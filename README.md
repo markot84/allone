@@ -49,6 +49,4 @@ The application is deployed to Firebase Hosting with Firestore database.
 
 **See `FIREBASE_SETUP.md` for detailed instructions.**
 
-### GitHub Pages (Legacy)
-
-The application can also be deployed to GitHub Pages via GitHub Actions on push to `main` branch.
+**Live URL:** https://performance-plus-4a5b2.web.app
