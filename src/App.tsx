@@ -11,6 +11,7 @@ import { Reports } from './components/reports';
 import { ROIAttribution } from './components/roi';
 import { Help } from './components/help';
 import { AIInsightsPanel, AIInsightsTrigger } from './components/insights';
+import { DataImport } from './components/data';
 import { aiInsights } from './data';
 
 const queryClient = new QueryClient();
@@ -37,6 +38,8 @@ function App() {
         return <Reports />;
       case 'roi':
         return <ROIAttribution />;
+      case 'data':
+        return <DataImport />;
       case 'help':
         return <Help />;
       default:

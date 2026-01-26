@@ -20,6 +20,7 @@ import {
   ThreeBarsIcon,
   XIcon
 } from '@primer/octicons-react';
+import { Upload } from 'lucide-react';
 
 type SectionId =
   | 'dashboard'
@@ -31,6 +32,7 @@ type SectionId =
   | 'reports'
   | 'roi'
   | 'insights'
+  | 'data'
   | 'help';
 
 export interface AppShellProps {
@@ -55,6 +57,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
       { id: 'reports', label: 'Reports', icon: ReportIcon },
       { id: 'roi', label: 'ROI Attribution', icon: GraphIcon },
       { id: 'insights', label: 'AI Insights', icon: LightBulbIcon },
+      { id: 'data', label: 'Data Import', icon: Upload },
       { id: 'help', label: 'Help & Support', icon: GearIcon }
     ],
     []
@@ -71,7 +74,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
           style={{ width: '100%', textAlign: 'left' }}
         >
           <NavList.LeadingVisual>
-            <item.icon />
+            {typeof item.icon === 'function' ? <item.icon size={16} /> : <item.icon />}
           </NavList.LeadingVisual>
           {item.label}
         </NavList.Item>
