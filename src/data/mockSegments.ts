@@ -8,7 +8,7 @@ export const rfmSegments: RFMSegment[] = [
     count: 1247,
     percentage: 12.4,
     revenue_share: 38.2,
-    color: '#22C55E',
+    color: '#16A34A',
     description: 'Υψηλή αξία, πρόσφατες αγορές, συχνοί αγοραστές',
     icon: ''
   },
@@ -19,7 +19,7 @@ export const rfmSegments: RFMSegment[] = [
     count: 2341,
     percentage: 23.3,
     revenue_share: 28.5,
-    color: '#3B82F6',
+    color: '#2563EB',
     description: 'Σταθερή αγοραστική συμπεριφορά',
     icon: ''
   },
@@ -30,7 +30,7 @@ export const rfmSegments: RFMSegment[] = [
     count: 1856,
     percentage: 18.5,
     revenue_share: 15.2,
-    color: '#8B5CF6',
+    color: '#7C3AED',
     description: 'Πρόσφατοι με δυναμική ανάπτυξης',
     icon: ''
   },
@@ -41,7 +41,7 @@ export const rfmSegments: RFMSegment[] = [
     count: 1523,
     percentage: 15.2,
     revenue_share: 10.8,
-    color: '#F59E0B',
+    color: '#EA580C',
     description: 'Μειωμένη δραστηριότητα, κίνδυνος απώλειας',
     icon: ''
   },
@@ -52,7 +52,7 @@ export const rfmSegments: RFMSegment[] = [
     count: 3067,
     percentage: 30.6,
     revenue_share: 7.3,
-    color: '#EF4444',
+    color: '#DC2626',
     description: 'Αδρανείς για μεγάλο χρονικό διάστημα',
     icon: ''
   }

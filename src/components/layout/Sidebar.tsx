@@ -13,7 +13,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Link2,
-  X
+  X,
+  Lightbulb
 } from 'lucide-react';
 
 interface NavItem {
@@ -36,6 +37,7 @@ const mainNavItems: NavItem[] = [
 ];
 
 const secondaryNavItems: NavItem[] = [
+  { id: 'concept', name: 'Concept', icon: <Lightbulb size={18} /> },
   { id: 'insights', name: 'AI Insights', icon: <Sparkles size={18} /> },
   { id: 'help', name: 'Help & Support', icon: <HelpCircle size={18} /> }
 ];

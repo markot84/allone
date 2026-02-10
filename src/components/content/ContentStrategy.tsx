@@ -16,6 +16,7 @@ import {
   Check
 } from 'lucide-react';
 import { Card, CardHeader, Badge, Button } from '../common';
+import { useSegments } from '../../hooks';
 import { 
   activeStrategyContext, 
   strategyContentMap, 
@@ -33,6 +34,7 @@ const statusConfig = {
 };
 
 export function ContentStrategy() {
+  const { segments: rfmSegments } = useSegments();
   const [showStrategyMap, setShowStrategyMap] = useState(false);
   const [filterAligned, setFilterAligned] = useState<'all' | 'aligned' | 'misaligned'>('all');
 
@@ -313,7 +315,7 @@ export function ContentStrategy() {
                   </div>
                 ) : (
                   weekContent.map((item, index) => (
-                    <ContentCard key={item.id} item={item} index={index} />
+                    <ContentCard key={item.id} item={item} index={index} segments={rfmSegments} />
                   ))
                 )}
               </div>
@@ -368,9 +370,10 @@ function DirectionItem({ label, value }: { label: string; value: string }) {
 interface ContentCardProps {
   item: typeof contentItems[0];
   index: number;
+  segments?: Array<{ id: string; name?: string; color?: string }>;
 }
 
-function ContentCard({ item, index }: ContentCardProps) {
+function ContentCard({ item, index, segments = [] }: ContentCardProps) {
   const status = statusConfig[item.status];
 
   return (
@@ -415,7 +418,17 @@ function ContentCard({ item, index }: ContentCardProps) {
           <div className="flex items-center gap-2 mt-2 text-xs text-[#4A4A4A]">
             <span>{item.scheduled}</span>
             <span>•</span>
-            <span>{item.segment}</span>
+            <span className="flex items-center gap-1">
+              {(() => {
+                const seg = segments.find(s => s.name === item.segment || s.id === item.segment);
+                return seg ? (
+                  <>
+                    <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: seg.color ?? '#6B7280' }} />
+                    {item.segment}
+                  </>
+                ) : item.segment;
+              })()}
+            </span>
           </div>
 
           {/* Products */}

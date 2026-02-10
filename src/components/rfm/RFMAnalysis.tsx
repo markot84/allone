@@ -20,12 +20,25 @@ import {
   Tooltip,
   CartesianGrid
 } from 'recharts';
-import { Card, CardHeader, Badge, Button } from '../common';
-import { rfmSegments, segmentCategoryMatrix, segmentMigration, totalCustomers } from '../../data';
+import { Card, CardHeader, Badge, Button, Spinner, Tooltip as InfoTooltip } from '../common';
+import { useSegments } from '../../hooks';
+import { segmentCategoryMatrix, segmentMigration } from '../../data';
 import type { RFMSegment } from '../../types';
+
+const fmt = (n: number) => Number(n).toFixed(2);
 
 export function RFMAnalysis() {
   const [selectedSegment, setSelectedSegment] = useState<RFMSegment | null>(null);
+  const { segments: rfmSegments, totalCustomers, isLoading: segmentsLoading, hasImported: hasImportedSegments } = useSegments();
+  const totalCustomersDisplay = totalCustomers || 10034;
+
+  if (segmentsLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <Spinner size="lg" label="Φόρτωση RFM segments…" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -34,6 +47,9 @@ export function RFMAnalysis() {
         <h2 className="text-2xl font-bold text-[#1A1A1A]">RFM Analysis</h2>
         <p className="text-[#4A4A4A] mt-1">
           Analyze customer segments based on Recency, Frequency, and Monetary value
+          {hasImportedSegments && (
+            <span className="ml-2 text-[#22C55E] font-medium">· {rfmSegments.length} segment(s) · {totalCustomersDisplay.toLocaleString()} customers</span>
+          )}
         </p>
       </div>
 
@@ -45,9 +61,9 @@ export function RFMAnalysis() {
               <Users size={20} className="text-[#FF6B35]" />
             </div>
             <div>
-              <p className="text-sm text-[#4A4A4A]">Total Customers</p>
+              <p className="text-sm text-[#4A4A4A]"><InfoTooltip content="Συνολικός αριθμός πελατών σε όλα τα RFM segments.">Total Customers</InfoTooltip></p>
               <p className="text-xl font-bold text-[#1A1A1A] font-mono">
-                {totalCustomers.toLocaleString()}
+                {totalCustomersDisplay.toLocaleString()}
               </p>
             </div>
           </div>
@@ -58,7 +74,7 @@ export function RFMAnalysis() {
               <TrendingUp size={20} className="text-[#22C55E]" />
             </div>
             <div>
-              <p className="text-sm text-[#4A4A4A]">Active Segments</p>
+              <p className="text-sm text-[#4A4A4A]"><InfoTooltip content="Αριθμός RFM segments (ομαδοποιημένοι πελάτες βάσει Recency, Frequency, Monetary).">Active Segments</InfoTooltip></p>
               <p className="text-xl font-bold text-[#1A1A1A]">
                 {rfmSegments.filter(s => s.id !== 'lost').length}
               </p>
@@ -71,7 +87,7 @@ export function RFMAnalysis() {
               <Zap size={20} className="text-[#3B82F6]" />
             </div>
             <div>
-              <p className="text-sm text-[#4A4A4A]">Avg Segment Score</p>
+              <p className="text-sm text-[#4A4A4A]"><InfoTooltip content="Μέσος όρος RFM score (1–5 ανά R, F, M).">Avg Segment Score</InfoTooltip></p>
               <p className="text-xl font-bold text-[#1A1A1A] font-mono">78.4</p>
             </div>
           </div>
@@ -82,9 +98,9 @@ export function RFMAnalysis() {
               <TrendingDown size={20} className="text-[#F59E0B]" />
             </div>
             <div>
-              <p className="text-sm text-[#4A4A4A]">At Risk Rate</p>
+              <p className="text-sm text-[#4A4A4A]"><InfoTooltip content="Ποσοστό πελατών στο segment «At Risk» (μειωμένη δραστηριότητα).">At Risk Rate</InfoTooltip></p>
               <p className="text-xl font-bold text-[#F59E0B] font-mono">
-                {rfmSegments.find(s => s.id === 'at_risk')?.percentage}%
+                {fmt(rfmSegments.find(s => s.id === 'at_risk')?.percentage ?? 0)}%
               </p>
             </div>
           </div>
@@ -109,42 +125,44 @@ export function RFMAnalysis() {
         </div>
 
         {/* Distribution Chart */}
-        <Card padding="lg">
+        <Card padding="lg" className="min-w-[280px]">
           <CardHeader
             title="Revenue Distribution"
             subtitle="By segment"
           />
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={rfmSegments as any}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={50}
-                  outerRadius={80}
-                  paddingAngle={3}
-                  dataKey="revenue_share"
-                >
-                  {rfmSegments.map((segment) => (
-                    <Cell
-                      key={segment.id}
-                      fill={segment.color}
-                      stroke={selectedSegment?.id === segment.id ? '#1A1A1A' : 'none'}
-                      strokeWidth={2}
-                    />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#fff',
-                    border: '1px solid #E5E5E5',
-                    borderRadius: '8px'
-                  }}
-                  formatter={(value) => [`${value || 0}%`, 'Revenue']}
-                />
-              </PieChart>
-            </ResponsiveContainer>
+          <div
+            className="w-full overflow-visible shrink-0"
+            style={{ width: '100%', height: 256 }}
+          >
+            <PieChart width={300} height={256} margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+              <Pie
+                data={rfmSegments}
+                cx="50%"
+                cy="50%"
+                innerRadius={50}
+                outerRadius={80}
+                paddingAngle={3}
+                dataKey="revenue_share"
+                nameKey="name"
+              >
+                {rfmSegments.map((segment) => (
+                  <Cell
+                    key={segment.id}
+                    fill={segment.color}
+                    stroke={selectedSegment?.id === segment.id ? '#1A1A1A' : 'none'}
+                    strokeWidth={2}
+                  />
+                ))}
+              </Pie>
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#fff',
+                  border: '1px solid #E5E5E5',
+                  borderRadius: '8px'
+                }}
+                formatter={(value: number | undefined) => [`${fmt(value ?? 0)}%`, 'Revenue']}
+              />
+            </PieChart>
           </div>
           <div className="space-y-2">
             {rfmSegments.map((segment) => (
@@ -166,7 +184,7 @@ export function RFMAnalysis() {
                   <span className="text-sm text-[#4A4A4A]">{segment.name}</span>
                 </div>
                 <span className="text-sm font-medium font-mono" style={{ color: segment.color }}>
-                  {segment.revenue_share}%
+                  {fmt(segment.revenue_share ?? 0)}%
                 </span>
               </div>
             ))}
@@ -226,7 +244,7 @@ export function RFMAnalysis() {
                   <p className={`font-bold font-mono ${isPositive ? 'text-[#22C55E]' : 'text-[#EF4444]'}`}>
                     {flow.count.toLocaleString()}
                   </p>
-                  <p className="text-xs text-[#4A4A4A]">{flow.percentage}%</p>
+                  <p className="text-xs text-[#4A4A4A]">{fmt(flow.percentage ?? 0)}%</p>
                 </div>
               </motion.div>
             );
@@ -260,10 +278,13 @@ function SegmentCard({ segment, index, isSelected, onSelect }: SegmentCardProps)
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
             <div
-              className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl"
-              style={{ backgroundColor: `${segment.color}20` }}
+              className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl flex-shrink-0"
+              style={{
+                backgroundColor: `${segment.color}35`,
+                border: `2px solid ${segment.color}`,
+              }}
             >
-              {/* no emoji icons */}
+              {/* segment color indicator */}
             </div>
             <div>
               <h3 className="font-semibold text-[#1A1A1A]">{segment.name}</h3>
@@ -288,13 +309,13 @@ function SegmentCard({ segment, index, isSelected, onSelect }: SegmentCardProps)
           <div>
             <p className="text-xs text-[#4A4A4A]">% of Base</p>
             <p className="font-bold font-mono" style={{ color: segment.color }}>
-              {segment.percentage}%
+              {fmt(segment.percentage ?? 0)}%
             </p>
           </div>
           <div>
             <p className="text-xs text-[#4A4A4A]">Revenue</p>
             <p className="font-bold text-[#1A1A1A] font-mono">
-              {segment.revenue_share}%
+              {fmt(segment.revenue_share ?? 0)}%
             </p>
           </div>
         </div>
@@ -308,8 +329,10 @@ interface SegmentDetailProps {
   onClose: () => void;
 }
 
+const emptyCategoryData = { categories: [], brands: [], price_sensitivity: 'medium' as const, preferred_channels: [] };
+
 function SegmentDetail({ segment, onClose }: SegmentDetailProps) {
-  const categoryData = segmentCategoryMatrix[segment.id];
+  const categoryData = segmentCategoryMatrix[segment.id] ?? emptyCategoryData;
 
   return (
     <Card padding="lg">

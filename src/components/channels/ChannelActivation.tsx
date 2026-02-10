@@ -22,12 +22,14 @@ import {
   Legend
 } from 'recharts';
 import { Card, CardHeader, Badge, Button } from '../common';
+import { useProducts } from '../../hooks';
 import { channelMixByScenario, channelPerformanceHistory } from '../../data/mockChannels';
 import { scenarios } from '../../data/mockScenarios';
 
 const COLORS = ['#FF6B35', '#3B82F6', '#22C55E', '#8B5CF6', '#F59E0B'];
 
 export function ChannelActivation() {
+  const { count: productsCount } = useProducts();
   const [selectedScenario, setSelectedScenario] = useState('profit_max');
   const [budgetMultiplier, setBudgetMultiplier] = useState(1);
 
@@ -303,7 +305,7 @@ export function ChannelActivation() {
               <div className="space-y-2 text-sm text-[#4A4A4A]">
                 <div className="flex justify-between">
                   <span>Products</span>
-                  <span className="font-mono">{(1200 + index * 300).toLocaleString()}</span>
+                  <span className="font-mono">{productsCount.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Last sync</span>

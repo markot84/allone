@@ -6,6 +6,7 @@ import {
   setDoc, 
   updateDoc, 
   deleteDoc, 
+  writeBatch,
   query, 
   where, 
   orderBy, 
@@ -49,6 +50,22 @@ export class FirestoreService {
       console.error(`Error getting documents from ${collectionName}:`, error);
       throw error;
     }
+  }
+
+  // Batch write (max 500 ops per batch; Firestore limit)
+  static async batchSet(
+    collectionName: string,
+    items: { id: string; data: Record<string, unknown> }[]
+  ): Promise<void> {
+    if (items.length === 0) return;
+    const batch = writeBatch(db);
+    for (const item of items) {
+      const docRef = doc(db, collectionName, item.id);
+      const clean: Record<string, unknown> = { ...item.data, updatedAt: Timestamp.now() };
+      Object.keys(clean).forEach((k) => clean[k] === undefined && delete clean[k]);
+      batch.set(docRef, clean, { merge: true });
+    }
+    await batch.commit();
   }
 
   // Create or update document
@@ -95,6 +112,20 @@ export class FirestoreService {
     } catch (error) {
       console.error(`Error deleting document ${docId} from ${collectionName}:`, error);
       throw error;
+    }
+  }
+
+  // Delete all documents in collection (batch delete, for replacing customer-level with aggregated segments)
+  static async deleteCollection(collectionName: string): Promise<void> {
+    const colRef = collection(db, collectionName);
+    const BATCH_SIZE = 500;
+    let snapshot = await getDocs(colRef);
+    while (!snapshot.empty) {
+      const batch = writeBatch(db);
+      snapshot.docs.slice(0, BATCH_SIZE).forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+      if (snapshot.docs.length <= BATCH_SIZE) break;
+      snapshot = await getDocs(colRef);
     }
   }
 }

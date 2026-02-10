@@ -13,8 +13,8 @@ import {
   FileText
 } from 'lucide-react';
 import { Card, CardHeader, Badge, Button } from '../common';
+import { useSegments } from '../../hooks';
 import { contentCalendar, upcomingMonths, contentFormats } from '../../data/mockCalendar';
-import { rfmSegments } from '../../data/mockSegments';
 
 const statusConfig = {
   draft: { label: 'Draft', color: '#4A4A4A', bgColor: '#F5F5F5', icon: <FileText size={12} /> },
@@ -24,6 +24,7 @@ const statusConfig = {
 };
 
 export function ContentCalendar() {
+  const { segments: rfmSegments } = useSegments();
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
   const [showAIPanel, setShowAIPanel] = useState(false);
 
@@ -130,11 +131,11 @@ export function ContentCalendar() {
                             key={seg}
                             className="text-xs px-2 py-0.5 rounded-full"
                             style={{
-                              backgroundColor: segment ? `${segment.color}20` : '#F5F5F5',
+                              backgroundColor: segment ? `${segment.color ?? '#6B7280'}20` : '#F5F5F5',
                               color: segment?.color || '#4A4A4A'
                             }}
                           >
-                            {segment?.icon} {seg}
+                            {seg}
                           </span>
                         );
                       })}
@@ -252,7 +253,7 @@ export function ContentCalendar() {
                     <option>All Segments</option>
                     {rfmSegments.map((seg) => (
                       <option key={seg.id} value={seg.id}>
-                        {seg.icon} {seg.name}
+                        {seg.name}
                       </option>
                     ))}
                   </select>

@@ -11,25 +11,150 @@ import {
   Package,
   Target,
   TrendingUp,
-  Users
+  Users,
+  GitCompare
 } from 'lucide-react';
 import { Card, CardHeader, Button, Slider, Badge } from '../common';
 import { ScenarioSelector } from './ScenarioSelector';
 import { ChannelRecommendations } from './ChannelRecommendations';
 import { ApprovalWorkflow } from './ApprovalWorkflow';
 import { StrategyImpactPreview } from './StrategyImpactPreview';
+import { CustomToolsCard } from './CustomToolsCard';
+import { CompareScenariosModal } from './CompareScenariosModal';
+import { useProducts, useSegments } from '../../hooks';
 import {
   scenarios,
   defaultWeights,
   weightFactors,
   channelRecommendations
 } from '../../data';
-import { products, calculateCompositeScore } from '../../data/mockProducts';
-import { rfmSegments } from '../../data';
+import { getPreviewConfig, type PreviewColumnId } from '../../data/strategyPreviewConfig';
+import { calculateCompositeScore } from '../../data/mockProducts';
+import { Tooltip } from '../common';
+import type { Product } from '../../types';
 
 type ApprovalStatus = 'draft' | 'pending_review' | 'approved' | 'implementing';
 
+function PreviewCell({
+  columnId,
+  product,
+  rank,
+}: {
+  columnId: PreviewColumnId;
+  product: Product & { composite_score?: number };
+  rank: number;
+}) {
+  const cap = product.stock_capacity || 1;
+  const ratio = (product.stock_level || 0) / cap;
+  const isScore = columnId === 'score';
+  const alignRight = isScore ? 'text-right' : '';
+
+  switch (columnId) {
+    case 'rank':
+      return (
+        <td className="py-3">
+          <span className="w-6 h-6 rounded-full bg-[#F5F5F5] flex items-center justify-center text-xs font-medium">
+            {rank}
+          </span>
+        </td>
+      );
+    case 'product':
+      return (
+        <td className="py-3">
+          <div>
+            <p className="text-sm font-medium text-[#1A1A1A] truncate max-w-[200px]">{product.name}</p>
+            <p className="text-xs text-[#9CA3AF]">{product.sku}</p>
+          </div>
+        </td>
+      );
+    case 'category':
+      return (
+        <td className="py-3">
+          <span className="text-sm text-[#4A4A4A]">{product.category}</span>
+        </td>
+      );
+    case 'margin':
+      return (
+        <td className="py-3">
+          <Badge
+            variant={
+              product.margin_tier === 'high' ? 'success' : product.margin_tier === 'medium' ? 'warning' : 'danger'
+            }
+          >
+            {(product.margin_percentage ?? 0).toFixed(1)}%
+          </Badge>
+        </td>
+      );
+    case 'stock':
+      return (
+        <td className="py-3">
+          <div className="flex items-center gap-2">
+            <div className="w-16 h-1.5 bg-[#E5E5E5] rounded-full overflow-hidden">
+              <div
+                className="h-full rounded-full"
+                style={{
+                  width: `${ratio * 100}%`,
+                  backgroundColor: ratio > 0.8 ? '#EF4444' : ratio > 0.5 ? '#F59E0B' : '#22C55E',
+                }}
+              />
+            </div>
+            <span className="text-xs text-[#4A4A4A] font-mono">{product.stock_level ?? 0}</span>
+          </div>
+        </td>
+      );
+    case 'stock_age':
+      return (
+        <td className="py-3">
+          <span className="text-sm text-[#4A4A4A]">{product.stock_age_days ?? 0} days</span>
+        </td>
+      );
+    case 'excess_pct': {
+      const excess = Math.max(0, (product.stock_level ?? 0) - cap);
+      const pct = cap > 0 ? ((excess / cap) * 100).toFixed(0) : '0';
+      return (
+        <td className="py-3">
+          <span className="text-sm font-medium text-[#4A4A4A]">{pct}%</span>
+        </td>
+      );
+    }
+    case 'priority_tag':
+      return (
+        <td className="py-3">
+          <Badge variant="default" size="sm">
+            {product.priority_tag ?? '-'}
+          </Badge>
+        </td>
+      );
+    case 'revenue_potential': {
+      const val = (product.price ?? 0) * (product.stock_level ?? 0);
+      const fmt = val >= 1000 ? `€${(val / 1000).toFixed(1)}K` : `€${val.toFixed(0)}`;
+      return (
+        <td className="py-3">
+          <span className="text-sm font-mono text-[#1A1A1A]">{fmt}</span>
+        </td>
+      );
+    }
+    case 'score':
+      return (
+        <td className={`py-3 ${alignRight}`}>
+          <motion.span
+            key={product.composite_score}
+            initial={{ scale: 1.2 }}
+            animate={{ scale: 1 }}
+            className="text-lg font-bold text-[#FF6B35] font-mono"
+          >
+            {product.composite_score?.toFixed(1)}
+          </motion.span>
+        </td>
+      );
+    default:
+      return <td className="py-3" />;
+  }
+}
+
 export function WeightConfigurator() {
+  const { products, hasImported } = useProducts();
+  const { segments: rfmSegments } = useSegments();
   const [selectedScenario, setSelectedScenario] = useState(scenarios[0].id);
   const [weights, setWeights] = useState<Record<string, number>>(
     scenarios[0].weights || defaultWeights
@@ -38,6 +163,13 @@ export function WeightConfigurator() {
   const [selectedSegment, setSelectedSegment] = useState('champions');
   const [showImpactPreview, setShowImpactPreview] = useState(false);
   const [pendingScenarioChange, setPendingScenarioChange] = useState<string | null>(null);
+  const [showCompareModal, setShowCompareModal] = useState(false);
+
+  const getWeightsForScenario = useCallback((scenarioId: string) => {
+    if (scenarioId === 'custom') return weights;
+    const scenario = scenarios.find((s) => s.id === scenarioId);
+    return scenario?.weights ?? defaultWeights;
+  }, [weights]);
 
   // Handle scenario change with impact preview
   const handleScenarioChange = useCallback((scenarioId: string) => {
@@ -118,16 +250,17 @@ export function WeightConfigurator() {
     setApprovalStatus('draft');
   }, []);
 
-  // Calculate prioritized products
+  // Calculate prioritized products (strategy-specific score logic)
   const prioritizedProducts = useMemo(() => {
+    const strategyId = selectedScenario === 'custom' ? undefined : selectedScenario;
     return products
       .map((p) => ({
         ...p,
-        composite_score: calculateCompositeScore(p, weights)
+        composite_score: calculateCompositeScore(p, weights, undefined, strategyId)
       }))
       .sort((a, b) => (b.composite_score || 0) - (a.composite_score || 0))
       .slice(0, 10);
-  }, [weights]);
+  }, [products, weights, selectedScenario]);
 
   // Get channel recommendations for current scenario
   const currentRecommendations = useMemo(() => {
@@ -136,6 +269,7 @@ export function WeightConfigurator() {
   }, [selectedScenario]);
 
   const totalWeight = Object.values(weights).reduce((a, b) => a + b, 0);
+  const previewConfig = getPreviewConfig(selectedScenario, weights);
 
   return (
     <div className="space-y-6 max-w-full overflow-x-hidden">
@@ -149,10 +283,15 @@ export function WeightConfigurator() {
             Customize product prioritization factors for your marketing campaigns
           </p>
         </div>
-        <ApprovalWorkflow
-          status={approvalStatus}
-          onStatusChange={setApprovalStatus}
-        />
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="sm" icon={<GitCompare size={16} />} onClick={() => setShowCompareModal(true)}>
+            Compare
+          </Button>
+          <ApprovalWorkflow
+            status={approvalStatus}
+            onStatusChange={setApprovalStatus}
+          />
+        </div>
       </div>
 
       {/* Scenario Selector */}
@@ -160,6 +299,21 @@ export function WeightConfigurator() {
         selectedScenario={selectedScenario}
         onScenarioChange={handleScenarioChange}
       />
+
+      {/* Custom Tools - when Custom is selected */}
+      {selectedScenario === 'custom' && (
+        <Card padding="lg" className="border-l-4 border-l-[#8B5CF6]">
+          <CardHeader
+            title="Custom Tools"
+            subtitle="Clone, save presets, compare, export/import"
+          />
+          <CustomToolsCard
+            weights={weights}
+            onWeightsChange={setWeights}
+            onCompareClick={() => setShowCompareModal(true)}
+          />
+        </Card>
+      )}
 
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 max-w-full overflow-x-hidden">
@@ -245,20 +399,32 @@ export function WeightConfigurator() {
         <Card className="xl:col-span-2" padding="lg">
           <CardHeader
             title="Live Preview"
-            subtitle="Top 10 Prioritized Products"
+            subtitle={
+              hasImported ? `Top 10 from ${products.length} imported products` : 'Top 10 Prioritized Products'
+            }
             icon={<Sparkles size={18} className="text-[var(--nts-medium-gray)]" />}
           />
+          {selectedScenario === 'custom' && (
+            <p className="text-xs text-[#6B7280] mb-3 -mt-2">
+              Προσαρμοσμένα weights – σύγκρινε scenarios ή αποθήκευσε preset για γρήγορη εναλλαγή.
+            </p>
+          )}
 
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="text-left text-xs text-[#4A4A4A] border-b border-[#E5E5E5]">
-                  <th className="pb-3 font-medium">Rank</th>
-                  <th className="pb-3 font-medium">Product</th>
-                  <th className="pb-3 font-medium">Category</th>
-                  <th className="pb-3 font-medium">Margin</th>
-                  <th className="pb-3 font-medium">Stock</th>
-                  <th className="pb-3 font-medium text-right">Score</th>
+                  {previewConfig.columns.map((col) => (
+                    <th key={col.id} className={`pb-3 font-medium ${col.id === 'score' ? 'text-right' : ''}`}>
+                      {col.tooltip ? (
+                        <Tooltip content={col.tooltip}>
+                          <span>{col.label}</span>
+                        </Tooltip>
+                      ) : (
+                        col.label
+                      )}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
@@ -273,68 +439,14 @@ export function WeightConfigurator() {
                       transition={{ delay: index * 0.03 }}
                       className="border-b border-[#E5E5E5] last:border-0"
                     >
-                      <td className="py-3">
-                        <span className="w-6 h-6 rounded-full bg-[#F5F5F5] flex items-center justify-center text-xs font-medium">
-                          {index + 1}
-                        </span>
-                      </td>
-                      <td className="py-3">
-                        <div>
-                          <p className="text-sm font-medium text-[#1A1A1A] truncate max-w-[200px]">
-                            {product.name}
-                          </p>
-                          <p className="text-xs text-[#9CA3AF]">{product.sku}</p>
-                        </div>
-                      </td>
-                      <td className="py-3">
-                        <span className="text-sm text-[#4A4A4A]">
-                          {product.category}
-                        </span>
-                      </td>
-                      <td className="py-3">
-                        <Badge
-                          variant={
-                            product.margin_tier === 'high'
-                              ? 'success'
-                              : product.margin_tier === 'medium'
-                              ? 'warning'
-                              : 'danger'
-                          }
-                        >
-                          {product.margin_percentage.toFixed(1)}%
-                        </Badge>
-                      </td>
-                      <td className="py-3">
-                        <div className="flex items-center gap-2">
-                          <div className="w-16 h-1.5 bg-[#E5E5E5] rounded-full overflow-hidden">
-                            <div
-                              className="h-full rounded-full"
-                              style={{
-                                width: `${(product.stock_level / product.stock_capacity) * 100}%`,
-                                backgroundColor:
-                                  product.stock_level / product.stock_capacity > 0.8
-                                    ? '#EF4444'
-                                    : product.stock_level / product.stock_capacity > 0.5
-                                    ? '#F59E0B'
-                                    : '#22C55E'
-                              }}
-                            />
-                          </div>
-                          <span className="text-xs text-[#4A4A4A] font-mono">
-                            {product.stock_level}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="py-3 text-right">
-                        <motion.span
-                          key={product.composite_score}
-                          initial={{ scale: 1.2 }}
-                          animate={{ scale: 1 }}
-                          className="text-lg font-bold text-[#FF6B35] font-mono"
-                        >
-                          {product.composite_score?.toFixed(1)}
-                        </motion.span>
-                      </td>
+                      {previewConfig.columns.map((col) => (
+                        <PreviewCell
+                          key={col.id}
+                          columnId={col.id}
+                          product={product}
+                          rank={index + 1}
+                        />
+                      ))}
                     </motion.tr>
                   ))}
                 </AnimatePresence>
@@ -353,16 +465,30 @@ export function WeightConfigurator() {
             <div>
               <p className="text-xs text-[#4A4A4A]">Avg Score</p>
               <p className="text-lg font-bold text-[#1A1A1A] font-mono">
-                {(
-                  prioritizedProducts.reduce((sum, p) => sum + (p.composite_score || 0), 0) /
-                  prioritizedProducts.length
-                ).toFixed(1)}
+                {prioritizedProducts.length > 0
+                  ? (
+                      prioritizedProducts.reduce((sum, p) => sum + (p.composite_score || 0), 0) /
+                      prioritizedProducts.length
+                    ).toFixed(1)
+                  : '-'}
               </p>
             </div>
             <div>
-              <p className="text-xs text-[#4A4A4A]">High Margin Products</p>
+              <p className="text-xs text-[#4A4A4A]">
+                {selectedScenario === 'stock_clearance'
+                  ? 'With Excess Stock'
+                  : selectedScenario === 'brand_launch'
+                  ? 'With Priority Tag'
+                  : 'High Margin'}
+              </p>
               <p className="text-lg font-bold text-[#22C55E]">
-                {prioritizedProducts.filter((p) => p.margin_tier === 'high').length}
+                {selectedScenario === 'stock_clearance'
+                  ? prioritizedProducts.filter(
+                      (p) => ((p.stock_level ?? 0) / (p.stock_capacity || 1)) > 1
+                    ).length
+                  : selectedScenario === 'brand_launch'
+                  ? prioritizedProducts.filter((p) => !!p.priority_tag).length
+                  : prioritizedProducts.filter((p) => p.margin_tier === 'high').length}
               </p>
             </div>
           </div>
@@ -413,6 +539,14 @@ export function WeightConfigurator() {
           setPendingScenarioChange(null);
         }}
         onConfirm={confirmStrategyChange}
+      />
+
+      {/* Compare Scenarios Modal */}
+      <CompareScenariosModal
+        isOpen={showCompareModal}
+        onClose={() => setShowCompareModal(false)}
+        products={products}
+        getWeightsForScenario={getWeightsForScenario}
       />
     </div>
   );

@@ -10,6 +10,7 @@ import {
   Zap
 } from 'lucide-react';
 import { Badge, Button } from '../common';
+import { useSegments, useProducts } from '../../hooks';
 import { aiInsights } from '../../data/mockInsights';
 import type { AIInsight } from '../../types';
 
@@ -19,6 +20,8 @@ interface AIInsightsPanelProps {
 }
 
 export function AIInsightsPanel({ isOpen, onClose }: AIInsightsPanelProps) {
+  const { segments, hasImported: hasSegments } = useSegments();
+  const { count: productsCount, hasImported: hasProducts } = useProducts();
   const [filter, setFilter] = useState<'all' | 'opportunity' | 'warning' | 'recommendation'>('all');
 
   const filteredInsights = aiInsights.filter(
@@ -62,7 +65,14 @@ export function AIInsightsPanel({ isOpen, onClose }: AIInsightsPanelProps) {
                   </div>
                   <div>
                     <h2 className="font-bold text-[var(--nts-charcoal)] text-[15px]">AI Insights</h2>
-                    <p className="text-[13px] text-[var(--nts-medium-gray)]">{aiInsights.length} actionable insights</p>
+                    <p className="text-[13px] text-[var(--nts-medium-gray)]">
+                      {aiInsights.length} actionable insights
+                      {(hasSegments || hasProducts) && (
+                        <span className="text-[11px] text-[var(--nts-medium-gray)] block mt-0.5">
+                          · {segments.length} segments · {productsCount} products
+                        </span>
+                      )}
+                    </p>
                   </div>
                 </div>
                 <button

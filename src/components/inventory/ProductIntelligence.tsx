@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Package,
@@ -12,12 +13,66 @@ import {
   TrendingUp,
   TrendingDown
 } from 'lucide-react';
-import { Card, Badge, Button, ProgressBar } from '../common';
-import { products, inventorySummary, inventoryAlerts, categories } from '../../data/mockProducts';
-import type { Product } from '../../types';
+import { Card, Badge, Button, ProgressBar, Spinner, Tooltip } from '../common';
+import { ProductsService } from '../../services/firestore';
+import { products as mockProducts, inventoryAlerts, categories as mockCategories } from '../../data/mockProducts';
+import type { Product, InventorySummary } from '../../types';
 
 type SortField = 'name' | 'margin_percentage' | 'stock_level' | 'stock_age_days' | 'price';
 type SortDirection = 'asc' | 'desc';
+
+function computeInventorySummary(products: Product[]): InventorySummary {
+  const total = products.length;
+  if (total === 0) {
+    return {
+      total_skus: 0,
+      total_value: 0,
+      healthy_stock: { count: 0, percentage: 0 },
+      excess_stock: { count: 0, percentage: 0, value: 0 },
+      dead_stock: { count: 0, percentage: 0, value: 0 },
+      low_stock: { count: 0, percentage: 0 },
+    };
+  }
+
+  let totalValue = 0;
+  let healthyCount = 0;
+  let excessCount = 0;
+  let excessValue = 0;
+  let deadCount = 0;
+  let deadValue = 0;
+  let lowCount = 0;
+
+  for (const p of products) {
+    const level = p.stock_level ?? 0;
+    const capacity = Math.max(p.stock_capacity ?? 0, 1);
+    const price = p.price ?? 0;
+    const ageDays = p.stock_age_days ?? 0;
+    const ratio = level / capacity;
+
+    totalValue += level * price;
+
+    if (ageDays > 180) {
+      deadCount++;
+      deadValue += level * price;
+    } else if (ratio > 0.8) {
+      excessCount++;
+      excessValue += level * price;
+    } else if (ratio < 0.2 || level < 10) {
+      lowCount++;
+    } else {
+      healthyCount++;
+    }
+  }
+
+  return {
+    total_skus: total,
+    total_value: Math.round(totalValue),
+    healthy_stock: { count: healthyCount, percentage: total ? Math.round((healthyCount / total) * 1000) / 10 : 0 },
+    excess_stock: { count: excessCount, percentage: total ? Math.round((excessCount / total) * 1000) / 10 : 0, value: Math.round(excessValue) },
+    dead_stock: { count: deadCount, percentage: total ? Math.round((deadCount / total) * 1000) / 10 : 0, value: Math.round(deadValue) },
+    low_stock: { count: lowCount, percentage: total ? Math.round((lowCount / total) * 1000) / 10 : 0 },
+  };
+}
 
 export function ProductIntelligence() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -28,13 +83,25 @@ export function ProductIntelligence() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
+  const { data: firestoreProducts = [], isPending: productsLoading } = useQuery({
+    queryKey: ['products'],
+    queryFn: () => ProductsService.getAll() as Promise<Product[]>,
+  });
+
+  const products = (firestoreProducts?.length > 0 ? firestoreProducts : mockProducts) as Product[];
+  const inventorySummary = useMemo(() => computeInventorySummary(products), [products]);
+  const categories = useMemo(() => {
+    const fromProducts = [...new Set(products.map(p => p.category))].filter(Boolean).sort();
+    return fromProducts.length > 0 ? fromProducts : mockCategories;
+  }, [products]);
+
   // Filter and sort products
   const filteredProducts = useMemo(() => {
     return products
       .filter((p) => {
-        const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                             p.sku.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesCategory = selectedCategory === 'all' || p.category === selectedCategory;
+        const matchesSearch = (p.name ?? '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                             (p.sku ?? '').toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesCategory = selectedCategory === 'all' || (p.category ?? '') === selectedCategory;
         const matchesMargin = marginFilter === 'all' || p.margin_tier === marginFilter;
         return matchesSearch && matchesCategory && matchesMargin;
       })
@@ -68,6 +135,14 @@ export function ProductIntelligence() {
     }
   };
 
+  if (productsLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <Spinner size="lg" label="Φόρτωση προϊόντων…" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -76,6 +151,9 @@ export function ProductIntelligence() {
           <h2 className="text-2xl font-bold text-[#1A1A1A]">Product Intelligence</h2>
           <p className="text-[#4A4A4A] mt-1">
             Monitor inventory health and product performance
+            {firestoreProducts?.length > 0 && (
+              <span className="ml-2 text-[#22C55E] font-medium">· Showing {firestoreProducts.length} imported product(s)</span>
+            )}
           </p>
         </div>
         <Button variant="secondary" icon={<Download size={16} />}>
@@ -90,6 +168,7 @@ export function ProductIntelligence() {
           value={inventorySummary.total_skus.toLocaleString()}
           icon={<Package size={20} />}
           color="#3B82F6"
+          tooltip="Συνολικός αριθμός προϊόντων (SKU) στο inventory."
         />
         <SummaryCard
           label="Healthy Stock"
@@ -97,20 +176,27 @@ export function ProductIntelligence() {
           subValue={inventorySummary.healthy_stock.count.toLocaleString()}
           icon={<TrendingUp size={20} />}
           color="#22C55E"
+          tooltip="Προϊόντα με stock 20–80% της χωρητικότητας και ηλικία < 180 ημερών."
         />
         <SummaryCard
           label="Excess Stock"
-          value={`€${(inventorySummary.excess_stock.value / 1000).toFixed(0)}K`}
+          value={inventorySummary.excess_stock.value >= 1000
+            ? `€${(inventorySummary.excess_stock.value / 1000).toFixed(1)}K`
+            : `€${inventorySummary.excess_stock.value.toLocaleString()}`}
           subValue={`${inventorySummary.excess_stock.count} SKUs`}
           icon={<AlertTriangle size={20} />}
           color="#F59E0B"
+          tooltip="Προϊόντα με stock > 80% της χωρητικότητας (υπερπλήρωση)."
         />
         <SummaryCard
           label="Dead Stock"
-          value={`€${(inventorySummary.dead_stock.value / 1000).toFixed(0)}K`}
+          value={inventorySummary.dead_stock.value >= 1000
+            ? `€${(inventorySummary.dead_stock.value / 1000).toFixed(1)}K`
+            : `€${inventorySummary.dead_stock.value.toLocaleString()}`}
           subValue={`${inventorySummary.dead_stock.count} SKUs`}
           icon={<AlertCircle size={20} />}
           color="#EF4444"
+          tooltip="Προϊόντα με stock_age > 180 ημερών (αδρανές απόθεμα)."
         />
         <SummaryCard
           label="Low Stock"
@@ -118,6 +204,7 @@ export function ProductIntelligence() {
           subValue={`${inventorySummary.low_stock.count} SKUs`}
           icon={<TrendingDown size={20} />}
           color="#8B5CF6"
+          tooltip="Προϊόντα με stock < 20% της χωρητικότητας ή < 10 μονάδες."
         />
       </div>
 
@@ -219,7 +306,10 @@ export function ProductIntelligence() {
                   </button>
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-[#4A4A4A]">
-                  Category
+                  <span className="inline-flex items-center gap-1">
+                    Category
+                    <Tooltip content="Κατηγορία προϊόντος (π.χ. από DSS: Προμηθευτής)." size={12} />
+                  </span>
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-[#4A4A4A]">
                   <button
@@ -345,9 +435,10 @@ interface SummaryCardProps {
   subValue?: string;
   icon: React.ReactNode;
   color: string;
+  tooltip?: string;
 }
 
-function SummaryCard({ label, value, subValue, icon, color }: SummaryCardProps) {
+function SummaryCard({ label, value, subValue, icon, color, tooltip }: SummaryCardProps) {
   return (
     <Card padding="md" hover>
       <div className="flex items-center gap-3">
@@ -358,7 +449,9 @@ function SummaryCard({ label, value, subValue, icon, color }: SummaryCardProps) 
           <span style={{ color }}>{icon}</span>
         </div>
         <div>
-          <p className="text-sm text-[#4A4A4A]">{label}</p>
+          <p className="text-sm text-[#4A4A4A]">
+            {tooltip ? <Tooltip content={tooltip}>{label}</Tooltip> : label}
+          </p>
           <p className="text-xl font-bold text-[#1A1A1A] font-mono">{value}</p>
           {subValue && (
             <p className="text-xs text-[#9CA3AF]">{subValue}</p>
@@ -375,7 +468,9 @@ interface ProductRowProps {
 }
 
 function ProductRow({ product, index }: ProductRowProps) {
-  const stockPercentage = (product.stock_level / product.stock_capacity) * 100;
+  const stockPercentage = (product.stock_capacity && product.stock_capacity > 0)
+    ? (product.stock_level / product.stock_capacity) * 100
+    : 0;
   const stockColor = stockPercentage > 80 ? '#EF4444' : stockPercentage > 50 ? '#F59E0B' : '#22C55E';
   const ageColor = product.stock_age_days > 180 ? '#EF4444' : product.stock_age_days > 90 ? '#F59E0B' : '#22C55E';
 
@@ -406,14 +501,14 @@ function ProductRow({ product, index }: ProductRowProps) {
             product.margin_tier === 'medium' ? 'warning' : 'danger'
           }
         >
-          {product.margin_percentage.toFixed(1)}%
+          {(product.margin_percentage ?? 0).toFixed(1)}%
         </Badge>
       </td>
       <td className="px-4 py-3">
         <div className="flex items-center gap-2">
           <ProgressBar
-            value={product.stock_level}
-            max={product.stock_capacity}
+            value={product.stock_level ?? 0}
+            max={Math.max(product.stock_capacity ?? 0, 1)}
             color={stockColor}
             size="sm"
             className="w-16"
@@ -428,7 +523,7 @@ function ProductRow({ product, index }: ProductRowProps) {
           className="text-sm font-mono"
           style={{ color: ageColor }}
         >
-          {product.stock_age_days}d
+          {(product.stock_age_days ?? 0)}d
         </span>
       </td>
       <td className="px-4 py-3">
@@ -449,7 +544,7 @@ function ProductRow({ product, index }: ProductRowProps) {
       </td>
       <td className="px-4 py-3">
         <span className="text-sm font-mono text-[#1A1A1A]">
-          €{product.price.toFixed(2)}
+          €{(product.price ?? 0).toFixed(2)}
         </span>
       </td>
       <td className="px-4 py-3 text-right">

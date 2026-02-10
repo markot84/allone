@@ -135,16 +135,21 @@ export const inventoryAlerts: InventoryAlert[] = [
 
 // Calculate composite scores based on weights
 export function calculateCompositeScore(
-  product: Product, 
+  product: Product,
   weights: Record<string, number>,
-  segmentAffinities?: Record<string, number>
+  segmentAffinities?: Record<string, number>,
+  strategyId?: string
 ): number {
-  const profitScore = product.margin_percentage / 60 * 100; // Normalize to 0-100
-  
-  const stockRatio = product.stock_level / product.stock_capacity;
-  const stockAgeScore = Math.max(0, 100 - (product.stock_age_days / 180 * 100));
+  const profitScore = Math.min(100, (product.margin_percentage || 0) / 60 * 100);
+
+  const stockRatio = (product.stock_level || 0) / (product.stock_capacity || 1);
   const stockScore = stockRatio > 0.8 ? 90 : stockRatio > 0.5 ? 60 : 30;
-  const inventoryScore = (stockScore + (100 - stockAgeScore)) / 2;
+  // For stock_clearance: old stock = higher priority (we want to clear it)
+  const stockAgeScore =
+    strategyId === 'stock_clearance'
+      ? Math.min(100, ((product.stock_age_days || 0) / 180) * 100) // old = high
+      : Math.max(0, 100 - ((product.stock_age_days || 0) / 180 * 100)); // old = low
+  const inventoryScore = (stockScore + stockAgeScore) / 2;
   
   const strategicScore = product.priority_tag ? 
     (product.priority_tag === 'Brand Push' ? 90 :

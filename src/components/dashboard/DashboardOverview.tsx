@@ -22,9 +22,8 @@ import {
   Cell
 } from 'recharts';
 import { Card, CardHeader } from '../common';
-import { dashboardKPIs, aiInsights } from '../../data';
-import { rfmSegments } from '../../data';
-import { roiMockData } from '../../data';
+import { useSegments, useProducts } from '../../hooks';
+import { dashboardKPIs, aiInsights, roiMockData } from '../../data';
 
 const revenueData = roiMockData.months.map((month, i) => ({
   month: month.split(' ')[0],
@@ -32,13 +31,9 @@ const revenueData = roiMockData.months.map((month, i) => ({
   attributed: roiMockData.attributed_revenue[i] / 1000
 }));
 
-// Debug: Log data to ensure it's available
-if (typeof window !== 'undefined') {
-  console.log('Revenue Data:', revenueData);
-  console.log('RFM Segments:', rfmSegments);
-}
-
 export function DashboardOverview() {
+  const { segments: rfmSegments } = useSegments();
+  const { count: productsCount } = useProducts();
   const revenueContainerRef = useRef<HTMLDivElement>(null);
   const segmentContainerRef = useRef<HTMLDivElement>(null);
   const [chartDimensions, setChartDimensions] = useState({ revenue: { width: 800, height: 288 }, segment: { width: 400, height: 224 } });
@@ -208,10 +203,11 @@ export function DashboardOverview() {
                   outerRadius={85}
                   paddingAngle={3}
                   dataKey="percentage"
+                  nameKey="name"
                   labelLine={false}
                 >
                   {rfmSegments.map((segment) => (
-                    <Cell key={segment.id} fill={segment.color} stroke="#fff" strokeWidth={2} />
+                    <Cell key={segment.id} fill={segment.color ?? '#6B7280'} stroke="#fff" strokeWidth={2} />
                   ))}
                 </Pie>
                 <Tooltip
@@ -240,7 +236,7 @@ export function DashboardOverview() {
                   <span className="text-[#4A4A4A]">{segment.name}</span>
                 </div>
                 <span className="font-medium text-[#1A1A1A] font-mono">
-                  {segment.percentage.toFixed(1)}%
+                  {(segment.percentage ?? 0).toFixed(1)}%
                 </span>
               </div>
             ))}
@@ -305,7 +301,7 @@ export function DashboardOverview() {
           <div className="grid grid-cols-2 gap-5">
             <StatBox
               label="Total Products"
-              value="4,523"
+              value={productsCount.toLocaleString()}
               icon={<Package size={18} />}
               color="#3B82F6"
             />

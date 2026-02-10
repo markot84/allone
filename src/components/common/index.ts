@@ -3,3 +3,6 @@ export { Button } from './Button';
 export { Badge } from './Badge';
 export { Slider } from './Slider';
 export { ProgressBar } from './ProgressBar';
+export { Spinner } from './Spinner';
+export { ToastProvider, useToast } from './Toast';
+export { Tooltip } from './Tooltip';

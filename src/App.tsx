@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ToastProvider } from './components/common';
 import { AppShell } from './components/layout';
 import { DashboardOverview } from './components/dashboard/DashboardOverview';
 import { WeightConfigurator } from './components/strategy';
@@ -10,6 +11,7 @@ import { ContentStrategy } from './components/content';
 import { Reports } from './components/reports';
 import { ROIAttribution } from './components/roi';
 import { Help } from './components/help';
+import { Concept } from './components/concept';
 import { AIInsightsPanel, AIInsightsTrigger } from './components/insights';
 import { DataImport } from './components/data';
 import { aiInsights } from './data';
@@ -40,6 +42,8 @@ function App() {
         return <ROIAttribution />;
       case 'data':
         return <DataImport />;
+      case 'concept':
+        return <Concept onNavigateToStrategy={() => handleSectionChange('strategy')} />;
       case 'help':
         return <Help />;
       default:
@@ -57,6 +61,7 @@ function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <ToastProvider>
       <div style={{ 
         height: '100vh', 
         width: '100vw',
@@ -85,6 +90,7 @@ function App() {
           onClose={() => setInsightsPanelOpen(false)}
         />
       </div>
+      </ToastProvider>
     </QueryClientProvider>
   );
 }
