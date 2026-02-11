@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import {
   PieChart as PieChartIcon,
@@ -32,6 +32,21 @@ export function ChannelActivation() {
   const { count: productsCount } = useProducts();
   const [selectedScenario, setSelectedScenario] = useState('profit_max');
   const [budgetMultiplier, setBudgetMultiplier] = useState(1);
+  const historyChartRef = useRef<HTMLDivElement>(null);
+  const [historyChartSize, setHistoryChartSize] = useState({ width: 800, height: 288 });
+
+  useEffect(() => {
+    const update = () => {
+      if (historyChartRef.current) {
+        const w = historyChartRef.current.offsetWidth || 800;
+        setHistoryChartSize({ width: Math.max(w, 400), height: 288 });
+      }
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    if (historyChartRef.current) ro.observe(historyChartRef.current);
+    return () => ro.disconnect();
+  }, []);
 
   const channelMix = useMemo(() => {
     const mix = channelMixByScenario[selectedScenario] || channelMixByScenario.profit_max;
@@ -249,9 +264,17 @@ export function ChannelActivation() {
           subtitle="ROAS trend over last 6 months"
           icon={<TrendingUp size={20} className="text-[#FF6B35]" />}
         />
-        <div className="h-72">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={channelPerformanceHistory}>
+        <div
+          ref={historyChartRef}
+          className="w-full"
+          style={{ width: '100%', height: 288, minHeight: 288, position: 'relative' }}
+        >
+          <LineChart
+            width={historyChartSize.width}
+            height={historyChartSize.height}
+            data={channelPerformanceHistory}
+            margin={{ top: 10, right: 10, left: 10, bottom: 10 }}
+          >
               <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" />
               <XAxis
                 dataKey="month"
@@ -278,7 +301,6 @@ export function ChannelActivation() {
               <Line type="monotone" dataKey="remarketing" stroke="#22C55E" strokeWidth={2} name="Remarketing" dot={{ r: 4 }} />
               <Line type="monotone" dataKey="sms" stroke="#F59E0B" strokeWidth={2} name="SMS" dot={{ r: 4 }} />
             </LineChart>
-          </ResponsiveContainer>
         </div>
       </Card>
 

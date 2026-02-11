@@ -2,7 +2,6 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AnalyticsService } from '../services/firestore';
 import { useBrand } from './useBrand';
-import { roiMockData } from '../data/mockROI';
 
 export interface AnalyticsRecord {
   id: string;
@@ -26,13 +25,7 @@ export function useAnalytics() {
   });
 
   const revenueData = useMemo(() => {
-    if (analyticsRecords.length === 0) {
-      return roiMockData.months.map((month, i) => ({
-        month: month.split(' ')[0],
-        total: roiMockData.total_revenue[i] / 1000,
-        attributed: roiMockData.attributed_revenue[i] / 1000,
-      }));
-    }
+    if (analyticsRecords.length === 0) return [];
     const toDate = (d: unknown) => d && typeof (d as any).toDate === 'function' ? (d as any).toDate() : new Date(d as string);
     const sorted = [...analyticsRecords].sort(
       (a, b) => toDate((a as any).date).getTime() - toDate((b as any).date).getTime()

@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useBrand } from '../../hooks';
 import { Upload, FileText, CheckCircle2, XCircle, AlertCircle, Clock, Download, Trash2 } from 'lucide-react';
 import { Card, CardHeader, Button, Spinner, ProgressBar, useToast, Tooltip } from '../common';
-import { importFile, saveImportJob, getImportJobs, isSupportedFile, parseCSV, type ImportType, type ImportResult, type ImportJob, type ImportProgress } from '../../services/import';
+import { importFile, saveImportJob, getImportJobs, isSupportedFile, parseCSV, PRODUCT_COLUMN_MAPPING, type ImportType, type ImportResult, type ImportJob, type ImportProgress } from '../../services/import';
 import * as XLSX from 'xlsx';
 import { Text, Heading, Label } from '@primer/react';
 
@@ -236,9 +236,9 @@ export function DataImport() {
 
   const getCSVTemplate = (type: ImportType) => {
     const templates: Record<ImportType, string> = {
-      products: `SKU,Name,Category,Margin Tier,Margin Percentage,Stock Level,Stock Capacity,Stock Age Days,Price,Priority Tag
-PROD-001,Product Name,Electronics,high,35.5,100,500,30,99.99,featured
-PROD-002,Another Product,Clothing,medium,25.0,50,200,15,49.99,`,
+      products: `SKU_ID,Product_Name,Category,Sell_Price,Cost_Price,Stock_On_Hand,Qty_Sold_Period,Revenue_Period,Supplier,Brand,First_Available_Date,Last_Sale_Date,Priority_Flag,Stock_Age_Days,Gross_Profit,Gross_Margin_%,Margin_Tier
+PROD-001,Product Name,Electronics,99.99,64.99,100,50,4999.50,,,2025-01-01,,featured,30,3500.50,35.0,high
+PROD-002,Another Product,Clothing,49.99,25.00,50,20,999.80,,,2025-02-01,,,15,499.90,50.0,medium`,
       segments: `Name,RFM Score,Count,Percentage,Revenue Share,Color,Description
 Champions,555,1500,25.5,45.2,#22c55e,High value customers
 Loyal,444,2000,34.0,30.1,#3b82f6,Regular customers`,
@@ -480,6 +480,39 @@ Value1,Value2,Value3`,
               </div>
             )}
           </div>
+
+          {/* Column mapping (Products only) */}
+          {selectedType === 'products' && (
+            <div className="p-4 bg-[#DBEAFE]/40 rounded-lg border border-[#3B82F6]/30">
+              <div className="text-sm font-semibold text-[#1E40AF] mb-3 flex items-center gap-2">
+                <FileText size={16} />
+                Αντιστοίχιση στηλών (Excel → Εφαρμογή)
+              </div>
+              <p className="text-xs text-[var(--nts-medium-gray)] mb-3">
+                Οι στήλες του αρχείου σου αντιστοιχίζονται αυτόματα ως εξής. Επιβεβαιώνοντας, οι εισαγωγές θα χρησιμοποιούν αυτή τη mapping.
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm border-collapse">
+                  <thead>
+                    <tr className="border-b border-[#E5E5E5]">
+                      <th className="text-left py-2 px-3 font-medium text-[#4A4A4A]">Στήλη αρχείου</th>
+                      <th className="text-left py-2 px-3 font-medium text-[#4A4A4A]">Πεδίο εφαρμογής</th>
+                      <th className="text-left py-2 px-3 font-medium text-[#4A4A4A]">Εμφανίζεται σε</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {PRODUCT_COLUMN_MAPPING.map((m, i) => (
+                      <tr key={i} className="border-b border-[#E5E5E5]/60 last:border-0">
+                        <td className="py-2 px-3 font-mono text-xs bg-white/60">{m.fileColumn}</td>
+                        <td className="py-2 px-3 font-medium text-[#1A1A1A]">{m.appField}</td>
+                        <td className="py-2 px-3 text-xs text-[#4A4A4A]">{m.usedIn}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           {/* Template Download */}
           <div className="flex flex-wrap items-center gap-3 p-4 bg-[var(--nts-light-gray)] rounded-lg border border-[var(--nts-border-gray)]">

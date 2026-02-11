@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ToastProvider } from './components/common';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
+import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
+import { ToastProvider, ErrorBoundary } from './components/common';
 import { AuthGuard, InviteAcceptPage, InviteUserSection } from './components/auth';
 import { AppShell } from './components/layout';
 import { DashboardOverview } from './components/dashboard/DashboardOverview';
@@ -15,8 +17,38 @@ import { Help } from './components/help';
 import { Concept } from './components/concept';
 import { AIInsightsPanel, AIInsightsTriggerWrapper } from './components/insights';
 import { DataImport } from './components/data';
+import { BrandsPage } from './components/brands';
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: { staleTime: 5 * 60 * 1000, gcTime: 30 * 60 * 1000 }
+  }
+});
+
+const persister = typeof window !== 'undefined'
+  ? createSyncStoragePersister({
+      storage: window.localStorage,
+      key: 'PERF_PLUS_QUERY_CACHE',
+      throttleTime: 1000
+    })
+  : undefined;
+
+function QueryProvider({ children }: { children: React.ReactNode }) {
+  if (persister) {
+    return (
+      <PersistQueryClientProvider
+        client={queryClient}
+        persistOptions={{
+          persister,
+          maxAge: 24 * 60 * 60 * 1000 // 24h
+        }}
+      >
+        {children}
+      </PersistQueryClientProvider>
+    );
+  }
+  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+}
 
 function App() {
   const [activeSection, setActiveSection] = useState('dashboard');
@@ -26,7 +58,7 @@ function App() {
   const pathMatch = typeof window !== 'undefined' && window.location.pathname.match(/^\/invite\/([^/]+)$/);
   if (pathMatch) {
     return (
-      <QueryClientProvider client={queryClient}>
+      <QueryProvider>
         <ToastProvider>
           <InviteAcceptPage
             token={pathMatch[1]}
@@ -35,12 +67,14 @@ function App() {
             }}
           />
         </ToastProvider>
-      </QueryClientProvider>
+      </QueryProvider>
     );
   }
 
   const renderContent = () => {
     switch (activeSection) {
+      case 'brands':
+        return <BrandsPage onNavigateToDashboard={() => handleSectionChange('dashboard')} />;
       case 'dashboard':
         return <DashboardOverview />;
       case 'strategy':
@@ -79,7 +113,7 @@ function App() {
   };
 
   return (
-    <QueryClientProvider client={queryClient}>
+    <QueryProvider>
       <ToastProvider>
       <AuthGuard>
       <div style={{ 
@@ -95,7 +129,9 @@ function App() {
           activeSection={activeSection}
           onSectionChange={handleSectionChange}
         >
-          {renderContent()}
+          <ErrorBoundary key={activeSection}>
+            {renderContent()}
+          </ErrorBoundary>
         </AppShell>
 
         {/* AI Insights Floating Button */}
@@ -109,7 +145,7 @@ function App() {
       </div>
       </AuthGuard>
       </ToastProvider>
-    </QueryClientProvider>
+    </QueryProvider>
   );
 }
 

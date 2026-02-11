@@ -13,7 +13,6 @@ import { useMemo } from 'react';
 import { Badge, Button } from '../common';
 import { useSegments, useProducts } from '../../hooks';
 import { generateInsightsFromData } from '../../services/insights';
-import { aiInsights as staticInsights } from '../../data/mockInsights';
 import type { AIInsight } from '../../types';
 
 interface AIInsightsPanelProps {
@@ -27,9 +26,7 @@ export function AIInsightsPanel({ isOpen, onClose }: AIInsightsPanelProps) {
   const [filter, setFilter] = useState<'all' | 'opportunity' | 'warning' | 'recommendation'>('all');
 
   const aiInsights = useMemo(() => {
-    const dynamic = generateInsightsFromData(products, segments);
-    if (dynamic.length > 0) return dynamic;
-    return staticInsights;
+    return generateInsightsFromData(products, segments);
   }, [products, segments]);
 
   const filteredInsights = aiInsights.filter(

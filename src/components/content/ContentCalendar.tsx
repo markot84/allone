@@ -73,7 +73,7 @@ export function ContentCalendar() {
       {/* Calendar Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
         {contentCalendar.content_items.map((item, index) => {
-          const status = statusConfig[item.status];
+          const status = statusConfig[item.status as keyof typeof statusConfig] ?? statusConfig.draft;
           const isSelected = selectedWeek === item.week;
 
           return (

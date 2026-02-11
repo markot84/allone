@@ -48,13 +48,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const ensureProfile = async () => {
       const existing = await FirestoreService.getDocument('users', user.uid);
       if (!existing) {
+        // Don't set brandIds here - acceptInvite may have run first (invite flow).
+        // Setting brandIds: [] would overwrite invite data. Leave brandIds for acceptInvite/BrandCreateForm.
         await FirestoreService.setDocument('users', user.uid, {
           id: user.uid,
           email: user.email ?? '',
           displayName: user.displayName ?? null,
-          brandIds: [],
           createdAt: Timestamp.now(),
-        });
+        } as Record<string, unknown>);
       }
     };
     ensureProfile().catch(console.error);

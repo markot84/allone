@@ -25,7 +25,7 @@ import {
   ReferenceLine
 } from 'recharts';
 import { Card, CardHeader, Badge, Button } from '../common';
-import { useAnalytics } from '../../hooks';
+import { useAnalytics, useSegments, useProducts } from '../../hooks';
 import {
   roiDashboard,
   roiCalculator,
@@ -38,7 +38,10 @@ import {
 const COLORS = ['#22C55E', '#3B82F6', '#FF6B35', '#8B5CF6', '#F59E0B'];
 
 export function ROIAttribution() {
-  const { revenueData } = useAnalytics();
+  const { revenueData, hasImported: hasAnalytics } = useAnalytics();
+  const { hasImported: hasSegments } = useSegments();
+  const { count: productsCount } = useProducts();
+  const hasAnyData = hasAnalytics || hasSegments || productsCount > 0;
   const [showMethodology, setShowMethodology] = useState(false);
   const [selectedBreakdown, setSelectedBreakdown] = useState<string | null>(null);
   const trendContainerRef = useRef<HTMLDivElement>(null);
@@ -79,31 +82,22 @@ export function ROIAttribution() {
     rate: r.total > 0 ? Math.round((r.attributed / r.total) * 1000) / 10 : 0
   }));
 
-  // Prepare breakdown data
-  const breakdownData = [
-    { 
-      id: 'segment',
-      name: 'Segment Campaigns', 
-      value: roiDashboard.breakdown.segment_activation.percentage, 
-      amount: roiDashboard.breakdown.segment_activation.revenue,
-      details: roiDashboard.breakdown.segment_activation.details
-    },
-    { 
-      id: 'inventory',
-      name: 'Stock Clearance', 
-      value: roiDashboard.breakdown.inventory_optimization.percentage, 
-      amount: roiDashboard.breakdown.inventory_optimization.revenue,
-      details: roiDashboard.breakdown.inventory_optimization.details,
-      costAvoided: roiDashboard.breakdown.inventory_optimization.cost_avoided
-    },
-    { 
-      id: 'channel',
-      name: 'Channel Optimization', 
-      value: roiDashboard.breakdown.channel_optimization.percentage, 
-      amount: roiDashboard.breakdown.channel_optimization.revenue,
-      details: roiDashboard.breakdown.channel_optimization.details
-    }
-  ];
+  // Prepare breakdown data (zeros when no imported data)
+  const summary = hasAnyData ? roiDashboard.summary : { total_revenue: 0, performance_plus_attributed: 0, attribution_percentage: 0, roi_multiplier: 0 };
+  const roiDisplay = hasAnyData ? roiCalculator.display : { headline: '0x ROI', subheadline: 'Φόρτωσε δεδομένα για να δεις το ROI', disclaimer: 'Βάσει conservative attribution methodology' };
+  const breakdownData = hasAnyData
+    ? [
+        { id: 'segment', name: 'Segment Campaigns', value: roiDashboard.breakdown.segment_activation.percentage, amount: roiDashboard.breakdown.segment_activation.revenue, details: roiDashboard.breakdown.segment_activation.details },
+        { id: 'inventory', name: 'Stock Clearance', value: roiDashboard.breakdown.inventory_optimization.percentage, amount: roiDashboard.breakdown.inventory_optimization.revenue, details: roiDashboard.breakdown.inventory_optimization.details, costAvoided: roiDashboard.breakdown.inventory_optimization.cost_avoided },
+        { id: 'channel', name: 'Channel Optimization', value: roiDashboard.breakdown.channel_optimization.percentage, amount: roiDashboard.breakdown.channel_optimization.revenue, details: roiDashboard.breakdown.channel_optimization.details }
+      ]
+    : [
+        { id: 'segment', name: 'Segment Campaigns', value: 0, amount: 0, details: [] },
+        { id: 'inventory', name: 'Stock Clearance', value: 0, amount: 0, details: [], costAvoided: 0 },
+        { id: 'channel', name: 'Channel Optimization', value: 0, amount: 0, details: [] }
+      ];
+  const segmentPerf = hasAnyData ? segmentPerformance : [];
+  const costSavingsData = hasAnyData ? costSavings : { period: 'Last 90 Days', items: [], total: 0 };
 
   return (
     <div className="space-y-6">
@@ -148,18 +142,20 @@ export function ROIAttribution() {
                   animate={{ scale: 1 }}
                   transition={{ type: 'spring', stiffness: 200 }}
                 >
-                  {roiCalculator.display.headline}
+                  {roiDisplay.headline}
                 </motion.span>
-                <Badge variant="success" size="md">
-                  +{roiDashboard.summary.attribution_percentage}% attributed
-                </Badge>
+                {summary.attribution_percentage > 0 && (
+                  <Badge variant="success" size="md">
+                    +{summary.attribution_percentage}% attributed
+                  </Badge>
+                )}
               </div>
               <p className="text-[var(--nts-medium-gray)] mt-4 max-w-md">
-                {roiCalculator.display.subheadline}
+                {roiDisplay.subheadline}
               </p>
               <p className="text-xs text-[var(--nts-medium-gray)] mt-2 flex items-center gap-1">
                 <Info size={12} />
-                {roiCalculator.display.disclaimer}
+                {roiDisplay.disclaimer}
               </p>
             </div>
 
@@ -168,13 +164,13 @@ export function ROIAttribution() {
               <MetricBox 
                 icon={<DollarSign size={20} />}
                 label="Total Revenue" 
-                value={`€${(roiDashboard.summary.total_revenue / 1000).toFixed(1)}K`}
+                value={`€${(summary.total_revenue / 1000).toFixed(1)}K`}
                 color="var(--nts-charcoal)"
               />
               <MetricBox 
                 icon={<Target size={20} />}
                 label="P+ Attributed" 
-                value={`€${(roiDashboard.summary.performance_plus_attributed / 1000).toFixed(1)}K`}
+                value={`€${(summary.performance_plus_attributed / 1000).toFixed(1)}K`}
                 color="var(--nts-orange)"
                 highlight
               />
@@ -184,13 +180,13 @@ export function ROIAttribution() {
               <MetricBox 
                 icon={<DollarSign size={20} />}
                 label="Subscription Cost" 
-                value={`€${roiCalculator.subscription_cost_period.toLocaleString()}`}
+                value={`€${(hasAnyData ? roiCalculator.subscription_cost_period : 0).toLocaleString()}`}
                 color="var(--nts-charcoal)"
               />
               <MetricBox 
                 icon={<TrendingUp size={20} />}
                 label="ROI Multiplier" 
-                value={`${roiDashboard.summary.roi_multiplier}x`}
+                value={`${summary.roi_multiplier}x`}
                 color="var(--success)"
               />
             </div>
@@ -203,27 +199,27 @@ export function ROIAttribution() {
         <ImpactCard
           icon="💶"
           label="Total Revenue"
-          value="€847,500"
-          subtext="+18.2% vs previous period"
+          value={`€${(summary.total_revenue / 1000).toFixed(1)}K`}
+          subtext={hasAnyData ? '+18.2% vs previous period' : 'Φόρτωσε δεδομένα'}
         />
         <ImpactCard
           icon="🎯"
           label="Performance+ Attributed"
-          value="€312,800"
-          subtext="36.9% of total revenue"
+          value={`€${(summary.performance_plus_attributed / 1000).toFixed(1)}K`}
+          subtext={hasAnyData ? `${summary.attribution_percentage}% of total revenue` : 'Φόρτωσε δεδομένα'}
           highlight
         />
         <ImpactCard
           icon="📈"
           label="ROI Multiplier"
-          value="64x"
+          value={`${summary.roi_multiplier}x`}
           subtext="Return on subscription cost"
         />
         <ImpactCard
           icon="💰"
           label="Cost Savings"
-          value="€62,000"
-          subtext="Warehousing + Ad efficiency"
+          value={`€${(costSavingsData.total / 1000).toFixed(0)}K`}
+          subtext={hasAnyData ? 'Warehousing + Ad efficiency' : 'Φόρτωσε δεδομένα'}
         />
       </div>
 
@@ -312,6 +308,7 @@ export function ROIAttribution() {
           </div>
 
           {/* Milestones */}
+          {hasAnyData && (
           <div className="mt-4 pt-4 border-t border-[#E5E5E5]">
             <p className="text-sm font-medium text-[#1A1A1A] mb-3">Key Milestones</p>
             <div className="flex flex-wrap gap-2">
@@ -330,6 +327,7 @@ export function ROIAttribution() {
               ))}
             </div>
           </div>
+          )}
         </Card>
 
         {/* Attribution Breakdown */}
@@ -438,6 +436,11 @@ export function ROIAttribution() {
           subtitle="Campaign results by RFM segment"
           icon={<Target size={20} className="text-[#FF6B35]" />}
         />
+        {segmentPerf.length === 0 ? (
+          <p className="text-sm text-[#4A4A4A] py-8 text-center">
+            Φόρτωσε RFM δεδομένα για να δεις την απόδοση ανά segment.
+          </p>
+        ) : (
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
@@ -452,7 +455,7 @@ export function ROIAttribution() {
               </tr>
             </thead>
             <tbody>
-              {segmentPerformance.map((seg, index) => (
+              {segmentPerf.map((seg, index) => (
                 <motion.tr
                   key={seg.segment}
                   initial={{ opacity: 0 }}
@@ -488,6 +491,7 @@ export function ROIAttribution() {
             </tbody>
           </table>
         </div>
+        )}
       </Card>
 
       {/* Cost Savings + Methodology */}
@@ -495,11 +499,11 @@ export function ROIAttribution() {
         <Card padding="lg">
           <CardHeader
             title="Cost Savings"
-            subtitle={costSavings.period}
+            subtitle={costSavingsData.period}
             icon={<DollarSign size={20} className="text-[#22C55E]" />}
           />
           <div className="space-y-4">
-            {costSavings.items.map((item, index) => (
+            {costSavingsData.items.map((item, index) => (
               <motion.div
                 key={item.category}
                 initial={{ opacity: 0, x: -10 }}
@@ -522,7 +526,7 @@ export function ROIAttribution() {
             <div className="pt-4 border-t border-[#E5E5E5] flex justify-between items-center">
               <span className="font-medium text-[#1A1A1A]">Total Savings</span>
               <span className="text-2xl font-bold text-[#22C55E] font-mono">
-                €{costSavings.total.toLocaleString()}
+                €{costSavingsData.total.toLocaleString()}
               </span>
             </div>
           </div>

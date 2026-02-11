@@ -20,6 +20,8 @@ interface BrandContextValue {
 
 const BrandContext = createContext<BrandContextValue | null>(null);
 
+const STORAGE_KEY_PREFIX = 'perf-plus-last-brand';
+
 export function BrandProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -51,7 +53,13 @@ export function BrandProvider({ children }: { children: ReactNode }) {
       setBrands(brandList);
       const defaultId = profile?.defaultBrandId ?? brandIds[0];
       const defaultBrand = brandList.find((b) => b.id === defaultId) ?? brandList[0] ?? null;
-      setCurrentBrandState((prev) => prev ? brandList.find((b) => b.id === prev.id) ?? defaultBrand : defaultBrand);
+      // On refresh: prefer last selected brand (localStorage) if still in user's brands
+      const storageKey = `${STORAGE_KEY_PREFIX}-${user.uid}`;
+      const lastBrandId = typeof localStorage !== 'undefined' ? localStorage.getItem(storageKey) : null;
+      const lastBrand = lastBrandId && brandIds.includes(lastBrandId)
+        ? brandList.find((b) => b.id === lastBrandId) ?? defaultBrand
+        : defaultBrand;
+      setCurrentBrandState((prev) => prev ? brandList.find((b) => b.id === prev.id) ?? lastBrand : lastBrand);
     } catch (err) {
       console.error('refreshBrands:', err);
       setBrands([]);
@@ -63,7 +71,12 @@ export function BrandProvider({ children }: { children: ReactNode }) {
 
   const setCurrentBrand = useCallback((brand: Brand | null) => {
     setCurrentBrandState(brand);
-  }, []);
+    if (typeof localStorage !== 'undefined' && user?.uid) {
+      const storageKey = `${STORAGE_KEY_PREFIX}-${user.uid}`;
+      if (brand) localStorage.setItem(storageKey, brand.id);
+      else localStorage.removeItem(storageKey);
+    }
+  }, [user?.uid]);
 
   useEffect(() => {
     refreshBrands();

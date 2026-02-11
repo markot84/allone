@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { Building2 } from 'lucide-react';
+import { Spinner } from '../common';
 import { BrandCreateForm } from './BrandCreateForm';
 import { useBrand } from '../../hooks';
 
@@ -10,7 +11,13 @@ interface BrandOnboardingProps {
 export function BrandOnboarding({ children }: BrandOnboardingProps) {
   const { brands, loading, refreshBrands } = useBrand();
 
-  if (loading) return null;
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[var(--nts-light-gray)]">
+        <Spinner size="lg" label="Φόρτωση…" />
+      </div>
+    );
+  }
   if (brands.length > 0) return <>{children}</>;
 
   return (

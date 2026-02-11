@@ -58,10 +58,12 @@ export async function acceptInvite(token: string, userId: string): Promise<void>
   const profile = await FirestoreService.getDocument<{ brandIds?: string[]; defaultBrandId?: string }>('users', userId);
   const brandIds = profile?.brandIds ?? [];
   if (!brandIds.includes(invite.brandId)) {
-    await FirestoreService.updateDocument('users', userId, {
+    // Use setDocument with merge - creates profile if new user, merges if exists
+    await FirestoreService.setDocument('users', userId, {
+      id: userId,
       brandIds: [...brandIds, invite.brandId],
       defaultBrandId: profile?.defaultBrandId || invite.brandId,
-    });
+    } as Record<string, unknown>);
   }
 
   await FirestoreService.updateDocument('invites', invite.id, {

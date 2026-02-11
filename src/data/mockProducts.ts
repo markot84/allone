@@ -140,7 +140,7 @@ export function calculateCompositeScore(
   segmentAffinities?: Record<string, number>,
   strategyId?: string
 ): number {
-  const profitScore = Math.min(100, (product.margin_percentage || 0) / 60 * 100);
+  const profitScore = Math.min(100, Math.max(0, (product.margin_percentage || 0) / 60 * 100));
 
   const stockRatio = (product.stock_level || 0) / (product.stock_capacity || 1);
   const stockScore = stockRatio > 0.8 ? 90 : stockRatio > 0.5 ? 60 : 30;
@@ -158,7 +158,8 @@ export function calculateCompositeScore(
      product.priority_tag === 'Seasonal' ? 65 :
      product.priority_tag === 'Clearance' ? 50 : 40) : 30;
   
-  const revenueScore = Math.min(100, (product.price * product.stock_level) / 5000 * 100);
+  const revenueProxy = product.revenue_period ?? (product.price * (product.stock_level || 0));
+  const revenueScore = Math.min(100, revenueProxy / 5000 * 100);
   
   const fitScore = segmentAffinities?.[product.category] 
     ? segmentAffinities[product.category] * 100 

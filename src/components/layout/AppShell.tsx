@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Header as PrimerHeader,
   NavList,
@@ -7,6 +8,7 @@ import {
 } from '@primer/react';
 import { Button } from '../common';
 import { useAuth, useBrand } from '../../hooks';
+import type { Brand } from '../../types';
 import {
   GearIcon,
   GraphIcon,
@@ -21,9 +23,10 @@ import {
   ThreeBarsIcon,
   XIcon
 } from '@primer/octicons-react';
-import { Upload, UserPlus } from 'lucide-react';
+import { Upload, UserPlus, Building2 } from 'lucide-react';
 
 type SectionId =
+  | 'brands'
   | 'dashboard'
   | 'strategy'
   | 'calendar'
@@ -45,6 +48,214 @@ export interface AppShellProps {
 
 type NavItem = { id: SectionId; label: string; icon: any };
 
+function BrandMenu({
+  currentBrand,
+  brands,
+  isOpen,
+  onToggle,
+  onClose,
+  onSelect
+}: {
+  currentBrand: Brand | null;
+  brands: Brand[];
+  isOpen: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+  onSelect: (brand: Brand) => void;
+}) {
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
+
+  useEffect(() => {
+    if (isOpen && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      setMenuStyle({
+        position: 'fixed',
+        top: rect.bottom + 4,
+        right: window.innerWidth - rect.right,
+        minWidth: Math.max(180, rect.width),
+        maxHeight: 280,
+        overflowY: 'auto',
+        zIndex: 1000
+      });
+    }
+  }, [isOpen]);
+
+  if (!currentBrand) return null;
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        onClick={onToggle}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          padding: '6px 12px',
+          border: '1px solid rgba(255, 107, 53, 0.3)',
+          borderRadius: 8,
+          background: 'linear-gradient(135deg, #FFF0EB 0%, #FFE4DC 100%)',
+          cursor: brands.length > 1 ? 'pointer' : 'default',
+          fontSize: 14,
+          fontWeight: 600,
+          color: '#FF6B35'
+        }}
+      >
+        <Text as="span" size="small" weight="semibold">{currentBrand.name}</Text>
+        {brands.length > 1 && (
+          <span style={{ opacity: 0.7, fontSize: 12 }}>▼</span>
+        )}
+      </button>
+      {brands.length > 1 && isOpen && createPortal(
+        <>
+          <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 999 }} aria-hidden />
+          <div
+            style={{
+              ...menuStyle,
+              background: 'var(--bgColor-default, #ffffff)',
+              border: '1px solid var(--borderColor-default, #d0d7de)',
+              borderRadius: 8,
+              boxShadow: '0 8px 24px rgba(0,0,0,0.12)'
+            }}
+          >
+            {brands.map((b) => (
+              <button
+                key={b.id}
+                onClick={() => { onSelect(b); onClose(); }}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  textAlign: 'left',
+                  border: 'none',
+                  background: currentBrand?.id === b.id ? 'var(--bgColor-muted, #f6f8fa)' : 'transparent',
+                  cursor: 'pointer',
+                  fontSize: 14,
+                  color: currentBrand?.id === b.id ? '#FF6B35' : 'var(--fgColor-default, #24292f)'
+                }}
+              >
+                {b.name}
+              </button>
+            ))}
+          </div>
+        </>,
+        document.body
+      )}
+    </>
+  );
+}
+
+function AccountMenu({
+  user,
+  onSignOut,
+  isOpen,
+  onToggle,
+  onClose
+}: {
+  user: { email?: string | null; displayName?: string | null } | null;
+  onSignOut: () => void;
+  isOpen: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+}) {
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
+
+  useEffect(() => {
+    if (isOpen && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      setMenuStyle({
+        position: 'fixed',
+        top: rect.bottom + 4,
+        right: window.innerWidth - rect.right,
+        minWidth: 220,
+        zIndex: 1000
+      });
+    }
+  }, [isOpen]);
+
+  if (!user) return null;
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        onClick={onToggle}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '6px 12px',
+          border: '1px solid var(--borderColor-default, #d0d7de)',
+          borderRadius: 6,
+          background: 'var(--bgColor-default, #ffffff)',
+          cursor: 'pointer',
+          fontSize: 14
+        }}
+      >
+        <div
+          style={{
+            width: 24,
+            height: 24,
+            borderRadius: '50%',
+            background: 'var(--bgColor-accent-emphasis, #0969da)',
+            color: 'white',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontWeight: 600,
+            fontSize: 12,
+            flexShrink: 0
+          }}
+        >
+          {(user.email?.[0] || user.displayName?.[0] || '?').toUpperCase()}
+        </div>
+        <Text as="span" size="small" className="hidden sm:inline" style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {user.email || user.displayName || 'Account'}
+        </Text>
+      </button>
+      {isOpen && createPortal(
+        <>
+          <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 999 }} aria-hidden />
+          <div
+            style={{
+              ...menuStyle,
+              background: 'var(--bgColor-default, #ffffff)',
+              border: '1px solid var(--borderColor-default, #d0d7de)',
+              borderRadius: 8,
+              boxShadow: '0 8px 24px rgba(0,0,0,0.12)'
+            }}
+          >
+            <div style={{ padding: 12, borderBottom: '1px solid var(--borderColor-default, #d0d7de)' }}>
+              <Text as="div" size="small" style={{ color: 'var(--fgColor-muted, #57606a)', marginBottom: 2 }}>Account</Text>
+              <Text as="div" size="small" weight="semibold" style={{ wordBreak: 'break-all' }}>{user.email}</Text>
+              {user.displayName && (
+                <Text as="div" size="small" style={{ color: 'var(--fgColor-muted, #57606a)' }}>{user.displayName}</Text>
+              )}
+            </div>
+            <button
+              onClick={() => { onSignOut(); onClose(); }}
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                textAlign: 'left',
+                border: 'none',
+                background: 'transparent',
+                cursor: 'pointer',
+                fontSize: 14,
+                color: 'var(--danger-fg, #cf222e)'
+              }}
+            >
+              Αποσύνδεση
+            </button>
+          </div>
+        </>,
+        document.body
+      )}
+    </>
+  );
+}
+
 export function AppShell({ activeSection, onSectionChange, children }: AppShellProps) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -54,6 +265,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
 
   const navItems = useMemo<NavItem[]>(
     () => [
+      { id: 'brands', label: 'Τα Brands μου', icon: Building2 },
       { id: 'dashboard', label: 'Dashboard', icon: HomeIcon },
       { id: 'strategy', label: 'Strategy Weights', icon: GraphIcon },
       { id: 'calendar', label: 'Content Strategy', icon: PencilIcon },
@@ -76,7 +288,8 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
         <NavList.Item
           key={item.id}
           as="button"
-          onClick={() => onSelect(item.id)}
+          type="button"
+          onClick={(e) => { e.preventDefault(); onSelect(item.id); }}
           aria-current={activeSection === item.id ? 'page' : undefined}
           style={{ width: '100%', textAlign: 'left' }}
         >
@@ -145,147 +358,26 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
         </PrimerHeader.Item>
 
         {currentBrand && (
-          <PrimerHeader.Item style={{ position: 'relative' }}>
-            <button
-              onClick={() => brands.length > 1 && setBrandMenuOpen((o) => !o)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '6px 12px',
-                border: '1px solid rgba(255, 107, 53, 0.3)',
-                borderRadius: 8,
-                background: 'linear-gradient(135deg, #FFF0EB 0%, #FFE4DC 100%)',
-                cursor: brands.length > 1 ? 'pointer' : 'default',
-                fontSize: 14,
-                fontWeight: 600,
-                color: '#FF6B35'
-              }}
-            >
-              <Text as="span" size="small" weight="semibold">{currentBrand.name}</Text>
-              {brands.length > 1 && (
-                <span style={{ opacity: 0.7, fontSize: 12 }}>▼</span>
-              )}
-            </button>
-            {brands.length > 1 && brandMenuOpen && (
-              <>
-                <div onClick={() => setBrandMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 99 }} />
-                <div
-                  style={{
-                    position: 'absolute',
-                    right: 0,
-                    top: '100%',
-                    marginTop: 4,
-                    minWidth: 180,
-                    background: 'var(--bgColor-default, #ffffff)',
-                    border: '1px solid var(--borderColor-default, #d0d7de)',
-                    borderRadius: 8,
-                    boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-                    zIndex: 100
-                  }}
-                >
-                  {brands.map((b) => (
-                    <button
-                      key={b.id}
-                      onClick={() => { setCurrentBrand(b); setBrandMenuOpen(false); }}
-                      style={{
-                        width: '100%',
-                        padding: '10px 12px',
-                        textAlign: 'left',
-                        border: 'none',
-                        background: currentBrand?.id === b.id ? 'var(--bgColor-muted, #f6f8fa)' : 'transparent',
-                        cursor: 'pointer',
-                        fontSize: 14
-                      }}
-                    >
-                      {b.name}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
+          <PrimerHeader.Item>
+            <BrandMenu
+              currentBrand={currentBrand}
+              brands={brands}
+              isOpen={brandMenuOpen}
+              onToggle={() => setBrandMenuOpen((o) => !o)}
+              onClose={() => setBrandMenuOpen(false)}
+              onSelect={setCurrentBrand}
+            />
           </PrimerHeader.Item>
         )}
 
-        <PrimerHeader.Item style={{ position: 'relative' }}>
-          <button
-            onClick={() => setUserMenuOpen((o) => !o)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              padding: '6px 12px',
-              border: '1px solid var(--borderColor-default, #d0d7de)',
-              borderRadius: 6,
-              background: 'var(--bgColor-default, #ffffff)',
-              cursor: 'pointer',
-              fontSize: 14
-            }}
-          >
-            <div
-              style={{
-                width: 24,
-                height: 24,
-                borderRadius: '50%',
-                background: 'var(--bgColor-accent-emphasis, #0969da)',
-                color: 'white',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontWeight: 600,
-                fontSize: 12
-              }}
-            >
-              {(user?.email?.[0] || user?.displayName?.[0] || '?').toUpperCase()}
-            </div>
-            <Text as="span" size="small" className="hidden sm:inline truncate max-w-[140px]">
-              {user?.email || user?.displayName || 'User'}
-            </Text>
-          </button>
-          {userMenuOpen && (
-            <>
-              <div
-                onClick={() => setUserMenuOpen(false)}
-                style={{ position: 'fixed', inset: 0, zIndex: 99 }}
-              />
-              <div
-                style={{
-                  position: 'absolute',
-                  right: 0,
-                  top: '100%',
-                  marginTop: 4,
-                  minWidth: 180,
-                  background: 'var(--bgColor-default, #ffffff)',
-                  border: '1px solid var(--borderColor-default, #d0d7de)',
-                  borderRadius: 8,
-                  boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-                  zIndex: 100
-                }}
-              >
-                <div style={{ padding: 12, borderBottom: '1px solid var(--borderColor-default, #d0d7de)' }}>
-                  <Text as="div" size="small" weight="semibold">{user?.email}</Text>
-                  <Text as="div" size="small" style={{ color: 'var(--fgColor-muted, #57606a)' }}>
-                    {user?.displayName || 'User'}
-                  </Text>
-                </div>
-                <button
-                  onClick={() => { signOut(); setUserMenuOpen(false); }}
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    textAlign: 'left',
-                    border: 'none',
-                    background: 'transparent',
-                    cursor: 'pointer',
-                    fontSize: 14,
-                    color: 'var(--danger-fg, #cf222e)'
-                  }}
-                >
-                  Αποσύνδεση
-                </button>
-              </div>
-            </>
-          )}
+        <PrimerHeader.Item style={{ position: 'relative', overflow: 'visible' }}>
+          <AccountMenu
+            user={user}
+            onSignOut={signOut}
+            isOpen={userMenuOpen}
+            onToggle={() => setUserMenuOpen((o) => !o)}
+            onClose={() => setUserMenuOpen(false)}
+          />
         </PrimerHeader.Item>
       </PrimerHeader>
 
@@ -459,20 +551,46 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
                 </button>
               </div>
               {currentBrand && (
-                <div
-                  style={{
-                    padding: '10px 12px',
-                    borderRadius: 8,
-                    background: 'linear-gradient(135deg, #FFF0EB 0%, #FFE4DC 100%)',
-                    border: '1px solid rgba(255, 107, 53, 0.25)'
-                  }}
-                >
-                  <Text as="div" size="small" style={{ color: 'var(--fgColor-muted, #57606a)' }}>
+                <div style={{ padding: '0 12px 12px' }}>
+                  <Text as="div" size="small" style={{ color: 'var(--fgColor-muted, #57606a)', marginBottom: 6 }}>
                     Brand
                   </Text>
-                  <Text as="div" weight="semibold" style={{ color: '#FF6B35' }}>
-                    {currentBrand.name}
-                  </Text>
+                  {brands.length > 1 ? (
+                    brands.map((b) => (
+                      <button
+                        key={b.id}
+                        onClick={() => { setCurrentBrand(b); setMobileNavOpen(false); }}
+                        style={{
+                          width: '100%',
+                          padding: '10px 12px',
+                          textAlign: 'left',
+                          border: 'none',
+                          borderRadius: 8,
+                          background: currentBrand?.id === b.id ? 'linear-gradient(135deg, #FFF0EB 0%, #FFE4DC 100%)' : 'var(--bgColor-muted, #f6f8fa)',
+                          cursor: 'pointer',
+                          fontSize: 14,
+                          color: currentBrand?.id === b.id ? '#FF6B35' : 'var(--fgColor-default, #24292f)',
+                          fontWeight: currentBrand?.id === b.id ? 600 : 400,
+                          marginBottom: 4
+                        }}
+                      >
+                        {b.name}
+                      </button>
+                    ))
+                  ) : (
+                    <div
+                      style={{
+                        padding: '10px 12px',
+                        borderRadius: 8,
+                        background: 'linear-gradient(135deg, #FFF0EB 0%, #FFE4DC 100%)',
+                        border: '1px solid rgba(255, 107, 53, 0.25)'
+                      }}
+                    >
+                      <Text as="div" weight="semibold" style={{ color: '#FF6B35' }}>
+                        {currentBrand.name}
+                      </Text>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

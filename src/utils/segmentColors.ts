@@ -13,7 +13,8 @@ export const SEGMENT_COLORS: Record<string, string> = {
   customers_needing_attention: '#EC4899',
 };
 
-export function getSegmentColor(segment: RFMSegment): string {
+export function getSegmentColor(segment: RFMSegment | null | undefined): string {
+  if (!segment) return '#6B7280';
   const idKey = segment.id.toLowerCase().replace(/\s+/g, '_');
   const idKeyNoApostrophe = idKey.replace(/'/g, '');
   const nameKey = (segment.name ?? '').toLowerCase().replace(/\s+/g, '_');

@@ -23,17 +23,16 @@ import {
 } from 'recharts';
 import { Card, CardHeader } from '../common';
 import { useSegments, useProducts, useAnalytics, useCampaigns } from '../../hooks';
-import { dashboardKPIs, aiInsights as staticInsights } from '../../data';
 import { generateInsightsFromData } from '../../services/insights';
 
 export function DashboardOverview() {
-  const { segments: rfmSegments } = useSegments();
+  const { segments: rfmSegments, hasImported: hasSegments } = useSegments();
   const { count: productsCount, products } = useProducts();
-  const { revenueData } = useAnalytics();
+  const { revenueData, hasImported: hasAnalytics } = useAnalytics();
   const { count: campaignsCount } = useCampaigns();
+  const hasAnyData = hasAnalytics || hasSegments || productsCount > 0;
   const aiInsights = useMemo(() => {
-    const dynamic = generateInsightsFromData(products, rfmSegments);
-    return dynamic.length > 0 ? dynamic : staticInsights;
+    return generateInsightsFromData(products, rfmSegments);
   }, [products, rfmSegments]);
   const revenueContainerRef = useRef<HTMLDivElement>(null);
   const segmentContainerRef = useRef<HTMLDivElement>(null);
@@ -77,12 +76,68 @@ export function DashboardOverview() {
         </p>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 gap-4 sm:gap-6">
-        {dashboardKPIs.map((kpi, index) => (
-          <KPICard key={kpi.label} kpi={kpi} index={index} />
-        ))}
-      </div>
+      {/* KPI Cards - from real data only */}
+      {(revenueData.length > 0 || productsCount > 0 || rfmSegments.length > 0) && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 gap-4 sm:gap-6">
+          {revenueData.length > 0 && (
+            <KPICard
+              kpi={{
+                label: 'Total Revenue',
+                value: `€${revenueData.reduce((s, r) => s + r.total, 0).toFixed(0)}K`,
+                change: 0,
+                changeLabel: '',
+                trend: 'up' as const,
+                sparklineData: revenueData.map(r => r.total)
+              }}
+              index={0}
+            />
+          )}
+          {productsCount > 0 && (
+            <KPICard
+              kpi={{
+                label: 'Products',
+                value: productsCount.toLocaleString(),
+                change: products.length > 0
+                  ? (() => {
+                      const withStock = products.filter((p) => (p.stock_level ?? 0) >= 10 && (p.stock_age_days ?? 0) <= 180);
+                      return Math.round((withStock.length / products.length) * 1000) / 10;
+                    })()
+                  : undefined,
+                changeLabel: 'healthy',
+                trend: 'up' as const,
+                sparklineData: []
+              }}
+              index={1}
+            />
+          )}
+          {rfmSegments.length > 0 && (
+            <KPICard
+              kpi={{
+                label: 'Segments',
+                value: rfmSegments.length.toString(),
+                change: 0,
+                changeLabel: 'RFM',
+                trend: 'up' as const,
+                sparklineData: []
+              }}
+              index={2}
+            />
+          )}
+          {campaignsCount > 0 && (
+            <KPICard
+              kpi={{
+                label: 'Campaigns',
+                value: campaignsCount.toString(),
+                change: 0,
+                changeLabel: 'active',
+                trend: 'up' as const,
+                sparklineData: []
+              }}
+              index={3}
+            />
+          )}
+        </div>
+      )}
 
       {/* Main Charts Row */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 lg:gap-8">
@@ -314,13 +369,13 @@ export function DashboardOverview() {
             />
             <StatBox
               label="Stock Clearance"
-              value="€89.2K"
+              value={hasAnyData ? '€89.2K' : '€0'}
               icon={<TrendingUp size={18} />}
               color="#8B5CF6"
             />
             <StatBox
               label="Cost Savings"
-              value="€62K"
+              value={hasAnyData ? '€62K' : '€0'}
               icon={<DollarSign size={18} />}
               color="#FF6B35"
             />
@@ -331,9 +386,9 @@ export function DashboardOverview() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-[13px] font-medium text-[var(--nts-medium-gray)] mb-1">Performance+ ROI</p>
-                <p className="text-3xl font-bold tracking-tight text-[var(--nts-charcoal)] mb-1 font-mono">64x</p>
+                <p className="text-3xl font-bold tracking-tight text-[var(--nts-charcoal)] mb-1 font-mono">{hasAnyData ? '64x' : '0x'}</p>
                 <p className="text-[13px] text-[var(--nts-medium-gray)]">
-                  Κάθε €1 → €64 attributed revenue
+                  {hasAnyData ? 'Κάθε €1 → €64 attributed revenue' : 'Φόρτωσε δεδομένα για να δεις το ROI'}
                 </p>
               </div>
               <div className="w-10 h-10 bg-[var(--nts-light-gray)] rounded-md border border-[var(--nts-border-gray)] flex items-center justify-center">
@@ -348,7 +403,7 @@ export function DashboardOverview() {
 }
 
 interface KPICardProps {
-  kpi: typeof dashboardKPIs[0];
+  kpi: { label: string; value: string; change?: number; changeLabel?: string; trend?: 'up' | 'down'; sparklineData?: number[] };
   index: number;
 }
 
@@ -375,21 +430,20 @@ function KPICard({ kpi, index }: KPICardProps) {
         <p className="text-3xl font-bold text-[var(--nts-charcoal)] mb-3 font-mono tracking-tight">
           {kpi.value}
         </p>
-        <div className="flex items-center gap-2">
-          <span
-            className={`text-[14px] font-semibold px-2 py-0.5 rounded-lg ${
-              kpi.trend === 'up'
-                ? 'text-[var(--nts-medium-gray)] bg-[var(--nts-light-gray)] border border-[var(--nts-border-gray)]'
-                : kpi.trend === 'down'
-                ? 'text-[var(--nts-medium-gray)] bg-[var(--nts-light-gray)] border border-[var(--nts-border-gray)]'
-                : 'text-[var(--nts-medium-gray)] bg-[var(--nts-light-gray)] border border-[var(--nts-border-gray)]'
-            }`}
-          >
-            {kpi.change > 0 ? '+' : ''}
-            {kpi.change}%
-          </span>
-          <span className="text-[13px] text-[var(--nts-medium-gray)]">{kpi.changeLabel}</span>
-        </div>
+        {(kpi.change != null || kpi.changeLabel) && (
+          <div className="flex items-center gap-2">
+            {kpi.change != null && (
+              <span
+                className={`text-[14px] font-semibold px-2 py-0.5 rounded-lg text-[var(--nts-medium-gray)] bg-[var(--nts-light-gray)] border border-[var(--nts-border-gray)]`}
+              >
+                {kpi.change > 0 ? '+' : ''}{kpi.change}%
+              </span>
+            )}
+            {kpi.changeLabel && (
+              <span className="text-[13px] text-[var(--nts-medium-gray)]">{kpi.changeLabel}</span>
+            )}
+          </div>
+        )}
       </Card>
     </motion.div>
   );

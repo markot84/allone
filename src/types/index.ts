@@ -71,7 +71,7 @@ export interface SegmentCategoryData {
   preferred_channels: string[];
 }
 
-// Product Types
+// Product Types (aligned with FINAL_Unified_Production_Schema)
 export interface Product {
   id: string;
   name: string;
@@ -85,6 +85,16 @@ export interface Product {
   priority_tag?: string;
   price: number;
   composite_score?: number;
+  /** Cost price (Cost_Price in template) - optional */
+  cost_price?: number;
+  /** Revenue in period (Revenue_Period in template) - optional, used for revenue-based scoring */
+  revenue_period?: number;
+  /** Qty sold in period (Qty_Sold_Period in template) - optional */
+  qty_sold_period?: number;
+  /** First available date (First_Available_Date in template) - for Stock Age calc when Stock_Age_Days empty */
+  first_available_date?: string;
+  /** Firestore: when product was imported - fallback for Stock Age when no date column */
+  createdAt?: { toDate: () => Date } | Date | string;
 }
 
 export interface InventorySummary {

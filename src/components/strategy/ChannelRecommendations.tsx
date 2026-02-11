@@ -5,13 +5,20 @@ import type { ChannelRecommendation, RFMSegment } from '../../types';
 
 interface ChannelRecommendationsProps {
   recommendations: ChannelRecommendation;
-  segment: RFMSegment;
+  segment: RFMSegment | null;
 }
 
 export function ChannelRecommendations({
   recommendations,
   segment
 }: ChannelRecommendationsProps) {
+  if (!segment) {
+    return (
+      <div className="p-8 text-center text-[#4A4A4A]">
+        <p>Φόρτωσε RFM segments για να δεις συστάσεις καναλιών.</p>
+      </div>
+    );
+  }
   if (!recommendations) {
     return (
       <div className="p-8 text-center text-[#4A4A4A]">

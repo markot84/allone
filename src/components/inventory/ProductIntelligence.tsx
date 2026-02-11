@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { Card, Badge, Button, ProgressBar, Spinner, Tooltip } from '../common';
 import { useProducts } from '../../hooks';
-import { categories as mockCategories } from '../../data/mockProducts';
+import { getStockAgeDays } from '../../utils/productUtils';
 import type { Product, InventorySummary, InventoryAlert } from '../../types';
 
 type SortField = 'name' | 'margin_percentage' | 'stock_level' | 'stock_age_days' | 'price';
@@ -45,18 +45,19 @@ function computeInventorySummary(products: Product[]): InventorySummary {
     const level = p.stock_level ?? 0;
     const capacity = Math.max(p.stock_capacity ?? 0, 1);
     const price = p.price ?? 0;
-    const ageDays = p.stock_age_days ?? 0;
-    const ratio = level / capacity;
+    const ageDays = getStockAgeDays(p);
+    const hasExplicitCapacity = (p.stock_capacity ?? 0) > 0 && p.stock_capacity !== level;
+    const ratio = hasExplicitCapacity ? level / capacity : (level > 0 ? 0.5 : 0);
 
     totalValue += level * price;
 
     if (ageDays > 180) {
       deadCount++;
       deadValue += level * price;
-    } else if (ratio > 0.8) {
+    } else if (hasExplicitCapacity && ratio > 0.8) {
       excessCount++;
       excessValue += level * price;
-    } else if (ratio < 0.2 || level < 10) {
+    } else if (level < 10 || (hasExplicitCapacity && ratio < 0.2)) {
       lowCount++;
     } else {
       healthyCount++;
@@ -75,8 +76,11 @@ function computeInventorySummary(products: Product[]): InventorySummary {
 
 function computeInventoryAlerts(products: Product[]): InventoryAlert[] {
   const alerts: InventoryAlert[] = [];
-  const deadStock = products.filter((p) => (p.stock_age_days ?? 0) > 180);
-  const nearDead = products.filter((p) => (p.stock_age_days ?? 0) > 120 && (p.stock_age_days ?? 0) <= 180);
+  const deadStock = products.filter((p) => getStockAgeDays(p) > 180);
+  const nearDead = products.filter((p) => {
+    const age = getStockAgeDays(p);
+    return age > 120 && age <= 180;
+  });
   const highMarginLowStock = products.filter(
     (p) => (p.margin_tier === 'high' || (p.margin_percentage ?? 0) > 25) && ((p.stock_level ?? 0) < 10 || (p.stock_level ?? 0) / Math.max(p.stock_capacity ?? 1, 1) < 0.2)
   );
@@ -100,7 +104,7 @@ export function ProductIntelligence() {
   const inventoryAlerts = useMemo(() => computeInventoryAlerts(products), [products]);
   const categories = useMemo(() => {
     const fromProducts = [...new Set(products.map(p => p.category))].filter(Boolean).sort();
-    return fromProducts.length > 0 ? fromProducts : mockCategories;
+    return fromProducts;
   }, [products]);
 
   // Filter and sort products
@@ -114,8 +118,8 @@ export function ProductIntelligence() {
         return matchesSearch && matchesCategory && matchesMargin;
       })
       .sort((a, b) => {
-        const aVal = a[sortField];
-        const bVal = b[sortField];
+        const aVal = sortField === 'stock_age_days' ? getStockAgeDays(a) : a[sortField];
+        const bVal = sortField === 'stock_age_days' ? getStockAgeDays(b) : b[sortField];
         if (typeof aVal === 'string' && typeof bVal === 'string') {
           return sortDirection === 'asc' 
             ? aVal.localeCompare(bVal) 
@@ -125,7 +129,7 @@ export function ProductIntelligence() {
           ? (aVal as number) - (bVal as number) 
           : (bVal as number) - (aVal as number);
       });
-  }, [searchQuery, selectedCategory, marginFilter, sortField, sortDirection]);
+  }, [products, searchQuery, selectedCategory, marginFilter, sortField, sortDirection]);
 
   const paginatedProducts = filteredProducts.slice(
     (currentPage - 1) * itemsPerPage,
@@ -324,7 +328,7 @@ export function ProductIntelligence() {
                     onClick={() => handleSort('margin_percentage')}
                     className="flex items-center gap-1 hover:text-[#1A1A1A]"
                   >
-                    Margin
+                    Gross Margin
                     <SortIcon field="margin_percentage" current={sortField} direction={sortDirection} />
                   </button>
                 </th>
@@ -338,13 +342,15 @@ export function ProductIntelligence() {
                   </button>
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-[#4A4A4A]">
-                  <button
-                    onClick={() => handleSort('stock_age_days')}
-                    className="flex items-center gap-1 hover:text-[#1A1A1A]"
-                  >
-                    Stock Age
-                    <SortIcon field="stock_age_days" current={sortField} direction={sortDirection} />
-                  </button>
+                  <Tooltip content="Ημέρες από First_Available_Date ή Stock_Age_Days από αρχείο." size={12}>
+                    <button
+                      onClick={() => handleSort('stock_age_days')}
+                      className="flex items-center gap-1 hover:text-[#1A1A1A]"
+                    >
+                      Stock Age
+                      <SortIcon field="stock_age_days" current={sortField} direction={sortDirection} />
+                    </button>
+                  </Tooltip>
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-[#4A4A4A]">
                   Priority Tag
@@ -480,7 +486,8 @@ function ProductRow({ product, index }: ProductRowProps) {
     ? (product.stock_level / product.stock_capacity) * 100
     : 0;
   const stockColor = stockPercentage > 80 ? '#EF4444' : stockPercentage > 50 ? '#F59E0B' : '#22C55E';
-  const ageColor = product.stock_age_days > 180 ? '#EF4444' : product.stock_age_days > 90 ? '#F59E0B' : '#22C55E';
+  const ageDays = getStockAgeDays(product);
+  const ageColor = ageDays > 180 ? '#EF4444' : ageDays > 90 ? '#F59E0B' : '#22C55E';
 
   return (
     <motion.tr
@@ -531,7 +538,7 @@ function ProductRow({ product, index }: ProductRowProps) {
           className="text-sm font-mono"
           style={{ color: ageColor }}
         >
-          {(product.stock_age_days ?? 0)}d
+          {getStockAgeDays(product)}d
         </span>
       </td>
       <td className="px-4 py-3">

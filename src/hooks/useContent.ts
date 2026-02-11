@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { ContentService } from '../services/firestore';
 import { useBrand } from './useBrand';
-import { contentItems as mockContentItems } from '../data/mockContent';
 
 export interface ContentItem {
   id: string;
@@ -31,7 +30,8 @@ export function useContent() {
     queryFn: () => (brandId ? ContentService.getAll(brandId) : Promise.resolve([])) as Promise<ContentItem[]>,
   });
 
-  const contentItems = firestoreContent.length > 0 ? (firestoreContent as ContentItem[]) : mockContentItems;
+  // When brandId is set: show real data only. When no brand: empty (no mock).
+  const contentItems = (brandId ? (firestoreContent as ContentItem[]) : []) as ContentItem[];
   return {
     contentItems,
     hasImported: firestoreContent.length > 0,

@@ -527,7 +527,7 @@ export function WeightConfigurator() {
 
         <ChannelRecommendations
           recommendations={currentRecommendations[selectedSegment] || currentRecommendations.champions}
-          segment={rfmSegments.find((s) => s.id === selectedSegment) || rfmSegments[0]}
+          segment={rfmSegments.find((s) => s.id === selectedSegment) ?? rfmSegments[0] ?? null}
         />
       </Card>
 

@@ -33,6 +33,25 @@ async function runWithConcurrency<T, R>(
 }
 
 const SUPPORTED_EXTENSIONS = ['.csv', '.xlsx'];
+
+/** Column mapping: Excel/CSV column → App field (where it appears in UI) */
+export const PRODUCT_COLUMN_MAPPING = [
+  { fileColumn: 'SKU_ID', appField: 'SKU', usedIn: 'Product Intelligence, Strategy, Dashboard count' },
+  { fileColumn: 'Product_Name', appField: 'Product', usedIn: 'Product Intelligence, Strategy Preview' },
+  { fileColumn: 'Category', appField: 'Category', usedIn: 'Product Intelligence table' },
+  { fileColumn: 'Sell_Price', appField: 'Price', usedIn: 'Product Intelligence, Strategy, Revenue calc' },
+  { fileColumn: 'Cost_Price', appField: 'Cost price', usedIn: 'Optional, margin derivation' },
+  { fileColumn: 'Stock_On_Hand', appField: 'Stock Level', usedIn: 'Product Intelligence, Total SKUs, Strategy' },
+  { fileColumn: 'Qty_Sold_Period', appField: 'Qty sold', usedIn: 'Optional, analytics' },
+  { fileColumn: 'Revenue_Period', appField: 'Revenue', usedIn: 'Strategy composite score, prioritization' },
+  { fileColumn: 'Stock_Age_Days', appField: 'Stock Age', usedIn: 'Product Intelligence, Strategy (stock_clearance)' },
+  { fileColumn: 'First_Available_Date', appField: 'Stock Age (αν λείπει Stock_Age_Days)', usedIn: 'Υπολογισμός: σήμερα − ημερομηνία' },
+  { fileColumn: 'Gross_Margin_%', appField: 'Gross Margin %', usedIn: 'Product Intelligence, Strategy profit score' },
+  { fileColumn: 'Sell_Price + Cost_Price', appField: 'Gross Margin % (αν λείπει Gross_Margin_%)', usedIn: 'Υπολογισμός: (Sell−Cost)/Sell × 100' },
+  { fileColumn: 'Margin_Tier', appField: 'Margin tier', usedIn: 'Strategy, Badge (high/medium/low)' },
+  { fileColumn: 'Priority_Flag', appField: 'Priority Tag', usedIn: 'Product Intelligence, Strategy strategic score' },
+] as const;
+
 export function isSupportedFile(name: string): boolean {
   const lower = name.toLowerCase();
   return SUPPORTED_EXTENSIONS.some(ext => lower.endsWith(ext));
@@ -145,7 +164,8 @@ function csvToObjects(csvRows: string[][]): Record<string, string>[] {
     
     const obj: Record<string, string> = {};
     headers.forEach((header, index) => {
-      obj[header] = row[index]?.trim() || '';
+      const cell = row[index];
+      obj[header] = (cell != null ? String(cell).trim() : '') || '';
     });
     objects.push(obj);
   }
@@ -167,20 +187,44 @@ function pick(row: Record<string, string>, ...keys: string[]): string {
   return '';
 }
 
+// Parse date from Excel serial (number) or ISO string → days ago from today
+function daysFromFirstAvailable(val: string): number | null {
+  if (!val || !val.trim()) return null;
+  const n = parseFloat(val);
+  let date: Date;
+  if (!isNaN(n) && n > 0) {
+    date = new Date((n - 25569) * 86400 * 1000); // Excel serial → JS Date
+  } else {
+    date = new Date(val.trim());
+  }
+  if (isNaN(date.getTime())) return null;
+  const now = new Date();
+  return Math.floor((now.getTime() - date.getTime()) / 86400000);
+}
+
+// Gross margin % from Sell_Price and Cost_Price when Gross_Margin_% empty
+function calcGrossMarginPct(sellPrice: number, costPrice: number): number | null {
+  if (sellPrice <= 0) return null;
+  return ((sellPrice - costPrice) / sellPrice) * 100;
+}
+
 // Validate and transform Products
+// Primary schema: FINAL_Unified_Production_Schema (SKU_ID, Product_Name, Category, Sell_Price, Cost_Price, Stock_On_Hand, Qty_Sold_Period, Revenue_Period, Supplier, Brand, First_Available_Date, Last_Sale_Date, Priority_Flag, Stock_Age_Days, Gross_Profit, Gross_Margin_%, Margin_Tier)
 function validateProduct(row: Record<string, string>, index: number): { valid: boolean; data?: Product; error?: string } {
-  // Flexible column aliases to support different export formats (Monday.com, DSS, etc.)
-  // DSS export: SKU, Περιγραφή, Προμηθευτής, Κατάσταση, Κίνηση, Δυναμικό_Υπόλοιπο, Επιθυμητό_Απόθεμα, MST_TOD, MST_(ημέρες), Ανάγκη, Τελική_Παραγγελία, MOQ, Packing, Κόστος, Alerts
   const name = pick(row, 'name', 'product_name', 'product', 'title', 'item', 'item_name', 'description', 'product_title', 'όνομα', 'προϊόν', 'περιγραφή');
-  const sku = pick(row, 'sku', 'id', 'product_id', 'item_id', 'code', 'κωδικός', 'barcode', 'ean');
+  const sku = pick(row, 'sku', 'sku_id', 'id', 'product_id', 'item_id', 'code', 'κωδικός', 'barcode', 'ean');
   const category = pick(row, 'category', 'product_category', 'group', 'κατηγορία', 'type', 'department', 'προμηθευτής');
   const marginTier = pick(row, 'margin_tier', 'margin_category', 'tier');
-  const marginPct = pick(row, 'margin_percentage', 'margin_pct', 'margin', 'margin_%', 'gross_margin', 'profit_margin');
-  const stockLevel = pick(row, 'stock_level', 'stock', 'quantity', 'qty', 'inventory', 'on_hand', 'units', 'απόθεμα', 'ποσότητα', 'available_stock', 'δυναμικό_υπόλοιπο', 'κίνηση');
+  const marginPct = pick(row, 'margin_percentage', 'margin_pct', 'margin', 'margin_%', 'gross_margin_%', 'gross_margin', 'profit_margin');
+  const stockLevel = pick(row, 'stock_level', 'stock', 'stock_on_hand', 'quantity', 'qty', 'inventory', 'on_hand', 'units', 'απόθεμα', 'ποσότητα', 'available_stock', 'δυναμικό_υπόλοιπο', 'κίνηση');
   const stockCapacity = pick(row, 'stock_capacity', 'capacity', 'max_stock', 'max_quantity', 'χωρητικότητα', 'επιθυμητό_απόθεμα');
   const stockAge = pick(row, 'stock_age_days', 'age_days', 'days_in_stock', 'stock_age', 'age', 'mst_(ημέρες)');
-  const price = pick(row, 'price', 'unit_price', 'retail_price', 'sell_price', 'τιμή', 'cost', 'msrp', 'κόστος');
-  const priority = pick(row, 'priority_tag', 'priority', 'tag', 'label', 'alerts', 'κατάσταση');
+  const firstAvailableDate = pick(row, 'first_available_date', 'first_available', 'available_date', 'date_added', 'created_date', 'creation_date', 'inventory_date');
+  const price = pick(row, 'price', 'unit_price', 'retail_price', 'sell_price', 'τιμή', 'msrp', 'κόστος');
+  const costPrice = pick(row, 'cost_price', 'cost', 'κόστος');
+  const revenuePeriod = pick(row, 'revenue_period', 'revenue', 'revenue_period');
+  const qtySoldPeriod = pick(row, 'qty_sold_period', 'qty_sold', 'quantity_sold');
+  const priority = pick(row, 'priority_tag', 'priority_flag', 'priority', 'tag', 'label', 'alerts', 'κατάσταση');
 
   const errors: string[] = [];
 
@@ -193,18 +237,41 @@ function validateProduct(row: Record<string, string>, index: number): { valid: b
   }
 
   const rawId = sku || name.slice(0, 60) || `product-${Date.now()}-${index}`;
+  const stockLevelNum = parseInt(stockLevel || '0', 10) || 0;
+  const stockCapacityNum = parseInt(stockCapacity || '0', 10) || 0;
+  const sellPriceNum = parseFloat(price || '0') || 0;
+  const costPriceNum = parseFloat(costPrice || '0') || 0;
+
+  // Stock Age: prefer Stock_Age_Days from file, else compute from First_Available_Date
+  let stockAgeDays = parseInt(stockAge || '0', 10) || 0;
+  if (stockAgeDays === 0 && firstAvailableDate) {
+    const computed = daysFromFirstAvailable(firstAvailableDate);
+    if (computed !== null && computed >= 0) stockAgeDays = computed;
+  }
+
+  // Gross Margin %: prefer Gross_Margin_% from file, else compute from (Sell_Price - Cost_Price) / Sell_Price
+  let marginPctNum = parseFloat(marginPct || '0') || 0;
+  if (marginPctNum === 0 && sellPriceNum > 0) {
+    const computed = calcGrossMarginPct(sellPriceNum, costPriceNum);
+    if (computed !== null) marginPctNum = Math.round(computed * 10) / 10;
+  }
+
   const product: Product = {
     id: sanitizeDocId(String(rawId)),
     name: name || sku,
     sku: sku || rawId,
     category: category || 'Uncategorized',
-    margin_tier: (['high', 'medium', 'low'].includes(marginTier) ? marginTier : 'medium') as 'high' | 'medium' | 'low',
-    margin_percentage: parseFloat(marginPct || '0') || 0,
-    stock_level: parseInt(stockLevel || '0', 10) || 0,
-    stock_capacity: parseInt(stockCapacity || '0', 10) || 0,
-    stock_age_days: parseInt(stockAge || '0', 10) || 0,
-    price: parseFloat(price || '0') || 0,
+    margin_tier: (['high', 'medium', 'low'].includes((marginTier || '').toLowerCase()) ? (marginTier || 'medium').toLowerCase() : 'medium') as 'high' | 'medium' | 'low',
+    margin_percentage: marginPctNum,
+    stock_level: stockLevelNum,
+    stock_capacity: stockCapacityNum || stockLevelNum || 1,
+    stock_age_days: stockAgeDays,
+    price: sellPriceNum,
     ...(priority ? { priority_tag: priority } : {}),
+    ...(costPrice ? { cost_price: costPriceNum } : {}),
+    ...(revenuePeriod ? { revenue_period: parseFloat(revenuePeriod || '0') || 0 } : {}),
+    ...(qtySoldPeriod ? { qty_sold_period: parseInt(qtySoldPeriod || '0', 10) || 0 } : {}),
+    ...(firstAvailableDate ? { first_available_date: firstAvailableDate } : {}),
   };
 
   return { valid: true, data: product };

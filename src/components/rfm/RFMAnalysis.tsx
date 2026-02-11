@@ -30,7 +30,7 @@ const fmt = (n: number) => Number(n).toFixed(2);
 export function RFMAnalysis() {
   const [selectedSegment, setSelectedSegment] = useState<RFMSegment | null>(null);
   const { segments: rfmSegments, totalCustomers, isLoading: segmentsLoading, hasImported: hasImportedSegments } = useSegments();
-  const totalCustomersDisplay = totalCustomers || 10034;
+  const totalCustomersDisplay = totalCustomers;
 
   if (segmentsLoading) {
     return (
@@ -88,7 +88,14 @@ export function RFMAnalysis() {
             </div>
             <div>
               <p className="text-sm text-[#4A4A4A]"><InfoTooltip content="Μέσος όρος RFM score (1–5 ανά R, F, M).">Avg Segment Score</InfoTooltip></p>
-              <p className="text-xl font-bold text-[#1A1A1A] font-mono">78.4</p>
+              <p className="text-xl font-bold text-[#1A1A1A] font-mono">
+                {rfmSegments.length > 0
+                  ? (() => {
+                      const vals = rfmSegments.map((s) => parseFloat(String(s.rfm_score || '')) || 0).filter((v) => v > 0);
+                      return vals.length > 0 ? (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1) : '0';
+                    })()
+                  : '0'}
+              </p>
             </div>
           </div>
         </Card>
@@ -209,46 +216,52 @@ export function RFMAnalysis() {
       <Card padding="lg">
         <CardHeader
           title="Segment Migration"
-          subtitle={segmentMigration.period}
+          subtitle={hasImportedSegments ? segmentMigration.period : ''}
           icon={<ArrowRight size={20} className="text-[#FF6B35]" />}
         />
         <div className="space-y-3">
-          {segmentMigration.flows.slice(0, 6).map((flow, index) => {
-            const fromSegment = rfmSegments.find(s => s.id === flow.from);
-            const toSegment = rfmSegments.find(s => s.id === flow.to);
-            const isPositive = ['champions', 'loyal', 'potential'].includes(flow.to) && 
-                              ['at_risk', 'lost'].includes(flow.from);
-            
-            return (
-              <motion.div
-                key={`${flow.from}-${flow.to}`}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.05 }}
-                className="flex items-center gap-4 p-3 bg-[#F5F5F5] rounded-lg"
-              >
-                <div className="flex items-center gap-2 flex-1">
-                  <Badge
-                    variant={flow.from === 'lost' ? 'danger' : flow.from === 'at_risk' ? 'warning' : 'default'}
+          {hasImportedSegments
+            ? segmentMigration.flows.slice(0, 6).map((flow, index) => {
+                const fromSegment = rfmSegments.find(s => s.id === flow.from);
+                const toSegment = rfmSegments.find(s => s.id === flow.to);
+                const isPositive = ['champions', 'loyal', 'potential'].includes(flow.to) &&
+                                  ['at_risk', 'lost'].includes(flow.from);
+
+                return (
+                  <motion.div
+                    key={`${flow.from}-${flow.to}`}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                    className="flex items-center gap-4 p-3 bg-[#F5F5F5] rounded-lg"
                   >
-                    {fromSegment?.icon} {fromSegment?.name}
-                  </Badge>
-                  <ArrowRight size={16} className="text-[#9CA3AF]" />
-                  <Badge
-                    variant={flow.to === 'champions' ? 'success' : flow.to === 'loyal' ? 'info' : 'default'}
-                  >
-                    {toSegment?.icon} {toSegment?.name}
-                  </Badge>
-                </div>
-                <div className="text-right">
-                  <p className={`font-bold font-mono ${isPositive ? 'text-[#22C55E]' : 'text-[#EF4444]'}`}>
-                    {flow.count.toLocaleString()}
-                  </p>
-                  <p className="text-xs text-[#4A4A4A]">{fmt(flow.percentage ?? 0)}%</p>
-                </div>
-              </motion.div>
-            );
-          })}
+                    <div className="flex items-center gap-2 flex-1">
+                      <Badge
+                        variant={flow.from === 'lost' ? 'danger' : flow.from === 'at_risk' ? 'warning' : 'default'}
+                      >
+                        {fromSegment?.icon} {fromSegment?.name}
+                      </Badge>
+                      <ArrowRight size={16} className="text-[#9CA3AF]" />
+                      <Badge
+                        variant={flow.to === 'champions' ? 'success' : flow.to === 'loyal' ? 'info' : 'default'}
+                      >
+                        {toSegment?.icon} {toSegment?.name}
+                      </Badge>
+                    </div>
+                    <div className="text-right">
+                      <p className={`font-bold font-mono ${isPositive ? 'text-[#22C55E]' : 'text-[#EF4444]'}`}>
+                        {flow.count.toLocaleString()}
+                      </p>
+                      <p className="text-xs text-[#4A4A4A]">{fmt(flow.percentage ?? 0)}%</p>
+                    </div>
+                  </motion.div>
+                );
+              })
+            : (
+              <p className="text-sm text-[#4A4A4A] py-4">
+                Φόρτωσε RFM δεδομένα για να δεις την μετακίνηση μεταξύ segments.
+              </p>
+            )}
         </div>
       </Card>
     </div>

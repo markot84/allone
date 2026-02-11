@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
 import { ProductsService } from '../services/firestore';
-import { products as mockProducts } from '../data/mockProducts';
 import { useBrand } from './useBrand';
 import type { Product } from '../types';
 
@@ -11,9 +10,13 @@ export function useProducts() {
   const { data: firestoreProducts = [], isPending } = useQuery({
     queryKey: ['products', brandId],
     queryFn: () => (brandId ? ProductsService.getAll(brandId) : Promise.resolve([])) as Promise<Product[]>,
+    staleTime: 5 * 60 * 1000, // 5 min - avoid refetch on every mount/refresh
+    gcTime: 30 * 60 * 1000, // 30 min - keep in cache
+    placeholderData: (previousData) => previousData, // keep previous data visible during refetch
   });
 
-  const products = (firestoreProducts?.length > 0 ? firestoreProducts : mockProducts) as Product[];
+  // When brandId is set: show real data only. When no brand: empty (no mock).
+  const products = (brandId ? (firestoreProducts ?? []) : []) as Product[];
 
   return {
     products,
