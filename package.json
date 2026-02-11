@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "firebase:deploy": "npm run build && firebase deploy --only hosting",
-    "firebase:serve": "npm run build && firebase serve"
+    "firebase:serve": "npm run build && firebase serve",
+    "migrate:brandid": "node scripts/migrate-add-brandid.mjs"
   },
   "dependencies": {
     "@primer/octicons-react": "^19.21.2",
@@ -35,6 +36,7 @@
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
+    "firebase-admin": "^13.6.1",
     "globals": "^16.5.0",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ToastProvider } from './components/common';
+import { AuthGuard, InviteAcceptPage, InviteUserSection } from './components/auth';
 import { AppShell } from './components/layout';
 import { DashboardOverview } from './components/dashboard/DashboardOverview';
 import { WeightConfigurator } from './components/strategy';
@@ -22,6 +23,23 @@ function App() {
   const [activeSection, setActiveSection] = useState('dashboard');
   const [insightsPanelOpen, setInsightsPanelOpen] = useState(false);
 
+  // Handle /invite/:token route (no AuthGuard - page works for both logged-in and logged-out users)
+  const pathMatch = typeof window !== 'undefined' && window.location.pathname.match(/^\/invite\/([^/]+)$/);
+  if (pathMatch) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <ToastProvider>
+          <InviteAcceptPage
+            token={pathMatch[1]}
+            onAccepted={() => {
+              window.location.href = '/';
+            }}
+          />
+        </ToastProvider>
+      </QueryClientProvider>
+    );
+  }
+
   const renderContent = () => {
     switch (activeSection) {
       case 'dashboard':
@@ -42,6 +60,8 @@ function App() {
         return <ROIAttribution />;
       case 'data':
         return <DataImport />;
+      case 'invite':
+        return <InviteUserSection />;
       case 'concept':
         return <Concept onNavigateToStrategy={() => handleSectionChange('strategy')} />;
       case 'help':
@@ -62,6 +82,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
+      <AuthGuard>
       <div style={{ 
         height: '100vh', 
         width: '100vw',
@@ -90,6 +111,7 @@ function App() {
           onClose={() => setInsightsPanelOpen(false)}
         />
       </div>
+      </AuthGuard>
       </ToastProvider>
     </QueryClientProvider>
   );

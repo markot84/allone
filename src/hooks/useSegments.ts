@@ -3,12 +3,16 @@ import { useQuery } from '@tanstack/react-query';
 import { SegmentsService } from '../services/firestore';
 import { rfmSegments as mockSegments } from '../data';
 import { getSegmentColor } from '../utils/segmentColors';
+import { useBrand } from './useBrand';
 import type { RFMSegment } from '../types';
 
 export function useSegments() {
+  const { currentBrand } = useBrand();
+  const brandId = currentBrand?.id ?? null;
+
   const { data: firestoreSegments = [], isPending } = useQuery({
-    queryKey: ['segments'],
-    queryFn: () => SegmentsService.getAll() as Promise<RFMSegment[]>,
+    queryKey: ['segments', brandId],
+    queryFn: () => (brandId ? SegmentsService.getAll(brandId) : Promise.resolve([])) as Promise<RFMSegment[]>,
   });
 
   const segments = useMemo(() => {

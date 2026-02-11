@@ -55,8 +55,8 @@ html, body {
   overflow: hidden;
 }
 
-/* Prevent horizontal overflow in all containers */
-* {
+/* Prevent horizontal overflow - exclude form controls to avoid blocking input */
+*:not(input):not(textarea):not(select) {
   max-width: 100%;
 }
 

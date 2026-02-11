@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { flushSync } from 'react-dom';
 import { useQueryClient } from '@tanstack/react-query';
+import { useBrand } from '../../hooks';
 import { Upload, FileText, CheckCircle2, XCircle, AlertCircle, Clock, Download, Trash2 } from 'lucide-react';
 import { Card, CardHeader, Button, Spinner, ProgressBar, useToast, Tooltip } from '../common';
 import { importFile, saveImportJob, getImportJobs, isSupportedFile, parseCSV, type ImportType, type ImportResult, type ImportJob, type ImportProgress } from '../../services/import';
@@ -10,6 +11,7 @@ import { Text, Heading, Label } from '@primer/react';
 export type FileWithType = { file: File; type: ImportType };
 
 export function DataImport() {
+  const { currentBrand } = useBrand();
   const [selectedType, setSelectedType] = useState<ImportType>('products');
   const [selectedFiles, setSelectedFiles] = useState<FileWithType[]>([]);
   const [isImporting, setIsImporting] = useState(false);
@@ -108,6 +110,10 @@ export function DataImport() {
       alert('Please select at least one file');
       return;
     }
+    if (!currentBrand) {
+      toast.error('Επιλέξτε ή δημιουργήστε brand πριν την εισαγωγή.');
+      return;
+    }
 
     const total = selectedFiles.length;
     const results: ImportResult[] = [];
@@ -135,7 +141,7 @@ export function DataImport() {
         });
         const result = await importFile(file, type, (p) => {
           setImportProgress((prev) => prev ? { ...prev, fileProgress: p } : null);
-        });
+        }, currentBrand?.id ?? null);
         results.push(result);
       }
 

@@ -6,6 +6,7 @@ import {
   TextInput
 } from '@primer/react';
 import { Button } from '../common';
+import { useAuth, useBrand } from '../../hooks';
 import {
   GearIcon,
   GraphIcon,
@@ -20,7 +21,7 @@ import {
   ThreeBarsIcon,
   XIcon
 } from '@primer/octicons-react';
-import { Upload } from 'lucide-react';
+import { Upload, UserPlus } from 'lucide-react';
 
 type SectionId =
   | 'dashboard'
@@ -33,6 +34,7 @@ type SectionId =
   | 'roi'
   | 'insights'
   | 'data'
+  | 'invite'
   | 'help';
 
 export interface AppShellProps {
@@ -45,6 +47,10 @@ type NavItem = { id: SectionId; label: string; icon: any };
 
 export function AppShell({ activeSection, onSectionChange, children }: AppShellProps) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [brandMenuOpen, setBrandMenuOpen] = useState(false);
+  const { user, signOut } = useAuth();
+  const { currentBrand, brands, setCurrentBrand } = useBrand();
 
   const navItems = useMemo<NavItem[]>(
     () => [
@@ -58,6 +64,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
       { id: 'roi', label: 'ROI Attribution', icon: GraphIcon },
       { id: 'insights', label: 'AI Insights', icon: LightBulbIcon },
       { id: 'data', label: 'Data Import', icon: Upload },
+      { id: 'invite', label: 'Καλέστε χρήστη', icon: UserPlus },
       { id: 'help', label: 'Help & Support', icon: GearIcon }
     ],
     []
@@ -136,6 +143,150 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
             block
           />
         </PrimerHeader.Item>
+
+        {currentBrand && (
+          <PrimerHeader.Item style={{ position: 'relative' }}>
+            <button
+              onClick={() => brands.length > 1 && setBrandMenuOpen((o) => !o)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '6px 12px',
+                border: '1px solid rgba(255, 107, 53, 0.3)',
+                borderRadius: 8,
+                background: 'linear-gradient(135deg, #FFF0EB 0%, #FFE4DC 100%)',
+                cursor: brands.length > 1 ? 'pointer' : 'default',
+                fontSize: 14,
+                fontWeight: 600,
+                color: '#FF6B35'
+              }}
+            >
+              <Text as="span" size="small" weight="semibold">{currentBrand.name}</Text>
+              {brands.length > 1 && (
+                <span style={{ opacity: 0.7, fontSize: 12 }}>▼</span>
+              )}
+            </button>
+            {brands.length > 1 && brandMenuOpen && (
+              <>
+                <div onClick={() => setBrandMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 99 }} />
+                <div
+                  style={{
+                    position: 'absolute',
+                    right: 0,
+                    top: '100%',
+                    marginTop: 4,
+                    minWidth: 180,
+                    background: 'var(--bgColor-default, #ffffff)',
+                    border: '1px solid var(--borderColor-default, #d0d7de)',
+                    borderRadius: 8,
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                    zIndex: 100
+                  }}
+                >
+                  {brands.map((b) => (
+                    <button
+                      key={b.id}
+                      onClick={() => { setCurrentBrand(b); setBrandMenuOpen(false); }}
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px',
+                        textAlign: 'left',
+                        border: 'none',
+                        background: currentBrand?.id === b.id ? 'var(--bgColor-muted, #f6f8fa)' : 'transparent',
+                        cursor: 'pointer',
+                        fontSize: 14
+                      }}
+                    >
+                      {b.name}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </PrimerHeader.Item>
+        )}
+
+        <PrimerHeader.Item style={{ position: 'relative' }}>
+          <button
+            onClick={() => setUserMenuOpen((o) => !o)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '6px 12px',
+              border: '1px solid var(--borderColor-default, #d0d7de)',
+              borderRadius: 6,
+              background: 'var(--bgColor-default, #ffffff)',
+              cursor: 'pointer',
+              fontSize: 14
+            }}
+          >
+            <div
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: '50%',
+                background: 'var(--bgColor-accent-emphasis, #0969da)',
+                color: 'white',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: 600,
+                fontSize: 12
+              }}
+            >
+              {(user?.email?.[0] || user?.displayName?.[0] || '?').toUpperCase()}
+            </div>
+            <Text as="span" size="small" className="hidden sm:inline truncate max-w-[140px]">
+              {user?.email || user?.displayName || 'User'}
+            </Text>
+          </button>
+          {userMenuOpen && (
+            <>
+              <div
+                onClick={() => setUserMenuOpen(false)}
+                style={{ position: 'fixed', inset: 0, zIndex: 99 }}
+              />
+              <div
+                style={{
+                  position: 'absolute',
+                  right: 0,
+                  top: '100%',
+                  marginTop: 4,
+                  minWidth: 180,
+                  background: 'var(--bgColor-default, #ffffff)',
+                  border: '1px solid var(--borderColor-default, #d0d7de)',
+                  borderRadius: 8,
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                  zIndex: 100
+                }}
+              >
+                <div style={{ padding: 12, borderBottom: '1px solid var(--borderColor-default, #d0d7de)' }}>
+                  <Text as="div" size="small" weight="semibold">{user?.email}</Text>
+                  <Text as="div" size="small" style={{ color: 'var(--fgColor-muted, #57606a)' }}>
+                    {user?.displayName || 'User'}
+                  </Text>
+                </div>
+                <button
+                  onClick={() => { signOut(); setUserMenuOpen(false); }}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    textAlign: 'left',
+                    border: 'none',
+                    background: 'transparent',
+                    cursor: 'pointer',
+                    fontSize: 14,
+                    color: 'var(--danger-fg, #cf222e)'
+                  }}
+                >
+                  Αποσύνδεση
+                </button>
+              </div>
+            </>
+          )}
+        </PrimerHeader.Item>
       </PrimerHeader>
 
       <div style={{ 
@@ -160,6 +311,29 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
             backgroundColor: 'var(--bgColor-default, #ffffff)'
           }}
         >
+          {currentBrand && (
+            <div
+              style={{
+                margin: 12,
+                padding: '12px 14px',
+                borderRadius: 10,
+                background: 'linear-gradient(135deg, #FFF0EB 0%, #FFE4DC 100%)',
+                border: '1px solid rgba(255, 107, 53, 0.25)'
+              }}
+            >
+              <Text as="div" size="small" style={{ color: 'var(--fgColor-muted, #57606a)', marginBottom: 4 }}>
+                Brand
+              </Text>
+              <Text as="div" weight="semibold" size="medium" style={{ color: '#FF6B35' }}>
+                {currentBrand.name}
+              </Text>
+              {currentBrand.type && (
+                <Text as="div" size="small" style={{ color: 'var(--fgColor-muted, #57606a)', marginTop: 2 }}>
+                  {currentBrand.type}
+                </Text>
+              )}
+            </div>
+          )}
           <div style={{ padding: 16 }}>
             <Nav onSelect={(id) => onSectionChange(id)} />
           </div>
@@ -231,57 +405,76 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
               padding: 16, 
               borderBottom: '1px solid var(--borderColor-default, #d0d7de)',
               display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
+              flexDirection: 'column',
+              gap: 12,
               flexShrink: 0
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div
+                    style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: 6,
+                      border: '1px solid var(--borderColor-default, #d0d7de)',
+                      display: 'grid',
+                      placeItems: 'center',
+                      fontWeight: 700,
+                      color: 'var(--fgColor-default, #24292f)'
+                    }}
+                  >
+                    P+
+                  </div>
+                  <div>
+                    <Text as="div" weight="semibold" size="medium">
+                      Performance+
+                    </Text>
+                    <Text as="div" size="small" style={{ color: 'var(--fgColor-muted, #57606a)' }}>
+                      by notthesame.ai
+                    </Text>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setMobileNavOpen(false)}
+                  aria-label="Close navigation"
                   style={{
-                    width: 28,
-                    height: 28,
+                    padding: 8,
+                    border: 'none',
+                    background: 'transparent',
+                    cursor: 'pointer',
                     borderRadius: 6,
-                    border: '1px solid var(--borderColor-default, #d0d7de)',
-                    display: 'grid',
-                    placeItems: 'center',
-                    fontWeight: 700,
-                    color: 'var(--fgColor-default, #24292f)'
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'var(--fgColor-muted, #57606a)'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = 'var(--bgColor-muted, #f6f8fa)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'transparent';
                   }}
                 >
-                  P+
-                </div>
-                <div>
-                  <Text as="div" weight="semibold" size="medium">
-                    Performance+
-                  </Text>
-                  <Text as="div" size="small" style={{ color: 'var(--fgColor-muted, #57606a)' }}>
-                    by notthesame.ai
-                  </Text>
-                </div>
+                  <XIcon />
+                </button>
               </div>
-              <button
-                onClick={() => setMobileNavOpen(false)}
-                aria-label="Close navigation"
-                style={{
-                  padding: 8,
-                  border: 'none',
-                  background: 'transparent',
-                  cursor: 'pointer',
-                  borderRadius: 6,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: 'var(--fgColor-muted, #57606a)'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = 'var(--bgColor-muted, #f6f8fa)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'transparent';
-                }}
-              >
-                <XIcon />
-              </button>
+              {currentBrand && (
+                <div
+                  style={{
+                    padding: '10px 12px',
+                    borderRadius: 8,
+                    background: 'linear-gradient(135deg, #FFF0EB 0%, #FFE4DC 100%)',
+                    border: '1px solid rgba(255, 107, 53, 0.25)'
+                  }}
+                >
+                  <Text as="div" size="small" style={{ color: 'var(--fgColor-muted, #57606a)' }}>
+                    Brand
+                  </Text>
+                  <Text as="div" weight="semibold" style={{ color: '#FF6B35' }}>
+                    {currentBrand.name}
+                  </Text>
+                </div>
+              )}
             </div>
             {/* Navigation */}
             <div style={{ padding: 16, flex: 1, overflowY: 'auto' }}>

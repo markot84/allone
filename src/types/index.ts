@@ -1,3 +1,32 @@
+// Auth & Brand Types
+export interface Brand {
+  id: string;
+  name: string;
+  type: 'B2B' | 'B2C';
+  createdAt: string;
+  createdBy: string;
+}
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  displayName?: string;
+  brandIds: string[];
+  defaultBrandId?: string;
+  createdAt: string;
+}
+
+export interface Invite {
+  id: string;
+  brandId: string;
+  email: string;
+  role: string;
+  token: string;
+  expiresAt: string;
+  usedAt?: string;
+  createdBy?: string;
+}
+
 // Strategy Weights Types
 export interface WeightFactor {
   id: string;

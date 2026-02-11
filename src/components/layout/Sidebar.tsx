@@ -37,6 +37,7 @@ const mainNavItems: NavItem[] = [
 ];
 
 const secondaryNavItems: NavItem[] = [
+  { id: 'invite', name: 'Καλέστε χρήστη', icon: <Users size={18} /> },
   { id: 'concept', name: 'Concept', icon: <Lightbulb size={18} /> },
   { id: 'insights', name: 'AI Insights', icon: <Sparkles size={18} /> },
   { id: 'help', name: 'Help & Support', icon: <HelpCircle size={18} /> }

@@ -311,11 +311,12 @@ function aggregateCustomersToSegments(objects: Record<string, string>[]): RFMSeg
   });
 }
 
-// Main import function (CSV or XLSX)
+// Main import function (CSV or XLSX). Pass brandId for multi-tenant scoping.
 export async function importFile(
   file: File,
   type: ImportType,
-  onProgress?: (p: ImportProgress) => void
+  onProgress?: (p: ImportProgress) => void,
+  brandId?: string | null
 ): Promise<ImportResult> {
   const result: ImportResult = {
     success: true,
@@ -377,7 +378,7 @@ export async function importFile(
             id: p.id,
             data: { ...p, createdAt: Timestamp.now() } as Record<string, unknown>,
           }));
-          await FirestoreService.batchSet(coll, batchItems);
+          await FirestoreService.batchSet(coll, batchItems, brandId);
           rowsProcessed += chunkItems.length;
           onProgress?.({
             rowsProcessed,
@@ -399,7 +400,7 @@ export async function importFile(
 
         if (isCustomerLevelData(objects)) {
           // SignalLab: aggregate customers by RFM_Segment → max ~9 segments
-          await FirestoreService.deleteCollection('segments');
+          await FirestoreService.deleteCollection('segments', brandId);
           validSegments = aggregateCustomersToSegments(objects);
           result.warnings.push(`Aggregated ${objects.length} customers into ${validSegments.length} segments`);
         } else {
@@ -427,7 +428,7 @@ export async function importFile(
             id: s.id,
             data: { ...s, createdAt: Timestamp.now() } as Record<string, unknown>,
           }));
-          await FirestoreService.batchSet(segColl, batchItems);
+          await FirestoreService.batchSet(segColl, batchItems, brandId);
           segRowsProcessed += chunkItems.length;
           onProgress?.({
             rowsProcessed: segRowsProcessed,

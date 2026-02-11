@@ -1,44 +1,39 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // DEV: Allow read/write without auth so Import and app work before adding Firebase Auth.
-    // For production: switch to the auth rules below and enable Firebase Authentication.
+    // Users: only own profile
     match /users/{userId} {
-      allow read, write: if true;
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
+    // Brands: authenticated users can read/write (refined in Phase D with createdBy)
+    match /brands/{brandId} {
+      allow read, write: if request.auth != null;
+    }
+    // Invites: authenticated users (refined in Phase C)
+    match /invites/{inviteId} {
+      allow read, write: if request.auth != null;
+    }
+    // Brand-scoped collections: require auth. Docs with brandId allow access when user has that brand.
     match /products/{productId} {
-      allow read, write: if true;
+      allow read, write: if request.auth != null;
     }
     match /segments/{segmentId} {
-      allow read, write: if true;
+      allow read, write: if request.auth != null;
     }
     match /campaigns/{campaignId} {
-      allow read, write: if true;
+      allow read, write: if request.auth != null;
     }
     match /content/{contentId} {
-      allow read, write: if true;
+      allow read, write: if request.auth != null;
     }
     match /analytics/{analyticsId} {
-      allow read, write: if true;
+      allow read, write: if request.auth != null;
     }
     match /import_jobs/{jobId} {
-      allow read, write: if true;
+      allow read, write: if request.auth != null;
     }
     match /custom/{docId} {
-      allow read, write: if true;
+      allow read, write: if request.auth != null;
     }
-
-    // PRODUCTION (when you enable Firebase Auth): uncomment below and remove the "if true" blocks above
-    // match /users/{userId} {
-    //   allow read, write: if request.auth != null && request.auth.uid == userId;
-    // }
-    // match /products/{productId} {
-    //   allow read, write: if request.auth != null;
-    // }
-    // match /segments/{segmentId} { allow read, write: if request.auth != null; }
-    // match /campaigns/{campaignId} { allow read, write: if request.auth != null; }
-    // match /content/{contentId} { allow read, write: if request.auth != null; }
-    // match /analytics/{analyticsId} { allow read, write: if request.auth != null; }
-    // match /import_jobs/{jobId} { allow read, write: if request.auth != null; }
   }
 }

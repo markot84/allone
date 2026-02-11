@@ -33,18 +33,23 @@ export class FirestoreService {
     }
   }
 
-  // Get all documents from collection
+  // Get all documents from collection. When brandId is provided, filters by brandId.
   static async getDocuments<T>(
-    collectionName: string, 
-    constraints: QueryConstraint[] = []
+    collectionName: string,
+    constraints: QueryConstraint[] = [],
+    brandId?: string | null
   ): Promise<T[]> {
     try {
-      const q = query(collection(db, collectionName), ...constraints);
+      const allConstraints = [...constraints];
+      if (brandId) {
+        allConstraints.push(where('brandId', '==', brandId));
+      }
+      const q = query(collection(db, collectionName), ...allConstraints);
       const querySnapshot = await getDocs(q);
-      
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
+
+      return querySnapshot.docs.map((d) => ({
+        id: d.id,
+        ...d.data(),
       })) as T[];
     } catch (error) {
       console.error(`Error getting documents from ${collectionName}:`, error);
@@ -52,16 +57,21 @@ export class FirestoreService {
     }
   }
 
-  // Batch write (max 500 ops per batch; Firestore limit)
+  // Batch write (max 500 ops per batch; Firestore limit). Pass brandId to add to each doc.
   static async batchSet(
     collectionName: string,
-    items: { id: string; data: Record<string, unknown> }[]
+    items: { id: string; data: Record<string, unknown> }[],
+    brandId?: string | null
   ): Promise<void> {
     if (items.length === 0) return;
     const batch = writeBatch(db);
     for (const item of items) {
       const docRef = doc(db, collectionName, item.id);
-      const clean: Record<string, unknown> = { ...item.data, updatedAt: Timestamp.now() };
+      const clean: Record<string, unknown> = {
+        ...item.data,
+        updatedAt: Timestamp.now(),
+        ...(brandId ? { brandId } : {}),
+      };
       Object.keys(clean).forEach((k) => clean[k] === undefined && delete clean[k]);
       batch.set(docRef, clean, { merge: true });
     }
@@ -115,35 +125,40 @@ export class FirestoreService {
     }
   }
 
-  // Delete all documents in collection (batch delete, for replacing customer-level with aggregated segments)
-  static async deleteCollection(collectionName: string): Promise<void> {
+  // Delete all documents in collection. When brandId provided, only deletes docs with that brandId.
+  static async deleteCollection(collectionName: string, brandId?: string | null): Promise<void> {
     const colRef = collection(db, collectionName);
+    const constraints = brandId ? [where('brandId', '==', brandId)] : [];
+    const q = constraints.length ? query(colRef, ...constraints) : colRef;
     const BATCH_SIZE = 500;
-    let snapshot = await getDocs(colRef);
+    let snapshot = await getDocs(q);
     while (!snapshot.empty) {
       const batch = writeBatch(db);
       snapshot.docs.slice(0, BATCH_SIZE).forEach((d) => batch.delete(d.ref));
       await batch.commit();
       if (snapshot.docs.length <= BATCH_SIZE) break;
-      snapshot = await getDocs(colRef);
+      snapshot = await getDocs(q);
     }
   }
 }
 
-// Specific collections helpers
+// Specific collections helpers - pass brandId for scoped queries
 export const ProductsService = {
-  getAll: () => FirestoreService.getDocuments('products'),
+  getAll: (brandId?: string | null) => FirestoreService.getDocuments('products', [], brandId),
   getById: (id: string) => FirestoreService.getDocument('products', id),
-  create: (id: string, data: any) => FirestoreService.setDocument('products', id, data),
+  create: (id: string, data: Record<string, unknown>, brandId?: string | null) =>
+    FirestoreService.setDocument('products', id, { ...data, ...(brandId ? { brandId } : {}) }),
   update: (id: string, data: any) => FirestoreService.updateDocument('products', id, data),
   delete: (id: string) => FirestoreService.deleteDocument('products', id),
 };
 
 export const SegmentsService = {
-  getAll: () => FirestoreService.getDocuments('segments'),
+  getAll: (brandId?: string | null) => FirestoreService.getDocuments('segments', [], brandId),
   getById: (id: string) => FirestoreService.getDocument('segments', id),
-  create: (id: string, data: any) => FirestoreService.setDocument('segments', id, data),
+  create: (id: string, data: Record<string, unknown>, brandId?: string | null) =>
+    FirestoreService.setDocument('segments', id, { ...data, ...(brandId ? { brandId } : {}) }),
   update: (id: string, data: any) => FirestoreService.updateDocument('segments', id, data),
+  delete: (id: string) => FirestoreService.deleteDocument('segments', id),
 };
 
 export const CampaignsService = {
