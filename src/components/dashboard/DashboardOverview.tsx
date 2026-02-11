@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   TrendingUp,
   Users,
@@ -22,18 +22,19 @@ import {
   Cell
 } from 'recharts';
 import { Card, CardHeader } from '../common';
-import { useSegments, useProducts } from '../../hooks';
-import { dashboardKPIs, aiInsights, roiMockData } from '../../data';
-
-const revenueData = roiMockData.months.map((month, i) => ({
-  month: month.split(' ')[0],
-  total: roiMockData.total_revenue[i] / 1000,
-  attributed: roiMockData.attributed_revenue[i] / 1000
-}));
+import { useSegments, useProducts, useAnalytics, useCampaigns } from '../../hooks';
+import { dashboardKPIs, aiInsights as staticInsights } from '../../data';
+import { generateInsightsFromData } from '../../services/insights';
 
 export function DashboardOverview() {
   const { segments: rfmSegments } = useSegments();
-  const { count: productsCount } = useProducts();
+  const { count: productsCount, products } = useProducts();
+  const { revenueData } = useAnalytics();
+  const { count: campaignsCount } = useCampaigns();
+  const aiInsights = useMemo(() => {
+    const dynamic = generateInsightsFromData(products, rfmSegments);
+    return dynamic.length > 0 ? dynamic : staticInsights;
+  }, [products, rfmSegments]);
   const revenueContainerRef = useRef<HTMLDivElement>(null);
   const segmentContainerRef = useRef<HTMLDivElement>(null);
   const [chartDimensions, setChartDimensions] = useState({ revenue: { width: 800, height: 288 }, segment: { width: 400, height: 224 } });
@@ -307,7 +308,7 @@ export function DashboardOverview() {
             />
             <StatBox
               label="Active Campaigns"
-              value="12"
+              value={campaignsCount.toLocaleString()}
               icon={<Target size={18} />}
               color="#22C55E"
             />

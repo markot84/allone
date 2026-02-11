@@ -1,1 +1,1 @@
-export { AIInsightsPanel, AIInsightsTrigger } from './AIInsightsPanel';
+export { AIInsightsPanel, AIInsightsTrigger, AIInsightsTriggerWrapper } from './AIInsightsPanel';

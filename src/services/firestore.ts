@@ -162,26 +162,29 @@ export const SegmentsService = {
 };
 
 export const CampaignsService = {
-  getAll: () => FirestoreService.getDocuments('campaigns', [orderBy('createdAt', 'desc')]),
+  getAll: (brandId?: string | null) => FirestoreService.getDocuments('campaigns', [orderBy('createdAt', 'desc')], brandId),
   getById: (id: string) => FirestoreService.getDocument('campaigns', id),
-  create: (id: string, data: any) => FirestoreService.setDocument('campaigns', id, data),
+  create: (id: string, data: any, brandId?: string | null) =>
+    FirestoreService.setDocument('campaigns', id, { ...data, ...(brandId ? { brandId } : {}) }),
   update: (id: string, data: any) => FirestoreService.updateDocument('campaigns', id, data),
 };
 
 export const ContentService = {
-  getAll: () => FirestoreService.getDocuments('content', [orderBy('createdAt', 'desc')]),
+  getAll: (brandId?: string | null) => FirestoreService.getDocuments('content', [orderBy('createdAt', 'desc')], brandId),
   getById: (id: string) => FirestoreService.getDocument('content', id),
-  create: (id: string, data: any) => FirestoreService.setDocument('content', id, data),
+  create: (id: string, data: any, brandId?: string | null) =>
+    FirestoreService.setDocument('content', id, { ...data, ...(brandId ? { brandId } : {}) }),
   update: (id: string, data: any) => FirestoreService.updateDocument('content', id, data),
 };
 
 export const AnalyticsService = {
-  getAll: () => FirestoreService.getDocuments('analytics', [orderBy('date', 'desc')]),
-  getByDateRange: (startDate: Date, endDate: Date) => 
+  getAll: (brandId?: string | null) => FirestoreService.getDocuments('analytics', [orderBy('date', 'desc')], brandId),
+  getByDateRange: (startDate: Date, endDate: Date, brandId?: string | null) =>
     FirestoreService.getDocuments('analytics', [
       where('date', '>=', Timestamp.fromDate(startDate)),
       where('date', '<=', Timestamp.fromDate(endDate)),
       orderBy('date', 'desc')
-    ]),
-  create: (id: string, data: any) => FirestoreService.setDocument('analytics', id, data),
+    ], brandId),
+  create: (id: string, data: any, brandId?: string | null) =>
+    FirestoreService.setDocument('analytics', id, { ...data, ...(brandId ? { brandId } : {}) }),
 };

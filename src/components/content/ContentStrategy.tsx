@@ -16,11 +16,11 @@ import {
   Check
 } from 'lucide-react';
 import { Card, CardHeader, Badge, Button } from '../common';
-import { useSegments } from '../../hooks';
+import { useSegments, useContent } from '../../hooks';
+import type { ContentItem } from '../../hooks/useContent';
 import { 
   activeStrategyContext, 
   strategyContentMap, 
-  contentItems, 
   contentApprovalFlow,
   editorialActions 
 } from '../../data/mockContent';
@@ -35,6 +35,7 @@ const statusConfig = {
 
 export function ContentStrategy() {
   const { segments: rfmSegments } = useSegments();
+  const { contentItems } = useContent();
   const [showStrategyMap, setShowStrategyMap] = useState(false);
   const [filterAligned, setFilterAligned] = useState<'all' | 'aligned' | 'misaligned'>('all');
 
@@ -51,10 +52,11 @@ export function ContentStrategy() {
 
   // Group content by week
   const contentByWeek = filteredContent.reduce((acc, item) => {
-    if (!acc[item.week]) acc[item.week] = [];
-    acc[item.week].push(item);
+    const week = item.week ?? 0;
+    if (!acc[week]) acc[week] = [];
+    acc[week].push(item);
     return acc;
-  }, {} as Record<number, typeof contentItems>);
+  }, {} as Record<number, ContentItem[]>);
 
   return (
     <div className="space-y-6">
@@ -368,13 +370,13 @@ function DirectionItem({ label, value }: { label: string; value: string }) {
 }
 
 interface ContentCardProps {
-  item: typeof contentItems[0];
+  item: ContentItem;
   index: number;
   segments?: Array<{ id: string; name?: string; color?: string }>;
 }
 
 function ContentCard({ item, index, segments = [] }: ContentCardProps) {
-  const status = statusConfig[item.status];
+  const status = statusConfig[item.status as keyof typeof statusConfig] ?? statusConfig.draft;
 
   return (
     <motion.div
@@ -432,11 +434,15 @@ function ContentCard({ item, index, segments = [] }: ContentCardProps) {
           </div>
 
           {/* Products */}
-          {item.products_featured > 0 && (
-            <p className="text-xs text-[#9CA3AF] mt-1">
-              {item.products_featured} products
-            </p>
-          )}
+          {(() => {
+            const pf = item.products_featured;
+            const count = typeof pf === 'number' ? pf : pf?.length ?? 0;
+            return count > 0 ? (
+              <p className="text-xs text-[#9CA3AF] mt-1">
+                {count} products
+              </p>
+            ) : null;
+          })()}
 
           {/* Alignment Warning */}
           {!item.is_aligned && item.alignment_warning && (
@@ -450,7 +456,7 @@ function ContentCard({ item, index, segments = [] }: ContentCardProps) {
             <div className="mt-2 pt-2 border-t border-[#E5E5E5] grid grid-cols-3 gap-1 text-center">
               <div>
                 <p className="text-[10px] text-[#9CA3AF]">Opens</p>
-                <p className="text-xs font-bold font-mono">{item.performance.opens.toLocaleString()}</p>
+                <p className="text-xs font-bold font-mono">{(item.performance.opens ?? 0).toLocaleString()}</p>
               </div>
               <div>
                 <p className="text-[10px] text-[#9CA3AF]">Clicks</p>

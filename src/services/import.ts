@@ -369,7 +369,8 @@ export async function importFile(
           }
         }
 
-        // Batch import to Firestore (500/batch, 3 concurrent)
+        // Replace existing products for this brand, then import
+        await FirestoreService.deleteCollection('products', brandId);
         const productChunks = chunk(validProducts, BATCH_SIZE);
         const coll = 'products';
         let rowsProcessed = 0;
@@ -404,7 +405,8 @@ export async function importFile(
           validSegments = aggregateCustomersToSegments(objects);
           result.warnings.push(`Aggregated ${objects.length} customers into ${validSegments.length} segments`);
         } else {
-          // Segment-level: each row = one segment
+          // Segment-level: each row = one segment — replace existing first
+          await FirestoreService.deleteCollection('segments', brandId);
           validSegments = [];
           for (let i = 0; i < objects.length; i++) {
             const validation = validateSegmentRow(objects[i], i);

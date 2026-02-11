@@ -9,9 +9,11 @@ import {
   Target,
   Zap
 } from 'lucide-react';
+import { useMemo } from 'react';
 import { Badge, Button } from '../common';
 import { useSegments, useProducts } from '../../hooks';
-import { aiInsights } from '../../data/mockInsights';
+import { generateInsightsFromData } from '../../services/insights';
+import { aiInsights as staticInsights } from '../../data/mockInsights';
 import type { AIInsight } from '../../types';
 
 interface AIInsightsPanelProps {
@@ -21,8 +23,14 @@ interface AIInsightsPanelProps {
 
 export function AIInsightsPanel({ isOpen, onClose }: AIInsightsPanelProps) {
   const { segments, hasImported: hasSegments } = useSegments();
-  const { count: productsCount, hasImported: hasProducts } = useProducts();
+  const { products, count: productsCount, hasImported: hasProducts } = useProducts();
   const [filter, setFilter] = useState<'all' | 'opportunity' | 'warning' | 'recommendation'>('all');
+
+  const aiInsights = useMemo(() => {
+    const dynamic = generateInsightsFromData(products, segments);
+    if (dynamic.length > 0) return dynamic;
+    return staticInsights;
+  }, [products, segments]);
 
   const filteredInsights = aiInsights.filter(
     insight => filter === 'all' || insight.type === filter
@@ -127,27 +135,29 @@ interface InsightCardProps {
   index: number;
 }
 
+const INSIGHT_CONFIG: Record<string, { bgColor: string; borderColor: string; iconColor: string; icon: React.ReactElement }> = {
+  opportunity: {
+    bgColor: 'var(--nts-light-gray)',
+    borderColor: 'var(--nts-border-gray)',
+    iconColor: 'var(--nts-medium-gray)',
+    icon: <Lightbulb size={18} />
+  },
+  warning: {
+    bgColor: 'var(--nts-light-gray)',
+    borderColor: 'var(--nts-border-gray)',
+    iconColor: 'var(--nts-medium-gray)',
+    icon: <AlertTriangle size={18} />
+  },
+  recommendation: {
+    bgColor: 'var(--nts-light-gray)',
+    borderColor: 'var(--nts-border-gray)',
+    iconColor: 'var(--nts-medium-gray)',
+    icon: <Target size={18} />
+  }
+};
+
 function InsightCard({ insight, index }: InsightCardProps) {
-  const config = {
-    opportunity: {
-      bgColor: 'var(--nts-light-gray)',
-      borderColor: 'var(--nts-border-gray)',
-      iconColor: 'var(--nts-medium-gray)',
-      icon: <Lightbulb size={18} />
-    },
-    warning: {
-      bgColor: 'var(--nts-light-gray)',
-      borderColor: 'var(--nts-border-gray)',
-      iconColor: 'var(--nts-medium-gray)',
-      icon: <AlertTriangle size={18} />
-    },
-    recommendation: {
-      bgColor: 'var(--nts-light-gray)',
-      borderColor: 'var(--nts-border-gray)',
-      iconColor: 'var(--nts-medium-gray)',
-      icon: <Target size={18} />
-    }
-  }[insight.type];
+  const config = INSIGHT_CONFIG[insight.type] ?? INSIGHT_CONFIG.recommendation;
 
   return (
     <motion.div
@@ -205,4 +215,15 @@ export function AIInsightsTrigger({ onClick, insightCount }: { onClick: () => vo
       )}
     </motion.button>
   );
+}
+
+/** Wrapper that computes dynamic insight count from products/segments */
+export function AIInsightsTriggerWrapper({ onClick }: { onClick: () => void }) {
+  const { products } = useProducts();
+  const { segments } = useSegments();
+  const insightCount = useMemo(() => {
+    const insights = generateInsightsFromData(products, segments);
+    return insights.filter((i) => i.impact === 'high').length;
+  }, [products, segments]);
+  return <AIInsightsTrigger onClick={onClick} insightCount={insightCount} />;
 }

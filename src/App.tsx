@@ -13,9 +13,8 @@ import { Reports } from './components/reports';
 import { ROIAttribution } from './components/roi';
 import { Help } from './components/help';
 import { Concept } from './components/concept';
-import { AIInsightsPanel, AIInsightsTrigger } from './components/insights';
+import { AIInsightsPanel, AIInsightsTriggerWrapper } from './components/insights';
 import { DataImport } from './components/data';
-import { aiInsights } from './data';
 
 const queryClient = new QueryClient();
 
@@ -100,10 +99,7 @@ function App() {
         </AppShell>
 
         {/* AI Insights Floating Button */}
-        <AIInsightsTrigger
-          onClick={() => setInsightsPanelOpen(true)}
-          insightCount={aiInsights.filter(i => i.impact === 'high').length}
-        />
+        <AIInsightsTriggerWrapper onClick={() => setInsightsPanelOpen(true)} />
 
         {/* AI Insights Panel */}
         <AIInsightsPanel

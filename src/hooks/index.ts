@@ -2,3 +2,6 @@ export { useSegments } from './useSegments';
 export { useProducts } from './useProducts';
 export { useAuth } from './useAuth';
 export { useBrand } from './useBrand';
+export { useAnalytics } from './useAnalytics';
+export { useContent } from './useContent';
+export { useCampaigns } from './useCampaigns';

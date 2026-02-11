@@ -9,6 +9,7 @@ import {
   Plus
 } from 'lucide-react';
 import { Card, CardHeader, Badge, Button } from '../common';
+import { useProducts, useSegments, useCampaigns, useAnalytics } from '../../hooks';
 
 const reportTypes = [
   {
@@ -83,6 +84,21 @@ const scheduledReports = [
 ];
 
 export function Reports() {
+  const { count: productsCount } = useProducts();
+  const { segments } = useSegments();
+  const segmentsCount = segments.length;
+  const { campaigns } = useCampaigns();
+  const { hasImported: hasAnalytics } = useAnalytics();
+
+  const reportDataCounts: Record<string, number | string> = {
+    executive: hasAnalytics ? '✓' : 0,
+    segment: segmentsCount,
+    inventory: productsCount,
+    channel: hasAnalytics ? '✓' : 0,
+    campaign: campaigns.length,
+    product: productsCount
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -118,6 +134,13 @@ export function Reports() {
                   
                   <div className="flex items-center gap-3 mt-3">
                     <Badge variant="default" size="sm">{report.format}</Badge>
+                    {reportDataCounts[report.id] !== undefined && (
+                      <span className="text-xs text-[#4A4A4A]">
+                        Data: {typeof reportDataCounts[report.id] === 'number'
+                          ? reportDataCounts[report.id].toLocaleString()
+                          : reportDataCounts[report.id]}
+                      </span>
+                    )}
                     <span className="text-xs text-[#9CA3AF]">
                       Last: {report.lastGenerated}
                     </span>
@@ -192,30 +215,30 @@ export function Reports() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card padding="md">
           <div className="text-center">
-            <p className="text-3xl font-bold text-[#1A1A1A] font-mono">156</p>
-            <p className="text-sm text-[#4A4A4A] mt-1">Reports Generated</p>
-            <p className="text-xs text-[#22C55E]">This month</p>
+            <p className="text-3xl font-bold text-[#1A1A1A] font-mono">{productsCount}</p>
+            <p className="text-sm text-[#4A4A4A] mt-1">Products</p>
+            <p className="text-xs text-[#22C55E]">In catalog</p>
           </div>
         </Card>
         <Card padding="md">
           <div className="text-center">
-            <p className="text-3xl font-bold text-[#1A1A1A] font-mono">12</p>
-            <p className="text-sm text-[#4A4A4A] mt-1">Scheduled Reports</p>
-            <p className="text-xs text-[#3B82F6]">Active</p>
+            <p className="text-3xl font-bold text-[#1A1A1A] font-mono">{segmentsCount}</p>
+            <p className="text-sm text-[#4A4A4A] mt-1">Segments</p>
+            <p className="text-xs text-[#3B82F6]">RFM</p>
           </div>
         </Card>
         <Card padding="md">
           <div className="text-center">
-            <p className="text-3xl font-bold text-[#1A1A1A] font-mono">24</p>
-            <p className="text-sm text-[#4A4A4A] mt-1">Recipients</p>
-            <p className="text-xs text-[#8B5CF6]">Team members</p>
+            <p className="text-3xl font-bold text-[#1A1A1A] font-mono">{campaigns.length}</p>
+            <p className="text-sm text-[#4A4A4A] mt-1">Campaigns</p>
+            <p className="text-xs text-[#8B5CF6]">Active</p>
           </div>
         </Card>
         <Card padding="md">
           <div className="text-center">
-            <p className="text-3xl font-bold text-[#1A1A1A] font-mono">98%</p>
-            <p className="text-sm text-[#4A4A4A] mt-1">Delivery Rate</p>
-            <p className="text-xs text-[#22C55E]">Last 30 days</p>
+            <p className="text-3xl font-bold text-[#1A1A1A] font-mono">{hasAnalytics ? '✓' : '—'}</p>
+            <p className="text-sm text-[#4A4A4A] mt-1">Analytics</p>
+            <p className="text-xs text-[#22C55E]">{hasAnalytics ? 'Imported' : 'No data'}</p>
           </div>
         </Card>
       </div>

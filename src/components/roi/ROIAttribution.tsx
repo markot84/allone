@@ -25,6 +25,7 @@ import {
   ReferenceLine
 } from 'recharts';
 import { Card, CardHeader, Badge, Button } from '../common';
+import { useAnalytics } from '../../hooks';
 import {
   roiDashboard,
   roiCalculator,
@@ -37,6 +38,7 @@ import {
 const COLORS = ['#22C55E', '#3B82F6', '#FF6B35', '#8B5CF6', '#F59E0B'];
 
 export function ROIAttribution() {
+  const { revenueData } = useAnalytics();
   const [showMethodology, setShowMethodology] = useState(false);
   const [selectedBreakdown, setSelectedBreakdown] = useState<string | null>(null);
   const trendContainerRef = useRef<HTMLDivElement>(null);
@@ -69,12 +71,12 @@ export function ROIAttribution() {
     return () => resizeObserver.disconnect();
   }, []);
 
-  // Prepare trend data
-  const trendData = roiMockData.months.map((month, i) => ({
-    month: month.split(' ')[0],
-    total: roiMockData.total_revenue[i] / 1000,
-    attributed: roiMockData.attributed_revenue[i] / 1000,
-    rate: roiMockData.attribution_rate[i]
+  // Prepare trend data (revenueData from useAnalytics = real or mock)
+  const trendData = revenueData.map((r) => ({
+    month: r.month,
+    total: r.total,
+    attributed: r.attributed,
+    rate: r.total > 0 ? Math.round((r.attributed / r.total) * 1000) / 10 : 0
   }));
 
   // Prepare breakdown data

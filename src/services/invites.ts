@@ -18,16 +18,16 @@ export async function createInvite(
   const inviteId = `inv_${token.replace(/-/g, '_')}`;
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + INVITE_EXPIRY_DAYS);
-  const invite: Omit<Invite, 'id'> = {
+  const invite = {
+    id: inviteId,
     brandId,
     email: email.trim() ? email.trim().toLowerCase() : '',
     role,
     token,
     expiresAt: expiresAt.toISOString(),
-    usedAt: undefined,
     createdBy,
   };
-  await FirestoreService.setDocument('invites', inviteId, { ...invite, id: inviteId });
+  await FirestoreService.setDocument('invites', inviteId, invite);
   return { token, inviteId };
 }
 
@@ -38,7 +38,12 @@ export async function getInviteByToken(token: string): Promise<(Invite & { brand
   if (invite.usedAt) return null;
   const expiresAt = new Date(invite.expiresAt);
   if (expiresAt < new Date()) return null;
-  const brand = await FirestoreService.getDocument<{ name: string }>('brands', invite.brandId);
+  let brand: { name: string } | null = null;
+  try {
+    brand = await FirestoreService.getDocument<{ name: string }>('brands', invite.brandId);
+  } catch {
+    // Brand read may fail when unauthenticated ( Firestore rules require auth for brands)
+  }
   return { ...invite, brand: brand ?? undefined };
 }
 

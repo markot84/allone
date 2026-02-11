@@ -23,3 +23,7 @@ export const db = getFirestore(app);
 export const auth = getAuth(app);
 
 export default app;
+
+/** App base URL for invite links (production). Set VITE_APP_URL in .env */
+export const APP_URL =
+  import.meta.env.VITE_APP_URL || 'https://performance-plus-4a5b2.web.app';

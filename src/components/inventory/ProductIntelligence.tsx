@@ -1,5 +1,4 @@
 import { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Package,
@@ -14,9 +13,9 @@ import {
   TrendingDown
 } from 'lucide-react';
 import { Card, Badge, Button, ProgressBar, Spinner, Tooltip } from '../common';
-import { ProductsService } from '../../services/firestore';
-import { products as mockProducts, inventoryAlerts, categories as mockCategories } from '../../data/mockProducts';
-import type { Product, InventorySummary } from '../../types';
+import { useProducts } from '../../hooks';
+import { categories as mockCategories } from '../../data/mockProducts';
+import type { Product, InventorySummary, InventoryAlert } from '../../types';
 
 type SortField = 'name' | 'margin_percentage' | 'stock_level' | 'stock_age_days' | 'price';
 type SortDirection = 'asc' | 'desc';
@@ -74,6 +73,19 @@ function computeInventorySummary(products: Product[]): InventorySummary {
   };
 }
 
+function computeInventoryAlerts(products: Product[]): InventoryAlert[] {
+  const alerts: InventoryAlert[] = [];
+  const deadStock = products.filter((p) => (p.stock_age_days ?? 0) > 180);
+  const nearDead = products.filter((p) => (p.stock_age_days ?? 0) > 120 && (p.stock_age_days ?? 0) <= 180);
+  const highMarginLowStock = products.filter(
+    (p) => (p.margin_tier === 'high' || (p.margin_percentage ?? 0) > 25) && ((p.stock_level ?? 0) < 10 || (p.stock_level ?? 0) / Math.max(p.stock_capacity ?? 1, 1) < 0.2)
+  );
+  if (deadStock.length > 0) alerts.push({ type: 'critical', message: `${deadStock.length} SKU(s) με stock age > 180 ημέρες`, action: 'Ελέγξτε για clearance' });
+  if (nearDead.length > 0) alerts.push({ type: 'warning', message: `${nearDead.length} SKU(s) πλησιάζουν dead stock`, action: 'Δημιουργήστε προσφορές' });
+  if (highMarginLowStock.length > 0) alerts.push({ type: 'info', message: `${highMarginLowStock.length} high-margin items με low stock`, action: 'Πρόταση αναπλήρωσης' });
+  return alerts.length > 0 ? alerts : [];
+}
+
 export function ProductIntelligence() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -83,13 +95,9 @@ export function ProductIntelligence() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
-  const { data: firestoreProducts = [], isPending: productsLoading } = useQuery({
-    queryKey: ['products'],
-    queryFn: () => ProductsService.getAll() as Promise<Product[]>,
-  });
-
-  const products = (firestoreProducts?.length > 0 ? firestoreProducts : mockProducts) as Product[];
+  const { products, isLoading: productsLoading, hasImported } = useProducts();
   const inventorySummary = useMemo(() => computeInventorySummary(products), [products]);
+  const inventoryAlerts = useMemo(() => computeInventoryAlerts(products), [products]);
   const categories = useMemo(() => {
     const fromProducts = [...new Set(products.map(p => p.category))].filter(Boolean).sort();
     return fromProducts.length > 0 ? fromProducts : mockCategories;
@@ -151,8 +159,8 @@ export function ProductIntelligence() {
           <h2 className="text-2xl font-bold text-[#1A1A1A]">Product Intelligence</h2>
           <p className="text-[#4A4A4A] mt-1">
             Monitor inventory health and product performance
-            {firestoreProducts?.length > 0 && (
-              <span className="ml-2 text-[#22C55E] font-medium">· Showing {firestoreProducts.length} imported product(s)</span>
+            {hasImported && products.length > 0 && (
+              <span className="ml-2 text-[#22C55E] font-medium">· Showing {products.length} imported product(s)</span>
             )}
           </p>
         </div>

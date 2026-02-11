@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { UserPlus } from 'lucide-react';
 import { Button } from '../common';
 import { createInvite } from '../../services/invites';
+import { APP_URL } from '../../config/firebase';
 import { useAuth } from '../../hooks';
 import { useBrand } from '../../hooks';
 
@@ -28,7 +29,7 @@ export function InviteUserCard({ onInviteCreated }: InviteUserCardProps) {
     setSubmitting(true);
     try {
       const { token } = await createInvite(currentBrand.id, email.trim(), role, user.uid);
-      const link = `${window.location.origin}/invite/${token}`;
+      const link = `${APP_URL.replace(/\/$/, '')}/invite/${token}`;
       setInviteLink(link);
       onInviteCreated?.(link);
     } catch (err) {

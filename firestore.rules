@@ -9,9 +9,10 @@ service cloud.firestore {
     match /brands/{brandId} {
       allow read, write: if request.auth != null;
     }
-    // Invites: authenticated users (refined in Phase C)
+    // Invites: read allowed for invite links (logged-out users). Write requires auth.
     match /invites/{inviteId} {
-      allow read, write: if request.auth != null;
+      allow read: if true;
+      allow write: if request.auth != null;
     }
     // Brand-scoped collections: require auth. Docs with brandId allow access when user has that brand.
     match /products/{productId} {
