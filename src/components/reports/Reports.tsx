@@ -15,42 +15,42 @@ const reportTypes = [
   {
     id: 'executive',
     name: 'Executive Summary',
-    description: 'High-level KPIs and ROI overview for board presentations',
+    description: 'High-level KPIs και ROI overview για board presentations',
     icon: '📊',
     format: 'PDF',
-    lastGenerated: '2 hours ago'
+    lastGenerated: 'πριν 2 ώρες'
   },
   {
     id: 'segment',
     name: 'Segment Performance',
-    description: 'Detailed RFM segment analysis with migration trends',
+    description: 'Λεπτομερής ανάλυση RFM segments με migration trends',
     icon: '👥',
     format: 'PDF/Excel',
-    lastGenerated: '1 day ago'
+    lastGenerated: 'πριν 1 ημέρα'
   },
   {
     id: 'inventory',
     name: 'Inventory Health',
-    description: 'Stock levels, aging analysis, and optimization opportunities',
+    description: 'Επίπεδα αποθεμάτων, ανάλυση ηλικίας, και ευκαιρίες βελτιστοποίησης',
     icon: '📦',
     format: 'Excel',
-    lastGenerated: '3 hours ago'
+    lastGenerated: 'πριν 3 ώρες'
   },
   {
     id: 'channel',
     name: 'Channel Attribution',
-    description: 'ROAS breakdown and budget allocation analysis',
+    description: 'Ανάλυση ROAS breakdown και budget allocation',
     icon: '📢',
     format: 'PDF/Excel',
-    lastGenerated: '6 hours ago'
+    lastGenerated: 'πριν 6 ώρες'
   },
   {
     id: 'campaign',
     name: 'Campaign Performance',
-    description: 'Detailed results for all marketing campaigns',
+    description: 'Λεπτομερή αποτελέσματα για όλα τα marketing campaigns',
     icon: '🎯',
     format: 'Excel',
-    lastGenerated: '12 hours ago'
+    lastGenerated: 'πριν 12 ώρες'
   },
   {
     id: 'product',
@@ -58,7 +58,7 @@ const reportTypes = [
     description: 'Current scoring and ranking based on strategy weights',
     icon: '🏷️',
     format: 'Excel/CSV',
-    lastGenerated: '1 hour ago'
+    lastGenerated: 'πριν 1 ώρα'
   }
 ];
 
@@ -165,7 +165,7 @@ export function Reports() {
       <Card padding="lg">
         <CardHeader
           title="Scheduled Reports"
-          subtitle="Automated report delivery"
+          subtitle="Αυτοματοποιημένη παράδοση reports"
           icon={<Clock size={20} className="text-[#FF6B35]" />}
           action={
             <Button variant="secondary" size="sm" icon={<Plus size={14} />}>
@@ -201,7 +201,7 @@ export function Reports() {
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <Badge variant="success" size="sm">Active</Badge>
+                <Badge variant="success" size="sm">Ενεργό</Badge>
                 <button className="p-2 hover:bg-white rounded-lg transition-colors">
                   <ChevronRight size={16} className="text-[#4A4A4A]" />
                 </button>
@@ -231,14 +231,14 @@ export function Reports() {
           <div className="text-center">
             <p className="text-3xl font-bold text-[#1A1A1A] font-mono">{campaigns.length}</p>
             <p className="text-sm text-[#4A4A4A] mt-1">Campaigns</p>
-            <p className="text-xs text-[#8B5CF6]">Active</p>
+            <p className="text-xs text-[#8B5CF6]">Ενεργό</p>
           </div>
         </Card>
         <Card padding="md">
           <div className="text-center">
             <p className="text-3xl font-bold text-[#1A1A1A] font-mono">{hasAnalytics ? '✓' : '—'}</p>
             <p className="text-sm text-[#4A4A4A] mt-1">Analytics</p>
-            <p className="text-xs text-[#22C55E]">{hasAnalytics ? 'Imported' : 'No data'}</p>
+            <p className="text-xs text-[#22C55E]">{hasAnalytics ? 'Εισαγόμενα' : 'Χωρίς δεδομένα'}</p>
           </div>
         </Card>
       </div>

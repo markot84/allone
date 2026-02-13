@@ -28,11 +28,11 @@ export function DataImport() {
   const queryClient = useQueryClient();
 
   const importTypes: { value: ImportType; label: string; description: string }[] = [
-    { value: 'products', label: 'Products', description: 'Import product inventory data (SKU, name, category, stock, price, etc.)' },
-    { value: 'segments', label: 'RFM Segments', description: 'Import customer segment data (name, RFM score, count, revenue share)' },
-    { value: 'campaigns', label: 'Campaigns', description: 'Import marketing campaign data' },
-    { value: 'analytics', label: 'Analytics', description: 'Import analytics and performance data' },
-    { value: 'custom', label: 'Custom Data', description: 'Import custom data structure' },
+    { value: 'products', label: 'Products', description: 'Εισαγωγή δεδομένων αποθεμάτων προϊόντων (SKU, όνομα, κατηγορία, stock, τιμή, κλπ.)' },
+    { value: 'segments', label: 'RFM Segments', description: 'Εισαγωγή δεδομένων customer segments (όνομα, RFM score, count, revenue share)' },
+    { value: 'campaigns', label: 'Campaigns', description: 'Εισαγωγή δεδομένων marketing campaigns (Google Ads & Meta υποστηρίζονται)' },
+    { value: 'analytics', label: 'Analytics', description: 'Εισαγωγή analytics και performance δεδομένων' },
+    { value: 'custom', label: 'Custom Data', description: 'Εισαγωγή προσαρμοσμένης δομής δεδομένων' },
   ];
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -72,9 +72,18 @@ export function DataImport() {
   const handleLoadFromUrl = async () => {
     const url = importUrl.trim();
     if (!url) {
-      setUrlError('Enter a URL');
+      setUrlError('Εισάγετε URL');
       return;
     }
+    
+    // Validate URL format
+    try {
+      new URL(url);
+    } catch {
+      setUrlError('Μη έγκυρο URL format');
+      return;
+    }
+    
     setUrlLoading(true);
     setUrlError(null);
     setImportResult(null);
@@ -84,22 +93,45 @@ export function DataImport() {
         throw new Error(`HTTP ${res.status}: ${res.statusText}`);
       }
       const blob = await res.blob();
+      const contentType = res.headers.get('Content-Type') || blob.type;
       const disposition = res.headers.get('Content-Disposition');
+      
+      // Extract filename from URL or Content-Disposition header
       let fileName = url.split('/').pop()?.split('?')[0] || 'import.csv';
       if (disposition) {
         const match = disposition.match(/filename[*]?=(?:UTF-8'')?["']?([^"';]+)/i);
-        if (match?.[1]) fileName = match[1].trim();
+        if (match?.[1]) fileName = decodeURIComponent(match[1].trim());
       }
+      
+      // Detect file type from content type or filename
+      const isExcel = 
+        contentType.includes('spreadsheet') || 
+        contentType.includes('excel') ||
+        contentType.includes('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') ||
+        fileName.toLowerCase().endsWith('.xlsx') ||
+        fileName.toLowerCase().endsWith('.xls');
+      
       if (!isSupportedFile(fileName)) {
-        if (blob.type.includes('spreadsheet') || blob.type.includes('excel')) fileName = 'import.xlsx';
-        else fileName = fileName.replace(/\.[^.]+$/, '') + '.csv';
+        if (isExcel) {
+          fileName = fileName.replace(/\.[^.]+$/, '') + '.xlsx';
+        } else {
+          fileName = fileName.replace(/\.[^.]+$/, '') + '.csv';
+        }
       }
-      const file = new File([blob], fileName, { type: blob.type });
+      
+      const file = new File([blob], fileName, { 
+        type: isExcel ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : blob.type 
+      });
       setSelectedFiles(prev => [...prev, { file, type: selectedType }]);
       setImportUrl('');
-      toast.success(`Το αρχείο "${fileName}" φορτώθηκε. Πάτα Import για εισαγωγή.`);
+      toast.success(`Το αρχείο "${fileName}" φορτώθηκε επιτυχώς. Κάντε κλικ στο Import για εισαγωγή.`);
     } catch (err) {
-      setUrlError(err instanceof Error ? err.message : 'Failed to load from URL. Check CORS and link.');
+      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+      if (errorMsg.includes('CORS') || errorMsg.includes('Failed to fetch')) {
+        setUrlError('CORS error: Το URL πρέπει να επιτρέπει cross-origin requests. Προσπαθήστε με Google Cloud signed URL ή άλλο CORS-enabled link.');
+      } else {
+        setUrlError(`Σφάλμα: ${errorMsg}. Ελέγξτε ότι το URL είναι έγκυρο και προσβάσιμο.`);
+      }
     } finally {
       setUrlLoading(false);
     }
@@ -173,8 +205,35 @@ export function DataImport() {
             : 'Η ενέργεια ολοκληρώθηκε.'
         );
         const typesImported = new Set(selectedFiles.map((f) => f.type));
-        if (typesImported.has('products')) queryClient.invalidateQueries({ queryKey: ['products'] });
-        if (typesImported.has('segments')) queryClient.invalidateQueries({ queryKey: ['segments'] });
+        const brandId = currentBrand?.id ?? null;
+        
+        if (import.meta.env.MODE === 'development') {
+          console.debug('[DataImport] Import successful, invalidating queries for:', Array.from(typesImported), 'brandId:', brandId);
+        }
+        
+        // Invalidate queries with brandId to ensure fresh data
+        if (typesImported.has('products')) {
+          queryClient.invalidateQueries({ queryKey: ['products', brandId] });
+          queryClient.invalidateQueries({ queryKey: ['products'] });
+        }
+        if (typesImported.has('segments')) {
+          queryClient.invalidateQueries({ queryKey: ['segments', brandId] });
+          queryClient.invalidateQueries({ queryKey: ['segments'] });
+        }
+        if (typesImported.has('analytics')) {
+          queryClient.invalidateQueries({ queryKey: ['analytics', brandId] });
+          queryClient.invalidateQueries({ queryKey: ['analytics'] });
+          if (import.meta.env.MODE === 'development') {
+            console.debug('[DataImport] Analytics queries invalidated, should refetch now');
+          }
+        }
+        if (typesImported.has('campaigns')) {
+          queryClient.invalidateQueries({ queryKey: ['campaigns', brandId] });
+          queryClient.invalidateQueries({ queryKey: ['campaigns'] });
+          if (import.meta.env.MODE === 'development') {
+            console.debug('[DataImport] Campaigns queries invalidated, should refetch now');
+          }
+        }
       } else {
         toast.error(
           aggregated.errors.length > 0
@@ -242,11 +301,13 @@ PROD-002,Another Product,Clothing,49.99,25.00,50,20,999.80,,,2025-02-01,,,15,499
       segments: `Name,RFM Score,Count,Percentage,Revenue Share,Color,Description
 Champions,555,1500,25.5,45.2,#22c55e,High value customers
 Loyal,444,2000,34.0,30.1,#3b82f6,Regular customers`,
-      campaigns: `Name,Channel,Budget,Start Date,End Date,Status
-Summer Sale,Email Marketing,5000,2026-06-01,2026-08-31,active`,
-      analytics: `Date,Metric,Value,Channel
-2026-01-01,Revenue,50000,Email Marketing
-2026-01-02,Revenue,52000,Meta Ads`,
+      campaigns: `Channel,Campaign Name,Period,Start Date,End Date,Status,Budget,Amount Spent,Impressions,Clicks,CTR,CPC,CPM,Conversions,Conversion Value,ROAS,Cost per Conversion,Conversion Rate,Currency Code,Bid Strategy Type,Result Type
+Google Ads,Demand Gen Campaign,January 2025,2025-01-01,2025-01-31,Enabled,1000,850,50000,1200,2.4,0.71,17,45,5000,5.88,18.89,3.75,EUR,Maximize Conversions,
+Meta,CAMP_Brands_new_SA_,2025-01-01 - 2025-01-31,2025-01-01,2025-01-31,Active,5000,6202.97,4058725,66220,1.63,0.094,1.53,479,65499.31,10.56,12.95,,EUR,,Purchase`,
+      analytics: `Date,Total Revenue,Attributed Revenue,Attribution Rate
+2026-01-01,50000,15000,30.0
+2026-02-01,52000,18000,34.6
+2026-03-01,48000,16500,34.4`,
       custom: `Column1,Column2,Column3
 Value1,Value2,Value3`,
     };
@@ -329,7 +390,7 @@ Value1,Value2,Value3`,
       <Card padding="lg">
         <CardHeader
           title="Import Data"
-          subtitle="Select data type and upload CSV file"
+          subtitle="Επιλέξτε τύπο δεδομένων και ανεβάστε CSV αρχείο"
           icon={<Upload size={20} className="text-[var(--nts-charcoal)]" />}
         />
 
@@ -337,7 +398,7 @@ Value1,Value2,Value3`,
           {/* Data Type Selection (default for new files) */}
           <div>
             <Label style={{ marginBottom: 8, display: 'block', fontWeight: 600 }}>
-              <Tooltip content="Ο τύπος που θα ανατεθεί σε νέα αρχεία. Μπορείς να αλλάξεις τύπο ανά αρχείο στη λίστα.">Default type for new files</Tooltip>
+              <Tooltip content="Ο τύπος που θα ανατεθεί σε νέα αρχεία. Μπορείς να αλλάξεις τύπο ανά αρχείο στη λίστα.">Προεπιλεγμένος τύπος για νέα αρχεία</Tooltip>
             </Label>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {importTypes.map((type) => (
@@ -363,33 +424,51 @@ Value1,Value2,Value3`,
           {/* Import from URL */}
           <div>
             <Label style={{ marginBottom: 8, display: 'block', fontWeight: 600 }}>
-              <Tooltip content="Επικόλλησε URL αρχείου (π.χ. Google Cloud signed URL). Τα αρχεία πρέπει να επιτρέπουν CORS.">Or import from link</Tooltip>
+              <Tooltip content="Επικόλλησε URL αρχείου CSV ή Excel (.xlsx). Υποστηρίζονται Google Cloud signed URLs, OneDrive, Dropbox links (αν επιτρέπουν CORS).">Εισαγωγή από URL (CSV ή Excel)</Tooltip>
             </Label>
             <div className="flex gap-2 flex-wrap">
               <input
                 type="url"
-                placeholder="https://... (e.g. Google Cloud signed URL)"
+                placeholder="https://... (CSV ή Excel file URL)"
                 value={importUrl}
                 onChange={(e) => { setImportUrl(e.target.value); setUrlError(null); }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !urlLoading && importUrl.trim()) {
+                    handleLoadFromUrl();
+                  }
+                }}
                 className="flex-1 min-w-[200px] px-3 py-2 border border-[var(--nts-border-gray)] rounded-lg text-sm focus:outline-none focus:border-[#FF6B35]"
               />
               <Button
-                variant="secondary"
+                variant="primary"
                 onClick={handleLoadFromUrl}
-                disabled={urlLoading}
+                disabled={urlLoading || !importUrl.trim()}
               >
-                {urlLoading ? 'Loading...' : 'Load from URL'}
+                {urlLoading ? (
+                  <>
+                    <Spinner size="sm" className="mr-2" />
+                    Φόρτωση...
+                  </>
+                ) : (
+                  'Φόρτωση από URL'
+                )}
               </Button>
             </div>
             {urlError && (
-              <p className="text-sm text-[#cf222e] mt-1">{urlError}</p>
+              <p className="text-sm text-[#cf222e] mt-1 flex items-start gap-2">
+                <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
+                <span>{urlError}</span>
+              </p>
             )}
+            <p className="text-xs text-[var(--nts-medium-gray)] mt-1">
+              Υποστηρίζονται CSV και Excel (.xlsx) files. Το file type detect-άρεται αυτόματα.
+            </p>
           </div>
 
           {/* File Upload */}
           <div>
             <Label style={{ marginBottom: 8, display: 'block', fontWeight: 600 }}>
-              <Tooltip content="Ανέβασε .csv ή .xlsx. Monday.com, DSS και SignalLab exports υποστηρίζονται με auto-detection στηλών.">Files (CSV or Excel)</Tooltip>
+              <Tooltip content="Ανέβασε .csv ή .xlsx. Monday.com, DSS και SignalLab exports υποστηρίζονται με auto-detection στηλών.">Αρχεία (CSV ή Excel)</Tooltip>
             </Label>
             <div className="border-2 border-dashed border-[var(--nts-border-gray)] rounded-lg p-6 text-center">
               <input
@@ -646,7 +725,7 @@ Value1,Value2,Value3`,
         <Card padding="lg">
           <CardHeader
             title="Import History"
-            subtitle="Recent import jobs"
+            subtitle="Πρόσφατες εισαγωγές"
             icon={<Clock size={20} className="text-[var(--nts-charcoal)]" />}
           />
 
@@ -657,7 +736,7 @@ Value1,Value2,Value3`,
               </div>
             ) : importHistory.length === 0 ? (
               <div className="text-center py-8 text-[var(--nts-medium-gray)]">
-                No import history yet
+                Δεν υπάρχει ιστορικό εισαγωγών ακόμα
               </div>
             ) : (
               importHistory.map((job) => (
@@ -678,7 +757,7 @@ Value1,Value2,Value3`,
                         {job.createdAt.toLocaleString()}
                         {job.result && (
                           <span className="ml-2">
-                            • {job.result.imported} imported, {job.result.failed} failed
+                            • {job.result.imported} εισήχθησαν, {job.result.failed} απέτυχαν
                           </span>
                         )}
                       </div>

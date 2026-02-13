@@ -22,10 +22,70 @@ import {
 } from 'recharts';
 import { Card, CardHeader, Badge, Button, Spinner, Tooltip as InfoTooltip } from '../common';
 import { useSegments } from '../../hooks';
-import { segmentCategoryMatrix, segmentMigration } from '../../data';
+import { segmentCategoryMatrix } from '../../data';
 import type { RFMSegment } from '../../types';
 
 const fmt = (n: number) => Number(n).toFixed(2);
+
+// Get default RFM score from segment name (fallback when rfm_score is missing)
+function getDefaultRFMScoreFromName(segmentName: string): string | null {
+  const name = segmentName.toLowerCase().trim();
+  const defaults: Record<string, string> = {
+    'champions': '5-5-5',
+    'loyal_customers': '4-4-3',
+    'loyal': '4-4-3',
+    'promising': '4-2-3',
+    'potential_loyalists': '4-2-3',
+    'potential': '4-2-3',
+    'at_risk': '2-3-3',
+    'hibernating': '2-2-2',
+    'lost': '1-1-1',
+    'new_customers': '5-1-1',
+    'recent_customers': '5-2-2',
+    'cant_lose_them': '3-5-5',
+    "can't_lose_them": '3-5-5',
+    'customers_needing_attention': '3-3-2',
+  };
+  
+  // Try exact match first
+  if (defaults[name]) return defaults[name];
+  
+  // Try partial match
+  for (const [key, value] of Object.entries(defaults)) {
+    if (name.includes(key) || key.includes(name)) {
+      return value;
+    }
+  }
+  
+  return null;
+}
+
+// Calculate average RFM score from a segment's rfm_score string
+// Handles formats like "5-5-5 to 4-4-4" (range) or "555" (3 digits) or "5-5-5"
+function calculateAvgRFMScore(rfmScore: string | undefined | null, segmentName?: string): number | null {
+  let scoreStr = rfmScore;
+  
+  // If rfm_score is empty, try to get default from segment name
+  if ((!scoreStr || !scoreStr.trim()) && segmentName) {
+    scoreStr = getDefaultRFMScoreFromName(segmentName);
+  }
+  
+  if (!scoreStr || typeof scoreStr !== 'string') return null;
+  
+  const trimmed = scoreStr.trim();
+  if (!trimmed) return null;
+  
+  // Extract all digits from the string
+  const digits = trimmed.match(/\d/g);
+  if (!digits || digits.length === 0) return null;
+  
+  // Convert to numbers and filter valid RFM scores (1-5)
+  const numbers = digits.map(d => parseInt(d, 10)).filter(n => !isNaN(n) && n >= 1 && n <= 5);
+  if (numbers.length === 0) return null;
+  
+  const sum = numbers.reduce((a, b) => a + b, 0);
+  return sum / numbers.length;
+}
 
 export function RFMAnalysis() {
   const [selectedSegment, setSelectedSegment] = useState<RFMSegment | null>(null);
@@ -61,7 +121,7 @@ export function RFMAnalysis() {
               <Users size={20} className="text-[#FF6B35]" />
             </div>
             <div>
-              <p className="text-sm text-[#4A4A4A]"><InfoTooltip content="Συνολικός αριθμός πελατών σε όλα τα RFM segments.">Total Customers</InfoTooltip></p>
+              <p className="text-sm text-[#4A4A4A]"><InfoTooltip content="Συνολικός αριθμός πελατών σε όλα τα RFM segments.">Σύνολο Πελατών</InfoTooltip></p>
               <p className="text-xl font-bold text-[#1A1A1A] font-mono">
                 {totalCustomersDisplay.toLocaleString()}
               </p>
@@ -74,7 +134,7 @@ export function RFMAnalysis() {
               <TrendingUp size={20} className="text-[#22C55E]" />
             </div>
             <div>
-              <p className="text-sm text-[#4A4A4A]"><InfoTooltip content="Αριθμός RFM segments (ομαδοποιημένοι πελάτες βάσει Recency, Frequency, Monetary).">Active Segments</InfoTooltip></p>
+              <p className="text-sm text-[#4A4A4A]"><InfoTooltip content="Αριθμός RFM segments (ομαδοποιημένοι πελάτες βάσει Recency, Frequency, Monetary).">Ενεργά Segments</InfoTooltip></p>
               <p className="text-xl font-bold text-[#1A1A1A]">
                 {rfmSegments.filter(s => s.id !== 'lost').length}
               </p>
@@ -87,14 +147,30 @@ export function RFMAnalysis() {
               <Zap size={20} className="text-[#3B82F6]" />
             </div>
             <div>
-              <p className="text-sm text-[#4A4A4A]"><InfoTooltip content="Μέσος όρος RFM score (1–5 ανά R, F, M).">Avg Segment Score</InfoTooltip></p>
+              <p className="text-sm text-[#4A4A4A]"><InfoTooltip content="Μέσος όρος RFM score (1–5 ανά R, F, M).">Μέσος Segment Score</InfoTooltip></p>
               <p className="text-xl font-bold text-[#1A1A1A] font-mono">
-                {rfmSegments.length > 0
-                  ? (() => {
-                      const vals = rfmSegments.map((s) => parseFloat(String(s.rfm_score || '')) || 0).filter((v) => v > 0);
-                      return vals.length > 0 ? (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1) : '0';
-                    })()
-                  : '0'}
+                {(() => {
+                  if (rfmSegments.length === 0) return '0';
+                  
+                  const scores = rfmSegments
+                    .map((s) => calculateAvgRFMScore(s.rfm_score, s.name))
+                    .filter((score): score is number => score !== null && !isNaN(score) && isFinite(score));
+                  
+                  if (scores.length === 0) {
+                    // Debug: log segments without valid scores
+                    if (import.meta.env.MODE === 'development') {
+                      console.debug('No valid RFM scores found. Segments:', rfmSegments.map(s => ({ 
+                        name: s.name, 
+                        rfm_score: s.rfm_score,
+                        rfm_score_type: typeof s.rfm_score 
+                      })));
+                    }
+                    return '0';
+                  }
+                  
+                  const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+                  return avg.toFixed(1);
+                })()}
               </p>
             </div>
           </div>
@@ -105,7 +181,7 @@ export function RFMAnalysis() {
               <TrendingDown size={20} className="text-[#F59E0B]" />
             </div>
             <div>
-              <p className="text-sm text-[#4A4A4A]"><InfoTooltip content="Ποσοστό πελατών στο segment «At Risk» (μειωμένη δραστηριότητα).">At Risk Rate</InfoTooltip></p>
+              <p className="text-sm text-[#4A4A4A]"><InfoTooltip content="Ποσοστό πελατών στο segment «At Risk» (μειωμένη δραστηριότητα).">Ποσοστό At Risk</InfoTooltip></p>
               <p className="text-xl font-bold text-[#F59E0B] font-mono">
                 {fmt(rfmSegments.find(s => s.id === 'at_risk')?.percentage ?? 0)}%
               </p>
@@ -135,7 +211,7 @@ export function RFMAnalysis() {
         <Card padding="lg" className="min-w-[280px]">
           <CardHeader
             title="Revenue Distribution"
-            subtitle="By segment"
+            subtitle="Ανά segment"
           />
           <div
             className="w-full overflow-visible shrink-0"
@@ -216,52 +292,27 @@ export function RFMAnalysis() {
       <Card padding="lg">
         <CardHeader
           title="Segment Migration"
-          subtitle={hasImportedSegments ? segmentMigration.period : ''}
+          subtitle={hasImportedSegments ? 'Τελευταίες 30 ημέρες' : ''}
           icon={<ArrowRight size={20} className="text-[#FF6B35]" />}
         />
         <div className="space-y-3">
-          {hasImportedSegments
-            ? segmentMigration.flows.slice(0, 6).map((flow, index) => {
-                const fromSegment = rfmSegments.find(s => s.id === flow.from);
-                const toSegment = rfmSegments.find(s => s.id === flow.to);
-                const isPositive = ['champions', 'loyal', 'potential'].includes(flow.to) &&
-                                  ['at_risk', 'lost'].includes(flow.from);
-
-                return (
-                  <motion.div
-                    key={`${flow.from}-${flow.to}`}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                    className="flex items-center gap-4 p-3 bg-[#F5F5F5] rounded-lg"
-                  >
-                    <div className="flex items-center gap-2 flex-1">
-                      <Badge
-                        variant={flow.from === 'lost' ? 'danger' : flow.from === 'at_risk' ? 'warning' : 'default'}
-                      >
-                        {fromSegment?.icon} {fromSegment?.name}
-                      </Badge>
-                      <ArrowRight size={16} className="text-[#9CA3AF]" />
-                      <Badge
-                        variant={flow.to === 'champions' ? 'success' : flow.to === 'loyal' ? 'info' : 'default'}
-                      >
-                        {toSegment?.icon} {toSegment?.name}
-                      </Badge>
-                    </div>
-                    <div className="text-right">
-                      <p className={`font-bold font-mono ${isPositive ? 'text-[#22C55E]' : 'text-[#EF4444]'}`}>
-                        {flow.count.toLocaleString()}
-                      </p>
-                      <p className="text-xs text-[#4A4A4A]">{fmt(flow.percentage ?? 0)}%</p>
-                    </div>
-                  </motion.div>
-                );
-              })
-            : (
+          {hasImportedSegments && rfmSegments.length > 0 ? (
+            // Show empty migration flows (zeros) when no comparison data exists
+            // In the future, this will be populated from actual migration comparison data
+            rfmSegments.length > 0 ? (
+              <p className="text-sm text-[#4A4A4A] py-4 text-center">
+                Δεν υπάρχουν συγκρινόμενα δεδομένα για την περίοδο. Φόρτωσε δεδομένα από διαφορετικές περιόδους για να δεις την μετακίνηση μεταξύ segments.
+              </p>
+            ) : (
               <p className="text-sm text-[#4A4A4A] py-4">
                 Φόρτωσε RFM δεδομένα για να δεις την μετακίνηση μεταξύ segments.
               </p>
-            )}
+            )
+          ) : (
+            <p className="text-sm text-[#4A4A4A] py-4">
+              Φόρτωσε RFM δεδομένα για να δεις την μετακίνηση μεταξύ segments.
+            </p>
+          )}
         </div>
       </Card>
     </div>
@@ -345,7 +396,11 @@ interface SegmentDetailProps {
 const emptyCategoryData = { categories: [], brands: [], price_sensitivity: 'medium' as const, preferred_channels: [] };
 
 function SegmentDetail({ segment, onClose }: SegmentDetailProps) {
-  const categoryData = segmentCategoryMatrix[segment.id] ?? emptyCategoryData;
+  const { hasImported: hasImportedSegments } = useSegments();
+  // Use empty data when no imported segments exist (no mock data)
+  const categoryData = hasImportedSegments 
+    ? (segmentCategoryMatrix[segment.id] ?? emptyCategoryData)
+    : emptyCategoryData;
 
   return (
     <Card padding="lg">
@@ -362,20 +417,21 @@ function SegmentDetail({ segment, onClose }: SegmentDetailProps) {
             <p className="text-[#4A4A4A]">{segment.description}</p>
           </div>
         </div>
-        <Button variant="ghost" onClick={onClose}>Close</Button>
+        <Button variant="ghost" onClick={onClose}>Κλείσιμο</Button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Category Affinity */}
         <div>
           <h4 className="font-medium text-[#1A1A1A] mb-4">Category Preferences</h4>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={categoryData?.categories || []}
-                layout="vertical"
-                margin={{ left: 100 }}
-              >
+          {categoryData?.categories && categoryData.categories.length > 0 ? (
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={categoryData.categories}
+                  layout="vertical"
+                  margin={{ left: 100 }}
+                >
                 <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" />
                 <XAxis
                   type="number"
@@ -397,10 +453,15 @@ function SegmentDetail({ segment, onClose }: SegmentDetailProps) {
                   }}
                   formatter={(value) => [`${(((value as number) || 0) * 100).toFixed(0)}%`, 'Affinity']}
                 />
-                <Bar dataKey="affinity" fill={segment.color} radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+                  <Bar dataKey="affinity" fill={segment.color} radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="h-64 flex items-center justify-center bg-[#F5F5F5] rounded-lg">
+              <p className="text-sm text-[#4A4A4A]">Δεν υπάρχουν δεδομένα category preferences</p>
+            </div>
+          )}
         </div>
 
         {/* Segment Details */}
@@ -408,9 +469,13 @@ function SegmentDetail({ segment, onClose }: SegmentDetailProps) {
           <div className="p-4 bg-[#F5F5F5] rounded-lg">
             <h5 className="text-sm font-medium text-[#1A1A1A] mb-2">Preferred Brands</h5>
             <div className="flex flex-wrap gap-2">
-              {categoryData?.brands.map((brand) => (
-                <Badge key={brand} variant="default">{brand}</Badge>
-              ))}
+              {categoryData?.brands && categoryData.brands.length > 0 ? (
+                categoryData.brands.map((brand) => (
+                  <Badge key={brand} variant="default">{brand}</Badge>
+                ))
+              ) : (
+                <p className="text-xs text-[#4A4A4A]">Δεν υπάρχουν δεδομένα</p>
+              )}
             </div>
           </div>
 
@@ -430,9 +495,13 @@ function SegmentDetail({ segment, onClose }: SegmentDetailProps) {
           <div className="p-4 bg-[#F5F5F5] rounded-lg">
             <h5 className="text-sm font-medium text-[#1A1A1A] mb-2">Preferred Channels</h5>
             <div className="flex flex-wrap gap-2">
-              {categoryData?.preferred_channels.map((channel) => (
-                <Badge key={channel} variant="info">{channel}</Badge>
-              ))}
+              {categoryData?.preferred_channels && categoryData.preferred_channels.length > 0 ? (
+                categoryData.preferred_channels.map((channel) => (
+                  <Badge key={channel} variant="info">{channel}</Badge>
+                ))
+              ) : (
+                <p className="text-xs text-[#4A4A4A]">Δεν υπάρχουν δεδομένα</p>
+              )}
             </div>
           </div>
 

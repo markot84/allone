@@ -12,25 +12,25 @@ interface ApprovalWorkflowProps {
 
 const statusConfig = {
   draft: {
-    label: 'Draft',
+    label: 'Προσχέδιο',
     icon: <FileText size={14} className="text-[var(--nts-medium-gray)]" />,
     color: '#4A4A4A',
     bgColor: '#F5F5F5'
   },
   pending_review: {
-    label: 'Pending Review',
+    label: 'Σε Αναμονή Αξιολόγησης',
     icon: <Clock size={14} className="text-[var(--nts-medium-gray)]" />,
     color: '#F59E0B',
     bgColor: '#FEF3C7'
   },
   approved: {
-    label: 'Approved',
+    label: 'Εγκεκριμένο',
     icon: <CheckCircle2 size={14} className="text-[var(--nts-medium-gray)]" />,
     color: '#22C55E',
     bgColor: '#DCFCE7'
   },
   implementing: {
-    label: 'In Implementation',
+    label: 'Σε Εφαρμογή',
     icon: <Rocket size={14} className="text-[var(--nts-medium-gray)]" />,
     color: '#3B82F6',
     bgColor: '#DBEAFE'
@@ -44,11 +44,11 @@ export function ApprovalWorkflow({ status, onStatusChange }: ApprovalWorkflowPro
   const getNextAction = () => {
     switch (status) {
       case 'draft':
-        return { label: 'Send for Review', nextStatus: 'pending_review' as ApprovalStatus };
+        return { label: 'Αποστολή για Αξιολόγηση', nextStatus: 'pending_review' as ApprovalStatus };
       case 'pending_review':
-        return { label: 'Approve & Activate', nextStatus: 'approved' as ApprovalStatus };
+        return { label: 'Έγκριση & Ενεργοποίηση', nextStatus: 'approved' as ApprovalStatus };
       case 'approved':
-        return { label: 'Start Implementation', nextStatus: 'implementing' as ApprovalStatus };
+        return { label: 'Έναρξη Εφαρμογής', nextStatus: 'implementing' as ApprovalStatus };
       case 'implementing':
         return null;
     }
@@ -150,7 +150,7 @@ export function ApprovalWorkflow({ status, onStatusChange }: ApprovalWorkflowPro
               }}
               className="w-full px-4 py-2 text-left text-sm text-[#EF4444] hover:bg-[#FEE2E2] flex items-center gap-2"
             >
-              ↩️ Reset to Draft
+              ↩️ Επαναφορά σε Προσχέδιο
             </button>
           </motion.div>
         )}

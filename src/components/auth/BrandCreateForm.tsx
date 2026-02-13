@@ -4,6 +4,7 @@ import { Building2 } from 'lucide-react';
 import { Button } from '../common';
 import { useAuth } from '../../hooks';
 import { FirestoreService } from '../../services/firestore';
+import { BrandAssetUpload } from '../brands/BrandAssetUpload';
 import type { Brand } from '../../types';
 
 function sanitizeId(s: string): string {
@@ -22,6 +23,7 @@ export function BrandCreateForm({ onCreated }: BrandCreateFormProps) {
   const { user } = useAuth();
   const [name, setName] = useState('');
   const [type, setType] = useState<'B2B' | 'B2C'>('B2C');
+  const [logoUrl, setLogoUrl] = useState<string>('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -37,12 +39,14 @@ export function BrandCreateForm({ onCreated }: BrandCreateFormProps) {
     setSubmitting(true);
     try {
       const brandId = sanitizeId(trimmed);
+      
       const brand: Brand = {
         id: brandId,
         name: trimmed,
         type,
         createdAt: new Date().toISOString(),
         createdBy: user.uid,
+        ...(logoUrl ? { logoUrl } : {}),
       };
       await FirestoreService.setDocument('brands', brandId, brand);
       const profile = await FirestoreService.getDocument<{ brandIds?: string[] }>('users', user.uid);
@@ -108,6 +112,17 @@ export function BrandCreateForm({ onCreated }: BrandCreateFormProps) {
           </button>
         </div>
       </div>
+      
+      {/* Logo Upload - Show upload field */}
+      <BrandAssetUpload
+        brandId={name.trim() ? sanitizeId(name.trim()) : 'temp'}
+        currentLogoUrl={logoUrl}
+        onUploadComplete={(url) => {
+          setLogoUrl(url);
+        }}
+        assetType="logo"
+      />
+      
       {error && <p className="text-sm text-[#EF4444]">{error}</p>}
       <Button type="submit" variant="primary" className="w-full" disabled={submitting}>
         Δημιουργία Brand

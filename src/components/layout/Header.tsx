@@ -38,7 +38,7 @@ export function Header({ title, subtitle, onOpenSidebar }: HeaderProps) {
           <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--nts-medium-gray)]" />
           <input
             type="text"
-            placeholder="Search..."
+            placeholder="Αναζήτηση..."
             className="w-72 pl-10 pr-3 py-2 bg-white border border-[var(--nts-border-gray)] rounded-md text-[14px] focus:outline-none focus:border-[#0969da] transition-colors placeholder:text-[#8c959f]"
           />
         </div>

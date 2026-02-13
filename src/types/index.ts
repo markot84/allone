@@ -5,6 +5,12 @@ export interface Brand {
   type: 'B2B' | 'B2C';
   createdAt: string;
   createdBy: string;
+  logoUrl?: string; // Firebase Storage URL for brand logo
+  assets?: {
+    logo?: string;
+    images?: string[];
+    documents?: string[];
+  };
 }
 
 export interface UserProfile {
@@ -202,4 +208,34 @@ export interface KPIData {
   changeLabel: string;
   trend: 'up' | 'down' | 'neutral';
   sparklineData?: number[];
+}
+
+// Campaign Types
+export interface Campaign {
+  id: string;
+  name: string;
+  channel: 'Google Ads' | 'Meta' | 'Other';
+  period?: string; // Month or date range
+  start_date?: string; // ISO date string
+  end_date?: string; // ISO date string
+  status?: string; // active, paused, completed, etc.
+  budget?: number;
+  amount_spent?: number;
+  impressions?: number;
+  clicks?: number;
+  ctr?: number; // Click-through rate
+  cpc?: number; // Cost per click
+  cpm?: number; // Cost per 1,000 impressions
+  conversions?: number;
+  conversion_value?: number;
+  roas?: number; // Return on ad spend
+  cost_per_conversion?: number;
+  conversion_rate?: number;
+  currency_code?: string;
+  bid_strategy_type?: string; // Google Ads specific
+  result_type?: string; // Meta specific
+  brandId?: string;
+  createdAt?: Date | string;
+  importedAt?: Date | string;
+  source?: string; // Source file name
 }

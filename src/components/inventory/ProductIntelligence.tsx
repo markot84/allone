@@ -267,7 +267,7 @@ export function ProductIntelligence() {
             <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
             <input
               type="text"
-              placeholder="Search products..."
+              placeholder="Αναζήτηση προϊόντων..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-4 py-2 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[#FF6B35] focus:bg-white transition-all"
@@ -393,7 +393,7 @@ export function ProductIntelligence() {
               disabled={currentPage === 1}
               onClick={() => setCurrentPage(currentPage - 1)}
             >
-              Previous
+              Προηγούμενο
             </Button>
             {[...Array(Math.min(5, totalPages))].map((_, i) => {
               const page = i + 1;
@@ -434,7 +434,7 @@ export function ProductIntelligence() {
               disabled={currentPage === totalPages}
               onClick={() => setCurrentPage(currentPage + 1)}
             >
-              Next
+              Επόμενο
             </Button>
           </div>
         </div>
@@ -564,7 +564,7 @@ function ProductRow({ product, index }: ProductRowProps) {
       </td>
       <td className="px-4 py-3 text-right">
         <button className="text-xs font-medium text-[#FF6B35] hover:underline">
-          Add to Feed
+          Προσθήκη στο Feed
         </button>
       </td>
     </motion.tr>

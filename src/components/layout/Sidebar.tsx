@@ -7,14 +7,15 @@ import {
   Megaphone,
   FileText,
   BarChart3,
-  DollarSign,
+  Euro,
   Sparkles,
   HelpCircle,
   ChevronLeft,
   ChevronRight,
   Link2,
   X,
-  Lightbulb
+  Lightbulb,
+  Target
 } from 'lucide-react';
 
 interface NavItem {
@@ -32,8 +33,9 @@ const mainNavItems: NavItem[] = [
   { id: 'rfm', name: 'RFM Analysis', icon: <Users size={18} /> },
   { id: 'products', name: 'Product Intelligence', icon: <Package size={18} /> },
   { id: 'channels', name: 'Channel Activation', icon: <Megaphone size={18} /> },
+  { id: 'campaigns', name: 'Campaigns', icon: <Target size={18} /> },
   { id: 'reports', name: 'Reports', icon: <BarChart3 size={18} /> },
-  { id: 'roi', name: 'ROI Attribution', icon: <DollarSign size={18} /> }
+  { id: 'roi', name: 'ROI Attribution', icon: <Euro size={18} /> }
 ];
 
 const secondaryNavItems: NavItem[] = [

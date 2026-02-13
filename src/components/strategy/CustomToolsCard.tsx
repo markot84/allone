@@ -130,7 +130,7 @@ export function CustomToolsCard({ weights, onWeightsChange, onCompareClick }: Cu
           </div>
         ) : (
           <Button variant="secondary" size="sm" icon={<Save size={14} />} onClick={() => setShowSaveInline(true)}>
-            Save preset
+            Αποθήκευση preset
           </Button>
         )}
 
@@ -142,13 +142,13 @@ export function CustomToolsCard({ weights, onWeightsChange, onCompareClick }: Cu
               onChange={(e) => setLoadPresetId(e.target.value)}
               className="px-3 py-2 bg-[#F5F5F5] border border-transparent rounded-lg text-sm"
             >
-              <option value="">— Load preset —</option>
+              <option value="">— Φόρτωση preset —</option>
               {presets.map((p) => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </select>
             <Button variant="secondary" size="sm" icon={<FolderOpen size={14} />} onClick={handleLoad} disabled={!loadPresetId}>
-              Load
+              Φόρτωση
             </Button>
             <Button
               variant="ghost"
@@ -164,19 +164,19 @@ export function CustomToolsCard({ weights, onWeightsChange, onCompareClick }: Cu
               disabled={!loadPresetId}
               className="text-[#EF4444] hover:text-[#DC2626]"
             >
-              Delete
+              Διαγραφή
             </Button>
           </div>
         )}
 
         {/* Compare */}
         <Button variant="secondary" size="sm" icon={<GitCompare size={14} />} onClick={onCompareClick}>
-          Compare scenarios
+          Σύγκριση scenarios
         </Button>
 
         {/* Export */}
         <Button variant="ghost" size="sm" icon={<Download size={14} />} onClick={handleExport}>
-          Export JSON
+          Εξαγωγή JSON
         </Button>
 
         {/* Import */}
@@ -188,7 +188,7 @@ export function CustomToolsCard({ weights, onWeightsChange, onCompareClick }: Cu
           onChange={handleImport}
         />
         <Button variant="ghost" size="sm" icon={<Upload size={14} />} onClick={() => fileInputRef.current?.click()}>
-          Import JSON
+          Εισαγωγή JSON
         </Button>
       </div>
 

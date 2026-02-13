@@ -61,7 +61,7 @@ export function Button({
       trailingVisual={icon && iconPosition === 'right' ? () => <>{icon}</> : undefined}
       {...rest}
     >
-      {loading ? 'Loading…' : children}
+      {loading ? 'Φόρτωση…' : children}
     </PrimerButton>
   );
 }

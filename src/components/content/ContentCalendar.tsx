@@ -17,10 +17,10 @@ import { useSegments } from '../../hooks';
 import { contentCalendar, upcomingMonths, contentFormats } from '../../data/mockCalendar';
 
 const statusConfig = {
-  draft: { label: 'Draft', color: '#4A4A4A', bgColor: '#F5F5F5', icon: <FileText size={12} /> },
-  in_production: { label: 'In Production', color: '#3B82F6', bgColor: '#DBEAFE', icon: <Edit size={12} /> },
-  scheduled: { label: 'Scheduled', color: '#8B5CF6', bgColor: '#EDE9FE', icon: <Clock size={12} /> },
-  published: { label: 'Published', color: '#22C55E', bgColor: '#DCFCE7', icon: <Check size={12} /> }
+  draft: { label: 'Προσχέδιο', color: '#4A4A4A', bgColor: '#F5F5F5', icon: <FileText size={12} /> },
+  in_production: { label: 'Σε Παραγωγή', color: '#3B82F6', bgColor: '#DBEAFE', icon: <Edit size={12} /> },
+  scheduled: { label: 'Προγραμματισμένο', color: '#8B5CF6', bgColor: '#EDE9FE', icon: <Clock size={12} /> },
+  published: { label: 'Δημοσιευμένο', color: '#22C55E', bgColor: '#DCFCE7', icon: <Check size={12} /> }
 };
 
 export function ContentCalendar() {
@@ -174,7 +174,7 @@ export function ContentCalendar() {
                     View
                   </Button>
                   <Button variant="secondary" size="sm" icon={<Edit size={14} />} className="flex-1">
-                    Edit
+                    Επεξεργασία
                   </Button>
                 </div>
               </Card>
@@ -187,7 +187,7 @@ export function ContentCalendar() {
       <Card padding="lg">
         <CardHeader
           title="Upcoming Planning"
-          subtitle="Preview of next months"
+          subtitle="Προεπισκόπηση επόμενων μηνών"
           icon={<Calendar size={20} className="text-[#FF6B35]" />}
         />
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -226,7 +226,7 @@ export function ContentCalendar() {
               icon={<Sparkles size={20} className="text-[#FF6B35]" />}
               action={
                 <Button variant="ghost" size="sm" onClick={() => setShowAIPanel(false)}>
-                  Close
+                  Κλείσιμο
                 </Button>
               }
             />

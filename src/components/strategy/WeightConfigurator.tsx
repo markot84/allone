@@ -7,7 +7,7 @@ import {
   Sparkles,
   AlertCircle,
   Eye,
-  DollarSign,
+  Euro,
   Package,
   Target,
   TrendingUp,
@@ -280,12 +280,12 @@ export function WeightConfigurator() {
             Strategy Weights Configurator
           </h2>
           <p className="text-[14px] text-[var(--nts-medium-gray)] mt-1">
-            Customize product prioritization factors for your marketing campaigns
+            Προσαρμογή παραγόντων προτεραιοποίησης προϊόντων για τα marketing campaigns σας
           </p>
         </div>
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" icon={<GitCompare size={16} />} onClick={() => setShowCompareModal(true)}>
-            Compare
+            Σύγκριση
           </Button>
           <ApprovalWorkflow
             status={approvalStatus}
@@ -305,7 +305,7 @@ export function WeightConfigurator() {
         <Card padding="lg" className="border-l-4 border-l-[#8B5CF6]">
           <CardHeader
             title="Custom Tools"
-            subtitle="Clone, save presets, compare, export/import"
+            subtitle="Clone, αποθήκευση presets, σύγκριση, export/import"
           />
           <CustomToolsCard
             weights={weights}
@@ -321,7 +321,7 @@ export function WeightConfigurator() {
         <Card className="xl:col-span-1" padding="lg">
           <CardHeader
             title="Factor Weights"
-            subtitle={`Total: ${totalWeight}%`}
+            subtitle={`Σύνολο: ${totalWeight}%`}
             action={
               <Button
                 variant="ghost"
@@ -353,7 +353,7 @@ export function WeightConfigurator() {
                 onChange={(value) => handleWeightChange(factor.id, value)}
                 color={factor.color}
                 icon={
-                  factor.id === 'profit' ? <DollarSign size={16} /> :
+                  factor.id === 'profit' ? <Euro size={16} /> :
                   factor.id === 'stock' ? <Package size={16} /> :
                   factor.id === 'strategic' ? <Target size={16} /> :
                   factor.id === 'revenue' ? <TrendingUp size={16} /> :
@@ -400,7 +400,7 @@ export function WeightConfigurator() {
           <CardHeader
             title="Live Preview"
             subtitle={
-              hasImported ? `Top 10 from ${products.length} imported products` : 'Top 10 Prioritized Products'
+              hasImported ? `Top 10 από ${products.length} εισαγόμενα προϊόντα` : 'Top 10 Προτεραιοποιημένα Προϊόντα'
             }
             icon={<Sparkles size={18} className="text-[var(--nts-medium-gray)]" />}
           />
@@ -499,7 +499,7 @@ export function WeightConfigurator() {
       <Card padding="lg">
         <CardHeader
           title="Channel Recommendations"
-          subtitle="AI-powered channel mix based on selected strategy"
+            subtitle="AI-powered channel mix βάσει επιλεγμένης στρατηγικής"
           icon={<Sparkles size={18} className="text-[var(--nts-medium-gray)]" />}
           action={
             <div className="flex items-center gap-2">

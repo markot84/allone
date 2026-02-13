@@ -92,9 +92,9 @@ export function ContentStrategy() {
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-lg font-bold text-[#1A1A1A]">
-                  Active Strategy: {activeStrategyContext.name}
+                  Ενεργή Στρατηγική: {activeStrategyContext.name}
                 </h3>
-                <Badge variant="success">Active</Badge>
+                <Badge variant="success">Ενεργή</Badge>
               </div>
               <p className="text-sm text-[#4A4A4A]">
                 Approved by {activeStrategyContext.approved_by} on {activeStrategyContext.approved_date}
@@ -160,7 +160,7 @@ export function ContentStrategy() {
                 <AlertTriangle size={20} className="text-[#F59E0B]" />
                 <div>
                   <p className="font-medium text-[#92400E]">
-                    {misalignedCount} content items may not align with current {activeStrategyContext.name} strategy
+                    {misalignedCount} content items ενδέχεται να μην ευθυγραμμίζονται με την τρέχουσα στρατηγική {activeStrategyContext.name}
                   </p>
                   <p className="text-sm text-[#B45309]">
                     Review and reschedule or adjust content to match strategy direction
@@ -194,7 +194,7 @@ export function ContentStrategy() {
                 icon={<Link2 size={20} className="text-[#FF6B35]" />}
                 action={
                   <Button variant="ghost" size="sm" onClick={() => setShowStrategyMap(false)}>
-                    Close
+                    Κλείσιμο
                   </Button>
                 }
               />
@@ -214,7 +214,7 @@ export function ContentStrategy() {
                         <span className="text-2xl">{strategy.icon}</span>
                         <div>
                           <h4 className="font-medium text-[#1A1A1A] text-sm">{strategy.name}</h4>
-                          {isActive && <Badge variant="orange" size="sm">Active</Badge>}
+                          {isActive && <Badge variant="orange" size="sm">Ενεργή</Badge>}
                         </div>
                       </div>
                       <div className="space-y-2 text-xs">
@@ -310,9 +310,9 @@ export function ContentStrategy() {
               <div className="space-y-3">
                 {weekContent.length === 0 ? (
                   <div className="p-4 border-2 border-dashed border-[#E5E5E5] rounded-xl text-center">
-                    <p className="text-sm text-[#9CA3AF]">No content scheduled</p>
+                    <p className="text-sm text-[#9CA3AF]">Δεν υπάρχει προγραμματισμένο περιεχόμενο</p>
                     <Button variant="ghost" size="sm" icon={<Plus size={14} />} className="mt-2">
-                      Add Content
+                      Προσθήκη Περιεχομένου
                     </Button>
                   </div>
                 ) : (
@@ -475,7 +475,7 @@ function ContentCard({ item, index, segments = [] }: ContentCardProps) {
               View
             </Button>
             <Button variant="ghost" size="sm" icon={<Edit size={12} />} className="flex-1 text-xs">
-              Edit
+              Επεξεργασία
             </Button>
           </div>
         </div>

@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Zap, Target, DollarSign } from 'lucide-react';
+import { Zap, Target, Euro } from 'lucide-react';
 import { Badge } from '../common';
 import type { ChannelRecommendation, RFMSegment } from '../../types';
 
@@ -22,7 +22,7 @@ export function ChannelRecommendations({
   if (!recommendations) {
     return (
       <div className="p-8 text-center text-[#4A4A4A]">
-        <p>No recommendations available for this segment.</p>
+        <p>Δεν υπάρχουν διαθέσιμες συστάσεις για αυτό το segment.</p>
       </div>
     );
   }
@@ -129,7 +129,7 @@ export function ChannelRecommendations({
       <div className="p-4 bg-gradient-to-r from-[#F5F5F5] to-white rounded-lg border border-[#E5E5E5]">
         <div className="flex items-start gap-3">
           <div className="w-8 h-8 bg-[#3B82F6]/10 rounded-lg flex items-center justify-center flex-shrink-0">
-            <DollarSign size={16} className="text-[#3B82F6]" />
+            <Euro size={16} className="text-[#3B82F6]" />
           </div>
           <div>
             <h5 className="font-medium text-[#1A1A1A] text-sm">AI Rationale</h5>

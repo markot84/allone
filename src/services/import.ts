@@ -1,7 +1,7 @@
 import { Timestamp } from 'firebase/firestore';
 import * as XLSX from 'xlsx';
 import { FirestoreService } from './firestore';
-import type { Product, RFMSegment } from '../types';
+import type { Product, RFMSegment, Campaign } from '../types';
 
 const BATCH_SIZE = 500; // Firestore limit per writeBatch
 const BATCH_CONCURRENCY = 3;
@@ -130,37 +130,125 @@ export function parseCSV(csvText: string): string[][] {
   return lines;
 }
 
-// Parse XLSX to array of rows (first row = headers)
-function parseXLSXToRows(buffer: ArrayBuffer): string[][] {
+// Parse XLSX to array of rows (auto-detect header row for campaigns)
+function parseXLSXToRows(buffer: ArrayBuffer, type?: ImportType): string[][] {
   const wb = XLSX.read(buffer, { type: 'array' });
-  const firstSheet = wb.SheetNames[0];
-  if (!firstSheet) return [];
-  const sheet = wb.Sheets[firstSheet];
+  
+  // Try to find the right sheet (prefer "Raw Data Report" for Meta, or first sheet)
+  let sheetName = wb.SheetNames[0];
+  if (type === 'campaigns') {
+    const rawDataSheet = wb.SheetNames.find(name => 
+      name.toLowerCase().includes('raw') || name.toLowerCase().includes('data')
+    );
+    if (rawDataSheet) sheetName = rawDataSheet;
+  }
+  
+  if (!sheetName) return [];
+  const sheet = wb.Sheets[sheetName];
   const rows = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, defval: '' });
-  return rows.map(row => (Array.isArray(row) ? row : [row]).map(cell => String(cell ?? '').trim()));
+  const cleanedRows = rows.map(row => (Array.isArray(row) ? row : [row]).map(cell => String(cell ?? '').trim()));
+  
+  // For campaigns, try to find header row (Google Ads & Meta have headers in row 2-3)
+  if (type === 'campaigns' && cleanedRows.length > 2) {
+    // Look for common campaign header keywords
+    const headerKeywords = ['campaign', 'month', 'impressions', 'clicks', 'cost', 'conversions', 'roas', 'purchases', 'spent'];
+    let bestMatch = 0;
+    let bestScore = 0;
+    
+    for (let i = 0; i < Math.min(10, cleanedRows.length); i++) {
+      const row = cleanedRows[i];
+      if (!row || row.length === 0) continue;
+      
+      const rowText = row.join(' ').toLowerCase();
+      const score = headerKeywords.filter(keyword => rowText.includes(keyword)).length;
+      
+      // Check if row looks like data (has large numbers) - headers shouldn't
+      const hasLargeNumbers = row.some(cell => {
+        const str = String(cell).trim();
+        const num = parseFloat(str);
+        return !isNaN(num) && num > 1000;
+      });
+      
+      // Prefer rows with high keyword match and no large numbers
+      if (score > bestScore && !hasLargeNumbers) {
+        bestScore = score;
+        bestMatch = i;
+      }
+    }
+    
+    if (bestScore >= 3) { // At least 3 header keywords found
+      return cleanedRows.slice(bestMatch);
+    }
+  }
+  
+  return cleanedRows;
 }
 
 // Get rows (header + data) from file - CSV or XLSX
-async function getRowsFromFile(file: File): Promise<string[][]> {
+async function getRowsFromFile(file: File, type?: ImportType): Promise<string[][]> {
   const name = file.name.toLowerCase();
   if (name.endsWith('.xlsx')) {
     const buffer = await file.arrayBuffer();
-    return parseXLSXToRows(buffer);
+    return parseXLSXToRows(buffer, type);
   }
   const text = await file.text();
   return parseCSV(text);
 }
 
-// Convert CSV rows to objects
-function csvToObjects(csvRows: string[][]): Record<string, string>[] {
+// Convert CSV rows to objects (supports finding header row for campaigns)
+function csvToObjects(csvRows: string[][], type?: ImportType): Record<string, string>[] {
   if (csvRows.length === 0) return [];
   
-  const headers = csvRows[0].map(h => h.trim().toLowerCase().replace(/\s+/g, '_'));
+  // For campaigns, try to find header row if first row doesn't look like headers
+  let headerRowIndex = 0;
+  if (type === 'campaigns' && csvRows.length > 1) {
+    const headerKeywords = ['campaign', 'month', 'impressions', 'clicks', 'cost', 'conversions', 'roas', 'purchases', 'spent'];
+    let bestMatch = 0;
+    let bestScore = 0;
+    
+    for (let i = 0; i < Math.min(10, csvRows.length); i++) {
+      const row = csvRows[i];
+      if (!row || row.length === 0) continue;
+      
+      const rowText = row.join(' ').toLowerCase();
+      const score = headerKeywords.filter(keyword => rowText.includes(keyword)).length;
+      
+      // Also check if row looks like data (has numbers) - headers shouldn't have many numbers
+      const hasNumbers = row.some(cell => {
+        const str = String(cell).trim();
+        return str && !isNaN(parseFloat(str)) && parseFloat(str) > 100;
+      });
+      
+      // Prefer rows with high keyword match and no large numbers
+      if (score > bestScore && !hasNumbers) {
+        bestScore = score;
+        bestMatch = i;
+      }
+    }
+    
+    if (bestScore >= 3) { // At least 3 header keywords found
+      headerRowIndex = bestMatch;
+    }
+  }
+  
+  const headers = csvRows[headerRowIndex].map(h => h.trim().toLowerCase().replace(/\s+/g, '_'));
   const objects: Record<string, string>[] = [];
 
-  for (let i = 1; i < csvRows.length; i++) {
+  for (let i = headerRowIndex + 1; i < csvRows.length; i++) {
     const row = csvRows[i];
-    if (row.length === 0) continue;
+    if (row.length === 0 || !row.some(cell => cell !== '')) continue;
+    
+    // Skip rows that look like headers (all text, no numbers)
+    const rowText = row.join(' ').toLowerCase();
+    const hasHeaderKeywords = ['campaign', 'month', 'impressions', 'clicks'].some(k => rowText.includes(k));
+    const hasData = row.some(cell => {
+      const str = String(cell).trim();
+      return str && (!isNaN(parseFloat(str)) || str.match(/^\d{4}-\d{2}-\d{2}/));
+    });
+    if (hasHeaderKeywords && !hasData && i === headerRowIndex + 1) {
+      // This might be a duplicate header row, skip it
+      continue;
+    }
     
     const obj: Record<string, string> = {};
     headers.forEach((header, index) => {
@@ -178,12 +266,43 @@ function sanitizeDocId(value: string): string {
   return value.replace(/[/\\]/g, '_').trim() || `id-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-// Helper: find first matching value from a list of possible column aliases
+// Helper: find first matching value from a list of possible column aliases (case-insensitive, handles normalized keys)
 function pick(row: Record<string, string>, ...keys: string[]): string {
+  // First try exact match (case-sensitive)
   for (const k of keys) {
     const val = row[k];
     if (val !== undefined && val !== '') return val;
   }
+  
+  // Then try case-insensitive match
+  const rowKeys = Object.keys(row);
+  for (const k of keys) {
+    const lowerKey = k.toLowerCase().replace(/\s+/g, '_').replace(/[()]/g, '');
+    const matchingKey = rowKeys.find(rk => {
+      const normalizedRk = rk.toLowerCase().replace(/\s+/g, '_').replace(/[()]/g, '');
+      return normalizedRk === lowerKey || normalizedRk.includes(lowerKey) || lowerKey.includes(normalizedRk);
+    });
+    if (matchingKey) {
+      const val = row[matchingKey];
+      if (val !== undefined && val !== '') return val;
+    }
+  }
+  
+  // Also try partial matching (e.g., "amount spent" matches "amount_spent_eur")
+  for (const k of keys) {
+    const keyWords = k.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+    if (keyWords.length > 0) {
+      const matchingKey = rowKeys.find(rk => {
+        const normalizedRk = rk.toLowerCase().replace(/\s+/g, '_').replace(/[()]/g, '');
+        return keyWords.every(word => normalizedRk.includes(word));
+      });
+      if (matchingKey) {
+        const val = row[matchingKey];
+        if (val !== undefined && val !== '') return val;
+      }
+    }
+  }
+  
   return '';
 }
 
@@ -321,6 +440,271 @@ function validateSegmentRow(row: Record<string, string>, index: number): { valid
   return { valid: true, data: segment };
 }
 
+// Validate analytics row
+function validateAnalyticsRow(row: Record<string, string>, index: number): { valid: boolean; data?: { id: string; date: Timestamp; total_revenue?: number; attributed_revenue?: number; attribution_rate?: number }; error?: string } {
+  const date = pick(row, 'date', 'date_time', 'timestamp', 'period', 'month', 'year_month');
+  const totalRevenue = pick(row, 'total_revenue', 'total revenue', 'revenue', 'total', 'total_rev', 'revenue_total');
+  const attributedRevenue = pick(row, 'attributed_revenue', 'attributed revenue', 'attributed', 'attributed_rev', 'performance_plus_revenue', 'pp_revenue');
+  const attributionRate = pick(row, 'attribution_rate', 'attribution rate', 'attribution_%', 'attribution_percentage', 'rate');
+
+  if (!date) {
+    return { valid: false, error: `Row ${index + 1}: Missing date` };
+  }
+
+  // Parse date - support various formats
+  let parsedDate: Date | null = null;
+  try {
+    parsedDate = new Date(date);
+    if (isNaN(parsedDate.getTime())) {
+      return { valid: false, error: `Row ${index + 1}: Invalid date format: ${date}` };
+    }
+  } catch {
+    return { valid: false, error: `Row ${index + 1}: Invalid date format: ${date}` };
+  }
+
+  const totalRevNum = totalRevenue ? parseFloat(totalRevenue.replace(/[^0-9.-]/g, '')) : undefined;
+  const attributedRevNum = attributedRevenue ? parseFloat(attributedRevenue.replace(/[^0-9.-]/g, '')) : undefined;
+  const attributionRateNum = attributionRate ? parseFloat(attributionRate.replace(/[^0-9.-]/g, '')) : undefined;
+
+  // Calculate attribution rate if not provided but both revenues exist
+  let finalAttributionRate = attributionRateNum;
+  if (finalAttributionRate === undefined && totalRevNum !== undefined && attributedRevNum !== undefined && totalRevNum > 0) {
+    finalAttributionRate = Math.round((attributedRevNum / totalRevNum) * 1000) / 10;
+  }
+
+  const analyticsId = `analytics-${parsedDate.toISOString().split('T')[0]}-${index}`;
+
+  return {
+    valid: true,
+    data: {
+      id: sanitizeDocId(analyticsId),
+      date: Timestamp.fromDate(parsedDate), // Store as Firestore Timestamp for proper querying
+      ...(totalRevNum !== undefined ? { total_revenue: totalRevNum } : {}),
+      ...(attributedRevNum !== undefined ? { attributed_revenue: attributedRevNum } : {}),
+      ...(finalAttributionRate !== undefined ? { attribution_rate: finalAttributionRate } : {}),
+    },
+  };
+}
+
+// Validate campaign row (supports Google Ads & Meta formats)
+function validateCampaignRow(row: Record<string, string>, index: number): { valid: boolean; data?: Campaign; error?: string } {
+  // First, check if there's an explicit "Channel" column (highest priority)
+  const explicitChannel = pick(row, 'channel', 'channel_name', 'source', 'platform');
+  
+  // Detect channel from column names (case-insensitive)
+  const rowKeysLower = Object.keys(row).map(k => k.toLowerCase());
+  const hasGoogleAdsColumns = rowKeysLower.some(k => 
+    k.includes('campaign') && (k.includes('status') || k.includes('budget') || k.includes('bid strategy'))
+  ) || rowKeysLower.includes('conv. value / cost') || rowKeysLower.includes('conv value / cost');
+  
+  const hasMetaColumns = rowKeysLower.some(k => 
+    k.includes('campaign name') || 
+    k.includes('purchase roas') || 
+    k.includes('amount spent') || 
+    k.includes('reporting starts') ||
+    k.includes('reporting ends') ||
+    k.includes('result type') ||
+    k.includes('cost per result') ||
+    (k.includes('purchases') && k.includes('conversion value')) ||
+    (k.includes('ctr') && k.includes('all')) ||
+    (k.includes('cpc') && k.includes('all'))
+  );
+  
+  let channel: 'Google Ads' | 'Meta' | 'Other' = 'Other';
+  
+  // Use explicit channel if available (highest priority)
+  if (explicitChannel) {
+    const channelLower = explicitChannel.toLowerCase().trim();
+    if (channelLower.includes('meta') || channelLower.includes('facebook') || channelLower.includes('instagram')) {
+      channel = 'Meta';
+    } else if (channelLower.includes('google') || channelLower.includes('ads')) {
+      channel = 'Google Ads';
+    }
+  }
+  
+  // If no explicit channel, detect from columns
+  if (channel === 'Other') {
+    // Prioritize Meta detection if Meta columns are found
+    if (hasMetaColumns) {
+      channel = 'Meta';
+    } else if (hasGoogleAdsColumns) {
+      channel = 'Google Ads';
+    }
+  }
+  
+  // Debug logging in development
+  if (import.meta.env.MODE === 'development' && index < 3) {
+    console.debug(`[Campaign Row ${index}] Channel detection:`, {
+      explicitChannel,
+      hasGoogleAdsColumns,
+      hasMetaColumns,
+      detectedChannel: channel,
+      sampleKeys: Object.keys(row).slice(0, 5)
+    });
+  }
+
+  // Common fields - try various formats (original, normalized, with/without spaces/underscores)
+  let name = pick(row, 
+    'campaign_name', 'campaign name', 'campaign', 'name', 'campaign_name_',
+    'campaignname', 'campaign-name'
+  );
+  const period = pick(row, 'month', 'period', 'date range', 'date_range');
+  const status = pick(row, 'status', 'campaign status', 'campaign_status', 'state');
+  
+  // If no campaign name, create one from period/month + campaign (if available)
+  if (!name || name.trim() === '') {
+    const campaignField = pick(row, 'campaign', 'campaign_name', 'campaign name');
+    if (period && period.trim() !== '') {
+      name = period.trim();
+      if (campaignField && campaignField.trim() !== '') {
+        name = `${campaignField.trim()} - ${period.trim()}`;
+      }
+    } else if (campaignField && campaignField.trim() !== '') {
+      name = campaignField.trim();
+    } else {
+      // Last resort: use reporting dates or row index
+      const reportingStarts = pick(row, 'reporting starts', 'reporting_starts', 'start_date', 'start date');
+      if (reportingStarts && reportingStarts.trim() !== '') {
+        name = `Campaign ${reportingStarts.trim()}`;
+      } else {
+        name = `Campaign Row ${index + 1}`;
+      }
+    }
+  }
+  const budget = pick(row, 'budget', 'budget_amount', 'daily_budget');
+  // Meta uses "Amount spent (EUR)" - try various formats
+  const amountSpent = pick(row, 
+    'amount spent (eur)', 'amount spent (eur)', 'amount_spent_eur', 'amount_spent',
+    'cost', 'spend', 'total_cost', 'spent'
+  );
+  const impressions = pick(row, 'impressions', 'impr.', 'impr', 'imp');
+  // Meta uses "Clicks (all)" - prioritize this
+  const clicks = pick(row, 'clicks (all)', 'clicks', 'click', 'clicks_all');
+  // Meta uses "CTR (all)" - prioritize this
+  const ctr = pick(row, 'ctr (all)', 'ctr', 'click_through_rate', 'ctr_all');
+  // Meta uses "CPC (all)" - prioritize this
+  const cpc = pick(row, 'cpc (all)', 'avg. cpc', 'cpc', 'cost_per_click', 'avg cpc', 'cpc_all');
+  const cpm = pick(row, 'cpm (cost per 1,000 impressions)', 'cpm', 'cost_per_mille', 'cpm (cost per 1,000 impressions)');
+  // Meta uses "Purchases" instead of "Conversions"
+  const conversions = pick(row, 'purchases', 'conversions', 'purchase', 'conversion');
+  // Meta uses "Purchases conversion value"
+  const conversionValue = pick(row, 
+    'purchases conversion value', 'purchases_conversion_value',
+    'conv. value', 'conversion_value', 'purchase_value', 'purchase conversion value'
+  );
+  // Meta uses "Purchase ROAS (return on ad spend)" - prioritize this
+  const roas = pick(row, 
+    'purchase roas (return on ad spend)', 'purchase_roas_return_on_ad_spend',
+    'conv. value / cost', 'roas', 'return_on_ad_spend', 'purchase roas'
+  );
+  // Meta uses "Cost per result"
+  const costPerConversion = pick(row, 
+    'cost per result', 'cost_per_result',
+    'cost / conv.', 'cost_per_conversion', 'cost per conversion'
+  );
+  const conversionRate = pick(row, 'conv. rate', 'conversion_rate', 'conversion rate');
+  const currencyCode = pick(row, 'currency code', 'currency', 'currency_code');
+  
+  // Google Ads specific
+  const bidStrategyType = pick(row, 'bid strategy type', 'bid_strategy_type', 'bidding_strategy');
+  
+  // Meta specific
+  const resultType = pick(row, 'result type', 'result_type');
+  const reportingStarts = pick(row, 'reporting starts', 'reporting_starts', 'start_date', 'start date');
+  const reportingEnds = pick(row, 'reporting ends', 'reporting_ends', 'end_date', 'end date');
+  
+  // Use reporting dates if available, otherwise try to parse period
+  let startDate: string | undefined = reportingStarts;
+  let endDate: string | undefined = reportingEnds;
+  
+  if (!startDate && period) {
+    // Try to parse period like "2025-01-01 - 2025-01-31" or "January 2025"
+    const dateRangeMatch = period.match(/(\d{4}-\d{2}-\d{2})\s*-\s*(\d{4}-\d{2}-\d{2})/);
+    if (dateRangeMatch) {
+      startDate = dateRangeMatch[1];
+      endDate = dateRangeMatch[2];
+    } else {
+      // Try "January 2025" format
+      const monthMatch = period.match(/(\w+)\s+(\d{4})/);
+      if (monthMatch) {
+        const monthNames: Record<string, string> = {
+          january: '01', february: '02', march: '03', april: '04', may: '05', june: '06',
+          july: '07', august: '08', september: '09', october: '10', november: '11', december: '12'
+        };
+        const month = monthNames[monthMatch[1].toLowerCase()];
+        if (month) {
+          startDate = `${monthMatch[2]}-${month}-01`;
+          // End date is last day of month
+          const lastDay = new Date(parseInt(monthMatch[2]), parseInt(month), 0).getDate();
+          endDate = `${monthMatch[2]}-${month}-${lastDay}`;
+        }
+      }
+    }
+  }
+
+  // Name should always be set now (we create it from period/campaign if missing)
+  if (!name || name.trim() === '') {
+    return { valid: false, error: `Row ${index + 1}: Cannot determine campaign identifier` };
+  }
+
+  // Final channel validation: if channel is still 'Other' but we have Meta-specific data, force Meta
+  // This happens after we've picked all the fields
+  const roasValue = pick(row, 
+    'purchase roas (return on ad spend)', 'purchase_roas_return_on_ad_spend',
+    'conv. value / cost', 'roas', 'return_on_ad_spend', 'purchase roas'
+  );
+  const resultTypeValue = pick(row, 'result type', 'result_type');
+  const purchasesValue = pick(row, 'purchases', 'conversions', 'purchase', 'conversion');
+  
+  let finalChannel = channel;
+  if (channel === 'Other') {
+    // Check if we have Meta-specific fields with actual data
+    const hasMetaData = (amountSpent && parseFloat(amountSpent) > 0) || 
+                        (roasValue && parseFloat(roasValue) > 0) ||
+                        (resultTypeValue && resultTypeValue.trim() !== '') ||
+                        (purchasesValue && purchasesValue.trim() !== '');
+    
+    // Check if we have Google Ads-specific fields
+    const bidStrategyValue = pick(row, 'bid strategy type', 'bid_strategy_type', 'bidding_strategy');
+    const convValueCost = pick(row, 'conv. value / cost', 'conv value / cost');
+    const hasGoogleAdsData = (bidStrategyValue && bidStrategyValue.trim() !== '') ||
+                             (convValueCost && convValueCost.trim() !== '');
+    
+    if (hasMetaData && !hasGoogleAdsData) {
+      finalChannel = 'Meta';
+    } else if (hasGoogleAdsData && !hasMetaData) {
+      finalChannel = 'Google Ads';
+    }
+  }
+
+  const campaign: Campaign = {
+    id: sanitizeDocId(`campaign-${Date.now()}-${index}`),
+    name: name.trim(),
+    channel: finalChannel,
+    ...(period ? { period: period.trim() } : {}),
+    ...(startDate ? { start_date: startDate } : {}),
+    ...(endDate ? { end_date: endDate } : {}),
+    ...(status ? { status: status.trim().toLowerCase() } : {}),
+    ...(budget ? { budget: parseFloat(budget) || 0 } : {}),
+    ...(amountSpent ? { amount_spent: parseFloat(amountSpent) || 0 } : {}),
+    ...(impressions ? { impressions: parseInt(impressions, 10) || 0 } : {}),
+    ...(clicks ? { clicks: parseInt(clicks, 10) || 0 } : {}),
+    ...(ctr ? { ctr: parseFloat(ctr) || 0 } : {}),
+    ...(cpc ? { cpc: parseFloat(cpc) || 0 } : {}),
+    ...(cpm ? { cpm: parseFloat(cpm) || 0 } : {}),
+    ...(conversions ? { conversions: parseInt(conversions, 10) || 0 } : {}),
+    ...(conversionValue ? { conversion_value: parseFloat(conversionValue) || 0 } : {}),
+    ...(roas ? { roas: parseFloat(roas) || 0 } : {}),
+    ...(costPerConversion ? { cost_per_conversion: parseFloat(costPerConversion) || 0 } : {}),
+    ...(conversionRate ? { conversion_rate: parseFloat(conversionRate) || 0 } : {}),
+    ...(currencyCode ? { currency_code: currencyCode.trim().toUpperCase() } : {}),
+    ...(bidStrategyType ? { bid_strategy_type: bidStrategyType.trim() } : {}),
+    ...(resultType ? { result_type: resultType.trim() } : {}),
+  };
+
+  return { valid: true, data: campaign };
+}
+
 // Aggregate customer-level rows into segments (SignalLab format: each row = customer)
 function aggregateCustomersToSegments(objects: Record<string, string>[]): RFMSegment[] {
   const segmentMap = new Map<string, { count: number; monetary: number; displayName: string }>();
@@ -400,14 +784,14 @@ export async function importFile(
       return result;
     }
 
-    const rows = await getRowsFromFile(file);
+    const rows = await getRowsFromFile(file, type);
     if (rows.length < 2) {
       result.success = false;
       result.errors.push('File must contain at least a header row and one data row');
       return result;
     }
 
-    const objects = csvToObjects(rows);
+    const objects = csvToObjects(rows, type);
     
     if (objects.length === 0) {
       result.success = false;
@@ -514,8 +898,100 @@ export async function importFile(
         break;
       }
 
-      case 'campaigns':
-      case 'analytics':
+      case 'analytics': {
+        // Validate and transform analytics records
+        const validAnalytics: Array<{ id: string; data: Record<string, unknown> }> = [];
+        for (let i = 0; i < objects.length; i++) {
+          const validation = validateAnalyticsRow(objects[i], i);
+          if (validation.valid && validation.data) {
+            validAnalytics.push({
+              id: validation.data.id,
+              data: { ...validation.data, createdAt: Timestamp.now() } as Record<string, unknown>,
+            });
+          } else {
+            result.failed++;
+            if (validation.error && result.errors.length < MAX_ERRORS_DISPLAY) {
+              result.errors.push(validation.error);
+            }
+          }
+        }
+
+        if (import.meta.env.MODE === 'development') {
+          console.debug('[Import] Analytics: Valid records:', validAnalytics.length, 'BrandId:', brandId);
+          if (validAnalytics.length > 0) {
+            console.debug('[Import] First analytics record:', validAnalytics[0]);
+          }
+        }
+
+        // Batch import to Firestore
+        const analyticsChunks = chunk(validAnalytics, BATCH_SIZE);
+        let analyticsProcessed = 0;
+        await runWithConcurrency(analyticsChunks, BATCH_CONCURRENCY, async (chunkItems, batchIndex) => {
+          await FirestoreService.batchSet('analytics', chunkItems, brandId);
+          analyticsProcessed += chunkItems.length;
+          onProgress?.({
+            rowsProcessed: analyticsProcessed,
+            totalRows: validAnalytics.length,
+            batchIndex: batchIndex + 1,
+            totalBatches: analyticsChunks.length,
+            fileName: file.name,
+          });
+        });
+        result.imported = validAnalytics.length;
+        if (result.failed > MAX_ERRORS_DISPLAY) {
+          result.errors.push(`...and ${result.failed - MAX_ERRORS_DISPLAY} more validation errors`);
+        }
+        break;
+      }
+
+      case 'campaigns': {
+        // Validate and transform campaigns
+        const validCampaigns: Campaign[] = [];
+        objects.forEach((row, i) => {
+          const validation = validateCampaignRow(row, i);
+          if (validation.valid && validation.data) {
+            validCampaigns.push({
+              ...validation.data,
+              brandId: brandId || undefined,
+              importedAt: new Date(),
+              source: file.name,
+            });
+          } else {
+            result.failed++;
+            if (result.errors.length < MAX_ERRORS_DISPLAY) {
+              result.errors.push(validation.error || `Row ${i + 1}: Invalid campaign data`);
+            }
+          }
+        });
+        
+        // Batch store campaigns
+        const campaignChunks = chunk(validCampaigns, BATCH_SIZE);
+        let campaignProcessed = 0;
+        await runWithConcurrency(campaignChunks, BATCH_CONCURRENCY, async (chunkItems, batchIndex) => {
+          const items = chunkItems.map(c => ({ 
+            id: c.id, 
+            data: { 
+              ...c, 
+              createdAt: Timestamp.now() 
+            } as unknown as Record<string, unknown> 
+          }));
+          await FirestoreService.batchSet('campaigns', items, brandId);
+          campaignProcessed += chunkItems.length;
+          onProgress?.({
+            rowsProcessed: campaignProcessed,
+            totalRows: validCampaigns.length,
+            batchIndex: batchIndex + 1,
+            totalBatches: campaignChunks.length,
+            fileName: file.name,
+          });
+        });
+        result.imported = validCampaigns.length;
+        if (result.failed > MAX_ERRORS_DISPLAY) {
+          result.errors.push(`...and ${result.failed - MAX_ERRORS_DISPLAY} more validation errors`);
+        }
+        break;
+      }
+      
       case 'custom':
         result.warnings.push(`${type} import is not yet fully implemented`);
         // Batch store as raw data
@@ -526,7 +1002,7 @@ export async function importFile(
         const rawChunks = chunk(rawItems, BATCH_SIZE);
         let rawProcessed = 0;
         await runWithConcurrency(rawChunks, BATCH_CONCURRENCY, async (chunkItems, batchIndex) => {
-          await FirestoreService.batchSet(type, chunkItems);
+          await FirestoreService.batchSet(type, chunkItems, brandId);
           rawProcessed += chunkItems.length;
           onProgress?.({
             rowsProcessed: rawProcessed,

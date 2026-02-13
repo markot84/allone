@@ -4,6 +4,7 @@ import { Building2, Plus, ChevronRight } from 'lucide-react';
 import { Card, Button } from '../common';
 import { useBrand } from '../../hooks';
 import { BrandCreateForm } from '../auth/BrandCreateForm';
+import { getAssetUrl } from '../../services/storage';
 import type { Brand } from '../../types';
 
 const COLORS = ['#FF6B35', '#3B82F6', '#22C55E', '#8B5CF6', '#F59E0B'];
@@ -78,12 +79,30 @@ export function BrandsPage({ onNavigateToDashboard }: BrandsPageProps) {
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div
-                    className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold flex-shrink-0"
-                    style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                  >
-                    <Building2 size={24} />
-                  </div>
+                  {brand.logoUrl ? (
+                    <div className="w-12 h-12 rounded-xl overflow-hidden border-2 border-[var(--nts-border-gray)] bg-white flex items-center justify-center flex-shrink-0">
+                      <img
+                        src={getAssetUrl(brand.logoUrl) || brand.logoUrl}
+                        alt={brand.name}
+                        className="w-full h-full object-contain"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                          const parent = target.parentElement;
+                          if (parent) {
+                            parent.innerHTML = `<div class="w-full h-full flex items-center justify-center" style="background-color: ${COLORS[index % COLORS.length]}"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L2 7L12 12L22 7L12 2Z" fill="white"/><path d="M2 17L12 22L22 17M2 12L12 17L22 12" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>`;
+                          }
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <div
+                      className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold flex-shrink-0"
+                      style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                    >
+                      <Building2 size={24} />
+                    </div>
+                  )}
                   <div className="min-w-0">
                     <h3 className="font-semibold text-[#1A1A1A] truncate">{brand.name}</h3>
                     {brand.type && (

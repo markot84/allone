@@ -10,6 +10,7 @@ import { WeightConfigurator } from './components/strategy';
 import { RFMAnalysis } from './components/rfm';
 import { ProductIntelligence } from './components/inventory';
 import { ChannelActivation } from './components/channels';
+import { CampaignsPage } from './components/campaigns/CampaignsPage';
 import { ContentStrategy } from './components/content';
 import { Reports } from './components/reports';
 import { ROIAttribution } from './components/roi';
@@ -76,7 +77,7 @@ function App() {
       case 'brands':
         return <BrandsPage onNavigateToDashboard={() => handleSectionChange('dashboard')} />;
       case 'dashboard':
-        return <DashboardOverview />;
+        return <DashboardOverview onSectionChange={handleSectionChange} onOpenInsights={() => setInsightsPanelOpen(true)} />;
       case 'strategy':
         return <WeightConfigurator />;
       case 'rfm':
@@ -84,7 +85,9 @@ function App() {
       case 'products':
         return <ProductIntelligence />;
       case 'channels':
-        return <ChannelActivation />;
+        return <ChannelActivation onSectionChange={handleSectionChange} />;
+      case 'campaigns':
+        return <CampaignsPage />;
       case 'calendar':
         return <ContentStrategy />;
       case 'reports':

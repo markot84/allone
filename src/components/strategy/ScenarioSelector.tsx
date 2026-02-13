@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Check, DollarSign, Package, Rocket, Settings, TrendingUp } from 'lucide-react';
+import { Check, Euro, Package, Rocket, Settings, TrendingUp } from 'lucide-react';
 import { scenarios } from '../../data';
 
 interface ScenarioSelectorProps {
@@ -15,7 +15,7 @@ export function ScenarioSelector({
     const cls = 'text-[var(--nts-medium-gray)]';
     switch (id) {
       case 'profit_max':
-        return <DollarSign size={18} className={cls} />;
+        return <Euro size={18} className={cls} />;
       case 'stock_clearance':
         return <Package size={18} className={cls} />;
       case 'brand_launch':

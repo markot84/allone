@@ -149,12 +149,12 @@ export function StrategyImpactPreview({ isOpen, onClose, onConfirm }: StrategyIm
           <div className="p-4 border border-[#E5E5E5] rounded-xl">
             <div className="flex items-center gap-2 mb-4">
               <Megaphone size={18} className="text-[#FF6B35]" />
-              <h3 className="font-semibold text-[#1A1A1A]">Active Campaigns</h3>
+              <h3 className="font-semibold text-[#1A1A1A]">Ενεργά Campaigns</h3>
             </div>
             <div className="grid grid-cols-3 gap-4">
               <div className="text-center p-3 bg-[#DBEAFE] rounded-lg">
                 <p className="text-xl font-bold text-[#3B82F6]">{impacts.campaigns.active}</p>
-                <p className="text-xs text-[#1E40AF]">Currently active</p>
+                <p className="text-xs text-[#1E40AF]">Τρέχον ενεργά</p>
               </div>
               <div className="text-center p-3 bg-[#FEF3C7] rounded-lg">
                 <p className="text-xl font-bold text-[#F59E0B]">{impacts.campaigns.will_pause}</p>
@@ -190,7 +190,7 @@ export function StrategyImpactPreview({ isOpen, onClose, onConfirm }: StrategyIm
         {/* Actions */}
         <div className="p-6 border-t border-[#E5E5E5] flex justify-end gap-3">
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            Ακύρωση
           </Button>
           <Button variant="primary" icon={<Check size={16} />} onClick={onConfirm}>
             Confirm Strategy Change

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  DollarSign,
+  Euro,
   TrendingUp,
   Target,
   PieChart as PieChartIcon,
@@ -133,7 +133,7 @@ export function ROIAttribution() {
             {/* Main ROI Display */}
             <div className="md:col-span-2">
               <p className="text-[var(--nts-medium-gray)] text-sm mb-2 flex items-center gap-2">
-                <DollarSign size={16} className="text-[var(--nts-medium-gray)]" /> Performance+ ROI ({roiDashboard.period})
+                <Euro size={16} className="text-[var(--nts-medium-gray)]" /> Performance+ ROI ({roiDashboard.period})
               </p>
               <div className="flex items-baseline gap-4 flex-wrap">
                 <motion.span 
@@ -162,8 +162,8 @@ export function ROIAttribution() {
             {/* Key Metrics */}
             <div className="space-y-4">
               <MetricBox 
-                icon={<DollarSign size={20} />}
-                label="Total Revenue" 
+                icon={<Euro size={20} />}
+                label="Σύνολο Εσόδων" 
                 value={`€${(summary.total_revenue / 1000).toFixed(1)}K`}
                 color="var(--nts-charcoal)"
               />
@@ -178,14 +178,14 @@ export function ROIAttribution() {
 
             <div className="space-y-4">
               <MetricBox 
-                icon={<DollarSign size={20} />}
-                label="Subscription Cost" 
+                icon={<Euro size={20} />}
+                label="Κόστος Συνδρομής" 
                 value={`€${(hasAnyData ? roiCalculator.subscription_cost_period : 0).toLocaleString()}`}
                 color="var(--nts-charcoal)"
               />
               <MetricBox 
                 icon={<TrendingUp size={20} />}
-                label="ROI Multiplier" 
+                label="ROI Πολλαπλασιαστής" 
                 value={`${summary.roi_multiplier}x`}
                 color="var(--success)"
               />
@@ -198,7 +198,7 @@ export function ROIAttribution() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <ImpactCard
           icon="💶"
-          label="Total Revenue"
+          label="Σύνολο Εσόδων"
           value={`€${(summary.total_revenue / 1000).toFixed(1)}K`}
           subtext={hasAnyData ? '+18.2% vs previous period' : 'Φόρτωσε δεδομένα'}
         />
@@ -211,13 +211,13 @@ export function ROIAttribution() {
         />
         <ImpactCard
           icon="📈"
-          label="ROI Multiplier"
+          label="ROI Πολλαπλασιαστής"
           value={`${summary.roi_multiplier}x`}
           subtext="Return on subscription cost"
         />
         <ImpactCard
           icon="💰"
-          label="Cost Savings"
+          label="Εξοικονομήσεις"
           value={`€${(costSavingsData.total / 1000).toFixed(0)}K`}
           subtext={hasAnyData ? 'Warehousing + Ad efficiency' : 'Φόρτωσε δεδομένα'}
         />
@@ -228,7 +228,7 @@ export function ROIAttribution() {
         <Card className="lg:col-span-2" padding="lg">
           <CardHeader
             title="Revenue Attribution Trend"
-            subtitle="Total vs Performance+ attributed revenue"
+            subtitle="Σύνολο vs Performance+ attributed revenue"
             icon={<TrendingUp size={20} className="text-[#FF6B35]" />}
           />
           <div 
@@ -334,7 +334,7 @@ export function ROIAttribution() {
         <Card padding="lg">
           <CardHeader
             title="Attribution Breakdown"
-            subtitle="Revenue by source"
+            subtitle="Έσοδα ανά πηγή"
             icon={<PieChartIcon size={20} className="text-[#FF6B35]" />}
           />
           <div 
@@ -417,8 +417,13 @@ export function ROIAttribution() {
                         {detail.segment || detail.type || detail.metric || detail.name}
                       </span>
                       <span className="font-mono text-[#1A1A1A]">
-                        {detail.revenue ? `€${(detail.revenue / 1000).toFixed(1)}K` : 
-                         detail.value || detail.improvement || ''}
+                        {detail.revenue 
+                          ? `€${(detail.revenue / 1000).toFixed(1)}K` 
+                          : detail.value 
+                          ? `€${typeof detail.value === 'number' ? detail.value.toLocaleString() : detail.value}`
+                          : detail.before !== undefined && detail.after !== undefined
+                          ? `€${detail.before.toFixed(2)} → €${detail.after.toFixed(2)} ${detail.improvement || ''}`
+                          : detail.improvement || ''}
                       </span>
                     </div>
                   ))}
@@ -433,7 +438,7 @@ export function ROIAttribution() {
       <Card padding="lg">
         <CardHeader
           title="Segment Performance"
-          subtitle="Campaign results by RFM segment"
+          subtitle="Αποτελέσματα campaigns ανά RFM segment"
           icon={<Target size={20} className="text-[#FF6B35]" />}
         />
         {segmentPerf.length === 0 ? (
@@ -499,8 +504,8 @@ export function ROIAttribution() {
         <Card padding="lg">
           <CardHeader
             title="Cost Savings"
-            subtitle={costSavingsData.period}
-            icon={<DollarSign size={20} className="text-[#22C55E]" />}
+            subtitle={costSavingsData.period === 'Last 90 Days' ? 'Τελευταίες 90 ημέρες' : costSavingsData.period}
+            icon={<Euro size={20} className="text-[#22C55E]" />}
           />
           <div className="space-y-4">
             {costSavingsData.items.map((item, index) => (
@@ -536,7 +541,7 @@ export function ROIAttribution() {
         <Card padding="lg">
           <CardHeader
             title="Attribution Methodology"
-            subtitle="Transparent measurement approach"
+            subtitle="Διαφανής προσέγγιση μέτρησης"
             icon={<Info size={20} className="text-[#3B82F6]" />}
             action={
               <button

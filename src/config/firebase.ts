@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
+import { getStorage } from 'firebase/storage';
 
 // Firebase configuration
 // TODO: Replace with your Firebase project configuration
@@ -21,6 +22,9 @@ export const db = getFirestore(app);
 
 // Initialize Auth
 export const auth = getAuth(app);
+
+// Initialize Storage
+export const storage = getStorage(app);
 
 export default app;
 

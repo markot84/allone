@@ -64,6 +64,9 @@ export class FirestoreService {
     brandId?: string | null
   ): Promise<void> {
     if (items.length === 0) return;
+    if (import.meta.env.MODE === 'development') {
+      console.debug(`[FirestoreService] batchSet: ${collectionName}, ${items.length} items, brandId:`, brandId);
+    }
     const batch = writeBatch(db);
     for (const item of items) {
       const docRef = doc(db, collectionName, item.id);
@@ -73,9 +76,15 @@ export class FirestoreService {
         ...(brandId ? { brandId } : {}),
       };
       Object.keys(clean).forEach((k) => clean[k] === undefined && delete clean[k]);
+      if (import.meta.env.MODE === 'development' && collectionName === 'analytics' && items.indexOf(item) === 0) {
+        console.debug('[FirestoreService] First analytics doc data:', clean);
+      }
       batch.set(docRef, clean, { merge: true });
     }
     await batch.commit();
+    if (import.meta.env.MODE === 'development') {
+      console.debug(`[FirestoreService] batchSet completed: ${collectionName}`);
+    }
   }
 
   // Create or update document
@@ -162,10 +171,22 @@ export const SegmentsService = {
 };
 
 export const CampaignsService = {
-  getAll: (brandId?: string | null) => FirestoreService.getDocuments('campaigns', [orderBy('createdAt', 'desc')], brandId),
+  getAll: (brandId?: string | null) => {
+    // Try to order by createdAt, but fallback to importedAt if createdAt doesn't exist
+    return FirestoreService.getDocuments('campaigns', [orderBy('createdAt', 'desc')], brandId)
+      .catch(() => {
+        // If orderBy fails (e.g., no createdAt field), try without ordering or with importedAt
+        return FirestoreService.getDocuments('campaigns', [], brandId)
+          .then(campaigns => campaigns.sort((a: any, b: any) => {
+            const aDate = a.createdAt?.toDate?.() || a.importedAt?.toDate?.() || new Date(0);
+            const bDate = b.createdAt?.toDate?.() || b.importedAt?.toDate?.() || new Date(0);
+            return bDate.getTime() - aDate.getTime();
+          }));
+      });
+  },
   getById: (id: string) => FirestoreService.getDocument('campaigns', id),
   create: (id: string, data: any, brandId?: string | null) =>
-    FirestoreService.setDocument('campaigns', id, { ...data, ...(brandId ? { brandId } : {}) }),
+    FirestoreService.setDocument('campaigns', id, { ...data, ...(brandId ? { brandId } : {}), createdAt: Timestamp.now() }),
   update: (id: string, data: any) => FirestoreService.updateDocument('campaigns', id, data),
 };
 

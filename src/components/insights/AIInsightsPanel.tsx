@@ -7,13 +7,15 @@ import {
   Lightbulb,
   AlertTriangle,
   Target,
-  Zap
+  Zap,
+  MessageCircle
 } from 'lucide-react';
 import { useMemo } from 'react';
 import { Badge, Button } from '../common';
 import { useSegments, useProducts } from '../../hooks';
 import { generateInsightsFromData } from '../../services/insights';
 import type { AIInsight } from '../../types';
+import { AIAssistant } from './AIAssistant';
 
 interface AIInsightsPanelProps {
   isOpen: boolean;
@@ -21,9 +23,11 @@ interface AIInsightsPanelProps {
 }
 
 export function AIInsightsPanel({ isOpen, onClose }: AIInsightsPanelProps) {
-  const { segments, hasImported: hasSegments } = useSegments();
-  const { products, count: productsCount, hasImported: hasProducts } = useProducts();
+  const { segments } = useSegments();
+  const { products } = useProducts();
   const [filter, setFilter] = useState<'all' | 'opportunity' | 'warning' | 'recommendation'>('all');
+  const [activeTab, setActiveTab] = useState<'insights' | 'assistant'>('insights');
+  const [assistantOpen, setAssistantOpen] = useState(false);
 
   const aiInsights = useMemo(() => {
     return generateInsightsFromData(products, segments);
@@ -69,14 +73,9 @@ export function AIInsightsPanel({ isOpen, onClose }: AIInsightsPanelProps) {
                     <Sparkles size={18} className="text-[var(--nts-medium-gray)]" />
                   </div>
                   <div>
-                    <h2 className="font-bold text-[var(--nts-charcoal)] text-[15px]">AI Insights</h2>
+                    <h2 className="font-bold text-[var(--nts-charcoal)] text-[15px]">AI Assistant</h2>
                     <p className="text-[13px] text-[var(--nts-medium-gray)]">
-                      {aiInsights.length} actionable insights
-                      {(hasSegments || hasProducts) && (
-                        <span className="text-[11px] text-[var(--nts-medium-gray)] block mt-0.5">
-                          · {segments.length} segments · {productsCount} products
-                        </span>
-                      )}
+                      Insights & Knowledge Library
                     </p>
                   </div>
                 </div>
@@ -88,41 +87,117 @@ export function AIInsightsPanel({ isOpen, onClose }: AIInsightsPanelProps) {
                 </button>
               </div>
 
-              {/* Filters */}
+              {/* Tabs */}
               <div className="flex gap-2 mt-4">
-                {(['all', 'opportunity', 'warning', 'recommendation'] as const).map((type) => (
-                  <button
-                    key={type}
-                    onClick={() => setFilter(type)}
-                    className={`
-                      px-3 py-1.5 rounded-full text-xs font-medium transition-colors border
-                      ${filter === type
-                        ? 'bg-white text-[var(--nts-charcoal)] border-[var(--nts-border-gray)]'
-                        : 'bg-[var(--nts-light-gray)] text-[var(--nts-medium-gray)] border-[var(--nts-border-gray)] hover:bg-white'}
-                    `}
-                  >
-                    {type.charAt(0).toUpperCase() + type.slice(1)} ({countByType[type]})
-                  </button>
-                ))}
+                <button
+                  onClick={() => setActiveTab('insights')}
+                  className={`
+                    flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-colors border
+                    ${activeTab === 'insights'
+                      ? 'bg-white text-[var(--nts-charcoal)] border-[var(--nts-border-gray)]'
+                      : 'bg-[var(--nts-light-gray)] text-[var(--nts-medium-gray)] border-[var(--nts-border-gray)] hover:bg-white'}
+                  `}
+                >
+                  <div className="flex items-center justify-center gap-2">
+                    <Sparkles size={14} />
+                    Insights ({aiInsights.length})
+                  </div>
+                </button>
+                <button
+                  onClick={() => setActiveTab('assistant')}
+                  className={`
+                    flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-colors border
+                    ${activeTab === 'assistant'
+                      ? 'bg-white text-[var(--nts-charcoal)] border-[var(--nts-border-gray)]'
+                      : 'bg-[var(--nts-light-gray)] text-[var(--nts-medium-gray)] border-[var(--nts-border-gray)] hover:bg-white'}
+                  `}
+                >
+                  <div className="flex items-center justify-center gap-2">
+                    <MessageCircle size={14} />
+                    Ask Assistant
+                  </div>
+                </button>
               </div>
             </div>
 
-            {/* Insights List */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {filteredInsights.map((insight, index) => (
-                <InsightCard key={index} insight={insight} index={index} />
-              ))}
-            </div>
+            {/* Content */}
+            {activeTab === 'insights' ? (
+              <>
+                {/* Filters */}
+                <div className="px-5 pb-3 border-b border-[var(--nts-border-gray)]">
+                  <div className="flex gap-2">
+                    {(['all', 'opportunity', 'warning', 'recommendation'] as const).map((type) => (
+                      <button
+                        key={type}
+                        onClick={() => setFilter(type)}
+                        className={`
+                          px-3 py-1.5 rounded-full text-xs font-medium transition-colors border
+                          ${filter === type
+                            ? 'bg-white text-[var(--nts-charcoal)] border-[var(--nts-border-gray)]'
+                            : 'bg-[var(--nts-light-gray)] text-[var(--nts-medium-gray)] border-[var(--nts-border-gray)] hover:bg-white'}
+                        `}
+                      >
+                        {type.charAt(0).toUpperCase() + type.slice(1)} ({countByType[type]})
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-            {/* Footer */}
-            <div className="p-4 border-t border-[var(--nts-border-gray)]">
-              <Button variant="primary" className="w-full" icon={<Zap size={16} />}>
-                Apply All Recommendations
-              </Button>
-            </div>
+                {/* Insights List */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                  {filteredInsights.length === 0 ? (
+                    <div className="text-center py-8 text-[var(--nts-medium-gray)]">
+                      <p className="text-sm">Δεν υπάρχουν insights προς το παρόν.</p>
+                      <p className="text-xs mt-2">Φορτώστε δεδομένα για να δείτε προτάσεις.</p>
+                    </div>
+                  ) : (
+                    filteredInsights.map((insight, index) => (
+                      <InsightCard key={index} insight={insight} index={index} />
+                    ))
+                  )}
+                </div>
+
+                {/* Footer */}
+                <div className="p-4 border-t border-[var(--nts-border-gray)]">
+                  <Button variant="primary" className="w-full" icon={<Zap size={16} />}>
+                    Apply All Recommendations
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <div className="flex-1 flex items-center justify-center p-4">
+                <div className="text-center">
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#FF6B35] to-[#FF8C5A] flex items-center justify-center mx-auto mb-4 overflow-hidden">
+                    <img
+                      src="/ai-assistant-icon.png"
+                      alt="AI Assistant"
+                      className="w-full h-full object-contain"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                      }}
+                    />
+                  </div>
+                  <h3 className="font-semibold text-[var(--nts-charcoal)] mb-2">AI Assistant</h3>
+                  <p className="text-sm text-[var(--nts-medium-gray)] mb-4">
+                    Ρωτήστε με οτιδήποτε για το Performance+
+                  </p>
+                  <Button
+                    variant="primary"
+                    onClick={() => setAssistantOpen(true)}
+                    icon={<MessageCircle size={16} />}
+                  >
+                    Άνοιγμα Chat
+                  </Button>
+                </div>
+              </div>
+            )}
           </motion.div>
         </>
       )}
+      
+      {/* AI Assistant Chat Panel */}
+      <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
     </AnimatePresence>
   );
 }

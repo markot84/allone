@@ -1,0 +1,23 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Brand assets: authenticated users can upload/read their brand assets
+    match /brands/{brandId}/assets/{assetType}/{fileName} {
+      // Allow read if user is authenticated
+      allow read: if request.auth != null;
+      
+      // Allow write (upload/delete) if user is authenticated
+      // In production, you might want to add additional checks:
+      // - User has access to this brand
+      // - File size/type validation
+      allow write: if request.auth != null
+        && request.resource.size < 5 * 1024 * 1024 // Max 5MB
+        && request.resource.contentType.matches('image/.*');
+    }
+    
+    // Deny all other paths
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

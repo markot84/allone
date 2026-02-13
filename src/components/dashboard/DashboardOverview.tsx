@@ -4,36 +4,128 @@ import {
   TrendingUp,
   Users,
   Package,
-  DollarSign,
+  Euro,
   Target,
   AlertTriangle,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  Calendar
 } from 'lucide-react';
+import { Tooltip } from '../common';
 import {
   AreaChart,
   Area,
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
+  Tooltip as RechartsTooltip,
   PieChart,
   Pie,
   Cell
 } from 'recharts';
-import { Card, CardHeader } from '../common';
+import { Card, CardHeader, Badge } from '../common';
 import { useSegments, useProducts, useAnalytics, useCampaigns } from '../../hooks';
 import { generateInsightsFromData } from '../../services/insights';
 
-export function DashboardOverview() {
+interface DashboardOverviewProps {
+  onSectionChange?: (section: string) => void;
+  onOpenInsights?: () => void;
+}
+
+// Get default RFM score from segment name (fallback when rfm_score is missing)
+function getDefaultRFMScoreFromName(segmentName: string): string | null {
+  const name = segmentName.toLowerCase().trim();
+  const defaults: Record<string, string> = {
+    'champions': '5-5-5',
+    'loyal_customers': '4-4-3',
+    'loyal': '4-4-3',
+    'promising': '4-2-3',
+    'potential_loyalists': '4-2-3',
+    'potential': '4-2-3',
+    'at_risk': '2-3-3',
+    'hibernating': '2-2-2',
+    'lost': '1-1-1',
+    'new_customers': '5-1-1',
+    'recent_customers': '5-2-2',
+    'cant_lose_them': '3-5-5',
+    "can't_lose_them": '3-5-5',
+    'customers_needing_attention': '3-3-2',
+  };
+  
+  // Try exact match first
+  if (defaults[name]) return defaults[name];
+  
+  // Try partial match
+  for (const [key, value] of Object.entries(defaults)) {
+    if (name.includes(key) || key.includes(name)) {
+      return value;
+    }
+  }
+  
+  return null;
+}
+
+// Calculate average RFM score from a segment's rfm_score string
+function calculateAvgRFMScore(rfmScore: string | undefined | null, segmentName?: string): number | null {
+  let scoreStr = rfmScore;
+  
+  // If rfm_score is empty, try to get default from segment name
+  if ((!scoreStr || !scoreStr.trim()) && segmentName) {
+    scoreStr = getDefaultRFMScoreFromName(segmentName);
+  }
+  
+  if (!scoreStr || typeof scoreStr !== 'string') return null;
+  
+  const trimmed = scoreStr.trim();
+  if (!trimmed) return null;
+  
+  // Extract all digits from the string
+  const digits = trimmed.match(/\d/g);
+  if (!digits || digits.length === 0) return null;
+  
+  // Convert to numbers and filter valid RFM scores (1-5)
+  const numbers = digits.map(d => parseInt(d, 10)).filter(n => !isNaN(n) && n >= 1 && n <= 5);
+  if (numbers.length === 0) return null;
+  
+  const sum = numbers.reduce((a, b) => a + b, 0);
+  return sum / numbers.length;
+}
+
+export function DashboardOverview({ onSectionChange, onOpenInsights }: DashboardOverviewProps = {}) {
   const { segments: rfmSegments, hasImported: hasSegments } = useSegments();
   const { count: productsCount, products } = useProducts();
-  const { revenueData, hasImported: hasAnalytics } = useAnalytics();
-  const { count: campaignsCount } = useCampaigns();
-  const hasAnyData = hasAnalytics || hasSegments || productsCount > 0;
+  const { revenueData, hasImported: hasAnalytics, isLoading: analyticsLoading } = useAnalytics();
+  const { count: campaignsCount, campaigns, hasImported: hasCampaigns } = useCampaigns();
+  const hasAnyData = hasAnalytics || hasSegments || productsCount > 0 || hasCampaigns;
+  const [activeTab, setActiveTab] = useState<'overview' | 'campaigns'>('overview');
+  
+  // Debug logging
+  useEffect(() => {
+    if (import.meta.env.MODE === 'development') {
+      console.debug('[Dashboard] Revenue data:', revenueData.length, 'records', revenueData);
+      console.debug('[Dashboard] Has analytics:', hasAnalytics, 'Loading:', analyticsLoading);
+    }
+  }, [revenueData, hasAnalytics, analyticsLoading]);
   const aiInsights = useMemo(() => {
     return generateInsightsFromData(products, rfmSegments);
   }, [products, rfmSegments]);
+
+  // Handle insight action clicks
+  const handleInsightAction = (insight: { action: string; title: string }) => {
+    const action = insight.action.toLowerCase();
+    
+    // Map actions to navigation
+    if (action.includes('campaign') || action.includes('win-back') || action.includes('στόχευση')) {
+      onSectionChange?.('channels');
+    } else if (action.includes('inventory') || action.includes('αναπλήρωση') || action.includes('ελέγξτε')) {
+      onSectionChange?.('products');
+    } else if (action.includes('sequence') || action.includes('setup')) {
+      onSectionChange?.('strategy');
+    } else {
+      // Default: open AI Insights panel or navigate to relevant section
+      onSectionChange?.('insights');
+    }
+  };
   const revenueContainerRef = useRef<HTMLDivElement>(null);
   const segmentContainerRef = useRef<HTMLDivElement>(null);
   const [chartDimensions, setChartDimensions] = useState({ revenue: { width: 800, height: 288 }, segment: { width: 400, height: 224 } });
@@ -72,30 +164,36 @@ export function DashboardOverview() {
           Dashboard
         </h2>
         <p className="text-[14px] text-[var(--nts-medium-gray)] mt-1">
-          Welcome back to Performance+
+          Καλώς ήρθατε στο Performance+
         </p>
       </div>
 
       {/* KPI Cards - from real data only */}
       {(revenueData.length > 0 || productsCount > 0 || rfmSegments.length > 0) && (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 gap-4 sm:gap-6">
-          {revenueData.length > 0 && (
-            <KPICard
-              kpi={{
-                label: 'Total Revenue',
-                value: `€${revenueData.reduce((s, r) => s + r.total, 0).toFixed(0)}K`,
-                change: 0,
-                changeLabel: '',
-                trend: 'up' as const,
-                sparklineData: revenueData.map(r => r.total)
-              }}
-              index={0}
-            />
-          )}
+          {revenueData.length > 0 && (() => {
+            const totalRevenue = revenueData.reduce((s, r) => s + r.total, 0);
+            const totalAttributed = revenueData.reduce((s, r) => s + r.attributed, 0);
+            const attributionRate = totalRevenue > 0 ? Math.round((totalAttributed / totalRevenue) * 1000) / 10 : 0;
+            
+            return (
+              <KPICard
+                kpi={{
+                  label: 'Σύνολο Εσόδων',
+                  value: `€${totalRevenue.toFixed(0)}K`,
+                  change: attributionRate > 0 ? attributionRate : undefined,
+                  changeLabel: attributionRate > 0 ? 'attributed' : undefined,
+                  trend: 'up' as const,
+                  sparklineData: revenueData.map(r => r.total)
+                }}
+                index={0}
+              />
+            );
+          })()}
           {productsCount > 0 && (
             <KPICard
               kpi={{
-                label: 'Products',
+                label: 'Προϊόντα',
                 value: productsCount.toLocaleString(),
                 change: products.length > 0
                   ? (() => {
@@ -103,67 +201,192 @@ export function DashboardOverview() {
                       return Math.round((withStock.length / products.length) * 1000) / 10;
                     })()
                   : undefined,
-                changeLabel: 'healthy',
+                  changeLabel: 'υγιή',
                 trend: 'up' as const,
                 sparklineData: []
               }}
               index={1}
+              onClick={() => onSectionChange?.('products')}
             />
           )}
-          {rfmSegments.length > 0 && (
-            <KPICard
-              kpi={{
-                label: 'Segments',
-                value: rfmSegments.length.toString(),
-                change: 0,
-                changeLabel: 'RFM',
-                trend: 'up' as const,
-                sparklineData: []
-              }}
-              index={2}
-            />
-          )}
-          {campaignsCount > 0 && (
-            <KPICard
-              kpi={{
-                label: 'Campaigns',
-                value: campaignsCount.toString(),
-                change: 0,
-                changeLabel: 'active',
-                trend: 'up' as const,
-                sparklineData: []
-              }}
-              index={3}
-            />
-          )}
+          {rfmSegments.length > 0 && (() => {
+            // Calculate average RFM score across all segments
+            const scores = rfmSegments
+              .map((s) => calculateAvgRFMScore(s.rfm_score, s.name))
+              .filter((score): score is number => score !== null && !isNaN(score) && isFinite(score));
+            
+            const avgScore = scores.length > 0 
+              ? (scores.reduce((a, b) => a + b, 0) / scores.length)
+              : null;
+            
+            return (
+              <KPICard
+                kpi={{
+                  label: 'Segments',
+                  value: rfmSegments.length.toString(),
+                  change: avgScore ? Math.round(avgScore * 10) / 10 : undefined,
+                  changeLabel: avgScore ? 'μέσος score' : 'RFM',
+                  trend: 'up' as const,
+                  sparklineData: []
+                }}
+                index={2}
+                onClick={() => onSectionChange?.('rfm')}
+              />
+            );
+          })()}
+          {campaignsCount > 0 && (() => {
+            // Calculate active campaigns
+            const activeCampaigns = (campaigns as any[]).filter((c) => 
+              c.status === 'active' || c.status === 'enabled' || c.status === 'eligible' || !c.status
+            ).length;
+            
+            return (
+              <KPICard
+                kpi={{
+                  label: 'Campaigns',
+                  value: campaignsCount.toString(),
+                  change: activeCampaigns,
+                  changeLabel: 'ενεργά',
+                  trend: 'up' as const,
+                  sparklineData: (campaigns as any[]).slice(0, 7).map((c) => c.amount_spent || 0)
+                }}
+                index={3}
+                onClick={() => onSectionChange?.('campaigns')}
+              />
+            );
+          })()}
         </div>
       )}
 
+      {/* Tabs for Overview and Campaigns */}
+      {hasCampaigns && campaignsCount > 0 && (
+        <Card padding="none">
+          <div className="flex border-b border-[var(--nts-border-gray)]">
+            <button
+              onClick={() => setActiveTab('overview')}
+              className={`flex-1 px-6 py-3 text-sm font-medium transition-colors ${
+                activeTab === 'overview'
+                  ? 'text-[var(--nts-charcoal)] border-b-2 border-[#FF6B35]'
+                  : 'text-[var(--nts-medium-gray)] hover:text-[var(--nts-charcoal)]'
+              }`}
+            >
+              Overview
+            </button>
+            <button
+              onClick={() => setActiveTab('campaigns')}
+              className={`flex-1 px-6 py-3 text-sm font-medium transition-colors ${
+                activeTab === 'campaigns'
+                  ? 'text-[var(--nts-charcoal)] border-b-2 border-[#FF6B35]'
+                  : 'text-[var(--nts-medium-gray)] hover:text-[var(--nts-charcoal)]'
+              }`}
+            >
+              Ενεργά Campaigns ({campaignsCount})
+            </button>
+          </div>
+        </Card>
+      )}
+
+      {/* Campaigns Tab Content */}
+      {activeTab === 'campaigns' && hasCampaigns && (
+        <Card padding="lg">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {(campaigns as any[]).slice(0, 12).map((campaign) => (
+              <motion.div
+                key={campaign.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-4 border border-[#E5E5E5] rounded-xl hover:border-[#FF6B35] transition-all cursor-pointer"
+                onClick={() => onSectionChange?.('campaigns')}
+              >
+                <div className="flex items-start justify-between mb-2">
+                  <h4 className="font-medium text-[#1A1A1A] text-sm flex-1 truncate">{campaign.name}</h4>
+                  <Badge 
+                    variant={
+                      campaign.status === 'active' || campaign.status === 'enabled' || campaign.status === 'eligible' || !campaign.status
+                        ? 'success' 
+                        : 'default'
+                    } 
+                    size="sm"
+                  >
+                    {campaign.status || 'Active'}
+                  </Badge>
+                </div>
+                <p className="text-xs text-[#4A4A4A] mb-3">{campaign.channel}</p>
+                <div className="space-y-1 text-xs">
+                  {campaign.amount_spent && (
+                    <div className="flex justify-between">
+                      <span className="text-[#4A4A4A]">Spent:</span>
+                      <span className="font-mono font-medium">€{campaign.amount_spent.toLocaleString()}</span>
+                    </div>
+                  )}
+                  {campaign.roas && (
+                    <div className="flex justify-between">
+                      <span className="text-[#4A4A4A]">ROAS:</span>
+                      <span className="font-mono font-medium text-[#22C55E]">{campaign.roas.toFixed(2)}x</span>
+                    </div>
+                  )}
+                  {campaign.conversions && (
+                    <div className="flex justify-between">
+                      <span className="text-[#4A4A4A]">Conversions:</span>
+                      <span className="font-mono font-medium">{campaign.conversions.toLocaleString()}</span>
+                    </div>
+                  )}
+                  {campaign.period && (
+                    <div className="flex items-center gap-1 mt-2 text-[#4A4A4A]">
+                      <Calendar size={12} />
+                      <span>{campaign.period}</span>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            ))}
+          </div>
+          {campaignsCount > 12 && (
+            <div className="mt-4 text-center">
+              <button
+                onClick={() => onSectionChange?.('campaigns')}
+                className="text-sm font-medium text-[#FF6B35] hover:text-[#FF8C5A]"
+              >
+                View All {campaignsCount} Campaigns →
+              </button>
+            </div>
+          )}
+        </Card>
+      )}
+
       {/* Main Charts Row */}
+      {activeTab === 'overview' && (
+        <>
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 lg:gap-8">
         {/* Revenue Trend */}
-        <Card className="xl:col-span-2" padding="lg">
+        <Card 
+          className="xl:col-span-2" 
+          padding="lg"
+          hover={!!onSectionChange}
+          onClick={() => onSectionChange?.('roi')}
+        >
           <CardHeader
             title="Revenue Performance"
-            subtitle="Total vs Performance+ Attributed"
+            subtitle="Σύνολο vs Performance+ Attributed"
             icon={<TrendingUp size={18} className="text-[var(--nts-medium-gray)]" />}
           />
-          <div 
-            ref={revenueContainerRef}
-            className="w-full" 
-            style={{ 
-              width: '100%', 
-              height: '288px', 
-              minHeight: '288px', 
-              position: 'relative'
-            }}
-          >
-            <AreaChart 
-              width={chartDimensions.revenue.width} 
-              height={chartDimensions.revenue.height} 
-              data={revenueData} 
-              margin={{ top: 10, right: 10, left: 10, bottom: 10 }}
+          {revenueData.length > 0 ? (
+            <div 
+              ref={revenueContainerRef}
+              className="w-full" 
+              style={{ 
+                width: '100%', 
+                height: '288px', 
+                minHeight: '288px', 
+                position: 'relative'
+              }}
             >
+              <AreaChart 
+                width={chartDimensions.revenue.width} 
+                height={chartDimensions.revenue.height} 
+                data={revenueData} 
+                margin={{ top: 10, right: 10, left: 10, bottom: 10 }}
+              >
                 <defs>
                   <linearGradient id="totalGradient" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#9CA3AF" stopOpacity={0.3}/>
@@ -187,7 +410,7 @@ export function DashboardOverview() {
                   tickLine={{ stroke: '#d0d7de' }}
                   tickFormatter={(value) => `€${value}K`}
                 />
-                <Tooltip
+                <RechartsTooltip
                   contentStyle={{
                     backgroundColor: '#fff',
                     border: '1px solid #d0d7de',
@@ -220,24 +443,39 @@ export function DashboardOverview() {
                   name="attributed"
                 />
               </AreaChart>
-          </div>
-          <div className="flex items-center gap-6 mt-4 pt-4 border-t border-[var(--nts-border-gray)]">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-[#9CA3AF]" />
-              <span className="text-sm text-[var(--nts-medium-gray)]">Total Revenue</span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-[var(--nts-orange)]" />
-              <span className="text-sm text-[var(--nts-medium-gray)]">Performance+ Attributed</span>
+          ) : (
+            <div className="w-full h-[288px] flex items-center justify-center bg-[#F5F5F5] rounded-lg">
+              <div className="text-center">
+                <TrendingUp size={32} className="text-[#9CA3AF] mx-auto mb-2" />
+                <p className="text-sm text-[#4A4A4A] font-medium">Δεν υπάρχουν δεδομένα</p>
+                <p className="text-xs text-[#9CA3AF] mt-1">Φόρτωσε Analytics δεδομένα για να δεις το Revenue Performance</p>
+              </div>
             </div>
-          </div>
+          )}
+          {revenueData.length > 0 && (
+            <div className="flex items-center gap-6 mt-4 pt-4 border-t border-[var(--nts-border-gray)]">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-[#9CA3AF]" />
+                <span className="text-sm text-[var(--nts-medium-gray)]">Total Revenue</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-[var(--nts-orange)]" />
+                <span className="text-sm text-[var(--nts-medium-gray)]">Performance+ Attributed</span>
+              </div>
+            </div>
+          )}
         </Card>
 
         {/* Segment Distribution */}
-        <Card padding="lg">
+        <Card 
+          padding="lg"
+          hover={!!onSectionChange}
+          onClick={() => onSectionChange?.('rfm')}
+        >
           <CardHeader
             title="Customer Segments"
-            subtitle="RFM Distribution"
+            subtitle="Κατανομή RFM"
             icon={<Users size={18} className="text-[var(--nts-medium-gray)]" />}
           />
           <div 
@@ -266,7 +504,20 @@ export function DashboardOverview() {
                     <Cell key={segment.id} fill={segment.color ?? '#6B7280'} stroke="#fff" strokeWidth={2} />
                   ))}
                 </Pie>
-                <Tooltip
+                <RechartsTooltip
+                  contentStyle={{
+                    backgroundColor: '#fff',
+                    border: '1px solid #d0d7de',
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    padding: '8px 12px'
+                  }}
+                  formatter={(value: any, _name?: string, props?: any) => [
+                    `${(value || 0).toFixed(1)}%`,
+                    props?.payload?.name || ''
+                  ]}
+                />
+                <RechartsTooltip
                   contentStyle={{
                     backgroundColor: '#fff',
                     border: '1px solid #d0d7de',
@@ -303,11 +554,28 @@ export function DashboardOverview() {
       {/* AI Insights Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* AI Insights */}
-        <Card padding="lg">
+        <Card 
+          padding="lg"
+          hover={!!onOpenInsights}
+          onClick={() => onOpenInsights?.()}
+        >
           <CardHeader
             title="AI Insights"
-            subtitle="Actionable recommendations"
+            subtitle="Πρακτικές συστάσεις"
             icon={<Target size={18} className="text-[var(--nts-medium-gray)]" />}
+            action={
+              aiInsights.length > 4 && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenInsights?.();
+                  }}
+                  className="text-xs font-medium text-[var(--nts-orange)] hover:text-[var(--nts-orange-hover)]"
+                >
+                  View All ({aiInsights.length})
+                </button>
+              )
+            }
           />
           <div className="space-y-4">
             {aiInsights.slice(0, 4).map((insight, index) => (
@@ -338,7 +606,13 @@ export function DashboardOverview() {
                       {insight.insight}
                     </p>
                   </div>
-                  <button className="text-[13px] font-semibold text-[var(--nts-orange)] hover:text-[var(--nts-orange-hover)] whitespace-nowrap px-2 py-1 rounded-md hover:bg-white transition-colors">
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleInsightAction(insight);
+                    }}
+                    className="text-[13px] font-semibold text-[var(--nts-orange)] hover:text-[var(--nts-orange-hover)] whitespace-nowrap px-2 py-1 rounded-md hover:bg-white transition-colors cursor-pointer"
+                  >
                     {insight.action}
                   </button>
                 </div>
@@ -348,36 +622,50 @@ export function DashboardOverview() {
         </Card>
 
         {/* Quick Stats */}
-        <Card padding="lg">
+        <Card 
+          padding="lg"
+          hover={!!onSectionChange}
+          onClick={() => onSectionChange?.('reports')}
+        >
           <CardHeader
             title="Performance Summary"
-            subtitle="Last 90 days"
-            icon={<DollarSign size={18} className="text-[var(--nts-medium-gray)]" />}
+            subtitle="Τελευταίες 90 ημέρες"
+            icon={<Euro size={18} className="text-[var(--nts-medium-gray)]" />}
           />
           <div className="grid grid-cols-2 gap-5">
             <StatBox
-              label="Total Products"
+              label="Σύνολο Προϊόντων"
               value={productsCount.toLocaleString()}
               icon={<Package size={18} />}
               color="#3B82F6"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSectionChange?.('products');
+              }}
             />
             <StatBox
-              label="Active Campaigns"
+              label="Ενεργά Campaigns"
               value={campaignsCount.toLocaleString()}
               icon={<Target size={18} />}
               color="#22C55E"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSectionChange?.('campaigns');
+              }}
             />
             <StatBox
               label="Stock Clearance"
               value={hasAnyData ? '€89.2K' : '€0'}
               icon={<TrendingUp size={18} />}
               color="#8B5CF6"
+              tooltip="Το συνολικό ποσό εσόδων που προέκυψε από την πώληση υπερπλήρων ή παλαιών αποθεμάτων. Το icon με την ανοδική τάση υποδηλώνει επιτυχημένη μείωση αποθεμάτων και δημιουργία εσόδων."
             />
             <StatBox
               label="Cost Savings"
               value={hasAnyData ? '€62K' : '€0'}
-              icon={<DollarSign size={18} />}
+              icon={<Euro size={18} />}
               color="#FF6B35"
+              tooltip="Το συνολικό ποσό χρημάτων που εξοικονομήθηκε μέσω βελτιώσεων λειτουργικής αποδοτικότητας, επαναδιαπραγμάτευσης συμβολαίων, μείωσης σπατάλης ή άλλων μέτρων εξοικονόμησης κόστους."
             />
           </div>
 
@@ -398,6 +686,8 @@ export function DashboardOverview() {
           </div>
         </Card>
       </div>
+        </>
+      )}
     </div>
   );
 }
@@ -405,16 +695,22 @@ export function DashboardOverview() {
 interface KPICardProps {
   kpi: { label: string; value: string; change?: number; changeLabel?: string; trend?: 'up' | 'down'; sparklineData?: number[] };
   index: number;
+  onClick?: () => void;
 }
 
-function KPICard({ kpi, index }: KPICardProps) {
+function KPICard({ kpi, index, onClick }: KPICardProps) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.05 }}
     >
-      <Card padding="lg" hover className="border-l-4 border-l-transparent hover:border-l-[#0969da]">
+      <Card 
+        padding="lg" 
+        hover={!!onClick}
+        className="border-l-4 border-l-transparent hover:border-l-[#0969da]"
+        onClick={onClick}
+      >
         <div className="flex items-start justify-between mb-3">
           <p className="text-[13px] font-medium text-[var(--nts-medium-gray)]">{kpi.label}</p>
           {kpi.trend === 'up' ? (
@@ -436,7 +732,11 @@ function KPICard({ kpi, index }: KPICardProps) {
               <span
                 className={`text-[14px] font-semibold px-2 py-0.5 rounded-lg text-[var(--nts-medium-gray)] bg-[var(--nts-light-gray)] border border-[var(--nts-border-gray)]`}
               >
-                {kpi.change > 0 ? '+' : ''}{kpi.change}%
+                {(kpi.changeLabel === 'active' || kpi.changeLabel === 'ενεργά' || kpi.changeLabel === 'avg score' || kpi.changeLabel === 'μέσος score' || kpi.changeLabel === 'υγιή')
+                  ? `${kpi.change}` 
+                  : (kpi.changeLabel === 'attributed')
+                  ? `${kpi.change}%`
+                  : `${kpi.change > 0 ? '+' : ''}${kpi.change}%`}
               </span>
             )}
             {kpi.changeLabel && (
@@ -454,11 +754,16 @@ interface StatBoxProps {
   value: string;
   icon: React.ReactNode;
   color: string;
+  onClick?: (e: React.MouseEvent) => void;
+  tooltip?: string;
 }
 
-function StatBox({ label, value, icon, color }: StatBoxProps) {
+function StatBox({ label, value, icon, color, onClick, tooltip }: StatBoxProps) {
   return (
-    <div className="p-4 bg-white rounded-xl border border-[var(--nts-border-gray)] flex flex-col items-center justify-center text-center gap-2">
+    <div 
+      className={`p-4 bg-white rounded-xl border border-[var(--nts-border-gray)] flex flex-col items-center justify-center text-center gap-2 ${onClick ? 'hover:border-[#0969da] hover:shadow-sm transition-all cursor-pointer' : ''}`}
+      onClick={onClick}
+    >
       <div
         className="w-11 h-11 rounded-lg border border-[var(--nts-border-gray)] bg-[var(--nts-light-gray)] flex items-center justify-center"
         aria-hidden="true"
@@ -467,7 +772,15 @@ function StatBox({ label, value, icon, color }: StatBoxProps) {
           {icon}
         </span>
       </div>
-      <p className="text-[12px] font-medium text-[var(--nts-medium-gray)] leading-4">{label}</p>
+      <p className="text-[12px] font-medium text-[var(--nts-medium-gray)] leading-4">
+        {tooltip ? (
+          <Tooltip content={tooltip} size={12}>
+            {label}
+          </Tooltip>
+        ) : (
+          label
+        )}
+      </p>
       <p className="text-xl font-semibold text-[var(--nts-dark-gray)] font-mono leading-6">{value}</p>
     </div>
   );
