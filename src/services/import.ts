@@ -36,20 +36,90 @@ const SUPPORTED_EXTENSIONS = ['.csv', '.xlsx'];
 
 /** Column mapping: Excel/CSV column → App field (where it appears in UI) */
 export const PRODUCT_COLUMN_MAPPING = [
-  { fileColumn: 'SKU_ID', appField: 'SKU', usedIn: 'Product Intelligence, Strategy, Dashboard count' },
-  { fileColumn: 'Product_Name', appField: 'Product', usedIn: 'Product Intelligence, Strategy Preview' },
-  { fileColumn: 'Category', appField: 'Category', usedIn: 'Product Intelligence table' },
-  { fileColumn: 'Sell_Price', appField: 'Price', usedIn: 'Product Intelligence, Strategy, Revenue calc' },
-  { fileColumn: 'Cost_Price', appField: 'Cost price', usedIn: 'Optional, margin derivation' },
-  { fileColumn: 'Stock_On_Hand', appField: 'Stock Level', usedIn: 'Product Intelligence, Total SKUs, Strategy' },
-  { fileColumn: 'Qty_Sold_Period', appField: 'Qty sold', usedIn: 'Optional, analytics' },
-  { fileColumn: 'Revenue_Period', appField: 'Revenue', usedIn: 'Strategy composite score, prioritization' },
-  { fileColumn: 'Stock_Age_Days', appField: 'Stock Age', usedIn: 'Product Intelligence, Strategy (stock_clearance)' },
-  { fileColumn: 'First_Available_Date', appField: 'Stock Age (αν λείπει Stock_Age_Days)', usedIn: 'Υπολογισμός: σήμερα − ημερομηνία' },
-  { fileColumn: 'Gross_Margin_%', appField: 'Gross Margin %', usedIn: 'Product Intelligence, Strategy profit score' },
-  { fileColumn: 'Sell_Price + Cost_Price', appField: 'Gross Margin % (αν λείπει Gross_Margin_%)', usedIn: 'Υπολογισμός: (Sell−Cost)/Sell × 100' },
-  { fileColumn: 'Margin_Tier', appField: 'Margin tier', usedIn: 'Strategy, Badge (high/medium/low)' },
-  { fileColumn: 'Priority_Flag', appField: 'Priority Tag', usedIn: 'Product Intelligence, Strategy strategic score' },
+  { 
+    fileColumn: 'SKU_ID', 
+    appField: 'SKU', 
+    usedIn: 'Product Intelligence, Strategy, Dashboard count',
+    alternatives: ['SKU_ID', 'SKU', 'sku_id', 'sku', 'ID', 'id', 'Product_ID', 'product_id', 'Item_ID', 'item_id', 'Item ID', 'item id', 'Code', 'code', 'Κωδικός', 'κωδικός', 'Barcode', 'barcode', 'EAN', 'ean']
+  },
+  { 
+    fileColumn: 'Product_Name', 
+    appField: 'Product', 
+    usedIn: 'Product Intelligence, Strategy Preview',
+    alternatives: ['Product_Name', 'Product Name', 'product_name', 'Name', 'name', 'Product', 'product', 'Title', 'title', 'Item', 'item', 'Item_Name', 'item_name', 'Description', 'description', 'Product_Title', 'product_title', 'Όνομα', 'όνομα', 'Προϊόν', 'προϊόν', 'Περιγραφή', 'περιγραφή']
+  },
+  { 
+    fileColumn: 'Category', 
+    appField: 'Category', 
+    usedIn: 'Product Intelligence table',
+    alternatives: ['Category', 'category', 'Product_Category', 'product_category', 'Group', 'group', 'Κατηγορία', 'κατηγορία', 'Type', 'type', 'Department', 'department', 'Προμηθευτής', 'προμηθευτής']
+  },
+  { 
+    fileColumn: 'Sell_Price', 
+    appField: 'Price', 
+    usedIn: 'Product Intelligence, Strategy, Revenue calc',
+    alternatives: ['Sell_Price', 'Sell Price', 'sell_price', 'Price', 'price', 'Unit_Price', 'unit_price', 'Retail_Price', 'retail_price', 'MSRP', 'msrp', 'Τιμή', 'τιμή']
+  },
+  { 
+    fileColumn: 'Cost_Price', 
+    appField: 'Cost price', 
+    usedIn: 'Optional, margin derivation',
+    alternatives: ['Cost_Price', 'Cost Price', 'cost_price', 'Cost', 'cost', 'Κόστος', 'κόστος']
+  },
+  { 
+    fileColumn: 'Stock_On_Hand', 
+    appField: 'Stock Level', 
+    usedIn: 'Product Intelligence, Total SKUs, Strategy',
+    alternatives: ['Stock_On_Hand', 'Stock On Hand', 'stock_on_hand', 'Stock_Level', 'stock_level', 'Stock', 'stock', 'Quantity', 'quantity', 'Qty', 'qty', 'Inventory', 'inventory', 'On_Hand', 'on_hand', 'Units', 'units', 'Απόθεμα', 'απόθεμα', 'Ποσότητα', 'ποσότητα', 'Available_Stock', 'available_stock', 'Δυναμικό_Υπόλοιπο', 'δυναμικό_υπόλοιπο', 'Κίνηση', 'κίνηση']
+  },
+  { 
+    fileColumn: 'Qty_Sold_Period', 
+    appField: 'Qty sold', 
+    usedIn: 'Optional, analytics',
+    alternatives: ['Qty_Sold_Period', 'Qty Sold Period', 'qty_sold_period', 'Qty_Sold', 'qty_sold', 'Quantity_Sold', 'quantity_sold']
+  },
+  { 
+    fileColumn: 'Revenue_Period', 
+    appField: 'Revenue', 
+    usedIn: 'Strategy composite score, prioritization',
+    alternatives: ['Revenue_Period', 'Revenue Period', 'revenue_period', 'Revenue', 'revenue']
+  },
+  { 
+    fileColumn: 'Stock_Age_Days', 
+    appField: 'Stock Age', 
+    usedIn: 'Product Intelligence, Strategy (stock_clearance)',
+    alternatives: ['Stock_Age_Days', 'Stock Age Days', 'stock_age_days', 'Age_Days', 'age_days', 'Days_In_Stock', 'days_in_stock', 'Stock_Age', 'stock_age', 'Age', 'age', 'MST_(ημέρες)', 'mst_(ημέρες)']
+  },
+  { 
+    fileColumn: 'First_Available_Date', 
+    appField: 'Stock Age (αν λείπει Stock_Age_Days)', 
+    usedIn: 'Υπολογισμός: σήμερα − ημερομηνία',
+    alternatives: ['First_Available_Date', 'First Available Date', 'first_available_date', 'First_Available', 'first_available', 'Available_Date', 'available_date', 'Date_Added', 'date_added', 'Created_Date', 'created_date', 'Creation_Date', 'creation_date', 'Inventory_Date', 'inventory_date', 'Data', 'data', 'Ημερομηνία', 'ημερομηνία', 'Ημ/νία', 'ημ/νία']
+  },
+  { 
+    fileColumn: 'Gross_Margin_%', 
+    appField: 'Gross Margin %', 
+    usedIn: 'Product Intelligence, Strategy profit score',
+    alternatives: ['Gross_Margin_%', 'Gross Margin %', 'gross_margin_%', 'Margin_Percentage', 'margin_percentage', 'Margin_Pct', 'margin_pct', 'Margin', 'margin', 'Margin_%', 'margin_%', 'Gross_Margin', 'gross_margin', 'Profit_Margin', 'profit_margin']
+  },
+  { 
+    fileColumn: 'Sell_Price + Cost_Price', 
+    appField: 'Gross Margin % (αν λείπει Gross_Margin_%)', 
+    usedIn: 'Υπολογισμός: (Sell−Cost)/Sell × 100',
+    alternatives: ['Υπολογίζεται αυτόματα αν υπάρχουν Sell_Price και Cost_Price']
+  },
+  { 
+    fileColumn: 'Margin_Tier', 
+    appField: 'Margin tier', 
+    usedIn: 'Strategy, Badge (high/medium/low)',
+    alternatives: ['Margin_Tier', 'Margin Tier', 'margin_tier', 'Margin_Category', 'margin_category', 'Tier', 'tier']
+  },
+  { 
+    fileColumn: 'Priority_Flag', 
+    appField: 'Priority Tag', 
+    usedIn: 'Product Intelligence, Strategy strategic score',
+    alternatives: ['Priority_Flag', 'Priority Flag', 'priority_flag', 'Priority_Tag', 'priority_tag', 'Priority', 'priority', 'Tag', 'tag', 'Label', 'label', 'Alerts', 'alerts', 'Κατάσταση', 'κατάσταση']
+  },
 ] as const;
 
 export function isSupportedFile(name: string): boolean {
@@ -148,10 +218,12 @@ function parseXLSXToRows(buffer: ArrayBuffer, type?: ImportType): string[][] {
   const rows = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, defval: '' });
   const cleanedRows = rows.map(row => (Array.isArray(row) ? row : [row]).map(cell => String(cell ?? '').trim()));
   
-  // For campaigns, try to find header row (Google Ads & Meta have headers in row 2-3)
-  if (type === 'campaigns' && cleanedRows.length > 2) {
-    // Look for common campaign header keywords
-    const headerKeywords = ['campaign', 'month', 'impressions', 'clicks', 'cost', 'conversions', 'roas', 'purchases', 'spent'];
+  // Try to find header row (for campaigns and products)
+  if (cleanedRows.length > 2) {
+    const headerKeywords = type === 'campaigns'
+      ? ['campaign', 'month', 'impressions', 'clicks', 'cost', 'conversions', 'roas', 'purchases', 'spent', 'amount spent', 'purchase roas', 'reporting starts', 'result type']
+      : ['sku_id', 'sku', 'product_name', 'product', 'name', 'category', 'sell_price', 'price', 'stock_on_hand', 'stock', 'cost_price', 'cost', 'revenue', 'margin', 'quantity', 'item', 'id', 'title', 'item_id'];
+    
     let bestMatch = 0;
     let bestScore = 0;
     
@@ -159,8 +231,11 @@ function parseXLSXToRows(buffer: ArrayBuffer, type?: ImportType): string[][] {
       const row = cleanedRows[i];
       if (!row || row.length === 0) continue;
       
-      const rowText = row.join(' ').toLowerCase();
-      const score = headerKeywords.filter(keyword => rowText.includes(keyword)).length;
+      const rowText = row.join(' ').toLowerCase().replace(/[_\s]/g, ' ');
+      const score = headerKeywords.filter(keyword => {
+        const normalizedKeyword = keyword.toLowerCase().replace(/[_\s]/g, ' ');
+        return rowText.includes(normalizedKeyword);
+      }).length;
       
       // Check if row looks like data (has large numbers) - headers shouldn't
       const hasLargeNumbers = row.some(cell => {
@@ -169,14 +244,24 @@ function parseXLSXToRows(buffer: ArrayBuffer, type?: ImportType): string[][] {
         return !isNaN(num) && num > 1000;
       });
       
-      // Prefer rows with high keyword match and no large numbers
-      if (score > bestScore && !hasLargeNumbers) {
+      // Check if row looks like a date range or title (e.g., "january_1,_2025_-_january_31,_2026" or "Product report")
+      const looksLikeTitleOrDateRange = row.some(cell => {
+        const str = String(cell).toLowerCase();
+        return str.includes('january') || str.includes('february') || str.includes('march') || 
+               str.includes('report') || str.includes('product report') ||
+               (str.includes('2025') && str.includes('2026')) || 
+               str.match(/\d{4}[_-]\d{1,2}[_-]\d{1,2}/);
+      });
+      
+      // Prefer rows with high keyword match, no large numbers, and no title/date ranges
+      if (score > bestScore && !hasLargeNumbers && !looksLikeTitleOrDateRange) {
         bestScore = score;
         bestMatch = i;
       }
     }
     
-    if (bestScore >= 3) { // At least 3 header keywords found
+    const minScore = type === 'campaigns' ? 3 : 2; // Products need at least 2 header keywords
+    if (bestScore >= minScore) {
       return cleanedRows.slice(bestMatch);
     }
   }
@@ -195,14 +280,17 @@ async function getRowsFromFile(file: File, type?: ImportType): Promise<string[][
   return parseCSV(text);
 }
 
-// Convert CSV rows to objects (supports finding header row for campaigns)
+// Convert CSV rows to objects (supports finding header row for campaigns and products)
 function csvToObjects(csvRows: string[][], type?: ImportType): Record<string, string>[] {
   if (csvRows.length === 0) return [];
   
-  // For campaigns, try to find header row if first row doesn't look like headers
+  // Try to find header row if first row doesn't look like headers
   let headerRowIndex = 0;
-  if (type === 'campaigns' && csvRows.length > 1) {
-    const headerKeywords = ['campaign', 'month', 'impressions', 'clicks', 'cost', 'conversions', 'roas', 'purchases', 'spent'];
+  if (csvRows.length > 1) {
+    const headerKeywords = type === 'campaigns' 
+      ? ['campaign', 'month', 'impressions', 'clicks', 'cost', 'conversions', 'roas', 'purchases', 'spent', 'amount spent', 'purchase roas', 'reporting starts', 'result type']
+      : ['sku', 'product', 'name', 'category', 'price', 'stock', 'cost', 'revenue', 'margin', 'quantity', 'item', 'id', 'title', 'item_id', 'κωδικός', 'περιγραφή', 'ομάδα', 'τιμή', 'διαθεσιμότητα', 'απόθεμα'];
+    
     let bestMatch = 0;
     let bestScore = 0;
     
@@ -226,28 +314,66 @@ function csvToObjects(csvRows: string[][], type?: ImportType): Record<string, st
       }
     }
     
-    if (bestScore >= 3) { // At least 3 header keywords found
+    const minScore = type === 'campaigns' ? 3 : 2; // Products need at least 2 header keywords
+    if (bestScore >= minScore) {
       headerRowIndex = bestMatch;
     }
   }
   
   const headers = csvRows[headerRowIndex].map(h => h.trim().toLowerCase().replace(/\s+/g, '_'));
+  
+  // Debug: Log detected headers for products
+  if (type === 'products' && import.meta.env.MODE === 'development') {
+    console.debug('[csvToObjects] Detected headers for products:', headers);
+    console.debug('[csvToObjects] Looking for:', ['stock_on_hand', 'stock_level', 'stock', 'quantity', 'sell_price', 'price', 'cost_price', 'cost', 'gross_margin_%', 'margin_percentage', 'stock_age_days', 'age_days']);
+  }
+  
   const objects: Record<string, string>[] = [];
 
   for (let i = headerRowIndex + 1; i < csvRows.length; i++) {
     const row = csvRows[i];
     if (row.length === 0 || !row.some(cell => cell !== '')) continue;
     
-    // Skip rows that look like headers (all text, no numbers)
+    // Skip rows that look like headers or date ranges (all text, no numbers)
+    // But be more lenient for campaigns - Meta files have date ranges in data rows
     const rowText = row.join(' ').toLowerCase();
-    const hasHeaderKeywords = ['campaign', 'month', 'impressions', 'clicks'].some(k => rowText.includes(k));
-    const hasData = row.some(cell => {
-      const str = String(cell).trim();
-      return str && (!isNaN(parseFloat(str)) || str.match(/^\d{4}-\d{2}-\d{2}/));
-    });
-    if (hasHeaderKeywords && !hasData && i === headerRowIndex + 1) {
-      // This might be a duplicate header row, skip it
-      continue;
+    const headerKeywords = type === 'campaigns' 
+      ? ['campaign', 'month', 'impressions', 'clicks']
+      : ['sku', 'product', 'name', 'category', 'price', 'stock'];
+    const hasHeaderKeywords = headerKeywords.some(k => rowText.includes(k));
+    
+    // For campaigns, only skip if it's clearly a duplicate header row (has header keywords but no data AND is right after header row)
+    if (type === 'campaigns') {
+      const hasData = row.some(cell => {
+        const str = String(cell).trim();
+        // Check for numbers (purchases, conversions, amounts, etc.)
+        const num = parseFloat(str);
+        return str && (!isNaN(num) && num > 0);
+      });
+      // Only skip if it's a duplicate header row (has header keywords but no data AND is right after header row)
+      // Don't skip rows with date ranges for campaigns - they're part of the data (e.g., "2025-01-01 - 2025-01-31")
+      if (hasHeaderKeywords && !hasData && i === headerRowIndex + 1) {
+        continue;
+      }
+      // For campaigns, always include rows that have data (numbers), even if they contain date ranges
+      if (!hasData) {
+        // Skip empty rows or rows with only text (no numbers)
+        continue;
+      }
+    } else {
+      // For products, skip date ranges
+      const looksLikeDateRange = row.some(cell => {
+        const str = String(cell).toLowerCase();
+        return str.includes('january') || str.includes('february') || str.includes('march') || 
+               str.includes('2025') || str.includes('2026') || str.match(/\d{4}[_-]\d{1,2}[_-]\d{1,2}/);
+      });
+      const hasData = row.some(cell => {
+        const str = String(cell).trim();
+        return str && (!isNaN(parseFloat(str)) || str.match(/^\d{4}-\d{2}-\d{2}/));
+      });
+      if ((hasHeaderKeywords && !hasData && i === headerRowIndex + 1) || looksLikeDateRange) {
+        continue;
+      }
     }
     
     const obj: Record<string, string> = {};
@@ -255,6 +381,14 @@ function csvToObjects(csvRows: string[][], type?: ImportType): Record<string, st
       const cell = row[index];
       obj[header] = (cell != null ? String(cell).trim() : '') || '';
     });
+    
+    // Debug: Log first few rows for products
+    if (type === 'products' && objects.length < 3 && import.meta.env.MODE === 'development') {
+      const relevantKeys = ['item_id', 'title', 'stock_on_hand', 'stock_level', 'stock', 'quantity', 'sell_price', 'price', 'cost_price', 'cost', 'gross_margin_%', 'margin_percentage', 'stock_age_days', 'age_days'];
+      const relevantObj = Object.fromEntries(Object.entries(obj).filter(([k]) => relevantKeys.some(rk => k.includes(rk) || rk.includes(k))));
+      console.debug(`[csvToObjects] Row ${objects.length + 1} relevant fields:`, relevantObj);
+    }
+    
     objects.push(obj);
   }
 
@@ -330,20 +464,65 @@ function calcGrossMarginPct(sellPrice: number, costPrice: number): number | null
 // Validate and transform Products
 // Primary schema: FINAL_Unified_Production_Schema (SKU_ID, Product_Name, Category, Sell_Price, Cost_Price, Stock_On_Hand, Qty_Sold_Period, Revenue_Period, Supplier, Brand, First_Available_Date, Last_Sale_Date, Priority_Flag, Stock_Age_Days, Gross_Profit, Gross_Margin_%, Margin_Tier)
 function validateProduct(row: Record<string, string>, index: number): { valid: boolean; data?: Product; error?: string } {
-  const name = pick(row, 'name', 'product_name', 'product', 'title', 'item', 'item_name', 'description', 'product_title', 'όνομα', 'προϊόν', 'περιγραφή');
-  const sku = pick(row, 'sku', 'sku_id', 'id', 'product_id', 'item_id', 'code', 'κωδικός', 'barcode', 'ean');
-  const category = pick(row, 'category', 'product_category', 'group', 'κατηγορία', 'type', 'department', 'προμηθευτής');
+  // Debug: Log available keys for first few rows
+  if (index < 3) {
+    console.log(`[Product Row ${index}] Available keys (${Object.keys(row).length}):`, Object.keys(row));
+    const relevantKeys = Object.keys(row).filter(k => 
+      k.includes('stock') || k.includes('price') || k.includes('cost') || 
+      k.includes('margin') || k.includes('age') || k.includes('quantity') ||
+      k.includes('item') || k.includes('title') || k.includes('sku')
+    );
+    console.log(`[Product Row ${index}] Relevant keys:`, relevantKeys);
+    console.log(`[Product Row ${index}] Relevant values:`, Object.fromEntries(relevantKeys.map(k => [k, row[k]])));
+  }
+  
+  // Headers are normalized: "Title" -> "title", "Item ID" -> "item_id"
+  // Greek headers: "Κωδικός" -> "κωδικός", "Περιγραφή" -> "περιγραφή"
+  // Note: Normalize converts spaces to underscores and lowercases, so "Τιμή αγοράς" -> "τιμή_αγοράς"
+  // Greek headers FIRST for priority (normalized: "Κωδικός" -> "κωδικός", "Περιγραφή" -> "περιγραφή")
+  const name = pick(row, 'περιγραφή', 'title', 'name', 'product_name', 'product', 'Title', 'item', 'item_name', 'description', 'product_title', 'όνομα', 'προϊόν');
+  const sku = pick(row, 'κωδικός', 'item_id', 'sku', 'sku_id', 'id', 'product_id', 'Item ID', 'item id', 'Item_ID', 'code', 'barcode', 'ean');
+  const category = pick(row, 'ομάδα', 'category', 'product_category', 'group', 'κατηγορία', 'type', 'department', 'προμηθευτής');
   const marginTier = pick(row, 'margin_tier', 'margin_category', 'tier');
-  const marginPct = pick(row, 'margin_percentage', 'margin_pct', 'margin', 'margin_%', 'gross_margin_%', 'gross_margin', 'profit_margin');
-  const stockLevel = pick(row, 'stock_level', 'stock', 'stock_on_hand', 'quantity', 'qty', 'inventory', 'on_hand', 'units', 'απόθεμα', 'ποσότητα', 'available_stock', 'δυναμικό_υπόλοιπο', 'κίνηση');
-  const stockCapacity = pick(row, 'stock_capacity', 'capacity', 'max_stock', 'max_quantity', 'χωρητικότητα', 'επιθυμητό_απόθεμα');
-  const stockAge = pick(row, 'stock_age_days', 'age_days', 'days_in_stock', 'stock_age', 'age', 'mst_(ημέρες)');
-  const firstAvailableDate = pick(row, 'first_available_date', 'first_available', 'available_date', 'date_added', 'created_date', 'creation_date', 'inventory_date');
-  const price = pick(row, 'price', 'unit_price', 'retail_price', 'sell_price', 'τιμή', 'msrp', 'κόστος');
-  const costPrice = pick(row, 'cost_price', 'cost', 'κόστος');
+  // Try to calculate margin from conv._value_/_cost (ROAS-like metric) if available
+  const marginPct = pick(row, 'margin_percentage', 'margin_pct', 'margin', 'margin_%', 'gross_margin_%', 'gross_margin', 'gross_margin_pct', 'profit_margin', 'conv._rate', 'conv_rate');
+  // Stock level - Greek: "Διαθεσιμότητα" = Availability/Stock Level (normalized: "διαθεσιμότητα")
+  const stockLevel = pick(row, 'διαθεσιμότητα', 'stock_on_hand', 'Stock_On_Hand', 'stock_level', 'Stock_Level', 'stock', 'Stock', 'quantity', 'Quantity', 'qty', 'Qty', 'inventory', 'Inventory', 'on_hand', 'On_Hand', 'units', 'Units', 'απόθεμα', 'ποσότητα', 'available_stock', 'Available_Stock', 'δυναμικό_υπόλοιπο', 'κίνηση');
+  const stockCapacity = pick(row, 'stock_capacity', 'capacity', 'max_stock', 'max_quantity', 'χωρητικότητα', 'επιθυμητό_απόθεμα', 'αναμενόμενα', 'Αναμενόμενα');
+  const stockAge = pick(row, 'stock_age_days', 'Stock_Age_Days', 'age_days', 'Age_Days', 'days_in_stock', 'Days_In_Stock', 'stock_age', 'Stock_Age', 'age', 'Age', 'mst_(ημέρες)', 'MST_(ημέρες)');
+  // Greek: "Ημ.πρώτης παραλ." = First Available Date (normalized: "ημ.πρώτης_παραλ.")
+  const firstAvailableDate = pick(row, 'ημ.πρώτης_παραλ.', 'first_available_date', 'first_available', 'available_date', 'date_added', 'created_date', 'creation_date', 'inventory_date', 'ημερομηνία_πρώτης_παραλαβής');
+  // Headers are normalized: "Sell Price" -> "sell_price", "Price" -> "price"
+  // Greek: "Λιανικής" = Retail Price (normalized: "λιανικής"), "Χονδρικής" = Wholesale Price (normalized: "χονδρικής")
+  const price = pick(row, 'λιανικής', 'χονδρικής', 'sell_price', 'Sell_Price', 'price', 'Price', 'unit_price', 'Unit_Price', 'retail_price', 'Retail_Price', 'conv._value', 'conv_value', 'conversion_value', 'τιμή', 'msrp', 'MSRP');
+  // "cost" from campaigns could be cost_price
+  // Greek: "Τιμή αγοράς" = Cost Price (normalized: "τιμή_αγοράς")
+  const costPrice = pick(row, 'τιμή_αγοράς', 'cost_price', 'Cost_Price', 'cost', 'Cost', 'κόστος');
   const revenuePeriod = pick(row, 'revenue_period', 'revenue', 'revenue_period');
   const qtySoldPeriod = pick(row, 'qty_sold_period', 'qty_sold', 'quantity_sold');
   const priority = pick(row, 'priority_tag', 'priority_flag', 'priority', 'tag', 'label', 'alerts', 'κατάσταση');
+  
+  // Debug: Log what was found
+  if (index < 3) {
+    console.log(`[Product Row ${index}] Found values:`, {
+      name: name || '(empty)',
+      sku: sku || '(empty)',
+      category: category || '(empty)',
+      price: price || '(empty)',
+      costPrice: costPrice || '(empty)',
+      stockLevel: stockLevel || '(empty)',
+      marginPct: marginPct || '(empty)',
+      stockAge: stockAge || '(empty)',
+      firstAvailableDate: firstAvailableDate || '(empty)'
+    });
+    // Also show what pick function tried to find
+    const priceKeys = ['sell_price', 'price', 'unit_price', 'retail_price', 'conv._value', 'conv_value', 'conversion_value', 'τιμή', 'msrp', 'MSRP'];
+    const costKeys = ['cost_price', 'Cost_Price', 'cost', 'Cost', 'κόστος', 'Κόστος'];
+    const stockKeys = ['stock_on_hand', 'Stock_On_Hand', 'stock_level', 'Stock_Level', 'stock', 'Stock', 'quantity', 'Quantity'];
+    console.log(`[Product Row ${index}] Price keys found:`, priceKeys.filter(k => row[k] !== undefined && row[k] !== '').map(k => `${k}: ${row[k]}`));
+    console.log(`[Product Row ${index}] Cost keys found:`, costKeys.filter(k => row[k] !== undefined && row[k] !== '').map(k => `${k}: ${row[k]}`));
+    console.log(`[Product Row ${index}] Stock keys found:`, stockKeys.filter(k => row[k] !== undefined && row[k] !== '').map(k => `${k}: ${row[k]}`));
+  }
 
   const errors: string[] = [];
 
@@ -362,17 +541,43 @@ function validateProduct(row: Record<string, string>, index: number): { valid: b
   const costPriceNum = parseFloat(costPrice || '0') || 0;
 
   // Stock Age: prefer Stock_Age_Days from file, else compute from First_Available_Date
+  // If neither exists, it will be calculated from createdAt (import date) when reading from Firestore
   let stockAgeDays = parseInt(stockAge || '0', 10) || 0;
-  if (stockAgeDays === 0 && firstAvailableDate) {
+  if (stockAgeDays === 0 && firstAvailableDate && firstAvailableDate.trim() !== '') {
     const computed = daysFromFirstAvailable(firstAvailableDate);
-    if (computed !== null && computed >= 0) stockAgeDays = computed;
+    if (computed !== null && computed >= 0) {
+      stockAgeDays = computed;
+    }
   }
+  // If still 0, it will be calculated from createdAt when reading products from Firestore
 
   // Gross Margin %: prefer Gross_Margin_% from file, else compute from (Sell_Price - Cost_Price) / Sell_Price
   let marginPctNum = parseFloat(marginPct || '0') || 0;
-  if (marginPctNum === 0 && sellPriceNum > 0) {
+  // Always calculate margin if we have both price and cost (to ensure accuracy)
+  if (sellPriceNum > 0 && costPriceNum > 0) {
     const computed = calcGrossMarginPct(sellPriceNum, costPriceNum);
-    if (computed !== null) marginPctNum = Math.round(computed * 10) / 10;
+    if (computed !== null && computed > 0) {
+      // Use calculated margin if file margin is 0 or missing
+      if (marginPctNum === 0 || !marginPct || marginPct.trim() === '') {
+        marginPctNum = Math.round(computed * 10) / 10;
+      }
+    }
+  }
+  
+  // Debug: Log calculations for first few rows
+  if (index < 3) {
+    console.log(`[Product Row ${index}] Calculations:`, {
+      sellPriceNum,
+      costPriceNum,
+      marginPctFromFile: marginPct,
+      marginPctCalculated: marginPctNum,
+      stockLevelFromFile: stockLevel,
+      stockLevelNum,
+      stockAgeFromFile: stockAge,
+      stockAgeDays,
+      firstAvailableDate,
+      computedStockAge: stockAgeDays === 0 && firstAvailableDate ? daysFromFirstAvailable(firstAvailableDate) : null
+    });
   }
 
   const product: Product = {
@@ -392,6 +597,19 @@ function validateProduct(row: Record<string, string>, index: number): { valid: b
     ...(qtySoldPeriod ? { qty_sold_period: parseInt(qtySoldPeriod || '0', 10) || 0 } : {}),
     ...(firstAvailableDate ? { first_available_date: firstAvailableDate } : {}),
   };
+
+  // Debug: Log final product for first few rows
+  if (index < 3) {
+    console.log(`[Product Row ${index}] Final product:`, {
+      id: product.id,
+      name: product.name,
+      margin_percentage: product.margin_percentage,
+      stock_level: product.stock_level,
+      stock_age_days: product.stock_age_days,
+      price: product.price,
+      cost_price: product.cost_price
+    });
+  }
 
   return { valid: true, data: product };
 }
@@ -492,20 +710,23 @@ function validateCampaignRow(row: Record<string, string>, index: number): { vali
   const explicitChannel = pick(row, 'channel', 'channel_name', 'source', 'platform');
   
   // Detect channel from column names (case-insensitive)
+  // Note: Headers are normalized: "Campaign name" -> "campaign_name", "Amount spent (EUR)" -> "amount_spent_(eur)"
   const rowKeysLower = Object.keys(row).map(k => k.toLowerCase());
   const hasGoogleAdsColumns = rowKeysLower.some(k => 
-    k.includes('campaign') && (k.includes('status') || k.includes('budget') || k.includes('bid strategy'))
-  ) || rowKeysLower.includes('conv. value / cost') || rowKeysLower.includes('conv value / cost');
+    (k.includes('campaign') && (k.includes('status') || k.includes('budget') || k.includes('bid_strategy') || k.includes('bid strategy'))) ||
+    k.includes('conv._value_/_cost') || k.includes('conv value / cost') || k.includes('conv_value_/_cost')
+  );
   
+  // Meta columns: normalized headers have underscores, e.g., "campaign_name", "amount_spent", "purchase_roas"
   const hasMetaColumns = rowKeysLower.some(k => 
-    k.includes('campaign name') || 
-    k.includes('purchase roas') || 
-    k.includes('amount spent') || 
-    k.includes('reporting starts') ||
-    k.includes('reporting ends') ||
-    k.includes('result type') ||
-    k.includes('cost per result') ||
-    (k.includes('purchases') && k.includes('conversion value')) ||
+    (k.includes('campaign') && k.includes('name')) || 
+    (k.includes('purchase') && k.includes('roas')) || 
+    (k.includes('amount') && k.includes('spent')) || 
+    k.includes('reporting_starts') || k.includes('reporting starts') ||
+    k.includes('reporting_ends') || k.includes('reporting ends') ||
+    k.includes('result_type') || k.includes('result type') ||
+    k.includes('cost_per_result') || k.includes('cost per result') ||
+    (k.includes('purchases') && (k.includes('conversion_value') || k.includes('conversion value'))) ||
     (k.includes('ctr') && k.includes('all')) ||
     (k.includes('cpc') && k.includes('all'))
   );
@@ -533,6 +754,16 @@ function validateCampaignRow(row: Record<string, string>, index: number): { vali
   }
   
   // Debug logging in development
+  if (import.meta.env.MODE === 'development' && index < 3) {
+    console.debug(`[Campaign Row ${index}] Channel Detection:`, {
+      explicitChannel,
+      hasGoogleAdsColumns,
+      hasMetaColumns,
+      detectedChannel: channel,
+      rowKeys: Object.keys(row).slice(0, 15),
+    });
+  }
+  
   if (import.meta.env.MODE === 'development' && index < 3) {
     console.debug(`[Campaign Row ${index}] Channel detection:`, {
       explicitChannel,
@@ -572,9 +803,10 @@ function validateCampaignRow(row: Record<string, string>, index: number): { vali
     }
   }
   const budget = pick(row, 'budget', 'budget_amount', 'daily_budget');
-  // Meta uses "Amount spent (EUR)" - try various formats
+  // Meta uses "Amount spent (EUR)" - normalized: "amount_spent_(eur)" -> "amount_spent_eur" (parentheses removed)
+  // Try normalized versions first, then fallback to other formats
   const amountSpent = pick(row, 
-    'amount spent (eur)', 'amount spent (eur)', 'amount_spent_eur', 'amount_spent',
+    'amount_spent_(eur)', 'amount_spent_eur', 'amount_spent', 'amount spent (eur)', 'amount spent (eur)',
     'cost', 'spend', 'total_cost', 'spent'
   );
   const impressions = pick(row, 'impressions', 'impr.', 'impr', 'imp');
@@ -656,6 +888,10 @@ function validateCampaignRow(row: Record<string, string>, index: number): { vali
   const resultTypeValue = pick(row, 'result type', 'result_type');
   const purchasesValue = pick(row, 'purchases', 'conversions', 'purchase', 'conversion');
   
+  // Check if we have Google Ads-specific fields
+  const bidStrategyValue = pick(row, 'bid strategy type', 'bid_strategy_type', 'bidding_strategy');
+  const convValueCost = pick(row, 'conv. value / cost', 'conv value / cost');
+  
   let finalChannel = channel;
   if (channel === 'Other') {
     // Check if we have Meta-specific fields with actual data
@@ -664,9 +900,6 @@ function validateCampaignRow(row: Record<string, string>, index: number): { vali
                         (resultTypeValue && resultTypeValue.trim() !== '') ||
                         (purchasesValue && purchasesValue.trim() !== '');
     
-    // Check if we have Google Ads-specific fields
-    const bidStrategyValue = pick(row, 'bid strategy type', 'bid_strategy_type', 'bidding_strategy');
-    const convValueCost = pick(row, 'conv. value / cost', 'conv value / cost');
     const hasGoogleAdsData = (bidStrategyValue && bidStrategyValue.trim() !== '') ||
                              (convValueCost && convValueCost.trim() !== '');
     
@@ -675,6 +908,31 @@ function validateCampaignRow(row: Record<string, string>, index: number): { vali
     } else if (hasGoogleAdsData && !hasMetaData) {
       finalChannel = 'Google Ads';
     }
+  }
+
+  // Debug logging for final channel assignment
+  if (import.meta.env.MODE === 'development' && index < 3) {
+    const amountSpentNum = amountSpent ? parseFloat(amountSpent) : 0;
+    const conversionValueNum = conversionValue ? parseFloat(conversionValue) : 0;
+    const roasNum = roasValue ? parseFloat(roasValue) : 0;
+    console.debug(`[Campaign Row ${index}] Final Channel & Values:`, {
+      initialChannel: channel,
+      finalChannel,
+      hasMetaData: (amountSpent && parseFloat(amountSpent) > 0) || (roasValue && parseFloat(roasValue) > 0) || (resultTypeValue && resultTypeValue.trim() !== ''),
+      hasGoogleAdsData: (bidStrategyValue && bidStrategyValue.trim() !== '') || (convValueCost && convValueCost.trim() !== ''),
+      amountSpent_raw: amountSpent,
+      amountSpent_parsed: amountSpentNum,
+      conversionValue_raw: conversionValue,
+      conversionValue_parsed: conversionValueNum,
+      roas_raw: roasValue,
+      roas_parsed: roasNum,
+      calculated_roas: amountSpentNum > 0 ? conversionValueNum / amountSpentNum : 0,
+      resultTypeValue,
+      bidStrategyValue,
+      convValueCost,
+      name,
+      period,
+    });
   }
 
   const campaign: Campaign = {
@@ -799,9 +1057,22 @@ export async function importFile(
       return result;
     }
 
-    // Log detected headers as a warning for debugging
-    const detectedHeaders = rows[0].map(h => h.trim()).filter(Boolean);
-    result.warnings.push(`Detected columns: ${detectedHeaders.join(', ')}`);
+    // Log detected headers as a warning for debugging (use actual headers from objects, not raw rows)
+    if (objects.length > 0) {
+      const detectedHeaders = Object.keys(objects[0]).filter(Boolean);
+      if (detectedHeaders.length > 0) {
+        result.warnings.push(`Detected columns: ${detectedHeaders.slice(0, 20).join(', ')}${detectedHeaders.length > 20 ? ` ... (+${detectedHeaders.length - 20} more)` : ''}`);
+      }
+      
+      // Debug: Log first row for products to help diagnose matching issues
+      if (type === 'products' && objects.length > 0) {
+        const firstRowKeys = Object.keys(objects[0]);
+        const firstRowSample = Object.fromEntries(Object.entries(objects[0]).slice(0, 10));
+        console.log('[Product Import] Detected headers:', firstRowKeys);
+        console.log('[Product Import] First row sample:', firstRowSample);
+        result.warnings.push(`Debug: Detected ${firstRowKeys.length} columns. Sample keys: ${firstRowKeys.slice(0, 10).join(', ')}`);
+      }
+    }
 
     // Process based on type
     switch (type) {
@@ -820,16 +1091,65 @@ export async function importFile(
           }
         }
 
-        // Replace existing products for this brand, then import
+        // Delete all existing products for this brand before importing new ones
+        if (import.meta.env.MODE === 'development') {
+          console.debug(`[Import] Deleting existing products for brandId: ${brandId}`);
+        }
         await FirestoreService.deleteCollection('products', brandId);
         const productChunks = chunk(validProducts, BATCH_SIZE);
         const coll = 'products';
         let rowsProcessed = 0;
+        const importTimestamp = Timestamp.now();
+        
         await runWithConcurrency(productChunks, BATCH_CONCURRENCY, async (chunkItems, batchIndex) => {
-          const batchItems = chunkItems.map((p) => ({
-            id: p.id,
-            data: { ...p, createdAt: Timestamp.now() } as Record<string, unknown>,
-          }));
+          const batchItems = chunkItems.map((p) => {
+            // Calculate stock age from createdAt if stock_age_days is 0 or missing
+            let finalStockAgeDays = p.stock_age_days ?? 0;
+            if (finalStockAgeDays === 0) {
+              // Stock age = days from import date (createdAt) to today
+              // Since we're importing now, stock age starts at 0 (today - today = 0)
+              // But if we want to track from import date, we set it to 0 and let getStockAgeDays calculate it
+              finalStockAgeDays = 0; // Will be calculated by getStockAgeDays from createdAt
+            }
+            
+            // Ensure margin is calculated if we have price and cost
+            let finalMarginPct = p.margin_percentage ?? 0;
+            if ((finalMarginPct === 0 || !p.margin_percentage) && p.price && p.price > 0 && p.cost_price && p.cost_price > 0) {
+              const computed = calcGrossMarginPct(p.price, p.cost_price);
+              if (computed !== null && computed > 0) {
+                finalMarginPct = Math.round(computed * 10) / 10;
+              }
+            }
+            
+            // Debug: Log batch processing for first product in first batch
+            if (batchIndex === 0 && chunkItems.indexOf(p) === 0) {
+              console.log(`[Import Batch] Processing product:`, {
+                id: p.id,
+                name: p.name,
+                price: p.price,
+                cost_price: p.cost_price,
+                margin_percentage_before: p.margin_percentage,
+                margin_percentage_after: finalMarginPct,
+                stock_level: p.stock_level,
+                stock_capacity: p.stock_capacity,
+                stock_age_days_before: p.stock_age_days,
+                stock_age_days_after: finalStockAgeDays,
+                first_available_date: p.first_available_date,
+                createdAt: importTimestamp.toString()
+              });
+              console.log(`[Import Batch] Full product object:`, JSON.stringify(p, null, 2));
+            }
+            
+            return {
+              id: p.id,
+              data: { 
+                ...p, 
+                stock_age_days: finalStockAgeDays,
+                margin_percentage: finalMarginPct,
+                createdAt: importTimestamp 
+              } as Record<string, unknown>,
+            };
+          });
           await FirestoreService.batchSet(coll, batchItems, brandId);
           rowsProcessed += chunkItems.length;
           onProgress?.({

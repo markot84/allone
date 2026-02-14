@@ -342,6 +342,8 @@ export function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
             <div className="p-4 border-t border-[var(--nts-border-gray)]">
               <div className="flex gap-2">
                 <input
+                  id="ai-assistant-input"
+                  name="ai-assistant-input"
                   ref={inputRef}
                   type="text"
                   value={input}

@@ -124,6 +124,18 @@ export function CampaignsPage() {
           <p className="text-[#4A4A4A] mt-1">
             {summaryStats.total} {summaryStats.total === 1 ? 'campaign' : 'campaigns'} imported
           </p>
+          {import.meta.env.MODE === 'development' && (() => {
+            const bySource: Record<string, number> = {};
+            (campaigns as Campaign[]).forEach(c => {
+              const source = (c as any).source || 'Unknown';
+              bySource[source] = (bySource[source] || 0) + 1;
+            });
+            return (
+              <p className="text-xs text-[#9CA3AF] mt-1">
+                Sources: {Object.entries(bySource).map(([src, count]) => `${src}: ${count}`).join(', ')}
+              </p>
+            );
+          })()}
         </div>
         <div className="flex items-center gap-3">
           <Button variant="secondary" icon={<Download size={16} />}>

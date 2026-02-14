@@ -1,12 +1,11 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { flushSync } from 'react-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useBrand } from '../../hooks';
-import { Upload, FileText, CheckCircle2, XCircle, AlertCircle, Clock, Download, Trash2 } from 'lucide-react';
-import { Card, CardHeader, Button, Spinner, ProgressBar, useToast, Tooltip } from '../common';
-import { importFile, saveImportJob, getImportJobs, isSupportedFile, parseCSV, PRODUCT_COLUMN_MAPPING, type ImportType, type ImportResult, type ImportJob, type ImportProgress } from '../../services/import';
-import * as XLSX from 'xlsx';
-import { Text, Heading, Label } from '@primer/react';
+import { FileText, CheckCircle2, XCircle, AlertCircle, Clock, Trash2, FileUp, Link as LinkIcon, HelpCircle, ExternalLink } from 'lucide-react';
+import { Card, Button, Spinner, ProgressBar, useToast, Badge } from '../common';
+import { importFile, saveImportJob, getImportJobs, isSupportedFile, PRODUCT_COLUMN_MAPPING, type ImportType, type ImportResult, type ImportJob, type ImportProgress } from '../../services/import';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export type FileWithType = { file: File; type: ImportType };
 
@@ -23,35 +22,55 @@ export function DataImport() {
   const [importUrl, setImportUrl] = useState('');
   const [urlLoading, setUrlLoading] = useState(false);
   const [urlError, setUrlError] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [showUrlImport, setShowUrlImport] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
   const queryClient = useQueryClient();
 
-  const importTypes: { value: ImportType; label: string; description: string }[] = [
-    { value: 'products', label: 'Products', description: 'Εισαγωγή δεδομένων αποθεμάτων προϊόντων (SKU, όνομα, κατηγορία, stock, τιμή, κλπ.)' },
-    { value: 'segments', label: 'RFM Segments', description: 'Εισαγωγή δεδομένων customer segments (όνομα, RFM score, count, revenue share)' },
-    { value: 'campaigns', label: 'Campaigns', description: 'Εισαγωγή δεδομένων marketing campaigns (Google Ads & Meta υποστηρίζονται)' },
-    { value: 'analytics', label: 'Analytics', description: 'Εισαγωγή analytics και performance δεδομένων' },
-    { value: 'custom', label: 'Custom Data', description: 'Εισαγωγή προσαρμοσμένης δομής δεδομένων' },
+  const importTypes: { value: ImportType; label: string; icon: string }[] = [
+    { value: 'products', label: 'Products', icon: '📦' },
+    { value: 'segments', label: 'Segments', icon: '👥' },
+    { value: 'campaigns', label: 'Campaigns', icon: '📊' },
+    { value: 'analytics', label: 'Analytics', icon: '📈' },
   ];
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const fileList = event.target.files;
-    if (!fileList?.length) return;
-    const all = Array.from(fileList);
-    const valid = all.filter(f => isSupportedFile(f.name));
-    if (valid.length < all.length) {
-      alert(`${all.length - valid.length} file(s) skipped (use .csv or .xlsx)`);
+  const handleFileSelect = useCallback((files: FileList | File[]) => {
+    const fileArray = Array.from(files);
+    const valid = fileArray.filter(f => isSupportedFile(f.name));
+    if (valid.length < fileArray.length) {
+      toast.error(`${fileArray.length - valid.length} αρχείο(α) παραλείφθηκαν (χρησιμοποιήστε .csv ή .xlsx)`);
     }
     if (valid.length) {
       setSelectedFiles(prev => [...prev, ...valid.map(f => ({ file: f, type: selectedType }))]);
       setImportResult(null);
       setUrlError(null);
     }
-    requestAnimationFrame(() => {
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    });
-  };
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }, [selectedType, toast]);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      handleFileSelect(files);
+    }
+  }, [handleFileSelect]);
 
   const removeFile = (index: number) => {
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
@@ -293,114 +312,67 @@ export function DataImport() {
     }
   };
 
-  const getCSVTemplate = (type: ImportType) => {
-    const templates: Record<ImportType, string> = {
-      products: `SKU_ID,Product_Name,Category,Sell_Price,Cost_Price,Stock_On_Hand,Qty_Sold_Period,Revenue_Period,Supplier,Brand,First_Available_Date,Last_Sale_Date,Priority_Flag,Stock_Age_Days,Gross_Profit,Gross_Margin_%,Margin_Tier
-PROD-001,Product Name,Electronics,99.99,64.99,100,50,4999.50,,,2025-01-01,,featured,30,3500.50,35.0,high
-PROD-002,Another Product,Clothing,49.99,25.00,50,20,999.80,,,2025-02-01,,,15,499.90,50.0,medium`,
-      segments: `Name,RFM Score,Count,Percentage,Revenue Share,Color,Description
-Champions,555,1500,25.5,45.2,#22c55e,High value customers
-Loyal,444,2000,34.0,30.1,#3b82f6,Regular customers`,
-      campaigns: `Channel,Campaign Name,Period,Start Date,End Date,Status,Budget,Amount Spent,Impressions,Clicks,CTR,CPC,CPM,Conversions,Conversion Value,ROAS,Cost per Conversion,Conversion Rate,Currency Code,Bid Strategy Type,Result Type
-Google Ads,Demand Gen Campaign,January 2025,2025-01-01,2025-01-31,Enabled,1000,850,50000,1200,2.4,0.71,17,45,5000,5.88,18.89,3.75,EUR,Maximize Conversions,
-Meta,CAMP_Brands_new_SA_,2025-01-01 - 2025-01-31,2025-01-01,2025-01-31,Active,5000,6202.97,4058725,66220,1.63,0.094,1.53,479,65499.31,10.56,12.95,,EUR,,Purchase`,
-      analytics: `Date,Total Revenue,Attributed Revenue,Attribution Rate
-2026-01-01,50000,15000,30.0
-2026-02-01,52000,18000,34.6
-2026-03-01,48000,16500,34.4`,
-      custom: `Column1,Column2,Column3
-Value1,Value2,Value3`,
-    };
-    return templates[type];
-  };
 
-  const downloadTemplate = () => {
-    const template = getCSVTemplate(selectedType);
-    const blob = new Blob([template], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${selectedType}_template.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
-  const downloadTemplateXlsx = () => {
-    const template = getCSVTemplate(selectedType);
-    const rows = parseCSV(template);
-    const ws = XLSX.utils.aoa_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Template');
-    XLSX.writeFile(wb, `${selectedType}_template.xlsx`);
-  };
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <Heading as="h2" style={{ fontSize: 24, fontWeight: 600, marginBottom: 8 }}>
-          Data Import
-        </Heading>
-        <Text as="p" style={{ color: 'var(--fgColor-muted, #57606a)', fontSize: 14 }}>
-          Import your data from CSV or Excel (.xlsx) files, or paste a direct link (e.g. Google Cloud signed URL). Supported types: Products, Segments, Campaigns, Analytics, Custom.
-        </Text>
+        <h2 className="text-2xl font-bold text-[#1A1A1A]">Data Import</h2>
+        <p className="text-[#4A4A4A] mt-1">
+          Import your data from CSV or Excel (.xlsx) files, or paste a direct link (e.g. Google Cloud signed URL). Supported types: Products, Segments, Campaigns, Analytics.
+        </p>
       </div>
 
       {/* Progress bar - fixed at top when importing so it's always visible */}
-      {isImporting && importProgress && (
-        <Card padding="lg" className="border-[#0969da]/40 bg-[#ddf4ff]/60">
-          <div className="space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <Spinner size="sm" />
-                <span className="text-sm font-semibold text-[#0969da]">
+      <AnimatePresence>
+        {isImporting && importProgress && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="bg-blue-50 border border-blue-200 rounded-lg p-4"
+          >
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Spinner size="sm" />
+                  <span className="text-sm font-semibold text-blue-700">
+                    {importProgress.fileProgress
+                      ? `Εισαγωγή ${importProgress.fileProgress.rowsProcessed.toLocaleString()} / ${importProgress.fileProgress.totalRows.toLocaleString()} εγγραφών`
+                      : `Εισαγωγή αρχείου ${importProgress.current} από ${importProgress.total}`}
+                  </span>
+                </div>
+                <span className="text-sm font-mono font-semibold text-blue-700 flex-shrink-0">
                   {importProgress.fileProgress
-                    ? `Εισαγωγή ${importProgress.fileProgress.rowsProcessed.toLocaleString()} / ${importProgress.fileProgress.totalRows.toLocaleString()} εγγραφών`
-                    : `Εισαγωγή αρχείου ${importProgress.current} από ${importProgress.total}`}
+                    ? `${Math.round((importProgress.fileProgress.rowsProcessed / importProgress.fileProgress.totalRows) * 100)}%`
+                    : `${Math.round(((importProgress.current || 0) / importProgress.total) * 100)}%`}
                 </span>
               </div>
-              <span className="text-sm font-mono font-semibold text-[#0969da] flex-shrink-0">
-                {importProgress.fileProgress
-                  ? `${Math.round((importProgress.fileProgress.rowsProcessed / importProgress.fileProgress.totalRows) * 100)}%`
-                  : `${Math.round(((importProgress.current || 0) / importProgress.total) * 100)}%`}
-              </span>
+              <ProgressBar
+                value={importProgress.fileProgress?.rowsProcessed ?? importProgress.current ?? 0}
+                max={importProgress.fileProgress?.totalRows ?? importProgress.total ?? 1}
+                size="lg"
+                color="#3B82F6"
+              />
+              <p className="text-xs text-gray-600 truncate" title={importProgress.fileName}>
+                {importProgress.fileName}
+                {importProgress.fileProgress && (
+                  <span className="ml-1">· batch {importProgress.fileProgress.batchIndex}/{importProgress.fileProgress.totalBatches}</span>
+                )}
+              </p>
             </div>
-            <ProgressBar
-              value={importProgress.fileProgress?.rowsProcessed ?? importProgress.current ?? 0}
-              max={importProgress.fileProgress?.totalRows ?? importProgress.total ?? 1}
-              size="lg"
-              color="#0969da"
-            />
-            <p className="text-xs text-[var(--nts-medium-gray)] truncate" title={importProgress.fileName}>
-              {importProgress.fileName}
-              {importProgress.fileProgress && (
-                <span className="ml-1">· batch {importProgress.fileProgress.batchIndex}/{importProgress.fileProgress.totalBatches}</span>
-              )}
-            </p>
-            <p className="text-xs text-[#0969da] animate-pulse">
-              {importProgress.fileProgress ? 'Εγγραφή στη βάση…' : 'Ανάλυση αρχείου…'}
-            </p>
-          </div>
-        </Card>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Import Form */}
-      <Card padding="lg">
-        <CardHeader
-          title="Import Data"
-          subtitle="Επιλέξτε τύπο δεδομένων και ανεβάστε CSV αρχείο"
-          icon={<Upload size={20} className="text-[var(--nts-charcoal)]" />}
-        />
-
-        <div className="space-y-6 mt-6">
-          {/* Data Type Selection (default for new files) */}
+      <Card>
+        <div className="p-6 space-y-6">
+          {/* Compact Type Selection - Tab-like buttons */}
           <div>
-            <Label style={{ marginBottom: 8, display: 'block', fontWeight: 600 }}>
-              <Tooltip content="Ο τύπος που θα ανατεθεί σε νέα αρχεία. Μπορείς να αλλάξεις τύπο ανά αρχείο στη λίστα.">Προεπιλεγμένος τύπος για νέα αρχεία</Tooltip>
-            </Label>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            <p className="text-sm font-medium text-[#4A4A4A] mb-3">Επιλέξτε τύπο δεδομένων:</p>
+            <div className="flex flex-wrap gap-2">
               {importTypes.map((type) => (
                 <button
                   key={type.value}
@@ -408,222 +380,252 @@ Value1,Value2,Value3`,
                     setSelectedType(type.value);
                     setImportResult(null);
                   }}
-                  className={`p-4 rounded-lg border-2 text-left transition-all ${
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                     selectedType === type.value
-                      ? 'border-[var(--nts-charcoal)] bg-[var(--nts-light-gray)]'
-                      : 'border-[var(--nts-border-gray)] bg-white hover:border-[var(--nts-medium-gray)]'
+                      ? 'bg-[#FF6B35] text-white shadow-sm'
+                      : 'bg-white text-[#4A4A4A] border border-[#E5E5E5] hover:border-[#FF6B35] hover:text-[#FF6B35]'
                   }`}
                 >
-                  <div className="font-semibold text-[var(--nts-charcoal)] mb-1">{type.label}</div>
-                  <div className="text-sm text-[var(--nts-medium-gray)]">{type.description}</div>
+                  <span className="mr-2">{type.icon}</span>
+                  {type.label}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Import from URL */}
-          <div>
-            <Label style={{ marginBottom: 8, display: 'block', fontWeight: 600 }}>
-              <Tooltip content="Επικόλλησε URL αρχείου CSV ή Excel (.xlsx). Υποστηρίζονται Google Cloud signed URLs, OneDrive, Dropbox links (αν επιτρέπουν CORS).">Εισαγωγή από URL (CSV ή Excel)</Tooltip>
-            </Label>
-            <div className="flex gap-2 flex-wrap">
-              <input
-                type="url"
-                placeholder="https://... (CSV ή Excel file URL)"
-                value={importUrl}
-                onChange={(e) => { setImportUrl(e.target.value); setUrlError(null); }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !urlLoading && importUrl.trim()) {
-                    handleLoadFromUrl();
-                  }
-                }}
-                className="flex-1 min-w-[200px] px-3 py-2 border border-[var(--nts-border-gray)] rounded-lg text-sm focus:outline-none focus:border-[#FF6B35]"
-              />
-              <Button
-                variant="primary"
-                onClick={handleLoadFromUrl}
-                disabled={urlLoading || !importUrl.trim()}
-              >
-                {urlLoading ? (
-                  <>
-                    <Spinner size="sm" className="mr-2" />
-                    Φόρτωση...
-                  </>
-                ) : (
-                  'Φόρτωση από URL'
-                )}
-              </Button>
-            </div>
-            {urlError && (
-              <p className="text-sm text-[#cf222e] mt-1 flex items-start gap-2">
-                <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
-                <span>{urlError}</span>
-              </p>
-            )}
-            <p className="text-xs text-[var(--nts-medium-gray)] mt-1">
-              Υποστηρίζονται CSV και Excel (.xlsx) files. Το file type detect-άρεται αυτόματα.
-            </p>
+          {/* Drag & Drop Zone */}
+          <div
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={`border-2 border-dashed rounded-lg p-8 text-center transition-all ${
+              isDragging
+                ? 'border-[#FF6B35] bg-orange-50'
+                : 'border-[#E5E5E5] bg-[#F9F9F9] hover:border-[#FF6B35] hover:bg-orange-50/30'
+            }`}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,.xlsx"
+              multiple
+              onChange={(e) => {
+                if (e.target.files) {
+                  handleFileSelect(e.target.files);
+                }
+              }}
+              className="hidden"
+              id="file-input"
+            />
+            <label
+              htmlFor="file-input"
+              className="cursor-pointer flex flex-col items-center gap-3"
+            >
+              <div className={`w-16 h-16 rounded-full flex items-center justify-center transition-colors ${
+                isDragging ? 'bg-[#FF6B35]' : 'bg-white border-2 border-[#E5E5E5]'
+              }`}>
+                <FileUp size={32} className={isDragging ? 'text-white' : 'text-[#FF6B35]'} />
+              </div>
+              <div>
+                <p className="text-base font-semibold text-[#1A1A1A]">
+                  {isDragging ? 'Αφήστε τα αρχεία εδώ' : 'Σύρετε αρχεία εδώ ή κάντε κλικ για επιλογή'}
+                </p>
+                <p className="text-sm text-[#9CA3AF] mt-1">
+                  CSV ή Excel (.xlsx) · Πολλαπλά αρχεία υποστηρίζονται
+                </p>
+              </div>
+            </label>
           </div>
 
-          {/* File Upload */}
-          <div>
-            <Label style={{ marginBottom: 8, display: 'block', fontWeight: 600 }}>
-              <Tooltip content="Ανέβασε .csv ή .xlsx. Monday.com, DSS και SignalLab exports υποστηρίζονται με auto-detection στηλών.">Αρχεία (CSV ή Excel)</Tooltip>
-            </Label>
-            <div className="border-2 border-dashed border-[var(--nts-border-gray)] rounded-lg p-6 text-center">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".csv,.xlsx"
-                multiple
-                onChange={handleFileSelect}
-                className="hidden"
-                id="csv-file-input"
-              />
-              <label
-                htmlFor="csv-file-input"
-                className="cursor-pointer flex flex-col items-center gap-3"
-              >
-                <div className="w-12 h-12 rounded-lg border border-[var(--nts-border-gray)] bg-[var(--nts-light-gray)] flex items-center justify-center">
-                  <FileText size={24} className="text-[var(--nts-medium-gray)]" />
-                </div>
-                <div>
-                  <div className="font-medium text-[var(--nts-charcoal)]">
-                    {selectedFiles.length > 0
-                      ? `${selectedFiles.length} file(s) selected`
-                      : 'Click to select one or more .csv or .xlsx'}
-                  </div>
-                  <div className="text-sm text-[var(--nts-medium-gray)] mt-1">
-                    Ctrl+Click ή Shift+Click για πολλά αρχεία · ή load from URL above
-                  </div>
-                </div>
-              </label>
-              {selectedFiles.length > 0 && (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  className="mt-3"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  + Προσθήκη ακόμα αρχείων
-                </Button>
-              )}
-            </div>
-
+          {/* Selected Files List with Animations */}
+          <AnimatePresence>
             {selectedFiles.length > 0 && (
-              <div className="mt-3 space-y-2">
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="space-y-2"
+              >
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-[var(--nts-charcoal)]">Selected files — ορίστε τύπο ανά αρχείο</span>
+                  <p className="text-sm font-medium text-[#1A1A1A]">
+                    {selectedFiles.length} {selectedFiles.length === 1 ? 'αρχείο επιλέχθηκε' : 'αρχεία επιλέχθηκαν'}
+                  </p>
                   <button
-                    type="button"
                     onClick={clearFiles}
-                    className="text-xs text-[var(--nts-medium-gray)] hover:text-[#cf222e] flex items-center gap-1"
+                    className="text-xs text-[#9CA3AF] hover:text-[#EF4444] flex items-center gap-1"
                   >
-                    <Trash2 size={12} /> Clear all
+                    <Trash2 size={14} />
+                    Καθαρισμός όλων
                   </button>
                 </div>
-                <ul className="max-h-52 overflow-y-auto rounded-lg border border-[var(--nts-border-gray)] divide-y divide-[var(--nts-border-gray)]">
-                  {selectedFiles.map((item, index) => (
-                    <li
-                      key={`${item.file.name}-${index}`}
-                      className="flex items-center gap-2 px-3 py-2 bg-white text-sm flex-wrap"
-                    >
-                      <span className="font-medium text-[var(--nts-charcoal)] truncate min-w-0 flex-1" title={item.file.name}>
-                        {item.file.name}
-                      </span>
-                      <select
-                        value={item.type}
-                        onChange={(e) => setFileType(index, e.target.value as ImportType)}
-                        className="text-xs border border-[var(--nts-border-gray)] rounded px-2 py-1 bg-white text-[var(--nts-charcoal)] focus:outline-none focus:border-[#FF6B35]"
-                        title="Τύπος εισαγωγής για αυτό το αρχείο"
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  <AnimatePresence>
+                    {selectedFiles.map((item, index) => (
+                      <motion.div
+                        key={`${item.file.name}-${index}`}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: 20 }}
+                        className="flex items-center gap-3 p-3 bg-white border border-[#E5E5E5] rounded-lg hover:border-[#FF6B35] transition-colors"
                       >
-                        {importTypes.map((t) => (
-                          <option key={t.value} value={t.value}>{t.label}</option>
-                        ))}
-                      </select>
-                      <span className="text-[var(--nts-medium-gray)] flex-shrink-0">
-                        {(item.file.size / 1024).toFixed(1)} KB
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => removeFile(index)}
-                        className="p-1 rounded text-[var(--nts-medium-gray)] hover:bg-[#ffebe9] hover:text-[#cf222e]"
-                        aria-label="Remove file"
-                      >
-                        <XCircle size={16} />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-
-          {/* Column mapping (Products only) */}
-          {selectedType === 'products' && (
-            <div className="p-4 bg-[#DBEAFE]/40 rounded-lg border border-[#3B82F6]/30">
-              <div className="text-sm font-semibold text-[#1E40AF] mb-3 flex items-center gap-2">
-                <FileText size={16} />
-                Αντιστοίχιση στηλών (Excel → Εφαρμογή)
-              </div>
-              <p className="text-xs text-[var(--nts-medium-gray)] mb-3">
-                Οι στήλες του αρχείου σου αντιστοιχίζονται αυτόματα ως εξής. Επιβεβαιώνοντας, οι εισαγωγές θα χρησιμοποιούν αυτή τη mapping.
-              </p>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm border-collapse">
-                  <thead>
-                    <tr className="border-b border-[#E5E5E5]">
-                      <th className="text-left py-2 px-3 font-medium text-[#4A4A4A]">Στήλη αρχείου</th>
-                      <th className="text-left py-2 px-3 font-medium text-[#4A4A4A]">Πεδίο εφαρμογής</th>
-                      <th className="text-left py-2 px-3 font-medium text-[#4A4A4A]">Εμφανίζεται σε</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {PRODUCT_COLUMN_MAPPING.map((m, i) => (
-                      <tr key={i} className="border-b border-[#E5E5E5]/60 last:border-0">
-                        <td className="py-2 px-3 font-mono text-xs bg-white/60">{m.fileColumn}</td>
-                        <td className="py-2 px-3 font-medium text-[#1A1A1A]">{m.appField}</td>
-                        <td className="py-2 px-3 text-xs text-[#4A4A4A]">{m.usedIn}</td>
-                      </tr>
+                        <FileText size={20} className="text-[#9CA3AF] flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-[#1A1A1A] truncate" title={item.file.name}>
+                            {item.file.name}
+                          </p>
+                          <p className="text-xs text-[#9CA3AF]">
+                            {(item.file.size / 1024).toFixed(1)} KB
+                          </p>
+                        </div>
+                        <select
+                          value={item.type}
+                          onChange={(e) => setFileType(index, e.target.value as ImportType)}
+                          className={`text-xs border rounded px-2 py-1 bg-white text-[#1A1A1A] focus:outline-none focus:border-[#FF6B35] ${
+                            (item.file.name.toLowerCase().includes('campaign') || item.file.name.toLowerCase().includes('google ads') || item.file.name.toLowerCase().includes('meta')) &&
+                            item.type !== 'campaigns'
+                              ? 'border-orange-400 bg-orange-50'
+                              : 'border-[#E5E5E5]'
+                          }`}
+                        >
+                          {importTypes.map((t) => (
+                            <option key={t.value} value={t.value}>{t.label}</option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={() => removeFile(index)}
+                          className="p-1 rounded text-[#9CA3AF] hover:text-[#EF4444] hover:bg-red-50 transition-colors"
+                          aria-label="Remove file"
+                        >
+                          <XCircle size={18} />
+                        </button>
+                      </motion.div>
                     ))}
-                  </tbody>
-                </table>
+                  </AnimatePresence>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Column Mapping Info & Download Template - Products only */}
+          {selectedType === 'products' && (
+            <div className="border-t border-[#E5E5E5] pt-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-medium text-[#1A1A1A]">
+                    Οι στήλες του αρχείου σας αντιστοιχίζονται αυτόματα
+                  </p>
+                  <button
+                    onClick={() => {
+                      window.location.hash = 'help?article=column-mapping-table';
+                      const event = new CustomEvent('navigate-to-help');
+                      window.dispatchEvent(event);
+                    }}
+                    className="inline-flex items-center gap-1 text-xs text-[#3B82F6] hover:text-[#2563EB] transition-colors group"
+                    title="Δείτε όλες τις πιθανές εκδοχές ονομάτων στηλών στο Help"
+                  >
+                    <HelpCircle size={14} />
+                    <span>Δείτε πίνακα</span>
+                    <ExternalLink size={12} />
+                  </button>
+                </div>
+                <Button
+                  onClick={() => {
+                    // Create CSV template from PRODUCT_COLUMN_MAPPING
+                    const headers = PRODUCT_COLUMN_MAPPING.map(m => m.fileColumn).filter(h => !h.includes('+') && h !== 'Sell_Price + Cost_Price');
+                    const csvContent = [
+                      headers.join(','),
+                      // Add example row with sample data
+                      headers.map((h) => {
+                        if (h === 'SKU_ID') return 'SKU-001';
+                        if (h === 'Product_Name') return 'Sample Product';
+                        if (h === 'Category') return 'Electronics';
+                        if (h === 'Sell_Price') return '99.99';
+                        if (h === 'Cost_Price') return '60.00';
+                        if (h === 'Stock_On_Hand') return '100';
+                        if (h === 'Stock_Age_Days') return '30';
+                        if (h === 'Gross_Margin_%') return '40.0';
+                        if (h === 'Margin_Tier') return 'high';
+                        if (h === 'Priority_Flag') return 'New Launch';
+                        if (h === 'First_Available_Date') return '2025-01-15';
+                        if (h === 'Qty_Sold_Period') return '50';
+                        if (h === 'Revenue_Period') return '4999.50';
+                        return '';
+                      }).join(',')
+                    ].join('\n');
+                    
+                    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                    const link = document.createElement('a');
+                    const url = URL.createObjectURL(blob);
+                    link.setAttribute('href', url);
+                    link.setAttribute('download', 'products_template.csv');
+                    link.style.visibility = 'hidden';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    toast.success('Template downloaded!');
+                  }}
+                  variant="secondary"
+                  size="sm"
+                >
+                  <FileText size={14} className="mr-1" />
+                  Download Template
+                </Button>
               </div>
             </div>
           )}
 
-          {/* Template Download */}
-          <div className="flex flex-wrap items-center gap-3 p-4 bg-[var(--nts-light-gray)] rounded-lg border border-[var(--nts-border-gray)]">
-            <AlertCircle size={18} className="text-[var(--nts-medium-gray)] flex-shrink-0" />
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium text-[var(--nts-charcoal)]">Need a template?</div>
-              <div className="text-xs text-[var(--nts-medium-gray)] mt-0.5">
-                Download CSV or Excel with the correct column structure
-              </div>
-            </div>
-            <div className="flex gap-2 flex-shrink-0">
-              <Button
-                variant="secondary"
-                size="sm"
-                icon={<Download size={14} />}
-                onClick={downloadTemplate}
+          {/* Collapsible URL Import */}
+          <div className="border-t border-[#E5E5E5] pt-4">
+            <button
+              onClick={() => setShowUrlImport(!showUrlImport)}
+              className="flex items-center gap-2 text-sm font-medium text-[#4A4A4A] hover:text-[#FF6B35] transition-colors"
+            >
+              <LinkIcon size={16} />
+              Εισαγωγή από URL
+              {showUrlImport ? ' ▲' : ' ▼'}
+            </button>
+            {showUrlImport && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="mt-3 space-y-2"
               >
-                CSV
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                icon={<Download size={14} />}
-                onClick={downloadTemplateXlsx}
-              >
-                Excel
-              </Button>
-            </div>
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    placeholder="https://... (CSV ή Excel file URL)"
+                    value={importUrl}
+                    onChange={(e) => { setImportUrl(e.target.value); setUrlError(null); }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !urlLoading && importUrl.trim()) {
+                        handleLoadFromUrl();
+                      }
+                    }}
+                    className="flex-1 px-3 py-2 border border-[#E5E5E5] rounded-lg text-sm focus:outline-none focus:border-[#FF6B35]"
+                  />
+                  <Button
+                    variant="primary"
+                    onClick={handleLoadFromUrl}
+                    disabled={urlLoading || !importUrl.trim()}
+                  >
+                    {urlLoading ? <Spinner size="sm" className="mr-2" /> : null}
+                    Φόρτωση
+                  </Button>
+                </div>
+                {urlError && (
+                  <p className="text-sm text-[#EF4444] flex items-start gap-2">
+                    <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
+                    <span>{urlError}</span>
+                  </p>
+                )}
+              </motion.div>
+            )}
           </div>
 
+
           {/* Import Button */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 pt-4 border-t border-[#E5E5E5]">
             <Button
               variant="primary"
               loading={isImporting}
@@ -631,9 +633,16 @@ Value1,Value2,Value3`,
               disabled={selectedFiles.length === 0 || isImporting}
               className="flex-1"
             >
-              {selectedFiles.length > 0
-                ? `Import ${selectedFiles.length} file(s)`
-                : 'Import Data'}
+              {isImporting ? (
+                <>
+                  <Spinner size="sm" className="mr-2" />
+                  Εισαγωγή...
+                </>
+              ) : selectedFiles.length > 0 ? (
+                `Εισαγωγή ${selectedFiles.length} ${selectedFiles.length === 1 ? 'αρχείου' : 'αρχείων'}`
+              ) : (
+                'Επιλέξτε αρχεία'
+              )}
             </Button>
             <Button
               variant="secondary"
@@ -644,134 +653,133 @@ Value1,Value2,Value3`,
                 }
               }}
             >
-              {showHistory ? 'Hide' : 'Show'} History
+              {showHistory ? 'Απόκρυψη' : 'Ιστορικό'}
             </Button>
           </div>
         </div>
       </Card>
 
-      {/* Import Result - success/failure message */}
-      {importResult && (
-        <Card
-          padding="lg"
-          className={
-            importResult.success
-              ? 'border-[#1a7f37]/40 bg-[#dafbe1]/30'
-              : 'border-[#cf222e]/40 bg-[#ffebe9]/30'
-          }
-        >
-          <CardHeader
-            title={importResult.success ? 'Η εισαγωγή ολοκληρώθηκε επιτυχώς' : 'Η εισαγωγή απέτυχε'}
-            subtitle={`${importResult.imported} εγγραφές εισήχθησαν, ${importResult.failed} απέτυχαν`}
-            icon={
-              importResult.success ? (
-                <CheckCircle2 size={20} className="text-[#1a7f37]" />
-              ) : (
-                <XCircle size={20} className="text-[#cf222e]" />
-              )
-            }
-          />
-
-          <div className="mt-6 space-y-4">
-            {importResult.imported > 0 && (
-              <div className="p-4 bg-[#dafbe1] rounded-lg border border-[#1a7f37]/20">
-                <div className="flex items-center gap-2 mb-2">
-                  <CheckCircle2 size={18} className="text-[#1a7f37]" />
-                  <div className="font-semibold text-[#1a7f37]">
-                    {importResult.imported} records imported successfully
+      {/* Import Result - Animated */}
+      <AnimatePresence>
+        {importResult && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+          >
+            <Card className={importResult.success ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}>
+              <div className="p-6">
+                <div className="flex items-start gap-4">
+                  {importResult.success ? (
+                    <CheckCircle2 size={24} className="text-green-600 flex-shrink-0 mt-1" />
+                  ) : (
+                    <XCircle size={24} className="text-red-600 flex-shrink-0 mt-1" />
+                  )}
+                  <div className="flex-1">
+                    <h3 className={`text-lg font-semibold mb-1 ${importResult.success ? 'text-green-800' : 'text-red-800'}`}>
+                      {importResult.success ? 'Επιτυχής εισαγωγή' : 'Η εισαγωγή απέτυχε'}
+                    </h3>
+                    <p className="text-sm text-gray-600 mb-4">
+                      {importResult.imported > 0 && `${importResult.imported} εισήχθησαν`}
+                      {importResult.failed > 0 && ` · ${importResult.failed} απέτυχαν`}
+                    </p>
+                    
+                    {importResult.errors.length > 0 && (
+                      <div className="mt-4 space-y-1">
+                        <p className="text-sm font-medium text-red-800">Σφάλματα:</p>
+                        <ul className="text-sm text-red-700 space-y-1 max-h-32 overflow-y-auto">
+                          {importResult.errors.slice(0, 5).map((error, index) => (
+                            <li key={index} className="flex items-start gap-2">
+                              <span className="text-red-500">•</span>
+                              <span>{error}</span>
+                            </li>
+                          ))}
+                          {importResult.errors.length > 5 && (
+                            <li className="text-gray-500">...και {importResult.errors.length - 5} ακόμα</li>
+                          )}
+                        </ul>
+                      </div>
+                    )}
+                    
+                    {importResult.warnings.length > 0 && (
+                      <div className="mt-4 space-y-1">
+                        <p className="text-sm font-medium text-orange-800">Προειδοποιήσεις:</p>
+                        <ul className="text-sm text-orange-700 space-y-1">
+                          {importResult.warnings.slice(0, 3).map((warning, index) => (
+                            <li key={index} className="flex items-start gap-2">
+                              <span className="text-orange-500">•</span>
+                              <span>{warning}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
-            )}
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-            {importResult.errors.length > 0 && (
-              <div className="p-4 bg-[#ffebe9] rounded-lg border border-[#cf222e]/20">
-                <div className="flex items-center gap-2 mb-2">
-                  <XCircle size={18} className="text-[#cf222e]" />
-                  <div className="font-semibold text-[#cf222e]">Errors ({importResult.errors.length})</div>
-                </div>
-                <ul className="list-disc list-inside space-y-1 text-sm text-[#cf222e] ml-6">
-                  {importResult.errors.slice(0, 10).map((error, index) => (
-                    <li key={index}>{error}</li>
-                  ))}
-                  {importResult.errors.length > 10 && (
-                    <li className="text-[var(--nts-medium-gray)]">
-                      ...and {importResult.errors.length - 10} more errors
-                    </li>
-                  )}
-                </ul>
-              </div>
-            )}
-
-            {importResult.warnings.length > 0 && (
-              <div className="p-4 bg-[#fff8c5] rounded-lg border border-[#9a6700]/20">
-                <div className="flex items-center gap-2 mb-2">
-                  <AlertCircle size={18} className="text-[#9a6700]" />
-                  <div className="font-semibold text-[#9a6700]">Warnings ({importResult.warnings.length})</div>
-                </div>
-                <ul className="list-disc list-inside space-y-1 text-sm text-[#9a6700] ml-6">
-                  {importResult.warnings.map((warning, index) => (
-                    <li key={index}>{warning}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        </Card>
-      )}
-
-      {/* Import History */}
-      {showHistory && (
-        <Card padding="lg">
-          <CardHeader
-            title="Import History"
-            subtitle="Πρόσφατες εισαγωγές"
-            icon={<Clock size={20} className="text-[var(--nts-charcoal)]" />}
-          />
-
-          <div className="mt-6 space-y-3">
-            {historyLoading ? (
-              <div className="py-12">
-                <Spinner size="md" label="Φόρτωση ιστορικού…" />
-              </div>
-            ) : importHistory.length === 0 ? (
-              <div className="text-center py-8 text-[var(--nts-medium-gray)]">
-                Δεν υπάρχει ιστορικό εισαγωγών ακόμα
-              </div>
-            ) : (
-              importHistory.map((job) => (
-                <div
-                  key={job.id}
-                  className="p-4 border border-[var(--nts-border-gray)] rounded-lg bg-white"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        {getStatusIcon(job.status)}
-                        <div className="font-semibold text-[var(--nts-charcoal)]">{job.fileName}</div>
-                        <div className="text-xs text-[var(--nts-medium-gray)] px-2 py-0.5 bg-[var(--nts-light-gray)] rounded">
-                          {job.type}
+      {/* Import History - Collapsible */}
+      <AnimatePresence>
+        {showHistory && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+          >
+            <Card>
+              <div className="p-6">
+                <h3 className="text-lg font-semibold text-[#1A1A1A] mb-4 flex items-center gap-2">
+                  <Clock size={20} />
+                  Ιστορικό Εισαγωγών
+                </h3>
+                <div className="space-y-3">
+                  {historyLoading ? (
+                    <div className="py-12">
+                      <Spinner size="md" label="Φόρτωση ιστορικού…" />
+                    </div>
+                  ) : importHistory.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                      Δεν υπάρχει ιστορικό εισαγωγών ακόμα
+                    </div>
+                  ) : (
+                    importHistory.map((job) => (
+                      <div
+                        key={job.id}
+                        className="p-4 border border-[#E5E5E5] rounded-lg bg-white hover:border-[#FF6B35] transition-colors"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              {getStatusIcon(job.status)}
+                              <div className="font-semibold text-[#1A1A1A]">{job.fileName}</div>
+                              <Badge variant="default">{job.type}</Badge>
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              {job.createdAt.toLocaleString('el-GR')}
+                              {job.result && (
+                                <span className="ml-2">
+                                  • {job.result.imported} εισήχθησαν, {job.result.failed} απέτυχαν
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-xs text-gray-500 capitalize">
+                            {job.status}
+                          </div>
                         </div>
                       </div>
-                      <div className="text-sm text-[var(--nts-medium-gray)]">
-                        {job.createdAt.toLocaleString()}
-                        {job.result && (
-                          <span className="ml-2">
-                            • {job.result.imported} εισήχθησαν, {job.result.failed} απέτυχαν
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="text-xs text-[var(--nts-medium-gray)] capitalize">
-                      {job.status}
-                    </div>
-                  </div>
+                    ))
+                  )}
                 </div>
-              ))
-            )}
-          </div>
-        </Card>
-      )}
+              </div>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

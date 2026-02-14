@@ -140,20 +140,82 @@ export class FirestoreService {
     const constraints = brandId ? [where('brandId', '==', brandId)] : [];
     const q = constraints.length ? query(colRef, ...constraints) : colRef;
     const BATCH_SIZE = 500;
+    let totalDeleted = 0;
     let snapshot = await getDocs(q);
+    
+    if (snapshot.empty) {
+      if (import.meta.env.MODE === 'development') {
+        console.debug(`[FirestoreService] deleteCollection: No documents to delete in ${collectionName}${brandId ? ` for brandId ${brandId}` : ''}`);
+      }
+      return;
+    }
+    
+    if (import.meta.env.MODE === 'development') {
+      console.debug(`[FirestoreService] deleteCollection: Starting deletion of ${snapshot.size} documents from ${collectionName}${brandId ? ` for brandId ${brandId}` : ''}`);
+    }
+    
     while (!snapshot.empty) {
       const batch = writeBatch(db);
-      snapshot.docs.slice(0, BATCH_SIZE).forEach((d) => batch.delete(d.ref));
+      const docsToDelete = snapshot.docs.slice(0, BATCH_SIZE);
+      docsToDelete.forEach((d) => batch.delete(d.ref));
       await batch.commit();
+      totalDeleted += docsToDelete.length;
+      
       if (snapshot.docs.length <= BATCH_SIZE) break;
       snapshot = await getDocs(q);
+    }
+    
+    if (import.meta.env.MODE === 'development') {
+      console.debug(`[FirestoreService] deleteCollection: Deleted ${totalDeleted} documents from ${collectionName}${brandId ? ` for brandId ${brandId}` : ''}`);
     }
   }
 }
 
 // Specific collections helpers - pass brandId for scoped queries
 export const ProductsService = {
-  getAll: (brandId?: string | null) => FirestoreService.getDocuments('products', [], brandId),
+  getAll: async (brandId?: string | null) => {
+    const products = await FirestoreService.getDocuments('products', [], brandId);
+    
+    // Debug: Log sample products to help diagnose data issues
+    if (import.meta.env.MODE === 'development' && products.length > 0) {
+      const sample = products.slice(0, 5) as any[];
+      console.debug('[ProductsService.getAll] Sample products from Firestore:', sample.map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        sku: p.sku,
+        price: p.price,
+        cost_price: p.cost_price,
+        margin_percentage: p.margin_percentage,
+        stock_level: p.stock_level,
+        stock_capacity: p.stock_capacity,
+        stock_age_days: p.stock_age_days,
+        first_available_date: p.first_available_date,
+        createdAt: p.createdAt,
+        hasQuestionMarks: String(p.name || '').includes('?') || String(p.sku || '').includes('?'),
+      })));
+      
+      // Also log summary statistics
+      const withStockLevel = products.filter((p: any) => (p.stock_level ?? 0) > 0).length;
+      const withMargin = products.filter((p: any) => (p.margin_percentage ?? 0) > 0).length;
+      const withStockAge = products.filter((p: any) => (p.stock_age_days ?? 0) > 0).length;
+      const withPrice = products.filter((p: any) => (p.price ?? 0) > 0).length;
+      const withCostPrice = products.filter((p: any) => (p.cost_price ?? 0) > 0).length;
+      
+      console.debug('[ProductsService.getAll] Summary:', {
+        total: products.length,
+        withStockLevel,
+        withMargin,
+        withStockAge,
+        withPrice,
+        withCostPrice,
+        stockLevelPercentage: products.length > 0 ? Math.round((withStockLevel / products.length) * 100) : 0,
+        marginPercentage: products.length > 0 ? Math.round((withMargin / products.length) * 100) : 0,
+        stockAgePercentage: products.length > 0 ? Math.round((withStockAge / products.length) * 100) : 0,
+      });
+    }
+    
+    return products;
+  },
   getById: (id: string) => FirestoreService.getDocument('products', id),
   create: (id: string, data: Record<string, unknown>, brandId?: string | null) =>
     FirestoreService.setDocument('products', id, { ...data, ...(brandId ? { brandId } : {}) }),

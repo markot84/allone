@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
@@ -54,6 +54,18 @@ function QueryProvider({ children }: { children: React.ReactNode }) {
 function App() {
   const [activeSection, setActiveSection] = useState('dashboard');
   const [insightsPanelOpen, setInsightsPanelOpen] = useState(false);
+
+  // Listen for navigate-to-help events
+  useEffect(() => {
+    const handleNavigateToHelp = () => {
+      setActiveSection('help');
+      // The Help component will handle the articleId from hash
+    };
+    window.addEventListener('navigate-to-help' as any, handleNavigateToHelp);
+    return () => {
+      window.removeEventListener('navigate-to-help' as any, handleNavigateToHelp);
+    };
+  }, []);
 
   // Handle /invite/:token route (no AuthGuard - page works for both logged-in and logged-out users)
   const pathMatch = typeof window !== 'undefined' && window.location.pathname.match(/^\/invite\/([^/]+)$/);

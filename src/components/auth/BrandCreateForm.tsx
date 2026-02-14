@@ -81,6 +81,8 @@ export function BrandCreateForm({ onCreated }: BrandCreateFormProps) {
         <div className="relative">
           <Building2 size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--nts-medium-gray)]" />
           <input
+            id="brand-name"
+            name="brand-name"
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}

@@ -204,6 +204,34 @@ export const knowledgeArticles: KnowledgeArticle[] = [
 - medium: 15-30%
 - low: <15%
 
+**Πιθανές Εκδοχές Ονομάτων Στηλών:**
+
+Το σύστημα αναγνωρίζει αυτόματα διάφορες εκδοχές ονομάτων για κάθε πεδίο:
+
+**SKU/ID:**
+SKU_ID, SKU, sku_id, sku, ID, id, Product_ID, product_id, Item_ID, item_id, Code, code, Κωδικός, κωδικός, Barcode, barcode, EAN, ean
+
+**Product Name:**
+Product_Name, Product Name, product_name, Name, name, Product, product, Title, title, Item, item, Item_Name, item_name, Description, description, Product_Title, product_title, Όνομα, όνομα, Προϊόν, προϊόν, Περιγραφή, περιγραφή
+
+**Category:**
+Category, category, Product_Category, product_category, Group, group, Κατηγορία, κατηγορία, Type, type, Department, department, Προμηθευτής, προμηθευτής
+
+**Price:**
+Sell_Price, Sell Price, sell_price, Price, price, Unit_Price, unit_price, Retail_Price, retail_price, MSRP, msrp, Τιμή, τιμή
+
+**Cost Price:**
+Cost_Price, Cost Price, cost_price, Cost, cost, Κόστος, κόστος
+
+**Stock Level:**
+Stock_On_Hand, Stock On Hand, stock_on_hand, Stock_Level, stock_level, Stock, stock, Quantity, quantity, Qty, qty, Inventory, inventory, On_Hand, on_hand, Units, units, Απόθεμα, απόθεμα, Ποσότητα, ποσότητα, Available_Stock, available_stock, Δυναμικό_Υπόλοιπο, δυναμικό_υπόλοιπο, Κίνηση, κίνηση
+
+**Date:**
+First_Available_Date, First Available Date, first_available_date, First_Available, first_available, Available_Date, available_date, Date_Added, date_added, Created_Date, created_date, Creation_Date, creation_date, Inventory_Date, inventory_date, Data, data, Ημερομηνία, ημερομηνία, Ημ/νία, ημ/νία
+
+**Margin:**
+Gross_Margin_%, Gross Margin %, gross_margin_%, Margin_Percentage, margin_percentage, Margin_Pct, margin_pct, Margin, margin, Margin_%, margin_%, Gross_Margin, gross_margin, Profit_Margin, profit_margin
+
 **Validation:**
 Το σύστημα ελέγχει ότι:
 - SKU είναι unique
@@ -211,7 +239,7 @@ export const knowledgeArticles: KnowledgeArticle[] = [
 - Stock Level >= 0
 - Dates είναι σε σωστό format`,
     tags: ['products', 'import', 'inventory'],
-    related: ['products-intelligence', 'strategy-weights'],
+    related: ['products-intelligence', 'strategy-weights', 'column-names-guide'],
     faq: [
       {
         question: 'Τι γίνεται αν δεν έχω Cost Price;',
@@ -220,6 +248,10 @@ export const knowledgeArticles: KnowledgeArticle[] = [
       {
         question: 'Πώς υπολογίζεται το Stock Age;',
         answer: 'Αν δεν το δώσετε, το σύστημα θα το υπολογίσει από το First Available Date ή από το createdAt timestamp.'
+      },
+      {
+        question: 'Τι γίνεται αν οι στήλες μου έχουν διαφορετικά ονόματα;',
+        answer: 'Το σύστημα αναγνωρίζει αυτόματα πολλές εκδοχές ονομάτων. Δείτε το πίνακα "Αντιστοίχιση Στηλών" στο Data Import για όλες τις πιθανές εκδοχές.'
       }
     ]
   },
@@ -239,6 +271,29 @@ export const knowledgeArticles: KnowledgeArticle[] = [
 - Color: Hex color για visualization (π.χ. #22C55E)
 - Description: Περιγραφή του segment
 
+**Πιθανές Εκδοχές Ονομάτων Στηλών:**
+
+**Name:**
+Name, name, Segment_Name, segment_name, Segment, segment, Title, title
+
+**RFM Score:**
+RFM_Score, RFM Score, rfm_score, Score, score, RFM, rfm
+
+**Count:**
+Count, count, Customer_Count, customer_count, Customers, customers, Size, size, Total, total
+
+**Percentage:**
+Percentage, percentage, Percent, percent, Pct, pct, %, Percentage_Share, percentage_share
+
+**Revenue Share:**
+Revenue_Share, Revenue Share, revenue_share, Revenue_Percentage, revenue_percentage, Rev_Share, rev_share
+
+**Color:**
+Color, color, Colour, colour, Hex_Color, hex_color, Color_Code, color_code
+
+**Description:**
+Description, description, Desc, desc, Note, note, Notes, notes, Περιγραφή, περιγραφή, Behavioral_Persona, behavioral_persona, Tier, tier
+
 **RFM Score Format:**
 - Single score: "5-5-5" (Recency-Frequency-Monetary)
 - Range: "5-5-5 to 4-4-4" (score range)
@@ -250,7 +305,7 @@ export const knowledgeArticles: KnowledgeArticle[] = [
 - At Risk: 2-2-2 to 3-3-3
 - Lost: 1-1-1 to 2-2-2`,
     tags: ['segments', 'rfm', 'customers'],
-    related: ['rfm-analysis', 'understanding-segments']
+    related: ['rfm-analysis', 'understanding-segments', 'column-names-guide']
   },
   {
     id: 'analytics-import',
@@ -262,6 +317,20 @@ export const knowledgeArticles: KnowledgeArticle[] = [
 - Total Revenue: Συνολικό εισόδημα (σε units, π.χ. 50000 για €50K)
 - Attributed Revenue: Revenue που αποδίδεται στο Performance+ (σε units)
 - Attribution Rate: Ποσοστό attribution (π.χ. 30.0 για 30%)
+
+**Πιθανές Εκδοχές Ονομάτων Στηλών:**
+
+**Date:**
+Date, date, Date_Time, date_time, Timestamp, timestamp, Period, period, Month, month, Year_Month, year_month, Data, data, Ημερομηνία, ημερομηνία, Ημ/νία, ημ/νία
+
+**Total Revenue:**
+Total_Revenue, Total Revenue, total_revenue, Revenue, revenue, Total, total, Total_Rev, total_rev, Revenue_Total, revenue_total
+
+**Attributed Revenue:**
+Attributed_Revenue, Attributed Revenue, attributed_revenue, Attributed, attributed, Attributed_Rev, attributed_rev, Performance_Plus_Revenue, performance_plus_revenue, PP_Revenue, pp_revenue
+
+**Attribution Rate:**
+Attribution_Rate, Attribution Rate, attribution_rate, Attribution_%, attribution_%, Attribution_Percentage, attribution_percentage, Rate, rate
 
 **Format:**
 \`\`\`csv
@@ -276,7 +345,139 @@ Date,Total Revenue,Attributed Revenue,Attribution Rate
 - Η ημερομηνία πρέπει να είναι σε ISO format (YYYY-MM-DD)
 - Το Attribution Rate υπολογίζεται αυτόματα αν δεν το δώσετε`,
     tags: ['analytics', 'revenue', 'performance'],
-    related: ['roi-attribution-basics', 'dashboard-overview']
+    related: ['roi-attribution-basics', 'dashboard-overview', 'column-names-guide']
+  },
+  {
+    id: 'campaigns-import',
+    category: 'data-import',
+    title: 'Εισαγωγή Campaigns',
+    description: 'Πώς να φορτώσετε marketing campaigns (Google Ads & Meta)',
+    content: `**Υποστηριζόμενα κανάλια:**
+- Google Ads
+- Meta (Facebook/Instagram)
+
+**Υποχρεωτικά πεδία:**
+- Campaign Name: Όνομα καμπάνιας
+- Channel: Google Ads ή Meta (αναγνωρίζεται αυτόματα)
+- Amount Spent: Ποσό που δαπανήθηκε
+- Impressions: Αριθμός εμφανίσεων
+- Clicks: Αριθμός κλικ
+
+**Πιθανές Εκδοχές Ονομάτων Στηλών:**
+
+**Campaign Name:**
+Campaign_Name, Campaign Name, campaign_name, Campaign, campaign, Name, name, Campaign_Name_, campaignname, Campaign-Name
+
+**Channel:**
+Channel, channel, Channel_Name, channel_name, Source, source, Platform, platform
+
+**Amount Spent:**
+Amount_Spent_(EUR), Amount Spent (EUR), amount_spent_eur, Amount_Spent, amount_spent, Cost, cost, Spend, spend, Total_Cost, total_cost, Spent, spent
+
+**Impressions:**
+Impressions, impressions, Impr., impr., Impr, impr, Imp, imp
+
+**Clicks:**
+Clicks_(all), Clicks (all), clicks, Click, click, Clicks_All, clicks_all
+
+**CTR:**
+CTR_(all), CTR (all), ctr, Click_Through_Rate, click_through_rate, CTR_All, ctr_all
+
+**CPC:**
+CPC_(all), CPC (all), Avg._CPC, Avg. CPC, cpc, Cost_Per_Click, cost_per_click, Avg_CPC, avg_cpc, CPC_All, cpc_all
+
+**Conversions/Purchases:**
+Conversions, conversions, Purchases, purchases, Conv., conv.
+
+**Conversion Value:**
+Conversion_Value, Conversion Value, conversion_value, Purchases_Conversion_Value, Purchases conversion value, Purchase_ROAS, Purchase ROAS
+
+**ROAS:**
+ROAS, roas, Conv._Value_/_Cost, Conv. Value / Cost, Conv_Value_/_Cost
+
+**Period/Month:**
+Month, month, Period, period, Date_Range, date_range, Reporting_Starts, reporting starts, Reporting_Ends, reporting ends
+
+**Σημειώσεις:**
+- Το σύστημα αναγνωρίζει αυτόματα το κανάλι από τις στήλες
+- Για Meta campaigns, χρησιμοποιείται "Purchase ROAS" αντί για "ROAS"
+- Αν λείπει το Campaign Name, χρησιμοποιείται το Period/Month ως όνομα`,
+    tags: ['campaigns', 'google-ads', 'meta', 'marketing'],
+    related: ['channel-activation', 'column-names-guide']
+  },
+  {
+    id: 'column-names-guide',
+    category: 'data-import',
+    title: 'Οδηγός Ονομάτων Στηλών',
+    description: 'Πλήρης λίστα πιθανών εκδοχών ονομάτων για κάθε template',
+    content: `Το σύστημα αναγνωρίζει αυτόματα διάφορες εκδοχές ονομάτων για κάθε πεδίο. Αυτό σημαίνει ότι δεν χρειάζεται να αλλάξετε τα ονόματα των στηλών σας - το σύστημα θα τα βρει αυτόματα.
+
+**Πώς λειτουργεί:**
+- Το σύστημα αναζητά case-insensitive matches
+- Υποστηρίζει underscores, spaces, και διάφορες μορφές
+- Υποστηρίζει ελληνικά και αγγλικά ονόματα
+- Αν δεν βρει ακριβή match, κάνει partial matching
+
+**Για κάθε template:**
+- **Products**: Δείτε "Εισαγωγή Προϊόντων" για όλες τις εκδοχές
+- **Campaigns**: Δείτε "Εισαγωγή Campaigns" για Google Ads & Meta
+- **Analytics**: Δείτε "Εισαγωγή Analytics Data" για revenue columns
+- **Segments**: Δείτε "Εισαγωγή RFM Segments" για segment columns
+
+**Συμβουλές:**
+- Χρησιμοποιήστε τον πίνακα "Αντιστοίχιση Στηλών" παρακάτω για να δείτε όλες τις πιθανές εκδοχές
+- Αν μια στήλη δεν αναγνωρίζεται, ελέγξτε αν υπάρχει παρόμοιο όνομα στη λίστα
+- Μπορείτε να χρησιμοποιήσετε ελληνικά ή αγγλικά ονόματα`,
+    tags: ['import', 'columns', 'template', 'guide'],
+    related: ['products-import', 'campaigns-import', 'analytics-import', 'segments-import']
+  },
+  {
+    id: 'column-mapping-table',
+    category: 'data-import',
+    title: 'Πίνακας Αντιστοίχισης Στηλών - Products',
+    description: 'Πλήρης πίνακας με όλες τις πιθανές εκδοχές ονομάτων για κάθε πεδίο προϊόντων',
+    content: `Ο παρακάτω πίνακας δείχνει όλες τις πιθανές εκδοχές ονομάτων που αναγνωρίζει το σύστημα για κάθε πεδίο προϊόντων.
+
+**SKU/ID:**
+SKU_ID, SKU, sku_id, sku, ID, id, Product_ID, product_id, Item_ID, item_id, Item ID, item id, Code, code, Κωδικός, κωδικός, Barcode, barcode, EAN, ean
+
+**Product Name:**
+Product_Name, Product Name, product_name, Name, name, Product, product, Title, title, Item, item, Item_Name, item_name, Description, description, Product_Title, product_title, Όνομα, όνομα, Προϊόν, προϊόν, Περιγραφή, περιγραφή
+
+**Category:**
+Category, category, Product_Category, product_category, Group, group, Κατηγορία, κατηγορία, Type, type, Department, department, Προμηθευτής, προμηθευτής
+
+**Price:**
+Sell_Price, Sell Price, sell_price, Price, price, Unit_Price, unit_price, Retail_Price, retail_price, MSRP, msrp, Τιμή, τιμή
+
+**Cost Price:**
+Cost_Price, Cost Price, cost_price, Cost, cost, Κόστος, κόστος
+
+**Stock Level:**
+Stock_On_Hand, Stock On Hand, stock_on_hand, Stock_Level, stock_level, Stock, stock, Quantity, quantity, Qty, qty, Inventory, inventory, On_Hand, on_hand, Units, units, Απόθεμα, απόθεμα, Ποσότητα, ποσότητα, Available_Stock, available_stock, Δυναμικό_Υπόλοιπο, δυναμικό_υπόλοιπο, Κίνηση, κίνηση
+
+**Date:**
+First_Available_Date, First Available Date, first_available_date, First_Available, first_available, Available_Date, available_date, Date_Added, date_added, Created_Date, created_date, Creation_Date, creation_date, Inventory_Date, inventory_date, Data, data, Ημερομηνία, ημερομηνία, Ημ/νία, ημ/νία
+
+**Margin:**
+Gross_Margin_%, Gross Margin %, gross_margin_%, Margin_Percentage, margin_percentage, Margin_Pct, margin_pct, Margin, margin, Margin_%, margin_%, Gross_Margin, gross_margin, Profit_Margin, profit_margin
+
+**Stock Age:**
+Stock_Age_Days, Stock Age Days, stock_age_days, Age_Days, age_days, Days_In_Stock, days_in_stock, Stock_Age, stock_age, Age, age, MST_(ημέρες), mst_(ημέρες)
+
+**Revenue:**
+Revenue_Period, Revenue Period, revenue_period, Revenue, revenue
+
+**Quantity Sold:**
+Qty_Sold_Period, Qty Sold Period, qty_sold_period, Qty_Sold, qty_sold, Quantity_Sold, quantity_sold
+
+**Priority:**
+Priority_Flag, Priority Flag, priority_flag, Priority_Tag, priority_tag, Priority, priority, Tag, tag, Label, label, Alerts, alerts, Κατάσταση, κατάσταση
+
+**Margin Tier:**
+Margin_Tier, Margin Tier, margin_tier, Margin_Category, margin_category, Tier, tier`,
+    tags: ['products', 'import', 'columns', 'mapping', 'table'],
+    related: ['products-import', 'column-names-guide']
   },
   // STRATEGY
   {

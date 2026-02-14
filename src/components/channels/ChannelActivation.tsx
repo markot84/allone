@@ -52,6 +52,9 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
       totalImpressions: number;
       totalClicks: number;
       campaignCount: number;
+      // For debugging: track if campaigns have pre-calculated ROAS
+      hasPreCalculatedROAS: boolean;
+      sampleCampaigns: Array<{ name: string; amount_spent: number; conversion_value: number; roas?: number }>;
     }> = {};
 
     (campaigns as Campaign[]).forEach((campaign) => {
@@ -64,6 +67,8 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
           totalImpressions: 0,
           totalClicks: 0,
           campaignCount: 0,
+          hasPreCalculatedROAS: false,
+          sampleCampaigns: [],
         };
       }
 
@@ -74,9 +79,55 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
       stats.totalImpressions += campaign.impressions || 0;
       stats.totalClicks += campaign.clicks || 0;
       stats.campaignCount += 1;
+      
+      // Track if campaign has pre-calculated ROAS
+      if (campaign.roas && campaign.roas > 0) {
+        stats.hasPreCalculatedROAS = true;
+      }
+      
+      // Store sample campaigns for debugging (first 2 per channel)
+      if (stats.sampleCampaigns.length < 2) {
+        stats.sampleCampaigns.push({
+          name: campaign.name,
+          amount_spent: campaign.amount_spent || 0,
+          conversion_value: campaign.conversion_value || 0,
+          roas: campaign.roas,
+        });
+      }
     });
 
+    // Debug logging in development
+    if (import.meta.env.MODE === 'development') {
+      console.debug('[ChannelActivation] Channel Performance Calculation:', {
+        totalCampaigns: campaigns.length,
+        channelBreakdown: Object.entries(channelStats).map(([channel, stats]) => ({
+          channel,
+          totalSpent: stats.totalSpent,
+          totalConversionValue: stats.totalConversionValue,
+          totalConversions: stats.totalConversions,
+          totalImpressions: stats.totalImpressions,
+          totalClicks: stats.totalClicks,
+          campaignCount: stats.campaignCount,
+          hasPreCalculatedROAS: stats.hasPreCalculatedROAS,
+          calculatedROAS: stats.totalSpent > 0 ? stats.totalConversionValue / stats.totalSpent : 0,
+          sampleCampaigns: stats.sampleCampaigns,
+        })),
+        sampleCampaignsByChannel: Object.entries(channelStats).map(([channel]) => ({
+          channel,
+          sampleCampaigns: (campaigns as Campaign[]).filter(c => (c.channel || 'Other') === channel).slice(0, 3).map(c => ({
+            name: c.name,
+            amount_spent: c.amount_spent,
+            conversion_value: c.conversion_value,
+            roas: c.roas,
+            period: c.period,
+          })),
+        })),
+      });
+    }
+
     // Calculate ROAS for each channel
+    // If campaigns have pre-calculated ROAS, we can use weighted average
+    // Otherwise, calculate from total conversion_value / total spent
     const channelPerformance: Array<{
       channel: string;
       spent: number;
@@ -87,9 +138,58 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
       cpc: number;
       campaignCount: number;
     }> = Object.entries(channelStats).map(([channel, stats]) => {
-      const roas = stats.totalSpent > 0 ? stats.totalConversionValue / stats.totalSpent : 0;
-      const ctr = stats.totalImpressions > 0 ? (stats.totalClicks / stats.totalImpressions) * 100 : 0;
-      const cpc = stats.totalClicks > 0 ? stats.totalSpent / stats.totalClicks : 0;
+      // Calculate ROAS: prefer pre-calculated if available, otherwise calculate from totals
+      let roas = 0;
+      if (stats.hasPreCalculatedROAS && stats.totalSpent > 0) {
+        // Weighted average ROAS based on spend
+        const campaignsWithROAS = (campaigns as Campaign[]).filter(
+          c => (c.channel || 'Other') === channel && c.roas && c.roas > 0 && c.amount_spent && c.amount_spent > 0
+        );
+        if (campaignsWithROAS.length > 0) {
+          const weightedROAS = campaignsWithROAS.reduce((sum, c) => {
+            return sum + ((c.roas || 0) * (c.amount_spent || 0));
+          }, 0) / stats.totalSpent;
+          roas = weightedROAS;
+        } else {
+          // Fallback to calculated ROAS
+          roas = stats.totalSpent > 0 ? stats.totalConversionValue / stats.totalSpent : 0;
+        }
+      } else {
+        // Calculate ROAS from totals
+        roas = stats.totalSpent > 0 ? stats.totalConversionValue / stats.totalSpent : 0;
+      }
+      
+      // CTR: use pre-calculated if available, otherwise calculate from totals
+      let ctr = 0;
+      const campaignsWithCTR = (campaigns as Campaign[]).filter(
+        c => (c.channel || 'Other') === channel && c.ctr && c.ctr > 0
+      );
+      if (campaignsWithCTR.length > 0 && stats.totalImpressions > 0) {
+        // Weighted average CTR based on impressions
+        const weightedCTR = campaignsWithCTR.reduce((sum, c) => {
+          return sum + ((c.ctr || 0) * (c.impressions || 0));
+        }, 0) / stats.totalImpressions;
+        ctr = weightedCTR;
+      } else {
+        // Calculate CTR from totals
+        ctr = stats.totalImpressions > 0 ? (stats.totalClicks / stats.totalImpressions) * 100 : 0;
+      }
+      
+      // CPC: use pre-calculated if available, otherwise calculate from totals
+      let cpc = 0;
+      const campaignsWithCPC = (campaigns as Campaign[]).filter(
+        c => (c.channel || 'Other') === channel && c.cpc && c.cpc > 0 && c.clicks && c.clicks > 0
+      );
+      if (campaignsWithCPC.length > 0 && stats.totalClicks > 0) {
+        // Weighted average CPC based on clicks
+        const weightedCPC = campaignsWithCPC.reduce((sum, c) => {
+          return sum + ((c.cpc || 0) * (c.clicks || 0));
+        }, 0) / stats.totalClicks;
+        cpc = weightedCPC;
+      } else {
+        // Calculate CPC from totals
+        cpc = stats.totalClicks > 0 ? stats.totalSpent / stats.totalClicks : 0;
+      }
 
       return {
         channel,
@@ -103,7 +203,14 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
       };
     });
 
-    return channelPerformance.sort((a, b) => b.spent - a.spent);
+    const sorted = channelPerformance.sort((a, b) => b.spent - a.spent);
+    
+    // Debug logging for final results
+    if (import.meta.env.MODE === 'development') {
+      console.debug('[ChannelActivation] Final Channel Performance:', sorted);
+    }
+    
+    return sorted;
   }, [campaigns, hasCampaigns]);
 
   // Calculate monthly performance history from campaigns

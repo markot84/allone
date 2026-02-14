@@ -219,6 +219,7 @@ export interface Campaign {
   start_date?: string; // ISO date string
   end_date?: string; // ISO date string
   status?: string; // active, paused, completed, etc.
+  is_active?: boolean; // true for current import, false for historical
   budget?: number;
   amount_spent?: number;
   impressions?: number;

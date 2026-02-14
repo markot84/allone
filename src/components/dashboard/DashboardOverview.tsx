@@ -188,10 +188,12 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             // Calculate attributed revenue (from Analytics only, campaigns don't have attribution)
             const totalAttributed = revenueData.reduce((s, r) => s + r.attributed, 0);
             
-            // Attribution rate based on total revenue (only if we have Analytics data)
-            const attributionRate = totalRevenue > 0 && analyticsRevenue > 0 
+            // Attribution rate only makes sense if we have Analytics data WITH actual revenue AND attributed revenue
+            // If we only have campaigns or Analytics without revenue/attribution, don't show attribution
+            const hasValidAnalytics = revenueData.length > 0 && analyticsRevenue > 0 && totalAttributed > 0;
+            const attributionRate = hasValidAnalytics && totalRevenue > 0
               ? Math.round((totalAttributed / totalRevenue) * 1000) / 10 
-              : 0;
+              : undefined;
             
             // Sparkline data: use Analytics if available, otherwise use campaigns monthly data
             const sparklineData = useMemo(() => {
@@ -235,8 +237,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 kpi={{
                   label: 'Σύνολο Εσόδων',
                   value: `€${totalRevenue.toFixed(0)}K`,
-                  change: attributionRate > 0 ? attributionRate : undefined,
-                  changeLabel: attributionRate > 0 ? 'attributed' : campaignsRevenue > 0 && analyticsRevenue === 0 ? 'από campaigns' : undefined,
+                  change: attributionRate,
+                  changeLabel: attributionRate !== undefined ? 'attributed' : undefined,
                   trend: 'up' as const,
                   sparklineData: sparklineData
                 }}
@@ -293,6 +295,32 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             const activeCampaigns = (campaigns as any[]).filter((c) => 
               c.status === 'active' || c.status === 'enabled' || c.status === 'eligible' || !c.status
             ).length;
+            
+            // Debug: Group by source file to help user understand where campaigns come from
+            const campaignsBySource = useMemo(() => {
+              const sourceMap: Record<string, number> = {};
+              (campaigns as any[]).forEach(c => {
+                const source = c.source || 'Unknown';
+                sourceMap[source] = (sourceMap[source] || 0) + 1;
+              });
+              return sourceMap;
+            }, [campaigns]);
+            
+            // Debug logging in development
+            if (import.meta.env.MODE === 'development') {
+              console.debug('[Dashboard] Campaigns breakdown:', {
+                total: campaignsCount,
+                active: activeCampaigns,
+                bySource: campaignsBySource,
+                sampleCampaigns: (campaigns as any[]).slice(0, 3).map(c => ({
+                  id: c.id,
+                  name: c.name,
+                  channel: c.channel,
+                  source: c.source,
+                  importedAt: c.importedAt
+                }))
+              });
+            }
             
             return (
               <KPICard

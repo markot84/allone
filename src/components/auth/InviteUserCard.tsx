@@ -87,6 +87,8 @@ export function InviteUserCard({ onInviteCreated }: InviteUserCardProps) {
           </div>
           <p className="text-xs text-[var(--nts-medium-gray)]">Ή συμπληρώστε email για audit:</p>
           <input
+            id="invite-email"
+            name="invite-email"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -94,6 +96,8 @@ export function InviteUserCard({ onInviteCreated }: InviteUserCardProps) {
             className="w-full px-3 py-2 text-sm bg-white border border-[var(--nts-border-gray)] rounded-lg"
           />
           <select
+            id="invite-role"
+            name="invite-role"
             value={role}
             onChange={(e) => setRole(e.target.value)}
             className="w-full px-3 py-2 text-sm bg-white border border-[var(--nts-border-gray)] rounded-lg"

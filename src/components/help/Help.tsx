@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   Book,
@@ -25,6 +25,26 @@ export function Help() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedArticle, setSelectedArticle] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Handle hash navigation (e.g., #help?article=column-mapping-table)
+  useEffect(() => {
+    const checkHash = () => {
+      const hash = window.location.hash;
+      const match = hash.match(/help\?article=([^&]+)/);
+      if (match) {
+        const articleId = match[1];
+        const article = getArticleById(articleId);
+        if (article) {
+          setSelectedCategory(article.category);
+          setSelectedArticle(articleId);
+        }
+      }
+    };
+    
+    checkHash();
+    window.addEventListener('hashchange', checkHash);
+    return () => window.removeEventListener('hashchange', checkHash);
+  }, []);
 
   const filteredArticles = useMemo(() => {
     if (searchQuery.trim()) {

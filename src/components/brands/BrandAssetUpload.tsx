@@ -116,6 +116,8 @@ export function BrandAssetUpload({
       {/* Upload Button */}
       <div className="flex items-center gap-2">
         <input
+          id={`brand-asset-${assetType}`}
+          name={`brand-asset-${assetType}`}
           ref={fileInputRef}
           type="file"
           accept="image/jpeg,image/png,image/svg+xml,image/webp,image/gif"

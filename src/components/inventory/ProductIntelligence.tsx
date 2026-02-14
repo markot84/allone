@@ -51,6 +51,24 @@ function computeInventorySummary(products: Product[]): InventorySummary {
 
     totalValue += level * price;
 
+    // Debug: Log first few products for troubleshooting
+    if (products.indexOf(p) < 3) {
+      console.debug(`[ProductIntelligence] Product ${products.indexOf(p)}:`, {
+        id: p.id,
+        name: p.name,
+        stock_level: level,
+        stock_capacity: capacity,
+        price,
+        ageDays,
+        hasExplicitCapacity,
+        ratio,
+        margin_percentage: p.margin_percentage,
+        cost_price: p.cost_price,
+        first_available_date: p.first_available_date,
+        createdAt: p.createdAt
+      });
+    }
+
     if (ageDays > 180) {
       deadCount++;
       deadValue += level * price;
