@@ -169,12 +169,66 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       </div>
 
       {/* KPI Cards - from real data only */}
-      {(revenueData.length > 0 || productsCount > 0 || rfmSegments.length > 0) && (
+      {(revenueData.length > 0 || productsCount > 0 || rfmSegments.length > 0 || (hasCampaigns && campaigns.length > 0)) && (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 gap-4 sm:gap-6">
-          {revenueData.length > 0 && (() => {
-            const totalRevenue = revenueData.reduce((s, r) => s + r.total, 0);
+          {(revenueData.length > 0 || (hasCampaigns && campaigns.length > 0)) && (() => {
+            // Calculate total revenue from Analytics import
+            const analyticsRevenue = revenueData.reduce((s, r) => s + r.total, 0);
+            
+            // Calculate total conversion value from campaigns (in thousands)
+            const campaignsRevenue = hasCampaigns && campaigns.length > 0
+              ? (campaigns as any[]).reduce((sum, c) => sum + ((c.conversion_value || 0) / 1000), 0)
+              : 0;
+            
+            // Total revenue = Analytics + Campaigns conversion value
+            // If no Analytics but we have campaigns, show campaigns revenue
+            // If we have both, add them together
+            const totalRevenue = analyticsRevenue + campaignsRevenue;
+            
+            // Calculate attributed revenue (from Analytics only, campaigns don't have attribution)
             const totalAttributed = revenueData.reduce((s, r) => s + r.attributed, 0);
-            const attributionRate = totalRevenue > 0 ? Math.round((totalAttributed / totalRevenue) * 1000) / 10 : 0;
+            
+            // Attribution rate based on total revenue (only if we have Analytics data)
+            const attributionRate = totalRevenue > 0 && analyticsRevenue > 0 
+              ? Math.round((totalAttributed / totalRevenue) * 1000) / 10 
+              : 0;
+            
+            // Sparkline data: use Analytics if available, otherwise use campaigns monthly data
+            const sparklineData = useMemo(() => {
+              if (revenueData.length > 0) {
+                return revenueData.map(r => r.total);
+              }
+              if (hasCampaigns && campaigns.length > 0) {
+                // Group campaigns by month and sum conversion_value
+                const monthlyData: Record<string, number> = {};
+                (campaigns as any[]).forEach(c => {
+                  const period = c.period || c.start_date || '';
+                  if (!period) return;
+                  
+                  let monthKey = '';
+                  if (period.match(/^\d{4}-\d{2}-\d{2}/)) {
+                    const date = new Date(period);
+                    monthKey = date.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' });
+                  } else {
+                    // Try to extract month from period like "January 2025"
+                    const monthMatch = period.match(/(\w+)\s+(\d{4})/);
+                    if (monthMatch) {
+                      monthKey = `${monthMatch[1].substring(0, 3)} ${monthMatch[2].substring(2)}`;
+                    } else {
+                      monthKey = period;
+                    }
+                  }
+                  
+                  if (!monthlyData[monthKey]) {
+                    monthlyData[monthKey] = 0;
+                  }
+                  monthlyData[monthKey] += (c.conversion_value || 0) / 1000;
+                });
+                
+                return Object.values(monthlyData).sort((a, b) => a - b);
+              }
+              return [];
+            }, [revenueData, campaigns, hasCampaigns]);
             
             return (
               <KPICard
@@ -182,9 +236,9 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   label: 'Σύνολο Εσόδων',
                   value: `€${totalRevenue.toFixed(0)}K`,
                   change: attributionRate > 0 ? attributionRate : undefined,
-                  changeLabel: attributionRate > 0 ? 'attributed' : undefined,
+                  changeLabel: attributionRate > 0 ? 'attributed' : campaignsRevenue > 0 && analyticsRevenue === 0 ? 'από campaigns' : undefined,
                   trend: 'up' as const,
-                  sparklineData: revenueData.map(r => r.total)
+                  sparklineData: sparklineData
                 }}
                 index={0}
               />
