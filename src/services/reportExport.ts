@@ -59,6 +59,10 @@ export function isPdfSupported(reportId: string): boolean {
   return PDF_SUPPORTED[reportId] ?? false;
 }
 
+export function safeBrandName(name: string | undefined): string {
+  return (name || 'Brand').replace(/[^a-zA-Z0-9Α-Ωα-ωά-ώ_-]/g, '_').replace(/_+/g, '_').slice(0, 40) || 'Brand';
+}
+
 export async function exportReport(
   reportId: string,
   format: ReportFormat,
@@ -67,6 +71,7 @@ export async function exportReport(
     segments?: RFMSegment[];
     campaigns?: Campaign[];
     analyticsRecords?: Array<{ date?: unknown; total_revenue?: number; attributed_revenue?: number }>;
+    brandName?: string;
   }
 ): Promise<void> {
   if (format === 'pdf' && !PDF_SUPPORTED[reportId]) {
@@ -85,17 +90,19 @@ async function exportReportToPdf(
     segments?: RFMSegment[];
     campaigns?: Campaign[];
     analyticsRecords?: Array<{ date?: unknown; total_revenue?: number; attributed_revenue?: number }>;
+    brandName?: string;
   }
 ): Promise<void> {
   const doc = new jsPDF();
   const date = new Date().toISOString().split('T')[0];
+  const brand = safeBrandName(data.brandName);
 
   doc.setFontSize(18);
   doc.text('Performance+ Report', 14, 20);
 
   doc.setFontSize(10);
   doc.setTextColor(100, 100, 100);
-  doc.text(`Generated: ${date}`, 14, 28);
+  doc.text(`${brand} · Generated: ${date}`, 14, 28);
 
   doc.setTextColor(0, 0, 0);
   doc.setFontSize(12);
@@ -158,7 +165,7 @@ async function exportReportToPdf(
       throw new Error(`PDF not supported for ${reportId}`);
   }
 
-  doc.save(`${reportId}_report_${date}.pdf`);
+  doc.save(`${brand}_${reportId}_report_${date}.pdf`);
 }
 
 async function exportReportToExcel(
@@ -168,10 +175,12 @@ async function exportReportToExcel(
     segments?: RFMSegment[];
     campaigns?: Campaign[];
     analyticsRecords?: Array<{ date?: unknown; total_revenue?: number; attributed_revenue?: number }>;
+    brandName?: string;
   }
 ): Promise<void> {
   const XLSX = await import('xlsx');
   const date = new Date().toISOString().split('T')[0];
+  const brand = safeBrandName(data.brandName);
 
   let ws: ReturnType<typeof XLSX.utils.aoa_to_sheet>;
   let sheetName: string;
@@ -186,6 +195,7 @@ async function exportReportToExcel(
       const campaignValue = campaigns.reduce((s, c) => s + (c.conversion_value ?? 0), 0);
       ws = XLSX.utils.aoa_to_sheet([
         ['Executive Summary', ''],
+        ['Brand', data.brandName || '—'],
         ['Generated', date],
         [''],
         ['Metric', 'Value'],
@@ -195,22 +205,28 @@ async function exportReportToExcel(
         ['Records', records.length],
       ]);
       sheetName = 'Executive';
-      filename = `executive_summary_${date}.xlsx`;
+      filename = `${brand}_executive_summary_${date}.xlsx`;
       break;
     }
     case 'segment': {
       const segments = data.segments ?? [];
       ws = XLSX.utils.aoa_to_sheet([
+        ['Brand', data.brandName || '—'],
+        ['Generated', date],
+        [''],
         ['Segment', 'Count', 'Revenue Share %', 'RFM Score', 'Description'],
         ...segments.map((s) => [s.name, s.count, s.revenue_share, s.rfm_score, s.description ?? '']),
       ]);
       sheetName = 'Segments';
-      filename = `segment_performance_${date}.xlsx`;
+      filename = `${brand}_segment_performance_${date}.xlsx`;
       break;
     }
     case 'inventory': {
       const products = data.products ?? [];
       ws = XLSX.utils.aoa_to_sheet([
+        ['Brand', data.brandName || '—'],
+        ['Generated', date],
+        [''],
         ['SKU', 'Name', 'Category', 'Price', 'Margin %', 'Stock Level', 'Stock Capacity', 'Stock Age Days', 'Priority Tag'],
         ...products.map((p) => [
           p.sku || '',
@@ -225,7 +241,7 @@ async function exportReportToExcel(
         ]),
       ]);
       sheetName = 'Inventory';
-      filename = `inventory_health_${date}.xlsx`;
+      filename = `${brand}_inventory_health_${date}.xlsx`;
       break;
     }
     case 'channel': {
@@ -239,6 +255,9 @@ async function exportReportToExcel(
         byChannel[ch].count += 1;
       });
       ws = XLSX.utils.aoa_to_sheet([
+        ['Brand', data.brandName || '—'],
+        ['Generated', date],
+        [''],
         ['Channel', 'Campaigns', 'Amount Spent', 'Conversion Value', 'ROAS'],
         ...Object.entries(byChannel).map(([ch, v]) => [
           ch,
@@ -249,12 +268,15 @@ async function exportReportToExcel(
         ]),
       ]);
       sheetName = 'Channels';
-      filename = `channel_attribution_${date}.xlsx`;
+      filename = `${brand}_channel_attribution_${date}.xlsx`;
       break;
     }
     case 'campaign': {
       const campaigns = data.campaigns ?? [];
       ws = XLSX.utils.aoa_to_sheet([
+        ['Brand', data.brandName || '—'],
+        ['Generated', date],
+        [''],
         ['Name', 'Channel', 'Period', 'Amount Spent', 'Impressions', 'Clicks', 'Conversions', 'Conversion Value', 'ROAS'],
         ...campaigns.map((c) => [
           c.name || '',
@@ -269,12 +291,15 @@ async function exportReportToExcel(
         ]),
       ]);
       sheetName = 'Campaigns';
-      filename = `campaign_performance_${date}.xlsx`;
+      filename = `${brand}_campaign_performance_${date}.xlsx`;
       break;
     }
     case 'product': {
       const products = data.products ?? [];
       ws = XLSX.utils.aoa_to_sheet([
+        ['Brand', data.brandName || '—'],
+        ['Generated', date],
+        [''],
         ['SKU', 'Name', 'Category', 'Price', 'Margin %', 'Stock Level', 'Stock Age Days', 'Priority Tag', 'Margin Tier'],
         ...products.map((p) => [
           p.sku || '',
@@ -289,7 +314,7 @@ async function exportReportToExcel(
         ]),
       ]);
       sheetName = 'Products';
-      filename = `product_prioritization_${date}.xlsx`;
+      filename = `${brand}_product_prioritization_${date}.xlsx`;
       break;
     }
     default:

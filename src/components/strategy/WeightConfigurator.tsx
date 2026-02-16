@@ -27,7 +27,7 @@ import { ApprovalWorkflow } from './ApprovalWorkflow';
 import { StrategyImpactPreview } from './StrategyImpactPreview';
 import { CustomToolsCard } from './CustomToolsCard';
 import { CompareScenariosModal } from './CompareScenariosModal';
-import { useProducts, useSegments } from '../../hooks';
+import { useProducts, useSegments, useBrand } from '../../hooks';
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import { useAuth } from '../../hooks';
 import {
@@ -39,6 +39,7 @@ import { useAIChannelRecommendations } from '../../hooks/useAIChannelRecommendat
 import { getPreviewConfig, type PreviewColumnId } from '../../data/strategyPreviewConfig';
 import { calculateCompositeScore } from '../../utils/compositeScore';
 import { getStockAgeDays } from '../../utils/productUtils';
+import { safeBrandName } from '../../services/reportExport';
 import { useToast } from '../common/Toast';
 import { Tooltip } from '../common';
 import type { Product } from '../../types';
@@ -163,6 +164,7 @@ const PreviewCell = memo(function PreviewCell({
 });
 
 export function WeightConfigurator() {
+  const { currentBrand } = useBrand();
   const { products, hasImported } = useProducts();
   const { segments: rfmSegments } = useSegments();
   const { user } = useAuth();
@@ -407,8 +409,15 @@ export function WeightConfigurator() {
       p.priority_tag || ''
     ]);
 
+    const brand = safeBrandName(currentBrand?.name);
+    const date = new Date().toISOString().split('T')[0];
+
     if (format === 'csv') {
       const csvContent = [
+        ['Brand', currentBrand?.name || '—'].join(','),
+        ['Generated', date].join(','),
+        ['Scenario', selectedScenario || '—'].join(','),
+        '',
         headers.join(','),
         ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
       ].join('\n');
@@ -417,7 +426,7 @@ export function WeightConfigurator() {
       const link = document.createElement('a');
       const url = URL.createObjectURL(blob);
       link.setAttribute('href', url);
-      link.setAttribute('download', `product_feed_${selectedScenario}_${new Date().toISOString().split('T')[0]}.csv`);
+      link.setAttribute('download', `${brand}_product_feed_${selectedScenario}_${date}.csv`);
       link.style.visibility = 'hidden';
       document.body.appendChild(link);
       link.click();
@@ -427,10 +436,11 @@ export function WeightConfigurator() {
     } else if (format === 'xlsx') {
       try {
         const XLSX = await import('xlsx');
-        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+        const metaRows = [['Brand', currentBrand?.name || '—'], ['Generated', date], ['Scenario', selectedScenario || '—'], [''], headers];
+        const ws = XLSX.utils.aoa_to_sheet([...metaRows, ...rows]);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Products');
-        XLSX.writeFile(wb, `product_feed_${selectedScenario}_${new Date().toISOString().split('T')[0]}.xlsx`);
+        XLSX.writeFile(wb, `${brand}_product_feed_${selectedScenario}_${date}.xlsx`);
         toast.success('Product feed downloaded successfully');
       } catch (error) {
         console.error('Excel export error:', error);

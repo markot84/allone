@@ -12,7 +12,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { Card, CardHeader, Badge, Button, Spinner } from '../common';
-import { useProducts, useSegments, useCampaigns, useAnalytics } from '../../hooks';
+import { useProducts, useSegments, useCampaigns, useAnalytics, useBrand } from '../../hooks';
 import { useToast } from '../common/Toast';
 import {
   exportReport,
@@ -92,6 +92,7 @@ const DEFAULT_SCHEDULES: ScheduledReport[] = [
 
 export function Reports() {
   const toast = useToast();
+  const { currentBrand } = useBrand();
   const { products, count: productsCount } = useProducts();
   const { segments } = useSegments();
   const segmentsCount = segments.length;
@@ -121,6 +122,7 @@ export function Reports() {
         segments,
         campaigns: campaignsTyped,
         analyticsRecords,
+        brandName: currentBrand?.name,
       });
       toast.success(`Το report κατέβηκε επιτυχώς (${format.toUpperCase()})`);
     } catch (err) {

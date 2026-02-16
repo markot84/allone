@@ -25,8 +25,9 @@ import {
 } from 'recharts';
 import { Card, CardHeader, Badge, Button, Spinner } from '../common';
 import { useToast } from '../common/Toast';
-import { useProducts, useCampaigns } from '../../hooks';
+import { useProducts, useCampaigns, useBrand } from '../../hooks';
 import { getStockAgeDays } from '../../utils/productUtils';
+import { safeBrandName } from '../../services/reportExport';
 // Removed mock data imports - using only real data
 import type { Campaign } from '../../types';
 
@@ -37,6 +38,7 @@ interface ChannelActivationProps {
 }
 
 export function ChannelActivation({ onSectionChange }: ChannelActivationProps = {}) {
+  const { currentBrand } = useBrand();
   const { products, count: productsCount } = useProducts();
   const { campaigns, isLoading: campaignsLoading, hasImported: hasCampaigns } = useCampaigns();
   const toast = useToast();
@@ -400,8 +402,15 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         break;
     }
 
+    const brand = safeBrandName(currentBrand?.name);
+    const date = new Date().toISOString().split('T')[0];
+
     if (format === 'csv') {
       const csvContent = [
+        ['Brand', currentBrand?.name || '—'].join(','),
+        ['Generated', date].join(','),
+        ['Feed Type', feedType].join(','),
+        '',
         headers.join(','),
         ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
       ].join('\n');
@@ -410,7 +419,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
       const link = document.createElement('a');
       const url = URL.createObjectURL(blob);
       link.setAttribute('href', url);
-      link.setAttribute('download', `${feedType.toLowerCase().replace(/\s+/g, '_')}_export_${new Date().toISOString().split('T')[0]}.csv`);
+      link.setAttribute('download', `${brand}_${feedType.toLowerCase().replace(/\s+/g, '_')}_export_${date}.csv`);
       link.style.visibility = 'hidden';
       document.body.appendChild(link);
       link.click();
@@ -419,10 +428,11 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     } else if (format === 'xlsx') {
       try {
         const XLSX = await import('xlsx');
-        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+        const metaRows = [['Brand', currentBrand?.name || '—'], ['Generated', date], ['Feed Type', feedType], [''], headers];
+        const ws = XLSX.utils.aoa_to_sheet([...metaRows, ...rows]);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Products');
-        XLSX.writeFile(wb, `${feedType.toLowerCase().replace(/\s+/g, '_')}_export_${new Date().toISOString().split('T')[0]}.xlsx`);
+        XLSX.writeFile(wb, `${brand}_${feedType.toLowerCase().replace(/\s+/g, '_')}_export_${date}.xlsx`);
       } catch (error) {
         console.error('Excel export error:', error);
         alert('Σφάλμα κατά την εξαγωγή Excel. Δοκιμάστε CSV.');

@@ -15,7 +15,7 @@ import {
   TrendingDown
 } from 'lucide-react';
 import { Card, Badge, Button, ProgressBar, Spinner, Tooltip } from '../common';
-import { useProducts } from '../../hooks';
+import { useProducts, useBrand } from '../../hooks';
 import { getStockAgeDays } from '../../utils/productUtils';
 import { ExportModal } from './ExportModal';
 import { ProductCharts } from './ProductCharts';
@@ -124,6 +124,7 @@ export function ProductIntelligence() {
   const [currentPage, setCurrentPage] = useState(1);
   const PAGE_SIZE = 150;
 
+  const { currentBrand } = useBrand();
   const { products, isLoading: productsLoading, hasImported } = useProducts();
   const inventorySummary = useMemo(() => computeInventorySummary(products), [products]);
   const inventoryAlerts = useMemo(() => computeInventoryAlerts(products), [products]);
@@ -488,6 +489,7 @@ export function ProductIntelligence() {
         onClose={() => setShowExportModal(false)}
         filteredProducts={filteredProducts}
         onShowCharts={() => setShowCharts(true)}
+        brandName={currentBrand?.name}
       />
 
       {/* Charts Modal */}

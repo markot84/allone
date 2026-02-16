@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, FileSpreadsheet, FileText, FileCode, BarChart3, ExternalLink } from 'lucide-react';
 import { Button } from '../common';
 import { getStockAgeDays } from '../../utils/productUtils';
+import { safeBrandName } from '../../services/reportExport';
 import type { Product } from '../../types';
 
 interface ExportModalProps {
@@ -10,12 +11,16 @@ interface ExportModalProps {
   onClose: () => void;
   filteredProducts: Product[];
   onShowCharts?: () => void;
+  brandName?: string;
 }
 
-export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts }: ExportModalProps) {
+export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts, brandName }: ExportModalProps) {
   const [showGoogleSheetsModal, setShowGoogleSheetsModal] = useState(false);
   
   if (!isOpen) return null;
+
+  const brand = safeBrandName(brandName);
+  const date = new Date().toISOString().split('T')[0];
 
   const exportToCSV = () => {
     const headers = ['SKU', 'Name', 'Category', 'Price', 'Margin %', 'Stock Level', 'Stock Capacity', 'Stock Age Days', 'Priority Tag'];
@@ -32,6 +37,9 @@ export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts }:
     ]);
 
     const csvContent = [
+      ['Brand', brandName || '—'].join(','),
+      ['Generated', date].join(','),
+      '',
       headers.join(','),
       ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
     ].join('\n');
@@ -40,7 +48,7 @@ export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts }:
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
-    link.setAttribute('download', `products_export_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `${brand}_products_export_${date}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
@@ -53,6 +61,7 @@ export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts }:
       const XLSX = await import('xlsx');
       
       const headers = ['SKU', 'Name', 'Category', 'Price', 'Margin %', 'Stock Level', 'Stock Capacity', 'Stock Age Days', 'Priority Tag'];
+      const metaRows = [['Brand', brandName || '—'], ['Generated', date], [''], headers];
       const rows = filteredProducts.map(p => [
         p.sku || '',
         p.name || '',
@@ -65,11 +74,11 @@ export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts }:
         p.priority_tag || ''
       ]);
 
-      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      const ws = XLSX.utils.aoa_to_sheet([...metaRows, ...rows]);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Products');
       
-      XLSX.writeFile(wb, `products_export_${new Date().toISOString().split('T')[0]}.xlsx`);
+      XLSX.writeFile(wb, `${brand}_products_export_${date}.xlsx`);
       onClose();
     } catch (error) {
       console.error('Excel export error:', error);
@@ -122,14 +131,13 @@ export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts }:
     const blob = new Blob([xml], { type: 'application/xml;charset=utf-8' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `google_ads_feed_${new Date().toISOString().split('T')[0]}.xml`;
+    link.download = `${brand}_google_ads_feed_${date}.xml`;
     link.click();
     URL.revokeObjectURL(link.href);
     onClose();
   };
 
   const exportToGoogleSheets = () => {
-    // Create CSV content
     const headers = ['SKU', 'Name', 'Category', 'Price', 'Margin %', 'Stock Level', 'Stock Capacity', 'Stock Age Days', 'Priority Tag'];
     const rows = filteredProducts.map(p => [
       p.sku || '',
@@ -144,16 +152,18 @@ export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts }:
     ]);
 
     const csvContent = [
+      ['Brand', brandName || '—'].join(','),
+      ['Generated', date].join(','),
+      '',
       headers.join(','),
       ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
     ].join('\n');
 
-    // Create CSV blob and download it
     const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
-    link.setAttribute('download', `products_export_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `${brand}_products_export_${date}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
