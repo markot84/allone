@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus,
@@ -13,11 +13,17 @@ import {
   CheckCircle,
   ArrowRight,
   Check,
-  RefreshCw
+  RefreshCw,
+  X
 } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { Timestamp } from 'firebase/firestore';
 import { Card, CardHeader, Badge, Button, Spinner } from '../common';
 import { useSegments, useContent, useAIContentSuggestions } from '../../hooks';
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
+import { useBrand } from '../../hooks/useBrand';
+import { ContentService } from '../../services/firestore';
+import { strategyContentMap } from '../../data/mockContent';
 import type { ContentItem } from '../../hooks/useContent';
 // Removed mock content imports - using only real data from useContent hook
 const statusConfig = {
@@ -29,13 +35,20 @@ const statusConfig = {
   on_hold: { label: 'On Hold', color: '#F59E0B', bgColor: '#FEF3C7', icon: <Pause size={12} /> }
 };
 
+const CONTENT_TYPES = ['Email Campaign', 'SMS Campaign', 'Blog Post', 'Landing Page', 'Social Post', 'Newsletter', 'Multi-channel Campaign'];
+
 export function ContentStrategy() {
+  const { currentBrand } = useBrand();
   const { segments: rfmSegments } = useSegments();
   const { contentItems } = useContent();
   const { activeStrategy, getStrategyName, isLoading: strategyLoading } = useActiveStrategy();
+  const queryClient = useQueryClient();
   const [showStrategyMap, setShowStrategyMap] = useState(false);
   const [filterAligned, setFilterAligned] = useState<'all' | 'aligned' | 'misaligned'>('all');
   const [aiEnabled, setAiEnabled] = useState(true);
+  const [showNewContentModal, setShowNewContentModal] = useState(false);
+  const [preselectedWeek, setPreselectedWeek] = useState<number | null>(null);
+  const [quickFillSuggestion, setQuickFillSuggestion] = useState<{ title: string; type: string; channel: string } | null>(null);
   const { suggestions, isLoading: suggestionsLoading, refetch, hasStrategy } = useAIContentSuggestions(aiEnabled);
 
   // Removed mock data - using only real contentItems from useContent hook
@@ -75,7 +88,11 @@ export function ContentStrategy() {
           >
             Strategy Map
           </Button>
-          <Button variant="primary" icon={<Plus size={16} />}>
+          <Button
+            variant="primary"
+            icon={<Plus size={16} />}
+            onClick={() => { setPreselectedWeek(null); setQuickFillSuggestion(null); setShowNewContentModal(true); }}
+          >
             New Content
           </Button>
         </div>
@@ -259,7 +276,20 @@ export function ContentStrategy() {
                           "{action.headline_suggestion}"
                         </div>
                       )}
-                      <Button variant="ghost" size="sm" className="mt-2 w-full text-xs">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="mt-2 w-full text-xs"
+                        onClick={() => {
+                          setQuickFillSuggestion({
+                            title: action.title,
+                            type: action.type,
+                            channel: action.channel,
+                          });
+                          setPreselectedWeek(null);
+                          setShowNewContentModal(true);
+                        }}
+                      >
                         Χρήση πρότασης
                       </Button>
                     </motion.div>
@@ -319,7 +349,7 @@ export function ContentStrategy() {
             <Card padding="lg">
               <CardHeader
                 title="Strategy-to-Content Mapping"
-                subtitle="How each strategy influences content"
+                subtitle="Πώς κάθε στρατηγική επηρεάζει το περιεχόμενο"
                 icon={<Link2 size={20} className="text-[#FF6B35]" />}
                 action={
                   <Button variant="ghost" size="sm" onClick={() => setShowStrategyMap(false)}>
@@ -327,13 +357,45 @@ export function ContentStrategy() {
                   </Button>
                 }
               />
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <p className="text-sm text-[#4A4A4A]">
-                  Strategy mapping will be available when content items are imported.
-                </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
+                {Object.entries(strategyContentMap).map(([id, s]) => (
+                  <div key={id} className="p-4 border border-[#E5E5E5] rounded-xl">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-2xl">{s.icon}</span>
+                      <h4 className="font-semibold text-[#1A1A1A]">{s.name}</h4>
+                    </div>
+                    <p className="text-xs text-[#4A4A4A] mb-2">Tone: {s.content_tone}</p>
+                    <p className="text-xs text-[#9CA3AF] mb-1">Τύποι: {s.content_types?.join(', ')}</p>
+                    <p className="text-xs text-[#9CA3AF] mb-1">Κανάλια: {s.channels?.join(', ')}</p>
+                    <p className="text-xs text-[#9CA3AF]">CTA: {s.cta_style}</p>
+                    {s.avoid?.length ? (
+                      <p className="text-xs text-[#F59E0B] mt-2">Αποφυγή: {s.avoid.join(', ')}</p>
+                    ) : null}
+                  </div>
+                ))}
               </div>
             </Card>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* New Content Modal */}
+      <AnimatePresence>
+        {showNewContentModal && (
+          <NewContentModal
+            onClose={() => { setShowNewContentModal(false); setPreselectedWeek(null); setQuickFillSuggestion(null); }}
+            onSaved={() => {
+              queryClient.invalidateQueries({ queryKey: ['content', currentBrand?.id] });
+              setShowNewContentModal(false);
+              setPreselectedWeek(null);
+              setQuickFillSuggestion(null);
+            }}
+            preselectedWeek={preselectedWeek}
+            segments={rfmSegments}
+            brandId={currentBrand?.id ?? null}
+            strategyMatch={activeStrategy?.scenarioId}
+            quickFill={quickFillSuggestion}
+          />
         )}
       </AnimatePresence>
 
@@ -383,7 +445,13 @@ export function ContentStrategy() {
                 {weekContent.length === 0 ? (
                   <div className="p-4 border-2 border-dashed border-[#E5E5E5] rounded-xl text-center">
                     <p className="text-sm text-[#9CA3AF]">Δεν υπάρχει προγραμματισμένο περιεχόμενο</p>
-                    <Button variant="ghost" size="sm" icon={<Plus size={14} />} className="mt-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon={<Plus size={14} />}
+                      className="mt-2"
+                      onClick={() => { setPreselectedWeek(week); setShowNewContentModal(true); }}
+                    >
                       Προσθήκη Περιεχομένου
                     </Button>
                   </div>
@@ -415,7 +483,155 @@ export function ContentStrategy() {
   );
 }
 
-// Removed DirectionItem helper - not used anymore
+// New Content Modal - creates content and saves to Firestore
+interface NewContentModalProps {
+  onClose: () => void;
+  onSaved: () => void;
+  preselectedWeek: number | null;
+  segments: Array<{ id: string; name?: string }>;
+  brandId: string | null;
+  strategyMatch?: string;
+  quickFill?: { title: string; type: string; channel: string } | null;
+}
+
+function NewContentModal({ onClose, onSaved, preselectedWeek, segments, brandId, strategyMatch, quickFill }: NewContentModalProps) {
+  const [title, setTitle] = useState(quickFill?.title ?? '');
+  const [type, setType] = useState(quickFill?.type && CONTENT_TYPES.includes(quickFill.type) ? quickFill.type : CONTENT_TYPES[0]);
+  const [week, setWeek] = useState(preselectedWeek ?? 1);
+
+  useEffect(() => {
+    if (preselectedWeek !== null) setWeek(preselectedWeek);
+  }, [preselectedWeek]);
+
+  useEffect(() => {
+    if (quickFill) {
+      setTitle(quickFill.title);
+      if (CONTENT_TYPES.includes(quickFill.type)) setType(quickFill.type);
+    }
+  }, [quickFill]);
+  const [segment, setSegment] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    if (!title.trim()) {
+      setError('Συμπληρώστε τίτλο');
+      return;
+    }
+    if (!brandId) {
+      setError('Επιλέξτε brand');
+      return;
+    }
+    setSaving(true);
+    try {
+      const id = `content_${brandId}_${Date.now()}`;
+      const item: Record<string, unknown> = {
+        title: title.trim(),
+        type,
+        week,
+        status: 'draft',
+        strategy_match: strategyMatch ?? undefined,
+        is_aligned: !!strategyMatch,
+        segment: segment || undefined,
+        scheduled: new Date().toISOString().slice(0, 10),
+        createdAt: Timestamp.now(),
+      };
+      await ContentService.create(id, item, brandId);
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Σφάλμα αποθήκευσης');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        className="bg-white rounded-2xl shadow-2xl max-w-md w-full"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="p-6 border-b border-[#E5E5E5] flex items-center justify-between">
+          <h3 className="text-lg font-bold text-[#1A1A1A]">Νέο Περιεχόμενο</h3>
+          <button onClick={onClose} className="p-2 hover:bg-[#F5F5F5] rounded-lg">
+            <X size={20} className="text-[#4A4A4A]" />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {error && (
+            <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm">{error}</div>
+          )}
+          <div>
+            <label className="block text-sm font-medium text-[#4A4A4A] mb-1">Τίτλος *</label>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="π.χ. Flash Sale Email - Εβδομάδα 1"
+              className="w-full px-3 py-2 border border-[#E5E5E5] rounded-lg text-sm focus:outline-none focus:border-[#FF6B35]"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-[#4A4A4A] mb-1">Τύπος</label>
+            <select
+              value={type}
+              onChange={(e) => setType(e.target.value)}
+              className="w-full px-3 py-2 border border-[#E5E5E5] rounded-lg text-sm focus:outline-none focus:border-[#FF6B35]"
+            >
+              {CONTENT_TYPES.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-[#4A4A4A] mb-1">Εβδομάδα</label>
+            <select
+              value={week}
+              onChange={(e) => setWeek(parseInt(e.target.value, 10))}
+              className="w-full px-3 py-2 border border-[#E5E5E5] rounded-lg text-sm focus:outline-none focus:border-[#FF6B35]"
+            >
+              {[1, 2, 3, 4].map((w) => (
+                <option key={w} value={w}>Εβδομάδα {w}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-[#4A4A4A] mb-1">Segment</label>
+            <select
+              value={segment}
+              onChange={(e) => setSegment(e.target.value)}
+              className="w-full px-3 py-2 border border-[#E5E5E5] rounded-lg text-sm focus:outline-none focus:border-[#FF6B35]"
+            >
+              <option value="">— Όλα —</option>
+              {segments.map((s) => (
+                <option key={s.id} value={s.name ?? s.id}>{s.name ?? s.id}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex gap-3 pt-4">
+            <Button type="button" variant="ghost" onClick={onClose} className="flex-1">
+              Ακύρωση
+            </Button>
+            <Button type="submit" variant="primary" disabled={saving} className="flex-1">
+              {saving ? <Spinner size="sm" /> : 'Αποθήκευση'}
+            </Button>
+          </div>
+        </form>
+      </motion.div>
+    </motion.div>
+  );
+}
 
 interface ContentCardProps {
   item: ContentItem;
