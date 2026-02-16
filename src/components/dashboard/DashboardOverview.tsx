@@ -244,37 +244,9 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             );
           })()}
           {campaignsCount > 0 && (() => {
-            // Calculate active campaigns
             const activeCampaigns = (campaigns as any[]).filter((c) => 
               c.status === 'active' || c.status === 'enabled' || c.status === 'eligible' || !c.status
             ).length;
-            
-            // Debug: Group by source file to help user understand where campaigns come from
-            const campaignsBySource = useMemo(() => {
-              const sourceMap: Record<string, number> = {};
-              (campaigns as any[]).forEach(c => {
-                const source = c.source || 'Unknown';
-                sourceMap[source] = (sourceMap[source] || 0) + 1;
-              });
-              return sourceMap;
-            }, [campaigns]);
-            
-            // Debug logging in development
-            if (import.meta.env.MODE === 'development') {
-              console.debug('[Dashboard] Campaigns breakdown:', {
-                total: campaignsCount,
-                active: activeCampaigns,
-                bySource: campaignsBySource,
-                sampleCampaigns: (campaigns as any[]).slice(0, 3).map(c => ({
-                  id: c.id,
-                  name: c.name,
-                  channel: c.channel,
-                  source: c.source,
-                  importedAt: c.importedAt
-                }))
-              });
-            }
-            
             return (
               <KPICard
                 kpi={{
@@ -302,26 +274,25 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             const attributionRate = hasValidAnalytics && totalRevenue > 0
               ? Math.round((totalAttributed / totalRevenue) * 1000) / 10
               : undefined;
-            const sparklineData = useMemo(() => {
-              if (revenueData.length > 0) return revenueData.map(r => r.total);
-              if (hasCampaigns && campaigns.length > 0) {
-                const monthlyData: Record<string, number> = {};
-                (campaigns as any[]).forEach(c => {
-                  const period = c.period || c.start_date || '';
-                  if (!period) return;
-                  let monthKey = '';
-                  if (period.match(/^\d{4}-\d{2}-\d{2}/)) {
-                    monthKey = new Date(period).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' });
-                  } else {
-                    const monthMatch = period.match(/(\w+)\s+(\d{4})/);
-                    monthKey = monthMatch ? `${monthMatch[1].substring(0, 3)} ${monthMatch[2].substring(2)}` : period;
-                  }
-                  monthlyData[monthKey] = (monthlyData[monthKey] || 0) + (c.conversion_value || 0) / 1000;
-                });
-                return Object.values(monthlyData).sort((a, b) => a - b);
-              }
-              return [];
-            }, [revenueData, campaigns, hasCampaigns]);
+            let sparklineData: number[] = [];
+            if (revenueData.length > 0) {
+              sparklineData = revenueData.map(r => r.total);
+            } else if (hasCampaigns && campaigns.length > 0) {
+              const monthlyData: Record<string, number> = {};
+              (campaigns as any[]).forEach(c => {
+                const period = c.period || c.start_date || '';
+                if (!period) return;
+                let monthKey = '';
+                if (period.match(/^\d{4}-\d{2}-\d{2}/)) {
+                  monthKey = new Date(period).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' });
+                } else {
+                  const monthMatch = period.match(/(\w+)\s+(\d{4})/);
+                  monthKey = monthMatch ? `${monthMatch[1].substring(0, 3)} ${monthMatch[2].substring(2)}` : period;
+                }
+                monthlyData[monthKey] = (monthlyData[monthKey] || 0) + (c.conversion_value || 0) / 1000;
+              });
+              sparklineData = Object.values(monthlyData).sort((a, b) => a - b);
+            }
             return (
               <KPICard
                 kpi={{

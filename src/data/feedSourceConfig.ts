@@ -43,15 +43,28 @@ export const FEED_SOURCE_CONFIG: Record<FeedSourceType, FeedSourceInfo> = {
   google_ads: {
     id: 'google_ads',
     name: 'Google Ads / Merchant Center',
-    description: 'Product feed από Google Merchant Center ή Google Ads. id, title, price, link, image_link.',
+    description: 'Product feed από Google Merchant Center (XML) ή CSV. id, title, price, product_type, availability, link, image_link.',
     icon: '🛒',
     columnAliases: [
       { feedColumn: 'id', appField: 'sku', required: true },
+      { feedColumn: 'item_group_id', appField: 'item_group_id' },
       { feedColumn: 'title', appField: 'name', required: true },
-      { feedColumn: 'description', appField: 'category' },
       { feedColumn: 'price', appField: 'price', required: true },
-      { feedColumn: 'availability', appField: 'stock_level' },
+      { feedColumn: 'sale_price', appField: 'sale_price' },
+      { feedColumn: 'description', appField: 'description' },
+      { feedColumn: 'product_type', appField: 'category' },
       { feedColumn: 'google_product_category', appField: 'category' },
+      { feedColumn: 'availability', appField: 'stock_level' },
+      { feedColumn: 'brand', appField: 'brand' },
+      { feedColumn: 'image_link', appField: 'image_url' },
+      { feedColumn: 'link', appField: 'product_url' },
+      { feedColumn: 'size', appField: 'size' },
+      { feedColumn: 'size_type', appField: 'size_type' },
+      { feedColumn: 'size_system', appField: 'size_system' },
+      { feedColumn: 'material', appField: 'material' },
+      { feedColumn: 'custom_label_0', appField: 'priority_tag' },
+      { feedColumn: 'condition', appField: 'condition' },
+      { feedColumn: 'gender', appField: 'gender' },
     ],
   },
   meta_catalog: {
@@ -72,3 +85,29 @@ export const FEED_SOURCE_CONFIG: Record<FeedSourceType, FeedSourceInfo> = {
 
 /** All feed source types for UI */
 export const FEED_SOURCE_OPTIONS: FeedSourceInfo[] = Object.values(FEED_SOURCE_CONFIG);
+
+/** CSV template headers for Google Ads manual import (matches XML feed columns) */
+export const GOOGLE_ADS_CSV_HEADERS = [
+  'id', 'item_group_id', 'title', 'price', 'sale_price', 'description',
+  'product_type', 'google_product_category', 'availability', 'brand',
+  'image_link', 'link', 'size', 'size_type', 'size_system', 'material',
+  'custom_label_0', 'condition', 'gender',
+] as const;
+
+/** Download Google Ads CSV template */
+export function downloadGoogleAdsCsvTemplate(): void {
+  const headers = [...GOOGLE_ADS_CSV_HEADERS];
+  const exampleRow = [
+    'SKU-001', 'SKU-001', 'Product Name', '24 EUR', '24 EUR', 'Description',
+    'Category > Subcategory', '', 'in stock', 'Brand',
+    'https://example.com/image.jpg', 'https://example.com/product', 'M', 'regular', 'EU',
+    '', '', 'new', '',
+  ];
+  const csv = [headers.join(','), exampleRow.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')].join('\n');
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'google_ads_feed_template.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}

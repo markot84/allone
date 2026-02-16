@@ -69,8 +69,13 @@ export function FeedSourcesSection() {
         if (m?.[1]) fileName = decodeURIComponent(m[1].trim());
       }
       const isExcel = contentType.includes('spreadsheet') || fileName.toLowerCase().endsWith('.xlsx');
-      const file = new File([blob], fileName, {
-        type: isExcel ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'text/csv',
+      const isXml = contentType.includes('xml') || fileName.toLowerCase().endsWith('.xml');
+      let finalName = fileName;
+      if (source.type === 'google_ads' && isXml && !fileName.toLowerCase().endsWith('.xml')) {
+        finalName = fileName.replace(/\.[^.]+$/, '') + '.xml';
+      }
+      const file = new File([blob], finalName, {
+        type: isExcel ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : isXml ? 'application/xml' : 'text/csv',
       });
       const result = await importFile(file, 'products', undefined, currentBrand.id, source.type);
       await FeedSourcesService.updateLastRun(

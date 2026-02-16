@@ -5,7 +5,7 @@ import { useBrand } from '../../hooks';
 import { FileText, CheckCircle2, XCircle, AlertCircle, Clock, Trash2, FileUp, Link as LinkIcon, HelpCircle, ExternalLink } from 'lucide-react';
 import { Card, Button, Spinner, ProgressBar, useToast, Badge } from '../common';
 import { importFile, saveImportJob, getImportJobs, isSupportedFile, PRODUCT_COLUMN_MAPPING, type ImportType, type ImportResult, type ImportJob, type ImportProgress } from '../../services/import';
-import { FEED_SOURCE_OPTIONS, type FeedSourceType } from '../../data/feedSourceConfig';
+import { FEED_SOURCE_OPTIONS, downloadGoogleAdsCsvTemplate, type FeedSourceType } from '../../data/feedSourceConfig';
 import { FeedPreviewModal } from './FeedPreviewModal';
 import { FeedSourcesSection } from './FeedSourcesSection';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -48,7 +48,7 @@ export function DataImport() {
     const fileArray = Array.from(files);
     const valid = fileArray.filter(f => isSupportedFile(f.name));
     if (valid.length < fileArray.length) {
-      toast.error(`${fileArray.length - valid.length} αρχείο(α) παραλείφθηκαν (χρησιμοποιήστε .csv ή .xlsx)`);
+      toast.error(`${fileArray.length - valid.length} αρχείο(α) παραλείφθηκαν (χρησιμοποιήστε .csv, .xlsx ή .xml)`);
     }
     if (valid.length) {
       setSelectedFiles(prev => [...prev, ...valid.map(f => ({ file: f, type: selectedType }))]);
@@ -462,9 +462,20 @@ export function DataImport() {
             </div>
           )}
           {importMode === 'feed' && (
-            <p className="text-sm text-[#4A4A4A]">
-              Εισαγωγή προϊόντων από <strong>{FEED_SOURCE_OPTIONS.find(f => f.id === selectedFeedSource)?.name}</strong>
-            </p>
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <p className="text-sm text-[#4A4A4A]">
+                Εισαγωγή προϊόντων από <strong>{FEED_SOURCE_OPTIONS.find(f => f.id === selectedFeedSource)?.name}</strong>
+              </p>
+              {selectedFeedSource === 'google_ads' && (
+                <button
+                  type="button"
+                  onClick={downloadGoogleAdsCsvTemplate}
+                  className="text-sm text-[#FF6B35] hover:underline"
+                >
+                  Λήψη CSV template
+                </button>
+              )}
+            </div>
           )}
 
           {/* Drag & Drop Zone */}
@@ -481,7 +492,7 @@ export function DataImport() {
             <input
               ref={fileInputRef}
               type="file"
-              accept=".csv,.xlsx"
+              accept=".csv,.xlsx,.xml"
               multiple
               onChange={(e) => {
                 if (e.target.files) {
@@ -505,7 +516,7 @@ export function DataImport() {
                   {isDragging ? 'Αφήστε τα αρχεία εδώ' : 'Σύρετε αρχεία εδώ ή κάντε κλικ για επιλογή'}
                 </p>
                 <p className="text-sm text-[#9CA3AF] mt-1">
-                  CSV ή Excel (.xlsx) · Πολλαπλά αρχεία υποστηρίζονται
+                  CSV, Excel (.xlsx) ή XML (Google Ads) · Πολλαπλά αρχεία υποστηρίζονται
                 </p>
               </div>
             </label>

@@ -33,7 +33,7 @@ async function runWithConcurrency<T, R>(
   return results;
 }
 
-const SUPPORTED_EXTENSIONS = ['.csv', '.xlsx'];
+const SUPPORTED_EXTENSIONS = ['.csv', '.xlsx', '.xml'];
 
 /** Column mapping: Excel/CSV column → App field (where it appears in UI) */
 export const PRODUCT_COLUMN_MAPPING = [
@@ -270,6 +270,49 @@ function parseXLSXToRows(buffer: ArrayBuffer, type?: ImportType): string[][] {
   return cleanedRows;
 }
 
+const GOOGLE_NS = 'http://base.google.com/ns/1.0';
+
+/** Parse Google Merchant/Ads XML feed to Record<string, string>[] */
+function parseGoogleFeedXml(xmlText: string): Record<string, string>[] {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xmlText, 'text/xml');
+  const parseErr = doc.querySelector('parsererror');
+  if (parseErr) throw new Error(`XML parse error: ${parseErr.textContent}`);
+
+  const entries = doc.getElementsByTagName('entry');
+  const rows: Record<string, string>[] = [];
+  const text = (el: Element | null) => (el?.textContent ?? '').trim();
+
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    const byLocal = (local: string, ns = GOOGLE_NS) =>
+      entry.getElementsByTagNameNS(ns, local)[0];
+    const row: Record<string, string> = {
+      id: text(byLocal('id')),
+      item_group_id: text(byLocal('item_group_id')),
+      title: text(entry.getElementsByTagName('title')[0]),
+      price: text(byLocal('price')),
+      sale_price: text(byLocal('sale_price')),
+      description: text(entry.getElementsByTagName('description')[0]),
+      product_type: text(byLocal('product_type')),
+      google_product_category: text(byLocal('google_product_category')),
+      availability: text(byLocal('availability')),
+      brand: text(byLocal('brand')),
+      image_link: text(byLocal('image_link')),
+      link: text(entry.getElementsByTagName('link')[0]),
+      size: text(byLocal('size')),
+      size_type: text(byLocal('size_type')),
+      size_system: text(byLocal('size_system')),
+      material: text(byLocal('material')),
+      custom_label_0: text(byLocal('custom_label_0')),
+      condition: text(byLocal('condition')),
+      gender: text(byLocal('gender')),
+    };
+    rows.push(row);
+  }
+  return rows;
+}
+
 // Get rows (header + data) from file - CSV or XLSX
 async function getRowsFromFile(file: File, type?: ImportType): Promise<string[][]> {
   const name = file.name.toLowerCase();
@@ -279,6 +322,13 @@ async function getRowsFromFile(file: File, type?: ImportType): Promise<string[][
   }
   const text = await file.text();
   return parseCSV(text);
+}
+
+/** Get objects from XML (Google Ads feed). Returns null for non-XML. */
+async function getObjectsFromXmlFile(file: File): Promise<Record<string, string>[] | null> {
+  if (!file.name.toLowerCase().endsWith('.xml')) return null;
+  const text = await file.text();
+  return parseGoogleFeedXml(text);
 }
 
 // Convert CSV rows to objects (supports finding header row for campaigns and products)
@@ -508,12 +558,12 @@ function validateProduct(row: Record<string, string>, index: number): { valid: b
   // Greek headers FIRST for priority (normalized: "Κωδικός" -> "κωδικός", "Περιγραφή" -> "περιγραφή")
   const name = pick(row, 'περιγραφή', 'title', 'name', 'product_name', 'product', 'Title', 'item', 'item_name', 'description', 'product_title', 'όνομα', 'προϊόν');
   const sku = pick(row, 'κωδικός', 'item_id', 'sku', 'sku_id', 'id', 'product_id', 'Item ID', 'item id', 'Item_ID', 'code', 'barcode', 'ean');
-  const category = pick(row, 'ομάδα', 'category', 'product_category', 'group', 'κατηγορία', 'type', 'department', 'προμηθευτής');
+  const category = pick(row, 'ομάδα', 'category', 'product_category', 'product_type', 'group', 'κατηγορία', 'type', 'department', 'προμηθευτής');
   const marginTier = pick(row, 'margin_tier', 'margin_category', 'tier');
   // Try to calculate margin from conv._value_/_cost (ROAS-like metric) if available
   const marginPct = pick(row, 'margin_percentage', 'margin_pct', 'margin', 'margin_%', 'gross_margin_%', 'gross_margin', 'gross_margin_pct', 'profit_margin', 'conv._rate', 'conv_rate');
   // Stock level - Greek: "Διαθεσιμότητα" = Availability/Stock Level (normalized: "διαθεσιμότητα")
-  const stockLevel = pick(row, 'διαθεσιμότητα', 'stock_on_hand', 'Stock_On_Hand', 'stock_level', 'Stock_Level', 'stock', 'Stock', 'quantity', 'Quantity', 'qty', 'Qty', 'inventory', 'Inventory', 'on_hand', 'On_Hand', 'units', 'Units', 'απόθεμα', 'ποσότητα', 'available_stock', 'Available_Stock', 'δυναμικό_υπόλοιπο', 'κίνηση');
+  const stockLevel = pick(row, 'διαθεσιμότητα', 'stock_on_hand', 'Stock_On_Hand', 'stock_level', 'Stock_Level', 'stock', 'Stock', 'quantity', 'Quantity', 'qty', 'Qty', 'inventory', 'Inventory', 'on_hand', 'On_Hand', 'units', 'Units', 'απόθεμα', 'ποσότητα', 'available_stock', 'Available_Stock', 'δυναμικό_υπόλοιπο', 'κίνηση', 'availability');
   const stockCapacity = pick(row, 'stock_capacity', 'capacity', 'max_stock', 'max_quantity', 'χωρητικότητα', 'επιθυμητό_απόθεμα', 'αναμενόμενα', 'Αναμενόμενα');
   const stockAge = pick(row, 'stock_age_days', 'Stock_Age_Days', 'age_days', 'Age_Days', 'days_in_stock', 'Days_In_Stock', 'stock_age', 'Stock_Age', 'age', 'Age', 'mst_(ημέρες)', 'MST_(ημέρες)');
   // Greek: "Ημ.πρώτης παραλ." = First Available Date (normalized: "ημ.πρώτης_παραλ.")
@@ -561,7 +611,11 @@ function validateProduct(row: Record<string, string>, index: number): { valid: b
   }
 
   const rawId = sku || name.slice(0, 60) || `product-${Date.now()}-${index}`;
-  const stockLevelNum = parseInt(stockLevel || '0', 10) || 0;
+  const sl = (stockLevel || '').toLowerCase();
+  const stockLevelNum =
+    sl.includes('in stock') || sl === 'in_stock' ? 1
+    : sl.includes('out of stock') || sl === 'out_of_stock' ? 0
+    : parseInt(stockLevel || '0', 10) || 0;
   const stockCapacityNum = parseInt(stockCapacity || '0', 10) || 0;
   const sellPriceNum = parseFloat(price || '0') || 0;
   const costPriceNum = parseFloat(costPrice || '0') || 0;
@@ -1060,23 +1114,30 @@ export async function previewFileForProducts(
   errors: string[];
   warnings: string[];
 }> {
-  const rows = await getRowsFromFile(file, 'products');
-  if (rows.length < 2) {
-    return {
-      headers: [],
-      sampleRows: [],
-      mappedSample: [],
-      validCount: 0,
-      errorCount: 0,
-      totalRows: 0,
-      errors: ['File must contain header + at least one data row'],
-      warnings: [],
-    };
+  let objects: Record<string, string>[];
+  const xmlObjects = await getObjectsFromXmlFile(file);
+  if (xmlObjects !== null) {
+    objects = xmlObjects;
+    if (!feedSourceType) feedSourceType = 'google_ads';
+  } else {
+    const rows = await getRowsFromFile(file, 'products');
+    if (rows.length < 2) {
+      return {
+        headers: [],
+        sampleRows: [],
+        mappedSample: [],
+        validCount: 0,
+        errorCount: 0,
+        totalRows: 0,
+        errors: ['File must contain header + at least one data row'],
+        warnings: [],
+      };
+    }
+    objects = csvToObjects(rows, 'products');
   }
-  const objects = csvToObjects(rows, 'products');
   if (objects.length === 0) {
     return {
-      headers: Object.keys(rows[0] || {}),
+      headers: Object.keys(objects[0] || {}),
       sampleRows: [],
       mappedSample: [],
       validCount: 0,
@@ -1139,18 +1200,24 @@ export async function importFile(
   try {
     if (!isSupportedFile(file.name)) {
       result.success = false;
-      result.errors.push(`Unsupported file type. Use .csv or .xlsx`);
+      result.errors.push(`Unsupported file type. Use .csv, .xlsx or .xml (Google Ads feed)`);
       return result;
     }
 
-    const rows = await getRowsFromFile(file, type);
-    if (rows.length < 2) {
-      result.success = false;
-      result.errors.push('File must contain at least a header row and one data row');
-      return result;
+    let objects: Record<string, string>[];
+    const xmlObjects = await getObjectsFromXmlFile(file);
+    if (xmlObjects !== null) {
+      objects = xmlObjects;
+      if (type === 'products' && !feedSourceType) feedSourceType = 'google_ads';
+    } else {
+      const rows = await getRowsFromFile(file, type);
+      if (rows.length < 2) {
+        result.success = false;
+        result.errors.push('File must contain at least a header row and one data row');
+        return result;
+      }
+      objects = csvToObjects(rows, type);
     }
-
-    const objects = csvToObjects(rows, type);
     
     if (objects.length === 0) {
       result.success = false;

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, FileSpreadsheet, FileText, BarChart3, ExternalLink } from 'lucide-react';
+import { X, FileSpreadsheet, FileText, FileCode, BarChart3, ExternalLink } from 'lucide-react';
 import { Button } from '../common';
 import { getStockAgeDays } from '../../utils/productUtils';
 import type { Product } from '../../types';
@@ -75,6 +75,57 @@ export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts }:
       console.error('Excel export error:', error);
       alert('Σφάλμα κατά την εξαγωγή Excel. Δοκιμάστε CSV.');
     }
+  };
+
+  const exportToGoogleAdsXml = () => {
+    const cdata = (s: string) => String(s).replace(/]]>/g, ']]]]><![CDATA[>');
+    const escape = (s: string) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const entries = filteredProducts.map((p) => {
+      const id = p.sku || p.id;
+      const title = p.name || id;
+      const price = `${(p.price ?? 0).toFixed(2)} EUR`;
+      const availability = (p.stock_level ?? 0) > 0 ? 'in stock' : 'out of stock';
+      const productType = p.category || '';
+      const link = ((p as unknown) as Record<string, unknown>).product_url as string | undefined || '';
+      const imageLink = ((p as unknown) as Record<string, unknown>).image_url as string | undefined || '';
+      return [
+        `  <entry>`,
+        `    <g:item_group_id><![CDATA[${id}]]></g:item_group_id>`,
+        `    <title><![CDATA[${cdata(title)}]]></title>`,
+        `    <g:price>${price}</g:price>`,
+        `    <g:sale_price>${price}</g:sale_price>`,
+        `    <description><![CDATA[${cdata(title)}]]></description>`,
+        `    <g:google_product_category/>`,
+        `    <g:product_type><![CDATA[${cdata(productType)}]]></g:product_type>`,
+        `    <g:availability>${availability}</g:availability>`,
+        `    <g:brand/>`,
+        imageLink ? `    <g:image_link><![CDATA[${imageLink}]]></g:image_link>` : `    <g:image_link/>`,
+        link ? `    <link><![CDATA[${link}]]></link>` : `    <link/>`,
+        `    <g:size/>`,
+        `    <g:size_type/>`,
+        `    <g:size_system>EU</g:size_system>`,
+        `    <g:material/>`,
+        `    <g:custom_label_0/>`,
+        `    <g:identifier_exists>no</g:identifier_exists>`,
+        `    <g:condition>new</g:condition>`,
+        `    <g:gender/>`,
+        `    <g:id>${escape(id)}</g:id>`,
+        `  </entry>`,
+      ].join('\n');
+    });
+    const xml = [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<feed xmlns:g="http://base.google.com/ns/1.0">',
+      entries.join('\n'),
+      '</feed>',
+    ].join('\n');
+    const blob = new Blob([xml], { type: 'application/xml;charset=utf-8' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `google_ads_feed_${new Date().toISOString().split('T')[0]}.xml`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+    onClose();
   };
 
   const exportToGoogleSheets = () => {
@@ -180,6 +231,19 @@ export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts }:
                 <div className="flex-1">
                   <h3 className="font-semibold text-[#1A1A1A]">Export to CSV</h3>
                   <p className="text-xs text-[#4A4A4A]">Download as .csv file</p>
+                </div>
+              </button>
+
+              <button
+                onClick={exportToGoogleAdsXml}
+                className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[#FF6B35] hover:bg-[#FFF0EB] transition-all text-left flex items-center gap-4 group"
+              >
+                <div className="p-3 bg-[#EA4335]/10 rounded-lg group-hover:bg-[#EA4335]/20 transition-colors">
+                  <FileCode size={24} className="text-[#EA4335]" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-[#1A1A1A]">Export to Google Ads XML</h3>
+                  <p className="text-xs text-[#4A4A4A]">Product feed για Merchant Center</p>
                 </div>
               </button>
 
