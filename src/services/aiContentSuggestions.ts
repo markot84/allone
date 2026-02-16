@@ -15,6 +15,28 @@ export interface OrganicAction {
   headline_suggestion?: string;
 }
 
+/** Fallback: static suggestions from strategyContentMap when AI fails */
+function getFallbackSuggestions(scenarioId: string, scenarioName: string): OrganicAction[] {
+  const mapEntry = scenarioId && scenarioId !== 'custom'
+    ? strategyContentMap[scenarioId as keyof typeof strategyContentMap]
+    : undefined;
+  if (!mapEntry) return [];
+
+  const types = mapEntry.content_types ?? [];
+  const channels = mapEntry.channels ?? [];
+  const headlines = mapEntry.sample_headlines ?? [];
+  const tone = mapEntry.content_tone ?? '';
+
+  return types.slice(0, 6).map((type, i) => ({
+    type,
+    title: `${type} – ${scenarioName}`,
+    description: `Δημιουργήστε ${type.toLowerCase()} με ${tone.toLowerCase()} τόνο. ${mapEntry.avoid?.length ? `Αποφύγετε: ${mapEntry.avoid.slice(0, 2).join(', ')}.` : ''}`,
+    channel: channels[i % channels.length] ?? 'Email',
+    priority: (i < 2 ? 'high' : i < 4 ? 'medium' : 'low') as OrganicAction['priority'],
+    headline_suggestion: headlines[i % headlines.length],
+  }));
+}
+
 export interface ContentSuggestionsResult {
   actions: OrganicAction[];
 }
@@ -92,10 +114,14 @@ export async function generateContentSuggestions(
       text = result.candidates[0].content.parts[0].text;
     }
 
-    if (!text) return null;
-    return parseAIResponse(text);
+    if (!text) {
+      return { actions: getFallbackSuggestions(scenarioId, scenarioName) };
+    }
+    const parsed = parseAIResponse(text);
+    if (parsed?.actions?.length) return parsed;
+    return { actions: getFallbackSuggestions(scenarioId, scenarioName) };
   } catch (error) {
     console.error('[aiContentSuggestions]', error);
-    return null;
+    return { actions: getFallbackSuggestions(scenarioId, scenarioName) };
   }
 }
