@@ -1,8 +1,21 @@
 /**
- * Export reports to Excel. Each report type uses real data from hooks.
+ * Export reports to Excel or PDF. Each report type uses real data from hooks.
  */
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import type { Product, RFMSegment, Campaign } from '../types';
 import { getStockAgeDays } from '../utils/productUtils';
+
+export type ReportFormat = 'excel' | 'pdf';
+
+const PDF_SUPPORTED: Record<string, boolean> = {
+  executive: true,
+  segment: true,
+  channel: true,
+  inventory: false,
+  campaign: false,
+  product: false,
+};
 
 const SCHEDULED_REPORTS_KEY = 'perf_plus_scheduled_reports';
 
@@ -42,7 +55,113 @@ export function deleteScheduledReport(id: string): void {
   localStorage.setItem(SCHEDULED_REPORTS_KEY, JSON.stringify(list));
 }
 
-export async function exportReportToExcel(
+export function isPdfSupported(reportId: string): boolean {
+  return PDF_SUPPORTED[reportId] ?? false;
+}
+
+export async function exportReport(
+  reportId: string,
+  format: ReportFormat,
+  data: {
+    products?: Product[];
+    segments?: RFMSegment[];
+    campaigns?: Campaign[];
+    analyticsRecords?: Array<{ date?: unknown; total_revenue?: number; attributed_revenue?: number }>;
+  }
+): Promise<void> {
+  if (format === 'pdf' && !PDF_SUPPORTED[reportId]) {
+    throw new Error('PDF δεν υποστηρίζεται για αυτό το report');
+  }
+  if (format === 'pdf') {
+    return exportReportToPdf(reportId, data);
+  }
+  return exportReportToExcel(reportId, data);
+}
+
+async function exportReportToPdf(
+  reportId: string,
+  data: {
+    products?: Product[];
+    segments?: RFMSegment[];
+    campaigns?: Campaign[];
+    analyticsRecords?: Array<{ date?: unknown; total_revenue?: number; attributed_revenue?: number }>;
+  }
+): Promise<void> {
+  const doc = new jsPDF();
+  const date = new Date().toISOString().split('T')[0];
+
+  doc.setFontSize(18);
+  doc.text('Performance+ Report', 14, 20);
+
+  doc.setFontSize(10);
+  doc.setTextColor(100, 100, 100);
+  doc.text(`Generated: ${date}`, 14, 28);
+
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(12);
+
+  switch (reportId) {
+    case 'executive': {
+      const records = data.analyticsRecords ?? [];
+      const campaigns = data.campaigns ?? [];
+      const totalRevenue = records.reduce((s, r) => s + (r.total_revenue ?? 0), 0);
+      const attributed = records.reduce((s, r) => s + (r.attributed_revenue ?? 0), 0);
+      const campaignValue = campaigns.reduce((s, c) => s + (c.conversion_value ?? 0), 0);
+      doc.text('Executive Summary', 14, 40);
+      autoTable(doc, {
+        startY: 48,
+        head: [['Metric', 'Value']],
+        body: [
+          ['Total Revenue (Analytics)', `€${(totalRevenue / 1000).toFixed(1)}K`],
+          ['Attributed Revenue', `€${(attributed / 1000).toFixed(1)}K`],
+          ['Campaign Conversion Value', `€${(campaignValue / 1000).toFixed(1)}K`],
+          ['Records', String(records.length)],
+        ],
+      });
+      break;
+    }
+    case 'segment': {
+      const segments = data.segments ?? [];
+      doc.text('Segment Performance', 14, 40);
+      autoTable(doc, {
+        startY: 48,
+        head: [['Segment', 'Count', 'Revenue Share %', 'RFM Score']],
+        body: segments.map((s) => [s.name, String(s.count), String(s.revenue_share), s.rfm_score ?? '']),
+      });
+      break;
+    }
+    case 'channel': {
+      const campaigns = data.campaigns ?? [];
+      const byChannel: Record<string, { spent: number; value: number; count: number }> = {};
+      campaigns.forEach((c) => {
+        const ch = c.channel || 'Other';
+        if (!byChannel[ch]) byChannel[ch] = { spent: 0, value: 0, count: 0 };
+        byChannel[ch].spent += c.amount_spent ?? 0;
+        byChannel[ch].value += c.conversion_value ?? 0;
+        byChannel[ch].count += 1;
+      });
+      doc.text('Channel Attribution', 14, 40);
+      autoTable(doc, {
+        startY: 48,
+        head: [['Channel', 'Campaigns', 'Spent', 'Value', 'ROAS']],
+        body: Object.entries(byChannel).map(([ch, v]) => [
+          ch,
+          String(v.count),
+          `€${(v.spent / 1000).toFixed(1)}K`,
+          `€${(v.value / 1000).toFixed(1)}K`,
+          v.spent > 0 ? (v.value / v.spent).toFixed(2) : '-',
+        ]),
+      });
+      break;
+    }
+    default:
+      throw new Error(`PDF not supported for ${reportId}`);
+  }
+
+  doc.save(`${reportId}_report_${date}.pdf`);
+}
+
+async function exportReportToExcel(
   reportId: string,
   data: {
     products?: Product[];

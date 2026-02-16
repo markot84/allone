@@ -15,11 +15,13 @@ import { Card, CardHeader, Badge, Button, Spinner } from '../common';
 import { useProducts, useSegments, useCampaigns, useAnalytics } from '../../hooks';
 import { useToast } from '../common/Toast';
 import {
-  exportReportToExcel,
+  exportReport,
+  isPdfSupported,
   getScheduledReports,
   saveScheduledReport,
   deleteScheduledReport,
   type ScheduledReport,
+  type ReportFormat,
 } from '../../services/reportExport';
 
 interface ReportTypeItem {
@@ -111,16 +113,16 @@ export function Reports() {
     if (stored.length > 0) setScheduledReports(stored);
   }, []);
 
-  const handleGenerate = async (reportId: string) => {
+  const handleGenerate = async (reportId: string, format: ReportFormat = 'excel') => {
     setGeneratingId(reportId);
     try {
-      await exportReportToExcel(reportId, {
+      await exportReport(reportId, format, {
         products,
         segments,
         campaigns: campaignsTyped,
         analyticsRecords,
       });
-      toast.success('Το report κατέβηκε επιτυχώς');
+      toast.success(`Το report κατέβηκε επιτυχώς (${format.toUpperCase()})`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Σφάλμα εξαγωγής');
     } finally {
@@ -199,15 +201,26 @@ export function Reports() {
                     </span>
                   </div>
 
-                  <div className="flex gap-2 mt-4">
+                  <div className="flex flex-wrap gap-2 mt-4">
+                    {isPdfSupported(report.id) && (
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        icon={generatingId === report.id ? <Spinner size="sm" /> : <Download size={14} />}
+                        disabled={generatingId !== null}
+                        onClick={() => handleGenerate(report.id, 'pdf')}
+                      >
+                        PDF
+                      </Button>
+                    )}
                     <Button
-                      variant="primary"
+                      variant={isPdfSupported(report.id) ? 'secondary' : 'primary'}
                       size="sm"
                       icon={generatingId === report.id ? <Spinner size="sm" /> : <Download size={14} />}
                       disabled={generatingId !== null}
-                      onClick={() => handleGenerate(report.id)}
+                      onClick={() => handleGenerate(report.id, 'excel')}
                     >
-                      Generate
+                      Excel
                     </Button>
                     <Button
                       variant="ghost"
@@ -287,7 +300,7 @@ export function Reports() {
                       variant="ghost"
                       size="sm"
                       icon={<Download size={14} />}
-                      onClick={() => handleGenerate(report.reportType)}
+                      onClick={() => handleGenerate(report.reportType, isPdfSupported(report.reportType) ? 'pdf' : 'excel')}
                     >
                       Generate τώρα
                     </Button>
@@ -359,7 +372,7 @@ export function Reports() {
           <CustomReportModal
             reportTypes={reportTypes}
             onClose={() => setShowCustomModal(false)}
-            onGenerate={(id) => { handleGenerate(id); setShowCustomModal(false); }}
+            onGenerate={(id, format) => { handleGenerate(id, format); setShowCustomModal(false); }}
             generating={generatingId !== null}
           />
         )}
@@ -473,10 +486,11 @@ function CustomReportModal({
 }: {
   reportTypes: ReportTypeItem[];
   onClose: () => void;
-  onGenerate: (id: string) => void;
+  onGenerate: (id: string, format: ReportFormat) => void;
   generating: boolean;
 }) {
   const [selectedId, setSelectedId] = useState('executive');
+  const [format, setFormat] = useState<ReportFormat>('pdf');
 
   return (
     <motion.div
@@ -504,7 +518,10 @@ function CustomReportModal({
             <label className="block text-sm font-medium text-[#4A4A4A] mb-2">Επιλέξτε τύπο report</label>
             <select
               value={selectedId}
-              onChange={(e) => setSelectedId(e.target.value)}
+              onChange={(e) => {
+                setSelectedId(e.target.value);
+                setFormat(isPdfSupported(e.target.value) ? 'pdf' : 'excel');
+              }}
               className="w-full px-3 py-2 border border-[#E5E5E5] rounded-lg text-sm focus:outline-none focus:border-[#FF6B35]"
             >
               {reportTypes.map((r: ReportTypeItem) => (
@@ -512,16 +529,29 @@ function CustomReportModal({
               ))}
             </select>
           </div>
+          {isPdfSupported(selectedId) && (
+            <div>
+              <label className="block text-sm font-medium text-[#4A4A4A] mb-2">Μορφή</label>
+              <select
+                value={format}
+                onChange={(e) => setFormat(e.target.value as ReportFormat)}
+                className="w-full px-3 py-2 border border-[#E5E5E5] rounded-lg text-sm focus:outline-none focus:border-[#FF6B35]"
+              >
+                <option value="pdf">PDF</option>
+                <option value="excel">Excel</option>
+              </select>
+            </div>
+          )}
           <div className="flex gap-3 pt-4">
             <Button variant="ghost" onClick={onClose} className="flex-1">Ακύρωση</Button>
             <Button
               variant="primary"
               icon={generating ? <Spinner size="sm" /> : <Download size={14} />}
               disabled={generating}
-              onClick={() => onGenerate(selectedId)}
+              onClick={() => onGenerate(selectedId, format)}
               className="flex-1"
             >
-              Generate
+              Generate {format.toUpperCase()}
             </Button>
           </div>
         </div>
