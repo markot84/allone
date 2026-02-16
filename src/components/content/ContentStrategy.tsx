@@ -12,10 +12,11 @@ import {
   FileText,
   CheckCircle,
   ArrowRight,
-  Check
+  Check,
+  RefreshCw
 } from 'lucide-react';
-import { Card, CardHeader, Badge, Button } from '../common';
-import { useSegments, useContent } from '../../hooks';
+import { Card, CardHeader, Badge, Button, Spinner } from '../common';
+import { useSegments, useContent, useAIContentSuggestions } from '../../hooks';
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import type { ContentItem } from '../../hooks/useContent';
 // Removed mock content imports - using only real data from useContent hook
@@ -34,6 +35,8 @@ export function ContentStrategy() {
   const { activeStrategy, getStrategyName, isLoading: strategyLoading } = useActiveStrategy();
   const [showStrategyMap, setShowStrategyMap] = useState(false);
   const [filterAligned, setFilterAligned] = useState<'all' | 'aligned' | 'misaligned'>('all');
+  const [aiEnabled, setAiEnabled] = useState(true);
+  const { suggestions, isLoading: suggestionsLoading, refetch, hasStrategy } = useAIContentSuggestions(aiEnabled);
 
   // Removed mock data - using only real contentItems from useContent hook
   
@@ -183,6 +186,96 @@ export function ContentStrategy() {
           </div>
         )}
       </Card>
+
+      {/* AI Organic Actions - Only when strategy exists */}
+      {hasStrategy && (
+        <Card padding="lg" className="border-l-4 border-l-[#8B5CF6]">
+          <div className="flex items-center justify-between flex-wrap gap-4 mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-[#EDE9FE] rounded-xl flex items-center justify-center">
+                <Sparkles size={24} className="text-[#8B5CF6]" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-[#1A1A1A]">AI Οργανικές Ενέργειες</h3>
+                <p className="text-sm text-[#4A4A4A]">
+                  Προτάσεις περιεχομένου βάσει της στρατηγικής {activeStrategy && getStrategyName(activeStrategy.scenarioId)}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setAiEnabled(!aiEnabled)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  aiEnabled ? 'bg-[#8B5CF6]/20 text-[#8B5CF6]' : 'bg-[#F5F5F5] text-[#4A4A4A]'
+                }`}
+                title={aiEnabled ? 'AI ενεργό' : 'AI απενεργοποιημένο'}
+              >
+                {aiEnabled ? 'AI ON' : 'AI OFF'}
+              </button>
+              {aiEnabled && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={<RefreshCw size={14} />}
+                  onClick={() => refetch()}
+                  disabled={suggestionsLoading}
+                >
+                  Ανανέωση
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {aiEnabled && (
+            <>
+              {suggestionsLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Spinner size="lg" label="Φόρτωση προτάσεων..." />
+                </div>
+              ) : suggestions.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {suggestions.map((action, i) => (
+                    <motion.div
+                      key={i}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.05 }}
+                      className="p-4 bg-white border border-[#E5E5E5] rounded-xl hover:border-[#8B5CF6]/50 transition-colors"
+                    >
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <Badge
+                          variant={action.priority === 'high' ? 'success' : 'default'}
+                          size="sm"
+                        >
+                          {action.type}
+                        </Badge>
+                        <span className="text-xs text-[#9CA3AF] capitalize">{action.priority}</span>
+                      </div>
+                      <h4 className="font-semibold text-[#1A1A1A] text-sm mb-1">{action.title}</h4>
+                      <p className="text-xs text-[#4A4A4A] mb-2">{action.description}</p>
+                      <p className="text-xs text-[#9CA3AF] mb-2">Κανάλι: {action.channel}</p>
+                      {action.headline_suggestion && (
+                        <div className="p-2 bg-[#F5F5F5] rounded text-xs text-[#4A4A4A] italic">
+                          "{action.headline_suggestion}"
+                        </div>
+                      )}
+                      <Button variant="ghost" size="sm" className="mt-2 w-full text-xs">
+                        Χρήση πρότασης
+                      </Button>
+                    </motion.div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <p className="text-sm text-[#4A4A4A]">
+                    Δεν βρέθηκαν προτάσεις. Κάντε κλικ στο Ανανέωση για νέα γενιά.
+                  </p>
+                </div>
+              )}
+            </>
+          )}
+        </Card>
+      )}
 
       {/* Misalignment Alert */}
       {misalignedCount > 0 && (
