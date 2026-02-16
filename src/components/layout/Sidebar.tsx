@@ -29,13 +29,13 @@ interface NavItem {
 const mainNavItems: NavItem[] = [
   { id: 'dashboard', name: 'Dashboard', icon: <LayoutDashboard size={18} /> },
   { id: 'strategy', name: 'Strategy Weights', icon: <SlidersHorizontal size={18} />, linked: true },
-  { id: 'calendar', name: 'Content Strategy', icon: <FileText size={18} />, linked: true },
-  { id: 'rfm', name: 'RFM Analysis', icon: <Users size={18} /> },
   { id: 'products', name: 'Product Intelligence', icon: <Package size={18} /> },
+  { id: 'rfm', name: 'RFM Analysis', icon: <Users size={18} /> },
   { id: 'channels', name: 'Channel Activation', icon: <Megaphone size={18} /> },
   { id: 'campaigns', name: 'Campaigns', icon: <Target size={18} /> },
-  { id: 'reports', name: 'Reports', icon: <BarChart3 size={18} /> },
-  { id: 'roi', name: 'ROI Attribution', icon: <Euro size={18} /> }
+  { id: 'roi', name: 'ROI', icon: <Euro size={18} /> },
+  { id: 'calendar', name: 'Content Strategy', icon: <FileText size={18} />, linked: true },
+  { id: 'reports', name: 'Reports', icon: <BarChart3 size={18} /> }
 ];
 
 const secondaryNavItems: NavItem[] = [

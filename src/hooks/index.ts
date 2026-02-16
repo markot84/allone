@@ -5,3 +5,5 @@ export { useBrand } from './useBrand';
 export { useAnalytics } from './useAnalytics';
 export { useContent } from './useContent';
 export { useCampaigns } from './useCampaigns';
+export { useActiveStrategy } from './useActiveStrategy';
+export { useFeedSources } from './useFeedSources';

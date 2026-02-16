@@ -1,6 +1,7 @@
 import { Timestamp } from 'firebase/firestore';
 import * as XLSX from 'xlsx';
 import { FirestoreService } from './firestore';
+import { FEED_SOURCE_CONFIG, type FeedSourceType } from '../data/feedSourceConfig';
 import type { Product, RFMSegment, Campaign } from '../types';
 
 const BATCH_SIZE = 500; // Firestore limit per writeBatch
@@ -393,6 +394,31 @@ function csvToObjects(csvRows: string[][], type?: ImportType): Record<string, st
   }
 
   return objects;
+}
+
+/** Map feed row to app schema using feed source config. Handles availability→stock_level, price stripping. */
+function mapFeedRowToAppRow(row: Record<string, string>, feedSourceType: FeedSourceType): Record<string, string> {
+  const config = FEED_SOURCE_CONFIG[feedSourceType];
+  const appRow: Record<string, string> = {};
+  const norm = (s: string) => s.toLowerCase().replace(/\s+/g, '_');
+  const rowByNorm = Object.fromEntries(Object.entries(row).map(([k, v]) => [norm(k), v]));
+
+  for (const { feedColumn, appField } of config.columnAliases) {
+    const feedKey = norm(feedColumn);
+    const val = row[feedColumn] ?? rowByNorm[feedKey] ?? '';
+    if (val === undefined || val === '') continue;
+
+    const strVal = String(val).trim();
+    if (appField === 'stock_level' && feedColumn.toLowerCase() === 'availability') {
+      const v = strVal.toLowerCase();
+      appRow[appField] = v.includes('in stock') || v === 'in_stock' ? '1' : '0';
+    } else if (appField === 'price') {
+      appRow[appField] = strVal.replace(/[^\d.,-]/g, '').replace(',', '.') || strVal;
+    } else {
+      appRow[appField] = strVal;
+    }
+  }
+  return appRow;
 }
 
 // Firestore document IDs cannot contain / or \ — sanitize for safe write
@@ -1020,12 +1046,87 @@ function aggregateCustomersToSegments(objects: Record<string, string>[]): RFMSeg
   });
 }
 
+/** Preview file for products: parse, validate, return summary. For Feed mode pass feedSourceType. */
+export async function previewFileForProducts(
+  file: File,
+  feedSourceType?: FeedSourceType
+): Promise<{
+  headers: string[];
+  sampleRows: Record<string, string>[];
+  mappedSample: Record<string, string>[];
+  validCount: number;
+  errorCount: number;
+  totalRows: number;
+  errors: string[];
+  warnings: string[];
+}> {
+  const rows = await getRowsFromFile(file, 'products');
+  if (rows.length < 2) {
+    return {
+      headers: [],
+      sampleRows: [],
+      mappedSample: [],
+      validCount: 0,
+      errorCount: 0,
+      totalRows: 0,
+      errors: ['File must contain header + at least one data row'],
+      warnings: [],
+    };
+  }
+  const objects = csvToObjects(rows, 'products');
+  if (objects.length === 0) {
+    return {
+      headers: Object.keys(rows[0] || {}),
+      sampleRows: [],
+      mappedSample: [],
+      validCount: 0,
+      errorCount: 0,
+      totalRows: 0,
+      errors: ['No data rows found'],
+      warnings: [],
+    };
+  }
+  const headers = Object.keys(objects[0]).filter(Boolean);
+  const PREVIEW_ROWS = 10;
+  const sampleRows = objects.slice(0, PREVIEW_ROWS);
+  const mappedSample = feedSourceType
+    ? sampleRows.map((r) => mapFeedRowToAppRow(r, feedSourceType))
+    : sampleRows;
+
+  let validCount = 0;
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  for (let i = 0; i < objects.length; i++) {
+    const row = feedSourceType ? mapFeedRowToAppRow(objects[i], feedSourceType) : objects[i];
+    const v = validateProduct(row, i);
+    if (v.valid) validCount++;
+    else if (v.error && errors.length < MAX_ERRORS_DISPLAY) errors.push(v.error);
+  }
+
+  if (objects.length > 0 && headers.length > 0) {
+    warnings.push(`Detected ${headers.length} columns: ${headers.slice(0, 15).join(', ')}${headers.length > 15 ? '…' : ''}`);
+  }
+
+  return {
+    headers,
+    sampleRows,
+    mappedSample,
+    validCount,
+    errorCount: objects.length - validCount,
+    totalRows: objects.length,
+    errors,
+    warnings,
+  };
+}
+
 // Main import function (CSV or XLSX). Pass brandId for multi-tenant scoping.
 export async function importFile(
   file: File,
   type: ImportType,
   onProgress?: (p: ImportProgress) => void,
-  brandId?: string | null
+  brandId?: string | null,
+  feedSourceType?: FeedSourceType
 ): Promise<ImportResult> {
   const result: ImportResult = {
     success: true,
@@ -1080,7 +1181,10 @@ export async function importFile(
         const validProducts: Product[] = [];
         
         for (let i = 0; i < objects.length; i++) {
-          const validation = validateProduct(objects[i], i);
+          const row = feedSourceType
+            ? mapFeedRowToAppRow(objects[i], feedSourceType)
+            : objects[i];
+          const validation = validateProduct(row, i);
           if (validation.valid && validation.data) {
             validProducts.push(validation.data);
           } else {

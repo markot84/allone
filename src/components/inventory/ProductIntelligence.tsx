@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Package,
@@ -6,6 +6,8 @@ import {
   AlertCircle,
   Info,
   Search,
+  ChevronLeft,
+  ChevronRight,
   ChevronDown,
   ChevronUp,
   Download,
@@ -15,6 +17,8 @@ import {
 import { Card, Badge, Button, ProgressBar, Spinner, Tooltip } from '../common';
 import { useProducts } from '../../hooks';
 import { getStockAgeDays } from '../../utils/productUtils';
+import { ExportModal } from './ExportModal';
+import { ProductCharts } from './ProductCharts';
 import type { Product, InventorySummary, InventoryAlert } from '../../types';
 
 type SortField = 'name' | 'margin_percentage' | 'stock_level' | 'stock_age_days' | 'price';
@@ -112,10 +116,13 @@ export function ProductIntelligence() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [marginFilter, setMarginFilter] = useState<string>('all');
+  const [stockAgeFilter, setStockAgeFilter] = useState<'all' | 'dead' | 'near-dead' | 'high-margin-low-stock'>('all');
   const [sortField, setSortField] = useState<SortField>('margin_percentage');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [showCharts, setShowCharts] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 20;
+  const PAGE_SIZE = 150;
 
   const { products, isLoading: productsLoading, hasImported } = useProducts();
   const inventorySummary = useMemo(() => computeInventorySummary(products), [products]);
@@ -133,7 +140,21 @@ export function ProductIntelligence() {
                              (p.sku ?? '').toLowerCase().includes(searchQuery.toLowerCase());
         const matchesCategory = selectedCategory === 'all' || (p.category ?? '') === selectedCategory;
         const matchesMargin = marginFilter === 'all' || p.margin_tier === marginFilter;
-        return matchesSearch && matchesCategory && matchesMargin;
+        
+        // Stock age filter
+        const age = getStockAgeDays(p);
+        let matchesStockAge = true;
+        if (stockAgeFilter === 'dead') {
+          matchesStockAge = age > 180;
+        } else if (stockAgeFilter === 'near-dead') {
+          matchesStockAge = age > 120 && age <= 180;
+        } else if (stockAgeFilter === 'high-margin-low-stock') {
+          const isHighMargin = p.margin_tier === 'high' || (p.margin_percentage ?? 0) > 25;
+          const isLowStock = (p.stock_level ?? 0) < 10 || ((p.stock_level ?? 0) / Math.max(p.stock_capacity ?? 1, 1) < 0.2);
+          matchesStockAge = isHighMargin && isLowStock;
+        }
+        
+        return matchesSearch && matchesCategory && matchesMargin && matchesStockAge;
       })
       .sort((a, b) => {
         const aVal = sortField === 'stock_age_days' ? getStockAgeDays(a) : a[sortField];
@@ -147,14 +168,17 @@ export function ProductIntelligence() {
           ? (aVal as number) - (bVal as number) 
           : (bVal as number) - (aVal as number);
       });
-  }, [products, searchQuery, selectedCategory, marginFilter, sortField, sortDirection]);
+  }, [products, searchQuery, selectedCategory, marginFilter, stockAgeFilter, sortField, sortDirection]);
 
+  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE));
   const paginatedProducts = filteredProducts.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
   );
 
-  const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedCategory, marginFilter, stockAgeFilter, sortField, sortDirection]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -186,7 +210,11 @@ export function ProductIntelligence() {
             )}
           </p>
         </div>
-        <Button variant="secondary" icon={<Download size={16} />}>
+        <Button 
+          variant="secondary" 
+          icon={<Download size={16} />}
+          onClick={() => setShowExportModal(true)}
+        >
           Export Report
         </Button>
       </div>
@@ -266,7 +294,30 @@ export function ProductIntelligence() {
                 )}
                 <div className="flex-1">
                   <p className="text-sm font-medium text-[#1A1A1A]">{alert.message}</p>
-                  <button className="text-xs font-medium text-[#FF6B35] mt-1 hover:underline">
+                  <button 
+                    className="text-xs font-medium text-[#FF6B35] mt-1 hover:underline cursor-pointer"
+                    onClick={() => {
+                      // Set filter based on alert type
+                      if (alert.type === 'critical') {
+                        setStockAgeFilter('dead');
+                        setSortField('stock_age_days');
+                        setSortDirection('desc');
+                      } else if (alert.type === 'warning') {
+                        setStockAgeFilter('near-dead');
+                        setSortField('stock_age_days');
+                        setSortDirection('desc');
+                      } else if (alert.type === 'info') {
+                        setStockAgeFilter('high-margin-low-stock');
+                        setSortField('margin_percentage');
+                        setSortDirection('desc');
+                      }
+                      // Scroll to table
+                      setTimeout(() => {
+                        const tableElement = document.querySelector('[data-product-table]');
+                        tableElement?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }, 100);
+                    }}
+                  >
                     {alert.action} →
                   </button>
                 </div>
@@ -277,7 +328,7 @@ export function ProductIntelligence() {
       </div>
 
       {/* Product Table */}
-      <Card padding="none">
+      <Card padding="none" data-product-table>
         {/* Filters */}
         <div className="p-4 border-b border-[#E5E5E5] flex flex-wrap gap-4 items-center">
           {/* Search */}
@@ -322,7 +373,7 @@ export function ProductIntelligence() {
         </div>
 
         {/* Table */}
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-[60vh] overflow-y-auto">
           <table className="w-full">
             <thead>
               <tr className="bg-[#F5F5F5]">
@@ -398,65 +449,53 @@ export function ProductIntelligence() {
         </div>
 
         {/* Pagination */}
-        <div className="p-4 border-t border-[#E5E5E5] flex items-center justify-between">
+        <div className="p-4 border-t border-[#E5E5E5] flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-[#4A4A4A]">
-            Showing {(currentPage - 1) * itemsPerPage + 1} to{' '}
-            {Math.min(currentPage * itemsPerPage, filteredProducts.length)} of{' '}
-            {filteredProducts.length}
+            {filteredProducts.length === 0
+              ? 'Δεν βρέθηκαν προϊόντα'
+              : `Εμφανίζονται ${(currentPage - 1) * PAGE_SIZE + 1}–${Math.min(currentPage * PAGE_SIZE, filteredProducts.length)} από ${filteredProducts.length} προϊόντα`}
           </p>
           <div className="flex items-center gap-2">
             <Button
-              variant="ghost"
+              variant="secondary"
               size="sm"
-              disabled={currentPage === 1}
-              onClick={() => setCurrentPage(currentPage - 1)}
+              icon={<ChevronLeft size={16} />}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage <= 1}
             >
-              Προηγούμενο
+              Προηγούμενα
             </Button>
-            {[...Array(Math.min(5, totalPages))].map((_, i) => {
-              const page = i + 1;
-              return (
-                <button
-                  key={page}
-                  onClick={() => setCurrentPage(page)}
-                  className={`
-                    w-8 h-8 rounded-lg text-sm font-medium transition-colors
-                    ${currentPage === page
-                      ? 'bg-[#FF6B35] text-white'
-                      : 'text-[#4A4A4A] hover:bg-[#F5F5F5]'}
-                  `}
-                >
-                  {page}
-                </button>
-              );
-            })}
-            {totalPages > 5 && (
-              <>
-                <span className="text-[#4A4A4A]">...</span>
-                <button
-                  onClick={() => setCurrentPage(totalPages)}
-                  className={`
-                    w-8 h-8 rounded-lg text-sm font-medium transition-colors
-                    ${currentPage === totalPages
-                      ? 'bg-[#FF6B35] text-white'
-                      : 'text-[#4A4A4A] hover:bg-[#F5F5F5]'}
-                  `}
-                >
-                  {totalPages}
-                </button>
-              </>
-            )}
+            <span className="text-sm text-[#4A4A4A] px-2">
+              Σελίδα {currentPage} από {totalPages}
+            </span>
             <Button
-              variant="ghost"
+              variant="secondary"
               size="sm"
-              disabled={currentPage === totalPages}
-              onClick={() => setCurrentPage(currentPage + 1)}
+              icon={<ChevronRight size={16} />}
+              iconPosition="right"
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage >= totalPages}
             >
-              Επόμενο
+              Επόμενα
             </Button>
           </div>
         </div>
       </Card>
+
+      {/* Export Modal */}
+      <ExportModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        filteredProducts={filteredProducts}
+        onShowCharts={() => setShowCharts(true)}
+      />
+
+      {/* Charts Modal */}
+      <ProductCharts
+        isOpen={showCharts}
+        onClose={() => setShowCharts(false)}
+        products={filteredProducts}
+      />
     </div>
   );
 }

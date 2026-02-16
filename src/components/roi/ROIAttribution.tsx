@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Euro,
@@ -25,23 +25,33 @@ import {
   ReferenceLine
 } from 'recharts';
 import { Card, CardHeader, Badge, Button } from '../common';
-import { useAnalytics, useSegments, useProducts } from '../../hooks';
+import { useAnalytics, useSegments, useProducts, useCampaigns } from '../../hooks';
 import {
-  roiDashboard,
-  roiCalculator,
-  roiMockData,
-  segmentPerformance,
-  costSavings,
   attributionMethodology
 } from '../../data/mockROI';
+import {
+  calculateTotalRevenue,
+  calculateAttributedRevenue,
+  calculateROISummary,
+  calculateSegmentPerformance,
+  calculateCostSavings,
+  SUBSCRIPTION_COST_PERIOD,
+  type ROISummary,
+} from '../../utils/roiUtils';
+import type { Campaign } from '../../types';
 
 const COLORS = ['#22C55E', '#3B82F6', '#FF6B35', '#8B5CF6', '#F59E0B'];
 
-export function ROIAttribution() {
-  const { revenueData, hasImported: hasAnalytics } = useAnalytics();
-  const { hasImported: hasSegments } = useSegments();
-  const { count: productsCount } = useProducts();
-  const hasAnyData = hasAnalytics || hasSegments || productsCount > 0;
+interface ROIAttributionProps {
+  embedded?: boolean;
+}
+
+export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
+  const { revenueData, analyticsRecords, hasImported: hasAnalytics } = useAnalytics();
+  const { segments, hasImported: hasSegments } = useSegments();
+  const { products, count: productsCount } = useProducts();
+  const { campaigns, hasImported: hasCampaigns } = useCampaigns();
+  const hasAnyData = hasAnalytics || hasSegments || productsCount > 0 || hasCampaigns;
   const [showMethodology, setShowMethodology] = useState(false);
   const [selectedBreakdown, setSelectedBreakdown] = useState<string | null>(null);
   const trendContainerRef = useRef<HTMLDivElement>(null);
@@ -74,7 +84,42 @@ export function ROIAttribution() {
     return () => resizeObserver.disconnect();
   }, []);
 
-  // Prepare trend data (revenueData from useAnalytics = real or mock)
+  // Calculate ROI from real data
+  const campaignsTyped = campaigns as Campaign[];
+  const productsTyped = products;
+  
+  const totalRevenue = useMemo(() => {
+    if (hasAnyData) {
+      return calculateTotalRevenue(analyticsRecords, campaignsTyped);
+    }
+    return 0;
+  }, [analyticsRecords, campaignsTyped, hasAnyData]);
+
+  const attributedBreakdown = useMemo(() => {
+    if (hasAnyData) {
+      return calculateAttributedRevenue(campaignsTyped, productsTyped, segments);
+    }
+    return {
+      segment_activation: { revenue: 0, percentage: 0, details: [] },
+      inventory_optimization: { revenue: 0, percentage: 0, details: [], cost_avoided: 0 },
+      channel_optimization: { revenue: 0, percentage: 0, details: [] },
+    };
+  }, [campaignsTyped, productsTyped, segments, hasAnyData]);
+
+  const attributedRevenue = useMemo(() => {
+    return attributedBreakdown.segment_activation.revenue +
+           attributedBreakdown.inventory_optimization.revenue +
+           attributedBreakdown.channel_optimization.revenue;
+  }, [attributedBreakdown]);
+
+  const summary: ROISummary = useMemo(() => {
+    if (hasAnyData) {
+      return calculateROISummary(totalRevenue, attributedRevenue, 'period');
+    }
+    return { total_revenue: 0, performance_plus_attributed: 0, attribution_percentage: 0, roi_multiplier: 0 };
+  }, [totalRevenue, attributedRevenue, hasAnyData]);
+
+  // Prepare trend data (revenueData from useAnalytics - only real data)
   const trendData = revenueData.map((r) => ({
     month: r.month,
     total: r.total,
@@ -82,46 +127,93 @@ export function ROIAttribution() {
     rate: r.total > 0 ? Math.round((r.attributed / r.total) * 1000) / 10 : 0
   }));
 
-  // Prepare breakdown data (zeros when no imported data)
-  const summary = hasAnyData ? roiDashboard.summary : { total_revenue: 0, performance_plus_attributed: 0, attribution_percentage: 0, roi_multiplier: 0 };
-  const roiDisplay = hasAnyData ? roiCalculator.display : { headline: '0x ROI', subheadline: 'Φόρτωσε δεδομένα για να δεις το ROI', disclaimer: 'Βάσει conservative attribution methodology' };
-  const breakdownData = hasAnyData
+  // ROI Display
+  const roiDisplay = hasAnyData && summary.roi_multiplier > 0
+    ? {
+        headline: `${summary.roi_multiplier.toFixed(1)}x ROI`,
+        subheadline: `Κάθε €1 στο Performance+ απέφερε €${summary.roi_multiplier.toFixed(1)} σε attributed revenue`,
+        disclaimer: 'Βάσει conservative attribution methodology'
+      }
+    : { headline: '0x ROI', subheadline: 'Φόρτωσε δεδομένα για να δεις το ROI', disclaimer: 'Βάσει conservative attribution methodology' };
+
+  // Breakdown data from real calculations
+  const breakdownData = hasAnyData && attributedRevenue > 0
     ? [
-        { id: 'segment', name: 'Segment Campaigns', value: roiDashboard.breakdown.segment_activation.percentage, amount: roiDashboard.breakdown.segment_activation.revenue, details: roiDashboard.breakdown.segment_activation.details },
-        { id: 'inventory', name: 'Stock Clearance', value: roiDashboard.breakdown.inventory_optimization.percentage, amount: roiDashboard.breakdown.inventory_optimization.revenue, details: roiDashboard.breakdown.inventory_optimization.details, costAvoided: roiDashboard.breakdown.inventory_optimization.cost_avoided },
-        { id: 'channel', name: 'Channel Optimization', value: roiDashboard.breakdown.channel_optimization.percentage, amount: roiDashboard.breakdown.channel_optimization.revenue, details: roiDashboard.breakdown.channel_optimization.details }
+        { 
+          id: 'segment', 
+          name: 'Segment Campaigns', 
+          value: attributedBreakdown.segment_activation.percentage, 
+          amount: attributedBreakdown.segment_activation.revenue, 
+          details: attributedBreakdown.segment_activation.details.map(d => ({ segment: d.segment, revenue: d.revenue, campaigns: d.campaigns }))
+        },
+        { 
+          id: 'inventory', 
+          name: 'Stock Clearance', 
+          value: attributedBreakdown.inventory_optimization.percentage, 
+          amount: attributedBreakdown.inventory_optimization.revenue, 
+          details: attributedBreakdown.inventory_optimization.details.map(d => ({ type: d.type, revenue: d.revenue, units: d.units })),
+          costAvoided: attributedBreakdown.inventory_optimization.cost_avoided
+        },
+        { 
+          id: 'channel', 
+          name: 'Channel Optimization', 
+          value: attributedBreakdown.channel_optimization.percentage, 
+          amount: attributedBreakdown.channel_optimization.revenue, 
+          details: attributedBreakdown.channel_optimization.details
+        }
+      ]
+    : hasAnyData
+    ? [
+        { id: 'segment', name: 'Segment Campaigns', value: 0, amount: 0, details: [] },
+        { id: 'inventory', name: 'Stock Clearance', value: 0, amount: 0, details: [], costAvoided: 0 },
+        { id: 'channel', name: 'Channel Optimization', value: 0, amount: 0, details: [] }
       ]
     : [
         { id: 'segment', name: 'Segment Campaigns', value: 0, amount: 0, details: [] },
         { id: 'inventory', name: 'Stock Clearance', value: 0, amount: 0, details: [], costAvoided: 0 },
         { id: 'channel', name: 'Channel Optimization', value: 0, amount: 0, details: [] }
       ];
-  const segmentPerf = hasAnyData ? segmentPerformance : [];
-  const costSavingsData = hasAnyData ? costSavings : { period: 'Last 90 Days', items: [], total: 0 };
+
+  // Segment performance from real data only
+  const segmentPerf = useMemo(() => {
+    if (hasAnyData && segments.length > 0 && campaignsTyped.length > 0) {
+      return calculateSegmentPerformance(campaignsTyped, segments);
+    }
+    return [];
+  }, [campaignsTyped, segments, hasAnyData]);
+
+  // Cost savings from real data only
+  const costSavingsData = useMemo(() => {
+    if (hasAnyData && (productsTyped.length > 0 || campaignsTyped.length > 0)) {
+      return calculateCostSavings(productsTyped, campaignsTyped);
+    }
+    return { period: 'Last 90 Days', items: [], total: 0 };
+  }, [productsTyped, campaignsTyped, hasAnyData]);
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-[#1A1A1A]">ROI Attribution</h2>
-          <p className="text-[#4A4A4A] mt-1">
-            Measure and prove Performance+ impact on your business
-          </p>
+      {!embedded && (
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-[#1A1A1A]">ROI Attribution</h2>
+            <p className="text-[#4A4A4A] mt-1">
+              Measure and prove Performance+ impact on your business
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <Button 
+              variant="secondary" 
+              icon={<HelpCircle size={16} />}
+              onClick={() => setShowMethodology(!showMethodology)}
+            >
+              Methodology
+            </Button>
+            <Button variant="primary" icon={<Download size={16} />}>
+              Export Report
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          <Button 
-            variant="secondary" 
-            icon={<HelpCircle size={16} />}
-            onClick={() => setShowMethodology(!showMethodology)}
-          >
-            Methodology
-          </Button>
-          <Button variant="primary" icon={<Download size={16} />}>
-            Export Report
-          </Button>
-        </div>
-      </div>
+      )}
 
       {/* Hero ROI Card */}
       <motion.div
@@ -133,7 +225,7 @@ export function ROIAttribution() {
             {/* Main ROI Display */}
             <div className="md:col-span-2">
               <p className="text-[var(--nts-medium-gray)] text-sm mb-2 flex items-center gap-2">
-                <Euro size={16} className="text-[var(--nts-medium-gray)]" /> Performance+ ROI ({roiDashboard.period})
+                <Euro size={16} className="text-[var(--nts-medium-gray)]" /> Performance+ ROI (Last 90 Days)
               </p>
               <div className="flex items-baseline gap-4 flex-wrap">
                 <motion.span 
@@ -180,7 +272,7 @@ export function ROIAttribution() {
               <MetricBox 
                 icon={<Euro size={20} />}
                 label="Κόστος Συνδρομής" 
-                value={`€${(hasAnyData ? roiCalculator.subscription_cost_period : 0).toLocaleString()}`}
+                value={`€${SUBSCRIPTION_COST_PERIOD.toLocaleString()}`}
                 color="var(--nts-charcoal)"
               />
               <MetricBox 
@@ -307,27 +399,6 @@ export function ROIAttribution() {
               </AreaChart>
           </div>
 
-          {/* Milestones */}
-          {hasAnyData && (
-          <div className="mt-4 pt-4 border-t border-[#E5E5E5]">
-            <p className="text-sm font-medium text-[#1A1A1A] mb-3">Key Milestones</p>
-            <div className="flex flex-wrap gap-2">
-              {roiMockData.milestones.map((milestone, index) => (
-                <Badge
-                  key={index}
-                  variant={
-                    milestone.type === 'start' ? 'info' :
-                    milestone.type === 'peak' ? 'success' :
-                    milestone.type === 'milestone' ? 'orange' : 'default'
-                  }
-                  size="md"
-                >
-                  {milestone.month}: {milestone.event}
-                </Badge>
-              ))}
-            </div>
-          </div>
-          )}
         </Card>
 
         {/* Attribution Breakdown */}
@@ -508,7 +579,7 @@ export function ROIAttribution() {
             icon={<Euro size={20} className="text-[#22C55E]" />}
           />
           <div className="space-y-4">
-            {costSavingsData.items.map((item, index) => (
+            {costSavingsData.items.map((item: { category: string; amount: number; description: string; icon: string }, index: number) => (
               <motion.div
                 key={item.category}
                 initial={{ opacity: 0, x: -10 }}

@@ -1,4 +1,5 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   RefreshCw,
@@ -12,9 +13,14 @@ import {
   Target,
   TrendingUp,
   Users,
-  GitCompare
+  GitCompare,
+  X,
+  FileSpreadsheet,
+  FileText,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
-import { Card, CardHeader, Button, Slider, Badge } from '../common';
+import { Card, CardHeader, Button, Slider, Badge, Spinner } from '../common';
 import { ScenarioSelector } from './ScenarioSelector';
 import { ChannelRecommendations } from './ChannelRecommendations';
 import { ApprovalWorkflow } from './ApprovalWorkflow';
@@ -22,20 +28,24 @@ import { StrategyImpactPreview } from './StrategyImpactPreview';
 import { CustomToolsCard } from './CustomToolsCard';
 import { CompareScenariosModal } from './CompareScenariosModal';
 import { useProducts, useSegments } from '../../hooks';
+import { useActiveStrategy } from '../../hooks/useActiveStrategy';
+import { useAuth } from '../../hooks';
 import {
   scenarios,
   defaultWeights,
-  weightFactors,
-  channelRecommendations
+  weightFactors
 } from '../../data';
+import { useAIChannelRecommendations } from '../../hooks/useAIChannelRecommendations';
 import { getPreviewConfig, type PreviewColumnId } from '../../data/strategyPreviewConfig';
-import { calculateCompositeScore } from '../../data/mockProducts';
+import { calculateCompositeScore } from '../../utils/compositeScore';
+import { getStockAgeDays } from '../../utils/productUtils';
+import { useToast } from '../common/Toast';
 import { Tooltip } from '../common';
 import type { Product } from '../../types';
 
 type ApprovalStatus = 'draft' | 'pending_review' | 'approved' | 'implementing';
 
-function PreviewCell({
+const PreviewCell = memo(function PreviewCell({
   columnId,
   product,
   rank,
@@ -150,56 +160,124 @@ function PreviewCell({
     default:
       return <td className="py-3" />;
   }
-}
+});
 
 export function WeightConfigurator() {
   const { products, hasImported } = useProducts();
   const { segments: rfmSegments } = useSegments();
-  const [selectedScenario, setSelectedScenario] = useState(scenarios[0].id);
-  const [weights, setWeights] = useState<Record<string, number>>(
-    scenarios[0].weights || defaultWeights
-  );
-  const [approvalStatus, setApprovalStatus] = useState<ApprovalStatus>('draft');
+  const { user } = useAuth();
+  const { activeStrategy, saveActiveStrategy, isLoading: strategyLoading } = useActiveStrategy();
+  const toast = useToast();
+  
+  // Initialize from active strategy if available, otherwise no default
+  const [selectedScenario, setSelectedScenario] = useState<string | null>(() => {
+    if (activeStrategy) return activeStrategy.scenarioId;
+    return null; // No default scenario - user must select
+  });
+  const [weights, setWeights] = useState<Record<string, number>>(() => {
+    if (activeStrategy) return activeStrategy.weights;
+    return defaultWeights; // Empty weights, user must select scenario
+  });
+  const [approvalStatus, setApprovalStatus] = useState<ApprovalStatus>(() => {
+    if (activeStrategy) return activeStrategy.approvalStatus;
+    return 'draft';
+  });
   const [selectedSegment, setSelectedSegment] = useState('champions');
   const [showImpactPreview, setShowImpactPreview] = useState(false);
   const [pendingScenarioChange, setPendingScenarioChange] = useState<string | null>(null);
+  const [previewTargetScenario, setPreviewTargetScenario] = useState<string | null>(null); // For manual preview
   const [showCompareModal, setShowCompareModal] = useState(false);
+  const [showFeedFormatModal, setShowFeedFormatModal] = useState(false);
+  const [currentPreviewPage, setCurrentPreviewPage] = useState(1);
+  const PREVIEW_PAGE_SIZE = 10;
 
-  const getWeightsForScenario = useCallback((scenarioId: string) => {
-    if (scenarioId === 'custom') return weights;
+  // Refs must be declared before other hooks
+  const debounceTimerRef = useRef<number | null>(null);
+  
+  // Debounced weights for expensive calculations
+  const [debouncedWeights, setDebouncedWeights] = useState(weights);
+
+  const getWeightsForScenario = useCallback((scenarioId: string | null) => {
+    if (!scenarioId || scenarioId === 'custom') return weights;
     const scenario = scenarios.find((s) => s.id === scenarioId);
     return scenario?.weights ?? defaultWeights;
   }, [weights]);
 
-  // Handle scenario change with impact preview
-  const handleScenarioChange = useCallback((scenarioId: string) => {
-    // If changing from an approved/implementing scenario, show impact preview
-    if (approvalStatus === 'approved' || approvalStatus === 'implementing') {
-      setPendingScenarioChange(scenarioId);
-      setShowImpactPreview(true);
-    } else {
-      applyScenarioChange(scenarioId);
-    }
-  }, [approvalStatus]);
+  // Calculate total weight early to avoid reference errors
+  const totalWeight = Object.values(weights).reduce((a, b) => a + b, 0);
 
-  // Apply the scenario change
+  // Get current weights for comparison
+  const getCurrentWeights = useCallback(() => {
+    if (!selectedScenario || selectedScenario === 'custom') return weights;
+    const scenario = scenarios.find((s) => s.id === selectedScenario);
+    return scenario?.weights ?? weights;
+  }, [selectedScenario, weights]);
+
+  // Handle scenario change with impact preview (NO auto-save)
+  const handleScenarioChange = useCallback((scenarioId: string) => {
+    // If selecting the same scenario, do nothing
+    if (scenarioId === selectedScenario) {
+      return;
+    }
+    
+    // Just update the UI - no auto-save
+    const scenario = scenarios.find((s) => s.id === scenarioId);
+    if (scenario) {
+      const newWeights = scenario.weights || defaultWeights;
+      setWeights(newWeights);
+      setSelectedScenario(scenarioId);
+      setApprovalStatus('draft');
+    }
+    
+    // Show preview when changing strategy
+    setPendingScenarioChange(scenarioId);
+    setShowImpactPreview(true);
+  }, [selectedScenario]);
+
+  // Apply the scenario change and SAVE it
   const applyScenarioChange = useCallback((scenarioId: string) => {
     setSelectedScenario(scenarioId);
     const scenario = scenarios.find((s) => s.id === scenarioId);
-    if (scenario?.weights) {
-      setWeights(scenario.weights);
-    }
+    const newWeights = scenario?.weights || defaultWeights;
+    setWeights(newWeights);
     setApprovalStatus('draft');
     setShowImpactPreview(false);
     setPendingScenarioChange(null);
-  }, []);
+    setPreviewTargetScenario(null);
+    
+    // Save the strategy when user confirms the change
+    if (!user) {
+      toast.error('Πρέπει να είσαι συνδεδεμένος');
+      return;
+    }
+    
+    const scenarioName = scenario?.name || (scenarioId === 'custom' ? 'Custom' : 'Unknown');
+    
+    saveActiveStrategy({
+      scenarioId: scenarioId,
+      weights: newWeights,
+      approvalStatus: 'draft',
+      approvedBy: user.email || user.displayName || 'User',
+    }).then(() => {
+      toast.success(`Στρατηγική "${scenarioName}" αποθηκεύτηκε`);
+    }).catch((error) => {
+      console.error('Error saving strategy:', error);
+      toast.error(`Σφάλμα: ${error?.message || error}`);
+    });
+  }, [user, saveActiveStrategy, toast]);
 
   // Confirm strategy change after impact preview
   const confirmStrategyChange = useCallback(() => {
     if (pendingScenarioChange) {
       applyScenarioChange(pendingScenarioChange);
+    } else if (previewTargetScenario) {
+      applyScenarioChange(previewTargetScenario);
     }
-  }, [pendingScenarioChange, applyScenarioChange]);
+  }, [pendingScenarioChange, previewTargetScenario, applyScenarioChange]);
+
+  const previewConfig = getPreviewConfig(selectedScenario || 'profit_max', weights);
+
+  // NO auto-save for custom weights - user must click "Save Strategy" button
 
   // Handle individual weight change with proportional adjustment
   const handleWeightChange = useCallback(
@@ -239,9 +317,25 @@ export function WeightConfigurator() {
       setWeights(newWeights);
       setSelectedScenario('custom');
       setApprovalStatus('draft');
+      
+      // Debounce expensive calculations
+      if (debounceTimerRef.current) {
+        window.clearTimeout(debounceTimerRef.current);
+      }
+      debounceTimerRef.current = window.setTimeout(() => {
+        setDebouncedWeights(newWeights);
+      }, 150);
     },
     [weights]
   );
+  
+  // Sync debounced weights when weights change externally (scenario selection)
+  useEffect(() => {
+    if (debounceTimerRef.current) {
+      window.clearTimeout(debounceTimerRef.current);
+    }
+    setDebouncedWeights(weights);
+  }, [selectedScenario]); // Only when scenario changes, not on every weight change
 
   // Reset to default
   const handleReset = useCallback(() => {
@@ -251,25 +345,128 @@ export function WeightConfigurator() {
   }, []);
 
   // Calculate prioritized products (strategy-specific score logic)
+  // Use debounced weights for expensive calculations, limit to top 100 for preview
   const prioritizedProducts = useMemo(() => {
+    if (!selectedScenario) return [];
+    const strategyId = selectedScenario === 'custom' ? undefined : selectedScenario;
+    const scored = products
+      .map((p) => ({
+        ...p,
+        composite_score: calculateCompositeScore(p, debouncedWeights, undefined, strategyId)
+      }))
+      .sort((a, b) => (b.composite_score || 0) - (a.composite_score || 0));
+    
+    // Return top 100 for preview (full list only needed for export)
+    return scored.slice(0, 100);
+  }, [products, debouncedWeights, selectedScenario]);
+
+  const previewTotalPages = Math.max(1, Math.ceil(prioritizedProducts.length / PREVIEW_PAGE_SIZE));
+  const paginatedPreviewProducts = prioritizedProducts.slice(
+    (currentPreviewPage - 1) * PREVIEW_PAGE_SIZE,
+    currentPreviewPage * PREVIEW_PAGE_SIZE
+  );
+
+  useEffect(() => {
+    setCurrentPreviewPage(1);
+  }, [selectedScenario, debouncedWeights]);
+
+  // Full list for export (only calculated when needed)
+  const allPrioritizedProducts = useMemo(() => {
+    if (!selectedScenario) return [];
     const strategyId = selectedScenario === 'custom' ? undefined : selectedScenario;
     return products
       .map((p) => ({
         ...p,
-        composite_score: calculateCompositeScore(p, weights, undefined, strategyId)
+        composite_score: calculateCompositeScore(p, debouncedWeights, undefined, strategyId)
       }))
-      .sort((a, b) => (b.composite_score || 0) - (a.composite_score || 0))
-      .slice(0, 10);
-  }, [products, weights, selectedScenario]);
+      .sort((a, b) => (b.composite_score || 0) - (a.composite_score || 0));
+  }, [products, debouncedWeights, selectedScenario]);
 
-  // Get channel recommendations for current scenario
-  const currentRecommendations = useMemo(() => {
-    const scenarioKey = selectedScenario === 'custom' ? 'profit_max' : selectedScenario;
-    return channelRecommendations[scenarioKey] || channelRecommendations.profit_max;
-  }, [selectedScenario]);
+  // Generate product feed function
+  const generateProductFeed = async (format: 'csv' | 'xlsx') => {
+    if (allPrioritizedProducts.length === 0) {
+      toast.error('Δεν υπάρχουν προϊόντα για feed generation');
+      return;
+    }
 
-  const totalWeight = Object.values(weights).reduce((a, b) => a + b, 0);
-  const previewConfig = getPreviewConfig(selectedScenario, weights);
+    // Use all prioritized products (sorted by composite score)
+    const feedProducts = allPrioritizedProducts;
+
+    // Standard product feed format
+    const headers = ['SKU', 'Name', 'Category', 'Price', 'Margin %', 'Stock Level', 'Stock Capacity', 'Stock Age Days', 'Composite Score', 'Priority Tag'];
+    const rows = feedProducts.map(p => [
+      p.sku || '',
+      p.name || '',
+      p.category || '',
+      (p.price || 0).toFixed(2),
+      (p.margin_percentage || 0).toFixed(1),
+      p.stock_level || 0,
+      p.stock_capacity || 0,
+      getStockAgeDays(p),
+      p.composite_score || 0,
+      p.priority_tag || ''
+    ]);
+
+    if (format === 'csv') {
+      const csvContent = [
+        headers.join(','),
+        ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+      ].join('\n');
+
+      const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `product_feed_${selectedScenario}_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast.success('Product feed downloaded successfully');
+    } else if (format === 'xlsx') {
+      try {
+        const XLSX = await import('xlsx');
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Products');
+        XLSX.writeFile(wb, `product_feed_${selectedScenario}_${new Date().toISOString().split('T')[0]}.xlsx`);
+        toast.success('Product feed downloaded successfully');
+      } catch (error) {
+        console.error('Excel export error:', error);
+        toast.error('Σφάλμα κατά την εξαγωγή Excel. Δοκιμάστε CSV.');
+      }
+    }
+    
+    setShowFeedFormatModal(false);
+  };
+
+  // AI-powered channel recommendations (fallback to static on error/disabled)
+  const {
+    currentRecommendations,
+    isLoading: aiRecLoading,
+    error: aiRecError,
+    aiEnabled,
+    toggleAI,
+    isAIGenerated
+  } = useAIChannelRecommendations({
+    selectedScenarioId: selectedScenario,
+    segments: rfmSegments,
+    selectedSegmentId: selectedSegment,
+    useAI: true
+  });
+
+  // Load saved strategy from Firestore on mount/refresh
+  useEffect(() => {
+    if (!strategyLoading && activeStrategy) {
+      setSelectedScenario(activeStrategy.scenarioId);
+      setWeights(activeStrategy.weights);
+      setApprovalStatus(activeStrategy.approvalStatus);
+    }
+  }, [activeStrategy?.id, strategyLoading]);
+
+  // NO auto-save default strategy - user must select and save manually
+
 
   return (
     <div className="space-y-6 max-w-full overflow-x-hidden">
@@ -284,9 +481,17 @@ export function WeightConfigurator() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" icon={<GitCompare size={16} />} onClick={() => setShowCompareModal(true)}>
-            Σύγκριση
-          </Button>
+          <Tooltip content="Συγκρίνετε δύο στρατηγικές: weights, Top N προϊόντα (τα N με τα υψηλότερα scores), revenue/margin, αλλαγές θέσης.">
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<GitCompare size={16} />}
+              onClick={() => setShowCompareModal(true)}
+              className="!border-[#FF6B35]/50 hover:!border-[#FF6B35]"
+            >
+              Σύγκριση
+            </Button>
+          </Tooltip>
           <ApprovalWorkflow
             status={approvalStatus}
             onStatusChange={setApprovalStatus}
@@ -380,7 +585,20 @@ export function WeightConfigurator() {
               variant="secondary"
               className="w-full"
               icon={<Eye size={16} />}
-              onClick={() => setShowImpactPreview(true)}
+              disabled={!selectedScenario}
+              onClick={() => {
+                if (!selectedScenario) return;
+                // Show preview comparing current strategy with first alternative
+                const otherScenarios = scenarios.filter(s => s.id !== selectedScenario && s.id !== 'custom');
+                if (otherScenarios.length > 0) {
+                  setPreviewTargetScenario(otherScenarios[0].id);
+                  setShowImpactPreview(true);
+                } else {
+                  // No alternatives, just show current state
+                  setPreviewTargetScenario(null);
+                  setShowImpactPreview(true);
+                }
+              }}
             >
               Preview Impact
             </Button>
@@ -388,7 +606,8 @@ export function WeightConfigurator() {
               variant="secondary"
               className="w-full"
               icon={<Download size={16} />}
-              disabled={approvalStatus !== 'approved'}
+              disabled={!selectedScenario || products.length === 0}
+              onClick={() => setShowFeedFormatModal(true)}
             >
               Generate Product Feed
             </Button>
@@ -400,7 +619,7 @@ export function WeightConfigurator() {
           <CardHeader
             title="Live Preview"
             subtitle={
-              hasImported ? `Top 10 από ${products.length} εισαγόμενα προϊόντα` : 'Top 10 Προτεραιοποιημένα Προϊόντα'
+              hasImported ? `Top 100 από ${products.length} εισαγόμενα προϊόντα (10 ανά σελίδα)` : 'Top 100 Προτεραιοποιημένα Προϊόντα (10 ανά σελίδα)'
             }
             icon={<Sparkles size={18} className="text-[var(--nts-medium-gray)]" />}
           />
@@ -429,14 +648,14 @@ export function WeightConfigurator() {
               </thead>
               <tbody>
                 <AnimatePresence mode="popLayout">
-                  {prioritizedProducts.map((product, index) => (
+                  {paginatedPreviewProducts.map((product, index) => (
                     <motion.tr
                       key={product.id}
                       layout
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      transition={{ delay: index * 0.03 }}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.2 }}
                       className="border-b border-[#E5E5E5] last:border-0"
                     >
                       {previewConfig.columns.map((col) => (
@@ -444,7 +663,7 @@ export function WeightConfigurator() {
                           key={col.id}
                           columnId={col.id}
                           product={product}
-                          rank={index + 1}
+                          rank={(currentPreviewPage - 1) * PREVIEW_PAGE_SIZE + index + 1}
                         />
                       ))}
                     </motion.tr>
@@ -453,6 +672,39 @@ export function WeightConfigurator() {
               </tbody>
             </table>
           </div>
+
+          {/* Pagination */}
+          {prioritizedProducts.length > PREVIEW_PAGE_SIZE && (
+            <div className="mt-4 pt-4 border-t border-[#E5E5E5] flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-[#4A4A4A]">
+                Εμφανίζονται {(currentPreviewPage - 1) * PREVIEW_PAGE_SIZE + 1}–{Math.min(currentPreviewPage * PREVIEW_PAGE_SIZE, prioritizedProducts.length)} από {prioritizedProducts.length} προϊόντα
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<ChevronLeft size={16} />}
+                  onClick={() => setCurrentPreviewPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPreviewPage <= 1}
+                >
+                  Προηγούμενα
+                </Button>
+                <span className="text-sm text-[#4A4A4A] px-2">
+                  Σελίδα {currentPreviewPage} από {previewTotalPages}
+                </span>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<ChevronRight size={16} />}
+                  iconPosition="right"
+                  onClick={() => setCurrentPreviewPage((p) => Math.min(previewTotalPages, p + 1))}
+                  disabled={currentPreviewPage >= previewTotalPages}
+                >
+                  Επόμενα
+                </Button>
+              </div>
+            </div>
+          )}
 
           {/* Impact Summary */}
           <div className="mt-6 p-4 bg-[#F5F5F5] rounded-lg grid grid-cols-3 gap-4">
@@ -499,10 +751,27 @@ export function WeightConfigurator() {
       <Card padding="lg">
         <CardHeader
           title="Channel Recommendations"
-            subtitle="AI-powered channel mix βάσει επιλεγμένης στρατηγικής"
+          subtitle={
+            aiEnabled
+              ? isAIGenerated
+                ? 'AI-generated channel mix βάσει στρατηγικής + segment'
+                : aiRecLoading
+                ? 'AI δημιουργεί συστάσεις…'
+                : 'AI-powered channel mix βάσει επιλεγμένης στρατηγικής'
+              : 'Στατικές συστάσεις (rule-based)'
+          }
           icon={<Sparkles size={18} className="text-[var(--nts-medium-gray)]" />}
           action={
             <div className="flex items-center gap-2">
+              <button
+                onClick={toggleAI}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                  aiEnabled ? 'bg-[#FF6B35]/20 text-[#FF6B35]' : 'bg-[#F5F5F5] text-[#4A4A4A]'
+                }`}
+                title={aiEnabled ? 'AI ενεργό – κλικ για στατικές' : 'AI απενεργοποιημένο – κλικ για AI'}
+              >
+                {aiEnabled ? 'AI ON' : 'AI OFF'}
+              </button>
               {rfmSegments.slice(0, 4).map((segment) => (
                 <button
                   key={segment.id}
@@ -525,10 +794,22 @@ export function WeightConfigurator() {
           }
         />
 
-        <ChannelRecommendations
-          recommendations={currentRecommendations[selectedSegment] || currentRecommendations.champions}
-          segment={rfmSegments.find((s) => s.id === selectedSegment) ?? rfmSegments[0] ?? null}
-        />
+        {aiRecError && (
+          <p className="text-xs text-amber-600 mb-2">
+            AI απέτυχε – εμφανίζονται στατικές συστάσεις. Ενεργοποίησε Vertex AI στο Firebase Console.
+          </p>
+        )}
+        {aiRecLoading ? (
+          <div className="flex items-center gap-3 p-6">
+            <Spinner size="md" />
+            <span className="text-sm text-[#4A4A4A]">Δημιουργία AI συστάσεων για {rfmSegments.find((s) => s.id === selectedSegment)?.name ?? selectedSegment}…</span>
+          </div>
+        ) : (
+          <ChannelRecommendations
+            recommendations={currentRecommendations[selectedSegment] || currentRecommendations.champions}
+            segment={rfmSegments.find((s) => s.id === selectedSegment) ?? rfmSegments[0] ?? null}
+          />
+        )}
       </Card>
 
       {/* Strategy Impact Preview Modal */}
@@ -537,8 +818,19 @@ export function WeightConfigurator() {
         onClose={() => {
           setShowImpactPreview(false);
           setPendingScenarioChange(null);
+          setPreviewTargetScenario(null);
         }}
         onConfirm={confirmStrategyChange}
+        currentWeights={getCurrentWeights()}
+        newWeights={
+          pendingScenarioChange 
+            ? getWeightsForScenario(pendingScenarioChange) 
+            : previewTargetScenario 
+              ? getWeightsForScenario(previewTargetScenario)
+              : selectedScenario ? getWeightsForScenario(selectedScenario) : defaultWeights
+        }
+        currentScenarioId={selectedScenario || undefined}
+        newScenarioId={pendingScenarioChange || previewTargetScenario || selectedScenario || undefined}
       />
 
       {/* Compare Scenarios Modal */}
@@ -548,6 +840,81 @@ export function WeightConfigurator() {
         products={products}
         getWeightsForScenario={getWeightsForScenario}
       />
+
+      {/* Product Feed Format Modal */}
+      <AnimatePresence>
+        {showFeedFormatModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            onClick={() => setShowFeedFormatModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-2xl shadow-2xl max-w-md w-full"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="p-6 border-b border-[#E5E5E5] flex items-center justify-between">
+                <h2 className="text-xl font-bold text-[#1A1A1A]">Generate Product Feed</h2>
+                <button
+                  onClick={() => setShowFeedFormatModal(false)}
+                  className="p-2 hover:bg-[#F5F5F5] rounded-lg transition-colors"
+                >
+                  <X size={20} className="text-[#4A4A4A]" />
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="p-6 space-y-3">
+                <p className="text-sm text-[#4A4A4A] mb-4">
+                  Generate feed με <strong>{allPrioritizedProducts.length}</strong> προϊόντα ταξινομημένα βάσει της τρέχουσας strategy
+                </p>
+
+                <button
+                  onClick={() => generateProductFeed('xlsx')}
+                  className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[#FF6B35] hover:bg-[#FFF0EB] transition-all text-left flex items-center gap-4 group"
+                >
+                  <div className="p-3 bg-[#22C55E]/10 rounded-lg group-hover:bg-[#22C55E]/20 transition-colors">
+                    <FileSpreadsheet size={24} className="text-[#22C55E]" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-[#1A1A1A]">Excel (.xlsx)</h3>
+                    <p className="text-xs text-[#4A4A4A]">Download as Excel file</p>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => generateProductFeed('csv')}
+                  className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[#FF6B35] hover:bg-[#FFF0EB] transition-all text-left flex items-center gap-4 group"
+                >
+                  <div className="p-3 bg-[#3B82F6]/10 rounded-lg group-hover:bg-[#3B82F6]/20 transition-colors">
+                    <FileText size={24} className="text-[#3B82F6]" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-[#1A1A1A]">CSV (.csv)</h3>
+                    <p className="text-xs text-[#4A4A4A]">Download as CSV file</p>
+                  </div>
+                </button>
+              </div>
+
+              {/* Footer */}
+              <div className="p-6 border-t border-[#E5E5E5] flex justify-end">
+                <Button 
+                  variant="ghost" 
+                  onClick={() => setShowFeedFormatModal(false)}
+                >
+                  Ακύρωση
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -30,7 +30,6 @@ export function Card({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
       className={className}
-      onClick={onClick}
     >
       <div
         className="card-primer"
@@ -39,16 +38,17 @@ export function Card({
           border: '1px solid var(--borderColor-default, #d0d7de)',
           borderRadius: 8,
           padding: paddingPx[padding],
-          cursor: hover ? 'pointer' : 'default',
+          cursor: (hover || onClick) ? 'pointer' : 'default',
           transition: 'background-color 120ms ease, border-color 120ms ease'
         }}
+        onClick={onClick}
         onMouseEnter={(e) => {
-          if (!hover) return;
+          if (!hover && !onClick) return;
           (e.currentTarget as HTMLDivElement).style.background = 'var(--canvas-subtle, #f6f8fa)';
           (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--borderColor-muted, #d8dee4)';
         }}
         onMouseLeave={(e) => {
-          if (!hover) return;
+          if (!hover && !onClick) return;
           (e.currentTarget as HTMLDivElement).style.background = 'var(--canvas-default, #ffffff)';
           (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--borderColor-default, #d0d7de)';
         }}

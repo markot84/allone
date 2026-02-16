@@ -33,6 +33,24 @@ export interface Invite {
   createdBy?: string;
 }
 
+// Feed Source Types (for automated import)
+export type FeedSourceType = 'erp' | 'google_ads' | 'meta_catalog';
+
+export interface FeedSource {
+  id: string;
+  brandId: string;
+  name: string;
+  type: FeedSourceType;
+  url: string;
+  schedule?: string; // cron: "0 6 * * *" = daily 6:00
+  lastRun?: string; // ISO
+  lastStatus?: 'success' | 'failed';
+  lastError?: string;
+  lastImported?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // Strategy Weights Types
 export interface WeightFactor {
   id: string;

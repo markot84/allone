@@ -6,3 +6,4 @@ export * from './mockROI';
 export * from './mockInsights';
 export * from './mockCalendar';
 export * from './mockContent';
+export * from './feedSourceConfig';

@@ -3,7 +3,7 @@ import { Check, Euro, Package, Rocket, Settings, TrendingUp } from 'lucide-react
 import { scenarios } from '../../data';
 
 interface ScenarioSelectorProps {
-  selectedScenario: string;
+  selectedScenario: string | null;
   onScenarioChange: (scenarioId: string) => void;
 }
 
@@ -30,7 +30,7 @@ export function ScenarioSelector({
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 max-w-full overflow-x-hidden">
       {scenarios.map((scenario, index) => {
-        const isSelected = selectedScenario === scenario.id;
+        const isSelected = selectedScenario !== null && selectedScenario === scenario.id;
         
         return (
           <motion.div

@@ -23,7 +23,7 @@ import {
   ThreeBarsIcon,
   XIcon
 } from '@primer/octicons-react';
-import { Upload, UserPlus, Building2 } from 'lucide-react';
+import { Upload, UserPlus, Building2, Target } from 'lucide-react';
 
 type SectionId =
   | 'brands'
@@ -33,6 +33,7 @@ type SectionId =
   | 'rfm'
   | 'products'
   | 'channels'
+  | 'campaigns'
   | 'reports'
   | 'roi'
   | 'insights'
@@ -268,12 +269,13 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
       { id: 'brands', label: 'Τα Brands μου', icon: Building2 },
       { id: 'dashboard', label: 'Dashboard', icon: HomeIcon },
       { id: 'strategy', label: 'Strategy Weights', icon: GraphIcon },
-      { id: 'calendar', label: 'Content Strategy', icon: PencilIcon },
-      { id: 'rfm', label: 'RFM Analysis', icon: OrganizationIcon },
       { id: 'products', label: 'Product Intelligence', icon: PackageIcon },
+      { id: 'rfm', label: 'RFM Analysis', icon: OrganizationIcon },
       { id: 'channels', label: 'Channel Activation', icon: MegaphoneIcon },
+      { id: 'campaigns', label: 'Campaigns', icon: Target },
+      { id: 'roi', label: 'ROI', icon: GraphIcon },
+      { id: 'calendar', label: 'Content Strategy', icon: PencilIcon },
       { id: 'reports', label: 'Reports', icon: ReportIcon },
-      { id: 'roi', label: 'ROI Attribution', icon: GraphIcon },
       { id: 'insights', label: 'AI Insights', icon: LightBulbIcon },
       { id: 'data', label: 'Data Import', icon: Upload },
       { id: 'invite', label: 'Καλέστε χρήστη', icon: UserPlus },
@@ -289,7 +291,11 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
           key={item.id}
           as="button"
           type="button"
-          onClick={(e) => { e.preventDefault(); onSelect(item.id); }}
+          onClick={(e) => { 
+            e.preventDefault(); 
+            e.stopPropagation();
+            onSelect(item.id); 
+          }}
           aria-current={activeSection === item.id ? 'page' : undefined}
           style={{ width: '100%', textAlign: 'left' }}
         >
@@ -598,8 +604,8 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
             <div style={{ padding: 16, flex: 1, overflowY: 'auto' }}>
               <Nav
                 onSelect={(id) => {
-                  onSectionChange(id);
                   setMobileNavOpen(false);
+                  onSectionChange(id);
                 }}
               />
             </div>

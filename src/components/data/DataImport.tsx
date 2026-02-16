@@ -5,6 +5,9 @@ import { useBrand } from '../../hooks';
 import { FileText, CheckCircle2, XCircle, AlertCircle, Clock, Trash2, FileUp, Link as LinkIcon, HelpCircle, ExternalLink } from 'lucide-react';
 import { Card, Button, Spinner, ProgressBar, useToast, Badge } from '../common';
 import { importFile, saveImportJob, getImportJobs, isSupportedFile, PRODUCT_COLUMN_MAPPING, type ImportType, type ImportResult, type ImportJob, type ImportProgress } from '../../services/import';
+import { FEED_SOURCE_OPTIONS, type FeedSourceType } from '../../data/feedSourceConfig';
+import { FeedPreviewModal } from './FeedPreviewModal';
+import { FeedSourcesSection } from './FeedSourcesSection';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export type FileWithType = { file: File; type: ImportType };
@@ -24,6 +27,10 @@ export function DataImport() {
   const [urlError, setUrlError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [showUrlImport, setShowUrlImport] = useState(false);
+  const [importMode, setImportMode] = useState<'standard' | 'feed'>('standard');
+  const [selectedFeedSource, setSelectedFeedSource] = useState<FeedSourceType>('erp');
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewFileIndex, setPreviewFileIndex] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -34,6 +41,8 @@ export function DataImport() {
     { value: 'campaigns', label: 'Campaigns', icon: '📊' },
     { value: 'analytics', label: 'Analytics', icon: '📈' },
   ];
+
+  const isFeedImport = importMode === 'feed' && selectedType === 'products';
 
   const handleFileSelect = useCallback((files: FileList | File[]) => {
     const fileArray = Array.from(files);
@@ -187,12 +196,17 @@ export function DataImport() {
 
       for (let i = 0; i < selectedFiles.length; i++) {
         const { file, type } = selectedFiles[i];
+        const effectiveType = isFeedImport ? 'products' : type;
         flushSync(() => {
           setImportProgress({ current: i + 1, total, fileName: file.name, fileProgress: undefined });
         });
-        const result = await importFile(file, type, (p) => {
-          setImportProgress((prev) => prev ? { ...prev, fileProgress: p } : null);
-        }, currentBrand?.id ?? null);
+        const result = await importFile(
+          file,
+          effectiveType,
+          (p) => setImportProgress((prev) => prev ? { ...prev, fileProgress: p } : null),
+          currentBrand?.id ?? null,
+          isFeedImport ? selectedFeedSource : undefined
+        );
         results.push(result);
       }
 
@@ -223,7 +237,7 @@ export function DataImport() {
             ? `Επιτυχής εισαγωγή: ${aggregated.imported} εγγραφές εισήχθησαν.`
             : 'Η ενέργεια ολοκληρώθηκε.'
         );
-        const typesImported = new Set(selectedFiles.map((f) => f.type));
+        const typesImported = new Set(isFeedImport ? ['products'] : selectedFiles.map((f) => f.type));
         const brandId = currentBrand?.id ?? null;
         
         if (import.meta.env.MODE === 'development') {
@@ -299,6 +313,11 @@ export function DataImport() {
     }
   };
 
+  const handleConfirmImportFromPreview = () => {
+    setShowPreviewModal(false);
+    handleImport();
+  };
+
   const getStatusIcon = (status: ImportJob['status']) => {
     switch (status) {
       case 'completed':
@@ -320,8 +339,32 @@ export function DataImport() {
       <div>
         <h2 className="text-2xl font-bold text-[#1A1A1A]">Data Import</h2>
         <p className="text-[#4A4A4A] mt-1">
-          Import your data from CSV or Excel (.xlsx) files, or paste a direct link (e.g. Google Cloud signed URL). Supported types: Products, Segments, Campaigns, Analytics.
+          Import από CSV/Excel ή URL. Υποστηρίζονται: Products, Segments, Campaigns, Analytics. Για προϊόντα: ERP export, Google Ads, Meta Catalog.
         </p>
+      </div>
+
+      {/* Import Mode: Standard vs Feed Sources */}
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={() => { setImportMode('standard'); setImportResult(null); }}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+            importMode === 'standard'
+              ? 'bg-[#FF6B35] text-white shadow-sm'
+              : 'bg-white text-[#4A4A4A] border border-[#E5E5E5] hover:border-[#FF6B35]'
+          }`}
+        >
+          Standard Import
+        </button>
+        <button
+          onClick={() => { setImportMode('feed'); setSelectedType('products'); setImportResult(null); }}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+            importMode === 'feed'
+              ? 'bg-[#FF6B35] text-white shadow-sm'
+              : 'bg-white text-[#4A4A4A] border border-[#E5E5E5] hover:border-[#FF6B35]'
+          }`}
+        >
+          Feed Sources (ERP, Google Ads, Meta)
+        </button>
       </div>
 
       {/* Progress bar - fixed at top when importing so it's always visible */}
@@ -369,29 +412,60 @@ export function DataImport() {
       {/* Import Form */}
       <Card>
         <div className="p-6 space-y-6">
-          {/* Compact Type Selection - Tab-like buttons */}
-          <div>
-            <p className="text-sm font-medium text-[#4A4A4A] mb-3">Επιλέξτε τύπο δεδομένων:</p>
-            <div className="flex flex-wrap gap-2">
-              {importTypes.map((type) => (
-                <button
-                  key={type.value}
-                  onClick={() => {
-                    setSelectedType(type.value);
-                    setImportResult(null);
-                  }}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                    selectedType === type.value
-                      ? 'bg-[#FF6B35] text-white shadow-sm'
-                      : 'bg-white text-[#4A4A4A] border border-[#E5E5E5] hover:border-[#FF6B35] hover:text-[#FF6B35]'
-                  }`}
-                >
-                  <span className="mr-2">{type.icon}</span>
-                  {type.label}
-                </button>
-              ))}
+          {/* Feed Source selector - when Feed mode */}
+          {importMode === 'feed' && (
+            <div className="p-4 bg-[#FFF9F7] border border-[#FFE4DC] rounded-lg">
+              <p className="text-sm font-medium text-[#4A4A4A] mb-3">Πηγή Feed:</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {FEED_SOURCE_OPTIONS.map((feed) => (
+                  <button
+                    key={feed.id}
+                    onClick={() => setSelectedFeedSource(feed.id)}
+                    className={`p-4 rounded-lg border text-left transition-all ${
+                      selectedFeedSource === feed.id
+                        ? 'border-[#FF6B35] bg-white shadow-sm'
+                        : 'border-[#E5E5E5] bg-white hover:border-[#FF6B35]/50'
+                    }`}
+                  >
+                    <span className="text-2xl">{feed.icon}</span>
+                    <p className="font-semibold text-[#1A1A1A] mt-1">{feed.name}</p>
+                    <p className="text-xs text-[#6B7280] mt-0.5">{feed.description}</p>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* Compact Type Selection - Tab-like buttons (hidden in Feed mode) */}
+          {importMode === 'standard' && (
+            <div>
+              <p className="text-sm font-medium text-[#4A4A4A] mb-3">Επιλέξτε τύπο δεδομένων:</p>
+              <div className="flex flex-wrap gap-2">
+                {importTypes.map((type) => (
+                  <button
+                    key={type.value}
+                    onClick={() => {
+                      setSelectedType(type.value);
+                      setImportResult(null);
+                    }}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                      selectedType === type.value
+                        ? 'bg-[#FF6B35] text-white shadow-sm'
+                        : 'bg-white text-[#4A4A4A] border border-[#E5E5E5] hover:border-[#FF6B35] hover:text-[#FF6B35]'
+                    }`}
+                  >
+                    <span className="mr-2">{type.icon}</span>
+                    {type.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {importMode === 'feed' && (
+            <p className="text-sm text-[#4A4A4A]">
+              Εισαγωγή προϊόντων από <strong>{FEED_SOURCE_OPTIONS.find(f => f.id === selectedFeedSource)?.name}</strong>
+            </p>
+          )}
 
           {/* Drag & Drop Zone */}
           <div
@@ -450,13 +524,27 @@ export function DataImport() {
                   <p className="text-sm font-medium text-[#1A1A1A]">
                     {selectedFiles.length} {selectedFiles.length === 1 ? 'αρχείο επιλέχθηκε' : 'αρχεία επιλέχθηκαν'}
                   </p>
-                  <button
-                    onClick={clearFiles}
-                    className="text-xs text-[#9CA3AF] hover:text-[#EF4444] flex items-center gap-1"
-                  >
-                    <Trash2 size={14} />
-                    Καθαρισμός όλων
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {(isFeedImport || (importMode === 'standard' && selectedType === 'products')) && selectedFiles.length > 0 && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => {
+                          setPreviewFileIndex(0);
+                          setShowPreviewModal(true);
+                        }}
+                      >
+                        Preview
+                      </Button>
+                    )}
+                    <button
+                      onClick={clearFiles}
+                      className="text-xs text-[#9CA3AF] hover:text-[#EF4444] flex items-center gap-1"
+                    >
+                      <Trash2 size={14} />
+                      Καθαρισμός όλων
+                    </button>
+                  </div>
                 </div>
                 <div className="space-y-2 max-h-64 overflow-y-auto">
                   <AnimatePresence>
@@ -477,20 +565,26 @@ export function DataImport() {
                             {(item.file.size / 1024).toFixed(1)} KB
                           </p>
                         </div>
-                        <select
-                          value={item.type}
-                          onChange={(e) => setFileType(index, e.target.value as ImportType)}
-                          className={`text-xs border rounded px-2 py-1 bg-white text-[#1A1A1A] focus:outline-none focus:border-[#FF6B35] ${
-                            (item.file.name.toLowerCase().includes('campaign') || item.file.name.toLowerCase().includes('google ads') || item.file.name.toLowerCase().includes('meta')) &&
-                            item.type !== 'campaigns'
-                              ? 'border-orange-400 bg-orange-50'
-                              : 'border-[#E5E5E5]'
-                          }`}
-                        >
-                          {importTypes.map((t) => (
-                            <option key={t.value} value={t.value}>{t.label}</option>
-                          ))}
-                        </select>
+                        {importMode === 'standard' ? (
+                          <select
+                            value={item.type}
+                            onChange={(e) => setFileType(index, e.target.value as ImportType)}
+                            className={`text-xs border rounded px-2 py-1 bg-white text-[#1A1A1A] focus:outline-none focus:border-[#FF6B35] ${
+                              (item.file.name.toLowerCase().includes('campaign') || item.file.name.toLowerCase().includes('google ads') || item.file.name.toLowerCase().includes('meta')) &&
+                              item.type !== 'campaigns'
+                                ? 'border-orange-400 bg-orange-50'
+                                : 'border-[#E5E5E5]'
+                            }`}
+                          >
+                            {importTypes.map((t) => (
+                              <option key={t.value} value={t.value}>{t.label}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className="text-xs text-[#6B7280] px-2 py-1 bg-[#F5F5F5] rounded">
+                            Products
+                          </span>
+                        )}
                         <button
                           onClick={() => removeFile(index)}
                           className="p-1 rounded text-[#9CA3AF] hover:text-[#EF4444] hover:bg-red-50 transition-colors"
@@ -507,12 +601,16 @@ export function DataImport() {
           </AnimatePresence>
 
           {/* Column Mapping Info & Download Template - Products only */}
-          {selectedType === 'products' && (
+          {(selectedType === 'products' || importMode === 'feed') && (
             <div className="border-t border-[#E5E5E5] pt-4 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-medium text-[#1A1A1A]">
-                    Οι στήλες του αρχείου σας αντιστοιχίζονται αυτόματα
+                    {importMode === 'feed' ? (
+                      <>Για <strong>{FEED_SOURCE_OPTIONS.find(f => f.id === selectedFeedSource)?.name}</strong>: id→sku, title→name, price→price κλπ. Αυτόματη αντιστοίχιση.</>
+                    ) : (
+                      'Οι στήλες του αρχείου σας αντιστοιχίζονται αυτόματα'
+                    )}
                   </p>
                   <button
                     onClick={() => {
@@ -780,6 +878,18 @@ export function DataImport() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Feed Sources - saved sources with Sync τώρα */}
+      {importMode === 'feed' && <FeedSourcesSection />}
+
+      {/* Feed Preview Modal */}
+      <FeedPreviewModal
+        isOpen={showPreviewModal}
+        onClose={() => setShowPreviewModal(false)}
+        file={selectedFiles[previewFileIndex]?.file ?? null}
+        feedSourceType={isFeedImport ? selectedFeedSource : undefined}
+        onConfirmImport={handleConfirmImportFromPreview}
+      />
     </div>
   );
 }

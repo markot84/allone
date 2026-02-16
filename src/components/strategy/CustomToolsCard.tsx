@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { Save, FolderOpen, GitCompare, Download, Upload } from 'lucide-react';
-import { Button } from '../common';
+import { Button, Tooltip } from '../common';
 import { scenarios } from '../../data';
 import {
   getPresets,
@@ -170,9 +170,11 @@ export function CustomToolsCard({ weights, onWeightsChange, onCompareClick }: Cu
         )}
 
         {/* Compare */}
-        <Button variant="secondary" size="sm" icon={<GitCompare size={14} />} onClick={onCompareClick}>
-          Σύγκριση scenarios
-        </Button>
+        <Tooltip content="Συγκρίνετε το custom scenario με άλλες στρατηγικές: weights, Top N προϊόντα (τα N με τα υψηλότερα scores), revenue/margin.">
+          <Button variant="secondary" size="sm" icon={<GitCompare size={14} />} onClick={onCompareClick}>
+            Σύγκριση scenarios
+          </Button>
+        </Tooltip>
 
         {/* Export */}
         <Button variant="ghost" size="sm" icon={<Download size={14} />} onClick={handleExport}>

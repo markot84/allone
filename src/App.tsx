@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
@@ -52,8 +52,43 @@ function QueryProvider({ children }: { children: React.ReactNode }) {
 }
 
 function App() {
-  const [activeSection, setActiveSection] = useState('dashboard');
+  // Initialize from URL hash or default to dashboard
+  const getInitialSection = () => {
+    if (typeof window === 'undefined') return 'dashboard';
+    const hash = window.location.hash.replace('#', '');
+    if (hash && ['brands', 'dashboard', 'strategy', 'rfm', 'products', 'channels', 'campaigns', 'calendar', 'reports', 'roi', 'data', 'invite', 'concept', 'help'].includes(hash)) {
+      return hash;
+    }
+    return 'dashboard';
+  };
+
+  const [activeSection, setActiveSection] = useState(getInitialSection);
   const [insightsPanelOpen, setInsightsPanelOpen] = useState(false);
+
+  // Sync URL hash with active section
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const hash = window.location.hash.replace('#', '');
+    if (hash !== activeSection && activeSection !== 'insights') {
+      window.history.replaceState(null, '', `#${activeSection}`);
+    }
+  }, [activeSection]);
+
+  // Listen for hash changes (browser back/forward)
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace('#', '');
+      if (hash && hash !== activeSection) {
+        if (hash === 'insights') {
+          setInsightsPanelOpen(true);
+        } else {
+          setActiveSection(hash);
+        }
+      }
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, [activeSection]);
 
   // Listen for navigate-to-help events
   useEffect(() => {
@@ -83,6 +118,21 @@ function App() {
       </QueryProvider>
     );
   }
+
+  const handleSectionChange = useCallback((section: string) => {
+    // Use requestAnimationFrame for instant UI update
+    requestAnimationFrame(() => {
+      if (section === 'insights') {
+        setInsightsPanelOpen(true);
+      } else {
+        setActiveSection(section);
+        // Update URL hash for persistence
+        if (typeof window !== 'undefined') {
+          window.history.pushState(null, '', `#${section}`);
+        }
+      }
+    });
+  }, []);
 
   const renderContent = () => {
     switch (activeSection) {
@@ -115,15 +165,7 @@ function App() {
       case 'help':
         return <Help />;
       default:
-        return <DashboardOverview />;
-    }
-  };
-
-  const handleSectionChange = (section: string) => {
-    if (section === 'insights') {
-      setInsightsPanelOpen(true);
-    } else {
-      setActiveSection(section);
+        return <DashboardOverview onSectionChange={handleSectionChange} onOpenInsights={() => setInsightsPanelOpen(true)} />;
     }
   };
 
@@ -144,7 +186,7 @@ function App() {
           activeSection={activeSection}
           onSectionChange={handleSectionChange}
         >
-          <ErrorBoundary key={activeSection}>
+          <ErrorBoundary>
             {renderContent()}
           </ErrorBoundary>
         </AppShell>

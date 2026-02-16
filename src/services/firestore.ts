@@ -13,6 +13,11 @@ import {
   Timestamp,
   QueryConstraint
 } from 'firebase/firestore';
+
+// Helper to create orderBy constraint
+export const createOrderBy = (field: string, direction: 'asc' | 'desc' = 'desc') => {
+  return orderBy(field, direction);
+};
 import { db } from '../config/firebase';
 
 // Generic CRUD operations
@@ -40,10 +45,12 @@ export class FirestoreService {
     brandId?: string | null
   ): Promise<T[]> {
     try {
-      const allConstraints = [...constraints];
+      // Firestore requires: equality filters first, then orderBy
+      const allConstraints: QueryConstraint[] = [];
       if (brandId) {
         allConstraints.push(where('brandId', '==', brandId));
       }
+      allConstraints.push(...constraints);
       const q = query(collection(db, collectionName), ...allConstraints);
       const querySnapshot = await getDocs(q);
 
@@ -95,10 +102,19 @@ export class FirestoreService {
   ): Promise<void> {
     try {
       const docRef = doc(db, collectionName, docId);
-      await setDoc(docRef, {
-        ...data,
-        updatedAt: Timestamp.now()
-      }, { merge: true });
+      // Remove undefined and null values (Firestore doesn't accept undefined)
+      const clean: Record<string, unknown> = {};
+      // Only copy non-undefined and non-null values
+      for (const key in data) {
+        const value = data[key];
+        if (value !== undefined && value !== null) {
+          clean[key] = value;
+        }
+      }
+      // Always set updatedAt
+      clean.updatedAt = Timestamp.now();
+      // Use setDoc with merge to update existing fields, but clean object ensures no undefined values
+      await setDoc(docRef, clean, { merge: true });
     } catch (error) {
       console.error(`Error setting document ${docId} in ${collectionName}:`, error);
       throw error;

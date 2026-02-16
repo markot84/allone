@@ -14,7 +14,8 @@ import {
 } from 'lucide-react';
 import { Card, CardHeader, Badge, Button } from '../common';
 import { useSegments } from '../../hooks';
-import { contentCalendar, upcomingMonths, contentFormats } from '../../data/mockCalendar';
+import { useContent } from '../../hooks';
+// Removed mock calendar imports - using only real data from useContent hook
 
 const statusConfig = {
   draft: { label: 'Προσχέδιο', color: '#4A4A4A', bgColor: '#F5F5F5', icon: <FileText size={12} /> },
@@ -25,8 +26,17 @@ const statusConfig = {
 
 export function ContentCalendar() {
   const { segments: rfmSegments } = useSegments();
+  const { contentItems } = useContent();
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
   const [showAIPanel, setShowAIPanel] = useState(false);
+  
+  // Group content items by week
+  const contentByWeek = contentItems.reduce((acc, item) => {
+    const week = item.week ?? 0;
+    if (!acc[week]) acc[week] = [];
+    acc[week].push(item);
+    return acc;
+  }, {} as Record<number, typeof contentItems>);
 
   return (
     <div className="space-y-6">
@@ -59,9 +69,11 @@ export function ContentCalendar() {
             <ChevronLeft size={20} className="text-[#4A4A4A]" />
           </button>
           <div className="text-center">
-            <h3 className="text-xl font-bold text-[#1A1A1A]">{contentCalendar.month}</h3>
+            <h3 className="text-xl font-bold text-[#1A1A1A]">
+              {contentItems.length > 0 ? `${contentItems.length} Content Items` : 'No Content Items'}
+            </h3>
             <p className="text-sm text-[#4A4A4A]">
-              Theme: {contentCalendar.theme} | Focus: {contentCalendar.customer_journey_focus}
+              {contentItems.length > 0 ? 'Content calendar from imported data' : 'Import content items to see calendar'}
             </p>
           </div>
           <button className="p-2 rounded-lg hover:bg-[#F5F5F5] transition-colors">
@@ -72,115 +84,134 @@ export function ContentCalendar() {
 
       {/* Calendar Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-        {contentCalendar.content_items.map((item, index) => {
-          const status = statusConfig[item.status as keyof typeof statusConfig] ?? statusConfig.draft;
-          const isSelected = selectedWeek === item.week;
+        {contentItems.length === 0 ? (
+          <div className="col-span-4 p-8 text-center border-2 border-dashed border-[#E5E5E5] rounded-xl">
+            <p className="text-sm text-[#4A4A4A]">Δεν υπάρχουν content items. Εισαγάγετε content για να δείτε το calendar.</p>
+          </div>
+        ) : (
+          Object.entries(contentByWeek).map(([week, weekItems]) => {
+            const weekNum = parseInt(week);
+            return weekItems.map((item, itemIndex) => {
+              const status = statusConfig[item.status as keyof typeof statusConfig] ?? statusConfig.draft;
+              const isSelected = selectedWeek === weekNum;
 
-          return (
-            <motion.div
-              key={item.week}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
-            >
-              <Card
-                padding="md"
-                hover
-                onClick={() => setSelectedWeek(isSelected ? null : item.week)}
-                className={isSelected ? 'ring-2 ring-[#FF6B35]' : ''}
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <Badge variant="orange">Week {item.week}</Badge>
-                  <div
-                    className="flex items-center gap-1 px-2 py-1 rounded-full text-xs"
-                    style={{ backgroundColor: status.bgColor, color: status.color }}
+              return (
+                <motion.div
+                  key={`${item.id || weekNum}-${itemIndex}`}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: itemIndex * 0.1 }}
+                >
+                  <Card
+                    padding="md"
+                    hover
+                    onClick={() => setSelectedWeek(isSelected ? null : weekNum)}
+                    className={isSelected ? 'ring-2 ring-[#FF6B35]' : ''}
                   >
-                    {status.icon}
-                    {status.label}
-                  </div>
-                </div>
-
-                <h4 className="font-semibold text-[#1A1A1A] mb-2">{item.topic}</h4>
-
-                <div className="space-y-3">
-                  {/* Formats */}
-                  <div>
-                    <p className="text-xs text-[#4A4A4A] mb-1">Formats</p>
-                    <div className="flex flex-wrap gap-1">
-                      {item.formats.slice(0, 3).map((format) => (
-                        <Badge key={format} variant="default" size="sm">
-                          {format}
-                        </Badge>
-                      ))}
-                      {item.formats.length > 3 && (
-                        <Badge variant="default" size="sm">
-                          +{item.formats.length - 3}
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Segments */}
-                  <div>
-                    <p className="text-xs text-[#4A4A4A] mb-1">Target Segments</p>
-                    <div className="flex flex-wrap gap-1">
-                      {item.target_segments.slice(0, 2).map((seg) => {
-                        const segment = rfmSegments.find(s => s.name === seg);
-                        return (
-                          <span
-                            key={seg}
-                            className="text-xs px-2 py-0.5 rounded-full"
-                            style={{
-                              backgroundColor: segment ? `${segment.color ?? '#6B7280'}20` : '#F5F5F5',
-                              color: segment?.color || '#4A4A4A'
-                            }}
-                          >
-                            {seg}
-                          </span>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Performance (if published) */}
-                  {item.performance && (
-                    <div className="pt-3 border-t border-[#E5E5E5]">
-                      <div className="grid grid-cols-3 gap-2 text-center">
-                        <div>
-                          <p className="text-xs text-[#4A4A4A]">Views</p>
-                          <p className="font-bold text-[#1A1A1A] font-mono text-sm">
-                            {item.performance.views.toLocaleString()}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-[#4A4A4A]">Engagement</p>
-                          <p className="font-bold text-[#22C55E] font-mono text-sm">
-                            {item.performance.engagement}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-[#4A4A4A]">Conv.</p>
-                          <p className="font-bold text-[#FF6B35] font-mono text-sm">
-                            {item.performance.conversions}
-                          </p>
-                        </div>
+                    <div className="flex items-center justify-between mb-3">
+                      <Badge variant="orange">Week {weekNum}</Badge>
+                      <div
+                        className="flex items-center gap-1 px-2 py-1 rounded-full text-xs"
+                        style={{ backgroundColor: status.bgColor, color: status.color }}
+                      >
+                        {status.icon}
+                        {status.label}
                       </div>
                     </div>
-                  )}
-                </div>
 
-                <div className="flex gap-2 mt-4">
-                  <Button variant="ghost" size="sm" icon={<Eye size={14} />} className="flex-1">
-                    View
-                  </Button>
-                  <Button variant="secondary" size="sm" icon={<Edit size={14} />} className="flex-1">
-                    Επεξεργασία
-                  </Button>
-                </div>
-              </Card>
-            </motion.div>
-          );
-        })}
+                    <h4 className="font-semibold text-[#1A1A1A] mb-2">{item.title || item.topic || 'Content Item'}</h4>
+
+                    <div className="space-y-3">
+                      {/* Formats */}
+                      {item.formats && item.formats.length > 0 && (
+                        <div>
+                          <p className="text-xs text-[#4A4A4A] mb-1">Formats</p>
+                          <div className="flex flex-wrap gap-1">
+                            {item.formats.slice(0, 3).map((format) => (
+                              <Badge key={format} variant="default" size="sm">
+                                {format}
+                              </Badge>
+                            ))}
+                            {item.formats.length > 3 && (
+                              <Badge variant="default" size="sm">
+                                +{item.formats.length - 3}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Segments */}
+                      {item.target_segments && item.target_segments.length > 0 && (
+                        <div>
+                          <p className="text-xs text-[#4A4A4A] mb-1">Target Segments</p>
+                          <div className="flex flex-wrap gap-1">
+                            {item.target_segments.slice(0, 2).map((seg) => {
+                              const segment = rfmSegments.find(s => s.name === seg);
+                              return (
+                                <span
+                                  key={seg}
+                                  className="text-xs px-2 py-0.5 rounded-full"
+                                  style={{
+                                    backgroundColor: segment ? `${segment.color ?? '#6B7280'}20` : '#F5F5F5',
+                                    color: segment?.color || '#4A4A4A'
+                                  }}
+                                >
+                                  {seg}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Performance (if published) */}
+                      {item.performance && (
+                        <div className="pt-3 border-t border-[#E5E5E5]">
+                          <div className="grid grid-cols-3 gap-2 text-center">
+                            {item.performance.opens && (
+                              <div>
+                                <p className="text-xs text-[#4A4A4A]">Opens</p>
+                                <p className="font-bold text-[#1A1A1A] font-mono text-sm">
+                                  {item.performance.opens.toLocaleString()}
+                                </p>
+                              </div>
+                            )}
+                            {item.performance.clicks && (
+                              <div>
+                                <p className="text-xs text-[#4A4A4A]">Clicks</p>
+                                <p className="font-bold text-[#22C55E] font-mono text-sm">
+                                  {item.performance.clicks.toLocaleString()}
+                                </p>
+                              </div>
+                            )}
+                            {item.performance.conversions && (
+                              <div>
+                                <p className="text-xs text-[#4A4A4A]">Conv.</p>
+                                <p className="font-bold text-[#FF6B35] font-mono text-sm">
+                                  {item.performance.conversions}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex gap-2 mt-4">
+                      <Button variant="ghost" size="sm" icon={<Eye size={14} />} className="flex-1">
+                        View
+                      </Button>
+                      <Button variant="secondary" size="sm" icon={<Edit size={14} />} className="flex-1">
+                        Επεξεργασία
+                      </Button>
+                    </div>
+                  </Card>
+                </motion.div>
+              );
+            });
+          }).flat()
+        )}
       </div>
 
       {/* Upcoming Months */}
@@ -190,25 +221,12 @@ export function ContentCalendar() {
           subtitle="Προεπισκόπηση επόμενων μηνών"
           icon={<Calendar size={20} className="text-[#FF6B35]" />}
         />
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {upcomingMonths.map((month, index) => (
-            <motion.div
-              key={month.month}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
-              className="p-4 border border-[#E5E5E5] rounded-xl hover:border-[#FF6B35] hover:shadow-sm transition-all"
-            >
-              <h4 className="font-semibold text-[#1A1A1A]">{month.month}</h4>
-              <p className="text-sm text-[#FF6B35] mt-1">{month.theme}</p>
-              <p className="text-xs text-[#4A4A4A] mt-2">{month.focus}</p>
-              <div className="flex flex-wrap gap-1 mt-3">
-                {month.key_events.map((event) => (
-                  <Badge key={event} variant="info" size="sm">{event}</Badge>
-                ))}
-              </div>
-            </motion.div>
-          ))}
+        <div className="text-center py-8">
+          <p className="text-sm text-[#4A4A4A]">
+            {contentItems.length > 0 
+              ? `Content items are displayed in the calendar above. Total: ${contentItems.length} items.`
+              : 'Import content items to see upcoming planning.'}
+          </p>
         </div>
       </Card>
 
@@ -280,12 +298,12 @@ export function ContentCalendar() {
                     Output Formats
                   </label>
                   <div className="flex flex-wrap gap-2">
-                    {contentFormats.slice(0, 8).map((format) => (
+                    {['Email', 'Blog', 'Social Media', 'Landing Page', 'Video', 'Newsletter'].map((format) => (
                       <button
-                        key={format.id}
-                        className="px-3 py-1.5 bg-[#F5F5F5] rounded-lg text-sm text-[#4A4A4A] hover:bg-[#FF6B35] hover:text-white transition-colors flex items-center gap-1"
+                        key={format}
+                        className="px-3 py-1.5 bg-[#F5F5F5] rounded-lg text-sm text-[#4A4A4A] hover:bg-[#FF6B35] hover:text-white transition-colors"
                       >
-                        {format.icon} {format.name}
+                        {format}
                       </button>
                     ))}
                   </div>

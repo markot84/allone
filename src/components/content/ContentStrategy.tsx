@@ -10,20 +10,15 @@ import {
   Pause,
   Link2,
   FileText,
-  ExternalLink,
   CheckCircle,
   ArrowRight,
   Check
 } from 'lucide-react';
 import { Card, CardHeader, Badge, Button } from '../common';
 import { useSegments, useContent } from '../../hooks';
+import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import type { ContentItem } from '../../hooks/useContent';
-import { 
-  activeStrategyContext, 
-  strategyContentMap, 
-  contentApprovalFlow,
-  editorialActions 
-} from '../../data/mockContent';
+// Removed mock content imports - using only real data from useContent hook
 const statusConfig = {
   draft: { label: 'Draft', color: '#4A4A4A', bgColor: '#F5F5F5', icon: <FileText size={12} /> },
   in_production: { label: 'In Production', color: '#3B82F6', bgColor: '#DBEAFE', icon: <Edit size={12} /> },
@@ -36,10 +31,11 @@ const statusConfig = {
 export function ContentStrategy() {
   const { segments: rfmSegments } = useSegments();
   const { contentItems } = useContent();
+  const { activeStrategy, getStrategyName, isLoading: strategyLoading } = useActiveStrategy();
   const [showStrategyMap, setShowStrategyMap] = useState(false);
   const [filterAligned, setFilterAligned] = useState<'all' | 'aligned' | 'misaligned'>('all');
 
-  const currentStrategyContent = strategyContentMap[activeStrategyContext.id as keyof typeof strategyContentMap];
+  // Removed mock data - using only real contentItems from useContent hook
   
   const filteredContent = contentItems.filter(item => {
     if (filterAligned === 'all') return true;
@@ -87,18 +83,47 @@ export function ContentStrategy() {
         <div className="flex items-start justify-between flex-wrap gap-4">
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 bg-[#FFF0EB] rounded-xl flex items-center justify-center text-3xl">
-              {currentStrategyContent?.icon}
+              <Sparkles size={24} />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-lg font-bold text-[#1A1A1A]">
-                  Ενεργή Στρατηγική: {activeStrategyContext.name}
+                  {strategyLoading 
+                    ? 'Φόρτωση στρατηγικής...'
+                    : activeStrategy 
+                    ? `${getStrategyName(activeStrategy.scenarioId)}`
+                    : 'Δεν υπάρχει ενεργή στρατηγική'}
                 </h3>
-                <Badge variant="success">Ενεργή</Badge>
+                {activeStrategy && activeStrategy.approvalStatus === 'implementing' && (
+                  <Badge variant="success">Ενεργή</Badge>
+                )}
+                {activeStrategy && activeStrategy.approvalStatus === 'approved' && (
+                  <Badge variant="default">Εγκεκριμένη</Badge>
+                )}
+                {activeStrategy && activeStrategy.approvalStatus === 'draft' && (
+                  <Badge variant="default">Προσχέδιο</Badge>
+                )}
+                {activeStrategy && activeStrategy.approvalStatus === 'pending_review' && (
+                  <Badge variant="default">Σε Αναμονή</Badge>
+                )}
               </div>
               <p className="text-sm text-[#4A4A4A]">
-                Approved by {activeStrategyContext.approved_by} on {activeStrategyContext.approved_date}
+                {strategyLoading 
+                  ? 'Ελέγχοντας για ενεργή στρατηγική...'
+                  : activeStrategy 
+                  ? `${contentItems.length > 0 ? `${contentItems.length} content items, ` : ''}${alignedCount} aligned, ${misalignedCount} need review`
+                  : 'Πήγαινε στο Strategy Weights για να ορίσεις ενεργή στρατηγική'}
               </p>
+              {activeStrategy && 'implementedAt' in activeStrategy && activeStrategy.implementedAt && (
+                <p className="text-xs text-[#9CA3AF] mt-1">
+                  Εφαρμογή: {new Date(activeStrategy.implementedAt).toLocaleDateString('el-GR')}
+                </p>
+              )}
+              {activeStrategy && 'approvedBy' in activeStrategy && activeStrategy.approvedBy && (
+                <p className="text-xs text-[#9CA3AF] mt-1">
+                  Εγκεκρίθηκε από: {activeStrategy.approvedBy}
+                </p>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-4">
@@ -113,39 +138,50 @@ export function ContentStrategy() {
           </div>
         </div>
 
-        {/* Content Direction */}
-        <div className="mt-6 p-4 bg-[#F5F5F5] rounded-xl">
-          <h4 className="font-medium text-[#1A1A1A] mb-3 flex items-center gap-2">
-            <Sparkles size={16} className="text-[#FF6B35]" />
-            AI Content Direction
-          </h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <DirectionItem 
-              label="Tone" 
-              value={activeStrategyContext.content_direction.tone} 
-            />
-            <DirectionItem 
-              label="Focus" 
-              value={activeStrategyContext.content_direction.messaging_focus} 
-            />
-            <DirectionItem 
-              label="Products" 
-              value={activeStrategyContext.content_direction.product_emphasis} 
-            />
+        {/* Strategy Details - Show when active strategy exists */}
+        {activeStrategy && (
+          <div className="mt-6 p-4 bg-[#F5F5F5] rounded-xl">
+            <h4 className="font-medium text-[#1A1A1A] mb-3 flex items-center gap-2">
+              <Sparkles size={16} className="text-[#FF6B35]" />
+              Στρατηγική: {getStrategyName(activeStrategy.scenarioId)}
+            </h4>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
+              <div>
+                <p className="text-xs text-[#9CA3AF]">Profit</p>
+                <p className="font-semibold text-[#1A1A1A]">{activeStrategy.weights?.profit || 0}%</p>
+              </div>
+              <div>
+                <p className="text-xs text-[#9CA3AF]">Stock</p>
+                <p className="font-semibold text-[#1A1A1A]">{activeStrategy.weights?.stock || 0}%</p>
+              </div>
+              <div>
+                <p className="text-xs text-[#9CA3AF]">Strategic</p>
+                <p className="font-semibold text-[#1A1A1A]">{activeStrategy.weights?.strategic || 0}%</p>
+              </div>
+              <div>
+                <p className="text-xs text-[#9CA3AF]">Revenue</p>
+                <p className="font-semibold text-[#1A1A1A]">{activeStrategy.weights?.revenue || 0}%</p>
+              </div>
+              <div>
+                <p className="text-xs text-[#9CA3AF]">Fit</p>
+                <p className="font-semibold text-[#1A1A1A]">{activeStrategy.weights?.fit || 0}%</p>
+              </div>
+            </div>
           </div>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <span className="text-xs text-[#4A4A4A]">Recommended formats:</span>
-            {activeStrategyContext.content_direction.recommended_formats.map(format => (
-              <Badge key={format} variant="success" size="sm">{format}</Badge>
-            ))}
+        )}
+
+        {/* Content Direction - Only show when we have content items */}
+        {contentItems.length > 0 && (
+          <div className="mt-6 p-4 bg-[#F5F5F5] rounded-xl">
+            <h4 className="font-medium text-[#1A1A1A] mb-3 flex items-center gap-2">
+              <Sparkles size={16} className="text-[#FF6B35]" />
+              Content Overview
+            </h4>
+            <p className="text-sm text-[#4A4A4A]">
+              {contentItems.length} content items imported. {alignedCount} aligned with strategy, {misalignedCount} need review.
+            </p>
           </div>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <span className="text-xs text-[#4A4A4A]">Avoid:</span>
-            {activeStrategyContext.content_direction.avoid.map(item => (
-              <Badge key={item} variant="danger" size="sm">{item}</Badge>
-            ))}
-          </div>
-        </div>
+        )}
       </Card>
 
       {/* Misalignment Alert */}
@@ -160,7 +196,7 @@ export function ContentStrategy() {
                 <AlertTriangle size={20} className="text-[#F59E0B]" />
                 <div>
                   <p className="font-medium text-[#92400E]">
-                    {misalignedCount} content items ενδέχεται να μην ευθυγραμμίζονται με την τρέχουσα στρατηγική {activeStrategyContext.name}
+                    {misalignedCount} content items ενδέχεται να μην ευθυγραμμίζονται με την τρέχουσα στρατηγική
                   </p>
                   <p className="text-sm text-[#B45309]">
                     Review and reschedule or adjust content to match strategy direction
@@ -199,73 +235,16 @@ export function ContentStrategy() {
                 }
               />
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {Object.values(strategyContentMap).map((strategy) => {
-                  const isActive = strategy.id === activeStrategyContext.id;
-                  return (
-                    <div
-                      key={strategy.id}
-                      className={`p-4 rounded-xl border-2 transition-all ${
-                        isActive 
-                          ? 'border-[#FF6B35] bg-[#FFF0EB]' 
-                          : 'border-[#E5E5E5] bg-white hover:border-[#FF6B35]/50'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 mb-3">
-                        <span className="text-2xl">{strategy.icon}</span>
-                        <div>
-                          <h4 className="font-medium text-[#1A1A1A] text-sm">{strategy.name}</h4>
-                          {isActive && <Badge variant="orange" size="sm">Ενεργή</Badge>}
-                        </div>
-                      </div>
-                      <div className="space-y-2 text-xs">
-                        <div>
-                          <span className="text-[#9CA3AF]">Tone:</span>
-                          <p className="text-[#4A4A4A]">{strategy.content_tone}</p>
-                        </div>
-                        <div>
-                          <span className="text-[#9CA3AF]">CTA Style:</span>
-                          <p className="text-[#4A4A4A]">{strategy.cta_style}</p>
-                        </div>
-                        <div className="pt-2">
-                          <span className="text-[#9CA3AF]">Sample headlines:</span>
-                          {strategy.sample_headlines.slice(0, 2).map((h, i) => (
-                            <p key={i} className="text-[#4A4A4A] italic">"{h}"</p>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+                <p className="text-sm text-[#4A4A4A]">
+                  Strategy mapping will be available when content items are imported.
+                </p>
               </div>
             </Card>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Editorial App Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {editorialActions.map((action) => (
-          <Card key={action.id} padding="md" hover>
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 bg-[#FFF0EB] rounded-lg flex items-center justify-center text-xl">
-                {action.icon}
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-medium text-[#1A1A1A] text-sm">{action.label}</h4>
-                  {action.badge && (
-                    <Badge variant="orange" size="sm">{action.badge}</Badge>
-                  )}
-                </div>
-                <p className="text-xs text-[#4A4A4A] mt-1">{action.description}</p>
-                <button className="text-xs text-[#FF6B35] mt-2 hover:underline flex items-center gap-1">
-                  Open <ExternalLink size={10} />
-                </button>
-              </div>
-            </div>
-          </Card>
-        ))}
-      </div>
+      {/* Editorial App Actions - Removed mock data */}
 
       {/* Filter Tabs */}
       <div className="flex items-center gap-2 border-b border-[#E5E5E5] pb-4">
@@ -333,41 +312,17 @@ export function ContentStrategy() {
           subtitle="Stages from brief to publication"
           icon={<ArrowRight size={20} className="text-[#FF6B35]" />}
         />
-        <div className="flex items-center justify-between overflow-x-auto pb-4">
-          {contentApprovalFlow.map((stage, index) => (
-            <div key={stage.stage} className="flex items-center">
-              <div className="flex flex-col items-center min-w-[120px]">
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-xl ${
-                  index < 3 ? 'bg-[#DCFCE7]' : 'bg-[#F5F5F5]'
-                }`}>
-                  {stage.icon}
-                </div>
-                <p className="text-xs font-medium text-[#1A1A1A] mt-2 text-center">{stage.label}</p>
-                <p className="text-[10px] text-[#4A4A4A] text-center">{stage.approver}</p>
-                {stage.auto_flags && (
-                  <Badge variant="info" size="sm" className="mt-1">Auto-flags</Badge>
-                )}
-              </div>
-              {index < contentApprovalFlow.length - 1 && (
-                <div className={`w-12 h-0.5 ${index < 2 ? 'bg-[#22C55E]' : 'bg-[#E5E5E5]'}`} />
-              )}
-            </div>
-          ))}
+        <div className="text-center py-8">
+          <p className="text-sm text-[#4A4A4A]">
+            Content approval workflow will be available when content items are imported.
+          </p>
         </div>
       </Card>
     </div>
   );
 }
 
-// Helper Components
-function DirectionItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-xs text-[#9CA3AF] mb-1">{label}</p>
-      <p className="text-sm text-[#1A1A1A]">{value}</p>
-    </div>
-  );
-}
+// Removed DirectionItem helper - not used anymore
 
 interface ContentCardProps {
   item: ContentItem;

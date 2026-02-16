@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { Check, CheckCircle2, ChevronDown, Clock, FileText, Rocket } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Button } from '../common';
 
 type ApprovalStatus = 'draft' | 'pending_review' | 'approved' | 'implementing';
@@ -39,7 +40,34 @@ const statusConfig = {
 
 export function ApprovalWorkflow({ status, onStatusChange }: ApprovalWorkflowProps) {
   const [showDropdown, setShowDropdown] = useState(false);
+  const [dropdownStyle, setDropdownStyle] = useState<{ top: number; right: number; minWidth: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
   const config = statusConfig[status];
+
+  useEffect(() => {
+    if (showDropdown && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      setDropdownStyle({
+        top: rect.bottom + 8,
+        right: window.innerWidth - rect.right,
+        minWidth: Math.max(192, rect.width)
+      });
+    } else {
+      setDropdownStyle(null);
+    }
+  }, [showDropdown]);
+
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!showDropdown) return;
+    const onOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (btnRef.current?.contains(target) || dropdownRef.current?.contains(target)) return;
+      setShowDropdown(false);
+    };
+    document.addEventListener('click', onOutside, { capture: true });
+    return () => document.removeEventListener('click', onOutside, { capture: true });
+  }, [showDropdown]);
 
   const getNextAction = () => {
     switch (status) {
@@ -114,46 +142,59 @@ export function ApprovalWorkflow({ status, onStatusChange }: ApprovalWorkflowPro
       {/* Quick Actions Dropdown */}
       <div className="relative">
         <button
-          onClick={() => setShowDropdown(!showDropdown)}
+          ref={btnRef}
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowDropdown((v) => !v);
+          }}
           className="p-2 rounded-lg hover:bg-[#F5F5F5] transition-colors"
         >
           <ChevronDown size={16} className="text-[#4A4A4A]" />
         </button>
 
-        {showDropdown && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-lg border border-[#E5E5E5] py-1 z-10"
-          >
-            {Object.entries(statusConfig).map(([key, cfg]) => (
+        {showDropdown && dropdownStyle &&
+          createPortal(
+            <motion.div
+              ref={dropdownRef}
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="fixed bg-white rounded-lg shadow-lg border border-[#E5E5E5] py-1 z-[1000] max-h-[280px] overflow-y-auto"
+              style={{
+                top: dropdownStyle.top,
+                right: dropdownStyle.right,
+                minWidth: dropdownStyle.minWidth
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {Object.entries(statusConfig).map(([key, cfg]) => (
+                <button
+                  key={key}
+                  onClick={() => {
+                    onStatusChange(key as ApprovalStatus);
+                    setShowDropdown(false);
+                  }}
+                  className={`
+                    w-full px-4 py-2 text-left text-sm flex items-center gap-2 hover:bg-[#F5F5F5]
+                    ${key === status ? 'bg-[#FFF0EB] text-[#FF6B35]' : 'text-[#1A1A1A]'}
+                  `}
+                >
+                  <span className="inline-flex shrink-0">{cfg.icon}</span>
+                  {cfg.label}
+                </button>
+              ))}
+              <div className="border-t border-[#E5E5E5] my-1" />
               <button
-                key={key}
                 onClick={() => {
-                  onStatusChange(key as ApprovalStatus);
+                  onStatusChange('draft');
                   setShowDropdown(false);
                 }}
-                className={`
-                  w-full px-4 py-2 text-left text-sm flex items-center gap-2 hover:bg-[#F5F5F5]
-                  ${key === status ? 'bg-[#FFF0EB] text-[#FF6B35]' : 'text-[#1A1A1A]'}
-                `}
+                className="w-full px-4 py-2 text-left text-sm text-[#EF4444] hover:bg-[#FEE2E2] flex items-center gap-2"
               >
-                <span className="inline-flex">{cfg.icon}</span>
-                {cfg.label}
+                ↩️ Επαναφορά σε Προσχέδιο
               </button>
-            ))}
-            <div className="border-t border-[#E5E5E5] my-1" />
-            <button
-              onClick={() => {
-                onStatusChange('draft');
-                setShowDropdown(false);
-              }}
-              className="w-full px-4 py-2 text-left text-sm text-[#EF4444] hover:bg-[#FEE2E2] flex items-center gap-2"
-            >
-              ↩️ Επαναφορά σε Προσχέδιο
-            </button>
-          </motion.div>
-        )}
+            </motion.div>,
+            document.body
+          )}
       </div>
     </div>
   );

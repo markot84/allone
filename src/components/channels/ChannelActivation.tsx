@@ -1,18 +1,20 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   PieChart as PieChartIcon,
   TrendingUp,
   Download,
   RefreshCw,
   Eye,
-  Settings
+  Settings,
+  X,
+  FileSpreadsheet,
+  FileText
 } from 'lucide-react';
 import {
   PieChart,
   Pie,
   Cell,
-  ResponsiveContainer,
   XAxis,
   YAxis,
   Tooltip,
@@ -22,9 +24,10 @@ import {
   Legend
 } from 'recharts';
 import { Card, CardHeader, Badge, Button, Spinner } from '../common';
+import { useToast } from '../common/Toast';
 import { useProducts, useCampaigns } from '../../hooks';
-import { channelMixByScenario, channelPerformanceHistory } from '../../data/mockChannels';
-import { scenarios } from '../../data/mockScenarios';
+import { getStockAgeDays } from '../../utils/productUtils';
+// Removed mock data imports - using only real data
 import type { Campaign } from '../../types';
 
 const COLORS = ['#FF6B35', '#3B82F6', '#22C55E', '#8B5CF6', '#F59E0B'];
@@ -34,12 +37,16 @@ interface ChannelActivationProps {
 }
 
 export function ChannelActivation({ onSectionChange }: ChannelActivationProps = {}) {
-  const { count: productsCount } = useProducts();
+  const { products, count: productsCount } = useProducts();
   const { campaigns, isLoading: campaignsLoading, hasImported: hasCampaigns } = useCampaigns();
+  const toast = useToast();
   const [selectedScenario, setSelectedScenario] = useState('profit_max');
   const [budgetMultiplier, setBudgetMultiplier] = useState(1);
   const historyChartRef = useRef<HTMLDivElement>(null);
   const [historyChartSize, setHistoryChartSize] = useState({ width: 800, height: 288 });
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [selectedFeed, setSelectedFeed] = useState<string | null>(null);
+  const [showExportAllModal, setShowExportAllModal] = useState(false);
 
   // Calculate real channel performance from imported campaigns
   const realChannelPerformance = useMemo(() => {
@@ -308,28 +315,120 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   }, [realChannelPerformance, hasCampaigns, budgetMultiplier]);
 
   const channelMix = useMemo(() => {
-    // Use real data if available, otherwise fallback to mock
+    // Use only real data - no mock fallback
     if (realChannelMix) {
       return realChannelMix;
     }
-    const mix = channelMixByScenario[selectedScenario] || channelMixByScenario.profit_max;
+    // Return empty mix when no real data
     return {
-      ...mix,
-      total_budget: mix.total_budget * budgetMultiplier,
-      allocation: mix.allocation.map(a => ({
-        ...a,
-        budget: a.budget * budgetMultiplier
-      }))
+      google_ads: 0,
+      meta_ads: 0,
+      email: 0,
+      sms: 0,
+      other: 0,
+      total_budget: 0,
+      allocation: []
     };
-  }, [realChannelMix, selectedScenario, budgetMultiplier]);
+  }, [realChannelMix]);
 
   const weightedROAS = useMemo(() => {
+    if (!channelMix.allocation || channelMix.allocation.length === 0) return '0.0';
     const total = channelMix.allocation.reduce((sum, ch) => sum + ch.budget, 0);
+    if (total === 0) return '0.0';
     return channelMix.allocation.reduce(
       (sum, ch) => sum + (ch.expected_roas * ch.budget / total),
       0
     ).toFixed(1);
   }, [channelMix]);
+
+  // Export functions for different feed types
+  const exportFeed = async (feedType: string, format: 'csv' | 'xlsx') => {
+    if (products.length === 0) {
+      toast.error('Δεν υπάρχουν προϊόντα για export');
+      return;
+    }
+
+    // Format products based on feed type
+    let headers: string[] = [];
+    let rows: any[][] = [];
+
+    switch (feedType) {
+      case 'Google Shopping':
+        headers = ['id', 'title', 'description', 'link', 'image_link', 'price', 'availability', 'brand', 'condition', 'google_product_category'];
+        rows = products.map(p => [
+          p.sku || p.id,
+          p.name || '',
+          `${p.name || ''} - ${p.category || ''}`,
+          `https://yoursite.com/products/${p.sku || p.id}`,
+          '', // image_link - would need image URL
+          `${(p.price || 0).toFixed(2)} EUR`,
+          (p.stock_level || 0) > 0 ? 'in stock' : 'out of stock',
+          '', // brand - would need brand field
+          'new',
+          p.category || ''
+        ]);
+        break;
+      case 'Meta Catalog':
+        headers = ['id', 'title', 'description', 'availability', 'condition', 'price', 'link', 'image_link', 'brand'];
+        rows = products.map(p => [
+          p.sku || p.id,
+          p.name || '',
+          `${p.name || ''} - ${p.category || ''}`,
+          (p.stock_level || 0) > 0 ? 'in stock' : 'out of stock',
+          'new',
+          `${(p.price || 0).toFixed(2)} EUR`,
+          `https://yoursite.com/products/${p.sku || p.id}`,
+          '', // image_link
+          '' // brand
+        ]);
+        break;
+      case 'Email Feed':
+      case 'Display Feed':
+      default:
+        headers = ['SKU', 'Name', 'Category', 'Price', 'Margin %', 'Stock Level', 'Stock Capacity', 'Stock Age Days', 'Priority Tag'];
+        rows = products.map(p => [
+          p.sku || '',
+          p.name || '',
+          p.category || '',
+          (p.price || 0).toFixed(2),
+          (p.margin_percentage || 0).toFixed(1),
+          p.stock_level || 0,
+          p.stock_capacity || 0,
+          getStockAgeDays(p),
+          p.priority_tag || ''
+        ]);
+        break;
+    }
+
+    if (format === 'csv') {
+      const csvContent = [
+        headers.join(','),
+        ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+      ].join('\n');
+
+      const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `${feedType.toLowerCase().replace(/\s+/g, '_')}_export_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } else if (format === 'xlsx') {
+      try {
+        const XLSX = await import('xlsx');
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Products');
+        XLSX.writeFile(wb, `${feedType.toLowerCase().replace(/\s+/g, '_')}_export_${new Date().toISOString().split('T')[0]}.xlsx`);
+      } catch (error) {
+        console.error('Excel export error:', error);
+        alert('Σφάλμα κατά την εξαγωγή Excel. Δοκιμάστε CSV.');
+      }
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -342,10 +441,22 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="secondary" icon={<RefreshCw size={16} />}>
+          <Button 
+            variant="secondary" 
+            icon={<RefreshCw size={16} />}
+            onClick={() => {
+              alert('Feed sync functionality coming soon!');
+            }}
+          >
             Sync Feeds
           </Button>
-          <Button variant="primary" icon={<Download size={16} />}>
+          <Button 
+            variant="primary" 
+            icon={<Download size={16} />}
+            onClick={() => {
+              setShowExportAllModal(true);
+            }}
+          >
             Export All
           </Button>
         </div>
@@ -364,11 +475,10 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                 onChange={(e) => setSelectedScenario(e.target.value)}
                 className="w-full px-4 py-2.5 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[#FF6B35] focus:bg-white transition-all"
               >
-                {scenarios.filter(s => s.id !== 'custom').map((scenario) => (
-                  <option key={scenario.id} value={scenario.id}>
-                    {scenario.name}
-                  </option>
-                ))}
+                <option value="profit_max">Profit Maximization</option>
+                <option value="stock_clearance">Stock Clearance</option>
+                <option value="revenue_growth">Revenue Growth</option>
+                <option value="brand_positioning">Brand Positioning</option>
               </select>
             </div>
 
@@ -419,93 +529,53 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
             </div>
           ) : channelMix && channelMix.allocation && channelMix.allocation.length > 0 ? (
             <>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={channelMix.allocation}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={85}
-                      paddingAngle={2}
-                      dataKey="percentage"
-                      nameKey="channel"
-                    >
-                      {channelMix.allocation.map((_, index) => (
-                        <Cell key={channelMix.allocation[index].channel} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: '#fff',
-                        border: '1px solid #E5E5E5',
-                        borderRadius: '8px'
-                      }}
-                      formatter={(value: number | undefined) => [`${value ? value.toFixed(1) : '0'}%`, '']}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
+              <div 
+                className="w-full flex items-center justify-center"
+                style={{ width: '100%', height: '256px', minHeight: '256px', position: 'relative' }}
+              >
+                <PieChart width={300} height={256}>
+                  <Pie
+                    data={channelMix.allocation}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={85}
+                    paddingAngle={2}
+                    dataKey="percentage"
+                    nameKey="channel"
+                    labelLine={false}
+                  >
+                    {channelMix.allocation.map((channel, index) => (
+                      <Cell key={channel.channel || index} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#fff',
+                      border: '1px solid #E5E5E5',
+                      borderRadius: '8px',
+                      padding: '8px 12px'
+                    }}
+                    formatter={(value: number | string | undefined, name: string | undefined) => [
+                      `${typeof value === 'number' ? value.toFixed(1) : value || '0'}%`,
+                      name || 'Channel'
+                    ]}
+                    labelFormatter={(label) => `Channel: ${label || 'Unknown'}`}
+                  />
+                </PieChart>
               </div>
               <div className="space-y-2 mt-4">
                 {channelMix.allocation.map((channel, index) => (
-                  <div key={channel.channel} className="flex items-center justify-between text-sm">
+                  <div key={channel.channel || index} className="flex items-center justify-between text-sm">
                     <div className="flex items-center gap-2">
                       <div
                         className="w-3 h-3 rounded-full"
                         style={{ backgroundColor: COLORS[index % COLORS.length] }}
                       />
-                      <span className="text-[#4A4A4A] truncate max-w-[120px]">{channel.channel}</span>
+                      <span className="text-[#4A4A4A] truncate max-w-[120px]">{channel.channel || 'Unknown'}</span>
                     </div>
                     <span className="font-mono text-[#1A1A1A]">
-                      €{channel.budget.toLocaleString()} ({channel.percentage.toFixed(1)}%)
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </>
-          ) : channelMix && channelMix.allocation && channelMix.allocation.length > 0 ? (
-            <>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={channelMix.allocation}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={85}
-                      paddingAngle={2}
-                      dataKey="percentage"
-                      nameKey="channel"
-                    >
-                      {channelMix.allocation.map((_, index) => (
-                        <Cell key={channelMix.allocation[index]?.channel || index} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: '#fff',
-                        border: '1px solid #E5E5E5',
-                        borderRadius: '8px'
-                      }}
-                      formatter={(value, name) => [`${value || 0}%`, name]}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="space-y-2 mt-4">
-                {channelMix.allocation.map((channel, index) => (
-                  <div key={channel.channel} className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="w-3 h-3 rounded-full"
-                        style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                      />
-                      <span className="text-[#4A4A4A] truncate max-w-[120px]">{channel.channel}</span>
-                    </div>
-                    <span className="font-mono text-[#1A1A1A]">
-                      €{channel.budget.toLocaleString()}
+                      €{channel.budget?.toLocaleString() || '0'} ({channel.percentage?.toFixed(1) || '0'}%)
                     </span>
                   </div>
                 ))}
@@ -656,11 +726,11 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
           className="w-full"
           style={{ width: '100%', height: 288, minHeight: 288, position: 'relative' }}
         >
-          {(realPerformanceHistory && realPerformanceHistory.length > 0) || (channelPerformanceHistory && channelPerformanceHistory.length > 0) ? (
+          {realPerformanceHistory && realPerformanceHistory.length > 0 ? (
             <LineChart
               width={historyChartSize.width}
               height={historyChartSize.height}
-              data={realPerformanceHistory || channelPerformanceHistory || []}
+              data={realPerformanceHistory}
               margin={{ top: 10, right: 10, left: 10, bottom: 10 }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" />
@@ -791,10 +861,29 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                 </div>
               </div>
               <div className="flex gap-2 mt-4">
-                <Button variant="ghost" size="sm" icon={<Eye size={14} />} className="flex-1">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  icon={<Eye size={14} />} 
+                  className="flex-1"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    alert(`Preview για ${feed}:\n${productsCount.toLocaleString()} products\n\nΘα εμφανιστεί preview modal σύντομα.`);
+                  }}
+                >
                   Preview
                 </Button>
-                <Button variant="secondary" size="sm" icon={<Download size={14} />} className="flex-1">
+                <Button 
+                  variant="secondary" 
+                  size="sm" 
+                  icon={<Download size={14} />} 
+                  className="flex-1"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedFeed(feed);
+                    setShowExportModal(true);
+                  }}
+                >
                   Export
                 </Button>
               </div>
@@ -802,6 +891,195 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
           ))}
         </div>
       </Card>
+
+      {/* Export Format Modal */}
+      <AnimatePresence>
+        {showExportModal && selectedFeed && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            onClick={() => {
+              setShowExportModal(false);
+              setSelectedFeed(null);
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-2xl shadow-2xl max-w-md w-full"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="p-6 border-b border-[#E5E5E5] flex items-center justify-between">
+                <h2 className="text-xl font-bold text-[#1A1A1A]">Επιλογή Format</h2>
+                <button
+                  onClick={() => {
+                    setShowExportModal(false);
+                    setSelectedFeed(null);
+                  }}
+                  className="p-2 hover:bg-[#F5F5F5] rounded-lg transition-colors"
+                >
+                  <X size={20} className="text-[#4A4A4A]" />
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="p-6 space-y-3">
+                <p className="text-sm text-[#4A4A4A] mb-4">
+                  Επιλέξτε format για <strong>{selectedFeed}</strong>
+                </p>
+
+                <button
+                  onClick={() => {
+                    exportFeed(selectedFeed, 'xlsx');
+                    setShowExportModal(false);
+                    setSelectedFeed(null);
+                  }}
+                  className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[#FF6B35] hover:bg-[#FFF0EB] transition-all text-left flex items-center gap-4 group"
+                >
+                  <div className="p-3 bg-[#22C55E]/10 rounded-lg group-hover:bg-[#22C55E]/20 transition-colors">
+                    <FileSpreadsheet size={24} className="text-[#22C55E]" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-[#1A1A1A]">Excel (.xlsx)</h3>
+                    <p className="text-xs text-[#4A4A4A]">Download as Excel file</p>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    exportFeed(selectedFeed, 'csv');
+                    setShowExportModal(false);
+                    setSelectedFeed(null);
+                  }}
+                  className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[#FF6B35] hover:bg-[#FFF0EB] transition-all text-left flex items-center gap-4 group"
+                >
+                  <div className="p-3 bg-[#3B82F6]/10 rounded-lg group-hover:bg-[#3B82F6]/20 transition-colors">
+                    <FileText size={24} className="text-[#3B82F6]" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-[#1A1A1A]">CSV (.csv)</h3>
+                    <p className="text-xs text-[#4A4A4A]">Download as CSV file</p>
+                  </div>
+                </button>
+              </div>
+
+              {/* Footer */}
+              <div className="p-6 border-t border-[#E5E5E5] flex justify-end">
+                <Button 
+                  variant="ghost" 
+                  onClick={() => {
+                    setShowExportModal(false);
+                    setSelectedFeed(null);
+                  }}
+                >
+                  Ακύρωση
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Export All Format Modal */}
+      <AnimatePresence>
+        {showExportAllModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            onClick={() => {
+              setShowExportAllModal(false);
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-2xl shadow-2xl max-w-md w-full"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="p-6 border-b border-[#E5E5E5] flex items-center justify-between">
+                <h2 className="text-xl font-bold text-[#1A1A1A]">Export All Feeds</h2>
+                <button
+                  onClick={() => {
+                    setShowExportAllModal(false);
+                  }}
+                  className="p-2 hover:bg-[#F5F5F5] rounded-lg transition-colors"
+                >
+                  <X size={20} className="text-[#4A4A4A]" />
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="p-6 space-y-3">
+                <p className="text-sm text-[#4A4A4A] mb-4">
+                  Επιλέξτε format για όλα τα feeds (Google Shopping, Meta Catalog, Email Feed, Display Feed)
+                </p>
+
+                <button
+                  onClick={() => {
+                    ['Google Shopping', 'Meta Catalog', 'Email Feed', 'Display Feed'].forEach((feed, index) => {
+                      setTimeout(() => {
+                        exportFeed(feed, 'xlsx');
+                      }, index * 500); // Stagger exports to avoid browser blocking
+                    });
+                    setShowExportAllModal(false);
+                    toast.success('Export όλων των feeds ξεκίνησε');
+                  }}
+                  className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[#FF6B35] hover:bg-[#FFF0EB] transition-all text-left flex items-center gap-4 group"
+                >
+                  <div className="p-3 bg-[#22C55E]/10 rounded-lg group-hover:bg-[#22C55E]/20 transition-colors">
+                    <FileSpreadsheet size={24} className="text-[#22C55E]" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-[#1A1A1A]">Excel (.xlsx)</h3>
+                    <p className="text-xs text-[#4A4A4A]">Export όλα τα feeds ως Excel files</p>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    ['Google Shopping', 'Meta Catalog', 'Email Feed', 'Display Feed'].forEach((feed, index) => {
+                      setTimeout(() => {
+                        exportFeed(feed, 'csv');
+                      }, index * 500); // Stagger exports to avoid browser blocking
+                    });
+                    setShowExportAllModal(false);
+                    toast.success('Export όλων των feeds ξεκίνησε');
+                  }}
+                  className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[#FF6B35] hover:bg-[#FFF0EB] transition-all text-left flex items-center gap-4 group"
+                >
+                  <div className="p-3 bg-[#3B82F6]/10 rounded-lg group-hover:bg-[#3B82F6]/20 transition-colors">
+                    <FileText size={24} className="text-[#3B82F6]" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-[#1A1A1A]">CSV (.csv)</h3>
+                    <p className="text-xs text-[#4A4A4A]">Export όλα τα feeds ως CSV files</p>
+                  </div>
+                </button>
+              </div>
+
+              {/* Footer */}
+              <div className="p-6 border-t border-[#E5E5E5] flex justify-end">
+                <Button 
+                  variant="ghost" 
+                  onClick={() => {
+                    setShowExportAllModal(false);
+                  }}
+                >
+                  Ακύρωση
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

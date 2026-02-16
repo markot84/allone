@@ -8,8 +8,7 @@ import {
   Target,
   AlertTriangle,
   ArrowUpRight,
-  ArrowDownRight,
-  Calendar
+  ArrowDownRight
 } from 'lucide-react';
 import { Tooltip } from '../common';
 import {
@@ -23,8 +22,11 @@ import {
   Pie,
   Cell
 } from 'recharts';
-import { Card, CardHeader, Badge } from '../common';
-import { useSegments, useProducts, useAnalytics, useCampaigns } from '../../hooks';
+import { Card, CardHeader } from '../common';
+import { useSegments, useProducts, useAnalytics, useCampaigns, useActiveStrategy } from '../../hooks';
+import { ROIAttribution } from '../roi';
+import { calculateTotalRevenue, calculateAttributedRevenue, calculateROISummary } from '../../utils/roiUtils';
+import type { Campaign } from '../../types';
 import { generateInsightsFromData } from '../../services/insights';
 
 interface DashboardOverviewProps {
@@ -94,10 +96,23 @@ function calculateAvgRFMScore(rfmScore: string | undefined | null, segmentName?:
 export function DashboardOverview({ onSectionChange, onOpenInsights }: DashboardOverviewProps = {}) {
   const { segments: rfmSegments, hasImported: hasSegments } = useSegments();
   const { count: productsCount, products } = useProducts();
-  const { revenueData, hasImported: hasAnalytics, isLoading: analyticsLoading } = useAnalytics();
+  const { revenueData, analyticsRecords = [], hasImported: hasAnalytics, isLoading: analyticsLoading } = useAnalytics();
   const { count: campaignsCount, campaigns, hasImported: hasCampaigns } = useCampaigns();
+  const { activeStrategy, getStrategyName } = useActiveStrategy();
   const hasAnyData = hasAnalytics || hasSegments || productsCount > 0 || hasCampaigns;
-  const [activeTab, setActiveTab] = useState<'overview' | 'campaigns'>('overview');
+  
+  // Calculate ROI for dashboard display
+  const roiSummary = useMemo(() => {
+    if (!hasAnyData) return null;
+    const campaignsTyped = campaigns as Campaign[];
+    const totalRev = calculateTotalRevenue(analyticsRecords || [], campaignsTyped);
+    const attributedBreakdown = calculateAttributedRevenue(campaignsTyped, products || [], rfmSegments || []);
+    const attributedRev = attributedBreakdown.segment_activation.revenue + 
+                          attributedBreakdown.inventory_optimization.revenue + 
+                          attributedBreakdown.channel_optimization.revenue;
+    return calculateROISummary(totalRev, attributedRev, 'period');
+  }, [hasAnyData, analyticsRecords, campaigns, products, rfmSegments]);
+  const [activeTab, setActiveTab] = useState<'overview' | 'roi'>('overview');
   
   // Debug logging
   useEffect(() => {
@@ -168,84 +183,22 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         </p>
       </div>
 
-      {/* KPI Cards - from real data only */}
+      {/* KPI Cards - order: Strategy, Προϊόντα, Segments, Campaigns, Σύνολο Εσόδων, ROI */}
       {(revenueData.length > 0 || productsCount > 0 || rfmSegments.length > 0 || (hasCampaigns && campaigns.length > 0)) && (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 gap-4 sm:gap-6">
-          {(revenueData.length > 0 || (hasCampaigns && campaigns.length > 0)) && (() => {
-            // Calculate total revenue from Analytics import
-            const analyticsRevenue = revenueData.reduce((s, r) => s + r.total, 0);
-            
-            // Calculate total conversion value from campaigns (in thousands)
-            const campaignsRevenue = hasCampaigns && campaigns.length > 0
-              ? (campaigns as any[]).reduce((sum, c) => sum + ((c.conversion_value || 0) / 1000), 0)
-              : 0;
-            
-            // Total revenue = Analytics + Campaigns conversion value
-            // If no Analytics but we have campaigns, show campaigns revenue
-            // If we have both, add them together
-            const totalRevenue = analyticsRevenue + campaignsRevenue;
-            
-            // Calculate attributed revenue (from Analytics only, campaigns don't have attribution)
-            const totalAttributed = revenueData.reduce((s, r) => s + r.attributed, 0);
-            
-            // Attribution rate only makes sense if we have Analytics data WITH actual revenue AND attributed revenue
-            // If we only have campaigns or Analytics without revenue/attribution, don't show attribution
-            const hasValidAnalytics = revenueData.length > 0 && analyticsRevenue > 0 && totalAttributed > 0;
-            const attributionRate = hasValidAnalytics && totalRevenue > 0
-              ? Math.round((totalAttributed / totalRevenue) * 1000) / 10 
-              : undefined;
-            
-            // Sparkline data: use Analytics if available, otherwise use campaigns monthly data
-            const sparklineData = useMemo(() => {
-              if (revenueData.length > 0) {
-                return revenueData.map(r => r.total);
-              }
-              if (hasCampaigns && campaigns.length > 0) {
-                // Group campaigns by month and sum conversion_value
-                const monthlyData: Record<string, number> = {};
-                (campaigns as any[]).forEach(c => {
-                  const period = c.period || c.start_date || '';
-                  if (!period) return;
-                  
-                  let monthKey = '';
-                  if (period.match(/^\d{4}-\d{2}-\d{2}/)) {
-                    const date = new Date(period);
-                    monthKey = date.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' });
-                  } else {
-                    // Try to extract month from period like "January 2025"
-                    const monthMatch = period.match(/(\w+)\s+(\d{4})/);
-                    if (monthMatch) {
-                      monthKey = `${monthMatch[1].substring(0, 3)} ${monthMatch[2].substring(2)}`;
-                    } else {
-                      monthKey = period;
-                    }
-                  }
-                  
-                  if (!monthlyData[monthKey]) {
-                    monthlyData[monthKey] = 0;
-                  }
-                  monthlyData[monthKey] += (c.conversion_value || 0) / 1000;
-                });
-                
-                return Object.values(monthlyData).sort((a, b) => a - b);
-              }
-              return [];
-            }, [revenueData, campaigns, hasCampaigns]);
-            
-            return (
-              <KPICard
-                kpi={{
-                  label: 'Σύνολο Εσόδων',
-                  value: `€${totalRevenue.toFixed(0)}K`,
-                  change: attributionRate,
-                  changeLabel: attributionRate !== undefined ? 'attributed' : undefined,
-                  trend: 'up' as const,
-                  sparklineData: sparklineData
-                }}
-                index={0}
-              />
-            );
-          })()}
+          {/* 1. Strategy */}
+          <KPICard
+            kpi={{
+              label: 'Strategy',
+              value: activeStrategy ? getStrategyName(activeStrategy.scenarioId) : '—',
+              changeLabel: activeStrategy?.approvalStatus === 'implementing' ? 'ενεργή' : activeStrategy ? 'Ρυθμίσεις' : undefined,
+              trend: 'up' as const,
+              sparklineData: []
+            }}
+            index={0}
+            onClick={() => onSectionChange?.('strategy')}
+          />
+          {/* 2. Προϊόντα */}
           {productsCount > 0 && (
             <KPICard
               kpi={{
@@ -337,11 +290,72 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               />
             );
           })()}
+          {/* 5. Σύνολο Εσόδων */}
+          {(revenueData.length > 0 || (hasCampaigns && campaigns.length > 0)) && (() => {
+            const analyticsRevenue = revenueData.reduce((s, r) => s + r.total, 0);
+            const campaignsRevenue = hasCampaigns && campaigns.length > 0
+              ? (campaigns as any[]).reduce((sum, c) => sum + ((c.conversion_value || 0) / 1000), 0)
+              : 0;
+            const totalRevenue = analyticsRevenue + campaignsRevenue;
+            const totalAttributed = revenueData.reduce((s, r) => s + r.attributed, 0);
+            const hasValidAnalytics = revenueData.length > 0 && analyticsRevenue > 0 && totalAttributed > 0;
+            const attributionRate = hasValidAnalytics && totalRevenue > 0
+              ? Math.round((totalAttributed / totalRevenue) * 1000) / 10
+              : undefined;
+            const sparklineData = useMemo(() => {
+              if (revenueData.length > 0) return revenueData.map(r => r.total);
+              if (hasCampaigns && campaigns.length > 0) {
+                const monthlyData: Record<string, number> = {};
+                (campaigns as any[]).forEach(c => {
+                  const period = c.period || c.start_date || '';
+                  if (!period) return;
+                  let monthKey = '';
+                  if (period.match(/^\d{4}-\d{2}-\d{2}/)) {
+                    monthKey = new Date(period).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' });
+                  } else {
+                    const monthMatch = period.match(/(\w+)\s+(\d{4})/);
+                    monthKey = monthMatch ? `${monthMatch[1].substring(0, 3)} ${monthMatch[2].substring(2)}` : period;
+                  }
+                  monthlyData[monthKey] = (monthlyData[monthKey] || 0) + (c.conversion_value || 0) / 1000;
+                });
+                return Object.values(monthlyData).sort((a, b) => a - b);
+              }
+              return [];
+            }, [revenueData, campaigns, hasCampaigns]);
+            return (
+              <KPICard
+                kpi={{
+                  label: 'Σύνολο Εσόδων',
+                  value: `€${totalRevenue.toFixed(0)}K`,
+                  change: attributionRate,
+                  changeLabel: attributionRate !== undefined ? 'attributed' : undefined,
+                  trend: 'up' as const,
+                  sparklineData
+                }}
+                index={4}
+                onClick={() => onSectionChange?.('roi')}
+              />
+            );
+          })()}
+          {/* 6. ROI */}
+          {hasAnyData && (
+            <KPICard
+              kpi={{
+                label: 'ROI',
+                value: roiSummary && roiSummary.roi_multiplier > 0 ? `${roiSummary.roi_multiplier.toFixed(1)}x` : '—',
+                changeLabel: roiSummary && roiSummary.roi_multiplier > 0 ? 'πολλαπλασιαστής' : undefined,
+                trend: 'up' as const,
+                sparklineData: []
+              }}
+              index={5}
+              onClick={() => onSectionChange?.('roi')}
+            />
+          )}
         </div>
       )}
 
-      {/* Tabs for Overview and Campaigns */}
-      {hasCampaigns && campaignsCount > 0 && (
+      {/* Tabs for Overview and ROI Attribution */}
+      {hasAnyData && (
         <Card padding="none">
           <div className="flex border-b border-[var(--nts-border-gray)]">
             <button
@@ -355,85 +369,24 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               Overview
             </button>
             <button
-              onClick={() => setActiveTab('campaigns')}
+              onClick={() => setActiveTab('roi')}
               className={`flex-1 px-6 py-3 text-sm font-medium transition-colors ${
-                activeTab === 'campaigns'
+                activeTab === 'roi'
                   ? 'text-[var(--nts-charcoal)] border-b-2 border-[#FF6B35]'
                   : 'text-[var(--nts-medium-gray)] hover:text-[var(--nts-charcoal)]'
               }`}
             >
-              Ενεργά Campaigns ({campaignsCount})
+              ROI Attribution
             </button>
           </div>
         </Card>
       )}
 
-      {/* Campaigns Tab Content */}
-      {activeTab === 'campaigns' && hasCampaigns && (
-        <Card padding="lg">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {(campaigns as any[]).slice(0, 12).map((campaign) => (
-              <motion.div
-                key={campaign.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="p-4 border border-[#E5E5E5] rounded-xl hover:border-[#FF6B35] transition-all cursor-pointer"
-                onClick={() => onSectionChange?.('campaigns')}
-              >
-                <div className="flex items-start justify-between mb-2">
-                  <h4 className="font-medium text-[#1A1A1A] text-sm flex-1 truncate">{campaign.name}</h4>
-                  <Badge 
-                    variant={
-                      campaign.status === 'active' || campaign.status === 'enabled' || campaign.status === 'eligible' || !campaign.status
-                        ? 'success' 
-                        : 'default'
-                    } 
-                    size="sm"
-                  >
-                    {campaign.status || 'Active'}
-                  </Badge>
-                </div>
-                <p className="text-xs text-[#4A4A4A] mb-3">{campaign.channel}</p>
-                <div className="space-y-1 text-xs">
-                  {campaign.amount_spent && (
-                    <div className="flex justify-between">
-                      <span className="text-[#4A4A4A]">Spent:</span>
-                      <span className="font-mono font-medium">€{campaign.amount_spent.toLocaleString()}</span>
-                    </div>
-                  )}
-                  {campaign.roas && (
-                    <div className="flex justify-between">
-                      <span className="text-[#4A4A4A]">ROAS:</span>
-                      <span className="font-mono font-medium text-[#22C55E]">{campaign.roas.toFixed(2)}x</span>
-                    </div>
-                  )}
-                  {campaign.conversions && (
-                    <div className="flex justify-between">
-                      <span className="text-[#4A4A4A]">Conversions:</span>
-                      <span className="font-mono font-medium">{campaign.conversions.toLocaleString()}</span>
-                    </div>
-                  )}
-                  {campaign.period && (
-                    <div className="flex items-center gap-1 mt-2 text-[#4A4A4A]">
-                      <Calendar size={12} />
-                      <span>{campaign.period}</span>
-                    </div>
-                  )}
-                </div>
-              </motion.div>
-            ))}
-          </div>
-          {campaignsCount > 12 && (
-            <div className="mt-4 text-center">
-              <button
-                onClick={() => onSectionChange?.('campaigns')}
-                className="text-sm font-medium text-[#FF6B35] hover:text-[#FF8C5A]"
-              >
-                View All {campaignsCount} Campaigns →
-              </button>
-            </div>
-          )}
-        </Card>
+      {/* ROI Attribution Tab Content */}
+      {activeTab === 'roi' && (
+        <div className="pt-2">
+          <ROIAttribution embedded />
+        </div>
       )}
 
       {/* Main Charts Row */}
@@ -756,9 +709,13 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-[13px] font-medium text-[var(--nts-medium-gray)] mb-1">Performance+ ROI</p>
-                <p className="text-3xl font-bold tracking-tight text-[var(--nts-charcoal)] mb-1 font-mono">{hasAnyData ? '64x' : '0x'}</p>
+                <p className="text-3xl font-bold tracking-tight text-[var(--nts-charcoal)] mb-1 font-mono">
+                  {roiSummary && roiSummary.roi_multiplier > 0 ? `${roiSummary.roi_multiplier.toFixed(1)}x` : '0x'}
+                </p>
                 <p className="text-[13px] text-[var(--nts-medium-gray)]">
-                  {hasAnyData ? 'Κάθε €1 → €64 attributed revenue' : 'Φόρτωσε δεδομένα για να δεις το ROI'}
+                  {roiSummary && roiSummary.roi_multiplier > 0 
+                    ? `Κάθε €1 → €${roiSummary.roi_multiplier.toFixed(1)} attributed revenue` 
+                    : 'Φόρτωσε δεδομένα για να δεις το ROI'}
                 </p>
               </div>
               <div className="w-10 h-10 bg-[var(--nts-light-gray)] rounded-md border border-[var(--nts-border-gray)] flex items-center justify-center">
