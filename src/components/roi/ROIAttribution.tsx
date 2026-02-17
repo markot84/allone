@@ -25,7 +25,7 @@ import {
   ReferenceLine
 } from 'recharts';
 import { Card, CardHeader, Badge, Button } from '../common';
-import { useAnalytics, useSegments, useProducts, useCampaigns } from '../../hooks';
+import { useOrganic, useSegments, useProducts, useCampaigns } from '../../hooks';
 import {
   attributionMethodology
 } from '../../data/mockROI';
@@ -35,9 +35,10 @@ import {
   calculateROISummary,
   calculateSegmentPerformance,
   calculateCostSavings,
-  SUBSCRIPTION_COST_PERIOD,
+  getCampaignDateForMonth,
   type ROISummary,
 } from '../../utils/roiUtils';
+import { formatCurrency, formatCurrencyCompact, formatNumber, formatMultiplier, formatPercent } from '../../utils/format';
 import type { Campaign } from '../../types';
 
 const COLORS = ['#22C55E', '#3B82F6', '#FF6B35', '#8B5CF6', '#F59E0B'];
@@ -47,11 +48,11 @@ interface ROIAttributionProps {
 }
 
 export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
-  const { revenueData, analyticsRecords, hasImported: hasAnalytics } = useAnalytics();
+  const { totalOrganicRevenue, byMonth: organicByMonth, hasImported: hasOrganic } = useOrganic();
   const { segments, hasImported: hasSegments } = useSegments();
   const { products, count: productsCount } = useProducts();
   const { campaigns, hasImported: hasCampaigns } = useCampaigns();
-  const hasAnyData = hasAnalytics || hasSegments || productsCount > 0 || hasCampaigns;
+  const hasAnyData = hasOrganic || hasSegments || productsCount > 0 || hasCampaigns;
   const [showMethodology, setShowMethodology] = useState(false);
   const [selectedBreakdown, setSelectedBreakdown] = useState<string | null>(null);
   const trendContainerRef = useRef<HTMLDivElement>(null);
@@ -90,10 +91,10 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
   
   const totalRevenue = useMemo(() => {
     if (hasAnyData) {
-      return calculateTotalRevenue(analyticsRecords, campaignsTyped);
+      return calculateTotalRevenue(totalOrganicRevenue, campaignsTyped);
     }
     return 0;
-  }, [analyticsRecords, campaignsTyped, hasAnyData]);
+  }, [totalOrganicRevenue, campaignsTyped, hasAnyData]);
 
   const attributedBreakdown = useMemo(() => {
     if (hasAnyData) {
@@ -112,45 +113,80 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
            attributedBreakdown.channel_optimization.revenue;
   }, [attributedBreakdown]);
 
+  const campaignCost = useMemo(() => {
+    return campaignsTyped.reduce((sum, c) => sum + (c.amount_spent || 0), 0);
+  }, [campaignsTyped]);
+
   const summary: ROISummary = useMemo(() => {
     if (hasAnyData) {
-      return calculateROISummary(totalRevenue, attributedRevenue, 'period');
+      return calculateROISummary(totalRevenue, attributedRevenue, campaignCost);
     }
-    return { total_revenue: 0, performance_plus_attributed: 0, attribution_percentage: 0, roi_multiplier: 0 };
-  }, [totalRevenue, attributedRevenue, hasAnyData]);
+    return { total_revenue: 0, performance_plus_attributed: 0, attribution_percentage: 0, roi_multiplier: 0, campaign_cost: 0 };
+  }, [totalRevenue, attributedRevenue, campaignCost, hasAnyData]);
 
-  // Prepare trend data (revenueData from useAnalytics - only real data)
-  const trendData = revenueData.map((r) => ({
-    month: r.month,
-    total: r.total,
-    attributed: r.attributed,
-    rate: r.total > 0 ? Math.round((r.attributed / r.total) * 1000) / 10 : 0
-  }));
+  // Scale factor when attributed > total (breakdown amounts shown proportionally)
+  const scaleFactor = useMemo(() => {
+    if (totalRevenue <= 0 || attributedRevenue <= 0) return 1;
+    return attributedRevenue > totalRevenue ? totalRevenue / attributedRevenue : 1;
+  }, [totalRevenue, attributedRevenue]);
+
+  // Prepare trend data: οργανικά + campaigns ανά μήνα
+  const trendData = useMemo(() => {
+    const byMonth = new Map<string, { organic: number; campaigns: number }>();
+    organicByMonth.forEach((val, key) => {
+      byMonth.set(key, { organic: val, campaigns: 0 });
+    });
+    campaignsTyped.forEach((c) => {
+      const date = getCampaignDateForMonth(c);
+      const key = date ? date.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }) : 'Other';
+      const ex = byMonth.get(key) || { organic: 0, campaigns: 0 };
+      byMonth.set(key, { ...ex, campaigns: ex.campaigns + (c.conversion_value || 0) });
+    });
+    if (byMonth.size === 0) return [];
+    const order = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return Array.from(byMonth.entries())
+      .sort((a, b) => {
+        const [ma, ya] = a[0].split(' ');
+        const [mb, yb] = b[0].split(' ');
+        const ia = order.indexOf(ma); const ib = order.indexOf(mb);
+        if (ia !== ib) return ia - ib;
+        return (ya || '').localeCompare(yb || '');
+      })
+      .map(([month, d]) => {
+        const total = d.organic + d.campaigns;
+        return {
+          month,
+          total: total / 1000,
+          attributed: d.campaigns / 1000,
+          rate: total > 0 ? Math.round((d.campaigns / total) * 1000) / 10 : 0,
+        };
+      });
+  }, [organicByMonth, campaignsTyped]);
 
   // ROI Display
   const roiDisplay = hasAnyData && summary.roi_multiplier > 0
     ? {
-        headline: `${summary.roi_multiplier.toFixed(1)}x ROI`,
-        subheadline: `Κάθε €1 στο Performance+ απέφερε €${summary.roi_multiplier.toFixed(1)} σε attributed revenue`,
+        headline: `${formatMultiplier(summary.roi_multiplier, 1)} ROI`,
+        subheadline: `Κάθε €1 σε διαφημίσεις απέφερε €${formatNumber(summary.roi_multiplier, 1)} σε attributed revenue`,
         disclaimer: 'Βάσει conservative attribution methodology'
       }
     : { headline: '0x ROI', subheadline: 'Φόρτωσε δεδομένα για να δεις το ROI', disclaimer: 'Βάσει conservative attribution methodology' };
 
-  // Breakdown data from real calculations
+  // Breakdown data from real calculations (amounts scaled when attributed > total)
   const breakdownData = hasAnyData && attributedRevenue > 0
     ? [
         { 
           id: 'segment', 
           name: 'Segment Campaigns', 
           value: attributedBreakdown.segment_activation.percentage, 
-          amount: attributedBreakdown.segment_activation.revenue, 
+          amount: attributedBreakdown.segment_activation.revenue * scaleFactor, 
           details: attributedBreakdown.segment_activation.details.map(d => ({ segment: d.segment, revenue: d.revenue, campaigns: d.campaigns }))
         },
         { 
           id: 'inventory', 
           name: 'Stock Clearance', 
           value: attributedBreakdown.inventory_optimization.percentage, 
-          amount: attributedBreakdown.inventory_optimization.revenue, 
+          amount: attributedBreakdown.inventory_optimization.revenue * scaleFactor, 
           details: attributedBreakdown.inventory_optimization.details.map(d => ({ type: d.type, revenue: d.revenue, units: d.units })),
           costAvoided: attributedBreakdown.inventory_optimization.cost_avoided
         },
@@ -158,7 +194,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
           id: 'channel', 
           name: 'Channel Optimization', 
           value: attributedBreakdown.channel_optimization.percentage, 
-          amount: attributedBreakdown.channel_optimization.revenue, 
+          amount: attributedBreakdown.channel_optimization.revenue * scaleFactor, 
           details: attributedBreakdown.channel_optimization.details
         }
       ]
@@ -256,13 +292,13 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
               <MetricBox 
                 icon={<Euro size={20} />}
                 label="Σύνολο Εσόδων" 
-                value={`€${(summary.total_revenue / 1000).toFixed(1)}K`}
+                value={formatCurrencyCompact(summary.total_revenue)}
                 color="var(--nts-charcoal)"
               />
               <MetricBox 
                 icon={<Target size={20} />}
                 label="P+ Attributed" 
-                value={`€${(summary.performance_plus_attributed / 1000).toFixed(1)}K`}
+                value={formatCurrencyCompact(summary.performance_plus_attributed)}
                 color="var(--nts-orange)"
                 highlight
               />
@@ -271,14 +307,14 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
             <div className="space-y-4">
               <MetricBox 
                 icon={<Euro size={20} />}
-                label="Κόστος Συνδρομής" 
-                value={`€${SUBSCRIPTION_COST_PERIOD.toLocaleString()}`}
+                label="Κόστος Campaigns" 
+                value={formatCurrencyCompact(summary.campaign_cost)}
                 color="var(--nts-charcoal)"
               />
               <MetricBox 
                 icon={<TrendingUp size={20} />}
                 label="ROI Πολλαπλασιαστής" 
-                value={`${summary.roi_multiplier}x`}
+                value={`${formatMultiplier(summary.roi_multiplier, 1)}`}
                 color="var(--success)"
               />
             </div>
@@ -291,26 +327,26 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
         <ImpactCard
           icon="💶"
           label="Σύνολο Εσόδων"
-          value={`€${(summary.total_revenue / 1000).toFixed(1)}K`}
+          value={formatCurrencyCompact(summary.total_revenue)}
           subtext={hasAnyData ? '+18.2% vs previous period' : 'Φόρτωσε δεδομένα'}
         />
         <ImpactCard
           icon="🎯"
           label="Performance+ Attributed"
-          value={`€${(summary.performance_plus_attributed / 1000).toFixed(1)}K`}
-          subtext={hasAnyData ? `${summary.attribution_percentage}% of total revenue` : 'Φόρτωσε δεδομένα'}
+          value={formatCurrencyCompact(summary.performance_plus_attributed)}
+          subtext={hasAnyData ? `${formatNumber(summary.attribution_percentage, 1)}% of total revenue` : 'Φόρτωσε δεδομένα'}
           highlight
         />
         <ImpactCard
           icon="📈"
           label="ROI Πολλαπλασιαστής"
-          value={`${summary.roi_multiplier}x`}
-          subtext="Return on subscription cost"
+          value={`${formatMultiplier(summary.roi_multiplier, 1)}`}
+          subtext="Return on ad spend"
         />
         <ImpactCard
           icon="💰"
           label="Εξοικονομήσεις"
-          value={`€${(costSavingsData.total / 1000).toFixed(0)}K`}
+          value={formatCurrencyCompact(costSavingsData.total)}
           subtext={hasAnyData ? 'Warehousing + Ad efficiency' : 'Φόρτωσε δεδομένα'}
         />
       </div>
@@ -371,7 +407,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                     padding: '8px 12px'
                   }}
                   formatter={(value: any, name?: string) => [
-                    `€${((value as number) || 0).toFixed(0)}K`,
+                    formatCurrencyCompact((value as number) || 0),
                     name === 'total' ? 'Total Revenue' : 'P+ Attributed'
                   ]}
                   labelStyle={{ color: '#24292f', fontWeight: 600, marginBottom: 4 }}
@@ -441,7 +477,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                 </Pie>
                 <Tooltip
                   contentStyle={{ backgroundColor: '#fff', border: '1px solid #E5E5E5', borderRadius: '8px' }}
-                  formatter={(value) => [`${value || 0}%`, '']}
+                  formatter={(value) => [formatPercent((value as number) || 0, 1), '']}
                 />
               </PieChart>
           </div>
@@ -460,7 +496,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-bold text-[#1A1A1A] font-mono">
-                    €{(item.amount / 1000).toFixed(1)}K
+                    {formatCurrencyCompact(item.amount)}
                   </span>
                   <ChevronRight 
                     size={14} 
@@ -489,11 +525,11 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                       </span>
                       <span className="font-mono text-[#1A1A1A]">
                         {detail.revenue 
-                          ? `€${(detail.revenue / 1000).toFixed(1)}K` 
+                          ? formatCurrencyCompact(detail.revenue)
                           : detail.value 
-                          ? `€${typeof detail.value === 'number' ? detail.value.toLocaleString() : detail.value}`
+                          ? `€${typeof detail.value === 'number' ? formatCurrency(detail.value) : detail.value}`
                           : detail.before !== undefined && detail.after !== undefined
-                          ? `€${detail.before.toFixed(2)} → €${detail.after.toFixed(2)} ${detail.improvement || ''}`
+                          ? `€${formatCurrency(detail.before)} → €${formatCurrency(detail.after)} ${detail.improvement || ''}`
                           : detail.improvement || ''}
                       </span>
                     </div>
@@ -543,18 +579,18 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                     <span className="font-medium text-[#1A1A1A]">{seg.segment}</span>
                   </td>
                   <td className="py-3 font-mono text-sm">
-                    {seg.customers_targeted.toLocaleString()}
+                    {formatNumber(seg.customers_targeted)}
                   </td>
                   <td className="py-3 font-mono text-sm">
                     {seg.campaigns_run}
                   </td>
                   <td className="py-3">
                     <span className="font-bold text-[#1A1A1A] font-mono">
-                      €{(seg.revenue_generated / 1000).toFixed(1)}K
+                      {formatCurrencyCompact(seg.revenue_generated)}
                     </span>
                   </td>
                   <td className="py-3 font-mono text-sm">
-                    €{seg.avg_order_value}
+                    €{formatCurrency(seg.avg_order_value)}
                   </td>
                   <td className="py-3">
                     <Badge variant="info">{seg.conversion_rate}</Badge>
@@ -595,14 +631,14 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                   </div>
                 </div>
                 <span className="text-lg font-bold text-[#22C55E] font-mono">
-                  €{item.amount.toLocaleString()}
+                  €{formatCurrency(item.amount)}
                 </span>
               </motion.div>
             ))}
             <div className="pt-4 border-t border-[#E5E5E5] flex justify-between items-center">
               <span className="font-medium text-[#1A1A1A]">Total Savings</span>
               <span className="text-2xl font-bold text-[#22C55E] font-mono">
-                €{costSavingsData.total.toLocaleString()}
+                €{formatCurrency(costSavingsData.total)}
               </span>
             </div>
           </div>

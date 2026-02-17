@@ -1,13 +1,11 @@
 import type { Campaign, Product, RFMSegment } from '../types';
 
-export const SUBSCRIPTION_COST_MONTHLY = 1600;
-export const SUBSCRIPTION_COST_PERIOD = 4800; // 90 days
-
 export interface ROISummary {
   total_revenue: number;
   performance_plus_attributed: number;
   attribution_percentage: number;
   roi_multiplier: number;
+  campaign_cost: number;
 }
 
 export interface ROIBreakdown {
@@ -41,20 +39,33 @@ export interface SegmentPerformance {
 }
 
 /**
- * Calculate total revenue from analytics and campaigns
+ * Calculate total revenue: άθροισμα Οργανικών Εσόδων (τζίρος χωρίς campaigns) + Campaigns.
  */
 export function calculateTotalRevenue(
-  analyticsRecords: Array<{ total_revenue?: number }>,
+  organicRevenue: number,
   campaigns: Campaign[]
 ): number {
-  // Total revenue from analytics
-  const analyticsRevenue = analyticsRecords.reduce((sum, r) => sum + (r.total_revenue || 0), 0);
-  
-  // Total conversion value from campaigns (if not already in analytics)
   const campaignsRevenue = campaigns.reduce((sum, c) => sum + (c.conversion_value || 0), 0);
-  
-  // Use the larger value (analytics is more comprehensive, but campaigns might have additional data)
-  return Math.max(analyticsRevenue, campaignsRevenue > 0 ? campaignsRevenue : analyticsRevenue);
+  return organicRevenue + campaignsRevenue;
+}
+
+/** Extract date from campaign for month grouping (start_date, end_date, or period "2025-01-01 - 2025-01-31") */
+export function getCampaignDateForMonth(c: Campaign): Date | null {
+  const d = c.start_date || c.end_date;
+  if (d && d.trim()) {
+    const parsed = new Date(d.trim());
+    if (!isNaN(parsed.getTime())) return parsed;
+  }
+  if (c.period && c.period.trim()) {
+    const rangeMatch = c.period.match(/(\d{4}-\d{2}-\d{2})\s*[-–to]\s*(\d{4}-\d{2}-\d{2})/i);
+    if (rangeMatch) return new Date(rangeMatch[1]);
+    const monthMatch = c.period.match(/(\w+)\s+(\d{4})/);
+    if (monthMatch) {
+      const parsed = new Date(`${monthMatch[1]} 1, ${monthMatch[2]}`);
+      return isNaN(parsed.getTime()) ? null : parsed;
+    }
+  }
+  return null;
 }
 
 /**
@@ -129,16 +140,14 @@ export function calculateAttributedRevenue(
   // Cost avoided: warehousing costs for cleared stock
   const costAvoided = (deadStockProducts.length + excessStockProducts.length) * 50; // €50 per SKU per period
   
-  // Channel Optimization: ROAS improvements
-  // Calculate average ROAS from campaigns
+  // Channel Optimization: incremental revenue from ROAS improvement vs baseline
+  // Cap roasImprovement to avoid explosion (e.g. single campaign with 100x ROAS)
   const campaignsWithROAS = campaigns.filter(c => c.roas && c.roas > 0 && c.amount_spent && c.amount_spent > 0);
   const avgROAS = campaignsWithROAS.length > 0
     ? campaignsWithROAS.reduce((sum, c) => sum + (c.roas || 0), 0) / campaignsWithROAS.length
     : 0;
-  
-  // Assume baseline ROAS of 3.0x, calculate incremental improvement
   const baselineROAS = 3.0;
-  const roasImprovement = Math.max(0, avgROAS - baselineROAS);
+  const roasImprovement = Math.min(Math.max(0, avgROAS - baselineROAS), 10); // cap at 10x
   const totalSpent = campaigns.reduce((sum, c) => sum + (c.amount_spent || 0), 0);
   const channelRevenue = totalSpent * roasImprovement;
   
@@ -184,22 +193,25 @@ export function calculateAttributedRevenue(
 }
 
 /**
- * Calculate ROI summary
+ * Calculate ROI summary.
+ * ROI = attributed revenue / campaign cost (ad spend).
+ * Attributed is capped at total revenue (conservative).
  */
 export function calculateROISummary(
   totalRevenue: number,
   attributedRevenue: number,
-  period: 'monthly' | 'period' = 'period'
+  campaignCost: number
 ): ROISummary {
-  const subscriptionCost = period === 'monthly' ? SUBSCRIPTION_COST_MONTHLY : SUBSCRIPTION_COST_PERIOD;
-  const attributionPercentage = totalRevenue > 0 ? (attributedRevenue / totalRevenue) * 100 : 0;
-  const roiMultiplier = subscriptionCost > 0 ? attributedRevenue / subscriptionCost : 0;
-  
+  const cappedAttributed = totalRevenue > 0 ? Math.min(attributedRevenue, totalRevenue) : attributedRevenue;
+  const attributionPercentage = totalRevenue > 0 ? (cappedAttributed / totalRevenue) * 100 : 0;
+  const roiMultiplier = campaignCost > 0 ? cappedAttributed / campaignCost : 0;
+
   return {
     total_revenue: totalRevenue,
-    performance_plus_attributed: attributedRevenue,
+    performance_plus_attributed: cappedAttributed,
     attribution_percentage: Math.round(attributionPercentage * 10) / 10,
     roi_multiplier: Math.round(roiMultiplier * 10) / 10,
+    campaign_cost: campaignCost,
   };
 }
 

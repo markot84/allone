@@ -158,33 +158,34 @@ export class FirestoreService {
     const BATCH_SIZE = 500;
     let totalDeleted = 0;
     let snapshot = await getDocs(q);
-    
+
     if (snapshot.empty) {
       if (import.meta.env.MODE === 'development') {
         console.debug(`[FirestoreService] deleteCollection: No documents to delete in ${collectionName}${brandId ? ` for brandId ${brandId}` : ''}`);
       }
       return;
     }
-    
+
     if (import.meta.env.MODE === 'development') {
       console.debug(`[FirestoreService] deleteCollection: Starting deletion of ${snapshot.size} documents from ${collectionName}${brandId ? ` for brandId ${brandId}` : ''}`);
     }
-    
+
     while (!snapshot.empty) {
       const batch = writeBatch(db);
       const docsToDelete = snapshot.docs.slice(0, BATCH_SIZE);
       docsToDelete.forEach((d) => batch.delete(d.ref));
       await batch.commit();
       totalDeleted += docsToDelete.length;
-      
+
       if (snapshot.docs.length <= BATCH_SIZE) break;
       snapshot = await getDocs(q);
     }
-    
+
     if (import.meta.env.MODE === 'development') {
       console.debug(`[FirestoreService] deleteCollection: Deleted ${totalDeleted} documents from ${collectionName}${brandId ? ` for brandId ${brandId}` : ''}`);
     }
   }
+
 }
 
 // Specific collections helpers - pass brandId for scoped queries
@@ -286,4 +287,10 @@ export const AnalyticsService = {
     ], brandId),
   create: (id: string, data: any, brandId?: string | null) =>
     FirestoreService.setDocument('analytics', id, { ...data, ...(brandId ? { brandId } : {}) }),
+};
+
+export const OrganicService = {
+  getAll: (brandId?: string | null) => FirestoreService.getDocuments('organic', [orderBy('period', 'desc')], brandId),
+  create: (id: string, data: any, brandId?: string | null) =>
+    FirestoreService.setDocument('organic', id, { ...data, ...(brandId ? { brandId } : {}) }),
 };

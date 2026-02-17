@@ -3,6 +3,7 @@ export { useProducts } from './useProducts';
 export { useAuth } from './useAuth';
 export { useBrand } from './useBrand';
 export { useAnalytics } from './useAnalytics';
+export { useOrganic } from './useOrganic';
 export { useContent } from './useContent';
 export { useCampaigns } from './useCampaigns';
 export { useActiveStrategy } from './useActiveStrategy';

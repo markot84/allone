@@ -33,6 +33,16 @@ export interface Invite {
   createdBy?: string;
 }
 
+// Οργανικά οικονομικά στοιχεία επιχείρησης (τζίρος χωρίς campaigns)
+export interface OrganicRevenue {
+  id: string;
+  period: string; // ISO date or "YYYY-MM" or "January 2025"
+  organic_revenue: number; // τζίρος οργανικός (χωρίς έσοδα από campaigns)
+  brandId?: string;
+  createdAt?: Date | string;
+  source?: string;
+}
+
 // Feed Source Types (for automated import)
 export type FeedSourceType = 'erp' | 'google_ads' | 'meta_catalog';
 
@@ -186,11 +196,12 @@ export interface ROIBreakdown {
 }
 
 export interface ROISummary {
-  period: string;
+  period?: string;
   total_revenue: number;
   performance_plus_attributed: number;
   attribution_percentage: number;
   roi_multiplier: number;
+  campaign_cost: number;
 }
 
 // AI Insights Types

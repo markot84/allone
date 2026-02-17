@@ -1,15 +1,93 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { TrendingUp, Filter, Download, Search, Calendar, DollarSign } from 'lucide-react';
-import { Card, CardHeader, Badge, Button, Spinner } from '../common';
-import { useCampaigns } from '../../hooks';
+import { TrendingUp, Filter, Download, Search, Calendar, DollarSign, Trash2 } from 'lucide-react';
+import { Card, CardHeader, Badge, Button, Spinner, useToast } from '../common';
+import { useCampaigns, useBrand } from '../../hooks';
+import { FirestoreService } from '../../services/firestore';
+import { formatCurrency, formatNumber, formatMultiplier, formatPercent } from '../../utils/format';
 import type { Campaign } from '../../types';
 
-export function CampaignsPage() {
+function parseCampaignDate(d: string | undefined): Date | null {
+  if (!d || !d.trim()) return null;
+  const parsed = new Date(d.trim());
+  return isNaN(parsed.getTime()) ? null : parsed;
+}
+
+interface CampaignsPageProps {
+  onSectionChange?: (section: string) => void;
+}
+
+export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
+  const { currentBrand } = useBrand();
   const { campaigns, isLoading, hasImported } = useCampaigns();
+  const queryClient = useQueryClient();
+  const toast = useToast();
   const [searchQuery, setSearchQuery] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
   const [channelFilter, setChannelFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [dateFrom, setDateFrom] = useState<string>('');
+  const [dateTo, setDateTo] = useState<string>('');
+
+  // Date range from campaigns data (start_date, end_date, or parse from period "2025-01-01 - 2025-01-31")
+  const { minDate, maxDate, dateFromDefault, dateToDefault } = useMemo(() => {
+    const list = campaigns as Campaign[];
+    let min: Date | null = null;
+    let max: Date | null = null;
+    list.forEach(c => {
+      let start = parseCampaignDate(c.start_date);
+      let end = parseCampaignDate(c.end_date);
+      if (!start && !end && c.period) {
+        const m = c.period.match(/(\d{4}-\d{2}-\d{2})\s*[-–]\s*(\d{4}-\d{2}-\d{2})/);
+        if (m) {
+          start = parseCampaignDate(m[1]);
+          end = parseCampaignDate(m[2]);
+        }
+      }
+      if (start) {
+        min = !min || start < min ? start : min;
+        max = !max || start > max ? start : max;
+      }
+      if (end) {
+        min = !min || end < min ? end : min;
+        max = !max || end > max ? end : max;
+      }
+    });
+    return {
+      minDate: min,
+      maxDate: max,
+      dateFromDefault: min ? (min as Date).toISOString().slice(0, 10) : '',
+      dateToDefault: max ? (max as Date).toISOString().slice(0, 10) : '',
+    };
+  }, [campaigns]);
+
+  // Αυτόματη ανίχνευση περιόδου: όταν φορτώσουν campaigns, θέτουμε Από/Έως βάσει ημερομηνιών τους
+  useEffect(() => {
+    if (dateFromDefault && dateToDefault) {
+      setDateFrom(dateFromDefault);
+      setDateTo(dateToDefault);
+    } else {
+      setDateFrom('');
+      setDateTo('');
+    }
+  }, [dateFromDefault, dateToDefault]);
+
+  const handleDeleteCampaigns = async () => {
+    if (!currentBrand?.id) return;
+    if (!window.confirm(`Διαγραφή όλων των campaigns (${campaigns.length}) για το brand "${currentBrand.name}"; Αυτή η ενέργεια δεν αναιρείται.`)) return;
+    setIsDeleting(true);
+    try {
+      await FirestoreService.deleteCollection('campaigns', currentBrand.id);
+      queryClient.invalidateQueries({ queryKey: ['campaigns', currentBrand.id] });
+      queryClient.invalidateQueries({ queryKey: ['campaigns'] });
+      toast.success('Τα campaigns διαγράφηκαν επιτυχώς.');
+    } catch (e) {
+      toast.error(`Σφάλμα διαγραφής: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   // Filter campaigns
   const filteredCampaigns = useMemo(() => {
@@ -25,9 +103,17 @@ export function CampaignsPage() {
       );
     }
 
-    // Channel filter
+    // Channel filter (include campaigns with matching source file when channel is Other)
     if (channelFilter !== 'all') {
-      filtered = filtered.filter(c => c.channel === channelFilter);
+      filtered = filtered.filter(c => {
+        const ch = c.channel || 'Other';
+        if (ch === channelFilter) return true;
+        if (ch !== 'Other') return false;
+        const src = ((c as { source?: string }).source || '').toLowerCase();
+        if (channelFilter === 'Google Ads' && (src.includes('google') || src.includes('google ads'))) return true;
+        if (channelFilter === 'Meta' && (src.includes('meta') || src.includes('facebook') || src.includes('instagram'))) return true;
+        return false;
+      });
     }
 
     // Status filter
@@ -41,19 +127,43 @@ export function CampaignsPage() {
       });
     }
 
-    return filtered;
-  }, [campaigns, searchQuery, channelFilter, statusFilter]);
+    // Date range filter
+    if (dateFrom || dateTo) {
+      const from = dateFrom ? new Date(dateFrom).getTime() : 0;
+      const to = dateTo ? new Date(dateTo).getTime() + 86400000 : Infinity;
+      filtered = filtered.filter(c => {
+        let start = parseCampaignDate(c.start_date);
+        let end = parseCampaignDate(c.end_date);
+        if (!start && !end && c.period) {
+          const m = c.period.match(/(\d{4}-\d{2}-\d{2})\s*[-–]\s*(\d{4}-\d{2}-\d{2})/);
+          if (m) {
+            start = parseCampaignDate(m[1]);
+            end = parseCampaignDate(m[2]);
+          }
+        }
+        const campStart = start ? start.getTime() : null;
+        const campEnd = end ? end.getTime() : null;
+        if (!campStart && !campEnd) return true;
+        const overlapStart = campStart ? campStart <= to : campEnd ? campEnd >= from : true;
+        const overlapEnd = campEnd ? campEnd >= from : campStart ? campStart <= to : true;
+        return overlapStart && overlapEnd;
+      });
+    }
 
-  // Calculate summary stats
+    return filtered;
+  }, [campaigns, searchQuery, channelFilter, statusFilter, dateFrom, dateTo]);
+
+  // Calculate summary stats (from filtered campaigns)
   const summaryStats = useMemo(() => {
-    const total = (campaigns as Campaign[]).length;
-    const totalSpent = (campaigns as Campaign[]).reduce((sum, c) => sum + (c.amount_spent || 0), 0);
-    const totalConversions = (campaigns as Campaign[]).reduce((sum, c) => sum + (c.conversions || 0), 0);
-    const totalConversionValue = (campaigns as Campaign[]).reduce((sum, c) => sum + (c.conversion_value || 0), 0);
+    const list = filteredCampaigns;
+    const total = list.length;
+    const totalSpent = list.reduce((sum, c) => sum + (c.amount_spent || 0), 0);
+    const totalConversions = list.reduce((sum, c) => sum + (c.conversions || 0), 0);
+    const totalConversionValue = list.reduce((sum, c) => sum + (c.conversion_value || 0), 0);
     const avgROAS = totalSpent > 0 ? totalConversionValue / totalSpent : 0;
 
     const byChannel: Record<string, number> = {};
-    (campaigns as Campaign[]).forEach(c => {
+    list.forEach(c => {
       const channel = c.channel || 'Other';
       byChannel[channel] = (byChannel[channel] || 0) + 1;
     });
@@ -66,15 +176,25 @@ export function CampaignsPage() {
       avgROAS,
       byChannel,
     };
-  }, [campaigns]);
+  }, [filteredCampaigns]);
 
-  // Get unique channels and statuses
+  // Standard channels + unique from data (sorted: standard first, then data-derived)
+  const STANDARD_CHANNELS = ['Meta', 'Google Ads', 'Google Shopping', 'Other'];
   const channels = useMemo(() => {
-    const unique = new Set<string>();
+    const fromData = new Set<string>();
     (campaigns as Campaign[]).forEach(c => {
-      if (c.channel) unique.add(c.channel);
+      const ch = c.channel || 'Other';
+      fromData.add(ch);
     });
-    return Array.from(unique);
+    const combined = new Set([...STANDARD_CHANNELS, ...fromData]);
+    return Array.from(combined).sort((a, b) => {
+      const aIdx = STANDARD_CHANNELS.indexOf(a);
+      const bIdx = STANDARD_CHANNELS.indexOf(b);
+      if (aIdx >= 0 && bIdx >= 0) return aIdx - bIdx;
+      if (aIdx >= 0) return -1;
+      if (bIdx >= 0) return 1;
+      return a.localeCompare(b);
+    });
   }, [campaigns]);
 
   const statuses = useMemo(() => {
@@ -108,7 +228,15 @@ export function CampaignsPage() {
             Δεν υπάρχουν imported campaigns ακόμα.
           </p>
           <p className="text-sm text-[#4A4A4A]">
-            Μεταβείτε στο <strong>Data Import</strong> για να εισάγετε campaigns από Google Ads ή Meta.
+            Μεταβείτε στο{' '}
+            <button
+              type="button"
+              onClick={() => onSectionChange?.('data-campaigns')}
+              className="font-semibold text-[#FF6B35] hover:underline focus:outline-none focus:ring-2 focus:ring-[#FF6B35] focus:ring-offset-1 rounded"
+            >
+              Data Import
+            </button>
+            {' '}για να εισάγετε campaigns από Google Ads ή Meta.
           </p>
         </Card>
       </div>
@@ -138,11 +266,67 @@ export function CampaignsPage() {
           })()}
         </div>
         <div className="flex items-center gap-3">
+          <Button
+            variant="secondary"
+            icon={<Trash2 size={16} />}
+            onClick={handleDeleteCampaigns}
+            disabled={isDeleting || !hasImported}
+            className="text-[#DC2626] hover:bg-[#FEE2E2]"
+          >
+            {isDeleting ? 'Διαγραφή…' : 'Διαγραφή δεδομένων'}
+          </Button>
           <Button variant="secondary" icon={<Download size={16} />}>
             Export
           </Button>
         </div>
       </div>
+
+      {/* Date range tab */}
+      <Card padding="md" className="border-l-4 border-l-[#FF6B35]">
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Calendar size={18} className="text-[#FF6B35]" />
+            <span className="text-sm font-medium text-[#4A4A4A]">Περίοδος δεδομένων:</span>
+          </div>
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-[#9CA3AF]">Από</label>
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                min={dateFromDefault || undefined}
+                max={dateToDefault || undefined}
+                className="px-3 py-1.5 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[#FF6B35] focus:bg-white transition-all"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-[#9CA3AF]">Έως</label>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                min={dateFromDefault || undefined}
+                max={dateToDefault || undefined}
+                className="px-3 py-1.5 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[#FF6B35] focus:bg-white transition-all"
+              />
+            </div>
+            {(dateFrom || dateTo) && (
+              <button
+                onClick={() => { setDateFrom(''); setDateTo(''); }}
+                className="text-xs text-[#FF6B35] hover:underline"
+              >
+                Καθαρισμός
+              </button>
+            )}
+          </div>
+          {minDate && maxDate && (
+            <span className="text-xs text-[#9CA3AF]">
+              Διαθέσιμα: {(minDate as Date).toLocaleDateString('el-GR')} – {(maxDate as Date).toLocaleDateString('el-GR')}
+            </span>
+          )}
+        </div>
+      </Card>
 
       {/* Summary Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -151,7 +335,7 @@ export function CampaignsPage() {
             <div>
               <p className="text-sm text-[#4A4A4A]">Total Spent</p>
               <p className="text-2xl font-bold text-[#1A1A1A] font-mono mt-1">
-                €{summaryStats.totalSpent.toLocaleString()}
+                €{formatCurrency(summaryStats.totalSpent, 2)}
               </p>
             </div>
             <div className="w-12 h-12 bg-[#FFF0EB] rounded-lg flex items-center justify-center">
@@ -165,7 +349,7 @@ export function CampaignsPage() {
             <div>
               <p className="text-sm text-[#4A4A4A]">Total Conversions</p>
               <p className="text-2xl font-bold text-[#1A1A1A] font-mono mt-1">
-                {summaryStats.totalConversions.toLocaleString()}
+                {formatNumber(summaryStats.totalConversions)}
               </p>
             </div>
             <div className="w-12 h-12 bg-[#DCFCE7] rounded-lg flex items-center justify-center">
@@ -179,7 +363,7 @@ export function CampaignsPage() {
             <div>
               <p className="text-sm text-[#4A4A4A]">Conversion Value</p>
               <p className="text-2xl font-bold text-[#1A1A1A] font-mono mt-1">
-                €{summaryStats.totalConversionValue.toLocaleString()}
+                €{formatCurrency(summaryStats.totalConversionValue, 2)}
               </p>
             </div>
             <div className="w-12 h-12 bg-[#DBEAFE] rounded-lg flex items-center justify-center">
@@ -193,7 +377,7 @@ export function CampaignsPage() {
             <div>
               <p className="text-sm text-[#4A4A4A]">Avg ROAS</p>
               <p className="text-2xl font-bold text-[#1A1A1A] font-mono mt-1">
-                {summaryStats.avgROAS.toFixed(2)}x
+                {formatMultiplier(summaryStats.avgROAS, 2)}
               </p>
             </div>
             <div className="w-12 h-12 bg-[#FEF3C7] rounded-lg flex items-center justify-center">
@@ -312,24 +496,24 @@ export function CampaignsPage() {
                       </Badge>
                     </td>
                     <td className="py-3 px-2 text-right font-mono text-sm">
-                      {campaign.amount_spent ? `€${campaign.amount_spent.toLocaleString()}` : '-'}
+                      {campaign.amount_spent ? `€${formatCurrency(campaign.amount_spent, 2)}` : '-'}
                     </td>
                     <td className="py-3 px-2 text-right font-mono text-sm">
-                      {campaign.impressions ? campaign.impressions.toLocaleString() : '-'}
+                      {campaign.impressions ? formatNumber(campaign.impressions) : '-'}
                     </td>
                     <td className="py-3 px-2 text-right font-mono text-sm">
-                      {campaign.clicks ? campaign.clicks.toLocaleString() : '-'}
+                      {campaign.clicks ? formatNumber(campaign.clicks) : '-'}
                     </td>
                     <td className="py-3 px-2 text-right font-mono text-sm">
-                      {campaign.ctr ? `${campaign.ctr.toFixed(2)}%` : '-'}
+                      {campaign.ctr ? formatPercent(campaign.ctr, 2) : '-'}
                     </td>
                     <td className="py-3 px-2 text-right font-mono text-sm">
-                      {campaign.conversions ? campaign.conversions.toLocaleString() : '-'}
+                      {campaign.conversions ? formatNumber(campaign.conversions) : '-'}
                     </td>
                     <td className="py-3 px-2 text-right">
                       {campaign.roas ? (
                         <Badge variant="success" size="sm">
-                          {campaign.roas.toFixed(2)}x
+                          {formatMultiplier(campaign.roas, 2)}
                         </Badge>
                       ) : (
                         '-'

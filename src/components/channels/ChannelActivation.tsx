@@ -28,6 +28,7 @@ import { useToast } from '../common/Toast';
 import { useProducts, useCampaigns, useBrand } from '../../hooks';
 import { getStockAgeDays } from '../../utils/productUtils';
 import { safeBrandName } from '../../services/reportExport';
+import { formatCurrency, formatNumber, formatPercent, formatMultiplier } from '../../utils/format';
 // Removed mock data imports - using only real data
 import type { Campaign } from '../../types';
 
@@ -306,7 +307,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         target_segments: [] as string[],
         expected_roas: ch.roas,
         priority_products: [] as string[],
-        rationale: `${ch.campaignCount} campaigns, ${ch.conversions.toLocaleString()} conversions`,
+        rationale: `${ch.campaignCount} campaigns, ${formatNumber(ch.conversions)} conversions`,
       };
     });
 
@@ -334,13 +335,14 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   }, [realChannelMix]);
 
   const weightedROAS = useMemo(() => {
-    if (!channelMix.allocation || channelMix.allocation.length === 0) return '0.0';
+    if (!channelMix.allocation || channelMix.allocation.length === 0) return '0,0x';
     const total = channelMix.allocation.reduce((sum, ch) => sum + ch.budget, 0);
-    if (total === 0) return '0.0';
-    return channelMix.allocation.reduce(
+    if (total === 0) return '0,0x';
+    const avg = channelMix.allocation.reduce(
       (sum, ch) => sum + (ch.expected_roas * ch.budget / total),
       0
-    ).toFixed(1);
+    );
+    return formatMultiplier(avg, 1);
   }, [channelMix]);
 
   // Export functions for different feed types
@@ -363,7 +365,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
           `${p.name || ''} - ${p.category || ''}`,
           `https://yoursite.com/products/${p.sku || p.id}`,
           '', // image_link - would need image URL
-          `${(p.price || 0).toFixed(2)} EUR`,
+          `${formatCurrency(p.price || 0, 2)} EUR`,
           (p.stock_level || 0) > 0 ? 'in stock' : 'out of stock',
           '', // brand - would need brand field
           'new',
@@ -378,7 +380,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
           `${p.name || ''} - ${p.category || ''}`,
           (p.stock_level || 0) > 0 ? 'in stock' : 'out of stock',
           'new',
-          `${(p.price || 0).toFixed(2)} EUR`,
+          `${formatCurrency(p.price || 0, 2)} EUR`,
           `https://yoursite.com/products/${p.sku || p.id}`,
           '', // image_link
           '' // brand
@@ -392,8 +394,8 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
           p.sku || '',
           p.name || '',
           p.category || '',
-          (p.price || 0).toFixed(2),
-          (p.margin_percentage || 0).toFixed(1),
+          formatCurrency(p.price || 0, 2),
+          formatPercent(p.margin_percentage || 0, 1).replace('%', ''),
           p.stock_level || 0,
           p.stock_capacity || 0,
           getStockAgeDays(p),
@@ -517,7 +519,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
           <div className="text-right">
             <p className="text-sm text-[#4A4A4A]">Total Budget</p>
             <p className="text-2xl font-bold text-[#1A1A1A] font-mono">
-              €{channelMix.total_budget.toLocaleString()}
+              €{formatCurrency(channelMix.total_budget)}
             </p>
           </div>
         </div>
@@ -567,7 +569,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                       padding: '8px 12px'
                     }}
                     formatter={(value: number | string | undefined, name: string | undefined) => [
-                      `${typeof value === 'number' ? value.toFixed(1) : value || '0'}%`,
+                      formatPercent(typeof value === 'number' ? value : 0, 1),
                       name || 'Channel'
                     ]}
                     labelFormatter={(label) => `Channel: ${label || 'Unknown'}`}
@@ -585,7 +587,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                       <span className="text-[#4A4A4A] truncate max-w-[120px]">{channel.channel || 'Unknown'}</span>
                     </div>
                     <span className="font-mono text-[#1A1A1A]">
-                      €{channel.budget?.toLocaleString() || '0'} ({channel.percentage?.toFixed(1) || '0'}%)
+                      €{formatCurrency(channel.budget ?? 0)} ({formatPercent(channel.percentage ?? 0, 1)})
                     </span>
                   </div>
                 ))}
@@ -606,13 +608,14 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
             action={
               hasCampaigns && realChannelPerformance ? (
                 <Badge variant="success" size="md">
-                  Avg ROAS: {(
-                    realChannelPerformance.reduce((sum, ch) => sum + ch.roas, 0) / realChannelPerformance.length
-                  ).toFixed(1)}x
+                  Avg ROAS: {formatMultiplier(
+                    realChannelPerformance.reduce((sum, ch) => sum + ch.roas, 0) / realChannelPerformance.length,
+                    1
+                  )}
                 </Badge>
               ) : (
                 <Badge variant="success" size="md">
-                  Avg ROAS: {weightedROAS}x
+                  Avg ROAS: {weightedROAS}
                 </Badge>
               )
             }
@@ -646,24 +649,24 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                         </p>
                         <div className="flex flex-wrap gap-3 mt-3 text-xs text-[#4A4A4A]">
                           <div>
-                            <span className="font-medium">Conversions:</span> {channel.conversions.toLocaleString()}
+                            <span className="font-medium">Conversions:</span> {formatNumber(channel.conversions)}
                           </div>
                           <div>
-                            <span className="font-medium">CTR:</span> {channel.ctr.toFixed(2)}%
+                            <span className="font-medium">CTR:</span> {formatPercent(channel.ctr, 2)}
                           </div>
                           <div>
-                            <span className="font-medium">CPC:</span> €{channel.cpc.toFixed(2)}
+                            <span className="font-medium">CPC:</span> €{formatCurrency(channel.cpc, 2)}
                           </div>
                         </div>
                       </div>
                     </div>
                     <div className="text-right">
                       <p className="text-lg font-bold text-[#1A1A1A] font-mono">
-                        €{channel.spent.toLocaleString()}
+                        €{formatCurrency(channel.spent)}
                       </p>
                       <p className="text-sm text-[#4A4A4A]">Spent</p>
                       <Badge variant="success" className="mt-2">
-                        ROAS: {channel.roas.toFixed(2)}x
+                        ROAS: {formatMultiplier(channel.roas, 2)}
                       </Badge>
                     </div>
                   </div>
@@ -709,7 +712,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                   </div>
                   <div className="text-right">
                     <p className="text-lg font-bold text-[#1A1A1A] font-mono">
-                      €{channel.budget.toLocaleString()}
+                      €{formatCurrency(channel.budget)}
                     </p>
                     <p className="text-sm text-[#4A4A4A]">{channel.percentage}%</p>
                     <Badge variant="success" className="mt-2">
@@ -752,7 +755,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
               <YAxis
                 tick={{ fill: '#4A4A4A', fontSize: 12 }}
                 axisLine={{ stroke: '#E5E5E5' }}
-                tickFormatter={(value) => `${value}x`}
+                tickFormatter={(value) => formatMultiplier(value, 1)}
               />
               <Tooltip
                 contentStyle={{
@@ -760,7 +763,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                   border: '1px solid #E5E5E5',
                   borderRadius: '8px'
                 }}
-                formatter={(value) => [`${value || 0}x`, 'ROAS']}
+                formatter={(value) => [formatMultiplier((value as number) || 0, 1), 'ROAS']}
               />
               <Legend />
               <Line type="monotone" dataKey="email" stroke="#FF6B35" strokeWidth={2} name="Email" dot={{ r: 4 }} />
@@ -813,19 +816,19 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                   {campaign.amount_spent && (
                     <div className="flex justify-between">
                       <span className="text-[#4A4A4A]">Spent:</span>
-                      <span className="font-mono font-medium">€{campaign.amount_spent.toLocaleString()}</span>
+                      <span className="font-mono font-medium">€{formatCurrency(campaign.amount_spent)}</span>
                     </div>
                   )}
                   {campaign.roas && (
                     <div className="flex justify-between">
                       <span className="text-[#4A4A4A]">ROAS:</span>
-                      <span className="font-mono font-medium text-[#22C55E]">{campaign.roas.toFixed(2)}x</span>
+                      <span className="font-mono font-medium text-[#22C55E]">{formatMultiplier(campaign.roas, 2)}</span>
                     </div>
                   )}
                   {campaign.conversions && (
                     <div className="flex justify-between">
                       <span className="text-[#4A4A4A]">Conversions:</span>
-                      <span className="font-mono font-medium">{campaign.conversions.toLocaleString()}</span>
+                      <span className="font-mono font-medium">{formatNumber(campaign.conversions)}</span>
                     </div>
                   )}
                 </div>
@@ -863,7 +866,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
               <div className="space-y-2 text-sm text-[#4A4A4A]">
                 <div className="flex justify-between">
                   <span>Products</span>
-                  <span className="font-mono">{productsCount.toLocaleString()}</span>
+                  <span className="font-mono">{formatNumber(productsCount)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Last sync</span>
@@ -878,7 +881,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                   className="flex-1"
                   onClick={(e) => {
                     e.stopPropagation();
-                    alert(`Preview για ${feed}:\n${productsCount.toLocaleString()} products\n\nΘα εμφανιστεί preview modal σύντομα.`);
+                    alert(`Preview για ${feed}:\n${formatNumber(productsCount)} products\n\nΘα εμφανιστεί preview modal σύντομα.`);
                   }}
                 >
                   Preview

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Users,
@@ -6,7 +7,8 @@ import {
   TrendingDown,
   ChevronRight,
   ArrowRight,
-  Zap
+  Zap,
+  Trash2
 } from 'lucide-react';
 import {
   PieChart,
@@ -20,12 +22,14 @@ import {
   Tooltip,
   CartesianGrid
 } from 'recharts';
-import { Card, CardHeader, Badge, Button, Spinner, Tooltip as InfoTooltip } from '../common';
-import { useSegments } from '../../hooks';
+import { Card, CardHeader, Badge, Button, Spinner, Tooltip as InfoTooltip, useToast } from '../common';
+import { useSegments, useBrand } from '../../hooks';
+import { FirestoreService } from '../../services/firestore';
 import { segmentCategoryMatrix } from '../../data';
 import type { RFMSegment } from '../../types';
 
-const fmt = (n: number) => Number(n).toFixed(2);
+import { formatCurrency, formatNumber, formatPercent } from '../../utils/format';
+const fmt = (n: number) => formatCurrency(n, 2);
 
 // Get default RFM score from segment name (fallback when rfm_score is missing)
 function getDefaultRFMScoreFromName(segmentName: string): string | null {
@@ -87,10 +91,34 @@ function calculateAvgRFMScore(rfmScore: string | undefined | null, segmentName?:
   return sum / numbers.length;
 }
 
-export function RFMAnalysis() {
+interface RFMAnalysisProps {
+  onSectionChange?: (section: string) => void;
+}
+
+export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
   const [selectedSegment, setSelectedSegment] = useState<RFMSegment | null>(null);
   const { segments: rfmSegments, totalCustomers, isLoading: segmentsLoading, hasImported: hasImportedSegments } = useSegments();
+  const { currentBrand } = useBrand();
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const [isDeleting, setIsDeleting] = useState(false);
   const totalCustomersDisplay = totalCustomers;
+
+  const handleDeleteSegments = async () => {
+    if (!currentBrand?.id) return;
+    if (!window.confirm(`Διαγραφή όλων των segments (${rfmSegments.length}) για το brand "${currentBrand.name}"; Αυτή η ενέργεια δεν αναιρείται.`)) return;
+    setIsDeleting(true);
+    try {
+      await FirestoreService.deleteCollection('segments', currentBrand.id);
+      queryClient.invalidateQueries({ queryKey: ['segments', currentBrand.id] });
+      queryClient.invalidateQueries({ queryKey: ['segments'] });
+      toast.success('Τα segments διαγράφηκαν επιτυχώς.');
+    } catch (e) {
+      toast.error(`Σφάλμα διαγραφής: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   if (segmentsLoading) {
     return (
@@ -100,17 +128,57 @@ export function RFMAnalysis() {
     );
   }
 
+  if (!hasImportedSegments) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-2xl font-bold text-[#1A1A1A]">RFM Analysis</h2>
+          <p className="text-[#4A4A4A] mt-1">
+            Analyze customer segments based on Recency, Frequency, and Monetary value
+          </p>
+        </div>
+        <Card padding="lg" className="text-center py-12">
+          <p className="text-[#4A4A4A] mb-4">
+            Δεν υπάρχουν imported segments ακόμα.
+          </p>
+          <p className="text-sm text-[#4A4A4A]">
+            Μεταβείτε στο{' '}
+            <button
+              type="button"
+              onClick={() => onSectionChange?.('data-segments')}
+              className="font-semibold text-[#FF6B35] hover:underline focus:outline-none focus:ring-2 focus:ring-[#FF6B35] focus:ring-offset-1 rounded"
+            >
+              Data Import
+            </button>
+            {' '}για να εισάγετε RFM segments.
+          </p>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
+      <div className="flex items-center justify-between">
+        <div>
         <h2 className="text-2xl font-bold text-[#1A1A1A]">RFM Analysis</h2>
         <p className="text-[#4A4A4A] mt-1">
           Analyze customer segments based on Recency, Frequency, and Monetary value
           {hasImportedSegments && (
-            <span className="ml-2 text-[#22C55E] font-medium">· {rfmSegments.length} segment(s) · {totalCustomersDisplay.toLocaleString()} customers</span>
+            <span className="ml-2 text-[#22C55E] font-medium">· {rfmSegments.length} segment(s) · {formatNumber(totalCustomersDisplay)} customers</span>
           )}
         </p>
+        </div>
+        <Button
+          variant="secondary"
+          icon={<Trash2 size={16} />}
+          onClick={handleDeleteSegments}
+          disabled={isDeleting || !hasImportedSegments}
+          className="text-[#DC2626] hover:bg-[#FEE2E2]"
+        >
+          {isDeleting ? 'Διαγραφή…' : 'Διαγραφή δεδομένων'}
+        </Button>
       </div>
 
       {/* Overview Stats */}
@@ -123,7 +191,7 @@ export function RFMAnalysis() {
             <div>
               <p className="text-sm text-[#4A4A4A]"><InfoTooltip content="Συνολικός αριθμός πελατών σε όλα τα RFM segments.">Σύνολο Πελατών</InfoTooltip></p>
               <p className="text-xl font-bold text-[#1A1A1A] font-mono">
-                {totalCustomersDisplay.toLocaleString()}
+                {formatNumber(totalCustomersDisplay)}
               </p>
             </div>
           </div>
@@ -169,7 +237,7 @@ export function RFMAnalysis() {
                   }
                   
                   const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
-                  return avg.toFixed(1);
+                  return formatNumber(avg, 1);
                 })()}
               </p>
             </div>
@@ -367,7 +435,7 @@ function SegmentCard({ segment, index, isSelected, onSelect }: SegmentCardProps)
           <div>
             <p className="text-xs text-[#4A4A4A]">Customers</p>
             <p className="font-bold text-[#1A1A1A] font-mono">
-              {segment.count.toLocaleString()}
+              {formatNumber(segment.count)}
             </p>
           </div>
           <div>
@@ -436,7 +504,7 @@ function SegmentDetail({ segment, onClose }: SegmentDetailProps) {
                 <XAxis
                   type="number"
                   domain={[0, 1]}
-                  tickFormatter={(v) => `${(v * 100).toFixed(0)}%`}
+                  tickFormatter={(v) => formatPercent((v as number) * 100, 0)}
                   tick={{ fill: '#4A4A4A', fontSize: 12 }}
                 />
                 <YAxis
@@ -451,7 +519,7 @@ function SegmentDetail({ segment, onClose }: SegmentDetailProps) {
                     border: '1px solid #E5E5E5',
                     borderRadius: '8px'
                   }}
-                  formatter={(value) => [`${(((value as number) || 0) * 100).toFixed(0)}%`, 'Affinity']}
+                  formatter={(value) => [formatPercent(((value as number) || 0) * 100, 0), 'Affinity']}
                 />
                   <Bar dataKey="affinity" fill={segment.color} radius={[0, 4, 4, 0]} />
                 </BarChart>

@@ -19,6 +19,7 @@ import { Concept } from './components/concept';
 import { AIInsightsPanel, AIInsightsTriggerWrapper } from './components/insights';
 import { DataImport } from './components/data';
 import { BrandsPage } from './components/brands';
+import { BusinessFinances } from './components/finances';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -56,9 +57,8 @@ function App() {
   const getInitialSection = () => {
     if (typeof window === 'undefined') return 'dashboard';
     const hash = window.location.hash.replace('#', '');
-    if (hash && ['brands', 'dashboard', 'strategy', 'rfm', 'products', 'channels', 'campaigns', 'calendar', 'reports', 'roi', 'data', 'invite', 'concept', 'help'].includes(hash)) {
-      return hash;
-    }
+    const validSections = ['brands', 'dashboard', 'strategy', 'rfm', 'products', 'channels', 'campaigns', 'finances', 'calendar', 'reports', 'roi', 'data', 'data-products', 'data-segments', 'data-campaigns', 'data-organic', 'invite', 'concept', 'help'];
+    if (hash && validSections.includes(hash)) return hash;
     return 'dashboard';
   };
 
@@ -143,13 +143,15 @@ function App() {
       case 'strategy':
         return <WeightConfigurator />;
       case 'rfm':
-        return <RFMAnalysis />;
+        return <RFMAnalysis onSectionChange={handleSectionChange} />;
       case 'products':
-        return <ProductIntelligence />;
+        return <ProductIntelligence onSectionChange={handleSectionChange} />;
       case 'channels':
         return <ChannelActivation onSectionChange={handleSectionChange} />;
       case 'campaigns':
-        return <CampaignsPage />;
+        return <CampaignsPage onSectionChange={handleSectionChange} />;
+      case 'finances':
+        return <BusinessFinances onSectionChange={handleSectionChange} />;
       case 'calendar':
         return <ContentStrategy />;
       case 'reports':
@@ -157,7 +159,16 @@ function App() {
       case 'roi':
         return <ROIAttribution />;
       case 'data':
-        return <DataImport />;
+      case 'data-products':
+      case 'data-segments':
+      case 'data-campaigns':
+      case 'data-organic':
+        return <DataImport initialType={
+          activeSection === 'data-products' ? 'products' :
+          activeSection === 'data-segments' ? 'segments' :
+          activeSection === 'data-campaigns' ? 'campaigns' :
+          activeSection === 'data-organic' ? 'organic' : undefined
+        } />;
       case 'invite':
         return <InviteUserSection />;
       case 'concept':

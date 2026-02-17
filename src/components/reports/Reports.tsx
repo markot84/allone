@@ -12,7 +12,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { Card, CardHeader, Badge, Button, Spinner } from '../common';
-import { useProducts, useSegments, useCampaigns, useAnalytics, useBrand } from '../../hooks';
+import { useProducts, useSegments, useCampaigns, useOrganic, useBrand } from '../../hooks';
 import { useToast } from '../common/Toast';
 import {
   exportReport,
@@ -97,7 +97,7 @@ export function Reports() {
   const { segments } = useSegments();
   const segmentsCount = segments.length;
   const { campaigns } = useCampaigns();
-  const { analyticsRecords = [], hasImported: hasAnalytics } = useAnalytics();
+  const { records: organicRecords, totalOrganicRevenue, hasImported: hasOrganic } = useOrganic();
   const campaignsTyped = (campaigns ?? []) as import('../../types').Campaign[];
 
   const [scheduledReports, setScheduledReports] = useState<ScheduledReport[]>(() => {
@@ -121,7 +121,8 @@ export function Reports() {
         products,
         segments,
         campaigns: campaignsTyped,
-        analyticsRecords,
+        organicRecords,
+        totalOrganicRevenue,
         brandName: currentBrand?.name,
       });
       toast.success(`Το report κατέβηκε επιτυχώς (${format.toUpperCase()})`);
@@ -147,11 +148,12 @@ export function Reports() {
     toast.success('Διαγράφηκε');
   };
 
+  const hasFinancialData = hasOrganic || (campaignsTyped.length > 0);
   const reportDataCounts: Record<string, number | string> = {
-    executive: hasAnalytics ? '✓' : 0,
+    executive: hasFinancialData ? '✓' : 0,
     segment: segmentsCount,
     inventory: productsCount,
-    channel: hasAnalytics ? '✓' : 0,
+    channel: hasFinancialData ? '✓' : 0,
     campaign: campaigns.length,
     product: productsCount
   };
@@ -350,9 +352,9 @@ export function Reports() {
         </Card>
         <Card padding="md">
           <div className="text-center">
-            <p className="text-3xl font-bold text-[#1A1A1A] font-mono">{hasAnalytics ? '✓' : '—'}</p>
-            <p className="text-sm text-[#4A4A4A] mt-1">Analytics</p>
-            <p className="text-xs text-[#22C55E]">{hasAnalytics ? 'Εισαγόμενα' : 'Χωρίς δεδομένα'}</p>
+            <p className="text-3xl font-bold text-[#1A1A1A] font-mono">{hasOrganic ? '✓' : '—'}</p>
+            <p className="text-sm text-[#4A4A4A] mt-1">Οργανικά Έσοδα</p>
+            <p className="text-xs text-[#22C55E]">{hasOrganic ? 'Εισαγόμενα' : 'Χωρίς δεδομένα'}</p>
           </div>
         </Card>
       </div>

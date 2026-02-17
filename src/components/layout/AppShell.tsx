@@ -23,7 +23,7 @@ import {
   ThreeBarsIcon,
   XIcon
 } from '@primer/octicons-react';
-import { Upload, UserPlus, Building2, Target } from 'lucide-react';
+import { Upload, UserPlus, Building2, Target, Euro } from 'lucide-react';
 
 type SectionId =
   | 'brands'
@@ -34,6 +34,7 @@ type SectionId =
   | 'products'
   | 'channels'
   | 'campaigns'
+  | 'finances'
   | 'reports'
   | 'roi'
   | 'insights'
@@ -273,6 +274,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
       { id: 'rfm', label: 'RFM Analysis', icon: OrganizationIcon },
       { id: 'channels', label: 'Channel Activation', icon: MegaphoneIcon },
       { id: 'campaigns', label: 'Campaigns', icon: Target },
+      { id: 'finances', label: 'Οικονομικά', icon: Euro },
       { id: 'roi', label: 'ROI', icon: GraphIcon },
       { id: 'calendar', label: 'Content Strategy', icon: PencilIcon },
       { id: 'reports', label: 'Reports', icon: ReportIcon },
@@ -296,7 +298,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
             e.stopPropagation();
             onSelect(item.id); 
           }}
-          aria-current={activeSection === item.id ? 'page' : undefined}
+          aria-current={(activeSection === item.id || (item.id === 'data' && activeSection.startsWith('data-'))) ? 'page' : undefined}
           style={{ width: '100%', textAlign: 'left' }}
         >
           <NavList.LeadingVisual>

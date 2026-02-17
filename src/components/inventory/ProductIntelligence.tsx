@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Package,
@@ -12,10 +13,13 @@ import {
   ChevronUp,
   Download,
   TrendingUp,
-  TrendingDown
+  TrendingDown,
+  Trash2
 } from 'lucide-react';
-import { Card, Badge, Button, ProgressBar, Spinner, Tooltip } from '../common';
+import { Card, Badge, Button, ProgressBar, Spinner, Tooltip, useToast } from '../common';
 import { useProducts, useBrand } from '../../hooks';
+import { formatCurrency, formatCurrencyCompact, formatNumber, formatPercent } from '../../utils/format';
+import { FirestoreService } from '../../services/firestore';
 import { getStockAgeDays } from '../../utils/productUtils';
 import { ExportModal } from './ExportModal';
 import { ProductCharts } from './ProductCharts';
@@ -112,7 +116,11 @@ function computeInventoryAlerts(products: Product[]): InventoryAlert[] {
   return alerts.length > 0 ? alerts : [];
 }
 
-export function ProductIntelligence() {
+interface ProductIntelligenceProps {
+  onSectionChange?: (section: string) => void;
+}
+
+export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProps = {}) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [marginFilter, setMarginFilter] = useState<string>('all');
@@ -126,6 +134,9 @@ export function ProductIntelligence() {
 
   const { currentBrand } = useBrand();
   const { products, isLoading: productsLoading, hasImported } = useProducts();
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const [isDeleting, setIsDeleting] = useState(false);
   const inventorySummary = useMemo(() => computeInventorySummary(products), [products]);
   const inventoryAlerts = useMemo(() => computeInventoryAlerts(products), [products]);
   const categories = useMemo(() => {
@@ -190,10 +201,55 @@ export function ProductIntelligence() {
     }
   };
 
+  const handleDeleteProducts = async () => {
+    if (!currentBrand?.id) return;
+    if (!window.confirm(`Διαγραφή όλων των προϊόντων (${products.length}) για το brand "${currentBrand.name}"; Αυτή η ενέργεια δεν αναιρείται.`)) return;
+    setIsDeleting(true);
+    try {
+      await FirestoreService.deleteCollection('products', currentBrand.id);
+      queryClient.invalidateQueries({ queryKey: ['products', currentBrand.id] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      toast.success('Τα προϊόντα διαγράφηκαν επιτυχώς.');
+    } catch (e) {
+      toast.error(`Σφάλμα διαγραφής: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   if (productsLoading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
         <Spinner size="lg" label="Φόρτωση προϊόντων…" />
+      </div>
+    );
+  }
+
+  if (!hasImported) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-2xl font-bold text-[#1A1A1A]">Product Intelligence</h2>
+          <p className="text-[#4A4A4A] mt-1">
+            Monitor inventory health and product performance
+          </p>
+        </div>
+        <Card padding="lg" className="text-center py-12">
+          <p className="text-[#4A4A4A] mb-4">
+            Δεν υπάρχουν imported προϊόντα ακόμα.
+          </p>
+          <p className="text-sm text-[#4A4A4A]">
+            Μεταβείτε στο{' '}
+            <button
+              type="button"
+              onClick={() => onSectionChange?.('data-products')}
+              className="font-semibold text-[#FF6B35] hover:underline focus:outline-none focus:ring-2 focus:ring-[#FF6B35] focus:ring-offset-1 rounded"
+            >
+              Data Import
+            </button>
+            {' '}για να εισάγετε προϊόντα.
+          </p>
+        </Card>
       </div>
     );
   }
@@ -211,20 +267,31 @@ export function ProductIntelligence() {
             )}
           </p>
         </div>
-        <Button 
-          variant="secondary" 
-          icon={<Download size={16} />}
-          onClick={() => setShowExportModal(true)}
-        >
-          Export Report
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="secondary"
+            icon={<Trash2 size={16} />}
+            onClick={handleDeleteProducts}
+            disabled={isDeleting || !hasImported}
+            className="text-[#DC2626] hover:bg-[#FEE2E2]"
+          >
+            {isDeleting ? 'Διαγραφή…' : 'Διαγραφή δεδομένων'}
+          </Button>
+          <Button 
+            variant="secondary" 
+            icon={<Download size={16} />}
+            onClick={() => setShowExportModal(true)}
+          >
+            Export Report
+          </Button>
+        </div>
       </div>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <SummaryCard
           label="Total SKUs"
-          value={inventorySummary.total_skus.toLocaleString()}
+          value={formatNumber(inventorySummary.total_skus)}
           icon={<Package size={20} />}
           color="#3B82F6"
           tooltip="Συνολικός αριθμός προϊόντων (SKU) στο inventory."
@@ -232,7 +299,7 @@ export function ProductIntelligence() {
         <SummaryCard
           label="Healthy Stock"
           value={`${inventorySummary.healthy_stock.percentage}%`}
-          subValue={inventorySummary.healthy_stock.count.toLocaleString()}
+          subValue={formatNumber(inventorySummary.healthy_stock.count)}
           icon={<TrendingUp size={20} />}
           color="#22C55E"
           tooltip="Προϊόντα με stock 20–80% της χωρητικότητας και ηλικία < 180 ημερών."
@@ -240,8 +307,8 @@ export function ProductIntelligence() {
         <SummaryCard
           label="Excess Stock"
           value={inventorySummary.excess_stock.value >= 1000
-            ? `€${(inventorySummary.excess_stock.value / 1000).toFixed(1)}K`
-            : `€${inventorySummary.excess_stock.value.toLocaleString()}`}
+            ? formatCurrencyCompact(inventorySummary.excess_stock.value)
+            : `€${formatCurrency(inventorySummary.excess_stock.value)}`}
           subValue={`${inventorySummary.excess_stock.count} SKUs`}
           icon={<AlertTriangle size={20} />}
           color="#F59E0B"
@@ -250,8 +317,8 @@ export function ProductIntelligence() {
         <SummaryCard
           label="Dead Stock"
           value={inventorySummary.dead_stock.value >= 1000
-            ? `€${(inventorySummary.dead_stock.value / 1000).toFixed(1)}K`
-            : `€${inventorySummary.dead_stock.value.toLocaleString()}`}
+            ? formatCurrencyCompact(inventorySummary.dead_stock.value)
+            : `€${formatCurrency(inventorySummary.dead_stock.value)}`}
           subValue={`${inventorySummary.dead_stock.count} SKUs`}
           icon={<AlertCircle size={20} />}
           color="#EF4444"
@@ -575,7 +642,7 @@ function ProductRow({ product, index }: ProductRowProps) {
             product.margin_tier === 'medium' ? 'warning' : 'danger'
           }
         >
-          {(product.margin_percentage ?? 0).toFixed(1)}%
+          {formatPercent(product.margin_percentage ?? 0, 1)}
         </Badge>
       </td>
       <td className="px-4 py-3">
@@ -618,7 +685,7 @@ function ProductRow({ product, index }: ProductRowProps) {
       </td>
       <td className="px-4 py-3">
         <span className="text-sm font-mono text-[#1A1A1A]">
-          €{(product.price ?? 0).toFixed(2)}
+          €{formatCurrency(product.price ?? 0, 2)}
         </span>
       </td>
       <td className="px-4 py-3 text-right">

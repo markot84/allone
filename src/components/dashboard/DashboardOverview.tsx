@@ -23,9 +23,10 @@ import {
   Cell
 } from 'recharts';
 import { Card, CardHeader } from '../common';
-import { useSegments, useProducts, useAnalytics, useCampaigns, useActiveStrategy } from '../../hooks';
+import { useSegments, useProducts, useOrganic, useCampaigns, useActiveStrategy } from '../../hooks';
 import { ROIAttribution } from '../roi';
-import { calculateTotalRevenue, calculateAttributedRevenue, calculateROISummary } from '../../utils/roiUtils';
+import { calculateTotalRevenue, calculateAttributedRevenue, calculateROISummary, calculateCostSavings, getCampaignDateForMonth } from '../../utils/roiUtils';
+import { formatCurrencyCompact, formatNumber, formatMultiplier, formatPercent } from '../../utils/format';
 import type { Campaign } from '../../types';
 import { generateInsightsFromData } from '../../services/insights';
 
@@ -96,31 +97,70 @@ function calculateAvgRFMScore(rfmScore: string | undefined | null, segmentName?:
 export function DashboardOverview({ onSectionChange, onOpenInsights }: DashboardOverviewProps = {}) {
   const { segments: rfmSegments, hasImported: hasSegments } = useSegments();
   const { count: productsCount, products } = useProducts();
-  const { revenueData, analyticsRecords = [], hasImported: hasAnalytics, isLoading: analyticsLoading } = useAnalytics();
+  const { totalOrganicRevenue, byMonth: organicByMonth, hasImported: hasOrganic } = useOrganic();
   const { count: campaignsCount, campaigns, hasImported: hasCampaigns } = useCampaigns();
   const { activeStrategy, getStrategyName } = useActiveStrategy();
-  const hasAnyData = hasAnalytics || hasSegments || productsCount > 0 || hasCampaigns;
+  const hasAnyData = hasOrganic || hasSegments || productsCount > 0 || hasCampaigns;
   
-  // Calculate ROI for dashboard display
+  // Calculate ROI and cost savings for dashboard display
+  const campaignsTyped = (campaigns ?? []) as Campaign[];
+  const attributedBreakdown = useMemo(() => {
+    if (!hasAnyData) return null;
+    return calculateAttributedRevenue(campaignsTyped, products || [], rfmSegments || []);
+  }, [hasAnyData, campaignsTyped, products, rfmSegments]);
+  const costSavingsData = useMemo(() => {
+    if (!hasAnyData) return { total: 0, items: [] };
+    return calculateCostSavings(products || [], campaignsTyped);
+  }, [hasAnyData, products, campaignsTyped]);
+  const campaignCost = useMemo(() => {
+    return campaignsTyped.reduce((sum, c) => sum + (c.amount_spent || 0), 0);
+  }, [campaignsTyped]);
+
   const roiSummary = useMemo(() => {
     if (!hasAnyData) return null;
-    const campaignsTyped = campaigns as Campaign[];
-    const totalRev = calculateTotalRevenue(analyticsRecords || [], campaignsTyped);
-    const attributedBreakdown = calculateAttributedRevenue(campaignsTyped, products || [], rfmSegments || []);
-    const attributedRev = attributedBreakdown.segment_activation.revenue + 
-                          attributedBreakdown.inventory_optimization.revenue + 
-                          attributedBreakdown.channel_optimization.revenue;
-    return calculateROISummary(totalRev, attributedRev, 'period');
-  }, [hasAnyData, analyticsRecords, campaigns, products, rfmSegments]);
+    const totalRev = calculateTotalRevenue(totalOrganicRevenue || 0, campaignsTyped);
+    const attributedRev = attributedBreakdown
+      ? attributedBreakdown.segment_activation.revenue +
+        attributedBreakdown.inventory_optimization.revenue +
+        attributedBreakdown.channel_optimization.revenue
+      : 0;
+    return calculateROISummary(totalRev, attributedRev, campaignCost);
+  }, [hasAnyData, totalOrganicRevenue, campaignsTyped, attributedBreakdown, campaignCost]);
   const [activeTab, setActiveTab] = useState<'overview' | 'roi'>('overview');
-  
+
+  // Revenue chart data: οργανικά + campaigns ανά μήνα
+  const revenueChartData = useMemo(() => {
+    const byMonth = new Map<string, { total: number; attributed: number }>();
+    organicByMonth.forEach((val, key) => {
+      byMonth.set(key, { total: val / 1000, attributed: 0 });
+    });
+    campaignsTyped.forEach(c => {
+      const date = getCampaignDateForMonth(c);
+      const key = date ? date.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }) : 'Other';
+      const ex = byMonth.get(key) || { total: 0, attributed: 0 };
+      byMonth.set(key, {
+        total: ex.total + (c.conversion_value || 0) / 1000,
+        attributed: ex.attributed + (c.conversion_value || 0) / 1000,
+      });
+    });
+    if (byMonth.size === 0) return [];
+    const order = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return Array.from(byMonth.entries())
+      .sort((a, b) => {
+        const [ma, ya] = a[0].split(' ');
+        const [mb, yb] = b[0].split(' ');
+        const ia = order.indexOf(ma); const ib = order.indexOf(mb);
+        return ia !== ib ? ia - ib : (ya || '').localeCompare(yb || '');
+      })
+      .map(([month, d]) => ({ month, total: d.total, attributed: d.attributed }));
+  }, [organicByMonth, campaignsTyped]);
+
   // Debug logging
   useEffect(() => {
     if (import.meta.env.MODE === 'development') {
-      console.debug('[Dashboard] Revenue data:', revenueData.length, 'records', revenueData);
-      console.debug('[Dashboard] Has analytics:', hasAnalytics, 'Loading:', analyticsLoading);
+      console.debug('[Dashboard] Organic revenue:', totalOrganicRevenue, 'hasOrganic:', hasOrganic);
     }
-  }, [revenueData, hasAnalytics, analyticsLoading]);
+  }, [totalOrganicRevenue, hasOrganic]);
   const aiInsights = useMemo(() => {
     return generateInsightsFromData(products, rfmSegments);
   }, [products, rfmSegments]);
@@ -184,7 +224,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       </div>
 
       {/* KPI Cards - order: Strategy, Προϊόντα, Segments, Campaigns, Σύνολο Εσόδων, ROI */}
-      {(revenueData.length > 0 || productsCount > 0 || rfmSegments.length > 0 || (hasCampaigns && campaigns.length > 0)) && (
+      {(hasOrganic || productsCount > 0 || rfmSegments.length > 0 || (hasCampaigns && campaigns.length > 0)) && (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 gap-4 sm:gap-6">
           {/* 1. Strategy */}
           <KPICard
@@ -203,7 +243,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             <KPICard
               kpi={{
                 label: 'Προϊόντα',
-                value: productsCount.toLocaleString(),
+                value: formatNumber(productsCount),
                 change: products.length > 0
                   ? (() => {
                       const withStock = products.filter((p) => (p.stock_level ?? 0) >= 10 && (p.stock_age_days ?? 0) <= 180);
@@ -262,42 +302,28 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               />
             );
           })()}
-          {/* 5. Σύνολο Εσόδων */}
-          {(revenueData.length > 0 || (hasCampaigns && campaigns.length > 0)) && (() => {
-            const analyticsRevenue = revenueData.reduce((s, r) => s + r.total, 0);
-            const campaignsRevenue = hasCampaigns && campaigns.length > 0
-              ? (campaigns as any[]).reduce((sum, c) => sum + ((c.conversion_value || 0) / 1000), 0)
-              : 0;
-            const totalRevenue = analyticsRevenue + campaignsRevenue;
-            const totalAttributed = revenueData.reduce((s, r) => s + r.attributed, 0);
-            const hasValidAnalytics = revenueData.length > 0 && analyticsRevenue > 0 && totalAttributed > 0;
-            const attributionRate = hasValidAnalytics && totalRevenue > 0
-              ? Math.round((totalAttributed / totalRevenue) * 1000) / 10
+          {/* 5. Σύνολο Εσόδων - από campaigns όταν δεν υπάρχει Analytics */}
+          {(hasOrganic || (hasCampaigns && campaigns.length > 0)) && (() => {
+            const campaignsTyped = campaigns as Campaign[];
+            const attributionRate = roiSummary && roiSummary.total_revenue > 0
+              ? roiSummary.attribution_percentage
               : undefined;
             let sparklineData: number[] = [];
-            if (revenueData.length > 0) {
-              sparklineData = revenueData.map(r => r.total);
-            } else if (hasCampaigns && campaigns.length > 0) {
-              const monthlyData: Record<string, number> = {};
-              (campaigns as any[]).forEach(c => {
-                const period = c.period || c.start_date || '';
-                if (!period) return;
-                let monthKey = '';
-                if (period.match(/^\d{4}-\d{2}-\d{2}/)) {
-                  monthKey = new Date(period).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' });
-                } else {
-                  const monthMatch = period.match(/(\w+)\s+(\d{4})/);
-                  monthKey = monthMatch ? `${monthMatch[1].substring(0, 3)} ${monthMatch[2].substring(2)}` : period;
-                }
-                monthlyData[monthKey] = (monthlyData[monthKey] || 0) + (c.conversion_value || 0) / 1000;
-              });
-              sparklineData = Object.values(monthlyData).sort((a, b) => a - b);
-            }
+            const monthlyData: Record<string, number> = {};
+            organicByMonth.forEach((val, key) => {
+              monthlyData[key] = (monthlyData[key] || 0) + val / 1000;
+            });
+            campaignsTyped.forEach(c => {
+              const date = getCampaignDateForMonth(c);
+              const monthKey = date ? date.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }) : 'Other';
+              monthlyData[monthKey] = (monthlyData[monthKey] || 0) + (c.conversion_value || 0) / 1000;
+            });
+            sparklineData = Object.values(monthlyData).sort((a, b) => a - b);
             return (
               <KPICard
                 kpi={{
                   label: 'Σύνολο Εσόδων',
-                  value: `€${totalRevenue.toFixed(0)}K`,
+                  value: formatCurrencyCompact(roiSummary?.total_revenue ?? 0),
                   change: attributionRate,
                   changeLabel: attributionRate !== undefined ? 'attributed' : undefined,
                   trend: 'up' as const,
@@ -313,7 +339,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             <KPICard
               kpi={{
                 label: 'ROI',
-                value: roiSummary && roiSummary.roi_multiplier > 0 ? `${roiSummary.roi_multiplier.toFixed(1)}x` : '—',
+                value: roiSummary && roiSummary.roi_multiplier > 0 ? formatMultiplier(roiSummary.roi_multiplier, 1) : '—',
                 changeLabel: roiSummary && roiSummary.roi_multiplier > 0 ? 'πολλαπλασιαστής' : undefined,
                 trend: 'up' as const,
                 sparklineData: []
@@ -376,7 +402,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             subtitle="Σύνολο vs Performance+ Attributed"
             icon={<TrendingUp size={18} className="text-[var(--nts-medium-gray)]" />}
           />
-          {revenueData.length > 0 ? (
+          {revenueChartData.length > 0 ? (
             <div 
               ref={revenueContainerRef}
               className="w-full" 
@@ -390,7 +416,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               <AreaChart 
                 width={chartDimensions.revenue.width} 
                 height={chartDimensions.revenue.height} 
-                data={revenueData} 
+                data={revenueChartData} 
                 margin={{ top: 10, right: 10, left: 10, bottom: 10 }}
               >
                 <defs>
@@ -414,7 +440,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   tick={{ fill: '#57606a', fontSize: 12 }}
                   axisLine={{ stroke: '#d0d7de' }}
                   tickLine={{ stroke: '#d0d7de' }}
-                  tickFormatter={(value) => `€${value}K`}
+                  tickFormatter={(value) => `€${formatNumber(value)}K`}
                 />
                 <RechartsTooltip
                   contentStyle={{
@@ -425,7 +451,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                     padding: '8px 12px'
                   }}
                   formatter={(value: any, name?: string) => [
-                    `€${(value || 0).toFixed(0)}K`,
+                    formatCurrencyCompact((value as number) || 0),
                     name === 'total' ? 'Total Revenue' : 'Performance+ Attributed'
                   ]}
                   labelStyle={{ color: '#24292f', fontWeight: 600, marginBottom: 4 }}
@@ -455,11 +481,11 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               <div className="text-center">
                 <TrendingUp size={32} className="text-[#9CA3AF] mx-auto mb-2" />
                 <p className="text-sm text-[#4A4A4A] font-medium">Δεν υπάρχουν δεδομένα</p>
-                <p className="text-xs text-[#9CA3AF] mt-1">Φόρτωσε Analytics δεδομένα για να δεις το Revenue Performance</p>
+                <p className="text-xs text-[#9CA3AF] mt-1">Φόρτωσε Analytics ή Campaigns για να δεις το Revenue Performance</p>
               </div>
             </div>
           )}
-          {revenueData.length > 0 && (
+          {revenueChartData.length > 0 && (
             <div className="flex items-center gap-6 mt-4 pt-4 border-t border-[var(--nts-border-gray)]">
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded-full bg-[#9CA3AF]" />
@@ -519,7 +545,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                     padding: '8px 12px'
                   }}
                   formatter={(value: any, _name?: string, props?: any) => [
-                    `${(value || 0).toFixed(1)}%`,
+                    formatPercent((value as number) || 0, 1),
                     props?.payload?.name || ''
                   ]}
                 />
@@ -532,7 +558,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                     padding: '8px 12px'
                   }}
                   formatter={(value: any, _name?: string, props?: any) => [
-                    `${(value || 0).toFixed(1)}%`,
+                    formatPercent((value as number) || 0, 1),
                     props?.payload?.name || ''
                   ]}
                 />
@@ -549,7 +575,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   <span className="text-[#4A4A4A]">{segment.name}</span>
                 </div>
                 <span className="font-medium text-[#1A1A1A] font-mono">
-                  {(segment.percentage ?? 0).toFixed(1)}%
+                  {formatPercent(segment.percentage ?? 0, 1)}
                 </span>
               </div>
             ))}
@@ -641,7 +667,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           <div className="grid grid-cols-2 gap-5">
             <StatBox
               label="Σύνολο Προϊόντων"
-              value={productsCount.toLocaleString()}
+              value={formatNumber(productsCount)}
               icon={<Package size={18} />}
               color="#3B82F6"
               onClick={(e) => {
@@ -651,7 +677,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             />
             <StatBox
               label="Ενεργά Campaigns"
-              value={campaignsCount.toLocaleString()}
+              value={formatNumber(campaignsCount)}
               icon={<Target size={18} />}
               color="#22C55E"
               onClick={(e) => {
@@ -661,17 +687,19 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             />
             <StatBox
               label="Stock Clearance"
-              value={hasAnyData ? '€89.2K' : '€0'}
+              value={hasAnyData && attributedBreakdown
+                ? formatCurrencyCompact(attributedBreakdown.inventory_optimization.revenue)
+                : '€0'}
               icon={<TrendingUp size={18} />}
               color="#8B5CF6"
-              tooltip="Το συνολικό ποσό εσόδων που προέκυψε από την πώληση υπερπλήρων ή παλαιών αποθεμάτων. Το icon με την ανοδική τάση υποδηλώνει επιτυχημένη μείωση αποθεμάτων και δημιουργία εσόδων."
+              tooltip="Το συνολικό ποσό εσόδων που προέκυψε από την πώληση υπερπλήρων ή παλαιών αποθεμάτων."
             />
             <StatBox
               label="Cost Savings"
-              value={hasAnyData ? '€62K' : '€0'}
+              value={hasAnyData ? formatCurrencyCompact(costSavingsData.total) : '€0'}
               icon={<Euro size={18} />}
               color="#FF6B35"
-              tooltip="Το συνολικό ποσό χρημάτων που εξοικονομήθηκε μέσω βελτιώσεων λειτουργικής αποδοτικότητας, επαναδιαπραγμάτευσης συμβολαίων, μείωσης σπατάλης ή άλλων μέτρων εξοικονόμησης κόστους."
+              tooltip="Το συνολικό ποσό χρημάτων που εξοικονομήθηκε μέσω βελτιώσεων λειτουργικής αποδοτικότητας."
             />
           </div>
 
@@ -681,11 +709,11 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               <div>
                 <p className="text-[13px] font-medium text-[var(--nts-medium-gray)] mb-1">Performance+ ROI</p>
                 <p className="text-3xl font-bold tracking-tight text-[var(--nts-charcoal)] mb-1 font-mono">
-                  {roiSummary && roiSummary.roi_multiplier > 0 ? `${roiSummary.roi_multiplier.toFixed(1)}x` : '0x'}
+                  {roiSummary && roiSummary.roi_multiplier > 0 ? formatMultiplier(roiSummary.roi_multiplier, 1) : '0x'}
                 </p>
                 <p className="text-[13px] text-[var(--nts-medium-gray)]">
                   {roiSummary && roiSummary.roi_multiplier > 0 
-                    ? `Κάθε €1 → €${roiSummary.roi_multiplier.toFixed(1)} attributed revenue` 
+                    ? `Κάθε €1 σε διαφημίσεις → €${formatNumber(roiSummary.roi_multiplier, 1)} attributed revenue` 
                     : 'Φόρτωσε δεδομένα για να δεις το ROI'}
                 </p>
               </div>

@@ -1,6 +1,7 @@
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp, writeBatch, doc } from 'firebase/firestore';
 import * as XLSX from 'xlsx';
-import { FirestoreService } from './firestore';
+import { db } from '../config/firebase';
+import { FirestoreService, CampaignsService } from './firestore';
 import { FEED_SOURCE_CONFIG, type FeedSourceType } from '../data/feedSourceConfig';
 import type { Product, RFMSegment, Campaign } from '../types';
 
@@ -128,7 +129,7 @@ export function isSupportedFile(name: string): boolean {
   return SUPPORTED_EXTENSIONS.some(ext => lower.endsWith(ext));
 }
 
-export type ImportType = 'products' | 'segments' | 'campaigns' | 'analytics' | 'custom';
+export type ImportType = 'products' | 'segments' | 'campaigns' | 'analytics' | 'organic' | 'custom';
 
 export interface ImportResult {
   success: boolean;
@@ -784,17 +785,52 @@ function validateAnalyticsRow(row: Record<string, string>, index: number): { val
   };
 }
 
+// Validate organic revenue row (οργανικά έσοδα - τζίρος χωρίς campaigns)
+function validateOrganicRow(row: Record<string, string>, index: number): { valid: boolean; data?: { id: string; period: string; organic_revenue: number }; error?: string } {
+  const period = pick(row, 'period', 'periodo', 'month', 'μήνας', 'date', 'ημερομηνία', 'year_month');
+  const revenue = pick(row, 'organic_revenue', 'organic revenue', 'revenue', 'έσοδα', 'total_revenue', 'total revenue', 'τζίρος', 'organic');
+
+  if (!period || !period.trim()) {
+    return { valid: false, error: `Row ${index + 1}: Missing period` };
+  }
+
+  const revenueNum = revenue ? parseFloat(revenue.replace(/[^0-9.-]/g, '')) : 0;
+  if (isNaN(revenueNum) || revenueNum < 0) {
+    return { valid: false, error: `Row ${index + 1}: Invalid organic revenue` };
+  }
+
+  const organicId = `organic-${period.trim().replace(/\s+/g, '-')}-${index}`;
+  return {
+    valid: true,
+    data: {
+      id: sanitizeDocId(organicId),
+      period: period.trim(),
+      organic_revenue: revenueNum,
+    },
+  };
+}
+
+export type CampaignChannelOverride = 'Google Ads' | 'Meta' | null;
+
 // Validate campaign row (supports Google Ads & Meta formats)
-function validateCampaignRow(row: Record<string, string>, index: number): { valid: boolean; data?: Campaign; error?: string } {
+function validateCampaignRow(
+  row: Record<string, string>,
+  index: number,
+  fileName?: string,
+  channelOverride?: CampaignChannelOverride
+): { valid: boolean; data?: Campaign; error?: string } {
   // First, check if there's an explicit "Channel" column (highest priority)
-  const explicitChannel = pick(row, 'channel', 'channel_name', 'source', 'platform');
+  const explicitChannel = pick(row, 'channel', 'channel_name', 'source', 'platform', 'account', 'account_name', 'ad_account', 'ad_account_name', 'network', 'campaign_type');
   
   // Detect channel from column names (case-insensitive)
   // Note: Headers are normalized: "Campaign name" -> "campaign_name", "Amount spent (EUR)" -> "amount_spent_(eur)"
   const rowKeysLower = Object.keys(row).map(k => k.toLowerCase());
   const hasGoogleAdsColumns = rowKeysLower.some(k => 
     (k.includes('campaign') && (k.includes('status') || k.includes('budget') || k.includes('bid_strategy') || k.includes('bid strategy'))) ||
-    k.includes('conv._value_/_cost') || k.includes('conv value / cost') || k.includes('conv_value_/_cost')
+    k.includes('conv._value_/_cost') || k.includes('conv value / cost') || k.includes('conv_value_/_cost') ||
+    k.includes('avg_cpc') || k.includes('avg. cpc') ||
+    (k.includes('campaign') && k.includes('type')) ||
+    k.includes('search_impression_share') || k.includes('quality_score')
   );
   
   // Meta columns: normalized headers have underscores, e.g., "campaign_name", "amount_spent", "purchase_roas"
@@ -822,13 +858,35 @@ function validateCampaignRow(row: Record<string, string>, index: number): { vali
       channel = 'Google Ads';
     }
   }
-  
-  // If no explicit channel, detect from columns
+
+  // If no explicit channel, try file name (before column detection - file name is reliable)
+  const fileNameLower = (fileName || '').toLowerCase();
+  const fileSuggestsGoogle = fileNameLower.includes('google') || fileNameLower.includes('google ads');
+  const fileSuggestsMeta = fileNameLower.includes('meta') || fileNameLower.includes('facebook') || fileNameLower.includes('instagram');
   if (channel === 'Other') {
-    // Prioritize Meta detection if Meta columns are found
-    if (hasMetaColumns) {
+    if (fileSuggestsGoogle && !fileSuggestsMeta) channel = 'Google Ads';
+    else if (fileSuggestsMeta && !fileSuggestsGoogle) channel = 'Meta';
+  }
+  
+  // If still Other, detect from columns
+  if (channel === 'Other') {
+    if (hasGoogleAdsColumns && !hasMetaColumns) {
+      channel = 'Google Ads';
+    } else if (hasMetaColumns) {
       channel = 'Meta';
     } else if (hasGoogleAdsColumns) {
+      channel = 'Google Ads';
+    }
+  }
+
+  // Fallback: infer from campaign name or account (before we have 'name' - use pick)
+  const campaignNameForChannel = pick(row, 'campaign_name', 'campaign name', 'campaign', 'name');
+  const accountForChannel = pick(row, 'account', 'account_name', 'ad_account');
+  const combinedForChannel = `${campaignNameForChannel || ''} ${accountForChannel || ''}`.toLowerCase();
+  if (channel === 'Other' && combinedForChannel) {
+    if (combinedForChannel.includes('meta') || combinedForChannel.includes('facebook') || combinedForChannel.includes('instagram') || combinedForChannel.includes('fb ') || combinedForChannel.includes('ig ')) {
+      channel = 'Meta';
+    } else if (combinedForChannel.includes('google') || combinedForChannel.includes('gads') || combinedForChannel.includes('search') || combinedForChannel.includes('display') || combinedForChannel.includes('shopping')) {
       channel = 'Google Ads';
     }
   }
@@ -987,7 +1045,16 @@ function validateCampaignRow(row: Record<string, string>, index: number): { vali
       finalChannel = 'Meta';
     } else if (hasGoogleAdsData && !hasMetaData) {
       finalChannel = 'Google Ads';
+    } else if (fileSuggestsGoogle && !fileSuggestsMeta) {
+      finalChannel = 'Google Ads';
+    } else if (fileSuggestsMeta && !fileSuggestsGoogle) {
+      finalChannel = 'Meta';
     }
+  }
+
+  // User override: force channel for entire file (when auto-detect fails)
+  if (channelOverride) {
+    finalChannel = channelOverride;
   }
 
   // Debug logging for final channel assignment
@@ -1187,7 +1254,9 @@ export async function importFile(
   type: ImportType,
   onProgress?: (p: ImportProgress) => void,
   brandId?: string | null,
-  feedSourceType?: FeedSourceType
+  feedSourceType?: FeedSourceType,
+  campaignChannelOverride?: CampaignChannelOverride,
+  appendCampaigns?: boolean
 ): Promise<ImportResult> {
   const result: ImportResult = {
     success: true,
@@ -1414,6 +1483,9 @@ export async function importFile(
           }
         }
 
+        // Delete existing analytics for this brand before importing new ones
+        await FirestoreService.deleteCollection('analytics', brandId);
+
         // Batch import to Firestore
         const analyticsChunks = chunk(validAnalytics, BATCH_SIZE);
         let analyticsProcessed = 0;
@@ -1435,11 +1507,50 @@ export async function importFile(
         break;
       }
 
+      case 'organic': {
+        const validOrganic: Array<{ id: string; data: Record<string, unknown> }> = [];
+        for (let i = 0; i < objects.length; i++) {
+          const validation = validateOrganicRow(objects[i], i);
+          if (validation.valid && validation.data) {
+            validOrganic.push({
+              id: validation.data.id,
+              data: { ...validation.data, createdAt: Timestamp.now() } as Record<string, unknown>,
+            });
+          } else {
+            result.failed++;
+            if (validation.error && result.errors.length < MAX_ERRORS_DISPLAY) {
+              result.errors.push(validation.error);
+            }
+          }
+        }
+
+        await FirestoreService.deleteCollection('organic', brandId);
+
+        const organicChunks = chunk(validOrganic, BATCH_SIZE);
+        let organicProcessed = 0;
+        await runWithConcurrency(organicChunks, BATCH_CONCURRENCY, async (chunkItems, batchIndex) => {
+          await FirestoreService.batchSet('organic', chunkItems, brandId);
+          organicProcessed += chunkItems.length;
+          onProgress?.({
+            rowsProcessed: organicProcessed,
+            totalRows: validOrganic.length,
+            batchIndex: batchIndex + 1,
+            totalBatches: organicChunks.length,
+            fileName: file.name,
+          });
+        });
+        result.imported = validOrganic.length;
+        if (result.failed > MAX_ERRORS_DISPLAY) {
+          result.errors.push(`...and ${result.failed - MAX_ERRORS_DISPLAY} more validation errors`);
+        }
+        break;
+      }
+
       case 'campaigns': {
         // Validate and transform campaigns
         const validCampaigns: Campaign[] = [];
         objects.forEach((row, i) => {
-          const validation = validateCampaignRow(row, i);
+          const validation = validateCampaignRow(row, i, file.name, campaignChannelOverride ?? undefined);
           if (validation.valid && validation.data) {
             validCampaigns.push({
               ...validation.data,
@@ -1454,7 +1565,30 @@ export async function importFile(
             }
           }
         });
-        
+
+        // Delete existing campaigns only when NOT appending (first file of multi-file import).
+        // When appendCampaigns=true, we keep existing campaigns and add new ones.
+        if (!appendCampaigns) {
+          if (brandId) {
+            try {
+              const existing = await CampaignsService.getAll(brandId);
+              if (existing.length > 0) {
+                for (let i = 0; i < existing.length; i += BATCH_SIZE) {
+                  const batch = writeBatch(db);
+                  (existing as { id: string }[]).slice(i, i + BATCH_SIZE).forEach((c) => {
+                    batch.delete(doc(db, 'campaigns', c.id));
+                  });
+                  await batch.commit();
+                }
+              }
+            } catch (e) {
+              await FirestoreService.deleteCollection('campaigns', brandId);
+            }
+          } else {
+            await FirestoreService.deleteCollection('campaigns', brandId);
+          }
+        }
+
         // Batch store campaigns
         const campaignChunks = chunk(validCampaigns, BATCH_SIZE);
         let campaignProcessed = 0;

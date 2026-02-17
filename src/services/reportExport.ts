@@ -5,6 +5,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { Product, RFMSegment, Campaign } from '../types';
 import { getStockAgeDays } from '../utils/productUtils';
+import { formatCurrencyCompact, formatNumber } from '../utils/format';
 
 export type ReportFormat = 'excel' | 'pdf';
 
@@ -70,7 +71,8 @@ export async function exportReport(
     products?: Product[];
     segments?: RFMSegment[];
     campaigns?: Campaign[];
-    analyticsRecords?: Array<{ date?: unknown; total_revenue?: number; attributed_revenue?: number }>;
+    organicRecords?: Array<{ period?: string; organic_revenue?: number }>;
+    totalOrganicRevenue?: number;
     brandName?: string;
   }
 ): Promise<void> {
@@ -89,7 +91,8 @@ async function exportReportToPdf(
     products?: Product[];
     segments?: RFMSegment[];
     campaigns?: Campaign[];
-    analyticsRecords?: Array<{ date?: unknown; total_revenue?: number; attributed_revenue?: number }>;
+    organicRecords?: Array<{ period?: string; organic_revenue?: number }>;
+    totalOrganicRevenue?: number;
     brandName?: string;
   }
 ): Promise<void> {
@@ -109,20 +112,20 @@ async function exportReportToPdf(
 
   switch (reportId) {
     case 'executive': {
-      const records = data.analyticsRecords ?? [];
       const campaigns = data.campaigns ?? [];
-      const totalRevenue = records.reduce((s, r) => s + (r.total_revenue ?? 0), 0);
-      const attributed = records.reduce((s, r) => s + (r.attributed_revenue ?? 0), 0);
+      const organicRevenue = data.totalOrganicRevenue ?? (data.organicRecords ?? []).reduce((s, r) => s + (r.organic_revenue ?? 0), 0);
       const campaignValue = campaigns.reduce((s, c) => s + (c.conversion_value ?? 0), 0);
+      const totalRevenue = organicRevenue + campaignValue;
       doc.text('Executive Summary', 14, 40);
       autoTable(doc, {
         startY: 48,
         head: [['Metric', 'Value']],
         body: [
-          ['Total Revenue (Analytics)', `€${(totalRevenue / 1000).toFixed(1)}K`],
-          ['Attributed Revenue', `€${(attributed / 1000).toFixed(1)}K`],
-          ['Campaign Conversion Value', `€${(campaignValue / 1000).toFixed(1)}K`],
-          ['Records', String(records.length)],
+          ['Total Revenue', formatCurrencyCompact(totalRevenue)],
+          ['Οργανικά Έσοδα', formatCurrencyCompact(organicRevenue)],
+          ['Campaign Conversion Value', formatCurrencyCompact(campaignValue)],
+          ['Περίοδοι Οργανικών', String((data.organicRecords ?? []).length)],
+          ['Campaigns', String(campaigns.length)],
         ],
       });
       break;
@@ -154,9 +157,9 @@ async function exportReportToPdf(
         body: Object.entries(byChannel).map(([ch, v]) => [
           ch,
           String(v.count),
-          `€${(v.spent / 1000).toFixed(1)}K`,
-          `€${(v.value / 1000).toFixed(1)}K`,
-          v.spent > 0 ? (v.value / v.spent).toFixed(2) : '-',
+          formatCurrencyCompact(v.spent),
+          formatCurrencyCompact(v.value),
+          v.spent > 0 ? formatNumber(v.value / v.spent, 2) : '-',
         ]),
       });
       break;
@@ -174,7 +177,8 @@ async function exportReportToExcel(
     products?: Product[];
     segments?: RFMSegment[];
     campaigns?: Campaign[];
-    analyticsRecords?: Array<{ date?: unknown; total_revenue?: number; attributed_revenue?: number }>;
+    organicRecords?: Array<{ period?: string; organic_revenue?: number }>;
+    totalOrganicRevenue?: number;
     brandName?: string;
   }
 ): Promise<void> {
@@ -188,21 +192,21 @@ async function exportReportToExcel(
 
   switch (reportId) {
     case 'executive': {
-      const records = data.analyticsRecords ?? [];
       const campaigns = data.campaigns ?? [];
-      const totalRevenue = records.reduce((s, r) => s + (r.total_revenue ?? 0), 0);
-      const attributed = records.reduce((s, r) => s + (r.attributed_revenue ?? 0), 0);
+      const organicRevenue = data.totalOrganicRevenue ?? (data.organicRecords ?? []).reduce((s, r) => s + (r.organic_revenue ?? 0), 0);
       const campaignValue = campaigns.reduce((s, c) => s + (c.conversion_value ?? 0), 0);
+      const totalRevenue = organicRevenue + campaignValue;
       ws = XLSX.utils.aoa_to_sheet([
         ['Executive Summary', ''],
         ['Brand', data.brandName || '—'],
         ['Generated', date],
         [''],
         ['Metric', 'Value'],
-        ['Total Revenue (Analytics)', totalRevenue],
-        ['Attributed Revenue', attributed],
+        ['Total Revenue', totalRevenue],
+        ['Οργανικά Έσοδα', organicRevenue],
         ['Campaign Conversion Value', campaignValue],
-        ['Records', records.length],
+        ['Περίοδοι Οργανικών', (data.organicRecords ?? []).length],
+        ['Campaigns', campaigns.length],
       ]);
       sheetName = 'Executive';
       filename = `${brand}_executive_summary_${date}.xlsx`;

@@ -1,20 +1,28 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { flushSync } from 'react-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useBrand } from '../../hooks';
 import { FileText, CheckCircle2, XCircle, AlertCircle, Clock, Trash2, FileUp, Link as LinkIcon, HelpCircle, ExternalLink } from 'lucide-react';
 import { Card, Button, Spinner, ProgressBar, useToast, Badge } from '../common';
-import { importFile, saveImportJob, getImportJobs, isSupportedFile, PRODUCT_COLUMN_MAPPING, type ImportType, type ImportResult, type ImportJob, type ImportProgress } from '../../services/import';
+import { importFile, saveImportJob, getImportJobs, isSupportedFile, PRODUCT_COLUMN_MAPPING, type ImportType, type ImportResult, type ImportJob, type ImportProgress, type CampaignChannelOverride } from '../../services/import';
 import { FEED_SOURCE_OPTIONS, downloadGoogleAdsCsvTemplate, type FeedSourceType } from '../../data/feedSourceConfig';
 import { FeedPreviewModal } from './FeedPreviewModal';
 import { FeedSourcesSection } from './FeedSourcesSection';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export type FileWithType = { file: File; type: ImportType };
+export type FileWithType = { file: File; type: ImportType; campaignChannel?: CampaignChannelOverride };
 
-export function DataImport() {
+interface DataImportProps {
+  initialType?: ImportType;
+}
+
+export function DataImport({ initialType }: DataImportProps = {}) {
   const { currentBrand } = useBrand();
-  const [selectedType, setSelectedType] = useState<ImportType>('products');
+  const [selectedType, setSelectedType] = useState<ImportType>(initialType ?? 'products');
+
+  useEffect(() => {
+    if (initialType) setSelectedType(initialType);
+  }, [initialType]);
   const [selectedFiles, setSelectedFiles] = useState<FileWithType[]>([]);
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState<{ current: number; total: number; fileName: string; fileProgress?: ImportProgress } | null>(null);
@@ -39,7 +47,7 @@ export function DataImport() {
     { value: 'products', label: 'Products', icon: '📦' },
     { value: 'segments', label: 'Segments', icon: '👥' },
     { value: 'campaigns', label: 'Campaigns', icon: '📊' },
-    { value: 'analytics', label: 'Analytics', icon: '📈' },
+    { value: 'organic', label: 'Οργανικά Έσοδα', icon: '💰' },
   ];
 
   const isFeedImport = importMode === 'feed' && selectedType === 'products';
@@ -51,7 +59,11 @@ export function DataImport() {
       toast.error(`${fileArray.length - valid.length} αρχείο(α) παραλείφθηκαν (χρησιμοποιήστε .csv, .xlsx ή .xml)`);
     }
     if (valid.length) {
-      setSelectedFiles(prev => [...prev, ...valid.map(f => ({ file: f, type: selectedType }))]);
+      setSelectedFiles(prev => [...prev, ...valid.map(f => ({
+        file: f,
+        type: selectedType,
+        ...(selectedType === 'campaigns' ? { campaignChannel: null as CampaignChannelOverride } : {}),
+      }))]);
       setImportResult(null);
       setUrlError(null);
     }
@@ -93,7 +105,14 @@ export function DataImport() {
   };
 
   const setFileType = (index: number, type: ImportType) => {
-    setSelectedFiles(prev => prev.map((item, i) => i === index ? { ...item, type } : item));
+    setSelectedFiles(prev => prev.map((item, i) =>
+      i === index ? { ...item, type, ...(type === 'campaigns' ? { campaignChannel: null as CampaignChannelOverride } : {}) } : item
+    ));
+    setImportResult(null);
+  };
+
+  const setFileCampaignChannel = (index: number, channel: CampaignChannelOverride) => {
+    setSelectedFiles(prev => prev.map((item, i) => i === index ? { ...item, campaignChannel: channel } : item));
     setImportResult(null);
   };
 
@@ -150,7 +169,11 @@ export function DataImport() {
       const file = new File([blob], fileName, { 
         type: isExcel ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : blob.type 
       });
-      setSelectedFiles(prev => [...prev, { file, type: selectedType }]);
+      setSelectedFiles(prev => [...prev, {
+        file,
+        type: selectedType,
+        ...(selectedType === 'campaigns' ? { campaignChannel: null as CampaignChannelOverride } : {}),
+      }]);
       setImportUrl('');
       toast.success(`Το αρχείο "${fileName}" φορτώθηκε επιτυχώς. Κάντε κλικ στο Import για εισαγωγή.`);
     } catch (err) {
@@ -194,9 +217,11 @@ export function DataImport() {
 
       await saveImportJob(job);
 
+      const firstCampaignIdx = selectedFiles.findIndex((f) => f.type === 'campaigns');
       for (let i = 0; i < selectedFiles.length; i++) {
         const { file, type } = selectedFiles[i];
         const effectiveType = isFeedImport ? 'products' : type;
+        const appendCampaigns = effectiveType === 'campaigns' && firstCampaignIdx >= 0 && i > firstCampaignIdx;
         flushSync(() => {
           setImportProgress({ current: i + 1, total, fileName: file.name, fileProgress: undefined });
         });
@@ -205,7 +230,9 @@ export function DataImport() {
           effectiveType,
           (p) => setImportProgress((prev) => prev ? { ...prev, fileProgress: p } : null),
           currentBrand?.id ?? null,
-          isFeedImport ? selectedFeedSource : undefined
+          isFeedImport ? selectedFeedSource : undefined,
+          effectiveType === 'campaigns' ? selectedFiles[i].campaignChannel : undefined,
+          appendCampaigns
         );
         results.push(result);
       }
@@ -256,9 +283,10 @@ export function DataImport() {
         if (typesImported.has('analytics')) {
           queryClient.invalidateQueries({ queryKey: ['analytics', brandId] });
           queryClient.invalidateQueries({ queryKey: ['analytics'] });
-          if (import.meta.env.MODE === 'development') {
-            console.debug('[DataImport] Analytics queries invalidated, should refetch now');
-          }
+        }
+        if (typesImported.has('organic')) {
+          queryClient.invalidateQueries({ queryKey: ['organic', brandId] });
+          queryClient.invalidateQueries({ queryKey: ['organic'] });
         }
         if (typesImported.has('campaigns')) {
           queryClient.invalidateQueries({ queryKey: ['campaigns', brandId] });
@@ -577,20 +605,32 @@ export function DataImport() {
                           </p>
                         </div>
                         {importMode === 'standard' ? (
-                          <select
-                            value={item.type}
-                            onChange={(e) => setFileType(index, e.target.value as ImportType)}
-                            className={`text-xs border rounded px-2 py-1 bg-white text-[#1A1A1A] focus:outline-none focus:border-[#FF6B35] ${
-                              (item.file.name.toLowerCase().includes('campaign') || item.file.name.toLowerCase().includes('google ads') || item.file.name.toLowerCase().includes('meta')) &&
-                              item.type !== 'campaigns'
-                                ? 'border-orange-400 bg-orange-50'
-                                : 'border-[#E5E5E5]'
-                            }`}
-                          >
-                            {importTypes.map((t) => (
-                              <option key={t.value} value={t.value}>{t.label}</option>
-                            ))}
-                          </select>
+                          item.type === 'campaigns' ? (
+                            <select
+                              value={item.campaignChannel ?? ''}
+                              onChange={(e) => setFileCampaignChannel(index, (e.target.value || null) as CampaignChannelOverride)}
+                              className="text-xs border border-[#E5E5E5] rounded px-2 py-1 bg-white text-[#1A1A1A] focus:outline-none focus:border-[#FF6B35]"
+                              title="Campaign Channel"
+                            >
+                              <option value="">Αυτόματη</option>
+                              <option value="Google Ads">Google Ads</option>
+                              <option value="Meta">Meta</option>
+                            </select>
+                          ) : (
+                            <select
+                              value={item.type}
+                              onChange={(e) => setFileType(index, e.target.value as ImportType)}
+                              className={`text-xs border rounded px-2 py-1 bg-white text-[#1A1A1A] focus:outline-none focus:border-[#FF6B35] ${
+                                (item.file.name.toLowerCase().includes('campaign') || item.file.name.toLowerCase().includes('google ads') || item.file.name.toLowerCase().includes('meta'))
+                                  ? 'border-orange-400 bg-orange-50'
+                                  : 'border-[#E5E5E5]'
+                              }`}
+                            >
+                              {importTypes.map((t) => (
+                                <option key={t.value} value={t.value}>{t.label}</option>
+                              ))}
+                            </select>
+                          )
                         ) : (
                           <span className="text-xs text-[#6B7280] px-2 py-1 bg-[#F5F5F5] rounded">
                             Products
