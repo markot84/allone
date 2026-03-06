@@ -8,6 +8,7 @@ interface LoginPageProps {
   onSignUp: (email: string, password: string) => Promise<void>;
   onSignInWithGoogle: () => Promise<void>;
   loading?: boolean;
+  onBackToLanding?: () => void;
 }
 
 export function LoginPage({
@@ -15,6 +16,7 @@ export function LoginPage({
   onSignUp,
   onSignInWithGoogle,
   loading = false,
+  onBackToLanding,
 }: LoginPageProps) {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
@@ -82,6 +84,15 @@ export function LoginPage({
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-md"
       >
+        {onBackToLanding && (
+          <button
+            type="button"
+            onClick={onBackToLanding}
+            className="mb-3 text-sm text-[var(--nts-medium-gray)] transition-colors hover:text-[var(--nts-charcoal)]"
+          >
+            ← Επιστροφή στην αρχική
+          </button>
+        )}
         <div className="bg-white rounded-2xl shadow-lg border border-[var(--nts-border-gray)] p-8">
           <div className="text-center mb-8">
             <div className="w-14 h-14 bg-white rounded-xl border-2 border-[#FF6B35] flex items-center justify-center mx-auto mb-4">

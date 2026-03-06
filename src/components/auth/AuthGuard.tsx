@@ -4,6 +4,7 @@ import { useAuth } from '../../hooks';
 import { BrandProvider } from '../../contexts/BrandContext';
 import { BrandOnboarding } from './BrandOnboarding';
 import { LoginPage } from './LoginPage';
+import { MarketingIndexPage } from './MarketingIndexPage';
 import { Spinner } from '../common';
 
 interface AuthGuardProps {
@@ -12,6 +13,10 @@ interface AuthGuardProps {
 
 export function AuthGuard({ children }: AuthGuardProps) {
   const { user, loading, signIn, signUp, signInWithGoogle } = useAuth();
+  const params = new URLSearchParams(window.location.search);
+  const showAuth = params.get('auth') === '1' || params.get('auth') === 'true';
+  const forceLandingPreview = params.get('landing') === '1' || params.get('landing') === 'true';
+  const landingVariant = params.get('lp') === 'ops' ? 'ops' : 'ceo';
 
   // Redirect to returnUrl after login (e.g. /invite/:token)
   useEffect(() => {
@@ -32,11 +37,59 @@ export function AuthGuard({ children }: AuthGuardProps) {
   }
 
   if (!user) {
+    if (!showAuth) {
+      return (
+        <MarketingIndexPage
+          variant={landingVariant}
+          onVariantChange={(variant) => {
+            const next = new URLSearchParams(window.location.search);
+            next.set('lp', variant);
+            const query = next.toString();
+            window.location.href = `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`;
+          }}
+          onOpenAuth={() => {
+            const next = new URLSearchParams(window.location.search);
+            next.set('auth', '1');
+            const query = next.toString();
+            window.location.href = `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`;
+          }}
+        />
+      );
+    }
+
     return (
       <LoginPage
         onSignIn={signIn}
         onSignUp={signUp}
         onSignInWithGoogle={signInWithGoogle}
+        onBackToLanding={() => {
+          const next = new URLSearchParams(window.location.search);
+          next.delete('auth');
+          const query = next.toString();
+          window.location.href = `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`;
+        }}
+      />
+    );
+  }
+
+  if (forceLandingPreview) {
+    return (
+      <MarketingIndexPage
+        variant={landingVariant}
+        onVariantChange={(variant) => {
+          const next = new URLSearchParams(window.location.search);
+          next.set('lp', variant);
+          next.set('landing', '1');
+          const query = next.toString();
+          window.location.href = `${window.location.pathname}${query ? `?${query}` : ''}`;
+        }}
+        onOpenAuth={() => {
+          const next = new URLSearchParams(window.location.search);
+          next.delete('landing');
+          next.delete('auth');
+          const query = next.toString();
+          window.location.href = `${window.location.pathname}${query ? `?${query}` : ''}#dashboard`;
+        }}
       />
     );
   }
