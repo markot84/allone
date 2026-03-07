@@ -358,7 +358,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
 
         <PrimerHeader.Item full className="hidden md:block" style={{ maxWidth: 520 }}>
           <div style={{ position: 'relative', width: '100%' }}>
-            <SearchIcon style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.3)' }} />
+            <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.3)', display: 'flex' }}><SearchIcon /></span>
             <input
               type="text"
               aria-label="Search"
