@@ -10,7 +10,8 @@ import {
   TrendingDown,
   Pause,
   Play,
-  Check
+  Check,
+  SlidersHorizontal
 } from 'lucide-react';
 import { Badge, Button } from '../common';
 import { useProducts, useCampaigns, useContent } from '../../hooks';
@@ -46,7 +47,7 @@ export function StrategyImpactPreview({
     const scenario = scenarios.find(s => s.id === currentScenarioId);
     return {
       name: scenario?.name || 'Current Strategy',
-      icon: scenario?.icon || '📊'
+      icon: scenario?.icon || ''
     };
   }, [currentScenarioId]);
 
@@ -54,7 +55,7 @@ export function StrategyImpactPreview({
     const scenario = scenarios.find(s => s.id === newScenarioId);
     return {
       name: scenario?.name || 'New Strategy',
-      icon: scenario?.icon || '🎯'
+      icon: scenario?.icon || ''
     };
   }, [newScenarioId]);
 
@@ -305,12 +306,16 @@ export function StrategyImpactPreview({
           {/* From → To */}
           <div className="flex items-center gap-4 mt-6 p-4 bg-[#F5F5F5] rounded-xl">
             <div className="flex items-center gap-2">
-              <span className="text-2xl">{from.icon}</span>
+              <div className="w-8 h-8 rounded-lg border border-[var(--nts-border-gray)] bg-white flex items-center justify-center text-[var(--nts-medium-gray)]">
+                <SlidersHorizontal size={16} />
+              </div>
               <span className="font-medium text-[#1A1A1A]">{from.name}</span>
             </div>
             <ArrowRight size={24} className="text-[var(--nts-accent)]" />
             <div className="flex items-center gap-2">
-              <span className="text-2xl">{to.icon}</span>
+              <div className="w-8 h-8 rounded-lg border border-[var(--nts-border-gray)] bg-white flex items-center justify-center text-[var(--nts-medium-gray)]">
+                <SlidersHorizontal size={16} />
+              </div>
               <span className="font-medium text-[#1A1A1A]">{to.name}</span>
             </div>
           </div>
@@ -321,7 +326,7 @@ export function StrategyImpactPreview({
           {/* Products Impact */}
           <div className="p-4 border border-[#E5E5E5] rounded-xl">
             <div className="flex items-center gap-2 mb-4">
-              <Package size={18} className="text-[#3B82F6]" />
+              <Package size={18} className="text-[var(--nts-medium-gray)]" />
               <h3 className="font-semibold text-[#1A1A1A]">Product Prioritization</h3>
             </div>
             <div className="grid grid-cols-2 gap-4 mb-4">
@@ -362,7 +367,7 @@ export function StrategyImpactPreview({
           {/* Content Impact */}
           <div className="p-4 border border-[#E5E5E5] rounded-xl">
             <div className="flex items-center gap-2 mb-4">
-              <FileText size={18} className="text-[#8B5CF6]" />
+              <FileText size={18} className="text-[var(--nts-medium-gray)]" />
               <h3 className="font-semibold text-[#1A1A1A]">Content Alignment</h3>
             </div>
             <div className="grid grid-cols-3 gap-4 mb-4">
@@ -416,7 +421,7 @@ export function StrategyImpactPreview({
                 <p className="text-xl font-bold text-[#F59E0B]">{impacts.campaigns.will_pause}</p>
                 <p className="text-xs text-[#92400E]">Will pause</p>
               </div>
-              <div className="text-center p-3 bg-[var(--nts-accent-light)] rounded-lg">
+              <div className="text-center p-3 bg-[var(--nts-light-gray)] rounded-lg">
                 <p className="text-xl font-bold text-[var(--nts-accent)]">{impacts.campaigns.will_adjust}</p>
                 <p className="text-xs text-[#C2410C]">Will adjust</p>
               </div>

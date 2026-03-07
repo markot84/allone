@@ -887,7 +887,7 @@ export function WeightConfigurator() {
 
                 <button
                   onClick={() => generateProductFeed('xlsx')}
-                  className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-accent-light)] transition-all text-left flex items-center gap-4 group"
+                  className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group"
                 >
                   <div className="p-3 bg-[#22C55E]/10 rounded-lg group-hover:bg-[#22C55E]/20 transition-colors">
                     <FileSpreadsheet size={24} className="text-[#22C55E]" />
@@ -900,7 +900,7 @@ export function WeightConfigurator() {
 
                 <button
                   onClick={() => generateProductFeed('csv')}
-                  className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-accent-light)] transition-all text-left flex items-center gap-4 group"
+                  className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group"
                 >
                   <div className="p-3 bg-[#3B82F6]/10 rounded-lg group-hover:bg-[#3B82F6]/20 transition-colors">
                     <FileText size={24} className="text-[#3B82F6]" />

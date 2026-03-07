@@ -5,6 +5,8 @@
  * Meta Catalog: similar to Google.
  */
 
+import { createElement } from 'react';
+import { Database, ShoppingCart, Smartphone } from 'lucide-react';
 import type { FeedSourceType } from '../types';
 export type { FeedSourceType };
 
@@ -12,7 +14,7 @@ export interface FeedSourceInfo {
   id: FeedSourceType;
   name: string;
   description: string;
-  icon: string;
+  icon: React.ReactNode;
   /** Feed column names (as they typically appear) → our Product field */
   columnAliases: { feedColumn: string; appField: string; required?: boolean }[];
 }
@@ -23,7 +25,7 @@ export const FEED_SOURCE_CONFIG: Record<FeedSourceType, FeedSourceInfo> = {
     id: 'erp',
     name: 'ERP Export',
     description: 'CSV/Excel από ERP (SAP, NetSuite, Oracle κλπ). Αυτόματη αντιστοίχιση με εναλλακτικά ονόματα στηλών.',
-    icon: '📊',
+    icon: createElement(Database, { size: 20 }),
     columnAliases: [
       { feedColumn: 'SKU_ID', appField: 'sku', required: true },
       { feedColumn: 'Product_Name', appField: 'name', required: true },
@@ -44,7 +46,7 @@ export const FEED_SOURCE_CONFIG: Record<FeedSourceType, FeedSourceInfo> = {
     id: 'google_ads',
     name: 'Google Ads / Merchant Center',
     description: 'Product feed από Google Merchant Center (XML) ή CSV. id, title, price, product_type, availability, link, image_link.',
-    icon: '🛒',
+    icon: createElement(ShoppingCart, { size: 20 }),
     columnAliases: [
       { feedColumn: 'id', appField: 'sku', required: true },
       { feedColumn: 'item_group_id', appField: 'item_group_id' },
@@ -71,7 +73,7 @@ export const FEED_SOURCE_CONFIG: Record<FeedSourceType, FeedSourceInfo> = {
     id: 'meta_catalog',
     name: 'Meta Catalog',
     description: 'Product catalog από Meta (Facebook/Instagram). id, name, price, availability, url.',
-    icon: '📱',
+    icon: createElement(Smartphone, { size: 20 }),
     columnAliases: [
       { feedColumn: 'id', appField: 'sku', required: true },
       { feedColumn: 'name', appField: 'name', required: true },

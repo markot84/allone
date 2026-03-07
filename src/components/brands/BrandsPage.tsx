@@ -72,7 +72,7 @@ export function BrandsPage({ onNavigateToDashboard }: BrandsPageProps) {
               hover
               className={`cursor-pointer transition-all ${
                 currentBrand?.id === brand.id
-                  ? 'ring-2 ring-[var(--nts-accent)] bg-[var(--nts-accent-light)]'
+                  ? 'ring-2 ring-[var(--nts-accent)] bg-[var(--nts-light-gray)]'
                   : ''
               }`}
               onClick={() => handleBrandSelect(brand)}

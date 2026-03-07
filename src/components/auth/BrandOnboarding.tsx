@@ -32,7 +32,7 @@ export function BrandOnboarding({ children }: BrandOnboardingProps) {
       >
         <div className="bg-white rounded-2xl shadow-lg border border-[var(--nts-border-gray)] p-8">
           <div className="text-center mb-8">
-            <div className="w-14 h-14 bg-[var(--nts-accent-light)] rounded-xl flex items-center justify-center mx-auto mb-4">
+            <div className="w-14 h-14 bg-[var(--nts-light-gray)] rounded-xl flex items-center justify-center mx-auto mb-4">
               <Building2 size={28} className="text-[var(--nts-accent)]" />
             </div>
             <h1 className="text-2xl font-bold text-[var(--nts-charcoal)]">Δημιούργησε το πρώτο σου Brand</h1>

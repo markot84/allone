@@ -151,7 +151,7 @@ export function Help() {
 
             {/* Tips */}
             {currentArticle.tips && currentArticle.tips.length > 0 && (
-              <div className="mt-6 p-4 bg-[var(--nts-accent-light)] rounded-xl border border-[var(--nts-accent)]/20">
+              <div className="mt-6 p-4 bg-[var(--nts-light-gray)] rounded-xl border border-[var(--nts-accent)]/20">
                 <h4 className="font-semibold text-[#1A1A1A] mb-3 flex items-center gap-2">
                   <Lightbulb size={18} className="text-[var(--nts-accent)]" />
                   Συμβουλές:
@@ -194,7 +194,7 @@ export function Help() {
                       <button
                         key={relatedId}
                         onClick={() => handleArticleClick(relatedId)}
-                        className="px-3 py-1.5 bg-[#F5F5F5] hover:bg-[var(--nts-accent-light)] rounded-lg text-sm text-[#1A1A1A] transition-colors"
+                        className="px-3 py-1.5 bg-[#F5F5F5] hover:bg-[var(--nts-light-gray)] rounded-lg text-sm text-[#1A1A1A] transition-colors"
                       >
                         {related.title}
                       </button>
@@ -357,15 +357,14 @@ export function Help() {
                   >
                     <div className="flex items-start gap-4">
                       <div
-                        className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl"
-                        style={{ backgroundColor: `${category.color}15` }}
+                        className="w-12 h-12 rounded-xl border border-[var(--nts-border-gray)] bg-[var(--nts-light-gray)] flex items-center justify-center text-xs font-semibold text-[var(--nts-medium-gray)]"
                       >
                         {category.icon}
                       </div>
                       <div className="flex-1">
                         <h3 className="font-semibold text-[#1A1A1A]">{category.title}</h3>
                         <p className="text-sm text-[#4A4A4A] mt-1">{category.description}</p>
-                        <p className="text-xs mt-2" style={{ color: category.color }}>
+                        <p className="text-xs mt-2 text-[var(--nts-medium-gray)]">
                           {articlesCount} άρθρα
                         </p>
                       </div>
@@ -391,7 +390,7 @@ export function Help() {
                   <motion.button
                     key={article.id}
                     onClick={() => handleArticleClick(article.id)}
-                    className="w-full flex items-center justify-between p-3 bg-[#F5F5F5] rounded-lg hover:bg-[var(--nts-accent-light)] transition-colors group text-left"
+                    className="w-full flex items-center justify-between p-3 bg-[#F5F5F5] rounded-lg hover:bg-[var(--nts-light-gray)] transition-colors group text-left"
                   >
                     <span className="text-sm text-[#1A1A1A] group-hover:text-[var(--nts-accent)]">
                       {article.title}

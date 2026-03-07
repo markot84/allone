@@ -117,7 +117,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
         </Card>
         <Card padding="md">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-[var(--nts-accent-light)] rounded-lg flex items-center justify-center">
+            <div className="w-10 h-10 bg-[var(--nts-light-gray)] rounded-lg flex items-center justify-center">
               <TrendingUp size={20} className="text-[var(--nts-accent)]" />
             </div>
             <div>

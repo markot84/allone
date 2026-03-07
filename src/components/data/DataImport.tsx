@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { flushSync } from 'react-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useBrand } from '../../hooks';
-import { FileText, CheckCircle2, XCircle, AlertCircle, Clock, Trash2, FileUp, Link as LinkIcon, HelpCircle, ExternalLink } from 'lucide-react';
+import { FileText, CheckCircle2, XCircle, AlertCircle, Clock, Trash2, FileUp, Link as LinkIcon, HelpCircle, ExternalLink, Package, Users, BarChart3, Euro } from 'lucide-react';
 import { Card, Button, Spinner, ProgressBar, useToast, Badge } from '../common';
 import { importFile, saveImportJob, getImportJobs, isSupportedFile, PRODUCT_COLUMN_MAPPING, type ImportType, type ImportResult, type ImportJob, type ImportProgress, type CampaignChannelOverride } from '../../services/import';
 import { FEED_SOURCE_OPTIONS, downloadGoogleAdsCsvTemplate, type FeedSourceType } from '../../data/feedSourceConfig';
@@ -43,11 +43,11 @@ export function DataImport({ initialType }: DataImportProps = {}) {
   const toast = useToast();
   const queryClient = useQueryClient();
 
-  const importTypes: { value: ImportType; label: string; icon: string }[] = [
-    { value: 'products', label: 'Products', icon: '📦' },
-    { value: 'segments', label: 'Segments', icon: '👥' },
-    { value: 'campaigns', label: 'Campaigns', icon: '📊' },
-    { value: 'organic', label: 'Οργανικά Έσοδα', icon: '💰' },
+  const importTypes: { value: ImportType; label: string; icon: React.ReactNode }[] = [
+    { value: 'products', label: 'Products', icon: <Package size={16} /> },
+    { value: 'segments', label: 'Segments', icon: <Users size={16} /> },
+    { value: 'campaigns', label: 'Campaigns', icon: <BarChart3 size={16} /> },
+    { value: 'organic', label: 'Οργανικά Έσοδα', icon: <Euro size={16} /> },
   ];
 
   const isFeedImport = importMode === 'feed' && selectedType === 'products';
@@ -442,7 +442,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
         <div className="p-6 space-y-6">
           {/* Feed Source selector - when Feed mode */}
           {importMode === 'feed' && (
-            <div className="p-4 bg-[var(--nts-accent-light)] border border-[var(--nts-accent-light)] rounded-lg">
+            <div className="p-4 bg-[var(--nts-light-gray)] border border-[var(--borderColor-default,#d0d7de)] rounded-lg">
               <p className="text-sm font-medium text-[#4A4A4A] mb-3">Πηγή Feed:</p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {FEED_SOURCE_OPTIONS.map((feed) => (
@@ -455,7 +455,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
                         : 'border-[#E5E5E5] bg-white hover:border-[var(--nts-accent)]/50'
                     }`}
                   >
-                    <span className="text-2xl">{feed.icon}</span>
+                    <span className="text-[var(--nts-medium-gray)]">{feed.icon}</span>
                     <p className="font-semibold text-[#1A1A1A] mt-1">{feed.name}</p>
                     <p className="text-xs text-[#6B7280] mt-0.5">{feed.description}</p>
                   </button>
@@ -482,7 +482,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
                         : 'bg-white text-[#4A4A4A] border border-[#E5E5E5] hover:border-[var(--nts-accent)] hover:text-[var(--nts-accent)]'
                     }`}
                   >
-                    <span className="mr-2">{type.icon}</span>
+                    <span className="mr-2 inline-flex">{type.icon}</span>
                     {type.label}
                   </button>
                 ))}
@@ -513,8 +513,8 @@ export function DataImport({ initialType }: DataImportProps = {}) {
             onDrop={handleDrop}
             className={`border-2 border-dashed rounded-lg p-8 text-center transition-all ${
               isDragging
-                ? 'border-[var(--nts-accent)] bg-[var(--nts-accent-light)]'
-                : 'border-[#E5E5E5] bg-[#F9F9F9] hover:border-[var(--nts-accent)] hover:bg-[var(--nts-accent-light)]/30'
+                ? 'border-[var(--nts-accent)] bg-[var(--nts-light-gray)]'
+                : 'border-[#E5E5E5] bg-[#F9F9F9] hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)]'
             }`}
           >
             <input
@@ -622,7 +622,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
                               onChange={(e) => setFileType(index, e.target.value as ImportType)}
                               className={`text-xs border rounded px-2 py-1 bg-white text-[#1A1A1A] focus:outline-none focus:border-[var(--nts-accent)] ${
                                 (item.file.name.toLowerCase().includes('campaign') || item.file.name.toLowerCase().includes('google ads') || item.file.name.toLowerCase().includes('meta'))
-                                  ? 'border-orange-400 bg-[var(--nts-accent-light)]'
+                                  ? 'border-gray-400 bg-[var(--nts-light-gray)]'
                                   : 'border-[#E5E5E5]'
                               }`}
                             >

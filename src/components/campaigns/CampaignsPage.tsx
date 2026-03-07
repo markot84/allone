@@ -338,7 +338,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                 €{formatCurrency(summaryStats.totalSpent, 2)}
               </p>
             </div>
-            <div className="w-12 h-12 bg-[var(--nts-accent-light)] rounded-lg flex items-center justify-center">
+            <div className="w-12 h-12 bg-[var(--nts-light-gray)] rounded-lg flex items-center justify-center">
               <DollarSign size={24} className="text-[var(--nts-accent)]" />
             </div>
           </div>

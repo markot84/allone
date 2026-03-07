@@ -102,7 +102,7 @@ export function ContentStrategy() {
       <Card padding="lg" className="border-l-4 border-l-[var(--nts-accent)]">
         <div className="flex items-start justify-between flex-wrap gap-4">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 bg-[var(--nts-accent-light)] rounded-xl flex items-center justify-center text-3xl">
+            <div className="w-14 h-14 bg-[var(--nts-light-gray)] rounded-xl flex items-center justify-center text-3xl">
               <Sparkles size={24} />
             </div>
             <div>

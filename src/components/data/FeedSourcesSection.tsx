@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, RefreshCw, Trash2, Pencil, Link as LinkIcon } from 'lucide-react';
+import { Plus, RefreshCw, Trash2, Pencil, Link as LinkIcon, FileText } from 'lucide-react';
 import { Card, Button, Spinner, useToast } from '../common';
 import { useFeedSources } from '../../hooks';
 import { useBrand } from '../../hooks';
@@ -205,7 +205,7 @@ export function FeedSourcesSection() {
                 key={s.id}
                 className="flex items-center gap-3 p-3 border border-[#E5E5E5] rounded-lg hover:border-[var(--nts-accent)]/50 transition-colors"
               >
-                <span className="text-xl">{typeInfo(s.type)?.icon ?? '📄'}</span>
+                <span className="text-[var(--nts-medium-gray)]">{typeInfo(s.type)?.icon ?? <FileText size={20} />}</span>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-[#1A1A1A] truncate">{s.name}</p>
                   <p className="text-xs text-[#6B7280] truncate" title={s.url}>{s.url}</p>

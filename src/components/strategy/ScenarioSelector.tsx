@@ -44,7 +44,7 @@ export function ScenarioSelector({
               className={`
                 w-full min-w-0 p-4 rounded-xl border-2 text-left transition-all duration-200
                 ${isSelected
-                  ? 'border-[var(--nts-accent)] bg-[var(--nts-accent-light)] shadow-md'
+                  ? 'border-[var(--nts-accent)] bg-[var(--nts-light-gray)] shadow-md'
                   : 'border-[#E5E5E5] bg-white hover:border-[var(--nts-accent)]/50 hover:shadow-sm'
                 }
               `}

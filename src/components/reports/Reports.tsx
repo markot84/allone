@@ -10,6 +10,12 @@ import {
   Plus,
   X,
   Trash2,
+  BarChart3,
+  Users,
+  Package,
+  Megaphone,
+  Target,
+  Tag,
 } from 'lucide-react';
 import { Card, CardHeader, Badge, Button, Spinner } from '../common';
 import { useProducts, useSegments, useCampaigns, useOrganic, useBrand } from '../../hooks';
@@ -28,7 +34,7 @@ interface ReportTypeItem {
   id: string;
   name: string;
   description: string;
-  icon: string;
+  icon: React.ReactNode;
   format: string;
   lastGenerated: string;
 }
@@ -38,7 +44,7 @@ const reportTypes: ReportTypeItem[] = [
     id: 'executive',
     name: 'Executive Summary',
     description: 'High-level KPIs και ROI overview για board presentations',
-    icon: '📊',
+    icon: <BarChart3 size={20} />,
     format: 'PDF',
     lastGenerated: 'πριν 2 ώρες'
   },
@@ -46,7 +52,7 @@ const reportTypes: ReportTypeItem[] = [
     id: 'segment',
     name: 'Segment Performance',
     description: 'Λεπτομερής ανάλυση segments με RFM, behavioral και firmographic οπτικές',
-    icon: '👥',
+    icon: <Users size={20} />,
     format: 'PDF/Excel',
     lastGenerated: 'πριν 1 ημέρα'
   },
@@ -54,7 +60,7 @@ const reportTypes: ReportTypeItem[] = [
     id: 'inventory',
     name: 'Inventory Health',
     description: 'Επίπεδα αποθεμάτων, ανάλυση ηλικίας, και ευκαιρίες βελτιστοποίησης',
-    icon: '📦',
+    icon: <Package size={20} />,
     format: 'Excel',
     lastGenerated: 'πριν 3 ώρες'
   },
@@ -62,7 +68,7 @@ const reportTypes: ReportTypeItem[] = [
     id: 'channel',
     name: 'Channel Attribution',
     description: 'Ανάλυση ROAS breakdown και budget allocation',
-    icon: '📢',
+    icon: <Megaphone size={20} />,
     format: 'PDF/Excel',
     lastGenerated: 'πριν 6 ώρες'
   },
@@ -70,7 +76,7 @@ const reportTypes: ReportTypeItem[] = [
     id: 'campaign',
     name: 'Campaign Performance',
     description: 'Λεπτομερή αποτελέσματα για όλα τα marketing campaigns',
-    icon: '🎯',
+    icon: <Target size={20} />,
     format: 'Excel',
     lastGenerated: 'πριν 12 ώρες'
   },
@@ -78,7 +84,7 @@ const reportTypes: ReportTypeItem[] = [
     id: 'product',
     name: 'Product Prioritization',
     description: 'Current scoring and ranking based on strategy weights',
-    icon: '🏷️',
+    icon: <Tag size={20} />,
     format: 'Excel/CSV',
     lastGenerated: 'πριν 1 ώρα'
   }
@@ -184,7 +190,7 @@ export function Reports() {
           >
             <Card padding="md" hover>
               <div className="flex items-start gap-4">
-                <div className="w-12 h-12 bg-[var(--nts-accent-light)] rounded-xl flex items-center justify-center text-2xl">
+                <div className="w-12 h-12 bg-[var(--nts-light-gray)] rounded-xl border border-[var(--nts-border-gray)] flex items-center justify-center text-[var(--nts-medium-gray)]">
                   {report.icon}
                 </div>
                 <div className="flex-1">

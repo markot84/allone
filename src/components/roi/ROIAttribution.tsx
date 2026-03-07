@@ -325,26 +325,26 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
       {/* Impact Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <ImpactCard
-          icon="💶"
+          icon={<Euro size={20} />}
           label="Σύνολο Εσόδων"
           value={formatCurrencyCompact(summary.total_revenue)}
           subtext={hasAnyData ? '+18.2% vs previous period' : 'Φόρτωσε δεδομένα'}
         />
         <ImpactCard
-          icon="🎯"
+          icon={<Target size={20} />}
           label="Performance+ Attributed"
           value={formatCurrencyCompact(summary.performance_plus_attributed)}
           subtext={hasAnyData ? `${formatNumber(summary.attribution_percentage, 1)}% of total revenue` : 'Φόρτωσε δεδομένα'}
           highlight
         />
         <ImpactCard
-          icon="📈"
+          icon={<TrendingUp size={20} />}
           label="ROI Πολλαπλασιαστής"
           value={`${formatMultiplier(summary.roi_multiplier, 1)}`}
           subtext="Return on ad spend"
         />
         <ImpactCard
-          icon="💰"
+          icon={<Euro size={20} />}
           label="Εξοικονομήσεις"
           value={formatCurrencyCompact(costSavingsData.total)}
           subtext={hasAnyData ? 'Warehousing + Ad efficiency' : 'Φόρτωσε δεδομένα'}
@@ -612,7 +612,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
           <CardHeader
             title="Cost Savings"
             subtitle={costSavingsData.period === 'Last 90 Days' ? 'Τελευταίες 90 ημέρες' : costSavingsData.period}
-            icon={<Euro size={20} className="text-[#22C55E]" />}
+            icon={<Euro size={20} className="text-[var(--nts-medium-gray)]" />}
           />
           <div className="space-y-4">
             {costSavingsData.items.map((item: { category: string; amount: number; description: string; icon: string }, index: number) => (
@@ -624,7 +624,9 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                 className="flex items-center justify-between p-4 bg-[#F5F5F5] rounded-lg"
               >
                 <div className="flex items-center gap-3">
-                  <span className="text-2xl">{item.icon}</span>
+                  <div className="w-10 h-10 rounded-lg border border-[var(--nts-border-gray)] bg-[var(--nts-light-gray)] flex items-center justify-center text-[var(--nts-medium-gray)]">
+                    <Euro size={18} />
+                  </div>
                   <div>
                     <p className="font-medium text-[#1A1A1A]">{item.category}</p>
                     <p className="text-xs text-[#4A4A4A]">{item.description}</p>
@@ -649,7 +651,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
           <CardHeader
             title="Attribution Methodology"
             subtitle="Διαφανής προσέγγιση μέτρησης"
-            icon={<Info size={20} className="text-[#3B82F6]" />}
+            icon={<Info size={20} className="text-[var(--nts-medium-gray)]" />}
             action={
               <button
                 onClick={() => setShowMethodology(!showMethodology)}
@@ -748,7 +750,7 @@ function MetricBox({ icon, label, value, color, highlight = false }: {
 }
 
 function ImpactCard({ icon, label, value, subtext, highlight = false }: {
-  icon: string;
+  icon: React.ReactNode;
   label: string;
   value: string;
   subtext: string;
@@ -765,7 +767,9 @@ function ImpactCard({ icon, label, value, subtext, highlight = false }: {
         className={highlight ? 'bg-[var(--nts-orange-light)] border-[var(--nts-orange)]' : ''}
       >
         <div className="flex items-start gap-3">
-          <span className="text-2xl">{icon}</span>
+          <div className="w-10 h-10 rounded-lg border border-[var(--nts-border-gray)] bg-[var(--nts-light-gray)] flex items-center justify-center text-[var(--nts-medium-gray)]">
+            {icon}
+          </div>
           <div>
             <p className={`text-sm ${highlight ? 'text-[var(--nts-charcoal)]' : 'text-[var(--nts-medium-gray)]'}`}>{label}</p>
             <p className={`text-2xl font-bold font-mono ${highlight ? 'text-[var(--nts-orange)]' : 'text-[var(--nts-charcoal)]'}`}>

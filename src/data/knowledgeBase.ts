@@ -18,72 +18,72 @@ export const knowledgeCategories = [
   {
     id: 'getting-started',
     title: 'Ξεκινώντας',
-    icon: '🎯',
+    icon: 'GS',
     description: 'Βασικές έννοιες και πρώτα βήματα',
-    color: '#F97316'
+    color: '#6B7280'
   },
   {
     id: 'data-import',
     title: 'Εισαγωγή Δεδομένων',
-    icon: '📥',
+    icon: 'DI',
     description: 'Πώς να φορτώσετε και να διαχειριστείτε δεδομένα',
-    color: '#3B82F6'
+    color: '#6B7280'
   },
   {
     id: 'strategy',
     title: 'Στρατηγική Προτεραιοποίησης',
-    icon: '⚙️',
+    icon: 'SW',
     description: 'Ρύθμιση βαρών και στρατηγικών',
-    color: '#8B5CF6'
+    color: '#6B7280'
   },
   {
     id: 'rfm',
     title: 'RFM Ανάλυση',
-    icon: '👥',
+    icon: 'DA',
     description: 'Κατανόηση των customer segments',
-    color: '#22C55E'
+    color: '#6B7280'
   },
   {
     id: 'products',
     title: 'Product Intelligence',
-    icon: '📦',
+    icon: 'PI',
     description: 'Διαχείριση προϊόντων και αποθεμάτων',
-    color: '#F59E0B'
+    color: '#6B7280'
   },
   {
     id: 'channels',
     title: 'Channel Activation',
-    icon: '📢',
+    icon: 'CA',
     description: 'Προτάσεις καναλιών και budget allocation',
-    color: '#EF4444'
+    color: '#6B7280'
   },
   {
     id: 'content',
     title: 'Content Strategy',
-    icon: '✍️',
+    icon: 'CS',
     description: 'Συγχρονισμός περιεχομένου με στρατηγική',
-    color: '#06B6D4'
+    color: '#6B7280'
   },
   {
     id: 'roi',
     title: 'ROI Attribution',
-    icon: '💶',
+    icon: 'RA',
     description: 'Μέτρηση επιπτώσης Performance+',
-    color: '#10B981'
+    color: '#6B7280'
   },
   {
     id: 'dashboard',
     title: 'Dashboard & Analytics',
-    icon: '📊',
+    icon: 'DB',
     description: 'Ερμηνεία δεδομένων και KPIs',
-    color: '#6366F1'
+    color: '#6B7280'
   },
   {
     id: 'troubleshooting',
     title: 'Αντιμετώπιση Προβλημάτων',
-    icon: '🔧',
+    icon: 'TR',
     description: 'Συχνά προβλήματα και λύσεις',
-    color: '#9CA3AF'
+    color: '#6B7280'
   }
 ];
 

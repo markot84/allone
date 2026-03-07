@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, BarChart3, Brain, Database, Euro, FileText, FileSpreadsheet, HelpCircle, LayoutDashboard, Megaphone, Package, ShieldCheck, SlidersHorizontal, Target, Upload, Users } from 'lucide-react';
+import { useRef } from 'react';
+import { ArrowRight, BarChart3, Brain, Database, FileSpreadsheet, HelpCircle, ShieldCheck, Target, Upload } from 'lucide-react';
 
 type LandingVariant = 'ceo' | 'ops';
 
@@ -11,18 +11,12 @@ interface MarketingIndexPageProps {
 
 // ─── Static data ─────────────────────────────────────────────────────────────
 
-const metrics = [
-  { label: 'πηγές δεδομένων (ERP, Ads, CSV, χειροκίνητα)', value: '5', suffix: '+' },
-  { label: 'modules ενεργά — από data analysis έως content strategy', value: '7', suffix: '' },
-  { label: 'ολοκληρωμένος κύκλος: data → intelligence → activation', value: '1', suffix: '' },
-];
-
 const dataSources = [
   { name: 'ERP / Πωλήσεις', description: 'Προϊόντα, απόθεμα, τιμολόγηση, πελατολόγιο', icon: <Database size={18} /> },
   { name: 'Google Ads', description: 'Campaigns, κόστος, conversions, κοινά', icon: <BarChart3 size={18} /> },
-  { name: 'Meta Ads', description: 'Campaigns, audiences, Meta-IDs, attribution', icon: <Target size={18} /> },
+  { name: 'Meta Ads', description: 'Campaigns, audiences, attribution', icon: <Target size={18} /> },
   { name: 'CSV / Excel', description: 'Segments, οικονομικά, analytics, custom data', icon: <FileSpreadsheet size={18} /> },
-  { name: 'Χειροκίνητη εισαγωγή', description: 'KPIs, budgets, στρατηγικές παράμετροι', icon: <Upload size={18} /> },
+  { name: 'Data Import', description: 'Αυτόματη ή manual εισαγωγή αρχείων δεδομένων', icon: <Upload size={18} /> },
 ];
 
 const inputOutputChain = {
@@ -39,12 +33,6 @@ const inputOutputChain = {
   ],
 };
 
-const coreFeatures = [
-  { title: 'Strategy Weights', description: 'Μεταφράζει τη στρατηγική της επιχείρησης σε μετρήσιμες βαρύτητες, ώστε κάθε απόφαση να αξιολογείται με ενιαία διοικητική λογική.', icon: <SlidersHorizontal size={18} /> },
-  { title: 'Data Analysis', description: 'Μετατρέπει τα δεδομένα πελατών σε εφαρμόσιμη εμπορική νοημοσύνη μέσω RFM, behavioral, firmographic και αξιακής ανάλυσης.', icon: <Users size={18} /> },
-  { title: 'Product Intelligence', description: 'Αναδεικνύει την πραγματική εμπορική δυναμική του χαρτοφυλακίου με πολυπαραγονική αξιολόγηση, ιεράρχηση και σαφή σήματα απόφασης.', icon: <Package size={18} /> },
-  { title: 'Channel Activation', description: 'Μετατρέπει insights και προτεραιότητες σε AI-powered κατευθύνσεις για κανάλια, ενέργειες και κατανομή επένδυσης.', icon: <Megaphone size={18} /> },
-];
 
 const problemsBeforeAfter = [
   {
@@ -53,7 +41,7 @@ const problemsBeforeAfter = [
   },
   {
     before: 'Κατανομή προϋπολογισμού χωρίς τεκμηριωμένη αποτίμηση της απόδοσης ανά κανάλι ή πρωτοβουλία.',
-    after: 'Σαφές πλαίσιο ROI attribution και εμπορικού πλαισίου αναφορών, ώστε να γνωρίζεις τι αποδίδει, τι αναστέλλεται και τι κλιμακώνεται.',
+    after: 'Σαφές πλαίσιο ROI attribution και εμπορικού πλαισίου αναφορών, ώστε να είναι σαφές τι αποδίδει, τι αναστέλλεται και τι κλιμακώνεται.',
   },
   {
     before: 'Εκτέλεση ενεργειών marketing χωρίς κοινό στρατηγικό πλαίσιο μεταξύ διοίκησης, ομάδων και συνεργατών.',
@@ -61,19 +49,6 @@ const problemsBeforeAfter = [
   },
 ];
 
-const operatingFlow = [
-  { step: '01', title: 'Ενοποίηση δεδομένων', description: 'Εισάγεις δεδομένα από ERP, διαφημιστικές κονσόλες (Google Ads, Meta), οικονομικά στοιχεία και πελατολόγιο — μέσω CSV ή χειροκίνητα. Με ή χωρίς API — zero setup time.', icon: <LayoutDashboard size={18} /> },
-  { step: '02', title: 'Εμπορική νοημοσύνη με AI', description: 'Η ανάλυση δεδομένων, το segmentation και η αξιολόγηση προϊόντων αποκαλύπτουν πού βρίσκεται η πραγματική εμπορική δυναμική.', icon: <Users size={18} /> },
-  { step: '03', title: 'Στρατηγική καθοδήγηση', description: 'Το σύστημα προτείνει προτεραιότητες για κανάλια, περιεχόμενο και εμπορικές κινήσεις με εφαρμόσιμη λογική απόφασης.', icon: <Target size={18} /> },
-  { step: '04', title: 'Διακυβέρνηση απόδοσης', description: 'Παρακολουθείς την επίδραση, επανακατανέμεις επένδυση και βελτιστοποιείς με συνεχή κύκλο λήψης αποφάσεων.', icon: <Euro size={18} /> },
-];
-
-const valuePillars = [
-  { title: 'Για τη Διοίκηση', description: 'Παρέχει ενιαία εικόνα για εμπορική επίδοση, περιθώρια κέρδους, ρίσκο και στρατηγικές προτεραιότητες.', icon: <BarChart3 size={18} /> },
-  { title: 'Για το Marketing', description: 'Μετατρέπει τα δεδομένα και τα AI-powered insights σε εφαρμόσιμη καθοδήγηση ανά κοινό, καμπάνια και δημιουργική προτεραιότητα.', icon: <Megaphone size={18} /> },
-  { title: 'Για τον Οργανισμό', description: 'Εδραιώνει κοινή γλώσσα αποφάσεων μεταξύ διοίκησης, εμπορικής διεύθυνσης, finance, operations και marketing.', icon: <FileText size={18} /> },
-  { title: 'Για Finance & Operations', description: 'Ενισχύει τον έλεγχο του προϋπολογισμού, της αποδοτικότητας και του πραγματικού επιχειρησιακού αντίκτυπου με μετρήσιμη λογική.', icon: <Euro size={18} /> },
-];
 
 const appPreviewPoints = [
   {
@@ -131,12 +106,12 @@ const variantCopy: Record<LandingVariant, {
   ceo: {
     badge: 'AI-powered operating layer για εμπορικές αποφάσεις',
     headline: 'Performance+',
-    highlight: 'το λειτουργικό σύστημα της επιχειρηματικής ανάπτυξης',
+    highlight: 'λειτουργικό σύστημα επιχειρηματικής ανάπτυξης',
     description: 'Αναλύει δεδομένα κοινού και αποθέματος, μετατρέπει την πληροφορία σε επιχειρηματική νοημοσύνη και προτείνει σενάρια εμπορικής πολιτικής, κατάλληλα προωθητικά κανάλια και οργανικό περιεχόμενο. Παράλληλα, συντονίζει τα εσωτερικά τμήματα και τους εξωτερικούς συνεργάτες, μειώνοντας τον κατακερματισμό της πληροφορίας και τις καθυστερήσεις που επιβραδύνουν την ανάπτυξη.',
     cta: 'Είσοδος στο Performance+',
     uspTitle: 'Γιατί ξεχωρίζει',
     uspPoints: [
-      'Μετατρέπει τα εμπορικά δεδομένα σε διοικητική καθοδήγηση προσανατολισμένη στην κερδοφορία και στην εφαρμογή.',
+      'Μετατρέπει τα εμπορικά δεδομένα σε διοικητική καθοδήγηση προσανατολισμένη στον εκάστοτε στρατηγικό στόχο, κερδοφορία, εκκαθάριση αποθέματος, λανσάρισμα ή αύξηση τζίρου.',
       'Συνδέει segmentation, προϊόντα, κανάλια και προτεραιότητες σε ενιαία λογική αξιολόγησης.',
       'Καθιστά την επίδραση μετρήσιμη μέσω ROI Attribution και AI-powered αναλυτικών συμπερασμάτων.',
     ],
@@ -147,7 +122,7 @@ const variantCopy: Record<LandingVariant, {
   ops: {
     badge: 'AI-powered operating layer για στρατηγική εκτέλεση',
     headline: 'Performance+',
-    highlight: 'το λειτουργικό σύστημα της επιχειρηματικής ανάπτυξης',
+    highlight: 'λειτουργικό σύστημα επιχειρηματικής ανάπτυξης',
     description: 'Αναλύει δεδομένα κοινού και αποθέματος, μετατρέπει την πληροφορία σε επιχειρηματική νοημοσύνη και προτείνει σενάρια εμπορικής πολιτικής, κατάλληλα προωθητικά κανάλια και οργανικό περιεχόμενο. Παράλληλα, συντονίζει τα εσωτερικά τμήματα και τους εξωτερικούς συνεργάτες, μειώνοντας τον κατακερματισμό της πληροφορίας και τις καθυστερήσεις που επιβραδύνουν την ανάπτυξη.',
     cta: 'Είσοδος στο Performance+',
     uspTitle: 'Γιατί το επιλέγουν τα τμήματα marketing και εμπορικής διεύθυνσης',
@@ -162,137 +137,10 @@ const variantCopy: Record<LandingVariant, {
   },
 };
 
-// ─── Hooks ────────────────────────────────────────────────────────────────────
-
-function useCountUp(target: number, duration = 1400, active: boolean) {
-  const [count, setCount] = useState(0);
-  useEffect(() => {
-    if (!active) return;
-    let start = 0;
-    const step = Math.ceil(target / (duration / 16));
-    const timer = setInterval(() => {
-      start = Math.min(start + step, target);
-      setCount(start);
-      if (start >= target) clearInterval(timer);
-    }, 16);
-    return () => clearInterval(timer);
-  }, [target, duration, active]);
-  return count;
-}
-
 // ─── Sub-components ───────────────────────────────────────────────────────────
-
-function MetricItem({ value, suffix, label, active }: { value: number; suffix: string; label: string; active: boolean }) {
-  const count = useCountUp(value, 1200, active);
-  return (
-    <div className="flex flex-col items-center gap-1 px-6 py-4 text-center">
-      <p className="text-3xl font-bold text-[#1f2328] md:text-4xl">
-        {count}{suffix}
-      </p>
-      <p className="text-xs text-[var(--nts-medium-gray)]">{label}</p>
-    </div>
-  );
-}
-
-function isDarkHighlight(index: number) {
-  const row = Math.floor(index / 2);
-  const isRightColumn = index % 2 === 1;
-  return row % 2 === 0 ? isRightColumn : !isRightColumn;
-}
 
 function isPreviewDarkHighlight(index: number) {
   return index === 1 || index === 3;
-}
-
-function EditorialCard({
-  title,
-  description,
-  icon,
-  eyebrow,
-  stat,
-  dark = false
-}: {
-  title: string;
-  description: string;
-  icon: React.ReactNode;
-  eyebrow: string;
-  stat: string;
-  dark?: boolean;
-}) {
-  return (
-    <article
-      className={[
-        'group relative min-h-[280px] overflow-hidden rounded-[28px] border p-6 transition duration-300',
-        dark
-          ? 'border-white/10 bg-[#0f1115] text-white shadow-[0_22px_50px_rgba(15,17,21,0.34)]'
-          : 'border-[#1f2328]/15 bg-[var(--nts-bg-pure)] text-[var(--nts-charcoal)] shadow-[0_18px_36px_rgba(16,24,40,0.12)] hover:border-[var(--nts-accent)]/35',
-      ].join(' ')}
-    >
-      <div
-        className={[
-          'pointer-events-none absolute right-[-28px] top-[-24px] h-36 w-36 rounded-full blur-2xl',
-          dark ? 'bg-[var(--nts-accent)]/25' : 'bg-[#1f2328]/6'
-        ].join(' ')}
-      />
-      <div
-        className={[
-          'pointer-events-none absolute bottom-4 right-4 h-20 w-20 rounded-3xl border',
-          dark ? 'border-white/10 bg-white/5' : 'border-[#1f2328]/10 bg-[var(--nts-bg-subtle)]'
-        ].join(' ')}
-      />
-      <div className="relative flex h-full flex-col justify-between">
-        <div>
-          <div className="flex items-start justify-between gap-4">
-            <div
-              className={[
-                'inline-flex h-11 w-11 items-center justify-center rounded-2xl border',
-                dark
-                  ? 'border-white/12 bg-white/6 text-white'
-                  : 'border-[#1f2328]/10 bg-[var(--nts-bg-subtle)] text-[var(--nts-charcoal)]'
-              ].join(' ')}
-            >
-              {icon}
-            </div>
-            <span
-              className={[
-                'rounded-full px-3 py-1 text-[11px] font-semibold tracking-[0.08em]',
-                dark
-                  ? 'border border-white/10 bg-white/6 text-white/72'
-                  : 'border border-[#1f2328]/10 bg-[var(--nts-bg-subtle)] text-[var(--nts-medium-gray)]'
-              ].join(' ')}
-            >
-              {eyebrow}
-            </span>
-          </div>
-
-          <div className="mt-8 space-y-3">
-            <h3 className={dark ? 'max-w-xs text-[28px] font-semibold leading-[1.05] text-white' : 'max-w-xs text-[28px] font-semibold leading-[1.05] text-[var(--nts-charcoal)]'}>
-              {title}
-            </h3>
-            <p className={dark ? 'max-w-sm text-sm leading-6 text-white/72' : 'max-w-sm text-sm leading-6 text-[var(--nts-medium-gray)]'}>
-              {description}
-            </p>
-          </div>
-        </div>
-
-        <div className="relative mt-8 flex items-end justify-between gap-4">
-          <div className={dark ? 'space-y-1' : 'space-y-1'}>
-            <p className={dark ? 'text-[11px] tracking-[0.08em] text-white/52' : 'text-[11px] tracking-[0.08em] text-[var(--nts-medium-gray)]'}>
-              Εστίαση
-            </p>
-            <p className={dark ? 'text-2xl font-semibold text-white' : 'text-2xl font-semibold text-[var(--nts-charcoal)]'}>
-              {stat}
-            </p>
-          </div>
-          <div className="flex items-end gap-1.5">
-            <span className={dark ? 'h-8 w-2 rounded-full bg-white/20' : 'h-8 w-2 rounded-full bg-[#1f2328]/10'} />
-            <span className="h-12 w-2 rounded-full bg-[var(--nts-accent)]" />
-            <span className={dark ? 'h-16 w-2 rounded-full bg-white/50' : 'h-16 w-2 rounded-full bg-[#1f2328]'} />
-          </div>
-        </div>
-      </div>
-    </article>
-  );
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -302,30 +150,6 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
   void _onVariantChange;
 
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [scrolled, setScrolled] = useState(false);
-  void scrolled;
-  const [metricsVisible, setMetricsVisible] = useState(false);
-  const metricsRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const onScroll = () => setScrolled(el.scrollTop > 60);
-    el.addEventListener('scroll', onScroll);
-    return () => el.removeEventListener('scroll', onScroll);
-  }, []);
-
-  useEffect(() => {
-    const el = scrollRef.current;
-    const metricsEl = metricsRef.current;
-    if (!el || !metricsEl) return;
-    const onScroll = () => {
-      const rect = metricsEl.getBoundingClientRect();
-      if (rect.top < window.innerHeight - 80) setMetricsVisible(true);
-    };
-    el.addEventListener('scroll', onScroll);
-    return () => el.removeEventListener('scroll', onScroll);
-  }, []);
 
   return (
     <div ref={scrollRef} className="h-screen overflow-y-auto overflow-x-hidden bg-[var(--nts-bg-subtle)] text-[var(--nts-charcoal)]">
@@ -336,8 +160,8 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
           <div className="rounded-[22px] border border-[#1f2328]/10 bg-[var(--nts-bg-pure)] px-4 py-3 shadow-[0_10px_24px_rgba(16,24,40,0.08)] md:px-5">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#1f2328]/10 bg-[var(--nts-bg-subtle)] text-[var(--nts-charcoal)]">
-                  <Brain size={18} />
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl">
+                  <img src="/nts-icon.png" alt="Performance+" className="h-8 w-8 object-contain" />
                 </div>
                 <div className="min-w-0">
                   <p className="text-xs text-[var(--nts-medium-gray)]">{copy.badge}</p>
@@ -365,10 +189,10 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
           <div className="relative">
             <div className="space-y-8">
               <div className="space-y-5">
-                <h1 className="max-w-4xl text-3xl font-semibold leading-[1.04] text-[var(--nts-charcoal)] md:text-5xl">
-                  {copy.headline}
+                <h1 className="max-w-4xl leading-[1.04] text-[var(--nts-charcoal)]">
+                  <span className="block text-4xl font-bold md:text-6xl">{copy.headline}</span>
                   {copy.highlight && (
-                    <span className="mt-2 block text-[var(--nts-accent)]">{copy.highlight}</span>
+                    <span className="mt-2 block text-2xl font-semibold text-[var(--nts-accent)] md:text-4xl">{copy.highlight}</span>
                   )}
                 </h1>
                 <p className="max-w-2xl text-[15px] leading-7 text-[var(--nts-medium-gray)] md:text-base">
@@ -411,12 +235,12 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
         </div>
       </section>
 
-      {/* ── Data Sources ──────────────────────────────────────────────── */}
+      {/* ── Data Sources + Input/Output ─────────────────────────────────── */}
       <section className="mx-auto w-full max-w-7xl px-6 pb-8 md:px-10">
         <div className="rounded-2xl border border-[#1f2328] bg-[var(--nts-bg-pure)] p-6 shadow-[0_20px_44px_rgba(16,24,40,0.14)]">
-          <p className="text-[11px] tracking-[0.08em] text-[var(--nts-accent)]">Πηγές Δεδομένων</p>
-          <h3 className="mt-2 text-lg font-semibold text-[var(--nts-charcoal)]">Με ή χωρίς API — zero setup time</h3>
-          <p className="mt-1 text-sm text-[var(--nts-medium-gray)]">Εισάγεις δεδομένα από τις πηγές που ήδη χρησιμοποιείς. CSV, χειροκίνητα ή μέσω API integrations.</p>
+          <p className="text-[11px] tracking-[0.08em] text-[var(--nts-accent)]">Data Input → Intelligence Output</p>
+          <h3 className="mt-2 text-lg font-semibold text-[var(--nts-charcoal)]">Ενοποίηση δεδομένων από πολλαπλές πηγές σε ενιαίο περιβάλλον αποφάσεων</h3>
+
           <div className="mt-5 grid gap-3 md:grid-cols-5">
             {dataSources.map((source) => (
               <div key={source.name} className="rounded-xl border border-[#1f2328]/12 bg-[var(--nts-bg-subtle)] p-4 text-center">
@@ -428,6 +252,37 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
               </div>
             ))}
           </div>
+
+          <div className="mt-6 grid gap-4 md:grid-cols-[1fr_auto_1fr]">
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold tracking-[0.08em] text-[var(--nts-medium-gray)]">Data Input</p>
+              {inputOutputChain.inputs.map((item) => (
+                <div key={item} className="rounded-xl border border-[#1f2328]/12 bg-[var(--nts-bg-subtle)] px-4 py-3 text-sm text-[var(--nts-charcoal)]">
+                  {item}
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden items-center justify-center md:flex">
+              <div className="flex flex-col items-center gap-2">
+                <div className="h-12 w-px bg-[var(--nts-accent)]/40" />
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--nts-accent)] text-white shadow-[0_6px_14px_rgba(249,115,22,0.35)]">
+                  <ArrowRight size={16} />
+                </div>
+                <p className="text-[10px] font-semibold tracking-[0.08em] text-[var(--nts-accent)]">AI</p>
+                <div className="h-12 w-px bg-[var(--nts-accent)]/40" />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold tracking-[0.08em] text-[var(--nts-accent)]">Intelligence Output</p>
+              {inputOutputChain.outputs.map((item) => (
+                <div key={item} className="rounded-xl border border-white/10 bg-[#12151b] px-4 py-3 text-sm text-white/80">
+                  {item}
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </section>
 
@@ -436,13 +291,13 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
           <div className="rounded-[28px] border border-[#1f2328]/10 bg-[var(--nts-bg-pure)] p-6 shadow-[0_18px_40px_rgba(16,24,40,0.12)]">
             <p className="text-[11px] tracking-[0.08em] text-[var(--nts-accent)]">Διοικητική Επισκόπηση</p>
             <h2 className="mt-4 max-w-2xl text-xl font-semibold leading-tight text-[var(--nts-charcoal)]">
-              Το κεντρικό control layer για επιχειρηματίες και στελέχη που θέλουν καθαρή λογική αποφάσεων και συντονισμένη εκτέλεση.
+              Το λειτουργικό σύστημα που μετατρέπει δεδομένα σε επιχειρηματική νοημοσύνη, άμεση και αποδοτική λήψη αποφάσεων με συντονισμένο πλάνο ενεργειών.
             </h2>
             <div className="mt-6 grid gap-4 md:grid-cols-2">
               <div className="rounded-2xl border border-white/10 bg-[#12151b] p-5 shadow-[0_10px_24px_rgba(15,17,21,0.16)]">
                 <p className="text-[11px] tracking-[0.08em] text-[var(--nts-accent)]">Εποπτεία</p>
                 <p className="mt-2 text-2xl font-semibold text-white">360°</p>
-                <p className="mt-2 text-sm leading-6 text-white/68">Συγκεντρώνεις κρίσιμα δεδομένα, προϊόντα, κοινά και κανάλια σε ένα ενιαίο πεδίο διοικητικής αναφοράς.</p>
+                <p className="mt-2 text-sm leading-6 text-white/68">Κρίσιμα δεδομένα, προϊόντα, κοινά και κανάλια συγκεντρώνονται σε ένα ενιαίο πεδίο διοικητικής αναφοράς.</p>
               </div>
               <div className="rounded-2xl border border-[var(--nts-accent)]/30 bg-[#181c24] p-5 shadow-[0_10px_24px_rgba(15,17,21,0.16)]">
                 <p className="text-[11px] tracking-[0.08em] text-[var(--nts-accent)]">Απόδοση</p>
@@ -463,23 +318,6 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
                 ))}
               </ul>
           </div>
-        </div>
-      </section>
-
-      {/* ── Core features ────────────────────────────────────────────────── */}
-      <section className="mx-auto w-full max-w-7xl px-6 pb-8 md:px-10">
-        <div className="grid gap-5 md:grid-cols-2">
-          {coreFeatures.map((feature, index) => (
-            <EditorialCard
-              key={feature.title}
-              title={feature.title}
-              description={feature.description}
-              icon={feature.icon}
-              eyebrow={index % 2 === 0 ? 'Στρατηγική ενότητα' : 'Επίπεδο ΤΝ'}
-              stat={['Στρατηγική με έμφαση στο Gross Margin', 'Στόχευση Αγοραστικού Κοινού Υψηλής Αξίας', 'Εστίαση σε New Releases', 'Επιλογή Ιδανικών Καναλιών Επικοινωνίας'][index] ?? 'Απόδοση'}
-              dark={isDarkHighlight(index)}
-            />
-          ))}
         </div>
       </section>
 
@@ -508,76 +346,6 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
                   {item.after}
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Operating flow ────────────────────────────────────────────────── */}
-      <section className="mx-auto w-full max-w-7xl px-6 pb-8 md:px-10">
-        <div className="rounded-2xl border border-[#1f2328] bg-[var(--nts-bg-pure)] p-6 shadow-[0_20px_44px_rgba(16,24,40,0.14)]">
-          <h3 className="text-lg font-semibold text-[var(--nts-charcoal)]">Πώς λειτουργεί: από τα δεδομένα στη στρατηγική απόφαση</h3>
-          <div className="mt-4 grid gap-3 md:grid-cols-2">
-            {operatingFlow.map((item) => (
-              <article key={item.step} className="rounded-xl border border-[#1f2328]/20 bg-[var(--nts-bg-pure)] p-4 transition hover:border-[var(--nts-accent)]/35">
-                <div className="flex items-center gap-3">
-                  <div className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[#1f2328]/30 text-[#1f2328]">
-                    {item.icon}
-                  </div>
-                  <span className="text-xs font-bold tracking-widest text-[var(--nts-accent)]">{item.step}</span>
-                </div>
-                <h4 className="mt-3 text-sm font-semibold text-[var(--nts-charcoal)]">{item.title}</h4>
-                <p className="mt-2 text-sm text-[var(--nts-medium-gray)]">{item.description}</p>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Value pillars ─────────────────────────────────────────────────── */}
-      <section className="mx-auto w-full max-w-7xl px-6 pb-8 md:px-10">
-        <div className="rounded-2xl border border-[#1f2328] bg-[var(--nts-bg-pure)] p-6 shadow-[0_20px_44px_rgba(16,24,40,0.14)]">
-          <h3 className="text-lg font-semibold text-[var(--nts-charcoal)]">Τι υπεραξία προσφέρει ως κοινό σύστημα αποφάσεων</h3>
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
-            {valuePillars.map((item, index) => (
-              <article
-                key={item.title}
-                className={[
-                  'relative overflow-hidden rounded-[24px] border p-5',
-                  isDarkHighlight(index)
-                    ? 'border-white/10 bg-[#12151b] text-white'
-                    : 'border-[#1f2328]/12 bg-[var(--nts-bg-subtle)] text-[var(--nts-charcoal)]'
-                ].join(' ')}
-              >
-                <div
-                  className={[
-                    'pointer-events-none absolute right-0 top-0 h-24 w-24 rounded-full blur-2xl',
-                    isDarkHighlight(index) ? 'bg-[var(--nts-accent)]/20' : 'bg-[#1f2328]/6'
-                  ].join(' ')}
-                />
-                <div
-                  className={[
-                    'inline-flex h-10 w-10 items-center justify-center rounded-2xl border',
-                    isDarkHighlight(index)
-                      ? 'border-white/10 bg-white/6 text-white'
-                      : 'border-[#1f2328]/10 bg-[var(--nts-bg-pure)] text-[var(--nts-charcoal)]'
-                  ].join(' ')}
-                >
-                  {item.icon}
-                </div>
-                <h4 className={isDarkHighlight(index) ? 'relative mt-6 text-xl font-semibold text-white' : 'relative mt-6 text-xl font-semibold text-[var(--nts-charcoal)]'}>
-                  {item.title}
-                </h4>
-                <p className={isDarkHighlight(index) ? 'relative mt-3 max-w-md text-sm leading-6 text-white/72' : 'relative mt-3 max-w-md text-sm leading-6 text-[var(--nts-medium-gray)]'}>
-                  {item.description}
-                </p>
-                <div className="relative mt-8 flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-[var(--nts-accent)]" />
-                  <span className={isDarkHighlight(index) ? 'text-xs tracking-[0.08em] text-white/56' : 'text-xs tracking-[0.08em] text-[var(--nts-medium-gray)]'}>
-                    {index % 2 === 0 ? 'Υποστήριξη απόφασης' : 'Υποστήριξη εκτέλεσης'}
-                  </span>
-                </div>
-              </article>
             ))}
           </div>
         </div>
@@ -651,53 +419,6 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
         </div>
       </section>
 
-      {/* ── Metrics strip ────────────────────────────────────────────────── */}
-      <div ref={metricsRef} className="mx-auto w-full max-w-7xl px-6 pb-8 md:px-10">
-        <div className="grid divide-x divide-[#1f2328]/15 rounded-2xl border border-[#1f2328] bg-[var(--nts-bg-pure)] shadow-[0_16px_32px_rgba(16,24,40,0.12)] md:grid-cols-3">
-          {metrics.map((m) => (
-            <MetricItem key={m.label} value={parseInt(m.value)} suffix={m.suffix} label={m.label} active={metricsVisible} />
-          ))}
-        </div>
-      </div>
-
-      {/* ── Input → Output chain ─────────────────────────────────────── */}
-      <section className="mx-auto w-full max-w-7xl px-6 pb-8 md:px-10">
-        <div className="rounded-2xl border border-[#1f2328] bg-[var(--nts-bg-pure)] p-6 shadow-[0_18px_40px_rgba(16,24,40,0.14)]">
-          <h3 className="text-lg font-semibold text-[var(--nts-charcoal)]">Data Input → Commercial Intelligence Output</h3>
-          <p className="mt-1 text-sm text-[var(--nts-medium-gray)]">Από πρωτογενή δεδομένα σε εφαρμόσιμη εμπορική καθοδήγηση — end-to-end.</p>
-
-          <div className="mt-5 grid gap-4 md:grid-cols-[1fr_auto_1fr]">
-            <div className="space-y-2">
-              <p className="text-[11px] font-semibold tracking-[0.08em] text-[var(--nts-medium-gray)]">Data Input</p>
-              {inputOutputChain.inputs.map((item) => (
-                <div key={item} className="rounded-xl border border-[#1f2328]/12 bg-[var(--nts-bg-subtle)] px-4 py-3 text-sm text-[var(--nts-charcoal)]">
-                  {item}
-                </div>
-              ))}
-            </div>
-
-            <div className="hidden items-center justify-center md:flex">
-              <div className="flex flex-col items-center gap-2">
-                <div className="h-16 w-px bg-[var(--nts-accent)]/40" />
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--nts-accent)] text-white shadow-[0_6px_14px_rgba(249,115,22,0.35)]">
-                  <ArrowRight size={16} />
-                </div>
-                <p className="text-[10px] font-semibold tracking-[0.08em] text-[var(--nts-accent)]">AI</p>
-                <div className="h-16 w-px bg-[var(--nts-accent)]/40" />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <p className="text-[11px] font-semibold tracking-[0.08em] text-[var(--nts-accent)]">Intelligence Output</p>
-              {inputOutputChain.outputs.map((item) => (
-                <div key={item} className="rounded-xl border border-white/10 bg-[#12151b] px-4 py-3 text-sm text-white/80">
-                  {item}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
 
       {/* ── Final CTA ─────────────────────────────────────────────────────── */}
       <section className="mx-auto w-full max-w-7xl px-6 pb-8 md:px-10">
@@ -711,7 +432,7 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
               onClick={onOpenAuth}
               className="inline-flex items-center gap-2 rounded-xl bg-[var(--nts-accent)] px-5 py-3 text-sm font-semibold text-white shadow-[0_10px_20px_rgba(249,115,22,0.35)] transition hover:bg-[var(--nts-accent-hover)]"
             >
-              Ενεργοποίησε τον χώρο εργασίας σου
+              Ενεργοποίηση χώρου εργασίας
               <ArrowRight size={16} />
             </button>
             <a

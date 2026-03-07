@@ -75,7 +75,7 @@ export function ChannelRecommendations({
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.1 }}
-                className="flex items-center justify-between p-3 bg-[var(--nts-accent-light)] rounded-lg border border-[var(--nts-accent)]/20"
+                className="flex items-center justify-between p-3 bg-[var(--nts-light-gray)] rounded-lg border border-[var(--borderColor-default,#d0d7de)]"
               >
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 bg-[var(--nts-accent)] rounded-lg flex items-center justify-center">
