@@ -25,7 +25,7 @@ export function Slider({
   min = 0,
   max = 100,
   step = 1,
-  color = '#FF6B35',
+  color = 'var(--nts-accent)',
   icon,
   tooltip,
   disabled = false

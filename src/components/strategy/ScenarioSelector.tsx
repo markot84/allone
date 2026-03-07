@@ -44,8 +44,8 @@ export function ScenarioSelector({
               className={`
                 w-full min-w-0 p-4 rounded-xl border-2 text-left transition-all duration-200
                 ${isSelected
-                  ? 'border-[#FF6B35] bg-[#FFF0EB] shadow-md'
-                  : 'border-[#E5E5E5] bg-white hover:border-[#FF6B35]/50 hover:shadow-sm'
+                  ? 'border-[var(--nts-accent)] bg-[var(--nts-accent-light)] shadow-md'
+                  : 'border-[#E5E5E5] bg-white hover:border-[var(--nts-accent)]/50 hover:shadow-sm'
                 }
               `}
             >
@@ -55,7 +55,7 @@ export function ScenarioSelector({
                   <motion.div
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
-                    className="w-5 h-5 bg-[#FF6B35] rounded-full flex items-center justify-center"
+                    className="w-5 h-5 bg-[var(--nts-accent)] rounded-full flex items-center justify-center"
                   >
                     <Check size={12} className="text-white" />
                   </motion.div>
@@ -85,7 +85,7 @@ export function ScenarioSelector({
                               key === 'stock' ? '#3B82F6' :
                               key === 'strategic' ? '#8B5CF6' :
                               key === 'revenue' ? '#F59E0B' :
-                              '#FF6B35'
+                              'var(--nts-accent)'
                           }}
                         />
                       ))}

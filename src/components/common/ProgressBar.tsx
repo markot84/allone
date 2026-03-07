@@ -18,7 +18,7 @@ const sizes = {
 export function ProgressBar({
   value,
   max = 100,
-  color = '#FF6B35',
+  color = 'var(--nts-accent)',
   showLabel = false,
   size = 'md',
   className = ''

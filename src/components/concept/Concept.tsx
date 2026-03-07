@@ -171,7 +171,7 @@ export function Concept({ onNavigateToStrategy }: ConceptProps) {
           <CardHeader
             title="Έτοιμος να ρυθμίσεις τη στρατηγική;"
             subtitle="Strategy Weights → διάλεξε scenario ή custom weights → preview impact → submit για approval."
-            icon={<SlidersHorizontal size={20} className="text-[#FF6B35]" />}
+            icon={<SlidersHorizontal size={20} className="text-[var(--nts-accent)]" />}
           />
           <Button
             variant="primary"

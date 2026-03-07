@@ -95,8 +95,8 @@ export function LoginPage({
         )}
         <div className="bg-white rounded-2xl shadow-lg border border-[var(--nts-border-gray)] p-8">
           <div className="text-center mb-8">
-            <div className="w-14 h-14 bg-white rounded-xl border-2 border-[#FF6B35] flex items-center justify-center mx-auto mb-4">
-              <span className="font-bold text-[#FF6B35] text-xl">P+</span>
+            <div className="w-14 h-14 bg-white rounded-xl border-2 border-[var(--nts-accent)] flex items-center justify-center mx-auto mb-4">
+              <span className="font-bold text-[var(--nts-accent)] text-xl">P+</span>
             </div>
             <h1 className="text-2xl font-bold text-[var(--nts-charcoal)]">Performance+</h1>
             <p className="text-[var(--nts-medium-gray)] mt-1">by notthesame.ai</p>
@@ -108,7 +108,7 @@ export function LoginPage({
               onClick={() => { setMode('login'); setError(''); }}
               className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
                 mode === 'login'
-                  ? 'bg-[#FF6B35] text-white'
+                  ? 'bg-[var(--nts-accent)] text-white'
                   : 'bg-[var(--nts-light-gray)] text-[var(--nts-medium-gray)] hover:bg-[#E5E5E5]'
               }`}
             >
@@ -119,7 +119,7 @@ export function LoginPage({
               onClick={() => { setMode('register'); setError(''); }}
               className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
                 mode === 'register'
-                  ? 'bg-[#FF6B35] text-white'
+                  ? 'bg-[var(--nts-accent)] text-white'
                   : 'bg-[var(--nts-light-gray)] text-[var(--nts-medium-gray)] hover:bg-[#E5E5E5]'
               }`}
             >
@@ -139,7 +139,7 @@ export function LoginPage({
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="email@example.com"
-                  className="w-full min-w-0 pl-10 pr-4 py-2.5 bg-[var(--nts-light-gray)] border border-[var(--nts-border-gray)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#FF6B35] focus:border-[#FF6B35] focus:bg-white"
+                  className="w-full min-w-0 pl-10 pr-4 py-2.5 bg-[var(--nts-light-gray)] border border-[var(--nts-border-gray)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)] focus:border-[var(--nts-accent)] focus:bg-white"
                   autoComplete="email"
                 />
               </div>
@@ -155,7 +155,7 @@ export function LoginPage({
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full min-w-0 pl-10 pr-4 py-2.5 bg-[var(--nts-light-gray)] border border-[var(--nts-border-gray)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#FF6B35] focus:border-[#FF6B35] focus:bg-white"
+                  className="w-full min-w-0 pl-10 pr-4 py-2.5 bg-[var(--nts-light-gray)] border border-[var(--nts-border-gray)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)] focus:border-[var(--nts-accent)] focus:bg-white"
                   autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
                 />
               </div>
@@ -172,7 +172,7 @@ export function LoginPage({
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full min-w-0 pl-10 pr-4 py-2.5 bg-[var(--nts-light-gray)] border border-[var(--nts-border-gray)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#FF6B35] focus:border-[#FF6B35] focus:bg-white"
+                    className="w-full min-w-0 pl-10 pr-4 py-2.5 bg-[var(--nts-light-gray)] border border-[var(--nts-border-gray)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)] focus:border-[var(--nts-accent)] focus:bg-white"
                     autoComplete="new-password"
                   />
                 </div>

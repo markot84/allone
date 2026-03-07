@@ -359,7 +359,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               onClick={() => setActiveTab('overview')}
               className={`flex-1 px-6 py-3 text-sm font-medium transition-colors ${
                 activeTab === 'overview'
-                  ? 'text-[var(--nts-charcoal)] border-b-2 border-[#FF6B35]'
+                  ? 'text-[var(--nts-charcoal)] border-b-2 border-[var(--nts-accent)]'
                   : 'text-[var(--nts-medium-gray)] hover:text-[var(--nts-charcoal)]'
               }`}
             >
@@ -369,7 +369,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               onClick={() => setActiveTab('roi')}
               className={`flex-1 px-6 py-3 text-sm font-medium transition-colors ${
                 activeTab === 'roi'
-                  ? 'text-[var(--nts-charcoal)] border-b-2 border-[#FF6B35]'
+                  ? 'text-[var(--nts-charcoal)] border-b-2 border-[var(--nts-accent)]'
                   : 'text-[var(--nts-medium-gray)] hover:text-[var(--nts-charcoal)]'
               }`}
             >
@@ -698,7 +698,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               label="Cost Savings"
               value={hasAnyData ? formatCurrencyCompact(costSavingsData.total) : '€0'}
               icon={<Euro size={18} />}
-              color="#FF6B35"
+              color="var(--nts-accent)"
               tooltip="Το συνολικό ποσό χρημάτων που εξοικονομήθηκε μέσω βελτιώσεων λειτουργικής αποδοτικότητας."
             />
           </div>

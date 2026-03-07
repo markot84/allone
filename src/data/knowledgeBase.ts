@@ -20,7 +20,7 @@ export const knowledgeCategories = [
     title: 'Ξεκινώντας',
     icon: '🎯',
     description: 'Βασικές έννοιες και πρώτα βήματα',
-    color: '#FF6B35'
+    color: '#F97316'
   },
   {
     id: 'data-import',

@@ -181,7 +181,7 @@ export function ProductCharts({ isOpen, onClose, products }: ProductChartsProps)
         {/* Header */}
         <div className="p-6 border-b border-[#E5E5E5] flex items-center justify-between sticky top-0 bg-white z-10">
           <div className="flex items-center gap-3">
-            <BarChart3 size={24} className="text-[#FF6B35]" />
+            <BarChart3 size={24} className="text-[var(--nts-accent)]" />
             <div>
               <h2 className="text-xl font-bold text-[#1A1A1A]">Product Data Visualization</h2>
               <p className="text-sm text-[#4A4A4A]">{products.length} products analyzed</p>
@@ -351,7 +351,7 @@ export function ProductCharts({ isOpen, onClose, products }: ProductChartsProps)
           {/* Stock Age vs Level */}
           <Card padding="lg" className="lg:col-span-2">
             <div className="flex items-center gap-2 mb-4">
-              <BarChart3 size={18} className="text-[#FF6B35]" />
+              <BarChart3 size={18} className="text-[var(--nts-accent)]" />
               <h3 className="font-semibold text-[#1A1A1A]">Stock Age vs Stock Level (Sample)</h3>
             </div>
             {stockAgeVsLevel.length > 0 ? (

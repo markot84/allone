@@ -65,7 +65,7 @@ export function ChannelRecommendations({
         {/* Primary Channels */}
         <div>
           <h5 className="text-sm font-medium text-[#1A1A1A] mb-3 flex items-center gap-2">
-            <Zap size={16} className="text-[#FF6B35]" />
+            <Zap size={16} className="text-[var(--nts-accent)]" />
             Primary Channels
           </h5>
           <div className="space-y-2">
@@ -75,10 +75,10 @@ export function ChannelRecommendations({
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.1 }}
-                className="flex items-center justify-between p-3 bg-[#FFF0EB] rounded-lg border border-[#FF6B35]/20"
+                className="flex items-center justify-between p-3 bg-[var(--nts-accent-light)] rounded-lg border border-[var(--nts-accent)]/20"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-[#FF6B35] rounded-lg flex items-center justify-center">
+                  <div className="w-8 h-8 bg-[var(--nts-accent)] rounded-lg flex items-center justify-center">
                     <span className="text-white text-sm">
                       {index + 1}
                     </span>
@@ -146,7 +146,7 @@ export function ChannelRecommendations({
         <div className="flex h-4 rounded-full overflow-hidden">
           {Object.entries(recommendations.budget_allocation).map(
             ([channel, percentage], index) => {
-              const colors = ['#FF6B35', '#3B82F6', '#22C55E', '#8B5CF6', '#F59E0B'];
+              const colors = ['var(--nts-accent)', '#3B82F6', '#22C55E', '#8B5CF6', '#F59E0B'];
               return (
                 <motion.div
                   key={channel}
@@ -164,7 +164,7 @@ export function ChannelRecommendations({
         <div className="flex flex-wrap gap-4 mt-3">
           {Object.entries(recommendations.budget_allocation).map(
             ([channel, percentage], index) => {
-              const colors = ['#FF6B35', '#3B82F6', '#22C55E', '#8B5CF6', '#F59E0B'];
+              const colors = ['var(--nts-accent)', '#3B82F6', '#22C55E', '#8B5CF6', '#F59E0B'];
               return (
                 <div key={channel} className="flex items-center gap-2">
                   <div

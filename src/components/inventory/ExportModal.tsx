@@ -220,7 +220,7 @@ export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts, b
 
               <button
                 onClick={exportToExcel}
-                className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[#FF6B35] hover:bg-[#FFF0EB] transition-all text-left flex items-center gap-4 group"
+                className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-accent-light)] transition-all text-left flex items-center gap-4 group"
               >
                 <div className="p-3 bg-[#22C55E]/10 rounded-lg group-hover:bg-[#22C55E]/20 transition-colors">
                   <FileSpreadsheet size={24} className="text-[#22C55E]" />
@@ -233,7 +233,7 @@ export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts, b
 
               <button
                 onClick={exportToCSV}
-                className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[#FF6B35] hover:bg-[#FFF0EB] transition-all text-left flex items-center gap-4 group"
+                className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-accent-light)] transition-all text-left flex items-center gap-4 group"
               >
                 <div className="p-3 bg-[#3B82F6]/10 rounded-lg group-hover:bg-[#3B82F6]/20 transition-colors">
                   <FileText size={24} className="text-[#3B82F6]" />
@@ -246,7 +246,7 @@ export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts, b
 
               <button
                 onClick={exportToGoogleAdsXml}
-                className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[#FF6B35] hover:bg-[#FFF0EB] transition-all text-left flex items-center gap-4 group"
+                className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-accent-light)] transition-all text-left flex items-center gap-4 group"
               >
                 <div className="p-3 bg-[#EA4335]/10 rounded-lg group-hover:bg-[#EA4335]/20 transition-colors">
                   <FileCode size={24} className="text-[#EA4335]" />
@@ -259,7 +259,7 @@ export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts, b
 
               <button
                 onClick={exportToGoogleSheets}
-                className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[#FF6B35] hover:bg-[#FFF0EB] transition-all text-left flex items-center gap-4 group"
+                className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-accent-light)] transition-all text-left flex items-center gap-4 group"
               >
                 <div className="p-3 bg-[#34A853]/10 rounded-lg group-hover:bg-[#34A853]/20 transition-colors">
                   <ExternalLink size={24} className="text-[#34A853]" />
@@ -272,7 +272,7 @@ export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts, b
 
               <button
                 onClick={showCharts}
-                className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[#FF6B35] hover:bg-[#FFF0EB] transition-all text-left flex items-center gap-4 group"
+                className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-accent-light)] transition-all text-left flex items-center gap-4 group"
               >
                 <div className="p-3 bg-[#8B5CF6]/10 rounded-lg group-hover:bg-[#8B5CF6]/20 transition-colors">
                   <BarChart3 size={24} className="text-[#8B5CF6]" />

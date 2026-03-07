@@ -377,8 +377,8 @@ export function DataImport({ initialType }: DataImportProps = {}) {
           onClick={() => { setImportMode('standard'); setImportResult(null); }}
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
             importMode === 'standard'
-              ? 'bg-[#FF6B35] text-white shadow-sm'
-              : 'bg-white text-[#4A4A4A] border border-[#E5E5E5] hover:border-[#FF6B35]'
+              ? 'bg-[var(--nts-accent)] text-white shadow-sm'
+              : 'bg-white text-[#4A4A4A] border border-[#E5E5E5] hover:border-[var(--nts-accent)]'
           }`}
         >
           Standard Import
@@ -387,8 +387,8 @@ export function DataImport({ initialType }: DataImportProps = {}) {
           onClick={() => { setImportMode('feed'); setSelectedType('products'); setImportResult(null); }}
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
             importMode === 'feed'
-              ? 'bg-[#FF6B35] text-white shadow-sm'
-              : 'bg-white text-[#4A4A4A] border border-[#E5E5E5] hover:border-[#FF6B35]'
+              ? 'bg-[var(--nts-accent)] text-white shadow-sm'
+              : 'bg-white text-[#4A4A4A] border border-[#E5E5E5] hover:border-[var(--nts-accent)]'
           }`}
         >
           Feed Sources (ERP, Google Ads, Meta)
@@ -442,7 +442,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
         <div className="p-6 space-y-6">
           {/* Feed Source selector - when Feed mode */}
           {importMode === 'feed' && (
-            <div className="p-4 bg-[#FFF9F7] border border-[#FFE4DC] rounded-lg">
+            <div className="p-4 bg-[var(--nts-accent-light)] border border-[var(--nts-accent-light)] rounded-lg">
               <p className="text-sm font-medium text-[#4A4A4A] mb-3">Πηγή Feed:</p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {FEED_SOURCE_OPTIONS.map((feed) => (
@@ -451,8 +451,8 @@ export function DataImport({ initialType }: DataImportProps = {}) {
                     onClick={() => setSelectedFeedSource(feed.id)}
                     className={`p-4 rounded-lg border text-left transition-all ${
                       selectedFeedSource === feed.id
-                        ? 'border-[#FF6B35] bg-white shadow-sm'
-                        : 'border-[#E5E5E5] bg-white hover:border-[#FF6B35]/50'
+                        ? 'border-[var(--nts-accent)] bg-white shadow-sm'
+                        : 'border-[#E5E5E5] bg-white hover:border-[var(--nts-accent)]/50'
                     }`}
                   >
                     <span className="text-2xl">{feed.icon}</span>
@@ -478,8 +478,8 @@ export function DataImport({ initialType }: DataImportProps = {}) {
                     }}
                     className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                       selectedType === type.value
-                        ? 'bg-[#FF6B35] text-white shadow-sm'
-                        : 'bg-white text-[#4A4A4A] border border-[#E5E5E5] hover:border-[#FF6B35] hover:text-[#FF6B35]'
+                        ? 'bg-[var(--nts-accent)] text-white shadow-sm'
+                        : 'bg-white text-[#4A4A4A] border border-[#E5E5E5] hover:border-[var(--nts-accent)] hover:text-[var(--nts-accent)]'
                     }`}
                   >
                     <span className="mr-2">{type.icon}</span>
@@ -498,7 +498,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
                 <button
                   type="button"
                   onClick={downloadGoogleAdsCsvTemplate}
-                  className="text-sm text-[#FF6B35] hover:underline"
+                  className="text-sm text-[var(--nts-accent)] hover:underline"
                 >
                   Λήψη CSV template
                 </button>
@@ -513,8 +513,8 @@ export function DataImport({ initialType }: DataImportProps = {}) {
             onDrop={handleDrop}
             className={`border-2 border-dashed rounded-lg p-8 text-center transition-all ${
               isDragging
-                ? 'border-[#FF6B35] bg-orange-50'
-                : 'border-[#E5E5E5] bg-[#F9F9F9] hover:border-[#FF6B35] hover:bg-orange-50/30'
+                ? 'border-[var(--nts-accent)] bg-[var(--nts-accent-light)]'
+                : 'border-[#E5E5E5] bg-[#F9F9F9] hover:border-[var(--nts-accent)] hover:bg-[var(--nts-accent-light)]/30'
             }`}
           >
             <input
@@ -535,9 +535,9 @@ export function DataImport({ initialType }: DataImportProps = {}) {
               className="cursor-pointer flex flex-col items-center gap-3"
             >
               <div className={`w-16 h-16 rounded-full flex items-center justify-center transition-colors ${
-                isDragging ? 'bg-[#FF6B35]' : 'bg-white border-2 border-[#E5E5E5]'
+                isDragging ? 'bg-[var(--nts-accent)]' : 'bg-white border-2 border-[#E5E5E5]'
               }`}>
-                <FileUp size={32} className={isDragging ? 'text-white' : 'text-[#FF6B35]'} />
+                <FileUp size={32} className={isDragging ? 'text-white' : 'text-[var(--nts-accent)]'} />
               </div>
               <div>
                 <p className="text-base font-semibold text-[#1A1A1A]">
@@ -593,7 +593,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: 20 }}
-                        className="flex items-center gap-3 p-3 bg-white border border-[#E5E5E5] rounded-lg hover:border-[#FF6B35] transition-colors"
+                        className="flex items-center gap-3 p-3 bg-white border border-[#E5E5E5] rounded-lg hover:border-[var(--nts-accent)] transition-colors"
                       >
                         <FileText size={20} className="text-[#9CA3AF] flex-shrink-0" />
                         <div className="flex-1 min-w-0">
@@ -609,7 +609,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
                             <select
                               value={item.campaignChannel ?? ''}
                               onChange={(e) => setFileCampaignChannel(index, (e.target.value || null) as CampaignChannelOverride)}
-                              className="text-xs border border-[#E5E5E5] rounded px-2 py-1 bg-white text-[#1A1A1A] focus:outline-none focus:border-[#FF6B35]"
+                              className="text-xs border border-[#E5E5E5] rounded px-2 py-1 bg-white text-[#1A1A1A] focus:outline-none focus:border-[var(--nts-accent)]"
                               title="Campaign Channel"
                             >
                               <option value="">Αυτόματη</option>
@@ -620,9 +620,9 @@ export function DataImport({ initialType }: DataImportProps = {}) {
                             <select
                               value={item.type}
                               onChange={(e) => setFileType(index, e.target.value as ImportType)}
-                              className={`text-xs border rounded px-2 py-1 bg-white text-[#1A1A1A] focus:outline-none focus:border-[#FF6B35] ${
+                              className={`text-xs border rounded px-2 py-1 bg-white text-[#1A1A1A] focus:outline-none focus:border-[var(--nts-accent)] ${
                                 (item.file.name.toLowerCase().includes('campaign') || item.file.name.toLowerCase().includes('google ads') || item.file.name.toLowerCase().includes('meta'))
-                                  ? 'border-orange-400 bg-orange-50'
+                                  ? 'border-orange-400 bg-[var(--nts-accent-light)]'
                                   : 'border-[#E5E5E5]'
                               }`}
                             >
@@ -727,7 +727,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
           <div className="border-t border-[#E5E5E5] pt-4">
             <button
               onClick={() => setShowUrlImport(!showUrlImport)}
-              className="flex items-center gap-2 text-sm font-medium text-[#4A4A4A] hover:text-[#FF6B35] transition-colors"
+              className="flex items-center gap-2 text-sm font-medium text-[#4A4A4A] hover:text-[var(--nts-accent)] transition-colors"
             >
               <LinkIcon size={16} />
               Εισαγωγή από URL
@@ -751,7 +751,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
                         handleLoadFromUrl();
                       }
                     }}
-                    className="flex-1 px-3 py-2 border border-[#E5E5E5] rounded-lg text-sm focus:outline-none focus:border-[#FF6B35]"
+                    className="flex-1 px-3 py-2 border border-[#E5E5E5] rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)]"
                   />
                   <Button
                     variant="primary"
@@ -898,7 +898,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
                     importHistory.map((job) => (
                       <div
                         key={job.id}
-                        className="p-4 border border-[#E5E5E5] rounded-lg bg-white hover:border-[#FF6B35] transition-colors"
+                        className="p-4 border border-[#E5E5E5] rounded-lg bg-white hover:border-[var(--nts-accent)] transition-colors"
                       >
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex-1">

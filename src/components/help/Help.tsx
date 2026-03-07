@@ -151,9 +151,9 @@ export function Help() {
 
             {/* Tips */}
             {currentArticle.tips && currentArticle.tips.length > 0 && (
-              <div className="mt-6 p-4 bg-[#FFF0EB] rounded-xl border border-[#FF6B35]/20">
+              <div className="mt-6 p-4 bg-[var(--nts-accent-light)] rounded-xl border border-[var(--nts-accent)]/20">
                 <h4 className="font-semibold text-[#1A1A1A] mb-3 flex items-center gap-2">
-                  <Lightbulb size={18} className="text-[#FF6B35]" />
+                  <Lightbulb size={18} className="text-[var(--nts-accent)]" />
                   Συμβουλές:
                 </h4>
                 <ul className="list-disc list-inside space-y-2 text-[#4A4A4A]">
@@ -194,7 +194,7 @@ export function Help() {
                       <button
                         key={relatedId}
                         onClick={() => handleArticleClick(relatedId)}
-                        className="px-3 py-1.5 bg-[#F5F5F5] hover:bg-[#FFF0EB] rounded-lg text-sm text-[#1A1A1A] transition-colors"
+                        className="px-3 py-1.5 bg-[#F5F5F5] hover:bg-[var(--nts-accent-light)] rounded-lg text-sm text-[#1A1A1A] transition-colors"
                       >
                         {related.title}
                       </button>
@@ -288,7 +288,7 @@ export function Help() {
             placeholder="Αναζήτηση άρθρων..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-12 pr-4 py-3 bg-white border border-[#E5E5E5] rounded-xl text-sm focus:outline-none focus:border-[#FF6B35] shadow-sm"
+            className="w-full pl-12 pr-4 py-3 bg-white border border-[#E5E5E5] rounded-xl text-sm focus:outline-none focus:border-[var(--nts-accent)] shadow-sm"
           />
           {searchQuery && (
             <button
@@ -382,7 +382,7 @@ export function Help() {
             <CardHeader
               title="Δημοφιλή Άρθρα"
               subtitle="Τα πιο χρήσιμα άρθρα"
-              icon={<Book size={20} className="text-[#FF6B35]" />}
+              icon={<Book size={20} className="text-[var(--nts-accent)]" />}
             />
             <div className="space-y-3 mt-4">
               {knowledgeArticles
@@ -391,12 +391,12 @@ export function Help() {
                   <motion.button
                     key={article.id}
                     onClick={() => handleArticleClick(article.id)}
-                    className="w-full flex items-center justify-between p-3 bg-[#F5F5F5] rounded-lg hover:bg-[#FFF0EB] transition-colors group text-left"
+                    className="w-full flex items-center justify-between p-3 bg-[#F5F5F5] rounded-lg hover:bg-[var(--nts-accent-light)] transition-colors group text-left"
                   >
-                    <span className="text-sm text-[#1A1A1A] group-hover:text-[#FF6B35]">
+                    <span className="text-sm text-[#1A1A1A] group-hover:text-[var(--nts-accent)]">
                       {article.title}
                     </span>
-                    <ChevronRight size={16} className="text-[#9CA3AF] group-hover:text-[#FF6B35]" />
+                    <ChevronRight size={16} className="text-[#9CA3AF] group-hover:text-[var(--nts-accent)]" />
                   </motion.button>
                 ))}
             </div>
@@ -407,7 +407,7 @@ export function Help() {
             <CardHeader
               title="Επικοινωνία με Support"
               subtitle="Είμαστε εδώ για να βοηθήσουμε"
-              icon={<MessageCircle size={20} className="text-[#FF6B35]" />}
+              icon={<MessageCircle size={20} className="text-[var(--nts-accent)]" />}
             />
             <div className="space-y-4 mt-4">
               <div className="p-4 bg-[#F5F5F5] rounded-xl">
@@ -448,7 +448,7 @@ export function Help() {
       <div className="text-center py-8 border-t border-[#E5E5E5]">
         <p className="text-[#4A4A4A]">
           Δεν βρίσκετε αυτό που ψάχνετε;{' '}
-          <a href="mailto:support@notthesame.ai" className="text-[#FF6B35] hover:underline">
+          <a href="mailto:support@notthesame.ai" className="text-[var(--nts-accent)] hover:underline">
             Επικοινωνήστε με την ομάδα μας
           </a>
         </p>

@@ -34,7 +34,7 @@ export function Card({
       <div
         className="card-primer"
         style={{
-          background: 'var(--canvas-default, #ffffff)',
+          background: 'var(--nts-bg-pure)',
           border: '1px solid var(--borderColor-default, #d0d7de)',
           borderRadius: 8,
           padding: paddingPx[padding],
@@ -44,12 +44,12 @@ export function Card({
         onClick={onClick}
         onMouseEnter={(e) => {
           if (!hover && !onClick) return;
-          (e.currentTarget as HTMLDivElement).style.background = 'var(--canvas-subtle, #f6f8fa)';
+          (e.currentTarget as HTMLDivElement).style.background = 'var(--nts-bg-subtle)';
           (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--borderColor-muted, #d8dee4)';
         }}
         onMouseLeave={(e) => {
           if (!hover && !onClick) return;
-          (e.currentTarget as HTMLDivElement).style.background = 'var(--canvas-default, #ffffff)';
+          (e.currentTarget as HTMLDivElement).style.background = 'var(--nts-bg-pure)';
           (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--borderColor-default, #d0d7de)';
         }}
       >

@@ -41,7 +41,7 @@ export function InviteAcceptPage({ token, onAccepted }: InviteAcceptPageProps) {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[var(--nts-light-gray)]">
-        <Loader2 size={32} className="animate-spin text-[#FF6B35]" />
+        <Loader2 size={32} className="animate-spin text-[var(--nts-accent)]" />
       </div>
     );
   }

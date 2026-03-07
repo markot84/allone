@@ -308,7 +308,7 @@ export function StrategyImpactPreview({
               <span className="text-2xl">{from.icon}</span>
               <span className="font-medium text-[#1A1A1A]">{from.name}</span>
             </div>
-            <ArrowRight size={24} className="text-[#FF6B35]" />
+            <ArrowRight size={24} className="text-[var(--nts-accent)]" />
             <div className="flex items-center gap-2">
               <span className="text-2xl">{to.icon}</span>
               <span className="font-medium text-[#1A1A1A]">{to.name}</span>
@@ -404,7 +404,7 @@ export function StrategyImpactPreview({
           {/* Campaigns Impact */}
           <div className="p-4 border border-[#E5E5E5] rounded-xl">
             <div className="flex items-center gap-2 mb-4">
-              <Megaphone size={18} className="text-[#FF6B35]" />
+              <Megaphone size={18} className="text-[var(--nts-accent)]" />
               <h3 className="font-semibold text-[#1A1A1A]">Ενεργά Campaigns</h3>
             </div>
             <div className="grid grid-cols-3 gap-4">
@@ -416,8 +416,8 @@ export function StrategyImpactPreview({
                 <p className="text-xl font-bold text-[#F59E0B]">{impacts.campaigns.will_pause}</p>
                 <p className="text-xs text-[#92400E]">Will pause</p>
               </div>
-              <div className="text-center p-3 bg-[#FFF0EB] rounded-lg">
-                <p className="text-xl font-bold text-[#FF6B35]">{impacts.campaigns.will_adjust}</p>
+              <div className="text-center p-3 bg-[var(--nts-accent-light)] rounded-lg">
+                <p className="text-xl font-bold text-[var(--nts-accent)]">{impacts.campaigns.will_adjust}</p>
                 <p className="text-xs text-[#C2410C]">Will adjust</p>
               </div>
             </div>

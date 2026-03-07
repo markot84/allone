@@ -191,7 +191,7 @@ export function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
             <div className="p-5 border-b border-[var(--nts-border-gray)]">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg border border-[var(--nts-border-gray)] bg-gradient-to-br from-[#FF6B35] to-[#FF8C5A] flex items-center justify-center overflow-hidden">
+                  <div className="w-10 h-10 rounded-lg border border-[var(--nts-border-gray)] bg-gradient-to-br from-[var(--nts-accent)] to-[var(--nts-accent-hover)] flex items-center justify-center overflow-hidden">
                     <img
                       src="/ai-assistant-icon.png"
                       alt="AI Assistant"
@@ -202,7 +202,7 @@ export function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
                         target.style.display = 'none';
                         const parent = target.parentElement;
                         if (parent) {
-                          parent.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" fill="#FF6B35"/><path d="M8 10h8M8 14h6" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>';
+                          parent.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" fill="var(--nts-accent)"/><path d="M8 10h8M8 14h6" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>';
                         }
                       }}
                     />
@@ -231,7 +231,7 @@ export function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
                   className={`flex gap-3 ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   {message.type === 'assistant' && (
-                    <div className="w-8 h-8 rounded-lg border border-[var(--nts-border-gray)] bg-gradient-to-br from-[#FF6B35] to-[#FF8C5A] flex items-center justify-center flex-shrink-0 overflow-hidden">
+                    <div className="w-8 h-8 rounded-lg border border-[var(--nts-border-gray)] bg-gradient-to-br from-[var(--nts-accent)] to-[var(--nts-accent-hover)] flex items-center justify-center flex-shrink-0 overflow-hidden">
                       <img
                         src="/assets/c__Users_mtseh_AppData_Roaming_Cursor_User_workspaceStorage_23c9096066703fac486b879f9238c027_images_4f3eaaee-054c-427c-be28-d815cb6a6cea-d803d4d0-e67f-4a4a-a858-acd1de7ea0e3.png"
                         alt="AI Assistant"
@@ -246,7 +246,7 @@ export function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
                   <div
                     className={`max-w-[80%] rounded-lg p-3 ${
                       message.type === 'user'
-                        ? 'bg-[#FF6B35] text-white'
+                        ? 'bg-[var(--nts-accent)] text-white'
                         : 'bg-[var(--nts-light-gray)] text-[var(--nts-charcoal)]'
                     }`}
                   >
@@ -266,7 +266,7 @@ export function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
                               href={source.url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="block text-xs p-2 bg-white/80 hover:bg-white rounded border border-[var(--nts-border-gray)]/30 text-[var(--nts-charcoal)] hover:text-[#FF6B35] transition-colors"
+                              className="block text-xs p-2 bg-white/80 hover:bg-white rounded border border-[var(--nts-border-gray)]/30 text-[var(--nts-charcoal)] hover:text-[var(--nts-accent)] transition-colors"
                             >
                               <div className="font-medium mb-1 flex items-center gap-1">
                                 {source.title}
@@ -301,7 +301,7 @@ export function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
                                   window.location.hash = `help?article=${articleId}`;
                                   onClose();
                                 }}
-                                className="text-xs px-2 py-1 bg-white/80 hover:bg-white rounded border border-[var(--nts-border-gray)]/30 text-[var(--nts-charcoal)] hover:text-[#FF6B35] transition-colors flex items-center gap-1"
+                                className="text-xs px-2 py-1 bg-white/80 hover:bg-white rounded border border-[var(--nts-border-gray)]/30 text-[var(--nts-charcoal)] hover:text-[var(--nts-accent)] transition-colors flex items-center gap-1"
                               >
                                 {article.title}
                                 <ExternalLink size={10} />
@@ -313,7 +313,7 @@ export function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
                     )}
                   </div>
                   {message.type === 'user' && (
-                    <div className="w-8 h-8 rounded-full bg-[#FF6B35] flex items-center justify-center flex-shrink-0">
+                    <div className="w-8 h-8 rounded-full bg-[var(--nts-accent)] flex items-center justify-center flex-shrink-0">
                       <MessageCircle size={16} className="text-white" />
                     </div>
                   )}
@@ -322,7 +322,7 @@ export function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
 
               {isTyping && (
                 <div className="flex gap-3 justify-start">
-                  <div className="w-8 h-8 rounded-lg border border-[var(--nts-border-gray)] bg-gradient-to-br from-[#FF6B35] to-[#FF8C5A] flex items-center justify-center flex-shrink-0">
+                  <div className="w-8 h-8 rounded-lg border border-[var(--nts-border-gray)] bg-gradient-to-br from-[var(--nts-accent)] to-[var(--nts-accent-hover)] flex items-center justify-center flex-shrink-0">
                     <Sparkles size={16} className="text-white animate-pulse" />
                   </div>
                   <div className="bg-[var(--nts-light-gray)] rounded-lg p-3">
@@ -350,13 +350,13 @@ export function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
                   onChange={(e) => setInput(e.target.value)}
                   onKeyPress={handleKeyPress}
                   placeholder="Ρωτήστε κάτι..."
-                  className="flex-1 px-4 py-2 border border-[var(--nts-border-gray)] rounded-lg text-sm focus:outline-none focus:border-[#FF6B35]"
+                  className="flex-1 px-4 py-2 border border-[var(--nts-border-gray)] rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)]"
                   disabled={isTyping}
                 />
                 <button
                   onClick={handleSend}
                   disabled={!input.trim() || isTyping}
-                  className="p-2 bg-[#FF6B35] text-white rounded-lg hover:bg-[#FF8C5A] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="p-2 bg-[var(--nts-accent)] text-white rounded-lg hover:bg-[var(--nts-accent-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Send size={18} />
                 </button>

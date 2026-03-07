@@ -41,7 +41,7 @@ import {
 import { formatCurrency, formatCurrencyCompact, formatNumber, formatMultiplier, formatPercent } from '../../utils/format';
 import type { Campaign } from '../../types';
 
-const COLORS = ['#22C55E', '#3B82F6', '#FF6B35', '#8B5CF6', '#F59E0B'];
+const COLORS = ['#22C55E', '#3B82F6', 'var(--nts-accent)', '#8B5CF6', '#F59E0B'];
 
 interface ROIAttributionProps {
   embedded?: boolean;
@@ -357,7 +357,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
           <CardHeader
             title="Revenue Attribution Trend"
             subtitle="Σύνολο vs Performance+ attributed revenue"
-            icon={<TrendingUp size={20} className="text-[#FF6B35]" />}
+            icon={<TrendingUp size={20} className="text-[var(--nts-accent)]" />}
           />
           <div 
             ref={trendContainerRef}
@@ -442,7 +442,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
           <CardHeader
             title="Attribution Breakdown"
             subtitle="Έσοδα ανά πηγή"
-            icon={<PieChartIcon size={20} className="text-[#FF6B35]" />}
+            icon={<PieChartIcon size={20} className="text-[var(--nts-accent)]" />}
           />
           <div 
             ref={breakdownContainerRef}
@@ -546,7 +546,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
         <CardHeader
           title="Segment Performance"
           subtitle="Αποτελέσματα campaigns ανά RFM segment"
-          icon={<Target size={20} className="text-[#FF6B35]" />}
+          icon={<Target size={20} className="text-[var(--nts-accent)]" />}
         />
         {segmentPerf.length === 0 ? (
           <p className="text-sm text-[#4A4A4A] py-8 text-center">
@@ -653,7 +653,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
             action={
               <button
                 onClick={() => setShowMethodology(!showMethodology)}
-                className="flex items-center gap-1 text-sm text-[#FF6B35] hover:underline"
+                className="flex items-center gap-1 text-sm text-[var(--nts-accent)] hover:underline"
               >
                 {showMethodology ? 'Collapse' : 'Expand'}
                 <ChevronDown size={14} className={`transition-transform ${showMethodology ? 'rotate-180' : ''}`} />
@@ -710,7 +710,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
       <Card padding="lg">
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 bg-gradient-to-br from-[#FF6B35] to-[#FF8C5A] rounded-xl flex items-center justify-center">
+            <div className="w-14 h-14 bg-gradient-to-br from-[var(--nts-accent)] to-[var(--nts-accent-hover)] rounded-xl flex items-center justify-center">
               <Award size={28} className="text-white" />
             </div>
             <div>

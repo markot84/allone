@@ -99,10 +99,10 @@ export function ContentStrategy() {
       </div>
 
       {/* Strategy-Content Alignment Panel */}
-      <Card padding="lg" className="border-l-4 border-l-[#FF6B35]">
+      <Card padding="lg" className="border-l-4 border-l-[var(--nts-accent)]">
         <div className="flex items-start justify-between flex-wrap gap-4">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 bg-[#FFF0EB] rounded-xl flex items-center justify-center text-3xl">
+            <div className="w-14 h-14 bg-[var(--nts-accent-light)] rounded-xl flex items-center justify-center text-3xl">
               <Sparkles size={24} />
             </div>
             <div>
@@ -162,7 +162,7 @@ export function ContentStrategy() {
         {activeStrategy && (
           <div className="mt-6 p-4 bg-[#F5F5F5] rounded-xl">
             <h4 className="font-medium text-[#1A1A1A] mb-3 flex items-center gap-2">
-              <Sparkles size={16} className="text-[#FF6B35]" />
+              <Sparkles size={16} className="text-[var(--nts-accent)]" />
               Στρατηγική: {getStrategyName(activeStrategy.scenarioId)}
             </h4>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
@@ -194,7 +194,7 @@ export function ContentStrategy() {
         {contentItems.length > 0 && (
           <div className="mt-6 p-4 bg-[#F5F5F5] rounded-xl">
             <h4 className="font-medium text-[#1A1A1A] mb-3 flex items-center gap-2">
-              <Sparkles size={16} className="text-[#FF6B35]" />
+              <Sparkles size={16} className="text-[var(--nts-accent)]" />
               Content Overview
             </h4>
             <p className="text-sm text-[#4A4A4A]">
@@ -350,7 +350,7 @@ export function ContentStrategy() {
               <CardHeader
                 title="Strategy-to-Content Mapping"
                 subtitle="Πώς κάθε στρατηγική επηρεάζει το περιεχόμενο"
-                icon={<Link2 size={20} className="text-[#FF6B35]" />}
+                icon={<Link2 size={20} className="text-[var(--nts-accent)]" />}
                 action={
                   <Button variant="ghost" size="sm" onClick={() => setShowStrategyMap(false)}>
                     Κλείσιμο
@@ -413,7 +413,7 @@ export function ContentStrategy() {
             onClick={() => setFilterAligned(tab.key as any)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
               filterAligned === tab.key
-                ? 'bg-[#FF6B35] text-white'
+                ? 'bg-[var(--nts-accent)] text-white'
                 : 'bg-[#F5F5F5] text-[#4A4A4A] hover:bg-[#E5E5E5]'
             }`}
           >
@@ -471,7 +471,7 @@ export function ContentStrategy() {
         <CardHeader
           title="Content Approval Workflow"
           subtitle="Stages from brief to publication"
-          icon={<ArrowRight size={20} className="text-[#FF6B35]" />}
+          icon={<ArrowRight size={20} className="text-[var(--nts-accent)]" />}
         />
         <div className="text-center py-8">
           <p className="text-sm text-[#4A4A4A]">
@@ -578,7 +578,7 @@ function NewContentModal({ onClose, onSaved, preselectedWeek, segments, brandId,
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="π.χ. Flash Sale Email - Εβδομάδα 1"
-              className="w-full px-3 py-2 border border-[#E5E5E5] rounded-lg text-sm focus:outline-none focus:border-[#FF6B35]"
+              className="w-full px-3 py-2 border border-[#E5E5E5] rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)]"
               required
             />
           </div>
@@ -587,7 +587,7 @@ function NewContentModal({ onClose, onSaved, preselectedWeek, segments, brandId,
             <select
               value={type}
               onChange={(e) => setType(e.target.value)}
-              className="w-full px-3 py-2 border border-[#E5E5E5] rounded-lg text-sm focus:outline-none focus:border-[#FF6B35]"
+              className="w-full px-3 py-2 border border-[#E5E5E5] rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)]"
             >
               {CONTENT_TYPES.map((t) => (
                 <option key={t} value={t}>{t}</option>
@@ -599,7 +599,7 @@ function NewContentModal({ onClose, onSaved, preselectedWeek, segments, brandId,
             <select
               value={week}
               onChange={(e) => setWeek(parseInt(e.target.value, 10))}
-              className="w-full px-3 py-2 border border-[#E5E5E5] rounded-lg text-sm focus:outline-none focus:border-[#FF6B35]"
+              className="w-full px-3 py-2 border border-[#E5E5E5] rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)]"
             >
               {[1, 2, 3, 4].map((w) => (
                 <option key={w} value={w}>Εβδομάδα {w}</option>
@@ -611,7 +611,7 @@ function NewContentModal({ onClose, onSaved, preselectedWeek, segments, brandId,
             <select
               value={segment}
               onChange={(e) => setSegment(e.target.value)}
-              className="w-full px-3 py-2 border border-[#E5E5E5] rounded-lg text-sm focus:outline-none focus:border-[#FF6B35]"
+              className="w-full px-3 py-2 border border-[#E5E5E5] rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)]"
             >
               <option value="">— Όλα —</option>
               {segments.map((s) => (

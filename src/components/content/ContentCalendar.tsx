@@ -106,7 +106,7 @@ export function ContentCalendar() {
                     padding="md"
                     hover
                     onClick={() => setSelectedWeek(isSelected ? null : weekNum)}
-                    className={isSelected ? 'ring-2 ring-[#FF6B35]' : ''}
+                    className={isSelected ? 'ring-2 ring-[var(--nts-accent)]' : ''}
                   >
                     <div className="flex items-center justify-between mb-3">
                       <Badge variant="orange">Week {weekNum}</Badge>
@@ -188,7 +188,7 @@ export function ContentCalendar() {
                             {item.performance.conversions && (
                               <div>
                                 <p className="text-xs text-[#4A4A4A]">Conv.</p>
-                                <p className="font-bold text-[#FF6B35] font-mono text-sm">
+                                <p className="font-bold text-[var(--nts-accent)] font-mono text-sm">
                                   {item.performance.conversions}
                                 </p>
                               </div>
@@ -219,7 +219,7 @@ export function ContentCalendar() {
         <CardHeader
           title="Upcoming Planning"
           subtitle="Προεπισκόπηση επόμενων μηνών"
-          icon={<Calendar size={20} className="text-[#FF6B35]" />}
+          icon={<Calendar size={20} className="text-[var(--nts-accent)]" />}
         />
         <div className="text-center py-8">
           <p className="text-sm text-[#4A4A4A]">
@@ -241,7 +241,7 @@ export function ContentCalendar() {
             <CardHeader
               title="AI Content Generator"
               subtitle="Generate content variations with AI"
-              icon={<Sparkles size={20} className="text-[#FF6B35]" />}
+              icon={<Sparkles size={20} className="text-[var(--nts-accent)]" />}
               action={
                 <Button variant="ghost" size="sm" onClick={() => setShowAIPanel(false)}>
                   Κλείσιμο
@@ -259,7 +259,7 @@ export function ContentCalendar() {
                   <input
                     type="text"
                     placeholder="e.g., Spring Collection Launch"
-                    className="w-full px-4 py-2.5 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[#FF6B35] focus:bg-white transition-all"
+                    className="w-full px-4 py-2.5 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all"
                   />
                 </div>
 
@@ -267,7 +267,7 @@ export function ContentCalendar() {
                   <label className="text-sm font-medium text-[#1A1A1A] mb-2 block">
                     Target Segment
                   </label>
-                  <select className="w-full px-4 py-2.5 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[#FF6B35] focus:bg-white transition-all">
+                  <select className="w-full px-4 py-2.5 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all">
                     <option>All Segments</option>
                     {rfmSegments.map((seg) => (
                       <option key={seg.id} value={seg.id}>
@@ -285,7 +285,7 @@ export function ContentCalendar() {
                     {['Professional', 'Friendly', 'Urgent', 'Exclusive', 'Playful'].map((tone) => (
                       <button
                         key={tone}
-                        className="px-3 py-1.5 bg-[#F5F5F5] rounded-full text-sm text-[#4A4A4A] hover:bg-[#FF6B35] hover:text-white transition-colors"
+                        className="px-3 py-1.5 bg-[#F5F5F5] rounded-full text-sm text-[#4A4A4A] hover:bg-[var(--nts-accent)] hover:text-white transition-colors"
                       >
                         {tone}
                       </button>
@@ -301,7 +301,7 @@ export function ContentCalendar() {
                     {['Email', 'Blog', 'Social Media', 'Landing Page', 'Video', 'Newsletter'].map((format) => (
                       <button
                         key={format}
-                        className="px-3 py-1.5 bg-[#F5F5F5] rounded-lg text-sm text-[#4A4A4A] hover:bg-[#FF6B35] hover:text-white transition-colors"
+                        className="px-3 py-1.5 bg-[#F5F5F5] rounded-lg text-sm text-[#4A4A4A] hover:bg-[var(--nts-accent)] hover:text-white transition-colors"
                       >
                         {format}
                       </button>

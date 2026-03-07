@@ -167,7 +167,7 @@ export function AIInsightsPanel({ isOpen, onClose }: AIInsightsPanelProps) {
             ) : (
               <div className="flex-1 flex items-center justify-center p-4">
                 <div className="text-center">
-                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#FF6B35] to-[#FF8C5A] flex items-center justify-center mx-auto mb-4 overflow-hidden">
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[var(--nts-accent)] to-[var(--nts-accent-hover)] flex items-center justify-center mx-auto mb-4 overflow-hidden">
                     <img
                       src="/ai-assistant-icon.png"
                       alt="AI Assistant"

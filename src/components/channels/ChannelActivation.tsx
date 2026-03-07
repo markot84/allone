@@ -32,7 +32,7 @@ import { formatCurrency, formatNumber, formatPercent, formatMultiplier } from '.
 // Removed mock data imports - using only real data
 import type { Campaign } from '../../types';
 
-const COLORS = ['#FF6B35', '#3B82F6', '#22C55E', '#8B5CF6', '#F59E0B'];
+const COLORS = ['var(--nts-accent)', '#3B82F6', '#22C55E', '#8B5CF6', '#F59E0B'];
 
 interface ChannelActivationProps {
   onSectionChange?: (section: string) => void;
@@ -485,7 +485,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
               <select
                 value={selectedScenario}
                 onChange={(e) => setSelectedScenario(e.target.value)}
-                className="w-full px-4 py-2.5 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[#FF6B35] focus:bg-white transition-all"
+                className="w-full px-4 py-2.5 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all"
               >
                 <option value="profit_max">Profit Maximization</option>
                 <option value="stock_clearance">Stock Clearance</option>
@@ -506,7 +506,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                   className={`
                     px-4 py-2 rounded-lg text-sm font-medium transition-all
                     ${budgetMultiplier === mult
-                      ? 'bg-[#FF6B35] text-white'
+                      ? 'bg-[var(--nts-accent)] text-white'
                       : 'bg-[#F5F5F5] text-[#4A4A4A] hover:bg-[#E5E5E5]'}
                   `}
                 >
@@ -533,7 +533,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
           <CardHeader
             title="Channel Mix"
             subtitle={hasCampaigns ? "Πραγματική budget allocation από campaigns" : "Budget allocation"}
-            icon={<PieChartIcon size={20} className="text-[#FF6B35]" />}
+            icon={<PieChartIcon size={20} className="text-[var(--nts-accent)]" />}
           />
           {campaignsLoading ? (
             <div className="flex items-center justify-center h-64">
@@ -732,7 +732,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         <CardHeader
           title="Channel Performance History"
           subtitle="ROAS trend τελευταίων 6 μηνών"
-          icon={<TrendingUp size={20} className="text-[#FF6B35]" />}
+          icon={<TrendingUp size={20} className="text-[var(--nts-accent)]" />}
         />
         <div
           ref={historyChartRef}
@@ -766,7 +766,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                 formatter={(value) => [formatMultiplier((value as number) || 0, 1), 'ROAS']}
               />
               <Legend />
-              <Line type="monotone" dataKey="email" stroke="#FF6B35" strokeWidth={2} name="Email" dot={{ r: 4 }} />
+              <Line type="monotone" dataKey="email" stroke="var(--nts-accent)" strokeWidth={2} name="Email" dot={{ r: 4 }} />
               <Line type="monotone" dataKey="google" stroke="#3B82F6" strokeWidth={2} name="Google" dot={{ r: 4 }} />
               <Line type="monotone" dataKey="meta" stroke="#8B5CF6" strokeWidth={2} name="Meta" dot={{ r: 4 }} />
               <Line type="monotone" dataKey="remarketing" stroke="#22C55E" strokeWidth={2} name="Remarketing" dot={{ r: 4 }} />
@@ -786,7 +786,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
           <CardHeader
             title="Active Campaigns"
             subtitle={`${campaigns.length} ${campaigns.length === 1 ? 'campaign' : 'campaigns'} imported`}
-            icon={<TrendingUp size={20} className="text-[#FF6B35]" />}
+            icon={<TrendingUp size={20} className="text-[var(--nts-accent)]" />}
             action={
               <Button 
                 variant="ghost" 
@@ -803,7 +803,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                 key={campaign.id}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="p-4 border border-[#E5E5E5] rounded-xl hover:border-[#FF6B35] transition-all"
+                className="p-4 border border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] transition-all"
               >
                 <div className="flex items-start justify-between mb-2">
                   <h4 className="font-medium text-[#1A1A1A] text-sm truncate flex-1">{campaign.name}</h4>
@@ -848,7 +848,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         <CardHeader
           title="Feed Generation"
           subtitle="Preview and export product feeds"
-          icon={<Settings size={20} className="text-[#FF6B35]" />}
+          icon={<Settings size={20} className="text-[var(--nts-accent)]" />}
         />
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {['Google Shopping', 'Meta Catalog', 'Email Feed', 'Display Feed'].map((feed, index) => (
@@ -857,7 +857,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.1 }}
-              className="p-4 border border-[#E5E5E5] rounded-xl hover:border-[#FF6B35] hover:shadow-md transition-all cursor-pointer"
+              className="p-4 border border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:shadow-md transition-all cursor-pointer"
             >
               <div className="flex items-center justify-between mb-3">
                 <h4 className="font-medium text-[#1A1A1A]">{feed}</h4>
@@ -951,7 +951,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                     setShowExportModal(false);
                     setSelectedFeed(null);
                   }}
-                  className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[#FF6B35] hover:bg-[#FFF0EB] transition-all text-left flex items-center gap-4 group"
+                  className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-accent-light)] transition-all text-left flex items-center gap-4 group"
                 >
                   <div className="p-3 bg-[#22C55E]/10 rounded-lg group-hover:bg-[#22C55E]/20 transition-colors">
                     <FileSpreadsheet size={24} className="text-[#22C55E]" />
@@ -968,7 +968,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                     setShowExportModal(false);
                     setSelectedFeed(null);
                   }}
-                  className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[#FF6B35] hover:bg-[#FFF0EB] transition-all text-left flex items-center gap-4 group"
+                  className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-accent-light)] transition-all text-left flex items-center gap-4 group"
                 >
                   <div className="p-3 bg-[#3B82F6]/10 rounded-lg group-hover:bg-[#3B82F6]/20 transition-colors">
                     <FileText size={24} className="text-[#3B82F6]" />
@@ -1045,7 +1045,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                     setShowExportAllModal(false);
                     toast.success('Export όλων των feeds ξεκίνησε');
                   }}
-                  className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[#FF6B35] hover:bg-[#FFF0EB] transition-all text-left flex items-center gap-4 group"
+                  className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-accent-light)] transition-all text-left flex items-center gap-4 group"
                 >
                   <div className="p-3 bg-[#22C55E]/10 rounded-lg group-hover:bg-[#22C55E]/20 transition-colors">
                     <FileSpreadsheet size={24} className="text-[#22C55E]" />
@@ -1066,7 +1066,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                     setShowExportAllModal(false);
                     toast.success('Export όλων των feeds ξεκίνησε');
                   }}
-                  className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[#FF6B35] hover:bg-[#FFF0EB] transition-all text-left flex items-center gap-4 group"
+                  className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-accent-light)] transition-all text-left flex items-center gap-4 group"
                 >
                   <div className="p-3 bg-[#3B82F6]/10 rounded-lg group-hover:bg-[#3B82F6]/20 transition-colors">
                     <FileText size={24} className="text-[#3B82F6]" />

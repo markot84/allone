@@ -146,7 +146,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
             <button
               type="button"
               onClick={() => onSectionChange?.('data-segments')}
-              className="font-semibold text-[#FF6B35] hover:underline focus:outline-none focus:ring-2 focus:ring-[#FF6B35] focus:ring-offset-1 rounded"
+              className="font-semibold text-[var(--nts-accent)] hover:underline focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)] focus:ring-offset-1 rounded"
             >
               Data Import
             </button>
@@ -185,8 +185,8 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card padding="md" hover>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-[#FFF0EB] rounded-lg flex items-center justify-center">
-              <Users size={20} className="text-[#FF6B35]" />
+            <div className="w-10 h-10 bg-[var(--nts-accent-light)] rounded-lg flex items-center justify-center">
+              <Users size={20} className="text-[var(--nts-accent)]" />
             </div>
             <div>
               <p className="text-sm text-[#4A4A4A]"><InfoTooltip content="Συνολικός αριθμός πελατών σε όλα τα RFM segments.">Σύνολο Πελατών</InfoTooltip></p>
@@ -361,7 +361,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
         <CardHeader
           title="Segment Migration"
           subtitle={hasImportedSegments ? 'Τελευταίες 30 ημέρες' : ''}
-          icon={<ArrowRight size={20} className="text-[#FF6B35]" />}
+          icon={<ArrowRight size={20} className="text-[var(--nts-accent)]" />}
         />
         <div className="space-y-3">
           {hasImportedSegments && rfmSegments.length > 0 ? (
@@ -405,7 +405,7 @@ function SegmentCard({ segment, index, isSelected, onSelect }: SegmentCardProps)
         padding="md"
         hover
         onClick={onSelect}
-        className={isSelected ? 'ring-2 ring-[#FF6B35]' : ''}
+        className={isSelected ? 'ring-2 ring-[var(--nts-accent)]' : ''}
       >
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">

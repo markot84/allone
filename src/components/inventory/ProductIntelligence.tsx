@@ -243,7 +243,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
             <button
               type="button"
               onClick={() => onSectionChange?.('data-products')}
-              className="font-semibold text-[#FF6B35] hover:underline focus:outline-none focus:ring-2 focus:ring-[#FF6B35] focus:ring-offset-1 rounded"
+              className="font-semibold text-[var(--nts-accent)] hover:underline focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)] focus:ring-offset-1 rounded"
             >
               Data Import
             </button>
@@ -363,7 +363,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                 <div className="flex-1">
                   <p className="text-sm font-medium text-[#1A1A1A]">{alert.message}</p>
                   <button 
-                    className="text-xs font-medium text-[#FF6B35] mt-1 hover:underline cursor-pointer"
+                    className="text-xs font-medium text-[var(--nts-accent)] mt-1 hover:underline cursor-pointer"
                     onClick={() => {
                       // Set filter based on alert type
                       if (alert.type === 'critical') {
@@ -407,7 +407,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
               placeholder="Αναζήτηση προϊόντων..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[#FF6B35] focus:bg-white transition-all"
+              className="w-full pl-10 pr-4 py-2 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all"
             />
           </div>
 
@@ -415,7 +415,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
-            className="px-4 py-2 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[#FF6B35] focus:bg-white transition-all"
+            className="px-4 py-2 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all"
           >
             <option value="all">All Categories</option>
             {categories.map((cat) => (
@@ -427,7 +427,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           <select
             value={marginFilter}
             onChange={(e) => setMarginFilter(e.target.value)}
-            className="px-4 py-2 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[#FF6B35] focus:bg-white transition-all"
+            className="px-4 py-2 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all"
           >
             <option value="all">All Margins</option>
             <option value="high">High Margin</option>
@@ -689,7 +689,7 @@ function ProductRow({ product, index }: ProductRowProps) {
         </span>
       </td>
       <td className="px-4 py-3 text-right">
-        <button className="text-xs font-medium text-[#FF6B35] hover:underline">
+        <button className="text-xs font-medium text-[var(--nts-accent)] hover:underline">
           Προσθήκη στο Feed
         </button>
       </td>

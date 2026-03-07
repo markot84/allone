@@ -95,13 +95,13 @@ function BrandMenu({
           alignItems: 'center',
           gap: 6,
           padding: '6px 12px',
-          border: '1px solid rgba(255, 107, 53, 0.3)',
+          border: '1px solid rgba(249, 115, 22, 0.35)',
           borderRadius: 8,
-          background: 'linear-gradient(135deg, #FFF0EB 0%, #FFE4DC 100%)',
+          background: 'var(--nts-accent-light)',
           cursor: brands.length > 1 ? 'pointer' : 'default',
           fontSize: 14,
           fontWeight: 600,
-          color: '#FF6B35'
+          color: 'var(--nts-accent)'
         }}
       >
         <Text as="span" size="small" weight="semibold">{currentBrand.name}</Text>
@@ -133,7 +133,7 @@ function BrandMenu({
                   background: currentBrand?.id === b.id ? 'var(--bgColor-muted, #f6f8fa)' : 'transparent',
                   cursor: 'pointer',
                   fontSize: 14,
-                  color: currentBrand?.id === b.id ? '#FF6B35' : 'var(--fgColor-default, #24292f)'
+                  color: currentBrand?.id === b.id ? 'var(--nts-accent)' : 'var(--fgColor-default, #24292f)'
                 }}
               >
                 {b.name}
@@ -408,7 +408,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
             borderRight: '1px solid var(--borderColor-default, #d0d7de)',
             overflowY: 'auto',
             overflowX: 'hidden',
-            backgroundColor: 'var(--bgColor-default, #ffffff)'
+            backgroundColor: 'var(--nts-bg-pure)'
           }}
         >
           {currentBrand && (
@@ -417,14 +417,14 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
                 margin: 12,
                 padding: '12px 14px',
                 borderRadius: 10,
-                background: 'linear-gradient(135deg, #FFF0EB 0%, #FFE4DC 100%)',
-                border: '1px solid rgba(255, 107, 53, 0.25)'
+                background: 'var(--nts-accent-light)',
+                border: '1px solid rgba(249, 115, 22, 0.3)'
               }}
             >
               <Text as="div" size="small" style={{ color: 'var(--fgColor-muted, #57606a)', marginBottom: 4 }}>
                 Brand
               </Text>
-              <Text as="div" weight="semibold" size="medium" style={{ color: '#FF6B35' }}>
+              <Text as="div" weight="semibold" size="medium" style={{ color: 'var(--nts-accent)' }}>
                 {currentBrand.name}
               </Text>
               {currentBrand.type && (
@@ -449,7 +449,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
             overflowX: 'hidden',
             width: '100%',
             maxWidth: '100%',
-            backgroundColor: 'var(--bgColor-default, #ffffff)'
+            backgroundColor: 'var(--nts-bg-pure)'
           }}
         >
           <div style={{ 
@@ -489,7 +489,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
               bottom: 0,
               width: 280,
               maxWidth: '80vw',
-              backgroundColor: 'var(--bgColor-default, #ffffff)',
+              backgroundColor: 'var(--nts-bg-pure)',
               borderRight: '1px solid var(--borderColor-default, #d0d7de)',
               zIndex: 1000,
               display: 'flex',
@@ -574,10 +574,10 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
                           textAlign: 'left',
                           border: 'none',
                           borderRadius: 8,
-                          background: currentBrand?.id === b.id ? 'linear-gradient(135deg, #FFF0EB 0%, #FFE4DC 100%)' : 'var(--bgColor-muted, #f6f8fa)',
+                          background: currentBrand?.id === b.id ? 'var(--nts-accent-light)' : 'var(--bgColor-muted, #f6f8fa)',
                           cursor: 'pointer',
                           fontSize: 14,
-                          color: currentBrand?.id === b.id ? '#FF6B35' : 'var(--fgColor-default, #24292f)',
+                          color: currentBrand?.id === b.id ? 'var(--nts-accent)' : 'var(--fgColor-default, #24292f)',
                           fontWeight: currentBrand?.id === b.id ? 600 : 400,
                           marginBottom: 4
                         }}
@@ -590,11 +590,11 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
                       style={{
                         padding: '10px 12px',
                         borderRadius: 8,
-                        background: 'linear-gradient(135deg, #FFF0EB 0%, #FFE4DC 100%)',
-                        border: '1px solid rgba(255, 107, 53, 0.25)'
+                        background: 'var(--nts-accent-light)',
+                        border: '1px solid rgba(249, 115, 22, 0.3)'
                       }}
                     >
-                      <Text as="div" weight="semibold" style={{ color: '#FF6B35' }}>
+                      <Text as="div" weight="semibold" style={{ color: 'var(--nts-accent)' }}>
                         {currentBrand.name}
                       </Text>
                     </div>

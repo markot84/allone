@@ -232,7 +232,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
             <button
               type="button"
               onClick={() => onSectionChange?.('data-campaigns')}
-              className="font-semibold text-[#FF6B35] hover:underline focus:outline-none focus:ring-2 focus:ring-[#FF6B35] focus:ring-offset-1 rounded"
+              className="font-semibold text-[var(--nts-accent)] hover:underline focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)] focus:ring-offset-1 rounded"
             >
               Data Import
             </button>
@@ -282,10 +282,10 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
       </div>
 
       {/* Date range tab */}
-      <Card padding="md" className="border-l-4 border-l-[#FF6B35]">
+      <Card padding="md" className="border-l-4 border-l-[var(--nts-accent)]">
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-2">
-            <Calendar size={18} className="text-[#FF6B35]" />
+            <Calendar size={18} className="text-[var(--nts-accent)]" />
             <span className="text-sm font-medium text-[#4A4A4A]">Περίοδος δεδομένων:</span>
           </div>
           <div className="flex items-center gap-3 flex-wrap">
@@ -297,7 +297,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                 onChange={(e) => setDateFrom(e.target.value)}
                 min={dateFromDefault || undefined}
                 max={dateToDefault || undefined}
-                className="px-3 py-1.5 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[#FF6B35] focus:bg-white transition-all"
+                className="px-3 py-1.5 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all"
               />
             </div>
             <div className="flex items-center gap-2">
@@ -308,13 +308,13 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                 onChange={(e) => setDateTo(e.target.value)}
                 min={dateFromDefault || undefined}
                 max={dateToDefault || undefined}
-                className="px-3 py-1.5 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[#FF6B35] focus:bg-white transition-all"
+                className="px-3 py-1.5 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all"
               />
             </div>
             {(dateFrom || dateTo) && (
               <button
                 onClick={() => { setDateFrom(''); setDateTo(''); }}
-                className="text-xs text-[#FF6B35] hover:underline"
+                className="text-xs text-[var(--nts-accent)] hover:underline"
               >
                 Καθαρισμός
               </button>
@@ -338,8 +338,8 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                 €{formatCurrency(summaryStats.totalSpent, 2)}
               </p>
             </div>
-            <div className="w-12 h-12 bg-[#FFF0EB] rounded-lg flex items-center justify-center">
-              <DollarSign size={24} className="text-[#FF6B35]" />
+            <div className="w-12 h-12 bg-[var(--nts-accent-light)] rounded-lg flex items-center justify-center">
+              <DollarSign size={24} className="text-[var(--nts-accent)]" />
             </div>
           </div>
         </Card>
@@ -398,7 +398,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                 placeholder="Αναζήτηση campaigns..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[#FF6B35] focus:bg-white transition-all"
+                className="w-full pl-10 pr-4 py-2 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all"
               />
             </div>
           </div>
@@ -408,7 +408,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
             <select
               value={channelFilter}
               onChange={(e) => setChannelFilter(e.target.value)}
-              className="px-3 py-2 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[#FF6B35] focus:bg-white transition-all"
+              className="px-3 py-2 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all"
             >
               <option value="all">Όλα τα Channels</option>
               {channels.map(ch => (
@@ -419,7 +419,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-2 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[#FF6B35] focus:bg-white transition-all"
+              className="px-3 py-2 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all"
             >
               <option value="all">Όλα τα Status</option>
               <option value="active">Ενεργά</option>

@@ -80,7 +80,7 @@ export const weightFactors: Omit<WeightFactor, 'value'>[] = [
     name: 'Customer Fit', 
     icon: '',
     tooltip: 'Segment affinity, purchase history',
-    color: '#FF6B35'
+    color: '#F97316'
   }
 ];
 

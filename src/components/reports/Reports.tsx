@@ -184,7 +184,7 @@ export function Reports() {
           >
             <Card padding="md" hover>
               <div className="flex items-start gap-4">
-                <div className="w-12 h-12 bg-[#FFF0EB] rounded-xl flex items-center justify-center text-2xl">
+                <div className="w-12 h-12 bg-[var(--nts-accent-light)] rounded-xl flex items-center justify-center text-2xl">
                   {report.icon}
                 </div>
                 <div className="flex-1">
@@ -247,7 +247,7 @@ export function Reports() {
         <CardHeader
           title="Scheduled Reports"
           subtitle="Αυτοματοποιημένη παράδοση reports"
-          icon={<Clock size={20} className="text-[#FF6B35]" />}
+          icon={<Clock size={20} className="text-[var(--nts-accent)]" />}
           action={
             <Button variant="secondary" size="sm" icon={<Plus size={14} />} onClick={() => setShowScheduleModal(true)}>
               New Schedule
@@ -266,7 +266,7 @@ export function Reports() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center">
-                    <FileText size={20} className="text-[#FF6B35]" />
+                    <FileText size={20} className="text-[var(--nts-accent)]" />
                   </div>
                   <div>
                     <h4 className="font-medium text-[#1A1A1A]">{report.name}</h4>
@@ -434,7 +434,7 @@ function ScheduleModal({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="π.χ. Weekly Executive Summary"
-              className="w-full px-3 py-2 border border-[#E5E5E5] rounded-lg text-sm focus:outline-none focus:border-[#FF6B35]"
+              className="w-full px-3 py-2 border border-[#E5E5E5] rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)]"
               required
             />
           </div>
@@ -443,7 +443,7 @@ function ScheduleModal({
             <select
               value={reportType}
               onChange={(e) => setReportType(e.target.value)}
-              className="w-full px-3 py-2 border border-[#E5E5E5] rounded-lg text-sm focus:outline-none focus:border-[#FF6B35]"
+              className="w-full px-3 py-2 border border-[#E5E5E5] rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)]"
             >
               {reportTypes.map((r: ReportTypeItem) => (
                 <option key={r.id} value={r.id}>{r.name}</option>
@@ -455,7 +455,7 @@ function ScheduleModal({
             <select
               value={frequency}
               onChange={(e) => setFrequency(e.target.value)}
-              className="w-full px-3 py-2 border border-[#E5E5E5] rounded-lg text-sm focus:outline-none focus:border-[#FF6B35]"
+              className="w-full px-3 py-2 border border-[#E5E5E5] rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)]"
             >
               <option value="Daily 8:00 AM">Καθημερινά 8:00</option>
               <option value="Every Monday 9:00 AM">Καθε Δευτέρα 9:00</option>
@@ -469,7 +469,7 @@ function ScheduleModal({
               value={recipientsStr}
               onChange={(e) => setRecipientsStr(e.target.value)}
               placeholder="email1@company.com, email2@company.com"
-              className="w-full px-3 py-2 border border-[#E5E5E5] rounded-lg text-sm focus:outline-none focus:border-[#FF6B35]"
+              className="w-full px-3 py-2 border border-[#E5E5E5] rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)]"
             />
           </div>
           <div className="flex gap-3 pt-4">
@@ -526,7 +526,7 @@ function CustomReportModal({
                 setSelectedId(e.target.value);
                 setFormat(isPdfSupported(e.target.value) ? 'pdf' : 'excel');
               }}
-              className="w-full px-3 py-2 border border-[#E5E5E5] rounded-lg text-sm focus:outline-none focus:border-[#FF6B35]"
+              className="w-full px-3 py-2 border border-[#E5E5E5] rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)]"
             >
               {reportTypes.map((r: ReportTypeItem) => (
                 <option key={r.id} value={r.id}>{r.name} ({r.format})</option>
@@ -539,7 +539,7 @@ function CustomReportModal({
               <select
                 value={format}
                 onChange={(e) => setFormat(e.target.value as ReportFormat)}
-                className="w-full px-3 py-2 border border-[#E5E5E5] rounded-lg text-sm focus:outline-none focus:border-[#FF6B35]"
+                className="w-full px-3 py-2 border border-[#E5E5E5] rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)]"
               >
                 <option value="pdf">PDF</option>
                 <option value="excel">Excel</option>

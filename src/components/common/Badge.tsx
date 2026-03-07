@@ -31,11 +31,12 @@ export function Badge({
   size = 'sm',
   className = '' 
 }: BadgeProps) {
+  const orangeClass = variant === 'orange' ? '!bg-[var(--nts-accent)] !text-white !border-transparent' : '';
   return (
     <Label
       variant={mapVariant(variant)}
       size={size === 'sm' ? 'small' : 'large'}
-      className={className}
+      className={`${orangeClass} ${className}`.trim()}
     >
       {children}
     </Label>

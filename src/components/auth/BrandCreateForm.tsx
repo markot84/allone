@@ -87,7 +87,7 @@ export function BrandCreateForm({ onCreated }: BrandCreateFormProps) {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="π.χ. My Store"
-            className="w-full pl-10 pr-4 py-2.5 bg-[var(--nts-light-gray)] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[#FF6B35] focus:bg-white"
+            className="w-full pl-10 pr-4 py-2.5 bg-[var(--nts-light-gray)] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white"
           />
         </div>
       </div>
@@ -98,7 +98,7 @@ export function BrandCreateForm({ onCreated }: BrandCreateFormProps) {
             type="button"
             onClick={() => setType('B2B')}
             className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
-              type === 'B2B' ? 'bg-[#FF6B35] text-white' : 'bg-[var(--nts-light-gray)] text-[var(--nts-medium-gray)]'
+              type === 'B2B' ? 'bg-[var(--nts-accent)] text-white' : 'bg-[var(--nts-light-gray)] text-[var(--nts-medium-gray)]'
             }`}
           >
             B2B
@@ -107,7 +107,7 @@ export function BrandCreateForm({ onCreated }: BrandCreateFormProps) {
             type="button"
             onClick={() => setType('B2C')}
             className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
-              type === 'B2C' ? 'bg-[#FF6B35] text-white' : 'bg-[var(--nts-light-gray)] text-[var(--nts-medium-gray)]'
+              type === 'B2C' ? 'bg-[var(--nts-accent)] text-white' : 'bg-[var(--nts-light-gray)] text-[var(--nts-medium-gray)]'
             }`}
           >
             B2C

@@ -224,13 +224,13 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
   }, []);
 
   return (
-    <div ref={scrollRef} className="h-screen overflow-y-auto overflow-x-hidden bg-white text-[var(--nts-charcoal)]">
+    <div ref={scrollRef} className="h-screen overflow-y-auto overflow-x-hidden bg-[var(--nts-bg-subtle)] text-[var(--nts-charcoal)]">
 
       {/* ── Sticky header ────────────────────────────────────────────────── */}
-      <header className={`sticky top-0 z-50 transition-all duration-300 ${scrolled ? 'shadow-[0_8px_24px_rgba(16,24,40,0.12)] bg-white/95 backdrop-blur' : 'bg-transparent'}`}>
+      <header className={`sticky top-0 z-50 transition-all duration-300 ${scrolled ? 'shadow-[0_8px_24px_rgba(16,24,40,0.12)] bg-[var(--nts-bg-pure)]/95 backdrop-blur' : 'bg-transparent'}`}>
         <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-4 md:px-10">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#1f2328]/30 bg-white text-[#1f2328] shadow-sm">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#1f2328]/30 bg-[var(--nts-bg-pure)] text-[#1f2328] shadow-sm">
               <Brain size={18} />
             </div>
             <div>
@@ -257,7 +257,7 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
             <button
               type="button"
               onClick={onOpenAuth}
-              className={`rounded-xl border border-[#e75b2d] bg-[#FF6B35] px-4 py-2 text-sm font-semibold text-white shadow-[0_6px_14px_rgba(255,107,53,0.35)] transition hover:bg-[#e75b2d] ${scrolled ? 'opacity-100' : 'opacity-90'}`}
+              className={`rounded-xl border border-[var(--nts-accent-hover)] bg-[var(--nts-accent)] px-4 py-2 text-sm font-semibold text-white shadow-[0_6px_14px_rgba(249,115,22,0.35)] transition hover:bg-[var(--nts-accent-hover)] ${scrolled ? 'opacity-100' : 'opacity-90'}`}
             >
               Είσοδος →
             </button>
@@ -269,15 +269,15 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
       <section className="mx-auto grid w-full max-w-7xl gap-10 px-6 pb-8 pt-6 md:px-10 md:pt-10 lg:grid-cols-2 lg:items-center">
         <div className="space-y-6">
           <div className="inline-flex items-center gap-2 rounded-full border border-[#1f2328]/20 bg-[var(--nts-light-gray)] px-3 py-1 text-xs text-[var(--nts-medium-gray)]">
-            <Sparkles size={13} className="text-[#FF6B35]" />
+            <Sparkles size={13} className="text-[var(--nts-accent)]" />
             {copy.badge}
           </div>
 
           <h1 className="text-3xl font-semibold leading-tight text-[var(--nts-charcoal)] md:text-5xl">
             {copy.headline}
-            <span className="mt-1 block text-[#FF6B35]">
+            <span className="mt-1 block text-[var(--nts-accent)]">
               {typewritten}
-              <span className="ml-0.5 inline-block h-8 w-0.5 animate-pulse bg-[#FF6B35] align-middle" />
+              <span className="ml-0.5 inline-block h-8 w-0.5 animate-pulse bg-[var(--nts-accent)] align-middle" />
             </span>
           </h1>
 
@@ -289,7 +289,7 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
             <button
               type="button"
               onClick={onOpenAuth}
-              className="inline-flex items-center gap-2 rounded-xl bg-[#FF6B35] px-5 py-3 text-sm font-semibold text-white shadow-[0_10px_20px_rgba(255,107,53,0.35)] transition hover:bg-[#e75b2d]"
+              className="inline-flex items-center gap-2 rounded-xl bg-[var(--nts-accent)] px-5 py-3 text-sm font-semibold text-white shadow-[0_10px_20px_rgba(249,115,22,0.35)] transition hover:bg-[var(--nts-accent-hover)]"
             >
               {copy.cta}
               <ArrowRight size={16} />
@@ -298,17 +298,17 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
         </div>
 
         {/* USP card */}
-        <div className="rounded-3xl border border-[#1f2328] bg-white p-6 shadow-[0_20px_44px_rgba(16,24,40,0.14)] md:p-8">
+        <div className="rounded-3xl border border-[#1f2328] bg-[var(--nts-bg-pure)] p-6 shadow-[0_20px_44px_rgba(16,24,40,0.14)] md:p-8">
           <p className="text-xs uppercase tracking-[0.14em] text-[var(--nts-medium-gray)]">{copy.uspTitle}</p>
           <ul className="mt-5 space-y-3">
             {copy.uspPoints.map((point) => (
               <li key={point} className="flex items-start gap-2 rounded-xl border border-[#1f2328]/15 bg-[var(--nts-light-gray)] px-4 py-3 text-sm text-[var(--nts-charcoal)]">
-                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#FF6B35]" />
+                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--nts-accent)]" />
                 {point}
               </li>
             ))}
           </ul>
-          <p className="mt-5 rounded-xl border border-[#FF6B35]/35 bg-[#FF6B35]/8 px-4 py-3 text-sm text-[var(--nts-charcoal)]">
+          <p className="mt-5 rounded-xl border border-[var(--nts-accent)]/35 bg-[var(--nts-accent)]/8 px-4 py-3 text-sm text-[var(--nts-charcoal)]">
             {copy.uspFooter}
           </p>
         </div>
@@ -328,7 +328,7 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
 
       {/* ── Metrics strip ────────────────────────────────────────────────── */}
       <div ref={metricsRef} className="mx-auto w-full max-w-7xl px-6 pb-8 md:px-10">
-        <div className="grid divide-x divide-[#1f2328]/15 rounded-2xl border border-[#1f2328] bg-white shadow-[0_16px_32px_rgba(16,24,40,0.12)] md:grid-cols-3">
+        <div className="grid divide-x divide-[#1f2328]/15 rounded-2xl border border-[#1f2328] bg-[var(--nts-bg-pure)] shadow-[0_16px_32px_rgba(16,24,40,0.12)] md:grid-cols-3">
           {metrics.map((m) => (
             <MetricItem key={m.label} value={parseInt(m.value)} suffix={m.suffix} label={m.label} active={metricsVisible} />
           ))}
@@ -337,7 +337,7 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
 
       {/* ── DNA block ────────────────────────────────────────────────────── */}
       <section className="mx-auto w-full max-w-7xl px-6 pb-8 md:px-10">
-        <div className="rounded-2xl border border-[#1f2328] bg-white p-6 shadow-[0_18px_40px_rgba(16,24,40,0.14)]">
+        <div className="rounded-2xl border border-[#1f2328] bg-[var(--nts-bg-pure)] p-6 shadow-[0_18px_40px_rgba(16,24,40,0.14)]">
           <h3 className="text-lg font-semibold text-[var(--nts-charcoal)]">Το μοναδικό DNA του Performance+</h3>
           <div className="mt-4 grid gap-3 md:grid-cols-3">
             {[
@@ -345,7 +345,7 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
               { title: 'AI recommendations με business context', body: 'Οι προτάσεις δεν είναι generic: λαμβάνουν υπόψη margin, segment behavior και εμπορικές προτεραιότητες.' },
               { title: 'ROI accountability σε επίπεδο διοίκησης', body: 'Κάθε ενέργεια συνδέεται με measurable impact για να ξέρεις τι κλιμακώνεις και τι σταματάς.' },
             ].map((item) => (
-              <article key={item.title} className="rounded-xl border border-[#1f2328]/20 bg-white p-4">
+              <article key={item.title} className="rounded-xl border border-[#1f2328]/20 bg-[var(--nts-bg-pure)] p-4">
                 <p className="text-sm font-semibold text-[var(--nts-charcoal)]">{item.title}</p>
                 <p className="mt-2 text-sm text-[var(--nts-medium-gray)]">{item.body}</p>
               </article>
@@ -360,9 +360,9 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
           {coreFeatures.map((feature) => (
             <article
               key={feature.title}
-              className="rounded-2xl border border-[#1f2328]/25 bg-white p-5 shadow-[0_16px_30px_rgba(16,24,40,0.12)] transition duration-200 hover:-translate-y-1 hover:border-[#FF6B35]/45 hover:shadow-[0_22px_40px_rgba(16,24,40,0.18)]"
+              className="rounded-2xl border border-[#1f2328]/25 bg-[var(--nts-bg-pure)] p-5 shadow-[0_16px_30px_rgba(16,24,40,0.12)] transition duration-200 hover:-translate-y-1 hover:border-[var(--nts-accent)]/45 hover:shadow-[0_22px_40px_rgba(16,24,40,0.18)]"
             >
-              <div className="mb-3 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#1f2328]/30 bg-white text-[#1f2328]">
+              <div className="mb-3 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#1f2328]/30 bg-[var(--nts-bg-pure)] text-[#1f2328]">
                 {feature.icon}
               </div>
               <h3 className="text-base font-semibold text-[var(--nts-charcoal)]">{feature.title}</h3>
@@ -374,14 +374,14 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
 
       {/* ── Before / After problems ──────────────────────────────────────── */}
       <section className="mx-auto w-full max-w-7xl px-6 pb-8 md:px-10">
-        <div className="rounded-2xl border border-[#1f2328] bg-white p-6 shadow-[0_20px_44px_rgba(16,24,40,0.14)]">
+        <div className="rounded-2xl border border-[#1f2328] bg-[var(--nts-bg-pure)] p-6 shadow-[0_20px_44px_rgba(16,24,40,0.14)]">
           <h3 className="text-lg font-semibold text-[var(--nts-charcoal)]">Ποια προβλήματα λύνει το Performance+</h3>
 
           {/* column headers */}
           <div className="mt-5 grid grid-cols-[1fr_1fr] gap-3 md:grid-cols-[auto_1fr_1fr]">
             <div className="hidden md:block" />
             <p className="rounded-t-xl bg-[var(--nts-light-gray)] px-4 py-2 text-center text-xs font-semibold uppercase tracking-wide text-[var(--nts-medium-gray)]">Χωρίς Performance+</p>
-            <p className="rounded-t-xl bg-[#FF6B35] px-4 py-2 text-center text-xs font-semibold uppercase tracking-wide text-white">Με Performance+</p>
+            <p className="rounded-t-xl bg-[var(--nts-accent)] px-4 py-2 text-center text-xs font-semibold uppercase tracking-wide text-white">Με Performance+</p>
           </div>
 
           <div className="space-y-2">
@@ -393,7 +393,7 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
                 <div className="rounded-xl border border-[#1f2328]/15 bg-[var(--nts-light-gray)] px-4 py-3 text-sm text-[var(--nts-medium-gray)] line-through decoration-[#1f2328]/25">
                   {item.before}
                 </div>
-                <div className="rounded-xl border border-[#FF6B35]/30 bg-[#FF6B35]/6 px-4 py-3 text-sm font-medium text-[var(--nts-charcoal)]">
+                <div className="rounded-xl border border-[var(--nts-accent)]/30 bg-[var(--nts-accent)]/6 px-4 py-3 text-sm font-medium text-[var(--nts-charcoal)]">
                   {item.after}
                 </div>
               </div>
@@ -404,16 +404,16 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
 
       {/* ── Operating flow ────────────────────────────────────────────────── */}
       <section className="mx-auto w-full max-w-7xl px-6 pb-8 md:px-10">
-        <div className="rounded-2xl border border-[#1f2328] bg-white p-6 shadow-[0_20px_44px_rgba(16,24,40,0.14)]">
+        <div className="rounded-2xl border border-[#1f2328] bg-[var(--nts-bg-pure)] p-6 shadow-[0_20px_44px_rgba(16,24,40,0.14)]">
           <h3 className="text-lg font-semibold text-[var(--nts-charcoal)]">Πώς το κάνει - από insight σε αποτέλεσμα</h3>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             {operatingFlow.map((item) => (
-              <article key={item.step} className="rounded-xl border border-[#1f2328]/20 bg-white p-4 transition hover:border-[#FF6B35]/35">
+              <article key={item.step} className="rounded-xl border border-[#1f2328]/20 bg-[var(--nts-bg-pure)] p-4 transition hover:border-[var(--nts-accent)]/35">
                 <div className="flex items-center gap-3">
                   <div className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[#1f2328]/30 text-[#1f2328]">
                     {item.icon}
                   </div>
-                  <span className="text-xs font-bold tracking-widest text-[#FF6B35]">{item.step}</span>
+                  <span className="text-xs font-bold tracking-widest text-[var(--nts-accent)]">{item.step}</span>
                 </div>
                 <h4 className="mt-3 text-sm font-semibold text-[var(--nts-charcoal)]">{item.title}</h4>
                 <p className="mt-2 text-sm text-[var(--nts-medium-gray)]">{item.description}</p>
@@ -425,11 +425,11 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
 
       {/* ── Value pillars ─────────────────────────────────────────────────── */}
       <section className="mx-auto w-full max-w-7xl px-6 pb-8 md:px-10">
-        <div className="rounded-2xl border border-[#1f2328] bg-white p-6 shadow-[0_20px_44px_rgba(16,24,40,0.14)]">
+        <div className="rounded-2xl border border-[#1f2328] bg-[var(--nts-bg-pure)] p-6 shadow-[0_20px_44px_rgba(16,24,40,0.14)]">
           <h3 className="text-lg font-semibold text-[var(--nts-charcoal)]">Τι υπεραξία προσφέρει στην πράξη</h3>
           <div className="mt-4 grid gap-3 md:grid-cols-3">
             {valuePillars.map((item) => (
-              <article key={item.title} className="rounded-xl border border-[#1f2328]/20 bg-white p-4">
+              <article key={item.title} className="rounded-xl border border-[#1f2328]/20 bg-[var(--nts-bg-pure)] p-4">
                 <div className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[#1f2328]/30 text-[#1f2328]">
                   {item.icon}
                 </div>
@@ -443,7 +443,7 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
 
       {/* ── App previews ──────────────────────────────────────────────────── */}
       <section className="mx-auto w-full max-w-7xl px-6 pb-8 md:px-10">
-        <div className="rounded-2xl border border-[#1f2328] bg-white p-6 shadow-[0_20px_44px_rgba(16,24,40,0.14)]">
+        <div className="rounded-2xl border border-[#1f2328] bg-[var(--nts-bg-pure)] p-6 shadow-[0_20px_44px_rgba(16,24,40,0.14)]">
           <h3 className="text-lg font-semibold text-[var(--nts-charcoal)]">3 σημεία από το ίδιο το application interface</h3>
           <p className="mt-2 text-sm text-[var(--nts-medium-gray)]">
             Πραγματικά in-app views που δείχνουν πώς το Performance+ μεταφράζει intelligence σε εμπορική δράση.
@@ -451,7 +451,7 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
 
           <div className="mt-5 grid gap-5">
             {appPreviewPoints.map((point) => (
-              <article key={point.title} className="rounded-xl border border-[#1f2328]/20 bg-white p-4 shadow-[0_10px_24px_rgba(16,24,40,0.12)]">
+              <article key={point.title} className="rounded-xl border border-[#1f2328]/20 bg-[var(--nts-bg-pure)] p-4 shadow-[0_10px_24px_rgba(16,24,40,0.12)]">
                 <div className="grid gap-4 md:grid-cols-[1.1fr_1fr] md:items-start">
                   <div>
                     <h4 className="text-sm font-semibold text-[var(--nts-charcoal)]">{point.title}</h4>
@@ -468,10 +468,10 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
                       className={`h-52 w-full object-cover transition-transform duration-500 group-hover:scale-105 ${point.imageClassName}`}
                     />
                     {/* Anonymization masks */}
-                    <div className="pointer-events-none absolute left-0 top-0 h-9 w-full bg-white/85 backdrop-blur-[2px]" />
-                    <div className="pointer-events-none absolute left-0 top-0 h-full w-12 bg-white/80 backdrop-blur-[1px]" />
-                    <div className="pointer-events-none absolute right-2 top-2 h-5 w-24 rounded bg-white/90" />
-                    <div className="pointer-events-none absolute left-2 top-2 h-5 w-20 rounded bg-white/90" />
+                    <div className="pointer-events-none absolute left-0 top-0 h-9 w-full bg-[var(--nts-bg-pure)]/85 backdrop-blur-[2px]" />
+                    <div className="pointer-events-none absolute left-0 top-0 h-full w-12 bg-[var(--nts-bg-pure)]/80 backdrop-blur-[1px]" />
+                    <div className="pointer-events-none absolute right-2 top-2 h-5 w-24 rounded bg-[var(--nts-bg-pure)]/90" />
+                    <div className="pointer-events-none absolute left-2 top-2 h-5 w-20 rounded bg-[var(--nts-bg-pure)]/90" />
                     {/* Hover overlay label */}
                     <div className="pointer-events-none absolute inset-0 flex items-end opacity-0 transition-opacity duration-300 group-hover:opacity-100">
                       <div className="w-full bg-[#1f2328]/80 px-4 py-2 backdrop-blur-sm">
@@ -488,7 +488,7 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
 
       {/* ── Final CTA ─────────────────────────────────────────────────────── */}
       <section className="mx-auto w-full max-w-7xl px-6 pb-8 md:px-10">
-        <div className="rounded-2xl border border-[#1f2328] bg-white p-6 shadow-[0_20px_44px_rgba(16,24,40,0.14)]">
+        <div className="rounded-2xl border border-[#1f2328] bg-[var(--nts-bg-pure)] p-6 shadow-[0_20px_44px_rgba(16,24,40,0.14)]">
           <h3 className="text-lg font-semibold text-[var(--nts-charcoal)]">{copy.finalTitle}</h3>
           <p className="mt-2 max-w-3xl text-sm text-[var(--nts-medium-gray)]">{copy.finalDescription}</p>
 
@@ -496,14 +496,14 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
             <button
               type="button"
               onClick={onOpenAuth}
-              className="inline-flex items-center gap-2 rounded-xl bg-[#FF6B35] px-5 py-3 text-sm font-semibold text-white shadow-[0_10px_20px_rgba(255,107,53,0.35)] transition hover:bg-[#e75b2d]"
+              className="inline-flex items-center gap-2 rounded-xl bg-[var(--nts-accent)] px-5 py-3 text-sm font-semibold text-white shadow-[0_10px_20px_rgba(249,115,22,0.35)] transition hover:bg-[var(--nts-accent-hover)]"
             >
               Ενεργοποίησε το workspace σου
               <ArrowRight size={16} />
             </button>
             <a
               href="mailto:hello@notthesame.ai?subject=Performance%2B%20Demo%20Request"
-              className="inline-flex items-center gap-2 rounded-xl border border-[#1f2328] bg-white px-5 py-3 text-sm font-semibold text-[#1f2328] transition hover:bg-[var(--nts-light-gray)]"
+              className="inline-flex items-center gap-2 rounded-xl border border-[#1f2328] bg-[var(--nts-bg-pure)] px-5 py-3 text-sm font-semibold text-[#1f2328] transition hover:bg-[var(--nts-light-gray)]"
             >
               <HelpCircle size={16} />
               Ζήτησε demo / επικοινωνία

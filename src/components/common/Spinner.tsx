@@ -16,7 +16,7 @@ export function Spinner({ size = 'md', className = '', label }: SpinnerProps) {
   return (
     <div className={`flex flex-col items-center justify-center gap-2 ${className}`}>
       <div
-        className={`rounded-full border-[var(--nts-border-gray)] border-t-[#FF6B35] animate-spin ${sizeClasses[size]}`}
+        className={`rounded-full border-[var(--nts-border-gray)] border-t-[var(--nts-accent)] animate-spin ${sizeClasses[size]}`}
         role="status"
         aria-label={label ? undefined : 'Loading'}
       />

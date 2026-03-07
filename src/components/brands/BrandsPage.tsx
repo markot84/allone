@@ -7,7 +7,7 @@ import { BrandCreateForm } from '../auth/BrandCreateForm';
 import { getAssetUrl } from '../../services/storage';
 import type { Brand } from '../../types';
 
-const COLORS = ['#FF6B35', '#3B82F6', '#22C55E', '#8B5CF6', '#F59E0B'];
+const COLORS = ['var(--nts-accent)', '#3B82F6', '#22C55E', '#8B5CF6', '#F59E0B'];
 
 interface BrandsPageProps {
   onNavigateToDashboard?: () => void;
@@ -52,7 +52,7 @@ export function BrandsPage({ onNavigateToDashboard }: BrandsPageProps) {
           exit={{ opacity: 0, height: 0 }}
           className="overflow-hidden"
         >
-          <Card padding="lg" className="border-l-4 border-l-[#FF6B35]">
+          <Card padding="lg" className="border-l-4 border-l-[var(--nts-accent)]">
             <h3 className="font-semibold text-[#1A1A1A] mb-4">Δημιουργία νέου brand</h3>
             <BrandCreateForm onCreated={handleCreated} />
           </Card>
@@ -72,7 +72,7 @@ export function BrandsPage({ onNavigateToDashboard }: BrandsPageProps) {
               hover
               className={`cursor-pointer transition-all ${
                 currentBrand?.id === brand.id
-                  ? 'ring-2 ring-[#FF6B35] bg-[#FFF0EB]'
+                  ? 'ring-2 ring-[var(--nts-accent)] bg-[var(--nts-accent-light)]'
                   : ''
               }`}
               onClick={() => handleBrandSelect(brand)}
@@ -113,12 +113,12 @@ export function BrandsPage({ onNavigateToDashboard }: BrandsPageProps) {
                 <ChevronRight
                   size={20}
                   className={`flex-shrink-0 ${
-                    currentBrand?.id === brand.id ? 'text-[#FF6B35]' : 'text-[#9CA3AF]'
+                    currentBrand?.id === brand.id ? 'text-[var(--nts-accent)]' : 'text-[#9CA3AF]'
                   }`}
                 />
               </div>
               {currentBrand?.id === brand.id && (
-                <p className="text-xs text-[#FF6B35] font-medium mt-2">Ενεργό brand</p>
+                <p className="text-xs text-[var(--nts-accent)] font-medium mt-2">Ενεργό brand</p>
               )}
             </Card>
           </motion.div>

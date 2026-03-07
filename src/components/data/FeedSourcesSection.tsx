@@ -203,7 +203,7 @@ export function FeedSourcesSection() {
             {feedSources.map((s) => (
               <div
                 key={s.id}
-                className="flex items-center gap-3 p-3 border border-[#E5E5E5] rounded-lg hover:border-[#FF6B35]/50 transition-colors"
+                className="flex items-center gap-3 p-3 border border-[#E5E5E5] rounded-lg hover:border-[var(--nts-accent)]/50 transition-colors"
               >
                 <span className="text-xl">{typeInfo(s.type)?.icon ?? '📄'}</span>
                 <div className="flex-1 min-w-0">

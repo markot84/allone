@@ -59,7 +59,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
             <button
               type="button"
               onClick={() => onSectionChange?.('data-organic')}
-              className="font-semibold text-[#FF6B35] hover:underline focus:outline-none focus:ring-2 focus:ring-[#FF6B35] focus:ring-offset-1 rounded"
+              className="font-semibold text-[var(--nts-accent)] hover:underline focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)] focus:ring-offset-1 rounded"
             >
               Data Import
             </button>
@@ -117,8 +117,8 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
         </Card>
         <Card padding="md">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-[#FFF0EB] rounded-lg flex items-center justify-center">
-              <TrendingUp size={20} className="text-[#FF6B35]" />
+            <div className="w-10 h-10 bg-[var(--nts-accent-light)] rounded-lg flex items-center justify-center">
+              <TrendingUp size={20} className="text-[var(--nts-accent)]" />
             </div>
             <div>
               <p className="text-sm text-[#4A4A4A]">Μέσος Όρος/Περίοδο</p>
