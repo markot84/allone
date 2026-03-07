@@ -123,7 +123,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
   if (segmentsLoading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
-        <Spinner size="lg" label="Φόρτωση RFM segments…" />
+        <Spinner size="lg" label="Φόρτωση data analysis segments…" />
       </div>
     );
   }
@@ -132,9 +132,9 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
     return (
       <div className="space-y-6">
         <div>
-          <h2 className="text-2xl font-bold text-[#1A1A1A]">RFM Analysis</h2>
+          <h2 className="text-2xl font-bold text-[#1A1A1A]">Data Analysis</h2>
           <p className="text-[#4A4A4A] mt-1">
-            Analyze customer segments based on Recency, Frequency, and Monetary value
+            Analyze customer segments through RFM, behavioral and firmographic lenses
           </p>
         </div>
         <Card padding="lg" className="text-center py-12">
@@ -150,7 +150,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
             >
               Data Import
             </button>
-            {' '}για να εισάγετε RFM segments.
+            {' '}για να εισάγετε segment δεδομένα.
           </p>
         </Card>
       </div>
@@ -162,9 +162,9 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-        <h2 className="text-2xl font-bold text-[#1A1A1A]">RFM Analysis</h2>
+        <h2 className="text-2xl font-bold text-[#1A1A1A]">Data Analysis</h2>
         <p className="text-[#4A4A4A] mt-1">
-          Analyze customer segments based on Recency, Frequency, and Monetary value
+          Analyze customer segments through RFM, behavioral and firmographic lenses
           {hasImportedSegments && (
             <span className="ml-2 text-[#22C55E] font-medium">· {rfmSegments.length} segment(s) · {formatNumber(totalCustomersDisplay)} customers</span>
           )}

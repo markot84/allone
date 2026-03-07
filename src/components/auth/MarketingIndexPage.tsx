@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, BarChart3, Brain, Euro, FileText, HelpCircle, LayoutDashboard, Lock, Megaphone, Package, Shield, SlidersHorizontal, Sparkles, Target, Users, Zap } from 'lucide-react';
+import { ArrowRight, BarChart3, Brain, Database, Euro, FileText, FileSpreadsheet, HelpCircle, LayoutDashboard, Megaphone, Package, ShieldCheck, SlidersHorizontal, Target, Upload, Users } from 'lucide-react';
 
 type LandingVariant = 'ceo' | 'ops';
 
@@ -12,154 +12,157 @@ interface MarketingIndexPageProps {
 // ─── Static data ─────────────────────────────────────────────────────────────
 
 const metrics = [
-  { label: 'Ενιαίο σύστημα αποφάσεων', value: '1', suffix: ' platform' },
-  { label: 'Commercial view', value: '360', suffix: '°' },
-  { label: 'ROI tracked per action', value: '100', suffix: '%' },
+  { label: 'πηγές δεδομένων (ERP, Ads, CSV, χειροκίνητα)', value: '5', suffix: '+' },
+  { label: 'modules ενεργά — από data analysis έως content strategy', value: '7', suffix: '' },
+  { label: 'ολοκληρωμένος κύκλος: data → intelligence → activation', value: '1', suffix: '' },
 ];
 
+const dataSources = [
+  { name: 'ERP / Πωλήσεις', description: 'Προϊόντα, απόθεμα, τιμολόγηση, πελατολόγιο', icon: <Database size={18} /> },
+  { name: 'Google Ads', description: 'Campaigns, κόστος, conversions, κοινά', icon: <BarChart3 size={18} /> },
+  { name: 'Meta Ads', description: 'Campaigns, audiences, Meta-IDs, attribution', icon: <Target size={18} /> },
+  { name: 'CSV / Excel', description: 'Segments, οικονομικά, analytics, custom data', icon: <FileSpreadsheet size={18} /> },
+  { name: 'Χειροκίνητη εισαγωγή', description: 'KPIs, budgets, στρατηγικές παράμετροι', icon: <Upload size={18} /> },
+];
+
+const inputOutputChain = {
+  inputs: [
+    'Transactional & inventory data (ERP)',
+    'Campaign performance & attribution (Google Ads, Meta)',
+    'Financial, CRM & custom datasets (CSV / manual)',
+  ],
+  outputs: [
+    'Audience segmentation & commercial prioritization',
+    'Portfolio scoring & decision signals',
+    'Channel mix optimization & budget allocation',
+    'Content strategy aligned with business objectives',
+  ],
+};
+
 const coreFeatures = [
-  { title: 'Strategy Weights', description: 'Ρυθμίζει factors προτεραιοποίησης με τρόπο που ταιριάζει στο εμπορικό σου μοντέλο.', icon: <SlidersHorizontal size={18} /> },
-  { title: 'RFM Analysis', description: 'Μετατρέπει raw δεδομένα σε εμπορικά χρήσιμα segments με ξεκάθαρες προτεραιότητες.', icon: <Users size={18} /> },
-  { title: 'Product Prioritization', description: 'Κατατάσσει portfolio με multi-factor scoring για γρήγορες αποφάσεις growth.', icon: <Package size={18} /> },
-  { title: 'Channel Activation', description: 'AI recommendations για τα επόμενα κανάλια και τις πιο αποδοτικές ενέργειες.', icon: <Megaphone size={18} /> },
+  { title: 'Strategy Weights', description: 'Μεταφράζει τη στρατηγική της επιχείρησης σε μετρήσιμες βαρύτητες, ώστε κάθε απόφαση να αξιολογείται με ενιαία διοικητική λογική.', icon: <SlidersHorizontal size={18} /> },
+  { title: 'Data Analysis', description: 'Μετατρέπει τα δεδομένα πελατών σε εφαρμόσιμη εμπορική νοημοσύνη μέσω RFM, behavioral, firmographic και αξιακής ανάλυσης.', icon: <Users size={18} /> },
+  { title: 'Product Intelligence', description: 'Αναδεικνύει την πραγματική εμπορική δυναμική του χαρτοφυλακίου με πολυπαραγονική αξιολόγηση, ιεράρχηση και σαφή σήματα απόφασης.', icon: <Package size={18} /> },
+  { title: 'Channel Activation', description: 'Μετατρέπει insights και προτεραιότητες σε AI-powered κατευθύνσεις για κανάλια, ενέργειες και κατανομή επένδυσης.', icon: <Megaphone size={18} /> },
 ];
 
 const problemsBeforeAfter = [
   {
-    before: 'Διασκορπισμένα reports, ασύνδετα εργαλεία και καθυστερημένο optimization.',
-    after: 'Ένα σύστημα, μία εικόνα: real-time intelligence για κάθε εμπορική απόφαση.',
+    before: 'Αποσπασματικά reports, ασύνδετα εργαλεία και αργή μετάβαση από την πληροφορία στην απόφαση.',
+    after: 'Ένα ενιαίο AI-powered σύστημα που μετατρέπει τα δεδομένα σε καθαρή στρατηγική εικόνα και εφαρμόσιμη καθοδήγηση.',
   },
   {
-    before: 'Budget allocation χωρίς πραγματική απόδειξη απόδοσης ανά κανάλι.',
-    after: 'Σαφής ROI attribution: ξέρεις τι αποδίδει, τι σταματάς και τι κλιμακώνεις.',
+    before: 'Κατανομή προϋπολογισμού χωρίς τεκμηριωμένη αποτίμηση της απόδοσης ανά κανάλι ή πρωτοβουλία.',
+    after: 'Σαφές πλαίσιο ROI attribution και εμπορικού πλαισίου αναφορών, ώστε να γνωρίζεις τι αποδίδει, τι αναστέλλεται και τι κλιμακώνεται.',
   },
   {
-    before: 'Marketing execution χωρίς κοινή στρατηγική γραμμή μεταξύ τμημάτων.',
-    after: 'Κοινό operating model για CMO, growth teams και διοίκηση.',
+    before: 'Εκτέλεση ενεργειών marketing χωρίς κοινό στρατηγικό πλαίσιο μεταξύ διοίκησης, ομάδων και συνεργατών.',
+    after: 'Κοινό σύστημα αποφάσεων που ευθυγραμμίζει διοίκηση, εσωτερικά τμήματα και εξωτερικούς συνεργάτες.',
   },
 ];
 
 const operatingFlow = [
-  { step: '01', title: 'Data foundation', description: 'Συγκεντρώνεις sales, προϊόντα και κανάλια σε ενιαία εικόνα.', icon: <LayoutDashboard size={18} /> },
-  { step: '02', title: 'Commercial intelligence', description: 'RFM, segmentation και product scoring αποκαλύπτουν πού υπάρχει margin για growth.', icon: <Users size={18} /> },
-  { step: '03', title: 'Activation strategy', description: 'Το σύστημα προτείνει προτεραιότητες για κανάλια, περιεχόμενο και εμπορικές κινήσεις.', icon: <Target size={18} /> },
-  { step: '04', title: 'ROI governance', description: 'Μετράς επίδραση, επαναπροσαρμόζεις budget και βελτιστοποιείς με κύκλους υψηλής ταχύτητας.', icon: <Euro size={18} /> },
+  { step: '01', title: 'Ενοποίηση δεδομένων', description: 'Εισάγεις δεδομένα από ERP, διαφημιστικές κονσόλες (Google Ads, Meta), οικονομικά στοιχεία και πελατολόγιο — μέσω CSV ή χειροκίνητα. Με ή χωρίς API — zero setup time.', icon: <LayoutDashboard size={18} /> },
+  { step: '02', title: 'Εμπορική νοημοσύνη με AI', description: 'Η ανάλυση δεδομένων, το segmentation και η αξιολόγηση προϊόντων αποκαλύπτουν πού βρίσκεται η πραγματική εμπορική δυναμική.', icon: <Users size={18} /> },
+  { step: '03', title: 'Στρατηγική καθοδήγηση', description: 'Το σύστημα προτείνει προτεραιότητες για κανάλια, περιεχόμενο και εμπορικές κινήσεις με εφαρμόσιμη λογική απόφασης.', icon: <Target size={18} /> },
+  { step: '04', title: 'Διακυβέρνηση απόδοσης', description: 'Παρακολουθείς την επίδραση, επανακατανέμεις επένδυση και βελτιστοποιείς με συνεχή κύκλο λήψης αποφάσεων.', icon: <Euro size={18} /> },
 ];
 
 const valuePillars = [
-  { title: 'Για τη Διοίκηση', description: 'Σαφές operating dashboard για revenue impact, margin signals και στρατηγικές προτεραιότητες.', icon: <BarChart3 size={18} /> },
-  { title: 'Για το Marketing Team', description: 'Actionable κατεύθυνση ανά segment και καμπάνια, με λιγότερο trial-and-error.', icon: <Megaphone size={18} /> },
-  { title: 'Για τον Οργανισμό', description: 'Κοινή γλώσσα αποφάσεων μεταξύ commercial, finance και marketing σε ένα σύστημα.', icon: <FileText size={18} /> },
+  { title: 'Για τη Διοίκηση', description: 'Παρέχει ενιαία εικόνα για εμπορική επίδοση, περιθώρια κέρδους, ρίσκο και στρατηγικές προτεραιότητες.', icon: <BarChart3 size={18} /> },
+  { title: 'Για το Marketing', description: 'Μετατρέπει τα δεδομένα και τα AI-powered insights σε εφαρμόσιμη καθοδήγηση ανά κοινό, καμπάνια και δημιουργική προτεραιότητα.', icon: <Megaphone size={18} /> },
+  { title: 'Για τον Οργανισμό', description: 'Εδραιώνει κοινή γλώσσα αποφάσεων μεταξύ διοίκησης, εμπορικής διεύθυνσης, finance, operations και marketing.', icon: <FileText size={18} /> },
+  { title: 'Για Finance & Operations', description: 'Ενισχύει τον έλεγχο του προϋπολογισμού, της αποδοτικότητας και του πραγματικού επιχειρησιακού αντίκτυπου με μετρήσιμη λογική.', icon: <Euro size={18} /> },
 ];
 
 const appPreviewPoints = [
   {
-    title: 'Executive Dashboard Control',
+    title: 'Dashboard',
     featureLabel: 'Dashboard',
-    problem: 'Πρόβλημα: Η διοίκηση δεν έχει μία ενιαία, αξιόπιστη εικόνα για την εμπορική πορεία.',
-    solution: 'Πώς το κάνει: Ενοποιεί KPIs, strategy και εμπορικά signals σε ένα dashboard.',
-    value: 'Υπεραξία: Ταχύτερες αποφάσεις με κοινή γλώσσα για CEO, CMO και growth teams.',
+    problem: 'Πρόβλημα: Η διοίκηση δεν διαθέτει ενιαία και αξιόπιστη εικόνα για την εμπορική πορεία της επιχείρησης.',
+    solution: 'Πώς το κάνει: Ενοποιεί KPIs, στρατηγικές προτεραιότητες και κρίσιμα εμπορικά σήματα σε κοινό πίνακα εποπτείας.',
+    value: 'Υπεραξία: Υποστηρίζει ταχύτερη και περισσότερο τεκμηριωμένη λήψη αποφάσεων με κοινό σημείο αναφοράς για διοίκηση και τμήματα.',
     imageSrc: '/landing-screens/dashboard.png',
     imageClassName: 'object-left-top',
   },
   {
-    title: 'Strategy Weights Intelligence',
-    featureLabel: 'Strategy',
-    problem: 'Πρόβλημα: Η προτεραιοποίηση προϊόντων/καναλιών γίνεται ad-hoc και όχι με δομημένα κριτήρια.',
-    solution: 'Πώς το κάνει: Strategy weights configurator με multi-factor scoring logic.',
-    value: 'Υπεραξία: Στόχευση budget σε κινήσεις με το μεγαλύτερο margin impact.',
+    title: 'Strategy Weights',
+    featureLabel: 'Strategy Weights',
+    problem: 'Πρόβλημα: Η ιεράρχηση προϊόντων και καναλιών γίνεται συχνά αποσπασματικά, χωρίς σταθερό διοικητικό πλαίσιο αξιολόγησης.',
+    solution: 'Πώς το κάνει: Επιτρέπει τη ρύθμιση στρατηγικών βαρύτητων και την πολυπαραγονική αποτίμηση κάθε επιλογής με κοινή λογική.',
+    value: 'Υπεραξία: Ο προϋπολογισμός κατευθύνεται προς κινήσεις με τη μεγαλύτερη δυνητική συμβολή σε ανάπτυξη, απόδοση και περιθώριο κέρδους.',
     imageSrc: '/landing-screens/strategy-rfm.png',
     imageClassName: 'object-top',
   },
   {
-    title: 'RFM Segmentation in Action',
-    featureLabel: 'RFM Analysis',
-    problem: 'Πρόβλημα: Το marketing στοχεύει οριζόντια χωρίς σαφή διαχωρισμό πελατών.',
-    solution: 'Πώς το κάνει: RFM analysis που εντοπίζει υψηλής αξίας, loyal και at-risk segments.',
-    value: 'Υπεραξία: Πιο έξυπνες καμπάνιες με μεγαλύτερη πιθανότητα conversion και retention.',
+    title: 'Data Analysis',
+    featureLabel: 'Data Analysis',
+    problem: 'Πρόβλημα: Το marketing στοχεύει οριζόντια χωρίς επαρκή διαχωρισμό πελατών, προτεραιοτήτων και δυνητικής αξίας.',
+    solution: 'Πώς το κάνει: Συνδυάζει RFM, συμπεριφορική και firmographic ανάλυση για ακριβέστερο segmentation και ιεράρχηση κοινού.',
+    value: 'Υπεραξία: Οι καμπάνιες αποκτούν υψηλότερη ακρίβεια στόχευσης, αυξημένη πιθανότητα μετατροπής και ισχυρότερη εμπορική αποδοτικότητα.',
     imageSrc: '/landing-screens/strategy-rfm.png',
     imageClassName: 'object-bottom',
   },
-];
-
-const trustSignals = [
-  { label: 'Enterprise-grade', icon: <Shield size={13} /> },
-  { label: 'AI-native', icon: <Sparkles size={13} /> },
-  { label: 'Firebase-secured', icon: <Lock size={13} /> },
-  { label: 'Fast execution', icon: <Zap size={13} /> },
+  {
+    title: 'Product Intelligence',
+    featureLabel: 'Product Intelligence',
+    problem: 'Πρόβλημα: Το προϊοντικό χαρτοφυλάκιο αξιολογείται αποσπασματικά, χωρίς σαφή εικόνα για ευκαιρίες, αδυναμίες και προτεραιότητες.',
+    solution: 'Πώς το κάνει: Εντάσσει τα προϊόντα σε ενιαίο πλαίσιο αξιολόγησης με εμπορικά σήματα, απόδοση και επόμενες προτεραιότητες ανάπτυξης.',
+    value: 'Υπεραξία: Γίνεται σαφές ποια προϊόντα πρέπει να ενισχυθούν, ποια να προστατευθούν και ποια να επανατοποθετηθούν με επιχειρηματική λογική.',
+    imageSrc: '/landing-screens/dashboard.png',
+    imageClassName: 'object-center',
+  },
+  {
+    title: 'Content Strategy',
+    featureLabel: 'Content Strategy',
+    problem: 'Πρόβλημα: Ο σχεδιασμός περιεχομένου εκτελείται χωρίς σαφή σύνδεση με κοινά, στόχους και εμπορικές επιδιώξεις.',
+    solution: 'Πώς το κάνει: Μετατρέπει audience insights, επιχειρηματικές προτεραιότητες και AI-powered σήματα σε σαφείς θεματικές κατευθύνσεις.',
+    value: 'Υπεραξία: Το περιεχόμενο παύει να είναι αποσπασματικό και ευθυγραμμίζεται άμεσα με engagement, ζήτηση και μετατροπές.',
+    imageSrc: '/landing-screens/strategy-rfm.png',
+    imageClassName: 'object-center',
+  },
 ];
 
 const variantCopy: Record<LandingVariant, {
-  badge: string; headline: string; highlight: string; typewriterWords: string[];
+  badge: string; headline: string; highlight: string;
   description: string; cta: string; uspTitle: string; uspPoints: string[];
   uspFooter: string; finalTitle: string; finalDescription: string;
 }> = {
   ceo: {
-    badge: 'Flagship platform for profitable growth',
-    headline: 'Από τα data στο growth,',
-    highlight: 'με AI στρατηγική που εκτελείται.',
-    typewriterWords: ['που εκτελείται.', 'που αποδεικνύεται.', 'που κλιμακώνεται.'],
-    description: 'Το Performance+ ενοποιεί marketing intelligence, product intelligence και ROI attribution ώστε η ομάδα σου να κινείται με σιγουριά στις αποφάσεις που αυξάνουν κέρδος.',
-    cta: 'Start with Performance+',
-    uspTitle: 'What makes it globally unique',
+    badge: 'AI-powered operating layer για εμπορικές αποφάσεις',
+    headline: 'Performance+',
+    highlight: 'το λειτουργικό σύστημα της επιχειρηματικής ανάπτυξης',
+    description: 'Αναλύει δεδομένα κοινού και αποθέματος, μετατρέπει την πληροφορία σε επιχειρηματική νοημοσύνη και προτείνει σενάρια εμπορικής πολιτικής, κατάλληλα προωθητικά κανάλια και οργανικό περιεχόμενο. Παράλληλα, συντονίζει τα εσωτερικά τμήματα και τους εξωτερικούς συνεργάτες, μειώνοντας τον κατακερματισμό της πληροφορίας και τις καθυστερήσεις που επιβραδύνουν την ανάπτυξη.',
+    cta: 'Είσοδος στο Performance+',
+    uspTitle: 'Γιατί ξεχωρίζει',
     uspPoints: [
-      'Μετατρέπει sales data σε profit-first στρατηγική με operational βήματα.',
-      'Συνδέει segmentation, προϊόντα και κανάλια σε ενιαία λογική απόφασης.',
-      'Δίνει measurable impact μέσω ROI Attribution και AI Insights.',
+      'Μετατρέπει τα εμπορικά δεδομένα σε διοικητική καθοδήγηση προσανατολισμένη στην κερδοφορία και στην εφαρμογή.',
+      'Συνδέει segmentation, προϊόντα, κανάλια και προτεραιότητες σε ενιαία λογική αξιολόγησης.',
+      'Καθιστά την επίδραση μετρήσιμη μέσω ROI Attribution και AI-powered αναλυτικών συμπερασμάτων.',
     ],
-    uspFooter: 'Για CEO, Founder, CMO και marketing teams που θέλουν κάθε καμπάνια να συνδέεται με measurable revenue impact.',
-    finalTitle: 'Έτοιμο για growth teams που μετρούν αποτέλεσμα',
-    finalDescription: 'Αν ο οργανισμός σου χρειάζεται marketing governance, υψηλή ταχύτητα αποφάσεων και σαφή σύνδεση performance με revenue, το Performance+ λειτουργεί ως operating system για την εμπορική σου ανάπτυξη.',
+    uspFooter: 'Απευθύνεται σε επιχειρηματίες και διευθυντικά στελέχη που χρειάζονται ένα κοινό σύστημα αποφάσεων για τα εσωτερικά τμήματα και τους εξωτερικούς συνεργάτες της επιχείρησής τους.',
+    finalTitle: 'Έτοιμο για οργανισμούς που απαιτούν καθαρή λογική αποφάσεων',
+    finalDescription: 'Όταν η επιχείρηση χρειάζεται AI-powered εμπορική νοημοσύνη, συστηματική διακυβέρνηση του marketing και σαφή σύνδεση της απόδοσης με τα έσοδα, το Performance+ λειτουργεί ως ενιαίο λειτουργικό σύστημα εμπορικής ανάπτυξης.',
   },
   ops: {
-    badge: 'Built for Marketing Ops velocity',
-    headline: 'Λιγότερο reporting,',
-    highlight: 'περισσότερες κινήσεις που αποδίδουν.',
-    typewriterWords: ['που αποδίδουν.', 'που μετράνε.', 'που κλιμακώνονται.'],
-    description: 'Το Performance+ δίνει σε marketing managers και performance teams ένα ενιαίο command center για segments, products, channels και content prioritization.',
-    cta: 'Activate Marketing Ops Mode',
-    uspTitle: 'Why Marketing Operations teams choose it',
+    badge: 'AI-powered operating layer για στρατηγική εκτέλεση',
+    headline: 'Performance+',
+    highlight: 'το λειτουργικό σύστημα της επιχειρηματικής ανάπτυξης',
+    description: 'Αναλύει δεδομένα κοινού και αποθέματος, μετατρέπει την πληροφορία σε επιχειρηματική νοημοσύνη και προτείνει σενάρια εμπορικής πολιτικής, κατάλληλα προωθητικά κανάλια και οργανικό περιεχόμενο. Παράλληλα, συντονίζει τα εσωτερικά τμήματα και τους εξωτερικούς συνεργάτες, μειώνοντας τον κατακερματισμό της πληροφορίας και τις καθυστερήσεις που επιβραδύνουν την ανάπτυξη.',
+    cta: 'Είσοδος στο Performance+',
+    uspTitle: 'Γιατί το επιλέγουν τα τμήματα marketing και εμπορικής διεύθυνσης',
     uspPoints: [
-      'Μειώνει τον χρόνο από analysis σε execution με actionable AI recommendations.',
-      'Ευθυγραμμίζει καμπάνιες, περιεχόμενο και budget σε κοινό KPI framework.',
-      'Κάνει εύκολο το weekly optimization cycle με καθαρά insights ανά segment.',
+      'Μειώνει τον χρόνο από την ανάλυση έως την εκτέλεση με σαφείς, εφαρμόσιμες και AI-powered προτάσεις.',
+      'Ευθυγραμμίζει καμπάνιες, περιεχόμενο και προϋπολογισμό σε κοινό πλαίσιο δεικτών απόδοσης.',
+      'Υποστηρίζει σταθερό κύκλο βελτιστοποίησης με καθαρά insights ανά κοινό, προϊόν και προτεραιότητα.',
     ],
-    uspFooter: 'Ιδανικό για οργανισμούς που χρειάζονται alignment μεταξύ CMO, Growth και Performance Marketing.',
-    finalTitle: 'Το operating layer του marketing τμήματος σου',
-    finalDescription: 'Για teams που τρέχουν πολλά κανάλια ταυτόχρονα, το Performance+ προσφέρει κοινή ορατότητα, ταχύτερη λήψη αποφάσεων και σταθερή βελτιστοποίηση ROI.',
+    uspFooter: 'Λειτουργεί ως κοινό σύστημα αναφοράς για τα τμήματα που σχεδιάζουν, εγκρίνουν και εκτελούν την εμπορική στρατηγική.',
+    finalTitle: 'Το λειτουργικό υπόβαθρο του marketing και του εμπορικού σχεδιασμού',
+    finalDescription: 'Για τμήματα που διαχειρίζονται πολλαπλά κανάλια και αυξημένη επιχειρησιακή πολυπλοκότητα, το Performance+ προσφέρει κοινή ορατότητα, AI-powered καθοδήγηση και συνεχή βελτιστοποίηση της απόδοσης.',
   },
 };
 
 // ─── Hooks ────────────────────────────────────────────────────────────────────
-
-function useTypewriter(words: string[], speed = 55, pause = 2200) {
-  const [displayed, setDisplayed] = useState('');
-  const [wordIdx, setWordIdx] = useState(0);
-  const [charIdx, setCharIdx] = useState(0);
-  const [deleting, setDeleting] = useState(false);
-
-  useEffect(() => {
-    const current = words[wordIdx];
-    const delay = deleting ? speed / 2 : charIdx === current.length ? pause : speed;
-    const timer = setTimeout(() => {
-      if (!deleting && charIdx < current.length) {
-        setDisplayed(current.slice(0, charIdx + 1));
-        setCharIdx(c => c + 1);
-      } else if (!deleting && charIdx === current.length) {
-        setDeleting(true);
-      } else if (deleting && charIdx > 0) {
-        setDisplayed(current.slice(0, charIdx - 1));
-        setCharIdx(c => c - 1);
-      } else {
-        setDeleting(false);
-        setWordIdx(i => (i + 1) % words.length);
-      }
-    }, delay);
-    return () => clearTimeout(timer);
-  }, [words, wordIdx, charIdx, deleting, speed, pause]);
-
-  return displayed;
-}
 
 function useCountUp(target: number, duration = 1400, active: boolean) {
   const [count, setCount] = useState(0);
@@ -191,11 +194,111 @@ function MetricItem({ value, suffix, label, active }: { value: number; suffix: s
   );
 }
 
+function isDarkHighlight(index: number) {
+  const row = Math.floor(index / 2);
+  const isRightColumn = index % 2 === 1;
+  return row % 2 === 0 ? isRightColumn : !isRightColumn;
+}
+
+function isPreviewDarkHighlight(index: number) {
+  return index === 1 || index === 3;
+}
+
+function EditorialCard({
+  title,
+  description,
+  icon,
+  eyebrow,
+  stat,
+  dark = false
+}: {
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+  eyebrow: string;
+  stat: string;
+  dark?: boolean;
+}) {
+  return (
+    <article
+      className={[
+        'group relative min-h-[280px] overflow-hidden rounded-[28px] border p-6 transition duration-300',
+        dark
+          ? 'border-white/10 bg-[#0f1115] text-white shadow-[0_22px_50px_rgba(15,17,21,0.34)]'
+          : 'border-[#1f2328]/15 bg-[var(--nts-bg-pure)] text-[var(--nts-charcoal)] shadow-[0_18px_36px_rgba(16,24,40,0.12)] hover:border-[var(--nts-accent)]/35',
+      ].join(' ')}
+    >
+      <div
+        className={[
+          'pointer-events-none absolute right-[-28px] top-[-24px] h-36 w-36 rounded-full blur-2xl',
+          dark ? 'bg-[var(--nts-accent)]/25' : 'bg-[#1f2328]/6'
+        ].join(' ')}
+      />
+      <div
+        className={[
+          'pointer-events-none absolute bottom-4 right-4 h-20 w-20 rounded-3xl border',
+          dark ? 'border-white/10 bg-white/5' : 'border-[#1f2328]/10 bg-[var(--nts-bg-subtle)]'
+        ].join(' ')}
+      />
+      <div className="relative flex h-full flex-col justify-between">
+        <div>
+          <div className="flex items-start justify-between gap-4">
+            <div
+              className={[
+                'inline-flex h-11 w-11 items-center justify-center rounded-2xl border',
+                dark
+                  ? 'border-white/12 bg-white/6 text-white'
+                  : 'border-[#1f2328]/10 bg-[var(--nts-bg-subtle)] text-[var(--nts-charcoal)]'
+              ].join(' ')}
+            >
+              {icon}
+            </div>
+            <span
+              className={[
+                'rounded-full px-3 py-1 text-[11px] font-semibold tracking-[0.08em]',
+                dark
+                  ? 'border border-white/10 bg-white/6 text-white/72'
+                  : 'border border-[#1f2328]/10 bg-[var(--nts-bg-subtle)] text-[var(--nts-medium-gray)]'
+              ].join(' ')}
+            >
+              {eyebrow}
+            </span>
+          </div>
+
+          <div className="mt-8 space-y-3">
+            <h3 className={dark ? 'max-w-xs text-[28px] font-semibold leading-[1.05] text-white' : 'max-w-xs text-[28px] font-semibold leading-[1.05] text-[var(--nts-charcoal)]'}>
+              {title}
+            </h3>
+            <p className={dark ? 'max-w-sm text-sm leading-6 text-white/72' : 'max-w-sm text-sm leading-6 text-[var(--nts-medium-gray)]'}>
+              {description}
+            </p>
+          </div>
+        </div>
+
+        <div className="relative mt-8 flex items-end justify-between gap-4">
+          <div className={dark ? 'space-y-1' : 'space-y-1'}>
+            <p className={dark ? 'text-[11px] tracking-[0.08em] text-white/52' : 'text-[11px] tracking-[0.08em] text-[var(--nts-medium-gray)]'}>
+              Εστίαση
+            </p>
+            <p className={dark ? 'text-2xl font-semibold text-white' : 'text-2xl font-semibold text-[var(--nts-charcoal)]'}>
+              {stat}
+            </p>
+          </div>
+          <div className="flex items-end gap-1.5">
+            <span className={dark ? 'h-8 w-2 rounded-full bg-white/20' : 'h-8 w-2 rounded-full bg-[#1f2328]/10'} />
+            <span className="h-12 w-2 rounded-full bg-[var(--nts-accent)]" />
+            <span className={dark ? 'h-16 w-2 rounded-full bg-white/50' : 'h-16 w-2 rounded-full bg-[#1f2328]'} />
+          </div>
+        </div>
+      </div>
+    </article>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChange }: MarketingIndexPageProps) {
   const copy = variantCopy[variant];
-  const typewritten = useTypewriter(copy.typewriterWords);
 
   // Sticky header / scroll state
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -227,147 +330,154 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
     <div ref={scrollRef} className="h-screen overflow-y-auto overflow-x-hidden bg-[var(--nts-bg-subtle)] text-[var(--nts-charcoal)]">
 
       {/* ── Sticky header ────────────────────────────────────────────────── */}
-      <header className={`sticky top-0 z-50 transition-all duration-300 ${scrolled ? 'shadow-[0_8px_24px_rgba(16,24,40,0.12)] bg-[var(--nts-bg-pure)]/95 backdrop-blur' : 'bg-transparent'}`}>
-        <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-4 md:px-10">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#1f2328]/30 bg-[var(--nts-bg-pure)] text-[#1f2328] shadow-sm">
-              <Brain size={18} />
-            </div>
-            <div>
-              <p className="text-sm font-semibold tracking-wide text-[var(--nts-charcoal)]">Performance+</p>
-              <p className="text-xs text-[var(--nts-medium-gray)]">by notthesame.ai</p>
-            </div>
-          </div>
+      <header className="relative z-20">
+        <div className="mx-auto w-full max-w-7xl px-6 pt-5 md:px-10">
+          <div className="rounded-[22px] border border-[#1f2328]/10 bg-[var(--nts-bg-pure)] px-4 py-3 shadow-[0_10px_24px_rgba(16,24,40,0.08)] md:px-5">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#1f2328]/10 bg-[var(--nts-bg-subtle)] text-[var(--nts-charcoal)]">
+                  <Brain size={18} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs text-[var(--nts-medium-gray)]">{copy.badge}</p>
+                </div>
+              </div>
 
-          <div className="flex items-center gap-3">
-            {/* A/B variant toggle */}
-            <div className="hidden items-center gap-1 md:flex">
-              {(['ceo', 'ops'] as const).map(v => (
-                <button
-                  key={v}
-                  type="button"
-                  onClick={() => onVariantChange?.(v)}
-                  className={`rounded-full px-3 py-1 text-xs transition ${variant === v ? 'bg-[#1f2328] text-white' : 'text-[var(--nts-medium-gray)] hover:text-[var(--nts-charcoal)]'}`}
-                >
-                  {v === 'ceo' ? 'CEO view' : 'Ops view'}
-                </button>
-              ))}
+              <button
+                type="button"
+                onClick={onOpenAuth}
+                className="rounded-xl border border-[var(--nts-accent-hover)] bg-[var(--nts-accent)] px-4 py-2 text-sm font-semibold text-white shadow-[0_6px_14px_rgba(249,115,22,0.35)] transition hover:bg-[var(--nts-accent-hover)]"
+              >
+                Είσοδος
+              </button>
             </div>
-
-            <button
-              type="button"
-              onClick={onOpenAuth}
-              className={`rounded-xl border border-[var(--nts-accent-hover)] bg-[var(--nts-accent)] px-4 py-2 text-sm font-semibold text-white shadow-[0_6px_14px_rgba(249,115,22,0.35)] transition hover:bg-[var(--nts-accent-hover)] ${scrolled ? 'opacity-100' : 'opacity-90'}`}
-            >
-              Είσοδος →
-            </button>
           </div>
         </div>
       </header>
 
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
-      <section className="mx-auto grid w-full max-w-7xl gap-10 px-6 pb-8 pt-6 md:px-10 md:pt-10 lg:grid-cols-2 lg:items-center">
-        <div className="space-y-6">
-          <div className="inline-flex items-center gap-2 rounded-full border border-[#1f2328]/20 bg-[var(--nts-light-gray)] px-3 py-1 text-xs text-[var(--nts-medium-gray)]">
-            <Sparkles size={13} className="text-[var(--nts-accent)]" />
-            {copy.badge}
+      <section className="mx-auto w-full max-w-7xl px-6 pb-8 pt-5 md:px-10 md:pt-7">
+        <div className="relative overflow-hidden rounded-[36px] border border-[#1f2328]/10 bg-[var(--nts-bg-pure)] px-6 py-8 shadow-[0_24px_56px_rgba(16,24,40,0.12)] md:px-8 md:py-10">
+          <div className="pointer-events-none absolute right-[-80px] top-[-20px] h-64 w-64 rounded-full bg-[var(--nts-accent)]/12 blur-3xl" />
+          <div className="pointer-events-none absolute bottom-[-100px] left-[-20px] h-72 w-72 rounded-full bg-[#1f2328]/4 blur-3xl" />
+
+          <div className="relative">
+            <div className="space-y-8">
+              <div className="space-y-5">
+                <h1 className="max-w-4xl text-3xl font-semibold leading-[1.04] text-[var(--nts-charcoal)] md:text-5xl">
+                  {copy.headline}
+                  {copy.highlight && (
+                    <span className="mt-2 block text-[var(--nts-accent)]">{copy.highlight}</span>
+                  )}
+                </h1>
+                <p className="max-w-2xl text-[15px] leading-7 text-[var(--nts-medium-gray)] md:text-base">
+                  {copy.description}
+                </p>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-3">
+                {[
+                  'Διοικητική εικόνα για έσοδα, περιθώρια κέρδους και εμπορικό ρίσκο.',
+                  'AI-powered προτεραιότητες για προϊόντα, κοινά, κανάλια και επένδυση.',
+                  'Κοινό πλαίσιο εκτέλεσης για management, marketing και εξωτερικούς συνεργάτες.'
+                ].map((point) => (
+                  <div key={point} className="rounded-2xl border border-white/10 bg-[#12151b] p-4.5 shadow-[0_10px_24px_rgba(15,17,21,0.18)]">
+                    <div className="mb-3 h-1.5 w-10 rounded-full bg-[var(--nts-accent)]" />
+                    <p className="text-sm leading-6 text-white/76">{point}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex flex-wrap gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={onOpenAuth}
+                  className="inline-flex items-center gap-2 rounded-xl bg-[var(--nts-accent)] px-5 py-3 text-sm font-semibold text-white shadow-[0_10px_20px_rgba(249,115,22,0.35)] transition hover:bg-[var(--nts-accent-hover)]"
+                >
+                  {copy.cta}
+                  <ArrowRight size={16} />
+                </button>
+                <a
+                  href="mailto:hello@notthesame.ai?subject=Performance%2B%20Demo%20Request"
+                  className="inline-flex items-center gap-2 rounded-xl border border-[#1f2328]/10 bg-[var(--nts-bg-subtle)] px-5 py-3 text-sm font-semibold text-[var(--nts-charcoal)] transition hover:bg-[var(--nts-light-gray)]"
+                >
+                  <HelpCircle size={16} />
+                  Ζήτησε demo
+                </a>
+              </div>
+            </div>
           </div>
-
-          <h1 className="text-3xl font-semibold leading-tight text-[var(--nts-charcoal)] md:text-5xl">
-            {copy.headline}
-            <span className="mt-1 block text-[var(--nts-accent)]">
-              {typewritten}
-              <span className="ml-0.5 inline-block h-8 w-0.5 animate-pulse bg-[var(--nts-accent)] align-middle" />
-            </span>
-          </h1>
-
-          <p className="max-w-xl text-base text-[var(--nts-medium-gray)] md:text-lg">
-            {copy.description}
-          </p>
-
-          <div className="flex flex-wrap gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onOpenAuth}
-              className="inline-flex items-center gap-2 rounded-xl bg-[var(--nts-accent)] px-5 py-3 text-sm font-semibold text-white shadow-[0_10px_20px_rgba(249,115,22,0.35)] transition hover:bg-[var(--nts-accent-hover)]"
-            >
-              {copy.cta}
-              <ArrowRight size={16} />
-            </button>
-          </div>
-        </div>
-
-        {/* USP card */}
-        <div className="rounded-3xl border border-[#1f2328] bg-[var(--nts-bg-pure)] p-6 shadow-[0_20px_44px_rgba(16,24,40,0.14)] md:p-8">
-          <p className="text-xs uppercase tracking-[0.14em] text-[var(--nts-medium-gray)]">{copy.uspTitle}</p>
-          <ul className="mt-5 space-y-3">
-            {copy.uspPoints.map((point) => (
-              <li key={point} className="flex items-start gap-2 rounded-xl border border-[#1f2328]/15 bg-[var(--nts-light-gray)] px-4 py-3 text-sm text-[var(--nts-charcoal)]">
-                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--nts-accent)]" />
-                {point}
-              </li>
-            ))}
-          </ul>
-          <p className="mt-5 rounded-xl border border-[var(--nts-accent)]/35 bg-[var(--nts-accent)]/8 px-4 py-3 text-sm text-[var(--nts-charcoal)]">
-            {copy.uspFooter}
-          </p>
         </div>
       </section>
 
-      {/* ── Trust signal bar ─────────────────────────────────────────────── */}
-      <div className="mx-auto w-full max-w-7xl px-6 pb-6 md:px-10">
-        <div className="flex flex-wrap items-center justify-center gap-6 rounded-2xl border border-[#1f2328]/15 bg-[var(--nts-light-gray)] px-6 py-3">
-          {trustSignals.map((s) => (
-            <div key={s.label} className="flex items-center gap-1.5 text-xs font-medium text-[var(--nts-medium-gray)]">
-              <span className="text-[#1f2328]">{s.icon}</span>
-              {s.label}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Metrics strip ────────────────────────────────────────────────── */}
-      <div ref={metricsRef} className="mx-auto w-full max-w-7xl px-6 pb-8 md:px-10">
-        <div className="grid divide-x divide-[#1f2328]/15 rounded-2xl border border-[#1f2328] bg-[var(--nts-bg-pure)] shadow-[0_16px_32px_rgba(16,24,40,0.12)] md:grid-cols-3">
-          {metrics.map((m) => (
-            <MetricItem key={m.label} value={parseInt(m.value)} suffix={m.suffix} label={m.label} active={metricsVisible} />
-          ))}
-        </div>
-      </div>
-
-      {/* ── DNA block ────────────────────────────────────────────────────── */}
+      {/* ── Data Sources ──────────────────────────────────────────────── */}
       <section className="mx-auto w-full max-w-7xl px-6 pb-8 md:px-10">
-        <div className="rounded-2xl border border-[#1f2328] bg-[var(--nts-bg-pure)] p-6 shadow-[0_18px_40px_rgba(16,24,40,0.14)]">
-          <h3 className="text-lg font-semibold text-[var(--nts-charcoal)]">Το μοναδικό DNA του Performance+</h3>
-          <div className="mt-4 grid gap-3 md:grid-cols-3">
-            {[
-              { title: 'One System, όχι πολλά disconnected εργαλεία', body: 'Strategy, segmentation, product priorities και channel actions λειτουργούν σε κοινό εμπορικό μοντέλο.' },
-              { title: 'AI recommendations με business context', body: 'Οι προτάσεις δεν είναι generic: λαμβάνουν υπόψη margin, segment behavior και εμπορικές προτεραιότητες.' },
-              { title: 'ROI accountability σε επίπεδο διοίκησης', body: 'Κάθε ενέργεια συνδέεται με measurable impact για να ξέρεις τι κλιμακώνεις και τι σταματάς.' },
-            ].map((item) => (
-              <article key={item.title} className="rounded-xl border border-[#1f2328]/20 bg-[var(--nts-bg-pure)] p-4">
-                <p className="text-sm font-semibold text-[var(--nts-charcoal)]">{item.title}</p>
-                <p className="mt-2 text-sm text-[var(--nts-medium-gray)]">{item.body}</p>
-              </article>
+        <div className="rounded-2xl border border-[#1f2328] bg-[var(--nts-bg-pure)] p-6 shadow-[0_20px_44px_rgba(16,24,40,0.14)]">
+          <p className="text-[11px] tracking-[0.08em] text-[var(--nts-accent)]">Πηγές Δεδομένων</p>
+          <h3 className="mt-2 text-lg font-semibold text-[var(--nts-charcoal)]">Με ή χωρίς API — zero setup time</h3>
+          <p className="mt-1 text-sm text-[var(--nts-medium-gray)]">Εισάγεις δεδομένα από τις πηγές που ήδη χρησιμοποιείς. CSV, χειροκίνητα ή μέσω API integrations.</p>
+          <div className="mt-5 grid gap-3 md:grid-cols-5">
+            {dataSources.map((source) => (
+              <div key={source.name} className="rounded-xl border border-[#1f2328]/12 bg-[var(--nts-bg-subtle)] p-4 text-center">
+                <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl border border-[#1f2328]/10 bg-[var(--nts-bg-pure)] text-[var(--nts-charcoal)]">
+                  {source.icon}
+                </div>
+                <p className="mt-3 text-sm font-semibold text-[var(--nts-charcoal)]">{source.name}</p>
+                <p className="mt-1 text-xs text-[var(--nts-medium-gray)]">{source.description}</p>
+              </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto w-full max-w-7xl px-6 pb-8 md:px-10">
+        <div className="grid items-stretch gap-5 lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="rounded-[28px] border border-[#1f2328]/10 bg-[var(--nts-bg-pure)] p-6 shadow-[0_18px_40px_rgba(16,24,40,0.12)]">
+            <p className="text-[11px] tracking-[0.08em] text-[var(--nts-accent)]">Διοικητική Επισκόπηση</p>
+            <h2 className="mt-4 max-w-2xl text-xl font-semibold leading-tight text-[var(--nts-charcoal)]">
+              Το κεντρικό control layer για επιχειρηματίες και στελέχη που θέλουν καθαρή λογική αποφάσεων και συντονισμένη εκτέλεση.
+            </h2>
+            <div className="mt-6 grid gap-4 md:grid-cols-2">
+              <div className="rounded-2xl border border-white/10 bg-[#12151b] p-5 shadow-[0_10px_24px_rgba(15,17,21,0.16)]">
+                <p className="text-[11px] tracking-[0.08em] text-[var(--nts-accent)]">Εποπτεία</p>
+                <p className="mt-2 text-2xl font-semibold text-white">360°</p>
+                <p className="mt-2 text-sm leading-6 text-white/68">Συγκεντρώνεις κρίσιμα δεδομένα, προϊόντα, κοινά και κανάλια σε ένα ενιαίο πεδίο διοικητικής αναφοράς.</p>
+              </div>
+              <div className="rounded-2xl border border-[var(--nts-accent)]/30 bg-[#181c24] p-5 shadow-[0_10px_24px_rgba(15,17,21,0.16)]">
+                <p className="text-[11px] tracking-[0.08em] text-[var(--nts-accent)]">Απόδοση</p>
+                <p className="mt-2 text-2xl font-semibold text-white">Προτεραιότητα στο ROI</p>
+                <p className="mt-2 text-sm leading-6 text-white/72">Ο προϋπολογισμός αποκτά σαφή λογική κατανομής και πλαίσιο ενεργειών με βάση την πραγματική απόδοση.</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-[26px] border border-[#1f2328]/10 bg-[#12151b] p-6 shadow-[0_18px_40px_rgba(15,17,21,0.18)]">
+              <p className="text-[11px] tracking-[0.08em] text-[var(--nts-accent)]">{copy.uspTitle}</p>
+              <ul className="mt-4 space-y-3">
+                {copy.uspPoints.map((point) => (
+                  <li key={point} className="flex items-start gap-3 text-sm leading-6 text-white/76">
+                    <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-[var(--nts-accent)]" />
+                    <span>{point}</span>
+                  </li>
+                ))}
+              </ul>
           </div>
         </div>
       </section>
 
       {/* ── Core features ────────────────────────────────────────────────── */}
       <section className="mx-auto w-full max-w-7xl px-6 pb-8 md:px-10">
-        <div className="grid gap-4 md:grid-cols-2">
-          {coreFeatures.map((feature) => (
-            <article
+        <div className="grid gap-5 md:grid-cols-2">
+          {coreFeatures.map((feature, index) => (
+            <EditorialCard
               key={feature.title}
-              className="rounded-2xl border border-[#1f2328]/25 bg-[var(--nts-bg-pure)] p-5 shadow-[0_16px_30px_rgba(16,24,40,0.12)] transition duration-200 hover:-translate-y-1 hover:border-[var(--nts-accent)]/45 hover:shadow-[0_22px_40px_rgba(16,24,40,0.18)]"
-            >
-              <div className="mb-3 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#1f2328]/30 bg-[var(--nts-bg-pure)] text-[#1f2328]">
-                {feature.icon}
-              </div>
-              <h3 className="text-base font-semibold text-[var(--nts-charcoal)]">{feature.title}</h3>
-              <p className="mt-2 text-sm text-[var(--nts-medium-gray)]">{feature.description}</p>
-            </article>
+              title={feature.title}
+              description={feature.description}
+              icon={feature.icon}
+              eyebrow={index % 2 === 0 ? 'Στρατηγική ενότητα' : 'Επίπεδο ΤΝ'}
+              stat={['Στρατηγική με έμφαση στο Gross Margin', 'Στόχευση Αγοραστικού Κοινού Υψηλής Αξίας', 'Εστίαση σε New Releases', 'Επιλογή Ιδανικών Καναλιών Επικοινωνίας'][index] ?? 'Απόδοση'}
+              dark={isDarkHighlight(index)}
+            />
           ))}
         </div>
       </section>
@@ -375,13 +485,13 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
       {/* ── Before / After problems ──────────────────────────────────────── */}
       <section className="mx-auto w-full max-w-7xl px-6 pb-8 md:px-10">
         <div className="rounded-2xl border border-[#1f2328] bg-[var(--nts-bg-pure)] p-6 shadow-[0_20px_44px_rgba(16,24,40,0.14)]">
-          <h3 className="text-lg font-semibold text-[var(--nts-charcoal)]">Ποια προβλήματα λύνει το Performance+</h3>
+            <h3 className="text-lg font-semibold text-[var(--nts-charcoal)]">Ποια προβλήματα επιλύει το Performance+</h3>
 
           {/* column headers */}
           <div className="mt-5 grid grid-cols-[1fr_1fr] gap-3 md:grid-cols-[auto_1fr_1fr]">
             <div className="hidden md:block" />
-            <p className="rounded-t-xl bg-[var(--nts-light-gray)] px-4 py-2 text-center text-xs font-semibold uppercase tracking-wide text-[var(--nts-medium-gray)]">Χωρίς Performance+</p>
-            <p className="rounded-t-xl bg-[var(--nts-accent)] px-4 py-2 text-center text-xs font-semibold uppercase tracking-wide text-white">Με Performance+</p>
+            <p className="rounded-t-xl bg-[var(--nts-light-gray)] px-4 py-2 text-center text-xs font-semibold tracking-[0.08em] text-[var(--nts-medium-gray)]">Χωρίς το Performance+</p>
+            <p className="rounded-t-xl bg-[var(--nts-accent)] px-4 py-2 text-center text-xs font-semibold tracking-[0.08em] text-white">Με το Performance+</p>
           </div>
 
           <div className="space-y-2">
@@ -405,7 +515,7 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
       {/* ── Operating flow ────────────────────────────────────────────────── */}
       <section className="mx-auto w-full max-w-7xl px-6 pb-8 md:px-10">
         <div className="rounded-2xl border border-[#1f2328] bg-[var(--nts-bg-pure)] p-6 shadow-[0_20px_44px_rgba(16,24,40,0.14)]">
-          <h3 className="text-lg font-semibold text-[var(--nts-charcoal)]">Πώς το κάνει - από insight σε αποτέλεσμα</h3>
+          <h3 className="text-lg font-semibold text-[var(--nts-charcoal)]">Πώς λειτουργεί: από τα δεδομένα στη στρατηγική απόφαση</h3>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             {operatingFlow.map((item) => (
               <article key={item.step} className="rounded-xl border border-[#1f2328]/20 bg-[var(--nts-bg-pure)] p-4 transition hover:border-[var(--nts-accent)]/35">
@@ -426,15 +536,46 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
       {/* ── Value pillars ─────────────────────────────────────────────────── */}
       <section className="mx-auto w-full max-w-7xl px-6 pb-8 md:px-10">
         <div className="rounded-2xl border border-[#1f2328] bg-[var(--nts-bg-pure)] p-6 shadow-[0_20px_44px_rgba(16,24,40,0.14)]">
-          <h3 className="text-lg font-semibold text-[var(--nts-charcoal)]">Τι υπεραξία προσφέρει στην πράξη</h3>
-          <div className="mt-4 grid gap-3 md:grid-cols-3">
-            {valuePillars.map((item) => (
-              <article key={item.title} className="rounded-xl border border-[#1f2328]/20 bg-[var(--nts-bg-pure)] p-4">
-                <div className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[#1f2328]/30 text-[#1f2328]">
+          <h3 className="text-lg font-semibold text-[var(--nts-charcoal)]">Τι υπεραξία προσφέρει ως κοινό σύστημα αποφάσεων</h3>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            {valuePillars.map((item, index) => (
+              <article
+                key={item.title}
+                className={[
+                  'relative overflow-hidden rounded-[24px] border p-5',
+                  isDarkHighlight(index)
+                    ? 'border-white/10 bg-[#12151b] text-white'
+                    : 'border-[#1f2328]/12 bg-[var(--nts-bg-subtle)] text-[var(--nts-charcoal)]'
+                ].join(' ')}
+              >
+                <div
+                  className={[
+                    'pointer-events-none absolute right-0 top-0 h-24 w-24 rounded-full blur-2xl',
+                    isDarkHighlight(index) ? 'bg-[var(--nts-accent)]/20' : 'bg-[#1f2328]/6'
+                  ].join(' ')}
+                />
+                <div
+                  className={[
+                    'inline-flex h-10 w-10 items-center justify-center rounded-2xl border',
+                    isDarkHighlight(index)
+                      ? 'border-white/10 bg-white/6 text-white'
+                      : 'border-[#1f2328]/10 bg-[var(--nts-bg-pure)] text-[var(--nts-charcoal)]'
+                  ].join(' ')}
+                >
                   {item.icon}
                 </div>
-                <h4 className="mt-3 text-sm font-semibold text-[var(--nts-charcoal)]">{item.title}</h4>
-                <p className="mt-2 text-sm text-[var(--nts-medium-gray)]">{item.description}</p>
+                <h4 className={isDarkHighlight(index) ? 'relative mt-6 text-xl font-semibold text-white' : 'relative mt-6 text-xl font-semibold text-[var(--nts-charcoal)]'}>
+                  {item.title}
+                </h4>
+                <p className={isDarkHighlight(index) ? 'relative mt-3 max-w-md text-sm leading-6 text-white/72' : 'relative mt-3 max-w-md text-sm leading-6 text-[var(--nts-medium-gray)]'}>
+                  {item.description}
+                </p>
+                <div className="relative mt-8 flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full bg-[var(--nts-accent)]" />
+                  <span className={isDarkHighlight(index) ? 'text-xs tracking-[0.08em] text-white/56' : 'text-xs tracking-[0.08em] text-[var(--nts-medium-gray)]'}>
+                    {index % 2 === 0 ? 'Υποστήριξη απόφασης' : 'Υποστήριξη εκτέλεσης'}
+                  </span>
+                </div>
               </article>
             ))}
           </div>
@@ -444,44 +585,115 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
       {/* ── App previews ──────────────────────────────────────────────────── */}
       <section className="mx-auto w-full max-w-7xl px-6 pb-8 md:px-10">
         <div className="rounded-2xl border border-[#1f2328] bg-[var(--nts-bg-pure)] p-6 shadow-[0_20px_44px_rgba(16,24,40,0.14)]">
-          <h3 className="text-lg font-semibold text-[var(--nts-charcoal)]">3 σημεία από το ίδιο το application interface</h3>
+          <h3 className="text-lg font-semibold text-[var(--nts-charcoal)]">5 σημεία από το ίδιο το περιβάλλον της εφαρμογής</h3>
           <p className="mt-2 text-sm text-[var(--nts-medium-gray)]">
-            Πραγματικά in-app views που δείχνουν πώς το Performance+ μεταφράζει intelligence σε εμπορική δράση.
+            Πραγματικές οθόνες της εφαρμογής που δείχνουν πώς το Performance+ μετατρέπει δεδομένα και νοημοσύνη σε στοχευμένη εμπορική δράση.
           </p>
 
-          <div className="mt-5 grid gap-5">
-            {appPreviewPoints.map((point) => (
-              <article key={point.title} className="rounded-xl border border-[#1f2328]/20 bg-[var(--nts-bg-pure)] p-4 shadow-[0_10px_24px_rgba(16,24,40,0.12)]">
-                <div className="grid gap-4 md:grid-cols-[1.1fr_1fr] md:items-start">
-                  <div>
-                    <h4 className="text-sm font-semibold text-[var(--nts-charcoal)]">{point.title}</h4>
-                    <p className="mt-2 text-xs text-[var(--nts-medium-gray)]">{point.problem}</p>
-                    <p className="mt-1 text-xs text-[var(--nts-medium-gray)]">{point.solution}</p>
-                    <p className="mt-1 text-xs font-medium text-[var(--nts-charcoal)]">{point.value}</p>
+          <div className="mt-6 grid gap-6">
+            {appPreviewPoints.map((point, index) => (
+              <article
+                key={point.title}
+                className={[
+                  'relative overflow-hidden rounded-[30px] border p-5 shadow-[0_14px_32px_rgba(16,24,40,0.12)]',
+                  isPreviewDarkHighlight(index)
+                    ? 'border-white/10 bg-[#101319] text-white'
+                    : 'border-[#1f2328]/15 bg-[var(--nts-bg-pure)] text-[var(--nts-charcoal)]'
+                ].join(' ')}
+              >
+                <div className="pointer-events-none absolute left-0 top-0 h-1 w-full bg-[var(--nts-accent)]" />
+                <div className="pointer-events-none absolute bottom-0 left-0 h-1 w-full bg-[var(--nts-accent)]" />
+                <div className={`grid items-center gap-6 lg:grid-cols-[0.86fr_1.14fr] ${index % 2 === 1 ? 'lg:grid-cols-[1.14fr_0.86fr]' : ''}`}>
+                  <div className={index % 2 === 1 ? 'lg:order-2' : ''}>
+                    <div>
+                      {point.featureLabel !== point.title && (
+                        <div className="inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold tracking-[0.08em] border-current/10 bg-current/5 text-inherit">
+                          {point.featureLabel}
+                        </div>
+                      )}
+                      <h4 className={isPreviewDarkHighlight(index) ? 'mt-4 text-3xl font-semibold text-white' : 'mt-4 text-3xl font-semibold text-[var(--nts-charcoal)]'}>
+                        {point.title}
+                      </h4>
+                      <p className={isPreviewDarkHighlight(index) ? 'mt-4 text-sm leading-7 text-white/68' : 'mt-4 text-sm leading-7 text-[var(--nts-medium-gray)]'}>
+                        {point.problem}
+                      </p>
+                      <p className={isPreviewDarkHighlight(index) ? 'mt-3 text-sm leading-7 text-white/68' : 'mt-3 text-sm leading-7 text-[var(--nts-medium-gray)]'}>
+                        {point.solution}
+                      </p>
+                    </div>
+
+                    <div className={isPreviewDarkHighlight(index) ? 'mt-6 rounded-2xl border border-white/10 bg-white/6 p-4 text-sm font-medium text-white' : 'mt-6 rounded-2xl border border-[#1f2328]/10 bg-[var(--nts-bg-subtle)] p-4 text-sm font-medium text-[var(--nts-charcoal)]'}>
+                      {point.value}
+                    </div>
                   </div>
 
-                  {/* Screenshot with zoom + overlay label on hover */}
-                  <div className="group relative overflow-hidden rounded-lg border border-[#1f2328]/25 bg-[var(--nts-light-gray)]">
-                    <img
-                      src={point.imageSrc}
-                      alt={`${point.title} screenshot`}
-                      className={`h-52 w-full object-cover transition-transform duration-500 group-hover:scale-105 ${point.imageClassName}`}
-                    />
-                    {/* Anonymization masks */}
-                    <div className="pointer-events-none absolute left-0 top-0 h-9 w-full bg-[var(--nts-bg-pure)]/85 backdrop-blur-[2px]" />
-                    <div className="pointer-events-none absolute left-0 top-0 h-full w-12 bg-[var(--nts-bg-pure)]/80 backdrop-blur-[1px]" />
-                    <div className="pointer-events-none absolute right-2 top-2 h-5 w-24 rounded bg-[var(--nts-bg-pure)]/90" />
-                    <div className="pointer-events-none absolute left-2 top-2 h-5 w-20 rounded bg-[var(--nts-bg-pure)]/90" />
-                    {/* Hover overlay label */}
-                    <div className="pointer-events-none absolute inset-0 flex items-end opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-                      <div className="w-full bg-[#1f2328]/80 px-4 py-2 backdrop-blur-sm">
-                        <p className="text-xs font-semibold text-white">{point.featureLabel}</p>
+                  <div className={index % 2 === 1 ? 'lg:order-1' : ''}>
+                    <div className="relative overflow-hidden rounded-[26px] border border-[#1f2328]/15 bg-[var(--nts-light-gray)]">
+                      <img
+                        src={point.imageSrc}
+                        alt={`${point.title} screenshot`}
+                        className={`h-[360px] w-full object-cover lg:h-[420px] ${point.imageClassName}`}
+                      />
+                      <div className="pointer-events-none absolute left-0 top-0 h-10 w-full bg-[var(--nts-bg-pure)]/86 backdrop-blur-[2px]" />
+                      <div className="pointer-events-none absolute left-0 top-0 h-full w-14 bg-[var(--nts-bg-pure)]/76 backdrop-blur-[1px]" />
+                      <div className="pointer-events-none absolute right-3 top-3 h-6 w-28 rounded-full bg-[var(--nts-bg-pure)]/92" />
+                      <div className="pointer-events-none absolute left-3 top-3 h-6 w-24 rounded-full bg-[var(--nts-bg-pure)]/92" />
+                      <div className="pointer-events-none absolute bottom-4 left-4 rounded-full bg-[#0f1115]/86 px-3 py-1.5 text-[11px] font-semibold tracking-[0.08em] text-white backdrop-blur">
+                        Ζωντανή απεικόνιση προϊόντος
                       </div>
                     </div>
                   </div>
                 </div>
               </article>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Metrics strip ────────────────────────────────────────────────── */}
+      <div ref={metricsRef} className="mx-auto w-full max-w-7xl px-6 pb-8 md:px-10">
+        <div className="grid divide-x divide-[#1f2328]/15 rounded-2xl border border-[#1f2328] bg-[var(--nts-bg-pure)] shadow-[0_16px_32px_rgba(16,24,40,0.12)] md:grid-cols-3">
+          {metrics.map((m) => (
+            <MetricItem key={m.label} value={parseInt(m.value)} suffix={m.suffix} label={m.label} active={metricsVisible} />
+          ))}
+        </div>
+      </div>
+
+      {/* ── Input → Output chain ─────────────────────────────────────── */}
+      <section className="mx-auto w-full max-w-7xl px-6 pb-8 md:px-10">
+        <div className="rounded-2xl border border-[#1f2328] bg-[var(--nts-bg-pure)] p-6 shadow-[0_18px_40px_rgba(16,24,40,0.14)]">
+          <h3 className="text-lg font-semibold text-[var(--nts-charcoal)]">Data Input → Commercial Intelligence Output</h3>
+          <p className="mt-1 text-sm text-[var(--nts-medium-gray)]">Από πρωτογενή δεδομένα σε εφαρμόσιμη εμπορική καθοδήγηση — end-to-end.</p>
+
+          <div className="mt-5 grid gap-4 md:grid-cols-[1fr_auto_1fr]">
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold tracking-[0.08em] text-[var(--nts-medium-gray)]">Data Input</p>
+              {inputOutputChain.inputs.map((item) => (
+                <div key={item} className="rounded-xl border border-[#1f2328]/12 bg-[var(--nts-bg-subtle)] px-4 py-3 text-sm text-[var(--nts-charcoal)]">
+                  {item}
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden items-center justify-center md:flex">
+              <div className="flex flex-col items-center gap-2">
+                <div className="h-16 w-px bg-[var(--nts-accent)]/40" />
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--nts-accent)] text-white shadow-[0_6px_14px_rgba(249,115,22,0.35)]">
+                  <ArrowRight size={16} />
+                </div>
+                <p className="text-[10px] font-semibold tracking-[0.08em] text-[var(--nts-accent)]">AI</p>
+                <div className="h-16 w-px bg-[var(--nts-accent)]/40" />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold tracking-[0.08em] text-[var(--nts-accent)]">Intelligence Output</p>
+              {inputOutputChain.outputs.map((item) => (
+                <div key={item} className="rounded-xl border border-white/10 bg-[#12151b] px-4 py-3 text-sm text-white/80">
+                  {item}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>
@@ -498,7 +710,7 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
               onClick={onOpenAuth}
               className="inline-flex items-center gap-2 rounded-xl bg-[var(--nts-accent)] px-5 py-3 text-sm font-semibold text-white shadow-[0_10px_20px_rgba(249,115,22,0.35)] transition hover:bg-[var(--nts-accent-hover)]"
             >
-              Ενεργοποίησε το workspace σου
+              Ενεργοποίησε τον χώρο εργασίας σου
               <ArrowRight size={16} />
             </button>
             <a
@@ -506,13 +718,29 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
               className="inline-flex items-center gap-2 rounded-xl border border-[#1f2328] bg-[var(--nts-bg-pure)] px-5 py-3 text-sm font-semibold text-[#1f2328] transition hover:bg-[var(--nts-light-gray)]"
             >
               <HelpCircle size={16} />
-              Ζήτησε demo / επικοινωνία
+              Ζήτησε παρουσίαση / επικοινωνία
             </a>
           </div>
 
           <p className="mt-4 text-xs text-[var(--nts-medium-gray)]">
-            Εναλλακτικά: email στο <span className="font-semibold text-[var(--nts-charcoal)]">hello@notthesame.ai</span> για enterprise onboarding, pricing ή custom εμπορικό setup.
+            Εναλλακτικά, επικοινώνησε στο <span className="font-semibold text-[var(--nts-charcoal)]">hello@notthesame.ai</span> για εταιρική ένταξη, εμπορική πολιτική ή εξειδικευμένη προσαρμογή του AI-powered περιβάλλοντος αποφάσεων.
           </p>
+        </div>
+      </section>
+
+      {/* ── Compliance trust bar ─────────────────────────────────────────── */}
+      <section className="mx-auto w-full max-w-7xl px-6 pb-8 md:px-10">
+        <div className="flex flex-wrap items-center justify-center gap-6 rounded-2xl border border-[#1f2328]/10 bg-[var(--nts-bg-subtle)] px-6 py-4">
+          {[
+            { icon: <ShieldCheck size={15} />, text: 'GDPR-compliant' },
+            { icon: <Brain size={15} />, text: 'EU AI Act — limited risk, transparent AI' },
+            { icon: <Database size={15} />, text: 'Google Cloud / Firebase (EU region)' },
+          ].map((item) => (
+            <div key={item.text} className="flex items-center gap-2 text-xs text-[var(--nts-medium-gray)]">
+              <span className="text-[var(--nts-charcoal)]">{item.icon}</span>
+              <span>{item.text}</span>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -521,9 +749,14 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
         <div className="flex items-center justify-between border-t border-[#1f2328]/10 pt-5">
           <div className="flex items-center gap-2 text-xs text-[var(--nts-medium-gray)]">
             <Brain size={13} className="text-[#1f2328]" />
-            <span>Performance+ by <span className="font-semibold text-[var(--nts-charcoal)]">notthesame.ai</span></span>
+            <span>
+              Performance+ powered by{' '}
+              <a href="https://notthesame.gr" target="_blank" rel="noreferrer" className="font-semibold text-[var(--nts-charcoal)] hover:underline">
+                notthesame.ai
+              </a>
+            </span>
           </div>
-          <p className="text-xs text-[var(--nts-medium-gray)]">AI-Powered Marketing Intelligence</p>
+          <p className="text-xs text-[var(--nts-medium-gray)]">AI-powered πλατφόρμα εμπορικής και επιχειρησιακής νοημοσύνης</p>
         </div>
       </footer>
 

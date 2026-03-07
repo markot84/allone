@@ -271,7 +271,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
       { id: 'dashboard', label: 'Dashboard', icon: HomeIcon },
       { id: 'strategy', label: 'Strategy Weights', icon: GraphIcon },
       { id: 'products', label: 'Product Intelligence', icon: PackageIcon },
-      { id: 'rfm', label: 'RFM Analysis', icon: OrganizationIcon },
+      { id: 'rfm', label: 'Data Analysis', icon: OrganizationIcon },
       { id: 'channels', label: 'Channel Activation', icon: MegaphoneIcon },
       { id: 'campaigns', label: 'Campaigns', icon: Target },
       { id: 'finances', label: 'Οικονομικά', icon: Euro },

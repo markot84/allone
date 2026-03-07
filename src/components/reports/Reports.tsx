@@ -45,7 +45,7 @@ const reportTypes: ReportTypeItem[] = [
   {
     id: 'segment',
     name: 'Segment Performance',
-    description: 'Λεπτομερής ανάλυση RFM segments με migration trends',
+    description: 'Λεπτομερής ανάλυση segments με RFM, behavioral και firmographic οπτικές',
     icon: '👥',
     format: 'PDF/Excel',
     lastGenerated: 'πριν 1 ημέρα'

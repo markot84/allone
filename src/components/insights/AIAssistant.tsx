@@ -108,8 +108,8 @@ export function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
         if (query.includes('import') || query.includes('εισαγωγή') || query.includes('δεδομένα')) {
           response = 'Για την εισαγωγή δεδομένων, μπορείτε να χρησιμοποιήσετε CSV ή XLSX αρχεία. Υπάρχουν templates για κάθε τύπο δεδομένων (Products, Segments, Analytics, Campaigns).';
           articleRefs = ['data-import-basics', 'products-import', 'segments-import'];
-        } else if (query.includes('rfm') || query.includes('segment')) {
-          response = 'Το RFM Analysis σας βοηθά να κατανοήσετε τους πελάτες σας μέσω Recency, Frequency, και Monetary scores. Κάθε segment έχει διαφορετικές χαρακτηριστικές και στρατηγικές.';
+        } else if (query.includes('rfm') || query.includes('segment') || query.includes('data analysis')) {
+          response = 'Το Data Analysis σας βοηθά να κατανοήσετε τους πελάτες σας μέσω RFM, behavioral και firmographic ανάλυσης, ώστε κάθε segment να αποκτά σαφέστερη εμπορική ερμηνεία.';
           articleRefs = ['rfm-analysis', 'understanding-segments'];
         } else if (query.includes('strategy') || query.includes('στρατηγική') || query.includes('weights')) {
           response = 'Το Strategy Weights Configurator σας επιτρέπει να προσαρμόσετε πώς προτεραιοποιούνται τα προϊόντα. Μπορείτε να χρησιμοποιήσετε preset scenarios ή να δημιουργήσετε custom.';
@@ -131,7 +131,7 @@ export function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
           response = `Βρήκα σχετικό άρθρο: "${article.title}". ${article.description}`;
           articleRefs = [article.id];
         } else {
-          response = 'Μπορώ να σας βοηθήσω με ερωτήσεις σχετικά με:\n\n• Εισαγωγή δεδομένων\n• RFM Analysis και Segments\n• Strategy Weights Configuration\n• Product Intelligence\n• Channel Activation\n• ROI Attribution\n• Dashboard και KPIs\n• Marketing, Digital Marketing, Analytics, Content Marketing\n\nΤι θα θέλατε να μάθετε;';
+          response = 'Μπορώ να σας βοηθήσω με ερωτήσεις σχετικά με:\n\n• Εισαγωγή δεδομένων\n• Data Analysis και Segments\n• Strategy Weights Configuration\n• Product Intelligence\n• Channel Activation\n• ROI Attribution\n• Dashboard και KPIs\n• Marketing, Digital Marketing, Analytics, Content Marketing\n\nΤι θα θέλατε να μάθετε;';
         }
       }
 
