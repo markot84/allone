@@ -149,6 +149,34 @@ h1, h2, h3, h4, h5, h6 {
   font-family: 'JetBrains Mono', monospace;
 }
 
+/* Dark sidebar overrides for Primer NavList */
+.sidebar-dark nav button,
+.sidebar-dark nav a,
+.sidebar-dark li button,
+.sidebar-dark li a {
+  color: rgba(255, 255, 255, 0.65) !important;
+}
+.sidebar-dark nav button:hover,
+.sidebar-dark nav a:hover,
+.sidebar-dark li button:hover,
+.sidebar-dark li a:hover {
+  color: rgba(255, 255, 255, 0.85) !important;
+  background-color: rgba(255, 255, 255, 0.06) !important;
+}
+.sidebar-dark [aria-current="page"],
+.sidebar-dark [aria-current="page"]:hover {
+  background-color: rgba(249, 115, 22, 0.12) !important;
+  color: #e8873a !important;
+}
+.sidebar-dark [aria-current="page"]::before {
+  background-color: #e8873a !important;
+}
+.sidebar-dark nav svg,
+.sidebar-dark li svg {
+  color: #d4854a !important;
+}
+
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 8px;

@@ -77,6 +77,7 @@ export interface Scenario {
   icon: string;
   description: string;
   weights: Record<string, number> | null;
+  duration?: number | 'ongoing';
 }
 
 // RFM Types

@@ -112,7 +112,7 @@ export function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
           response = 'Το Data Analysis σας βοηθά να κατανοήσετε τους πελάτες σας μέσω RFM, behavioral και firmographic ανάλυσης, ώστε κάθε segment να αποκτά σαφέστερη εμπορική ερμηνεία.';
           articleRefs = ['rfm-analysis', 'understanding-segments'];
         } else if (query.includes('strategy') || query.includes('στρατηγική') || query.includes('weights')) {
-          response = 'Το Strategy Weights Configurator σας επιτρέπει να προσαρμόσετε πώς προτεραιοποιούνται τα προϊόντα. Μπορείτε να χρησιμοποιήσετε preset scenarios ή να δημιουργήσετε custom.';
+          response = 'Το Commercial Strategy σας επιτρέπει να προσαρμόσετε πώς προτεραιοποιούνται τα προϊόντα. Μπορείτε να χρησιμοποιήσετε preset scenarios ή να δημιουργήσετε custom.';
           articleRefs = ['strategy-weights', 'scenarios'];
         } else if (query.includes('roi') || query.includes('attribution')) {
           response = 'Το ROI Attribution μετράει την επιπτώση του Performance+ στο business σας. Δείχνει total revenue, attributed revenue, και ROI multiplier.';
@@ -131,7 +131,7 @@ export function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
           response = `Βρήκα σχετικό άρθρο: "${article.title}". ${article.description}`;
           articleRefs = [article.id];
         } else {
-          response = 'Μπορώ να σας βοηθήσω με ερωτήσεις σχετικά με:\n\n• Εισαγωγή δεδομένων\n• Data Analysis και Segments\n• Strategy Weights Configuration\n• Product Intelligence\n• Channel Activation\n• ROI Attribution\n• Dashboard και KPIs\n• Marketing, Digital Marketing, Analytics, Content Marketing\n\nΤι θα θέλατε να μάθετε;';
+          response = 'Μπορώ να σας βοηθήσω με ερωτήσεις σχετικά με:\n\n• Εισαγωγή δεδομένων\n• Data Analysis και Segments\n• Commercial Strategy\n• Product Intelligence\n• Channel Activation\n• ROI Attribution\n• Dashboard και KPIs\n• Marketing, Digital Marketing, Analytics, Content Marketing\n\nΤι θα θέλατε να μάθετε;';
         }
       }
 

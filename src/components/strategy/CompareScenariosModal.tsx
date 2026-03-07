@@ -75,13 +75,22 @@ export function CompareScenariosModal({
     const rankMapB: Record<string, number> = {};
     scoredB.forEach((p, i) => (rankMapB[p.id] = i + 1));
 
+    const estimateQty = (p: typeof scoredA[0]) =>
+      p.qty_sold_period ?? Math.max(1, Math.round((p.stock_level ?? 0) * 0.7));
+
     const sumRevenue = (items: typeof scoredA) =>
-      items.reduce((s, p) => s + (p.revenue_period ?? p.price * (p.qty_sold_period ?? 0)), 0);
+      items.reduce((s, p) => {
+        if (p.revenue_period) return s + p.revenue_period;
+        return s + p.price * estimateQty(p);
+      }, 0);
+
     const sumMargin = (items: typeof scoredA) =>
       items.reduce((s, p) => {
-        const cost = p.cost_price ?? p.price * (1 - (p.margin_percentage ?? 0) / 100);
-        const qty = p.qty_sold_period ?? 1;
-        return s + (p.price - cost) * qty;
+        const marginPct = p.margin_percentage > 0
+          ? p.margin_percentage
+          : p.margin_tier === 'high' ? 40 : p.margin_tier === 'medium' ? 25 : 12;
+        const cost = p.cost_price ?? p.price * (1 - marginPct / 100);
+        return s + (p.price - cost) * estimateQty(p);
       }, 0);
 
     const idsA = new Set(scoredA.map((p) => p.id));
@@ -210,12 +219,12 @@ export function CompareScenariosModal({
               <h5 className="text-xs font-semibold text-[#4A4A4A] mb-2">{nameA}</h5>
               <div className="text-sm space-y-1">
                 <div>
-                  <Tooltip content="Top N = τα N προϊόντα με τα υψηλότερα composite scores (προτεραιότητα). Άθροισμα revenue για αυτά — δείχνει το δυνητικό τζίρο αν τα προωθήσετε." size={12}>
+                  <Tooltip content="Top N προϊόντα με τα υψηλότερα scores. Εκτίμηση βάσει τιμής × ποσότητας (ή 70% αποθέματος αν λείπουν πωλήσεις)." size={12}>
                     <span>Εκτιμ. Revenue: <span className="font-semibold">{formatEur(revenueA)}</span></span>
                   </Tooltip>
                 </div>
                 <div>
-                  <Tooltip content="Top N = τα N προϊόντα με τα υψηλότερα scores. Άθροισμα κερδοφορίας (price − cost) × qty — δείχνει το δυνητικό κέρδος." size={12}>
+                  <Tooltip content="Top N προϊόντα: (τιμή − κόστος) × εκτιμώμενη ποσότητα. Κόστος από cost_price ή margin tier (high 40%, medium 25%, low 12%). Sell-through 70% αν λείπουν πωλήσεις." size={12}>
                     <span>Εκτιμ. Margin: <span className="font-semibold">{formatEur(marginA)}</span></span>
                   </Tooltip>
                 </div>
@@ -225,12 +234,12 @@ export function CompareScenariosModal({
               <h5 className="text-xs font-semibold text-[#4A4A4A] mb-2">{nameB}</h5>
               <div className="text-sm space-y-1">
                 <div>
-                  <Tooltip content="Top N = τα N προϊόντα με τα υψηλότερα scores στο B. Άθροισμα revenue για αυτά." size={12}>
+                  <Tooltip content="Top N προϊόντα: εκτίμηση βάσει τιμής × ποσότητας (ή 70% αποθέματος)." size={12}>
                     <span>Εκτιμ. Revenue: <span className="font-semibold">{formatEur(revenueB)}</span></span>
                   </Tooltip>
                 </div>
                 <div>
-                  <Tooltip content="Top N = τα N προϊόντα με τα υψηλότερα scores στο B. Άθροισμα κερδοφορίας για αυτά." size={12}>
+                  <Tooltip content="Top N προϊόντα: (τιμή − κόστος) × εκτιμώμενη ποσότητα. Κόστος από cost_price ή margin tier (high 40%, medium 25%, low 12%)." size={12}>
                     <span>Εκτιμ. Margin: <span className="font-semibold">{formatEur(marginB)}</span></span>
                   </Tooltip>
                 </div>
@@ -350,18 +359,18 @@ export function CompareScenariosModal({
 
           <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="p-3 bg-[#F5F5F5] rounded-lg text-xs text-[#4A4A4A]">
-              <Tooltip content="Top N = τα N προϊόντα με τα υψηλότερα scores. Κοινά = εμφανίζονται στο Top N και στο A και στο B — σταθερά προτεραιότητες." size={12}>
-                <span>Κοινά: {overlap} προϊόντα εμφανίζονται και στα δύο</span>
+              <Tooltip content="Προϊόντα που εμφανίζονται στο Top N και στα δύο σενάρια — σταθερές προτεραιότητες ανεξαρτήτως στρατηγικής." size={12}>
+                <span>Κοινά: <span className="font-semibold">{overlap}</span> ({sampleSize > 0 ? Math.round(overlap / sampleSize * 100) : 0}% overlap)</span>
               </Tooltip>
             </div>
             <div className="p-3 bg-[#FEF3C7] rounded-lg text-xs text-[#4A4A4A]">
-              <Tooltip content="Top N = τα N προϊόντα με τα υψηλότερα scores. Μόνο στο A = στο Top N του A αλλά όχι του B — πιθανή απώλεια προτεραιότητας αν αλλάξετε σε B." size={12}>
-                <span>Μόνο στο A: {onlyInA.length} προϊόντα</span>
+              <Tooltip content={`Προϊόντα στο Top ${sampleSize} του ${nameA} που δεν εμφανίζονται στο Top ${sampleSize} του ${nameB}.`} size={12}>
+                <span>Μοναδικά {nameA}: <span className="font-semibold">{onlyInA.length}</span></span>
               </Tooltip>
             </div>
             <div className="p-3 bg-[#DBEAFE] rounded-lg text-xs text-[#4A4A4A]">
-              <Tooltip content="Top N = τα N προϊόντα με τα υψηλότερα scores. Μόνο στο B = στο Top N του B αλλά όχι του A — νέα ευκαιρίες αν επιλέξετε B." size={12}>
-                <span>Μόνο στο B: {onlyInB.length} προϊόντα</span>
+              <Tooltip content={`Προϊόντα στο Top ${sampleSize} του ${nameB} που δεν εμφανίζονται στο Top ${sampleSize} του ${nameA}.`} size={12}>
+                <span>Μοναδικά {nameB}: <span className="font-semibold">{onlyInB.length}</span></span>
               </Tooltip>
             </div>
           </div>

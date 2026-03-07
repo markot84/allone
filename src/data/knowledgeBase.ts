@@ -104,7 +104,7 @@ export const knowledgeArticles: KnowledgeArticle[] = [
 Η πλατφόρμα συνδυάζει:
 - Product Intelligence για αποθέματα και προτεραιοποίηση
 - RFM Analysis για customer segmentation
-- Strategy Weights Configurator για προσαρμοσμένη στρατηγική
+- Commercial Strategy για προσαρμοσμένη στρατηγική
 - Channel Activation για budget optimization
 - ROI Attribution για μέτρηση επιπτώσεων`,
     tags: ['basics', 'overview', 'introduction'],
@@ -483,9 +483,9 @@ Margin_Tier, Margin Tier, margin_tier, Margin_Category, margin_category, Tier, t
   {
     id: 'strategy-weights',
     category: 'strategy',
-    title: 'Strategy Weights Configurator',
+    title: 'Commercial Strategy',
     description: 'Πώς να ρυθμίσετε τους παράγοντες προτεραιοποίησης',
-    content: `Το Strategy Weights Configurator σας επιτρέπει να προσαρμόσετε πώς το σύστημα προτεραιοποιεί προϊόντα.
+    content: `Το Commercial Strategy σας επιτρέπει να προσαρμόσετε πώς το σύστημα προτεραιοποιεί προϊόντα.
 
 **Διαθέσιμοι παράγοντες:**
 1. **Profitability** (💰): Margin και profit potential

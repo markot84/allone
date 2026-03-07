@@ -132,7 +132,7 @@ export function ContentStrategy() {
                   ? 'Ελέγχοντας για ενεργή στρατηγική...'
                   : activeStrategy 
                   ? `${contentItems.length > 0 ? `${contentItems.length} content items, ` : ''}${alignedCount} aligned, ${misalignedCount} need review`
-                  : 'Πήγαινε στο Strategy Weights για να ορίσεις ενεργή στρατηγική'}
+                  : 'Πήγαινε στην Εμπορική Στρατηγική για να ορίσεις ενεργή στρατηγική'}
               </p>
               {activeStrategy && 'implementedAt' in activeStrategy && activeStrategy.implementedAt && (
                 <p className="text-xs text-[#9CA3AF] mt-1">

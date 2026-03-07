@@ -18,7 +18,9 @@ import {
   FileSpreadsheet,
   FileText,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Clock,
+  Infinity
 } from 'lucide-react';
 import { Card, CardHeader, Button, Slider, Badge, Spinner } from '../common';
 import { ScenarioSelector } from './ScenarioSelector';
@@ -184,6 +186,12 @@ export function WeightConfigurator() {
     if (activeStrategy) return activeStrategy.approvalStatus;
     return 'draft';
   });
+  const [duration, setDuration] = useState<number | 'ongoing'>(() => {
+    if (activeStrategy?.duration !== undefined) return activeStrategy.duration;
+    const s = scenarios.find(sc => sc.id === activeStrategy?.scenarioId);
+    return s?.duration ?? 'ongoing';
+  });
+  const [customDays, setCustomDays] = useState('');
   const [selectedSegment, setSelectedSegment] = useState('champions');
   const [showImpactPreview, setShowImpactPreview] = useState(false);
   const [pendingScenarioChange, setPendingScenarioChange] = useState<string | null>(null);
@@ -215,23 +223,12 @@ export function WeightConfigurator() {
     return scenario?.weights ?? weights;
   }, [selectedScenario, weights]);
 
-  // Handle scenario change with impact preview (NO auto-save)
+  // Handle scenario change with impact preview — show preview first, apply only on confirm
   const handleScenarioChange = useCallback((scenarioId: string) => {
-    // If selecting the same scenario, do nothing
     if (scenarioId === selectedScenario) {
       return;
     }
     
-    // Just update the UI - no auto-save
-    const scenario = scenarios.find((s) => s.id === scenarioId);
-    if (scenario) {
-      const newWeights = scenario.weights || defaultWeights;
-      setWeights(newWeights);
-      setSelectedScenario(scenarioId);
-      setApprovalStatus('draft');
-    }
-    
-    // Show preview when changing strategy
     setPendingScenarioChange(scenarioId);
     setShowImpactPreview(true);
   }, [selectedScenario]);
@@ -241,13 +238,14 @@ export function WeightConfigurator() {
     setSelectedScenario(scenarioId);
     const scenario = scenarios.find((s) => s.id === scenarioId);
     const newWeights = scenario?.weights || defaultWeights;
+    const newDuration = scenario?.duration ?? 'ongoing';
     setWeights(newWeights);
+    setDuration(newDuration);
     setApprovalStatus('draft');
     setShowImpactPreview(false);
     setPendingScenarioChange(null);
     setPreviewTargetScenario(null);
     
-    // Save the strategy when user confirms the change
     if (!user) {
       toast.error('Πρέπει να είσαι συνδεδεμένος');
       return;
@@ -258,6 +256,7 @@ export function WeightConfigurator() {
     saveActiveStrategy({
       scenarioId: scenarioId,
       weights: newWeights,
+      duration: newDuration,
       approvalStatus: 'draft',
       approvedBy: user.email || user.displayName || 'User',
     }).then(() => {
@@ -267,6 +266,18 @@ export function WeightConfigurator() {
       toast.error(`Σφάλμα: ${error?.message || error}`);
     });
   }, [user, saveActiveStrategy, toast]);
+
+  const handleDurationChange = useCallback((newDuration: number | 'ongoing') => {
+    setDuration(newDuration);
+    if (!user || !selectedScenario) return;
+    saveActiveStrategy({
+      scenarioId: selectedScenario,
+      weights,
+      duration: newDuration,
+      approvalStatus: approvalStatus,
+      approvedBy: user.email || user.displayName || 'User',
+    }).catch(() => {});
+  }, [user, selectedScenario, weights, approvalStatus, saveActiveStrategy]);
 
   // Confirm strategy change after impact preview
   const confirmStrategyChange = useCallback(() => {
@@ -472,6 +483,9 @@ export function WeightConfigurator() {
       setSelectedScenario(activeStrategy.scenarioId);
       setWeights(activeStrategy.weights);
       setApprovalStatus(activeStrategy.approvalStatus);
+      if (activeStrategy.duration !== undefined) {
+        setDuration(activeStrategy.duration);
+      }
     }
   }, [activeStrategy?.id, strategyLoading]);
 
@@ -484,24 +498,13 @@ export function WeightConfigurator() {
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between max-w-full overflow-x-hidden">
         <div className="min-w-0 flex-1">
           <h2 className="text-2xl font-bold text-[var(--nts-charcoal)] tracking-tight">
-            Strategy Weights Configurator
+            Commercial Strategy
           </h2>
           <p className="text-[14px] text-[var(--nts-medium-gray)] mt-1">
-            Προσαρμογή παραγόντων προτεραιοποίησης προϊόντων για τα marketing campaigns σας
+            Καθορισμός εμπορικών προτεραιοτήτων, κατανομή πόρων και συντονισμός εκτέλεσης
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Tooltip content="Συγκρίνετε δύο στρατηγικές: weights, Top N προϊόντα (τα N με τα υψηλότερα scores), revenue/margin, αλλαγές θέσης.">
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={<GitCompare size={16} />}
-              onClick={() => setShowCompareModal(true)}
-              className="!border-[var(--nts-accent)]/50 hover:!border-[var(--nts-accent)]"
-            >
-              Σύγκριση
-            </Button>
-          </Tooltip>
           <ApprovalWorkflow
             status={approvalStatus}
             onStatusChange={setApprovalStatus}
@@ -513,7 +516,74 @@ export function WeightConfigurator() {
       <ScenarioSelector
         selectedScenario={selectedScenario}
         onScenarioChange={handleScenarioChange}
+        activeDuration={duration}
       />
+
+      {/* Duration + Compare — single row */}
+      {selectedScenario && (
+        <Card padding="md">
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2 text-sm font-medium text-[#4A4A4A] flex-shrink-0">
+              <Clock size={16} className="text-[var(--nts-medium-gray)]" />
+              <span>Διάρκεια στρατηγικής</span>
+            </div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {[7, 14, 30, 60, 90].map(d => (
+                <button
+                  key={d}
+                  onClick={() => { handleDurationChange(d); setCustomDays(''); }}
+                  className={`px-2.5 py-1 text-xs font-medium rounded-md border transition-all ${
+                    duration === d
+                      ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)] text-white'
+                      : 'border-[#E5E5E5] bg-white text-[#4A4A4A] hover:border-[var(--nts-accent)]/50'
+                  }`}
+                >
+                  {d} ημ.
+                </button>
+              ))}
+              <button
+                onClick={() => { handleDurationChange('ongoing'); setCustomDays(''); }}
+                className={`px-2.5 py-1 text-xs font-medium rounded-md border transition-all flex items-center gap-1 ${
+                  duration === 'ongoing'
+                    ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)] text-white'
+                    : 'border-[#E5E5E5] bg-white text-[#4A4A4A] hover:border-[var(--nts-accent)]/50'
+                }`}
+              >
+                <Infinity size={12} />
+              </button>
+              <input
+                type="number"
+                min={1}
+                max={365}
+                placeholder="—"
+                value={customDays}
+                onChange={e => {
+                  const v = e.target.value;
+                  setCustomDays(v);
+                  const n = parseInt(v, 10);
+                  if (n > 0 && n <= 365) handleDurationChange(n);
+                }}
+                className={`w-14 px-2 py-1 text-xs border rounded-md text-center focus:outline-none focus:border-[var(--nts-accent)] ${
+                  typeof duration === 'number' && ![7, 14, 30, 60, 90].includes(duration)
+                    ? 'border-[var(--nts-accent)] bg-[var(--nts-light-gray)]'
+                    : 'border-[#E5E5E5]'
+                }`}
+              />
+              <span className="text-[11px] text-[#9CA3AF]">ημ.</span>
+            </div>
+
+            <div className="ml-auto flex-shrink-0">
+              <button
+                onClick={() => setShowCompareModal(true)}
+                className="group flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-[var(--nts-medium-gray)] hover:text-[var(--nts-accent)] border border-dashed border-[var(--nts-border-gray)] hover:border-[var(--nts-accent)] transition-all duration-200"
+              >
+                <GitCompare size={13} />
+                <span>Σύγκριση Σεναρίων Εμπορικής Στρατηγικής</span>
+              </button>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Custom Tools - when Custom is selected */}
       {selectedScenario === 'custom' && (
@@ -535,8 +605,8 @@ export function WeightConfigurator() {
         {/* Weight Sliders */}
         <Card className="xl:col-span-1" padding="lg">
           <CardHeader
-            title="Factor Weights"
-            subtitle={`Σύνολο: ${totalWeight}%`}
+            title="Priority Weights"
+            subtitle={`Commercial Strategy · Σύνολο: ${totalWeight}%`}
             action={
               <Button
                 variant="ghost"
@@ -841,6 +911,14 @@ export function WeightConfigurator() {
         }
         currentScenarioId={selectedScenario || undefined}
         newScenarioId={pendingScenarioChange || previewTargetScenario || selectedScenario || undefined}
+        currentDuration={duration}
+        newDuration={
+          pendingScenarioChange
+            ? scenarios.find(s => s.id === pendingScenarioChange)?.duration ?? 'ongoing'
+            : previewTargetScenario
+              ? scenarios.find(s => s.id === previewTargetScenario)?.duration ?? 'ongoing'
+              : duration
+        }
       />
 
       {/* Compare Scenarios Modal */}

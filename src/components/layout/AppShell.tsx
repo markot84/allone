@@ -3,8 +3,7 @@ import { createPortal } from 'react-dom';
 import {
   Header as PrimerHeader,
   NavList,
-  Text,
-  TextInput
+  Text
 } from '@primer/react';
 import { Button } from '../common';
 import { useAuth, useBrand } from '../../hooks';
@@ -95,16 +94,16 @@ function BrandMenu({
           alignItems: 'center',
           gap: 6,
           padding: '6px 12px',
-          border: '1px solid var(--borderColor-default, #d0d7de)',
+          border: '1px solid rgba(255,255,255,0.12)',
           borderRadius: 8,
-          background: 'var(--nts-light-gray)',
+          background: 'rgba(255,255,255,0.06)',
           cursor: brands.length > 1 ? 'pointer' : 'default',
           fontSize: 14,
           fontWeight: 600,
-          color: 'var(--nts-charcoal)'
+          color: 'rgba(255,255,255,0.8)'
         }}
       >
-        <Text as="span" size="small" weight="semibold">{currentBrand.name}</Text>
+        <Text as="span" size="small" weight="semibold" style={{ color: 'rgba(255,255,255,0.8)' }}>{currentBrand.name}</Text>
         {brands.length > 1 && (
           <span style={{ opacity: 0.7, fontSize: 12 }}>▼</span>
         )}
@@ -188,9 +187,9 @@ function AccountMenu({
           alignItems: 'center',
           gap: 8,
           padding: '6px 12px',
-          border: '1px solid var(--borderColor-default, #d0d7de)',
+          border: '1px solid rgba(255,255,255,0.12)',
           borderRadius: 6,
-          background: 'var(--bgColor-default, #ffffff)',
+          background: 'rgba(255,255,255,0.06)',
           cursor: 'pointer',
           fontSize: 14
         }}
@@ -200,7 +199,7 @@ function AccountMenu({
             width: 24,
             height: 24,
             borderRadius: '50%',
-            background: 'var(--bgColor-accent-emphasis, #0969da)',
+            background: '#d4854a',
             color: 'white',
             display: 'flex',
             alignItems: 'center',
@@ -212,7 +211,7 @@ function AccountMenu({
         >
           {(user.email?.[0] || user.displayName?.[0] || '?').toUpperCase()}
         </div>
-        <Text as="span" size="small" className="hidden sm:inline" style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <Text as="span" size="small" className="hidden sm:inline" style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'rgba(255,255,255,0.75)' }}>
           {user.email || user.displayName || 'Account'}
         </Text>
       </button>
@@ -269,7 +268,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
     () => [
       { id: 'brands', label: 'Τα Brands μου', icon: Building2 },
       { id: 'dashboard', label: 'Dashboard', icon: HomeIcon },
-      { id: 'strategy', label: 'Strategy Weights', icon: GraphIcon },
+      { id: 'strategy', label: 'Commercial Strategy', icon: GraphIcon },
       { id: 'products', label: 'Product Intelligence', icon: PackageIcon },
       { id: 'rfm', label: 'Data Analysis', icon: OrganizationIcon },
       { id: 'channels', label: 'Channel Activation', icon: MegaphoneIcon },
@@ -312,7 +311,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
 
   return (
     <>
-      <PrimerHeader style={{ borderBottom: '1px solid var(--borderColor-default, #d0d7de)' }}>
+      <PrimerHeader style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', backgroundColor: '#111111' }}>
         <PrimerHeader.Item>
           <Button
             variant="ghost"
@@ -336,20 +335,21 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
                 width: 28,
                 height: 28,
                 borderRadius: 6,
-                border: '1px solid var(--borderColor-default, #d0d7de)',
+                border: '1px solid rgba(255,255,255,0.15)',
                 display: 'grid',
                 placeItems: 'center',
                 fontWeight: 700,
-                color: 'var(--fgColor-default, #24292f)'
+                color: '#d4854a',
+                fontSize: 12
               }}
             >
               P+
             </div>
             <div style={{ minWidth: 0 }}>
-              <Text as="div" weight="semibold" size="medium" className="truncate">
+              <Text as="div" weight="semibold" size="medium" className="truncate" style={{ color: 'rgba(255,255,255,0.85)' }}>
                 Performance+
               </Text>
-              <Text as="div" size="small" style={{ color: 'var(--fgColor-muted, #57606a)' }} className="truncate">
+              <Text as="div" size="small" style={{ color: 'rgba(255,255,255,0.4)' }} className="truncate">
                 by notthesame.ai
               </Text>
             </div>
@@ -357,12 +357,32 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
         </PrimerHeader.Item>
 
         <PrimerHeader.Item full className="hidden md:block" style={{ maxWidth: 520 }}>
-          <TextInput
-            leadingVisual={SearchIcon}
-            aria-label="Search"
-            placeholder="Search…"
-            block
-          />
+          <div style={{ position: 'relative', width: '100%' }}>
+            <SearchIcon style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.3)' }} />
+            <input
+              type="text"
+              aria-label="Search"
+              placeholder="Search…"
+              style={{
+                width: '100%',
+                padding: '7px 12px 7px 34px',
+                background: 'transparent',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: 6,
+                color: 'rgba(255,255,255,0.7)',
+                fontSize: 14,
+                outline: 'none'
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)';
+                e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
+                e.currentTarget.style.background = 'transparent';
+              }}
+            />
+          </div>
         </PrimerHeader.Item>
 
         {currentBrand && (
@@ -400,15 +420,15 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
       }}>
         {/* Sidebar */}
         <div 
-          className="hidden md:block"
+          className="hidden md:block sidebar-dark"
           style={{
             width: 260,
             minWidth: 260,
             maxWidth: 260,
-            borderRight: '1px solid var(--borderColor-default, #d0d7de)',
+            borderRight: '1px solid rgba(255,255,255,0.08)',
             overflowY: 'auto',
             overflowX: 'hidden',
-            backgroundColor: 'var(--nts-bg-pure)'
+            backgroundColor: '#111111'
           }}
         >
           {currentBrand && (
@@ -417,18 +437,18 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
                 margin: 12,
                 padding: '12px 14px',
                 borderRadius: 10,
-                background: 'var(--nts-light-gray)',
-                border: '1px solid var(--borderColor-default, #d0d7de)'
+                background: 'rgba(255,255,255,0.06)',
+                border: '1px solid rgba(255,255,255,0.1)'
               }}
             >
-              <Text as="div" size="small" style={{ color: 'var(--fgColor-muted, #57606a)', marginBottom: 4 }}>
+              <Text as="div" size="small" style={{ color: 'rgba(255,255,255,0.4)', marginBottom: 4 }}>
                 Brand
               </Text>
-              <Text as="div" weight="semibold" size="medium" style={{ color: 'var(--nts-charcoal)' }}>
+              <Text as="div" weight="semibold" size="medium" style={{ color: 'rgba(255,255,255,0.85)' }}>
                 {currentBrand.name}
               </Text>
               {currentBrand.type && (
-                <Text as="div" size="small" style={{ color: 'var(--fgColor-muted, #57606a)', marginTop: 2 }}>
+                <Text as="div" size="small" style={{ color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>
                   {currentBrand.type}
                 </Text>
               )}
@@ -482,6 +502,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
           />
           {/* Mobile Navigation Drawer */}
           <div
+            className="sidebar-dark"
             style={{
               position: 'fixed',
               top: 0,
@@ -489,12 +510,12 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
               bottom: 0,
               width: 280,
               maxWidth: '80vw',
-              backgroundColor: 'var(--nts-bg-pure)',
-              borderRight: '1px solid var(--borderColor-default, #d0d7de)',
+              backgroundColor: '#111111',
+              borderRight: '1px solid rgba(255,255,255,0.08)',
               zIndex: 1000,
               display: 'flex',
               flexDirection: 'column',
-              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
+              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
               animation: 'slideInLeft 0.2s ease-out',
               overflowY: 'auto',
               overflowX: 'hidden'
@@ -503,7 +524,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
             {/* Header */}
             <div style={{ 
               padding: 16, 
-              borderBottom: '1px solid var(--borderColor-default, #d0d7de)',
+              borderBottom: '1px solid rgba(255,255,255,0.08)',
               display: 'flex',
               flexDirection: 'column',
               gap: 12,
@@ -516,20 +537,21 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
                       width: 28,
                       height: 28,
                       borderRadius: 6,
-                      border: '1px solid var(--borderColor-default, #d0d7de)',
+                      border: '1px solid rgba(255,255,255,0.2)',
                       display: 'grid',
                       placeItems: 'center',
                       fontWeight: 700,
-                      color: 'var(--fgColor-default, #24292f)'
+                      color: 'var(--nts-accent)',
+                      fontSize: 12
                     }}
                   >
                     P+
                   </div>
                   <div>
-                    <Text as="div" weight="semibold" size="medium">
+                    <Text as="div" weight="semibold" size="medium" style={{ color: '#ffffff' }}>
                       Performance+
                     </Text>
-                    <Text as="div" size="small" style={{ color: 'var(--fgColor-muted, #57606a)' }}>
+                    <Text as="div" size="small" style={{ color: 'rgba(255,255,255,0.5)' }}>
                       by notthesame.ai
                     </Text>
                   </div>
@@ -546,10 +568,10 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color: 'var(--fgColor-muted, #57606a)'
+                    color: 'rgba(255,255,255,0.5)'
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = 'var(--bgColor-muted, #f6f8fa)';
+                    e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)';
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.backgroundColor = 'transparent';
@@ -560,7 +582,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
               </div>
               {currentBrand && (
                 <div style={{ padding: '0 12px 12px' }}>
-                  <Text as="div" size="small" style={{ color: 'var(--fgColor-muted, #57606a)', marginBottom: 6 }}>
+                  <Text as="div" size="small" style={{ color: 'rgba(255,255,255,0.5)', marginBottom: 6 }}>
                     Brand
                   </Text>
                   {brands.length > 1 ? (
@@ -574,10 +596,10 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
                           textAlign: 'left',
                           border: 'none',
                           borderRadius: 8,
-                          background: currentBrand?.id === b.id ? 'var(--nts-light-gray)' : 'var(--bgColor-muted, #f6f8fa)',
+                          background: currentBrand?.id === b.id ? 'rgba(249,115,22,0.15)' : 'rgba(255,255,255,0.06)',
                           cursor: 'pointer',
                           fontSize: 14,
-                          color: currentBrand?.id === b.id ? 'var(--nts-charcoal)' : 'var(--fgColor-default, #24292f)',
+                          color: currentBrand?.id === b.id ? 'var(--nts-accent)' : 'rgba(255,255,255,0.7)',
                           fontWeight: currentBrand?.id === b.id ? 600 : 400,
                           marginBottom: 4
                         }}
@@ -590,11 +612,11 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
                       style={{
                         padding: '10px 12px',
                         borderRadius: 8,
-                        background: 'var(--nts-light-gray)',
-                        border: '1px solid var(--borderColor-default, #d0d7de)'
+                        background: 'rgba(255,255,255,0.06)',
+                        border: '1px solid rgba(255,255,255,0.1)'
                       }}
                     >
-                      <Text as="div" weight="semibold" style={{ color: 'var(--nts-charcoal)' }}>
+                      <Text as="div" weight="semibold" style={{ color: '#ffffff' }}>
                         {currentBrand.name}
                       </Text>
                     </div>

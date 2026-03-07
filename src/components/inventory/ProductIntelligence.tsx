@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -125,6 +125,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [marginFilter, setMarginFilter] = useState<string>('all');
   const [stockAgeFilter, setStockAgeFilter] = useState<'all' | 'dead' | 'near-dead' | 'high-margin-low-stock'>('all');
+  const [stockCardFilter, setStockCardFilter] = useState<'all' | 'healthy' | 'excess' | 'dead' | 'low'>('all');
   const [sortField, setSortField] = useState<SortField>('margin_percentage');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [showExportModal, setShowExportModal] = useState(false);
@@ -165,8 +166,28 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           const isLowStock = (p.stock_level ?? 0) < 10 || ((p.stock_level ?? 0) / Math.max(p.stock_capacity ?? 1, 1) < 0.2);
           matchesStockAge = isHighMargin && isLowStock;
         }
+
+        // Stock card filter
+        let matchesStockCard = true;
+        if (stockCardFilter !== 'all') {
+          const level = p.stock_level ?? 0;
+          const capacity = Math.max(p.stock_capacity ?? 0, 1);
+          const hasCapacity = (p.stock_capacity ?? 0) > 0 && p.stock_capacity !== level;
+          const ratio = hasCapacity ? level / capacity : (level > 0 ? 0.5 : 0);
+          const ageD = getStockAgeDays(p);
+
+          if (stockCardFilter === 'healthy') {
+            matchesStockCard = ratio >= 0.2 && ratio <= 0.8 && ageD <= 180;
+          } else if (stockCardFilter === 'excess') {
+            matchesStockCard = ratio > 0.8;
+          } else if (stockCardFilter === 'dead') {
+            matchesStockCard = ageD > 180;
+          } else if (stockCardFilter === 'low') {
+            matchesStockCard = level < 10 || ratio < 0.2;
+          }
+        }
         
-        return matchesSearch && matchesCategory && matchesMargin && matchesStockAge;
+        return matchesSearch && matchesCategory && matchesMargin && matchesStockAge && matchesStockCard;
       })
       .sort((a, b) => {
         const aVal = sortField === 'stock_age_days' ? getStockAgeDays(a) : a[sortField];
@@ -180,7 +201,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           ? (aVal as number) - (bVal as number) 
           : (bVal as number) - (aVal as number);
       });
-  }, [products, searchQuery, selectedCategory, marginFilter, stockAgeFilter, sortField, sortDirection]);
+  }, [products, searchQuery, selectedCategory, marginFilter, stockAgeFilter, stockCardFilter, sortField, sortDirection]);
 
   const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE));
   const paginatedProducts = filteredProducts.slice(
@@ -190,7 +211,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, selectedCategory, marginFilter, stockAgeFilter, sortField, sortDirection]);
+  }, [searchQuery, selectedCategory, marginFilter, stockAgeFilter, stockCardFilter, sortField, sortDirection]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -295,6 +316,8 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           icon={<Package size={20} />}
           color="#3B82F6"
           tooltip="Συνολικός αριθμός προϊόντων (SKU) στο inventory."
+          active={stockCardFilter === 'all'}
+          onClick={() => setStockCardFilter('all')}
         />
         <SummaryCard
           label="Healthy Stock"
@@ -303,6 +326,8 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           icon={<TrendingUp size={20} />}
           color="#22C55E"
           tooltip="Προϊόντα με stock 20–80% της χωρητικότητας και ηλικία < 180 ημερών."
+          active={stockCardFilter === 'healthy'}
+          onClick={() => setStockCardFilter(stockCardFilter === 'healthy' ? 'all' : 'healthy')}
         />
         <SummaryCard
           label="Excess Stock"
@@ -313,6 +338,8 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           icon={<AlertTriangle size={20} />}
           color="#F59E0B"
           tooltip="Προϊόντα με stock > 80% της χωρητικότητας (υπερπλήρωση)."
+          active={stockCardFilter === 'excess'}
+          onClick={() => setStockCardFilter(stockCardFilter === 'excess' ? 'all' : 'excess')}
         />
         <SummaryCard
           label="Dead Stock"
@@ -323,6 +350,8 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           icon={<AlertCircle size={20} />}
           color="#EF4444"
           tooltip="Προϊόντα με stock_age > 180 ημερών (αδρανές απόθεμα)."
+          active={stockCardFilter === 'dead'}
+          onClick={() => setStockCardFilter(stockCardFilter === 'dead' ? 'all' : 'dead')}
         />
         <SummaryCard
           label="Low Stock"
@@ -331,6 +360,8 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           icon={<TrendingDown size={20} />}
           color="#8B5CF6"
           tooltip="Προϊόντα με stock < 20% της χωρητικότητας ή < 10 μονάδες."
+          active={stockCardFilter === 'low'}
+          onClick={() => setStockCardFilter(stockCardFilter === 'low' ? 'all' : 'low')}
         />
       </div>
 
@@ -412,28 +443,23 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           </div>
 
           {/* Category Filter */}
-          <select
+          <DropdownFilter
             value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="px-4 py-2 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all"
-          >
-            <option value="all">All Categories</option>
-            {categories.map((cat) => (
-              <option key={cat} value={cat}>{cat}</option>
-            ))}
-          </select>
+            onChange={setSelectedCategory}
+            options={[{ value: 'all', label: 'All Categories' }, ...categories.map(c => ({ value: c, label: c }))]}
+          />
 
           {/* Margin Filter */}
-          <select
+          <DropdownFilter
             value={marginFilter}
-            onChange={(e) => setMarginFilter(e.target.value)}
-            className="px-4 py-2 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all"
-          >
-            <option value="all">All Margins</option>
-            <option value="high">High Margin</option>
-            <option value="medium">Medium Margin</option>
-            <option value="low">Low Margin</option>
-          </select>
+            onChange={setMarginFilter}
+            options={[
+              { value: 'all', label: 'All Margins' },
+              { value: 'high', label: 'High Margin' },
+              { value: 'medium', label: 'Medium Margin' },
+              { value: 'low', label: 'Low Margin' }
+            ]}
+          />
 
           <div className="text-sm text-[#4A4A4A]">
             {filteredProducts.length} products
@@ -576,11 +602,18 @@ interface SummaryCardProps {
   icon: React.ReactNode;
   color: string;
   tooltip?: string;
+  active?: boolean;
+  onClick?: () => void;
 }
 
-function SummaryCard({ label, value, subValue, icon, color, tooltip }: SummaryCardProps) {
+function SummaryCard({ label, value, subValue, icon, color, tooltip, active, onClick }: SummaryCardProps) {
   return (
-    <Card padding="md" hover>
+    <Card
+      padding="md"
+      hover
+      className="h-full cursor-pointer"
+      onClick={onClick}
+    >
       <div className="flex items-center gap-3">
         <div
           className="w-10 h-10 rounded-lg flex items-center justify-center"
@@ -588,7 +621,7 @@ function SummaryCard({ label, value, subValue, icon, color, tooltip }: SummaryCa
         >
           <span style={{ color }}>{icon}</span>
         </div>
-        <div>
+        <div className="flex-1 min-w-0">
           <p className="text-sm text-[#4A4A4A]">
             {tooltip ? <Tooltip content={tooltip}>{label}</Tooltip> : label}
           </p>
@@ -597,7 +630,9 @@ function SummaryCard({ label, value, subValue, icon, color, tooltip }: SummaryCa
             <p className="text-xs text-[#9CA3AF]">{subValue}</p>
           )}
         </div>
+        <div className="w-2 h-2 rounded-full flex-shrink-0 transition-colors duration-200" style={{ backgroundColor: active ? color : 'transparent' }} />
       </div>
+      <div className="h-0.5 rounded-full mt-3 -mb-1 transition-colors duration-200" style={{ backgroundColor: active ? color : 'transparent' }} />
     </Card>
   );
 }
@@ -702,4 +737,54 @@ function SortIcon({ field, current, direction }: { field: SortField; current: So
     return <ChevronDown size={12} className="opacity-30" />;
   }
   return direction === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />;
+}
+
+interface DropdownFilterProps {
+  value: string;
+  onChange: (val: string) => void;
+  options: { value: string; label: string }[];
+}
+
+function DropdownFilter({ value, onChange, options }: DropdownFilterProps) {
+  const [open, setOpen] = useState(false);
+  const ref = React.useRef<HTMLDivElement>(null);
+  const selected = options.find(o => o.value === value);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="px-4 py-2 bg-[#F5F5F5] border border-transparent rounded-lg text-sm flex items-center gap-2 hover:border-[var(--nts-accent)] transition-all"
+      >
+        <span>{selected?.label ?? value}</span>
+        <ChevronDown size={14} className="text-[#9CA3AF]" />
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-[#E5E5E5] rounded-lg shadow-lg max-h-64 overflow-y-auto min-w-[200px]">
+          {options.map(o => (
+            <button
+              key={o.value}
+              type="button"
+              onClick={() => { onChange(o.value); setOpen(false); }}
+              className={`w-full text-left px-4 py-2 text-sm hover:bg-[#F5F5F5] transition-colors ${
+                o.value === value ? 'text-[var(--nts-accent)] font-medium bg-[#FFF7ED]' : 'text-[#1A1A1A]'
+              }`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }

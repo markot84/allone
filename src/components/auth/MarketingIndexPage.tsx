@@ -61,8 +61,8 @@ const appPreviewPoints = [
     imageClassName: 'object-left-top',
   },
   {
-    title: 'Strategy Weights',
-    featureLabel: 'Strategy Weights',
+    title: 'Commercial Strategy',
+    featureLabel: 'Commercial Strategy',
     problem: 'Πρόβλημα: Η ιεράρχηση προϊόντων και καναλιών γίνεται συχνά αποσπασματικά, χωρίς σταθερό διοικητικό πλαίσιο αξιολόγησης.',
     solution: 'Πώς το κάνει: Επιτρέπει τη ρύθμιση στρατηγικών βαρύτητων και την πολυπαραγονική αποτίμηση κάθε επιλογής με κοινή λογική.',
     value: 'Υπεραξία: Ο προϋπολογισμός κατευθύνεται προς κινήσεις με τη μεγαλύτερη δυνητική συμβολή σε ανάπτυξη, απόδοση και περιθώριο κέρδους.',

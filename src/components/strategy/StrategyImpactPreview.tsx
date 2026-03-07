@@ -27,7 +27,12 @@ interface StrategyImpactPreviewProps {
   newWeights: Record<string, number>;
   currentScenarioId?: string;
   newScenarioId?: string;
+  currentDuration?: number | 'ongoing';
+  newDuration?: number | 'ongoing';
 }
+
+const formatDuration = (d?: number | 'ongoing') =>
+  d === undefined ? '' : d === 'ongoing' ? 'Ongoing' : `${d} ημ.`;
 
 export function StrategyImpactPreview({ 
   isOpen, 
@@ -36,9 +41,10 @@ export function StrategyImpactPreview({
   currentWeights,
   newWeights,
   currentScenarioId,
-  newScenarioId
+  newScenarioId,
+  currentDuration,
+  newDuration
 }: StrategyImpactPreviewProps) {
-  if (!isOpen) return null;
   const { products } = useProducts();
   const { campaigns } = useCampaigns();
   const { contentItems } = useContent();
@@ -272,6 +278,8 @@ export function StrategyImpactPreview({
     estimated_impact: estimatedImpact
   };
 
+  if (!isOpen) return null;
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -303,22 +311,34 @@ export function StrategyImpactPreview({
             </div>
           </div>
 
-          {/* From → To */}
-          <div className="flex items-center gap-4 mt-6 p-4 bg-[#F5F5F5] rounded-xl">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg border border-[var(--nts-border-gray)] bg-white flex items-center justify-center text-[var(--nts-medium-gray)]">
-                <SlidersHorizontal size={16} />
+          {/* From → To (only when actually changing) */}
+          {!isSameStrategy && (
+            <div className="flex items-center gap-4 mt-6 p-4 bg-[#F5F5F5] rounded-xl">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg border border-[var(--nts-border-gray)] bg-white flex items-center justify-center text-[var(--nts-medium-gray)]">
+                  <SlidersHorizontal size={16} />
+                </div>
+                <div>
+                  <span className="font-medium text-[#1A1A1A]">{from.name}</span>
+                  {currentDuration !== undefined && (
+                    <span className="ml-2 text-xs text-[#9CA3AF]">{formatDuration(currentDuration)}</span>
+                  )}
+                </div>
               </div>
-              <span className="font-medium text-[#1A1A1A]">{from.name}</span>
-            </div>
-            <ArrowRight size={24} className="text-[var(--nts-accent)]" />
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg border border-[var(--nts-border-gray)] bg-white flex items-center justify-center text-[var(--nts-medium-gray)]">
-                <SlidersHorizontal size={16} />
+              <ArrowRight size={24} className="text-[var(--nts-accent)]" />
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg border border-[var(--nts-border-gray)] bg-white flex items-center justify-center text-[var(--nts-medium-gray)]">
+                  <SlidersHorizontal size={16} />
+                </div>
+                <div>
+                  <span className="font-medium text-[#1A1A1A]">{to.name}</span>
+                  {newDuration !== undefined && (
+                    <span className="ml-2 text-xs text-[#9CA3AF]">{formatDuration(newDuration)}</span>
+                  )}
+                </div>
               </div>
-              <span className="font-medium text-[#1A1A1A]">{to.name}</span>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Impact Sections */}

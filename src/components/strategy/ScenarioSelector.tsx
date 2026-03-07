@@ -1,15 +1,17 @@
 import { motion } from 'framer-motion';
-import { Check, Euro, Package, Rocket, Settings, TrendingUp } from 'lucide-react';
+import { Check, Clock, Euro, Infinity, Package, Rocket, Settings, TrendingUp } from 'lucide-react';
 import { scenarios } from '../../data';
 
 interface ScenarioSelectorProps {
   selectedScenario: string | null;
   onScenarioChange: (scenarioId: string) => void;
+  activeDuration?: number | 'ongoing';
 }
 
 export function ScenarioSelector({
   selectedScenario,
-  onScenarioChange
+  onScenarioChange,
+  activeDuration
 }: ScenarioSelectorProps) {
   const scenarioIcon = (id: string) => {
     const cls = 'text-[var(--nts-medium-gray)]';
@@ -42,12 +44,23 @@ export function ScenarioSelector({
             <button
               onClick={() => onScenarioChange(scenario.id)}
               className={`
-                w-full min-w-0 p-4 rounded-xl border-2 text-left transition-all duration-200
+                w-full h-full min-w-0 p-4 rounded-xl border-2 text-left transition-all duration-200 flex flex-col
                 ${isSelected
-                  ? 'border-[var(--nts-accent)] bg-[var(--nts-light-gray)] shadow-md'
-                  : 'border-[#E5E5E5] bg-white hover:border-[var(--nts-accent)]/50 hover:shadow-sm'
+                  ? 'border-[var(--nts-accent)] bg-[var(--nts-light-gray)]'
+                  : 'border-[#E5E5E5] bg-white hover:border-[var(--nts-accent)]/50'
                 }
               `}
+              style={{
+                boxShadow: isSelected
+                  ? '0 6px 20px rgba(0,0,0,0.14), 0 3px 8px rgba(0,0,0,0.10)'
+                  : '0 2px 6px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.08)'
+              }}
+              onMouseEnter={(e) => {
+                if (!isSelected) e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.14), 0 3px 8px rgba(0,0,0,0.10)';
+              }}
+              onMouseLeave={(e) => {
+                if (!isSelected) e.currentTarget.style.boxShadow = '0 2px 6px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.08)';
+              }}
             >
               <div className="flex items-start justify-between">
                 <span className="inline-flex">{scenarioIcon(scenario.id)}</span>
@@ -67,9 +80,26 @@ export function ScenarioSelector({
               <p className="text-xs text-[#4A4A4A] mt-1">
                 {scenario.description}
               </p>
+              {(() => {
+                const displayDuration = isSelected && activeDuration !== undefined
+                  ? activeDuration
+                  : scenario.duration;
+                if (displayDuration === undefined) return null;
+                return (
+                  <div className="flex items-center gap-1 mt-2">
+                    {displayDuration === 'ongoing'
+                      ? <Infinity size={12} className="text-[#9CA3AF]" />
+                      : <Clock size={12} className="text-[#9CA3AF]" />
+                    }
+                    <span className="text-[10px] text-[#9CA3AF]">
+                      {displayDuration === 'ongoing' ? 'Ongoing' : `${displayDuration} ημέρες`}
+                    </span>
+                  </div>
+                );
+              })()}
               
               {scenario.weights && (
-                <div className="mt-3 pt-3 border-t border-[#E5E5E5]">
+                <div className="mt-auto pt-3 border-t border-[#E5E5E5]">
                   <div className="flex gap-1">
                     {Object.entries(scenario.weights)
                       .sort((a, b) => b[1] - a[1])

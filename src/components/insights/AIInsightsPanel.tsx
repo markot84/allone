@@ -275,11 +275,12 @@ export function AIInsightsTrigger({ onClick, insightCount }: { onClick: () => vo
   return (
     <motion.button
       onClick={onClick}
-      whileHover={{ scale: 1.05 }}
+      whileHover={{ scale: 1.08 }}
       whileTap={{ scale: 0.95 }}
-      className="fixed bottom-6 right-6 w-12 h-12 bg-white rounded-full border border-[var(--nts-border-gray)] shadow-sm flex items-center justify-center z-30"
+      className="fixed bottom-6 right-6 w-14 h-14 rounded-full shadow-lg flex items-center justify-center z-30 overflow-hidden"
+      style={{ background: 'transparent' }}
     >
-      <Sparkles size={20} className="text-[var(--nts-medium-gray)]" />
+      <img src="/mascot.png" alt="AI Assistant" className="w-full h-full object-contain" />
       {insightCount > 0 && (
         <span className="absolute -top-1 -right-1 w-5 h-5 bg-[#cf222e] rounded-full text-white text-xs font-bold flex items-center justify-center">
           {insightCount}

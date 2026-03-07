@@ -32,25 +32,28 @@ export function Card({
       className={className}
     >
       <div
-        className="card-primer"
+        className={`card-primer ${className.includes('h-full') ? 'h-full' : ''}`}
         style={{
           background: 'var(--nts-bg-pure)',
           border: '1px solid var(--borderColor-default, #d0d7de)',
           borderRadius: 8,
           padding: paddingPx[padding],
           cursor: (hover || onClick) ? 'pointer' : 'default',
-          transition: 'background-color 120ms ease, border-color 120ms ease'
+          transition: 'background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease',
+          boxShadow: '0 2px 6px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.08)'
         }}
         onClick={onClick}
         onMouseEnter={(e) => {
           if (!hover && !onClick) return;
           (e.currentTarget as HTMLDivElement).style.background = 'var(--nts-bg-subtle)';
           (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--borderColor-muted, #d8dee4)';
+          (e.currentTarget as HTMLDivElement).style.boxShadow = '0 6px 20px rgba(0,0,0,0.14), 0 3px 8px rgba(0,0,0,0.10)';
         }}
         onMouseLeave={(e) => {
           if (!hover && !onClick) return;
           (e.currentTarget as HTMLDivElement).style.background = 'var(--nts-bg-pure)';
           (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--borderColor-default, #d0d7de)';
+          (e.currentTarget as HTMLDivElement).style.boxShadow = '0 2px 6px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.08)';
         }}
       >
         {children}

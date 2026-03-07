@@ -6,35 +6,40 @@ export const scenarios: Scenario[] = [
     name: 'Profit Maximization', 
     icon: '',
     description: 'Μεγιστοποίηση κερδοφορίας',
-    weights: { profit: 40, stock: 15, strategic: 15, revenue: 10, fit: 20 }
+    weights: { profit: 40, stock: 15, strategic: 15, revenue: 10, fit: 20 },
+    duration: 'ongoing' as const
   },
   { 
     id: 'stock_clearance', 
     name: 'Stock Clearance', 
     icon: '',
     description: 'Εκκαθάριση αποθέματος',
-    weights: { profit: 15, stock: 45, strategic: 10, revenue: 10, fit: 20 }
+    weights: { profit: 15, stock: 45, strategic: 10, revenue: 10, fit: 20 },
+    duration: 30
   },
   { 
     id: 'brand_launch', 
     name: 'Brand Launch', 
     icon: '',
     description: 'Λανσάρισμα νέου brand/προϊόντος',
-    weights: { profit: 10, stock: 10, strategic: 50, revenue: 10, fit: 20 }
+    weights: { profit: 10, stock: 10, strategic: 50, revenue: 10, fit: 20 },
+    duration: 60
   },
   { 
     id: 'revenue_push', 
     name: 'Revenue Push', 
     icon: '',
     description: 'Αύξηση τζίρου',
-    weights: { profit: 15, stock: 15, strategic: 15, revenue: 35, fit: 20 }
+    weights: { profit: 15, stock: 15, strategic: 15, revenue: 35, fit: 20 },
+    duration: 90
   },
   { 
     id: 'custom', 
     name: 'Custom', 
     icon: '',
     description: 'Προσαρμοσμένη στρατηγική',
-    weights: null
+    weights: null,
+    duration: 'ongoing' as const
   }
 ];
 

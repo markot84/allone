@@ -10,6 +10,7 @@ export interface ActiveStrategy {
   brandId: string;
   scenarioId: string;
   weights: Record<string, number>;
+  duration?: number | 'ongoing';
   approvalStatus: 'draft' | 'pending_review' | 'approved' | 'implementing';
   approvedAt?: string;
   approvedBy?: string;
@@ -95,6 +96,7 @@ export function useActiveStrategy() {
     mutationFn: async (strategy: {
       scenarioId: string;
       weights: Record<string, number>;
+      duration?: number | 'ongoing';
       approvalStatus: ActiveStrategy['approvalStatus'];
       approvedBy?: string;
     }) => {
@@ -113,6 +115,10 @@ export function useActiveStrategy() {
         createdAt: now,
         updatedAt: now,
       };
+
+      if (strategy.duration !== undefined) {
+        strategyData.duration = strategy.duration;
+      }
       
       // Only add optional fields if they have values (Firestore doesn't accept undefined)
       if (strategy.approvedBy) {

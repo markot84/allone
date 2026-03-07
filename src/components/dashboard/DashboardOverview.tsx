@@ -742,11 +742,12 @@ function KPICard({ kpi, index, onClick }: KPICardProps) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.05 }}
+      className="h-full"
     >
-      <Card 
-        padding="lg" 
+      <Card
+        padding="lg"
         hover={!!onClick}
-        className="border-l-4 border-l-transparent hover:border-l-[#0969da]"
+        className="border-l-4 border-l-transparent hover:border-l-[#0969da] h-full"
         onClick={onClick}
       >
         <div className="flex items-start justify-between mb-3">
