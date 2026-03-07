@@ -114,6 +114,7 @@ const variantCopy: Record<LandingVariant, {
       'Μετατρέπει τα εμπορικά δεδομένα σε διοικητική καθοδήγηση προσανατολισμένη στον εκάστοτε στρατηγικό στόχο, κερδοφορία, εκκαθάριση αποθέματος, λανσάρισμα ή αύξηση τζίρου.',
       'Συνδέει segmentation, προϊόντα, κανάλια και προτεραιότητες σε ενιαία λογική αξιολόγησης.',
       'Καθιστά την επίδραση μετρήσιμη μέσω ROI Attribution και AI-powered αναλυτικών συμπερασμάτων.',
+      'Επιτρέπει άμεση σύγκριση εμπορικών σεναρίων με εκτίμηση revenue, margin και προϊοντικής ανακατανομής πριν την εφαρμογή κάθε απόφασης.',
     ],
     uspFooter: 'Απευθύνεται σε επιχειρηματίες και διευθυντικά στελέχη που χρειάζονται ένα κοινό σύστημα αποφάσεων για τα εσωτερικά τμήματα και τους εξωτερικούς συνεργάτες της επιχείρησής τους.',
     finalTitle: 'Έτοιμο για οργανισμούς που απαιτούν καθαρή λογική αποφάσεων',
@@ -326,24 +327,16 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
         <div className="rounded-2xl border border-[#1f2328] bg-[var(--nts-bg-pure)] p-6 shadow-[0_20px_44px_rgba(16,24,40,0.14)]">
             <h3 className="text-lg font-semibold text-[var(--nts-charcoal)]">Ποια προβλήματα επιλύει το Performance+</h3>
 
-          {/* column headers */}
-          <div className="mt-5 grid grid-cols-[1fr_1fr] gap-3 md:grid-cols-[auto_1fr_1fr]">
-            <div className="hidden md:block" />
-            <p className="rounded-t-xl bg-[var(--nts-light-gray)] px-4 py-2 text-center text-xs font-semibold tracking-[0.08em] text-[var(--nts-medium-gray)]">Χωρίς το Performance+</p>
-            <p className="rounded-t-xl bg-[var(--nts-accent)] px-4 py-2 text-center text-xs font-semibold tracking-[0.08em] text-white">Με το Performance+</p>
-          </div>
-
-          <div className="space-y-2">
+          <div className="mt-6 space-y-4">
             {problemsBeforeAfter.map((item, i) => (
-              <div key={i} className="grid grid-cols-[1fr_1fr] gap-3 md:grid-cols-[auto_1fr_1fr]">
-                <div className="hidden items-center md:flex">
-                  <span className="text-xs font-bold text-[#1f2328]/40">{String(i + 1).padStart(2, '0')}</span>
+              <div key={i} className="grid grid-cols-1 md:grid-cols-2 gap-0 rounded-xl overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.08)]">
+                <div className="bg-[#1a1a1a] px-5 py-4 flex items-start gap-3">
+                  <span className="flex-shrink-0 mt-0.5 w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-[11px] font-bold text-white/50">{String(i + 1).padStart(2, '0')}</span>
+                  <p className="text-sm text-white/60 leading-relaxed">{item.before}</p>
                 </div>
-                <div className="rounded-xl border border-[#1f2328]/15 bg-[var(--nts-light-gray)] px-4 py-3 text-sm text-[var(--nts-medium-gray)] line-through decoration-[#1f2328]/25">
-                  {item.before}
-                </div>
-                <div className="rounded-xl border border-[var(--nts-accent)]/30 bg-[var(--nts-accent)]/6 px-4 py-3 text-sm font-medium text-[var(--nts-charcoal)]">
-                  {item.after}
+                <div className="bg-white px-5 py-4 flex items-start gap-3 border-l-4 border-[var(--nts-accent)]">
+                  <span className="flex-shrink-0 mt-0.5 w-6 h-6 rounded-full bg-[var(--nts-accent)] flex items-center justify-center text-[11px] font-bold text-white">✓</span>
+                  <p className="text-sm font-medium text-[var(--nts-charcoal)] leading-relaxed">{item.after}</p>
                 </div>
               </div>
             ))}
