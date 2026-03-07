@@ -297,12 +297,13 @@ function EditorialCard({
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChange }: MarketingIndexPageProps) {
+export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChange: _onVariantChange }: MarketingIndexPageProps) {
   const copy = variantCopy[variant];
+  void _onVariantChange;
 
-  // Sticky header / scroll state
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scrolled, setScrolled] = useState(false);
+  void scrolled;
   const [metricsVisible, setMetricsVisible] = useState(false);
   const metricsRef = useRef<HTMLDivElement>(null);
 
