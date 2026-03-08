@@ -20,6 +20,7 @@ import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 import { SUPER_ADMIN_EMAILS, SUPPORT_EMAIL, APP_NAME } from '../../config/superAdmins';
 import type { Brand, ChangelogEntry } from '../../types';
 import { useAuth } from '../../hooks';
+import buildInfo from '../../generated/buildInfo.json';
 
 type AdminTab = 'brands' | 'api' | 'changelog' | 'system';
 
@@ -359,6 +360,7 @@ function ChangelogTab({ userEmail }: { userEmail: string }) {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [autoSaved, setAutoSaved] = useState(false);
   const [form, setForm] = useState({ version: '', title: '', changes: '' });
 
   const loadEntries = useCallback(async () => {
@@ -366,14 +368,43 @@ function ChangelogTab({ userEmail }: { userEmail: string }) {
       const docs = await FirestoreService.getDocuments<ChangelogEntry>('changelog');
       docs.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
       setEntries(docs);
+      return docs;
     } catch (err) {
       console.error('Failed to load changelog:', err);
+      return [];
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => { loadEntries(); }, [loadEntries]);
+  // Auto-detect new build and save changelog entry
+  useEffect(() => {
+    if (autoSaved) return;
+    loadEntries().then(async (docs) => {
+      const currentVersion = buildInfo.version;
+      const alreadyRecorded = docs.some((d) => d.version === currentVersion);
+      if (!alreadyRecorded && buildInfo.changes.length > 0) {
+        const now = new Date().toISOString();
+        const firstCommitMsg = buildInfo.commits[0]?.message || '';
+        const title = firstCommitMsg
+          .replace(/^(feat|fix|refactor|chore)(\(.+?\))?:\s*/i, '')
+          .split(',')[0]
+          .trim() || `Build ${currentVersion}`;
+        const docId = `v${currentVersion.replace(/\./g, '-')}-${Date.now()}`;
+        await FirestoreService.setDocument('changelog', docId, {
+          id: docId,
+          version: currentVersion,
+          title,
+          changes: buildInfo.changes,
+          date: buildInfo.buildDate,
+          createdBy: `auto (${userEmail})`,
+          createdAt: now,
+        } as unknown as Record<string, unknown>);
+        setAutoSaved(true);
+        await loadEntries();
+      }
+    });
+  }, [loadEntries, userEmail, autoSaved]);
 
   const handleSave = async () => {
     if (!form.version.trim() || !form.title.trim()) return;
@@ -431,13 +462,42 @@ function ChangelogTab({ userEmail }: { userEmail: string }) {
 
   return (
     <div>
+      {/* Current Build Info */}
+      <div style={{
+        padding: 12, borderRadius: 10, marginBottom: 16,
+        background: 'var(--bgColor-muted, #f6f8fa)',
+        border: '1px solid var(--borderColor-default)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8
+      }}>
+        <div>
+          <Text as="span" size="small" style={{ color: 'var(--fgColor-muted)' }}>Τρέχον build: </Text>
+          <span style={{ padding: '1px 8px', borderRadius: 12, fontSize: 12, fontWeight: 700, background: 'rgba(212,133,74,0.12)', color: 'var(--nts-accent)' }}>
+            v{buildInfo.version}
+          </span>
+          <Text as="span" size="small" style={{ color: 'var(--fgColor-muted)', marginLeft: 8 }}>
+            {buildInfo.commitHash} · {new Date(buildInfo.buildDate).toLocaleDateString('el-GR')}
+          </Text>
+        </div>
+        <Text as="span" size="small" style={{ color: 'var(--fgColor-muted)' }}>
+          {buildInfo.changes.length} αλλαγές · {buildInfo.branch}
+        </Text>
+      </div>
+
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <Text as="p" style={{ color: 'var(--fgColor-muted)', fontSize: 14 }}>
           Ιστορικό εκδόσεων και ενημερώσεων
         </Text>
         {!showForm && (
           <button
-            onClick={() => { setShowForm(true); setEditingId(null); setForm({ version: '', title: '', changes: '' }); }}
+            onClick={() => {
+              setShowForm(true);
+              setEditingId(null);
+              setForm({
+                version: buildInfo.version,
+                title: buildInfo.commits[0]?.message?.replace(/^(feat|fix|refactor|chore)(\(.+?\))?:\s*/i, '').split(',')[0].trim() || '',
+                changes: buildInfo.changes.join('\n'),
+              });
+            }}
             style={{
               display: 'flex', alignItems: 'center', gap: 6,
               padding: '6px 14px', borderRadius: 6,
@@ -652,9 +712,11 @@ function SystemInfoTab() {
       title: 'Εφαρμογή',
       items: [
         { label: 'Όνομα', value: APP_NAME },
+        { label: 'Version', value: `v${buildInfo.version} (${buildInfo.commitHash})` },
+        { label: 'Build Date', value: new Date(buildInfo.buildDate).toLocaleString('el-GR') },
         { label: 'Project ID', value: projectId },
         { label: 'Environment', value: import.meta.env.MODE || 'development' },
-        { label: 'Build Tool', value: 'Vite' },
+        { label: 'Branch', value: buildInfo.branch },
       ]
     },
     {

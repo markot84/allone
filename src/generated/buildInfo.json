@@ -1,0 +1,81 @@
+{
+  "version": "0.1.0",
+  "previousVersion": "0.0.0",
+  "commitHash": "72fb5df",
+  "branch": "main",
+  "buildDate": "2026-03-08T07:44:50.565Z",
+  "commits": [
+    {
+      "hash": "72fb5df",
+      "message": "feat: branded auth action pages, Greek locale for Firebase emails"
+    },
+    {
+      "hash": "7dd800e",
+      "message": "feat: super admin dashboard, menu refactor, auth improvements"
+    },
+    {
+      "hash": "46cad67",
+      "message": "feat: redesign before/after section, add scenario comparison USP point"
+    },
+    {
+      "hash": "1d4b655",
+      "message": "fix: SearchIcon style prop build error"
+    },
+    {
+      "hash": "071ce6d",
+      "message": "feat: dark sidebar/header, card shadows, strategy duration, commercial strategy rename, mascot AI button"
+    },
+    {
+      "hash": "9a61631",
+      "message": "refactor: replace orange accent backgrounds with neutral gray across app. Remove nts-accent-light from all components, update icons to monochrome, add NTS favicon, refine landing page copy."
+    },
+    {
+      "hash": "80688b6",
+      "message": "fix: suppress unused var warnings for build"
+    },
+    {
+      "hash": "d8dcd4d",
+      "message": "feat: landing page overhaul - data sources, input/output chain, compliance, traction. Rename RFM to Data Analysis. Add one-pagers EN/GR."
+    },
+    {
+      "hash": "ff91055",
+      "message": "feat: new accent orange, background scale, fix MarketingIndexPage - Replace faded orange with solid #F97316 - Add nts-bg tokens (pure/subtle/muted/strong/dark) - Update shadows, CTAs, Badge, Card across app"
+    },
+    {
+      "hash": "6611e1c",
+      "message": "feat(landing): add typewriter, metrics strip, sticky header, before/after layout, screenshot hover, trust bar, footer brand tag"
+    },
+    {
+      "hash": "c927a36",
+      "message": "feat: add premium marketing landing and auth entry flow"
+    },
+    {
+      "hash": "6340c28",
+      "message": "ROI from campaign cost, EU number format (18.300,55), multi-file campaign import (Google Ads + Meta), Channel Activation fixes"
+    },
+    {
+      "hash": "740affa",
+      "message": "Add brand name to all exports"
+    },
+    {
+      "hash": "75963e8",
+      "message": "feat: add PDF export for Executive, Segment, Channel reports"
+    },
+    {
+      "hash": "4035e67",
+      "message": "feat: wire Reports & Analytics - Generate export, Custom Report, Schedule modal, expand schedules"
+    }
+  ],
+  "changes": [
+    "branded auth action pages, Greek locale for Firebase emails",
+    "super admin dashboard, menu refactor, auth improvements",
+    "redesign before/after section, add scenario comparison USP point",
+    "SearchIcon style prop build error",
+    "dark sidebar/header, card shadows, strategy duration, commercial strategy rename, mascot AI button",
+    "replace orange accent backgrounds with neutral gray across app. Remove nts-accent-light from all components, update icons to monochrome, add NTS favicon, refine landing page copy.",
+    "suppress unused var warnings for build",
+    "landing page overhaul - data sources, input/output chain, compliance, traction. Rename RFM to Data Analysis. Add one-pagers EN/GR.",
+    "new accent orange, background scale, fix MarketingIndexPage - Replace faded orange with solid #F97316 - Add nts-bg tokens (pure/subtle/muted/strong/dark) - Update shadows, CTAs, Badge, Card across app",
+    "add typewriter, metrics strip, sticky header, before/after layout, screenshot hover, trust bar, footer brand tag"
+  ]
+}
