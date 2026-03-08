@@ -22,6 +22,7 @@ export const db = getFirestore(app);
 
 // Initialize Auth
 export const auth = getAuth(app);
+auth.languageCode = 'el';
 
 // Initialize Storage
 export const storage = getStorage(app);

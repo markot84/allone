@@ -22,6 +22,7 @@ import { DataImport } from './components/data';
 import { BrandsPage } from './components/brands';
 import { BusinessFinances } from './components/finances';
 import { SuperAdminDashboard } from './components/admin';
+import { AuthActionPage } from './components/auth/AuthActionPage';
 import { isSuperAdminEmail } from './config/superAdmins';
 
 const queryClient = new QueryClient({
@@ -104,6 +105,26 @@ function App() {
       window.removeEventListener('navigate-to-help' as any, handleNavigateToHelp);
     };
   }, []);
+
+  // Handle Firebase Auth action URLs (password reset, email verification)
+  if (typeof window !== 'undefined') {
+    const params = new URLSearchParams(window.location.search);
+    const authMode = params.get('mode');
+    const oobCode = params.get('oobCode');
+    if (authMode && oobCode) {
+      return (
+        <QueryProvider>
+          <ToastProvider>
+            <AuthActionPage
+              mode={authMode}
+              oobCode={oobCode}
+              onDone={() => { window.location.href = '/?auth=1'; }}
+            />
+          </ToastProvider>
+        </QueryProvider>
+      );
+    }
+  }
 
   // Handle /invite/:token route (no AuthGuard - page works for both logged-in and logged-out users)
   const pathMatch = typeof window !== 'undefined' && window.location.pathname.match(/^\/invite\/([^/]+)$/);
