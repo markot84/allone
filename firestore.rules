@@ -55,5 +55,10 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow write: if request.auth != null;
     }
+    // Shared strategy packages: public read (shareable links), auth write
+    match /shared_packages/{packageId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
   }
 }

@@ -114,7 +114,7 @@ export function ScenarioSelector({
                             width: `${value}%`,
                             backgroundColor: 
                               key === 'profit' ? '#22C55E' :
-                              key === 'stock' ? '#78716C' :
+                              key === 'stock' ? '#3B82F6' :
                               key === 'strategic' ? '#8B5CF6' :
                               key === 'revenue' ? '#F59E0B' :
                               'var(--nts-accent)'

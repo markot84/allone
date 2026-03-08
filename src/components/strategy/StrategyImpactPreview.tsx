@@ -33,7 +33,7 @@ interface ImpactBaseProps {
 
 const WEIGHT_KEYS = ['profit', 'stock', 'strategic', 'revenue', 'fit'];
 const WEIGHT_COLORS: Record<string, string> = {
-  profit: '#22C55E', stock: '#78716C', strategic: '#8B5CF6',
+  profit: '#22C55E', stock: '#3B82F6', strategic: '#8B5CF6',
   revenue: '#F59E0B', fit: '#F97316',
 };
 const WEIGHT_LABELS: Record<string, string> = {

@@ -80,7 +80,7 @@ export const weightFactors: Omit<WeightFactor, 'value'>[] = [
     name: 'Inventory Optimization', 
     icon: '',
     tooltip: 'Stock levels, age, excess inventory',
-    color: '#78716C'
+    color: '#3B82F6'
   },
   { 
     id: 'strategic', 

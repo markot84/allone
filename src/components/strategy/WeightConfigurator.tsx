@@ -21,7 +21,7 @@ import {
 import { Card, CardHeader, Button, Slider, Badge, Spinner } from '../common';
 import { ScenarioSelector } from './ScenarioSelector';
 import { ChannelRecommendations } from './ChannelRecommendations';
-import { ApprovalWorkflow } from './ApprovalWorkflow';
+import { StrategyPackage } from './StrategyPackage';
 import { StrategyImpactSummary, StrategyImpactModal } from './StrategyImpactPreview';
 import { SeasonalDiscountPanel, type SeasonalDiscountConfig } from './SeasonalDiscountPanel';
 import { CustomToolsCard } from './CustomToolsCard';
@@ -48,7 +48,6 @@ import { Tooltip } from '../common';
 import type { SeasonalPeriod } from '../../data/seasonalPeriods';
 import type { Product } from '../../types';
 
-type ApprovalStatus = 'draft' | 'pending_review' | 'approved' | 'implementing';
 
 const PreviewCell = memo(function PreviewCell({
   columnId,
@@ -184,10 +183,6 @@ export function WeightConfigurator() {
     if (activeStrategy) return activeStrategy.weights;
     return defaultWeights; // Empty weights, user must select scenario
   });
-  const [approvalStatus, setApprovalStatus] = useState<ApprovalStatus>(() => {
-    if (activeStrategy) return activeStrategy.approvalStatus;
-    return 'draft';
-  });
   const [duration, setDuration] = useState<number | 'ongoing'>(() => {
     if (activeStrategy?.duration !== undefined) return activeStrategy.duration;
     const s = scenarios.find(sc => sc.id === activeStrategy?.scenarioId);
@@ -297,7 +292,6 @@ export function WeightConfigurator() {
     const saveDuration = overrideDuration ?? scenario?.duration ?? 'ongoing';
     setWeights(newWeights);
     setDuration(saveDuration);
-    setApprovalStatus('draft');
     setPendingScenarioChange(null);
     setShowDetailModal(false);
     
@@ -326,7 +320,6 @@ export function WeightConfigurator() {
     setMixConfig(config);
     setWeights(blendedWeights);
     setMixPanelOpen(false);
-    setApprovalStatus('draft');
 
     if (!user) {
       toast.error('Πρέπει να είσαι συνδεδεμένος');
@@ -363,7 +356,6 @@ export function WeightConfigurator() {
     setSelectedScenario('mixed');
     setMixConfig(config);
     setWeights(blended);
-    setApprovalStatus('draft');
 
     if (!user) return;
     saveActiveStrategy({
@@ -489,7 +481,6 @@ export function WeightConfigurator() {
 
       setWeights(newWeights);
       setSelectedScenario('custom');
-      setApprovalStatus('draft');
       
       // Debounce expensive calculations
       if (debounceTimerRef.current) {
@@ -514,7 +505,6 @@ export function WeightConfigurator() {
   const handleReset = useCallback(() => {
     setWeights(defaultWeights);
     setSelectedScenario('custom');
-    setApprovalStatus('draft');
   }, []);
 
   // Calculate prioritized products (strategy-specific score logic)
@@ -656,7 +646,6 @@ export function WeightConfigurator() {
     if (!strategyLoading && activeStrategy) {
       setSelectedScenario(activeStrategy.scenarioId);
       setWeights(activeStrategy.weights);
-      setApprovalStatus(activeStrategy.approvalStatus);
       if (activeStrategy.duration !== undefined) {
         setDuration(activeStrategy.duration);
       }
@@ -684,13 +673,20 @@ export function WeightConfigurator() {
             Καθορισμός εμπορικών προτεραιοτήτων, κατανομή πόρων και συντονισμός εκτέλεσης
           </p>
         </div>
-        <div className="flex items-center gap-3 flex-shrink-0">
-          <ApprovalWorkflow
-            status={approvalStatus}
-            onStatusChange={setApprovalStatus}
-          />
-        </div>
       </div>
+
+      {/* Strategy Package — share/copy active strategy */}
+      {selectedScenario && selectedScenario !== 'custom' && (
+        <StrategyPackage
+          scenarioId={selectedScenario}
+          weights={currentScenarioWeights}
+          duration={duration}
+          brandName={currentBrand?.name}
+          rankedSegments={rankedSegments}
+          channelRecommendation={aiRecommendation}
+          mixConfig={mixConfig}
+        />
+      )}
 
       {/* Strategy Expiry Warning */}
       {(() => {
@@ -856,7 +852,7 @@ export function WeightConfigurator() {
                   <Users size={16} />
                 }
                 tooltip={factor.tooltip}
-                disabled={approvalStatus === 'approved' || approvalStatus === 'implementing'}
+                disabled={false}
               />
             ))}
           </div>

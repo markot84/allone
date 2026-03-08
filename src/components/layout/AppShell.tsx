@@ -401,14 +401,14 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
       : typeof (raw as any)?.seconds === 'number' ? (raw as any).seconds * 1000
       : NaN;
     if (isNaN(startMs)) {
-      return { text: `${dur}ημ`, color: '#22C55E' };
+      return { text: `${dur}ημ`, color: '#F97316' };
     }
     const elapsedDays = Math.floor((Date.now() - startMs) / 86400000);
-    if (elapsedDays < 1) return { text: `${dur}ημ`, color: '#22C55E' };
+    if (elapsedDays < 1) return { text: `${dur}ημ`, color: '#F97316' };
     const remaining = dur - elapsedDays;
     if (remaining <= 0) return { text: 'Έληξε', color: '#EF4444' };
     if (remaining <= 3) return { text: `${remaining}ημ`, color: '#F59E0B' };
-    return { text: `${remaining}ημ`, color: '#22C55E' };
+    return { text: `${remaining}ημ`, color: '#F97316' };
   }, [activeStrategy]);
 
   const togglePin = () => {
@@ -502,21 +502,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
             onClick={(e) => e.preventDefault()}
             style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}
           >
-            <div
-              style={{
-                width: 28,
-                height: 28,
-                borderRadius: 6,
-                border: '1px solid rgba(255,255,255,0.15)',
-                display: 'grid',
-                placeItems: 'center',
-                fontWeight: 700,
-                color: '#d4854a',
-                fontSize: 12
-              }}
-            >
-              P+
-            </div>
+            <img src="/favicon.png" alt="≠" style={{ width: 28, height: 28, borderRadius: 6 }} />
             <div style={{ minWidth: 0 }}>
               <Text as="div" weight="semibold" size="medium" className="truncate" style={{ color: 'rgba(255,255,255,0.85)' }}>
                 Performance+
@@ -611,16 +597,13 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
             }}
           >
             <div style={{ 
-              padding: '12px 16px', 
+              padding: '8px 16px', 
               borderBottom: '1px solid rgba(255,255,255,0.08)',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'space-between',
+              justifyContent: 'flex-end',
               flexShrink: 0
             }}>
-              <Text as="div" size="small" weight="semibold" style={{ color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: 0.5, fontSize: 11 }}>
-                Menu
-              </Text>
               <button
                 onClick={togglePin}
                 title="Ξεκαρφίτσωμα μενού"
@@ -633,7 +616,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: 'var(--nts-accent)'
+                  color: 'rgba(255,255,255,0.5)'
                 }}
               >
                 <PinIcon size={14} />
@@ -712,21 +695,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
               flexShrink: 0
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div
-                  style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: 6,
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    display: 'grid',
-                    placeItems: 'center',
-                    fontWeight: 700,
-                    color: 'var(--nts-accent)',
-                    fontSize: 12
-                  }}
-                >
-                  P+
-                </div>
+                <img src="/favicon.png" alt="≠" style={{ width: 28, height: 28, borderRadius: 6 }} />
                 <div>
                   <Text as="div" weight="semibold" size="medium" style={{ color: '#ffffff' }}>
                     Performance+

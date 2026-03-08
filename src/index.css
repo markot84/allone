@@ -158,26 +158,29 @@ h1, h2, h3, h4, h5, h6 {
 .sidebar-dark nav a,
 .sidebar-dark li button,
 .sidebar-dark li a {
-  color: rgba(255, 255, 255, 0.65) !important;
+  color: rgba(255, 255, 255, 0.55) !important;
 }
 .sidebar-dark nav button:hover,
 .sidebar-dark nav a:hover,
 .sidebar-dark li button:hover,
 .sidebar-dark li a:hover {
-  color: rgba(255, 255, 255, 0.85) !important;
-  background-color: rgba(255, 255, 255, 0.06) !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+  background-color: rgba(255, 255, 255, 0.05) !important;
 }
 .sidebar-dark [aria-current="page"],
 .sidebar-dark [aria-current="page"]:hover {
-  background-color: rgba(249, 115, 22, 0.12) !important;
-  color: #e8873a !important;
+  background-color: rgba(255, 255, 255, 0.07) !important;
+  color: rgba(255, 255, 255, 0.95) !important;
 }
 .sidebar-dark [aria-current="page"]::before {
-  background-color: #e8873a !important;
+  background-color: var(--nts-accent) !important;
 }
 .sidebar-dark nav svg,
 .sidebar-dark li svg {
-  color: #d4854a !important;
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+.sidebar-dark [aria-current="page"] svg {
+  color: var(--nts-accent) !important;
 }
 
 

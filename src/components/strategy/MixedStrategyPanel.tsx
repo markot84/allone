@@ -96,7 +96,7 @@ export function MixedStrategyPanel({ onApply, onClose, initialConfig }: MixedStr
 
   const weightKeys = ['profit', 'stock', 'strategic', 'revenue', 'fit'];
   const weightColors: Record<string, string> = {
-    profit: '#22C55E', stock: '#78716C', strategic: '#8B5CF6',
+    profit: '#22C55E', stock: '#3B82F6', strategic: '#8B5CF6',
     revenue: '#F59E0B', fit: '#F97316',
   };
 

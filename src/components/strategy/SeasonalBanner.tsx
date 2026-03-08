@@ -11,8 +11,8 @@ const ICON_MAP: Record<string, ComponentType<LucideProps>> = {
 function SeasonalIcon({ name }: { name: string }) {
   const Icon = ICON_MAP[name] ?? Calendar;
   return (
-    <div className="w-8 h-8 rounded-lg bg-[var(--nts-accent)]/10 flex items-center justify-center flex-shrink-0">
-      <Icon size={16} className="text-[var(--nts-accent)]" />
+    <div className="w-8 h-8 rounded-lg bg-[#F5F5F5] flex items-center justify-center flex-shrink-0">
+      <Icon size={16} className="text-[#4A4A4A]" />
     </div>
   );
 }
@@ -66,14 +66,14 @@ export function SeasonalBanner({
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -8 }}
-        className="relative rounded-xl border border-[var(--nts-accent)]/30 bg-gradient-to-r from-[var(--nts-accent)]/5 to-transparent p-4"
+        className="relative rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] p-4"
       >
         <div className="flex items-start gap-3">
           <SeasonalIcon name={season.icon} />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
               <h4 className="text-sm font-semibold text-[#1A1A1A]">{season.name}</h4>
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--nts-accent)]/10 text-[var(--nts-accent)] font-medium">
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#F0FDF4] text-[#15803D] font-medium border border-[#BBF7D0]">
                 Εποχιακή πρόταση
               </span>
             </div>
@@ -84,14 +84,14 @@ export function SeasonalBanner({
               </span>
               <button
                 onClick={() => onApplySeason(season)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-[var(--nts-accent)] text-white hover:opacity-90 transition-opacity"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#4A4A4A] border border-[#E5E5E5] hover:bg-[#F5F5F5] transition-colors"
               >
                 <Zap size={12} />
                 Εφαρμογή
               </button>
               <button
                 onClick={onManageSeasons}
-                className="flex items-center gap-1 text-[11px] text-[#9CA3AF] hover:text-[var(--nts-accent)] transition-colors"
+                className="flex items-center gap-1 text-[11px] text-[#9CA3AF] hover:text-[#4A4A4A] transition-colors"
               >
                 <Calendar size={11} />
                 Διαχείριση περιόδων

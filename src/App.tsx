@@ -24,6 +24,7 @@ import { BusinessFinances } from './components/finances';
 import { SuperAdminDashboard } from './components/admin';
 import { AuthActionPage } from './components/auth/AuthActionPage';
 import { isSuperAdminEmail } from './config/superAdmins';
+import { SharedPackageViewer } from './components/strategy/SharedPackageViewer';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -144,6 +145,20 @@ function App() {
               window.location.href = '/';
             }}
           />
+        </ToastProvider>
+      </QueryProvider>
+    );
+  }
+
+  // Handle #shared/ID route — public viewer for shared strategy packages
+  const sharedMatch = typeof window !== 'undefined' && window.location.hash.match(/^#shared\/([a-zA-Z0-9]+)$/);
+  if (sharedMatch) {
+    return (
+      <QueryProvider>
+        <ToastProvider>
+          <div style={{ minHeight: '100vh', backgroundColor: '#fff', padding: 24 }}>
+            <SharedPackageViewer packageId={sharedMatch[1]} />
+          </div>
         </ToastProvider>
       </QueryProvider>
     );
