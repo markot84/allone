@@ -45,7 +45,6 @@ import { rankSegments, type ScoredSegment } from '../../utils/segmentRelevance';
 import { safeBrandName } from '../../services/reportExport';
 import { useToast } from '../common/Toast';
 import { Tooltip } from '../common';
-import { getPresets, savePreset, loadPreset, deletePreset } from '../../data/weightPresets';
 import type { SeasonalPeriod } from '../../data/seasonalPeriods';
 import type { Product } from '../../types';
 
@@ -246,10 +245,6 @@ export function WeightConfigurator() {
   });
   const [seasonalDiscountConfig, setSeasonalDiscountConfig] = useState<SeasonalDiscountConfig | null>(null);
   const [seasonalPanelOpen, setSeasonalPanelOpen] = useState(false);
-  const [showPresetSave, setShowPresetSave] = useState(false);
-  const [presetName, setPresetName] = useState('');
-  const [presets, setPresets] = useState(getPresets());
-  const [loadPresetId, setLoadPresetId] = useState('');
   const [customSeasons, setCustomSeasons] = useState<SeasonalPeriod[]>(() => {
     try {
       const raw = localStorage.getItem('perf-plus-custom-seasons');
@@ -399,48 +394,6 @@ export function WeightConfigurator() {
     } as any).catch(() => {});
   }, [user, saveActiveStrategy, toast, weights, duration]);
 
-  const handlePresetSave = useCallback(() => {
-    const name = presetName.trim() || `Preset ${new Date().toLocaleDateString('el-GR')}`;
-    savePreset({
-      name,
-      weights,
-      scenarioId: selectedScenario ?? undefined,
-      mixConfig: selectedScenario === 'mixed' && mixConfig ? mixConfig : undefined,
-      duration,
-    });
-    setPresetName('');
-    setShowPresetSave(false);
-    setPresets(getPresets());
-    toast.success(`Preset "${name}" αποθηκεύτηκε`);
-  }, [presetName, weights, selectedScenario, mixConfig, duration, toast]);
-
-  const handlePresetLoad = useCallback(() => {
-    if (!loadPresetId) return;
-    const preset = loadPreset(loadPresetId);
-    if (!preset) return;
-
-    if (preset.scenarioId === 'mixed' && preset.mixConfig) {
-      setSelectedScenario('mixed');
-      setMixConfig(preset.mixConfig as MixConfig);
-      setWeights(preset.weights);
-    } else if (preset.scenarioId && preset.scenarioId !== 'custom') {
-      applyScenarioChange(preset.scenarioId);
-    } else {
-      setWeights(preset.weights);
-      setSelectedScenario(preset.scenarioId ?? 'custom');
-    }
-    if (preset.duration !== undefined) setDuration(preset.duration);
-    setLoadPresetId('');
-    toast.success(`Preset "${preset.name}" φορτώθηκε`);
-  }, [loadPresetId, applyScenarioChange, toast]);
-
-  const handlePresetDelete = useCallback(() => {
-    if (!loadPresetId) return;
-    deletePreset(loadPresetId);
-    setLoadPresetId('');
-    setPresets(getPresets());
-    toast.success('Preset διαγράφηκε');
-  }, [loadPresetId, toast]);
 
   const handleSaveCustomSeason = useCallback((period: SeasonalPeriod) => {
     setCustomSeasons(prev => {
@@ -484,22 +437,6 @@ export function WeightConfigurator() {
     setSeasonalPanelOpen(false);
     setPendingScenarioChange(scenarioId);
   }, [selectedScenario, applyScenarioChange]);
-
-  const handleDurationChange = useCallback((newDuration: number | 'ongoing') => {
-    setDuration(newDuration);
-    if (!user || !selectedScenario) return;
-    const payload: Parameters<typeof saveActiveStrategy>[0] = {
-      scenarioId: selectedScenario,
-      weights,
-      duration: newDuration,
-      approvalStatus: approvalStatus,
-      approvedBy: user.email || user.displayName || 'User',
-    };
-    if (selectedScenario === 'mixed' && mixConfig) {
-      payload.mixConfig = mixConfig;
-    }
-    saveActiveStrategy(payload).catch(() => {});
-  }, [user, selectedScenario, weights, approvalStatus, saveActiveStrategy, mixConfig]);
 
   // Confirm strategy change after impact preview
   const confirmStrategyChange = useCallback((selectedDuration: number | 'ongoing') => {
