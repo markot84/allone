@@ -584,12 +584,13 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       </div>
 
       {/* AI Insights Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
         {/* AI Insights */}
         <Card 
           padding="lg"
           hover={!!onOpenInsights}
           onClick={() => onOpenInsights?.()}
+          className="h-full flex flex-col"
         >
           <CardHeader
             title="AI Insights"
@@ -602,54 +603,47 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                     e.stopPropagation();
                     onOpenInsights?.();
                   }}
-                  className="text-xs font-medium text-[var(--nts-orange)] hover:text-[var(--nts-orange-hover)]"
+                  className="text-xs font-medium text-[#9CA3AF] hover:text-[#4A4A4A] transition-colors"
                 >
-                  View All ({aiInsights.length})
+                  Όλα ({aiInsights.length})
                 </button>
               )
             }
           />
-          <div className="space-y-4">
-            {aiInsights.slice(0, 4).map((insight, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.1 }}
-                className={`
-                  p-4 rounded-md border border-[var(--nts-border-gray)]
-                  ${insight.type === 'warning'
-                    ? 'bg-[#fff8c5]'
-                    : insight.type === 'opportunity'
-                    ? 'bg-[#dafbe1]'
-                    : 'bg-[var(--nts-light-gray)]'
-                  }
-                `}
-              >
-                <div className="flex items-start gap-4">
-                  <span className="mt-0.5 text-[var(--nts-medium-gray)]">
-                    {insight.type === 'warning' ? <AlertTriangle size={18} /> : insight.type === 'opportunity' ? <TrendingUp size={18} /> : <Target size={18} />}
-                  </span>
-                  <div className="flex-1">
-                    <h4 className="font-semibold text-[var(--nts-charcoal)] text-[14px] mb-1">
-                      {insight.title}
-                    </h4>
-                    <p className="text-[13px] text-[var(--nts-medium-gray)] leading-relaxed line-clamp-2">
-                      {insight.insight}
-                    </p>
+          <div className="space-y-3 flex-1">
+            {aiInsights.slice(0, 4).map((insight, index) => {
+              const borderColor = insight.type === 'warning' ? '#F59E0B' : insight.type === 'opportunity' ? '#22C55E' : '#9CA3AF';
+              return (
+                <motion.div
+                  key={index}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                  className="p-3 rounded-lg border border-[#E5E5E5] bg-[#FAFAFA]"
+                  style={{ borderLeftWidth: 3, borderLeftColor: borderColor }}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-semibold text-[#1A1A1A] text-[13px] mb-0.5 leading-snug">
+                        {insight.title}
+                      </h4>
+                      <p className="text-[12px] text-[#9CA3AF] leading-relaxed line-clamp-2">
+                        {insight.insight}
+                      </p>
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleInsightAction(insight);
+                      }}
+                      className="text-[11px] font-medium text-[#4A4A4A] whitespace-nowrap px-2 py-1 rounded-md border border-[#E5E5E5] hover:bg-[#F5F5F5] transition-colors cursor-pointer flex-shrink-0 mt-0.5"
+                    >
+                      {insight.action}
+                    </button>
                   </div>
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleInsightAction(insight);
-                    }}
-                    className="text-[13px] font-semibold text-[var(--nts-orange)] hover:text-[var(--nts-orange-hover)] whitespace-nowrap px-2 py-1 rounded-md hover:bg-white transition-colors cursor-pointer"
-                  >
-                    {insight.action}
-                  </button>
-                </div>
-              </motion.div>
-            ))}
+                </motion.div>
+              );
+            })}
           </div>
         </Card>
 
@@ -658,6 +652,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           padding="lg"
           hover={!!onSectionChange}
           onClick={() => onSectionChange?.('reports')}
+          className="h-full"
         >
           <CardHeader
             title="Performance Summary"

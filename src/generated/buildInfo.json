@@ -1,10 +1,18 @@
 {
-  "version": "0.13.0",
-  "previousVersion": "0.12.0",
-  "commitHash": "1608b1e",
+  "version": "0.14.0",
+  "previousVersion": "0.13.0",
+  "commitHash": "0aa0100",
   "branch": "main",
-  "buildDate": "2026-03-08T17:09:08.255Z",
+  "buildDate": "2026-03-08T18:24:45.519Z",
   "commits": [
+    {
+      "hash": "0aa0100",
+      "message": "Strategy Package (PDF + Link), sidebar redesign, brand icon, UI refinements"
+    },
+    {
+      "hash": "6791047",
+      "message": "Fix revenue_share property name"
+    },
     {
       "hash": "1608b1e",
       "message": "AI upgrade: CMO-level prompts, deterministic output (temp=0), funnel stage labels, expanded channels, structured bullets, 1hr cache"
@@ -56,17 +64,11 @@
     {
       "hash": "46cad67",
       "message": "feat: redesign before/after section, add scenario comparison USP point"
-    },
-    {
-      "hash": "1d4b655",
-      "message": "fix: SearchIcon style prop build error"
-    },
-    {
-      "hash": "071ce6d",
-      "message": "feat: dark sidebar/header, card shadows, strategy duration, commercial strategy rename, mascot AI button"
     }
   ],
   "changes": [
+    "Strategy Package (PDF + Link), sidebar redesign, brand icon, UI refinements",
+    "Fix revenue_share property name",
     "AI upgrade: CMO-level prompts, deterministic output (temp=0), funnel stage labels, expanded channels, structured bullets, 1hr cache",
     "Clean up unused preset/duration code for production build",
     "Refactor strategy UI: remove save button, move compare below cards, integrate duration in apply popup, fix segment wrapping and duration sync",
@@ -74,8 +76,6 @@
     "[Διόρθωση] Remove unused SEASONAL_PERIODS import",
     "[Νέο χαρακτηριστικό] Harmonize blue palette with warm neutrals, seasonal Lucide icons, content AI refactor, seasonal discount strategy, impact preview redesign, strategic docs",
     "[Νέο χαρακτηριστικό] Mixed strategies, seasonal periods, personalized AI, strategy expiry",
-    "[Νέο χαρακτηριστικό] Gemini AI integration, responsive fixes, dynamic RFM segments",
-    "[Νέο χαρακτηριστικό] Changelog UI polish - colored dots, Greek labels, build info panel",
-    "[Νέο χαρακτηριστικό] Auto-versioning from git commits"
+    "[Νέο χαρακτηριστικό] Gemini AI integration, responsive fixes, dynamic RFM segments"
   ]
 }
