@@ -68,15 +68,37 @@ const commitHash = git('git rev-parse --short HEAD');
 const branch = git('git branch --show-current');
 const buildDate = new Date().toISOString();
 
+// Commit type → Greek label
+const typeLabels = {
+  'feat': 'Νέο χαρακτηριστικό',
+  'fix': 'Διόρθωση',
+  'refactor': 'Αναδιαμόρφωση',
+  'style': 'Βελτίωση εμφάνισης',
+  'perf': 'Βελτίωση απόδοσης',
+  'docs': 'Τεκμηρίωση',
+  'chore': 'Συντήρηση',
+  'build': 'Build',
+  'ci': 'CI/CD',
+  'test': 'Δοκιμές',
+};
+
+function toGreekLabel(msg) {
+  const m = msg.match(/^(feat|fix|refactor|chore|docs|style|perf|test|ci|build)(\(.+?\))?:\s*/i);
+  const label = m ? typeLabels[m[1].toLowerCase()] || '' : '';
+  const body = m ? msg.slice(m[0].length).trim() : msg;
+  // Capitalize first char of body
+  const cap = body.charAt(0).toUpperCase() + body.slice(1);
+  return label ? `[${label}] ${cap}` : cap;
+}
+
 // Categorize changes for changelog
 const changes = [];
 for (const msg of commitMessages) {
-  // Clean up: remove "feat: ", "fix: " prefix for display
   const clean = msg
     .replace(/^(feat|fix|refactor|chore|docs|style|perf|test|ci|build)(\(.+?\))?:\s*/i, '')
     .trim();
   if (clean && !clean.startsWith('Merge') && clean.length > 5) {
-    changes.push(clean);
+    changes.push(toGreekLabel(msg));
   }
 }
 

@@ -352,6 +352,113 @@ function ApiStatusTab() {
   );
 }
 
+/* ─── Build Info Panel ─── */
+
+function BuildInfoPanel() {
+  const [expanded, setExpanded] = useState(false);
+  const [copiedAll, setCopiedAll] = useState(false);
+
+  const copyChangesForUsers = async () => {
+    const lines = buildInfo.changes.map((c, i) => `${i + 1}. ${c}`).join('\n');
+    const text = `${APP_NAME} v${buildInfo.version} — Νέα Ενημέρωση\n\n${lines}\n\nΥποστήριξη: ${SUPPORT_EMAIL}`;
+    await navigator.clipboard.writeText(text);
+    setCopiedAll(true);
+    setTimeout(() => setCopiedAll(false), 2000);
+  };
+
+  return (
+    <div style={{
+      borderRadius: 10, marginBottom: 16,
+      border: '1px solid var(--borderColor-default)',
+      background: 'var(--bgColor-default, #fff)',
+      overflow: 'hidden'
+    }}>
+      {/* Header - always visible */}
+      <button
+        onClick={() => setExpanded((e) => !e)}
+        style={{
+          width: '100%', padding: '12px 16px',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          border: 'none', background: 'var(--bgColor-muted, #f6f8fa)',
+          cursor: 'pointer', gap: 8
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Text as="span" size="small" weight="semibold" style={{ color: 'var(--fgColor-default)' }}>Τρέχον build</Text>
+          <span style={{ padding: '1px 8px', borderRadius: 12, fontSize: 12, fontWeight: 700, background: 'rgba(212,133,74,0.12)', color: 'var(--nts-accent)' }}>
+            v{buildInfo.version}
+          </span>
+          <Text as="span" size="small" style={{ color: 'var(--fgColor-muted)' }}>
+            {buildInfo.commitHash} · {new Date(buildInfo.buildDate).toLocaleDateString('el-GR')}
+          </Text>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{
+            padding: '1px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600,
+            background: 'rgba(45,164,78,0.1)', color: '#2da44e'
+          }}>
+            {buildInfo.changes.length} αλλαγές
+          </span>
+          <span style={{ fontSize: 12, color: 'var(--fgColor-muted)', transition: 'transform 0.2s', transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
+        </div>
+      </button>
+
+      {/* Expanded: changes list + copy button */}
+      {expanded && (
+        <div style={{ padding: 16, borderTop: '1px solid var(--borderColor-default)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <Text as="span" size="small" weight="semibold" style={{ color: 'var(--fgColor-muted)' }}>
+              Αλλαγές σε αυτό το build
+            </Text>
+            <button
+              onClick={(e) => { e.stopPropagation(); copyChangesForUsers(); }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 5,
+                padding: '4px 10px', borderRadius: 6,
+                border: '1px solid var(--borderColor-default)',
+                background: copiedAll ? 'rgba(45,164,78,0.08)' : 'var(--bgColor-default)',
+                cursor: 'pointer', fontSize: 12, fontWeight: 500,
+                color: copiedAll ? '#2da44e' : 'var(--fgColor-default)'
+              }}
+            >
+              {copiedAll ? <><CheckCircleIcon size={12} /> Αντιγράφηκε!</> : <><CopyIcon size={12} /> Αντιγραφή για χρήστες</>}
+            </button>
+          </div>
+          <div style={{ display: 'grid', gap: 2 }}>
+            {buildInfo.changes.map((change, i) => {
+              const tagMatch = change.match(/^\[(.+?)\]\s*/);
+              const tag = tagMatch ? tagMatch[1] : null;
+              const text = tagMatch ? change.slice(tagMatch[0].length) : change;
+              const dot = tag?.includes('Διόρθωση') ? '#cf222e' : tag?.includes('Αναδιαμόρφωση') ? '#8250df' : tag?.includes('Βελτίωση') ? '#0969da' : '#2da44e';
+              return (
+                <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 13, lineHeight: 1.6, padding: '2px 0' }}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: dot, flexShrink: 0, marginTop: 6 }} />
+                  <span style={{ color: 'var(--fgColor-default)' }}>{text}</span>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Commits detail */}
+          <details style={{ marginTop: 12 }}>
+            <summary style={{ fontSize: 12, color: 'var(--fgColor-muted)', cursor: 'pointer', userSelect: 'none' }}>
+              Commits ({buildInfo.commits.length})
+            </summary>
+            <div style={{ marginTop: 6, fontSize: 12 }}>
+              {buildInfo.commits.map((c) => (
+                <div key={c.hash} style={{ display: 'flex', gap: 8, padding: '3px 0', color: 'var(--fgColor-muted)' }}>
+                  <code style={{ fontSize: 11, color: 'var(--nts-accent)', flexShrink: 0 }}>{c.hash}</code>
+                  <span>{c.message}</span>
+                </div>
+              ))}
+            </div>
+          </details>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── Changelog Tab ─── */
 
 function ChangelogTab({ userEmail }: { userEmail: string }) {
@@ -450,7 +557,7 @@ function ChangelogTab({ userEmail }: { userEmail: string }) {
   };
 
   const copyToClipboard = async (entry: ChangelogEntry) => {
-    const text = `${APP_NAME} v${entry.version}\n${entry.title}\n\n${entry.changes.map((c) => `• ${c}`).join('\n')}\n\nΥποστήριξη: ${SUPPORT_EMAIL}`;
+    const text = `${APP_NAME} v${entry.version}\n${entry.title}\n\n${entry.changes.map((c, i) => `${i + 1}. ${c}`).join('\n')}\n\nΥποστήριξη: ${SUPPORT_EMAIL}`;
     await navigator.clipboard.writeText(text);
     setCopiedId(entry.id);
     setTimeout(() => setCopiedId(null), 2000);
@@ -462,26 +569,8 @@ function ChangelogTab({ userEmail }: { userEmail: string }) {
 
   return (
     <div>
-      {/* Current Build Info */}
-      <div style={{
-        padding: 12, borderRadius: 10, marginBottom: 16,
-        background: 'var(--bgColor-muted, #f6f8fa)',
-        border: '1px solid var(--borderColor-default)',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8
-      }}>
-        <div>
-          <Text as="span" size="small" style={{ color: 'var(--fgColor-muted)' }}>Τρέχον build: </Text>
-          <span style={{ padding: '1px 8px', borderRadius: 12, fontSize: 12, fontWeight: 700, background: 'rgba(212,133,74,0.12)', color: 'var(--nts-accent)' }}>
-            v{buildInfo.version}
-          </span>
-          <Text as="span" size="small" style={{ color: 'var(--fgColor-muted)', marginLeft: 8 }}>
-            {buildInfo.commitHash} · {new Date(buildInfo.buildDate).toLocaleDateString('el-GR')}
-          </Text>
-        </div>
-        <Text as="span" size="small" style={{ color: 'var(--fgColor-muted)' }}>
-          {buildInfo.changes.length} αλλαγές · {buildInfo.branch}
-        </Text>
-      </div>
+      {/* Current Build Info - Expandable */}
+      <BuildInfoPanel />
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <Text as="p" style={{ color: 'var(--fgColor-muted)', fontSize: 14 }}>
@@ -661,11 +750,20 @@ function ChangelogTab({ userEmail }: { userEmail: string }) {
               </div>
             </div>
             {entry.changes.length > 0 && (
-              <ul style={{ margin: 0, paddingLeft: 20, fontSize: 14, color: 'var(--fgColor-default)' }}>
-                {entry.changes.map((change, i) => (
-                  <li key={i} style={{ marginBottom: 2 }}>{change}</li>
-                ))}
-              </ul>
+              <div style={{ display: 'grid', gap: 2 }}>
+                {entry.changes.map((change, i) => {
+                  const tagMatch = change.match(/^\[(.+?)\]\s*/);
+                  const tag = tagMatch ? tagMatch[1] : null;
+                  const text = tagMatch ? change.slice(tagMatch[0].length) : change;
+                  const dot = tag?.includes('Διόρθωση') ? '#cf222e' : tag?.includes('Αναδιαμόρφωση') ? '#8250df' : tag?.includes('Βελτίωση') ? '#0969da' : '#2da44e';
+                  return (
+                    <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 13, lineHeight: 1.6, padding: '2px 0' }}>
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: dot, flexShrink: 0, marginTop: 6 }} />
+                      <span>{text}</span>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
         ))}
