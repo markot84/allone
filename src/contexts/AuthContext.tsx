@@ -2,6 +2,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useMemo,
   useState,
   useCallback,
   type ReactNode
@@ -12,20 +13,31 @@ import {
   createUserWithEmailAndPassword,
   signInWithPopup,
   signOut as firebaseSignOut,
+  sendPasswordResetEmail,
+  linkWithCredential,
+  linkWithPopup,
+  EmailAuthProvider,
   GoogleAuthProvider,
   type User
 } from 'firebase/auth';
 import { Timestamp } from 'firebase/firestore';
 import { auth } from '../config/firebase';
 import { FirestoreService } from '../services/firestore';
+import { isSuperAdminEmail } from '../config/superAdmins';
 
 interface AuthContextValue {
   user: User | null;
   loading: boolean;
+  isSuperAdmin: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
+  linkPassword: (password: string) => Promise<void>;
+  linkGoogle: () => Promise<void>;
+  hasPasswordProvider: boolean;
+  hasGoogleProvider: boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -78,13 +90,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await firebaseSignOut(auth);
   }, []);
 
+  const resetPassword = useCallback(async (email: string) => {
+    const appUrl = import.meta.env.VITE_APP_URL || 'https://performance-plus-4a5b2.web.app';
+    await sendPasswordResetEmail(auth, email, {
+      url: `${appUrl}/?auth=1`,
+      handleCodeInApp: false,
+    });
+  }, []);
+
+  const linkPassword = useCallback(async (password: string) => {
+    if (!auth.currentUser?.email) throw new Error('No email found');
+    const credential = EmailAuthProvider.credential(auth.currentUser.email, password);
+    await linkWithCredential(auth.currentUser, credential);
+  }, []);
+
+  const linkGoogle = useCallback(async () => {
+    if (!auth.currentUser) throw new Error('Not signed in');
+    const provider = new GoogleAuthProvider();
+    await linkWithPopup(auth.currentUser, provider);
+  }, []);
+
+  const superAdmin = useMemo(() => isSuperAdminEmail(user?.email), [user?.email]);
+  const hasPasswordProvider = useMemo(() => user?.providerData.some((p) => p.providerId === 'password') ?? false, [user]);
+  const hasGoogleProvider = useMemo(() => user?.providerData.some((p) => p.providerId === 'google.com') ?? false, [user]);
+
   const value: AuthContextValue = {
     user,
     loading,
+    isSuperAdmin: superAdmin,
     signIn,
     signUp,
     signInWithGoogle,
     signOut,
+    resetPassword,
+    linkPassword,
+    linkGoogle,
+    hasPasswordProvider,
+    hasGoogleProvider,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -17,8 +17,19 @@ export interface UserProfile {
   id: string;
   email: string;
   displayName?: string;
+  role?: 'member' | 'admin' | 'superadmin';
   brandIds: string[];
   defaultBrandId?: string;
+  createdAt: string;
+}
+
+export interface ChangelogEntry {
+  id: string;
+  version: string;
+  date: string;
+  title: string;
+  changes: string[];
+  createdBy: string;
   createdAt: string;
 }
 

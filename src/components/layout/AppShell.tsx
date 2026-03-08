@@ -17,12 +17,16 @@ import {
   OrganizationIcon,
   PackageIcon,
   PencilIcon,
+  PinIcon,
   ReportIcon,
   SearchIcon,
+  ShieldIcon,
   ThreeBarsIcon,
   XIcon
 } from '@primer/octicons-react';
 import { Upload, UserPlus, Building2, Target, Euro } from 'lucide-react';
+
+const SIDEBAR_PIN_KEY = 'perf-plus-sidebar-pinned';
 
 type SectionId =
   | 'brands'
@@ -39,7 +43,8 @@ type SectionId =
   | 'insights'
   | 'data'
   | 'invite'
-  | 'help';
+  | 'help'
+  | 'admin';
 
 export interface AppShellProps {
   activeSection: string;
@@ -151,16 +156,27 @@ function AccountMenu({
   onSignOut,
   isOpen,
   onToggle,
-  onClose
+  onClose,
+  hasPasswordProvider,
+  hasGoogleProvider,
+  onLinkPassword,
+  onLinkGoogle
 }: {
   user: { email?: string | null; displayName?: string | null } | null;
   onSignOut: () => void;
   isOpen: boolean;
   onToggle: () => void;
   onClose: () => void;
+  hasPasswordProvider: boolean;
+  hasGoogleProvider: boolean;
+  onLinkPassword: (password: string) => Promise<void>;
+  onLinkGoogle: () => Promise<void>;
 }) {
   const btnRef = useRef<HTMLButtonElement>(null);
   const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
+  const [showSetPassword, setShowSetPassword] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [linkMsg, setLinkMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
   useEffect(() => {
     if (isOpen && btnRef.current) {
@@ -233,7 +249,109 @@ function AccountMenu({
               {user.displayName && (
                 <Text as="div" size="small" style={{ color: 'var(--fgColor-muted, #57606a)' }}>{user.displayName}</Text>
               )}
+              <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
+                {hasPasswordProvider && (
+                  <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 10, background: 'rgba(45,164,78,0.1)', color: '#2da44e' }}>Email/Password</span>
+                )}
+                {hasGoogleProvider && (
+                  <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 10, background: 'rgba(66,133,244,0.1)', color: '#4285F4' }}>Google</span>
+                )}
+              </div>
             </div>
+
+            {/* Link providers */}
+            {!hasPasswordProvider && (
+              <div style={{ borderBottom: '1px solid var(--borderColor-default, #d0d7de)' }}>
+                {!showSetPassword ? (
+                  <button
+                    onClick={() => setShowSetPassword(true)}
+                    style={{
+                      width: '100%', padding: '10px 12px', textAlign: 'left',
+                      border: 'none', background: 'transparent', cursor: 'pointer',
+                      fontSize: 13, color: 'var(--fgColor-default, #24292f)'
+                    }}
+                  >
+                    Ορισμός κωδικού
+                  </button>
+                ) : (
+                  <div style={{ padding: 10 }}>
+                    <input
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Νέος κωδικός (min 6)"
+                      style={{
+                        width: '100%', padding: '6px 10px', fontSize: 13, borderRadius: 6,
+                        border: '1px solid var(--borderColor-default)', marginBottom: 6
+                      }}
+                    />
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button
+                        onClick={async () => {
+                          if (newPassword.length < 6) { setLinkMsg({ type: 'err', text: 'Min 6 χαρακτήρες' }); return; }
+                          try {
+                            await onLinkPassword(newPassword);
+                            setLinkMsg({ type: 'ok', text: 'Κωδικός ορίστηκε!' });
+                            setShowSetPassword(false);
+                            setNewPassword('');
+                          } catch (e: any) {
+                            setLinkMsg({ type: 'err', text: e.message?.includes('auth/') ? 'Αποτυχία σύνδεσης' : (e.message || 'Σφάλμα') });
+                          }
+                        }}
+                        style={{
+                          flex: 1, padding: '5px 8px', fontSize: 12, fontWeight: 600, borderRadius: 6,
+                          border: 'none', background: 'var(--nts-accent)', color: '#fff', cursor: 'pointer'
+                        }}
+                      >
+                        Αποθήκευση
+                      </button>
+                      <button
+                        onClick={() => { setShowSetPassword(false); setNewPassword(''); setLinkMsg(null); }}
+                        style={{
+                          padding: '5px 8px', fontSize: 12, borderRadius: 6,
+                          border: '1px solid var(--borderColor-default)', background: 'transparent', cursor: 'pointer'
+                        }}
+                      >
+                        Ακύρωση
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!hasGoogleProvider && (
+              <div style={{ borderBottom: '1px solid var(--borderColor-default, #d0d7de)' }}>
+                <button
+                  onClick={async () => {
+                    try {
+                      await onLinkGoogle();
+                      setLinkMsg({ type: 'ok', text: 'Google συνδέθηκε!' });
+                    } catch (e: any) {
+                      setLinkMsg({ type: 'err', text: e.message?.includes('auth/credential-already-in-use') ? 'Αυτό το Google account χρησιμοποιείται ήδη' : (e.message || 'Σφάλμα') });
+                    }
+                  }}
+                  style={{
+                    width: '100%', padding: '10px 12px', textAlign: 'left',
+                    border: 'none', background: 'transparent', cursor: 'pointer',
+                    fontSize: 13, color: 'var(--fgColor-default, #24292f)'
+                  }}
+                >
+                  Σύνδεση Google λογαριασμού
+                </button>
+              </div>
+            )}
+
+            {linkMsg && (
+              <div style={{
+                padding: '6px 12px', fontSize: 12,
+                color: linkMsg.type === 'ok' ? '#2da44e' : '#cf222e',
+                background: linkMsg.type === 'ok' ? 'rgba(45,164,78,0.08)' : 'rgba(207,34,46,0.08)'
+              }}>
+                {linkMsg.text}
+              </div>
+            )}
+
             <button
               onClick={() => { onSignOut(); onClose(); }}
               style={{
@@ -258,31 +376,53 @@ function AccountMenu({
 }
 
 export function AppShell({ activeSection, onSectionChange, children }: AppShellProps) {
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    if (typeof localStorage !== 'undefined') return localStorage.getItem(SIDEBAR_PIN_KEY) === '1';
+    return false;
+  });
+  const [sidebarPinned, setSidebarPinned] = useState(() => {
+    if (typeof localStorage !== 'undefined') return localStorage.getItem(SIDEBAR_PIN_KEY) === '1';
+    return false;
+  });
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [brandMenuOpen, setBrandMenuOpen] = useState(false);
-  const { user, signOut } = useAuth();
+  const { user, signOut, isSuperAdmin, hasPasswordProvider, hasGoogleProvider, linkPassword, linkGoogle } = useAuth();
   const { currentBrand, brands, setCurrentBrand } = useBrand();
 
+  const togglePin = () => {
+    const next = !sidebarPinned;
+    setSidebarPinned(next);
+    setSidebarOpen(next);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(SIDEBAR_PIN_KEY, next ? '1' : '0');
+    }
+  };
+
   const navItems = useMemo<NavItem[]>(
-    () => [
-      { id: 'brands', label: 'Τα Brands μου', icon: Building2 },
-      { id: 'dashboard', label: 'Dashboard', icon: HomeIcon },
-      { id: 'strategy', label: 'Commercial Strategy', icon: GraphIcon },
-      { id: 'products', label: 'Product Intelligence', icon: PackageIcon },
-      { id: 'rfm', label: 'Data Analysis', icon: OrganizationIcon },
-      { id: 'channels', label: 'Channel Activation', icon: MegaphoneIcon },
-      { id: 'campaigns', label: 'Campaigns', icon: Target },
-      { id: 'finances', label: 'Οικονομικά', icon: Euro },
-      { id: 'roi', label: 'ROI', icon: GraphIcon },
-      { id: 'calendar', label: 'Content Strategy', icon: PencilIcon },
-      { id: 'reports', label: 'Reports', icon: ReportIcon },
-      { id: 'insights', label: 'AI Insights', icon: LightBulbIcon },
-      { id: 'data', label: 'Data Import', icon: Upload },
-      { id: 'invite', label: 'Καλέστε χρήστη', icon: UserPlus },
-      { id: 'help', label: 'Help & Support', icon: GearIcon }
-    ],
-    []
+    () => {
+      const items: NavItem[] = [
+        { id: 'brands', label: 'Τα Brands μου', icon: Building2 },
+        { id: 'dashboard', label: 'Dashboard', icon: HomeIcon },
+        { id: 'strategy', label: 'Commercial Strategy', icon: GraphIcon },
+        { id: 'products', label: 'Product Intelligence', icon: PackageIcon },
+        { id: 'rfm', label: 'Data Analysis', icon: OrganizationIcon },
+        { id: 'channels', label: 'Channel Activation', icon: MegaphoneIcon },
+        { id: 'campaigns', label: 'Campaigns', icon: Target },
+        { id: 'finances', label: 'Οικονομικά', icon: Euro },
+        { id: 'roi', label: 'ROI', icon: GraphIcon },
+        { id: 'calendar', label: 'Content Strategy', icon: PencilIcon },
+        { id: 'reports', label: 'Reports', icon: ReportIcon },
+        { id: 'insights', label: 'AI Insights', icon: LightBulbIcon },
+        { id: 'data', label: 'Data Import', icon: Upload },
+        { id: 'invite', label: 'Καλέστε χρήστη', icon: UserPlus },
+        { id: 'help', label: 'Help & Support', icon: GearIcon }
+      ];
+      if (isSuperAdmin) {
+        items.push({ id: 'admin', label: 'Super Admin', icon: ShieldIcon });
+      }
+      return items;
+    },
+    [isSuperAdmin]
   );
 
   const Nav = ({ onSelect }: { onSelect: (id: SectionId) => void }) => (
@@ -317,10 +457,10 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
             variant="ghost"
             size="sm"
             icon={<ThreeBarsIcon />}
-            className="md:hidden"
-            onClick={() => setMobileNavOpen(true)}
+            onClick={() => { if (sidebarPinned) { togglePin(); } else { setSidebarOpen((o) => !o); } }}
+            style={{ color: 'rgba(255,255,255,0.85)' }}
           >
-            Menu
+            <span style={{ color: 'rgba(255,255,255,0.85)' }}>Menu</span>
           </Button>
         </PrimerHeader.Item>
 
@@ -405,6 +545,10 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
             isOpen={userMenuOpen}
             onToggle={() => setUserMenuOpen((o) => !o)}
             onClose={() => setUserMenuOpen(false)}
+            hasPasswordProvider={hasPasswordProvider}
+            hasGoogleProvider={hasGoogleProvider}
+            onLinkPassword={linkPassword}
+            onLinkGoogle={linkGoogle}
           />
         </PrimerHeader.Item>
       </PrimerHeader>
@@ -418,46 +562,56 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
         width: '100%',
         maxWidth: '100%'
       }}>
-        {/* Sidebar */}
-        <div 
-          className="hidden md:block sidebar-dark"
-          style={{
-            width: 260,
-            minWidth: 260,
-            maxWidth: 260,
-            borderRight: '1px solid rgba(255,255,255,0.08)',
-            overflowY: 'auto',
-            overflowX: 'hidden',
-            backgroundColor: '#111111'
-          }}
-        >
-          {currentBrand && (
-            <div
-              style={{
-                margin: 12,
-                padding: '12px 14px',
-                borderRadius: 10,
-                background: 'rgba(255,255,255,0.06)',
-                border: '1px solid rgba(255,255,255,0.1)'
-              }}
-            >
-              <Text as="div" size="small" style={{ color: 'rgba(255,255,255,0.4)', marginBottom: 4 }}>
-                Brand
+        {/* Pinned Sidebar */}
+        {sidebarPinned && (
+          <div 
+            className="sidebar-dark"
+            style={{
+              width: 260,
+              minWidth: 260,
+              maxWidth: 260,
+              borderRight: '1px solid rgba(255,255,255,0.08)',
+              overflowY: 'auto',
+              overflowX: 'hidden',
+              backgroundColor: '#111111',
+              display: 'flex',
+              flexDirection: 'column'
+            }}
+          >
+            <div style={{ 
+              padding: '12px 16px', 
+              borderBottom: '1px solid rgba(255,255,255,0.08)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexShrink: 0
+            }}>
+              <Text as="div" size="small" weight="semibold" style={{ color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: 0.5, fontSize: 11 }}>
+                Menu
               </Text>
-              <Text as="div" weight="semibold" size="medium" style={{ color: 'rgba(255,255,255,0.85)' }}>
-                {currentBrand.name}
-              </Text>
-              {currentBrand.type && (
-                <Text as="div" size="small" style={{ color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>
-                  {currentBrand.type}
-                </Text>
-              )}
+              <button
+                onClick={togglePin}
+                title="Ξεκαρφίτσωμα μενού"
+                style={{
+                  padding: 4,
+                  border: 'none',
+                  background: 'rgba(255,255,255,0.1)',
+                  cursor: 'pointer',
+                  borderRadius: 4,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--nts-accent)'
+                }}
+              >
+                <PinIcon size={14} />
+              </button>
             </div>
-          )}
-          <div style={{ padding: 16 }}>
-            <Nav onSelect={(id) => onSectionChange(id)} />
+            <div style={{ padding: 12, flex: 1, overflowY: 'auto' }}>
+              <Nav onSelect={(id) => onSectionChange(id)} />
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Main Content */}
         <div 
@@ -483,24 +637,19 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
         </div>
       </div>
 
-      {/* Mobile Navigation Overlay */}
-      {mobileNavOpen && (
+      {/* Drawer Overlay (unpinned) */}
+      {sidebarOpen && !sidebarPinned && (
         <>
-          {/* Backdrop */}
           <div
-            onClick={() => setMobileNavOpen(false)}
+            onClick={() => setSidebarOpen(false)}
             style={{
               position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
+              inset: 0,
               backgroundColor: 'rgba(0, 0, 0, 0.3)',
               zIndex: 999,
               animation: 'fadeIn 0.2s ease-out'
             }}
           />
-          {/* Mobile Navigation Drawer */}
           <div
             className="sidebar-dark"
             style={{
@@ -521,46 +670,46 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
               overflowX: 'hidden'
             }}
           >
-            {/* Header */}
+            {/* Drawer Header */}
             <div style={{ 
               padding: 16, 
               borderBottom: '1px solid rgba(255,255,255,0.08)',
               display: 'flex',
-              flexDirection: 'column',
-              gap: 12,
+              alignItems: 'center',
+              justifyContent: 'space-between',
               flexShrink: 0
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div
-                    style={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: 6,
-                      border: '1px solid rgba(255,255,255,0.2)',
-                      display: 'grid',
-                      placeItems: 'center',
-                      fontWeight: 700,
-                      color: 'var(--nts-accent)',
-                      fontSize: 12
-                    }}
-                  >
-                    P+
-                  </div>
-                  <div>
-                    <Text as="div" weight="semibold" size="medium" style={{ color: '#ffffff' }}>
-                      Performance+
-                    </Text>
-                    <Text as="div" size="small" style={{ color: 'rgba(255,255,255,0.5)' }}>
-                      by notthesame.ai
-                    </Text>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setMobileNavOpen(false)}
-                  aria-label="Close navigation"
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div
                   style={{
-                    padding: 8,
+                    width: 28,
+                    height: 28,
+                    borderRadius: 6,
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    display: 'grid',
+                    placeItems: 'center',
+                    fontWeight: 700,
+                    color: 'var(--nts-accent)',
+                    fontSize: 12
+                  }}
+                >
+                  P+
+                </div>
+                <div>
+                  <Text as="div" weight="semibold" size="medium" style={{ color: '#ffffff' }}>
+                    Performance+
+                  </Text>
+                  <Text as="div" size="small" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                    by notthesame.ai
+                  </Text>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 4 }}>
+                <button
+                  onClick={togglePin}
+                  title="Καρφίτσωμα μενού"
+                  style={{
+                    padding: 6,
                     border: 'none',
                     background: 'transparent',
                     cursor: 'pointer',
@@ -570,65 +719,37 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
                     justifyContent: 'center',
                     color: 'rgba(255,255,255,0.5)'
                   }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
                 >
-                  <XIcon />
+                  <PinIcon size={16} />
+                </button>
+                <button
+                  onClick={() => setSidebarOpen(false)}
+                  aria-label="Close navigation"
+                  style={{
+                    padding: 6,
+                    border: 'none',
+                    background: 'transparent',
+                    cursor: 'pointer',
+                    borderRadius: 6,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'rgba(255,255,255,0.5)'
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                >
+                  <XIcon size={16} />
                 </button>
               </div>
-              {currentBrand && (
-                <div style={{ padding: '0 12px 12px' }}>
-                  <Text as="div" size="small" style={{ color: 'rgba(255,255,255,0.5)', marginBottom: 6 }}>
-                    Brand
-                  </Text>
-                  {brands.length > 1 ? (
-                    brands.map((b) => (
-                      <button
-                        key={b.id}
-                        onClick={() => { setCurrentBrand(b); setMobileNavOpen(false); }}
-                        style={{
-                          width: '100%',
-                          padding: '10px 12px',
-                          textAlign: 'left',
-                          border: 'none',
-                          borderRadius: 8,
-                          background: currentBrand?.id === b.id ? 'rgba(249,115,22,0.15)' : 'rgba(255,255,255,0.06)',
-                          cursor: 'pointer',
-                          fontSize: 14,
-                          color: currentBrand?.id === b.id ? 'var(--nts-accent)' : 'rgba(255,255,255,0.7)',
-                          fontWeight: currentBrand?.id === b.id ? 600 : 400,
-                          marginBottom: 4
-                        }}
-                      >
-                        {b.name}
-                      </button>
-                    ))
-                  ) : (
-                    <div
-                      style={{
-                        padding: '10px 12px',
-                        borderRadius: 8,
-                        background: 'rgba(255,255,255,0.06)',
-                        border: '1px solid rgba(255,255,255,0.1)'
-                      }}
-                    >
-                      <Text as="div" weight="semibold" style={{ color: '#ffffff' }}>
-                        {currentBrand.name}
-                      </Text>
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
             {/* Navigation */}
             <div style={{ padding: 16, flex: 1, overflowY: 'auto' }}>
               <Nav
                 onSelect={(id) => {
-                  setMobileNavOpen(false);
+                  setSidebarOpen(false);
                   onSectionChange(id);
                 }}
               />

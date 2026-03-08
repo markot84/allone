@@ -1,8 +1,8 @@
 import { motion } from 'framer-motion';
-import { Building2 } from 'lucide-react';
+import { Building2, ArrowLeft } from 'lucide-react';
 import { Spinner } from '../common';
 import { BrandCreateForm } from './BrandCreateForm';
-import { useBrand } from '../../hooks';
+import { useAuth, useBrand } from '../../hooks';
 
 interface BrandOnboardingProps {
   children: React.ReactNode;
@@ -10,6 +10,7 @@ interface BrandOnboardingProps {
 
 export function BrandOnboarding({ children }: BrandOnboardingProps) {
   const { brands, loading, refreshBrands } = useBrand();
+  const { signOut } = useAuth();
 
   if (loading) {
     return (
@@ -19,6 +20,11 @@ export function BrandOnboarding({ children }: BrandOnboardingProps) {
     );
   }
   if (brands.length > 0) return <>{children}</>;
+
+  const handleBack = async () => {
+    await signOut();
+    window.location.href = '/';
+  };
 
   return (
     <div
@@ -44,6 +50,13 @@ export function BrandOnboarding({ children }: BrandOnboardingProps) {
             </p>
           </div>
           <BrandCreateForm onCreated={refreshBrands} />
+          <button
+            onClick={handleBack}
+            className="w-full mt-4 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium text-[var(--nts-medium-gray)] hover:text-[var(--nts-charcoal)] hover:bg-[var(--nts-light-gray)] transition-colors"
+          >
+            <ArrowLeft size={16} />
+            Επιστροφή στην αρχική
+          </button>
         </div>
       </motion.div>
     </div>

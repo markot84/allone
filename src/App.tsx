@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
 import { ToastProvider, ErrorBoundary } from './components/common';
+import { auth } from './config/firebase';
 import { AuthGuard, InviteAcceptPage, InviteUserSection } from './components/auth';
 import { AppShell } from './components/layout';
 import { DashboardOverview } from './components/dashboard/DashboardOverview';
@@ -20,6 +21,8 @@ import { AIInsightsPanel, AIInsightsTriggerWrapper } from './components/insights
 import { DataImport } from './components/data';
 import { BrandsPage } from './components/brands';
 import { BusinessFinances } from './components/finances';
+import { SuperAdminDashboard } from './components/admin';
+import { isSuperAdminEmail } from './config/superAdmins';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -57,7 +60,7 @@ function App() {
   const getInitialSection = () => {
     if (typeof window === 'undefined') return 'dashboard';
     const hash = window.location.hash.replace('#', '');
-    const validSections = ['brands', 'dashboard', 'strategy', 'rfm', 'products', 'channels', 'campaigns', 'finances', 'calendar', 'reports', 'roi', 'data', 'data-products', 'data-segments', 'data-campaigns', 'data-organic', 'invite', 'concept', 'help'];
+    const validSections = ['brands', 'dashboard', 'strategy', 'rfm', 'products', 'channels', 'campaigns', 'finances', 'calendar', 'reports', 'roi', 'data', 'data-products', 'data-segments', 'data-campaigns', 'data-organic', 'invite', 'concept', 'help', 'admin'];
     if (hash && validSections.includes(hash)) return hash;
     return 'dashboard';
   };
@@ -175,6 +178,15 @@ function App() {
         return <Concept onNavigateToStrategy={() => handleSectionChange('strategy')} />;
       case 'help':
         return <Help />;
+      case 'admin': {
+        // Gate: only super admins can access this route
+        const u = auth.currentUser;
+        if (!isSuperAdminEmail(u?.email)) {
+          handleSectionChange('dashboard');
+          return <DashboardOverview onSectionChange={handleSectionChange} onOpenInsights={() => setInsightsPanelOpen(true)} />;
+        }
+        return <SuperAdminDashboard />;
+      }
       default:
         return <DashboardOverview onSectionChange={handleSectionChange} onOpenInsights={() => setInsightsPanelOpen(true)} />;
     }

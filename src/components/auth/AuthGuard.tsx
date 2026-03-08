@@ -12,7 +12,7 @@ interface AuthGuardProps {
 }
 
 export function AuthGuard({ children }: AuthGuardProps) {
-  const { user, loading, signIn, signUp, signInWithGoogle } = useAuth();
+  const { user, loading, signIn, signUp, signInWithGoogle, resetPassword } = useAuth();
   const params = new URLSearchParams(window.location.search);
   const showAuth = params.get('auth') === '1' || params.get('auth') === 'true';
   const forceLandingPreview = params.get('landing') === '1' || params.get('landing') === 'true';
@@ -62,6 +62,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
         onSignIn={signIn}
         onSignUp={signUp}
         onSignInWithGoogle={signInWithGoogle}
+        onResetPassword={resetPassword}
         onBackToLanding={() => {
           const next = new URLSearchParams(window.location.search);
           next.delete('auth');

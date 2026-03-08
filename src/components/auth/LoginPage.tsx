@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Mail, Lock, LogIn } from 'lucide-react';
+import { Mail, Lock, LogIn, ArrowLeft, Send } from 'lucide-react';
 import { Button } from '../common';
 
 interface LoginPageProps {
   onSignIn: (email: string, password: string) => Promise<void>;
   onSignUp: (email: string, password: string) => Promise<void>;
   onSignInWithGoogle: () => Promise<void>;
+  onResetPassword?: (email: string) => Promise<void>;
   loading?: boolean;
   onBackToLanding?: () => void;
 }
@@ -15,14 +16,16 @@ export function LoginPage({
   onSignIn,
   onSignUp,
   onSignInWithGoogle,
+  onResetPassword,
   loading = false,
   onBackToLanding,
 }: LoginPageProps) {
-  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [mode, setMode] = useState<'login' | 'register' | 'forgot'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
+  const [resetSent, setResetSent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -55,6 +58,25 @@ export function LoginPage({
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Σφάλμα σύνδεσης';
+      setError(msg.includes('auth/') ? translateAuthError(msg) : msg);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    if (!email.trim()) {
+      setError('Εισάγετε email');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await onResetPassword?.(email.trim());
+      setResetSent(true);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Σφάλμα αποστολής';
       setError(msg.includes('auth/') ? translateAuthError(msg) : msg);
     } finally {
       setSubmitting(false);
@@ -102,6 +124,79 @@ export function LoginPage({
             <p className="text-[var(--nts-medium-gray)] mt-1">by notthesame.ai</p>
           </div>
 
+          {mode === 'forgot' ? (
+            /* ── Forgot Password View ── */
+            <>
+              {resetSent ? (
+                <div className="text-center space-y-4">
+                  <div className="w-14 h-14 bg-[#ECFDF5] rounded-xl flex items-center justify-center mx-auto">
+                    <Send size={24} className="text-[#10B981]" />
+                  </div>
+                  <div>
+                    <p className="text-[var(--nts-charcoal)] font-semibold">Email εστάλη!</p>
+                    <p className="text-sm text-[var(--nts-medium-gray)] mt-1">
+                      Ελέγξτε το <strong>{email}</strong> για τον σύνδεσμο επαναφοράς κωδικού.
+                    </p>
+                    <p className="text-xs text-[var(--nts-medium-gray)] mt-2">
+                      Αν δεν βρείτε το email, ελέγξτε τον φάκελο spam.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setMode('login'); setResetSent(false); setError(''); }}
+                    className="flex items-center justify-center gap-2 mx-auto text-sm font-medium text-[var(--nts-accent)] hover:underline"
+                  >
+                    <ArrowLeft size={14} />
+                    Επιστροφή στη σύνδεση
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <p className="text-sm text-[var(--nts-medium-gray)] mb-5 text-center">
+                    Εισάγετε το email σας και θα λάβετε σύνδεσμο για επαναφορά κωδικού.
+                  </p>
+                  <form onSubmit={handleResetPassword} className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-[var(--nts-charcoal)] mb-1.5">Email</label>
+                      <div className="relative">
+                        <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--nts-medium-gray)]" />
+                        <input
+                          type="email"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          placeholder="email@example.com"
+                          className="w-full min-w-0 pl-10 pr-4 py-2.5 bg-[var(--nts-light-gray)] border border-[var(--nts-border-gray)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)] focus:border-[var(--nts-accent)] focus:bg-white"
+                          autoComplete="email"
+                        />
+                      </div>
+                    </div>
+                    {error && (
+                      <p className="text-sm text-[#EF4444] bg-[#FEE2E2] rounded-lg px-3 py-2">{error}</p>
+                    )}
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      className="w-full"
+                      icon={<Send size={16} />}
+                      disabled={submitting}
+                    >
+                      {submitting ? 'Αποστολή...' : 'Αποστολή συνδέσμου'}
+                    </Button>
+                  </form>
+                  <button
+                    type="button"
+                    onClick={() => { setMode('login'); setError(''); }}
+                    className="w-full mt-4 flex items-center justify-center gap-2 text-sm text-[var(--nts-medium-gray)] hover:text-[var(--nts-charcoal)] transition-colors"
+                  >
+                    <ArrowLeft size={14} />
+                    Επιστροφή στη σύνδεση
+                  </button>
+                </>
+              )}
+            </>
+          ) : (
+            /* ── Login / Register View ── */
+            <>
           <div className="flex gap-2 mb-6">
             <button
               type="button"
@@ -145,7 +240,18 @@ export function LoginPage({
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-[var(--nts-charcoal)] mb-1.5">Κωδικός</label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-sm font-medium text-[var(--nts-charcoal)]">Κωδικός</label>
+                {mode === 'login' && onResetPassword && (
+                  <button
+                    type="button"
+                    onClick={() => { setMode('forgot'); setError(''); setResetSent(false); }}
+                    className="text-xs text-[var(--nts-accent)] hover:underline"
+                  >
+                    Ξεχάσατε τον κωδικό;
+                  </button>
+                )}
+              </div>
               <div className="relative">
                 <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--nts-medium-gray)]" />
                 <input
@@ -228,6 +334,8 @@ export function LoginPage({
               <span>Σύνδεση με Google</span>
             </button>
           </div>
+            </>
+          )}
         </div>
       </motion.div>
     </div>
@@ -240,5 +348,7 @@ function translateAuthError(msg: string): string {
   if (msg.includes('auth/weak-password')) return 'Ο κωδικός είναι πολύ αδύναμος';
   if (msg.includes('auth/invalid-email')) return 'Μη έγκυρο email';
   if (msg.includes('auth/popup-closed-by-user')) return 'Άκυρη η σύνδεση με Google';
+  if (msg.includes('auth/too-many-requests')) return 'Πολλές προσπάθειες. Δοκιμάστε αργότερα.';
+  if (msg.includes('auth/missing-email')) return 'Εισάγετε email';
   return msg;
 }
