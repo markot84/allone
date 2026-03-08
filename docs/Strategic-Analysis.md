@@ -255,6 +255,74 @@ Based on strategic analysis, recommended priority order:
 
 ---
 
+## 8. Refined Buyer Persona & Go-to-Market (March 2026 Update)
+
+### 8.1 Primary Buyer Persona: The Scaling E-shop Owner
+
+**Profile:**
+- Ιδιοκτήτης ή εταιρεία με established e-shop στην Ελλάδα
+- Revenue: 2M - 15M ετησίως
+- Αναγνωρισιμότητα, πιστό κοινό, δεν αντιμετωπίζει πρόβλημα βιωσιμότητας
+- Βλέπει συνεχόμενο growth και θέλει να το μεγιστοποιήσει
+- Ομάδα: Ιδιοκτήτης + 1 marketing person + 1-2 external agencies
+- Ήδη πληρώνει 2-5K+/μήνα σε agency fees, ads, tools
+
+**Pains:**
+- Fragmented data (Analytics, Meta Ads, spreadsheets, email reports)
+- Δεν υπάρχει single source of truth για εμπορική στρατηγική
+- Χαοτική επικοινωνία με agency — "τι κάνουμε αυτόν τον μήνα;"
+- Ο marketing person είναι overwhelmed, τρέχει 10 πράγματα χωρίς strategic framework
+- Ο ιδιοκτήτης ρωτάει "πώς πάμε;" και παίρνει Excel ή "καλά πάμε"
+
+**Gains:**
+- Clarity σε 30 δευτερόλεπτα — dashboard, strategy status, ROI
+- AI-powered strategic direction χωρίς να χρειάζεται marketing director (3-5K/μήνα)
+- Ένα click → η ομάδα/agency ξέρει τι να κάνει (Strategy Package + Brief)
+- Data-driven αποφάσεις αντί για gut feeling
+
+**Value Proposition:**
+> "Ο marketing director που δεν χρειάζεται να προσλάβεις."
+
+### 8.2 Three-Phase GTM Model
+
+**Phase 1 — Lead Magnet (τρέχουσα φάση)**
+- Το Performance+ είναι proprietary tool της NotTheSame
+- Η marketing page δείχνει τη μεθοδολογία, όχι πουλάει software
+- Ο ιδιοκτήτης βλέπει, λέει "θέλω κι εγώ αυτό", γίνεται lead
+- CTA: "Κλείστε Demo" → meeting με NotTheSame
+- Validation: 3/3 brands που το είδαν, το αγόρασαν (100% conversion)
+- Η NotTheSame διαφοροποιείται: "δουλεύουμε έτσι, γι' αυτό είμαστε καλύτεροι"
+
+**Phase 2 — Whitelabel for Agencies**
+- Subscription model για agencies: Performance+ με δικό τους branding
+- Υψηλό LTV, χαμηλό churn — agency δεν αλλάζει εργαλείο με 20 πελάτες
+- Revenue: recurring B2B SaaS
+- Απαιτεί: multi-tenant architecture, whitelabel theming
+
+**Phase 3 — Direct SaaS**
+- Ο ιδιοκτήτης e-shop αγοράζει μόνος του
+- Απαιτεί: self-serve onboarding, support, tutorials
+- Μεγαλύτερη αγορά αλλά μεγαλύτερη επένδυση σε growth
+
+### 8.3 Pricing Positioning
+
+Δεν πουλάμε software — πουλάμε **μεθοδολογία και αποτέλεσμα**.
+
+| Context | Σύγκριση | Performance+ |
+|---|---|---|
+| Marketing Director salary | 3.000 - 5.000€/μήνα | 200 - 500€/μήνα |
+| Strategy consulting | 2.000 - 10.000€/project | Ενσωματωμένο |
+| Multiple analytics tools | 500 - 1.500€/μήνα (combined) | All-in-one |
+
+### 8.4 Competitive Advantage
+
+1. **Agency + Tool**: Η NotTheSame είναι agency ΚΑΙ κατασκευαστής του εργαλείου. Κανείς ανταγωνιστής δεν έχει αυτό.
+2. **Already in the room**: Monthly meetings με τον αγοραστή. Zero customer acquisition cost για Phase 1.
+3. **Greek market first**: Localized AI (ελληνικά), Greek business context, local seasonal periods.
+4. **Proven methodology**: Real brands, real data, real results — όχι θεωρητικό product.
+
+---
+
 **Document maintained by:** notthesame.ai
 **Last updated:** March 2026
 **Confidentiality:** Internal use only
