@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Percent, Tag, Package, Check, X } from 'lucide-react';
 import { useProducts } from '../../hooks';
-import { SEASONAL_PERIODS, getActiveSeasons, getUpcomingSeason, type SeasonalPeriod } from '../../data/seasonalPeriods';
+import { getActiveSeasons, getUpcomingSeason, type SeasonalPeriod } from '../../data/seasonalPeriods';
 
 export interface SeasonalDiscountConfig {
   periodId?: string;

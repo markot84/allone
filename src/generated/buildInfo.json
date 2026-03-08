@@ -1,10 +1,14 @@
 {
-  "version": "0.6.0",
-  "previousVersion": "0.5.0",
-  "commitHash": "bd4d43f",
+  "version": "0.8.0",
+  "previousVersion": "0.7.0",
+  "commitHash": "667abd6",
   "branch": "main",
-  "buildDate": "2026-03-08T10:39:59.602Z",
+  "buildDate": "2026-03-08T12:45:02.813Z",
   "commits": [
+    {
+      "hash": "667abd6",
+      "message": "feat: harmonize blue palette with warm neutrals, seasonal Lucide icons, content AI refactor, seasonal discount strategy, impact preview redesign, strategic docs"
+    },
     {
       "hash": "bd4d43f",
       "message": "feat: Mixed strategies, seasonal periods, personalized AI, strategy expiry"
@@ -60,13 +64,10 @@
     {
       "hash": "6611e1c",
       "message": "feat(landing): add typewriter, metrics strip, sticky header, before/after layout, screenshot hover, trust bar, footer brand tag"
-    },
-    {
-      "hash": "c927a36",
-      "message": "feat: add premium marketing landing and auth entry flow"
     }
   ],
   "changes": [
+    "[Νέο χαρακτηριστικό] Harmonize blue palette with warm neutrals, seasonal Lucide icons, content AI refactor, seasonal discount strategy, impact preview redesign, strategic docs",
     "[Νέο χαρακτηριστικό] Mixed strategies, seasonal periods, personalized AI, strategy expiry",
     "[Νέο χαρακτηριστικό] Gemini AI integration, responsive fixes, dynamic RFM segments",
     "[Νέο χαρακτηριστικό] Changelog UI polish - colored dots, Greek labels, build info panel",
@@ -75,7 +76,6 @@
     "[Νέο χαρακτηριστικό] Super admin dashboard, menu refactor, auth improvements",
     "[Νέο χαρακτηριστικό] Redesign before/after section, add scenario comparison USP point",
     "[Διόρθωση] SearchIcon style prop build error",
-    "[Νέο χαρακτηριστικό] Dark sidebar/header, card shadows, strategy duration, commercial strategy rename, mascot AI button",
-    "[Αναδιαμόρφωση] Replace orange accent backgrounds with neutral gray across app. Remove nts-accent-light from all components, update icons to monochrome, add NTS favicon, refine landing page copy."
+    "[Νέο χαρακτηριστικό] Dark sidebar/header, card shadows, strategy duration, commercial strategy rename, mascot AI button"
   ]
 }
