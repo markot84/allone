@@ -1,10 +1,14 @@
 {
-  "version": "0.14.0",
-  "previousVersion": "0.13.0",
-  "commitHash": "0aa0100",
+  "version": "0.15.0",
+  "previousVersion": "0.14.0",
+  "commitHash": "7ca779e",
   "branch": "main",
-  "buildDate": "2026-03-08T18:24:45.519Z",
+  "buildDate": "2026-03-08T18:47:46.100Z",
   "commits": [
+    {
+      "hash": "7ca779e",
+      "message": "AI Insights refinement, seasonal banner neutral, Inventory blue restore"
+    },
     {
       "hash": "0aa0100",
       "message": "Strategy Package (PDF + Link), sidebar redesign, brand icon, UI refinements"
@@ -60,13 +64,10 @@
     {
       "hash": "7dd800e",
       "message": "feat: super admin dashboard, menu refactor, auth improvements"
-    },
-    {
-      "hash": "46cad67",
-      "message": "feat: redesign before/after section, add scenario comparison USP point"
     }
   ],
   "changes": [
+    "AI Insights refinement, seasonal banner neutral, Inventory blue restore",
     "Strategy Package (PDF + Link), sidebar redesign, brand icon, UI refinements",
     "Fix revenue_share property name",
     "AI upgrade: CMO-level prompts, deterministic output (temp=0), funnel stage labels, expanded channels, structured bullets, 1hr cache",
@@ -75,7 +76,6 @@
     "[Διόρθωση] Replace remaining blue #0969da with neutrals, fix strategy duration badge, preserve mixConfig on duration change",
     "[Διόρθωση] Remove unused SEASONAL_PERIODS import",
     "[Νέο χαρακτηριστικό] Harmonize blue palette with warm neutrals, seasonal Lucide icons, content AI refactor, seasonal discount strategy, impact preview redesign, strategic docs",
-    "[Νέο χαρακτηριστικό] Mixed strategies, seasonal periods, personalized AI, strategy expiry",
-    "[Νέο χαρακτηριστικό] Gemini AI integration, responsive fixes, dynamic RFM segments"
+    "[Νέο χαρακτηριστικό] Mixed strategies, seasonal periods, personalized AI, strategy expiry"
   ]
 }

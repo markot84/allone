@@ -6,7 +6,6 @@ import {
   Package,
   Euro,
   Target,
-  AlertTriangle,
   ArrowUpRight,
   ArrowDownRight
 } from 'lucide-react';
