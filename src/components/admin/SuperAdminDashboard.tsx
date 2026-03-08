@@ -429,7 +429,7 @@ function BuildInfoPanel() {
               const tagMatch = change.match(/^\[(.+?)\]\s*/);
               const tag = tagMatch ? tagMatch[1] : null;
               const text = tagMatch ? change.slice(tagMatch[0].length) : change;
-              const dot = tag?.includes('Διόρθωση') ? '#cf222e' : tag?.includes('Αναδιαμόρφωση') ? '#8250df' : tag?.includes('Βελτίωση') ? '#0969da' : '#2da44e';
+              const dot = tag?.includes('Διόρθωση') ? '#cf222e' : tag?.includes('Αναδιαμόρφωση') ? '#8250df' : tag?.includes('Βελτίωση') ? '#78716C' : '#2da44e';
               return (
                 <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 13, lineHeight: 1.6, padding: '2px 0' }}>
                   <span style={{ width: 6, height: 6, borderRadius: '50%', background: dot, flexShrink: 0, marginTop: 6 }} />
@@ -755,7 +755,7 @@ function ChangelogTab({ userEmail }: { userEmail: string }) {
                   const tagMatch = change.match(/^\[(.+?)\]\s*/);
                   const tag = tagMatch ? tagMatch[1] : null;
                   const text = tagMatch ? change.slice(tagMatch[0].length) : change;
-                  const dot = tag?.includes('Διόρθωση') ? '#cf222e' : tag?.includes('Αναδιαμόρφωση') ? '#8250df' : tag?.includes('Βελτίωση') ? '#0969da' : '#2da44e';
+                  const dot = tag?.includes('Διόρθωση') ? '#cf222e' : tag?.includes('Αναδιαμόρφωση') ? '#8250df' : tag?.includes('Βελτίωση') ? '#78716C' : '#2da44e';
                   return (
                     <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 13, lineHeight: 1.6, padding: '2px 0' }}>
                       <span style={{ width: 6, height: 6, borderRadius: '50%', background: dot, flexShrink: 0, marginTop: 6 }} />

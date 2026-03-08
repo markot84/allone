@@ -57,7 +57,7 @@ function ToastItem({ toast, onClose }: { toast: ToastItem; onClose: () => void }
   const styles = {
     success: 'bg-[#dafbe1] border-[#1a7f37]/30 text-[#1a7f37]',
     error: 'bg-[#ffebe9] border-[#cf222e]/30 text-[#cf222e]',
-    info: 'bg-[#ddf4ff] border-[#0969da]/30 text-[#0969da]',
+    info: 'bg-[#F3F4F6] border-[#6B7280]/30 text-[#6B7280]',
   };
   const icons = {
     success: <CheckCircle2 size={20} className="flex-shrink-0" />,

@@ -136,7 +136,7 @@ export function ChannelRecommendations({
           }
           const sections = [
             { icon: Users, color: '#8B5CF6', label: 'Πελάτες' },
-            { icon: MessageSquare, color: '#78716C', label: 'Κανάλια' },
+            { icon: MessageSquare, color: '#3B82F6', label: 'Κανάλια' },
             { icon: TrendingUp, color: '#22C55E', label: 'Αποτέλεσμα' },
           ];
           return (

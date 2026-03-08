@@ -400,8 +400,12 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
       : typeof (raw as any)?.toMillis === 'function' ? (raw as any).toMillis()
       : typeof (raw as any)?.seconds === 'number' ? (raw as any).seconds * 1000
       : NaN;
-    if (isNaN(startMs)) return null;
-    const remaining = Math.ceil((startMs + dur * 86400000 - Date.now()) / 86400000);
+    if (isNaN(startMs)) {
+      return { text: `${dur}ημ`, color: '#22C55E' };
+    }
+    const elapsedDays = Math.floor((Date.now() - startMs) / 86400000);
+    if (elapsedDays < 1) return { text: `${dur}ημ`, color: '#22C55E' };
+    const remaining = dur - elapsedDays;
     if (remaining <= 0) return { text: 'Έληξε', color: '#EF4444' };
     if (remaining <= 3) return { text: `${remaining}ημ`, color: '#F59E0B' };
     return { text: `${remaining}ημ`, color: '#22C55E' };

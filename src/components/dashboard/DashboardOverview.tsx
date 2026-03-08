@@ -425,8 +425,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                     <stop offset="95%" stopColor="#9CA3AF" stopOpacity={0}/>
                   </linearGradient>
                   <linearGradient id="attributedGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#0969da" stopOpacity={0.4}/>
-                    <stop offset="95%" stopColor="#0969da" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="#78716C" stopOpacity={0.4}/>
+                    <stop offset="95%" stopColor="#78716C" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" vertical={false} />
@@ -468,7 +468,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 <Area
                   type="monotone"
                   dataKey="attributed"
-                  stroke="#0969da"
+                  stroke="#78716C"
                   strokeWidth={2}
                   fillOpacity={1}
                   fill="url(#attributedGradient)"
@@ -747,7 +747,7 @@ function KPICard({ kpi, index, onClick }: KPICardProps) {
       <Card
         padding="lg"
         hover={!!onClick}
-        className="border-l-4 border-l-transparent hover:border-l-[#0969da] h-full"
+        className="border-l-4 border-l-transparent hover:border-l-[var(--nts-accent)] h-full"
         onClick={onClick}
       >
         <div className="flex items-start justify-between mb-3">
@@ -800,7 +800,7 @@ interface StatBoxProps {
 function StatBox({ label, value, icon, color, onClick, tooltip }: StatBoxProps) {
   return (
     <div 
-      className={`p-4 bg-white rounded-xl border border-[var(--nts-border-gray)] flex flex-col items-center justify-center text-center gap-2 ${onClick ? 'hover:border-[#0969da] hover:shadow-sm transition-all cursor-pointer' : ''}`}
+      className={`p-4 bg-white rounded-xl border border-[var(--nts-border-gray)] flex flex-col items-center justify-center text-center gap-2 ${onClick ? 'hover:border-[var(--nts-accent)] hover:shadow-sm transition-all cursor-pointer' : ''}`}
       onClick={onClick}
     >
       <div

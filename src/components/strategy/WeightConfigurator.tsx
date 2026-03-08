@@ -492,14 +492,18 @@ export function WeightConfigurator() {
   const handleDurationChange = useCallback((newDuration: number | 'ongoing') => {
     setDuration(newDuration);
     if (!user || !selectedScenario) return;
-    saveActiveStrategy({
+    const payload: Parameters<typeof saveActiveStrategy>[0] = {
       scenarioId: selectedScenario,
       weights,
       duration: newDuration,
       approvalStatus: approvalStatus,
       approvedBy: user.email || user.displayName || 'User',
-    }).catch(() => {});
-  }, [user, selectedScenario, weights, approvalStatus, saveActiveStrategy]);
+    };
+    if (selectedScenario === 'mixed' && mixConfig) {
+      payload.mixConfig = mixConfig;
+    }
+    saveActiveStrategy(payload).catch(() => {});
+  }, [user, selectedScenario, weights, approvalStatus, saveActiveStrategy, mixConfig]);
 
   // Confirm strategy change after impact preview
   const confirmStrategyChange = useCallback(() => {
