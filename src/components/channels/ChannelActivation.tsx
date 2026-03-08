@@ -32,7 +32,7 @@ import { formatCurrency, formatNumber, formatPercent, formatMultiplier } from '.
 // Removed mock data imports - using only real data
 import type { Campaign } from '../../types';
 
-const COLORS = ['var(--nts-accent)', '#3B82F6', '#22C55E', '#8B5CF6', '#F59E0B'];
+const COLORS = ['var(--nts-accent)', '#78716C', '#22C55E', '#8B5CF6', '#F59E0B'];
 
 interface ChannelActivationProps {
   onSectionChange?: (section: string) => void;
@@ -767,7 +767,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
               />
               <Legend />
               <Line type="monotone" dataKey="email" stroke="var(--nts-accent)" strokeWidth={2} name="Email" dot={{ r: 4 }} />
-              <Line type="monotone" dataKey="google" stroke="#3B82F6" strokeWidth={2} name="Google" dot={{ r: 4 }} />
+              <Line type="monotone" dataKey="google" stroke="#78716C" strokeWidth={2} name="Google" dot={{ r: 4 }} />
               <Line type="monotone" dataKey="meta" stroke="#8B5CF6" strokeWidth={2} name="Meta" dot={{ r: 4 }} />
               <Line type="monotone" dataKey="remarketing" stroke="#22C55E" strokeWidth={2} name="Remarketing" dot={{ r: 4 }} />
               <Line type="monotone" dataKey="sms" stroke="#F59E0B" strokeWidth={2} name="SMS" dot={{ r: 4 }} />
@@ -970,8 +970,8 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                   }}
                   className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group"
                 >
-                  <div className="p-3 bg-[#3B82F6]/10 rounded-lg group-hover:bg-[#3B82F6]/20 transition-colors">
-                    <FileText size={24} className="text-[#3B82F6]" />
+                  <div className="p-3 bg-[#F5F5F5] rounded-lg group-hover:bg-[#E5E5E5] transition-colors">
+                    <FileText size={24} className="text-[#4A4A4A]" />
                   </div>
                   <div className="flex-1">
                     <h3 className="font-semibold text-[#1A1A1A]">CSV (.csv)</h3>
@@ -1068,8 +1068,8 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                   }}
                   className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group"
                 >
-                  <div className="p-3 bg-[#3B82F6]/10 rounded-lg group-hover:bg-[#3B82F6]/20 transition-colors">
-                    <FileText size={24} className="text-[#3B82F6]" />
+                  <div className="p-3 bg-[#F5F5F5] rounded-lg group-hover:bg-[#E5E5E5] transition-colors">
+                    <FileText size={24} className="text-[#4A4A4A]" />
                   </div>
                   <div className="flex-1">
                     <h3 className="font-semibold text-[#1A1A1A]">CSV (.csv)</h3>

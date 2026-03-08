@@ -34,8 +34,12 @@
   --warning-light: #FEF3C7;
   --danger: #EF4444;
   --danger-light: #FEE2E2;
-  --info: #3B82F6;
-  --info-light: #DBEAFE;
+  --info: #6B7280;
+  --info-light: #F3F4F6;
+
+  /* Chart secondary series (warm neutral instead of cold blue) */
+  --nts-chart-secondary: #78716C;
+  --nts-chart-secondary-light: #E7E5E4;
   
   /* Segment Colors (for RFM clusters) */
   --champions: #22C55E;

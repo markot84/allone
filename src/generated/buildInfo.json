@@ -1,10 +1,14 @@
 {
-  "version": "0.5.0",
-  "previousVersion": "0.4.0",
-  "commitHash": "c8cf493",
+  "version": "0.6.0",
+  "previousVersion": "0.5.0",
+  "commitHash": "bd4d43f",
   "branch": "main",
-  "buildDate": "2026-03-08T09:21:10.726Z",
+  "buildDate": "2026-03-08T10:39:59.602Z",
   "commits": [
+    {
+      "hash": "bd4d43f",
+      "message": "feat: Mixed strategies, seasonal periods, personalized AI, strategy expiry"
+    },
     {
       "hash": "c8cf493",
       "message": "feat: Gemini AI integration, responsive fixes, dynamic RFM segments"
@@ -60,13 +64,10 @@
     {
       "hash": "c927a36",
       "message": "feat: add premium marketing landing and auth entry flow"
-    },
-    {
-      "hash": "6340c28",
-      "message": "ROI from campaign cost, EU number format (18.300,55), multi-file campaign import (Google Ads + Meta), Channel Activation fixes"
     }
   ],
   "changes": [
+    "[Νέο χαρακτηριστικό] Mixed strategies, seasonal periods, personalized AI, strategy expiry",
     "[Νέο χαρακτηριστικό] Gemini AI integration, responsive fixes, dynamic RFM segments",
     "[Νέο χαρακτηριστικό] Changelog UI polish - colored dots, Greek labels, build info panel",
     "[Νέο χαρακτηριστικό] Auto-versioning from git commits",
@@ -75,7 +76,6 @@
     "[Νέο χαρακτηριστικό] Redesign before/after section, add scenario comparison USP point",
     "[Διόρθωση] SearchIcon style prop build error",
     "[Νέο χαρακτηριστικό] Dark sidebar/header, card shadows, strategy duration, commercial strategy rename, mascot AI button",
-    "[Αναδιαμόρφωση] Replace orange accent backgrounds with neutral gray across app. Remove nts-accent-light from all components, update icons to monochrome, add NTS favicon, refine landing page copy.",
-    "[Διόρθωση] Suppress unused var warnings for build"
+    "[Αναδιαμόρφωση] Replace orange accent backgrounds with neutral gray across app. Remove nts-accent-light from all components, update icons to monochrome, add NTS favicon, refine landing page copy."
   ]
 }

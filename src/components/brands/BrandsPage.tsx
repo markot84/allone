@@ -7,7 +7,7 @@ import { BrandCreateForm } from '../auth/BrandCreateForm';
 import { getAssetUrl } from '../../services/storage';
 import type { Brand } from '../../types';
 
-const COLORS = ['var(--nts-accent)', '#3B82F6', '#22C55E', '#8B5CF6', '#F59E0B'];
+const COLORS = ['var(--nts-accent)', '#78716C', '#22C55E', '#8B5CF6', '#F59E0B'];
 
 interface BrandsPageProps {
   onNavigateToDashboard?: () => void;

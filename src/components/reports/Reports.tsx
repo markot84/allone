@@ -346,7 +346,7 @@ export function Reports() {
           <div className="text-center">
             <p className="text-3xl font-bold text-[#1A1A1A] font-mono">{segmentsCount}</p>
             <p className="text-sm text-[#4A4A4A] mt-1">Segments</p>
-            <p className="text-xs text-[#3B82F6]">RFM</p>
+            <p className="text-xs text-[#4A4A4A]">RFM</p>
           </div>
         </Card>
         <Card padding="md">

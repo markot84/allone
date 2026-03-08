@@ -14,7 +14,14 @@ export interface OrganicAction {
   headline_suggestion?: string;
 }
 
-/** Fallback: static suggestions from strategyContentMap when AI fails */
+export interface ContentDirection {
+  channel: string;
+  theme: string;
+  reasoning: string;
+  targetSegments?: string[];
+  suggestedCategories?: string[];
+}
+
 function getFallbackSuggestions(scenarioId: string, scenarioName: string): OrganicAction[] {
   const mapEntry = scenarioId && scenarioId !== 'custom'
     ? strategyContentMap[scenarioId as keyof typeof strategyContentMap]
@@ -38,6 +45,8 @@ function getFallbackSuggestions(scenarioId: string, scenarioName: string): Organ
 
 export interface ContentSuggestionsResult {
   actions: OrganicAction[];
+  directions: ContentDirection[];
+  brief: string;
 }
 
 function parseAIResponse(text: string): ContentSuggestionsResult | null {
@@ -61,8 +70,22 @@ function parseAIResponse(text: string): ContentSuggestionsResult | null {
       }))
       .filter((a) => a.title && a.description);
 
-    if (actions.length === 0) return null;
-    return { actions };
+    const directionsRaw = Array.isArray(parsed.directions) ? parsed.directions : [];
+    const directions: ContentDirection[] = directionsRaw
+      .filter((d): d is Record<string, unknown> => d && typeof d === 'object')
+      .map((d) => ({
+        channel: String(d.channel ?? ''),
+        theme: String(d.theme ?? ''),
+        reasoning: String(d.reasoning ?? ''),
+        targetSegments: Array.isArray(d.targetSegments) ? d.targetSegments.map(String) : undefined,
+        suggestedCategories: Array.isArray(d.suggestedCategories) ? d.suggestedCategories.map(String) : undefined,
+      }))
+      .filter((d) => d.channel && d.theme);
+
+    const brief = typeof parsed.brief === 'string' ? parsed.brief : '';
+
+    if (actions.length === 0 && directions.length === 0) return null;
+    return { actions, directions, brief };
   } catch {
     return null;
   }
@@ -72,12 +95,15 @@ export interface GenerateContentSuggestionsParams {
   scenarioId: string;
   scenarioName: string;
   weights: Record<string, number> | null;
+  brandName?: string;
+  topCategories?: string[];
+  segmentNames?: string[];
 }
 
 export async function generateContentSuggestions(
   params: GenerateContentSuggestionsParams
 ): Promise<ContentSuggestionsResult | null> {
-  const { scenarioId, scenarioName, weights } = params;
+  const { scenarioId, scenarioName, weights, brandName, topCategories, segmentNames } = params;
 
   const mapEntry = scenarioId && scenarioId !== 'custom'
     ? strategyContentMap[scenarioId as keyof typeof strategyContentMap]
@@ -94,6 +120,9 @@ export async function generateContentSuggestions(
     ctaStyle: mapEntry?.cta_style,
     avoid: mapEntry?.avoid,
     sampleHeadlines: mapEntry?.sample_headlines,
+    brandName,
+    topCategories,
+    segmentNames,
   };
 
   try {
@@ -111,13 +140,13 @@ export async function generateContentSuggestions(
     const text = result.response.text();
 
     if (!text) {
-      return { actions: getFallbackSuggestions(scenarioId, scenarioName) };
+      return { actions: getFallbackSuggestions(scenarioId, scenarioName), directions: [], brief: '' };
     }
     const parsed = parseAIResponse(text);
-    if (parsed?.actions?.length) return parsed;
-    return { actions: getFallbackSuggestions(scenarioId, scenarioName) };
+    if (parsed && (parsed.actions.length > 0 || parsed.directions.length > 0)) return parsed;
+    return { actions: getFallbackSuggestions(scenarioId, scenarioName), directions: [], brief: '' };
   } catch (error) {
     console.error('[aiContentSuggestions]', error);
-    return { actions: getFallbackSuggestions(scenarioId, scenarioName) };
+    return { actions: getFallbackSuggestions(scenarioId, scenarioName), directions: [], brief: '' };
   }
 }

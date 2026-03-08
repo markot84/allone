@@ -168,7 +168,7 @@ export function Help() {
             {currentArticle.faq && currentArticle.faq.length > 0 && (
               <div className="mt-6">
                 <h4 className="font-semibold text-[#1A1A1A] mb-3 flex items-center gap-2">
-                  <HelpCircle size={18} className="text-[#3B82F6]" />
+                  <HelpCircle size={18} className="text-[#4A4A4A]" />
                   Συχνές Ερωτήσεις:
                 </h4>
                 <div className="space-y-3">
@@ -426,8 +426,8 @@ export function Help() {
 
               <div className="p-4 border border-[#E5E5E5] rounded-xl">
                 <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 bg-[#3B82F6]/20 rounded-lg flex items-center justify-center">
-                    <Mail size={20} className="text-[#3B82F6]" />
+                  <div className="w-10 h-10 bg-[#F5F5F5] rounded-lg flex items-center justify-center">
+                    <Mail size={20} className="text-[#4A4A4A]" />
                   </div>
                   <div>
                     <h4 className="font-medium text-[#1A1A1A]">Email Support</h4>

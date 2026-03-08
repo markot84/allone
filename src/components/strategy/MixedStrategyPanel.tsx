@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Euro, Package, Rocket, TrendingUp, Check, ArrowUp, ArrowDown } from 'lucide-react';
+import { Euro, Package, Rocket, TrendingUp, Check, ArrowUp, ArrowDown, X } from 'lucide-react';
 import { scenarios } from '../../data';
 import { Button } from '../common';
 
@@ -13,6 +13,7 @@ export interface MixConfig {
 
 interface MixedStrategyPanelProps {
   onApply: (blendedWeights: Record<string, number>, config: MixConfig) => void;
+  onClose?: () => void;
   initialConfig?: MixConfig | null;
 }
 
@@ -58,7 +59,7 @@ export function computeBlendedWeights(
   return blended;
 }
 
-export function MixedStrategyPanel({ onApply, initialConfig }: MixedStrategyPanelProps) {
+export function MixedStrategyPanel({ onApply, onClose, initialConfig }: MixedStrategyPanelProps) {
   const [scenarioA, setScenarioA] = useState<string | null>(initialConfig?.scenarioA ?? null);
   const [scenarioB, setScenarioB] = useState<string | null>(initialConfig?.scenarioB ?? null);
   const [percentA, setPercentA] = useState(initialConfig?.percentA ?? 70);
@@ -95,7 +96,7 @@ export function MixedStrategyPanel({ onApply, initialConfig }: MixedStrategyPane
 
   const weightKeys = ['profit', 'stock', 'strategic', 'revenue', 'fit'];
   const weightColors: Record<string, string> = {
-    profit: '#22C55E', stock: '#3B82F6', strategic: '#8B5CF6',
+    profit: '#22C55E', stock: '#78716C', strategic: '#8B5CF6',
     revenue: '#F59E0B', fit: '#F97316',
   };
 
@@ -106,8 +107,18 @@ export function MixedStrategyPanel({ onApply, initialConfig }: MixedStrategyPane
       exit={{ opacity: 0, height: 0 }}
       className="overflow-hidden"
     >
-      <div className="p-5 bg-white rounded-xl border-2 border-[#E5E5E5]"
+      <div className="p-5 bg-white rounded-xl border-2 border-[#E5E5E5] relative"
         style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="absolute top-3 right-3 p-1.5 rounded-lg hover:bg-[#F5F5F5] text-[#9CA3AF] hover:text-[#4A4A4A] transition-colors"
+            title="Κλείσιμο"
+          >
+            <X size={18} />
+          </button>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-4 items-start">
           {/* Strategy A */}

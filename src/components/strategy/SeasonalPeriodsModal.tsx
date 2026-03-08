@@ -1,7 +1,29 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, type ComponentType } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Plus, Trash2, Calendar, Zap } from 'lucide-react';
+import { X, Plus, Trash2, Calendar, Zap, Tag, Gift, Percent, Sun, Thermometer, BookOpen, Flower2, Heart, HeartHandshake, Pin, type LucideProps } from 'lucide-react';
 import { SEASONAL_PERIODS, type SeasonalPeriod, getActiveSeasons } from '../../data/seasonalPeriods';
+
+const ICON_MAP: Record<string, ComponentType<LucideProps>> = {
+  tag: Tag,
+  gift: Gift,
+  percent: Percent,
+  sun: Sun,
+  thermometer: Thermometer,
+  'book-open': BookOpen,
+  'flower-2': Flower2,
+  heart: Heart,
+  'heart-handshake': HeartHandshake,
+  pin: Pin,
+};
+
+function SeasonalIcon({ name }: { name: string }) {
+  const Icon = ICON_MAP[name] ?? Calendar;
+  return (
+    <div className="w-8 h-8 rounded-lg bg-[#F5F5F5] flex items-center justify-center flex-shrink-0">
+      <Icon size={16} className="text-[var(--nts-accent)]" />
+    </div>
+  );
+}
 import { scenarios } from '../../data';
 import { Button } from '../common';
 
@@ -62,7 +84,7 @@ export function SeasonalPeriodsModal({
     const period: SeasonalPeriod = {
       id: `custom_${Date.now()}`,
       name: newName.trim(),
-      icon: '📌',
+      icon: 'pin',
       dateRange: { startMonth: newStartMonth, startDay: newStartDay, endMonth: newEndMonth, endDay: newEndDay },
       suggestedMix: { scenarioA: newScenarioA, scenarioB: newScenarioB, percentA: newPercentA },
       description: newDescription.trim() || `Custom περίοδος: ${newName.trim()}`,
@@ -116,7 +138,7 @@ export function SeasonalPeriodsModal({
                   }`}
                 >
                   <div className="flex items-start gap-3">
-                    <span className="text-lg">{period.icon}</span>
+                    <SeasonalIcon name={period.icon} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <h4 className="text-sm font-semibold text-[#1A1A1A]">{period.name}</h4>

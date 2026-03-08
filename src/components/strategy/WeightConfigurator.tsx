@@ -6,7 +6,6 @@ import {
   Download,
   Sparkles,
   AlertCircle,
-  Eye,
   Euro,
   Package,
   Target,
@@ -21,14 +20,14 @@ import {
   Clock,
   Infinity,
   Bookmark,
-  FolderOpen,
-  Calendar
+  FolderOpen
 } from 'lucide-react';
 import { Card, CardHeader, Button, Slider, Badge, Spinner } from '../common';
 import { ScenarioSelector } from './ScenarioSelector';
 import { ChannelRecommendations } from './ChannelRecommendations';
 import { ApprovalWorkflow } from './ApprovalWorkflow';
-import { StrategyImpactPreview } from './StrategyImpactPreview';
+import { StrategyImpactSummary, StrategyImpactModal } from './StrategyImpactPreview';
+import { SeasonalDiscountPanel, type SeasonalDiscountConfig } from './SeasonalDiscountPanel';
 import { CustomToolsCard } from './CustomToolsCard';
 import { CompareScenariosModal } from './CompareScenariosModal';
 import { MixedStrategyPanel, type MixConfig, computeBlendedWeights } from './MixedStrategyPanel';
@@ -241,13 +240,16 @@ export function WeightConfigurator() {
     }
   }, [selectedScenario, rankedSegments]);
 
-  const [showImpactPreview, setShowImpactPreview] = useState(false);
   const [pendingScenarioChange, setPendingScenarioChange] = useState<string | null>(null);
-  const [previewTargetScenario, setPreviewTargetScenario] = useState<string | null>(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
   const [showCompareModal, setShowCompareModal] = useState(false);
   const [showFeedFormatModal, setShowFeedFormatModal] = useState(false);
   const [showSeasonalModal, setShowSeasonalModal] = useState(false);
-  const [mixPanelOpen, setMixPanelOpen] = useState(true);
+  const [mixPanelOpen, setMixPanelOpen] = useState(() => {
+    return !((activeStrategy as any)?.mixConfig && activeStrategy?.scenarioId === 'mixed');
+  });
+  const [seasonalDiscountConfig, setSeasonalDiscountConfig] = useState<SeasonalDiscountConfig | null>(null);
+  const [seasonalPanelOpen, setSeasonalPanelOpen] = useState(false);
   const [showPresetSave, setShowPresetSave] = useState(false);
   const [presetName, setPresetName] = useState('');
   const [presets, setPresets] = useState(getPresets());
@@ -269,7 +271,7 @@ export function WeightConfigurator() {
 
   const getWeightsForScenario = useCallback((scenarioId: string | null) => {
     if (!scenarioId || scenarioId === 'custom') return weights;
-    if (scenarioId === 'mixed') return weights;
+    if (scenarioId === 'mixed' || scenarioId === 'seasonal_discount') return weights;
     const scenario = scenarios.find((s) => s.id === scenarioId);
     return scenario?.weights ?? defaultWeights;
   }, [weights]);
@@ -288,10 +290,13 @@ export function WeightConfigurator() {
   const applyScenarioChange = useCallback((scenarioId: string) => {
     setSelectedScenario(scenarioId);
 
-    if (scenarioId === 'mixed') {
-      setShowImpactPreview(false);
+    if (scenarioId === 'mixed' || scenarioId === 'seasonal_discount') {
       setPendingScenarioChange(null);
-      setPreviewTargetScenario(null);
+      setShowDetailModal(false);
+      if (scenarioId === 'seasonal_discount') {
+        const scenario = scenarios.find((s) => s.id === scenarioId);
+        setDuration(scenario?.duration ?? 30);
+      }
       return;
     }
 
@@ -302,9 +307,8 @@ export function WeightConfigurator() {
     setWeights(newWeights);
     setDuration(newDuration);
     setApprovalStatus('draft');
-    setShowImpactPreview(false);
     setPendingScenarioChange(null);
-    setPreviewTargetScenario(null);
+    setShowDetailModal(false);
     
     if (!user) {
       toast.error('Πρέπει να είσαι συνδεδεμένος');
@@ -383,6 +387,22 @@ export function WeightConfigurator() {
     }).catch(() => {});
   }, [user, saveActiveStrategy, toast, duration]);
 
+  const handleSeasonalDiscountApply = useCallback((config: SeasonalDiscountConfig) => {
+    setSeasonalDiscountConfig(config);
+    setSeasonalPanelOpen(false);
+    toast.success(`Εκπτωτική περίοδος "${config.periodName}" (-${config.discountPercent}%) εφαρμόστηκε`);
+
+    if (!user) return;
+    saveActiveStrategy({
+      scenarioId: 'seasonal_discount',
+      weights,
+      duration,
+      approvalStatus: 'draft',
+      approvedBy: user.email || user.displayName || 'User',
+      seasonalDiscount: config,
+    } as any).catch(() => {});
+  }, [user, saveActiveStrategy, toast, weights, duration]);
+
   const handlePresetSave = useCallback(() => {
     const name = presetName.trim() || `Preset ${new Date().toLocaleDateString('el-GR')}`;
     savePreset({
@@ -445,17 +465,28 @@ export function WeightConfigurator() {
   // Handle scenario change with impact preview — show preview first, apply only on confirm
   const handleScenarioChange = useCallback((scenarioId: string) => {
     if (scenarioId === selectedScenario) {
+      if (scenarioId === 'mixed') setMixPanelOpen(p => !p);
+      if (scenarioId === 'seasonal_discount') setSeasonalPanelOpen(p => !p);
       return;
     }
 
     if (scenarioId === 'mixed') {
       setMixPanelOpen(true);
+      setSeasonalPanelOpen(false);
       applyScenarioChange('mixed');
       return;
     }
+
+    if (scenarioId === 'seasonal_discount') {
+      setSeasonalPanelOpen(true);
+      setMixPanelOpen(false);
+      applyScenarioChange('seasonal_discount');
+      return;
+    }
     
+    setMixPanelOpen(false);
+    setSeasonalPanelOpen(false);
     setPendingScenarioChange(scenarioId);
-    setShowImpactPreview(true);
   }, [selectedScenario, applyScenarioChange]);
 
   const handleDurationChange = useCallback((newDuration: number | 'ongoing') => {
@@ -474,10 +505,10 @@ export function WeightConfigurator() {
   const confirmStrategyChange = useCallback(() => {
     if (pendingScenarioChange) {
       applyScenarioChange(pendingScenarioChange);
-    } else if (previewTargetScenario) {
-      applyScenarioChange(previewTargetScenario);
+      setPendingScenarioChange(null);
+      setShowDetailModal(false);
     }
-  }, [pendingScenarioChange, previewTargetScenario, applyScenarioChange]);
+  }, [pendingScenarioChange, applyScenarioChange]);
 
   const previewConfig = getPreviewConfig(selectedScenario || 'profit_max', weights);
 
@@ -768,27 +799,44 @@ export function WeightConfigurator() {
       <ScenarioSelector
         selectedScenario={selectedScenario}
         onScenarioChange={handleScenarioChange}
-        activeDuration={duration}
       />
+
+      {/* Inline Impact Summary — appears when selecting a new scenario */}
+      <AnimatePresence>
+        {pendingScenarioChange && (
+          <StrategyImpactSummary
+            currentWeights={getCurrentWeights()}
+            newWeights={getWeightsForScenario(pendingScenarioChange)}
+            currentScenarioId={selectedScenario || undefined}
+            newScenarioId={pendingScenarioChange}
+            onConfirm={confirmStrategyChange}
+            onCancel={() => setPendingScenarioChange(null)}
+            onDetails={() => setShowDetailModal(true)}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Mixed Strategy Panel */}
       <AnimatePresence>
         {selectedScenario === 'mixed' && mixPanelOpen && (
           <MixedStrategyPanel
             onApply={handleMixedApply}
+            onClose={() => setMixPanelOpen(false)}
             initialConfig={mixConfig}
           />
         )}
       </AnimatePresence>
-      {selectedScenario === 'mixed' && !mixPanelOpen && (
-        <button
-          onClick={() => setMixPanelOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 text-xs font-medium text-[var(--nts-accent)] border border-dashed border-[var(--nts-accent)]/30 rounded-lg hover:bg-[var(--nts-accent)]/5 transition-colors"
-        >
-          Επεξεργασία μικτής στρατηγικής
-        </button>
-      )}
 
+      {/* Seasonal/Discount Panel */}
+      <AnimatePresence>
+        {selectedScenario === 'seasonal_discount' && seasonalPanelOpen && (
+          <SeasonalDiscountPanel
+            onApply={handleSeasonalDiscountApply}
+            onClose={() => setSeasonalPanelOpen(false)}
+            initialConfig={seasonalDiscountConfig}
+          />
+        )}
+      </AnimatePresence>
       {/* Duration + Compare — single row */}
       {selectedScenario && (
         <Card padding="md">
@@ -907,13 +955,6 @@ export function WeightConfigurator() {
               )}
 
               <button
-                onClick={() => setShowSeasonalModal(true)}
-                className="group flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-[var(--nts-medium-gray)] hover:text-[var(--nts-accent)] border border-dashed border-[var(--nts-border-gray)] hover:border-[var(--nts-accent)] transition-all duration-200"
-              >
-                <Calendar size={13} />
-                <span>Εποχιακές</span>
-              </button>
-              <button
                 onClick={() => setShowCompareModal(true)}
                 className="group flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-[var(--nts-medium-gray)] hover:text-[var(--nts-accent)] border border-dashed border-[var(--nts-border-gray)] hover:border-[var(--nts-accent)] transition-all duration-200"
               >
@@ -992,27 +1033,7 @@ export function WeightConfigurator() {
 
           {/* Actions */}
           <div className="mt-6 pt-6 border-t border-[var(--nts-border-gray)] space-y-2">
-            <Button
-              variant="secondary"
-              className="w-full"
-              icon={<Eye size={16} />}
-              disabled={!selectedScenario}
-              onClick={() => {
-                if (!selectedScenario) return;
-                // Show preview comparing current strategy with first alternative
-                const otherScenarios = scenarios.filter(s => s.id !== selectedScenario && s.id !== 'custom');
-                if (otherScenarios.length > 0) {
-                  setPreviewTargetScenario(otherScenarios[0].id);
-                  setShowImpactPreview(true);
-                } else {
-                  // No alternatives, just show current state
-                  setPreviewTargetScenario(null);
-                  setShowImpactPreview(true);
-                }
-              }}
-            >
-              Preview Impact
-            </Button>
+            {/* Preview Impact removed — inline summary replaces it */}
             <Button
               variant="secondary"
               className="w-full"
@@ -1254,34 +1275,20 @@ export function WeightConfigurator() {
         )}
       </Card>
 
-      {/* Strategy Impact Preview Modal */}
-      <StrategyImpactPreview
-        isOpen={showImpactPreview}
-        onClose={() => {
-          setShowImpactPreview(false);
-          setPendingScenarioChange(null);
-          setPreviewTargetScenario(null);
-        }}
-        onConfirm={confirmStrategyChange}
-        currentWeights={getCurrentWeights()}
-        newWeights={
-          pendingScenarioChange 
-            ? getWeightsForScenario(pendingScenarioChange) 
-            : previewTargetScenario 
-              ? getWeightsForScenario(previewTargetScenario)
-              : selectedScenario ? getWeightsForScenario(selectedScenario) : defaultWeights
-        }
-        currentScenarioId={selectedScenario || undefined}
-        newScenarioId={pendingScenarioChange || previewTargetScenario || selectedScenario || undefined}
-        currentDuration={duration}
-        newDuration={
-          pendingScenarioChange
-            ? scenarios.find(s => s.id === pendingScenarioChange)?.duration ?? 'ongoing'
-            : previewTargetScenario
-              ? scenarios.find(s => s.id === previewTargetScenario)?.duration ?? 'ongoing'
-              : duration
-        }
-      />
+      {/* Strategy Impact Detail Modal */}
+      {pendingScenarioChange && (
+        <StrategyImpactModal
+          isOpen={showDetailModal}
+          onClose={() => setShowDetailModal(false)}
+          onConfirm={confirmStrategyChange}
+          currentWeights={getCurrentWeights()}
+          newWeights={getWeightsForScenario(pendingScenarioChange)}
+          currentScenarioId={selectedScenario || undefined}
+          newScenarioId={pendingScenarioChange}
+          currentDuration={duration}
+          newDuration={scenarios.find(s => s.id === pendingScenarioChange)?.duration ?? 'ongoing'}
+        />
+      )}
 
       {/* Compare Scenarios Modal */}
       <CompareScenariosModal
@@ -1342,8 +1349,8 @@ export function WeightConfigurator() {
                   onClick={() => generateProductFeed('csv')}
                   className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group"
                 >
-                  <div className="p-3 bg-[#3B82F6]/10 rounded-lg group-hover:bg-[#3B82F6]/20 transition-colors">
-                    <FileText size={24} className="text-[#3B82F6]" />
+                  <div className="p-3 bg-[#F5F5F5] rounded-lg group-hover:bg-[#E5E5E5] transition-colors">
+                    <FileText size={24} className="text-[#4A4A4A]" />
                   </div>
                   <div className="flex-1">
                     <h3 className="font-semibold text-[#1A1A1A]">CSV (.csv)</h3>

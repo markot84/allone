@@ -235,8 +235,8 @@ export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts, b
                 onClick={exportToCSV}
                 className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group"
               >
-                <div className="p-3 bg-[#3B82F6]/10 rounded-lg group-hover:bg-[#3B82F6]/20 transition-colors">
-                  <FileText size={24} className="text-[#3B82F6]" />
+                <div className="p-3 bg-[#F5F5F5] rounded-lg group-hover:bg-[#E5E5E5] transition-colors">
+                  <FileText size={24} className="text-[#4A4A4A]" />
                 </div>
                 <div className="flex-1">
                   <h3 className="font-semibold text-[#1A1A1A]">Export to CSV</h3>

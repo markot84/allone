@@ -368,7 +368,7 @@ export function CompareScenariosModal({
                 <span>Μοναδικά {nameA}: <span className="font-semibold">{onlyInA.length}</span></span>
               </Tooltip>
             </div>
-            <div className="p-3 bg-[#DBEAFE] rounded-lg text-xs text-[#4A4A4A]">
+            <div className="p-3 bg-[#F5F5F5] rounded-lg text-xs text-[#4A4A4A]">
               <Tooltip content={`Προϊόντα στο Top ${sampleSize} του ${nameB} που δεν εμφανίζονται στο Top ${sampleSize} του ${nameA}.`} size={12}>
                 <span>Μοναδικά {nameB}: <span className="font-semibold">{onlyInB.length}</span></span>
               </Tooltip>

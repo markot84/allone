@@ -42,6 +42,14 @@ export const scenarios: Scenario[] = [
     duration: 'ongoing' as const
   },
   { 
+    id: 'seasonal_discount', 
+    name: 'Εποχιακή / Εκπτωτική', 
+    icon: '',
+    description: 'Εποχιακές προσφορές & εκπτώσεις σε προϊόντα',
+    weights: null,
+    duration: 30
+  },
+  { 
     id: 'custom', 
     name: 'Custom', 
     icon: '',
@@ -72,7 +80,7 @@ export const weightFactors: Omit<WeightFactor, 'value'>[] = [
     name: 'Inventory Optimization', 
     icon: '',
     tooltip: 'Stock levels, age, excess inventory',
-    color: '#3B82F6'
+    color: '#78716C'
   },
   { 
     id: 'strategic', 

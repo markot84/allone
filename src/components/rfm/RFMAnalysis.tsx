@@ -211,8 +211,8 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
         </Card>
         <Card padding="md" hover>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-[#DBEAFE] rounded-lg flex items-center justify-center">
-              <Zap size={20} className="text-[#3B82F6]" />
+            <div className="w-10 h-10 bg-[#F5F5F5] rounded-lg flex items-center justify-center">
+              <Zap size={20} className="text-[#4A4A4A]" />
             </div>
             <div>
               <p className="text-sm text-[#4A4A4A]"><InfoTooltip content="Μέσος όρος RFM score (1–5 ανά R, F, M).">Μέσος Segment Score</InfoTooltip></p>

@@ -33,8 +33,8 @@ const statusConfig = {
   implementing: {
     label: 'Σε Εφαρμογή',
     icon: <Rocket size={14} className="text-[var(--nts-medium-gray)]" />,
-    color: '#3B82F6',
-    bgColor: '#DBEAFE'
+    color: '#6B7280',
+    bgColor: '#F3F4F6'
   }
 };
 

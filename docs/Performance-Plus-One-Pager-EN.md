@@ -96,6 +96,67 @@ Built by notthesame.ai — a team with deep expertise in commercial strategy, di
 
 ---
 
+---
+
+### Latest Capabilities (v0.6.0 — March 2026)
+
+| Capability | Description |
+|---|---|
+| **Mixed Strategies** | Combine two commercial strategies with custom percentages (e.g., 70% Profit Maximization + 30% Stock Clearance) for nuanced commercial policy |
+| **Seasonal Intelligence** | Predefined Greek market periods (Black Friday, Christmas, Easter, etc.) with auto-suggested strategy mixes. Custom periods supported. Proactive banner alerts when a season approaches |
+| **Strategy Presets** | Save and load complete strategy configurations (scenario, mix, duration) for quick deployment across periods |
+| **Personalized AI** | AI recommendations reference the actual brand name, product categories, and B2B/B2C context — not generic advice |
+| **Segment-Strategy Matching** | Intelligent scoring ranks customer segments by relevance to the selected strategy. Ideal/good/partial fit levels with visual highlighting |
+| **Structured AI Rationale** | Three-section format (Customers / Channels / Expected Result) with segment cross-references for complete picture |
+| **Strategy Expiry Management** | Duration tracking with nav badge, countdown, and proactive warning 3 days before expiry |
+
+### Buyer Personas & Go-to-Market
+
+Performance+ serves three distinct buyer personas with different buying motions:
+
+**1. Marketing Agency (Primary Buyer)**
+- Manages 10-50 brands simultaneously — multi-tenant architecture maximizes LTV
+- Needs a framework to justify decisions to clients — Performance+ becomes their competitive advantage
+- Selling to 1 agency = reaching 20+ brands
+- Positioning: "The system behind your agency's strategy"
+
+**2. Marketing Manager / Commercial Director (Internal Champion)**
+- Daily user who drives adoption within the organization
+- Doesn't hold budget authority but can influence the CEO
+- Needs free tier or trial to prove value before requesting budget
+- Positioning: "Replace spreadsheets and guesswork with data-driven commercial policy"
+
+**3. Growth Consultant (Force Multiplier)**
+- Works with 3-10 companies simultaneously
+- Needs a framework, not just advice — Performance+ becomes their operating system
+- Positioning: "Structured commercial intelligence for every client engagement"
+
+The business owner/CEO is the **beneficiary** but rarely the direct buyer. They trust their agency, marketing manager, or consultant to evaluate and recommend tools.
+
+### Competitive Landscape
+
+**Direct competitors (none cover the full cycle):**
+
+| Player | What They Do | Gap vs Performance+ |
+|---|---|---|
+| Triple Whale | E-commerce analytics, attribution | Analytics only — no strategy formulation |
+| Northbeam | Marketing attribution, mix modeling | Attribution only — no product intelligence |
+| Peel Insights | RFM, cohort analytics | Data analysis only — no activation layer |
+| Glew.io | E-commerce BI | Dashboards only — doesn't propose strategy |
+
+**Adjacent competitors (partial overlap):**
+
+| Player | Overlap |
+|---|---|
+| HubSpot | CRM + marketing automation — no commercial strategy layer |
+| Klaviyo | Email/SMS segmentation — channel-specific, not cross-channel |
+| Shopify Apps (Segments.ai, RetainIQ) | RFM segmentation — Shopify-only, no strategy |
+| Salesforce Marketing Cloud | Enterprise-grade — too complex and expensive for €2-50M segment |
+
+**Real competitor: Excel + Agency.** 80% of target companies run strategy in spreadsheets and execute through agencies. Performance+ replaces this loop with a shared, intelligent system.
+
+---
+
 **Contact:** hello@notthesame.ai
 **Web:** notthesame.gr
 **Product:** Performance+

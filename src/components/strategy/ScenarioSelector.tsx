@@ -1,17 +1,15 @@
 import { motion } from 'framer-motion';
-import { Check, Clock, Euro, Infinity, Layers, Package, Rocket, Settings, TrendingUp } from 'lucide-react';
+import { Check, Clock, Euro, Infinity, Layers, Package, Percent, Rocket, Settings, TrendingUp } from 'lucide-react';
 import { scenarios } from '../../data';
 
 interface ScenarioSelectorProps {
   selectedScenario: string | null;
   onScenarioChange: (scenarioId: string) => void;
-  activeDuration?: number | 'ongoing';
 }
 
 export function ScenarioSelector({
   selectedScenario,
   onScenarioChange,
-  activeDuration
 }: ScenarioSelectorProps) {
   const scenarioIcon = (id: string) => {
     const cls = 'text-[var(--nts-medium-gray)]';
@@ -26,13 +24,15 @@ export function ScenarioSelector({
         return <TrendingUp size={18} className={cls} />;
       case 'mixed':
         return <Layers size={18} className={cls} />;
+      case 'seasonal_discount':
+        return <Percent size={18} className={cls} />;
       default:
         return <Settings size={18} className={cls} />;
     }
   };
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6 gap-4 max-w-full overflow-x-hidden">
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3 max-w-full overflow-x-hidden">
       {scenarios.map((scenario, index) => {
         const isSelected = selectedScenario !== null && selectedScenario === scenario.id;
         
@@ -82,23 +82,17 @@ export function ScenarioSelector({
               <p className="text-xs text-[#4A4A4A] mt-1">
                 {scenario.description}
               </p>
-              {(() => {
-                const displayDuration = isSelected && activeDuration !== undefined
-                  ? activeDuration
-                  : scenario.duration;
-                if (displayDuration === undefined) return null;
-                return (
-                  <div className="flex items-center gap-1 mt-2">
-                    {displayDuration === 'ongoing'
-                      ? <Infinity size={12} className="text-[#9CA3AF]" />
-                      : <Clock size={12} className="text-[#9CA3AF]" />
-                    }
-                    <span className="text-[10px] text-[#9CA3AF]">
-                      {displayDuration === 'ongoing' ? 'Ongoing' : `${displayDuration} ημέρες`}
-                    </span>
-                  </div>
-                );
-              })()}
+              {scenario.duration !== undefined && (
+                <div className="flex items-center gap-1 mt-2">
+                  {scenario.duration === 'ongoing'
+                    ? <Infinity size={12} className="text-[#9CA3AF]" />
+                    : <Clock size={12} className="text-[#9CA3AF]" />
+                  }
+                  <span className="text-[10px] text-[#9CA3AF]">
+                    {scenario.duration === 'ongoing' ? 'Ongoing' : `${scenario.duration} ημέρες`}
+                  </span>
+                </div>
+              )}
               
               {scenario.weights && (
                 <div className="mt-auto pt-3 border-t border-[#E5E5E5]">
@@ -114,7 +108,7 @@ export function ScenarioSelector({
                             width: `${value}%`,
                             backgroundColor: 
                               key === 'profit' ? '#22C55E' :
-                              key === 'stock' ? '#3B82F6' :
+                              key === 'stock' ? '#78716C' :
                               key === 'strategic' ? '#8B5CF6' :
                               key === 'revenue' ? '#F59E0B' :
                               'var(--nts-accent)'

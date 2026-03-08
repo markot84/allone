@@ -263,7 +263,7 @@ export function ProductCharts({ isOpen, onClose, products }: ProductChartsProps)
           {/* Stock Status Pie */}
           <Card padding="lg">
             <div className="flex items-center gap-2 mb-4">
-              <Package size={18} className="text-[#3B82F6]" />
+              <Package size={18} className="text-[#78716C]" />
               <h3 className="font-semibold text-[#1A1A1A]">Stock Status</h3>
             </div>
             {stockStatus.some((s: { value: number }) => s.value > 0) ? (
@@ -337,7 +337,7 @@ export function ProductCharts({ isOpen, onClose, products }: ProductChartsProps)
                     <Tooltip />
                     <Legend />
                     <Bar dataKey="margin" fill="#22C55E" name="Margin %" />
-                    <Bar dataKey="price" fill="#3B82F6" name="Price (€)" />
+                    <Bar dataKey="price" fill="#78716C" name="Price (€)" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -364,7 +364,7 @@ export function ProductCharts({ isOpen, onClose, products }: ProductChartsProps)
                     <YAxis yAxisId="right" orientation="right" />
                     <Tooltip />
                     <Legend />
-                    <Line yAxisId="left" type="monotone" dataKey="level" stroke="#3B82F6" name="Stock Level" />
+                    <Line yAxisId="left" type="monotone" dataKey="level" stroke="#78716C" name="Stock Level" />
                     <Line yAxisId="right" type="monotone" dataKey="margin" stroke="#22C55E" name="Margin %" />
                   </LineChart>
                 </ResponsiveContainer>

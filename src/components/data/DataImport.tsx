@@ -353,7 +353,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
       case 'failed':
         return <XCircle size={16} className="text-[#cf222e]" />;
       case 'processing':
-        return <Clock size={16} className="text-[#0969da]" />;
+        return <Clock size={16} className="text-[#4A4A4A]" />;
       default:
         return <Clock size={16} className="text-[#57606a]" />;
     }
@@ -402,19 +402,19 @@ export function DataImport({ initialType }: DataImportProps = {}) {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
-            className="bg-blue-50 border border-blue-200 rounded-lg p-4"
+            className="bg-[#F5F5F5] border border-[#E5E5E5] rounded-lg p-4"
           >
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
                   <Spinner size="sm" />
-                  <span className="text-sm font-semibold text-blue-700">
+                  <span className="text-sm font-semibold text-[#4A4A4A]">
                     {importProgress.fileProgress
                       ? `Εισαγωγή ${importProgress.fileProgress.rowsProcessed.toLocaleString()} / ${importProgress.fileProgress.totalRows.toLocaleString()} εγγραφών`
                       : `Εισαγωγή αρχείου ${importProgress.current} από ${importProgress.total}`}
                   </span>
                 </div>
-                <span className="text-sm font-mono font-semibold text-blue-700 flex-shrink-0">
+                <span className="text-sm font-mono font-semibold text-[#4A4A4A] flex-shrink-0">
                   {importProgress.fileProgress
                     ? `${Math.round((importProgress.fileProgress.rowsProcessed / importProgress.fileProgress.totalRows) * 100)}%`
                     : `${Math.round(((importProgress.current || 0) / importProgress.total) * 100)}%`}
@@ -424,7 +424,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
                 value={importProgress.fileProgress?.rowsProcessed ?? importProgress.current ?? 0}
                 max={importProgress.fileProgress?.totalRows ?? importProgress.total ?? 1}
                 size="lg"
-                color="#3B82F6"
+                color="#4A4A4A"
               />
               <p className="text-xs text-gray-600 truncate" title={importProgress.fileName}>
                 {importProgress.fileName}
@@ -669,7 +669,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
                       const event = new CustomEvent('navigate-to-help');
                       window.dispatchEvent(event);
                     }}
-                    className="inline-flex items-center gap-1 text-xs text-[#3B82F6] hover:text-[#2563EB] transition-colors group"
+                    className="inline-flex items-center gap-1 text-xs text-[#F97316] hover:text-[#EA580C] transition-colors group"
                     title="Δείτε όλες τις πιθανές εκδοχές ονομάτων στηλών στο Help"
                   >
                     <HelpCircle size={14} />

@@ -96,6 +96,67 @@ SaaS συνδρομή (μηνιαία/ετήσια) με κλιμακωτή τι
 
 ---
 
+---
+
+### Τελευταίες Δυνατότητες (v0.6.0 — Μάρτιος 2026)
+
+| Δυνατότητα | Περιγραφή |
+|---|---|
+| **Μικτές Στρατηγικές** | Συνδυασμός δύο εμπορικών στρατηγικών με custom ποσοστά (π.χ. 70% Profit Maximization + 30% Stock Clearance) για πιο εξειδικευμένη εμπορική πολιτική |
+| **Εποχιακή Νοημοσύνη** | Προκαθορισμένες εποχιακές περίοδοι ελληνικής αγοράς (Black Friday, Χριστούγεννα, Πάσχα κ.ά.) με αυτόματα προτεινόμενα strategy mixes. Υποστήριξη custom περιόδων. Proactive ειδοποιήσεις πριν κάθε περίοδο |
+| **Strategy Presets** | Αποθήκευση και φόρτωση ολοκληρωμένων στρατηγικών ρυθμίσεων (σενάριο, mix, διάρκεια) για γρήγορη εφαρμογή |
+| **Εξατομικευμένο AI** | Οι AI προτάσεις αναφέρουν ονομαστικά το brand, τις κατηγορίες προϊόντων και το B2B/B2C context — όχι γενικόλογες συμβουλές |
+| **Segment-Strategy Matching** | Ευφυής βαθμολόγηση κατατάσσει τα segments πελατών κατά σχετικότητα με την επιλεγμένη στρατηγική. Επίπεδα ideal/good/partial με οπτική ένδειξη |
+| **Δομημένη AI Αιτιολόγηση** | Τριμερής μορφή (Πελάτες / Κανάλια / Αποτέλεσμα) με αναφορές σε σχετικά segments για ολοκληρωμένη εικόνα |
+| **Διαχείριση Λήξης Στρατηγικής** | Παρακολούθηση διάρκειας με badge, αντίστροφη μέτρηση και proactive ειδοποίηση 3 ημέρες πριν τη λήξη |
+
+### Buyer Personas & Go-to-Market
+
+Το Performance+ εξυπηρετεί τρεις ξεχωριστούς τύπους αγοραστών με διαφορετική αγοραστική συμπεριφορά:
+
+**1. Marketing Agency (Κύριος Αγοραστής)**
+- Διαχειρίζεται 10-50 brands ταυτόχρονα — η multi-tenant αρχιτεκτονική μεγιστοποιεί το LTV
+- Χρειάζεται framework για να τεκμηριώσει αποφάσεις στους πελάτες — το Performance+ γίνεται ανταγωνιστικό πλεονέκτημα
+- Πώληση σε 1 agency = πρόσβαση σε 20+ brands
+- Positioning: "Το σύστημα πίσω από τη στρατηγική του agency σας"
+
+**2. Marketing Manager / Commercial Director (Εσωτερικός Champion)**
+- Καθημερινός χρήστης που οδηγεί την υιοθέτηση μέσα στον οργανισμό
+- Δεν έχει budget authority αλλά μπορεί να επηρεάσει τον CEO
+- Χρειάζεται free tier ή trial για να αποδείξει αξία πριν ζητήσει budget
+- Positioning: "Αντικαταστήστε τα spreadsheets με data-driven εμπορική πολιτική"
+
+**3. Growth Consultant (Πολλαπλασιαστής Δύναμης)**
+- Δουλεύει με 3-10 εταιρείες ταυτόχρονα
+- Χρειάζεται framework, όχι απλά συμβουλευτική — το Performance+ γίνεται το operating system του
+- Positioning: "Δομημένη εμπορική νοημοσύνη για κάθε πελάτη σας"
+
+Ο επιχειρηματίας/CEO είναι ο **ωφελούμενος** αλλά σπάνια ο άμεσος αγοραστής. Εμπιστεύεται το agency, τον marketing manager ή τον σύμβουλό του για αξιολόγηση και σύσταση εργαλείων.
+
+### Ανταγωνιστικό Τοπίο
+
+**Άμεσοι ανταγωνιστές (κανένας δεν καλύπτει τον πλήρη κύκλο):**
+
+| Player | Τι Κάνει | Κενό vs Performance+ |
+|---|---|---|
+| Triple Whale | E-commerce analytics, attribution | Μόνο analytics — δεν κάνει strategy formulation |
+| Northbeam | Marketing attribution, mix modeling | Μόνο attribution — δεν έχει product intelligence |
+| Peel Insights | RFM, cohort analytics | Μόνο data analysis — δεν έχει activation layer |
+| Glew.io | E-commerce BI | Μόνο dashboards — δεν προτείνει στρατηγική |
+
+**Εφαπτόμενοι ανταγωνιστές (μερική αλληλοεπικάλυψη):**
+
+| Player | Αλληλοεπικάλυψη |
+|---|---|
+| HubSpot | CRM + marketing automation — δεν έχει commercial strategy layer |
+| Klaviyo | Email/SMS segmentation — channel-specific, όχι cross-channel |
+| Shopify Apps (Segments.ai, RetainIQ) | RFM segmentation — μόνο Shopify, χωρίς στρατηγική |
+| Salesforce Marketing Cloud | Enterprise-grade — υπερβολικά complex και ακριβό για segment €2-50M |
+
+**Πραγματικός ανταγωνιστής: Excel + Agency.** Το 80% των εταιρειών στο target segment τρέχει στρατηγική σε spreadsheets και εκτελεί μέσω agencies. Το Performance+ αντικαθιστά αυτό τον κύκλο με ένα κοινό, ευφυές σύστημα.
+
+---
+
 **Επικοινωνία:** hello@notthesame.ai
 **Web:** notthesame.gr
 **Προϊόν:** Performance+

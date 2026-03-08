@@ -314,7 +314,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           label="Total SKUs"
           value={formatNumber(inventorySummary.total_skus)}
           icon={<Package size={20} />}
-          color="#3B82F6"
+          color="#78716C"
           tooltip="Συνολικός αριθμός προϊόντων (SKU) στο inventory."
           active={stockCardFilter === 'all'}
           onClick={() => setStockCardFilter('all')}
@@ -380,7 +380,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                 border-l-4
                 ${alert.type === 'critical' ? 'border-l-[#EF4444] bg-[#FEE2E2]' :
                   alert.type === 'warning' ? 'border-l-[#F59E0B] bg-[#FEF3C7]' :
-                  'border-l-[#3B82F6] bg-[#DBEAFE]'}
+                  'border-l-[#78716C] bg-[#F3F4F6]'}
               `}
             >
               <div className="flex items-start gap-3">
@@ -389,7 +389,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                 ) : alert.type === 'warning' ? (
                   <AlertTriangle size={20} className="text-[#F59E0B] flex-shrink-0" />
                 ) : (
-                  <Info size={20} className="text-[#3B82F6] flex-shrink-0" />
+                  <Info size={20} className="text-[#78716C] flex-shrink-0" />
                 )}
                 <div className="flex-1">
                   <p className="text-sm font-medium text-[#1A1A1A]">{alert.message}</p>

@@ -1,7 +1,21 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, type ComponentType } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Zap, Calendar } from 'lucide-react';
+import { X, Zap, Calendar, Tag, Gift, Percent, Sun, Thermometer, BookOpen, Flower2, Heart, HeartHandshake, Pin, type LucideProps } from 'lucide-react';
 import { getActiveSeasons, type SeasonalPeriod } from '../../data/seasonalPeriods';
+
+const ICON_MAP: Record<string, ComponentType<LucideProps>> = {
+  tag: Tag, gift: Gift, percent: Percent, sun: Sun, thermometer: Thermometer,
+  'book-open': BookOpen, 'flower-2': Flower2, heart: Heart, 'heart-handshake': HeartHandshake, pin: Pin,
+};
+
+function SeasonalIcon({ name }: { name: string }) {
+  const Icon = ICON_MAP[name] ?? Calendar;
+  return (
+    <div className="w-8 h-8 rounded-lg bg-[var(--nts-accent)]/10 flex items-center justify-center flex-shrink-0">
+      <Icon size={16} className="text-[var(--nts-accent)]" />
+    </div>
+  );
+}
 import { scenarios } from '../../data';
 
 interface SeasonalBannerProps {
@@ -55,7 +69,7 @@ export function SeasonalBanner({
         className="relative rounded-xl border border-[var(--nts-accent)]/30 bg-gradient-to-r from-[var(--nts-accent)]/5 to-transparent p-4"
       >
         <div className="flex items-start gap-3">
-          <span className="text-xl flex-shrink-0 mt-0.5">{season.icon}</span>
+          <SeasonalIcon name={season.icon} />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
               <h4 className="text-sm font-semibold text-[#1A1A1A]">{season.name}</h4>

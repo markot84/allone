@@ -669,7 +669,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               label="Σύνολο Προϊόντων"
               value={formatNumber(productsCount)}
               icon={<Package size={18} />}
-              color="#3B82F6"
+              color="#4A4A4A"
               onClick={(e) => {
                 e.stopPropagation();
                 onSectionChange?.('products');

@@ -19,7 +19,7 @@ import { useContent } from '../../hooks';
 
 const statusConfig = {
   draft: { label: 'Προσχέδιο', color: '#4A4A4A', bgColor: '#F5F5F5', icon: <FileText size={12} /> },
-  in_production: { label: 'Σε Παραγωγή', color: '#3B82F6', bgColor: '#DBEAFE', icon: <Edit size={12} /> },
+  in_production: { label: 'Σε Παραγωγή', color: '#6B7280', bgColor: '#F3F4F6', icon: <Edit size={12} /> },
   scheduled: { label: 'Προγραμματισμένο', color: '#8B5CF6', bgColor: '#EDE9FE', icon: <Clock size={12} /> },
   published: { label: 'Δημοσιευμένο', color: '#22C55E', bgColor: '#DCFCE7', icon: <Check size={12} /> }
 };

@@ -1,6 +1,6 @@
 /**
  * Prompt για AI Organic Content Suggestions.
- * Προτείνει οργανικές ενέργειες (content types, channels, headlines) βάσει αποθηκευμένης στρατηγικής.
+ * Προτείνει θεματικές κατευθύνσεις ανά κανάλι + παραδείγματα ενεργειών βάσει στρατηγικής.
  */
 
 export interface StrategyContext {
@@ -13,38 +13,64 @@ export interface StrategyContext {
   ctaStyle?: string;
   avoid?: string[];
   sampleHeadlines?: string[];
+  brandName?: string;
+  topCategories?: string[];
+  segmentNames?: string[];
 }
 
 export const CONTENT_SUGGESTIONS_SYSTEM_PROMPT = `Είσαι ειδικός content strategist για e-commerce. Απαντάς ΑΠΟΚΛΕΙΣΤΙΚΑ στα Ελληνικά.
 
-Προτείνεις οργανικές ενέργειες περιεχομένου (όχι paid ads) βάσει της ενεργής εμπορικής στρατηγικής.
+Δημιουργείς 2 πράγματα:
+1. ΘΕΜΑΤΙΚΕΣ ΚΑΤΕΥΘΥΝΣΕΙΣ: Ανά κανάλι επικοινωνίας (Email, Blog, Social Media, Newsletter κλπ), ποιες θεματικές πρέπει να αναπτύξει η ομάδα marketing, βάσει στρατηγικής, segments πελατών και κατηγοριών προϊόντων.
+2. ΠΑΡΑΔΕΙΓΜΑΤΑ ΕΝΕΡΓΕΙΩΝ: Συγκεκριμένες ιδέες περιεχομένου ως εφαρμογή των κατευθύνσεων.
+
+ΠΡΟΣΩΠΟΠΟΙΗΣΗ: Αν σου δοθεί το όνομα της επιχείρησης και οι κατηγορίες προϊόντων, ΠΡΕΠΕΙ να τα χρησιμοποιήσεις παντού. ΜΗΝ χρησιμοποιείς placeholders όπως [Brand] ή [Κατηγορία].
 
 Απάντα ΜΟΝΟ με valid JSON, χωρίς markdown ή εξήγηση. Format:
 {
+  "directions": [
+    {
+      "channel": "Κανάλι (π.χ. Email, Blog/SEO, Social Media, Newsletter, LinkedIn)",
+      "theme": "Θεματική κατεύθυνση σε 1 πρόταση",
+      "reasoning": "Γιατί αυτή η θεματική ταιριάζει στη στρατηγική και στα segments (1-2 προτάσεις)",
+      "targetSegments": ["Segment A", "Segment B"],
+      "suggestedCategories": ["Κατηγορία 1", "Κατηγορία 2"]
+    }
+  ],
   "actions": [
     {
-      "type": "Τύπος ενέργειας (π.χ. Email, Blog, Social Post, Newsletter)",
-      "title": "Σύντομος τίτλος ενέργειας στα Ελληνικά",
-      "description": "Περιγραφή 1-2 προτάσεις στα Ελληνικά, σαφής και κατανοητή",
-      "channel": "Κανάλι (π.χ. Email, Instagram, Blog, Facebook, LinkedIn)",
+      "type": "Τύπος ενέργειας",
+      "title": "Σύντομος τίτλος στα Ελληνικά",
+      "description": "Περιγραφή 1-2 προτάσεις",
+      "channel": "Κανάλι",
       "priority": "high" | "medium" | "low",
       "headline_suggestion": "Παράδειγμα headline στα Ελληνικά"
     }
-  ]
+  ],
+  "brief": "Σύντομο brief (3-5 προτάσεις) για την ομάδα marketing/εξωτερικούς συνεργάτες. Περιλαμβάνει: τη στρατηγική κατεύθυνση, τα κύρια segments-στόχους, τις βασικές θεματικές, τον τόνο επικοινωνίας και τι πρέπει να αποφευχθεί."
 }
 
 Κανόνες:
-- 4-6 συγκεκριμένες ενέργειες
+- directions: 3-5 κατευθύνσεις, μία ανά κανάλι
+- actions: 4-6 συγκεκριμένα παραδείγματα (εφαρμογή των directions)
+- brief: ένα copyable κείμενο κατευθύνσεων για αποστολή σε marketing team ή agency
 - Μόνο οργανικά κανάλια (όχι paid ads)
-- ΟΛΑ τα κείμενα (title, description, headline_suggestion) ΠΡΕΠΕΙ να είναι 100% στα Ελληνικά. Μην χρησιμοποιείς greeklish ή μείγμα γλωσσών.
-- Προτεραιότητα "high" για τις πιο σημαντικές
-- headline_suggestion: 1 ρεαλιστικό παράδειγμα ανά ενέργεια, στα Ελληνικά`;
+- ΟΛΑ τα κείμενα 100% στα Ελληνικά
+- Χρήση πραγματικού brand name και κατηγοριών σε headlines και titles`;
 
 export function buildContentSuggestionsUserPrompt(ctx: StrategyContext): string {
   const w = ctx.weights || {};
   const weightsStr = `Profit: ${w.profit ?? 0}%, Stock: ${w.stock ?? 0}%, Strategic: ${w.strategic ?? 0}%, Revenue: ${w.revenue ?? 0}%, Fit: ${w.fit ?? 0}%`;
 
-  return `Ενεργή στρατηγική: ${ctx.scenarioName}
+  const brandSection = ctx.brandName
+    ? `Επιχείρηση: ${ctx.brandName}${ctx.topCategories?.length ? `\nΚατηγορίες προϊόντων: ${ctx.topCategories.join(', ')}` : ''}${ctx.segmentNames?.length ? `\nSegments πελατών: ${ctx.segmentNames.join(', ')}` : ''}\n\n`
+    : '';
+
+  const personalizationNote = ctx.brandName
+    ? `\nΧρησιμοποίησε το brand name «${ctx.brandName}» στα titles, headlines και brief.${ctx.topCategories?.length ? ` Ανέφερε πραγματικές κατηγορίες (${ctx.topCategories.slice(0, 3).join(', ')}).` : ''}${ctx.segmentNames?.length ? ` Ανέφερε πραγματικά segments (${ctx.segmentNames.slice(0, 4).join(', ')}) στις κατευθύνσεις.` : ''}`
+    : '';
+
+  return `${brandSection}Ενεργή στρατηγική: ${ctx.scenarioName}
 Βάρη: ${weightsStr}
 
 ${ctx.contentTone ? `Tone: ${ctx.contentTone}` : ''}
@@ -54,5 +80,5 @@ ${ctx.ctaStyle ? `CTA στυλ: ${ctx.ctaStyle}` : ''}
 ${ctx.avoid?.length ? `Αποφυγή: ${ctx.avoid.join(', ')}` : ''}
 ${ctx.sampleHeadlines?.length ? `Παραδείγματα headlines: ${ctx.sampleHeadlines.slice(0, 3).join(' | ')}` : ''}
 
-Δώσε 4-6 οργανικές ενέργειες περιεχομένου (actions array) σε JSON.`;
+Δώσε directions (θεματικές κατευθύνσεις ανά κανάλι), actions (παραδείγματα ενεργειών) και brief (κείμενο κατευθύνσεων) σε JSON.${personalizationNote}`;
 }

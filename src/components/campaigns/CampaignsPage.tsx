@@ -366,8 +366,8 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                 €{formatCurrency(summaryStats.totalConversionValue, 2)}
               </p>
             </div>
-            <div className="w-12 h-12 bg-[#DBEAFE] rounded-lg flex items-center justify-center">
-              <TrendingUp size={24} className="text-[#3B82F6]" />
+            <div className="w-12 h-12 bg-[#F5F5F5] rounded-lg flex items-center justify-center">
+              <TrendingUp size={24} className="text-[#4A4A4A]" />
             </div>
           </div>
         </Card>

@@ -41,7 +41,7 @@ import {
 import { formatCurrency, formatCurrencyCompact, formatNumber, formatMultiplier, formatPercent } from '../../utils/format';
 import type { Campaign } from '../../types';
 
-const COLORS = ['#22C55E', '#3B82F6', 'var(--nts-accent)', '#8B5CF6', '#F59E0B'];
+const COLORS = ['#22C55E', '#78716C', 'var(--nts-accent)', '#8B5CF6', '#F59E0B'];
 
 interface ROIAttributionProps {
   embedded?: boolean;
@@ -381,8 +381,8 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                     <stop offset="95%" stopColor="#E5E5E5" stopOpacity={0}/>
                   </linearGradient>
                   <linearGradient id="attrGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#0969da" stopOpacity={0.4}/>
-                    <stop offset="95%" stopColor="#0969da" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="#78716C" stopOpacity={0.4}/>
+                    <stop offset="95%" stopColor="#78716C" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" vertical={false} />
@@ -413,7 +413,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                   labelStyle={{ color: '#24292f', fontWeight: 600, marginBottom: 4 }}
                 />
                 {/* Milestone annotations */}
-                <ReferenceLine x="Sep" stroke="#0969da" strokeDasharray="3 3" label={{ value: 'Launch', position: 'top', fontSize: 10, fill: '#57606a' }} />
+                <ReferenceLine x="Sep" stroke="#78716C" strokeDasharray="3 3" label={{ value: 'Launch', position: 'top', fontSize: 10, fill: '#57606a' }} />
                 <Area 
                   type="monotone" 
                   dataKey="total" 
@@ -426,7 +426,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                 <Area 
                   type="monotone" 
                   dataKey="attributed" 
-                  stroke="#0969da" 
+                  stroke="#78716C" 
                   strokeWidth={2} 
                   fillOpacity={1}
                   fill="url(#attrGrad)" 
@@ -663,8 +663,8 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
             }
           />
           
-          <div className="p-4 bg-[#DBEAFE] border border-[#3B82F6]/20 rounded-lg mb-4">
-            <p className="text-sm text-[#1E40AF]">
+          <div className="p-4 bg-[#F5F5F5] border border-[#E5E5E5] rounded-lg mb-4">
+            <p className="text-sm text-[#1A1A1A]">
               <strong>Πώς υπολογίζουμε το Impact:</strong> Χρησιμοποιούμε conservative attribution για να διασφαλίσουμε ότι τα αποτελέσματα είναι αξιόπιστα και επαληθεύσιμα.
             </p>
           </div>
@@ -760,22 +760,23 @@ function ImpactCard({ icon, label, value, subtext, highlight = false }: {
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
+      className="h-full"
     >
       <Card 
         padding="md" 
         hover 
-        className={highlight ? 'bg-[var(--nts-orange-light)] border-[var(--nts-orange)]' : ''}
+        className={`h-full ${highlight ? 'bg-[var(--nts-orange-light)] border-[var(--nts-orange)]' : ''}`}
       >
-        <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-lg border border-[var(--nts-border-gray)] bg-[var(--nts-light-gray)] flex items-center justify-center text-[var(--nts-medium-gray)]">
+        <div className="flex items-start gap-3 h-full">
+          <div className="w-10 h-10 rounded-lg border border-[var(--nts-border-gray)] bg-[var(--nts-light-gray)] flex items-center justify-center text-[var(--nts-medium-gray)] flex-shrink-0">
             {icon}
           </div>
-          <div>
+          <div className="min-w-0">
             <p className={`text-sm ${highlight ? 'text-[var(--nts-charcoal)]' : 'text-[var(--nts-medium-gray)]'}`}>{label}</p>
             <p className={`text-2xl font-bold font-mono ${highlight ? 'text-[var(--nts-orange)]' : 'text-[var(--nts-charcoal)]'}`}>
               {value}
             </p>
-            <p className={`text-xs mt-1 text-[var(--nts-medium-gray)]`}>
+            <p className="text-xs mt-1 text-[var(--nts-medium-gray)]">
               {subtext}
             </p>
           </div>

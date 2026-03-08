@@ -136,7 +136,7 @@ export function ChannelRecommendations({
           }
           const sections = [
             { icon: Users, color: '#8B5CF6', label: 'Πελάτες' },
-            { icon: MessageSquare, color: '#3B82F6', label: 'Κανάλια' },
+            { icon: MessageSquare, color: '#78716C', label: 'Κανάλια' },
             { icon: TrendingUp, color: '#22C55E', label: 'Αποτέλεσμα' },
           ];
           return (
@@ -173,7 +173,7 @@ export function ChannelRecommendations({
         <div className="flex h-4 rounded-full overflow-hidden">
           {Object.entries(recommendations.budget_allocation).map(
             ([channel, percentage], index) => {
-              const colors = ['var(--nts-accent)', '#3B82F6', '#22C55E', '#8B5CF6', '#F59E0B'];
+              const colors = ['var(--nts-accent)', '#78716C', '#22C55E', '#8B5CF6', '#F59E0B'];
               return (
                 <motion.div
                   key={channel}
@@ -191,7 +191,7 @@ export function ChannelRecommendations({
         <div className="flex flex-wrap gap-4 mt-3">
           {Object.entries(recommendations.budget_allocation).map(
             ([channel, percentage], index) => {
-              const colors = ['var(--nts-accent)', '#3B82F6', '#22C55E', '#8B5CF6', '#F59E0B'];
+              const colors = ['var(--nts-accent)', '#78716C', '#22C55E', '#8B5CF6', '#F59E0B'];
               return (
                 <div key={channel} className="flex items-center gap-2">
                   <div
