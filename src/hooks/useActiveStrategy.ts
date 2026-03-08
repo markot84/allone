@@ -23,6 +23,7 @@ export interface ActiveStrategy {
   approvedBy?: string;
   implementedAt?: string;
   mixConfig?: MixConfig;
+  monthlyBudget?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -108,6 +109,7 @@ export function useActiveStrategy() {
       approvalStatus: ActiveStrategy['approvalStatus'];
       approvedBy?: string;
       mixConfig?: MixConfig;
+      monthlyBudget?: number;
     }) => {
       if (!brandId) throw new Error('No brand selected');
       
@@ -133,6 +135,10 @@ export function useActiveStrategy() {
         strategyData.mixConfig = strategy.mixConfig;
       }
       
+      if (strategy.monthlyBudget !== undefined) {
+        strategyData.monthlyBudget = strategy.monthlyBudget;
+      }
+
       // Only add optional fields if they have values (Firestore doesn't accept undefined)
       if (strategy.approvedBy) {
         strategyData.approvedBy = strategy.approvedBy;
@@ -155,6 +161,22 @@ export function useActiveStrategy() {
     onSuccess: (savedStrategy) => {
       queryClient.setQueryData(['activeStrategy', brandId], savedStrategy);
       queryClient.invalidateQueries({ queryKey: ['activeStrategy', brandId] }).catch(() => {});
+    },
+  });
+
+  const updateBudget = useMutation({
+    mutationFn: async (monthlyBudget: number) => {
+      if (!activeStrategy?.id || !brandId) throw new Error('No active strategy');
+      const now = new Date().toISOString();
+      await FirestoreService.setDocument('active_strategies', activeStrategy.id, {
+        ...activeStrategy,
+        monthlyBudget,
+        updatedAt: now,
+      } as Record<string, unknown>);
+      return { ...activeStrategy, monthlyBudget, updatedAt: now };
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(['activeStrategy', brandId], updated);
     },
   });
 
@@ -189,6 +211,8 @@ export function useActiveStrategy() {
     isLoading,
     saveActiveStrategy: saveActiveStrategy.mutateAsync,
     isSaving: saveActiveStrategy.isPending,
+    updateBudget: updateBudget.mutateAsync,
+    isSavingBudget: updateBudget.isPending,
     getStrategyName,
   };
 }

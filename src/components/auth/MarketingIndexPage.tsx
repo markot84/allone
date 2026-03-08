@@ -21,16 +21,16 @@ const dataSources = [
 
 const inputOutputChain = {
   inputs: [
-    'Transactional & inventory data (ERP)',
-    'Campaign performance & attribution (Google Ads, Meta)',
-    'Financial, CRM & custom datasets (CSV / manual)',
+    'Δεδομένα πωλήσεων και αποθέματος (ERP)',
+    'Απόδοση καμπανιών και attribution (Google Ads, Meta)',
+    'Οικονομικά, CRM και custom data (CSV / manual)',
   ],
   outputs: [
-    'Audience segmentation & commercial prioritization',
-    'Portfolio scoring & decision signals',
-    'AI-personalized channel mix per strategy & segment',
-    'Seasonal/discount campaign management',
-    'Content strategy aligned with business objectives',
+    'Segmentation κοινού και εμπορική ιεράρχηση',
+    'Αξιολόγηση προϊοντικού χαρτοφυλακίου',
+    'AI channel mix ανά στρατηγική και segment',
+    'Διαχείριση εποχιακών και εκπτωτικών περιόδων',
+    'Content strategy ευθυγραμμισμένο με τους στόχους σας',
   ],
 };
 
@@ -107,8 +107,8 @@ const variantCopy: Record<LandingVariant, {
   ceo: {
     badge: 'AI-powered operating layer για εμπορικές αποφάσεις',
     headline: 'Performance+',
-    highlight: 'λειτουργικό σύστημα επιχειρηματικής ανάπτυξης',
-    description: 'Αναλύει δεδομένα κοινού και αποθέματος, μετατρέπει την πληροφορία σε επιχειρηματική νοημοσύνη και προτείνει σενάρια εμπορικής πολιτικής, κατάλληλα προωθητικά κανάλια και οργανικό περιεχόμενο. Παράλληλα, συντονίζει τα εσωτερικά τμήματα και τους εξωτερικούς συνεργάτες, μειώνοντας τον κατακερματισμό της πληροφορίας και τις καθυστερήσεις που επιβραδύνουν την ανάπτυξη.',
+    highlight: 'το σύστημα νοημοσύνης του e-shop σας',
+    description: 'Αναλύει δεδομένα κοινού και αποθέματος, μετατρέπει την πληροφορία σε επιχειρηματική νοημοσύνη και προτείνει σενάρια εμπορικής πολιτικής, κατάλληλα προωθητικά κανάλια και οργανικό περιεχόμενο. Παράλληλα, συντονίζει τα εσωτερικά τμήματα και τους εξωτερικούς συνεργάτες, μειώνοντας τον κατακερματισμό της πληροφορίας και τις καθυστερήσεις που επιβραδύνουν την επίτευξη των στόχων σας!',
     cta: 'Είσοδος στο Performance+',
     uspTitle: 'Γιατί ξεχωρίζει',
     uspPoints: [
@@ -124,8 +124,8 @@ const variantCopy: Record<LandingVariant, {
   ops: {
     badge: 'AI-powered operating layer για στρατηγική εκτέλεση',
     headline: 'Performance+',
-    highlight: 'λειτουργικό σύστημα επιχειρηματικής ανάπτυξης',
-    description: 'Αναλύει δεδομένα κοινού και αποθέματος, μετατρέπει την πληροφορία σε επιχειρηματική νοημοσύνη και προτείνει σενάρια εμπορικής πολιτικής, κατάλληλα προωθητικά κανάλια και οργανικό περιεχόμενο. Παράλληλα, συντονίζει τα εσωτερικά τμήματα και τους εξωτερικούς συνεργάτες, μειώνοντας τον κατακερματισμό της πληροφορίας και τις καθυστερήσεις που επιβραδύνουν την ανάπτυξη.',
+    highlight: 'το σύστημα νοημοσύνης του e-shop σας',
+    description: 'Αναλύει δεδομένα κοινού και αποθέματος, μετατρέπει την πληροφορία σε επιχειρηματική νοημοσύνη και προτείνει σενάρια εμπορικής πολιτικής, κατάλληλα προωθητικά κανάλια και οργανικό περιεχόμενο. Παράλληλα, συντονίζει τα εσωτερικά τμήματα και τους εξωτερικούς συνεργάτες, μειώνοντας τον κατακερματισμό της πληροφορίας και τις καθυστερήσεις που επιβραδύνουν την επίτευξη των στόχων σας!',
     cta: 'Είσοδος στο Performance+',
     uspTitle: 'Γιατί το επιλέγουν τα τμήματα marketing και εμπορικής διεύθυνσης',
     uspPoints: [
@@ -204,9 +204,9 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
 
               <div className="grid gap-4 md:grid-cols-3">
                 {[
-                  'Διοικητική εικόνα για έσοδα, περιθώρια κέρδους και εμπορικό ρίσκο.',
-                  'AI-powered προτεραιότητες για προϊόντα, κοινά, κανάλια και επένδυση.',
-                  'Κοινό πλαίσιο εκτέλεσης για management, marketing και εξωτερικούς συνεργάτες.'
+                  'Πλήρης και άμεση εικόνα εσόδων, απόδοσης επένδυσης και εμπορικών προτεραιοτήτων.',
+                  'AI που αναλύει τους πελάτες, τα προϊόντα και την αποθήκη σας και προτείνει την κατάλληλη εμπορική στρατηγική.',
+                  'Ένα λειτουργικό σύστημα, κοινό σημείο αναφοράς για ιδιοκτήτη, ομάδα marketing και agency.'
                 ].map((point) => (
                   <div key={point} className="rounded-2xl border border-white/10 bg-[#12151b] p-4.5 shadow-[0_10px_24px_rgba(15,17,21,0.18)]">
                     <div className="mb-3 h-1.5 w-10 rounded-full bg-[var(--nts-accent)]" />
@@ -240,7 +240,7 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
       {/* ── Data Sources + Input/Output ─────────────────────────────────── */}
       <section className="mx-auto w-full max-w-7xl px-6 pb-8 md:px-10">
         <div className="rounded-2xl border border-[#1f2328] bg-[var(--nts-bg-pure)] p-6 shadow-[0_20px_44px_rgba(16,24,40,0.14)]">
-          <p className="text-[11px] tracking-[0.08em] text-[var(--nts-accent)]">Data Input → Intelligence Output</p>
+          <p className="text-[11px] tracking-[0.08em] text-[var(--nts-accent)]">Δεδομένα → Νοημοσύνη</p>
           <h3 className="mt-2 text-lg font-semibold text-[var(--nts-charcoal)]">Ενοποίηση δεδομένων από πολλαπλές πηγές σε ενιαίο περιβάλλον αποφάσεων</h3>
 
           <div className="mt-5 grid gap-3 md:grid-cols-5">
@@ -257,7 +257,7 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
 
           <div className="mt-6 grid gap-4 md:grid-cols-[1fr_auto_1fr]">
             <div className="space-y-2">
-              <p className="text-[11px] font-semibold tracking-[0.08em] text-[var(--nts-medium-gray)]">Data Input</p>
+              <p className="text-[11px] font-semibold tracking-[0.08em] text-[var(--nts-medium-gray)]">Είσοδος δεδομένων</p>
               {inputOutputChain.inputs.map((item) => (
                 <div key={item} className="rounded-xl border border-[#1f2328]/12 bg-[var(--nts-bg-subtle)] px-4 py-3 text-sm text-[var(--nts-charcoal)]">
                   {item}
@@ -277,7 +277,7 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
             </div>
 
             <div className="space-y-2">
-              <p className="text-[11px] font-semibold tracking-[0.08em] text-[var(--nts-accent)]">Intelligence Output</p>
+              <p className="text-[11px] font-semibold tracking-[0.08em] text-[var(--nts-accent)]">Εμπορική νοημοσύνη</p>
               {inputOutputChain.outputs.map((item) => (
                 <div key={item} className="rounded-xl border border-white/10 bg-[#12151b] px-4 py-3 text-sm text-white/80">
                   {item}
@@ -291,9 +291,9 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
       <section className="mx-auto w-full max-w-7xl px-6 pb-8 md:px-10">
         <div className="grid items-stretch gap-5 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="rounded-[28px] border border-[#1f2328]/10 bg-[var(--nts-bg-pure)] p-6 shadow-[0_18px_40px_rgba(16,24,40,0.12)]">
-            <p className="text-[11px] tracking-[0.08em] text-[var(--nts-accent)]">Διοικητική Επισκόπηση</p>
+            <p className="text-[11px] tracking-[0.08em] text-[var(--nts-accent)]">E-shop Intelligence</p>
             <h2 className="mt-4 max-w-2xl text-xl font-semibold leading-tight text-[var(--nts-charcoal)]">
-              Το λειτουργικό σύστημα που μετατρέπει δεδομένα σε επιχειρηματική νοημοσύνη, άμεση και αποδοτική λήψη αποφάσεων με συντονισμένο πλάνο ενεργειών.
+              Το λειτουργικό σύστημα που μετατρέπει ανεκμετάλλευτα δεδομένα σε εμπορική νοημοσύνη, άμεση και αποδοτική λήψη αποφάσεων με συντονισμένο πλάνο ενεργειών.
             </h2>
             <div className="mt-6 grid gap-4 md:grid-cols-2">
               <div className="rounded-2xl border border-white/10 bg-[#12151b] p-5 shadow-[0_10px_24px_rgba(15,17,21,0.16)]">
@@ -332,7 +332,7 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
             {problemsBeforeAfter.map((item, i) => (
               <div key={i} className="grid grid-cols-1 md:grid-cols-2 gap-0 rounded-xl overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.08)]">
                 <div className="bg-[#1a1a1a] px-5 py-4 flex items-start gap-3">
-                  <span className="flex-shrink-0 mt-0.5 w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-[11px] font-bold text-white/50">{String(i + 1).padStart(2, '0')}</span>
+                  <span className="flex-shrink-0 mt-0.5 w-6 h-6 rounded-full bg-[var(--nts-accent)]/20 flex items-center justify-center text-[11px] font-bold text-[var(--nts-accent)]">{String(i + 1).padStart(2, '0')}</span>
                   <p className="text-sm text-white/60 leading-relaxed">{item.before}</p>
                 </div>
                 <div className="bg-white px-5 py-4 flex items-start gap-3 border-l-4 border-[var(--nts-accent)]">

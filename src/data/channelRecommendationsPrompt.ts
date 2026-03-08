@@ -27,8 +27,24 @@ export const CHANNEL_RECOMMENDATIONS_SYSTEM_PROMPT = `Είσαι Senior Marketin
   "primary": ["Κανάλι 1", "Κανάλι 2", "Κανάλι 3"],
   "secondary": ["Κανάλι 4", "Κανάλι 5"],
   "budget_allocation": { "kanali1": 30, "kanali2": 25, "kanali3": 20, "kanali4": 15, "kanali5": 10 },
-  "rationale": "Πελάτες: ... || Κανάλια: ... || Αποτέλεσμα: ..."
+  "rationale": "Πελάτες: ... || Κανάλια: ... || Αποτέλεσμα: ...",
+  "actions": []
 }
+
+ΑΝ σου δοθεί μηνιαίο budget ΚΑΙ/Ή campaign performance data, πρέπει να συμπληρώσεις το πεδίο "actions" με smart recommendations. Κάθε action έχει:
+- "channel": το κανάλι στο οποίο αναφέρεται
+- "type": "increase" | "decrease" | "push" | "pause" | "maintain"
+- "reason": σύντομη αιτιολόγηση στα Ελληνικά (π.χ. "ROAS 8.5x, αύξηση budget κατά 15%")
+- "suggestedChange": προτεινόμενη % αλλαγή (θετικός αριθμός, π.χ. 15 σημαίνει +15% ή -15% ανάλογα με το type)
+
+Τύποι actions:
+- "increase": το κανάλι αποδίδει καλά, πρότεινε αύξηση budget
+- "decrease": χαμηλή απόδοση, πρότεινε μείωση
+- "push": ευκαιρία για aggressive push (εποχικότητα, τάση, flash sale)
+- "pause": πολύ χαμηλή απόδοση, πρότεινε παύση
+- "maintain": σταθερή απόδοση, διατήρησε
+
+Αν δεν υπάρχουν δεδομένα performance ή budget, άφησε το actions ως κενό array [].
 
 ΔΙΑΘΕΣΙΜΑ ΚΑΝΑΛΙΑ (επέλεξε τα κατάλληλα ανά στρατηγική):
 Performance: "Google Search Ads", "Google Shopping", "Meta Ads (Facebook/Instagram)", "Google Performance Max"
@@ -90,6 +106,14 @@ export interface SegmentFitInfo {
   revenueShare?: number;
 }
 
+export interface CampaignPerformanceData {
+  channel: string;
+  spent: number;
+  roas: number;
+  conversions: number;
+  ctr: number;
+}
+
 export function buildChannelRecommendationsUserPrompt(params: {
   scenarioName: string;
   scenarioDescription: string;
@@ -102,6 +126,8 @@ export function buildChannelRecommendationsUserPrompt(params: {
   brandType?: 'B2B' | 'B2C';
   topCategories?: string[];
   segmentFitList?: SegmentFitInfo[];
+  totalBudget?: number;
+  campaignPerformance?: CampaignPerformanceData[];
 }): string {
   const {
     scenarioName,
@@ -115,6 +141,8 @@ export function buildChannelRecommendationsUserPrompt(params: {
     brandType,
     topCategories,
     segmentFitList,
+    totalBudget,
+    campaignPerformance,
   } = params;
 
   const fitContext = FIT_CONTEXT[fitLevel];
@@ -153,5 +181,5 @@ ${segmentMapSection}
 Στο "Πελάτες:" section:
 1. Πρώτα αναλύεις το ΤΡΕΧΟΝ segment (αυτό που ζητήθηκε) με πλήρη ανάλυση
 2. Μετά αφιερώνεις 1 bullet ΓΙΑ ΚΑΘΕ ένα από τα υπόλοιπα ιδανικά και καλά segments. Κάθε bullet πρέπει να εξηγεί ΠΟΙΟΙ είναι αυτοί οι πελάτες και ΓΙΑΤΙ ταιριάζουν σε αυτή τη στρατηγική. ΟΧΙ απλή αναφορά ονόματος.
-Π.χ. "...Οι «Champions» αγοράζουν συχνά και ξοδεύουν πολλά.\n• «Loyal Customers»: πιστοί πελάτες με σταθερές αγορές, ιδανικοί για upselling σε premium κατηγορίες\n• «Promising»: νέοι πελάτες με δυναμική ανάπτυξης, κατάλληλοι για targeted προσφορές που θα τους μετατρέψουν σε τακτικούς αγοραστές\n• «At Risk»: ενεργοί πελάτες που απομακρύνονται, χρειάζονται ενέργειες επανενεργοποίησης πριν χαθούν"`;
+Π.χ. "...Οι «Champions» αγοράζουν συχνά και ξοδεύουν πολλά.\n• «Loyal Customers»: πιστοί πελάτες με σταθερές αγορές, ιδανικοί για upselling σε premium κατηγορίες\n• «Promising»: νέοι πελάτες με δυναμική ανάπτυξης, κατάλληλοι για targeted προσφορές που θα τους μετατρέψουν σε τακτικούς αγοραστές\n• «At Risk»: ενεργοί πελάτες που απομακρύνονται, χρειάζονται ενέργειες επανενεργοποίησης πριν χαθούν"${totalBudget ? `\n\nΜΗΝΙΑΙΟ BUDGET: €${totalBudget.toLocaleString('el-GR')}\nΛάβε υπόψη αυτό το budget στην κατανομή. Στο "actions" πρότεινε συγκεκριμένες ενέργειες budget management βάσει στρατηγικής.` : ''}${campaignPerformance && campaignPerformance.length > 0 ? `\n\nΠΡΑΓΜΑΤΙΚΑ CAMPAIGN PERFORMANCE DATA:\n${campaignPerformance.map(c => `- ${c.channel}: Spent €${c.spent.toLocaleString('el-GR', { maximumFractionDigits: 0 })}, ROAS ${c.roas.toFixed(1)}x, Conversions ${c.conversions}, CTR ${c.ctr.toFixed(1)}%`).join('\n')}\nΑνάλυσε τα δεδομένα performance και δώσε actionable recommendations στο "actions" (increase/decrease/push/pause/maintain για κάθε κανάλι).` : ''}`;
 }

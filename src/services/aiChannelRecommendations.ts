@@ -2,9 +2,10 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import {
   CHANNEL_RECOMMENDATIONS_SYSTEM_PROMPT,
   buildChannelRecommendationsUserPrompt,
-  type FitLevel
+  type FitLevel,
+  type CampaignPerformanceData,
 } from '../data/channelRecommendationsPrompt';
-import type { ChannelRecommendation } from '../types';
+import type { ChannelRecommendation, BudgetAction } from '../types';
 import type { Scenario } from '../types';
 import type { RFMSegment } from '../types';
 
@@ -34,11 +35,18 @@ function parseAIResponse(text: string): ChannelRecommendation | null {
 
     if (primary.length === 0) return null;
 
+    const actions: BudgetAction[] = Array.isArray(parsed.actions)
+      ? (parsed.actions as BudgetAction[]).filter(
+          a => a && typeof a.channel === 'string' && typeof a.type === 'string'
+        )
+      : [];
+
     return {
       primary,
       secondary,
       budget_allocation,
-      rationale
+      rationale,
+      ...(actions.length > 0 ? { actions } : {}),
     };
   } catch {
     return null;
@@ -62,12 +70,14 @@ export interface GenerateRecommendationsParams {
   fitLevel?: FitLevel;
   brandContext?: BrandContext;
   segmentFitList?: SegmentFitInfo[];
+  totalBudget?: number;
+  campaignPerformance?: CampaignPerformanceData[];
 }
 
 export async function generateChannelRecommendations(
   params: GenerateRecommendationsParams
 ): Promise<ChannelRecommendation | null> {
-  const { scenario, segment, fitLevel, brandContext, segmentFitList } = params;
+  const { scenario, segment, fitLevel, brandContext, segmentFitList, totalBudget, campaignPerformance } = params;
 
   try {
     if (!GEMINI_API_KEY) throw new Error('VITE_GEMINI_API_KEY is not set');
@@ -92,6 +102,8 @@ export async function generateChannelRecommendations(
       brandType: brandContext?.brandType,
       topCategories: brandContext?.topCategories,
       segmentFitList,
+      totalBudget,
+      campaignPerformance,
     });
 
     const result = await model.generateContent(userPrompt);

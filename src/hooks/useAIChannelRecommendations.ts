@@ -5,6 +5,7 @@ import { channelRecommendations as staticRecommendations, scenarios } from '../d
 import type { ChannelRecommendation } from '../types';
 import type { RFMSegment } from '../types';
 import type { FitLevel } from '../utils/segmentRelevance';
+import type { CampaignPerformanceData } from '../data/channelRecommendationsPrompt';
 
 export interface MixConfigForAI {
   scenarioA: string;
@@ -33,6 +34,8 @@ export interface UseAIChannelRecommendationsOptions {
   brandContext?: BrandContext | null;
   segmentFitList?: SegmentFitInfo[];
   useAI?: boolean;
+  totalBudget?: number;
+  campaignPerformance?: CampaignPerformanceData[];
 }
 
 const SEGMENT_NAME_MAP: Record<string, string> = {
@@ -75,7 +78,9 @@ export function useAIChannelRecommendations({
   mixConfig,
   brandContext,
   segmentFitList,
-  useAI = true
+  useAI = true,
+  totalBudget,
+  campaignPerformance,
 }: UseAIChannelRecommendationsOptions) {
   const [aiEnabled, setAiEnabled] = useState(useAI);
 
@@ -119,10 +124,16 @@ export function useAIChannelRecommendations({
     error: aiError,
     refetch
   } = useQuery({
-    queryKey: ['aiChannelRecommendations', 'v5', selectedScenarioId, selectedSegmentId, fitLevel, aiEnabled, mixConfig?.scenarioA, mixConfig?.scenarioB, mixConfig?.percentA, brandContext?.brandName],
+    queryKey: ['aiChannelRecommendations', 'v6', selectedScenarioId, selectedSegmentId, fitLevel, aiEnabled, mixConfig?.scenarioA, mixConfig?.scenarioB, mixConfig?.percentA, brandContext?.brandName, totalBudget],
     queryFn: async () => {
       if (!scenario || !segment || !aiEnabled) return null;
-      return generateChannelRecommendations({ scenario, segment, fitLevel, brandContext: brandContext ?? undefined, segmentFitList: segmentFitList ?? undefined });
+      return generateChannelRecommendations({
+        scenario, segment, fitLevel,
+        brandContext: brandContext ?? undefined,
+        segmentFitList: segmentFitList ?? undefined,
+        totalBudget,
+        campaignPerformance,
+      });
     },
     enabled: !!scenario && !!segment && aiEnabled && selectedSegmentId !== '',
     staleTime: 60 * 60 * 1000,

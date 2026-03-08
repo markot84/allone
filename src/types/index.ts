@@ -169,11 +169,19 @@ export interface ChannelAllocation {
   rationale: string;
 }
 
+export interface BudgetAction {
+  channel: string;
+  type: 'increase' | 'decrease' | 'push' | 'pause' | 'maintain';
+  reason: string;
+  suggestedChange?: number;
+}
+
 export interface ChannelRecommendation {
   primary: string[];
   secondary: string[];
   budget_allocation: Record<string, number>;
   rationale: string;
+  actions?: BudgetAction[];
 }
 
 // Content Calendar Types

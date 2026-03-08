@@ -14,6 +14,12 @@ import {
   Clock,
   Circle,
   ChevronDown,
+  Wallet,
+  ArrowUpRight,
+  ArrowDownRight,
+  Zap,
+  Pause,
+  Minus,
 } from 'lucide-react';
 import {
   PieChart,
@@ -35,7 +41,7 @@ import { getStockAgeDays } from '../../utils/productUtils';
 import { safeBrandName } from '../../services/reportExport';
 import { formatCurrency, formatNumber, formatPercent, formatMultiplier } from '../../utils/format';
 import { scenarios } from '../../data';
-import type { Campaign, ChannelRecommendation } from '../../types';
+import type { Campaign, ChannelRecommendation, BudgetAction } from '../../types';
 
 const COLORS = ['var(--nts-accent)', '#78716C', '#22C55E', '#8B5CF6', '#F59E0B', '#3B82F6', '#EC4899'];
 
@@ -96,6 +102,14 @@ const STATUS_CONFIG = {
   done: { label: 'Done', icon: CheckCircle2, color: '#22C55E', bg: '#F0FDF4' },
 } as const;
 
+const ACTION_TYPE_CONFIG = {
+  increase: { label: 'Αύξηση', icon: ArrowUpRight, color: '#22C55E', bg: '#F0FDF4' },
+  decrease: { label: 'Μείωση', icon: ArrowDownRight, color: '#EF4444', bg: '#FEF2F2' },
+  push: { label: 'Push', icon: Zap, color: '#F97316', bg: '#FFF7ED' },
+  pause: { label: 'Pause', icon: Pause, color: '#9CA3AF', bg: '#F5F5F5' },
+  maintain: { label: 'Διατήρηση', icon: Minus, color: '#6B7280', bg: '#F9FAFB' },
+} as const;
+
 type ChannelStatus = 'pending' | 'in_progress' | 'done';
 
 interface ChannelActivationProps {
@@ -107,7 +121,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   const { products, count: productsCount } = useProducts();
   const { campaigns, isLoading: campaignsLoading, hasImported: hasCampaigns } = useCampaigns();
   const { segments: rfmSegments } = useSegments();
-  const { activeStrategy, getStrategyName } = useActiveStrategy();
+  const { activeStrategy, getStrategyName, updateBudget, isSavingBudget } = useActiveStrategy();
   const toast = useToast();
 
   const historyChartRef = useRef<HTMLDivElement>(null);
@@ -117,6 +131,9 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   const [showExportAllModal, setShowExportAllModal] = useState(false);
   const [editingNote, setEditingNote] = useState<string | null>(null);
   const [noteText, setNoteText] = useState('');
+  const [budgetInput, setBudgetInput] = useState('');
+  const [editingBudget, setEditingBudget] = useState(false);
+  const monthlyBudget = activeStrategy?.monthlyBudget ?? null;
 
   const strategyId = activeStrategy?.id ?? null;
   const scenarioId = activeStrategy?.scenarioId ?? null;
@@ -134,6 +151,27 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     return { brandName: currentBrand.name || '', brandType: 'B2C' as const, topCategories: sorted };
   }, [currentBrand, products]);
 
+  const campaignPerfForAI = useMemo(() => {
+    if (!hasCampaigns || campaigns.length === 0) return undefined;
+    const channelStats: Record<string, { spent: number; convValue: number; conversions: number; impressions: number; clicks: number }> = {};
+    (campaigns as Campaign[]).forEach(c => {
+      const ch = c.channel || 'Other';
+      if (!channelStats[ch]) channelStats[ch] = { spent: 0, convValue: 0, conversions: 0, impressions: 0, clicks: 0 };
+      channelStats[ch].spent += c.amount_spent || 0;
+      channelStats[ch].convValue += c.conversion_value || 0;
+      channelStats[ch].conversions += c.conversions || 0;
+      channelStats[ch].impressions += c.impressions || 0;
+      channelStats[ch].clicks += c.clicks || 0;
+    });
+    return Object.entries(channelStats).map(([channel, s]) => ({
+      channel,
+      spent: s.spent,
+      roas: s.spent > 0 ? s.convValue / s.spent : 0,
+      conversions: s.conversions,
+      ctr: s.impressions > 0 ? (s.clicks / s.impressions) * 100 : 0,
+    }));
+  }, [campaigns, hasCampaigns]);
+
   const { recommendation: aiRecommendation, isLoading: aiLoading } = useAIChannelRecommendations({
     selectedScenarioId: scenarioId,
     segments: rfmSegments,
@@ -141,6 +179,8 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     mixConfig,
     brandContext,
     useAI: true,
+    totalBudget: monthlyBudget ?? undefined,
+    campaignPerformance: campaignPerfForAI,
   });
 
   const { getStatus, getNote, updateActivation, isSaving } = useChannelActivations(strategyId);
@@ -248,9 +288,33 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
 
   const handleExportBrief = useCallback(() => {
     if (!aiRecommendation || !activeStrategy) return;
-    const briefData = buildBriefData(aiRecommendation, activeStrategy, currentBrand?.name, allChannels, getStatus, getNote);
+    const briefData = buildBriefData(aiRecommendation, activeStrategy, currentBrand?.name, allChannels, getStatus, getNote, monthlyBudget);
     openBriefPdf(briefData);
-  }, [aiRecommendation, activeStrategy, currentBrand, allChannels, getStatus, getNote]);
+  }, [aiRecommendation, activeStrategy, currentBrand, allChannels, getStatus, getNote, monthlyBudget]);
+
+  const handleBudgetSave = useCallback(async () => {
+    const parsed = parseFloat(budgetInput.replace(/[^\d.,]/g, '').replace(',', '.'));
+    if (isNaN(parsed) || parsed <= 0) {
+      toast.error('Εισάγετε ένα έγκυρο ποσό');
+      return;
+    }
+    try {
+      await updateBudget(parsed);
+      toast.success(`Budget €${parsed.toLocaleString('el-GR')} αποθηκεύτηκε`);
+      setEditingBudget(false);
+    } catch {
+      toast.error('Σφάλμα κατά την αποθήκευση');
+    }
+  }, [budgetInput, updateBudget, toast]);
+
+  const getActionForChannel = useCallback((channelName: string): BudgetAction | null => {
+    if (!aiRecommendation?.actions) return null;
+    const lower = channelName.toLowerCase().trim();
+    return aiRecommendation.actions.find(a => {
+      const aLower = a.channel.toLowerCase().trim();
+      return aLower === lower || lower.includes(aLower) || aLower.includes(lower.split(' ')[0]);
+    }) ?? null;
+  }, [aiRecommendation]);
 
   // Feed export
   const exportFeed = async (feedType: string, format: 'csv' | 'xlsx') => {
@@ -310,7 +374,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h2 className="text-2xl font-bold text-[#1A1A1A]">Channel Activation</h2>
           <p className="text-[#4A4A4A] mt-1">
@@ -323,6 +387,48 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {/* Monthly Budget */}
+          <div className="flex items-center gap-2">
+            <Wallet size={16} className="text-[#9CA3AF]" />
+            {editingBudget ? (
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm text-[#4A4A4A]">€</span>
+                <input
+                  type="text"
+                  value={budgetInput}
+                  onChange={e => setBudgetInput(e.target.value)}
+                  placeholder="π.χ. 5000"
+                  className="w-24 text-sm px-2 py-1.5 border border-[#E5E5E5] rounded-lg focus:outline-none focus:border-[var(--nts-accent)] font-mono"
+                  autoFocus
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') handleBudgetSave();
+                    if (e.key === 'Escape') { setEditingBudget(false); setBudgetInput(''); }
+                  }}
+                />
+                <button
+                  onClick={handleBudgetSave}
+                  disabled={isSavingBudget}
+                  className="text-xs px-3 py-1.5 bg-[#1A1A1A] text-white rounded-lg hover:bg-[#333] disabled:opacity-50"
+                >
+                  OK
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => {
+                  setBudgetInput(monthlyBudget ? String(monthlyBudget) : '');
+                  setEditingBudget(true);
+                }}
+                className="text-sm font-medium px-3 py-1.5 rounded-lg border border-[#E5E5E5] hover:border-[var(--nts-accent)] transition-colors"
+              >
+                {monthlyBudget
+                  ? <span className="font-mono">€{monthlyBudget.toLocaleString('el-GR')}<span className="text-[#9CA3AF] font-normal">/μήνα</span></span>
+                  : <span className="text-[#9CA3AF]">Ορισμός budget</span>
+                }
+              </button>
+            )}
+          </div>
+
           {aiRecommendation && activeStrategy && (
             <Button
               variant="primary"
@@ -408,15 +514,29 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                 </PieChart>
               </div>
               <div className="space-y-2 mt-4">
-                {aiPieData.map((item, index) => (
-                  <div key={item.channel} className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
-                      <span className="text-[#4A4A4A] truncate max-w-[120px]">{item.channel}</span>
+                {aiPieData.map((item, index) => {
+                  const eurAmount = monthlyBudget ? Math.round((item.percentage / 100) * monthlyBudget) : null;
+                  return (
+                    <div key={item.channel} className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                        <span className="text-[#4A4A4A] truncate max-w-[120px]">{item.channel}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {eurAmount !== null && (
+                          <span className="font-mono text-[11px] text-[#9CA3AF]">€{eurAmount.toLocaleString('el-GR')}</span>
+                        )}
+                        <span className="font-mono text-[#1A1A1A]">{formatPercent(item.percentage, 0)}</span>
+                      </div>
                     </div>
-                    <span className="font-mono text-[#1A1A1A]">{formatPercent(item.percentage, 0)}</span>
+                  );
+                })}
+                {monthlyBudget && (
+                  <div className="flex items-center justify-between text-xs pt-2 border-t border-[#E5E5E5]">
+                    <span className="text-[#9CA3AF]">Μηνιαίο budget</span>
+                    <span className="font-mono font-semibold text-[#1A1A1A]">€{monthlyBudget.toLocaleString('el-GR')}</span>
                   </div>
-                ))}
+                )}
               </div>
             </>
           ) : (
@@ -458,6 +578,8 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                 const statusCfg = STATUS_CONFIG[status];
                 const StatusIcon = statusCfg.icon;
                 const isEditing = editingNote === ch.name;
+                const eurAmount = (ch.budget !== null && monthlyBudget) ? Math.round((ch.budget / 100) * monthlyBudget) : null;
+                const action = getActionForChannel(ch.name);
 
                 return (
                   <motion.div
@@ -481,10 +603,31 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                           {!ch.isPrimary && (
                             <span className="text-[10px] text-[#9CA3AF] border border-[#E5E5E5] px-1.5 py-0.5 rounded">secondary</span>
                           )}
+                          {action && (() => {
+                            const cfg = ACTION_TYPE_CONFIG[action.type];
+                            const ActionIcon = cfg.icon;
+                            return (
+                              <span
+                                className="text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1 cursor-help"
+                                style={{ backgroundColor: cfg.bg, color: cfg.color }}
+                                title={action.reason}
+                              >
+                                <ActionIcon size={10} />
+                                {cfg.label}{action.suggestedChange ? ` ${action.type === 'decrease' || action.type === 'pause' ? '-' : '+'}${action.suggestedChange}%` : ''}
+                              </span>
+                            );
+                          })()}
                         </div>
-                        {ch.budget !== null && (
-                          <p className="text-xs text-[#4A4A4A] mt-1">Budget allocation: <span className="font-semibold text-[#1A1A1A]">{ch.budget}%</span></p>
-                        )}
+                        <div className="flex items-center gap-3 mt-1">
+                          {ch.budget !== null && (
+                            <span className="text-xs text-[#4A4A4A]">
+                              Budget: <span className="font-semibold text-[#1A1A1A]">{ch.budget}%</span>
+                              {eurAmount !== null && (
+                                <span className="font-mono ml-1 text-[#1A1A1A] font-semibold">· €{eurAmount.toLocaleString('el-GR')}</span>
+                              )}
+                            </span>
+                          )}
+                        </div>
 
                         {/* Note display / edit */}
                         {isEditing ? (
@@ -757,7 +900,8 @@ interface BriefData {
   brandName: string;
   strategyName: string;
   duration: string;
-  channels: { name: string; isPrimary: boolean; budget: number | null; funnel: string; funnelColor: string; status: string; note: string }[];
+  monthlyBudget: number | null;
+  channels: { name: string; isPrimary: boolean; budget: number | null; budgetEur: number | null; funnel: string; funnelColor: string; status: string; note: string }[];
   rationale: string;
   date: string;
 }
@@ -769,15 +913,18 @@ function buildBriefData(
   channels: { name: string; isPrimary: boolean; budget: number | null }[],
   getStatus: (ch: string) => string,
   getNote: (ch: string) => string,
+  monthlyBudget: number | null,
 ): BriefData {
   const scenario = scenarios.find(s => s.id === strategy.scenarioId);
   return {
     brandName: brandName || '',
     strategyName: scenario?.name || strategy.scenarioId,
     duration: strategy.duration === 'ongoing' ? 'Ongoing' : strategy.duration ? `${strategy.duration} ημέρες` : '—',
+    monthlyBudget,
     channels: channels.map(ch => {
       const f = getFunnelStage(ch.name);
-      return { name: ch.name, isPrimary: ch.isPrimary, budget: ch.budget, funnel: f.label, funnelColor: f.color, status: getStatus(ch.name), note: getNote(ch.name) };
+      const eurAmt = (ch.budget !== null && monthlyBudget) ? Math.round((ch.budget / 100) * monthlyBudget) : null;
+      return { name: ch.name, isPrimary: ch.isPrimary, budget: ch.budget, budgetEur: eurAmt, funnel: f.label, funnelColor: f.color, status: getStatus(ch.name), note: getNote(ch.name) };
     }),
     rationale: rec.rationale || '',
     date: new Date().toLocaleDateString('el-GR', { day: 'numeric', month: 'long', year: 'numeric' }),
@@ -788,12 +935,15 @@ function openBriefPdf(data: BriefData) {
   const channelRows = data.channels.map(ch => {
     const statusLabel = STATUS_CONFIG[ch.status as ChannelStatus]?.label || ch.status;
     const statusColor = STATUS_CONFIG[ch.status as ChannelStatus]?.color || '#9CA3AF';
+    const budgetDisplay = ch.budget !== null
+      ? `${ch.budget}%${ch.budgetEur !== null ? ` · €${ch.budgetEur.toLocaleString('el-GR')}` : ''}`
+      : '';
     return `
       <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:#FAFAFA;border-radius:10px;margin:4px 0;border-left:3px solid ${ch.funnelColor}">
         <div style="flex:1">
           <div style="font-size:13px;font-weight:600;color:#1A1A1A">${ch.name}</div>
           <div style="font-size:11px;color:#4A4A4A;margin-top:2px">
-            ${ch.funnel}${ch.budget !== null ? ` · ${ch.budget}%` : ''}${!ch.isPrimary ? ' · secondary' : ''}
+            ${ch.funnel}${budgetDisplay ? ` · ${budgetDisplay}` : ''}${!ch.isPrimary ? ' · secondary' : ''}
           </div>
           ${ch.note ? `<div style="font-size:11px;color:#4A4A4A;margin-top:4px;font-style:italic">${ch.note}</div>` : ''}
         </div>
@@ -837,7 +987,7 @@ function openBriefPdf(data: BriefData) {
     <div class="logo">≠</div>
   </div>
 
-  <div class="meta-grid">
+  <div class="meta-grid"${data.monthlyBudget ? ' style="grid-template-columns:1fr 1fr 1fr"' : ''}>
     <div class="meta-card">
       <div class="meta-label">Στρατηγική</div>
       <div class="meta-value">${data.strategyName}</div>
@@ -846,6 +996,10 @@ function openBriefPdf(data: BriefData) {
       <div class="meta-label">Διάρκεια</div>
       <div class="meta-value">${data.duration}</div>
     </div>
+    ${data.monthlyBudget ? `<div class="meta-card">
+      <div class="meta-label">Μηνιαίο Budget</div>
+      <div class="meta-value">€${data.monthlyBudget.toLocaleString('el-GR')}</div>
+    </div>` : ''}
   </div>
 
   <div class="section">

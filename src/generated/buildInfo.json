@@ -1,10 +1,14 @@
 {
-  "version": "0.21.0",
-  "previousVersion": "0.20.0",
-  "commitHash": "8628840",
+  "version": "0.22.0",
+  "previousVersion": "0.21.0",
+  "commitHash": "1338329",
   "branch": "main",
-  "buildDate": "2026-03-08T22:26:58.989Z",
+  "buildDate": "2026-03-08T23:15:04.409Z",
   "commits": [
+    {
+      "hash": "1338329",
+      "message": "Revert MarketingIndexPage to pre-rewrite state"
+    },
     {
       "hash": "8628840",
       "message": "Channel Activation upgrade: AI briefs, per-channel status (Firestore), agency brief export"
@@ -60,13 +64,10 @@
     {
       "hash": "bd4d43f",
       "message": "feat: Mixed strategies, seasonal periods, personalized AI, strategy expiry"
-    },
-    {
-      "hash": "c8cf493",
-      "message": "feat: Gemini AI integration, responsive fixes, dynamic RFM segments"
     }
   ],
   "changes": [
+    "Revert MarketingIndexPage to pre-rewrite state",
     "Channel Activation upgrade: AI briefs, per-channel status (Firestore), agency brief export",
     "Refine value proposition tone: professional tagline aligned with NotTheSame brand",
     "Positioning and marketing refresh: new buyer persona, GTM strategy, marketing page rewrite",
@@ -75,7 +76,6 @@
     "Strategy Package (PDF + Link), sidebar redesign, brand icon, UI refinements",
     "Fix revenue_share property name",
     "AI upgrade: CMO-level prompts, deterministic output (temp=0), funnel stage labels, expanded channels, structured bullets, 1hr cache",
-    "Clean up unused preset/duration code for production build",
-    "Refactor strategy UI: remove save button, move compare below cards, integrate duration in apply popup, fix segment wrapping and duration sync"
+    "Clean up unused preset/duration code for production build"
   ]
 }
