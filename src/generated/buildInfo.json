@@ -1,10 +1,14 @@
 {
-  "version": "0.24.0",
-  "previousVersion": "0.23.0",
-  "commitHash": "e035b99",
+  "version": "0.25.0",
+  "previousVersion": "0.24.0",
+  "commitHash": "2c5a596",
   "branch": "main",
-  "buildDate": "2026-03-08T23:31:56.162Z",
+  "buildDate": "2026-03-08T23:48:47.931Z",
   "commits": [
+    {
+      "hash": "2c5a596",
+      "message": "AI prompt: separate paid vs owned channels, budget only for paid media"
+    },
     {
       "hash": "e035b99",
       "message": "UI: sidebar reorder, logo orange ring, marketing text update"
@@ -60,13 +64,10 @@
     {
       "hash": "04429d4",
       "message": "fix: replace remaining blue #0969da with neutrals, fix strategy duration badge, preserve mixConfig on duration change"
-    },
-    {
-      "hash": "57245e2",
-      "message": "fix: remove unused SEASONAL_PERIODS import"
     }
   ],
   "changes": [
+    "AI prompt: separate paid vs owned channels, budget only for paid media",
     "UI: sidebar reorder, logo orange ring, marketing text update",
     "Budget management: monthly budget input, EUR allocation per channel, AI smart actions (increase/decrease/push)",
     "Revert MarketingIndexPage to pre-rewrite state",
@@ -75,7 +76,6 @@
     "Positioning and marketing refresh: new buyer persona, GTM strategy, marketing page rewrite",
     "[Διόρθωση] Remove unused AlertTriangle import",
     "AI Insights refinement, seasonal banner neutral, Inventory blue restore",
-    "Strategy Package (PDF + Link), sidebar redesign, brand icon, UI refinements",
-    "Fix revenue_share property name"
+    "Strategy Package (PDF + Link), sidebar redesign, brand icon, UI refinements"
   ]
 }

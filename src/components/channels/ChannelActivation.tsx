@@ -20,6 +20,8 @@ import {
   Zap,
   Pause,
   Minus,
+  Users,
+  MessageSquare,
 } from 'lucide-react';
 import {
   PieChart,
@@ -46,9 +48,9 @@ import type { Campaign, ChannelRecommendation, BudgetAction } from '../../types'
 const COLORS = ['var(--nts-accent)', '#78716C', '#22C55E', '#8B5CF6', '#F59E0B', '#3B82F6', '#EC4899'];
 
 const FUNNEL_STAGE: Record<string, { label: string; color: string }> = {
-  'google search ads': { label: 'Conversion', color: '#22C55E' },
-  'google shopping': { label: 'Conversion', color: '#22C55E' },
-  'google performance max': { label: 'Full-funnel', color: '#6B7280' },
+  'google search ads': { label: 'Sales', color: '#22C55E' },
+  'google shopping': { label: 'Sales', color: '#22C55E' },
+  'google performance max': { label: 'Sales', color: '#22C55E' },
   'meta ads (facebook/instagram)': { label: 'Awareness', color: '#3B82F6' },
   'meta ads': { label: 'Awareness', color: '#3B82F6' },
   'youtube ads': { label: 'Consideration', color: '#F97316' },
@@ -58,20 +60,27 @@ const FUNNEL_STAGE: Record<string, { label: string; color: string }> = {
   'sms': { label: 'Loyalty', color: '#8B5CF6' },
   'push notifications': { label: 'Loyalty', color: '#8B5CF6' },
   'loyalty programs': { label: 'Loyalty', color: '#8B5CF6' },
-  'dynamic remarketing': { label: 'Conversion', color: '#22C55E' },
-  'meta retargeting': { label: 'Conversion', color: '#22C55E' },
-  'google remarketing': { label: 'Conversion', color: '#22C55E' },
-  'remarketing': { label: 'Conversion', color: '#22C55E' },
+  'dynamic remarketing': { label: 'Sales', color: '#22C55E' },
+  'meta retargeting': { label: 'Sales', color: '#22C55E' },
+  'google remarketing': { label: 'Sales', color: '#22C55E' },
+  'remarketing': { label: 'Sales', color: '#22C55E' },
   'organic social media': { label: 'Awareness', color: '#3B82F6' },
   'influencer marketing': { label: 'Consideration', color: '#F97316' },
   'content marketing/seo': { label: 'Consideration', color: '#F97316' },
   'content marketing': { label: 'Consideration', color: '#F97316' },
   'seo': { label: 'Consideration', color: '#F97316' },
-  'marketplace ads (skroutz, amazon)': { label: 'Conversion', color: '#22C55E' },
-  'marketplace ads (skroutz)': { label: 'Conversion', color: '#22C55E' },
-  'affiliate marketing': { label: 'Conversion', color: '#22C55E' },
+  'seo (on-page & technical)': { label: 'Consideration', color: '#F97316' },
+  'blog / editorial content': { label: 'Consideration', color: '#F97316' },
+  'product content optimization': { label: 'Consideration', color: '#F97316' },
+  'marketplace ads (skroutz, amazon)': { label: 'Sales', color: '#22C55E' },
+  'marketplace ads (skroutz)': { label: 'Sales', color: '#22C55E' },
+  'affiliate marketing': { label: 'Sales', color: '#22C55E' },
   'tiktok ads': { label: 'Awareness', color: '#3B82F6' },
+  'pinterest ads': { label: 'Consideration', color: '#F97316' },
   'whatsapp business': { label: 'Loyalty', color: '#8B5CF6' },
+  'ugc (user-generated content)': { label: 'Consideration', color: '#F97316' },
+  'video/connected tv': { label: 'Awareness', color: '#3B82F6' },
+  'programmatic display': { label: 'Awareness', color: '#3B82F6' },
 };
 
 function getFunnelStage(channel: string) {
@@ -80,7 +89,11 @@ function getFunnelStage(channel: string) {
   for (const [k, v] of Object.entries(FUNNEL_STAGE)) {
     if (key.includes(k) || k.includes(key)) return v;
   }
-  return { label: 'Other', color: '#9CA3AF' };
+  if (key.includes('ads') || key.includes('search') || key.includes('shopping') || key.includes('remarketing')) return { label: 'Sales', color: '#22C55E' };
+  if (key.includes('display') || key.includes('video') || key.includes('social') || key.includes('tiktok')) return { label: 'Awareness', color: '#3B82F6' };
+  if (key.includes('content') || key.includes('seo') || key.includes('influencer') || key.includes('blog')) return { label: 'Consideration', color: '#F97316' };
+  if (key.includes('email') || key.includes('sms') || key.includes('push') || key.includes('loyalty') || key.includes('crm')) return { label: 'Loyalty', color: '#8B5CF6' };
+  return { label: 'Awareness', color: '#3B82F6' };
 }
 
 function getBudgetForChannel(channel: string, allocation: Record<string, number>): number | null {
@@ -181,6 +194,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     useAI: true,
     totalBudget: monthlyBudget ?? undefined,
     campaignPerformance: campaignPerfForAI,
+    context: 'activation',
   });
 
   const { getStatus, getNote, updateActivation, isSaving } = useChannelActivations(strategyId);
@@ -695,14 +709,61 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
               })}
 
               {/* AI Rationale */}
-              {aiRecommendation?.rationale && (
-                <div className="mt-4 p-4 bg-[#FAFAFA] rounded-xl border border-[#E5E5E5]">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[#9CA3AF] mb-2">AI Analysis</p>
-                  {aiRecommendation.rationale.split('||').map((part, i) => (
-                    <p key={i} className="text-xs text-[#4A4A4A] leading-relaxed mb-1">{part.trim()}</p>
-                  ))}
-                </div>
-              )}
+              {aiRecommendation?.rationale && (() => {
+                const parts = aiRecommendation.rationale.split('||').map(s => s.trim());
+                const hasStructure = parts.length >= 3 && parts[0].startsWith('Πελάτες:');
+                const sections = [
+                  { icon: Users, color: '#8B5CF6', label: 'Πελάτες' },
+                  { icon: MessageSquare, color: '#3B82F6', label: 'Κανάλια' },
+                  { icon: TrendingUp, color: '#22C55E', label: 'Αποτέλεσμα' },
+                ];
+                return (
+                  <div className="mt-4 p-4 bg-gradient-to-r from-[#F5F5F5] to-white rounded-xl border border-[#E5E5E5]">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-[#9CA3AF] mb-3">AI Analysis</p>
+                    {hasStructure ? (
+                      <div className="space-y-3">
+                        {parts.slice(0, 3).map((part, i) => {
+                          const s = sections[i];
+                          const text = part.replace(/^(Πελάτες|Κανάλια|Αποτέλεσμα):\s*/i, '');
+                          const Icon = s.icon;
+                          const cleaned = text.replace(/—/g, ',');
+                          const lines = cleaned.split('\n').map(l => l.trim()).filter(Boolean);
+                          const intro = lines.filter(l => !l.startsWith('•'));
+                          const bullets = lines.filter(l => l.startsWith('•')).map(l => l.replace(/^•\s*/, ''));
+                          return (
+                            <div key={i} className="flex items-start gap-2.5">
+                              <div
+                                className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 mt-0.5"
+                                style={{ backgroundColor: `${s.color}15` }}
+                              >
+                                <Icon size={13} style={{ color: s.color }} />
+                              </div>
+                              <div className="min-w-0">
+                                <span className="text-xs font-semibold" style={{ color: s.color }}>{s.label}</span>
+                                {intro.length > 0 && (
+                                  <p className="text-sm text-[#4A4A4A] leading-relaxed">{intro.join(' ')}</p>
+                                )}
+                                {bullets.length > 0 && (
+                                  <ul className="mt-1 space-y-0.5">
+                                    {bullets.map((b, bi) => (
+                                      <li key={bi} className="flex items-start gap-1.5 text-sm text-[#4A4A4A] leading-relaxed">
+                                        <span className="mt-1.5 w-1 h-1 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />
+                                        {b}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-[#4A4A4A] leading-relaxed">{aiRecommendation.rationale.replace(/—/g, ',')}</p>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           ) : (
             <div className="flex items-center justify-center py-16">

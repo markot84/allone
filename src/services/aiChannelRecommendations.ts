@@ -4,6 +4,7 @@ import {
   buildChannelRecommendationsUserPrompt,
   type FitLevel,
   type CampaignPerformanceData,
+  type PromptContext,
 } from '../data/channelRecommendationsPrompt';
 import type { ChannelRecommendation, BudgetAction } from '../types';
 import type { Scenario } from '../types';
@@ -72,12 +73,13 @@ export interface GenerateRecommendationsParams {
   segmentFitList?: SegmentFitInfo[];
   totalBudget?: number;
   campaignPerformance?: CampaignPerformanceData[];
+  context?: PromptContext;
 }
 
 export async function generateChannelRecommendations(
   params: GenerateRecommendationsParams
 ): Promise<ChannelRecommendation | null> {
-  const { scenario, segment, fitLevel, brandContext, segmentFitList, totalBudget, campaignPerformance } = params;
+  const { scenario, segment, fitLevel, brandContext, segmentFitList, totalBudget, campaignPerformance, context } = params;
 
   try {
     if (!GEMINI_API_KEY) throw new Error('VITE_GEMINI_API_KEY is not set');
@@ -104,6 +106,7 @@ export async function generateChannelRecommendations(
       segmentFitList,
       totalBudget,
       campaignPerformance,
+      context,
     });
 
     const result = await model.generateContent(userPrompt);

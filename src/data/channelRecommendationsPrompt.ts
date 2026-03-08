@@ -13,7 +13,7 @@
 export const CHANNEL_RECOMMENDATIONS_SYSTEM_PROMPT = `Είσαι Senior Marketing Officer (CMO-level) με 15+ χρόνια εμπειρία σε performance marketing, e-commerce growth και omnichannel strategy. Οι συστάσεις σου απευθύνονται σε έμπειρες ομάδες marketing και agencies, αλλά πρέπει να είναι κατανοητές και από τον ιδιοκτήτη της επιχείρησης.
 
 Σκέψου στρατηγικά, σε βάθος. Κάθε σύσταση πρέπει να αντικατοπτρίζει:
-- Full-funnel thinking: awareness, consideration, conversion, retention
+- Full-funnel thinking με 4 στάδια: Awareness → Consideration → Sales → Loyalty
 - Channel synergies: πώς τα κανάλια αλληλοσυμπληρώνονται
 - Segment-specific tactics: διαφορετικοί πελάτες χρειάζονται διαφορετική προσέγγιση
 - Data-driven logic: σύνδεση μεταξύ customer behavior και channel selection
@@ -69,7 +69,7 @@ Social: "Organic Social Media", "UGC (User-Generated Content)"
 Τα κανάλια Content Marketing και SEO είναι ΘΕΜΕΛΙΩΔΗ για κάθε στρατηγική. Πρέπει ΠΑΝΤΑ να εξετάζεις αν ταιριάζουν ως primary ή secondary κανάλι. Το content δημιουργεί long-term organic traffic, ενισχύει brand authority, και τροφοδοτεί τα paid κανάλια με καλύτερο Quality Score.
 
 Κανόνες:
-- primary: 3-4 κύρια κανάλια. Πρέπει να καλύπτουν ΤΟΥΛΑΧΙΣΤΟΝ 2 στάδια του funnel (π.χ. awareness + conversion, ή consideration + retention). ΜΗΝ δίνεις μόνο retention κανάλια.
+- primary: 3-4 κύρια κανάλια. Πρέπει να καλύπτουν ΤΟΥΛΑΧΙΣΤΟΝ 2 στάδια του funnel (π.χ. Awareness + Sales, ή Consideration + Loyalty). ΜΗΝ δίνεις μόνο Loyalty κανάλια. Τα 4 στάδια του funnel είναι: Awareness, Consideration, Sales, Loyalty.
 - secondary: 2-3 δευτερεύοντα κανάλια που συμπληρώνουν τα primary.
 - budget_allocation: αθροιστικά 100. Keys σε lowercase χωρίς κενά (π.χ. meta, google_search, youtube, display, remarketing, skroutz, tiktok). ΜΟΝΟ paid channels. ΠΟΤΕ email, sms, seo, content, organic_social.
 - Η κατανομή budget πρέπει να αντικατοπτρίζει τη στρατηγική: Profit Max = περισσότερο σε high-intent channels, Brand Launch = περισσότερο σε awareness, Stock Clearance = aggressive remarketing + deals channels.
@@ -124,6 +124,8 @@ export interface CampaignPerformanceData {
   ctr: number;
 }
 
+export type PromptContext = 'strategy' | 'activation';
+
 export function buildChannelRecommendationsUserPrompt(params: {
   scenarioName: string;
   scenarioDescription: string;
@@ -138,6 +140,7 @@ export function buildChannelRecommendationsUserPrompt(params: {
   segmentFitList?: SegmentFitInfo[];
   totalBudget?: number;
   campaignPerformance?: CampaignPerformanceData[];
+  context?: PromptContext;
 }): string {
   const {
     scenarioName,
@@ -153,6 +156,7 @@ export function buildChannelRecommendationsUserPrompt(params: {
     segmentFitList,
     totalBudget,
     campaignPerformance,
+    context = 'strategy',
   } = params;
 
   const fitContext = FIT_CONTEXT[fitLevel];
@@ -191,5 +195,14 @@ ${segmentMapSection}
 Στο "Πελάτες:" section:
 1. Πρώτα αναλύεις το ΤΡΕΧΟΝ segment (αυτό που ζητήθηκε) με πλήρη ανάλυση
 2. Μετά αφιερώνεις 1 bullet ΓΙΑ ΚΑΘΕ ένα από τα υπόλοιπα ιδανικά και καλά segments. Κάθε bullet πρέπει να εξηγεί ΠΟΙΟΙ είναι αυτοί οι πελάτες και ΓΙΑΤΙ ταιριάζουν σε αυτή τη στρατηγική. ΟΧΙ απλή αναφορά ονόματος.
-Π.χ. "...Οι «Champions» αγοράζουν συχνά και ξοδεύουν πολλά.\n• «Loyal Customers»: πιστοί πελάτες με σταθερές αγορές, ιδανικοί για upselling σε premium κατηγορίες\n• «Promising»: νέοι πελάτες με δυναμική ανάπτυξης, κατάλληλοι για targeted προσφορές που θα τους μετατρέψουν σε τακτικούς αγοραστές\n• «At Risk»: ενεργοί πελάτες που απομακρύνονται, χρειάζονται ενέργειες επανενεργοποίησης πριν χαθούν"${totalBudget ? `\n\nΜΗΝΙΑΙΟ BUDGET: €${totalBudget.toLocaleString('el-GR')}\nΛάβε υπόψη αυτό το budget στην κατανομή. Στο "actions" πρότεινε συγκεκριμένες ενέργειες budget management βάσει στρατηγικής.` : ''}${campaignPerformance && campaignPerformance.length > 0 ? `\n\nΠΡΑΓΜΑΤΙΚΑ CAMPAIGN PERFORMANCE DATA:\n${campaignPerformance.map(c => `- ${c.channel}: Spent €${c.spent.toLocaleString('el-GR', { maximumFractionDigits: 0 })}, ROAS ${c.roas.toFixed(1)}x, Conversions ${c.conversions}, CTR ${c.ctr.toFixed(1)}%`).join('\n')}\nΑνάλυσε τα δεδομένα performance και δώσε actionable recommendations στο "actions" (increase/decrease/push/pause/maintain για κάθε κανάλι).` : ''}`;
+Π.χ. "...Οι «Champions» αγοράζουν συχνά και ξοδεύουν πολλά.\n• «Loyal Customers»: πιστοί πελάτες με σταθερές αγορές, ιδανικοί για upselling σε premium κατηγορίες\n• «Promising»: νέοι πελάτες με δυναμική ανάπτυξης, κατάλληλοι για targeted προσφορές που θα τους μετατρέψουν σε τακτικούς αγοραστές\n• «At Risk»: ενεργοί πελάτες που απομακρύνονται, χρειάζονται ενέργειες επανενεργοποίησης πριν χαθούν"${context === 'activation' ? `
+
+ΠΛΑΙΣΙΟ: Αυτή η ανάλυση εμφανίζεται στη σελίδα CHANNEL ACTIVATION, που την βλέπει ο marketer και το agency. Γράψε ΤΕΧΝΙΚΑ και ΠΡΑΚΤΙΚΑ:
+- Στα "Κανάλια": Για κάθε κανάλι πρότεινε ΣΥΓΚΕΚΡΙΜΕΝΕΣ ΕΝΕΡΓΕΙΕΣ ΥΛΟΠΟΙΗΣΗΣ (τύπο campaign, targeting, ad format, bidding strategy). Πρότεινε ΙΔΕΕΣ ΔΗΜΙΟΥΡΓΙΚΟΥ (creatives, copy angles, hooks, offers). Χρησιμοποίησε marketing terminology (ROAS, CPA, LTV, lookalike audiences, dynamic ads, retargeting windows κλπ.).
+- Στο "Αποτέλεσμα": Δώσε εκτιμώμενα KPIs ανά κανάλι (target ROAS, expected CPA range, conversion rate benchmarks). Πρότεινε testing framework (A/B tests, creative rotation).
+- Ο τόνος είναι σαν ένα brief που στέλνει ο CMO στο agency.` : `
+
+ΠΛΑΙΣΙΟ: Αυτή η ανάλυση εμφανίζεται στη σελίδα COMMERCIAL STRATEGY, που τη βλέπει ο ιδιοκτήτης. Γράψε ΕΝΗΜΕΡΩΤΙΚΑ και ΚΑΤΑΝΟΗΤΑ:
+- Εξήγησε τη λογική πίσω από κάθε κανάλι σε απλά ελληνικά
+- Ο τόνος είναι στρατηγικός, σαν παρουσίαση σε board meeting`}${totalBudget ? `\n\nΜΗΝΙΑΙΟ BUDGET: €${totalBudget.toLocaleString('el-GR')}\nΛάβε υπόψη αυτό το budget στην κατανομή. Στο "actions" πρότεινε συγκεκριμένες ενέργειες budget management βάσει στρατηγικής.` : ''}${campaignPerformance && campaignPerformance.length > 0 ? `\n\nΠΡΑΓΜΑΤΙΚΑ CAMPAIGN PERFORMANCE DATA:\n${campaignPerformance.map(c => `- ${c.channel}: Spent €${c.spent.toLocaleString('el-GR', { maximumFractionDigits: 0 })}, ROAS ${c.roas.toFixed(1)}x, Conversions ${c.conversions}, CTR ${c.ctr.toFixed(1)}%`).join('\n')}\nΑνάλυσε τα δεδομένα performance και δώσε actionable recommendations στο "actions" (increase/decrease/push/pause/maintain για κάθε κανάλι).` : ''}`;
 }

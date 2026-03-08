@@ -5,7 +5,7 @@ import { channelRecommendations as staticRecommendations, scenarios } from '../d
 import type { ChannelRecommendation } from '../types';
 import type { RFMSegment } from '../types';
 import type { FitLevel } from '../utils/segmentRelevance';
-import type { CampaignPerformanceData } from '../data/channelRecommendationsPrompt';
+import type { CampaignPerformanceData, PromptContext } from '../data/channelRecommendationsPrompt';
 
 export interface MixConfigForAI {
   scenarioA: string;
@@ -36,6 +36,7 @@ export interface UseAIChannelRecommendationsOptions {
   useAI?: boolean;
   totalBudget?: number;
   campaignPerformance?: CampaignPerformanceData[];
+  context?: PromptContext;
 }
 
 const SEGMENT_NAME_MAP: Record<string, string> = {
@@ -81,6 +82,7 @@ export function useAIChannelRecommendations({
   useAI = true,
   totalBudget,
   campaignPerformance,
+  context = 'strategy',
 }: UseAIChannelRecommendationsOptions) {
   const [aiEnabled, setAiEnabled] = useState(useAI);
 
@@ -124,7 +126,7 @@ export function useAIChannelRecommendations({
     error: aiError,
     refetch
   } = useQuery({
-    queryKey: ['aiChannelRecommendations', 'v6', selectedScenarioId, selectedSegmentId, fitLevel, aiEnabled, mixConfig?.scenarioA, mixConfig?.scenarioB, mixConfig?.percentA, brandContext?.brandName, totalBudget],
+    queryKey: ['aiChannelRecommendations', 'v7', selectedScenarioId, selectedSegmentId, fitLevel, aiEnabled, mixConfig?.scenarioA, mixConfig?.scenarioB, mixConfig?.percentA, brandContext?.brandName, totalBudget, context],
     queryFn: async () => {
       if (!scenario || !segment || !aiEnabled) return null;
       return generateChannelRecommendations({
@@ -133,6 +135,7 @@ export function useAIChannelRecommendations({
         segmentFitList: segmentFitList ?? undefined,
         totalBudget,
         campaignPerformance,
+        context,
       });
     },
     enabled: !!scenario && !!segment && aiEnabled && selectedSegmentId !== '',
