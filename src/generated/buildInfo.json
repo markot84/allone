@@ -1,10 +1,14 @@
 {
-  "version": "0.17.0",
-  "previousVersion": "0.16.0",
-  "commitHash": "d819009",
+  "version": "0.18.0",
+  "previousVersion": "0.17.0",
+  "commitHash": "2472baa",
   "branch": "main",
-  "buildDate": "2026-03-08T22:01:49.330Z",
+  "buildDate": "2026-03-08T22:06:59.968Z",
   "commits": [
+    {
+      "hash": "2472baa",
+      "message": "Positioning and marketing refresh: new buyer persona, GTM strategy, marketing page rewrite"
+    },
     {
       "hash": "d819009",
       "message": "fix: remove unused AlertTriangle import"
@@ -60,13 +64,10 @@
     {
       "hash": "7c6878e",
       "message": "feat: auto-versioning from git commits"
-    },
-    {
-      "hash": "72fb5df",
-      "message": "feat: branded auth action pages, Greek locale for Firebase emails"
     }
   ],
   "changes": [
+    "Positioning and marketing refresh: new buyer persona, GTM strategy, marketing page rewrite",
     "[Διόρθωση] Remove unused AlertTriangle import",
     "AI Insights refinement, seasonal banner neutral, Inventory blue restore",
     "Strategy Package (PDF + Link), sidebar redesign, brand icon, UI refinements",
@@ -75,7 +76,6 @@
     "Clean up unused preset/duration code for production build",
     "Refactor strategy UI: remove save button, move compare below cards, integrate duration in apply popup, fix segment wrapping and duration sync",
     "[Διόρθωση] Replace remaining blue #0969da with neutrals, fix strategy duration badge, preserve mixConfig on duration change",
-    "[Διόρθωση] Remove unused SEASONAL_PERIODS import",
-    "[Νέο χαρακτηριστικό] Harmonize blue palette with warm neutrals, seasonal Lucide icons, content AI refactor, seasonal discount strategy, impact preview redesign, strategic docs"
+    "[Διόρθωση] Remove unused SEASONAL_PERIODS import"
   ]
 }

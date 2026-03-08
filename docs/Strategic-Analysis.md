@@ -276,12 +276,12 @@ Based on strategic analysis, recommended priority order:
 
 **Gains:**
 - Clarity σε 30 δευτερόλεπτα — dashboard, strategy status, ROI
-- AI-powered strategic direction χωρίς να χρειάζεται marketing director (3-5K/μήνα)
+- AI-powered strategic direction αντί για ad-hoc αποφάσεις
 - Ένα click → η ομάδα/agency ξέρει τι να κάνει (Strategy Package + Brief)
 - Data-driven αποφάσεις αντί για gut feeling
 
 **Value Proposition:**
-> "Ο marketing director που δεν χρειάζεται να προσλάβεις."
+> "Στρατηγική εμπορική καθοδήγηση, powered by AI."
 
 ### 8.2 Three-Phase GTM Model
 
@@ -310,7 +310,7 @@ Based on strategic analysis, recommended priority order:
 
 | Context | Σύγκριση | Performance+ |
 |---|---|---|
-| Marketing Director salary | 3.000 - 5.000€/μήνα | 200 - 500€/μήνα |
+| Εσωτερική στρατηγική ομάδα | 3.000 - 5.000€/μήνα | 200 - 500€/μήνα |
 | Strategy consulting | 2.000 - 10.000€/project | Ενσωματωμένο |
 | Multiple analytics tools | 500 - 1.500€/μήνα (combined) | All-in-one |
 

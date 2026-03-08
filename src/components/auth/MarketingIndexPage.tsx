@@ -252,10 +252,10 @@ export function MarketingIndexPage({ onOpenAuth, variant: _variant, onVariantCha
           <div>
             <p className="text-sm font-medium text-[var(--nts-accent)] mb-2">Γιατί Performance+</p>
             <h2 className="text-2xl md:text-3xl font-bold text-[#1A1A1A]">
-              Ο marketing director που δεν χρειάζεται να προσλάβετε.
+              Στρατηγική εμπορική καθοδήγηση, powered by AI.
             </h2>
             <p className="mt-4 text-[#4A4A4A] leading-relaxed">
-              Ένας marketing director κοστίζει 3.000-5.000€ τον μήνα. Το Performance+ σας δίνει AI-powered strategic direction, εξατομικευμένη στο brand σας, τα προϊόντα σας και τους πελάτες σας.
+              Το Performance+ αντικαθιστά τον κατακερματισμό εργαλείων και reports με ένα ενιαίο σύστημα εμπορικής νοημοσύνης — εξατομικευμένο στο brand, τα προϊόντα και τους πελάτες σας.
             </p>
           </div>
           <div className="grid grid-cols-2 gap-4">
