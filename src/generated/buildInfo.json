@@ -1,10 +1,14 @@
 {
-  "version": "0.22.0",
-  "previousVersion": "0.21.0",
-  "commitHash": "1338329",
+  "version": "0.23.0",
+  "previousVersion": "0.22.0",
+  "commitHash": "4345982",
   "branch": "main",
-  "buildDate": "2026-03-08T23:15:04.409Z",
+  "buildDate": "2026-03-08T23:25:46.844Z",
   "commits": [
+    {
+      "hash": "4345982",
+      "message": "Budget management: monthly budget input, EUR allocation per channel, AI smart actions (increase/decrease/push)"
+    },
     {
       "hash": "1338329",
       "message": "Revert MarketingIndexPage to pre-rewrite state"
@@ -60,13 +64,10 @@
     {
       "hash": "667abd6",
       "message": "feat: harmonize blue palette with warm neutrals, seasonal Lucide icons, content AI refactor, seasonal discount strategy, impact preview redesign, strategic docs"
-    },
-    {
-      "hash": "bd4d43f",
-      "message": "feat: Mixed strategies, seasonal periods, personalized AI, strategy expiry"
     }
   ],
   "changes": [
+    "Budget management: monthly budget input, EUR allocation per channel, AI smart actions (increase/decrease/push)",
     "Revert MarketingIndexPage to pre-rewrite state",
     "Channel Activation upgrade: AI briefs, per-channel status (Firestore), agency brief export",
     "Refine value proposition tone: professional tagline aligned with NotTheSame brand",
@@ -75,7 +76,6 @@
     "AI Insights refinement, seasonal banner neutral, Inventory blue restore",
     "Strategy Package (PDF + Link), sidebar redesign, brand icon, UI refinements",
     "Fix revenue_share property name",
-    "AI upgrade: CMO-level prompts, deterministic output (temp=0), funnel stage labels, expanded channels, structured bullets, 1hr cache",
-    "Clean up unused preset/duration code for production build"
+    "AI upgrade: CMO-level prompts, deterministic output (temp=0), funnel stage labels, expanded channels, structured bullets, 1hr cache"
   ]
 }

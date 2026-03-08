@@ -293,7 +293,7 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
           <div className="rounded-[28px] border border-[#1f2328]/10 bg-[var(--nts-bg-pure)] p-6 shadow-[0_18px_40px_rgba(16,24,40,0.12)]">
             <p className="text-[11px] tracking-[0.08em] text-[var(--nts-accent)]">E-shop Intelligence</p>
             <h2 className="mt-4 max-w-2xl text-xl font-semibold leading-tight text-[var(--nts-charcoal)]">
-              Το λειτουργικό σύστημα που μετατρέπει ανεκμετάλλευτα δεδομένα σε εμπορική νοημοσύνη, άμεση και αποδοτική λήψη αποφάσεων με συντονισμένο πλάνο ενεργειών.
+              Το λειτουργικό σύστημα που μετατρέπει μη αξιοποιήσιμα δεδομένα σε εμπορική νοημοσύνη, άμεση και αποδοτική λήψη αποφάσεων με συντονισμένο πλάνο ενεργειών.
             </h2>
             <div className="mt-6 grid gap-4 md:grid-cols-2">
               <div className="rounded-2xl border border-white/10 bg-[#12151b] p-5 shadow-[0_10px_24px_rgba(15,17,21,0.16)]">
