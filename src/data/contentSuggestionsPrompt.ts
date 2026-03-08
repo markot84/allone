@@ -56,7 +56,9 @@ export const CONTENT_SUGGESTIONS_SYSTEM_PROMPT = `Είσαι ειδικός cont
 - brief: ένα copyable κείμενο κατευθύνσεων για αποστολή σε marketing team ή agency
 - Μόνο οργανικά κανάλια (όχι paid ads)
 - ΟΛΑ τα κείμενα 100% στα Ελληνικά
-- Χρήση πραγματικού brand name και κατηγοριών σε headlines και titles`;
+- Χρήση πραγματικού brand name και κατηγοριών σε headlines και titles
+- ΑΠΑΓΟΡΕΥΕΤΑΙ η χρήση em-dash (—). Χρησιμοποίησε τελεία ή κόμμα αντί για παύλες.
+- Χρησιμοποίησε σαφή δομή στα κείμενα: σύντομες προτάσεις, bullets όπου βοηθά την ανάγνωση`;
 
 export function buildContentSuggestionsUserPrompt(ctx: StrategyContext): string {
   const w = ctx.weights || {};

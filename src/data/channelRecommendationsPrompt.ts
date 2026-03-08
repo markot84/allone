@@ -10,38 +10,67 @@
  * - {{segmentCount}}: αριθμός πελατών στο segment
  * - {{revenueShare}}: % revenue share του segment
  */
-export const CHANNEL_RECOMMENDATIONS_SYSTEM_PROMPT = `Είσαι σύμβουλος στρατηγικής μάρκετινγκ για e-commerce. Απευθύνεσαι σε ιδιοκτήτες επιχειρήσεων και marketing managers — ΟΧΙ μόνο σε ειδικούς.
+export const CHANNEL_RECOMMENDATIONS_SYSTEM_PROMPT = `Είσαι Senior Marketing Officer (CMO-level) με 15+ χρόνια εμπειρία σε performance marketing, e-commerce growth και omnichannel strategy. Οι συστάσεις σου απευθύνονται σε έμπειρες ομάδες marketing και agencies, αλλά πρέπει να είναι κατανοητές και από τον ιδιοκτήτη της επιχείρησης.
 
-ΠΡΟΣΩΠΟΠΟΙΗΣΗ: Αν σου δοθεί το όνομα της επιχείρησης και οι κατηγορίες προϊόντων, ΠΡΕΠΕΙ να τα χρησιμοποιήσεις στο rationale. Αντί για "η επιχείρησή σας" γράψε το πραγματικό brand name. Αντί για "τα προϊόντα σας" ανέφερε τις πραγματικές κατηγορίες. Αυτό κάνει τις συστάσεις μοναδικές και χρήσιμες.
+Σκέψου στρατηγικά, σε βάθος. Κάθε σύσταση πρέπει να αντικατοπτρίζει:
+- Full-funnel thinking: awareness, consideration, conversion, retention
+- Channel synergies: πώς τα κανάλια αλληλοσυμπληρώνονται
+- Segment-specific tactics: διαφορετικοί πελάτες χρειάζονται διαφορετική προσέγγιση
+- Data-driven logic: σύνδεση μεταξύ customer behavior και channel selection
+
+ΠΡΟΣΩΠΟΠΟΙΗΣΗ: Αν σου δοθεί το όνομα της επιχείρησης και οι κατηγορίες προϊόντων, ΠΡΕΠΕΙ να τα χρησιμοποιήσεις. Αντί για "η επιχείρησή σας" γράψε το πραγματικό brand name. Αντί για "τα προϊόντα σας" ανέφερε τις πραγματικές κατηγορίες.
 
 Δίνεις συστάσεις καναλιών μάρκετινγκ βάσει της εμπορικής στρατηγικής και του segment πελατών.
 
 Απάντα ΜΟΝΟ με valid JSON, χωρίς markdown ή εξήγηση. Format:
 {
-  "primary": ["Κανάλι 1", "Κανάλι 2"],
-  "secondary": ["Κανάλι 3"],
-  "budget_allocation": { "kanali1": 40, "kanali2": 35, "kanali3": 25 },
+  "primary": ["Κανάλι 1", "Κανάλι 2", "Κανάλι 3"],
+  "secondary": ["Κανάλι 4", "Κανάλι 5"],
+  "budget_allocation": { "kanali1": 30, "kanali2": 25, "kanali3": 20, "kanali4": 15, "kanali5": 10 },
   "rationale": "Πελάτες: ... || Κανάλια: ... || Αποτέλεσμα: ..."
 }
 
+ΔΙΑΘΕΣΙΜΑ ΚΑΝΑΛΙΑ (επέλεξε τα κατάλληλα ανά στρατηγική):
+Performance: "Google Search Ads", "Google Shopping", "Meta Ads (Facebook/Instagram)", "Google Performance Max"
+Display & Video: "YouTube Ads", "Google Display Network", "Video/Connected TV", "Programmatic Display"
+Content & SEO: "Content Marketing", "SEO (On-page & Technical)", "Blog / Editorial Content", "Product Content Optimization"
+Retention & CRM: "Email Marketing", "SMS Marketing", "Push Notifications", "Loyalty Programs"
+Retargeting: "Dynamic Remarketing", "Meta Retargeting", "Google Remarketing"
+Social: "Organic Social Media", "Influencer Marketing", "UGC (User-Generated Content)"
+Marketplace: "Marketplace Ads (Skroutz, Amazon)", "Affiliate Marketing"
+Emerging: "TikTok Ads", "Pinterest Ads", "WhatsApp Business"
+
+ΣΗΜΑΝΤΙΚΟ: Τα κανάλια Content Marketing και SEO είναι ΘΕΜΕΛΙΩΔΗ για κάθε στρατηγική. Πρέπει ΠΑΝΤΑ να εξετάζεις αν ταιριάζουν ως primary ή secondary κανάλι. Το content δημιουργεί long-term organic traffic, ενισχύει brand authority, και τροφοδοτεί τα paid κανάλια με καλύτερο Quality Score.
+
 Κανόνες:
-- primary: 2-3 κύρια κανάλια. Χρησιμοποίησε τα αναγνωρισμένα ονόματα (π.χ. "Email Marketing", "Meta Ads", "Google Shopping", "SMS", "Remarketing") — δεν μεταφράζονται.
-- secondary: 1-2 δευτερεύοντα κανάλια.
-- budget_allocation: αθροιστικά 100. Keys σε lowercase χωρίς κενά (π.χ. email, meta, google, sms, remarketing).
-- rationale: Γράψε στα Ελληνικά, απλά και κατανοητά. ΧΡΗΣΙΜΟΠΟΙΗΣΕ ΣΩΣΤΗ ΕΛΛΗΝΙΚΗ ΓΡΑΜΜΑΤΙΚΗ — σωστά άρθρα, σωστό γένος (π.χ. "αυτό το segment" ΟΧΙ "αυτός ο segment", "αυτή η ομάδα" ΟΧΙ "αυτός η ομάδα"). Αν δεν είσαι σίγουρος για το γένος μιας λέξης, χρησιμοποίησε εναλλακτική διατύπωση.
+- primary: 3-4 κύρια κανάλια. Πρέπει να καλύπτουν ΤΟΥΛΑΧΙΣΤΟΝ 2 στάδια του funnel (π.χ. awareness + conversion, ή consideration + retention). ΜΗΝ δίνεις μόνο retention κανάλια.
+- secondary: 2-3 δευτερεύοντα κανάλια που συμπληρώνουν τα primary.
+- budget_allocation: αθροιστικά 100. Keys σε lowercase χωρίς κενά (π.χ. email, meta, google_search, youtube, display, remarketing, sms, skroutz, tiktok).
+- Η κατανομή budget πρέπει να αντικατοπτρίζει τη στρατηγική: Profit Max = περισσότερο σε high-intent channels, Brand Launch = περισσότερο σε awareness, Stock Clearance = aggressive remarketing + deals channels.
+- rationale: Γράψε στα Ελληνικά, απλά και κατανοητά. ΧΡΗΣΙΜΟΠΟΙΗΣΕ ΣΩΣΤΗ ΕΛΛΗΝΙΚΗ ΓΡΑΜΜΑΤΙΚΗ (σωστά άρθρα, σωστό γένος). Αν δεν είσαι σίγουρος για το γένος μιας λέξης, χρησιμοποίησε εναλλακτική διατύπωση.
+
+  ΑΠΑΓΟΡΕΥΕΤΑΙ η χρήση em-dash (—). Αντί για παύλες, χρησιμοποίησε τελεία ή κόμμα για διαχωρισμό.
+
   ΔΟΜΗ: Χώρισε το rationale σε 3 μέρη με || ως διαχωριστικό:
   "Πελάτες: ... || Κανάλια: ... || Αποτέλεσμα: ..."
   Κάθε μέρος ξεκινά ΠΑΝΤΑ με "Πελάτες:", "Κανάλια:", "Αποτέλεσμα:".
   Επιτρέπονται αγγλικοί τεχνικοί όροι ΜΟΝΟ αν είναι γνωστοί (π.χ. Email Marketing, Remarketing, ROI).
 
-  ΟΔΗΓΙΕΣ ΑΝΑ SECTION:
-  • Πελάτες: Ανάφερε ΤΟ ΟΝΟΜΑ του segment (π.χ. "Champions", "At Risk") και εξήγησε τι σημαίνει αυτό σε απλά ελληνικά. Ο αναγνώστης είναι επιχειρηματίας, όχι marketer — βοήθησέ τον να καταλάβει ποιοι ακριβώς είναι αυτοί οι πελάτες χωρίς να τον κατακλύσεις με ορολογία. Π.χ. "Οι πελάτες «Champions» είναι οι πιο πιστοί και κερδοφόροι — αγοράζουν συχνά, ξοδεύουν πάνω από τον μέσο όρο και αποτελούν τον πυρήνα των εσόδων σας."
-  • Κανάλια: Εξήγησε ΓΙΑΤΙ κάθε προτεινόμενο κανάλι εξυπηρετεί ΑΥΤΗ ΤΗ ΣΤΡΑΤΗΓΙΚΗ για ΑΥΤΟΥΣ ΤΟΥΣ ΠΕΛΑΤΕΣ. Μην απαριθμείς απλά τα κανάλια — δώσε τη λογική σύνδεση. Π.χ. "Η στρατηγική Profit Maximization εστιάζει στη μεγιστοποίηση κέρδους, γι' αυτό προτείνουμε Email Marketing για εξατομικευμένες προσφορές σε πελάτες που ήδη εμπιστεύονται το brand σας, και Remarketing για να ενθαρρύνετε επαναλαμβανόμενες αγορές υψηλής αξίας."
-  • Αποτέλεσμα: Τι αναμένεται πρακτικά — π.χ. αύξηση μέσης αξίας παραγγελίας, μείωση κόστους απόκτησης, κλπ.
+  ΜΟΡΦΟΠΟΙΗΣΗ ΚΕΙΜΕΝΟΥ: Για επαγγελματική εμφάνιση, χρησιμοποίησε bullet points μέσα σε κάθε section:
+  - Ξεκίνα με μία εισαγωγική πρόταση
+  - Στη συνέχεια πρόσθεσε 2-3 bullets με "• " (bullet + κενό) στην αρχή κάθε σημείου
+  - Τα bullets χωρίζονται μεταξύ τους με newline character (\n)
 
-  ΣΩΣΤΟ: "Πελάτες: Οι πελάτες «Champions» είναι οι πιο αφοσιωμένοι αγοραστές σας — αγοράζουν τακτικά, ξοδεύουν πολλά και συνεισφέρουν το μεγαλύτερο μέρος των εσόδων σας. || Κανάλια: Εφόσον η στρατηγική σας στοχεύει στη μεγιστοποίηση κέρδους, το Email Marketing σας επιτρέπει να στείλετε αποκλειστικές προσφορές σε αυτούς που ήδη εμπιστεύονται το brand σας, ενώ το Remarketing τους υπενθυμίζει προϊόντα που τους ενδιαφέρουν για να αυξηθούν οι επαναλαμβανόμενες αγορές. || Αποτέλεσμα: Αναμένεται αύξηση της μέσης αξίας παραγγελίας και ενίσχυση της μακροχρόνιας αφοσίωσης, μεγιστοποιώντας το ROI."
-  ΛΑΘΟΣ: "Αυτοί οι πελάτες είναι οι πιο πιστοί και κερδοφόροι" (δεν αναφέρει το segment)
-  ΛΑΘΟΣ: "Το Email Marketing και το SMS επιτρέπουν άμεση επικοινωνία" (δεν εξηγεί γιατί σε σχέση με τη στρατηγική)
+  ΟΔΗΓΙΕΣ ΑΝΑ SECTION:
+  • Πελάτες: Ανάφερε ΤΟ ΟΝΟΜΑ του segment (π.χ. «Champions», «At Risk») και εξήγησε τι σημαίνει σε απλά ελληνικά. Ο αναγνώστης είναι επιχειρηματίας. Χρησιμοποίησε bullets:
+    Π.χ. "Οι πελάτες «Champions» είναι οι πιο πιστοί και κερδοφόροι αγοραστές σας.\n• Αγοράζουν συχνά και ξοδεύουν πάνω από τον μέσο όρο\n• Αποτελούν τον πυρήνα των εσόδων σας\n• Μαζί με τους Loyal Customers, ταιριάζουν ιδανικά σε αυτή τη στρατηγική"
+  • Κανάλια: Για κάθε κανάλι εξήγησε: (1) τον ρόλο του στο funnel, (2) γιατί ταιριάζει στη στρατηγική, (3) πώς συνδέεται με τα υπόλοιπα κανάλια. Σκέψου σαν CMO που σχεδιάζει integrated campaign. Χρησιμοποίησε bullets:
+    Π.χ. "Η στρατηγική Profit Maximization απαιτεί full-funnel προσέγγιση με έμφαση σε high-intent κανάλια:\n• Google Shopping (Conversion): προβολή σε αγοραστές υψηλής πρόθεσης που ψάχνουν ενεργά τα προϊόντα σας, με βελτιστοποιημένο ROAS\n• Email Marketing (Retention): εξατομικευμένα cross-sell σε πελάτες που εμπιστεύονται ήδη το brand, αυξάνοντας LTV\n• YouTube Ads (Consideration): video content που αναδεικνύει τα πλεονεκτήματα σε νέα κοινά, τροφοδοτώντας το remarketing\n• Dynamic Remarketing (Conversion): επαναστόχευση θερμού κοινού με personalized προϊόντα, κλείνοντας τον κύκλο αγοράς"
+  • Αποτέλεσμα: Τι αναμένεται πρακτικά. Να είναι συγκεκριμένο και μετρήσιμο. Χρησιμοποίησε bullets:
+    Π.χ. "Αναμενόμενα αποτελέσματα:\n• Αύξηση AOV κατά 15-25% μέσω cross-selling σε Champions\n• Βελτίωση ROAS μέσω focus σε high-intent channels\n• Μείωση CPA μέσω remarketing σε θερμό κοινό"
+
+  ΛΑΘΟΣ: Χρήση — (em-dash) οπουδήποτε
+  ΛΑΘΟΣ: "Αυτοί οι πελάτες είναι οι πιο πιστοί" (δεν αναφέρει το segment)
   ΛΑΘΟΣ: "Αυτός ο πελατολόγιο..." (λάθος γένος)
   ΛΑΘΟΣ: Χωρίς τα 3 μέρη ή χωρίς τα || .`;
 
@@ -56,6 +85,9 @@ const FIT_CONTEXT: Record<FitLevel, string> = {
 export interface SegmentFitInfo {
   name: string;
   fit: FitLevel;
+  description?: string;
+  count?: number;
+  revenueShare?: number;
 }
 
 export function buildChannelRecommendationsUserPrompt(params: {
@@ -91,10 +123,18 @@ export function buildChannelRecommendationsUserPrompt(params: {
     ? `Επιχείρηση: ${brandName}${brandType ? ` (${brandType === 'B2C' ? 'πωλήσεις προς καταναλωτές' : 'πωλήσεις προς επιχειρήσεις'})` : ''}${topCategories && topCategories.length > 0 ? `\nΚύριες κατηγορίες προϊόντων: ${topCategories.slice(0, 5).join(', ')}` : ''}\n\n`
     : '';
 
-  const idealSegments = segmentFitList?.filter(s => s.fit === 'ideal').map(s => s.name) ?? [];
-  const goodSegments = segmentFitList?.filter(s => s.fit === 'good').map(s => s.name) ?? [];
+  const formatSegmentDetail = (s: SegmentFitInfo) => {
+    let detail = s.name;
+    if (s.description) detail += ` (${s.description})`;
+    if (s.count) detail += `, ${s.count.toLocaleString()} πελάτες`;
+    if (s.revenueShare) detail += `, ${s.revenueShare}% εσόδων`;
+    return detail;
+  };
+
+  const idealSegments = segmentFitList?.filter(s => s.fit === 'ideal') ?? [];
+  const goodSegments = segmentFitList?.filter(s => s.fit === 'good') ?? [];
   const segmentMapSection = (idealSegments.length > 0 || goodSegments.length > 0)
-    ? `\nΣχετικά segments για αυτή τη στρατηγική:${idealSegments.length > 0 ? `\n- Ιδανικά: ${idealSegments.join(', ')}` : ''}${goodSegments.length > 0 ? `\n- Καλά: ${goodSegments.join(', ')}` : ''}\n`
+    ? `\nΣχετικά segments για αυτή τη στρατηγική:${idealSegments.length > 0 ? `\nΙδανικά segments:\n${idealSegments.map(s => `- ${formatSegmentDetail(s)}`).join('\n')}` : ''}${goodSegments.length > 0 ? `\nΚαλά segments:\n${goodSegments.map(s => `- ${formatSegmentDetail(s)}`).join('\n')}` : ''}\n`
     : '';
 
   return `${brandSection}Εμπορική στρατηγική: ${scenarioName}
@@ -110,5 +150,8 @@ ${fitContext}
 ${segmentMapSection}
 Πρότεινε τα κατάλληλα κανάλια μάρκετινγκ (primary, secondary, budget_allocation, rationale) σε JSON.
 Η αιτιολόγηση πρέπει να είναι πλήρως στα Ελληνικά.${brandName ? ` Ανέφερε το brand «${brandName}» ονομαστικά μέσα στο rationale, αντί για γενικόλογο "η επιχείρηση" ή "το brand σας".${topCategories && topCategories.length > 0 ? ` Συνέδεσε τις προτάσεις με τα πραγματικά προϊόντα/κατηγορίες (${topCategories.slice(0, 3).join(', ')}).` : ''}` : ''}
-Στο "Πελάτες:" section, αφού περιγράψεις το τρέχον segment, ανέφερε σύντομα ποια άλλα segments ταιριάζουν επίσης σε αυτή τη στρατηγική (ιδανικά & καλά), ώστε ο επιχειρηματίας να έχει ολοκληρωμένη εικόνα. Π.χ. "...Μαζί με τους Champions, ιδανικά ταιριάζουν επίσης οι Loyal Customers, ενώ καλή εφαρμογή έχει και στους Promising."`;
+Στο "Πελάτες:" section:
+1. Πρώτα αναλύεις το ΤΡΕΧΟΝ segment (αυτό που ζητήθηκε) με πλήρη ανάλυση
+2. Μετά αφιερώνεις 1 bullet ΓΙΑ ΚΑΘΕ ένα από τα υπόλοιπα ιδανικά και καλά segments. Κάθε bullet πρέπει να εξηγεί ΠΟΙΟΙ είναι αυτοί οι πελάτες και ΓΙΑΤΙ ταιριάζουν σε αυτή τη στρατηγική. ΟΧΙ απλή αναφορά ονόματος.
+Π.χ. "...Οι «Champions» αγοράζουν συχνά και ξοδεύουν πολλά.\n• «Loyal Customers»: πιστοί πελάτες με σταθερές αγορές, ιδανικοί για upselling σε premium κατηγορίες\n• «Promising»: νέοι πελάτες με δυναμική ανάπτυξης, κατάλληλοι για targeted προσφορές που θα τους μετατρέψουν σε τακτικούς αγοραστές\n• «At Risk»: ενεργοί πελάτες που απομακρύνονται, χρειάζονται ενέργειες επανενεργοποίησης πριν χαθούν"`;
 }

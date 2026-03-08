@@ -3,6 +3,66 @@ import { Zap, Target, Users, MessageSquare, TrendingUp } from 'lucide-react';
 import { Badge } from '../common';
 import type { ChannelRecommendation, RFMSegment } from '../../types';
 
+const FUNNEL_STAGE: Record<string, { label: string; color: string }> = {
+  'google search ads': { label: 'Conversion', color: '#22C55E' },
+  'google shopping': { label: 'Conversion', color: '#22C55E' },
+  'google performance max': { label: 'Full-funnel', color: '#6B7280' },
+  'meta ads (facebook/instagram)': { label: 'Awareness', color: '#3B82F6' },
+  'meta ads': { label: 'Awareness', color: '#3B82F6' },
+  'youtube ads': { label: 'Consideration', color: '#F97316' },
+  'google display network': { label: 'Awareness', color: '#3B82F6' },
+  'video/connected tv': { label: 'Awareness', color: '#3B82F6' },
+  'programmatic display': { label: 'Awareness', color: '#3B82F6' },
+  'email marketing': { label: 'Loyalty', color: '#8B5CF6' },
+  'sms marketing': { label: 'Loyalty', color: '#8B5CF6' },
+  'sms': { label: 'Loyalty', color: '#8B5CF6' },
+  'push notifications': { label: 'Loyalty', color: '#8B5CF6' },
+  'loyalty programs': { label: 'Loyalty', color: '#8B5CF6' },
+  'dynamic remarketing': { label: 'Conversion', color: '#22C55E' },
+  'meta retargeting': { label: 'Conversion', color: '#22C55E' },
+  'google remarketing': { label: 'Conversion', color: '#22C55E' },
+  'remarketing': { label: 'Conversion', color: '#22C55E' },
+  'organic social media': { label: 'Awareness', color: '#3B82F6' },
+  'influencer marketing': { label: 'Consideration', color: '#F97316' },
+  'content marketing/seo': { label: 'Consideration', color: '#F97316' },
+  'content marketing': { label: 'Consideration', color: '#F97316' },
+  'seo (on-page & technical)': { label: 'Consideration', color: '#F97316' },
+  'seo': { label: 'Consideration', color: '#F97316' },
+  'blog / editorial content': { label: 'Awareness', color: '#3B82F6' },
+  'blog': { label: 'Awareness', color: '#3B82F6' },
+  'product content optimization': { label: 'Conversion', color: '#22C55E' },
+  'ugc (user-generated content)': { label: 'Consideration', color: '#F97316' },
+  'ugc': { label: 'Consideration', color: '#F97316' },
+  'marketplace ads (skroutz, amazon)': { label: 'Conversion', color: '#22C55E' },
+  'marketplace ads (skroutz)': { label: 'Conversion', color: '#22C55E' },
+  'affiliate marketing': { label: 'Conversion', color: '#22C55E' },
+  'tiktok ads': { label: 'Awareness', color: '#3B82F6' },
+  'pinterest ads': { label: 'Consideration', color: '#F97316' },
+  'whatsapp business': { label: 'Loyalty', color: '#8B5CF6' },
+};
+
+function getFunnelStage(channel: string) {
+  const key = channel.toLowerCase().trim();
+  if (FUNNEL_STAGE[key]) return FUNNEL_STAGE[key];
+  for (const [k, v] of Object.entries(FUNNEL_STAGE)) {
+    if (key.includes(k) || k.includes(key)) return v;
+  }
+  return { label: 'Other', color: '#9CA3AF' };
+}
+
+function getBudgetForChannel(channel: string, allocation: Record<string, number>): number | null {
+  const lower = channel.toLowerCase().trim();
+  for (const [key, val] of Object.entries(allocation)) {
+    const k = key.toLowerCase();
+    if (k === lower) return val;
+    if (lower.includes(k) || k.includes(lower.split(' ')[0])) return val;
+    const normalized = lower.replace(/[^a-z]/g, '');
+    const normalizedKey = k.replace(/[^a-z]/g, '');
+    if (normalized.startsWith(normalizedKey) || normalizedKey.startsWith(normalized.slice(0, 5))) return val;
+  }
+  return null;
+}
+
 interface ChannelRecommendationsProps {
   recommendations: ChannelRecommendation | null;
   segment: RFMSegment | null;
@@ -69,27 +129,35 @@ export function ChannelRecommendations({
             Primary Channels
           </h5>
           <div className="space-y-2">
-            {recommendations.primary.map((channel, index) => (
-              <motion.div
-                key={channel}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.1 }}
-                className="flex items-center justify-between p-3 bg-[var(--nts-light-gray)] rounded-lg border border-[var(--borderColor-default,#d0d7de)]"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-[var(--nts-accent)] rounded-lg flex items-center justify-center">
-                    <span className="text-white text-sm">
-                      {index + 1}
-                    </span>
+            {recommendations.primary.map((channel, index) => {
+              const stage = getFunnelStage(channel);
+              const pct = getBudgetForChannel(channel, recommendations.budget_allocation);
+              return (
+                <motion.div
+                  key={channel}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                  className="flex items-center justify-between p-3 bg-[var(--nts-light-gray)] rounded-lg border border-[var(--borderColor-default,#d0d7de)]"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-8 h-8 bg-[var(--nts-accent)] rounded-lg flex items-center justify-center flex-shrink-0">
+                      <span className="text-white text-sm">{index + 1}</span>
+                    </div>
+                    <div className="min-w-0">
+                      <span className="font-medium text-[#1A1A1A] text-sm">{channel}</span>
+                      <span
+                        className="ml-2 text-[10px] font-medium px-1.5 py-0.5 rounded-full"
+                        style={{ backgroundColor: `${stage.color}15`, color: stage.color }}
+                      >
+                        {stage.label}
+                      </span>
+                    </div>
                   </div>
-                  <span className="font-medium text-[#1A1A1A]">{channel}</span>
-                </div>
-                <Badge variant="orange">
-                  {recommendations.budget_allocation[channel.toLowerCase().split(' ')[0]] || 30}%
-                </Badge>
-              </motion.div>
-            ))}
+                  {pct != null && <Badge variant="orange">{pct}%</Badge>}
+                </motion.div>
+              );
+            })}
           </div>
         </div>
 
@@ -100,27 +168,37 @@ export function ChannelRecommendations({
             Secondary Channels
           </h5>
           <div className="space-y-2">
-            {recommendations.secondary.map((channel, index) => (
-              <motion.div
-                key={channel}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.3 + index * 0.1 }}
-                className="flex items-center justify-between p-3 bg-[#F5F5F5] rounded-lg"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-[#4A4A4A] rounded-lg flex items-center justify-center">
-                    <span className="text-white text-sm">
-                      {recommendations.primary.length + index + 1}
-                    </span>
+            {recommendations.secondary.map((channel, index) => {
+              const stage = getFunnelStage(channel);
+              const pct = getBudgetForChannel(channel, recommendations.budget_allocation);
+              return (
+                <motion.div
+                  key={channel}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.3 + index * 0.1 }}
+                  className="flex items-center justify-between p-3 bg-[#F5F5F5] rounded-lg"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-8 h-8 bg-[#4A4A4A] rounded-lg flex items-center justify-center flex-shrink-0">
+                      <span className="text-white text-sm">
+                        {recommendations.primary.length + index + 1}
+                      </span>
+                    </div>
+                    <div className="min-w-0">
+                      <span className="text-[#1A1A1A] text-sm">{channel}</span>
+                      <span
+                        className="ml-2 text-[10px] font-medium px-1.5 py-0.5 rounded-full"
+                        style={{ backgroundColor: `${stage.color}15`, color: stage.color }}
+                      >
+                        {stage.label}
+                      </span>
+                    </div>
                   </div>
-                  <span className="text-[#1A1A1A]">{channel}</span>
-                </div>
-                <Badge variant="default">
-                  {recommendations.budget_allocation[channel.toLowerCase().split(' ')[0]] || 20}%
-                </Badge>
-              </motion.div>
-            ))}
+                  {pct != null && <Badge variant="default">{pct}%</Badge>}
+                </motion.div>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -132,7 +210,7 @@ export function ChannelRecommendations({
           const parts = recommendations.rationale.split('||').map(s => s.trim());
           const hasStructure = parts.length >= 3 && parts[0].startsWith('Πελάτες:');
           if (!hasStructure) {
-            return <p className="text-sm text-[#4A4A4A] leading-relaxed">{recommendations.rationale}</p>;
+            return <p className="text-sm text-[#4A4A4A] leading-relaxed">{recommendations.rationale.replace(/—/g, ',')}</p>;
           }
           const sections = [
             { icon: Users, color: '#8B5CF6', label: 'Πελάτες' },
@@ -155,7 +233,29 @@ export function ChannelRecommendations({
                     </div>
                     <div className="min-w-0">
                       <span className="text-xs font-semibold" style={{ color: s.color }}>{s.label}</span>
-                      <p className="text-sm text-[#4A4A4A] leading-relaxed">{text}</p>
+                      {(() => {
+                        const cleaned = text.replace(/—/g, ',');
+                        const lines = cleaned.split('\n').map(l => l.trim()).filter(Boolean);
+                        const intro = lines.filter(l => !l.startsWith('•'));
+                        const bullets = lines.filter(l => l.startsWith('•')).map(l => l.replace(/^•\s*/, ''));
+                        return (
+                          <>
+                            {intro.length > 0 && (
+                              <p className="text-sm text-[#4A4A4A] leading-relaxed">{intro.join(' ')}</p>
+                            )}
+                            {bullets.length > 0 && (
+                              <ul className="mt-1 space-y-0.5">
+                                {bullets.map((b, bi) => (
+                                  <li key={bi} className="flex items-start gap-1.5 text-sm text-[#4A4A4A] leading-relaxed">
+                                    <span className="mt-1.5 w-1 h-1 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />
+                                    {b}
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
                 );

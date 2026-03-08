@@ -125,9 +125,12 @@ export function useAIChannelRecommendations({
       return generateChannelRecommendations({ scenario, segment, fitLevel, brandContext: brandContext ?? undefined, segmentFitList: segmentFitList ?? undefined });
     },
     enabled: !!scenario && !!segment && aiEnabled && selectedSegmentId !== '',
-    staleTime: 5 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
-    retry: 1
+    staleTime: 60 * 60 * 1000,
+    gcTime: 2 * 60 * 60 * 1000,
+    retry: 1,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
   });
 
   const recommendation = useMemo((): ChannelRecommendation | null => {

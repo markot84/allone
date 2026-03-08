@@ -131,7 +131,10 @@ export async function generateContentSuggestions(
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
       model: MODEL_NAME,
-      systemInstruction: CONTENT_SUGGESTIONS_SYSTEM_PROMPT
+      systemInstruction: CONTENT_SUGGESTIONS_SYSTEM_PROMPT,
+      generationConfig: {
+        temperature: 0,
+      },
     });
 
     const userPrompt = buildContentSuggestionsUserPrompt(ctx);

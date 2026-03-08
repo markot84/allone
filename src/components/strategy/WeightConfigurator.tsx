@@ -641,7 +641,13 @@ export function WeightConfigurator() {
       brandType: currentBrand.type,
       topCategories: [...new Set(products.map(p => p.category).filter(Boolean))].slice(0, 5),
     } : null,
-    segmentFitList: rankedSegments.map(rs => ({ name: rs.segment.name, fit: rs.fit })),
+    segmentFitList: rankedSegments.map(rs => ({
+      name: rs.segment.name,
+      fit: rs.fit,
+      description: rs.segment.description,
+      count: rs.segment.count,
+      revenueShare: rs.segment.revenueShare,
+    })),
     useAI: true
   });
 

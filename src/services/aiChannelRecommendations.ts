@@ -74,7 +74,10 @@ export async function generateChannelRecommendations(
     const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({
       model: MODEL_NAME,
-      systemInstruction: CHANNEL_RECOMMENDATIONS_SYSTEM_PROMPT
+      systemInstruction: CHANNEL_RECOMMENDATIONS_SYSTEM_PROMPT,
+      generationConfig: {
+        temperature: 0,
+      },
     });
 
     const userPrompt = buildChannelRecommendationsUserPrompt({

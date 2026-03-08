@@ -26,7 +26,11 @@ export function useAIContentSuggestions({ aiEnabled, brandName, topCategories, s
       });
     },
     enabled: !!activeStrategy && aiEnabled,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 60 * 60 * 1000,
+    gcTime: 2 * 60 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
   });
 
   return {
