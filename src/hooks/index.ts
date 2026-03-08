@@ -9,3 +9,4 @@ export { useCampaigns } from './useCampaigns';
 export { useActiveStrategy } from './useActiveStrategy';
 export { useAIContentSuggestions } from './useAIContentSuggestions';
 export { useFeedSources } from './useFeedSources';
+export { useChannelActivations } from './useChannelActivations';

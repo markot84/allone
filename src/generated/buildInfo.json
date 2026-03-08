@@ -1,10 +1,14 @@
 {
-  "version": "0.18.0",
-  "previousVersion": "0.17.0",
-  "commitHash": "2472baa",
+  "version": "0.20.0",
+  "previousVersion": "0.19.0",
+  "commitHash": "65c9cf0",
   "branch": "main",
-  "buildDate": "2026-03-08T22:06:59.968Z",
+  "buildDate": "2026-03-08T22:24:43.886Z",
   "commits": [
+    {
+      "hash": "65c9cf0",
+      "message": "Refine value proposition tone: professional tagline aligned with NotTheSame brand"
+    },
     {
       "hash": "2472baa",
       "message": "Positioning and marketing refresh: new buyer persona, GTM strategy, marketing page rewrite"
@@ -60,13 +64,10 @@
     {
       "hash": "febbde0",
       "message": "feat: changelog UI polish - colored dots, Greek labels, build info panel"
-    },
-    {
-      "hash": "7c6878e",
-      "message": "feat: auto-versioning from git commits"
     }
   ],
   "changes": [
+    "Refine value proposition tone: professional tagline aligned with NotTheSame brand",
     "Positioning and marketing refresh: new buyer persona, GTM strategy, marketing page rewrite",
     "[Διόρθωση] Remove unused AlertTriangle import",
     "AI Insights refinement, seasonal banner neutral, Inventory blue restore",
@@ -75,7 +76,6 @@
     "AI upgrade: CMO-level prompts, deterministic output (temp=0), funnel stage labels, expanded channels, structured bullets, 1hr cache",
     "Clean up unused preset/duration code for production build",
     "Refactor strategy UI: remove save button, move compare below cards, integrate duration in apply popup, fix segment wrapping and duration sync",
-    "[Διόρθωση] Replace remaining blue #0969da with neutrals, fix strategy duration badge, preserve mixConfig on duration change",
-    "[Διόρθωση] Remove unused SEASONAL_PERIODS import"
+    "[Διόρθωση] Replace remaining blue #0969da with neutrals, fix strategy duration badge, preserve mixConfig on duration change"
   ]
 }

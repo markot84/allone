@@ -1,15 +1,19 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   PieChart as PieChartIcon,
   TrendingUp,
   Download,
-  RefreshCw,
   Eye,
   Settings,
   X,
   FileSpreadsheet,
-  FileText
+  FileText,
+  FileDown,
+  CheckCircle2,
+  Clock,
+  Circle,
+  ChevronDown,
 } from 'lucide-react';
 import {
   PieChart,
@@ -21,18 +25,78 @@ import {
   CartesianGrid,
   LineChart,
   Line,
-  Legend
+  Legend,
 } from 'recharts';
 import { Card, CardHeader, Badge, Button, Spinner } from '../common';
 import { useToast } from '../common/Toast';
-import { useProducts, useCampaigns, useBrand } from '../../hooks';
+import { useProducts, useCampaigns, useBrand, useSegments, useActiveStrategy, useChannelActivations } from '../../hooks';
+import { useAIChannelRecommendations } from '../../hooks/useAIChannelRecommendations';
 import { getStockAgeDays } from '../../utils/productUtils';
 import { safeBrandName } from '../../services/reportExport';
 import { formatCurrency, formatNumber, formatPercent, formatMultiplier } from '../../utils/format';
-// Removed mock data imports - using only real data
-import type { Campaign } from '../../types';
+import { scenarios } from '../../data';
+import type { Campaign, ChannelRecommendation } from '../../types';
 
-const COLORS = ['var(--nts-accent)', '#78716C', '#22C55E', '#8B5CF6', '#F59E0B'];
+const COLORS = ['var(--nts-accent)', '#78716C', '#22C55E', '#8B5CF6', '#F59E0B', '#3B82F6', '#EC4899'];
+
+const FUNNEL_STAGE: Record<string, { label: string; color: string }> = {
+  'google search ads': { label: 'Conversion', color: '#22C55E' },
+  'google shopping': { label: 'Conversion', color: '#22C55E' },
+  'google performance max': { label: 'Full-funnel', color: '#6B7280' },
+  'meta ads (facebook/instagram)': { label: 'Awareness', color: '#3B82F6' },
+  'meta ads': { label: 'Awareness', color: '#3B82F6' },
+  'youtube ads': { label: 'Consideration', color: '#F97316' },
+  'google display network': { label: 'Awareness', color: '#3B82F6' },
+  'email marketing': { label: 'Loyalty', color: '#8B5CF6' },
+  'sms marketing': { label: 'Loyalty', color: '#8B5CF6' },
+  'sms': { label: 'Loyalty', color: '#8B5CF6' },
+  'push notifications': { label: 'Loyalty', color: '#8B5CF6' },
+  'loyalty programs': { label: 'Loyalty', color: '#8B5CF6' },
+  'dynamic remarketing': { label: 'Conversion', color: '#22C55E' },
+  'meta retargeting': { label: 'Conversion', color: '#22C55E' },
+  'google remarketing': { label: 'Conversion', color: '#22C55E' },
+  'remarketing': { label: 'Conversion', color: '#22C55E' },
+  'organic social media': { label: 'Awareness', color: '#3B82F6' },
+  'influencer marketing': { label: 'Consideration', color: '#F97316' },
+  'content marketing/seo': { label: 'Consideration', color: '#F97316' },
+  'content marketing': { label: 'Consideration', color: '#F97316' },
+  'seo': { label: 'Consideration', color: '#F97316' },
+  'marketplace ads (skroutz, amazon)': { label: 'Conversion', color: '#22C55E' },
+  'marketplace ads (skroutz)': { label: 'Conversion', color: '#22C55E' },
+  'affiliate marketing': { label: 'Conversion', color: '#22C55E' },
+  'tiktok ads': { label: 'Awareness', color: '#3B82F6' },
+  'whatsapp business': { label: 'Loyalty', color: '#8B5CF6' },
+};
+
+function getFunnelStage(channel: string) {
+  const key = channel.toLowerCase().trim();
+  if (FUNNEL_STAGE[key]) return FUNNEL_STAGE[key];
+  for (const [k, v] of Object.entries(FUNNEL_STAGE)) {
+    if (key.includes(k) || k.includes(key)) return v;
+  }
+  return { label: 'Other', color: '#9CA3AF' };
+}
+
+function getBudgetForChannel(channel: string, allocation: Record<string, number>): number | null {
+  const lower = channel.toLowerCase().trim();
+  for (const [key, val] of Object.entries(allocation)) {
+    const k = key.toLowerCase();
+    if (k === lower) return val;
+    if (lower.includes(k) || k.includes(lower.split(' ')[0])) return val;
+    const normalized = lower.replace(/[^a-z]/g, '');
+    const normalizedKey = k.replace(/[^a-z]/g, '');
+    if (normalized.startsWith(normalizedKey) || normalizedKey.startsWith(normalized.slice(0, 5))) return val;
+  }
+  return null;
+}
+
+const STATUS_CONFIG = {
+  pending: { label: 'Pending', icon: Circle, color: '#9CA3AF', bg: '#F5F5F5' },
+  in_progress: { label: 'In Progress', icon: Clock, color: '#F97316', bg: '#FFF7ED' },
+  done: { label: 'Done', icon: CheckCircle2, color: '#22C55E', bg: '#F0FDF4' },
+} as const;
+
+type ChannelStatus = 'pending' | 'in_progress' | 'done';
 
 interface ChannelActivationProps {
   onSectionChange?: (section: string) => void;
@@ -42,204 +106,100 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   const { currentBrand } = useBrand();
   const { products, count: productsCount } = useProducts();
   const { campaigns, isLoading: campaignsLoading, hasImported: hasCampaigns } = useCampaigns();
+  const { segments: rfmSegments } = useSegments();
+  const { activeStrategy, getStrategyName } = useActiveStrategy();
   const toast = useToast();
-  const [selectedScenario, setSelectedScenario] = useState('profit_max');
-  const [budgetMultiplier, setBudgetMultiplier] = useState(1);
+
   const historyChartRef = useRef<HTMLDivElement>(null);
   const [historyChartSize, setHistoryChartSize] = useState({ width: 800, height: 288 });
   const [showExportModal, setShowExportModal] = useState(false);
   const [selectedFeed, setSelectedFeed] = useState<string | null>(null);
   const [showExportAllModal, setShowExportAllModal] = useState(false);
+  const [editingNote, setEditingNote] = useState<string | null>(null);
+  const [noteText, setNoteText] = useState('');
 
-  // Calculate real channel performance from imported campaigns
+  const strategyId = activeStrategy?.id ?? null;
+  const scenarioId = activeStrategy?.scenarioId ?? null;
+  const mixConfig = activeStrategy?.mixConfig ?? null;
+
+  const firstSegment = rfmSegments[0] ?? null;
+
+  const brandContext = useMemo(() => {
+    if (!currentBrand) return null;
+    const topCats = products
+      .map(p => p.category)
+      .filter(Boolean)
+      .reduce((acc, cat) => { acc[cat!] = (acc[cat!] || 0) + 1; return acc; }, {} as Record<string, number>);
+    const sorted = Object.entries(topCats).sort((a, b) => b[1] - a[1]).slice(0, 5).map(e => e[0]);
+    return { brandName: currentBrand.name || '', brandType: 'B2C' as const, topCategories: sorted };
+  }, [currentBrand, products]);
+
+  const { recommendation: aiRecommendation, isLoading: aiLoading } = useAIChannelRecommendations({
+    selectedScenarioId: scenarioId,
+    segments: rfmSegments,
+    selectedSegmentId: firstSegment?.id ?? '',
+    mixConfig,
+    brandContext,
+    useAI: true,
+  });
+
+  const { getStatus, getNote, updateActivation, isSaving } = useChannelActivations(strategyId);
+
+  // Build channel list from AI recommendations
+  const allChannels = useMemo(() => {
+    if (!aiRecommendation) return [];
+    const channels: { name: string; isPrimary: boolean; budget: number | null }[] = [];
+    for (const ch of aiRecommendation.primary) {
+      channels.push({ name: ch, isPrimary: true, budget: getBudgetForChannel(ch, aiRecommendation.budget_allocation) });
+    }
+    for (const ch of aiRecommendation.secondary) {
+      channels.push({ name: ch, isPrimary: false, budget: getBudgetForChannel(ch, aiRecommendation.budget_allocation) });
+    }
+    return channels;
+  }, [aiRecommendation]);
+
+  // Pie chart data from AI allocation
+  const aiPieData = useMemo(() => {
+    if (!aiRecommendation) return [];
+    return Object.entries(aiRecommendation.budget_allocation)
+      .filter(([, v]) => v > 0)
+      .sort((a, b) => b[1] - a[1])
+      .map(([channel, pct]) => ({ channel, percentage: pct }));
+  }, [aiRecommendation]);
+
+  // Real campaign performance
   const realChannelPerformance = useMemo(() => {
     if (!hasCampaigns || campaigns.length === 0) return null;
-
-    const channelStats: Record<string, {
-      totalSpent: number;
-      totalConversions: number;
-      totalConversionValue: number;
-      totalImpressions: number;
-      totalClicks: number;
-      campaignCount: number;
-      // For debugging: track if campaigns have pre-calculated ROAS
-      hasPreCalculatedROAS: boolean;
-      sampleCampaigns: Array<{ name: string; amount_spent: number; conversion_value: number; roas?: number }>;
-    }> = {};
-
-    (campaigns as Campaign[]).forEach((campaign) => {
-      const channel = campaign.channel || 'Other';
-      if (!channelStats[channel]) {
-        channelStats[channel] = {
-          totalSpent: 0,
-          totalConversions: 0,
-          totalConversionValue: 0,
-          totalImpressions: 0,
-          totalClicks: 0,
-          campaignCount: 0,
-          hasPreCalculatedROAS: false,
-          sampleCampaigns: [],
-        };
-      }
-
-      const stats = channelStats[channel];
-      stats.totalSpent += campaign.amount_spent || 0;
-      stats.totalConversions += campaign.conversions || 0;
-      stats.totalConversionValue += campaign.conversion_value || 0;
-      stats.totalImpressions += campaign.impressions || 0;
-      stats.totalClicks += campaign.clicks || 0;
-      stats.campaignCount += 1;
-      
-      // Track if campaign has pre-calculated ROAS
-      if (campaign.roas && campaign.roas > 0) {
-        stats.hasPreCalculatedROAS = true;
-      }
-      
-      // Store sample campaigns for debugging (first 2 per channel)
-      if (stats.sampleCampaigns.length < 2) {
-        stats.sampleCampaigns.push({
-          name: campaign.name,
-          amount_spent: campaign.amount_spent || 0,
-          conversion_value: campaign.conversion_value || 0,
-          roas: campaign.roas,
-        });
-      }
+    const channelStats: Record<string, { totalSpent: number; totalConversions: number; totalConversionValue: number; totalImpressions: number; totalClicks: number; campaignCount: number }> = {};
+    (campaigns as Campaign[]).forEach(c => {
+      const channel = c.channel || 'Other';
+      if (!channelStats[channel]) channelStats[channel] = { totalSpent: 0, totalConversions: 0, totalConversionValue: 0, totalImpressions: 0, totalClicks: 0, campaignCount: 0 };
+      const s = channelStats[channel];
+      s.totalSpent += c.amount_spent || 0;
+      s.totalConversions += c.conversions || 0;
+      s.totalConversionValue += c.conversion_value || 0;
+      s.totalImpressions += c.impressions || 0;
+      s.totalClicks += c.clicks || 0;
+      s.campaignCount += 1;
     });
-
-    // Debug logging in development
-    if (import.meta.env.MODE === 'development') {
-      console.debug('[ChannelActivation] Channel Performance Calculation:', {
-        totalCampaigns: campaigns.length,
-        channelBreakdown: Object.entries(channelStats).map(([channel, stats]) => ({
-          channel,
-          totalSpent: stats.totalSpent,
-          totalConversionValue: stats.totalConversionValue,
-          totalConversions: stats.totalConversions,
-          totalImpressions: stats.totalImpressions,
-          totalClicks: stats.totalClicks,
-          campaignCount: stats.campaignCount,
-          hasPreCalculatedROAS: stats.hasPreCalculatedROAS,
-          calculatedROAS: stats.totalSpent > 0 ? stats.totalConversionValue / stats.totalSpent : 0,
-          sampleCampaigns: stats.sampleCampaigns,
-        })),
-        sampleCampaignsByChannel: Object.entries(channelStats).map(([channel]) => ({
-          channel,
-          sampleCampaigns: (campaigns as Campaign[]).filter(c => (c.channel || 'Other') === channel).slice(0, 3).map(c => ({
-            name: c.name,
-            amount_spent: c.amount_spent,
-            conversion_value: c.conversion_value,
-            roas: c.roas,
-            period: c.period,
-          })),
-        })),
-      });
-    }
-
-    // Calculate ROAS for each channel
-    // If campaigns have pre-calculated ROAS, we can use weighted average
-    // Otherwise, calculate from total conversion_value / total spent
-    const channelPerformance: Array<{
-      channel: string;
-      spent: number;
-      roas: number;
-      conversions: number;
-      conversionValue: number;
-      ctr: number;
-      cpc: number;
-      campaignCount: number;
-    }> = Object.entries(channelStats).map(([channel, stats]) => {
-      // Calculate ROAS: prefer pre-calculated if available, otherwise calculate from totals
-      let roas = 0;
-      if (stats.hasPreCalculatedROAS && stats.totalSpent > 0) {
-        // Weighted average ROAS based on spend
-        const campaignsWithROAS = (campaigns as Campaign[]).filter(
-          c => (c.channel || 'Other') === channel && c.roas && c.roas > 0 && c.amount_spent && c.amount_spent > 0
-        );
-        if (campaignsWithROAS.length > 0) {
-          const weightedROAS = campaignsWithROAS.reduce((sum, c) => {
-            return sum + ((c.roas || 0) * (c.amount_spent || 0));
-          }, 0) / stats.totalSpent;
-          roas = weightedROAS;
-        } else {
-          // Fallback to calculated ROAS
-          roas = stats.totalSpent > 0 ? stats.totalConversionValue / stats.totalSpent : 0;
-        }
-      } else {
-        // Calculate ROAS from totals
-        roas = stats.totalSpent > 0 ? stats.totalConversionValue / stats.totalSpent : 0;
-      }
-      
-      // CTR: use pre-calculated if available, otherwise calculate from totals
-      let ctr = 0;
-      const campaignsWithCTR = (campaigns as Campaign[]).filter(
-        c => (c.channel || 'Other') === channel && c.ctr && c.ctr > 0
-      );
-      if (campaignsWithCTR.length > 0 && stats.totalImpressions > 0) {
-        // Weighted average CTR based on impressions
-        const weightedCTR = campaignsWithCTR.reduce((sum, c) => {
-          return sum + ((c.ctr || 0) * (c.impressions || 0));
-        }, 0) / stats.totalImpressions;
-        ctr = weightedCTR;
-      } else {
-        // Calculate CTR from totals
-        ctr = stats.totalImpressions > 0 ? (stats.totalClicks / stats.totalImpressions) * 100 : 0;
-      }
-      
-      // CPC: use pre-calculated if available, otherwise calculate from totals
-      let cpc = 0;
-      const campaignsWithCPC = (campaigns as Campaign[]).filter(
-        c => (c.channel || 'Other') === channel && c.cpc && c.cpc > 0 && c.clicks && c.clicks > 0
-      );
-      if (campaignsWithCPC.length > 0 && stats.totalClicks > 0) {
-        // Weighted average CPC based on clicks
-        const weightedCPC = campaignsWithCPC.reduce((sum, c) => {
-          return sum + ((c.cpc || 0) * (c.clicks || 0));
-        }, 0) / stats.totalClicks;
-        cpc = weightedCPC;
-      } else {
-        // Calculate CPC from totals
-        cpc = stats.totalClicks > 0 ? stats.totalSpent / stats.totalClicks : 0;
-      }
-
-      return {
-        channel,
-        spent: stats.totalSpent,
-        roas: roas || 0,
-        conversions: stats.totalConversions,
-        conversionValue: stats.totalConversionValue,
-        ctr,
-        cpc,
-        campaignCount: stats.campaignCount,
-      };
-    });
-
-    const sorted = channelPerformance.sort((a, b) => b.spent - a.spent);
-    
-    // Debug logging for final results
-    if (import.meta.env.MODE === 'development') {
-      console.debug('[ChannelActivation] Final Channel Performance:', sorted);
-    }
-    
-    return sorted;
+    return Object.entries(channelStats).map(([channel, s]) => ({
+      channel,
+      spent: s.totalSpent,
+      roas: s.totalSpent > 0 ? s.totalConversionValue / s.totalSpent : 0,
+      conversions: s.totalConversions,
+      ctr: s.totalImpressions > 0 ? (s.totalClicks / s.totalImpressions) * 100 : 0,
+      cpc: s.totalClicks > 0 ? s.totalSpent / s.totalClicks : 0,
+      campaignCount: s.campaignCount,
+    })).sort((a, b) => b.spent - a.spent);
   }, [campaigns, hasCampaigns]);
 
-  // Calculate monthly performance history from campaigns
+  // Performance history from campaigns
   const realPerformanceHistory = useMemo(() => {
     if (!hasCampaigns || campaigns.length === 0) return null;
-
-    const monthlyData: Record<string, {
-      google: number;
-      meta: number;
-      email: number;
-      remarketing: number;
-      sms: number;
-    }> = {};
-
-    (campaigns as Campaign[]).forEach((campaign) => {
-      const period = campaign.period || campaign.start_date || '';
+    const monthlyData: Record<string, { google: number; meta: number; email: number; remarketing: number; sms: number }> = {};
+    (campaigns as Campaign[]).forEach(c => {
+      const period = c.period || c.start_date || '';
       if (!period) return;
-
-      // Extract month from period (e.g., "January 2025" or "2025-01-01")
       let monthKey = '';
       if (period.match(/^\d{4}-\d{2}-\d{2}/)) {
         const date = new Date(period);
@@ -247,35 +207,19 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
       } else {
         monthKey = period;
       }
-
-      if (!monthlyData[monthKey]) {
-        monthlyData[monthKey] = { google: 0, meta: 0, email: 0, remarketing: 0, sms: 0 };
-      }
-
-      const roas = campaign.roas || 0;
-      const channel = campaign.channel?.toLowerCase() || 'other';
-
-      if (channel.includes('google')) {
-        monthlyData[monthKey].google = Math.max(monthlyData[monthKey].google, roas);
-      } else if (channel.includes('meta') || channel.includes('facebook')) {
-        monthlyData[monthKey].meta = Math.max(monthlyData[monthKey].meta, roas);
-      } else if (channel.includes('email')) {
-        monthlyData[monthKey].email = Math.max(monthlyData[monthKey].email, roas);
-      } else if (channel.includes('remarketing') || channel.includes('display')) {
-        monthlyData[monthKey].remarketing = Math.max(monthlyData[monthKey].remarketing, roas);
-      } else if (channel.includes('sms')) {
-        monthlyData[monthKey].sms = Math.max(monthlyData[monthKey].sms, roas);
-      }
+      if (!monthlyData[monthKey]) monthlyData[monthKey] = { google: 0, meta: 0, email: 0, remarketing: 0, sms: 0 };
+      const roas = c.roas || 0;
+      const ch = c.channel?.toLowerCase() || 'other';
+      if (ch.includes('google')) monthlyData[monthKey].google = Math.max(monthlyData[monthKey].google, roas);
+      else if (ch.includes('meta') || ch.includes('facebook')) monthlyData[monthKey].meta = Math.max(monthlyData[monthKey].meta, roas);
+      else if (ch.includes('email')) monthlyData[monthKey].email = Math.max(monthlyData[monthKey].email, roas);
+      else if (ch.includes('remarketing') || ch.includes('display')) monthlyData[monthKey].remarketing = Math.max(monthlyData[monthKey].remarketing, roas);
+      else if (ch.includes('sms')) monthlyData[monthKey].sms = Math.max(monthlyData[monthKey].sms, roas);
     });
-
     return Object.entries(monthlyData)
       .map(([month, data]) => ({ month, ...data }))
-      .sort((a, b) => {
-        const dateA = new Date(a.month);
-        const dateB = new Date(b.month);
-        return dateA.getTime() - dateB.getTime();
-      })
-      .slice(-6); // Last 6 months
+      .sort((a, b) => new Date(a.month).getTime() - new Date(b.month).getTime())
+      .slice(-6);
   }, [campaigns, hasCampaigns]);
 
   useEffect(() => {
@@ -291,143 +235,55 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     return () => ro.disconnect();
   }, []);
 
-  // Calculate real channel mix from campaigns
-  const realChannelMix = useMemo(() => {
-    if (!hasCampaigns || !realChannelPerformance || realChannelPerformance.length === 0) return null;
+  const handleStatusChange = useCallback(async (channel: string, status: ChannelStatus) => {
+    await updateActivation({ channel, status });
+    toast.success(`${channel}: ${STATUS_CONFIG[status].label}`);
+  }, [updateActivation, toast]);
 
-    const totalSpent = realChannelPerformance.reduce((sum, ch) => sum + ch.spent, 0);
-    if (totalSpent === 0) return null;
+  const handleNoteSave = useCallback(async (channel: string) => {
+    await updateActivation({ channel, note: noteText });
+    setEditingNote(null);
+    setNoteText('');
+  }, [updateActivation, noteText]);
 
-    const allocation = realChannelPerformance.map((ch) => {
-      const percentage = totalSpent > 0 ? (ch.spent / totalSpent) * 100 : 0;
-      return {
-        channel: ch.channel,
-        budget: ch.spent * budgetMultiplier,
-        percentage: Math.round(percentage * 10) / 10,
-        target_segments: [] as string[],
-        expected_roas: ch.roas,
-        priority_products: [] as string[],
-        rationale: `${ch.campaignCount} campaigns, ${formatNumber(ch.conversions)} conversions`,
-      };
-    });
+  const handleExportBrief = useCallback(() => {
+    if (!aiRecommendation || !activeStrategy) return;
+    const briefData = buildBriefData(aiRecommendation, activeStrategy, currentBrand?.name, allChannels, getStatus, getNote);
+    openBriefPdf(briefData);
+  }, [aiRecommendation, activeStrategy, currentBrand, allChannels, getStatus, getNote]);
 
-    return {
-      total_budget: totalSpent * budgetMultiplier,
-      allocation,
-    };
-  }, [realChannelPerformance, hasCampaigns, budgetMultiplier]);
-
-  const channelMix = useMemo(() => {
-    // Use only real data - no mock fallback
-    if (realChannelMix) {
-      return realChannelMix;
-    }
-    // Return empty mix when no real data
-    return {
-      google_ads: 0,
-      meta_ads: 0,
-      email: 0,
-      sms: 0,
-      other: 0,
-      total_budget: 0,
-      allocation: []
-    };
-  }, [realChannelMix]);
-
-  const weightedROAS = useMemo(() => {
-    if (!channelMix.allocation || channelMix.allocation.length === 0) return '0,0x';
-    const total = channelMix.allocation.reduce((sum, ch) => sum + ch.budget, 0);
-    if (total === 0) return '0,0x';
-    const avg = channelMix.allocation.reduce(
-      (sum, ch) => sum + (ch.expected_roas * ch.budget / total),
-      0
-    );
-    return formatMultiplier(avg, 1);
-  }, [channelMix]);
-
-  // Export functions for different feed types
+  // Feed export
   const exportFeed = async (feedType: string, format: 'csv' | 'xlsx') => {
-    if (products.length === 0) {
-      toast.error('Δεν υπάρχουν προϊόντα για export');
-      return;
-    }
-
-    // Format products based on feed type
+    if (products.length === 0) { toast.error('Δεν υπάρχουν προϊόντα για export'); return; }
     let headers: string[] = [];
     let rows: any[][] = [];
-
     switch (feedType) {
       case 'Google Shopping':
         headers = ['id', 'title', 'description', 'link', 'image_link', 'price', 'availability', 'brand', 'condition', 'google_product_category'];
-        rows = products.map(p => [
-          p.sku || p.id,
-          p.name || '',
-          `${p.name || ''} - ${p.category || ''}`,
-          `https://yoursite.com/products/${p.sku || p.id}`,
-          '', // image_link - would need image URL
-          `${formatCurrency(p.price || 0, 2)} EUR`,
-          (p.stock_level || 0) > 0 ? 'in stock' : 'out of stock',
-          '', // brand - would need brand field
-          'new',
-          p.category || ''
-        ]);
+        rows = products.map(p => [p.sku || p.id, p.name || '', `${p.name || ''} - ${p.category || ''}`, `https://yoursite.com/products/${p.sku || p.id}`, '', `${formatCurrency(p.price || 0, 2)} EUR`, (p.stock_level || 0) > 0 ? 'in stock' : 'out of stock', '', 'new', p.category || '']);
         break;
       case 'Meta Catalog':
         headers = ['id', 'title', 'description', 'availability', 'condition', 'price', 'link', 'image_link', 'brand'];
-        rows = products.map(p => [
-          p.sku || p.id,
-          p.name || '',
-          `${p.name || ''} - ${p.category || ''}`,
-          (p.stock_level || 0) > 0 ? 'in stock' : 'out of stock',
-          'new',
-          `${formatCurrency(p.price || 0, 2)} EUR`,
-          `https://yoursite.com/products/${p.sku || p.id}`,
-          '', // image_link
-          '' // brand
-        ]);
+        rows = products.map(p => [p.sku || p.id, p.name || '', `${p.name || ''} - ${p.category || ''}`, (p.stock_level || 0) > 0 ? 'in stock' : 'out of stock', 'new', `${formatCurrency(p.price || 0, 2)} EUR`, `https://yoursite.com/products/${p.sku || p.id}`, '', '']);
         break;
-      case 'Email Feed':
-      case 'Display Feed':
       default:
         headers = ['SKU', 'Name', 'Category', 'Price', 'Margin %', 'Stock Level', 'Stock Capacity', 'Stock Age Days', 'Priority Tag'];
-        rows = products.map(p => [
-          p.sku || '',
-          p.name || '',
-          p.category || '',
-          formatCurrency(p.price || 0, 2),
-          formatPercent(p.margin_percentage || 0, 1).replace('%', ''),
-          p.stock_level || 0,
-          p.stock_capacity || 0,
-          getStockAgeDays(p),
-          p.priority_tag || ''
-        ]);
+        rows = products.map(p => [p.sku || '', p.name || '', p.category || '', formatCurrency(p.price || 0, 2), formatPercent(p.margin_percentage || 0, 1).replace('%', ''), p.stock_level || 0, p.stock_capacity || 0, getStockAgeDays(p), p.priority_tag || '']);
         break;
     }
-
     const brand = safeBrandName(currentBrand?.name);
     const date = new Date().toISOString().split('T')[0];
-
     if (format === 'csv') {
-      const csvContent = [
-        ['Brand', currentBrand?.name || '—'].join(','),
-        ['Generated', date].join(','),
-        ['Feed Type', feedType].join(','),
-        '',
-        headers.join(','),
-        ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-      ].join('\n');
-
+      const csvContent = [['Brand', currentBrand?.name || '—'].join(','), ['Generated', date].join(','), ['Feed Type', feedType].join(','), '', headers.join(','), ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))].join('\n');
       const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
+      link.setAttribute('href', URL.createObjectURL(blob));
       link.setAttribute('download', `${brand}_${feedType.toLowerCase().replace(/\s+/g, '_')}_export_${date}.csv`);
       link.style.visibility = 'hidden';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    } else if (format === 'xlsx') {
+    } else {
       try {
         const XLSX = await import('xlsx');
         const metaRows = [['Brand', currentBrand?.name || '—'], ['Generated', date], ['Feed Type', feedType], [''], headers];
@@ -435,12 +291,21 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Products');
         XLSX.writeFile(wb, `${brand}_${feedType.toLowerCase().replace(/\s+/g, '_')}_export_${date}.xlsx`);
-      } catch (error) {
-        console.error('Excel export error:', error);
-        alert('Σφάλμα κατά την εξαγωγή Excel. Δοκιμάστε CSV.');
-      }
+      } catch { toast.error('Σφάλμα κατά την εξαγωγή Excel. Δοκιμάστε CSV.'); }
     }
   };
+
+  const strategyName = scenarioId ? getStrategyName(scenarioId) : null;
+  const durationLabel = activeStrategy?.duration === 'ongoing' ? 'Ongoing' : activeStrategy?.duration ? `${activeStrategy.duration} ημ.` : null;
+
+  // Progress summary
+  const progressSummary = useMemo(() => {
+    if (allChannels.length === 0) return null;
+    const total = allChannels.length;
+    const done = allChannels.filter(c => getStatus(c.name) === 'done').length;
+    const inProgress = allChannels.filter(c => getStatus(c.name) === 'in_progress').length;
+    return { total, done, inProgress, pending: total - done - inProgress };
+  }, [allChannels, getStatus]);
 
   return (
     <div className="space-y-6">
@@ -449,105 +314,78 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         <div>
           <h2 className="text-2xl font-bold text-[#1A1A1A]">Channel Activation</h2>
           <p className="text-[#4A4A4A] mt-1">
-            AI-powered channel recommendations based on your strategy
+            {strategyName ? (
+              <>
+                <span className="font-medium text-[#1A1A1A]">{strategyName}</span>
+                {durationLabel && <span className="text-[#9CA3AF]"> · {durationLabel}</span>}
+              </>
+            ) : 'AI-powered channel recommendations based on your strategy'}
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Button 
-            variant="secondary" 
-            icon={<RefreshCw size={16} />}
-            onClick={() => {
-              alert('Feed sync functionality coming soon!');
-            }}
-          >
-            Sync Feeds
-          </Button>
-          <Button 
-            variant="primary" 
+          {aiRecommendation && activeStrategy && (
+            <Button
+              variant="primary"
+              icon={<FileDown size={16} />}
+              onClick={handleExportBrief}
+            >
+              Export Brief
+            </Button>
+          )}
+          <Button
+            variant="secondary"
             icon={<Download size={16} />}
-            onClick={() => {
-              setShowExportAllModal(true);
-            }}
+            onClick={() => setShowExportAllModal(true)}
           >
-            Export All
+            Export Feeds
           </Button>
         </div>
       </div>
 
-      {/* Scenario & Budget Selector */}
-      {!hasCampaigns && (
-        <Card padding="md">
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex-1 min-w-[200px]">
-              <label className="text-sm font-medium text-[#1A1A1A] mb-2 block">
-                Strategy Scenario
-              </label>
-              <select
-                value={selectedScenario}
-                onChange={(e) => setSelectedScenario(e.target.value)}
-                className="w-full px-4 py-2.5 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all"
-              >
-                <option value="profit_max">Profit Maximization</option>
-                <option value="stock_clearance">Stock Clearance</option>
-                <option value="revenue_growth">Revenue Growth</option>
-                <option value="brand_positioning">Brand Positioning</option>
-              </select>
+      {/* Progress bar */}
+      {progressSummary && progressSummary.total > 0 && (
+        <div className="flex items-center gap-4 px-4 py-3 bg-[#FAFAFA] rounded-xl border border-[#E5E5E5]">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xs font-medium text-[#4A4A4A]">Activation Progress</span>
+              <span className="text-xs text-[#9CA3AF]">{progressSummary.done}/{progressSummary.total} channels</span>
             </div>
-
-          <div className="flex-1 min-w-[200px]">
-            <label className="text-sm font-medium text-[#1A1A1A] mb-2 block">
-              Budget Multiplier
-            </label>
-            <div className="flex items-center gap-3">
-              {[0.5, 1, 1.5, 2].map((mult) => (
-                <button
-                  key={mult}
-                  onClick={() => setBudgetMultiplier(mult)}
-                  className={`
-                    px-4 py-2 rounded-lg text-sm font-medium transition-all
-                    ${budgetMultiplier === mult
-                      ? 'bg-[var(--nts-accent)] text-white'
-                      : 'bg-[#F5F5F5] text-[#4A4A4A] hover:bg-[#E5E5E5]'}
-                  `}
-                >
-                  {mult}x
-                </button>
-              ))}
+            <div className="h-1.5 bg-[#E5E5E5] rounded-full overflow-hidden flex">
+              {progressSummary.done > 0 && (
+                <div className="h-full bg-[#22C55E] rounded-full" style={{ width: `${(progressSummary.done / progressSummary.total) * 100}%` }} />
+              )}
+              {progressSummary.inProgress > 0 && (
+                <div className="h-full bg-[#F97316]" style={{ width: `${(progressSummary.inProgress / progressSummary.total) * 100}%` }} />
+              )}
             </div>
           </div>
-
-          <div className="text-right">
-            <p className="text-sm text-[#4A4A4A]">Total Budget</p>
-            <p className="text-2xl font-bold text-[#1A1A1A] font-mono">
-              €{formatCurrency(channelMix.total_budget)}
-            </p>
+          <div className="flex items-center gap-3 text-xs">
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#22C55E]" />{progressSummary.done} done</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#F97316]" />{progressSummary.inProgress} in progress</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#9CA3AF]" />{progressSummary.pending} pending</span>
           </div>
         </div>
-      </Card>
       )}
 
-      {/* Main Grid */}
+      {/* Main Grid: Pie + Brief Cards */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Channel Mix Chart */}
+        {/* Channel Mix Pie */}
         <Card padding="lg">
           <CardHeader
             title="Channel Mix"
-            subtitle={hasCampaigns ? "Πραγματική budget allocation από campaigns" : "Budget allocation"}
+            subtitle={hasCampaigns ? 'Πραγματική budget allocation' : 'AI-recommended allocation'}
             icon={<PieChartIcon size={20} className="text-[var(--nts-accent)]" />}
           />
-          {campaignsLoading ? (
+          {(aiLoading || campaignsLoading) ? (
             <div className="flex items-center justify-center h-64">
-              <Spinner size="lg" label="Φόρτωση campaigns…" />
+              <Spinner size="lg" label="Φόρτωση..." />
             </div>
-          ) : channelMix && channelMix.allocation && channelMix.allocation.length > 0 ? (
+          ) : aiPieData.length > 0 ? (
             <>
-              <div 
-                className="w-full flex items-center justify-center"
-                style={{ width: '100%', height: '256px', minHeight: '256px', position: 'relative' }}
-              >
+              <div className="w-full flex items-center justify-center" style={{ width: '100%', height: '256px', minHeight: '256px', position: 'relative' }}>
                 <PieChart width={300} height={256}>
                   <Pie
-                    data={channelMix.allocation}
+                    data={aiPieData}
                     cx="50%"
                     cy="50%"
                     innerRadius={60}
@@ -557,348 +395,303 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                     nameKey="channel"
                     labelLine={false}
                   >
-                    {channelMix.allocation.map((channel, index) => (
-                      <Cell key={channel.channel || index} fill={COLORS[index % COLORS.length]} />
+                    {aiPieData.map((_, index) => (
+                      <Cell key={index} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
                   <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#fff',
-                      border: '1px solid #E5E5E5',
-                      borderRadius: '8px',
-                      padding: '8px 12px'
-                    }}
+                    contentStyle={{ backgroundColor: '#fff', border: '1px solid #E5E5E5', borderRadius: '8px', padding: '8px 12px' }}
                     formatter={(value: number | string | undefined, name: string | undefined) => [
-                      formatPercent(typeof value === 'number' ? value : 0, 1),
-                      name || 'Channel'
+                      formatPercent(typeof value === 'number' ? value : 0, 1), name || 'Channel'
                     ]}
-                    labelFormatter={(label) => `Channel: ${label || 'Unknown'}`}
                   />
                 </PieChart>
               </div>
               <div className="space-y-2 mt-4">
-                {channelMix.allocation.map((channel, index) => (
-                  <div key={channel.channel || index} className="flex items-center justify-between text-sm">
+                {aiPieData.map((item, index) => (
+                  <div key={item.channel} className="flex items-center justify-between text-sm">
                     <div className="flex items-center gap-2">
-                      <div
-                        className="w-3 h-3 rounded-full"
-                        style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                      />
-                      <span className="text-[#4A4A4A] truncate max-w-[120px]">{channel.channel || 'Unknown'}</span>
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                      <span className="text-[#4A4A4A] truncate max-w-[120px]">{item.channel}</span>
                     </div>
-                    <span className="font-mono text-[#1A1A1A]">
-                      €{formatCurrency(channel.budget ?? 0)} ({formatPercent(channel.percentage ?? 0, 1)})
-                    </span>
+                    <span className="font-mono text-[#1A1A1A]">{formatPercent(item.percentage, 0)}</span>
                   </div>
                 ))}
               </div>
             </>
           ) : (
             <div className="flex items-center justify-center h-64">
-              <p className="text-sm text-[#4A4A4A]">Δεν υπάρχουν δεδομένα για Channel Mix</p>
+              <div className="text-center">
+                <p className="text-sm text-[#4A4A4A]">Δεν υπάρχει ενεργή στρατηγική</p>
+                <button onClick={() => onSectionChange?.('strategy')} className="mt-2 text-xs text-[var(--nts-accent)] hover:underline">
+                  Ενεργοποίηση στρατηγικής →
+                </button>
+              </div>
             </div>
           )}
         </Card>
 
-        {/* Channel Details */}
+        {/* Channel Brief Cards */}
         <Card className="lg:col-span-2" padding="lg">
           <CardHeader
-            title={hasCampaigns ? "Channel Performance" : "Channel Recommendations"}
-            subtitle={hasCampaigns ? "Πραγματικά δεδομένα από imported campaigns" : "Detailed allocation with expected ROAS"}
+            title="Channel Briefs"
+            subtitle={aiRecommendation ? `${allChannels.length} κανάλια — AI-recommended` : 'Αναμονή στρατηγικής'}
             action={
-              hasCampaigns && realChannelPerformance ? (
-                <Badge variant="success" size="md">
-                  Avg ROAS: {formatMultiplier(
-                    realChannelPerformance.reduce((sum, ch) => sum + ch.roas, 0) / realChannelPerformance.length,
-                    1
-                  )}
-                </Badge>
-              ) : (
-                <Badge variant="success" size="md">
-                  Avg ROAS: {weightedROAS}
+              aiRecommendation && (
+                <Badge variant="default" size="md">
+                  {allChannels.filter(c => c.isPrimary).length} primary · {allChannels.filter(c => !c.isPrimary).length} secondary
                 </Badge>
               )
             }
           />
-          {campaignsLoading ? (
+
+          {aiLoading ? (
             <div className="flex items-center justify-center py-12">
-              <Spinner size="lg" label="Φόρτωση campaigns…" />
+              <Spinner size="lg" label="AI analysis..." />
             </div>
-          ) : hasCampaigns && realChannelPerformance && realChannelPerformance.length > 0 ? (
-            <div className="space-y-4">
-              {realChannelPerformance.map((channel, index) => (
-                <motion.div
-                  key={channel.channel}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                  className="p-4 bg-[#F5F5F5] rounded-xl"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start gap-3">
-                      <div
-                        className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold"
-                        style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                      >
-                        {index + 1}
+          ) : allChannels.length > 0 ? (
+            <div className="space-y-3">
+              {allChannels.map((ch, index) => {
+                const funnel = getFunnelStage(ch.name);
+                const status = getStatus(ch.name);
+                const note = getNote(ch.name);
+                const statusCfg = STATUS_CONFIG[status];
+                const StatusIcon = statusCfg.icon;
+                const isEditing = editingNote === ch.name;
+
+                return (
+                  <motion.div
+                    key={ch.name}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.04 }}
+                    className="p-4 rounded-xl border border-[#E5E5E5] hover:border-[#D4D4D4] transition-colors"
+                    style={{ borderLeftWidth: 3, borderLeftColor: funnel.color }}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="font-semibold text-[#1A1A1A] text-sm">{ch.name}</h4>
+                          <span
+                            className="text-[10px] font-medium px-2 py-0.5 rounded-full"
+                            style={{ backgroundColor: funnel.color + '18', color: funnel.color }}
+                          >
+                            {funnel.label}
+                          </span>
+                          {!ch.isPrimary && (
+                            <span className="text-[10px] text-[#9CA3AF] border border-[#E5E5E5] px-1.5 py-0.5 rounded">secondary</span>
+                          )}
+                        </div>
+                        {ch.budget !== null && (
+                          <p className="text-xs text-[#4A4A4A] mt-1">Budget allocation: <span className="font-semibold text-[#1A1A1A]">{ch.budget}%</span></p>
+                        )}
+
+                        {/* Note display / edit */}
+                        {isEditing ? (
+                          <div className="mt-2 flex gap-2">
+                            <input
+                              type="text"
+                              value={noteText}
+                              onChange={e => setNoteText(e.target.value)}
+                              placeholder="Σημείωση για την ομάδα..."
+                              className="flex-1 text-xs px-3 py-1.5 border border-[#E5E5E5] rounded-lg focus:outline-none focus:border-[var(--nts-accent)]"
+                              autoFocus
+                              onKeyDown={e => { if (e.key === 'Enter') handleNoteSave(ch.name); if (e.key === 'Escape') { setEditingNote(null); setNoteText(''); } }}
+                            />
+                            <button onClick={() => handleNoteSave(ch.name)} disabled={isSaving} className="text-xs px-3 py-1.5 bg-[#1A1A1A] text-white rounded-lg hover:bg-[#333] disabled:opacity-50">
+                              Save
+                            </button>
+                          </div>
+                        ) : note ? (
+                          <button
+                            onClick={() => { setEditingNote(ch.name); setNoteText(note); }}
+                            className="mt-1.5 text-xs text-[#4A4A4A] bg-[#FAFAFA] px-2.5 py-1 rounded-md hover:bg-[#F5F5F5] text-left w-full truncate"
+                          >
+                            {note}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => { setEditingNote(ch.name); setNoteText(''); }}
+                            className="mt-1.5 text-[11px] text-[#9CA3AF] hover:text-[#4A4A4A]"
+                          >
+                            + Σημείωση
+                          </button>
+                        )}
                       </div>
-                      <div>
-                        <h4 className="font-semibold text-[#1A1A1A]">{channel.channel}</h4>
-                        <p className="text-sm text-[#4A4A4A] mt-1">
-                          {channel.campaignCount} {channel.campaignCount === 1 ? 'campaign' : 'campaigns'}
-                        </p>
-                        <div className="flex flex-wrap gap-3 mt-3 text-xs text-[#4A4A4A]">
-                          <div>
-                            <span className="font-medium">Conversions:</span> {formatNumber(channel.conversions)}
-                          </div>
-                          <div>
-                            <span className="font-medium">CTR:</span> {formatPercent(channel.ctr, 2)}
-                          </div>
-                          <div>
-                            <span className="font-medium">CPC:</span> €{formatCurrency(channel.cpc, 2)}
-                          </div>
+
+                      {/* Status dropdown */}
+                      <div className="relative group flex-shrink-0">
+                        <button
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                          style={{ backgroundColor: statusCfg.bg, color: statusCfg.color }}
+                        >
+                          <StatusIcon size={13} />
+                          {statusCfg.label}
+                          <ChevronDown size={11} />
+                        </button>
+                        <div className="absolute right-0 top-full mt-1 bg-white border border-[#E5E5E5] rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10 min-w-[140px]">
+                          {(Object.entries(STATUS_CONFIG) as [ChannelStatus, typeof STATUS_CONFIG.pending][]).map(([key, cfg]) => {
+                            const Icon = cfg.icon;
+                            return (
+                              <button
+                                key={key}
+                                onClick={() => handleStatusChange(ch.name, key)}
+                                className="flex items-center gap-2 w-full px-3 py-2 text-xs hover:bg-[#FAFAFA] first:rounded-t-lg last:rounded-b-lg"
+                                style={{ color: cfg.color }}
+                              >
+                                <Icon size={13} />
+                                {cfg.label}
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-lg font-bold text-[#1A1A1A] font-mono">
-                        €{formatCurrency(channel.spent)}
-                      </p>
-                      <p className="text-sm text-[#4A4A4A]">Spent</p>
-                      <Badge variant="success" className="mt-2">
-                        ROAS: {formatMultiplier(channel.roas, 2)}
-                      </Badge>
-                    </div>
-                  </div>
-                </motion.div>
-              ))}
+                  </motion.div>
+                );
+              })}
+
+              {/* AI Rationale */}
+              {aiRecommendation?.rationale && (
+                <div className="mt-4 p-4 bg-[#FAFAFA] rounded-xl border border-[#E5E5E5]">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[#9CA3AF] mb-2">AI Analysis</p>
+                  {aiRecommendation.rationale.split('||').map((part, i) => (
+                    <p key={i} className="text-xs text-[#4A4A4A] leading-relaxed mb-1">{part.trim()}</p>
+                  ))}
+                </div>
+              )}
             </div>
           ) : (
-            <div className="space-y-4">
-              {channelMix.allocation.map((channel, index) => (
-                <motion.div
-                key={channel.channel}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.1 }}
-                className="p-4 bg-[#F5F5F5] rounded-xl"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start gap-3">
-                    <div
-                      className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold"
-                      style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                    >
-                      {index + 1}
-                    </div>
-                    <div>
-                      <h4 className="font-semibold text-[#1A1A1A]">{channel.channel}</h4>
-                      <p className="text-sm text-[#4A4A4A] mt-1">{channel.rationale}</p>
-                      
-                      <div className="flex flex-wrap gap-2 mt-3">
-                        <div className="text-xs text-[#4A4A4A]">
-                          <span className="font-medium">Segments:</span>{' '}
-                          {channel.target_segments.join(', ')}
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {channel.priority_products.map((prod) => (
-                          <Badge key={prod} variant="default" size="sm">
-                            {prod}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-lg font-bold text-[#1A1A1A] font-mono">
-                      €{formatCurrency(channel.budget)}
-                    </p>
-                    <p className="text-sm text-[#4A4A4A]">{channel.percentage}%</p>
-                    <Badge variant="success" className="mt-2">
-                      ROAS: {channel.expected_roas}x
-                    </Badge>
-                  </div>
-                </div>
-              </motion.div>
-              ))}
+            <div className="flex items-center justify-center py-16">
+              <div className="text-center">
+                <p className="text-sm text-[#4A4A4A]">Ενεργοποιήστε μια στρατηγική για να δείτε channel briefs</p>
+                <button onClick={() => onSectionChange?.('strategy')} className="mt-2 text-xs text-[var(--nts-accent)] hover:underline">
+                  Commercial Strategy →
+                </button>
+              </div>
             </div>
           )}
         </Card>
       </div>
 
-      {/* Performance History */}
-      <Card padding="lg">
-        <CardHeader
-          title="Channel Performance History"
-          subtitle="ROAS trend τελευταίων 6 μηνών"
-          icon={<TrendingUp size={20} className="text-[var(--nts-accent)]" />}
-        />
-        <div
-          ref={historyChartRef}
-          className="w-full"
-          style={{ width: '100%', height: 288, minHeight: 288, position: 'relative' }}
-        >
-          {realPerformanceHistory && realPerformanceHistory.length > 0 ? (
-            <LineChart
-              width={historyChartSize.width}
-              height={historyChartSize.height}
-              data={realPerformanceHistory}
-              margin={{ top: 10, right: 10, left: 10, bottom: 10 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" />
-              <XAxis
-                dataKey="month"
-                tick={{ fill: '#4A4A4A', fontSize: 12 }}
-                axisLine={{ stroke: '#E5E5E5' }}
-              />
-              <YAxis
-                tick={{ fill: '#4A4A4A', fontSize: 12 }}
-                axisLine={{ stroke: '#E5E5E5' }}
-                tickFormatter={(value) => formatMultiplier(value, 1)}
-              />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#fff',
-                  border: '1px solid #E5E5E5',
-                  borderRadius: '8px'
-                }}
-                formatter={(value) => [formatMultiplier((value as number) || 0, 1), 'ROAS']}
-              />
-              <Legend />
-              <Line type="monotone" dataKey="email" stroke="var(--nts-accent)" strokeWidth={2} name="Email" dot={{ r: 4 }} />
-              <Line type="monotone" dataKey="google" stroke="#78716C" strokeWidth={2} name="Google" dot={{ r: 4 }} />
-              <Line type="monotone" dataKey="meta" stroke="#8B5CF6" strokeWidth={2} name="Meta" dot={{ r: 4 }} />
-              <Line type="monotone" dataKey="remarketing" stroke="#22C55E" strokeWidth={2} name="Remarketing" dot={{ r: 4 }} />
-              <Line type="monotone" dataKey="sms" stroke="#F59E0B" strokeWidth={2} name="SMS" dot={{ r: 4 }} />
-            </LineChart>
-          ) : (
-            <div className="flex items-center justify-center h-full">
-              <p className="text-sm text-[#4A4A4A]">Δεν υπάρχουν δεδομένα performance history</p>
-            </div>
-          )}
-        </div>
-      </Card>
+      {/* Actual Campaign Performance (when campaigns exist) */}
+      {hasCampaigns && realChannelPerformance && realChannelPerformance.length > 0 && (
+        <Card padding="lg">
+          <CardHeader
+            title="Campaign Performance"
+            subtitle="Πραγματικά δεδομένα από imported campaigns"
+            icon={<TrendingUp size={20} className="text-[var(--nts-accent)]" />}
+            action={
+              <Badge variant="success" size="md">
+                Avg ROAS: {formatMultiplier(
+                  realChannelPerformance.reduce((sum, ch) => sum + ch.roas, 0) / realChannelPerformance.length, 1
+                )}
+              </Badge>
+            }
+          />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-2">
+            {realChannelPerformance.map((channel, index) => (
+              <motion.div
+                key={channel.channel}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.05 }}
+                className="p-4 bg-[#F5F5F5] rounded-xl"
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <h4 className="font-semibold text-[#1A1A1A] text-sm">{channel.channel}</h4>
+                  <Badge variant="success" size="sm">
+                    ROAS: {formatMultiplier(channel.roas, 2)}
+                  </Badge>
+                </div>
+                <div className="space-y-1.5 text-xs text-[#4A4A4A]">
+                  <div className="flex justify-between"><span>Spent</span><span className="font-mono font-medium text-[#1A1A1A]">€{formatCurrency(channel.spent)}</span></div>
+                  <div className="flex justify-between"><span>Conversions</span><span className="font-mono font-medium">{formatNumber(channel.conversions)}</span></div>
+                  <div className="flex justify-between"><span>CTR</span><span className="font-mono">{formatPercent(channel.ctr, 2)}</span></div>
+                  <div className="flex justify-between"><span>CPC</span><span className="font-mono">€{formatCurrency(channel.cpc, 2)}</span></div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </Card>
+      )}
 
-      {/* Real Campaigns List */}
+      {/* Performance History */}
+      {hasCampaigns && (
+        <Card padding="lg">
+          <CardHeader
+            title="Channel Performance History"
+            subtitle="ROAS trend τελευταίων 6 μηνών"
+            icon={<TrendingUp size={20} className="text-[var(--nts-accent)]" />}
+          />
+          <div ref={historyChartRef} className="w-full" style={{ width: '100%', height: 288, minHeight: 288, position: 'relative' }}>
+            {realPerformanceHistory && realPerformanceHistory.length > 0 ? (
+              <LineChart width={historyChartSize.width} height={historyChartSize.height} data={realPerformanceHistory} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" />
+                <XAxis dataKey="month" tick={{ fill: '#4A4A4A', fontSize: 12 }} axisLine={{ stroke: '#E5E5E5' }} />
+                <YAxis tick={{ fill: '#4A4A4A', fontSize: 12 }} axisLine={{ stroke: '#E5E5E5' }} tickFormatter={(v) => formatMultiplier(v, 1)} />
+                <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #E5E5E5', borderRadius: '8px' }} formatter={(v) => [formatMultiplier((v as number) || 0, 1), 'ROAS']} />
+                <Legend />
+                <Line type="monotone" dataKey="email" stroke="var(--nts-accent)" strokeWidth={2} name="Email" dot={{ r: 4 }} />
+                <Line type="monotone" dataKey="google" stroke="#78716C" strokeWidth={2} name="Google" dot={{ r: 4 }} />
+                <Line type="monotone" dataKey="meta" stroke="#8B5CF6" strokeWidth={2} name="Meta" dot={{ r: 4 }} />
+                <Line type="monotone" dataKey="remarketing" stroke="#22C55E" strokeWidth={2} name="Remarketing" dot={{ r: 4 }} />
+                <Line type="monotone" dataKey="sms" stroke="#F59E0B" strokeWidth={2} name="SMS" dot={{ r: 4 }} />
+              </LineChart>
+            ) : (
+              <div className="flex items-center justify-center h-full">
+                <p className="text-sm text-[#4A4A4A]">Δεν υπάρχουν δεδομένα performance history</p>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
+
+      {/* Active campaigns */}
       {hasCampaigns && campaigns.length > 0 && (
         <Card padding="lg">
           <CardHeader
             title="Active Campaigns"
             subtitle={`${campaigns.length} ${campaigns.length === 1 ? 'campaign' : 'campaigns'} imported`}
             icon={<TrendingUp size={20} className="text-[var(--nts-accent)]" />}
-            action={
-              <Button 
-                variant="ghost" 
-                size="sm"
-                onClick={() => onSectionChange?.('campaigns')}
-              >
-                View All
-              </Button>
-            }
+            action={<Button variant="ghost" size="sm" onClick={() => onSectionChange?.('campaigns')}>View All</Button>}
           />
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
             {(campaigns as Campaign[]).slice(0, 6).map((campaign) => (
-              <motion.div
-                key={campaign.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="p-4 border border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] transition-all"
-              >
+              <motion.div key={campaign.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-4 border border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] transition-all">
                 <div className="flex items-start justify-between mb-2">
                   <h4 className="font-medium text-[#1A1A1A] text-sm truncate flex-1">{campaign.name}</h4>
-                  <Badge variant={campaign.status === 'active' || campaign.status === 'enabled' ? 'success' : 'default'} size="sm">
-                    {campaign.status || 'Active'}
-                  </Badge>
+                  <Badge variant={campaign.status === 'active' || campaign.status === 'enabled' ? 'success' : 'default'} size="sm">{campaign.status || 'Active'}</Badge>
                 </div>
                 <p className="text-xs text-[#4A4A4A] mb-3">{campaign.channel}</p>
                 <div className="space-y-1 text-xs">
-                  {campaign.amount_spent && (
-                    <div className="flex justify-between">
-                      <span className="text-[#4A4A4A]">Spent:</span>
-                      <span className="font-mono font-medium">€{formatCurrency(campaign.amount_spent)}</span>
-                    </div>
-                  )}
-                  {campaign.roas && (
-                    <div className="flex justify-between">
-                      <span className="text-[#4A4A4A]">ROAS:</span>
-                      <span className="font-mono font-medium text-[#22C55E]">{formatMultiplier(campaign.roas, 2)}</span>
-                    </div>
-                  )}
-                  {campaign.conversions && (
-                    <div className="flex justify-between">
-                      <span className="text-[#4A4A4A]">Conversions:</span>
-                      <span className="font-mono font-medium">{formatNumber(campaign.conversions)}</span>
-                    </div>
-                  )}
+                  {campaign.amount_spent && <div className="flex justify-between"><span className="text-[#4A4A4A]">Spent:</span><span className="font-mono font-medium">€{formatCurrency(campaign.amount_spent)}</span></div>}
+                  {campaign.roas && <div className="flex justify-between"><span className="text-[#4A4A4A]">ROAS:</span><span className="font-mono font-medium text-[#22C55E]">{formatMultiplier(campaign.roas, 2)}</span></div>}
+                  {campaign.conversions && <div className="flex justify-between"><span className="text-[#4A4A4A]">Conversions:</span><span className="font-mono font-medium">{formatNumber(campaign.conversions)}</span></div>}
                 </div>
               </motion.div>
             ))}
           </div>
-          {campaigns.length > 6 && (
-            <p className="text-sm text-[#4A4A4A] mt-4 text-center">
-              και {campaigns.length - 6} ακόμα campaigns...
-            </p>
-          )}
+          {campaigns.length > 6 && <p className="text-sm text-[#4A4A4A] mt-4 text-center">και {campaigns.length - 6} ακόμα campaigns...</p>}
         </Card>
       )}
 
-      {/* Feed Preview */}
+      {/* Feed Generation */}
       <Card padding="lg">
-        <CardHeader
-          title="Feed Generation"
-          subtitle="Preview and export product feeds"
-          icon={<Settings size={20} className="text-[var(--nts-accent)]" />}
-        />
+        <CardHeader title="Feed Generation" subtitle="Preview and export product feeds" icon={<Settings size={20} className="text-[var(--nts-accent)]" />} />
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {['Google Shopping', 'Meta Catalog', 'Email Feed', 'Display Feed'].map((feed, index) => (
-            <motion.div
-              key={feed}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
-              className="p-4 border border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:shadow-md transition-all cursor-pointer"
-            >
+            <motion.div key={feed} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.1 }} className="p-4 border border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:shadow-md transition-all cursor-pointer">
               <div className="flex items-center justify-between mb-3">
                 <h4 className="font-medium text-[#1A1A1A]">{feed}</h4>
                 <Badge variant="success" size="sm">Ενεργό</Badge>
               </div>
               <div className="space-y-2 text-sm text-[#4A4A4A]">
-                <div className="flex justify-between">
-                  <span>Products</span>
-                  <span className="font-mono">{formatNumber(productsCount)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Last sync</span>
-                  <span>πριν 2ω</span>
-                </div>
+                <div className="flex justify-between"><span>Products</span><span className="font-mono">{formatNumber(productsCount)}</span></div>
               </div>
               <div className="flex gap-2 mt-4">
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  icon={<Eye size={14} />} 
-                  className="flex-1"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    alert(`Preview για ${feed}:\n${formatNumber(productsCount)} products\n\nΘα εμφανιστεί preview modal σύντομα.`);
-                  }}
-                >
-                  Preview
-                </Button>
-                <Button 
-                  variant="secondary" 
-                  size="sm" 
-                  icon={<Download size={14} />} 
-                  className="flex-1"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedFeed(feed);
-                    setShowExportModal(true);
-                  }}
-                >
-                  Export
-                </Button>
+                <Button variant="ghost" size="sm" icon={<Eye size={14} />} className="flex-1" onClick={(e) => { e.stopPropagation(); alert(`Preview για ${feed}:\n${formatNumber(productsCount)} products`); }}>Preview</Button>
+                <Button variant="secondary" size="sm" icon={<Download size={14} />} className="flex-1" onClick={(e) => { e.stopPropagation(); setSelectedFeed(feed); setShowExportModal(true); }}>Export</Button>
               </div>
             </motion.div>
           ))}
@@ -908,191 +701,176 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
       {/* Export Format Modal */}
       <AnimatePresence>
         {showExportModal && selectedFeed && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-            onClick={() => {
-              setShowExportModal(false);
-              setSelectedFeed(null);
-            }}
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-2xl shadow-2xl max-w-md w-full"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Header */}
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => { setShowExportModal(false); setSelectedFeed(null); }}>
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white rounded-2xl shadow-2xl max-w-md w-full" onClick={(e) => e.stopPropagation()}>
               <div className="p-6 border-b border-[#E5E5E5] flex items-center justify-between">
                 <h2 className="text-xl font-bold text-[#1A1A1A]">Επιλογή Format</h2>
-                <button
-                  onClick={() => {
-                    setShowExportModal(false);
-                    setSelectedFeed(null);
-                  }}
-                  className="p-2 hover:bg-[#F5F5F5] rounded-lg transition-colors"
-                >
-                  <X size={20} className="text-[#4A4A4A]" />
-                </button>
+                <button onClick={() => { setShowExportModal(false); setSelectedFeed(null); }} className="p-2 hover:bg-[#F5F5F5] rounded-lg transition-colors"><X size={20} className="text-[#4A4A4A]" /></button>
               </div>
-
-              {/* Content */}
               <div className="p-6 space-y-3">
-                <p className="text-sm text-[#4A4A4A] mb-4">
-                  Επιλέξτε format για <strong>{selectedFeed}</strong>
-                </p>
-
-                <button
-                  onClick={() => {
-                    exportFeed(selectedFeed, 'xlsx');
-                    setShowExportModal(false);
-                    setSelectedFeed(null);
-                  }}
-                  className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group"
-                >
-                  <div className="p-3 bg-[#22C55E]/10 rounded-lg group-hover:bg-[#22C55E]/20 transition-colors">
-                    <FileSpreadsheet size={24} className="text-[#22C55E]" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-[#1A1A1A]">Excel (.xlsx)</h3>
-                    <p className="text-xs text-[#4A4A4A]">Download as Excel file</p>
-                  </div>
+                <p className="text-sm text-[#4A4A4A] mb-4">Επιλέξτε format για <strong>{selectedFeed}</strong></p>
+                <button onClick={() => { exportFeed(selectedFeed, 'xlsx'); setShowExportModal(false); setSelectedFeed(null); }} className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group">
+                  <div className="p-3 bg-[#22C55E]/10 rounded-lg group-hover:bg-[#22C55E]/20 transition-colors"><FileSpreadsheet size={24} className="text-[#22C55E]" /></div>
+                  <div className="flex-1"><h3 className="font-semibold text-[#1A1A1A]">Excel (.xlsx)</h3><p className="text-xs text-[#4A4A4A]">Download as Excel file</p></div>
                 </button>
-
-                <button
-                  onClick={() => {
-                    exportFeed(selectedFeed, 'csv');
-                    setShowExportModal(false);
-                    setSelectedFeed(null);
-                  }}
-                  className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group"
-                >
-                  <div className="p-3 bg-[#F5F5F5] rounded-lg group-hover:bg-[#E5E5E5] transition-colors">
-                    <FileText size={24} className="text-[#4A4A4A]" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-[#1A1A1A]">CSV (.csv)</h3>
-                    <p className="text-xs text-[#4A4A4A]">Download as CSV file</p>
-                  </div>
+                <button onClick={() => { exportFeed(selectedFeed, 'csv'); setShowExportModal(false); setSelectedFeed(null); }} className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group">
+                  <div className="p-3 bg-[#F5F5F5] rounded-lg group-hover:bg-[#E5E5E5] transition-colors"><FileText size={24} className="text-[#4A4A4A]" /></div>
+                  <div className="flex-1"><h3 className="font-semibold text-[#1A1A1A]">CSV (.csv)</h3><p className="text-xs text-[#4A4A4A]">Download as CSV file</p></div>
                 </button>
               </div>
-
-              {/* Footer */}
-              <div className="p-6 border-t border-[#E5E5E5] flex justify-end">
-                <Button 
-                  variant="ghost" 
-                  onClick={() => {
-                    setShowExportModal(false);
-                    setSelectedFeed(null);
-                  }}
-                >
-                  Ακύρωση
-                </Button>
-              </div>
+              <div className="p-6 border-t border-[#E5E5E5] flex justify-end"><Button variant="ghost" onClick={() => { setShowExportModal(false); setSelectedFeed(null); }}>Ακύρωση</Button></div>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Export All Format Modal */}
+      {/* Export All Modal */}
       <AnimatePresence>
         {showExportAllModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-            onClick={() => {
-              setShowExportAllModal(false);
-            }}
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-2xl shadow-2xl max-w-md w-full"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Header */}
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowExportAllModal(false)}>
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white rounded-2xl shadow-2xl max-w-md w-full" onClick={(e) => e.stopPropagation()}>
               <div className="p-6 border-b border-[#E5E5E5] flex items-center justify-between">
                 <h2 className="text-xl font-bold text-[#1A1A1A]">Export All Feeds</h2>
-                <button
-                  onClick={() => {
-                    setShowExportAllModal(false);
-                  }}
-                  className="p-2 hover:bg-[#F5F5F5] rounded-lg transition-colors"
-                >
-                  <X size={20} className="text-[#4A4A4A]" />
-                </button>
+                <button onClick={() => setShowExportAllModal(false)} className="p-2 hover:bg-[#F5F5F5] rounded-lg transition-colors"><X size={20} className="text-[#4A4A4A]" /></button>
               </div>
-
-              {/* Content */}
               <div className="p-6 space-y-3">
-                <p className="text-sm text-[#4A4A4A] mb-4">
-                  Επιλέξτε format για όλα τα feeds (Google Shopping, Meta Catalog, Email Feed, Display Feed)
-                </p>
-
-                <button
-                  onClick={() => {
-                    ['Google Shopping', 'Meta Catalog', 'Email Feed', 'Display Feed'].forEach((feed, index) => {
-                      setTimeout(() => {
-                        exportFeed(feed, 'xlsx');
-                      }, index * 500); // Stagger exports to avoid browser blocking
-                    });
-                    setShowExportAllModal(false);
-                    toast.success('Export όλων των feeds ξεκίνησε');
-                  }}
-                  className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group"
-                >
-                  <div className="p-3 bg-[#22C55E]/10 rounded-lg group-hover:bg-[#22C55E]/20 transition-colors">
-                    <FileSpreadsheet size={24} className="text-[#22C55E]" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-[#1A1A1A]">Excel (.xlsx)</h3>
-                    <p className="text-xs text-[#4A4A4A]">Export όλα τα feeds ως Excel files</p>
-                  </div>
+                <button onClick={() => { ['Google Shopping', 'Meta Catalog', 'Email Feed', 'Display Feed'].forEach((f, i) => { setTimeout(() => exportFeed(f, 'xlsx'), i * 500); }); setShowExportAllModal(false); toast.success('Export όλων των feeds ξεκίνησε'); }} className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group">
+                  <div className="p-3 bg-[#22C55E]/10 rounded-lg"><FileSpreadsheet size={24} className="text-[#22C55E]" /></div>
+                  <div className="flex-1"><h3 className="font-semibold text-[#1A1A1A]">Excel (.xlsx)</h3><p className="text-xs text-[#4A4A4A]">Export all feeds as Excel</p></div>
                 </button>
-
-                <button
-                  onClick={() => {
-                    ['Google Shopping', 'Meta Catalog', 'Email Feed', 'Display Feed'].forEach((feed, index) => {
-                      setTimeout(() => {
-                        exportFeed(feed, 'csv');
-                      }, index * 500); // Stagger exports to avoid browser blocking
-                    });
-                    setShowExportAllModal(false);
-                    toast.success('Export όλων των feeds ξεκίνησε');
-                  }}
-                  className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group"
-                >
-                  <div className="p-3 bg-[#F5F5F5] rounded-lg group-hover:bg-[#E5E5E5] transition-colors">
-                    <FileText size={24} className="text-[#4A4A4A]" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-[#1A1A1A]">CSV (.csv)</h3>
-                    <p className="text-xs text-[#4A4A4A]">Export όλα τα feeds ως CSV files</p>
-                  </div>
+                <button onClick={() => { ['Google Shopping', 'Meta Catalog', 'Email Feed', 'Display Feed'].forEach((f, i) => { setTimeout(() => exportFeed(f, 'csv'), i * 500); }); setShowExportAllModal(false); toast.success('Export όλων των feeds ξεκίνησε'); }} className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group">
+                  <div className="p-3 bg-[#F5F5F5] rounded-lg"><FileText size={24} className="text-[#4A4A4A]" /></div>
+                  <div className="flex-1"><h3 className="font-semibold text-[#1A1A1A]">CSV (.csv)</h3><p className="text-xs text-[#4A4A4A]">Export all feeds as CSV</p></div>
                 </button>
               </div>
-
-              {/* Footer */}
-              <div className="p-6 border-t border-[#E5E5E5] flex justify-end">
-                <Button 
-                  variant="ghost" 
-                  onClick={() => {
-                    setShowExportAllModal(false);
-                  }}
-                >
-                  Ακύρωση
-                </Button>
-              </div>
+              <div className="p-6 border-t border-[#E5E5E5] flex justify-end"><Button variant="ghost" onClick={() => setShowExportAllModal(false)}>Ακύρωση</Button></div>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
     </div>
   );
+}
+
+// Brief PDF generation
+interface BriefData {
+  brandName: string;
+  strategyName: string;
+  duration: string;
+  channels: { name: string; isPrimary: boolean; budget: number | null; funnel: string; funnelColor: string; status: string; note: string }[];
+  rationale: string;
+  date: string;
+}
+
+function buildBriefData(
+  rec: ChannelRecommendation,
+  strategy: { scenarioId: string; duration?: number | 'ongoing' },
+  brandName: string | undefined,
+  channels: { name: string; isPrimary: boolean; budget: number | null }[],
+  getStatus: (ch: string) => string,
+  getNote: (ch: string) => string,
+): BriefData {
+  const scenario = scenarios.find(s => s.id === strategy.scenarioId);
+  return {
+    brandName: brandName || '',
+    strategyName: scenario?.name || strategy.scenarioId,
+    duration: strategy.duration === 'ongoing' ? 'Ongoing' : strategy.duration ? `${strategy.duration} ημέρες` : '—',
+    channels: channels.map(ch => {
+      const f = getFunnelStage(ch.name);
+      return { name: ch.name, isPrimary: ch.isPrimary, budget: ch.budget, funnel: f.label, funnelColor: f.color, status: getStatus(ch.name), note: getNote(ch.name) };
+    }),
+    rationale: rec.rationale || '',
+    date: new Date().toLocaleDateString('el-GR', { day: 'numeric', month: 'long', year: 'numeric' }),
+  };
+}
+
+function openBriefPdf(data: BriefData) {
+  const channelRows = data.channels.map(ch => {
+    const statusLabel = STATUS_CONFIG[ch.status as ChannelStatus]?.label || ch.status;
+    const statusColor = STATUS_CONFIG[ch.status as ChannelStatus]?.color || '#9CA3AF';
+    return `
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:#FAFAFA;border-radius:10px;margin:4px 0;border-left:3px solid ${ch.funnelColor}">
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:600;color:#1A1A1A">${ch.name}</div>
+          <div style="font-size:11px;color:#4A4A4A;margin-top:2px">
+            ${ch.funnel}${ch.budget !== null ? ` · ${ch.budget}%` : ''}${!ch.isPrimary ? ' · secondary' : ''}
+          </div>
+          ${ch.note ? `<div style="font-size:11px;color:#4A4A4A;margin-top:4px;font-style:italic">${ch.note}</div>` : ''}
+        </div>
+        <span style="font-size:11px;font-weight:600;color:${statusColor}">${statusLabel}</span>
+      </div>`;
+  }).join('');
+
+  const rationaleHtml = data.rationale
+    ? data.rationale.split('||').map(p => `<p style="margin:6px 0;font-size:12px;color:#4A4A4A;line-height:1.6">${p.trim()}</p>`).join('')
+    : '';
+
+  const html = `<!DOCTYPE html>
+<html lang="el">
+<head>
+<meta charset="UTF-8">
+<title>Channel Brief${data.brandName ? ` — ${data.brandName}` : ''}</title>
+<style>
+  @media print { body { margin: 0; } .no-print { display: none !important; } }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1A1A1A; max-width: 700px; margin: 0 auto; padding: 40px 32px; background: #fff; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #F97316; padding-bottom: 16px; margin-bottom: 24px; }
+  .brand-name { font-size: 22px; font-weight: 700; }
+  .date { font-size: 12px; color: #9CA3AF; margin-top: 4px; }
+  .logo { font-size: 28px; font-weight: 800; color: #F97316; }
+  .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px; }
+  .meta-card { padding: 14px; background: #FAFAFA; border-radius: 10px; }
+  .meta-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #9CA3AF; font-weight: 600; }
+  .meta-value { font-size: 15px; font-weight: 600; margin-top: 4px; }
+  .section { margin-bottom: 20px; }
+  .section-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: #9CA3AF; margin-bottom: 10px; padding-bottom: 4px; border-bottom: 1px solid #F5F5F5; }
+  .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #E5E5E5; display: flex; justify-content: space-between; align-items: center; }
+  .footer-text { font-size: 11px; color: #9CA3AF; }
+  .footer-brand { font-size: 14px; font-weight: 700; color: #F97316; }
+</style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <div class="brand-name">${data.brandName || 'Channel Brief'}</div>
+      <div class="date">${data.date}</div>
+    </div>
+    <div class="logo">≠</div>
+  </div>
+
+  <div class="meta-grid">
+    <div class="meta-card">
+      <div class="meta-label">Στρατηγική</div>
+      <div class="meta-value">${data.strategyName}</div>
+    </div>
+    <div class="meta-card">
+      <div class="meta-label">Διάρκεια</div>
+      <div class="meta-value">${data.duration}</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Channel Plan (${data.channels.length} κανάλια)</div>
+    ${channelRows}
+  </div>
+
+  ${rationaleHtml ? `
+  <div class="section">
+    <div class="section-title">AI Analysis</div>
+    ${rationaleHtml}
+  </div>` : ''}
+
+  <div class="footer">
+    <div class="footer-text">Channel Brief — Performance+ | notthesame.ai</div>
+    <div class="footer-brand">≠</div>
+  </div>
+
+  <script>window.onload = function() { window.print(); }</script>
+</body>
+</html>`;
+
+  const win = window.open('', '_blank');
+  if (win) {
+    win.document.write(html);
+    win.document.close();
+  }
 }
