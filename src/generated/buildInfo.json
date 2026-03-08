@@ -1,10 +1,18 @@
 {
-  "version": "0.11.0",
-  "previousVersion": "0.10.0",
-  "commitHash": "acaf0ee",
+  "version": "0.13.0",
+  "previousVersion": "0.12.0",
+  "commitHash": "1608b1e",
   "branch": "main",
-  "buildDate": "2026-03-08T16:32:31.194Z",
+  "buildDate": "2026-03-08T17:09:08.255Z",
   "commits": [
+    {
+      "hash": "1608b1e",
+      "message": "AI upgrade: CMO-level prompts, deterministic output (temp=0), funnel stage labels, expanded channels, structured bullets, 1hr cache"
+    },
+    {
+      "hash": "c0d326e",
+      "message": "Clean up unused preset/duration code for production build"
+    },
     {
       "hash": "acaf0ee",
       "message": "Refactor strategy UI: remove save button, move compare below cards, integrate duration in apply popup, fix segment wrapping and duration sync"
@@ -56,17 +64,11 @@
     {
       "hash": "071ce6d",
       "message": "feat: dark sidebar/header, card shadows, strategy duration, commercial strategy rename, mascot AI button"
-    },
-    {
-      "hash": "9a61631",
-      "message": "refactor: replace orange accent backgrounds with neutral gray across app. Remove nts-accent-light from all components, update icons to monochrome, add NTS favicon, refine landing page copy."
-    },
-    {
-      "hash": "80688b6",
-      "message": "fix: suppress unused var warnings for build"
     }
   ],
   "changes": [
+    "AI upgrade: CMO-level prompts, deterministic output (temp=0), funnel stage labels, expanded channels, structured bullets, 1hr cache",
+    "Clean up unused preset/duration code for production build",
     "Refactor strategy UI: remove save button, move compare below cards, integrate duration in apply popup, fix segment wrapping and duration sync",
     "[Διόρθωση] Replace remaining blue #0969da with neutrals, fix strategy duration badge, preserve mixConfig on duration change",
     "[Διόρθωση] Remove unused SEASONAL_PERIODS import",
@@ -74,8 +76,6 @@
     "[Νέο χαρακτηριστικό] Mixed strategies, seasonal periods, personalized AI, strategy expiry",
     "[Νέο χαρακτηριστικό] Gemini AI integration, responsive fixes, dynamic RFM segments",
     "[Νέο χαρακτηριστικό] Changelog UI polish - colored dots, Greek labels, build info panel",
-    "[Νέο χαρακτηριστικό] Auto-versioning from git commits",
-    "[Νέο χαρακτηριστικό] Branded auth action pages, Greek locale for Firebase emails",
-    "[Νέο χαρακτηριστικό] Super admin dashboard, menu refactor, auth improvements"
+    "[Νέο χαρακτηριστικό] Auto-versioning from git commits"
   ]
 }

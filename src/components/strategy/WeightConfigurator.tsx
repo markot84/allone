@@ -646,7 +646,7 @@ export function WeightConfigurator() {
       fit: rs.fit,
       description: rs.segment.description,
       count: rs.segment.count,
-      revenueShare: rs.segment.revenueShare,
+      revenueShare: rs.segment.revenue_share,
     })),
     useAI: true
   });
