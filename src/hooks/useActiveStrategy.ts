@@ -152,10 +152,9 @@ export function useActiveStrategy() {
         id: strategyId,
       } as ActiveStrategy;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['activeStrategy', brandId] }).then(() => {
-        queryClient.refetchQueries({ queryKey: ['activeStrategy', brandId] });
-      }).catch(() => {});
+    onSuccess: (savedStrategy) => {
+      queryClient.setQueryData(['activeStrategy', brandId], savedStrategy);
+      queryClient.invalidateQueries({ queryKey: ['activeStrategy', brandId] }).catch(() => {});
     },
   });
 

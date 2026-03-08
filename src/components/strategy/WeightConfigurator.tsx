@@ -17,10 +17,6 @@ import {
   FileText,
   ChevronLeft,
   ChevronRight,
-  Clock,
-  Infinity,
-  Bookmark,
-  FolderOpen
 } from 'lucide-react';
 import { Card, CardHeader, Button, Slider, Badge, Spinner } from '../common';
 import { ScenarioSelector } from './ScenarioSelector';
@@ -198,7 +194,7 @@ export function WeightConfigurator() {
     const s = scenarios.find(sc => sc.id === activeStrategy?.scenarioId);
     return s?.duration ?? 'ongoing';
   });
-  const [customDays, setCustomDays] = useState('');
+
   const [selectedSegment, setSelectedSegment] = useState('');
   const [mixConfig, setMixConfig] = useState<MixConfig | null>(() => {
     return (activeStrategy as any)?.mixConfig ?? null;
@@ -287,7 +283,7 @@ export function WeightConfigurator() {
   }, [selectedScenario, weights]);
 
   // Apply the scenario change and SAVE it
-  const applyScenarioChange = useCallback((scenarioId: string) => {
+  const applyScenarioChange = useCallback((scenarioId: string, overrideDuration?: number | 'ongoing') => {
     setSelectedScenario(scenarioId);
 
     if (scenarioId === 'mixed' || scenarioId === 'seasonal_discount') {
@@ -295,7 +291,7 @@ export function WeightConfigurator() {
       setShowDetailModal(false);
       if (scenarioId === 'seasonal_discount') {
         const scenario = scenarios.find((s) => s.id === scenarioId);
-        setDuration(scenario?.duration ?? 30);
+        setDuration(overrideDuration ?? scenario?.duration ?? 30);
       }
       return;
     }
@@ -303,9 +299,9 @@ export function WeightConfigurator() {
     setMixConfig(null);
     const scenario = scenarios.find((s) => s.id === scenarioId);
     const newWeights = scenario?.weights || defaultWeights;
-    const newDuration = scenario?.duration ?? 'ongoing';
+    const saveDuration = overrideDuration ?? scenario?.duration ?? 'ongoing';
     setWeights(newWeights);
-    setDuration(newDuration);
+    setDuration(saveDuration);
     setApprovalStatus('draft');
     setPendingScenarioChange(null);
     setShowDetailModal(false);
@@ -320,7 +316,7 @@ export function WeightConfigurator() {
     saveActiveStrategy({
       scenarioId: scenarioId,
       weights: newWeights,
-      duration: newDuration,
+      duration: saveDuration,
       approvalStatus: 'draft',
       approvedBy: user.email || user.displayName || 'User',
     }).then(() => {
@@ -506,9 +502,10 @@ export function WeightConfigurator() {
   }, [user, selectedScenario, weights, approvalStatus, saveActiveStrategy, mixConfig]);
 
   // Confirm strategy change after impact preview
-  const confirmStrategyChange = useCallback(() => {
+  const confirmStrategyChange = useCallback((selectedDuration: number | 'ongoing') => {
     if (pendingScenarioChange) {
-      applyScenarioChange(pendingScenarioChange);
+      applyScenarioChange(pendingScenarioChange, selectedDuration);
+      setDuration(selectedDuration);
       setPendingScenarioChange(null);
       setShowDetailModal(false);
     }
@@ -803,7 +800,19 @@ export function WeightConfigurator() {
       <ScenarioSelector
         selectedScenario={selectedScenario}
         onScenarioChange={handleScenarioChange}
+        activeDuration={duration}
       />
+
+      {/* Compare button below scenario cards */}
+      <div className="flex justify-end">
+        <button
+          onClick={() => setShowCompareModal(true)}
+          className="group flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-[var(--nts-medium-gray)] hover:text-[var(--nts-accent)] border border-dashed border-[var(--nts-border-gray)] hover:border-[var(--nts-accent)] transition-all duration-200"
+        >
+          <GitCompare size={13} />
+          <span>Σύγκριση στρατηγικών</span>
+        </button>
+      </div>
 
       {/* Inline Impact Summary — appears when selecting a new scenario */}
       <AnimatePresence>
@@ -816,6 +825,7 @@ export function WeightConfigurator() {
             onConfirm={confirmStrategyChange}
             onCancel={() => setPendingScenarioChange(null)}
             onDetails={() => setShowDetailModal(true)}
+            initialDuration={scenarios.find(s => s.id === pendingScenarioChange)?.duration ?? duration}
           />
         )}
       </AnimatePresence>
@@ -841,134 +851,7 @@ export function WeightConfigurator() {
           />
         )}
       </AnimatePresence>
-      {/* Duration + Compare — single row */}
-      {selectedScenario && (
-        <Card padding="md">
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex items-center gap-2 text-sm font-medium text-[#4A4A4A] flex-shrink-0">
-              <Clock size={16} className="text-[var(--nts-medium-gray)]" />
-              <span>Διάρκεια στρατηγικής</span>
-            </div>
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {[7, 14, 30, 60, 90].map(d => (
-                <button
-                  key={d}
-                  onClick={() => { handleDurationChange(d); setCustomDays(''); }}
-                  className={`px-2.5 py-1 text-xs font-medium rounded-md border transition-all ${
-                    duration === d
-                      ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)] text-white'
-                      : 'border-[#E5E5E5] bg-white text-[#4A4A4A] hover:border-[var(--nts-accent)]/50'
-                  }`}
-                >
-                  {d} ημ.
-                </button>
-              ))}
-              <button
-                onClick={() => { handleDurationChange('ongoing'); setCustomDays(''); }}
-                className={`px-2.5 py-1 text-xs font-medium rounded-md border transition-all flex items-center gap-1 ${
-                  duration === 'ongoing'
-                    ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)] text-white'
-                    : 'border-[#E5E5E5] bg-white text-[#4A4A4A] hover:border-[var(--nts-accent)]/50'
-                }`}
-              >
-                <Infinity size={12} />
-              </button>
-              <input
-                type="number"
-                min={1}
-                max={365}
-                placeholder="—"
-                value={customDays}
-                onChange={e => {
-                  const v = e.target.value;
-                  setCustomDays(v);
-                  const n = parseInt(v, 10);
-                  if (n > 0 && n <= 365) handleDurationChange(n);
-                }}
-                className={`w-14 px-2 py-1 text-xs border rounded-md text-center focus:outline-none focus:border-[var(--nts-accent)] ${
-                  typeof duration === 'number' && ![7, 14, 30, 60, 90].includes(duration)
-                    ? 'border-[var(--nts-accent)] bg-[var(--nts-light-gray)]'
-                    : 'border-[#E5E5E5]'
-                }`}
-              />
-              <span className="text-[11px] text-[#9CA3AF]">ημ.</span>
-            </div>
-
-            <div className="ml-auto flex items-center gap-2 flex-shrink-0 flex-wrap">
-              {showPresetSave ? (
-                <div className="flex items-center gap-1.5">
-                  <input
-                    type="text"
-                    placeholder="Όνομα preset"
-                    value={presetName}
-                    onChange={e => setPresetName(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handlePresetSave()}
-                    className="px-2 py-1 text-xs border border-[#E5E5E5] rounded-md w-32 focus:outline-none focus:border-[var(--nts-accent)]"
-                    autoFocus
-                  />
-                  <button onClick={handlePresetSave} className="px-2 py-1 text-xs font-medium rounded-md bg-[var(--nts-accent)] text-white">
-                    OK
-                  </button>
-                  <button onClick={() => setShowPresetSave(false)} className="px-2 py-1 text-xs text-[#9CA3AF] hover:text-[#4A4A4A]">
-                    <X size={12} />
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => setShowPresetSave(true)}
-                  className="group flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-[var(--nts-medium-gray)] hover:text-[var(--nts-accent)] border border-dashed border-[var(--nts-border-gray)] hover:border-[var(--nts-accent)] transition-all duration-200"
-                >
-                  <Bookmark size={13} />
-                  <span>Αποθήκευση</span>
-                </button>
-              )}
-
-              {presets.length > 0 && (
-                <div className="flex items-center gap-1">
-                  <select
-                    value={loadPresetId}
-                    onChange={e => setLoadPresetId(e.target.value)}
-                    className="px-2 py-1.5 text-xs border border-[#E5E5E5] rounded-md bg-white focus:outline-none focus:border-[var(--nts-accent)]"
-                  >
-                    <option value="">Presets</option>
-                    {presets.map(p => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}{p.scenarioId ? ` (${p.scenarioId})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                  {loadPresetId && (
-                    <>
-                      <button
-                        onClick={handlePresetLoad}
-                        className="p-1.5 rounded-md text-[var(--nts-accent)] hover:bg-[var(--nts-accent)]/10 transition-colors"
-                        title="Φόρτωση"
-                      >
-                        <FolderOpen size={13} />
-                      </button>
-                      <button
-                        onClick={handlePresetDelete}
-                        className="p-1.5 rounded-md text-[#9CA3AF] hover:text-[#EF4444] hover:bg-[#FEF2F2] transition-colors"
-                        title="Διαγραφή"
-                      >
-                        <X size={13} />
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
-
-              <button
-                onClick={() => setShowCompareModal(true)}
-                className="group flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-[var(--nts-medium-gray)] hover:text-[var(--nts-accent)] border border-dashed border-[var(--nts-border-gray)] hover:border-[var(--nts-accent)] transition-all duration-200"
-              >
-                <GitCompare size={13} />
-                <span>Σύγκριση</span>
-              </button>
-            </div>
-          </div>
-        </Card>
-      )}
+      {/* Duration is now inside the impact summary popup */}
 
       {/* Custom Tools - when Custom is selected */}
       {selectedScenario === 'custom' && (
@@ -1198,7 +1081,7 @@ export function WeightConfigurator() {
           }
           icon={<Sparkles size={18} className="text-[var(--nts-medium-gray)]" />}
           action={
-            <div className="flex items-center gap-2 overflow-x-auto max-w-full">
+            <div className="flex flex-wrap items-center gap-1.5">
               <button
                 onClick={toggleAI}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all flex-shrink-0"
@@ -1230,7 +1113,7 @@ export function WeightConfigurator() {
                   <button
                     key={segment.id}
                     onClick={() => setSelectedSegment(segment.id)}
-                    className="px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap flex-shrink-0"
+                    className="px-2.5 py-1 rounded-full text-[11px] font-medium transition-all whitespace-nowrap"
                     style={{
                       backgroundColor: isSelected
                         ? segment.color

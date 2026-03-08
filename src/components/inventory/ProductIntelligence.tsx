@@ -614,9 +614,9 @@ function SummaryCard({ label, value, subValue, icon, color, tooltip, active, onC
       className="h-full cursor-pointer"
       onClick={onClick}
     >
-      <div className="flex items-center gap-3">
+      <div className="flex items-start gap-3">
         <div
-          className="w-10 h-10 rounded-lg flex items-center justify-center"
+          className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"
           style={{ backgroundColor: `${color}20` }}
         >
           <span style={{ color }}>{icon}</span>
@@ -630,7 +630,7 @@ function SummaryCard({ label, value, subValue, icon, color, tooltip, active, onC
             <p className="text-xs text-[#9CA3AF]">{subValue}</p>
           )}
         </div>
-        <div className="w-2 h-2 rounded-full flex-shrink-0 transition-colors duration-200" style={{ backgroundColor: active ? color : 'transparent' }} />
+        <div className="w-2 h-2 rounded-full flex-shrink-0 mt-2 transition-colors duration-200" style={{ backgroundColor: active ? color : 'transparent' }} />
       </div>
       <div className="h-0.5 rounded-full mt-3 -mb-1 transition-colors duration-200" style={{ backgroundColor: active ? color : 'transparent' }} />
     </Card>

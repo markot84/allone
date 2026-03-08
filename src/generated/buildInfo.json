@@ -1,10 +1,18 @@
 {
-  "version": "0.8.0",
-  "previousVersion": "0.7.0",
-  "commitHash": "667abd6",
+  "version": "0.9.0",
+  "previousVersion": "0.8.0",
+  "commitHash": "04429d4",
   "branch": "main",
-  "buildDate": "2026-03-08T12:45:02.813Z",
+  "buildDate": "2026-03-08T13:09:04.884Z",
   "commits": [
+    {
+      "hash": "04429d4",
+      "message": "fix: replace remaining blue #0969da with neutrals, fix strategy duration badge, preserve mixConfig on duration change"
+    },
+    {
+      "hash": "57245e2",
+      "message": "fix: remove unused SEASONAL_PERIODS import"
+    },
     {
       "hash": "667abd6",
       "message": "feat: harmonize blue palette with warm neutrals, seasonal Lucide icons, content AI refactor, seasonal discount strategy, impact preview redesign, strategic docs"
@@ -56,17 +64,11 @@
     {
       "hash": "d8dcd4d",
       "message": "feat: landing page overhaul - data sources, input/output chain, compliance, traction. Rename RFM to Data Analysis. Add one-pagers EN/GR."
-    },
-    {
-      "hash": "ff91055",
-      "message": "feat: new accent orange, background scale, fix MarketingIndexPage - Replace faded orange with solid #F97316 - Add nts-bg tokens (pure/subtle/muted/strong/dark) - Update shadows, CTAs, Badge, Card across app"
-    },
-    {
-      "hash": "6611e1c",
-      "message": "feat(landing): add typewriter, metrics strip, sticky header, before/after layout, screenshot hover, trust bar, footer brand tag"
     }
   ],
   "changes": [
+    "[Διόρθωση] Replace remaining blue #0969da with neutrals, fix strategy duration badge, preserve mixConfig on duration change",
+    "[Διόρθωση] Remove unused SEASONAL_PERIODS import",
     "[Νέο χαρακτηριστικό] Harmonize blue palette with warm neutrals, seasonal Lucide icons, content AI refactor, seasonal discount strategy, impact preview redesign, strategic docs",
     "[Νέο χαρακτηριστικό] Mixed strategies, seasonal periods, personalized AI, strategy expiry",
     "[Νέο χαρακτηριστικό] Gemini AI integration, responsive fixes, dynamic RFM segments",
@@ -74,8 +76,6 @@
     "[Νέο χαρακτηριστικό] Auto-versioning from git commits",
     "[Νέο χαρακτηριστικό] Branded auth action pages, Greek locale for Firebase emails",
     "[Νέο χαρακτηριστικό] Super admin dashboard, menu refactor, auth improvements",
-    "[Νέο χαρακτηριστικό] Redesign before/after section, add scenario comparison USP point",
-    "[Διόρθωση] SearchIcon style prop build error",
-    "[Νέο χαρακτηριστικό] Dark sidebar/header, card shadows, strategy duration, commercial strategy rename, mascot AI button"
+    "[Νέο χαρακτηριστικό] Redesign before/after section, add scenario comparison USP point"
   ]
 }

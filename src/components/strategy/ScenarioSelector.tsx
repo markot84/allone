@@ -5,11 +5,13 @@ import { scenarios } from '../../data';
 interface ScenarioSelectorProps {
   selectedScenario: string | null;
   onScenarioChange: (scenarioId: string) => void;
+  activeDuration?: number | 'ongoing';
 }
 
 export function ScenarioSelector({
   selectedScenario,
   onScenarioChange,
+  activeDuration,
 }: ScenarioSelectorProps) {
   const scenarioIcon = (id: string) => {
     const cls = 'text-[var(--nts-medium-gray)]';
@@ -82,17 +84,21 @@ export function ScenarioSelector({
               <p className="text-xs text-[#4A4A4A] mt-1">
                 {scenario.description}
               </p>
-              {scenario.duration !== undefined && (
-                <div className="flex items-center gap-1 mt-2">
-                  {scenario.duration === 'ongoing'
-                    ? <Infinity size={12} className="text-[#9CA3AF]" />
-                    : <Clock size={12} className="text-[#9CA3AF]" />
-                  }
-                  <span className="text-[10px] text-[#9CA3AF]">
-                    {scenario.duration === 'ongoing' ? 'Ongoing' : `${scenario.duration} ημέρες`}
-                  </span>
-                </div>
-              )}
+              {(() => {
+                const dur = isSelected && activeDuration !== undefined ? activeDuration : scenario.duration;
+                if (dur === undefined) return null;
+                return (
+                  <div className="flex items-center gap-1 mt-2">
+                    {dur === 'ongoing'
+                      ? <Infinity size={12} className="text-[#9CA3AF]" />
+                      : <Clock size={12} className="text-[#9CA3AF]" />
+                    }
+                    <span className="text-[10px] text-[#9CA3AF]">
+                      {dur === 'ongoing' ? 'Ongoing' : `${dur} ημέρες`}
+                    </span>
+                  </div>
+                );
+              })()}
               
               {scenario.weights && (
                 <div className="mt-auto pt-3 border-t border-[#E5E5E5]">

@@ -10,7 +10,9 @@ import {
   Megaphone,
   X,
   ChevronDown,
-  Check
+  Check,
+  Clock,
+  Infinity
 } from 'lucide-react';
 import { Button } from '../common';
 import { useProducts, useCampaigns, useContent } from '../../hooks';
@@ -84,15 +86,17 @@ function useProductImpacts(
 /* ───────── Layer 1: Inline Summary Card ───────── */
 
 interface StrategyImpactSummaryProps extends ImpactBaseProps {
-  onConfirm: () => void;
+  onConfirm: (selectedDuration: number | 'ongoing') => void;
   onCancel: () => void;
   onDetails: () => void;
+  initialDuration: number | 'ongoing';
 }
 
 export function StrategyImpactSummary({
   currentWeights, newWeights, currentScenarioId, newScenarioId,
-  onConfirm, onCancel, onDetails,
+  onConfirm, onCancel, onDetails, initialDuration,
 }: StrategyImpactSummaryProps) {
+  const [duration, setDuration] = useState<number | 'ongoing'>(initialDuration);
   const { products } = useProducts();
   const impacts = useProductImpacts(products, currentWeights, newWeights, currentScenarioId, newScenarioId);
 
@@ -133,6 +137,37 @@ export function StrategyImpactSummary({
           </div>
         </div>
 
+        {/* Duration selector */}
+        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-[#F5F5F5]">
+          <Clock size={13} className="text-[#9CA3AF] flex-shrink-0" />
+          <span className="text-xs text-[#9CA3AF] flex-shrink-0">Διάρκεια</span>
+          <div className="flex items-center gap-1 flex-wrap">
+            {[7, 14, 30, 60, 90].map(d => (
+              <button
+                key={d}
+                onClick={() => setDuration(d)}
+                className={`px-2 py-0.5 text-[11px] font-medium rounded border transition-all ${
+                  duration === d
+                    ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)] text-white'
+                    : 'border-[#E5E5E5] text-[#4A4A4A] hover:border-[var(--nts-accent)]/50'
+                }`}
+              >
+                {d}ημ
+              </button>
+            ))}
+            <button
+              onClick={() => setDuration('ongoing')}
+              className={`px-2 py-0.5 text-[11px] font-medium rounded border transition-all ${
+                duration === 'ongoing'
+                  ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)] text-white'
+                  : 'border-[#E5E5E5] text-[#4A4A4A] hover:border-[var(--nts-accent)]/50'
+              }`}
+            >
+              <Infinity size={11} />
+            </button>
+          </div>
+        </div>
+
         <div className="flex items-center justify-end gap-2 mt-3">
           <button
             onClick={onDetails}
@@ -148,7 +183,7 @@ export function StrategyImpactSummary({
             Ακύρωση
           </button>
           <button
-            onClick={onConfirm}
+            onClick={() => onConfirm(duration)}
             className="px-4 py-1.5 text-xs font-medium bg-[var(--nts-accent)] text-white rounded-lg hover:opacity-90 transition-opacity flex items-center gap-1.5"
           >
             <Check size={12} />
@@ -165,7 +200,7 @@ export function StrategyImpactSummary({
 interface StrategyImpactModalProps extends ImpactBaseProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: () => void;
+  onConfirm: (selectedDuration: number | 'ongoing') => void;
 }
 
 const formatDuration = (d?: number | 'ongoing') =>
@@ -357,7 +392,7 @@ export function StrategyImpactModal({
           <Button variant="ghost" onClick={onClose}>
             Ακύρωση
           </Button>
-          <Button variant="primary" icon={<Check size={16} />} onClick={onConfirm}>
+          <Button variant="primary" icon={<Check size={16} />} onClick={() => onConfirm(newDuration ?? 'ongoing')}>
             Εφαρμογή αλλαγής
           </Button>
         </div>

@@ -71,7 +71,7 @@ interface CardHeaderProps {
 
 export function CardHeader({ title, subtitle, icon, action }: CardHeaderProps) {
   return (
-    <div className="flex items-start justify-between gap-3 mb-4">
+    <div className="flex flex-col gap-3 mb-4">
       <div className="flex items-center gap-2 min-w-0">
         {icon && (
           <span style={{ color: 'var(--fgColor-muted, #57606a)' }}>
@@ -79,7 +79,7 @@ export function CardHeader({ title, subtitle, icon, action }: CardHeaderProps) {
           </span>
         )}
         <div className="min-w-0">
-          <Heading as="h3" variant="small" className="truncate" style={{ margin: 0 }}>
+          <Heading as="h3" variant="small" style={{ margin: 0 }}>
             {title}
           </Heading>
           {subtitle && (
@@ -94,7 +94,7 @@ export function CardHeader({ title, subtitle, icon, action }: CardHeaderProps) {
           )}
         </div>
       </div>
-      {action && <div className="flex-shrink-0">{action}</div>}
+      {action && <div className="w-full">{action}</div>}
     </div>
   );
 }
