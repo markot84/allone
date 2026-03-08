@@ -5,6 +5,13 @@ import { useBrand } from './useBrand';
 import { scenarios } from '../data';
 import { useMemo } from 'react';
 
+export interface MixConfig {
+  scenarioA: string;
+  scenarioB: string;
+  percentA: number;
+  percentB: number;
+}
+
 export interface ActiveStrategy {
   id: string;
   brandId: string;
@@ -15,6 +22,7 @@ export interface ActiveStrategy {
   approvedAt?: string;
   approvedBy?: string;
   implementedAt?: string;
+  mixConfig?: MixConfig;
   createdAt: string;
   updatedAt: string;
 }
@@ -99,6 +107,7 @@ export function useActiveStrategy() {
       duration?: number | 'ongoing';
       approvalStatus: ActiveStrategy['approvalStatus'];
       approvedBy?: string;
+      mixConfig?: MixConfig;
     }) => {
       if (!brandId) throw new Error('No brand selected');
       
@@ -118,6 +127,10 @@ export function useActiveStrategy() {
 
       if (strategy.duration !== undefined) {
         strategyData.duration = strategy.duration;
+      }
+
+      if (strategy.mixConfig) {
+        strategyData.mixConfig = strategy.mixConfig;
       }
       
       // Only add optional fields if they have values (Firestore doesn't accept undefined)

@@ -1,10 +1,14 @@
 {
-  "version": "0.4.0",
-  "previousVersion": "0.3.0",
-  "commitHash": "febbde0",
+  "version": "0.5.0",
+  "previousVersion": "0.4.0",
+  "commitHash": "c8cf493",
   "branch": "main",
-  "buildDate": "2026-03-08T08:09:48.618Z",
+  "buildDate": "2026-03-08T09:21:10.726Z",
   "commits": [
+    {
+      "hash": "c8cf493",
+      "message": "feat: Gemini AI integration, responsive fixes, dynamic RFM segments"
+    },
     {
       "hash": "febbde0",
       "message": "feat: changelog UI polish - colored dots, Greek labels, build info panel"
@@ -60,13 +64,10 @@
     {
       "hash": "6340c28",
       "message": "ROI from campaign cost, EU number format (18.300,55), multi-file campaign import (Google Ads + Meta), Channel Activation fixes"
-    },
-    {
-      "hash": "740affa",
-      "message": "Add brand name to all exports"
     }
   ],
   "changes": [
+    "[Νέο χαρακτηριστικό] Gemini AI integration, responsive fixes, dynamic RFM segments",
     "[Νέο χαρακτηριστικό] Changelog UI polish - colored dots, Greek labels, build info panel",
     "[Νέο χαρακτηριστικό] Auto-versioning from git commits",
     "[Νέο χαρακτηριστικό] Branded auth action pages, Greek locale for Firebase emails",
@@ -75,7 +76,6 @@
     "[Διόρθωση] SearchIcon style prop build error",
     "[Νέο χαρακτηριστικό] Dark sidebar/header, card shadows, strategy duration, commercial strategy rename, mascot AI button",
     "[Αναδιαμόρφωση] Replace orange accent backgrounds with neutral gray across app. Remove nts-accent-light from all components, update icons to monochrome, add NTS favicon, refine landing page copy.",
-    "[Διόρθωση] Suppress unused var warnings for build",
-    "[Νέο χαρακτηριστικό] Landing page overhaul - data sources, input/output chain, compliance, traction. Rename RFM to Data Analysis. Add one-pagers EN/GR."
+    "[Διόρθωση] Suppress unused var warnings for build"
   ]
 }

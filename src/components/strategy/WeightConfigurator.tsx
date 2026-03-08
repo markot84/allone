@@ -19,7 +19,10 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
-  Infinity
+  Infinity,
+  Bookmark,
+  FolderOpen,
+  Calendar
 } from 'lucide-react';
 import { Card, CardHeader, Button, Slider, Badge, Spinner } from '../common';
 import { ScenarioSelector } from './ScenarioSelector';
@@ -28,6 +31,9 @@ import { ApprovalWorkflow } from './ApprovalWorkflow';
 import { StrategyImpactPreview } from './StrategyImpactPreview';
 import { CustomToolsCard } from './CustomToolsCard';
 import { CompareScenariosModal } from './CompareScenariosModal';
+import { MixedStrategyPanel, type MixConfig, computeBlendedWeights } from './MixedStrategyPanel';
+import { SeasonalBanner } from './SeasonalBanner';
+import { SeasonalPeriodsModal } from './SeasonalPeriodsModal';
 import { useProducts, useSegments, useBrand } from '../../hooks';
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import { useAuth } from '../../hooks';
@@ -40,9 +46,12 @@ import { useAIChannelRecommendations } from '../../hooks/useAIChannelRecommendat
 import { getPreviewConfig, type PreviewColumnId } from '../../data/strategyPreviewConfig';
 import { calculateCompositeScore } from '../../utils/compositeScore';
 import { getStockAgeDays } from '../../utils/productUtils';
+import { rankSegments, type ScoredSegment } from '../../utils/segmentRelevance';
 import { safeBrandName } from '../../services/reportExport';
 import { useToast } from '../common/Toast';
 import { Tooltip } from '../common';
+import { getPresets, savePreset, loadPreset, deletePreset } from '../../data/weightPresets';
+import type { SeasonalPeriod } from '../../data/seasonalPeriods';
 import type { Product } from '../../types';
 
 type ApprovalStatus = 'draft' | 'pending_review' | 'approved' | 'implementing';
@@ -192,18 +201,63 @@ export function WeightConfigurator() {
   });
   const [customDays, setCustomDays] = useState('');
   const [selectedSegment, setSelectedSegment] = useState('');
-  
-  useEffect(() => {
-    if (rfmSegments.length > 0 && (!selectedSegment || !rfmSegments.some(s => s.id === selectedSegment))) {
-      setSelectedSegment(rfmSegments[0].id);
+  const [mixConfig, setMixConfig] = useState<MixConfig | null>(() => {
+    return (activeStrategy as any)?.mixConfig ?? null;
+  });
+
+  const currentScenarioWeights = useMemo(() => {
+    if (selectedScenario === 'mixed' && mixConfig?.scenarioA && mixConfig?.scenarioB) {
+      return computeBlendedWeights(mixConfig.scenarioA, mixConfig.scenarioB, mixConfig.percentA);
     }
-  }, [rfmSegments, selectedSegment]);
+    if (!selectedScenario || selectedScenario === 'custom') return weights;
+    const sc = scenarios.find(s => s.id === selectedScenario);
+    return sc?.weights ?? weights;
+  }, [selectedScenario, weights, mixConfig]);
+
+  const rankedSegments = useMemo(
+    () => rankSegments(rfmSegments, currentScenarioWeights),
+    [rfmSegments, currentScenarioWeights]
+  );
+
+  const segmentFitMap = useMemo(() => {
+    const map: Record<string, ScoredSegment> = {};
+    for (const rs of rankedSegments) map[rs.segment.id] = rs;
+    return map;
+  }, [rankedSegments]);
+
+  useEffect(() => {
+    if (rankedSegments.length > 0 && (!selectedSegment || !rankedSegments.some(rs => rs.segment.id === selectedSegment))) {
+      setSelectedSegment(rankedSegments[0].segment.id);
+    }
+  }, [rankedSegments, selectedSegment]);
+
+  const prevScenarioRef = useRef(selectedScenario);
+  useEffect(() => {
+    if (selectedScenario !== prevScenarioRef.current) {
+      prevScenarioRef.current = selectedScenario;
+      if (rankedSegments.length > 0) {
+        setSelectedSegment(rankedSegments[0].segment.id);
+      }
+    }
+  }, [selectedScenario, rankedSegments]);
 
   const [showImpactPreview, setShowImpactPreview] = useState(false);
   const [pendingScenarioChange, setPendingScenarioChange] = useState<string | null>(null);
-  const [previewTargetScenario, setPreviewTargetScenario] = useState<string | null>(null); // For manual preview
+  const [previewTargetScenario, setPreviewTargetScenario] = useState<string | null>(null);
   const [showCompareModal, setShowCompareModal] = useState(false);
   const [showFeedFormatModal, setShowFeedFormatModal] = useState(false);
+  const [showSeasonalModal, setShowSeasonalModal] = useState(false);
+  const [mixPanelOpen, setMixPanelOpen] = useState(true);
+  const [showPresetSave, setShowPresetSave] = useState(false);
+  const [presetName, setPresetName] = useState('');
+  const [presets, setPresets] = useState(getPresets());
+  const [loadPresetId, setLoadPresetId] = useState('');
+  const [customSeasons, setCustomSeasons] = useState<SeasonalPeriod[]>(() => {
+    try {
+      const raw = localStorage.getItem('perf-plus-custom-seasons');
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+  });
   const [currentPreviewPage, setCurrentPreviewPage] = useState(1);
   const PREVIEW_PAGE_SIZE = 10;
 
@@ -215,6 +269,7 @@ export function WeightConfigurator() {
 
   const getWeightsForScenario = useCallback((scenarioId: string | null) => {
     if (!scenarioId || scenarioId === 'custom') return weights;
+    if (scenarioId === 'mixed') return weights;
     const scenario = scenarios.find((s) => s.id === scenarioId);
     return scenario?.weights ?? defaultWeights;
   }, [weights]);
@@ -229,19 +284,18 @@ export function WeightConfigurator() {
     return scenario?.weights ?? weights;
   }, [selectedScenario, weights]);
 
-  // Handle scenario change with impact preview — show preview first, apply only on confirm
-  const handleScenarioChange = useCallback((scenarioId: string) => {
-    if (scenarioId === selectedScenario) {
-      return;
-    }
-    
-    setPendingScenarioChange(scenarioId);
-    setShowImpactPreview(true);
-  }, [selectedScenario]);
-
   // Apply the scenario change and SAVE it
   const applyScenarioChange = useCallback((scenarioId: string) => {
     setSelectedScenario(scenarioId);
+
+    if (scenarioId === 'mixed') {
+      setShowImpactPreview(false);
+      setPendingScenarioChange(null);
+      setPreviewTargetScenario(null);
+      return;
+    }
+
+    setMixConfig(null);
     const scenario = scenarios.find((s) => s.id === scenarioId);
     const newWeights = scenario?.weights || defaultWeights;
     const newDuration = scenario?.duration ?? 'ongoing';
@@ -272,6 +326,137 @@ export function WeightConfigurator() {
       toast.error(`Σφάλμα: ${error?.message || error}`);
     });
   }, [user, saveActiveStrategy, toast]);
+
+  const handleMixedApply = useCallback((blendedWeights: Record<string, number>, config: MixConfig) => {
+    setMixConfig(config);
+    setWeights(blendedWeights);
+    setMixPanelOpen(false);
+    setApprovalStatus('draft');
+
+    if (!user) {
+      toast.error('Πρέπει να είσαι συνδεδεμένος');
+      return;
+    }
+
+    const nameA = scenarios.find(s => s.id === config.scenarioA)?.name ?? config.scenarioA;
+    const nameB = scenarios.find(s => s.id === config.scenarioB)?.name ?? config.scenarioB;
+
+    saveActiveStrategy({
+      scenarioId: 'mixed',
+      weights: blendedWeights,
+      duration: duration,
+      approvalStatus: 'draft',
+      approvedBy: user.email || user.displayName || 'User',
+      mixConfig: config,
+    } as any).then(() => {
+      toast.success(`Μικτή στρατηγική "${nameA} ${config.percentA}% / ${nameB} ${config.percentB}%" αποθηκεύτηκε`);
+    }).catch((error) => {
+      console.error('Error saving mixed strategy:', error);
+      toast.error(`Σφάλμα: ${error?.message || error}`);
+    });
+  }, [user, saveActiveStrategy, toast, duration]);
+
+  const handleSeasonApply = useCallback((period: SeasonalPeriod) => {
+    const mix = period.suggestedMix;
+    const blended = computeBlendedWeights(mix.scenarioA, mix.scenarioB, mix.percentA);
+    const config: MixConfig = {
+      scenarioA: mix.scenarioA,
+      scenarioB: mix.scenarioB,
+      percentA: mix.percentA,
+      percentB: 100 - mix.percentA,
+    };
+    setSelectedScenario('mixed');
+    setMixConfig(config);
+    setWeights(blended);
+    setApprovalStatus('draft');
+
+    if (!user) return;
+    saveActiveStrategy({
+      scenarioId: 'mixed',
+      weights: blended,
+      duration,
+      approvalStatus: 'draft',
+      approvedBy: user.email || user.displayName || 'User',
+      mixConfig: config,
+    } as any).then(() => {
+      toast.success(`Εποχιακή στρατηγική "${period.name}" εφαρμόστηκε`);
+    }).catch(() => {});
+  }, [user, saveActiveStrategy, toast, duration]);
+
+  const handlePresetSave = useCallback(() => {
+    const name = presetName.trim() || `Preset ${new Date().toLocaleDateString('el-GR')}`;
+    savePreset({
+      name,
+      weights,
+      scenarioId: selectedScenario ?? undefined,
+      mixConfig: selectedScenario === 'mixed' && mixConfig ? mixConfig : undefined,
+      duration,
+    });
+    setPresetName('');
+    setShowPresetSave(false);
+    setPresets(getPresets());
+    toast.success(`Preset "${name}" αποθηκεύτηκε`);
+  }, [presetName, weights, selectedScenario, mixConfig, duration, toast]);
+
+  const handlePresetLoad = useCallback(() => {
+    if (!loadPresetId) return;
+    const preset = loadPreset(loadPresetId);
+    if (!preset) return;
+
+    if (preset.scenarioId === 'mixed' && preset.mixConfig) {
+      setSelectedScenario('mixed');
+      setMixConfig(preset.mixConfig as MixConfig);
+      setWeights(preset.weights);
+    } else if (preset.scenarioId && preset.scenarioId !== 'custom') {
+      applyScenarioChange(preset.scenarioId);
+    } else {
+      setWeights(preset.weights);
+      setSelectedScenario(preset.scenarioId ?? 'custom');
+    }
+    if (preset.duration !== undefined) setDuration(preset.duration);
+    setLoadPresetId('');
+    toast.success(`Preset "${preset.name}" φορτώθηκε`);
+  }, [loadPresetId, applyScenarioChange, toast]);
+
+  const handlePresetDelete = useCallback(() => {
+    if (!loadPresetId) return;
+    deletePreset(loadPresetId);
+    setLoadPresetId('');
+    setPresets(getPresets());
+    toast.success('Preset διαγράφηκε');
+  }, [loadPresetId, toast]);
+
+  const handleSaveCustomSeason = useCallback((period: SeasonalPeriod) => {
+    setCustomSeasons(prev => {
+      const updated = [...prev, period];
+      localStorage.setItem('perf-plus-custom-seasons', JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
+
+  const handleDeleteCustomSeason = useCallback((id: string) => {
+    setCustomSeasons(prev => {
+      const updated = prev.filter(p => p.id !== id);
+      localStorage.setItem('perf-plus-custom-seasons', JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
+
+  // Handle scenario change with impact preview — show preview first, apply only on confirm
+  const handleScenarioChange = useCallback((scenarioId: string) => {
+    if (scenarioId === selectedScenario) {
+      return;
+    }
+
+    if (scenarioId === 'mixed') {
+      setMixPanelOpen(true);
+      applyScenarioChange('mixed');
+      return;
+    }
+    
+    setPendingScenarioChange(scenarioId);
+    setShowImpactPreview(true);
+  }, [selectedScenario, applyScenarioChange]);
 
   const handleDurationChange = useCallback((newDuration: number | 'ongoing') => {
     setDuration(newDuration);
@@ -480,6 +665,14 @@ export function WeightConfigurator() {
     selectedScenarioId: selectedScenario,
     segments: rfmSegments,
     selectedSegmentId: selectedSegment,
+    fitLevel: segmentFitMap[selectedSegment]?.fit ?? 'good',
+    mixConfig: selectedScenario === 'mixed' && mixConfig ? mixConfig : undefined,
+    brandContext: currentBrand ? {
+      brandName: currentBrand.name,
+      brandType: currentBrand.type,
+      topCategories: [...new Set(products.map(p => p.category).filter(Boolean))].slice(0, 5),
+    } : null,
+    segmentFitList: rankedSegments.map(rs => ({ name: rs.segment.name, fit: rs.fit })),
     useAI: true
   });
 
@@ -491,6 +684,12 @@ export function WeightConfigurator() {
       setApprovalStatus(activeStrategy.approvalStatus);
       if (activeStrategy.duration !== undefined) {
         setDuration(activeStrategy.duration);
+      }
+      const saved = (activeStrategy as any).mixConfig;
+      if (activeStrategy.scenarioId === 'mixed' && saved) {
+        setMixConfig(saved as MixConfig);
+      } else {
+        setMixConfig(null);
       }
     }
   }, [activeStrategy?.id, strategyLoading]);
@@ -518,12 +717,77 @@ export function WeightConfigurator() {
         </div>
       </div>
 
+      {/* Strategy Expiry Warning */}
+      {(() => {
+        if (!activeStrategy?.duration || activeStrategy.duration === 'ongoing') return null;
+        const dur = typeof activeStrategy.duration === 'string' ? parseInt(activeStrategy.duration, 10) : activeStrategy.duration;
+        if (!dur || isNaN(dur)) return null;
+        const raw = activeStrategy.updatedAt || activeStrategy.createdAt;
+        const startMs = typeof raw === 'string' ? new Date(raw).getTime()
+          : typeof (raw as any)?.toMillis === 'function' ? (raw as any).toMillis()
+          : typeof (raw as any)?.seconds === 'number' ? (raw as any).seconds * 1000
+          : NaN;
+        if (isNaN(startMs)) return null;
+        const end = new Date(startMs + dur * 86400000);
+        const remaining = Math.ceil((end.getTime() - Date.now()) / 86400000);
+        if (remaining > 3) return null;
+        const expired = remaining <= 0;
+        return (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className={`rounded-xl border p-4 ${expired ? 'border-[#EF4444]/30 bg-[#EF4444]/5' : 'border-[#F59E0B]/30 bg-[#F59E0B]/5'}`}
+          >
+            <div className="flex items-start gap-3">
+              <AlertCircle size={18} className={expired ? 'text-[#EF4444] mt-0.5' : 'text-[#F59E0B] mt-0.5'} />
+              <div className="flex-1 min-w-0">
+                <h4 className={`text-sm font-semibold ${expired ? 'text-[#EF4444]' : 'text-[#F59E0B]'}`}>
+                  {expired ? 'Η στρατηγική σας έχει λήξει' : `Η στρατηγική λήγει σε ${remaining} ${remaining === 1 ? 'ημέρα' : 'ημέρες'}`}
+                </h4>
+                <p className="text-xs text-[#4A4A4A] mt-1 leading-relaxed">
+                  {expired
+                    ? 'Η διάρκεια της τρέχουσας στρατηγικής έχει ολοκληρωθεί. Επιλέξτε νέα στρατηγική ή ανανεώστε την υπάρχουσα.'
+                    : 'Ετοιμαστείτε για αλλαγή — ελέγξτε τα αποτελέσματα και αποφασίστε αν θα ανανεώσετε, προσαρμόσετε ή αλλάξετε στρατηγική.'
+                  }
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        );
+      })()}
+
+      {/* Seasonal Banner */}
+      <SeasonalBanner
+        currentScenarioId={selectedScenario}
+        currentMixConfig={mixConfig}
+        onApplySeason={handleSeasonApply}
+        onManageSeasons={() => setShowSeasonalModal(true)}
+      />
+
       {/* Scenario Selector */}
       <ScenarioSelector
         selectedScenario={selectedScenario}
         onScenarioChange={handleScenarioChange}
         activeDuration={duration}
       />
+
+      {/* Mixed Strategy Panel */}
+      <AnimatePresence>
+        {selectedScenario === 'mixed' && mixPanelOpen && (
+          <MixedStrategyPanel
+            onApply={handleMixedApply}
+            initialConfig={mixConfig}
+          />
+        )}
+      </AnimatePresence>
+      {selectedScenario === 'mixed' && !mixPanelOpen && (
+        <button
+          onClick={() => setMixPanelOpen(true)}
+          className="flex items-center gap-2 px-4 py-2 text-xs font-medium text-[var(--nts-accent)] border border-dashed border-[var(--nts-accent)]/30 rounded-lg hover:bg-[var(--nts-accent)]/5 transition-colors"
+        >
+          Επεξεργασία μικτής στρατηγικής
+        </button>
+      )}
 
       {/* Duration + Compare — single row */}
       {selectedScenario && (
@@ -578,13 +842,83 @@ export function WeightConfigurator() {
               <span className="text-[11px] text-[#9CA3AF]">ημ.</span>
             </div>
 
-            <div className="ml-auto flex-shrink-0">
+            <div className="ml-auto flex items-center gap-2 flex-shrink-0 flex-wrap">
+              {showPresetSave ? (
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="text"
+                    placeholder="Όνομα preset"
+                    value={presetName}
+                    onChange={e => setPresetName(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handlePresetSave()}
+                    className="px-2 py-1 text-xs border border-[#E5E5E5] rounded-md w-32 focus:outline-none focus:border-[var(--nts-accent)]"
+                    autoFocus
+                  />
+                  <button onClick={handlePresetSave} className="px-2 py-1 text-xs font-medium rounded-md bg-[var(--nts-accent)] text-white">
+                    OK
+                  </button>
+                  <button onClick={() => setShowPresetSave(false)} className="px-2 py-1 text-xs text-[#9CA3AF] hover:text-[#4A4A4A]">
+                    <X size={12} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowPresetSave(true)}
+                  className="group flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-[var(--nts-medium-gray)] hover:text-[var(--nts-accent)] border border-dashed border-[var(--nts-border-gray)] hover:border-[var(--nts-accent)] transition-all duration-200"
+                >
+                  <Bookmark size={13} />
+                  <span>Αποθήκευση</span>
+                </button>
+              )}
+
+              {presets.length > 0 && (
+                <div className="flex items-center gap-1">
+                  <select
+                    value={loadPresetId}
+                    onChange={e => setLoadPresetId(e.target.value)}
+                    className="px-2 py-1.5 text-xs border border-[#E5E5E5] rounded-md bg-white focus:outline-none focus:border-[var(--nts-accent)]"
+                  >
+                    <option value="">Presets</option>
+                    {presets.map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}{p.scenarioId ? ` (${p.scenarioId})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {loadPresetId && (
+                    <>
+                      <button
+                        onClick={handlePresetLoad}
+                        className="p-1.5 rounded-md text-[var(--nts-accent)] hover:bg-[var(--nts-accent)]/10 transition-colors"
+                        title="Φόρτωση"
+                      >
+                        <FolderOpen size={13} />
+                      </button>
+                      <button
+                        onClick={handlePresetDelete}
+                        className="p-1.5 rounded-md text-[#9CA3AF] hover:text-[#EF4444] hover:bg-[#FEF2F2] transition-colors"
+                        title="Διαγραφή"
+                      >
+                        <X size={13} />
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+
+              <button
+                onClick={() => setShowSeasonalModal(true)}
+                className="group flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-[var(--nts-medium-gray)] hover:text-[var(--nts-accent)] border border-dashed border-[var(--nts-border-gray)] hover:border-[var(--nts-accent)] transition-all duration-200"
+              >
+                <Calendar size={13} />
+                <span>Εποχιακές</span>
+              </button>
               <button
                 onClick={() => setShowCompareModal(true)}
                 className="group flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-[var(--nts-medium-gray)] hover:text-[var(--nts-accent)] border border-dashed border-[var(--nts-border-gray)] hover:border-[var(--nts-accent)] transition-all duration-200"
               >
                 <GitCompare size={13} />
-                <span>Σύγκριση Σεναρίων Εμπορικής Στρατηγικής</span>
+                <span>Σύγκριση</span>
               </button>
             </div>
           </div>
@@ -842,31 +1176,61 @@ export function WeightConfigurator() {
             <div className="flex items-center gap-2 overflow-x-auto max-w-full">
               <button
                 onClick={toggleAI}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex-shrink-0 ${
-                  aiEnabled ? 'bg-[var(--nts-accent)]/20 text-[var(--nts-accent)]' : 'bg-[#F5F5F5] text-[#4A4A4A]'
-                }`}
-                title={aiEnabled ? 'AI ενεργό – κλικ για στατικές' : 'AI απενεργοποιημένο – κλικ για AI'}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all flex-shrink-0"
+                style={{
+                  background: aiEnabled
+                    ? '#1a1a1a'
+                    : '#E5E5E5',
+                  color: aiEnabled ? '#fff' : '#888',
+                  boxShadow: aiEnabled ? '0 2px 8px rgba(0,0,0,0.2)' : 'none',
+                }}
+                title={aiEnabled ? 'AI ενεργό – κλικ για απενεργοποίηση' : 'AI απενεργοποιημένο – κλικ για ενεργοποίηση'}
               >
-                {aiEnabled ? 'AI ON' : 'AI OFF'}
-              </button>
-              {rfmSegments.map((segment) => (
-                <button
-                  key={segment.id}
-                  onClick={() => setSelectedSegment(segment.id)}
-                  className={`
-                    px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap flex-shrink-0
-                    ${selectedSegment === segment.id
-                      ? 'text-white'
-                      : 'bg-[#F5F5F5] text-[#4A4A4A] hover:bg-[#E5E5E5]'
-                    }
-                  `}
+                <Sparkles size={12} />
+                {aiEnabled ? 'AI' : 'AI'}
+                <span
                   style={{
-                    backgroundColor: selectedSegment === segment.id ? segment.color : undefined
+                    width: 7, height: 7, borderRadius: '50%',
+                    background: aiEnabled ? '#4ade80' : '#aaa',
+                    boxShadow: aiEnabled ? '0 0 4px #4ade80' : 'none',
+                    flexShrink: 0,
                   }}
-                >
-                  {segment.name}
-                </button>
-              ))}
+                />
+              </button>
+              {rankedSegments.map(({ segment, fit }) => {
+                const isSelected = selectedSegment === segment.id;
+                const isIdeal = fit === 'ideal';
+                const isGood = fit === 'good';
+                return (
+                  <button
+                    key={segment.id}
+                    onClick={() => setSelectedSegment(segment.id)}
+                    className="px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap flex-shrink-0"
+                    style={{
+                      backgroundColor: isSelected
+                        ? segment.color
+                        : isIdeal
+                          ? 'rgba(34,197,94,0.08)'
+                          : '#F5F5F5',
+                      color: isSelected
+                        ? '#fff'
+                        : isIdeal
+                          ? '#4A4A4A'
+                          : '#4A4A4A',
+                      border: isIdeal && !isSelected
+                        ? '1.5px solid rgba(34,197,94,0.5)'
+                        : isGood && !isSelected
+                          ? '1.5px dashed rgba(34,197,94,0.35)'
+                          : '1.5px solid transparent',
+                      opacity: fit === 'partial' ? 0.6 : 1,
+                    }}
+                    title={fit === 'ideal' ? 'Ιδανικό segment για αυτή τη στρατηγική' : fit === 'good' ? 'Καλό ταίριασμα' : 'Μερικό ταίριασμα'}
+                  >
+                    {isIdeal && !isSelected && <span style={{ marginRight: 4, fontSize: 10, color: '#22C55E' }}>★</span>}
+                    {segment.name}
+                  </button>
+                );
+              })}
             </div>
           }
         />
@@ -1001,6 +1365,19 @@ export function WeightConfigurator() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Seasonal Periods Modal */}
+      <SeasonalPeriodsModal
+        isOpen={showSeasonalModal}
+        onClose={() => setShowSeasonalModal(false)}
+        onApply={(period) => {
+          handleSeasonApply(period);
+          setShowSeasonalModal(false);
+        }}
+        customPeriods={customSeasons}
+        onSaveCustom={handleSaveCustomSeason}
+        onDeleteCustom={handleDeleteCustomSeason}
+      />
     </div>
   );
 }

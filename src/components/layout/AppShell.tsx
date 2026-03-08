@@ -7,6 +7,7 @@ import {
 } from '@primer/react';
 import { Button } from '../common';
 import { useAuth, useBrand } from '../../hooks';
+import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import type { Brand } from '../../types';
 import {
   GearIcon,
@@ -52,7 +53,7 @@ export interface AppShellProps {
   children: React.ReactNode;
 }
 
-type NavItem = { id: SectionId; label: string; icon: any };
+type NavItem = { id: SectionId; label: string; icon: any; badge?: string; badgeColor?: string };
 
 function BrandMenu({
   currentBrand,
@@ -388,6 +389,23 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
   const [brandMenuOpen, setBrandMenuOpen] = useState(false);
   const { user, signOut, isSuperAdmin, hasPasswordProvider, hasGoogleProvider, linkPassword, linkGoogle } = useAuth();
   const { currentBrand, brands, setCurrentBrand } = useBrand();
+  const { activeStrategy } = useActiveStrategy();
+
+  const strategyBadge = useMemo(() => {
+    if (!activeStrategy?.duration || activeStrategy.duration === 'ongoing') return null;
+    const dur = typeof activeStrategy.duration === 'string' ? parseInt(activeStrategy.duration as string, 10) : activeStrategy.duration;
+    if (!dur || isNaN(dur)) return null;
+    const raw = activeStrategy.updatedAt || activeStrategy.createdAt;
+    const startMs = typeof raw === 'string' ? new Date(raw).getTime()
+      : typeof (raw as any)?.toMillis === 'function' ? (raw as any).toMillis()
+      : typeof (raw as any)?.seconds === 'number' ? (raw as any).seconds * 1000
+      : NaN;
+    if (isNaN(startMs)) return null;
+    const remaining = Math.ceil((startMs + dur * 86400000 - Date.now()) / 86400000);
+    if (remaining <= 0) return { text: 'Έληξε', color: '#EF4444' };
+    if (remaining <= 3) return { text: `${remaining}ημ`, color: '#F59E0B' };
+    return { text: `${remaining}ημ`, color: '#22C55E' };
+  }, [activeStrategy]);
 
   const togglePin = () => {
     const next = !sidebarPinned;
@@ -403,7 +421,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
       const items: NavItem[] = [
         { id: 'brands', label: 'Τα Brands μου', icon: Building2 },
         { id: 'dashboard', label: 'Dashboard', icon: HomeIcon },
-        { id: 'strategy', label: 'Commercial Strategy', icon: GraphIcon },
+        { id: 'strategy', label: 'Commercial Strategy', icon: GraphIcon, ...(strategyBadge ? { badge: strategyBadge.text, badgeColor: strategyBadge.color } : {}) },
         { id: 'products', label: 'Product Intelligence', icon: PackageIcon },
         { id: 'rfm', label: 'Data Analysis', icon: OrganizationIcon },
         { id: 'channels', label: 'Channel Activation', icon: MegaphoneIcon },
@@ -422,7 +440,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
       }
       return items;
     },
-    [isSuperAdmin]
+    [isSuperAdmin, strategyBadge]
   );
 
   const Nav = ({ onSelect }: { onSelect: (id: SectionId) => void }) => (
@@ -443,7 +461,17 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
           <NavList.LeadingVisual>
             {typeof item.icon === 'function' ? <item.icon size={16} /> : <item.icon />}
           </NavList.LeadingVisual>
-          {item.label}
+          <span className="flex items-center gap-2">
+            {item.label}
+            {item.badge && (
+              <span
+                className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full leading-none"
+                style={{ backgroundColor: `${item.badgeColor}20`, color: item.badgeColor }}
+              >
+                {item.badge}
+              </span>
+            )}
+          </span>
         </NavList.Item>
       ))}
     </NavList>

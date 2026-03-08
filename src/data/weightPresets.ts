@@ -1,7 +1,18 @@
+export interface MixConfigPreset {
+  scenarioA: string;
+  scenarioB: string;
+  percentA: number;
+  percentB: number;
+}
+
 export interface WeightPreset {
   id: string;
   name: string;
   weights: Record<string, number>;
+  scenarioId?: string;
+  mixConfig?: MixConfigPreset;
+  duration?: number | 'ongoing';
+  seasonId?: string;
   createdAt: string;
   clonedFrom?: string;
 }

@@ -1,7 +1,8 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import {
   CHANNEL_RECOMMENDATIONS_SYSTEM_PROMPT,
-  buildChannelRecommendationsUserPrompt
+  buildChannelRecommendationsUserPrompt,
+  type FitLevel
 } from '../data/channelRecommendationsPrompt';
 import type { ChannelRecommendation } from '../types';
 import type { Scenario } from '../types';
@@ -44,15 +45,29 @@ function parseAIResponse(text: string): ChannelRecommendation | null {
   }
 }
 
+export interface BrandContext {
+  brandName: string;
+  brandType: 'B2B' | 'B2C';
+  topCategories: string[];
+}
+
+export interface SegmentFitInfo {
+  name: string;
+  fit: 'ideal' | 'good' | 'partial';
+}
+
 export interface GenerateRecommendationsParams {
   scenario: Scenario;
   segment: RFMSegment;
+  fitLevel?: FitLevel;
+  brandContext?: BrandContext;
+  segmentFitList?: SegmentFitInfo[];
 }
 
 export async function generateChannelRecommendations(
   params: GenerateRecommendationsParams
 ): Promise<ChannelRecommendation | null> {
-  const { scenario, segment } = params;
+  const { scenario, segment, fitLevel, brandContext, segmentFitList } = params;
 
   try {
     if (!GEMINI_API_KEY) throw new Error('VITE_GEMINI_API_KEY is not set');
@@ -68,7 +83,12 @@ export async function generateChannelRecommendations(
       segmentName: segment.name,
       segmentDescription: segment.description || '',
       segmentCount: segment.count,
-      revenueShare: segment.revenue_share
+      revenueShare: segment.revenue_share,
+      fitLevel,
+      brandName: brandContext?.brandName,
+      brandType: brandContext?.brandType,
+      topCategories: brandContext?.topCategories,
+      segmentFitList,
     });
 
     const result = await model.generateContent(userPrompt);

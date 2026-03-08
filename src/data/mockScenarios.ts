@@ -34,6 +34,14 @@ export const scenarios: Scenario[] = [
     duration: 90
   },
   { 
+    id: 'mixed', 
+    name: 'Μικτή Στρατηγική', 
+    icon: '',
+    description: 'Συνδυασμός 2 στρατηγικών με ποσοστά',
+    weights: null,
+    duration: 'ongoing' as const
+  },
+  { 
     id: 'custom', 
     name: 'Custom', 
     icon: '',

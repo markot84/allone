@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Zap, Target, Euro } from 'lucide-react';
+import { Zap, Target, Users, MessageSquare, TrendingUp } from 'lucide-react';
 import { Badge } from '../common';
 import type { ChannelRecommendation, RFMSegment } from '../../types';
 
@@ -127,15 +127,42 @@ export function ChannelRecommendations({
 
       {/* Rationale */}
       <div className="p-4 bg-gradient-to-r from-[#F5F5F5] to-white rounded-lg border border-[#E5E5E5]">
-        <div className="flex items-start gap-3">
-          <div className="w-8 h-8 bg-[#3B82F6]/10 rounded-lg flex items-center justify-center flex-shrink-0">
-            <Euro size={16} className="text-[#3B82F6]" />
-          </div>
-          <div>
-            <h5 className="font-medium text-[#1A1A1A] text-sm">AI Rationale</h5>
-            <p className="text-sm text-[#4A4A4A] mt-1">{recommendations.rationale}</p>
-          </div>
-        </div>
+        <h5 className="font-medium text-[#1A1A1A] text-sm mb-3">AI Rationale</h5>
+        {(() => {
+          const parts = recommendations.rationale.split('||').map(s => s.trim());
+          const hasStructure = parts.length >= 3 && parts[0].startsWith('Πελάτες:');
+          if (!hasStructure) {
+            return <p className="text-sm text-[#4A4A4A] leading-relaxed">{recommendations.rationale}</p>;
+          }
+          const sections = [
+            { icon: Users, color: '#8B5CF6', label: 'Πελάτες' },
+            { icon: MessageSquare, color: '#3B82F6', label: 'Κανάλια' },
+            { icon: TrendingUp, color: '#22C55E', label: 'Αποτέλεσμα' },
+          ];
+          return (
+            <div className="space-y-2.5">
+              {parts.slice(0, 3).map((part, i) => {
+                const s = sections[i];
+                const text = part.replace(/^(Πελάτες|Κανάλια|Αποτέλεσμα):\s*/i, '');
+                const Icon = s.icon;
+                return (
+                  <div key={i} className="flex items-start gap-2.5">
+                    <div
+                      className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 mt-0.5"
+                      style={{ backgroundColor: `${s.color}15` }}
+                    >
+                      <Icon size={13} style={{ color: s.color }} />
+                    </div>
+                    <div className="min-w-0">
+                      <span className="text-xs font-semibold" style={{ color: s.color }}>{s.label}</span>
+                      <p className="text-sm text-[#4A4A4A] leading-relaxed">{text}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Budget Allocation Visualization */}

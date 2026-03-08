@@ -4,11 +4,34 @@ import { generateChannelRecommendations } from '../services/aiChannelRecommendat
 import { channelRecommendations as staticRecommendations, scenarios } from '../data';
 import type { ChannelRecommendation } from '../types';
 import type { RFMSegment } from '../types';
+import type { FitLevel } from '../utils/segmentRelevance';
+
+export interface MixConfigForAI {
+  scenarioA: string;
+  scenarioB: string;
+  percentA: number;
+  percentB: number;
+}
+
+export interface BrandContext {
+  brandName: string;
+  brandType: 'B2B' | 'B2C';
+  topCategories: string[];
+}
+
+export interface SegmentFitInfo {
+  name: string;
+  fit: FitLevel;
+}
 
 export interface UseAIChannelRecommendationsOptions {
   selectedScenarioId: string | null;
   segments: RFMSegment[];
   selectedSegmentId: string;
+  fitLevel?: FitLevel;
+  mixConfig?: MixConfigForAI | null;
+  brandContext?: BrandContext | null;
+  segmentFitList?: SegmentFitInfo[];
   useAI?: boolean;
 }
 
@@ -48,6 +71,10 @@ export function useAIChannelRecommendations({
   selectedScenarioId,
   segments,
   selectedSegmentId,
+  fitLevel = 'good',
+  mixConfig,
+  brandContext,
+  segmentFitList,
   useAI = true
 }: UseAIChannelRecommendationsOptions) {
   const [aiEnabled, setAiEnabled] = useState(useAI);
@@ -58,13 +85,28 @@ export function useAIChannelRecommendations({
   );
 
   const scenario = useMemo(() => {
+    if (selectedScenarioId === 'mixed' && mixConfig) {
+      const a = scenarios.find(s => s.id === mixConfig.scenarioA);
+      const b = scenarios.find(s => s.id === mixConfig.scenarioB);
+      if (a && b) {
+        return {
+          ...a,
+          id: 'mixed' as string,
+          name: `Μικτή: ${a.name} ${mixConfig.percentA}% + ${b.name} ${mixConfig.percentB}%`,
+          description: `Συνδυασμός στρατηγικών: ${a.name} (${a.description}) στο ${mixConfig.percentA}% και ${b.name} (${b.description}) στο ${mixConfig.percentB}%. Η πρώτη στρατηγική κυριαρχεί${mixConfig.percentA >= 60 ? ' σημαντικά' : ''} — προσάρμοσε τις προτάσεις ώστε να εξυπηρετούν κυρίως τον στόχο "${a.description}" αλλά ταυτόχρονα να συμβάλλουν και στο "${b.description}".`
+        };
+      }
+    }
     const id = selectedScenarioId === 'custom' ? 'profit_max' : selectedScenarioId;
     return scenarios.find((s) => s.id === id) ?? scenarios[0];
-  }, [selectedScenarioId]);
+  }, [selectedScenarioId, mixConfig]);
 
   const staticFallback = useMemo((): ChannelRecommendation | null => {
-    const scenarioRecs = selectedScenarioId && selectedScenarioId !== 'custom'
-      ? staticRecommendations[selectedScenarioId] || staticRecommendations.profit_max
+    const fallbackId = selectedScenarioId === 'mixed' && mixConfig
+      ? mixConfig.scenarioA
+      : selectedScenarioId;
+    const scenarioRecs = fallbackId && fallbackId !== 'custom'
+      ? staticRecommendations[fallbackId] || staticRecommendations.profit_max
       : staticRecommendations.profit_max;
     if (!segment) return Object.values(scenarioRecs)[0] || null;
     const staticKey = mapSegmentToStaticKey(segment);
@@ -77,10 +119,10 @@ export function useAIChannelRecommendations({
     error: aiError,
     refetch
   } = useQuery({
-    queryKey: ['aiChannelRecommendations', 'v2', selectedScenarioId, selectedSegmentId, aiEnabled],
+    queryKey: ['aiChannelRecommendations', 'v5', selectedScenarioId, selectedSegmentId, fitLevel, aiEnabled, mixConfig?.scenarioA, mixConfig?.scenarioB, mixConfig?.percentA, brandContext?.brandName],
     queryFn: async () => {
       if (!scenario || !segment || !aiEnabled) return null;
-      return generateChannelRecommendations({ scenario, segment });
+      return generateChannelRecommendations({ scenario, segment, fitLevel, brandContext: brandContext ?? undefined, segmentFitList: segmentFitList ?? undefined });
     },
     enabled: !!scenario && !!segment && aiEnabled && selectedSegmentId !== '',
     staleTime: 5 * 60 * 1000,

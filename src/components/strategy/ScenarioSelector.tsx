@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Check, Clock, Euro, Infinity, Package, Rocket, Settings, TrendingUp } from 'lucide-react';
+import { Check, Clock, Euro, Infinity, Layers, Package, Rocket, Settings, TrendingUp } from 'lucide-react';
 import { scenarios } from '../../data';
 
 interface ScenarioSelectorProps {
@@ -24,13 +24,15 @@ export function ScenarioSelector({
         return <Rocket size={18} className={cls} />;
       case 'revenue_push':
         return <TrendingUp size={18} className={cls} />;
+      case 'mixed':
+        return <Layers size={18} className={cls} />;
       default:
         return <Settings size={18} className={cls} />;
     }
   };
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 max-w-full overflow-x-hidden">
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6 gap-4 max-w-full overflow-x-hidden">
       {scenarios.map((scenario, index) => {
         const isSelected = selectedScenario !== null && selectedScenario === scenario.id;
         
