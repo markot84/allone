@@ -15,6 +15,7 @@
     "fix:user-brand": "node scripts/fix-user-brand.mjs"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@primer/octicons-react": "^19.21.2",
     "@primer/react": "^38.7.1",
     "@tailwindcss/vite": "^4.1.18",

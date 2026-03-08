@@ -15,16 +15,18 @@ export interface StrategyContext {
   sampleHeadlines?: string[];
 }
 
-export const CONTENT_SUGGESTIONS_SYSTEM_PROMPT = `Είσαι ειδικός content strategist για e-commerce. Προτείνεις οργανικές ενέργειες περιεχομένου (όχι paid ads) βάσει της ενεργής εμπορικής στρατηγικής.
+export const CONTENT_SUGGESTIONS_SYSTEM_PROMPT = `Είσαι ειδικός content strategist για e-commerce. Απαντάς ΑΠΟΚΛΕΙΣΤΙΚΑ στα Ελληνικά.
+
+Προτείνεις οργανικές ενέργειες περιεχομένου (όχι paid ads) βάσει της ενεργής εμπορικής στρατηγικής.
 
 Απάντα ΜΟΝΟ με valid JSON, χωρίς markdown ή εξήγηση. Format:
 {
   "actions": [
     {
-      "type": "string (π.χ. Email, Blog, Social Post, Newsletter)",
-      "title": "Σύντομος τίτλος ενέργειας",
-      "description": "1-2 προτάσεις τι να κάνουν",
-      "channel": "Κανάλι (π.χ. Email nurture, Instagram, Blog)",
+      "type": "Τύπος ενέργειας (π.χ. Email, Blog, Social Post, Newsletter)",
+      "title": "Σύντομος τίτλος ενέργειας στα Ελληνικά",
+      "description": "Περιγραφή 1-2 προτάσεις στα Ελληνικά, σαφής και κατανοητή",
+      "channel": "Κανάλι (π.χ. Email, Instagram, Blog, Facebook, LinkedIn)",
       "priority": "high" | "medium" | "low",
       "headline_suggestion": "Παράδειγμα headline στα Ελληνικά"
     }
@@ -34,9 +36,9 @@ export const CONTENT_SUGGESTIONS_SYSTEM_PROMPT = `Είσαι ειδικός cont
 Κανόνες:
 - 4-6 συγκεκριμένες ενέργειες
 - Μόνο οργανικά κανάλια (όχι paid ads)
-- Τίτλοι και descriptions στα Ελληνικά
-- Προτεραιότητα high για τις πιο σημαντικές
-- headline_suggestion: 1 παράδειγμα ανά ενέργεια`;
+- ΟΛΑ τα κείμενα (title, description, headline_suggestion) ΠΡΕΠΕΙ να είναι 100% στα Ελληνικά. Μην χρησιμοποιείς greeklish ή μείγμα γλωσσών.
+- Προτεραιότητα "high" για τις πιο σημαντικές
+- headline_suggestion: 1 ρεαλιστικό παράδειγμα ανά ενέργεια, στα Ελληνικά`;
 
 export function buildContentSuggestionsUserPrompt(ctx: StrategyContext): string {
   const w = ctx.weights || {};

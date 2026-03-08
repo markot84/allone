@@ -1,10 +1,9 @@
-import { getAI, getGenerativeModel } from 'firebase/ai';
-import app from '../config/firebase';
-import { buildContentSuggestionsUserPrompt, type StrategyContext } from '../data/contentSuggestionsPrompt';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import { CONTENT_SUGGESTIONS_SYSTEM_PROMPT, buildContentSuggestionsUserPrompt, type StrategyContext } from '../data/contentSuggestionsPrompt';
 import { strategyContentMap } from '../data/mockContent';
 import { scenarios } from '../data/mockScenarios';
 
-const MODEL_NAME = 'gemini-2.0-flash';
+const MODEL_NAME = 'gemini-2.5-flash';
 
 export interface OrganicAction {
   type: string;
@@ -98,21 +97,18 @@ export async function generateContentSuggestions(
   };
 
   try {
-    const ai = getAI(app);
-    const model = getGenerativeModel(ai, { model: MODEL_NAME });
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
+    if (!apiKey) throw new Error('VITE_GEMINI_API_KEY is not set');
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({
+      model: MODEL_NAME,
+      systemInstruction: CONTENT_SUGGESTIONS_SYSTEM_PROMPT
+    });
 
     const userPrompt = buildContentSuggestionsUserPrompt(ctx);
 
-    const result = (await model.generateContent(userPrompt)) as {
-      text?: () => string;
-      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-    };
-    let text = '';
-    if (typeof result?.text === 'function') {
-      text = result.text();
-    } else if (result?.candidates?.[0]?.content?.parts?.[0]?.text) {
-      text = result.candidates[0].content.parts[0].text;
-    }
+    const result = await model.generateContent(userPrompt);
+    const text = result.response.text();
 
     if (!text) {
       return { actions: getFallbackSuggestions(scenarioId, scenarioName) };

@@ -1,10 +1,14 @@
 {
-  "version": "0.3.0",
-  "previousVersion": "0.2.0",
-  "commitHash": "7c6878e",
+  "version": "0.4.0",
+  "previousVersion": "0.3.0",
+  "commitHash": "febbde0",
   "branch": "main",
-  "buildDate": "2026-03-08T07:55:10.674Z",
+  "buildDate": "2026-03-08T08:09:48.618Z",
   "commits": [
+    {
+      "hash": "febbde0",
+      "message": "feat: changelog UI polish - colored dots, Greek labels, build info panel"
+    },
     {
       "hash": "7c6878e",
       "message": "feat: auto-versioning from git commits"
@@ -60,13 +64,10 @@
     {
       "hash": "740affa",
       "message": "Add brand name to all exports"
-    },
-    {
-      "hash": "75963e8",
-      "message": "feat: add PDF export for Executive, Segment, Channel reports"
     }
   ],
   "changes": [
+    "[Νέο χαρακτηριστικό] Changelog UI polish - colored dots, Greek labels, build info panel",
     "[Νέο χαρακτηριστικό] Auto-versioning from git commits",
     "[Νέο χαρακτηριστικό] Branded auth action pages, Greek locale for Firebase emails",
     "[Νέο χαρακτηριστικό] Super admin dashboard, menu refactor, auth improvements",
@@ -75,7 +76,6 @@
     "[Νέο χαρακτηριστικό] Dark sidebar/header, card shadows, strategy duration, commercial strategy rename, mascot AI button",
     "[Αναδιαμόρφωση] Replace orange accent backgrounds with neutral gray across app. Remove nts-accent-light from all components, update icons to monochrome, add NTS favicon, refine landing page copy.",
     "[Διόρθωση] Suppress unused var warnings for build",
-    "[Νέο χαρακτηριστικό] Landing page overhaul - data sources, input/output chain, compliance, traction. Rename RFM to Data Analysis. Add one-pagers EN/GR.",
-    "[Νέο χαρακτηριστικό] New accent orange, background scale, fix MarketingIndexPage - Replace faded orange with solid #F97316 - Add nts-bg tokens (pure/subtle/muted/strong/dark) - Update shadows, CTAs, Badge, Card across app"
+    "[Νέο χαρακτηριστικό] Landing page overhaul - data sources, input/output chain, compliance, traction. Rename RFM to Data Analysis. Add one-pagers EN/GR."
   ]
 }

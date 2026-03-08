@@ -46,7 +46,13 @@ function QueryProvider({ children }: { children: React.ReactNode }) {
         client={queryClient}
         persistOptions={{
           persister,
-          maxAge: 24 * 60 * 60 * 1000 // 24h
+          maxAge: 24 * 60 * 60 * 1000,
+          dehydrateOptions: {
+            shouldDehydrateQuery: (query) => {
+              const key = query.queryKey[0];
+              return key !== 'aiChannelRecommendations' && key !== 'aiContentSuggestions';
+            }
+          }
         }}
       >
         {children}

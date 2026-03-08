@@ -3,7 +3,6 @@ import { memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   RefreshCw,
-  Send,
   Download,
   Sparkles,
   AlertCircle,
@@ -192,7 +191,14 @@ export function WeightConfigurator() {
     return s?.duration ?? 'ongoing';
   });
   const [customDays, setCustomDays] = useState('');
-  const [selectedSegment, setSelectedSegment] = useState('champions');
+  const [selectedSegment, setSelectedSegment] = useState('');
+  
+  useEffect(() => {
+    if (rfmSegments.length > 0 && (!selectedSegment || !rfmSegments.some(s => s.id === selectedSegment))) {
+      setSelectedSegment(rfmSegments[0].id);
+    }
+  }, [rfmSegments, selectedSegment]);
+
   const [showImpactPreview, setShowImpactPreview] = useState(false);
   const [pendingScenarioChange, setPendingScenarioChange] = useState<string | null>(null);
   const [previewTargetScenario, setPreviewTargetScenario] = useState<string | null>(null); // For manual preview
@@ -464,7 +470,7 @@ export function WeightConfigurator() {
 
   // AI-powered channel recommendations (fallback to static on error/disabled)
   const {
-    currentRecommendations,
+    recommendation: aiRecommendation,
     isLoading: aiRecLoading,
     error: aiRecError,
     aiEnabled,
@@ -495,8 +501,8 @@ export function WeightConfigurator() {
   return (
     <div className="space-y-6 max-w-full overflow-x-hidden">
       {/* Page Header */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between max-w-full overflow-x-hidden">
-        <div className="min-w-0 flex-1">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between max-w-full overflow-x-hidden">
+        <div className="min-w-0 flex-shrink-0">
           <h2 className="text-2xl font-bold text-[var(--nts-charcoal)] tracking-tight">
             Commercial Strategy
           </h2>
@@ -504,7 +510,7 @@ export function WeightConfigurator() {
             Καθορισμός εμπορικών προτεραιοτήτων, κατανομή πόρων και συντονισμός εκτέλεσης
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-shrink-0">
           <ApprovalWorkflow
             status={approvalStatus}
             onStatusChange={setApprovalStatus}
@@ -652,15 +658,6 @@ export function WeightConfigurator() {
 
           {/* Actions */}
           <div className="mt-6 pt-6 border-t border-[var(--nts-border-gray)] space-y-2">
-            <Button
-              variant="primary"
-              className="w-full"
-              icon={<Send size={16} />}
-              disabled={totalWeight !== 100 || approvalStatus !== 'draft'}
-              onClick={() => setApprovalStatus('pending_review')}
-            >
-              Send for Review
-            </Button>
             <Button
               variant="secondary"
               className="w-full"
@@ -842,22 +839,22 @@ export function WeightConfigurator() {
           }
           icon={<Sparkles size={18} className="text-[var(--nts-medium-gray)]" />}
           action={
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 overflow-x-auto max-w-full">
               <button
                 onClick={toggleAI}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex-shrink-0 ${
                   aiEnabled ? 'bg-[var(--nts-accent)]/20 text-[var(--nts-accent)]' : 'bg-[#F5F5F5] text-[#4A4A4A]'
                 }`}
                 title={aiEnabled ? 'AI ενεργό – κλικ για στατικές' : 'AI απενεργοποιημένο – κλικ για AI'}
               >
                 {aiEnabled ? 'AI ON' : 'AI OFF'}
               </button>
-              {rfmSegments.slice(0, 4).map((segment) => (
+              {rfmSegments.map((segment) => (
                 <button
                   key={segment.id}
                   onClick={() => setSelectedSegment(segment.id)}
                   className={`
-                    px-3 py-1.5 rounded-full text-xs font-medium transition-all
+                    px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap flex-shrink-0
                     ${selectedSegment === segment.id
                       ? 'text-white'
                       : 'bg-[#F5F5F5] text-[#4A4A4A] hover:bg-[#E5E5E5]'
@@ -875,9 +872,10 @@ export function WeightConfigurator() {
         />
 
         {aiRecError && (
-          <p className="text-xs text-amber-600 mb-2">
-            AI απέτυχε – εμφανίζονται στατικές συστάσεις. Ενεργοποίησε Vertex AI στο Firebase Console.
-          </p>
+          <div className="text-xs text-amber-600 mb-2 p-3 bg-amber-50 rounded-lg border border-amber-200">
+            <p className="font-medium">AI απέτυχε – εμφανίζονται στατικές συστάσεις.</p>
+            <p className="mt-1 text-amber-500 break-all">{(aiRecError as Error)?.message || String(aiRecError)}</p>
+          </div>
         )}
         {aiRecLoading ? (
           <div className="flex items-center gap-3 p-6">
@@ -886,7 +884,7 @@ export function WeightConfigurator() {
           </div>
         ) : (
           <ChannelRecommendations
-            recommendations={currentRecommendations[selectedSegment] || currentRecommendations.champions}
+            recommendations={aiRecommendation}
             segment={rfmSegments.find((s) => s.id === selectedSegment) ?? rfmSegments[0] ?? null}
           />
         )}

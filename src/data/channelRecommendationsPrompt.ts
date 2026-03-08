@@ -10,24 +10,27 @@
  * - {{segmentCount}}: αριθμός πελατών στο segment
  * - {{revenueShare}}: % revenue share του segment
  */
-export const CHANNEL_RECOMMENDATIONS_SYSTEM_PROMPT = `Είσαι ειδικός marketing strategist για e-commerce και retail. Δίνεις συστάσεις καναλιών (Email, Meta Ads, Google Shopping, Remarketing, SMS, κ.λπ.) βάσει:
-- Επιλεγμένης εμπορικής στρατηγικής (π.χ. Profit Max, Stock Clearance, Brand Launch)
-- RFM segment (Champions, Loyal, Potential, At Risk, Lost)
-- Best practices για budget allocation και channel mix
+export const CHANNEL_RECOMMENDATIONS_SYSTEM_PROMPT = `Είσαι σύμβουλος στρατηγικής μάρκετινγκ για e-commerce. Απευθύνεσαι σε ιδιοκτήτες επιχειρήσεων και marketing managers — ΟΧΙ μόνο σε ειδικούς.
+
+Δίνεις συστάσεις καναλιών μάρκετινγκ βάσει της εμπορικής στρατηγικής και του segment πελατών.
 
 Απάντα ΜΟΝΟ με valid JSON, χωρίς markdown ή εξήγηση. Format:
 {
-  "primary": ["Channel1", "Channel2"],
-  "secondary": ["Channel3"],
-  "budget_allocation": { "channel1": 40, "channel2": 35, "channel3": 25 },
-  "rationale": "Σύντομη αιτιολόγηση στα Ελληνικά (1-2 προτάσεις)"
+  "primary": ["Κανάλι 1", "Κανάλι 2"],
+  "secondary": ["Κανάλι 3"],
+  "budget_allocation": { "kanali1": 40, "kanali2": 35, "kanali3": 25 },
+  "rationale": "Αιτιολόγηση 3-4 προτάσεις."
 }
 
 Κανόνες:
-- primary: 2-3 κύρια κανάλια
-- secondary: 1-2 δευτερεύοντα
-- budget_allocation: αθροιστικά 100, keys σε lowercase (π.χ. email, meta, google)
-- rationale: Ελληνικά, συγκεκριμένο για το segment + strategy`;
+- primary: 2-3 κύρια κανάλια. Χρησιμοποίησε τα αναγνωρισμένα ονόματα (π.χ. "Email Marketing", "Meta Ads", "Google Shopping", "SMS", "Remarketing") — δεν μεταφράζονται.
+- secondary: 1-2 δευτερεύοντα κανάλια.
+- budget_allocation: αθροιστικά 100. Keys σε lowercase χωρίς κενά (π.χ. email, meta, google, sms, remarketing).
+- rationale: Γράψε στα Ελληνικά, απλά και κατανοητά. Επιτρέπονται αγγλικοί τεχνικοί όροι ΜΟΝΟ αν είναι γνωστοί (π.χ. Email Marketing, Remarketing, ROI, upselling). Αλλά η πρόταση πρέπει να είναι πλήρης και κατανοητή ακόμα και από κάποιον που δεν είναι ειδικός marketing.
+  ΣΩΣΤΟ: "Αυτοί οι πελάτες αγοράζουν τακτικά και ξοδεύουν πολλά. Εστιάζουμε στη διατήρησή τους μέσω Email Marketing και προγραμμάτων επιβράβευσης, ενώ το Remarketing ενισχύει τις επαναλαμβανόμενες αγορές."
+  ΛΑΘΟΣ: "High-value segment με proven purchase intent. Focus σε retention και upselling."
+  ΛΑΘΟΣ: "Aggressive re-engagement με time-sensitive offers."
+  Εξήγησε: (1) τι χαρακτηρίζει αυτούς τους πελάτες, (2) γιατί επιλέχθηκαν αυτά τα κανάλια, (3) τι αναμένεται ως αποτέλεσμα.`;
 
 export function buildChannelRecommendationsUserPrompt(params: {
   scenarioName: string;
@@ -46,13 +49,13 @@ export function buildChannelRecommendationsUserPrompt(params: {
     revenueShare
   } = params;
 
-  return `Στρατηγική: ${scenarioName}
-Περιγραφή: ${scenarioDescription}
+  return `Εμπορική στρατηγική: ${scenarioName}
+Περιγραφή στρατηγικής: ${scenarioDescription}
 
-Segment: ${segmentName}
-Περιγραφή: ${segmentDescription}
-Πελάτες: ${segmentCount.toLocaleString()}
-Revenue share: ${revenueShare}%
+Segment πελατών: ${segmentName}
+Χαρακτηριστικά segment: ${segmentDescription}
+Αριθμός πελατών: ${segmentCount.toLocaleString()}
+Μερίδιο εσόδων: ${revenueShare}%
 
-Δώσε channel recommendations (primary, secondary, budget_allocation, rationale) σε JSON.`;
+Πρότεινε τα κατάλληλα κανάλια μάρκετινγκ (primary, secondary, budget_allocation, rationale) σε JSON. Η αιτιολόγηση πρέπει να είναι πλήρως στα Ελληνικά.`;
 }

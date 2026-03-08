@@ -1,13 +1,14 @@
-import { getAI, getGenerativeModel } from 'firebase/ai';
-import app from '../config/firebase';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import {
+  CHANNEL_RECOMMENDATIONS_SYSTEM_PROMPT,
   buildChannelRecommendationsUserPrompt
 } from '../data/channelRecommendationsPrompt';
 import type { ChannelRecommendation } from '../types';
 import type { Scenario } from '../types';
 import type { RFMSegment } from '../types';
 
-const MODEL_NAME = 'gemini-2.0-flash';
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
+const MODEL_NAME = 'gemini-2.5-flash';
 
 function parseAIResponse(text: string): ChannelRecommendation | null {
   try {
@@ -54,8 +55,12 @@ export async function generateChannelRecommendations(
   const { scenario, segment } = params;
 
   try {
-    const ai = getAI(app);
-    const model = getGenerativeModel(ai, { model: MODEL_NAME });
+    if (!GEMINI_API_KEY) throw new Error('VITE_GEMINI_API_KEY is not set');
+    const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({
+      model: MODEL_NAME,
+      systemInstruction: CHANNEL_RECOMMENDATIONS_SYSTEM_PROMPT
+    });
 
     const userPrompt = buildChannelRecommendationsUserPrompt({
       scenarioName: scenario.name,
@@ -66,13 +71,8 @@ export async function generateChannelRecommendations(
       revenueShare: segment.revenue_share
     });
 
-    const result = await model.generateContent(userPrompt) as { text?: () => string; candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
-    let text = '';
-    if (typeof result?.text === 'function') {
-      text = result.text();
-    } else if (result?.candidates?.[0]?.content?.parts?.[0]?.text) {
-      text = result.candidates[0].content.parts[0].text;
-    }
+    const result = await model.generateContent(userPrompt);
+    const text = result.response.text();
 
     if (!text) return null;
 

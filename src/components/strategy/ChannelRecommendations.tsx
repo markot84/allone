@@ -4,7 +4,7 @@ import { Badge } from '../common';
 import type { ChannelRecommendation, RFMSegment } from '../../types';
 
 interface ChannelRecommendationsProps {
-  recommendations: ChannelRecommendation;
+  recommendations: ChannelRecommendation | null;
   segment: RFMSegment | null;
 }
 

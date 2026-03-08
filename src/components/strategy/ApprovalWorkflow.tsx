@@ -100,7 +100,7 @@ export function ApprovalWorkflow({ status, onStatusChange }: ApprovalWorkflowPro
       </motion.div>
 
       {/* Workflow Steps */}
-      <div className="hidden md:flex items-center gap-1 flex-wrap max-w-full overflow-x-auto">
+      <div className="hidden lg:flex items-center gap-1 flex-wrap max-w-full overflow-x-auto">
         {Object.entries(statusConfig).map(([key], index) => {
           const isActive = key === status;
           const isPast = Object.keys(statusConfig).indexOf(status) > index;
