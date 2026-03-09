@@ -1,10 +1,14 @@
 {
-  "version": "0.26.0",
-  "previousVersion": "0.25.0",
-  "commitHash": "24d1b4e",
+  "version": "0.27.0",
+  "previousVersion": "0.26.0",
+  "commitHash": "adfacb6",
   "branch": "main",
-  "buildDate": "2026-03-09T00:00:30.646Z",
+  "buildDate": "2026-03-09T06:09:47.648Z",
   "commits": [
+    {
+      "hash": "adfacb6",
+      "message": "Sync channels: Strategy saves AI recommendations to Firestore, Channel Activation reads from saved data. Fixed static fallback to paid-only budget allocation."
+    },
     {
       "hash": "24d1b4e",
       "message": "AI context: strategy vs activation tone, funnel 4-stage (Awareness/Consideration/Sales/Loyalty), rationale formatting"
@@ -60,13 +64,10 @@
     {
       "hash": "c0d326e",
       "message": "Clean up unused preset/duration code for production build"
-    },
-    {
-      "hash": "acaf0ee",
-      "message": "Refactor strategy UI: remove save button, move compare below cards, integrate duration in apply popup, fix segment wrapping and duration sync"
     }
   ],
   "changes": [
+    "Sync channels: Strategy saves AI recommendations to Firestore, Channel Activation reads from saved data. Fixed static fallback to paid-only budget allocation.",
     "AI context: strategy vs activation tone, funnel 4-stage (Awareness/Consideration/Sales/Loyalty), rationale formatting",
     "AI prompt: separate paid vs owned channels, budget only for paid media",
     "UI: sidebar reorder, logo orange ring, marketing text update",
@@ -75,7 +76,6 @@
     "Channel Activation upgrade: AI briefs, per-channel status (Firestore), agency brief export",
     "Refine value proposition tone: professional tagline aligned with NotTheSame brand",
     "Positioning and marketing refresh: new buyer persona, GTM strategy, marketing page rewrite",
-    "[Διόρθωση] Remove unused AlertTriangle import",
-    "AI Insights refinement, seasonal banner neutral, Inventory blue restore"
+    "[Διόρθωση] Remove unused AlertTriangle import"
   ]
 }
