@@ -3,13 +3,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   TrendingUp,
   Users,
-  Package,
-  Euro,
   Target,
   ArrowUpRight,
   ArrowDownRight
 } from 'lucide-react';
-import { Tooltip } from '../common';
 import {
   AreaChart,
   Area,
@@ -32,65 +29,6 @@ import { generateInsightsFromData } from '../../services/insights';
 interface DashboardOverviewProps {
   onSectionChange?: (section: string) => void;
   onOpenInsights?: () => void;
-}
-
-// Get default RFM score from segment name (fallback when rfm_score is missing)
-function getDefaultRFMScoreFromName(segmentName: string): string | null {
-  const name = segmentName.toLowerCase().trim();
-  const defaults: Record<string, string> = {
-    'champions': '5-5-5',
-    'loyal_customers': '4-4-3',
-    'loyal': '4-4-3',
-    'promising': '4-2-3',
-    'potential_loyalists': '4-2-3',
-    'potential': '4-2-3',
-    'at_risk': '2-3-3',
-    'hibernating': '2-2-2',
-    'lost': '1-1-1',
-    'new_customers': '5-1-1',
-    'recent_customers': '5-2-2',
-    'cant_lose_them': '3-5-5',
-    "can't_lose_them": '3-5-5',
-    'customers_needing_attention': '3-3-2',
-  };
-  
-  // Try exact match first
-  if (defaults[name]) return defaults[name];
-  
-  // Try partial match
-  for (const [key, value] of Object.entries(defaults)) {
-    if (name.includes(key) || key.includes(name)) {
-      return value;
-    }
-  }
-  
-  return null;
-}
-
-// Calculate average RFM score from a segment's rfm_score string
-function calculateAvgRFMScore(rfmScore: string | undefined | null, segmentName?: string): number | null {
-  let scoreStr = rfmScore;
-  
-  // If rfm_score is empty, try to get default from segment name
-  if ((!scoreStr || !scoreStr.trim()) && segmentName) {
-    scoreStr = getDefaultRFMScoreFromName(segmentName);
-  }
-  
-  if (!scoreStr || typeof scoreStr !== 'string') return null;
-  
-  const trimmed = scoreStr.trim();
-  if (!trimmed) return null;
-  
-  // Extract all digits from the string
-  const digits = trimmed.match(/\d/g);
-  if (!digits || digits.length === 0) return null;
-  
-  // Convert to numbers and filter valid RFM scores (1-5)
-  const numbers = digits.map(d => parseInt(d, 10)).filter(n => !isNaN(n) && n >= 1 && n <= 5);
-  if (numbers.length === 0) return null;
-  
-  const sum = numbers.reduce((a, b) => a + b, 0);
-  return sum / numbers.length;
 }
 
 export function DashboardOverview({ onSectionChange, onOpenInsights }: DashboardOverviewProps = {}) {
@@ -200,147 +138,101 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           Dashboard
         </h2>
         <p className="text-[14px] text-[var(--nts-medium-gray)] mt-1">
-          Καλώς ήρθατε στο Performance+
+          {activeStrategy
+            ? <>Στρατηγική: <span className="font-medium text-[var(--nts-charcoal)]">{getStrategyName(activeStrategy.scenarioId)}</span></>
+            : 'Καλώς ήρθατε στο Performance+'}
+          {activeStrategy?.approvalStatus === 'implementing' && (
+            <span className="ml-2 inline-flex items-center px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-green-100 text-green-700 align-middle">ενεργή</span>
+          )}
         </p>
       </div>
 
-      {/* KPI Cards - order: Strategy, Προϊόντα, Segments, Campaigns, Σύνολο Εσόδων, ROI */}
-      {(hasOrganic || productsCount > 0 || rfmSegments.length > 0 || (hasCampaigns && campaigns.length > 0)) && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 gap-4 sm:gap-6">
-          {/* 1. Strategy */}
-          <KPICard
-            kpi={{
-              label: 'Strategy',
-              value: activeStrategy ? getStrategyName(activeStrategy.scenarioId) : '—',
-              changeLabel: activeStrategy?.approvalStatus === 'implementing' ? 'ενεργή' : activeStrategy ? 'Ρυθμίσεις' : undefined,
-              trend: 'up' as const,
-              sparklineData: []
-            }}
-            index={0}
-            onClick={() => onSectionChange?.('strategy')}
-          />
-          {/* 2. Προϊόντα */}
-          {productsCount > 0 && (
-            <KPICard
-              kpi={{
-                label: 'Προϊόντα',
-                value: formatNumber(productsCount),
-                change: products.length > 0
-                  ? (() => {
-                      const withStock = products.filter((p) => (p.stock_level ?? 0) >= 10 && (p.stock_age_days ?? 0) <= 180);
-                      return Math.round((withStock.length / products.length) * 1000) / 10;
-                    })()
-                  : undefined,
-                  changeLabel: 'υγιή',
-                trend: 'up' as const,
-                sparklineData: []
-              }}
-              index={1}
-              onClick={() => onSectionChange?.('products')}
-            />
-          )}
-          {rfmSegments.length > 0 && (() => {
-            // Calculate average RFM score across all segments
-            const scores = rfmSegments
-              .map((s) => calculateAvgRFMScore(s.rfm_score, s.name))
-              .filter((score): score is number => score !== null && !isNaN(score) && isFinite(score));
-            
-            const avgScore = scores.length > 0 
-              ? (scores.reduce((a, b) => a + b, 0) / scores.length)
-              : null;
-            
-            return (
-              <KPICard
-                kpi={{
-                  label: 'Segments',
-                  value: rfmSegments.length.toString(),
-                  change: avgScore ? Math.round(avgScore * 10) / 10 : undefined,
-                  changeLabel: avgScore ? 'μέσος score' : 'RFM',
-                  trend: 'up' as const,
-                  sparklineData: []
-                }}
-                index={2}
-                onClick={() => onSectionChange?.('rfm')}
-              />
-            );
-          })()}
-          {campaignsCount > 0 && (() => {
-            const activeCampaigns = (campaigns as any[]).filter((c) => 
-              c.status === 'active' || c.status === 'enabled' || c.status === 'eligible' || !c.status
-            ).length;
-            return (
-              <KPICard
-                kpi={{
-                  label: 'Campaigns',
-                  value: campaignsCount.toString(),
-                  change: activeCampaigns,
-                  changeLabel: 'ενεργά',
-                  trend: 'up' as const,
-                  sparklineData: (campaigns as any[]).slice(0, 7).map((c) => c.amount_spent || 0)
-                }}
-                index={3}
-                onClick={() => onSectionChange?.('campaigns')}
-              />
-            );
-          })()}
-          {/* 5. Σύνολο Εσόδων */}
-          {(hasOrganic || (hasCampaigns && campaigns.length > 0)) && (() => {
-            let sparklineData: number[] = [];
-            const monthlyData: Record<string, number> = {};
-            organicByMonth.forEach((val, key) => {
-              monthlyData[key] = (monthlyData[key] || 0) + val / 1000;
-            });
+      {/* KPI Cards — Financial Overview */}
+      {(hasOrganic || hasCampaigns) && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+          {(() => {
+            const md: Record<string, number> = {};
+            organicByMonth.forEach((v, k) => { md[k] = (md[k] || 0) + v; });
             campaignsTyped.forEach(c => {
-              const date = getCampaignDateForMonth(c);
-              const monthKey = date ? date.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }) : 'Other';
-              monthlyData[monthKey] = (monthlyData[monthKey] || 0) + (c.conversion_value || 0) / 1000;
+              const d = getCampaignDateForMonth(c);
+              const k = d ? d.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }) : 'Other';
+              md[k] = (md[k] || 0) + (c.conversion_value || 0);
             });
-            sparklineData = Object.values(monthlyData).sort((a, b) => a - b);
+            const months = Object.entries(md).filter(([k]) => k !== 'Other');
+            const sorted = months.length >= 2
+              ? months.sort((a, b) => {
+                  const order = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                  const [ma, ya] = a[0].split(' ');
+                  const [mb, yb] = b[0].split(' ');
+                  return (ya || '').localeCompare(yb || '') || order.indexOf(ma) - order.indexOf(mb);
+                })
+              : months;
+            const prev = sorted.length >= 2 ? sorted[sorted.length - 2][1] : 0;
+            const curr = sorted.length >= 1 ? sorted[sorted.length - 1][1] : 0;
+            const momChange = prev > 0 ? ((curr - prev) / prev) * 100 : null;
             return (
               <KPICard
                 kpi={{
                   label: 'Σύνολο Εσόδων',
                   value: formatCurrencyCompact(dashboardTotalRevenue),
-                  trend: 'up' as const,
-                  sparklineData
+                  change: momChange !== null ? Math.round(momChange) : undefined,
+                  changeLabel: momChange !== null ? 'vs προηγ. μήνα' : undefined,
+                  trend: momChange !== null ? (momChange >= 0 ? 'up' as const : 'down' as const) : 'up' as const,
+                  sparklineData: Object.values(md).map(v => v / 1000)
                 }}
-                index={4}
+                index={0}
                 onClick={() => onSectionChange?.('roi')}
               />
             );
           })()}
-          {/* 6. ROI — the primary metric */}
-          {hasCampaigns && (() => {
+          {(() => {
+            const cpa = campaignMetrics.cpa;
+            return (
+              <KPICard
+                kpi={{
+                  label: 'Ad Spend',
+                  value: hasCampaigns ? formatCurrencyCompact(campaignMetrics.totalSpend) : '€0',
+                  changeLabel: hasCampaigns && cpa > 0
+                    ? `CPA €${formatNumber(cpa, 1)} · ${formatNumber(campaignMetrics.totalConversions)} conv.`
+                    : undefined,
+                  trend: hasCampaigns ? 'up' as const : undefined,
+                  sparklineData: campaignsTyped.slice(0, 7).map(c => c.amount_spent || 0)
+                }}
+                index={1}
+                onClick={() => onSectionChange?.('campaigns')}
+              />
+            );
+          })()}
+          {(() => {
             const roiPercent = campaignMetrics.totalSpend > 0
               ? ((campaignMetrics.totalRevenue - campaignMetrics.totalSpend) / campaignMetrics.totalSpend) * 100
               : 0;
             return (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.25 }}
-                className="h-full cursor-pointer"
+              <KPICard
+                kpi={{
+                  label: 'ROI',
+                  value: roiPercent > 0 ? `+${formatNumber(roiPercent, 0)}%` : '—',
+                  changeLabel: roiPercent > 0 ? 'return on investment' : undefined,
+                  trend: roiPercent > 0 ? 'up' as const : undefined,
+                }}
+                index={2}
                 onClick={() => onSectionChange?.('roi')}
-              >
-                <div className="h-full rounded-2xl bg-gradient-to-br from-[#1A1A1A] to-[#2D2D2D] p-5 flex flex-col justify-between text-white shadow-xl hover:shadow-2xl transition-shadow">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-white/60">ROI</span>
-                    <div className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center">
-                      <TrendingUp size={14} className="text-[var(--nts-accent)]" />
-                    </div>
-                  </div>
-                  <div className="mt-3">
-                    <p className="text-3xl font-bold tracking-tight font-mono">
-                      {roiPercent > 0 ? `+${formatNumber(roiPercent, 0)}%` : '—'}
-                    </p>
-                    <p className="text-[11px] text-white/50 mt-1">
-                      {roiPercent > 0 ? 'return on investment' : 'χωρίς δεδομένα'}
-                    </p>
-                  </div>
-                </div>
-              </motion.div>
+                className="border-2 border-[var(--nts-accent)]/20"
+              />
             );
           })()}
+          <KPICard
+            kpi={{
+              label: 'ROAS',
+              value: campaignMetrics.roas > 0 ? formatMultiplier(campaignMetrics.roas, 1) : '—',
+              changeLabel: campaignMetrics.roas > 0
+                ? `€1 → €${formatNumber(campaignMetrics.roas, 1)}`
+                : undefined,
+              trend: campaignMetrics.roas > 0 ? 'up' as const : undefined,
+            }}
+            index={3}
+            onClick={() => onSectionChange?.('roi')}
+          />
         </div>
       )}
 
@@ -373,7 +265,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   const roi = ((campaignMetrics.totalRevenue - campaignMetrics.totalSpend) / campaignMetrics.totalSpend) * 100;
                   return roi > 0 ? (
                     <span className="ml-1 px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-[var(--nts-accent)] text-white leading-none">
-                      +{formatNumber(roi, 0)}%
+                      +{formatNumber(roi, 0)}% · {formatMultiplier(campaignMetrics.roas, 1)}
                     </span>
                   ) : null;
                 })()}
@@ -553,19 +445,6 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                     props?.payload?.name || ''
                   ]}
                 />
-                <RechartsTooltip
-                  contentStyle={{
-                    backgroundColor: '#fff',
-                    border: '1px solid #d0d7de',
-                    borderRadius: '6px',
-                    fontSize: '12px',
-                    padding: '8px 12px'
-                  }}
-                  formatter={(value: any, _name?: string, props?: any) => [
-                    formatPercent((value as number) || 0, 1),
-                    props?.payload?.name || ''
-                  ]}
-                />
               </PieChart>
           </div>
           <div className="space-y-2 mt-4">
@@ -587,14 +466,14 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         </Card>
       </div>
 
-      {/* AI Insights Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+      {/* AI Insights & Strategy */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-stretch">
         {/* AI Insights */}
         <Card 
           padding="lg"
           hover={!!onOpenInsights}
           onClick={() => onOpenInsights?.()}
-          className="h-full flex flex-col"
+          className="xl:col-span-2 h-full flex flex-col"
         >
           <CardHeader
             title="AI Insights"
@@ -651,100 +530,47 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           </div>
         </Card>
 
-        {/* Quick Stats */}
-        <Card 
-          padding="lg"
-          hover={!!onSectionChange}
-          onClick={() => onSectionChange?.('reports')}
-          className="h-full"
-        >
+        {/* Strategy & Health */}
+        <Card padding="lg" className="h-full flex flex-col">
           <CardHeader
-            title="Performance Summary"
-            subtitle="Τελευταίες 90 ημέρες"
-            icon={<Euro size={18} className="text-[var(--nts-medium-gray)]" />}
+            title="Strategy & Status"
+            subtitle="Ενεργή στρατηγική & δεδομένα"
+            icon={<Target size={18} className="text-[var(--nts-medium-gray)]" />}
           />
-          <div className="grid grid-cols-2 gap-5">
-            <StatBox
-              label="Σύνολο Προϊόντων"
-              value={formatNumber(productsCount)}
-              icon={<Package size={18} />}
-              color="#4A4A4A"
-              onClick={(e) => {
-                e.stopPropagation();
-                onSectionChange?.('products');
-              }}
-            />
-            <StatBox
-              label="Ενεργά Campaigns"
-              value={formatNumber(campaignsCount)}
-              icon={<Target size={18} />}
-              color="#22C55E"
-              onClick={(e) => {
-                e.stopPropagation();
-                onSectionChange?.('campaigns');
-              }}
-            />
-            <StatBox
-              label="Ad Spend"
-              value={hasCampaigns ? formatCurrencyCompact(campaignMetrics.totalSpend) : '€0'}
-              icon={<Euro size={18} />}
-              color="#8B5CF6"
-              tooltip="Συνολικό ποσό διαφημιστικής δαπάνης από campaigns."
-            />
-            <StatBox
-              label="Conversions"
-              value={hasCampaigns ? formatNumber(campaignMetrics.totalConversions) : '0'}
-              icon={<Target size={18} />}
-              color="var(--nts-accent)"
-              tooltip="Συνολικές μετατροπές από campaigns."
-            />
-          </div>
-
-          {/* ROI & ROAS Highlight */}
-          <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* ROI - Primary metric */}
-            {(() => {
-              const roiVal = campaignMetrics.totalSpend > 0
-                ? ((campaignMetrics.totalRevenue - campaignMetrics.totalSpend) / campaignMetrics.totalSpend) * 100
-                : 0;
-              return (
-                <div className="p-5 bg-gradient-to-br from-[var(--nts-accent)]/5 to-white rounded-xl border-2 border-[var(--nts-accent)]/20">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-[13px] font-semibold text-[var(--nts-accent)] mb-1">ROI</p>
-                      <p className="text-3xl font-bold tracking-tight text-[var(--nts-charcoal)] mb-1 font-mono">
-                        {roiVal > 0 ? `+${formatNumber(roiVal, 0)}%` : '—'}
-                      </p>
-                      <p className="text-[13px] text-[var(--nts-medium-gray)]">
-                        {roiVal > 0
-                          ? `Καθαρό κέρδος ${formatNumber(roiVal, 0)}% επί της διαφημιστικής δαπάνης`
-                          : 'Φόρτωσε campaigns για υπολογισμό ROI'}
-                      </p>
-                    </div>
-                    <div className="w-10 h-10 bg-[var(--nts-accent)]/10 rounded-md flex items-center justify-center">
-                      <TrendingUp size={18} className="text-[var(--nts-accent)]" strokeWidth={2.5} />
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
-            {/* ROAS */}
-            <div className="p-5 bg-white rounded-xl border border-[var(--nts-border-gray)]">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[13px] font-medium text-[var(--nts-medium-gray)] mb-1">ROAS</p>
-                  <p className="text-3xl font-bold tracking-tight text-[var(--nts-charcoal)] mb-1 font-mono">
-                    {campaignMetrics.roas > 0 ? formatMultiplier(campaignMetrics.roas, 1) : '—'}
-                  </p>
-                  <p className="text-[13px] text-[var(--nts-medium-gray)]">
-                    {campaignMetrics.roas > 0
-                      ? `Κάθε €1 σε ads → €${formatNumber(campaignMetrics.roas, 1)} revenue`
-                      : 'Φόρτωσε campaigns για να δεις το ROAS'}
-                  </p>
-                </div>
-                <div className="w-10 h-10 bg-[var(--nts-light-gray)] rounded-md border border-[var(--nts-border-gray)] flex items-center justify-center">
-                  <TrendingUp size={18} className="text-[var(--nts-medium-gray)]" strokeWidth={2} />
-                </div>
+          <div className="flex-1 flex flex-col gap-4">
+            <div
+              className="p-4 rounded-xl border border-[var(--nts-border-gray)] bg-[var(--nts-light-gray)] cursor-pointer hover:border-[var(--nts-accent)] transition-colors"
+              onClick={() => onSectionChange?.('strategy')}
+            >
+              <p className="text-[11px] font-medium text-[var(--nts-medium-gray)] uppercase tracking-wider mb-1">Στρατηγική</p>
+              <p className="text-[15px] font-semibold text-[var(--nts-charcoal)]">
+                {activeStrategy ? getStrategyName(activeStrategy.scenarioId) : 'Δεν έχει οριστεί'}
+              </p>
+              {activeStrategy?.approvalStatus === 'implementing' && (
+                <span className="inline-block mt-1.5 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-green-100 text-green-700">ενεργή</span>
+              )}
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div
+                className="text-center p-3 rounded-lg bg-white border border-[var(--nts-border-gray)] cursor-pointer hover:border-[var(--nts-accent)] transition-colors"
+                onClick={(e) => { e.stopPropagation(); onSectionChange?.('products'); }}
+              >
+                <p className="text-lg font-bold text-[var(--nts-charcoal)] font-mono">{formatNumber(productsCount)}</p>
+                <p className="text-[11px] text-[var(--nts-medium-gray)]">Προϊόντα</p>
+              </div>
+              <div
+                className="text-center p-3 rounded-lg bg-white border border-[var(--nts-border-gray)] cursor-pointer hover:border-[var(--nts-accent)] transition-colors"
+                onClick={(e) => { e.stopPropagation(); onSectionChange?.('campaigns'); }}
+              >
+                <p className="text-lg font-bold text-[var(--nts-charcoal)] font-mono">{formatNumber(campaignsCount)}</p>
+                <p className="text-[11px] text-[var(--nts-medium-gray)]">Campaigns</p>
+              </div>
+              <div
+                className="text-center p-3 rounded-lg bg-white border border-[var(--nts-border-gray)] cursor-pointer hover:border-[var(--nts-accent)] transition-colors"
+                onClick={(e) => { e.stopPropagation(); onSectionChange?.('rfm'); }}
+              >
+                <p className="text-lg font-bold text-[var(--nts-charcoal)] font-mono">{rfmSegments.length}</p>
+                <p className="text-[11px] text-[var(--nts-medium-gray)]">Segments</p>
               </div>
             </div>
           </div>
@@ -815,39 +641,3 @@ function KPICard({ kpi, index, onClick, className }: KPICardProps) {
   );
 }
 
-interface StatBoxProps {
-  label: string;
-  value: string;
-  icon: React.ReactNode;
-  color: string;
-  onClick?: (e: React.MouseEvent) => void;
-  tooltip?: string;
-}
-
-function StatBox({ label, value, icon, color, onClick, tooltip }: StatBoxProps) {
-  return (
-    <div 
-      className={`p-4 bg-white rounded-xl border border-[var(--nts-border-gray)] flex flex-col items-center justify-center text-center gap-2 ${onClick ? 'hover:border-[var(--nts-accent)] hover:shadow-sm transition-all cursor-pointer' : ''}`}
-      onClick={onClick}
-    >
-      <div
-        className="w-11 h-11 rounded-lg border border-[var(--nts-border-gray)] bg-[var(--nts-light-gray)] flex items-center justify-center"
-        aria-hidden="true"
-      >
-        <span style={{ color }} className="inline-flex items-center justify-center">
-          {icon}
-        </span>
-      </div>
-      <p className="text-[12px] font-medium text-[var(--nts-medium-gray)] leading-4">
-        {tooltip ? (
-          <Tooltip content={tooltip} size={12}>
-            {label}
-          </Tooltip>
-        ) : (
-          label
-        )}
-      </p>
-      <p className="text-xl font-semibold text-[var(--nts-dark-gray)] font-mono leading-6">{value}</p>
-    </div>
-  );
-}

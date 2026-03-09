@@ -145,7 +145,7 @@ export function useAIChannelRecommendations({
         context,
       });
     },
-    enabled: !!scenario && !!segment && aiEnabled && selectedSegmentId !== '',
+    enabled: !!selectedScenarioId && !!scenario && !!segment && aiEnabled && selectedSegmentId !== '',
     staleTime: 60 * 60 * 1000,
     gcTime: 2 * 60 * 60 * 1000,
     retry: 1,

@@ -171,6 +171,7 @@ function App() {
         setInsightsPanelOpen(true);
       } else {
         setActiveSection(section);
+        window.scrollTo({ top: 0 });
         // Update URL hash for persistence
         if (typeof window !== 'undefined') {
           window.history.pushState(null, '', `#${section}`);

@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { TrendingUp, Filter, Download, Search, Calendar, DollarSign, Trash2 } from 'lucide-react';
+import { TrendingUp, Filter, Download, Search, Calendar, DollarSign, Trash2, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import { Card, CardHeader, Badge, Button, Spinner, useToast } from '../common';
 import { useCampaigns, useBrand } from '../../hooks';
 import { FirestoreService } from '../../services/firestore';
@@ -29,6 +29,8 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [dateFrom, setDateFrom] = useState<string>('');
   const [dateTo, setDateTo] = useState<string>('');
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   // Date range from campaigns data (start_date, end_date, or parse from period "2025-01-01 - 2025-01-31")
   const { minDate, maxDate, dateFromDefault, dateToDefault } = useMemo(() => {
@@ -152,6 +154,38 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
 
     return filtered;
   }, [campaigns, searchQuery, channelFilter, statusFilter, dateFrom, dateTo]);
+
+  const sortedCampaigns = useMemo(() => {
+    if (!sortColumn) return filteredCampaigns;
+    const sorted = [...filteredCampaigns].sort((a, b) => {
+      let va: string | number = 0;
+      let vb: string | number = 0;
+      switch (sortColumn) {
+        case 'name': va = a.name || ''; vb = b.name || ''; break;
+        case 'channel': va = a.channel || ''; vb = b.channel || ''; break;
+        case 'period': va = a.period || ''; vb = b.period || ''; break;
+        case 'status': va = a.status || ''; vb = b.status || ''; break;
+        case 'spent': va = a.amount_spent || 0; vb = b.amount_spent || 0; break;
+        case 'impressions': va = a.impressions || 0; vb = b.impressions || 0; break;
+        case 'clicks': va = a.clicks || 0; vb = b.clicks || 0; break;
+        case 'ctr': va = a.ctr || 0; vb = b.ctr || 0; break;
+        case 'conversions': va = a.conversions || 0; vb = b.conversions || 0; break;
+        case 'roas': va = a.roas || 0; vb = b.roas || 0; break;
+      }
+      if (typeof va === 'string') return sortDirection === 'asc' ? va.localeCompare(vb as string) : (vb as string).localeCompare(va);
+      return sortDirection === 'asc' ? (va as number) - (vb as number) : (vb as number) - (va as number);
+    });
+    return sorted;
+  }, [filteredCampaigns, sortColumn, sortDirection]);
+
+  const handleSort = (col: string) => {
+    if (sortColumn === col) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(col);
+      setSortDirection(col === 'name' || col === 'channel' ? 'asc' : 'desc');
+    }
+  };
 
   // Calculate summary stats (from filtered campaigns)
   const summaryStats = useMemo(() => {
@@ -447,20 +481,20 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
             <table className="w-full">
               <thead>
                 <tr className="text-left text-xs text-[#4A4A4A] border-b border-[#E5E5E5]">
-                  <th className="pb-3 font-medium px-2">Campaign Name</th>
-                  <th className="pb-3 font-medium px-2">Channel</th>
-                  <th className="pb-3 font-medium px-2">Period</th>
-                  <th className="pb-3 font-medium px-2">Status</th>
-                  <th className="pb-3 font-medium px-2 text-right">Spent</th>
-                  <th className="pb-3 font-medium px-2 text-right">Impressions</th>
-                  <th className="pb-3 font-medium px-2 text-right">Clicks</th>
-                  <th className="pb-3 font-medium px-2 text-right">CTR</th>
-                  <th className="pb-3 font-medium px-2 text-right">Conversions</th>
-                  <th className="pb-3 font-medium px-2 text-right">ROAS</th>
+                  <SortableHeader col="name" label="Campaign Name" current={sortColumn} dir={sortDirection} onSort={handleSort} />
+                  <SortableHeader col="channel" label="Channel" current={sortColumn} dir={sortDirection} onSort={handleSort} />
+                  <SortableHeader col="period" label="Period" current={sortColumn} dir={sortDirection} onSort={handleSort} />
+                  <SortableHeader col="status" label="Status" current={sortColumn} dir={sortDirection} onSort={handleSort} />
+                  <SortableHeader col="spent" label="Spent" current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" />
+                  <SortableHeader col="impressions" label="Impressions" current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" />
+                  <SortableHeader col="clicks" label="Clicks" current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" />
+                  <SortableHeader col="ctr" label="CTR" current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" />
+                  <SortableHeader col="conversions" label="Conversions" current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" />
+                  <SortableHeader col="roas" label="ROAS" current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" />
                 </tr>
               </thead>
               <tbody>
-                {filteredCampaigns.map((campaign, index) => (
+                {sortedCampaigns.map((campaign, index) => (
                   <motion.tr
                     key={campaign.id}
                     initial={{ opacity: 0, y: 10 }}
@@ -478,7 +512,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                       )}
                     </td>
                     <td className="py-3 px-2">
-                      <Badge variant="default" size="sm">{campaign.channel || 'Other'}</Badge>
+                      <ChannelBadge channel={campaign.channel || 'Other'} />
                     </td>
                     <td className="py-3 px-2 text-sm text-[#4A4A4A]">
                       {campaign.period || '-'}
@@ -527,5 +561,58 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
         )}
       </Card>
     </div>
+  );
+}
+
+function SortableHeader({ col, label, current, dir, onSort, align }: {
+  col: string; label: string; current: string | null; dir: 'asc' | 'desc'; onSort: (col: string) => void; align?: 'right';
+}) {
+  const active = current === col;
+  return (
+    <th
+      className={`pb-3 font-medium px-2 cursor-pointer select-none hover:text-[var(--nts-charcoal)] transition-colors ${align === 'right' ? 'text-right' : ''}`}
+      onClick={() => onSort(col)}
+    >
+      <span className="inline-flex items-center gap-1">
+        {align === 'right' && (
+          active
+            ? (dir === 'asc' ? <ArrowUp size={12} className="text-[var(--nts-accent)]" /> : <ArrowDown size={12} className="text-[var(--nts-accent)]" />)
+            : <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-40" />
+        )}
+        <span className={active ? 'text-[var(--nts-charcoal)] font-semibold' : ''}>{label}</span>
+        {align !== 'right' && (
+          active
+            ? (dir === 'asc' ? <ArrowUp size={12} className="text-[var(--nts-accent)]" /> : <ArrowDown size={12} className="text-[var(--nts-accent)]" />)
+            : <ArrowUpDown size={12} className="opacity-30" />
+        )}
+      </span>
+    </th>
+  );
+}
+
+const CHANNEL_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+  'Google Ads':      { bg: '#E8F5E9', text: '#2E7D32', border: '#A5D6A7' },
+  'Google Shopping': { bg: '#E8F5E9', text: '#2E7D32', border: '#A5D6A7' },
+  'Meta':            { bg: '#E3F2FD', text: '#1565C0', border: '#90CAF9' },
+  'Facebook':        { bg: '#E3F2FD', text: '#1565C0', border: '#90CAF9' },
+  'Instagram':       { bg: '#FCE4EC', text: '#C62828', border: '#F48FB1' },
+  'TikTok':          { bg: '#F3E5F5', text: '#6A1B9A', border: '#CE93D8' },
+  'Email':           { bg: '#FFF8E1', text: '#F57F17', border: '#FFE082' },
+  'SMS':             { bg: '#EDE7F6', text: '#4527A0', border: '#B39DDB' },
+  'LinkedIn':        { bg: '#E3F2FD', text: '#0D47A1', border: '#90CAF9' },
+  'X (Twitter)':     { bg: '#ECEFF1', text: '#37474F', border: '#B0BEC5' },
+  'Pinterest':       { bg: '#FCE4EC', text: '#AD1457', border: '#F48FB1' },
+};
+const DEFAULT_CHANNEL_COLOR = { bg: '#F5F5F5', text: '#616161', border: '#E0E0E0' };
+
+function ChannelBadge({ channel }: { channel: string }) {
+  const c = CHANNEL_COLORS[channel] || DEFAULT_CHANNEL_COLOR;
+  return (
+    <span
+      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[12px] font-medium border whitespace-nowrap"
+      style={{ backgroundColor: c.bg, color: c.text, borderColor: c.border }}
+    >
+      {channel}
+    </span>
   );
 }
