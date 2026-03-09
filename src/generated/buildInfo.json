@@ -1,10 +1,14 @@
 {
-  "version": "0.29.11",
-  "previousVersion": "0.29.10",
-  "commitHash": "3729e6f",
+  "version": "0.29.12",
+  "previousVersion": "0.29.11",
+  "commitHash": "a33698b",
   "branch": "main",
-  "buildDate": "2026-03-09T09:50:46.436Z",
+  "buildDate": "2026-03-09T10:00:58.084Z",
   "commits": [
+    {
+      "hash": "a33698b",
+      "message": "Force AI on strategy save, fix activation generation, adjust prompt length"
+    },
     {
       "hash": "3729e6f",
       "message": "Dual AI recommendations: short for strategy, detailed for activation"
@@ -60,13 +64,10 @@
     {
       "hash": "8628840",
       "message": "Channel Activation upgrade: AI briefs, per-channel status (Firestore), agency brief export"
-    },
-    {
-      "hash": "65c9cf0",
-      "message": "Refine value proposition tone: professional tagline aligned with NotTheSame brand"
     }
   ],
   "changes": [
+    "Force AI on strategy save, fix activation generation, adjust prompt length",
     "Dual AI recommendations: short for strategy, detailed for activation",
     "AI analyses run only on strategy save, not on page refresh",
     "Channel Activation requires saved strategy, rich AI context, ROI dashboard tab with ROAS badge",
@@ -75,7 +76,6 @@
     "ROI page rebuild: remove all fabricated data, real-data-only dashboard",
     "Sidebar nav reorder: Data > Strategy > Execution > Reporting flow",
     "Sync channels: Strategy saves AI recommendations to Firestore, Channel Activation reads from saved data. Fixed static fallback to paid-only budget allocation.",
-    "AI context: strategy vs activation tone, funnel 4-stage (Awareness/Consideration/Sales/Loyalty), rationale formatting",
-    "AI prompt: separate paid vs owned channels, budget only for paid media"
+    "AI context: strategy vs activation tone, funnel 4-stage (Awareness/Consideration/Sales/Loyalty), rationale formatting"
   ]
 }

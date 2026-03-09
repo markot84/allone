@@ -202,14 +202,16 @@ ${segmentMapSection}
 - Στο "Αποτέλεσμα": Δώσε εκτιμώμενα KPIs ανά κανάλι (target ROAS, expected CPA range, conversion rate benchmarks). Πρότεινε testing framework (A/B tests, creative rotation).
 - Ο τόνος είναι σαν ένα brief που στέλνει ο CMO στο agency.` : `
 
-ΠΛΑΙΣΙΟ: Αυτή η ανάλυση εμφανίζεται στη σελίδα COMMERCIAL STRATEGY και τη βλέπει ο ΙΔΙΟΚΤΗΤΗΣ της επιχείρησης.
+ΠΛΑΙΣΙΟ: Αυτή η ανάλυση εμφανίζεται στη σελίδα COMMERCIAL STRATEGY και τη βλέπει ο ΙΔΙΟΚΤΗΤΗΣ της επιχείρησης. Γράψε κατανοητά, σαν executive summary.
 
-ΚΑΝΟΝΑΣ ΜΗΚΟΥΣ: Κράτα το rationale ΣΥΝΟΠΤΙΚΟ αλλά ΟΥΣΙΑΣΤΙΚΟ. Κάθε section πρέπει να έχει 3-5 bullets. Ο επιχειρηματίας θέλει να καταλάβει γρήγορα ΤΙ κάνουμε, ΣΕ ΠΟΙΟΥΣ απευθυνόμαστε, και ΤΙ περιμένουμε, χωρίς υπερβολικές τεχνικές λεπτομέρειες.
+ΑΚΟΛΟΥΘΗΣΕ ΑΥΤΟ ΤΟ FORMAT ΑΚΡΙΒΩΣ (με bullets, newlines, 1-2 προτάσεις ανά bullet):
 
-ΣΤΥΛ:
-- Γράψε σε απλά ελληνικά. Εξήγησε τους αγγλικούς όρους όταν τους χρησιμοποιείς (π.χ. "remarketing, δηλαδή επαναστόχευση πελατών που έχουν ήδη επισκεφθεί το site")
-- Ο τόνος είναι στρατηγικός αλλά κατανοητός, σαν ένα executive summary σε board meeting
-- Στα "Πελάτες": 2-3 προτάσεις για το κύριο segment (ποιοι είναι, γιατί ταιριάζουν), μετά 1 bullet ανά επιπλέον segment που ταιριάζει (σύντομη εξήγηση)
-- Στα "Κανάλια": 1 εισαγωγική πρόταση + 1 bullet ανά κανάλι (ο ρόλος του + γιατί ταιριάζει στη στρατηγική, σε 1-2 προτάσεις)
-- Στο "Αποτέλεσμα": 3-4 bullets με αναμενόμενα αποτελέσματα σε απλά ελληνικά`}${totalBudget ? `\n\nΜΗΝΙΑΙΟ BUDGET: €${totalBudget.toLocaleString('el-GR')}\nΛάβε υπόψη αυτό το budget στην κατανομή. Στο "actions" πρότεινε συγκεκριμένες ενέργειες budget management βάσει στρατηγικής.` : ''}${campaignPerformance && campaignPerformance.length > 0 ? `\n\nΠΡΑΓΜΑΤΙΚΑ CAMPAIGN PERFORMANCE DATA:\n${campaignPerformance.map(c => `- ${c.channel}: Spent €${c.spent.toLocaleString('el-GR', { maximumFractionDigits: 0 })}, ROAS ${c.roas.toFixed(1)}x, Conversions ${c.conversions}, CTR ${c.ctr.toFixed(1)}%`).join('\n')}\nΑνάλυσε τα δεδομένα performance και δώσε actionable recommendations στο "actions" (increase/decrease/push/pause/maintain για κάθε κανάλι).` : ''}`;
+Παράδειγμα rationale:
+"Πελάτες: Οι «Champions» είναι οι πιο πιστοί και κερδοφόροι πελάτες σας. Αγοράζουν τακτικά και ξοδεύουν πάνω από τον μέσο όρο.\n• «Loyal Customers»: πιστοί πελάτες με σταθερές αγορές, ιδανικοί για cross-selling\n• «Promising»: νέοι πελάτες με δυναμική, κατάλληλοι για στοχευμένες προσφορές || Κανάλια: Η στρατηγική απαιτεί εστίαση σε κανάλια υψηλής πρόθεσης αγοράς:\n• Google Shopping: προβάλλει τα προϊόντα σας σε όσους ψάχνουν ενεργά, με υψηλή απόδοση\n• Google Search Ads: στοχεύει πελάτες που αναζητούν συγκεκριμένα προϊόντα ή κατηγορίες\n• Meta Ads: προσεγγίζει νέα κοινά μέσω Facebook/Instagram με βάση ενδιαφέροντα και συμπεριφορά\n• Dynamic Remarketing: υπενθυμίζει προϊόντα σε πελάτες που επισκέφθηκαν το site χωρίς να αγοράσουν\n• Email Marketing: ενισχύει τη σχέση με υπάρχοντες πελάτες μέσω εξατομικευμένων προτάσεων || Αποτέλεσμα: Αναμενόμενα αποτελέσματα:\n• Αύξηση μέσης αξίας παραγγελίας μέσω cross-selling στους καλύτερους πελάτες\n• Βελτίωση απόδοσης διαφήμισης (ROAS) με εστίαση σε κανάλια υψηλής πρόθεσης\n• Μείωση κόστους απόκτησης πελάτη μέσω remarketing"
+
+ΚΑΝΟΝΕΣ:
+- ΚΑΘΕ section ΠΡΕΠΕΙ να έχει 3-5 bullets με "• " μπροστά, χωρισμένα με \\n
+- Κάθε bullet πρέπει να είναι 1-2 ολοκληρωμένες προτάσεις (ΟΧΙ λίγες λέξεις)
+- Γράψε σε απλά ελληνικά. Εξήγησε τους αγγλικούς όρους (π.χ. "remarketing, δηλαδή επαναστόχευση")
+- Ο τόνος πρέπει να είναι στρατηγικός αλλά κατανοητός από μη-τεχνικό κοινό`}${totalBudget ? `\n\nΜΗΝΙΑΙΟ BUDGET: €${totalBudget.toLocaleString('el-GR')}\nΛάβε υπόψη αυτό το budget στην κατανομή. Στο "actions" πρότεινε συγκεκριμένες ενέργειες budget management βάσει στρατηγικής.` : ''}${campaignPerformance && campaignPerformance.length > 0 ? `\n\nΠΡΑΓΜΑΤΙΚΑ CAMPAIGN PERFORMANCE DATA:\n${campaignPerformance.map(c => `- ${c.channel}: Spent €${c.spent.toLocaleString('el-GR', { maximumFractionDigits: 0 })}, ROAS ${c.roas.toFixed(1)}x, Conversions ${c.conversions}, CTR ${c.ctr.toFixed(1)}%`).join('\n')}\nΑνάλυσε τα δεδομένα performance και δώσε actionable recommendations στο "actions" (increase/decrease/push/pause/maintain για κάθε κανάλι).` : ''}`;
 }
