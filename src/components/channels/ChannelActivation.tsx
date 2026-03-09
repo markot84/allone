@@ -149,8 +149,8 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   const strategyId = activeStrategy?.id ?? null;
   const scenarioId = activeStrategy?.scenarioId ?? null;
 
-  // Only read saved recommendation from Firestore (AI runs only on strategy save in Commercial Strategy)
-  const aiRecommendation = activeStrategy?.channelRecommendation ?? null;
+  // Read detailed activation recommendation (generated on strategy save, context: 'activation')
+  const aiRecommendation = activeStrategy?.activationRecommendation ?? activeStrategy?.channelRecommendation ?? null;
   const aiLoading = false;
 
   const { getStatus, getNote, updateActivation, isSaving } = useChannelActivations(strategyId);

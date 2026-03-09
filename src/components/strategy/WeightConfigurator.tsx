@@ -38,6 +38,7 @@ import {
   weightFactors
 } from '../../data';
 import { useAIChannelRecommendations } from '../../hooks/useAIChannelRecommendations';
+import { generateChannelRecommendations } from '../../services/aiChannelRecommendations';
 import { generateContentSuggestions } from '../../services/aiContentSuggestions';
 import { getPreviewConfig, type PreviewColumnId } from '../../data/strategyPreviewConfig';
 import { calculateCompositeScore } from '../../utils/compositeScore';
@@ -172,7 +173,7 @@ export function WeightConfigurator() {
   const { products, hasImported } = useProducts();
   const { segments: rfmSegments } = useSegments();
   const { user } = useAuth();
-  const { activeStrategy, saveActiveStrategy, saveRecommendation, saveContentSuggestions, isLoading: strategyLoading } = useActiveStrategy();
+  const { activeStrategy, saveActiveStrategy, saveRecommendation, saveActivationRecommendation, saveContentSuggestions, isLoading: strategyLoading } = useActiveStrategy();
   const toast = useToast();
   const [strategySaveVersion, setStrategySaveVersion] = useState(0);
   
@@ -652,7 +653,7 @@ export function WeightConfigurator() {
   // Show saved recommendation on load, switch to fresh after save+AI-generation
   const aiRecommendation = (strategySaveVersion > 0 && freshAiRec) ? freshAiRec : (activeStrategy?.channelRecommendation ?? null);
 
-  // Persist AI results after fresh generation
+  // Persist strategy-context AI results after fresh generation
   useEffect(() => {
     if (freshAiRec && isAIGenerated && strategySaveVersion > 0 && activeStrategy?.id && !activeStrategy.id.startsWith('default_')) {
       saveRecommendation(freshAiRec).catch((err) => {
@@ -661,25 +662,55 @@ export function WeightConfigurator() {
     }
   }, [freshAiRec, isAIGenerated, strategySaveVersion, activeStrategy?.id, saveRecommendation]);
 
-  // Also generate and persist content suggestions after strategy save
+  // After strategy save: generate activation recommendation + content suggestions (in parallel)
   useEffect(() => {
-    if (strategySaveVersion > 0 && activeStrategy?.id && !activeStrategy.id.startsWith('default_') && aiEnabled) {
-      const segmentNames = rfmSegments.map(s => s.name || s.id).slice(0, 6);
-      const topCats = [...new Set(products.map(p => p.category).filter(Boolean))].slice(0, 5);
-      const scenarioName = scenarios.find(s => s.id === activeStrategy.scenarioId)?.name || activeStrategy.scenarioId;
-      generateContentSuggestions({
-        scenarioId: activeStrategy.scenarioId,
-        scenarioName,
-        weights: activeStrategy.weights ?? null,
-        brandName: currentBrand?.name,
-        topCategories: topCats,
-        segmentNames,
-      }).then(result => {
-        if (result) {
-          saveContentSuggestions(result).catch(err => console.error('[WeightConfigurator] Failed to save content suggestions:', err));
+    if (strategySaveVersion === 0 || !activeStrategy?.id || activeStrategy.id.startsWith('default_') || !aiEnabled) return;
+
+    const segment = rfmSegments.find(s => s.id === selectedSegment) ?? rfmSegments[0];
+    const scenarioObj = scenarios.find(s => s.id === activeStrategy.scenarioId) ?? scenarios[0];
+    const topCats = [...new Set(products.map(p => p.category).filter(Boolean))].slice(0, 5);
+    const segmentNames = rfmSegments.map(s => s.name || s.id).slice(0, 6);
+    const scenarioName = scenarioObj?.name || activeStrategy.scenarioId;
+
+    // 1. Activation recommendation (detailed, for marketing teams)
+    if (segment && scenarioObj) {
+      generateChannelRecommendations({
+        scenario: scenarioObj,
+        segment,
+        fitLevel: segmentFitMap[selectedSegment]?.fit ?? 'good',
+        brandContext: currentBrand ? {
+          brandName: currentBrand.name,
+          brandType: currentBrand.type,
+          topCategories: topCats,
+        } : undefined,
+        segmentFitList: rankedSegments.map(rs => ({
+          name: rs.segment.name,
+          fit: rs.fit,
+          description: rs.segment.description,
+          count: rs.segment.count,
+          revenueShare: rs.segment.revenue_share,
+        })),
+        context: 'activation',
+      }).then(rec => {
+        if (rec) {
+          saveActivationRecommendation(rec).catch(err => console.error('[WeightConfigurator] Failed to save activation recommendation:', err));
         }
-      }).catch(err => console.error('[WeightConfigurator] Content AI generation failed:', err));
+      }).catch(err => console.error('[WeightConfigurator] Activation AI failed:', err));
     }
+
+    // 2. Content suggestions
+    generateContentSuggestions({
+      scenarioId: activeStrategy.scenarioId,
+      scenarioName,
+      weights: activeStrategy.weights ?? null,
+      brandName: currentBrand?.name,
+      topCategories: topCats,
+      segmentNames,
+    }).then(result => {
+      if (result) {
+        saveContentSuggestions(result).catch(err => console.error('[WeightConfigurator] Failed to save content suggestions:', err));
+      }
+    }).catch(err => console.error('[WeightConfigurator] Content AI failed:', err));
   }, [strategySaveVersion, activeStrategy?.id]);
 
   // Load saved strategy from Firestore on mount/refresh

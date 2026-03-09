@@ -202,7 +202,15 @@ ${segmentMapSection}
 - Στο "Αποτέλεσμα": Δώσε εκτιμώμενα KPIs ανά κανάλι (target ROAS, expected CPA range, conversion rate benchmarks). Πρότεινε testing framework (A/B tests, creative rotation).
 - Ο τόνος είναι σαν ένα brief που στέλνει ο CMO στο agency.` : `
 
-ΠΛΑΙΣΙΟ: Αυτή η ανάλυση εμφανίζεται στη σελίδα COMMERCIAL STRATEGY, που τη βλέπει ο ιδιοκτήτης. Γράψε ΕΝΗΜΕΡΩΤΙΚΑ και ΚΑΤΑΝΟΗΤΑ:
-- Εξήγησε τη λογική πίσω από κάθε κανάλι σε απλά ελληνικά
-- Ο τόνος είναι στρατηγικός, σαν παρουσίαση σε board meeting`}${totalBudget ? `\n\nΜΗΝΙΑΙΟ BUDGET: €${totalBudget.toLocaleString('el-GR')}\nΛάβε υπόψη αυτό το budget στην κατανομή. Στο "actions" πρότεινε συγκεκριμένες ενέργειες budget management βάσει στρατηγικής.` : ''}${campaignPerformance && campaignPerformance.length > 0 ? `\n\nΠΡΑΓΜΑΤΙΚΑ CAMPAIGN PERFORMANCE DATA:\n${campaignPerformance.map(c => `- ${c.channel}: Spent €${c.spent.toLocaleString('el-GR', { maximumFractionDigits: 0 })}, ROAS ${c.roas.toFixed(1)}x, Conversions ${c.conversions}, CTR ${c.ctr.toFixed(1)}%`).join('\n')}\nΑνάλυσε τα δεδομένα performance και δώσε actionable recommendations στο "actions" (increase/decrease/push/pause/maintain για κάθε κανάλι).` : ''}`;
+ΠΛΑΙΣΙΟ: Αυτή η ανάλυση εμφανίζεται στη σελίδα COMMERCIAL STRATEGY και τη βλέπει ο ΙΔΙΟΚΤΗΤΗΣ της επιχείρησης.
+
+ΚΡΙΤΙΚΟΣ ΚΑΝΟΝΑΣ ΜΗΚΟΥΣ: Κράτα το rationale ΣΥΝΤΟΜΟ. Μέγιστο 5-6 γραμμές ανά section. Ο επιχειρηματίας θέλει να καταλάβει γρήγορα ΤΙ κάνουμε, ΣΕ ΠΟΙΟΥΣ απευθυνόμαστε, και ΤΙ περιμένουμε.
+
+ΣΤΥΛ:
+- Γράψε σε απλά ελληνικά, χωρίς jargon. Εξήγησε τους αγγλικούς όρους αν τους χρησιμοποιήσεις (π.χ. "remarketing, δηλαδή επαναστόχευση πελατών που έχουν ήδη επισκεφθεί το site")
+- Ο τόνος είναι στρατηγικός αλλά κατανοητός, σαν ένα executive summary σε board meeting
+- ΜΗΝ αναλύεις κάθε κανάλι ξεχωριστά σε μεγάλη παράγραφο. Αρκεί μία σύντομη πρόταση ανά κανάλι
+- Στα "Πελάτες": 1-2 προτάσεις για το κύριο segment, μετά 1 γραμμή που αναφέρει ποια άλλα segments ταιριάζουν
+- Στα "Κανάλια": 1 πρόταση εισαγωγής + 1 bullet ανά κανάλι (μόνο ο ρόλος του σε 5-10 λέξεις)
+- Στο "Αποτέλεσμα": 2-3 σύντομα bullets με αναμενόμενα αποτελέσματα σε απλά ελληνικά`}${totalBudget ? `\n\nΜΗΝΙΑΙΟ BUDGET: €${totalBudget.toLocaleString('el-GR')}\nΛάβε υπόψη αυτό το budget στην κατανομή. Στο "actions" πρότεινε συγκεκριμένες ενέργειες budget management βάσει στρατηγικής.` : ''}${campaignPerformance && campaignPerformance.length > 0 ? `\n\nΠΡΑΓΜΑΤΙΚΑ CAMPAIGN PERFORMANCE DATA:\n${campaignPerformance.map(c => `- ${c.channel}: Spent €${c.spent.toLocaleString('el-GR', { maximumFractionDigits: 0 })}, ROAS ${c.roas.toFixed(1)}x, Conversions ${c.conversions}, CTR ${c.ctr.toFixed(1)}%`).join('\n')}\nΑνάλυσε τα δεδομένα performance και δώσε actionable recommendations στο "actions" (increase/decrease/push/pause/maintain για κάθε κανάλι).` : ''}`;
 }
