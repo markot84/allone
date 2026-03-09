@@ -37,8 +37,7 @@ import {
 } from 'recharts';
 import { Card, CardHeader, Badge, Button, Spinner } from '../common';
 import { useToast } from '../common/Toast';
-import { useProducts, useCampaigns, useBrand, useSegments, useActiveStrategy, useChannelActivations } from '../../hooks';
-import { useAIChannelRecommendations } from '../../hooks/useAIChannelRecommendations';
+import { useProducts, useCampaigns, useBrand, useActiveStrategy, useChannelActivations } from '../../hooks';
 import { getStockAgeDays } from '../../utils/productUtils';
 import { safeBrandName } from '../../services/reportExport';
 import { formatCurrency, formatNumber, formatPercent, formatMultiplier } from '../../utils/format';
@@ -133,7 +132,6 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   const { currentBrand } = useBrand();
   const { products, count: productsCount } = useProducts();
   const { campaigns, isLoading: campaignsLoading, hasImported: hasCampaigns } = useCampaigns();
-  const { segments: rfmSegments } = useSegments();
   const { activeStrategy, getStrategyName, updateBudget, isSavingBudget } = useActiveStrategy();
   const toast = useToast();
 
@@ -150,52 +148,11 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
 
   const strategyId = activeStrategy?.id ?? null;
   const scenarioId = activeStrategy?.scenarioId ?? null;
-  const mixConfig = activeStrategy?.mixConfig ?? null;
 
-  const firstSegment = rfmSegments[0] ?? null;
-
-  const brandContext = useMemo(() => {
-    if (!currentBrand) return null;
-    const topCats = products
-      .map(p => p.category)
-      .filter(Boolean)
-      .reduce((acc, cat) => { acc[cat!] = (acc[cat!] || 0) + 1; return acc; }, {} as Record<string, number>);
-    const sorted = Object.entries(topCats).sort((a, b) => b[1] - a[1]).slice(0, 5).map(e => e[0]);
-    return { brandName: currentBrand.name || '', brandType: 'B2C' as const, topCategories: sorted };
-  }, [currentBrand, products]);
-
-  const campaignPerfForAI = useMemo(() => {
-    if (!hasCampaigns || campaigns.length === 0) return undefined;
-    const channelStats: Record<string, { spent: number; convValue: number; conversions: number; impressions: number; clicks: number }> = {};
-    (campaigns as Campaign[]).forEach(c => {
-      const ch = c.channel || 'Other';
-      if (!channelStats[ch]) channelStats[ch] = { spent: 0, convValue: 0, conversions: 0, impressions: 0, clicks: 0 };
-      channelStats[ch].spent += c.amount_spent || 0;
-      channelStats[ch].convValue += c.conversion_value || 0;
-      channelStats[ch].conversions += c.conversions || 0;
-      channelStats[ch].impressions += c.impressions || 0;
-      channelStats[ch].clicks += c.clicks || 0;
-    });
-    return Object.entries(channelStats).map(([channel, s]) => ({
-      channel,
-      spent: s.spent,
-      roas: s.spent > 0 ? s.convValue / s.spent : 0,
-      conversions: s.conversions,
-      ctr: s.impressions > 0 ? (s.clicks / s.impressions) * 100 : 0,
-    }));
-  }, [campaigns, hasCampaigns]);
-
-  const { recommendation: aiRecommendation, isLoading: aiLoading } = useAIChannelRecommendations({
-    selectedScenarioId: scenarioId,
-    segments: rfmSegments,
-    selectedSegmentId: firstSegment?.id ?? '',
-    mixConfig,
-    brandContext,
-    useAI: true,
-    totalBudget: monthlyBudget ?? undefined,
-    campaignPerformance: campaignPerfForAI,
-    context: 'activation',
-  });
+  // Use the saved recommendation from the active strategy (synced from Commercial Strategy)
+  const savedRecommendation = activeStrategy?.channelRecommendation ?? null;
+  const aiRecommendation = savedRecommendation;
+  const aiLoading = false;
 
   const { getStatus, getNote, updateActivation, isSaving } = useChannelActivations(strategyId);
 

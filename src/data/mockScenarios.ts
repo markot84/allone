@@ -108,130 +108,130 @@ export const weightFactors: Omit<WeightFactor, 'value'>[] = [
 export const channelRecommendations: Record<string, Record<string, ChannelRecommendation>> = {
   profit_max: {
     champions: {
-      primary: ['Email Marketing', 'Loyalty Programs'],
-      secondary: ['Remarketing Display'],
-      budget_allocation: { email: 40, loyalty: 35, display: 25 },
-      rationale: 'High-value segment με proven purchase intent. Focus σε retention και upselling.'
+      primary: ['Google Shopping', 'Meta Ads (Facebook/Instagram)', 'Dynamic Remarketing'],
+      secondary: ['Email Marketing', 'Google Search Ads'],
+      budget_allocation: { google_shopping: 35, meta: 30, remarketing: 20, google_search: 15 },
+      rationale: 'Πελάτες: Οι «Champions» είναι οι πιο κερδοφόροι πελάτες με υψηλή πρόθεση αγοράς. || Κανάλια: Google Shopping και Meta Ads για conversion σε high-intent κοινό, Dynamic Remarketing για κλείσιμο κύκλου αγοράς, Email Marketing για cross-sell (owned, χωρίς ad spend). || Αποτέλεσμα: Αύξηση AOV και ROAS μέσω στόχευσης σε πελάτες υψηλής αξίας.'
     },
     loyal: {
-      primary: ['Email Sequences', 'App Push'],
-      secondary: ['Social Organic', 'Remarketing'],
-      budget_allocation: { email: 45, push: 30, social: 15, remarketing: 10 },
-      rationale: 'Maintain engagement με personalized recommendations για cross-sell.'
+      primary: ['Google Shopping', 'Meta Ads (Facebook/Instagram)', 'Google Remarketing'],
+      secondary: ['Email Marketing', 'Content Marketing'],
+      budget_allocation: { google_shopping: 35, meta: 35, remarketing: 30 },
+      rationale: 'Πελάτες: Οι «Loyal Customers» αγοράζουν σταθερά και εμπιστεύονται το brand. || Κανάλια: Google Shopping και Meta Ads για νέα προϊόντα, Remarketing για category expansion, Email (owned) για personalized cross-sell. || Αποτέλεσμα: Αύξηση LTV μέσω category expansion και cross-selling.'
     },
     potential: {
-      primary: ['Email Nurture', 'Meta Ads'],
-      secondary: ['Google Shopping'],
-      budget_allocation: { email: 35, meta: 40, google: 25 },
-      rationale: 'Convert potential με targeted offers και social proof.'
+      primary: ['Google Shopping', 'Meta Ads (Facebook/Instagram)'],
+      secondary: ['Google Search Ads', 'Email Marketing'],
+      budget_allocation: { google_shopping: 40, meta: 40, google_search: 20 },
+      rationale: 'Πελάτες: Οι «Potential» δείχνουν ενδιαφέρον αλλά δεν έχουν μετατραπεί σε τακτικούς αγοραστές. || Κανάλια: Google Shopping για high-intent αναζητήσεις, Meta Ads για targeted offers με social proof, Email nurture (owned). || Αποτέλεσμα: Conversion σε τακτικούς πελάτες μέσω στοχευμένων προσφορών.'
     },
     at_risk: {
-      primary: ['Email Win-back', 'Remarketing'],
-      secondary: ['SMS Offers'],
-      budget_allocation: { email: 50, remarketing: 30, sms: 20 },
-      rationale: 'Aggressive re-engagement με time-sensitive offers.'
+      primary: ['Dynamic Remarketing', 'Meta Retargeting', 'Google Remarketing'],
+      secondary: ['Email Marketing', 'SMS Marketing'],
+      budget_allocation: { remarketing: 40, meta_retargeting: 35, google_remarketing: 25 },
+      rationale: 'Πελάτες: Οι «At Risk» απομακρύνονται, χρειάζονται επανενεργοποίηση. || Κανάλια: Remarketing σε όλες τις πλατφόρμες για επαναστόχευση θερμού κοινού, Email και SMS (owned) για time-sensitive offers. || Αποτέλεσμα: Επανενεργοποίηση πελατών πριν χαθούν οριστικά.'
     },
     lost: {
-      primary: ['Remarketing Display'],
-      secondary: ['Email (Low frequency)'],
-      budget_allocation: { remarketing: 70, email: 30 },
-      rationale: 'Low-cost awareness maintenance, minimal investment.'
+      primary: ['Meta Ads (Facebook/Instagram)', 'Google Display Network'],
+      secondary: ['Google Search Ads', 'Email Marketing'],
+      budget_allocation: { meta: 45, display: 35, google_search: 20 },
+      rationale: 'Πελάτες: Οι «Lost» χρειάζονται awareness-level προσέγγιση. || Κανάλια: Meta Ads για broad reach, Google Display για brand recall, Search Ads για intent-based catch. || Αποτέλεσμα: Low-cost awareness με ελάχιστη επένδυση.'
     }
   },
   stock_clearance: {
     champions: {
-      primary: ['Email Flash Sales', 'App Push Notifications'],
-      secondary: ['Social Organic'],
-      budget_allocation: { email: 45, push: 35, social: 20 },
-      rationale: 'Leverage loyalty για γρήγορο stock movement.'
+      primary: ['Google Shopping', 'Meta Ads (Facebook/Instagram)', 'Dynamic Remarketing'],
+      secondary: ['Email Marketing', 'SMS Marketing'],
+      budget_allocation: { google_shopping: 35, meta: 35, remarketing: 30 },
+      rationale: 'Πελάτες: Οι «Champions» αγοράζουν γρήγορα, ιδανικοί για εκκαθάριση. || Κανάλια: Google Shopping και Meta Ads με aggressive pricing, Remarketing για επαναστόχευση, Email/SMS (owned) για flash sales. || Αποτέλεσμα: Γρήγορη μείωση αποθέματος μέσω πιστών πελατών.'
     },
     loyal: {
-      primary: ['Email Exclusive Access', 'SMS Flash'],
-      secondary: ['App Push'],
-      budget_allocation: { email: 50, sms: 30, push: 20 },
-      rationale: 'Early access incentives για loyal base.'
+      primary: ['Meta Ads (Facebook/Instagram)', 'Google Shopping'],
+      secondary: ['Dynamic Remarketing', 'Email Marketing'],
+      budget_allocation: { meta: 40, google_shopping: 35, remarketing: 25 },
+      rationale: 'Πελάτες: Οι «Loyal» ανταποκρίνονται σε early access deals. || Κανάλια: Meta Ads και Google Shopping για εκπτωτικές προσφορές, Email (owned) για exclusive early access. || Αποτέλεσμα: Αύξηση conversion rate μέσω exclusive deals.'
     },
     potential: {
-      primary: ['Google Shopping', 'Meta Ads'],
-      secondary: ['Email Sequences'],
-      budget_allocation: { google: 40, meta: 35, email: 25 },
-      rationale: 'Acquisition focus με value-driven messaging.'
+      primary: ['Google Shopping', 'Meta Ads (Facebook/Instagram)'],
+      secondary: ['Google Search Ads', 'Email Marketing'],
+      budget_allocation: { google_shopping: 40, meta: 35, google_search: 25 },
+      rationale: 'Πελάτες: Οι «Potential» προσελκύονται από χαμηλές τιμές. || Κανάλια: Google Shopping για price-sensitive αναζητήσεις, Meta Ads για value messaging. || Αποτέλεσμα: Acquisition μέσω value-driven offers.'
     },
     at_risk: {
-      primary: ['Remarketing Display', 'Email Deals'],
-      secondary: ['SMS'],
-      budget_allocation: { remarketing: 45, email: 35, sms: 20 },
-      rationale: 'Deep discounts για re-activation.'
+      primary: ['Dynamic Remarketing', 'Meta Retargeting', 'Marketplace Ads (Skroutz, Amazon)'],
+      secondary: ['Email Marketing', 'SMS Marketing'],
+      budget_allocation: { remarketing: 35, meta_retargeting: 30, skroutz: 35 },
+      rationale: 'Πελάτες: Οι «At Risk» χρειάζονται ελκυστικές τιμές για επιστροφή. || Κανάλια: Remarketing με deep discounts, Skroutz για price-sensitive κοινό, Email/SMS (owned) για flash deals. || Αποτέλεσμα: Επανενεργοποίηση με aggressive pricing.'
     },
     lost: {
-      primary: ['Display Ads', 'Google Shopping'],
-      secondary: ['Email'],
-      budget_allocation: { display: 50, google: 35, email: 15 },
-      rationale: 'Broad reach με aggressive pricing.'
+      primary: ['Google Shopping', 'Meta Ads (Facebook/Instagram)', 'Google Display Network'],
+      secondary: ['Email Marketing'],
+      budget_allocation: { google_shopping: 40, meta: 35, display: 25 },
+      rationale: 'Πελάτες: Οι «Lost» μπορούν να προσελκυστούν ξανά με aggressive deals. || Κανάλια: Broad paid reach με εκπτωτικό μήνυμα. || Αποτέλεσμα: Volume sales σε χαμηλό κόστος.'
     }
   },
   brand_launch: {
     champions: {
-      primary: ['Email VIP Preview', 'App Exclusive'],
-      secondary: ['Influencer Seeding'],
-      budget_allocation: { email: 40, app: 35, influencer: 25 },
-      rationale: 'Early access builds anticipation και word-of-mouth.'
+      primary: ['Meta Ads (Facebook/Instagram)', 'YouTube Ads', 'Google Display Network'],
+      secondary: ['Email Marketing', 'Influencer Marketing'],
+      budget_allocation: { meta: 40, youtube: 35, display: 25 },
+      rationale: 'Πελάτες: Οι «Champions» είναι brand advocates, ιδανικοί για word-of-mouth. || Κανάλια: Meta και YouTube για awareness, Display για reach, Email (owned) για VIP preview. || Αποτέλεσμα: Δημιουργία anticipation και viral engagement.'
     },
     loyal: {
-      primary: ['Email Launch Announcement', 'Social Teaser'],
-      secondary: ['App Push'],
-      budget_allocation: { email: 45, social: 35, push: 20 },
-      rationale: 'Build excitement within engaged base.'
+      primary: ['Meta Ads (Facebook/Instagram)', 'YouTube Ads'],
+      secondary: ['Google Display Network', 'Email Marketing'],
+      budget_allocation: { meta: 45, youtube: 35, display: 20 },
+      rationale: 'Πελάτες: Οι «Loyal» δημιουργούν buzz γύρω από νέα brands. || Κανάλια: Meta και YouTube για teaser campaigns, Email (owned) για launch announcements. || Αποτέλεσμα: Brand awareness στη βάση πελατών.'
     },
     potential: {
-      primary: ['Meta Awareness', 'YouTube Ads'],
-      secondary: ['Google Display'],
-      budget_allocation: { meta: 45, youtube: 35, google: 20 },
-      rationale: 'Broad awareness για new brand recognition.'
+      primary: ['Meta Ads (Facebook/Instagram)', 'YouTube Ads', 'Google Display Network'],
+      secondary: ['TikTok Ads', 'Content Marketing'],
+      budget_allocation: { meta: 40, youtube: 30, display: 20, tiktok: 10 },
+      rationale: 'Πελάτες: Οι «Potential» χρειάζονται broad awareness. || Κανάλια: Full awareness stack, Meta, YouTube, Display για maximum reach, TikTok για νεανικά κοινά. || Αποτέλεσμα: Ευρεία αναγνωρισιμότητα σε νέα κοινά.'
     },
     at_risk: {
-      primary: ['Email Re-engagement', 'Social Ads'],
-      secondary: ['Remarketing'],
-      budget_allocation: { email: 40, social: 40, remarketing: 20 },
-      rationale: 'New brand as re-engagement hook.'
+      primary: ['Meta Ads (Facebook/Instagram)', 'Dynamic Remarketing'],
+      secondary: ['Google Display Network', 'Email Marketing'],
+      budget_allocation: { meta: 45, remarketing: 30, display: 25 },
+      rationale: 'Πελάτες: Νέο brand ως ευκαιρία re-engagement. || Κανάλια: Meta για fresh positioning, Remarketing για υπενθύμιση. || Αποτέλεσμα: Re-engagement μέσω brand refresh.'
     },
     lost: {
-      primary: ['Display Awareness', 'Social Reach'],
-      secondary: ['Email'],
-      budget_allocation: { display: 50, social: 35, email: 15 },
-      rationale: 'Brand refresh opportunity.'
+      primary: ['Google Display Network', 'Meta Ads (Facebook/Instagram)'],
+      secondary: ['YouTube Ads', 'Email Marketing'],
+      budget_allocation: { display: 45, meta: 35, youtube: 20 },
+      rationale: 'Πελάτες: Brand refresh ως ευκαιρία επανασύνδεσης. || Κανάλια: Display και Meta για broad awareness. || Αποτέλεσμα: Brand recall σε χαμηλό κόστος.'
     }
   },
   revenue_push: {
     champions: {
-      primary: ['Email Premium Bundles', 'Loyalty Upsell'],
-      secondary: ['App Personalized'],
-      budget_allocation: { email: 40, loyalty: 35, app: 25 },
-      rationale: 'High AOV focus με premium recommendations.'
+      primary: ['Google Shopping', 'Google Search Ads', 'Meta Ads (Facebook/Instagram)'],
+      secondary: ['Dynamic Remarketing', 'Email Marketing'],
+      budget_allocation: { google_shopping: 35, google_search: 25, meta: 25, remarketing: 15 },
+      rationale: 'Πελάτες: Οι «Champions» έχουν υψηλό AOV, ιδανικοί για premium upselling. || Κανάλια: Google Shopping και Search για high-intent, Meta για lookalike audiences, Remarketing για repeat purchases, Email (owned) για premium bundles. || Αποτέλεσμα: Αύξηση εσόδων μέσω upselling σε high-value πελάτες.'
     },
     loyal: {
-      primary: ['Email Cross-sell', 'Google Shopping'],
-      secondary: ['Meta Dynamic'],
-      budget_allocation: { email: 40, google: 35, meta: 25 },
-      rationale: 'Volume push με category expansion.'
+      primary: ['Google Shopping', 'Meta Ads (Facebook/Instagram)'],
+      secondary: ['Google Search Ads', 'Email Marketing'],
+      budget_allocation: { google_shopping: 40, meta: 35, google_search: 25 },
+      rationale: 'Πελάτες: Οι «Loyal» αγοράζουν σταθερά, ιδανικοί για volume push. || Κανάλια: Google Shopping και Meta για category expansion, Email (owned) για cross-sell. || Αποτέλεσμα: Volume push μέσω category expansion.'
     },
     potential: {
-      primary: ['Google Shopping', 'Meta Conversion'],
-      secondary: ['Email Sequences'],
-      budget_allocation: { google: 45, meta: 35, email: 20 },
-      rationale: 'Aggressive acquisition για volume goals.'
+      primary: ['Google Shopping', 'Meta Ads (Facebook/Instagram)', 'Google Search Ads'],
+      secondary: ['Email Marketing', 'Content Marketing'],
+      budget_allocation: { google_shopping: 40, meta: 35, google_search: 25 },
+      rationale: 'Πελάτες: Οι «Potential» αποτελούν acquisition target. || Κανάλια: Aggressive paid mix, Google Shopping, Meta, Search για volume. || Αποτέλεσμα: Aggressive acquisition για revenue goals.'
     },
     at_risk: {
-      primary: ['Remarketing', 'Email Incentives'],
-      secondary: ['SMS Flash'],
-      budget_allocation: { remarketing: 45, email: 35, sms: 20 },
-      rationale: 'Incentive-driven reactivation για quick revenue.'
+      primary: ['Dynamic Remarketing', 'Meta Retargeting', 'Google Remarketing'],
+      secondary: ['Email Marketing', 'SMS Marketing'],
+      budget_allocation: { remarketing: 40, meta_retargeting: 35, google_remarketing: 25 },
+      rationale: 'Πελάτες: Οι «At Risk» χρειάζονται incentive-driven reactivation. || Κανάλια: Full remarketing stack με personalized offers, Email/SMS (owned) για flash deals. || Αποτέλεσμα: Quick revenue μέσω reactivation.'
     },
     lost: {
-      primary: ['Google Shopping', 'Display'],
-      secondary: ['Email'],
-      budget_allocation: { google: 50, display: 35, email: 15 },
-      rationale: 'Volume-focused broad targeting.'
+      primary: ['Google Shopping', 'Meta Ads (Facebook/Instagram)', 'Google Display Network'],
+      secondary: ['Google Search Ads', 'Email Marketing'],
+      budget_allocation: { google_shopping: 40, meta: 35, display: 25 },
+      rationale: 'Πελάτες: Volume-focused broad targeting. || Κανάλια: Paid channels για broad reach με aggressive offers. || Αποτέλεσμα: Volume sales μέσω ευρείας στόχευσης.'
     }
   }
 };

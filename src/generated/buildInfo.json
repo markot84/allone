@@ -1,10 +1,14 @@
 {
-  "version": "0.25.0",
-  "previousVersion": "0.24.0",
-  "commitHash": "2c5a596",
+  "version": "0.26.0",
+  "previousVersion": "0.25.0",
+  "commitHash": "24d1b4e",
   "branch": "main",
-  "buildDate": "2026-03-08T23:48:47.931Z",
+  "buildDate": "2026-03-09T00:00:30.646Z",
   "commits": [
+    {
+      "hash": "24d1b4e",
+      "message": "AI context: strategy vs activation tone, funnel 4-stage (Awareness/Consideration/Sales/Loyalty), rationale formatting"
+    },
     {
       "hash": "2c5a596",
       "message": "AI prompt: separate paid vs owned channels, budget only for paid media"
@@ -60,13 +64,10 @@
     {
       "hash": "acaf0ee",
       "message": "Refactor strategy UI: remove save button, move compare below cards, integrate duration in apply popup, fix segment wrapping and duration sync"
-    },
-    {
-      "hash": "04429d4",
-      "message": "fix: replace remaining blue #0969da with neutrals, fix strategy duration badge, preserve mixConfig on duration change"
     }
   ],
   "changes": [
+    "AI context: strategy vs activation tone, funnel 4-stage (Awareness/Consideration/Sales/Loyalty), rationale formatting",
     "AI prompt: separate paid vs owned channels, budget only for paid media",
     "UI: sidebar reorder, logo orange ring, marketing text update",
     "Budget management: monthly budget input, EUR allocation per channel, AI smart actions (increase/decrease/push)",
@@ -75,7 +76,6 @@
     "Refine value proposition tone: professional tagline aligned with NotTheSame brand",
     "Positioning and marketing refresh: new buyer persona, GTM strategy, marketing page rewrite",
     "[Διόρθωση] Remove unused AlertTriangle import",
-    "AI Insights refinement, seasonal banner neutral, Inventory blue restore",
-    "Strategy Package (PDF + Link), sidebar redesign, brand icon, UI refinements"
+    "AI Insights refinement, seasonal banner neutral, Inventory blue restore"
   ]
 }

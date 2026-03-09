@@ -4,6 +4,7 @@ import { FirestoreService } from '../services/firestore';
 import { useBrand } from './useBrand';
 import { scenarios } from '../data';
 import { useMemo } from 'react';
+import type { ChannelRecommendation } from '../types';
 
 export interface MixConfig {
   scenarioA: string;
@@ -24,6 +25,7 @@ export interface ActiveStrategy {
   implementedAt?: string;
   mixConfig?: MixConfig;
   monthlyBudget?: number;
+  channelRecommendation?: ChannelRecommendation;
   createdAt: string;
   updatedAt: string;
 }
@@ -180,6 +182,22 @@ export function useActiveStrategy() {
     },
   });
 
+  const saveRecommendation = useMutation({
+    mutationFn: async (recommendation: ChannelRecommendation) => {
+      if (!activeStrategy?.id || !brandId) throw new Error('No active strategy');
+      const now = new Date().toISOString();
+      await FirestoreService.setDocument('active_strategies', activeStrategy.id, {
+        ...activeStrategy,
+        channelRecommendation: recommendation,
+        updatedAt: now,
+      } as Record<string, unknown>);
+      return { ...activeStrategy, channelRecommendation: recommendation, updatedAt: now };
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(['activeStrategy', brandId], updated);
+    },
+  });
+
   const getStrategyName = (scenarioId: string) => {
     const scenario = scenarios.find(s => s.id === scenarioId);
     return scenario?.name || 'Custom Strategy';
@@ -213,6 +231,7 @@ export function useActiveStrategy() {
     isSaving: saveActiveStrategy.isPending,
     updateBudget: updateBudget.mutateAsync,
     isSavingBudget: updateBudget.isPending,
+    saveRecommendation: saveRecommendation.mutateAsync,
     getStrategyName,
   };
 }

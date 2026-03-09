@@ -171,7 +171,7 @@ export function WeightConfigurator() {
   const { products, hasImported } = useProducts();
   const { segments: rfmSegments } = useSegments();
   const { user } = useAuth();
-  const { activeStrategy, saveActiveStrategy, isLoading: strategyLoading } = useActiveStrategy();
+  const { activeStrategy, saveActiveStrategy, saveRecommendation, isLoading: strategyLoading } = useActiveStrategy();
   const toast = useToast();
   
   // Initialize from active strategy if available, otherwise no default
@@ -640,6 +640,13 @@ export function WeightConfigurator() {
     })),
     useAI: true
   });
+
+  // Auto-save AI recommendation to active strategy when it changes
+  useEffect(() => {
+    if (aiRecommendation && isAIGenerated && activeStrategy?.id && !activeStrategy.id.startsWith('default_')) {
+      saveRecommendation(aiRecommendation).catch(() => {});
+    }
+  }, [aiRecommendation, isAIGenerated, activeStrategy?.id]);
 
   // Load saved strategy from Firestore on mount/refresh
   useEffect(() => {
