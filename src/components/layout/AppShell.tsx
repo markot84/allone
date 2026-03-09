@@ -425,7 +425,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
       const items: NavItem[] = [
         { id: 'brands', label: 'Τα Brands μου', icon: Building2 },
         { id: 'dashboard', label: 'Dashboard', icon: HomeIcon },
-        { id: 'roi', label: 'ROI', icon: GraphIcon },
+        { id: 'roi', label: 'ROI & Απόδοση', icon: GraphIcon },
         { id: 'products', label: 'Product Intelligence', icon: PackageIcon },
         { id: 'rfm', label: 'Data Analysis', icon: OrganizationIcon },
         { id: 'strategy', label: 'Commercial Strategy', icon: GraphIcon, ...(strategyBadge ? { badge: strategyBadge.text, badgeColor: strategyBadge.color } : {}) },

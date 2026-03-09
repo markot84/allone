@@ -1,10 +1,14 @@
 {
-  "version": "0.29.17",
-  "previousVersion": "0.29.16",
-  "commitHash": "25bd8a3",
+  "version": "0.29.18",
+  "previousVersion": "0.29.17",
+  "commitHash": "853e4a8",
   "branch": "main",
-  "buildDate": "2026-03-09T10:39:18.359Z",
+  "buildDate": "2026-03-09T10:51:30.459Z",
   "commits": [
+    {
+      "hash": "853e4a8",
+      "message": "Fix AI save flow, add ROI metric with visual emphasis, improve strategy prompt"
+    },
     {
       "hash": "25bd8a3",
       "message": "ROI sidebar tab: rename to ROI & Apodosi, add NEW badge with emphasis"
@@ -60,13 +64,10 @@
     {
       "hash": "2c5a596",
       "message": "AI prompt: separate paid vs owned channels, budget only for paid media"
-    },
-    {
-      "hash": "e035b99",
-      "message": "UI: sidebar reorder, logo orange ring, marketing text update"
     }
   ],
   "changes": [
+    "Fix AI save flow, add ROI metric with visual emphasis, improve strategy prompt",
     "ROI sidebar tab: rename to ROI & Apodosi, add NEW badge with emphasis",
     "Strategy prompt: mandatory bullet format, remove brevity language",
     "Fix race condition in AI saves (updateDocument), improve strategy prompt with example",
@@ -75,7 +76,6 @@
     "AI analyses run only on strategy save, not on page refresh",
     "Channel Activation requires saved strategy, rich AI context, ROI dashboard tab with ROAS badge",
     "Update build info",
-    "Fix strategy sync, ROI chart, dashboard tabs, AI context richness",
-    "ROI page rebuild: remove all fabricated data, real-data-only dashboard"
+    "Fix strategy sync, ROI chart, dashboard tabs, AI context richness"
   ]
 }
