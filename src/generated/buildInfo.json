@@ -1,10 +1,14 @@
 {
-  "version": "0.29.14",
-  "previousVersion": "0.29.13",
-  "commitHash": "a0f2803",
+  "version": "0.29.15",
+  "previousVersion": "0.29.14",
+  "commitHash": "1a5513b",
   "branch": "main",
-  "buildDate": "2026-03-09T10:12:38.641Z",
+  "buildDate": "2026-03-09T10:26:49.832Z",
   "commits": [
+    {
+      "hash": "1a5513b",
+      "message": "Strategy prompt: mandatory bullet format, remove brevity language"
+    },
     {
       "hash": "a0f2803",
       "message": "Fix race condition in AI saves (updateDocument), improve strategy prompt with example"
@@ -60,13 +64,10 @@
     {
       "hash": "4345982",
       "message": "Budget management: monthly budget input, EUR allocation per channel, AI smart actions (increase/decrease/push)"
-    },
-    {
-      "hash": "1338329",
-      "message": "Revert MarketingIndexPage to pre-rewrite state"
     }
   ],
   "changes": [
+    "Strategy prompt: mandatory bullet format, remove brevity language",
     "Fix race condition in AI saves (updateDocument), improve strategy prompt with example",
     "Force AI on strategy save, fix activation generation, adjust prompt length",
     "Dual AI recommendations: short for strategy, detailed for activation",
@@ -75,7 +76,6 @@
     "Update build info",
     "Fix strategy sync, ROI chart, dashboard tabs, AI context richness",
     "ROI page rebuild: remove all fabricated data, real-data-only dashboard",
-    "Sidebar nav reorder: Data > Strategy > Execution > Reporting flow",
-    "Sync channels: Strategy saves AI recommendations to Firestore, Channel Activation reads from saved data. Fixed static fallback to paid-only budget allocation."
+    "Sidebar nav reorder: Data > Strategy > Execution > Reporting flow"
   ]
 }
