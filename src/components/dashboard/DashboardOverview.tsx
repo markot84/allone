@@ -309,28 +309,36 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               />
             );
           })()}
-          {/* 6. ROI — the primary metric of the whole app */}
+          {/* 6. ROI — the primary metric */}
           {hasCampaigns && (() => {
             const roiPercent = campaignMetrics.totalSpend > 0
               ? ((campaignMetrics.totalRevenue - campaignMetrics.totalSpend) / campaignMetrics.totalSpend) * 100
               : 0;
             return (
-              <div className="relative" onClick={() => onSectionChange?.('roi')}>
-                {roiPercent > 0 && (
-                  <div className="absolute -top-1 -right-1 z-10 w-3 h-3 rounded-full bg-[var(--nts-accent)] animate-pulse" />
-                )}
-                <KPICard
-                  kpi={{
-                    label: 'ROI',
-                    value: roiPercent > 0 ? `+${formatNumber(roiPercent, 0)}%` : '—',
-                    changeLabel: roiPercent > 0 ? `κέρδος ανά €1 διαφήμισης` : undefined,
-                    trend: 'up' as const,
-                    sparklineData: []
-                  }}
-                  index={5}
-                  className="ring-2 ring-[var(--nts-accent)]/30 shadow-lg"
-                />
-              </div>
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.25 }}
+                className="h-full cursor-pointer"
+                onClick={() => onSectionChange?.('roi')}
+              >
+                <div className="h-full rounded-2xl bg-gradient-to-br from-[#1A1A1A] to-[#2D2D2D] p-5 flex flex-col justify-between text-white shadow-xl hover:shadow-2xl transition-shadow">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-white/60">ROI</span>
+                    <div className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center">
+                      <TrendingUp size={14} className="text-[var(--nts-accent)]" />
+                    </div>
+                  </div>
+                  <div className="mt-3">
+                    <p className="text-3xl font-bold tracking-tight font-mono">
+                      {roiPercent > 0 ? `+${formatNumber(roiPercent, 0)}%` : '—'}
+                    </p>
+                    <p className="text-[11px] text-white/50 mt-1">
+                      {roiPercent > 0 ? 'return on investment' : 'χωρίς δεδομένα'}
+                    </p>
+                  </div>
+                </div>
+              </motion.div>
             );
           })()}
         </div>

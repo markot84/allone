@@ -196,36 +196,69 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
         </div>
       )}
 
-      {/* Section 1: Key Metrics */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard
-          icon={<Euro size={20} />}
-          label="Συνολικά Έσοδα"
-          value={formatCurrencyCompact(totalRevenue)}
-          subtitle={hasOrganic && hasCampaigns ? 'Organic + Campaigns' : hasOrganic ? 'Organic' : 'Campaigns'}
-          color="var(--nts-charcoal)"
-        />
-        <MetricCard
-          icon={<Wallet size={20} />}
-          label="Ad Spend"
-          value={formatCurrencyCompact(metrics.totalSpend)}
-          subtitle={`${campaignsTyped.length} campaigns`}
-          color="#EF4444"
-        />
-        <MetricCard
-          icon={<TrendingUp size={20} />}
-          label="ROAS"
-          value={metrics.roas > 0 ? `${formatNumber(metrics.roas, 2)}x` : '—'}
-          subtitle="Μέσος σταθμισμένος"
-          color="#22C55E"
-        />
-        <MetricCard
-          icon={<ShoppingCart size={20} />}
-          label="Conversions"
-          value={formatNumber(metrics.totalConversions)}
-          subtitle={metrics.cpa > 0 ? `CPA: €${formatNumber(metrics.cpa, 2)}` : ''}
-          color="var(--nts-accent)"
-        />
+      {/* ROI Hero + Key Metrics */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+        {/* ROI Hero Card */}
+        {(() => {
+          const roiPercent = metrics.totalSpend > 0
+            ? ((metrics.totalRevenue - metrics.totalSpend) / metrics.totalSpend) * 100
+            : 0;
+          const profit = metrics.totalRevenue - metrics.totalSpend;
+          return (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="lg:col-span-1 rounded-2xl bg-gradient-to-br from-[#1A1A1A] to-[#2D2D2D] p-6 flex flex-col justify-between text-white shadow-xl"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-white/50">Return on Investment</span>
+                <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
+                  <TrendingUp size={16} className="text-[var(--nts-accent)]" />
+                </div>
+              </div>
+              <p className="text-4xl font-bold tracking-tight font-mono mb-1">
+                {roiPercent > 0 ? `+${formatNumber(roiPercent, 0)}%` : '—'}
+              </p>
+              {profit > 0 && (
+                <p className="text-[12px] text-white/40 mt-1">
+                  Κέρδος {formatCurrencyCompact(profit)} σε {formatCurrencyCompact(metrics.totalSpend)} spend
+                </p>
+              )}
+            </motion.div>
+          );
+        })()}
+
+        {/* 4 Metric Cards */}
+        <div className="lg:col-span-4 grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <MetricCard
+            icon={<Euro size={20} />}
+            label="Συνολικά Έσοδα"
+            value={formatCurrencyCompact(totalRevenue)}
+            subtitle={hasOrganic && hasCampaigns ? 'Organic + Campaigns' : hasOrganic ? 'Organic' : 'Campaigns'}
+            color="var(--nts-charcoal)"
+          />
+          <MetricCard
+            icon={<Wallet size={20} />}
+            label="Ad Spend"
+            value={formatCurrencyCompact(metrics.totalSpend)}
+            subtitle={`${campaignsTyped.length} campaigns`}
+            color="#EF4444"
+          />
+          <MetricCard
+            icon={<TrendingUp size={20} />}
+            label="ROAS"
+            value={metrics.roas > 0 ? `${formatNumber(metrics.roas, 2)}x` : '—'}
+            subtitle="Μέσος σταθμισμένος"
+            color="#22C55E"
+          />
+          <MetricCard
+            icon={<ShoppingCart size={20} />}
+            label="Conversions"
+            value={formatNumber(metrics.totalConversions)}
+            subtitle={metrics.cpa > 0 ? `CPA: €${formatNumber(metrics.cpa, 2)}` : ''}
+            color="var(--nts-accent)"
+          />
+        </div>
       </div>
 
       {/* Section 2: Revenue Trend */}

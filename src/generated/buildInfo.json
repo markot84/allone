@@ -1,10 +1,14 @@
 {
-  "version": "0.29.19",
-  "previousVersion": "0.29.18",
-  "commitHash": "cdc6036",
+  "version": "0.29.20",
+  "previousVersion": "0.29.19",
+  "commitHash": "5356687",
   "branch": "main",
-  "buildDate": "2026-03-09T10:56:10.986Z",
+  "buildDate": "2026-03-09T11:09:43.814Z",
   "commits": [
+    {
+      "hash": "5356687",
+      "message": "Fix static fallback showing instead of AI result after strategy save"
+    },
     {
       "hash": "cdc6036",
       "message": "Remove NEW badge from ROI sidebar item"
@@ -60,13 +64,10 @@
     {
       "hash": "adfacb6",
       "message": "Sync channels: Strategy saves AI recommendations to Firestore, Channel Activation reads from saved data. Fixed static fallback to paid-only budget allocation."
-    },
-    {
-      "hash": "24d1b4e",
-      "message": "AI context: strategy vs activation tone, funnel 4-stage (Awareness/Consideration/Sales/Loyalty), rationale formatting"
     }
   ],
   "changes": [
+    "Fix static fallback showing instead of AI result after strategy save",
     "Remove NEW badge from ROI sidebar item",
     "Fix AI save flow, add ROI metric with visual emphasis, improve strategy prompt",
     "ROI sidebar tab: rename to ROI & Apodosi, add NEW badge with emphasis",
@@ -75,7 +76,6 @@
     "Force AI on strategy save, fix activation generation, adjust prompt length",
     "Dual AI recommendations: short for strategy, detailed for activation",
     "AI analyses run only on strategy save, not on page refresh",
-    "Channel Activation requires saved strategy, rich AI context, ROI dashboard tab with ROAS badge",
-    "Update build info"
+    "Channel Activation requires saved strategy, rich AI context, ROI dashboard tab with ROAS badge"
   ]
 }
