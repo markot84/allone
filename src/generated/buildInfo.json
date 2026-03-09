@@ -1,10 +1,14 @@
 {
-  "version": "0.29.12",
-  "previousVersion": "0.29.11",
-  "commitHash": "a33698b",
+  "version": "0.29.14",
+  "previousVersion": "0.29.13",
+  "commitHash": "a0f2803",
   "branch": "main",
-  "buildDate": "2026-03-09T10:00:58.084Z",
+  "buildDate": "2026-03-09T10:12:38.641Z",
   "commits": [
+    {
+      "hash": "a0f2803",
+      "message": "Fix race condition in AI saves (updateDocument), improve strategy prompt with example"
+    },
     {
       "hash": "a33698b",
       "message": "Force AI on strategy save, fix activation generation, adjust prompt length"
@@ -60,13 +64,10 @@
     {
       "hash": "1338329",
       "message": "Revert MarketingIndexPage to pre-rewrite state"
-    },
-    {
-      "hash": "8628840",
-      "message": "Channel Activation upgrade: AI briefs, per-channel status (Firestore), agency brief export"
     }
   ],
   "changes": [
+    "Fix race condition in AI saves (updateDocument), improve strategy prompt with example",
     "Force AI on strategy save, fix activation generation, adjust prompt length",
     "Dual AI recommendations: short for strategy, detailed for activation",
     "AI analyses run only on strategy save, not on page refresh",
@@ -75,7 +76,6 @@
     "Fix strategy sync, ROI chart, dashboard tabs, AI context richness",
     "ROI page rebuild: remove all fabricated data, real-data-only dashboard",
     "Sidebar nav reorder: Data > Strategy > Execution > Reporting flow",
-    "Sync channels: Strategy saves AI recommendations to Firestore, Channel Activation reads from saved data. Fixed static fallback to paid-only budget allocation.",
-    "AI context: strategy vs activation tone, funnel 4-stage (Awareness/Consideration/Sales/Loyalty), rationale formatting"
+    "Sync channels: Strategy saves AI recommendations to Firestore, Channel Activation reads from saved data. Fixed static fallback to paid-only budget allocation."
   ]
 }

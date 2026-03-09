@@ -202,16 +202,17 @@ ${segmentMapSection}
 - Στο "Αποτέλεσμα": Δώσε εκτιμώμενα KPIs ανά κανάλι (target ROAS, expected CPA range, conversion rate benchmarks). Πρότεινε testing framework (A/B tests, creative rotation).
 - Ο τόνος είναι σαν ένα brief που στέλνει ο CMO στο agency.` : `
 
-ΠΛΑΙΣΙΟ: Αυτή η ανάλυση εμφανίζεται στη σελίδα COMMERCIAL STRATEGY και τη βλέπει ο ΙΔΙΟΚΤΗΤΗΣ της επιχείρησης. Γράψε κατανοητά, σαν executive summary.
+ΠΛΑΙΣΙΟ: Αυτή η ανάλυση εμφανίζεται στη σελίδα COMMERCIAL STRATEGY και τη βλέπει ο ΙΔΙΟΚΤΗΤΗΣ της επιχείρησης.
 
-ΑΚΟΛΟΥΘΗΣΕ ΑΥΤΟ ΤΟ FORMAT ΑΚΡΙΒΩΣ (με bullets, newlines, 1-2 προτάσεις ανά bullet):
+ΥΠΟΧΡΕΩΤΙΚΟ FORMAT — ακολούθησε ΑΚΡΙΒΩΣ αυτή τη δομή:
 
-Παράδειγμα rationale:
-"Πελάτες: Οι «Champions» είναι οι πιο πιστοί και κερδοφόροι πελάτες σας. Αγοράζουν τακτικά και ξοδεύουν πάνω από τον μέσο όρο.\n• «Loyal Customers»: πιστοί πελάτες με σταθερές αγορές, ιδανικοί για cross-selling\n• «Promising»: νέοι πελάτες με δυναμική, κατάλληλοι για στοχευμένες προσφορές || Κανάλια: Η στρατηγική απαιτεί εστίαση σε κανάλια υψηλής πρόθεσης αγοράς:\n• Google Shopping: προβάλλει τα προϊόντα σας σε όσους ψάχνουν ενεργά, με υψηλή απόδοση\n• Google Search Ads: στοχεύει πελάτες που αναζητούν συγκεκριμένα προϊόντα ή κατηγορίες\n• Meta Ads: προσεγγίζει νέα κοινά μέσω Facebook/Instagram με βάση ενδιαφέροντα και συμπεριφορά\n• Dynamic Remarketing: υπενθυμίζει προϊόντα σε πελάτες που επισκέφθηκαν το site χωρίς να αγοράσουν\n• Email Marketing: ενισχύει τη σχέση με υπάρχοντες πελάτες μέσω εξατομικευμένων προτάσεων || Αποτέλεσμα: Αναμενόμενα αποτελέσματα:\n• Αύξηση μέσης αξίας παραγγελίας μέσω cross-selling στους καλύτερους πελάτες\n• Βελτίωση απόδοσης διαφήμισης (ROAS) με εστίαση σε κανάλια υψηλής πρόθεσης\n• Μείωση κόστους απόκτησης πελάτη μέσω remarketing"
+"Πελάτες: [Εισαγωγή 1-2 προτάσεις για το κύριο segment]\n• «Segment A»: [1-2 προτάσεις ποιοι είναι και γιατί ταιριάζουν]\n• «Segment B»: [1-2 προτάσεις]\n• «Segment C»: [1-2 προτάσεις] || Κανάλια: [Εισαγωγή 1 πρόταση για τη στρατηγική λογική]\n• [Κανάλι 1]: [1-2 προτάσεις σε απλά ελληνικά, τι κάνει και γιατί χρειάζεται]\n• [Κανάλι 2]: [1-2 προτάσεις]\n• [Κανάλι 3]: [1-2 προτάσεις]\n• [Κανάλι 4]: [1-2 προτάσεις]\n• [Κανάλι 5]: [1-2 προτάσεις] || Αποτέλεσμα: Τι αναμένουμε:\n• [αποτέλεσμα 1, 1 πρόταση]\n• [αποτέλεσμα 2, 1 πρόταση]\n• [αποτέλεσμα 3, 1 πρόταση]"
 
-ΚΑΝΟΝΕΣ:
-- ΚΑΘΕ section ΠΡΕΠΕΙ να έχει 3-5 bullets με "• " μπροστά, χωρισμένα με \\n
-- Κάθε bullet πρέπει να είναι 1-2 ολοκληρωμένες προτάσεις (ΟΧΙ λίγες λέξεις)
-- Γράψε σε απλά ελληνικά. Εξήγησε τους αγγλικούς όρους (π.χ. "remarketing, δηλαδή επαναστόχευση")
-- Ο τόνος πρέπει να είναι στρατηγικός αλλά κατανοητός από μη-τεχνικό κοινό`}${totalBudget ? `\n\nΜΗΝΙΑΙΟ BUDGET: €${totalBudget.toLocaleString('el-GR')}\nΛάβε υπόψη αυτό το budget στην κατανομή. Στο "actions" πρότεινε συγκεκριμένες ενέργειες budget management βάσει στρατηγικής.` : ''}${campaignPerformance && campaignPerformance.length > 0 ? `\n\nΠΡΑΓΜΑΤΙΚΑ CAMPAIGN PERFORMANCE DATA:\n${campaignPerformance.map(c => `- ${c.channel}: Spent €${c.spent.toLocaleString('el-GR', { maximumFractionDigits: 0 })}, ROAS ${c.roas.toFixed(1)}x, Conversions ${c.conversions}, CTR ${c.ctr.toFixed(1)}%`).join('\n')}\nΑνάλυσε τα δεδομένα performance και δώσε actionable recommendations στο "actions" (increase/decrease/push/pause/maintain για κάθε κανάλι).` : ''}`;
+ΑΠΑΙΤΗΣΕΙΣ:
+- ΚΑΘΕ section ΠΡΕΠΕΙ να περιέχει ΤΟΥΛΑΧΙΣΤΟΝ 3 bullets με "• " (U+2022 + space)
+- ΠΟΤΕ μην γράψεις ένα section σε μία μόνο πρόταση χωρίς bullets. ΠΑΝΤΑ χρησιμοποίησε bullets
+- Τα bullets χωρίζονται με \\n (newline)
+- Γράψε σε απλά ελληνικά χωρίς jargon. Εξήγησε αγγλικούς όρους (π.χ. "remarketing, δηλαδή επαναστόχευση πελατών")
+- Μην χρησιμοποιείς τεχνικούς όρους χωρίς εξήγηση (ROAS → "απόδοση διαφήμισης", CPA → "κόστος ανά πελάτη")
+- ΔΕΝ θέλουμε τεχνικές οδηγίες υλοποίησης (bidding strategy, ad formats κλπ). Μόνο τη ΛΟΓΙΚΗ και το ΓΙΑΤΙ`}${totalBudget ? `\n\nΜΗΝΙΑΙΟ BUDGET: €${totalBudget.toLocaleString('el-GR')}\nΛάβε υπόψη αυτό το budget στην κατανομή. Στο "actions" πρότεινε συγκεκριμένες ενέργειες budget management βάσει στρατηγικής.` : ''}${campaignPerformance && campaignPerformance.length > 0 ? `\n\nΠΡΑΓΜΑΤΙΚΑ CAMPAIGN PERFORMANCE DATA:\n${campaignPerformance.map(c => `- ${c.channel}: Spent €${c.spent.toLocaleString('el-GR', { maximumFractionDigits: 0 })}, ROAS ${c.roas.toFixed(1)}x, Conversions ${c.conversions}, CTR ${c.ctr.toFixed(1)}%`).join('\n')}\nΑνάλυσε τα δεδομένα performance και δώσε actionable recommendations στο "actions" (increase/decrease/push/pause/maintain για κάθε κανάλι).` : ''}`;
 }
