@@ -126,7 +126,7 @@ export function useAIChannelRecommendations({
     error: aiError,
     refetch
   } = useQuery({
-    queryKey: ['aiChannelRecommendations', 'v7', selectedScenarioId, selectedSegmentId, fitLevel, aiEnabled, mixConfig?.scenarioA, mixConfig?.scenarioB, mixConfig?.percentA, brandContext?.brandName, totalBudget, context],
+    queryKey: ['aiChannelRecommendations', 'v8', selectedScenarioId, selectedSegmentId, fitLevel, aiEnabled, mixConfig?.scenarioA, mixConfig?.scenarioB, mixConfig?.percentA, brandContext?.brandName, totalBudget, context],
     queryFn: async () => {
       if (!scenario || !segment || !aiEnabled) return null;
       return generateChannelRecommendations({

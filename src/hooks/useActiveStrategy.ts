@@ -41,46 +41,27 @@ export function useActiveStrategy() {
       if (!brandId) return null;
       
       try {
-        // Get active strategy for this brand
         const strategies = await FirestoreService.getDocuments<ActiveStrategy>(
           'active_strategies',
           [orderBy('updatedAt', 'desc')],
           brandId
         );
         
-        // Helper to get timestamp for sorting (prefer updatedAt, fallback to ID which contains Date.now())
+        if (strategies.length === 0) return null;
+
         const getTime = (s: ActiveStrategy) => {
           const u = s.updatedAt;
           if (u) {
             if (typeof u === 'string') return new Date(u).getTime();
             if (typeof (u as any)?.toMillis === 'function') return (u as any).toMillis();
           }
-          // Fallback: parse timestamp from id (format: strategy_brandId_1234567890)
           const match = s.id?.match(/_(\d+)$/);
           return match ? parseInt(match[1], 10) : 0;
         };
 
-        // Return the most recent implementing or approved strategy
-        const implementing = strategies.filter(s => s.approvalStatus === 'implementing');
-        if (implementing.length > 0) {
-          const mostRecent = implementing.sort((a, b) => getTime(b) - getTime(a))[0];
-          return mostRecent;
-        }
-        
-        const approved = strategies.filter(s => s.approvalStatus === 'approved');
-        if (approved.length > 0) {
-          const mostRecent = approved.sort((a, b) => getTime(b) - getTime(a))[0];
-          return mostRecent;
-        }
-        
-        // If no implementing/approved, return the most recent draft
-        const drafts = strategies.filter(s => s.approvalStatus === 'draft');
-        if (drafts.length > 0) {
-          const sorted = [...drafts].sort((a, b) => getTime(b) - getTime(a));
-          return sorted[0];
-        }
-        
-        return null;
+        // Always return the most recently updated strategy
+        const sorted = [...strategies].sort((a, b) => getTime(b) - getTime(a));
+        return sorted[0];
       } catch (error: any) {
         // If index is building, return null (will use fallback)
         // This allows saves to work even if query fails
@@ -185,13 +166,16 @@ export function useActiveStrategy() {
   const saveRecommendation = useMutation({
     mutationFn: async (recommendation: ChannelRecommendation) => {
       if (!activeStrategy?.id || !brandId) throw new Error('No active strategy');
+      if (activeStrategy.id.startsWith('default_')) throw new Error('Cannot save to default strategy');
       const now = new Date().toISOString();
+      // Clean recommendation to remove undefined values that Firestore rejects
+      const cleanRec = JSON.parse(JSON.stringify(recommendation));
       await FirestoreService.setDocument('active_strategies', activeStrategy.id, {
         ...activeStrategy,
-        channelRecommendation: recommendation,
+        channelRecommendation: cleanRec,
         updatedAt: now,
       } as Record<string, unknown>);
-      return { ...activeStrategy, channelRecommendation: recommendation, updatedAt: now };
+      return { ...activeStrategy, channelRecommendation: cleanRec, updatedAt: now };
     },
     onSuccess: (updated) => {
       queryClient.setQueryData(['activeStrategy', brandId], updated);

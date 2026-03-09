@@ -342,13 +342,21 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             </button>
             <button
               onClick={() => setActiveTab('roi')}
-              className={`flex-1 px-6 py-3 text-sm font-medium transition-colors ${
+              className={`flex-1 px-6 py-3 text-sm font-medium transition-colors relative ${
                 activeTab === 'roi'
                   ? 'text-[var(--nts-charcoal)] border-b-2 border-[var(--nts-accent)]'
                   : 'text-[var(--nts-medium-gray)] hover:text-[var(--nts-charcoal)]'
               }`}
             >
-              ROI Attribution
+              <span className="flex items-center justify-center gap-2">
+                <TrendingUp size={15} className={activeTab === 'roi' ? 'text-[var(--nts-accent)]' : 'text-[var(--nts-medium-gray)]'} />
+                ROI & Απόδοση
+                {hasCampaigns && campaignMetrics.roas > 0 && (
+                  <span className="ml-1 px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-[var(--nts-accent)] text-white leading-none">
+                    {formatNumber(campaignMetrics.roas, 1)}x
+                  </span>
+                )}
+              </span>
             </button>
           </div>
         </Card>

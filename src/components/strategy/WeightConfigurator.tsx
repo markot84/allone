@@ -306,7 +306,7 @@ export function WeightConfigurator() {
       scenarioId: scenarioId,
       weights: newWeights,
       duration: saveDuration,
-      approvalStatus: 'draft',
+      approvalStatus: 'implementing',
       approvedBy: user.email || user.displayName || 'User',
     }).then(() => {
       toast.success(`Στρατηγική "${scenarioName}" αποθηκεύτηκε`);
@@ -333,7 +333,7 @@ export function WeightConfigurator() {
       scenarioId: 'mixed',
       weights: blendedWeights,
       duration: duration,
-      approvalStatus: 'draft',
+      approvalStatus: 'implementing',
       approvedBy: user.email || user.displayName || 'User',
       mixConfig: config,
     } as any).then(() => {
@@ -362,7 +362,7 @@ export function WeightConfigurator() {
       scenarioId: 'mixed',
       weights: blended,
       duration,
-      approvalStatus: 'draft',
+      approvalStatus: 'implementing',
       approvedBy: user.email || user.displayName || 'User',
       mixConfig: config,
     } as any).then(() => {
@@ -380,7 +380,7 @@ export function WeightConfigurator() {
       scenarioId: 'seasonal_discount',
       weights,
       duration,
-      approvalStatus: 'draft',
+      approvalStatus: 'implementing',
       approvedBy: user.email || user.displayName || 'User',
       seasonalDiscount: config,
     } as any).catch(() => {});
@@ -644,9 +644,11 @@ export function WeightConfigurator() {
   // Auto-save AI recommendation to active strategy when it changes
   useEffect(() => {
     if (aiRecommendation && isAIGenerated && activeStrategy?.id && !activeStrategy.id.startsWith('default_')) {
-      saveRecommendation(aiRecommendation).catch(() => {});
+      saveRecommendation(aiRecommendation).catch((err) => {
+        console.error('[WeightConfigurator] Failed to save AI recommendation:', err);
+      });
     }
-  }, [aiRecommendation, isAIGenerated, activeStrategy?.id]);
+  }, [aiRecommendation, isAIGenerated, activeStrategy?.id, saveRecommendation]);
 
   // Load saved strategy from Firestore on mount/refresh
   useEffect(() => {

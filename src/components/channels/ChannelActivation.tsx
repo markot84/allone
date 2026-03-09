@@ -37,7 +37,9 @@ import {
 } from 'recharts';
 import { Card, CardHeader, Badge, Button, Spinner } from '../common';
 import { useToast } from '../common/Toast';
-import { useProducts, useCampaigns, useBrand, useActiveStrategy, useChannelActivations } from '../../hooks';
+import { useProducts, useCampaigns, useBrand, useActiveStrategy, useChannelActivations, useSegments } from '../../hooks';
+import { useAIChannelRecommendations } from '../../hooks/useAIChannelRecommendations';
+import { rankSegments } from '../../utils/segmentRelevance';
 import { getStockAgeDays } from '../../utils/productUtils';
 import { safeBrandName } from '../../services/reportExport';
 import { formatCurrency, formatNumber, formatPercent, formatMultiplier } from '../../utils/format';
@@ -132,7 +134,8 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   const { currentBrand } = useBrand();
   const { products, count: productsCount } = useProducts();
   const { campaigns, isLoading: campaignsLoading, hasImported: hasCampaigns } = useCampaigns();
-  const { activeStrategy, getStrategyName, updateBudget, isSavingBudget } = useActiveStrategy();
+  const { activeStrategy, getStrategyName, updateBudget, isSavingBudget, saveRecommendation } = useActiveStrategy();
+  const { segments: rfmSegments } = useSegments();
   const toast = useToast();
 
   const historyChartRef = useRef<HTMLDivElement>(null);
@@ -149,10 +152,89 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   const strategyId = activeStrategy?.id ?? null;
   const scenarioId = activeStrategy?.scenarioId ?? null;
 
-  // Use the saved recommendation from the active strategy (synced from Commercial Strategy)
+  // Saved recommendation from Firestore
   const savedRecommendation = activeStrategy?.channelRecommendation ?? null;
-  const aiRecommendation = savedRecommendation;
-  const aiLoading = false;
+
+  // AI fallback: generate if no saved recommendation exists
+  const needsAI = !!scenarioId && !savedRecommendation && !activeStrategy?.id?.startsWith('default_');
+  const firstSegmentId = rfmSegments.length > 0 ? rfmSegments[0].id : '';
+
+  const strategyWeights = useMemo(() => {
+    const sc = scenarios.find(s => s.id === scenarioId);
+    return sc?.weights ?? {};
+  }, [scenarioId]);
+
+  const rankedSegments = useMemo(
+    () => rankSegments(rfmSegments, strategyWeights),
+    [rfmSegments, strategyWeights]
+  );
+
+  const topCategories = useMemo(
+    () => [...new Set(products.map(p => p.category).filter(Boolean))].slice(0, 5),
+    [products]
+  );
+
+  const campaignPerfForAI = useMemo(() => {
+    if (!hasCampaigns || campaigns.length === 0) return undefined;
+    const channelStats: Record<string, { spent: number; convValue: number; conversions: number; impressions: number; clicks: number }> = {};
+    (campaigns as Campaign[]).forEach(c => {
+      const ch = c.channel || 'Other';
+      if (!channelStats[ch]) channelStats[ch] = { spent: 0, convValue: 0, conversions: 0, impressions: 0, clicks: 0 };
+      const s = channelStats[ch];
+      s.spent += c.amount_spent || 0;
+      s.convValue += c.conversion_value || 0;
+      s.conversions += c.conversions || 0;
+      s.impressions += c.impressions || 0;
+      s.clicks += c.clicks || 0;
+    });
+    return Object.entries(channelStats).map(([channel, s]) => ({
+      channel,
+      spent: s.spent,
+      roas: s.spent > 0 ? s.convValue / s.spent : 0,
+      conversions: s.conversions,
+      ctr: s.impressions > 0 ? (s.clicks / s.impressions) * 100 : 0,
+    }));
+  }, [campaigns, hasCampaigns]);
+
+  const {
+    recommendation: aiFallback,
+    isLoading: aiFallbackLoading,
+    isAIGenerated,
+  } = useAIChannelRecommendations({
+    selectedScenarioId: needsAI ? scenarioId : null,
+    segments: rfmSegments,
+    selectedSegmentId: firstSegmentId,
+    fitLevel: rankedSegments.length > 0 ? rankedSegments[0].fit : 'good',
+    brandContext: currentBrand ? {
+      brandName: currentBrand.name,
+      brandType: currentBrand.type,
+      topCategories,
+    } : null,
+    segmentFitList: rankedSegments.map(rs => ({
+      name: rs.segment.name,
+      fit: rs.fit,
+      description: rs.segment.description,
+      count: rs.segment.count,
+      revenueShare: rs.segment.revenue_share,
+    })),
+    totalBudget: monthlyBudget ?? undefined,
+    campaignPerformance: campaignPerfForAI,
+    useAI: needsAI,
+    context: 'activation',
+  });
+
+  // Use saved first, then AI fallback
+  const aiRecommendation = savedRecommendation || aiFallback;
+  const aiLoading = needsAI && aiFallbackLoading;
+
+  // Auto-save AI fallback recommendation to strategy when generated
+  useEffect(() => {
+    if (aiFallback && isAIGenerated && !savedRecommendation && activeStrategy?.id && !activeStrategy.id.startsWith('default_')) {
+      saveRecommendation(aiFallback).catch((err) => {
+        console.error('[ChannelActivation] Failed to persist AI recommendation:', err);
+      });
+    }
+  }, [aiFallback, isAIGenerated, savedRecommendation, activeStrategy?.id, saveRecommendation]);
 
   const { getStatus, getNote, updateActivation, isSaving } = useChannelActivations(strategyId);
 

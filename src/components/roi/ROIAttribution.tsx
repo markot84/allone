@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   Euro,
@@ -8,6 +8,8 @@ import {
   Wallet,
   ShoppingCart,
   ArrowUpRight,
+  Loader2,
+  Database,
 } from 'lucide-react';
 import {
   AreaChart,
@@ -16,11 +18,12 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  ResponsiveContainer,
   Legend,
 } from 'recharts';
-import { Card, CardHeader, Badge } from '../common';
-import { useOrganic, useCampaigns, useActiveStrategy } from '../../hooks';
+import { Card, CardHeader, Badge, Button } from '../common';
+import { useOrganic, useCampaigns, useActiveStrategy, useBrand } from '../../hooks';
+import { CampaignsService, OrganicService } from '../../services/firestore';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   calculateTotalRevenue,
   calculateCampaignMetrics,
@@ -42,6 +45,28 @@ const CHANNEL_COLORS: Record<string, string> = {
   'SMS': '#8B5CF6',
 };
 
+const DEMO_CAMPAIGNS: Omit<Campaign, 'id'>[] = [
+  { name: 'Google Shopping — Ρούχα Εργασίας', channel: 'Google Ads', period: 'Jan 2026', start_date: '2026-01-01', end_date: '2026-01-31', status: 'completed', amount_spent: 1200, impressions: 84000, clicks: 3360, conversions: 142, conversion_value: 8520, roas: 7.1, ctr: 4.0 },
+  { name: 'Google Shopping — Παπούτσια Ασφαλείας', channel: 'Google Ads', period: 'Jan 2026', start_date: '2026-01-01', end_date: '2026-01-31', status: 'completed', amount_spent: 980, impressions: 67000, clicks: 2680, conversions: 98, conversion_value: 6370, roas: 6.5, ctr: 4.0 },
+  { name: 'Meta — Retargeting Cart Abandoners', channel: 'Meta', period: 'Jan 2026', start_date: '2026-01-05', end_date: '2026-01-31', status: 'completed', amount_spent: 650, impressions: 120000, clicks: 1800, conversions: 64, conversion_value: 3840, roas: 5.9, ctr: 1.5 },
+  { name: 'Meta — Lookalike Champions', channel: 'Meta', period: 'Feb 2026', start_date: '2026-02-01', end_date: '2026-02-28', status: 'completed', amount_spent: 800, impressions: 145000, clicks: 2175, conversions: 76, conversion_value: 4940, roas: 6.2, ctr: 1.5 },
+  { name: 'Google Shopping — Προστασία Κεφαλής', channel: 'Google Ads', period: 'Feb 2026', start_date: '2026-02-01', end_date: '2026-02-28', status: 'completed', amount_spent: 750, impressions: 52000, clicks: 2080, conversions: 89, conversion_value: 4895, roas: 6.5, ctr: 4.0 },
+  { name: 'Google Search — Brand Terms', channel: 'Google Ads', period: 'Feb 2026', start_date: '2026-02-01', end_date: '2026-02-28', status: 'completed', amount_spent: 320, impressions: 18000, clicks: 1440, conversions: 112, conversion_value: 5040, roas: 15.8, ctr: 8.0 },
+  { name: 'Meta — Spring Collection Launch', channel: 'Meta', period: 'Mar 2026', start_date: '2026-03-01', end_date: '2026-03-08', status: 'active', amount_spent: 420, impressions: 78000, clicks: 1170, conversions: 38, conversion_value: 2660, roas: 6.3, ctr: 1.5 },
+  { name: 'Google Shopping — Υλικά Συσκευασίας', channel: 'Google Ads', period: 'Mar 2026', start_date: '2026-03-01', end_date: '2026-03-08', status: 'active', amount_spent: 380, impressions: 28000, clicks: 1120, conversions: 52, conversion_value: 2600, roas: 6.8, ctr: 4.0 },
+  { name: 'Google Remarketing — Visited Products', channel: 'Google Ads', period: 'Jan 2026', start_date: '2026-01-10', end_date: '2026-02-28', status: 'completed', amount_spent: 540, impressions: 210000, clicks: 2100, conversions: 87, conversion_value: 4350, roas: 8.1, ctr: 1.0 },
+  { name: 'Meta — Stock Clearance Flash Sale', channel: 'Meta', period: 'Feb 2026', start_date: '2026-02-10', end_date: '2026-02-17', status: 'completed', amount_spent: 350, impressions: 95000, clicks: 1425, conversions: 53, conversion_value: 2650, roas: 7.6, ctr: 1.5 },
+];
+
+const DEMO_ORGANIC = [
+  { period: '2025-10-01', organic_revenue: 42000 },
+  { period: '2025-11-01', organic_revenue: 48500 },
+  { period: '2025-12-01', organic_revenue: 67000 },
+  { period: '2026-01-01', organic_revenue: 38000 },
+  { period: '2026-02-01', organic_revenue: 41200 },
+  { period: '2026-03-01', organic_revenue: 15800 },
+];
+
 interface ROIAttributionProps {
   embedded?: boolean;
 }
@@ -50,8 +75,42 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
   const { totalOrganicRevenue, byMonth: organicByMonth, hasImported: hasOrganic } = useOrganic();
   const { campaigns, hasImported: hasCampaigns } = useCampaigns();
   const { activeStrategy } = useActiveStrategy();
+  const { currentBrand } = useBrand();
+  const queryClient = useQueryClient();
+  const [seeding, setSeeding] = useState(false);
   const campaignsTyped = campaigns as Campaign[];
   const hasData = hasOrganic || hasCampaigns;
+  const chartRef = useRef<HTMLDivElement>(null);
+  const [chartWidth, setChartWidth] = useState(800);
+
+  useEffect(() => {
+    const el = chartRef.current;
+    if (!el) return;
+    const update = () => setChartWidth(el.offsetWidth || 800);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [hasData]);
+
+  const seedDemoData = useCallback(async () => {
+    const brandId = currentBrand?.id ?? null;
+    setSeeding(true);
+    try {
+      for (const c of DEMO_CAMPAIGNS) {
+        const id = `demo_${c.name.replace(/\s+/g, '_').substring(0, 40)}_${Date.now()}`;
+        await CampaignsService.create(id, { ...c } as Record<string, unknown>, brandId);
+      }
+      for (const o of DEMO_ORGANIC) {
+        const id = `demo_organic_${o.period}_${Date.now()}`;
+        await OrganicService.create(id, { ...o } as Record<string, unknown>, brandId);
+      }
+      queryClient.invalidateQueries({ queryKey: ['campaigns'] });
+      queryClient.invalidateQueries({ queryKey: ['organic'] });
+    } finally {
+      setSeeding(false);
+    }
+  }, [currentBrand, queryClient]);
   const monthlyBudget = activeStrategy?.monthlyBudget || 0;
 
   const metrics = useMemo(() => calculateCampaignMetrics(campaignsTyped), [campaignsTyped]);
@@ -111,9 +170,17 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
           <div className="text-center py-16">
             <BarChart3 size={48} className="mx-auto text-[var(--nts-medium-gray)] mb-4" />
             <h3 className="text-lg font-semibold text-[var(--nts-charcoal)] mb-2">Δεν υπάρχουν δεδομένα</h3>
-            <p className="text-[var(--nts-medium-gray)] max-w-md mx-auto">
+            <p className="text-[var(--nts-medium-gray)] max-w-md mx-auto mb-6">
               Φόρτωσε campaigns και organic revenue στο Data Import για να δεις την απόδοση.
             </p>
+            <Button
+              variant="secondary"
+              icon={seeding ? <Loader2 size={16} className="animate-spin" /> : <Database size={16} />}
+              onClick={seedDemoData}
+              disabled={seeding}
+            >
+              {seeding ? 'Φόρτωση...' : 'Φόρτωση Demo Data'}
+            </Button>
           </div>
         </Card>
       </div>
@@ -169,70 +236,68 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
             subtitle="Organic vs Campaign revenue ανά μήνα"
             icon={<TrendingUp size={20} className="text-[var(--nts-accent)]" />}
           />
-          <div className="w-full" style={{ height: 320 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={trendData} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
-                <defs>
-                  <linearGradient id="organicGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="campaignGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#F97316" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#F97316" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" vertical={false} />
-                <XAxis
-                  dataKey="month"
-                  tick={{ fill: '#57606a', fontSize: 12 }}
-                  axisLine={{ stroke: '#d0d7de' }}
-                  tickLine={{ stroke: '#d0d7de' }}
-                />
-                <YAxis
-                  tickFormatter={(v) => `€${(v / 1000).toFixed(0)}K`}
-                  tick={{ fill: '#57606a', fontSize: 12 }}
-                  axisLine={{ stroke: '#d0d7de' }}
-                  tickLine={{ stroke: '#d0d7de' }}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#fff',
-                    border: '1px solid #d0d7de',
-                    borderRadius: '6px',
-                    fontSize: '12px',
-                    padding: '8px 12px',
-                  }}
-                  formatter={(value: any, name?: string) => [
-                    formatCurrencyCompact((value as number) || 0),
-                    name === 'organic' ? 'Organic Revenue' : 'Campaign Revenue',
-                  ]}
-                  labelStyle={{ color: '#24292f', fontWeight: 600, marginBottom: 4 }}
-                />
-                <Legend
-                  formatter={(value) => (value === 'organic' ? 'Organic' : 'Campaigns')}
-                  wrapperStyle={{ fontSize: 12 }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="organic"
-                  stroke="#3B82F6"
-                  strokeWidth={2}
-                  fillOpacity={1}
-                  fill="url(#organicGrad)"
-                  name="organic"
-                />
-                <Area
-                  type="monotone"
-                  dataKey="campaigns"
-                  stroke="#F97316"
-                  strokeWidth={2}
-                  fillOpacity={1}
-                  fill="url(#campaignGrad)"
-                  name="campaigns"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+          <div ref={chartRef} className="w-full" style={{ minHeight: 320, position: 'relative' }}>
+            <AreaChart width={chartWidth} height={300} data={trendData} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
+              <defs>
+                <linearGradient id="organicGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="campaignGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#F97316" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#F97316" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" vertical={false} />
+              <XAxis
+                dataKey="month"
+                tick={{ fill: '#57606a', fontSize: 12 }}
+                axisLine={{ stroke: '#d0d7de' }}
+                tickLine={{ stroke: '#d0d7de' }}
+              />
+              <YAxis
+                tickFormatter={(v) => `€${(v / 1000).toFixed(0)}K`}
+                tick={{ fill: '#57606a', fontSize: 12 }}
+                axisLine={{ stroke: '#d0d7de' }}
+                tickLine={{ stroke: '#d0d7de' }}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#fff',
+                  border: '1px solid #d0d7de',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  padding: '8px 12px',
+                }}
+                formatter={(value: any, name?: string) => [
+                  formatCurrencyCompact((value as number) || 0),
+                  name === 'organic' ? 'Organic Revenue' : 'Campaign Revenue',
+                ]}
+                labelStyle={{ color: '#24292f', fontWeight: 600, marginBottom: 4 }}
+              />
+              <Legend
+                formatter={(value) => (value === 'organic' ? 'Organic' : 'Campaigns')}
+                wrapperStyle={{ fontSize: 12 }}
+              />
+              <Area
+                type="monotone"
+                dataKey="organic"
+                stroke="#3B82F6"
+                strokeWidth={2}
+                fillOpacity={1}
+                fill="url(#organicGrad)"
+                name="organic"
+              />
+              <Area
+                type="monotone"
+                dataKey="campaigns"
+                stroke="#F97316"
+                strokeWidth={2}
+                fillOpacity={1}
+                fill="url(#campaignGrad)"
+                name="campaigns"
+              />
+            </AreaChart>
           </div>
         </Card>
       )}
@@ -315,16 +380,16 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
             icon={<Target size={20} className="text-[var(--nts-accent)]" />}
           />
           <div className="overflow-x-auto mt-2">
-            <table className="w-full">
+            <table className="w-full" style={{ minWidth: 700 }}>
               <thead>
                 <tr className="text-left text-xs text-[var(--nts-medium-gray)] border-b border-[var(--nts-border-gray)]">
-                  <th className="pb-3 font-medium">Campaign</th>
-                  <th className="pb-3 font-medium">Κανάλι</th>
-                  <th className="pb-3 font-medium text-right">Spend</th>
-                  <th className="pb-3 font-medium text-right">Revenue</th>
-                  <th className="pb-3 font-medium text-right">ROAS</th>
-                  <th className="pb-3 font-medium text-right">Conv.</th>
-                  <th className="pb-3 font-medium">Status</th>
+                  <th className="pb-3 font-medium" style={{ width: '30%' }}>Campaign</th>
+                  <th className="pb-3 font-medium" style={{ width: '12%' }}>Κανάλι</th>
+                  <th className="pb-3 font-medium text-right" style={{ width: '12%' }}>Spend</th>
+                  <th className="pb-3 font-medium text-right" style={{ width: '12%' }}>Revenue</th>
+                  <th className="pb-3 font-medium text-right" style={{ width: '10%' }}>ROAS</th>
+                  <th className="pb-3 font-medium text-right" style={{ width: '10%' }}>Conv.</th>
+                  <th className="pb-3 font-medium text-center" style={{ width: '10%' }}>Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -336,29 +401,29 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                     transition={{ delay: index * 0.03 }}
                     className="border-b border-[var(--nts-border-gray)] last:border-0 hover:bg-[var(--nts-light-gray)]"
                   >
-                    <td className="py-3 pr-4">
-                      <span className="text-sm font-medium text-[var(--nts-charcoal)] truncate block max-w-[240px]">
+                    <td className="py-3 pr-3">
+                      <span className="text-sm font-medium text-[var(--nts-charcoal)] truncate block max-w-[280px]" title={c.name}>
                         {c.name}
                       </span>
                     </td>
-                    <td className="py-3 pr-4">
+                    <td className="py-3 pr-3">
                       <Badge variant="default" size="sm">{c.channel}</Badge>
                     </td>
-                    <td className="py-3 text-right font-mono text-sm">
+                    <td className="py-3 text-right font-mono text-sm pr-3">
                       {formatCurrencyCompact(c.amount_spent || 0)}
                     </td>
-                    <td className="py-3 text-right font-mono text-sm font-bold">
+                    <td className="py-3 text-right font-mono text-sm font-bold pr-3">
                       {formatCurrencyCompact(c.conversion_value || 0)}
                     </td>
-                    <td className="py-3 text-right">
+                    <td className="py-3 text-right pr-3">
                       <span className={`font-mono text-sm font-bold ${(c.roas || 0) >= 1 ? 'text-[#22C55E]' : 'text-[#EF4444]'}`}>
                         {c.roas ? `${formatNumber(c.roas, 2)}x` : '—'}
                       </span>
                     </td>
-                    <td className="py-3 text-right font-mono text-sm">
+                    <td className="py-3 text-right font-mono text-sm pr-3">
                       {formatNumber(c.conversions || 0)}
                     </td>
-                    <td className="py-3">
+                    <td className="py-3 text-center">
                       <CampaignStatusBadge status={c.status} />
                     </td>
                   </motion.tr>
