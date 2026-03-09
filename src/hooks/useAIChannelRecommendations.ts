@@ -165,6 +165,7 @@ export function useAIChannelRecommendations({
 
   return {
     recommendation,
+    aiOnlyResult: aiRecommendation ?? null,
     isLoading: aiLoading,
     error: aiError,
     aiEnabled,

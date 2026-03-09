@@ -672,6 +672,7 @@ export function WeightConfigurator() {
   // AI channel recommendations — only triggered after strategy save (strategySaveVersion > 0)
   const {
     recommendation: freshAiRec,
+    aiOnlyResult,
     isLoading: aiRecLoading,
     error: aiRecError,
     aiEnabled,
@@ -699,21 +700,23 @@ export function WeightConfigurator() {
     saveVersion: strategySaveVersion,
   });
 
-  // Show saved recommendation on load, switch to fresh after save+AI-generation
-  const aiRecommendation = (strategySaveVersion > 0 && freshAiRec) ? freshAiRec : (activeStrategy?.channelRecommendation ?? null);
+  // On load: show saved recommendation. After save: show AI-only result (no static fallback), loading while pending.
+  const aiRecommendation = strategySaveVersion > 0
+    ? (aiOnlyResult ?? null)
+    : (activeStrategy?.channelRecommendation ?? freshAiRec);
 
-  // Save strategy-context recommendation when generated
+  // Save AI-generated strategy recommendation when ready
   useEffect(() => {
-    if (!freshAiRec || !isAIGenerated || strategySaveVersion === 0 || !activeStrategy?.id || activeStrategy.id.startsWith('default_')) return;
+    if (!aiOnlyResult || !isAIGenerated || strategySaveVersion === 0 || !activeStrategy?.id || activeStrategy.id.startsWith('default_')) return;
     const strategyId = activeStrategy.id;
-    const clean = JSON.parse(JSON.stringify(freshAiRec));
+    const clean = JSON.parse(JSON.stringify(aiOnlyResult));
     FirestoreService.setDocument('active_strategies', strategyId, {
       channelRecommendation: clean,
       updatedAt: new Date().toISOString(),
     } as Record<string, unknown>).then(() => {
       queryClient.invalidateQueries({ queryKey: ['activeStrategy'] });
     }).catch(err => console.error('[WeightConfigurator] Save strategy rec failed:', err));
-  }, [freshAiRec, isAIGenerated, strategySaveVersion, activeStrategy?.id]);
+  }, [aiOnlyResult, isAIGenerated, strategySaveVersion, activeStrategy?.id]);
 
   // After strategy save: generate activation + content AI (directly to Firestore, no mutation closures)
 
