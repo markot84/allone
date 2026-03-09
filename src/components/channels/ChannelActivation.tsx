@@ -412,6 +412,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     }
   };
 
+  const hasRealStrategy = !!activeStrategy?.id && !activeStrategy.id.startsWith('default_') && !!scenarioId;
   const strategyName = scenarioId ? getStrategyName(scenarioId) : null;
   const durationLabel = activeStrategy?.duration === 'ongoing' ? 'Ongoing' : activeStrategy?.duration ? `${activeStrategy.duration} ημ.` : null;
 
@@ -424,6 +425,61 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     return { total, done, inProgress, pending: total - done - inProgress };
   }, [allChannels, getStatus]);
 
+  if (!hasRealStrategy) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-2xl font-bold text-[#1A1A1A]">Channel Activation</h2>
+          <p className="text-[#4A4A4A] mt-1">AI-powered channel mix βάσει εμπορικής στρατηγικής</p>
+        </div>
+        <Card padding="lg">
+          <div className="text-center py-20">
+            <Settings size={48} className="mx-auto text-[var(--nts-medium-gray)] mb-4" />
+            <h3 className="text-lg font-semibold text-[var(--nts-charcoal)] mb-2">Απαιτείται Εμπορική Στρατηγική</h3>
+            <p className="text-[var(--nts-medium-gray)] max-w-md mx-auto mb-6">
+              Επιλέξτε και αποθηκεύστε μια εμπορική στρατηγική στο Commercial Strategy για να ενεργοποιηθεί η ανάλυση καναλιών και οι AI συστάσεις.
+            </p>
+            <Button
+              variant="primary"
+              icon={<Settings size={16} />}
+              onClick={() => onSectionChange?.('strategy')}
+            >
+              Commercial Strategy →
+            </Button>
+          </div>
+        </Card>
+
+        {/* Campaign Performance - always visible */}
+        {realChannelPerformance && realChannelPerformance.length > 0 && (
+          <Card padding="lg">
+            <CardHeader
+              title="Campaign Performance"
+              subtitle="Πραγματικά δεδομένα από imported campaigns"
+              icon={<TrendingUp size={20} className="text-[var(--nts-accent)]" />}
+            />
+            <div className="mt-2">
+              <Badge variant="default" size="sm">Avg ROAS: {formatMultiplier(realChannelPerformance.reduce((sum, c) => sum + c.roas * c.spent, 0) / Math.max(realChannelPerformance.reduce((sum, c) => sum + c.spent, 0), 1), 1)}</Badge>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              {realChannelPerformance.map((ch) => (
+                <div key={ch.channel} className="p-4 rounded-lg border border-[#E5E5E5] bg-white">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-medium text-[#1A1A1A] text-sm">{ch.channel}</span>
+                    <Badge variant={ch.roas >= 3 ? 'success' : ch.roas >= 1 ? 'warning' : 'default'} size="sm">ROAS: {formatMultiplier(ch.roas, 2)}</Badge>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div><span className="text-[#9CA3AF]">Spent</span><p className="font-mono">€{formatCurrency(ch.spent)}</p></div>
+                    <div><span className="text-[#9CA3AF]">Conversions</span><p className="font-mono">{formatNumber(ch.conversions)}</p></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -431,12 +487,8 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         <div>
           <h2 className="text-2xl font-bold text-[#1A1A1A]">Channel Activation</h2>
           <p className="text-[#4A4A4A] mt-1">
-            {strategyName ? (
-              <>
-                <span className="font-medium text-[#1A1A1A]">{strategyName}</span>
-                {durationLabel && <span className="text-[#9CA3AF]"> · {durationLabel}</span>}
-              </>
-            ) : 'AI-powered channel recommendations based on your strategy'}
+            <span className="font-medium text-[#1A1A1A]">{strategyName}</span>
+            {durationLabel && <span className="text-[#9CA3AF]"> · {durationLabel}</span>}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -594,12 +646,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
             </>
           ) : (
             <div className="flex items-center justify-center h-64">
-              <div className="text-center">
-                <p className="text-sm text-[#4A4A4A]">Δεν υπάρχει ενεργή στρατηγική</p>
-                <button onClick={() => onSectionChange?.('strategy')} className="mt-2 text-xs text-[var(--nts-accent)] hover:underline">
-                  Ενεργοποίηση στρατηγικής →
-                </button>
-              </div>
+              <Spinner size="lg" label="Δημιουργία AI συστάσεων..." />
             </div>
           )}
         </Card>
@@ -806,12 +853,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
             </div>
           ) : (
             <div className="flex items-center justify-center py-16">
-              <div className="text-center">
-                <p className="text-sm text-[#4A4A4A]">Ενεργοποιήστε μια στρατηγική για να δείτε channel briefs</p>
-                <button onClick={() => onSectionChange?.('strategy')} className="mt-2 text-xs text-[var(--nts-accent)] hover:underline">
-                  Commercial Strategy →
-                </button>
-              </div>
+              <Spinner size="lg" label="Δημιουργία AI συστάσεων..." />
             </div>
           )}
         </Card>

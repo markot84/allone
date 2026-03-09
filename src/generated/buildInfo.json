@@ -1,10 +1,18 @@
 {
-  "version": "0.29.7",
-  "previousVersion": "0.29.6",
-  "commitHash": "38b0667",
+  "version": "0.29.8",
+  "previousVersion": "0.29.7",
+  "commitHash": "ab51ae2",
   "branch": "main",
-  "buildDate": "2026-03-09T07:21:00.710Z",
+  "buildDate": "2026-03-09T08:51:35.310Z",
   "commits": [
+    {
+      "hash": "ab51ae2",
+      "message": "Update build info"
+    },
+    {
+      "hash": "8610be8",
+      "message": "Fix strategy sync, ROI chart, dashboard tabs, AI context richness"
+    },
     {
       "hash": "38b0667",
       "message": "ROI page rebuild: remove all fabricated data, real-data-only dashboard"
@@ -56,17 +64,11 @@
     {
       "hash": "7ca779e",
       "message": "AI Insights refinement, seasonal banner neutral, Inventory blue restore"
-    },
-    {
-      "hash": "0aa0100",
-      "message": "Strategy Package (PDF + Link), sidebar redesign, brand icon, UI refinements"
-    },
-    {
-      "hash": "6791047",
-      "message": "Fix revenue_share property name"
     }
   ],
   "changes": [
+    "Update build info",
+    "Fix strategy sync, ROI chart, dashboard tabs, AI context richness",
     "ROI page rebuild: remove all fabricated data, real-data-only dashboard",
     "Sidebar nav reorder: Data > Strategy > Execution > Reporting flow",
     "Sync channels: Strategy saves AI recommendations to Firestore, Channel Activation reads from saved data. Fixed static fallback to paid-only budget allocation.",
@@ -74,8 +76,6 @@
     "AI prompt: separate paid vs owned channels, budget only for paid media",
     "UI: sidebar reorder, logo orange ring, marketing text update",
     "Budget management: monthly budget input, EUR allocation per channel, AI smart actions (increase/decrease/push)",
-    "Revert MarketingIndexPage to pre-rewrite state",
-    "Channel Activation upgrade: AI briefs, per-channel status (Firestore), agency brief export",
-    "Refine value proposition tone: professional tagline aligned with NotTheSame brand"
+    "Revert MarketingIndexPage to pre-rewrite state"
   ]
 }
