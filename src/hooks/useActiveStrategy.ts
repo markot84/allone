@@ -171,23 +171,22 @@ export function useActiveStrategy() {
     },
   });
 
-  // Partial updates to avoid race conditions between concurrent AI saves
   const saveRecommendation = useMutation({
     mutationFn: async (recommendation: ChannelRecommendation) => {
       if (!activeStrategy?.id || !brandId) throw new Error('No active strategy');
       if (activeStrategy.id.startsWith('default_')) throw new Error('Cannot save to default strategy');
       const now = new Date().toISOString();
+      // Clean recommendation to remove undefined values that Firestore rejects
       const cleanRec = JSON.parse(JSON.stringify(recommendation));
-      await FirestoreService.updateDocument('active_strategies', activeStrategy.id, {
+      await FirestoreService.setDocument('active_strategies', activeStrategy.id, {
+        ...activeStrategy,
         channelRecommendation: cleanRec,
         updatedAt: now,
-      });
+      } as Record<string, unknown>);
       return { ...activeStrategy, channelRecommendation: cleanRec, updatedAt: now };
     },
     onSuccess: (updated) => {
-      queryClient.setQueryData(['activeStrategy', brandId], (old: ActiveStrategy | null | undefined) =>
-        old ? { ...old, channelRecommendation: updated.channelRecommendation, updatedAt: updated.updatedAt } : updated
-      );
+      queryClient.setQueryData(['activeStrategy', brandId], updated);
     },
   });
 
@@ -197,16 +196,15 @@ export function useActiveStrategy() {
       if (activeStrategy.id.startsWith('default_')) throw new Error('Cannot save to default strategy');
       const now = new Date().toISOString();
       const cleanRec = JSON.parse(JSON.stringify(recommendation));
-      await FirestoreService.updateDocument('active_strategies', activeStrategy.id, {
+      await FirestoreService.setDocument('active_strategies', activeStrategy.id, {
+        ...activeStrategy,
         activationRecommendation: cleanRec,
         updatedAt: now,
-      });
+      } as Record<string, unknown>);
       return { ...activeStrategy, activationRecommendation: cleanRec, updatedAt: now };
     },
     onSuccess: (updated) => {
-      queryClient.setQueryData(['activeStrategy', brandId], (old: ActiveStrategy | null | undefined) =>
-        old ? { ...old, activationRecommendation: updated.activationRecommendation, updatedAt: updated.updatedAt } : updated
-      );
+      queryClient.setQueryData(['activeStrategy', brandId], updated);
     },
   });
 
@@ -216,16 +214,15 @@ export function useActiveStrategy() {
       if (activeStrategy.id.startsWith('default_')) throw new Error('Cannot save to default strategy');
       const now = new Date().toISOString();
       const clean = JSON.parse(JSON.stringify(suggestions));
-      await FirestoreService.updateDocument('active_strategies', activeStrategy.id, {
+      await FirestoreService.setDocument('active_strategies', activeStrategy.id, {
+        ...activeStrategy,
         contentSuggestions: clean,
         updatedAt: now,
-      });
+      } as Record<string, unknown>);
       return { ...activeStrategy, contentSuggestions: clean, updatedAt: now };
     },
     onSuccess: (updated) => {
-      queryClient.setQueryData(['activeStrategy', brandId], (old: ActiveStrategy | null | undefined) =>
-        old ? { ...old, contentSuggestions: updated.contentSuggestions, updatedAt: updated.updatedAt } : updated
-      );
+      queryClient.setQueryData(['activeStrategy', brandId], updated);
     },
   });
 

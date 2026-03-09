@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -40,6 +41,7 @@ import {
 import { useAIChannelRecommendations } from '../../hooks/useAIChannelRecommendations';
 import { generateChannelRecommendations } from '../../services/aiChannelRecommendations';
 import { generateContentSuggestions } from '../../services/aiContentSuggestions';
+import { FirestoreService } from '../../services/firestore';
 import { getPreviewConfig, type PreviewColumnId } from '../../data/strategyPreviewConfig';
 import { calculateCompositeScore } from '../../utils/compositeScore';
 import { getStockAgeDays } from '../../utils/productUtils';
@@ -173,9 +175,10 @@ export function WeightConfigurator() {
   const { products, hasImported } = useProducts();
   const { segments: rfmSegments } = useSegments();
   const { user } = useAuth();
-  const { activeStrategy, saveActiveStrategy, saveRecommendation, saveActivationRecommendation, saveContentSuggestions, isLoading: strategyLoading } = useActiveStrategy();
+  const { activeStrategy, saveActiveStrategy, isLoading: strategyLoading } = useActiveStrategy();
   const toast = useToast();
   const [strategySaveVersion, setStrategySaveVersion] = useState(0);
+  const queryClient = useQueryClient();
   
   // Initialize from active strategy if available, otherwise no default
   const [selectedScenario, setSelectedScenario] = useState<string | null>(() => {
@@ -276,6 +279,48 @@ export function WeightConfigurator() {
   }, [selectedScenario, weights]);
 
   // Apply the scenario change and SAVE it
+  // Generate activation + content AI and save directly to Firestore (called after strategy save)
+  const triggerAIGeneration = useCallback(async (savedStrategyId: string, scenarioId: string, strategyWeights: Record<string, number>) => {
+    const segment = rfmSegments.find(s => s.id === selectedSegment) ?? rfmSegments[0];
+    const scenarioObj = scenarios.find(s => s.id === scenarioId) ?? scenarios[0];
+    const topCats = [...new Set(products.map(p => p.category).filter(Boolean))].slice(0, 5);
+    const segmentNames = rfmSegments.map(s => s.name || s.id).slice(0, 6);
+    const scenarioName = scenarioObj?.name || scenarioId;
+
+    const saveField = async (field: string, value: unknown) => {
+      const clean = JSON.parse(JSON.stringify(value));
+      await FirestoreService.setDocument('active_strategies', savedStrategyId, {
+        [field]: clean,
+        updatedAt: new Date().toISOString(),
+      } as Record<string, unknown>);
+    };
+
+    const promises: Promise<void>[] = [];
+
+    if (segment && scenarioObj) {
+      promises.push(
+        generateChannelRecommendations({
+          scenario: scenarioObj, segment,
+          fitLevel: segmentFitMap[selectedSegment]?.fit ?? 'good',
+          brandContext: currentBrand ? { brandName: currentBrand.name, brandType: currentBrand.type, topCategories: topCats } : undefined,
+          segmentFitList: rankedSegments.map(rs => ({ name: rs.segment.name, fit: rs.fit, description: rs.segment.description, count: rs.segment.count, revenueShare: rs.segment.revenue_share })),
+          context: 'activation',
+        }).then(rec => { if (rec) return saveField('activationRecommendation', rec); })
+          .catch(err => console.error('[AI] Activation failed:', err))
+      );
+    }
+
+    promises.push(
+      generateContentSuggestions({
+        scenarioId, scenarioName, weights: strategyWeights, brandName: currentBrand?.name, topCategories: topCats, segmentNames,
+      }).then(result => { if (result) return saveField('contentSuggestions', result); })
+        .catch(err => console.error('[AI] Content failed:', err))
+    );
+
+    await Promise.allSettled(promises);
+    queryClient.invalidateQueries({ queryKey: ['activeStrategy'] });
+  }, [rfmSegments, selectedSegment, products, currentBrand, rankedSegments, segmentFitMap, queryClient]);
+
   const applyScenarioChange = useCallback((scenarioId: string, overrideDuration?: number | 'ongoing') => {
     setSelectedScenario(scenarioId);
 
@@ -311,14 +356,15 @@ export function WeightConfigurator() {
       duration: saveDuration,
       approvalStatus: 'implementing',
       approvedBy: user.email || user.displayName || 'User',
-    }).then(() => {
+    }).then((saved) => {
       toast.success(`Στρατηγική "${scenarioName}" αποθηκεύτηκε`);
       setStrategySaveVersion(v => v + 1);
+      if (saved?.id) triggerAIGeneration(saved.id, scenarioId, newWeights);
     }).catch((error) => {
       console.error('Error saving strategy:', error);
       toast.error(`Σφάλμα: ${error?.message || error}`);
     });
-  }, [user, saveActiveStrategy, toast]);
+  }, [user, saveActiveStrategy, toast, triggerAIGeneration]);
 
   const handleMixedApply = useCallback((blendedWeights: Record<string, number>, config: MixConfig) => {
     setMixConfig(config);
@@ -340,14 +386,15 @@ export function WeightConfigurator() {
       approvalStatus: 'implementing',
       approvedBy: user.email || user.displayName || 'User',
       mixConfig: config,
-    } as any).then(() => {
+    } as any).then((saved) => {
       toast.success(`Μικτή στρατηγική "${nameA} ${config.percentA}% / ${nameB} ${config.percentB}%" αποθηκεύτηκε`);
       setStrategySaveVersion(v => v + 1);
+      if (saved?.id) triggerAIGeneration(saved.id, 'mixed', blendedWeights);
     }).catch((error) => {
       console.error('Error saving mixed strategy:', error);
       toast.error(`Σφάλμα: ${error?.message || error}`);
     });
-  }, [user, saveActiveStrategy, toast, duration]);
+  }, [user, saveActiveStrategy, toast, duration, triggerAIGeneration]);
 
   const handleSeasonApply = useCallback((period: SeasonalPeriod) => {
     const mix = period.suggestedMix;
@@ -370,11 +417,12 @@ export function WeightConfigurator() {
       approvalStatus: 'implementing',
       approvedBy: user.email || user.displayName || 'User',
       mixConfig: config,
-    } as any).then(() => {
+    } as any).then((saved) => {
       toast.success(`Εποχιακή στρατηγική "${period.name}" εφαρμόστηκε`);
       setStrategySaveVersion(v => v + 1);
+      if (saved?.id) triggerAIGeneration(saved.id, 'mixed', blended);
     }).catch(() => {});
-  }, [user, saveActiveStrategy, toast, duration]);
+  }, [user, saveActiveStrategy, toast, duration, triggerAIGeneration]);
 
   const handleSeasonalDiscountApply = useCallback((config: SeasonalDiscountConfig) => {
     setSeasonalDiscountConfig(config);
@@ -389,10 +437,11 @@ export function WeightConfigurator() {
       approvalStatus: 'implementing',
       approvedBy: user.email || user.displayName || 'User',
       seasonalDiscount: config,
-    } as any).then(() => {
+    } as any).then((saved) => {
       setStrategySaveVersion(v => v + 1);
+      if (saved?.id) triggerAIGeneration(saved.id, 'seasonal_discount', weights);
     }).catch(() => {});
-  }, [user, saveActiveStrategy, toast, weights, duration]);
+  }, [user, saveActiveStrategy, toast, weights, duration, triggerAIGeneration]);
 
 
   const handleSaveCustomSeason = useCallback((period: SeasonalPeriod) => {
@@ -653,65 +702,20 @@ export function WeightConfigurator() {
   // Show saved recommendation on load, switch to fresh after save+AI-generation
   const aiRecommendation = (strategySaveVersion > 0 && freshAiRec) ? freshAiRec : (activeStrategy?.channelRecommendation ?? null);
 
-  // Persist strategy-context AI results after fresh generation
+  // Save strategy-context recommendation when generated
   useEffect(() => {
-    if (freshAiRec && isAIGenerated && strategySaveVersion > 0 && activeStrategy?.id && !activeStrategy.id.startsWith('default_')) {
-      saveRecommendation(freshAiRec).catch((err) => {
-        console.error('[WeightConfigurator] Failed to save AI recommendation:', err);
-      });
-    }
-  }, [freshAiRec, isAIGenerated, strategySaveVersion, activeStrategy?.id, saveRecommendation]);
+    if (!freshAiRec || !isAIGenerated || strategySaveVersion === 0 || !activeStrategy?.id || activeStrategy.id.startsWith('default_')) return;
+    const strategyId = activeStrategy.id;
+    const clean = JSON.parse(JSON.stringify(freshAiRec));
+    FirestoreService.setDocument('active_strategies', strategyId, {
+      channelRecommendation: clean,
+      updatedAt: new Date().toISOString(),
+    } as Record<string, unknown>).then(() => {
+      queryClient.invalidateQueries({ queryKey: ['activeStrategy'] });
+    }).catch(err => console.error('[WeightConfigurator] Save strategy rec failed:', err));
+  }, [freshAiRec, isAIGenerated, strategySaveVersion, activeStrategy?.id]);
 
-  // After strategy save: generate activation recommendation + content suggestions (in parallel)
-  useEffect(() => {
-    if (strategySaveVersion === 0 || !activeStrategy?.id || activeStrategy.id.startsWith('default_')) return;
-
-    const segment = rfmSegments.find(s => s.id === selectedSegment) ?? rfmSegments[0];
-    const scenarioObj = scenarios.find(s => s.id === activeStrategy.scenarioId) ?? scenarios[0];
-    const topCats = [...new Set(products.map(p => p.category).filter(Boolean))].slice(0, 5);
-    const segmentNames = rfmSegments.map(s => s.name || s.id).slice(0, 6);
-    const scenarioName = scenarioObj?.name || activeStrategy.scenarioId;
-
-    // 1. Activation recommendation (detailed, for marketing teams)
-    if (segment && scenarioObj) {
-      generateChannelRecommendations({
-        scenario: scenarioObj,
-        segment,
-        fitLevel: segmentFitMap[selectedSegment]?.fit ?? 'good',
-        brandContext: currentBrand ? {
-          brandName: currentBrand.name,
-          brandType: currentBrand.type,
-          topCategories: topCats,
-        } : undefined,
-        segmentFitList: rankedSegments.map(rs => ({
-          name: rs.segment.name,
-          fit: rs.fit,
-          description: rs.segment.description,
-          count: rs.segment.count,
-          revenueShare: rs.segment.revenue_share,
-        })),
-        context: 'activation',
-      }).then(rec => {
-        if (rec) {
-          saveActivationRecommendation(rec).catch(err => console.error('[WeightConfigurator] Failed to save activation recommendation:', err));
-        }
-      }).catch(err => console.error('[WeightConfigurator] Activation AI failed:', err));
-    }
-
-    // 2. Content suggestions
-    generateContentSuggestions({
-      scenarioId: activeStrategy.scenarioId,
-      scenarioName,
-      weights: activeStrategy.weights ?? null,
-      brandName: currentBrand?.name,
-      topCategories: topCats,
-      segmentNames,
-    }).then(result => {
-      if (result) {
-        saveContentSuggestions(result).catch(err => console.error('[WeightConfigurator] Failed to save content suggestions:', err));
-      }
-    }).catch(err => console.error('[WeightConfigurator] Content AI failed:', err));
-  }, [strategySaveVersion, activeStrategy?.id]);
+  // After strategy save: generate activation + content AI (directly to Firestore, no mutation closures)
 
   // Load saved strategy from Firestore on mount/refresh
   useEffect(() => {

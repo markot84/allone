@@ -309,20 +309,30 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               />
             );
           })()}
-          {/* 6. ROAS */}
-          {hasCampaigns && (
-            <KPICard
-              kpi={{
-                label: 'ROAS',
-                value: campaignMetrics.roas > 0 ? formatMultiplier(campaignMetrics.roas, 1) : '—',
-                changeLabel: campaignMetrics.roas > 0 ? 'return on ad spend' : undefined,
-                trend: 'up' as const,
-                sparklineData: []
-              }}
-              index={5}
-              onClick={() => onSectionChange?.('roi')}
-            />
-          )}
+          {/* 6. ROI — the primary metric of the whole app */}
+          {hasCampaigns && (() => {
+            const roiPercent = campaignMetrics.totalSpend > 0
+              ? ((campaignMetrics.totalRevenue - campaignMetrics.totalSpend) / campaignMetrics.totalSpend) * 100
+              : 0;
+            return (
+              <div className="relative" onClick={() => onSectionChange?.('roi')}>
+                {roiPercent > 0 && (
+                  <div className="absolute -top-1 -right-1 z-10 w-3 h-3 rounded-full bg-[var(--nts-accent)] animate-pulse" />
+                )}
+                <KPICard
+                  kpi={{
+                    label: 'ROI',
+                    value: roiPercent > 0 ? `+${formatNumber(roiPercent, 0)}%` : '—',
+                    changeLabel: roiPercent > 0 ? `κέρδος ανά €1 διαφήμισης` : undefined,
+                    trend: 'up' as const,
+                    sparklineData: []
+                  }}
+                  index={5}
+                  className="ring-2 ring-[var(--nts-accent)]/30 shadow-lg"
+                />
+              </div>
+            );
+          })()}
         </div>
       )}
 
@@ -351,11 +361,14 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               <span className="flex items-center justify-center gap-2">
                 <TrendingUp size={15} className={activeTab === 'roi' ? 'text-[var(--nts-accent)]' : 'text-[var(--nts-medium-gray)]'} />
                 ROI & Απόδοση
-                {hasCampaigns && campaignMetrics.roas > 0 && (
-                  <span className="ml-1 px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-[var(--nts-accent)] text-white leading-none">
-                    {formatNumber(campaignMetrics.roas, 1)}x
-                  </span>
-                )}
+                {hasCampaigns && campaignMetrics.totalSpend > 0 && (() => {
+                  const roi = ((campaignMetrics.totalRevenue - campaignMetrics.totalSpend) / campaignMetrics.totalSpend) * 100;
+                  return roi > 0 ? (
+                    <span className="ml-1 px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-[var(--nts-accent)] text-white leading-none">
+                      +{formatNumber(roi, 0)}%
+                    </span>
+                  ) : null;
+                })()}
               </span>
             </button>
           </div>
@@ -679,22 +692,51 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             />
           </div>
 
-          {/* ROAS Highlight */}
-          <div className="mt-6 p-5 bg-white rounded-xl border border-[var(--nts-border-gray)]">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[13px] font-medium text-[var(--nts-medium-gray)] mb-1">Campaign ROAS</p>
-                <p className="text-3xl font-bold tracking-tight text-[var(--nts-charcoal)] mb-1 font-mono">
-                  {campaignMetrics.roas > 0 ? formatMultiplier(campaignMetrics.roas, 1) : '—'}
-                </p>
-                <p className="text-[13px] text-[var(--nts-medium-gray)]">
-                  {campaignMetrics.roas > 0
-                    ? `Κάθε €1 σε διαφημίσεις → €${formatNumber(campaignMetrics.roas, 1)} revenue`
-                    : 'Φόρτωσε campaigns για να δεις το ROAS'}
-                </p>
-              </div>
-              <div className="w-10 h-10 bg-[var(--nts-light-gray)] rounded-md border border-[var(--nts-border-gray)] flex items-center justify-center">
-                <TrendingUp size={18} className="text-[var(--nts-medium-gray)]" strokeWidth={2} />
+          {/* ROI & ROAS Highlight */}
+          <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* ROI - Primary metric */}
+            {(() => {
+              const roiVal = campaignMetrics.totalSpend > 0
+                ? ((campaignMetrics.totalRevenue - campaignMetrics.totalSpend) / campaignMetrics.totalSpend) * 100
+                : 0;
+              return (
+                <div className="p-5 bg-gradient-to-br from-[var(--nts-accent)]/5 to-white rounded-xl border-2 border-[var(--nts-accent)]/20">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[13px] font-semibold text-[var(--nts-accent)] mb-1">ROI</p>
+                      <p className="text-3xl font-bold tracking-tight text-[var(--nts-charcoal)] mb-1 font-mono">
+                        {roiVal > 0 ? `+${formatNumber(roiVal, 0)}%` : '—'}
+                      </p>
+                      <p className="text-[13px] text-[var(--nts-medium-gray)]">
+                        {roiVal > 0
+                          ? `Καθαρό κέρδος ${formatNumber(roiVal, 0)}% επί της διαφημιστικής δαπάνης`
+                          : 'Φόρτωσε campaigns για υπολογισμό ROI'}
+                      </p>
+                    </div>
+                    <div className="w-10 h-10 bg-[var(--nts-accent)]/10 rounded-md flex items-center justify-center">
+                      <TrendingUp size={18} className="text-[var(--nts-accent)]" strokeWidth={2.5} />
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+            {/* ROAS */}
+            <div className="p-5 bg-white rounded-xl border border-[var(--nts-border-gray)]">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[13px] font-medium text-[var(--nts-medium-gray)] mb-1">ROAS</p>
+                  <p className="text-3xl font-bold tracking-tight text-[var(--nts-charcoal)] mb-1 font-mono">
+                    {campaignMetrics.roas > 0 ? formatMultiplier(campaignMetrics.roas, 1) : '—'}
+                  </p>
+                  <p className="text-[13px] text-[var(--nts-medium-gray)]">
+                    {campaignMetrics.roas > 0
+                      ? `Κάθε €1 σε ads → €${formatNumber(campaignMetrics.roas, 1)} revenue`
+                      : 'Φόρτωσε campaigns για να δεις το ROAS'}
+                  </p>
+                </div>
+                <div className="w-10 h-10 bg-[var(--nts-light-gray)] rounded-md border border-[var(--nts-border-gray)] flex items-center justify-center">
+                  <TrendingUp size={18} className="text-[var(--nts-medium-gray)]" strokeWidth={2} />
+                </div>
               </div>
             </div>
           </div>
@@ -710,9 +752,10 @@ interface KPICardProps {
   kpi: { label: string; value: string; change?: number; changeLabel?: string; trend?: 'up' | 'down'; sparklineData?: number[] };
   index: number;
   onClick?: () => void;
+  className?: string;
 }
 
-function KPICard({ kpi, index, onClick }: KPICardProps) {
+function KPICard({ kpi, index, onClick, className }: KPICardProps) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -723,7 +766,7 @@ function KPICard({ kpi, index, onClick }: KPICardProps) {
       <Card
         padding="lg"
         hover={!!onClick}
-        className="border-l-4 border-l-transparent hover:border-l-[var(--nts-accent)] h-full"
+        className={`border-l-4 border-l-transparent hover:border-l-[var(--nts-accent)] h-full ${className || ''}`}
         onClick={onClick}
       >
         <div className="flex items-start justify-between mb-3">

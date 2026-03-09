@@ -1,10 +1,14 @@
 {
-  "version": "0.29.15",
-  "previousVersion": "0.29.14",
-  "commitHash": "1a5513b",
+  "version": "0.29.17",
+  "previousVersion": "0.29.16",
+  "commitHash": "25bd8a3",
   "branch": "main",
-  "buildDate": "2026-03-09T10:26:49.832Z",
+  "buildDate": "2026-03-09T10:39:18.359Z",
   "commits": [
+    {
+      "hash": "25bd8a3",
+      "message": "ROI sidebar tab: rename to ROI & Apodosi, add NEW badge with emphasis"
+    },
     {
       "hash": "1a5513b",
       "message": "Strategy prompt: mandatory bullet format, remove brevity language"
@@ -60,13 +64,10 @@
     {
       "hash": "e035b99",
       "message": "UI: sidebar reorder, logo orange ring, marketing text update"
-    },
-    {
-      "hash": "4345982",
-      "message": "Budget management: monthly budget input, EUR allocation per channel, AI smart actions (increase/decrease/push)"
     }
   ],
   "changes": [
+    "ROI sidebar tab: rename to ROI & Apodosi, add NEW badge with emphasis",
     "Strategy prompt: mandatory bullet format, remove brevity language",
     "Fix race condition in AI saves (updateDocument), improve strategy prompt with example",
     "Force AI on strategy save, fix activation generation, adjust prompt length",
@@ -75,7 +76,6 @@
     "Channel Activation requires saved strategy, rich AI context, ROI dashboard tab with ROAS badge",
     "Update build info",
     "Fix strategy sync, ROI chart, dashboard tabs, AI context richness",
-    "ROI page rebuild: remove all fabricated data, real-data-only dashboard",
-    "Sidebar nav reorder: Data > Strategy > Execution > Reporting flow"
+    "ROI page rebuild: remove all fabricated data, real-data-only dashboard"
   ]
 }
