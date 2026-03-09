@@ -38,6 +38,7 @@ import {
   weightFactors
 } from '../../data';
 import { useAIChannelRecommendations } from '../../hooks/useAIChannelRecommendations';
+import { generateContentSuggestions } from '../../services/aiContentSuggestions';
 import { getPreviewConfig, type PreviewColumnId } from '../../data/strategyPreviewConfig';
 import { calculateCompositeScore } from '../../utils/compositeScore';
 import { getStockAgeDays } from '../../utils/productUtils';
@@ -171,8 +172,9 @@ export function WeightConfigurator() {
   const { products, hasImported } = useProducts();
   const { segments: rfmSegments } = useSegments();
   const { user } = useAuth();
-  const { activeStrategy, saveActiveStrategy, saveRecommendation, isLoading: strategyLoading } = useActiveStrategy();
+  const { activeStrategy, saveActiveStrategy, saveRecommendation, saveContentSuggestions, isLoading: strategyLoading } = useActiveStrategy();
   const toast = useToast();
+  const [strategySaveVersion, setStrategySaveVersion] = useState(0);
   
   // Initialize from active strategy if available, otherwise no default
   const [selectedScenario, setSelectedScenario] = useState<string | null>(() => {
@@ -310,6 +312,7 @@ export function WeightConfigurator() {
       approvedBy: user.email || user.displayName || 'User',
     }).then(() => {
       toast.success(`Στρατηγική "${scenarioName}" αποθηκεύτηκε`);
+      setStrategySaveVersion(v => v + 1);
     }).catch((error) => {
       console.error('Error saving strategy:', error);
       toast.error(`Σφάλμα: ${error?.message || error}`);
@@ -338,6 +341,7 @@ export function WeightConfigurator() {
       mixConfig: config,
     } as any).then(() => {
       toast.success(`Μικτή στρατηγική "${nameA} ${config.percentA}% / ${nameB} ${config.percentB}%" αποθηκεύτηκε`);
+      setStrategySaveVersion(v => v + 1);
     }).catch((error) => {
       console.error('Error saving mixed strategy:', error);
       toast.error(`Σφάλμα: ${error?.message || error}`);
@@ -367,6 +371,7 @@ export function WeightConfigurator() {
       mixConfig: config,
     } as any).then(() => {
       toast.success(`Εποχιακή στρατηγική "${period.name}" εφαρμόστηκε`);
+      setStrategySaveVersion(v => v + 1);
     }).catch(() => {});
   }, [user, saveActiveStrategy, toast, duration]);
 
@@ -383,7 +388,9 @@ export function WeightConfigurator() {
       approvalStatus: 'implementing',
       approvedBy: user.email || user.displayName || 'User',
       seasonalDiscount: config,
-    } as any).catch(() => {});
+    } as any).then(() => {
+      setStrategySaveVersion(v => v + 1);
+    }).catch(() => {});
   }, [user, saveActiveStrategy, toast, weights, duration]);
 
 
@@ -612,16 +619,16 @@ export function WeightConfigurator() {
     setShowFeedFormatModal(false);
   };
 
-  // AI-powered channel recommendations (fallback to static on error/disabled)
+  // AI channel recommendations — only triggered after strategy save (strategySaveVersion > 0)
   const {
-    recommendation: aiRecommendation,
+    recommendation: freshAiRec,
     isLoading: aiRecLoading,
     error: aiRecError,
     aiEnabled,
     toggleAI,
     isAIGenerated
   } = useAIChannelRecommendations({
-    selectedScenarioId: selectedScenario,
+    selectedScenarioId: strategySaveVersion > 0 ? selectedScenario : null,
     segments: rfmSegments,
     selectedSegmentId: selectedSegment,
     fitLevel: segmentFitMap[selectedSegment]?.fit ?? 'good',
@@ -638,17 +645,42 @@ export function WeightConfigurator() {
       count: rs.segment.count,
       revenueShare: rs.segment.revenue_share,
     })),
-    useAI: true
+    useAI: strategySaveVersion > 0,
+    saveVersion: strategySaveVersion,
   });
 
-  // Auto-save AI recommendation to active strategy when it changes
+  // Show saved recommendation on load, switch to fresh after save+AI-generation
+  const aiRecommendation = (strategySaveVersion > 0 && freshAiRec) ? freshAiRec : (activeStrategy?.channelRecommendation ?? null);
+
+  // Persist AI results after fresh generation
   useEffect(() => {
-    if (aiRecommendation && isAIGenerated && activeStrategy?.id && !activeStrategy.id.startsWith('default_')) {
-      saveRecommendation(aiRecommendation).catch((err) => {
+    if (freshAiRec && isAIGenerated && strategySaveVersion > 0 && activeStrategy?.id && !activeStrategy.id.startsWith('default_')) {
+      saveRecommendation(freshAiRec).catch((err) => {
         console.error('[WeightConfigurator] Failed to save AI recommendation:', err);
       });
     }
-  }, [aiRecommendation, isAIGenerated, activeStrategy?.id, saveRecommendation]);
+  }, [freshAiRec, isAIGenerated, strategySaveVersion, activeStrategy?.id, saveRecommendation]);
+
+  // Also generate and persist content suggestions after strategy save
+  useEffect(() => {
+    if (strategySaveVersion > 0 && activeStrategy?.id && !activeStrategy.id.startsWith('default_') && aiEnabled) {
+      const segmentNames = rfmSegments.map(s => s.name || s.id).slice(0, 6);
+      const topCats = [...new Set(products.map(p => p.category).filter(Boolean))].slice(0, 5);
+      const scenarioName = scenarios.find(s => s.id === activeStrategy.scenarioId)?.name || activeStrategy.scenarioId;
+      generateContentSuggestions({
+        scenarioId: activeStrategy.scenarioId,
+        scenarioName,
+        weights: activeStrategy.weights ?? null,
+        brandName: currentBrand?.name,
+        topCategories: topCats,
+        segmentNames,
+      }).then(result => {
+        if (result) {
+          saveContentSuggestions(result).catch(err => console.error('[WeightConfigurator] Failed to save content suggestions:', err));
+        }
+      }).catch(err => console.error('[WeightConfigurator] Content AI generation failed:', err));
+    }
+  }, [strategySaveVersion, activeStrategy?.id]);
 
   // Load saved strategy from Firestore on mount/refresh
   useEffect(() => {

@@ -37,6 +37,7 @@ export interface UseAIChannelRecommendationsOptions {
   totalBudget?: number;
   campaignPerformance?: CampaignPerformanceData[];
   context?: PromptContext;
+  saveVersion?: number;
 }
 
 const SEGMENT_NAME_MAP: Record<string, string> = {
@@ -83,6 +84,7 @@ export function useAIChannelRecommendations({
   totalBudget,
   campaignPerformance,
   context = 'strategy',
+  saveVersion = 0,
 }: UseAIChannelRecommendationsOptions) {
   const [aiEnabled, setAiEnabled] = useState(useAI);
 
@@ -126,7 +128,7 @@ export function useAIChannelRecommendations({
     error: aiError,
     refetch
   } = useQuery({
-    queryKey: ['aiChannelRecommendations', 'v8', selectedScenarioId, selectedSegmentId, fitLevel, aiEnabled, mixConfig?.scenarioA, mixConfig?.scenarioB, mixConfig?.percentA, brandContext?.brandName, totalBudget, context],
+    queryKey: ['aiChannelRecommendations', 'v9', selectedScenarioId, selectedSegmentId, fitLevel, aiEnabled, mixConfig?.scenarioA, mixConfig?.scenarioB, mixConfig?.percentA, brandContext?.brandName, totalBudget, context, saveVersion],
     queryFn: async () => {
       if (!scenario || !segment || !aiEnabled) return null;
       return generateChannelRecommendations({

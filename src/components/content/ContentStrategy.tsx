@@ -2,7 +2,6 @@ import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Sparkles,
-  RefreshCw,
   Copy,
   Check,
   Mail,
@@ -17,8 +16,8 @@ import {
   FileText,
   Send,
 } from 'lucide-react';
-import { Card, Badge, Button, Spinner } from '../common';
-import { useSegments, useProducts, useAIContentSuggestions } from '../../hooks';
+import { Card, Badge, Spinner } from '../common';
+// Data is now read from activeStrategy.contentSuggestions (persisted on strategy save)
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import { useBrand } from '../../hooks/useBrand';
 
@@ -40,29 +39,18 @@ function getChannelIcon(channel: string) {
 
 export function ContentStrategy() {
   const { currentBrand } = useBrand();
-  const { products } = useProducts();
-  const { segments: rfmSegments } = useSegments();
   const { activeStrategy, getStrategyName, isLoading: strategyLoading } = useActiveStrategy();
-  const [aiEnabled, setAiEnabled] = useState(true);
   const [showExamples, setShowExamples] = useState(false);
   const [briefCopied, setBriefCopied] = useState(false);
   const [allCopied, setAllCopied] = useState(false);
 
-  const topCategories = useMemo(
-    () => [...new Set(products.map(p => p.category).filter(Boolean))].slice(0, 5),
-    [products]
-  );
-  const segmentNames = useMemo(
-    () => rfmSegments.map(s => s.name || s.id).slice(0, 6),
-    [rfmSegments]
-  );
-
-  const { suggestions, directions, brief, isLoading: suggestionsLoading, refetch, hasStrategy } = useAIContentSuggestions({
-    aiEnabled,
-    brandName: currentBrand?.name,
-    topCategories,
-    segmentNames,
-  });
+  // Read persisted content suggestions from strategy (AI runs only on strategy save)
+  const saved = activeStrategy?.contentSuggestions;
+  const suggestions = saved?.actions ?? [];
+  const directions = saved?.directions ?? [];
+  const brief = saved?.brief ?? '';
+  const suggestionsLoading = strategyLoading;
+  const hasStrategy = !!activeStrategy && !activeStrategy.id.startsWith('default_');
 
   const handleCopyBrief = () => {
     if (!brief) return;
@@ -151,39 +139,7 @@ export function ContentStrategy() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setAiEnabled(!aiEnabled)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all flex-shrink-0"
-            style={{
-              background: aiEnabled ? '#1a1a1a' : '#E5E5E5',
-              color: aiEnabled ? '#fff' : '#888',
-              boxShadow: aiEnabled ? '0 2px 8px rgba(0,0,0,0.2)' : 'none',
-            }}
-            title={aiEnabled ? 'AI ενεργό' : 'AI απενεργοποιημένο'}
-          >
-            <Sparkles size={12} />
-            AI
-            <span
-              style={{
-                width: 7, height: 7, borderRadius: '50%',
-                background: aiEnabled ? '#4ade80' : '#aaa',
-                boxShadow: aiEnabled ? '0 0 4px #4ade80' : 'none',
-                flexShrink: 0,
-              }}
-            />
-          </button>
-          {aiEnabled && (
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={<RefreshCw size={14} />}
-              onClick={() => refetch()}
-              disabled={suggestionsLoading}
-            >
-              Ανανέωση
-            </Button>
-          )}
-          {aiEnabled && !suggestionsLoading && buildFullExportText && (
+          {hasStrategy && !suggestionsLoading && buildFullExportText && (
             <button
               onClick={handleCopyAll}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all bg-[#F5F5F5] hover:bg-[#E5E5E5] text-[#1A1A1A]"
@@ -197,14 +153,25 @@ export function ContentStrategy() {
       </div>
 
       {/* Loading state */}
-      {hasStrategy && aiEnabled && suggestionsLoading && (
+      {hasStrategy && suggestionsLoading && (
         <div className="flex items-center justify-center py-16">
-          <Spinner size="lg" label="Δημιουργία θεματικών κατευθύνσεων..." />
+          <Spinner size="lg" label="Φόρτωση..." />
         </div>
       )}
 
+      {/* Empty state when strategy exists but no content suggestions saved */}
+      {hasStrategy && !suggestionsLoading && !saved && (
+        <Card padding="lg">
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <Sparkles size={32} className="text-[#9CA3AF] mb-3" />
+            <p className="text-sm text-[#4A4A4A] font-medium">Δεν υπάρχουν προτάσεις περιεχομένου</p>
+            <p className="text-xs text-[#9CA3AF] mt-1">Αποθηκεύστε (ξανά) τη στρατηγική στο Commercial Strategy για να δημιουργηθούν αυτόματα</p>
+          </div>
+        </Card>
+      )}
+
       {/* Thematic Directions per Channel */}
-      {hasStrategy && aiEnabled && !suggestionsLoading && directions.length > 0 && (
+      {hasStrategy && !suggestionsLoading && directions.length > 0 && (
         <Card padding="lg">
           <div className="flex items-center gap-3 mb-5">
             <div className="w-10 h-10 bg-[#F5F5F5] rounded-xl flex items-center justify-center">
@@ -265,7 +232,7 @@ export function ContentStrategy() {
       )}
 
       {/* Example Content Actions (collapsible) */}
-      {hasStrategy && aiEnabled && !suggestionsLoading && suggestions.length > 0 && (
+      {hasStrategy && !suggestionsLoading && suggestions.length > 0 && (
         <Card padding="lg">
           <button
             onClick={() => setShowExamples(!showExamples)}
@@ -329,7 +296,7 @@ export function ContentStrategy() {
       )}
 
       {/* Content Brief for Marketing Team */}
-      {hasStrategy && aiEnabled && !suggestionsLoading && brief && (
+      {hasStrategy && !suggestionsLoading && brief && (
         <Card padding="lg">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">

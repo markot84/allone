@@ -5,6 +5,7 @@ import { useBrand } from './useBrand';
 import { scenarios } from '../data';
 import { useMemo } from 'react';
 import type { ChannelRecommendation } from '../types';
+import type { ContentSuggestionsResult } from '../services/aiContentSuggestions';
 
 export interface MixConfig {
   scenarioA: string;
@@ -26,6 +27,7 @@ export interface ActiveStrategy {
   mixConfig?: MixConfig;
   monthlyBudget?: number;
   channelRecommendation?: ChannelRecommendation;
+  contentSuggestions?: ContentSuggestionsResult;
   createdAt: string;
   updatedAt: string;
 }
@@ -93,6 +95,7 @@ export function useActiveStrategy() {
       approvedBy?: string;
       mixConfig?: MixConfig;
       monthlyBudget?: number;
+      channelRecommendation?: ChannelRecommendation;
     }) => {
       if (!brandId) throw new Error('No brand selected');
       
@@ -120,6 +123,10 @@ export function useActiveStrategy() {
       
       if (strategy.monthlyBudget !== undefined) {
         strategyData.monthlyBudget = strategy.monthlyBudget;
+      }
+
+      if (strategy.channelRecommendation) {
+        strategyData.channelRecommendation = JSON.parse(JSON.stringify(strategy.channelRecommendation));
       }
 
       // Only add optional fields if they have values (Firestore doesn't accept undefined)
@@ -182,6 +189,24 @@ export function useActiveStrategy() {
     },
   });
 
+  const saveContentSuggestions = useMutation({
+    mutationFn: async (suggestions: ContentSuggestionsResult) => {
+      if (!activeStrategy?.id || !brandId) throw new Error('No active strategy');
+      if (activeStrategy.id.startsWith('default_')) throw new Error('Cannot save to default strategy');
+      const now = new Date().toISOString();
+      const clean = JSON.parse(JSON.stringify(suggestions));
+      await FirestoreService.setDocument('active_strategies', activeStrategy.id, {
+        ...activeStrategy,
+        contentSuggestions: clean,
+        updatedAt: now,
+      } as Record<string, unknown>);
+      return { ...activeStrategy, contentSuggestions: clean, updatedAt: now };
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(['activeStrategy', brandId], updated);
+    },
+  });
+
   const getStrategyName = (scenarioId: string) => {
     const scenario = scenarios.find(s => s.id === scenarioId);
     return scenario?.name || 'Custom Strategy';
@@ -216,6 +241,7 @@ export function useActiveStrategy() {
     updateBudget: updateBudget.mutateAsync,
     isSavingBudget: updateBudget.isPending,
     saveRecommendation: saveRecommendation.mutateAsync,
+    saveContentSuggestions: saveContentSuggestions.mutateAsync,
     getStrategyName,
   };
 }
