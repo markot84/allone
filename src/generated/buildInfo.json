@@ -1,10 +1,18 @@
 {
-  "version": "0.27.0",
-  "previousVersion": "0.26.0",
-  "commitHash": "adfacb6",
+  "version": "0.29.7",
+  "previousVersion": "0.29.6",
+  "commitHash": "38b0667",
   "branch": "main",
-  "buildDate": "2026-03-09T06:09:47.648Z",
+  "buildDate": "2026-03-09T07:21:00.710Z",
   "commits": [
+    {
+      "hash": "38b0667",
+      "message": "ROI page rebuild: remove all fabricated data, real-data-only dashboard"
+    },
+    {
+      "hash": "838ace4",
+      "message": "Sidebar nav reorder: Data > Strategy > Execution > Reporting flow"
+    },
     {
       "hash": "adfacb6",
       "message": "Sync channels: Strategy saves AI recommendations to Firestore, Channel Activation reads from saved data. Fixed static fallback to paid-only budget allocation."
@@ -56,17 +64,11 @@
     {
       "hash": "6791047",
       "message": "Fix revenue_share property name"
-    },
-    {
-      "hash": "1608b1e",
-      "message": "AI upgrade: CMO-level prompts, deterministic output (temp=0), funnel stage labels, expanded channels, structured bullets, 1hr cache"
-    },
-    {
-      "hash": "c0d326e",
-      "message": "Clean up unused preset/duration code for production build"
     }
   ],
   "changes": [
+    "ROI page rebuild: remove all fabricated data, real-data-only dashboard",
+    "Sidebar nav reorder: Data > Strategy > Execution > Reporting flow",
     "Sync channels: Strategy saves AI recommendations to Firestore, Channel Activation reads from saved data. Fixed static fallback to paid-only budget allocation.",
     "AI context: strategy vs activation tone, funnel 4-stage (Awareness/Consideration/Sales/Loyalty), rationale formatting",
     "AI prompt: separate paid vs owned channels, budget only for paid media",
@@ -74,8 +76,6 @@
     "Budget management: monthly budget input, EUR allocation per channel, AI smart actions (increase/decrease/push)",
     "Revert MarketingIndexPage to pre-rewrite state",
     "Channel Activation upgrade: AI briefs, per-channel status (Firestore), agency brief export",
-    "Refine value proposition tone: professional tagline aligned with NotTheSame brand",
-    "Positioning and marketing refresh: new buyer persona, GTM strategy, marketing page rewrite",
-    "[Διόρθωση] Remove unused AlertTriangle import"
+    "Refine value proposition tone: professional tagline aligned with NotTheSame brand"
   ]
 }
