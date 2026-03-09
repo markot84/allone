@@ -1,16 +1,13 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useMemo } from 'react';
+import { motion } from 'framer-motion';
 import {
   Euro,
   TrendingUp,
   Target,
-  PieChart as PieChartIcon,
-  Info,
-  Download,
-  ChevronRight,
-  ChevronDown,
-  Award,
-  HelpCircle
+  BarChart3,
+  Wallet,
+  ShoppingCart,
+  ArrowUpRight,
 } from 'lucide-react';
 import {
   AreaChart,
@@ -19,29 +16,31 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  PieChart,
-  Pie,
-  Cell,
-  ReferenceLine
+  ResponsiveContainer,
+  Legend,
 } from 'recharts';
-import { Card, CardHeader, Badge, Button } from '../common';
-import { useOrganic, useSegments, useProducts, useCampaigns } from '../../hooks';
-import {
-  attributionMethodology
-} from '../../data/mockROI';
+import { Card, CardHeader, Badge } from '../common';
+import { useOrganic, useCampaigns, useActiveStrategy } from '../../hooks';
 import {
   calculateTotalRevenue,
-  calculateAttributedRevenue,
-  calculateROISummary,
-  calculateSegmentPerformance,
-  calculateCostSavings,
+  calculateCampaignMetrics,
+  calculateChannelPerformance,
   getCampaignDateForMonth,
-  type ROISummary,
 } from '../../utils/roiUtils';
-import { formatCurrency, formatCurrencyCompact, formatNumber, formatMultiplier, formatPercent } from '../../utils/format';
+import { formatCurrencyCompact, formatNumber, formatPercent } from '../../utils/format';
 import type { Campaign } from '../../types';
 
-const COLORS = ['#22C55E', '#78716C', 'var(--nts-accent)', '#8B5CF6', '#F59E0B'];
+const CHANNEL_COLORS: Record<string, string> = {
+  'Google Ads': '#4285F4',
+  'Meta': '#1877F2',
+  'Other': '#78716C',
+  'Google Shopping': '#34A853',
+  'Facebook': '#1877F2',
+  'Instagram': '#E4405F',
+  'TikTok': '#000000',
+  'Email': '#F59E0B',
+  'SMS': '#8B5CF6',
+};
 
 interface ROIAttributionProps {
   embedded?: boolean;
@@ -49,88 +48,19 @@ interface ROIAttributionProps {
 
 export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
   const { totalOrganicRevenue, byMonth: organicByMonth, hasImported: hasOrganic } = useOrganic();
-  const { segments, hasImported: hasSegments } = useSegments();
-  const { products, count: productsCount } = useProducts();
   const { campaigns, hasImported: hasCampaigns } = useCampaigns();
-  const hasAnyData = hasOrganic || hasSegments || productsCount > 0 || hasCampaigns;
-  const [showMethodology, setShowMethodology] = useState(false);
-  const [selectedBreakdown, setSelectedBreakdown] = useState<string | null>(null);
-  const trendContainerRef = useRef<HTMLDivElement>(null);
-  const breakdownContainerRef = useRef<HTMLDivElement>(null);
-  const [chartDimensions, setChartDimensions] = useState({ trend: { width: 800, height: 288 }, breakdown: { width: 400, height: 192 } });
-
-  useEffect(() => {
-    const updateDimensions = () => {
-      if (trendContainerRef.current) {
-        const width = trendContainerRef.current.offsetWidth || 800;
-        setChartDimensions(prev => ({
-          ...prev,
-          trend: { width: Math.max(width, 400), height: 288 }
-        }));
-      }
-      if (breakdownContainerRef.current) {
-        const width = breakdownContainerRef.current.offsetWidth || 400;
-        setChartDimensions(prev => ({
-          ...prev,
-          breakdown: { width: Math.max(width, 300), height: 192 }
-        }));
-      }
-    };
-
-    updateDimensions();
-    const resizeObserver = new ResizeObserver(updateDimensions);
-    if (trendContainerRef.current) resizeObserver.observe(trendContainerRef.current);
-    if (breakdownContainerRef.current) resizeObserver.observe(breakdownContainerRef.current);
-
-    return () => resizeObserver.disconnect();
-  }, []);
-
-  // Calculate ROI from real data
+  const { activeStrategy } = useActiveStrategy();
   const campaignsTyped = campaigns as Campaign[];
-  const productsTyped = products;
-  
-  const totalRevenue = useMemo(() => {
-    if (hasAnyData) {
-      return calculateTotalRevenue(totalOrganicRevenue, campaignsTyped);
-    }
-    return 0;
-  }, [totalOrganicRevenue, campaignsTyped, hasAnyData]);
+  const hasData = hasOrganic || hasCampaigns;
+  const monthlyBudget = activeStrategy?.monthlyBudget || 0;
 
-  const attributedBreakdown = useMemo(() => {
-    if (hasAnyData) {
-      return calculateAttributedRevenue(campaignsTyped, productsTyped, segments);
-    }
-    return {
-      segment_activation: { revenue: 0, percentage: 0, details: [] },
-      inventory_optimization: { revenue: 0, percentage: 0, details: [], cost_avoided: 0 },
-      channel_optimization: { revenue: 0, percentage: 0, details: [] },
-    };
-  }, [campaignsTyped, productsTyped, segments, hasAnyData]);
+  const metrics = useMemo(() => calculateCampaignMetrics(campaignsTyped), [campaignsTyped]);
+  const totalRevenue = useMemo(
+    () => calculateTotalRevenue(totalOrganicRevenue || 0, campaignsTyped),
+    [totalOrganicRevenue, campaignsTyped]
+  );
+  const channelPerf = useMemo(() => calculateChannelPerformance(campaignsTyped), [campaignsTyped]);
 
-  const attributedRevenue = useMemo(() => {
-    return attributedBreakdown.segment_activation.revenue +
-           attributedBreakdown.inventory_optimization.revenue +
-           attributedBreakdown.channel_optimization.revenue;
-  }, [attributedBreakdown]);
-
-  const campaignCost = useMemo(() => {
-    return campaignsTyped.reduce((sum, c) => sum + (c.amount_spent || 0), 0);
-  }, [campaignsTyped]);
-
-  const summary: ROISummary = useMemo(() => {
-    if (hasAnyData) {
-      return calculateROISummary(totalRevenue, attributedRevenue, campaignCost);
-    }
-    return { total_revenue: 0, performance_plus_attributed: 0, attribution_percentage: 0, roi_multiplier: 0, campaign_cost: 0 };
-  }, [totalRevenue, attributedRevenue, campaignCost, hasAnyData]);
-
-  // Scale factor when attributed > total (breakdown amounts shown proportionally)
-  const scaleFactor = useMemo(() => {
-    if (totalRevenue <= 0 || attributedRevenue <= 0) return 1;
-    return attributedRevenue > totalRevenue ? totalRevenue / attributedRevenue : 1;
-  }, [totalRevenue, attributedRevenue]);
-
-  // Prepare trend data: οργανικά + campaigns ανά μήνα
   const trendData = useMemo(() => {
     const byMonth = new Map<string, { organic: number; campaigns: number }>();
     organicByMonth.forEach((val, key) => {
@@ -143,645 +73,392 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
       byMonth.set(key, { ...ex, campaigns: ex.campaigns + (c.conversion_value || 0) });
     });
     if (byMonth.size === 0) return [];
-    const order = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const order = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return Array.from(byMonth.entries())
       .sort((a, b) => {
         const [ma, ya] = a[0].split(' ');
         const [mb, yb] = b[0].split(' ');
-        const ia = order.indexOf(ma); const ib = order.indexOf(mb);
-        if (ia !== ib) return ia - ib;
-        return (ya || '').localeCompare(yb || '');
+        if (ya !== yb) return (ya || '').localeCompare(yb || '');
+        return order.indexOf(ma) - order.indexOf(mb);
       })
-      .map(([month, d]) => {
-        const total = d.organic + d.campaigns;
-        return {
-          month,
-          total: total / 1000,
-          attributed: d.campaigns / 1000,
-          rate: total > 0 ? Math.round((d.campaigns / total) * 1000) / 10 : 0,
-        };
-      });
+      .map(([month, d]) => ({
+        month,
+        organic: Math.round(d.organic),
+        campaigns: Math.round(d.campaigns),
+      }));
   }, [organicByMonth, campaignsTyped]);
 
-  // ROI Display
-  const roiDisplay = hasAnyData && summary.roi_multiplier > 0
-    ? {
-        headline: `${formatMultiplier(summary.roi_multiplier, 1)} ROI`,
-        subheadline: `Κάθε €1 σε διαφημίσεις απέφερε €${formatNumber(summary.roi_multiplier, 1)} σε attributed revenue`,
-        disclaimer: 'Βάσει conservative attribution methodology'
-      }
-    : { headline: '0x ROI', subheadline: 'Φόρτωσε δεδομένα για να δεις το ROI', disclaimer: 'Βάσει conservative attribution methodology' };
+  const topCampaigns = useMemo(() => {
+    return [...campaignsTyped]
+      .filter(c => (c.amount_spent || 0) > 0)
+      .sort((a, b) => (b.roas || 0) - (a.roas || 0))
+      .slice(0, 10);
+  }, [campaignsTyped]);
 
-  // Breakdown data from real calculations (amounts scaled when attributed > total)
-  const breakdownData = hasAnyData && attributedRevenue > 0
-    ? [
-        { 
-          id: 'segment', 
-          name: 'Segment Campaigns', 
-          value: attributedBreakdown.segment_activation.percentage, 
-          amount: attributedBreakdown.segment_activation.revenue * scaleFactor, 
-          details: attributedBreakdown.segment_activation.details.map(d => ({ segment: d.segment, revenue: d.revenue, campaigns: d.campaigns }))
-        },
-        { 
-          id: 'inventory', 
-          name: 'Stock Clearance', 
-          value: attributedBreakdown.inventory_optimization.percentage, 
-          amount: attributedBreakdown.inventory_optimization.revenue * scaleFactor, 
-          details: attributedBreakdown.inventory_optimization.details.map(d => ({ type: d.type, revenue: d.revenue, units: d.units })),
-          costAvoided: attributedBreakdown.inventory_optimization.cost_avoided
-        },
-        { 
-          id: 'channel', 
-          name: 'Channel Optimization', 
-          value: attributedBreakdown.channel_optimization.percentage, 
-          amount: attributedBreakdown.channel_optimization.revenue * scaleFactor, 
-          details: attributedBreakdown.channel_optimization.details
-        }
-      ]
-    : hasAnyData
-    ? [
-        { id: 'segment', name: 'Segment Campaigns', value: 0, amount: 0, details: [] },
-        { id: 'inventory', name: 'Stock Clearance', value: 0, amount: 0, details: [], costAvoided: 0 },
-        { id: 'channel', name: 'Channel Optimization', value: 0, amount: 0, details: [] }
-      ]
-    : [
-        { id: 'segment', name: 'Segment Campaigns', value: 0, amount: 0, details: [] },
-        { id: 'inventory', name: 'Stock Clearance', value: 0, amount: 0, details: [], costAvoided: 0 },
-        { id: 'channel', name: 'Channel Optimization', value: 0, amount: 0, details: [] }
-      ];
+  const totalSpendForBudget = metrics.totalSpend;
+  const budgetUtilization = monthlyBudget > 0 ? (totalSpendForBudget / monthlyBudget) * 100 : 0;
 
-  // Segment performance from real data only
-  const segmentPerf = useMemo(() => {
-    if (hasAnyData && segments.length > 0 && campaignsTyped.length > 0) {
-      return calculateSegmentPerformance(campaignsTyped, segments);
-    }
-    return [];
-  }, [campaignsTyped, segments, hasAnyData]);
-
-  // Cost savings from real data only
-  const costSavingsData = useMemo(() => {
-    if (hasAnyData && (productsTyped.length > 0 || campaignsTyped.length > 0)) {
-      return calculateCostSavings(productsTyped, campaignsTyped);
-    }
-    return { period: 'Last 90 Days', items: [], total: 0 };
-  }, [productsTyped, campaignsTyped, hasAnyData]);
+  if (!hasData) {
+    return (
+      <div className="space-y-6">
+        {!embedded && (
+          <div>
+            <h2 className="text-2xl font-bold text-[var(--nts-charcoal)]">ROI & Απόδοση</h2>
+            <p className="text-[var(--nts-medium-gray)] mt-1">Μέτρηση απόδοσης καμπανιών και εσόδων</p>
+          </div>
+        )}
+        <Card padding="lg">
+          <div className="text-center py-16">
+            <BarChart3 size={48} className="mx-auto text-[var(--nts-medium-gray)] mb-4" />
+            <h3 className="text-lg font-semibold text-[var(--nts-charcoal)] mb-2">Δεν υπάρχουν δεδομένα</h3>
+            <p className="text-[var(--nts-medium-gray)] max-w-md mx-auto">
+              Φόρτωσε campaigns και organic revenue στο Data Import για να δεις την απόδοση.
+            </p>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       {!embedded && (
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold text-[#1A1A1A]">ROI Attribution</h2>
-            <p className="text-[#4A4A4A] mt-1">
-              Measure and prove Performance+ impact on your business
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <Button 
-              variant="secondary" 
-              icon={<HelpCircle size={16} />}
-              onClick={() => setShowMethodology(!showMethodology)}
-            >
-              Methodology
-            </Button>
-            <Button variant="primary" icon={<Download size={16} />}>
-              Export Report
-            </Button>
-          </div>
+        <div>
+          <h2 className="text-2xl font-bold text-[var(--nts-charcoal)]">ROI & Απόδοση</h2>
+          <p className="text-[var(--nts-medium-gray)] mt-1">Μέτρηση απόδοσης καμπανιών και εσόδων</p>
         </div>
       )}
 
-      {/* Hero ROI Card */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
-        <Card padding="lg" className="bg-white border-2 border-[var(--nts-border-gray)]">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-            {/* Main ROI Display */}
-            <div className="md:col-span-2">
-              <p className="text-[var(--nts-medium-gray)] text-sm mb-2 flex items-center gap-2">
-                <Euro size={16} className="text-[var(--nts-medium-gray)]" /> Performance+ ROI (Last 90 Days)
-              </p>
-              <div className="flex items-baseline gap-4 flex-wrap">
-                <motion.span 
-                  className="text-6xl font-bold text-[var(--nts-charcoal)]"
-                  initial={{ scale: 0.5 }}
-                  animate={{ scale: 1 }}
-                  transition={{ type: 'spring', stiffness: 200 }}
-                >
-                  {roiDisplay.headline}
-                </motion.span>
-                {summary.attribution_percentage > 0 && (
-                  <Badge variant="success" size="md">
-                    +{summary.attribution_percentage}% attributed
-                  </Badge>
-                )}
-              </div>
-              <p className="text-[var(--nts-medium-gray)] mt-4 max-w-md">
-                {roiDisplay.subheadline}
-              </p>
-              <p className="text-xs text-[var(--nts-medium-gray)] mt-2 flex items-center gap-1">
-                <Info size={12} />
-                {roiDisplay.disclaimer}
-              </p>
-            </div>
-
-            {/* Key Metrics */}
-            <div className="space-y-4">
-              <MetricBox 
-                icon={<Euro size={20} />}
-                label="Σύνολο Εσόδων" 
-                value={formatCurrencyCompact(summary.total_revenue)}
-                color="var(--nts-charcoal)"
-              />
-              <MetricBox 
-                icon={<Target size={20} />}
-                label="P+ Attributed" 
-                value={formatCurrencyCompact(summary.performance_plus_attributed)}
-                color="var(--nts-orange)"
-                highlight
-              />
-            </div>
-
-            <div className="space-y-4">
-              <MetricBox 
-                icon={<Euro size={20} />}
-                label="Κόστος Campaigns" 
-                value={formatCurrencyCompact(summary.campaign_cost)}
-                color="var(--nts-charcoal)"
-              />
-              <MetricBox 
-                icon={<TrendingUp size={20} />}
-                label="ROI Πολλαπλασιαστής" 
-                value={`${formatMultiplier(summary.roi_multiplier, 1)}`}
-                color="var(--success)"
-              />
-            </div>
-          </div>
-        </Card>
-      </motion.div>
-
-      {/* Impact Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <ImpactCard
+      {/* Section 1: Key Metrics */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <MetricCard
           icon={<Euro size={20} />}
-          label="Σύνολο Εσόδων"
-          value={formatCurrencyCompact(summary.total_revenue)}
-          subtext={hasAnyData ? '+18.2% vs previous period' : 'Φόρτωσε δεδομένα'}
+          label="Συνολικά Έσοδα"
+          value={formatCurrencyCompact(totalRevenue)}
+          subtitle={hasOrganic && hasCampaigns ? 'Organic + Campaigns' : hasOrganic ? 'Organic' : 'Campaigns'}
+          color="var(--nts-charcoal)"
         />
-        <ImpactCard
-          icon={<Target size={20} />}
-          label="Performance+ Attributed"
-          value={formatCurrencyCompact(summary.performance_plus_attributed)}
-          subtext={hasAnyData ? `${formatNumber(summary.attribution_percentage, 1)}% of total revenue` : 'Φόρτωσε δεδομένα'}
-          highlight
+        <MetricCard
+          icon={<Wallet size={20} />}
+          label="Ad Spend"
+          value={formatCurrencyCompact(metrics.totalSpend)}
+          subtitle={`${campaignsTyped.length} campaigns`}
+          color="#EF4444"
         />
-        <ImpactCard
+        <MetricCard
           icon={<TrendingUp size={20} />}
-          label="ROI Πολλαπλασιαστής"
-          value={`${formatMultiplier(summary.roi_multiplier, 1)}`}
-          subtext="Return on ad spend"
+          label="ROAS"
+          value={metrics.roas > 0 ? `${formatNumber(metrics.roas, 2)}x` : '—'}
+          subtitle="Μέσος σταθμισμένος"
+          color="#22C55E"
         />
-        <ImpactCard
-          icon={<Euro size={20} />}
-          label="Εξοικονομήσεις"
-          value={formatCurrencyCompact(costSavingsData.total)}
-          subtext={hasAnyData ? 'Warehousing + Ad efficiency' : 'Φόρτωσε δεδομένα'}
+        <MetricCard
+          icon={<ShoppingCart size={20} />}
+          label="Conversions"
+          value={formatNumber(metrics.totalConversions)}
+          subtitle={metrics.cpa > 0 ? `CPA: €${formatNumber(metrics.cpa, 2)}` : ''}
+          color="var(--nts-accent)"
         />
       </div>
 
-      {/* Revenue Trend + Attribution Breakdown */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2" padding="lg">
+      {/* Section 2: Revenue Trend */}
+      {trendData.length > 0 && (
+        <Card padding="lg">
           <CardHeader
-            title="Revenue Attribution Trend"
-            subtitle="Σύνολο vs Performance+ attributed revenue"
+            title="Τάση Εσόδων"
+            subtitle="Organic vs Campaign revenue ανά μήνα"
             icon={<TrendingUp size={20} className="text-[var(--nts-accent)]" />}
           />
-          <div 
-            ref={trendContainerRef}
-            className="w-full" 
-            style={{ 
-              width: '100%', 
-              height: '288px', 
-              minHeight: '288px', 
-              position: 'relative'
-            }}
-          >
-            <AreaChart 
-              width={chartDimensions.trend.width} 
-              height={chartDimensions.trend.height} 
-              data={trendData} 
-              margin={{ top: 10, right: 10, left: 10, bottom: 10 }}
-            >
+          <div className="w-full" style={{ height: 320 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={trendData} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
                 <defs>
-                  <linearGradient id="totalGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#E5E5E5" stopOpacity={0.8}/>
-                    <stop offset="95%" stopColor="#E5E5E5" stopOpacity={0}/>
+                  <linearGradient id="organicGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
                   </linearGradient>
-                  <linearGradient id="attrGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#78716C" stopOpacity={0.4}/>
-                    <stop offset="95%" stopColor="#78716C" stopOpacity={0}/>
+                  <linearGradient id="campaignGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#F97316" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#F97316" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" vertical={false} />
-                <XAxis 
-                  dataKey="month" 
-                  tick={{ fill: '#57606a', fontSize: 12 }} 
+                <XAxis
+                  dataKey="month"
+                  tick={{ fill: '#57606a', fontSize: 12 }}
                   axisLine={{ stroke: '#d0d7de' }}
                   tickLine={{ stroke: '#d0d7de' }}
                 />
-                <YAxis 
-                  tickFormatter={(v) => `€${v}K`} 
+                <YAxis
+                  tickFormatter={(v) => `€${(v / 1000).toFixed(0)}K`}
                   tick={{ fill: '#57606a', fontSize: 12 }}
                   axisLine={{ stroke: '#d0d7de' }}
                   tickLine={{ stroke: '#d0d7de' }}
                 />
                 <Tooltip
-                  contentStyle={{ 
-                    backgroundColor: '#fff', 
-                    border: '1px solid #d0d7de', 
+                  contentStyle={{
+                    backgroundColor: '#fff',
+                    border: '1px solid #d0d7de',
                     borderRadius: '6px',
                     fontSize: '12px',
-                    padding: '8px 12px'
+                    padding: '8px 12px',
                   }}
                   formatter={(value: any, name?: string) => [
                     formatCurrencyCompact((value as number) || 0),
-                    name === 'total' ? 'Total Revenue' : 'P+ Attributed'
+                    name === 'organic' ? 'Organic Revenue' : 'Campaign Revenue',
                   ]}
                   labelStyle={{ color: '#24292f', fontWeight: 600, marginBottom: 4 }}
                 />
-                {/* Milestone annotations */}
-                <ReferenceLine x="Sep" stroke="#78716C" strokeDasharray="3 3" label={{ value: 'Launch', position: 'top', fontSize: 10, fill: '#57606a' }} />
-                <Area 
-                  type="monotone" 
-                  dataKey="total" 
-                  stroke="#9CA3AF" 
-                  strokeWidth={2} 
-                  fillOpacity={1}
-                  fill="url(#totalGrad)" 
-                  name="total" 
+                <Legend
+                  formatter={(value) => (value === 'organic' ? 'Organic' : 'Campaigns')}
+                  wrapperStyle={{ fontSize: 12 }}
                 />
-                <Area 
-                  type="monotone" 
-                  dataKey="attributed" 
-                  stroke="#78716C" 
-                  strokeWidth={2} 
+                <Area
+                  type="monotone"
+                  dataKey="organic"
+                  stroke="#3B82F6"
+                  strokeWidth={2}
                   fillOpacity={1}
-                  fill="url(#attrGrad)" 
-                  name="attributed" 
+                  fill="url(#organicGrad)"
+                  name="organic"
+                />
+                <Area
+                  type="monotone"
+                  dataKey="campaigns"
+                  stroke="#F97316"
+                  strokeWidth={2}
+                  fillOpacity={1}
+                  fill="url(#campaignGrad)"
+                  name="campaigns"
                 />
               </AreaChart>
+            </ResponsiveContainer>
           </div>
-
         </Card>
+      )}
 
-        {/* Attribution Breakdown */}
+      {/* Section 3: Channel ROI Comparison */}
+      {channelPerf.length > 0 && (
         <Card padding="lg">
           <CardHeader
-            title="Attribution Breakdown"
-            subtitle="Έσοδα ανά πηγή"
-            icon={<PieChartIcon size={20} className="text-[var(--nts-accent)]" />}
+            title="Απόδοση ανά Κανάλι"
+            subtitle="Σύγκριση ROAS, spend και conversions"
+            icon={<BarChart3 size={20} className="text-[var(--nts-accent)]" />}
           />
-          <div 
-            ref={breakdownContainerRef}
-            className="w-full" 
-            style={{ 
-              width: '100%', 
-              height: '192px', 
-              minHeight: '192px', 
-              position: 'relative'
-            }}
-          >
-            <PieChart width={chartDimensions.breakdown.width} height={chartDimensions.breakdown.height}>
-                <Pie
-                  data={breakdownData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={50}
-                  outerRadius={70}
-                  paddingAngle={3}
-                  dataKey="value"
-                  onClick={(data) => setSelectedBreakdown(selectedBreakdown === data.id ? null : data.id)}
-                >
-                  {breakdownData.map((_, index) => (
-                    <Cell 
-                      key={index} 
-                      fill={COLORS[index]} 
-                      stroke={selectedBreakdown === breakdownData[index].id ? '#1A1A1A' : 'transparent'}
-                      strokeWidth={2}
-                      cursor="pointer"
-                    />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #E5E5E5', borderRadius: '8px' }}
-                  formatter={(value) => [formatPercent((value as number) || 0, 1), '']}
-                />
-              </PieChart>
-          </div>
-          <div className="space-y-3 mt-4">
-            {breakdownData.map((item, index) => (
-              <button
-                key={item.id}
-                onClick={() => setSelectedBreakdown(selectedBreakdown === item.id ? null : item.id)}
-                className={`w-full flex items-center justify-between p-2 rounded-lg transition-all ${
-                  selectedBreakdown === item.id ? 'bg-[#F5F5F5]' : 'hover:bg-[#F5F5F5]'
-                }`}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mt-4">
+            {channelPerf.map((ch, i) => (
+              <motion.div
+                key={ch.channel}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.05 }}
+                className="p-4 rounded-lg border border-[var(--nts-border-gray)] bg-white hover:shadow-sm transition-shadow"
               >
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[index] }} />
-                  <span className="text-sm text-[#4A4A4A]">{item.name}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-[#1A1A1A] font-mono">
-                    {formatCurrencyCompact(item.amount)}
-                  </span>
-                  <ChevronRight 
-                    size={14} 
-                    className={`text-[#9CA3AF] transition-transform ${selectedBreakdown === item.id ? 'rotate-90' : ''}`}
+                <div className="flex items-center gap-2 mb-3">
+                  <div
+                    className="w-3 h-3 rounded-full"
+                    style={{ backgroundColor: CHANNEL_COLORS[ch.channel] || '#78716C' }}
                   />
+                  <span className="font-medium text-[var(--nts-charcoal)] text-sm">{ch.channel}</span>
+                  <span className="text-xs text-[var(--nts-medium-gray)] ml-auto">
+                    {ch.campaignCount} campaign{ch.campaignCount !== 1 ? 's' : ''}
+                  </span>
                 </div>
-              </button>
-            ))}
-          </div>
-
-          {/* Detail Expansion */}
-          <AnimatePresence>
-            {selectedBreakdown && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="mt-4 pt-4 border-t border-[#E5E5E5]"
-              >
-                <p className="text-xs font-medium text-[#1A1A1A] mb-2">Details</p>
-                <div className="space-y-2">
-                  {breakdownData.find(b => b.id === selectedBreakdown)?.details.map((detail: any, i: number) => (
-                    <div key={i} className="flex justify-between text-xs">
-                      <span className="text-[#4A4A4A]">
-                        {detail.segment || detail.type || detail.metric || detail.name}
-                      </span>
-                      <span className="font-mono text-[#1A1A1A]">
-                        {detail.revenue 
-                          ? formatCurrencyCompact(detail.revenue)
-                          : detail.value 
-                          ? `€${typeof detail.value === 'number' ? formatCurrency(detail.value) : detail.value}`
-                          : detail.before !== undefined && detail.after !== undefined
-                          ? `€${formatCurrency(detail.before)} → €${formatCurrency(detail.after)} ${detail.improvement || ''}`
-                          : detail.improvement || ''}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </Card>
-      </div>
-
-      {/* Segment Performance */}
-      <Card padding="lg">
-        <CardHeader
-          title="Segment Performance"
-          subtitle="Αποτελέσματα campaigns ανά RFM segment"
-          icon={<Target size={20} className="text-[var(--nts-accent)]" />}
-        />
-        {segmentPerf.length === 0 ? (
-          <p className="text-sm text-[#4A4A4A] py-8 text-center">
-            Φόρτωσε RFM δεδομένα για να δεις την απόδοση ανά segment.
-          </p>
-        ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="text-left text-xs text-[#4A4A4A] border-b border-[#E5E5E5]">
-                <th className="pb-3 font-medium">Segment</th>
-                <th className="pb-3 font-medium">Customers</th>
-                <th className="pb-3 font-medium">Campaigns</th>
-                <th className="pb-3 font-medium">Revenue</th>
-                <th className="pb-3 font-medium">AOV</th>
-                <th className="pb-3 font-medium">Conv. Rate</th>
-                <th className="pb-3 font-medium">vs Benchmark</th>
-              </tr>
-            </thead>
-            <tbody>
-              {segmentPerf.map((seg, index) => (
-                <motion.tr
-                  key={seg.segment}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: index * 0.05 }}
-                  className="border-b border-[#E5E5E5] last:border-0 hover:bg-[#F5F5F5]"
-                >
-                  <td className="py-3">
-                    <span className="font-medium text-[#1A1A1A]">{seg.segment}</span>
-                  </td>
-                  <td className="py-3 font-mono text-sm">
-                    {formatNumber(seg.customers_targeted)}
-                  </td>
-                  <td className="py-3 font-mono text-sm">
-                    {seg.campaigns_run}
-                  </td>
-                  <td className="py-3">
-                    <span className="font-bold text-[#1A1A1A] font-mono">
-                      {formatCurrencyCompact(seg.revenue_generated)}
-                    </span>
-                  </td>
-                  <td className="py-3 font-mono text-sm">
-                    €{formatCurrency(seg.avg_order_value)}
-                  </td>
-                  <td className="py-3">
-                    <Badge variant="info">{seg.conversion_rate}</Badge>
-                  </td>
-                  <td className="py-3">
-                    <Badge variant="success">{seg.vs_benchmark}</Badge>
-                  </td>
-                </motion.tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        )}
-      </Card>
-
-      {/* Cost Savings + Methodology */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card padding="lg">
-          <CardHeader
-            title="Cost Savings"
-            subtitle={costSavingsData.period === 'Last 90 Days' ? 'Τελευταίες 90 ημέρες' : costSavingsData.period}
-            icon={<Euro size={20} className="text-[var(--nts-medium-gray)]" />}
-          />
-          <div className="space-y-4">
-            {costSavingsData.items.map((item: { category: string; amount: number; description: string; icon: string }, index: number) => (
-              <motion.div
-                key={item.category}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.1 }}
-                className="flex items-center justify-between p-4 bg-[#F5F5F5] rounded-lg"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg border border-[var(--nts-border-gray)] bg-[var(--nts-light-gray)] flex items-center justify-center text-[var(--nts-medium-gray)]">
-                    <Euro size={18} />
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <p className="text-[10px] text-[var(--nts-medium-gray)] uppercase tracking-wider">Spend</p>
+                    <p className="text-sm font-bold font-mono text-[var(--nts-charcoal)]">
+                      {formatCurrencyCompact(ch.spent)}
+                    </p>
                   </div>
                   <div>
-                    <p className="font-medium text-[#1A1A1A]">{item.category}</p>
-                    <p className="text-xs text-[#4A4A4A]">{item.description}</p>
+                    <p className="text-[10px] text-[var(--nts-medium-gray)] uppercase tracking-wider">Revenue</p>
+                    <p className="text-sm font-bold font-mono text-[var(--nts-charcoal)]">
+                      {formatCurrencyCompact(ch.revenue)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-[var(--nts-medium-gray)] uppercase tracking-wider">ROAS</p>
+                    <p className={`text-sm font-bold font-mono ${ch.roas >= 1 ? 'text-[#22C55E]' : 'text-[#EF4444]'}`}>
+                      {ch.roas > 0 ? `${formatNumber(ch.roas, 2)}x` : '—'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-[var(--nts-medium-gray)] uppercase tracking-wider">Conv.</p>
+                    <p className="text-sm font-mono text-[var(--nts-charcoal)]">{formatNumber(ch.conversions)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-[var(--nts-medium-gray)] uppercase tracking-wider">CPA</p>
+                    <p className="text-sm font-mono text-[var(--nts-charcoal)]">
+                      {ch.cpa > 0 ? `€${formatNumber(ch.cpa, 2)}` : '—'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-[var(--nts-medium-gray)] uppercase tracking-wider">CTR</p>
+                    <p className="text-sm font-mono text-[var(--nts-charcoal)]">
+                      {ch.ctr > 0 ? formatPercent(ch.ctr) : '—'}
+                    </p>
                   </div>
                 </div>
-                <span className="text-lg font-bold text-[#22C55E] font-mono">
-                  €{formatCurrency(item.amount)}
-                </span>
               </motion.div>
             ))}
-            <div className="pt-4 border-t border-[#E5E5E5] flex justify-between items-center">
-              <span className="font-medium text-[#1A1A1A]">Total Savings</span>
-              <span className="text-2xl font-bold text-[#22C55E] font-mono">
-                €{formatCurrency(costSavingsData.total)}
-              </span>
-            </div>
           </div>
         </Card>
+      )}
 
-        {/* Attribution Methodology Panel */}
+      {/* Section 4: Campaign Table */}
+      {topCampaigns.length > 0 && (
         <Card padding="lg">
           <CardHeader
-            title="Attribution Methodology"
-            subtitle="Διαφανής προσέγγιση μέτρησης"
-            icon={<Info size={20} className="text-[var(--nts-medium-gray)]" />}
-            action={
-              <button
-                onClick={() => setShowMethodology(!showMethodology)}
-                className="flex items-center gap-1 text-sm text-[var(--nts-accent)] hover:underline"
-              >
-                {showMethodology ? 'Collapse' : 'Expand'}
-                <ChevronDown size={14} className={`transition-transform ${showMethodology ? 'rotate-180' : ''}`} />
-              </button>
-            }
+            title="Top Campaigns"
+            subtitle="Ταξινόμηση κατά ROAS"
+            icon={<Target size={20} className="text-[var(--nts-accent)]" />}
           />
-          
-          <div className="p-4 bg-[#F5F5F5] border border-[#E5E5E5] rounded-lg mb-4">
-            <p className="text-sm text-[#1A1A1A]">
-              <strong>Πώς υπολογίζουμε το Impact:</strong> Χρησιμοποιούμε conservative attribution για να διασφαλίσουμε ότι τα αποτελέσματα είναι αξιόπιστα και επαληθεύσιμα.
-            </p>
-          </div>
-
-          <div className="space-y-3">
-            {attributionMethodology.methods.map((method, index) => (
-              <motion.div
-                key={method.name}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.1 }}
-                className="p-4 border border-[#E5E5E5] rounded-lg"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <h4 className="font-medium text-[#1A1A1A] text-sm">{method.name}</h4>
-                    <p className="text-xs text-[#4A4A4A] mt-1">{method.description}</p>
-                    <AnimatePresence>
-                      {showMethodology && (
-                        <motion.p
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          className="text-xs text-[#9CA3AF] mt-2"
-                        >
-                          <span className="font-medium">Tracking:</span> {method.tracking}
-                        </motion.p>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                  <Badge
-                    variant={method.confidence === 'high' ? 'success' : 'warning'}
-                    size="sm"
+          <div className="overflow-x-auto mt-2">
+            <table className="w-full">
+              <thead>
+                <tr className="text-left text-xs text-[var(--nts-medium-gray)] border-b border-[var(--nts-border-gray)]">
+                  <th className="pb-3 font-medium">Campaign</th>
+                  <th className="pb-3 font-medium">Κανάλι</th>
+                  <th className="pb-3 font-medium text-right">Spend</th>
+                  <th className="pb-3 font-medium text-right">Revenue</th>
+                  <th className="pb-3 font-medium text-right">ROAS</th>
+                  <th className="pb-3 font-medium text-right">Conv.</th>
+                  <th className="pb-3 font-medium">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {topCampaigns.map((c, index) => (
+                  <motion.tr
+                    key={c.id}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: index * 0.03 }}
+                    className="border-b border-[var(--nts-border-gray)] last:border-0 hover:bg-[var(--nts-light-gray)]"
                   >
-                    {method.confidence}
-                  </Badge>
-                </div>
-              </motion.div>
-            ))}
+                    <td className="py-3 pr-4">
+                      <span className="text-sm font-medium text-[var(--nts-charcoal)] truncate block max-w-[240px]">
+                        {c.name}
+                      </span>
+                    </td>
+                    <td className="py-3 pr-4">
+                      <Badge variant="default" size="sm">{c.channel}</Badge>
+                    </td>
+                    <td className="py-3 text-right font-mono text-sm">
+                      {formatCurrencyCompact(c.amount_spent || 0)}
+                    </td>
+                    <td className="py-3 text-right font-mono text-sm font-bold">
+                      {formatCurrencyCompact(c.conversion_value || 0)}
+                    </td>
+                    <td className="py-3 text-right">
+                      <span className={`font-mono text-sm font-bold ${(c.roas || 0) >= 1 ? 'text-[#22C55E]' : 'text-[#EF4444]'}`}>
+                        {c.roas ? `${formatNumber(c.roas, 2)}x` : '—'}
+                      </span>
+                    </td>
+                    <td className="py-3 text-right font-mono text-sm">
+                      {formatNumber(c.conversions || 0)}
+                    </td>
+                    <td className="py-3">
+                      <CampaignStatusBadge status={c.status} />
+                    </td>
+                  </motion.tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </Card>
-      </div>
+      )}
 
-      {/* Executive Summary CTA */}
-      <Card padding="lg">
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 bg-gradient-to-br from-[var(--nts-accent)] to-[var(--nts-accent-hover)] rounded-xl flex items-center justify-center">
-              <Award size={28} className="text-white" />
+      {/* Section 5: Budget Utilization */}
+      {monthlyBudget > 0 && (
+        <Card padding="lg">
+          <CardHeader
+            title="Budget Utilization"
+            subtitle="Μηνιαίο budget vs πραγματικό spend"
+            icon={<Wallet size={20} className="text-[var(--nts-accent)]" />}
+          />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
+            <div className="text-center">
+              <p className="text-xs text-[var(--nts-medium-gray)] uppercase tracking-wider mb-1">Μηνιαίο Budget</p>
+              <p className="text-2xl font-bold font-mono text-[var(--nts-charcoal)]">
+                {formatCurrencyCompact(monthlyBudget)}
+              </p>
             </div>
-            <div>
-              <h3 className="text-lg font-bold text-[#1A1A1A]">Executive Summary Report</h3>
-              <p className="text-[#4A4A4A]">
-                Download a one-page PDF report for board/management presentations
+            <div className="text-center">
+              <p className="text-xs text-[var(--nts-medium-gray)] uppercase tracking-wider mb-1">Πραγματικό Spend</p>
+              <p className="text-2xl font-bold font-mono text-[var(--nts-charcoal)]">
+                {formatCurrencyCompact(totalSpendForBudget)}
+              </p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-[var(--nts-medium-gray)] uppercase tracking-wider mb-1">Υπόλοιπο</p>
+              <p className={`text-2xl font-bold font-mono ${monthlyBudget - totalSpendForBudget >= 0 ? 'text-[#22C55E]' : 'text-[#EF4444]'}`}>
+                {formatCurrencyCompact(monthlyBudget - totalSpendForBudget)}
               </p>
             </div>
           </div>
-          <Button variant="primary" size="lg" icon={<Download size={18} />}>
-            Generate PDF Report
-          </Button>
-        </div>
-      </Card>
+          <div className="mt-6">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-[var(--nts-medium-gray)]">Αξιοποίηση</span>
+              <span className="text-xs font-mono font-bold text-[var(--nts-charcoal)]">
+                {formatPercent(Math.min(budgetUtilization, 100))}
+              </span>
+            </div>
+            <div className="w-full h-3 bg-[var(--nts-light-gray)] rounded-full overflow-hidden">
+              <motion.div
+                className="h-full rounded-full"
+                initial={{ width: 0 }}
+                animate={{ width: `${Math.min(budgetUtilization, 100)}%` }}
+                transition={{ duration: 0.8, ease: 'easeOut' }}
+                style={{
+                  backgroundColor: budgetUtilization > 100 ? '#EF4444' : budgetUtilization > 80 ? '#F59E0B' : '#22C55E',
+                }}
+              />
+            </div>
+            {budgetUtilization > 100 && (
+              <p className="text-xs text-[#EF4444] mt-2 flex items-center gap-1">
+                <ArrowUpRight size={12} />
+                Υπέρβαση budget κατά {formatPercent(budgetUtilization - 100)}
+              </p>
+            )}
+          </div>
+        </Card>
+      )}
     </div>
   );
 }
 
-// Helper Components
-function MetricBox({ icon, label, value, color, highlight = false }: { 
-  icon: React.ReactNode; 
-  label: string; 
-  value: string; 
-  color: string;
-  highlight?: boolean;
-}) {
-  return (
-    <div className={`p-4 rounded-lg border ${highlight ? 'bg-[var(--nts-orange-light)] border-[var(--nts-orange)]' : 'bg-[var(--nts-light-gray)] border-[var(--nts-border-gray)]'}`}>
-      <p className="text-[var(--nts-medium-gray)] text-xs flex items-center gap-2 mb-2">
-        <span className="text-[var(--nts-medium-gray)]">{icon}</span> {label}
-      </p>
-      <p className="text-xl font-bold font-mono" style={{ color }}>{value}</p>
-    </div>
-  );
-}
-
-function ImpactCard({ icon, label, value, subtext, highlight = false }: {
+function MetricCard({
+  icon, label, value, subtitle, color,
+}: {
   icon: React.ReactNode;
   label: string;
   value: string;
-  subtext: string;
-  highlight?: boolean;
+  subtitle: string;
+  color: string;
 }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="h-full"
-    >
-      <Card 
-        padding="md" 
-        hover 
-        className={`h-full ${highlight ? 'bg-[var(--nts-orange-light)] border-[var(--nts-orange)]' : ''}`}
-      >
-        <div className="flex items-start gap-3 h-full">
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+      <Card padding="md" hover className="h-full">
+        <div className="flex items-start gap-3">
           <div className="w-10 h-10 rounded-lg border border-[var(--nts-border-gray)] bg-[var(--nts-light-gray)] flex items-center justify-center text-[var(--nts-medium-gray)] flex-shrink-0">
             {icon}
           </div>
           <div className="min-w-0">
-            <p className={`text-sm ${highlight ? 'text-[var(--nts-charcoal)]' : 'text-[var(--nts-medium-gray)]'}`}>{label}</p>
-            <p className={`text-2xl font-bold font-mono ${highlight ? 'text-[var(--nts-orange)]' : 'text-[var(--nts-charcoal)]'}`}>
-              {value}
-            </p>
-            <p className="text-xs mt-1 text-[var(--nts-medium-gray)]">
-              {subtext}
-            </p>
+            <p className="text-xs text-[var(--nts-medium-gray)]">{label}</p>
+            <p className="text-xl font-bold font-mono mt-0.5" style={{ color }}>{value}</p>
+            {subtitle && <p className="text-[10px] text-[var(--nts-medium-gray)] mt-0.5">{subtitle}</p>}
           </div>
         </div>
       </Card>
     </motion.div>
   );
+}
+
+function CampaignStatusBadge({ status }: { status?: string }) {
+  const s = (status || '').toLowerCase();
+  if (s === 'active' || s === 'enabled') return <Badge variant="success" size="sm">Active</Badge>;
+  if (s === 'paused') return <Badge variant="warning" size="sm">Paused</Badge>;
+  if (s === 'completed' || s === 'removed') return <Badge variant="default" size="sm">Ended</Badge>;
+  return <Badge variant="default" size="sm">{status || '—'}</Badge>;
 }

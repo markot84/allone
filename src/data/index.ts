@@ -2,7 +2,6 @@ export * from './mockSegments';
 export * from './mockProducts';
 export * from './mockScenarios';
 export * from './mockChannels';
-export * from './mockROI';
 export * from './mockInsights';
 export * from './mockCalendar';
 export * from './mockContent';

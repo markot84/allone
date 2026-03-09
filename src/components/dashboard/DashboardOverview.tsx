@@ -24,7 +24,7 @@ import {
 import { Card, CardHeader } from '../common';
 import { useSegments, useProducts, useOrganic, useCampaigns, useActiveStrategy } from '../../hooks';
 import { ROIAttribution } from '../roi';
-import { calculateTotalRevenue, calculateAttributedRevenue, calculateROISummary, calculateCostSavings, getCampaignDateForMonth } from '../../utils/roiUtils';
+import { calculateTotalRevenue, calculateCampaignMetrics, getCampaignDateForMonth } from '../../utils/roiUtils';
 import { formatCurrencyCompact, formatNumber, formatMultiplier, formatPercent } from '../../utils/format';
 import type { Campaign } from '../../types';
 import { generateInsightsFromData } from '../../services/insights';
@@ -101,30 +101,12 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   const { activeStrategy, getStrategyName } = useActiveStrategy();
   const hasAnyData = hasOrganic || hasSegments || productsCount > 0 || hasCampaigns;
   
-  // Calculate ROI and cost savings for dashboard display
   const campaignsTyped = (campaigns ?? []) as Campaign[];
-  const attributedBreakdown = useMemo(() => {
-    if (!hasAnyData) return null;
-    return calculateAttributedRevenue(campaignsTyped, products || [], rfmSegments || []);
-  }, [hasAnyData, campaignsTyped, products, rfmSegments]);
-  const costSavingsData = useMemo(() => {
-    if (!hasAnyData) return { total: 0, items: [] };
-    return calculateCostSavings(products || [], campaignsTyped);
-  }, [hasAnyData, products, campaignsTyped]);
-  const campaignCost = useMemo(() => {
-    return campaignsTyped.reduce((sum, c) => sum + (c.amount_spent || 0), 0);
-  }, [campaignsTyped]);
-
-  const roiSummary = useMemo(() => {
-    if (!hasAnyData) return null;
-    const totalRev = calculateTotalRevenue(totalOrganicRevenue || 0, campaignsTyped);
-    const attributedRev = attributedBreakdown
-      ? attributedBreakdown.segment_activation.revenue +
-        attributedBreakdown.inventory_optimization.revenue +
-        attributedBreakdown.channel_optimization.revenue
-      : 0;
-    return calculateROISummary(totalRev, attributedRev, campaignCost);
-  }, [hasAnyData, totalOrganicRevenue, campaignsTyped, attributedBreakdown, campaignCost]);
+  const campaignMetrics = useMemo(() => calculateCampaignMetrics(campaignsTyped), [campaignsTyped]);
+  const dashboardTotalRevenue = useMemo(
+    () => calculateTotalRevenue(totalOrganicRevenue || 0, campaignsTyped),
+    [totalOrganicRevenue, campaignsTyped]
+  );
   const [activeTab, setActiveTab] = useState<'overview' | 'roi'>('overview');
 
   // Revenue chart data: οργανικά + campaigns ανά μήνα
@@ -301,12 +283,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               />
             );
           })()}
-          {/* 5. Σύνολο Εσόδων - από campaigns όταν δεν υπάρχει Analytics */}
+          {/* 5. Σύνολο Εσόδων */}
           {(hasOrganic || (hasCampaigns && campaigns.length > 0)) && (() => {
-            const campaignsTyped = campaigns as Campaign[];
-            const attributionRate = roiSummary && roiSummary.total_revenue > 0
-              ? roiSummary.attribution_percentage
-              : undefined;
             let sparklineData: number[] = [];
             const monthlyData: Record<string, number> = {};
             organicByMonth.forEach((val, key) => {
@@ -322,9 +300,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               <KPICard
                 kpi={{
                   label: 'Σύνολο Εσόδων',
-                  value: formatCurrencyCompact(roiSummary?.total_revenue ?? 0),
-                  change: attributionRate,
-                  changeLabel: attributionRate !== undefined ? 'attributed' : undefined,
+                  value: formatCurrencyCompact(dashboardTotalRevenue),
                   trend: 'up' as const,
                   sparklineData
                 }}
@@ -333,13 +309,13 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               />
             );
           })()}
-          {/* 6. ROI */}
-          {hasAnyData && (
+          {/* 6. ROAS */}
+          {hasCampaigns && (
             <KPICard
               kpi={{
-                label: 'ROI',
-                value: roiSummary && roiSummary.roi_multiplier > 0 ? formatMultiplier(roiSummary.roi_multiplier, 1) : '—',
-                changeLabel: roiSummary && roiSummary.roi_multiplier > 0 ? 'πολλαπλασιαστής' : undefined,
+                label: 'ROAS',
+                value: campaignMetrics.roas > 0 ? formatMultiplier(campaignMetrics.roas, 1) : '—',
+                changeLabel: campaignMetrics.roas > 0 ? 'return on ad spend' : undefined,
                 trend: 'up' as const,
                 sparklineData: []
               }}
@@ -680,35 +656,33 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               }}
             />
             <StatBox
-              label="Stock Clearance"
-              value={hasAnyData && attributedBreakdown
-                ? formatCurrencyCompact(attributedBreakdown.inventory_optimization.revenue)
-                : '€0'}
-              icon={<TrendingUp size={18} />}
+              label="Ad Spend"
+              value={hasCampaigns ? formatCurrencyCompact(campaignMetrics.totalSpend) : '€0'}
+              icon={<Euro size={18} />}
               color="#8B5CF6"
-              tooltip="Το συνολικό ποσό εσόδων που προέκυψε από την πώληση υπερπλήρων ή παλαιών αποθεμάτων."
+              tooltip="Συνολικό ποσό διαφημιστικής δαπάνης από campaigns."
             />
             <StatBox
-              label="Cost Savings"
-              value={hasAnyData ? formatCurrencyCompact(costSavingsData.total) : '€0'}
-              icon={<Euro size={18} />}
+              label="Conversions"
+              value={hasCampaigns ? formatNumber(campaignMetrics.totalConversions) : '0'}
+              icon={<Target size={18} />}
               color="var(--nts-accent)"
-              tooltip="Το συνολικό ποσό χρημάτων που εξοικονομήθηκε μέσω βελτιώσεων λειτουργικής αποδοτικότητας."
+              tooltip="Συνολικές μετατροπές από campaigns."
             />
           </div>
 
-          {/* ROI Highlight */}
+          {/* ROAS Highlight */}
           <div className="mt-6 p-5 bg-white rounded-xl border border-[var(--nts-border-gray)]">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[13px] font-medium text-[var(--nts-medium-gray)] mb-1">Performance+ ROI</p>
+                <p className="text-[13px] font-medium text-[var(--nts-medium-gray)] mb-1">Campaign ROAS</p>
                 <p className="text-3xl font-bold tracking-tight text-[var(--nts-charcoal)] mb-1 font-mono">
-                  {roiSummary && roiSummary.roi_multiplier > 0 ? formatMultiplier(roiSummary.roi_multiplier, 1) : '0x'}
+                  {campaignMetrics.roas > 0 ? formatMultiplier(campaignMetrics.roas, 1) : '—'}
                 </p>
                 <p className="text-[13px] text-[var(--nts-medium-gray)]">
-                  {roiSummary && roiSummary.roi_multiplier > 0 
-                    ? `Κάθε €1 σε διαφημίσεις → €${formatNumber(roiSummary.roi_multiplier, 1)} attributed revenue` 
-                    : 'Φόρτωσε δεδομένα για να δεις το ROI'}
+                  {campaignMetrics.roas > 0
+                    ? `Κάθε €1 σε διαφημίσεις → €${formatNumber(campaignMetrics.roas, 1)} revenue`
+                    : 'Φόρτωσε campaigns για να δεις το ROAS'}
                 </p>
               </div>
               <div className="w-10 h-10 bg-[var(--nts-light-gray)] rounded-md border border-[var(--nts-border-gray)] flex items-center justify-center">
