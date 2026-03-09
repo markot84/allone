@@ -646,7 +646,7 @@ export function WeightConfigurator() {
       count: rs.segment.count,
       revenueShare: rs.segment.revenue_share,
     })),
-    useAI: strategySaveVersion > 0,
+    useAI: true,
     saveVersion: strategySaveVersion,
   });
 
@@ -664,7 +664,7 @@ export function WeightConfigurator() {
 
   // After strategy save: generate activation recommendation + content suggestions (in parallel)
   useEffect(() => {
-    if (strategySaveVersion === 0 || !activeStrategy?.id || activeStrategy.id.startsWith('default_') || !aiEnabled) return;
+    if (strategySaveVersion === 0 || !activeStrategy?.id || activeStrategy.id.startsWith('default_')) return;
 
     const segment = rfmSegments.find(s => s.id === selectedSegment) ?? rfmSegments[0];
     const scenarioObj = scenarios.find(s => s.id === activeStrategy.scenarioId) ?? scenarios[0];

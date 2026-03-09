@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { generateChannelRecommendations } from '../services/aiChannelRecommendations';
 import { channelRecommendations as staticRecommendations, scenarios } from '../data';
@@ -88,6 +88,11 @@ export function useAIChannelRecommendations({
 }: UseAIChannelRecommendationsOptions) {
   const [aiEnabled, setAiEnabled] = useState(useAI);
 
+  // Force AI on when a new save triggers generation
+  useEffect(() => {
+    if (saveVersion > 0) setAiEnabled(true);
+  }, [saveVersion]);
+
   const segment = useMemo(
     () => segments.find((s) => s.id === selectedSegmentId) ?? segments[0] ?? null,
     [segments, selectedSegmentId]
@@ -128,7 +133,7 @@ export function useAIChannelRecommendations({
     error: aiError,
     refetch
   } = useQuery({
-    queryKey: ['aiChannelRecommendations', 'v9', selectedScenarioId, selectedSegmentId, fitLevel, aiEnabled, mixConfig?.scenarioA, mixConfig?.scenarioB, mixConfig?.percentA, brandContext?.brandName, totalBudget, context, saveVersion],
+    queryKey: ['aiChannelRecommendations', 'v10', selectedScenarioId, selectedSegmentId, fitLevel, aiEnabled, mixConfig?.scenarioA, mixConfig?.scenarioB, mixConfig?.percentA, brandContext?.brandName, totalBudget, context, saveVersion],
     queryFn: async () => {
       if (!scenario || !segment || !aiEnabled) return null;
       return generateChannelRecommendations({

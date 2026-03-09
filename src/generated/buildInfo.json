@@ -1,10 +1,14 @@
 {
-  "version": "0.29.10",
-  "previousVersion": "0.29.9",
-  "commitHash": "add9923",
+  "version": "0.29.11",
+  "previousVersion": "0.29.10",
+  "commitHash": "3729e6f",
   "branch": "main",
-  "buildDate": "2026-03-09T09:37:07.533Z",
+  "buildDate": "2026-03-09T09:50:46.436Z",
   "commits": [
+    {
+      "hash": "3729e6f",
+      "message": "Dual AI recommendations: short for strategy, detailed for activation"
+    },
     {
       "hash": "add9923",
       "message": "AI analyses run only on strategy save, not on page refresh"
@@ -60,13 +64,10 @@
     {
       "hash": "65c9cf0",
       "message": "Refine value proposition tone: professional tagline aligned with NotTheSame brand"
-    },
-    {
-      "hash": "2472baa",
-      "message": "Positioning and marketing refresh: new buyer persona, GTM strategy, marketing page rewrite"
     }
   ],
   "changes": [
+    "Dual AI recommendations: short for strategy, detailed for activation",
     "AI analyses run only on strategy save, not on page refresh",
     "Channel Activation requires saved strategy, rich AI context, ROI dashboard tab with ROAS badge",
     "Update build info",
@@ -75,7 +76,6 @@
     "Sidebar nav reorder: Data > Strategy > Execution > Reporting flow",
     "Sync channels: Strategy saves AI recommendations to Firestore, Channel Activation reads from saved data. Fixed static fallback to paid-only budget allocation.",
     "AI context: strategy vs activation tone, funnel 4-stage (Awareness/Consideration/Sales/Loyalty), rationale formatting",
-    "AI prompt: separate paid vs owned channels, budget only for paid media",
-    "UI: sidebar reorder, logo orange ring, marketing text update"
+    "AI prompt: separate paid vs owned channels, budget only for paid media"
   ]
 }
