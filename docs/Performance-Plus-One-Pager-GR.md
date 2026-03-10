@@ -84,6 +84,46 @@ SaaS συνδρομή (μηνιαία/ετήσια) με κλιμακωτή τι
 - Go-to-market σε Ελλάδα και Νότια Ευρώπη
 - Ενίσχυση ομάδας (engineering, commercial, customer success)
 
+### Τιμολόγηση (Value-Based)
+
+Το Performance+ αντικαθιστά λειτουργίες που κοστίζουν €3.000-8.000/μήνα (σύμβουλος, agency, data analyst, inventory tool).
+
+| Πλάνο | Τιμή | Για ποιον |
+|---|---|---|
+| **Starter** | Δωρεάν | Solo marketer, trial — 1 brand |
+| **Growth** | €249/μήνα | SME / in-house team — 3 brands |
+| **Professional** | €449/μήνα | Scaling eshop — 5 brands, advanced AI |
+| **Agency** | €699-899/μήνα | Agencies — unlimited brands, white-label |
+| **Enterprise** | €1.200-2.500/μήνα | Custom — API, SSO, dedicated support |
+
+**ROI παράδειγμα:** Eshop με €50K/μήνα ad spend που βελτιώνει ROAS κατά 10% = €5.000 επιπλέον revenue/μήνα. Ακόμα και στο €449/μήνα = **11x ROI** στο subscription.
+
+### Πιθανοί Φορείς Χρηματοδότησης
+
+**Ελλάδα — Grants / Δημόσια:**
+- ΕΣΠΑ / ΕΠΑνΕΚ — ψηφιακός μετασχηματισμός, ερευνητικά
+- Ελληνική Αναπτυξιακή Τράπεζα (HDB) — innovation loans
+- Ερευνώ – Καινοτομώ — R&D funding για AI/tech
+
+**Ελλάδα — VCs & Angels:**
+- VentureFriends, Marathon VC — early-stage SaaS
+- BigPi Ventures — AI-focused
+- Metavallon VC, Uni.Fund, Starttech Ventures — seed stage
+
+**Accelerators:**
+- Elevate Greece — tax incentives & grants registry
+- Found.ation, EGG (Eurobank), Orange Grove
+
+**EU-level:**
+- EIC Accelerator (Horizon Europe) — up to €2.5M grant + equity
+- EIT Digital — growth & go-to-market support
+- Eurostars — SME R&D collaboration
+
+**Southern Europe expansion:**
+- Portugal: Startup Portugal / 200M Fund
+- Spain: ENISA loans, Barcelona Activa
+- Italy: CDP Venture Capital
+
 ### Ομάδα
 
 Ανάπτυξη από τη notthesame.ai — ομάδα με εξειδίκευση σε εμπορική στρατηγική, digital marketing και ανάπτυξη προϊόντος.

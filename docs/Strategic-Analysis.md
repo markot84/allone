@@ -166,28 +166,76 @@ Key talking points for investors:
 | "Where are your paying customers?" | "We have a working product with real data. We're entering market now with an agency-first model. Our pilot agencies manage X brands." |
 | "What's your moat?" | "Data network effects over time, high switching costs from saved strategies and integrated workflows, and AI that improves with commercial outcome data." |
 | "Why not just a feature in HubSpot/Salesforce?" | "They serve enterprise and focus on CRM/automation. We serve the €2-50M segment with strategy formulation — a layer they don't have." |
-| "How do you price?" | "SaaS subscription. Agency tier: €199-499/month for unlimited brands. Direct: €49-99/month per brand." |
+| "How do you price?" | "Value-based SaaS. Growth €249/mo, Professional €449/mo, Agency €699-899/mo unlimited brands. We replace €3-8K/month of consultant + agency + analyst cost — even at €449/mo that's 11x ROI for an eshop with €50K ad spend." |
 | "Can you scale beyond Greece?" | "The commercial decision loop (data → strategy → execution) is universal. Southern Europe (Iberia, Italy) has identical dynamics and is underserved." |
+
+### Potential Funding Sources
+
+**Greece — Grants / Public Funding:**
+- **ΕΣΠΑ / ΕΠΑνΕΚ** — digital transformation, R&D programs
+- **Ελληνική Αναπτυξιακή Τράπεζα (HDB)** — innovation loans, guarantees
+- **Ερευνώ – Καινοτομώ** — R&D funding for AI/tech products
+
+**Greece — VCs & Angels:**
+- **VentureFriends** — early-stage, SaaS focus
+- **Marathon VC** — pre-seed/seed, Southern Europe
+- **BigPi Ventures** — AI-focused, Greek startups
+- **Metavallon VC** — seed stage, tech
+- **Uni.Fund** — university spin-offs / early tech
+- **Starttech Ventures** — pre-seed
+
+**Accelerators / Incubators:**
+- **Elevate Greece** — official startup registry, access to tax incentives & grants
+- **Found.ation** — Greek accelerator
+- **EGG (Eurobank)** — incubator / support program
+- **Orange Grove** — Dutch Embassy backed, Athens
+
+**EU-level:**
+- **EIC Accelerator (Horizon Europe)** — up to €2.5M grant + equity
+- **EIT Digital** — growth & go-to-market support for digital innovation
+- **Eurostars** — SME R&D collaboration across borders
+
+**Southern Europe Expansion:**
+- **Portugal:** Startup Portugal / 200M Fund
+- **Spain:** ENISA loans, Barcelona Activa
+- **Italy:** CDP Venture Capital
 
 ---
 
 ## 5. Pricing Framework
+
+### Value-Based Pricing Rationale
+
+Performance+ replaces multiple expensive functions:
+
+| What it replaces | Typical market cost |
+|---|---|
+| External strategy consultant | €1.500-5.000/month |
+| Marketing agency retainer | €1.000-3.000/month |
+| Data analyst (salary) | €1.500-2.500/month |
+| Inventory planning tool (Cin7, Katana) | €200-800/month |
+| Reporting / BI tool | €100-500/month |
+
+**ROI example:** An eshop with €50K/month ad spend that improves ROAS by 10% = €5.000 additional revenue/month. Even at €299/month subscription = **16x ROI**.
 
 ### Proposed Tiers
 
 | Tier | Target | Brands | Users | Price | Key Features |
 |---|---|---|---|---|---|
 | **Starter** | Solo marketer / trial | 1 | 2 | Free | Core strategy, segments, AI recommendations |
-| **Growth** | SME / in-house team | 3 | 10 | €99/month | + Presets, seasonal, exports, content strategy |
-| **Agency** | Marketing agencies | Unlimited | Unlimited | €299-499/month | + Multi-brand dashboard, white-label reports, client sharing |
-| **Enterprise** | Large organizations | Custom | Custom | Custom | + API integrations, SSO, dedicated support |
+| **Growth** | SME / in-house team | 3 | 10 | €249/month | + Inventory intelligence, seasonal periods, exports, content strategy, ROI attribution |
+| **Professional** | Scaling eshop / multi-brand | 5 | 20 | €449/month | + Advanced AI analysis, procurement signals, full reporting suite |
+| **Agency** | Marketing agencies | Unlimited | Unlimited | €699-899/month | + Multi-brand dashboard, white-label reports, client sharing |
+| **Enterprise** | Large organizations | Custom | Custom | €1.200-2.500/month | + API integrations, SSO, dedicated support, custom AI models |
 
 ### Pricing Strategy
 
 - **Free tier is essential** for the marketing manager persona (needs to prove value before requesting budget)
-- **Agency tier is the revenue driver** — higher price justified by multi-brand access
+- **Value-based positioning:** price anchored against consultant/agency cost, not SaaS tooling — Performance+ replaces €3-8K/month of external services
+- **Agency tier is the volume driver** — 1 sale = 20+ brands under management
+- **Professional tier** bridges the gap between solo users and agencies — captures growing eshops
 - **Annual discount** (20%) to reduce churn and improve cash flow
-- **Pay-per-brand add-on** for Growth tier (€29/additional brand)
+- **Pay-per-brand add-on** for Growth tier (€49/additional brand)
 
 ---
 
