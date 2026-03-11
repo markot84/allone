@@ -78,7 +78,7 @@ export const PRODUCT_COLUMN_MAPPING = [
     fileColumn: 'Qty_Sold_Period', 
     appField: 'Qty sold', 
     usedIn: 'Optional, analytics',
-    alternatives: ['Qty_Sold_Period', 'Qty Sold Period', 'qty_sold_period', 'Qty_Sold', 'qty_sold', 'Quantity_Sold', 'quantity_sold']
+    alternatives: ['Qty_Sold_Period', 'Qty Sold Period', 'qty_sold_period', 'Qty_Sold', 'qty_sold', 'Quantity_Sold', 'quantity_sold', 'Πωλήσεις', 'πωλήσεις', 'Sales', 'sales', 'Sold', 'sold', 'Units_Sold', 'units_sold']
   },
   { 
     fileColumn: 'Revenue_Period', 
@@ -568,7 +568,7 @@ function validateProduct(row: Record<string, string>, index: number): { valid: b
   const category = pick(row, 'ομάδα', 'category', 'product_category', 'product_type', 'group', 'κατηγορία', 'type', 'department');
   const marginTier = pick(row, 'margin_tier', 'margin_category', 'tier');
   // Try to calculate margin from conv._value_/_cost (ROAS-like metric) if available
-  const marginPct = pick(row, 'margin_percentage', 'margin_pct', 'margin', 'margin_%', 'gross_margin_%', 'gross_margin', 'gross_margin_pct', 'profit_margin', 'conv._rate', 'conv_rate');
+  const marginPct = pick(row, 'margin_percentage', 'margin_pct', 'margin', 'margin_%', 'gross_margin_%', 'gross_margin', 'gross_margin_pct', 'profit_margin', 'profit', 'κέρδος', 'conv._rate', 'conv_rate');
   // Stock level - Greek: "Διαθεσιμότητα" = Availability/Stock Level (normalized: "διαθεσιμότητα")
   const stockLevel = pick(row, 'διαθεσιμότητα', 'stock_on_hand', 'Stock_On_Hand', 'stock_level', 'Stock_Level', 'stock', 'Stock', 'quantity', 'Quantity', 'qty', 'Qty', 'inventory', 'Inventory', 'on_hand', 'On_Hand', 'units', 'Units', 'απόθεμα', 'ποσότητα', 'available_stock', 'Available_Stock', 'δυναμικό_υπόλοιπο', 'κίνηση', 'availability');
   const stockCapacity = pick(row, 'stock_capacity', 'capacity', 'max_stock', 'max_quantity', 'χωρητικότητα', 'επιθυμητό_απόθεμα', 'αναμενόμενα', 'Αναμενόμενα');
@@ -582,7 +582,7 @@ function validateProduct(row: Record<string, string>, index: number): { valid: b
   // Greek: "Τιμή αγοράς" = Cost Price (normalized: "τιμή_αγοράς")
   const costPrice = pick(row, 'τιμή_αγοράς', 'cost_price', 'Cost_Price', 'cost', 'Cost', 'κόστος');
   const revenuePeriod = pick(row, 'revenue_period', 'revenue', 'revenue_period');
-  const qtySoldPeriod = pick(row, 'qty_sold_period', 'qty_sold', 'quantity_sold');
+  const qtySoldPeriod = pick(row, 'πωλήσεις', 'qty_sold_period', 'qty_sold', 'quantity_sold', 'sales', 'sold', 'units_sold');
   const priority = pick(row, 'priority_tag', 'priority_flag', 'priority', 'tag', 'label', 'alerts', 'κατάσταση');
   const supplier = pick(row, 'supplier', 'vendor', 'supplier_name', 'vendor_name', 'προμηθευτής');
   
@@ -623,10 +623,10 @@ function validateProduct(row: Record<string, string>, index: number): { valid: b
   const stockLevelNum =
     sl.includes('in stock') || sl === 'in_stock' ? 1
     : sl.includes('out of stock') || sl === 'out_of_stock' ? 0
-    : parseInt(stockLevel || '0', 10) || 0;
+    : Math.round(parseFloat(String(stockLevel || '0').replace(',', '.')) || 0);
   const stockCapacityNum = parseInt(stockCapacity || '0', 10) || 0;
-  const sellPriceNum = parseFloat(price || '0') || 0;
-  const costPriceNum = parseFloat(costPrice || '0') || 0;
+  const sellPriceNum = parseFloat(String(price || '0').replace(',', '.')) || 0;
+  const costPriceNum = parseFloat(String(costPrice || '0').replace(',', '.')) || 0;
 
   // Stock Age: prefer Stock_Age_Days from file, else compute from First_Available_Date
   // If neither exists, it will be calculated from createdAt (import date) when reading from Firestore
@@ -640,7 +640,7 @@ function validateProduct(row: Record<string, string>, index: number): { valid: b
   // If still 0, it will be calculated from createdAt when reading products from Firestore
 
   // Gross Margin %: prefer Gross_Margin_% from file, else compute from (Sell_Price - Cost_Price) / Sell_Price
-  let marginPctNum = parseFloat(marginPct || '0') || 0;
+  let marginPctNum = parseFloat(String(marginPct || '0').replace(',', '.')) || 0;
   // Always calculate margin if we have both price and cost (to ensure accuracy)
   if (sellPriceNum > 0 && costPriceNum > 0) {
     const computed = calcGrossMarginPct(sellPriceNum, costPriceNum);
@@ -681,8 +681,8 @@ function validateProduct(row: Record<string, string>, index: number): { valid: b
     price: sellPriceNum,
     ...(priority ? { priority_tag: priority } : {}),
     ...(costPrice ? { cost_price: costPriceNum } : {}),
-    ...(revenuePeriod ? { revenue_period: parseFloat(revenuePeriod || '0') || 0 } : {}),
-    ...(qtySoldPeriod ? { qty_sold_period: parseInt(qtySoldPeriod || '0', 10) || 0 } : {}),
+    ...(revenuePeriod ? { revenue_period: parseFloat(String(revenuePeriod || '0').replace(',', '.')) || 0 } : {}),
+    ...(qtySoldPeriod ? { qty_sold_period: Math.round(parseFloat(String(qtySoldPeriod).replace(',', '.')) || 0) } : {}),
     ...(firstAvailableDate ? { first_available_date: firstAvailableDate } : {}),
     ...(supplier ? { supplier } : {}),
   };
@@ -1412,6 +1412,38 @@ export async function importFile(
         if (result.failed > MAX_ERRORS_DISPLAY) {
           result.errors.push(`...and ${result.failed - MAX_ERRORS_DISPLAY} more validation errors`);
         }
+
+        // Auto-extract suppliers with TOD from imported products
+        try {
+          const supplierMap = new Map<string, number>();
+          const rawRows = objects;
+          const pickCol = (r: Record<string, string>, ...alts: string[]) => {
+            for (const a of alts) {
+              const k = Object.keys(r).find(rk => rk.toLowerCase().trim() === a.toLowerCase());
+              if (k && r[k] != null && String(r[k]).trim()) return String(r[k]).trim();
+            }
+            return '';
+          };
+          for (const r of rawRows) {
+            const sName = pickCol(r, 'supplier', 'vendor', 'supplier_name', 'προμηθευτής');
+            if (!sName) continue;
+            const todVal = parseInt(pickCol(r, 'tod', 'target_days', 'target_days_of_stock') || '0', 10);
+            if (!supplierMap.has(sName) || (todVal > 0 && !supplierMap.get(sName))) {
+              supplierMap.set(sName, todVal > 0 ? todVal : 60);
+            }
+          }
+          if (supplierMap.size > 0) {
+            const supItems = Array.from(supplierMap.entries()).map(([name, tod]) => ({
+              id: name.replace(/[/\\#$.[\]]/g, '_').replace(/\s+/g, '_').slice(0, 120),
+              data: { name, tod, lead_time: 0, contact: '' } as Record<string, unknown>,
+            }));
+            await FirestoreService.batchSet('suppliers', supItems, brandId);
+            result.warnings.push(`Αυτόματη εισαγωγή ${supItems.length} προμηθευτών με TOD`);
+          }
+        } catch (supErr) {
+          console.error('[Import] Auto-supplier extraction error:', supErr);
+        }
+
         break;
       }
 

@@ -1,10 +1,14 @@
 {
-  "version": "0.29.38",
-  "previousVersion": "0.29.37",
-  "commitHash": "90303d4",
+  "version": "0.29.39",
+  "previousVersion": "0.29.38",
+  "commitHash": "5a9d08c",
   "branch": "main",
-  "buildDate": "2026-03-11T09:42:31.670Z",
+  "buildDate": "2026-03-11T12:31:12.182Z",
   "commits": [
+    {
+      "hash": "5a9d08c",
+      "message": "Align supplier stats cards layout"
+    },
     {
       "hash": "90303d4",
       "message": "Fix AI assistant icons, article navigation, add Priority Weights docs"
@@ -60,13 +64,10 @@
     {
       "hash": "3729e6f",
       "message": "Dual AI recommendations: short for strategy, detailed for activation"
-    },
-    {
-      "hash": "add9923",
-      "message": "AI analyses run only on strategy save, not on page refresh"
     }
   ],
   "changes": [
+    "Align supplier stats cards layout",
     "Fix AI assistant icons, article navigation, add Priority Weights docs",
     "Fix Button component: icon-only burger, styled primary/secondary buttons",
     "TOD-based stock classification, supplier management page, burger menu",
@@ -75,7 +76,6 @@
     "ROI card redesign: dark gradient hero in Dashboard and ROI page",
     "Fix static fallback showing instead of AI result after strategy save",
     "Remove NEW badge from ROI sidebar item",
-    "Fix AI save flow, add ROI metric with visual emphasis, improve strategy prompt",
-    "ROI sidebar tab: rename to ROI & Apodosi, add NEW badge with emphasis"
+    "Fix AI save flow, add ROI metric with visual emphasis, improve strategy prompt"
   ]
 }

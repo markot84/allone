@@ -127,34 +127,52 @@ export function SuppliersPage() {
 
   const handleSaveEdit = async () => {
     if (!editingId) return;
-    await SuppliersService.update(editingId, { tod: editTod, lead_time: editLeadTime });
-    setEditingId(null);
-    invalidate();
-    toast.success('TOD ενημερώθηκε');
+    try {
+      await SuppliersService.update(editingId, { tod: editTod, lead_time: editLeadTime });
+      setEditingId(null);
+      invalidate();
+      toast.success('TOD ενημερώθηκε');
+    } catch (err) {
+      console.error('[SuppliersPage] Update error:', err);
+      toast.error('Σφάλμα κατά την ενημέρωση');
+    }
   };
 
   const handleDelete = async (id: string) => {
-    await SuppliersService.delete(id);
-    invalidate();
-    toast.success('Προμηθευτής διαγράφηκε');
+    try {
+      await SuppliersService.delete(id);
+      invalidate();
+      toast.success('Προμηθευτής διαγράφηκε');
+    } catch (err) {
+      console.error('[SuppliersPage] Delete error:', err);
+      toast.error('Σφάλμα κατά τη διαγραφή');
+    }
   };
 
   const handleAddSupplier = async () => {
-    if (!newName.trim() || !brandId) return;
-    const id = sanitizeDocId(newName.trim());
-    await SuppliersService.create(id, {
-      name: newName.trim(),
-      tod: newTod,
-      lead_time: newLeadTime,
-      contact: newContact,
-    }, brandId);
-    setShowAddForm(false);
-    setNewName('');
-    setNewTod(DEFAULT_TOD);
-    setNewLeadTime(0);
-    setNewContact('');
-    invalidate();
-    toast.success('Προμηθευτής προστέθηκε');
+    if (!newName.trim() || !brandId) {
+      toast.error(!brandId ? 'Δεν έχει επιλεγεί brand' : 'Το όνομα είναι υποχρεωτικό');
+      return;
+    }
+    try {
+      const id = sanitizeDocId(newName.trim());
+      await SuppliersService.create(id, {
+        name: newName.trim(),
+        tod: newTod,
+        lead_time: newLeadTime,
+        contact: newContact,
+      }, brandId);
+      setShowAddForm(false);
+      setNewName('');
+      setNewTod(DEFAULT_TOD);
+      setNewLeadTime(0);
+      setNewContact('');
+      invalidate();
+      toast.success('Προμηθευτής προστέθηκε');
+    } catch (err) {
+      console.error('[SuppliersPage] Add error:', err);
+      toast.error('Σφάλμα κατά την αποθήκευση');
+    }
   };
 
   if (isLoading) {
