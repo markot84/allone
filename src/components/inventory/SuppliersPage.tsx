@@ -11,6 +11,7 @@ import {
   Plus,
   FileSpreadsheet,
   Clock,
+  Package,
 } from 'lucide-react';
 import { Card, Button, Spinner, useToast } from '../common';
 import { useSuppliers, useBrand, useProducts } from '../../hooks';
@@ -286,32 +287,22 @@ export function SuppliersPage() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="p-4 text-center">
-          <Truck size={20} className="mx-auto text-[var(--nts-accent)] mb-1" />
-          <p className="text-2xl font-bold text-[var(--nts-charcoal)]">{suppliers.length}</p>
-          <p className="text-xs text-[var(--nts-medium-gray)]">Προμηθευτές</p>
-        </Card>
-        <Card className="p-4 text-center">
-          <Clock size={20} className="mx-auto text-blue-500 mb-1" />
-          <p className="text-2xl font-bold text-[var(--nts-charcoal)]">
-            {suppliers.length > 0 ? Math.round(suppliers.reduce((s, x) => s + x.tod, 0) / suppliers.length) : DEFAULT_TOD}
-          </p>
-          <p className="text-xs text-[var(--nts-medium-gray)]">Μέσο TOD (ημέρες)</p>
-        </Card>
-        <Card className="p-4 text-center">
-          <p className="text-2xl font-bold text-[var(--nts-charcoal)]">
-            {suppliers.length > 0
-              ? Math.round(suppliers.filter(s => (s.lead_time || 0) > 0).reduce((s, x) => s + (x.lead_time || 0), 0) / Math.max(suppliers.filter(s => (s.lead_time || 0) > 0).length, 1))
-              : 0}
-          </p>
-          <p className="text-xs text-[var(--nts-medium-gray)]">Μέσο Lead Time (ημέρες)</p>
-        </Card>
-        <Card className="p-4 text-center">
-          <p className="text-2xl font-bold text-[var(--nts-charcoal)]">
-            {Array.from(productCountBySupplier.values()).reduce((a, b) => a + b, 0)}
-          </p>
-          <p className="text-xs text-[var(--nts-medium-gray)]">Συνδεδεμένα Προϊόντα</p>
-        </Card>
+        {[
+          { icon: <Truck size={18} />, color: 'text-[var(--nts-accent)]', value: suppliers.length, label: 'Προμηθευτές' },
+          { icon: <Clock size={18} />, color: 'text-blue-500', value: suppliers.length > 0 ? Math.round(suppliers.reduce((s, x) => s + x.tod, 0) / suppliers.length) : DEFAULT_TOD, label: 'Μέσο TOD (ημέρες)' },
+          { icon: <Clock size={18} />, color: 'text-amber-500', value: suppliers.length > 0 ? Math.round(suppliers.filter(s => (s.lead_time || 0) > 0).reduce((s, x) => s + (x.lead_time || 0), 0) / Math.max(suppliers.filter(s => (s.lead_time || 0) > 0).length, 1)) : 0, label: 'Μέσο Lead Time (ημέρες)' },
+          { icon: <Package size={18} />, color: 'text-green-500', value: Array.from(productCountBySupplier.values()).reduce((a, b) => a + b, 0), label: 'Συνδεδεμένα Προϊόντα' },
+        ].map((stat, i) => (
+          <Card key={i} className="p-4 flex items-center gap-3">
+            <div className={`w-9 h-9 rounded-lg bg-gray-50 flex items-center justify-center shrink-0 ${stat.color}`}>
+              {stat.icon}
+            </div>
+            <div>
+              <p className="text-xl font-bold text-[var(--nts-charcoal)] leading-tight">{stat.value}</p>
+              <p className="text-xs text-[var(--nts-medium-gray)]">{stat.label}</p>
+            </div>
+          </Card>
+        ))}
       </div>
 
       {/* Search */}
