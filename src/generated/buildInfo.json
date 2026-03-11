@@ -1,10 +1,22 @@
 {
-  "version": "0.29.20",
-  "previousVersion": "0.29.19",
-  "commitHash": "5356687",
+  "version": "0.29.33",
+  "previousVersion": "0.29.32",
+  "commitHash": "56322ce",
   "branch": "main",
-  "buildDate": "2026-03-09T11:09:43.814Z",
+  "buildDate": "2026-03-11T06:30:25.009Z",
   "commits": [
+    {
+      "hash": "56322ce",
+      "message": "Update pricing to value-based tiers, add funding sources"
+    },
+    {
+      "hash": "6893e9e",
+      "message": "Redesign dashboard, add campaign sorting and channel colors"
+    },
+    {
+      "hash": "44d8c77",
+      "message": "ROI card redesign: dark gradient hero in Dashboard and ROI page"
+    },
     {
       "hash": "5356687",
       "message": "Fix static fallback showing instead of AI result after strategy save"
@@ -52,30 +64,18 @@
     {
       "hash": "8610be8",
       "message": "Fix strategy sync, ROI chart, dashboard tabs, AI context richness"
-    },
-    {
-      "hash": "38b0667",
-      "message": "ROI page rebuild: remove all fabricated data, real-data-only dashboard"
-    },
-    {
-      "hash": "838ace4",
-      "message": "Sidebar nav reorder: Data > Strategy > Execution > Reporting flow"
-    },
-    {
-      "hash": "adfacb6",
-      "message": "Sync channels: Strategy saves AI recommendations to Firestore, Channel Activation reads from saved data. Fixed static fallback to paid-only budget allocation."
     }
   ],
   "changes": [
+    "Update pricing to value-based tiers, add funding sources",
+    "Redesign dashboard, add campaign sorting and channel colors",
+    "ROI card redesign: dark gradient hero in Dashboard and ROI page",
     "Fix static fallback showing instead of AI result after strategy save",
     "Remove NEW badge from ROI sidebar item",
     "Fix AI save flow, add ROI metric with visual emphasis, improve strategy prompt",
     "ROI sidebar tab: rename to ROI & Apodosi, add NEW badge with emphasis",
     "Strategy prompt: mandatory bullet format, remove brevity language",
     "Fix race condition in AI saves (updateDocument), improve strategy prompt with example",
-    "Force AI on strategy save, fix activation generation, adjust prompt length",
-    "Dual AI recommendations: short for strategy, detailed for activation",
-    "AI analyses run only on strategy save, not on page refresh",
-    "Channel Activation requires saved strategy, rich AI context, ROI dashboard tab with ROAS badge"
+    "Force AI on strategy save, fix activation generation, adjust prompt length"
   ]
 }

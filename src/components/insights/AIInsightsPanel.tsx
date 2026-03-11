@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { useMemo } from 'react';
 import { Badge, Button } from '../common';
-import { useSegments, useProducts } from '../../hooks';
+import { useSegments, useProducts, useSuppliers } from '../../hooks';
 import { generateInsightsFromData } from '../../services/insights';
 import type { AIInsight } from '../../types';
 import { AIAssistant } from './AIAssistant';
@@ -25,13 +25,20 @@ interface AIInsightsPanelProps {
 export function AIInsightsPanel({ isOpen, onClose }: AIInsightsPanelProps) {
   const { segments } = useSegments();
   const { products } = useProducts();
+  const { suppliers } = useSuppliers();
   const [filter, setFilter] = useState<'all' | 'opportunity' | 'warning' | 'recommendation'>('all');
   const [activeTab, setActiveTab] = useState<'insights' | 'assistant'>('insights');
   const [assistantOpen, setAssistantOpen] = useState(false);
 
+  const supplierTodMap = useMemo(() => {
+    const m = new Map<string, number>();
+    suppliers.forEach(s => m.set(s.name, s.tod));
+    return m;
+  }, [suppliers]);
+
   const aiInsights = useMemo(() => {
-    return generateInsightsFromData(products, segments);
-  }, [products, segments]);
+    return generateInsightsFromData(products, segments, supplierTodMap);
+  }, [products, segments, supplierTodMap]);
 
   const filteredInsights = aiInsights.filter(
     insight => filter === 'all' || insight.type === filter
@@ -294,9 +301,15 @@ export function AIInsightsTrigger({ onClick, insightCount }: { onClick: () => vo
 export function AIInsightsTriggerWrapper({ onClick }: { onClick: () => void }) {
   const { products } = useProducts();
   const { segments } = useSegments();
+  const { suppliers } = useSuppliers();
+  const supplierTodMap2 = useMemo(() => {
+    const m = new Map<string, number>();
+    suppliers.forEach(s => m.set(s.name, s.tod));
+    return m;
+  }, [suppliers]);
   const insightCount = useMemo(() => {
-    const insights = generateInsightsFromData(products, segments);
+    const insights = generateInsightsFromData(products, segments, supplierTodMap2);
     return insights.filter((i) => i.impact === 'high').length;
-  }, [products, segments]);
+  }, [products, segments, supplierTodMap2]);
   return <AIInsightsTrigger onClick={onClick} insightCount={insightCount} />;
 }

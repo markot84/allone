@@ -1,31 +1,43 @@
 import type { Product, RFMSegment, AIInsight } from '../types';
+import { classifyStockHealth, getProductTod } from '../utils/productUtils';
 
 /** Generate dynamic AI insights from real products and segments data */
 export function generateInsightsFromData(
   products: Product[],
-  segments: RFMSegment[]
+  segments: RFMSegment[],
+  supplierTodMap?: Map<string, number>
 ): AIInsight[] {
   const insights: AIInsight[] = [];
 
-  // Products-based insights
-  const deadStock = products.filter((p) => (p.stock_age_days ?? 0) > 180);
-  const lowStock = products.filter(
-    (p) => (p.stock_level ?? 0) < 10 || (p.stock_level ?? 0) / Math.max(p.stock_capacity ?? 1, 1) < 0.2
-  );
+  const classify = (p: Product) => classifyStockHealth(p, getProductTod(p, supplierTodMap));
+  const deadStock = products.filter((p) => classify(p) === 'dead');
+  const lowStock = products.filter((p) => classify(p) === 'low');
+  const excessStock = products.filter((p) => classify(p) === 'excess');
   const highMarginProducts = products.filter(
     (p) => p.margin_tier === 'high' || (p.margin_percentage ?? 0) > 25
   );
   const highMarginLowStock = highMarginProducts.filter(
-    (p) => (p.stock_level ?? 0) < 10 || (p.stock_level ?? 0) / Math.max(p.stock_capacity ?? 1, 1) < 0.2
+    (p) => classify(p) === 'low'
   );
 
   if (deadStock.length > 0) {
     insights.push({
       type: 'warning',
       icon: '',
-      title: 'Dead stock αλλαγή προτεραιότητας',
-      insight: `${deadStock.length} SKU(s) με stock age > 180 ημέρες. Ιδανικό για clearance campaigns.`,
+      title: 'Dead stock — χωρίς πωλήσεις',
+      insight: `${deadStock.length} SKU(s) χωρίς πωλήσεις στην τελευταία περίοδο. Ιδανικό για clearance campaigns.`,
       action: 'Δημιουργία Campaign',
+      impact: 'high',
+    });
+  }
+
+  if (excessStock.length > 0) {
+    insights.push({
+      type: 'warning',
+      icon: '',
+      title: 'Πλεόνασμα αποθέματος',
+      insight: `${excessStock.length} SKU(s) με απόθεμα > 2x του στόχου. Δεσμεύουν κεφάλαιο.`,
+      action: 'Δημιουργία Προσφορών',
       impact: 'high',
     });
   }
@@ -35,7 +47,7 @@ export function generateInsightsFromData(
       type: 'opportunity',
       icon: '',
       title: 'High-margin items με low stock',
-      insight: `${highMarginLowStock.length} high-margin προϊόντα έχουν low stock. Προτεραιότητα αναπλήρωσης.`,
+      insight: `${highMarginLowStock.length} high-margin προϊόντα κινδυνεύουν να εξαντληθούν. Προτεραιότητα αναπλήρωσης.`,
       action: 'Πρόταση αναπλήρωσης',
       impact: 'medium',
     });
@@ -46,7 +58,7 @@ export function generateInsightsFromData(
       type: 'recommendation',
       icon: '',
       title: 'Χαμηλά αποθέματα',
-      insight: `${lowStock.length} προϊόντα (${Math.round((lowStock.length / products.length) * 100)}%) έχουν low stock.`,
+      insight: `${lowStock.length} προϊόντα (${Math.round((lowStock.length / products.length) * 100)}%) θα εξαντληθούν σε < ${Math.round(60 / 2)} ημέρες.`,
       action: 'Ελέγξτε Inventory',
       impact: 'medium',
     });

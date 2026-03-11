@@ -17,10 +17,10 @@ import {
   Trash2
 } from 'lucide-react';
 import { Card, Badge, Button, ProgressBar, Spinner, Tooltip, useToast } from '../common';
-import { useProducts, useBrand } from '../../hooks';
+import { useProducts, useBrand, useSuppliers } from '../../hooks';
 import { formatCurrency, formatCurrencyCompact, formatNumber, formatPercent } from '../../utils/format';
 import { FirestoreService } from '../../services/firestore';
-import { getStockAgeDays } from '../../utils/productUtils';
+import { classifyStockHealth, getDaysOfStock, getProductTod } from '../../utils/productUtils';
 import { ExportModal } from './ExportModal';
 import { ProductCharts } from './ProductCharts';
 import type { Product, InventorySummary, InventoryAlert } from '../../types';
@@ -28,7 +28,7 @@ import type { Product, InventorySummary, InventoryAlert } from '../../types';
 type SortField = 'name' | 'margin_percentage' | 'stock_level' | 'stock_age_days' | 'price';
 type SortDirection = 'asc' | 'desc';
 
-function computeInventorySummary(products: Product[]): InventorySummary {
+function computeInventorySummary(products: Product[], supplierTodMap?: Map<string, number>): InventorySummary {
   const total = products.length;
   if (total === 0) {
     return {
@@ -51,42 +51,25 @@ function computeInventorySummary(products: Product[]): InventorySummary {
 
   for (const p of products) {
     const level = p.stock_level ?? 0;
-    const capacity = Math.max(p.stock_capacity ?? 0, 1);
     const price = p.price ?? 0;
-    const ageDays = getStockAgeDays(p);
-    const hasExplicitCapacity = (p.stock_capacity ?? 0) > 0 && p.stock_capacity !== level;
-    const ratio = hasExplicitCapacity ? level / capacity : (level > 0 ? 0.5 : 0);
-
     totalValue += level * price;
 
-    // Debug: Log first few products for troubleshooting
-    if (products.indexOf(p) < 3) {
-      console.debug(`[ProductIntelligence] Product ${products.indexOf(p)}:`, {
-        id: p.id,
-        name: p.name,
-        stock_level: level,
-        stock_capacity: capacity,
-        price,
-        ageDays,
-        hasExplicitCapacity,
-        ratio,
-        margin_percentage: p.margin_percentage,
-        cost_price: p.cost_price,
-        first_available_date: p.first_available_date,
-        createdAt: p.createdAt
-      });
-    }
-
-    if (ageDays > 180) {
-      deadCount++;
-      deadValue += level * price;
-    } else if (hasExplicitCapacity && ratio > 0.8) {
-      excessCount++;
-      excessValue += level * price;
-    } else if (level < 10 || (hasExplicitCapacity && ratio < 0.2)) {
-      lowCount++;
-    } else {
-      healthyCount++;
+    const tod = getProductTod(p, supplierTodMap);
+    const health = classifyStockHealth(p, tod);
+    switch (health) {
+      case 'dead':
+        deadCount++;
+        deadValue += level * price;
+        break;
+      case 'excess':
+        excessCount++;
+        excessValue += level * price;
+        break;
+      case 'low':
+        lowCount++;
+        break;
+      default:
+        healthyCount++;
     }
   }
 
@@ -100,18 +83,16 @@ function computeInventorySummary(products: Product[]): InventorySummary {
   };
 }
 
-function computeInventoryAlerts(products: Product[]): InventoryAlert[] {
+function computeInventoryAlerts(products: Product[], supplierTodMap?: Map<string, number>): InventoryAlert[] {
   const alerts: InventoryAlert[] = [];
-  const deadStock = products.filter((p) => getStockAgeDays(p) > 180);
-  const nearDead = products.filter((p) => {
-    const age = getStockAgeDays(p);
-    return age > 120 && age <= 180;
-  });
+  const classify = (p: Product) => classifyStockHealth(p, getProductTod(p, supplierTodMap));
+  const deadStock = products.filter((p) => classify(p) === 'dead');
+  const excessStock = products.filter((p) => classify(p) === 'excess');
   const highMarginLowStock = products.filter(
-    (p) => (p.margin_tier === 'high' || (p.margin_percentage ?? 0) > 25) && ((p.stock_level ?? 0) < 10 || (p.stock_level ?? 0) / Math.max(p.stock_capacity ?? 1, 1) < 0.2)
+    (p) => (p.margin_tier === 'high' || (p.margin_percentage ?? 0) > 25) && classify(p) === 'low'
   );
-  if (deadStock.length > 0) alerts.push({ type: 'critical', message: `${deadStock.length} SKU(s) με stock age > 180 ημέρες`, action: 'Ελέγξτε για clearance' });
-  if (nearDead.length > 0) alerts.push({ type: 'warning', message: `${nearDead.length} SKU(s) πλησιάζουν dead stock`, action: 'Δημιουργήστε προσφορές' });
+  if (deadStock.length > 0) alerts.push({ type: 'critical', message: `${deadStock.length} SKU(s) χωρίς πωλήσεις (dead stock)`, action: 'Ελέγξτε για clearance' });
+  if (excessStock.length > 0) alerts.push({ type: 'warning', message: `${excessStock.length} SKU(s) με πλεόνασμα αποθέματος`, action: 'Δημιουργήστε προσφορές' });
   if (highMarginLowStock.length > 0) alerts.push({ type: 'info', message: `${highMarginLowStock.length} high-margin items με low stock`, action: 'Πρόταση αναπλήρωσης' });
   return alerts.length > 0 ? alerts : [];
 }
@@ -135,11 +116,19 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
 
   const { currentBrand } = useBrand();
   const { products, isLoading: productsLoading, hasImported } = useProducts();
+  const { suppliers } = useSuppliers();
   const queryClient = useQueryClient();
   const toast = useToast();
   const [isDeleting, setIsDeleting] = useState(false);
-  const inventorySummary = useMemo(() => computeInventorySummary(products), [products]);
-  const inventoryAlerts = useMemo(() => computeInventoryAlerts(products), [products]);
+
+  const supplierTodMap = useMemo(() => {
+    const m = new Map<string, number>();
+    suppliers.forEach(s => m.set(s.name, s.tod));
+    return m;
+  }, [suppliers]);
+
+  const inventorySummary = useMemo(() => computeInventorySummary(products, supplierTodMap), [products, supplierTodMap]);
+  const inventoryAlerts = useMemo(() => computeInventoryAlerts(products, supplierTodMap), [products, supplierTodMap]);
   const categories = useMemo(() => {
     const fromProducts = [...new Set(products.map(p => p.category))].filter(Boolean).sort();
     return fromProducts;
@@ -155,43 +144,30 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
         const matchesMargin = marginFilter === 'all' || p.margin_tier === marginFilter;
         
         // Stock age filter
-        const age = getStockAgeDays(p);
+        const tod = getProductTod(p, supplierTodMap);
+        const health = classifyStockHealth(p, tod);
         let matchesStockAge = true;
         if (stockAgeFilter === 'dead') {
-          matchesStockAge = age > 180;
+          matchesStockAge = health === 'dead';
         } else if (stockAgeFilter === 'near-dead') {
-          matchesStockAge = age > 120 && age <= 180;
+          const dos = getDaysOfStock(p);
+          matchesStockAge = health === 'excess' && dos !== Infinity;
         } else if (stockAgeFilter === 'high-margin-low-stock') {
           const isHighMargin = p.margin_tier === 'high' || (p.margin_percentage ?? 0) > 25;
-          const isLowStock = (p.stock_level ?? 0) < 10 || ((p.stock_level ?? 0) / Math.max(p.stock_capacity ?? 1, 1) < 0.2);
-          matchesStockAge = isHighMargin && isLowStock;
+          matchesStockAge = isHighMargin && health === 'low';
         }
 
         // Stock card filter
         let matchesStockCard = true;
         if (stockCardFilter !== 'all') {
-          const level = p.stock_level ?? 0;
-          const capacity = Math.max(p.stock_capacity ?? 0, 1);
-          const hasCapacity = (p.stock_capacity ?? 0) > 0 && p.stock_capacity !== level;
-          const ratio = hasCapacity ? level / capacity : (level > 0 ? 0.5 : 0);
-          const ageD = getStockAgeDays(p);
-
-          if (stockCardFilter === 'healthy') {
-            matchesStockCard = ratio >= 0.2 && ratio <= 0.8 && ageD <= 180;
-          } else if (stockCardFilter === 'excess') {
-            matchesStockCard = ratio > 0.8;
-          } else if (stockCardFilter === 'dead') {
-            matchesStockCard = ageD > 180;
-          } else if (stockCardFilter === 'low') {
-            matchesStockCard = level < 10 || ratio < 0.2;
-          }
+          matchesStockCard = health === stockCardFilter;
         }
         
         return matchesSearch && matchesCategory && matchesMargin && matchesStockAge && matchesStockCard;
       })
       .sort((a, b) => {
-        const aVal = sortField === 'stock_age_days' ? getStockAgeDays(a) : a[sortField];
-        const bVal = sortField === 'stock_age_days' ? getStockAgeDays(b) : b[sortField];
+        const aVal = sortField === 'stock_age_days' ? getDaysOfStock(a) : a[sortField];
+        const bVal = sortField === 'stock_age_days' ? getDaysOfStock(b) : b[sortField];
         if (typeof aVal === 'string' && typeof bVal === 'string') {
           return sortDirection === 'asc' 
             ? aVal.localeCompare(bVal) 
@@ -201,7 +177,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           ? (aVal as number) - (bVal as number) 
           : (bVal as number) - (aVal as number);
       });
-  }, [products, searchQuery, selectedCategory, marginFilter, stockAgeFilter, stockCardFilter, sortField, sortDirection]);
+  }, [products, searchQuery, selectedCategory, marginFilter, stockAgeFilter, stockCardFilter, sortField, sortDirection, supplierTodMap]);
 
   const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE));
   const paginatedProducts = filteredProducts.slice(
@@ -325,7 +301,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           subValue={formatNumber(inventorySummary.healthy_stock.count)}
           icon={<TrendingUp size={20} />}
           color="#22C55E"
-          tooltip="Προϊόντα με stock 20–80% της χωρητικότητας και ηλικία < 180 ημερών."
+          tooltip="Προϊόντα με διάρκεια αποθέματος μεταξύ TOD/2 και TOD×2."
           active={stockCardFilter === 'healthy'}
           onClick={() => setStockCardFilter(stockCardFilter === 'healthy' ? 'all' : 'healthy')}
         />
@@ -337,7 +313,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           subValue={`${inventorySummary.excess_stock.count} SKUs`}
           icon={<AlertTriangle size={20} />}
           color="#F59E0B"
-          tooltip="Προϊόντα με stock > 80% της χωρητικότητας (υπερπλήρωση)."
+          tooltip="Προϊόντα με διάρκεια αποθέματος > TOD×2 (πλεόνασμα)."
           active={stockCardFilter === 'excess'}
           onClick={() => setStockCardFilter(stockCardFilter === 'excess' ? 'all' : 'excess')}
         />
@@ -349,7 +325,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           subValue={`${inventorySummary.dead_stock.count} SKUs`}
           icon={<AlertCircle size={20} />}
           color="#EF4444"
-          tooltip="Προϊόντα με stock_age > 180 ημερών (αδρανές απόθεμα)."
+          tooltip="Προϊόντα χωρίς πωλήσεις — δεσμεύουν κεφάλαιο."
           active={stockCardFilter === 'dead'}
           onClick={() => setStockCardFilter(stockCardFilter === 'dead' ? 'all' : 'dead')}
         />
@@ -359,7 +335,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           subValue={`${inventorySummary.low_stock.count} SKUs`}
           icon={<TrendingDown size={20} />}
           color="#8B5CF6"
-          tooltip="Προϊόντα με stock < 20% της χωρητικότητας ή < 10 μονάδες."
+          tooltip="Προϊόντα με διάρκεια αποθέματος ≤ TOD/2 — κίνδυνος εξάντλησης."
           active={stockCardFilter === 'low'}
           onClick={() => setStockCardFilter(stockCardFilter === 'low' ? 'all' : 'low')}
         />
@@ -505,12 +481,12 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                   </button>
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-[#4A4A4A]">
-                  <Tooltip content="Ημέρες από First_Available_Date ή Stock_Age_Days από αρχείο." size={12}>
+                  <Tooltip content="Εκτιμώμενες ημέρες αποθέματος βάσει ρυθμού πωλήσεων (Days of Stock)." size={12}>
                     <button
                       onClick={() => handleSort('stock_age_days')}
                       className="flex items-center gap-1 hover:text-[#1A1A1A]"
                     >
-                      Stock Age
+                      Days of Stock
                       <SortIcon field="stock_age_days" current={sortField} direction={sortDirection} />
                     </button>
                   </Tooltip>
@@ -535,7 +511,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
             <tbody>
               <AnimatePresence mode="popLayout">
                 {paginatedProducts.map((product, index) => (
-                  <ProductRow key={product.id} product={product} index={index} />
+                  <ProductRow key={product.id} product={product} index={index} supplierTodMap={supplierTodMap} />
                 ))}
               </AnimatePresence>
             </tbody>
@@ -590,6 +566,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
         isOpen={showCharts}
         onClose={() => setShowCharts(false)}
         products={filteredProducts}
+        supplierTodMap={supplierTodMap}
       />
     </div>
   );
@@ -639,16 +616,16 @@ function SummaryCard({ label, value, subValue, icon, color, tooltip, active, onC
 
 interface ProductRowProps {
   product: Product;
+  supplierTodMap?: Map<string, number>;
   index: number;
 }
 
-function ProductRow({ product, index }: ProductRowProps) {
-  const stockPercentage = (product.stock_capacity && product.stock_capacity > 0)
-    ? (product.stock_level / product.stock_capacity) * 100
-    : 0;
-  const stockColor = stockPercentage > 80 ? '#EF4444' : stockPercentage > 50 ? '#F59E0B' : '#22C55E';
-  const ageDays = getStockAgeDays(product);
-  const ageColor = ageDays > 180 ? '#EF4444' : ageDays > 90 ? '#F59E0B' : '#22C55E';
+function ProductRow({ product, index, supplierTodMap }: ProductRowProps) {
+  const tod = getProductTod(product, supplierTodMap);
+  const health = classifyStockHealth(product, tod);
+  const healthColor = health === 'dead' ? '#EF4444' : health === 'excess' ? '#EF4444' : health === 'low' ? '#F59E0B' : '#22C55E';
+  const stockColor = healthColor;
+  const ageColor = healthColor;
 
   return (
     <motion.tr
@@ -699,7 +676,7 @@ function ProductRow({ product, index }: ProductRowProps) {
           className="text-sm font-mono"
           style={{ color: ageColor }}
         >
-          {getStockAgeDays(product)}d
+          {getDaysOfStock(product) === Infinity ? '∞' : `${Math.round(getDaysOfStock(product))}d`}
         </span>
       </td>
       <td className="px-4 py-3">

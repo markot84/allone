@@ -1,4 +1,5 @@
 import type { Product, InventorySummary, InventoryAlert } from '../types';
+import { getDaysOfStock, DEFAULT_TOD } from '../utils/productUtils';
 
 export const categories = [
   'Premium Electronics',
@@ -118,12 +119,12 @@ export const inventorySummary: InventorySummary = {
 export const inventoryAlerts: InventoryAlert[] = [
   { 
     type: 'critical', 
-    message: '45 SKUs με stock age > 180 days', 
+    message: '45 SKUs χωρίς πωλήσεις (dead stock)', 
     action: 'Review for clearance' 
   },
   { 
     type: 'warning', 
-    message: '123 SKUs approaching dead stock threshold', 
+    message: '123 SKUs με πλεόνασμα αποθέματος', 
     action: 'Create promotions' 
   },
   { 
@@ -142,13 +143,13 @@ export function calculateCompositeScore(
 ): number {
   const profitScore = Math.min(100, Math.max(0, (product.margin_percentage || 0) / 60 * 100));
 
-  const stockRatio = (product.stock_level || 0) / (product.stock_capacity || 1);
-  const stockScore = stockRatio > 0.8 ? 90 : stockRatio > 0.5 ? 60 : 30;
-  // For stock_clearance: old stock = higher priority (we want to clear it)
+  const dos = getDaysOfStock(product);
+  const dosNorm = dos === Infinity ? 0 : Math.min(100, Math.max(0, (1 - Math.abs(dos - DEFAULT_TOD) / (DEFAULT_TOD * 2)) * 100));
+  const stockScore = dosNorm;
   const stockAgeScore =
     strategyId === 'stock_clearance'
-      ? Math.min(100, ((product.stock_age_days || 0) / 180) * 100) // old = high
-      : Math.max(0, 100 - ((product.stock_age_days || 0) / 180 * 100)); // old = low
+      ? (dos === Infinity ? 100 : Math.min(100, (dos / (DEFAULT_TOD * 2)) * 100))
+      : (dos === Infinity ? 0 : Math.max(0, 100 - (dos / (DEFAULT_TOD * 2)) * 100));
   const inventoryScore = (stockScore + stockAgeScore) / 2;
   
   const strategicScore = product.priority_tag ? 

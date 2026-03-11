@@ -54,7 +54,7 @@ export const PRODUCT_COLUMN_MAPPING = [
     fileColumn: 'Category', 
     appField: 'Category', 
     usedIn: 'Product Intelligence table',
-    alternatives: ['Category', 'category', 'Product_Category', 'product_category', 'Group', 'group', 'Κατηγορία', 'κατηγορία', 'Type', 'type', 'Department', 'department', 'Προμηθευτής', 'προμηθευτής']
+    alternatives: ['Category', 'category', 'Product_Category', 'product_category', 'Group', 'group', 'Κατηγορία', 'κατηγορία', 'Type', 'type', 'Department', 'department']
   },
   { 
     fileColumn: 'Sell_Price', 
@@ -121,6 +121,12 @@ export const PRODUCT_COLUMN_MAPPING = [
     appField: 'Priority Tag', 
     usedIn: 'Product Intelligence, Strategy strategic score',
     alternatives: ['Priority_Flag', 'Priority Flag', 'priority_flag', 'Priority_Tag', 'priority_tag', 'Priority', 'priority', 'Tag', 'tag', 'Label', 'label', 'Alerts', 'alerts', 'Κατάσταση', 'κατάσταση']
+  },
+  { 
+    fileColumn: 'Supplier', 
+    appField: 'Supplier', 
+    usedIn: 'Product Intelligence, TOD per supplier',
+    alternatives: ['Supplier', 'supplier', 'Vendor', 'vendor', 'Supplier_Name', 'supplier_name', 'Προμηθευτής', 'προμηθευτής', 'Vendor_Name', 'vendor_name']
   },
 ] as const;
 
@@ -559,7 +565,7 @@ function validateProduct(row: Record<string, string>, index: number): { valid: b
   // Greek headers FIRST for priority (normalized: "Κωδικός" -> "κωδικός", "Περιγραφή" -> "περιγραφή")
   const name = pick(row, 'περιγραφή', 'title', 'name', 'product_name', 'product', 'Title', 'item', 'item_name', 'description', 'product_title', 'όνομα', 'προϊόν');
   const sku = pick(row, 'κωδικός', 'item_id', 'sku', 'sku_id', 'id', 'product_id', 'Item ID', 'item id', 'Item_ID', 'code', 'barcode', 'ean');
-  const category = pick(row, 'ομάδα', 'category', 'product_category', 'product_type', 'group', 'κατηγορία', 'type', 'department', 'προμηθευτής');
+  const category = pick(row, 'ομάδα', 'category', 'product_category', 'product_type', 'group', 'κατηγορία', 'type', 'department');
   const marginTier = pick(row, 'margin_tier', 'margin_category', 'tier');
   // Try to calculate margin from conv._value_/_cost (ROAS-like metric) if available
   const marginPct = pick(row, 'margin_percentage', 'margin_pct', 'margin', 'margin_%', 'gross_margin_%', 'gross_margin', 'gross_margin_pct', 'profit_margin', 'conv._rate', 'conv_rate');
@@ -578,6 +584,7 @@ function validateProduct(row: Record<string, string>, index: number): { valid: b
   const revenuePeriod = pick(row, 'revenue_period', 'revenue', 'revenue_period');
   const qtySoldPeriod = pick(row, 'qty_sold_period', 'qty_sold', 'quantity_sold');
   const priority = pick(row, 'priority_tag', 'priority_flag', 'priority', 'tag', 'label', 'alerts', 'κατάσταση');
+  const supplier = pick(row, 'supplier', 'vendor', 'supplier_name', 'vendor_name', 'προμηθευτής');
   
   // Debug: Log what was found
   if (index < 3) {
@@ -677,6 +684,7 @@ function validateProduct(row: Record<string, string>, index: number): { valid: b
     ...(revenuePeriod ? { revenue_period: parseFloat(revenuePeriod || '0') || 0 } : {}),
     ...(qtySoldPeriod ? { qty_sold_period: parseInt(qtySoldPeriod || '0', 10) || 0 } : {}),
     ...(firstAvailableDate ? { first_available_date: firstAvailableDate } : {}),
+    ...(supplier ? { supplier } : {}),
   };
 
   // Debug: Log final product for first few rows

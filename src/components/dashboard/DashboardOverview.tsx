@@ -19,7 +19,7 @@ import {
   Cell
 } from 'recharts';
 import { Card, CardHeader } from '../common';
-import { useSegments, useProducts, useOrganic, useCampaigns, useActiveStrategy } from '../../hooks';
+import { useSegments, useProducts, useOrganic, useCampaigns, useActiveStrategy, useSuppliers } from '../../hooks';
 import { ROIAttribution } from '../roi';
 import { calculateTotalRevenue, calculateCampaignMetrics, getCampaignDateForMonth } from '../../utils/roiUtils';
 import { formatCurrencyCompact, formatNumber, formatMultiplier, formatPercent } from '../../utils/format';
@@ -34,9 +34,16 @@ interface DashboardOverviewProps {
 export function DashboardOverview({ onSectionChange, onOpenInsights }: DashboardOverviewProps = {}) {
   const { segments: rfmSegments, hasImported: hasSegments } = useSegments();
   const { count: productsCount, products } = useProducts();
+  const { suppliers } = useSuppliers();
   const { totalOrganicRevenue, byMonth: organicByMonth, hasImported: hasOrganic } = useOrganic();
   const { count: campaignsCount, campaigns, hasImported: hasCampaigns } = useCampaigns();
   const { activeStrategy, getStrategyName } = useActiveStrategy();
+
+  const supplierTodMap = useMemo(() => {
+    const m = new Map<string, number>();
+    suppliers.forEach(s => m.set(s.name, s.tod));
+    return m;
+  }, [suppliers]);
   const hasAnyData = hasOrganic || hasSegments || productsCount > 0 || hasCampaigns;
   
   const campaignsTyped = (campaigns ?? []) as Campaign[];
@@ -81,8 +88,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     }
   }, [totalOrganicRevenue, hasOrganic]);
   const aiInsights = useMemo(() => {
-    return generateInsightsFromData(products, rfmSegments);
-  }, [products, rfmSegments]);
+    return generateInsightsFromData(products, rfmSegments, supplierTodMap);
+  }, [products, rfmSegments, supplierTodMap]);
 
   // Handle insight action clicks
   const handleInsightAction = (insight: { action: string; title: string }) => {

@@ -25,7 +25,7 @@ import {
   ThreeBarsIcon,
   XIcon
 } from '@primer/octicons-react';
-import { Upload, UserPlus, Building2, Target, Euro } from 'lucide-react';
+import { Upload, UserPlus, Building2, Target, Euro, Truck } from 'lucide-react';
 
 const SIDEBAR_PIN_KEY = 'perf-plus-sidebar-pinned';
 
@@ -36,6 +36,7 @@ type SectionId =
   | 'calendar'
   | 'rfm'
   | 'products'
+  | 'suppliers'
   | 'channels'
   | 'campaigns'
   | 'finances'
@@ -427,6 +428,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
         { id: 'dashboard', label: 'Dashboard', icon: HomeIcon },
         { id: 'roi', label: 'ROI & Απόδοση', icon: GraphIcon },
         { id: 'products', label: 'Product Intelligence', icon: PackageIcon },
+        { id: 'suppliers', label: 'Προμηθευτές', icon: Truck },
         { id: 'rfm', label: 'Data Analysis', icon: OrganizationIcon },
         { id: 'strategy', label: 'Commercial Strategy', icon: GraphIcon, ...(strategyBadge ? { badge: strategyBadge.text, badgeColor: strategyBadge.color } : {}) },
         { id: 'channels', label: 'Channel Activation', icon: MegaphoneIcon },
@@ -491,9 +493,8 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
             icon={<ThreeBarsIcon />}
             onClick={() => { if (sidebarPinned) { togglePin(); } else { setSidebarOpen((o) => !o); } }}
             style={{ color: 'rgba(255,255,255,0.85)' }}
-          >
-            <span style={{ color: 'rgba(255,255,255,0.85)' }}>Menu</span>
-          </Button>
+            aria-label="Menu"
+          />
         </PrimerHeader.Item>
 
         <PrimerHeader.Item full style={{ minWidth: 0 }}>

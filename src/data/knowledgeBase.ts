@@ -643,9 +643,10 @@ Margin_Tier, Margin Tier, margin_tier, Margin_Category, margin_category, Tier, t
 
 **Inventory Summary:**
 - **Total SKUs**: Συνολικός αριθμός προϊόντων
-- **Healthy Stock**: Προϊόντα με stock 20-80% capacity και age <180 days
-- **Excess Stock**: Προϊόντα με stock >80% capacity
-- **Dead Stock**: Προϊόντα με stock age >180 days
+- **Healthy Stock**: Προϊόντα με διάρκεια αποθέματος μεταξύ TOD/2 και TOD×2
+- **Excess Stock**: Προϊόντα με διάρκεια αποθέματος > TOD×2 (πλεόνασμα)
+- **Low Stock**: Προϊόντα με διάρκεια αποθέματος ≤ TOD/2 (κίνδυνος εξάντλησης)
+- **Dead Stock**: Προϊόντα χωρίς πωλήσεις και με απόθεμα (TOD = Target Days of Stock, default 60 ημέρες)
 
 **Product Details:**
 Για κάθε προϊόν βλέπετε:
@@ -676,7 +677,7 @@ Margin_Tier, Margin Tier, margin_tier, Margin_Category, margin_category, Tier, t
     content: `**Stock Clearance** είναι το revenue που προέκυψε από την πώληση υπερπλήρων ή παλαιών αποθεμάτων.
 
 **Πώς λειτουργεί:**
-1. Το σύστημα εντοπίζει excess stock (>80% capacity) και dead stock (>180 days)
+1. Το σύστημα εντοπίζει excess stock (>TOD×2 ημέρες αποθέματος) και dead stock (μηδενικές πωλήσεις)
 2. Προτείνεται να προωθηθούν σε specific segments (π.χ. At Risk, Potential)
 3. Δημιουργούνται targeted campaigns
 4. Το revenue από αυτές τις πωλήσεις trackάρεται ως Stock Clearance

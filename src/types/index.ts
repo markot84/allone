@@ -117,6 +117,20 @@ export interface SegmentCategoryData {
   preferred_channels: string[];
 }
 
+// Supplier Types
+export interface Supplier {
+  id: string;
+  name: string;
+  /** Target Days of Stock — ideal stock duration in days */
+  tod: number;
+  /** Optional lead time in days */
+  lead_time?: number;
+  /** Optional contact info */
+  contact?: string;
+  /** Brand scope */
+  brandId?: string;
+}
+
 // Product Types (aligned with FINAL_Unified_Production_Schema)
 export interface Product {
   id: string;
@@ -141,6 +155,8 @@ export interface Product {
   first_available_date?: string;
   /** Firestore: when product was imported - fallback for Stock Age when no date column */
   createdAt?: { toDate: () => Date } | Date | string;
+  /** Supplier name — links to Supplier.name for TOD lookup */
+  supplier?: string;
 }
 
 export interface InventorySummary {

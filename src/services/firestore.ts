@@ -249,6 +249,18 @@ export const SegmentsService = {
   delete: (id: string) => FirestoreService.deleteDocument('segments', id),
 };
 
+export const SuppliersService = {
+  getAll: (brandId?: string | null) => FirestoreService.getDocuments('suppliers', [], brandId),
+  getById: (id: string) => FirestoreService.getDocument('suppliers', id),
+  create: (id: string, data: Record<string, unknown>, brandId?: string | null) =>
+    FirestoreService.setDocument('suppliers', id, { ...data, ...(brandId ? { brandId } : {}) }),
+  update: (id: string, data: Record<string, unknown>) => FirestoreService.updateDocument('suppliers', id, data),
+  delete: (id: string) => FirestoreService.deleteDocument('suppliers', id),
+  batchSet: (items: { id: string; data: Record<string, unknown> }[], brandId?: string | null) =>
+    FirestoreService.batchSet('suppliers', items, brandId),
+  deleteAll: (brandId?: string | null) => FirestoreService.deleteCollection('suppliers', brandId),
+};
+
 export const CampaignsService = {
   getAll: (brandId?: string | null) => {
     // Try to order by createdAt, but fallback to importedAt if createdAt doesn't exist

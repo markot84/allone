@@ -3,16 +3,17 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, TrendingUp, Package, AlertTriangle, BarChart3 } from 'lucide-react';
 import { Card, Button } from '../common';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
-import { getStockAgeDays } from '../../utils/productUtils';
+import { getStockAgeDays, classifyStockHealth, getProductTod } from '../../utils/productUtils';
 import type { Product } from '../../types';
 
 interface ProductChartsProps {
   isOpen: boolean;
   onClose: () => void;
   products: Product[];
+  supplierTodMap?: Map<string, number>;
 }
 
-export function ProductCharts({ isOpen, onClose, products }: ProductChartsProps) {
+export function ProductCharts({ isOpen, onClose, products, supplierTodMap }: ProductChartsProps) {
   // Debug: Log products count and sample data
   useEffect(() => {
     if (isOpen) {
@@ -96,26 +97,21 @@ export function ProductCharts({ isOpen, onClose, products }: ProductChartsProps)
     return result;
   }, [products]);
 
-  // Stock Level Status
+  // Stock Level Status (TOD-based)
   const stockStatus = useMemo(() => {
     let healthy = 0;
     let low = 0;
     let excess = 0;
-    let empty = 0;
+    let dead = 0;
 
     products.forEach(p => {
-      const level = p.stock_level || 0;
-      const capacity = Math.max(p.stock_capacity || 0, 1);
-      const ratio = level / capacity;
-
-      if (level === 0) {
-        empty++;
-      } else if (ratio < 0.2 || level < 10) {
-        low++;
-      } else if (ratio > 0.8) {
-        excess++;
-      } else {
-        healthy++;
+      const tod = getProductTod(p, supplierTodMap);
+      const health = classifyStockHealth(p, tod);
+      switch (health) {
+        case 'dead': dead++; break;
+        case 'low': low++; break;
+        case 'excess': excess++; break;
+        default: healthy++;
       }
     });
 
@@ -123,7 +119,7 @@ export function ProductCharts({ isOpen, onClose, products }: ProductChartsProps)
       { name: 'Healthy', value: healthy, color: '#22C55E' },
       { name: 'Low Stock', value: low, color: '#F59E0B' },
       { name: 'Excess Stock', value: excess, color: '#EF4444' },
-      { name: 'Empty', value: empty, color: '#9CA3AF' }
+      { name: 'Dead Stock', value: dead, color: '#9CA3AF' }
     ];
     console.log('[ProductCharts] Stock status:', result);
     return result;

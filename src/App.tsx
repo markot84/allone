@@ -19,6 +19,7 @@ import { Help } from './components/help';
 import { Concept } from './components/concept';
 import { AIInsightsPanel, AIInsightsTriggerWrapper } from './components/insights';
 import { DataImport } from './components/data';
+import { SuppliersPage } from './components/inventory/SuppliersPage';
 import { BrandsPage } from './components/brands';
 import { BusinessFinances } from './components/finances';
 import { SuperAdminDashboard } from './components/admin';
@@ -68,7 +69,7 @@ function App() {
   const getInitialSection = () => {
     if (typeof window === 'undefined') return 'dashboard';
     const hash = window.location.hash.replace('#', '');
-    const validSections = ['brands', 'dashboard', 'strategy', 'rfm', 'products', 'channels', 'campaigns', 'finances', 'calendar', 'reports', 'roi', 'data', 'data-products', 'data-segments', 'data-campaigns', 'data-organic', 'invite', 'concept', 'help', 'admin'];
+    const validSections = ['brands', 'dashboard', 'strategy', 'rfm', 'products', 'suppliers', 'channels', 'campaigns', 'finances', 'calendar', 'reports', 'roi', 'data', 'data-products', 'data-segments', 'data-campaigns', 'data-organic', 'invite', 'concept', 'help', 'admin'];
     if (hash && validSections.includes(hash)) return hash;
     return 'dashboard';
   };
@@ -192,6 +193,8 @@ function App() {
         return <RFMAnalysis onSectionChange={handleSectionChange} />;
       case 'products':
         return <ProductIntelligence onSectionChange={handleSectionChange} />;
+      case 'suppliers':
+        return <SuppliersPage />;
       case 'channels':
         return <ChannelActivation onSectionChange={handleSectionChange} />;
       case 'campaigns':

@@ -1,4 +1,5 @@
 import type { Product } from '../types';
+import { getDaysOfStock, getProductTod } from './productUtils';
 
 /**
  * Calculate composite score for a product based on weights and strategy
@@ -7,17 +8,19 @@ export function calculateCompositeScore(
   product: Product,
   weights: Record<string, number>,
   segmentAffinities?: Record<string, number>,
-  strategyId?: string
+  strategyId?: string,
+  supplierTodMap?: Map<string, number>
 ): number {
   const profitScore = Math.min(100, Math.max(0, (product.margin_percentage || 0) / 60 * 100));
 
-  const stockRatio = (product.stock_level || 0) / (product.stock_capacity || 1);
-  const stockScore = stockRatio > 0.8 ? 90 : stockRatio > 0.5 ? 60 : 30;
-  // For stock_clearance: old stock = higher priority (we want to clear it)
+  const tod = getProductTod(product, supplierTodMap);
+  const dos = getDaysOfStock(product);
+  const dosNorm = dos === Infinity ? 0 : Math.min(100, Math.max(0, (1 - Math.abs(dos - tod) / (tod * 2)) * 100));
+  const stockScore = dosNorm;
   const stockAgeScore =
     strategyId === 'stock_clearance'
-      ? Math.min(100, ((product.stock_age_days || 0) / 180) * 100) // old = high
-      : Math.max(0, 100 - ((product.stock_age_days || 0) / 180 * 100)); // old = low
+      ? (dos === Infinity ? 100 : Math.min(100, (dos / (tod * 2)) * 100))
+      : (dos === Infinity ? 0 : Math.max(0, 100 - (dos / (tod * 2)) * 100));
   const inventoryScore = (stockScore + stockAgeScore) / 2;
   
   const strategicScore = product.priority_tag ? 
