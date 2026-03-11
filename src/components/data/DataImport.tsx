@@ -8,6 +8,7 @@ import { importFile, saveImportJob, getImportJobs, isSupportedFile, PRODUCT_COLU
 import { FEED_SOURCE_OPTIONS, downloadGoogleAdsCsvTemplate, type FeedSourceType } from '../../data/feedSourceConfig';
 import { FeedPreviewModal } from './FeedPreviewModal';
 import { FeedSourcesSection } from './FeedSourcesSection';
+import { ApiKeyManager } from './ApiKeyManager';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export type FileWithType = { file: File; type: ImportType; campaignChannel?: CampaignChannelOverride };
@@ -932,6 +933,9 @@ export function DataImport({ initialType }: DataImportProps = {}) {
 
       {/* Feed Sources - saved sources with Sync τώρα */}
       {importMode === 'feed' && <FeedSourcesSection />}
+
+      {/* API Key Management */}
+      <ApiKeyManager />
 
       {/* Feed Preview Modal */}
       <FeedPreviewModal
