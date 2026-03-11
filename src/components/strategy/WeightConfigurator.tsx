@@ -70,74 +70,73 @@ const PreviewCell = memo(function PreviewCell({
   switch (columnId) {
     case 'rank':
       return (
-        <td className="py-3">
-          <span className="w-6 h-6 rounded-full bg-[#F5F5F5] flex items-center justify-center text-xs font-medium">
+        <td className="py-2 pr-1 w-8">
+          <span className="w-5 h-5 rounded-full bg-[#F5F5F5] flex items-center justify-center text-[10px] font-medium">
             {rank}
           </span>
         </td>
       );
     case 'product':
       return (
-        <td className="py-3">
-          <div>
-            <p className="text-sm font-medium text-[#1A1A1A] truncate max-w-[200px]">{product.name}</p>
-            <p className="text-xs text-[#9CA3AF]">{product.sku}</p>
-          </div>
+        <td className="py-2 pr-2 max-w-0">
+          <p className="text-xs font-medium text-[#1A1A1A] truncate">{product.name}</p>
+          <p className="text-[10px] text-[#9CA3AF] truncate">{product.sku}</p>
         </td>
       );
     case 'category':
       return (
-        <td className="py-3">
-          <span className="text-sm text-[#4A4A4A]">{product.category}</span>
+        <td className="py-2 pr-2 hidden lg:table-cell">
+          <span className="text-xs text-[#4A4A4A] truncate block max-w-[100px]">{product.category}</span>
         </td>
       );
     case 'margin':
       return (
-        <td className="py-3">
+        <td className="py-2 pr-2 w-16">
           <Badge
             variant={
               product.margin_tier === 'high' ? 'success' : product.margin_tier === 'medium' ? 'warning' : 'danger'
             }
+            size="sm"
           >
-            {(product.margin_percentage ?? 0).toFixed(1)}%
+            {(product.margin_percentage ?? 0).toFixed(0)}%
           </Badge>
         </td>
       );
     case 'stock':
       return (
-        <td className="py-3">
-          <div className="flex items-center gap-2">
-            <div className="w-16 h-1.5 bg-[#E5E5E5] rounded-full overflow-hidden">
+        <td className="py-2 pr-2 w-20 hidden sm:table-cell">
+          <div className="flex items-center gap-1.5">
+            <div className="w-10 h-1.5 bg-[#E5E5E5] rounded-full overflow-hidden shrink-0">
               <div
                 className="h-full rounded-full"
                 style={{
-                  width: `${ratio * 100}%`,
+                  width: `${Math.min(ratio * 100, 100)}%`,
                   backgroundColor: ratio > 0.8 ? '#EF4444' : ratio > 0.5 ? '#F59E0B' : '#22C55E',
                 }}
               />
             </div>
-            <span className="text-xs text-[#4A4A4A] font-mono">{product.stock_level ?? 0}</span>
+            <span className="text-[10px] text-[#4A4A4A] font-mono">{product.stock_level ?? 0}</span>
           </div>
         </td>
       );
     case 'stock_age':
       return (
-        <td className="py-3">
-          <span className="text-sm text-[#4A4A4A]">{product.stock_age_days ?? 0} days</span>
+        <td className="py-2 pr-2 w-16 hidden md:table-cell">
+          <span className="text-xs text-[#4A4A4A]">{product.stock_age_days ?? 0}d</span>
         </td>
       );
     case 'excess_pct': {
       const excess = Math.max(0, (product.stock_level ?? 0) - cap);
       const pct = cap > 0 ? ((excess / cap) * 100).toFixed(0) : '0';
       return (
-        <td className="py-3">
-          <span className="text-sm font-medium text-[#4A4A4A]">{pct}%</span>
+        <td className="py-2 pr-2 w-14 hidden md:table-cell">
+          <span className="text-xs font-medium text-[#4A4A4A]">{pct}%</span>
         </td>
       );
     }
     case 'priority_tag':
       return (
-        <td className="py-3">
+        <td className="py-2 pr-2 w-20 hidden md:table-cell">
           <Badge variant="default" size="sm">
             {product.priority_tag ?? '-'}
           </Badge>
@@ -147,19 +146,19 @@ const PreviewCell = memo(function PreviewCell({
       const val = (product.price ?? 0) * (product.stock_level ?? 0);
       const fmt = val >= 1000 ? `€${(val / 1000).toFixed(1)}K` : `€${val.toFixed(0)}`;
       return (
-        <td className="py-3">
-          <span className="text-sm font-mono text-[#1A1A1A]">{fmt}</span>
+        <td className="py-2 pr-2 w-16 hidden sm:table-cell">
+          <span className="text-xs font-mono text-[#1A1A1A]">{fmt}</span>
         </td>
       );
     }
     case 'score':
       return (
-        <td className={`py-3 ${alignRight}`}>
+        <td className={`py-2 w-14 ${alignRight}`}>
           <motion.span
             key={product.composite_score}
             initial={{ scale: 1.2 }}
             animate={{ scale: 1 }}
-            className="text-lg font-bold text-[var(--nts-accent)] font-mono"
+            className="text-sm font-bold text-[var(--nts-accent)] font-mono"
           >
             {product.composite_score?.toFixed(1)}
           </motion.span>
@@ -966,21 +965,38 @@ export function WeightConfigurator() {
             </p>
           )}
 
-          <div className="overflow-x-auto">
-            <table className="w-full">
+          <div className="-mx-2">
+            <table className="w-full table-fixed">
               <thead>
-                <tr className="text-left text-xs text-[#4A4A4A] border-b border-[#E5E5E5]">
-                  {previewConfig.columns.map((col) => (
-                    <th key={col.id} className={`pb-3 font-medium ${col.id === 'score' ? 'text-right' : ''}`}>
-                      {col.tooltip ? (
-                        <Tooltip content={col.tooltip}>
-                          <span>{col.label}</span>
-                        </Tooltip>
-                      ) : (
-                        col.label
-                      )}
-                    </th>
-                  ))}
+                <tr className="text-left text-[11px] text-[#4A4A4A] border-b border-[#E5E5E5]">
+                  {previewConfig.columns.map((col) => {
+                    const hiddenClass =
+                      col.id === 'category' ? 'hidden lg:table-cell' :
+                      col.id === 'stock' || col.id === 'revenue_potential' ? 'hidden sm:table-cell' :
+                      col.id === 'stock_age' || col.id === 'excess_pct' || col.id === 'priority_tag' ? 'hidden md:table-cell' :
+                      '';
+                    const widthClass =
+                      col.id === 'rank' ? 'w-8' :
+                      col.id === 'score' ? 'w-14' :
+                      col.id === 'margin' ? 'w-16' :
+                      col.id === 'stock' ? 'w-20' :
+                      col.id === 'stock_age' || col.id === 'revenue_potential' ? 'w-16' :
+                      col.id === 'excess_pct' ? 'w-14' :
+                      col.id === 'priority_tag' ? 'w-20' :
+                      col.id === 'category' ? 'w-24' :
+                      '';
+                    return (
+                      <th key={col.id} className={`pb-2 font-medium ${col.id === 'score' ? 'text-right' : ''} ${hiddenClass} ${widthClass}`}>
+                        {col.tooltip ? (
+                          <Tooltip content={col.tooltip}>
+                            <span>{col.label}</span>
+                          </Tooltip>
+                        ) : (
+                          col.label
+                        )}
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody>

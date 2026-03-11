@@ -447,7 +447,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           <table className="w-full">
             <thead>
               <tr className="bg-[#F5F5F5]">
-                <th className="px-4 py-3 text-left text-xs font-medium text-[#4A4A4A]">
+                <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A]">
                   <button
                     onClick={() => handleSort('name')}
                     className="flex items-center gap-1 hover:text-[#1A1A1A]"
@@ -456,45 +456,45 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                     <SortIcon field="name" current={sortField} direction={sortDirection} />
                   </button>
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-[#4A4A4A]">
+                <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A] hidden lg:table-cell">
                   <span className="inline-flex items-center gap-1">
                     Category
                     <Tooltip content="Κατηγορία προϊόντος (π.χ. από DSS: Προμηθευτής)." size={12} />
                   </span>
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-[#4A4A4A]">
+                <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A]">
                   <button
                     onClick={() => handleSort('margin_percentage')}
                     className="flex items-center gap-1 hover:text-[#1A1A1A]"
                   >
-                    Gross Margin
+                    Margin
                     <SortIcon field="margin_percentage" current={sortField} direction={sortDirection} />
                   </button>
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-[#4A4A4A]">
+                <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A] hidden sm:table-cell">
                   <button
                     onClick={() => handleSort('stock_level')}
                     className="flex items-center gap-1 hover:text-[#1A1A1A]"
                   >
-                    Stock Level
+                    Stock
                     <SortIcon field="stock_level" current={sortField} direction={sortDirection} />
                   </button>
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-[#4A4A4A]">
+                <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A] hidden md:table-cell">
                   <Tooltip content="Εκτιμώμενες ημέρες αποθέματος βάσει ρυθμού πωλήσεων (Days of Stock)." size={12}>
                     <button
                       onClick={() => handleSort('stock_age_days')}
                       className="flex items-center gap-1 hover:text-[#1A1A1A]"
                     >
-                      Days of Stock
+                      DOS
                       <SortIcon field="stock_age_days" current={sortField} direction={sortDirection} />
                     </button>
                   </Tooltip>
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-[#4A4A4A]">
-                  Priority Tag
+                <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A] hidden lg:table-cell">
+                  Tag
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-[#4A4A4A]">
+                <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A] hidden sm:table-cell">
                   <button
                     onClick={() => handleSort('price')}
                     className="flex items-center gap-1 hover:text-[#1A1A1A]"
@@ -503,7 +503,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                     <SortIcon field="price" current={sortField} direction={sortDirection} />
                   </button>
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-[#4A4A4A]">
+                <th className="px-3 py-2 text-right text-[11px] font-medium text-[#4A4A4A]">
                   Actions
                 </th>
               </tr>
@@ -636,50 +636,51 @@ function ProductRow({ product, index, supplierTodMap }: ProductRowProps) {
       transition={{ delay: index * 0.02 }}
       className="border-b border-[#E5E5E5] hover:bg-[#F5F5F5] transition-colors"
     >
-      <td className="px-4 py-3">
-        <div>
-          <p className="text-sm font-medium text-[#1A1A1A] truncate max-w-[200px]">
+      <td className="px-3 py-2">
+        <div className="min-w-0">
+          <p className="text-xs font-medium text-[#1A1A1A] truncate">
             {product.name}
           </p>
-          <p className="text-xs text-[#9CA3AF]">{product.sku}</p>
+          <p className="text-[10px] text-[#9CA3AF] truncate">{product.sku}</p>
         </div>
       </td>
-      <td className="px-4 py-3">
-        <span className="text-sm text-[#4A4A4A]">{product.category}</span>
+      <td className="px-3 py-2 hidden lg:table-cell">
+        <span className="text-xs text-[#4A4A4A] truncate block max-w-[120px]">{product.category}</span>
       </td>
-      <td className="px-4 py-3">
+      <td className="px-3 py-2">
         <Badge
           variant={
             product.margin_tier === 'high' ? 'success' :
             product.margin_tier === 'medium' ? 'warning' : 'danger'
           }
+          size="sm"
         >
-          {formatPercent(product.margin_percentage ?? 0, 1)}
+          {formatPercent(product.margin_percentage ?? 0, 0)}
         </Badge>
       </td>
-      <td className="px-4 py-3">
-        <div className="flex items-center gap-2">
+      <td className="px-3 py-2 hidden sm:table-cell">
+        <div className="flex items-center gap-1.5">
           <ProgressBar
             value={product.stock_level ?? 0}
             max={Math.max(product.stock_capacity ?? 0, 1)}
             color={stockColor}
             size="sm"
-            className="w-16"
+            className="w-12"
           />
-          <span className="text-xs text-[#4A4A4A] font-mono w-8">
+          <span className="text-[10px] text-[#4A4A4A] font-mono">
             {product.stock_level}
           </span>
         </div>
       </td>
-      <td className="px-4 py-3">
+      <td className="px-3 py-2 hidden md:table-cell">
         <span
-          className="text-sm font-mono"
+          className="text-xs font-mono"
           style={{ color: ageColor }}
         >
           {getDaysOfStock(product) === Infinity ? '∞' : `${Math.round(getDaysOfStock(product))}d`}
         </span>
       </td>
-      <td className="px-4 py-3">
+      <td className="px-3 py-2 hidden lg:table-cell">
         {product.priority_tag ? (
           <Badge
             variant={
@@ -688,21 +689,22 @@ function ProductRow({ product, index, supplierTodMap }: ProductRowProps) {
               product.priority_tag === 'Best Seller' ? 'orange' :
               product.priority_tag === 'Clearance' ? 'warning' : 'default'
             }
+            size="sm"
           >
             {product.priority_tag}
           </Badge>
         ) : (
-          <span className="text-xs text-[#9CA3AF]">—</span>
+          <span className="text-[10px] text-[#9CA3AF]">—</span>
         )}
       </td>
-      <td className="px-4 py-3">
-        <span className="text-sm font-mono text-[#1A1A1A]">
+      <td className="px-3 py-2 hidden sm:table-cell">
+        <span className="text-xs font-mono text-[#1A1A1A]">
           €{formatCurrency(product.price ?? 0, 2)}
         </span>
       </td>
-      <td className="px-4 py-3 text-right">
-        <button className="text-xs font-medium text-[var(--nts-accent)] hover:underline">
-          Προσθήκη στο Feed
+      <td className="px-3 py-2 text-right">
+        <button className="text-[10px] font-medium text-[var(--nts-accent)] hover:underline">
+          Feed
         </button>
       </td>
     </motion.tr>

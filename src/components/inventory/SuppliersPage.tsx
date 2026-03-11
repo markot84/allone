@@ -345,15 +345,15 @@ export function SuppliersPage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm table-fixed">
               <thead>
                 <tr className="bg-[#F9F9F9] border-b border-[#E5E5E5]">
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider">Προμηθευτής</th>
-                  <th className="text-center px-4 py-3 text-xs font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider">TOD (ημέρες)</th>
-                  <th className="text-center px-4 py-3 text-xs font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider">Lead Time</th>
-                  <th className="text-center px-4 py-3 text-xs font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider">Προϊόντα</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider">Επικοινωνία</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider">Ενέργειες</th>
+                  <th className="text-left px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider">Προμηθευτής</th>
+                  <th className="text-center px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider w-20">TOD</th>
+                  <th className="text-center px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider w-20 hidden sm:table-cell">Lead Time</th>
+                  <th className="text-center px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider w-16">Προϊόντα</th>
+                  <th className="text-left px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider hidden md:table-cell">Επικοινωνία</th>
+                  <th className="text-right px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider w-20">Ενέργειες</th>
                 </tr>
               </thead>
               <tbody>
@@ -367,45 +367,45 @@ export function SuppliersPage() {
                       transition={{ delay: i * 0.02 }}
                       className="border-b border-[#E5E5E5] hover:bg-[#F5F5F5] transition-colors"
                     >
-                      <td className="px-4 py-3 font-medium text-[var(--nts-charcoal)]">{s.name}</td>
-                      <td className="px-4 py-3 text-center">
+                      <td className="px-3 py-2 font-medium text-xs text-[var(--nts-charcoal)] truncate">{s.name}</td>
+                      <td className="px-3 py-2 text-center">
                         {editingId === s.id ? (
                           <input
                             type="number"
                             value={editTod}
                             onChange={e => setEditTod(parseInt(e.target.value) || DEFAULT_TOD)}
                             min={1}
-                            className="w-20 text-center text-sm border border-[var(--nts-accent)] rounded px-2 py-1 focus:outline-none"
+                            className="w-16 text-center text-xs border border-[var(--nts-accent)] rounded px-1 py-1 focus:outline-none"
                             autoFocus
                           />
                         ) : (
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-[var(--nts-accent)]/10 text-[var(--nts-accent)]">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-[var(--nts-accent)]/10 text-[var(--nts-accent)]">
                             {s.tod}d
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-center">
+                      <td className="px-3 py-2 text-center hidden sm:table-cell">
                         {editingId === s.id ? (
                           <input
                             type="number"
                             value={editLeadTime}
                             onChange={e => setEditLeadTime(parseInt(e.target.value) || 0)}
                             min={0}
-                            className="w-20 text-center text-sm border border-[#E5E5E5] rounded px-2 py-1 focus:outline-none"
+                            className="w-16 text-center text-xs border border-[#E5E5E5] rounded px-1 py-1 focus:outline-none"
                           />
                         ) : (
-                          <span className="text-sm text-[var(--nts-medium-gray)]">
+                          <span className="text-xs text-[var(--nts-medium-gray)]">
                             {s.lead_time ? `${s.lead_time}d` : '—'}
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-center">
-                        <span className="text-sm font-mono text-[var(--nts-charcoal)]">
+                      <td className="px-3 py-2 text-center">
+                        <span className="text-xs font-mono text-[var(--nts-charcoal)]">
                           {productCountBySupplier.get(s.name) || 0}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-sm text-[var(--nts-medium-gray)]">{s.contact || '—'}</td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-3 py-2 text-xs text-[var(--nts-medium-gray)] truncate hidden md:table-cell">{s.contact || '—'}</td>
+                      <td className="px-3 py-2 text-right">
                         {editingId === s.id ? (
                           <div className="flex items-center justify-end gap-1">
                             <button onClick={handleSaveEdit} className="p-1 text-green-600 hover:bg-green-50 rounded">
