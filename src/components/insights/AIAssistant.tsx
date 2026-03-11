@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Sparkles,
   X,
   Send,
   BookOpen,
@@ -191,19 +190,15 @@ export function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
             <div className="p-5 border-b border-[var(--nts-border-gray)]">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg border border-[var(--nts-border-gray)] bg-gradient-to-br from-[var(--nts-accent)] to-[var(--nts-accent-hover)] flex items-center justify-center overflow-hidden">
+                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[var(--nts-accent)] to-[var(--nts-accent-hover)] flex items-center justify-center overflow-hidden">
                     <img
-                      src="/ai-assistant-icon.png"
+                      src="/mascot.png"
                       alt="AI Assistant"
                       className="w-full h-full object-contain"
                       onError={(e) => {
-                        // Fallback to icon if image fails to load
                         const target = e.target as HTMLImageElement;
                         target.style.display = 'none';
-                        const parent = target.parentElement;
-                        if (parent) {
-                          parent.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" fill="var(--nts-accent)"/><path d="M8 10h8M8 14h6" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>';
-                        }
+                        target.parentElement!.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M12 2a5 5 0 0 1 5 5v1h1a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h1V7a5 5 0 0 1 5-5z"/><circle cx="9" cy="13" r="1" fill="white"/><circle cx="15" cy="13" r="1" fill="white"/></svg>';
                       }}
                     />
                   </div>
@@ -231,14 +226,15 @@ export function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
                   className={`flex gap-3 ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   {message.type === 'assistant' && (
-                    <div className="w-8 h-8 rounded-lg border border-[var(--nts-border-gray)] bg-gradient-to-br from-[var(--nts-accent)] to-[var(--nts-accent-hover)] flex items-center justify-center flex-shrink-0 overflow-hidden">
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--nts-accent)] to-[var(--nts-accent-hover)] flex items-center justify-center flex-shrink-0 overflow-hidden">
                       <img
-                        src="/assets/c__Users_mtseh_AppData_Roaming_Cursor_User_workspaceStorage_23c9096066703fac486b879f9238c027_images_4f3eaaee-054c-427c-be28-d815cb6a6cea-d803d4d0-e67f-4a4a-a858-acd1de7ea0e3.png"
+                        src="/mascot.png"
                         alt="AI Assistant"
                         className="w-full h-full object-contain"
                         onError={(e) => {
                           const target = e.target as HTMLImageElement;
                           target.style.display = 'none';
+                          target.parentElement!.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M12 2a5 5 0 0 1 5 5v1h1a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h1V7a5 5 0 0 1 5-5z"/><circle cx="9" cy="13" r="1" fill="white"/><circle cx="15" cy="13" r="1" fill="white"/></svg>';
                         }}
                       />
                     </div>
@@ -299,6 +295,8 @@ export function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
                                 onClick={(e) => {
                                   e.preventDefault();
                                   window.location.hash = `help?article=${articleId}`;
+                                  window.dispatchEvent(new HashChangeEvent('hashchange'));
+                                  window.dispatchEvent(new CustomEvent('navigate-to-help'));
                                   onClose();
                                 }}
                                 className="text-xs px-2 py-1 bg-white/80 hover:bg-white rounded border border-[var(--nts-border-gray)]/30 text-[var(--nts-charcoal)] hover:text-[var(--nts-accent)] transition-colors flex items-center gap-1"
@@ -322,8 +320,8 @@ export function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
 
               {isTyping && (
                 <div className="flex gap-3 justify-start">
-                  <div className="w-8 h-8 rounded-lg border border-[var(--nts-border-gray)] bg-gradient-to-br from-[var(--nts-accent)] to-[var(--nts-accent-hover)] flex items-center justify-center flex-shrink-0">
-                    <Sparkles size={16} className="text-white animate-pulse" />
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--nts-accent)] to-[var(--nts-accent-hover)] flex items-center justify-center flex-shrink-0 overflow-hidden">
+                    <img src="/mascot.png" alt="" className="w-full h-full object-contain animate-pulse" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                   </div>
                   <div className="bg-[var(--nts-light-gray)] rounded-lg p-3">
                     <div className="flex gap-1">

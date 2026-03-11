@@ -1,10 +1,14 @@
 {
-  "version": "0.29.35",
-  "previousVersion": "0.29.34",
-  "commitHash": "f55ce76",
+  "version": "0.29.37",
+  "previousVersion": "0.29.36",
+  "commitHash": "7b3dbfe",
   "branch": "main",
-  "buildDate": "2026-03-11T06:51:12.010Z",
+  "buildDate": "2026-03-11T07:24:03.328Z",
   "commits": [
+    {
+      "hash": "7b3dbfe",
+      "message": "Fix Button component: icon-only burger, styled primary/secondary buttons"
+    },
     {
       "hash": "f55ce76",
       "message": "TOD-based stock classification, supplier management page, burger menu"
@@ -60,13 +64,10 @@
     {
       "hash": "efa0059",
       "message": "Channel Activation requires saved strategy, rich AI context, ROI dashboard tab with ROAS badge"
-    },
-    {
-      "hash": "ab51ae2",
-      "message": "Update build info"
     }
   ],
   "changes": [
+    "Fix Button component: icon-only burger, styled primary/secondary buttons",
     "TOD-based stock classification, supplier management page, burger menu",
     "Update pricing to value-based tiers, add funding sources",
     "Redesign dashboard, add campaign sorting and channel colors",
@@ -75,7 +76,6 @@
     "Remove NEW badge from ROI sidebar item",
     "Fix AI save flow, add ROI metric with visual emphasis, improve strategy prompt",
     "ROI sidebar tab: rename to ROI & Apodosi, add NEW badge with emphasis",
-    "Strategy prompt: mandatory bullet format, remove brevity language",
-    "Fix race condition in AI saves (updateDocument), improve strategy prompt with example"
+    "Strategy prompt: mandatory bullet format, remove brevity language"
   ]
 }

@@ -69,8 +69,9 @@ function App() {
   const getInitialSection = () => {
     if (typeof window === 'undefined') return 'dashboard';
     const hash = window.location.hash.replace('#', '');
+    const baseSection = hash.split('?')[0];
     const validSections = ['brands', 'dashboard', 'strategy', 'rfm', 'products', 'suppliers', 'channels', 'campaigns', 'finances', 'calendar', 'reports', 'roi', 'data', 'data-products', 'data-segments', 'data-campaigns', 'data-organic', 'invite', 'concept', 'help', 'admin'];
-    if (hash && validSections.includes(hash)) return hash;
+    if (baseSection && validSections.includes(baseSection)) return baseSection;
     return 'dashboard';
   };
 
