@@ -304,21 +304,21 @@ export function SuppliersPage() {
       </AnimatePresence>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-4 gap-3">
         {[
-          { icon: <Truck size={18} />, color: 'text-[var(--nts-accent)]', value: suppliers.length, label: 'Προμηθευτές' },
-          { icon: <Clock size={18} />, color: 'text-blue-500', value: suppliers.length > 0 ? Math.round(suppliers.reduce((s, x) => s + x.tod, 0) / suppliers.length) : DEFAULT_TOD, label: 'Μέσο TOD (ημέρες)' },
-          { icon: <Clock size={18} />, color: 'text-amber-500', value: suppliers.length > 0 ? Math.round(suppliers.filter(s => (s.lead_time || 0) > 0).reduce((s, x) => s + (x.lead_time || 0), 0) / Math.max(suppliers.filter(s => (s.lead_time || 0) > 0).length, 1)) : 0, label: 'Μέσο Lead Time (ημέρες)' },
-          { icon: <Package size={18} />, color: 'text-green-500', value: Array.from(productCountBySupplier.values()).reduce((a, b) => a + b, 0), label: 'Συνδεδεμένα Προϊόντα' },
+          { icon: <Truck size={16} />, color: 'text-[var(--nts-accent)]', bg: 'bg-[var(--nts-accent)]/10', value: suppliers.length, label: 'Προμηθευτές' },
+          { icon: <Clock size={16} />, color: 'text-blue-500', bg: 'bg-blue-50', value: suppliers.length > 0 ? Math.round(suppliers.reduce((s, x) => s + x.tod, 0) / suppliers.length) : DEFAULT_TOD, label: 'Μέσο TOD' },
+          { icon: <Clock size={16} />, color: 'text-amber-500', bg: 'bg-amber-50', value: suppliers.length > 0 ? Math.round(suppliers.filter(s => (s.lead_time || 0) > 0).reduce((s, x) => s + (x.lead_time || 0), 0) / Math.max(suppliers.filter(s => (s.lead_time || 0) > 0).length, 1)) : 0, label: 'Μέσο Lead Time' },
+          { icon: <Package size={16} />, color: 'text-green-500', bg: 'bg-green-50', value: Array.from(productCountBySupplier.values()).reduce((a, b) => a + b, 0), label: 'Συνδ. Προϊόντα' },
         ].map((stat, i) => (
-          <Card key={i} className="p-4 flex items-center gap-3">
-            <div className={`w-9 h-9 rounded-lg bg-gray-50 flex items-center justify-center shrink-0 ${stat.color}`}>
-              {stat.icon}
+          <Card key={i} className="px-4 py-3">
+            <div className="flex items-center gap-2 mb-1">
+              <div className={`w-7 h-7 rounded-md ${stat.bg} flex items-center justify-center shrink-0 ${stat.color}`}>
+                {stat.icon}
+              </div>
+              <span className="text-[11px] text-[var(--nts-medium-gray)] leading-tight">{stat.label}</span>
             </div>
-            <div>
-              <p className="text-xl font-bold text-[var(--nts-charcoal)] leading-tight">{stat.value}</p>
-              <p className="text-xs text-[var(--nts-medium-gray)]">{stat.label}</p>
-            </div>
+            <p className="text-2xl font-bold text-[var(--nts-charcoal)] pl-9">{stat.value}</p>
           </Card>
         ))}
       </div>
