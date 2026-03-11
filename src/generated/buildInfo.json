@@ -1,10 +1,14 @@
 {
-  "version": "0.29.33",
-  "previousVersion": "0.29.32",
-  "commitHash": "56322ce",
+  "version": "0.29.35",
+  "previousVersion": "0.29.34",
+  "commitHash": "f55ce76",
   "branch": "main",
-  "buildDate": "2026-03-11T06:30:25.009Z",
+  "buildDate": "2026-03-11T06:51:12.010Z",
   "commits": [
+    {
+      "hash": "f55ce76",
+      "message": "TOD-based stock classification, supplier management page, burger menu"
+    },
     {
       "hash": "56322ce",
       "message": "Update pricing to value-based tiers, add funding sources"
@@ -60,13 +64,10 @@
     {
       "hash": "ab51ae2",
       "message": "Update build info"
-    },
-    {
-      "hash": "8610be8",
-      "message": "Fix strategy sync, ROI chart, dashboard tabs, AI context richness"
     }
   ],
   "changes": [
+    "TOD-based stock classification, supplier management page, burger menu",
     "Update pricing to value-based tiers, add funding sources",
     "Redesign dashboard, add campaign sorting and channel colors",
     "ROI card redesign: dark gradient hero in Dashboard and ROI page",
@@ -75,7 +76,6 @@
     "Fix AI save flow, add ROI metric with visual emphasis, improve strategy prompt",
     "ROI sidebar tab: rename to ROI & Apodosi, add NEW badge with emphasis",
     "Strategy prompt: mandatory bullet format, remove brevity language",
-    "Fix race condition in AI saves (updateDocument), improve strategy prompt with example",
-    "Force AI on strategy save, fix activation generation, adjust prompt length"
+    "Fix race condition in AI saves (updateDocument), improve strategy prompt with example"
   ]
 }
