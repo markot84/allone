@@ -478,19 +478,19 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
           </div>
         ) : (
           <div className="overflow-x-auto mt-4">
-            <table className="w-full table-fixed">
+            <table className="w-full">
               <thead>
                 <tr className="text-left text-[11px] text-[#4A4A4A] border-b border-[#E5E5E5]">
                   <SortableHeader col="name" label="Campaign" current={sortColumn} dir={sortDirection} onSort={handleSort} className="" />
-                  <SortableHeader col="channel" label="Channel" current={sortColumn} dir={sortDirection} onSort={handleSort} className="w-20" />
-                  <SortableHeader col="period" label="Period" current={sortColumn} dir={sortDirection} onSort={handleSort} className="w-20 hidden lg:table-cell" />
-                  <SortableHeader col="status" label="Status" current={sortColumn} dir={sortDirection} onSort={handleSort} className="w-16 hidden md:table-cell" />
-                  <SortableHeader col="spent" label="Spent" current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="w-16" />
-                  <SortableHeader col="impressions" label="Impr." current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="w-16 hidden lg:table-cell" />
-                  <SortableHeader col="clicks" label="Clicks" current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="w-14 hidden md:table-cell" />
-                  <SortableHeader col="ctr" label="CTR" current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="w-12 hidden lg:table-cell" />
-                  <SortableHeader col="conversions" label="Conv." current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="w-14 hidden sm:table-cell" />
-                  <SortableHeader col="roas" label="ROAS" current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="w-14" />
+                  <SortableHeader col="channel" label="Channel" current={sortColumn} dir={sortDirection} onSort={handleSort} className="whitespace-nowrap" />
+                  <SortableHeader col="period" label="Period" current={sortColumn} dir={sortDirection} onSort={handleSort} className="whitespace-nowrap hidden lg:table-cell" />
+                  <SortableHeader col="status" label="Status" current={sortColumn} dir={sortDirection} onSort={handleSort} className="whitespace-nowrap hidden md:table-cell" />
+                  <SortableHeader col="spent" label="Spent" current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="whitespace-nowrap" />
+                  <SortableHeader col="impressions" label="Impr." current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="whitespace-nowrap hidden lg:table-cell" />
+                  <SortableHeader col="clicks" label="Clicks" current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="whitespace-nowrap hidden md:table-cell" />
+                  <SortableHeader col="ctr" label="CTR" current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="whitespace-nowrap hidden lg:table-cell" />
+                  <SortableHeader col="conversions" label="Conv." current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="whitespace-nowrap hidden sm:table-cell" />
+                  <SortableHeader col="roas" label="ROAS" current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="whitespace-nowrap" />
                 </tr>
               </thead>
               <tbody>
@@ -502,16 +502,16 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                     transition={{ delay: index * 0.02 }}
                     className="border-b border-[#E5E5E5] hover:bg-[#F5F5F5] transition-colors"
                   >
-                    <td className="py-2 px-2 min-w-0">
+                    <td className="py-2 px-3 max-w-[200px] lg:max-w-[280px]">
                       <div className="font-medium text-xs text-[#1A1A1A] truncate">{campaign.name}</div>
                     </td>
-                    <td className="py-2 px-2">
+                    <td className="py-2 px-3 whitespace-nowrap">
                       <ChannelBadge channel={campaign.channel || 'Other'} />
                     </td>
-                    <td className="py-2 px-2 text-xs text-[#4A4A4A] hidden lg:table-cell">
+                    <td className="py-2 px-3 text-xs text-[#4A4A4A] whitespace-nowrap hidden lg:table-cell">
                       {campaign.period || '-'}
                     </td>
-                    <td className="py-2 px-2 hidden md:table-cell">
+                    <td className="py-2 px-3 whitespace-nowrap hidden md:table-cell">
                       <Badge 
                         variant={
                           campaign.status === 'active' || campaign.status === 'enabled' || campaign.status === 'eligible' || !campaign.status
@@ -523,19 +523,19 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                         {campaign.status || 'Active'}
                       </Badge>
                     </td>
-                    <td className="py-2 px-2 text-right font-mono text-xs">
+                    <td className="py-2 px-3 text-right font-mono text-xs whitespace-nowrap">
                       {campaign.amount_spent ? `€${formatCurrency(campaign.amount_spent, 2)}` : '-'}
                     </td>
-                    <td className="py-2 px-2 text-right font-mono text-xs hidden lg:table-cell">
+                    <td className="py-2 px-3 text-right font-mono text-xs whitespace-nowrap hidden lg:table-cell">
                       {campaign.impressions ? formatNumber(campaign.impressions) : '-'}
                     </td>
-                    <td className="py-2 px-2 text-right font-mono text-xs hidden md:table-cell">
+                    <td className="py-2 px-3 text-right font-mono text-xs whitespace-nowrap hidden md:table-cell">
                       {campaign.clicks ? formatNumber(campaign.clicks) : '-'}
                     </td>
-                    <td className="py-2 px-2 text-right font-mono text-xs hidden lg:table-cell">
+                    <td className="py-2 px-3 text-right font-mono text-xs whitespace-nowrap hidden lg:table-cell">
                       {campaign.ctr ? formatPercent(campaign.ctr, 2) : '-'}
                     </td>
-                    <td className="py-2 px-2 text-right font-mono text-xs hidden sm:table-cell">
+                    <td className="py-2 px-3 text-right font-mono text-xs whitespace-nowrap hidden sm:table-cell">
                       {campaign.conversions ? formatNumber(campaign.conversions) : '-'}
                     </td>
                     <td className="py-3 px-2 text-right">
