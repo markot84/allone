@@ -16,7 +16,9 @@
 import * as admin from 'firebase-admin';
 import { logger } from 'firebase-functions/v2';
 
-const db = admin.firestore();
+function getDb() {
+  return admin.firestore();
+}
 
 const GOOGLE_ADS_API_VERSION = 'v18';
 const GOOGLE_ADS_BASE_URL = `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}`;
@@ -87,7 +89,7 @@ export async function handleGoogleAdsCallback(
     // Get customer accounts accessible with this token
     const customers = await listAccessibleCustomers(tokens.access_token);
 
-    await db.doc(`connectors/${brandId}`).set(
+    await getDb().doc(`connectors/${brandId}`).set(
       {
         google_ads: {
           connected: true,
@@ -171,7 +173,7 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
 }> {
   const { developerToken } = getCredentials();
 
-  const connectorDoc = await db.doc(`connectors/${brandId}`).get();
+  const connectorDoc = await getDb().doc(`connectors/${brandId}`).get();
   const connector = connectorDoc.data()?.google_ads;
 
   if (!connector?.connected || !connector?.refreshToken) {
@@ -267,7 +269,7 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
       }
 
       // Calculate CTR and ROAS, then write to Firestore
-      const batch = db.batch();
+      const batch = getDb().batch();
       let count = 0;
 
       for (const [, campaign] of campaignMap) {
@@ -280,7 +282,7 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
         campaign.amount_spent = Math.round(campaign.amount_spent * 100) / 100;
         campaign.updatedAt = admin.firestore.FieldValue.serverTimestamp();
 
-        const ref = db.collection('campaigns').doc(campaign.id);
+        const ref = getDb().collection('campaigns').doc(campaign.id);
         batch.set(ref, campaign, { merge: true });
         count++;
       }
@@ -296,7 +298,7 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
   }
 
   // Log import
-  await db.collection('import_jobs').add({
+  await getDb().collection('import_jobs').add({
     brandId,
     type: 'campaigns',
     source: 'google_ads_api',

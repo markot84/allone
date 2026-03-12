@@ -15,7 +15,9 @@
 import * as admin from 'firebase-admin';
 import { logger } from 'firebase-functions/v2';
 
-const db = admin.firestore();
+function getDb() {
+  return admin.firestore();
+}
 
 const META_GRAPH_URL = 'https://graph.facebook.com/v21.0';
 const META_AUTH_URL = 'https://www.facebook.com/v21.0/dialog/oauth';
@@ -104,7 +106,7 @@ export async function handleMetaCallback(
     const adAccounts = await listAdAccounts(longToken);
 
     // Step 4: Store in Firestore
-    await db.doc(`connectors/${brandId}`).set(
+    await getDb().doc(`connectors/${brandId}`).set(
       {
         meta: {
           connected: true,
@@ -155,7 +157,7 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
   imported: number;
   error?: string;
 }> {
-  const connectorDoc = await db.doc(`connectors/${brandId}`).get();
+  const connectorDoc = await getDb().doc(`connectors/${brandId}`).get();
   const connector = connectorDoc.data()?.meta;
 
   if (!connector?.connected || !connector?.accessToken) {
@@ -204,7 +206,7 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
       }
 
       const data = await res.json();
-      const batch = db.batch();
+      const batch = getDb().batch();
       let count = 0;
 
       for (const row of data.data || []) {
@@ -242,7 +244,7 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         };
 
-        const ref = db.collection('campaigns').doc(campaign.id);
+        const ref = getDb().collection('campaigns').doc(campaign.id);
         batch.set(ref, campaign, { merge: true });
         count++;
       }
@@ -258,7 +260,7 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
   }
 
   // Log import
-  await db.collection('import_jobs').add({
+  await getDb().collection('import_jobs').add({
     brandId,
     type: 'campaigns',
     source: 'meta_api',
