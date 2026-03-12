@@ -4,7 +4,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Card, Button, Badge, Spinner, useToast } from '../common';
 import { useBrand, useAuth } from '../../hooks';
 import { FirestoreService } from '../../services/firestore';
-import { getAuth } from 'firebase/auth';
 
 interface ApiKeyDoc {
   id: string;
@@ -16,7 +15,6 @@ interface ApiKeyDoc {
 }
 
 const IMPORT_ENDPOINT = 'https://importdata-edvzr6unva-ew.a.run.app';
-const GENERATE_ENDPOINT = 'https://generateapikey-edvzr6unva-ew.a.run.app';
 
 export function ApiKeyManager() {
   const { currentBrand } = useBrand();
@@ -48,31 +46,31 @@ export function ApiKeyManager() {
     fetchKeys();
   }, [fetchKeys]);
 
+  const generateUniqueKey = () => {
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    let result = 'pp_';
+    for (let i = 0; i < 32; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+  };
+
   const handleGenerate = async () => {
     if (!brandId || !user) return;
     setGenerating(true);
     try {
-      const auth = getAuth();
-      const idToken = await auth.currentUser?.getIdToken();
-      if (!idToken) throw new Error('Not authenticated');
+      const key = generateUniqueKey();
+      const docId = `key_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
-      const res = await fetch(GENERATE_ENDPOINT, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${idToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ brandId }),
-      });
+      await FirestoreService.setDocument('api_keys', docId, {
+        key,
+        brandId,
+        active: true,
+        createdBy: user.uid || user.email || 'unknown',
+      } as Record<string, unknown>);
 
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Failed to generate key');
-      }
-
-      const { apiKey } = await res.json();
       toast.success('API Key δημιουργήθηκε');
-      setRevealedKeys((prev) => new Set(prev).add(apiKey));
+      setRevealedKeys((prev) => new Set(prev).add(key));
       await fetchKeys();
     } catch (err) {
       console.error('[ApiKeyManager] Generate error:', err);
