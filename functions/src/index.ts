@@ -1,10 +1,21 @@
 import * as admin from 'firebase-admin';
 import { onRequest } from 'firebase-functions/v2/https';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { logger } from 'firebase-functions/v2';
 import Busboy from 'busboy';
 import { parseCSV, parseXLSXBuffer, csvToObjects } from './parseFile';
 import { validateProduct, type ProductData } from './validateProduct';
 import { validateCampaign, type CampaignData } from './validateCampaign';
+import {
+  getGoogleAdsAuthUrl,
+  handleGoogleAdsCallback,
+  fetchGoogleAdsCampaigns,
+} from './googleAdsConnector';
+import {
+  getMetaAuthUrl,
+  handleMetaCallback,
+  fetchMetaCampaigns,
+} from './metaConnector';
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -370,5 +381,214 @@ export const generateApiKey = onRequest(
       logger.error('Generate API key failed:', message);
       res.status(500).json({ error: message });
     }
+  }
+);
+
+// ─── Connector: Get OAuth URLs ─────────────────────────────────
+
+/**
+ * POST /connectorAuth
+ * Body: { brandId, provider: "google_ads" | "meta", redirectUri }
+ * Returns: { authUrl }
+ */
+export const connectorAuth = onRequest(
+  { region: 'europe-west1', cors: true },
+  async (req, res) => {
+    if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+
+    try {
+      const idToken = authHeader.slice(7).trim();
+      await admin.auth().verifyIdToken(idToken);
+
+      const { brandId, provider, redirectUri } = req.body as {
+        brandId?: string; provider?: string; redirectUri?: string;
+      };
+
+      if (!brandId || !provider || !redirectUri) {
+        res.status(400).json({ error: 'Missing brandId, provider, or redirectUri' });
+        return;
+      }
+
+      let authUrl: string;
+      if (provider === 'google_ads') {
+        authUrl = getGoogleAdsAuthUrl(brandId, redirectUri);
+      } else if (provider === 'meta') {
+        authUrl = getMetaAuthUrl(brandId, redirectUri);
+      } else {
+        res.status(400).json({ error: `Unknown provider: ${provider}` });
+        return;
+      }
+
+      res.status(200).json({ authUrl });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      res.status(500).json({ error: msg });
+    }
+  }
+);
+
+// ─── Connector: OAuth Callback ─────────────────────────────────
+
+/**
+ * GET /connectorCallback?code=xxx&state=base64({brandId, provider})
+ * Handles OAuth redirect from Google/Meta
+ */
+export const connectorCallback = onRequest(
+  { region: 'europe-west1', cors: true },
+  async (req, res) => {
+    const { code, state } = req.query as { code?: string; state?: string };
+
+    if (!code || !state) {
+      res.status(400).send('Missing code or state parameter');
+      return;
+    }
+
+    try {
+      const { brandId, provider } = JSON.parse(
+        Buffer.from(state, 'base64url').toString()
+      );
+
+      const redirectUri = `https://${req.hostname}${req.path}`;
+
+      let result: { success: boolean; error?: string };
+
+      if (provider === 'google_ads') {
+        result = await handleGoogleAdsCallback(code, brandId, redirectUri);
+      } else if (provider === 'meta') {
+        result = await handleMetaCallback(code, brandId, redirectUri);
+      } else {
+        res.status(400).send(`Unknown provider: ${provider}`);
+        return;
+      }
+
+      if (result.success) {
+        // Redirect back to the app with success
+        res.redirect(`https://www.performanceplus.gr/#data?connector=${provider}&status=success`);
+      } else {
+        res.redirect(`https://www.performanceplus.gr/#data?connector=${provider}&status=error&message=${encodeURIComponent(result.error || 'Unknown error')}`);
+      }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      logger.error('[ConnectorCallback] Error:', msg);
+      res.status(500).send(`Callback error: ${msg}`);
+    }
+  }
+);
+
+// ─── Connector: Disconnect ─────────────────────────────────────
+
+/**
+ * POST /connectorDisconnect
+ * Body: { brandId, provider }
+ */
+export const connectorDisconnect = onRequest(
+  { region: 'europe-west1', cors: true },
+  async (req, res) => {
+    if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+
+    try {
+      const idToken = authHeader.slice(7).trim();
+      await admin.auth().verifyIdToken(idToken);
+
+      const { brandId, provider } = req.body as { brandId?: string; provider?: string };
+      if (!brandId || !provider) { res.status(400).json({ error: 'Missing params' }); return; }
+
+      await db.doc(`connectors/${brandId}`).set(
+        { [provider]: { connected: false, accessToken: '', refreshToken: '' } },
+        { merge: true }
+      );
+
+      res.status(200).json({ success: true });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      res.status(500).json({ error: msg });
+    }
+  }
+);
+
+// ─── Connector: Manual Sync ────────────────────────────────────
+
+/**
+ * POST /connectorSync
+ * Body: { brandId, provider }
+ */
+export const connectorSync = onRequest(
+  { region: 'europe-west1', cors: true, timeoutSeconds: 300, memory: '512MiB' },
+  async (req, res) => {
+    if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+
+    try {
+      const idToken = authHeader.slice(7).trim();
+      await admin.auth().verifyIdToken(idToken);
+
+      const { brandId, provider } = req.body as { brandId?: string; provider?: string };
+      if (!brandId || !provider) { res.status(400).json({ error: 'Missing params' }); return; }
+
+      let result;
+      if (provider === 'google_ads') {
+        result = await fetchGoogleAdsCampaigns(brandId);
+      } else if (provider === 'meta') {
+        result = await fetchMetaCampaigns(brandId);
+      } else {
+        res.status(400).json({ error: `Unknown provider: ${provider}` });
+        return;
+      }
+
+      res.status(200).json(result);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      res.status(500).json({ error: msg });
+    }
+  }
+);
+
+// ─── Scheduled: Daily Sync (06:00 Europe/Athens) ───────────────
+
+export const scheduledSync = onSchedule(
+  {
+    schedule: 'every day 06:00',
+    timeZone: 'Europe/Athens',
+    region: 'europe-west1',
+    memory: '512MiB',
+    timeoutSeconds: 540,
+  },
+  async () => {
+    logger.info('[ScheduledSync] Starting daily connector sync');
+
+    const connectorsSnap = await db.collection('connectors').get();
+
+    for (const doc of connectorsSnap.docs) {
+      const brandId = doc.id;
+      const data = doc.data();
+
+      if (data.google_ads?.connected) {
+        try {
+          const result = await fetchGoogleAdsCampaigns(brandId);
+          logger.info(`[ScheduledSync] Google Ads for ${brandId}: imported ${result.imported}`);
+        } catch (err) {
+          logger.error(`[ScheduledSync] Google Ads failed for ${brandId}:`, err);
+        }
+      }
+
+      if (data.meta?.connected) {
+        try {
+          const result = await fetchMetaCampaigns(brandId);
+          logger.info(`[ScheduledSync] Meta for ${brandId}: imported ${result.imported}`);
+        } catch (err) {
+          logger.error(`[ScheduledSync] Meta failed for ${brandId}:`, err);
+        }
+      }
+    }
+
+    logger.info('[ScheduledSync] Daily sync completed');
   }
 );

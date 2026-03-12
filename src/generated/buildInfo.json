@@ -1,10 +1,42 @@
 {
-  "version": "0.29.39",
-  "previousVersion": "0.29.38",
-  "commitHash": "5a9d08c",
+  "version": "0.29.40",
+  "previousVersion": "0.29.39",
+  "commitHash": "8a47c81",
   "branch": "main",
-  "buildDate": "2026-03-11T12:31:12.182Z",
+  "buildDate": "2026-03-12T17:53:44.413Z",
   "commits": [
+    {
+      "hash": "8a47c81",
+      "message": "Fix campaigns table responsive - use table-auto with whitespace-nowrap to prevent column overlap"
+    },
+    {
+      "hash": "7f01c21",
+      "message": "Fix API key generation - use direct Firestore write instead of Cloud Function"
+    },
+    {
+      "hash": "806ee46",
+      "message": "Add API Key Management UI for automated imports in Data Import section"
+    },
+    {
+      "hash": "ddc96c6",
+      "message": "Add Cloud Functions: HTTP import endpoint + API key auth for automated daily imports"
+    },
+    {
+      "hash": "961161f",
+      "message": "Responsive tables - compact layout, hide columns on smaller screens"
+    },
+    {
+      "hash": "733c466",
+      "message": "Fix suppliers stats cards layout - equal width, compact spacing"
+    },
+    {
+      "hash": "c3ab550",
+      "message": "Add suppliers collection to Firestore rules"
+    },
+    {
+      "hash": "a1db345",
+      "message": "Fix product import: Greek columns, comma decimals, auto-extract suppliers with TOD"
+    },
     {
       "hash": "5a9d08c",
       "message": "Align supplier stats cards layout"
@@ -32,50 +64,18 @@
     {
       "hash": "44d8c77",
       "message": "ROI card redesign: dark gradient hero in Dashboard and ROI page"
-    },
-    {
-      "hash": "5356687",
-      "message": "Fix static fallback showing instead of AI result after strategy save"
-    },
-    {
-      "hash": "cdc6036",
-      "message": "Remove NEW badge from ROI sidebar item"
-    },
-    {
-      "hash": "853e4a8",
-      "message": "Fix AI save flow, add ROI metric with visual emphasis, improve strategy prompt"
-    },
-    {
-      "hash": "25bd8a3",
-      "message": "ROI sidebar tab: rename to ROI & Apodosi, add NEW badge with emphasis"
-    },
-    {
-      "hash": "1a5513b",
-      "message": "Strategy prompt: mandatory bullet format, remove brevity language"
-    },
-    {
-      "hash": "a0f2803",
-      "message": "Fix race condition in AI saves (updateDocument), improve strategy prompt with example"
-    },
-    {
-      "hash": "a33698b",
-      "message": "Force AI on strategy save, fix activation generation, adjust prompt length"
-    },
-    {
-      "hash": "3729e6f",
-      "message": "Dual AI recommendations: short for strategy, detailed for activation"
     }
   ],
   "changes": [
+    "Fix campaigns table responsive - use table-auto with whitespace-nowrap to prevent column overlap",
+    "Fix API key generation - use direct Firestore write instead of Cloud Function",
+    "Add API Key Management UI for automated imports in Data Import section",
+    "Add Cloud Functions: HTTP import endpoint + API key auth for automated daily imports",
+    "Responsive tables - compact layout, hide columns on smaller screens",
+    "Fix suppliers stats cards layout - equal width, compact spacing",
+    "Add suppliers collection to Firestore rules",
+    "Fix product import: Greek columns, comma decimals, auto-extract suppliers with TOD",
     "Align supplier stats cards layout",
-    "Fix AI assistant icons, article navigation, add Priority Weights docs",
-    "Fix Button component: icon-only burger, styled primary/secondary buttons",
-    "TOD-based stock classification, supplier management page, burger menu",
-    "Update pricing to value-based tiers, add funding sources",
-    "Redesign dashboard, add campaign sorting and channel colors",
-    "ROI card redesign: dark gradient hero in Dashboard and ROI page",
-    "Fix static fallback showing instead of AI result after strategy save",
-    "Remove NEW badge from ROI sidebar item",
-    "Fix AI save flow, add ROI metric with visual emphasis, improve strategy prompt"
+    "Fix AI assistant icons, article navigation, add Priority Weights docs"
   ]
 }

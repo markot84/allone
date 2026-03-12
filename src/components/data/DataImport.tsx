@@ -9,6 +9,7 @@ import { FEED_SOURCE_OPTIONS, downloadGoogleAdsCsvTemplate, type FeedSourceType 
 import { FeedPreviewModal } from './FeedPreviewModal';
 import { FeedSourcesSection } from './FeedSourcesSection';
 import { ApiKeyManager } from './ApiKeyManager';
+import { ConnectorsPanel } from './ConnectorsPanel';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export type FileWithType = { file: File; type: ImportType; campaignChannel?: CampaignChannelOverride };
@@ -933,6 +934,9 @@ export function DataImport({ initialType }: DataImportProps = {}) {
 
       {/* Feed Sources - saved sources with Sync τώρα */}
       {importMode === 'feed' && <FeedSourcesSection />}
+
+      {/* Ad Platform Connectors (Google Ads, Meta) */}
+      <ConnectorsPanel />
 
       {/* API Key Management */}
       <ApiKeyManager />
