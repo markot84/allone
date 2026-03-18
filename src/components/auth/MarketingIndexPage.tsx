@@ -67,7 +67,7 @@ const appPreviewPoints = [
     problem: 'Πρόβλημα: Η ιεράρχηση προϊόντων και καναλιών γίνεται συχνά αποσπασματικά, χωρίς σταθερό διοικητικό πλαίσιο αξιολόγησης.',
     solution: 'Πώς το κάνει: 7 στρατηγικά σενάρια (Κερδοφορία, Εκκαθάριση Αποθέματος, Λανσάρισμα, Αύξηση Τζίρου, Μικτή, Εποχιακή/Εκπτωτική, Custom) με AI που αναλύει κάθε segment πελατών και προσαρμόζει τις προτάσεις καναλιών και περιεχομένου στο brand, τα προϊόντα και τη στρατηγική σας.',
     value: 'Υπεραξία: Ο προϋπολογισμός κατευθύνεται προς κινήσεις με τη μεγαλύτερη δυνητική συμβολή σε ανάπτυξη, απόδοση και περιθώριο κέρδους — με προσωποποιημένη AI καθοδήγηση αντί γενικών συστάσεων.',
-    imageSrc: '/landing-screens/strategy-rfm.png',
+    imageSrc: '/landing-screens/commercial-strategy-cards.png',
     imageClassName: 'object-top',
   },
   {
@@ -76,8 +76,8 @@ const appPreviewPoints = [
     problem: 'Πρόβλημα: Το marketing στοχεύει οριζόντια χωρίς επαρκή διαχωρισμό πελατών, προτεραιοτήτων και δυνητικής αξίας.',
     solution: 'Πώς το κάνει: Συνδυάζει RFM, συμπεριφορική και firmographic ανάλυση για ακριβέστερο segmentation και ιεράρχηση κοινού.',
     value: 'Υπεραξία: Οι καμπάνιες αποκτούν υψηλότερη ακρίβεια στόχευσης, αυξημένη πιθανότητα μετατροπής και ισχυρότερη εμπορική αποδοτικότητα.',
-    imageSrc: '/landing-screens/strategy-rfm.png',
-    imageClassName: 'object-bottom',
+    imageSrc: '/landing-screens/data-analysis.png',
+    imageClassName: 'object-contain',
   },
   {
     title: 'Product Intelligence',
@@ -85,8 +85,8 @@ const appPreviewPoints = [
     problem: 'Πρόβλημα: Το προϊοντικό χαρτοφυλάκιο αξιολογείται αποσπασματικά, χωρίς σαφή εικόνα για ευκαιρίες, αδυναμίες και προτεραιότητες.',
     solution: 'Πώς το κάνει: Εντάσσει τα προϊόντα σε ενιαίο πλαίσιο αξιολόγησης με εμπορικά σήματα, απόδοση και επόμενες προτεραιότητες ανάπτυξης.',
     value: 'Υπεραξία: Γίνεται σαφές ποια προϊόντα πρέπει να ενισχυθούν, ποια να προστατευθούν και ποια να επανατοποθετηθούν με επιχειρηματική λογική.',
-    imageSrc: '/landing-screens/dashboard.png',
-    imageClassName: 'object-center',
+    imageSrc: '/landing-screens/product-intelligence.png',
+    imageClassName: 'object-contain',
   },
   {
     title: 'Content Strategy',
@@ -94,8 +94,8 @@ const appPreviewPoints = [
     problem: 'Πρόβλημα: Ο σχεδιασμός περιεχομένου εκτελείται χωρίς σαφή σύνδεση με κοινά, στόχους και εμπορικές επιδιώξεις.',
     solution: 'Πώς το κάνει: Μετατρέπει audience insights, επιχειρηματικές προτεραιότητες και AI-powered σήματα σε σαφείς θεματικές κατευθύνσεις.',
     value: 'Υπεραξία: Το περιεχόμενο παύει να είναι αποσπασματικό και ευθυγραμμίζεται άμεσα με engagement, ζήτηση και μετατροπές.',
-    imageSrc: '/landing-screens/strategy-rfm.png',
-    imageClassName: 'object-center',
+    imageSrc: '/landing-screens/content-strategy.png',
+    imageClassName: 'object-contain',
   },
 ];
 
@@ -183,54 +183,62 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
       </header>
 
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
-      <section className="mx-auto w-full max-w-7xl px-6 pb-8 pt-5 md:px-10 md:pt-7">
-        <div className="relative overflow-hidden rounded-[36px] border border-[#1f2328]/10 bg-[var(--nts-bg-pure)] px-6 py-8 shadow-[0_24px_56px_rgba(16,24,40,0.12)] md:px-8 md:py-10">
+      <section className="mx-auto w-full max-w-7xl px-6 pb-6 pt-4 md:px-10 md:pt-5">
+        <div className="relative overflow-hidden rounded-[36px] border border-[#1f2328]/10 bg-[var(--nts-bg-pure)] px-5 py-6 shadow-[0_24px_56px_rgba(16,24,40,0.12)] md:px-6 md:py-7">
           <div className="pointer-events-none absolute right-[-80px] top-[-20px] h-64 w-64 rounded-full bg-[var(--nts-accent)]/12 blur-3xl" />
           <div className="pointer-events-none absolute bottom-[-100px] left-[-20px] h-72 w-72 rounded-full bg-[#1f2328]/4 blur-3xl" />
 
           <div className="relative">
-            <div className="space-y-8">
-              <div className="space-y-5">
+            <div className="grid gap-4 lg:grid-cols-[1.02fr_0.98fr] lg:items-center lg:gap-5">
+              <div className="space-y-4">
                 <h1 className="max-w-4xl leading-[1.04] text-[var(--nts-charcoal)]">
                   <span className="block text-4xl font-bold md:text-6xl">{copy.headline}</span>
                   {copy.highlight && (
-                    <span className="mt-2 block text-2xl font-semibold text-[var(--nts-accent)] md:text-4xl">{copy.highlight}</span>
+                    <span className="mt-1 block text-2xl font-semibold text-[var(--nts-accent)] md:text-4xl">{copy.highlight}</span>
                   )}
                 </h1>
-                <p className="max-w-2xl text-[15px] leading-7 text-[var(--nts-medium-gray)] md:text-base">
+                <p className="max-w-xl text-[15px] leading-7 text-[var(--nts-medium-gray)] md:text-base">
                   {copy.description}
                 </p>
+
+                <div className="space-y-2">
+                  {[
+                    'Πλήρης και άμεση εικόνα εσόδων, απόδοσης επένδυσης και εμπορικών προτεραιοτήτων.',
+                    'AI που αναλύει τους πελάτες, τα προϊόντα και την αποθήκη σας και προτείνει την κατάλληλη εμπορική στρατηγική.',
+                    'Ένα λειτουργικό σύστημα, κοινό σημείο αναφοράς για ιδιοκτήτη, ομάδα marketing και agency.'
+                  ].map((point) => (
+                    <div key={point} className="flex items-start gap-2.5">
+                      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--nts-accent)]" />
+                      <p className="text-sm leading-6 text-[var(--nts-charcoal)]">{point}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={onOpenAuth}
+                    className="inline-flex items-center gap-2 rounded-xl bg-[var(--nts-accent)] px-5 py-3 text-sm font-semibold text-white shadow-[0_10px_20px_rgba(249,115,22,0.35)] transition hover:bg-[var(--nts-accent-hover)]"
+                  >
+                    {copy.cta}
+                    <ArrowRight size={16} />
+                  </button>
+                  <a
+                    href="mailto:hello@notthesame.ai?subject=Performance%2B%20Demo%20Request"
+                    className="inline-flex items-center gap-2 rounded-xl border border-[#1f2328]/10 bg-[var(--nts-bg-subtle)] px-5 py-3 text-sm font-semibold text-[var(--nts-charcoal)] transition hover:bg-[var(--nts-light-gray)]"
+                  >
+                    <HelpCircle size={16} />
+                    Ζήτησε demo
+                  </a>
+                </div>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-3">
-                {[
-                  'Πλήρης και άμεση εικόνα εσόδων, απόδοσης επένδυσης και εμπορικών προτεραιοτήτων.',
-                  'AI που αναλύει τους πελάτες, τα προϊόντα και την αποθήκη σας και προτείνει την κατάλληλη εμπορική στρατηγική.',
-                  'Ένα λειτουργικό σύστημα, κοινό σημείο αναφοράς για ιδιοκτήτη, ομάδα marketing και agency.'
-                ].map((point) => (
-                  <div key={point} className="rounded-2xl border border-white/10 bg-[#12151b] p-4.5 shadow-[0_10px_24px_rgba(15,17,21,0.18)]">
-                    <div className="mb-3 h-1.5 w-10 rounded-full bg-[var(--nts-accent)]" />
-                    <p className="text-sm leading-6 text-white/76">{point}</p>
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex flex-wrap gap-3 pt-1">
-                <button
-                  type="button"
-                  onClick={onOpenAuth}
-                  className="inline-flex items-center gap-2 rounded-xl bg-[var(--nts-accent)] px-5 py-3 text-sm font-semibold text-white shadow-[0_10px_20px_rgba(249,115,22,0.35)] transition hover:bg-[var(--nts-accent-hover)]"
-                >
-                  {copy.cta}
-                  <ArrowRight size={16} />
-                </button>
-                <a
-                  href="mailto:hello@notthesame.ai?subject=Performance%2B%20Demo%20Request"
-                  className="inline-flex items-center gap-2 rounded-xl border border-[#1f2328]/10 bg-[var(--nts-bg-subtle)] px-5 py-3 text-sm font-semibold text-[var(--nts-charcoal)] transition hover:bg-[var(--nts-light-gray)]"
-                >
-                  <HelpCircle size={16} />
-                  Ζήτησε demo
-                </a>
+              <div className="relative overflow-hidden rounded-[22px] border border-[#1f2328]/15 bg-[var(--nts-light-gray)] shadow-[0_10px_24px_rgba(16,24,40,0.1)]">
+                <img
+                  src="/landing-screens/commercial-strategy-hero.png"
+                  alt="Performance+ Commercial Strategy dashboard"
+                  className="h-auto w-full object-contain"
+                />
               </div>
             </div>
           </div>
@@ -350,65 +358,63 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
         <div className="rounded-2xl border border-[#1f2328] bg-[var(--nts-bg-pure)] p-6 shadow-[0_20px_44px_rgba(16,24,40,0.14)]">
           <h3 className="text-lg font-semibold text-[var(--nts-charcoal)]">5 σημεία από το ίδιο το περιβάλλον της εφαρμογής</h3>
           <p className="mt-2 text-sm text-[var(--nts-medium-gray)]">
-            Πραγματικές οθόνες της εφαρμογής που δείχνουν πώς το Performance+ μετατρέπει δεδομένα και νοημοσύνη σε στοχευμένη εμπορική δράση.
+            Πώς το Performance+ μετατρέπει δεδομένα και νοημοσύνη σε στοχευμένη εμπορική δράση.
           </p>
 
-          <div className="mt-6 grid gap-6">
-            {appPreviewPoints.map((point, index) => (
-              <article
-                key={point.title}
-                className={[
-                  'relative overflow-hidden rounded-[30px] border p-5 shadow-[0_14px_32px_rgba(16,24,40,0.12)]',
-                  isPreviewDarkHighlight(index)
-                    ? 'border-white/10 bg-[#101319] text-white'
-                    : 'border-[#1f2328]/15 bg-[var(--nts-bg-pure)] text-[var(--nts-charcoal)]'
-                ].join(' ')}
-              >
-                <div className="pointer-events-none absolute left-0 top-0 h-1 w-full bg-[var(--nts-accent)]" />
-                <div className="pointer-events-none absolute bottom-0 left-0 h-1 w-full bg-[var(--nts-accent)]" />
-                <div className={`grid items-center gap-6 lg:grid-cols-[0.86fr_1.14fr] ${index % 2 === 1 ? 'lg:grid-cols-[1.14fr_0.86fr]' : ''}`}>
-                  <div className={index % 2 === 1 ? 'lg:order-2' : ''}>
-                    <div>
-                      {point.featureLabel !== point.title && (
-                        <div className="inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold tracking-[0.08em] border-current/10 bg-current/5 text-inherit">
-                          {point.featureLabel}
-                        </div>
-                      )}
-                      <h4 className={isPreviewDarkHighlight(index) ? 'mt-4 text-3xl font-semibold text-white' : 'mt-4 text-3xl font-semibold text-[var(--nts-charcoal)]'}>
-                        {point.title}
-                      </h4>
-                      <p className={isPreviewDarkHighlight(index) ? 'mt-4 text-sm leading-7 text-white/68' : 'mt-4 text-sm leading-7 text-[var(--nts-medium-gray)]'}>
-                        {point.problem}
-                      </p>
-                      <p className={isPreviewDarkHighlight(index) ? 'mt-3 text-sm leading-7 text-white/68' : 'mt-3 text-sm leading-7 text-[var(--nts-medium-gray)]'}>
-                        {point.solution}
-                      </p>
-                    </div>
-
-                    <div className={isPreviewDarkHighlight(index) ? 'mt-6 rounded-2xl border border-white/10 bg-white/6 p-4 text-sm font-medium text-white' : 'mt-6 rounded-2xl border border-[#1f2328]/10 bg-[var(--nts-bg-subtle)] p-4 text-sm font-medium text-[var(--nts-charcoal)]'}>
-                      {point.value}
-                    </div>
+          <div className="mt-6 grid gap-5">
+            {appPreviewPoints.map((point, index) => {
+              const hasImage = ['Commercial Strategy', 'Data Analysis', 'Product Intelligence', 'Content Strategy'].includes(point.title ?? '') && point.imageSrc;
+              const contentBlock = (
+                <>
+                  <div>
+                    {point.featureLabel !== point.title && (
+                      <div className="inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold tracking-[0.08em] border-current/10 bg-current/5 text-inherit">
+                        {point.featureLabel}
+                      </div>
+                    )}
+                    <h4 className={isPreviewDarkHighlight(index) ? 'mt-3 text-xl font-semibold text-white' : 'mt-3 text-xl font-semibold text-[var(--nts-charcoal)]'}>
+                      {point.title}
+                    </h4>
+                    <p className={isPreviewDarkHighlight(index) ? 'mt-3 text-sm leading-7 text-white/68' : 'mt-3 text-sm leading-7 text-[var(--nts-medium-gray)]'}>
+                      {point.problem}
+                    </p>
+                    <p className={isPreviewDarkHighlight(index) ? 'mt-2 text-sm leading-7 text-white/68' : 'mt-2 text-sm leading-7 text-[var(--nts-medium-gray)]'}>
+                      {point.solution}
+                    </p>
                   </div>
-
-                  <div className={index % 2 === 1 ? 'lg:order-1' : ''}>
-                    <div className="relative overflow-hidden rounded-[26px] border border-[#1f2328]/15 bg-[var(--nts-light-gray)]">
-                      <img
-                        src={point.imageSrc}
-                        alt={`${point.title} screenshot`}
-                        className={`h-[360px] w-full object-cover lg:h-[420px] ${point.imageClassName}`}
-                      />
-                      <div className="pointer-events-none absolute left-0 top-0 h-10 w-full bg-[var(--nts-bg-pure)]/86 backdrop-blur-[2px]" />
-                      <div className="pointer-events-none absolute left-0 top-0 h-full w-14 bg-[var(--nts-bg-pure)]/76 backdrop-blur-[1px]" />
-                      <div className="pointer-events-none absolute right-3 top-3 h-6 w-28 rounded-full bg-[var(--nts-bg-pure)]/92" />
-                      <div className="pointer-events-none absolute left-3 top-3 h-6 w-24 rounded-full bg-[var(--nts-bg-pure)]/92" />
-                      <div className="pointer-events-none absolute bottom-4 left-4 rounded-full bg-[#0f1115]/86 px-3 py-1.5 text-[11px] font-semibold tracking-[0.08em] text-white backdrop-blur">
-                        Ζωντανή απεικόνιση προϊόντος
+                  <div className={isPreviewDarkHighlight(index) ? 'mt-4 rounded-xl border border-white/10 bg-white/6 p-4 text-sm font-medium text-white' : 'mt-4 rounded-xl border border-[#1f2328]/10 bg-[var(--nts-bg-subtle)] p-4 text-sm font-medium text-[var(--nts-charcoal)]'}>
+                    {point.value}
+                  </div>
+                </>
+              );
+              return (
+                <article
+                  key={point.title}
+                  className={[
+                    'relative overflow-hidden rounded-[24px] border p-5 shadow-[0_10px_24px_rgba(16,24,40,0.1)]',
+                    isPreviewDarkHighlight(index)
+                      ? 'border-white/10 bg-[#101319] text-white'
+                      : 'border-[#1f2328]/15 bg-[var(--nts-bg-pure)] text-[var(--nts-charcoal)]'
+                  ].join(' ')}
+                >
+                  <div className="pointer-events-none absolute left-0 top-0 h-1 w-full bg-[var(--nts-accent)]" />
+                  {hasImage ? (
+                    <div className="grid gap-5 lg:grid-cols-[1fr_1fr] lg:items-center">
+                      <div className="space-y-4">{contentBlock}</div>
+                      <div className="relative overflow-hidden rounded-[20px] border border-[#1f2328]/15 bg-[var(--nts-light-gray)] flex items-center justify-center">
+                        <img
+                          src={point.imageSrc}
+                          alt={`${point.title} screenshot`}
+                          className="h-auto max-h-[340px] w-full object-contain"
+                        />
                       </div>
                     </div>
-                  </div>
-                </div>
-              </article>
-            ))}
+                  ) : (
+                    contentBlock
+                  )}
+                </article>
+              );
+            })}
           </div>
         </div>
       </section>
