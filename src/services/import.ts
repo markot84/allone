@@ -102,7 +102,7 @@ export const PRODUCT_COLUMN_MAPPING = [
     fileColumn: 'Gross_Margin_%', 
     appField: 'Gross Margin %', 
     usedIn: 'Product Intelligence, Strategy profit score',
-    alternatives: ['Gross_Margin_%', 'Gross Margin %', 'gross_margin_%', 'Margin_Percentage', 'margin_percentage', 'Margin_Pct', 'margin_pct', 'Margin', 'margin', 'Margin_%', 'margin_%', 'Gross_Margin', 'gross_margin', 'Profit_Margin', 'profit_margin']
+    alternatives: ['Gross_Margin_%', 'Gross Margin %', 'gross_margin_%', 'Margin_Percentage', 'margin_percentage', 'Margin_Pct', 'margin_pct', 'Margin', 'margin', 'Margin_%', 'margin_%', 'Gross_Margin', 'gross_margin', 'Profit_Margin', 'profit_margin', 'Κέρδος', 'κέρδος', 'Περιθώριο', 'περιθώριο', 'Μικτό_Κέρδος', 'μικτό_κέρδος']
   },
   { 
     fileColumn: 'Sell_Price + Cost_Price', 
@@ -567,8 +567,7 @@ function validateProduct(row: Record<string, string>, index: number): { valid: b
   const sku = pick(row, 'κωδικός', 'item_id', 'sku', 'sku_id', 'id', 'product_id', 'Item ID', 'item id', 'Item_ID', 'code', 'barcode', 'ean');
   const category = pick(row, 'ομάδα', 'category', 'product_category', 'product_type', 'group', 'κατηγορία', 'type', 'department');
   const marginTier = pick(row, 'margin_tier', 'margin_category', 'tier');
-  // Try to calculate margin from conv._value_/_cost (ROAS-like metric) if available
-  const marginPct = pick(row, 'margin_percentage', 'margin_pct', 'margin', 'margin_%', 'gross_margin_%', 'gross_margin', 'gross_margin_pct', 'profit_margin', 'profit', 'κέρδος', 'conv._rate', 'conv_rate');
+  const marginPct = pick(row, 'margin_percentage', 'margin_pct', 'margin', 'margin_%', 'gross_margin_%', 'gross_margin', 'gross_margin_pct', 'profit_margin', 'profit', 'κέρδος', 'περιθώριο', 'μικτό_κέρδος');
   // Stock level - Greek: "Διαθεσιμότητα" = Availability/Stock Level (normalized: "διαθεσιμότητα")
   const stockLevel = pick(row, 'διαθεσιμότητα', 'stock_on_hand', 'Stock_On_Hand', 'stock_level', 'Stock_Level', 'stock', 'Stock', 'quantity', 'Quantity', 'qty', 'Qty', 'inventory', 'Inventory', 'on_hand', 'On_Hand', 'units', 'Units', 'απόθεμα', 'ποσότητα', 'available_stock', 'Available_Stock', 'δυναμικό_υπόλοιπο', 'κίνηση', 'availability');
   const stockCapacity = pick(row, 'stock_capacity', 'capacity', 'max_stock', 'max_quantity', 'χωρητικότητα', 'επιθυμητό_απόθεμα', 'αναμενόμενα', 'Αναμενόμενα');
@@ -639,16 +638,20 @@ function validateProduct(row: Record<string, string>, index: number): { valid: b
   }
   // If still 0, it will be calculated from createdAt when reading products from Firestore
 
-  // Gross Margin %: prefer Gross_Margin_% from file, else compute from (Sell_Price - Cost_Price) / Sell_Price
+  // Gross Margin %: use file value when present, otherwise compute from (Sell_Price - Cost_Price) / Sell_Price
   let marginPctNum = parseFloat(String(marginPct || '0').replace(',', '.')) || 0;
-  // Always calculate margin if we have both price and cost (to ensure accuracy)
-  if (sellPriceNum > 0 && costPriceNum > 0) {
+  const hasFileMargin = !!(marginPct && marginPct.trim() !== '' && marginPctNum !== 0);
+
+  // Detect decimal-form margins (e.g. 0.25 meaning 25%) and convert to percentage
+  if (hasFileMargin && marginPctNum > 0 && marginPctNum < 1) {
+    marginPctNum = Math.round(marginPctNum * 1000) / 10;
+  }
+
+  // Only compute margin from price/cost when the file doesn't already provide one
+  if (!hasFileMargin && sellPriceNum > 0 && costPriceNum > 0) {
     const computed = calcGrossMarginPct(sellPriceNum, costPriceNum);
     if (computed !== null && computed > 0) {
-      // Use calculated margin if file margin is 0 or missing
-      if (marginPctNum === 0 || !marginPct || marginPct.trim() === '') {
-        marginPctNum = Math.round(computed * 10) / 10;
-      }
+      marginPctNum = Math.round(computed * 10) / 10;
     }
   }
   
@@ -673,7 +676,9 @@ function validateProduct(row: Record<string, string>, index: number): { valid: b
     name: name || sku,
     sku: sku || rawId,
     category: category || 'Uncategorized',
-    margin_tier: (['high', 'medium', 'low'].includes((marginTier || '').toLowerCase()) ? (marginTier || 'medium').toLowerCase() : 'medium') as 'high' | 'medium' | 'low',
+    margin_tier: (['high', 'medium', 'low'].includes((marginTier || '').toLowerCase())
+      ? (marginTier!).toLowerCase()
+      : marginPctNum > 25 ? 'high' : marginPctNum > 10 ? 'medium' : 'low') as 'high' | 'medium' | 'low',
     margin_percentage: marginPctNum,
     stock_level: stockLevelNum,
     stock_capacity: stockCapacityNum || stockLevelNum || 1,
@@ -1360,9 +1365,9 @@ export async function importFile(
               finalStockAgeDays = 0; // Will be calculated by getStockAgeDays from createdAt
             }
             
-            // Ensure margin is calculated if we have price and cost
+            // Use file margin when available; compute from price/cost only as fallback
             let finalMarginPct = p.margin_percentage ?? 0;
-            if ((finalMarginPct === 0 || !p.margin_percentage) && p.price && p.price > 0 && p.cost_price && p.cost_price > 0) {
+            if (finalMarginPct === 0 && p.price && p.price > 0 && p.cost_price && p.cost_price > 0) {
               const computed = calcGrossMarginPct(p.price, p.cost_price);
               if (computed !== null && computed > 0) {
                 finalMarginPct = Math.round(computed * 10) / 10;

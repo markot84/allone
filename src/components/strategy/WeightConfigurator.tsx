@@ -741,30 +741,49 @@ export function WeightConfigurator() {
 
   return (
     <div className="space-y-6 max-w-full overflow-x-hidden">
-      {/* Page Header */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between max-w-full overflow-x-hidden">
-        <div className="min-w-0 flex-shrink-0">
-          <h2 className="text-2xl font-bold text-[var(--nts-charcoal)] tracking-tight">
-            Commercial Strategy
-          </h2>
-          <p className="text-[14px] text-[var(--nts-medium-gray)] mt-1">
-            Καθορισμός εμπορικών προτεραιοτήτων, κατανομή πόρων και συντονισμός εκτέλεσης
-          </p>
+      {/* Page Header — 2 columns: left = text + package + tabs, right = preview image */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr,minmax(280px,400px)] gap-6 lg:gap-8 items-start max-w-full overflow-x-hidden">
+        {/* Left column: title, subtitle, strategy package, tabs */}
+        <div className="min-w-0 space-y-4 flex flex-col">
+          <div>
+            <h2 className="text-2xl font-bold text-[var(--nts-charcoal)] tracking-tight">
+              Commercial Strategy
+            </h2>
+            <p className="text-[14px] text-[var(--nts-medium-gray)] mt-1">
+              Καθορισμός εμπορικών προτεραιοτήτων, κατανομή πόρων και συντονισμός εκτέλεσης
+            </p>
+          </div>
+
+          {/* Strategy Package — share/copy active strategy */}
+          {selectedScenario && selectedScenario !== 'custom' && (
+            <StrategyPackage
+              scenarioId={selectedScenario}
+              weights={currentScenarioWeights}
+              duration={duration}
+              brandName={currentBrand?.name}
+              rankedSegments={rankedSegments}
+              channelRecommendation={aiRecommendation}
+              mixConfig={mixConfig}
+            />
+          )}
+
+          {/* Scenario Selector (tabs) */}
+          <ScenarioSelector
+            selectedScenario={selectedScenario}
+            onScenarioChange={handleScenarioChange}
+            activeDuration={duration}
+          />
+        </div>
+
+        {/* Right column: preview image */}
+        <div className="hidden lg:block relative shrink-0">
+          <img
+            src="/landing-screens/strategy-rfm.png"
+            alt="Commercial Strategy preview"
+            className="w-full rounded-xl shadow-lg border border-[var(--nts-border-gray)] object-cover object-top"
+          />
         </div>
       </div>
-
-      {/* Strategy Package — share/copy active strategy */}
-      {selectedScenario && selectedScenario !== 'custom' && (
-        <StrategyPackage
-          scenarioId={selectedScenario}
-          weights={currentScenarioWeights}
-          duration={duration}
-          brandName={currentBrand?.name}
-          rankedSegments={rankedSegments}
-          channelRecommendation={aiRecommendation}
-          mixConfig={mixConfig}
-        />
-      )}
 
       {/* Strategy Expiry Warning */}
       {(() => {
@@ -811,13 +830,6 @@ export function WeightConfigurator() {
         currentMixConfig={mixConfig}
         onApplySeason={handleSeasonApply}
         onManageSeasons={() => setShowSeasonalModal(true)}
-      />
-
-      {/* Scenario Selector */}
-      <ScenarioSelector
-        selectedScenario={selectedScenario}
-        onScenarioChange={handleScenarioChange}
-        activeDuration={duration}
       />
 
       {/* Compare button below scenario cards */}
