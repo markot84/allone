@@ -61,6 +61,20 @@
       ]
     },
     {
+      "collectionGroup": "procurement_snapshots",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "brandId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "active_strategies",
       "queryScope": "COLLECTION",
       "fields": [

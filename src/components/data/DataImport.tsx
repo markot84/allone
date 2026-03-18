@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { flushSync } from 'react-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useBrand } from '../../hooks';
-import { FileText, CheckCircle2, XCircle, AlertCircle, Clock, Trash2, FileUp, Link as LinkIcon, HelpCircle, ExternalLink, Package, Users, BarChart3, Euro } from 'lucide-react';
+import { FileText, CheckCircle2, XCircle, AlertCircle, Clock, Trash2, FileUp, Link as LinkIcon, HelpCircle, ExternalLink, Package, Users, BarChart3, Euro, ClipboardList } from 'lucide-react';
 import { Card, Button, Spinner, ProgressBar, useToast, Badge } from '../common';
 import { importFile, saveImportJob, getImportJobs, isSupportedFile, PRODUCT_COLUMN_MAPPING, type ImportType, type ImportResult, type ImportJob, type ImportProgress, type CampaignChannelOverride } from '../../services/import';
 import { FEED_SOURCE_OPTIONS, downloadGoogleAdsCsvTemplate, type FeedSourceType } from '../../data/feedSourceConfig';
@@ -50,6 +50,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
     { value: 'segments', label: 'Segments', icon: <Users size={16} /> },
     { value: 'campaigns', label: 'Campaigns', icon: <BarChart3 size={16} /> },
     { value: 'organic', label: 'Οργανικά Έσοδα', icon: <Euro size={16} /> },
+    { value: 'procurement', label: 'Procurement (7 καρτέλες)', icon: <ClipboardList size={16} /> },
   ];
 
   const isFeedImport = importMode === 'feed' && selectedType === 'products';

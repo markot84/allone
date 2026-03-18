@@ -306,3 +306,54 @@ export const OrganicService = {
   create: (id: string, data: any, brandId?: string | null) =>
     FirestoreService.setDocument('organic', id, { ...data, ...(brandId ? { brandId } : {}) }),
 };
+
+// Procurement: 7 collections matching PROCUREMENT_TEMPLATE.xlsx sheets
+export const PROCUREMENT_COLLECTIONS = [
+  'procurement_inventory',
+  'procurement_costing',
+  'procurement_item_evaluation',
+  'procurement_customer_evaluation',
+  'procurement_pricing_policy',
+  'procurement_fiscal_year',
+  'procurement_statistics',
+] as const;
+
+const PROCUREMENT_MAX_SNAPSHOTS = 5;
+
+export const ProcurementService = {
+  getAll: (collectionKey: (typeof PROCUREMENT_COLLECTIONS)[number], brandId?: string | null) =>
+    FirestoreService.getDocuments(collectionKey, [], brandId),
+  batchSet: (collectionKey: (typeof PROCUREMENT_COLLECTIONS)[number], items: { id: string; data: Record<string, unknown> }[], brandId?: string | null) =>
+    FirestoreService.batchSet(collectionKey, items, brandId),
+  deleteAll: (collectionKey: (typeof PROCUREMENT_COLLECTIONS)[number], brandId?: string | null) =>
+    FirestoreService.deleteCollection(collectionKey, brandId),
+  /** Save current state to snapshot before replace. Keeps last N snapshots per brand. */
+  async saveSnapshot(
+    brandId: string,
+    snapshotData: Record<string, unknown[]>,
+    replacedByFileName?: string
+  ): Promise<void> {
+    const id = `snap_${brandId}_${Date.now()}`;
+    await FirestoreService.setDocument('procurement_snapshots', id, {
+      brandId,
+      createdAt: Timestamp.now(),
+      replacedByFileName: replacedByFileName ?? null,
+      ...snapshotData,
+    });
+    const existing = await FirestoreService.getDocuments<{ id: string; createdAt: unknown }>(
+      'procurement_snapshots',
+      [where('brandId', '==', brandId), orderBy('createdAt', 'asc')],
+      null
+    );
+    if (existing.length > PROCUREMENT_MAX_SNAPSHOTS) {
+      const toDelete = existing.slice(0, existing.length - PROCUREMENT_MAX_SNAPSHOTS);
+      for (const doc of toDelete) {
+        await FirestoreService.deleteDocument('procurement_snapshots', doc.id);
+      }
+    }
+  },
+  getSnapshots: (brandId?: string | null) =>
+    FirestoreService.getDocuments('procurement_snapshots', [orderBy('createdAt', 'desc')], brandId),
+};
+
+/** Enables seedDemoData in ProcurementService */

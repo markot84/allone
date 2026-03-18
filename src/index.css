@@ -87,21 +87,20 @@ html, body {
   scroll-behavior: smooth;
 }
 
-/* Ensure Recharts containers have proper dimensions */
+/* Recharts sizing – no !important so inline styles win for height */
+.recharts-responsive-container {
+  width: 100%;
+}
+
 .recharts-wrapper {
-  width: 100% !important;
-  height: 100% !important;
-  position: relative !important;
+  width: 100%;
+  height: 100%;
+  position: relative;
 }
 
 .recharts-surface {
-  width: 100% !important;
-  height: 100% !important;
-}
-
-.recharts-responsive-container {
-  width: 100% !important;
-  height: 100% !important;
+  width: 100%;
+  height: 100%;
 }
 
 /* Mobile menu animations */

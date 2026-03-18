@@ -11,3 +11,4 @@ export { useAIContentSuggestions } from './useAIContentSuggestions';
 export { useFeedSources } from './useFeedSources';
 export { useChannelActivations } from './useChannelActivations';
 export { useSuppliers } from './useSuppliers';
+export { useProcurement } from './useProcurement';

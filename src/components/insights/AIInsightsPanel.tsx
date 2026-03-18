@@ -278,7 +278,7 @@ function InsightCard({ insight, index }: InsightCardProps) {
 }
 
 // Floating Trigger Button
-export function AIInsightsTrigger({ onClick, insightCount }: { onClick: () => void; insightCount: number }) {
+export function AIInsightsTrigger({ onClick }: { onClick: () => void; insightCount?: number }) {
   return (
     <motion.button
       onClick={onClick}
@@ -289,7 +289,7 @@ export function AIInsightsTrigger({ onClick, insightCount }: { onClick: () => vo
       <img
         src="/mascot.png"
         alt="AI Assistant"
-        className="w-11 h-11 object-contain"
+        className="w-12 h-12 object-contain"
         onError={(e) => {
           const target = e.target as HTMLImageElement;
           target.style.display = 'none';
@@ -297,11 +297,6 @@ export function AIInsightsTrigger({ onClick, insightCount }: { onClick: () => vo
           target.parentElement!.innerHTML += '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M12 2a5 5 0 0 1 5 5v1h1a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h1V7a5 5 0 0 1 5-5z"/><circle cx="9" cy="13" r="1" fill="white"/><circle cx="15" cy="13" r="1" fill="white"/></svg>';
         }}
       />
-      {insightCount > 0 && (
-        <span className="absolute -top-1 -right-1 w-5 h-5 bg-[#cf222e] rounded-full text-white text-xs font-bold flex items-center justify-center">
-          {insightCount}
-        </span>
-      )}
     </motion.button>
   );
 }

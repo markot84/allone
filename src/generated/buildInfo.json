@@ -1,10 +1,18 @@
 {
-  "version": "0.29.40",
-  "previousVersion": "0.29.39",
-  "commitHash": "8a47c81",
+  "version": "0.60.0",
+  "previousVersion": "0.59.0",
+  "commitHash": "f5defec",
   "branch": "main",
-  "buildDate": "2026-03-12T17:53:44.413Z",
+  "buildDate": "2026-03-16T09:01:04.357Z",
   "commits": [
+    {
+      "hash": "f5defec",
+      "message": "fix: lazy db init in connectors to fix deploy"
+    },
+    {
+      "hash": "05b9866",
+      "message": "feat: add Google Ads and Meta API connectors with OAuth, scheduled sync, and UI"
+    },
     {
       "hash": "8a47c81",
       "message": "Fix campaigns table responsive - use table-auto with whitespace-nowrap to prevent column overlap"
@@ -56,17 +64,11 @@
     {
       "hash": "56322ce",
       "message": "Update pricing to value-based tiers, add funding sources"
-    },
-    {
-      "hash": "6893e9e",
-      "message": "Redesign dashboard, add campaign sorting and channel colors"
-    },
-    {
-      "hash": "44d8c77",
-      "message": "ROI card redesign: dark gradient hero in Dashboard and ROI page"
     }
   ],
   "changes": [
+    "[Διόρθωση] Lazy db init in connectors to fix deploy",
+    "[Νέο χαρακτηριστικό] Add Google Ads and Meta API connectors with OAuth, scheduled sync, and UI",
     "Fix campaigns table responsive - use table-auto with whitespace-nowrap to prevent column overlap",
     "Fix API key generation - use direct Firestore write instead of Cloud Function",
     "Add API Key Management UI for automated imports in Data Import section",
@@ -74,8 +76,6 @@
     "Responsive tables - compact layout, hide columns on smaller screens",
     "Fix suppliers stats cards layout - equal width, compact spacing",
     "Add suppliers collection to Firestore rules",
-    "Fix product import: Greek columns, comma decimals, auto-extract suppliers with TOD",
-    "Align supplier stats cards layout",
-    "Fix AI assistant icons, article navigation, add Priority Weights docs"
+    "Fix product import: Greek columns, comma decimals, auto-extract suppliers with TOD"
   ]
 }

@@ -20,6 +20,7 @@ import { Concept } from './components/concept';
 import { AIInsightsPanel, AIInsightsTriggerWrapper } from './components/insights';
 import { DataImport } from './components/data';
 import { SuppliersPage } from './components/inventory/SuppliersPage';
+import { ProcurementPage } from './components/procurement/ProcurementPage';
 import { BrandsPage } from './components/brands';
 import { BusinessFinances } from './components/finances';
 import { SuperAdminDashboard } from './components/admin';
@@ -70,7 +71,7 @@ function App() {
     if (typeof window === 'undefined') return 'dashboard';
     const hash = window.location.hash.replace('#', '');
     const baseSection = hash.split('?')[0];
-    const validSections = ['brands', 'dashboard', 'strategy', 'rfm', 'products', 'suppliers', 'channels', 'campaigns', 'finances', 'calendar', 'reports', 'roi', 'data', 'data-products', 'data-segments', 'data-campaigns', 'data-organic', 'invite', 'concept', 'help', 'admin'];
+    const validSections = ['brands', 'dashboard', 'strategy', 'rfm', 'products', 'suppliers', 'procurement', 'channels', 'campaigns', 'finances', 'calendar', 'reports', 'roi', 'data', 'data-products', 'data-segments', 'data-campaigns', 'data-organic', 'data-procurement', 'invite', 'concept', 'help', 'admin'];
     if (baseSection && validSections.includes(baseSection)) return baseSection;
     return 'dashboard';
   };
@@ -196,6 +197,8 @@ function App() {
         return <ProductIntelligence onSectionChange={handleSectionChange} />;
       case 'suppliers':
         return <SuppliersPage />;
+      case 'procurement':
+        return <ProcurementPage onSectionChange={handleSectionChange} />;
       case 'channels':
         return <ChannelActivation onSectionChange={handleSectionChange} />;
       case 'campaigns':
@@ -213,11 +216,13 @@ function App() {
       case 'data-segments':
       case 'data-campaigns':
       case 'data-organic':
+      case 'data-procurement':
         return <DataImport initialType={
           activeSection === 'data-products' ? 'products' :
           activeSection === 'data-segments' ? 'segments' :
           activeSection === 'data-campaigns' ? 'campaigns' :
-          activeSection === 'data-organic' ? 'organic' : undefined
+          activeSection === 'data-organic' ? 'organic' :
+          activeSection === 'data-procurement' ? 'procurement' : undefined
         } />;
       case 'invite':
         return <InviteUserSection />;

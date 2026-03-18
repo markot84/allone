@@ -1,7 +1,9 @@
 import { Timestamp, writeBatch, doc } from 'firebase/firestore';
 import * as XLSX from 'xlsx';
 import { db } from '../config/firebase';
-import { FirestoreService, CampaignsService } from './firestore';
+import { FirestoreService, CampaignsService, ProcurementService, PROCUREMENT_COLLECTIONS } from './firestore';
+import { PROCUREMENT_SHEET_NAMES } from '../types/procurement';
+import type { ProcurementSheetType } from '../types/procurement';
 import { FEED_SOURCE_CONFIG, type FeedSourceType } from '../data/feedSourceConfig';
 import type { Product, RFMSegment, Campaign } from '../types';
 
@@ -135,7 +137,7 @@ export function isSupportedFile(name: string): boolean {
   return SUPPORTED_EXTENSIONS.some(ext => lower.endsWith(ext));
 }
 
-export type ImportType = 'products' | 'segments' | 'campaigns' | 'analytics' | 'organic' | 'custom';
+export type ImportType = 'products' | 'segments' | 'campaigns' | 'analytics' | 'organic' | 'custom' | 'procurement';
 
 export interface ImportResult {
   success: boolean;
@@ -1261,6 +1263,101 @@ export async function previewFileForProducts(
   };
 }
 
+const PROCUREMENT_SHEET_ORDER: ProcurementSheetType[] = [
+  'inventory', 'costing', 'item_evaluation', 'customer_evaluation', 'pricing_policy', 'fiscal_year', 'statistics'
+];
+
+/** Import procurement Excel (7 sheets). Replaces all data; saves snapshot before replace (max 5 per brand). */
+async function importProcurementFile(
+  file: File,
+  brandId: string | null | undefined,
+  onProgress?: (p: ImportProgress) => void
+): Promise<ImportResult> {
+  const result: ImportResult = { success: true, imported: 0, failed: 0, errors: [], warnings: [] };
+  if (!brandId) {
+    result.success = false;
+    result.errors.push('Απαιτείται brand');
+    return result;
+  }
+  try {
+    // 1. Snapshot: αν υπάρχουν δεδομένα, αποθηκεύουμε πριν την αντικατάσταση
+    const snapKeys: (keyof typeof PROCUREMENT_SHEET_NAMES)[] = ['inventory', 'costing', 'item_evaluation', 'customer_evaluation', 'pricing_policy', 'fiscal_year', 'statistics'];
+    const existingArrays = await Promise.all(
+      PROCUREMENT_COLLECTIONS.map((coll) => ProcurementService.getAll(coll, brandId))
+    );
+    const hasExisting = existingArrays.some((arr) => arr.length > 0);
+    if (hasExisting) {
+      const snapshotData: Record<string, unknown[]> = {};
+      snapKeys.forEach((key, idx) => {
+        snapshotData[key] = existingArrays[idx] as unknown[];
+      });
+      await ProcurementService.saveSnapshot(brandId, snapshotData, file.name);
+    }
+
+    // 2. Replace: διαγραφή + εισαγωγή νέων
+    const buffer = await file.arrayBuffer();
+    const wb = XLSX.read(buffer, { type: 'array' });
+    let totalImported = 0;
+
+    for (let i = 0; i < PROCUREMENT_SHEET_ORDER.length; i++) {
+      const sheetType = PROCUREMENT_SHEET_ORDER[i];
+      const sheetName = PROCUREMENT_SHEET_NAMES[sheetType];
+      const coll = PROCUREMENT_COLLECTIONS[i];
+      const sheet = wb.Sheets[sheetName];
+
+      if (!sheet) {
+        result.warnings.push(`Φύλλο "${sheetName}" δεν βρέθηκε· παράλειψη.`);
+        continue;
+      }
+
+      const rows = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, defval: '' }) as string[][];
+      const cleaned = rows.map(r => (Array.isArray(r) ? r : [r]).map(c => String(c ?? '').trim()));
+
+      if (cleaned.length < 2) {
+        result.warnings.push(`Φύλλο "${sheetName}": χρειάζεται header + τουλάχιστον 1 γραμμή.`);
+        continue;
+      }
+
+      const headers = cleaned[0].map(h => String(h || '').trim());
+      const dataRows = cleaned.slice(1).filter(r => r.some(c => c !== ''));
+
+      const objects: Record<string, string>[] = dataRows.map(row => {
+        const obj: Record<string, string> = {};
+        headers.forEach((h, idx) => { obj[h] = row[idx] != null ? String(row[idx]).trim() : ''; });
+        return obj;
+      });
+
+      if (objects.length === 0) {
+        await ProcurementService.deleteAll(coll as typeof PROCUREMENT_COLLECTIONS[number], brandId);
+        continue;
+      }
+
+      await ProcurementService.deleteAll(coll as typeof PROCUREMENT_COLLECTIONS[number], brandId);
+
+      const items = objects.map((row, idx) => ({
+        id: `${sheetType}_${idx}_${Date.now()}`,
+        data: { ...row, rowIndex: idx, sheetType } as Record<string, unknown>
+      }));
+
+      const chunks = chunk(items, BATCH_SIZE);
+      for (let b = 0; b < chunks.length; b++) {
+        await ProcurementService.batchSet(coll as typeof PROCUREMENT_COLLECTIONS[number], chunks[b], brandId);
+        totalImported += chunks[b].length;
+        onProgress?.({ rowsProcessed: totalImported, totalRows: objects.length, batchIndex: b, totalBatches: chunks.length, fileName: file.name });
+      }
+    }
+
+    result.imported = totalImported;
+    if (hasExisting) {
+      result.warnings.push('Αρχειοθετήθηκε snapshot προηγούμενων δεδομένων (τελευταία 5).');
+    }
+  } catch (err) {
+    result.success = false;
+    result.errors.push(err instanceof Error ? err.message : String(err));
+  }
+  return result;
+}
+
 // Main import function (CSV or XLSX). Pass brandId for multi-tenant scoping.
 export async function importFile(
   file: File,
@@ -1284,6 +1381,15 @@ export async function importFile(
       result.success = false;
       result.errors.push(`Unsupported file type. Use .csv, .xlsx or .xml (Google Ads feed)`);
       return result;
+    }
+
+    if (type === 'procurement') {
+      if (!file.name.toLowerCase().endsWith('.xlsx')) {
+        result.success = false;
+        result.errors.push('Procurement απαιτεί αρχείο .xlsx με 7 καρτέλες (PROCUREMENT_TEMPLATE)');
+        return result;
+      }
+      return importProcurementFile(file, brandId, onProgress);
     }
 
     let objects: Record<string, string>[];

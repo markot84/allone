@@ -25,7 +25,7 @@ import {
   ThreeBarsIcon,
   XIcon
 } from '@primer/octicons-react';
-import { Upload, UserPlus, Building2, Target, Euro, Truck } from 'lucide-react';
+import { Upload, UserPlus, Building2, Target, Euro, Truck, FileSpreadsheet } from 'lucide-react';
 
 const SIDEBAR_PIN_KEY = 'perf-plus-sidebar-pinned';
 
@@ -37,6 +37,7 @@ type SectionId =
   | 'rfm'
   | 'products'
   | 'suppliers'
+  | 'procurement'
   | 'channels'
   | 'campaigns'
   | 'finances'
@@ -429,6 +430,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
         { id: 'roi', label: 'ROI & Απόδοση', icon: GraphIcon },
         { id: 'products', label: 'Product Intelligence', icon: PackageIcon },
         { id: 'suppliers', label: 'Προμηθευτές', icon: Truck },
+        { id: 'procurement', label: 'Procurement', icon: FileSpreadsheet },
         { id: 'rfm', label: 'Data Analysis', icon: OrganizationIcon },
         { id: 'strategy', label: 'Commercial Strategy', icon: GraphIcon, ...(strategyBadge ? { badge: strategyBadge.text, badgeColor: strategyBadge.color } : {}) },
         { id: 'channels', label: 'Channel Activation', icon: MegaphoneIcon },

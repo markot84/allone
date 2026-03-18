@@ -20,7 +20,6 @@ import {
 } from 'recharts';
 import { Card, CardHeader } from '../common';
 import { useSegments, useProducts, useOrganic, useCampaigns, useActiveStrategy, useSuppliers } from '../../hooks';
-import { ROIAttribution } from '../roi';
 import { calculateTotalRevenue, calculateCampaignMetrics, getCampaignDateForMonth } from '../../utils/roiUtils';
 import { formatCurrencyCompact, formatNumber, formatMultiplier, formatPercent } from '../../utils/format';
 import type { Campaign } from '../../types';
@@ -52,7 +51,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     () => calculateTotalRevenue(totalOrganicRevenue || 0, campaignsTyped),
     [totalOrganicRevenue, campaignsTyped]
   );
-  const [activeTab, setActiveTab] = useState<'overview' | 'roi'>('overview');
+  
 
   // Revenue chart data: οργανικά + campaigns ανά μήνα
   const revenueChartData = useMemo(() => {
@@ -243,54 +242,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         </div>
       )}
 
-      {/* Tabs for Overview and ROI Attribution */}
-      {hasAnyData && (
-        <Card padding="none">
-          <div className="flex border-b border-[var(--nts-border-gray)]">
-            <button
-              onClick={() => setActiveTab('overview')}
-              className={`flex-1 px-6 py-3 text-sm font-medium transition-colors ${
-                activeTab === 'overview'
-                  ? 'text-[var(--nts-charcoal)] border-b-2 border-[var(--nts-accent)]'
-                  : 'text-[var(--nts-medium-gray)] hover:text-[var(--nts-charcoal)]'
-              }`}
-            >
-              Overview
-            </button>
-            <button
-              onClick={() => setActiveTab('roi')}
-              className={`flex-1 px-6 py-3 text-sm font-medium transition-colors relative ${
-                activeTab === 'roi'
-                  ? 'text-[var(--nts-charcoal)] border-b-2 border-[var(--nts-accent)]'
-                  : 'text-[var(--nts-medium-gray)] hover:text-[var(--nts-charcoal)]'
-              }`}
-            >
-              <span className="flex items-center justify-center gap-2">
-                <TrendingUp size={15} className={activeTab === 'roi' ? 'text-[var(--nts-accent)]' : 'text-[var(--nts-medium-gray)]'} />
-                ROI & Απόδοση
-                {hasCampaigns && campaignMetrics.totalSpend > 0 && (() => {
-                  const roi = ((campaignMetrics.totalRevenue - campaignMetrics.totalSpend) / campaignMetrics.totalSpend) * 100;
-                  return roi > 0 ? (
-                    <span className="ml-1 px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-[var(--nts-accent)] text-white leading-none">
-                      +{formatNumber(roi, 0)}% · {formatMultiplier(campaignMetrics.roas, 1)}
-                    </span>
-                  ) : null;
-                })()}
-              </span>
-            </button>
-          </div>
-        </Card>
-      )}
-
-      {/* ROI Attribution Tab Content */}
-      {activeTab === 'roi' && (
-        <div className="pt-2">
-          <ROIAttribution embedded />
-        </div>
-      )}
-
       {/* Main Charts Row */}
-      {activeTab === 'overview' && (
+      {hasAnyData && (
         <>
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 lg:gap-8">
         {/* Revenue Trend */}
