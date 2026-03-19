@@ -1,10 +1,18 @@
 {
-  "version": "0.60.0",
-  "previousVersion": "0.59.0",
-  "commitHash": "f5defec",
+  "version": "0.63.0",
+  "previousVersion": "0.62.0",
+  "commitHash": "bea52b7",
   "branch": "main",
-  "buildDate": "2026-03-16T09:01:04.357Z",
+  "buildDate": "2026-03-18T11:30:29.365Z",
   "commits": [
+    {
+      "hash": "bea52b7",
+      "message": "feat: add Procurement module with 7-tab analysis, charts, and UI redesign"
+    },
+    {
+      "hash": "0c14fb0",
+      "message": "feat: prefer file margin over computed in Product Intelligence - use margin from imported file when present, compute from price/cost only as fallback, auto-derive margin_tier from percentage, remove incorrect conv_rate aliases"
+    },
     {
       "hash": "f5defec",
       "message": "fix: lazy db init in connectors to fix deploy"
@@ -56,17 +64,11 @@
     {
       "hash": "7b3dbfe",
       "message": "Fix Button component: icon-only burger, styled primary/secondary buttons"
-    },
-    {
-      "hash": "f55ce76",
-      "message": "TOD-based stock classification, supplier management page, burger menu"
-    },
-    {
-      "hash": "56322ce",
-      "message": "Update pricing to value-based tiers, add funding sources"
     }
   ],
   "changes": [
+    "[Νέο χαρακτηριστικό] Add Procurement module with 7-tab analysis, charts, and UI redesign",
+    "[Νέο χαρακτηριστικό] Prefer file margin over computed in Product Intelligence - use margin from imported file when present, compute from price/cost only as fallback, auto-derive margin_tier from percentage, remove incorrect conv_rate aliases",
     "[Διόρθωση] Lazy db init in connectors to fix deploy",
     "[Νέο χαρακτηριστικό] Add Google Ads and Meta API connectors with OAuth, scheduled sync, and UI",
     "Fix campaigns table responsive - use table-auto with whitespace-nowrap to prevent column overlap",
@@ -74,8 +76,6 @@
     "Add API Key Management UI for automated imports in Data Import section",
     "Add Cloud Functions: HTTP import endpoint + API key auth for automated daily imports",
     "Responsive tables - compact layout, hide columns on smaller screens",
-    "Fix suppliers stats cards layout - equal width, compact spacing",
-    "Add suppliers collection to Firestore rules",
-    "Fix product import: Greek columns, comma decimals, auto-extract suppliers with TOD"
+    "Fix suppliers stats cards layout - equal width, compact spacing"
   ]
 }

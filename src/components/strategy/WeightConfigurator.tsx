@@ -89,19 +89,31 @@ const PreviewCell = memo(function PreviewCell({
           <span className="text-xs text-[#4A4A4A] truncate block max-w-[100px]">{product.category}</span>
         </td>
       );
-    case 'margin':
+    case 'margin': {
+      // Use file/stored margin when available; otherwise compute live from price & cost_price
+      const storedMargin = product.margin_percentage ?? 0;
+      const costPrice = product.cost_price ?? 0;
+      const liveMargin =
+        storedMargin > 0
+          ? storedMargin
+          : product.price > 0 && costPrice > 0
+          ? Math.round(((product.price - costPrice) / product.price) * 1000) / 10
+          : 0;
+      const liveTier: 'high' | 'medium' | 'low' =
+        storedMargin > 0
+          ? product.margin_tier
+          : liveMargin > 25 ? 'high' : liveMargin > 10 ? 'medium' : 'low';
       return (
         <td className="py-2 pr-2 w-16">
           <Badge
-            variant={
-              product.margin_tier === 'high' ? 'success' : product.margin_tier === 'medium' ? 'warning' : 'danger'
-            }
+            variant={liveTier === 'high' ? 'success' : liveTier === 'medium' ? 'warning' : 'danger'}
             size="sm"
           >
-            {(product.margin_percentage ?? 0).toFixed(0)}%
+            {liveMargin.toFixed(0)}%
           </Badge>
         </td>
       );
+    }
     case 'stock':
       return (
         <td className="py-2 pr-2 w-20 hidden sm:table-cell">
@@ -775,14 +787,6 @@ export function WeightConfigurator() {
           />
         </div>
 
-        {/* Right column: preview image */}
-        <div className="hidden lg:block relative shrink-0">
-          <img
-            src="/landing-screens/strategy-rfm.png"
-            alt="Commercial Strategy preview"
-            className="w-full rounded-xl shadow-lg border border-[var(--nts-border-gray)] object-cover object-top"
-          />
-        </div>
       </div>
 
       {/* Strategy Expiry Warning */}
