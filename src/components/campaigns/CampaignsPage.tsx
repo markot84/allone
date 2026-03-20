@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { TrendingUp, Filter, Download, Search, Calendar, DollarSign, Trash2, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
@@ -8,9 +8,22 @@ import { FirestoreService } from '../../services/firestore';
 import { formatCurrency, formatNumber, formatMultiplier, formatPercent } from '../../utils/format';
 import type { Campaign } from '../../types';
 
-function parseCampaignDate(d: string | undefined): Date | null {
-  if (!d || !d.trim()) return null;
-  const parsed = new Date(d.trim());
+function parseCampaignDate(d: string | number | undefined): Date | null {
+  if (d === null || d === undefined || d === '') return null;
+  const str = String(d).trim();
+  if (!str) return null;
+
+  // Excel serial date number (e.g. 45658 = 2025-01-01)
+  if (/^\d+$/.test(str)) {
+    const serial = parseInt(str, 10);
+    if (serial > 30000 && serial < 60000) {
+      const date = new Date((serial - 25569) * 86400 * 1000);
+      return isNaN(date.getTime()) ? null : date;
+    }
+    return null;
+  }
+
+  const parsed = new Date(str);
   return isNaN(parsed.getTime()) ? null : parsed;
 }
 
@@ -27,53 +40,16 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [channelFilter, setChannelFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [dateFrom, setDateFrom] = useState<string>('');
-  const [dateTo, setDateTo] = useState<string>('');
+  const LS_FROM = 'campaigns_dateFrom';
+  const LS_TO   = 'campaigns_dateTo';
+  const [dateFrom, setDateFromState] = useState<string>(() => localStorage.getItem(LS_FROM) ?? '');
+  const [dateTo,   setDateToState]   = useState<string>(() => localStorage.getItem(LS_TO)   ?? '');
+
+  const setDateFrom = (v: string) => { setDateFromState(v); localStorage.setItem(LS_FROM, v); };
+  const setDateTo   = (v: string) => { setDateToState(v);   localStorage.setItem(LS_TO,   v); };
+
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
-
-  // Date range from campaigns data (start_date, end_date, or parse from period "2025-01-01 - 2025-01-31")
-  const { minDate, maxDate, dateFromDefault, dateToDefault } = useMemo(() => {
-    const list = campaigns as Campaign[];
-    let min: Date | null = null;
-    let max: Date | null = null;
-    list.forEach(c => {
-      let start = parseCampaignDate(c.start_date);
-      let end = parseCampaignDate(c.end_date);
-      if (!start && !end && c.period) {
-        const m = c.period.match(/(\d{4}-\d{2}-\d{2})\s*[-–]\s*(\d{4}-\d{2}-\d{2})/);
-        if (m) {
-          start = parseCampaignDate(m[1]);
-          end = parseCampaignDate(m[2]);
-        }
-      }
-      if (start) {
-        min = !min || start < min ? start : min;
-        max = !max || start > max ? start : max;
-      }
-      if (end) {
-        min = !min || end < min ? end : min;
-        max = !max || end > max ? end : max;
-      }
-    });
-    return {
-      minDate: min,
-      maxDate: max,
-      dateFromDefault: min ? (min as Date).toISOString().slice(0, 10) : '',
-      dateToDefault: max ? (max as Date).toISOString().slice(0, 10) : '',
-    };
-  }, [campaigns]);
-
-  // Αυτόματη ανίχνευση περιόδου: όταν φορτώσουν campaigns, θέτουμε Από/Έως βάσει ημερομηνιών τους
-  useEffect(() => {
-    if (dateFromDefault && dateToDefault) {
-      setDateFrom(dateFromDefault);
-      setDateTo(dateToDefault);
-    } else {
-      setDateFrom('');
-      setDateTo('');
-    }
-  }, [dateFromDefault, dateToDefault]);
 
   const handleDeleteCampaigns = async () => {
     if (!currentBrand?.id) return;
@@ -329,8 +305,6 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                 type="date"
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
-                min={dateFromDefault || undefined}
-                max={dateToDefault || undefined}
                 className="px-3 py-1.5 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all"
               />
             </div>
@@ -340,25 +314,18 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                 type="date"
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
-                min={dateFromDefault || undefined}
-                max={dateToDefault || undefined}
                 className="px-3 py-1.5 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all"
               />
             </div>
             {(dateFrom || dateTo) && (
               <button
-                onClick={() => { setDateFrom(''); setDateTo(''); }}
+                onClick={() => { setDateFrom(''); setDateTo(''); localStorage.removeItem(LS_FROM); localStorage.removeItem(LS_TO); }}
                 className="text-xs text-[var(--nts-accent)] hover:underline"
               >
                 Καθαρισμός
               </button>
             )}
           </div>
-          {minDate && maxDate && (
-            <span className="text-xs text-[#9CA3AF]">
-              Διαθέσιμα: {(minDate as Date).toLocaleDateString('el-GR')} – {(maxDate as Date).toLocaleDateString('el-GR')}
-            </span>
-          )}
         </div>
       </Card>
 

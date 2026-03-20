@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { CheckCircle, Loader2 } from 'lucide-react';
-import { Button } from '../common';
 import { useAuth } from '../../hooks';
 import { getInviteByToken, acceptInvite } from '../../services/invites';
 
@@ -40,21 +39,28 @@ export function InviteAcceptPage({ token, onAccepted }: InviteAcceptPageProps) {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[var(--nts-light-gray)]">
-        <Loader2 size={32} className="animate-spin text-[var(--nts-accent)]" />
+      <div className="min-h-screen flex items-center justify-center bg-[#f5f5f7]">
+        <Loader2 size={28} className="animate-spin text-[var(--nts-accent)]" />
       </div>
     );
   }
 
   if (!invite) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[var(--nts-light-gray)] p-4">
-        <div className="bg-white rounded-2xl shadow-lg border border-[var(--nts-border-gray)] p-8 text-center max-w-md">
-          <p className="text-[var(--nts-charcoal)] font-medium">Το invite δεν είναι έγκυρο ή έχει λήξει.</p>
-          <Button variant="primary" className="mt-4" onClick={() => (window.location.href = '/')}>
-            Πήγαινε στην αρχική
-          </Button>
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-[#f5f5f7] p-4">
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="w-full max-w-[360px] bg-white rounded-2xl border border-[#E5E7EB] shadow-sm p-7 text-center"
+        >
+          <p className="text-sm text-[#1A1A1A] font-medium">Το invite δεν είναι έγκυρο ή έχει λήξει.</p>
+          <button
+            onClick={() => (window.location.href = '/')}
+            className="mt-4 w-full py-2.5 rounded-xl bg-[var(--nts-accent)] text-white text-sm font-semibold hover:opacity-90 transition-opacity"
+          >
+            Αρχική σελίδα
+          </button>
+        </motion.div>
       </div>
     );
   }
@@ -62,52 +68,62 @@ export function InviteAcceptPage({ token, onAccepted }: InviteAcceptPageProps) {
   const brandName = invite.brand?.name ?? invite.brandId;
 
   return (
-    <div
-      className="min-h-screen flex items-center justify-center bg-[var(--nts-light-gray)] p-4"
-      style={{ background: 'linear-gradient(135deg, #f6f8fa 0%, #e9ecef 100%)' }}
-    >
+    <div className="min-h-screen flex flex-col items-center justify-center bg-[#f5f5f7] px-4 py-10">
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md"
+        transition={{ duration: 0.3 }}
+        className="w-full max-w-[360px]"
       >
-        <div className="bg-white rounded-2xl shadow-lg border border-[var(--nts-border-gray)] p-8">
-          <div className="text-center mb-8">
-            <div className="w-14 h-14 bg-[#DCFCE7] rounded-xl flex items-center justify-center mx-auto mb-4">
-              <CheckCircle size={28} className="text-[#22C55E]" />
+        {/* Logo */}
+        <div className="text-center mb-7">
+          <div className="inline-flex items-center justify-center w-11 h-11 rounded-xl bg-[var(--nts-accent)] mb-3">
+            <span className="font-bold text-white text-base tracking-tight">P+</span>
+          </div>
+          <h1 className="text-xl font-bold text-[#1A1A1A] tracking-tight">Performance+</h1>
+          <p className="text-xs text-[#9CA3AF] mt-0.5">by notthesame.ai</p>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-[#E5E7EB] shadow-sm p-7">
+          <div className="text-center mb-6">
+            <div className="w-11 h-11 bg-[#DCFCE7] rounded-xl flex items-center justify-center mx-auto mb-3">
+              <CheckCircle size={22} className="text-[#22C55E]" />
             </div>
-            <h1 className="text-2xl font-bold text-[var(--nts-charcoal)]">Πρόσκληση σε Brand</h1>
-            <p className="text-[var(--nts-medium-gray)] mt-1">
-              Σας προσκαλούν να συμμετάσχετε στο <strong>{brandName}</strong>
+            <h2 className="text-base font-bold text-[#1A1A1A]">Πρόσκληση σε Brand</h2>
+            <p className="text-xs text-[#6B7280] mt-1">
+              Προσκαλείστε να συμμετάσχετε στο <strong className="text-[#1A1A1A]">{brandName}</strong>
             </p>
           </div>
+
           {!user ? (
-            <div className="space-y-4">
-              <p className="text-sm text-[var(--nts-medium-gray)] text-center">
-                Εγγραφείτε νέο λογαριασμό ή συνδεθείτε με υπάρχοντα για να αποδεχτείτε την πρόσκληση στο {brandName}.
+            <div className="space-y-3">
+              <p className="text-xs text-[#6B7280] text-center">
+                Συνδεθείτε ή δημιουργήστε λογαριασμό για να αποδεχτείτε την πρόσκληση.
               </p>
-              <Button
-                variant="primary"
-                className="w-full"
+              <button
                 onClick={() => {
                   const returnUrl = `/invite/${token}`;
                   window.location.href = `/?returnUrl=${encodeURIComponent(returnUrl)}`;
                 }}
+                className="w-full py-2.5 rounded-xl bg-[var(--nts-accent)] text-white text-sm font-semibold hover:opacity-90 transition-opacity"
               >
                 Σύνδεση / Εγγραφή
-              </Button>
+              </button>
             </div>
           ) : (
-            <div className="space-y-4">
-              {error && <p className="text-sm text-[#EF4444] text-center">{error}</p>}
-              <Button
-                variant="primary"
-                className="w-full"
+            <div className="space-y-3">
+              {error && (
+                <p className="text-xs text-[#EF4444] bg-[#FEF2F2] border border-[#FECACA] rounded-lg px-3 py-2 text-center">
+                  {error}
+                </p>
+              )}
+              <button
                 onClick={handleAccept}
                 disabled={submitting}
+                className="w-full py-2.5 rounded-xl bg-[var(--nts-accent)] text-white text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {submitting ? 'Αποδοχή…' : 'Αποδοχή πρόσκλησης'}
-              </Button>
+              </button>
             </div>
           )}
         </div>

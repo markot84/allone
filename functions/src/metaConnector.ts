@@ -13,10 +13,20 @@
  */
 
 import * as admin from 'firebase-admin';
+import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 
-function getDb() {
-  return admin.firestore();
+let _db: Firestore | null = null;
+
+function getDb(): Firestore {
+  if (!_db) {
+    _db = admin.firestore();
+  }
+  return _db;
+}
+
+export function setDb(db: Firestore) {
+  _db = db;
 }
 
 const META_GRAPH_URL = 'https://graph.facebook.com/v21.0';
@@ -26,7 +36,6 @@ const SCOPES = [
   'ads_read',
   'ads_management',
   'business_management',
-  'read_insights',
 ].join(',');
 
 function getCredentials() {
@@ -41,7 +50,7 @@ function getCredentials() {
  */
 export function getMetaAuthUrl(brandId: string, redirectUri: string): string {
   const { appId } = getCredentials();
-  const state = Buffer.from(JSON.stringify({ brandId, provider: 'meta' })).toString('base64url');
+  const state = Buffer.from(JSON.stringify({ brandId, provider: 'meta', redirectUri })).toString('base64url');
 
   const params = new URLSearchParams({
     client_id: appId,
@@ -54,14 +63,22 @@ export function getMetaAuthUrl(brandId: string, redirectUri: string): string {
   return `${META_AUTH_URL}?${params.toString()}`;
 }
 
+export interface AdAccount { id: string; name: string; }
+
+export interface MetaCallbackData {
+  accessToken: string;
+  expiresIn: number;
+  availableAccounts: AdAccount[];
+  needsSelection: boolean;
+}
+
 /**
- * Exchange authorization code for long-lived token and store it
+ * Exchange authorization code for tokens and return data (caller handles Firestore write)
  */
 export async function handleMetaCallback(
   code: string,
-  brandId: string,
   redirectUri: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; data?: MetaCallbackData; error?: string }> {
   const { appId, appSecret } = getCredentials();
 
   try {
@@ -102,29 +119,50 @@ export async function handleMetaCallback(
 
     const { access_token: longToken, expires_in } = await longRes.json();
 
-    // Step 3: Get ad accounts
+    // Step 3: Get all accessible ad accounts
     const adAccounts = await listAdAccounts(longToken);
+    logger.info(`[Meta] Got ${adAccounts.length} ad accounts`);
 
-    // Step 4: Store in Firestore
+    return {
+      success: true,
+      data: {
+        accessToken: longToken,
+        expiresIn: expires_in || 5184000,
+        availableAccounts: adAccounts,
+        needsSelection: adAccounts.length > 1,
+      },
+    };
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    logger.error('[Meta] Callback error:', msg);
+    return { success: false, error: msg };
+  }
+}
+
+/**
+ * Confirm the selected ad account for this brand
+ */
+export async function selectMetaAccount(
+  brandId: string,
+  accountId: string,
+  accountName: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
     await getDb().doc(`connectors/${brandId}`).set(
       {
         meta: {
           connected: true,
-          accessToken: longToken,
-          expiresAt: Date.now() + (expires_in || 5184000) * 1000,
-          adAccountIds: adAccounts.map((a) => a.id),
-          adAccountNames: adAccounts.map((a) => a.name),
-          connectedAt: admin.firestore.FieldValue.serverTimestamp(),
+          pendingAccountSelection: false,
+          adAccountIds: [accountId],
+          adAccountNames: [accountName],
         },
       },
       { merge: true }
     );
-
-    logger.info(`[Meta] Connected for brand ${brandId}, ${adAccounts.length} ad accounts`);
+    logger.info(`[Meta] Account selected for brand ${brandId}: ${accountId}`);
     return { success: true };
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    logger.error('[Meta] Callback error:', msg);
     return { success: false, error: msg };
   }
 }
@@ -141,8 +179,9 @@ async function listAdAccounts(accessToken: string): Promise<{ id: string; name: 
     if (!res.ok) return [];
 
     const data = await res.json();
+    logger.info('[Meta] listAdAccounts raw:', JSON.stringify(data.data?.slice(0, 3)));
     return (data.data || [])
-      .filter((a: any) => a.account_status === 1) // only active accounts
+      .filter((a: any) => Number(a.account_status) !== 2) // exclude disabled (status=2); accept all others
       .map((a: any) => ({ id: a.id, name: a.name || a.id }));
   } catch {
     return [];
@@ -179,6 +218,11 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
 
   for (const accountId of adAccountIds) {
     try {
+      const since = new Date();
+      since.setFullYear(since.getFullYear() - 1);
+      const sinceStr = since.toISOString().split('T')[0];
+      const untilStr = new Date().toISOString().split('T')[0];
+
       const params = new URLSearchParams({
         fields: [
           'campaign_name',
@@ -192,7 +236,7 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
           'reach',
           'frequency',
         ].join(','),
-        date_preset: 'last_30d',
+        time_range: JSON.stringify({ since: sinceStr, until: untilStr }),
         level: 'campaign',
         access_token: accessToken,
       });
@@ -239,9 +283,10 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
           roas: spend > 0 ? Math.round((conversionValue / spend) * 100) / 100 : 0,
           reach: parseInt(row.reach || '0', 10),
           frequency: parseFloat(row.frequency || '0'),
-          period: 'Last 30 days',
+          period: 'Last 365 days',
           brandId,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          createdAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
         };
 
         const ref = getDb().collection('campaigns').doc(campaign.id);
@@ -268,7 +313,7 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
     imported: totalImported,
     failed: 0,
     errors: [],
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: FieldValue.serverTimestamp(),
   });
 
   return { success: true, imported: totalImported };

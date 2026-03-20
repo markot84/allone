@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useBrand, useAuth } from '../../hooks';
 import { auth } from '../../config/firebase';
 import { FirestoreService } from '../../services/firestore';
@@ -10,12 +11,23 @@ import {
   CheckCircle2,
   AlertTriangle,
   ExternalLink,
+  Building2,
 } from 'lucide-react';
+
+interface AdAccount {
+  id: string;
+  name: string;
+}
 
 interface ConnectorState {
   connected: boolean;
+  pendingAccountSelection?: boolean;
+  availableAccounts?: AdAccount[];
   connectedAt?: any;
-  customerIds?: string[];
+  // Google Ads
+  customerId?: string;
+  customerName?: string;
+  // Meta
   adAccountIds?: string[];
   adAccountNames?: string[];
   expiresAt?: number;
@@ -56,16 +68,129 @@ const FUNCTIONS_BASE =
   import.meta.env.VITE_FUNCTIONS_URL ||
   'https://europe-west1-performance-plus-4a5b2.cloudfunctions.net';
 
+// ─── Account Picker Modal ────────────────────────────────────────
+
+function AccountPickerModal({
+  accounts,
+  brandName,
+  onConfirm,
+  onCancel,
+  loading,
+}: {
+  accounts: AdAccount[];
+  brandName: string;
+  onConfirm: (account: AdAccount) => void;
+  onCancel: () => void;
+  loading: boolean;
+}) {
+  const [selected, setSelected] = useState<AdAccount | null>(accounts[0] ?? null);
+  const [manualId, setManualId] = useState('');
+  const manualMode = accounts.length === 0;
+
+  const handleConfirm = () => {
+    if (manualMode) {
+      const id = manualId.trim().replace(/-/g, '');
+      if (id) onConfirm({ id, name: `Account ${id}` });
+    } else if (selected) {
+      onConfirm(selected);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50">
+            <Building2 size={20} className="text-indigo-600" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-[#1A1A1A]">Επιλογή Διαφημιστικού Λογαριασμού</h3>
+            <p className="text-xs text-[#6B7280]">για το brand <strong>{brandName}</strong></p>
+          </div>
+        </div>
+
+        {manualMode ? (
+          <div className="mb-5">
+            <p className="text-sm text-[#6B7280] mb-3">
+              Δεν ήταν δυνατή η αυτόματη ανάκτηση λογαριασμών. Εισάγετε χειροκίνητα το <strong>Customer ID</strong> του Google Ads λογαριασμού (μορφή: 123-456-7890):
+            </p>
+            <input
+              type="text"
+              value={manualId}
+              onChange={(e) => setManualId(e.target.value)}
+              placeholder="π.χ. 123-456-7890"
+              className="w-full rounded-lg border border-[#E5E5E5] px-3 py-2 text-sm focus:outline-none focus:border-indigo-500"
+            />
+          </div>
+        ) : (
+          <>
+            <p className="text-sm text-[#6B7280] mb-4">
+              Έχεις πρόσβαση σε {accounts.length} λογαριασμούς. Επίλεξε ποιος αντιστοιχεί σε αυτό το brand:
+            </p>
+            <div className="space-y-2 max-h-60 overflow-y-auto mb-5">
+              {accounts.map((acc) => (
+                <label
+                  key={acc.id}
+                  className={`flex items-center gap-3 rounded-xl border-2 px-4 py-3 cursor-pointer transition-all ${
+                    selected?.id === acc.id
+                      ? 'border-indigo-500 bg-indigo-50'
+                      : 'border-[#E5E5E5] hover:border-[#D1D5DB]'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="adAccount"
+                    value={acc.id}
+                    checked={selected?.id === acc.id}
+                    onChange={() => setSelected(acc)}
+                    className="accent-indigo-600"
+                  />
+                  <div>
+                    <p className="text-sm font-medium text-[#1A1A1A]">{acc.name}</p>
+                    <p className="text-xs text-[#9CA3AF]">{acc.id}</p>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </>
+        )}
+
+        <div className="flex gap-3">
+          <Button variant="secondary" size="sm" onClick={onCancel} className="flex-1" disabled={loading}>
+            Άκυρο
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={handleConfirm}
+            disabled={(manualMode ? !manualId.trim() : !selected) || loading}
+            className="flex-1"
+          >
+            {loading ? <Spinner size="sm" className="mr-1" /> : null}
+            {loading ? 'Αποθήκευση...' : 'Επιβεβαίωση'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Component ──────────────────────────────────────────────
+
 export function ConnectorsPanel() {
   const { currentBrand } = useBrand();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const brandId = currentBrand?.id ?? null;
+  const brandName = currentBrand?.name ?? 'Brand';
   const toast = useToast();
 
   const [states, setStates] = useState<Record<string, ConnectorState>>({});
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState<string | null>(null);
   const [connecting, setConnecting] = useState<string | null>(null);
+  const [accountPickerFor, setAccountPickerFor] = useState<string | null>(null);
+  const [confirmingAccount, setConfirmingAccount] = useState(false);
 
   const fetchStates = useCallback(async () => {
     if (!brandId) return;
@@ -99,15 +224,23 @@ export function ConnectorsPanel() {
       const connector = params.get('connector');
       const status = params.get('status');
       if (connector && status === 'success') {
-        toast.success(`${connector === 'google_ads' ? 'Google Ads' : 'Meta'} συνδέθηκε επιτυχώς!`);
-        fetchStates();
+        // Clear hash first, then reload so Firestore state is fresh
+        history.replaceState(null, '', window.location.pathname + '#data');
+        window.location.reload();
       } else if (connector && status === 'error') {
         toast.error(`Σφάλμα σύνδεσης: ${params.get('message') || 'Unknown'}`);
+        history.replaceState(null, '', window.location.pathname + '#data');
       }
-      // Clean URL
-      window.location.hash = 'data';
     }
   }, [toast, fetchStates]);
+
+  // Auto-open picker if pending
+  useEffect(() => {
+    const pendingProvider = Object.entries(states).find(
+      ([, s]) => s.pendingAccountSelection
+    )?.[0];
+    if (pendingProvider) setAccountPickerFor(pendingProvider);
+  }, [states]);
 
   const handleConnect = async (provider: ConnectorConfig['id']) => {
     if (!brandId || !user) return;
@@ -125,11 +258,7 @@ export function ConnectorsPanel() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          brandId,
-          provider,
-          redirectUri: callbackUrl,
-        }),
+        body: JSON.stringify({ brandId, provider, redirectUri: callbackUrl }),
       });
 
       if (!res.ok) {
@@ -194,6 +323,7 @@ export function ConnectorsPanel() {
       const result = await res.json();
       if (result.success) {
         toast.success(`Εισήχθησαν ${result.imported} campaigns`);
+        queryClient.invalidateQueries({ queryKey: ['campaigns', brandId] });
       } else {
         toast.error(result.error || 'Sync failed');
       }
@@ -205,129 +335,196 @@ export function ConnectorsPanel() {
     }
   };
 
+  const handleConfirmAccount = async (account: AdAccount) => {
+    if (!brandId || !accountPickerFor) return;
+    setConfirmingAccount(true);
+
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error('Not authenticated');
+
+      const res = await fetch(`${FUNCTIONS_BASE}/connectorSelectAccount`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          brandId,
+          provider: accountPickerFor,
+          accountId: account.id,
+          accountName: account.name,
+        }),
+      });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      toast.success(`Λογαριασμός "${account.name}" επιλέχθηκε για αυτό το brand`);
+      setAccountPickerFor(null);
+      await fetchStates();
+    } catch (err) {
+      toast.error('Σφάλμα επιλογής λογαριασμού');
+      console.error(err);
+    } finally {
+      setConfirmingAccount(false);
+    }
+  };
+
   if (!brandId) return null;
 
+  const pendingState = accountPickerFor ? states[accountPickerFor] : null;
+
   return (
-    <Card>
-      <div className="p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="text-lg font-semibold text-[#1A1A1A] flex items-center gap-2">
-              <Link2 size={20} className="text-[var(--nts-accent)]" />
-              Ad Platform Connectors
-            </h3>
-            <p className="text-sm text-[#6B7280] mt-0.5">
-              Σύνδεσε Google Ads & Meta για αυτόματη εισαγωγή campaigns καθημερινά (06:00)
-            </p>
-          </div>
-        </div>
+    <>
+      {accountPickerFor && pendingState?.pendingAccountSelection && (
+        <AccountPickerModal
+          accounts={pendingState.availableAccounts || []}
+          brandName={brandName}
+          onConfirm={handleConfirmAccount}
+          onCancel={() => setAccountPickerFor(null)}
+          loading={confirmingAccount}
+        />
+      )}
 
-        {loading ? (
-          <div className="py-8 flex justify-center">
-            <Spinner size="md" label="Φόρτωση connectors..." />
+      <Card>
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-lg font-semibold text-[#1A1A1A] flex items-center gap-2">
+                <Link2 size={20} className="text-[var(--nts-accent)]" />
+                Ad Platform Connectors
+              </h3>
+              <p className="text-sm text-[#6B7280] mt-0.5">
+                Σύνδεσε Google Ads & Meta για αυτόματη εισαγωγή campaigns καθημερινά (06:00)
+              </p>
+            </div>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {CONNECTORS.map((conn) => {
-              const state = states[conn.id] || { connected: false };
-              const isConnected = state.connected;
-              const isSyncing = syncing === conn.id;
-              const isConnecting = connecting === conn.id;
-              const isExpired = state.expiresAt ? state.expiresAt < Date.now() : false;
 
-              return (
-                <div
-                  key={conn.id}
-                  className={`rounded-xl border-2 p-5 transition-all ${
-                    isConnected
-                      ? `${conn.bgColor} ${conn.borderColor}`
-                      : 'bg-white border-[#E5E5E5] hover:border-[#D1D5DB]'
-                  }`}
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl">{conn.icon}</span>
-                      <div>
-                        <h4 className="font-semibold text-[#1A1A1A]">{conn.name}</h4>
-                        <p className="text-xs text-[#6B7280] mt-0.5">{conn.description}</p>
+          {loading ? (
+            <div className="py-8 flex justify-center">
+              <Spinner size="md" label="Φόρτωση connectors..." />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {CONNECTORS.map((conn) => {
+                const state = states[conn.id] || { connected: false };
+                const isConnected = state.connected;
+                const isPending = !!state.pendingAccountSelection;
+                const isSyncing = syncing === conn.id;
+                const isConnecting = connecting === conn.id;
+                const isExpired = state.expiresAt ? state.expiresAt < Date.now() : false;
+
+                return (
+                  <div
+                    key={conn.id}
+                    className={`rounded-xl border-2 p-5 transition-all ${
+                      isConnected
+                        ? `${conn.bgColor} ${conn.borderColor}`
+                        : isPending
+                        ? 'bg-amber-50 border-amber-300'
+                        : 'bg-white border-[#E5E5E5] hover:border-[#D1D5DB]'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">{conn.icon}</span>
+                        <div>
+                          <h4 className="font-semibold text-[#1A1A1A]">{conn.name}</h4>
+                          <p className="text-xs text-[#6B7280] mt-0.5">{conn.description}</p>
+                        </div>
                       </div>
+                      {isConnected && !isExpired && (
+                        <CheckCircle2 size={20} className="text-green-500 flex-shrink-0" />
+                      )}
+                      {(isConnected && isExpired) || isPending ? (
+                        <AlertTriangle size={20} className="text-amber-500 flex-shrink-0" />
+                      ) : null}
                     </div>
-                    {isConnected && !isExpired && (
-                      <CheckCircle2 size={20} className="text-green-500 flex-shrink-0" />
-                    )}
-                    {isConnected && isExpired && (
-                      <AlertTriangle size={20} className="text-amber-500 flex-shrink-0" />
-                    )}
-                  </div>
 
-                  {isConnected && (
-                    <div className="mb-3 text-xs text-[#6B7280] space-y-1">
-                      {conn.id === 'google_ads' && state.customerIds && (
-                        <p>{state.customerIds.length} customer account(s)</p>
-                      )}
-                      {conn.id === 'meta' && state.adAccountNames && (
-                        <p>{state.adAccountNames.length} ad account(s): {state.adAccountNames.join(', ')}</p>
-                      )}
-                      {isExpired && (
-                        <p className="text-amber-600 font-medium">Token expired — reconnect required</p>
-                      )}
-                    </div>
-                  )}
+                    {isPending && (
+                      <p className="mb-3 text-xs text-amber-700 font-medium">
+                        Απαιτείται επιλογή διαφημιστικού λογαριασμού
+                      </p>
+                    )}
 
-                  <div className="flex items-center gap-2 mt-3">
-                    {isConnected ? (
-                      <>
+                    {isConnected && (
+                      <div className="mb-3 text-xs text-[#6B7280] space-y-1">
+                        {conn.id === 'google_ads' && state.customerName && (
+                          <p>{state.customerName} ({state.customerId})</p>
+                        )}
+                        {conn.id === 'meta' && state.adAccountNames && (
+                          <p>{state.adAccountNames.join(', ')}</p>
+                        )}
+                        {isExpired && (
+                          <p className="text-amber-600 font-medium">Token expired — reconnect required</p>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-2 mt-3">
+                      {isPending ? (
                         <Button
                           variant="primary"
                           size="sm"
-                          onClick={() => handleSync(conn.id)}
-                          disabled={isSyncing || isExpired}
-                          className="flex-1"
+                          onClick={() => setAccountPickerFor(conn.id)}
+                          className="w-full"
                         >
-                          {isSyncing ? (
+                          <Building2 size={14} className="mr-1" />
+                          Επιλογή λογαριασμού
+                        </Button>
+                      ) : isConnected ? (
+                        <>
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={() => handleSync(conn.id)}
+                            disabled={isSyncing || isExpired}
+                            className="flex-1"
+                          >
+                            {isSyncing ? (
+                              <Spinner size="sm" className="mr-1" />
+                            ) : (
+                              <RefreshCw size={14} className="mr-1" />
+                            )}
+                            {isSyncing ? 'Syncing...' : 'Sync τώρα'}
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => handleDisconnect(conn.id)}
+                          >
+                            <Unlink size={14} className="mr-1" />
+                            Αποσύνδεση
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={() => handleConnect(conn.id)}
+                          disabled={isConnecting}
+                          className="w-full"
+                        >
+                          {isConnecting ? (
                             <Spinner size="sm" className="mr-1" />
                           ) : (
-                            <RefreshCw size={14} className="mr-1" />
+                            <ExternalLink size={14} className="mr-1" />
                           )}
-                          {isSyncing ? 'Syncing...' : 'Sync τώρα'}
+                          {isConnecting ? 'Σύνδεση...' : `Σύνδεση ${conn.name}`}
                         </Button>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => handleDisconnect(conn.id)}
-                        >
-                          <Unlink size={14} className="mr-1" />
-                          Αποσύνδεση
-                        </Button>
-                      </>
-                    ) : (
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        onClick={() => handleConnect(conn.id)}
-                        disabled={isConnecting}
-                        className="w-full"
-                      >
-                        {isConnecting ? (
-                          <Spinner size="sm" className="mr-1" />
-                        ) : (
-                          <ExternalLink size={14} className="mr-1" />
-                        )}
-                        {isConnecting ? 'Σύνδεση...' : `Σύνδεση ${conn.name}`}
-                      </Button>
-                    )}
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+                );
+              })}
+            </div>
+          )}
 
-        <p className="text-xs text-[#9CA3AF] mt-4">
-          Τα credentials αποθηκεύονται ασφαλώς. Ρυθμίστε <code>GOOGLE_ADS_CLIENT_ID</code>, <code>GOOGLE_ADS_CLIENT_SECRET</code>,
-          <code> GOOGLE_ADS_DEVELOPER_TOKEN</code>, <code>META_APP_ID</code>, <code>META_APP_SECRET</code> στο Cloud Functions environment.
-        </p>
-      </div>
-    </Card>
+          <p className="text-xs text-[#9CA3AF] mt-4">
+            Κάθε brand συνδέεται με τον δικό του διαφημιστικό λογαριασμό. Τα credentials αποθηκεύονται ασφαλώς.
+          </p>
+        </div>
+      </Card>
+    </>
   );
 }

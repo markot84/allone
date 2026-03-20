@@ -1,10 +1,18 @@
 {
-  "version": "0.63.0",
-  "previousVersion": "0.62.0",
-  "commitHash": "bea52b7",
+  "version": "0.74.0",
+  "previousVersion": "0.73.0",
+  "commitHash": "a9fb695",
   "branch": "main",
-  "buildDate": "2026-03-18T11:30:29.365Z",
+  "buildDate": "2026-03-20T13:30:13.411Z",
   "commits": [
+    {
+      "hash": "a9fb695",
+      "message": "fix: show file margin in strategy table, remove decorative strategy image"
+    },
+    {
+      "hash": "9c6281b",
+      "message": "feat: marketing page hero layout, 5 σημεία with app screenshots (Commercial Strategy, Data Analysis, Product Intelligence, Content Strategy)"
+    },
     {
       "hash": "bea52b7",
       "message": "feat: add Procurement module with 7-tab analysis, charts, and UI redesign"
@@ -56,17 +64,11 @@
     {
       "hash": "5a9d08c",
       "message": "Align supplier stats cards layout"
-    },
-    {
-      "hash": "90303d4",
-      "message": "Fix AI assistant icons, article navigation, add Priority Weights docs"
-    },
-    {
-      "hash": "7b3dbfe",
-      "message": "Fix Button component: icon-only burger, styled primary/secondary buttons"
     }
   ],
   "changes": [
+    "[Διόρθωση] Show file margin in strategy table, remove decorative strategy image",
+    "[Νέο χαρακτηριστικό] Marketing page hero layout, 5 σημεία with app screenshots (Commercial Strategy, Data Analysis, Product Intelligence, Content Strategy)",
     "[Νέο χαρακτηριστικό] Add Procurement module with 7-tab analysis, charts, and UI redesign",
     "[Νέο χαρακτηριστικό] Prefer file margin over computed in Product Intelligence - use margin from imported file when present, compute from price/cost only as fallback, auto-derive margin_tier from percentage, remove incorrect conv_rate aliases",
     "[Διόρθωση] Lazy db init in connectors to fix deploy",
@@ -74,8 +76,6 @@
     "Fix campaigns table responsive - use table-auto with whitespace-nowrap to prevent column overlap",
     "Fix API key generation - use direct Firestore write instead of Cloud Function",
     "Add API Key Management UI for automated imports in Data Import section",
-    "Add Cloud Functions: HTTP import endpoint + API key auth for automated daily imports",
-    "Responsive tables - compact layout, hide columns on smaller screens",
-    "Fix suppliers stats cards layout - equal width, compact spacing"
+    "Add Cloud Functions: HTTP import endpoint + API key auth for automated daily imports"
   ]
 }

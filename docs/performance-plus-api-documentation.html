@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Performance Plus – API Usage Documentation</title>
+<style>
+  body { font-family: Arial, sans-serif; max-width: 750px; margin: 40px auto; color: #222; line-height: 1.6; }
+  h1 { color: #1a73e8; border-bottom: 2px solid #1a73e8; padding-bottom: 8px; }
+  h2 { color: #333; margin-top: 28px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+  th { background: #1a73e8; color: white; padding: 8px 12px; text-align: left; }
+  td { padding: 8px 12px; border-bottom: 1px solid #ddd; }
+  .label { font-weight: bold; width: 180px; }
+  .note { background: #f8f9fa; border-left: 4px solid #1a73e8; padding: 10px 16px; margin-top: 20px; font-size: 0.92em; }
+  footer { margin-top: 40px; font-size: 0.85em; color: #888; border-top: 1px solid #eee; padding-top: 12px; }
+</style>
+</head>
+<body>
+
+<h1>Performance Plus – Tool Design &amp; API Usage Documentation</h1>
+
+<h2>1. Company Overview</h2>
+<table>
+  <tr><td class="label">Company Name</td><td>notthesame | Performance Marketing Agency</td></tr>
+  <tr><td class="label">Industry</td><td>Digital Marketing Agency</td></tr>
+  <tr><td class="label">Years in Operation</td><td>15 years</td></tr>
+  <tr><td class="label">Core Service</td><td>Performance Marketing — Google Ads campaign management &amp; optimization for clients across multiple verticals</td></tr>
+  <tr><td class="label">Website</td><td>performanceplus.gr</td></tr>
+</table>
+
+<h2>2. Tool Description</h2>
+<p>
+  <strong>Performance Plus</strong> is an internal analytics platform developed by the notthesame agency to consolidate,
+  monitor, and report on Google Ads campaign performance across all managed client accounts. It was built as an
+  operational necessity to replace manual reporting processes that previously required exporting data from multiple
+  interfaces.
+</p>
+<p>
+  The platform is used by the agency's internal team and by the agency's clients, who are granted secure,
+  read-only access to their own campaign data via OAuth-authenticated accounts. Each client can only view
+  data belonging to their own brand — no cross-account data exposure exists.
+  It serves as a single source of truth for campaign KPIs, enabling faster decision-making and transparent
+  live reporting for clients.
+</p>
+
+<h2>3. Google Ads API Usage</h2>
+<table>
+  <tr><td class="label">API Used</td><td>Google Ads API (REST / GAQL)</td></tr>
+  <tr><td class="label">Access Type</td><td>Manager Account (MCC) — agency manages multiple client sub-accounts</td></tr>
+  <tr><td class="label">Authentication</td><td>OAuth 2.0 with offline access (refresh token stored server-side via Firebase Cloud Functions)</td></tr>
+  <tr><td class="label">Data Pulled</td><td>Campaign name, status, impressions, clicks, CTR, conversions, cost, ROAS — aggregated over custom date ranges</td></tr>
+  <tr><td class="label">Query Method</td><td>GAQL via <code>customers/{id}/googleAds:searchStream</code></td></tr>
+  <tr><td class="label">Sync Frequency</td><td>On-demand (manual sync) + scheduled daily via Firebase Cloud Scheduler</td></tr>
+  <tr><td class="label">Data Storage</td><td>Google Cloud Firestore (private, within the agency's Firebase project)</td></tr>
+  <tr><td class="label">Data Sharing</td><td>None — data is not shared with or sold to third parties</td></tr>
+</table>
+
+<h2>4. Architecture Overview</h2>
+<table>
+  <tr><td class="label">Frontend</td><td>React (Vite) — hosted on Firebase Hosting</td></tr>
+  <tr><td class="label">Backend</td><td>Firebase Cloud Functions (Node.js / TypeScript)</td></tr>
+  <tr><td class="label">Database</td><td>Google Cloud Firestore</td></tr>
+  <tr><td class="label">Auth</td><td>Firebase Authentication — agency team + invited client accounts (OAuth, read-only per brand)</td></tr>
+  <tr><td class="label">Hosting</td><td>Firebase Hosting + Google Cloud Run (europe-west1)</td></tr>
+  <tr><td class="label">Secrets</td><td>Firebase Secret Manager (OAuth tokens never exposed to frontend)</td></tr>
+</table>
+
+<h2>5. Data Handling &amp; Privacy</h2>
+<ul>
+  <li>All API credentials (Client ID, Client Secret, Developer Token, Refresh Tokens) are stored server-side using Firebase Secret Manager and never exposed to the client browser.</li>
+  <li>Campaign data is stored in a private Firestore database accessible only to authenticated agency team members.</li>
+  <li>No user personal data from end-consumers is collected or processed.</li>
+  <li>The platform does not make any changes to Google Ads campaigns — it is strictly read-only.</li>
+</ul>
+
+<div class="note">
+  <strong>Note:</strong> Performance Plus is a client-facing reporting platform built by the notthesame performance marketing agency.
+  Clients are invited via email and can only access data for their own brand. The agency manages all Google Ads accounts
+  via MCC. The platform does not distribute or resell API access.
+</div>
+
+<footer>
+  Performance Plus — notthesame Agency | Internal Use Only | &copy; 2026
+</footer>
+
+</body>
+</html>

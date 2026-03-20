@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { onRequest } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { logger } from 'firebase-functions/v2';
@@ -10,15 +11,21 @@ import {
   getGoogleAdsAuthUrl,
   handleGoogleAdsCallback,
   fetchGoogleAdsCampaigns,
+  selectGoogleAdsAccount,
+  setDb as setGoogleAdsDb,
 } from './googleAdsConnector';
 import {
   getMetaAuthUrl,
   handleMetaCallback,
   fetchMetaCampaigns,
+  selectMetaAccount,
+  setDb as setMetaDb,
 } from './metaConnector';
 
 admin.initializeApp();
-const db = admin.firestore();
+const db = getFirestore();
+setMetaDb(db);
+setGoogleAdsDb(db);
 
 const BATCH_SIZE = 500;
 
@@ -83,7 +90,7 @@ async function batchWrite(
         {
           ...item.data,
           brandId,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
         },
         { merge: true }
       );
@@ -186,7 +193,7 @@ async function logImportJob(
     imported: result.imported,
     failed: result.failed,
     errors: result.errors,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: FieldValue.serverTimestamp(),
   });
 }
 
@@ -371,7 +378,7 @@ export const generateApiKey = onRequest(
         brandId,
         active: true,
         createdBy: decoded.uid,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
       });
 
       logger.info(`API key created for brand ${brandId} by ${decoded.uid}`);
@@ -392,7 +399,7 @@ export const generateApiKey = onRequest(
  * Returns: { authUrl }
  */
 export const connectorAuth = onRequest(
-  { region: 'europe-west1', cors: true },
+  { region: 'europe-west1', cors: true, secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID'] },
   async (req, res) => {
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
@@ -437,7 +444,7 @@ export const connectorAuth = onRequest(
  * Handles OAuth redirect from Google/Meta
  */
 export const connectorCallback = onRequest(
-  { region: 'europe-west1', cors: true },
+  { region: 'europe-west1', cors: true, secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID'] },
   async (req, res) => {
     const { code, state } = req.query as { code?: string; state?: string };
 
@@ -447,18 +454,43 @@ export const connectorCallback = onRequest(
     }
 
     try {
-      const { brandId, provider } = JSON.parse(
+      const { brandId, provider, redirectUri } = JSON.parse(
         Buffer.from(state, 'base64url').toString()
       );
 
-      const redirectUri = `https://${req.hostname}${req.path}`;
+      if (!redirectUri) {
+        res.status(400).send('Missing redirectUri in state');
+        return;
+      }
 
       let result: { success: boolean; error?: string };
 
       if (provider === 'google_ads') {
         result = await handleGoogleAdsCallback(code, brandId, redirectUri);
       } else if (provider === 'meta') {
-        result = await handleMetaCallback(code, brandId, redirectUri);
+        const metaResult = await handleMetaCallback(code, redirectUri);
+        if (metaResult.success && metaResult.data) {
+          const { accessToken, expiresIn, availableAccounts, needsSelection } = metaResult.data;
+          await db.doc(`connectors/${brandId}`).set(
+            {
+              meta: {
+                connected: !needsSelection,
+                pendingAccountSelection: needsSelection,
+                accessToken,
+                expiresAt: Date.now() + expiresIn * 1000,
+                availableAccounts,
+                adAccountIds: needsSelection ? [] : availableAccounts.map((a) => a.id),
+                adAccountNames: needsSelection ? [] : availableAccounts.map((a) => a.name),
+                connectedAt: FieldValue.serverTimestamp(),
+              },
+            },
+            { merge: true }
+          );
+          logger.info(`[Meta] Saved to Firestore for brand ${brandId}`);
+          result = { success: true };
+        } else {
+          result = { success: false, error: metaResult.error };
+        }
       } else {
         res.status(400).send(`Unknown provider: ${provider}`);
         return;
@@ -512,6 +544,52 @@ export const connectorDisconnect = onRequest(
   }
 );
 
+// ─── Connector: Select Ad Account ──────────────────────────────
+
+/**
+ * POST /connectorSelectAccount
+ * Body: { brandId, provider, accountId, accountName }
+ */
+export const connectorSelectAccount = onRequest(
+  { region: 'europe-west1', cors: true },
+  async (req, res) => {
+    if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+
+    try {
+      const idToken = authHeader.slice(7).trim();
+      await admin.auth().verifyIdToken(idToken);
+
+      const { brandId, provider, accountId, accountName } = req.body as {
+        brandId?: string; provider?: string; accountId?: string; accountName?: string;
+      };
+
+      if (!brandId || !provider || !accountId) {
+        res.status(400).json({ error: 'Missing brandId, provider, or accountId' });
+        return;
+      }
+
+      let result: { success: boolean; error?: string };
+      if (provider === 'meta') {
+        result = await selectMetaAccount(brandId, accountId, accountName || accountId);
+      } else if (provider === 'google_ads') {
+        await selectGoogleAdsAccount(brandId, accountId, accountName || accountId);
+        result = { success: true };
+      } else {
+        res.status(400).json({ error: `Account selection not supported for ${provider}` });
+        return;
+      }
+
+      res.status(200).json(result);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      res.status(500).json({ error: msg });
+    }
+  }
+);
+
 // ─── Connector: Manual Sync ────────────────────────────────────
 
 /**
@@ -519,7 +597,7 @@ export const connectorDisconnect = onRequest(
  * Body: { brandId, provider }
  */
 export const connectorSync = onRequest(
-  { region: 'europe-west1', cors: true, timeoutSeconds: 300, memory: '512MiB' },
+  { region: 'europe-west1', cors: true, timeoutSeconds: 300, memory: '512MiB', secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID'] },
   async (req, res) => {
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
@@ -560,6 +638,7 @@ export const scheduledSync = onSchedule(
     region: 'europe-west1',
     memory: '512MiB',
     timeoutSeconds: 540,
+    secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID'],
   },
   async () => {
     logger.info('[ScheduledSync] Starting daily connector sync');
