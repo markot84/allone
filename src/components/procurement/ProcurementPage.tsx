@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import {
   Package, Calculator, Star, Users, FileText, Calendar, BarChart3,
-  Upload, ChevronRight, ArrowLeft, Tag, DollarSign, Search, X,
+  Upload, ChevronRight, ArrowLeft, Tag, DollarSign, Search, X, ChevronDown,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -425,6 +425,87 @@ function ProcurementChart({ tabKey, rows }: { tabKey: ProcurementSheetType; rows
   return null;
 }
 
+// ── Excel-style column filter dropdown ────────────────────────────────────────
+
+function ColumnFilterDropdown({
+  column, allValues, selectedValues, onApply, onClose,
+}: {
+  column: string;
+  allValues: string[];
+  selectedValues: string[];
+  onApply: (vals: string[]) => void;
+  onClose: () => void;
+}) {
+  const [search, setSearch] = useState('');
+  const [local, setLocal] = useState<string[]>(() =>
+    selectedValues.length > 0 ? selectedValues : allValues
+  );
+
+  const filtered = allValues.filter(v => v.toLowerCase().includes(search.toLowerCase()));
+  const filteredAllChecked = filtered.length > 0 && filtered.every(v => local.includes(v));
+
+  const toggleValue = (v: string) =>
+    setLocal(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
+
+  const toggleAll = () =>
+    setLocal(prev =>
+      filteredAllChecked
+        ? prev.filter(v => !filtered.includes(v))
+        : [...new Set([...prev, ...filtered])]
+    );
+
+  return (
+    <div className="bg-white border border-[var(--nts-border-gray)] rounded-lg shadow-2xl w-56 overflow-hidden">
+      <div className="px-3 py-2 border-b border-[var(--nts-border-gray)] bg-[var(--nts-light-gray)]">
+        <p className="text-[11px] font-semibold text-[var(--nts-charcoal)] truncate">{column}</p>
+      </div>
+      <div className="px-2 pt-2 pb-1">
+        <div className="relative">
+          <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-[var(--nts-medium-gray)] pointer-events-none" />
+          <input
+            autoFocus
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Αναζήτηση..."
+            className="w-full pl-6 pr-2 py-1.5 text-[11px] border border-[var(--nts-border-gray)] rounded focus:outline-none focus:border-[var(--nts-accent)]"
+          />
+        </div>
+      </div>
+      <div className="px-2 pb-0.5 border-b border-[var(--nts-border-gray)] mb-1">
+        <label className="flex items-center gap-2 px-1 py-1 cursor-pointer hover:bg-[var(--nts-light-gray)] rounded text-[11px] font-semibold text-[var(--nts-charcoal)]">
+          <input type="checkbox" checked={filteredAllChecked} onChange={toggleAll} className="accent-[var(--nts-accent)]" />
+          (Επιλογή όλων)
+        </label>
+      </div>
+      <div style={{ maxHeight: 180, overflowY: 'auto' }} className="px-2 pb-1 space-y-0.5">
+        {filtered.map(v => (
+          <label key={v} className="flex items-center gap-2 px-1 py-0.5 cursor-pointer hover:bg-[var(--nts-light-gray)] rounded text-[11px] text-[var(--nts-charcoal)]">
+            <input type="checkbox" checked={local.includes(v)} onChange={() => toggleValue(v)} className="accent-[var(--nts-accent)]" />
+            <span className="truncate">{v || '(κενό)'}</span>
+          </label>
+        ))}
+        {filtered.length === 0 && (
+          <p className="text-[11px] text-[var(--nts-medium-gray)] px-1 py-2 text-center">Δεν βρέθηκαν αποτελέσματα</p>
+        )}
+      </div>
+      <div className="flex gap-2 px-2 py-2 border-t border-[var(--nts-border-gray)]">
+        <button
+          onClick={() => onApply(local.length === allValues.length ? [] : local)}
+          className="flex-1 py-1.5 text-[11px] font-semibold bg-[var(--nts-accent)] text-white rounded hover:opacity-90 transition-opacity"
+        >
+          Εφαρμογή
+        </button>
+        <button
+          onClick={onClose}
+          className="flex-1 py-1.5 text-[11px] border border-[var(--nts-border-gray)] rounded hover:bg-[var(--nts-light-gray)] transition-colors"
+        >
+          Άκυρο
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 interface ProcurementPageProps {
@@ -480,7 +561,8 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
     count: data[key]?.length ?? 0,
   }));
 
-  const [colFilters, setColFilters] = useState<Record<string, string>>({});
+  const [colFilters, setColFilters] = useState<Record<string, string[]>>({});
+  const [openFilter, setOpenFilter] = useState<{ col: string; rect: DOMRect } | null>(null);
 
   const activeData = (data[activeTab] ?? []) as Record<string, unknown>[];
   const headers = useMemo(() => {
@@ -494,17 +576,29 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
   }, [activeData, activeTab]);
 
   // Reset filters on tab change
-  useEffect(() => { setColFilters({}); }, [activeTab]);
+  useEffect(() => { setColFilters({}); setOpenFilter(null); }, [activeTab]);
+
+  const columnUniqueValues = useMemo(() => {
+    const result: Record<string, string[]> = {};
+    headers.forEach(h => {
+      result[h] = [...new Set(activeData.map(r => String(r[h] ?? '')))].sort((a, b) => {
+        const na = parseNum(a), nb = parseNum(b);
+        if (na !== 0 || nb !== 0) return na - nb;
+        return a.localeCompare(b, 'el');
+      });
+    });
+    return result;
+  }, [activeData, headers]);
 
   const filteredData = useMemo(() => {
-    const entries = Object.entries(colFilters).filter(([, v]) => v.trim() !== '');
+    const entries = Object.entries(colFilters).filter(([, v]) => v.length > 0);
     if (entries.length === 0) return activeData;
     return activeData.filter(row =>
-      entries.every(([col, term]) =>
-        String(row[col] ?? '').toLowerCase().includes(term.toLowerCase())
-      )
+      entries.every(([col, vals]) => vals.includes(String(row[col] ?? '')))
     );
   }, [activeData, colFilters]);
+
+  const hasFilters = Object.values(colFilters).some(v => v.length > 0);
 
   if (isLoading) {
     return <div className="flex items-center justify-center py-16"><Spinner size="lg" /></div>;
@@ -698,7 +792,7 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
 
           {/* Data table */}
           <Card padding="none">
-            {/* Filter status bar */}
+            {/* Status bar */}
             {activeData.length > 0 && (
               <div className="flex items-center justify-between px-4 py-2 border-b border-[var(--nts-border-gray)] bg-[var(--nts-bg-pure)]">
                 <span className="text-[11px] text-[var(--nts-medium-gray)]">
@@ -706,7 +800,7 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
                     ? `${filteredData.length.toLocaleString('el-GR')} από ${activeData.length.toLocaleString('el-GR')} εγγραφές`
                     : `${activeData.length.toLocaleString('el-GR')} εγγραφές`}
                 </span>
-                {Object.values(colFilters).some(v => v) && (
+                {hasFilters && (
                   <button
                     onClick={() => setColFilters({})}
                     className="flex items-center gap-1 text-[11px] text-[var(--nts-accent)] hover:underline"
@@ -722,32 +816,33 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
               ) : (
                 <table className="w-full text-sm">
                   <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
-                    {/* Column names */}
                     <tr className="border-b border-[var(--nts-border-gray)] bg-[var(--nts-light-gray)]">
-                      {headers.map(h => (
-                        <th
-                          key={h}
-                          className="px-4 py-2.5 text-left font-semibold text-[var(--nts-charcoal)] whitespace-nowrap text-[12px]"
-                        >
-                          {h}
-                        </th>
-                      ))}
-                    </tr>
-                    {/* Filter inputs */}
-                    <tr className="border-b border-[var(--nts-border-gray)] bg-white">
-                      {headers.map(h => (
-                        <th key={h} className="px-2 py-1.5">
-                          <div className="relative">
-                            <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-[var(--nts-medium-gray)] pointer-events-none" />
-                            <input
-                              value={colFilters[h] ?? ''}
-                              onChange={e => setColFilters(prev => ({ ...prev, [h]: e.target.value }))}
-                              placeholder=""
-                              className="w-full pl-6 pr-2 py-1 text-[11px] rounded border border-[var(--nts-border-gray)] bg-[var(--nts-light-gray)] focus:outline-none focus:border-[var(--nts-accent)] transition-colors min-w-[80px]"
-                            />
-                          </div>
-                        </th>
-                      ))}
+                      {headers.map(h => {
+                        const isFiltered = (colFilters[h]?.length ?? 0) > 0;
+                        return (
+                          <th
+                            key={h}
+                            className="px-3 py-0 text-left font-semibold text-[var(--nts-charcoal)] text-[11px] min-w-[90px]"
+                          >
+                            <button
+                              onClick={(e) => {
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                setOpenFilter(prev => prev?.col === h ? null : { col: h, rect });
+                              }}
+                              className="flex items-start justify-between gap-1 w-full py-2.5 text-left group"
+                            >
+                              <span className="leading-tight whitespace-normal break-words" style={{ maxWidth: 110 }}>
+                                {h}
+                              </span>
+                              <ChevronDown
+                                size={12}
+                                className={`flex-shrink-0 mt-0.5 transition-colors ${isFiltered ? 'text-[var(--nts-accent)]' : 'text-[var(--nts-medium-gray)] opacity-50 group-hover:opacity-100'}`}
+                              />
+                            </button>
+                            {isFiltered && <div className="h-0.5 bg-[var(--nts-accent)] rounded mx-0 -mt-px" />}
+                          </th>
+                        );
+                      })}
                     </tr>
                   </thead>
                   <tbody>
@@ -771,7 +866,7 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
                           return (
                             <td
                               key={h}
-                              className={`px-4 py-2 text-[var(--nts-charcoal)] text-[12px] ${isNum ? 'text-right font-mono' : ''}`}
+                              className={`px-3 py-2 text-[var(--nts-charcoal)] text-[12px] ${isNum ? 'text-center font-mono' : ''}`}
                             >
                               {isBadge ? (
                                 <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold border ${BADGE_STYLES[raw]}`}>
@@ -788,6 +883,33 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
               )}
             </div>
           </Card>
+        </>
+      )}
+
+      {/* Excel-style filter dropdown — rendered outside table to avoid overflow clipping */}
+      {openFilter && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpenFilter(null)} />
+          <div
+            className="fixed z-50"
+            style={{ top: openFilter.rect.bottom + 2, left: Math.min(openFilter.rect.left, window.innerWidth - 230) }}
+          >
+            <ColumnFilterDropdown
+              column={openFilter.col}
+              allValues={columnUniqueValues[openFilter.col] ?? []}
+              selectedValues={colFilters[openFilter.col] ?? []}
+              onApply={(vals) => {
+                setColFilters(prev => {
+                  const next = { ...prev };
+                  if (vals.length === 0) delete next[openFilter.col];
+                  else next[openFilter.col] = vals;
+                  return next;
+                });
+                setOpenFilter(null);
+              }}
+              onClose={() => setOpenFilter(null)}
+            />
+          </div>
         </>
       )}
     </div>

@@ -1,10 +1,14 @@
 {
-  "version": "0.83.0",
-  "previousVersion": "0.82.0",
-  "commitHash": "e71a7e8",
+  "version": "0.84.0",
+  "previousVersion": "0.83.0",
+  "commitHash": "548203e",
   "branch": "main",
-  "buildDate": "2026-03-23T09:50:08.600Z",
+  "buildDate": "2026-03-23T10:11:09.503Z",
   "commits": [
+    {
+      "hash": "548203e",
+      "message": "feat: add column filters and fix decimal display in procurement tables"
+    },
     {
       "hash": "e71a7e8",
       "message": "feat: replace unreadable charts with top-10 horizontal bars and category distribution views"
@@ -60,13 +64,10 @@
     {
       "hash": "7f01c21",
       "message": "Fix API key generation - use direct Firestore write instead of Cloud Function"
-    },
-    {
-      "hash": "806ee46",
-      "message": "Add API Key Management UI for automated imports in Data Import section"
     }
   ],
   "changes": [
+    "[Νέο χαρακτηριστικό] Add column filters and fix decimal display in procurement tables",
     "[Νέο χαρακτηριστικό] Replace unreadable charts with top-10 horizontal bars and category distribution views",
     "[Διόρθωση] ParseNum correctly handles decimal dots vs thousands separators in procurement; add procurement cache invalidation",
     "[Διόρθωση] Procurement import progress bar shows correct % across all sheets",
@@ -75,7 +76,6 @@
     "[Νέο χαρακτηριστικό] Google Ads connector, Meta sync fix, login UI redesign, campaigns improvements",
     "[Διόρθωση] Show file margin in strategy table, remove decorative strategy image",
     "[Νέο χαρακτηριστικό] Marketing page hero layout, 5 σημεία with app screenshots (Commercial Strategy, Data Analysis, Product Intelligence, Content Strategy)",
-    "[Νέο χαρακτηριστικό] Add Procurement module with 7-tab analysis, charts, and UI redesign",
-    "[Νέο χαρακτηριστικό] Prefer file margin over computed in Product Intelligence - use margin from imported file when present, compute from price/cost only as fallback, auto-derive margin_tier from percentage, remove incorrect conv_rate aliases"
+    "[Νέο χαρακτηριστικό] Add Procurement module with 7-tab analysis, charts, and UI redesign"
   ]
 }
