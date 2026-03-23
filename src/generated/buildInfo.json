@@ -1,10 +1,14 @@
 {
-  "version": "0.91.0",
-  "previousVersion": "0.90.0",
-  "commitHash": "08de5da",
+  "version": "0.92.0",
+  "previousVersion": "0.91.0",
+  "commitHash": "62c43a7",
   "branch": "main",
-  "buildDate": "2026-03-23T14:59:57.374Z",
+  "buildDate": "2026-03-23T15:11:26.168Z",
   "commits": [
+    {
+      "hash": "62c43a7",
+      "message": "fix: fuzzy column matching (findCol), parseNum 3-digit dot heuristic, Αξία αποθέματος KPI"
+    },
     {
       "hash": "08de5da",
       "message": "feat: Procurement API Push integration - parseXLSXAllSheets, importProcurement Cloud Function, importData endpoint extension, DataImport UI docs"
@@ -60,13 +64,10 @@
     {
       "hash": "fe4f31d",
       "message": "fix: skip empty header columns in procurement import to avoid Firestore empty field error"
-    },
-    {
-      "hash": "75159aa",
-      "message": "feat: Google Ads connector, Meta sync fix, login UI redesign, campaigns improvements"
     }
   ],
   "changes": [
+    "[Διόρθωση] Fuzzy column matching (findCol), parseNum 3-digit dot heuristic, Αξία αποθέματος KPI",
     "[Νέο χαρακτηριστικό] Procurement API Push integration - parseXLSXAllSheets, importProcurement Cloud Function, importData endpoint extension, DataImport UI docs",
     "[Διόρθωση] Whitespace-nowrap via Tailwind class on td, fix header word-break, remove w-full from table",
     "[Συντήρηση] Add docs/ to .gitignore and remove from tracking",
@@ -75,7 +76,6 @@
     "[Νέο χαρακτηριστικό] Chart toggle button, table pagination (20 rows/page) with page controls",
     "[Διόρθωση] Proportional column widths with fixed table layout, ellipsis for text, per-type alignment",
     "[Νέο χαρακτηριστικό] Excel-style column filters with checkboxes, 2-line headers, centered numeric columns",
-    "[Νέο χαρακτηριστικό] Add column filters and fix decimal display in procurement tables",
-    "[Νέο χαρακτηριστικό] Replace unreadable charts with top-10 horizontal bars and category distribution views"
+    "[Νέο χαρακτηριστικό] Add column filters and fix decimal display in procurement tables"
   ]
 }

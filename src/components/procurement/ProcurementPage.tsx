@@ -129,11 +129,18 @@ function parseNum(v: unknown): number {
   return isNaN(n) ? 0 : n;
 }
 
-/** Returns the first column key whose name contains the keyword (case-insensitive). */
+/** Returns true if the column name is a garbage numeric header (e.g. "4065528.538423248") */
+function isNumericColName(k: string): boolean {
+  return k.trim() !== '' && !isNaN(Number(k.trim()));
+}
+
+/** Returns the first non-numeric column key whose name contains the keyword (case-insensitive). */
 function findCol(rows: Record<string, unknown>[], keyword: string): string {
   if (rows.length === 0) return keyword;
   const kUp = keyword.toUpperCase();
-  return Object.keys(rows[0]).find(k => k.toUpperCase().includes(kUp)) ?? keyword;
+  return Object.keys(rows[0])
+    .filter(k => !isNumericColName(k))
+    .find(k => k.toUpperCase().includes(kUp)) ?? keyword;
 }
 
 function isNumericLike(v: string): boolean {
@@ -233,44 +240,62 @@ function findStatMetricColumn(rows: Record<string, unknown>[], excludedKeys: Set
 
 function getChartData(key: ProcurementSheetType, rows: Record<string, unknown>[]) {
   switch (key) {
-    case 'inventory':
+    case 'inventory': {
+      const stockCol = findCol(rows, 'ΔΙΑΘΕΣΙΜΟ ΥΠΟΛΟΙΠΟ');
+      const evalCol  = findCol(rows, 'ΑΞΙΟΛΟΓΗΣΗ ΕΙΔΟΥΣ');
+      const codeCol  = findCol(rows, 'ΚΩΔΙΚΟΣ');
       return [...rows]
-        .map(r => ({ name: String(r['ΚΩΔΙΚΟΣ'] ?? ''), stock: parseNum(r['ΔΙΑΘΕΣΙΜΟ ΥΠΟΛΟΙΠΟ']), eval: String(r['ΑΞΙΟΛΟΓΗΣΗ ΕΙΔΟΥΣ'] ?? 'C') }))
+        .map(r => ({ name: String(r[codeCol] ?? ''), stock: parseNum(r[stockCol]), eval: String(r[evalCol] ?? 'C') }))
         .filter(r => r.stock > 0)
         .sort((a, b) => b.stock - a.stock)
         .slice(0, TOP_N);
-    case 'costing':
+    }
+    case 'costing': {
+      const primCol = findCol(rows, 'ΠΡΩΤΟΓΕΝΕΣ');
+      const secCol  = findCol(rows, 'ΔΕΥΤΕΡΟΓΕΝΕΣ');
+      const codeCol = findCol(rows, 'ΚΩΔΙΚΟΣ');
       return [...rows]
-        .map(r => ({ name: String(r['ΚΩΔΙΚΟΣ'] ?? ''), primary: parseNum(r['ΠΡΩΤΟΓΕΝΕΣ ΚΟΣΤΟΣ']), secondary: parseNum(r['ΔΕΥΤΕΡΟΓΕΝΕΣ ΚΟΣΤΟΣ']) }))
+        .map(r => ({ name: String(r[codeCol] ?? ''), primary: parseNum(r[primCol]), secondary: parseNum(r[secCol]) }))
         .filter(r => r.primary > 0)
         .sort((a, b) => b.primary - a.primary)
         .slice(0, TOP_N);
+    }
     case 'item_evaluation': {
+      const evalCol = findCol(rows, 'ΑΞΙΟΛΟΓΗΣΗ ΕΙΔΟΥΣ');
       const dist: Record<string, number> = {};
-      rows.forEach(r => { const cat = String(r['ΑΞΙΟΛΟΓΗΣΗ ΕΙΔΟΥΣ'] ?? '').trim() || 'Χωρίς'; dist[cat] = (dist[cat] ?? 0) + 1; });
+      rows.forEach(r => { const cat = String(r[evalCol] ?? '').trim() || 'Χωρίς'; dist[cat] = (dist[cat] ?? 0) + 1; });
       return Object.entries(dist).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
     }
     case 'customer_evaluation': {
+      const evalCol = findCol(rows, 'ΑΞΙΟΛΟΓΗΣΗ');
       const dist: Record<string, number> = {};
-      rows.forEach(r => { const cat = String(r['ΑΞΙΟΛΟΓΗΣΗ'] ?? '').trim() || 'Χωρίς'; dist[cat] = (dist[cat] ?? 0) + 1; });
+      rows.forEach(r => { const cat = String(r[evalCol] ?? '').trim() || 'Χωρίς'; dist[cat] = (dist[cat] ?? 0) + 1; });
       return Object.entries(dist).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
     }
-    case 'pricing_policy':
+    case 'pricing_policy': {
+      const costCol  = findCol(rows, 'ΣΥΝΟΛΙΚΟ ΚΟΣΤΟΣ');
+      const priceCol = findCol(rows, 'ΤΙΜΗ ΠΩΛΗΣΗΣ');
+      const codeCol  = findCol(rows, 'ΚΩΔΙΚΟΣ');
       return [...rows]
-        .map(r => ({ name: String(r['ΚΩΔΙΚΟΣ'] ?? ''), cost: parseNum(r['ΣΥΝΟΛΙΚΟ ΚΟΣΤΟΣ']), price: parseNum(r['ΜΕΣΗ ΤΙΜΗ ΠΩΛΗΣΗΣ']) }))
+        .map(r => ({ name: String(r[codeCol] ?? ''), cost: parseNum(r[costCol]), price: parseNum(r[priceCol]) }))
         .filter(r => r.price > 0)
         .sort((a, b) => b.price - a.price)
         .slice(0, TOP_N);
-    case 'fiscal_year':
+    }
+    case 'fiscal_year': {
+      const turnoverCol = findCol(rows, 'ΤΖΙΡΟΣ');
+      const profitCol   = findCol(rows, 'ΚΕΡΔΟΣ');
+      const codeCol     = findCol(rows, 'ΚΩΔΙΚΟΣ');
       return [...rows]
-        .map(r => ({ name: String(r['ΚΩΔΙΚΟΣ'] ?? ''), turnover: parseNum(r['ΑΠΟΛΟΓΙΣΤΙΚΟΣ ΤΖΙΡΟΣ']), profit: parseNum(r['ΑΠΟΛΟΓΙΣΤΙΚΟ ΚΕΡΔΟΣ']) }))
-        .filter(r => r.turnover > 0)
+        .map(r => ({ name: String(r[codeCol] ?? ''), turnover: parseNum(r[turnoverCol]), profit: parseNum(r[profitCol]) }))
+        .filter(r => r.turnover !== 0)
         .sort((a, b) => b.turnover - a.turnover)
         .slice(0, TOP_N);
+    }
     case 'statistics': {
       if (rows.length === 0) return [];
       const metricKey = findStatMetricColumn(rows, EXCLUDED_KEYS);
-      const allKeys = Object.keys(rows[0]).filter(k => !EXCLUDED_KEYS.has(k));
+      const allKeys = Object.keys(rows[0]).filter(k => !EXCLUDED_KEYS.has(k) && !isNumericColName(k));
       const periodKeys = allKeys.filter(k => k !== metricKey);
       return periodKeys.map(period => {
         const point: Record<string, unknown> = { period };
@@ -617,7 +642,7 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
   const activeData = (data[activeTab] ?? []) as Record<string, unknown>[];
   const headers = useMemo(() => {
     if (activeData.length === 0) return [];
-    const allKeys = Object.keys(activeData[0]).filter(k => !EXCLUDED_KEYS.has(k));
+    const allKeys = Object.keys(activeData[0]).filter(k => !EXCLUDED_KEYS.has(k) && !isNumericColName(k));
     if (activeTab === 'statistics') {
       const metricCol = findStatMetricColumn(activeData as Record<string, unknown>[], EXCLUDED_KEYS);
       return [metricCol, ...allKeys.filter(k => k !== metricCol)];
