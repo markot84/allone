@@ -1,7 +1,8 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import {
   Package, Calculator, Star, Users, FileText, Calendar, BarChart3,
-  Upload, ChevronRight, ArrowLeft, Tag, DollarSign, Search, X, ChevronDown,
+  Upload, ChevronRight, ArrowLeft, Tag, DollarSign, Search, X,
+  ChevronDown, ChevronLeft, EyeOff,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -563,6 +564,10 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
 
   const [colFilters, setColFilters] = useState<Record<string, string[]>>({});
   const [openFilter, setOpenFilter] = useState<{ col: string; rect: DOMRect } | null>(null);
+  const [showChart, setShowChart] = useState(true);
+  const [currentPage, setCurrentPage] = useState(0);
+
+  const PAGE_SIZE = 20;
 
   const activeData = (data[activeTab] ?? []) as Record<string, unknown>[];
   const headers = useMemo(() => {
@@ -575,8 +580,10 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
     return allKeys;
   }, [activeData, activeTab]);
 
-  // Reset filters on tab change
-  useEffect(() => { setColFilters({}); setOpenFilter(null); }, [activeTab]);
+  // Reset on tab change
+  useEffect(() => { setColFilters({}); setOpenFilter(null); setCurrentPage(0); }, [activeTab]);
+  // Reset page on filter change
+  useEffect(() => { setCurrentPage(0); }, [colFilters]);
 
   const columnUniqueValues = useMemo(() => {
     const result: Record<string, string[]> = {};
@@ -599,6 +606,9 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
   }, [activeData, colFilters]);
 
   const hasFilters = Object.values(colFilters).some(v => v.length > 0);
+
+  const totalPages = Math.ceil(filteredData.length / PAGE_SIZE);
+  const pageData = filteredData.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
 
   // Detect column types from data samples for proportional widths
   type ColType = 'badge' | 'number' | 'code' | 'text';
@@ -809,10 +819,22 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
           {/* Chart card */}
           {activeData.length > 0 && (
             <Card padding="lg">
-              <p className="text-[12px] font-semibold text-[var(--nts-medium-gray)] mb-4" style={{ textTransform: 'none' }}>
-                {CHART_TITLES[activeTab]}
-              </p>
-              <ProcurementChart tabKey={activeTab} rows={activeData} />
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-[12px] font-semibold text-[var(--nts-medium-gray)]" style={{ textTransform: 'none' }}>
+                  {CHART_TITLES[activeTab]}
+                </p>
+                <button
+                  onClick={() => setShowChart(v => !v)}
+                  className="flex items-center gap-1.5 text-[11px] text-[var(--nts-medium-gray)] hover:text-[var(--nts-charcoal)] transition-colors"
+                >
+                  {showChart ? (
+                    <><EyeOff size={13} /> Απόκρυψη</>
+                  ) : (
+                    <><BarChart3 size={13} /> Εμφάνιση γραφήματος</>
+                  )}
+                </button>
+              </div>
+              {showChart && <ProcurementChart tabKey={activeTab} rows={activeData} />}
             </Card>
           )}
 
@@ -825,6 +847,7 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
                   {filteredData.length < activeData.length
                     ? `${filteredData.length.toLocaleString('el-GR')} από ${activeData.length.toLocaleString('el-GR')} εγγραφές`
                     : `${activeData.length.toLocaleString('el-GR')} εγγραφές`}
+                  {totalPages > 1 && ` · Σελίδα ${currentPage + 1} από ${totalPages}`}
                 </span>
                 {hasFilters && (
                   <button
@@ -836,7 +859,7 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
                 )}
               </div>
             )}
-            <div className="overflow-x-auto" style={{ maxHeight: 520, overflowY: 'auto' }}>
+            <div className="overflow-x-auto">
               {activeData.length === 0 ? (
                 <div className="p-8 text-center text-[var(--nts-medium-gray)]">Καμία εγγραφή σε αυτή την καρτέλα.</div>
               ) : (
@@ -883,7 +906,7 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
                           Κανένα αποτέλεσμα για τα επιλεγμένα φίλτρα.
                         </td>
                       </tr>
-                    ) : filteredData.map((row, idx) => (
+                    ) : pageData.map((row, idx) => (
                       <tr
                         key={(row as { id?: string }).id ?? idx}
                         className={`border-b border-[var(--nts-border-gray)] hover:bg-[var(--nts-accent)]/5 transition-colors ${
@@ -922,6 +945,48 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
                 </table>
               )}
             </div>
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between px-4 py-2.5 border-t border-[var(--nts-border-gray)] bg-[var(--nts-bg-pure)]">
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
+                  disabled={currentPage === 0}
+                  className="flex items-center gap-1 px-3 py-1.5 text-[11px] font-medium border border-[var(--nts-border-gray)] rounded hover:bg-[var(--nts-light-gray)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  <ChevronLeft size={13} /> Προηγούμενη
+                </button>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+                    let page = i;
+                    if (totalPages > 7) {
+                      const half = 3;
+                      const start = Math.max(0, Math.min(currentPage - half, totalPages - 7));
+                      page = start + i;
+                    }
+                    return (
+                      <button
+                        key={page}
+                        onClick={() => setCurrentPage(page)}
+                        className={`min-w-[28px] h-7 px-2 text-[11px] font-medium rounded transition-colors ${
+                          page === currentPage
+                            ? 'bg-[var(--nts-accent)] text-white'
+                            : 'hover:bg-[var(--nts-light-gray)] text-[var(--nts-medium-gray)]'
+                        }`}
+                      >
+                        {page + 1}
+                      </button>
+                    );
+                  })}
+                </div>
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
+                  disabled={currentPage === totalPages - 1}
+                  className="flex items-center gap-1 px-3 py-1.5 text-[11px] font-medium border border-[var(--nts-border-gray)] rounded hover:bg-[var(--nts-light-gray)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Επόμενη <ChevronRight size={13} />
+                </button>
+              </div>
+            )}
           </Card>
         </>
       )}

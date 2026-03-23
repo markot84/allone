@@ -1,10 +1,14 @@
 {
-  "version": "0.85.0",
-  "previousVersion": "0.84.0",
-  "commitHash": "21e721a",
+  "version": "0.86.0",
+  "previousVersion": "0.85.0",
+  "commitHash": "2498429",
   "branch": "main",
-  "buildDate": "2026-03-23T10:23:36.544Z",
+  "buildDate": "2026-03-23T10:31:09.116Z",
   "commits": [
+    {
+      "hash": "2498429",
+      "message": "fix: proportional column widths with fixed table layout, ellipsis for text, per-type alignment"
+    },
     {
       "hash": "21e721a",
       "message": "feat: Excel-style column filters with checkboxes, 2-line headers, centered numeric columns"
@@ -60,13 +64,10 @@
     {
       "hash": "05b9866",
       "message": "feat: add Google Ads and Meta API connectors with OAuth, scheduled sync, and UI"
-    },
-    {
-      "hash": "8a47c81",
-      "message": "Fix campaigns table responsive - use table-auto with whitespace-nowrap to prevent column overlap"
     }
   ],
   "changes": [
+    "[Διόρθωση] Proportional column widths with fixed table layout, ellipsis for text, per-type alignment",
     "[Νέο χαρακτηριστικό] Excel-style column filters with checkboxes, 2-line headers, centered numeric columns",
     "[Νέο χαρακτηριστικό] Add column filters and fix decimal display in procurement tables",
     "[Νέο χαρακτηριστικό] Replace unreadable charts with top-10 horizontal bars and category distribution views",
@@ -75,7 +76,6 @@
     "[Νέο χαρακτηριστικό] Show last import date per type in DataImport and ConnectorsPanel",
     "[Διόρθωση] Skip empty header columns in procurement import to avoid Firestore empty field error",
     "[Νέο χαρακτηριστικό] Google Ads connector, Meta sync fix, login UI redesign, campaigns improvements",
-    "[Διόρθωση] Show file margin in strategy table, remove decorative strategy image",
-    "[Νέο χαρακτηριστικό] Marketing page hero layout, 5 σημεία with app screenshots (Commercial Strategy, Data Analysis, Product Intelligence, Content Strategy)"
+    "[Διόρθωση] Show file margin in strategy table, remove decorative strategy image"
   ]
 }
