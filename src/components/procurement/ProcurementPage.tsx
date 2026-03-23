@@ -600,6 +600,32 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
 
   const hasFilters = Object.values(colFilters).some(v => v.length > 0);
 
+  // Detect column types from data samples for proportional widths
+  type ColType = 'badge' | 'number' | 'code' | 'text';
+  const columnTypes = useMemo((): Record<string, ColType> => {
+    if (activeData.length === 0) return {};
+    return Object.fromEntries(headers.map(h => {
+      if (BADGE_KEYS.has(h)) return [h, 'badge' as ColType];
+      const hUp = h.toUpperCase();
+      if (hUp.match(/^(ΚΩΔΙΚΟΣ|ΚΩΔ\.?|ΑΑ|ΑΡ\.|ΑΡΙΘ|ID)$/)) return [h, 'code' as ColType];
+      if (hUp.includes('ΚΩΔΙΚΟΣ') && hUp.length < 18) return [h, 'code' as ColType];
+      const samples = activeData.slice(0, 30).map(r => String(r[h] ?? '')).filter(Boolean);
+      const numRatio = samples.length ? samples.filter(v => isNumericLike(v)).length / samples.length : 0;
+      if (numRatio >= 0.7) return [h, 'number' as ColType];
+      return [h, 'text' as ColType];
+    }));
+  }, [activeData, headers]);
+
+  function colWidth(h: string): number {
+    const t = columnTypes[h] ?? 'text';
+    if (t === 'badge') return 88;
+    if (t === 'code') return 108;
+    if (t === 'number') return 100;
+    // text: scale by header length
+    const len = h.length;
+    return len <= 12 ? 130 : len <= 20 ? 160 : 200;
+  }
+
   if (isLoading) {
     return <div className="flex items-center justify-center py-16"><Spinner size="lg" /></div>;
   }
@@ -814,32 +840,37 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
               {activeData.length === 0 ? (
                 <div className="p-8 text-center text-[var(--nts-medium-gray)]">Καμία εγγραφή σε αυτή την καρτέλα.</div>
               ) : (
-                <table className="w-full text-sm">
+                <table style={{ tableLayout: 'fixed', width: Math.max(headers.reduce((s, h) => s + colWidth(h), 0), 600) }} className="text-sm">
+                  <colgroup>
+                    {headers.map(h => <col key={h} style={{ width: colWidth(h) }} />)}
+                  </colgroup>
                   <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                     <tr className="border-b border-[var(--nts-border-gray)] bg-[var(--nts-light-gray)]">
                       {headers.map(h => {
                         const isFiltered = (colFilters[h]?.length ?? 0) > 0;
+                        const ct = columnTypes[h] ?? 'text';
+                        const align = ct === 'text' || ct === 'code' ? 'left' : 'center';
                         return (
                           <th
                             key={h}
-                            className="px-3 py-0 text-left font-semibold text-[var(--nts-charcoal)] text-[11px] min-w-[90px]"
+                            className={`px-3 py-0 font-semibold text-[var(--nts-charcoal)] text-[11px] text-${align}`}
                           >
                             <button
                               onClick={(e) => {
                                 const rect = e.currentTarget.getBoundingClientRect();
                                 setOpenFilter(prev => prev?.col === h ? null : { col: h, rect });
                               }}
-                              className="flex items-start justify-between gap-1 w-full py-2.5 text-left group"
+                              className={`flex items-start gap-1 w-full py-2.5 group ${align === 'center' ? 'justify-center' : 'justify-between'}`}
                             >
-                              <span className="leading-tight whitespace-normal break-words" style={{ maxWidth: 110 }}>
+                              <span className="leading-tight whitespace-normal break-words line-clamp-2">
                                 {h}
                               </span>
                               <ChevronDown
-                                size={12}
-                                className={`flex-shrink-0 mt-0.5 transition-colors ${isFiltered ? 'text-[var(--nts-accent)]' : 'text-[var(--nts-medium-gray)] opacity-50 group-hover:opacity-100'}`}
+                                size={11}
+                                className={`flex-shrink-0 mt-0.5 transition-colors ${isFiltered ? 'text-[var(--nts-accent)]' : 'text-[var(--nts-medium-gray)] opacity-40 group-hover:opacity-100'}`}
                               />
                             </button>
-                            {isFiltered && <div className="h-0.5 bg-[var(--nts-accent)] rounded mx-0 -mt-px" />}
+                            {isFiltered && <div className="h-0.5 bg-[var(--nts-accent)] rounded -mt-px" />}
                           </th>
                         );
                       })}
@@ -863,10 +894,19 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
                           const raw = String(row[h] ?? '');
                           const isBadge = BADGE_KEYS.has(h) && raw in BADGE_STYLES;
                           const isNum = !isBadge && isNumericLike(raw);
+                          const ct = columnTypes[h] ?? 'text';
+                          const isText = ct === 'text';
                           return (
                             <td
                               key={h}
-                              className={`px-3 py-2 text-[var(--nts-charcoal)] text-[12px] ${isNum ? 'text-center font-mono' : ''}`}
+                              title={isText && raw.length > 20 ? raw : undefined}
+                              className={`px-3 py-2 text-[var(--nts-charcoal)] text-[12px] ${
+                                isBadge ? 'text-center' :
+                                isNum ? 'text-center font-mono tabular-nums' :
+                                ct === 'code' ? 'text-left font-mono' :
+                                'text-left'
+                              }`}
+                              style={isText ? { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } : undefined}
                             >
                               {isBadge ? (
                                 <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold border ${BADGE_STYLES[raw]}`}>

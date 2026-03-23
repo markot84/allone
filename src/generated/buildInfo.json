@@ -1,10 +1,14 @@
 {
-  "version": "0.84.0",
-  "previousVersion": "0.83.0",
-  "commitHash": "548203e",
+  "version": "0.85.0",
+  "previousVersion": "0.84.0",
+  "commitHash": "21e721a",
   "branch": "main",
-  "buildDate": "2026-03-23T10:11:09.503Z",
+  "buildDate": "2026-03-23T10:23:36.544Z",
   "commits": [
+    {
+      "hash": "21e721a",
+      "message": "feat: Excel-style column filters with checkboxes, 2-line headers, centered numeric columns"
+    },
     {
       "hash": "548203e",
       "message": "feat: add column filters and fix decimal display in procurement tables"
@@ -60,13 +64,10 @@
     {
       "hash": "8a47c81",
       "message": "Fix campaigns table responsive - use table-auto with whitespace-nowrap to prevent column overlap"
-    },
-    {
-      "hash": "7f01c21",
-      "message": "Fix API key generation - use direct Firestore write instead of Cloud Function"
     }
   ],
   "changes": [
+    "[Νέο χαρακτηριστικό] Excel-style column filters with checkboxes, 2-line headers, centered numeric columns",
     "[Νέο χαρακτηριστικό] Add column filters and fix decimal display in procurement tables",
     "[Νέο χαρακτηριστικό] Replace unreadable charts with top-10 horizontal bars and category distribution views",
     "[Διόρθωση] ParseNum correctly handles decimal dots vs thousands separators in procurement; add procurement cache invalidation",
@@ -75,7 +76,6 @@
     "[Διόρθωση] Skip empty header columns in procurement import to avoid Firestore empty field error",
     "[Νέο χαρακτηριστικό] Google Ads connector, Meta sync fix, login UI redesign, campaigns improvements",
     "[Διόρθωση] Show file margin in strategy table, remove decorative strategy image",
-    "[Νέο χαρακτηριστικό] Marketing page hero layout, 5 σημεία with app screenshots (Commercial Strategy, Data Analysis, Product Intelligence, Content Strategy)",
-    "[Νέο χαρακτηριστικό] Add Procurement module with 7-tab analysis, charts, and UI redesign"
+    "[Νέο χαρακτηριστικό] Marketing page hero layout, 5 σημεία with app screenshots (Commercial Strategy, Data Analysis, Product Intelligence, Content Strategy)"
   ]
 }
