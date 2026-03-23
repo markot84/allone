@@ -1,10 +1,14 @@
 {
-  "version": "0.82.0",
-  "previousVersion": "0.81.0",
-  "commitHash": "77bac72",
+  "version": "0.83.0",
+  "previousVersion": "0.82.0",
+  "commitHash": "e71a7e8",
   "branch": "main",
-  "buildDate": "2026-03-23T09:47:56.036Z",
+  "buildDate": "2026-03-23T09:50:08.600Z",
   "commits": [
+    {
+      "hash": "e71a7e8",
+      "message": "feat: replace unreadable charts with top-10 horizontal bars and category distribution views"
+    },
     {
       "hash": "77bac72",
       "message": "fix: parseNum correctly handles decimal dots vs thousands separators in procurement; add procurement cache invalidation"
@@ -60,13 +64,10 @@
     {
       "hash": "806ee46",
       "message": "Add API Key Management UI for automated imports in Data Import section"
-    },
-    {
-      "hash": "ddc96c6",
-      "message": "Add Cloud Functions: HTTP import endpoint + API key auth for automated daily imports"
     }
   ],
   "changes": [
+    "[Νέο χαρακτηριστικό] Replace unreadable charts with top-10 horizontal bars and category distribution views",
     "[Διόρθωση] ParseNum correctly handles decimal dots vs thousands separators in procurement; add procurement cache invalidation",
     "[Διόρθωση] Procurement import progress bar shows correct % across all sheets",
     "[Νέο χαρακτηριστικό] Show last import date per type in DataImport and ConnectorsPanel",
@@ -75,7 +76,6 @@
     "[Διόρθωση] Show file margin in strategy table, remove decorative strategy image",
     "[Νέο χαρακτηριστικό] Marketing page hero layout, 5 σημεία with app screenshots (Commercial Strategy, Data Analysis, Product Intelligence, Content Strategy)",
     "[Νέο χαρακτηριστικό] Add Procurement module with 7-tab analysis, charts, and UI redesign",
-    "[Νέο χαρακτηριστικό] Prefer file margin over computed in Product Intelligence - use margin from imported file when present, compute from price/cost only as fallback, auto-derive margin_tier from percentage, remove incorrect conv_rate aliases",
-    "[Διόρθωση] Lazy db init in connectors to fix deploy"
+    "[Νέο χαρακτηριστικό] Prefer file margin over computed in Product Intelligence - use margin from imported file when present, compute from price/cost only as fallback, auto-derive margin_tier from percentage, remove incorrect conv_rate aliases"
   ]
 }

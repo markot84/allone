@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import {
   Package, Calculator, Star, Users, FileText, Calendar, BarChart3,
-  Upload, ChevronRight, ArrowLeft, Tag, DollarSign,
+  Upload, ChevronRight, ArrowLeft, Tag, DollarSign, Search, X,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -118,6 +118,14 @@ function isNumericLike(v: string): boolean {
   if (!v.trim()) return false;
   const cleaned = v.replace(/\s/g, '').replace(/\./g, '').replace(',', '.');
   return !isNaN(parseFloat(cleaned)) && cleaned !== '' && isFinite(Number(cleaned));
+}
+
+function formatNumCell(raw: string): string {
+  const n = parseNum(raw);
+  if (Math.abs(n - Math.round(n)) < 1e-9) {
+    return Math.round(n).toLocaleString('el-GR');
+  }
+  return n.toLocaleString('el-GR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
 function getSummary(key: ProcurementSheetType, rows: Record<string, unknown>[]) {
@@ -472,6 +480,8 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
     count: data[key]?.length ?? 0,
   }));
 
+  const [colFilters, setColFilters] = useState<Record<string, string>>({});
+
   const activeData = (data[activeTab] ?? []) as Record<string, unknown>[];
   const headers = useMemo(() => {
     if (activeData.length === 0) return [];
@@ -482,6 +492,19 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
     }
     return allKeys;
   }, [activeData, activeTab]);
+
+  // Reset filters on tab change
+  useEffect(() => { setColFilters({}); }, [activeTab]);
+
+  const filteredData = useMemo(() => {
+    const entries = Object.entries(colFilters).filter(([, v]) => v.trim() !== '');
+    if (entries.length === 0) return activeData;
+    return activeData.filter(row =>
+      entries.every(([col, term]) =>
+        String(row[col] ?? '').toLowerCase().includes(term.toLowerCase())
+      )
+    );
+  }, [activeData, colFilters]);
 
   if (isLoading) {
     return <div className="flex items-center justify-center py-16"><Spinner size="lg" /></div>;
@@ -675,25 +698,66 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
 
           {/* Data table */}
           <Card padding="none">
+            {/* Filter status bar */}
+            {activeData.length > 0 && (
+              <div className="flex items-center justify-between px-4 py-2 border-b border-[var(--nts-border-gray)] bg-[var(--nts-bg-pure)]">
+                <span className="text-[11px] text-[var(--nts-medium-gray)]">
+                  {filteredData.length < activeData.length
+                    ? `${filteredData.length.toLocaleString('el-GR')} από ${activeData.length.toLocaleString('el-GR')} εγγραφές`
+                    : `${activeData.length.toLocaleString('el-GR')} εγγραφές`}
+                </span>
+                {Object.values(colFilters).some(v => v) && (
+                  <button
+                    onClick={() => setColFilters({})}
+                    className="flex items-center gap-1 text-[11px] text-[var(--nts-accent)] hover:underline"
+                  >
+                    <X size={11} /> Καθαρισμός φίλτρων
+                  </button>
+                )}
+              </div>
+            )}
             <div className="overflow-x-auto" style={{ maxHeight: 520, overflowY: 'auto' }}>
               {activeData.length === 0 ? (
                 <div className="p-8 text-center text-[var(--nts-medium-gray)]">Καμία εγγραφή σε αυτή την καρτέλα.</div>
               ) : (
                 <table className="w-full text-sm">
                   <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+                    {/* Column names */}
                     <tr className="border-b border-[var(--nts-border-gray)] bg-[var(--nts-light-gray)]">
                       {headers.map(h => (
                         <th
                           key={h}
-                          className="px-4 py-3 text-left font-semibold text-[var(--nts-charcoal)] whitespace-nowrap text-[12px]"
+                          className="px-4 py-2.5 text-left font-semibold text-[var(--nts-charcoal)] whitespace-nowrap text-[12px]"
                         >
                           {h}
                         </th>
                       ))}
                     </tr>
+                    {/* Filter inputs */}
+                    <tr className="border-b border-[var(--nts-border-gray)] bg-white">
+                      {headers.map(h => (
+                        <th key={h} className="px-2 py-1.5">
+                          <div className="relative">
+                            <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-[var(--nts-medium-gray)] pointer-events-none" />
+                            <input
+                              value={colFilters[h] ?? ''}
+                              onChange={e => setColFilters(prev => ({ ...prev, [h]: e.target.value }))}
+                              placeholder=""
+                              className="w-full pl-6 pr-2 py-1 text-[11px] rounded border border-[var(--nts-border-gray)] bg-[var(--nts-light-gray)] focus:outline-none focus:border-[var(--nts-accent)] transition-colors min-w-[80px]"
+                            />
+                          </div>
+                        </th>
+                      ))}
+                    </tr>
                   </thead>
                   <tbody>
-                    {activeData.map((row, idx) => (
+                    {filteredData.length === 0 ? (
+                      <tr>
+                        <td colSpan={headers.length} className="px-4 py-8 text-center text-[11px] text-[var(--nts-medium-gray)]">
+                          Κανένα αποτέλεσμα για τα επιλεγμένα φίλτρα.
+                        </td>
+                      </tr>
+                    ) : filteredData.map((row, idx) => (
                       <tr
                         key={(row as { id?: string }).id ?? idx}
                         className={`border-b border-[var(--nts-border-gray)] hover:bg-[var(--nts-accent)]/5 transition-colors ${
@@ -707,13 +771,13 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
                           return (
                             <td
                               key={h}
-                              className={`px-4 py-2.5 text-[var(--nts-charcoal)] ${isNum ? 'text-right font-mono' : ''}`}
+                              className={`px-4 py-2 text-[var(--nts-charcoal)] text-[12px] ${isNum ? 'text-right font-mono' : ''}`}
                             >
                               {isBadge ? (
                                 <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold border ${BADGE_STYLES[raw]}`}>
                                   {raw}
                                 </span>
-                              ) : raw}
+                              ) : isNum ? formatNumCell(raw) : raw}
                             </td>
                           );
                         })}
