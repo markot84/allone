@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { callGemini } from './geminiProxy';
 import { CONTENT_SUGGESTIONS_SYSTEM_PROMPT, buildContentSuggestionsUserPrompt, type StrategyContext } from '../data/contentSuggestionsPrompt';
 import { strategyContentMap } from '../data/mockContent';
 import { scenarios } from '../data/mockScenarios';
@@ -126,21 +126,14 @@ export async function generateContentSuggestions(
   };
 
   try {
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
-    if (!apiKey) throw new Error('VITE_GEMINI_API_KEY is not set');
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
-      model: MODEL_NAME,
-      systemInstruction: CONTENT_SUGGESTIONS_SYSTEM_PROMPT,
-      generationConfig: {
-        temperature: 0,
-      },
-    });
-
     const userPrompt = buildContentSuggestionsUserPrompt(ctx);
 
-    const result = await model.generateContent(userPrompt);
-    const text = result.response.text();
+    const text = await callGemini({
+      systemPrompt: CONTENT_SUGGESTIONS_SYSTEM_PROMPT,
+      userPrompt,
+      model: MODEL_NAME,
+      temperature: 0,
+    });
 
     if (!text) {
       return { actions: getFallbackSuggestions(scenarioId, scenarioName), directions: [], brief: '' };

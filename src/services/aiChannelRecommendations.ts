@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { callGemini } from './geminiProxy';
 import {
   CHANNEL_RECOMMENDATIONS_SYSTEM_PROMPT,
   buildChannelRecommendationsUserPrompt,
@@ -10,7 +10,6 @@ import type { ChannelRecommendation, BudgetAction } from '../types';
 import type { Scenario } from '../types';
 import type { RFMSegment } from '../types';
 
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
 const MODEL_NAME = 'gemini-2.5-flash';
 
 function parseAIResponse(text: string): ChannelRecommendation | null {
@@ -82,16 +81,6 @@ export async function generateChannelRecommendations(
   const { scenario, segment, fitLevel, brandContext, segmentFitList, totalBudget, campaignPerformance, context } = params;
 
   try {
-    if (!GEMINI_API_KEY) throw new Error('VITE_GEMINI_API_KEY is not set');
-    const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({
-      model: MODEL_NAME,
-      systemInstruction: CHANNEL_RECOMMENDATIONS_SYSTEM_PROMPT,
-      generationConfig: {
-        temperature: 0,
-      },
-    });
-
     const userPrompt = buildChannelRecommendationsUserPrompt({
       scenarioName: scenario.name,
       scenarioDescription: scenario.description || '',
@@ -109,8 +98,12 @@ export async function generateChannelRecommendations(
       context,
     });
 
-    const result = await model.generateContent(userPrompt);
-    const text = result.response.text();
+    const text = await callGemini({
+      systemPrompt: CHANNEL_RECOMMENDATIONS_SYSTEM_PROMPT,
+      userPrompt,
+      model: MODEL_NAME,
+      temperature: 0,
+    });
 
     if (!text) return null;
 

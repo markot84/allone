@@ -1,10 +1,18 @@
 {
-  "version": "0.93.0",
-  "previousVersion": "0.92.0",
-  "commitHash": "06e587b",
+  "version": "0.94.0",
+  "previousVersion": "0.93.0",
+  "commitHash": "85a0083",
   "branch": "main",
-  "buildDate": "2026-03-23T15:16:49.928Z",
+  "buildDate": "2026-03-23T18:05:47.901Z",
   "commits": [
+    {
+      "hash": "85a0083",
+      "message": "chore: move internal .md docs to private docs/ folder (gitignored)"
+    },
+    {
+      "hash": "9ac8757",
+      "message": "fix: fiscal year totals from numeric column names, stock value = cost×qty calc"
+    },
     {
       "hash": "06e587b",
       "message": "fix: filter numeric column names (isNumericColName), fuzzy getChartData, clean statistics cols"
@@ -56,17 +64,11 @@
     {
       "hash": "77bac72",
       "message": "fix: parseNum correctly handles decimal dots vs thousands separators in procurement; add procurement cache invalidation"
-    },
-    {
-      "hash": "2330684",
-      "message": "fix: procurement import progress bar shows correct % across all sheets"
-    },
-    {
-      "hash": "640073e",
-      "message": "feat: show last import date per type in DataImport and ConnectorsPanel"
     }
   ],
   "changes": [
+    "[Συντήρηση] Move internal .md docs to private docs/ folder (gitignored)",
+    "[Διόρθωση] Fiscal year totals from numeric column names, stock value = cost×qty calc",
     "[Διόρθωση] Filter numeric column names (isNumericColName), fuzzy getChartData, clean statistics cols",
     "[Διόρθωση] Fuzzy column matching (findCol), parseNum 3-digit dot heuristic, Αξία αποθέματος KPI",
     "[Νέο χαρακτηριστικό] Procurement API Push integration - parseXLSXAllSheets, importProcurement Cloud Function, importData endpoint extension, DataImport UI docs",
@@ -74,8 +76,6 @@
     "[Συντήρηση] Add docs/ to .gitignore and remove from tracking",
     "[Συντήρηση] Remove unused colWidth function",
     "[Διόρθωση] Auto-fit column widths, whitespace-nowrap on data cells, max-width+ellipsis on text",
-    "[Νέο χαρακτηριστικό] Chart toggle button, table pagination (20 rows/page) with page controls",
-    "[Διόρθωση] Proportional column widths with fixed table layout, ellipsis for text, per-type alignment",
-    "[Νέο χαρακτηριστικό] Excel-style column filters with checkboxes, 2-line headers, centered numeric columns"
+    "[Νέο χαρακτηριστικό] Chart toggle button, table pagination (20 rows/page) with page controls"
   ]
 }

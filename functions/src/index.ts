@@ -3,6 +3,10 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { onRequest } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { logger } from 'firebase-functions/v2';
+import { defineSecret } from 'firebase-functions/params';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+
+const GEMINI_SECRET = defineSecret('GEMINI_API_KEY');
 import Busboy from 'busboy';
 import { parseCSV, parseXLSXBuffer, parseXLSXAllSheets, csvToObjects } from './parseFile';
 import { validateProduct, type ProductData } from './validateProduct';
@@ -772,5 +776,68 @@ export const scheduledSync = onSchedule(
     }
 
     logger.info('[ScheduledSync] Daily sync completed');
+  }
+);
+
+/**
+ * Gemini Proxy
+ * POST /geminiProxy
+ * Headers: Authorization: Bearer {FIREBASE_ID_TOKEN}
+ * Body: { systemPrompt: string, userPrompt: string, model?: string, temperature?: number }
+ * Returns: { text: string }
+ *
+ * The API key never leaves the server — stored as Firebase Secret.
+ */
+export const geminiProxy = onRequest(
+  { region: 'europe-west1', secrets: [GEMINI_SECRET], cors: true },
+  async (req, res) => {
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'Method not allowed' });
+      return;
+    }
+
+    // Verify Firebase ID token
+    const authHeader = req.headers.authorization || '';
+    if (!authHeader.startsWith('Bearer ')) {
+      res.status(401).json({ error: 'Missing Authorization header' });
+      return;
+    }
+    const idToken = authHeader.slice(7);
+    try {
+      await admin.auth().verifyIdToken(idToken);
+    } catch {
+      res.status(401).json({ error: 'Invalid or expired token' });
+      return;
+    }
+
+    const { systemPrompt, userPrompt, model = 'gemini-2.5-flash', temperature = 0 } = req.body as {
+      systemPrompt?: string;
+      userPrompt?: string;
+      model?: string;
+      temperature?: number;
+    };
+
+    if (!userPrompt) {
+      res.status(400).json({ error: 'Missing userPrompt' });
+      return;
+    }
+
+    try {
+      const apiKey = GEMINI_SECRET.value();
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const geminiModel = genAI.getGenerativeModel({
+        model,
+        ...(systemPrompt ? { systemInstruction: systemPrompt } : {}),
+        generationConfig: { temperature },
+      });
+
+      const result = await geminiModel.generateContent(userPrompt);
+      const text = result.response.text();
+      res.status(200).json({ text });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error('[geminiProxy] Gemini error:', message);
+      res.status(500).json({ error: `Gemini request failed: ${message}` });
+    }
   }
 );
