@@ -106,13 +106,34 @@ function parseNum(v: unknown): number {
   const s = String(v).trim().replace(/\s/g, '');
   if (!s) return 0;
   if (s.includes(',')) {
-    // Greek/European format: dots = thousands separators, comma = decimal
+    // Greek/European format: dots = thousands, comma = decimal  (e.g. "1.234,56")
     const n = parseFloat(s.replace(/\./g, '').replace(',', '.'));
     return isNaN(n) ? 0 : n;
   }
-  // Standard format: dot = decimal point
+  const dots = (s.match(/\./g) ?? []).length;
+  if (dots > 1) {
+    // Multiple dots → all thousands separators (e.g. "1.234.567")
+    const n = parseFloat(s.replace(/\./g, ''));
+    return isNaN(n) ? 0 : n;
+  }
+  if (dots === 1) {
+    const afterDot = s.split('.')[1] ?? '';
+    if (afterDot.length === 3) {
+      // Exactly 3 digits after dot → Greek thousands (e.g. "4.332" = 4332, "1.000" = 1000)
+      const n = parseFloat(s.replace(/\./g, ''));
+      return isNaN(n) ? 0 : n;
+    }
+  }
+  // Standard decimal (e.g. "4.33", "65427.42")
   const n = parseFloat(s);
   return isNaN(n) ? 0 : n;
+}
+
+/** Returns the first column key whose name contains the keyword (case-insensitive). */
+function findCol(rows: Record<string, unknown>[], keyword: string): string {
+  if (rows.length === 0) return keyword;
+  const kUp = keyword.toUpperCase();
+  return Object.keys(rows[0]).find(k => k.toUpperCase().includes(kUp)) ?? keyword;
 }
 
 function isNumericLike(v: string): boolean {
@@ -132,38 +153,53 @@ function formatNumCell(raw: string): string {
 function getSummary(key: ProcurementSheetType, rows: Record<string, unknown>[]) {
   const count = rows.length;
   if (count === 0) return { count, primary: '—', secondary: '' };
+  const fmt0 = (n: number) => n.toLocaleString('el-GR', { maximumFractionDigits: 0 });
   switch (key) {
     case 'inventory': {
-      const sumStock = rows.reduce((s, r) => s + parseNum(r['ΔΙΑΘΕΣΙΜΟ ΥΠΟΛΟΙΠΟ']), 0);
-      const toRefill = rows.filter(r => parseNum(r['ΠΟΣΟΤΗΤΑ ΑΝΑΤΡΟΦΟΔΟΣΙΑΣ']) > 0).length;
-      return { count, primary: Math.round(sumStock).toLocaleString('el-GR'), secondary: toRefill > 0 ? `${toRefill} SKU σε ανατροφοδότηση` : 'Φυσιολογικά επίπεδα' };
+      const stockCol = findCol(rows, 'ΔΙΑΘΕΣΙΜΟ ΥΠΟΛΟΙΠΟ');
+      const refillCol = findCol(rows, 'ΑΝΑΤΡΟΦΟΔΟΣΙΑ');
+      const valueCol = findCol(rows, 'ΑΞΙΑ');
+      const sumStock = rows.reduce((s, r) => s + parseNum(r[stockCol]), 0);
+      const sumValue = rows.reduce((s, r) => s + parseNum(r[valueCol]), 0);
+      const toRefill = rows.filter(r => parseNum(r[refillCol]) > 0).length;
+      const secParts = [];
+      if (toRefill > 0) secParts.push(`${toRefill} SKU σε ανατροφοδότηση`);
+      if (sumValue > 0) secParts.push(`Αξία: €${fmt0(sumValue)}`);
+      return { count, primary: fmt0(sumStock), secondary: secParts.join(' · ') || 'Φυσιολογικά επίπεδα' };
     }
     case 'costing': {
-      const costs = rows.map(r => parseNum(r['ΠΡΩΤΟΓΕΝΕΣ ΚΟΣΤΟΣ'])).filter(Boolean);
+      const costCol = findCol(rows, 'ΠΡΩΤΟΓΕΝΕΣ');
+      const costs = rows.map(r => parseNum(r[costCol])).filter(Boolean);
       const avg = costs.length ? costs.reduce((a, b) => a + b, 0) / costs.length : 0;
-      return { count, primary: `€${avg.toFixed(2)}`, secondary: 'Μέσο πρωτογενές κόστος' };
+      return { count, primary: `€${avg.toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, secondary: 'Μέσο πρωτογενές κόστος' };
     }
     case 'item_evaluation': {
-      const scores = rows.map(r => parseNum(r['ΒΑΘΜΟΛΟΓΙΑ'])).filter(Boolean);
+      const scoreCol = findCol(rows, 'ΒΑΘΜΟΛΟΓΙΑ');
+      const scores = rows.map(r => parseNum(r[scoreCol])).filter(Boolean);
       const avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
       return { count, primary: avg.toFixed(1), secondary: 'Μέση βαθμολογία ειδών' };
     }
     case 'customer_evaluation': {
-      const scores = rows.map(r => parseNum(r['ΒΑΘΜΟΛΟΓΙΑ'])).filter(Boolean);
+      const scoreCol = findCol(rows, 'ΒΑΘΜΟΛΟΓΙΑ');
+      const evalCol = findCol(rows, 'ΑΞΙΟΛΟΓΗΣΗ');
+      const scores = rows.map(r => parseNum(r[scoreCol])).filter(Boolean);
       const avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
-      const vip = rows.filter(r => String(r['ΑΞΙΟΛΟΓΗΣΗ'] ?? '').toUpperCase() === 'VIP').length;
+      const vip = rows.filter(r => String(r[evalCol] ?? '').toUpperCase() === 'VIP').length;
       return { count, primary: avg.toFixed(1), secondary: vip > 0 ? `${vip} VIP πελάτες` : 'Μέση βαθμολογία' };
     }
     case 'pricing_policy': {
-      const prices = rows.map(r => parseNum(r['ΜΕΣΗ ΤΙΜΗ ΠΩΛΗΣΗΣ'])).filter(Boolean);
+      const priceCol = findCol(rows, 'ΤΙΜΗ ΠΩΛΗΣΗΣ');
+      const prices = rows.map(r => parseNum(r[priceCol])).filter(Boolean);
       const avg = prices.length ? prices.reduce((a, b) => a + b, 0) / prices.length : 0;
-      return { count, primary: `€${avg.toFixed(2)}`, secondary: 'Μέση τιμή πώλησης' };
+      return { count, primary: `€${avg.toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, secondary: 'Μέση τιμή πώλησης' };
     }
     case 'fiscal_year': {
-      const turnover = rows.reduce((s, r) => s + parseNum(r['ΑΠΟΛΟΓΙΣΤΙΚΟΣ ΤΖΙΡΟΣ']), 0);
-      const profit = rows.reduce((s, r) => s + parseNum(r['ΑΠΟΛΟΓΙΣΤΙΚΟ ΚΕΡΔΟΣ']), 0);
+      const turnoverCol = findCol(rows, 'ΤΖΙΡΟΣ');
+      const profitCol = findCol(rows, 'ΚΕΡΔΟΣ');
+      const turnover = rows.reduce((s, r) => s + parseNum(r[turnoverCol]), 0);
+      const profit = rows.reduce((s, r) => s + parseNum(r[profitCol]), 0);
       const margin = turnover > 0 ? ((profit / turnover) * 100).toFixed(1) : '0';
-      return { count, primary: `€${turnover.toLocaleString('el-GR', { maximumFractionDigits: 0 })}`, secondary: `Κέρδος: €${profit.toLocaleString('el-GR', { maximumFractionDigits: 0 })} (${margin}%)` };
+      return { count, primary: `€${fmt0(turnover)}`, secondary: `Κέρδος: €${fmt0(profit)} (${margin}%)` };
     }
     case 'statistics':
       return { count, primary: String(count), secondary: 'μετρικές' };
@@ -538,19 +574,28 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
     }
   };
 
-  // 4 global KPIs for the overview header
+  // Global KPIs for the overview header
   const globalKPIs = useMemo(() => {
     const invRows = (data.inventory ?? []) as Record<string, unknown>[];
     const itemRows = (data.item_evaluation ?? []) as Record<string, unknown>[];
     const fiscalRows = (data.fiscal_year ?? []) as Record<string, unknown>[];
-    const totalStock = invRows.reduce((s, r) => s + parseNum(r['ΔΙΑΘΕΣΙΜΟ ΥΠΟΛΟΙΠΟ']), 0);
-    const totalTurnover = fiscalRows.reduce((s, r) => s + parseNum(r['ΑΠΟΛΟΓΙΣΤΙΚΟΣ ΤΖΙΡΟΣ']), 0);
-    const scores = itemRows.map(r => parseNum(r['ΒΑΘΜΟΛΟΓΙΑ'])).filter(Boolean);
+    const fmt0 = (n: number) => n.toLocaleString('el-GR', { maximumFractionDigits: 0 });
+
+    const stockCol = findCol(invRows, 'ΔΙΑΘΕΣΙΜΟ ΥΠΟΛΟΙΠΟ');
+    const valueCol = findCol(invRows, 'ΑΞΙΑ');
+    const turnoverCol = findCol(fiscalRows, 'ΤΖΙΡΟΣ');
+    const scoreCol = findCol(itemRows, 'ΒΑΘΜΟΛΟΓΙΑ');
+
+    const totalStock = invRows.reduce((s, r) => s + parseNum(r[stockCol]), 0);
+    const totalValue = invRows.reduce((s, r) => s + parseNum(r[valueCol]), 0);
+    const totalTurnover = fiscalRows.reduce((s, r) => s + parseNum(r[turnoverCol]), 0);
+    const scores = itemRows.map(r => parseNum(r[scoreCol])).filter(Boolean);
     const avgScore = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
+
     return [
       { label: 'Συνολικά SKUs', value: invRows.length > 0 ? String(invRows.length) : '—', Icon: Tag },
-      { label: 'Σύνολο αποθέματος', value: invRows.length > 0 ? Math.round(totalStock).toLocaleString('el-GR') : '—', Icon: Package },
-      { label: 'Απολογιστικός τζίρος', value: fiscalRows.length > 0 ? `€${totalTurnover.toLocaleString('el-GR', { maximumFractionDigits: 0 })}` : '—', Icon: DollarSign },
+      { label: 'Αξία αποθέματος', value: totalValue > 0 ? `€${fmt0(totalValue)}` : invRows.length > 0 ? fmt0(totalStock) : '—', Icon: Package },
+      { label: 'Απολογιστικός τζίρος', value: fiscalRows.length > 0 ? `€${fmt0(totalTurnover)}` : '—', Icon: DollarSign },
       { label: 'Μέση βαθμολογία ειδών', value: scores.length > 0 ? avgScore.toFixed(1) : '—', Icon: Star },
     ];
   }, [data]);

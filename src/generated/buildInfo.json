@@ -1,10 +1,14 @@
 {
-  "version": "0.90.0",
-  "previousVersion": "0.89.0",
-  "commitHash": "11120ef",
+  "version": "0.91.0",
+  "previousVersion": "0.90.0",
+  "commitHash": "08de5da",
   "branch": "main",
-  "buildDate": "2026-03-23T13:43:44.682Z",
+  "buildDate": "2026-03-23T14:59:57.374Z",
   "commits": [
+    {
+      "hash": "08de5da",
+      "message": "feat: Procurement API Push integration - parseXLSXAllSheets, importProcurement Cloud Function, importData endpoint extension, DataImport UI docs"
+    },
     {
       "hash": "11120ef",
       "message": "fix: whitespace-nowrap via Tailwind class on td, fix header word-break, remove w-full from table"
@@ -60,13 +64,10 @@
     {
       "hash": "75159aa",
       "message": "feat: Google Ads connector, Meta sync fix, login UI redesign, campaigns improvements"
-    },
-    {
-      "hash": "a9fb695",
-      "message": "fix: show file margin in strategy table, remove decorative strategy image"
     }
   ],
   "changes": [
+    "[Νέο χαρακτηριστικό] Procurement API Push integration - parseXLSXAllSheets, importProcurement Cloud Function, importData endpoint extension, DataImport UI docs",
     "[Διόρθωση] Whitespace-nowrap via Tailwind class on td, fix header word-break, remove w-full from table",
     "[Συντήρηση] Add docs/ to .gitignore and remove from tracking",
     "[Συντήρηση] Remove unused colWidth function",
@@ -75,7 +76,6 @@
     "[Διόρθωση] Proportional column widths with fixed table layout, ellipsis for text, per-type alignment",
     "[Νέο χαρακτηριστικό] Excel-style column filters with checkboxes, 2-line headers, centered numeric columns",
     "[Νέο χαρακτηριστικό] Add column filters and fix decimal display in procurement tables",
-    "[Νέο χαρακτηριστικό] Replace unreadable charts with top-10 horizontal bars and category distribution views",
-    "[Διόρθωση] ParseNum correctly handles decimal dots vs thousands separators in procurement; add procurement cache invalidation"
+    "[Νέο χαρακτηριστικό] Replace unreadable charts with top-10 horizontal bars and category distribution views"
   ]
 }
