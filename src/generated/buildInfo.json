@@ -1,10 +1,14 @@
 {
-  "version": "0.78.0",
-  "previousVersion": "0.77.0",
-  "commitHash": "640073e",
+  "version": "0.81.0",
+  "previousVersion": "0.80.0",
+  "commitHash": "2330684",
   "branch": "main",
-  "buildDate": "2026-03-23T09:20:16.477Z",
+  "buildDate": "2026-03-23T09:36:48.394Z",
   "commits": [
+    {
+      "hash": "2330684",
+      "message": "fix: procurement import progress bar shows correct % across all sheets"
+    },
     {
       "hash": "640073e",
       "message": "feat: show last import date per type in DataImport and ConnectorsPanel"
@@ -60,13 +64,10 @@
     {
       "hash": "961161f",
       "message": "Responsive tables - compact layout, hide columns on smaller screens"
-    },
-    {
-      "hash": "733c466",
-      "message": "Fix suppliers stats cards layout - equal width, compact spacing"
     }
   ],
   "changes": [
+    "[Διόρθωση] Procurement import progress bar shows correct % across all sheets",
     "[Νέο χαρακτηριστικό] Show last import date per type in DataImport and ConnectorsPanel",
     "[Διόρθωση] Skip empty header columns in procurement import to avoid Firestore empty field error",
     "[Νέο χαρακτηριστικό] Google Ads connector, Meta sync fix, login UI redesign, campaigns improvements",
@@ -75,7 +76,6 @@
     "[Νέο χαρακτηριστικό] Add Procurement module with 7-tab analysis, charts, and UI redesign",
     "[Νέο χαρακτηριστικό] Prefer file margin over computed in Product Intelligence - use margin from imported file when present, compute from price/cost only as fallback, auto-derive margin_tier from percentage, remove incorrect conv_rate aliases",
     "[Διόρθωση] Lazy db init in connectors to fix deploy",
-    "[Νέο χαρακτηριστικό] Add Google Ads and Meta API connectors with OAuth, scheduled sync, and UI",
-    "Fix campaigns table responsive - use table-auto with whitespace-nowrap to prevent column overlap"
+    "[Νέο χαρακτηριστικό] Add Google Ads and Meta API connectors with OAuth, scheduled sync, and UI"
   ]
 }

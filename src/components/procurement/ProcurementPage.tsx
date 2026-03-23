@@ -99,7 +99,15 @@ const STAT_LINE_COLORS = ['#F97316', '#3B82F6', '#22C55E', '#8B5CF6', '#F59E0B',
 
 function parseNum(v: unknown): number {
   if (v == null || v === '') return 0;
-  const s = String(v).replace(/\s/g, '').replace(/\./g, '').replace(',', '.');
+  if (typeof v === 'number') return isNaN(v) ? 0 : v;
+  const s = String(v).trim().replace(/\s/g, '');
+  if (!s) return 0;
+  if (s.includes(',')) {
+    // Greek/European format: dots = thousands separators, comma = decimal
+    const n = parseFloat(s.replace(/\./g, '').replace(',', '.'));
+    return isNaN(n) ? 0 : n;
+  }
+  // Standard format: dot = decimal point
   const n = parseFloat(s);
   return isNaN(n) ? 0 : n;
 }

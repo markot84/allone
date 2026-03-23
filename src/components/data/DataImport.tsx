@@ -299,6 +299,9 @@ export function DataImport({ initialType }: DataImportProps = {}) {
             console.debug('[DataImport] Campaigns queries invalidated, should refetch now');
           }
         }
+        if (typesImported.has('procurement')) {
+          queryClient.invalidateQueries({ queryKey: ['procurement'] });
+        }
       } else {
         toast.error(
           aggregated.errors.length > 0
