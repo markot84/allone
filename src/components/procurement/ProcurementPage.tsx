@@ -129,9 +129,35 @@ function parseNum(v: unknown): number {
   return isNaN(n) ? 0 : n;
 }
 
-/** Returns true if the column name is a garbage numeric header (e.g. "4065528.538423248") */
+/** Returns true if the column name is a numeric value (e.g. "4065528.538423248") */
 function isNumericColName(k: string): boolean {
   return k.trim() !== '' && !isNaN(Number(k.trim()));
+}
+
+/**
+ * In the ΑΠΟΛΟΓΙΣΤΙΚΟ ΕΤΟΣ sheet, Excel stores the year totals (turnover, profit, margin%)
+ * as numeric values in the header row. XLSX reads them as column names.
+ * This function extracts those totals from the column keys of the data rows.
+ */
+function getFiscalYearTotals(rows: Record<string, unknown>[]): { turnover: number; profit: number; marginPct: number } {
+  if (rows.length === 0) return { turnover: 0, profit: 0, marginPct: 0 };
+  const nums = Object.keys(rows[0])
+    .filter(isNumericColName)
+    .map(Number)
+    .filter(n => n > 0)
+    .sort((a, b) => b - a);
+  if (nums.length >= 2) {
+    const turnover = nums[0];
+    const profit = nums.find(n => n > 1 && n < turnover) ?? nums[1];
+    const marginPct = nums.find(n => n > 0 && n < 1) ?? (turnover > 0 ? profit / turnover : 0);
+    return { turnover, profit, marginPct };
+  }
+  // Fallback: sum rows
+  const turnoverCol = findCol(rows, 'ΤΖΙΡΟΣ');
+  const profitCol   = findCol(rows, 'ΚΕΡΔΟΣ');
+  const turnover = rows.reduce((s, r) => s + parseNum(r[turnoverCol]), 0);
+  const profit   = rows.reduce((s, r) => s + parseNum(r[profitCol]), 0);
+  return { turnover, profit, marginPct: turnover > 0 ? profit / turnover : 0 };
 }
 
 /** Returns the first non-numeric column key whose name contains the keyword (case-insensitive). */
@@ -163,13 +189,13 @@ function getSummary(key: ProcurementSheetType, rows: Record<string, unknown>[]) 
   const fmt0 = (n: number) => n.toLocaleString('el-GR', { maximumFractionDigits: 0 });
   switch (key) {
     case 'inventory': {
-      const stockCol = findCol(rows, 'ΔΙΑΘΕΣΙΜΟ ΥΠΟΛΟΙΠΟ');
+      const stockCol  = findCol(rows, 'ΔΙΑΘΕΣΙΜΟ ΥΠΟΛΟΙΠΟ');
+      const costCol   = findCol(rows, 'ΠΡΩΤΟΓΕΝΕΣ ΚΟΣΤΟΣ');
       const refillCol = findCol(rows, 'ΑΝΑΤΡΟΦΟΔΟΣΙΑ');
-      const valueCol = findCol(rows, 'ΑΞΙΑ');
-      const sumStock = rows.reduce((s, r) => s + parseNum(r[stockCol]), 0);
-      const sumValue = rows.reduce((s, r) => s + parseNum(r[valueCol]), 0);
-      const toRefill = rows.filter(r => parseNum(r[refillCol]) > 0).length;
-      const secParts = [];
+      const sumStock  = rows.reduce((s, r) => s + parseNum(r[stockCol]), 0);
+      const sumValue  = rows.reduce((s, r) => s + parseNum(r[costCol]) * parseNum(r[stockCol]), 0);
+      const toRefill  = rows.filter(r => parseNum(r[refillCol]) > 0).length;
+      const secParts  = [];
       if (toRefill > 0) secParts.push(`${toRefill} SKU σε ανατροφοδότηση`);
       if (sumValue > 0) secParts.push(`Αξία: €${fmt0(sumValue)}`);
       return { count, primary: fmt0(sumStock), secondary: secParts.join(' · ') || 'Φυσιολογικά επίπεδα' };
@@ -201,12 +227,8 @@ function getSummary(key: ProcurementSheetType, rows: Record<string, unknown>[]) 
       return { count, primary: `€${avg.toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, secondary: 'Μέση τιμή πώλησης' };
     }
     case 'fiscal_year': {
-      const turnoverCol = findCol(rows, 'ΤΖΙΡΟΣ');
-      const profitCol = findCol(rows, 'ΚΕΡΔΟΣ');
-      const turnover = rows.reduce((s, r) => s + parseNum(r[turnoverCol]), 0);
-      const profit = rows.reduce((s, r) => s + parseNum(r[profitCol]), 0);
-      const margin = turnover > 0 ? ((profit / turnover) * 100).toFixed(1) : '0';
-      return { count, primary: `€${fmt0(turnover)}`, secondary: `Κέρδος: €${fmt0(profit)} (${margin}%)` };
+      const { turnover, profit, marginPct } = getFiscalYearTotals(rows);
+      return { count, primary: `€${fmt0(turnover)}`, secondary: `Κέρδος: €${fmt0(profit)} (${(marginPct * 100).toFixed(1)}%)` };
     }
     case 'statistics':
       return { count, primary: String(count), secondary: 'μετρικές' };
@@ -607,13 +629,14 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
     const fmt0 = (n: number) => n.toLocaleString('el-GR', { maximumFractionDigits: 0 });
 
     const stockCol = findCol(invRows, 'ΔΙΑΘΕΣΙΜΟ ΥΠΟΛΟΙΠΟ');
-    const valueCol = findCol(invRows, 'ΑΞΙΑ');
-    const turnoverCol = findCol(fiscalRows, 'ΤΖΙΡΟΣ');
+    const costCol  = findCol(invRows, 'ΠΡΩΤΟΓΕΝΕΣ ΚΟΣΤΟΣ');
     const scoreCol = findCol(itemRows, 'ΒΑΘΜΟΛΟΓΙΑ');
 
     const totalStock = invRows.reduce((s, r) => s + parseNum(r[stockCol]), 0);
-    const totalValue = invRows.reduce((s, r) => s + parseNum(r[valueCol]), 0);
-    const totalTurnover = fiscalRows.reduce((s, r) => s + parseNum(r[turnoverCol]), 0);
+    const totalValue = invRows.reduce((s, r) => s + parseNum(r[costCol]) * parseNum(r[stockCol]), 0);
+
+    const { turnover: totalTurnover } = getFiscalYearTotals(fiscalRows);
+
     const scores = itemRows.map(r => parseNum(r[scoreCol])).filter(Boolean);
     const avgScore = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
 
