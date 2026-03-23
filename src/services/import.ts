@@ -1323,7 +1323,10 @@ async function importProcurementFile(
 
       const objects: Record<string, string>[] = dataRows.map(row => {
         const obj: Record<string, string> = {};
-        headers.forEach((h, idx) => { obj[h] = row[idx] != null ? String(row[idx]).trim() : ''; });
+        headers.forEach((h, idx) => {
+          if (!h) return; // skip empty header columns
+          obj[h] = row[idx] != null ? String(row[idx]).trim() : '';
+        });
         return obj;
       });
 
