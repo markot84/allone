@@ -18,6 +18,101 @@ interface DataImportProps {
   initialType?: ImportType;
 }
 
+const PROCUREMENT_ENDPOINT =
+  'https://europe-west1-performance-plus-4a5b2.cloudfunctions.net/importData';
+
+const CURL_SNIPPET = `curl -X POST \\
+  ${PROCUREMENT_ENDPOINT} \\
+  -H "Authorization: Bearer {API_KEY}" \\
+  -F "file=@PROCUREMENT_TEMPLATE.xlsx" \\
+  -F "type=procurement"`;
+
+const PYTHON_SNIPPET = `import requests
+
+url = "${PROCUREMENT_ENDPOINT}"
+headers = {"Authorization": "Bearer {API_KEY}"}
+with open("PROCUREMENT_TEMPLATE.xlsx", "rb") as f:
+    resp = requests.post(url, headers=headers, files={"file": f}, data={"type": "procurement"})
+print(resp.json())`;
+
+function ProcurementApiInfo() {
+  const [activeTab, setActiveTab] = useState<'curl' | 'python'>('curl');
+  const [copied, setCopied] = useState(false);
+
+  const snippet = activeTab === 'curl' ? CURL_SNIPPET : PYTHON_SNIPPET;
+
+  function handleCopy() {
+    navigator.clipboard.writeText(snippet).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  return (
+    <div className="mt-8 rounded-2xl border border-[var(--nts-border)] bg-[var(--nts-surface)] shadow-sm overflow-hidden">
+      <div className="flex items-center gap-3 px-6 py-4 border-b border-[var(--nts-border)]">
+        <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-[var(--nts-brand-light)]">
+          <svg className="w-5 h-5 text-[var(--nts-brand)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-[var(--nts-text-primary)]">Αυτόματη Εισαγωγή Procurement</p>
+          <p className="text-xs text-[var(--nts-text-muted)]">Στείλε το PROCUREMENT_TEMPLATE.xlsx από ERP/server μέσω HTTP POST</p>
+        </div>
+      </div>
+
+      <div className="px-6 py-5 space-y-4">
+        {/* Endpoint */}
+        <div>
+          <p className="text-xs font-medium text-[var(--nts-text-muted)] mb-1.5 uppercase tracking-wide">Endpoint</p>
+          <div className="flex items-center gap-2 rounded-lg bg-[var(--nts-bg)] border border-[var(--nts-border)] px-3 py-2">
+            <span className="text-xs font-mono text-[var(--nts-brand)] break-all">{PROCUREMENT_ENDPOINT}</span>
+          </div>
+        </div>
+
+        {/* Code snippet tabs */}
+        <div>
+          <div className="flex gap-1 mb-2">
+            {(['curl', 'python'] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setActiveTab(t)}
+                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                  activeTab === t
+                    ? 'bg-[var(--nts-brand)] text-white'
+                    : 'text-[var(--nts-text-muted)] hover:text-[var(--nts-text-primary)] hover:bg-[var(--nts-border)]'
+                }`}
+              >
+                {t === 'curl' ? 'cURL' : 'Python'}
+              </button>
+            ))}
+          </div>
+          <div className="relative">
+            <pre className="text-xs font-mono leading-relaxed text-[var(--nts-text-primary)] bg-[var(--nts-bg)] border border-[var(--nts-border)] rounded-lg p-4 overflow-x-auto whitespace-pre">
+              {snippet}
+            </pre>
+            <button
+              onClick={handleCopy}
+              className="absolute top-2.5 right-2.5 px-2.5 py-1 text-xs font-medium rounded-md bg-[var(--nts-surface)] border border-[var(--nts-border)] text-[var(--nts-text-muted)] hover:text-[var(--nts-text-primary)] transition-colors"
+            >
+              {copied ? 'Αντιγράφηκε!' : 'Αντιγραφή'}
+            </button>
+          </div>
+        </div>
+
+        {/* Notes */}
+        <ul className="text-xs text-[var(--nts-text-muted)] space-y-1 list-disc list-inside">
+          <li>Απαιτείται <code className="font-mono text-[var(--nts-text-primary)]">Authorization: Bearer {'{'}{'{'}API_KEY{'}'}{'}'}</code> — διαχείριση κλειδιού από την παραπάνω ενότητα.</li>
+          <li>Το αρχείο πρέπει να ακολουθεί τη δομή <code className="font-mono text-[var(--nts-text-primary)]">PROCUREMENT_TEMPLATE.xlsx</code> (7 sheets).</li>
+          <li>Η εισαγωγή αντικαθιστά τα δεδομένα ανά sheet για το συγκεκριμένο brand.</li>
+          <li>Η απόκριση επιστρέφει <code className="font-mono text-[var(--nts-text-primary)]">{'{'} "sheets": {'{'}"inventory": 45, ...{'}'}, "totalImported": 315 {'}'}</code>.</li>
+        </ul>
+      </div>
+    </div>
+  );
+}
+
 export function DataImport({ initialType }: DataImportProps = {}) {
   const { currentBrand } = useBrand();
   const [selectedType, setSelectedType] = useState<ImportType>(initialType ?? 'products');
@@ -962,6 +1057,9 @@ export function DataImport({ initialType }: DataImportProps = {}) {
 
       {/* API Key Management */}
       <ApiKeyManager />
+
+      {/* Procurement Automated Import */}
+      <ProcurementApiInfo />
 
       {/* Feed Preview Modal */}
       <FeedPreviewModal

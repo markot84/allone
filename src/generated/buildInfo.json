@@ -1,10 +1,14 @@
 {
-  "version": "0.89.0",
-  "previousVersion": "0.88.0",
-  "commitHash": "0f74c3d",
+  "version": "0.90.0",
+  "previousVersion": "0.89.0",
+  "commitHash": "11120ef",
   "branch": "main",
-  "buildDate": "2026-03-23T13:04:04.187Z",
+  "buildDate": "2026-03-23T13:43:44.682Z",
   "commits": [
+    {
+      "hash": "11120ef",
+      "message": "fix: whitespace-nowrap via Tailwind class on td, fix header word-break, remove w-full from table"
+    },
     {
       "hash": "0f74c3d",
       "message": "chore: add docs/ to .gitignore and remove from tracking"
@@ -60,13 +64,10 @@
     {
       "hash": "a9fb695",
       "message": "fix: show file margin in strategy table, remove decorative strategy image"
-    },
-    {
-      "hash": "9c6281b",
-      "message": "feat: marketing page hero layout, 5 σημεία with app screenshots (Commercial Strategy, Data Analysis, Product Intelligence, Content Strategy)"
     }
   ],
   "changes": [
+    "[Διόρθωση] Whitespace-nowrap via Tailwind class on td, fix header word-break, remove w-full from table",
     "[Συντήρηση] Add docs/ to .gitignore and remove from tracking",
     "[Συντήρηση] Remove unused colWidth function",
     "[Διόρθωση] Auto-fit column widths, whitespace-nowrap on data cells, max-width+ellipsis on text",
@@ -75,7 +76,6 @@
     "[Νέο χαρακτηριστικό] Excel-style column filters with checkboxes, 2-line headers, centered numeric columns",
     "[Νέο χαρακτηριστικό] Add column filters and fix decimal display in procurement tables",
     "[Νέο χαρακτηριστικό] Replace unreadable charts with top-10 horizontal bars and category distribution views",
-    "[Διόρθωση] ParseNum correctly handles decimal dots vs thousands separators in procurement; add procurement cache invalidation",
-    "[Διόρθωση] Procurement import progress bar shows correct % across all sheets"
+    "[Διόρθωση] ParseNum correctly handles decimal dots vs thousands separators in procurement; add procurement cache invalidation"
   ]
 }

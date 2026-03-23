@@ -156,6 +156,24 @@ export function csvToObjects(csvRows: string[][], type?: string): Record<string,
   return objects;
 }
 
+/**
+ * Reads every sheet from an XLSX workbook and returns raw string rows per sheet name.
+ * Used for multi-sheet imports like PROCUREMENT_TEMPLATE.xlsx.
+ */
+export function parseXLSXAllSheets(buffer: Buffer): Map<string, string[][]> {
+  const wb = XLSX.read(buffer, { type: 'buffer' });
+  const result = new Map<string, string[][]>();
+  for (const sheetName of wb.SheetNames) {
+    const sheet = wb.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, defval: '' });
+    result.set(
+      sheetName,
+      rows.map((row) => (Array.isArray(row) ? row : [row]).map((cell) => String(cell ?? '').trim()))
+    );
+  }
+  return result;
+}
+
 export function pick(row: Record<string, string>, ...keys: string[]): string {
   for (const k of keys) {
     const val = row[k];

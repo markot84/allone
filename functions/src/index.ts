@@ -4,7 +4,7 @@ import { onRequest } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { logger } from 'firebase-functions/v2';
 import Busboy from 'busboy';
-import { parseCSV, parseXLSXBuffer, csvToObjects } from './parseFile';
+import { parseCSV, parseXLSXBuffer, parseXLSXAllSheets, csvToObjects } from './parseFile';
 import { validateProduct, type ProductData } from './validateProduct';
 import { validateCampaign, type CampaignData } from './validateCampaign';
 import {
@@ -29,7 +29,7 @@ setGoogleAdsDb(db);
 
 const BATCH_SIZE = 500;
 
-type ImportType = 'products' | 'campaigns' | 'segments';
+type ImportType = 'products' | 'campaigns' | 'segments' | 'procurement';
 
 interface ImportResult {
   success: boolean;
@@ -99,6 +99,96 @@ async function batchWrite(
     await batch.commit();
     logger.info(`Batch ${Math.floor(i / BATCH_SIZE) + 1}: wrote ${chunk.length} docs to ${collectionName}`);
   }
+}
+
+// ── Procurement sheet name → Firestore collection suffix mapping ──────────────
+const PROCUREMENT_SHEET_MAP: Record<string, string> = {
+  'ΔΙΑΧΕΙΡΙΣΗ ΑΠΟΘΕΜΑΤΟΣ': 'inventory',
+  'ΚΟΣΤΟΛΟΓΗΣΗ': 'costing',
+  'ΑΞΙΟΛΟΓΗΣΗ ΕΙΔΩΝ': 'item_evaluation',
+  'ΑΞΙΟΛΟΓΗΣΗ ΠΕΛΑΤΩΝ': 'customer_evaluation',
+  'ΤΙΜΟΛΟΓΙΑΚΗ ΠΟΛΙΤΙΚΗ': 'pricing_policy',
+  'ΑΠΟΛΟΓΙΣΤΙΚΟ ΕΤΟΣ': 'fiscal_year',
+  'ΣΤΑΤΙΣΤΙΚΑ': 'statistics',
+};
+
+interface ProcurementImportResult {
+  success: boolean;
+  sheets: Record<string, number>;
+  totalImported: number;
+  errors: string[];
+  timestamp: string;
+}
+
+async function importProcurement(
+  buffer: Buffer,
+  brandId: string
+): Promise<ProcurementImportResult> {
+  const allSheets = parseXLSXAllSheets(buffer);
+  const sheets: Record<string, number> = {};
+  const errors: string[] = [];
+  let totalImported = 0;
+
+  for (const [sheetName, rows] of allSheets.entries()) {
+    const sheetKey = sheetName.trim().toUpperCase();
+    // Find matching key (case-insensitive, ignore accents won't be perfect but good enough)
+    const collectionSuffix = Object.entries(PROCUREMENT_SHEET_MAP).find(
+      ([k]) => sheetKey === k.toUpperCase() || sheetKey.includes(k.toUpperCase()) || k.toUpperCase().includes(sheetKey)
+    )?.[1];
+
+    if (!collectionSuffix) {
+      logger.warn(`[Procurement] Unknown sheet: "${sheetName}" — skipping`);
+      continue;
+    }
+
+    const collection = `procurement_${collectionSuffix}`;
+
+    try {
+      // Convert rows to objects preserving original Greek column names
+      const headerRowIdx = rows.findIndex((r) => r.some((c) => c.length > 1));
+      if (headerRowIdx === -1 || rows.length <= headerRowIdx + 1) {
+        sheets[collectionSuffix] = 0;
+        continue;
+      }
+
+      const headers = rows[headerRowIdx];
+      const dataRows = rows.slice(headerRowIdx + 1).filter((r) => r.some((c) => c !== ''));
+
+      const items = dataRows.map((row, idx) => {
+        const obj: Record<string, unknown> = {
+          sheetType: collectionSuffix,
+          rowIndex: idx,
+          brandId,
+          createdAt: new Date().toISOString(),
+        };
+        headers.forEach((h, i) => {
+          if (h) obj[h] = row[i] ?? '';
+        });
+        const id = String(row[0] || idx).replace(/[/\\]/g, '_').trim() || String(idx);
+        return { id, data: obj };
+      });
+
+      if (items.length > 0) {
+        await batchWrite(collection, items, brandId);
+      }
+
+      sheets[collectionSuffix] = items.length;
+      totalImported += items.length;
+      logger.info(`[Procurement] ${collection}: imported ${items.length} rows`);
+    } catch (err) {
+      const msg = `Sheet "${sheetName}" failed: ${err instanceof Error ? err.message : String(err)}`;
+      errors.push(msg);
+      logger.error(`[Procurement] ${msg}`);
+    }
+  }
+
+  return {
+    success: errors.length === 0,
+    sheets,
+    totalImported,
+    errors: errors.slice(0, 20),
+    timestamp: new Date().toISOString(),
+  };
 }
 
 async function importProducts(
@@ -267,6 +357,13 @@ export const importData = onRequest(
         const arrayBuf = await response.arrayBuffer();
         const buffer = Buffer.from(arrayBuf);
         const urlFilename = fileUrl.split('/').pop() || 'import.csv';
+
+        if (type === 'procurement') {
+          const procResult = await importProcurement(buffer, brandId);
+          res.status(200).json(procResult);
+          return;
+        }
+
         const objects = parseFile(buffer, urlFilename, type as ImportType);
 
         let result: ImportResult;
@@ -318,6 +415,12 @@ export const importData = onRequest(
       }
 
       logger.info(`Processing ${fileName} as ${importType} for brand ${brandId}`);
+
+      if (importType === 'procurement') {
+        const procResult = await importProcurement(fileBuffer, brandId);
+        res.status(200).json(procResult);
+        return;
+      }
 
       const objects = parseFile(fileBuffer, fileName, importType);
       logger.info(`Parsed ${objects.length} rows from ${fileName}`);
