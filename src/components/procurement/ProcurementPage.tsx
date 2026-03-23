@@ -854,28 +854,29 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
               {activeData.length === 0 ? (
                 <div className="p-8 text-center text-[var(--nts-medium-gray)]">Καμία εγγραφή σε αυτή την καρτέλα.</div>
               ) : (
-                <table className="text-sm w-full">
+                <table className="text-sm">
                   <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                     <tr className="border-b border-[var(--nts-border-gray)] bg-[var(--nts-light-gray)]">
                       {headers.map(h => {
                         const isFiltered = (colFilters[h]?.length ?? 0) > 0;
                         const ct = columnTypes[h] ?? 'text';
-                        const align = ct === 'text' || ct === 'code' ? 'left' : 'center';
+                        const isNumCol = ct === 'number' || ct === 'badge';
                         return (
                           <th
                             key={h}
-                            className={`px-3 py-0 font-semibold text-[var(--nts-charcoal)] text-[11px]`}
-                            style={{ textAlign: align }}
+                            className="px-3 py-0 font-semibold text-[var(--nts-charcoal)] text-[11px]"
                           >
                             <button
                               onClick={(e) => {
                                 const rect = e.currentTarget.getBoundingClientRect();
                                 setOpenFilter(prev => prev?.col === h ? null : { col: h, rect });
                               }}
-                              className="flex items-start gap-1 w-full py-2.5 group"
-                              style={{ justifyContent: align === 'center' ? 'center' : 'space-between' }}
+                              className={`flex items-start gap-1 w-full py-2.5 group ${isNumCol ? 'justify-center' : 'justify-between'}`}
                             >
-                              <span className="leading-tight" style={{ whiteSpace: 'normal', wordBreak: 'break-word', maxWidth: 120 }}>
+                              <span
+                                className="leading-tight"
+                                style={{ whiteSpace: 'normal', overflowWrap: 'normal', maxWidth: 130 }}
+                              >
                                 {h}
                               </span>
                               <ChevronDown
@@ -913,17 +914,13 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
                             <td
                               key={h}
                               title={isText && raw.length > 25 ? raw : undefined}
-                              className={`px-3 py-2 text-[var(--nts-charcoal)] text-[12px] ${
+                              className={`px-3 py-2 text-[var(--nts-charcoal)] text-[12px] whitespace-nowrap ${
                                 isBadge ? 'text-center' :
                                 isNum ? 'text-center font-mono tabular-nums' :
                                 ct === 'code' ? 'text-left font-mono' :
                                 'text-left'
                               }`}
-                              style={
-                                isText
-                                  ? { maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
-                                  : { whiteSpace: 'nowrap' }
-                              }
+                              style={isText ? { maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis' } : undefined}
                             >
                               {isBadge ? (
                                 <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold border ${BADGE_STYLES[raw]}`}>

@@ -1,10 +1,18 @@
 {
-  "version": "0.88.0",
-  "previousVersion": "0.87.0",
-  "commitHash": "51c360a",
+  "version": "0.89.0",
+  "previousVersion": "0.88.0",
+  "commitHash": "0f74c3d",
   "branch": "main",
-  "buildDate": "2026-03-23T10:36:52.734Z",
+  "buildDate": "2026-03-23T13:04:04.187Z",
   "commits": [
+    {
+      "hash": "0f74c3d",
+      "message": "chore: add docs/ to .gitignore and remove from tracking"
+    },
+    {
+      "hash": "f8ed8a3",
+      "message": "chore: remove unused colWidth function"
+    },
     {
       "hash": "51c360a",
       "message": "fix: auto-fit column widths, whitespace-nowrap on data cells, max-width+ellipsis on text"
@@ -56,17 +64,11 @@
     {
       "hash": "9c6281b",
       "message": "feat: marketing page hero layout, 5 σημεία with app screenshots (Commercial Strategy, Data Analysis, Product Intelligence, Content Strategy)"
-    },
-    {
-      "hash": "bea52b7",
-      "message": "feat: add Procurement module with 7-tab analysis, charts, and UI redesign"
-    },
-    {
-      "hash": "0c14fb0",
-      "message": "feat: prefer file margin over computed in Product Intelligence - use margin from imported file when present, compute from price/cost only as fallback, auto-derive margin_tier from percentage, remove incorrect conv_rate aliases"
     }
   ],
   "changes": [
+    "[Συντήρηση] Add docs/ to .gitignore and remove from tracking",
+    "[Συντήρηση] Remove unused colWidth function",
     "[Διόρθωση] Auto-fit column widths, whitespace-nowrap on data cells, max-width+ellipsis on text",
     "[Νέο χαρακτηριστικό] Chart toggle button, table pagination (20 rows/page) with page controls",
     "[Διόρθωση] Proportional column widths with fixed table layout, ellipsis for text, per-type alignment",
@@ -74,8 +76,6 @@
     "[Νέο χαρακτηριστικό] Add column filters and fix decimal display in procurement tables",
     "[Νέο χαρακτηριστικό] Replace unreadable charts with top-10 horizontal bars and category distribution views",
     "[Διόρθωση] ParseNum correctly handles decimal dots vs thousands separators in procurement; add procurement cache invalidation",
-    "[Διόρθωση] Procurement import progress bar shows correct % across all sheets",
-    "[Νέο χαρακτηριστικό] Show last import date per type in DataImport and ConnectorsPanel",
-    "[Διόρθωση] Skip empty header columns in procurement import to avoid Firestore empty field error"
+    "[Διόρθωση] Procurement import progress bar shows correct % across all sheets"
   ]
 }
