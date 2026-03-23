@@ -1,10 +1,18 @@
 {
-  "version": "0.74.0",
-  "previousVersion": "0.73.0",
-  "commitHash": "a9fb695",
+  "version": "0.77.0",
+  "previousVersion": "0.76.0",
+  "commitHash": "fe4f31d",
   "branch": "main",
-  "buildDate": "2026-03-20T13:30:13.411Z",
+  "buildDate": "2026-03-23T08:39:24.116Z",
   "commits": [
+    {
+      "hash": "fe4f31d",
+      "message": "fix: skip empty header columns in procurement import to avoid Firestore empty field error"
+    },
+    {
+      "hash": "75159aa",
+      "message": "feat: Google Ads connector, Meta sync fix, login UI redesign, campaigns improvements"
+    },
     {
       "hash": "a9fb695",
       "message": "fix: show file margin in strategy table, remove decorative strategy image"
@@ -56,17 +64,11 @@
     {
       "hash": "c3ab550",
       "message": "Add suppliers collection to Firestore rules"
-    },
-    {
-      "hash": "a1db345",
-      "message": "Fix product import: Greek columns, comma decimals, auto-extract suppliers with TOD"
-    },
-    {
-      "hash": "5a9d08c",
-      "message": "Align supplier stats cards layout"
     }
   ],
   "changes": [
+    "[Διόρθωση] Skip empty header columns in procurement import to avoid Firestore empty field error",
+    "[Νέο χαρακτηριστικό] Google Ads connector, Meta sync fix, login UI redesign, campaigns improvements",
     "[Διόρθωση] Show file margin in strategy table, remove decorative strategy image",
     "[Νέο χαρακτηριστικό] Marketing page hero layout, 5 σημεία with app screenshots (Commercial Strategy, Data Analysis, Product Intelligence, Content Strategy)",
     "[Νέο χαρακτηριστικό] Add Procurement module with 7-tab analysis, charts, and UI redesign",
@@ -74,8 +76,6 @@
     "[Διόρθωση] Lazy db init in connectors to fix deploy",
     "[Νέο χαρακτηριστικό] Add Google Ads and Meta API connectors with OAuth, scheduled sync, and UI",
     "Fix campaigns table responsive - use table-auto with whitespace-nowrap to prevent column overlap",
-    "Fix API key generation - use direct Firestore write instead of Cloud Function",
-    "Add API Key Management UI for automated imports in Data Import section",
-    "Add Cloud Functions: HTTP import endpoint + API key auth for automated daily imports"
+    "Fix API key generation - use direct Firestore write instead of Cloud Function"
   ]
 }

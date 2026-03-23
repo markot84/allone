@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useBrand } from '../../hooks';
 import { FileText, CheckCircle2, XCircle, AlertCircle, Clock, Trash2, FileUp, Link as LinkIcon, HelpCircle, ExternalLink, Package, Users, BarChart3, Euro, ClipboardList } from 'lucide-react';
 import { Card, Button, Spinner, ProgressBar, useToast, Badge } from '../common';
-import { importFile, saveImportJob, getImportJobs, isSupportedFile, PRODUCT_COLUMN_MAPPING, type ImportType, type ImportResult, type ImportJob, type ImportProgress, type CampaignChannelOverride } from '../../services/import';
+import { importFile, saveImportJob, getImportJobs, getLastImportDates, isSupportedFile, PRODUCT_COLUMN_MAPPING, type ImportType, type ImportResult, type ImportJob, type ImportProgress, type CampaignChannelOverride } from '../../services/import';
 import { FEED_SOURCE_OPTIONS, downloadGoogleAdsCsvTemplate, type FeedSourceType } from '../../data/feedSourceConfig';
 import { FeedPreviewModal } from './FeedPreviewModal';
 import { FeedSourcesSection } from './FeedSourcesSection';
@@ -30,6 +30,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
   const [importProgress, setImportProgress] = useState<{ current: number; total: number; fileName: string; fileProgress?: ImportProgress } | null>(null);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [importHistory, setImportHistory] = useState<ImportJob[]>([]);
+  const [lastImportDates, setLastImportDates] = useState<Record<string, Date>>({});
   const [showHistory, setShowHistory] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [importUrl, setImportUrl] = useState('');
@@ -331,10 +332,17 @@ export function DataImport({ initialType }: DataImportProps = {}) {
     }
   };
 
+  const brandId = currentBrand?.id ?? null;
+
+  useEffect(() => {
+    if (!brandId) return;
+    getLastImportDates(brandId).then(setLastImportDates).catch(() => {});
+  }, [brandId]);
+
   const loadHistory = async () => {
     setHistoryLoading(true);
     try {
-      const history = await getImportJobs();
+      const history = await getImportJobs(brandId);
       setImportHistory(history.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()));
     } catch (error) {
       console.error('Failed to load import history:', error);
@@ -472,23 +480,33 @@ export function DataImport({ initialType }: DataImportProps = {}) {
             <div>
               <p className="text-sm font-medium text-[#4A4A4A] mb-3">Επιλέξτε τύπο δεδομένων:</p>
               <div className="flex flex-wrap gap-2">
-                {importTypes.map((type) => (
+                {importTypes.map((type) => {
+                  const lastDate = lastImportDates[type.value];
+                  return (
                   <button
                     key={type.value}
                     onClick={() => {
                       setSelectedType(type.value);
                       setImportResult(null);
                     }}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex flex-col items-start ${
                       selectedType === type.value
                         ? 'bg-[var(--nts-accent)] text-white shadow-sm'
                         : 'bg-white text-[#4A4A4A] border border-[#E5E5E5] hover:border-[var(--nts-accent)] hover:text-[var(--nts-accent)]'
                     }`}
                   >
-                    <span className="mr-2 inline-flex">{type.icon}</span>
-                    {type.label}
+                    <span className="flex items-center gap-2">
+                      <span className="inline-flex">{type.icon}</span>
+                      {type.label}
+                    </span>
+                    {lastDate && (
+                      <span className={`text-[10px] mt-0.5 ${selectedType === type.value ? 'text-white/80' : 'text-[#9CA3AF]'}`}>
+                        Τελευταίο: {lastDate.toLocaleDateString('el-GR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                      </span>
+                    )}
                   </button>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

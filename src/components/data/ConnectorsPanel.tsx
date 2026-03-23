@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useBrand, useAuth } from '../../hooks';
 import { auth } from '../../config/firebase';
+import { getLastImportDates } from '../../services/import';
 import { FirestoreService } from '../../services/firestore';
 import { Card, Button, Spinner, useToast } from '../common';
 import {
@@ -186,6 +187,7 @@ export function ConnectorsPanel() {
   const toast = useToast();
 
   const [states, setStates] = useState<Record<string, ConnectorState>>({});
+  const [lastSyncDates, setLastSyncDates] = useState<Record<string, Date>>({});
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState<string | null>(null);
   const [connecting, setConnecting] = useState<string | null>(null);
@@ -195,7 +197,10 @@ export function ConnectorsPanel() {
   const fetchStates = useCallback(async () => {
     if (!brandId) return;
     try {
-      const doc = await FirestoreService.getDocument('connectors', brandId);
+      const [doc, dates] = await Promise.all([
+        FirestoreService.getDocument('connectors', brandId),
+        getLastImportDates(brandId),
+      ]);
       if (doc) {
         const data = doc as Record<string, any>;
         setStates({
@@ -205,6 +210,11 @@ export function ConnectorsPanel() {
       } else {
         setStates({ google_ads: { connected: false }, meta: { connected: false } });
       }
+      // Map source keys to connector ids
+      setLastSyncDates({
+        google_ads: dates['google_ads_api'] || dates['campaigns'],
+        meta: dates['meta_api'] || dates['campaigns'],
+      } as Record<string, Date>);
     } catch {
       setStates({ google_ads: { connected: false }, meta: { connected: false } });
     } finally {
@@ -324,6 +334,7 @@ export function ConnectorsPanel() {
       if (result.success) {
         toast.success(`Εισήχθησαν ${result.imported} campaigns`);
         queryClient.invalidateQueries({ queryKey: ['campaigns', brandId] });
+        fetchStates();
       } else {
         toast.error(result.error || 'Sync failed');
       }
@@ -454,6 +465,11 @@ export function ConnectorsPanel() {
                         )}
                         {conn.id === 'meta' && state.adAccountNames && (
                           <p>{state.adAccountNames.join(', ')}</p>
+                        )}
+                        {lastSyncDates[conn.id] && (
+                          <p className="text-[#9CA3AF]">
+                            Τελευταίο sync: {lastSyncDates[conn.id].toLocaleDateString('el-GR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </p>
                         )}
                         {isExpired && (
                           <p className="text-amber-600 font-medium">Token expired — reconnect required</p>

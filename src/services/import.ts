@@ -1835,11 +1835,28 @@ export async function saveImportJob(job: Omit<ImportJob, 'id'>): Promise<string>
 }
 
 // Get import job history
-export async function getImportJobs(): Promise<ImportJob[]> {
-  const jobs = await FirestoreService.getDocuments<ImportJob>('import_jobs', []);
+export async function getImportJobs(brandId?: string | null): Promise<ImportJob[]> {
+  const jobs = await FirestoreService.getDocuments<ImportJob>('import_jobs', [], brandId);
   return jobs.map(job => ({
     ...job,
     createdAt: (job.createdAt as any)?.toDate?.() || new Date(job.createdAt as any),
     completedAt: (job.completedAt as any)?.toDate?.() || (job.completedAt ? new Date(job.completedAt as any) : undefined),
   }));
+}
+
+// Get last successful import date per type (for UI display)
+export async function getLastImportDates(brandId: string | null | undefined): Promise<Record<string, Date>> {
+  if (!brandId) return {};
+  const jobs = await getImportJobs(brandId);
+  const result: Record<string, Date> = {};
+  for (const job of jobs) {
+    if (job.status !== 'completed' && job.status !== undefined) continue;
+    const key = (job as any).source || job.type;
+    const existing = result[key];
+    if (!existing || job.createdAt > existing) result[key] = job.createdAt;
+    // Also track by type
+    const existing2 = result[job.type];
+    if (!existing2 || job.createdAt > existing2) result[job.type] = job.createdAt;
+  }
+  return result;
 }
