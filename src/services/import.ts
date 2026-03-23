@@ -1299,6 +1299,16 @@ async function importProcurementFile(
     const wb = XLSX.read(buffer, { type: 'array' });
     let totalImported = 0;
 
+    // Pre-calculate total rows across all sheets for accurate progress
+    let grandTotalRows = 0;
+    for (const sheetType of PROCUREMENT_SHEET_ORDER) {
+      const sheet = wb.Sheets[PROCUREMENT_SHEET_NAMES[sheetType]];
+      if (sheet) {
+        const rows = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, defval: '' }) as string[][];
+        grandTotalRows += Math.max(0, rows.length - 1);
+      }
+    }
+
     for (let i = 0; i < PROCUREMENT_SHEET_ORDER.length; i++) {
       const sheetType = PROCUREMENT_SHEET_ORDER[i];
       const sheetName = PROCUREMENT_SHEET_NAMES[sheetType];
@@ -1346,7 +1356,7 @@ async function importProcurementFile(
       for (let b = 0; b < chunks.length; b++) {
         await ProcurementService.batchSet(coll as typeof PROCUREMENT_COLLECTIONS[number], chunks[b], brandId);
         totalImported += chunks[b].length;
-        onProgress?.({ rowsProcessed: totalImported, totalRows: objects.length, batchIndex: b, totalBatches: chunks.length, fileName: file.name });
+        onProgress?.({ rowsProcessed: totalImported, totalRows: grandTotalRows, batchIndex: b, totalBatches: chunks.length, fileName: file.name });
       }
     }
 

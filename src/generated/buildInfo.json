@@ -1,10 +1,14 @@
 {
-  "version": "0.77.0",
-  "previousVersion": "0.76.0",
-  "commitHash": "fe4f31d",
+  "version": "0.78.0",
+  "previousVersion": "0.77.0",
+  "commitHash": "640073e",
   "branch": "main",
-  "buildDate": "2026-03-23T08:39:24.116Z",
+  "buildDate": "2026-03-23T09:20:16.477Z",
   "commits": [
+    {
+      "hash": "640073e",
+      "message": "feat: show last import date per type in DataImport and ConnectorsPanel"
+    },
     {
       "hash": "fe4f31d",
       "message": "fix: skip empty header columns in procurement import to avoid Firestore empty field error"
@@ -60,13 +64,10 @@
     {
       "hash": "733c466",
       "message": "Fix suppliers stats cards layout - equal width, compact spacing"
-    },
-    {
-      "hash": "c3ab550",
-      "message": "Add suppliers collection to Firestore rules"
     }
   ],
   "changes": [
+    "[Νέο χαρακτηριστικό] Show last import date per type in DataImport and ConnectorsPanel",
     "[Διόρθωση] Skip empty header columns in procurement import to avoid Firestore empty field error",
     "[Νέο χαρακτηριστικό] Google Ads connector, Meta sync fix, login UI redesign, campaigns improvements",
     "[Διόρθωση] Show file margin in strategy table, remove decorative strategy image",
@@ -75,7 +76,6 @@
     "[Νέο χαρακτηριστικό] Prefer file margin over computed in Product Intelligence - use margin from imported file when present, compute from price/cost only as fallback, auto-derive margin_tier from percentage, remove incorrect conv_rate aliases",
     "[Διόρθωση] Lazy db init in connectors to fix deploy",
     "[Νέο χαρακτηριστικό] Add Google Ads and Meta API connectors with OAuth, scheduled sync, and UI",
-    "Fix campaigns table responsive - use table-auto with whitespace-nowrap to prevent column overlap",
-    "Fix API key generation - use direct Firestore write instead of Cloud Function"
+    "Fix campaigns table responsive - use table-auto with whitespace-nowrap to prevent column overlap"
   ]
 }
