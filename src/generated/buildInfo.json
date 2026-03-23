@@ -1,10 +1,14 @@
 {
-  "version": "0.81.0",
-  "previousVersion": "0.80.0",
-  "commitHash": "2330684",
+  "version": "0.82.0",
+  "previousVersion": "0.81.0",
+  "commitHash": "77bac72",
   "branch": "main",
-  "buildDate": "2026-03-23T09:36:48.394Z",
+  "buildDate": "2026-03-23T09:47:56.036Z",
   "commits": [
+    {
+      "hash": "77bac72",
+      "message": "fix: parseNum correctly handles decimal dots vs thousands separators in procurement; add procurement cache invalidation"
+    },
     {
       "hash": "2330684",
       "message": "fix: procurement import progress bar shows correct % across all sheets"
@@ -60,13 +64,10 @@
     {
       "hash": "ddc96c6",
       "message": "Add Cloud Functions: HTTP import endpoint + API key auth for automated daily imports"
-    },
-    {
-      "hash": "961161f",
-      "message": "Responsive tables - compact layout, hide columns on smaller screens"
     }
   ],
   "changes": [
+    "[Διόρθωση] ParseNum correctly handles decimal dots vs thousands separators in procurement; add procurement cache invalidation",
     "[Διόρθωση] Procurement import progress bar shows correct % across all sheets",
     "[Νέο χαρακτηριστικό] Show last import date per type in DataImport and ConnectorsPanel",
     "[Διόρθωση] Skip empty header columns in procurement import to avoid Firestore empty field error",
@@ -75,7 +76,6 @@
     "[Νέο χαρακτηριστικό] Marketing page hero layout, 5 σημεία with app screenshots (Commercial Strategy, Data Analysis, Product Intelligence, Content Strategy)",
     "[Νέο χαρακτηριστικό] Add Procurement module with 7-tab analysis, charts, and UI redesign",
     "[Νέο χαρακτηριστικό] Prefer file margin over computed in Product Intelligence - use margin from imported file when present, compute from price/cost only as fallback, auto-derive margin_tier from percentage, remove incorrect conv_rate aliases",
-    "[Διόρθωση] Lazy db init in connectors to fix deploy",
-    "[Νέο χαρακτηριστικό] Add Google Ads and Meta API connectors with OAuth, scheduled sync, and UI"
+    "[Διόρθωση] Lazy db init in connectors to fix deploy"
   ]
 }

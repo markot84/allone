@@ -6,7 +6,7 @@ import {
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip as RechartsTooltip,
-  LineChart, Line, ReferenceLine, Legend, Cell,
+  LineChart, Line, Legend, Cell,
 } from 'recharts';
 import { Card, Spinner, Button, useToast } from '../common';
 import { useProcurement } from '../../hooks/useProcurement';
@@ -40,13 +40,15 @@ const SHEET_ICON_BG: Record<ProcurementSheetType, string> = {
   statistics: 'bg-gray-50 text-gray-600',
 };
 
+const TOP_N = 10;
+
 const CHART_TITLES: Record<ProcurementSheetType, string> = {
-  inventory: 'Διαθέσιμο απόθεμα ανά SKU',
-  costing: 'Κόστος ανά SKU',
-  item_evaluation: 'Βαθμολογία ανά είδος',
-  customer_evaluation: 'Βαθμολογία ανά πελάτη',
-  pricing_policy: 'Κόστος vs Τιμή πώλησης',
-  fiscal_year: 'Τζίρος & Κέρδος ανά SKU',
+  inventory: `Top ${TOP_N} SKU ανά διαθέσιμο απόθεμα`,
+  costing: `Top ${TOP_N} SKU ανά πρωτογενές κόστος`,
+  item_evaluation: 'Κατανομή ειδών ανά αξιολόγηση',
+  customer_evaluation: 'Κατανομή πελατών ανά αξιολόγηση',
+  pricing_policy: `Top ${TOP_N} SKU ανά μέση τιμή πώλησης`,
+  fiscal_year: `Top ${TOP_N} SKU ανά απολογιστικό τζίρο`,
   statistics: 'Τάση ανά περίοδο',
 };
 
@@ -187,40 +189,39 @@ function findStatMetricColumn(rows: Record<string, unknown>[], excludedKeys: Set
 function getChartData(key: ProcurementSheetType, rows: Record<string, unknown>[]) {
   switch (key) {
     case 'inventory':
-      return rows.map(r => ({
-        name: String(r['ΚΩΔΙΚΟΣ'] ?? '').slice(0, 10),
-        stock: parseNum(r['ΔΙΑΘΕΣΙΜΟ ΥΠΟΛΟΙΠΟ']),
-        eval: String(r['ΑΞΙΟΛΟΓΗΣΗ ΕΙΔΟΥΣ'] ?? 'C'),
-      }));
+      return [...rows]
+        .map(r => ({ name: String(r['ΚΩΔΙΚΟΣ'] ?? ''), stock: parseNum(r['ΔΙΑΘΕΣΙΜΟ ΥΠΟΛΟΙΠΟ']), eval: String(r['ΑΞΙΟΛΟΓΗΣΗ ΕΙΔΟΥΣ'] ?? 'C') }))
+        .filter(r => r.stock > 0)
+        .sort((a, b) => b.stock - a.stock)
+        .slice(0, TOP_N);
     case 'costing':
-      return rows.map(r => ({
-        name: String(r['ΚΩΔΙΚΟΣ'] ?? '').slice(0, 10),
-        primary: parseNum(r['ΠΡΩΤΟΓΕΝΕΣ ΚΟΣΤΟΣ']),
-        secondary: parseNum(r['ΔΕΥΤΕΡΟΓΕΝΕΣ ΚΟΣΤΟΣ']),
-      }));
-    case 'item_evaluation':
-      return rows.map(r => ({
-        name: String(r['ΚΩΔΙΚΟΣ'] ?? '').slice(0, 10),
-        score: parseNum(r['ΒΑΘΜΟΛΟΓΙΑ']),
-      }));
-    case 'customer_evaluation':
-      return rows.map(r => ({
-        name: String(r['ΕΠΩΝΥΜΙΑ'] ?? '').slice(0, 14),
-        score: parseNum(r['ΒΑΘΜΟΛΟΓΙΑ']),
-        eval: String(r['ΑΞΙΟΛΟΓΗΣΗ'] ?? ''),
-      }));
+      return [...rows]
+        .map(r => ({ name: String(r['ΚΩΔΙΚΟΣ'] ?? ''), primary: parseNum(r['ΠΡΩΤΟΓΕΝΕΣ ΚΟΣΤΟΣ']), secondary: parseNum(r['ΔΕΥΤΕΡΟΓΕΝΕΣ ΚΟΣΤΟΣ']) }))
+        .filter(r => r.primary > 0)
+        .sort((a, b) => b.primary - a.primary)
+        .slice(0, TOP_N);
+    case 'item_evaluation': {
+      const dist: Record<string, number> = {};
+      rows.forEach(r => { const cat = String(r['ΑΞΙΟΛΟΓΗΣΗ ΕΙΔΟΥΣ'] ?? '').trim() || 'Χωρίς'; dist[cat] = (dist[cat] ?? 0) + 1; });
+      return Object.entries(dist).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
+    }
+    case 'customer_evaluation': {
+      const dist: Record<string, number> = {};
+      rows.forEach(r => { const cat = String(r['ΑΞΙΟΛΟΓΗΣΗ'] ?? '').trim() || 'Χωρίς'; dist[cat] = (dist[cat] ?? 0) + 1; });
+      return Object.entries(dist).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
+    }
     case 'pricing_policy':
-      return rows.map(r => ({
-        name: String(r['ΚΩΔΙΚΟΣ'] ?? '').slice(0, 10),
-        cost: parseNum(r['ΣΥΝΟΛΙΚΟ ΚΟΣΤΟΣ']),
-        price: parseNum(r['ΜΕΣΗ ΤΙΜΗ ΠΩΛΗΣΗΣ']),
-      }));
+      return [...rows]
+        .map(r => ({ name: String(r['ΚΩΔΙΚΟΣ'] ?? ''), cost: parseNum(r['ΣΥΝΟΛΙΚΟ ΚΟΣΤΟΣ']), price: parseNum(r['ΜΕΣΗ ΤΙΜΗ ΠΩΛΗΣΗΣ']) }))
+        .filter(r => r.price > 0)
+        .sort((a, b) => b.price - a.price)
+        .slice(0, TOP_N);
     case 'fiscal_year':
-      return rows.map(r => ({
-        name: String(r['ΚΩΔΙΚΟΣ'] ?? '').slice(0, 10),
-        turnover: parseNum(r['ΑΠΟΛΟΓΙΣΤΙΚΟΣ ΤΖΙΡΟΣ']),
-        profit: parseNum(r['ΑΠΟΛΟΓΙΣΤΙΚΟ ΚΕΡΔΟΣ']),
-      }));
+      return [...rows]
+        .map(r => ({ name: String(r['ΚΩΔΙΚΟΣ'] ?? ''), turnover: parseNum(r['ΑΠΟΛΟΓΙΣΤΙΚΟΣ ΤΖΙΡΟΣ']), profit: parseNum(r['ΑΠΟΛΟΓΙΣΤΙΚΟ ΚΕΡΔΟΣ']) }))
+        .filter(r => r.turnover > 0)
+        .sort((a, b) => b.turnover - a.turnover)
+        .slice(0, TOP_N);
     case 'statistics': {
       if (rows.length === 0) return [];
       const metricKey = findStatMetricColumn(rows, EXCLUDED_KEYS);
@@ -248,7 +249,7 @@ function getStatSeriesNames(rows: Record<string, unknown>[]): string[] {
 
 // ── Chart component ───────────────────────────────────────────────────────────
 
-const CHART_HEIGHT = 220;
+const Y_AXIS_WIDTH = 115;
 
 function ProcurementChart({ tabKey, rows }: { tabKey: ProcurementSheetType; rows: Record<string, unknown>[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -271,101 +272,125 @@ function ProcurementChart({ tabKey, rows }: { tabKey: ProcurementSheetType; rows
   if (chartData.length === 0) return null;
 
   const W = chartWidth;
-  const H = CHART_HEIGHT;
   const axisStyle = { fill: '#57606a', fontSize: 11 };
-  const margin = { top: 10, right: 10, left: 0, bottom: 5 };
+  const marginH = { top: 5, right: 20, left: 0, bottom: 5 };
+  const marginV = { top: 10, right: 10, left: 0, bottom: 5 };
 
-  let chart: React.ReactNode = null;
-
+  // Horizontal bar charts — Top N items
   if (tabKey === 'inventory') {
-    chart = (
-      <BarChart width={W} height={H} data={chartData} margin={margin}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" vertical={false} />
-        <XAxis dataKey="name" tick={axisStyle} tickLine={false} axisLine={false} />
-        <YAxis tick={axisStyle} tickLine={false} axisLine={false} />
-        <RechartsTooltip formatter={(v: number | undefined) => [Number(v ?? 0).toLocaleString('el-GR'), 'Απόθεμα']} />
-        <Bar dataKey="stock" radius={[4, 4, 0, 0]}>
-          {chartData.map((entry: { eval: string }, i: number) => (
-            <Cell key={i} fill={EVAL_COLORS[entry.eval] ?? CHART_COLORS.accent} />
-          ))}
-        </Bar>
-      </BarChart>
+    const H = Math.max(200, chartData.length * 34 + 30);
+    return (
+      <div ref={containerRef} style={{ width: '100%' }}>
+        <BarChart layout="vertical" width={W} height={H} data={chartData} margin={marginH}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" horizontal={false} />
+          <XAxis type="number" tick={axisStyle} tickLine={false} axisLine={false} tickFormatter={(v: number) => Number(v).toLocaleString('el-GR')} />
+          <YAxis type="category" dataKey="name" width={Y_AXIS_WIDTH} tick={axisStyle} tickLine={false} axisLine={false} />
+          <RechartsTooltip formatter={(v: number | undefined) => [Number(v ?? 0).toLocaleString('el-GR'), 'Απόθεμα']} />
+          <Bar dataKey="stock" radius={[0, 4, 4, 0]} barSize={20}>
+            {chartData.map((entry: { eval: string }, i: number) => (
+              <Cell key={i} fill={EVAL_COLORS[entry.eval] ?? CHART_COLORS.accent} />
+            ))}
+          </Bar>
+        </BarChart>
+      </div>
     );
-  } else if (tabKey === 'costing') {
-    chart = (
-      <BarChart width={W} height={H} data={chartData} margin={margin}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" vertical={false} />
-        <XAxis dataKey="name" tick={axisStyle} tickLine={false} axisLine={false} />
-        <YAxis tick={axisStyle} tickLine={false} axisLine={false} tickFormatter={(v: number) => `€${v}`} />
-        <RechartsTooltip formatter={(v: number | undefined, name: string | undefined) => [`€${(v ?? 0).toFixed(2)}`, name === 'primary' ? 'Πρωτογενές κόστος' : 'Δευτερογενές κόστος']} />
-        <Legend formatter={(v: string) => v === 'primary' ? 'Πρωτογενές κόστος' : 'Δευτερογενές κόστος'} wrapperStyle={{ fontSize: 11 }} />
-        <Bar dataKey="primary" fill={CHART_COLORS.accent} radius={[4, 4, 0, 0]} />
-        <Bar dataKey="secondary" fill={CHART_COLORS.secondary} radius={[4, 4, 0, 0]} />
-      </BarChart>
+  }
+
+  if (tabKey === 'costing') {
+    const H = Math.max(200, chartData.length * 42 + 40);
+    return (
+      <div ref={containerRef} style={{ width: '100%' }}>
+        <BarChart layout="vertical" width={W} height={H} data={chartData} margin={marginH}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" horizontal={false} />
+          <XAxis type="number" tick={axisStyle} tickLine={false} axisLine={false} tickFormatter={(v: number) => `€${v}`} />
+          <YAxis type="category" dataKey="name" width={Y_AXIS_WIDTH} tick={axisStyle} tickLine={false} axisLine={false} />
+          <RechartsTooltip formatter={(v: number | undefined, name: string | undefined) => [`€${(v ?? 0).toFixed(2)}`, name === 'primary' ? 'Πρωτογενές κόστος' : 'Δευτερογενές κόστος']} />
+          <Legend formatter={(v: string) => v === 'primary' ? 'Πρωτογενές κόστος' : 'Δευτερογενές κόστος'} wrapperStyle={{ fontSize: 11 }} />
+          <Bar dataKey="primary" fill={CHART_COLORS.accent} radius={[0, 4, 4, 0]} barSize={13} />
+          <Bar dataKey="secondary" fill={CHART_COLORS.secondary} radius={[0, 4, 4, 0]} barSize={13} />
+        </BarChart>
+      </div>
     );
-  } else if (tabKey === 'item_evaluation') {
-    const scores = chartData.map((d: { score: number }) => d.score);
-    const avg = scores.length ? scores.reduce((a: number, b: number) => a + b, 0) / scores.length : 0;
-    chart = (
-      <BarChart width={W} height={H} data={chartData} margin={margin}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" vertical={false} />
-        <XAxis dataKey="name" tick={axisStyle} tickLine={false} axisLine={false} />
-        <YAxis domain={[0, 100]} tick={axisStyle} tickLine={false} axisLine={false} />
-        <RechartsTooltip formatter={(v: number | undefined) => [v ?? 0, 'Βαθμολογία']} />
-        <ReferenceLine y={avg} stroke="#9CA3AF" strokeDasharray="4 4" label={{ value: `Μέσος: ${avg.toFixed(0)}`, fill: '#9CA3AF', fontSize: 11, position: 'insideTopRight' }} />
-        <Bar dataKey="score" radius={[4, 4, 0, 0]}>
-          {chartData.map((entry: { score: number }, i: number) => {
-            const s = entry.score;
-            return <Cell key={i} fill={s >= 80 ? EVAL_COLORS.A : s >= 60 ? EVAL_COLORS.B : EVAL_COLORS.C} />;
-          })}
-        </Bar>
-      </BarChart>
+  }
+
+  // Distribution charts — count per category
+  if (tabKey === 'item_evaluation') {
+    return (
+      <div ref={containerRef} style={{ width: '100%' }}>
+        <BarChart width={W} height={220} data={chartData} margin={marginV}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" vertical={false} />
+          <XAxis dataKey="name" tick={axisStyle} tickLine={false} axisLine={false} />
+          <YAxis tick={axisStyle} tickLine={false} axisLine={false} allowDecimals={false} />
+          <RechartsTooltip formatter={(v: number | undefined) => [v ?? 0, 'Αριθμός ειδών']} />
+          <Bar dataKey="count" radius={[4, 4, 0, 0]} maxBarSize={60}>
+            {chartData.map((entry: { name: string }, i: number) => (
+              <Cell key={i} fill={EVAL_COLORS[entry.name] ?? CHART_COLORS.info} />
+            ))}
+          </Bar>
+        </BarChart>
+      </div>
     );
-  } else if (tabKey === 'customer_evaluation') {
-    chart = (
-      <BarChart width={W} height={H} data={chartData} margin={margin}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" vertical={false} />
-        <XAxis dataKey="name" tick={axisStyle} tickLine={false} axisLine={false} />
-        <YAxis domain={[0, 100]} tick={axisStyle} tickLine={false} axisLine={false} />
-        <RechartsTooltip formatter={(v: number | undefined) => [v ?? 0, 'Βαθμολογία']} />
-        <Bar dataKey="score" radius={[4, 4, 0, 0]}>
-          {chartData.map((entry: { eval: string }, i: number) => (
-            <Cell key={i} fill={EVAL_COLORS[entry.eval] ?? CHART_COLORS.info} />
-          ))}
-        </Bar>
-      </BarChart>
+  }
+
+  if (tabKey === 'customer_evaluation') {
+    return (
+      <div ref={containerRef} style={{ width: '100%' }}>
+        <BarChart width={W} height={220} data={chartData} margin={marginV}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" vertical={false} />
+          <XAxis dataKey="name" tick={axisStyle} tickLine={false} axisLine={false} />
+          <YAxis tick={axisStyle} tickLine={false} axisLine={false} allowDecimals={false} />
+          <RechartsTooltip formatter={(v: number | undefined) => [v ?? 0, 'Αριθμός πελατών']} />
+          <Bar dataKey="count" radius={[4, 4, 0, 0]} maxBarSize={60}>
+            {chartData.map((entry: { name: string }, i: number) => (
+              <Cell key={i} fill={EVAL_COLORS[entry.name] ?? CHART_COLORS.purple} />
+            ))}
+          </Bar>
+        </BarChart>
+      </div>
     );
-  } else if (tabKey === 'pricing_policy') {
-    chart = (
-      <BarChart width={W} height={H} data={chartData} margin={margin}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" vertical={false} />
-        <XAxis dataKey="name" tick={axisStyle} tickLine={false} axisLine={false} />
-        <YAxis tick={axisStyle} tickLine={false} axisLine={false} tickFormatter={(v: number) => `€${v}`} />
-        <RechartsTooltip formatter={(v: number | undefined, name: string | undefined) => [`€${(v ?? 0).toFixed(2)}`, name === 'cost' ? 'Συνολικό κόστος' : 'Μέση τιμή πώλησης']} />
-        <Legend formatter={(v: string) => v === 'cost' ? 'Συνολικό κόστος' : 'Μέση τιμή πώλησης'} wrapperStyle={{ fontSize: 11 }} />
-        <Bar dataKey="cost" fill={CHART_COLORS.secondary} radius={[4, 4, 0, 0]} />
-        <Bar dataKey="price" fill={CHART_COLORS.accent} radius={[4, 4, 0, 0]} />
-      </BarChart>
+  }
+
+  if (tabKey === 'pricing_policy') {
+    const H = Math.max(200, chartData.length * 42 + 40);
+    return (
+      <div ref={containerRef} style={{ width: '100%' }}>
+        <BarChart layout="vertical" width={W} height={H} data={chartData} margin={marginH}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" horizontal={false} />
+          <XAxis type="number" tick={axisStyle} tickLine={false} axisLine={false} tickFormatter={(v: number) => `€${v}`} />
+          <YAxis type="category" dataKey="name" width={Y_AXIS_WIDTH} tick={axisStyle} tickLine={false} axisLine={false} />
+          <RechartsTooltip formatter={(v: number | undefined, name: string | undefined) => [`€${(v ?? 0).toFixed(2)}`, name === 'cost' ? 'Συνολικό κόστος' : 'Μέση τιμή πώλησης']} />
+          <Legend formatter={(v: string) => v === 'cost' ? 'Συνολικό κόστος' : 'Μέση τιμή πώλησης'} wrapperStyle={{ fontSize: 11 }} />
+          <Bar dataKey="cost" fill={CHART_COLORS.secondary} radius={[0, 4, 4, 0]} barSize={13} />
+          <Bar dataKey="price" fill={CHART_COLORS.accent} radius={[0, 4, 4, 0]} barSize={13} />
+        </BarChart>
+      </div>
     );
-  } else if (tabKey === 'fiscal_year') {
-    chart = (
-      <BarChart width={W} height={H} data={chartData} margin={margin}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" vertical={false} />
-        <XAxis dataKey="name" tick={axisStyle} tickLine={false} axisLine={false} />
-        <YAxis tick={axisStyle} tickLine={false} axisLine={false} tickFormatter={(v: number) => `€${v}`} />
-        <RechartsTooltip formatter={(v: number | undefined, name: string | undefined) => [`€${(v ?? 0).toLocaleString('el-GR')}`, name === 'turnover' ? 'Τζίρος' : 'Κέρδος']} />
-        <Legend formatter={(v: string) => v === 'turnover' ? 'Τζίρος' : 'Κέρδος'} wrapperStyle={{ fontSize: 11 }} />
-        <Bar dataKey="turnover" fill={CHART_COLORS.info} radius={[4, 4, 0, 0]} />
-        <Bar dataKey="profit" fill={CHART_COLORS.success} radius={[4, 4, 0, 0]} />
-      </BarChart>
+  }
+
+  if (tabKey === 'fiscal_year') {
+    const H = Math.max(200, chartData.length * 42 + 40);
+    return (
+      <div ref={containerRef} style={{ width: '100%' }}>
+        <BarChart layout="vertical" width={W} height={H} data={chartData} margin={marginH}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" horizontal={false} />
+          <XAxis type="number" tick={axisStyle} tickLine={false} axisLine={false} tickFormatter={(v: number) => `€${Number(v).toLocaleString('el-GR', { maximumFractionDigits: 0 })}`} />
+          <YAxis type="category" dataKey="name" width={Y_AXIS_WIDTH} tick={axisStyle} tickLine={false} axisLine={false} />
+          <RechartsTooltip formatter={(v: number | undefined, name: string | undefined) => [`€${Number(v ?? 0).toLocaleString('el-GR')}`, name === 'turnover' ? 'Τζίρος' : 'Κέρδος']} />
+          <Legend formatter={(v: string) => v === 'turnover' ? 'Τζίρος' : 'Κέρδος'} wrapperStyle={{ fontSize: 11 }} />
+          <Bar dataKey="turnover" fill={CHART_COLORS.info} radius={[0, 4, 4, 0]} barSize={13} />
+          <Bar dataKey="profit" fill={CHART_COLORS.success} radius={[0, 4, 4, 0]} barSize={13} />
+        </BarChart>
+      </div>
     );
-  } else if (tabKey === 'statistics') {
+  }
+
+  if (tabKey === 'statistics') {
     const allSeriesNames = getStatSeriesNames(rows);
     const seriesNames = allSeriesNames.slice(0, 6);
     const hiddenCount = allSeriesNames.length - seriesNames.length;
     return (
       <div ref={containerRef} style={{ width: '100%' }}>
-        <LineChart width={W} height={H} data={chartData} margin={margin}>
+        <LineChart width={W} height={240} data={chartData} margin={marginV}>
           <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" vertical={false} />
           <XAxis dataKey="period" tick={axisStyle} tickLine={false} axisLine={false} />
           <YAxis tick={axisStyle} tickLine={false} axisLine={false} />
@@ -389,11 +414,7 @@ function ProcurementChart({ tabKey, rows }: { tabKey: ProcurementSheetType; rows
     );
   }
 
-  return (
-    <div ref={containerRef} style={{ width: '100%' }}>
-      {chart}
-    </div>
-  );
+  return null;
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
