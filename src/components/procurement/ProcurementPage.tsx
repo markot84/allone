@@ -863,10 +863,7 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
               {activeData.length === 0 ? (
                 <div className="p-8 text-center text-[var(--nts-medium-gray)]">Καμία εγγραφή σε αυτή την καρτέλα.</div>
               ) : (
-                <table style={{ tableLayout: 'fixed', width: Math.max(headers.reduce((s, h) => s + colWidth(h), 0), 600) }} className="text-sm">
-                  <colgroup>
-                    {headers.map(h => <col key={h} style={{ width: colWidth(h) }} />)}
-                  </colgroup>
+                <table className="text-sm w-full">
                   <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                     <tr className="border-b border-[var(--nts-border-gray)] bg-[var(--nts-light-gray)]">
                       {headers.map(h => {
@@ -876,16 +873,18 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
                         return (
                           <th
                             key={h}
-                            className={`px-3 py-0 font-semibold text-[var(--nts-charcoal)] text-[11px] text-${align}`}
+                            className={`px-3 py-0 font-semibold text-[var(--nts-charcoal)] text-[11px]`}
+                            style={{ textAlign: align }}
                           >
                             <button
                               onClick={(e) => {
                                 const rect = e.currentTarget.getBoundingClientRect();
                                 setOpenFilter(prev => prev?.col === h ? null : { col: h, rect });
                               }}
-                              className={`flex items-start gap-1 w-full py-2.5 group ${align === 'center' ? 'justify-center' : 'justify-between'}`}
+                              className="flex items-start gap-1 w-full py-2.5 group"
+                              style={{ justifyContent: align === 'center' ? 'center' : 'space-between' }}
                             >
-                              <span className="leading-tight whitespace-normal break-words line-clamp-2">
+                              <span className="leading-tight" style={{ whiteSpace: 'normal', wordBreak: 'break-word', maxWidth: 120 }}>
                                 {h}
                               </span>
                               <ChevronDown
@@ -922,14 +921,18 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
                           return (
                             <td
                               key={h}
-                              title={isText && raw.length > 20 ? raw : undefined}
+                              title={isText && raw.length > 25 ? raw : undefined}
                               className={`px-3 py-2 text-[var(--nts-charcoal)] text-[12px] ${
                                 isBadge ? 'text-center' :
                                 isNum ? 'text-center font-mono tabular-nums' :
                                 ct === 'code' ? 'text-left font-mono' :
                                 'text-left'
                               }`}
-                              style={isText ? { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } : undefined}
+                              style={
+                                isText
+                                  ? { maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
+                                  : { whiteSpace: 'nowrap' }
+                              }
                             >
                               {isBadge ? (
                                 <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold border ${BADGE_STYLES[raw]}`}>

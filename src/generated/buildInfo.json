@@ -1,10 +1,14 @@
 {
-  "version": "0.86.0",
-  "previousVersion": "0.85.0",
-  "commitHash": "2498429",
+  "version": "0.87.0",
+  "previousVersion": "0.86.0",
+  "commitHash": "debaa1e",
   "branch": "main",
-  "buildDate": "2026-03-23T10:31:09.116Z",
+  "buildDate": "2026-03-23T10:36:15.983Z",
   "commits": [
+    {
+      "hash": "debaa1e",
+      "message": "feat: chart toggle button, table pagination (20 rows/page) with page controls"
+    },
     {
       "hash": "2498429",
       "message": "fix: proportional column widths with fixed table layout, ellipsis for text, per-type alignment"
@@ -60,13 +64,10 @@
     {
       "hash": "f5defec",
       "message": "fix: lazy db init in connectors to fix deploy"
-    },
-    {
-      "hash": "05b9866",
-      "message": "feat: add Google Ads and Meta API connectors with OAuth, scheduled sync, and UI"
     }
   ],
   "changes": [
+    "[Νέο χαρακτηριστικό] Chart toggle button, table pagination (20 rows/page) with page controls",
     "[Διόρθωση] Proportional column widths with fixed table layout, ellipsis for text, per-type alignment",
     "[Νέο χαρακτηριστικό] Excel-style column filters with checkboxes, 2-line headers, centered numeric columns",
     "[Νέο χαρακτηριστικό] Add column filters and fix decimal display in procurement tables",
@@ -75,7 +76,6 @@
     "[Διόρθωση] Procurement import progress bar shows correct % across all sheets",
     "[Νέο χαρακτηριστικό] Show last import date per type in DataImport and ConnectorsPanel",
     "[Διόρθωση] Skip empty header columns in procurement import to avoid Firestore empty field error",
-    "[Νέο χαρακτηριστικό] Google Ads connector, Meta sync fix, login UI redesign, campaigns improvements",
-    "[Διόρθωση] Show file margin in strategy table, remove decorative strategy image"
+    "[Νέο χαρακτηριστικό] Google Ads connector, Meta sync fix, login UI redesign, campaigns improvements"
   ]
 }
