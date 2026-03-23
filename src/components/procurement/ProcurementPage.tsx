@@ -626,15 +626,6 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
     }));
   }, [activeData, headers]);
 
-  function colWidth(h: string): number {
-    const t = columnTypes[h] ?? 'text';
-    if (t === 'badge') return 88;
-    if (t === 'code') return 108;
-    if (t === 'number') return 100;
-    // text: scale by header length
-    const len = h.length;
-    return len <= 12 ? 130 : len <= 20 ? 160 : 200;
-  }
 
   if (isLoading) {
     return <div className="flex items-center justify-center py-16"><Spinner size="lg" /></div>;
