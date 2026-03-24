@@ -338,19 +338,62 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
 
   let totalImported = 0;
 
-  try {
-    // Use MCC login-customer-id only if it differs from the target account.
-    // For direct (non-MCC) accounts, omit or use self to avoid 501 UNIMPLEMENTED.
-    const effectiveLoginId = loginCustomerId && loginCustomerId !== customerId
-      ? loginCustomerId
-      : customerId;
+  // Helper: run a GAQL search with optional login-customer-id
+  const runQuery = async (query: string, loginId?: string): Promise<Response> => {
+    const h: Record<string, string> = {
+      Authorization: `Bearer ${accessToken}`,
+      'developer-token': developerToken,
+      'Content-Type': 'application/json',
+    };
+    if (loginId) h['login-customer-id'] = loginId;
+    return fetch(
+      `${GOOGLE_ADS_BASE_URL}/customers/${customerId}/googleAds:search`,
+      { method: 'POST', headers: h, body: JSON.stringify({ query, pageSize: 1000 }) }
+    );
+  };
 
+  try {
+    // First attempt: with MCC as login-customer-id
+    // Second attempt: without login-customer-id (for direct access tokens)
+    const attempts: Array<string | undefined> = loginCustomerId !== customerId
+      ? [loginCustomerId, undefined]
+      : [undefined];
+
+    let workingLoginId: string | undefined;
+    for (const loginId of attempts) {
+      const testRes = await runQuery(
+        'SELECT campaign.id FROM campaign LIMIT 1',
+        loginId
+      );
+      if (testRes.ok) {
+        workingLoginId = loginId;
+        logger.info(`[GoogleAds] loginId "${loginId ?? 'none'}" works for ${customerId}`);
+        break;
+      }
+      const errBody = await testRes.text();
+      logger.warn(`[GoogleAds] loginId "${loginId ?? 'none'}" failed (${testRes.status}): ${errBody.slice(0, 200)}`);
+    }
+
+    if (workingLoginId === undefined && attempts[0] !== undefined) {
+      // Both attempts failed — try with customerId as login
+      const selfRes = await runQuery('SELECT campaign.id FROM campaign LIMIT 1', customerId);
+      if (selfRes.ok) {
+        workingLoginId = customerId;
+        logger.info(`[GoogleAds] self loginId works for ${customerId}`);
+      } else {
+        const errText = await selfRes.text();
+        logger.error(`[GoogleAds] All loginId attempts failed for ${customerId}: ${errText.slice(0, 300)}`);
+        return { success: false, imported: 0, error: `Google Ads ${selfRes.status}: UNIMPLEMENTED — βεβαιωθείτε ότι ο developer token ανήκει στο MCC και έχει Standard access.` };
+      }
+    }
+
+    const effectiveLoginId = workingLoginId;
     const headers: Record<string, string> = {
       Authorization: `Bearer ${accessToken}`,
       'developer-token': developerToken,
       'Content-Type': 'application/json',
-      'login-customer-id': effectiveLoginId,
     };
+    if (effectiveLoginId) headers['login-customer-id'] = effectiveLoginId;
 
     let nextPageToken: string | undefined;
     const campaignMap = new Map<string, any>();
