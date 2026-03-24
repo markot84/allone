@@ -271,11 +271,17 @@ async function refreshAccessToken(refreshToken: string): Promise<string | null> 
   });
 
   if (!res.ok) {
-    logger.error('[GoogleAds] Token refresh failed:', res.status);
+    const errText = await res.text();
+    logger.error(`[GoogleAds] Token refresh failed (${res.status}): ${errText.slice(0, 200)}`);
     return null;
   }
 
   const data = await res.json();
+  if (!data.access_token) {
+    logger.error('[GoogleAds] Token refresh returned no access_token:', JSON.stringify(data).slice(0, 200));
+    return null;
+  }
+  logger.info(`[GoogleAds] Token refresh OK — scope: ${data.scope || 'unknown'}`);
   return data.access_token;
 }
 
