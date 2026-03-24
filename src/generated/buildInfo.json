@@ -1,10 +1,14 @@
 {
-  "version": "0.94.0",
-  "previousVersion": "0.93.0",
-  "commitHash": "85a0083",
+  "version": "0.95.0",
+  "previousVersion": "0.94.0",
+  "commitHash": "2bf587b",
   "branch": "main",
-  "buildDate": "2026-03-23T18:05:47.901Z",
+  "buildDate": "2026-03-24T06:19:09.442Z",
   "commits": [
+    {
+      "hash": "2bf587b",
+      "message": "security: move Gemini API key to Firebase Secret Manager via server-side proxy CF"
+    },
     {
       "hash": "85a0083",
       "message": "chore: move internal .md docs to private docs/ folder (gitignored)"
@@ -60,13 +64,10 @@
     {
       "hash": "e71a7e8",
       "message": "feat: replace unreadable charts with top-10 horizontal bars and category distribution views"
-    },
-    {
-      "hash": "77bac72",
-      "message": "fix: parseNum correctly handles decimal dots vs thousands separators in procurement; add procurement cache invalidation"
     }
   ],
   "changes": [
+    "Security: move Gemini API key to Firebase Secret Manager via server-side proxy CF",
     "[Συντήρηση] Move internal .md docs to private docs/ folder (gitignored)",
     "[Διόρθωση] Fiscal year totals from numeric column names, stock value = cost×qty calc",
     "[Διόρθωση] Filter numeric column names (isNumericColName), fuzzy getChartData, clean statistics cols",
@@ -75,7 +76,6 @@
     "[Διόρθωση] Whitespace-nowrap via Tailwind class on td, fix header word-break, remove w-full from table",
     "[Συντήρηση] Add docs/ to .gitignore and remove from tracking",
     "[Συντήρηση] Remove unused colWidth function",
-    "[Διόρθωση] Auto-fit column widths, whitespace-nowrap on data cells, max-width+ellipsis on text",
-    "[Νέο χαρακτηριστικό] Chart toggle button, table pagination (20 rows/page) with page controls"
+    "[Διόρθωση] Auto-fit column widths, whitespace-nowrap on data cells, max-width+ellipsis on text"
   ]
 }
