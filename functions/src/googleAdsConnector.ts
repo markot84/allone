@@ -313,22 +313,23 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
   const sinceStr = since.toISOString().slice(0, 10);
   const untilStr = now.toISOString().slice(0, 10);
 
+  // Note: ORDER BY on metrics with date segmentation causes UNIMPLEMENTED in some accounts.
+  // segments.date must be in SELECT when used in WHERE with date range.
   const gaqlQuery = `
     SELECT
       campaign.id,
       campaign.name,
       campaign.status,
       campaign.advertising_channel_type,
+      segments.date,
       metrics.impressions,
       metrics.clicks,
-      metrics.ctr,
       metrics.conversions,
       metrics.cost_micros,
       metrics.conversions_value
     FROM campaign
     WHERE segments.date BETWEEN '${sinceStr}' AND '${untilStr}'
       AND campaign.status != 'REMOVED'
-    ORDER BY metrics.cost_micros DESC
   `;
 
   let totalImported = 0;
@@ -361,13 +362,13 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
 
       if (!res.ok) {
         const errText = await res.text();
-        logger.warn(`[GoogleAds] Query failed for ${customerId} (${res.status}):`, errText);
+        logger.error(`[GoogleAds] Query failed — status:${res.status} customerId:${customerId} loginId:${effectiveLoginId} devToken:${developerToken.slice(0,6)}*** body:${errText.slice(0, 500)}`);
         let detail = errText;
         try {
           const parsed = JSON.parse(errText);
-          detail = parsed?.error?.message || parsed?.error?.status || errText;
+          detail = parsed?.error?.message || parsed?.error?.details?.[0]?.errors?.[0]?.message || parsed?.error?.status || errText;
         } catch { /* keep raw text */ }
-        return { success: false, imported: 0, error: `Google Ads ${res.status}: ${detail.slice(0, 200)}` };
+        return { success: false, imported: 0, error: `Google Ads ${res.status}: ${detail.slice(0, 300)}` };
       }
 
       const page = await res.json();
