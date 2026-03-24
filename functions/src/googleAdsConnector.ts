@@ -28,7 +28,7 @@ function getDb(): Firestore {
   return _db ?? (admin.firestore() as unknown as Firestore);
 }
 
-const GOOGLE_ADS_API_VERSION = 'v18';
+const GOOGLE_ADS_API_VERSION = 'v19';
 const GOOGLE_ADS_BASE_URL = `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}`;
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
