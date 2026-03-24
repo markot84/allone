@@ -1,10 +1,14 @@
 {
-  "version": "0.98.0",
-  "previousVersion": "0.97.0",
-  "commitHash": "f3b6e70",
+  "version": "0.99.0",
+  "previousVersion": "0.98.0",
+  "commitHash": "809190f",
   "branch": "main",
-  "buildDate": "2026-03-24T06:58:58.156Z",
+  "buildDate": "2026-03-24T07:01:27.773Z",
   "commits": [
+    {
+      "hash": "809190f",
+      "message": "fix: modal dialog width with inline style override, improved account picker UI"
+    },
     {
       "hash": "f3b6e70",
       "message": "fix: restore Google Ads API v19, keep improved error detail logging"
@@ -60,13 +64,10 @@
     {
       "hash": "51c360a",
       "message": "fix: auto-fit column widths, whitespace-nowrap on data cells, max-width+ellipsis on text"
-    },
-    {
-      "hash": "debaa1e",
-      "message": "feat: chart toggle button, table pagination (20 rows/page) with page controls"
     }
   ],
   "changes": [
+    "[Διόρθωση] Modal dialog width with inline style override, improved account picker UI",
     "[Διόρθωση] Restore Google Ads API v19, keep improved error detail logging",
     "[Διόρθωση] Downgrade Google Ads API to v18 stable, improve error detail in sync response",
     "[Διόρθωση] Remove global max-width override that broke Tailwind max-w utilities on login UI",
@@ -75,7 +76,6 @@
     "[Διόρθωση] Fiscal year totals from numeric column names, stock value = cost×qty calc",
     "[Διόρθωση] Filter numeric column names (isNumericColName), fuzzy getChartData, clean statistics cols",
     "[Διόρθωση] Fuzzy column matching (findCol), parseNum 3-digit dot heuristic, Αξία αποθέματος KPI",
-    "[Νέο χαρακτηριστικό] Procurement API Push integration - parseXLSXAllSheets, importProcurement Cloud Function, importData endpoint extension, DataImport UI docs",
-    "[Διόρθωση] Whitespace-nowrap via Tailwind class on td, fix header word-break, remove w-full from table"
+    "[Νέο χαρακτηριστικό] Procurement API Push integration - parseXLSXAllSheets, importProcurement Cloud Function, importData endpoint extension, DataImport UI docs"
   ]
 }

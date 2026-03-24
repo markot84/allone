@@ -115,9 +115,12 @@ function AccountPickerModal({
         <div className="px-6 py-5">
           {manualMode ? (
             <div>
-              <p className="text-sm text-[#6B7280] mb-4">
-                Εισάγετε το <strong>Customer ID</strong> του Google Ads λογαριασμού:
-              </p>
+              <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 mb-4">
+                <span className="text-amber-500 text-sm mt-0.5">⚠</span>
+                <p className="text-xs text-amber-700">
+                  Εισάγετε το ID του <strong>διαφημιστικού λογαριασμού</strong> (sub-account), <strong>όχι</strong> του Manager Account (MCC).
+                </p>
+              </div>
               <input
                 type="text"
                 value={manualId}
@@ -126,7 +129,7 @@ function AccountPickerModal({
                 style={{ width: '100%' }}
                 className="rounded-lg border border-[#E5E7EB] px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 bg-[#F9FAFB]"
               />
-              <p className="text-xs text-[#9CA3AF] mt-2">Βρείτε το ID στο Google Ads → Ρυθμίσεις λογαριασμού</p>
+              <p className="text-xs text-[#9CA3AF] mt-2">Google Ads → επιλογή sub-account → Ρυθμίσεις → Customer ID</p>
             </div>
           ) : (
             <>
