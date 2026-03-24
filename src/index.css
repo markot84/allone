@@ -71,19 +71,9 @@ html, body {
   overflow: hidden;
 }
 
-/* Prevent horizontal overflow - exclude form controls to avoid blocking input */
-*:not(input):not(textarea):not(select) {
-  max-width: 100%;
-}
-
-/* Ensure all grid and flex containers respect viewport width */
-.grid {
-  max-width: 100%;
-  min-width: 0;
-}
-
-/* Smooth scrolling */
+/* Prevent flex/grid children from overflowing their containers */
 * {
+  min-width: 0;
   scroll-behavior: smooth;
 }
 

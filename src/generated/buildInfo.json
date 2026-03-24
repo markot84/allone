@@ -1,10 +1,14 @@
 {
-  "version": "0.95.0",
-  "previousVersion": "0.94.0",
-  "commitHash": "2bf587b",
+  "version": "0.97.0",
+  "previousVersion": "0.96.0",
+  "commitHash": "26e4e3d",
   "branch": "main",
-  "buildDate": "2026-03-24T06:19:09.442Z",
+  "buildDate": "2026-03-24T06:29:00.689Z",
   "commits": [
+    {
+      "hash": "26e4e3d",
+      "message": "security: move Gemini API key to Firebase Secret Manager via server-side proxy CF"
+    },
     {
       "hash": "2bf587b",
       "message": "security: move Gemini API key to Firebase Secret Manager via server-side proxy CF"
@@ -60,10 +64,6 @@
     {
       "hash": "548203e",
       "message": "feat: add column filters and fix decimal display in procurement tables"
-    },
-    {
-      "hash": "e71a7e8",
-      "message": "feat: replace unreadable charts with top-10 horizontal bars and category distribution views"
     }
   ],
   "changes": [
