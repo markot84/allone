@@ -97,28 +97,41 @@ function AccountPickerModal({
     }
   };
 
+  const S = {
+    overlay: { position: 'fixed' as const, inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)', padding: '16px' },
+    card: { maxWidth: '420px', width: '100%', backgroundColor: '#fff', borderRadius: '16px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)', overflow: 'hidden' },
+    header: { display: 'flex', alignItems: 'center', gap: '12px', padding: '20px 24px', borderBottom: '1px solid #F3F4F6' },
+    iconWrap: { flexShrink: 0, width: '40px', height: '40px', borderRadius: '10px', backgroundColor: '#EEF2FF', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+    body: { padding: '20px 24px' },
+    warning: { display: 'flex', gap: '8px', backgroundColor: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '8px', padding: '10px 12px', marginBottom: '14px' },
+    input: { width: '100%', borderRadius: '8px', border: '1px solid #E5E7EB', padding: '10px 12px', fontSize: '14px', backgroundColor: '#F9FAFB', outline: 'none', boxSizing: 'border-box' as const },
+    footer: { display: 'flex', gap: '10px', padding: '0 24px 20px' },
+    btnSecondary: { flex: 1, padding: '9px 16px', borderRadius: '8px', border: '1px solid #E5E7EB', backgroundColor: '#fff', fontSize: '13px', fontWeight: 500, cursor: 'pointer', color: '#374151' },
+    btnPrimary: (disabled: boolean) => ({ flex: 1, padding: '9px 16px', borderRadius: '8px', border: 'none', backgroundColor: disabled ? '#FCA868' : '#F97316', fontSize: '13px', fontWeight: 600, cursor: disabled ? 'not-allowed' : 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }),
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
-      <div style={{ maxWidth: '440px', width: '100%' }} className="rounded-2xl bg-white shadow-2xl overflow-hidden">
+    <div style={S.overlay}>
+      <div style={S.card}>
         {/* Header */}
-        <div className="flex items-center gap-3 px-6 py-5 border-b border-[#F3F4F6]">
-          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-indigo-50">
-            <Building2 size={20} className="text-indigo-600" />
+        <div style={S.header}>
+          <div style={S.iconWrap}>
+            <Building2 size={18} color="#4F46E5" />
           </div>
           <div>
-            <h3 className="font-semibold text-[#1A1A1A] text-sm">Επιλογή Διαφημιστικού Λογαριασμού</h3>
-            <p className="text-xs text-[#6B7280]">για το brand <strong>{brandName}</strong></p>
+            <p style={{ margin: 0, fontWeight: 600, fontSize: '14px', color: '#111827' }}>Επιλογή Διαφημιστικού Λογαριασμού</p>
+            <p style={{ margin: 0, fontSize: '12px', color: '#6B7280' }}>για το brand <strong>{brandName}</strong></p>
           </div>
         </div>
 
         {/* Body */}
-        <div className="px-6 py-5">
+        <div style={S.body}>
           {manualMode ? (
             <div>
-              <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 mb-4">
-                <span className="text-amber-500 text-sm mt-0.5">⚠</span>
-                <p className="text-xs text-amber-700">
-                  Εισάγετε το ID του <strong>διαφημιστικού λογαριασμού</strong> (sub-account), <strong>όχι</strong> του Manager Account (MCC).
+              <div style={S.warning}>
+                <span style={{ fontSize: '14px', color: '#D97706', flexShrink: 0 }}>⚠</span>
+                <p style={{ margin: 0, fontSize: '12px', color: '#92400E', lineHeight: '1.5' }}>
+                  Εισάγετε το ID του <strong>διαφημιστικού sub-account</strong>, όχι του Manager Account (MCC).
                 </p>
               </div>
               <input
@@ -126,60 +139,52 @@ function AccountPickerModal({
                 value={manualId}
                 onChange={(e) => setManualId(e.target.value)}
                 placeholder="π.χ. 123-456-7890"
-                style={{ width: '100%' }}
-                className="rounded-lg border border-[#E5E7EB] px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 bg-[#F9FAFB]"
+                style={S.input}
+                onKeyDown={(e) => e.key === 'Enter' && handleConfirm()}
               />
-              <p className="text-xs text-[#9CA3AF] mt-2">Google Ads → επιλογή sub-account → Ρυθμίσεις → Customer ID</p>
+              <p style={{ margin: '8px 0 0', fontSize: '11px', color: '#9CA3AF' }}>
+                Google Ads → επιλογή sub-account → Ρυθμίσεις → Customer ID
+              </p>
             </div>
           ) : (
-            <>
-              <p className="text-sm text-[#6B7280] mb-3">
+            <div>
+              <p style={{ margin: '0 0 12px', fontSize: '13px', color: '#6B7280' }}>
                 Επίλεξε τον λογαριασμό για το brand:
               </p>
-              <div className="space-y-2" style={{ maxHeight: '240px', overflowY: 'auto' }}>
+              <div style={{ maxHeight: '220px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {accounts.map((acc) => (
                   <label
                     key={acc.id}
-                    className={`flex items-center gap-3 rounded-xl border-2 px-4 py-3 cursor-pointer transition-all ${
-                      selected?.id === acc.id
-                        ? 'border-indigo-500 bg-indigo-50'
-                        : 'border-[#E5E7EB] hover:border-[#D1D5DB] hover:bg-[#F9FAFB]'
-                    }`}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '12px',
+                      padding: '12px 16px', borderRadius: '10px', cursor: 'pointer',
+                      border: `2px solid ${selected?.id === acc.id ? '#6366F1' : '#E5E7EB'}`,
+                      backgroundColor: selected?.id === acc.id ? '#EEF2FF' : '#fff',
+                    }}
                   >
-                    <input
-                      type="radio"
-                      name="adAccount"
-                      value={acc.id}
-                      checked={selected?.id === acc.id}
-                      onChange={() => setSelected(acc)}
-                      className="accent-indigo-600 flex-shrink-0"
-                    />
+                    <input type="radio" name="adAccount" value={acc.id} checked={selected?.id === acc.id} onChange={() => setSelected(acc)} style={{ accentColor: '#6366F1', flexShrink: 0 }} />
                     <div>
-                      <p className="text-sm font-medium text-[#1A1A1A]">{acc.name}</p>
-                      <p className="text-xs text-[#9CA3AF]">{acc.id}</p>
+                      <p style={{ margin: 0, fontSize: '13px', fontWeight: 500, color: '#111827' }}>{acc.name}</p>
+                      <p style={{ margin: 0, fontSize: '11px', color: '#9CA3AF' }}>{acc.id}</p>
                     </div>
                   </label>
                 ))}
               </div>
-            </>
+            </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="flex gap-3 px-6 pb-5">
-          <Button variant="secondary" size="sm" onClick={onCancel} className="flex-1" disabled={loading}>
-            Άκυρο
-          </Button>
-          <Button
-            variant="primary"
-            size="sm"
+        <div style={S.footer}>
+          <button style={S.btnSecondary} onClick={onCancel} disabled={loading}>Άκυρο</button>
+          <button
+            style={S.btnPrimary((manualMode ? !manualId.trim() : !selected) || loading)}
             onClick={handleConfirm}
             disabled={(manualMode ? !manualId.trim() : !selected) || loading}
-            className="flex-1"
           >
-            {loading ? <Spinner size="sm" className="mr-1" /> : null}
+            {loading && <Spinner size="sm" />}
             {loading ? 'Αποθήκευση...' : 'Επιβεβαίωση'}
-          </Button>
+          </button>
         </div>
       </div>
     </div>

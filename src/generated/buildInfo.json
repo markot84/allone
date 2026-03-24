@@ -1,10 +1,14 @@
 {
-  "version": "0.99.0",
-  "previousVersion": "0.98.0",
-  "commitHash": "809190f",
+  "version": "0.100.0",
+  "previousVersion": "0.99.0",
+  "commitHash": "091bff0",
   "branch": "main",
-  "buildDate": "2026-03-24T07:01:27.773Z",
+  "buildDate": "2026-03-24T07:05:29.358Z",
   "commits": [
+    {
+      "hash": "091bff0",
+      "message": "fix: clarify sub-account vs MCC in Google Ads account picker UI"
+    },
     {
       "hash": "809190f",
       "message": "fix: modal dialog width with inline style override, improved account picker UI"
@@ -60,13 +64,10 @@
     {
       "hash": "f8ed8a3",
       "message": "chore: remove unused colWidth function"
-    },
-    {
-      "hash": "51c360a",
-      "message": "fix: auto-fit column widths, whitespace-nowrap on data cells, max-width+ellipsis on text"
     }
   ],
   "changes": [
+    "[Διόρθωση] Clarify sub-account vs MCC in Google Ads account picker UI",
     "[Διόρθωση] Modal dialog width with inline style override, improved account picker UI",
     "[Διόρθωση] Restore Google Ads API v19, keep improved error detail logging",
     "[Διόρθωση] Downgrade Google Ads API to v18 stable, improve error detail in sync response",
@@ -75,7 +76,6 @@
     "[Συντήρηση] Move internal .md docs to private docs/ folder (gitignored)",
     "[Διόρθωση] Fiscal year totals from numeric column names, stock value = cost×qty calc",
     "[Διόρθωση] Filter numeric column names (isNumericColName), fuzzy getChartData, clean statistics cols",
-    "[Διόρθωση] Fuzzy column matching (findCol), parseNum 3-digit dot heuristic, Αξία αποθέματος KPI",
-    "[Νέο χαρακτηριστικό] Procurement API Push integration - parseXLSXAllSheets, importProcurement Cloud Function, importData endpoint extension, DataImport UI docs"
+    "[Διόρθωση] Fuzzy column matching (findCol), parseNum 3-digit dot heuristic, Αξία αποθέματος KPI"
   ]
 }
