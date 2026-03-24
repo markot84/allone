@@ -131,9 +131,36 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
     return filtered;
   }, [campaigns, searchQuery, channelFilter, statusFilter, dateFrom, dateTo]);
 
+  // Compute date-range-aware metrics per campaign
+  const campaignsWithDateMetrics = useMemo(() => {
+    const useDateFilter = !!(dateFrom || dateTo);
+    if (!useDateFilter) return filteredCampaigns;
+
+    const fromDate = dateFrom || '0000-00-00';
+    const toDate = dateTo || '9999-99-99';
+
+    return filteredCampaigns.map(c => {
+      if (!c.dailyMetrics || Object.keys(c.dailyMetrics).length === 0) return c;
+      let impressions = 0, clicks = 0, conversions = 0, amount_spent = 0, conversion_value = 0;
+      for (const [date, m] of Object.entries(c.dailyMetrics)) {
+        if (date <= toDate && date >= fromDate.slice(0, 7) + '-01') {
+          impressions += m.impressions || 0;
+          clicks += m.clicks || 0;
+          conversions += m.conversions || 0;
+          amount_spent += m.amount_spent || 0;
+          conversion_value += m.conversion_value || 0;
+        }
+      }
+      const ctr = impressions > 0 ? Math.round((clicks / impressions) * 10000) / 100 : 0;
+      const roas = amount_spent > 0 ? Math.round((conversion_value / amount_spent) * 100) / 100 : 0;
+      amount_spent = Math.round(amount_spent * 100) / 100;
+      return { ...c, impressions, clicks, conversions, amount_spent, conversion_value, ctr, roas };
+    });
+  }, [filteredCampaigns, dateFrom, dateTo]);
+
   const sortedCampaigns = useMemo(() => {
-    if (!sortColumn) return filteredCampaigns;
-    const sorted = [...filteredCampaigns].sort((a, b) => {
+    if (!sortColumn) return campaignsWithDateMetrics;
+    const sorted = [...campaignsWithDateMetrics].sort((a, b) => {
       let va: string | number = 0;
       let vb: string | number = 0;
       switch (sortColumn) {
@@ -152,7 +179,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
       return sortDirection === 'asc' ? (va as number) - (vb as number) : (vb as number) - (va as number);
     });
     return sorted;
-  }, [filteredCampaigns, sortColumn, sortDirection]);
+  }, [campaignsWithDateMetrics, sortColumn, sortDirection]);
 
   const handleSort = (col: string) => {
     if (sortColumn === col) {
@@ -163,13 +190,36 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
     }
   };
 
-  // Calculate summary stats (from filtered campaigns)
+  // Calculate summary stats from dailyMetrics within selected date range
   const summaryStats = useMemo(() => {
     const list = filteredCampaigns;
     const total = list.length;
-    const totalSpent = list.reduce((sum, c) => sum + (c.amount_spent || 0), 0);
-    const totalConversions = list.reduce((sum, c) => sum + (c.conversions || 0), 0);
-    const totalConversionValue = list.reduce((sum, c) => sum + (c.conversion_value || 0), 0);
+    const useDateFilter = !!(dateFrom || dateTo);
+
+    let totalSpent = 0;
+    let totalConversions = 0;
+    let totalConversionValue = 0;
+
+    for (const c of list) {
+      if (useDateFilter && c.dailyMetrics && Object.keys(c.dailyMetrics).length > 0) {
+        const fromDate = dateFrom || '0000-00-00';
+        const toDate = dateTo || '9999-99-99';
+        for (const [date, m] of Object.entries(c.dailyMetrics)) {
+          // Include bucket if its start date is before toDate and the next month starts after fromDate
+          // This handles both daily keys (YYYY-MM-DD) and monthly keys (YYYY-MM-01)
+          if (date <= toDate && date >= fromDate.slice(0, 7) + '-01') {
+            totalSpent += m.amount_spent || 0;
+            totalConversions += m.conversions || 0;
+            totalConversionValue += m.conversion_value || 0;
+          }
+        }
+      } else {
+        totalSpent += c.amount_spent || 0;
+        totalConversions += c.conversions || 0;
+        totalConversionValue += c.conversion_value || 0;
+      }
+    }
+
     const avgROAS = totalSpent > 0 ? totalConversionValue / totalSpent : 0;
 
     const byChannel: Record<string, number> = {};
@@ -186,7 +236,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
       avgROAS,
       byChannel,
     };
-  }, [filteredCampaigns]);
+  }, [filteredCampaigns, dateFrom, dateTo]);
 
   // Standard channels + unique from data (sorted: standard first, then data-derived)
   const STANDARD_CHANNELS = ['Meta', 'Google Ads', 'Google Shopping', 'Other'];

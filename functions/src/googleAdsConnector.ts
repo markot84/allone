@@ -28,7 +28,7 @@ function getDb(): Firestore {
   return _db ?? (admin.firestore() as unknown as Firestore);
 }
 
-const GOOGLE_ADS_API_VERSION = 'v19';
+const GOOGLE_ADS_API_VERSION = 'v22';
 const GOOGLE_ADS_BASE_URL = `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}`;
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
@@ -36,11 +36,12 @@ const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const SCOPES = ['https://www.googleapis.com/auth/adwords'];
 
 function getCredentials() {
+  const raw = (s?: string) => (s?.trim().split(/\s+/)[0] || '');
   return {
-    clientId: process.env.GOOGLE_ADS_CLIENT_ID || '',
-    clientSecret: process.env.GOOGLE_ADS_CLIENT_SECRET || '',
-    developerToken: process.env.GOOGLE_ADS_DEVELOPER_TOKEN || '',
-    loginCustomerId: process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID || '',
+    clientId: raw(process.env.GOOGLE_ADS_CLIENT_ID),
+    clientSecret: raw(process.env.GOOGLE_ADS_CLIENT_SECRET),
+    developerToken: raw(process.env.GOOGLE_ADS_DEVELOPER_TOKEN),
+    loginCustomerId: raw(process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID).replace(/-/g, ''),
   };
 }
 
@@ -195,11 +196,11 @@ export async function selectGoogleAdsAccount(brandId: string, customerId: string
  * List accessible Google Ads customer accounts with names
  */
 async function listAccessibleCustomers(accessToken: string): Promise<GoogleAdsCustomer[]> {
-  const { developerToken, loginCustomerId: rawLoginId } = getCredentials();
-  const loginCustomerId = rawLoginId.replace(/-/g, '');
+  const { developerToken, loginCustomerId } = getCredentials();
+
+  logger.info(`[GoogleAds] DIAG listAccessible — loginCustomerId="${loginCustomerId}" devToken="${developerToken.slice(0,6)}..." rawEnv="${(process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID || '').slice(0,30)}"`);
 
   try {
-    // Get resource names
     const headers: Record<string, string> = {
       Authorization: `Bearer ${accessToken}`,
       'developer-token': developerToken,
@@ -244,6 +245,41 @@ async function listAccessibleCustomers(accessToken: string): Promise<GoogleAdsCu
         }
       } catch {
         customers.push({ id: cid, name: `Account ${cid}`, resourceName: `customers/${cid}` });
+      }
+    }
+
+    // If only the MCC was returned, query it for sub-accounts
+    const hasMccOnly = loginCustomerId && customers.length > 0 && customers.every(c => c.id === loginCustomerId);
+    if (hasMccOnly) {
+      logger.info(`[GoogleAds] Only MCC returned — querying for sub-accounts under ${loginCustomerId}`);
+      try {
+        const subRes = await fetch(
+          `${GOOGLE_ADS_BASE_URL}/customers/${loginCustomerId}/googleAds:search`,
+          {
+            method: 'POST',
+            headers: { ...headers, 'Content-Type': 'application/json', 'login-customer-id': loginCustomerId },
+            body: JSON.stringify({
+              query: `SELECT customer_client.client_customer, customer_client.descriptive_name, customer_client.id, customer_client.manager FROM customer_client WHERE customer_client.manager = false`,
+            }),
+          }
+        );
+        if (subRes.ok) {
+          const subData = await subRes.json();
+          const subAccounts: GoogleAdsCustomer[] = (subData.results || []).map((row: any) => ({
+            id: String(row.customerClient?.id || row.customerClient?.clientCustomer?.replace('customers/', '') || ''),
+            name: row.customerClient?.descriptiveName || 'Sub-account',
+            resourceName: row.customerClient?.clientCustomer || '',
+          })).filter((a: GoogleAdsCustomer) => a.id && a.id !== loginCustomerId);
+          if (subAccounts.length > 0) {
+            logger.info(`[GoogleAds] Found ${subAccounts.length} sub-accounts under MCC`);
+            return subAccounts;
+          }
+        } else {
+          const errText = await subRes.text();
+          logger.warn(`[GoogleAds] Sub-account query failed (${subRes.status}): ${errText.slice(0, 300)}`);
+        }
+      } catch (e) {
+        logger.warn(`[GoogleAds] Sub-account query error: ${e}`);
       }
     }
 
@@ -293,9 +329,7 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
   imported: number;
   error?: string;
 }> {
-  const { developerToken, loginCustomerId: rawLoginId } = getCredentials();
-  // Google Ads API requires IDs without dashes
-  const loginCustomerId = rawLoginId.replace(/-/g, '');
+  const { developerToken, loginCustomerId } = getCredentials();
 
   const connectorDoc = await getDb().doc(`connectors/${brandId}`).get();
   const connector = connectorDoc.data()?.google_ads;
@@ -313,8 +347,11 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
     return { success: false, imported: 0, error: 'Failed to refresh token' };
   }
 
-  // Strip dashes — API requires plain numeric IDs
   const customerId: string = String(connector.customerId).replace(/-/g, '');
+
+  if (loginCustomerId && customerId === loginCustomerId) {
+    return { success: false, imported: 0, error: 'Ο Customer ID ταυτίζεται με τον MCC — χρησιμοποιήστε το ID του sub-account.' };
+  }
 
   // Build last 365 days date range
   const now = new Date();
@@ -345,6 +382,7 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
   let totalImported = 0;
 
   // Helper: run a GAQL search with optional login-customer-id
+  const searchUrl = `${GOOGLE_ADS_BASE_URL}/customers/${customerId}/googleAds:search`;
   const runQuery = async (query: string, loginId?: string): Promise<Response> => {
     const h: Record<string, string> = {
       Authorization: `Bearer ${accessToken}`,
@@ -352,45 +390,52 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
       'Content-Type': 'application/json',
     };
     if (loginId) h['login-customer-id'] = loginId;
-    return fetch(
-      `${GOOGLE_ADS_BASE_URL}/customers/${customerId}/googleAds:search`,
-      { method: 'POST', headers: h, body: JSON.stringify({ query, pageSize: 1000 }) }
-    );
+    return fetch(searchUrl, { method: 'POST', headers: h, body: JSON.stringify({ query }) });
   };
 
+  logger.info(`[GoogleAds] Fetching campaigns — url=${searchUrl} loginCustomerId=${loginCustomerId} customerId=${customerId}`);
+
   try {
-    // First attempt: with MCC as login-customer-id
-    // Second attempt: without login-customer-id (for direct access tokens)
-    const attempts: Array<string | undefined> = loginCustomerId !== customerId
-      ? [loginCustomerId, undefined]
-      : [undefined];
+    // Always try MCC first, then without header, then self-reference
+    const attempts: Array<string | undefined> = [];
+    if (loginCustomerId && loginCustomerId !== customerId) attempts.push(loginCustomerId);
+    attempts.push(undefined);
+    if (loginCustomerId && loginCustomerId !== customerId) attempts.push(customerId);
 
     let workingLoginId: string | undefined;
+    let found = false;
     for (const loginId of attempts) {
+      // Use customer.id as probe — lighter and avoids resource-specific issues
       const testRes = await runQuery(
-        'SELECT campaign.id FROM campaign LIMIT 1',
+        'SELECT customer.id, customer.descriptive_name FROM customer LIMIT 1',
         loginId
       );
       if (testRes.ok) {
         workingLoginId = loginId;
+        found = true;
         logger.info(`[GoogleAds] loginId "${loginId ?? 'none'}" works for ${customerId}`);
         break;
       }
       const errBody = await testRes.text();
-      logger.warn(`[GoogleAds] loginId "${loginId ?? 'none'}" failed (${testRes.status}): ${errBody.slice(0, 200)}`);
+      let parsedErr = errBody.slice(0, 800);
+      try {
+        const parsed = JSON.parse(errBody);
+        const details = parsed?.error?.details || [];
+        const gadsErr = details[0]?.errors?.[0];
+        const fieldViolations = details[0]?.fieldViolations;
+        const errCode = gadsErr?.errorCode ? JSON.stringify(gadsErr.errorCode) : '';
+        const errMsg = gadsErr?.message || parsed?.error?.message || '';
+        const fieldInfo = fieldViolations ? ` fields=${JSON.stringify(fieldViolations)}` : '';
+        parsedErr = `${parsed?.error?.status || ''} ${errCode} ${errMsg}${fieldInfo}`.trim();
+        logger.warn(`[GoogleAds] loginId "${loginId ?? 'none'}" full details: ${JSON.stringify(details).slice(0, 500)}`);
+      } catch { /* keep raw */ }
+      logger.warn(`[GoogleAds] loginId "${loginId ?? 'none'}" failed (${testRes.status}): ${parsedErr}`);
     }
 
-    if (workingLoginId === undefined && attempts[0] !== undefined) {
-      // Both attempts failed — try with customerId as login
-      const selfRes = await runQuery('SELECT campaign.id FROM campaign LIMIT 1', customerId);
-      if (selfRes.ok) {
-        workingLoginId = customerId;
-        logger.info(`[GoogleAds] self loginId works for ${customerId}`);
-      } else {
-        const errText = await selfRes.text();
-        logger.error(`[GoogleAds] All loginId attempts failed for ${customerId}: ${errText.slice(0, 300)}`);
-        return { success: false, imported: 0, error: `Google Ads ${selfRes.status}: UNIMPLEMENTED — βεβαιωθείτε ότι ο developer token ανήκει στο MCC και έχει Standard access.` };
-      }
+    if (!found) {
+      const lastErrMsg = `All ${attempts.length} login-customer-id attempts failed for customer ${customerId}`;
+      logger.error(`[GoogleAds] ${lastErrMsg}`);
+      return { success: false, imported: 0, error: `Google Ads: ${lastErrMsg}. Βεβαιωθείτε ότι ο λογαριασμός ${customerId} είναι προσβάσιμος μέσω του MCC.` };
     }
 
     const effectiveLoginId = workingLoginId;
@@ -405,7 +450,7 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
     const campaignMap = new Map<string, any>();
 
     do {
-      const body: Record<string, any> = { query: gaqlQuery, pageSize: 1000 };
+      const body: Record<string, any> = { query: gaqlQuery };
       if (nextPageToken) body.pageToken = nextPageToken;
 
       const res = await fetch(
@@ -430,13 +475,21 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
       for (const row of page.results || []) {
         const campaignId = row.campaign?.id;
         const campaignName = row.campaign?.name;
+        const segDate = row.segments?.date || '';
         if (!campaignId || !campaignName) continue;
+
+        const dayImpressions = parseInt(row.metrics?.impressions || '0', 10);
+        const dayClicks = parseInt(row.metrics?.clicks || '0', 10);
+        const dayConversions = parseFloat(row.metrics?.conversions || '0');
+        const daySpent = parseInt(row.metrics?.costMicros || '0', 10) / 1_000_000;
+        const dayConvValue = parseFloat(row.metrics?.conversionsValue || '0');
 
         const existing = campaignMap.get(campaignId) || {
           id: `gads_${customerId}_${campaignId}`,
           name: campaignName,
           channel: 'Google Ads',
           status: (row.campaign?.status || 'ENABLED').toLowerCase(),
+          advertising_channel_type: row.campaign?.advertisingChannelType || '',
           impressions: 0,
           clicks: 0,
           conversions: 0,
@@ -444,15 +497,28 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
           conversion_value: 0,
           ctr: 0,
           roas: 0,
-          period: 'Last 365 days',
+          start_date: sinceStr,
+          end_date: untilStr,
+          period: `${sinceStr} – ${untilStr}`,
+          dailyMetrics: {} as Record<string, { impressions: number; clicks: number; conversions: number; amount_spent: number; conversion_value: number }>,
           brandId,
         };
 
-        existing.impressions += parseInt(row.metrics?.impressions || '0', 10);
-        existing.clicks += parseInt(row.metrics?.clicks || '0', 10);
-        existing.conversions += parseFloat(row.metrics?.conversions || '0');
-        existing.amount_spent += parseInt(row.metrics?.costMicros || '0', 10) / 1_000_000;
-        existing.conversion_value += parseFloat(row.metrics?.conversionsValue || '0');
+        existing.impressions += dayImpressions;
+        existing.clicks += dayClicks;
+        existing.conversions += dayConversions;
+        existing.amount_spent += daySpent;
+        existing.conversion_value += dayConvValue;
+
+        if (segDate) {
+          const prev = existing.dailyMetrics[segDate] || { impressions: 0, clicks: 0, conversions: 0, amount_spent: 0, conversion_value: 0 };
+          prev.impressions += dayImpressions;
+          prev.clicks += dayClicks;
+          prev.conversions += dayConversions;
+          prev.amount_spent += daySpent;
+          prev.conversion_value += dayConvValue;
+          existing.dailyMetrics[segDate] = prev;
+        }
 
         campaignMap.set(campaignId, existing);
       }

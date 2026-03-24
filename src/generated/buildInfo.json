@@ -1,10 +1,30 @@
 {
-  "version": "0.100.0",
-  "previousVersion": "0.99.0",
-  "commitHash": "091bff0",
+  "version": "0.102.0",
+  "previousVersion": "0.101.0",
+  "commitHash": "5d2c14f",
   "branch": "main",
-  "buildDate": "2026-03-24T07:05:29.358Z",
+  "buildDate": "2026-03-24T08:30:48.281Z",
   "commits": [
+    {
+      "hash": "5d2c14f",
+      "message": "debug: add token refresh scope logging to diagnose Google Ads UNIMPLEMENTED"
+    },
+    {
+      "hash": "7a20b66",
+      "message": "fix: auto-detect working login-customer-id by testing MCC, no-header, and self fallbacks"
+    },
+    {
+      "hash": "ebe037d",
+      "message": "fix: strip dashes from Google Ads customer IDs before API calls (API requires plain numeric IDs)"
+    },
+    {
+      "hash": "8834901",
+      "message": "fix: add segments.date to SELECT, remove ORDER BY metrics, improve error logging"
+    },
+    {
+      "hash": "8b5c453",
+      "message": "fix: rewrite account picker modal with 100% inline styles to bypass CSS layer issues"
+    },
     {
       "hash": "091bff0",
       "message": "fix: clarify sub-account vs MCC in Google Ads account picker UI"
@@ -44,38 +64,18 @@
     {
       "hash": "06e587b",
       "message": "fix: filter numeric column names (isNumericColName), fuzzy getChartData, clean statistics cols"
-    },
-    {
-      "hash": "62c43a7",
-      "message": "fix: fuzzy column matching (findCol), parseNum 3-digit dot heuristic, Αξία αποθέματος KPI"
-    },
-    {
-      "hash": "08de5da",
-      "message": "feat: Procurement API Push integration - parseXLSXAllSheets, importProcurement Cloud Function, importData endpoint extension, DataImport UI docs"
-    },
-    {
-      "hash": "11120ef",
-      "message": "fix: whitespace-nowrap via Tailwind class on td, fix header word-break, remove w-full from table"
-    },
-    {
-      "hash": "0f74c3d",
-      "message": "chore: add docs/ to .gitignore and remove from tracking"
-    },
-    {
-      "hash": "f8ed8a3",
-      "message": "chore: remove unused colWidth function"
     }
   ],
   "changes": [
+    "Debug: add token refresh scope logging to diagnose Google Ads UNIMPLEMENTED",
+    "[Διόρθωση] Auto-detect working login-customer-id by testing MCC, no-header, and self fallbacks",
+    "[Διόρθωση] Strip dashes from Google Ads customer IDs before API calls (API requires plain numeric IDs)",
+    "[Διόρθωση] Add segments.date to SELECT, remove ORDER BY metrics, improve error logging",
+    "[Διόρθωση] Rewrite account picker modal with 100% inline styles to bypass CSS layer issues",
     "[Διόρθωση] Clarify sub-account vs MCC in Google Ads account picker UI",
     "[Διόρθωση] Modal dialog width with inline style override, improved account picker UI",
     "[Διόρθωση] Restore Google Ads API v19, keep improved error detail logging",
     "[Διόρθωση] Downgrade Google Ads API to v18 stable, improve error detail in sync response",
-    "[Διόρθωση] Remove global max-width override that broke Tailwind max-w utilities on login UI",
-    "Security: move Gemini API key to Firebase Secret Manager via server-side proxy CF",
-    "[Συντήρηση] Move internal .md docs to private docs/ folder (gitignored)",
-    "[Διόρθωση] Fiscal year totals from numeric column names, stock value = cost×qty calc",
-    "[Διόρθωση] Filter numeric column names (isNumericColName), fuzzy getChartData, clean statistics cols",
-    "[Διόρθωση] Fuzzy column matching (findCol), parseNum 3-digit dot heuristic, Αξία αποθέματος KPI"
+    "[Διόρθωση] Remove global max-width override that broke Tailwind max-w utilities on login UI"
   ]
 }

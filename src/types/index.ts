@@ -304,4 +304,11 @@ export interface Campaign {
   createdAt?: Date | string;
   importedAt?: Date | string;
   source?: string; // Source file name
+  dailyMetrics?: Record<string, {
+    impressions: number;
+    clicks: number;
+    conversions: number;
+    amount_spent: number;
+    conversion_value: number;
+  }>;
 }

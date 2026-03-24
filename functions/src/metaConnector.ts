@@ -213,6 +213,18 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
     return { success: false, imported: 0, error: 'No ad accounts found' };
   }
 
+  // Delete existing Meta campaigns before re-importing to avoid stale data
+  const existingSnap = await getDb().collection('campaigns')
+    .where('brandId', '==', brandId)
+    .where('channel', '==', 'Meta')
+    .get();
+  if (!existingSnap.empty) {
+    const delBatch = getDb().batch();
+    existingSnap.docs.forEach(d => delBatch.delete(d.ref));
+    await delBatch.commit();
+    logger.info(`[Meta] Deleted ${existingSnap.size} stale Meta campaigns for brand ${brandId} before re-import`);
+  }
+
   let totalImported = 0;
   const accessToken = connector.accessToken;
 
@@ -223,42 +235,72 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
       const sinceStr = since.toISOString().split('T')[0];
       const untilStr = new Date().toISOString().split('T')[0];
 
+      // Fetch monthly breakdown — allows date-range filtering with monthly precision
       const params = new URLSearchParams({
         fields: [
           'campaign_name',
           'campaign_id',
           'impressions',
           'clicks',
-          'ctr',
           'spend',
           'actions',
           'action_values',
           'reach',
           'frequency',
+          'date_start',
         ].join(','),
         time_range: JSON.stringify({ since: sinceStr, until: untilStr }),
+        time_increment: 'monthly',
         level: 'campaign',
+        limit: '500',
         access_token: accessToken,
       });
 
-      const res = await fetch(`${META_GRAPH_URL}/${accountId}/insights?${params}`);
-
-      if (!res.ok) {
-        const errText = await res.text();
-        logger.warn(`[Meta] Insights failed for ${accountId}:`, errText);
-        continue;
+      // Paginate through all monthly rows
+      const allRows: any[] = [];
+      let nextUrl: string | null = `${META_GRAPH_URL}/${accountId}/insights?${params}`;
+      let pageCount = 0;
+      while (nextUrl && pageCount < 20) {
+        const pageRes: Response = await fetch(nextUrl);
+        if (!pageRes.ok) {
+          const errText = await pageRes.text();
+          logger.warn(`[Meta] Insights failed for ${accountId} (page ${pageCount}): ${errText}`);
+          // Fallback: try without time_increment
+          if (pageCount === 0) {
+            const fallbackParams = new URLSearchParams({
+              fields: ['campaign_name','campaign_id','impressions','clicks','spend','actions','action_values','reach','frequency'].join(','),
+              time_range: JSON.stringify({ since: sinceStr, until: untilStr }),
+              level: 'campaign',
+              limit: '500',
+              access_token: accessToken,
+            });
+            const fbRes: Response = await fetch(`${META_GRAPH_URL}/${accountId}/insights?${fallbackParams}`);
+            if (fbRes.ok) {
+              const fbData: any = await fbRes.json();
+              allRows.push(...(fbData.data || []));
+              logger.info(`[Meta] Fallback (aggregated) fetched ${allRows.length} rows for ${accountId}`);
+            } else {
+              logger.warn(`[Meta] Fallback also failed for ${accountId}: ${await fbRes.text()}`);
+            }
+          }
+          break;
+        }
+        const pageData: any = await pageRes.json();
+        allRows.push(...(pageData.data || []));
+        nextUrl = pageData.paging?.next || null;
+        pageCount++;
       }
+      logger.info(`[Meta] Fetched ${allRows.length} rows across ${pageCount} pages for ${accountId}`);
 
-      const data = await res.json();
-      const batch = getDb().batch();
-      let count = 0;
+      // Aggregate monthly rows per campaign, building dailyMetrics map (keyed by month start date)
+      const campaignMap = new Map<string, any>();
 
-      for (const row of data.data || []) {
+      for (const row of allRows) {
         const campaignId = row.campaign_id;
         const campaignName = row.campaign_name;
+        const rowDate: string = row.date_start || '';
         if (!campaignId || !campaignName) continue;
 
-        // Extract purchase/conversion actions
         const purchases = (row.actions || []).find(
           (a: any) => a.action_type === 'purchase' || a.action_type === 'offsite_conversion.fb_pixel_purchase'
         );
@@ -266,38 +308,73 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
           (a: any) => a.action_type === 'purchase' || a.action_type === 'offsite_conversion.fb_pixel_purchase'
         );
 
-        const conversions = parseFloat(purchases?.value || '0');
-        const conversionValue = parseFloat(purchaseValue?.value || '0');
-        const spend = parseFloat(row.spend || '0');
+        const rowConversions = parseFloat(purchases?.value || '0');
+        const rowConvValue = parseFloat(purchaseValue?.value || '0');
+        const rowSpend = parseFloat(row.spend || '0');
+        const rowImpressions = parseInt(row.impressions || '0', 10);
+        const rowClicks = parseInt(row.clicks || '0', 10);
 
-        const campaign = {
+        const existing = campaignMap.get(campaignId) || {
           id: `meta_${accountId}_${campaignId}`,
           name: campaignName,
           channel: 'Meta',
           status: 'active',
-          impressions: parseInt(row.impressions || '0', 10),
-          clicks: parseInt(row.clicks || '0', 10),
-          ctr: parseFloat((row.ctr || '0').replace('%', '')),
-          conversions,
-          amount_spent: Math.round(spend * 100) / 100,
-          roas: spend > 0 ? Math.round((conversionValue / spend) * 100) / 100 : 0,
-          reach: parseInt(row.reach || '0', 10),
-          frequency: parseFloat(row.frequency || '0'),
-          period: 'Last 365 days',
+          impressions: 0,
+          clicks: 0,
+          conversions: 0,
+          conversion_value: 0,
+          amount_spent: 0,
+          ctr: 0,
+          roas: 0,
+          reach: 0,
+          frequency: 0,
+          start_date: sinceStr,
+          end_date: untilStr,
+          period: `${sinceStr} – ${untilStr}`,
+          dailyMetrics: {} as Record<string, any>,
           brandId,
           createdAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         };
 
-        const ref = getDb().collection('campaigns').doc(campaign.id);
-        batch.set(ref, campaign, { merge: true });
-        count++;
+        existing.impressions += rowImpressions;
+        existing.clicks += rowClicks;
+        existing.conversions += rowConversions;
+        existing.conversion_value += rowConvValue;
+        existing.amount_spent += rowSpend;
+        existing.reach += parseInt(row.reach || '0', 10);
+
+        // Store in dailyMetrics keyed by month start date (for date-range filtering)
+        if (rowDate) {
+          existing.dailyMetrics[rowDate] = {
+            impressions: rowImpressions,
+            clicks: rowClicks,
+            conversions: rowConversions,
+            amount_spent: rowSpend,
+            conversion_value: rowConvValue,
+          };
+        }
+
+        campaignMap.set(campaignId, existing);
       }
 
-      if (count > 0) {
+      const allCampaigns = Array.from(campaignMap.values());
+
+      // Firestore batch limit is 500 — chunk writes
+      const CHUNK = 400;
+      for (let i = 0; i < allCampaigns.length; i += CHUNK) {
+        const chunk = allCampaigns.slice(i, i + CHUNK);
+        const batch = getDb().batch();
+        for (const campaign of chunk) {
+          const ref = getDb().collection('campaigns').doc(campaign.id);
+          batch.set(ref, campaign, { merge: true });
+        }
         await batch.commit();
-        totalImported += count;
-        logger.info(`[Meta] Imported ${count} campaigns for account ${accountId}`);
+      }
+
+      if (allCampaigns.length > 0) {
+        totalImported += allCampaigns.length;
+        logger.info(`[Meta] Imported ${allCampaigns.length} campaigns for account ${accountId}`);
       }
     } catch (err) {
       logger.error(`[Meta] Error for account ${accountId}:`, err);
