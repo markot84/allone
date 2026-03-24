@@ -195,7 +195,8 @@ export async function selectGoogleAdsAccount(brandId: string, customerId: string
  * List accessible Google Ads customer accounts with names
  */
 async function listAccessibleCustomers(accessToken: string): Promise<GoogleAdsCustomer[]> {
-  const { developerToken, loginCustomerId } = getCredentials();
+  const { developerToken, loginCustomerId: rawLoginId } = getCredentials();
+  const loginCustomerId = rawLoginId.replace(/-/g, '');
 
   try {
     // Get resource names
@@ -286,7 +287,9 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
   imported: number;
   error?: string;
 }> {
-  const { developerToken, loginCustomerId } = getCredentials();
+  const { developerToken, loginCustomerId: rawLoginId } = getCredentials();
+  // Google Ads API requires IDs without dashes
+  const loginCustomerId = rawLoginId.replace(/-/g, '');
 
   const connectorDoc = await getDb().doc(`connectors/${brandId}`).get();
   const connector = connectorDoc.data()?.google_ads;
@@ -304,7 +307,8 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
     return { success: false, imported: 0, error: 'Failed to refresh token' };
   }
 
-  const customerId: string = connector.customerId;
+  // Strip dashes — API requires plain numeric IDs
+  const customerId: string = String(connector.customerId).replace(/-/g, '');
 
   // Build last 365 days date range
   const now = new Date();
