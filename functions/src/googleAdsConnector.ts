@@ -28,7 +28,7 @@ function getDb(): Firestore {
   return _db ?? (admin.firestore() as unknown as Firestore);
 }
 
-const GOOGLE_ADS_API_VERSION = 'v19';
+const GOOGLE_ADS_API_VERSION = 'v18';
 const GOOGLE_ADS_BASE_URL = `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}`;
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
@@ -355,8 +355,13 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
 
       if (!res.ok) {
         const errText = await res.text();
-        logger.warn(`[GoogleAds] Query failed for ${customerId}:`, errText);
-        return { success: false, imported: 0, error: `Query failed: ${res.status}` };
+        logger.warn(`[GoogleAds] Query failed for ${customerId} (${res.status}):`, errText);
+        let detail = errText;
+        try {
+          const parsed = JSON.parse(errText);
+          detail = parsed?.error?.message || parsed?.error?.status || errText;
+        } catch { /* keep raw text */ }
+        return { success: false, imported: 0, error: `Google Ads ${res.status}: ${detail.slice(0, 200)}` };
       }
 
       const page = await res.json();
