@@ -1,10 +1,22 @@
 {
-  "version": "0.97.0",
-  "previousVersion": "0.96.0",
-  "commitHash": "26e4e3d",
+  "version": "0.98.0",
+  "previousVersion": "0.97.0",
+  "commitHash": "f3b6e70",
   "branch": "main",
-  "buildDate": "2026-03-24T06:29:00.689Z",
+  "buildDate": "2026-03-24T06:58:58.156Z",
   "commits": [
+    {
+      "hash": "f3b6e70",
+      "message": "fix: restore Google Ads API v19, keep improved error detail logging"
+    },
+    {
+      "hash": "3e5477a",
+      "message": "fix: downgrade Google Ads API to v18 stable, improve error detail in sync response"
+    },
+    {
+      "hash": "fd07fef",
+      "message": "fix: remove global max-width override that broke Tailwind max-w utilities on login UI"
+    },
     {
       "hash": "26e4e3d",
       "message": "security: move Gemini API key to Firebase Secret Manager via server-side proxy CF"
@@ -52,30 +64,18 @@
     {
       "hash": "debaa1e",
       "message": "feat: chart toggle button, table pagination (20 rows/page) with page controls"
-    },
-    {
-      "hash": "2498429",
-      "message": "fix: proportional column widths with fixed table layout, ellipsis for text, per-type alignment"
-    },
-    {
-      "hash": "21e721a",
-      "message": "feat: Excel-style column filters with checkboxes, 2-line headers, centered numeric columns"
-    },
-    {
-      "hash": "548203e",
-      "message": "feat: add column filters and fix decimal display in procurement tables"
     }
   ],
   "changes": [
+    "[Διόρθωση] Restore Google Ads API v19, keep improved error detail logging",
+    "[Διόρθωση] Downgrade Google Ads API to v18 stable, improve error detail in sync response",
+    "[Διόρθωση] Remove global max-width override that broke Tailwind max-w utilities on login UI",
     "Security: move Gemini API key to Firebase Secret Manager via server-side proxy CF",
     "[Συντήρηση] Move internal .md docs to private docs/ folder (gitignored)",
     "[Διόρθωση] Fiscal year totals from numeric column names, stock value = cost×qty calc",
     "[Διόρθωση] Filter numeric column names (isNumericColName), fuzzy getChartData, clean statistics cols",
     "[Διόρθωση] Fuzzy column matching (findCol), parseNum 3-digit dot heuristic, Αξία αποθέματος KPI",
     "[Νέο χαρακτηριστικό] Procurement API Push integration - parseXLSXAllSheets, importProcurement Cloud Function, importData endpoint extension, DataImport UI docs",
-    "[Διόρθωση] Whitespace-nowrap via Tailwind class on td, fix header word-break, remove w-full from table",
-    "[Συντήρηση] Add docs/ to .gitignore and remove from tracking",
-    "[Συντήρηση] Remove unused colWidth function",
-    "[Διόρθωση] Auto-fit column widths, whitespace-nowrap on data cells, max-width+ellipsis on text"
+    "[Διόρθωση] Whitespace-nowrap via Tailwind class on td, fix header word-break, remove w-full from table"
   ]
 }

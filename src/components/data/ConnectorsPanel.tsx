@@ -98,65 +98,72 @@ function AccountPickerModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+      <div style={{ maxWidth: '440px', width: '100%' }} className="rounded-2xl bg-white shadow-2xl overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center gap-3 px-6 py-5 border-b border-[#F3F4F6]">
+          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-indigo-50">
             <Building2 size={20} className="text-indigo-600" />
           </div>
           <div>
-            <h3 className="font-semibold text-[#1A1A1A]">Επιλογή Διαφημιστικού Λογαριασμού</h3>
+            <h3 className="font-semibold text-[#1A1A1A] text-sm">Επιλογή Διαφημιστικού Λογαριασμού</h3>
             <p className="text-xs text-[#6B7280]">για το brand <strong>{brandName}</strong></p>
           </div>
         </div>
 
-        {manualMode ? (
-          <div className="mb-5">
-            <p className="text-sm text-[#6B7280] mb-3">
-              Δεν ήταν δυνατή η αυτόματη ανάκτηση λογαριασμών. Εισάγετε χειροκίνητα το <strong>Customer ID</strong> του Google Ads λογαριασμού (μορφή: 123-456-7890):
-            </p>
-            <input
-              type="text"
-              value={manualId}
-              onChange={(e) => setManualId(e.target.value)}
-              placeholder="π.χ. 123-456-7890"
-              className="w-full rounded-lg border border-[#E5E5E5] px-3 py-2 text-sm focus:outline-none focus:border-indigo-500"
-            />
-          </div>
-        ) : (
-          <>
-            <p className="text-sm text-[#6B7280] mb-4">
-              Έχεις πρόσβαση σε {accounts.length} λογαριασμούς. Επίλεξε ποιος αντιστοιχεί σε αυτό το brand:
-            </p>
-            <div className="space-y-2 max-h-60 overflow-y-auto mb-5">
-              {accounts.map((acc) => (
-                <label
-                  key={acc.id}
-                  className={`flex items-center gap-3 rounded-xl border-2 px-4 py-3 cursor-pointer transition-all ${
-                    selected?.id === acc.id
-                      ? 'border-indigo-500 bg-indigo-50'
-                      : 'border-[#E5E5E5] hover:border-[#D1D5DB]'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="adAccount"
-                    value={acc.id}
-                    checked={selected?.id === acc.id}
-                    onChange={() => setSelected(acc)}
-                    className="accent-indigo-600"
-                  />
-                  <div>
-                    <p className="text-sm font-medium text-[#1A1A1A]">{acc.name}</p>
-                    <p className="text-xs text-[#9CA3AF]">{acc.id}</p>
-                  </div>
-                </label>
-              ))}
+        {/* Body */}
+        <div className="px-6 py-5">
+          {manualMode ? (
+            <div>
+              <p className="text-sm text-[#6B7280] mb-4">
+                Εισάγετε το <strong>Customer ID</strong> του Google Ads λογαριασμού:
+              </p>
+              <input
+                type="text"
+                value={manualId}
+                onChange={(e) => setManualId(e.target.value)}
+                placeholder="π.χ. 123-456-7890"
+                style={{ width: '100%' }}
+                className="rounded-lg border border-[#E5E7EB] px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 bg-[#F9FAFB]"
+              />
+              <p className="text-xs text-[#9CA3AF] mt-2">Βρείτε το ID στο Google Ads → Ρυθμίσεις λογαριασμού</p>
             </div>
-          </>
-        )}
+          ) : (
+            <>
+              <p className="text-sm text-[#6B7280] mb-3">
+                Επίλεξε τον λογαριασμό για το brand:
+              </p>
+              <div className="space-y-2" style={{ maxHeight: '240px', overflowY: 'auto' }}>
+                {accounts.map((acc) => (
+                  <label
+                    key={acc.id}
+                    className={`flex items-center gap-3 rounded-xl border-2 px-4 py-3 cursor-pointer transition-all ${
+                      selected?.id === acc.id
+                        ? 'border-indigo-500 bg-indigo-50'
+                        : 'border-[#E5E7EB] hover:border-[#D1D5DB] hover:bg-[#F9FAFB]'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="adAccount"
+                      value={acc.id}
+                      checked={selected?.id === acc.id}
+                      onChange={() => setSelected(acc)}
+                      className="accent-indigo-600 flex-shrink-0"
+                    />
+                    <div>
+                      <p className="text-sm font-medium text-[#1A1A1A]">{acc.name}</p>
+                      <p className="text-xs text-[#9CA3AF]">{acc.id}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
 
-        <div className="flex gap-3">
+        {/* Footer */}
+        <div className="flex gap-3 px-6 pb-5">
           <Button variant="secondary" size="sm" onClick={onCancel} className="flex-1" disabled={loading}>
             Άκυρο
           </Button>

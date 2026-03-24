@@ -226,7 +226,7 @@ async function listAccessibleCustomers(accessToken: string): Promise<GoogleAdsCu
           `${GOOGLE_ADS_BASE_URL}/customers/${cid}/googleAds:search`,
           {
             method: 'POST',
-            headers: { ...headers, 'Content-Type': 'application/json', 'login-customer-id': loginCustomerId || cid },
+            headers: { ...headers, 'Content-Type': 'application/json', 'login-customer-id': (loginCustomerId && loginCustomerId !== cid) ? loginCustomerId : cid },
             body: JSON.stringify({ query: 'SELECT customer.id, customer.descriptive_name FROM customer LIMIT 1' }),
           }
         );
@@ -334,11 +334,17 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
   let totalImported = 0;
 
   try {
+    // Use MCC login-customer-id only if it differs from the target account.
+    // For direct (non-MCC) accounts, omit or use self to avoid 501 UNIMPLEMENTED.
+    const effectiveLoginId = loginCustomerId && loginCustomerId !== customerId
+      ? loginCustomerId
+      : customerId;
+
     const headers: Record<string, string> = {
       Authorization: `Bearer ${accessToken}`,
       'developer-token': developerToken,
       'Content-Type': 'application/json',
-      'login-customer-id': loginCustomerId || customerId,
+      'login-customer-id': effectiveLoginId,
     };
 
     let nextPageToken: string | undefined;
