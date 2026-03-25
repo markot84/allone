@@ -268,7 +268,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             <KPICard
               kpi={{
                 label: 'ROAS',
-                value: campaignMetrics.roas > 0 ? formatMultiplier(campaignMetrics.roas, 1) : '—',
+                value: campaignMetrics.roas > 0 ? formatMultiplier(campaignMetrics.roas, 2) : '—',
                 change: roasMoM !== null ? Math.round(roasMoM) : undefined,
                 changeLabel: roasMoM !== null ? 'vs προηγ. μήνα' : campaignMetrics.roas > 0 ? `€1 → €${formatNumber(campaignMetrics.roas, 1)}` : undefined,
                 trend: campaignMetrics.roas > 0 ? (roasMoM !== null && roasMoM < 0 ? 'down' : 'up') : undefined,
@@ -280,7 +280,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             <KPICard
               kpi={{
                 label: 'Blended ROAS',
-                value: blendedRoas > 0 ? formatMultiplier(blendedRoas, 1) : '—',
+                value: blendedRoas > 0 ? formatMultiplier(blendedRoas, 2) : '—',
                 changeLabel: blendedRoas > 0 ? `€1 → €${formatNumber(blendedRoas, 1)}` : undefined,
                 trend: blendedRoas > 0 ? 'up' : undefined,
                 tooltip: 'Συνολικά έσοδα (οργανικά + paid) ÷ Ad Spend. Πιο ρεαλιστική μέτρηση απόδοσης γιατί συμπεριλαμβάνει τα οργανικά.',

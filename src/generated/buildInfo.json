@@ -1,10 +1,14 @@
 {
-  "version": "0.112.0",
-  "previousVersion": "0.111.0",
-  "commitHash": "7da154c",
+  "version": "0.113.0",
+  "previousVersion": "0.112.0",
+  "commitHash": "3726de3",
   "branch": "main",
-  "buildDate": "2026-03-25T09:27:33.914Z",
+  "buildDate": "2026-03-25T09:43:58.669Z",
   "commits": [
+    {
+      "hash": "3726de3",
+      "message": "feat: add Price Benchmarking (GMC), Competitive Intelligence, Dashboard KPIs, tooltips, fix token expired warning"
+    },
     {
       "hash": "7da154c",
       "message": "Fix Google Ads sync and add date-range filtering for campaigns"
@@ -60,13 +64,10 @@
     {
       "hash": "85a0083",
       "message": "chore: move internal .md docs to private docs/ folder (gitignored)"
-    },
-    {
-      "hash": "9ac8757",
-      "message": "fix: fiscal year totals from numeric column names, stock value = cost×qty calc"
     }
   ],
   "changes": [
+    "[Νέο χαρακτηριστικό] Add Price Benchmarking (GMC), Competitive Intelligence, Dashboard KPIs, tooltips, fix token expired warning",
     "Fix Google Ads sync and add date-range filtering for campaigns",
     "Debug: add token refresh scope logging to diagnose Google Ads UNIMPLEMENTED",
     "[Διόρθωση] Auto-detect working login-customer-id by testing MCC, no-header, and self fallbacks",
@@ -75,7 +76,6 @@
     "[Διόρθωση] Rewrite account picker modal with 100% inline styles to bypass CSS layer issues",
     "[Διόρθωση] Clarify sub-account vs MCC in Google Ads account picker UI",
     "[Διόρθωση] Modal dialog width with inline style override, improved account picker UI",
-    "[Διόρθωση] Restore Google Ads API v19, keep improved error detail logging",
-    "[Διόρθωση] Downgrade Google Ads API to v18 stable, improve error detail in sync response"
+    "[Διόρθωση] Restore Google Ads API v19, keep improved error detail logging"
   ]
 }
