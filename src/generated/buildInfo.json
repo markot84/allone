@@ -1,10 +1,14 @@
 {
-  "version": "0.119.0",
-  "previousVersion": "0.118.0",
-  "commitHash": "8d8fa37",
+  "version": "0.120.0",
+  "previousVersion": "0.119.0",
+  "commitHash": "a75fa92",
   "branch": "main",
-  "buildDate": "2026-03-25T10:03:12.679Z",
+  "buildDate": "2026-03-25T10:13:06.298Z",
   "commits": [
+    {
+      "hash": "a75fa92",
+      "message": "feat: audit fixes, GMC tab in Competitive Intel, plan selector in Super Admin"
+    },
     {
       "hash": "8d8fa37",
       "message": "fix: align Dashboard ROAS formatting to 2 decimal places"
@@ -60,13 +64,10 @@
     {
       "hash": "26e4e3d",
       "message": "security: move Gemini API key to Firebase Secret Manager via server-side proxy CF"
-    },
-    {
-      "hash": "2bf587b",
-      "message": "security: move Gemini API key to Firebase Secret Manager via server-side proxy CF"
     }
   ],
   "changes": [
+    "[Νέο χαρακτηριστικό] Audit fixes, GMC tab in Competitive Intel, plan selector in Super Admin",
     "[Διόρθωση] Align Dashboard ROAS formatting to 2 decimal places",
     "[Νέο χαρακτηριστικό] Add Price Benchmarking (GMC), Competitive Intelligence, Dashboard KPIs, tooltips, fix token expired warning",
     "Fix Google Ads sync and add date-range filtering for campaigns",
@@ -75,7 +76,6 @@
     "[Διόρθωση] Strip dashes from Google Ads customer IDs before API calls (API requires plain numeric IDs)",
     "[Διόρθωση] Add segments.date to SELECT, remove ORDER BY metrics, improve error logging",
     "[Διόρθωση] Rewrite account picker modal with 100% inline styles to bypass CSS layer issues",
-    "[Διόρθωση] Clarify sub-account vs MCC in Google Ads account picker UI",
-    "[Διόρθωση] Modal dialog width with inline style override, improved account picker UI"
+    "[Διόρθωση] Clarify sub-account vs MCC in Google Ads account picker UI"
   ]
 }

@@ -37,11 +37,14 @@ import {
 } from 'recharts';
 import { Card, CardHeader, Badge, Button, Spinner } from '../common';
 import { useToast } from '../common/Toast';
-import { useProducts, useCampaigns, useBrand, useActiveStrategy, useChannelActivations } from '../../hooks';
+import { useProducts, useCampaigns, useBrand, useSegments, useActiveStrategy, useChannelActivations } from '../../hooks';
 import { getStockAgeDays } from '../../utils/productUtils';
 import { safeBrandName } from '../../services/reportExport';
 import { formatCurrency, formatNumber, formatPercent, formatMultiplier } from '../../utils/format';
 import { scenarios } from '../../data';
+import { generateChannelRecommendations } from '../../services/aiChannelRecommendations';
+import { FirestoreService } from '../../services/firestore';
+import { useQueryClient } from '@tanstack/react-query';
 import type { Campaign, ChannelRecommendation, BudgetAction } from '../../types';
 
 const COLORS = ['var(--nts-accent)', '#78716C', '#22C55E', '#8B5CF6', '#F59E0B', '#3B82F6', '#EC4899'];
@@ -132,7 +135,9 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   const { currentBrand } = useBrand();
   const { products, count: productsCount } = useProducts();
   const { campaigns, isLoading: campaignsLoading, hasImported: hasCampaigns } = useCampaigns();
+  const { segments: rfmSegments } = useSegments();
   const { activeStrategy, getStrategyName, updateBudget, isSavingBudget } = useActiveStrategy();
+  const queryClient = useQueryClient();
   const toast = useToast();
 
   const historyChartRef = useRef<HTMLDivElement>(null);
@@ -144,6 +149,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   const [noteText, setNoteText] = useState('');
   const [budgetInput, setBudgetInput] = useState('');
   const [editingBudget, setEditingBudget] = useState(false);
+  const [aiGenerating, setAiGenerating] = useState(false);
   const monthlyBudget = activeStrategy?.monthlyBudget ?? null;
 
   const strategyId = activeStrategy?.id ?? null;
@@ -151,7 +157,55 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
 
   // Read detailed activation recommendation (generated on strategy save, context: 'activation')
   const aiRecommendation = activeStrategy?.activationRecommendation ?? activeStrategy?.channelRecommendation ?? null;
-  const aiLoading = false;
+  const aiLoading = aiGenerating;
+
+  // Auto-generate AI recommendation if strategy exists but recommendation is missing
+  const hasRealStrategyId = !!strategyId && !strategyId.startsWith('default_') && !!scenarioId;
+  const autoGenTriggered = useRef(false);
+
+  const generateRecommendation = useCallback(async () => {
+    if (!strategyId || !scenarioId || !currentBrand) return;
+    const scenario = scenarios.find(s => s.id === scenarioId) ?? scenarios[0];
+    const segment = rfmSegments[0];
+    if (!segment) return;
+
+    setAiGenerating(true);
+    try {
+      const topCats = [...new Set(products.map(p => p.category).filter(Boolean))].slice(0, 5);
+      const rec = await generateChannelRecommendations({
+        scenario,
+        segment,
+        fitLevel: 'good',
+        brandContext: { brandName: currentBrand.name, brandType: currentBrand.type, topCategories: topCats },
+        context: 'activation',
+      });
+
+      if (rec) {
+        const clean = JSON.parse(JSON.stringify(rec));
+        await FirestoreService.setDocument('active_strategies', strategyId, {
+          activationRecommendation: clean,
+          updatedAt: new Date().toISOString(),
+        } as Record<string, unknown>);
+        queryClient.invalidateQueries({ queryKey: ['activeStrategy'] });
+        toast.success('AI συστάσεις δημιουργήθηκαν');
+      } else {
+        toast.error('Η AI δεν επέστρεψε αποτέλεσμα. Δοκιμάστε ξανά.');
+      }
+    } catch (err) {
+      console.error('[ChannelActivation] AI generation failed:', err);
+      toast.error('Σφάλμα κατά τη δημιουργία AI συστάσεων');
+    } finally {
+      setAiGenerating(false);
+    }
+  }, [strategyId, scenarioId, currentBrand, rfmSegments, products, queryClient, toast]);
+
+  useEffect(() => {
+    if (autoGenTriggered.current) return;
+    if (!hasRealStrategyId || aiRecommendation || aiGenerating) return;
+    if (rfmSegments.length === 0) return;
+    autoGenTriggered.current = true;
+    generateRecommendation();
+  }, [hasRealStrategyId, aiRecommendation, aiGenerating, rfmSegments, generateRecommendation]);
 
   const { getStatus, getNote, updateActivation, isSaving } = useChannelActivations(strategyId);
 
@@ -565,7 +619,15 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
             <div className="flex items-center justify-center h-64">
               <div className="text-center">
                 <p className="text-sm text-[#4A4A4A]">Δεν υπάρχουν AI συστάσεις για αυτή τη στρατηγική</p>
-                <p className="text-xs text-[#9CA3AF] mt-1">Αποθηκεύστε ξανά τη στρατηγική στο Commercial Strategy</p>
+                <p className="text-xs text-[#9CA3AF] mt-1 mb-3">Πατήστε για δημιουργία AI recommendations</p>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={generateRecommendation}
+                  disabled={aiGenerating}
+                >
+                  {aiGenerating ? <><Spinner size="sm" className="mr-1" /> Δημιουργία...</> : 'Δημιουργία AI Συστάσεων'}
+                </Button>
               </div>
             </div>
           )}
@@ -774,7 +836,16 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
           ) : (
             <div className="flex items-center justify-center py-16">
               <div className="text-center">
-                <p className="text-sm text-[#4A4A4A]">Αποθηκεύστε στρατηγική στο Commercial Strategy για AI briefs</p>
+                <p className="text-sm text-[#4A4A4A]">Αναμονή AI συστάσεων...</p>
+                <p className="text-xs text-[#9CA3AF] mt-1 mb-3">Δημιουργήστε channel briefs βάσει της στρατηγικής σας</p>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={generateRecommendation}
+                  disabled={aiGenerating}
+                >
+                  {aiGenerating ? <><Spinner size="sm" className="mr-1" /> Δημιουργία...</> : 'Δημιουργία AI Briefs'}
+                </Button>
               </div>
             </div>
           )}
