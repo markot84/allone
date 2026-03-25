@@ -85,12 +85,14 @@ const FUNCTIONS_BASE =
 function AccountPickerModal({
   accounts,
   brandName,
+  provider,
   onConfirm,
   onCancel,
   loading,
 }: {
   accounts: AdAccount[];
   brandName: string;
+  provider: string;
   onConfirm: (account: AdAccount) => void;
   onCancel: () => void;
   loading: boolean;
@@ -98,6 +100,16 @@ function AccountPickerModal({
   const [selected, setSelected] = useState<AdAccount | null>(accounts[0] ?? null);
   const [manualId, setManualId] = useState('');
   const manualMode = accounts.length === 0;
+
+  const isMerchant = provider === 'merchant';
+  const modalTitle = isMerchant ? 'Επιλογή Merchant Center Account' : 'Επιλογή Διαφημιστικού Λογαριασμού';
+  const manualHint = isMerchant
+    ? 'Εισάγετε το Merchant Center ID σας.'
+    : 'Εισάγετε το ID του διαφημιστικού sub-account, όχι του Manager Account (MCC).';
+  const manualHelp = isMerchant
+    ? 'Merchant Center → Ρυθμίσεις → Account ID'
+    : 'Google Ads → επιλογή sub-account → Ρυθμίσεις → Customer ID';
+  const manualPlaceholder = isMerchant ? 'π.χ. 123456789' : 'π.χ. 123-456-7890';
 
   const handleConfirm = () => {
     if (manualMode) {
@@ -130,7 +142,7 @@ function AccountPickerModal({
             <Building2 size={18} color="#4F46E5" />
           </div>
           <div>
-            <p style={{ margin: 0, fontWeight: 600, fontSize: '14px', color: '#111827' }}>Επιλογή Διαφημιστικού Λογαριασμού</p>
+            <p style={{ margin: 0, fontWeight: 600, fontSize: '14px', color: '#111827' }}>{modalTitle}</p>
             <p style={{ margin: 0, fontSize: '12px', color: '#6B7280' }}>για το brand <strong>{brandName}</strong></p>
           </div>
         </div>
@@ -142,19 +154,19 @@ function AccountPickerModal({
               <div style={S.warning}>
                 <span style={{ fontSize: '14px', color: '#D97706', flexShrink: 0 }}>⚠</span>
                 <p style={{ margin: 0, fontSize: '12px', color: '#92400E', lineHeight: '1.5' }}>
-                  Εισάγετε το ID του <strong>διαφημιστικού sub-account</strong>, όχι του Manager Account (MCC).
+                  {manualHint}
                 </p>
               </div>
               <input
                 type="text"
                 value={manualId}
                 onChange={(e) => setManualId(e.target.value)}
-                placeholder="π.χ. 123-456-7890"
+                placeholder={manualPlaceholder}
                 style={S.input}
                 onKeyDown={(e) => e.key === 'Enter' && handleConfirm()}
               />
               <p style={{ margin: '8px 0 0', fontSize: '11px', color: '#9CA3AF' }}>
-                Google Ads → επιλογή sub-account → Ρυθμίσεις → Customer ID
+                {manualHelp}
               </p>
             </div>
           ) : (
@@ -421,6 +433,7 @@ export function ConnectorsPanel() {
         <AccountPickerModal
           accounts={pendingState.availableAccounts || []}
           brandName={brandName}
+          provider={accountPickerFor}
           onConfirm={handleConfirmAccount}
           onCancel={() => setAccountPickerFor(null)}
           loading={confirmingAccount}

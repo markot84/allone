@@ -178,13 +178,13 @@ export function AutomationSettingsPage() {
                         {/* Toggle */}
                         <button
                           onClick={() => updateTrigger(triggerDef.id, { enabled: !config.enabled })}
-                          className={`relative w-10 h-5 rounded-full transition-colors shrink-0 ${
-                            config.enabled ? 'bg-[var(--nts-accent)]' : 'bg-[#D1D5DB]'
+                          className={`relative inline-flex items-center w-9 h-5 rounded-full transition-colors shrink-0 ${
+                            config.enabled ? 'bg-[#22C55E]' : 'bg-[#D1D5DB]'
                           }`}
                         >
                           <span
-                            className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
-                              config.enabled ? 'translate-x-5' : 'translate-x-0.5'
+                            className={`inline-block w-3.5 h-3.5 rounded-full bg-white shadow-sm transition-transform ${
+                              config.enabled ? 'translate-x-[18px]' : 'translate-x-[3px]'
                             }`}
                           />
                         </button>

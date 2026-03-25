@@ -105,6 +105,7 @@ function BrandsTab() {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [userCounts, setUserCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
+  const [updatingPlan, setUpdatingPlan] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -131,6 +132,18 @@ function BrandsTab() {
     load();
   }, []);
 
+  const handlePlanChange = async (brandId: string, newPlan: 'growth' | 'enterprise') => {
+    setUpdatingPlan(brandId);
+    try {
+      await FirestoreService.updateDocument('brands', brandId, { plan: newPlan });
+      setBrands((prev) => prev.map((b) => (b.id === brandId ? { ...b, plan: newPlan } : b)));
+    } catch (err) {
+      console.error('Failed to update plan:', err);
+    } finally {
+      setUpdatingPlan(null);
+    }
+  };
+
   if (loading) {
     return <div style={{ padding: 24, textAlign: 'center', color: 'var(--fgColor-muted)' }}>Φόρτωση brands...</div>;
   }
@@ -141,59 +154,100 @@ function BrandsTab() {
         Συνολικά {brands.length} brand{brands.length !== 1 ? 's' : ''} στο σύστημα
       </Text>
       <div style={{ display: 'grid', gap: 12 }}>
-        {brands.map((brand) => (
-          <div
-            key={brand.id}
-            style={{
-              padding: 16,
-              borderRadius: 10,
-              border: '1px solid var(--borderColor-default, #d0d7de)',
-              background: 'var(--bgColor-default, #fff)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 16,
-              flexWrap: 'wrap'
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              {brand.logoUrl ? (
-                <img src={brand.logoUrl} alt={brand.name} style={{ width: 36, height: 36, borderRadius: 8, objectFit: 'cover' }} />
-              ) : (
-                <div style={{
-                  width: 36, height: 36, borderRadius: 8,
-                  background: 'var(--bgColor-accent-muted, #ddf4ff)',
-                  display: 'grid', placeItems: 'center',
-                  fontWeight: 700, fontSize: 14, color: 'var(--nts-accent)'
-                }}>
-                  {brand.name[0]?.toUpperCase()}
+        {brands.map((brand) => {
+          const plan = brand.plan ?? 'growth';
+          const isEnterprise = plan === 'enterprise';
+          return (
+            <div
+              key={brand.id}
+              style={{
+                padding: 16,
+                borderRadius: 10,
+                border: `1px solid ${isEnterprise ? 'rgba(139,92,246,0.3)' : 'var(--borderColor-default, #d0d7de)'}`,
+                background: 'var(--bgColor-default, #fff)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 16,
+                flexWrap: 'wrap'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                {brand.logoUrl ? (
+                  <img src={brand.logoUrl} alt={brand.name} style={{ width: 36, height: 36, borderRadius: 8, objectFit: 'cover' }} />
+                ) : (
+                  <div style={{
+                    width: 36, height: 36, borderRadius: 8,
+                    background: 'var(--bgColor-accent-muted, #ddf4ff)',
+                    display: 'grid', placeItems: 'center',
+                    fontWeight: 700, fontSize: 14, color: 'var(--nts-accent)'
+                  }}>
+                    {brand.name[0]?.toUpperCase()}
+                  </div>
+                )}
+                <div>
+                  <Text as="div" weight="semibold" style={{ fontSize: 15 }}>{brand.name}</Text>
+                  <Text as="div" size="small" style={{ color: 'var(--fgColor-muted)' }}>
+                    {brand.type} · Created {new Date(brand.createdAt).toLocaleDateString('el-GR')}
+                  </Text>
                 </div>
-              )}
-              <div>
-                <Text as="div" weight="semibold" style={{ fontSize: 15 }}>{brand.name}</Text>
-                <Text as="div" size="small" style={{ color: 'var(--fgColor-muted)' }}>
-                  {brand.type} · Created {new Date(brand.createdAt).toLocaleDateString('el-GR')}
-                </Text>
+              </div>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                {/* Plan Selector */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 0, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--borderColor-default, #d0d7de)' }}>
+                  <button
+                    onClick={() => plan !== 'growth' && handlePlanChange(brand.id, 'growth')}
+                    disabled={updatingPlan === brand.id}
+                    style={{
+                      padding: '5px 12px',
+                      fontSize: 12,
+                      fontWeight: plan === 'growth' ? 700 : 400,
+                      border: 'none',
+                      cursor: updatingPlan === brand.id ? 'wait' : 'pointer',
+                      background: plan === 'growth' ? '#22C55E' : 'var(--bgColor-default, #fff)',
+                      color: plan === 'growth' ? '#fff' : 'var(--fgColor-muted)',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    Growth
+                  </button>
+                  <button
+                    onClick={() => plan !== 'enterprise' && handlePlanChange(brand.id, 'enterprise')}
+                    disabled={updatingPlan === brand.id}
+                    style={{
+                      padding: '5px 12px',
+                      fontSize: 12,
+                      fontWeight: plan === 'enterprise' ? 700 : 400,
+                      border: 'none',
+                      borderLeft: '1px solid var(--borderColor-default, #d0d7de)',
+                      cursor: updatingPlan === brand.id ? 'wait' : 'pointer',
+                      background: plan === 'enterprise' ? '#8B5CF6' : 'var(--bgColor-default, #fff)',
+                      color: plan === 'enterprise' ? '#fff' : 'var(--fgColor-muted)',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    Enterprise
+                  </button>
+                </div>
+
+                <div style={{ textAlign: 'center', minWidth: 40 }}>
+                  <Text as="div" weight="semibold" style={{ fontSize: 16 }}>{userCounts[brand.id] || 0}</Text>
+                  <Text as="div" size="small" style={{ color: 'var(--fgColor-muted)' }}>χρήστες</Text>
+                </div>
+                <span style={{
+                  padding: '2px 8px',
+                  borderRadius: 12,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  background: brand.type === 'B2C' ? 'rgba(212,133,74,0.12)' : 'rgba(59,130,246,0.12)',
+                  color: brand.type === 'B2C' ? '#d4854a' : '#3b82f6'
+                }}>
+                  {brand.type}
+                </span>
               </div>
             </div>
-            <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-              <div style={{ textAlign: 'center' }}>
-                <Text as="div" weight="semibold" style={{ fontSize: 16 }}>{userCounts[brand.id] || 0}</Text>
-                <Text as="div" size="small" style={{ color: 'var(--fgColor-muted)' }}>χρήστες</Text>
-              </div>
-              <span style={{
-                padding: '2px 8px',
-                borderRadius: 12,
-                fontSize: 12,
-                fontWeight: 600,
-                background: brand.type === 'B2C' ? 'rgba(212,133,74,0.12)' : 'rgba(59,130,246,0.12)',
-                color: brand.type === 'B2C' ? '#d4854a' : '#3b82f6'
-              }}>
-                {brand.type}
-              </span>
-            </div>
-          </div>
-        ))}
+          );
+        })}
         {brands.length === 0 && (
           <Text as="p" style={{ color: 'var(--fgColor-muted)', textAlign: 'center', padding: 32 }}>
             Δεν υπάρχουν brands ακόμα.

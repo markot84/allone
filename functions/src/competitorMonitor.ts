@@ -59,7 +59,7 @@ export async function fetchCompetitorAds(brandId: string): Promise<{
   const settingsDoc = await getDb().doc(`competitor_settings/${brandId}`).get();
   const settings = settingsDoc.data();
 
-  if (!settings?.competitors || settings.competitors.length === 0) {
+  if (!settings?.competitors || !Array.isArray(settings.competitors) || settings.competitors.length === 0) {
     return { success: true, totalAds: 0, newAds: 0 };
   }
 
@@ -74,103 +74,133 @@ export async function fetchCompetitorAds(brandId: string): Promise<{
   let newAds = 0;
   const now = new Date();
 
+  // Pre-fetch existing ad IDs to avoid N+1 reads
+  const existingAdsSnap = await getDb()
+    .collection('competitor_ads')
+    .doc(brandId)
+    .collection('ads')
+    .get();
+  const existingAdsMap = new Map<string, FirebaseFirestore.DocumentData>();
+  for (const doc of existingAdsSnap.docs) {
+    existingAdsMap.set(doc.id, doc.data());
+  }
+
   for (const competitor of competitors) {
+    if (!competitor.pageId) continue;
+
     try {
-      const params = new URLSearchParams({
+      let nextUrl: string | null = `${META_GRAPH_URL}/ads_archive?${new URLSearchParams({
         access_token: appToken,
         search_page_ids: competitor.pageId,
         ad_reached_countries: 'GR',
         ad_active_status: 'ALL',
         fields: 'id,ad_creative_bodies,ad_delivery_start_time,ad_delivery_stop_time,page_name,publisher_platforms',
         limit: '50',
-      });
+      }).toString()}`;
 
-      const res = await fetch(`${META_GRAPH_URL}/ads_archive?${params.toString()}`);
+      while (nextUrl) {
+        const res: Response = await fetch(nextUrl);
 
-      if (!res.ok) {
-        const errText = await res.text();
-        logger.warn(`[Competitor] Ad Library query failed for ${competitor.name} (${res.status}): ${errText.slice(0, 300)}`);
-        continue;
-      }
-
-      const data = await res.json();
-      const ads = data.data || [];
-
-      const batch = getDb().batch();
-      let batchCount = 0;
-
-      for (const ad of ads) {
-        const adId = ad.id;
-        if (!adId) continue;
-
-        const startDate = ad.ad_delivery_start_time || '';
-        const endDate = ad.ad_delivery_stop_time || undefined;
-        const adText = (ad.ad_creative_bodies || [])[0] || '';
-        const platforms: string[] = ad.publisher_platforms || [];
-        const isActive = !endDate || new Date(endDate) > now;
-
-        let daysRunning = 0;
-        if (startDate) {
-          daysRunning = Math.floor(
-            (now.getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24)
-          );
+        if (!res.ok) {
+          const errText = await res.text();
+          logger.warn(`[Competitor] Ad Library query failed for ${competitor.name} (${res.status}): ${errText.slice(0, 300)}`);
+          break;
         }
 
-        const existingDoc = await getDb()
-          .collection('competitor_ads')
-          .doc(brandId)
-          .collection('ads')
-          .doc(adId)
-          .get();
+        const data: any = await res.json();
+        const ads: any[] = data.data || [];
+        nextUrl = data.paging?.next || null;
 
-        const isNew = !existingDoc.exists;
-        if (isNew) newAds++;
+        const batch = getDb().batch();
+        let batchCount = 0;
 
-        const adDoc: CompetitorAd = {
-          adId,
-          competitorName: competitor.name,
-          competitorPageId: competitor.pageId,
-          adText: adText.slice(0, 500),
-          startDate,
-          endDate,
-          platforms,
-          isActive,
-          daysRunning,
-          firstSeenAt: isNew ? now.toISOString() : (existingDoc.data()?.firstSeenAt || now.toISOString()),
-          lastSeenAt: now.toISOString(),
-        };
+        for (const ad of ads) {
+          const adId = ad.id;
+          if (!adId) continue;
 
-        const ref = getDb()
-          .collection('competitor_ads')
-          .doc(brandId)
-          .collection('ads')
-          .doc(adId);
+          const startDate = ad.ad_delivery_start_time || '';
+          const endDate = ad.ad_delivery_stop_time || undefined;
+          const adText = (ad.ad_creative_bodies || [])[0] || '';
+          const platforms: string[] = ad.publisher_platforms || [];
+          const isActive = !endDate || new Date(endDate) > now;
 
-        batch.set(ref, adDoc, { merge: true });
-        batchCount++;
-        totalAds++;
+          let daysRunning = 0;
+          if (startDate) {
+            const parsed = new Date(startDate).getTime();
+            if (!isNaN(parsed)) {
+              daysRunning = Math.max(0, Math.floor((now.getTime() - parsed) / (1000 * 60 * 60 * 24)));
+            }
+          }
+
+          const existingData = existingAdsMap.get(adId);
+          const isNew = !existingData;
+          if (isNew) newAds++;
+
+          const adDoc: CompetitorAd = {
+            adId,
+            competitorName: competitor.name,
+            competitorPageId: competitor.pageId,
+            adText: adText.slice(0, 500),
+            startDate,
+            endDate,
+            platforms,
+            isActive,
+            daysRunning,
+            firstSeenAt: isNew ? now.toISOString() : (existingData?.firstSeenAt || now.toISOString()),
+            lastSeenAt: now.toISOString(),
+          };
+
+          const ref = getDb()
+            .collection('competitor_ads')
+            .doc(brandId)
+            .collection('ads')
+            .doc(adId);
+
+          batch.set(ref, adDoc, { merge: true });
+          batchCount++;
+          totalAds++;
+
+          if (batchCount >= 450) {
+            await batch.commit();
+            batchCount = 0;
+          }
+        }
+
+        if (batchCount > 0) {
+          await batch.commit();
+        }
+
+        logger.info(`[Competitor] ${competitor.name}: page with ${ads.length} ads`);
       }
-
-      if (batchCount > 0) {
-        await batch.commit();
-      }
-
-      logger.info(`[Competitor] ${competitor.name}: ${ads.length} ads (${newAds} new)`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       logger.error(`[Competitor] Error for ${competitor.name}:`, msg);
     }
   }
 
-  await getDb().collection('import_jobs').add({
-    brandId,
-    type: 'competitor_ads',
-    source: 'meta_ad_library',
-    status: 'completed',
-    imported: totalAds,
-    newAds,
-    createdAt: FieldValue.serverTimestamp(),
-  });
+  // Update lastSyncAt on settings doc
+  try {
+    await getDb().doc(`competitor_settings/${brandId}`).set(
+      { lastSyncAt: now.toISOString() },
+      { merge: true }
+    );
+  } catch (e) {
+    logger.warn(`[Competitor] Failed to update lastSyncAt: ${e}`);
+  }
+
+  try {
+    await getDb().collection('import_jobs').add({
+      brandId,
+      type: 'competitor_ads',
+      source: 'meta_ad_library',
+      status: 'completed',
+      imported: totalAds,
+      newAds,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+  } catch (e) {
+    logger.warn(`[Competitor] Failed to log import job: ${e}`);
+  }
 
   return { success: true, totalAds, newAds };
 }

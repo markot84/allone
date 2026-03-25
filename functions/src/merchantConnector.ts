@@ -273,67 +273,81 @@ export async function fetchPriceBenchmarks(brandId: string): Promise<{
     `;
 
     const url = `${MERCHANT_API_BASE}/${merchantId}/reports/search`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ query }),
-    });
+    const allRows: any[] = [];
+    let pageToken: string | undefined;
 
-    if (!res.ok) {
-      const errText = await res.text();
-      logger.error(`[Merchant] Reports query failed (${res.status}): ${errText.slice(0, 500)}`);
-      return { success: false, imported: 0, error: `Merchant API ${res.status}: ${errText.slice(0, 200)}` };
-    }
+    do {
+      const body: Record<string, any> = { query };
+      if (pageToken) body.pageToken = pageToken;
 
-    const data = await res.json();
-    const results = data.results || [];
-    logger.info(`[Merchant] Got ${results.length} price benchmark rows for ${merchantId}`);
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
 
-    if (results.length === 0) {
+      if (!res.ok) {
+        const errText = await res.text();
+        logger.error(`[Merchant] Reports query failed (${res.status}): ${errText.slice(0, 500)}`);
+        return { success: false, imported: 0, error: `Merchant API ${res.status}: ${errText.slice(0, 200)}` };
+      }
+
+      const data = await res.json();
+      allRows.push(...(data.results || []));
+      pageToken = data.nextPageToken;
+    } while (pageToken);
+
+    logger.info(`[Merchant] Got ${allRows.length} price benchmark rows for ${merchantId}`);
+
+    if (allRows.length === 0) {
       return { success: true, imported: 0 };
     }
 
-    const batch = getDb().batch();
     let count = 0;
+    const BATCH_LIMIT = 450;
 
-    for (const row of results) {
-      const productId = row.productView?.id;
-      const gtin = row.productView?.gtin;
-      if (!productId) continue;
+    for (let i = 0; i < allRows.length; i += BATCH_LIMIT) {
+      const batch = getDb().batch();
+      const chunk = allRows.slice(i, i + BATCH_LIMIT);
 
-      const yourPriceMicros = parseInt(row.productView?.price?.amountMicros || '0', 10);
-      const benchmarkMicros = parseInt(row.priceCompetitiveness?.benchmarkPrice?.amountMicros || '0', 10);
-      const yourPrice = yourPriceMicros / 1_000_000;
-      const benchmarkPrice = benchmarkMicros / 1_000_000;
-      const priceDiff = benchmarkPrice > 0
-        ? Math.round(((yourPrice - benchmarkPrice) / benchmarkPrice) * 1000) / 10
-        : 0;
+      for (const row of chunk) {
+        const productId = row.productView?.id;
+        const gtinVal = row.productView?.gtin;
+        const gtin = Array.isArray(gtinVal) ? gtinVal[0] || '' : gtinVal || '';
+        if (!productId) continue;
 
-      const docId = productId.replace(/[/\\:]/g, '_');
-      const ref = getDb()
-        .collection('price_benchmarks')
-        .doc(brandId)
-        .collection('skus')
-        .doc(docId);
+        const yourPriceMicros = parseInt(row.productView?.price?.amountMicros || row.productView?.priceMicros || '0', 10);
+        const benchmarkMicros = parseInt(row.priceCompetitiveness?.benchmarkPrice?.amountMicros || row.priceCompetitiveness?.benchmarkPriceMicros || '0', 10);
+        const yourPrice = yourPriceMicros / 1_000_000;
+        const benchmarkPrice = benchmarkMicros / 1_000_000;
+        const priceDiff = benchmarkPrice > 0
+          ? Math.round(((yourPrice - benchmarkPrice) / benchmarkPrice) * 1000) / 10
+          : 0;
 
-      batch.set(ref, {
-        productId,
-        title: row.productView?.title || '',
-        gtin: gtin || '',
-        yourPrice,
-        benchmarkPrice,
-        priceDiff,
-        currency: row.productView?.price?.currencyCode || 'EUR',
-        country: row.priceCompetitiveness?.countryCode || 'GR',
-        updatedAt: new Date().toISOString(),
-      });
-      count++;
-    }
+        const docId = productId.replace(/[/\\:]/g, '_');
+        const ref = getDb()
+          .collection('price_benchmarks')
+          .doc(brandId)
+          .collection('skus')
+          .doc(docId);
 
-    if (count > 0) {
+        batch.set(ref, {
+          productId,
+          title: row.productView?.title || '',
+          gtin,
+          yourPrice,
+          benchmarkPrice,
+          priceDiff,
+          currency: row.productView?.price?.currencyCode || 'EUR',
+          country: row.priceCompetitiveness?.countryCode || 'GR',
+          updatedAt: new Date().toISOString(),
+        });
+        count++;
+      }
+
       await batch.commit();
     }
 

@@ -21,6 +21,8 @@ interface EvaluationContext {
   procurementInventory?: Record<string, string | undefined>[];
   procurementCosting?: Record<string, string | undefined>[];
   procurementPricingPolicy?: Record<string, string | undefined>[];
+  priceBenchmarks?: { priceDiff: number }[];
+  competitorNewAdsCount?: number;
 }
 
 interface TriggerResult {
@@ -275,11 +277,42 @@ function evaluateTrigger(
     }
 
     case 'price_above_benchmark': {
-      return null;
+      const benchmarks = ctx.priceBenchmarks ?? [];
+      const thresholdPct = config.threshold ?? 10;
+      const aboveThreshold = benchmarks.filter(b => b.priceDiff > thresholdPct);
+      if (aboveThreshold.length === 0) return null;
+      return {
+        triggerId: 'price_above_benchmark',
+        triggerLabel: 'Τιμή πάνω από αγορά',
+        severity: aboveThreshold.length >= 10 ? 'critical' : 'warning',
+        title: `${aboveThreshold.length} SKUs ακριβότερα κατά >${thresholdPct}% από benchmark`,
+        description: `Εντοπίστηκαν ${aboveThreshold.length} προϊόντα με τιμή πάνω από τη μέση αγοράς (Merchant Center).`,
+        suggestions: [
+          'Εξετάστε μείωση τιμών στα SKUs με τη μεγαλύτερη απόκλιση',
+          'Ελέγξτε τα margins και κόστος προμήθειας',
+          'Ανατρέξτε στο Product Intelligence → vs Market',
+        ],
+        data: { count: aboveThreshold.length, threshold: thresholdPct },
+      };
     }
 
     case 'competitor_new_ads': {
-      return null;
+      const newAdsCount = ctx.competitorNewAdsCount ?? 0;
+      const threshold = config.threshold ?? 3;
+      if (newAdsCount < threshold) return null;
+      return {
+        triggerId: 'competitor_new_ads',
+        triggerLabel: 'Νέες ads ανταγωνιστών',
+        severity: newAdsCount >= 10 ? 'critical' : 'warning',
+        title: `${newAdsCount} νέες διαφημίσεις ανταγωνιστών`,
+        description: `Εντοπίστηκαν ${newAdsCount} νέες διαφημίσεις ανταγωνιστών από το τελευταίο scan (Meta Ad Library).`,
+        suggestions: [
+          'Εξετάστε τα μηνύματα και το positioning ανταγωνιστών',
+          'Αξιολογήστε αν χρειάζεται αντίδραση στη στρατηγική ads',
+          'Δείτε λεπτομέρειες στο Competitive Intel',
+        ],
+        data: { newAds: newAdsCount, threshold },
+      };
     }
 
     default:

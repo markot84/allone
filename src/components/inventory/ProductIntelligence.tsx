@@ -127,8 +127,18 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   const benchmarkMap = useMemo(() => {
     const m = new Map<string, { priceDiff: number; benchmarkPrice: number }>();
     for (const b of benchmarks) {
-      const key = (b.gtin || b.productId || '').toLowerCase();
-      if (key) m.set(key, { priceDiff: b.priceDiff, benchmarkPrice: b.benchmarkPrice });
+      const val = { priceDiff: b.priceDiff, benchmarkPrice: b.benchmarkPrice };
+      // Index by GTIN
+      if (b.gtin) m.set(b.gtin.toLowerCase(), val);
+      // Index by full productId (online:en:GR:SKU)
+      if (b.productId) {
+        m.set(b.productId.toLowerCase(), val);
+        // Extract the last segment (actual SKU) from Merchant-style IDs
+        const lastSeg = b.productId.split(':').pop();
+        if (lastSeg) m.set(lastSeg.toLowerCase(), val);
+      }
+      // Index by title (fallback fuzzy)
+      if (b.title) m.set(b.title.toLowerCase(), val);
     }
     return m;
   }, [benchmarks]);
@@ -802,8 +812,8 @@ function ProductRow({ product, index, supplierTodMap, benchmarkMap }: ProductRow
       {benchmarkMap && (
         <td className="px-3 py-2 hidden lg:table-cell">
           {(() => {
-            const key = (product.sku || product.id || '').toLowerCase();
-            const bm = benchmarkMap.get(key);
+            const candidates = [product.sku, product.id, product.name].filter(Boolean).map(k => k!.toLowerCase());
+            const bm = candidates.reduce<{ priceDiff: number; benchmarkPrice: number } | undefined>((found, k) => found || benchmarkMap.get(k), undefined);
             if (!bm) return <span className="text-[10px] text-[#9CA3AF]">—</span>;
             const diff = bm.priceDiff;
             return (
