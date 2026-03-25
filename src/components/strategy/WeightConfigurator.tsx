@@ -42,6 +42,7 @@ import { useAIChannelRecommendations } from '../../hooks/useAIChannelRecommendat
 import { generateChannelRecommendations } from '../../services/aiChannelRecommendations';
 import { generateContentSuggestions } from '../../services/aiContentSuggestions';
 import { FirestoreService } from '../../services/firestore';
+import { BriefingDrawer } from '../coordination/BriefingDrawer';
 import { getPreviewConfig, type PreviewColumnId } from '../../data/strategyPreviewConfig';
 import { calculateCompositeScore } from '../../utils/compositeScore';
 import { getStockAgeDays } from '../../utils/productUtils';
@@ -188,6 +189,14 @@ export function WeightConfigurator() {
   const { user } = useAuth();
   const { activeStrategy, saveActiveStrategy, isLoading: strategyLoading } = useActiveStrategy();
   const toast = useToast();
+
+  const [briefingName, setBriefingName] = useState<string | null>(null);
+  const [showBriefingDrawer, setShowBriefingDrawer] = useState(false);
+
+  const createStrategyDecision = useCallback(async (strategyName: string) => {
+    setBriefingName(strategyName);
+  }, []);
+
   const [strategySaveVersion, setStrategySaveVersion] = useState(0);
   const queryClient = useQueryClient();
   
@@ -371,11 +380,12 @@ export function WeightConfigurator() {
       toast.success(`Στρατηγική "${scenarioName}" αποθηκεύτηκε`);
       setStrategySaveVersion(v => v + 1);
       if (saved?.id) triggerAIGeneration(saved.id, scenarioId, newWeights);
+      createStrategyDecision(scenarioName);
     }).catch((error) => {
       console.error('Error saving strategy:', error);
       toast.error(`Σφάλμα: ${error?.message || error}`);
     });
-  }, [user, saveActiveStrategy, toast, triggerAIGeneration]);
+  }, [user, saveActiveStrategy, toast, triggerAIGeneration, createStrategyDecision]);
 
   const handleMixedApply = useCallback((blendedWeights: Record<string, number>, config: MixConfig) => {
     setMixConfig(config);
@@ -398,14 +408,16 @@ export function WeightConfigurator() {
       approvedBy: user.email || user.displayName || 'User',
       mixConfig: config,
     } as any).then((saved) => {
-      toast.success(`Μικτή στρατηγική "${nameA} ${config.percentA}% / ${nameB} ${config.percentB}%" αποθηκεύτηκε`);
+      const mixName = `${nameA} ${config.percentA}% / ${nameB} ${config.percentB}%`;
+      toast.success(`Μικτή στρατηγική "${mixName}" αποθηκεύτηκε`);
       setStrategySaveVersion(v => v + 1);
       if (saved?.id) triggerAIGeneration(saved.id, 'mixed', blendedWeights);
+      createStrategyDecision(`Μικτή: ${mixName}`);
     }).catch((error) => {
       console.error('Error saving mixed strategy:', error);
       toast.error(`Σφάλμα: ${error?.message || error}`);
     });
-  }, [user, saveActiveStrategy, toast, duration, triggerAIGeneration]);
+  }, [user, saveActiveStrategy, toast, duration, triggerAIGeneration, createStrategyDecision]);
 
   const handleSeasonApply = useCallback((period: SeasonalPeriod) => {
     const mix = period.suggestedMix;
@@ -432,8 +444,9 @@ export function WeightConfigurator() {
       toast.success(`Εποχιακή στρατηγική "${period.name}" εφαρμόστηκε`);
       setStrategySaveVersion(v => v + 1);
       if (saved?.id) triggerAIGeneration(saved.id, 'mixed', blended);
+      createStrategyDecision(`Εποχιακή: ${period.name}`);
     }).catch(() => {});
-  }, [user, saveActiveStrategy, toast, duration, triggerAIGeneration]);
+  }, [user, saveActiveStrategy, toast, duration, triggerAIGeneration, createStrategyDecision]);
 
   const handleSeasonalDiscountApply = useCallback((config: SeasonalDiscountConfig) => {
     setSeasonalDiscountConfig(config);
@@ -451,8 +464,9 @@ export function WeightConfigurator() {
     } as any).then((saved) => {
       setStrategySaveVersion(v => v + 1);
       if (saved?.id) triggerAIGeneration(saved.id, 'seasonal_discount', weights);
+      createStrategyDecision(`Εκπτωτική: ${config.periodName} (-${config.discountPercent}%)`);
     }).catch(() => {});
-  }, [user, saveActiveStrategy, toast, weights, duration, triggerAIGeneration]);
+  }, [user, saveActiveStrategy, toast, weights, duration, triggerAIGeneration, createStrategyDecision]);
 
 
   const handleSaveCustomSeason = useCallback((period: SeasonalPeriod) => {
@@ -785,6 +799,32 @@ export function WeightConfigurator() {
             onScenarioChange={handleScenarioChange}
             activeDuration={duration}
           />
+
+          {/* Briefing Banner — shown after strategy save */}
+          {briefingName && !showBriefingDrawer && (
+            <div className="flex items-center justify-between gap-3 px-4 py-3 bg-[#111827] rounded-xl">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="w-2 h-2 rounded-full bg-[var(--nts-accent)] shrink-0 animate-pulse" />
+                <span className="text-sm text-white truncate">
+                  Στρατηγική <strong>"{briefingName}"</strong> ενεργοποιήθηκε
+                </span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => setBriefingName(null)}
+                  className="text-xs text-white/40 hover:text-white/70 transition-colors"
+                >
+                  Παράλειψη
+                </button>
+                <button
+                  onClick={() => setShowBriefingDrawer(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-[var(--nts-accent)] text-white rounded-lg hover:opacity-90 transition-opacity"
+                >
+                  Αποστολή Briefing →
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
       </div>
@@ -1322,6 +1362,19 @@ export function WeightConfigurator() {
         onSaveCustom={handleSaveCustomSeason}
         onDeleteCustom={handleDeleteCustomSeason}
       />
+
+      {/* Briefing Drawer */}
+      {showBriefingDrawer && briefingName && (
+        <BriefingDrawer
+          strategyName={briefingName}
+          onClose={() => setShowBriefingDrawer(false)}
+          onSent={() => {
+            setShowBriefingDrawer(false);
+            setBriefingName(null);
+            toast.success('Briefing εστάλη στα τμήματα');
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { where } from 'firebase/firestore';
 import { FirestoreService } from './firestore';
+import { MembersService } from './coordination';
 import type { Invite } from '../types';
 
 const INVITE_EXPIRY_DAYS = 7;
@@ -65,6 +66,17 @@ export async function acceptInvite(token: string, userId: string): Promise<void>
       defaultBrandId: profile?.defaultBrandId || invite.brandId,
     } as Record<string, unknown>);
   }
+
+  // Create brand member doc
+  const userProfile = await FirestoreService.getDocument<{ email?: string; displayName?: string }>('users', userId);
+  await MembersService.set(invite.brandId, {
+    userId,
+    email: userProfile?.email ?? invite.email ?? '',
+    displayName: userProfile?.displayName ?? '',
+    role: (invite.role === 'admin' ? 'admin' : 'member') as 'admin' | 'member',
+    department: 'other',
+    joinedAt: new Date().toISOString(),
+  });
 
   await FirestoreService.updateDocument('invites', invite.id, {
     usedAt: new Date().toISOString(),

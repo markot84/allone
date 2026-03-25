@@ -1,0 +1,79 @@
+import { logger } from 'firebase-functions/v2';
+import * as nodemailer from 'nodemailer';
+import type { Firestore } from 'firebase-admin/firestore';
+
+let _db: Firestore;
+export function setDb(db: Firestore) { _db = db; }
+
+export async function sendNotificationEmail(
+  userId: string,
+  notification: {
+    title: string;
+    body: string;
+    type: string;
+    brandId: string;
+    entityType?: string;
+    entityId?: string;
+  }
+): Promise<void> {
+  if (!_db) { logger.error('emailNotifier: db not set'); return; }
+
+  const email = process.env.SMTP_EMAIL || '';
+  const pass = process.env.SMTP_PASSWORD || '';
+  if (!email || !pass) {
+    logger.warn('SMTP credentials not configured — skipping email');
+    return;
+  }
+
+  // Get user email
+  const userDoc = await _db.collection('users').doc(userId).get();
+  const userData = userDoc.data();
+  if (!userData?.email) {
+    logger.warn(`No email for user ${userId}`);
+    return;
+  }
+
+  // Get brand name
+  let brandName = '';
+  try {
+    const brandDoc = await _db.collection('brands').doc(notification.brandId).get();
+    brandName = brandDoc.data()?.name || '';
+  } catch { /* ignore */ }
+
+  const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: { user: email, pass },
+  });
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 520px; margin: 0 auto; padding: 24px;">
+      <div style="background: #111; border-radius: 12px 12px 0 0; padding: 20px 24px; text-align: center;">
+        <span style="color: #fff; font-size: 18px; font-weight: 700;">Performance+</span>
+        ${brandName ? `<span style="color: rgba(255,255,255,0.6); font-size: 13px; display: block; margin-top: 4px;">${brandName}</span>` : ''}
+      </div>
+      <div style="border: 1px solid #E5E7EB; border-top: none; border-radius: 0 0 12px 12px; padding: 24px;">
+        <h2 style="margin: 0 0 8px; font-size: 16px; color: #111827;">${notification.title}</h2>
+        <p style="margin: 0 0 20px; font-size: 14px; color: #6B7280; line-height: 1.5;">${notification.body}</p>
+        <a href="https://performanceplus.gr/#coordination"
+           style="display: inline-block; padding: 10px 24px; background: #F97316; color: #fff; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 600;">
+          Δες στην εφαρμογή
+        </a>
+      </div>
+      <p style="text-align: center; margin-top: 16px; font-size: 11px; color: #9CA3AF;">
+        Αυτό το email εστάλη αυτόματα από το Performance+ — Συντονισμός Τμημάτων
+      </p>
+    </div>
+  `;
+
+  try {
+    await transporter.sendMail({
+      from: `"Performance+" <${email}>`,
+      to: userData.email,
+      subject: `[Performance+] ${notification.title}`,
+      html,
+    });
+    logger.info(`Email sent to ${userData.email} for notification: ${notification.title}`);
+  } catch (err) {
+    logger.error('Failed to send email:', err);
+  }
+}

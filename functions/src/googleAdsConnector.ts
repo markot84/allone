@@ -356,7 +356,7 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
   // Build last 365 days date range
   const now = new Date();
   const since = new Date(now);
-  since.setDate(since.getDate() - 365);
+  since.setDate(since.getDate() - 365 * 3);
   const sinceStr = since.toISOString().slice(0, 10);
   const untilStr = now.toISOString().slice(0, 10);
 
@@ -499,7 +499,7 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
           roas: 0,
           start_date: sinceStr,
           end_date: untilStr,
-          period: `${sinceStr} – ${untilStr}`,
+          period: `${sinceStr} – ${untilStr}`, // Last 3 years
           dailyMetrics: {} as Record<string, { impressions: number; clicks: number; conversions: number; amount_spent: number; conversion_value: number }>,
           brandId,
         };

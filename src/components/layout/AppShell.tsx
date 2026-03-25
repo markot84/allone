@@ -6,7 +6,7 @@ import {
   Text
 } from '@primer/react';
 import { Button } from '../common';
-import { useAuth, useBrand } from '../../hooks';
+import { useAuth, useBrand, usePlan } from '../../hooks';
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import type { Brand } from '../../types';
 import {
@@ -25,7 +25,8 @@ import {
   ThreeBarsIcon,
   XIcon
 } from '@primer/octicons-react';
-import { Upload, UserPlus, Building2, Target, Euro, Truck, FileSpreadsheet } from 'lucide-react';
+import { Upload, UserPlus, Building2, Target, Euro, Truck, FileSpreadsheet, GitPullRequestArrow, Zap } from 'lucide-react';
+import { NotificationBell } from '../coordination/NotificationBell';
 
 const SIDEBAR_PIN_KEY = 'perf-plus-sidebar-pinned';
 
@@ -40,10 +41,13 @@ type SectionId =
   | 'procurement'
   | 'channels'
   | 'campaigns'
+  | 'competitive'
   | 'finances'
   | 'reports'
   | 'roi'
   | 'insights'
+  | 'coordination'
+  | 'automation'
   | 'data'
   | 'invite'
   | 'help'
@@ -391,6 +395,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
   const [brandMenuOpen, setBrandMenuOpen] = useState(false);
   const { user, signOut, isSuperAdmin, hasPasswordProvider, hasGoogleProvider, linkPassword, linkGoogle } = useAuth();
   const { currentBrand, brands, setCurrentBrand } = useBrand();
+  const { isEnterprise } = usePlan();
   const { activeStrategy } = useActiveStrategy();
 
   const strategyBadge = useMemo(() => {
@@ -430,25 +435,32 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
         { id: 'roi', label: 'ROI & Απόδοση', icon: GraphIcon },
         { id: 'products', label: 'Product Intelligence', icon: PackageIcon },
         { id: 'suppliers', label: 'Προμηθευτές', icon: Truck },
-        { id: 'procurement', label: 'Procurement', icon: FileSpreadsheet },
+      ];
+      if (isEnterprise) {
+        items.push({ id: 'procurement', label: 'Procurement', icon: FileSpreadsheet });
+      }
+      items.push(
         { id: 'rfm', label: 'Data Analysis', icon: OrganizationIcon },
         { id: 'strategy', label: 'Commercial Strategy', icon: GraphIcon, ...(strategyBadge ? { badge: strategyBadge.text, badgeColor: strategyBadge.color } : {}) },
         { id: 'channels', label: 'Channel Activation', icon: MegaphoneIcon },
         { id: 'campaigns', label: 'Campaigns', icon: Target },
+        { id: 'competitive', label: 'Competitive Intel', icon: SearchIcon },
         { id: 'calendar', label: 'Content Strategy', icon: PencilIcon },
         { id: 'finances', label: 'Οικονομικά', icon: Euro },
         { id: 'reports', label: 'Reports', icon: ReportIcon },
+        { id: 'coordination', label: 'Συντονισμός Τμημάτων', icon: GitPullRequestArrow },
+        { id: 'automation', label: 'Αυτοματισμοί', icon: Zap },
         { id: 'insights', label: 'AI Insights', icon: LightBulbIcon },
         { id: 'data', label: 'Data Import', icon: Upload },
         { id: 'invite', label: 'Καλέστε χρήστη', icon: UserPlus },
         { id: 'help', label: 'Help & Support', icon: GearIcon }
-      ];
+      );
       if (isSuperAdmin) {
         items.push({ id: 'admin', label: 'Super Admin', icon: ShieldIcon });
       }
       return items;
     },
-    [isSuperAdmin, strategyBadge]
+    [isSuperAdmin, isEnterprise, strategyBadge]
   );
 
   const Nav = ({ onSelect }: { onSelect: (id: SectionId) => void }) => (
@@ -558,6 +570,10 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
             />
           </PrimerHeader.Item>
         )}
+
+        <PrimerHeader.Item style={{ position: 'relative', overflow: 'visible' }}>
+          <NotificationBell onNavigate={(s) => onSectionChange(s)} />
+        </PrimerHeader.Item>
 
         <PrimerHeader.Item style={{ position: 'relative', overflow: 'visible' }}>
           <AccountMenu

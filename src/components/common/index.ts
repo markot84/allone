@@ -7,3 +7,6 @@ export { Spinner } from './Spinner';
 export { ErrorBoundary } from './ErrorBoundary';
 export { ToastProvider, useToast } from './Toast';
 export { Tooltip } from './Tooltip';
+export { KPICard } from './KPICard';
+export type { KPICardData } from './KPICard';
+export { EnterpriseBadge } from './EnterpriseBadge';

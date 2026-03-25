@@ -35,13 +35,14 @@ interface ConnectorState {
 }
 
 interface ConnectorConfig {
-  id: 'google_ads' | 'meta';
+  id: 'google_ads' | 'meta' | 'merchant';
   name: string;
   description: string;
   icon: string;
   color: string;
   bgColor: string;
   borderColor: string;
+  syncLabel?: string;
 }
 
 const CONNECTORS: ConnectorConfig[] = [
@@ -62,6 +63,16 @@ const CONNECTORS: ConnectorConfig[] = [
     color: '#1877F2',
     bgColor: 'bg-indigo-50',
     borderColor: 'border-indigo-200',
+  },
+  {
+    id: 'merchant',
+    name: 'Google Merchant Center',
+    description: 'Price benchmarking — σύγκριση τιμών σας vs αγορά ανά SKU',
+    icon: '🛒',
+    color: '#0D652D',
+    bgColor: 'bg-emerald-50',
+    borderColor: 'border-emerald-200',
+    syncLabel: 'benchmarks',
   },
 ];
 
@@ -221,17 +232,18 @@ export function ConnectorsPanel() {
         setStates({
           google_ads: data.google_ads || { connected: false },
           meta: data.meta || { connected: false },
+          merchant: data.merchant || { connected: false },
         });
       } else {
-        setStates({ google_ads: { connected: false }, meta: { connected: false } });
+        setStates({ google_ads: { connected: false }, meta: { connected: false }, merchant: { connected: false } });
       }
-      // Map source keys to connector ids
       setLastSyncDates({
         google_ads: dates['google_ads_api'] || dates['campaigns'],
         meta: dates['meta_api'] || dates['campaigns'],
+        merchant: dates['merchant_center_api'] || dates['price_benchmarks'],
       } as Record<string, Date>);
     } catch {
-      setStates({ google_ads: { connected: false }, meta: { connected: false } });
+        setStates({ google_ads: { connected: false }, meta: { connected: false }, merchant: { connected: false } });
     } finally {
       setLoading(false);
     }
@@ -347,8 +359,11 @@ export function ConnectorsPanel() {
 
       const result = await res.json();
       if (result.success) {
-        toast.success(`Εισήχθησαν ${result.imported} campaigns`);
+        const syncedConnector = CONNECTORS.find((c) => c.id === provider);
+        const label = syncedConnector?.syncLabel || 'campaigns';
+        toast.success(`Εισήχθησαν ${result.imported} ${label}`);
         queryClient.invalidateQueries({ queryKey: ['campaigns', brandId] });
+        if (provider === 'merchant') queryClient.invalidateQueries({ queryKey: ['priceBenchmarks', brandId] });
         fetchStates();
       } else {
         toast.error(result.error || 'Sync failed');
@@ -421,7 +436,7 @@ export function ConnectorsPanel() {
                 Ad Platform Connectors
               </h3>
               <p className="text-sm text-[#6B7280] mt-0.5">
-                Σύνδεσε Google Ads & Meta για αυτόματη εισαγωγή campaigns καθημερινά (06:00)
+                Σύνδεσε Google Ads, Meta & Merchant Center για αυτόματη εισαγωγή δεδομένων (06:00)
               </p>
             </div>
           </div>
@@ -438,7 +453,6 @@ export function ConnectorsPanel() {
                 const isPending = !!state.pendingAccountSelection;
                 const isSyncing = syncing === conn.id;
                 const isConnecting = connecting === conn.id;
-                const isExpired = state.expiresAt ? state.expiresAt < Date.now() : false;
 
                 return (
                   <div
@@ -459,12 +473,12 @@ export function ConnectorsPanel() {
                           <p className="text-xs text-[#6B7280] mt-0.5">{conn.description}</p>
                         </div>
                       </div>
-                      {isConnected && !isExpired && (
+                      {isConnected && (
                         <CheckCircle2 size={20} className="text-green-500 flex-shrink-0" />
                       )}
-                      {(isConnected && isExpired) || isPending ? (
+                      {isPending && (
                         <AlertTriangle size={20} className="text-amber-500 flex-shrink-0" />
-                      ) : null}
+                      )}
                     </div>
 
                     {isPending && (
@@ -481,13 +495,13 @@ export function ConnectorsPanel() {
                         {conn.id === 'meta' && state.adAccountNames && (
                           <p>{state.adAccountNames.join(', ')}</p>
                         )}
+                        {conn.id === 'merchant' && (state as any).merchantName && (
+                          <p>{(state as any).merchantName} ({(state as any).merchantId})</p>
+                        )}
                         {lastSyncDates[conn.id] && (
                           <p className="text-[#9CA3AF]">
                             Τελευταίο sync: {lastSyncDates[conn.id].toLocaleDateString('el-GR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                           </p>
-                        )}
-                        {isExpired && (
-                          <p className="text-amber-600 font-medium">Token expired — reconnect required</p>
                         )}
                       </div>
                     )}
@@ -509,7 +523,7 @@ export function ConnectorsPanel() {
                             variant="primary"
                             size="sm"
                             onClick={() => handleSync(conn.id)}
-                            disabled={isSyncing || isExpired}
+                            disabled={isSyncing}
                             className="flex-1"
                           >
                             {isSyncing ? (

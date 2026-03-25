@@ -189,7 +189,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
               <Users size={20} className="text-[var(--nts-accent)]" />
             </div>
             <div>
-              <p className="text-sm text-[#4A4A4A]"><InfoTooltip content="Συνολικός αριθμός πελατών σε όλα τα RFM segments.">Σύνολο Πελατών</InfoTooltip></p>
+              <p className="text-sm text-[#4A4A4A]"><InfoTooltip content="Συνολικός αριθμός πελατών από τα εισαγμένα RFM segments. Περιλαμβάνει ενεργούς και ανενεργούς.">Σύνολο Πελατών</InfoTooltip></p>
               <p className="text-xl font-bold text-[#1A1A1A] font-mono">
                 {formatNumber(totalCustomersDisplay)}
               </p>
@@ -215,7 +215,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
               <Zap size={20} className="text-[#4A4A4A]" />
             </div>
             <div>
-              <p className="text-sm text-[#4A4A4A]"><InfoTooltip content="Μέσος όρος RFM score (1–5 ανά R, F, M).">Μέσος Segment Score</InfoTooltip></p>
+              <p className="text-sm text-[#4A4A4A]"><InfoTooltip content="Μέσος όρος RFM score (1–5). Υψηλότερο = καλύτερη ποιότητα πελατολογίου. Κάτω από 3.0 σημαίνει ότι η πλειονότητα των πελατών είναι ανενεργή.">Μέσος Segment Score</InfoTooltip></p>
               <p className="text-xl font-bold text-[#1A1A1A] font-mono">
                 {(() => {
                   if (rfmSegments.length === 0) return '0';
@@ -249,7 +249,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
               <TrendingDown size={20} className="text-[#F59E0B]" />
             </div>
             <div>
-              <p className="text-sm text-[#4A4A4A]"><InfoTooltip content="Ποσοστό πελατών στο segment «At Risk» (μειωμένη δραστηριότητα).">Ποσοστό At Risk</InfoTooltip></p>
+              <p className="text-sm text-[#4A4A4A]"><InfoTooltip content="Ποσοστό πελατών στο At Risk segment — πελάτες με μειωμένη δραστηριότητα που κινδυνεύουν να χαθούν. Πάνω από 20% απαιτεί άμεση δράση (win-back campaign).">Ποσοστό At Risk</InfoTooltip></p>
               <p className="text-xl font-bold text-[#F59E0B] font-mono">
                 {fmt(rfmSegments.find(s => s.id === 'at_risk')?.percentage ?? 0)}%
               </p>

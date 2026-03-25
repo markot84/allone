@@ -84,6 +84,27 @@ export const knowledgeCategories = [
     icon: 'TR',
     description: 'Συχνά προβλήματα και λύσεις',
     color: '#6B7280'
+  },
+  {
+    id: 'coordination',
+    title: 'Συντονισμός Τμημάτων',
+    icon: 'CO',
+    description: 'Briefing Board, αποφάσεις και συντονισμός ομάδων',
+    color: '#6B7280'
+  },
+  {
+    id: 'automation',
+    title: 'Αυτοματισμοί',
+    icon: 'AU',
+    description: 'Smart triggers και αυτόματη λήψη αποφάσεων',
+    color: '#6B7280'
+  },
+  {
+    id: 'competitive',
+    title: 'Ανταγωνισμός & Τιμές',
+    icon: 'CI',
+    description: 'Price benchmarking και competitor monitoring',
+    color: '#0D652D'
   }
 ];
 
@@ -849,6 +870,399 @@ Margin_Tier, Margin Tier, margin_tier, Margin_Category, margin_category, Tier, t
       {
         question: 'Πώς μπορώ να διορθώσω validation errors;',
         answer: 'Κάντε κλικ στο error message για να δείτε το row και το field που έχει πρόβλημα. Χρησιμοποιήστε το template για reference.'
+      }
+    ]
+  },
+
+  // ── Coordination ──────────────────────────────────────────────────────
+  {
+    id: 'coordination-briefing-board',
+    category: 'coordination',
+    title: 'Briefing Board — Συντονισμός Τμημάτων',
+    description: 'Πώς λειτουργεί το κεντρικό σύστημα συντονισμού αποφάσεων και ενεργειών.',
+    content: `# Briefing Board — Συντονισμός Τμημάτων
+
+Το Briefing Board είναι ο κεντρικός χώρος επικοινωνίας μεταξύ επιχειρηματία, εσωτερικών τμημάτων (εμπορική δ/νση, marketing, procurement) και εξωτερικών συνεργατών (agency).
+
+## Δομή
+
+### Τελευταίο Briefing (Top Bar)
+Εμφανίζει την πιο πρόσφατη ενεργή απόφαση σε dark bar στην κορυφή. Κλικ για λεπτομέρειες.
+
+### Ενεργές Αποφάσεις (Αριστερή στήλη)
+Λίστα αποφάσεων με:
+- Χρωματική ένδειξη κατηγορίας
+- Τίτλο και περιγραφή
+- Τμήματα που αφορά
+- Ημερομηνία δημιουργίας
+
+### Εισερχόμενες Προτάσεις (Δεξιά στήλη)
+Προτάσεις από τμήματα που περιμένουν έγκριση. Inline κουμπιά Έγκριση / Απόρριψη.
+
+### Εκκρεμείς Εργασίες (Πλήρες πλάτος)
+Flat list εργασιών με status, τμήμα, assignee και inline ολοκλήρωση.
+
+## Τύποι Ενεργειών
+- **Νέα Απόφαση**: Δημιουργεί ενεργή απόφαση και ειδοποιεί τα tagged τμήματα
+- **Πρόταση**: Δημιουργεί πρόταση (status: proposal) που περιμένει έγκριση
+- **Εργασία**: Ανατίθεται σε τμήμα/άτομο και παρακολουθείται
+
+## Ειδοποιήσεις
+- **Bell (in-app)**: Real-time ειδοποιήσεις μέσα στην εφαρμογή
+- **Email**: Αυτόματη αποστολή email στα tagged τμήματα
+
+## Ροή Ενεργειών (Activity Feed)
+Side drawer που δείχνει χρονολογικά όλες τις ενέργειες: δημιουργία, αλλαγή status, σχόλια.`,
+    tags: ['coordination', 'briefing', 'decisions', 'tasks', 'notifications', 'συντονισμός'],
+    related: ['coordination-briefing-from-strategy'],
+    steps: [
+      'Πλοηγηθείτε στο Συντονισμός Τμημάτων από το sidebar',
+      'Κλικ "+ Νέα Απόφαση" για νέα απόφαση ή "+ Πρόταση" για πρόταση',
+      'Συμπληρώστε τίτλο, περιγραφή, κατηγορία, προτεραιότητα',
+      'Επιλέξτε τα τμήματα που αφορά (tags)',
+      'Αποθηκεύστε — τα τμήματα ειδοποιούνται αυτόματα',
+      'Προσθέστε εργασίες και σχόλια στο detail panel'
+    ],
+    faq: [
+      {
+        question: 'Τι διαφορά έχει η Απόφαση από την Πρόταση;',
+        answer: 'Η Απόφαση είναι ενεργή αμέσως και εμφανίζεται στις Ενεργές Αποφάσεις. Η Πρόταση περιμένει έγκριση και εμφανίζεται στις Εισερχόμενες Προτάσεις.'
+      },
+      {
+        question: 'Πώς ειδοποιούνται τα τμήματα;',
+        answer: 'Μέσω bell notification εντός εφαρμογής και email. Η ειδοποίηση περιλαμβάνει τίτλο, περιγραφή και link στην απόφαση.'
+      }
+    ]
+  },
+  {
+    id: 'coordination-briefing-from-strategy',
+    category: 'coordination',
+    title: 'Αποστολή Briefing από Εμπορική Στρατηγική',
+    description: 'Πώς η ενεργοποίηση μιας εμπορικής στρατηγικής δημιουργεί αυτόματα briefing στα τμήματα.',
+    content: `# Αποστολή Briefing από Commercial Strategy
+
+Μετά την ενεργοποίηση μιας εμπορικής στρατηγικής, το Performance+ προτείνει αυτόματη κοινοποίηση στα τμήματα μέσω του Briefing Board.
+
+## Ροή
+
+### 1. Ενεργοποίηση Στρατηγικής
+Επιλέγετε ένα scenario (π.χ. Profit Maximization) και πατάτε Save.
+
+### 2. Banner
+Εμφανίζεται dark banner:
+> Στρατηγική "Profit Maximization" ενεργοποιήθηκε  [Παράλειψη] [Αποστολή Briefing →]
+
+### 3. Briefing Drawer
+Πατώντας "Αποστολή Briefing" ανοίγει bottom sheet:
+- **Τίτλος** (pre-filled με το όνομα στρατηγικής)
+- **Σημείωση** (textarea για πρόσθετες οδηγίες)
+- **Τμήματα** (department chips — θυμάται τις τελευταίες επιλογές)
+
+### 4. Αποστολή
+Δημιουργεί:
+- **Απόφαση** στο Briefing Board (status: active, priority: high)
+- **Bell notification** στα tagged τμήματα
+- **Email** ειδοποίηση
+
+## Τμήματα
+Τα διαθέσιμα τμήματα: Εμπορική Δ/νση, Marketing, Procurement, Agency, Διοίκηση.
+Η εφαρμογή θυμάται τις τελευταίες επιλογές σας (localStorage).`,
+    tags: ['briefing', 'strategy', 'coordination', 'notifications', 'στρατηγική'],
+    related: ['coordination-briefing-board', 'strategy-weights'],
+    steps: [
+      'Πηγαίνετε στο Commercial Strategy',
+      'Επιλέξτε ένα scenario και πατήστε Save',
+      'Στο banner πατήστε "Αποστολή Briefing"',
+      'Ελέγξτε/τροποποιήστε τίτλο και σημείωση',
+      'Επιλέξτε τα τμήματα που αφορά',
+      'Πατήστε "Αποστολή" — η απόφαση εμφανίζεται στο Συντονισμό'
+    ]
+  },
+
+  // ── Automation ────────────────────────────────────────────────────────
+  {
+    id: 'automation-triggers',
+    category: 'automation',
+    title: 'Αυτοματισμοί Λήψης Αποφάσεων',
+    description: 'Πώς λειτουργούν τα smart triggers και πώς ρυθμίζονται.',
+    content: `# Αυτοματισμοί Λήψης Αποφάσεων
+
+Η εφαρμογή παρακολουθεί αυτόματα τα δεδομένα σας και δημιουργεί ειδοποιήσεις/αποφάσεις όταν εντοπίσει σημαντικά σήματα.
+
+## Κατηγορίες Triggers
+
+### Απόθεμα & Προϊόντα (Growth Plan)
+- **Dead stock** — SKUs χωρίς πωλήσεις πάνω από X%
+- **Excess stock** — Αξία πλεονάσματος πάνω από X€
+- **Χαμηλό απόθεμα (high-margin)** — Κρίσιμα χαμηλό stock σε κερδοφόρα SKUs
+- **Νέα προϊόντα** — Ειδοποίηση εισαγωγής νέων SKUs
+- **Μεγέθυνση αποθέματος** — Stock level πάνω από threshold
+
+### Καμπάνιες & Απόδοση (Growth Plan)
+- **Υψηλή απόδοση** — ROAS πάνω από Xx
+- **Αδυναμία campaign** — ROAS κάτω από Xx
+
+### Πελατολόγιο & Segments (Growth Plan)
+- **Churn risk** — At-risk segment πάνω από X%
+- **VIP ανάπτυξη** — Champions segment αυξάνεται
+
+### Εποχικότητα (Growth Plan)
+- **Εποχική περίοδος** — X ημέρες πριν από Black Friday, Χριστούγεννα κ.α.
+
+### Procurement (Enterprise only)
+- **Χαμηλή επάρκεια** — Ημέρες κάλυψης κάτω από threshold
+- **Πλεόνασμα** — Surplus αξία πάνω από X€
+- **Νέο brand** — Νέο brand στα procurement data
+- **Τιμολογιακή απόκλιση** — Τιμή vs πολιτική πάνω από X%
+- **Καθυστέρηση προμηθευτή** — Χρόνος παράδοσης πέρα από αναμενόμενο
+
+## Ρυθμίσεις ανά Trigger
+- **Toggle** on/off
+- **Κατώφλι** (threshold) — αριθμητική τιμή ενεργοποίησης
+- **Έλεγχος κάθε** — πόσες ημέρες μεσολαβούν μεταξύ ελέγχων
+- **Auto-briefing** — αυτόματη δημιουργία απόφασης στο Συντονισμό
+
+## Πότε τρέχουν
+Οι αυτοματισμοί αξιολογούνται κατά τη φόρτωση του Dashboard. Αν ένα trigger «πυροδοτηθεί», δημιουργείται alert και (αν είναι ενεργό το auto-briefing) απόφαση στο Briefing Board.`,
+    tags: ['automation', 'triggers', 'alerts', 'αυτοματισμοί', 'ειδοποιήσεις'],
+    related: ['coordination-briefing-board'],
+    steps: [
+      'Πλοηγηθείτε στο Αυτοματισμοί από το sidebar',
+      'Ενεργοποιήστε τα triggers που σας ενδιαφέρουν με το toggle',
+      'Ρυθμίστε το κατώφλι (π.χ. Dead stock > 15%)',
+      'Ορίστε κάθε πόσες ημέρες θέλετε έλεγχο',
+      'Ενεργοποιήστε Auto-briefing αν θέλετε αυτόματη ενημέρωση τμημάτων',
+      'Αποθηκεύστε — οι αυτοματισμοί τρέχουν αυτόματα'
+    ],
+    faq: [
+      {
+        question: 'Πότε τρέχουν οι αυτοματισμοί;',
+        answer: 'Κατά τη φόρτωση του Dashboard. Η εφαρμογή ελέγχει αν έχει περάσει αρκετός χρόνος από τον τελευταίο έλεγχο (βάσει του interval που ορίσατε) πριν αξιολογήσει ξανά.'
+      },
+      {
+        question: 'Τι είναι auto-briefing;',
+        answer: 'Όταν ένα trigger ενεργοποιηθεί και έχετε ενεργό το auto-briefing, δημιουργείται αυτόματα μια απόφαση στο Briefing Board (Συντονισμός Τμημάτων) και ειδοποιούνται τα αρμόδια τμήματα.'
+      },
+      {
+        question: 'Τι σημαίνουν τα Enterprise triggers;',
+        answer: 'Τα triggers της κατηγορίας Procurement είναι διαθέσιμα μόνο στο Performance+ Enterprise. Αφορούν δεδομένα ERP, προμηθευτές και τιμολογιακή πολιτική.'
+      }
+    ]
+  },
+
+  // ── Financial KPIs ────────────────────────────────────────────────────
+  {
+    id: 'understanding-financial-kpis',
+    category: 'dashboard',
+    title: 'Κατανόηση Οικονομικών KPIs',
+    description: 'Αναλυτικοί ορισμοί για όλους τους οικονομικούς δείκτες του Dashboard.',
+    content: `# Κατανόηση Οικονομικών KPIs
+
+## Σύνολο Εσόδων
+Συνολικά έσοδα από οργανικές πωλήσεις + conversion value από campaigns (Google Ads, Meta). Εμφανίζει MoM (month-over-month) μεταβολή.
+
+## Ad Spend
+Συνολικό ποσό που δαπανήθηκε σε διαφημίσεις. Περιλαμβάνει Google Ads και Meta Ads spend. Εμφανίζει CPA (Cost Per Acquisition) ως subtitle.
+
+## ROI (Return on Investment)
+Υπολογισμός: **(Campaign Revenue − Ad Spend) ÷ Ad Spend × 100**
+
+Παράδειγμα: Αν ξοδέψατε €1.000 και κερδίσατε €4.000, ROI = +300%.
+
+## ROAS (Return on Ad Spend)
+Υπολογισμός: **Campaign Revenue ÷ Ad Spend**
+
+Παράδειγμα: ROAS 4.0x = Κάθε €1 που ξοδεύετε σε διαφήμιση φέρνει €4 σε πωλήσεις.
+
+Σημαντική διαφορά: Ο ROAS μετράει μόνο τα έσοδα campaigns, ενώ ο Blended ROAS περιλαμβάνει και τα οργανικά.
+
+## Blended ROAS
+Υπολογισμός: **Συνολικά Έσοδα (οργανικά + paid) ÷ Ad Spend**
+
+Γιατί είναι σημαντικός: Η διαφήμιση επηρεάζει και τις οργανικές πωλήσεις (brand awareness, remarketing effect). Ο Blended ROAS δίνει μια πιο ρεαλιστική εικόνα της συνολικής απόδοσης.
+
+## Μέσο Καλάθι — AOV (Average Order Value)
+Υπολογισμός: **Αξία Μετατροπών ÷ Αριθμός Μετατροπών**
+
+Τι δείχνει:
+- Αν αυξάνεται → τα upsells/cross-sells λειτουργούν
+- Αν μειώνεται → πιθανή υπερβολική χρήση εκπτώσεων (discount fatigue)
+
+## MoM (Month-over-Month)
+Σύγκριση με τον προηγούμενο μήνα. Εμφανίζεται ως ▲ ή ▼ με ποσοστό αλλαγής.
+
+## Sparklines
+Τα μικρά γραφήματα κάτω από κάθε KPI δείχνουν την τάση ανά μήνα. Ανοδική τάση = πράγματα πάνε καλά, καθοδική = χρειάζεται δράση.`,
+    tags: ['kpis', 'roi', 'roas', 'aov', 'blended', 'financial', 'dashboard', 'οικονομικά'],
+    related: ['understanding-kpis', 'roi-attribution-basics'],
+    tips: [
+      'ROAS > 4x θεωρείται πολύ καλός στα περισσότερα industries',
+      'Blended ROAS είναι πιο σημαντικός από τον απλό ROAS για τη συνολική εικόνα',
+      'Αν το AOV μειώνεται, σκεφτείτε στρατηγικές αύξησης μέσου καλαθιού (bundles, free shipping thresholds)',
+      'MoM comparison έχει νόημα μόνο αν συγκρίνεται μήνες χωρίς ιδιαιτερότητες (π.χ. μη συγκρίνετε Δεκέμβριο με Ιανουάριο)'
+    ]
+  },
+
+  // ── Content Strategy ──────────────────────────────────────────────────
+  {
+    id: 'content-strategy-guide',
+    category: 'content',
+    title: 'Content Strategy — Οδηγός',
+    description: 'Πώς λειτουργεί η AI-generated content strategy και πώς αξιοποιείται.',
+    content: `# Content Strategy — Οδηγός
+
+Η σελίδα Content Strategy παρέχει AI-generated κατευθύνσεις περιεχομένου ευθυγραμμισμένες με την ενεργή εμπορική στρατηγική σας.
+
+## Πώς δημιουργείται
+
+### 1. Ενεργοποίηση Στρατηγικής
+Πηγαίνετε στο Commercial Strategy, επιλέξτε scenario και πατήστε Save. Η εφαρμογή χρησιμοποιεί Google Generative AI για να δημιουργήσει εξατομικευμένες προτάσεις.
+
+### 2. Inputs στο AI
+- Ενεργή στρατηγική (π.χ. Profit Maximization, Stock Clearance)
+- Βάρη στρατηγικής (κερδοφορία, απόθεμα, τζίρος κ.λπ.)
+- Brand name και κατηγορίες προϊόντων
+- Customer segments (π.χ. Champions, At Risk)
+
+### 3. Τι παράγεται
+- **Θεματικές κατευθύνσεις ανά κανάλι**: Blog, Social Media, Email, κ.λπ. — με θέμα, reasoning, target segments
+- **Παραδείγματα ενεργειών**: Συγκεκριμένα content pieces με τίτλο, περιγραφή, κανάλι, priority
+- **Brief για ομάδα marketing**: Έτοιμο κείμενο για αποστολή στην ομάδα ή το agency
+
+## Αξιοποίηση
+- **Αντιγραφή brief**: Αποστέλλεται στην ομάδα marketing ή στο agency
+- **Σύνδεση με Briefing Board**: Μέσω αποστολής briefing από τη στρατηγική
+- **Εναρμόνιση content**: Το περιεχόμενο ευθυγραμμίζεται αυτόματα με τις εμπορικές προτεραιότητες`,
+    tags: ['content', 'strategy', 'ai', 'marketing', 'blog', 'social media', 'περιεχόμενο'],
+    related: ['strategy-weights', 'channel-activation'],
+    steps: [
+      'Πηγαίνετε στο Commercial Strategy και ενεργοποιήστε μια στρατηγική',
+      'Πλοηγηθείτε στο Content Strategy',
+      'Δείτε τις θεματικές κατευθύνσεις ανά κανάλι',
+      'Ανοίξτε τα παραδείγματα ενεργειών για ιδέες',
+      'Αντιγράψτε το brief και στείλτε το στην ομάδα σας'
+    ]
+  },
+
+  // ── Plans ─────────────────────────────────────────────────────────────
+  {
+    id: 'plan-growth-enterprise',
+    category: 'getting-started',
+    title: 'Growth Plan vs Enterprise',
+    description: 'Τι περιλαμβάνει κάθε plan και πώς διαφοροποιείται.',
+    content: `# Growth Plan vs Enterprise
+
+Το Performance+ διατίθεται σε δύο εκδόσεις:
+
+## Performance+ (Growth Plan)
+Η βασική έκδοση για e-commerce SMBs:
+- **Dashboard** — KPIs, revenue chart, AI insights
+- **Commercial Strategy** — 7 εμπορικά σενάρια, composite scoring
+- **RFM Analysis** — Customer segmentation
+- **Product Intelligence** — Stock health, inventory analytics
+- **Campaigns** — Google Ads & Meta tracking, 3 χρόνια ιστορικό
+- **Content Strategy** — AI-generated content directions
+- **ROI Attribution** — Channel performance, ROAS, ROI
+- **Συντονισμός Τμημάτων** — Briefing Board, αποφάσεις, εργασίες
+- **Αυτοματισμοί** — 10 smart triggers (Απόθεμα, Καμπάνιες, Πελατολόγιο, Εποχικότητα)
+- **AI Insights** — Πρακτικές συστάσεις βασισμένες στα δεδομένα
+
+## Performance+ Enterprise
+Όλα τα παραπάνω **+**:
+- **Procurement module** — Διαχείριση αποθέματος ERP, κοστολόγηση, αξιολόγηση ειδών, τιμολογιακή πολιτική, απολογιστικό, στατιστικά
+- **Enterprise KPIs** — ERP SKUs, ημέρες επάρκειας, συνολικές πωλήσεις στο Product Intelligence
+- **5 extra triggers** — Procurement-specific: χαμηλή επάρκεια, πλεόνασμα, νέο brand, τιμολογιακή απόκλιση, καθυστέρηση προμηθευτή
+- **ERP data integration** — Import δεδομένων από ERP/procurement systems
+
+## Πώς αλλάζει
+Η έκδοση ορίζεται στο brand profile (Firestore). Μεταβίβαση σε Enterprise γίνεται κατόπιν επικοινωνίας.`,
+    tags: ['plans', 'growth', 'enterprise', 'procurement', 'features', 'pricing'],
+    related: ['what-is-performance-plus', 'automation-triggers'],
+    faq: [
+      {
+        question: 'Πώς μπορώ να κάνω upgrade σε Enterprise;',
+        answer: 'Επικοινωνήστε στο hello@notthesame.ai για εταιρική ένταξη. Η αναβάθμιση ενεργοποιεί αυτόματα το Procurement module και τους enterprise triggers.'
+      },
+      {
+        question: 'Μπορώ να δοκιμάσω το Enterprise;',
+        answer: 'Ναι, μπορείτε να ζητήσετε δοκιμαστική περίοδο Enterprise μέσω email ή demo request.'
+      }
+    ]
+  },
+  // ── Competitive Intelligence ──
+  {
+    id: 'price-benchmarking',
+    title: 'Price Benchmarking (Google Merchant Center)',
+    description: 'Σύγκριση τιμών σας vs μέση τιμή αγοράς ανά SKU',
+    category: 'competitive',
+    content: `# Price Benchmarking
+
+## Τι είναι
+Χρησιμοποιεί το **Google Merchant Center** (Content API — PriceCompetitivenessProductView) για να ανακτήσει τη μέση τιμή αγοράς ανά GTIN/SKU.
+
+## Πώς λειτουργεί
+1. Συνδέστε τον λογαριασμό Merchant Center μέσω **Data Import → Connectors**
+2. Πατήστε "Sync τώρα" για εισαγωγή benchmarks
+3. Στο **Product Intelligence** εμφανίζεται η στήλη **vs Market** (ποσοστιαία απόκλιση)
+
+## Τι βλέπετε
+- **Πράσινο** — η τιμή σας είναι χαμηλότερη από την αγορά
+- **Κόκκινο** — η τιμή σας είναι υψηλότερη
+- Summary strip: Σύνολο SKU με benchmark, πόσα πάνω/κάτω, μέση απόκλιση
+
+## Automation trigger
+Ενεργοποιήστε τον trigger **"Τιμή πάνω από αγορά"** στις Ρυθμίσεις Αυτοματισμών για να ειδοποιείστε αυτόματα.`,
+    tags: ['price', 'benchmark', 'merchant center', 'gmc', 'vs market', 'sku'],
+    related: ['automation-triggers', 'competitor-monitoring'],
+    faq: [
+      {
+        question: 'Χρειάζομαι Google Merchant Center;',
+        answer: 'Ναι, πρέπει να έχετε ενεργό GMC account με δημοσιευμένα προϊόντα (Shopping feed) ώστε να υπάρχουν benchmark data.'
+      },
+      {
+        question: 'Πόσο συχνά ανανεώνονται οι τιμές;',
+        answer: 'Αυτόματα κάθε μέρα στις 06:00 μέσω scheduled sync. Μπορείτε επίσης να πατήσετε "Sync τώρα" χειροκίνητα.'
+      }
+    ]
+  },
+  {
+    id: 'competitor-monitoring',
+    title: 'Competitor Monitoring (Meta Ad Library)',
+    description: 'Παρακολούθηση διαφημίσεων ανταγωνιστών μέσω Meta Ad Library',
+    category: 'competitive',
+    content: `# Competitor Monitoring
+
+## Τι είναι
+Χρησιμοποιεί το **Meta Ad Library API** για να εντοπίσει ενεργές και ιστορικές διαφημίσεις ανταγωνιστών στα Meta (Facebook/Instagram).
+
+## Πώς λειτουργεί
+1. Μεταβείτε στο **Competitive Intel** από το μενού
+2. Προσθέστε ανταγωνιστές (Facebook Page ID + όνομα)
+3. Πατήστε "Scan τώρα" για εισαγωγή δεδομένων
+
+## Τι βλέπετε
+- **KPIs**: Αριθμός ανταγωνιστών, ενεργές ads, σύνολο ads, τελευταίο scan
+- **Λίστα ads**: Κείμενο ad, ημερομηνίες, πλατφόρμες, ημέρες λειτουργίας, κατάσταση
+- **Φίλτρα**: Αναζήτηση ανά ανταγωνιστή ή κείμενο
+
+## Automation trigger
+Ενεργοποιήστε τον trigger **"Νέες ads ανταγωνιστών"** για αυτόματη ειδοποίηση όταν εντοπίζονται νέες διαφημίσεις.
+
+## Πώς βρίσκω το Page ID;
+- Μεταβείτε στη σελίδα του ανταγωνιστή στο Facebook
+- Κάντε κλικ στο "About" / "Πληροφορίες"
+- Κάτω-κάτω αναγράφεται το Page ID
+- Εναλλακτικά: graph.facebook.com/{page_username}`,
+    tags: ['competitor', 'ads', 'meta', 'ad library', 'monitoring', 'facebook'],
+    related: ['price-benchmarking', 'automation-triggers'],
+    faq: [
+      {
+        question: 'Χρειάζεται σύνδεση Meta;',
+        answer: 'Όχι, το Ad Library API χρησιμοποιεί App Access Token (app_id|app_secret) — δεν απαιτείται user login.'
+      },
+      {
+        question: 'Μπορώ να δω ads ανταγωνιστών σε Google;',
+        answer: 'Προς το παρόν η λειτουργία καλύπτει μόνο Meta platforms. Google Ads Transparency Center δεν παρέχει ακόμα programmatic API.'
       }
     ]
   }

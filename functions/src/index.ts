@@ -25,11 +25,26 @@ import {
   selectMetaAccount,
   setDb as setMetaDb,
 } from './metaConnector';
+import { sendNotificationEmail, setDb as setEmailDb } from './emailNotifier';
+import {
+  getMerchantAuthUrl,
+  handleMerchantCallback,
+  fetchPriceBenchmarks,
+  selectMerchantAccount,
+  setDb as setMerchantDb,
+} from './merchantConnector';
+import {
+  fetchCompetitorAds,
+  setDb as setCompetitorDb,
+} from './competitorMonitor';
 
 admin.initializeApp();
 const db = getFirestore();
 setMetaDb(db);
 setGoogleAdsDb(db);
+setEmailDb(db);
+setMerchantDb(db);
+setCompetitorDb(db);
 
 const BATCH_SIZE = 500;
 
@@ -531,6 +546,8 @@ export const connectorAuth = onRequest(
         authUrl = getGoogleAdsAuthUrl(brandId, redirectUri);
       } else if (provider === 'meta') {
         authUrl = getMetaAuthUrl(brandId, redirectUri);
+      } else if (provider === 'merchant') {
+        authUrl = getMerchantAuthUrl(brandId, redirectUri);
       } else {
         res.status(400).json({ error: `Unknown provider: ${provider}` });
         return;
@@ -598,6 +615,8 @@ export const connectorCallback = onRequest(
         } else {
           result = { success: false, error: metaResult.error };
         }
+      } else if (provider === 'merchant') {
+        result = await handleMerchantCallback(code, brandId, redirectUri);
       } else {
         res.status(400).send(`Unknown provider: ${provider}`);
         return;
@@ -684,6 +703,9 @@ export const connectorSelectAccount = onRequest(
       } else if (provider === 'google_ads') {
         await selectGoogleAdsAccount(brandId, accountId, accountName || accountId);
         result = { success: true };
+      } else if (provider === 'merchant') {
+        await selectMerchantAccount(brandId, accountId, accountName || accountId);
+        result = { success: true };
       } else {
         res.status(400).json({ error: `Account selection not supported for ${provider}` });
         return;
@@ -723,6 +745,10 @@ export const connectorSync = onRequest(
         result = await fetchGoogleAdsCampaigns(brandId);
       } else if (provider === 'meta') {
         result = await fetchMetaCampaigns(brandId);
+      } else if (provider === 'merchant') {
+        result = await fetchPriceBenchmarks(brandId);
+      } else if (provider === 'competitor') {
+        result = await fetchCompetitorAds(brandId);
       } else {
         res.status(400).json({ error: `Unknown provider: ${provider}` });
         return;
@@ -771,6 +797,30 @@ export const scheduledSync = onSchedule(
           logger.info(`[ScheduledSync] Meta for ${brandId}: imported ${result.imported}`);
         } catch (err) {
           logger.error(`[ScheduledSync] Meta failed for ${brandId}:`, err);
+        }
+      }
+
+      if (data.merchant?.connected) {
+        try {
+          const result = await fetchPriceBenchmarks(brandId);
+          logger.info(`[ScheduledSync] Merchant for ${brandId}: imported ${result.imported}`);
+        } catch (err) {
+          logger.error(`[ScheduledSync] Merchant failed for ${brandId}:`, err);
+        }
+      }
+    }
+
+    // Competitor monitoring — runs for all brands with competitor settings
+    const competitorSnap = await db.collection('competitor_settings').get();
+    for (const doc of competitorSnap.docs) {
+      const brandId = doc.id;
+      const data = doc.data();
+      if (data.competitors?.length > 0) {
+        try {
+          const result = await fetchCompetitorAds(brandId);
+          logger.info(`[ScheduledSync] Competitors for ${brandId}: ${result.totalAds} ads (${result.newAds} new)`);
+        } catch (err) {
+          logger.error(`[ScheduledSync] Competitors failed for ${brandId}:`, err);
         }
       }
     }
@@ -839,5 +889,44 @@ export const geminiProxy = onRequest(
       logger.error('[geminiProxy] Gemini error:', message);
       res.status(500).json({ error: `Gemini request failed: ${message}` });
     }
+  }
+);
+
+// ── Email Notification Endpoint ─────────────────────────────────────────────
+
+export const sendEmailNotification = onRequest(
+  { region: 'europe-west1', cors: true },
+  async (req, res) => {
+    if (req.method !== 'POST') { res.status(405).send('POST only'); return; }
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    try {
+      await admin.auth().verifyIdToken(authHeader.split('Bearer ')[1]);
+    } catch {
+      res.status(401).json({ error: 'Invalid token' });
+      return;
+    }
+
+    const { userIds, title, body, type, brandId, entityType, entityId } = req.body;
+    if (!userIds || !Array.isArray(userIds) || !title) {
+      res.status(400).json({ error: 'Missing userIds or title' });
+      return;
+    }
+
+    const results: string[] = [];
+    for (const uid of userIds) {
+      try {
+        await sendNotificationEmail(uid, { title, body: body || '', type: type || '', brandId: brandId || '', entityType, entityId });
+        results.push(`${uid}: sent`);
+      } catch (err) {
+        results.push(`${uid}: failed`);
+      }
+    }
+
+    res.status(200).json({ ok: true, results });
   }
 );

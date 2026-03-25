@@ -12,3 +12,5 @@ export { useFeedSources } from './useFeedSources';
 export { useChannelActivations } from './useChannelActivations';
 export { useSuppliers } from './useSuppliers';
 export { useProcurement } from './useProcurement';
+export { useBrandMembers, useDecisions, useTasks, useComments, useActivity, useNotifications } from './useCoordination';
+export { usePlan } from './usePlan';

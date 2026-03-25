@@ -27,6 +27,11 @@ import { SuperAdminDashboard } from './components/admin';
 import { AuthActionPage } from './components/auth/AuthActionPage';
 import { isSuperAdminEmail } from './config/superAdmins';
 import { SharedPackageViewer } from './components/strategy/SharedPackageViewer';
+import { CoordinationPage } from './components/coordination';
+import { AutomationSettingsPage } from './components/settings';
+import { CompetitorInsights } from './components/competitive/CompetitorInsights';
+import { EnterpriseBadge } from './components/common';
+import { usePlan } from './hooks/usePlan';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -71,7 +76,7 @@ function App() {
     if (typeof window === 'undefined') return 'dashboard';
     const hash = window.location.hash.replace('#', '');
     const baseSection = hash.split('?')[0];
-    const validSections = ['brands', 'dashboard', 'strategy', 'rfm', 'products', 'suppliers', 'procurement', 'channels', 'campaigns', 'finances', 'calendar', 'reports', 'roi', 'data', 'data-products', 'data-segments', 'data-campaigns', 'data-organic', 'data-procurement', 'invite', 'concept', 'help', 'admin'];
+    const validSections = ['brands', 'dashboard', 'strategy', 'rfm', 'products', 'suppliers', 'procurement', 'channels', 'campaigns', 'competitive', 'finances', 'calendar', 'reports', 'roi', 'data', 'data-products', 'data-segments', 'data-campaigns', 'data-organic', 'data-procurement', 'invite', 'concept', 'help', 'admin', 'coordination', 'automation'];
     if (baseSection && validSections.includes(baseSection)) return baseSection;
     return 'dashboard';
   };
@@ -198,11 +203,17 @@ function App() {
       case 'suppliers':
         return <SuppliersPage />;
       case 'procurement':
-        return <ProcurementPage onSectionChange={handleSectionChange} />;
+        return <ProcurementGate onSectionChange={handleSectionChange} />;
       case 'channels':
         return <ChannelActivation onSectionChange={handleSectionChange} />;
       case 'campaigns':
         return <CampaignsPage onSectionChange={handleSectionChange} />;
+      case 'coordination':
+        return <CoordinationPage />;
+      case 'automation':
+        return <AutomationSettingsPage />;
+      case 'competitive':
+        return <CompetitorInsights />;
       case 'finances':
         return <BusinessFinances onSectionChange={handleSectionChange} />;
       case 'calendar':
@@ -279,6 +290,12 @@ function App() {
       </ToastProvider>
     </QueryProvider>
   );
+}
+
+function ProcurementGate({ onSectionChange }: { onSectionChange: (s: string) => void }) {
+  const { isEnterprise } = usePlan();
+  if (!isEnterprise) return <div className="max-w-xl mx-auto mt-12"><EnterpriseBadge /></div>;
+  return <ProcurementPage onSectionChange={onSectionChange} />;
 }
 
 export default App;

@@ -16,8 +16,9 @@ import {
   TrendingDown,
   Trash2
 } from 'lucide-react';
-import { Card, Badge, Button, ProgressBar, Spinner, Tooltip, useToast } from '../common';
-import { useProducts, useBrand, useSuppliers } from '../../hooks';
+import { Card, Badge, Button, ProgressBar, Spinner, Tooltip, useToast, EnterpriseBadge } from '../common';
+import { useProducts, useBrand, useSuppliers, usePlan, useProcurement } from '../../hooks';
+import { usePriceBenchmarks } from '../../hooks/usePriceBenchmarks';
 import { formatCurrency, formatCurrencyCompact, formatNumber, formatPercent } from '../../utils/format';
 import { FirestoreService } from '../../services/firestore';
 import { classifyStockHealth, getDaysOfStock, getProductTod } from '../../utils/productUtils';
@@ -117,8 +118,20 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   const { currentBrand } = useBrand();
   const { products, isLoading: productsLoading, hasImported } = useProducts();
   const { suppliers } = useSuppliers();
+  const { isEnterprise } = usePlan();
+  const { data: procData } = useProcurement();
+  const { benchmarks, count: benchmarkCount, aboveMarket, belowMarket, avgDiff } = usePriceBenchmarks();
   const queryClient = useQueryClient();
   const toast = useToast();
+
+  const benchmarkMap = useMemo(() => {
+    const m = new Map<string, { priceDiff: number; benchmarkPrice: number }>();
+    for (const b of benchmarks) {
+      const key = (b.gtin || b.productId || '').toLowerCase();
+      if (key) m.set(key, { priceDiff: b.priceDiff, benchmarkPrice: b.benchmarkPrice });
+    }
+    return m;
+  }, [benchmarks]);
   const [isDeleting, setIsDeleting] = useState(false);
 
   const supplierTodMap = useMemo(() => {
@@ -129,6 +142,20 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
 
   const inventorySummary = useMemo(() => computeInventorySummary(products, supplierTodMap), [products, supplierTodMap]);
   const inventoryAlerts = useMemo(() => computeInventoryAlerts(products, supplierTodMap), [products, supplierTodMap]);
+
+  const procSummary = useMemo(() => {
+    if (!isEnterprise || !procData.inventory?.length) return null;
+    let totalSkus = 0;
+    let lowCoverage = 0;
+    let totalSales = 0;
+    for (const row of procData.inventory as Record<string, string | undefined>[]) {
+      totalSkus++;
+      const covDays = parseFloat(row['ΗΜΕΡΕΣ_ΕΠΑΡΚΕΙΑΣ_ΔΙΑΘΕΣΙΜΟΥ_ΑΠΟΘΕΜΑΤΟΣ'] ?? '999');
+      if (covDays < 15) lowCoverage++;
+      totalSales += parseFloat(row['ΣΥΝΟΛΙΚΕΣ_ΠΩΛΗΣΕΙΣ'] ?? '0');
+    }
+    return { totalSkus, lowCoverage, totalSales: Math.round(totalSales) };
+  }, [isEnterprise, procData.inventory]);
   const categories = useMemo(() => {
     const fromProducts = [...new Set(products.map(p => p.category))].filter(Boolean).sort();
     return fromProducts;
@@ -341,6 +368,68 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
         />
       </div>
 
+      {/* Enterprise Procurement KPIs */}
+      {isEnterprise && procSummary && (
+        <div className="flex items-center gap-4 px-4 py-3 bg-gradient-to-r from-[#7C3AED]/5 to-[#2563EB]/5 border border-[#7C3AED]/15 rounded-xl">
+          <EnterpriseBadge inline />
+          <div className="flex items-center gap-6 text-sm">
+            <div>
+              <span className="text-[#6B7280] flex items-center gap-1">ERP SKUs: <Tooltip content="Αριθμός μοναδικών κωδικών (SKU) στο σύστημα ERP/Procurement." size={12} /></span>
+              <strong className="text-[#111827]">{formatNumber(procSummary.totalSkus)}</strong>
+            </div>
+            <div>
+              <span className="text-[#6B7280] flex items-center gap-1">Χαμηλή επάρκεια: <Tooltip content="SKUs με ημέρες επάρκειας αποθέματος κάτω από 15 — κίνδυνος εξάντλησης." size={12} /></span>
+              <strong className={procSummary.lowCoverage > 0 ? 'text-red-600' : 'text-[#111827]'}>
+                {procSummary.lowCoverage} SKUs
+              </strong>
+            </div>
+            <div>
+              <span className="text-[#6B7280] flex items-center gap-1">Συνολικές πωλήσεις: <Tooltip content="Άθροισμα πωλήσεων σε αξία (€) από τα δεδομένα Procurement." size={12} /></span>
+              <strong className="text-[#111827]">{formatCurrencyCompact(procSummary.totalSales)}</strong>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Price Benchmark Strip */}
+      {benchmarkCount > 0 && (
+        <div className="flex items-center gap-4 px-4 py-3 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl">
+          <span className="text-lg">🛒</span>
+          <div className="flex items-center gap-6 text-sm">
+            <div>
+              <span className="text-[#6B7280] flex items-center gap-1">
+                SKUs με benchmark:
+                <Tooltip content="Πλήθος SKU που έχουν αντιστοιχιστεί με τιμές αγοράς (Google Merchant Center)." size={12} />
+              </span>
+              <strong className="text-[#111827]">{formatNumber(benchmarkCount)}</strong>
+            </div>
+            <div>
+              <span className="text-[#6B7280] flex items-center gap-1">
+                Πάνω από αγορά:
+                <Tooltip content="SKU με τιμή υψηλότερη από τη μέση τιμή αγοράς." size={12} />
+              </span>
+              <strong className="text-red-600">{aboveMarket}</strong>
+            </div>
+            <div>
+              <span className="text-[#6B7280] flex items-center gap-1">
+                Κάτω από αγορά:
+                <Tooltip content="SKU με τιμή χαμηλότερη από τη μέση τιμή αγοράς." size={12} />
+              </span>
+              <strong className="text-green-600">{belowMarket}</strong>
+            </div>
+            <div>
+              <span className="text-[#6B7280] flex items-center gap-1">
+                Μέση απόκλιση:
+                <Tooltip content="Μέση ποσοστιαία απόκλιση τιμών σας vs αγοράς. Θετικό = ακριβότεροι, αρνητικό = φθηνότεροι." size={12} />
+              </span>
+              <strong className={avgDiff > 0 ? 'text-red-600' : avgDiff < 0 ? 'text-green-600' : 'text-[#111827]'}>
+                {avgDiff > 0 ? '+' : ''}{avgDiff}%
+              </strong>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Alerts */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {inventoryAlerts.map((alert, index) => (
@@ -503,6 +592,13 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                     <SortIcon field="price" current={sortField} direction={sortDirection} />
                   </button>
                 </th>
+                {benchmarkCount > 0 && (
+                  <th className="px-3 py-2 text-left text-[11px] font-medium text-[#4A4A4A] hidden lg:table-cell">
+                    <Tooltip content="Απόκλιση τιμής σε σχέση με τη μέση τιμή αγοράς (Google Merchant Center)." size={12}>
+                      vs Market
+                    </Tooltip>
+                  </th>
+                )}
                 <th className="px-3 py-2 text-right text-[11px] font-medium text-[#4A4A4A]">
                   Actions
                 </th>
@@ -511,7 +607,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
             <tbody>
               <AnimatePresence mode="popLayout">
                 {paginatedProducts.map((product, index) => (
-                  <ProductRow key={product.id} product={product} index={index} supplierTodMap={supplierTodMap} />
+                  <ProductRow key={product.id} product={product} index={index} supplierTodMap={supplierTodMap} benchmarkMap={benchmarkCount > 0 ? benchmarkMap : undefined} />
                 ))}
               </AnimatePresence>
             </tbody>
@@ -617,10 +713,11 @@ function SummaryCard({ label, value, subValue, icon, color, tooltip, active, onC
 interface ProductRowProps {
   product: Product;
   supplierTodMap?: Map<string, number>;
+  benchmarkMap?: Map<string, { priceDiff: number; benchmarkPrice: number }>;
   index: number;
 }
 
-function ProductRow({ product, index, supplierTodMap }: ProductRowProps) {
+function ProductRow({ product, index, supplierTodMap, benchmarkMap }: ProductRowProps) {
   const tod = getProductTod(product, supplierTodMap);
   const health = classifyStockHealth(product, tod);
   const healthColor = health === 'dead' ? '#EF4444' : health === 'excess' ? '#EF4444' : health === 'low' ? '#F59E0B' : '#22C55E';
@@ -702,6 +799,21 @@ function ProductRow({ product, index, supplierTodMap }: ProductRowProps) {
           €{formatCurrency(product.price ?? 0, 2)}
         </span>
       </td>
+      {benchmarkMap && (
+        <td className="px-3 py-2 hidden lg:table-cell">
+          {(() => {
+            const key = (product.sku || product.id || '').toLowerCase();
+            const bm = benchmarkMap.get(key);
+            if (!bm) return <span className="text-[10px] text-[#9CA3AF]">—</span>;
+            const diff = bm.priceDiff;
+            return (
+              <span className={`text-xs font-mono font-medium ${diff > 0 ? 'text-red-600' : diff < 0 ? 'text-green-600' : 'text-[#6B7280]'}`}>
+                {diff > 0 ? '+' : ''}{diff}%
+              </span>
+            );
+          })()}
+        </td>
+      )}
       <td className="px-3 py-2 text-right">
         <button className="text-[10px] font-medium text-[var(--nts-accent)] hover:underline">
           Feed

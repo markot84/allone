@@ -1,10 +1,14 @@
 {
-  "version": "0.102.0",
-  "previousVersion": "0.101.0",
-  "commitHash": "5d2c14f",
+  "version": "0.112.0",
+  "previousVersion": "0.111.0",
+  "commitHash": "7da154c",
   "branch": "main",
-  "buildDate": "2026-03-24T08:30:48.281Z",
+  "buildDate": "2026-03-25T09:27:33.914Z",
   "commits": [
+    {
+      "hash": "7da154c",
+      "message": "Fix Google Ads sync and add date-range filtering for campaigns"
+    },
     {
       "hash": "5d2c14f",
       "message": "debug: add token refresh scope logging to diagnose Google Ads UNIMPLEMENTED"
@@ -60,13 +64,10 @@
     {
       "hash": "9ac8757",
       "message": "fix: fiscal year totals from numeric column names, stock value = cost×qty calc"
-    },
-    {
-      "hash": "06e587b",
-      "message": "fix: filter numeric column names (isNumericColName), fuzzy getChartData, clean statistics cols"
     }
   ],
   "changes": [
+    "Fix Google Ads sync and add date-range filtering for campaigns",
     "Debug: add token refresh scope logging to diagnose Google Ads UNIMPLEMENTED",
     "[Διόρθωση] Auto-detect working login-customer-id by testing MCC, no-header, and self fallbacks",
     "[Διόρθωση] Strip dashes from Google Ads customer IDs before API calls (API requires plain numeric IDs)",
@@ -75,7 +76,6 @@
     "[Διόρθωση] Clarify sub-account vs MCC in Google Ads account picker UI",
     "[Διόρθωση] Modal dialog width with inline style override, improved account picker UI",
     "[Διόρθωση] Restore Google Ads API v19, keep improved error detail logging",
-    "[Διόρθωση] Downgrade Google Ads API to v18 stable, improve error detail in sync response",
-    "[Διόρθωση] Remove global max-width override that broke Tailwind max-w utilities on login UI"
+    "[Διόρθωση] Downgrade Google Ads API to v18 stable, improve error detail in sync response"
   ]
 }

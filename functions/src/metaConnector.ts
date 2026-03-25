@@ -231,7 +231,7 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
   for (const accountId of adAccountIds) {
     try {
       const since = new Date();
-      since.setFullYear(since.getFullYear() - 1);
+      since.setFullYear(since.getFullYear() - 3);
       const sinceStr = since.toISOString().split('T')[0];
       const untilStr = new Date().toISOString().split('T')[0];
 

@@ -1,11 +1,14 @@
 // Auth & Brand Types
+export type BrandPlan = 'growth' | 'enterprise';
+
 export interface Brand {
   id: string;
   name: string;
   type: 'B2B' | 'B2C';
+  plan?: BrandPlan;
   createdAt: string;
   createdBy: string;
-  logoUrl?: string; // Firebase Storage URL for brand logo
+  logoUrl?: string;
   assets?: {
     logo?: string;
     images?: string[];
@@ -311,4 +314,154 @@ export interface Campaign {
     amount_spent: number;
     conversion_value: number;
   }>;
+}
+
+// ── Coordination System Types ───────────────────────────────────────────────
+
+export type BrandMemberRole = 'owner' | 'admin' | 'member';
+export type BrandDepartment = 'management' | 'commercial' | 'marketing' | 'procurement' | 'agency' | 'other';
+
+export interface BrandMember {
+  id: string; // same as userId
+  userId: string;
+  email: string;
+  displayName: string;
+  role: BrandMemberRole;
+  department: BrandDepartment;
+  departmentLabel?: string;
+  joinedAt: string;
+}
+
+export type DecisionCategory = 'pricing' | 'promotion' | 'product' | 'procurement' | 'marketing' | 'general';
+export type DecisionPriority = 'low' | 'medium' | 'high' | 'urgent';
+export type DecisionStatus = 'proposal' | 'draft' | 'active' | 'completed' | 'archived';
+
+export interface Decision {
+  id: string;
+  brandId: string;
+  title: string;
+  description: string;
+  category: DecisionCategory;
+  priority: DecisionPriority;
+  status: DecisionStatus;
+  targetDepartments: BrandDepartment[];
+  createdBy: string;
+  createdByName?: string;
+  createdAt: string;
+  updatedAt: string;
+  commentCount: number;
+  taskCount: number;
+}
+
+export type TaskStatus = 'pending' | 'in_progress' | 'done' | 'cancelled';
+export type TaskPriority = 'low' | 'medium' | 'high';
+
+export interface CoordinationTask {
+  id: string;
+  brandId: string;
+  title: string;
+  description?: string;
+  status: TaskStatus;
+  priority: TaskPriority;
+  assignedTo?: string;
+  assignedToName?: string;
+  assignedDepartment?: BrandDepartment;
+  linkedDecisionId?: string;
+  linkedDecisionTitle?: string;
+  dueDate?: string;
+  createdBy: string;
+  createdByName?: string;
+  createdAt: string;
+  updatedAt: string;
+  commentCount: number;
+}
+
+export type CommentEntityType = 'decision' | 'task' | 'campaign' | 'strategy' | 'product';
+
+export interface CoordinationComment {
+  id: string;
+  brandId: string;
+  entityType: CommentEntityType;
+  entityId: string;
+  text: string;
+  authorId: string;
+  authorName: string;
+  authorDepartment?: BrandDepartment;
+  createdAt: string;
+  mentions?: string[];
+}
+
+export type ActivityType =
+  | 'decision_created' | 'decision_updated' | 'decision_completed'
+  | 'task_created' | 'task_assigned' | 'task_completed'
+  | 'comment_added' | 'member_joined';
+
+export interface ActivityEntry {
+  id: string;
+  brandId: string;
+  type: ActivityType;
+  actorId: string;
+  actorName: string;
+  entityType: string;
+  entityId: string;
+  summary: string;
+  createdAt: string;
+}
+
+export interface UserNotification {
+  id: string;
+  brandId: string;
+  type: ActivityType;
+  title: string;
+  body: string;
+  entityType: string;
+  entityId: string;
+  read: boolean;
+  createdAt: string;
+}
+
+// ── Automation ───────────────────────────────────────────────────────────────
+
+export type TriggerPlanRequirement = 'growth' | 'enterprise';
+export type AlertSeverity = 'info' | 'warning' | 'critical';
+export type AlertStatus = 'new' | 'acknowledged' | 'acted' | 'dismissed';
+
+export interface TriggerDefinition {
+  id: string;
+  label: string;
+  description: string;
+  group: string;
+  planRequired: TriggerPlanRequirement;
+  defaultThreshold?: number;
+  thresholdLabel?: string;
+  thresholdUnit?: string;
+  defaultInterval: number;
+}
+
+export interface TriggerConfig {
+  enabled: boolean;
+  threshold?: number;
+  checkIntervalDays: number;
+  lastCheckedAt?: string;
+  autoBriefing: boolean;
+}
+
+export interface AutomationSettings {
+  triggers: Record<string, TriggerConfig>;
+  updatedAt: string;
+}
+
+export interface AutomationAlert {
+  id: string;
+  brandId: string;
+  triggerId: string;
+  triggerLabel: string;
+  severity: AlertSeverity;
+  title: string;
+  description: string;
+  suggestions: string[];
+  status: AlertStatus;
+  linkedDecisionId?: string;
+  data: Record<string, unknown>;
+  createdAt: string;
 }

@@ -1,8 +1,9 @@
 import { useState, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { TrendingUp, Filter, Download, Search, Calendar, DollarSign, Trash2, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
-import { Card, CardHeader, Badge, Button, Spinner, useToast } from '../common';
+import { TrendingUp, Filter, Download, Search, DollarSign, Trash2, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
+import { Card, CardHeader, Badge, Button, Spinner, useToast, Tooltip } from '../common';
+import { DateRangePicker } from '../ui/DateRangePicker';
 import { useCampaigns, useBrand } from '../../hooks';
 import { FirestoreService } from '../../services/firestore';
 import { formatCurrency, formatNumber, formatMultiplier, formatPercent } from '../../utils/format';
@@ -26,6 +27,21 @@ function parseCampaignDate(d: string | number | undefined): Date | null {
   const parsed = new Date(str);
   return isNaN(parsed.getTime()) ? null : parsed;
 }
+
+// Returns true if a dailyMetrics bucket overlaps with [fromDate, toDate].
+// Daily keys (YYYY-MM-DD): exact range check.
+// Monthly keys (day === '01'): include if any day of that month is within range.
+function bucketOverlaps(date: string, fromDate: string, toDate: string): boolean {
+  if (date.slice(8, 10) === '01') {
+    // Monthly bucket — last day of month
+    const [year, month] = date.slice(0, 7).split('-').map(Number);
+    const lastDay = new Date(year, month, 0).toISOString().slice(0, 10);
+    return date <= toDate && lastDay >= fromDate;
+  }
+  // Daily bucket — exact comparison
+  return date >= fromDate && date <= toDate;
+}
+
 
 interface CampaignsPageProps {
   onSectionChange?: (section: string) => void;
@@ -143,7 +159,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
       if (!c.dailyMetrics || Object.keys(c.dailyMetrics).length === 0) return c;
       let impressions = 0, clicks = 0, conversions = 0, amount_spent = 0, conversion_value = 0;
       for (const [date, m] of Object.entries(c.dailyMetrics)) {
-        if (date <= toDate && date >= fromDate.slice(0, 7) + '-01') {
+        if (bucketOverlaps(date, fromDate, toDate)) {
           impressions += m.impressions || 0;
           clicks += m.clicks || 0;
           conversions += m.conversions || 0;
@@ -195,6 +211,8 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
     const list = filteredCampaigns;
     const total = list.length;
     const useDateFilter = !!(dateFrom || dateTo);
+    const fromDate = dateFrom || '0000-00-00';
+    const toDate = dateTo || '9999-99-99';
 
     let totalSpent = 0;
     let totalConversions = 0;
@@ -202,12 +220,8 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
 
     for (const c of list) {
       if (useDateFilter && c.dailyMetrics && Object.keys(c.dailyMetrics).length > 0) {
-        const fromDate = dateFrom || '0000-00-00';
-        const toDate = dateTo || '9999-99-99';
         for (const [date, m] of Object.entries(c.dailyMetrics)) {
-          // Include bucket if its start date is before toDate and the next month starts after fromDate
-          // This handles both daily keys (YYYY-MM-DD) and monthly keys (YYYY-MM-01)
-          if (date <= toDate && date >= fromDate.slice(0, 7) + '-01') {
+          if (bucketOverlaps(date, fromDate, toDate)) {
             totalSpent += m.amount_spent || 0;
             totalConversions += m.conversions || 0;
             totalConversionValue += m.conversion_value || 0;
@@ -341,50 +355,25 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
         </div>
       </div>
 
-      {/* Date range tab */}
-      <Card padding="md" className="border-l-4 border-l-[var(--nts-accent)]">
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="flex items-center gap-2">
-            <Calendar size={18} className="text-[var(--nts-accent)]" />
-            <span className="text-sm font-medium text-[#4A4A4A]">Περίοδος δεδομένων:</span>
-          </div>
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex items-center gap-2">
-              <label className="text-xs text-[#9CA3AF]">Από</label>
-              <input
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                className="px-3 py-1.5 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="text-xs text-[#9CA3AF]">Έως</label>
-              <input
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-                className="px-3 py-1.5 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all"
-              />
-            </div>
-            {(dateFrom || dateTo) && (
-              <button
-                onClick={() => { setDateFrom(''); setDateTo(''); localStorage.removeItem(LS_FROM); localStorage.removeItem(LS_TO); }}
-                className="text-xs text-[var(--nts-accent)] hover:underline"
-              >
-                Καθαρισμός
-              </button>
-            )}
-          </div>
-        </div>
-      </Card>
+      {/* Date range picker */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <DateRangePicker
+          from={dateFrom}
+          to={dateTo}
+          onChange={(f, t) => { setDateFrom(f); setDateTo(t); }}
+          onClear={() => { setDateFrom(''); setDateTo(''); localStorage.removeItem(LS_FROM); localStorage.removeItem(LS_TO); }}
+        />
+        <span className="text-xs text-[#9CA3AF]">
+          Δεδομένα έως 3 χρόνια ιστορικού
+        </span>
+      </div>
 
       {/* Summary Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card padding="md">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-[#4A4A4A]">Total Spent</p>
+              <p className="text-sm text-[#4A4A4A] flex items-center gap-1">Total Spent <Tooltip content="Συνολικό ποσό που δαπανήθηκε σε διαφημίσεις εντός του επιλεγμένου εύρους ημερομηνιών." size={13} /></p>
               <p className="text-2xl font-bold text-[#1A1A1A] font-mono mt-1">
                 €{formatCurrency(summaryStats.totalSpent, 2)}
               </p>
@@ -398,7 +387,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
         <Card padding="md">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-[#4A4A4A]">Total Conversions</p>
+              <p className="text-sm text-[#4A4A4A] flex items-center gap-1">Total Conversions <Tooltip content="Αριθμός μετατροπών (αγορές, leads) που αποδίδονται στις καμπάνιες εντός της επιλεγμένης περιόδου." size={13} /></p>
               <p className="text-2xl font-bold text-[#1A1A1A] font-mono mt-1">
                 {formatNumber(summaryStats.totalConversions)}
               </p>
@@ -412,7 +401,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
         <Card padding="md">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-[#4A4A4A]">Conversion Value</p>
+              <p className="text-sm text-[#4A4A4A] flex items-center gap-1">Conversion Value <Tooltip content="Συνολική αξία (€) των μετατροπών που αποδίδονται στις καμπάνιες." size={13} /></p>
               <p className="text-2xl font-bold text-[#1A1A1A] font-mono mt-1">
                 €{formatCurrency(summaryStats.totalConversionValue, 2)}
               </p>
@@ -426,7 +415,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
         <Card padding="md">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-[#4A4A4A]">Avg ROAS</p>
+              <p className="text-sm text-[#4A4A4A] flex items-center gap-1">Avg ROAS <Tooltip content="Μέσο Return on Ad Spend εντός περιόδου: Αξία Μετατροπών ÷ Spend." size={13} /></p>
               <p className="text-2xl font-bold text-[#1A1A1A] font-mono mt-1">
                 {formatMultiplier(summaryStats.avgROAS, 2)}
               </p>
@@ -500,7 +489,6 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                 <tr className="text-left text-[11px] text-[#4A4A4A] border-b border-[#E5E5E5]">
                   <SortableHeader col="name" label="Campaign" current={sortColumn} dir={sortDirection} onSort={handleSort} className="" />
                   <SortableHeader col="channel" label="Channel" current={sortColumn} dir={sortDirection} onSort={handleSort} className="whitespace-nowrap" />
-                  <SortableHeader col="period" label="Period" current={sortColumn} dir={sortDirection} onSort={handleSort} className="whitespace-nowrap hidden lg:table-cell" />
                   <SortableHeader col="status" label="Status" current={sortColumn} dir={sortDirection} onSort={handleSort} className="whitespace-nowrap hidden md:table-cell" />
                   <SortableHeader col="spent" label="Spent" current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="whitespace-nowrap" />
                   <SortableHeader col="impressions" label="Impr." current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="whitespace-nowrap hidden lg:table-cell" />
@@ -524,9 +512,6 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                     </td>
                     <td className="py-2 px-3 whitespace-nowrap">
                       <ChannelBadge channel={campaign.channel || 'Other'} />
-                    </td>
-                    <td className="py-2 px-3 text-xs text-[#4A4A4A] whitespace-nowrap hidden lg:table-cell">
-                      {campaign.period || '-'}
                     </td>
                     <td className="py-2 px-3 whitespace-nowrap hidden md:table-cell">
                       <Badge 

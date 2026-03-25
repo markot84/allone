@@ -4,8 +4,6 @@ import {
   TrendingUp,
   Users,
   Target,
-  ArrowUpRight,
-  ArrowDownRight
 } from 'lucide-react';
 import {
   AreaChart,
@@ -18,12 +16,13 @@ import {
   Pie,
   Cell
 } from 'recharts';
-import { Card, CardHeader } from '../common';
+import { Card, CardHeader, KPICard } from '../common';
 import { useSegments, useProducts, useOrganic, useCampaigns, useActiveStrategy, useSuppliers } from '../../hooks';
 import { calculateTotalRevenue, calculateCampaignMetrics, getCampaignDateForMonth } from '../../utils/roiUtils';
 import { formatCurrencyCompact, formatNumber, formatMultiplier, formatPercent } from '../../utils/format';
 import type { Campaign } from '../../types';
 import { generateInsightsFromData } from '../../services/insights';
+import { useAutomationRunner } from '../../hooks/useAutomationRunner';
 
 interface DashboardOverviewProps {
   onSectionChange?: (section: string) => void;
@@ -37,6 +36,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   const { totalOrganicRevenue, byMonth: organicByMonth, hasImported: hasOrganic } = useOrganic();
   const { count: campaignsCount, campaigns, hasImported: hasCampaigns } = useCampaigns();
   const { activeStrategy, getStrategyName } = useActiveStrategy();
+  useAutomationRunner();
 
   const supplierTodMap = useMemo(() => {
     const m = new Map<string, number>();
@@ -154,93 +154,155 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       </div>
 
       {/* KPI Cards — Financial Overview */}
-      {(hasOrganic || hasCampaigns) && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-          {(() => {
-            const md: Record<string, number> = {};
-            organicByMonth.forEach((v, k) => { md[k] = (md[k] || 0) + v; });
-            campaignsTyped.forEach(c => {
-              const d = getCampaignDateForMonth(c);
-              const k = d ? d.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }) : 'Other';
-              md[k] = (md[k] || 0) + (c.conversion_value || 0);
+      {(hasOrganic || hasCampaigns) && (() => {
+        const monthOrder = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        const sortMonthKeys = (entries: [string, any][]) =>
+          entries
+            .filter(([k]) => k !== 'Other')
+            .sort((a, b) => {
+              const [ma, ya] = a[0].split(' ');
+              const [mb, yb] = b[0].split(' ');
+              return (ya || '').localeCompare(yb || '') || monthOrder.indexOf(ma) - monthOrder.indexOf(mb);
             });
-            const months = Object.entries(md).filter(([k]) => k !== 'Other');
-            const sorted = months.length >= 2
-              ? months.sort((a, b) => {
-                  const order = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-                  const [ma, ya] = a[0].split(' ');
-                  const [mb, yb] = b[0].split(' ');
-                  return (ya || '').localeCompare(yb || '') || order.indexOf(ma) - order.indexOf(mb);
-                })
-              : months;
-            const prev = sorted.length >= 2 ? sorted[sorted.length - 2][1] : 0;
-            const curr = sorted.length >= 1 ? sorted[sorted.length - 1][1] : 0;
-            const momChange = prev > 0 ? ((curr - prev) / prev) * 100 : null;
-            return (
-              <KPICard
-                kpi={{
-                  label: 'Σύνολο Εσόδων',
-                  value: formatCurrencyCompact(dashboardTotalRevenue),
-                  change: momChange !== null ? Math.round(momChange) : undefined,
-                  changeLabel: momChange !== null ? 'vs προηγ. μήνα' : undefined,
-                  trend: momChange !== null ? (momChange >= 0 ? 'up' as const : 'down' as const) : 'up' as const,
-                  sparklineData: Object.values(md).map(v => v / 1000)
-                }}
-                index={0}
-                onClick={() => onSectionChange?.('roi')}
-              />
-            );
-          })()}
-          {(() => {
-            const cpa = campaignMetrics.cpa;
-            return (
-              <KPICard
-                kpi={{
-                  label: 'Ad Spend',
-                  value: hasCampaigns ? formatCurrencyCompact(campaignMetrics.totalSpend) : '€0',
-                  changeLabel: hasCampaigns && cpa > 0
-                    ? `CPA €${formatNumber(cpa, 1)} · ${formatNumber(campaignMetrics.totalConversions)} conv.`
-                    : undefined,
-                  trend: hasCampaigns ? 'up' as const : undefined,
-                  sparklineData: campaignsTyped.slice(0, 7).map(c => c.amount_spent || 0)
-                }}
-                index={1}
-                onClick={() => onSectionChange?.('campaigns')}
-              />
-            );
-          })()}
-          {(() => {
-            const roiPercent = campaignMetrics.totalSpend > 0
-              ? ((campaignMetrics.totalRevenue - campaignMetrics.totalSpend) / campaignMetrics.totalSpend) * 100
-              : 0;
-            return (
-              <KPICard
-                kpi={{
-                  label: 'ROI',
-                  value: roiPercent > 0 ? `+${formatNumber(roiPercent, 0)}%` : '—',
-                  changeLabel: roiPercent > 0 ? 'return on investment' : undefined,
-                  trend: roiPercent > 0 ? 'up' as const : undefined,
-                }}
-                index={2}
-                onClick={() => onSectionChange?.('roi')}
-                className="border-2 border-[var(--nts-accent)]/20"
-              />
-            );
-          })()}
-          <KPICard
-            kpi={{
-              label: 'ROAS',
-              value: campaignMetrics.roas > 0 ? formatMultiplier(campaignMetrics.roas, 1) : '—',
-              changeLabel: campaignMetrics.roas > 0
-                ? `€1 → €${formatNumber(campaignMetrics.roas, 1)}`
-                : undefined,
-              trend: campaignMetrics.roas > 0 ? 'up' as const : undefined,
-            }}
-            index={3}
-            onClick={() => onSectionChange?.('roi')}
-          />
-        </div>
-      )}
+
+        const revenueByMonth: Record<string, number> = {};
+        const spendByMonth: Record<string, number> = {};
+        const convsValueByMonth: Record<string, number> = {};
+        const convsByMonth: Record<string, number> = {};
+
+        organicByMonth.forEach((v, k) => { revenueByMonth[k] = (revenueByMonth[k] || 0) + v; });
+        campaignsTyped.forEach(c => {
+          const d = getCampaignDateForMonth(c);
+          const k = d ? d.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }) : 'Other';
+          revenueByMonth[k] = (revenueByMonth[k] || 0) + (c.conversion_value || 0);
+          spendByMonth[k] = (spendByMonth[k] || 0) + (c.amount_spent || 0);
+          convsValueByMonth[k] = (convsValueByMonth[k] || 0) + (c.conversion_value || 0);
+          convsByMonth[k] = (convsByMonth[k] || 0) + (c.conversions || 0);
+        });
+
+        const calcMoM = (byMonth: Record<string, number>) => {
+          const sorted = sortMonthKeys(Object.entries(byMonth));
+          if (sorted.length < 2) return null;
+          const prev = sorted[sorted.length - 2][1];
+          const curr = sorted[sorted.length - 1][1];
+          return prev > 0 ? ((curr - prev) / prev) * 100 : null;
+        };
+
+        const revenueMoM = calcMoM(revenueByMonth);
+        const spendMoM = calcMoM(spendByMonth);
+
+        const sortedSpend = sortMonthKeys(Object.entries(spendByMonth));
+        const sortedConvVal = sortMonthKeys(Object.entries(convsValueByMonth));
+        const sortedConvs = sortMonthKeys(Object.entries(convsByMonth));
+
+        const prevRoas = sortedSpend.length >= 2 && sortedSpend[sortedSpend.length - 2][1] > 0
+          ? (sortedConvVal.length >= 2 ? sortedConvVal[sortedConvVal.length - 2][1] : 0) / sortedSpend[sortedSpend.length - 2][1]
+          : 0;
+        const currRoas = sortedSpend.length >= 1 && sortedSpend[sortedSpend.length - 1][1] > 0
+          ? (sortedConvVal.length >= 1 ? sortedConvVal[sortedConvVal.length - 1][1] : 0) / sortedSpend[sortedSpend.length - 1][1]
+          : 0;
+        const roasMoM = prevRoas > 0 ? ((currRoas - prevRoas) / prevRoas) * 100 : null;
+
+        const roiPercent = campaignMetrics.totalSpend > 0
+          ? ((campaignMetrics.totalRevenue - campaignMetrics.totalSpend) / campaignMetrics.totalSpend) * 100
+          : 0;
+
+        const aov = campaignMetrics.totalConversions > 0
+          ? campaignMetrics.totalRevenue / campaignMetrics.totalConversions
+          : 0;
+        const prevAov = sortedConvs.length >= 2 && sortedConvs[sortedConvs.length - 2][1] > 0
+          ? (sortedConvVal.length >= 2 ? sortedConvVal[sortedConvVal.length - 2][1] : 0) / sortedConvs[sortedConvs.length - 2][1]
+          : 0;
+        const currAov = sortedConvs.length >= 1 && sortedConvs[sortedConvs.length - 1][1] > 0
+          ? (sortedConvVal.length >= 1 ? sortedConvVal[sortedConvVal.length - 1][1] : 0) / sortedConvs[sortedConvs.length - 1][1]
+          : 0;
+        const aovMoM = prevAov > 0 ? ((currAov - prevAov) / prevAov) * 100 : null;
+
+        const blendedRoas = campaignMetrics.totalSpend > 0
+          ? dashboardTotalRevenue / campaignMetrics.totalSpend
+          : 0;
+
+        const revenueSpark = sortMonthKeys(Object.entries(revenueByMonth)).map(([, v]) => v / 1000);
+        const spendSpark = sortMonthKeys(Object.entries(spendByMonth)).map(([, v]) => v / 1000);
+
+        return (
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 sm:gap-5">
+            <KPICard
+              kpi={{
+                label: 'Σύνολο Εσόδων',
+                value: formatCurrencyCompact(dashboardTotalRevenue),
+                change: revenueMoM !== null ? Math.round(revenueMoM) : undefined,
+                changeLabel: revenueMoM !== null ? 'vs προηγ. μήνα' : undefined,
+                trend: revenueMoM !== null ? (revenueMoM >= 0 ? 'up' : 'down') : 'up',
+                sparklineData: revenueSpark,
+                tooltip: 'Συνολικά έσοδα από οργανικές πωλήσεις και campaigns. Περιλαμβάνει conversion value από Google Ads και Meta.',
+              }}
+              index={0}
+              onClick={() => onSectionChange?.('roi')}
+            />
+            <KPICard
+              kpi={{
+                label: 'Ad Spend',
+                value: hasCampaigns ? formatCurrencyCompact(campaignMetrics.totalSpend) : '€0',
+                change: spendMoM !== null ? Math.round(spendMoM) : undefined,
+                changeLabel: spendMoM !== null ? 'vs προηγ. μήνα' : hasCampaigns && campaignMetrics.cpa > 0 ? `CPA €${formatNumber(campaignMetrics.cpa, 1)}` : undefined,
+                trend: spendMoM !== null ? (spendMoM >= 0 ? 'up' : 'down') : hasCampaigns ? 'up' : undefined,
+                sparklineData: spendSpark,
+                tooltip: 'Συνολικό κόστος διαφήμισης σε Google Ads και Meta. CPA = Κόστος ανά μετατροπή.',
+              }}
+              index={1}
+              onClick={() => onSectionChange?.('campaigns')}
+            />
+            <KPICard
+              kpi={{
+                label: 'ROI',
+                value: roiPercent > 0 ? `+${formatNumber(roiPercent, 0)}%` : '—',
+                changeLabel: roiPercent > 0 ? 'return on investment' : undefined,
+                trend: roiPercent > 0 ? 'up' : undefined,
+                tooltip: 'Return on Investment — Ποσοστό κέρδους σε σχέση με το κόστος διαφήμισης: (Έσοδα campaigns − Ad Spend) ÷ Ad Spend × 100.',
+              }}
+              index={2}
+              onClick={() => onSectionChange?.('roi')}
+              className="border-2 border-[var(--nts-accent)]/20"
+            />
+            <KPICard
+              kpi={{
+                label: 'ROAS',
+                value: campaignMetrics.roas > 0 ? formatMultiplier(campaignMetrics.roas, 1) : '—',
+                change: roasMoM !== null ? Math.round(roasMoM) : undefined,
+                changeLabel: roasMoM !== null ? 'vs προηγ. μήνα' : campaignMetrics.roas > 0 ? `€1 → €${formatNumber(campaignMetrics.roas, 1)}` : undefined,
+                trend: campaignMetrics.roas > 0 ? (roasMoM !== null && roasMoM < 0 ? 'down' : 'up') : undefined,
+                tooltip: 'Return on Ad Spend — Πόσα ευρώ επιστρέφει κάθε 1€ διαφήμισης. ROAS 4x = €4 έσοδα ανά €1 spend.',
+              }}
+              index={3}
+              onClick={() => onSectionChange?.('roi')}
+            />
+            <KPICard
+              kpi={{
+                label: 'Blended ROAS',
+                value: blendedRoas > 0 ? formatMultiplier(blendedRoas, 1) : '—',
+                changeLabel: blendedRoas > 0 ? `€1 → €${formatNumber(blendedRoas, 1)}` : undefined,
+                trend: blendedRoas > 0 ? 'up' : undefined,
+                tooltip: 'Συνολικά έσοδα (οργανικά + paid) ÷ Ad Spend. Πιο ρεαλιστική μέτρηση απόδοσης γιατί συμπεριλαμβάνει τα οργανικά.',
+              }}
+              index={4}
+              onClick={() => onSectionChange?.('roi')}
+            />
+            <KPICard
+              kpi={{
+                label: 'Μέσο Καλάθι (AOV)',
+                value: aov > 0 ? `€${formatNumber(aov, 1)}` : '—',
+                change: aovMoM !== null ? Math.round(aovMoM) : undefined,
+                changeLabel: aovMoM !== null ? 'vs προηγ. μήνα' : undefined,
+                trend: aov > 0 ? (aovMoM !== null && aovMoM < 0 ? 'down' : 'up') : undefined,
+                tooltip: 'Average Order Value — Μέση αξία παραγγελίας: Αξία Μετατροπών ÷ Αριθμός Μετατροπών.',
+              }}
+              index={5}
+              onClick={() => onSectionChange?.('campaigns')}
+            />
+          </div>
+        );
+      })()}
 
       {/* Main Charts Row */}
       {hasAnyData && (
@@ -542,62 +604,4 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   );
 }
 
-interface KPICardProps {
-  kpi: { label: string; value: string; change?: number; changeLabel?: string; trend?: 'up' | 'down'; sparklineData?: number[] };
-  index: number;
-  onClick?: () => void;
-  className?: string;
-}
-
-function KPICard({ kpi, index, onClick, className }: KPICardProps) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.05 }}
-      className="h-full"
-    >
-      <Card
-        padding="lg"
-        hover={!!onClick}
-        className={`border-l-4 border-l-transparent hover:border-l-[var(--nts-accent)] h-full ${className || ''}`}
-        onClick={onClick}
-      >
-        <div className="flex items-start justify-between mb-3">
-          <p className="text-[13px] font-medium text-[var(--nts-medium-gray)]">{kpi.label}</p>
-          {kpi.trend === 'up' ? (
-            <div className="p-1.5 bg-[var(--nts-light-gray)] rounded-md border border-[var(--nts-border-gray)]">
-              <ArrowUpRight size={16} className="text-[var(--nts-medium-gray)]" />
-            </div>
-          ) : kpi.trend === 'down' ? (
-            <div className="p-1.5 bg-[var(--nts-light-gray)] rounded-md border border-[var(--nts-border-gray)]">
-              <ArrowDownRight size={16} className="text-[var(--nts-medium-gray)]" />
-            </div>
-          ) : null}
-        </div>
-        <p className="text-3xl font-bold text-[var(--nts-charcoal)] mb-3 font-mono tracking-tight">
-          {kpi.value}
-        </p>
-        {(kpi.change != null || kpi.changeLabel) && (
-          <div className="flex items-center gap-2">
-            {kpi.change != null && (
-              <span
-                className={`text-[14px] font-semibold px-2 py-0.5 rounded-lg text-[var(--nts-medium-gray)] bg-[var(--nts-light-gray)] border border-[var(--nts-border-gray)]`}
-              >
-                {(kpi.changeLabel === 'active' || kpi.changeLabel === 'ενεργά' || kpi.changeLabel === 'avg score' || kpi.changeLabel === 'μέσος score' || kpi.changeLabel === 'υγιή')
-                  ? `${kpi.change}` 
-                  : (kpi.changeLabel === 'attributed')
-                  ? `${kpi.change}%`
-                  : `${kpi.change > 0 ? '+' : ''}${kpi.change}%`}
-              </span>
-            )}
-            {kpi.changeLabel && (
-              <span className="text-[13px] text-[var(--nts-medium-gray)]">{kpi.changeLabel}</span>
-            )}
-          </div>
-        )}
-      </Card>
-    </motion.div>
-  );
-}
 

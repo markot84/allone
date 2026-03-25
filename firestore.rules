@@ -8,6 +8,10 @@ service cloud.firestore {
     // Brands: authenticated users can read/write (refined in Phase D with createdBy)
     match /brands/{brandId} {
       allow read, write: if request.auth != null;
+      // Brand members subcollection
+      match /members/{memberId} {
+        allow read, write: if request.auth != null;
+      }
     }
     // Invites: read allowed for invite links (logged-out users). Write requires auth.
     match /invites/{inviteId} {
@@ -90,6 +94,47 @@ service cloud.firestore {
     match /appConfig/{docId} {
       allow read: if request.auth != null;
       allow write: if request.auth != null;
+    }
+    // Automation settings & alerts
+    match /automation_settings/{brandId} {
+      allow read, write: if request.auth != null;
+    }
+    match /automation_alerts/{alertId} {
+      allow read, write: if request.auth != null;
+    }
+    // Coordination: decisions, tasks, comments, activity
+    match /decisions/{decisionId} {
+      allow read, write: if request.auth != null;
+    }
+    match /tasks/{taskId} {
+      allow read, write: if request.auth != null;
+    }
+    match /comments/{commentId} {
+      allow read, write: if request.auth != null;
+    }
+    match /activity/{activityId} {
+      allow read, write: if request.auth != null;
+    }
+    // User notifications subcollection
+    match /users/{userId}/notifications/{notifId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    // Price benchmarks (subcollection)
+    match /price_benchmarks/{brandId} {
+      allow read, write: if request.auth != null;
+      match /skus/{skuId} {
+        allow read, write: if request.auth != null;
+      }
+    }
+    // Competitor settings & ads
+    match /competitor_settings/{brandId} {
+      allow read, write: if request.auth != null;
+    }
+    match /competitor_ads/{brandId} {
+      allow read, write: if request.auth != null;
+      match /ads/{adId} {
+        allow read, write: if request.auth != null;
+      }
     }
     // Shared strategy packages: public read (shareable links), auth write
     match /shared_packages/{packageId} {
