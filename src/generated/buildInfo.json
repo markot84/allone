@@ -1,10 +1,14 @@
 {
-  "version": "0.120.0",
-  "previousVersion": "0.119.0",
-  "commitHash": "a75fa92",
+  "version": "0.122.0",
+  "previousVersion": "0.121.0",
+  "commitHash": "5753685",
   "branch": "main",
-  "buildDate": "2026-03-25T10:13:06.298Z",
+  "buildDate": "2026-03-25T10:17:01.922Z",
   "commits": [
+    {
+      "hash": "5753685",
+      "message": "fix: auto-generate AI channel recommendations in Channel Activation when missing"
+    },
     {
       "hash": "a75fa92",
       "message": "feat: audit fixes, GMC tab in Competitive Intel, plan selector in Super Admin"
@@ -60,13 +64,10 @@
     {
       "hash": "fd07fef",
       "message": "fix: remove global max-width override that broke Tailwind max-w utilities on login UI"
-    },
-    {
-      "hash": "26e4e3d",
-      "message": "security: move Gemini API key to Firebase Secret Manager via server-side proxy CF"
     }
   ],
   "changes": [
+    "[Διόρθωση] Auto-generate AI channel recommendations in Channel Activation when missing",
     "[Νέο χαρακτηριστικό] Audit fixes, GMC tab in Competitive Intel, plan selector in Super Admin",
     "[Διόρθωση] Align Dashboard ROAS formatting to 2 decimal places",
     "[Νέο χαρακτηριστικό] Add Price Benchmarking (GMC), Competitive Intelligence, Dashboard KPIs, tooltips, fix token expired warning",
@@ -75,7 +76,6 @@
     "[Διόρθωση] Auto-detect working login-customer-id by testing MCC, no-header, and self fallbacks",
     "[Διόρθωση] Strip dashes from Google Ads customer IDs before API calls (API requires plain numeric IDs)",
     "[Διόρθωση] Add segments.date to SELECT, remove ORDER BY metrics, improve error logging",
-    "[Διόρθωση] Rewrite account picker modal with 100% inline styles to bypass CSS layer issues",
-    "[Διόρθωση] Clarify sub-account vs MCC in Google Ads account picker UI"
+    "[Διόρθωση] Rewrite account picker modal with 100% inline styles to bypass CSS layer issues"
   ]
 }

@@ -257,33 +257,49 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     })).sort((a, b) => b.spent - a.spent);
   }, [campaigns, hasCampaigns]);
 
-  // Performance history from campaigns
+  // Performance history: weighted-average ROAS per channel per month
   const realPerformanceHistory = useMemo(() => {
     if (!hasCampaigns || campaigns.length === 0) return null;
-    const monthlyData: Record<string, { google: number; meta: number; email: number; remarketing: number; sms: number }> = {};
+
+    type ChannelKey = 'google' | 'meta';
+    const channelOf = (c: Campaign): ChannelKey | null => {
+      const ch = c.channel?.toLowerCase() || '';
+      if (ch.includes('google')) return 'google';
+      if (ch.includes('meta') || ch.includes('facebook')) return 'meta';
+      return null;
+    };
+
+    // Accumulate spend + conversion_value per YYYY-MM per channel
+    const buckets: Record<string, Record<ChannelKey, { spend: number; value: number }>> = {};
+
     (campaigns as Campaign[]).forEach(c => {
-      const period = c.period || c.start_date || '';
-      if (!period) return;
-      let monthKey = '';
-      if (period.match(/^\d{4}-\d{2}-\d{2}/)) {
-        const date = new Date(period);
-        monthKey = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-      } else {
-        monthKey = period;
-      }
-      if (!monthlyData[monthKey]) monthlyData[monthKey] = { google: 0, meta: 0, email: 0, remarketing: 0, sms: 0 };
-      const roas = c.roas || 0;
-      const ch = c.channel?.toLowerCase() || 'other';
-      if (ch.includes('google')) monthlyData[monthKey].google = Math.max(monthlyData[monthKey].google, roas);
-      else if (ch.includes('meta') || ch.includes('facebook')) monthlyData[monthKey].meta = Math.max(monthlyData[monthKey].meta, roas);
-      else if (ch.includes('email')) monthlyData[monthKey].email = Math.max(monthlyData[monthKey].email, roas);
-      else if (ch.includes('remarketing') || ch.includes('display')) monthlyData[monthKey].remarketing = Math.max(monthlyData[monthKey].remarketing, roas);
-      else if (ch.includes('sms')) monthlyData[monthKey].sms = Math.max(monthlyData[monthKey].sms, roas);
+      const dateStr = c.start_date || c.period || '';
+      if (!dateStr) return;
+      const parsed = new Date(dateStr);
+      if (isNaN(parsed.getTime())) return;
+      const key = `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}`;
+      const chKey = channelOf(c);
+      if (!chKey) return;
+
+      if (!buckets[key]) buckets[key] = { google: { spend: 0, value: 0 }, meta: { spend: 0, value: 0 } };
+      buckets[key][chKey].spend += c.amount_spent || 0;
+      buckets[key][chKey].value += c.conversion_value || 0;
     });
-    return Object.entries(monthlyData)
-      .map(([month, data]) => ({ month, ...data }))
-      .sort((a, b) => new Date(a.month).getTime() - new Date(b.month).getTime())
-      .slice(-6);
+
+    const rows = Object.entries(buckets)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(-6)
+      .map(([ym, data]) => {
+        const [y, m] = ym.split('-');
+        const label = new Date(Number(y), Number(m) - 1).toLocaleDateString('el-GR', { month: 'short', year: '2-digit' });
+        return {
+          month: label,
+          google: data.google.spend > 0 ? Math.round((data.google.value / data.google.spend) * 100) / 100 : 0,
+          meta: data.meta.spend > 0 ? Math.round((data.meta.value / data.meta.spend) * 100) / 100 : 0,
+        };
+      });
+
+    return rows.length > 0 ? rows : null;
   }, [campaigns, hasCampaigns]);
 
   useEffect(() => {
@@ -904,17 +920,27 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
           />
           <div ref={historyChartRef} className="w-full" style={{ width: '100%', height: 288, minHeight: 288, position: 'relative' }}>
             {realPerformanceHistory && realPerformanceHistory.length > 0 ? (
-              <LineChart width={historyChartSize.width} height={historyChartSize.height} data={realPerformanceHistory} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
+              <LineChart width={historyChartSize.width} height={historyChartSize.height} data={realPerformanceHistory} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" />
                 <XAxis dataKey="month" tick={{ fill: '#4A4A4A', fontSize: 12 }} axisLine={{ stroke: '#E5E5E5' }} />
-                <YAxis tick={{ fill: '#4A4A4A', fontSize: 12 }} axisLine={{ stroke: '#E5E5E5' }} tickFormatter={(v) => formatMultiplier(v, 1)} />
-                <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #E5E5E5', borderRadius: '8px' }} formatter={(v) => [formatMultiplier((v as number) || 0, 1), 'ROAS']} />
+                <YAxis
+                  tick={{ fill: '#4A4A4A', fontSize: 12 }}
+                  axisLine={{ stroke: '#E5E5E5' }}
+                  tickFormatter={(v) => `${v.toFixed(1)}x`}
+                  domain={[0, 'auto']}
+                />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #E5E5E5', borderRadius: '8px', padding: '10px 14px' }}
+                  formatter={(v, name) => [`${((v as number) || 0).toFixed(2)}x`, name as string]}
+                  labelFormatter={(label) => label}
+                />
                 <Legend />
-                <Line type="monotone" dataKey="email" stroke="var(--nts-accent)" strokeWidth={2} name="Email" dot={{ r: 4 }} />
-                <Line type="monotone" dataKey="google" stroke="#78716C" strokeWidth={2} name="Google" dot={{ r: 4 }} />
-                <Line type="monotone" dataKey="meta" stroke="#8B5CF6" strokeWidth={2} name="Meta" dot={{ r: 4 }} />
-                <Line type="monotone" dataKey="remarketing" stroke="#22C55E" strokeWidth={2} name="Remarketing" dot={{ r: 4 }} />
-                <Line type="monotone" dataKey="sms" stroke="#F59E0B" strokeWidth={2} name="SMS" dot={{ r: 4 }} />
+                {realPerformanceHistory.some(d => d.google > 0) && (
+                  <Line type="monotone" dataKey="google" stroke="#4285F4" strokeWidth={2.5} name="Google Ads" dot={{ r: 4, fill: '#4285F4' }} connectNulls />
+                )}
+                {realPerformanceHistory.some(d => d.meta > 0) && (
+                  <Line type="monotone" dataKey="meta" stroke="#8B5CF6" strokeWidth={2.5} name="Meta" dot={{ r: 4, fill: '#8B5CF6' }} connectNulls />
+                )}
               </LineChart>
             ) : (
               <div className="flex items-center justify-center h-full">
