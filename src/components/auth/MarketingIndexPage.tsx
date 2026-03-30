@@ -1,5 +1,6 @@
 import { useRef } from 'react';
-import { ArrowRight, BarChart3, Brain, Database, FileSpreadsheet, HelpCircle, ShieldCheck, Target, Upload } from 'lucide-react';
+import { ArrowRight, BarChart3, Brain, Database, FileSpreadsheet, HelpCircle, Mail, ShieldCheck, Target, Upload } from 'lucide-react';
+import { MARKETING_SUPPORT_EMAIL } from '../../config/superAdmins';
 
 type LandingVariant = 'ceo' | 'ops';
 
@@ -224,7 +225,7 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
                     <ArrowRight size={16} />
                   </button>
                   <a
-                    href="mailto:noreply@performanceplus.gr?subject=Performance%2B%20Demo%20Request"
+                    href={`mailto:${MARKETING_SUPPORT_EMAIL}?subject=Performance%2B%20Demo%20Request`}
                     className="inline-flex items-center gap-2 rounded-xl border border-[#1f2328]/10 bg-[var(--nts-bg-subtle)] px-5 py-3 text-sm font-semibold text-[var(--nts-charcoal)] transition hover:bg-[var(--nts-light-gray)]"
                   >
                     <HelpCircle size={16} />
@@ -445,7 +446,7 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
           </div>
 
           <p className="mt-4 text-xs text-[var(--nts-medium-gray)]">
-            Εναλλακτικά, επικοινώνησε στο <span className="font-semibold text-[var(--nts-charcoal)]">noreply@performanceplus.gr</span> για εταιρική ένταξη, εμπορική πολιτική ή εξειδικευμένη προσαρμογή του AI-powered περιβάλλοντος αποφάσεων.
+            Εναλλακτικά, επικοινώνησε στο <span className="font-semibold text-[var(--nts-charcoal)]">{MARKETING_SUPPORT_EMAIL}</span> για εταιρική ένταξη, εμπορική πολιτική ή εξειδικευμένη προσαρμογή του AI-powered περιβάλλοντος αποφάσεων.
           </p>
         </div>
       </section>
@@ -468,7 +469,7 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
 
       {/* ── Footer brand tag ──────────────────────────────────────────────── */}
       <footer className="mx-auto w-full max-w-7xl px-6 pb-10 pt-2 md:px-10">
-        <div className="flex items-center justify-between border-t border-[#1f2328]/10 pt-5">
+        <div className="flex flex-col gap-3 border-t border-[#1f2328]/10 pt-5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2 text-xs text-[var(--nts-medium-gray)]">
             <Brain size={13} className="text-[#1f2328]" />
             <span>
@@ -478,7 +479,16 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
               </a>
             </span>
           </div>
-          <p className="text-xs text-[var(--nts-medium-gray)]">AI-powered πλατφόρμα εμπορικής και επιχειρησιακής νοημοσύνης</p>
+          <div className="flex flex-col items-start gap-1 text-xs sm:items-end">
+            <p className="text-[var(--nts-medium-gray)]">AI-powered πλατφόρμα εμπορικής και επιχειρησιακής νοημοσύνης</p>
+            <a
+              href={`mailto:${MARKETING_SUPPORT_EMAIL}?subject=Performance%2B%20Επικοινωνία`}
+              className="inline-flex items-center gap-1.5 font-medium text-[var(--nts-charcoal)] hover:text-[var(--nts-accent)] hover:underline"
+            >
+              <Mail size={13} aria-hidden />
+              {MARKETING_SUPPORT_EMAIL}
+            </a>
+          </div>
         </div>
       </footer>
 
