@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { ArrowRight, BarChart3, Brain, Database, FileSpreadsheet, HelpCircle, Mail, ShieldCheck, Target, Upload } from 'lucide-react';
-import { MARKETING_SUPPORT_EMAIL } from '../../config/superAdmins';
+import { MARKETING_CONTACT_LABEL, MARKETING_CONTACT_MAILTO } from '../../config/superAdmins';
 
 type LandingVariant = 'ceo' | 'ops';
 
@@ -225,7 +225,7 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
                     <ArrowRight size={16} />
                   </button>
                   <a
-                    href={`mailto:${MARKETING_SUPPORT_EMAIL}?subject=Performance%2B%20Demo%20Request`}
+                    href={`mailto:${MARKETING_CONTACT_MAILTO}?subject=${encodeURIComponent('Performance+ Demo Request')}`}
                     className="inline-flex items-center gap-2 rounded-xl border border-[#1f2328]/10 bg-[var(--nts-bg-subtle)] px-5 py-3 text-sm font-semibold text-[var(--nts-charcoal)] transition hover:bg-[var(--nts-light-gray)]"
                   >
                     <HelpCircle size={16} />
@@ -437,7 +437,7 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
               <ArrowRight size={16} />
             </button>
             <a
-              href="mailto:noreply@performanceplus.gr?subject=Performance%2B%20Demo%20Request"
+              href={`mailto:${MARKETING_CONTACT_MAILTO}?subject=${encodeURIComponent('Performance+ Demo Request')}`}
               className="inline-flex items-center gap-2 rounded-xl border border-[#1f2328] bg-[var(--nts-bg-pure)] px-5 py-3 text-sm font-semibold text-[#1f2328] transition hover:bg-[var(--nts-light-gray)]"
             >
               <HelpCircle size={16} />
@@ -446,7 +446,7 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
           </div>
 
           <p className="mt-4 text-xs text-[var(--nts-medium-gray)]">
-            Εναλλακτικά, επικοινώνησε στο <span className="font-semibold text-[var(--nts-charcoal)]">{MARKETING_SUPPORT_EMAIL}</span> για εταιρική ένταξη, εμπορική πολιτική ή εξειδικευμένη προσαρμογή του AI-powered περιβάλλοντος αποφάσεων.
+            Εναλλακτικά, επικοινώνησε στο <span className="font-semibold text-[var(--nts-charcoal)]">{MARKETING_CONTACT_LABEL}</span> για εταιρική ένταξη, εμπορική πολιτική ή εξειδικευμένη προσαρμογή του AI-powered περιβάλλοντος αποφάσεων.
           </p>
         </div>
       </section>
@@ -482,11 +482,11 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
           <div className="flex flex-col items-start gap-1 text-xs sm:items-end">
             <p className="text-[var(--nts-medium-gray)]">AI-powered πλατφόρμα εμπορικής και επιχειρησιακής νοημοσύνης</p>
             <a
-              href={`mailto:${MARKETING_SUPPORT_EMAIL}?subject=Performance%2B%20Επικοινωνία`}
+              href={`mailto:${MARKETING_CONTACT_MAILTO}?subject=${encodeURIComponent('Performance+ Επικοινωνία')}`}
               className="inline-flex items-center gap-1.5 font-medium text-[var(--nts-charcoal)] hover:text-[var(--nts-accent)] hover:underline"
             >
               <Mail size={13} aria-hidden />
-              {MARKETING_SUPPORT_EMAIL}
+              {MARKETING_CONTACT_LABEL}
             </a>
           </div>
         </div>

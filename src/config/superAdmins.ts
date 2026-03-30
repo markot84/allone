@@ -7,8 +7,10 @@ export const SUPER_ADMIN_EMAILS: readonly string[] = [
 /** Υποστήριξη χρηστών / εφαρμογής (Auth, SuperAdmin, Help, νομικά) */
 export const SUPPORT_EMAIL = 'noreply@performanceplus.gr';
 
-/** Marketing landing: demo, επικοινωνία, footer */
-export const MARKETING_SUPPORT_EMAIL = 'support@performanceplus.gr';
+/** Marketing landing: φόρμες επικοινωνίας (mailto — και οι δύο παραλήπτες) */
+export const MARKETING_CONTACT_MAILTO = 'makis@notthesame.gr,dimitris@notthesame.gr';
+
+export const MARKETING_CONTACT_LABEL = 'makis@notthesame.gr · dimitris@notthesame.gr';
 
 export const APP_NAME = 'Performance+';
 
