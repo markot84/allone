@@ -18,6 +18,27 @@ import { logger } from 'firebase-functions/v2';
 
 let _db: Firestore | null = null;
 
+/**
+ * Generate array of { since, until } for each calendar month in the range.
+ * Uses string manipulation to avoid timezone issues.
+ */
+function generateMonthRanges(sinceStr: string, untilStr: string): Array<{ since: string; until: string }> {
+  const ranges: Array<{ since: string; until: string }> = [];
+  const [sy, sm] = sinceStr.split('-').map(Number);
+  const [ey, em] = untilStr.split('-').map(Number);
+
+  let y = sy, m = sm;
+  while (y < ey || (y === ey && m <= em)) {
+    const since = `${y}-${String(m).padStart(2, '0')}-01`;
+    const lastDay = new Date(y, m, 0).getDate(); // day 0 of next month = last day of this month
+    const until = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    ranges.push({ since, until });
+    m++;
+    if (m > 12) { m = 1; y++; }
+  }
+  return ranges;
+}
+
 function getDb(): Firestore {
   if (!_db) {
     _db = admin.firestore();
@@ -235,62 +256,69 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
       const sinceStr = since.toISOString().split('T')[0];
       const untilStr = new Date().toISOString().split('T')[0];
 
-      // Fetch monthly breakdown — allows date-range filtering with monthly precision
-      const params = new URLSearchParams({
-        fields: [
-          'campaign_name',
-          'campaign_id',
-          'impressions',
-          'clicks',
-          'spend',
-          'actions',
-          'action_values',
-          'reach',
-          'frequency',
-          'date_start',
-        ].join(','),
-        time_range: JSON.stringify({ since: sinceStr, until: untilStr }),
-        time_increment: 'monthly',
-        level: 'campaign',
-        limit: '500',
-        access_token: accessToken,
-      });
-
-      // Paginate through all monthly rows
+      // Fetch data per-month (individual API call per calendar month).
+      // time_increment=monthly is unreliable (some accounts silently ignore it),
+      // so we make explicit per-month calls for accurate date-range filtering.
       const allRows: any[] = [];
-      let nextUrl: string | null = `${META_GRAPH_URL}/${accountId}/insights?${params}`;
-      let pageCount = 0;
-      while (nextUrl && pageCount < 20) {
-        const pageRes: Response = await fetch(nextUrl);
-        if (!pageRes.ok) {
-          const errText = await pageRes.text();
-          logger.warn(`[Meta] Insights failed for ${accountId} (page ${pageCount}): ${errText}`);
-          // Fallback: try without time_increment
-          if (pageCount === 0) {
-            const fallbackParams = new URLSearchParams({
-              fields: ['campaign_name','campaign_id','impressions','clicks','spend','actions','action_values','reach','frequency'].join(','),
-              time_range: JSON.stringify({ since: sinceStr, until: untilStr }),
-              level: 'campaign',
-              limit: '500',
-              access_token: accessToken,
-            });
-            const fbRes: Response = await fetch(`${META_GRAPH_URL}/${accountId}/insights?${fallbackParams}`);
-            if (fbRes.ok) {
-              const fbData: any = await fbRes.json();
-              allRows.push(...(fbData.data || []));
-              logger.info(`[Meta] Fallback (aggregated) fetched ${allRows.length} rows for ${accountId}`);
-            } else {
-              logger.warn(`[Meta] Fallback also failed for ${accountId}: ${await fbRes.text()}`);
+      const usedFallback = false;
+      const monthRanges = generateMonthRanges(sinceStr, untilStr);
+      const insightsFields = ['campaign_name','campaign_id','impressions','clicks','spend','actions','action_values','reach','frequency'].join(',');
+
+      logger.info(`[Meta] Fetching ${monthRanges.length} months of data for ${accountId}...`);
+
+      for (const mr of monthRanges) {
+        try {
+          const monthParams = new URLSearchParams({
+            fields: insightsFields,
+            time_range: JSON.stringify({ since: mr.since, until: mr.until }),
+            level: 'campaign',
+            limit: '500',
+            access_token: accessToken,
+          });
+          let monthUrl: string | null = `${META_GRAPH_URL}/${accountId}/insights?${monthParams}`;
+          let monthPageCount = 0;
+          while (monthUrl && monthPageCount < 5) {
+            const monthRes: Response = await fetch(monthUrl);
+            if (!monthRes.ok) {
+              if (monthPageCount === 0) {
+                logger.warn(`[Meta] Month ${mr.since} failed for ${accountId}: ${await monthRes.text()}`);
+              }
+              break;
+            }
+            const monthData: any = await monthRes.json();
+            for (const row of (monthData.data || [])) {
+              row.date_start = mr.since;
+              allRows.push(row);
+            }
+            monthUrl = monthData.paging?.next || null;
+            monthPageCount++;
+          }
+        } catch (e) {
+          logger.warn(`[Meta] Per-month call failed for ${mr.since}: ${e}`);
+        }
+      }
+
+      logger.info(`[Meta] Fetched ${allRows.length} total rows across ${monthRanges.length} months for ${accountId}`);
+
+      // Fetch campaign statuses (effective_status) from the Campaigns API
+      const campaignStatusMap = new Map<string, string>();
+      try {
+        let statusUrl: string | null = `${META_GRAPH_URL}/${accountId}/campaigns?fields=id,effective_status&limit=500&access_token=${accessToken}`;
+        while (statusUrl) {
+          const statusRes: Response = await fetch(statusUrl);
+          if (!statusRes.ok) break;
+          const statusData: any = await statusRes.json();
+          for (const c of (statusData.data || [])) {
+            if (c.id && c.effective_status) {
+              campaignStatusMap.set(c.id, c.effective_status.toLowerCase());
             }
           }
-          break;
+          statusUrl = statusData.paging?.next || null;
         }
-        const pageData: any = await pageRes.json();
-        allRows.push(...(pageData.data || []));
-        nextUrl = pageData.paging?.next || null;
-        pageCount++;
+        logger.info(`[Meta] Fetched statuses for ${campaignStatusMap.size} campaigns in ${accountId}`);
+      } catch (e) {
+        logger.warn(`[Meta] Failed to fetch campaign statuses for ${accountId}: ${e}`);
       }
-      logger.info(`[Meta] Fetched ${allRows.length} rows across ${pageCount} pages for ${accountId}`);
 
       // Aggregate monthly rows per campaign, building dailyMetrics map (keyed by month start date)
       const campaignMap = new Map<string, any>();
@@ -301,24 +329,72 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
         const rowDate: string = row.date_start || '';
         if (!campaignId || !campaignName) continue;
 
-        const purchases = (row.actions || []).find(
-          (a: any) => a.action_type === 'purchase' || a.action_type === 'offsite_conversion.fb_pixel_purchase'
+        // Use offsite_conversion.fb_pixel_purchase as the primary purchase metric
+        // (pixel-tracked, most reliable). Fall back to 'purchase' if pixel not available.
+        const pixelPurchase = (row.actions || []).find(
+          (a: any) => a.action_type === 'offsite_conversion.fb_pixel_purchase'
         );
-        const purchaseValue = (row.action_values || []).find(
-          (a: any) => a.action_type === 'purchase' || a.action_type === 'offsite_conversion.fb_pixel_purchase'
+        const stdPurchase = (row.actions || []).find(
+          (a: any) => a.action_type === 'purchase'
         );
+        const primaryPurchase = pixelPurchase || stdPurchase;
 
-        const rowConversions = parseFloat(purchases?.value || '0');
-        const rowConvValue = parseFloat(purchaseValue?.value || '0');
+        const pixelPurchaseVal = (row.action_values || []).find(
+          (a: any) => a.action_type === 'offsite_conversion.fb_pixel_purchase'
+        );
+        const stdPurchaseVal = (row.action_values || []).find(
+          (a: any) => a.action_type === 'purchase'
+        );
+        const primaryPurchaseVal = pixelPurchaseVal || stdPurchaseVal;
+
+        const rowConversions = parseFloat(primaryPurchase?.value || '0');
+        const rowConvValue = parseFloat(primaryPurchaseVal?.value || '0');
         const rowSpend = parseFloat(row.spend || '0');
         const rowImpressions = parseInt(row.impressions || '0', 10);
         const rowClicks = parseInt(row.clicks || '0', 10);
 
+        // Build per-action-type breakdown from this row
+        const rowActions: Record<string, { conversions: number; value: number }> = {};
+        const actionValueMap: Record<string, number> = {};
+        for (const av of (row.action_values || [])) {
+          if (av.action_type && av.value) actionValueMap[av.action_type] = parseFloat(av.value);
+        }
+        for (const action of (row.actions || [])) {
+          if (!action.action_type || !action.value) continue;
+          const aType = action.action_type as string;
+          // Normalize action type names for readability
+          let label = aType;
+          // Keep pixel vs API/app purchases separate to avoid double-counting
+          if (aType === 'offsite_conversion.fb_pixel_purchase') label = 'Purchase (Pixel)';
+          else if (aType === 'purchase') label = 'Purchase';
+          else if (aType === 'offsite_conversion.fb_pixel_lead' || aType === 'lead') label = 'Lead';
+          else if (aType === 'offsite_conversion.fb_pixel_add_to_cart' || aType === 'add_to_cart') label = 'Add to Cart';
+          else if (aType === 'offsite_conversion.fb_pixel_initiate_checkout' || aType === 'initiate_checkout') label = 'Initiate Checkout';
+          else if (aType === 'offsite_conversion.fb_pixel_view_content' || aType === 'view_content') label = 'View Content';
+          else if (aType === 'offsite_conversion.fb_pixel_complete_registration' || aType === 'complete_registration') label = 'Complete Registration';
+          else if (aType === 'link_click') label = 'Link Click';
+          else if (aType === 'landing_page_view') label = 'Landing Page View';
+          else if (aType === 'page_engagement') label = 'Page Engagement';
+          else if (aType === 'post_engagement') label = 'Post Engagement';
+          else if (aType === 'video_view') label = 'Video View';
+          else if (aType.startsWith('offsite_conversion.')) label = aType.replace('offsite_conversion.fb_pixel_', '');
+
+          const convCount = parseFloat(action.value);
+          if (!rowActions[label]) rowActions[label] = { conversions: 0, value: 0 };
+          rowActions[label].conversions += convCount;
+          rowActions[label].value += actionValueMap[aType] || 0;
+        }
+
+        const metaStatus = campaignStatusMap.get(campaignId) || 'active';
+        const normalizedStatus = metaStatus === 'active' ? 'active'
+          : metaStatus === 'paused' ? 'paused'
+          : (metaStatus === 'archived' || metaStatus === 'deleted') ? 'completed'
+          : metaStatus;
         const existing = campaignMap.get(campaignId) || {
           id: `meta_${accountId}_${campaignId}`,
           name: campaignName,
           channel: 'Meta',
-          status: 'active',
+          status: normalizedStatus,
           impressions: 0,
           clicks: 0,
           conversions: 0,
@@ -332,6 +408,7 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
           end_date: untilStr,
           period: `${sinceStr} – ${untilStr}`,
           dailyMetrics: {} as Record<string, any>,
+          conversionActions: {} as Record<string, { conversions: number; value: number }>,
           brandId,
           createdAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
@@ -344,14 +421,25 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
         existing.amount_spent += rowSpend;
         existing.reach += parseInt(row.reach || '0', 10);
 
-        // Store in dailyMetrics keyed by month start date (for date-range filtering)
-        if (rowDate) {
+        // Merge per-action breakdown
+        for (const [label, vals] of Object.entries(rowActions)) {
+          const v = vals as { conversions: number; value: number };
+          if (!existing.conversionActions[label]) existing.conversionActions[label] = { conversions: 0, value: 0 };
+          existing.conversionActions[label].conversions += v.conversions;
+          existing.conversionActions[label].value += v.value;
+        }
+
+        // Only store dailyMetrics for monthly-granularity rows (not aggregated fallback)
+        // Monthly rows have date_start on the 1st of each month; fallback aggregated rows
+        // have date_start = range start (e.g., "2023-03-26") which would break date filtering.
+        if (rowDate && !usedFallback) {
           existing.dailyMetrics[rowDate] = {
             impressions: rowImpressions,
             clicks: rowClicks,
             conversions: rowConversions,
             amount_spent: rowSpend,
             conversion_value: rowConvValue,
+            conversionActions: rowActions,
           };
         }
 

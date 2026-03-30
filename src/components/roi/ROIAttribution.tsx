@@ -10,6 +10,7 @@ import {
   ArrowUpRight,
   Loader2,
   Database,
+  Calendar,
 } from 'lucide-react';
 import {
   AreaChart,
@@ -78,7 +79,64 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
   const { currentBrand } = useBrand();
   const queryClient = useQueryClient();
   const [seeding, setSeeding] = useState(false);
-  const campaignsTyped = campaigns as Campaign[];
+  const [dateRange, setDateRange] = useState<'30d' | '90d' | '6m' | '12m' | 'all'>('all');
+
+  const cutoffDate = useMemo(() => {
+    if (dateRange === 'all') return null;
+    const cutoff = new Date();
+    if (dateRange === '30d') cutoff.setDate(cutoff.getDate() - 30);
+    else if (dateRange === '90d') cutoff.setDate(cutoff.getDate() - 90);
+    else if (dateRange === '6m') cutoff.setMonth(cutoff.getMonth() - 6);
+    else if (dateRange === '12m') cutoff.setFullYear(cutoff.getFullYear() - 1);
+    return cutoff;
+  }, [dateRange]);
+
+  const dateFilteredCampaigns = useMemo(() => {
+    const all = campaigns as Campaign[];
+    if (!cutoffDate) return all;
+
+    return all.filter(c => {
+      const dm = (c as any).dailyMetrics as Record<string, any> | undefined;
+      if (dm && Object.keys(dm).length > 0) {
+        return Object.keys(dm).some(dateKey => new Date(dateKey) >= cutoffDate);
+      }
+      const start = c.start_date ? new Date(c.start_date) : null;
+      const period = c.period ? new Date(c.period) : null;
+      if (start && start >= cutoffDate) return true;
+      if (period && !isNaN(period.getTime()) && period >= cutoffDate) return true;
+      if (!start && !period) return true;
+      return false;
+    }).map(c => {
+      const dm = (c as any).dailyMetrics as Record<string, any> | undefined;
+      if (!dm || Object.keys(dm).length === 0) return c;
+
+      const filteredDm: Record<string, any> = {};
+      let spend = 0, impr = 0, clicks = 0, convs = 0, convValue = 0;
+      for (const [dateKey, metrics] of Object.entries(dm)) {
+        if (new Date(dateKey) >= cutoffDate) {
+          filteredDm[dateKey] = metrics;
+          spend += (metrics as any).amount_spent || 0;
+          impr += (metrics as any).impressions || 0;
+          clicks += (metrics as any).clicks || 0;
+          convs += (metrics as any).conversions || 0;
+          convValue += (metrics as any).conversion_value || 0;
+        }
+      }
+      return {
+        ...c,
+        dailyMetrics: filteredDm,
+        amount_spent: spend,
+        impressions: impr,
+        clicks: clicks,
+        conversions: convs,
+        conversion_value: convValue,
+        ctr: impr > 0 ? (clicks / impr) * 100 : 0,
+        roas: spend > 0 ? convValue / spend : 0,
+      };
+    });
+  }, [campaigns, cutoffDate]);
+
+  const campaignsTyped = dateFilteredCampaigns;
   const hasData = hasOrganic || hasCampaigns;
   const chartRef = useRef<HTMLDivElement>(null);
   const [chartWidth, setChartWidth] = useState(800);
@@ -190,9 +248,33 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
   return (
     <div className="space-y-6">
       {!embedded && (
-        <div>
-          <h2 className="text-2xl font-bold text-[var(--nts-charcoal)]">ROI & Απόδοση</h2>
-          <p className="text-[var(--nts-medium-gray)] mt-1">Μέτρηση απόδοσης καμπανιών και εσόδων</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-[var(--nts-charcoal)]">ROI & Απόδοση</h2>
+            <p className="text-[var(--nts-medium-gray)] mt-1">Μέτρηση απόδοσης καμπανιών και εσόδων</p>
+          </div>
+          <div className="flex items-center gap-1 bg-[#F3F4F6] p-1 rounded-lg">
+            <Calendar size={14} className="text-[#9CA3AF] ml-2 mr-1" />
+            {([
+              ['30d', '30 ημ.'],
+              ['90d', '90 ημ.'],
+              ['6m', '6 μήνες'],
+              ['12m', '12 μήνες'],
+              ['all', 'Όλα'],
+            ] as const).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setDateRange(key)}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  dateRange === key
+                    ? 'bg-white text-[#111827] shadow-sm'
+                    : 'text-[#6B7280] hover:text-[#374151]'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -200,10 +282,11 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
         {/* ROI Hero Card */}
         {(() => {
+          const adRevenue = metrics.totalRevenue;
           const roiPercent = metrics.totalSpend > 0
-            ? ((metrics.totalRevenue - metrics.totalSpend) / metrics.totalSpend) * 100
+            ? ((adRevenue - metrics.totalSpend) / metrics.totalSpend) * 100
             : 0;
-          const profit = metrics.totalRevenue - metrics.totalSpend;
+          const profit = adRevenue - metrics.totalSpend;
           return (
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
@@ -221,7 +304,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
               </p>
               {profit > 0 && (
                 <p className="text-[12px] text-[var(--nts-medium-gray)] mt-1">
-                  Κέρδος {formatCurrencyCompact(profit)} σε {formatCurrencyCompact(metrics.totalSpend)} spend
+                  Ad profit {formatCurrencyCompact(profit)} σε {formatCurrencyCompact(metrics.totalSpend)} spend
                 </p>
               )}
             </motion.div>
@@ -248,7 +331,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
             icon={<TrendingUp size={20} />}
             label="ROAS"
             value={metrics.roas > 0 ? `${formatNumber(metrics.roas, 2)}x` : '—'}
-            subtitle="Μέσος σταθμισμένος"
+            subtitle="Revenue / Ad Spend"
             color="#22C55E"
           />
           <MetricCard

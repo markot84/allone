@@ -9,16 +9,40 @@ import {
 import type { ChannelRecommendation, BudgetAction } from '../types';
 import type { Scenario } from '../types';
 import type { RFMSegment } from '../types';
+import { deriveBehavioralProfile, derivePredictiveMetrics } from './behavioralEngine';
 
 const MODEL_NAME = 'gemini-2.5-flash';
 
+function extractJSON(text: string): string | null {
+  let cleaned = text
+    .replace(/```json\s*/g, '')
+    .replace(/```\s*/g, '')
+    .trim();
+
+  // Try direct parse first
+  try { JSON.parse(cleaned); return cleaned; } catch { /* fall through */ }
+
+  // Extract first {...} block (handles text before/after JSON)
+  const start = cleaned.indexOf('{');
+  const end = cleaned.lastIndexOf('}');
+  if (start !== -1 && end > start) {
+    let candidate = cleaned.slice(start, end + 1);
+    try { JSON.parse(candidate); return candidate; } catch { /* try fixing */ }
+
+    // Fix unescaped newlines inside JSON strings
+    candidate = candidate.replace(/(?<=:\s*"[^"]*)\n/g, '\\n');
+    try { JSON.parse(candidate); return candidate; } catch { /* fall through */ }
+  }
+
+  return null;
+}
+
 function parseAIResponse(text: string): ChannelRecommendation | null {
+  const jsonStr = extractJSON(text);
+  if (!jsonStr) return null;
+
   try {
-    const cleaned = text
-      .replace(/```json\s*/g, '')
-      .replace(/```\s*/g, '')
-      .trim();
-    const parsed = JSON.parse(cleaned) as Record<string, unknown>;
+    const parsed = JSON.parse(jsonStr) as Record<string, unknown>;
 
     const primary = Array.isArray(parsed.primary)
       ? (parsed.primary as string[]).filter((s) => typeof s === 'string')
@@ -80,36 +104,60 @@ export async function generateChannelRecommendations(
 ): Promise<ChannelRecommendation | null> {
   const { scenario, segment, fitLevel, brandContext, segmentFitList, totalBudget, campaignPerformance, context } = params;
 
-  try {
-    const userPrompt = buildChannelRecommendationsUserPrompt({
-      scenarioName: scenario.name,
-      scenarioDescription: scenario.description || '',
-      segmentName: segment.name,
-      segmentDescription: segment.description || '',
-      segmentCount: segment.count,
-      revenueShare: segment.revenue_share,
-      fitLevel,
-      brandName: brandContext?.brandName,
-      brandType: brandContext?.brandType,
-      topCategories: brandContext?.topCategories,
-      segmentFitList,
-      totalBudget,
-      campaignPerformance,
-      context,
-    });
+  const behavioral = deriveBehavioralProfile(segment);
+  const predictive = derivePredictiveMetrics(segment);
 
-    const text = await callGemini({
-      systemPrompt: CHANNEL_RECOMMENDATIONS_SYSTEM_PROMPT,
-      userPrompt,
-      model: MODEL_NAME,
-      temperature: 0,
-    });
+  const behavioralContext = `
+BEHAVIORAL PROFILE (${segment.name}):
+- Persona: ${behavioral.persona} | Lifecycle: ${behavioral.lifecycle_stage}
+- Συχνότητα αγορών: ${behavioral.purchase_frequency} | Μέσο καλάθι: €${behavioral.avg_basket_size}
+- Preferred channels: ${behavioral.preferred_channels.join(', ')}
+- Device: ${behavioral.device_preference} | Price sensitivity: ${behavioral.price_sensitivity}
+- Upsell score: ${behavioral.upsell_score}% | Cross-sell score: ${behavioral.cross_sell_score}%
+- Engagement: ${behavioral.engagement_score}%
 
-    if (!text) return null;
+PREDICTIVE METRICS (${segment.name}):
+- Estimated LTV: €${predictive.estimated_ltv.toLocaleString()}
+- Churn risk: ${predictive.churn_risk}% (${predictive.churn_risk_label})
+- Next purchase: ${predictive.days_to_next_purchase} ημέρες (prob: ${predictive.next_purchase_probability}%)
+- Demand trend: ${predictive.demand_trend}
+- Retention score: ${predictive.retention_score}%
 
-    return parseAIResponse(text);
-  } catch (error) {
-    console.error('[aiChannelRecommendations]', error);
-    return null;
+Λάβε υπόψη αυτά τα behavioral και predictive signals στις συστάσεις καναλιών.`;
+
+  const userPrompt = buildChannelRecommendationsUserPrompt({
+    scenarioName: scenario.name,
+    scenarioDescription: scenario.description || '',
+    segmentName: segment.name,
+    segmentDescription: segment.description || '',
+    segmentCount: segment.count,
+    revenueShare: segment.revenue_share,
+    fitLevel,
+    brandName: brandContext?.brandName,
+    brandType: brandContext?.brandType,
+    topCategories: brandContext?.topCategories,
+    segmentFitList,
+    totalBudget,
+    campaignPerformance,
+    context,
+  }) + behavioralContext;
+
+  const text = await callGemini({
+    systemPrompt: CHANNEL_RECOMMENDATIONS_SYSTEM_PROMPT,
+    userPrompt,
+    model: MODEL_NAME,
+    temperature: 0,
+  });
+
+  if (!text) {
+    throw new Error('Gemini returned empty response');
   }
+
+  const result = parseAIResponse(text);
+  if (!result) {
+    console.error('[aiChannelRecommendations] Failed to parse AI response:', text.slice(0, 500));
+    throw new Error('AI response could not be parsed');
+  }
+
+  return result;
 }

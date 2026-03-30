@@ -14,3 +14,6 @@ export { useSuppliers } from './useSuppliers';
 export { useProcurement } from './useProcurement';
 export { useBrandMembers, useDecisions, useTasks, useComments, useActivity, useNotifications } from './useCoordination';
 export { usePlan } from './usePlan';
+export { useProductSource } from './useProductSource';
+export { useProductsPaginated } from './useProductsPaginated';
+export { useProductAggregates, useSegmentAggregates, useCampaignAggregates, useRefreshAggregates } from './useAggregates';

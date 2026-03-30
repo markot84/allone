@@ -1,8 +1,11 @@
-import { useState, useRef, useEffect } from 'react';
-import { Bell, CheckCheck, MessageSquare, CheckSquare, Users, Activity } from 'lucide-react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
+import { Bell, CheckCheck, MessageSquare, CheckSquare, Users, Activity, AlertTriangle, Zap } from 'lucide-react';
 import { useNotifications } from '../../hooks';
 import { NotificationsService } from '../../services/coordination';
 import { useAuth } from '../../hooks';
+import { useAutomationAlerts } from '../../hooks/useAutomation';
+import { AutomationAlertsService } from '../../services/automationSettings';
 
 const TYPE_META: Record<string, { icon: typeof Bell; color: string }> = {
   decision_created: { icon: MessageSquare, color: '#3B82F6' },
@@ -17,18 +20,47 @@ const TYPE_META: Record<string, { icon: typeof Bell; color: string }> = {
 
 export function NotificationBell({ onNavigate }: { onNavigate?: (section: string) => void }) {
   const { notifications, unreadCount } = useNotifications();
+  const { newAlerts, invalidate: invalidateAlerts } = useAutomationAlerts();
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const totalUnread = unreadCount + newAlerts.length;
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
+
+  const updatePosition = useCallback(() => {
+    if (!btnRef.current) return;
+    const rect = btnRef.current.getBoundingClientRect();
+    setMenuStyle({
+      position: 'fixed',
+      top: rect.bottom + 8,
+      right: window.innerWidth - rect.right,
+      width: 380,
+      maxHeight: 460,
+      overflowY: 'auto',
+      background: '#fff',
+      borderRadius: 12,
+      boxShadow: '0 8px 30px rgba(0,0,0,0.18)',
+      border: '1px solid #E5E7EB',
+      zIndex: 9999,
+    });
+  }, []);
 
   useEffect(() => {
     if (!open) return;
+    updatePosition();
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (
+        btnRef.current && !btnRef.current.contains(target) &&
+        dropdownRef.current && !dropdownRef.current.contains(target)
+      ) {
+        setOpen(false);
+      }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
+  }, [open, updatePosition]);
 
   const handleMarkAllRead = async () => {
     if (user?.uid) await NotificationsService.markAllRead(user.uid);
@@ -52,8 +84,9 @@ export function NotificationBell({ onNavigate }: { onNavigate?: (section: string
   };
 
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
+    <div style={{ position: 'relative' }}>
       <button
+        ref={btnRef}
         onClick={() => setOpen(o => !o)}
         style={{
           position: 'relative',
@@ -72,7 +105,7 @@ export function NotificationBell({ onNavigate }: { onNavigate?: (section: string
         onMouseLeave={e => (e.currentTarget.style.background = open ? 'rgba(255,255,255,0.12)' : 'transparent')}
       >
         <Bell size={18} />
-        {unreadCount > 0 && (
+        {totalUnread > 0 && (
           <span style={{
             position: 'absolute', top: 4, right: 4,
             minWidth: 16, height: 16, borderRadius: 8,
@@ -81,19 +114,13 @@ export function NotificationBell({ onNavigate }: { onNavigate?: (section: string
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             padding: '0 4px',
           }}>
-            {unreadCount > 9 ? '9+' : unreadCount}
+            {totalUnread > 9 ? '9+' : totalUnread}
           </span>
         )}
       </button>
 
-      {open && (
-        <div style={{
-          position: 'absolute', top: '100%', right: 0, marginTop: 8,
-          width: 360, maxHeight: 420, overflowY: 'auto',
-          background: '#fff', borderRadius: 12,
-          boxShadow: '0 8px 30px rgba(0,0,0,0.15)', border: '1px solid #E5E7EB',
-          zIndex: 1000,
-        }}>
+      {open && createPortal(
+        <div ref={dropdownRef} style={menuStyle}>
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             padding: '12px 16px', borderBottom: '1px solid #F3F4F6',
@@ -113,11 +140,61 @@ export function NotificationBell({ onNavigate }: { onNavigate?: (section: string
             )}
           </div>
 
-          {notifications.length === 0 ? (
+          {/* Automation Alerts */}
+          {newAlerts.length > 0 && (
+            <>
+              <div style={{ padding: '8px 16px', fontSize: 11, fontWeight: 600, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #F3F4F6' }}>
+                <Zap size={11} style={{ display: 'inline', marginRight: 4, verticalAlign: 'middle' }} />
+                Αυτοματισμοί
+              </div>
+              {newAlerts.slice(0, 5).map(alert => (
+                <button
+                  key={`alert-${alert.id}`}
+                  onClick={() => { onNavigate && onNavigate('automations'); setOpen(false); }}
+                  style={{
+                    display: 'flex', gap: 10, padding: '10px 16px',
+                    width: '100%', textAlign: 'left',
+                    background: '#FEF2F2',
+                    border: 'none', cursor: 'pointer',
+                    borderBottom: '1px solid #F3F4F6',
+                    transition: 'background 0.15s',
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.background = '#FEE2E2')}
+                  onMouseLeave={e => (e.currentTarget.style.background = '#FEF2F2')}
+                >
+                  <div style={{
+                    width: 32, height: 32, borderRadius: '50%',
+                    backgroundColor: alert.severity === 'critical' ? '#FEE2E2' : '#FFFBEB',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    flexShrink: 0,
+                  }}>
+                    <AlertTriangle size={14} style={{ color: alert.severity === 'critical' ? '#DC2626' : '#F59E0B' }} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', marginBottom: 2 }}>
+                      {alert.title}
+                    </div>
+                    <div style={{ fontSize: 12, color: '#6B7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {alert.description}
+                    </div>
+                  </div>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); AutomationAlertsService.dismiss(alert.id); invalidateAlerts(); }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, flexShrink: 0 }}
+                    title="Απόρριψη"
+                  >
+                    <span style={{ fontSize: 12, color: '#9CA3AF' }}>✕</span>
+                  </button>
+                </button>
+              ))}
+            </>
+          )}
+
+          {notifications.length === 0 && newAlerts.length === 0 ? (
             <div style={{ padding: 32, textAlign: 'center', color: '#9CA3AF', fontSize: 13 }}>
               Δεν υπάρχουν ειδοποιήσεις
             </div>
-          ) : (
+          ) : notifications.length === 0 ? null : (
             notifications.slice(0, 20).map(n => {
               const meta = TYPE_META[n.type] || { icon: Activity, color: '#9CA3AF' };
               const Icon = meta.icon;
@@ -162,7 +239,8 @@ export function NotificationBell({ onNavigate }: { onNavigate?: (section: string
               );
             })
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

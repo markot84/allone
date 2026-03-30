@@ -13,6 +13,9 @@ import {
   AlertTriangle,
   ExternalLink,
   Building2,
+  X,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 
 interface AdAccount {
@@ -34,8 +37,10 @@ interface ConnectorState {
   expiresAt?: number;
 }
 
+type ConnectorId = 'google_ads' | 'meta' | 'merchant' | 'ga4' | 'shopify' | 'woocommerce';
+
 interface ConnectorConfig {
-  id: 'google_ads' | 'meta' | 'merchant';
+  id: ConnectorId;
   name: string;
   description: string;
   icon: string;
@@ -43,6 +48,8 @@ interface ConnectorConfig {
   bgColor: string;
   borderColor: string;
   syncLabel?: string;
+  authType?: 'oauth' | 'credentials';
+  readOnlyNotice?: string;
 }
 
 const CONNECTORS: ConnectorConfig[] = [
@@ -54,6 +61,7 @@ const CONNECTORS: ConnectorConfig[] = [
     color: '#4285F4',
     bgColor: 'bg-blue-50',
     borderColor: 'border-blue-200',
+    readOnlyNotice: 'Αποκλειστικά ανάγνωση δεδομένων — δεν τροποποιούμε τον λογαριασμό σας',
   },
   {
     id: 'meta',
@@ -63,6 +71,7 @@ const CONNECTORS: ConnectorConfig[] = [
     color: '#1877F2',
     bgColor: 'bg-indigo-50',
     borderColor: 'border-indigo-200',
+    readOnlyNotice: 'Αποκλειστικά ανάγνωση δεδομένων — δεν τροποποιούμε τον λογαριασμό σας',
   },
   {
     id: 'merchant',
@@ -73,6 +82,39 @@ const CONNECTORS: ConnectorConfig[] = [
     bgColor: 'bg-emerald-50',
     borderColor: 'border-emerald-200',
     syncLabel: 'benchmarks',
+    readOnlyNotice: 'Read-only — αποκλειστικά ανάγνωση αναφορών τιμών',
+  },
+  {
+    id: 'ga4',
+    name: 'Google Analytics 4',
+    description: 'Sessions, users, traffic sources, top pages, bounce rate',
+    icon: '📊',
+    color: '#E37400',
+    bgColor: 'bg-orange-50',
+    borderColor: 'border-orange-200',
+    syncLabel: 'days',
+    readOnlyNotice: 'Read-only — analytics.readonly scope',
+  },
+  {
+    id: 'shopify',
+    name: 'Shopify',
+    description: 'Σύνδεση e-shop — products, orders, customers, inventory',
+    icon: '🟢',
+    color: '#96BF48',
+    bgColor: 'bg-lime-50',
+    borderColor: 'border-lime-200',
+    syncLabel: 'items',
+  },
+  {
+    id: 'woocommerce',
+    name: 'WooCommerce',
+    description: 'Σύνδεση WordPress e-shop — products, orders, customers',
+    icon: '🟣',
+    color: '#7F54B3',
+    bgColor: 'bg-purple-50',
+    borderColor: 'border-purple-200',
+    syncLabel: 'items',
+    authType: 'credentials',
   },
 ];
 
@@ -102,14 +144,23 @@ function AccountPickerModal({
   const manualMode = accounts.length === 0;
 
   const isMerchant = provider === 'merchant';
-  const modalTitle = isMerchant ? 'Επιλογή Merchant Center Account' : 'Επιλογή Διαφημιστικού Λογαριασμού';
-  const manualHint = isMerchant
-    ? 'Εισάγετε το Merchant Center ID σας.'
-    : 'Εισάγετε το ID του διαφημιστικού sub-account, όχι του Manager Account (MCC).';
-  const manualHelp = isMerchant
-    ? 'Merchant Center → Ρυθμίσεις → Account ID'
-    : 'Google Ads → επιλογή sub-account → Ρυθμίσεις → Customer ID';
-  const manualPlaceholder = isMerchant ? 'π.χ. 123456789' : 'π.χ. 123-456-7890';
+  const isGA4 = provider === 'ga4';
+  const modalTitle = isGA4
+    ? 'Επιλογή GA4 Property'
+    : isMerchant
+      ? 'Επιλογή Merchant Center Account'
+      : 'Επιλογή Διαφημιστικού Λογαριασμού';
+  const manualHint = isGA4
+    ? 'Εισάγετε το GA4 Property ID σας.'
+    : isMerchant
+      ? 'Εισάγετε το Merchant Center ID σας.'
+      : 'Εισάγετε το ID του διαφημιστικού sub-account, όχι του Manager Account (MCC).';
+  const manualHelp = isGA4
+    ? 'GA4 → Admin → Property Settings → Property ID'
+    : isMerchant
+      ? 'Merchant Center → Ρυθμίσεις → Account ID'
+      : 'Google Ads → επιλογή sub-account → Ρυθμίσεις → Customer ID';
+  const manualPlaceholder = isGA4 ? 'π.χ. 123456789' : isMerchant ? 'π.χ. 123456789' : 'π.χ. 123-456-7890';
 
   const handleConfirm = () => {
     if (manualMode) {
@@ -214,6 +265,211 @@ function AccountPickerModal({
   );
 }
 
+// ─── Shop Domain Modal (Shopify) ──────────────────────────────────
+
+function ShopDomainModal({
+  onConfirm,
+  onCancel,
+  loading,
+}: {
+  onConfirm: (domain: string) => void;
+  onCancel: () => void;
+  loading: boolean;
+}) {
+  const [domain, setDomain] = useState('');
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)', padding: '16px' }}>
+      <div style={{ maxWidth: '420px', width: '100%', backgroundColor: '#fff', borderRadius: '16px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid #F3F4F6' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontSize: '24px' }}>🟢</span>
+            <div>
+              <p style={{ margin: 0, fontWeight: 600, fontSize: '14px', color: '#111827' }}>Σύνδεση Shopify</p>
+              <p style={{ margin: 0, fontSize: '12px', color: '#6B7280' }}>Εισάγετε το domain του καταστήματός σας</p>
+            </div>
+          </div>
+          <button onClick={onCancel} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: '4px' }}>
+            <X size={18} />
+          </button>
+        </div>
+
+        <div style={{ padding: '20px 24px' }}>
+          <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>Shop Domain</label>
+          <input
+            type="text"
+            value={domain}
+            onChange={(e) => setDomain(e.target.value)}
+            placeholder="mystore.myshopify.com"
+            style={{ width: '100%', borderRadius: '8px', border: '1px solid #E5E7EB', padding: '10px 12px', fontSize: '14px', backgroundColor: '#F9FAFB', outline: 'none', boxSizing: 'border-box' }}
+            onKeyDown={(e) => e.key === 'Enter' && domain.trim() && onConfirm(domain.trim())}
+          />
+          <p style={{ margin: '8px 0 0', fontSize: '11px', color: '#9CA3AF' }}>
+            Μπορείτε να γράψετε μόνο το store name (π.χ. "mystore") ή ολόκληρο το domain.
+          </p>
+        </div>
+
+        <div style={{ display: 'flex', gap: '10px', padding: '0 24px 20px' }}>
+          <button
+            onClick={onCancel}
+            disabled={loading}
+            style={{ flex: 1, padding: '9px 16px', borderRadius: '8px', border: '1px solid #E5E7EB', backgroundColor: '#fff', fontSize: '13px', fontWeight: 500, cursor: 'pointer', color: '#374151' }}
+          >
+            Άκυρο
+          </button>
+          <button
+            onClick={() => domain.trim() && onConfirm(domain.trim())}
+            disabled={!domain.trim() || loading}
+            style={{ flex: 1, padding: '9px 16px', borderRadius: '8px', border: 'none', backgroundColor: !domain.trim() || loading ? '#A7F3D0' : '#10B981', fontSize: '13px', fontWeight: 600, cursor: !domain.trim() || loading ? 'not-allowed' : 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+          >
+            {loading && <Spinner size="sm" />}
+            {loading ? 'Σύνδεση...' : 'Συνέχεια με OAuth'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── WooCommerce Credentials Modal ────────────────────────────────
+
+function WooCredentialsModal({
+  brandId,
+  onSuccess,
+  onCancel,
+}: {
+  brandId: string;
+  onSuccess: () => void;
+  onCancel: () => void;
+}) {
+  const [storeUrl, setStoreUrl] = useState('');
+  const [consumerKey, setConsumerKey] = useState('');
+  const [consumerSecret, setConsumerSecret] = useState('');
+  const [showSecret, setShowSecret] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const toast = useToast();
+
+  const handleConnect = async () => {
+    if (!storeUrl.trim() || !consumerKey.trim() || !consumerSecret.trim()) return;
+    setLoading(true);
+    setError('');
+
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error('Not authenticated');
+
+      const res = await fetch(`${FUNCTIONS_BASE}/connectorSaveCredentials`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          brandId,
+          provider: 'woocommerce',
+          storeUrl: storeUrl.trim(),
+          consumerKey: consumerKey.trim(),
+          consumerSecret: consumerSecret.trim(),
+        }),
+      });
+
+      const result = await res.json();
+      if (result.success) {
+        toast.success(`WooCommerce συνδέθηκε: ${result.shopName || storeUrl}`);
+        onSuccess();
+      } else {
+        setError(result.error || 'Connection failed');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const inputStyle = { width: '100%', borderRadius: '8px', border: '1px solid #E5E7EB', padding: '10px 12px', fontSize: '14px', backgroundColor: '#F9FAFB', outline: 'none', boxSizing: 'border-box' as const };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)', padding: '16px' }}>
+      <div style={{ maxWidth: '460px', width: '100%', backgroundColor: '#fff', borderRadius: '16px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid #F3F4F6' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontSize: '24px' }}>🟣</span>
+            <div>
+              <p style={{ margin: 0, fontWeight: 600, fontSize: '14px', color: '#111827' }}>Σύνδεση WooCommerce</p>
+              <p style={{ margin: 0, fontSize: '12px', color: '#6B7280' }}>REST API credentials από το WordPress Admin</p>
+            </div>
+          </div>
+          <button onClick={onCancel} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: '4px' }}>
+            <X size={18} />
+          </button>
+        </div>
+
+        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>Store URL</label>
+            <input type="text" value={storeUrl} onChange={(e) => setStoreUrl(e.target.value)} placeholder="https://mystore.com" style={inputStyle} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>Consumer Key</label>
+            <input type="text" value={consumerKey} onChange={(e) => setConsumerKey(e.target.value)} placeholder="ck_..." style={inputStyle} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>Consumer Secret</label>
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showSecret ? 'text' : 'password'}
+                value={consumerSecret}
+                onChange={(e) => setConsumerSecret(e.target.value)}
+                placeholder="cs_..."
+                style={{ ...inputStyle, paddingRight: '40px' }}
+                onKeyDown={(e) => e.key === 'Enter' && handleConnect()}
+              />
+              <button
+                type="button"
+                onClick={() => setShowSecret(!showSecret)}
+                style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: '2px' }}
+              >
+                {showSecret ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+          </div>
+
+          <p style={{ margin: 0, fontSize: '11px', color: '#9CA3AF', lineHeight: '1.5' }}>
+            WordPress Admin → WooCommerce → Settings → Advanced → REST API → Add Key (Read permissions)
+          </p>
+
+          {error && (
+            <div style={{ display: 'flex', gap: '8px', backgroundColor: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '10px 12px' }}>
+              <AlertTriangle size={16} style={{ color: '#DC2626', flexShrink: 0, marginTop: '1px' }} />
+              <p style={{ margin: 0, fontSize: '12px', color: '#991B1B' }}>{error}</p>
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', gap: '10px', padding: '0 24px 20px' }}>
+          <button
+            onClick={onCancel}
+            disabled={loading}
+            style={{ flex: 1, padding: '9px 16px', borderRadius: '8px', border: '1px solid #E5E7EB', backgroundColor: '#fff', fontSize: '13px', fontWeight: 500, cursor: 'pointer', color: '#374151' }}
+          >
+            Άκυρο
+          </button>
+          <button
+            onClick={handleConnect}
+            disabled={!storeUrl.trim() || !consumerKey.trim() || !consumerSecret.trim() || loading}
+            style={{ flex: 1, padding: '9px 16px', borderRadius: '8px', border: 'none', backgroundColor: (!storeUrl.trim() || !consumerKey.trim() || !consumerSecret.trim() || loading) ? '#C4B5FD' : '#7C3AED', fontSize: '13px', fontWeight: 600, cursor: (!storeUrl.trim() || !consumerKey.trim() || !consumerSecret.trim() || loading) ? 'not-allowed' : 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+          >
+            {loading && <Spinner size="sm" />}
+            {loading ? 'Σύνδεση...' : 'Σύνδεση & Επαλήθευση'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Component ──────────────────────────────────────────────
 
 export function ConnectorsPanel() {
@@ -231,6 +487,17 @@ export function ConnectorsPanel() {
   const [connecting, setConnecting] = useState<string | null>(null);
   const [accountPickerFor, setAccountPickerFor] = useState<string | null>(null);
   const [confirmingAccount, setConfirmingAccount] = useState(false);
+  const [shopDomainModal, setShopDomainModal] = useState(false);
+  const [wooModal, setWooModal] = useState(false);
+
+  const emptyStates: Record<string, ConnectorState> = {
+    google_ads: { connected: false },
+    meta: { connected: false },
+    merchant: { connected: false },
+    ga4: { connected: false },
+    shopify: { connected: false },
+    woocommerce: { connected: false },
+  };
 
   const fetchStates = useCallback(async () => {
     if (!brandId) return;
@@ -245,17 +512,23 @@ export function ConnectorsPanel() {
           google_ads: data.google_ads || { connected: false },
           meta: data.meta || { connected: false },
           merchant: data.merchant || { connected: false },
+          ga4: data.ga4 || { connected: false },
+          shopify: data.shopify || { connected: false },
+          woocommerce: data.woocommerce || { connected: false },
         });
       } else {
-        setStates({ google_ads: { connected: false }, meta: { connected: false }, merchant: { connected: false } });
+        setStates(emptyStates);
       }
       setLastSyncDates({
         google_ads: dates['google_ads_api'] || dates['campaigns'],
         meta: dates['meta_api'] || dates['campaigns'],
         merchant: dates['merchant_center_api'] || dates['price_benchmarks'],
+        ga4: dates['ga4_api'] || dates['ga4'],
+        shopify: dates['shopify_api'],
+        woocommerce: dates['woocommerce_api'],
       } as Record<string, Date>);
     } catch {
-        setStates({ google_ads: { connected: false }, meta: { connected: false }, merchant: { connected: false } });
+      setStates(emptyStates);
     } finally {
       setLoading(false);
     }
@@ -291,8 +564,18 @@ export function ConnectorsPanel() {
     if (pendingProvider) setAccountPickerFor(pendingProvider);
   }, [states]);
 
-  const handleConnect = async (provider: ConnectorConfig['id']) => {
+  const handleConnect = async (provider: ConnectorConfig['id'], shopDomain?: string) => {
     if (!brandId || !user) return;
+
+    if (provider === 'shopify' && !shopDomain) {
+      setShopDomainModal(true);
+      return;
+    }
+    if (provider === 'woocommerce') {
+      setWooModal(true);
+      return;
+    }
+
     setConnecting(provider);
 
     try {
@@ -301,13 +584,16 @@ export function ConnectorsPanel() {
 
       const callbackUrl = `${FUNCTIONS_BASE}/connectorCallback`;
 
+      const body: Record<string, string> = { brandId, provider, redirectUri: callbackUrl };
+      if (provider === 'shopify' && shopDomain) body.shopDomain = shopDomain;
+
       const res = await fetch(`${FUNCTIONS_BASE}/connectorAuth`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ brandId, provider, redirectUri: callbackUrl }),
+        body: JSON.stringify(body),
       });
 
       if (!res.ok) {
@@ -412,9 +698,32 @@ export function ConnectorsPanel() {
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-      toast.success(`Λογαριασμός "${account.name}" επιλέχθηκε για αυτό το brand`);
+      toast.success(`Λογαριασμός "${account.name}" επιλέχθηκε — γίνεται sync...`);
+      const provider = accountPickerFor;
       setAccountPickerFor(null);
       await fetchStates();
+
+      // Auto-trigger sync after account selection
+      try {
+        setSyncing(provider as ConnectorConfig['id']);
+        const syncRes = await fetch(`${FUNCTIONS_BASE}/connectorSync`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ brandId, provider }),
+        });
+        if (syncRes.ok) {
+          const syncResult = await syncRes.json();
+          toast.success(`Sync ολοκληρώθηκε: ${syncResult.imported ?? 0} εγγραφές`);
+          queryClient.invalidateQueries();
+        }
+      } catch {
+        // Non-blocking — user can retry via Sync button
+      } finally {
+        setSyncing(null);
+      }
     } catch (err) {
       toast.error('Σφάλμα επιλογής λογαριασμού');
       console.error(err);
@@ -440,16 +749,38 @@ export function ConnectorsPanel() {
         />
       )}
 
+      {shopDomainModal && (
+        <ShopDomainModal
+          loading={connecting === 'shopify'}
+          onConfirm={(domain) => {
+            setShopDomainModal(false);
+            handleConnect('shopify', domain);
+          }}
+          onCancel={() => setShopDomainModal(false)}
+        />
+      )}
+
+      {wooModal && brandId && (
+        <WooCredentialsModal
+          brandId={brandId}
+          onSuccess={() => {
+            setWooModal(false);
+            fetchStates();
+          }}
+          onCancel={() => setWooModal(false)}
+        />
+      )}
+
       <Card>
         <div className="p-6">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="text-lg font-semibold text-[#1A1A1A] flex items-center gap-2">
                 <Link2 size={20} className="text-[var(--nts-accent)]" />
-                Ad Platform Connectors
+                Platform Connectors
               </h3>
               <p className="text-sm text-[#6B7280] mt-0.5">
-                Σύνδεσε Google Ads, Meta & Merchant Center για αυτόματη εισαγωγή δεδομένων (06:00)
+                Σύνδεσε Ad Platforms & E-shop για αυτόματη εισαγωγή δεδομένων (06:00)
               </p>
             </div>
           </div>
@@ -459,7 +790,7 @@ export function ConnectorsPanel() {
               <Spinner size="md" label="Φόρτωση connectors..." />
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {CONNECTORS.map((conn) => {
                 const state = states[conn.id] || { connected: false };
                 const isConnected = state.connected;
@@ -484,6 +815,12 @@ export function ConnectorsPanel() {
                         <div>
                           <h4 className="font-semibold text-[#1A1A1A]">{conn.name}</h4>
                           <p className="text-xs text-[#6B7280] mt-0.5">{conn.description}</p>
+                          {conn.readOnlyNotice && (
+                            <p className="text-[10px] text-emerald-600 mt-1 flex items-center gap-1">
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                              {conn.readOnlyNotice}
+                            </p>
+                          )}
                         </div>
                       </div>
                       {isConnected && (
@@ -510,6 +847,12 @@ export function ConnectorsPanel() {
                         )}
                         {conn.id === 'merchant' && (state as any).merchantName && (
                           <p>{(state as any).merchantName} ({(state as any).merchantId})</p>
+                        )}
+                        {conn.id === 'shopify' && (state as any).shopName && (
+                          <p>{(state as any).shopName} ({(state as any).shopDomain})</p>
+                        )}
+                        {conn.id === 'woocommerce' && (state as any).shopName && (
+                          <p>{(state as any).shopName}</p>
                         )}
                         {lastSyncDates[conn.id] && (
                           <p className="text-[#9CA3AF]">
@@ -579,7 +922,7 @@ export function ConnectorsPanel() {
           )}
 
           <p className="text-xs text-[#9CA3AF] mt-4">
-            Κάθε brand συνδέεται με τον δικό του διαφημιστικό λογαριασμό. Τα credentials αποθηκεύονται ασφαλώς.
+            Κάθε brand συνδέεται με τους δικούς του λογαριασμούς. Τα credentials αποθηκεύονται ασφαλώς στο Firebase.
           </p>
         </div>
       </Card>

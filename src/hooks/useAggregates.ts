@@ -1,0 +1,115 @@
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { doc, getDoc } from 'firebase/firestore';
+import { db, auth } from '../config/firebase';
+import { useBrand } from './useBrand';
+
+const REFRESH_URL = 'https://europe-west1-performance-plus-4a5b2.cloudfunctions.net/refreshAggregates';
+
+interface ProductAggregates {
+  totalSkus: number;
+  totalInventoryValue: number;
+  deadStock: { count: number; value: number };
+  lowStock: { count: number };
+  healthyStock: { count: number };
+  excessStock: { count: number; value: number };
+  avgMargin: number;
+  withStockLevel: number;
+  withMargin: number;
+  updatedAt: string;
+}
+
+interface SegmentAggregates {
+  totalCustomers: number;
+  segments: Record<string, { count: number; percentage: number; revenue: number }>;
+  atRiskPercentage: number;
+  championsPercentage: number;
+  updatedAt: string;
+}
+
+interface CampaignAggregates {
+  totalCampaigns: number;
+  totalSpend: number;
+  totalRevenue: number;
+  totalConversions: number;
+  avgRoas: number;
+  topByRoas: { name: string; roas: number; spend: number; revenue: number }[];
+  worstByRoas: { name: string; roas: number; spend: number; revenue: number }[];
+  byMonth: Record<string, { spend: number; revenue: number; conversions: number }>;
+  updatedAt: string;
+}
+
+async function fetchAggregate<T>(brandId: string, type: string): Promise<T | null> {
+  const snap = await getDoc(doc(db, 'brands', brandId, 'aggregates', type));
+  return snap.exists() ? (snap.data() as T) : null;
+}
+
+export function useProductAggregates() {
+  const { currentBrand } = useBrand();
+  const brandId = currentBrand?.id ?? null;
+
+  const { data, isPending } = useQuery({
+    queryKey: ['aggregates', 'products', brandId],
+    queryFn: () => (brandId ? fetchAggregate<ProductAggregates>(brandId, 'products') : null),
+    staleTime: 10 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
+    enabled: !!brandId,
+  });
+
+  return { productStats: data, isLoading: isPending };
+}
+
+export function useSegmentAggregates() {
+  const { currentBrand } = useBrand();
+  const brandId = currentBrand?.id ?? null;
+
+  const { data, isPending } = useQuery({
+    queryKey: ['aggregates', 'segments', brandId],
+    queryFn: () => (brandId ? fetchAggregate<SegmentAggregates>(brandId, 'segments') : null),
+    staleTime: 10 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
+    enabled: !!brandId,
+  });
+
+  return { segmentStats: data, isLoading: isPending };
+}
+
+export function useCampaignAggregates() {
+  const { currentBrand } = useBrand();
+  const brandId = currentBrand?.id ?? null;
+
+  const { data, isPending } = useQuery({
+    queryKey: ['aggregates', 'campaigns', brandId],
+    queryFn: () => (brandId ? fetchAggregate<CampaignAggregates>(brandId, 'campaigns') : null),
+    staleTime: 10 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
+    enabled: !!brandId,
+  });
+
+  return { campaignStats: data, isLoading: isPending };
+}
+
+export function useRefreshAggregates() {
+  const queryClient = useQueryClient();
+  const { currentBrand } = useBrand();
+
+  const refresh = async () => {
+    const brandId = currentBrand?.id;
+    if (!brandId) return;
+
+    const token = await auth.currentUser?.getIdToken();
+    if (!token) return;
+
+    await fetch(REFRESH_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ brandId }),
+    });
+
+    await queryClient.invalidateQueries({ queryKey: ['aggregates'] });
+  };
+
+  return { refresh };
+}

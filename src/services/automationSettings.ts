@@ -19,7 +19,17 @@ export const AutomationSettingsService = {
 
   async save(brandId: string, triggers: Record<string, TriggerConfig>): Promise<void> {
     const ref = doc(db, 'automation_settings', brandId);
-    await setDoc(ref, { triggers, updatedAt: ts() }, { merge: true });
+    // Strip undefined values which Firestore rejects
+    const clean: Record<string, Record<string, unknown>> = {};
+    for (const [id, cfg] of Object.entries(triggers)) {
+      clean[id] = {
+        enabled: cfg.enabled ?? false,
+        threshold: cfg.threshold ?? 0,
+        checkIntervalDays: cfg.checkIntervalDays ?? 7,
+        autoBriefing: cfg.autoBriefing ?? false,
+      };
+    }
+    await setDoc(ref, { triggers: clean, updatedAt: ts() }, { merge: true });
   },
 
   async updateTrigger(brandId: string, triggerId: string, config: Partial<TriggerConfig>): Promise<void> {

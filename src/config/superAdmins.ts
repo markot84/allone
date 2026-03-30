@@ -4,7 +4,8 @@ export const SUPER_ADMIN_EMAILS: readonly string[] = [
   'notthesame.ads@gmail.com',
 ];
 
-export const SUPPORT_EMAIL = 'support@notthesame.gr';
+/** Βασικό email επικοινωνίας (UI, υποστήριξη, νομικά) — συμβατό με αποστολή από noreply@ */
+export const SUPPORT_EMAIL = 'noreply@performanceplus.gr';
 
 export const APP_NAME = 'Performance+';
 

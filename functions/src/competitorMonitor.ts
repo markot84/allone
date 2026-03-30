@@ -55,6 +55,7 @@ export async function fetchCompetitorAds(brandId: string): Promise<{
   totalAds: number;
   newAds: number;
   error?: string;
+  warnings?: string[];
 }> {
   const settingsDoc = await getDb().doc(`competitor_settings/${brandId}`).get();
   const settings = settingsDoc.data();
@@ -72,6 +73,7 @@ export async function fetchCompetitorAds(brandId: string): Promise<{
 
   let totalAds = 0;
   let newAds = 0;
+  const warnings: string[] = [];
   const now = new Date();
 
   // Pre-fetch existing ad IDs to avoid N+1 reads
@@ -89,21 +91,31 @@ export async function fetchCompetitorAds(brandId: string): Promise<{
     if (!competitor.pageId) continue;
 
     try {
-      let nextUrl: string | null = `${META_GRAPH_URL}/ads_archive?${new URLSearchParams({
+      // ad_reached_countries is required by the API and expects array-like format
+      // Meta Graph API accepts ad_reached_countries=["GR"] in the query string
+      const countries: string[] = (settings as any).reachedCountries
+        ? (settings as any).reachedCountries
+        : ['GR'];
+      const params = new URLSearchParams({
         access_token: appToken,
         search_page_ids: competitor.pageId,
-        ad_reached_countries: 'GR',
         ad_active_status: 'ALL',
         fields: 'id,ad_creative_bodies,ad_delivery_start_time,ad_delivery_stop_time,page_name,publisher_platforms',
         limit: '50',
-      }).toString()}`;
+      });
+      params.set('ad_reached_countries', JSON.stringify(countries));
+
+      logger.info(`[Competitor] Querying ${competitor.name} (page ${competitor.pageId}), countries=${JSON.stringify(countries)}`);
+      let nextUrl: string | null = `${META_GRAPH_URL}/ads_archive?${params.toString()}`;
 
       while (nextUrl) {
         const res: Response = await fetch(nextUrl);
 
         if (!res.ok) {
           const errText = await res.text();
-          logger.warn(`[Competitor] Ad Library query failed for ${competitor.name} (${res.status}): ${errText.slice(0, 300)}`);
+          const msg = `Ad Library API error for ${competitor.name} (${res.status}): ${errText.slice(0, 200)}`;
+          logger.warn(`[Competitor] ${msg}`);
+          warnings.push(msg);
           break;
         }
 
@@ -170,11 +182,17 @@ export async function fetchCompetitorAds(brandId: string): Promise<{
           await batch.commit();
         }
 
-        logger.info(`[Competitor] ${competitor.name}: page with ${ads.length} ads`);
+        if (ads.length === 0 && !nextUrl) {
+          logger.warn(`[Competitor] ${competitor.name} (page ${competitor.pageId}): API returned 0 ads. Check page ID or country settings.`);
+          warnings.push(`${competitor.name}: 0 ads found. Verify the Page ID is the numeric ID (not URL slug).`);
+        } else {
+          logger.info(`[Competitor] ${competitor.name}: page with ${ads.length} ads`);
+        }
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       logger.error(`[Competitor] Error for ${competitor.name}:`, msg);
+      warnings.push(`Exception for ${competitor.name}: ${msg.slice(0, 200)}`);
     }
   }
 
@@ -202,5 +220,5 @@ export async function fetchCompetitorAds(brandId: string): Promise<{
     logger.warn(`[Competitor] Failed to log import job: ${e}`);
   }
 
-  return { success: true, totalAds, newAds };
+  return { success: true, totalAds, newAds, warnings: warnings.length > 0 ? warnings : undefined };
 }

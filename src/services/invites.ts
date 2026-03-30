@@ -1,7 +1,8 @@
 import { where } from 'firebase/firestore';
 import { FirestoreService } from './firestore';
 import { MembersService } from './coordination';
-import type { Invite } from '../types';
+import { logAndNotify } from './coordination';
+import type { Invite, BrandDepartment } from '../types';
 
 const INVITE_EXPIRY_DAYS = 7;
 
@@ -13,7 +14,8 @@ export async function createInvite(
   brandId: string,
   email: string,
   role: string,
-  createdBy: string
+  createdBy: string,
+  department: BrandDepartment = 'other'
 ): Promise<{ token: string; inviteId: string }> {
   const token = generateToken();
   const inviteId = `inv_${token.replace(/-/g, '_')}`;
@@ -24,6 +26,7 @@ export async function createInvite(
     brandId,
     email: email.trim() ? email.trim().toLowerCase() : '',
     role,
+    department,
     token,
     expiresAt: expiresAt.toISOString(),
     createdBy,
@@ -67,18 +70,33 @@ export async function acceptInvite(token: string, userId: string): Promise<void>
     } as Record<string, unknown>);
   }
 
-  // Create brand member doc
   const userProfile = await FirestoreService.getDocument<{ email?: string; displayName?: string }>('users', userId);
+  const displayName = userProfile?.displayName ?? '';
+  const department = invite.department ?? 'other';
+
   await MembersService.set(invite.brandId, {
     userId,
     email: userProfile?.email ?? invite.email ?? '',
-    displayName: userProfile?.displayName ?? '',
+    displayName,
     role: (invite.role === 'admin' ? 'admin' : 'member') as 'admin' | 'member',
-    department: 'other',
+    department,
     joinedAt: new Date().toISOString(),
   });
 
   await FirestoreService.updateDocument('invites', invite.id, {
     usedAt: new Date().toISOString(),
   });
+
+  // Notify team about new member
+  logAndNotify(
+    invite.brandId,
+    userId,
+    displayName || 'Νέο μέλος',
+    'member_joined',
+    'member',
+    userId,
+    `${displayName || 'Νέος χρήστης'} εντάχθηκε στην ομάδα`,
+    'Νέο μέλος',
+    `${displayName || 'Νέος χρήστης'} εντάχθηκε στην ομάδα`
+  ).catch(() => {});
 }

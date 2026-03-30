@@ -4,6 +4,7 @@ import {
   TrendingUp,
   Users,
   Target,
+  BarChart3,
 } from 'lucide-react';
 import {
   AreaChart,
@@ -16,13 +17,16 @@ import {
   Pie,
   Cell
 } from 'recharts';
-import { Card, CardHeader, KPICard } from '../common';
-import { useSegments, useProducts, useOrganic, useCampaigns, useActiveStrategy, useSuppliers } from '../../hooks';
+import { Card, CardHeader, KPICard, Tooltip, AlertsBanner } from '../common';
+import { useSegments, useOrganic, useCampaigns, useActiveStrategy, useSuppliers, useProductSource, useBrand, useProductAggregates } from '../../hooks';
+import { useGA4Data } from '../../hooks/useGA4Data';
 import { calculateTotalRevenue, calculateCampaignMetrics, getCampaignDateForMonth } from '../../utils/roiUtils';
 import { formatCurrencyCompact, formatNumber, formatMultiplier, formatPercent } from '../../utils/format';
 import type { Campaign } from '../../types';
 import { generateInsightsFromData } from '../../services/insights';
 import { useAutomationRunner } from '../../hooks/useAutomationRunner';
+import { useAutomationAlerts } from '../../hooks/useAutomation';
+import { MorningBriefing } from './MorningBriefing';
 
 interface DashboardOverviewProps {
   onSectionChange?: (section: string) => void;
@@ -30,13 +34,17 @@ interface DashboardOverviewProps {
 }
 
 export function DashboardOverview({ onSectionChange, onOpenInsights }: DashboardOverviewProps = {}) {
+  const { currentBrand } = useBrand();
   const { segments: rfmSegments, hasImported: hasSegments } = useSegments();
-  const { count: productsCount, products } = useProducts();
+  const { count: productsCount, products } = useProductSource();
+  const { productStats } = useProductAggregates();
   const { suppliers } = useSuppliers();
   const { totalOrganicRevenue, byMonth: organicByMonth, hasImported: hasOrganic } = useOrganic();
   const { count: campaignsCount, campaigns, hasImported: hasCampaigns } = useCampaigns();
   const { activeStrategy, getStrategyName } = useActiveStrategy();
   useAutomationRunner();
+  const ga4 = useGA4Data();
+  const { alerts: automationAlerts } = useAutomationAlerts();
 
   const supplierTodMap = useMemo(() => {
     const m = new Map<string, number>();
@@ -153,6 +161,30 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         </p>
       </div>
 
+      {/* Automation Alerts */}
+      <AlertsBanner maxAlerts={3} onNavigate={onSectionChange} />
+
+      {/* Morning Briefing */}
+      {currentBrand && (
+        <MorningBriefing
+          brandId={currentBrand.id}
+          brandName={currentBrand.name}
+          products={products}
+          campaigns={campaignsTyped}
+          segments={rfmSegments}
+          totalOrganicRevenue={totalOrganicRevenue || 0}
+          ga4={{
+            totals: ga4.totals,
+            weeklyChange: ga4.weeklyChange,
+            hasData: ga4.hasData,
+          }}
+          alerts={automationAlerts}
+          supplierTodMap={supplierTodMap}
+          onSectionChange={onSectionChange}
+          hasAnyData={hasAnyData}
+        />
+      )}
+
       {/* KPI Cards — Financial Overview */}
       {(hasOrganic || hasCampaigns) && (() => {
         const monthOrder = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -253,18 +285,37 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               index={1}
               onClick={() => onSectionChange?.('campaigns')}
             />
-            <KPICard
-              kpi={{
-                label: 'ROI',
-                value: roiPercent > 0 ? `+${formatNumber(roiPercent, 0)}%` : '—',
-                changeLabel: roiPercent > 0 ? 'return on investment' : undefined,
-                trend: roiPercent > 0 ? 'up' : undefined,
-                tooltip: 'Return on Investment — Ποσοστό κέρδους σε σχέση με το κόστος διαφήμισης: (Έσοδα campaigns − Ad Spend) ÷ Ad Spend × 100.',
-              }}
-              index={2}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="h-full cursor-pointer"
               onClick={() => onSectionChange?.('roi')}
-              className="border-2 border-[var(--nts-accent)]/20"
-            />
+            >
+              <div className="relative h-full rounded-xl bg-gradient-to-br from-[#1A1A2E] to-[#16213E] p-5 overflow-hidden group hover:shadow-lg transition-shadow">
+                <div className="absolute inset-0 bg-gradient-to-br from-[var(--nts-accent)]/10 to-transparent" />
+                <div className="absolute -right-6 -bottom-6 w-28 h-28 rounded-full bg-[var(--nts-accent)]/10 blur-2xl" />
+                <div className="relative z-10">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--nts-accent)]">ROI</span>
+                      <Tooltip content="Return on Investment — Ποσοστό κέρδους σε σχέση με το κόστος διαφήμισης: (Έσοδα campaigns − Ad Spend) ÷ Ad Spend × 100." size={13} />
+                    </div>
+                    {roiPercent > 0 && (
+                      <div className="w-7 h-7 rounded-lg bg-[#22C55E]/20 flex items-center justify-center">
+                        <TrendingUp size={14} className="text-[#22C55E]" />
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-3xl font-bold tracking-tight font-mono text-white mb-1">
+                    {roiPercent > 0 ? `+${formatNumber(roiPercent, 0)}%` : '—'}
+                  </p>
+                  {roiPercent > 0 && (
+                    <p className="text-[11px] text-white/50">return on investment</p>
+                  )}
+                </div>
+              </div>
+            </motion.div>
             <KPICard
               kpi={{
                 label: 'ROAS',
@@ -303,6 +354,56 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           </div>
         );
       })()}
+
+      {/* GA4 Web Analytics Summary */}
+      {ga4.hasData && (
+        <Card hover onClick={() => onSectionChange?.('analytics')}>
+          <div className="p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <BarChart3 size={18} className="text-orange-500" />
+                <h4 className="text-sm font-semibold text-[#1A1A1A]">Web Analytics</h4>
+                <span className="text-[10px] text-[#9CA3AF] bg-[#F3F4F6] px-1.5 py-0.5 rounded">{ga4.propertyName}</span>
+              </div>
+              <span className="text-[10px] text-[#9CA3AF]">90 ημέρες</span>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <p className="text-[11px] text-[#6B7280] mb-0.5">Sessions</p>
+                <p className="text-lg font-bold text-[#1A1A1A]">{ga4.totals.sessions >= 1000 ? `${(ga4.totals.sessions / 1000).toFixed(1)}K` : ga4.totals.sessions.toLocaleString()}</p>
+                {ga4.weeklyChange?.sessions != null && (
+                  <p className={`text-[10px] font-medium ${ga4.weeklyChange.sessions >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                    {ga4.weeklyChange.sessions >= 0 ? '+' : ''}{ga4.weeklyChange.sessions.toFixed(1)}% vs prev 7d
+                  </p>
+                )}
+              </div>
+              <div>
+                <p className="text-[11px] text-[#6B7280] mb-0.5">Users</p>
+                <p className="text-lg font-bold text-[#1A1A1A]">{ga4.totals.users >= 1000 ? `${(ga4.totals.users / 1000).toFixed(1)}K` : ga4.totals.users.toLocaleString()}</p>
+                {ga4.weeklyChange?.users != null && (
+                  <p className={`text-[10px] font-medium ${ga4.weeklyChange.users >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                    {ga4.weeklyChange.users >= 0 ? '+' : ''}{ga4.weeklyChange.users.toFixed(1)}% vs prev 7d
+                  </p>
+                )}
+              </div>
+              <div>
+                <p className="text-[11px] text-[#6B7280] mb-0.5">Bounce Rate</p>
+                <p className="text-lg font-bold text-[#1A1A1A]">{(ga4.totals.bounceRate * 100).toFixed(1)}%</p>
+                <p className="text-[10px] text-[#9CA3AF]">μέσος (90d)</p>
+              </div>
+              <div>
+                <p className="text-[11px] text-[#6B7280] mb-0.5">Conversions</p>
+                <p className="text-lg font-bold text-[#1A1A1A]">{ga4.totals.conversions.toLocaleString()}</p>
+                {ga4.weeklyChange?.conversions != null && (
+                  <p className={`text-[10px] font-medium ${ga4.weeklyChange.conversions >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                    {ga4.weeklyChange.conversions >= 0 ? '+' : ''}{ga4.weeklyChange.conversions.toFixed(1)}% vs prev 7d
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Main Charts Row */}
       {hasAnyData && (
@@ -577,7 +678,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 className="text-center p-3 rounded-lg bg-white border border-[var(--nts-border-gray)] cursor-pointer hover:border-[var(--nts-accent)] transition-colors"
                 onClick={(e) => { e.stopPropagation(); onSectionChange?.('products'); }}
               >
-                <p className="text-lg font-bold text-[var(--nts-charcoal)] font-mono">{formatNumber(productsCount)}</p>
+                <p className="text-lg font-bold text-[var(--nts-charcoal)] font-mono">{formatNumber(productsCount || productStats?.totalSkus || 0)}</p>
                 <p className="text-[11px] text-[var(--nts-medium-gray)]">Προϊόντα</p>
               </div>
               <div

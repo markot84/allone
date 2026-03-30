@@ -4,14 +4,10 @@ import { Button } from '../common';
 import { DecisionsService, logAndNotify } from '../../services/coordination';
 import { useBrand, useAuth } from '../../hooks';
 import type { BrandDepartment } from '../../types';
+import { DEPARTMENT_LABELS } from '../../types';
 
-const DEPTS: [BrandDepartment, string][] = [
-  ['commercial', 'Εμπορική Δ/νση'],
-  ['marketing', 'Marketing'],
-  ['procurement', 'Procurement'],
-  ['agency', 'Agency'],
-  ['management', 'Διοίκηση'],
-];
+const DEPTS: [BrandDepartment, string][] =
+  (Object.entries(DEPARTMENT_LABELS) as [BrandDepartment, string][]).filter(([k]) => k !== 'other');
 
 const DEPTS_KEY = 'perf-plus-briefing-depts';
 

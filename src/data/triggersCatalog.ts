@@ -5,6 +5,7 @@ export const TRIGGER_GROUPS = [
   { id: 'campaigns', label: 'Καμπάνιες & Απόδοση' },
   { id: 'customers', label: 'Πελατολόγιο & Segments' },
   { id: 'seasonal', label: 'Εποχικότητα' },
+  { id: 'analytics', label: 'Web Analytics (GA4)' },
   { id: 'competitive', label: 'Ανταγωνισμός & Τιμές' },
   { id: 'procurement', label: 'Procurement (Enterprise)' },
 ] as const;
@@ -115,6 +116,94 @@ export const TRIGGERS_CATALOG: TriggerDefinition[] = [
     defaultInterval: 7,
   },
 
+  {
+    id: 'high_churn_ltv',
+    label: 'High-LTV σε κίνδυνο churn',
+    description: 'Ειδοποίηση όταν πελάτες υψηλής αξίας (LTV) εμφανίζουν υψηλό churn risk',
+    group: 'customers',
+    planRequired: 'growth',
+    defaultThreshold: 60,
+    thresholdLabel: 'Churn risk >',
+    thresholdUnit: '%',
+    defaultInterval: 7,
+  },
+  {
+    id: 'upsell_opportunity',
+    label: 'Ευκαιρία upsell',
+    description: 'Ειδοποίηση για segments με upsell score πάνω από κατώφλι',
+    group: 'customers',
+    planRequired: 'growth',
+    defaultThreshold: 70,
+    thresholdLabel: 'Upsell score >',
+    thresholdUnit: '%',
+    defaultInterval: 7,
+  },
+  {
+    id: 'engagement_drop',
+    label: 'Πτώση engagement',
+    description: 'Ειδοποίηση όταν το engagement score segment πέσει κάτω από κατώφλι',
+    group: 'customers',
+    planRequired: 'growth',
+    defaultThreshold: 30,
+    thresholdLabel: 'Engagement <',
+    thresholdUnit: '%',
+    defaultInterval: 7,
+  },
+  {
+    id: 'demand_declining',
+    label: 'Πτωτική ζήτηση segment',
+    description: 'Ειδοποίηση όταν η ζήτηση ενός segment δείχνει πτωτική τάση',
+    group: 'customers',
+    planRequired: 'growth',
+    defaultInterval: 7,
+  },
+
+  // ── Web Analytics (GA4) ──
+  {
+    id: 'organic_traffic_spike',
+    label: 'Organic traffic spike',
+    description: 'Ειδοποίηση όταν το organic traffic αυξάνεται σημαντικά (7d vs 7d)',
+    group: 'analytics',
+    planRequired: 'growth',
+    defaultThreshold: 20,
+    thresholdLabel: 'Αύξηση sessions >',
+    thresholdUnit: '%',
+    defaultInterval: 7,
+  },
+  {
+    id: 'new_visitors_surge',
+    label: 'Αύξηση νέων επισκεπτών',
+    description: 'Ειδοποίηση όταν οι νέοι χρήστες αυξάνονται σημαντικά',
+    group: 'analytics',
+    planRequired: 'growth',
+    defaultThreshold: 25,
+    thresholdLabel: 'Αύξηση new users >',
+    thresholdUnit: '%',
+    defaultInterval: 7,
+  },
+  {
+    id: 'organic_conversion_drop',
+    label: 'Πτώση organic conversions',
+    description: 'Ειδοποίηση όταν τα organic conversions πέφτουν σημαντικά',
+    group: 'analytics',
+    planRequired: 'growth',
+    defaultThreshold: 15,
+    thresholdLabel: 'Πτώση conversions >',
+    thresholdUnit: '%',
+    defaultInterval: 7,
+  },
+  {
+    id: 'high_bounce_pages',
+    label: 'Σελίδες υψηλού bounce rate',
+    description: 'Ειδοποίηση για σελίδες με πολλές επισκέψεις αλλά υψηλό bounce rate',
+    group: 'analytics',
+    planRequired: 'growth',
+    defaultThreshold: 75,
+    thresholdLabel: 'Bounce rate >',
+    thresholdUnit: '%',
+    defaultInterval: 14,
+  },
+
   // ── Seasonal ──
   {
     id: 'seasonal_approaching',
@@ -212,8 +301,8 @@ export function getDefaultTriggerConfigs(): Record<string, import('../types').Tr
   for (const t of TRIGGERS_CATALOG) {
     configs[t.id] = {
       enabled: false,
-      threshold: t.defaultThreshold,
-      checkIntervalDays: t.defaultInterval,
+      threshold: t.defaultThreshold ?? 0,
+      checkIntervalDays: t.defaultInterval ?? 7,
       autoBriefing: false,
     };
   }

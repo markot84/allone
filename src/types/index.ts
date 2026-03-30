@@ -41,6 +41,7 @@ export interface Invite {
   brandId: string;
   email: string;
   role: string;
+  department?: BrandDepartment;
   token: string;
   expiresAt: string;
   usedAt?: string;
@@ -105,6 +106,44 @@ export interface RFMSegment {
   color: string;
   description: string;
   icon: string;
+  behavioral?: BehavioralProfile;
+  predictive?: PredictiveMetrics;
+}
+
+export interface BehavioralProfile {
+  preferred_channels: string[];
+  purchase_frequency: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'rare';
+  avg_basket_size: number;
+  peak_hours: string[];
+  peak_days: string[];
+  payment_method: string;
+  device_preference: 'mobile' | 'desktop' | 'mixed';
+  category_affinity: CategoryAffinity[];
+  upsell_score: number;
+  cross_sell_score: number;
+  price_sensitivity: 'low' | 'medium' | 'high';
+  engagement_score: number;
+  persona: string;
+  lifecycle_stage: 'new' | 'active' | 'loyal' | 'declining' | 'dormant';
+  communication_preferences: {
+    channel: string;
+    frequency: string;
+    best_time: string;
+  }[];
+}
+
+export interface PredictiveMetrics {
+  estimated_ltv: number;
+  ltv_confidence: number;
+  churn_risk: number;
+  churn_risk_label: 'low' | 'medium' | 'high' | 'critical';
+  next_purchase_probability: number;
+  days_to_next_purchase: number;
+  predicted_next_order_value: number;
+  revenue_forecast_30d: number;
+  revenue_forecast_90d: number;
+  demand_trend: 'growing' | 'stable' | 'declining';
+  retention_score: number;
 }
 
 export interface CategoryAffinity {
@@ -314,12 +353,26 @@ export interface Campaign {
     amount_spent: number;
     conversion_value: number;
   }>;
+  conversionActions?: Record<string, {
+    conversions: number;
+    value: number;
+  }>;
 }
 
 // ── Coordination System Types ───────────────────────────────────────────────
 
 export type BrandMemberRole = 'owner' | 'admin' | 'member';
-export type BrandDepartment = 'management' | 'commercial' | 'marketing' | 'procurement' | 'agency' | 'other';
+export type BrandDepartment = 'management' | 'commercial' | 'marketing' | 'procurement' | 'agency' | 'external_partner' | 'other';
+
+export const DEPARTMENT_LABELS: Record<BrandDepartment, string> = {
+  management: 'Διοίκηση',
+  commercial: 'Εμπορική Δ/νση',
+  marketing: 'Marketing',
+  procurement: 'Τμ. Προμηθειών',
+  agency: 'Marketing Agency',
+  external_partner: 'Εξωτερικός Συνεργάτης',
+  other: 'Άλλο',
+};
 
 export interface BrandMember {
   id: string; // same as userId
@@ -420,6 +473,29 @@ export interface UserNotification {
   createdAt: string;
 }
 
+export type NotificationChannel = 'inApp' | 'email';
+
+export interface NotificationPreferences {
+  userId: string;
+  brandId: string;
+  channels: Record<ActivityType, NotificationChannel[]>;
+  quietHoursEnabled?: boolean;
+  quietHoursStart?: string; // HH:mm
+  quietHoursEnd?: string;   // HH:mm
+  updatedAt?: string;
+}
+
+export const DEFAULT_NOTIFICATION_CHANNELS: Record<ActivityType, NotificationChannel[]> = {
+  decision_created: ['inApp', 'email'],
+  decision_updated: ['inApp'],
+  decision_completed: ['inApp', 'email'],
+  task_created: ['inApp', 'email'],
+  task_assigned: ['inApp', 'email'],
+  task_completed: ['inApp'],
+  comment_added: ['inApp'],
+  member_joined: ['inApp', 'email'],
+};
+
 // ── Automation ───────────────────────────────────────────────────────────────
 
 export type TriggerPlanRequirement = 'growth' | 'enterprise';
@@ -456,6 +532,7 @@ export interface AutomationAlert {
   brandId: string;
   triggerId: string;
   triggerLabel: string;
+  triggerGroup?: string;
   severity: AlertSeverity;
   title: string;
   description: string;
@@ -464,4 +541,52 @@ export interface AutomationAlert {
   linkedDecisionId?: string;
   data: Record<string, unknown>;
   createdAt: string;
+}
+
+// ─── E-commerce Types (Shopify / WooCommerce) ────────────────────
+
+export interface OrderItem {
+  sku: string;
+  name: string;
+  quantity: number;
+  price: number;
+  totalDiscount?: number;
+  variantTitle?: string;
+}
+
+export interface Order {
+  id: string;
+  orderId: string;
+  platform: 'shopify' | 'woocommerce';
+  status: 'pending' | 'processing' | 'completed' | 'cancelled' | 'refunded' | string;
+  customerEmail: string;
+  customerName: string;
+  items: OrderItem[];
+  totalAmount: number;
+  subtotalAmount?: number;
+  totalTax?: number;
+  totalShipping?: number;
+  totalDiscount?: number;
+  currency: string;
+  createdAt: string;
+  updatedAt?: string;
+  shippingCity?: string;
+  shippingCountry?: string;
+  tags?: string[];
+  brandId: string;
+}
+
+export interface EcomCustomer {
+  id: string;
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  ordersCount: number;
+  totalSpent: number;
+  currency: string;
+  firstOrderAt?: string;
+  lastOrderAt?: string;
+  tags?: string[];
+  platform: 'shopify' | 'woocommerce';
+  brandId: string;
 }

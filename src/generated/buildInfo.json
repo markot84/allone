@@ -1,10 +1,14 @@
 {
-  "version": "0.122.0",
-  "previousVersion": "0.121.0",
-  "commitHash": "5753685",
+  "version": "0.215.0",
+  "previousVersion": "0.214.0",
+  "commitHash": "3976bfb",
   "branch": "main",
-  "buildDate": "2026-03-25T10:17:01.922Z",
+  "buildDate": "2026-03-30T14:33:39.246Z",
   "commits": [
+    {
+      "hash": "3976bfb",
+      "message": "fix: rewrite Channel Performance History chart - weighted ROAS, proper date parsing"
+    },
     {
       "hash": "5753685",
       "message": "fix: auto-generate AI channel recommendations in Channel Activation when missing"
@@ -60,13 +64,10 @@
     {
       "hash": "3e5477a",
       "message": "fix: downgrade Google Ads API to v18 stable, improve error detail in sync response"
-    },
-    {
-      "hash": "fd07fef",
-      "message": "fix: remove global max-width override that broke Tailwind max-w utilities on login UI"
     }
   ],
   "changes": [
+    "[Διόρθωση] Rewrite Channel Performance History chart - weighted ROAS, proper date parsing",
     "[Διόρθωση] Auto-generate AI channel recommendations in Channel Activation when missing",
     "[Νέο χαρακτηριστικό] Audit fixes, GMC tab in Competitive Intel, plan selector in Super Admin",
     "[Διόρθωση] Align Dashboard ROAS formatting to 2 decimal places",
@@ -75,7 +76,6 @@
     "Debug: add token refresh scope logging to diagnose Google Ads UNIMPLEMENTED",
     "[Διόρθωση] Auto-detect working login-customer-id by testing MCC, no-header, and self fallbacks",
     "[Διόρθωση] Strip dashes from Google Ads customer IDs before API calls (API requires plain numeric IDs)",
-    "[Διόρθωση] Add segments.date to SELECT, remove ORDER BY metrics, improve error logging",
-    "[Διόρθωση] Rewrite account picker modal with 100% inline styles to bypass CSS layer issues"
+    "[Διόρθωση] Add segments.date to SELECT, remove ORDER BY metrics, improve error logging"
   ]
 }

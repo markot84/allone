@@ -31,7 +31,16 @@ export function useAutomationAlerts() {
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['automation_alerts', brandId] });
 
-  const newAlerts = alerts.filter(a => a.status === 'new');
+  // Deduplicate: keep only the most recent alert per triggerId
+  const seen = new Set<string>();
+  const newAlerts = alerts
+    .filter(a => a.status === 'new')
+    .filter(a => {
+      const key = a.triggerId || a.id;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
 
   return { alerts, newAlerts, isLoading: isPending, invalidate };
 }

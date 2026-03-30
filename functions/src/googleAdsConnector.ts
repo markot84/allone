@@ -20,6 +20,22 @@ import { logger } from 'firebase-functions/v2';
 
 let _db: Firestore | null = null;
 
+function generateMonthRanges(sinceStr: string, untilStr: string): Array<{ since: string; until: string }> {
+  const ranges: Array<{ since: string; until: string }> = [];
+  const [sy, sm] = sinceStr.split('-').map(Number);
+  const [ey, em] = untilStr.split('-').map(Number);
+  let y = sy, m = sm;
+  while (y < ey || (y === ey && m <= em)) {
+    const since = `${y}-${String(m).padStart(2, '0')}-01`;
+    const lastDay = new Date(y, m, 0).getDate();
+    const until = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    ranges.push({ since, until });
+    m++;
+    if (m > 12) { m = 1; y++; }
+  }
+  return ranges;
+}
+
 export function setDb(db: Firestore) {
   _db = db;
 }
@@ -524,6 +540,82 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
       }
     } while (nextPageToken);
 
+    // Second query: per-conversion-action breakdown per month (last 12 months only).
+    // Older data uses total metrics without per-action breakdown.
+    const convActionMap = new Map<string, Record<string, { conversions: number; value: number }>>();
+    const monthlyConvActions = new Map<string, Map<string, Record<string, { conversions: number; value: number }>>>();
+
+    try {
+      const oneYearAgo = new Date();
+      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+      const convSinceStr = `${oneYearAgo.getFullYear()}-${String(oneYearAgo.getMonth() + 1).padStart(2, '0')}-01`;
+      const monthRanges = generateMonthRanges(convSinceStr, untilStr);
+      logger.info(`[GoogleAds] Fetching conversion actions for ${monthRanges.length} months (last 12)...`);
+
+      for (const mr of monthRanges) {
+        const caQuery = `
+          SELECT campaign.id, segments.conversion_action_name,
+                 metrics.conversions, metrics.conversions_value
+          FROM campaign
+          WHERE segments.date BETWEEN '${mr.since}' AND '${mr.until}'
+            AND campaign.status != 'REMOVED'
+            AND metrics.conversions > 0
+        `;
+
+        try {
+          let caNextToken: string | undefined;
+          do {
+            const caBody: Record<string, any> = { query: caQuery };
+            if (caNextToken) caBody.pageToken = caNextToken;
+
+            const caRes = await fetch(
+              `${GOOGLE_ADS_BASE_URL}/customers/${customerId}/googleAds:search`,
+              { method: 'POST', headers, body: JSON.stringify(caBody) }
+            );
+
+            if (!caRes.ok) {
+              logger.warn(`[GoogleAds] Conv action query failed for ${mr.since} (${caRes.status})`);
+              break;
+            }
+
+            const caPage = await caRes.json();
+            caNextToken = caPage.nextPageToken;
+
+            for (const row of caPage.results || []) {
+              const cId = row.campaign?.id;
+              const actionName = row.segments?.conversionActionName || 'Unknown';
+              const convs = parseFloat(row.metrics?.conversions || '0');
+              const convVal = parseFloat(row.metrics?.conversionsValue || '0');
+              if (!cId || convs === 0) continue;
+              const docId = `gads_${customerId}_${cId}`;
+
+              // Aggregate totals
+              if (!convActionMap.has(docId)) convActionMap.set(docId, {});
+              const totals = convActionMap.get(docId)!;
+              if (!totals[actionName]) totals[actionName] = { conversions: 0, value: 0 };
+              totals[actionName].conversions += convs;
+              totals[actionName].value += convVal;
+
+              // Store per-month
+              if (!monthlyConvActions.has(docId)) monthlyConvActions.set(docId, new Map());
+              const months = monthlyConvActions.get(docId)!;
+              if (!months.has(mr.since)) months.set(mr.since, {});
+              const monthActions = months.get(mr.since)!;
+              if (!monthActions[actionName]) monthActions[actionName] = { conversions: 0, value: 0 };
+              monthActions[actionName].conversions += convs;
+              monthActions[actionName].value += convVal;
+            }
+          } while (caNextToken);
+        } catch (e) {
+          logger.warn(`[GoogleAds] Conv action query error for ${mr.since}:`, e);
+        }
+      }
+
+      logger.info(`[GoogleAds] Fetched conversion actions for ${convActionMap.size} campaigns across ${monthRanges.length} months`);
+    } catch (caErr) {
+      logger.warn(`[GoogleAds] Conversion action query error, skipping:`, caErr);
+    }
+
     const batch = getDb().batch();
     let count = 0;
 
@@ -535,6 +627,23 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
         ? Math.round((campaign.conversion_value / campaign.amount_spent) * 100) / 100
         : 0;
       campaign.amount_spent = Math.round(campaign.amount_spent * 100) / 100;
+
+      campaign.conversionActions = convActionMap.get(campaign.id) || {};
+
+      // Merge monthly conversionActions into dailyMetrics entries.
+      // For each month, find all daily entries in that month and attach the monthly conv actions.
+      const campaignMonths = monthlyConvActions.get(campaign.id);
+      if (campaignMonths) {
+        for (const [monthStart, actions] of campaignMonths) {
+          const monthPrefix = monthStart.slice(0, 7); // "2026-01"
+          for (const [dateKey, metrics] of Object.entries(campaign.dailyMetrics)) {
+            if (dateKey.startsWith(monthPrefix)) {
+              (metrics as any).conversionActions = actions;
+            }
+          }
+        }
+      }
+
       campaign.createdAt = FieldValue.serverTimestamp();
       campaign.updatedAt = FieldValue.serverTimestamp();
 
@@ -547,6 +656,12 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
       await batch.commit();
       totalImported = count;
       logger.info(`[GoogleAds] Imported ${count} campaigns for customer ${customerId}`);
+    }
+    // Fetch search terms & keywords (non-blocking — failures don't block campaign sync)
+    try {
+      await fetchSearchTermsAndKeywords(brandId, customerId, headers);
+    } catch (e) {
+      logger.warn('[GoogleAds] Search terms/keywords fetch failed (non-blocking):', e);
     }
   } catch (err) {
     logger.error(`[GoogleAds] Error for customer ${customerId}:`, err);
@@ -566,4 +681,155 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
   });
 
   return { success: true, imported: totalImported };
+}
+
+/**
+ * Fetch search terms and keywords from Google Ads (last 90 days)
+ */
+async function fetchSearchTermsAndKeywords(
+  brandId: string,
+  customerId: string,
+  headers: Record<string, string>
+): Promise<void> {
+  const db = getDb();
+  const end = new Date();
+  const start = new Date();
+  start.setDate(start.getDate() - 90);
+  const since = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
+  const until = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`;
+
+  // ── Search Terms ──
+  const stQuery = `
+    SELECT
+      search_term_view.search_term,
+      campaign.name,
+      ad_group.name,
+      metrics.impressions,
+      metrics.clicks,
+      metrics.conversions,
+      metrics.cost_micros,
+      metrics.conversions_value
+    FROM search_term_view
+    WHERE segments.date BETWEEN '${since}' AND '${until}'
+      AND metrics.impressions > 0
+    ORDER BY metrics.impressions DESC
+    LIMIT 500
+  `;
+
+  const searchTerms: any[] = [];
+  try {
+    let nextToken: string | undefined;
+    do {
+      const body: Record<string, any> = { query: stQuery };
+      if (nextToken) body.pageToken = nextToken;
+
+      const res = await fetch(
+        `${GOOGLE_ADS_BASE_URL}/customers/${customerId}/googleAds:search`,
+        { method: 'POST', headers, body: JSON.stringify(body) }
+      );
+
+      if (!res.ok) {
+        logger.warn(`[GoogleAds] Search terms query failed: ${res.status}`);
+        break;
+      }
+
+      const page = await res.json();
+      nextToken = page.nextPageToken;
+
+      for (const row of page.results || []) {
+        const term = row.searchTermView?.searchTerm;
+        if (!term) continue;
+        const costMicros = parseInt(row.metrics?.costMicros || '0');
+
+        searchTerms.push({
+          term,
+          campaign: row.campaign?.name || '',
+          adGroup: row.adGroup?.name || '',
+          impressions: parseInt(row.metrics?.impressions || '0'),
+          clicks: parseInt(row.metrics?.clicks || '0'),
+          conversions: parseFloat(row.metrics?.conversions || '0'),
+          cost: Math.round(costMicros / 10000) / 100,
+          conversionValue: parseFloat(row.metrics?.conversionsValue || '0'),
+        });
+      }
+    } while (nextToken);
+  } catch (e) {
+    logger.warn('[GoogleAds] Search terms fetch error:', e);
+  }
+
+  // ── Keywords ──
+  const kwQuery = `
+    SELECT
+      ad_group_criterion.keyword.text,
+      ad_group_criterion.keyword.match_type,
+      ad_group_criterion.quality_info.quality_score,
+      campaign.name,
+      ad_group.name,
+      ad_group_criterion.status,
+      metrics.impressions,
+      metrics.clicks,
+      metrics.conversions,
+      metrics.cost_micros,
+      metrics.conversions_value
+    FROM keyword_view
+    WHERE segments.date BETWEEN '${since}' AND '${until}'
+      AND ad_group_criterion.status != 'REMOVED'
+    ORDER BY metrics.impressions DESC
+    LIMIT 500
+  `;
+
+  const keywords: any[] = [];
+  try {
+    let nextToken: string | undefined;
+    do {
+      const body: Record<string, any> = { query: kwQuery };
+      if (nextToken) body.pageToken = nextToken;
+
+      const res = await fetch(
+        `${GOOGLE_ADS_BASE_URL}/customers/${customerId}/googleAds:search`,
+        { method: 'POST', headers, body: JSON.stringify(body) }
+      );
+
+      if (!res.ok) {
+        logger.warn(`[GoogleAds] Keywords query failed: ${res.status}`);
+        break;
+      }
+
+      const page = await res.json();
+      nextToken = page.nextPageToken;
+
+      for (const row of page.results || []) {
+        const text = row.adGroupCriterion?.keyword?.text;
+        if (!text) continue;
+        const costMicros = parseInt(row.metrics?.costMicros || '0');
+
+        keywords.push({
+          keyword: text,
+          matchType: row.adGroupCriterion?.keyword?.matchType || '',
+          qualityScore: row.adGroupCriterion?.qualityInfo?.qualityScore || null,
+          campaign: row.campaign?.name || '',
+          adGroup: row.adGroup?.name || '',
+          status: row.adGroupCriterion?.status || '',
+          impressions: parseInt(row.metrics?.impressions || '0'),
+          clicks: parseInt(row.metrics?.clicks || '0'),
+          conversions: parseFloat(row.metrics?.conversions || '0'),
+          cost: Math.round(costMicros / 10000) / 100,
+          conversionValue: parseFloat(row.metrics?.conversionsValue || '0'),
+        });
+      }
+    } while (nextToken);
+  } catch (e) {
+    logger.warn('[GoogleAds] Keywords fetch error:', e);
+  }
+
+  // Save to Firestore
+  const docRef = db.doc(`search_intelligence/${brandId}`);
+  await docRef.set({
+    searchTerms: searchTerms.slice(0, 500),
+    keywords: keywords.slice(0, 500),
+    syncedAt: FieldValue.serverTimestamp(),
+    dateRange: { start: since, end: until },
+  });
+
+  logger.info(`[GoogleAds] Saved ${searchTerms.length} search terms + ${keywords.length} keywords for brand ${brandId}`);
 }

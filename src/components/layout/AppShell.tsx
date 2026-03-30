@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef, useEffect } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Header as PrimerHeader,
@@ -6,7 +6,7 @@ import {
   Text
 } from '@primer/react';
 import { Button } from '../common';
-import { useAuth, useBrand, usePlan } from '../../hooks';
+import { useAuth, useBrand, usePlan, useBrandMembers } from '../../hooks';
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import type { Brand } from '../../types';
 import {
@@ -25,7 +25,7 @@ import {
   ThreeBarsIcon,
   XIcon
 } from '@primer/octicons-react';
-import { Upload, UserPlus, Building2, Target, Euro, Truck, FileSpreadsheet, GitPullRequestArrow, Zap } from 'lucide-react';
+import { Upload, UserPlus, Building2, Target, Euro, Truck, FileSpreadsheet, GitPullRequestArrow, Zap, BarChart3 } from 'lucide-react';
 import { NotificationBell } from '../coordination/NotificationBell';
 
 const SIDEBAR_PIN_KEY = 'perf-plus-sidebar-pinned';
@@ -48,6 +48,7 @@ type SectionId =
   | 'insights'
   | 'coordination'
   | 'automation'
+  | 'analytics'
   | 'data'
   | 'invite'
   | 'help'
@@ -59,7 +60,8 @@ export interface AppShellProps {
   children: React.ReactNode;
 }
 
-type NavItem = { id: SectionId; label: string; icon: any; badge?: string; badgeColor?: string };
+type NavGroup = 'overview' | 'intelligence' | 'strategy' | 'execution' | 'coordination' | 'utility';
+type NavItem = { id: SectionId; label: string; icon: any; badge?: string; badgeColor?: string; group: NavGroup };
 
 function BrandMenu({
   currentBrand,
@@ -397,6 +399,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
   const { currentBrand, brands, setCurrentBrand } = useBrand();
   const { isEnterprise } = usePlan();
   const { activeStrategy } = useActiveStrategy();
+  useBrandMembers();
 
   const strategyBadge = useMemo(() => {
     if (!activeStrategy?.duration || activeStrategy.duration === 'ongoing') return null;
@@ -430,72 +433,90 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
   const navItems = useMemo<NavItem[]>(
     () => {
       const items: NavItem[] = [
-        { id: 'brands', label: 'Τα Brands μου', icon: Building2 },
-        { id: 'dashboard', label: 'Dashboard', icon: HomeIcon },
-        { id: 'roi', label: 'ROI & Απόδοση', icon: GraphIcon },
-        { id: 'products', label: 'Product Intelligence', icon: PackageIcon },
-        { id: 'suppliers', label: 'Προμηθευτές', icon: Truck },
+        // Overview
+        { id: 'brands', label: 'Τα Brands μου', icon: Building2, group: 'overview' },
+        { id: 'dashboard', label: 'Dashboard', icon: HomeIcon, group: 'overview' },
+        { id: 'roi', label: 'ROI & Απόδοση', icon: GraphIcon, group: 'overview' },
+        // Data & Intelligence
+        { id: 'rfm', label: 'Data Analysis', icon: OrganizationIcon, group: 'intelligence' },
+        { id: 'products', label: 'Product Intelligence', icon: PackageIcon, group: 'intelligence' },
+        { id: 'competitive', label: 'Competitive Intel', icon: SearchIcon, group: 'intelligence' },
+        { id: 'analytics', label: 'Web Analytics', icon: BarChart3, group: 'intelligence' },
+        { id: 'insights', label: 'AI Insights', icon: LightBulbIcon, group: 'intelligence' },
+        // Strategy
+        { id: 'strategy', label: 'Commercial Strategy', icon: GraphIcon, group: 'strategy', ...(strategyBadge ? { badge: strategyBadge.text, badgeColor: strategyBadge.color } : {}) },
+        { id: 'channels', label: 'Channel Activation', icon: MegaphoneIcon, group: 'strategy' },
+        { id: 'campaigns', label: 'Campaigns', icon: Target, group: 'strategy' },
+        { id: 'calendar', label: 'Content Strategy', icon: PencilIcon, group: 'strategy' },
+        // Execution
+        { id: 'finances', label: 'Οικονομικά', icon: Euro, group: 'execution' },
+        { id: 'suppliers', label: 'Προμηθευτές', icon: Truck, group: 'execution' },
       ];
       if (isEnterprise) {
-        items.push({ id: 'procurement', label: 'Procurement', icon: FileSpreadsheet });
+        items.push({ id: 'procurement', label: 'Procurement', icon: FileSpreadsheet, group: 'execution' });
       }
       items.push(
-        { id: 'rfm', label: 'Data Analysis', icon: OrganizationIcon },
-        { id: 'strategy', label: 'Commercial Strategy', icon: GraphIcon, ...(strategyBadge ? { badge: strategyBadge.text, badgeColor: strategyBadge.color } : {}) },
-        { id: 'channels', label: 'Channel Activation', icon: MegaphoneIcon },
-        { id: 'campaigns', label: 'Campaigns', icon: Target },
-        { id: 'competitive', label: 'Competitive Intel', icon: SearchIcon },
-        { id: 'calendar', label: 'Content Strategy', icon: PencilIcon },
-        { id: 'finances', label: 'Οικονομικά', icon: Euro },
-        { id: 'reports', label: 'Reports', icon: ReportIcon },
-        { id: 'coordination', label: 'Συντονισμός Τμημάτων', icon: GitPullRequestArrow },
-        { id: 'automation', label: 'Αυτοματισμοί', icon: Zap },
-        { id: 'insights', label: 'AI Insights', icon: LightBulbIcon },
-        { id: 'data', label: 'Data Import', icon: Upload },
-        { id: 'invite', label: 'Καλέστε χρήστη', icon: UserPlus },
-        { id: 'help', label: 'Help & Support', icon: GearIcon }
+        // Coordination
+        { id: 'coordination', label: 'Συντονισμός Τμημάτων', icon: GitPullRequestArrow, group: 'coordination' },
+        { id: 'automation', label: 'Αυτοματισμοί', icon: Zap, group: 'coordination' },
+        { id: 'reports', label: 'Reports', icon: ReportIcon, group: 'coordination' },
+        // Utilities
+        { id: 'data', label: 'Data Import', icon: Upload, group: 'utility' },
+        { id: 'invite', label: 'Καλέστε χρήστη', icon: UserPlus, group: 'utility' },
+        { id: 'help', label: 'Help & Support', icon: GearIcon, group: 'utility' },
       );
       if (isSuperAdmin) {
-        items.push({ id: 'admin', label: 'Super Admin', icon: ShieldIcon });
+        items.push({ id: 'admin', label: 'Super Admin', icon: ShieldIcon, group: 'utility' });
       }
       return items;
     },
     [isSuperAdmin, isEnterprise, strategyBadge]
   );
 
-  const Nav = ({ onSelect }: { onSelect: (id: SectionId) => void }) => (
-    <NavList aria-label="Primary">
-      {navItems.map((item) => (
-        <NavList.Item
-          key={item.id}
-          as="button"
-          type="button"
-          onClick={(e) => { 
-            e.preventDefault(); 
-            e.stopPropagation();
-            onSelect(item.id); 
-          }}
-          aria-current={(activeSection === item.id || (item.id === 'data' && activeSection.startsWith('data-'))) ? 'page' : undefined}
-          style={{ width: '100%', textAlign: 'left' }}
-        >
-          <NavList.LeadingVisual>
-            {typeof item.icon === 'function' ? <item.icon size={16} /> : <item.icon />}
-          </NavList.LeadingVisual>
-          <span className="flex items-center gap-2">
-            {item.label}
-            {item.badge && (
-              <span
-                className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full leading-none"
-                style={{ backgroundColor: `${item.badgeColor}20`, color: item.badgeColor }}
+  const Nav = ({ onSelect }: { onSelect: (id: SectionId) => void }) => {
+    let lastGroup: NavGroup | null = null;
+    return (
+      <NavList aria-label="Primary">
+        {navItems.map((item) => {
+          const showSeparator = lastGroup !== null && item.group !== lastGroup;
+          lastGroup = item.group;
+          return (
+            <React.Fragment key={item.id}>
+              {showSeparator && (
+                <li aria-hidden="true" style={{ listStyle: 'none', margin: '6px 12px', borderTop: '1px solid rgba(255,255,255,0.08)' }} />
+              )}
+              <NavList.Item
+                as="button"
+                type="button"
+                onClick={(e) => { 
+                  e.preventDefault(); 
+                  e.stopPropagation();
+                  onSelect(item.id); 
+                }}
+                aria-current={(activeSection === item.id || (item.id === 'data' && activeSection.startsWith('data-'))) ? 'page' : undefined}
+                style={{ width: '100%', textAlign: 'left' }}
               >
-                {item.badge}
-              </span>
-            )}
-          </span>
-        </NavList.Item>
-      ))}
-    </NavList>
-  );
+                <NavList.LeadingVisual>
+                  {typeof item.icon === 'function' ? <item.icon size={16} /> : <item.icon />}
+                </NavList.LeadingVisual>
+                <span className="flex items-center gap-2">
+                  {item.label}
+                  {item.badge && (
+                    <span
+                      className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full leading-none"
+                      style={{ backgroundColor: `${item.badgeColor}20`, color: item.badgeColor }}
+                    >
+                      {item.badge}
+                    </span>
+                  )}
+                </span>
+              </NavList.Item>
+            </React.Fragment>
+          );
+        })}
+      </NavList>
+    );
+  };
 
   return (
     <>

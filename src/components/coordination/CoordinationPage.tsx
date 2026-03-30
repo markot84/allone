@@ -9,6 +9,7 @@ import type {
   Decision, CoordinationTask, DecisionCategory, DecisionPriority,
   DecisionStatus, TaskStatus, TaskPriority, BrandDepartment
 } from '../../types';
+import { DEPARTMENT_LABELS } from '../../types';
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
@@ -40,10 +41,7 @@ const STATUS_META: Record<string, { label: string; color: string }> = {
   cancelled: { label: 'Ακυρωμένη', color: '#EF4444' },
 };
 
-const DEPT_LABELS: Record<BrandDepartment, string> = {
-  management: 'Διοίκηση', commercial: 'Εμπορική Δ/νση', marketing: 'Marketing',
-  procurement: 'Procurement', agency: 'Agency', other: 'Άλλο',
-};
+const DEPT_LABELS = DEPARTMENT_LABELS;
 
 // ── Main Page (Briefing Board) ───────────────────────────────────────────────
 
@@ -82,37 +80,49 @@ export function CoordinationPage() {
   const lastBriefing = activeDecisions[0] ?? null;
 
   const handleApproveProposal = async (d: Decision) => {
-    await DecisionsService.update(d.id, { status: 'active' });
-    if (currentBrand && user) {
-      await logAndNotify(
-        currentBrand.id, user.uid, user.displayName || user.email || '',
-        'decision_updated', 'decision', d.id,
-        `Η πρόταση "${d.title}" εγκρίθηκε`,
-        'Πρόταση εγκρίθηκε', d.title,
-        d.targetDepartments as BrandDepartment[]
-      );
+    try {
+      await DecisionsService.update(d.id, { status: 'active' });
+      if (currentBrand && user) {
+        await logAndNotify(
+          currentBrand.id, user.uid, user.displayName || user.email || '',
+          'decision_updated', 'decision', d.id,
+          `Η πρόταση "${d.title}" εγκρίθηκε`,
+          'Πρόταση εγκρίθηκε', d.title,
+          d.targetDepartments as BrandDepartment[]
+        );
+      }
+      invalidateDecisions();
+      toast.success('Η πρόταση εγκρίθηκε');
+    } catch {
+      toast.error('Αποτυχία ενημέρωσης');
     }
-    invalidateDecisions();
-    toast.success('Η πρόταση εγκρίθηκε');
   };
 
   const handleRejectProposal = async (d: Decision) => {
-    await DecisionsService.update(d.id, { status: 'archived' });
-    invalidateDecisions();
-    toast.success('Η πρόταση απορρίφθηκε');
+    try {
+      await DecisionsService.update(d.id, { status: 'archived' });
+      invalidateDecisions();
+      toast.success('Η πρόταση απορρίφθηκε');
+    } catch {
+      toast.error('Αποτυχία ενημέρωσης');
+    }
   };
 
   const handleCompleteTask = async (t: CoordinationTask) => {
-    await TasksService.update(t.id, { status: 'done' });
-    if (currentBrand && user) {
-      await logAndNotify(
-        currentBrand.id, user.uid, user.displayName || user.email || '',
-        'task_completed', 'task', t.id,
-        `Η εργασία "${t.title}" ολοκληρώθηκε`, 'Εργασία ολοκληρώθηκε', t.title
-      );
+    try {
+      await TasksService.update(t.id, { status: 'done' });
+      if (currentBrand && user) {
+        await logAndNotify(
+          currentBrand.id, user.uid, user.displayName || user.email || '',
+          'task_completed', 'task', t.id,
+          `Η εργασία "${t.title}" ολοκληρώθηκε`, 'Εργασία ολοκληρώθηκε', t.title
+        );
+      }
+      invalidateTasks();
+      toast.success('Εργασία ολοκληρώθηκε');
+    } catch {
+      toast.error('Αποτυχία ενημέρωσης');
     }
-    invalidateTasks();
-    toast.success('Εργασία ολοκληρώθηκε');
   };
 
   return (
@@ -455,18 +465,22 @@ function DecisionDetail({ decision: d, onUpdate, onCreateTask }: { decision: Dec
   const toast = useToast();
 
   const handleStatusChange = async (status: DecisionStatus) => {
-    await DecisionsService.update(d.id, { status });
-    if (status === 'completed' && currentBrand && user) {
-      await logAndNotify(
-        currentBrand.id, user.uid, user.displayName || user.email || '',
-        'decision_completed', 'decision', d.id,
-        `Η απόφαση "${d.title}" ολοκληρώθηκε`, 'Απόφαση ολοκληρώθηκε', d.title,
-        d.targetDepartments as BrandDepartment[]
-      );
+    try {
+      await DecisionsService.update(d.id, { status });
+      if (status === 'completed' && currentBrand && user) {
+        await logAndNotify(
+          currentBrand.id, user.uid, user.displayName || user.email || '',
+          'decision_completed', 'decision', d.id,
+          `Η απόφαση "${d.title}" ολοκληρώθηκε`, 'Απόφαση ολοκληρώθηκε', d.title,
+          d.targetDepartments as BrandDepartment[]
+        );
+      }
+      invalidate();
+      onUpdate({ ...d, status });
+      toast.success('Ενημερώθηκε');
+    } catch {
+      toast.error('Αποτυχία ενημέρωσης');
     }
-    invalidate();
-    onUpdate({ ...d, status });
-    toast.success('Ενημερώθηκε');
   };
 
   const cat = CATEGORY_META[d.category];
@@ -538,10 +552,14 @@ function TaskDetail({ task: t, onUpdate }: { task: CoordinationTask; onUpdate: (
   const pri = PRIORITY_META[t.priority];
 
   const handleStatusChange = async (status: TaskStatus) => {
-    await TasksService.update(t.id, { status });
-    invalidate();
-    onUpdate({ ...t, status });
-    toast.success('Ενημερώθηκε');
+    try {
+      await TasksService.update(t.id, { status });
+      invalidate();
+      onUpdate({ ...t, status });
+      toast.success('Ενημερώθηκε');
+    } catch {
+      toast.error('Αποτυχία ενημέρωσης');
+    }
   };
 
   return (

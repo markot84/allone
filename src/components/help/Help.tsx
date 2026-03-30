@@ -431,7 +431,7 @@ export function Help() {
                   </div>
                   <div>
                     <h4 className="font-medium text-[#1A1A1A]">Email Support</h4>
-                    <p className="text-xs text-[#4A4A4A]">support@notthesame.ai</p>
+                    <p className="text-xs text-[#4A4A4A]">noreply@performanceplus.gr</p>
                   </div>
                 </div>
                 <Button variant="secondary" className="w-full">
@@ -447,7 +447,7 @@ export function Help() {
       <div className="text-center py-8 border-t border-[#E5E5E5]">
         <p className="text-[#4A4A4A]">
           Δεν βρίσκετε αυτό που ψάχνετε;{' '}
-          <a href="mailto:support@notthesame.ai" className="text-[var(--nts-accent)] hover:underline">
+          <a href="mailto:noreply@performanceplus.gr" className="text-[var(--nts-accent)] hover:underline">
             Επικοινωνήστε με την ομάδα μας
           </a>
         </p>

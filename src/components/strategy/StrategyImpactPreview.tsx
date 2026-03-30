@@ -15,7 +15,7 @@ import {
   Infinity
 } from 'lucide-react';
 import { Button } from '../common';
-import { useProducts, useCampaigns, useContent } from '../../hooks';
+import { useProductSource, useCampaigns, useContent } from '../../hooks';
 import { calculateCompositeScore } from '../../utils/compositeScore';
 import { scenarios } from '../../data/mockScenarios';
 import type { Product } from '../../types';
@@ -97,7 +97,7 @@ export function StrategyImpactSummary({
   onConfirm, onCancel, onDetails, initialDuration,
 }: StrategyImpactSummaryProps) {
   const [duration, setDuration] = useState<number | 'ongoing'>(initialDuration);
-  const { products } = useProducts();
+  const { products } = useProductSource();
   const impacts = useProductImpacts(products, currentWeights, newWeights, currentScenarioId, newScenarioId);
 
   const fromName = scenarios.find(s => s.id === currentScenarioId)?.name ?? 'Τρέχουσα';
@@ -212,7 +212,7 @@ export function StrategyImpactModal({
   currentScenarioId, newScenarioId,
   currentDuration, newDuration,
 }: StrategyImpactModalProps) {
-  const { products } = useProducts();
+  const { products } = useProductSource();
   const { campaigns } = useCampaigns();
   const { contentItems } = useContent();
   const [showProducts, setShowProducts] = useState(true);

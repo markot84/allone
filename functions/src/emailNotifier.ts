@@ -1,6 +1,6 @@
 import { logger } from 'firebase-functions/v2';
-import * as nodemailer from 'nodemailer';
 import type { Firestore } from 'firebase-admin/firestore';
+import { createTransporter, SENDER, NOREPLY_EMAIL } from './smtpConfig';
 
 let _db: Firestore;
 export function setDb(db: Firestore) { _db = db; }
@@ -18,14 +18,9 @@ export async function sendNotificationEmail(
 ): Promise<void> {
   if (!_db) { logger.error('emailNotifier: db not set'); return; }
 
-  const email = process.env.SMTP_EMAIL || '';
-  const pass = process.env.SMTP_PASSWORD || '';
-  if (!email || !pass) {
-    logger.warn('SMTP credentials not configured — skipping email');
-    return;
-  }
+  const transporter = createTransporter();
+  if (!transporter) return;
 
-  // Get user email
   const userDoc = await _db.collection('users').doc(userId).get();
   const userData = userDoc.data();
   if (!userData?.email) {
@@ -33,17 +28,11 @@ export async function sendNotificationEmail(
     return;
   }
 
-  // Get brand name
   let brandName = '';
   try {
     const brandDoc = await _db.collection('brands').doc(notification.brandId).get();
     brandName = brandDoc.data()?.name || '';
   } catch { /* ignore */ }
-
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: { user: email, pass },
-  });
 
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 520px; margin: 0 auto; padding: 24px;">
@@ -60,14 +49,14 @@ export async function sendNotificationEmail(
         </a>
       </div>
       <p style="text-align: center; margin-top: 16px; font-size: 11px; color: #9CA3AF;">
-        Αυτό το email εστάλη αυτόματα από το Performance+ — Συντονισμός Τμημάτων
+        Αυτό το email εστάλη αυτόματα από το Performance+ · ${NOREPLY_EMAIL}
       </p>
     </div>
   `;
 
   try {
     await transporter.sendMail({
-      from: `"Performance+" <${email}>`,
+      from: SENDER,
       to: userData.email,
       subject: `[Performance+] ${notification.title}`,
       html,

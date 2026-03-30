@@ -18,7 +18,7 @@ import {
   Tag,
 } from 'lucide-react';
 import { Card, CardHeader, Badge, Button, Spinner } from '../common';
-import { useProducts, useSegments, useCampaigns, useOrganic, useBrand } from '../../hooks';
+import { useProductSource, useSegments, useCampaigns, useOrganic, useBrand } from '../../hooks';
 import { useToast } from '../common/Toast';
 import {
   exportReport,
@@ -99,7 +99,7 @@ const DEFAULT_SCHEDULES: ScheduledReport[] = [
 export function Reports() {
   const toast = useToast();
   const { currentBrand } = useBrand();
-  const { products, count: productsCount } = useProducts();
+  const { products, count: productsCount } = useProductSource();
   const { segments } = useSegments();
   const segmentsCount = segments.length;
   const { campaigns } = useCampaigns();

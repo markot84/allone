@@ -224,7 +224,7 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
                     <ArrowRight size={16} />
                   </button>
                   <a
-                    href="mailto:hello@notthesame.ai?subject=Performance%2B%20Demo%20Request"
+                    href="mailto:noreply@performanceplus.gr?subject=Performance%2B%20Demo%20Request"
                     className="inline-flex items-center gap-2 rounded-xl border border-[#1f2328]/10 bg-[var(--nts-bg-subtle)] px-5 py-3 text-sm font-semibold text-[var(--nts-charcoal)] transition hover:bg-[var(--nts-light-gray)]"
                   >
                     <HelpCircle size={16} />
@@ -436,7 +436,7 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
               <ArrowRight size={16} />
             </button>
             <a
-              href="mailto:hello@notthesame.ai?subject=Performance%2B%20Demo%20Request"
+              href="mailto:noreply@performanceplus.gr?subject=Performance%2B%20Demo%20Request"
               className="inline-flex items-center gap-2 rounded-xl border border-[#1f2328] bg-[var(--nts-bg-pure)] px-5 py-3 text-sm font-semibold text-[#1f2328] transition hover:bg-[var(--nts-light-gray)]"
             >
               <HelpCircle size={16} />
@@ -445,7 +445,7 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
           </div>
 
           <p className="mt-4 text-xs text-[var(--nts-medium-gray)]">
-            Εναλλακτικά, επικοινώνησε στο <span className="font-semibold text-[var(--nts-charcoal)]">hello@notthesame.ai</span> για εταιρική ένταξη, εμπορική πολιτική ή εξειδικευμένη προσαρμογή του AI-powered περιβάλλοντος αποφάσεων.
+            Εναλλακτικά, επικοινώνησε στο <span className="font-semibold text-[var(--nts-charcoal)]">noreply@performanceplus.gr</span> για εταιρική ένταξη, εμπορική πολιτική ή εξειδικευμένη προσαρμογή του AI-powered περιβάλλοντος αποφάσεων.
           </p>
         </div>
       </section>

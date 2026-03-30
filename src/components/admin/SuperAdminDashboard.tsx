@@ -113,15 +113,17 @@ function BrandsTab() {
         const allBrands = await FirestoreService.getDocuments<Brand>('brands');
         setBrands(allBrands.sort((a, b) => a.name.localeCompare(b.name)));
 
-        const usersSnap = await getDocs(collection(db, 'users'));
         const counts: Record<string, number> = {};
-        usersSnap.docs.forEach((d) => {
-          const data = d.data();
-          const bIds: string[] = data.brandIds ?? [];
-          bIds.forEach((bid) => {
-            counts[bid] = (counts[bid] || 0) + 1;
-          });
-        });
+        const BATCH = 5;
+        for (let i = 0; i < allBrands.length; i += BATCH) {
+          const batch = allBrands.slice(i, i + BATCH);
+          await Promise.all(
+            batch.map(async (brand) => {
+              const membersSnap = await getDocs(collection(db, 'brands', brand.id, 'members'));
+              counts[brand.id] = membersSnap.size;
+            })
+          );
+        }
         setUserCounts(counts);
       } catch (err) {
         console.error('Failed to load brands:', err);

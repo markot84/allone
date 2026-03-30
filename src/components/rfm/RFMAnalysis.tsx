@@ -8,7 +8,11 @@ import {
   ChevronRight,
   ArrowRight,
   Zap,
-  Trash2
+  Trash2,
+  Brain,
+  LineChart,
+  Download,
+  FileSpreadsheet,
 } from 'lucide-react';
 import {
   PieChart,
@@ -26,10 +30,16 @@ import { Card, CardHeader, Badge, Button, Spinner, Tooltip as InfoTooltip, useTo
 import { useSegments, useBrand } from '../../hooks';
 import { FirestoreService } from '../../services/firestore';
 import { segmentCategoryMatrix } from '../../data';
+import { BehavioralTab } from './BehavioralTab';
+import { PredictiveTab } from './PredictiveTab';
+import { exportSegmentActionPack, exportAllSegmentActionPacks, exportSegmentCustomerList, exportAllSegmentCustomerLists } from '../../services/segmentActionPack';
+import { useActiveStrategy } from '../../hooks';
 import type { RFMSegment } from '../../types';
 
-import { formatCurrency, formatNumber, formatPercent } from '../../utils/format';
-const fmt = (n: number) => formatCurrency(n, 2);
+import { formatNumber, formatPercent } from '../../utils/format';
+const fmtPct = (n: number) => formatNumber(n, 2);
+
+type AnalysisTab = 'rfm' | 'behavioral' | 'predictive';
 
 // Get default RFM score from segment name (fallback when rfm_score is missing)
 function getDefaultRFMScoreFromName(segmentName: string): string | null {
@@ -97,12 +107,53 @@ interface RFMAnalysisProps {
 
 export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
   const [selectedSegment, setSelectedSegment] = useState<RFMSegment | null>(null);
+  const [activeTab, setActiveTab] = useState<AnalysisTab>('rfm');
   const { segments: rfmSegments, totalCustomers, isLoading: segmentsLoading, hasImported: hasImportedSegments } = useSegments();
   const { currentBrand } = useBrand();
   const queryClient = useQueryClient();
   const toast = useToast();
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const { activeStrategy } = useActiveStrategy();
+  const channelRecommendation = activeStrategy?.channelRecommendation ?? null;
   const totalCustomersDisplay = totalCustomers;
+
+  const handleExportAll = async (fmt: 'xlsx' | 'csv' = 'xlsx') => {
+    if (rfmSegments.length === 0) return;
+    setIsExporting(true);
+    try {
+      await exportAllSegmentActionPacks(rfmSegments, currentBrand?.name, channelRecommendation, fmt);
+      toast.success(`Action Packs (.${fmt}) exported!`);
+    } catch (e) {
+      toast.error(`Export error: ${e instanceof Error ? e.message : 'Unknown'}`);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleExportSegment = async (segment: RFMSegment, fmt: 'xlsx' | 'csv' = 'xlsx') => {
+    try {
+      await exportSegmentActionPack(segment, currentBrand?.name, channelRecommendation, fmt);
+      toast.success(`Action Pack: ${segment.name} (.${fmt})`);
+    } catch (e) {
+      toast.error(`Export error: ${e instanceof Error ? e.message : 'Unknown'}`);
+    }
+  };
+
+  const handleExportCustomerList = async (segment: RFMSegment | null, fmt: 'xlsx' | 'csv' = 'csv') => {
+    if (!currentBrand?.id) return;
+    try {
+      if (segment) {
+        const { count } = await exportSegmentCustomerList(currentBrand.id, segment, currentBrand.name, fmt);
+        toast.success(`${count} customers exported (.${fmt})`);
+      } else {
+        const { count } = await exportAllSegmentCustomerLists(currentBrand.id, rfmSegments, currentBrand.name, fmt);
+        toast.success(`${count} customers exported (.${fmt})`);
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Export error');
+    }
+  };
 
   const handleDeleteSegments = async () => {
     if (!currentBrand?.id) return;
@@ -170,17 +221,46 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
           )}
         </p>
         </div>
-        <Button
-          variant="secondary"
-          icon={<Trash2 size={16} />}
-          onClick={handleDeleteSegments}
-          disabled={isDeleting || !hasImportedSegments}
-          className="text-[#DC2626] hover:bg-[#FEE2E2]"
-        >
-          {isDeleting ? 'Διαγραφή…' : 'Διαγραφή δεδομένων'}
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            variant="primary"
+            icon={<Users size={16} />}
+            onClick={() => handleExportCustomerList(null, 'csv')}
+            disabled={isExporting || !hasImportedSegments}
+          >
+            Customer Lists .csv
+          </Button>
+          <Button
+            variant="secondary"
+            icon={<FileSpreadsheet size={16} />}
+            onClick={() => handleExportAll('xlsx')}
+            disabled={isExporting || !hasImportedSegments}
+          >
+            {isExporting ? 'Exporting…' : 'Action Packs .xlsx'}
+          </Button>
+          <Button
+            variant="secondary"
+            icon={<Trash2 size={16} />}
+            onClick={handleDeleteSegments}
+            disabled={isDeleting || !hasImportedSegments}
+            className="text-[#DC2626] hover:bg-[#FEE2E2]"
+          >
+            {isDeleting ? 'Διαγραφή…' : 'Διαγραφή δεδομένων'}
+          </Button>
+        </div>
       </div>
 
+      {/* Analysis Tabs */}
+      <div className="flex items-center gap-1 bg-[var(--nts-light-gray)] p-1 rounded-xl w-fit">
+        <TabButton active={activeTab === 'rfm'} onClick={() => setActiveTab('rfm')} icon={<Users size={14} />} label="RFM Segments" />
+        <TabButton active={activeTab === 'behavioral'} onClick={() => setActiveTab('behavioral')} icon={<Brain size={14} />} label="Behavioral" />
+        <TabButton active={activeTab === 'predictive'} onClick={() => setActiveTab('predictive')} icon={<LineChart size={14} />} label="Predictive LTV" />
+      </div>
+
+      {activeTab === 'behavioral' && <BehavioralTab segments={rfmSegments} />}
+      {activeTab === 'predictive' && <PredictiveTab segments={rfmSegments} />}
+
+      {activeTab === 'rfm' && <>
       {/* Overview Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card padding="md" hover>
@@ -251,7 +331,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
             <div>
               <p className="text-sm text-[#4A4A4A]"><InfoTooltip content="Ποσοστό πελατών στο At Risk segment — πελάτες με μειωμένη δραστηριότητα που κινδυνεύουν να χαθούν. Πάνω από 20% απαιτεί άμεση δράση (win-back campaign).">Ποσοστό At Risk</InfoTooltip></p>
               <p className="text-xl font-bold text-[#F59E0B] font-mono">
-                {fmt(rfmSegments.find(s => s.id === 'at_risk')?.percentage ?? 0)}%
+                {fmtPct(rfmSegments.find(s => s.id === 'at_risk')?.percentage ?? 0)}%
               </p>
             </div>
           </div>
@@ -271,71 +351,77 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
               onSelect={() => setSelectedSegment(
                 selectedSegment?.id === segment.id ? null : segment
               )}
+              onExport={(fmt) => handleExportSegment(segment, fmt)}
             />
           ))}
         </div>
 
         {/* Distribution Chart */}
-        <Card padding="lg" className="min-w-[280px]">
+        <Card padding="lg" className="min-w-[280px] flex flex-col">
           <CardHeader
             title="Revenue Distribution"
             subtitle="Ανά segment"
           />
-          <div
-            className="w-full overflow-visible shrink-0"
-            style={{ width: '100%', height: 256 }}
-          >
-            <PieChart width={300} height={256} margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
-              <Pie
-                data={rfmSegments}
-                cx="50%"
-                cy="50%"
-                innerRadius={50}
-                outerRadius={80}
-                paddingAngle={3}
-                dataKey="revenue_share"
-                nameKey="name"
-              >
-                {rfmSegments.map((segment) => (
-                  <Cell
-                    key={segment.id}
-                    fill={segment.color}
-                    stroke={selectedSegment?.id === segment.id ? '#1A1A1A' : 'none'}
-                    strokeWidth={2}
-                  />
-                ))}
-              </Pie>
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#fff',
-                  border: '1px solid #E5E5E5',
-                  borderRadius: '8px'
-                }}
-                formatter={(value: number | undefined) => [`${fmt(value ?? 0)}%`, 'Revenue']}
-              />
-            </PieChart>
+          <div className="w-full flex-shrink-0" style={{ height: 240 }}>
+            <ResponsiveContainer width="100%" height={240}>
+              <PieChart margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+                <Pie
+                  data={rfmSegments}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={55}
+                  outerRadius={85}
+                  paddingAngle={3}
+                  dataKey="revenue_share"
+                  nameKey="name"
+                  animationBegin={0}
+                  animationDuration={800}
+                >
+                  {rfmSegments.map((segment) => (
+                    <Cell
+                      key={segment.id}
+                      fill={segment.color}
+                      stroke={selectedSegment?.id === segment.id ? '#1A1A1A' : 'none'}
+                      strokeWidth={2}
+                      className="transition-opacity"
+                      opacity={selectedSegment ? (selectedSegment.id === segment.id ? 1 : 0.4) : 1}
+                    />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#fff',
+                    border: '1px solid #E5E5E5',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                    padding: '8px 12px',
+                  }}
+                  formatter={(value: number | undefined) => [`${fmtPct(value ?? 0)}%`, 'Revenue']}
+                />
+              </PieChart>
+            </ResponsiveContainer>
           </div>
-          <div className="space-y-2">
+          <div className="space-y-1 mt-2">
             {rfmSegments.map((segment) => (
               <div
                 key={segment.id}
                 className={`
-                  flex items-center justify-between p-2 rounded-lg cursor-pointer transition-all
-                  ${selectedSegment?.id === segment.id ? 'bg-[#F5F5F5]' : 'hover:bg-[#F5F5F5]'}
+                  flex items-center justify-between px-2.5 py-1.5 rounded-lg cursor-pointer transition-all
+                  ${selectedSegment?.id === segment.id ? 'bg-[#F5F5F5] ring-1 ring-[#E5E5E5]' : 'hover:bg-[#F5F5F5]'}
                 `}
                 onClick={() => setSelectedSegment(
                   selectedSegment?.id === segment.id ? null : segment
                 )}
               >
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 min-w-0">
                   <div
-                    className="w-3 h-3 rounded-full"
+                    className="w-2.5 h-2.5 rounded-full flex-shrink-0"
                     style={{ backgroundColor: segment.color }}
                   />
-                  <span className="text-sm text-[#4A4A4A]">{segment.name}</span>
+                  <span className="text-[13px] text-[#4A4A4A] truncate">{segment.name}</span>
                 </div>
-                <span className="text-sm font-medium font-mono" style={{ color: segment.color }}>
-                  {fmt(segment.revenue_share ?? 0)}%
+                <span className="text-[13px] font-semibold font-mono flex-shrink-0 ml-2" style={{ color: segment.color }}>
+                  {fmtPct(segment.revenue_share ?? 0)}%
                 </span>
               </div>
             ))}
@@ -351,7 +437,12 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
           >
-            <SegmentDetail segment={selectedSegment} onClose={() => setSelectedSegment(null)} />
+            <SegmentDetail
+              segment={selectedSegment}
+              onClose={() => setSelectedSegment(null)}
+              onExportCustomers={(fmt) => handleExportCustomerList(selectedSegment, fmt)}
+              onExportActionPack={(fmt) => handleExportSegment(selectedSegment, fmt)}
+            />
           </motion.div>
         )}
       </AnimatePresence>
@@ -383,7 +474,24 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
           )}
         </div>
       </Card>
+      </>}
     </div>
+  );
+}
+
+function TabButton({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+        active
+          ? 'bg-white text-[#1A1A1A] shadow-sm'
+          : 'text-[#4A4A4A] hover:text-[#1A1A1A]'
+      }`}
+    >
+      {icon}
+      {label}
+    </button>
   );
 }
 
@@ -392,9 +500,10 @@ interface SegmentCardProps {
   index: number;
   isSelected: boolean;
   onSelect: () => void;
+  onExport: (fmt: 'xlsx' | 'csv') => void;
 }
 
-function SegmentCard({ segment, index, isSelected, onSelect }: SegmentCardProps) {
+function SegmentCard({ segment, index, isSelected, onSelect, onExport }: SegmentCardProps) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -423,10 +532,26 @@ function SegmentCard({ segment, index, isSelected, onSelect }: SegmentCardProps)
               <p className="text-xs text-[#4A4A4A]">{segment.rfm_score}</p>
             </div>
           </div>
-          <ChevronRight
-            size={18}
-            className={`text-[#9CA3AF] transition-transform ${isSelected ? 'rotate-90' : ''}`}
-          />
+          <div className="flex items-center gap-1">
+            <button
+              onClick={(e) => { e.stopPropagation(); onExport('xlsx'); }}
+              className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[#22C55E] hover:bg-[#22C55E]/5 transition-colors"
+              title="Export .xlsx"
+            >
+              <FileSpreadsheet size={14} />
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); onExport('csv'); }}
+              className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[var(--nts-accent)] hover:bg-[var(--nts-accent)]/5 transition-colors"
+              title="Export .csv"
+            >
+              <Download size={14} />
+            </button>
+            <ChevronRight
+              size={18}
+              className={`text-[#9CA3AF] transition-transform ${isSelected ? 'rotate-90' : ''}`}
+            />
+          </div>
         </div>
 
         <p className="text-sm text-[#4A4A4A] mt-3">{segment.description}</p>
@@ -441,13 +566,13 @@ function SegmentCard({ segment, index, isSelected, onSelect }: SegmentCardProps)
           <div>
             <p className="text-xs text-[#4A4A4A]">% of Base</p>
             <p className="font-bold font-mono" style={{ color: segment.color }}>
-              {fmt(segment.percentage ?? 0)}%
+              {fmtPct(segment.percentage ?? 0)}%
             </p>
           </div>
           <div>
             <p className="text-xs text-[#4A4A4A]">Revenue</p>
             <p className="font-bold text-[#1A1A1A] font-mono">
-              {fmt(segment.revenue_share ?? 0)}%
+              {fmtPct(segment.revenue_share ?? 0)}%
             </p>
           </div>
         </div>
@@ -459,11 +584,13 @@ function SegmentCard({ segment, index, isSelected, onSelect }: SegmentCardProps)
 interface SegmentDetailProps {
   segment: RFMSegment;
   onClose: () => void;
+  onExportCustomers?: (fmt: 'xlsx' | 'csv') => void;
+  onExportActionPack?: (fmt: 'xlsx' | 'csv') => void;
 }
 
 const emptyCategoryData = { categories: [], brands: [], price_sensitivity: 'medium' as const, preferred_channels: [] };
 
-function SegmentDetail({ segment, onClose }: SegmentDetailProps) {
+function SegmentDetail({ segment, onClose, onExportCustomers, onExportActionPack }: SegmentDetailProps) {
   const { hasImported: hasImportedSegments } = useSegments();
   // Use empty data when no imported segments exist (no mock data)
   const categoryData = hasImportedSegments 
@@ -573,9 +700,19 @@ function SegmentDetail({ segment, onClose }: SegmentDetailProps) {
             </div>
           </div>
 
-          <Button variant="primary" className="w-full" icon={<Zap size={16} />}>
-            Create Campaign for {segment.name}
-          </Button>
+          <div className="space-y-2">
+            <Button variant="primary" className="w-full" icon={<Users size={16} />} onClick={() => onExportCustomers?.('csv')}>
+              Export Customer IDs (.csv)
+            </Button>
+            <div className="flex gap-2">
+              <Button variant="secondary" className="flex-1" icon={<FileSpreadsheet size={14} />} onClick={() => onExportActionPack?.('xlsx')}>
+                Action Pack
+              </Button>
+              <Button variant="secondary" className="flex-1" icon={<Download size={14} />} onClick={() => onExportCustomers?.('xlsx')}>
+                Customers .xlsx
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
     </Card>

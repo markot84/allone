@@ -1,0 +1,440 @@
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { db } from '../config/firebase';
+import { callGemini } from './geminiProxy';
+import { classifyStockHealth, getProductTod } from '../utils/productUtils';
+import { calculateCampaignMetrics } from '../utils/roiUtils';
+import { formatCurrency, formatNumber } from '../utils/format';
+import type { Product, Campaign, RFMSegment, AutomationAlert } from '../types';
+
+// ── Types ────────────────────────────────────────────────────────────────────
+
+export interface BriefingData {
+  revenue: {
+    totalOrganic: number;
+    totalCampaignRevenue: number;
+    totalSpend: number;
+    roas: number;
+    campaignCount: number;
+  };
+  ga4: {
+    sessions: number;
+    users: number;
+    newUsers: number;
+    bounceRate: number;
+    conversions: number;
+    weeklyChange: { sessions: number | null; users: number | null; conversions: number | null } | null;
+  } | null;
+  inventory: {
+    totalProducts: number;
+    deadStock: number;
+    lowStock: number;
+    excessStock: number;
+    deadStockValue: number;
+    lowStockTopNames: string[];
+  };
+  segments: {
+    total: number;
+    totalCustomers: number;
+    atRiskPct: number;
+    championsPct: number;
+    topSegment: { name: string; pct: number } | null;
+  };
+  campaigns: {
+    topPerformer: { name: string; roas: number } | null;
+    worstPerformer: { name: string; roas: number; spend: number } | null;
+  };
+  alerts: {
+    count: number;
+    critical: number;
+    topAlerts: string[];
+  };
+  brandName: string;
+}
+
+export interface MetricsSnapshot {
+  totalRevenue: number;
+  totalSpend: number;
+  roas: number;
+  deadStock: number;
+  lowStock: number;
+  criticalAlerts: number;
+  campaignCount: number;
+  atRiskPct: number;
+}
+
+export type BriefingUrgency = 'normal' | 'updated';
+
+export interface BriefingResult {
+  narrative: string;
+  actions: string[];
+  generatedAt: string;
+  dataHash: string;
+  urgency: BriefingUrgency;
+  updateReason?: string;
+}
+
+interface CachedBriefing extends BriefingResult {
+  _cachedAt: number;
+  _genCount: number;
+  _snapshot: MetricsSnapshot;
+}
+
+// ── Data Collector ───────────────────────────────────────────────────────────
+
+export function collectBriefingData(params: {
+  products: Product[];
+  campaigns: Campaign[];
+  segments: RFMSegment[];
+  totalOrganicRevenue: number;
+  ga4: {
+    totals: { sessions: number; users: number; newUsers: number; bounceRate: number; conversions: number };
+    weeklyChange: { sessions: number | null; users: number | null; conversions: number | null } | null;
+    hasData: boolean;
+  };
+  alerts: AutomationAlert[];
+  brandName: string;
+  supplierTodMap?: Map<string, number>;
+}): BriefingData {
+  const { products, campaigns, segments, totalOrganicRevenue, ga4, alerts, brandName, supplierTodMap } = params;
+
+  const classify = (p: Product) => classifyStockHealth(p, getProductTod(p, supplierTodMap));
+  const deadStock = products.filter(p => classify(p) === 'dead');
+  const lowStock = products.filter(p => classify(p) === 'low');
+  const excessStock = products.filter(p => classify(p) === 'excess');
+  const deadStockValue = deadStock.reduce((sum, p) => sum + (p.price || 0) * (p.stock_level || 0), 0);
+
+  const lowStockTopNames = lowStock
+    .sort((a, b) => (b.revenue_period || 0) - (a.revenue_period || 0))
+    .slice(0, 5)
+    .map(p => p.name);
+
+  const metrics = calculateCampaignMetrics(campaigns);
+
+  const atRisk = segments.find(s => s.id === 'at_risk' || s.name.toLowerCase().includes('at risk'));
+  const champions = segments.find(s => s.id === 'champions' || s.name.toLowerCase().includes('champion'));
+  const topSegment = segments.length > 0
+    ? [...segments].sort((a, b) => (b.percentage || 0) - (a.percentage || 0))[0]
+    : null;
+
+  const sorted = [...campaigns].filter(c => (c.amount_spent || 0) > 0);
+  const byRoas = sorted.sort((a, b) => (b.roas || 0) - (a.roas || 0));
+  const topPerformer = byRoas.length > 0 ? { name: byRoas[0].name, roas: byRoas[0].roas || 0 } : null;
+  const worstPerformer = byRoas.length > 1
+    ? { name: byRoas[byRoas.length - 1].name, roas: byRoas[byRoas.length - 1].roas || 0, spend: byRoas[byRoas.length - 1].amount_spent || 0 }
+    : null;
+
+  const activeAlerts = alerts.filter(a => a.status === 'new' || a.status === 'acknowledged');
+  const criticalAlerts = activeAlerts.filter(a => a.severity === 'critical');
+
+  return {
+    revenue: {
+      totalOrganic: totalOrganicRevenue,
+      totalCampaignRevenue: metrics.totalRevenue,
+      totalSpend: metrics.totalSpend,
+      roas: metrics.roas,
+      campaignCount: campaigns.length,
+    },
+    ga4: ga4.hasData ? {
+      sessions: ga4.totals.sessions,
+      users: ga4.totals.users,
+      newUsers: ga4.totals.newUsers,
+      bounceRate: ga4.totals.bounceRate,
+      conversions: ga4.totals.conversions,
+      weeklyChange: ga4.weeklyChange,
+    } : null,
+    inventory: {
+      totalProducts: products.length,
+      deadStock: deadStock.length,
+      lowStock: lowStock.length,
+      excessStock: excessStock.length,
+      deadStockValue,
+      lowStockTopNames,
+    },
+    segments: {
+      total: segments.length,
+      totalCustomers: segments.reduce((s, seg) => s + (seg.count || 0), 0),
+      atRiskPct: atRisk?.percentage || 0,
+      championsPct: champions?.percentage || 0,
+      topSegment: topSegment ? { name: topSegment.name, pct: topSegment.percentage } : null,
+    },
+    campaigns: { topPerformer, worstPerformer },
+    alerts: {
+      count: activeAlerts.length,
+      critical: criticalAlerts.length,
+      topAlerts: activeAlerts.slice(0, 3).map(a => a.title),
+    },
+    brandName,
+  };
+}
+
+// ── Metrics Snapshot ─────────────────────────────────────────────────────────
+
+function extractSnapshot(data: BriefingData): MetricsSnapshot {
+  return {
+    totalRevenue: data.revenue.totalOrganic + data.revenue.totalCampaignRevenue,
+    totalSpend: data.revenue.totalSpend,
+    roas: data.revenue.roas,
+    deadStock: data.inventory.deadStock,
+    lowStock: data.inventory.lowStock,
+    criticalAlerts: data.alerts.critical,
+    campaignCount: data.revenue.campaignCount,
+    atRiskPct: data.segments.atRiskPct,
+  };
+}
+
+// ── Significant Change Detection ─────────────────────────────────────────────
+
+const THRESHOLDS = {
+  revenueChangePct: 0.20,    // revenue moved ±20%
+  roasDropPct: 0.30,         // ROAS dropped 30%+
+  newCriticalAlerts: 1,      // any new critical alert
+  deadStockJump: 15,         // 15+ new dead stock items
+  atRiskJumpPp: 5,           // At Risk segment grew 5pp+
+};
+
+export interface ChangeSignal {
+  significant: boolean;
+  reason: string;
+}
+
+export function detectSignificantChange(
+  current: BriefingData,
+  cachedSnapshot: MetricsSnapshot,
+): ChangeSignal {
+  const now = extractSnapshot(current);
+
+  if (cachedSnapshot.totalRevenue > 0) {
+    const revDelta = (now.totalRevenue - cachedSnapshot.totalRevenue) / cachedSnapshot.totalRevenue;
+    if (Math.abs(revDelta) >= THRESHOLDS.revenueChangePct) {
+      const dir = revDelta > 0 ? 'αύξηση' : 'μείωση';
+      return { significant: true, reason: `Σημαντική ${dir} εσόδων (${(revDelta * 100).toFixed(0)}%)` };
+    }
+  }
+
+  if (cachedSnapshot.roas > 0 && now.roas > 0) {
+    const roasDrop = (cachedSnapshot.roas - now.roas) / cachedSnapshot.roas;
+    if (roasDrop >= THRESHOLDS.roasDropPct) {
+      return { significant: true, reason: `ROAS πτώση ${now.roas.toFixed(1)}x (ήταν ${cachedSnapshot.roas.toFixed(1)}x)` };
+    }
+  }
+
+  const newCritical = now.criticalAlerts - cachedSnapshot.criticalAlerts;
+  if (newCritical >= THRESHOLDS.newCriticalAlerts) {
+    return { significant: true, reason: `${newCritical} νέα critical alerts` };
+  }
+
+  const deadDelta = now.deadStock - cachedSnapshot.deadStock;
+  if (deadDelta >= THRESHOLDS.deadStockJump) {
+    return { significant: true, reason: `+${deadDelta} νέα dead stock προϊόντα` };
+  }
+
+  const atRiskDelta = now.atRiskPct - cachedSnapshot.atRiskPct;
+  if (atRiskDelta >= THRESHOLDS.atRiskJumpPp) {
+    return { significant: true, reason: `At Risk segment +${atRiskDelta.toFixed(1)}pp` };
+  }
+
+  return { significant: false, reason: '' };
+}
+
+// ── Prompt Builder ───────────────────────────────────────────────────────────
+
+function buildBriefingPrompt(data: BriefingData, updateContext?: string): string {
+  const sections: string[] = [];
+  const totalRevenue = data.revenue.totalOrganic + data.revenue.totalCampaignRevenue;
+
+  sections.push(`[BRAND] ${data.brandName}`);
+
+  sections.push(`[ΕΣΟΔΑ] Σύνολο: ${formatCurrency(totalRevenue)} (Organic: ${formatCurrency(data.revenue.totalOrganic)}, Campaigns: ${formatCurrency(data.revenue.totalCampaignRevenue)}), Ad Spend: ${formatCurrency(data.revenue.totalSpend)}, ROAS: ${data.revenue.roas > 0 ? data.revenue.roas.toFixed(2) + 'x' : 'N/A'}, Ενεργές Καμπάνιες: ${data.revenue.campaignCount}`);
+
+  if (data.ga4) {
+    const wc = data.ga4.weeklyChange;
+    const fmt = (v: number | null) => v !== null ? `${v >= 0 ? '+' : ''}${v.toFixed(1)}%` : 'N/A';
+    sections.push(`[TRAFFIC] Sessions: ${formatNumber(data.ga4.sessions)}, Users: ${formatNumber(data.ga4.users)}, New Users: ${formatNumber(data.ga4.newUsers)}, Conversions: ${formatNumber(data.ga4.conversions)}, Bounce: ${data.ga4.bounceRate.toFixed(1)}%${wc ? `, Weekly Δ: Sessions ${fmt(wc.sessions)}, Users ${fmt(wc.users)}, Conversions ${fmt(wc.conversions)}` : ''}`);
+  }
+
+  const inv = data.inventory;
+  sections.push(`[INVENTORY] ${inv.totalProducts} προϊόντα: ${inv.deadStock} dead stock, ${inv.lowStock} low stock, ${inv.excessStock} excess${inv.deadStockValue > 0 ? `, Δεσμευμένο κεφάλαιο dead stock: ${formatCurrency(inv.deadStockValue)}` : ''}${inv.lowStockTopNames.length > 0 ? `, Top sellers σε low stock: ${inv.lowStockTopNames.join(', ')}` : ''}`);
+
+  if (data.segments.total > 0) {
+    sections.push(`[SEGMENTS] ${data.segments.total} segments, ${formatNumber(data.segments.totalCustomers)} πελάτες, At Risk: ${data.segments.atRiskPct.toFixed(1)}%, Champions: ${data.segments.championsPct.toFixed(1)}%`);
+  }
+
+  const campParts: string[] = [];
+  if (data.campaigns.topPerformer) campParts.push(`Best: "${data.campaigns.topPerformer.name}" ROAS ${data.campaigns.topPerformer.roas.toFixed(2)}x`);
+  if (data.campaigns.worstPerformer) campParts.push(`Worst: "${data.campaigns.worstPerformer.name}" ROAS ${data.campaigns.worstPerformer.roas.toFixed(2)}x, Spend ${formatCurrency(data.campaigns.worstPerformer.spend)}`);
+  if (campParts.length > 0) sections.push(`[CAMPAIGNS] ${campParts.join(' | ')}`);
+
+  if (data.alerts.count > 0) {
+    sections.push(`[ALERTS] ${data.alerts.count} ενεργά (${data.alerts.critical} critical)${data.alerts.topAlerts.length > 0 ? ': ' + data.alerts.topAlerts.join(' | ') : ''}`);
+  }
+
+  if (updateContext) {
+    sections.push(`\n[ΣΗΜΑΝΤΙΚΗ ΑΛΛΑΓΗ] ${updateContext} — Δώσε έμφαση σε αυτήν την αλλαγή στο narrative.`);
+  }
+
+  return sections.join('\n');
+}
+
+const SYSTEM_PROMPT = `Είσαι ο AI business analyst του Performance+. Δημιούργησε ένα σύντομο briefing στα Ελληνικά για τον ιδιοκτήτη eshop.
+
+ΜΟΡΦΗ ΑΠΑΝΤΗΣΗΣ (ΑΥΣΤΗΡΑ):
+Γράψε ΜΟΝΟ valid JSON σε αυτή τη δομή:
+{
+  "narrative": "1 παράγραφος (3-5 προτάσεις)",
+  "actions": ["Ενέργεια 1", "Ενέργεια 2", "Ενέργεια 3"]
+}
+
+ΚΑΝΟΝΕΣ NARRATIVE:
+- Ξεκίνα με τα συνολικά έσοδα και ROAS, μετά αναφέρσου στο πιο σημαντικό inventory risk, μετά στην πιο αξιοσημείωτη καμπάνια.
+- Χρησιμοποίησε πραγματικά νούμερα από τα data. Μην επαναλαμβάνεις πληροφορίες.
+- Τόνος: σύντομος, επαγγελματικός, decision-oriented. Σαν να μιλάς σε CEO στο πρωινό standup.
+- Αν υπάρχει [ΣΗΜΑΝΤΙΚΗ ΑΛΛΑΓΗ], ξεκίνα το narrative με αυτήν.
+
+ΚΑΝΟΝΕΣ ACTIONS (ΚΡΙΤΙΚΟ):
+- Ακριβώς 3 ενέργειες. Κάθε μία σε 1 σύντομη πρόταση (max 15 λέξεις).
+- ΚΑΘΕ ΕΝΕΡΓΕΙΑ ΠΡΕΠΕΙ ΝΑ ΑΦΟΡΑ ΔΙΑΦΟΡΕΤΙΚΟ ΤΟΜΕΑ. Επέλεξε 3 από: Campaigns, Inventory, Segments, Traffic, Pricing, Content.
+- ΜΗΝ επαναλαμβάνεις τον ίδιο τομέα σε 2 ενέργειες. Αν π.χ. η 1η αφορά inventory, οι άλλες 2 ΠΡΕΠΕΙ να αφορούν campaigns/segments/traffic/content.
+- Πρόκριση: πρώτα ό,τι χάνει χρήματα, μετά ό,τι μπορεί να φέρει ανάπτυξη.
+- Κάθε action να ξεκινά με ρήμα (Ελέγξτε, Βελτιστοποιήστε, Ενεργοποιήστε, Αναλύστε, Σταματήστε, Αυξήστε κτλ).
+
+ΜΗΝ γράψεις τίποτα εκτός του JSON. ΜΗΝ χρησιμοποιείς markdown ή emojis.`;
+
+// ── Data Hash ────────────────────────────────────────────────────────────────
+
+function computeDataHash(data: BriefingData): string {
+  const key = [
+    data.revenue.totalOrganic,
+    data.revenue.totalCampaignRevenue,
+    data.revenue.totalSpend,
+    data.inventory.totalProducts,
+    data.inventory.deadStock,
+    data.inventory.lowStock,
+    data.segments.totalCustomers,
+    data.alerts.count,
+    data.ga4?.sessions ?? 0,
+  ].join('|');
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) {
+    hash = ((hash << 5) - hash + key.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash).toString(36);
+}
+
+// ── Cache ────────────────────────────────────────────────────────────────────
+
+const MAX_DAILY_GENERATIONS = 4;
+const MIN_REGEN_INTERVAL_MS = 60 * 60 * 1000; // 1 hour cooldown between auto-updates
+
+export async function getCachedBriefing(brandId: string): Promise<CachedBriefing | null> {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const ref = doc(db, 'brands', brandId, 'briefings', today);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return null;
+    return snap.data() as CachedBriefing;
+  } catch {
+    return null;
+  }
+}
+
+async function saveBriefingCache(
+  brandId: string,
+  result: BriefingResult,
+  snapshot: MetricsSnapshot,
+  prevGenCount: number,
+): Promise<void> {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const ref = doc(db, 'brands', brandId, 'briefings', today);
+    const cached: CachedBriefing = {
+      ...result,
+      _cachedAt: Date.now(),
+      _genCount: prevGenCount + 1,
+      _snapshot: snapshot,
+    };
+    await setDoc(ref, cached);
+  } catch { /* non-critical */ }
+}
+
+// ── Main: Generate Briefing ──────────────────────────────────────────────────
+
+export async function generateMorningBriefing(
+  brandId: string,
+  data: BriefingData,
+  options: { updateReason?: string } = {},
+): Promise<BriefingResult> {
+  const dataHash = computeDataHash(data);
+  const snapshot = extractSnapshot(data);
+  const existing = await getCachedBriefing(brandId);
+
+  const prevGenCount = existing?._genCount ?? 0;
+
+  const userPrompt = buildBriefingPrompt(data, options.updateReason);
+
+  const raw = await callGemini({
+    systemPrompt: SYSTEM_PROMPT,
+    userPrompt,
+    temperature: 0.4,
+  });
+
+  let parsed: { narrative: string; actions: string[] };
+  try {
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    parsed = JSON.parse(jsonMatch ? jsonMatch[0] : raw);
+  } catch {
+    parsed = {
+      narrative: raw.replace(/```json|```/g, '').trim(),
+      actions: [],
+    };
+  }
+
+  const urgency: BriefingUrgency = options.updateReason ? 'updated' : 'normal';
+
+  const result: BriefingResult = {
+    narrative: parsed.narrative || raw,
+    actions: Array.isArray(parsed.actions) ? parsed.actions.slice(0, 3) : [],
+    generatedAt: new Date().toISOString(),
+    dataHash,
+    urgency,
+    updateReason: options.updateReason,
+  };
+
+  await saveBriefingCache(brandId, result, snapshot, prevGenCount);
+  return result;
+}
+
+// ── Smart Auto-Update Check ──────────────────────────────────────────────────
+
+export async function checkAndAutoUpdate(
+  brandId: string,
+  data: BriefingData,
+): Promise<{ updated: boolean; result: BriefingResult | null }> {
+  const cached = await getCachedBriefing(brandId);
+
+  if (!cached) {
+    const result = await generateMorningBriefing(brandId, data);
+    return { updated: true, result };
+  }
+
+  if (cached._genCount >= MAX_DAILY_GENERATIONS) {
+    return { updated: false, result: null };
+  }
+
+  if (Date.now() - cached._cachedAt < MIN_REGEN_INTERVAL_MS) {
+    return { updated: false, result: null };
+  }
+
+  if (!cached._snapshot) {
+    return { updated: false, result: null };
+  }
+
+  const signal = detectSignificantChange(data, cached._snapshot);
+  if (!signal.significant) {
+    return { updated: false, result: null };
+  }
+
+  const result = await generateMorningBriefing(brandId, data, {
+    updateReason: signal.reason,
+  });
+  return { updated: true, result };
+}

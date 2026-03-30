@@ -153,11 +153,74 @@ export const knowledgeArticles: KnowledgeArticle[] = [
 
 Κάθε KPI card είναι clickable και σας οδηγεί στην αντίστοιχη λεπτομερή ανάλυση.`,
     tags: ['dashboard', 'kpis', 'metrics'],
-    related: ['understanding-kpis', 'roi-attribution-basics'],
+    related: ['understanding-kpis', 'roi-attribution-basics', 'ai-briefing'],
     tips: [
       'Κάντε hover πάνω στα labels για tooltips με εξηγήσεις',
       'Κάντε κλικ στα KPI cards για να δείτε λεπτομερή ανάλυση',
-      'Χρησιμοποιήστε το AI Insights panel για actionable recommendations'
+      'Το AI Briefing στην κορυφή σας δίνει αυτόματη σύνοψη κατάστασης'
+    ]
+  },
+  {
+    id: 'ai-briefing',
+    category: 'dashboard',
+    title: 'AI Briefing — Αυτόματη Ενημέρωση',
+    description: 'Πώς λειτουργεί η AI-powered σύνοψη στην κορυφή του Dashboard',
+    content: `# AI Briefing
+
+Το AI Briefing είναι μια αυτοματοποιημένη, narrative-first σύνοψη που εμφανίζεται στην κορυφή του Dashboard. Αντί για δεκάδες KPIs, σας δίνει σε 10 δευτερόλεπτα μια ολοκληρωμένη εικόνα της κατάστασης της επιχείρησής σας.
+
+## Πώς λειτουργεί
+
+### Αυτόματη δημιουργία (1x/ημέρα)
+Κατά την πρώτη σας είσοδο στην εφαρμογή κάθε ημέρα, το σύστημα δημιουργεί αυτόματα ένα νέο briefing. Αναλύει:
+- **Έσοδα & ROAS** — organic + campaign revenue, ad spend
+- **Traffic** — sessions, users, conversions, εβδομαδιαίες μεταβολές (GA4)
+- **Απόθεμα** — dead stock, low stock σε best sellers, δεσμευμένο κεφάλαιο
+- **Segments** — At Risk %, Champions %, μεγέθη segments
+- **Campaigns** — top/worst performers by ROAS
+- **Alerts** — ενεργά automation alerts
+
+### Smart Auto-Update
+Κάθε 10 λεπτά, το σύστημα ελέγχει αν κάτι σημαντικό άλλαξε. Ενημερώνεται αυτόματα μόνο αν:
+- Τα έσοδα μεταβλήθηκαν **±20%** ή περισσότερο
+- Το ROAS έπεσε **30%+**
+- Εμφανίστηκε νέο **critical alert**
+- Εντοπίστηκαν **15+ νέα dead stock** προϊόντα
+- Το At Risk segment αυξήθηκε **5+ ποσοστιαίες μονάδες**
+
+### Προστασία από υπερβολική χρήση
+- Μέγιστο **4 generations ανά ημέρα**
+- Cooldown **1 ώρα** μεταξύ auto-updates
+- Χωρίς update αν δεν υπάρχει σημαντική αλλαγή
+
+## Ένδειξη Επείγοντος
+Όταν γίνεται auto-update λόγω σημαντικής αλλαγής, το briefing εμφανίζει:
+- **Amber border** αντί για το κανονικό
+- Badge **"Ενημερώθηκε"** δίπλα στον τίτλο
+- Τον **λόγο ενημέρωσης** κάτω από την ώρα δημιουργίας
+
+## Action Items
+Κάθε briefing περιλαμβάνει 3 προτεινόμενες ενέργειες σε διαφορετικούς τομείς (Campaigns, Inventory, Segments, Traffic, Content). Κάθε ενέργεια είναι clickable και σας οδηγεί στη σχετική σελίδα.`,
+    tags: ['ai', 'briefing', 'dashboard', 'automation', 'gemini'],
+    related: ['dashboard-overview', 'understanding-kpis'],
+    tips: [
+      'Το briefing δημιουργείται αυτόματα — δεν χρειάζεται κάποια ενέργεια από εσάς',
+      'Αν δείτε amber border, σημαίνει ότι κάτι σημαντικό άλλαξε στα δεδομένα',
+      'Κάντε κλικ στις ενέργειες για να πλοηγηθείτε άμεσα στη σχετική σελίδα'
+    ],
+    faq: [
+      {
+        question: 'Πόσο συχνά ενημερώνεται το briefing;',
+        answer: 'Μία φορά αυτόματα κατά την πρώτη είσοδο της ημέρας. Ενημερώνεται αυτόματα αν εντοπιστεί σημαντική αλλαγή, με μέγιστο 4 φορές ανά ημέρα.'
+      },
+      {
+        question: 'Τι σημαίνει η κίτρινη ένδειξη "Ενημερώθηκε";',
+        answer: 'Σημαίνει ότι το briefing ενημερώθηκε αυτόματα λόγω σημαντικής μεταβολής στα δεδομένα σας (π.χ. πτώση ROAS, αύξηση εσόδων, νέο critical alert).'
+      },
+      {
+        question: 'Ποια δεδομένα χρησιμοποιεί;',
+        answer: 'Αξιοποιεί όλα τα υπάρχοντα δεδομένα: organic revenue, campaigns, GA4 analytics, product inventory, RFM segments και automation alerts.'
+      }
     ]
   },
   {
@@ -279,53 +342,58 @@ Gross_Margin_%, Gross Margin %, gross_margin_%, Margin_Percentage, margin_percen
   {
     id: 'segments-import',
     category: 'data-import',
-    title: 'Εισαγωγή RFM Segments',
-    description: 'Πώς να φορτώσετε customer segments',
-    content: `**Υποχρεωτικά πεδία:**
+    title: 'Εισαγωγή Segments (RFM + Behavioral + Predictive)',
+    description: 'Πώς να φορτώσετε customer segments με behavioral και predictive data',
+    content: `**Υποχρεωτικά πεδία (RFM):**
 - Name: Όνομα segment (π.χ. Champions, Loyal, At Risk)
 - RFM Score: Score format (π.χ. "5-5-5" ή "5-5-5 to 4-4-4")
 - Count: Αριθμός πελατών στο segment
 - Percentage: Ποσοστό του total customer base
 
-**Προαιρετικά:**
+**Προαιρετικά RFM:**
 - Revenue Share: Ποσοστό revenue από segment
-- Color: Hex color για visualization (π.χ. #22C55E)
+- Color: Hex color για visualization
 - Description: Περιγραφή του segment
+
+**Behavioral πεδία (προαιρετικά):**
+- persona: Τύπος πελάτη (π.χ. Power Buyer, Fading Customer)
+- lifecycle_stage: new, active, loyal, declining, dormant
+- purchase_frequency: daily, weekly, monthly, quarterly, rare
+- avg_basket_size: Μέση αξία καλαθιού (αριθμός)
+- upsell_score: 0-100 score upsell πιθανότητας
+- cross_sell_score: 0-100 score cross-sell πιθανότητας
+- engagement_score: 0-100 engagement score
+- price_sensitivity: low, medium, high
+- device_preference: mobile, desktop, mixed
+- preferred_channels: Κανάλια χωρισμένα με κόμμα (π.χ. "Email,SMS,Remarketing")
+- peak_hours: Ώρες αιχμής (π.χ. "10:00-12:00,20:00-22:00")
+- peak_days: Ημέρες αιχμής (π.χ. "Δευτέρα,Πέμπτη")
+- payment_method: Τρόπος πληρωμής
+
+**Predictive πεδία (προαιρετικά):**
+- estimated_ltv / ltv: Εκτιμώμενη αξία ζωής πελάτη
+- churn_risk: 0-100 ποσοστό κινδύνου churn
+- churn_risk_label: low, medium, high, critical
+- next_purchase_probability: 0-100 πιθανότητα επόμενης αγοράς
+- days_to_next_purchase: Εκτίμηση ημερών μέχρι επόμενη αγορά
+- predicted_next_order_value: Προβλεπόμενη αξία επόμενης παραγγελίας
+- revenue_forecast_30d: Πρόβλεψη εσόδων 30 ημερών
+- revenue_forecast_90d: Πρόβλεψη εσόδων 90 ημερών
+- demand_trend: growing, stable, declining
+- retention_score: 0-100 δείκτης διατήρησης
 
 **Πιθανές Εκδοχές Ονομάτων Στηλών:**
 
-**Name:**
-Name, name, Segment_Name, segment_name, Segment, segment, Title, title
+**Name:** Name, Segment_Name, Segment, Label, Group, Customer_Segment
+**RFM Score:** RFM_Score, Score, RFM, R_Score + F_Score + M_Score
+**Count:** Count, Customer_Count, Customers, Size, Total
+**Percentage:** Percentage, Percent, Pct, %
+**Revenue Share:** Revenue_Share, Revenue, Revenue_Pct, Rev_Share
+**Color:** Color, Colour, Hex
+**Description:** Description, Desc, Note, Notes, Behavioral_Persona, Tier
 
-**RFM Score:**
-RFM_Score, RFM Score, rfm_score, Score, score, RFM, rfm
-
-**Count:**
-Count, count, Customer_Count, customer_count, Customers, customers, Size, size, Total, total
-
-**Percentage:**
-Percentage, percentage, Percent, percent, Pct, pct, %, Percentage_Share, percentage_share
-
-**Revenue Share:**
-Revenue_Share, Revenue Share, revenue_share, Revenue_Percentage, revenue_percentage, Rev_Share, rev_share
-
-**Color:**
-Color, color, Colour, colour, Hex_Color, hex_color, Color_Code, color_code
-
-**Description:**
-Description, description, Desc, desc, Note, note, Notes, notes, Περιγραφή, περιγραφή, Behavioral_Persona, behavioral_persona, Tier, tier
-
-**RFM Score Format:**
-- Single score: "5-5-5" (Recency-Frequency-Monetary)
-- Range: "5-5-5 to 4-4-4" (score range)
-
-**Common Segments:**
-- Champions: 5-5-5 (high value, recent, frequent)
-- Loyal: 4-4-4 to 5-5-5
-- Potential: 3-3-3 to 4-4-4
-- At Risk: 2-2-2 to 3-3-3
-- Lost: 1-1-1 to 2-2-2`,
-    tags: ['segments', 'rfm', 'customers'],
+Αν δεν υπάρχουν behavioral/predictive στήλες, η εφαρμογή θα τα υπολογίσει αυτόματα (rule-based) από τα RFM δεδομένα. Αν εισαχθούν, αντικαθιστούν τα αυτόματα.`,
+    tags: ['segments', 'rfm', 'customers', 'behavioral', 'predictive', 'ltv', 'churn'],
     related: ['rfm-analysis', 'understanding-segments', 'column-names-guide']
   },
   {
@@ -1185,7 +1253,7 @@ Side drawer που δείχνει χρονολογικά όλες τις ενέ�
     faq: [
       {
         question: 'Πώς μπορώ να κάνω upgrade σε Enterprise;',
-        answer: 'Επικοινωνήστε στο hello@notthesame.ai για εταιρική ένταξη. Η αναβάθμιση ενεργοποιεί αυτόματα το Procurement module και τους enterprise triggers.'
+        answer: 'Επικοινωνήστε στο noreply@performanceplus.gr για εταιρική ένταξη. Η αναβάθμιση ενεργοποιεί αυτόματα το Procurement module και τους enterprise triggers.'
       },
       {
         question: 'Μπορώ να δοκιμάσω το Enterprise;',

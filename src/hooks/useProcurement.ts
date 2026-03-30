@@ -2,75 +2,50 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ProcurementService, PROCUREMENT_COLLECTIONS } from '../services/firestore';
 import { useBrand } from './useBrand';
 
+type SheetKey = 'inventory' | 'costing' | 'item_evaluation' | 'customer_evaluation' | 'pricing_policy' | 'fiscal_year' | 'statistics';
+
+const SHEET_TO_COLLECTION: Record<SheetKey, (typeof PROCUREMENT_COLLECTIONS)[number]> = {
+  inventory: 'procurement_inventory',
+  costing: 'procurement_costing',
+  item_evaluation: 'procurement_item_evaluation',
+  customer_evaluation: 'procurement_customer_evaluation',
+  pricing_policy: 'procurement_pricing_policy',
+  fiscal_year: 'procurement_fiscal_year',
+  statistics: 'procurement_statistics',
+};
+
+const KEYS = Object.keys(SHEET_TO_COLLECTION) as SheetKey[];
+
+async function fetchAllSheets(brandId: string) {
+  const results = await Promise.all(
+    KEYS.map((key) => ProcurementService.getAll(SHEET_TO_COLLECTION[key], brandId))
+  );
+  return Object.fromEntries(KEYS.map((key, i) => [key, results[i]])) as Record<SheetKey, unknown[]>;
+}
+
 export function useProcurement() {
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
   const queryClient = useQueryClient();
 
-  const fetchSheet = (key: (typeof PROCUREMENT_COLLECTIONS)[number]) =>
-    brandId ? ProcurementService.getAll(key, brandId) : Promise.resolve([]);
-
-  const inventory = useQuery({
-    queryKey: ['procurement', 'inventory', brandId],
-    queryFn: () => fetchSheet('procurement_inventory'),
+  const { data, isPending } = useQuery({
+    queryKey: ['procurement', brandId],
+    queryFn: () => (brandId ? fetchAllSheets(brandId) : Promise.resolve(null)),
+    staleTime: 15 * 60 * 1000,
     enabled: !!brandId,
   });
 
-  const costing = useQuery({
-    queryKey: ['procurement', 'costing', brandId],
-    queryFn: () => fetchSheet('procurement_costing'),
-    enabled: !!brandId,
-  });
-
-  const itemEvaluation = useQuery({
-    queryKey: ['procurement', 'item_evaluation', brandId],
-    queryFn: () => fetchSheet('procurement_item_evaluation'),
-    enabled: !!brandId,
-  });
-
-  const customerEvaluation = useQuery({
-    queryKey: ['procurement', 'customer_evaluation', brandId],
-    queryFn: () => fetchSheet('procurement_customer_evaluation'),
-    enabled: !!brandId,
-  });
-
-  const pricingPolicy = useQuery({
-    queryKey: ['procurement', 'pricing_policy', brandId],
-    queryFn: () => fetchSheet('procurement_pricing_policy'),
-    enabled: !!brandId,
-  });
-
-  const fiscalYear = useQuery({
-    queryKey: ['procurement', 'fiscal_year', brandId],
-    queryFn: () => fetchSheet('procurement_fiscal_year'),
-    enabled: !!brandId,
-  });
-
-  const statistics = useQuery({
-    queryKey: ['procurement', 'statistics', brandId],
-    queryFn: () => fetchSheet('procurement_statistics'),
-    enabled: !!brandId,
-  });
-
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ['procurement'] });
+  const empty: Record<SheetKey, unknown[]> = {
+    inventory: [], costing: [], item_evaluation: [], customer_evaluation: [],
+    pricing_policy: [], fiscal_year: [], statistics: [],
   };
 
-  const allData = {
-    inventory: inventory.data ?? [],
-    costing: costing.data ?? [],
-    item_evaluation: itemEvaluation.data ?? [],
-    customer_evaluation: customerEvaluation.data ?? [],
-    pricing_policy: pricingPolicy.data ?? [],
-    fiscal_year: fiscalYear.data ?? [],
-    statistics: statistics.data ?? [],
-  };
+  const allData = data ?? empty;
 
   return {
     data: allData,
-    isLoading: inventory.isPending || costing.isPending || itemEvaluation.isPending ||
-      customerEvaluation.isPending || pricingPolicy.isPending || fiscalYear.isPending || statistics.isPending,
+    isLoading: isPending,
     hasData: Object.values(allData).some((arr) => (arr?.length ?? 0) > 0),
-    invalidate,
+    invalidate: () => queryClient.invalidateQueries({ queryKey: ['procurement'] }),
   };
 }

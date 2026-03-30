@@ -12,16 +12,15 @@ export function useBrandMembers() {
   const { currentBrand } = useBrand();
   const { user } = useAuth();
   const brandId = currentBrand?.id ?? null;
-  const provisioned = useRef(false);
+  const provisioned = useRef<string | null>(null);
 
   const { data: members = [], isPending } = useQuery({
     queryKey: ['members', brandId],
     queryFn: async () => {
       if (!brandId) return [];
       const list = await MembersService.getAll(brandId);
-      // Auto-provision current user as owner if no members exist yet
-      if (list.length === 0 && user?.uid && !provisioned.current) {
-        provisioned.current = true;
+      if (list.length === 0 && user?.uid && provisioned.current !== brandId) {
+        provisioned.current = brandId;
         const isCreator = currentBrand?.createdBy === user.uid;
         await MembersService.set(brandId, {
           userId: user.uid,

@@ -8,6 +8,7 @@ import { AutomationSettingsService, AutomationAlertsService } from './automation
 import { DecisionsService, logAndNotify } from './coordination';
 import { classifyStockHealth, getDaysOfStock, getProductTod } from '../utils/productUtils';
 import { getUpcomingSeason, SEASONAL_PERIODS } from '../data/seasonalPeriods';
+import { deriveBehavioralProfile, derivePredictiveMetrics } from './behavioralEngine';
 
 interface EvaluationContext {
   brandId: string;
@@ -23,11 +24,17 @@ interface EvaluationContext {
   procurementPricingPolicy?: Record<string, string | undefined>[];
   priceBenchmarks?: { priceDiff: number }[];
   competitorNewAdsCount?: number;
+  ga4?: {
+    dailyEntries: { date: string; sessions: number; totalUsers: number; newUsers: number; pageViews: number; bounceRate: number; conversions: number }[];
+    trafficSources: { channel: string; sessions: number; users: number; conversions: number }[];
+    topPages: { path: string; pageViews: number; sessions: number; bounceRate: number }[];
+  };
 }
 
 interface TriggerResult {
   triggerId: string;
   triggerLabel: string;
+  triggerGroup?: string;
   severity: AlertSeverity;
   title: string;
   description: string;
@@ -143,12 +150,16 @@ function evaluateTrigger(
     case 'campaign_high_roas': {
       const highPerf = ctx.campaigns.filter(c => c.is_active && (c.roas ?? 0) > threshold);
       if (highPerf.length === 0) return null;
+      const ga4Organic = ctx.ga4?.trafficSources.find(s => s.channel === 'Organic Search');
+      const ga4CrossNote = ga4Organic
+        ? ` GA4: Organic search φέρνει ${ga4Organic.sessions.toLocaleString()} sessions — τα paid campaigns ενισχύουν τα organic.`
+        : '';
       return {
         triggerId,
         triggerLabel: 'Υψηλή απόδοση campaign',
         severity: 'info',
         title: `${highPerf.length} campaigns με ROAS > ${threshold}x`,
-        description: 'Ορισμένα campaigns αποδίδουν εξαιρετικά. Εξετάστε αύξηση budget.',
+        description: `Ορισμένα campaigns αποδίδουν εξαιρετικά. Εξετάστε αύξηση budget.${ga4CrossNote}`,
         suggestions: ['Αύξηση budget στα top campaigns', 'Scale σε νέα κοινά', 'Αναπαραγωγή στρατηγικής σε άλλα κανάλια'],
         data: { campaigns: highPerf.slice(0, 3).map(c => ({ name: c.name, roas: c.roas })) },
       };
@@ -171,12 +182,23 @@ function evaluateTrigger(
     case 'segment_churn_risk': {
       const atRisk = ctx.segments.find(s => s.id === 'at_risk' || s.name?.toLowerCase().includes('risk'));
       if (!atRisk || (atRisk.percentage ?? 0) <= threshold) return null;
+      let ga4Signal = '';
+      if (ctx.ga4 && ctx.ga4.dailyEntries.length >= 14) {
+        const last7 = ctx.ga4.dailyEntries.slice(-7);
+        const prev7 = ctx.ga4.dailyEntries.slice(-14, -7);
+        const retLast = last7.reduce((a, d) => a + (d.totalUsers - d.newUsers), 0);
+        const retPrev = prev7.reduce((a, d) => a + (d.totalUsers - d.newUsers), 0);
+        if (retPrev > 0) {
+          const retChange = ((retLast - retPrev) / retPrev) * 100;
+          if (retChange < -5) ga4Signal = ` GA4 επιβεβαιώνει: returning users ${retChange.toFixed(0)}%.`;
+        }
+      }
       return {
         triggerId,
         triggerLabel: 'Churn risk',
         severity: (atRisk.percentage ?? 0) > threshold * 1.5 ? 'critical' : 'warning',
         title: `At-risk segment στο ${atRisk.percentage?.toFixed(1)}%`,
-        description: `${atRisk.count} πελάτες κινδυνεύουν να χαθούν. Απαιτείται win-back στρατηγική.`,
+        description: `${atRisk.count} πελάτες κινδυνεύουν να χαθούν. Απαιτείται win-back στρατηγική.${ga4Signal}`,
         suggestions: ['Email win-back campaign', 'Exclusive offers σε at-risk πελάτες', 'Ανάλυση αιτιών αποχώρησης'],
         data: { percentage: atRisk.percentage, count: atRisk.count },
       };
@@ -315,6 +337,188 @@ function evaluateTrigger(
       };
     }
 
+    case 'high_churn_ltv': {
+      const highValueAtRisk = ctx.segments.filter(seg => {
+        const pred = derivePredictiveMetrics(seg);
+        return pred.churn_risk > threshold && pred.estimated_ltv > 3000;
+      });
+      if (highValueAtRisk.length === 0) return null;
+      const totalAtRisk = highValueAtRisk.reduce((acc, s) => acc + s.count, 0);
+      return {
+        triggerId,
+        triggerLabel: 'High-LTV churn risk',
+        severity: 'critical',
+        title: `${totalAtRisk} high-value πελάτες σε κίνδυνο churn`,
+        description: `Segments υψηλής αξίας (${highValueAtRisk.map(s => s.name).join(', ')}) εμφανίζουν churn risk > ${threshold}%.`,
+        suggestions: [
+          'Win-back campaign με VIP offers',
+          'Προσωπική επικοινωνία (email/τηλέφωνο) στους top πελάτες',
+          'Loyalty program activation',
+        ],
+        data: { segments: highValueAtRisk.map(s => s.name), totalCustomers: totalAtRisk },
+      };
+    }
+
+    case 'upsell_opportunity': {
+      const upsellSegs = ctx.segments.filter(seg => {
+        const beh = deriveBehavioralProfile(seg);
+        return beh.upsell_score > threshold;
+      });
+      if (upsellSegs.length === 0) return null;
+      const totalCustomers = upsellSegs.reduce((acc, s) => acc + s.count, 0);
+      return {
+        triggerId,
+        triggerLabel: 'Upsell ευκαιρία',
+        severity: 'info',
+        title: `${totalCustomers} πελάτες με upsell potential > ${threshold}%`,
+        description: `Segments ${upsellSegs.map(s => s.name).join(', ')} δείχνουν υψηλή προδιάθεση για premium αγορές.`,
+        suggestions: [
+          'Email campaign με premium product recommendations',
+          'Dynamic ads με higher-tier προϊόντα',
+          'Personalized landing pages ανά segment',
+        ],
+        data: { segments: upsellSegs.map(s => s.name), totalCustomers },
+      };
+    }
+
+    case 'engagement_drop': {
+      const lowEngagement = ctx.segments.filter(seg => {
+        const beh = deriveBehavioralProfile(seg);
+        return beh.engagement_score < threshold && seg.count > 100;
+      });
+      if (lowEngagement.length === 0) return null;
+      return {
+        triggerId,
+        triggerLabel: 'Πτώση engagement',
+        severity: 'warning',
+        title: `${lowEngagement.length} segments με engagement < ${threshold}%`,
+        description: `Χαμηλή αλληλεπίδραση σε: ${lowEngagement.map(s => s.name).join(', ')}. Κίνδυνος περαιτέρω απομάκρυνσης.`,
+        suggestions: [
+          'Re-engagement email series',
+          'SMS win-back με exclusive offer',
+          'Survey για κατανόηση αναγκών',
+        ],
+        data: { segments: lowEngagement.map(s => ({ name: s.name, count: s.count })) },
+      };
+    }
+
+    case 'demand_declining': {
+      const declining = ctx.segments.filter(seg => {
+        const pred = derivePredictiveMetrics(seg);
+        return pred.demand_trend === 'declining' && seg.revenue_share > 5;
+      });
+      if (declining.length === 0) return null;
+      return {
+        triggerId,
+        triggerLabel: 'Πτωτική ζήτηση',
+        severity: 'warning',
+        title: `Πτωτική ζήτηση σε ${declining.length} segments`,
+        description: `Segments με σημαντικό revenue share δείχνουν πτωτική τάση: ${declining.map(s => `${s.name} (${s.revenue_share}%)`).join(', ')}.`,
+        suggestions: [
+          'Ανάλυση αιτιών μείωσης',
+          'Ενεργοποίηση retention campaigns',
+          'Αξιολόγηση product-market fit',
+        ],
+        data: { segments: declining.map(s => ({ name: s.name, revenueShare: s.revenue_share })) },
+      };
+    }
+
+    // ── GA4 Triggers ──
+
+    case 'organic_traffic_spike': {
+      if (!ctx.ga4 || ctx.ga4.dailyEntries.length < 14) return null;
+      const last7 = ctx.ga4.dailyEntries.slice(-7);
+      const prev7 = ctx.ga4.dailyEntries.slice(-14, -7);
+      const curr = last7.reduce((a, d) => a + d.sessions, 0);
+      const prev = prev7.reduce((a, d) => a + d.sessions, 0);
+      if (prev === 0) return null;
+      const change = ((curr - prev) / prev) * 100;
+      if (change < threshold) return null;
+      return {
+        triggerId,
+        triggerLabel: 'Organic traffic spike',
+        severity: change > 50 ? 'critical' : 'info',
+        title: `Traffic +${change.toFixed(0)}% τις τελευταίες 7 ημέρες`,
+        description: `Οι sessions αυξήθηκαν από ${prev.toLocaleString()} σε ${curr.toLocaleString()} (${change.toFixed(1)}%). Πιθανή ευκαιρία promotion ή stock-up.`,
+        suggestions: [
+          'Ελέγξτε ποιες σελίδες/κατηγορίες έφεραν traffic',
+          'Αξιολογήστε αν χρειάζεται remarketing campaign',
+          'Βεβαιωθείτε ότι υπάρχει επαρκές απόθεμα στα popular SKUs',
+        ],
+        data: { currentSessions: curr, previousSessions: prev, changePercent: change },
+      };
+    }
+
+    case 'new_visitors_surge': {
+      if (!ctx.ga4 || ctx.ga4.dailyEntries.length < 14) return null;
+      const last7 = ctx.ga4.dailyEntries.slice(-7);
+      const prev7 = ctx.ga4.dailyEntries.slice(-14, -7);
+      const curr = last7.reduce((a, d) => a + d.newUsers, 0);
+      const prev = prev7.reduce((a, d) => a + d.newUsers, 0);
+      if (prev === 0) return null;
+      const change = ((curr - prev) / prev) * 100;
+      if (change < threshold) return null;
+      return {
+        triggerId,
+        triggerLabel: 'Νέοι επισκέπτες',
+        severity: 'info',
+        title: `+${change.toFixed(0)}% νέοι χρήστες τις τελευταίες 7 ημέρες`,
+        description: `${curr.toLocaleString()} νέοι χρήστες (από ${prev.toLocaleString()}). Acquisition momentum — ευκαιρία remarketing.`,
+        suggestions: [
+          'Ενεργοποιήστε remarketing campaign για τους νέους επισκέπτες',
+          'Δημιουργήστε lookalike audience βάσει αυτής της ομάδας',
+          'Ελέγξτε τις πηγές κίνησης (Traffic Sources) για insights',
+        ],
+        data: { currentNewUsers: curr, previousNewUsers: prev, changePercent: change },
+      };
+    }
+
+    case 'organic_conversion_drop': {
+      if (!ctx.ga4 || ctx.ga4.dailyEntries.length < 14) return null;
+      const last7 = ctx.ga4.dailyEntries.slice(-7);
+      const prev7 = ctx.ga4.dailyEntries.slice(-14, -7);
+      const curr = last7.reduce((a, d) => a + d.conversions, 0);
+      const prev = prev7.reduce((a, d) => a + d.conversions, 0);
+      if (prev === 0) return null;
+      const change = ((prev - curr) / prev) * 100;
+      if (change < threshold) return null;
+      return {
+        triggerId,
+        triggerLabel: 'Πτώση conversions',
+        severity: change > 30 ? 'critical' : 'warning',
+        title: `Conversions -${change.toFixed(0)}% τις τελευταίες 7 ημέρες`,
+        description: `Τα conversions μειώθηκαν από ${prev} σε ${curr}. Ελέγξτε αν υπάρχει πρόβλημα στο site ή αλλαγή στο traffic mix.`,
+        suggestions: [
+          'Ελέγξτε αν αλλάχτηκε κάτι στο site (UX, pricing, checkout)',
+          'Αξιολογήστε το traffic mix — μειώθηκε κάποιο quality channel;',
+          'Δείτε τις Top Pages για σελίδες με υψηλό bounce rate',
+        ],
+        data: { currentConversions: curr, previousConversions: prev, dropPercent: change },
+      };
+    }
+
+    case 'high_bounce_pages': {
+      if (!ctx.ga4 || ctx.ga4.topPages.length === 0) return null;
+      const bounceThreshold = threshold / 100;
+      const highBounce = ctx.ga4.topPages.filter(
+        p => p.bounceRate > bounceThreshold && p.sessions > 50
+      );
+      if (highBounce.length === 0) return null;
+      return {
+        triggerId,
+        triggerLabel: 'Υψηλό bounce rate',
+        severity: highBounce.length > 5 ? 'warning' : 'info',
+        title: `${highBounce.length} σελίδες με bounce rate > ${threshold}%`,
+        description: `Σελίδες με σημαντική κίνηση αλλά υψηλό bounce: ${highBounce.slice(0, 3).map(p => p.path).join(', ')}${highBounce.length > 3 ? ` (+${highBounce.length - 3} ακόμα)` : ''}`,
+        suggestions: [
+          'Ελέγξτε UX/content σε αυτές τις σελίδες',
+          'Βελτιώστε CTAs και internal linking',
+          'Αξιολογήστε αν το traffic source ταιριάζει με το content',
+        ],
+        data: { pages: highBounce.slice(0, 10).map(p => ({ path: p.path, bounceRate: p.bounceRate, sessions: p.sessions })) },
+      };
+    }
+
     default:
       return null;
   }
@@ -322,6 +526,10 @@ function evaluateTrigger(
 
 export async function runAutomationEvaluation(ctx: EvaluationContext): Promise<TriggerResult[]> {
   const settings = await AutomationSettingsService.get(ctx.brandId);
+  const existingAlerts = await AutomationAlertsService.getAll(ctx.brandId);
+  const activeAlertTriggers = new Set(
+    existingAlerts.filter(a => a.status === 'new').map(a => a.triggerId)
+  );
   const results: TriggerResult[] = [];
   const now = new Date();
 
@@ -330,6 +538,9 @@ export async function runAutomationEvaluation(ctx: EvaluationContext): Promise<T
 
     const config = settings.triggers[triggerDef.id];
     if (!config?.enabled) continue;
+
+    // Skip if there's already an active (undismissed) alert for this trigger
+    if (activeAlertTriggers.has(triggerDef.id)) continue;
 
     if (config.lastCheckedAt) {
       const lastCheck = new Date(config.lastCheckedAt);
@@ -348,6 +559,7 @@ export async function runAutomationEvaluation(ctx: EvaluationContext): Promise<T
         brandId: ctx.brandId,
         triggerId: result.triggerId,
         triggerLabel: result.triggerLabel,
+        triggerGroup: triggerDef.group,
         severity: result.severity,
         title: result.title,
         description: result.description,

@@ -30,7 +30,7 @@ import { CompareScenariosModal } from './CompareScenariosModal';
 import { MixedStrategyPanel, type MixConfig, computeBlendedWeights } from './MixedStrategyPanel';
 import { SeasonalBanner } from './SeasonalBanner';
 import { SeasonalPeriodsModal } from './SeasonalPeriodsModal';
-import { useProducts, useSegments, useBrand } from '../../hooks';
+import { useProductSource, useSegments, useBrand } from '../../hooks';
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import { useAuth } from '../../hooks';
 import {
@@ -48,6 +48,7 @@ import { calculateCompositeScore } from '../../utils/compositeScore';
 import { getStockAgeDays } from '../../utils/productUtils';
 import { rankSegments, type ScoredSegment } from '../../utils/segmentRelevance';
 import { safeBrandName } from '../../services/reportExport';
+import { exportStrategyPlan } from '../../services/segmentActionPack';
 import { useToast } from '../common/Toast';
 import { Tooltip } from '../common';
 import type { SeasonalPeriod } from '../../data/seasonalPeriods';
@@ -184,7 +185,7 @@ const PreviewCell = memo(function PreviewCell({
 
 export function WeightConfigurator() {
   const { currentBrand } = useBrand();
-  const { products, hasImported } = useProducts();
+  const { products, hasImported } = useProductSource();
   const { segments: rfmSegments } = useSegments();
   const { user } = useAuth();
   const { activeStrategy, saveActiveStrategy, isLoading: strategyLoading } = useActiveStrategy();
@@ -694,6 +695,25 @@ export function WeightConfigurator() {
     setShowFeedFormatModal(false);
   };
 
+  const [isExportingStrategy, setIsExportingStrategy] = useState(false);
+  const handleExportStrategy = async () => {
+    if (!selectedScenario) return;
+    setIsExportingStrategy(true);
+    try {
+      const scenarioName = scenarios.find(s => s.id === selectedScenario)?.name || selectedScenario;
+      await exportStrategyPlan({
+        brandName: currentBrand?.name,
+        scenarioName,
+        duration: duration === 'ongoing' ? 'Ongoing' : duration ? `${duration} ημέρες` : undefined,
+        monthlyBudget: activeStrategy?.monthlyBudget ?? null,
+        segments: rfmSegments,
+        channelRecommendation: activeStrategy?.channelRecommendation ?? null,
+      });
+      toast.success('Strategy Plan exported!');
+    } catch { toast.error('Export failed'); }
+    setIsExportingStrategy(false);
+  };
+
   // AI channel recommendations — only triggered after strategy save (strategySaveVersion > 0)
   const {
     recommendation: freshAiRec,
@@ -993,7 +1013,6 @@ export function WeightConfigurator() {
 
           {/* Actions */}
           <div className="mt-6 pt-6 border-t border-[var(--nts-border-gray)] space-y-2">
-            {/* Preview Impact removed — inline summary replaces it */}
             <Button
               variant="secondary"
               className="w-full"
@@ -1003,6 +1022,17 @@ export function WeightConfigurator() {
             >
               Generate Product Feed
             </Button>
+            {rfmSegments.length > 0 && (
+              <Button
+                variant="secondary"
+                className="w-full"
+                icon={<FileSpreadsheet size={16} />}
+                disabled={!selectedScenario || isExportingStrategy}
+                onClick={handleExportStrategy}
+              >
+                {isExportingStrategy ? 'Exporting…' : 'Export Strategy Plan'}
+              </Button>
+            )}
           </div>
         </Card>
 

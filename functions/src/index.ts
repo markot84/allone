@@ -37,6 +37,27 @@ import {
   fetchCompetitorAds,
   setDb as setCompetitorDb,
 } from './competitorMonitor';
+import { computeAggregatesForBrand, computeAggregatesForAllBrands } from './aggregateStats';
+import { evaluateAllBrandsServerSide } from './serverAlerts';
+import { sendDigestForAllBrands } from './dailyDigest';
+import { createTransporter, SENDER } from './smtpConfig';
+import {
+  getShopifyAuthUrl,
+  handleShopifyCallback,
+  fetchShopifyData,
+  setDb as setShopifyDb,
+} from './shopifyConnector';
+import {
+  saveWooCredentials,
+  fetchWooCommerceData,
+  setDb as setWooDb,
+} from './woocommerceConnector';
+import {
+  getGA4AuthUrl,
+  handleGA4Callback,
+  fetchGA4Data,
+  setDb as setGA4Db,
+} from './ga4Connector';
 
 admin.initializeApp();
 const db = getFirestore();
@@ -45,8 +66,16 @@ setGoogleAdsDb(db);
 setEmailDb(db);
 setMerchantDb(db);
 setCompetitorDb(db);
+setShopifyDb(db);
+setWooDb(db);
+setGA4Db(db);
 
 const BATCH_SIZE = 500;
+
+async function verifyBrandMembership(uid: string, brandId: string): Promise<boolean> {
+  const memberDoc = await db.doc(`brands/${brandId}/members/${uid}`).get();
+  return memberDoc.exists;
+}
 
 type ImportType = 'products' | 'campaigns' | 'segments' | 'procurement';
 
@@ -393,6 +422,7 @@ export const importData = onRequest(
         }
 
         await logImportJob(brandId, result, urlFilename, 'api_url');
+        computeAggregatesForBrand(brandId).catch(e => logger.warn('[import] aggregate refresh failed:', e));
         res.status(200).json(result);
         return;
       }
@@ -452,6 +482,7 @@ export const importData = onRequest(
       }
 
       await logImportJob(brandId, result, fileName, 'api_upload');
+      computeAggregatesForBrand(brandId).catch(e => logger.warn('[import] aggregate refresh failed:', e));
 
       res.status(200).json(result);
     } catch (error) {
@@ -492,6 +523,11 @@ export const generateApiKey = onRequest(
         return;
       }
 
+      if (!(await verifyBrandMembership(decoded.uid, brandId))) {
+        res.status(403).json({ error: 'Not a member of this brand' });
+        return;
+      }
+
       const { v4: uuidv4 } = await import('uuid');
       const key = `pp_${uuidv4().replace(/-/g, '')}`;
 
@@ -521,7 +557,7 @@ export const generateApiKey = onRequest(
  * Returns: { authUrl }
  */
 export const connectorAuth = onRequest(
-  { region: 'europe-west1', cors: true, secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID'] },
+  { region: 'europe-west1', cors: true, secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID', 'SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET'] },
   async (req, res) => {
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
@@ -530,14 +566,19 @@ export const connectorAuth = onRequest(
 
     try {
       const idToken = authHeader.slice(7).trim();
-      await admin.auth().verifyIdToken(idToken);
+      const decoded = await admin.auth().verifyIdToken(idToken);
 
-      const { brandId, provider, redirectUri } = req.body as {
-        brandId?: string; provider?: string; redirectUri?: string;
+      const { brandId, provider, redirectUri, shopDomain } = req.body as {
+        brandId?: string; provider?: string; redirectUri?: string; shopDomain?: string;
       };
 
       if (!brandId || !provider || !redirectUri) {
         res.status(400).json({ error: 'Missing brandId, provider, or redirectUri' });
+        return;
+      }
+
+      if (!(await verifyBrandMembership(decoded.uid, brandId))) {
+        res.status(403).json({ error: 'Not a member of this brand' });
         return;
       }
 
@@ -548,6 +589,14 @@ export const connectorAuth = onRequest(
         authUrl = getMetaAuthUrl(brandId, redirectUri);
       } else if (provider === 'merchant') {
         authUrl = getMerchantAuthUrl(brandId, redirectUri);
+      } else if (provider === 'ga4') {
+        authUrl = getGA4AuthUrl(brandId, redirectUri);
+      } else if (provider === 'shopify') {
+        if (!shopDomain) {
+          res.status(400).json({ error: 'Missing shopDomain for Shopify' });
+          return;
+        }
+        authUrl = getShopifyAuthUrl(brandId, shopDomain, redirectUri);
       } else {
         res.status(400).json({ error: `Unknown provider: ${provider}` });
         return;
@@ -568,9 +617,21 @@ export const connectorAuth = onRequest(
  * Handles OAuth redirect from Google/Meta
  */
 export const connectorCallback = onRequest(
-  { region: 'europe-west1', cors: true, secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID'] },
+  { region: 'europe-west1', cors: true, secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID', 'SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET'] },
   async (req, res) => {
-    const { code, state } = req.query as { code?: string; state?: string };
+    const { code, state, error: oauthError } = req.query as { code?: string; state?: string; error?: string };
+
+    // Google OAuth may redirect with ?error=access_denied instead of ?code=xxx
+    if (oauthError && state) {
+      try {
+        const { provider } = JSON.parse(Buffer.from(state, 'base64url').toString());
+        logger.warn(`[ConnectorCallback] OAuth denied: ${oauthError} for ${provider}`);
+        res.redirect(`https://www.performanceplus.gr/#data?connector=${provider}&status=error&message=${encodeURIComponent(oauthError === 'access_denied' ? 'Η πρόσβαση απορρίφθηκε' : oauthError)}`);
+      } catch {
+        res.status(400).send(`OAuth error: ${oauthError}`);
+      }
+      return;
+    }
 
     if (!code || !state) {
       res.status(400).send('Missing code or state parameter');
@@ -581,6 +642,7 @@ export const connectorCallback = onRequest(
       const { brandId, provider, redirectUri } = JSON.parse(
         Buffer.from(state, 'base64url').toString()
       );
+      logger.info(`[ConnectorCallback] provider=${provider} brandId=${brandId}`);
 
       if (!redirectUri) {
         res.status(400).send('Missing redirectUri in state');
@@ -617,6 +679,11 @@ export const connectorCallback = onRequest(
         }
       } else if (provider === 'merchant') {
         result = await handleMerchantCallback(code, brandId, redirectUri);
+      } else if (provider === 'ga4') {
+        result = await handleGA4Callback(code, brandId, redirectUri);
+      } else if (provider === 'shopify') {
+        const shopDomain = JSON.parse(Buffer.from(state, 'base64url').toString()).shopDomain;
+        result = await handleShopifyCallback(code, brandId, shopDomain);
       } else {
         res.status(400).send(`Unknown provider: ${provider}`);
         return;
@@ -652,10 +719,15 @@ export const connectorDisconnect = onRequest(
 
     try {
       const idToken = authHeader.slice(7).trim();
-      await admin.auth().verifyIdToken(idToken);
+      const decoded = await admin.auth().verifyIdToken(idToken);
 
       const { brandId, provider } = req.body as { brandId?: string; provider?: string };
       if (!brandId || !provider) { res.status(400).json({ error: 'Missing params' }); return; }
+
+      if (!(await verifyBrandMembership(decoded.uid, brandId))) {
+        res.status(403).json({ error: 'Not a member of this brand' });
+        return;
+      }
 
       await db.doc(`connectors/${brandId}`).set(
         { [provider]: { connected: false, accessToken: '', refreshToken: '' } },
@@ -686,7 +758,7 @@ export const connectorSelectAccount = onRequest(
 
     try {
       const idToken = authHeader.slice(7).trim();
-      await admin.auth().verifyIdToken(idToken);
+      const decoded = await admin.auth().verifyIdToken(idToken);
 
       const { brandId, provider, accountId, accountName } = req.body as {
         brandId?: string; provider?: string; accountId?: string; accountName?: string;
@@ -694,6 +766,11 @@ export const connectorSelectAccount = onRequest(
 
       if (!brandId || !provider || !accountId) {
         res.status(400).json({ error: 'Missing brandId, provider, or accountId' });
+        return;
+      }
+
+      if (!(await verifyBrandMembership(decoded.uid, brandId))) {
+        res.status(403).json({ error: 'Not a member of this brand' });
         return;
       }
 
@@ -705,6 +782,19 @@ export const connectorSelectAccount = onRequest(
         result = { success: true };
       } else if (provider === 'merchant') {
         await selectMerchantAccount(brandId, accountId, accountName || accountId);
+        result = { success: true };
+      } else if (provider === 'ga4') {
+        await db.doc(`connectors/${brandId}`).set(
+          {
+            ga4: {
+              connected: true,
+              pendingAccountSelection: false,
+              propertyId: accountId,
+              propertyName: accountName || `Property ${accountId}`,
+            },
+          },
+          { merge: true }
+        );
         result = { success: true };
       } else {
         res.status(400).json({ error: `Account selection not supported for ${provider}` });
@@ -726,7 +816,7 @@ export const connectorSelectAccount = onRequest(
  * Body: { brandId, provider }
  */
 export const connectorSync = onRequest(
-  { region: 'europe-west1', cors: true, timeoutSeconds: 300, memory: '512MiB', secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID'] },
+  { region: 'europe-west1', cors: true, timeoutSeconds: 300, memory: '512MiB', secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID', 'SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET'] },
   async (req, res) => {
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
@@ -735,10 +825,15 @@ export const connectorSync = onRequest(
 
     try {
       const idToken = authHeader.slice(7).trim();
-      await admin.auth().verifyIdToken(idToken);
+      const decoded = await admin.auth().verifyIdToken(idToken);
 
       const { brandId, provider } = req.body as { brandId?: string; provider?: string };
       if (!brandId || !provider) { res.status(400).json({ error: 'Missing params' }); return; }
+
+      if (!(await verifyBrandMembership(decoded.uid, brandId))) {
+        res.status(403).json({ error: 'Not a member of this brand' });
+        return;
+      }
 
       let result;
       if (provider === 'google_ads') {
@@ -749,12 +844,67 @@ export const connectorSync = onRequest(
         result = await fetchPriceBenchmarks(brandId);
       } else if (provider === 'competitor') {
         result = await fetchCompetitorAds(brandId);
+      } else if (provider === 'shopify') {
+        result = await fetchShopifyData(brandId);
+      } else if (provider === 'woocommerce') {
+        result = await fetchWooCommerceData(brandId);
+      } else if (provider === 'ga4') {
+        result = await fetchGA4Data(brandId);
       } else {
         res.status(400).json({ error: `Unknown provider: ${provider}` });
         return;
       }
 
       res.status(200).json(result);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      res.status(500).json({ error: msg });
+    }
+  }
+);
+
+// ─── Connector: Save Credentials (WooCommerce) ────────────────
+
+/**
+ * POST /connectorSaveCredentials
+ * Body: { brandId, provider: "woocommerce", storeUrl, consumerKey, consumerSecret }
+ */
+export const connectorSaveCredentials = onRequest(
+  { region: 'europe-west1', cors: true },
+  async (req, res) => {
+    if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+
+    try {
+      const idToken = authHeader.slice(7).trim();
+      const decoded = await admin.auth().verifyIdToken(idToken);
+
+      const { brandId, provider, storeUrl, consumerKey, consumerSecret } = req.body as {
+        brandId?: string; provider?: string; storeUrl?: string; consumerKey?: string; consumerSecret?: string;
+      };
+
+      if (!brandId || !provider) {
+        res.status(400).json({ error: 'Missing brandId or provider' });
+        return;
+      }
+
+      if (!(await verifyBrandMembership(decoded.uid, brandId))) {
+        res.status(403).json({ error: 'Not a member of this brand' });
+        return;
+      }
+
+      if (provider === 'woocommerce') {
+        if (!storeUrl || !consumerKey || !consumerSecret) {
+          res.status(400).json({ error: 'Missing storeUrl, consumerKey, or consumerSecret' });
+          return;
+        }
+        const result = await saveWooCredentials(brandId, storeUrl, consumerKey, consumerSecret);
+        res.status(200).json(result);
+      } else {
+        res.status(400).json({ error: `Credentials auth not supported for ${provider}` });
+      }
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       res.status(500).json({ error: msg });
@@ -771,7 +921,7 @@ export const scheduledSync = onSchedule(
     region: 'europe-west1',
     memory: '512MiB',
     timeoutSeconds: 540,
-    secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID'],
+    secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID', 'SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET'],
   },
   async () => {
     logger.info('[ScheduledSync] Starting daily connector sync');
@@ -806,6 +956,24 @@ export const scheduledSync = onSchedule(
           logger.info(`[ScheduledSync] Merchant for ${brandId}: imported ${result.imported}`);
         } catch (err) {
           logger.error(`[ScheduledSync] Merchant failed for ${brandId}:`, err);
+        }
+      }
+
+      if (data.shopify?.connected) {
+        try {
+          const result = await fetchShopifyData(brandId);
+          logger.info(`[ScheduledSync] Shopify for ${brandId}: imported ${result.imported}`);
+        } catch (err) {
+          logger.error(`[ScheduledSync] Shopify failed for ${brandId}:`, err);
+        }
+      }
+
+      if (data.woocommerce?.connected) {
+        try {
+          const result = await fetchWooCommerceData(brandId);
+          logger.info(`[ScheduledSync] WooCommerce for ${brandId}: imported ${result.imported}`);
+        } catch (err) {
+          logger.error(`[ScheduledSync] WooCommerce failed for ${brandId}:`, err);
         }
       }
     }
@@ -928,5 +1096,167 @@ export const sendEmailNotification = onRequest(
     }
 
     res.status(200).json({ ok: true, results });
+  }
+);
+
+// ── Send Invite Email ────────────────────────────────────────────────────────
+
+export const sendInviteEmail = onRequest(
+  { region: 'europe-west1', cors: true },
+  async (req, res) => {
+    if (req.method !== 'POST') { res.status(405).send('POST only'); return; }
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    try {
+      await admin.auth().verifyIdToken(authHeader.split('Bearer ')[1]);
+    } catch {
+      res.status(401).json({ error: 'Invalid token' });
+      return;
+    }
+
+    const { to, brandName, inviteLink, role, department } = req.body;
+    if (!to || !inviteLink) {
+      res.status(400).json({ error: 'Missing to or inviteLink' });
+      return;
+    }
+
+    const transporter = createTransporter();
+    if (!transporter) {
+      logger.warn('SMTP not configured — skipping invite email');
+      res.status(200).json({ ok: false, reason: 'smtp_not_configured' });
+      return;
+    }
+
+    const roleLabel = role === 'admin' ? 'Admin' : 'Member';
+    const deptLabel = department || '';
+
+    const html = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 520px; margin: 0 auto; padding: 24px;">
+        <div style="background: #111; border-radius: 12px 12px 0 0; padding: 20px 24px; text-align: center;">
+          <span style="color: #fff; font-size: 18px; font-weight: 700;">Performance+</span>
+        </div>
+        <div style="border: 1px solid #E5E7EB; border-top: none; border-radius: 0 0 12px 12px; padding: 24px;">
+          <h2 style="margin: 0 0 8px; font-size: 16px; color: #111827;">Πρόσκληση στο ${brandName || 'Performance+'}</h2>
+          <p style="margin: 0 0 6px; font-size: 14px; color: #6B7280; line-height: 1.5;">
+            Έχετε προσκληθεί να συμμετάσχετε στο <strong style="color: #111827;">${brandName}</strong> ως <strong>${roleLabel}</strong>${deptLabel ? ` (${deptLabel})` : ''}.
+          </p>
+          <p style="margin: 0 0 20px; font-size: 14px; color: #6B7280; line-height: 1.5;">
+            Πατήστε τον παρακάτω σύνδεσμο για να αποδεχτείτε την πρόσκληση.
+          </p>
+          <a href="${inviteLink}"
+             style="display: inline-block; padding: 12px 28px; background: #F97316; color: #fff; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 600;">
+            Αποδοχή πρόσκλησης
+          </a>
+          <p style="margin: 16px 0 0; font-size: 12px; color: #9CA3AF;">
+            Ο σύνδεσμος λήγει σε 7 ημέρες. Αν δεν μπορείτε να κάνετε κλικ, αντιγράψτε αυτό το URL:<br/>
+            <span style="color: #6B7280; word-break: break-all;">${inviteLink}</span>
+          </p>
+        </div>
+        <p style="text-align: center; margin-top: 16px; font-size: 11px; color: #9CA3AF;">
+          Performance+ · noreply@performanceplus.gr
+        </p>
+      </div>
+    `;
+
+    try {
+      await transporter.sendMail({
+        from: SENDER,
+        to,
+        subject: `[Performance+] Πρόσκληση στο ${brandName || 'brand'}`,
+        html,
+      });
+      logger.info(`Invite email sent to ${to} for brand ${brandName}`);
+      res.status(200).json({ ok: true });
+    } catch (err) {
+      logger.error('Failed to send invite email:', err);
+      res.status(500).json({ ok: false, error: 'Email send failed' });
+    }
+  }
+);
+
+// ── Aggregate Stats: On-Demand (callable) ───────────────────────────────────
+
+export const refreshAggregates = onRequest(
+  { region: 'europe-west1', cors: true, timeoutSeconds: 120, memory: '512MiB' },
+  async (req, res) => {
+    if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+
+    try {
+      const idToken = authHeader.slice(7).trim();
+      const decoded = await admin.auth().verifyIdToken(idToken);
+
+      const { brandId } = req.body as { brandId?: string };
+      if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
+
+      if (!(await verifyBrandMembership(decoded.uid, brandId))) {
+        res.status(403).json({ error: 'Not a member of this brand' });
+        return;
+      }
+
+      await computeAggregatesForBrand(brandId);
+      res.status(200).json({ success: true, brandId });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      logger.error('[refreshAggregates]', msg);
+      res.status(500).json({ error: msg });
+    }
+  }
+);
+
+// ── Aggregate Stats: Daily Schedule (runs after connector sync) ─────────────
+
+export const scheduledAggregates = onSchedule(
+  {
+    schedule: 'every day 06:30',
+    timeZone: 'Europe/Athens',
+    region: 'europe-west1',
+    memory: '512MiB',
+    timeoutSeconds: 300,
+  },
+  async () => {
+    logger.info('[scheduledAggregates] Starting daily aggregate computation');
+    const count = await computeAggregatesForAllBrands();
+    logger.info(`[scheduledAggregates] Completed for ${count} brands`);
+  }
+);
+
+// ── Server-Side Alert Evaluation (runs after aggregates are fresh) ──────────
+
+export const scheduledAlerts = onSchedule(
+  {
+    schedule: 'every day 07:00',
+    timeZone: 'Europe/Athens',
+    region: 'europe-west1',
+    memory: '512MiB',
+    timeoutSeconds: 300,
+  },
+  async () => {
+    logger.info('[scheduledAlerts] Starting server-side alert evaluation');
+    const { brands, alerts } = await evaluateAllBrandsServerSide();
+    logger.info(`[scheduledAlerts] Completed: ${brands} brands, ${alerts} new alerts`);
+  }
+);
+
+// ── Daily Email Digest (runs after alerts are generated) ────────────────────
+
+export const scheduledDigest = onSchedule(
+  {
+    schedule: 'every day 07:30',
+    timeZone: 'Europe/Athens',
+    region: 'europe-west1',
+    memory: '512MiB',
+    timeoutSeconds: 300,
+  },
+  async () => {
+    logger.info('[scheduledDigest] Starting daily email digest');
+    const { brands, emails } = await sendDigestForAllBrands();
+    logger.info(`[scheduledDigest] Completed: ${brands} brands, ${emails} emails sent`);
   }
 );

@@ -1,10 +1,11 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { TrendingUp, Filter, Download, Search, DollarSign, Trash2, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
-import { Card, CardHeader, Badge, Button, Spinner, useToast, Tooltip } from '../common';
+import { Card, CardHeader, Badge, Button, Spinner, useToast, Tooltip, AlertsBanner } from '../common';
 import { DateRangePicker } from '../ui/DateRangePicker';
 import { useCampaigns, useBrand } from '../../hooks';
+import { useSearchIntelligence } from '../../hooks/useSearchIntelligence';
 import { FirestoreService } from '../../services/firestore';
 import { formatCurrency, formatNumber, formatMultiplier, formatPercent } from '../../utils/format';
 import type { Campaign } from '../../types';
@@ -66,6 +67,17 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
 
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const LS_CONV = 'campaigns_convFilter';
+  const [convActionFilter, setConvActionFilter] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem(LS_CONV) || '[]'); } catch { return []; }
+  });
+  const [showConvDropdown, setShowConvDropdown] = useState(false);
+  const [activeTab, setActiveTab] = useState<'campaigns' | 'search_terms' | 'keywords'>('campaigns');
+  const COLLAPSED_LIMIT = 12;
+  const [tableExpanded, setTableExpanded] = useState(false);
+  const { searchTerms, keywords, hasData: hasSearchData } = useSearchIntelligence();
+  const [stSearch, setStSearch] = useState('');
+  const [kwSearch, setKwSearch] = useState('');
 
   const handleDeleteCampaigns = async () => {
     if (!currentBrand?.id) return;
@@ -83,9 +95,37 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
     }
   };
 
+  // Resolve effective status for Meta campaigns that were imported with hardcoded 'active'
+  const resolveStatus = useCallback((c: Campaign): string => {
+    const raw = (c.status || '').toLowerCase();
+    if (raw && raw !== 'active') return raw;
+    // For Meta campaigns with dailyMetrics, check if the campaign is still recent
+    const dm = (c as any).dailyMetrics as Record<string, any> | undefined;
+    if (dm && Object.keys(dm).length > 0) {
+      const latestDate = Object.keys(dm).sort().pop();
+      if (latestDate) {
+        const latest = new Date(latestDate);
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - 45);
+        if (latest < cutoff) return 'completed';
+      }
+    }
+    // Check end_date if it's not the sync range date (meta sets period ranges)
+    if (c.end_date && !c.end_date.includes('2024') && !c.end_date.includes('2023')) {
+      const end = new Date(c.end_date);
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - 14);
+      if (end < cutoff && c.channel === 'Meta') return 'completed';
+    }
+    return raw || 'active';
+  }, []);
+
   // Filter campaigns
   const filteredCampaigns = useMemo(() => {
-    let filtered = campaigns as Campaign[];
+    let filtered = (campaigns as Campaign[]).map(c => ({
+      ...c,
+      status: resolveStatus(c),
+    }));
 
     // Search filter
     if (searchQuery) {
@@ -147,6 +187,28 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
     return filtered;
   }, [campaigns, searchQuery, channelFilter, statusFilter, dateFrom, dateTo]);
 
+  const handleExportCampaigns = useCallback(() => {
+    if (filteredCampaigns.length === 0) return;
+    const headers = ['Name', 'Channel', 'Status', 'Impressions', 'Clicks', 'CTR %', 'Spend', 'Conversions', 'Conv. Value', 'ROAS', 'CPA', 'Start Date', 'End Date'];
+    const rows = filteredCampaigns.map(c => [
+      c.name || '', c.channel || '', c.status || '',
+      c.impressions ?? '', c.clicks ?? '',
+      c.impressions ? ((c.clicks || 0) / c.impressions * 100).toFixed(2) : '',
+      c.amount_spent ?? '', c.conversions ?? '', c.conversion_value ?? '',
+      c.amount_spent ? ((c.conversion_value || 0) / c.amount_spent).toFixed(2) : '',
+      c.conversions ? ((c.amount_spent || 0) / c.conversions).toFixed(2) : '',
+      c.start_date || '', c.end_date || '',
+    ]);
+    const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `campaigns_export_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [filteredCampaigns]);
+
   // Compute date-range-aware metrics per campaign
   const campaignsWithDateMetrics = useMemo(() => {
     const useDateFilter = !!(dateFrom || dateTo);
@@ -158,6 +220,9 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
     return filteredCampaigns.map(c => {
       if (!c.dailyMetrics || Object.keys(c.dailyMetrics).length === 0) return c;
       let impressions = 0, clicks = 0, conversions = 0, amount_spent = 0, conversion_value = 0;
+      const dateConvActions: Record<string, { conversions: number; value: number }> = {};
+      const countedConvMonths = new Set<string>();
+
       for (const [date, m] of Object.entries(c.dailyMetrics)) {
         if (bucketOverlaps(date, fromDate, toDate)) {
           impressions += m.impressions || 0;
@@ -165,18 +230,71 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
           conversions += m.conversions || 0;
           amount_spent += m.amount_spent || 0;
           conversion_value += m.conversion_value || 0;
+
+          const mAny = m as Record<string, any>;
+          if (mAny.conversionActions && typeof mAny.conversionActions === 'object') {
+            const monthKey = date.slice(0, 7); // "2026-02"
+            if (!countedConvMonths.has(monthKey)) {
+              countedConvMonths.add(monthKey);
+              for (const [label, vals] of Object.entries(mAny.conversionActions as Record<string, { conversions: number; value: number }>)) {
+                if (!dateConvActions[label]) dateConvActions[label] = { conversions: 0, value: 0 };
+                dateConvActions[label].conversions += vals.conversions || 0;
+                dateConvActions[label].value += vals.value || 0;
+              }
+            }
+          }
         }
       }
+
+      // Date filter active: always use date-filtered conversionActions only
+      const conversionActions = dateConvActions;
+
       const ctr = impressions > 0 ? Math.round((clicks / impressions) * 10000) / 100 : 0;
       const roas = amount_spent > 0 ? Math.round((conversion_value / amount_spent) * 100) / 100 : 0;
       amount_spent = Math.round(amount_spent * 100) / 100;
-      return { ...c, impressions, clicks, conversions, amount_spent, conversion_value, ctr, roas };
+      return { ...c, impressions, clicks, conversions, amount_spent, conversion_value, ctr, roas, conversionActions };
     });
   }, [filteredCampaigns, dateFrom, dateTo]);
 
+  const applyConvFilter = (c: Campaign): Campaign => {
+    if (convActionFilter.length === 0 || !c.conversionActions) return c;
+    let filteredConversions = 0;
+    const purchaseSelected = convActionFilter.includes('Purchase');
+
+    for (const action of convActionFilter) {
+      if (action === 'Purchase') {
+        const purchaseKeys = Object.keys(c.conversionActions).filter(k => k.toLowerCase().includes('purchase'));
+        const priority = ['Purchase (Pixel)', 'Purchase Completed (Google Ads)'];
+        const picked = purchaseKeys.find(k => priority.includes(k)) || purchaseKeys[0];
+        if (picked) {
+          filteredConversions += c.conversionActions[picked].conversions;
+        }
+      } else {
+        if (purchaseSelected && action.toLowerCase().includes('purchase')) continue;
+        const a = c.conversionActions[action];
+        if (a) {
+          filteredConversions += a.conversions;
+        }
+      }
+    }
+
+    // Derive conversion_value proportionally from exact general metrics
+    // to avoid discrepancies between per-action and aggregate API queries
+    const totalConv = c.conversions || 0;
+    const ratio = totalConv > 0 ? filteredConversions / totalConv : 0;
+    const conversion_value = Math.round((c.conversion_value || 0) * ratio * 100) / 100;
+    const roas = (c.amount_spent || 0) > 0 ? Math.round((conversion_value / (c.amount_spent || 1)) * 100) / 100 : 0;
+    return { ...c, conversions: filteredConversions, conversion_value, roas };
+  };
+
+  const campaignsWithConvFilter = useMemo(() => {
+    if (convActionFilter.length === 0) return campaignsWithDateMetrics;
+    return campaignsWithDateMetrics.map(applyConvFilter);
+  }, [campaignsWithDateMetrics, convActionFilter]);
+
   const sortedCampaigns = useMemo(() => {
-    if (!sortColumn) return campaignsWithDateMetrics;
-    const sorted = [...campaignsWithDateMetrics].sort((a, b) => {
+    if (!sortColumn) return campaignsWithConvFilter;
+    const sorted = [...campaignsWithConvFilter].sort((a, b) => {
       let va: string | number = 0;
       let vb: string | number = 0;
       switch (sortColumn) {
@@ -195,7 +313,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
       return sortDirection === 'asc' ? (va as number) - (vb as number) : (vb as number) - (va as number);
     });
     return sorted;
-  }, [campaignsWithDateMetrics, sortColumn, sortDirection]);
+  }, [campaignsWithConvFilter, sortColumn, sortDirection]);
 
   const handleSort = (col: string) => {
     if (sortColumn === col) {
@@ -206,32 +324,20 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
     }
   };
 
-  // Calculate summary stats from dailyMetrics within selected date range
+  // Summary stats derived from the already-filtered pipeline
+  // (campaignsWithConvFilter has date-filtered + conv-action-filtered metrics)
   const summaryStats = useMemo(() => {
-    const list = filteredCampaigns;
+    const list = campaignsWithConvFilter;
     const total = list.length;
-    const useDateFilter = !!(dateFrom || dateTo);
-    const fromDate = dateFrom || '0000-00-00';
-    const toDate = dateTo || '9999-99-99';
 
     let totalSpent = 0;
     let totalConversions = 0;
     let totalConversionValue = 0;
 
     for (const c of list) {
-      if (useDateFilter && c.dailyMetrics && Object.keys(c.dailyMetrics).length > 0) {
-        for (const [date, m] of Object.entries(c.dailyMetrics)) {
-          if (bucketOverlaps(date, fromDate, toDate)) {
-            totalSpent += m.amount_spent || 0;
-            totalConversions += m.conversions || 0;
-            totalConversionValue += m.conversion_value || 0;
-          }
-        }
-      } else {
-        totalSpent += c.amount_spent || 0;
-        totalConversions += c.conversions || 0;
-        totalConversionValue += c.conversion_value || 0;
-      }
+      totalSpent += c.amount_spent || 0;
+      totalConversions += c.conversions || 0;
+      totalConversionValue += c.conversion_value || 0;
     }
 
     const avgROAS = totalSpent > 0 ? totalConversionValue / totalSpent : 0;
@@ -250,7 +356,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
       avgROAS,
       byChannel,
     };
-  }, [filteredCampaigns, dateFrom, dateTo]);
+  }, [campaignsWithConvFilter]);
 
   // Standard channels + unique from data (sorted: standard first, then data-derived)
   const STANDARD_CHANNELS = ['Meta', 'Google Ads', 'Google Shopping', 'Other'];
@@ -279,6 +385,35 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
     });
     return Array.from(unique);
   }, [campaigns]);
+
+  const allConversionActions = useMemo(() => {
+    const actions = new Set<string>();
+    campaignsWithDateMetrics.forEach(c => {
+      if (c.conversionActions) {
+        Object.keys(c.conversionActions).forEach(a => actions.add(a));
+      }
+    });
+    // Add unified "Purchase" if any platform-specific purchase type exists
+    const hasPurchaseVariant = Array.from(actions).some(a => a.toLowerCase().includes('purchase'));
+    if (hasPurchaseVariant && !actions.has('Purchase')) {
+      actions.add('Purchase');
+    }
+    return Array.from(actions).sort();
+  }, [campaignsWithDateMetrics]);
+
+  const toggleConvAction = (action: string) => {
+    setConvActionFilter(prev => {
+      const next = prev.includes(action) ? prev.filter(a => a !== action) : [...prev, action];
+      localStorage.setItem(LS_CONV, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const clearConvFilter = () => {
+    setConvActionFilter([]);
+    localStorage.removeItem(LS_CONV);
+  };
+
 
   if (isLoading) {
     return (
@@ -349,12 +484,46 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
           >
             {isDeleting ? 'Διαγραφή…' : 'Διαγραφή δεδομένων'}
           </Button>
-          <Button variant="secondary" icon={<Download size={16} />}>
-            Export
+          <Button variant="secondary" icon={<Download size={16} />} onClick={handleExportCampaigns} disabled={filteredCampaigns.length === 0}>
+            Export .csv
           </Button>
         </div>
       </div>
 
+      {/* Automation Alerts */}
+      <AlertsBanner filterGroup="campaigns" maxAlerts={3} />
+
+      {/* Tabs */}
+      <div className="flex gap-1 bg-[#F5F5F5] p-1 rounded-lg w-fit">
+        {(['campaigns', 'search_terms', 'keywords'] as const).map(tab => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+              activeTab === tab
+                ? 'bg-white text-[#111827] shadow-sm'
+                : 'text-[#6B7280] hover:text-[#111827]'
+            }`}
+          >
+            {tab === 'campaigns' ? `Campaigns (${summaryStats.total})` :
+             tab === 'search_terms' ? `Search Terms ${hasSearchData ? `(${searchTerms.length})` : ''}` :
+             `Keywords ${hasSearchData ? `(${keywords.length})` : ''}`}
+          </button>
+        ))}
+      </div>
+
+      {activeTab !== 'campaigns' && (
+        <SearchIntelligenceTab
+          type={activeTab}
+          searchTerms={searchTerms}
+          keywords={keywords}
+          hasData={hasSearchData}
+          search={activeTab === 'search_terms' ? stSearch : kwSearch}
+          onSearchChange={activeTab === 'search_terms' ? setStSearch : setKwSearch}
+        />
+      )}
+
+      {activeTab === 'campaigns' && <>
       {/* Date range picker */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <DateRangePicker
@@ -467,16 +636,72 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                 <option key={status} value={status}>{status}</option>
               ))}
             </select>
+
+            {/* Conversion Action Filter */}
+            {allConversionActions.length > 0 && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowConvDropdown(!showConvDropdown)}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition-all ${
+                    convActionFilter.length > 0
+                      ? 'bg-[var(--nts-accent)] text-white'
+                      : 'bg-[#F5F5F5] text-[#4A4A4A] hover:bg-[#E5E5E5]'
+                  }`}
+                >
+                  <Filter size={14} />
+                  {convActionFilter.length > 0
+                    ? `Conversions (${convActionFilter.length})`
+                    : 'Conversion Type'}
+                </button>
+                {showConvDropdown && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowConvDropdown(false)} />
+                    <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-[#E5E5E5] rounded-xl shadow-lg py-2 min-w-[220px] max-h-[320px] overflow-y-auto">
+                      <div className="px-3 py-1.5 border-b border-[#F0F0F0] flex items-center justify-between">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-[#9CA3AF]">Conversion Actions</span>
+                        {convActionFilter.length > 0 && (
+                          <button onClick={clearConvFilter} className="text-[10px] text-[var(--nts-accent)] hover:underline">Clear</button>
+                        )}
+                      </div>
+                      {allConversionActions.map(action => (
+                        <label
+                          key={action}
+                          className="flex items-center gap-2.5 px-3 py-2 hover:bg-[#F5F5F5] cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={convActionFilter.includes(action)}
+                            onChange={() => toggleConvAction(action)}
+                            className="w-3.5 h-3.5 rounded border-[#D1D5DB] text-[var(--nts-accent)] focus:ring-[var(--nts-accent)]"
+                          />
+                          <span className="text-xs text-[#1A1A1A]">{action}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </Card>
 
       {/* Campaigns Table */}
       <Card padding="lg">
-        <CardHeader
-          title="Campaigns List"
-          subtitle={`${filteredCampaigns.length} ${filteredCampaigns.length === 1 ? 'campaign' : 'campaigns'}`}
-        />
+        <div className="flex items-center justify-between">
+          <CardHeader
+            title="Campaigns List"
+            subtitle={`${filteredCampaigns.length} ${filteredCampaigns.length === 1 ? 'campaign' : 'campaigns'}`}
+          />
+          {sortedCampaigns.length > COLLAPSED_LIMIT && (
+            <button
+              onClick={() => setTableExpanded(!tableExpanded)}
+              className="text-xs font-medium text-[var(--nts-accent)] hover:underline px-3 py-1.5 rounded-md hover:bg-[var(--nts-accent)]/5 transition-colors"
+            >
+              {tableExpanded ? 'Σύμπτυξη' : `Εμφάνιση όλων (${sortedCampaigns.length})`}
+            </button>
+          )}
+        </div>
 
         {filteredCampaigns.length === 0 ? (
           <div className="text-center py-12">
@@ -499,7 +724,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                 </tr>
               </thead>
               <tbody>
-                {sortedCampaigns.map((campaign, index) => (
+                {(tableExpanded ? sortedCampaigns : sortedCampaigns.slice(0, COLLAPSED_LIMIT)).map((campaign, index) => (
                   <motion.tr
                     key={campaign.id}
                     initial={{ opacity: 0, y: 10 }}
@@ -556,7 +781,128 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
           </div>
         )}
       </Card>
+      </>}
     </div>
+  );
+}
+
+// ─── Search Intelligence Tab ────────────────────────────────────
+
+function SearchIntelligenceTab({ type, searchTerms, keywords, hasData, search, onSearchChange }: {
+  type: 'search_terms' | 'keywords';
+  searchTerms: any[];
+  keywords: any[];
+  hasData: boolean;
+  search: string;
+  onSearchChange: (v: string) => void;
+}) {
+  const items = type === 'search_terms' ? searchTerms : keywords;
+  const q = search.toLowerCase();
+  const filtered = q
+    ? items.filter((item: any) => {
+        const text = type === 'search_terms' ? item.term : item.keyword;
+        return (text || '').toLowerCase().includes(q) || (item.campaign || '').toLowerCase().includes(q);
+      })
+    : items;
+
+  if (!hasData) {
+    return (
+      <Card padding="lg" className="text-center py-12">
+        <p className="text-[#6B7280]">
+          {type === 'search_terms' ? 'Search Terms' : 'Keywords'} θα εμφανιστούν μετά το επόμενο Google Ads sync.
+        </p>
+        <p className="text-xs text-[#9CA3AF] mt-2">Data Import → Google Ads → Sync τώρα</p>
+      </Card>
+    );
+  }
+
+  return (
+    <Card padding="lg">
+      <div className="flex items-center justify-between mb-4">
+        <CardHeader
+          title={type === 'search_terms' ? 'Search Terms' : 'Keywords'}
+          subtitle={`${filtered.length} ${type === 'search_terms' ? 'search terms' : 'keywords'} · τελευταίες 90 ημέρες`}
+        />
+        <div className="relative w-64">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
+          <input
+            type="text"
+            value={search}
+            onChange={e => onSearchChange(e.target.value)}
+            placeholder={type === 'search_terms' ? 'Αναζήτηση term...' : 'Αναζήτηση keyword...'}
+            className="w-full pl-9 pr-3 py-2 rounded-lg bg-[#F5F5F5] border-none text-sm focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)]/20"
+          />
+        </div>
+      </div>
+
+      <div className="overflow-x-auto max-h-[60vh] overflow-y-auto">
+        <table className="w-full text-left">
+          <thead className="sticky top-0 bg-[#F9FAFB] z-10">
+            <tr className="text-[11px] text-[#6B7280] uppercase tracking-wider border-b border-[#E5E7EB]">
+              <th className="pb-2 px-2 font-medium">{type === 'search_terms' ? 'Search Term' : 'Keyword'}</th>
+              {type === 'keywords' && <th className="pb-2 px-2 font-medium">Match</th>}
+              {type === 'keywords' && <th className="pb-2 px-2 font-medium text-right">QS</th>}
+              <th className="pb-2 px-2 font-medium">Campaign</th>
+              <th className="pb-2 px-2 font-medium text-right">Impr.</th>
+              <th className="pb-2 px-2 font-medium text-right">Clicks</th>
+              <th className="pb-2 px-2 font-medium text-right">CTR</th>
+              <th className="pb-2 px-2 font-medium text-right">Conv.</th>
+              <th className="pb-2 px-2 font-medium text-right">Cost</th>
+              <th className="pb-2 px-2 font-medium text-right">Conv. Value</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[#F3F4F6]">
+            {filtered.slice(0, 200).map((item: any, i: number) => {
+              const text = type === 'search_terms' ? item.term : item.keyword;
+              const ctr = item.impressions > 0 ? ((item.clicks / item.impressions) * 100).toFixed(2) : '0';
+              const qsBg = item.qualityScore >= 7 ? '#DCFCE7' : item.qualityScore >= 4 ? '#FEF9C3' : item.qualityScore ? '#FEE2E2' : '#F9FAFB';
+              const qsColor = item.qualityScore >= 7 ? '#166534' : item.qualityScore >= 4 ? '#854D0E' : item.qualityScore ? '#991B1B' : '#9CA3AF';
+
+              return (
+                <tr key={`${text}-${i}`} className="hover:bg-[#FAFAFA] transition-colors text-sm">
+                  <td className="py-2 px-2 font-medium text-[#111827] max-w-xs truncate">{text}</td>
+                  {type === 'keywords' && (
+                    <td className="py-2 px-2">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#F3F4F6] text-[#374151] uppercase">
+                        {(item.matchType || '').replace('_', ' ').toLowerCase()}
+                      </span>
+                    </td>
+                  )}
+                  {type === 'keywords' && (
+                    <td className="py-2 px-2 text-right">
+                      {item.qualityScore ? (
+                        <span className="inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold" style={{ backgroundColor: qsBg, color: qsColor }}>
+                          {item.qualityScore}
+                        </span>
+                      ) : <span className="text-[#9CA3AF]">—</span>}
+                    </td>
+                  )}
+                  <td className="py-2 px-2 text-[#6B7280] text-xs max-w-[180px] truncate">{item.campaign}</td>
+                  <td className="py-2 px-2 text-right font-mono text-[#374151]">{item.impressions.toLocaleString()}</td>
+                  <td className="py-2 px-2 text-right font-mono text-[#374151]">{item.clicks.toLocaleString()}</td>
+                  <td className="py-2 px-2 text-right font-mono text-[#374151]">{ctr}%</td>
+                  <td className="py-2 px-2 text-right font-mono text-[#374151]">{item.conversions > 0 ? item.conversions.toFixed(1) : '—'}</td>
+                  <td className="py-2 px-2 text-right font-mono text-[#374151]">€{item.cost.toFixed(2)}</td>
+                  <td className="py-2 px-2 text-right font-mono text-[#374151]">
+                    {item.conversionValue > 0 ? `€${item.conversionValue.toFixed(2)}` : '—'}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {filtered.length === 0 && (
+          <p className="text-sm text-[#9CA3AF] text-center py-8">
+            {search ? 'Δεν βρέθηκαν αποτελέσματα.' : 'Δεν υπάρχουν δεδομένα.'}
+          </p>
+        )}
+        {filtered.length > 200 && (
+          <p className="text-xs text-[#9CA3AF] text-center py-3">
+            Εμφανίζονται τα πρώτα 200 από {filtered.length} αποτελέσματα
+          </p>
+        )}
+      </div>
+    </Card>
   );
 }
 

@@ -185,45 +185,45 @@ export function ContentStrategy() {
             </div>
           </div>
 
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {directions.map((dir, i) => (
               <motion.div
                 key={i}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.06 }}
-                className="p-4 bg-[#FAFAFA] border border-[#E5E5E5] rounded-xl"
+                className="rounded-xl border border-[#E5E5E5] bg-white overflow-hidden hover:shadow-sm transition-shadow"
               >
-                <div className="flex items-start gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-white border border-[#E5E5E5] flex items-center justify-center flex-shrink-0 mt-0.5">
+                <div className="px-4 py-3 bg-[#FAFAFA] flex items-center gap-2.5 border-b border-[#E5E5E5]">
+                  <div className="w-8 h-8 rounded-lg bg-white border border-[#E5E5E5] flex items-center justify-center flex-shrink-0">
                     {getChannelIcon(dir.channel)}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h4 className="font-semibold text-[#1A1A1A] text-sm">{dir.channel}</h4>
-                    </div>
-                    <p className="text-sm text-[#1A1A1A] font-medium mb-1">{dir.theme}</p>
-                    <p className="text-xs text-[#4A4A4A] leading-relaxed">{dir.reasoning}</p>
+                  <h4 className="font-semibold text-[#1A1A1A] text-sm">{dir.channel}</h4>
+                </div>
+                <div className="px-4 py-3">
+                  <p className="text-sm text-[#1A1A1A] font-medium mb-1.5">{dir.theme}</p>
+                  <p className="text-xs text-[#4A4A4A] leading-relaxed">{dir.reasoning}</p>
 
-                    <div className="flex flex-wrap gap-3 mt-3">
+                  {((dir.targetSegments && dir.targetSegments.length > 0) || (dir.suggestedCategories && dir.suggestedCategories.length > 0)) && (
+                    <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-[#F0F0F0]">
                       {dir.targetSegments && dir.targetSegments.length > 0 && (
-                        <div className="flex items-center gap-1.5">
-                          <Users size={12} className="text-[#9CA3AF]" />
+                        <div className="flex items-center gap-1.5 px-2 py-1 bg-[#F5F3FF] rounded-md">
+                          <Users size={11} className="text-[#8B5CF6]" />
                           <span className="text-[11px] text-[#4A4A4A]">
                             {dir.targetSegments.join(', ')}
                           </span>
                         </div>
                       )}
                       {dir.suggestedCategories && dir.suggestedCategories.length > 0 && (
-                        <div className="flex items-center gap-1.5">
-                          <Tag size={12} className="text-[#9CA3AF]" />
+                        <div className="flex items-center gap-1.5 px-2 py-1 bg-[#FEF3C7] rounded-md">
+                          <Tag size={11} className="text-[#D97706]" />
                           <span className="text-[11px] text-[#4A4A4A]">
                             {dir.suggestedCategories.join(', ')}
                           </span>
                         </div>
                       )}
                     </div>
-                  </div>
+                  )}
                 </div>
               </motion.div>
             ))}
@@ -319,8 +319,31 @@ export function ContentStrategy() {
             </button>
           </div>
 
-          <div className="p-4 bg-[#FAFAFA] border border-[#E5E5E5] rounded-xl">
-            <p className="text-sm text-[#1A1A1A] leading-relaxed whitespace-pre-line">{brief}</p>
+          <div className="p-5 bg-gradient-to-br from-[#FAFAFA] to-white border border-[#E5E5E5] rounded-xl">
+            {(() => {
+              const paragraphs = brief.split('\n').filter((l: string) => l.trim());
+              return (
+                <div className="space-y-3">
+                  {paragraphs.map((para: string, pi: number) => {
+                    const isBullet = para.trim().startsWith('•') || para.trim().startsWith('-') || para.trim().startsWith('*');
+                    if (isBullet) {
+                      const text = para.trim().replace(/^[•\-*]\s*/, '');
+                      return (
+                        <div key={pi} className="flex items-start gap-2 ml-1">
+                          <span className="mt-2 w-1.5 h-1.5 rounded-full bg-[var(--nts-accent)] flex-shrink-0" />
+                          <p className="text-sm text-[#4A4A4A] leading-relaxed">{text}</p>
+                        </div>
+                      );
+                    }
+                    const isHeading = para.length < 60 && (para.endsWith(':') || para.toUpperCase() === para);
+                    if (isHeading) {
+                      return <p key={pi} className="text-xs font-bold uppercase tracking-wider text-[#9CA3AF] mt-2">{para}</p>;
+                    }
+                    return <p key={pi} className="text-sm text-[#1A1A1A] leading-relaxed">{para}</p>;
+                  })}
+                </div>
+              );
+            })()}
           </div>
         </Card>
       )}

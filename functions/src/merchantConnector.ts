@@ -263,12 +263,12 @@ export async function fetchPriceBenchmarks(brandId: string): Promise<{
       SELECT
         product_view.id,
         product_view.title,
-        product_view.gtin,
-        product_view.price.amount_micros,
-        product_view.price.currency_code,
+        product_view.brand,
+        product_view.price_micros,
+        product_view.currency_code,
         price_competitiveness.country_code,
-        price_competitiveness.benchmark_price.amount_micros,
-        price_competitiveness.benchmark_price.currency_code
+        price_competitiveness.benchmark_price_micros,
+        price_competitiveness.benchmark_price_currency_code
       FROM PriceCompetitivenessProductView
     `;
 
@@ -315,12 +315,10 @@ export async function fetchPriceBenchmarks(brandId: string): Promise<{
 
       for (const row of chunk) {
         const productId = row.productView?.id;
-        const gtinVal = row.productView?.gtin;
-        const gtin = Array.isArray(gtinVal) ? gtinVal[0] || '' : gtinVal || '';
         if (!productId) continue;
 
-        const yourPriceMicros = parseInt(row.productView?.price?.amountMicros || row.productView?.priceMicros || '0', 10);
-        const benchmarkMicros = parseInt(row.priceCompetitiveness?.benchmarkPrice?.amountMicros || row.priceCompetitiveness?.benchmarkPriceMicros || '0', 10);
+        const yourPriceMicros = parseInt(row.productView?.priceMicros || '0', 10);
+        const benchmarkMicros = parseInt(row.priceCompetitiveness?.benchmarkPriceMicros || '0', 10);
         const yourPrice = yourPriceMicros / 1_000_000;
         const benchmarkPrice = benchmarkMicros / 1_000_000;
         const priceDiff = benchmarkPrice > 0
@@ -337,11 +335,11 @@ export async function fetchPriceBenchmarks(brandId: string): Promise<{
         batch.set(ref, {
           productId,
           title: row.productView?.title || '',
-          gtin,
+          brand: row.productView?.brand || '',
           yourPrice,
           benchmarkPrice,
           priceDiff,
-          currency: row.productView?.price?.currencyCode || 'EUR',
+          currency: row.productView?.currencyCode || 'EUR',
           country: row.priceCompetitiveness?.countryCode || 'GR',
           updatedAt: new Date().toISOString(),
         });
@@ -353,12 +351,21 @@ export async function fetchPriceBenchmarks(brandId: string): Promise<{
 
     logger.info(`[Merchant] Imported ${count} price benchmarks for brand ${brandId}`);
 
+    // Also fetch PriceInsightsProductView (non-blocking)
+    let insightsCount = 0;
+    try {
+      insightsCount = await fetchPriceInsights(brandId, merchantId, accessToken);
+    } catch (e) {
+      logger.warn('[Merchant] PriceInsights fetch failed (non-blocking):', e);
+    }
+
     await getDb().collection('import_jobs').add({
       brandId,
       type: 'price_benchmarks',
       source: 'merchant_center_api',
       status: 'completed',
       imported: count,
+      insightsImported: insightsCount,
       failed: 0,
       errors: [],
       createdAt: FieldValue.serverTimestamp(),
@@ -370,4 +377,97 @@ export async function fetchPriceBenchmarks(brandId: string): Promise<{
     logger.error(`[Merchant] Error:`, msg);
     return { success: false, imported: 0, error: msg };
   }
+}
+
+/**
+ * Fetch Price Insights (suggested prices + predicted impact) from GMC.
+ */
+async function fetchPriceInsights(
+  brandId: string,
+  merchantId: string,
+  accessToken: string
+): Promise<number> {
+  const query = `
+    SELECT
+      product_view.id,
+      product_view.title,
+      product_view.brand,
+      product_view.price_micros,
+      product_view.currency_code,
+      price_insights.suggested_price_micros,
+      price_insights.suggested_price_currency_code,
+      price_insights.predicted_impressions_change_fraction,
+      price_insights.predicted_clicks_change_fraction,
+      price_insights.predicted_conversions_change_fraction
+    FROM PriceInsightsProductView
+  `;
+
+  const url = `${MERCHANT_API_BASE}/${merchantId}/reports/search`;
+  const allRows: any[] = [];
+  let pageToken: string | undefined;
+
+  do {
+    const body: Record<string, any> = { query };
+    if (pageToken) body.pageToken = pageToken;
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      logger.warn(`[Merchant] PriceInsights query failed (${res.status}): ${errText.slice(0, 300)}`);
+      return 0;
+    }
+
+    const data = await res.json();
+    allRows.push(...(data.results || []));
+    pageToken = data.nextPageToken;
+  } while (pageToken);
+
+  logger.info(`[Merchant] Got ${allRows.length} price insight rows for ${merchantId}`);
+
+  if (allRows.length === 0) return 0;
+
+  const insights: any[] = [];
+
+  for (const row of allRows) {
+    const productId = row.productView?.id;
+    if (!productId) continue;
+
+    const priceMicros = parseInt(row.productView?.priceMicros || '0', 10);
+    const suggestedMicros = parseInt(row.priceInsights?.suggestedPriceMicros || '0', 10);
+    const currentPrice = priceMicros / 1_000_000;
+    const suggestedPrice = suggestedMicros / 1_000_000;
+
+    insights.push({
+      productId,
+      title: row.productView?.title || '',
+      brand: row.productView?.brand || '',
+      currency: row.productView?.currencyCode || 'EUR',
+      currentPrice,
+      suggestedPrice,
+      priceDiffPercent: currentPrice > 0
+        ? Math.round(((suggestedPrice - currentPrice) / currentPrice) * 1000) / 10
+        : 0,
+      predictedImpressionsChange: parseFloat(row.priceInsights?.predictedImpressionsChangeFraction || '0'),
+      predictedClicksChange: parseFloat(row.priceInsights?.predictedClicksChangeFraction || '0'),
+      predictedConversionsChange: parseFloat(row.priceInsights?.predictedConversionsChangeFraction || '0'),
+    });
+  }
+
+  // Store as a single document (capped at 2000 items for safety)
+  await getDb().doc(`price_insights/${brandId}`).set({
+    items: insights.slice(0, 2000),
+    count: insights.length,
+    syncedAt: FieldValue.serverTimestamp(),
+  });
+
+  logger.info(`[Merchant] Saved ${insights.length} price insights for brand ${brandId}`);
+  return insights.length;
 }

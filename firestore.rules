@@ -1,41 +1,92 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // Super admin UIDs — full access to all brands
+    function isSuperAdmin() {
+      return request.auth != null
+        && request.auth.uid in ['yPIEMSB1jXXxGX2hHCOvLYoJY7L2', 'KApqDr7UlNa7TseQ25pakM8DRrd2', 'BAi5ZTMwFdWFCUR6k3IZq8cjPfp2'];
+    }
+
+    // Helper: check user is member, creator, or super admin
+    function isBrandMember(brandId) {
+      return isSuperAdmin()
+        || (request.auth != null
+            && (exists(/databases/$(database)/documents/brands/$(brandId)/members/$(request.auth.uid))
+                || get(/databases/$(database)/documents/brands/$(brandId)).data.createdBy == request.auth.uid));
+    }
+
     // Users: only own profile
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
-    // Brands: authenticated users can read/write (refined in Phase D with createdBy)
+
+    // User notifications subcollection
+    match /users/{userId}/notifications/{notifId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Brands: authenticated users can read list, write own brands
     match /brands/{brandId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update, delete: if isBrandMember(brandId);
+
       // Brand members subcollection
       match /members/{memberId} {
-        allow read, write: if request.auth != null;
+        allow read: if request.auth != null;
+        allow write: if request.auth != null;
+      }
+
+      // Morning briefing cache (per-day documents)
+      match /briefings/{briefingId} {
+        allow read, write: if isBrandMember(brandId);
+      }
+
+      // Server-side aggregated stats (products, segments, campaigns)
+      match /aggregates/{type} {
+        allow read: if isBrandMember(brandId);
+        allow write: if false;
       }
     }
-    // Invites: read allowed for invite links (logged-out users). Write requires auth.
+
+    // Invites: unauthenticated users can read (token acts as access control),
+    // write requires auth
     match /invites/{inviteId} {
       allow read: if true;
       allow write: if request.auth != null;
     }
-    // Brand-scoped collections: require auth. Docs with brandId allow access when user has that brand.
+
+    // Brand-scoped collections: verify user is member of the doc's brandId
     match /products/{productId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
     }
     match /segments/{segmentId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
     }
     match /campaigns/{campaignId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
     }
     match /content/{contentId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
     }
     match /analytics/{analyticsId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
     }
     match /organic/{organicId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
     }
     match /import_jobs/{jobId} {
       allow read, write: if request.auth != null;
@@ -44,48 +95,80 @@ service cloud.firestore {
       allow read, write: if request.auth != null;
     }
     match /active_strategies/{strategyId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
     }
     match /feed_sources/{sourceId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
     }
     match /channel_activations/{docId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
     }
     match /suppliers/{supplierId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
     }
     match /procurement_inventory/{docId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
     }
     match /procurement_costing/{docId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
     }
     match /procurement_item_evaluation/{docId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
     }
     match /procurement_customer_evaluation/{docId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
     }
     match /procurement_pricing_policy/{docId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
     }
     match /procurement_fiscal_year/{docId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
     }
     match /procurement_statistics/{docId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
     }
     match /procurement_snapshots/{docId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+    match /segment_customers/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
     }
     match /api_keys/{keyId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
     }
+    // Connectors: keyed by brandId directly
     match /connectors/{brandId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isBrandMember(brandId);
     }
-    // Changelog: any authenticated user can read, super admins write via client-side gate
+    // Changelog: any authenticated user can read
     match /changelog/{entryId} {
       allow read: if request.auth != null;
       allow write: if request.auth != null;
@@ -97,44 +180,67 @@ service cloud.firestore {
     }
     // Automation settings & alerts
     match /automation_settings/{brandId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isBrandMember(brandId);
     }
     match /automation_alerts/{alertId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
     }
     // Coordination: decisions, tasks, comments, activity
     match /decisions/{decisionId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
     }
     match /tasks/{taskId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
     }
     match /comments/{commentId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
     }
     match /activity/{activityId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
     }
-    // User notifications subcollection
-    match /users/{userId}/notifications/{notifId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    // Orders
+    match /orders/{orderId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
     }
-    // Price benchmarks (subcollection)
+    // Price benchmarks (keyed by brandId)
     match /price_benchmarks/{brandId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isBrandMember(brandId);
       match /skus/{skuId} {
-        allow read, write: if request.auth != null;
+        allow read, write: if isBrandMember(brandId);
       }
     }
-    // Competitor settings & ads
+    // Competitor settings & ads (keyed by brandId)
     match /competitor_settings/{brandId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isBrandMember(brandId);
     }
     match /competitor_ads/{brandId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isBrandMember(brandId);
       match /ads/{adId} {
-        allow read, write: if request.auth != null;
+        allow read, write: if isBrandMember(brandId);
       }
+    }
+    // Search intelligence & price insights (keyed by brandId)
+    match /search_intelligence/{brandId} {
+      allow read, write: if isBrandMember(brandId);
+    }
+    match /price_insights/{brandId} {
+      allow read, write: if isBrandMember(brandId);
+    }
+    // GA4 analytics data (keyed by brandId)
+    match /ga4_data/{brandId} {
+      allow read, write: if isBrandMember(brandId);
     }
     // Shared strategy packages: public read (shareable links), auth write
     match /shared_packages/{packageId} {

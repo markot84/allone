@@ -4,6 +4,7 @@ import { collection, doc, getDocs, setDoc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../../config/firebase';
 import { useBrand } from '../../hooks';
 import { usePriceBenchmarks } from '../../hooks/usePriceBenchmarks';
+import { usePriceInsights, type PriceInsight } from '../../hooks/usePriceInsights';
 import { Card, Button, Spinner, Badge, Tooltip, useToast } from '../common';
 import {
   Search,
@@ -52,7 +53,7 @@ interface CompetitorSettings {
   lastSyncAt?: string;
 }
 
-type Tab = 'pricing' | 'ads';
+type Tab = 'pricing' | 'insights' | 'ads';
 
 // ── Data fetchers ────────────────────────────────────────
 
@@ -90,6 +91,10 @@ export function CompetitorInsights() {
 
   // Price benchmarks
   const { benchmarks, isLoading: benchmarksLoading, count: benchmarkCount, aboveMarket, belowMarket, avgDiff } = usePriceBenchmarks();
+  // Price insights
+  const { insights: priceInsights, isLoading: insightsLoading, count: insightsCount, withSuggestionCount, avgConvLift, hasData: hasInsightsData } = usePriceInsights();
+  const [insightsSearch, setInsightsSearch] = useState('');
+  const [insightsSort, setInsightsSort] = useState<'conv' | 'diff' | 'name'>('conv');
 
   // Competitor ads
   const { data: settings } = useQuery({
@@ -168,6 +173,9 @@ export function CompetitorInsights() {
           toast.success(`Ενημερώθηκαν ${result.imported} SKU benchmarks`);
           queryClient.invalidateQueries({ queryKey: ['priceBenchmarks', brandId] });
         } else {
+          if (result.warnings?.length) {
+            toast.error(`API warnings: ${result.warnings[0]}`);
+          }
           toast.success(`Βρέθηκαν ${result.totalAds} ads (${result.newAds} νέες)`);
           queryClient.invalidateQueries({ queryKey: ['competitorAds', brandId] });
           queryClient.invalidateQueries({ queryKey: ['competitorSettings', brandId] });
@@ -203,7 +211,7 @@ export function CompetitorInsights() {
     if (benchmarkSearch) {
       const q = benchmarkSearch.toLowerCase();
       list = list.filter(
-        (b) => b.title.toLowerCase().includes(q) || b.productId.toLowerCase().includes(q) || b.gtin.toLowerCase().includes(q)
+        (b) => b.title.toLowerCase().includes(q) || b.productId.toLowerCase().includes(q) || b.gtin.toLowerCase().includes(q) || (b.brand || '').toLowerCase().includes(q)
       );
     }
     list.sort((a, b) => {
@@ -216,9 +224,24 @@ export function CompetitorInsights() {
 
   if (!brandId) return null;
 
-  const tabs: { id: Tab; label: string; count?: number }[] = [
-    { id: 'pricing', label: 'Price Benchmarks (GMC)', count: benchmarkCount },
-    { id: 'ads', label: 'Ad Monitoring (Meta)', count: ads.length },
+  const filteredInsights = useMemo(() => {
+    let list = [...priceInsights];
+    if (insightsSearch) {
+      const q = insightsSearch.toLowerCase();
+      list = list.filter(i => i.title.toLowerCase().includes(q) || (i.brand || '').toLowerCase().includes(q));
+    }
+    list.sort((a, b) => {
+      if (insightsSort === 'conv') return b.predictedConversionsChange - a.predictedConversionsChange;
+      if (insightsSort === 'diff') return Math.abs(b.priceDiffPercent) - Math.abs(a.priceDiffPercent);
+      return a.title.localeCompare(b.title);
+    });
+    return list;
+  }, [priceInsights, insightsSearch, insightsSort]);
+
+  const tabs: { id: Tab; label: string; count?: number; icon: React.ReactNode }[] = [
+    { id: 'pricing', label: 'Price Benchmarks', count: benchmarkCount, icon: <ShoppingCart size={15} /> },
+    { id: 'insights', label: 'Price Insights', count: insightsCount, icon: <TrendingUp size={15} /> },
+    { id: 'ads', label: 'Ad Monitoring', count: ads.length, icon: <Eye size={15} /> },
   ];
 
   return (
@@ -248,7 +271,7 @@ export function CompetitorInsights() {
                 : 'text-[#6B7280] hover:text-[#374151]'
             }`}
           >
-            {tab.id === 'pricing' ? <ShoppingCart size={15} /> : <Eye size={15} />}
+            {tab.icon}
             {tab.label}
             {(tab.count ?? 0) > 0 && (
               <span className={`text-xs px-1.5 py-0.5 rounded-full font-mono ${
@@ -348,7 +371,7 @@ export function CompetitorInsights() {
                 <div className="text-center py-10">
                   <ShoppingCart size={40} className="mx-auto text-[#D1D5DB] mb-3" />
                   <p className="text-sm text-[#9CA3AF] mb-1">Δεν υπάρχουν δεδομένα benchmarking.</p>
-                  <p className="text-xs text-[#D1D5DB]">Συνδέστε Google Merchant Center από τις Ρυθμίσεις Δεδομένων και πατήστε "Sync GMC".</p>
+                  <p className="text-xs text-[#D1D5DB]">Συνδέστε Google Merchant Center από το <strong className="text-[#9CA3AF]">Data Import</strong> (sidebar) και πατήστε "Sync GMC".</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto max-h-[55vh] overflow-y-auto">
@@ -356,6 +379,7 @@ export function CompetitorInsights() {
                     <thead className="sticky top-0 bg-[#F9FAFB] z-10">
                       <tr className="text-xs text-[#6B7280] uppercase tracking-wider">
                         <th className="px-3 py-2.5 font-medium">Προϊόν</th>
+                        <th className="px-3 py-2.5 font-medium hidden md:table-cell">Brand</th>
                         <th className="px-3 py-2.5 font-medium text-right">Η τιμή σας</th>
                         <th className="px-3 py-2.5 font-medium text-right">Benchmark</th>
                         <th className="px-3 py-2.5 font-medium text-right">Απόκλιση</th>
@@ -370,6 +394,92 @@ export function CompetitorInsights() {
                   </table>
                   {filteredBenchmarks.length === 0 && benchmarkSearch && (
                     <p className="text-sm text-[#9CA3AF] text-center py-6">Δεν βρέθηκαν αποτελέσματα.</p>
+                  )}
+                </div>
+              )}
+            </div>
+          </Card>
+        </>
+      )}
+
+      {/* ════════════════ INSIGHTS TAB ════════════════ */}
+      {activeTab === 'insights' && (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <KpiBox label="Προϊόντα με insights" value={String(insightsCount)} tooltip="Πλήθος SKUs με προτάσεις τιμής από Google." icon={<ShoppingCart size={18} />} color="#6366F1" />
+            <KpiBox label="Με πρόταση τιμής" value={String(withSuggestionCount)} tooltip="SKUs όπου η Google προτείνει διαφορετική τιμή." icon={<TrendingUp size={18} />} color="#F59E0B" />
+            <KpiBox label="Μέσο conv. lift" value={avgConvLift > 0 ? `+${avgConvLift}%` : `${avgConvLift}%`} tooltip="Μέση εκτιμώμενη αύξηση μετατροπών αν εφαρμόσετε τις προτεινόμενες τιμές." icon={<BarChart3 size={18} />} color="#22C55E" />
+            <KpiBox label="Πηγή" value="GMC 7d" tooltip="Βασίζεται στα τελευταία 7 ημέρες δεδομένων Google Merchant Center." icon={<Calendar size={18} />} color="#8B5CF6" />
+          </div>
+
+          <Card>
+            <div className="p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-base font-semibold text-[#1A1A1A]">Price Insights — Προτάσεις Τιμολόγησης</h3>
+                  <p className="text-xs text-[#9CA3AF] mt-0.5">Predicted impact αν εφαρμοστεί η προτεινόμενη τιμή (τελ. 7 ημέρες)</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={insightsSort}
+                    onChange={e => setInsightsSort(e.target.value as any)}
+                    className="px-3 py-1.5 border border-[#D1D5DB] rounded-lg text-xs bg-white focus:ring-2 focus:ring-[var(--nts-accent)]"
+                  >
+                    <option value="conv">Conv. lift ↓</option>
+                    <option value="diff">Απόκλιση τιμής ↓</option>
+                    <option value="name">Όνομα A-Z</option>
+                  </select>
+                  <div className="relative">
+                    <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
+                    <input
+                      type="text"
+                      value={insightsSearch}
+                      onChange={e => setInsightsSearch(e.target.value)}
+                      placeholder="Αναζήτηση..."
+                      className="pl-8 pr-3 py-1.5 bg-[#F5F5F5] border border-transparent rounded-lg text-xs focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all w-48"
+                    />
+                  </div>
+                  <Button variant="primary" size="sm" onClick={() => handleSync('merchant')} disabled={syncing !== null}>
+                    {syncing === 'merchant' ? <Spinner size="sm" className="mr-1" /> : <RefreshCw size={14} className="mr-1" />}
+                    Sync GMC
+                  </Button>
+                </div>
+              </div>
+
+              {insightsLoading ? (
+                <div className="py-8 flex justify-center"><Spinner size="md" label="Φόρτωση insights..." /></div>
+              ) : !hasInsightsData || insightsCount === 0 ? (
+                <div className="text-center py-10">
+                  <TrendingUp size={40} className="mx-auto text-[#D1D5DB] mb-3" />
+                  <p className="text-sm text-[#9CA3AF] mb-1">Δεν υπάρχουν Price Insights.</p>
+                  <p className="text-xs text-[#D1D5DB]">Πατήστε "Sync GMC" — τα insights φέρνονται αυτόματα μαζί με τα benchmarks.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto max-h-[55vh] overflow-y-auto">
+                  <table className="w-full text-left">
+                    <thead className="sticky top-0 bg-[#F9FAFB] z-10">
+                      <tr className="text-xs text-[#6B7280] uppercase tracking-wider">
+                        <th className="px-3 py-2.5 font-medium">Προϊόν</th>
+                        <th className="px-3 py-2.5 font-medium hidden md:table-cell">Brand</th>
+                        <th className="px-3 py-2.5 font-medium text-right">Τρέχουσα</th>
+                        <th className="px-3 py-2.5 font-medium text-right">Προτεινόμενη</th>
+                        <th className="px-3 py-2.5 font-medium text-right">Δ Τιμής</th>
+                        <th className="px-3 py-2.5 font-medium text-right">Impr.</th>
+                        <th className="px-3 py-2.5 font-medium text-right">Clicks</th>
+                        <th className="px-3 py-2.5 font-medium text-right">Conv.</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#F3F4F6]">
+                      {filteredInsights.slice(0, 300).map(item => (
+                        <InsightRow key={item.productId} item={item} />
+                      ))}
+                    </tbody>
+                  </table>
+                  {filteredInsights.length === 0 && insightsSearch && (
+                    <p className="text-sm text-[#9CA3AF] text-center py-6">Δεν βρέθηκαν αποτελέσματα.</p>
+                  )}
+                  {filteredInsights.length > 300 && (
+                    <p className="text-xs text-[#9CA3AF] text-center py-3">Εμφανίζονται τα πρώτα 300 από {filteredInsights.length}</p>
                   )}
                 </div>
               )}
@@ -457,7 +567,7 @@ export function CompetitorInsights() {
                       <div className="flex-1">
                         <label className="block text-xs font-medium text-[#374151] mb-1">
                           Facebook Page ID
-                          <Tooltip content="Βρείτε το Page ID μέσω facebook.com/page_name/about ή Graph API." size={12} />
+                          <Tooltip content="Αριθμητικό ID σελίδας. Βρείτε το μέσω facebook.com/page_name → About → Page transparency → Page ID, ή μέσω lookup-id.com." size={12} />
                         </label>
                         <input
                           type="text"
@@ -595,7 +705,7 @@ function KpiBox({
   );
 }
 
-function BenchmarkRow({ item }: { item: { productId: string; title: string; gtin: string; yourPrice: number; benchmarkPrice: number; priceDiff: number; currency: string } }) {
+function BenchmarkRow({ item }: { item: { productId: string; title: string; brand?: string; gtin: string; yourPrice: number; benchmarkPrice: number; priceDiff: number; currency: string } }) {
   const diffColor = item.priceDiff > 5 ? '#EF4444' : item.priceDiff < -5 ? '#22C55E' : '#6B7280';
   const diffBg = item.priceDiff > 5 ? '#FEF2F2' : item.priceDiff < -5 ? '#F0FDF4' : '#F9FAFB';
 
@@ -604,6 +714,9 @@ function BenchmarkRow({ item }: { item: { productId: string; title: string; gtin
       <td className="px-3 py-2.5">
         <p className="text-sm font-medium text-[#111827] line-clamp-1 max-w-xs">{item.title || item.productId}</p>
         <p className="text-[10px] text-[#9CA3AF] font-mono mt-0.5">{item.productId}</p>
+      </td>
+      <td className="px-3 py-2.5 hidden md:table-cell">
+        <span className="text-xs text-[#374151]">{item.brand || '—'}</span>
       </td>
       <td className="px-3 py-2.5 text-right">
         <span className="text-sm font-mono text-[#1A1A1A]">€{item.yourPrice.toFixed(2)}</span>
@@ -629,6 +742,58 @@ function BenchmarkRow({ item }: { item: { productId: string; title: string; gtin
       <td className="px-3 py-2.5 hidden lg:table-cell">
         <span className="text-[11px] font-mono text-[#9CA3AF]">{item.gtin || '—'}</span>
       </td>
+    </tr>
+  );
+}
+
+function InsightRow({ item }: { item: PriceInsight }) {
+  const hasSuggestion = item.suggestedPrice > 0 && item.suggestedPrice !== item.currentPrice;
+  const priceLower = item.suggestedPrice < item.currentPrice;
+
+  const fmtPct = (v: number) => {
+    const pct = Math.round(v * 100);
+    if (pct === 0) return <span className="text-[#9CA3AF]">—</span>;
+    const color = pct > 0 ? '#22C55E' : '#EF4444';
+    const bg = pct > 0 ? '#F0FDF4' : '#FEF2F2';
+    return (
+      <span className="inline-flex items-center gap-0.5 text-xs font-semibold px-1.5 py-0.5 rounded-full" style={{ color, backgroundColor: bg }}>
+        {pct > 0 ? <ArrowUp size={10} /> : <ArrowDown size={10} />}
+        {pct > 0 ? '+' : ''}{pct}%
+      </span>
+    );
+  };
+
+  return (
+    <tr className="hover:bg-[#FAFAFA] transition-colors">
+      <td className="px-3 py-2.5">
+        <p className="text-sm font-medium text-[#111827] line-clamp-1 max-w-xs">{item.title || item.productId}</p>
+        <p className="text-[10px] text-[#9CA3AF] font-mono mt-0.5">{item.productId}</p>
+      </td>
+      <td className="px-3 py-2.5 hidden md:table-cell">
+        <span className="text-xs text-[#374151]">{item.brand || '—'}</span>
+      </td>
+      <td className="px-3 py-2.5 text-right">
+        <span className="text-sm font-mono text-[#1A1A1A]">€{item.currentPrice.toFixed(2)}</span>
+      </td>
+      <td className="px-3 py-2.5 text-right">
+        {hasSuggestion ? (
+          <span className={`text-sm font-mono font-semibold ${priceLower ? 'text-[#22C55E]' : 'text-[#F59E0B]'}`}>
+            €{item.suggestedPrice.toFixed(2)}
+          </span>
+        ) : (
+          <span className="text-sm font-mono text-[#9CA3AF]">—</span>
+        )}
+      </td>
+      <td className="px-3 py-2.5 text-right">
+        {hasSuggestion ? (
+          <span className="text-xs font-mono text-[#6B7280]">
+            {item.priceDiffPercent > 0 ? '+' : ''}{item.priceDiffPercent}%
+          </span>
+        ) : <span className="text-[#9CA3AF]">—</span>}
+      </td>
+      <td className="px-3 py-2.5 text-right">{fmtPct(item.predictedImpressionsChange)}</td>
+      <td className="px-3 py-2.5 text-right">{fmtPct(item.predictedClicksChange)}</td>
+      <td className="px-3 py-2.5 text-right">{fmtPct(item.predictedConversionsChange)}</td>
     </tr>
   );
 }

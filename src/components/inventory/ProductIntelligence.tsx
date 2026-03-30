@@ -16,8 +16,8 @@ import {
   TrendingDown,
   Trash2
 } from 'lucide-react';
-import { Card, Badge, Button, ProgressBar, Spinner, Tooltip, useToast, EnterpriseBadge } from '../common';
-import { useProducts, useBrand, useSuppliers, usePlan, useProcurement } from '../../hooks';
+import { Card, Badge, Button, ProgressBar, Spinner, Tooltip, useToast, AlertsBanner } from '../common';
+import { useProducts, useProductSource, useBrand, useSuppliers, usePlan, useProcurement } from '../../hooks';
 import { usePriceBenchmarks } from '../../hooks/usePriceBenchmarks';
 import { formatCurrency, formatCurrencyCompact, formatNumber, formatPercent } from '../../utils/format';
 import { FirestoreService } from '../../services/firestore';
@@ -116,7 +116,8 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   const PAGE_SIZE = 150;
 
   const { currentBrand } = useBrand();
-  const { products, isLoading: productsLoading, hasImported } = useProducts();
+  const { products: rawProducts, isLoading: productsLoading, hasImported: rawHasImported } = useProducts();
+  const { products: sourceProducts, hasImported, usingProcurement } = useProductSource();
   const { suppliers } = useSuppliers();
   const { isEnterprise } = usePlan();
   const { data: procData } = useProcurement();
@@ -150,30 +151,106 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     return m;
   }, [suppliers]);
 
-  const inventorySummary = useMemo(() => computeInventorySummary(products, supplierTodMap), [products, supplierTodMap]);
-  const inventoryAlerts = useMemo(() => computeInventoryAlerts(products, supplierTodMap), [products, supplierTodMap]);
+  const inventorySummary = useMemo(() => computeInventorySummary(rawProducts, supplierTodMap), [rawProducts, supplierTodMap]);
+  const inventoryAlerts = useMemo(() => computeInventoryAlerts(rawProducts, supplierTodMap), [rawProducts, supplierTodMap]);
 
-  const procSummary = useMemo(() => {
-    if (!isEnterprise || !procData.inventory?.length) return null;
-    let totalSkus = 0;
-    let lowCoverage = 0;
-    let totalSales = 0;
-    for (const row of procData.inventory as Record<string, string | undefined>[]) {
-      totalSkus++;
-      const covDays = parseFloat(row['ΗΜΕΡΕΣ_ΕΠΑΡΚΕΙΑΣ_ΔΙΑΘΕΣΙΜΟΥ_ΑΠΟΘΕΜΑΤΟΣ'] ?? '999');
-      if (covDays < 15) lowCoverage++;
-      totalSales += parseFloat(row['ΣΥΝΟΛΙΚΕΣ_ΠΩΛΗΣΕΙΣ'] ?? '0');
+  // Procurement-based inventory summary (replaces product-based when available)
+  const procInventorySummary = useMemo((): InventorySummary | null => {
+    if (!isEnterprise) return null;
+    const invRows = (procData.inventory ?? []) as Record<string, unknown>[];
+    if (!invRows.length) return null;
+
+    const findCol = (rows: Record<string, unknown>[], keyword: string) => {
+      if (!rows.length) return keyword;
+      const kUp = keyword.toUpperCase();
+      return Object.keys(rows[0]).find(k => k.toUpperCase().includes(kUp)) ?? keyword;
+    };
+    const parseNum = (v: unknown) => {
+      if (v == null || v === '') return 0;
+      if (typeof v === 'number') return isNaN(v) ? 0 : v;
+      const s = String(v).trim().replace(/\s/g, '');
+      if (!s) return 0;
+      if (s.includes(',')) return parseFloat(s.replace(/\./g, '').replace(',', '.')) || 0;
+      return parseFloat(s) || 0;
+    };
+
+    const total = invRows.length;
+    const stockCol = findCol(invRows, 'ΔΙΑΘΕΣΙΜΟ ΥΠΟΛΟΙΠΟ');
+    const costCol = findCol(invRows, 'ΠΡΩΤΟΓΕΝΕΣ ΚΟΣΤΟΣ');
+    const evalCol = findCol(invRows, 'ΑΞΙΟΛΟΓΗΣΗ ΕΙΔΟΥΣ');
+    const refillCol = findCol(invRows, 'ΑΝΑΤΡΟΦΟΔΟΣΙΑ');
+    const statusCol = findCol(invRows, 'STATUS ΚΩΔΙΚΟΥ');
+
+    let totalValue = 0;
+    let healthyCount = 0;
+    let excessCount = 0;
+    let excessValue = 0;
+    let deadCount = 0;
+    let deadValue = 0;
+    let lowCount = 0;
+
+    for (const row of invRows) {
+      const stock = parseNum(row[stockCol]);
+      const cost = parseNum(row[costCol]);
+      const evalGrade = String(row[evalCol] ?? '').trim().toUpperCase();
+      const needsRefill = parseNum(row[refillCol]) > 0;
+      const status = String(row[statusCol] ?? '').trim().toUpperCase();
+      const itemValue = stock * cost;
+      totalValue += itemValue;
+
+      if (stock === 0 || status.includes('ΑΝΕΝΕΡΓ') || evalGrade === 'C') {
+        deadCount++;
+        deadValue += itemValue;
+      } else if (needsRefill) {
+        lowCount++;
+      } else if (evalGrade === 'A') {
+        healthyCount++;
+      } else {
+        excessCount++;
+        excessValue += itemValue;
+      }
     }
-    return { totalSkus, lowCoverage, totalSales: Math.round(totalSales) };
+
+    return {
+      total_skus: total,
+      total_value: Math.round(totalValue),
+      healthy_stock: { count: healthyCount, percentage: total ? Math.round((healthyCount / total) * 1000) / 10 : 0 },
+      excess_stock: { count: excessCount, percentage: total ? Math.round((excessCount / total) * 1000) / 10 : 0, value: Math.round(excessValue) },
+      dead_stock: { count: deadCount, percentage: total ? Math.round((deadCount / total) * 1000) / 10 : 0, value: Math.round(deadValue) },
+      low_stock: { count: lowCount, percentage: total ? Math.round((lowCount / total) * 1000) / 10 : 0 },
+    };
   }, [isEnterprise, procData.inventory]);
+
+  const procFiscalTurnover = useMemo(() => {
+    if (!isEnterprise) return 0;
+    const fiscalRows = (procData.fiscal_year ?? []) as Record<string, unknown>[];
+    if (!fiscalRows.length) return 0;
+    const findCol = (rows: Record<string, unknown>[], keyword: string) => {
+      if (!rows.length) return keyword;
+      return Object.keys(rows[0]).find(k => k.toUpperCase().includes(keyword.toUpperCase())) ?? keyword;
+    };
+    const parseNum = (v: unknown) => {
+      if (v == null || v === '') return 0;
+      if (typeof v === 'number') return isNaN(v) ? 0 : v;
+      const s = String(v).trim().replace(/\s/g, '');
+      if (s.includes(',')) return parseFloat(s.replace(/\./g, '').replace(',', '.')) || 0;
+      return parseFloat(s) || 0;
+    };
+    const turnoverCol = findCol(fiscalRows, 'ΤΖΙΡΟΣ');
+    return Math.round(fiscalRows.reduce((s, r) => s + parseNum(r[turnoverCol]), 0));
+  }, [isEnterprise, procData.fiscal_year]);
+
+  // Use procurement data when available, fallback to product import
+  const displaySummary = procInventorySummary ?? inventorySummary;
+
   const categories = useMemo(() => {
-    const fromProducts = [...new Set(products.map(p => p.category))].filter(Boolean).sort();
+    const fromProducts = [...new Set(sourceProducts.map(p => p.category))].filter(Boolean).sort();
     return fromProducts;
-  }, [products]);
+  }, [sourceProducts]);
 
   // Filter and sort products
   const filteredProducts = useMemo(() => {
-    return products
+    return sourceProducts
       .filter((p) => {
         const matchesSearch = (p.name ?? '').toLowerCase().includes(searchQuery.toLowerCase()) ||
                              (p.sku ?? '').toLowerCase().includes(searchQuery.toLowerCase());
@@ -214,7 +291,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           ? (aVal as number) - (bVal as number) 
           : (bVal as number) - (aVal as number);
       });
-  }, [products, searchQuery, selectedCategory, marginFilter, stockAgeFilter, stockCardFilter, sortField, sortDirection, supplierTodMap]);
+  }, [sourceProducts, searchQuery, selectedCategory, marginFilter, stockAgeFilter, stockCardFilter, sortField, sortDirection, supplierTodMap]);
 
   const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE));
   const paginatedProducts = filteredProducts.slice(
@@ -237,7 +314,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
 
   const handleDeleteProducts = async () => {
     if (!currentBrand?.id) return;
-    if (!window.confirm(`Διαγραφή όλων των προϊόντων (${products.length}) για το brand "${currentBrand.name}"; Αυτή η ενέργεια δεν αναιρείται.`)) return;
+    if (!window.confirm(`Διαγραφή όλων των προϊόντων (${rawProducts.length}) για το brand "${currentBrand.name}"; Αυτή η ενέργεια δεν αναιρείται.`)) return;
     setIsDeleting(true);
     try {
       await FirestoreService.deleteCollection('products', currentBrand.id);
@@ -259,7 +336,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     );
   }
 
-  if (!hasImported) {
+  if (!hasImported && !usingProcurement) {
     return (
       <div className="space-y-6">
         <div>
@@ -296,8 +373,10 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           <h2 className="text-2xl font-bold text-[#1A1A1A]">Product Intelligence</h2>
           <p className="text-[#4A4A4A] mt-1">
             Monitor inventory health and product performance
-            {hasImported && products.length > 0 && (
-              <span className="ml-2 text-[#22C55E] font-medium">· Showing {products.length} imported product(s)</span>
+            {sourceProducts.length > 0 && (
+              <span className="ml-2 text-[#22C55E] font-medium">
+                · Showing {sourceProducts.length} {usingProcurement ? 'procurement' : 'imported'} product(s)
+              </span>
             )}
           </p>
         </div>
@@ -306,7 +385,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
             variant="secondary"
             icon={<Trash2 size={16} />}
             onClick={handleDeleteProducts}
-            disabled={isDeleting || !hasImported}
+            disabled={isDeleting || !rawHasImported}
             className="text-[#DC2626] hover:bg-[#FEE2E2]"
           >
             {isDeleting ? 'Διαγραφή…' : 'Διαγραφή δεδομένων'}
@@ -321,82 +400,83 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
         </div>
       </div>
 
-      {/* Summary Cards */}
+      {/* Inventory Alerts */}
+      <AlertsBanner filterGroup="inventory" maxAlerts={2} compact />
+
+      {/* Summary Cards — uses procurement data when available */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <SummaryCard
           label="Total SKUs"
-          value={formatNumber(inventorySummary.total_skus)}
+          value={formatNumber(displaySummary.total_skus)}
           icon={<Package size={20} />}
           color="#78716C"
-          tooltip="Συνολικός αριθμός προϊόντων (SKU) στο inventory."
+          tooltip={procInventorySummary ? 'Σύνολο SKU από Procurement inventory.' : 'Συνολικός αριθμός προϊόντων (SKU) στο inventory.'}
           active={stockCardFilter === 'all'}
           onClick={() => setStockCardFilter('all')}
         />
         <SummaryCard
           label="Healthy Stock"
-          value={`${inventorySummary.healthy_stock.percentage}%`}
-          subValue={formatNumber(inventorySummary.healthy_stock.count)}
+          value={`${displaySummary.healthy_stock.percentage}%`}
+          subValue={formatNumber(displaySummary.healthy_stock.count)}
           icon={<TrendingUp size={20} />}
           color="#22C55E"
-          tooltip="Προϊόντα με διάρκεια αποθέματος μεταξύ TOD/2 και TOD×2."
+          tooltip={procInventorySummary ? 'SKUs αξιολόγησης A — υγιές απόθεμα.' : 'Προϊόντα με διάρκεια αποθέματος μεταξύ TOD/2 και TOD×2.'}
           active={stockCardFilter === 'healthy'}
           onClick={() => setStockCardFilter(stockCardFilter === 'healthy' ? 'all' : 'healthy')}
         />
         <SummaryCard
           label="Excess Stock"
-          value={inventorySummary.excess_stock.value >= 1000
-            ? formatCurrencyCompact(inventorySummary.excess_stock.value)
-            : `€${formatCurrency(inventorySummary.excess_stock.value)}`}
-          subValue={`${inventorySummary.excess_stock.count} SKUs`}
+          value={displaySummary.excess_stock.value >= 1000
+            ? formatCurrencyCompact(displaySummary.excess_stock.value)
+            : `€${formatCurrency(displaySummary.excess_stock.value)}`}
+          subValue={`${displaySummary.excess_stock.count} SKUs`}
           icon={<AlertTriangle size={20} />}
           color="#F59E0B"
-          tooltip="Προϊόντα με διάρκεια αποθέματος > TOD×2 (πλεόνασμα)."
+          tooltip={procInventorySummary ? 'SKUs αξιολόγησης B χωρίς ανάγκη ανατροφοδότησης — πιθανό πλεόνασμα.' : 'Προϊόντα με διάρκεια αποθέματος > TOD×2 (πλεόνασμα).'}
           active={stockCardFilter === 'excess'}
           onClick={() => setStockCardFilter(stockCardFilter === 'excess' ? 'all' : 'excess')}
         />
         <SummaryCard
           label="Dead Stock"
-          value={inventorySummary.dead_stock.value >= 1000
-            ? formatCurrencyCompact(inventorySummary.dead_stock.value)
-            : `€${formatCurrency(inventorySummary.dead_stock.value)}`}
-          subValue={`${inventorySummary.dead_stock.count} SKUs`}
+          value={displaySummary.dead_stock.value >= 1000
+            ? formatCurrencyCompact(displaySummary.dead_stock.value)
+            : `€${formatCurrency(displaySummary.dead_stock.value)}`}
+          subValue={`${displaySummary.dead_stock.count} SKUs`}
           icon={<AlertCircle size={20} />}
           color="#EF4444"
-          tooltip="Προϊόντα χωρίς πωλήσεις — δεσμεύουν κεφάλαιο."
+          tooltip={procInventorySummary ? 'SKUs ανενεργά ή αξιολόγησης C — δεσμεύουν κεφάλαιο.' : 'Προϊόντα χωρίς πωλήσεις — δεσμεύουν κεφάλαιο.'}
           active={stockCardFilter === 'dead'}
           onClick={() => setStockCardFilter(stockCardFilter === 'dead' ? 'all' : 'dead')}
         />
         <SummaryCard
           label="Low Stock"
-          value={`${inventorySummary.low_stock.percentage}%`}
-          subValue={`${inventorySummary.low_stock.count} SKUs`}
+          value={`${displaySummary.low_stock.percentage}%`}
+          subValue={`${displaySummary.low_stock.count} SKUs`}
           icon={<TrendingDown size={20} />}
           color="#8B5CF6"
-          tooltip="Προϊόντα με διάρκεια αποθέματος ≤ TOD/2 — κίνδυνος εξάντλησης."
+          tooltip={procInventorySummary ? 'SKUs σε ανατροφοδότηση — χρειάζονται παραγγελία.' : 'Προϊόντα με διάρκεια αποθέματος ≤ TOD/2 — κίνδυνος εξάντλησης.'}
           active={stockCardFilter === 'low'}
           onClick={() => setStockCardFilter(stockCardFilter === 'low' ? 'all' : 'low')}
         />
       </div>
 
-      {/* Enterprise Procurement KPIs */}
-      {isEnterprise && procSummary && (
+      {/* Enterprise Procurement Fiscal KPIs */}
+      {isEnterprise && procInventorySummary && (
         <div className="flex items-center gap-4 px-4 py-3 bg-gradient-to-r from-[#7C3AED]/5 to-[#2563EB]/5 border border-[#7C3AED]/15 rounded-xl">
-          <EnterpriseBadge inline />
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-[#7C3AED]/10 text-[#7C3AED] border border-[#7C3AED]/20">
+            <Package size={12} /> Procurement
+          </span>
           <div className="flex items-center gap-6 text-sm">
             <div>
-              <span className="text-[#6B7280] flex items-center gap-1">ERP SKUs: <Tooltip content="Αριθμός μοναδικών κωδικών (SKU) στο σύστημα ERP/Procurement." size={12} /></span>
-              <strong className="text-[#111827]">{formatNumber(procSummary.totalSkus)}</strong>
+              <span className="text-[#6B7280] flex items-center gap-1">Αξία αποθέματος: <Tooltip content="Σύνολο αξίας (stock × κόστος) από Procurement." size={12} /></span>
+              <strong className="text-[#111827]">{formatCurrencyCompact(displaySummary.total_value)}</strong>
             </div>
-            <div>
-              <span className="text-[#6B7280] flex items-center gap-1">Χαμηλή επάρκεια: <Tooltip content="SKUs με ημέρες επάρκειας αποθέματος κάτω από 15 — κίνδυνος εξάντλησης." size={12} /></span>
-              <strong className={procSummary.lowCoverage > 0 ? 'text-red-600' : 'text-[#111827]'}>
-                {procSummary.lowCoverage} SKUs
-              </strong>
-            </div>
-            <div>
-              <span className="text-[#6B7280] flex items-center gap-1">Συνολικές πωλήσεις: <Tooltip content="Άθροισμα πωλήσεων σε αξία (€) από τα δεδομένα Procurement." size={12} /></span>
-              <strong className="text-[#111827]">{formatCurrencyCompact(procSummary.totalSales)}</strong>
-            </div>
+            {procFiscalTurnover > 0 && (
+              <div>
+                <span className="text-[#6B7280] flex items-center gap-1">Απολογιστικός τζίρος: <Tooltip content="Σύνολο τζίρου από Procurement fiscal year." size={12} /></span>
+                <strong className="text-[#111827]">{formatCurrencyCompact(procFiscalTurnover)}</strong>
+              </div>
+            )}
           </div>
         </div>
       )}

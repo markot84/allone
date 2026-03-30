@@ -23,7 +23,7 @@ import {
 import { Timestamp } from 'firebase/firestore';
 import { auth } from '../config/firebase';
 import { FirestoreService } from '../services/firestore';
-import { isSuperAdminEmail } from '../config/superAdmins';
+import { isSuperAdminEmail, SUPER_ADMIN_EMAILS } from '../config/superAdmins';
 
 interface AuthContextValue {
   user: User | null;
@@ -71,6 +71,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     };
     ensureProfile().catch(console.error);
+
+    // Sync super admin UIDs to Firestore for security rules
+    if (isSuperAdminEmail(user.email)) {
+      (async () => {
+        try {
+          const doc = await FirestoreService.getDocument<{ uids: string[] }>('appConfig', 'superAdmins');
+          const existing = doc?.uids || [];
+          if (!existing.includes(user.uid)) {
+            await FirestoreService.setDocument('appConfig', 'superAdmins', {
+              uids: [...existing, user.uid],
+              emails: SUPER_ADMIN_EMAILS,
+            } as Record<string, unknown>);
+          }
+        } catch { /* non-critical */ }
+      })();
+    }
   }, [user?.uid]);
 
   const signIn = useCallback(async (email: string, password: string) => {

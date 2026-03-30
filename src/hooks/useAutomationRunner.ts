@@ -3,6 +3,7 @@ import { useBrand, useProducts, useSegments, useCampaigns, useSuppliers } from '
 import { useAuth } from './useAuth';
 import { usePlan } from './usePlan';
 import { usePriceBenchmarks } from './usePriceBenchmarks';
+import { useGA4Data } from './useGA4Data';
 import { runAutomationEvaluation } from '../services/automationEngine';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -28,30 +29,41 @@ export function useAutomationRunner() {
   const { campaigns } = useCampaigns();
   const { suppliers } = useSuppliers();
   const { benchmarks } = usePriceBenchmarks();
-  const hasRun = useRef(false);
+  const ga4 = useGA4Data();
+  const hasRun = useRef<string | null>(null);
 
   useEffect(() => {
-    if (hasRun.current) return;
     if (!currentBrand?.id || !user?.uid) return;
+    if (hasRun.current === currentBrand.id) return;
     if (products.length === 0 && segments.length === 0) return;
 
-    hasRun.current = true;
+    hasRun.current = currentBrand.id;
 
-    (async () => {
-      const competitorNewAdsCount = await getRecentNewAdsCount(currentBrand.id);
+    const brandId = currentBrand.id;
+    const timer = setTimeout(() => {
+      (async () => {
+        const competitorNewAdsCount = await getRecentNewAdsCount(brandId);
 
-      await runAutomationEvaluation({
-        brandId: currentBrand.id,
-        userId: user.uid,
-        userName: user.displayName || user.email || '',
-        plan: currentBrand.plan ?? 'growth',
-        products,
-        segments,
-        campaigns: (campaigns ?? []) as Campaign[],
-        suppliers,
-        priceBenchmarks: benchmarks.map(b => ({ priceDiff: b.priceDiff })),
-        competitorNewAdsCount,
-      });
-    })().catch(err => console.error('Automation evaluation failed:', err));
-  }, [currentBrand, user, plan, products, segments, campaigns, suppliers, benchmarks]);
+        await runAutomationEvaluation({
+          brandId,
+          userId: user.uid,
+          userName: user.displayName || user.email || '',
+          plan: currentBrand.plan ?? 'growth',
+          products,
+          segments,
+          campaigns: (campaigns ?? []) as Campaign[],
+          suppliers,
+          priceBenchmarks: benchmarks.map(b => ({ priceDiff: b.priceDiff })),
+          competitorNewAdsCount,
+          ga4: ga4.hasData ? {
+            dailyEntries: ga4.dailyEntries,
+            trafficSources: ga4.trafficSources,
+            topPages: ga4.topPages,
+          } : undefined,
+        });
+      })().catch(err => console.error('Automation evaluation failed:', err));
+    }, 10_000);
+
+    return () => clearTimeout(timer);
+  }, [currentBrand, user, plan, products, segments, campaigns, suppliers, benchmarks, ga4.hasData, ga4.dailyEntries, ga4.trafficSources, ga4.topPages]);
 }

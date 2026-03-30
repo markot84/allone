@@ -751,6 +751,75 @@ function validateSegmentRow(row: Record<string, string>, index: number): { valid
     icon: icon || '',
   };
 
+  // Behavioral fields (optional — from external analysis tool)
+  const persona = pick(row, 'persona', 'behavioral_persona', 'customer_type');
+  const lifecycle = pick(row, 'lifecycle_stage', 'lifecycle', 'stage');
+  const purchaseFreq = pick(row, 'purchase_frequency', 'frequency_label', 'freq');
+  const avgBasket = pick(row, 'avg_basket_size', 'avg_basket', 'avg_order_value', 'aov');
+  const upsellScore = pick(row, 'upsell_score', 'upsell');
+  const crossSellScore = pick(row, 'cross_sell_score', 'cross_sell', 'crosssell');
+  const engagementScore = pick(row, 'engagement_score', 'engagement');
+  const priceSens = pick(row, 'price_sensitivity', 'price_sens');
+  const devicePref = pick(row, 'device_preference', 'device', 'device_pref');
+  const preferredChannels = pick(row, 'preferred_channels', 'channels', 'pref_channels');
+  const peakHours = pick(row, 'peak_hours', 'best_hours');
+  const peakDays = pick(row, 'peak_days', 'best_days');
+  const paymentMethod = pick(row, 'payment_method', 'payment');
+
+  const hasBehavioral = persona || lifecycle || purchaseFreq || avgBasket || upsellScore || engagementScore;
+  if (hasBehavioral) {
+    segment.behavioral = {
+      persona: persona || 'General',
+      lifecycle_stage: (['new', 'active', 'loyal', 'declining', 'dormant'].includes(lifecycle?.toLowerCase() || '') ? lifecycle!.toLowerCase() : 'active') as 'new' | 'active' | 'loyal' | 'declining' | 'dormant',
+      purchase_frequency: (['daily', 'weekly', 'monthly', 'quarterly', 'rare'].includes(purchaseFreq?.toLowerCase() || '') ? purchaseFreq!.toLowerCase() : 'monthly') as 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'rare',
+      avg_basket_size: parseFloat(avgBasket || '0') || 60,
+      upsell_score: parseFloat(upsellScore || '0') || 30,
+      cross_sell_score: parseFloat(crossSellScore || '0') || 30,
+      engagement_score: parseFloat(engagementScore || '0') || 40,
+      price_sensitivity: (['low', 'medium', 'high'].includes(priceSens?.toLowerCase() || '') ? priceSens!.toLowerCase() : 'medium') as 'low' | 'medium' | 'high',
+      device_preference: (['mobile', 'desktop', 'mixed'].includes(devicePref?.toLowerCase() || '') ? devicePref!.toLowerCase() : 'mobile') as 'mobile' | 'desktop' | 'mixed',
+      preferred_channels: preferredChannels ? preferredChannels.split(/[,;|]/).map(c => c.trim()).filter(Boolean) : ['Email'],
+      peak_hours: peakHours ? peakHours.split(/[,;|]/).map(h => h.trim()).filter(Boolean) : [],
+      peak_days: peakDays ? peakDays.split(/[,;|]/).map(d => d.trim()).filter(Boolean) : [],
+      payment_method: paymentMethod || 'Κάρτα',
+      category_affinity: [],
+      communication_preferences: [],
+    };
+  }
+
+  // Predictive fields (optional — from external analysis tool)
+  const ltv = pick(row, 'estimated_ltv', 'ltv', 'lifetime_value', 'clv');
+  const churnRisk = pick(row, 'churn_risk', 'churn', 'churn_probability');
+  const churnLabel = pick(row, 'churn_risk_label', 'churn_label');
+  const nextPurchaseProb = pick(row, 'next_purchase_probability', 'next_purchase_prob', 'purchase_prob');
+  const daysToNext = pick(row, 'days_to_next_purchase', 'days_to_next', 'next_purchase_days');
+  const nextOrderValue = pick(row, 'predicted_next_order_value', 'next_order_value');
+  const forecast30 = pick(row, 'revenue_forecast_30d', 'forecast_30d', 'revenue_30d');
+  const forecast90 = pick(row, 'revenue_forecast_90d', 'forecast_90d', 'revenue_90d');
+  const demandTrend = pick(row, 'demand_trend', 'trend');
+  const retentionScore = pick(row, 'retention_score', 'retention');
+  const ltvConfidence = pick(row, 'ltv_confidence', 'confidence');
+
+  const hasPredictive = ltv || churnRisk || nextPurchaseProb || forecast30 || demandTrend;
+  if (hasPredictive) {
+    const churnVal = parseFloat(churnRisk || '0') || 0;
+    segment.predictive = {
+      estimated_ltv: parseFloat(ltv || '0') || 0,
+      ltv_confidence: parseFloat(ltvConfidence || '70') || 70,
+      churn_risk: churnVal,
+      churn_risk_label: (['low', 'medium', 'high', 'critical'].includes(churnLabel?.toLowerCase() || '')
+        ? churnLabel!.toLowerCase()
+        : churnVal < 20 ? 'low' : churnVal < 50 ? 'medium' : churnVal < 75 ? 'high' : 'critical') as 'low' | 'medium' | 'high' | 'critical',
+      next_purchase_probability: parseFloat(nextPurchaseProb || '50') || 50,
+      days_to_next_purchase: parseInt(daysToNext || '30', 10) || 30,
+      predicted_next_order_value: parseFloat(nextOrderValue || '0') || 0,
+      revenue_forecast_30d: parseFloat(forecast30 || '0') || 0,
+      revenue_forecast_90d: parseFloat(forecast90 || '0') || 0,
+      demand_trend: (['growing', 'stable', 'declining'].includes(demandTrend?.toLowerCase() || '') ? demandTrend!.toLowerCase() : 'stable') as 'growing' | 'stable' | 'declining',
+      retention_score: parseFloat(retentionScore || '50') || 50,
+    };
+  }
+
   return { valid: true, data: segment };
 }
 
@@ -1125,15 +1194,26 @@ function validateCampaignRow(
   return { valid: true, data: campaign };
 }
 
-// Aggregate customer-level rows into segments (SignalLab format: each row = customer)
-function aggregateCustomersToSegments(objects: Record<string, string>[]): RFMSegment[] {
+export interface SegmentCustomerRecord {
+  customerId: string;
+  email?: string;
+  segmentId: string;
+  segmentName: string;
+  recency?: number;
+  frequency?: number;
+  monetary?: number;
+  rfmScore?: string;
+}
+
+// Aggregate customer-level rows into segments AND extract per-customer records
+function aggregateCustomersToSegments(objects: Record<string, string>[]): { segments: RFMSegment[]; customersBySegment: Map<string, SegmentCustomerRecord[]> } {
   const segmentMap = new Map<string, { count: number; monetary: number; displayName: string }>();
+  const customersBySegment = new Map<string, SegmentCustomerRecord[]>();
 
   for (const row of objects) {
     const name = pick(row, 'rfm_segment', 'segment', 'segment_name', 'name');
     if (!name) continue;
 
-    // Normalize: "At Risk 2" → "At Risk", "Champions 5" → "Champions" for max ~9 segments
     const baseName = name.trim().replace(/\s+\d+$/, '').trim() || name.trim();
     const key = baseName.toLowerCase().replace(/\s+/g, '_');
     const displayName = baseName;
@@ -1142,9 +1222,27 @@ function aggregateCustomersToSegments(objects: Record<string, string>[]): RFMSeg
     existing.count += 1;
     existing.monetary += monetary;
     segmentMap.set(key, existing);
+
+    // Store customer record
+    const customerId = pick(row, 'customerid', 'customer_id', 'id', 'user_id', 'client_id');
+    if (customerId) {
+      const record: SegmentCustomerRecord = {
+        customerId,
+        email: pick(row, 'email', 'e-mail', 'mail') || undefined,
+        segmentId: sanitizeDocId(key),
+        segmentName: displayName,
+        recency: parseFloat(pick(row, 'recency', 'r', 'r_score') || '') || undefined,
+        frequency: parseFloat(pick(row, 'frequency', 'f', 'f_score') || '') || undefined,
+        monetary: monetary || undefined,
+        rfmScore: pick(row, 'rfm_score', 'rfmscore', 'score') || undefined,
+      };
+      const list = customersBySegment.get(key) || [];
+      list.push(record);
+      customersBySegment.set(key, list);
+    }
   }
 
-  const totalCount = objects.length;
+  const totalCount = [...segmentMap.values()].reduce((s, v) => s + v.count, 0);
   const totalMonetary = [...segmentMap.values()].reduce((s, v) => s + v.monetary, 0);
 
   const SEGMENT_COLORS: Record<string, string> = {
@@ -1163,7 +1261,7 @@ function aggregateCustomersToSegments(objects: Record<string, string>[]): RFMSeg
     customers_needing_attention: '#EC4899',
   };
 
-  return [...segmentMap.entries()].map(([key, { count, monetary, displayName }]) => {
+  const segments = [...segmentMap.entries()].map(([key, { count, monetary, displayName }]) => {
     const percentage = totalCount > 0 ? Math.round((count / totalCount) * 10000) / 100 : 0;
     const revenue_share = totalMonetary > 0 ? Math.round((monetary / totalMonetary) * 10000) / 100 : 0;
     const id = sanitizeDocId(key);
@@ -1180,6 +1278,8 @@ function aggregateCustomersToSegments(objects: Record<string, string>[]): RFMSeg
       icon: '',
     } as RFMSegment;
   });
+
+  return { segments, customersBySegment };
 }
 
 /** Preview file for products: parse, validate, return summary. For Feed mode pass feedSourceType. */
@@ -1575,10 +1675,30 @@ export async function importFile(
         let validSegments: RFMSegment[];
 
         if (isCustomerLevelData(objects)) {
-          // SignalLab: aggregate customers by RFM_Segment → max ~9 segments
           await FirestoreService.deleteCollection('segments', brandId);
-          validSegments = aggregateCustomersToSegments(objects);
+          const { segments: aggregated, customersBySegment } = aggregateCustomersToSegments(objects);
+          validSegments = aggregated;
           result.warnings.push(`Aggregated ${objects.length} customers into ${validSegments.length} segments`);
+
+          // Store customer-level data per segment for Action Pack exports
+          await FirestoreService.deleteCollection('segment_customers', brandId);
+          for (const [segKey, customers] of customersBySegment.entries()) {
+            const segId = sanitizeDocId(segKey);
+            // Chunk into docs of max 500 customers (Firestore doc size limit ~1MB)
+            const CHUNK = 500;
+            for (let i = 0; i < customers.length; i += CHUNK) {
+              const slice = customers.slice(i, i + CHUNK);
+              const docId = i === 0 ? segId : `${segId}_${Math.floor(i / CHUNK)}`;
+              await FirestoreService.setDocument('segment_customers', docId, {
+                segmentId: segId,
+                segmentName: slice[0]?.segmentName || segKey,
+                customers: slice,
+                totalInSegment: customers.length,
+                chunkIndex: Math.floor(i / CHUNK),
+                brandId,
+              } as Record<string, unknown>);
+            }
+          }
         } else {
           // Segment-level: each row = one segment — replace existing first
           await FirestoreService.deleteCollection('segments', brandId);

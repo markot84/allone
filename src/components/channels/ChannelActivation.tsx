@@ -22,6 +22,8 @@ import {
   Minus,
   Users,
   MessageSquare,
+  Sparkles,
+  ChevronUp,
 } from 'lucide-react';
 import {
   PieChart,
@@ -37,7 +39,9 @@ import {
 } from 'recharts';
 import { Card, CardHeader, Badge, Button, Spinner } from '../common';
 import { useToast } from '../common/Toast';
-import { useProducts, useCampaigns, useBrand, useSegments, useActiveStrategy, useChannelActivations } from '../../hooks';
+import { useProductSource, useCampaigns, useBrand, useSegments, useActiveStrategy, useChannelActivations } from '../../hooks';
+import { exportSegmentActionPack, exportAllSegmentActionPacks, exportStrategyPlan, exportAllSegmentCustomerLists } from '../../services/segmentActionPack';
+import { derivePredictiveMetrics } from '../../services/behavioralEngine';
 import { getStockAgeDays } from '../../utils/productUtils';
 import { safeBrandName } from '../../services/reportExport';
 import { formatCurrency, formatNumber, formatPercent, formatMultiplier } from '../../utils/format';
@@ -133,7 +137,7 @@ interface ChannelActivationProps {
 
 export function ChannelActivation({ onSectionChange }: ChannelActivationProps = {}) {
   const { currentBrand } = useBrand();
-  const { products, count: productsCount } = useProducts();
+  const { products, count: productsCount } = useProductSource();
   const { campaigns, isLoading: campaignsLoading, hasImported: hasCampaigns } = useCampaigns();
   const { segments: rfmSegments } = useSegments();
   const { activeStrategy, getStrategyName, updateBudget, isSavingBudget } = useActiveStrategy();
@@ -150,6 +154,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   const [budgetInput, setBudgetInput] = useState('');
   const [editingBudget, setEditingBudget] = useState(false);
   const [aiGenerating, setAiGenerating] = useState(false);
+  const [showAiBrief, setShowAiBrief] = useState(true);
   const monthlyBudget = activeStrategy?.monthlyBudget ?? null;
 
   const strategyId = activeStrategy?.id ?? null;
@@ -180,20 +185,17 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         context: 'activation',
       });
 
-      if (rec) {
-        const clean = JSON.parse(JSON.stringify(rec));
+      const clean = JSON.parse(JSON.stringify(rec));
         await FirestoreService.setDocument('active_strategies', strategyId, {
           activationRecommendation: clean,
           updatedAt: new Date().toISOString(),
         } as Record<string, unknown>);
         queryClient.invalidateQueries({ queryKey: ['activeStrategy'] });
         toast.success('AI συστάσεις δημιουργήθηκαν');
-      } else {
-        toast.error('Η AI δεν επέστρεψε αποτέλεσμα. Δοκιμάστε ξανά.');
-      }
     } catch (err) {
       console.error('[ChannelActivation] AI generation failed:', err);
-      toast.error('Σφάλμα κατά τη δημιουργία AI συστάσεων');
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      toast.error(`AI error: ${msg}`);
     } finally {
       setAiGenerating(false);
     }
@@ -257,20 +259,21 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     })).sort((a, b) => b.spent - a.spent);
   }, [campaigns, hasCampaigns]);
 
-  // Performance history: weighted-average ROAS per channel per month
+  // Performance history: weighted-average ROAS per channel per month (dynamic channels)
+  const CHANNEL_COLORS: Record<string, string> = {
+    'Google Ads': '#4285F4',
+    'Meta': '#8B5CF6',
+    'Other': '#F59E0B',
+    'TikTok': '#000000',
+    'LinkedIn': '#0A66C2',
+    'Pinterest': '#E60023',
+    'Skroutz': '#F68B24',
+  };
+
   const realPerformanceHistory = useMemo(() => {
     if (!hasCampaigns || campaigns.length === 0) return null;
 
-    type ChannelKey = 'google' | 'meta';
-    const channelOf = (c: Campaign): ChannelKey | null => {
-      const ch = c.channel?.toLowerCase() || '';
-      if (ch.includes('google')) return 'google';
-      if (ch.includes('meta') || ch.includes('facebook')) return 'meta';
-      return null;
-    };
-
-    // Accumulate spend + conversion_value per YYYY-MM per channel
-    const buckets: Record<string, Record<ChannelKey, { spend: number; value: number }>> = {};
+    const buckets: Record<string, Record<string, { spend: number; value: number }>> = {};
 
     (campaigns as Campaign[]).forEach(c => {
       const dateStr = c.start_date || c.period || '';
@@ -278,13 +281,16 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
       const parsed = new Date(dateStr);
       if (isNaN(parsed.getTime())) return;
       const key = `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}`;
-      const chKey = channelOf(c);
-      if (!chKey) return;
+      const channel = c.channel || 'Other';
 
-      if (!buckets[key]) buckets[key] = { google: { spend: 0, value: 0 }, meta: { spend: 0, value: 0 } };
-      buckets[key][chKey].spend += c.amount_spent || 0;
-      buckets[key][chKey].value += c.conversion_value || 0;
+      if (!buckets[key]) buckets[key] = {};
+      if (!buckets[key][channel]) buckets[key][channel] = { spend: 0, value: 0 };
+      buckets[key][channel].spend += c.amount_spent || 0;
+      buckets[key][channel].value += c.conversion_value || 0;
     });
+
+    const allChannelKeys = new Set<string>();
+    Object.values(buckets).forEach(chMap => Object.keys(chMap).forEach(ch => allChannelKeys.add(ch)));
 
     const rows = Object.entries(buckets)
       .sort(([a], [b]) => a.localeCompare(b))
@@ -292,14 +298,15 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
       .map(([ym, data]) => {
         const [y, m] = ym.split('-');
         const label = new Date(Number(y), Number(m) - 1).toLocaleDateString('el-GR', { month: 'short', year: '2-digit' });
-        return {
-          month: label,
-          google: data.google.spend > 0 ? Math.round((data.google.value / data.google.spend) * 100) / 100 : 0,
-          meta: data.meta.spend > 0 ? Math.round((data.meta.value / data.meta.spend) * 100) / 100 : 0,
-        };
+        const row: Record<string, string | number> = { month: label };
+        allChannelKeys.forEach(ch => {
+          const d = data[ch];
+          row[ch] = d && d.spend > 0 ? Math.round((d.value / d.spend) * 100) / 100 : 0;
+        });
+        return row;
       });
 
-    return rows.length > 0 ? rows : null;
+    return rows.length > 0 ? { rows, channels: Array.from(allChannelKeys) } : null;
   }, [campaigns, hasCampaigns]);
 
   useEffect(() => {
@@ -792,62 +799,6 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                 );
               })}
 
-              {/* AI Rationale */}
-              {aiRecommendation?.rationale && (() => {
-                const parts = aiRecommendation.rationale.split('||').map(s => s.trim());
-                const hasStructure = parts.length >= 3 && parts[0].startsWith('Πελάτες:');
-                const sections = [
-                  { icon: Users, color: '#8B5CF6', label: 'Πελάτες' },
-                  { icon: MessageSquare, color: '#3B82F6', label: 'Κανάλια' },
-                  { icon: TrendingUp, color: '#22C55E', label: 'Αποτέλεσμα' },
-                ];
-                return (
-                  <div className="mt-4 p-4 bg-gradient-to-r from-[#F5F5F5] to-white rounded-xl border border-[#E5E5E5]">
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-[#9CA3AF] mb-3">AI Analysis</p>
-                    {hasStructure ? (
-                      <div className="space-y-3">
-                        {parts.slice(0, 3).map((part, i) => {
-                          const s = sections[i];
-                          const text = part.replace(/^(Πελάτες|Κανάλια|Αποτέλεσμα):\s*/i, '');
-                          const Icon = s.icon;
-                          const cleaned = text.replace(/—/g, ',');
-                          const lines = cleaned.split('\n').map(l => l.trim()).filter(Boolean);
-                          const intro = lines.filter(l => !l.startsWith('•'));
-                          const bullets = lines.filter(l => l.startsWith('•')).map(l => l.replace(/^•\s*/, ''));
-                          return (
-                            <div key={i} className="flex items-start gap-2.5">
-                              <div
-                                className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 mt-0.5"
-                                style={{ backgroundColor: `${s.color}15` }}
-                              >
-                                <Icon size={13} style={{ color: s.color }} />
-                              </div>
-                              <div className="min-w-0">
-                                <span className="text-xs font-semibold" style={{ color: s.color }}>{s.label}</span>
-                                {intro.length > 0 && (
-                                  <p className="text-sm text-[#4A4A4A] leading-relaxed">{intro.join(' ')}</p>
-                                )}
-                                {bullets.length > 0 && (
-                                  <ul className="mt-1 space-y-0.5">
-                                    {bullets.map((b, bi) => (
-                                      <li key={bi} className="flex items-start gap-1.5 text-sm text-[#4A4A4A] leading-relaxed">
-                                        <span className="mt-1.5 w-1 h-1 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />
-                                        {b}
-                                      </li>
-                                    ))}
-                                  </ul>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-[#4A4A4A] leading-relaxed">{aiRecommendation.rationale.replace(/—/g, ',')}</p>
-                    )}
-                  </div>
-                );
-              })()}
             </div>
           ) : (
             <div className="flex items-center justify-center py-16">
@@ -868,6 +819,86 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         </Card>
       </div>
 
+      {/* AI Strategy Brief — full-width collapsible */}
+      {aiRecommendation?.rationale && (() => {
+        const parts = aiRecommendation.rationale.split('||').map(s => s.trim());
+        const hasStructure = parts.length >= 3 && parts[0].startsWith('Πελάτες:');
+        const sections = [
+          { icon: Users, color: '#8B5CF6', label: 'Πελάτες' },
+          { icon: MessageSquare, color: '#3B82F6', label: 'Κανάλια' },
+          { icon: TrendingUp, color: '#22C55E', label: 'Αποτέλεσμα' },
+        ];
+        return (
+          <Card padding="none">
+            <button
+              onClick={() => setShowAiBrief(!showAiBrief)}
+              className="w-full px-5 py-3.5 flex items-center justify-between hover:bg-[#FAFAFA] transition-colors"
+            >
+              <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#9CA3AF]">
+                <Sparkles size={13} className="text-[var(--nts-accent)]" />
+                AI Strategy Brief
+              </span>
+              <ChevronUp size={16} className={`text-[#9CA3AF] transition-transform ${showAiBrief ? '' : 'rotate-180'}`} />
+            </button>
+            <AnimatePresence>
+              {showAiBrief && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="overflow-hidden"
+                >
+                  <div className="px-5 pb-5 border-t border-[#F0F0F0]">
+                    {hasStructure ? (
+                      <div className="space-y-5 pt-4">
+                        {parts.slice(0, 3).map((part, i) => {
+                          const s = sections[i];
+                          const text = part.replace(/^(Πελάτες|Κανάλια|Αποτέλεσμα):\s*/i, '');
+                          const Icon = s.icon;
+                          const cleaned = text.replace(/—/g, ',');
+                          const lines = cleaned.split('\n').map(l => l.trim()).filter(Boolean);
+                          const intro = lines.filter(l => !l.startsWith('•') && !l.startsWith('*'));
+                          const bullets = lines.filter(l => l.startsWith('•') || l.startsWith('*')).map(l => l.replace(/^[•*]\s*/, ''));
+                          return (
+                            <div key={i}>
+                              <div className="flex items-center gap-2 mb-2">
+                                <div
+                                  className="w-6 h-6 rounded-md flex items-center justify-center"
+                                  style={{ backgroundColor: `${s.color}15` }}
+                                >
+                                  <Icon size={13} style={{ color: s.color }} />
+                                </div>
+                                <span className="text-xs font-bold uppercase tracking-wide" style={{ color: s.color }}>{s.label}</span>
+                              </div>
+                              {intro.length > 0 && (
+                                <p className="text-sm text-[#4A4A4A] leading-relaxed mb-2">{intro.join(' ')}</p>
+                              )}
+                              {bullets.length > 0 && (
+                                <ul className="space-y-1.5 ml-1">
+                                  {bullets.map((b, bi) => (
+                                    <li key={bi} className="flex items-start gap-2 text-sm text-[#4A4A4A] leading-relaxed">
+                                      <span className="mt-1.5 w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />
+                                      <span>{b}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-[#4A4A4A] leading-relaxed pt-4">{aiRecommendation.rationale.replace(/—/g, ',')}</p>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </Card>
+        );
+      })()}
+
       {/* Actual Campaign Performance (when campaigns exist) */}
       {hasCampaigns && realChannelPerformance && realChannelPerformance.length > 0 && (
         <Card padding="lg">
@@ -878,7 +909,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
             action={
               <Badge variant="success" size="md">
                 Avg ROAS: {formatMultiplier(
-                  realChannelPerformance.reduce((sum, ch) => sum + ch.roas, 0) / realChannelPerformance.length, 1
+                  realChannelPerformance.reduce((sum, ch) => sum + ch.roas * ch.spent, 0) / Math.max(realChannelPerformance.reduce((sum, ch) => sum + ch.spent, 0), 1), 1
                 )}
               </Badge>
             }
@@ -919,8 +950,8 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
             icon={<TrendingUp size={20} className="text-[var(--nts-accent)]" />}
           />
           <div ref={historyChartRef} className="w-full" style={{ width: '100%', height: 288, minHeight: 288, position: 'relative' }}>
-            {realPerformanceHistory && realPerformanceHistory.length > 0 ? (
-              <LineChart width={historyChartSize.width} height={historyChartSize.height} data={realPerformanceHistory} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
+            {realPerformanceHistory && realPerformanceHistory.rows.length > 0 ? (
+              <LineChart width={historyChartSize.width} height={historyChartSize.height} data={realPerformanceHistory.rows} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" />
                 <XAxis dataKey="month" tick={{ fill: '#4A4A4A', fontSize: 12 }} axisLine={{ stroke: '#E5E5E5' }} />
                 <YAxis
@@ -935,12 +966,14 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                   labelFormatter={(label) => label}
                 />
                 <Legend />
-                {realPerformanceHistory.some(d => d.google > 0) && (
-                  <Line type="monotone" dataKey="google" stroke="#4285F4" strokeWidth={2.5} name="Google Ads" dot={{ r: 4, fill: '#4285F4' }} connectNulls />
-                )}
-                {realPerformanceHistory.some(d => d.meta > 0) && (
-                  <Line type="monotone" dataKey="meta" stroke="#8B5CF6" strokeWidth={2.5} name="Meta" dot={{ r: 4, fill: '#8B5CF6' }} connectNulls />
-                )}
+                {realPerformanceHistory.channels.map((ch) => {
+                  const hasData = realPerformanceHistory.rows.some(d => (d[ch] as number) > 0);
+                  if (!hasData) return null;
+                  const color = CHANNEL_COLORS[ch] || '#6B7280';
+                  return (
+                    <Line key={ch} type="monotone" dataKey={ch} stroke={color} strokeWidth={2.5} name={ch} dot={{ r: 4, fill: color }} connectNulls />
+                  );
+                })}
               </LineChart>
             ) : (
               <div className="flex items-center justify-center h-full">
@@ -979,6 +1012,18 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
           {campaigns.length > 6 && <p className="text-sm text-[#4A4A4A] mt-4 text-center">και {campaigns.length - 6} ακόμα campaigns...</p>}
         </Card>
       )}
+
+      {/* Downloads Hub */}
+      <DownloadsHub
+        segments={rfmSegments}
+        brandName={currentBrand?.name}
+        brandId={currentBrand?.id}
+        channelRecommendation={aiRecommendation}
+        activeStrategy={activeStrategy}
+        scenarioId={scenarioId}
+        monthlyBudget={monthlyBudget}
+        toast={toast}
+      />
 
       {/* Feed Generation */}
       <Card padding="lg">
@@ -1053,6 +1098,202 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+// ── Downloads Hub ───────────────────────────────────────────────────────────
+
+interface DownloadsHubProps {
+  segments: import('../../types').RFMSegment[];
+  brandName?: string;
+  channelRecommendation: ChannelRecommendation | null;
+  activeStrategy: ReturnType<typeof useActiveStrategy>['activeStrategy'];
+  scenarioId: string | null;
+  monthlyBudget: number | null;
+  toast: ReturnType<typeof useToast>;
+  brandId?: string;
+}
+
+function DownloadsHub({ segments, brandName, channelRecommendation, activeStrategy, scenarioId, monthlyBudget, toast, brandId }: DownloadsHubProps) {
+  const [exporting, setExporting] = useState<string | null>(null);
+  const hasSegments = segments.length > 0;
+
+  type Fmt = 'xlsx' | 'csv';
+
+  const handleExportCustomerLists = async (fmt: Fmt = 'csv') => {
+    if (!brandId || !hasSegments) return;
+    setExporting('customers');
+    try {
+      const { count } = await exportAllSegmentCustomerLists(brandId, segments, brandName, fmt);
+      toast.success(`${count} customers exported (.${fmt})`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Export failed');
+    }
+    setExporting(null);
+  };
+
+  const handleExportAllPacks = async (fmt: Fmt = 'xlsx') => {
+    if (!hasSegments) return;
+    setExporting('all-packs');
+    try {
+      await exportAllSegmentActionPacks(segments, brandName, channelRecommendation, fmt);
+      toast.success(`All Segment Action Packs (.${fmt})`);
+    } catch { toast.error('Export failed'); }
+    setExporting(null);
+  };
+
+  const handleExportStrategy = async (fmt: Fmt = 'xlsx') => {
+    if (!scenarioId || !activeStrategy) return;
+    setExporting('strategy');
+    try {
+      const strategyName = scenarios.find(s => s.id === scenarioId)?.name || scenarioId;
+      await exportStrategyPlan({
+        brandName,
+        scenarioName: strategyName,
+        duration: activeStrategy.duration === 'ongoing' ? 'Ongoing' : activeStrategy.duration ? `${activeStrategy.duration} ημέρες` : undefined,
+        monthlyBudget,
+        segments,
+        channelRecommendation,
+        format: fmt,
+      });
+      toast.success(`Strategy Plan (.${fmt})`);
+    } catch { toast.error('Export failed'); }
+    setExporting(null);
+  };
+
+  const handleExportSegment = async (seg: import('../../types').RFMSegment, fmt: Fmt = 'xlsx') => {
+    setExporting(seg.id);
+    try {
+      await exportSegmentActionPack(seg, brandName, channelRecommendation, fmt);
+      toast.success(`Action Pack: ${seg.name} (.${fmt})`);
+    } catch { toast.error('Export failed'); }
+    setExporting(null);
+  };
+
+  if (!hasSegments) return null;
+
+  const topSegments = segments.slice(0, 6);
+
+  return (
+    <Card padding="lg">
+      <CardHeader
+        title="Downloads Hub"
+        subtitle="Έτοιμα action plans & templates για άμεση εκτέλεση"
+        icon={<FileDown size={20} className="text-[var(--nts-accent)]" />}
+      />
+
+      {/* Quick exports row */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2 mb-5">
+        <div className="p-4 border-2 border-[#E5E5E5] rounded-xl">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-[var(--nts-accent)]/10 rounded-lg">
+              <Users size={22} className="text-[var(--nts-accent)]" />
+            </div>
+            <div className="flex-1">
+              <h3 className="font-semibold text-[#1A1A1A] text-sm">All Segments Action Pack</h3>
+              <p className="text-xs text-[#4A4A4A] mt-0.5">
+                {segments.length} segments · Profile, Channel Plan & Templates
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2 mt-3">
+            <button onClick={() => handleExportAllPacks('xlsx')} disabled={exporting === 'all-packs'} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-[#E5E5E5] hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all disabled:opacity-50">
+              <FileSpreadsheet size={13} className="text-[#22C55E]" /> .xlsx
+            </button>
+            <button onClick={() => handleExportAllPacks('csv')} disabled={exporting === 'all-packs'} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-[#E5E5E5] hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all disabled:opacity-50">
+              <FileText size={13} className="text-[#4A4A4A]" /> .csv
+            </button>
+          </div>
+        </div>
+
+        {scenarioId && activeStrategy && (
+          <div className="p-4 border-2 border-[#E5E5E5] rounded-xl">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-[#3B82F6]/10 rounded-lg">
+                <Sparkles size={22} className="text-[#3B82F6]" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-[#1A1A1A] text-sm">Strategy Execution Plan</h3>
+                <p className="text-xs text-[#4A4A4A] mt-0.5">
+                  Channel mix, budget & campaign templates
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-3">
+              <button onClick={() => handleExportStrategy('xlsx')} disabled={exporting === 'strategy'} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-[#E5E5E5] hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all disabled:opacity-50">
+                <FileSpreadsheet size={13} className="text-[#22C55E]" /> .xlsx
+              </button>
+              <button onClick={() => handleExportStrategy('csv')} disabled={exporting === 'strategy'} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-[#E5E5E5] hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all disabled:opacity-50">
+                <FileText size={13} className="text-[#4A4A4A]" /> .csv
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Customer Lists */}
+      {brandId && (
+        <div className="p-4 border-2 border-[#10B981]/30 bg-[#10B981]/5 rounded-xl mb-5">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-[#10B981]/10 rounded-lg">
+              <Users size={22} className="text-[#10B981]" />
+            </div>
+            <div className="flex-1">
+              <h3 className="font-semibold text-[#1A1A1A] text-sm">Customer Lists ανά Segment</h3>
+              <p className="text-xs text-[#4A4A4A] mt-0.5">
+                Customer IDs, emails, RFM scores — έτοιμα για Custom Audiences & email campaigns
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => handleExportCustomerLists('csv')} disabled={exporting === 'customers'} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-[#10B981]/30 hover:border-[#10B981] hover:bg-[#10B981]/10 transition-all disabled:opacity-50">
+                <FileText size={13} className="text-[#10B981]" /> .csv
+              </button>
+              <button onClick={() => handleExportCustomerLists('xlsx')} disabled={exporting === 'customers'} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-[#10B981]/30 hover:border-[#10B981] hover:bg-[#10B981]/10 transition-all disabled:opacity-50">
+                <FileSpreadsheet size={13} className="text-[#10B981]" /> .xlsx
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Per-segment quick downloads */}
+      <div>
+        <p className="text-xs font-semibold text-[#9CA3AF] uppercase tracking-wider mb-2">Per Segment</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+          {topSegments.map(seg => {
+            const predictive = derivePredictiveMetrics(seg);
+            return (
+              <div
+                key={seg.id}
+                className="p-3 rounded-xl border border-[#E5E5E5] hover:border-[var(--nts-accent)] hover:shadow-sm transition-all text-left disabled:opacity-50"
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: seg.color }} />
+                  <span className="text-xs font-semibold text-[#1A1A1A] truncate">{seg.name}</span>
+                </div>
+                <div className="space-y-0.5 text-[10px] text-[#9CA3AF]">
+                  <div>{formatNumber(seg.count)} customers</div>
+                  <div>Churn: {predictive.churn_risk}%</div>
+                </div>
+                <div className="mt-2 flex gap-1">
+                  <button onClick={() => handleExportSegment(seg, 'xlsx')} disabled={exporting === seg.id} className="flex-1 flex items-center justify-center gap-1 px-1.5 py-1 text-[10px] font-medium rounded border border-[#E5E5E5] hover:border-[var(--nts-accent)] transition-colors disabled:opacity-50">
+                    <FileSpreadsheet size={10} className="text-[#22C55E]" /> xlsx
+                  </button>
+                  <button onClick={() => handleExportSegment(seg, 'csv')} disabled={exporting === seg.id} className="flex-1 flex items-center justify-center gap-1 px-1.5 py-1 text-[10px] font-medium rounded border border-[#E5E5E5] hover:border-[var(--nts-accent)] transition-colors disabled:opacity-50">
+                    <FileText size={10} className="text-[#9CA3AF]" /> csv
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {segments.length > 6 && (
+          <p className="text-xs text-[#9CA3AF] mt-2 text-center">
+            +{segments.length - 6} segments · χρησιμοποιήστε "All Segments" για πλήρες export
+          </p>
+        )}
+      </div>
+    </Card>
   );
 }
 

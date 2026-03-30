@@ -6,6 +6,7 @@ import { useBrand } from './useBrand';
 export interface PriceBenchmark {
   productId: string;
   title: string;
+  brand?: string;
   gtin: string;
   yourPrice: number;
   benchmarkPrice: number;

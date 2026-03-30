@@ -10,3 +10,4 @@ export { Tooltip } from './Tooltip';
 export { KPICard } from './KPICard';
 export type { KPICardData } from './KPICard';
 export { EnterpriseBadge } from './EnterpriseBadge';
+export { AlertsBanner } from './AlertsBanner';

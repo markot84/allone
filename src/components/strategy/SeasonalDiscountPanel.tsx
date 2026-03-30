@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Percent, Tag, Package, Check, X } from 'lucide-react';
-import { useProducts } from '../../hooks';
+import { useProductSource } from '../../hooks';
 import { getActiveSeasons, getUpcomingSeason, type SeasonalPeriod } from '../../data/seasonalPeriods';
 
 export interface SeasonalDiscountConfig {
@@ -24,7 +24,7 @@ interface SeasonalDiscountPanelProps {
 const DISCOUNT_PRESETS = [5, 10, 15, 20, 25, 30, 40, 50];
 
 export function SeasonalDiscountPanel({ onApply, onClose, initialConfig }: SeasonalDiscountPanelProps) {
-  const { products } = useProducts();
+  const { products } = useProductSource();
 
   const [periodName, setPeriodName] = useState(initialConfig?.periodName ?? '');
   const [discountPercent, setDiscountPercent] = useState(initialConfig?.discountPercent ?? 20);

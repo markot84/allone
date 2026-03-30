@@ -1,10 +1,14 @@
 import { useState } from 'react';
-import { UserPlus } from 'lucide-react';
+import { UserPlus, Mail, CheckCircle2 } from 'lucide-react';
 import { Button } from '../common';
 import { createInvite } from '../../services/invites';
-import { APP_URL } from '../../config/firebase';
+import { APP_URL, auth } from '../../config/firebase';
 import { useAuth } from '../../hooks';
 import { useBrand } from '../../hooks';
+import type { BrandDepartment } from '../../types';
+import { DEPARTMENT_LABELS } from '../../types';
+
+const INVITE_EMAIL_URL = 'https://europe-west1-performance-plus-4a5b2.cloudfunctions.net/sendInviteEmail';
 
 interface InviteUserCardProps {
   onInviteCreated?: (link: string) => void;
@@ -15,23 +19,49 @@ export function InviteUserCard({ onInviteCreated }: InviteUserCardProps) {
   const { currentBrand } = useBrand();
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('member');
+  const [department, setDepartment] = useState<BrandDepartment>('other');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [inviteLink, setInviteLink] = useState('');
+  const [emailSent, setEmailSent] = useState(false);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setEmailSent(false);
     if (!currentBrand || !user?.uid) {
       setError('Επιλέξτε brand');
       return;
     }
     setSubmitting(true);
     try {
-      const { token } = await createInvite(currentBrand.id, email.trim(), role, user.uid);
+      const { token } = await createInvite(currentBrand.id, email.trim(), role, user.uid, department);
       const link = `${APP_URL.replace(/\/$/, '')}/invite/${token}`;
       setInviteLink(link);
       onInviteCreated?.(link);
+
+      if (email.trim()) {
+        try {
+          const idToken = await auth.currentUser?.getIdToken();
+          if (idToken) {
+            const deptLabel = DEPARTMENT_LABELS[department] || '';
+            await fetch(INVITE_EMAIL_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+              body: JSON.stringify({
+                to: email.trim(),
+                brandName: currentBrand.name,
+                inviteLink: link,
+                role,
+                department: deptLabel,
+              }),
+            });
+            setEmailSent(true);
+          }
+        } catch {
+          // Email failed silently — link is still available
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Σφάλμα');
     } finally {
@@ -52,6 +82,14 @@ export function InviteUserCard({ onInviteCreated }: InviteUserCardProps) {
       </p>
       {inviteLink ? (
         <div className="space-y-2">
+          {emailSent && (
+            <div className="flex items-center gap-2 p-2.5 bg-green-50 border border-green-200 rounded-lg">
+              <CheckCircle2 size={16} className="text-green-600 flex-shrink-0" />
+              <p className="text-xs text-green-700">
+                Email πρόσκλησης εστάλη στο <strong>{email}</strong>
+              </p>
+            </div>
+          )}
           <p className="text-sm text-[var(--nts-medium-gray)]">Invite link:</p>
           <div className="flex gap-2">
             <input
@@ -68,47 +106,64 @@ export function InviteUserCard({ onInviteCreated }: InviteUserCardProps) {
               Αντιγραφή
             </Button>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => setInviteLink('')}>
+          <Button variant="ghost" size="sm" onClick={() => { setInviteLink(''); setEmail(''); setEmailSent(false); setDepartment('other'); }}>
             Νέο invite
           </Button>
         </div>
       ) : (
         <form onSubmit={handleCreate} className="space-y-3">
-          <div className="flex gap-2 flex-wrap">
-            <Button
-              type="button"
-              variant="primary"
-              size="sm"
-              disabled={submitting}
-              onClick={() => handleCreate({ preventDefault: () => {} } as React.FormEvent)}
+          {/* Department */}
+          <label className="block">
+            <span className="text-xs font-medium text-[var(--nts-charcoal)]">Τμήμα / Ρόλος</span>
+            <select
+              value={department}
+              onChange={(e) => setDepartment(e.target.value as BrandDepartment)}
+              className="mt-1 w-full px-3 py-2 text-sm bg-white border border-[var(--nts-border-gray)] rounded-lg"
             >
-              Δημιουργία link
+              {Object.entries(DEPARTMENT_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </label>
+
+          {/* Role */}
+          <label className="block">
+            <span className="text-xs font-medium text-[var(--nts-charcoal)]">Δικαιώματα</span>
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              className="mt-1 w-full px-3 py-2 text-sm bg-white border border-[var(--nts-border-gray)] rounded-lg"
+            >
+              <option value="member">Member</option>
+              <option value="admin">Admin</option>
+            </select>
+          </label>
+
+          {/* Email */}
+          <label className="block">
+            <span className="text-xs font-medium text-[var(--nts-charcoal)]">Email χρήστη</span>
+            <div className="relative mt-1">
+              <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--nts-medium-gray)]" />
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="email@example.com"
+                className="w-full pl-9 pr-3 py-2 text-sm bg-white border border-[var(--nts-border-gray)] rounded-lg"
+              />
+            </div>
+            <span className="text-[10px] text-[var(--nts-medium-gray)] mt-0.5 block">
+              Θα σταλεί email πρόσκλησης αυτόματα. Αφήστε κενό για link μόνο.
+            </span>
+          </label>
+
+          {error && <p className="text-sm text-[#EF4444]">{error}</p>}
+
+          <div className="pt-1">
+            <Button type="submit" variant="primary" size="sm" disabled={submitting} className="w-full">
+              {submitting ? 'Αποστολή…' : email.trim() ? 'Αποστολή πρόσκλησης' : 'Δημιουργία link'}
             </Button>
           </div>
-          <p className="text-xs text-[var(--nts-medium-gray)]">Ή συμπληρώστε email για audit:</p>
-          <input
-            id="invite-email"
-            name="invite-email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="email@example.com (προαιρετικό)"
-            className="w-full px-3 py-2 text-sm bg-white border border-[var(--nts-border-gray)] rounded-lg"
-          />
-          <select
-            id="invite-role"
-            name="invite-role"
-            value={role}
-            onChange={(e) => setRole(e.target.value)}
-            className="w-full px-3 py-2 text-sm bg-white border border-[var(--nts-border-gray)] rounded-lg"
-          >
-            <option value="member">Member</option>
-            <option value="admin">Admin</option>
-          </select>
-          {error && <p className="text-sm text-[#EF4444]">{error}</p>}
-          <Button type="submit" variant="primary" size="sm" disabled={submitting}>
-            Δημιουργία invite
-          </Button>
         </form>
       )}
     </div>

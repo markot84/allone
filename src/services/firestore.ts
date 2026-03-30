@@ -10,8 +10,13 @@ import {
   query, 
   where, 
   orderBy, 
+  limit,
+  startAfter,
+  getCountFromServer,
   Timestamp,
-  QueryConstraint
+  QueryConstraint,
+  type DocumentData,
+  type QueryDocumentSnapshot,
 } from 'firebase/firestore';
 
 // Helper to create orderBy constraint
@@ -19,6 +24,7 @@ export const createOrderBy = (field: string, direction: 'asc' | 'desc' = 'desc')
   return orderBy(field, direction);
 };
 import { db } from '../config/firebase';
+import type { Product } from '../types';
 
 // Generic CRUD operations
 export class FirestoreService {
@@ -45,7 +51,6 @@ export class FirestoreService {
     brandId?: string | null
   ): Promise<T[]> {
     try {
-      // Firestore requires: equality filters first, then orderBy
       const allConstraints: QueryConstraint[] = [];
       if (brandId) {
         allConstraints.push(where('brandId', '==', brandId));
@@ -64,31 +69,66 @@ export class FirestoreService {
     }
   }
 
-  // Batch write (max 500 ops per batch; Firestore limit). Pass brandId to add to each doc.
+  static async getDocumentsPaginated<T>(
+    collectionName: string,
+    options: {
+      brandId?: string | null;
+      pageSize: number;
+      cursor?: QueryDocumentSnapshot<DocumentData> | null;
+      constraints?: QueryConstraint[];
+    },
+  ): Promise<{ items: T[]; lastDoc: QueryDocumentSnapshot<DocumentData> | null; totalCount: number }> {
+    try {
+      const baseConstraints: QueryConstraint[] = [];
+      if (options.brandId) baseConstraints.push(where('brandId', '==', options.brandId));
+      if (options.constraints) baseConstraints.push(...options.constraints);
+
+      const countQ = query(collection(db, collectionName), ...baseConstraints);
+      const countSnap = await getCountFromServer(countQ);
+      const totalCount = countSnap.data().count;
+
+      const pageConstraints = [...baseConstraints, limit(options.pageSize)];
+      if (options.cursor) pageConstraints.push(startAfter(options.cursor));
+
+      const q = query(collection(db, collectionName), ...pageConstraints);
+      const snap = await getDocs(q);
+
+      const items = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as T[];
+      const lastDoc = snap.docs[snap.docs.length - 1] ?? null;
+
+      return { items, lastDoc, totalCount };
+    } catch (error) {
+      console.error(`Error paginating ${collectionName}:`, error);
+      throw error;
+    }
+  }
+
+  // Batch write with auto-chunking (Firestore limit: 500 ops per batch).
   static async batchSet(
     collectionName: string,
     items: { id: string; data: Record<string, unknown> }[],
     brandId?: string | null
   ): Promise<void> {
     if (items.length === 0) return;
+    const MAX_BATCH = 500;
     if (import.meta.env.MODE === 'development') {
       console.debug(`[FirestoreService] batchSet: ${collectionName}, ${items.length} items, brandId:`, brandId);
     }
-    const batch = writeBatch(db);
-    for (const item of items) {
-      const docRef = doc(db, collectionName, item.id);
-      const clean: Record<string, unknown> = {
-        ...item.data,
-        updatedAt: Timestamp.now(),
-        ...(brandId ? { brandId } : {}),
-      };
-      Object.keys(clean).forEach((k) => clean[k] === undefined && delete clean[k]);
-      if (import.meta.env.MODE === 'development' && collectionName === 'analytics' && items.indexOf(item) === 0) {
-        console.debug('[FirestoreService] First analytics doc data:', clean);
+    for (let i = 0; i < items.length; i += MAX_BATCH) {
+      const chunk = items.slice(i, i + MAX_BATCH);
+      const batch = writeBatch(db);
+      for (const item of chunk) {
+        const docRef = doc(db, collectionName, item.id);
+        const clean: Record<string, unknown> = {
+          ...item.data,
+          updatedAt: Timestamp.now(),
+          ...(brandId ? { brandId } : {}),
+        };
+        Object.keys(clean).forEach((k) => clean[k] === undefined && delete clean[k]);
+        batch.set(docRef, clean, { merge: true });
       }
-      batch.set(docRef, clean, { merge: true });
+      await batch.commit();
     }
-    await batch.commit();
     if (import.meta.env.MODE === 'development') {
       console.debug(`[FirestoreService] batchSet completed: ${collectionName}`);
     }
@@ -233,6 +273,8 @@ export const ProductsService = {
     
     return products;
   },
+  getPaginated: (brandId: string, pageSize: number, cursor?: QueryDocumentSnapshot<DocumentData> | null) =>
+    FirestoreService.getDocumentsPaginated<Product>('products', { brandId, pageSize, cursor }),
   getById: (id: string) => FirestoreService.getDocument('products', id),
   create: (id: string, data: Record<string, unknown>, brandId?: string | null) =>
     FirestoreService.setDocument('products', id, { ...data, ...(brandId ? { brandId } : {}) }),
@@ -249,6 +291,33 @@ export const SegmentsService = {
   delete: (id: string) => FirestoreService.deleteDocument('segments', id),
 };
 
+export const SegmentCustomersService = {
+  async getForSegment(brandId: string, segmentId: string): Promise<{ customerId: string; email?: string; recency?: number; frequency?: number; monetary?: number; rfmScore?: string }[]> {
+    const docs = await FirestoreService.getDocuments<{
+      segmentId: string;
+      customers: { customerId: string; email?: string; recency?: number; frequency?: number; monetary?: number; rfmScore?: string }[];
+    }>('segment_customers', [where('segmentId', '==', segmentId)], brandId);
+    return docs.flatMap(d => d.customers || []);
+  },
+  async getAllBySegment(brandId: string): Promise<Map<string, { customerId: string; email?: string; recency?: number; frequency?: number; monetary?: number; rfmScore?: string }[]>> {
+    const docs = await FirestoreService.getDocuments<{
+      segmentId: string;
+      customers: { customerId: string; email?: string; recency?: number; frequency?: number; monetary?: number; rfmScore?: string }[];
+    }>('segment_customers', [], brandId);
+    const map = new Map<string, typeof docs[0]['customers']>();
+    for (const d of docs) {
+      const existing = map.get(d.segmentId) || [];
+      existing.push(...(d.customers || []));
+      map.set(d.segmentId, existing);
+    }
+    return map;
+  },
+  hasData: async (brandId: string): Promise<boolean> => {
+    const docs = await FirestoreService.getDocuments('segment_customers', [], brandId);
+    return docs.length > 0;
+  },
+};
+
 export const SuppliersService = {
   getAll: (brandId?: string | null) => FirestoreService.getDocuments('suppliers', [], brandId),
   getById: (id: string) => FirestoreService.getDocument('suppliers', id),
@@ -263,10 +332,8 @@ export const SuppliersService = {
 
 export const CampaignsService = {
   getAll: (brandId?: string | null) => {
-    // Try to order by createdAt, but fallback to importedAt if createdAt doesn't exist
     return FirestoreService.getDocuments('campaigns', [orderBy('createdAt', 'desc')], brandId)
       .catch(() => {
-        // If orderBy fails (e.g., no createdAt field), try without ordering or with importedAt
         return FirestoreService.getDocuments('campaigns', [], brandId)
           .then(campaigns => campaigns.sort((a: any, b: any) => {
             const aDate = a.createdAt?.toDate?.() || a.importedAt?.toDate?.() || new Date(0);

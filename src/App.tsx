@@ -1,37 +1,41 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
-import { ToastProvider, ErrorBoundary } from './components/common';
+import { ToastProvider, ErrorBoundary, Spinner } from './components/common';
 import { auth } from './config/firebase';
 import { AuthGuard, InviteAcceptPage, InviteUserSection } from './components/auth';
 import { AppShell } from './components/layout';
 import { DashboardOverview } from './components/dashboard/DashboardOverview';
-import { WeightConfigurator } from './components/strategy';
 import { RFMAnalysis } from './components/rfm';
-import { ProductIntelligence } from './components/inventory';
 import { ChannelActivation } from './components/channels';
 import { CampaignsPage } from './components/campaigns/CampaignsPage';
 import { ContentStrategy } from './components/content';
-import { Reports } from './components/reports';
-import { ROIAttribution } from './components/roi';
 import { Help } from './components/help';
 import { Concept } from './components/concept';
 import { AIInsightsPanel, AIInsightsTriggerWrapper } from './components/insights';
 import { DataImport } from './components/data';
 import { SuppliersPage } from './components/inventory/SuppliersPage';
-import { ProcurementPage } from './components/procurement/ProcurementPage';
 import { BrandsPage } from './components/brands';
-import { BusinessFinances } from './components/finances';
-import { SuperAdminDashboard } from './components/admin';
 import { AuthActionPage } from './components/auth/AuthActionPage';
 import { isSuperAdminEmail } from './config/superAdmins';
 import { SharedPackageViewer } from './components/strategy/SharedPackageViewer';
 import { CoordinationPage } from './components/coordination';
 import { AutomationSettingsPage } from './components/settings';
-import { CompetitorInsights } from './components/competitive/CompetitorInsights';
+import { GA4Analytics } from './components/analytics/GA4Analytics';
 import { EnterpriseBadge } from './components/common';
 import { usePlan } from './hooks/usePlan';
+import { PrivacyPolicy } from './components/legal/PrivacyPolicy';
+import { TermsOfService } from './components/legal/TermsOfService';
+
+const ProductIntelligence = lazy(() => import('./components/inventory').then(m => ({ default: m.ProductIntelligence })));
+const ROIAttribution = lazy(() => import('./components/roi').then(m => ({ default: m.ROIAttribution })));
+const CompetitorInsights = lazy(() => import('./components/competitive/CompetitorInsights').then(m => ({ default: m.CompetitorInsights })));
+const SuperAdminDashboard = lazy(() => import('./components/admin').then(m => ({ default: m.SuperAdminDashboard })));
+const WeightConfigurator = lazy(() => import('./components/strategy').then(m => ({ default: m.WeightConfigurator })));
+const Reports = lazy(() => import('./components/reports').then(m => ({ default: m.Reports })));
+const BusinessFinances = lazy(() => import('./components/finances').then(m => ({ default: m.BusinessFinances })));
+const ProcurementPage = lazy(() => import('./components/procurement/ProcurementPage').then(m => ({ default: m.ProcurementPage })));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -58,7 +62,10 @@ function QueryProvider({ children }: { children: React.ReactNode }) {
           dehydrateOptions: {
             shouldDehydrateQuery: (query) => {
               const key = query.queryKey[0];
-              return key !== 'aiChannelRecommendations' && key !== 'aiContentSuggestions';
+              if (key === 'aiChannelRecommendations' || key === 'aiContentSuggestions') return false;
+              // Don't cache null/empty results — they block fresh fetches after first sync
+              if (query.state.data === null || query.state.data === undefined) return false;
+              return true;
             }
           }
         }}
@@ -76,7 +83,7 @@ function App() {
     if (typeof window === 'undefined') return 'dashboard';
     const hash = window.location.hash.replace('#', '');
     const baseSection = hash.split('?')[0];
-    const validSections = ['brands', 'dashboard', 'strategy', 'rfm', 'products', 'suppliers', 'procurement', 'channels', 'campaigns', 'competitive', 'finances', 'calendar', 'reports', 'roi', 'data', 'data-products', 'data-segments', 'data-campaigns', 'data-organic', 'data-procurement', 'invite', 'concept', 'help', 'admin', 'coordination', 'automation'];
+    const validSections = ['brands', 'dashboard', 'strategy', 'rfm', 'products', 'suppliers', 'procurement', 'channels', 'campaigns', 'competitive', 'analytics', 'finances', 'calendar', 'reports', 'roi', 'data', 'data-products', 'data-segments', 'data-campaigns', 'data-organic', 'data-procurement', 'invite', 'concept', 'help', 'admin', 'coordination', 'automation'];
     if (baseSection && validSections.includes(baseSection)) return baseSection;
     return 'dashboard';
   };
@@ -158,6 +165,27 @@ function App() {
     );
   }
 
+  // Public legal pages (no auth required)
+  if (typeof window !== 'undefined' && window.location.pathname === '/privacy') {
+    return (
+      <QueryProvider>
+        <ToastProvider>
+          <PrivacyPolicy />
+        </ToastProvider>
+      </QueryProvider>
+    );
+  }
+
+  if (typeof window !== 'undefined' && window.location.pathname === '/terms') {
+    return (
+      <QueryProvider>
+        <ToastProvider>
+          <TermsOfService />
+        </ToastProvider>
+      </QueryProvider>
+    );
+  }
+
   // Handle #shared/ID route — public viewer for shared strategy packages
   const sharedMatch = typeof window !== 'undefined' && window.location.hash.match(/^#shared\/([a-zA-Z0-9]+)$/);
   if (sharedMatch) {
@@ -214,6 +242,8 @@ function App() {
         return <AutomationSettingsPage />;
       case 'competitive':
         return <CompetitorInsights />;
+      case 'analytics':
+        return <GA4Analytics />;
       case 'finances':
         return <BusinessFinances onSectionChange={handleSectionChange} />;
       case 'calendar':
@@ -273,7 +303,9 @@ function App() {
           onSectionChange={handleSectionChange}
         >
           <ErrorBoundary>
-            {renderContent()}
+            <Suspense fallback={<div className="flex items-center justify-center h-64"><Spinner size="lg" /></div>}>
+              {renderContent()}
+            </Suspense>
           </ErrorBoundary>
         </AppShell>
 

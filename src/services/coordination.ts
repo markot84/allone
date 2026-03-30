@@ -6,8 +6,10 @@ import { getAuth } from 'firebase/auth';
 import { db } from '../config/firebase';
 import type {
   BrandMember, Decision, CoordinationTask, CoordinationComment,
-  ActivityEntry, UserNotification, ActivityType, BrandDepartment
+  ActivityEntry, UserNotification, ActivityType, BrandDepartment,
+  NotificationPreferences, NotificationChannel
 } from '../types';
+import { DEFAULT_NOTIFICATION_CHANNELS } from '../types';
 
 const ts = () => new Date().toISOString();
 
@@ -167,6 +169,9 @@ export const NotificationsService = {
     );
     return onSnapshot(q, snap => {
       callback(snap.docs.map(d => ({ id: d.id, ...d.data() }) as UserNotification));
+    }, (error) => {
+      console.warn('Notifications listener error:', error);
+      callback([]);
     });
   },
 
@@ -192,6 +197,26 @@ export const NotificationsService = {
   },
 };
 
+// ── Notification Preferences ────────────────────────────────────────────────
+
+export const NotificationPrefsService = {
+  async get(brandId: string, userId: string): Promise<NotificationPreferences | null> {
+    const ref = doc(db, 'brands', brandId, 'members', userId, 'settings', 'notifications');
+    const snap = await getDoc(ref);
+    return snap.exists() ? snap.data() as NotificationPreferences : null;
+  },
+
+  async save(brandId: string, userId: string, prefs: Partial<NotificationPreferences>): Promise<void> {
+    const ref = doc(db, 'brands', brandId, 'members', userId, 'settings', 'notifications');
+    await setDoc(ref, { ...prefs, userId, brandId, updatedAt: new Date().toISOString() }, { merge: true });
+  },
+
+  getChannelsFor(prefs: NotificationPreferences | null, type: ActivityType): NotificationChannel[] {
+    if (!prefs?.channels) return DEFAULT_NOTIFICATION_CHANNELS[type] ?? ['inApp'];
+    return prefs.channels[type] ?? DEFAULT_NOTIFICATION_CHANNELS[type] ?? ['inApp'];
+  },
+};
+
 // ── Helpers: broadcast notifications to relevant members ────────────────────
 
 export async function broadcastNotification(
@@ -208,12 +233,29 @@ export async function broadcastNotification(
     }
     return true;
   });
-  // In-app notifications
-  await Promise.all(targets.map(m => NotificationsService.send(m.userId, data)));
 
-  // Email notifications (fire-and-forget)
-  if (targets.length > 0) {
-    sendEmailNotifications(targets.map(m => m.userId), data).catch(() => {});
+  // Load preferences per member and route accordingly
+  const prefsMap = await Promise.all(
+    targets.map(async m => ({
+      member: m,
+      prefs: await NotificationPrefsService.get(brandId, m.userId).catch(() => null),
+    }))
+  );
+
+  const inAppTargets: string[] = [];
+  const emailTargets: string[] = [];
+
+  for (const { member, prefs } of prefsMap) {
+    const channels = NotificationPrefsService.getChannelsFor(prefs, data.type);
+    if (channels.includes('inApp')) inAppTargets.push(member.userId);
+    if (channels.includes('email')) emailTargets.push(member.userId);
+  }
+
+  if (inAppTargets.length > 0) {
+    await Promise.all(inAppTargets.map(uid => NotificationsService.send(uid, data)));
+  }
+  if (emailTargets.length > 0) {
+    sendEmailNotifications(emailTargets, data).catch(() => {});
   }
 }
 
