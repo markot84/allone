@@ -7,7 +7,7 @@ export const APP_NAME = 'Performance+';
 export const SENDER = `"${APP_NAME}" <${NOREPLY_EMAIL}>`;
 
 /**
- * Papaki (και γενικά custom SMTP): ορίζεις SMTP host από το email activation (π.χ. linux109.papaki.gr).
+ * Papaki (και γενικά custom SMTP): π.χ. linux230.papaki.gr (Outgoing mail / SMTP στο Papaki).
  * https://support.papaki.com/help/which-settings-should-i-use-in-a-mail-client/
  * Συνιστάται: θύρα 465 + SSL/TLS. Εναλλακτικά: 587 + STARTTLS.
  */
