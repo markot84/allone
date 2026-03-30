@@ -8,6 +8,10 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import Busboy from 'busboy';
 
 const GEMINI_SECRET = defineSecret('GEMINI_API_KEY');
+/** SMTP: mailbox που κάνει login (συχνά ίδιο με noreply ή service account Gmail) */
+const SMTP_EMAIL_SECRET = defineSecret('SMTP_EMAIL');
+/** SMTP: κωδικός ή App Password */
+const SMTP_PASSWORD_SECRET = defineSecret('SMTP_PASSWORD');
 import { parseCSV, parseXLSXBuffer, parseXLSXAllSheets, csvToObjects } from './parseFile';
 import { validateProduct, type ProductData } from './validateProduct';
 import { validateCampaign, type CampaignData } from './validateCampaign';
@@ -1063,7 +1067,7 @@ export const geminiProxy = onRequest(
 // ── Email Notification Endpoint ─────────────────────────────────────────────
 
 export const sendEmailNotification = onRequest(
-  { region: 'europe-west1', cors: true },
+  { region: 'europe-west1', cors: true, secrets: [SMTP_EMAIL_SECRET, SMTP_PASSWORD_SECRET] },
   async (req, res) => {
     if (req.method !== 'POST') { res.status(405).send('POST only'); return; }
 
@@ -1102,7 +1106,7 @@ export const sendEmailNotification = onRequest(
 // ── Send Invite Email ────────────────────────────────────────────────────────
 
 export const sendInviteEmail = onRequest(
-  { region: 'europe-west1', cors: true },
+  { region: 'europe-west1', cors: true, secrets: [SMTP_EMAIL_SECRET, SMTP_PASSWORD_SECRET] },
   async (req, res) => {
     if (req.method !== 'POST') { res.status(405).send('POST only'); return; }
 
@@ -1253,6 +1257,7 @@ export const scheduledDigest = onSchedule(
     region: 'europe-west1',
     memory: '512MiB',
     timeoutSeconds: 300,
+    secrets: [SMTP_EMAIL_SECRET, SMTP_PASSWORD_SECRET],
   },
   async () => {
     logger.info('[scheduledDigest] Starting daily email digest');
