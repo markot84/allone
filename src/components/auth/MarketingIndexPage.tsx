@@ -141,6 +141,11 @@ const variantCopy: Record<LandingVariant, {
   },
 };
 
+// ─── Layout: σχεδόν full width / ~4–5 του viewport (κεντραρισμένο) ─────────────
+
+const LANDING_MAX =
+  'mx-auto w-full max-w-[min(90rem,94vw)] px-4 sm:px-6 lg:px-10 xl:px-14';
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function isPreviewDarkHighlight(index: number) {
@@ -160,7 +165,7 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
 
       {/* ── Sticky header ────────────────────────────────────────────────── */}
       <header className="relative z-20">
-        <div className="mx-auto w-full max-w-7xl px-6 pt-5 md:px-10">
+        <div className={`${LANDING_MAX} pt-5`}>
           <div className="rounded-[22px] border border-[#1f2328]/10 bg-[var(--nts-bg-pure)] px-4 py-3 shadow-[0_10px_24px_rgba(16,24,40,0.08)] md:px-5">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
@@ -185,21 +190,21 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
       </header>
 
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
-      <section className="mx-auto w-full max-w-7xl px-6 pb-6 pt-4 md:px-10 md:pt-5">
-        <div className="relative overflow-hidden rounded-[36px] border border-[#1f2328]/10 bg-[var(--nts-bg-pure)] px-5 py-6 shadow-[0_24px_56px_rgba(16,24,40,0.12)] md:px-6 md:py-7">
+      <section className={`${LANDING_MAX} pb-6 pt-4 md:pt-5`}>
+        <div className="relative overflow-hidden rounded-[36px] border border-[#1f2328]/10 bg-[var(--nts-bg-pure)] px-5 py-6 shadow-[0_24px_56px_rgba(16,24,40,0.12)] sm:px-7 md:px-10 md:py-8 lg:px-12">
           <div className="pointer-events-none absolute right-[-80px] top-[-20px] h-64 w-64 rounded-full bg-[var(--nts-accent)]/12 blur-3xl" />
           <div className="pointer-events-none absolute bottom-[-100px] left-[-20px] h-72 w-72 rounded-full bg-[#1f2328]/4 blur-3xl" />
 
           <div className="relative">
-            <div className="grid gap-4 lg:grid-cols-[1.02fr_0.98fr] lg:items-center lg:gap-5">
+            <div className="grid gap-6 lg:grid-cols-[1.02fr_0.98fr] lg:items-center lg:gap-8 xl:gap-12">
               <div className="space-y-4">
-                <h1 className="max-w-4xl leading-[1.04] text-[var(--nts-charcoal)]">
+                <h1 className="max-w-none leading-[1.04] text-[var(--nts-charcoal)]">
                   <span className="block text-4xl font-bold md:text-6xl">{copy.headline}</span>
                   {copy.highlight && (
                     <span className="mt-1 block text-2xl font-semibold text-[var(--nts-accent)] md:text-4xl">{copy.highlight}</span>
                   )}
                 </h1>
-                <p className="max-w-xl text-[15px] leading-7 text-[var(--nts-medium-gray)] md:text-base">
+                <p className="max-w-none text-[15px] leading-7 text-[var(--nts-medium-gray)] md:text-base lg:pr-2">
                   {copy.description}
                 </p>
 
@@ -235,8 +240,8 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
       </section>
 
       {/* ── Data Sources + Input/Output ─────────────────────────────────── */}
-      <section className="mx-auto w-full max-w-7xl px-6 pb-8 md:px-10">
-        <div className="rounded-2xl border border-[#1f2328] bg-[var(--nts-bg-pure)] p-6 shadow-[0_20px_44px_rgba(16,24,40,0.14)]">
+      <section className={`${LANDING_MAX} pb-8`}>
+        <div className="rounded-2xl border border-[#1f2328] bg-[var(--nts-bg-pure)] p-6 shadow-[0_20px_44px_rgba(16,24,40,0.14)] md:p-8">
           <p className="text-[11px] tracking-[0.08em] text-[var(--nts-accent)]">Δεδομένα → Νοημοσύνη</p>
           <h3 className="mt-2 text-lg font-semibold text-[var(--nts-charcoal)]">Ενοποίηση δεδομένων από πολλαπλές πηγές σε ενιαίο περιβάλλον αποφάσεων</h3>
 
@@ -285,11 +290,11 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
         </div>
       </section>
 
-      <section className="mx-auto w-full max-w-7xl px-6 pb-8 md:px-10">
-        <div className="grid items-stretch gap-5 lg:grid-cols-[1.1fr_0.9fr]">
+      <section className={`${LANDING_MAX} pb-8`}>
+        <div className="grid items-stretch gap-5 lg:grid-cols-[1.1fr_0.9fr] lg:gap-8">
           <div className="rounded-[28px] border border-[#1f2328]/10 bg-[var(--nts-bg-pure)] p-6 shadow-[0_18px_40px_rgba(16,24,40,0.12)]">
             <p className="text-[11px] tracking-[0.08em] text-[var(--nts-accent)]">E-shop Intelligence</p>
-            <h2 className="mt-4 max-w-2xl text-xl font-semibold leading-tight text-[var(--nts-charcoal)]">
+            <h2 className="mt-4 max-w-none text-xl font-semibold leading-snug text-[var(--nts-charcoal)] md:text-2xl">
               Το λειτουργικό σύστημα που μετατρέπει μη αξιοποιήσιμα δεδομένα σε εμπορική νοημοσύνη και επιτρέπει άμεση και αποδοτική λήψη αποφάσεων, με συντονισμένο πλάνο ενεργειών.
             </h2>
             <div className="mt-6 grid gap-4 md:grid-cols-2">
@@ -321,8 +326,8 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
       </section>
 
       {/* ── Before / After problems ──────────────────────────────────────── */}
-      <section className="mx-auto w-full max-w-7xl px-6 pb-8 md:px-10">
-        <div className="rounded-2xl border border-[#1f2328] bg-[var(--nts-bg-pure)] p-6 shadow-[0_20px_44px_rgba(16,24,40,0.14)]">
+      <section className={`${LANDING_MAX} pb-8`}>
+        <div className="rounded-2xl border border-[#1f2328] bg-[var(--nts-bg-pure)] p-6 shadow-[0_20px_44px_rgba(16,24,40,0.14)] md:p-8">
             <h3 className="text-lg font-semibold text-[var(--nts-charcoal)]">Ποια προβλήματα επιλύει το Performance+</h3>
 
           <div className="mt-6 space-y-4">
@@ -343,8 +348,8 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
       </section>
 
       {/* ── App previews ──────────────────────────────────────────────────── */}
-      <section className="mx-auto w-full max-w-7xl px-6 pb-8 md:px-10">
-        <div className="rounded-2xl border border-[#1f2328] bg-[var(--nts-bg-pure)] p-6 shadow-[0_20px_44px_rgba(16,24,40,0.14)]">
+      <section className={`${LANDING_MAX} pb-8`}>
+        <div className="rounded-2xl border border-[#1f2328] bg-[var(--nts-bg-pure)] p-6 shadow-[0_20px_44px_rgba(16,24,40,0.14)] md:p-8">
           <h3 className="text-lg font-semibold text-[var(--nts-charcoal)]">5 σημεία από το ίδιο το περιβάλλον της εφαρμογής</h3>
           <p className="mt-2 text-sm text-[var(--nts-medium-gray)]">
             Πώς το Performance+ μετατρέπει δεδομένα και νοημοσύνη σε στοχευμένη εμπορική δράση.
@@ -388,13 +393,13 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
                 >
                   <div className="pointer-events-none absolute left-0 top-0 h-1 w-full bg-[var(--nts-accent)]" />
                   {hasImage ? (
-                    <div className="grid gap-5 lg:grid-cols-[1fr_1fr] lg:items-center">
+                    <div className="grid gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1.15fr)] lg:items-center xl:gap-10">
                       <div className="space-y-4">{contentBlock}</div>
-                      <div className="relative overflow-hidden rounded-[20px] border border-[#1f2328]/15 bg-[var(--nts-light-gray)] flex items-center justify-center">
+                      <div className="relative overflow-hidden rounded-[20px] border border-[#1f2328]/15 bg-[var(--nts-light-gray)] flex items-center justify-center min-h-[200px]">
                         <img
                           src={point.imageSrc}
                           alt={`${point.title} screenshot`}
-                          className="h-auto max-h-[340px] w-full object-contain"
+                          className="h-auto max-h-[min(480px,50vh)] w-full object-contain"
                         />
                       </div>
                     </div>
@@ -410,10 +415,10 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
 
 
       {/* ── Final CTA ─────────────────────────────────────────────────────── */}
-      <section className="mx-auto w-full max-w-7xl px-6 pb-8 md:px-10">
-        <div className="rounded-2xl border border-[#1f2328] bg-[var(--nts-bg-pure)] p-6 shadow-[0_20px_44px_rgba(16,24,40,0.14)]">
+      <section className={`${LANDING_MAX} pb-8`}>
+        <div className="rounded-2xl border border-[#1f2328] bg-[var(--nts-bg-pure)] p-6 shadow-[0_20px_44px_rgba(16,24,40,0.14)] md:p-8">
           <h3 className="text-lg font-semibold text-[var(--nts-charcoal)]">{copy.finalTitle}</h3>
-          <p className="mt-2 max-w-3xl text-sm text-[var(--nts-medium-gray)]">{copy.finalDescription}</p>
+          <p className="mt-2 max-w-none text-sm text-[var(--nts-medium-gray)] md:text-base">{copy.finalDescription}</p>
 
           <div className="mt-5 flex flex-wrap gap-3">
             <button
@@ -448,8 +453,8 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
       </section>
 
       {/* ── Compliance trust bar ─────────────────────────────────────────── */}
-      <section className="mx-auto w-full max-w-7xl px-6 pb-8 md:px-10">
-        <div className="flex flex-wrap items-center justify-center gap-6 rounded-2xl border border-[#1f2328]/10 bg-[var(--nts-bg-subtle)] px-6 py-4">
+      <section className={`${LANDING_MAX} pb-8`}>
+        <div className="flex flex-wrap items-center justify-center gap-6 rounded-2xl border border-[#1f2328]/10 bg-[var(--nts-bg-subtle)] px-6 py-4 md:px-10">
           {[
             { icon: <ShieldCheck size={15} />, text: 'GDPR-compliant' },
             { icon: <Brain size={15} />, text: 'EU AI Act — limited risk, transparent AI' },
@@ -464,7 +469,7 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
       </section>
 
       {/* ── Footer brand tag ──────────────────────────────────────────────── */}
-      <footer className="mx-auto w-full max-w-7xl px-6 pb-10 pt-2 md:px-10">
+      <footer className={`${LANDING_MAX} pb-10 pt-2`}>
         <div className="flex flex-col gap-3 border-t border-[#1f2328]/10 pt-5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2 text-xs text-[var(--nts-medium-gray)]">
             <Brain size={13} className="text-[#1f2328]" />
