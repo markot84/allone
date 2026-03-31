@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { ArrowRight, BarChart3, Brain, Database, FileSpreadsheet, HelpCircle, Mail, ShieldCheck, Target, Upload } from 'lucide-react';
-import { MARKETING_CONTACT_LABEL, MARKETING_CONTACT_MAILTO } from '../../config/superAdmins';
+import { MARKETING_CONTACT_MAILTO } from '../../config/superAdmins';
 
 type LandingVariant = 'ceo' | 'ops';
 
@@ -434,7 +434,15 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
           </div>
 
           <p className="mt-4 text-xs text-[var(--nts-medium-gray)]">
-            Εναλλακτικά, επικοινώνησε στο <span className="font-semibold text-[var(--nts-charcoal)]">{MARKETING_CONTACT_LABEL}</span> για εταιρική ένταξη, εμπορική πολιτική ή εξειδικευμένη προσαρμογή του AI-powered περιβάλλοντος αποφάσεων.
+            Εναλλακτικά,{' '}
+            <a
+              href={`mailto:${MARKETING_CONTACT_MAILTO}?subject=${encodeURIComponent('Performance+ — Επικοινωνία')}`}
+              className="font-semibold text-[var(--nts-charcoal)] underline underline-offset-2 hover:text-[var(--nts-accent)]"
+            >
+              επικοινώνησε μέσω email
+            </a>
+            {' '}
+            για εταιρική ένταξη, εμπορική πολιτική ή εξειδικευμένη προσαρμογή του AI-powered περιβάλλοντος αποφάσεων.
           </p>
         </div>
       </section>
@@ -474,7 +482,7 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
               className="inline-flex items-center gap-1.5 font-medium text-[var(--nts-charcoal)] hover:text-[var(--nts-accent)] hover:underline"
             >
               <Mail size={13} aria-hidden />
-              {MARKETING_CONTACT_LABEL}
+              Επικοινωνία
             </a>
           </div>
         </div>
