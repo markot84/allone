@@ -1,10 +1,50 @@
 {
-  "version": "0.215.0",
-  "previousVersion": "0.214.0",
-  "commitHash": "3976bfb",
+  "version": "0.217.0",
+  "previousVersion": "0.216.0",
+  "commitHash": "09d56fd",
   "branch": "main",
-  "buildDate": "2026-03-30T14:33:39.246Z",
+  "buildDate": "2026-03-31T08:31:46.173Z",
   "commits": [
+    {
+      "hash": "09d56fd",
+      "message": "style(landing): widen layout to ~94vw (max 90rem), larger hero and preview images"
+    },
+    {
+      "hash": "c0fe9da",
+      "message": "fix(marketing): hide contact emails on page, keep mailto to makis and dimitris"
+    },
+    {
+      "hash": "e7a519d",
+      "message": "copy(landing): E-shop Intelligence hero, USP, problems, Dashboard/Strategy/Data Analysis"
+    },
+    {
+      "hash": "8ae58b7",
+      "message": "chore(functions): Papaki env params, setup-smtp-secrets script, firebase deploy scripts"
+    },
+    {
+      "hash": "d9fa8f4",
+      "message": "docs(functions): Papaki SMTP host linux230.papaki.gr"
+    },
+    {
+      "hash": "ac9cc6f",
+      "message": "feat(functions): Papaki SMTP via SMTP_HOST/SMTP_PORT params, keep Gmail fallback"
+    },
+    {
+      "hash": "240f774",
+      "message": "fix(functions): bind SMTP_EMAIL and SMTP_PASSWORD secrets for email HTTP and digest"
+    },
+    {
+      "hash": "76f552f",
+      "message": "fix(marketing): contact mailto to makis and dimitris at notthesame.gr"
+    },
+    {
+      "hash": "d66f56d",
+      "message": "feat(marketing): use support@performanceplus.gr for contact CTAs and footer"
+    },
+    {
+      "hash": "e94d04e",
+      "message": "feat: use noreply@performanceplus.gr for transactional and UI contact email"
+    },
     {
       "hash": "3976bfb",
       "message": "fix: rewrite Channel Performance History chart - weighted ROAS, proper date parsing"
@@ -24,58 +64,18 @@
     {
       "hash": "3726de3",
       "message": "feat: add Price Benchmarking (GMC), Competitive Intelligence, Dashboard KPIs, tooltips, fix token expired warning"
-    },
-    {
-      "hash": "7da154c",
-      "message": "Fix Google Ads sync and add date-range filtering for campaigns"
-    },
-    {
-      "hash": "5d2c14f",
-      "message": "debug: add token refresh scope logging to diagnose Google Ads UNIMPLEMENTED"
-    },
-    {
-      "hash": "7a20b66",
-      "message": "fix: auto-detect working login-customer-id by testing MCC, no-header, and self fallbacks"
-    },
-    {
-      "hash": "ebe037d",
-      "message": "fix: strip dashes from Google Ads customer IDs before API calls (API requires plain numeric IDs)"
-    },
-    {
-      "hash": "8834901",
-      "message": "fix: add segments.date to SELECT, remove ORDER BY metrics, improve error logging"
-    },
-    {
-      "hash": "8b5c453",
-      "message": "fix: rewrite account picker modal with 100% inline styles to bypass CSS layer issues"
-    },
-    {
-      "hash": "091bff0",
-      "message": "fix: clarify sub-account vs MCC in Google Ads account picker UI"
-    },
-    {
-      "hash": "809190f",
-      "message": "fix: modal dialog width with inline style override, improved account picker UI"
-    },
-    {
-      "hash": "f3b6e70",
-      "message": "fix: restore Google Ads API v19, keep improved error detail logging"
-    },
-    {
-      "hash": "3e5477a",
-      "message": "fix: downgrade Google Ads API to v18 stable, improve error detail in sync response"
     }
   ],
   "changes": [
-    "[Διόρθωση] Rewrite Channel Performance History chart - weighted ROAS, proper date parsing",
-    "[Διόρθωση] Auto-generate AI channel recommendations in Channel Activation when missing",
-    "[Νέο χαρακτηριστικό] Audit fixes, GMC tab in Competitive Intel, plan selector in Super Admin",
-    "[Διόρθωση] Align Dashboard ROAS formatting to 2 decimal places",
-    "[Νέο χαρακτηριστικό] Add Price Benchmarking (GMC), Competitive Intelligence, Dashboard KPIs, tooltips, fix token expired warning",
-    "Fix Google Ads sync and add date-range filtering for campaigns",
-    "Debug: add token refresh scope logging to diagnose Google Ads UNIMPLEMENTED",
-    "[Διόρθωση] Auto-detect working login-customer-id by testing MCC, no-header, and self fallbacks",
-    "[Διόρθωση] Strip dashes from Google Ads customer IDs before API calls (API requires plain numeric IDs)",
-    "[Διόρθωση] Add segments.date to SELECT, remove ORDER BY metrics, improve error logging"
+    "[Βελτίωση εμφάνισης] Widen layout to ~94vw (max 90rem), larger hero and preview images",
+    "[Διόρθωση] Hide contact emails on page, keep mailto to makis and dimitris",
+    "Copy(landing): E-shop Intelligence hero, USP, problems, Dashboard/Strategy/Data Analysis",
+    "[Συντήρηση] Papaki env params, setup-smtp-secrets script, firebase deploy scripts",
+    "[Τεκμηρίωση] Papaki SMTP host linux230.papaki.gr",
+    "[Νέο χαρακτηριστικό] Papaki SMTP via SMTP_HOST/SMTP_PORT params, keep Gmail fallback",
+    "[Διόρθωση] Bind SMTP_EMAIL and SMTP_PASSWORD secrets for email HTTP and digest",
+    "[Διόρθωση] Contact mailto to makis and dimitris at notthesame.gr",
+    "[Νέο χαρακτηριστικό] Use support@performanceplus.gr for contact CTAs and footer",
+    "[Νέο χαρακτηριστικό] Use noreply@performanceplus.gr for transactional and UI contact email"
   ]
 }
