@@ -629,7 +629,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
             <div>
               <p className="text-sm text-[#4A4A4A] flex items-center gap-1">Total Spent <Tooltip content="Συνολικό ποσό που δαπανήθηκε σε διαφημίσεις εντός του επιλεγμένου εύρους ημερομηνιών." size={13} /></p>
               <p className="text-2xl font-bold text-[#1A1A1A] font-mono mt-1">
-                €{formatCurrency(summaryStats.totalSpent, 2)}
+                €{formatCurrency(summaryStats.totalSpent, 0)}
               </p>
             </div>
             <div className="w-12 h-12 bg-[var(--nts-light-gray)] rounded-lg flex items-center justify-center">
@@ -657,7 +657,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
             <div>
               <p className="text-sm text-[#4A4A4A] flex items-center gap-1">Conversion Value <Tooltip content="Συνολική αξία (€) των μετατροπών που αποδίδονται στις καμπάνιες." size={13} /></p>
               <p className="text-2xl font-bold text-[#1A1A1A] font-mono mt-1">
-                €{formatCurrency(summaryStats.totalConversionValue, 2)}
+                €{formatCurrency(summaryStats.totalConversionValue, 0)}
               </p>
             </div>
             <div className="w-12 h-12 bg-[#F5F5F5] rounded-lg flex items-center justify-center">
@@ -849,10 +849,10 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                       {formatConvCount(getDisplayConversions(campaign))}
                     </td>
                     <td className="py-2 px-3 text-right font-mono text-xs whitespace-nowrap hidden sm:table-cell">
-                      {campaign.amount_spent ? `€${formatCurrency(campaign.amount_spent, 2)}` : '-'}
+                      {campaign.amount_spent ? `€${formatCurrency(campaign.amount_spent, 0)}` : '-'}
                     </td>
                     <td className="py-2 px-3 text-right font-mono text-xs whitespace-nowrap hidden sm:table-cell" title="Conversion value (τζίρος από conversions)">
-                      €{formatCurrency(getDisplayConversionValue(campaign), 2)}
+                      €{formatCurrency(getDisplayConversionValue(campaign), 0)}
                     </td>
                     <td className="py-3 px-2 text-right">
                       {Number.isFinite(campaign.roas ?? NaN) ? (
