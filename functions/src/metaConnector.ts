@@ -236,19 +236,23 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
 
   // Delete existing Meta campaigns before re-importing to avoid stale data.
   // Chunk deletions — Firestore batch limit is 500.
-  const existingSnap = await getDb().collection('campaigns')
-    .where('brandId', '==', brandId)
-    .where('channel', '==', 'Meta')
-    .get();
-  if (!existingSnap.empty) {
-    const DEL_CHUNK = 400;
-    const docs = existingSnap.docs;
-    for (let i = 0; i < docs.length; i += DEL_CHUNK) {
-      const delBatch = getDb().batch();
-      docs.slice(i, i + DEL_CHUNK).forEach(d => delBatch.delete(d.ref));
-      await delBatch.commit();
+  try {
+    const existingSnap = await getDb().collection('campaigns')
+      .where('brandId', '==', brandId)
+      .where('channel', '==', 'Meta')
+      .get();
+    if (!existingSnap.empty) {
+      const DEL_CHUNK = 400;
+      const docs = existingSnap.docs;
+      for (let i = 0; i < docs.length; i += DEL_CHUNK) {
+        const delBatch = getDb().batch();
+        docs.slice(i, i + DEL_CHUNK).forEach(d => delBatch.delete(d.ref));
+        await delBatch.commit();
+      }
+      logger.info(`[Meta] Deleted ${existingSnap.size} stale Meta campaigns for brand ${brandId} before re-import`);
     }
-    logger.info(`[Meta] Deleted ${existingSnap.size} stale Meta campaigns for brand ${brandId} before re-import`);
+  } catch (delErr) {
+    logger.warn(`[Meta] Could not delete stale campaigns (non-fatal): ${delErr}`);
   }
 
   let totalImported = 0;
@@ -356,16 +360,6 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
           rowConvValue = parseFloat(av?.value || '0');
           break;
         }
-        if (rowConversions === 0) {
-          const pixelPurchase = actions.find((x: any) => x.action_type === 'offsite_conversion.fb_pixel_purchase');
-          const stdPurchase = actions.find((x: any) => x.action_type === 'purchase');
-          const primaryPurchase = pixelPurchase || stdPurchase;
-          const pixelPurchaseVal = actionValues.find((x: any) => x.action_type === 'offsite_conversion.fb_pixel_purchase');
-          const stdPurchaseVal = actionValues.find((x: any) => x.action_type === 'purchase');
-          const primaryPurchaseVal = pixelPurchaseVal || stdPurchaseVal;
-          rowConversions = parseFloat(primaryPurchase?.value || '0');
-          rowConvValue = parseFloat(primaryPurchaseVal?.value || '0');
-        }
         const rowSpend = parseFloat(row.spend || '0');
         const rowImpressions = parseInt(row.impressions || '0', 10);
         const rowClicks = parseInt(row.clicks || '0', 10);
@@ -465,8 +459,9 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
 
       const allCampaigns = Array.from(campaignMap.values());
 
-      // Firestore: max 500 ops/batch and ~10MB payload — large dailyMetrics docs need modest chunks
-      const CHUNK = 100;
+      // Firestore: max 500 ops/batch and ~10MB payload.
+      // Meta campaigns carry 36 months of dailyMetrics + conversionActions — keep chunks small.
+      const CHUNK = 15;
       for (let i = 0; i < allCampaigns.length; i += CHUNK) {
         const chunk = allCampaigns.slice(i, i + CHUNK);
         const batch = getDb().batch();

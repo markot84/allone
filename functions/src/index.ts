@@ -6,7 +6,7 @@ import { logger } from 'firebase-functions/v2';
 import { defineSecret } from 'firebase-functions/params';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import Busboy from 'busboy';
-// build: 99b38db — parseCampaignDayMetrics, omni_purchase, staleTime cache
+// build: a1c4e82 — meta CHUNK=15, delete try/catch, brandId+channel index
 
 const GEMINI_SECRET = defineSecret('GEMINI_API_KEY');
 /** SMTP: mailbox που κάνει login (συχνά ίδιο με noreply ή service account Gmail) */
