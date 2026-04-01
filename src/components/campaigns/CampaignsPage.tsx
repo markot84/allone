@@ -29,18 +29,22 @@ function parseCampaignDate(d: string | number | undefined): Date | null {
   return isNaN(parsed.getTime()) ? null : parsed;
 }
 
-// Returns true if a dailyMetrics bucket overlaps with [fromDate, toDate].
-// Daily keys (YYYY-MM-DD): exact range check.
-// Monthly keys (day === '01'): include if any day of that month is within range.
-function bucketOverlaps(date: string, fromDate: string, toDate: string): boolean {
+// Returns the fraction [0,1] of a dailyMetrics bucket that overlaps [fromDate, toDate].
+// Daily keys (YYYY-MM-DD): 0 or 1 exactly.
+// Monthly keys (day === '01'): proportional (e.g. "March 28 only" → 1/31 of March's aggregate).
+// This prevents showing full-month Meta data when the user selects a single day or partial month.
+function bucketOverlapFraction(date: string, fromDate: string, toDate: string): number {
   if (date.slice(8, 10) === '01') {
-    // Monthly bucket — last day of month
     const [year, month] = date.slice(0, 7).split('-').map(Number);
-    const lastDay = new Date(year, month, 0).toISOString().slice(0, 10);
-    return date <= toDate && lastDay >= fromDate;
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const monthEnd = `${date.slice(0, 7)}-${String(daysInMonth).padStart(2, '0')}`;
+    if (date > toDate || monthEnd < fromDate) return 0;
+    const overlapStart = date > fromDate ? date : fromDate;
+    const overlapEnd = monthEnd < toDate ? monthEnd : toDate;
+    const overlapDays = Math.round((new Date(overlapEnd).getTime() - new Date(overlapStart).getTime()) / 86400000) + 1;
+    return overlapDays / daysInMonth;
   }
-  // Daily bucket — exact comparison
-  return date >= fromDate && date <= toDate;
+  return date >= fromDate && date <= toDate ? 1 : 0;
 }
 
 function sumConversionActions(ca: Campaign['conversionActions'] | undefined): { conv: number; value: number } {
@@ -283,23 +287,24 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
       const countedConvMonths = new Set<string>();
 
       for (const [date, m] of Object.entries(c.dailyMetrics)) {
-        if (bucketOverlaps(date, fromDate, toDate)) {
-          impressions += m.impressions || 0;
-          clicks += m.clicks || 0;
-          conversions += m.conversions || 0;
-          amount_spent += m.amount_spent || 0;
-          conversion_value += m.conversion_value || 0;
+        const frac = bucketOverlapFraction(date, fromDate, toDate);
+        if (frac <= 0) continue;
 
-          const mAny = m as Record<string, any>;
-          if (mAny.conversionActions && typeof mAny.conversionActions === 'object') {
-            const monthKey = date.slice(0, 7); // "2026-02"
-            if (!countedConvMonths.has(monthKey)) {
-              countedConvMonths.add(monthKey);
-              for (const [label, vals] of Object.entries(mAny.conversionActions as Record<string, { conversions: number; value: number }>)) {
-                if (!dateConvActions[label]) dateConvActions[label] = { conversions: 0, value: 0 };
-                dateConvActions[label].conversions += vals.conversions || 0;
-                dateConvActions[label].value += vals.value || 0;
-              }
+        impressions += Math.round((m.impressions || 0) * frac);
+        clicks += Math.round((m.clicks || 0) * frac);
+        conversions += (m.conversions || 0) * frac;
+        amount_spent += (m.amount_spent || 0) * frac;
+        conversion_value += (m.conversion_value || 0) * frac;
+
+        const mAny = m as Record<string, any>;
+        if (mAny.conversionActions && typeof mAny.conversionActions === 'object') {
+          const monthKey = date.slice(0, 7);
+          if (!countedConvMonths.has(monthKey)) {
+            countedConvMonths.add(monthKey);
+            for (const [label, vals] of Object.entries(mAny.conversionActions as Record<string, { conversions: number; value: number }>)) {
+              if (!dateConvActions[label]) dateConvActions[label] = { conversions: 0, value: 0 };
+              dateConvActions[label].conversions += (vals.conversions || 0) * frac;
+              dateConvActions[label].value += (vals.value || 0) * frac;
             }
           }
         }
