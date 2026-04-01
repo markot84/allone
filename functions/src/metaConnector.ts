@@ -338,15 +338,14 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
         const rowDate: string = row.date_start || '';
         if (!campaignId || !campaignName) continue;
 
-        // Prefer pixel purchase, then omni/catalog purchase types (Advantage+ often uses omni_purchase).
+        // Use only pixel-tracked and standard purchase events.
+        // omni_purchase is excluded because it includes Meta-modeled (estimated) conversions
+        // that massively inflate counts — e.g. 1600% click-to-conversion on Advantage+ campaigns.
         const actions = row.actions || [];
         const actionValues = row.action_values || [];
         const purchaseTypes = [
           'offsite_conversion.fb_pixel_purchase',
-          'omni_purchase',
           'purchase',
-          'offsite_conversion.purchase',
-          'onsite_conversion.purchase',
         ];
         let rowConversions = 0;
         let rowConvValue = 0;
