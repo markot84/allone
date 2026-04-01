@@ -666,7 +666,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
             <div>
               <p className="text-sm text-[#4A4A4A] flex items-center gap-1">Avg ROAS <Tooltip content="Μέσο Return on Ad Spend εντός περιόδου: Αξία Μετατροπών ÷ Spend." size={13} /></p>
               <p className="text-2xl font-bold text-[#1A1A1A] font-mono mt-1">
-                {formatMultiplier(summaryStats.avgROAS, 2)}
+                {formatMultiplier(summaryStats.avgROAS, 0)}
               </p>
             </div>
             <div className="w-12 h-12 bg-[#FEF3C7] rounded-lg flex items-center justify-center">
@@ -852,7 +852,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                     <td className="py-3 px-2 text-right">
                       {Number.isFinite(campaign.roas ?? NaN) ? (
                         <Badge variant={(campaign.roas ?? 0) > 0 ? 'success' : 'default'} size="sm">
-                          {formatMultiplier(campaign.roas ?? 0, 2)}
+                          {formatMultiplier(campaign.roas ?? 0, 0)}
                         </Badge>
                       ) : (
                         '-'
