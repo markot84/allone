@@ -57,7 +57,7 @@ function sumConversionActions(ca: Campaign['conversionActions'] | undefined): { 
 /** Rollup conversions — με fallback στα conversionActions (π.χ. ασυμφωνία πεδίων / παλιά δεδομένα). */
 function getDisplayConversions(c: Campaign): number {
   const raw = c.conversions;
-  if (raw != null && raw !== '') {
+  if (raw != null) {
     const n = typeof raw === 'number' ? raw : parseFloat(String(raw));
     if (!Number.isNaN(n)) return n;
   }
@@ -66,7 +66,7 @@ function getDisplayConversions(c: Campaign): number {
 
 function getDisplayConversionValue(c: Campaign): number {
   const raw = c.conversion_value;
-  if (raw != null && raw !== '') {
+  if (raw != null) {
     const n = typeof raw === 'number' ? raw : parseFloat(String(raw));
     if (!Number.isNaN(n)) return n;
   }
