@@ -1,10 +1,14 @@
 {
-  "version": "0.265.0",
-  "previousVersion": "0.264.0",
-  "commitHash": "c5e557a",
+  "version": "0.266.0",
+  "previousVersion": "0.265.0",
+  "commitHash": "17dc697",
   "branch": "main",
-  "buildDate": "2026-04-01T16:18:22.084Z",
+  "buildDate": "2026-04-01T17:08:40.095Z",
   "commits": [
+    {
+      "hash": "17dc697",
+      "message": "feat: budget opportunity engine v1, ROI section; GMC last sync KPI; coordination list limit 5 + history"
+    },
     {
       "hash": "c5e557a",
       "message": "chore: ignore Cloud Functions env files except .env.example; stop tracking project env"
@@ -60,13 +64,10 @@
     {
       "hash": "3976bfb",
       "message": "fix: rewrite Channel Performance History chart - weighted ROAS, proper date parsing"
-    },
-    {
-      "hash": "5753685",
-      "message": "fix: auto-generate AI channel recommendations in Channel Activation when missing"
     }
   ],
   "changes": [
+    "[Νέο χαρακτηριστικό] Budget opportunity engine v1, ROI section; GMC last sync KPI; coordination list limit 5 + history",
     "[Συντήρηση] Ignore Cloud Functions env files except .env.example; stop tracking project env",
     "[Νέο χαρακτηριστικό] GMC report parsing, connectors & import jobs, RFM behavioral/predictive, auth, coordination, interest lead",
     "[Συντήρηση] BuildInfo after landing deploy build",
@@ -75,7 +76,6 @@
     "Copy(landing): E-shop Intelligence hero, USP, problems, Dashboard/Strategy/Data Analysis",
     "[Συντήρηση] Papaki env params, setup-smtp-secrets script, firebase deploy scripts",
     "[Τεκμηρίωση] Papaki SMTP host linux230.papaki.gr",
-    "[Νέο χαρακτηριστικό] Papaki SMTP via SMTP_HOST/SMTP_PORT params, keep Gmail fallback",
-    "[Διόρθωση] Bind SMTP_EMAIL and SMTP_PASSWORD secrets for email HTTP and digest"
+    "[Νέο χαρακτηριστικό] Papaki SMTP via SMTP_HOST/SMTP_PORT params, keep Gmail fallback"
   ]
 }

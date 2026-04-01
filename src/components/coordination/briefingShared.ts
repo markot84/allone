@@ -1,4 +1,4 @@
-import type { BrandDepartment, BrandMember } from '../../types';
+import type { BrandDepartment } from '../../types';
 import { DEPARTMENT_LABELS } from '../../types';
 
 /** localStorage key για απομνημονευμένη επιλογή τμημάτων (BriefingDrawer / quick strip) */
@@ -45,26 +45,6 @@ export const BRIEFING_MESSAGE_TEMPLATES: BriefingMessageTemplate[] = [
 
 export function getBriefingTemplate(id: string): BriefingMessageTemplate {
   return BRIEFING_MESSAGE_TEMPLATES.find((t) => t.id === id) ?? BRIEFING_MESSAGE_TEMPLATES[0];
-}
-
-/** Μία γραμμή προεπισκόπησης παραληπτών (in-app + email) */
-export function formatRecipientsPreview(depts: BrandDepartment[]): string {
-  if (!depts.length) return 'Επιλέξτε τουλάχιστον ένα τμήμα για ειδοποίηση.';
-  const labels = depts.map((d) => DEPARTMENT_LABELS[d] || d);
-  return `Η ειδοποίηση πάει σε μέλη που έχουν ταιριστό τμήμα στο προφίλ τους (${labels.join(', ')}). Δεν είναι «ένα email ανά τμήμα»: αν κάποιο τμήμα δεν έχει άλλα μέλη, δεν θα σταλεί κάπου. In-app και email ανά τις προτιμήσεις κάθε χρήστη. Ο αποστολέας δεν λαμβάνει αντίγραφο.`;
-}
-
-/** Άλλα μέλη (εξαιρώντας αποστολέα) με department στα επιλεγμένα τμήματα — ίδια λογική με broadcast. */
-export function countMembersInSelectedDepartments(
-  members: BrandMember[],
-  excludeUserId: string,
-  selectedDepts: BrandDepartment[]
-): number {
-  return members.filter((m) => {
-    if (m.userId === excludeUserId) return false;
-    const dept = m.department ?? 'other';
-    return selectedDepts.includes(dept);
-  }).length;
 }
 
 export function loadSavedBriefingDepartments(): BrandDepartment[] {

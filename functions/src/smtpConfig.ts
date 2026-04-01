@@ -1,6 +1,12 @@
 import * as nodemailer from 'nodemailer';
+import dns from 'node:dns';
 import { logger } from 'firebase-functions/v2';
 import { defineString } from 'firebase-functions/params';
+
+/** Πολλοί SMTP (Papaki/Plesk) ακούνε μόνο IPv4· το Cloud Run μπορεί να δοκιμάζει IPv6 πρώτα → ETIMEDOUT στο CONN. */
+if (typeof dns.setDefaultResultOrder === 'function') {
+  dns.setDefaultResultOrder('ipv4first');
+}
 
 export const NOREPLY_EMAIL = 'noreply@performanceplus.gr';
 export const APP_NAME = 'Performance+';
@@ -43,6 +49,10 @@ export function createTransporter(): nodemailer.Transporter | null {
     secure,
     ...(secure ? {} : { requireTLS: true }),
     auth: { user, pass },
+    /** Αργά δίκτυα / SMTP που κάνουν greylisting — default nodemailer 60s μερικές φορές δεν φτάνει. */
+    connectionTimeout: 120_000,
+    greetingTimeout: 45_000,
+    socketTimeout: 120_000,
     // SNI ώστε το cert να ταιριάζει με το domain (Plesk warning για certificate)
     tls: { minVersion: 'TLSv1.2', servername: host },
   });

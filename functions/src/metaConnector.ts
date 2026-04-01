@@ -448,8 +448,8 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
 
       const allCampaigns = Array.from(campaignMap.values());
 
-      // Firestore batch limit is 500 — chunk writes
-      const CHUNK = 400;
+      // Firestore: max 500 ops/batch and ~10MB payload — large dailyMetrics docs need modest chunks
+      const CHUNK = 100;
       for (let i = 0; i < allCampaigns.length; i += CHUNK) {
         const chunk = allCampaigns.slice(i, i + CHUNK);
         const batch = getDb().batch();

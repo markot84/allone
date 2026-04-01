@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { TrendingUp, Filter, Download, Search, DollarSign, Trash2, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import { Card, CardHeader, Badge, Button, Spinner, useToast, Tooltip, AlertsBanner } from '../common';
@@ -43,6 +43,40 @@ function bucketOverlaps(date: string, fromDate: string, toDate: string): boolean
   return date >= fromDate && date <= toDate;
 }
 
+function sumConversionActions(ca: Campaign['conversionActions'] | undefined): { conv: number; value: number } {
+  if (!ca) return { conv: 0, value: 0 };
+  return Object.values(ca).reduce(
+    (acc, a) => ({
+      conv: acc.conv + (a?.conversions ?? 0),
+      value: acc.value + (a?.value ?? 0),
+    }),
+    { conv: 0, value: 0 }
+  );
+}
+
+/** Rollup conversions — με fallback στα conversionActions (π.χ. ασυμφωνία πεδίων / παλιά δεδομένα). */
+function getDisplayConversions(c: Campaign): number {
+  const raw = c.conversions;
+  if (raw != null && raw !== '') {
+    const n = typeof raw === 'number' ? raw : parseFloat(String(raw));
+    if (!Number.isNaN(n)) return n;
+  }
+  return sumConversionActions(c.conversionActions).conv;
+}
+
+function getDisplayConversionValue(c: Campaign): number {
+  const raw = c.conversion_value;
+  if (raw != null && raw !== '') {
+    const n = typeof raw === 'number' ? raw : parseFloat(String(raw));
+    if (!Number.isNaN(n)) return n;
+  }
+  return sumConversionActions(c.conversionActions).value;
+}
+
+function formatConvCount(n: number): string {
+  const dec = Math.abs(n % 1) > 1e-6 ? 2 : 0;
+  return formatNumber(n, dec);
+}
 
 interface CampaignsPageProps {
   onSectionChange?: (section: string) => void;
@@ -51,6 +85,23 @@ interface CampaignsPageProps {
 export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
   const { currentBrand } = useBrand();
   const { campaigns, isLoading, hasImported } = useCampaigns();
+  const brandId = currentBrand?.id ?? null;
+  const { data: connectorsDoc, isPending: connectorsStatusPending } = useQuery({
+    queryKey: ['connectorsSummary', brandId],
+    queryFn: async () =>
+      brandId
+        ? FirestoreService.getDocumentWithTimeout<Record<string, { connected?: boolean }>>(
+            'connectors',
+            brandId,
+            15000
+          )
+        : null,
+    enabled: Boolean(brandId && !isLoading && !hasImported),
+    staleTime: 60_000,
+  });
+  const hasConnectedAdsOrMeta = Boolean(
+    connectorsDoc?.google_ads?.connected || connectorsDoc?.meta?.connected
+  );
   const queryClient = useQueryClient();
   const toast = useToast();
   const [searchQuery, setSearchQuery] = useState('');
@@ -194,9 +245,9 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
       c.name || '', c.channel || '', c.status || '',
       c.impressions ?? '', c.clicks ?? '',
       c.impressions ? ((c.clicks || 0) / c.impressions * 100).toFixed(2) : '',
-      c.amount_spent ?? '', c.conversions ?? '', c.conversion_value ?? '',
-      c.amount_spent ? ((c.conversion_value || 0) / c.amount_spent).toFixed(2) : '',
-      c.conversions ? ((c.amount_spent || 0) / c.conversions).toFixed(2) : '',
+      c.amount_spent ?? '', getDisplayConversions(c), getDisplayConversionValue(c),
+      c.amount_spent ? (getDisplayConversionValue(c) / c.amount_spent).toFixed(2) : '',
+      getDisplayConversions(c) ? ((c.amount_spent || 0) / getDisplayConversions(c)).toFixed(2) : '',
       c.start_date || '', c.end_date || '',
     ]);
     const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
@@ -306,7 +357,8 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
         case 'impressions': va = a.impressions || 0; vb = b.impressions || 0; break;
         case 'clicks': va = a.clicks || 0; vb = b.clicks || 0; break;
         case 'ctr': va = a.ctr || 0; vb = b.ctr || 0; break;
-        case 'conversions': va = a.conversions || 0; vb = b.conversions || 0; break;
+        case 'conversions': va = getDisplayConversions(a); vb = getDisplayConversions(b); break;
+        case 'conversion_value': va = getDisplayConversionValue(a); vb = getDisplayConversionValue(b); break;
         case 'roas': va = a.roas || 0; vb = b.roas || 0; break;
       }
       if (typeof va === 'string') return sortDirection === 'asc' ? va.localeCompare(vb as string) : (vb as string).localeCompare(va);
@@ -320,7 +372,8 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
       setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
     } else {
       setSortColumn(col);
-      setSortDirection(col === 'name' || col === 'channel' ? 'asc' : 'desc');
+      const ascCols = ['name', 'channel'];
+      setSortDirection(ascCols.includes(col) ? 'asc' : 'desc');
     }
   };
 
@@ -336,8 +389,8 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
 
     for (const c of list) {
       totalSpent += c.amount_spent || 0;
-      totalConversions += c.conversions || 0;
-      totalConversionValue += c.conversion_value || 0;
+      totalConversions += getDisplayConversions(c);
+      totalConversionValue += getDisplayConversionValue(c);
     }
 
     const avgROAS = totalSpent > 0 ? totalConversionValue / totalSpent : 0;
@@ -432,21 +485,40 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
             Διαχείριση και ανάλυση marketing campaigns
           </p>
         </div>
-        <Card padding="lg" className="text-center py-12">
-          <p className="text-[#4A4A4A] mb-4">
+        <Card padding="lg" className="text-center py-12 space-y-3">
+          <p className="text-[#4A4A4A]">
             Δεν υπάρχουν imported campaigns ακόμα.
           </p>
-          <p className="text-sm text-[#4A4A4A]">
-            Μεταβείτε στο{' '}
-            <button
-              type="button"
-              onClick={() => onSectionChange?.('data-campaigns')}
-              className="font-semibold text-[var(--nts-accent)] hover:underline focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)] focus:ring-offset-1 rounded"
-            >
-              Data Import
-            </button>
-            {' '}για να εισάγετε campaigns από Google Ads ή Meta.
-          </p>
+          {connectorsStatusPending ? (
+            <p className="text-sm text-[#6B7280]">Έλεγχος σύνδεσης πλατφόρμων…</p>
+          ) : hasConnectedAdsOrMeta ? (
+            <p className="text-sm text-[#4A4A4A] max-w-xl mx-auto">
+              Η σύνδεση Google Ads / Meta δεν εισάγει αυτόματα campaigns στη λίστα. Ανοίξτε το{' '}
+              <button
+                type="button"
+                onClick={() => onSectionChange?.('data-campaigns')}
+                className="font-semibold text-[var(--nts-accent)] hover:underline focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)] focus:ring-offset-1 rounded"
+              >
+                Data Import
+              </button>
+              {' '}
+              και πατήστε <strong className="font-semibold text-[#1A1A1A]">Sync τώρα</strong> για κάθε
+              πλατφόρμα (ή περιμένετε το προγραμματισμένο ημερήσιο sync).
+            </p>
+          ) : (
+            <p className="text-sm text-[#4A4A4A]">
+              Μεταβείτε στο{' '}
+              <button
+                type="button"
+                onClick={() => onSectionChange?.('data-campaigns')}
+                className="font-semibold text-[var(--nts-accent)] hover:underline focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)] focus:ring-offset-1 rounded"
+              >
+                Data Import
+              </button>
+              {' '}
+              για να συνδέσετε Google Ads ή Meta και να εισάγετε campaigns.
+            </p>
+          )}
         </Card>
       </div>
     );
@@ -558,7 +630,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
             <div>
               <p className="text-sm text-[#4A4A4A] flex items-center gap-1">Total Conversions <Tooltip content="Αριθμός μετατροπών (αγορές, leads) που αποδίδονται στις καμπάνιες εντός της επιλεγμένης περιόδου." size={13} /></p>
               <p className="text-2xl font-bold text-[#1A1A1A] font-mono mt-1">
-                {formatNumber(summaryStats.totalConversions)}
+                {formatConvCount(summaryStats.totalConversions)}
               </p>
             </div>
             <div className="w-12 h-12 bg-[#DCFCE7] rounded-lg flex items-center justify-center">
@@ -720,6 +792,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                   <SortableHeader col="clicks" label="Clicks" current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="whitespace-nowrap hidden md:table-cell" />
                   <SortableHeader col="ctr" label="CTR" current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="whitespace-nowrap hidden lg:table-cell" />
                   <SortableHeader col="conversions" label="Conv." current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="whitespace-nowrap hidden sm:table-cell" />
+                  <SortableHeader col="conversion_value" label="Τζίρος" title="Conversion value" current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="whitespace-nowrap hidden sm:table-cell" />
                   <SortableHeader col="roas" label="ROAS" current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="whitespace-nowrap" />
                 </tr>
               </thead>
@@ -763,7 +836,10 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                       {campaign.ctr ? formatPercent(campaign.ctr, 2) : '-'}
                     </td>
                     <td className="py-2 px-3 text-right font-mono text-xs whitespace-nowrap hidden sm:table-cell">
-                      {campaign.conversions ? formatNumber(campaign.conversions) : '-'}
+                      {formatConvCount(getDisplayConversions(campaign))}
+                    </td>
+                    <td className="py-2 px-3 text-right font-mono text-xs whitespace-nowrap hidden sm:table-cell" title="Conversion value (τζίρος από conversions)">
+                      €{formatCurrency(getDisplayConversionValue(campaign), 2)}
                     </td>
                     <td className="py-3 px-2 text-right">
                       {campaign.roas ? (
@@ -906,12 +982,13 @@ function SearchIntelligenceTab({ type, searchTerms, keywords, hasData, search, o
   );
 }
 
-function SortableHeader({ col, label, current, dir, onSort, align, className = '' }: {
-  col: string; label: string; current: string | null; dir: 'asc' | 'desc'; onSort: (col: string) => void; align?: 'right'; className?: string;
+function SortableHeader({ col, label, title: thTitle, current, dir, onSort, align, className = '' }: {
+  col: string; label: string; title?: string; current: string | null; dir: 'asc' | 'desc'; onSort: (col: string) => void; align?: 'right'; className?: string;
 }) {
   const active = current === col;
   return (
     <th
+      title={thTitle}
       className={`pb-2 font-medium px-2 cursor-pointer select-none hover:text-[var(--nts-charcoal)] transition-colors ${align === 'right' ? 'text-right' : ''} ${className}`}
       onClick={() => onSort(col)}
     >

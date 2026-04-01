@@ -102,7 +102,6 @@ export function DecisionNotifyStrip({ decision: d, variant = 'default' }: Decisi
             extraLine={extraLine}
             onExtraLineChange={setExtraLine}
             compact
-            showRecipientsPreview={variant === 'default'}
             showDepartmentRow={variant === 'default'}
           />
 

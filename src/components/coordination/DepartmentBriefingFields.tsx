@@ -2,7 +2,6 @@ import { Users } from 'lucide-react';
 import {
   BRIEFING_DEPT_OPTIONS,
   BRIEFING_MESSAGE_TEMPLATES,
-  formatRecipientsPreview,
   getBriefingTemplate,
 } from './briefingShared';
 import type { BrandDepartment } from '../../types';
@@ -23,8 +22,6 @@ interface DepartmentBriefingFieldsProps {
   onAdditionalNoteChange?: (v: string) => void;
   /** Στενότερα πεδία για inline strip */
   compact?: boolean;
-  /** Απόκρυψη γραμμής «Θα λάβουν…» (αν ήδη εμφανίζεται αλλού) */
-  showRecipientsPreview?: boolean;
   /** Απόκρυψη σειράς τμημάτων (chips/toggles) — όταν τα τμήματα φαίνονται πάνω */
   showDepartmentRow?: boolean;
 }
@@ -41,7 +38,6 @@ export function DepartmentBriefingFields({
   additionalNote = '',
   onAdditionalNoteChange,
   compact,
-  showRecipientsPreview = true,
   showDepartmentRow = true,
 }: DepartmentBriefingFieldsProps) {
   const template = getBriefingTemplate(templateId);
@@ -49,16 +45,6 @@ export function DepartmentBriefingFields({
 
   return (
     <div className="space-y-3">
-      {showRecipientsPreview && (
-        <p
-          className={`text-[#374151] bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg px-3 py-2 leading-snug ${
-            compact ? 'text-[11px]' : 'text-xs'
-          }`}
-        >
-          {formatRecipientsPreview(selectedDepts)}
-        </p>
-      )}
-
       {showDepartmentRow && (
       <div>
         <p className="text-xs font-medium text-[#6B7280] mb-2 flex items-center gap-1.5">

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { X, Send } from 'lucide-react';
 import { Button, useToast } from '../common';
 import { DecisionsService, logAndNotify } from '../../services/coordination';
@@ -7,7 +7,6 @@ import type { BrandDepartment } from '../../types';
 import { DepartmentBriefingFields } from './DepartmentBriefingFields';
 import {
   BRIEFING_MESSAGE_TEMPLATES,
-  countMembersInSelectedDepartments,
   getBriefingTemplate,
   loadSavedBriefingDepartments,
   saveBriefingDepartments,
@@ -46,14 +45,6 @@ export function BriefingDrawer({ strategyName, initialTitle, onClose, onSent }: 
   const [additionalNote, setAdditionalNote] = useState('');
   const [sending, setSending] = useState(false);
   const [selectedDepts, setSelectedDepts] = useState<BrandDepartment[]>(() => loadSavedBriefingDepartments());
-
-  const targetPeerCount = useMemo(
-    () =>
-      user?.uid
-        ? countMembersInSelectedDepartments(members, user.uid, selectedDepts)
-        : 0,
-    [members, user?.uid, selectedDepts]
-  );
 
   const toggleDept = (d: BrandDepartment) => {
     setSelectedDepts((prev) => {
@@ -194,15 +185,6 @@ export function BriefingDrawer({ strategyName, initialTitle, onClose, onSent }: 
             additionalNote={additionalNote}
             onAdditionalNoteChange={setAdditionalNote}
           />
-          <p
-            className={`text-xs mt-2 rounded-lg px-3 py-2 border ${
-              targetPeerCount === 0
-                ? 'bg-amber-50 border-amber-200 text-amber-900'
-                : 'bg-[#F0FDF4] border-emerald-200 text-emerald-900'
-            }`}
-          >
-            <strong>{targetPeerCount}</strong> άλλα μέλη ταιριάζουν στα επιλεγμένα τμήματα (ο αποστολέας εξαιρείται). Αν περιμένετε περισσότερους παραλήπτες, ελέγξτε ότι κάθε χρήστης έχει σωστό τμήμα στο προφίλ (Δεδομένα).
-          </p>
 
           <div className="flex gap-3 mt-5">
             <Button variant="secondary" onClick={onClose} className="flex-1">

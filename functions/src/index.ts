@@ -1141,15 +1141,28 @@ export const sendEmailNotification = onRequest(
       return;
     }
 
+    logger.info('[sendEmailNotification] SMTP batch start', {
+      recipientCount: userIds.length,
+      title: String(title).slice(0, 120),
+      brandId: brandId || '',
+      type: type || '',
+    });
+
     const results: string[] = [];
     for (const uid of userIds) {
       try {
         await sendNotificationEmail(uid, { title, body: body || '', type: type || '', brandId: brandId || '', entityType, entityId });
         results.push(`${uid}: sent`);
       } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        logger.warn('[sendEmailNotification] send failed', { uid, error: msg.slice(0, 200) });
         results.push(`${uid}: failed`);
       }
     }
+
+    const sent = results.filter((r) => r.includes(': sent')).length;
+    const failed = results.filter((r) => r.includes(': failed')).length;
+    logger.info('[sendEmailNotification] batch done', { sent, failed, total: results.length });
 
     res.status(200).json({ ok: true, results });
   }

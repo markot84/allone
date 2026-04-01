@@ -680,9 +680,10 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
       logger.warn(`[GoogleAds] Conversion action query error, skipping:`, caErr);
     }
 
-    const batch = getDb().batch();
-    let count = 0;
-
+    // Firestore allows max 500 ops per batch but also ~10MB total payload per commit.
+    // Campaign docs include multi-year dailyMetrics + nested conversionActions — one huge batch fails with
+    // INVALID_ARGUMENT: Transaction too big.
+    const prepared: any[] = [];
     for (const [, campaign] of campaignMap) {
       campaign.ctr = campaign.impressions > 0
         ? Math.round((campaign.clicks / campaign.impressions) * 10000) / 100
@@ -710,16 +711,25 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
 
       campaign.createdAt = FieldValue.serverTimestamp();
       campaign.updatedAt = FieldValue.serverTimestamp();
-
-      const ref = getDb().collection('campaigns').doc(campaign.id);
-      batch.set(ref, campaign, { merge: true });
-      count++;
+      prepared.push(campaign);
     }
 
-    if (count > 0) {
+    const WRITE_CHUNK = 25;
+    for (let i = 0; i < prepared.length; i += WRITE_CHUNK) {
+      const slice = prepared.slice(i, i + WRITE_CHUNK);
+      const batch = getDb().batch();
+      for (const campaign of slice) {
+        const ref = getDb().collection('campaigns').doc(campaign.id);
+        batch.set(ref, campaign, { merge: true });
+      }
       await batch.commit();
-      totalImported = count;
-      logger.info(`[GoogleAds] Imported ${count} campaigns for customer ${customerId}`);
+      logger.info(
+        `[GoogleAds] Batch ${Math.floor(i / WRITE_CHUNK) + 1}: wrote ${slice.length} campaigns (customer ${customerId})`
+      );
+    }
+    if (prepared.length > 0) {
+      totalImported = prepared.length;
+      logger.info(`[GoogleAds] Imported ${prepared.length} campaigns for customer ${customerId}`);
     }
     // Fetch search terms & keywords (non-blocking — failures don't block campaign sync)
     try {
