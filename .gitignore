@@ -29,6 +29,10 @@ dist-ssr
 .env.production.local
 .env.development.local
 
+# Cloud Functions — μυστικά ανά project (το .env.example παραμένει στο repo)
+functions/.env*
+!functions/.env.example
+
 # Docs
 docs/
 
