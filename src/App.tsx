@@ -62,8 +62,13 @@ function QueryProvider({ children }: { children: React.ReactNode }) {
           dehydrateOptions: {
             shouldDehydrateQuery: (query) => {
               const key = query.queryKey[0];
+              // AI queries: always fresh
               if (key === 'aiChannelRecommendations' || key === 'aiContentSuggestions') return false;
-              // Don't cache null/empty results — they block fresh fetches after first sync
+              // Large Firestore collections: served by Firestore's own IndexedDB cache —
+              // keeping them out of localStorage prevents quota-exceeded errors that
+              // silently wipe the entire persisted cache.
+              if (key === 'campaigns' || key === 'search_intelligence') return false;
+              // Don't persist empty / null results
               if (query.state.data === null || query.state.data === undefined) return false;
               return true;
             }
