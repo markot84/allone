@@ -27,9 +27,11 @@ import { generateInsightsFromData } from '../../services/insights';
 import { useAutomationRunner } from '../../hooks/useAutomationRunner';
 import { useAutomationAlerts } from '../../hooks/useAutomation';
 import { MorningBriefing } from './MorningBriefing';
+import { StrategyBriefingQuickStrip } from '../coordination/StrategyBriefingQuickStrip';
 
 interface DashboardOverviewProps {
-  onSectionChange?: (section: string) => void;
+  /** Προαιρετικό `hashQuery` για deep link (π.χ. ειδοποιήσεις → `#products?stock=low`) */
+  onSectionChange?: (section: string, opts?: { hashQuery?: string }) => void;
   onOpenInsights?: () => void;
 }
 
@@ -163,6 +165,16 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
 
       {/* Automation Alerts */}
       <AlertsBanner maxAlerts={3} onNavigate={onSectionChange} />
+
+      {/* Quick briefing — πάντα με brand, και χωρίς ενεργή στρατηγική */}
+      {currentBrand && (
+        <StrategyBriefingQuickStrip
+          hasActiveStrategy={!!activeStrategy}
+          strategyDisplayName={
+            activeStrategy ? getStrategyName(activeStrategy.scenarioId) : 'Εμπορική πολιτική'
+          }
+        />
+      )}
 
       {/* Morning Briefing */}
       {currentBrand && (

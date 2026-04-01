@@ -663,7 +663,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
                   {isDragging ? 'Αφήστε τα αρχεία εδώ' : 'Σύρετε αρχεία εδώ ή κάντε κλικ για επιλογή'}
                 </p>
                 <p className="text-sm text-[#9CA3AF] mt-1">
-                  CSV, Excel (.xlsx) ή XML (Google Ads) · Πολλαπλά αρχεία υποστηρίζονται
+                  CSV, Excel (.xlsx) ή XML (Google Ads / Skroutz) · Πολλαπλά αρχεία υποστηρίζονται
                 </p>
               </div>
             </label>

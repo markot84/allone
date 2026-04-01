@@ -73,7 +73,7 @@ export interface BriefingResult {
   updateReason?: string;
 }
 
-interface CachedBriefing extends BriefingResult {
+export interface CachedBriefing extends BriefingResult {
   _cachedAt: number;
   _genCount: number;
   _snapshot: MetricsSnapshot;
@@ -325,13 +325,39 @@ function computeDataHash(data: BriefingData): string {
 const MAX_DAILY_GENERATIONS = 4;
 const MIN_REGEN_INTERVAL_MS = 60 * 60 * 1000; // 1 hour cooldown between auto-updates
 
+/** Calendar day in local timezone (YYYY-MM-DD) — consistent with «σήμερα» για τον χρήστη */
+export function getLocalDateKey(d = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+export function briefingResultFromCache(c: CachedBriefing): BriefingResult {
+  return {
+    narrative: c.narrative,
+    actions: c.actions,
+    generatedAt: c.generatedAt,
+    dataHash: c.dataHash,
+    urgency: c.urgency,
+    updateReason: c.updateReason,
+  };
+}
+
 export async function getCachedBriefing(brandId: string): Promise<CachedBriefing | null> {
   try {
-    const today = new Date().toISOString().split('T')[0];
-    const ref = doc(db, 'brands', brandId, 'briefings', today);
-    const snap = await getDoc(ref);
-    if (!snap.exists()) return null;
-    return snap.data() as CachedBriefing;
+    const localKey = getLocalDateKey();
+    const refLocal = doc(db, 'brands', brandId, 'briefings', localKey);
+    let snap = await getDoc(refLocal);
+    if (snap.exists()) return snap.data() as CachedBriefing;
+    // Παλιές εγγραφές με UTC ημερομηνία (πριν το local key)
+    const utcKey = new Date().toISOString().split('T')[0];
+    if (utcKey !== localKey) {
+      const refUtc = doc(db, 'brands', brandId, 'briefings', utcKey);
+      snap = await getDoc(refUtc);
+      if (snap.exists()) return snap.data() as CachedBriefing;
+    }
+    return null;
   } catch {
     return null;
   }
@@ -344,7 +370,7 @@ async function saveBriefingCache(
   prevGenCount: number,
 ): Promise<void> {
   try {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateKey();
     const ref = doc(db, 'brands', brandId, 'briefings', today);
     const cached: CachedBriefing = {
       ...result,

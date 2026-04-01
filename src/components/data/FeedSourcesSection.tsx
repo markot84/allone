@@ -71,7 +71,7 @@ export function FeedSourcesSection() {
       const isExcel = contentType.includes('spreadsheet') || fileName.toLowerCase().endsWith('.xlsx');
       const isXml = contentType.includes('xml') || fileName.toLowerCase().endsWith('.xml');
       let finalName = fileName;
-      if (source.type === 'google_ads' && isXml && !fileName.toLowerCase().endsWith('.xml')) {
+      if ((source.type === 'google_ads' || source.type === 'skroutz') && isXml && !fileName.toLowerCase().endsWith('.xml')) {
         finalName = fileName.replace(/\.[^.]+$/, '') + '.xml';
       }
       const file = new File([blob], finalName, {
@@ -123,6 +123,7 @@ export function FeedSourcesSection() {
   const typeInfo = (t: FeedSource['type']) => FEED_SOURCE_OPTIONS.find((f) => f.id === t);
 
   return (
+    <div id="feed-sources-section">
     <Card>
       <div className="p-6">
         <div className="flex items-center justify-between mb-4">
@@ -253,5 +254,6 @@ export function FeedSourcesSection() {
         )}
       </div>
     </Card>
+    </div>
   );
 }

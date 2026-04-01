@@ -34,16 +34,19 @@ export function usePriceBenchmarks() {
     enabled: !!brandId,
   });
 
-  const aboveMarket = benchmarks.filter((b) => b.priceDiff > 0).length;
-  const belowMarket = benchmarks.filter((b) => b.priceDiff < 0).length;
-  const avgDiff = benchmarks.length > 0
-    ? Math.round(benchmarks.reduce((s, b) => s + b.priceDiff, 0) / benchmarks.length * 10) / 10
-    : 0;
+  const withMarket = benchmarks.filter((b) => b.benchmarkPrice > 0);
+  const aboveMarket = withMarket.filter((b) => b.priceDiff > 0).length;
+  const belowMarket = withMarket.filter((b) => b.priceDiff < 0).length;
+  const avgDiff =
+    withMarket.length > 0
+      ? Math.round((withMarket.reduce((s, b) => s + b.priceDiff, 0) / withMarket.length) * 10) / 10
+      : 0;
 
   return {
     benchmarks,
     isLoading: isPending,
     count: benchmarks.length,
+    withMarketBenchmarkCount: withMarket.length,
     aboveMarket,
     belowMarket,
     avgDiff,

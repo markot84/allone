@@ -5,11 +5,11 @@ import {
 import { getAuth } from 'firebase/auth';
 import { db } from '../config/firebase';
 import type {
-  BrandMember, Decision, CoordinationTask, CoordinationComment,
-  ActivityEntry, UserNotification, ActivityType, BrandDepartment,
+  BrandMember, BrandDepartment, Decision, CoordinationTask, CoordinationComment,
+  ActivityEntry, UserNotification, ActivityType,
   NotificationPreferences, NotificationChannel
 } from '../types';
-import { DEFAULT_NOTIFICATION_CHANNELS } from '../types';
+import { DEFAULT_NOTIFICATION_CHANNELS, DEPARTMENT_LABELS, normalizeBrandMemberRole } from '../types';
 
 const ts = () => new Date().toISOString();
 
@@ -19,13 +19,22 @@ export const MembersService = {
   async getAll(brandId: string): Promise<BrandMember[]> {
     const q = query(collection(db, 'brands', brandId, 'members'));
     const snap = await getDocs(q);
-    return snap.docs.map(d => ({ id: d.id, ...d.data() }) as BrandMember);
+    return snap.docs.map((d) => {
+      const data = d.data();
+      return {
+        id: d.id,
+        ...data,
+        role: normalizeBrandMemberRole(data.role),
+      } as BrandMember;
+    });
   },
 
   async get(brandId: string, userId: string): Promise<BrandMember | null> {
     const ref = doc(db, 'brands', brandId, 'members', userId);
     const snap = await getDoc(ref);
-    return snap.exists() ? { id: snap.id, ...snap.data() } as BrandMember : null;
+    if (!snap.exists()) return null;
+    const data = snap.data();
+    return { id: snap.id, ...data, role: normalizeBrandMemberRole(data.role) } as BrandMember;
   },
 
   async set(brandId: string, member: Omit<BrandMember, 'id'>): Promise<void> {
@@ -36,6 +45,15 @@ export const MembersService = {
   async updateRole(brandId: string, userId: string, role: BrandMember['role']): Promise<void> {
     const ref = doc(db, 'brands', brandId, 'members', userId);
     await updateDoc(ref, { role, updatedAt: Timestamp.now() });
+  },
+
+  async updateDepartment(brandId: string, userId: string, department: BrandDepartment): Promise<void> {
+    const ref = doc(db, 'brands', brandId, 'members', userId);
+    await updateDoc(ref, {
+      department,
+      departmentLabel: DEPARTMENT_LABELS[department],
+      updatedAt: Timestamp.now(),
+    });
   },
 
   async remove(brandId: string, userId: string): Promise<void> {
@@ -215,21 +233,43 @@ export const NotificationPrefsService = {
     if (!prefs?.channels) return DEFAULT_NOTIFICATION_CHANNELS[type] ?? ['inApp'];
     return prefs.channels[type] ?? DEFAULT_NOTIFICATION_CHANNELS[type] ?? ['inApp'];
   },
+
+  /** Προτιμήσεις ειδοποιήσεων όλων των μελών του brand (για πίνακα διαχείρισης). */
+  async listMemberPrefs(brandId: string, members: BrandMember[]): Promise<{ member: BrandMember; prefs: NotificationPreferences | null }[]> {
+    return Promise.all(
+      members.map(async (member) => ({
+        member,
+        prefs: await this.get(brandId, member.userId),
+      }))
+    );
+  },
 };
 
 // ── Helpers: broadcast notifications to relevant members ────────────────────
+
+export type BroadcastResult = {
+  /** Άλλα μέλη που έλαβαν in-app ειδοποίηση */
+  inAppRecipients: number;
+  /** Άλλα μέλη με ενεργό κανάλι email για αυτό το event */
+  emailRecipients: number;
+  emailSent: number;
+  emailFailed: number;
+};
 
 export async function broadcastNotification(
   brandId: string,
   excludeUserId: string,
   data: Omit<UserNotification, 'id' | 'createdAt' | 'read'>,
-  targetDepartments?: BrandDepartment[]
-): Promise<void> {
-  const members = await MembersService.getAll(brandId);
+  targetDepartments?: BrandDepartment[],
+  /** Αν δοθεί, αποφεύγεται δεύτερο getAll (π.χ. από BriefingDrawer με cached members). */
+  membersOverride?: BrandMember[]
+): Promise<BroadcastResult> {
+  const members = membersOverride ?? (await MembersService.getAll(brandId));
   const targets = members.filter(m => {
     if (m.userId === excludeUserId) return false;
     if (targetDepartments && targetDepartments.length > 0) {
-      return targetDepartments.includes(m.department);
+      const dept = m.department ?? 'other';
+      return targetDepartments.includes(dept);
     }
     return true;
   });
@@ -254,22 +294,45 @@ export async function broadcastNotification(
   if (inAppTargets.length > 0) {
     await Promise.all(inAppTargets.map(uid => NotificationsService.send(uid, data)));
   }
+
+  let emailSent = 0;
+  let emailFailed = 0;
   if (emailTargets.length > 0) {
-    sendEmailNotifications(emailTargets, data).catch(() => {});
+    // SMTP μέσω Cloud Function μπορεί να πάρει πολλά δευτερόλεπτα ανά παραλήπτη — μην μπλοκάρουμε το UI
+    void sendEmailNotifications(emailTargets, data)
+      .then((r) => {
+        if (r.failed > 0) {
+          console.warn('sendEmailNotification: κάποια email απέτυχαν', r);
+        }
+      })
+      .catch((e) => {
+        console.warn('sendEmailNotification:', e);
+      });
   }
+
+  return {
+    inAppRecipients: inAppTargets.length,
+    emailRecipients: emailTargets.length,
+    emailSent,
+    emailFailed,
+  };
 }
 
 async function sendEmailNotifications(
   userIds: string[],
   data: Omit<UserNotification, 'id' | 'createdAt' | 'read'>
-): Promise<void> {
+): Promise<{ sent: number; failed: number }> {
+  if (userIds.length === 0) return { sent: 0, failed: 0 };
   try {
     const auth = getAuth();
     const token = await auth.currentUser?.getIdToken();
-    if (!token) return;
+    if (!token) {
+      console.warn('sendEmailNotification: no auth token');
+      return { sent: 0, failed: userIds.length };
+    }
 
     const endpoint = 'https://europe-west1-performance-plus-4a5b2.cloudfunctions.net/sendEmailNotification';
-    await fetch(endpoint, {
+    const res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({
@@ -282,8 +345,26 @@ async function sendEmailNotifications(
         entityId: data.entityId,
       }),
     });
+    if (!res.ok) {
+      const errText = await res.text();
+      console.warn('sendEmailNotification HTTP', res.status, errText);
+      return { sent: 0, failed: userIds.length };
+    }
+    const json = (await res.json()) as { ok?: boolean; results?: string[] };
+    const lines = json.results ?? [];
+    let sent = 0;
+    let failed = 0;
+    for (const line of lines) {
+      if (line.includes(': sent')) sent += 1;
+      else if (line.includes(': failed')) failed += 1;
+    }
+    if (lines.length === 0 && userIds.length > 0) {
+      return { sent: 0, failed: userIds.length };
+    }
+    return { sent, failed };
   } catch (e) {
     console.warn('Email notification failed (non-critical):', e);
+    return { sent: 0, failed: userIds.length };
   }
 }
 
@@ -297,10 +378,11 @@ export async function logAndNotify(
   summary: string,
   notifTitle: string,
   notifBody: string,
-  targetDepartments?: BrandDepartment[]
-): Promise<void> {
+  targetDepartments?: BrandDepartment[],
+  membersOverride?: BrandMember[]
+): Promise<BroadcastResult> {
   await ActivityService.log({ brandId, type, actorId, actorName, entityType, entityId, summary });
-  await broadcastNotification(brandId, actorId, {
+  return broadcastNotification(brandId, actorId, {
     brandId, type, title: notifTitle, body: notifBody, entityType, entityId,
-  }, targetDepartments);
+  }, targetDepartments, membersOverride);
 }

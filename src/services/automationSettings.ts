@@ -1,6 +1,6 @@
 import { doc, getDoc, setDoc, collection, query, where, getDocs, deleteDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import type { AutomationSettings, AutomationAlert, TriggerConfig } from '../types';
+import type { AutomationSettings, AutomationAlert, TriggerConfig, AlertEvaluation } from '../types';
 import { getDefaultTriggerConfigs } from '../data/triggersCatalog';
 
 const ts = () => new Date().toISOString();
@@ -69,12 +69,30 @@ export const AutomationAlertsService = {
     await this.updateStatus(id, 'dismissed');
   },
 
+  /** Αρχειοθέτηση με αξιολόγηση — οι νέες ειδοποιήσεις συνεχίζουν να δημιουργούνται κανονικά από τον server */
+  async archiveWithEvaluation(id: string, evaluation: AlertEvaluation, evaluatedBy?: string): Promise<void> {
+    const ref = doc(db, 'automation_alerts', id);
+    await setDoc(
+      ref,
+      {
+        status: 'archived' as const,
+        evaluation,
+        evaluatedAt: ts(),
+        ...(evaluatedBy ? { evaluatedBy } : {}),
+      },
+      { merge: true }
+    );
+  },
+
   async deleteOld(brandId: string, olderThanDays = 30): Promise<void> {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - olderThanDays);
     const all = await this.getAll(brandId);
     for (const a of all) {
-      if (new Date(a.createdAt) < cutoff && (a.status === 'dismissed' || a.status === 'acted')) {
+      if (
+        new Date(a.createdAt) < cutoff &&
+        (a.status === 'dismissed' || a.status === 'acted' || a.status === 'archived')
+      ) {
         await deleteDoc(doc(db, 'automation_alerts', a.id));
       }
     }

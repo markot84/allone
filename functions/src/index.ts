@@ -62,6 +62,7 @@ import {
   fetchGA4Data,
   setDb as setGA4Db,
 } from './ga4Connector';
+import { persistInterestLead } from './interestLead';
 
 admin.initializeApp();
 const db = getFirestore();
@@ -76,9 +77,60 @@ setGA4Db(db);
 
 const BATCH_SIZE = 500;
 
+/** Σε συμφωνία με isBrandMember στα firestore.rules: μέλος, δημιουργός brand, ή super admin UID */
+const SUPER_ADMIN_UIDS = new Set([
+  'yPIEMSB1jXXxGX2hHCOvLYoJY7L2',
+  'KApqDr7UlNa7TseQ25pakM8DRrd2',
+  'BAi5ZTMwFdWFCUR6k3IZq8cjPfp2',
+]);
+
+/** Σε συμφωνία με src/config/superAdmins.ts */
+const SUPER_ADMIN_EMAILS = new Set([
+  'makis@notthesame.gr',
+  'eleana@notthesame.gr',
+  'notthesame.ads@gmail.com',
+]);
+
+async function isUidSuperAdmin(uid: string): Promise<boolean> {
+  if (SUPER_ADMIN_UIDS.has(uid)) return true;
+  try {
+    const cfg = await db.doc('appConfig/superAdmins').get();
+    const uids = cfg.data()?.uids as unknown;
+    if (Array.isArray(uids) && uids.includes(uid)) return true;
+  } catch {
+    /* ignore */
+  }
+  try {
+    const u = await admin.auth().getUser(uid);
+    const em = u.email?.toLowerCase();
+    if (em && SUPER_ADMIN_EMAILS.has(em)) return true;
+  } catch {
+    /* ignore */
+  }
+  return false;
+}
+
 async function verifyBrandMembership(uid: string, brandId: string): Promise<boolean> {
+  if (SUPER_ADMIN_UIDS.has(uid)) return true;
   const memberDoc = await db.doc(`brands/${brandId}/members/${uid}`).get();
-  return memberDoc.exists;
+  if (memberDoc.exists) return true;
+  const brandDoc = await db.doc(`brands/${brandId}`).get();
+  if (!brandDoc.exists) return false;
+  if (brandDoc.data()?.createdBy === uid) return true;
+  return isUidSuperAdmin(uid);
+}
+
+/** Σύνδεση/αποσύνδεση/sync connectors: ιδιοκτήτης, διαχειριστής, δημιουργός brand, super admin */
+async function verifyBrandConnectorManagement(uid: string, brandId: string): Promise<boolean> {
+  if (await isUidSuperAdmin(uid)) return true;
+  const brandDoc = await db.doc(`brands/${brandId}`).get();
+  if (!brandDoc.exists) return false;
+  if (brandDoc.data()?.createdBy === uid) return true;
+  const memberDoc = await db.doc(`brands/${brandId}/members/${uid}`).get();
+  if (!memberDoc.exists) return false;
+  const raw = (memberDoc.data()?.role as string | undefined) ?? 'member';
+  const role = raw.trim().toLowerCase();
+  return role === 'owner' || role === 'admin';
 }
 
 type ImportType = 'products' | 'campaigns' | 'segments' | 'procurement';
@@ -581,8 +633,8 @@ export const connectorAuth = onRequest(
         return;
       }
 
-      if (!(await verifyBrandMembership(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Not a member of this brand' });
+      if (!(await verifyBrandConnectorManagement(decoded.uid, brandId))) {
+        res.status(403).json({ error: 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να διαχειριστεί connectors' });
         return;
       }
 
@@ -728,8 +780,8 @@ export const connectorDisconnect = onRequest(
       const { brandId, provider } = req.body as { brandId?: string; provider?: string };
       if (!brandId || !provider) { res.status(400).json({ error: 'Missing params' }); return; }
 
-      if (!(await verifyBrandMembership(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Not a member of this brand' });
+      if (!(await verifyBrandConnectorManagement(decoded.uid, brandId))) {
+        res.status(403).json({ error: 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να διαχειριστεί connectors' });
         return;
       }
 
@@ -773,8 +825,8 @@ export const connectorSelectAccount = onRequest(
         return;
       }
 
-      if (!(await verifyBrandMembership(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Not a member of this brand' });
+      if (!(await verifyBrandConnectorManagement(decoded.uid, brandId))) {
+        res.status(403).json({ error: 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να διαχειριστεί connectors' });
         return;
       }
 
@@ -834,8 +886,8 @@ export const connectorSync = onRequest(
       const { brandId, provider } = req.body as { brandId?: string; provider?: string };
       if (!brandId || !provider) { res.status(400).json({ error: 'Missing params' }); return; }
 
-      if (!(await verifyBrandMembership(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Not a member of this brand' });
+      if (!(await verifyBrandConnectorManagement(decoded.uid, brandId))) {
+        res.status(403).json({ error: 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να διαχειριστεί connectors' });
         return;
       }
 
@@ -894,8 +946,8 @@ export const connectorSaveCredentials = onRequest(
         return;
       }
 
-      if (!(await verifyBrandMembership(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Not a member of this brand' });
+      if (!(await verifyBrandConnectorManagement(decoded.uid, brandId))) {
+        res.status(403).json({ error: 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να διαχειριστεί connectors' });
         return;
       }
 
@@ -1263,5 +1315,44 @@ export const scheduledDigest = onSchedule(
     logger.info('[scheduledDigest] Starting daily email digest');
     const { brands, emails } = await sendDigestForAllBrands();
     logger.info(`[scheduledDigest] Completed: ${brands} brands, ${emails} emails sent`);
+  }
+);
+
+// ── Public: εκδήλωση ενδιαφέροντος (landing, χωρίς auth) ─────────────────────
+
+export const submitInterestLead = onRequest(
+  { region: 'europe-west1', secrets: [SMTP_EMAIL_SECRET, SMTP_PASSWORD_SECRET] },
+  async (req, res) => {
+    // Ρητό CORS: η φόρμα καλεί απευθείας cloudfunctions.net (αποφεύγει 404 από Hosting rewrites)
+    res.set('Access-Control-Allow-Origin', '*');
+    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type');
+    if (req.method === 'OPTIONS') {
+      res.status(204).send('');
+      return;
+    }
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'POST only' });
+      return;
+    }
+    try {
+      const raw = req.body;
+      const body: Record<string, unknown> =
+        raw && typeof raw === 'object' && !Buffer.isBuffer(raw)
+          ? (raw as Record<string, unknown>)
+          : {};
+      const forwardedFor = req.headers['x-forwarded-for'];
+      const ff = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor;
+      const result = await persistInterestLead(db, body, { forwardedFor: ff });
+      if (!result.ok) {
+        res.status(400).json({ error: result.error || 'Invalid request' });
+        return;
+      }
+      res.status(200).json({ ok: true });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      logger.error('[submitInterestLead]', msg);
+      res.status(500).json({ error: 'Server error' });
+    }
   }
 );

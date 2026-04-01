@@ -37,7 +37,7 @@ import {
   Line,
   Legend,
 } from 'recharts';
-import { Card, CardHeader, Badge, Button, Spinner } from '../common';
+import { Card, CardHeader, Badge, Button, Spinner, FormattedProse } from '../common';
 import { useToast } from '../common/Toast';
 import { useProductSource, useCampaigns, useBrand, useSegments, useActiveStrategy, useChannelActivations } from '../../hooks';
 import { exportSegmentActionPack, exportAllSegmentActionPacks, exportStrategyPlan, exportAllSegmentCustomerLists } from '../../services/segmentActionPack';
@@ -148,6 +148,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   const [historyChartSize, setHistoryChartSize] = useState({ width: 800, height: 288 });
   const [showExportModal, setShowExportModal] = useState(false);
   const [selectedFeed, setSelectedFeed] = useState<string | null>(null);
+  const [previewFeed, setPreviewFeed] = useState<string | null>(null);
   const [showExportAllModal, setShowExportAllModal] = useState(false);
   const [editingNote, setEditingNote] = useState<string | null>(null);
   const [noteText, setNoteText] = useState('');
@@ -405,6 +406,47 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
       } catch { toast.error('Σφάλμα κατά την εξαγωγή Excel. Δοκιμάστε CSV.'); }
     }
   };
+
+  const getFeedPreviewTable = useCallback(
+    (feedType: string) => {
+      const slice = products.slice(0, 8);
+      if (feedType === 'Google Shopping') {
+        const headers = ['id', 'title', 'description', 'link', 'price', 'availability'];
+        const rows = slice.map((p) => [
+          p.sku || p.id,
+          p.name || '',
+          `${p.name || ''} - ${p.category || ''}`,
+          `https://yoursite.com/products/${p.sku || p.id}`,
+          `${formatCurrency(p.price || 0, 2)} EUR`,
+          (p.stock_level || 0) > 0 ? 'in stock' : 'out of stock',
+        ]);
+        return { headers, rows };
+      }
+      if (feedType === 'Meta Catalog') {
+        const headers = ['id', 'title', 'availability', 'price', 'link'];
+        const rows = slice.map((p) => [
+          p.sku || p.id,
+          p.name || '',
+          (p.stock_level || 0) > 0 ? 'in stock' : 'out of stock',
+          `${formatCurrency(p.price || 0, 2)} EUR`,
+          `https://yoursite.com/products/${p.sku || p.id}`,
+        ]);
+        return { headers, rows };
+      }
+      const headers = ['SKU', 'Name', 'Category', 'Price', 'Margin %', 'Stock', 'Priority'];
+      const rows = slice.map((p) => [
+        p.sku || '',
+        p.name || '',
+        p.category || '',
+        formatCurrency(p.price || 0, 2),
+        formatPercent(p.margin_percentage || 0, 1).replace('%', ''),
+        p.stock_level || 0,
+        p.priority_tag || '',
+      ]);
+      return { headers, rows };
+    },
+    [products]
+  );
 
   const hasRealStrategy = !!activeStrategy?.id && !activeStrategy.id.startsWith('default_') && !!scenarioId;
   const strategyName = scenarioId ? getStrategyName(scenarioId) : null;
@@ -857,9 +899,6 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                           const text = part.replace(/^(Πελάτες|Κανάλια|Αποτέλεσμα):\s*/i, '');
                           const Icon = s.icon;
                           const cleaned = text.replace(/—/g, ',');
-                          const lines = cleaned.split('\n').map(l => l.trim()).filter(Boolean);
-                          const intro = lines.filter(l => !l.startsWith('•') && !l.startsWith('*'));
-                          const bullets = lines.filter(l => l.startsWith('•') || l.startsWith('*')).map(l => l.replace(/^[•*]\s*/, ''));
                           return (
                             <div key={i}>
                               <div className="flex items-center gap-2 mb-2">
@@ -871,25 +910,15 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                                 </div>
                                 <span className="text-xs font-bold uppercase tracking-wide" style={{ color: s.color }}>{s.label}</span>
                               </div>
-                              {intro.length > 0 && (
-                                <p className="text-sm text-[#4A4A4A] leading-relaxed mb-2">{intro.join(' ')}</p>
-                              )}
-                              {bullets.length > 0 && (
-                                <ul className="space-y-1.5 ml-1">
-                                  {bullets.map((b, bi) => (
-                                    <li key={bi} className="flex items-start gap-2 text-sm text-[#4A4A4A] leading-relaxed">
-                                      <span className="mt-1.5 w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />
-                                      <span>{b}</span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              )}
+                              <FormattedProse content={cleaned} variant="compact" />
                             </div>
                           );
                         })}
                       </div>
                     ) : (
-                      <p className="text-sm text-[#4A4A4A] leading-relaxed pt-4">{aiRecommendation.rationale.replace(/—/g, ',')}</p>
+                      <div className="pt-4">
+                        <FormattedProse content={aiRecommendation.rationale.replace(/—/g, ',')} variant="compact" />
+                      </div>
                     )}
                   </div>
                 </motion.div>
@@ -1039,7 +1068,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                 <div className="flex justify-between"><span>Products</span><span className="font-mono">{formatNumber(productsCount)}</span></div>
               </div>
               <div className="flex gap-2 mt-4">
-                <Button variant="ghost" size="sm" icon={<Eye size={14} />} className="flex-1" onClick={(e) => { e.stopPropagation(); alert(`Preview για ${feed}:\n${formatNumber(productsCount)} products`); }}>Preview</Button>
+                <Button variant="ghost" size="sm" icon={<Eye size={14} />} className="flex-1" onClick={(e) => { e.stopPropagation(); setPreviewFeed(feed); }}>Preview</Button>
                 <Button variant="secondary" size="sm" icon={<Download size={14} />} className="flex-1" onClick={(e) => { e.stopPropagation(); setSelectedFeed(feed); setShowExportModal(true); }}>Export</Button>
               </div>
             </motion.div>
@@ -1068,6 +1097,88 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                 </button>
               </div>
               <div className="p-6 border-t border-[#E5E5E5] flex justify-end"><Button variant="ghost" onClick={() => { setShowExportModal(false); setSelectedFeed(null); }}>Ακύρωση</Button></div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Feed preview modal */}
+      <AnimatePresence>
+        {previewFeed && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            onClick={() => setPreviewFeed(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[85vh] flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-6 border-b border-[#E5E5E5] flex items-center justify-between flex-shrink-0">
+                <div>
+                  <h2 className="text-xl font-bold text-[#1A1A1A]">Προεπισκόπηση feed</h2>
+                  <p className="text-sm text-[#4A4A4A] mt-1">
+                    {previewFeed} · {formatNumber(productsCount)} προϊόντα · δείγμα {Math.min(8, productsCount)} γραμμών
+                  </p>
+                </div>
+                <button type="button" onClick={() => setPreviewFeed(null)} className="p-2 hover:bg-[#F5F5F5] rounded-lg transition-colors" aria-label="Κλείσιμο">
+                  <X size={20} className="text-[#4A4A4A]" />
+                </button>
+              </div>
+              <div className="p-6 overflow-auto flex-1 min-h-0">
+                {products.length === 0 ? (
+                  <p className="text-sm text-[#4A4A4A] text-center py-8">Δεν υπάρχουν προϊόντα στο catalog για προεπισκόπηση.</p>
+                ) : (
+                  (() => {
+                    const { headers, rows } = getFeedPreviewTable(previewFeed);
+                    return (
+                      <div className="overflow-x-auto border border-[#E5E5E5] rounded-xl">
+                        <table className="w-full text-xs text-left">
+                          <thead>
+                            <tr className="bg-[#FAFAFA] border-b border-[#E5E5E5]">
+                              {headers.map((h) => (
+                                <th key={h} className="px-3 py-2 font-semibold text-[#1A1A1A] whitespace-nowrap">
+                                  {h}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {rows.map((row, ri) => (
+                              <tr key={ri} className="border-b border-[#F0F0F0] last:border-0">
+                                {row.map((cell, ci) => (
+                                  <td key={ci} className="px-3 py-2 text-[#4A4A4A] max-w-[200px] truncate" title={String(cell)}>
+                                    {String(cell)}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  })()
+                )}
+              </div>
+              <div className="p-6 border-t border-[#E5E5E5] flex justify-end gap-2 flex-shrink-0">
+                <Button variant="ghost" onClick={() => setPreviewFeed(null)}>Κλείσιμο</Button>
+                <Button
+                  variant="secondary"
+                  icon={<Download size={14} />}
+                  onClick={() => {
+                    setSelectedFeed(previewFeed);
+                    setPreviewFeed(null);
+                    setShowExportModal(true);
+                  }}
+                >
+                  Export…
+                </Button>
+              </div>
             </motion.div>
           </motion.div>
         )}

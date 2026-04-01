@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { collection, doc, getDocs, setDoc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../../config/firebase';
@@ -51,9 +51,25 @@ interface CompetitorAd {
 interface CompetitorSettings {
   competitors: CompetitorConfig[];
   lastSyncAt?: string;
+  /** ISO 3166-1 alpha-2 codes for Meta Ad Library reach filter; empty/absent = server default (GR, CY, US, GB). */
+  reachedCountries?: string[];
+  /** Last sync messages from Cloud Function (Meta API). */
+  lastAdLibraryWarnings?: string[];
 }
 
 type Tab = 'pricing' | 'insights' | 'ads';
+
+const TOOLTIP_CI_REFRESH =
+  'Πλήρης συγχρονισμός connectors (GMC, Meta Ad Library κ.λπ.): καθημερινά ~06:00 (Europe/Athens). Στη σελίδα: cache Price Benchmarks ~10 λεπτά, Ad Monitoring ~5 λεπτά. Για άμεση ενημέρωση: Sync GMC ή Scan τώρα.';
+
+const TOOLTIP_BENCHMARK_UPDATED =
+  'Ημερομηνία τελευταίου sync με Google Merchant Center. Πλήρης ανανέωση: καθημερινά ~06:00 Europe/Athens + χειροκίνητο «Sync GMC». Προβολή στη σελίδα: cache ~10 λεπτά.';
+
+const TOOLTIP_INSIGHTS_SOURCE =
+  'Βάση: τελευταία 7 ημέρες GMC. Ανανέωση δεδομένων: ίδιο πρόγραμμα με τα benchmarks (ημερήσιο ~06:00 + Sync GMC).';
+
+const TOOLTIP_ADS_LAST_SCAN =
+  'Τελευταίος έλεγχος Meta Ad Library. Πλήρης ανανέωση: καθημερινά ~06:00 Europe/Athens + «Scan τώρα». Προβολή: cache ~5 λεπτά. Οι διαφημίσεις φιλτράρονται κατά χώρα reach — βλ. πεδίο χωρών παρακάτω.';
 
 // ── Data fetchers ────────────────────────────────────────
 
@@ -88,11 +104,30 @@ export function CompetitorInsights() {
   const [newPageId, setNewPageId] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [syncing, setSyncing] = useState<string | null>(null);
+  const [competitorSyncWarnings, setCompetitorSyncWarnings] = useState<string[] | null>(null);
+  const [dismissedAdWarnings, setDismissedAdWarnings] = useState(false);
+  const [reachCountriesInput, setReachCountriesInput] = useState('');
+  const [savingCountries, setSavingCountries] = useState(false);
 
   // Price benchmarks
-  const { benchmarks, isLoading: benchmarksLoading, count: benchmarkCount, aboveMarket, belowMarket, avgDiff } = usePriceBenchmarks();
+  const {
+    benchmarks,
+    isLoading: benchmarksLoading,
+    count: benchmarkCount,
+    aboveMarket,
+    belowMarket,
+    avgDiff,
+  } = usePriceBenchmarks();
   // Price insights
-  const { insights: priceInsights, isLoading: insightsLoading, count: insightsCount, withSuggestionCount, avgConvLift, hasData: hasInsightsData } = usePriceInsights();
+  const {
+    insights: priceInsights,
+    isLoading: insightsLoading,
+    count: insightsCount,
+    withSuggestionCount,
+    avgConvLift,
+    hasData: hasInsightsData,
+    sellerName: priceInsightsSellerName,
+  } = usePriceInsights();
   const [insightsSearch, setInsightsSearch] = useState('');
   const [insightsSort, setInsightsSort] = useState<'conv' | 'diff' | 'name'>('conv');
 
@@ -111,6 +146,48 @@ export function CompetitorInsights() {
   });
 
   const competitors = settings?.competitors ?? [];
+
+  useEffect(() => {
+    if (!settings?.reachedCountries?.length) {
+      setReachCountriesInput('');
+      return;
+    }
+    setReachCountriesInput(settings.reachedCountries.join(', '));
+  }, [settings?.reachedCountries]);
+
+  useEffect(() => {
+    setDismissedAdWarnings(false);
+  }, [settings?.lastSyncAt]);
+
+  const adLibraryWarningsList = useMemo(() => {
+    if (competitorSyncWarnings !== null) return competitorSyncWarnings;
+    return settings?.lastAdLibraryWarnings?.length ? settings.lastAdLibraryWarnings : null;
+  }, [competitorSyncWarnings, settings?.lastAdLibraryWarnings]);
+
+  const saveReachCountries = useCallback(async () => {
+    if (!brandId) return;
+    const raw = reachCountriesInput
+      .split(/[,;\s]+/)
+      .map((s) => s.trim().toUpperCase())
+      .filter((c) => /^[A-Z]{2}$/.test(c));
+    const unique = [...new Set(raw)];
+    setSavingCountries(true);
+    try {
+      await saveSettings(brandId, {
+        ...(settings ?? { competitors: [] }),
+        competitors: settings?.competitors ?? [],
+        reachedCountries: unique,
+      });
+      queryClient.invalidateQueries({ queryKey: ['competitorSettings', brandId] });
+      toast.success(
+        unique.length > 0 ? `Χώρες reach: ${unique.join(', ')}` : 'Προεπιλογή server: GR, CY, US, GB'
+      );
+    } catch {
+      toast.error('Αποτυχία αποθήκευσης χωρών');
+    } finally {
+      setSavingCountries(false);
+    }
+  }, [brandId, reachCountriesInput, settings, queryClient, toast]);
 
   const addCompetitor = useMutation({
     mutationFn: async () => {
@@ -173,14 +250,13 @@ export function CompetitorInsights() {
           toast.success(`Ενημερώθηκαν ${result.imported} SKU benchmarks`);
           queryClient.invalidateQueries({ queryKey: ['priceBenchmarks', brandId] });
         } else {
-          if (result.warnings?.length) {
-            toast.error(`API warnings: ${result.warnings[0]}`);
-          }
+          setCompetitorSyncWarnings(result.warnings?.length ? result.warnings : null);
           toast.success(`Βρέθηκαν ${result.totalAds} ads (${result.newAds} νέες)`);
           queryClient.invalidateQueries({ queryKey: ['competitorAds', brandId] });
           queryClient.invalidateQueries({ queryKey: ['competitorSettings', brandId] });
         }
       } else {
+        if (provider === 'competitor') setCompetitorSyncWarnings(null);
         toast.error(result.error || 'Sync failed');
       }
     } catch {
@@ -224,11 +300,19 @@ export function CompetitorInsights() {
 
   if (!brandId) return null;
 
+  const insightsSellerLabel =
+    (priceInsightsSellerName && priceInsightsSellerName.trim()) || currentBrand?.name || '';
+
   const filteredInsights = useMemo(() => {
     let list = [...priceInsights];
     if (insightsSearch) {
       const q = insightsSearch.toLowerCase();
-      list = list.filter(i => i.title.toLowerCase().includes(q) || (i.brand || '').toLowerCase().includes(q));
+      list = list.filter(
+        (i) =>
+          i.title.toLowerCase().includes(q) ||
+          (i.brand || '').toLowerCase().includes(q) ||
+          insightsSellerLabel.toLowerCase().includes(q)
+      );
     }
     list.sort((a, b) => {
       if (insightsSort === 'conv') return b.predictedConversionsChange - a.predictedConversionsChange;
@@ -236,7 +320,7 @@ export function CompetitorInsights() {
       return a.title.localeCompare(b.title);
     });
     return list;
-  }, [priceInsights, insightsSearch, insightsSort]);
+  }, [priceInsights, insightsSearch, insightsSort, insightsSellerLabel]);
 
   const tabs: { id: Tab; label: string; count?: number; icon: React.ReactNode }[] = [
     { id: 'pricing', label: 'Price Benchmarks', count: benchmarkCount, icon: <ShoppingCart size={15} /> },
@@ -252,6 +336,7 @@ export function CompetitorInsights() {
           <h2 className="text-2xl font-bold text-[#1A1A1A] flex items-center gap-2">
             <Search size={24} className="text-[var(--nts-accent)]" />
             Competitive Intelligence
+            <Tooltip content={TOOLTIP_CI_REFRESH} size={18} />
           </h2>
           <p className="text-[#4A4A4A] mt-1">
             Price benchmarking (Google Merchant Center) & Ad monitoring (Meta Ad Library)
@@ -290,9 +375,9 @@ export function CompetitorInsights() {
           {/* KPI Strip */}
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
             <KpiBox
-              label="SKUs με benchmark"
-              value={String(benchmarkCount)}
-              tooltip="Πλήθος SKUs με δεδομένα τιμών αγοράς από Google Merchant Center."
+              label="SKUs με benchmark GMC"
+              value={benchmarkCount > 0 ? String(benchmarkCount) : '—'}
+              tooltip="Προϊόντα όπου το Google Merchant Center (αναφορά Price Competitiveness) επιστρέφει μέση τιμή αγοράς για σύγκριση. Εμφανίζονται μόνο αυτά — προϊόντα χωρίς διαθέσιμο benchmark δεν εμφανίζονται. Ο συνολικός κατάλογος στο GMC μπορεί να είναι μεγαλύτερος."
               icon={<ShoppingCart size={18} />}
               color="#6366F1"
             />
@@ -320,7 +405,7 @@ export function CompetitorInsights() {
             <KpiBox
               label="Τελ. ενημέρωση"
               value={benchmarks.length > 0 ? new Date(benchmarks[0].updatedAt).toLocaleDateString('el-GR') : '—'}
-              tooltip="Ημερομηνία τελευταίου sync με Google Merchant Center."
+              tooltip={TOOLTIP_BENCHMARK_UPDATED}
               icon={<Calendar size={18} />}
               color="#8B5CF6"
             />
@@ -409,7 +494,7 @@ export function CompetitorInsights() {
             <KpiBox label="Προϊόντα με insights" value={String(insightsCount)} tooltip="Πλήθος SKUs με προτάσεις τιμής από Google." icon={<ShoppingCart size={18} />} color="#6366F1" />
             <KpiBox label="Με πρόταση τιμής" value={String(withSuggestionCount)} tooltip="SKUs όπου η Google προτείνει διαφορετική τιμή." icon={<TrendingUp size={18} />} color="#F59E0B" />
             <KpiBox label="Μέσο conv. lift" value={avgConvLift > 0 ? `+${avgConvLift}%` : `${avgConvLift}%`} tooltip="Μέση εκτιμώμενη αύξηση μετατροπών αν εφαρμόσετε τις προτεινόμενες τιμές." icon={<BarChart3 size={18} />} color="#22C55E" />
-            <KpiBox label="Πηγή" value="GMC 7d" tooltip="Βασίζεται στα τελευταία 7 ημέρες δεδομένων Google Merchant Center." icon={<Calendar size={18} />} color="#8B5CF6" />
+            <KpiBox label="Πηγή" value="GMC 7d" tooltip={TOOLTIP_INSIGHTS_SOURCE} icon={<Calendar size={18} />} color="#8B5CF6" />
           </div>
 
           <Card>
@@ -460,6 +545,7 @@ export function CompetitorInsights() {
                     <thead className="sticky top-0 bg-[#F9FAFB] z-10">
                       <tr className="text-xs text-[#6B7280] uppercase tracking-wider">
                         <th className="px-3 py-2.5 font-medium">Προϊόν</th>
+                        <th className="px-3 py-2.5 font-medium hidden md:table-cell">Πωλητής</th>
                         <th className="px-3 py-2.5 font-medium hidden md:table-cell">Brand</th>
                         <th className="px-3 py-2.5 font-medium text-right">Τρέχουσα</th>
                         <th className="px-3 py-2.5 font-medium text-right">Προτεινόμενη</th>
@@ -470,8 +556,8 @@ export function CompetitorInsights() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#F3F4F6]">
-                      {filteredInsights.slice(0, 300).map(item => (
-                        <InsightRow key={item.productId} item={item} />
+                      {filteredInsights.slice(0, 300).map((item) => (
+                        <InsightRow key={item.productId} item={item} sellerLabel={insightsSellerLabel} />
                       ))}
                     </tbody>
                   </table>
@@ -517,11 +603,70 @@ export function CompetitorInsights() {
             <KpiBox
               label="Τελευταίο scan"
               value={settings?.lastSyncAt ? new Date(settings.lastSyncAt).toLocaleDateString('el-GR') : '—'}
-              tooltip="Ημερομηνία τελευταίου ελέγχου Meta Ad Library."
+              tooltip={TOOLTIP_ADS_LAST_SCAN}
               icon={<Calendar size={18} />}
               color="#8B5CF6"
             />
           </div>
+
+          {adLibraryWarningsList && adLibraryWarningsList.length > 0 && !dismissedAdWarnings && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="font-medium mb-1">Meta Ad Library</p>
+                  <ul className="list-disc pl-5 space-y-1 text-xs">
+                    {adLibraryWarningsList.map((w, i) => (
+                      <li key={i} className="break-words">
+                        {w}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <button
+                  type="button"
+                  className="text-xs text-amber-800 underline shrink-0"
+                  onClick={() => {
+                    setDismissedAdWarnings(true);
+                    setCompetitorSyncWarnings(null);
+                  }}
+                >
+                  Κλείσιμο
+                </button>
+              </div>
+            </div>
+          )}
+
+          <Card>
+            <div className="p-5">
+              <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+                <div className="flex-1 min-w-0">
+                  <label className="flex items-center gap-1 text-xs font-medium text-[#374151] mb-1">
+                    Φίλτρο χωρών (reach)
+                    <Tooltip
+                      content="Φιλτράρει κατά χώρα που είδε η διαφήμιση. Κενό = προεπιλογή server (GR, EU, US, κ.λπ.). Αν δεν εμφανίζονται ads, δοκιμάστε επιπλέον χώρες (π.χ. DE, BG) ή επιβεβαιώστε το Page ID στο facebook.com/ads/library."
+                      size={11}
+                    />
+                  </label>
+                  <input
+                    type="text"
+                    value={reachCountriesInput}
+                    onChange={(e) => setReachCountriesInput(e.target.value)}
+                    placeholder="Κενό = προεπιλογή (GR + EU + US…). Π.χ. DE, BG αν δεν εμφανίζονται ads"
+                    className="w-full px-3 py-2 border border-[#D1D5DB] rounded-lg text-sm focus:ring-2 focus:ring-[var(--nts-accent)] focus:border-transparent"
+                  />
+                </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="shrink-0"
+                  onClick={() => void saveReachCountries()}
+                  disabled={savingCountries}
+                >
+                  {savingCountries ? <Spinner size="sm" /> : 'Αποθήκευση χωρών'}
+                </Button>
+              </div>
+            </div>
+          </Card>
 
           {/* Competitor Settings */}
           <Card>
@@ -746,7 +891,7 @@ function BenchmarkRow({ item }: { item: { productId: string; title: string; bran
   );
 }
 
-function InsightRow({ item }: { item: PriceInsight }) {
+function InsightRow({ item, sellerLabel }: { item: PriceInsight; sellerLabel: string }) {
   const hasSuggestion = item.suggestedPrice > 0 && item.suggestedPrice !== item.currentPrice;
   const priceLower = item.suggestedPrice < item.currentPrice;
 
@@ -768,6 +913,11 @@ function InsightRow({ item }: { item: PriceInsight }) {
       <td className="px-3 py-2.5">
         <p className="text-sm font-medium text-[#111827] line-clamp-1 max-w-xs">{item.title || item.productId}</p>
         <p className="text-[10px] text-[#9CA3AF] font-mono mt-0.5">{item.productId}</p>
+      </td>
+      <td className="px-3 py-2.5 hidden md:table-cell">
+        <span className="text-xs text-[#374151] line-clamp-2 max-w-[10rem]" title={sellerLabel || undefined}>
+          {sellerLabel || '—'}
+        </span>
       </td>
       <td className="px-3 py-2.5 hidden md:table-cell">
         <span className="text-xs text-[#374151]">{item.brand || '—'}</span>

@@ -1401,7 +1401,6 @@ export function WeightConfigurator() {
           onSent={() => {
             setShowBriefingDrawer(false);
             setBriefingName(null);
-            toast.success('Briefing εστάλη στα τμήματα');
           }}
         />
       )}

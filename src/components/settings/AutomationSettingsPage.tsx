@@ -236,7 +236,7 @@ export function AutomationSettingsPage() {
                                 ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/8 text-[var(--nts-accent)] font-medium'
                                 : 'border-[#E5E7EB] text-[#9CA3AF] hover:border-[#D1D5DB]'
                             }`}
-                            title="Αυτόματη δημιουργία απόφασης στο Συντονισμό"
+                            title="Αυτόματη δημιουργία εμπορικής πολιτικής στο Συντονισμό Τμημάτων"
                           >
                             {config.autoBriefing ? <Bell size={11} /> : <BellOff size={11} />}
                             Auto-briefing

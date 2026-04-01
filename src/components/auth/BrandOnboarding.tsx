@@ -12,9 +12,8 @@ import {
   Users,
   Target,
   Shield,
-  Zap,
 } from 'lucide-react';
-import { Spinner, Button } from '../common';
+import { Spinner, Button, PerformancePlusLogo } from '../common';
 import { BrandCreateForm } from './BrandCreateForm';
 import { useAuth, useBrand } from '../../hooks';
 
@@ -79,8 +78,8 @@ export function BrandOnboarding({ children }: BrandOnboardingProps) {
           >
             <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden">
               <div className="bg-gradient-to-r from-[#111] to-[#1a1a2e] p-8 text-center">
-                <div className="w-16 h-16 bg-white/10 backdrop-blur rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <Zap size={32} className="text-[#F97316]" />
+                <div className="flex justify-center mb-4">
+                  <PerformancePlusLogo height={44} className="mx-auto" variant="onDark" />
                 </div>
                 <h1 className="text-2xl font-bold text-white">
                   {firstName ? `Καλώς ήρθες, ${firstName}!` : 'Καλώς ήρθατε!'}

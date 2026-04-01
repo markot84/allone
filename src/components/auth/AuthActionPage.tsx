@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { Lock, CheckCircle, AlertCircle, ArrowLeft } from 'lucide-react';
 import { verifyPasswordResetCode, confirmPasswordReset, applyActionCode } from 'firebase/auth';
 import { auth } from '../../config/firebase';
-import { Button } from '../common';
+import { Button, PerformancePlusLogo } from '../common';
 import { SUPPORT_EMAIL } from '../../config/superAdmins';
 
 interface AuthActionPageProps {
@@ -182,11 +182,8 @@ function ActionWrapper({ children }: { children: React.ReactNode }) {
         className="w-full max-w-md"
       >
         <div className="bg-white rounded-2xl shadow-lg border border-[var(--nts-border-gray)] p-8">
-          <div className="text-center mb-6">
-            <div className="w-14 h-14 bg-white rounded-xl border-2 border-[var(--nts-accent)] flex items-center justify-center mx-auto mb-4">
-              <span className="font-bold text-[var(--nts-accent)] text-xl">P+</span>
-            </div>
-            <p className="text-xs text-[var(--nts-medium-gray)]">by notthesame.ai</p>
+          <div className="flex justify-center mb-6">
+            <PerformancePlusLogo height={44} className="mx-auto" />
           </div>
           {children}
           <div className="mt-6 pt-4 border-t border-[var(--nts-border-gray)] text-center">

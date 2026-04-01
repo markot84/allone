@@ -27,6 +27,94 @@ const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GA4_DATA_API = 'https://analyticsdata.googleapis.com/v1beta';
 const GA4_ADMIN_API = 'https://analyticsadmin.googleapis.com/v1beta';
 
+/**
+ * Normalize GA4 Default Channel Group labels so session vs first-user reports merge reliably.
+ * GA may return "(direct)", Greek labels, or "(not set)" vs "Unassigned" — align to a canonical key.
+ */
+function normalizeDefaultChannelGroup(name: string): string {
+  let s = name
+    .normalize('NFKC')
+    .trim()
+    .toLowerCase()
+    .replace(/_/g, ' ')
+    .replace(/[()]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (s === 'not set' || s === 'unassigned') return 'unassigned';
+  return s;
+}
+
+/**
+ * Map localized GA4 Default Channel Group labels (e.g. Greek UI) to one canonical key for matching
+ * across session vs first-user reports when GA returns different languages per query.
+ */
+const CHANNEL_LABEL_CANONICAL: Record<string, string> = {
+  // Greek (normalized lowercase) -> English canonical
+  'οργανική αναζήτηση': 'organic search',
+  'πληρωμένη αναζήτηση': 'paid search',
+  'άμεση': 'direct',
+  'παραπομπή': 'referral',
+  'οργανικά κοινωνικά δίκτυα': 'organic social',
+  'πληρωμένα κοινωνικά δίκτυα': 'paid social',
+  'ηλεκτρονικό ταχυδρομείο': 'email',
+  'οθόνη': 'display',
+  'αμειβόμενη αναζήτηση': 'paid search',
+  'άλλο πληρωμένο': 'paid other',
+  'διασταυρούμενο δίκτυο': 'cross-network',
+  'μη αντιστοιχισμένο': 'unassigned',
+  'αταξινόμητο': 'unassigned',
+  'πληρωμένες αγορές': 'paid shopping',
+  'οργανικές αγορές': 'organic shopping',
+  'πληρωμένο βίντεο': 'paid video',
+  'οργανικό βίντεο': 'organic video',
+};
+
+function canonicalChannelComparable(name: string): string {
+  const n = normalizeDefaultChannelGroup(name);
+  return CHANNEL_LABEL_CANONICAL[n] ?? n;
+}
+
+/** Map acquisition-channel row onto a session-channel row (exact normalized match, then loose substring match). */
+function pickTrafficChannelForNu(rawNuChannel: string, trafficKeys: string[]): string | null {
+  const n = canonicalChannelComparable(rawNuChannel);
+  for (const ch of trafficKeys) {
+    if (canonicalChannelComparable(ch) === n) return ch;
+  }
+  const nPlain = normalizeDefaultChannelGroup(rawNuChannel);
+  for (const ch of trafficKeys) {
+    if (normalizeDefaultChannelGroup(ch) === nPlain) return ch;
+  }
+  for (const ch of trafficKeys) {
+    const tn = normalizeDefaultChannelGroup(ch);
+    if (tn.length >= 5 && nPlain.length >= 5 && (nPlain.includes(tn) || tn.includes(nPlain))) return ch;
+  }
+  return null;
+}
+
+/** Distribute total new users across session channels by session share (last resort when labels never match). */
+function applyProportionalNewUsers(
+  trafficSources: Record<string, { sessions: number; newUsers: number }>,
+  totalNu: number
+): void {
+  const keys = Object.keys(trafficSources);
+  const totalSessions = keys.reduce((a, k) => a + (trafficSources[k].sessions || 0), 0);
+  if (totalSessions <= 0 || totalNu <= 0 || keys.length === 0) return;
+  let allocated = 0;
+  const sorted = [...keys].sort((a, b) => trafficSources[b].sessions - trafficSources[a].sessions);
+  sorted.forEach((ch, i) => {
+    if (i === sorted.length - 1) {
+      trafficSources[ch].newUsers = Math.max(0, totalNu - allocated);
+    } else {
+      const n = Math.round((totalNu * trafficSources[ch].sessions) / totalSessions);
+      trafficSources[ch].newUsers = n;
+      allocated += n;
+    }
+  });
+  logger.warn(
+    `[GA4] New users: applied session-proportional split (${totalNu} total) — channel labels did not match acquisition report`
+  );
+}
+
 const SCOPES = [
   'https://www.googleapis.com/auth/analytics.readonly',
 ];
@@ -312,7 +400,9 @@ export async function fetchGA4Data(
       };
     }
 
-    // Traffic source breakdown
+    // Traffic source breakdown (session-scoped channel).
+    // Do not request `newUsers` with `sessionDefaultChannelGroup` — often incompatible or all zeros.
+    // New users by acquisition channel: `firstUserDefaultChannelGroup` + `newUsers`, merged below (normalized keys).
     const sourceBody = {
       dateRanges: [{ startDate: formatDate(startDate), endDate: formatDate(endDate) }],
       dimensions: [
@@ -321,7 +411,6 @@ export async function fetchGA4Data(
       metrics: [
         { name: 'sessions' },
         { name: 'totalUsers' },
-        { name: 'newUsers' },
         { name: 'conversions' },
       ],
     };
@@ -346,15 +435,67 @@ export async function fetchGA4Data(
           const channel = row.dimensionValues?.[0]?.value || 'Unknown';
           const vals = row.metricValues || [];
           trafficSources[channel] = {
-            sessions: parseInt(vals[0]?.value || '0'),
-            users: parseInt(vals[1]?.value || '0'),
-            newUsers: parseInt(vals[2]?.value || '0'),
-            conversions: parseInt(vals[3]?.value || '0'),
+            sessions: parseInt(vals[0]?.value || '0', 10),
+            users: parseInt(vals[1]?.value || '0', 10),
+            conversions: parseInt(vals[2]?.value || '0', 10),
+            newUsers: 0,
           };
         }
       }
     } catch (e) {
       logger.warn('[GA4] Traffic sources query failed:', e);
+    }
+
+    // New users per acquisition channel — merge onto session-channel rows (same labels via languageCode + fuzzy match)
+    try {
+      const nuBody = {
+        languageCode: 'en',
+        dateRanges: [{ startDate: formatDate(startDate), endDate: formatDate(endDate) }],
+        dimensions: [{ name: 'firstUserDefaultChannelGroup' }],
+        metrics: [{ name: 'newUsers' }],
+      };
+      const nuRes = await fetch(`${GA4_DATA_API}/properties/${propertyId}:runReport`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify(nuBody),
+      });
+      if (nuRes.ok) {
+        const nuData = await nuRes.json();
+        const trafficKeys = Object.keys(trafficSources);
+        let totalNuReport = 0;
+        let mergedNu = 0;
+
+        for (const ch of trafficKeys) {
+          trafficSources[ch].newUsers = 0;
+        }
+
+        for (const row of nuData.rows || []) {
+          const rawChannel = row.dimensionValues?.[0]?.value || 'Unknown';
+          const nu = parseInt(row.metricValues?.[0]?.value || '0', 10);
+          totalNuReport += nu;
+          const match = pickTrafficChannelForNu(rawChannel, trafficKeys);
+          if (match) {
+            trafficSources[match].newUsers += nu;
+            mergedNu += nu;
+          }
+        }
+
+        if (totalNuReport > 0 && mergedNu === 0) {
+          applyProportionalNewUsers(trafficSources, totalNuReport);
+        } else if (totalNuReport > 0 && mergedNu > 0 && mergedNu < totalNuReport) {
+          logger.warn(
+            `[GA4] New users: matched ${mergedNu}/${totalNuReport} — some acquisition rows had no session channel (locale or extra channel)`
+          );
+        }
+      } else {
+        const errText = await nuRes.text();
+        logger.warn(`[GA4] New users by channel report failed: ${nuRes.status}`, errText.slice(0, 400));
+      }
+    } catch (e) {
+      logger.warn('[GA4] New users by channel query failed:', e);
     }
 
     // Top pages

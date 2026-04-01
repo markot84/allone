@@ -12,7 +12,7 @@ import {
   HelpCircle,
   X
 } from 'lucide-react';
-import { Card, CardHeader, Button } from '../common';
+import { Card, CardHeader, Button, useToast, FormattedProse } from '../common';
 import {
   knowledgeCategories,
   knowledgeArticles,
@@ -21,26 +21,39 @@ import {
   getArticleById
 } from '../../data/knowledgeBase';
 
+const SUPPORT_MAIL = 'noreply@performanceplus.gr';
+
 export function Help() {
+  const toast = useToast();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedArticle, setSelectedArticle] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Handle hash navigation (e.g., #help?article=column-mapping-table)
+  // Handle hash navigation: #help?article=… ή #help?q=… (αναζήτηση από header)
   useEffect(() => {
     const checkHash = () => {
-      const hash = window.location.hash;
-      const match = hash.match(/help\?article=([^&]+)/);
-      if (match) {
-        const articleId = match[1];
+      const hash = window.location.hash.replace(/^#/, '');
+      if (!hash.startsWith('help')) return;
+      const queryPart = hash.includes('?') ? hash.split('?').slice(1).join('?') : '';
+      const params = new URLSearchParams(queryPart);
+      const articleId = params.get('article');
+      const qRaw = params.get('q');
+      if (articleId) {
         const article = getArticleById(articleId);
         if (article) {
           setSelectedCategory(article.category);
           setSelectedArticle(articleId);
+          setSearchQuery('');
         }
+        return;
+      }
+      if (qRaw != null && qRaw !== '') {
+        setSearchQuery(qRaw);
+        setSelectedCategory(null);
+        setSelectedArticle(null);
       }
     };
-    
+
     checkHash();
     window.addEventListener('hashchange', checkHash);
     return () => window.removeEventListener('hashchange', checkHash);
@@ -102,37 +115,8 @@ export function Help() {
 
         {/* Article Content */}
         <Card padding="lg">
-          <div className="prose prose-sm max-w-none">
-            <div className="whitespace-pre-line text-[#1A1A1A] leading-relaxed">
-              {currentArticle.content.split('\n').map((line, i) => {
-                if (line.startsWith('**') && line.endsWith('**')) {
-                  return (
-                    <h3 key={i} className="font-semibold text-lg mt-6 mb-3 text-[#1A1A1A]">
-                      {line.replace(/\*\*/g, '')}
-                    </h3>
-                  );
-                }
-                if (line.startsWith('- **')) {
-                  const match = line.match(/- \*\*(.+?)\*\*: (.+)/);
-                  if (match) {
-                    return (
-                      <div key={i} className="my-2">
-                        <span className="font-semibold text-[#1A1A1A]">{match[1]}:</span>{' '}
-                        <span className="text-[#4A4A4A]">{match[2]}</span>
-                      </div>
-                    );
-                  }
-                }
-                if (line.trim() === '') {
-                  return <br key={i} />;
-                }
-                return (
-                  <p key={i} className="mb-3 text-[#4A4A4A]">
-                    {line}
-                  </p>
-                );
-              })}
-            </div>
+          <div className="max-w-none">
+            <FormattedProse content={currentArticle.content} variant="article" />
 
             {/* Steps */}
             {currentArticle.steps && currentArticle.steps.length > 0 && (
@@ -419,7 +403,14 @@ export function Help() {
                     <p className="text-xs text-[#22C55E]">Διαθέσιμο τώρα</p>
                   </div>
                 </div>
-                <Button variant="primary" className="w-full">
+                <Button
+                  variant="primary"
+                  className="w-full"
+                  onClick={() => {
+                    window.location.href = `mailto:${SUPPORT_MAIL}?subject=${encodeURIComponent('Performance+ — επικοινωνία')}`;
+                    toast.info('Ανοίγει το πρόγραμμα αλληλογραφίας για μήνυμα προς την ομάδα υποστήριξης.');
+                  }}
+                >
                   Ξεκινήστε Chat
                 </Button>
               </div>
@@ -434,7 +425,13 @@ export function Help() {
                     <p className="text-xs text-[#4A4A4A]">noreply@performanceplus.gr</p>
                   </div>
                 </div>
-                <Button variant="secondary" className="w-full">
+                <Button
+                  variant="secondary"
+                  className="w-full"
+                  onClick={() => {
+                    window.location.href = `mailto:${SUPPORT_MAIL}`;
+                  }}
+                >
                   Στείλτε Email
                 </Button>
               </div>
@@ -447,7 +444,7 @@ export function Help() {
       <div className="text-center py-8 border-t border-[#E5E5E5]">
         <p className="text-[#4A4A4A]">
           Δεν βρίσκετε αυτό που ψάχνετε;{' '}
-          <a href="mailto:noreply@performanceplus.gr" className="text-[var(--nts-accent)] hover:underline">
+          <a href={`mailto:${SUPPORT_MAIL}`} className="text-[var(--nts-accent)] hover:underline">
             Επικοινωνήστε με την ομάδα μας
           </a>
         </p>

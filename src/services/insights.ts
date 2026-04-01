@@ -22,6 +22,7 @@ export function generateInsightsFromData(
 
   if (deadStock.length > 0) {
     insights.push({
+      insightKey: 'dead_stock',
       type: 'warning',
       icon: '',
       title: 'Dead stock — χωρίς πωλήσεις',
@@ -33,6 +34,7 @@ export function generateInsightsFromData(
 
   if (excessStock.length > 0) {
     insights.push({
+      insightKey: 'excess_stock',
       type: 'warning',
       icon: '',
       title: 'Πλεόνασμα αποθέματος',
@@ -44,6 +46,7 @@ export function generateInsightsFromData(
 
   if (highMarginLowStock.length > 0) {
     insights.push({
+      insightKey: 'high_margin_low_stock',
       type: 'opportunity',
       icon: '',
       title: 'High-margin items με low stock',
@@ -55,6 +58,7 @@ export function generateInsightsFromData(
 
   if (lowStock.length > 5 && products.length > 0) {
     insights.push({
+      insightKey: 'low_stock',
       type: 'recommendation',
       icon: '',
       title: 'Χαμηλά αποθέματα',
@@ -71,6 +75,7 @@ export function generateInsightsFromData(
 
   if (atRisk && (atRisk.percentage ?? 0) > 15) {
     insights.push({
+      insightKey: 'at_risk_segment',
       type: 'warning',
       icon: '',
       title: 'At Risk segment σε αύξηση',
@@ -82,6 +87,7 @@ export function generateInsightsFromData(
 
   if (champions && (champions.revenue_share ?? 0) > 30) {
     insights.push({
+      insightKey: 'champions_segment',
       type: 'opportunity',
       icon: '',
       title: 'Champions segment opportunity',
@@ -94,6 +100,7 @@ export function generateInsightsFromData(
   if (segments.length > 0 && totalCustomers > 0) {
     const topSegment = segments.reduce((a, b) => ((a.revenue_share ?? 0) > (b.revenue_share ?? 0) ? a : b));
     insights.push({
+      insightKey: 'top_segment',
       type: 'recommendation',
       icon: '',
       title: 'Κορυφαίο segment',
@@ -108,6 +115,7 @@ export function generateInsightsFromData(
     const categories = [...new Set(products.map((p) => p.category))].filter(Boolean);
     if (categories.length >= 2) {
       insights.push({
+        insightKey: 'cross_sell',
         type: 'opportunity',
         icon: '',
         title: 'Δυνατότητα cross-sell',

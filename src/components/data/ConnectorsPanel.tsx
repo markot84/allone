@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useBrand, useAuth } from '../../hooks';
+import { useBrand, useAuth, useBrandMembers } from '../../hooks';
 import { auth } from '../../config/firebase';
 import { getLastImportDates } from '../../services/import';
 import { FirestoreService } from '../../services/firestore';
@@ -474,11 +474,19 @@ function WooCredentialsModal({
 
 export function ConnectorsPanel() {
   const { currentBrand } = useBrand();
-  const { user } = useAuth();
+  const { user, isSuperAdmin } = useAuth();
+  const { members } = useBrandMembers();
   const queryClient = useQueryClient();
   const brandId = currentBrand?.id ?? null;
   const brandName = currentBrand?.name ?? 'Brand';
   const toast = useToast();
+
+  const myRole = members.find((m) => m.userId === user?.uid)?.role ?? 'member';
+  const canManageConnectors =
+    Boolean(isSuperAdmin) ||
+    (Boolean(user?.uid && currentBrand?.createdBy === user.uid)) ||
+    myRole === 'owner' ||
+    myRole === 'admin';
 
   const [states, setStates] = useState<Record<string, ConnectorState>>({});
   const [lastSyncDates, setLastSyncDates] = useState<Record<string, Date>>({});
@@ -500,12 +508,13 @@ export function ConnectorsPanel() {
   };
 
   const fetchStates = useCallback(async () => {
-    if (!brandId) return;
+    if (!brandId) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
     try {
-      const [doc, dates] = await Promise.all([
-        FirestoreService.getDocument('connectors', brandId),
-        getLastImportDates(brandId),
-      ]);
+      const doc = await FirestoreService.getDocumentWithTimeout('connectors', brandId, 20000);
       if (doc) {
         const data = doc as Record<string, any>;
         setStates({
@@ -519,6 +528,22 @@ export function ConnectorsPanel() {
       } else {
         setStates(emptyStates);
       }
+    } catch (e) {
+      console.warn('[ConnectorsPanel] connectors doc:', e);
+      setStates(emptyStates);
+      if (e instanceof Error && /timeout/i.test(e.message)) {
+        toast.error('Αργή απόκριση από τη βάση. Δοκιμάστε ανανέωση σελίδας ή ελέγξτε το δίκτυο.');
+      }
+    } finally {
+      setLoading(false);
+    }
+    try {
+      const dates = await Promise.race([
+        getLastImportDates(brandId),
+        new Promise<Record<string, Date>>((_, reject) =>
+          setTimeout(() => reject(new Error('import dates timeout')), 25000)
+        ),
+      ]);
       setLastSyncDates({
         google_ads: dates['google_ads_api'] || dates['campaigns'],
         meta: dates['meta_api'] || dates['campaigns'],
@@ -528,11 +553,9 @@ export function ConnectorsPanel() {
         woocommerce: dates['woocommerce_api'],
       } as Record<string, Date>);
     } catch {
-      setStates(emptyStates);
-    } finally {
-      setLoading(false);
+      /* ημερομηνίες sync είναι secondary */
     }
-  }, [brandId]);
+  }, [brandId, toast]);
 
   useEffect(() => {
     fetchStates();
@@ -556,16 +579,24 @@ export function ConnectorsPanel() {
     }
   }, [toast, fetchStates]);
 
-  // Auto-open picker if pending
+  // Auto-open picker if pending (μόνο owner/admin/δημιουργός)
   useEffect(() => {
     const pendingProvider = Object.entries(states).find(
       ([, s]) => s.pendingAccountSelection
     )?.[0];
-    if (pendingProvider) setAccountPickerFor(pendingProvider);
-  }, [states]);
+    if (pendingProvider && canManageConnectors) setAccountPickerFor(pendingProvider);
+  }, [states, canManageConnectors]);
+
+  useEffect(() => {
+    if (!canManageConnectors) setAccountPickerFor(null);
+  }, [canManageConnectors]);
 
   const handleConnect = async (provider: ConnectorConfig['id'], shopDomain?: string) => {
     if (!brandId || !user) return;
+    if (!canManageConnectors) {
+      toast.error('Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να συνδέσει πλατφόρμες.');
+      return;
+    }
 
     if (provider === 'shopify' && !shopDomain) {
       setShopDomainModal(true);
@@ -612,6 +643,10 @@ export function ConnectorsPanel() {
 
   const handleDisconnect = async (provider: ConnectorConfig['id']) => {
     if (!brandId || !user) return;
+    if (!canManageConnectors) {
+      toast.error('Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να αποσυνδέσει.');
+      return;
+    }
     if (!confirm('Αποσύνδεση; Δεν θα γίνεται πλέον αυτόματη εισαγωγή.')) return;
 
     try {
@@ -638,6 +673,10 @@ export function ConnectorsPanel() {
 
   const handleSync = async (provider: ConnectorConfig['id']) => {
     if (!brandId || !user) return;
+    if (!canManageConnectors) {
+      toast.error('Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να κάνει sync.');
+      return;
+    }
     setSyncing(provider);
 
     try {
@@ -659,7 +698,13 @@ export function ConnectorsPanel() {
       if (result.success) {
         const syncedConnector = CONNECTORS.find((c) => c.id === provider);
         const label = syncedConnector?.syncLabel || 'campaigns';
-        toast.success(`Εισήχθησαν ${result.imported} ${label}`);
+        if (provider === 'merchant' && (result.imported === 0 || result.imported == null)) {
+          toast.info(
+            'GMC: sync ολοκληρώθηκε — 0 SKUs με benchmark. Έλεγξε GTIN στο feed και Price Competitiveness στο Merchant Center.'
+          );
+        } else {
+          toast.success(`Εισήχθησαν ${result.imported} ${label}`);
+        }
         queryClient.invalidateQueries({ queryKey: ['campaigns', brandId] });
         if (provider === 'merchant') queryClient.invalidateQueries({ queryKey: ['priceBenchmarks', brandId] });
         fetchStates();
@@ -782,6 +827,11 @@ export function ConnectorsPanel() {
               <p className="text-sm text-[#6B7280] mt-0.5">
                 Σύνδεσε Ad Platforms & E-shop για αυτόματη εισαγωγή δεδομένων (06:00)
               </p>
+              {!canManageConnectors && (
+                <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-3 max-w-xl">
+                  Οι συνδέσεις διαχειρίζονται μόνο από <strong>ιδιοκτήτη</strong> ή <strong>διαχειριστή</strong> του brand.
+                </p>
+              )}
             </div>
           </div>
 
@@ -868,7 +918,9 @@ export function ConnectorsPanel() {
                           variant="primary"
                           size="sm"
                           onClick={() => setAccountPickerFor(conn.id)}
+                          disabled={!canManageConnectors}
                           className="w-full"
+                          title={!canManageConnectors ? 'Μόνο ιδιοκτήτης ή διαχειριστής' : undefined}
                         >
                           <Building2 size={14} className="mr-1" />
                           Επιλογή λογαριασμού
@@ -879,8 +931,9 @@ export function ConnectorsPanel() {
                             variant="primary"
                             size="sm"
                             onClick={() => handleSync(conn.id)}
-                            disabled={isSyncing}
+                            disabled={isSyncing || !canManageConnectors}
                             className="flex-1"
+                            title={!canManageConnectors ? 'Μόνο ιδιοκτήτης ή διαχειριστής' : undefined}
                           >
                             {isSyncing ? (
                               <Spinner size="sm" className="mr-1" />
@@ -893,6 +946,8 @@ export function ConnectorsPanel() {
                             variant="secondary"
                             size="sm"
                             onClick={() => handleDisconnect(conn.id)}
+                            disabled={!canManageConnectors}
+                            title={!canManageConnectors ? 'Μόνο ιδιοκτήτης ή διαχειριστής' : undefined}
                           >
                             <Unlink size={14} className="mr-1" />
                             Αποσύνδεση
@@ -903,8 +958,9 @@ export function ConnectorsPanel() {
                           variant="primary"
                           size="sm"
                           onClick={() => handleConnect(conn.id)}
-                          disabled={isConnecting}
+                          disabled={isConnecting || !canManageConnectors}
                           className="w-full"
+                          title={!canManageConnectors ? 'Μόνο ιδιοκτήτης ή διαχειριστής' : undefined}
                         >
                           {isConnecting ? (
                             <Spinner size="sm" className="mr-1" />
@@ -920,6 +976,37 @@ export function ConnectorsPanel() {
               })}
             </div>
           )}
+
+          <div className="mt-4 rounded-xl border border-orange-200 bg-orange-50/60 p-4">
+            <div className="flex items-start gap-3">
+              <span className="text-xl shrink-0" aria-hidden>🛍️</span>
+              <div className="min-w-0">
+                <h4 className="text-sm font-semibold text-[#1A1A1A]">Skroutz — XML κατάλογος</h4>
+                <p className="text-xs text-[#6B7280] mt-1 leading-relaxed">
+                  Δεν απαιτείται OAuth. Προσθέστε το δημόσιο URL του XML από το merchant panel του Skroutz στην ενότητα{' '}
+                  <strong>Αποθηκευμένα Feed Sources</strong> (λειτουργία Feed) ή ανεβάστε αρχείο .xml με τύπο Skroutz.
+                </p>
+                <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-xs">
+                  <a
+                    href="https://developer.skroutz.gr/products/xml_feed/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[var(--nts-accent)] hover:underline inline-flex items-center gap-1"
+                  >
+                    Τεκμηρίωση XML feed
+                    <ExternalLink size={12} />
+                  </a>
+                  <button
+                    type="button"
+                    className="text-[var(--nts-accent)] hover:underline"
+                    onClick={() => document.getElementById('feed-sources-section')?.scrollIntoView({ behavior: 'smooth' })}
+                  >
+                    Μετάβαση στα Feed Sources
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
 
           <p className="text-xs text-[#9CA3AF] mt-4">
             Κάθε brand συνδέεται με τους δικούς του λογαριασμούς. Τα credentials αποθηκεύονται ασφαλώς στο Firebase.

@@ -6,6 +6,7 @@ import { NotificationsService } from '../../services/coordination';
 import { useAuth } from '../../hooks';
 import { useAutomationAlerts } from '../../hooks/useAutomation';
 import { AutomationAlertsService } from '../../services/automationSettings';
+import { getAlertNavigation } from '../../utils/alertNavigation';
 
 const TYPE_META: Record<string, { icon: typeof Bell; color: string }> = {
   decision_created: { icon: MessageSquare, color: '#3B82F6' },
@@ -18,7 +19,11 @@ const TYPE_META: Record<string, { icon: typeof Bell; color: string }> = {
   member_joined: { icon: Users, color: '#EC4899' },
 };
 
-export function NotificationBell({ onNavigate }: { onNavigate?: (section: string) => void }) {
+export function NotificationBell({
+  onNavigate,
+}: {
+  onNavigate?: (section: string, opts?: { hashQuery?: string }) => void;
+}) {
   const { notifications, unreadCount } = useNotifications();
   const { newAlerts, invalidate: invalidateAlerts } = useAutomationAlerts();
   const { user } = useAuth();
@@ -150,7 +155,11 @@ export function NotificationBell({ onNavigate }: { onNavigate?: (section: string
               {newAlerts.slice(0, 5).map(alert => (
                 <button
                   key={`alert-${alert.id}`}
-                  onClick={() => { onNavigate && onNavigate('automations'); setOpen(false); }}
+                  onClick={() => {
+                    const nav = getAlertNavigation(alert);
+                    onNavigate?.(nav.section, nav.hashQuery ? { hashQuery: nav.hashQuery } : undefined);
+                    setOpen(false);
+                  }}
                   style={{
                     display: 'flex', gap: 10, padding: '10px 16px',
                     width: '100%', textAlign: 'left',

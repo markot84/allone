@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { SegmentsService } from '../services/firestore';
+import { mergeDuplicateSegmentRowsByName } from '../utils/mergeDuplicateSegments';
 import { getSegmentColor } from '../utils/segmentColors';
 import { useBrand } from './useBrand';
 import type { RFMSegment } from '../types';
@@ -17,7 +18,9 @@ export function useSegments() {
   // When brandId is set: show real data only. When no brand: empty (no mock).
   const segments = useMemo(() => {
     const raw = (brandId ? (firestoreSegments ?? []) : []) as RFMSegment[];
-    return raw.filter((s): s is RFMSegment => s != null && typeof s.id === 'string').map((s) => ({ ...s, color: getSegmentColor(s) }));
+    const cleaned = raw.filter((s): s is RFMSegment => s != null && typeof s.id === 'string');
+    const merged = mergeDuplicateSegmentRowsByName(cleaned);
+    return merged.map((s) => ({ ...s, color: getSegmentColor(s) }));
   }, [brandId, firestoreSegments]);
 
   const totalCustomers = useMemo(

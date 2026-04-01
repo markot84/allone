@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { Zap, Target, Users, MessageSquare, TrendingUp } from 'lucide-react';
-import { Badge } from '../common';
+import { Badge, FormattedProse } from '../common';
 import type { ChannelRecommendation, RFMSegment } from '../../types';
 
 const FUNNEL_STAGE: Record<string, { label: string; color: string }> = {
@@ -210,7 +210,9 @@ export function ChannelRecommendations({
           const parts = recommendations.rationale.split('||').map(s => s.trim());
           const hasStructure = parts.length >= 3 && parts[0].startsWith('Πελάτες:');
           if (!hasStructure) {
-            return <p className="text-sm text-[#4A4A4A] leading-relaxed">{recommendations.rationale.replace(/—/g, ',')}</p>;
+            return (
+              <FormattedProse content={recommendations.rationale.replace(/—/g, ',')} variant="compact" />
+            );
           }
           const sections = [
             { icon: Users, color: '#8B5CF6', label: 'Πελάτες' },
@@ -223,6 +225,7 @@ export function ChannelRecommendations({
                 const s = sections[i];
                 const text = part.replace(/^(Πελάτες|Κανάλια|Αποτέλεσμα):\s*/i, '');
                 const Icon = s.icon;
+                const cleaned = text.replace(/—/g, ',');
                 return (
                   <div key={i} className="flex items-start gap-2.5">
                     <div
@@ -231,31 +234,9 @@ export function ChannelRecommendations({
                     >
                       <Icon size={13} style={{ color: s.color }} />
                     </div>
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <span className="text-xs font-semibold" style={{ color: s.color }}>{s.label}</span>
-                      {(() => {
-                        const cleaned = text.replace(/—/g, ',');
-                        const lines = cleaned.split('\n').map(l => l.trim()).filter(Boolean);
-                        const intro = lines.filter(l => !l.startsWith('•'));
-                        const bullets = lines.filter(l => l.startsWith('•')).map(l => l.replace(/^•\s*/, ''));
-                        return (
-                          <>
-                            {intro.length > 0 && (
-                              <p className="text-sm text-[#4A4A4A] leading-relaxed">{intro.join(' ')}</p>
-                            )}
-                            {bullets.length > 0 && (
-                              <ul className="mt-1 space-y-0.5">
-                                {bullets.map((b, bi) => (
-                                  <li key={bi} className="flex items-start gap-1.5 text-sm text-[#4A4A4A] leading-relaxed">
-                                    <span className="mt-1.5 w-1 h-1 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />
-                                    {b}
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
-                          </>
-                        );
-                      })()}
+                      <FormattedProse content={cleaned} variant="compact" />
                     </div>
                   </div>
                 );

@@ -20,6 +20,8 @@ interface PriceInsightsData {
   items: PriceInsight[];
   count: number;
   syncedAt: any;
+  /** Merchant Center account display name (ο «πωλητής» στο Google Shopping). */
+  sellerName?: string | null;
 }
 
 async function fetchInsights(brandId: string): Promise<PriceInsightsData | null> {
@@ -53,5 +55,6 @@ export function usePriceInsights() {
     withSuggestionCount: withSuggestion.length,
     avgConvLift,
     syncedAt: data?.syncedAt,
+    sellerName: data?.sellerName ?? undefined,
   };
 }

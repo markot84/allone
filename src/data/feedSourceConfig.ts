@@ -6,7 +6,7 @@
  */
 
 import { createElement } from 'react';
-import { Database, ShoppingCart, Smartphone } from 'lucide-react';
+import { Database, ShoppingCart, Smartphone, Store } from 'lucide-react';
 import type { FeedSourceType } from '../types';
 export type { FeedSourceType };
 
@@ -81,6 +81,30 @@ export const FEED_SOURCE_CONFIG: Record<FeedSourceType, FeedSourceInfo> = {
       { feedColumn: 'description', appField: 'category' },
       { feedColumn: 'price', appField: 'price', required: true },
       { feedColumn: 'availability', appField: 'stock_level' },
+    ],
+  },
+  skroutz: {
+    id: 'skroutz',
+    name: 'Skroutz (XML)',
+    description:
+      'Επίσημο XML καταλόγου Skroutz — unique_id, name, price (με ΦΠΑ), link, image, category, manufacturer. Το URL δίνεται από το merchant panel του Skroutz.',
+    icon: createElement(Store, { size: 20, className: 'text-orange-600' }),
+    columnAliases: [
+      { feedColumn: 'unique_id', appField: 'sku', required: true },
+      { feedColumn: 'id', appField: 'sku' },
+      { feedColumn: 'name', appField: 'name', required: true },
+      { feedColumn: 'title', appField: 'name' },
+      { feedColumn: 'price', appField: 'price', required: true },
+      { feedColumn: 'link', appField: 'product_url' },
+      { feedColumn: 'url', appField: 'product_url' },
+      { feedColumn: 'image', appField: 'image_url' },
+      { feedColumn: 'imageurl', appField: 'image_url' },
+      { feedColumn: 'category', appField: 'category' },
+      { feedColumn: 'manufacturer', appField: 'brand' },
+      { feedColumn: 'brand', appField: 'brand' },
+      { feedColumn: 'availability', appField: 'stock_level' },
+      { feedColumn: 'description', appField: 'description' },
+      { feedColumn: 'ean', appField: 'sku' },
     ],
   },
 };

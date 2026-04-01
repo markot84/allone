@@ -44,6 +44,39 @@ export class FirestoreService {
     }
   }
 
+  /**
+   * Ίδιο με getDocument αλλά με ανώτατο χρόνο — αποφεύγει ατέρμονο spinner όταν το Firestore client
+   * «κολλάει» (δίκτυο, offline persistence, σπάνια race του SDK).
+   */
+  static async getDocumentWithTimeout<T>(
+    collectionName: string,
+    docId: string,
+    timeoutMs = 20000
+  ): Promise<T | null> {
+    const docRef = doc(db, collectionName, docId);
+    const load = async (): Promise<T | null> => {
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        return { id: docSnap.id, ...docSnap.data() } as T;
+      }
+      return null;
+    };
+    return new Promise<T | null>((resolve, reject) => {
+      const t = setTimeout(() => {
+        reject(new Error(`Firestore timeout ${timeoutMs}ms (${collectionName}/${docId})`));
+      }, timeoutMs);
+      load()
+        .then((r) => {
+          clearTimeout(t);
+          resolve(r);
+        })
+        .catch((e) => {
+          clearTimeout(t);
+          reject(e);
+        });
+    });
+  }
+
   // Get all documents from collection. When brandId is provided, filters by brandId.
   static async getDocuments<T>(
     collectionName: string,

@@ -59,7 +59,7 @@ export interface OrganicRevenue {
 }
 
 // Feed Source Types (for automated import)
-export type FeedSourceType = 'erp' | 'google_ads' | 'meta_catalog';
+export type FeedSourceType = 'erp' | 'google_ads' | 'meta_catalog' | 'skroutz';
 
 export interface FeedSource {
   id: string;
@@ -257,13 +257,6 @@ export interface ContentItem {
   };
 }
 
-export interface ContentCalendar {
-  month: string;
-  theme: string;
-  customer_journey_focus: string;
-  content_items: ContentItem[];
-}
-
 // ROI Types
 export interface ROIBreakdown {
   label: string;
@@ -285,6 +278,8 @@ export interface ROISummary {
 // AI Insights Types
 export interface AIInsight {
   type: 'opportunity' | 'warning' | 'recommendation';
+  /** Stable id for navigation from the insights panel */
+  insightKey?: string;
   icon: string;
   title: string;
   insight: string;
@@ -362,6 +357,22 @@ export interface Campaign {
 // ── Coordination System Types ───────────────────────────────────────────────
 
 export type BrandMemberRole = 'owner' | 'admin' | 'member';
+
+export const ROLE_LABELS: Record<BrandMemberRole, string> = {
+  owner: 'Ιδιοκτήτης',
+  admin: 'Διαχειριστής',
+  member: 'Μέλος',
+};
+
+/** Κανονικοποίηση ρόλου από Firestore (legacy τιμές, κεφαλαία, κενά). */
+export function normalizeBrandMemberRole(raw: unknown): BrandMemberRole {
+  if (raw == null) return 'member';
+  const s = String(raw).trim().toLowerCase();
+  if (s === 'owner' || s === 'admin' || s === 'member') return s;
+  if (s === 'superadmin' || s === 'super_admin') return 'admin';
+  return 'member';
+}
+
 export type BrandDepartment = 'management' | 'commercial' | 'marketing' | 'procurement' | 'agency' | 'external_partner' | 'other';
 
 export const DEPARTMENT_LABELS: Record<BrandDepartment, string> = {
@@ -487,7 +498,8 @@ export interface NotificationPreferences {
 
 export const DEFAULT_NOTIFICATION_CHANNELS: Record<ActivityType, NotificationChannel[]> = {
   decision_created: ['inApp', 'email'],
-  decision_updated: ['inApp'],
+  /** Must include email: manual «ειδοποίηση τμημάτων», έγκριση πρότασης κ.λπ. */
+  decision_updated: ['inApp', 'email'],
   decision_completed: ['inApp', 'email'],
   task_created: ['inApp', 'email'],
   task_assigned: ['inApp', 'email'],
@@ -500,7 +512,9 @@ export const DEFAULT_NOTIFICATION_CHANNELS: Record<ActivityType, NotificationCha
 
 export type TriggerPlanRequirement = 'growth' | 'enterprise';
 export type AlertSeverity = 'info' | 'warning' | 'critical';
-export type AlertStatus = 'new' | 'acknowledged' | 'acted' | 'dismissed';
+/** Αξιολόγηση χρήστη πριν το αρχείο — δεν επηρεάζει τη δημιουργία νέων server-side alerts */
+export type AlertEvaluation = 'urgent' | 'interested' | 'not_interested';
+export type AlertStatus = 'new' | 'acknowledged' | 'acted' | 'dismissed' | 'archived';
 
 export interface TriggerDefinition {
   id: string;
@@ -541,6 +555,9 @@ export interface AutomationAlert {
   linkedDecisionId?: string;
   data: Record<string, unknown>;
   createdAt: string;
+  evaluation?: AlertEvaluation;
+  evaluatedAt?: string;
+  evaluatedBy?: string;
 }
 
 // ─── E-commerce Types (Shopify / WooCommerce) ────────────────────

@@ -1,4 +1,4 @@
-import { Timestamp, writeBatch, doc } from 'firebase/firestore';
+import { Timestamp, writeBatch, doc, orderBy, limit } from 'firebase/firestore';
 import * as XLSX from 'xlsx';
 import { db } from '../config/firebase';
 import { FirestoreService, CampaignsService, ProcurementService, PROCUREMENT_COLLECTIONS } from './firestore';
@@ -322,6 +322,60 @@ function parseGoogleFeedXml(xmlText: string): Record<string, string>[] {
   return rows;
 }
 
+/** Skroutz merchant XML: repeated <product> nodes (see developer.skroutz.gr XML feed). */
+function parseSkroutzFeedXml(xmlText: string): Record<string, string>[] {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xmlText, 'text/xml');
+  const parseErr = doc.querySelector('parsererror');
+  if (parseErr) throw new Error(`XML parse error: ${parseErr.textContent}`);
+
+  let products = doc.getElementsByTagName('product');
+  if (products.length === 0) {
+    products = doc.getElementsByTagName('skroutz_product');
+  }
+
+  const rows: Record<string, string>[] = [];
+
+  const childText = (parent: Element, ...names: string[]): string => {
+    const want = new Set(names.map((n) => n.toLowerCase()));
+    for (let i = 0; i < parent.children.length; i++) {
+      const c = parent.children[i];
+      const tag = c.tagName.replace(/^.*:/, '').toLowerCase();
+      if (want.has(tag)) {
+        const v = (c.textContent ?? '').trim();
+        if (v) return v;
+      }
+    }
+    for (const n of names) {
+      const els = parent.getElementsByTagName(n);
+      if (els.length > 0) {
+        const v = (els[0].textContent ?? '').trim();
+        if (v) return v;
+      }
+    }
+    return '';
+  };
+
+  for (let i = 0; i < products.length; i++) {
+    const p = products[i];
+    const row: Record<string, string> = {
+      unique_id: childText(p, 'unique_id', 'UniqueID', 'id', 'sku', 'mpn'),
+      name: childText(p, 'name', 'title'),
+      price: childText(p, 'price', 'Price'),
+      link: childText(p, 'link', 'url', 'permalink'),
+      image: childText(p, 'image', 'imageurl', 'image_url', 'thumbnail', 'picture'),
+      category: childText(p, 'category', 'category_name', 'product_type'),
+      manufacturer: childText(p, 'manufacturer', 'brand'),
+      brand: childText(p, 'brand', 'manufacturer'),
+      availability: childText(p, 'availability', 'stock', 'instock', 'quantity'),
+      description: childText(p, 'description', 'short_description'),
+      ean: childText(p, 'ean', 'barcode', 'gtin'),
+    };
+    rows.push(row);
+  }
+  return rows;
+}
+
 // Get rows (header + data) from file - CSV or XLSX
 async function getRowsFromFile(file: File, type?: ImportType): Promise<string[][]> {
   const name = file.name.toLowerCase();
@@ -333,10 +387,14 @@ async function getRowsFromFile(file: File, type?: ImportType): Promise<string[][
   return parseCSV(text);
 }
 
-/** Get objects from XML (Google Ads feed). Returns null for non-XML. */
-async function getObjectsFromXmlFile(file: File): Promise<Record<string, string>[] | null> {
+/** Get objects from XML (Google Merchant/Ads or Skroutz). Returns null for non-XML. */
+async function getObjectsFromXmlFile(
+  file: File,
+  feedSourceType?: FeedSourceType
+): Promise<Record<string, string>[] | null> {
   if (!file.name.toLowerCase().endsWith('.xml')) return null;
   const text = await file.text();
+  if (feedSourceType === 'skroutz') return parseSkroutzFeedXml(text);
   return parseGoogleFeedXml(text);
 }
 
@@ -710,14 +768,26 @@ function validateProduct(row: Record<string, string>, index: number): { valid: b
   return { valid: true, data: product };
 }
 
-// Check if this is customer-level data (SignalLab: each row = customer) vs segment-level (each row = aggregated segment)
+// Check if this is customer-level data (each row = customer) vs segment-level (each row = aggregated segment)
 function isCustomerLevelData(objects: Record<string, string>[]): boolean {
   if (objects.length === 0) return false;
   const first = objects[0];
-  const hasRfmSegment = !!pick(first, 'rfm_segment');
-  const hasCustomerId = !!pick(first, 'customerid', 'customer_id');
-  // SignalLab format: RFM_Segment + CustomerID per row
-  return hasRfmSegment && hasCustomerId;
+  const segmentCol = (r: Record<string, string>) =>
+    pick(r, 'rfm_segment', 'segment', 'segment_name', 'name');
+  const hasSegmentCol = !!segmentCol(first);
+  const hasCustomerCol = !!pick(first, 'customerid', 'customer_id', 'user_id', 'client_id', 'email');
+  if (!hasSegmentCol || !hasCustomerCol) return false;
+
+  // Σύνοψη segments (π.χ. 9 γραμμές, μία ανά segment, διαφορετικά ονόματα): όχι customer-level
+  if (objects.length <= 64 && objects.length > 1) {
+    const names = objects.map((r) => segmentCol(r).toLowerCase().trim()).filter(Boolean);
+    const unique = new Set(names);
+    if (unique.size === objects.length) {
+      const looksLikeCustomerMetrics = !!pick(first, 'recency', 'frequency', 'monetary', 'r_score', 'f_score', 'rfm_score');
+      if (!looksLikeCustomerMetrics) return false;
+    }
+  }
+  return true;
 }
 
 // Validate single segment row (for segment-level imports)
@@ -1297,7 +1367,7 @@ export async function previewFileForProducts(
   warnings: string[];
 }> {
   let objects: Record<string, string>[];
-  const xmlObjects = await getObjectsFromXmlFile(file);
+  const xmlObjects = await getObjectsFromXmlFile(file, feedSourceType);
   if (xmlObjects !== null) {
     objects = xmlObjects;
     if (!feedSourceType) feedSourceType = 'google_ads';
@@ -1492,7 +1562,7 @@ export async function importFile(
   try {
     if (!isSupportedFile(file.name)) {
       result.success = false;
-      result.errors.push(`Unsupported file type. Use .csv, .xlsx or .xml (Google Ads feed)`);
+      result.errors.push(`Unsupported file type. Use .csv, .xlsx ή .xml (Google Ads ή Skroutz feed)`);
       return result;
     }
 
@@ -1506,7 +1576,7 @@ export async function importFile(
     }
 
     let objects: Record<string, string>[];
-    const xmlObjects = await getObjectsFromXmlFile(file);
+    const xmlObjects = await getObjectsFromXmlFile(file, feedSourceType);
     if (xmlObjects !== null) {
       objects = xmlObjects;
       if (type === 'products' && !feedSourceType) feedSourceType = 'google_ads';
@@ -1974,17 +2044,27 @@ export async function getImportJobs(brandId?: string | null): Promise<ImportJob[
   }));
 }
 
+/** Πρόσφατα jobs για υπολογισμό «τελευταίας εισαγωγής» — όχι πλήρες ιστορικό (αποφυγή αργής φόρτωσης). */
+const IMPORT_JOBS_LOOKBACK_FOR_LAST_DATES = 3000;
+
 // Get last successful import date per type (for UI display)
 export async function getLastImportDates(brandId: string | null | undefined): Promise<Record<string, Date>> {
   if (!brandId) return {};
-  const jobs = await getImportJobs(brandId);
+  const jobs = await FirestoreService.getDocuments<ImportJob>(
+    'import_jobs',
+    [orderBy('createdAt', 'desc'), limit(IMPORT_JOBS_LOOKBACK_FOR_LAST_DATES)],
+    brandId
+  );
+  const normalized = jobs.map((job) => ({
+    ...job,
+    createdAt: (job.createdAt as { toDate?: () => Date } | undefined)?.toDate?.() ?? new Date(job.createdAt as string | number | Date),
+  }));
   const result: Record<string, Date> = {};
-  for (const job of jobs) {
+  for (const job of normalized) {
     if (job.status !== 'completed' && job.status !== undefined) continue;
-    const key = (job as any).source || job.type;
+    const key = (job as { source?: string }).source || job.type;
     const existing = result[key];
     if (!existing || job.createdAt > existing) result[key] = job.createdAt;
-    // Also track by type
     const existing2 = result[job.type];
     if (!existing2 || job.createdAt > existing2) result[job.type] = job.createdAt;
   }

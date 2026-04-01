@@ -1,14 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Bell, Mail, Monitor, Save, Loader2 } from 'lucide-react';
 import { useAuth, useBrand } from '../../hooks';
 import { NotificationPrefsService } from '../../services/coordination';
 import type { ActivityType, NotificationChannel, NotificationPreferences } from '../../types';
 import { DEFAULT_NOTIFICATION_CHANNELS } from '../../types';
 
-const ACTIVITY_LABELS: Record<ActivityType, string> = {
-  decision_created: 'Νέα απόφαση',
-  decision_updated: 'Ενημέρωση απόφασης',
-  decision_completed: 'Ολοκλήρωση απόφασης',
+export const ACTIVITY_LABELS: Record<ActivityType, string> = {
+  decision_created: 'Νέα εμπορική πολιτική ή πρόταση τμήματος',
+  decision_updated: 'Ενημέρωση εμπορικής πολιτικής / πρότασης',
+  decision_completed: 'Ολοκλήρωση εμπορικής πολιτικής',
   task_created: 'Νέο task',
   task_assigned: 'Ανάθεση task',
   task_completed: 'Ολοκλήρωση task',
@@ -16,13 +17,14 @@ const ACTIVITY_LABELS: Record<ActivityType, string> = {
   member_joined: 'Νέο μέλος',
 };
 
-const ACTIVITY_GROUPS: { label: string; types: ActivityType[] }[] = [
-  { label: 'Αποφάσεις', types: ['decision_created', 'decision_updated', 'decision_completed'] },
+export const ACTIVITY_GROUPS: { label: string; types: ActivityType[] }[] = [
+  { label: 'Εμπορικές πολιτικές & προτάσεις', types: ['decision_created', 'decision_updated', 'decision_completed'] },
   { label: 'Tasks', types: ['task_created', 'task_assigned', 'task_completed'] },
   { label: 'Γενικά', types: ['comment_added', 'member_joined'] },
 ];
 
 export function NotificationSettings() {
+  const qc = useQueryClient();
   const { user } = useAuth();
   const { currentBrand } = useBrand();
   const [channels, setChannels] = useState<Record<ActivityType, NotificationChannel[]>>(
@@ -59,6 +61,7 @@ export function NotificationSettings() {
     setSaving(true);
     try {
       await NotificationPrefsService.save(currentBrand.id, user.uid, { channels } as Partial<NotificationPreferences>);
+      void qc.invalidateQueries({ queryKey: ['memberNotificationPrefs', currentBrand.id] });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch { /* noop */ }

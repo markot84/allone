@@ -1,10 +1,14 @@
 {
-  "version": "0.217.0",
-  "previousVersion": "0.216.0",
-  "commitHash": "09d56fd",
+  "version": "0.264.0",
+  "previousVersion": "0.263.0",
+  "commitHash": "5a15aa1",
   "branch": "main",
-  "buildDate": "2026-03-31T08:31:46.173Z",
+  "buildDate": "2026-04-01T14:33:09.420Z",
   "commits": [
+    {
+      "hash": "5a15aa1",
+      "message": "chore: buildInfo after landing deploy build"
+    },
     {
       "hash": "09d56fd",
       "message": "style(landing): widen layout to ~94vw (max 90rem), larger hero and preview images"
@@ -60,13 +64,10 @@
     {
       "hash": "8d8fa37",
       "message": "fix: align Dashboard ROAS formatting to 2 decimal places"
-    },
-    {
-      "hash": "3726de3",
-      "message": "feat: add Price Benchmarking (GMC), Competitive Intelligence, Dashboard KPIs, tooltips, fix token expired warning"
     }
   ],
   "changes": [
+    "[Συντήρηση] BuildInfo after landing deploy build",
     "[Βελτίωση εμφάνισης] Widen layout to ~94vw (max 90rem), larger hero and preview images",
     "[Διόρθωση] Hide contact emails on page, keep mailto to makis and dimitris",
     "Copy(landing): E-shop Intelligence hero, USP, problems, Dashboard/Strategy/Data Analysis",
@@ -75,7 +76,6 @@
     "[Νέο χαρακτηριστικό] Papaki SMTP via SMTP_HOST/SMTP_PORT params, keep Gmail fallback",
     "[Διόρθωση] Bind SMTP_EMAIL and SMTP_PASSWORD secrets for email HTTP and digest",
     "[Διόρθωση] Contact mailto to makis and dimitris at notthesame.gr",
-    "[Νέο χαρακτηριστικό] Use support@performanceplus.gr for contact CTAs and footer",
-    "[Νέο χαρακτηριστικό] Use noreply@performanceplus.gr for transactional and UI contact email"
+    "[Νέο χαρακτηριστικό] Use support@performanceplus.gr for contact CTAs and footer"
   ]
 }

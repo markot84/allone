@@ -1,6 +1,8 @@
 import { useRef } from 'react';
 import { ArrowRight, BarChart3, Brain, Database, FileSpreadsheet, HelpCircle, Mail, ShieldCheck, Target, Upload } from 'lucide-react';
 import { MARKETING_CONTACT_MAILTO } from '../../config/superAdmins';
+import { InterestForm } from './InterestForm';
+import { PerformancePlusLogo } from '../common';
 
 type LandingVariant = 'ceo' | 'ops';
 
@@ -11,6 +13,9 @@ interface MarketingIndexPageProps {
 }
 
 // ─── Static data ─────────────────────────────────────────────────────────────
+
+/** Τίτλος marketing (header + hero) */
+const MARKETING_PAGE_TITLE = 'Performance+: Το σύστημα νοημοσύνης του e-shop σας.';
 
 const dataSources = [
   { name: 'ERP / Πωλήσεις', description: 'Προϊόντα, απόθεμα, τιμολόγηση, πελατολόγιο', icon: <Database size={18} /> },
@@ -101,14 +106,10 @@ const appPreviewPoints = [
 ];
 
 const variantCopy: Record<LandingVariant, {
-  badge: string; headline: string; highlight: string;
   description: string; cta: string; uspTitle: string; uspPoints: string[];
   uspFooter: string; finalTitle: string; finalDescription: string;
 }> = {
   ceo: {
-    badge: 'E-shop Intelligence',
-    headline: 'E-shop Intelligence',
-    highlight: 'Performance+',
     description: 'Το λειτουργικό σύστημα που μετατρέπει μη αξιοποιήσιμα δεδομένα σε εμπορική νοημοσύνη και επιτρέπει άμεση και αποδοτική λήψη αποφάσεων, με συντονισμένο πλάνο ενεργειών.',
     cta: 'Είσοδος στο Performance+',
     uspTitle: 'Γιατί ξεχωρίζει',
@@ -123,9 +124,6 @@ const variantCopy: Record<LandingVariant, {
     finalDescription: 'Όταν η επιχείρηση χρειάζεται AI-powered εμπορική νοημοσύνη, συστηματική διακυβέρνηση του marketing και σαφή σύνδεση της απόδοσης με τα έσοδα, το Performance+ λειτουργεί ως ενιαίο λειτουργικό σύστημα εμπορικής ανάπτυξης.',
   },
   ops: {
-    badge: 'E-shop Intelligence',
-    headline: 'E-shop Intelligence',
-    highlight: 'Performance+',
     description: 'Το λειτουργικό σύστημα που μετατρέπει μη αξιοποιήσιμα δεδομένα σε εμπορική νοημοσύνη και επιτρέπει άμεση και αποδοτική λήψη αποφάσεων, με συντονισμένο πλάνο ενεργειών.',
     cta: 'Είσοδος στο Performance+',
     uspTitle: 'Γιατί ξεχωρίζει',
@@ -168,13 +166,11 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
         <div className={`${LANDING_MAX} pt-5`}>
           <div className="rounded-[22px] border border-[#1f2328]/10 bg-[var(--nts-bg-pure)] px-4 py-3 shadow-[0_10px_24px_rgba(16,24,40,0.08)] md:px-5">
             <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl">
-                  <img src="/nts-icon.png" alt="Performance+" className="h-8 w-8 object-contain" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs text-[var(--nts-medium-gray)]">{copy.badge}</p>
-                </div>
+              <div className="flex min-w-0 flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-4">
+                <PerformancePlusLogo height={36} className="shrink-0" />
+                <p className="min-w-0 text-sm font-semibold leading-snug text-[var(--nts-charcoal)] sm:text-base">
+                  {MARKETING_PAGE_TITLE}
+                </p>
               </div>
 
               <button
@@ -198,11 +194,11 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
           <div className="relative">
             <div className="grid gap-6 lg:grid-cols-[1.02fr_0.98fr] lg:items-center lg:gap-8 xl:gap-12">
               <div className="space-y-4">
-                <h1 className="max-w-none leading-[1.04] text-[var(--nts-charcoal)]">
-                  <span className="block text-4xl font-bold md:text-6xl">{copy.headline}</span>
-                  {copy.highlight && (
-                    <span className="mt-1 block text-2xl font-semibold text-[var(--nts-accent)] md:text-4xl">{copy.highlight}</span>
-                  )}
+                <h1 className="max-w-none leading-[1.08] text-[var(--nts-charcoal)]">
+                  <span className="block text-3xl font-bold md:text-5xl lg:text-6xl">Performance+:</span>
+                  <span className="mt-2 block text-2xl font-semibold text-[var(--nts-accent)] md:text-3xl lg:text-[2.75rem]">
+                    Το σύστημα νοημοσύνης του e-shop σας.
+                  </span>
                 </h1>
                 <p className="max-w-none text-[15px] leading-7 text-[var(--nts-medium-gray)] md:text-base lg:pr-2">
                   {copy.description}
@@ -413,6 +409,10 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
         </div>
       </section>
 
+      {/* ── Εκδήλωση ενδιαφέροντος ───────────────────────────────────────── */}
+      <section id="interest" className={`${LANDING_MAX} pb-8`}>
+        <InterestForm />
+      </section>
 
       {/* ── Final CTA ─────────────────────────────────────────────────────── */}
       <section className={`${LANDING_MAX} pb-8`}>
@@ -471,10 +471,13 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
       {/* ── Footer brand tag ──────────────────────────────────────────────── */}
       <footer className={`${LANDING_MAX} pb-10 pt-2`}>
         <div className="flex flex-col gap-3 border-t border-[#1f2328]/10 pt-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2 text-xs text-[var(--nts-medium-gray)]">
-            <Brain size={13} className="text-[#1f2328]" />
+          <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--nts-medium-gray)]">
+            <img
+              src="/notthesame-logo.png"
+              alt="notthesame.ai"
+              className="h-6 w-auto max-w-[200px] object-contain object-left"
+            />
             <span>
-              Performance+ powered by{' '}
               <a href="https://notthesame.gr" target="_blank" rel="noreferrer" className="font-semibold text-[var(--nts-charcoal)] hover:underline">
                 notthesame.ai
               </a>

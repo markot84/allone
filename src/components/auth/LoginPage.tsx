@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Mail, Lock, ArrowLeft, Send } from 'lucide-react';
+import { PerformancePlusLogo } from '../common';
 
 interface LoginPageProps {
   onSignIn: (email: string, password: string) => Promise<void>;
@@ -100,12 +101,8 @@ export function LoginPage({
         className="w-full max-w-[360px]"
       >
         {/* Logo */}
-        <div className="text-center mb-7">
-          <div className="inline-flex items-center justify-center w-11 h-11 rounded-xl bg-[var(--nts-accent)] mb-3">
-            <span className="font-bold text-white text-base tracking-tight">P+</span>
-          </div>
-          <h1 className="text-xl font-bold text-[#1A1A1A] tracking-tight">Performance+</h1>
-          <p className="text-xs text-[#9CA3AF] mt-0.5">by notthesame.ai</p>
+        <div className="flex justify-center mb-7">
+          <PerformancePlusLogo height={48} className="mx-auto" />
         </div>
 
         {/* Card */}

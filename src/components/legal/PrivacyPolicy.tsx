@@ -1,10 +1,11 @@
+import { PerformancePlusLogo } from '../common';
+
 export function PrivacyPolicy() {
   return (
     <div style={{ maxWidth: 820, margin: '0 auto', padding: '48px 24px', fontFamily: 'system-ui, sans-serif', color: '#1A1A1A', lineHeight: 1.7 }}>
       <header style={{ marginBottom: 40, borderBottom: '2px solid #111', paddingBottom: 24 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-          <img src="/logo-icon.svg" alt="Performance+" style={{ height: 32 }} onError={e => (e.currentTarget.style.display = 'none')} />
-          <span style={{ fontSize: 20, fontWeight: 700 }}>Performance+</span>
+        <div style={{ marginBottom: 16 }}>
+          <PerformancePlusLogo height={40} />
         </div>
         <h1 style={{ fontSize: 28, fontWeight: 700, margin: 0 }}>Πολιτική Απορρήτου</h1>
         <p style={{ color: '#6B7280', fontSize: 14, marginTop: 8 }}>

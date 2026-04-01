@@ -91,9 +91,9 @@ const reportTypes: ReportTypeItem[] = [
 ];
 
 const DEFAULT_SCHEDULES: ScheduledReport[] = [
-  { id: 'd1', name: 'Weekly Executive Summary', frequency: 'Every Monday 9:00 AM', recipients: ['ceo@company.com', 'cmo@company.com'], reportType: 'executive', status: 'active', createdAt: '' },
-  { id: 'd2', name: 'Daily Inventory Alert', frequency: 'Daily 8:00 AM', recipients: ['operations@company.com'], reportType: 'inventory', status: 'active', createdAt: '' },
-  { id: 'd3', name: 'Monthly Performance Review', frequency: 'First Monday of month', recipients: ['team@company.com'], reportType: 'executive', status: 'active', createdAt: '' },
+  { id: 'sched_demo_1', name: 'Weekly Executive Summary', frequency: 'Every Monday 9:00 AM', recipients: ['ceo@company.com', 'cmo@company.com'], reportType: 'executive', status: 'active', createdAt: '' },
+  { id: 'sched_demo_2', name: 'Daily Inventory Alert', frequency: 'Daily 8:00 AM', recipients: ['operations@company.com'], reportType: 'inventory', status: 'active', createdAt: '' },
+  { id: 'sched_demo_3', name: 'Monthly Performance Review', frequency: 'First Monday of month', recipients: ['team@company.com'], reportType: 'executive', status: 'active', createdAt: '' },
 ];
 
 export function Reports() {
@@ -111,6 +111,7 @@ export function Reports() {
     return stored.length > 0 ? stored : DEFAULT_SCHEDULES;
   });
   const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [scheduleInitialReportType, setScheduleInitialReportType] = useState('executive');
   const [showCustomModal, setShowCustomModal] = useState(false);
   const [generatingId, setGeneratingId] = useState<string | null>(null);
   const [expandedScheduleId, setExpandedScheduleId] = useState<string | null>(null);
@@ -147,7 +148,6 @@ export function Reports() {
   };
 
   const handleDeleteSchedule = (id: string) => {
-    if (id.startsWith('d')) return; // Don't delete demo items from UI, just hide
     deleteScheduledReport(id);
     setScheduledReports(getScheduledReports());
     setExpandedScheduleId(null);
@@ -236,7 +236,10 @@ export function Reports() {
                       variant="ghost"
                       size="sm"
                       icon={<Calendar size={14} />}
-                      onClick={() => setShowScheduleModal(true)}
+                      onClick={() => {
+                        setScheduleInitialReportType(report.id);
+                        setShowScheduleModal(true);
+                      }}
                     >
                       Schedule
                     </Button>
@@ -255,7 +258,15 @@ export function Reports() {
           subtitle="Αυτοματοποιημένη παράδοση reports"
           icon={<Clock size={20} className="text-[var(--nts-accent)]" />}
           action={
-            <Button variant="secondary" size="sm" icon={<Plus size={14} />} onClick={() => setShowScheduleModal(true)}>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<Plus size={14} />}
+              onClick={() => {
+                setScheduleInitialReportType('executive');
+                setShowScheduleModal(true);
+              }}
+            >
               New Schedule
             </Button>
           }
@@ -314,17 +325,15 @@ export function Reports() {
                     >
                       Generate τώρα
                     </Button>
-                    {!report.id.startsWith('d') && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        icon={<Trash2 size={14} />}
-                        onClick={() => handleDeleteSchedule(report.id)}
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        Διαγραφή
-                      </Button>
-                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon={<Trash2 size={14} />}
+                      onClick={() => handleDeleteSchedule(report.id)}
+                      className="text-red-600 hover:text-red-700"
+                    >
+                      Διαγραφή
+                    </Button>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -370,6 +379,7 @@ export function Reports() {
         {showScheduleModal && (
           <ScheduleModal
             reportTypes={reportTypes}
+            initialReportType={scheduleInitialReportType}
             onClose={() => setShowScheduleModal(false)}
             onSave={handleSaveSchedule}
           />
@@ -393,17 +403,23 @@ export function Reports() {
 
 function ScheduleModal({
   reportTypes,
+  initialReportType,
   onClose,
   onSave,
 }: {
   reportTypes: ReportTypeItem[];
+  initialReportType: string;
   onClose: () => void;
   onSave: (name: string, frequency: string, recipients: string[], reportType: string) => void;
 }) {
   const [name, setName] = useState('');
   const [frequency, setFrequency] = useState('Every Monday 9:00 AM');
   const [recipientsStr, setRecipientsStr] = useState('');
-  const [reportType, setReportType] = useState('executive');
+  const [reportType, setReportType] = useState(() => initialReportType);
+
+  useEffect(() => {
+    setReportType(initialReportType);
+  }, [initialReportType]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

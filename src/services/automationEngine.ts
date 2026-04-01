@@ -587,7 +587,7 @@ export async function runAutomationEvaluation(ctx: EvaluationContext): Promise<T
           ctx.brandId, ctx.userId, ctx.userName,
           'decision_created', 'decision', decId,
           `Αυτοματισμός: ${result.title}`,
-          'Αυτόματη απόφαση', result.title,
+          'Αυτόματη εμπορική πολιτική', result.title,
           ['commercial', 'marketing']
         );
       }

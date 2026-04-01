@@ -11,18 +11,47 @@ import {
   MessageCircle
 } from 'lucide-react';
 import { useMemo } from 'react';
-import { Badge, Button } from '../common';
+import { Badge, Button, useToast, FormattedProse } from '../common';
 import { useSegments, useProducts, useSuppliers } from '../../hooks';
 import { generateInsightsFromData } from '../../services/insights';
 import type { AIInsight } from '../../types';
 import { AIAssistant } from './AIAssistant';
 
+/** Maps generated insights to app sections (see `generateInsightsFromData` insightKey). */
+const INSIGHT_NAV: Record<
+  string,
+  { section: string; hashQuery?: string }
+> = {
+  dead_stock: { section: 'products', hashQuery: 'stock=dead' },
+  excess_stock: { section: 'products', hashQuery: 'stock=excess' },
+  high_margin_low_stock: { section: 'products', hashQuery: 'filter=high-margin-low-stock' },
+  low_stock: { section: 'products', hashQuery: 'stock=low' },
+  at_risk_segment: { section: 'rfm' },
+  champions_segment: { section: 'campaigns' },
+  top_segment: { section: 'rfm' },
+  cross_sell: { section: 'channels' },
+};
+
+const APPLY_ALL_PRIORITY = [
+  'dead_stock',
+  'excess_stock',
+  'high_margin_low_stock',
+  'low_stock',
+  'at_risk_segment',
+  'champions_segment',
+  'top_segment',
+  'cross_sell',
+] as const;
+
 interface AIInsightsPanelProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Navigate to main app section; optional query after `#section` */
+  onNavigate?: (section: string, opts?: { hashQuery?: string }) => void;
 }
 
-export function AIInsightsPanel({ isOpen, onClose }: AIInsightsPanelProps) {
+export function AIInsightsPanel({ isOpen, onClose, onNavigate }: AIInsightsPanelProps) {
+  const toast = useToast();
   const { segments } = useSegments();
   const { products } = useProducts();
   const { suppliers } = useSuppliers();
@@ -49,6 +78,33 @@ export function AIInsightsPanel({ isOpen, onClose }: AIInsightsPanelProps) {
     opportunity: aiInsights.filter(i => i.type === 'opportunity').length,
     warning: aiInsights.filter(i => i.type === 'warning').length,
     recommendation: aiInsights.filter(i => i.type === 'recommendation').length
+  };
+
+  const navigateForInsight = (insight: AIInsight) => {
+    const key = insight.insightKey;
+    if (!key || !onNavigate) return;
+    const nav = INSIGHT_NAV[key];
+    if (!nav) return;
+    onClose();
+    onNavigate(nav.section, nav.hashQuery ? { hashQuery: nav.hashQuery } : undefined);
+  };
+
+  const handleApplyAll = () => {
+    if (!onNavigate || aiInsights.length === 0) return;
+    const keys = new Set(aiInsights.map((i) => i.insightKey).filter(Boolean));
+    for (const k of APPLY_ALL_PRIORITY) {
+      if (!keys.has(k)) continue;
+      const nav = INSIGHT_NAV[k];
+      if (nav) {
+        onClose();
+        onNavigate(nav.section, nav.hashQuery ? { hashQuery: nav.hashQuery } : undefined);
+        toast.success(
+          'Μεταφορά στο σχετικό τμήμα. Δείτε τις υπόλοιπες κάρτες για επιπλέον ενέργειες.'
+        );
+        return;
+      }
+    }
+    toast.info('Δεν βρέθηκε συνδεδεμένη ενέργεια.');
   };
 
   return (
@@ -159,16 +215,31 @@ export function AIInsightsPanel({ isOpen, onClose }: AIInsightsPanelProps) {
                     </div>
                   ) : (
                     filteredInsights.map((insight, index) => (
-                      <InsightCard key={index} insight={insight} index={index} />
+                      <InsightCard
+                        key={insight.insightKey ?? index}
+                        insight={insight}
+                        index={index}
+                        onAction={() => navigateForInsight(insight)}
+                        canNavigate={!!insight.insightKey && !!onNavigate && !!INSIGHT_NAV[insight.insightKey]}
+                      />
                     ))
                   )}
                 </div>
 
                 {/* Footer */}
                 <div className="p-4 border-t border-[var(--nts-border-gray)]">
-                  <Button variant="primary" className="w-full" icon={<Zap size={16} />}>
+                  <Button
+                    variant="primary"
+                    className="w-full"
+                    icon={<Zap size={16} />}
+                    onClick={handleApplyAll}
+                    disabled={!onNavigate || aiInsights.length === 0}
+                  >
                     Apply All Recommendations
                   </Button>
+                  <p className="text-[10px] text-[var(--nts-medium-gray)] mt-2 text-center leading-snug">
+                    Πρώτη προτεραιότητα: dead stock → πλεόνασμα → high-margin low → κ.λπ. Οι κάρτες ανοίγουν συγκεκριμένο module.
+                  </p>
                 </div>
               </>
             ) : (
@@ -212,6 +283,8 @@ export function AIInsightsPanel({ isOpen, onClose }: AIInsightsPanelProps) {
 interface InsightCardProps {
   insight: AIInsight;
   index: number;
+  onAction: () => void;
+  canNavigate: boolean;
 }
 
 const INSIGHT_CONFIG: Record<string, { bgColor: string; borderColor: string; iconColor: string; icon: React.ReactElement }> = {
@@ -235,7 +308,7 @@ const INSIGHT_CONFIG: Record<string, { bgColor: string; borderColor: string; ico
   }
 };
 
-function InsightCard({ insight, index }: InsightCardProps) {
+function InsightCard({ insight, index, onAction, canNavigate }: InsightCardProps) {
   const config = INSIGHT_CONFIG[insight.type] ?? INSIGHT_CONFIG.recommendation;
 
   return (
@@ -263,13 +336,21 @@ function InsightCard({ insight, index }: InsightCardProps) {
               {insight.impact}
             </Badge>
           </div>
-          <p className="text-xs text-[var(--nts-medium-gray)] mt-1">{insight.insight}</p>
+          <div className="mt-1 text-xs text-[var(--nts-medium-gray)] [&_p]:text-xs [&_strong]:font-semibold [&_strong]:text-[var(--nts-charcoal)]">
+            <FormattedProse content={insight.insight} variant="compact" />
+          </div>
           <button
-            className="mt-3 flex items-center gap-1 text-xs font-medium hover:underline"
-            style={{ color: config.borderColor }}
+            type="button"
+            onClick={onAction}
+            disabled={!canNavigate}
+            className={`mt-3 flex items-center gap-1 text-xs font-medium text-left w-full transition-colors ${
+              canNavigate
+                ? 'text-[var(--nts-accent)] hover:underline cursor-pointer'
+                : 'text-[var(--nts-medium-gray)] cursor-not-allowed opacity-60'
+            }`}
           >
             {insight.action}
-            <ChevronRight size={14} />
+            <ChevronRight size={14} className="shrink-0" />
           </button>
         </div>
       </div>

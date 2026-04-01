@@ -8,6 +8,7 @@ import {
   MessageCircle
 } from 'lucide-react';
 import { searchArticles, getArticleById } from '../../data/knowledgeBase';
+import { FormattedProse } from '../common';
 import { shouldSearchWeb, searchWeb, formatSearchResultsForResponse } from '../../services/webSearch';
 
 interface Message {
@@ -88,7 +89,7 @@ export function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
             
             // Also check knowledge base for Performance+ specific info
             if (relatedArticles.length > 0) {
-              response += '\n\n---\n\n**Σχετικά με το Performance+:**\n';
+              response += '\n\n—\n\nΣχετικά με το Performance+:\n';
               relatedArticles.forEach(article => {
                 response += `• ${article.title}\n`;
                 articleRefs.push(article.id);
@@ -246,7 +247,13 @@ export function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
                         : 'bg-[var(--nts-light-gray)] text-[var(--nts-charcoal)]'
                     }`}
                   >
-                    <p className="text-sm whitespace-pre-line">{message.content}</p>
+                    {message.type === 'assistant' ? (
+                      <div className="text-sm [&_p]:text-sm [&_li]:text-sm">
+                        <FormattedProse content={message.content} variant="compact" />
+                      </div>
+                    ) : (
+                      <p className="text-sm whitespace-pre-line">{message.content}</p>
+                    )}
                     
                     {/* Web Sources */}
                     {message.webSources && message.webSources.length > 0 && (

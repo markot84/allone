@@ -132,6 +132,14 @@ a:hover {
   text-decoration: underline;
 }
 
+/* App shell logo (onDark): λευκό wordmark + πορτοκαλί + — πάνω από Primer / global `a` */
+.perf-plus-logo--on-dark .perf-plus-logo-word {
+  color: #ffffff !important;
+}
+.perf-plus-logo--on-dark .perf-plus-logo-plus {
+  color: #f97316 !important;
+}
+
 /* Let Primer manage the heading scale for consistency */
 h1, h2, h3, h4, h5, h6 {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;

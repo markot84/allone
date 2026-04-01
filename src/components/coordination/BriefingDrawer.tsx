@@ -1,53 +1,91 @@
-import { useState } from 'react';
-import { X, Send, Users } from 'lucide-react';
-import { Button } from '../common';
+import { useMemo, useState } from 'react';
+import { X, Send } from 'lucide-react';
+import { Button, useToast } from '../common';
 import { DecisionsService, logAndNotify } from '../../services/coordination';
-import { useBrand, useAuth } from '../../hooks';
+import { useBrand, useAuth, useBrandMembers } from '../../hooks';
 import type { BrandDepartment } from '../../types';
-import { DEPARTMENT_LABELS } from '../../types';
-
-const DEPTS: [BrandDepartment, string][] =
-  (Object.entries(DEPARTMENT_LABELS) as [BrandDepartment, string][]).filter(([k]) => k !== 'other');
-
-const DEPTS_KEY = 'perf-plus-briefing-depts';
+import { DepartmentBriefingFields } from './DepartmentBriefingFields';
+import {
+  BRIEFING_MESSAGE_TEMPLATES,
+  countMembersInSelectedDepartments,
+  getBriefingTemplate,
+  loadSavedBriefingDepartments,
+  saveBriefingDepartments,
+} from './briefingShared';
 
 interface BriefingDrawerProps {
   strategyName: string;
+  /** Αν δοθεί (π.χ. briefing χωρίς ενεργό σενάριο), αντικαθιστά το «Νέα στρατηγική: …» */
+  initialTitle?: string;
   onClose: () => void;
   onSent: () => void;
 }
 
-export function BriefingDrawer({ strategyName, onClose, onSent }: BriefingDrawerProps) {
+function buildDecisionDescription(
+  strategyName: string,
+  templateBody: string,
+  extraLine: string,
+  additionalNote: string
+): string {
+  const parts: string[] = [templateBody];
+  if (extraLine.trim()) parts.push(extraLine.trim());
+  if (additionalNote.trim()) parts.push(additionalNote.trim());
+  const joined = parts.join('\n\n').trim();
+  if (joined) return joined;
+  return `Εφαρμόστηκε η στρατηγική "${strategyName}". Τα τμήματα καλούνται να ευθυγραμμίσουν τις ενέργειές τους.`;
+}
+
+export function BriefingDrawer({ strategyName, initialTitle, onClose, onSent }: BriefingDrawerProps) {
   const { currentBrand } = useBrand();
   const { user } = useAuth();
-  const [title, setTitle] = useState(`Νέα στρατηγική: ${strategyName}`);
-  const [note, setNote] = useState('');
+  const { members } = useBrandMembers();
+  const toast = useToast();
+  const [title, setTitle] = useState(() => initialTitle ?? `Νέα στρατηγική: ${strategyName}`);
+  const [templateId, setTemplateId] = useState(BRIEFING_MESSAGE_TEMPLATES[0].id);
+  const [extraLine, setExtraLine] = useState('');
+  const [additionalNote, setAdditionalNote] = useState('');
   const [sending, setSending] = useState(false);
-  const [selectedDepts, setSelectedDepts] = useState<BrandDepartment[]>(() => {
-    try {
-      return JSON.parse(localStorage.getItem(DEPTS_KEY) || '["commercial","marketing","procurement","agency"]');
-    } catch {
-      return ['commercial', 'marketing', 'procurement', 'agency'];
-    }
-  });
+  const [selectedDepts, setSelectedDepts] = useState<BrandDepartment[]>(() => loadSavedBriefingDepartments());
+
+  const targetPeerCount = useMemo(
+    () =>
+      user?.uid
+        ? countMembersInSelectedDepartments(members, user.uid, selectedDepts)
+        : 0,
+    [members, user?.uid, selectedDepts]
+  );
 
   const toggleDept = (d: BrandDepartment) => {
-    setSelectedDepts(prev => {
-      const next = prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d];
-      localStorage.setItem(DEPTS_KEY, JSON.stringify(next));
+    setSelectedDepts((prev) => {
+      const next = prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d];
+      saveBriefingDepartments(next);
       return next;
     });
   };
 
   const handleSend = async () => {
-    if (!title.trim() || !currentBrand?.id || !user?.uid || selectedDepts.length === 0) return;
+    if (!title.trim()) {
+      toast.error('Συμπληρώστε τίτλο για την εμπορική πολιτική.');
+      return;
+    }
+    if (!currentBrand?.id || !user?.uid) {
+      toast.error('Απαιτείται σύνδεση για αποστολή.');
+      return;
+    }
+    if (selectedDepts.length === 0) {
+      toast.error('Επιλέξτε τουλάχιστον ένα τμήμα.');
+      return;
+    }
     setSending(true);
     try {
       const authorName = user.displayName || user.email || '';
+      const template = getBriefingTemplate(templateId);
+      const description = buildDecisionDescription(strategyName, template.body, extraLine, additionalNote);
+
       const decId = await DecisionsService.create({
         brandId: currentBrand.id,
         title: title.trim(),
-        description: note.trim() || `Εφαρμόστηκε η στρατηγική "${strategyName}". Τα τμήματα καλούνται να ευθυγραμμίσουν τις ενέργειές τους.`,
+        description,
         category: 'general',
         priority: 'high',
         status: 'active',
@@ -55,17 +93,54 @@ export function BriefingDrawer({ strategyName, onClose, onSent }: BriefingDrawer
         createdBy: user.uid,
         createdByName: authorName,
       });
-      await logAndNotify(
-        currentBrand.id, user.uid, authorName,
-        'decision_created', 'decision', decId,
+      const broadcast = await logAndNotify(
+        currentBrand.id,
+        user.uid,
+        authorName,
+        'decision_created',
+        'decision',
+        decId,
         `${authorName} έστειλε briefing: "${title.trim()}"`,
         'Νέο Briefing',
         title.trim(),
-        selectedDepts
+        selectedDepts,
+        members
       );
+      const noOthers =
+        broadcast.inAppRecipients === 0 &&
+        broadcast.emailRecipients === 0;
+      if (noOthers) {
+        toast.info(
+          'Η εμπορική πολιτική αποθηκεύτηκε, αλλά δεν βρέθηκαν άλλα μέλη στα επιλεγμένα τμήματα (ή μόνο εσείς είστε στο brand). Ο αποστολέας δεν λαμβάνει ειδοποίηση ούτε email.'
+        );
+      } else {
+        const parts: string[] = [];
+        if (broadcast.inAppRecipients > 0) {
+          parts.push(`in-app: ${broadcast.inAppRecipients} μέλη`);
+        }
+        if (broadcast.emailRecipients > 0) {
+          parts.push(
+            `email: ${broadcast.emailRecipients} παραλήπτες (αποστολή στο παρασκήνιο)`
+          );
+        }
+        const msg =
+          parts.length > 0
+            ? `Το briefing καταχωρήθηκε. ${parts.join(' · ')}.`
+            : 'Το briefing καταχωρήθηκε.';
+        if (broadcast.emailFailed > 0 && broadcast.emailSent === 0 && broadcast.emailRecipients > 0) {
+          toast.error(msg);
+        } else if (broadcast.emailFailed > 0) {
+          toast.info(msg);
+        } else {
+          toast.success(msg);
+        }
+      }
       onSent();
     } catch (e) {
       console.error('Briefing failed:', e);
+      const msg = e instanceof Error ? e.message : String(e);
+      const short = msg.length > 120 ? `${msg.slice(0, 120)}…` : msg;
+      toast.error(`Αποτυχία αποστολής: ${short}`);
     } finally {
       setSending(false);
     }
@@ -73,25 +148,22 @@ export function BriefingDrawer({ strategyName, onClose, onSent }: BriefingDrawer
 
   return (
     <>
-      {/* Backdrop */}
       <div
-        className="fixed inset-0 z-40 bg-black/20 backdrop-blur-[1px]"
+        className="fixed inset-0 z-[90] bg-black/20 backdrop-blur-[1px]"
         onClick={onClose}
       />
 
-      {/* Bottom drawer */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-2xl shadow-2xl border-t border-[#E5E7EB] animate-in slide-in-from-bottom">
-        <div className="max-w-2xl mx-auto px-5 py-5">
-          {/* Handle */}
+      <div className="fixed bottom-0 left-0 right-0 z-[100] bg-white rounded-t-2xl shadow-2xl border-t border-[#E5E7EB] animate-in slide-in-from-bottom max-h-[min(92vh,900px)] flex flex-col">
+        <div className="max-w-2xl mx-auto px-5 py-5 w-full overflow-y-auto">
           <div className="w-10 h-1 bg-[#E5E7EB] rounded-full mx-auto mb-4" />
 
-          {/* Header */}
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="font-semibold text-[#111827] text-base">Αποστολή Briefing</h3>
               <p className="text-xs text-[#9CA3AF] mt-0.5">Ειδοποίηση τμημάτων για νέα στρατηγική</p>
             </div>
             <button
+              type="button"
               onClick={onClose}
               className="p-1.5 hover:bg-[#F3F4F6] rounded-lg transition-colors"
             >
@@ -99,52 +171,40 @@ export function BriefingDrawer({ strategyName, onClose, onSent }: BriefingDrawer
             </button>
           </div>
 
-          {/* Title */}
           <div className="mb-3">
+            <label className="text-xs font-medium text-[#374151] mb-1 block">Τίτλος εμπορικής πολιτικής</label>
             <input
               type="text"
               value={title}
-              onChange={e => setTitle(e.target.value)}
+              onChange={(e) => setTitle(e.target.value)}
               className="w-full px-3 py-2.5 text-sm font-medium border border-[#E5E7EB] rounded-xl focus:outline-none focus:border-[var(--nts-accent)] bg-[#FAFAFA]"
               placeholder="Τίτλος briefing"
             />
           </div>
 
-          {/* Note */}
-          <div className="mb-4">
-            <textarea
-              value={note}
-              onChange={e => setNote(e.target.value)}
-              rows={2}
-              placeholder="Προαιρετική σημείωση στα τμήματα... (π.χ. «Εστίαση σε κατηγορία Χ, ξεκινάμε από Δευτέρα»)"
-              className="w-full px-3 py-2.5 text-sm border border-[#E5E7EB] rounded-xl focus:outline-none focus:border-[var(--nts-accent)] resize-none text-[#374151] placeholder:text-[#D1D5DB] bg-[#FAFAFA]"
-            />
-          </div>
+          <DepartmentBriefingFields
+            deptSelectable
+            selectedDepts={selectedDepts}
+            onToggleDept={toggleDept}
+            templateId={templateId}
+            onTemplateIdChange={setTemplateId}
+            extraLine={extraLine}
+            onExtraLineChange={setExtraLine}
+            showAdditionalNote
+            additionalNote={additionalNote}
+            onAdditionalNoteChange={setAdditionalNote}
+          />
+          <p
+            className={`text-xs mt-2 rounded-lg px-3 py-2 border ${
+              targetPeerCount === 0
+                ? 'bg-amber-50 border-amber-200 text-amber-900'
+                : 'bg-[#F0FDF4] border-emerald-200 text-emerald-900'
+            }`}
+          >
+            <strong>{targetPeerCount}</strong> άλλα μέλη ταιριάζουν στα επιλεγμένα τμήματα (ο αποστολέας εξαιρείται). Αν περιμένετε περισσότερους παραλήπτες, ελέγξτε ότι κάθε χρήστης έχει σωστό τμήμα στο προφίλ (Δεδομένα).
+          </p>
 
-          {/* Departments */}
-          <div className="mb-5">
-            <p className="text-xs font-medium text-[#6B7280] mb-2 flex items-center gap-1.5">
-              <Users size={12} /> Ειδοποίηση τμημάτων
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {DEPTS.map(([k, v]) => (
-                <button
-                  key={k}
-                  onClick={() => toggleDept(k)}
-                  className={`px-3 py-1.5 text-sm rounded-lg border transition-all ${
-                    selectedDepts.includes(k)
-                      ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/8 text-[var(--nts-accent)] font-medium'
-                      : 'border-[#E5E7EB] text-[#9CA3AF] hover:border-[#D1D5DB] hover:text-[#6B7280]'
-                  }`}
-                >
-                  {v}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="flex gap-3">
+          <div className="flex gap-3 mt-5">
             <Button variant="secondary" onClick={onClose} className="flex-1">
               Παράλειψη
             </Button>

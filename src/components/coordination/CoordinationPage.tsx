@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
 import { Plus, MessageSquare, CheckSquare, Activity, ChevronRight, X, AlertTriangle, CheckCircle2, Users, Flag, Pencil, Zap, ThumbsUp, ThumbsDown } from 'lucide-react';
-import { Card, Button, Spinner, useToast } from '../common';
+import { Card, Button, Spinner, useToast, FormattedProse } from '../common';
 import { CommentsPanel } from './CommentsPanel';
+import { DecisionNotifyStrip } from './DecisionNotifyStrip';
 import { useDecisions, useTasks, useActivity, useBrandMembers, useAuth } from '../../hooks';
 import { useBrand } from '../../hooks';
 import { DecisionsService, TasksService, logAndNotify } from '../../services/coordination';
@@ -30,7 +31,7 @@ const PRIORITY_META: Record<string, { label: string; color: string; icon: typeof
 };
 
 const STATUS_META: Record<string, { label: string; color: string }> = {
-  proposal: { label: 'Πρόταση', color: '#8B5CF6' },
+  proposal: { label: 'Πρόταση τμήματος', color: '#8B5CF6' },
   draft: { label: 'Πρόχειρη', color: '#9CA3AF' },
   active: { label: 'Ενεργή', color: '#3B82F6' },
   completed: { label: 'Ολοκληρωμένη', color: '#10B981' },
@@ -87,7 +88,7 @@ export function CoordinationPage() {
           currentBrand.id, user.uid, user.displayName || user.email || '',
           'decision_updated', 'decision', d.id,
           `Η πρόταση "${d.title}" εγκρίθηκε`,
-          'Πρόταση εγκρίθηκε', d.title,
+          'Πρόταση τμήματος εγκρίθηκε', d.title,
           d.targetDepartments as BrandDepartment[]
         );
       }
@@ -131,17 +132,34 @@ export function CoordinationPage() {
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-[#111827]">Συντονισμός Τμημάτων</h1>
-          <p className="text-sm text-[#6B7280] mt-0.5">Briefing αποφάσεων, εισερχόμενες προτάσεις & εκκρεμείς εργασίες</p>
+          <p className="text-sm text-[#6B7280] mt-0.5">
+            Ειδοποιήστε τα τμήματα από την εμπορική πολιτική σε ένα βήμα — οι λεπτομερείς εργασίες είναι προαιρετικές.
+          </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="ghost" icon={<Activity size={15} />} onClick={() => setShowActivityDrawer(true)}>
-            Ροή ενεργειών
+        <div className="flex gap-2 flex-wrap justify-end">
+          <Button
+            variant="primary"
+            icon={<Zap size={15} />}
+            title="Καταχώρηση ενεργής εμπορικής πολιτικής — ειδοποίηση τμημάτων"
+            onClick={() => { setShowDecisionForm(true); setTaskFromDecision(null); }}
+          >
+            Νέα Εμπορική Πολιτική
           </Button>
-          <Button variant="secondary" icon={<Plus size={15} />} onClick={() => setShowProposalForm(true)}>
-            Πρόταση
+          <Button
+            variant="secondary"
+            icon={<Plus size={15} />}
+            title="Υποβολή πρότασης τμήματος προς έγκριση"
+            onClick={() => setShowProposalForm(true)}
+          >
+            Προτάσεις Τμημάτων
           </Button>
-          <Button variant="primary" icon={<Zap size={15} />} onClick={() => { setShowDecisionForm(true); setTaskFromDecision(null); }}>
-            Νέα Απόφαση
+          <Button
+            variant="ghost"
+            icon={<Activity size={15} />}
+            title="Χρονολογική ροή ενεργειών και ειδοποιήσεων"
+            onClick={() => setShowActivityDrawer(true)}
+          >
+            Ροή Ενεργειών
           </Button>
         </div>
       </div>
@@ -174,7 +192,7 @@ export function CoordinationPage() {
       ) : (
         <div className="flex items-center gap-3 px-5 py-4 bg-[#F9FAFB] border border-dashed border-[#E5E7EB] rounded-xl text-[#9CA3AF]">
           <Zap size={18} className="shrink-0" />
-          <p className="text-sm">Δεν υπάρχει ενεργό briefing. Δημιουργήστε την πρώτη απόφαση εμπορικής πολιτικής.</p>
+          <p className="text-sm">Δεν υπάρχει ενεργό briefing. Δημιουργήστε την πρώτη εμπορική πολιτική.</p>
         </div>
       )}
 
@@ -184,14 +202,14 @@ export function CoordinationPage() {
         <div>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold text-[#111827]">
-              Ενεργές Αποφάσεις
+              Νέα Εμπορική Πολιτική
               <span className="ml-2 text-xs font-normal text-[#9CA3AF]">({activeDecisions.length})</span>
             </h2>
           </div>
           <div className="space-y-2">
             {activeDecisions.length === 0 && (
               <div className="text-center py-8 text-[#D1D5DB] text-sm bg-[#F9FAFB] rounded-xl border border-dashed border-[#E5E7EB]">
-                Καμία ενεργή απόφαση
+                Καμία ενεργή εμπορική πολιτική
               </div>
             )}
             {activeDecisions.map(d => (
@@ -209,7 +227,7 @@ export function CoordinationPage() {
         <div>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold text-[#111827]">
-              Εισερχόμενες Προτάσεις
+              Προτάσεις Τμημάτων
               {proposals.length > 0 && (
                 <span className="ml-2 inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold rounded-full bg-[#8B5CF6] text-white">{proposals.length}</span>
               )}
@@ -218,7 +236,7 @@ export function CoordinationPage() {
           <div className="space-y-2">
             {proposals.length === 0 && (
               <div className="text-center py-8 text-[#D1D5DB] text-sm bg-[#F9FAFB] rounded-xl border border-dashed border-[#E5E7EB]">
-                Καμία εκκρεμής πρόταση
+                Καμία πρόταση τμήματος
               </div>
             )}
             {proposals.map(d => (
@@ -297,7 +315,13 @@ export function CoordinationPage() {
           <DecisionDetail
             decision={selectedDecision}
             onUpdate={(d) => setSelectedDecision(d)}
-            onCreateTask={() => { setTaskFromDecision(selectedDecision); setShowTaskForm(true); }}
+            onCreateTask={() => {
+              const dec = selectedDecision;
+              if (!dec) return;
+              setTaskFromDecision(dec);
+              setShowTaskForm(true);
+              setSelectedDecision(null);
+            }}
           />
         </DetailPanel>
       )}
@@ -320,7 +344,7 @@ export function CoordinationPage() {
           <div className="absolute inset-0 bg-black/20" onClick={() => setShowActivityDrawer(false)} />
           <div className="relative w-full max-w-sm bg-white shadow-2xl flex flex-col h-full animate-in slide-in-from-right">
             <div className="flex items-center justify-between px-4 py-3 border-b border-[#F3F4F6]">
-              <h2 className="font-semibold text-[#111827] text-sm">Ροή ενεργειών</h2>
+              <h2 className="font-semibold text-[#111827] text-sm">Ροή Ενεργειών</h2>
               <button onClick={() => setShowActivityDrawer(false)} className="p-1 hover:bg-[#F3F4F6] rounded-lg transition-colors">
                 <X size={18} className="text-[#6B7280]" />
               </button>
@@ -471,7 +495,7 @@ function DecisionDetail({ decision: d, onUpdate, onCreateTask }: { decision: Dec
         await logAndNotify(
           currentBrand.id, user.uid, user.displayName || user.email || '',
           'decision_completed', 'decision', d.id,
-          `Η απόφαση "${d.title}" ολοκληρώθηκε`, 'Απόφαση ολοκληρώθηκε', d.title,
+          `Η εμπορική πολιτική "${d.title}" ολοκληρώθηκε`, 'Εμπορική πολιτική ολοκληρώθηκε', d.title,
           d.targetDepartments as BrandDepartment[]
         );
       }
@@ -487,24 +511,13 @@ function DecisionDetail({ decision: d, onUpdate, onCreateTask }: { decision: Dec
   const pri = PRIORITY_META[d.priority];
 
   return (
-    <div className="space-y-4 p-4">
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-xs font-bold uppercase px-2 py-1 rounded-full" style={{ color: cat.color, backgroundColor: `${cat.color}15` }}>
-          {cat.label}
-        </span>
-        <span className="flex items-center gap-1 text-xs" style={{ color: pri.color }}>
-          <Flag size={12} /> {pri.label}
-        </span>
-      </div>
-
-      <p className="text-sm text-[#374151] whitespace-pre-wrap">{d.description || 'Χωρίς περιγραφή'}</p>
-
+    <div className="space-y-5 p-4">
       {d.targetDepartments && d.targetDepartments.length > 0 && (
         <div>
-          <p className="text-xs font-medium text-[#6B7280] mb-1.5 flex items-center gap-1"><Users size={12} /> Αφορά:</p>
-          <div className="flex flex-wrap gap-1">
-            {d.targetDepartments.map(dep => (
-              <span key={dep} className="text-xs px-2 py-1 rounded-md bg-[#F3F4F6] text-[#374151]">
+          <p className="text-[11px] font-medium text-[#6B7280] uppercase tracking-wide mb-2">Προς τμήματα</p>
+          <div className="flex flex-wrap gap-1.5">
+            {d.targetDepartments.map((dep) => (
+              <span key={dep} className="text-xs px-2.5 py-1 rounded-md bg-[#F3F4F6] text-[#111827]">
                 {DEPT_LABELS[dep] || dep}
               </span>
             ))}
@@ -512,34 +525,71 @@ function DecisionDetail({ decision: d, onUpdate, onCreateTask }: { decision: Dec
         </div>
       )}
 
-      <div className="flex gap-2 flex-wrap pt-2">
-        <p className="text-xs text-[#9CA3AF] w-full mb-1">Αλλαγή κατάστασης:</p>
-        {(['proposal', 'draft', 'active', 'completed', 'archived'] as DecisionStatus[]).map(s => (
+      <div>
+        <p className="text-[11px] font-medium text-[#6B7280] uppercase tracking-wide mb-2">
+          {d.status === 'proposal' ? 'Κείμενο πρότασης τμήματος' : 'Κείμενο εμπορικής πολιτικής'}
+        </p>
+        <div className="text-sm text-[#111827] leading-relaxed rounded-lg bg-[#FAFAFA] border border-[#F3F4F6] px-3 py-2.5 min-h-[3rem]">
+          {d.description?.trim() ? (
+            <FormattedProse content={d.description} variant="compact" />
+          ) : (
+            '—'
+          )}
+        </div>
+      </div>
+
+      <p className="text-[11px] text-[#9CA3AF]">
+        {STATUS_META[d.status].label} · {cat.label} · {pri.label}
+        {' · '}
+        {new Date(d.createdAt).toLocaleDateString('el-GR', { day: 'numeric', month: 'short', year: 'numeric' })}
+        {d.createdByName && ` · ${d.createdByName}`}
+      </p>
+
+      <div className="flex items-center gap-2">
+        <label htmlFor={`dec-status-${d.id}`} className="text-xs text-[#6B7280] shrink-0">
+          Κατάσταση
+        </label>
+        <select
+          id={`dec-status-${d.id}`}
+          value={d.status}
+          onChange={(e) => handleStatusChange(e.target.value as DecisionStatus)}
+          className="flex-1 min-w-0 text-sm border border-[#E5E7EB] rounded-lg px-2.5 py-1.5 bg-white text-[#374151]"
+        >
+          {(['proposal', 'draft', 'active', 'completed', 'archived'] as DecisionStatus[]).map((s) => (
+            <option key={s} value={s}>
+              {STATUS_META[s].label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <details className="rounded-lg border border-[#E5E7EB] bg-white">
+        <summary className="cursor-pointer px-3 py-2.5 text-xs font-medium text-[var(--nts-accent)] list-none [&::-webkit-details-marker]:hidden flex items-center gap-2">
+          <span className="text-[#9CA3AF] select-none">▸</span>
+          Νέα ειδοποίηση στα τμήματα
+        </summary>
+        <div className="px-3 pb-3 border-t border-[#F3F4F6] pt-3">
+          <DecisionNotifyStrip decision={d} variant="embedded" />
+        </div>
+      </details>
+
+      <details className="rounded-lg border border-[#E5E7EB] bg-[#FAFAFA]">
+        <summary className="cursor-pointer px-3 py-2.5 text-xs text-[#6B7280] list-none [&::-webkit-details-marker]:hidden flex items-center gap-2">
+          <Plus size={14} className="text-[var(--nts-accent)] shrink-0" />
+          {d.status === 'proposal'
+            ? 'Εργασία από αυτή την πρόταση τμήματος'
+            : 'Εργασία από αυτή την εμπορική πολιτική'}
+        </summary>
+        <div className="px-3 pb-3 pt-1">
           <button
-            key={s}
-            onClick={() => handleStatusChange(s)}
-            disabled={d.status === s}
-            className={`text-xs px-2.5 py-1 rounded-md border transition-all ${
-              d.status === s
-                ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/10 text-[var(--nts-accent)] font-medium'
-                : 'border-[#E5E7EB] text-[#6B7280] hover:border-[#D1D5DB]'
-            }`}
+            type="button"
+            onClick={onCreateTask}
+            className="text-sm font-medium text-[var(--nts-accent)] hover:underline"
           >
-            {STATUS_META[s].label}
+            Άνοιγμα φόρμας εργασίας
           </button>
-        ))}
-      </div>
-
-      <button
-        onClick={onCreateTask}
-        className="flex items-center gap-1.5 text-sm text-[var(--nts-accent)] hover:underline pt-1"
-      >
-        <Plus size={14} /> Δημιουργία εργασίας από αυτή την απόφαση
-      </button>
-
-      <div className="text-[10px] text-[#9CA3AF] pt-2 border-t border-[#F3F4F6]">
-        Δημιουργήθηκε: {new Date(d.createdAt).toLocaleDateString('el-GR')} {d.createdByName && `απo ${d.createdByName}`}
-      </div>
+        </div>
+      </details>
     </div>
   );
 }
@@ -565,7 +615,9 @@ function TaskDetail({ task: t, onUpdate }: { task: CoordinationTask; onUpdate: (
   return (
     <div className="space-y-4 p-4">
       {t.description && (
-        <p className="text-sm text-[#374151] whitespace-pre-wrap">{t.description}</p>
+        <div className="text-sm text-[#374151]">
+          <FormattedProse content={t.description} variant="compact" />
+        </div>
       )}
 
       <div className="grid grid-cols-2 gap-3 text-sm">
@@ -597,7 +649,7 @@ function TaskDetail({ task: t, onUpdate }: { task: CoordinationTask; onUpdate: (
 
       {t.linkedDecisionTitle && (
         <div className="text-xs text-[#6B7280] flex items-center gap-1">
-          <MessageSquare size={12} /> Απόφαση: {t.linkedDecisionTitle}
+          <MessageSquare size={12} /> Σχετική καταχώρηση: {t.linkedDecisionTitle}
         </div>
       )}
 
@@ -715,7 +767,7 @@ function DetailPanel({ title, onClose, children, entityType, entityId, entityTit
         {/* Comments */}
         <div className="flex-1 min-h-0 flex flex-col">
           <div className="px-4 py-2 text-xs font-semibold text-[#6B7280] uppercase tracking-wider border-b border-[#F3F4F6]">
-            Σχόλια
+            {entityType === 'decision' ? 'Διάλογος' : 'Σχόλια'}
           </div>
           <CommentsPanel entityType={entityType} entityId={entityId} entityTitle={entityTitle} />
         </div>
@@ -759,17 +811,17 @@ function DecisionFormModal({ onClose, isProposal = false }: { onClose: () => voi
         createdBy: user.uid,
         createdByName: authorName,
       });
-      const label = isProposal ? 'πρόταση' : 'απόφαση';
+      const label = isProposal ? 'πρόταση τμήματος' : 'εμπορική πολιτική';
       await logAndNotify(
         currentBrand.id, user.uid, authorName,
         'decision_created', 'decision', id,
         `${authorName} δημιούργησε νέα ${label}: "${title.trim()}"`,
-        isProposal ? 'Νέα πρόταση τμήματος' : 'Νέα απόφαση',
+        isProposal ? 'Νέα πρόταση τμήματος' : 'Νέα εμπορική πολιτική',
         title.trim(),
         targetDepts
       );
       invalidate();
-      toast.success(isProposal ? 'Η πρόταση υποβλήθηκε' : 'Η απόφαση δημιουργήθηκε');
+      toast.success(isProposal ? 'Η πρόταση υποβλήθηκε' : 'Η εμπορική πολιτική καταχωρήθηκε');
       onClose();
     } catch (err) {
       toast.error('Σφάλμα δημιουργίας');
@@ -783,7 +835,7 @@ function DecisionFormModal({ onClose, isProposal = false }: { onClose: () => voi
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
       <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-4 border-b border-[#F3F4F6]">
-          <h2 className="font-semibold text-[#111827]">{isProposal ? 'Νέα πρόταση' : 'Νέα απόφαση'}</h2>
+          <h2 className="font-semibold text-[#111827]">{isProposal ? 'Νέα πρόταση τμήματος' : 'Νέα εμπορική πολιτική'}</h2>
           <button onClick={onClose} className="p-1 hover:bg-[#F3F4F6] rounded-lg">
             <X size={18} className="text-[#6B7280]" />
           </button>
@@ -807,7 +859,7 @@ function DecisionFormModal({ onClose, isProposal = false }: { onClose: () => voi
               value={description}
               onChange={e => setDescription(e.target.value)}
               rows={3}
-              placeholder="Αναλυτική περιγραφή της απόφασης..."
+              placeholder={isProposal ? 'Αναλυτική περιγραφή της πρότασης τμήματος...' : 'Αναλυτική περιγραφή της εμπορικής πολιτικής...'}
               className="w-full px-3 py-2 text-sm border border-[#E5E7EB] rounded-lg focus:outline-none focus:border-[var(--nts-accent)] resize-none"
             />
           </div>
@@ -926,7 +978,7 @@ function TaskFormModal({ linkedDecision, onClose }: { linkedDecision: Decision |
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
       <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-4 border-b border-[#F3F4F6]">
@@ -939,7 +991,9 @@ function TaskFormModal({ linkedDecision, onClose }: { linkedDecision: Decision |
         <div className="p-4 space-y-4">
           {linkedDecision && (
             <div className="text-xs text-[#6B7280] bg-[#F9FAFB] rounded-lg px-3 py-2 flex items-center gap-1.5">
-              <MessageSquare size={12} /> Συνδεδεμένη απόφαση: <strong>{linkedDecision.title}</strong>
+              <MessageSquare size={12} /> Συνδεδεμένη{' '}
+              {linkedDecision.status === 'proposal' ? 'πρόταση τμήματος' : 'εμπορική πολιτική'}:{' '}
+              <strong>{linkedDecision.title}</strong>
             </div>
           )}
 

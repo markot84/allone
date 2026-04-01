@@ -1,9 +1,16 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { Sparkles, ArrowRight, AlertTriangle, Clock, Zap } from 'lucide-react';
+import { Sparkles, ArrowRight, AlertTriangle, Clock, Zap, ChevronDown, ChevronUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Tooltip } from '../common';
+import { Tooltip, FormattedProse, toPlainProseText } from '../common';
 import type { BriefingResult } from '../../services/morningBriefing';
-import { collectBriefingData, generateMorningBriefing, getCachedBriefing, checkAndAutoUpdate } from '../../services/morningBriefing';
+import {
+  collectBriefingData,
+  generateMorningBriefing,
+  getCachedBriefing,
+  checkAndAutoUpdate,
+  getLocalDateKey,
+  briefingResultFromCache,
+} from '../../services/morningBriefing';
 import type { Product, Campaign, RFMSegment, AutomationAlert } from '../../types';
 
 interface MorningBriefingProps {
@@ -20,41 +27,88 @@ interface MorningBriefingProps {
   };
   alerts: AutomationAlert[];
   supplierTodMap?: Map<string, number>;
-  onSectionChange?: (section: string) => void;
+  onSectionChange?: (section: string, opts?: { hashQuery?: string }) => void;
   hasAnyData: boolean;
 }
 
-const ACTION_ROUTES: Record<string, string> = {
-  'campaign': 'campaigns',
-  'καμπάνι': 'campaigns',
-  'stock': 'inventory',
-  'απόθεμα': 'inventory',
-  'dead': 'inventory',
-  'segment': 'rfm',
-  'at risk': 'rfm',
-  'champions': 'rfm',
-  'rfm': 'rfm',
-  'content': 'calendar',
-  'strategy': 'strategy',
-  'budget': 'channels',
-  'roas': 'roi',
-  'roi': 'roi',
-};
+/** Πραγματικές ενότητες εφαρμογής — όχι `inventory` (δεν υπάρχει route). */
+type GuessResult = { section: string; hashQuery?: string };
 
-function guessRoute(action: string): string {
+function guessRoute(action: string): GuessResult {
   const lower = action.toLowerCase();
-  for (const [keyword, route] of Object.entries(ACTION_ROUTES)) {
+  if (lower.includes('dead') || lower.includes('νεκρ')) {
+    return { section: 'products', hashQuery: 'stock=dead' };
+  }
+  if (lower.includes('excess') || lower.includes('πλεόνασμα')) {
+    return { section: 'products', hashQuery: 'stock=excess' };
+  }
+  if (lower.includes('high-margin') || lower.includes('high margin') || lower.includes('αναπλήρωση')) {
+    return { section: 'products', hashQuery: 'filter=high-margin-low-stock' };
+  }
+  const pairs: [string, GuessResult][] = [
+    ['campaign', { section: 'campaigns' }],
+    ['καμπάνι', { section: 'campaigns' }],
+    ['stock', { section: 'products' }],
+    ['απόθεμα', { section: 'products' }],
+    ['inventory', { section: 'products' }],
+    ['segment', { section: 'rfm' }],
+    ['at risk', { section: 'rfm' }],
+    ['champions', { section: 'rfm' }],
+    ['rfm', { section: 'rfm' }],
+    ['content', { section: 'calendar' }],
+    ['strategy', { section: 'strategy' }],
+    ['budget', { section: 'channels' }],
+    ['roas', { section: 'roi' }],
+    ['roi', { section: 'roi' }],
+  ];
+  for (const [keyword, route] of pairs) {
     if (lower.includes(keyword)) return route;
   }
-  return 'dashboard';
+  return { section: 'dashboard' };
 }
 
 const SIGNIFICANCE_CHECK_INTERVAL = 15 * 60 * 1000; // 15 minutes
 const INIT_DELAY_MS = 3_000; // defer init so KPIs paint first
 
+function briefingStorageKey(brandId: string) {
+  return `perf-plus-ai-briefing-v1:${brandId}:${getLocalDateKey()}`;
+}
+
+function loadBriefingFromStorage(brandId: string): BriefingResult | null {
+  try {
+    const raw = localStorage.getItem(briefingStorageKey(brandId));
+    if (!raw) return null;
+    const p = JSON.parse(raw) as BriefingResult;
+    if (typeof p.narrative !== 'string' || typeof p.generatedAt !== 'string') return null;
+    if (!Array.isArray(p.actions)) p.actions = [];
+    return p;
+  } catch {
+    return null;
+  }
+}
+
+function saveBriefingToStorage(brandId: string, b: BriefingResult) {
+  try {
+    localStorage.setItem(briefingStorageKey(brandId), JSON.stringify(b));
+  } catch {
+    /* quota */
+  }
+}
+
+function loadCollapsedPref(brandId: string): boolean {
+  try {
+    return localStorage.getItem(`perf-plus-briefing-collapsed:${brandId}`) === '1';
+  } catch {
+    return false;
+  }
+}
+
 export function MorningBriefing(props: MorningBriefingProps) {
   const { brandId, brandName, hasAnyData, onSectionChange } = props;
-  const [briefing, setBriefing] = useState<BriefingResult | null>(null);
+  const [briefing, setBriefing] = useState<BriefingResult | null>(() =>
+    brandId ? loadBriefingFromStorage(brandId) : null
+  );
+  const [collapsed, setCollapsed] = useState(() => (brandId ? loadCollapsedPref(brandId) : false));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const initRef = useRef<string | null>(null);
@@ -74,21 +128,43 @@ export function MorningBriefing(props: MorningBriefingProps) {
   const buildDataRef = useRef(buildData);
   buildDataRef.current = buildData;
 
-  const cacheLoadedRef = useRef<string | null>(null);
-
-  // Step 1: Load cached briefing immediately (fast — single Firestore read)
   useEffect(() => {
-    if (!brandId || cacheLoadedRef.current === brandId) return;
-    cacheLoadedRef.current = brandId;
+    if (!brandId) return;
+    setCollapsed(loadCollapsedPref(brandId));
+  }, [brandId]);
+
+  // Firestore: συγχρονισμός με server (νεότερο briefing) — το κείμενο της ημέρας παραμένει σταθερό στον browser μέχρι νέα γεννήτρια από κανόνες
+  useEffect(() => {
+    if (!brandId) return;
     initRef.current = null;
 
     (async () => {
       const cached = await getCachedBriefing(brandId);
-      if (cached) setBriefing(cached);
+      if (!cached) return;
+      const result = briefingResultFromCache(cached);
+      setBriefing((prev) => {
+        if (!prev) {
+          saveBriefingToStorage(brandId, result);
+          return result;
+        }
+        const tNew = new Date(result.generatedAt).getTime();
+        const tPrev = new Date(prev.generatedAt).getTime();
+        if (tNew >= tPrev) {
+          saveBriefingToStorage(brandId, result);
+          return result;
+        }
+        return prev;
+      });
     })();
   }, [brandId]);
 
-  // Step 2: Generate only if no cache AND data is substantively loaded
+  // Αποθήκευση τοπικά ανά ημερολογιακή ημέρα (επιβιώνει navigation / refresh)
+  useEffect(() => {
+    if (!brandId || !briefing) return;
+    saveBriefingToStorage(brandId, briefing);
+  }, [brandId, briefing]);
+
+  // Πρώτη γεννήτρια μόνο αν δεν υπάρχει briefing για σήμερα (ούτε local ούτε Firestore)
   const hasSubstantiveData = props.products.length > 0 || props.campaigns.length > 0;
 
   useEffect(() => {
@@ -99,7 +175,12 @@ export function MorningBriefing(props: MorningBriefingProps) {
       (async () => {
         const cached = await getCachedBriefing(brandId);
         if (cached) {
-          setBriefing(cached);
+          setBriefing(briefingResultFromCache(cached));
+          return;
+        }
+        const local = loadBriefingFromStorage(brandId);
+        if (local) {
+          setBriefing(local);
           return;
         }
         setLoading(true);
@@ -116,15 +197,16 @@ export function MorningBriefing(props: MorningBriefingProps) {
     return () => clearTimeout(timer);
   }, [brandId, hasAnyData, hasSubstantiveData, briefing]);
 
-  // Periodic significance check
+  // Έλεγχος σημαντικής αλλαγής (κανόνες) — μόνο όταν το tab είναι ορατό
   useEffect(() => {
     if (!brandId || !hasAnyData || !briefing) return;
 
     if (checkInterval.current) clearInterval(checkInterval.current);
 
     checkInterval.current = setInterval(async () => {
+      if (document.hidden) return;
       try {
-        const { updated, result } = await checkAndAutoUpdate(brandId, buildData());
+        const { updated, result } = await checkAndAutoUpdate(brandId, buildDataRef.current());
         if (updated && result) setBriefing(result);
       } catch { /* silent */ }
     }, SIGNIFICANCE_CHECK_INTERVAL);
@@ -132,7 +214,17 @@ export function MorningBriefing(props: MorningBriefingProps) {
     return () => {
       if (checkInterval.current) clearInterval(checkInterval.current);
     };
-  }, [brandId, hasAnyData, briefing, buildData]);
+  }, [brandId, hasAnyData, briefing]);
+
+  const toggleCollapsed = useCallback(() => {
+    setCollapsed((c) => {
+      const next = !c;
+      try {
+        localStorage.setItem(`perf-plus-briefing-collapsed:${brandId}`, next ? '1' : '0');
+      } catch { /* */ }
+      return next;
+    });
+  }, [brandId]);
 
   if (!hasAnyData) return null;
 
@@ -159,16 +251,22 @@ export function MorningBriefing(props: MorningBriefingProps) {
       <div className={`relative overflow-hidden rounded-2xl border ${borderClass} bg-gradient-to-br from-white via-white to-[var(--nts-accent)]/5 shadow-sm`}>
         <div className={`absolute top-0 left-0 right-0 h-[3px] ${gradientLine}`} />
 
-        <div className="p-6">
+        <div className={collapsed ? 'px-4 py-3' : 'p-6'}>
           {/* Header */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[var(--nts-accent)] to-[#8B5CF6] flex items-center justify-center shadow-sm">
+          <div className={`flex items-start justify-between gap-2 ${collapsed ? 'mb-0' : 'mb-4'}`}>
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[var(--nts-accent)] to-[#8B5CF6] flex items-center justify-center shadow-sm shrink-0">
                 <Sparkles size={18} className="text-white" />
               </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-[15px] font-semibold text-[var(--nts-charcoal)] flex items-center gap-1">AI Briefing <Tooltip content="Αυτόματη ενημέρωση AI μία φορά την ημέρα κατά την πρώτη σας είσοδο. Ενημερώνεται αυτόματα αν εντοπιστεί σημαντική αλλαγή (π.χ. μεγάλη μεταβολή εσόδων, πτώση ROAS, νέο critical alert). Μέγιστο 4 ενημερώσεις ανά ημέρα." size={13} /></h3>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-[15px] font-semibold text-[var(--nts-charcoal)] flex items-center gap-1">
+                    AI Briefing{' '}
+                    <Tooltip
+                      content="Το briefing της ημέρας αποθηκεύεται τοπικά και μένει ίδιο όταν αλλάζετε σελίδα ή κάνετε refresh. Ανανεώνεται αυτόματα μόνο όταν ισχύουν οι κανόνες σημαντικής αλλαγής (π.χ. μεταβολή εσόδων, ROAS, critical alerts). Μέγιστο 4 ενημερώσεις ανά ημέρα· έλεγχος περίπου κάθε 15 λεπτά όταν το tab είναι ανοιχτό."
+                      size={13}
+                    />
+                  </h3>
                   {isUpdated && (
                     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-amber-100 text-amber-700 animate-pulse">
                       <Zap size={9} /> Ενημερώθηκε
@@ -181,18 +279,33 @@ export function MorningBriefing(props: MorningBriefingProps) {
                   )}
                 </div>
                 {timeLabel && (
-                  <p className="text-[11px] text-[var(--nts-medium-gray)] flex items-center gap-1">
+                  <p className="text-[11px] text-[var(--nts-medium-gray)] flex items-center gap-1 mt-0.5">
                     <Clock size={10} /> {timeLabel}
-                    {briefing?.updateReason && (
+                    {briefing?.updateReason && !collapsed && (
                       <span className="ml-1 text-amber-600">— {briefing.updateReason}</span>
                     )}
                   </p>
                 )}
+                {collapsed && briefing && (
+                  <p className="text-[12px] text-[var(--nts-medium-gray)] mt-1 line-clamp-1">
+                    {toPlainProseText(briefing.narrative)}
+                  </p>
+                )}
               </div>
             </div>
+            <button
+              type="button"
+              onClick={toggleCollapsed}
+              className="shrink-0 p-2 rounded-lg hover:bg-[#F3F4F6] text-[var(--nts-medium-gray)] transition-colors"
+              aria-expanded={!collapsed}
+              title={collapsed ? 'Ανάπτυξη' : 'Μάζεμα'}
+            >
+              {collapsed ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
+            </button>
           </div>
 
           {/* Content */}
+          {!collapsed && (
           <AnimatePresence mode="wait">
             {loading && !briefing && (
               <motion.div
@@ -233,18 +346,23 @@ export function MorningBriefing(props: MorningBriefingProps) {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
               >
-                <p className="text-[14px] leading-relaxed text-[var(--nts-charcoal)] mb-4">
-                  {briefing.narrative}
-                </p>
+                <div className="mb-4 text-[14px] leading-relaxed text-[var(--nts-charcoal)]">
+                  <FormattedProse content={briefing.narrative} variant="compact" className="[&_p]:text-[14px] [&_li]:text-[14px]" />
+                </div>
 
                 {briefing.actions.length > 0 && (
                   <div className="flex flex-wrap gap-2">
                     {briefing.actions.map((action, i) => {
-                      const route = guessRoute(action);
+                      const target = guessRoute(action);
                       return (
                         <button
                           key={i}
-                          onClick={() => onSectionChange?.(route)}
+                          onClick={() =>
+                            onSectionChange?.(
+                              target.section,
+                              target.hashQuery ? { hashQuery: target.hashQuery } : undefined
+                            )
+                          }
                           className="group flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-[var(--nts-charcoal)] bg-white border border-[var(--nts-border-gray)] rounded-lg hover:border-[var(--nts-accent)] hover:text-[var(--nts-accent)] transition-all shadow-sm"
                         >
                           <span className="w-4 h-4 rounded-full bg-[var(--nts-accent)]/10 text-[var(--nts-accent)] flex items-center justify-center text-[10px] font-bold flex-shrink-0">
@@ -260,6 +378,7 @@ export function MorningBriefing(props: MorningBriefingProps) {
               </motion.div>
             )}
           </AnimatePresence>
+          )}
         </div>
       </div>
     </motion.div>

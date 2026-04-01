@@ -115,6 +115,29 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   const [currentPage, setCurrentPage] = useState(1);
   const PAGE_SIZE = 150;
 
+  /** Deep link: `#products?stock=low|dead|excess|healthy` ή `#products?filter=high-margin-low-stock` */
+  useEffect(() => {
+    const applyFromHash = () => {
+      const raw = window.location.hash.replace('#', '');
+      const [path, queryString] = raw.split('?');
+      if (path !== 'products') return;
+      const params = new URLSearchParams(queryString || '');
+      const stock = params.get('stock');
+      if (stock === 'low' || stock === 'dead' || stock === 'excess' || stock === 'healthy') {
+        setStockCardFilter(stock);
+        setCurrentPage(1);
+      }
+      const filter = params.get('filter');
+      if (filter === 'high-margin-low-stock') {
+        setStockAgeFilter('high-margin-low-stock');
+        setCurrentPage(1);
+      }
+    };
+    applyFromHash();
+    window.addEventListener('hashchange', applyFromHash);
+    return () => window.removeEventListener('hashchange', applyFromHash);
+  }, []);
+
   const { currentBrand } = useBrand();
   const { products: rawProducts, isLoading: productsLoading, hasImported: rawHasImported } = useProducts();
   const { products: sourceProducts, hasImported, usingProcurement } = useProductSource();
@@ -401,7 +424,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
       </div>
 
       {/* Inventory Alerts */}
-      <AlertsBanner filterGroup="inventory" maxAlerts={2} compact />
+      <AlertsBanner filterGroup="inventory" maxAlerts={2} compact onNavigate={onSectionChange} />
 
       {/* Summary Cards — uses procurement data when available */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">

@@ -5,7 +5,7 @@ import {
   NavList,
   Text
 } from '@primer/react';
-import { Button } from '../common';
+import { Button, PerformancePlusLogo } from '../common';
 import { useAuth, useBrand, usePlan, useBrandMembers } from '../../hooks';
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import type { Brand } from '../../types';
@@ -56,7 +56,7 @@ type SectionId =
 
 export interface AppShellProps {
   activeSection: string;
-  onSectionChange: (section: string) => void;
+  onSectionChange: (section: string, opts?: { hashQuery?: string }) => void;
   children: React.ReactNode;
 }
 
@@ -395,6 +395,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
   });
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [brandMenuOpen, setBrandMenuOpen] = useState(false);
+  const [headerSearch, setHeaderSearch] = useState('');
   const { user, signOut, isSuperAdmin, hasPasswordProvider, hasGoogleProvider, linkPassword, linkGoogle } = useAuth();
   const { currentBrand, brands, setCurrentBrand } = useBrand();
   const { isEnterprise } = usePlan();
@@ -534,19 +535,21 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
 
         <PrimerHeader.Item full style={{ minWidth: 0 }}>
           <PrimerHeader.Link
-            href="#"
+            as="button"
+            type="button"
             onClick={(e) => e.preventDefault()}
-            style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              textDecoration: 'none',
+              border: 'none',
+              background: 'transparent',
+              padding: 0,
+              font: 'inherit',
+              cursor: 'default',
+            }}
           >
-            <img src="/favicon.png" alt="≠" style={{ width: 28, height: 28, borderRadius: 6 }} />
-            <div style={{ minWidth: 0 }}>
-              <Text as="div" weight="semibold" size="medium" className="truncate" style={{ color: 'rgba(255,255,255,0.85)' }}>
-                Performance+
-              </Text>
-              <Text as="div" size="small" style={{ color: 'rgba(255,255,255,0.4)' }} className="truncate">
-                by notthesame.ai
-              </Text>
-            </div>
+            <PerformancePlusLogo height={40} className="max-h-10" variant="onDark" />
           </PrimerHeader.Link>
         </PrimerHeader.Item>
 
@@ -554,9 +557,20 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
           <div style={{ position: 'relative', width: '100%' }}>
             <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.3)', display: 'flex' }}><SearchIcon /></span>
             <input
-              type="text"
-              aria-label="Search"
+              type="search"
+              aria-label="Search help"
               placeholder="Search…"
+              value={headerSearch}
+              onChange={(e) => setHeaderSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter') return;
+                const q = headerSearch.trim();
+                if (!q) {
+                  onSectionChange('help');
+                  return;
+                }
+                onSectionChange('help', { hashQuery: `q=${encodeURIComponent(q)}` });
+              }}
               style={{
                 width: '100%',
                 padding: '7px 12px 7px 34px',
@@ -734,16 +748,8 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
               justifyContent: 'space-between',
               flexShrink: 0
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <img src="/favicon.png" alt="≠" style={{ width: 28, height: 28, borderRadius: 6 }} />
-                <div>
-                  <Text as="div" weight="semibold" size="medium" style={{ color: '#ffffff' }}>
-                    Performance+
-                  </Text>
-                  <Text as="div" size="small" style={{ color: 'rgba(255,255,255,0.5)' }}>
-                    by notthesame.ai
-                  </Text>
-                </div>
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <PerformancePlusLogo height={40} variant="onDark" />
               </div>
               <div style={{ display: 'flex', gap: 4 }}>
                 <button

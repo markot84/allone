@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { FileDown, Loader2 } from 'lucide-react';
+import { FormattedProse } from '../common';
 import { getSharedPackage, type SharedPackageData } from '../../services/strategyPackageShare';
 import { openPackagePdf } from '../../services/strategyPackagePdf';
 
@@ -122,8 +123,11 @@ export function SharedPackageViewer({ packageId }: SharedPackageViewerProps) {
       {data.rationale && (
         <div className="mb-6">
           <p className="text-[10px] font-semibold text-[#9CA3AF] uppercase tracking-wider mb-2 pb-1 border-b border-[#F5F5F5]">AI Analysis</p>
-          <div className="text-sm text-[#4A4A4A] leading-relaxed whitespace-pre-line">
-            {data.rationale.replace(/\|\|/g, '\n\n').replace(/—/g, ',')}
+          <div className="text-sm text-[#4A4A4A] leading-relaxed">
+            <FormattedProse
+              content={data.rationale.replace(/\|\|/g, '\n\n').replace(/—/g, ',')}
+              variant="compact"
+            />
           </div>
         </div>
       )}

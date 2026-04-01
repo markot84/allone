@@ -78,38 +78,42 @@ function QueryProvider({ children }: { children: React.ReactNode }) {
 }
 
 function App() {
-  // Initialize from URL hash or default to dashboard
+  const VALID_SECTIONS = ['brands', 'dashboard', 'strategy', 'rfm', 'products', 'suppliers', 'procurement', 'channels', 'campaigns', 'competitive', 'analytics', 'finances', 'calendar', 'reports', 'roi', 'data', 'data-products', 'data-segments', 'data-campaigns', 'data-organic', 'data-procurement', 'invite', 'concept', 'help', 'admin', 'coordination', 'automation'] as const;
+
+  // Initialize from URL hash or default to dashboard (υποστηρίζει #products?stock=low)
   const getInitialSection = () => {
     if (typeof window === 'undefined') return 'dashboard';
     const hash = window.location.hash.replace('#', '');
     const baseSection = hash.split('?')[0];
-    const validSections = ['brands', 'dashboard', 'strategy', 'rfm', 'products', 'suppliers', 'procurement', 'channels', 'campaigns', 'competitive', 'analytics', 'finances', 'calendar', 'reports', 'roi', 'data', 'data-products', 'data-segments', 'data-campaigns', 'data-organic', 'data-procurement', 'invite', 'concept', 'help', 'admin', 'coordination', 'automation'];
-    if (baseSection && validSections.includes(baseSection)) return baseSection;
+    if (baseSection && VALID_SECTIONS.includes(baseSection as (typeof VALID_SECTIONS)[number])) return baseSection;
     return 'dashboard';
   };
 
   const [activeSection, setActiveSection] = useState(getInitialSection);
   const [insightsPanelOpen, setInsightsPanelOpen] = useState(false);
 
-  // Sync URL hash with active section
+  // Sync active section → hash (μόνο path — διατηρεί query όταν ήδη ταιριάζει το section)
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const hash = window.location.hash.replace('#', '');
-    if (hash !== activeSection && activeSection !== 'insights') {
+    const base = hash.split('?')[0];
+    if (base !== activeSection && activeSection !== 'insights') {
       window.history.replaceState(null, '', `#${activeSection}`);
     }
   }, [activeSection]);
 
-  // Listen for hash changes (browser back/forward)
+  // Browser back/forward — parse μόνο το path του hash
   useEffect(() => {
     const handleHashChange = () => {
-      const hash = window.location.hash.replace('#', '');
-      if (hash && hash !== activeSection) {
-        if (hash === 'insights') {
-          setInsightsPanelOpen(true);
-        } else {
-          setActiveSection(hash);
-        }
+      const full = window.location.hash.replace('#', '');
+      const base = full.split('?')[0];
+      if (!full) return;
+      if (base === 'insights') {
+        setInsightsPanelOpen(true);
+        return;
+      }
+      if (VALID_SECTIONS.includes(base as (typeof VALID_SECTIONS)[number]) && base !== activeSection) {
+        setActiveSection(base);
       }
     };
     window.addEventListener('hashchange', handleHashChange);
@@ -200,17 +204,18 @@ function App() {
     );
   }
 
-  const handleSectionChange = useCallback((section: string) => {
-    // Use requestAnimationFrame for instant UI update
+  const handleSectionChange = useCallback((section: string, opts?: { hashQuery?: string }) => {
     requestAnimationFrame(() => {
       if (section === 'insights') {
         setInsightsPanelOpen(true);
       } else {
         setActiveSection(section);
         window.scrollTo({ top: 0 });
-        // Update URL hash for persistence
         if (typeof window !== 'undefined') {
-          window.history.pushState(null, '', `#${section}`);
+          const q = opts?.hashQuery ? (opts.hashQuery.startsWith('?') ? opts.hashQuery : `?${opts.hashQuery}`) : '';
+          window.history.pushState(null, '', `#${section}${q}`);
+          // pushState δεν ενεργοποιεί πάντα hashchange — χρειάζεται για deep links (π.χ. Product Intelligence filters)
+          window.dispatchEvent(new HashChangeEvent('hashchange'));
         }
       }
     });
@@ -316,6 +321,7 @@ function App() {
         <AIInsightsPanel
           isOpen={insightsPanelOpen}
           onClose={() => setInsightsPanelOpen(false)}
+          onNavigate={handleSectionChange}
         />
       </div>
       </AuthGuard>
@@ -324,7 +330,7 @@ function App() {
   );
 }
 
-function ProcurementGate({ onSectionChange }: { onSectionChange: (s: string) => void }) {
+function ProcurementGate({ onSectionChange }: { onSectionChange: (s: string, opts?: { hashQuery?: string }) => void }) {
   const { isEnterprise } = usePlan();
   if (!isEnterprise) return <div className="max-w-xl mx-auto mt-12"><EnterpriseBadge /></div>;
   return <ProcurementPage onSectionChange={onSectionChange} />;

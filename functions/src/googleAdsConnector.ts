@@ -67,6 +67,86 @@ export interface GoogleAdsCustomer {
   resourceName: string;
 }
 
+function normalizeCustomerId(id: string): string {
+  return String(id).replace(/-/g, '').trim();
+}
+
+/** Επιστρέφει child λογαριασμούς κάτω από MCC (όχι manager leaf accounts). */
+async function fetchManagedClients(accessToken: string, mccId: string): Promise<GoogleAdsCustomer[]> {
+  const { developerToken } = getCredentials();
+  const id = normalizeCustomerId(mccId);
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${accessToken}`,
+    'developer-token': developerToken,
+    'Content-Type': 'application/json',
+    'login-customer-id': id,
+  };
+  try {
+    const subRes = await fetch(`${GOOGLE_ADS_BASE_URL}/customers/${id}/googleAds:search`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        query: `SELECT customer_client.client_customer, customer_client.descriptive_name, customer_client.id, customer_client.manager
+                FROM customer_client
+                WHERE customer_client.manager = false`,
+      }),
+    });
+    if (!subRes.ok) {
+      const errText = await subRes.text();
+      logger.warn(`[GoogleAds] fetchManagedClients failed (${subRes.status}): ${errText.slice(0, 400)}`);
+      return [];
+    }
+    const subData = await subRes.json();
+    const rows = subData.results || [];
+    const out: GoogleAdsCustomer[] = [];
+    for (const row of rows) {
+      const rawId = row.customerClient?.id ?? row.customerClient?.clientCustomer?.replace?.('customers/', '');
+      const cid = rawId != null ? normalizeCustomerId(String(rawId)) : '';
+      if (!cid || cid === id) continue;
+      out.push({
+        id: cid,
+        name: row.customerClient?.descriptiveName || `Account ${cid}`,
+        resourceName: row.customerClient?.clientCustomer || `customers/${cid}`,
+      });
+    }
+    const seen = new Set<string>();
+    return out.filter((a) => {
+      if (seen.has(a.id)) return false;
+      seen.add(a.id);
+      return true;
+    });
+  } catch (e) {
+    logger.warn(`[GoogleAds] fetchManagedClients error: ${e}`);
+    return [];
+  }
+}
+
+async function fetchCustomerIsManager(accessToken: string, customerId: string): Promise<boolean> {
+  const { developerToken } = getCredentials();
+  const id = normalizeCustomerId(customerId);
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${accessToken}`,
+    'developer-token': developerToken,
+    'Content-Type': 'application/json',
+    'login-customer-id': id,
+  };
+  try {
+    const res = await fetch(`${GOOGLE_ADS_BASE_URL}/customers/${id}/googleAds:search`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        query: 'SELECT customer.manager FROM customer LIMIT 1',
+      }),
+    });
+    if (!res.ok) return false;
+    const data = await res.json();
+    const row = data.results?.[0];
+    return Boolean(row?.customer?.manager);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Generate the OAuth consent URL for Google Ads
  */
@@ -232,71 +312,55 @@ async function listAccessibleCustomers(accessToken: string): Promise<GoogleAdsCu
 
     const data = await res.json();
     const resourceNames: string[] = data.resourceNames || [];
-    const customerIds = resourceNames.map((rn: string) => rn.replace('customers/', ''));
+    const customerIds = [...new Set(resourceNames.map((rn: string) => normalizeCustomerId(rn.replace('customers/', ''))))];
 
     if (customerIds.length === 0) return [];
 
     // Fetch names via GAQL for each customer
     const customers: GoogleAdsCustomer[] = [];
     for (const cid of customerIds) {
+      const cidNorm = normalizeCustomerId(cid);
       try {
-        const infoRes = await fetch(
-          `${GOOGLE_ADS_BASE_URL}/customers/${cid}/googleAds:search`,
-          {
-            method: 'POST',
-            headers: { ...headers, 'Content-Type': 'application/json', 'login-customer-id': (loginCustomerId && loginCustomerId !== cid) ? loginCustomerId : cid },
-            body: JSON.stringify({ query: 'SELECT customer.id, customer.descriptive_name FROM customer LIMIT 1' }),
-          }
-        );
+        const loginForQuery =
+          loginCustomerId && loginCustomerId !== cidNorm ? loginCustomerId : cidNorm;
+        const infoRes = await fetch(`${GOOGLE_ADS_BASE_URL}/customers/${cidNorm}/googleAds:search`, {
+          method: 'POST',
+          headers: { ...headers, 'Content-Type': 'application/json', 'login-customer-id': loginForQuery },
+          body: JSON.stringify({ query: 'SELECT customer.id, customer.descriptive_name FROM customer LIMIT 1' }),
+        });
         if (infoRes.ok) {
           const infoData = await infoRes.json();
           const row = infoData.results?.[0];
           customers.push({
-            id: cid,
-            name: row?.customer?.descriptiveName || `Account ${cid}`,
-            resourceName: `customers/${cid}`,
+            id: cidNorm,
+            name: row?.customer?.descriptiveName || `Account ${cidNorm}`,
+            resourceName: `customers/${cidNorm}`,
           });
         } else {
-          customers.push({ id: cid, name: `Account ${cid}`, resourceName: `customers/${cid}` });
+          customers.push({ id: cidNorm, name: `Account ${cidNorm}`, resourceName: `customers/${cidNorm}` });
         }
       } catch {
-        customers.push({ id: cid, name: `Account ${cid}`, resourceName: `customers/${cid}` });
+        customers.push({ id: cidNorm, name: `Account ${cidNorm}`, resourceName: `customers/${cidNorm}` });
       }
     }
 
-    // If only the MCC was returned, query it for sub-accounts
-    const hasMccOnly = loginCustomerId && customers.length > 0 && customers.every(c => c.id === loginCustomerId);
-    if (hasMccOnly) {
-      logger.info(`[GoogleAds] Only MCC returned — querying for sub-accounts under ${loginCustomerId}`);
-      try {
-        const subRes = await fetch(
-          `${GOOGLE_ADS_BASE_URL}/customers/${loginCustomerId}/googleAds:search`,
-          {
-            method: 'POST',
-            headers: { ...headers, 'Content-Type': 'application/json', 'login-customer-id': loginCustomerId },
-            body: JSON.stringify({
-              query: `SELECT customer_client.client_customer, customer_client.descriptive_name, customer_client.id, customer_client.manager FROM customer_client WHERE customer_client.manager = false`,
-            }),
-          }
-        );
-        if (subRes.ok) {
-          const subData = await subRes.json();
-          const subAccounts: GoogleAdsCustomer[] = (subData.results || []).map((row: any) => ({
-            id: String(row.customerClient?.id || row.customerClient?.clientCustomer?.replace('customers/', '') || ''),
-            name: row.customerClient?.descriptiveName || 'Sub-account',
-            resourceName: row.customerClient?.clientCustomer || '',
-          })).filter((a: GoogleAdsCustomer) => a.id && a.id !== loginCustomerId);
-          if (subAccounts.length > 0) {
-            logger.info(`[GoogleAds] Found ${subAccounts.length} sub-accounts under MCC`);
-            return subAccounts;
-          }
-        } else {
-          const errText = await subRes.text();
-          logger.warn(`[GoogleAds] Sub-account query failed (${subRes.status}): ${errText.slice(0, 300)}`);
-        }
-      } catch (e) {
-        logger.warn(`[GoogleAds] Sub-account query error: ${e}`);
+    // Ένας προσβάσιμος λογαριασμός: αν είναι MCC, τράβα client λογαριασμούς (όχι μόνο όταν id === env MCC)
+    if (customers.length === 1) {
+      const sole = customers[0];
+      const subs = await fetchManagedClients(accessToken, sole.id);
+      if (subs.length > 0) {
+        logger.info(`[GoogleAds] Single accessible node expanded to ${subs.length} client accounts under ${sole.id}`);
+        return subs;
       }
+      const isMgr = await fetchCustomerIsManager(accessToken, sole.id);
+      if (isMgr) {
+        logger.info(
+          `[GoogleAds] Single account ${sole.id} is manager but no ENABLED client rows — manual Customer ID (sub-account)`
+        );
+        return [];
+      }
+      logger.info(`[GoogleAds] Single leaf account ${sole.id} — OK for auto-connect`);
+      return customers;
     }
 
     return customers;

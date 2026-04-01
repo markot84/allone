@@ -1,3 +1,4 @@
+import * as admin from 'firebase-admin';
 import { logger } from 'firebase-functions/v2';
 import type { Firestore } from 'firebase-admin/firestore';
 import { createTransporter, SENDER, NOREPLY_EMAIL } from './smtpConfig';
@@ -16,16 +17,44 @@ export async function sendNotificationEmail(
     entityId?: string;
   }
 ): Promise<void> {
-  if (!_db) { logger.error('emailNotifier: db not set'); return; }
+  if (!_db) {
+    logger.error('emailNotifier: db not set');
+    throw new Error('emailNotifier db not set');
+  }
 
   const transporter = createTransporter();
-  if (!transporter) return;
+  if (!transporter) {
+    logger.warn('[emailNotifier] SMTP not configured — cannot send');
+    throw new Error('SMTP not configured');
+  }
 
   const userDoc = await _db.collection('users').doc(userId).get();
   const userData = userDoc.data();
-  if (!userData?.email) {
-    logger.warn(`No email for user ${userId}`);
-    return;
+  let toEmail = userData?.email as string | undefined;
+  if (!toEmail) {
+    try {
+      const rec = await admin.auth().getUser(userId);
+      toEmail = rec.email || undefined;
+    } catch (e) {
+      logger.warn(`[emailNotifier] Auth lookup failed for ${userId}`, e);
+    }
+  }
+  if (!toEmail && notification.brandId) {
+    try {
+      const mem = await _db
+        .collection('brands')
+        .doc(notification.brandId)
+        .collection('members')
+        .doc(userId)
+        .get();
+      toEmail = (mem.data()?.email as string | undefined) || undefined;
+    } catch (e) {
+      logger.warn(`[emailNotifier] Member doc lookup failed for ${userId}`, e);
+    }
+  }
+  if (!toEmail) {
+    logger.warn(`[emailNotifier] No email for user ${userId} (users / Auth / brand member)`);
+    throw new Error('No recipient email');
   }
 
   let brandName = '';
@@ -57,12 +86,13 @@ export async function sendNotificationEmail(
   try {
     await transporter.sendMail({
       from: SENDER,
-      to: userData.email,
+      to: toEmail,
       subject: `[Performance+] ${notification.title}`,
       html,
     });
-    logger.info(`Email sent to ${userData.email} for notification: ${notification.title}`);
+    logger.info(`Email sent to ${toEmail} for notification: ${notification.title}`);
   } catch (err) {
     logger.error('Failed to send email:', err);
+    throw err;
   }
 }

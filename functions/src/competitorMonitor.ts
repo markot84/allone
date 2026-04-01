@@ -19,7 +19,39 @@ function getDb(): Firestore {
   return _db ?? (admin.firestore() as unknown as Firestore);
 }
 
-const META_GRAPH_URL = 'https://graph.facebook.com/v21.0';
+const META_GRAPH_VERSION = 'v24.0';
+const META_GRAPH_URL = `https://graph.facebook.com/${META_GRAPH_VERSION}`;
+
+/**
+ * Broad EU + export markets — B2B ads often have no impressions in GR alone.
+ * Override with competitor_settings.reachedCountries (comma ISO in UI).
+ */
+const DEFAULT_REACH_COUNTRIES = [
+  'GR',
+  'CY',
+  'US',
+  'GB',
+  'DE',
+  'IT',
+  'FR',
+  'ES',
+  'PT',
+  'NL',
+  'BE',
+  'AT',
+  'PL',
+  'BG',
+  'RO',
+  'TR',
+];
+
+function resolveReachedCountries(raw: unknown): string[] {
+  if (Array.isArray(raw) && raw.length > 0) {
+    const codes = raw.map((c) => String(c).trim().toUpperCase()).filter((c) => /^[A-Z]{2}$/.test(c));
+    if (codes.length > 0) return [...new Set(codes)];
+  }
+  return [...DEFAULT_REACH_COUNTRIES];
+}
 
 function getAppToken(): string {
   const appId = (process.env.META_APP_ID || '').trim();
@@ -45,6 +77,20 @@ interface CompetitorAd {
   daysRunning: number;
   firstSeenAt: string;
   lastSeenAt: string;
+}
+
+function normalizePagingNext(next: string | undefined | null): string | null {
+  if (!next) return null;
+  if (next.startsWith('http')) return next;
+  if (next.startsWith('/')) return `https://graph.facebook.com${next}`;
+  return `${META_GRAPH_URL}/${next.replace(/^\//, '')}`;
+}
+
+function adCreativeFirstLine(ad: { ad_creative_bodies?: unknown }): string {
+  const b = ad.ad_creative_bodies;
+  if (Array.isArray(b) && b.length > 0) return String(b[0]);
+  if (typeof b === 'string') return b;
+  return '';
 }
 
 /**
@@ -87,41 +133,54 @@ export async function fetchCompetitorAds(brandId: string): Promise<{
     existingAdsMap.set(doc.id, doc.data());
   }
 
+  const countries = resolveReachedCountries((settings as { reachedCountries?: unknown })?.reachedCountries);
+
   for (const competitor of competitors) {
     if (!competitor.pageId) continue;
 
+    const pageIdTrim = String(competitor.pageId).trim();
+    if (!/^\d+$/.test(pageIdTrim)) {
+      warnings.push(`${competitor.name}: Page ID "${pageIdTrim}" — χρειάζεται αριθμητικό Facebook Page ID (όχι URL ή username).`);
+      continue;
+    }
+
     try {
-      // ad_reached_countries is required by the API and expects array-like format
-      // Meta Graph API accepts ad_reached_countries=["GR"] in the query string
-      const countries: string[] = (settings as any).reachedCountries
-        ? (settings as any).reachedCountries
-        : ['GR'];
-      const params = new URLSearchParams({
-        access_token: appToken,
-        search_page_ids: competitor.pageId,
-        ad_active_status: 'ALL',
-        fields: 'id,ad_creative_bodies,ad_delivery_start_time,ad_delivery_stop_time,page_name,publisher_platforms',
-        limit: '50',
-      });
-      params.set('ad_reached_countries', JSON.stringify(countries));
+      let adsFetchedForPage = 0;
+      let hadAdLibraryHttpError = false;
+      let usedSearchPageIdsMode: 'plain' | 'jsonArray' | null = null;
+      /** Avoid double-counting the same ad id when we run multi-query fallbacks (e.g. per-country). */
+      const seenAdIdsThisCompetitor = new Set<string>();
 
-      logger.info(`[Competitor] Querying ${competitor.name} (page ${competitor.pageId}), countries=${JSON.stringify(countries)}`);
-      let nextUrl: string | null = `${META_GRAPH_URL}/ads_archive?${params.toString()}`;
+      const makeStartUrl = (mode: 'plain' | 'jsonArray', reachCountries: string[]): string => {
+        const params = new URLSearchParams({
+          access_token: appToken,
+          ad_active_status: 'ALL',
+          ad_type: 'ALL',
+          /** Aligns with Ad Library web UI (media_type=all). */
+          media_type: 'ALL',
+          fields:
+            'id,ad_creative_bodies,ad_delivery_start_time,ad_delivery_stop_time,page_name,publisher_platforms,page_id',
+          limit: '100',
+        });
+        if (mode === 'plain') {
+          params.set('search_page_ids', pageIdTrim);
+        } else {
+          params.set('search_page_ids', JSON.stringify([pageIdTrim]));
+        }
+        params.set('ad_reached_countries', JSON.stringify(reachCountries));
+        return `${META_GRAPH_URL}/ads_archive?${params.toString()}`;
+      };
 
-      while (nextUrl) {
-        const res: Response = await fetch(nextUrl);
-
-        if (!res.ok) {
-          const errText = await res.text();
-          const msg = `Ad Library API error for ${competitor.name} (${res.status}): ${errText.slice(0, 200)}`;
+      const processOnePage = async (data: any): Promise<boolean> => {
+        if (data.error) {
+          const err = data.error as { message?: string; code?: number };
+          const msg = `Ad Library API (${competitor.name}): ${err.message || JSON.stringify(err)} (code ${err.code ?? '?'})`;
           logger.warn(`[Competitor] ${msg}`);
           warnings.push(msg);
-          break;
+          return false;
         }
-
-        const data: any = await res.json();
         const ads: any[] = data.data || [];
-        nextUrl = data.paging?.next || null;
+        adsFetchedForPage += ads.length;
 
         const batch = getDb().batch();
         let batchCount = 0;
@@ -132,7 +191,7 @@ export async function fetchCompetitorAds(brandId: string): Promise<{
 
           const startDate = ad.ad_delivery_start_time || '';
           const endDate = ad.ad_delivery_stop_time || undefined;
-          const adText = (ad.ad_creative_bodies || [])[0] || '';
+          const adText = adCreativeFirstLine(ad);
           const platforms: string[] = ad.publisher_platforms || [];
           const isActive = !endDate || new Date(endDate) > now;
 
@@ -151,7 +210,7 @@ export async function fetchCompetitorAds(brandId: string): Promise<{
           const adDoc: CompetitorAd = {
             adId,
             competitorName: competitor.name,
-            competitorPageId: competitor.pageId,
+            competitorPageId: pageIdTrim,
             adText: adText.slice(0, 500),
             startDate,
             endDate,
@@ -171,6 +230,7 @@ export async function fetchCompetitorAds(brandId: string): Promise<{
           batch.set(ref, adDoc, { merge: true });
           batchCount++;
           totalAds++;
+          existingAdsMap.set(adId, adDoc);
 
           if (batchCount >= 450) {
             await batch.commit();
@@ -182,12 +242,98 @@ export async function fetchCompetitorAds(brandId: string): Promise<{
           await batch.commit();
         }
 
-        if (ads.length === 0 && !nextUrl) {
-          logger.warn(`[Competitor] ${competitor.name} (page ${competitor.pageId}): API returned 0 ads. Check page ID or country settings.`);
-          warnings.push(`${competitor.name}: 0 ads found. Verify the Page ID is the numeric ID (not URL slug).`);
-        } else {
-          logger.info(`[Competitor] ${competitor.name}: page with ${ads.length} ads`);
+        logger.info(`[Competitor] ${competitor.name}: page returned ${ads.length} ads (mode=${usedSearchPageIdsMode})`);
+        return true;
+      };
+
+      const runPagination = async (
+        startUrl: string,
+        mode: 'plain' | 'jsonArray',
+        reachCountriesForLog: string[]
+      ): Promise<void> => {
+        usedSearchPageIdsMode = mode;
+        adsFetchedForPage = 0;
+        let nextUrl: string | null = startUrl;
+
+        while (nextUrl) {
+          logger.info(
+            `[Competitor] GET ${competitor.name} (page ${pageIdTrim}), mode=${mode}, countries=${JSON.stringify(reachCountriesForLog)}`
+          );
+          const res: Response = await fetch(nextUrl);
+
+          if (!res.ok) {
+            hadAdLibraryHttpError = true;
+            const errText = await res.text();
+            const msg = `Ad Library API error for ${competitor.name} (${res.status}): ${errText.slice(0, 200)}`;
+            logger.warn(`[Competitor] ${msg}`);
+            warnings.push(msg);
+            return;
+          }
+
+          const data: any = await res.json();
+          const ok = await processOnePage(data);
+          if (!ok) {
+            hadAdLibraryHttpError = true;
+            return;
+          }
+
+          nextUrl = normalizePagingNext(data.paging?.next);
         }
+      };
+
+      await runPagination(makeStartUrl('plain', countries), 'plain', countries);
+
+      if (!hadAdLibraryHttpError && adsFetchedForPage === 0) {
+        logger.info(`[Competitor] Retrying ${competitor.name} with search_page_ids JSON array format`);
+        await runPagination(makeStartUrl('jsonArray', countries), 'jsonArray', countries);
+      }
+
+      /**
+       * Meta often returns rows when ad_reached_countries is a single ISO code, but [] when many
+       * codes are passed (observed in the wild). Probe one country at a time (union via deduped writes).
+       */
+      if (!hadAdLibraryHttpError && adsFetchedForPage === 0) {
+        const probeOrder = [
+          ...new Set([
+            ...countries,
+            'GR',
+            'CY',
+            'US',
+            'GB',
+            'DE',
+            'IT',
+            'ES',
+            'FR',
+            'NL',
+            'PL',
+            'RO',
+            'BG',
+            'AT',
+            'CH',
+          ]),
+        ];
+        for (const c of probeOrder) {
+          if (hadAdLibraryHttpError) break;
+          const one = [c];
+          logger.info(`[Competitor] ${competitor.name}: single-country probe ${c} (plain)`);
+          await runPagination(makeStartUrl('plain', one), 'plain', one);
+          if (adsFetchedForPage > 0) {
+            logger.info(`[Competitor] ${competitor.name}: single-country probe hit with ${c}`);
+            break;
+          }
+          await runPagination(makeStartUrl('jsonArray', one), 'jsonArray', one);
+          if (adsFetchedForPage > 0) {
+            logger.info(`[Competitor] ${competitor.name}: single-country JSON probe hit with ${c}`);
+            break;
+          }
+        }
+      }
+
+      if (!hadAdLibraryHttpError && adsFetchedForPage === 0) {
+        logger.warn(`[Competitor] ${competitor.name} (page ${pageIdTrim}): 0 ads for countries ${JSON.stringify(countries)}`);
+        warnings.push(
+          `${competitor.name}: 0 ads για reach [${countries.join(', ')}] (δοκιμάστηκαν και ερωτήματα ανά χώρα). Επιβεβαιώστε Page ID στο facebook.com/ads/library · φίλτρο χωρών · App (Live) με πρόσβαση Ad Library API · META_APP_ID/SECRET στα Functions.`
+        );
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -196,14 +342,16 @@ export async function fetchCompetitorAds(brandId: string): Promise<{
     }
   }
 
-  // Update lastSyncAt on settings doc
   try {
     await getDb().doc(`competitor_settings/${brandId}`).set(
-      { lastSyncAt: now.toISOString() },
+      {
+        lastSyncAt: now.toISOString(),
+        lastAdLibraryWarnings: warnings.length > 0 ? warnings : FieldValue.delete(),
+      },
       { merge: true }
     );
   } catch (e) {
-    logger.warn(`[Competitor] Failed to update lastSyncAt: ${e}`);
+    logger.warn(`[Competitor] Failed to update competitor_settings: ${e}`);
   }
 
   try {

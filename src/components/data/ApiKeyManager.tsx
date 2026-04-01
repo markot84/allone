@@ -30,7 +30,10 @@ export function ApiKeyManager() {
   const [showDocs, setShowDocs] = useState(false);
 
   const fetchKeys = useCallback(async () => {
-    if (!brandId) return;
+    if (!brandId) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const docs = await FirestoreService.getDocuments<ApiKeyDoc>('api_keys', [], brandId);

@@ -10,6 +10,15 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 5173,
     strictPort: false,
+    // Ίδιο origin με production (Firebase Hosting rewrite) — αποφεύγει CORS στο dev
+    proxy: {
+      '/api/submitInterestLead': {
+        target: 'https://europe-west1-performance-plus-4a5b2.cloudfunctions.net',
+        changeOrigin: true,
+        secure: true,
+        rewrite: () => '/submitInterestLead',
+      },
+    },
   },
   build: {
     outDir: 'dist',

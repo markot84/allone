@@ -203,36 +203,108 @@ function getDefaultBehavioral(): BehavioralProfile {
   };
 }
 
-export function deriveBehavioralProfile(segment: RFMSegment): BehavioralProfile {
-  if (segment.behavioral) return segment.behavioral;
+/** Κανονικοποίηση για SEGMENT_BEHAVIORAL_MAP (Can't → Cant, trim, κενά). */
+export function normalizeSegmentLookupKey(name: string): string {
+  return name.trim().toLowerCase().replace(/\s+/g, '_').replace(/'/g, '');
+}
 
-  const mapped = SEGMENT_BEHAVIORAL_MAP[segment.id] || SEGMENT_BEHAVIORAL_MAP[segment.name.toLowerCase().replace(/\s+/g, '_')] || {};
+function getMappedBehavioralPartial(segment: RFMSegment): Partial<BehavioralProfile> {
+  const byName = normalizeSegmentLookupKey(segment.name);
+  return (
+    SEGMENT_BEHAVIORAL_MAP[segment.id] ||
+    SEGMENT_BEHAVIORAL_MAP[normalizeSegmentLookupKey(segment.id)] ||
+    SEGMENT_BEHAVIORAL_MAP[byName] ||
+    {}
+  );
+}
+
+/** Τιμές που βάζει το validateSegmentRow όταν λείπουν στήλες — όχι «πραγματικό» import. */
+const IMPORT_TEMPLATE_DEFAULTS = {
+  engagement_score: 40,
+  upsell_score: 30,
+  cross_sell_score: 30,
+  avg_basket_size: 60,
+} as const;
+
+function buildProfileFromMapped(mapped: Partial<BehavioralProfile>): BehavioralProfile {
   const base = getDefaultBehavioral();
-
   const profile: BehavioralProfile = {
     ...base,
     ...mapped,
     category_affinity: mapped.category_affinity || base.category_affinity,
-    communication_preferences: (mapped.preferred_channels || base.preferred_channels).map(ch => ({
+    communication_preferences: (mapped.preferred_channels || base.preferred_channels).map((ch) => ({
       channel: ch,
-      frequency: mapped.lifecycle_stage === 'loyal' || mapped.lifecycle_stage === 'active' ? 'Εβδομαδιαία' : 'Μηνιαία',
+      frequency:
+        mapped.lifecycle_stage === 'loyal' || mapped.lifecycle_stage === 'active'
+          ? 'Εβδομαδιαία'
+          : 'Μηνιαία',
       best_time: (mapped.peak_hours || base.peak_hours)[0] || '10:00-12:00',
     })),
   };
-
   return profile;
 }
 
-export function derivePredictiveMetrics(segment: RFMSegment): PredictiveMetrics {
-  if (segment.predictive) return segment.predictive;
+/**
+ * Συγχώνευση εισαγόμενου behavioral με RFM-derived: αν το CSV είχε μόνο persona κ.λπ.
+ * αλλά τα scores είναι τα template defaults (40/30/30/60), χρησιμοποιούμε τις τιμές από το map ανά segment.
+ */
+function mergeImportedBehavioralWithDerived(
+  imported: BehavioralProfile,
+  derived: BehavioralProfile
+): BehavioralProfile {
+  const out: BehavioralProfile = { ...derived, ...imported };
+  if (
+    imported.engagement_score === IMPORT_TEMPLATE_DEFAULTS.engagement_score &&
+    derived.engagement_score !== imported.engagement_score
+  ) {
+    out.engagement_score = derived.engagement_score;
+  }
+  if (
+    imported.upsell_score === IMPORT_TEMPLATE_DEFAULTS.upsell_score &&
+    derived.upsell_score !== imported.upsell_score
+  ) {
+    out.upsell_score = derived.upsell_score;
+  }
+  if (
+    imported.cross_sell_score === IMPORT_TEMPLATE_DEFAULTS.cross_sell_score &&
+    derived.cross_sell_score !== imported.cross_sell_score
+  ) {
+    out.cross_sell_score = derived.cross_sell_score;
+  }
+  if (
+    imported.avg_basket_size === IMPORT_TEMPLATE_DEFAULTS.avg_basket_size &&
+    derived.avg_basket_size !== imported.avg_basket_size
+  ) {
+    out.avg_basket_size = derived.avg_basket_size;
+  }
+  const onlyEmail =
+    imported.preferred_channels?.length === 1 && imported.preferred_channels[0] === 'Email';
+  if (onlyEmail && derived.preferred_channels && derived.preferred_channels.length > 1) {
+    out.preferred_channels = derived.preferred_channels;
+    out.communication_preferences = derived.communication_preferences;
+  }
+  return out;
+}
 
-  const avgBasket = SEGMENT_BEHAVIORAL_MAP[segment.id]?.avg_basket_size || 60;
-  const engagement = SEGMENT_BEHAVIORAL_MAP[segment.id]?.engagement_score || 40;
+export function deriveBehavioralProfile(segment: RFMSegment): BehavioralProfile {
+  const mapped = getMappedBehavioralPartial(segment);
+  const derived = buildProfileFromMapped(mapped);
+
+  if (!segment.behavioral) return derived;
+
+  return mergeImportedBehavioralWithDerived(segment.behavioral, derived);
+}
+
+/** Υπολογισμός predictive από το ίδιο behavioral profile (μετά merge) — όχι μόνο raw map. */
+function computeDerivedPredictiveMetrics(segment: RFMSegment): PredictiveMetrics {
+  const profile = deriveBehavioralProfile(segment);
+  const avgBasket = profile.avg_basket_size;
+  const engagement = profile.engagement_score;
+  const freq = profile.purchase_frequency;
 
   const freqMultiplier: Record<string, number> = {
     daily: 300, weekly: 52, monthly: 12, quarterly: 4, rare: 1,
   };
-  const freq = SEGMENT_BEHAVIORAL_MAP[segment.id]?.purchase_frequency || 'monthly';
   const yearlyOrders = freqMultiplier[freq] || 12;
   const estimatedLtv = avgBasket * yearlyOrders * 2.5;
 
@@ -258,6 +330,33 @@ export function derivePredictiveMetrics(segment: RFMSegment): PredictiveMetrics 
     revenue_forecast_90d: Math.round(segment.count * avgBasket * (90 / daysToNext) * (engagement / 100) * 0.3),
     demand_trend: demandTrend,
     retention_score: Math.round(Math.max(5, engagement * 0.95)),
+  };
+}
+
+export function derivePredictiveMetrics(segment: RFMSegment): PredictiveMetrics {
+  const derived = computeDerivedPredictiveMetrics(segment);
+  const imp = segment.predictive;
+  if (!imp) return derived;
+
+  const templateChurn = Math.round(100 - IMPORT_TEMPLATE_DEFAULTS.engagement_score);
+  /** Τιμές που προκύπτουν από κενά πεδία στο CSV (ίδιο churn 60% παντού = 100 − default engagement 40). */
+  const useImportedChurn = imp.churn_risk > 0 && imp.churn_risk !== templateChurn;
+  const useImportedLtv = imp.estimated_ltv > 0;
+
+  return {
+    ...derived,
+    ...imp,
+    estimated_ltv: useImportedLtv ? imp.estimated_ltv : derived.estimated_ltv,
+    ltv_confidence: useImportedLtv ? imp.ltv_confidence : derived.ltv_confidence,
+    churn_risk: useImportedChurn ? imp.churn_risk : derived.churn_risk,
+    churn_risk_label: useImportedChurn ? imp.churn_risk_label : derived.churn_risk_label,
+    next_purchase_probability: useImportedLtv ? imp.next_purchase_probability : derived.next_purchase_probability,
+    days_to_next_purchase: imp.days_to_next_purchase > 0 ? imp.days_to_next_purchase : derived.days_to_next_purchase,
+    predicted_next_order_value: useImportedLtv ? imp.predicted_next_order_value : derived.predicted_next_order_value,
+    revenue_forecast_30d: imp.revenue_forecast_30d > 0 ? imp.revenue_forecast_30d : derived.revenue_forecast_30d,
+    revenue_forecast_90d: imp.revenue_forecast_90d > 0 ? imp.revenue_forecast_90d : derived.revenue_forecast_90d,
+    demand_trend: imp.demand_trend && useImportedLtv ? imp.demand_trend : derived.demand_trend,
+    retention_score: useImportedChurn ? imp.retention_score : derived.retention_score,
   };
 }
 

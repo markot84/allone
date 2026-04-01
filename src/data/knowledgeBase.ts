@@ -117,10 +117,10 @@ export const knowledgeArticles: KnowledgeArticle[] = [
     description: 'Εισαγωγή στην πλατφόρμα και τις βασικές της λειτουργίες',
     content: `Το Performance+ είναι μια ολοκληρωμένη πλατφόρμα διαχείρισης marketing performance που σας βοηθά να:
 
-**Βελτιστοποιήσετε την προτεραιοποίηση προϊόντων** μέσω multi-factor scoring
-**Κατανοήσετε τους πελάτες σας** με RFM segmentation
-**Αυξήσετε το ROI** μέσω data-driven decisions
-**Συγχρονίσετε το περιεχόμενο** με την εμπορική στρατηγική
+Βελτιστοποιήσετε την προτεραιοποίηση προϊόντων μέσω multi-factor scoring
+Κατανοήσετε τους πελάτες σας με RFM segmentation
+Αυξήσετε το ROI μέσω data-driven decisions
+Συγχρονίσετε το περιεχόμενο με την εμπορική στρατηγική
 
 Η πλατφόρμα συνδυάζει:
 - Product Intelligence για αποθέματα και προτεραιοποίηση
@@ -138,18 +138,18 @@ export const knowledgeArticles: KnowledgeArticle[] = [
     description: 'Κατανόηση των βασικών KPIs και metrics',
     content: `Το Dashboard σας δίνει μια ολοκληρωμένη εικόνα της απόδοσης σας.
 
-**Κύρια KPIs:**
-- **Total Revenue**: Συνολικό εισόδημα με attribution rate
-- **Products**: Συνολικός αριθμός προϊόντων στο σύστημα
-- **Segments**: RFM segments με μέσο score
-- **Campaigns**: Ενεργά campaigns
+Κύρια KPIs:
+- Total Revenue: Συνολικό εισόδημα με attribution rate
+- Products: Συνολικός αριθμός προϊόντων στο σύστημα
+- Segments: RFM segments με μέσο score
+- Campaigns: Ενεργά campaigns
 
-**Charts & Visualizations:**
-- **Revenue Performance**: Total vs Performance+ Attributed revenue
-- **Customer Segments**: Κατανομή πελατών ανά segment
-- **Performance Summary**: Stock Clearance, Cost Savings, ROI
+Charts & Visualizations:
+- Revenue Performance: Total vs Performance+ Attributed revenue
+- Customer Segments: Κατανομή πελατών ανά segment
+- Performance Summary: Stock Clearance, Cost Savings, ROI
 
-**AI Insights**: Προτάσεις για βελτίωση απόδοσης
+AI Insights: Προτάσεις για βελτίωση απόδοσης
 
 Κάθε KPI card είναι clickable και σας οδηγεί στην αντίστοιχη λεπτομερή ανάλυση.`,
     tags: ['dashboard', 'kpis', 'metrics'],
@@ -173,31 +173,31 @@ export const knowledgeArticles: KnowledgeArticle[] = [
 
 ### Αυτόματη δημιουργία (1x/ημέρα)
 Κατά την πρώτη σας είσοδο στην εφαρμογή κάθε ημέρα, το σύστημα δημιουργεί αυτόματα ένα νέο briefing. Αναλύει:
-- **Έσοδα & ROAS** — organic + campaign revenue, ad spend
-- **Traffic** — sessions, users, conversions, εβδομαδιαίες μεταβολές (GA4)
-- **Απόθεμα** — dead stock, low stock σε best sellers, δεσμευμένο κεφάλαιο
-- **Segments** — At Risk %, Champions %, μεγέθη segments
-- **Campaigns** — top/worst performers by ROAS
-- **Alerts** — ενεργά automation alerts
+- Έσοδα & ROAS — organic + campaign revenue, ad spend
+- Traffic — sessions, users, conversions, εβδομαδιαίες μεταβολές (GA4)
+- Απόθεμα — dead stock, low stock σε best sellers, δεσμευμένο κεφάλαιο
+- Segments — At Risk %, Champions %, μεγέθη segments
+- Campaigns — top/worst performers by ROAS
+- Alerts — ενεργά automation alerts
 
 ### Smart Auto-Update
 Κάθε 10 λεπτά, το σύστημα ελέγχει αν κάτι σημαντικό άλλαξε. Ενημερώνεται αυτόματα μόνο αν:
-- Τα έσοδα μεταβλήθηκαν **±20%** ή περισσότερο
-- Το ROAS έπεσε **30%+**
-- Εμφανίστηκε νέο **critical alert**
-- Εντοπίστηκαν **15+ νέα dead stock** προϊόντα
-- Το At Risk segment αυξήθηκε **5+ ποσοστιαίες μονάδες**
+- Τα έσοδα μεταβλήθηκαν ±20% ή περισσότερο
+- Το ROAS έπεσε 30%+
+- Εμφανίστηκε νέο critical alert
+- Εντοπίστηκαν 15+ νέα dead stock προϊόντα
+- Το At Risk segment αυξήθηκε 5+ ποσοστιαίες μονάδες
 
 ### Προστασία από υπερβολική χρήση
-- Μέγιστο **4 generations ανά ημέρα**
-- Cooldown **1 ώρα** μεταξύ auto-updates
+- Μέγιστο 4 generations ανά ημέρα
+- Cooldown 1 ώρα μεταξύ auto-updates
 - Χωρίς update αν δεν υπάρχει σημαντική αλλαγή
 
 ## Ένδειξη Επείγοντος
 Όταν γίνεται auto-update λόγω σημαντικής αλλαγής, το briefing εμφανίζει:
-- **Amber border** αντί για το κανονικό
-- Badge **"Ενημερώθηκε"** δίπλα στον τίτλο
-- Τον **λόγο ενημέρωσης** κάτω από την ώρα δημιουργίας
+- Amber border αντί για το κανονικό
+- Badge "Ενημερώθηκε" δίπλα στον τίτλο
+- Τον λόγο ενημέρωσης κάτω από την ώρα δημιουργίας
 
 ## Action Items
 Κάθε briefing περιλαμβάνει 3 προτεινόμενες ενέργειες σε διαφορετικούς τομείς (Campaigns, Inventory, Segments, Traffic, Content). Κάθε ενέργεια είναι clickable και σας οδηγεί στη σχετική σελίδα.`,
@@ -230,17 +230,17 @@ export const knowledgeArticles: KnowledgeArticle[] = [
     description: 'Πώς να φορτώσετε δεδομένα στην πλατφόρμα',
     content: `Η εισαγωγή δεδομένων είναι το πρώτο βήμα για να ξεκινήσετε.
 
-**Υποστηριζόμενοι τύποι δεδομένων:**
-1. **Products**: Προϊόντα με SKU, τιμή, stock, margin
-2. **RFM Segments**: Customer segments με RFM scores
-3. **Analytics**: Revenue και performance data
-4. **Campaigns**: Marketing campaigns
+Υποστηριζόμενοι τύποι δεδομένων:
+1. Products: Προϊόντα με SKU, τιμή, stock, margin
+2. RFM Segments: Customer segments με RFM scores
+3. Analytics: Revenue και performance data
+4. Campaigns: Marketing campaigns
 
-**Μέθοδοι εισαγωγής:**
-- **CSV/XLSX files**: Upload από τον υπολογιστή σας
-- **URL links**: Direct link σε CSV/Excel files online
+Μέθοδοι εισαγωγής:
+- CSV/XLSX files: Upload από τον υπολογιστή σας
+- URL links: Direct link σε CSV/Excel files online
 
-**Βήματα:**
+Βήματα:
 1. Μεταβείτε στο Data Import section
 2. Επιλέξτε τον τύπο δεδομένων
 3. Κάντε κλικ "Download Template" για να δείτε το format
@@ -269,13 +269,13 @@ export const knowledgeArticles: KnowledgeArticle[] = [
     category: 'data-import',
     title: 'Εισαγωγή Προϊόντων',
     description: 'Λεπτομερής οδηγός για import προϊόντων',
-    content: `**Υποχρεωτικά πεδία:**
+    content: `Υποχρεωτικά πεδία:
 - SKU: Μοναδικό identifier προϊόντος
 - Name: Όνομα προϊόντος
 - Category: Κατηγορία (π.χ. Electronics, Fashion)
 - Price: Τιμή πώλησης
 
-**Προαιρετικά αλλά συνιστώμενα:**
+Προαιρετικά αλλά συνιστώμενα:
 - Cost Price: Κόστος για υπολογισμό margin
 - Margin Percentage: Ποσοστό κέρδους
 - Stock Level: Τρέχον απόθεμα
@@ -283,40 +283,40 @@ export const knowledgeArticles: KnowledgeArticle[] = [
 - Stock Age Days: Ημέρες από την παραλαβή
 - Priority Tag: Strategic flags (New Launch, Brand Push, κλπ)
 
-**Margin Tier:**
+Margin Tier:
 - high: >30%
 - medium: 15-30%
 - low: <15%
 
-**Πιθανές Εκδοχές Ονομάτων Στηλών:**
+Πιθανές Εκδοχές Ονομάτων Στηλών:
 
 Το σύστημα αναγνωρίζει αυτόματα διάφορες εκδοχές ονομάτων για κάθε πεδίο:
 
-**SKU/ID:**
+SKU/ID:
 SKU_ID, SKU, sku_id, sku, ID, id, Product_ID, product_id, Item_ID, item_id, Code, code, Κωδικός, κωδικός, Barcode, barcode, EAN, ean
 
-**Product Name:**
+Product Name:
 Product_Name, Product Name, product_name, Name, name, Product, product, Title, title, Item, item, Item_Name, item_name, Description, description, Product_Title, product_title, Όνομα, όνομα, Προϊόν, προϊόν, Περιγραφή, περιγραφή
 
-**Category:**
+Category:
 Category, category, Product_Category, product_category, Group, group, Κατηγορία, κατηγορία, Type, type, Department, department, Προμηθευτής, προμηθευτής
 
-**Price:**
+Price:
 Sell_Price, Sell Price, sell_price, Price, price, Unit_Price, unit_price, Retail_Price, retail_price, MSRP, msrp, Τιμή, τιμή
 
-**Cost Price:**
+Cost Price:
 Cost_Price, Cost Price, cost_price, Cost, cost, Κόστος, κόστος
 
-**Stock Level:**
+Stock Level:
 Stock_On_Hand, Stock On Hand, stock_on_hand, Stock_Level, stock_level, Stock, stock, Quantity, quantity, Qty, qty, Inventory, inventory, On_Hand, on_hand, Units, units, Απόθεμα, απόθεμα, Ποσότητα, ποσότητα, Available_Stock, available_stock, Δυναμικό_Υπόλοιπο, δυναμικό_υπόλοιπο, Κίνηση, κίνηση
 
-**Date:**
+Date:
 First_Available_Date, First Available Date, first_available_date, First_Available, first_available, Available_Date, available_date, Date_Added, date_added, Created_Date, created_date, Creation_Date, creation_date, Inventory_Date, inventory_date, Data, data, Ημερομηνία, ημερομηνία, Ημ/νία, ημ/νία
 
-**Margin:**
+Margin:
 Gross_Margin_%, Gross Margin %, gross_margin_%, Margin_Percentage, margin_percentage, Margin_Pct, margin_pct, Margin, margin, Margin_%, margin_%, Gross_Margin, gross_margin, Profit_Margin, profit_margin
 
-**Validation:**
+Validation:
 Το σύστημα ελέγχει ότι:
 - SKU είναι unique
 - Price > 0
@@ -344,18 +344,18 @@ Gross_Margin_%, Gross Margin %, gross_margin_%, Margin_Percentage, margin_percen
     category: 'data-import',
     title: 'Εισαγωγή Segments (RFM + Behavioral + Predictive)',
     description: 'Πώς να φορτώσετε customer segments με behavioral και predictive data',
-    content: `**Υποχρεωτικά πεδία (RFM):**
+    content: `Υποχρεωτικά πεδία (RFM):
 - Name: Όνομα segment (π.χ. Champions, Loyal, At Risk)
 - RFM Score: Score format (π.χ. "5-5-5" ή "5-5-5 to 4-4-4")
 - Count: Αριθμός πελατών στο segment
 - Percentage: Ποσοστό του total customer base
 
-**Προαιρετικά RFM:**
+Προαιρετικά RFM:
 - Revenue Share: Ποσοστό revenue από segment
 - Color: Hex color για visualization
 - Description: Περιγραφή του segment
 
-**Behavioral πεδία (προαιρετικά):**
+Behavioral πεδία (προαιρετικά):
 - persona: Τύπος πελάτη (π.χ. Power Buyer, Fading Customer)
 - lifecycle_stage: new, active, loyal, declining, dormant
 - purchase_frequency: daily, weekly, monthly, quarterly, rare
@@ -370,7 +370,7 @@ Gross_Margin_%, Gross Margin %, gross_margin_%, Margin_Percentage, margin_percen
 - peak_days: Ημέρες αιχμής (π.χ. "Δευτέρα,Πέμπτη")
 - payment_method: Τρόπος πληρωμής
 
-**Predictive πεδία (προαιρετικά):**
+Predictive πεδία (προαιρετικά):
 - estimated_ltv / ltv: Εκτιμώμενη αξία ζωής πελάτη
 - churn_risk: 0-100 ποσοστό κινδύνου churn
 - churn_risk_label: low, medium, high, critical
@@ -382,15 +382,15 @@ Gross_Margin_%, Gross Margin %, gross_margin_%, Margin_Percentage, margin_percen
 - demand_trend: growing, stable, declining
 - retention_score: 0-100 δείκτης διατήρησης
 
-**Πιθανές Εκδοχές Ονομάτων Στηλών:**
+Πιθανές Εκδοχές Ονομάτων Στηλών:
 
-**Name:** Name, Segment_Name, Segment, Label, Group, Customer_Segment
-**RFM Score:** RFM_Score, Score, RFM, R_Score + F_Score + M_Score
-**Count:** Count, Customer_Count, Customers, Size, Total
-**Percentage:** Percentage, Percent, Pct, %
-**Revenue Share:** Revenue_Share, Revenue, Revenue_Pct, Rev_Share
-**Color:** Color, Colour, Hex
-**Description:** Description, Desc, Note, Notes, Behavioral_Persona, Tier
+Name: Name, Segment_Name, Segment, Label, Group, Customer_Segment
+RFM Score: RFM_Score, Score, RFM, R_Score + F_Score + M_Score
+Count: Count, Customer_Count, Customers, Size, Total
+Percentage: Percentage, Percent, Pct, %
+Revenue Share: Revenue_Share, Revenue, Revenue_Pct, Rev_Share
+Color: Color, Colour, Hex
+Description: Description, Desc, Note, Notes, Behavioral_Persona, Tier
 
 Αν δεν υπάρχουν behavioral/predictive στήλες, η εφαρμογή θα τα υπολογίσει αυτόματα (rule-based) από τα RFM δεδομένα. Αν εισαχθούν, αντικαθιστούν τα αυτόματα.`,
     tags: ['segments', 'rfm', 'customers', 'behavioral', 'predictive', 'ltv', 'churn'],
@@ -401,34 +401,34 @@ Gross_Margin_%, Gross Margin %, gross_margin_%, Margin_Percentage, margin_percen
     category: 'data-import',
     title: 'Εισαγωγή Analytics Data',
     description: 'Πώς να φορτώσετε revenue και performance data',
-    content: `**Υποχρεωτικά πεδία:**
+    content: `Υποχρεωτικά πεδία:
 - Date: Ημερομηνία σε format YYYY-MM-DD
 - Total Revenue: Συνολικό εισόδημα (σε units, π.χ. 50000 για €50K)
 - Attributed Revenue: Revenue που αποδίδεται στο Performance+ (σε units)
 - Attribution Rate: Ποσοστό attribution (π.χ. 30.0 για 30%)
 
-**Πιθανές Εκδοχές Ονομάτων Στηλών:**
+Πιθανές Εκδοχές Ονομάτων Στηλών:
 
-**Date:**
+Date:
 Date, date, Date_Time, date_time, Timestamp, timestamp, Period, period, Month, month, Year_Month, year_month, Data, data, Ημερομηνία, ημερομηνία, Ημ/νία, ημ/νία
 
-**Total Revenue:**
+Total Revenue:
 Total_Revenue, Total Revenue, total_revenue, Revenue, revenue, Total, total, Total_Rev, total_rev, Revenue_Total, revenue_total
 
-**Attributed Revenue:**
+Attributed Revenue:
 Attributed_Revenue, Attributed Revenue, attributed_revenue, Attributed, attributed, Attributed_Rev, attributed_rev, Performance_Plus_Revenue, performance_plus_revenue, PP_Revenue, pp_revenue
 
-**Attribution Rate:**
+Attribution Rate:
 Attribution_Rate, Attribution Rate, attribution_rate, Attribution_%, attribution_%, Attribution_Percentage, attribution_percentage, Rate, rate
 
-**Format:**
+Format:
 \`\`\`csv
 Date,Total Revenue,Attributed Revenue,Attribution Rate
 2026-01-01,50000,15000,30.0
 2026-02-01,52000,18000,34.6
 \`\`\`
 
-**Σημειώσεις:**
+Σημειώσεις:
 - Οι τιμές είναι σε base units (π.χ. 50000 = €50K)
 - Το σύστημα θα μετατρέψει αυτόματα σε K format για display
 - Η ημερομηνία πρέπει να είναι σε ISO format (YYYY-MM-DD)
@@ -441,53 +441,53 @@ Date,Total Revenue,Attributed Revenue,Attribution Rate
     category: 'data-import',
     title: 'Εισαγωγή Campaigns',
     description: 'Πώς να φορτώσετε marketing campaigns (Google Ads & Meta)',
-    content: `**Υποστηριζόμενα κανάλια:**
+    content: `Υποστηριζόμενα κανάλια:
 - Google Ads
 - Meta (Facebook/Instagram)
 
-**Υποχρεωτικά πεδία:**
+Υποχρεωτικά πεδία:
 - Campaign Name: Όνομα καμπάνιας
 - Channel: Google Ads ή Meta (αναγνωρίζεται αυτόματα)
 - Amount Spent: Ποσό που δαπανήθηκε
 - Impressions: Αριθμός εμφανίσεων
 - Clicks: Αριθμός κλικ
 
-**Πιθανές Εκδοχές Ονομάτων Στηλών:**
+Πιθανές Εκδοχές Ονομάτων Στηλών:
 
-**Campaign Name:**
+Campaign Name:
 Campaign_Name, Campaign Name, campaign_name, Campaign, campaign, Name, name, Campaign_Name_, campaignname, Campaign-Name
 
-**Channel:**
+Channel:
 Channel, channel, Channel_Name, channel_name, Source, source, Platform, platform
 
-**Amount Spent:**
+Amount Spent:
 Amount_Spent_(EUR), Amount Spent (EUR), amount_spent_eur, Amount_Spent, amount_spent, Cost, cost, Spend, spend, Total_Cost, total_cost, Spent, spent
 
-**Impressions:**
+Impressions:
 Impressions, impressions, Impr., impr., Impr, impr, Imp, imp
 
-**Clicks:**
+Clicks:
 Clicks_(all), Clicks (all), clicks, Click, click, Clicks_All, clicks_all
 
-**CTR:**
+CTR:
 CTR_(all), CTR (all), ctr, Click_Through_Rate, click_through_rate, CTR_All, ctr_all
 
-**CPC:**
+CPC:
 CPC_(all), CPC (all), Avg._CPC, Avg. CPC, cpc, Cost_Per_Click, cost_per_click, Avg_CPC, avg_cpc, CPC_All, cpc_all
 
-**Conversions/Purchases:**
+Conversions/Purchases:
 Conversions, conversions, Purchases, purchases, Conv., conv.
 
-**Conversion Value:**
+Conversion Value:
 Conversion_Value, Conversion Value, conversion_value, Purchases_Conversion_Value, Purchases conversion value, Purchase_ROAS, Purchase ROAS
 
-**ROAS:**
+ROAS:
 ROAS, roas, Conv._Value_/_Cost, Conv. Value / Cost, Conv_Value_/_Cost
 
-**Period/Month:**
+Period/Month:
 Month, month, Period, period, Date_Range, date_range, Reporting_Starts, reporting starts, Reporting_Ends, reporting ends
 
-**Σημειώσεις:**
+Σημειώσεις:
 - Το σύστημα αναγνωρίζει αυτόματα το κανάλι από τις στήλες
 - Για Meta campaigns, χρησιμοποιείται "Purchase ROAS" αντί για "ROAS"
 - Αν λείπει το Campaign Name, χρησιμοποιείται το Period/Month ως όνομα`,
@@ -501,19 +501,19 @@ Month, month, Period, period, Date_Range, date_range, Reporting_Starts, reportin
     description: 'Πλήρης λίστα πιθανών εκδοχών ονομάτων για κάθε template',
     content: `Το σύστημα αναγνωρίζει αυτόματα διάφορες εκδοχές ονομάτων για κάθε πεδίο. Αυτό σημαίνει ότι δεν χρειάζεται να αλλάξετε τα ονόματα των στηλών σας - το σύστημα θα τα βρει αυτόματα.
 
-**Πώς λειτουργεί:**
+Πώς λειτουργεί:
 - Το σύστημα αναζητά case-insensitive matches
 - Υποστηρίζει underscores, spaces, και διάφορες μορφές
 - Υποστηρίζει ελληνικά και αγγλικά ονόματα
 - Αν δεν βρει ακριβή match, κάνει partial matching
 
-**Για κάθε template:**
-- **Products**: Δείτε "Εισαγωγή Προϊόντων" για όλες τις εκδοχές
-- **Campaigns**: Δείτε "Εισαγωγή Campaigns" για Google Ads & Meta
-- **Analytics**: Δείτε "Εισαγωγή Analytics Data" για revenue columns
-- **Segments**: Δείτε "Εισαγωγή RFM Segments" για segment columns
+Για κάθε template:
+- Products: Δείτε "Εισαγωγή Προϊόντων" για όλες τις εκδοχές
+- Campaigns: Δείτε "Εισαγωγή Campaigns" για Google Ads & Meta
+- Analytics: Δείτε "Εισαγωγή Analytics Data" για revenue columns
+- Segments: Δείτε "Εισαγωγή RFM Segments" για segment columns
 
-**Συμβουλές:**
+Συμβουλές:
 - Χρησιμοποιήστε τον πίνακα "Αντιστοίχιση Στηλών" παρακάτω για να δείτε όλες τις πιθανές εκδοχές
 - Αν μια στήλη δεν αναγνωρίζεται, ελέγξτε αν υπάρχει παρόμοιο όνομα στη λίστα
 - Μπορείτε να χρησιμοποιήσετε ελληνικά ή αγγλικά ονόματα`,
@@ -527,43 +527,43 @@ Month, month, Period, period, Date_Range, date_range, Reporting_Starts, reportin
     description: 'Πλήρης πίνακας με όλες τις πιθανές εκδοχές ονομάτων για κάθε πεδίο προϊόντων',
     content: `Ο παρακάτω πίνακας δείχνει όλες τις πιθανές εκδοχές ονομάτων που αναγνωρίζει το σύστημα για κάθε πεδίο προϊόντων.
 
-**SKU/ID:**
+SKU/ID:
 SKU_ID, SKU, sku_id, sku, ID, id, Product_ID, product_id, Item_ID, item_id, Item ID, item id, Code, code, Κωδικός, κωδικός, Barcode, barcode, EAN, ean
 
-**Product Name:**
+Product Name:
 Product_Name, Product Name, product_name, Name, name, Product, product, Title, title, Item, item, Item_Name, item_name, Description, description, Product_Title, product_title, Όνομα, όνομα, Προϊόν, προϊόν, Περιγραφή, περιγραφή
 
-**Category:**
+Category:
 Category, category, Product_Category, product_category, Group, group, Κατηγορία, κατηγορία, Type, type, Department, department, Προμηθευτής, προμηθευτής
 
-**Price:**
+Price:
 Sell_Price, Sell Price, sell_price, Price, price, Unit_Price, unit_price, Retail_Price, retail_price, MSRP, msrp, Τιμή, τιμή
 
-**Cost Price:**
+Cost Price:
 Cost_Price, Cost Price, cost_price, Cost, cost, Κόστος, κόστος
 
-**Stock Level:**
+Stock Level:
 Stock_On_Hand, Stock On Hand, stock_on_hand, Stock_Level, stock_level, Stock, stock, Quantity, quantity, Qty, qty, Inventory, inventory, On_Hand, on_hand, Units, units, Απόθεμα, απόθεμα, Ποσότητα, ποσότητα, Available_Stock, available_stock, Δυναμικό_Υπόλοιπο, δυναμικό_υπόλοιπο, Κίνηση, κίνηση
 
-**Date:**
+Date:
 First_Available_Date, First Available Date, first_available_date, First_Available, first_available, Available_Date, available_date, Date_Added, date_added, Created_Date, created_date, Creation_Date, creation_date, Inventory_Date, inventory_date, Data, data, Ημερομηνία, ημερομηνία, Ημ/νία, ημ/νία
 
-**Margin:**
+Margin:
 Gross_Margin_%, Gross Margin %, gross_margin_%, Margin_Percentage, margin_percentage, Margin_Pct, margin_pct, Margin, margin, Margin_%, margin_%, Gross_Margin, gross_margin, Profit_Margin, profit_margin
 
-**Stock Age:**
+Stock Age:
 Stock_Age_Days, Stock Age Days, stock_age_days, Age_Days, age_days, Days_In_Stock, days_in_stock, Stock_Age, stock_age, Age, age, MST_(ημέρες), mst_(ημέρες)
 
-**Revenue:**
+Revenue:
 Revenue_Period, Revenue Period, revenue_period, Revenue, revenue
 
-**Quantity Sold:**
+Quantity Sold:
 Qty_Sold_Period, Qty Sold Period, qty_sold_period, Qty_Sold, qty_sold, Quantity_Sold, quantity_sold
 
-**Priority:**
+Priority:
 Priority_Flag, Priority Flag, priority_flag, Priority_Tag, priority_tag, Priority, priority, Tag, tag, Label, label, Alerts, alerts, Κατάσταση, κατάσταση
 
-**Margin Tier:**
+Margin Tier:
 Margin_Tier, Margin Tier, margin_tier, Margin_Category, margin_category, Tier, tier`,
     tags: ['products', 'import', 'columns', 'mapping', 'table'],
     related: ['products-import', 'column-names-guide']
@@ -576,24 +576,24 @@ Margin_Tier, Margin Tier, margin_tier, Margin_Category, margin_category, Tier, t
     description: 'Πώς να ρυθμίσετε τους παράγοντες προτεραιοποίησης',
     content: `Το Commercial Strategy σας επιτρέπει να προσαρμόσετε πώς το σύστημα προτεραιοποιεί προϊόντα.
 
-**Διαθέσιμοι παράγοντες:**
-1. **Profitability** (💰): Margin και profit potential
-2. **Inventory** (📦): Stock levels και stock age
-3. **Strategic** (🎯): Priority tags και brand flags
-4. **Revenue** (📈): Historical revenue performance
-5. **Customer Fit** (👥): Affinity με RFM segments
+Διαθέσιμοι παράγοντες:
+1. Profitability (💰): Margin και profit potential
+2. Inventory (📦): Stock levels και stock age
+3. Strategic (🎯): Priority tags και brand flags
+4. Revenue (📈): Historical revenue performance
+5. Customer Fit (👥): Affinity με RFM segments
 
-**Πώς λειτουργεί:**
+Πώς λειτουργεί:
 - Κάθε παράγοντας έχει βάρος από 0% έως 100%
 - Το σύνολο πρέπει να είναι 100%
 - Το σύστημα υπολογίζει composite score για κάθε προϊόν
 - Προϊόντα με υψηλότερο score προτεραιοποιούνται
 
-**Preset Scenarios:**
-- **Profit Maximization**: Εστίαση σε margin
-- **Stock Clearance**: Εστίαση σε excess/dead stock
-- **Revenue Push**: Εστίαση σε volume
-- **Brand Launch**: Εστίαση σε strategic flags
+Preset Scenarios:
+- Profit Maximization: Εστίαση σε margin
+- Stock Clearance: Εστίαση σε excess/dead stock
+- Revenue Push: Εστίαση σε volume
+- Brand Launch: Εστίαση σε strategic flags
 
 Μπορείτε να αποθηκεύσετε custom scenarios για γρήγορη πρόσβαση.`,
     tags: ['strategy', 'weights', 'prioritization'],
@@ -617,33 +617,33 @@ Margin_Tier, Margin Tier, margin_tier, Margin_Category, margin_category, Tier, t
     category: 'strategy',
     title: 'Scenarios & Presets',
     description: 'Πώς να χρησιμοποιήσετε και να δημιουργήσετε scenarios',
-    content: `**Preset Scenarios:**
+    content: `Preset Scenarios:
 
-1. **Profit Maximization** (💰)
+1. Profit Maximization (💰)
    - Profitability: 50%
    - Strategic: 30%
    - Revenue: 20%
    - Ιδανικό για: Premium positioning, high-margin focus
 
-2. **Stock Clearance** (📦)
+2. Stock Clearance (📦)
    - Inventory: 60%
    - Revenue: 30%
    - Customer Fit: 10%
    - Ιδανικό για: Excess/dead stock reduction
 
-3. **Revenue Push** (📈)
+3. Revenue Push (📈)
    - Revenue: 50%
    - Customer Fit: 30%
    - Profitability: 20%
    - Ιδανικό για: Volume growth, sales targets
 
-4. **Brand Launch** (🚀)
+4. Brand Launch (🚀)
    - Strategic: 50%
    - Customer Fit: 30%
    - Revenue: 20%
    - Ιδανικό για: New product launches
 
-**Custom Scenarios:**
+Custom Scenarios:
 Μπορείτε να δημιουργήσετε και να αποθηκεύσετε τα δικά σας scenarios με custom weights.`,
     tags: ['scenarios', 'presets', 'strategy'],
     related: ['strategy-weights', 'approval-workflow']
@@ -656,26 +656,26 @@ Margin_Tier, Margin Tier, margin_tier, Margin_Category, margin_category, Tier, t
     description: 'Κατανόηση του RFM segmentation model',
     content: `Το RFM (Recency, Frequency, Monetary) είναι ένα μοντέλο segmentation που κατηγοριοποιεί πελάτες βάσει:
 
-**R - Recency**: Πόσο πρόσφατα αγόρασε ο πελάτης
+R - Recency: Πόσο πρόσφατα αγόρασε ο πελάτης
 - 5: Πολύ πρόσφατα (π.χ. <30 ημέρες)
 - 1: Πολύ παλιά (π.χ. >180 ημέρες)
 
-**F - Frequency**: Πόσο συχνά αγοράζει
+F - Frequency: Πόσο συχνά αγοράζει
 - 5: Πολύ συχνά (π.χ. >10 orders)
 - 1: Σπάνια (π.χ. 1 order)
 
-**M - Monetary**: Πόσο ξοδεύει
+M - Monetary: Πόσο ξοδεύει
 - 5: Πολύ υψηλό (π.χ. >€500)
 - 1: Πολύ χαμηλό (π.χ. <€50)
 
-**Common Segments:**
-- **Champions** (5-5-5): Best customers, high value
-- **Loyal** (4-4-4): Regular customers, good value
-- **Potential** (3-3-3): New or occasional customers
-- **At Risk** (2-2-2): Declining engagement
-- **Lost** (1-1-1): Inactive customers
+Common Segments:
+- Champions (5-5-5): Best customers, high value
+- Loyal (4-4-4): Regular customers, good value
+- Potential (3-3-3): New or occasional customers
+- At Risk (2-2-2): Declining engagement
+- Lost (1-1-1): Inactive customers
 
-**Μέση RFM Score:**
+Μέση RFM Score:
 Υπολογίζεται ως μέσος όρος των R, F, M scores για όλα τα segments.`,
     tags: ['rfm', 'segmentation', 'customers'],
     related: ['understanding-segments', 'segment-migration'],
@@ -695,27 +695,27 @@ Margin_Tier, Margin Tier, margin_tier, Margin_Category, margin_category, Tier, t
     category: 'rfm',
     title: 'Κατανόηση των Segments',
     description: 'Τι σημαίνει κάθε RFM segment',
-    content: `**Champions (5-5-5)**
+    content: `Champions (5-5-5)
 - Best customers, high value και recent
 - Strategy: Exclusive offers, early access, loyalty rewards
 - Revenue share: Συνήθως 30-50% του total revenue
 
-**Loyal (4-4-4)**
+Loyal (4-4-4)
 - Regular customers με consistent purchases
 - Strategy: Retention campaigns, cross-sell opportunities
 - Revenue share: Συνήθως 20-30%
 
-**Potential (3-3-3)**
+Potential (3-3-3)
 - New ή occasional customers με potential
 - Strategy: Acquisition campaigns, engagement boosters
 - Revenue share: Συνήθως 10-20%
 
-**At Risk (2-2-2)**
+At Risk (2-2-2)
 - Declining engagement, risk of churn
 - Strategy: Win-back campaigns, special offers
 - Revenue share: Συνήθως 5-15%
 
-**Lost (1-1-1)**
+Lost (1-1-1)
 - Inactive customers
 - Strategy: Reactivation campaigns (low priority)
 - Revenue share: Συνήθως <5%`,
@@ -730,14 +730,14 @@ Margin_Tier, Margin Tier, margin_tier, Margin_Category, margin_category, Tier, t
     description: 'Κατανόηση του inventory και product management',
     content: `Το Product Intelligence section σας δίνει πλήρη εικόνα για:
 
-**Inventory Summary:**
-- **Total SKUs**: Συνολικός αριθμός προϊόντων
-- **Healthy Stock**: Προϊόντα με διάρκεια αποθέματος μεταξύ TOD/2 και TOD×2
-- **Excess Stock**: Προϊόντα με διάρκεια αποθέματος > TOD×2 (πλεόνασμα)
-- **Low Stock**: Προϊόντα με διάρκεια αποθέματος ≤ TOD/2 (κίνδυνος εξάντλησης)
-- **Dead Stock**: Προϊόντα χωρίς πωλήσεις και με απόθεμα (TOD = Target Days of Stock, default 60 ημέρες)
+Inventory Summary:
+- Total SKUs: Συνολικός αριθμός προϊόντων
+- Healthy Stock: Προϊόντα με διάρκεια αποθέματος μεταξύ TOD/2 και TOD×2
+- Excess Stock: Προϊόντα με διάρκεια αποθέματος > TOD×2 (πλεόνασμα)
+- Low Stock: Προϊόντα με διάρκεια αποθέματος ≤ TOD/2 (κίνδυνος εξάντλησης)
+- Dead Stock: Προϊόντα χωρίς πωλήσεις και με απόθεμα (TOD = Target Days of Stock, default 60 ημέρες)
 
-**Product Details:**
+Product Details:
 Για κάθε προϊόν βλέπετε:
 - Stock level vs capacity
 - Stock age (days)
@@ -746,7 +746,7 @@ Margin_Tier, Margin Tier, margin_tier, Margin_Category, margin_category, Tier, t
 - Priority tag
 - Composite score (αν έχει εφαρμοστεί strategy)
 
-**Actions:**
+Actions:
 - Filter και sort προϊόντα
 - Export prioritized feed
 - View detailed product information`,
@@ -763,21 +763,21 @@ Margin_Tier, Margin Tier, margin_tier, Margin_Category, margin_category, Tier, t
     category: 'products',
     title: 'Stock Clearance Strategy',
     description: 'Πώς να διαχειριστείτε excess και dead stock',
-    content: `**Stock Clearance** είναι το revenue που προέκυψε από την πώληση υπερπλήρων ή παλαιών αποθεμάτων.
+    content: `Stock Clearance είναι το revenue που προέκυψε από την πώληση υπερπλήρων ή παλαιών αποθεμάτων.
 
-**Πώς λειτουργεί:**
+Πώς λειτουργεί:
 1. Το σύστημα εντοπίζει excess stock (>TOD×2 ημέρες αποθέματος) και dead stock (μηδενικές πωλήσεις)
 2. Προτείνεται να προωθηθούν σε specific segments (π.χ. At Risk, Potential)
 3. Δημιουργούνται targeted campaigns
 4. Το revenue από αυτές τις πωλήσεις trackάρεται ως Stock Clearance
 
-**Best Practices:**
+Best Practices:
 - Target At Risk και Potential segments για clearance
 - Χρησιμοποιήστε urgency messaging
 - Bundle deals για dead stock
 - Flash sales για excess stock
 
-**Cost Savings:**
+Cost Savings:
 Εκτός από revenue, το clearance εξοικονομεί:
 - Warehousing costs
 - Storage fees
@@ -793,26 +793,26 @@ Margin_Tier, Margin Tier, margin_tier, Margin_Category, margin_category, Tier, t
     description: 'Πώς να χρησιμοποιήσετε τις channel recommendations',
     content: `Το Channel Activation σας δίνει AI-powered recommendations για:
 
-**Channel Mix Optimization:**
+Channel Mix Optimization:
 - Προτάσεις για budget allocation ανά channel
 - Expected ROAS για κάθε channel
 - Target segments για κάθε channel
 - Priority products για promotion
 
-**Channels:**
+Channels:
 - Google Shopping
 - Meta Ads (Facebook/Instagram)
 - Email Marketing
 - SMS Campaigns
 - Display/Remarketing
 
-**Πώς λειτουργεί:**
+Πώς λειτουργεί:
 1. Το σύστημα αναλύει τα products, segments, και strategy
 2. Προτείνει optimal channel mix
 3. Δίνει budget allocation recommendations
 4. Προτείνει target segments και products
 
-**Budget Allocation:**
+Budget Allocation:
 - Total budget κατανέμεται ανά channel
 - Κάθε channel έχει expected ROAS
 - Προτείνονται specific segments και products`,
@@ -832,24 +832,24 @@ Margin_Tier, Margin Tier, margin_tier, Margin_Category, margin_category, Tier, t
     description: 'Πώς να κατανοήσετε το ROI attribution',
     content: `Το ROI Attribution μετράει την επιπτώση του Performance+ στο business σας.
 
-**Κύρια Metrics:**
-- **Total Revenue**: Συνολικό εισόδημα
-- **P+ Attributed**: Revenue που αποδίδεται στο Performance+
-- **Attribution Rate**: Ποσοστό του total revenue που είναι attributed
-- **ROI Multiplier**: Πόσες φορές επιστρέφει το investment (π.χ. 64x)
+Κύρια Metrics:
+- Total Revenue: Συνολικό εισόδημα
+- P+ Attributed: Revenue που αποδίδεται στο Performance+
+- Attribution Rate: Ποσοστό του total revenue που είναι attributed
+- ROI Multiplier: Πόσες φορές επιστρέφει το investment (π.χ. 64x)
 
-**Attribution Methodology:**
-1. **Segment Campaign Attribution**: Revenue από campaigns που στοχεύουν RFM segments
-2. **Product Prioritization**: Revenue από prioritized products
-3. **Stock Clearance**: Revenue από excess/dead stock sales
-4. **Channel Optimization**: Incremental ROAS improvement
+Attribution Methodology:
+1. Segment Campaign Attribution: Revenue από campaigns που στοχεύουν RFM segments
+2. Product Prioritization: Revenue από prioritized products
+3. Stock Clearance: Revenue από excess/dead stock sales
+4. Channel Optimization: Incremental ROAS improvement
 
-**Breakdown:**
+Breakdown:
 - Segment Activation: Revenue από segment-specific campaigns
 - Inventory Optimization: Stock clearance revenue
 - Channel Optimization: ROAS improvements
 
-**Cost Savings:**
+Cost Savings:
 Εκτός από revenue, μετράμε:
 - Warehousing costs avoided
 - Google CSS savings
@@ -874,27 +874,27 @@ Margin_Tier, Margin Tier, margin_tier, Margin_Category, margin_category, Tier, t
     category: 'dashboard',
     title: 'Κατανόηση των KPIs',
     description: 'Τι σημαίνει κάθε KPI στο Dashboard',
-    content: `**Total Revenue (€XK)**
+    content: `Total Revenue (€XK)
 - Συνολικό εισόδημα από όλες τις πωλήσεις
 - Δείχνει "X% attributed" για το ποσοστό που αποδίδεται στο Performance+
 
-**Products**
+Products
 - Συνολικός αριθμός προϊόντων στο σύστημα
 - Clickable για να δείτε Product Intelligence
 
-**Segments**
+Segments
 - Αριθμός RFM segments
 - Δείχνει "X avg score" για μέσο RFM score
 
-**Campaigns**
+Campaigns
 - Αριθμός ενεργών marketing campaigns
 - Clickable για Channel Activation
 
-**Stock Clearance (€XK)**
+Stock Clearance (€XK)
 - Revenue από πώληση excess/dead stock
 - Tooltip: "Το συνολικό ποσό εσόδων που προέκυψε από την πώληση υπερπλήρων ή παλαιών αποθεμάτων"
 
-**Cost Savings (€XK)**
+Cost Savings (€XK)
 - Χρήματα που εξοικονομήθηκαν
 - Tooltip: "Το συνολικό ποσό χρημάτων που εξοικονομήθηκε μέσω βελτιώσεων λειτουργικής αποδοτικότητας"`,
     tags: ['kpis', 'dashboard', 'metrics'],
@@ -906,26 +906,26 @@ Margin_Tier, Margin Tier, margin_tier, Margin_Category, margin_category, Tier, t
     category: 'troubleshooting',
     title: 'Συχνά Προβλήματα',
     description: 'Λύσεις σε κοινά προβλήματα',
-    content: `**Δεδομένα δεν εμφανίζονται:**
+    content: `Δεδομένα δεν εμφανίζονται:
 - Ελέγξτε ότι έχετε κάνει import δεδομένα
 - Ελέγξτε ότι τα δεδομένα είναι για το σωστό brand
 - Refresh τη σελίδα
 
-**Validation errors στο import:**
+Validation errors στο import:
 - Χρησιμοποιήστε το template για σωστό format
 - Ελέγξτε ότι οι ημερομηνίες είναι YYYY-MM-DD
 - Ελέγξτε ότι τα required fields είναι συμπληρωμένα
 
-**Charts δεν εμφανίζουν data:**
+Charts δεν εμφανίζουν data:
 - Βεβαιωθείτε ότι έχετε importάρει analytics data
 - Ελέγξτε ότι τα dates είναι σωστά formatted
 - Μπορεί να χρειάζεται Firestore index (θα εμφανιστεί error message)
 
-**RFM Score shows 0:**
+RFM Score shows 0:
 - Ελέγξτε ότι τα segments έχουν RFM Score field
 - Αν λείπει, το σύστημα θα προσπαθήσει να το υπολογίσει από το name
 
-**Currency symbols:**
+Currency symbols:
 - Όλα τα amounts εμφανίζονται σε € (Euro)
 - Icons χρησιμοποιούν Euro symbol`,
     tags: ['troubleshooting', 'issues', 'help'],
@@ -971,13 +971,13 @@ Margin_Tier, Margin Tier, margin_tier, Margin_Category, margin_category, Tier, t
 Flat list εργασιών με status, τμήμα, assignee και inline ολοκλήρωση.
 
 ## Τύποι Ενεργειών
-- **Νέα Απόφαση**: Δημιουργεί ενεργή απόφαση και ειδοποιεί τα tagged τμήματα
-- **Πρόταση**: Δημιουργεί πρόταση (status: proposal) που περιμένει έγκριση
-- **Εργασία**: Ανατίθεται σε τμήμα/άτομο και παρακολουθείται
+- Νέα Απόφαση: Δημιουργεί ενεργή απόφαση και ειδοποιεί τα tagged τμήματα
+- Πρόταση: Δημιουργεί πρόταση (status: proposal) που περιμένει έγκριση
+- Εργασία: Ανατίθεται σε τμήμα/άτομο και παρακολουθείται
 
 ## Ειδοποιήσεις
-- **Bell (in-app)**: Real-time ειδοποιήσεις μέσα στην εφαρμογή
-- **Email**: Αυτόματη αποστολή email στα tagged τμήματα
+- Bell (in-app): Real-time ειδοποιήσεις μέσα στην εφαρμογή
+- Email: Αυτόματη αποστολή email στα tagged τμήματα
 
 ## Ροή Ενεργειών (Activity Feed)
 Side drawer που δείχνει χρονολογικά όλες τις ενέργειες: δημιουργία, αλλαγή status, σχόλια.`,
@@ -1022,15 +1022,15 @@ Side drawer που δείχνει χρονολογικά όλες τις ενέ�
 
 ### 3. Briefing Drawer
 Πατώντας "Αποστολή Briefing" ανοίγει bottom sheet:
-- **Τίτλος** (pre-filled με το όνομα στρατηγικής)
-- **Σημείωση** (textarea για πρόσθετες οδηγίες)
-- **Τμήματα** (department chips — θυμάται τις τελευταίες επιλογές)
+- Τίτλος (pre-filled με το όνομα στρατηγικής)
+- Σημείωση (textarea για πρόσθετες οδηγίες)
+- Τμήματα (department chips — θυμάται τις τελευταίες επιλογές)
 
 ### 4. Αποστολή
 Δημιουργεί:
-- **Απόφαση** στο Briefing Board (status: active, priority: high)
-- **Bell notification** στα tagged τμήματα
-- **Email** ειδοποίηση
+- Απόφαση στο Briefing Board (status: active, priority: high)
+- Bell notification στα tagged τμήματα
+- Email ειδοποίηση
 
 ## Τμήματα
 Τα διαθέσιμα τμήματα: Εμπορική Δ/νση, Marketing, Procurement, Agency, Διοίκηση.
@@ -1060,39 +1060,39 @@ Side drawer που δείχνει χρονολογικά όλες τις ενέ�
 ## Κατηγορίες Triggers
 
 ### Απόθεμα & Προϊόντα (Growth Plan)
-- **Dead stock** — SKUs χωρίς πωλήσεις πάνω από X%
-- **Excess stock** — Αξία πλεονάσματος πάνω από X€
-- **Χαμηλό απόθεμα (high-margin)** — Κρίσιμα χαμηλό stock σε κερδοφόρα SKUs
-- **Νέα προϊόντα** — Ειδοποίηση εισαγωγής νέων SKUs
-- **Μεγέθυνση αποθέματος** — Stock level πάνω από threshold
+- Dead stock — SKUs χωρίς πωλήσεις πάνω από X%
+- Excess stock — Αξία πλεονάσματος πάνω από X€
+- Χαμηλό απόθεμα (high-margin) — Κρίσιμα χαμηλό stock σε κερδοφόρα SKUs
+- Νέα προϊόντα — Ειδοποίηση εισαγωγής νέων SKUs
+- Μεγέθυνση αποθέματος — Stock level πάνω από threshold
 
 ### Καμπάνιες & Απόδοση (Growth Plan)
-- **Υψηλή απόδοση** — ROAS πάνω από Xx
-- **Αδυναμία campaign** — ROAS κάτω από Xx
+- Υψηλή απόδοση — ROAS πάνω από Xx
+- Αδυναμία campaign — ROAS κάτω από Xx
 
 ### Πελατολόγιο & Segments (Growth Plan)
-- **Churn risk** — At-risk segment πάνω από X%
-- **VIP ανάπτυξη** — Champions segment αυξάνεται
+- Churn risk — At-risk segment πάνω από X%
+- VIP ανάπτυξη — Champions segment αυξάνεται
 
 ### Εποχικότητα (Growth Plan)
-- **Εποχική περίοδος** — X ημέρες πριν από Black Friday, Χριστούγεννα κ.α.
+- Εποχική περίοδος — X ημέρες πριν από Black Friday, Χριστούγεννα κ.α.
 
 ### Ανταγωνισμός & Τιμές (Growth Plan)
-- **Τιμή πάνω από αγορά** — SKUs ακριβότερα κατά >X% από τη μέση αγοράς (Google Merchant Center)
-- **Νέες ads ανταγωνιστών** — Εντοπισμός >X νέων διαφημίσεων ανταγωνιστών (Meta Ad Library)
+- Τιμή πάνω από αγορά — SKUs ακριβότερα κατά >X% από τη μέση αγοράς (Google Merchant Center)
+- Νέες ads ανταγωνιστών — Εντοπισμός >X νέων διαφημίσεων ανταγωνιστών (Meta Ad Library)
 
 ### Procurement (Enterprise only)
-- **Χαμηλή επάρκεια** — Ημέρες κάλυψης κάτω από threshold
-- **Πλεόνασμα** — Surplus αξία πάνω από X€
-- **Νέο brand** — Νέο brand στα procurement data
-- **Τιμολογιακή απόκλιση** — Τιμή vs πολιτική πάνω από X%
-- **Καθυστέρηση προμηθευτή** — Χρόνος παράδοσης πέρα από αναμενόμενο
+- Χαμηλή επάρκεια — Ημέρες κάλυψης κάτω από threshold
+- Πλεόνασμα — Surplus αξία πάνω από X€
+- Νέο brand — Νέο brand στα procurement data
+- Τιμολογιακή απόκλιση — Τιμή vs πολιτική πάνω από X%
+- Καθυστέρηση προμηθευτή — Χρόνος παράδοσης πέρα από αναμενόμενο
 
 ## Ρυθμίσεις ανά Trigger
-- **Toggle** on/off
-- **Κατώφλι** (threshold) — αριθμητική τιμή ενεργοποίησης
-- **Έλεγχος κάθε** — πόσες ημέρες μεσολαβούν μεταξύ ελέγχων
-- **Auto-briefing** — αυτόματη δημιουργία απόφασης στο Συντονισμό
+- Toggle on/off
+- Κατώφλι (threshold) — αριθμητική τιμή ενεργοποίησης
+- Έλεγχος κάθε — πόσες ημέρες μεσολαβούν μεταξύ ελέγχων
+- Auto-briefing — αυτόματη δημιουργία απόφασης στο Συντονισμό
 
 ## Πότε τρέχουν
 Οι αυτοματισμοί αξιολογούνται κατά τη φόρτωση του Dashboard. Αν ένα trigger «πυροδοτηθεί», δημιουργείται alert και (αν είναι ενεργό το auto-briefing) απόφαση στο Briefing Board.`,
@@ -1137,24 +1137,24 @@ Side drawer που δείχνει χρονολογικά όλες τις ενέ�
 Συνολικό ποσό που δαπανήθηκε σε διαφημίσεις. Περιλαμβάνει Google Ads και Meta Ads spend. Εμφανίζει CPA (Cost Per Acquisition) ως subtitle.
 
 ## ROI (Return on Investment)
-Υπολογισμός: **(Campaign Revenue − Ad Spend) ÷ Ad Spend × 100**
+Υπολογισμός: (Campaign Revenue − Ad Spend) ÷ Ad Spend × 100
 
 Παράδειγμα: Αν ξοδέψατε €1.000 και κερδίσατε €4.000, ROI = +300%.
 
 ## ROAS (Return on Ad Spend)
-Υπολογισμός: **Campaign Revenue ÷ Ad Spend**
+Υπολογισμός: Campaign Revenue ÷ Ad Spend
 
 Παράδειγμα: ROAS 4.0x = Κάθε €1 που ξοδεύετε σε διαφήμιση φέρνει €4 σε πωλήσεις.
 
 Σημαντική διαφορά: Ο ROAS μετράει μόνο τα έσοδα campaigns, ενώ ο Blended ROAS περιλαμβάνει και τα οργανικά.
 
 ## Blended ROAS
-Υπολογισμός: **Συνολικά Έσοδα (οργανικά + paid) ÷ Ad Spend**
+Υπολογισμός: Συνολικά Έσοδα (οργανικά + paid) ÷ Ad Spend
 
 Γιατί είναι σημαντικός: Η διαφήμιση επηρεάζει και τις οργανικές πωλήσεις (brand awareness, remarketing effect). Ο Blended ROAS δίνει μια πιο ρεαλιστική εικόνα της συνολικής απόδοσης.
 
 ## Μέσο Καλάθι — AOV (Average Order Value)
-Υπολογισμός: **Αξία Μετατροπών ÷ Αριθμός Μετατροπών**
+Υπολογισμός: Αξία Μετατροπών ÷ Αριθμός Μετατροπών
 
 Τι δείχνει:
 - Αν αυξάνεται → τα upsells/cross-sells λειτουργούν
@@ -1197,14 +1197,14 @@ Side drawer που δείχνει χρονολογικά όλες τις ενέ�
 - Customer segments (π.χ. Champions, At Risk)
 
 ### 3. Τι παράγεται
-- **Θεματικές κατευθύνσεις ανά κανάλι**: Blog, Social Media, Email, κ.λπ. — με θέμα, reasoning, target segments
-- **Παραδείγματα ενεργειών**: Συγκεκριμένα content pieces με τίτλο, περιγραφή, κανάλι, priority
-- **Brief για ομάδα marketing**: Έτοιμο κείμενο για αποστολή στην ομάδα ή το agency
+- Θεματικές κατευθύνσεις ανά κανάλι: Blog, Social Media, Email, κ.λπ. — με θέμα, reasoning, target segments
+- Παραδείγματα ενεργειών: Συγκεκριμένα content pieces με τίτλο, περιγραφή, κανάλι, priority
+- Brief για ομάδα marketing: Έτοιμο κείμενο για αποστολή στην ομάδα ή το agency
 
 ## Αξιοποίηση
-- **Αντιγραφή brief**: Αποστέλλεται στην ομάδα marketing ή στο agency
-- **Σύνδεση με Briefing Board**: Μέσω αποστολής briefing από τη στρατηγική
-- **Εναρμόνιση content**: Το περιεχόμενο ευθυγραμμίζεται αυτόματα με τις εμπορικές προτεραιότητες`,
+- Αντιγραφή brief: Αποστέλλεται στην ομάδα marketing ή στο agency
+- Σύνδεση με Briefing Board: Μέσω αποστολής briefing από τη στρατηγική
+- Εναρμόνιση content: Το περιεχόμενο ευθυγραμμίζεται αυτόματα με τις εμπορικές προτεραιότητες`,
     tags: ['content', 'strategy', 'ai', 'marketing', 'blog', 'social media', 'περιεχόμενο'],
     related: ['strategy-weights', 'channel-activation'],
     steps: [
@@ -1228,23 +1228,23 @@ Side drawer που δείχνει χρονολογικά όλες τις ενέ�
 
 ## Performance+ (Growth Plan)
 Η βασική έκδοση για e-commerce SMBs:
-- **Dashboard** — KPIs, revenue chart, AI insights
-- **Commercial Strategy** — 7 εμπορικά σενάρια, composite scoring
-- **RFM Analysis** — Customer segmentation
-- **Product Intelligence** — Stock health, inventory analytics
-- **Campaigns** — Google Ads & Meta tracking, 3 χρόνια ιστορικό
-- **Content Strategy** — AI-generated content directions
-- **ROI Attribution** — Channel performance, ROAS, ROI
-- **Συντονισμός Τμημάτων** — Briefing Board, αποφάσεις, εργασίες
-- **Αυτοματισμοί** — 10 smart triggers (Απόθεμα, Καμπάνιες, Πελατολόγιο, Εποχικότητα)
-- **AI Insights** — Πρακτικές συστάσεις βασισμένες στα δεδομένα
+- Dashboard — KPIs, revenue chart, AI insights
+- Commercial Strategy — 7 εμπορικά σενάρια, composite scoring
+- RFM Analysis — Customer segmentation
+- Product Intelligence — Stock health, inventory analytics
+- Campaigns — Google Ads & Meta tracking, 3 χρόνια ιστορικό
+- Content Strategy — AI-generated content directions
+- ROI Attribution — Channel performance, ROAS, ROI
+- Συντονισμός Τμημάτων — Briefing Board, αποφάσεις, εργασίες
+- Αυτοματισμοί — 10 smart triggers (Απόθεμα, Καμπάνιες, Πελατολόγιο, Εποχικότητα)
+- AI Insights — Πρακτικές συστάσεις βασισμένες στα δεδομένα
 
 ## Performance+ Enterprise
-Όλα τα παραπάνω **+**:
-- **Procurement module** — Διαχείριση αποθέματος ERP, κοστολόγηση, αξιολόγηση ειδών, τιμολογιακή πολιτική, απολογιστικό, στατιστικά
-- **Enterprise KPIs** — ERP SKUs, ημέρες επάρκειας, συνολικές πωλήσεις στο Product Intelligence
-- **5 extra triggers** — Procurement-specific: χαμηλή επάρκεια, πλεόνασμα, νέο brand, τιμολογιακή απόκλιση, καθυστέρηση προμηθευτή
-- **ERP data integration** — Import δεδομένων από ERP/procurement systems
+Όλα τα παραπάνω +:
+- Procurement module — Διαχείριση αποθέματος ERP, κοστολόγηση, αξιολόγηση ειδών, τιμολογιακή πολιτική, απολογιστικό, στατιστικά
+- Enterprise KPIs — ERP SKUs, ημέρες επάρκειας, συνολικές πωλήσεις στο Product Intelligence
+- 5 extra triggers — Procurement-specific: χαμηλή επάρκεια, πλεόνασμα, νέο brand, τιμολογιακή απόκλιση, καθυστέρηση προμηθευτή
+- ERP data integration — Import δεδομένων από ERP/procurement systems
 
 ## Πώς αλλάζει
 Η έκδοση ορίζεται στο brand profile (Firestore). Μεταβίβαση σε Enterprise γίνεται κατόπιν επικοινωνίας.`,
@@ -1270,20 +1270,20 @@ Side drawer που δείχνει χρονολογικά όλες τις ενέ�
     content: `# Price Benchmarking
 
 ## Τι είναι
-Χρησιμοποιεί το **Google Merchant Center** (Content API — PriceCompetitivenessProductView) για να ανακτήσει τη μέση τιμή αγοράς ανά GTIN/SKU.
+Χρησιμοποιεί το Google Merchant Center (Content API — PriceCompetitivenessProductView) για να ανακτήσει τη μέση τιμή αγοράς ανά GTIN/SKU.
 
 ## Πώς λειτουργεί
-1. Συνδέστε τον λογαριασμό Merchant Center μέσω **Data Import → Connectors**
+1. Συνδέστε τον λογαριασμό Merchant Center μέσω Data Import → Connectors
 2. Πατήστε "Sync τώρα" για εισαγωγή benchmarks
-3. Στο **Product Intelligence** εμφανίζεται η στήλη **vs Market** (ποσοστιαία απόκλιση)
+3. Στο Product Intelligence εμφανίζεται η στήλη vs Market (ποσοστιαία απόκλιση)
 
 ## Τι βλέπετε
-- **Πράσινο** — η τιμή σας είναι χαμηλότερη από την αγορά
-- **Κόκκινο** — η τιμή σας είναι υψηλότερη
+- Πράσινο — η τιμή σας είναι χαμηλότερη από την αγορά
+- Κόκκινο — η τιμή σας είναι υψηλότερη
 - Summary strip: Σύνολο SKU με benchmark, πόσα πάνω/κάτω, μέση απόκλιση
 
 ## Automation trigger
-Ενεργοποιήστε τον trigger **"Τιμή πάνω από αγορά"** στις Ρυθμίσεις Αυτοματισμών για να ειδοποιείστε αυτόματα.`,
+Ενεργοποιήστε τον trigger "Τιμή πάνω από αγορά" στις Ρυθμίσεις Αυτοματισμών για να ειδοποιείστε αυτόματα.`,
     tags: ['price', 'benchmark', 'merchant center', 'gmc', 'vs market', 'sku'],
     related: ['automation-triggers', 'competitor-monitoring'],
     faq: [
@@ -1305,20 +1305,20 @@ Side drawer που δείχνει χρονολογικά όλες τις ενέ�
     content: `# Competitor Monitoring
 
 ## Τι είναι
-Χρησιμοποιεί το **Meta Ad Library API** για να εντοπίσει ενεργές και ιστορικές διαφημίσεις ανταγωνιστών στα Meta (Facebook/Instagram).
+Χρησιμοποιεί το Meta Ad Library API για να εντοπίσει ενεργές και ιστορικές διαφημίσεις ανταγωνιστών στα Meta (Facebook/Instagram).
 
 ## Πώς λειτουργεί
-1. Μεταβείτε στο **Competitive Intel** από το μενού
+1. Μεταβείτε στο Competitive Intel από το μενού
 2. Προσθέστε ανταγωνιστές (Facebook Page ID + όνομα)
 3. Πατήστε "Scan τώρα" για εισαγωγή δεδομένων
 
 ## Τι βλέπετε
-- **KPIs**: Αριθμός ανταγωνιστών, ενεργές ads, σύνολο ads, τελευταίο scan
-- **Λίστα ads**: Κείμενο ad, ημερομηνίες, πλατφόρμες, ημέρες λειτουργίας, κατάσταση
-- **Φίλτρα**: Αναζήτηση ανά ανταγωνιστή ή κείμενο
+- KPIs: Αριθμός ανταγωνιστών, ενεργές ads, σύνολο ads, τελευταίο scan
+- Λίστα ads: Κείμενο ad, ημερομηνίες, πλατφόρμες, ημέρες λειτουργίας, κατάσταση
+- Φίλτρα: Αναζήτηση ανά ανταγωνιστή ή κείμενο
 
 ## Automation trigger
-Ενεργοποιήστε τον trigger **"Νέες ads ανταγωνιστών"** για αυτόματη ειδοποίηση όταν εντοπίζονται νέες διαφημίσεις.
+Ενεργοποιήστε τον trigger "Νέες ads ανταγωνιστών" για αυτόματη ειδοποίηση όταν εντοπίζονται νέες διαφημίσεις.
 
 ## Πώς βρίσκω το Page ID;
 - Μεταβείτε στη σελίδα του ανταγωνιστή στο Facebook

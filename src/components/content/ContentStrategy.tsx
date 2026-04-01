@@ -16,7 +16,7 @@ import {
   FileText,
   Send,
 } from 'lucide-react';
-import { Card, Badge, Spinner } from '../common';
+import { Card, Badge, Spinner, FormattedProse, toPlainProseText } from '../common';
 // Data is now read from activeStrategy.contentSuggestions (persisted on strategy save)
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import { useBrand } from '../../hooks/useBrand';
@@ -54,7 +54,7 @@ export function ContentStrategy() {
 
   const handleCopyBrief = () => {
     if (!brief) return;
-    navigator.clipboard.writeText(brief).then(() => {
+    navigator.clipboard.writeText(toPlainProseText(brief)).then(() => {
       setBriefCopied(true);
       setTimeout(() => setBriefCopied(false), 2000);
     });
@@ -107,7 +107,7 @@ export function ContentStrategy() {
       lines.push('BRIEF ΓΙΑ ΟΜΑΔΑ MARKETING');
       lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       lines.push('');
-      lines.push(brief);
+      lines.push(toPlainProseText(brief));
     }
 
     lines.push('');
@@ -320,30 +320,7 @@ export function ContentStrategy() {
           </div>
 
           <div className="p-5 bg-gradient-to-br from-[#FAFAFA] to-white border border-[#E5E5E5] rounded-xl">
-            {(() => {
-              const paragraphs = brief.split('\n').filter((l: string) => l.trim());
-              return (
-                <div className="space-y-3">
-                  {paragraphs.map((para: string, pi: number) => {
-                    const isBullet = para.trim().startsWith('•') || para.trim().startsWith('-') || para.trim().startsWith('*');
-                    if (isBullet) {
-                      const text = para.trim().replace(/^[•\-*]\s*/, '');
-                      return (
-                        <div key={pi} className="flex items-start gap-2 ml-1">
-                          <span className="mt-2 w-1.5 h-1.5 rounded-full bg-[var(--nts-accent)] flex-shrink-0" />
-                          <p className="text-sm text-[#4A4A4A] leading-relaxed">{text}</p>
-                        </div>
-                      );
-                    }
-                    const isHeading = para.length < 60 && (para.endsWith(':') || para.toUpperCase() === para);
-                    if (isHeading) {
-                      return <p key={pi} className="text-xs font-bold uppercase tracking-wider text-[#9CA3AF] mt-2">{para}</p>;
-                    }
-                    return <p key={pi} className="text-sm text-[#1A1A1A] leading-relaxed">{para}</p>;
-                  })}
-                </div>
-              );
-            })()}
+            <FormattedProse content={brief} variant="default" />
           </div>
         </Card>
       )}

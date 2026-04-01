@@ -491,7 +491,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
       </div>
 
       {/* Automation Alerts */}
-      <AlertsBanner filterGroup="campaigns" maxAlerts={3} />
+      <AlertsBanner filterGroup="campaigns" maxAlerts={3} onNavigate={onSectionChange} />
 
       {/* Tabs */}
       <div className="flex gap-1 bg-[#F5F5F5] p-1 rounded-lg w-fit">
