@@ -1,10 +1,18 @@
 {
-  "version": "0.264.0",
-  "previousVersion": "0.263.0",
-  "commitHash": "5a15aa1",
+  "version": "0.265.0",
+  "previousVersion": "0.264.0",
+  "commitHash": "c5e557a",
   "branch": "main",
-  "buildDate": "2026-04-01T14:33:09.420Z",
+  "buildDate": "2026-04-01T16:18:22.084Z",
   "commits": [
+    {
+      "hash": "c5e557a",
+      "message": "chore: ignore Cloud Functions env files except .env.example; stop tracking project env"
+    },
+    {
+      "hash": "a2b2c7d",
+      "message": "feat: GMC report parsing, connectors & import jobs, RFM behavioral/predictive, auth, coordination, interest lead"
+    },
     {
       "hash": "5a15aa1",
       "message": "chore: buildInfo after landing deploy build"
@@ -56,17 +64,11 @@
     {
       "hash": "5753685",
       "message": "fix: auto-generate AI channel recommendations in Channel Activation when missing"
-    },
-    {
-      "hash": "a75fa92",
-      "message": "feat: audit fixes, GMC tab in Competitive Intel, plan selector in Super Admin"
-    },
-    {
-      "hash": "8d8fa37",
-      "message": "fix: align Dashboard ROAS formatting to 2 decimal places"
     }
   ],
   "changes": [
+    "[Συντήρηση] Ignore Cloud Functions env files except .env.example; stop tracking project env",
+    "[Νέο χαρακτηριστικό] GMC report parsing, connectors & import jobs, RFM behavioral/predictive, auth, coordination, interest lead",
     "[Συντήρηση] BuildInfo after landing deploy build",
     "[Βελτίωση εμφάνισης] Widen layout to ~94vw (max 90rem), larger hero and preview images",
     "[Διόρθωση] Hide contact emails on page, keep mailto to makis and dimitris",
@@ -74,8 +76,6 @@
     "[Συντήρηση] Papaki env params, setup-smtp-secrets script, firebase deploy scripts",
     "[Τεκμηρίωση] Papaki SMTP host linux230.papaki.gr",
     "[Νέο χαρακτηριστικό] Papaki SMTP via SMTP_HOST/SMTP_PORT params, keep Gmail fallback",
-    "[Διόρθωση] Bind SMTP_EMAIL and SMTP_PASSWORD secrets for email HTTP and digest",
-    "[Διόρθωση] Contact mailto to makis and dimitris at notthesame.gr",
-    "[Νέο χαρακτηριστικό] Use support@performanceplus.gr for contact CTAs and footer"
+    "[Διόρθωση] Bind SMTP_EMAIL and SMTP_PASSWORD secrets for email HTTP and digest"
   ]
 }

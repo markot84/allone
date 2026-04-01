@@ -63,7 +63,7 @@ const TOOLTIP_CI_REFRESH =
   'Πλήρης συγχρονισμός connectors (GMC, Meta Ad Library κ.λπ.): καθημερινά ~06:00 (Europe/Athens). Στη σελίδα: cache Price Benchmarks ~10 λεπτά, Ad Monitoring ~5 λεπτά. Για άμεση ενημέρωση: Sync GMC ή Scan τώρα.';
 
 const TOOLTIP_BENCHMARK_UPDATED =
-  'Ημερομηνία τελευταίου sync με Google Merchant Center. Πλήρης ανανέωση: καθημερινά ~06:00 Europe/Athens + χειροκίνητο «Sync GMC». Προβολή στη σελίδα: cache ~10 λεπτά.';
+  'Ημερομηνία/ώρα από το νεότερο αποθηκευμένο SKU benchmark (τελευταία επιτυχημένη εγγραφή στη βάση). Προγραμματισμένος συγχρονισμός connectors ~06:00 Europe/Athens ισχύει όταν το GMC είναι συνδεδεμένο — αν η ημερομηνία μένει παλιά, πατήστε «Sync GMC» (Data Import). Προβολή σελίδας: cache ~10 λεπτά.';
 
 const TOOLTIP_INSIGHTS_SOURCE =
   'Βάση: τελευταία 7 ημέρες GMC. Ανανέωση δεδομένων: ίδιο πρόγραμμα με τα benchmarks (ημερήσιο ~06:00 + Sync GMC).';
@@ -117,6 +117,7 @@ export function CompetitorInsights() {
     aboveMarket,
     belowMarket,
     avgDiff,
+    lastBenchmarkSyncedAt,
   } = usePriceBenchmarks();
   // Price insights
   const {
@@ -404,7 +405,17 @@ export function CompetitorInsights() {
             />
             <KpiBox
               label="Τελ. ενημέρωση"
-              value={benchmarks.length > 0 ? new Date(benchmarks[0].updatedAt).toLocaleDateString('el-GR') : '—'}
+              value={
+                lastBenchmarkSyncedAt
+                  ? lastBenchmarkSyncedAt.toLocaleString('el-GR', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })
+                  : '—'
+              }
               tooltip={TOOLTIP_BENCHMARK_UPDATED}
               icon={<Calendar size={18} />}
               color="#8B5CF6"

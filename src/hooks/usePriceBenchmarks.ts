@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -42,6 +43,17 @@ export function usePriceBenchmarks() {
       ? Math.round((withMarket.reduce((s, b) => s + b.priceDiff, 0) / withMarket.length) * 10) / 10
       : 0;
 
+  /** Νεότερο `updatedAt` μεταξύ όλων των SKU — όχι `benchmarks[0]` (η σειρά getDocs δεν είναι εγγυημένη). */
+  const lastBenchmarkSyncedAt = useMemo(() => {
+    if (benchmarks.length === 0) return null;
+    let maxMs = 0;
+    for (const b of benchmarks) {
+      const t = Date.parse(b.updatedAt);
+      if (!Number.isNaN(t) && t > maxMs) maxMs = t;
+    }
+    return maxMs > 0 ? new Date(maxMs) : null;
+  }, [benchmarks]);
+
   return {
     benchmarks,
     isLoading: isPending,
@@ -50,5 +62,6 @@ export function usePriceBenchmarks() {
     aboveMarket,
     belowMarket,
     avgDiff,
+    lastBenchmarkSyncedAt,
   };
 }

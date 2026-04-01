@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Plus, MessageSquare, CheckSquare, Activity, ChevronRight, X, AlertTriangle, CheckCircle2, Users, Flag, Pencil, Zap, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { Plus, MessageSquare, CheckSquare, Activity, ChevronRight, X, AlertTriangle, CheckCircle2, Users, Flag, Pencil, Zap, ThumbsUp, ThumbsDown, History } from 'lucide-react';
 import { Card, Button, Spinner, useToast, FormattedProse } from '../common';
 import { CommentsPanel } from './CommentsPanel';
 import { DecisionNotifyStrip } from './DecisionNotifyStrip';
@@ -44,6 +44,9 @@ const STATUS_META: Record<string, { label: string; color: string }> = {
 
 const DEPT_LABELS = DEPARTMENT_LABELS;
 
+/** Μέγιστο πλήθος εμπορικών πολιτικών στην κύρια λίστα — οι υπόλοιπες στο αναδιπλούμενο «Ιστορικό». */
+const RECENT_DECISIONS_LIMIT = 5;
+
 // ── Main Page (Briefing Board) ───────────────────────────────────────────────
 
 export function CoordinationPage() {
@@ -79,6 +82,14 @@ export function CoordinationPage() {
   );
 
   const lastBriefing = activeDecisions[0] ?? null;
+  const recentActiveDecisions = useMemo(
+    () => activeDecisions.slice(0, RECENT_DECISIONS_LIMIT),
+    [activeDecisions]
+  );
+  const olderActiveDecisions = useMemo(
+    () => activeDecisions.slice(RECENT_DECISIONS_LIMIT),
+    [activeDecisions]
+  );
 
   const handleApproveProposal = async (d: Decision) => {
     try {
@@ -200,11 +211,16 @@ export function CoordinationPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Left: Active Decisions */}
         <div>
-          <div className="flex items-center justify-between mb-3">
+          <div className="mb-3">
             <h2 className="text-sm font-semibold text-[#111827]">
               Νέα Εμπορική Πολιτική
               <span className="ml-2 text-xs font-normal text-[#9CA3AF]">({activeDecisions.length})</span>
             </h2>
+            {activeDecisions.length > RECENT_DECISIONS_LIMIT && (
+              <p className="text-[10px] text-[#9CA3AF] mt-1">
+                Εμφανίζονται οι {RECENT_DECISIONS_LIMIT} πιο πρόσφατες· οι υπόλοιπες στο ιστορικό παρακάτω.
+              </p>
+            )}
           </div>
           <div className="space-y-2">
             {activeDecisions.length === 0 && (
@@ -212,7 +228,7 @@ export function CoordinationPage() {
                 Καμία ενεργή εμπορική πολιτική
               </div>
             )}
-            {activeDecisions.map(d => (
+            {recentActiveDecisions.map(d => (
               <ActiveDecisionRow
                 key={d.id}
                 decision={d}
@@ -220,6 +236,32 @@ export function CoordinationPage() {
                 onSelect={() => setSelectedDecision(d)}
               />
             ))}
+            {olderActiveDecisions.length > 0 && (
+              <details className="group rounded-xl border border-[#E5E7EB] bg-[#FAFAFA] overflow-hidden">
+                <summary className="cursor-pointer list-none px-3.5 py-2.5 flex items-center gap-2 text-xs font-medium text-[#6B7280] hover:bg-[#F3F4F6] transition-colors [&::-webkit-details-marker]:hidden">
+                  <History size={14} className="text-[#9CA3AF] shrink-0" />
+                  <span>
+                    {olderActiveDecisions.length === 1
+                      ? 'Ιστορικό — 1 παλαιότερη ενεργή'
+                      : `Ιστορικό — ${olderActiveDecisions.length} παλαιότερες ενεργές`}
+                  </span>
+                  <ChevronRight
+                    size={14}
+                    className="text-[#D1D5DB] shrink-0 ml-auto transition-transform group-open:rotate-90"
+                  />
+                </summary>
+                <div className="space-y-2 px-1.5 pb-3 pt-2 border-t border-[#E5E7EB]">
+                  {olderActiveDecisions.map(d => (
+                    <ActiveDecisionRow
+                      key={d.id}
+                      decision={d}
+                      isSelected={selectedDecision?.id === d.id}
+                      onSelect={() => setSelectedDecision(d)}
+                    />
+                  ))}
+                </div>
+              </details>
+            )}
           </div>
         </div>
 
