@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { TrendingUp, Filter, Download, Search, DollarSign, Trash2, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
@@ -7,7 +7,8 @@ import { DateRangePicker } from '../ui/DateRangePicker';
 import { useCampaigns, useBrand } from '../../hooks';
 import { useSearchIntelligence } from '../../hooks/useSearchIntelligence';
 import { FirestoreService } from '../../services/firestore';
-import { formatCurrency, formatNumber, formatMultiplier, formatPercent } from '../../utils/format';
+import { formatCurrency, formatNumber, formatMultiplier, formatPercent, formatCompact } from '../../utils/format';
+import { getEffectiveConversionValue, getEffectiveConversions } from '../../utils/roiUtils';
 import type { Campaign } from '../../types';
 
 function parseCampaignDate(d: string | number | undefined): Date | null {
@@ -47,39 +48,18 @@ function bucketOverlapFraction(date: string, fromDate: string, toDate: string): 
   return date >= fromDate && date <= toDate ? 1 : 0;
 }
 
-function sumConversionActions(ca: Campaign['conversionActions'] | undefined): { conv: number; value: number } {
-  if (!ca) return { conv: 0, value: 0 };
-  return Object.values(ca).reduce(
-    (acc, a) => ({
-      conv: acc.conv + (a?.conversions ?? 0),
-      value: acc.value + (a?.value ?? 0),
-    }),
-    { conv: 0, value: 0 }
-  );
-}
+// omni_purchase excluded from conversion filter dropdown too
+const EXCLUDED_ACTION_LABELS = new Set(['omni_purchase']);
 
-/**
- * Conversions με fallback σε conversionActions.
- * Αν το aggregate field (c.conversions) είναι 0 αλλά υπάρχουν conversionActions,
- * χρησιμοποιεί το άθροισμα των actions (π.χ. παλιό sync που έγραψε 0 στο root αλλά έχει actions).
- */
+// Wrappers: use getEffectiveConversionValue/getEffectiveConversions (shared utility) as primary source.
+// When a date filter is active, campaignsWithDateMetrics overrides c.conversion_value/c.conversions
+// with the date-scaled values — those are already channel-agnostic so we can read them directly.
 function getDisplayConversions(c: Campaign): number {
-  const raw = c.conversions;
-  const n = raw != null ? (typeof raw === 'number' ? raw : parseFloat(String(raw))) : NaN;
-  const fromActions = sumConversionActions(c.conversionActions).conv;
-  if (!Number.isNaN(n) && n > 0) return n;
-  if (fromActions > 0) return fromActions;
-  return Number.isNaN(n) ? 0 : n; // preserve explicit 0 only when no actions either
+  return getEffectiveConversions(c);
 }
 
 function getDisplayConversionValue(c: Campaign): number {
-  const any = c as Campaign & { conversionValue?: number };
-  const raw = c.conversion_value ?? any.conversionValue;
-  const n = raw != null ? (typeof raw === 'number' ? raw : parseFloat(String(raw))) : NaN;
-  const fromActions = sumConversionActions(c.conversionActions).value;
-  if (!Number.isNaN(n) && n > 0) return n;
-  if (fromActions > 0) return fromActions;
-  return Number.isNaN(n) ? 0 : n;
+  return getEffectiveConversionValue(c);
 }
 
 function formatConvCount(n: number): string {
@@ -120,22 +100,39 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [channelFilter, setChannelFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const LS_FROM = 'campaigns_dateFrom';
-  const LS_TO   = 'campaigns_dateTo';
-  const [dateFrom, setDateFromState] = useState<string>(() => localStorage.getItem(LS_FROM) ?? '');
-  const [dateTo,   setDateToState]   = useState<string>(() => localStorage.getItem(LS_TO)   ?? '');
+  // Keys are brand-scoped to prevent filter bleed when switching brands
+  const LS_FROM = `campaigns_dateFrom_${brandId}`;
+  const LS_TO   = `campaigns_dateTo_${brandId}`;
+  const LS_CONV = `campaigns_convFilter_${brandId}`;
 
-  const setDateFrom = (v: string) => { setDateFromState(v); localStorage.setItem(LS_FROM, v); };
-  const setDateTo   = (v: string) => { setDateToState(v);   localStorage.setItem(LS_TO,   v); };
+  const [dateFrom, setDateFromState] = useState<string>(() => (brandId ? localStorage.getItem(LS_FROM) ?? '' : ''));
+  const [dateTo,   setDateToState]   = useState<string>(() => (brandId ? localStorage.getItem(LS_TO)   ?? '' : ''));
+
+  const setDateFrom = (v: string) => { setDateFromState(v); if (brandId) localStorage.setItem(LS_FROM, v); };
+  const setDateTo   = (v: string) => { setDateToState(v);   if (brandId) localStorage.setItem(LS_TO,   v); };
 
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
-  const LS_CONV = 'campaigns_convFilter';
   const [convActionFilter, setConvActionFilter] = useState<string[]>(() => {
+    if (!brandId) return [];
     try { return JSON.parse(localStorage.getItem(LS_CONV) || '[]'); } catch { return []; }
   });
   const [showConvDropdown, setShowConvDropdown] = useState(false);
   const [activeTab, setActiveTab] = useState<'campaigns' | 'search_terms' | 'keywords'>('campaigns');
+
+  // Reset all filters when the brand changes so one brand's filters don't bleed into another
+  const prevBrandId = useRef(brandId);
+  useEffect(() => {
+    if (prevBrandId.current === brandId) return;
+    prevBrandId.current = brandId;
+    const from = brandId ? (localStorage.getItem(`campaigns_dateFrom_${brandId}`) ?? '') : '';
+    const to   = brandId ? (localStorage.getItem(`campaigns_dateTo_${brandId}`)   ?? '') : '';
+    const conv = brandId ? (() => { try { return JSON.parse(localStorage.getItem(`campaigns_convFilter_${brandId}`) || '[]'); } catch { return []; } })() : [];
+    setDateFromState(from);
+    setDateToState(to);
+    setConvActionFilter(conv);
+    setSortColumn(null);
+  }, [brandId]);
   const COLLAPSED_LIMIT = 12;
   const [tableExpanded, setTableExpanded] = useState(false);
   const { searchTerms, keywords, hasData: hasSearchData } = useSearchIntelligence();
@@ -247,10 +244,10 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
       });
     }
 
-    // Always recompute ROAS from first principles so stale roas:0 from old syncs never shows.
+    // Always recompute ROAS using the trusted conversion value (excludes omni_purchase for Meta).
     return filtered.map(c => {
       const spent = c.amount_spent ?? 0;
-      const cv = c.conversion_value ?? 0;
+      const cv = getEffectiveConversionValue(c);
       return spent > 0 && cv > 0
         ? { ...c, roas: cv / spent }
         : c;
@@ -463,7 +460,9 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
     const actions = new Set<string>();
     campaignsWithDateMetrics.forEach(c => {
       if (c.conversionActions) {
-        Object.keys(c.conversionActions).forEach(a => actions.add(a));
+        Object.keys(c.conversionActions)
+          .filter(a => !EXCLUDED_ACTION_LABELS.has(a))
+          .forEach(a => actions.add(a));
       }
     });
     // Add unified "Purchase" if any platform-specific purchase type exists
@@ -844,10 +843,10 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                       </Badge>
                     </td>
                     <td className="py-2 px-3 text-right font-mono text-xs whitespace-nowrap hidden lg:table-cell">
-                      {campaign.impressions ? formatNumber(campaign.impressions) : '-'}
+                      {campaign.impressions ? formatCompact(campaign.impressions) : '-'}
                     </td>
                     <td className="py-2 px-3 text-right font-mono text-xs whitespace-nowrap hidden md:table-cell">
-                      {campaign.clicks ? formatNumber(campaign.clicks) : '-'}
+                      {campaign.clicks ? formatCompact(campaign.clicks) : '-'}
                     </td>
                     <td className="py-2 px-3 text-right font-mono text-xs whitespace-nowrap hidden lg:table-cell">
                       {campaign.ctr ? formatPercent(campaign.ctr, 2) : '-'}
@@ -862,13 +861,16 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                       €{formatCurrency(getDisplayConversionValue(campaign), 0)}
                     </td>
                     <td className="py-3 px-2 text-right">
-                      {Number.isFinite(campaign.roas ?? NaN) ? (
-                        <Badge variant={(campaign.roas ?? 0) > 0 ? 'success' : 'default'} size="sm">
-                          {formatMultiplier(campaign.roas ?? 0, 0)}
-                        </Badge>
-                      ) : (
-                        '-'
-                      )}
+                      {(() => {
+                        const cv = getDisplayConversionValue(campaign);
+                        const spent = campaign.amount_spent ?? 0;
+                        const roas = spent > 0 && cv > 0 ? cv / spent : 0;
+                        return (
+                          <Badge variant={roas > 0 ? 'success' : 'default'} size="sm">
+                            {formatMultiplier(roas, 0)}
+                          </Badge>
+                        );
+                      })()}
                     </td>
                   </motion.tr>
                 ))}

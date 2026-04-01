@@ -372,6 +372,8 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
         for (const action of (row.actions || [])) {
           if (!action.action_type || !action.value) continue;
           const aType = action.action_type as string;
+          // Skip modeled/broad attribution metrics — they inflate counts and double-count with pixel events.
+          if (aType === 'omni_purchase' || aType === 'offsite_conversion.purchase' || aType === 'onsite_conversion.purchase') continue;
           // Normalize action type names for readability
           let label = aType;
           // Keep pixel vs API/app purchases separate to avoid double-counting

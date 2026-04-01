@@ -1,10 +1,50 @@
 {
-  "version": "0.270.0",
-  "previousVersion": "0.269.0",
-  "commitHash": "99b38db",
+  "version": "0.285.0",
+  "previousVersion": "0.284.0",
+  "commitHash": "ef26624",
   "branch": "main",
-  "buildDate": "2026-04-01T17:52:19.208Z",
+  "buildDate": "2026-04-01T20:42:11.060Z",
   "commits": [
+    {
+      "hash": "ef26624",
+      "message": "fix(meta): remove omni_purchase - causes 1600%+ CTR due to modeled conversions inflation"
+    },
+    {
+      "hash": "95c0c59",
+      "message": "fix: recompute ROAS from cv/spent in frontend, never trust stale roas:0 from Firestore"
+    },
+    {
+      "hash": "5a8e931",
+      "message": "fix: round all currency amounts to 0 decimals in Campaigns page"
+    },
+    {
+      "hash": "d34eded",
+      "message": "perf: cache-first campaigns load via Firestore IndexedDB + skip localStorage for large queries"
+    },
+    {
+      "hash": "84ee79c",
+      "message": "fix(campaigns): proportional scaling for monthly Meta buckets in date filter"
+    },
+    {
+      "hash": "1ae4e5a",
+      "message": "fix: ROAS display 0 decimals (5.095x not 5.095,28x)"
+    },
+    {
+      "hash": "e01827a",
+      "message": "fix: ROAS calc in meta, round conv decimals, add OpenCart/Magento connectors"
+    },
+    {
+      "hash": "b1e6bb0",
+      "message": "fix(meta): resolve sync failures - CHUNK 100->15, delete try/catch, brandId+channel index"
+    },
+    {
+      "hash": "9d097c5",
+      "message": "fix: meta delete batch chunked, connectors panel cached via React Query (no reload on nav)"
+    },
+    {
+      "hash": "bafcd13",
+      "message": "chore: force functions redeploy trigger + git push"
+    },
     {
       "hash": "99b38db",
       "message": "campaigns: fix conversions/value display fallback, cache policy, connector batch chunks, omni_purchase meta"
@@ -24,58 +64,18 @@
     {
       "hash": "c5e557a",
       "message": "chore: ignore Cloud Functions env files except .env.example; stop tracking project env"
-    },
-    {
-      "hash": "a2b2c7d",
-      "message": "feat: GMC report parsing, connectors & import jobs, RFM behavioral/predictive, auth, coordination, interest lead"
-    },
-    {
-      "hash": "5a15aa1",
-      "message": "chore: buildInfo after landing deploy build"
-    },
-    {
-      "hash": "09d56fd",
-      "message": "style(landing): widen layout to ~94vw (max 90rem), larger hero and preview images"
-    },
-    {
-      "hash": "c0fe9da",
-      "message": "fix(marketing): hide contact emails on page, keep mailto to makis and dimitris"
-    },
-    {
-      "hash": "e7a519d",
-      "message": "copy(landing): E-shop Intelligence hero, USP, problems, Dashboard/Strategy/Data Analysis"
-    },
-    {
-      "hash": "8ae58b7",
-      "message": "chore(functions): Papaki env params, setup-smtp-secrets script, firebase deploy scripts"
-    },
-    {
-      "hash": "d9fa8f4",
-      "message": "docs(functions): Papaki SMTP host linux230.papaki.gr"
-    },
-    {
-      "hash": "ac9cc6f",
-      "message": "feat(functions): Papaki SMTP via SMTP_HOST/SMTP_PORT params, keep Gmail fallback"
-    },
-    {
-      "hash": "240f774",
-      "message": "fix(functions): bind SMTP_EMAIL and SMTP_PASSWORD secrets for email HTTP and digest"
-    },
-    {
-      "hash": "76f552f",
-      "message": "fix(marketing): contact mailto to makis and dimitris at notthesame.gr"
     }
   ],
   "changes": [
-    "Campaigns: fix conversions/value display fallback, cache policy, connector batch chunks, omni_purchase meta",
-    "[Διόρθωση] CampaignsPage strict TS for conversion getters (post-build)",
-    "Campaigns: conversions display, conversion value column, connector batch chunks; coordination/email tweaks",
-    "[Νέο χαρακτηριστικό] Budget opportunity engine v1, ROI section; GMC last sync KPI; coordination list limit 5 + history",
-    "[Συντήρηση] Ignore Cloud Functions env files except .env.example; stop tracking project env",
-    "[Νέο χαρακτηριστικό] GMC report parsing, connectors & import jobs, RFM behavioral/predictive, auth, coordination, interest lead",
-    "[Συντήρηση] BuildInfo after landing deploy build",
-    "[Βελτίωση εμφάνισης] Widen layout to ~94vw (max 90rem), larger hero and preview images",
-    "[Διόρθωση] Hide contact emails on page, keep mailto to makis and dimitris",
-    "Copy(landing): E-shop Intelligence hero, USP, problems, Dashboard/Strategy/Data Analysis"
+    "[Διόρθωση] Remove omni_purchase - causes 1600%+ CTR due to modeled conversions inflation",
+    "[Διόρθωση] Recompute ROAS from cv/spent in frontend, never trust stale roas:0 from Firestore",
+    "[Διόρθωση] Round all currency amounts to 0 decimals in Campaigns page",
+    "[Βελτίωση απόδοσης] Cache-first campaigns load via Firestore IndexedDB + skip localStorage for large queries",
+    "[Διόρθωση] Proportional scaling for monthly Meta buckets in date filter",
+    "[Διόρθωση] ROAS display 0 decimals (5.095x not 5.095,28x)",
+    "[Διόρθωση] ROAS calc in meta, round conv decimals, add OpenCart/Magento connectors",
+    "[Διόρθωση] Resolve sync failures - CHUNK 100->15, delete try/catch, brandId+channel index",
+    "[Διόρθωση] Meta delete batch chunked, connectors panel cached via React Query (no reload on nav)",
+    "[Συντήρηση] Force functions redeploy trigger + git push"
   ]
 }

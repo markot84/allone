@@ -30,6 +30,7 @@ import {
   calculateCampaignMetrics,
   calculateChannelPerformance,
   getCampaignDateForMonth,
+  getEffectiveConversionValue,
 } from '../../utils/roiUtils';
 import { BudgetOpportunitySection } from './BudgetOpportunitySection';
 import { formatCurrencyCompact, formatNumber, formatPercent } from '../../utils/format';
@@ -120,7 +121,14 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
           impr += (metrics as any).impressions || 0;
           clicks += (metrics as any).clicks || 0;
           convs += (metrics as any).conversions || 0;
-          convValue += (metrics as any).conversion_value || 0;
+          // For Meta: read from trusted purchase labels in dailyMetrics.conversionActions
+          // to avoid summing inflated omni_purchase values stored in conversion_value.
+          if (c.channel === 'Meta') {
+            const ma = (metrics as any).conversionActions;
+            convValue += ma?.['Purchase (Pixel)']?.value || ma?.['Purchase']?.value || 0;
+          } else {
+            convValue += (metrics as any).conversion_value || 0;
+          }
         }
       }
       return {
@@ -188,7 +196,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
       const date = getCampaignDateForMonth(c);
       const key = date ? date.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }) : 'Other';
       const ex = byMonth.get(key) || { organic: 0, campaigns: 0 };
-      byMonth.set(key, { ...ex, campaigns: ex.campaigns + (c.conversion_value || 0) });
+      byMonth.set(key, { ...ex, campaigns: ex.campaigns + getEffectiveConversionValue(c) });
     });
     if (byMonth.size === 0) return [];
     const order = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -532,12 +540,19 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                       {formatCurrencyCompact(c.amount_spent || 0)}
                     </td>
                     <td className="py-3 text-right font-mono text-sm font-bold pr-3">
-                      {formatCurrencyCompact(c.conversion_value || 0)}
+                      {formatCurrencyCompact(getEffectiveConversionValue(c))}
                     </td>
                     <td className="py-3 text-right pr-3">
-                      <span className={`font-mono text-sm font-bold ${(c.roas || 0) >= 1 ? 'text-[#22C55E]' : 'text-[#EF4444]'}`}>
-                        {c.roas ? `${formatNumber(c.roas, 2)}x` : '—'}
-                      </span>
+                      {(() => {
+                        const cv = getEffectiveConversionValue(c);
+                        const spent = c.amount_spent || 0;
+                        const roas = spent > 0 && cv > 0 ? cv / spent : 0;
+                        return (
+                          <span className={`font-mono text-sm font-bold ${roas >= 1 ? 'text-[#22C55E]' : 'text-[#EF4444]'}`}>
+                            {roas > 0 ? `${formatNumber(roas, 2)}x` : '—'}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="py-3 text-right font-mono text-sm pr-3">
                       {formatNumber(c.conversions || 0)}

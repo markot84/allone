@@ -128,9 +128,13 @@ export function MorningBriefing(props: MorningBriefingProps) {
   const buildDataRef = useRef(buildData);
   buildDataRef.current = buildData;
 
+  // Reset both collapsed pref and briefing immediately when brand changes.
+  // Without this, the previous brand's briefing stays visible until the async Firestore fetch completes.
   useEffect(() => {
     if (!brandId) return;
     setCollapsed(loadCollapsedPref(brandId));
+    setBriefing(loadBriefingFromStorage(brandId));
+    setError(null);
   }, [brandId]);
 
   // Firestore: συγχρονισμός με server (νεότερο briefing) — το κείμενο της ημέρας παραμένει σταθερό στον browser μέχρι νέα γεννήτρια από κανόνες

@@ -37,3 +37,10 @@ export function formatCurrencyCompact(n: number, decimals = 1): string {
 export function formatMultiplier(n: number, decimals = 2): string {
   return `${formatNumber(n, decimals)}x`;
 }
+
+/** Compact plain number: 3,2M / 520K / 8.400 */
+export function formatCompact(n: number): string {
+  if (n >= 1_000_000) return `${formatNumber(n / 1_000_000, 1)}M`;
+  if (n >= 10_000)    return `${formatNumber(n / 1_000, 0)}K`;
+  return formatNumber(n, 0);
+}

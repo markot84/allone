@@ -1,5 +1,60 @@
 import type { Campaign } from '../types';
 
+// Purchase labels trusted for Meta — in priority order.
+// omni_purchase is excluded: it's a Meta-modeled superset that inflates counts.
+const META_PURCHASE_LABELS = ['Purchase (Pixel)', 'Purchase'];
+const EXCLUDED_ACTION_LABELS = new Set(['omni_purchase']);
+
+/**
+ * Returns the reliable conversion value for a campaign.
+ *
+ * For Meta: reads only from trusted conversionActions labels ("Purchase (Pixel)" > "Purchase")
+ * to avoid stale Firestore documents that stored omni_purchase as the primary metric.
+ * For all other channels: uses c.conversion_value directly, falling back to conversionActions sum.
+ */
+export function getEffectiveConversionValue(c: Campaign): number {
+  if (c.channel === 'Meta') {
+    if (c.conversionActions) {
+      for (const label of META_PURCHASE_LABELS) {
+        const a = (c.conversionActions as Record<string, { conversions: number; value: number }>)[label];
+        if (a && a.value > 0) return a.value;
+      }
+    }
+    return 0;
+  }
+  const v = c.conversion_value || 0;
+  if (v > 0) return v;
+  if (c.conversionActions) {
+    return Object.entries(c.conversionActions as Record<string, { conversions: number; value: number }>)
+      .filter(([label]) => !EXCLUDED_ACTION_LABELS.has(label))
+      .reduce((sum, [, a]) => sum + (a?.value ?? 0), 0);
+  }
+  return 0;
+}
+
+/**
+ * Returns the reliable conversion count for a campaign (same logic as getEffectiveConversionValue).
+ */
+export function getEffectiveConversions(c: Campaign): number {
+  if (c.channel === 'Meta') {
+    if (c.conversionActions) {
+      for (const label of META_PURCHASE_LABELS) {
+        const a = (c.conversionActions as Record<string, { conversions: number; value: number }>)[label];
+        if (a && a.conversions > 0) return a.conversions;
+      }
+    }
+    return 0;
+  }
+  const v = c.conversions || 0;
+  if (v > 0) return v;
+  if (c.conversionActions) {
+    return Object.entries(c.conversionActions as Record<string, { conversions: number; value: number }>)
+      .filter(([label]) => !EXCLUDED_ACTION_LABELS.has(label))
+      .reduce((sum, [, a]) => sum + (a?.conversions ?? 0), 0);
+  }
+  return 0;
+}
+
 /**
  * Calculate total revenue: organic revenue + campaign conversion value.
  */
@@ -7,7 +62,7 @@ export function calculateTotalRevenue(
   organicRevenue: number,
   campaigns: Campaign[]
 ): number {
-  const campaignsRevenue = campaigns.reduce((sum, c) => sum + (c.conversion_value || 0), 0);
+  const campaignsRevenue = campaigns.reduce((sum, c) => sum + getEffectiveConversionValue(c), 0);
   return organicRevenue + campaignsRevenue;
 }
 
@@ -35,8 +90,8 @@ export function getCampaignDateForMonth(c: Campaign): Date | null {
  */
 export function calculateCampaignMetrics(campaigns: Campaign[]) {
   const totalSpend = campaigns.reduce((sum, c) => sum + (c.amount_spent || 0), 0);
-  const totalRevenue = campaigns.reduce((sum, c) => sum + (c.conversion_value || 0), 0);
-  const totalConversions = campaigns.reduce((sum, c) => sum + (c.conversions || 0), 0);
+  const totalRevenue = campaigns.reduce((sum, c) => sum + getEffectiveConversionValue(c), 0);
+  const totalConversions = campaigns.reduce((sum, c) => sum + getEffectiveConversions(c), 0);
   const totalImpressions = campaigns.reduce((sum, c) => sum + (c.impressions || 0), 0);
   const totalClicks = campaigns.reduce((sum, c) => sum + (c.clicks || 0), 0);
   const roas = totalSpend > 0 ? totalRevenue / totalSpend : 0;
@@ -62,8 +117,8 @@ export function calculateChannelPerformance(campaigns: Campaign[]) {
     }
     const s = channelStats[channel];
     s.spent += c.amount_spent || 0;
-    s.revenue += c.conversion_value || 0;
-    s.conversions += c.conversions || 0;
+    s.revenue += getEffectiveConversionValue(c);
+    s.conversions += getEffectiveConversions(c);
     s.impressions += c.impressions || 0;
     s.clicks += c.clicks || 0;
     s.count += 1;

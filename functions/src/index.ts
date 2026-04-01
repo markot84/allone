@@ -6,7 +6,7 @@ import { logger } from 'firebase-functions/v2';
 import { defineSecret } from 'firebase-functions/params';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import Busboy from 'busboy';
-// build: f3b9c11 — remove omni_purchase (inflated modeled conversions)
+// build: d7a2f05 — omni_purchase excluded from rowActions storage
 
 const GEMINI_SECRET = defineSecret('GEMINI_API_KEY');
 /** SMTP: mailbox που κάνει login (συχνά ίδιο με noreply ή service account Gmail) */
