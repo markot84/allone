@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useBrand, useAuth, useBrandMembers } from '../../hooks';
 import { auth } from '../../config/firebase';
 import { getLastImportDates } from '../../services/import';
@@ -488,9 +488,6 @@ export function ConnectorsPanel() {
     myRole === 'owner' ||
     myRole === 'admin';
 
-  const [states, setStates] = useState<Record<string, ConnectorState>>({});
-  const [lastSyncDates, setLastSyncDates] = useState<Record<string, Date>>({});
-  const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState<string | null>(null);
   const [connecting, setConnecting] = useState<string | null>(null);
   const [accountPickerFor, setAccountPickerFor] = useState<string | null>(null);
@@ -507,59 +504,63 @@ export function ConnectorsPanel() {
     woocommerce: { connected: false },
   };
 
-  const fetchStates = useCallback(async () => {
-    if (!brandId) {
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    try {
-      const doc = await FirestoreService.getDocumentWithTimeout('connectors', brandId, 20000);
-      if (doc) {
-        const data = doc as Record<string, any>;
-        setStates({
-          google_ads: data.google_ads || { connected: false },
-          meta: data.meta || { connected: false },
-          merchant: data.merchant || { connected: false },
-          ga4: data.ga4 || { connected: false },
-          shopify: data.shopify || { connected: false },
-          woocommerce: data.woocommerce || { connected: false },
-        });
-      } else {
-        setStates(emptyStates);
+  // Connectors doc — cached, refetch only after sync/connect/disconnect
+  const { data: connectorsData, isPending: loading, refetch: refetchConnectors } = useQuery({
+    queryKey: ['connectorsPanel', brandId],
+    queryFn: async () => {
+      if (!brandId) return null;
+      const doc = await FirestoreService.getDocumentWithTimeout<Record<string, any>>('connectors', brandId, 10000);
+      return doc;
+    },
+    enabled: !!brandId,
+    staleTime: Infinity,
+    gcTime: 24 * 60 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    retry: 1,
+  });
+
+  const states: Record<string, ConnectorState> = connectorsData
+    ? {
+        google_ads: connectorsData.google_ads || { connected: false },
+        meta: connectorsData.meta || { connected: false },
+        merchant: connectorsData.merchant || { connected: false },
+        ga4: connectorsData.ga4 || { connected: false },
+        shopify: connectorsData.shopify || { connected: false },
+        woocommerce: connectorsData.woocommerce || { connected: false },
       }
-    } catch (e) {
-      console.warn('[ConnectorsPanel] connectors doc:', e);
-      setStates(emptyStates);
-      if (e instanceof Error && /timeout/i.test(e.message)) {
-        toast.error('Αργή απόκριση από τη βάση. Δοκιμάστε ανανέωση σελίδας ή ελέγξτε το δίκτυο.');
-      }
-    } finally {
-      setLoading(false);
-    }
-    try {
-      const dates = await Promise.race([
-        getLastImportDates(brandId),
-        new Promise<Record<string, Date>>((_, reject) =>
-          setTimeout(() => reject(new Error('import dates timeout')), 25000)
-        ),
-      ]);
-      setLastSyncDates({
+    : emptyStates;
+
+  // Last sync dates — secondary, loaded once, cached
+  const { data: lastSyncDates = {} as Record<string, Date> } = useQuery({
+    queryKey: ['lastSyncDates', brandId],
+    queryFn: async () => {
+      if (!brandId) return {} as Record<string, Date>;
+      const dates = await getLastImportDates(brandId);
+      return {
         google_ads: dates['google_ads_api'] || dates['campaigns'],
         meta: dates['meta_api'] || dates['campaigns'],
         merchant: dates['merchant_center_api'] || dates['price_benchmarks'],
         ga4: dates['ga4_api'] || dates['ga4'],
         shopify: dates['shopify_api'],
         woocommerce: dates['woocommerce_api'],
-      } as Record<string, Date>);
-    } catch {
-      /* ημερομηνίες sync είναι secondary */
-    }
-  }, [brandId, toast]);
+      } as Record<string, Date>;
+    },
+    enabled: !!brandId,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    retry: 0,
+  });
 
-  useEffect(() => {
-    fetchStates();
-  }, [fetchStates]);
+  // Keep fetchStates for OAuth callback compatibility (force refetch after OAuth redirect)
+  const fetchStates = useCallback(async () => {
+    await refetchConnectors();
+    queryClient.invalidateQueries({ queryKey: ['lastSyncDates', brandId] });
+  }, [brandId, refetchConnectors, queryClient]);
 
   // Listen for OAuth callback results via URL hash params
   useEffect(() => {
@@ -707,6 +708,7 @@ export function ConnectorsPanel() {
         }
         queryClient.invalidateQueries({ queryKey: ['campaigns', brandId] });
         queryClient.invalidateQueries({ queryKey: ['connectorsSummary', brandId] });
+        queryClient.invalidateQueries({ queryKey: ['lastSyncDates', brandId] });
         if (provider === 'google_ads') {
           queryClient.invalidateQueries({ queryKey: ['search_intelligence', brandId] });
         }

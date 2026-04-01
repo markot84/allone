@@ -234,15 +234,20 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
     return { success: false, imported: 0, error: 'No ad accounts found' };
   }
 
-  // Delete existing Meta campaigns before re-importing to avoid stale data
+  // Delete existing Meta campaigns before re-importing to avoid stale data.
+  // Chunk deletions — Firestore batch limit is 500.
   const existingSnap = await getDb().collection('campaigns')
     .where('brandId', '==', brandId)
     .where('channel', '==', 'Meta')
     .get();
   if (!existingSnap.empty) {
-    const delBatch = getDb().batch();
-    existingSnap.docs.forEach(d => delBatch.delete(d.ref));
-    await delBatch.commit();
+    const DEL_CHUNK = 400;
+    const docs = existingSnap.docs;
+    for (let i = 0; i < docs.length; i += DEL_CHUNK) {
+      const delBatch = getDb().batch();
+      docs.slice(i, i + DEL_CHUNK).forEach(d => delBatch.delete(d.ref));
+      await delBatch.commit();
+    }
     logger.info(`[Meta] Deleted ${existingSnap.size} stale Meta campaigns for brand ${brandId} before re-import`);
   }
 
