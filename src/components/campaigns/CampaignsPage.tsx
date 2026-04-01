@@ -247,7 +247,14 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
       });
     }
 
-    return filtered;
+    // Always recompute ROAS from first principles so stale roas:0 from old syncs never shows.
+    return filtered.map(c => {
+      const spent = c.amount_spent ?? 0;
+      const cv = c.conversion_value ?? 0;
+      return spent > 0 && cv > 0
+        ? { ...c, roas: cv / spent }
+        : c;
+    });
   }, [campaigns, searchQuery, channelFilter, statusFilter, dateFrom, dateTo]);
 
   const handleExportCampaigns = useCallback(() => {
