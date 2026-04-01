@@ -706,6 +706,10 @@ export function ConnectorsPanel() {
           toast.success(`Εισήχθησαν ${result.imported} ${label}`);
         }
         queryClient.invalidateQueries({ queryKey: ['campaigns', brandId] });
+        queryClient.invalidateQueries({ queryKey: ['connectorsSummary', brandId] });
+        if (provider === 'google_ads') {
+          queryClient.invalidateQueries({ queryKey: ['search_intelligence', brandId] });
+        }
         if (provider === 'merchant') queryClient.invalidateQueries({ queryKey: ['priceBenchmarks', brandId] });
         fetchStates();
       } else {

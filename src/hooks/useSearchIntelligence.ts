@@ -48,8 +48,12 @@ export function useSearchIntelligence() {
   const { data, isPending } = useQuery({
     queryKey: ['search_intelligence', brandId],
     queryFn: () => (brandId ? fetchData(brandId) : Promise.resolve(null)),
-    staleTime: 10 * 60 * 1000,
     enabled: !!brandId,
+    staleTime: Infinity,
+    gcTime: 24 * 60 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   return {

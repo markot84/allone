@@ -51,6 +51,35 @@ const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 
 const SCOPES = ['https://www.googleapis.com/auth/adwords'];
 
+/**
+ * REST JSON uses camelCase; some fields may be missing. If primary conversions are 0,
+ * fall back to all_conversions / all_conversions_value (common when attribution uses "all conv." reporting).
+ */
+function parseCampaignDayMetrics(m: Record<string, unknown> | undefined | null): {
+  impressions: number;
+  clicks: number;
+  conversions: number;
+  conversion_value: number;
+  cost_micros: number;
+} {
+  if (!m || typeof m !== 'object') {
+    return { impressions: 0, clicks: 0, conversions: 0, conversion_value: 0, cost_micros: 0 };
+  }
+  const x = m as Record<string, any>;
+  const impressions = parseInt(String(x.impressions ?? '0'), 10) || 0;
+  const clicks = parseInt(String(x.clicks ?? '0'), 10) || 0;
+  const costMicros = parseInt(String(x.costMicros ?? x.cost_micros ?? '0'), 10) || 0;
+  let conversions = parseFloat(String(x.conversions ?? '0'));
+  let conversionValue = parseFloat(String(x.conversionsValue ?? x.conversions_value ?? '0'));
+  if (!Number.isFinite(conversions)) conversions = 0;
+  if (!Number.isFinite(conversionValue)) conversionValue = 0;
+  const allConv = parseFloat(String(x.allConversions ?? x.all_conversions ?? '0'));
+  const allVal = parseFloat(String(x.allConversionsValue ?? x.all_conversions_value ?? '0'));
+  if (conversions === 0 && Number.isFinite(allConv) && allConv > 0) conversions = allConv;
+  if (conversionValue === 0 && Number.isFinite(allVal) && allVal > 0) conversionValue = allVal;
+  return { impressions, clicks, conversions, conversion_value: conversionValue, cost_micros: costMicros };
+}
+
 function getCredentials() {
   const raw = (s?: string) => (s?.trim().split(/\s+/)[0] || '');
   return {
@@ -452,8 +481,10 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
       metrics.impressions,
       metrics.clicks,
       metrics.conversions,
-      metrics.cost_micros,
-      metrics.conversions_value
+      metrics.conversions_value,
+      metrics.all_conversions,
+      metrics.all_conversions_value,
+      metrics.cost_micros
     FROM campaign
     WHERE segments.date BETWEEN '${sinceStr}' AND '${untilStr}'
       AND campaign.status != 'REMOVED'
@@ -558,11 +589,12 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
         const segDate = row.segments?.date || '';
         if (!campaignId || !campaignName) continue;
 
-        const dayImpressions = parseInt(row.metrics?.impressions || '0', 10);
-        const dayClicks = parseInt(row.metrics?.clicks || '0', 10);
-        const dayConversions = parseFloat(row.metrics?.conversions || '0');
-        const daySpent = parseInt(row.metrics?.costMicros || '0', 10) / 1_000_000;
-        const dayConvValue = parseFloat(row.metrics?.conversionsValue || '0');
+        const day = parseCampaignDayMetrics(row.metrics as Record<string, unknown> | undefined);
+        const dayImpressions = day.impressions;
+        const dayClicks = day.clicks;
+        const dayConversions = day.conversions;
+        const daySpent = day.cost_micros / 1_000_000;
+        const dayConvValue = day.conversion_value;
 
         const existing = campaignMap.get(campaignId) || {
           id: `gads_${customerId}_${campaignId}`,

@@ -329,26 +329,38 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
         const rowDate: string = row.date_start || '';
         if (!campaignId || !campaignName) continue;
 
-        // Use offsite_conversion.fb_pixel_purchase as the primary purchase metric
-        // (pixel-tracked, most reliable). Fall back to 'purchase' if pixel not available.
-        const pixelPurchase = (row.actions || []).find(
-          (a: any) => a.action_type === 'offsite_conversion.fb_pixel_purchase'
-        );
-        const stdPurchase = (row.actions || []).find(
-          (a: any) => a.action_type === 'purchase'
-        );
-        const primaryPurchase = pixelPurchase || stdPurchase;
-
-        const pixelPurchaseVal = (row.action_values || []).find(
-          (a: any) => a.action_type === 'offsite_conversion.fb_pixel_purchase'
-        );
-        const stdPurchaseVal = (row.action_values || []).find(
-          (a: any) => a.action_type === 'purchase'
-        );
-        const primaryPurchaseVal = pixelPurchaseVal || stdPurchaseVal;
-
-        const rowConversions = parseFloat(primaryPurchase?.value || '0');
-        const rowConvValue = parseFloat(primaryPurchaseVal?.value || '0');
+        // Prefer pixel purchase, then omni/catalog purchase types (Advantage+ often uses omni_purchase).
+        const actions = row.actions || [];
+        const actionValues = row.action_values || [];
+        const purchaseTypes = [
+          'offsite_conversion.fb_pixel_purchase',
+          'omni_purchase',
+          'purchase',
+          'offsite_conversion.purchase',
+          'onsite_conversion.purchase',
+        ];
+        let rowConversions = 0;
+        let rowConvValue = 0;
+        for (const t of purchaseTypes) {
+          const a = actions.find((x: any) => x.action_type === t);
+          if (!a) continue;
+          const cv = parseFloat(a.value || '0');
+          if (cv <= 0) continue;
+          const av = actionValues.find((x: any) => x.action_type === t);
+          rowConversions = cv;
+          rowConvValue = parseFloat(av?.value || '0');
+          break;
+        }
+        if (rowConversions === 0) {
+          const pixelPurchase = actions.find((x: any) => x.action_type === 'offsite_conversion.fb_pixel_purchase');
+          const stdPurchase = actions.find((x: any) => x.action_type === 'purchase');
+          const primaryPurchase = pixelPurchase || stdPurchase;
+          const pixelPurchaseVal = actionValues.find((x: any) => x.action_type === 'offsite_conversion.fb_pixel_purchase');
+          const stdPurchaseVal = actionValues.find((x: any) => x.action_type === 'purchase');
+          const primaryPurchaseVal = pixelPurchaseVal || stdPurchaseVal;
+          rowConversions = parseFloat(primaryPurchase?.value || '0');
+          rowConvValue = parseFloat(primaryPurchaseVal?.value || '0');
+        }
         const rowSpend = parseFloat(row.spend || '0');
         const rowImpressions = parseInt(row.impressions || '0', 10);
         const rowClicks = parseInt(row.clicks || '0', 10);

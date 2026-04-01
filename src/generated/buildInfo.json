@@ -1,10 +1,14 @@
 {
-  "version": "0.268.0",
-  "previousVersion": "0.267.0",
-  "commitHash": "68ef024",
+  "version": "0.269.0",
+  "previousVersion": "0.268.0",
+  "commitHash": "b2f50a5",
   "branch": "main",
-  "buildDate": "2026-04-01T17:21:48.746Z",
+  "buildDate": "2026-04-01T17:43:14.630Z",
   "commits": [
+    {
+      "hash": "b2f50a5",
+      "message": "fix: CampaignsPage strict TS for conversion getters (post-build)"
+    },
     {
       "hash": "68ef024",
       "message": "Campaigns: conversions display, conversion value column, connector batch chunks; coordination/email tweaks"
@@ -60,13 +64,10 @@
     {
       "hash": "d66f56d",
       "message": "feat(marketing): use support@performanceplus.gr for contact CTAs and footer"
-    },
-    {
-      "hash": "e94d04e",
-      "message": "feat: use noreply@performanceplus.gr for transactional and UI contact email"
     }
   ],
   "changes": [
+    "[Διόρθωση] CampaignsPage strict TS for conversion getters (post-build)",
     "Campaigns: conversions display, conversion value column, connector batch chunks; coordination/email tweaks",
     "[Νέο χαρακτηριστικό] Budget opportunity engine v1, ROI section; GMC last sync KPI; coordination list limit 5 + history",
     "[Συντήρηση] Ignore Cloud Functions env files except .env.example; stop tracking project env",
@@ -75,7 +76,6 @@
     "[Βελτίωση εμφάνισης] Widen layout to ~94vw (max 90rem), larger hero and preview images",
     "[Διόρθωση] Hide contact emails on page, keep mailto to makis and dimitris",
     "Copy(landing): E-shop Intelligence hero, USP, problems, Dashboard/Strategy/Data Analysis",
-    "[Συντήρηση] Papaki env params, setup-smtp-secrets script, firebase deploy scripts",
-    "[Τεκμηρίωση] Papaki SMTP host linux230.papaki.gr"
+    "[Συντήρηση] Papaki env params, setup-smtp-secrets script, firebase deploy scripts"
   ]
 }

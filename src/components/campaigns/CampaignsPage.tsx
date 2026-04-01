@@ -54,23 +54,28 @@ function sumConversionActions(ca: Campaign['conversionActions'] | undefined): { 
   );
 }
 
-/** Rollup conversions — με fallback στα conversionActions (π.χ. ασυμφωνία πεδίων / παλιά δεδομένα). */
+/**
+ * Conversions με fallback σε conversionActions.
+ * Αν το aggregate field (c.conversions) είναι 0 αλλά υπάρχουν conversionActions,
+ * χρησιμοποιεί το άθροισμα των actions (π.χ. παλιό sync που έγραψε 0 στο root αλλά έχει actions).
+ */
 function getDisplayConversions(c: Campaign): number {
   const raw = c.conversions;
-  if (raw != null) {
-    const n = typeof raw === 'number' ? raw : parseFloat(String(raw));
-    if (!Number.isNaN(n)) return n;
-  }
-  return sumConversionActions(c.conversionActions).conv;
+  const n = raw != null ? (typeof raw === 'number' ? raw : parseFloat(String(raw))) : NaN;
+  const fromActions = sumConversionActions(c.conversionActions).conv;
+  if (!Number.isNaN(n) && n > 0) return n;
+  if (fromActions > 0) return fromActions;
+  return Number.isNaN(n) ? 0 : n; // preserve explicit 0 only when no actions either
 }
 
 function getDisplayConversionValue(c: Campaign): number {
-  const raw = c.conversion_value;
-  if (raw != null) {
-    const n = typeof raw === 'number' ? raw : parseFloat(String(raw));
-    if (!Number.isNaN(n)) return n;
-  }
-  return sumConversionActions(c.conversionActions).value;
+  const any = c as Campaign & { conversionValue?: number };
+  const raw = c.conversion_value ?? any.conversionValue;
+  const n = raw != null ? (typeof raw === 'number' ? raw : parseFloat(String(raw))) : NaN;
+  const fromActions = sumConversionActions(c.conversionActions).value;
+  if (!Number.isNaN(n) && n > 0) return n;
+  if (fromActions > 0) return fromActions;
+  return Number.isNaN(n) ? 0 : n;
 }
 
 function formatConvCount(n: number): string {
@@ -97,7 +102,11 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
           )
         : null,
     enabled: Boolean(brandId && !isLoading && !hasImported),
-    staleTime: 60_000,
+    staleTime: Infinity,
+    gcTime: 24 * 60 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
   const hasConnectedAdsOrMeta = Boolean(
     connectorsDoc?.google_ads?.connected || connectorsDoc?.meta?.connected
@@ -787,11 +796,11 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                   <SortableHeader col="name" label="Campaign" current={sortColumn} dir={sortDirection} onSort={handleSort} className="" />
                   <SortableHeader col="channel" label="Channel" current={sortColumn} dir={sortDirection} onSort={handleSort} className="whitespace-nowrap" />
                   <SortableHeader col="status" label="Status" current={sortColumn} dir={sortDirection} onSort={handleSort} className="whitespace-nowrap hidden md:table-cell" />
-                  <SortableHeader col="spent" label="Spent" current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="whitespace-nowrap" />
                   <SortableHeader col="impressions" label="Impr." current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="whitespace-nowrap hidden lg:table-cell" />
                   <SortableHeader col="clicks" label="Clicks" current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="whitespace-nowrap hidden md:table-cell" />
                   <SortableHeader col="ctr" label="CTR" current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="whitespace-nowrap hidden lg:table-cell" />
                   <SortableHeader col="conversions" label="Conv." current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="whitespace-nowrap hidden sm:table-cell" />
+                  <SortableHeader col="spent" label="Spent" current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="whitespace-nowrap hidden sm:table-cell" />
                   <SortableHeader col="conversion_value" label="Τζίρος" title="Conversion value" current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="whitespace-nowrap hidden sm:table-cell" />
                   <SortableHeader col="roas" label="ROAS" current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="whitespace-nowrap" />
                 </tr>
@@ -823,9 +832,6 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                         {campaign.status || 'Active'}
                       </Badge>
                     </td>
-                    <td className="py-2 px-3 text-right font-mono text-xs whitespace-nowrap">
-                      {campaign.amount_spent ? `€${formatCurrency(campaign.amount_spent, 2)}` : '-'}
-                    </td>
                     <td className="py-2 px-3 text-right font-mono text-xs whitespace-nowrap hidden lg:table-cell">
                       {campaign.impressions ? formatNumber(campaign.impressions) : '-'}
                     </td>
@@ -838,13 +844,16 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                     <td className="py-2 px-3 text-right font-mono text-xs whitespace-nowrap hidden sm:table-cell">
                       {formatConvCount(getDisplayConversions(campaign))}
                     </td>
+                    <td className="py-2 px-3 text-right font-mono text-xs whitespace-nowrap hidden sm:table-cell">
+                      {campaign.amount_spent ? `€${formatCurrency(campaign.amount_spent, 2)}` : '-'}
+                    </td>
                     <td className="py-2 px-3 text-right font-mono text-xs whitespace-nowrap hidden sm:table-cell" title="Conversion value (τζίρος από conversions)">
                       €{formatCurrency(getDisplayConversionValue(campaign), 2)}
                     </td>
                     <td className="py-3 px-2 text-right">
-                      {campaign.roas ? (
-                        <Badge variant="success" size="sm">
-                          {formatMultiplier(campaign.roas, 2)}
+                      {Number.isFinite(campaign.roas ?? NaN) ? (
+                        <Badge variant={(campaign.roas ?? 0) > 0 ? 'success' : 'default'} size="sm">
+                          {formatMultiplier(campaign.roas ?? 0, 2)}
                         </Badge>
                       ) : (
                         '-'
