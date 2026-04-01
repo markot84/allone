@@ -459,6 +459,13 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
 
       const allCampaigns = Array.from(campaignMap.values());
 
+      // Compute derived metrics after full aggregation
+      for (const c of allCampaigns) {
+        c.roas = c.amount_spent > 0 ? c.conversion_value / c.amount_spent : 0;
+        c.ctr = c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0;
+        c.frequency = c.reach > 0 ? c.impressions / c.reach : 0;
+      }
+
       // Firestore: max 500 ops/batch and ~10MB payload.
       // Meta campaigns carry 36 months of dailyMetrics + conversionActions — keep chunks small.
       const CHUNK = 15;

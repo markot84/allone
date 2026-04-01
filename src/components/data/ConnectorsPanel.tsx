@@ -37,7 +37,7 @@ interface ConnectorState {
   expiresAt?: number;
 }
 
-type ConnectorId = 'google_ads' | 'meta' | 'merchant' | 'ga4' | 'shopify' | 'woocommerce';
+type ConnectorId = 'google_ads' | 'meta' | 'merchant' | 'ga4' | 'shopify' | 'woocommerce' | 'opencart' | 'magento';
 
 interface ConnectorConfig {
   id: ConnectorId;
@@ -50,6 +50,7 @@ interface ConnectorConfig {
   syncLabel?: string;
   authType?: 'oauth' | 'credentials';
   readOnlyNotice?: string;
+  comingSoon?: boolean;
 }
 
 const CONNECTORS: ConnectorConfig[] = [
@@ -115,6 +116,30 @@ const CONNECTORS: ConnectorConfig[] = [
     borderColor: 'border-purple-200',
     syncLabel: 'items',
     authType: 'credentials',
+  },
+  {
+    id: 'opencart',
+    name: 'OpenCart',
+    description: 'Σύνδεση OpenCart e-shop — products, orders, customers',
+    icon: '🛍️',
+    color: '#23AFFE',
+    bgColor: 'bg-sky-50',
+    borderColor: 'border-sky-200',
+    syncLabel: 'items',
+    authType: 'credentials',
+    comingSoon: true,
+  },
+  {
+    id: 'magento',
+    name: 'Magento / Adobe Commerce',
+    description: 'Σύνδεση Magento e-shop — products, orders, customers',
+    icon: '🔶',
+    color: '#F46F25',
+    bgColor: 'bg-orange-50',
+    borderColor: 'border-orange-200',
+    syncLabel: 'items',
+    authType: 'credentials',
+    comingSoon: true,
   },
 ];
 
@@ -858,7 +883,9 @@ export function ConnectorsPanel() {
                   <div
                     key={conn.id}
                     className={`rounded-xl border-2 p-5 transition-all ${
-                      isConnected
+                      conn.comingSoon
+                        ? 'bg-gray-50 border-gray-200 opacity-70'
+                        : isConnected
                         ? `${conn.bgColor} ${conn.borderColor}`
                         : isPending
                         ? 'bg-amber-50 border-amber-300'
@@ -869,7 +896,12 @@ export function ConnectorsPanel() {
                       <div className="flex items-center gap-3">
                         <span className="text-2xl">{conn.icon}</span>
                         <div>
-                          <h4 className="font-semibold text-[#1A1A1A]">{conn.name}</h4>
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-semibold text-[#1A1A1A]">{conn.name}</h4>
+                            {conn.comingSoon && (
+                              <span className="text-[10px] font-medium bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded-full">Σύντομα</span>
+                            )}
+                          </div>
                           <p className="text-xs text-[#6B7280] mt-0.5">{conn.description}</p>
                           {conn.readOnlyNotice && (
                             <p className="text-[10px] text-emerald-600 mt-1 flex items-center gap-1">
@@ -919,7 +951,16 @@ export function ConnectorsPanel() {
                     )}
 
                     <div className="flex items-center gap-2 mt-3">
-                      {isPending ? (
+                      {conn.comingSoon ? (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled
+                          className="w-full cursor-not-allowed"
+                        >
+                          Σύντομα διαθέσιμο
+                        </Button>
+                      ) : isPending ? (
                         <Button
                           variant="primary"
                           size="sm"

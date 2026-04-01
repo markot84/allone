@@ -79,8 +79,7 @@ function getDisplayConversionValue(c: Campaign): number {
 }
 
 function formatConvCount(n: number): string {
-  const dec = Math.abs(n % 1) > 1e-6 ? 2 : 0;
-  return formatNumber(n, dec);
+  return formatNumber(Math.round(n), 0);
 }
 
 interface CampaignsPageProps {
