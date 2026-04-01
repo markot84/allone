@@ -1,10 +1,14 @@
 {
-  "version": "0.269.0",
-  "previousVersion": "0.268.0",
-  "commitHash": "b2f50a5",
+  "version": "0.270.0",
+  "previousVersion": "0.269.0",
+  "commitHash": "99b38db",
   "branch": "main",
-  "buildDate": "2026-04-01T17:43:14.630Z",
+  "buildDate": "2026-04-01T17:52:19.208Z",
   "commits": [
+    {
+      "hash": "99b38db",
+      "message": "campaigns: fix conversions/value display fallback, cache policy, connector batch chunks, omni_purchase meta"
+    },
     {
       "hash": "b2f50a5",
       "message": "fix: CampaignsPage strict TS for conversion getters (post-build)"
@@ -60,13 +64,10 @@
     {
       "hash": "76f552f",
       "message": "fix(marketing): contact mailto to makis and dimitris at notthesame.gr"
-    },
-    {
-      "hash": "d66f56d",
-      "message": "feat(marketing): use support@performanceplus.gr for contact CTAs and footer"
     }
   ],
   "changes": [
+    "Campaigns: fix conversions/value display fallback, cache policy, connector batch chunks, omni_purchase meta",
     "[Διόρθωση] CampaignsPage strict TS for conversion getters (post-build)",
     "Campaigns: conversions display, conversion value column, connector batch chunks; coordination/email tweaks",
     "[Νέο χαρακτηριστικό] Budget opportunity engine v1, ROI section; GMC last sync KPI; coordination list limit 5 + history",
@@ -75,7 +76,6 @@
     "[Συντήρηση] BuildInfo after landing deploy build",
     "[Βελτίωση εμφάνισης] Widen layout to ~94vw (max 90rem), larger hero and preview images",
     "[Διόρθωση] Hide contact emails on page, keep mailto to makis and dimitris",
-    "Copy(landing): E-shop Intelligence hero, USP, problems, Dashboard/Strategy/Data Analysis",
-    "[Συντήρηση] Papaki env params, setup-smtp-secrets script, firebase deploy scripts"
+    "Copy(landing): E-shop Intelligence hero, USP, problems, Dashboard/Strategy/Data Analysis"
   ]
 }
