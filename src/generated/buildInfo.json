@@ -1,10 +1,14 @@
 {
-  "version": "0.295.0",
-  "previousVersion": "0.294.0",
-  "commitHash": "5219744",
+  "version": "0.296.0",
+  "previousVersion": "0.295.0",
+  "commitHash": "dcb277c",
   "branch": "main",
-  "buildDate": "2026-04-02T15:16:34.702Z",
+  "buildDate": "2026-04-02T15:40:01.239Z",
   "commits": [
+    {
+      "hash": "dcb277c",
+      "message": "fix: filter Google Ads non-purchase conversions (store visits, calls) from ROAS/revenue metrics"
+    },
     {
       "hash": "5219744",
       "message": "fix: force function redeploy with updated build comment"
@@ -60,13 +64,10 @@
     {
       "hash": "d34eded",
       "message": "perf: cache-first campaigns load via Firestore IndexedDB + skip localStorage for large queries"
-    },
-    {
-      "hash": "84ee79c",
-      "message": "fix(campaigns): proportional scaling for monthly Meta buckets in date filter"
     }
   ],
   "changes": [
+    "[Διόρθωση] Filter Google Ads non-purchase conversions (store visits, calls) from ROAS/revenue metrics",
     "[Διόρθωση] Force function redeploy with updated build comment",
     "[Διόρθωση] Remove REMOVED campaign filter and use yesterday as untilStr in connectors",
     "[Διόρθωση] Align date ranges with ad platforms (toDate=yesterday) and remove all_conversions inflation",
@@ -75,7 +76,6 @@
     "[Διόρθωση] ROI page uses bucketOverlapFraction and aggregates conversionActions for correct period metrics",
     "[Νέο χαρακτηριστικό] Shared persistent period selector for Dashboard and ROI pages",
     "[Διόρθωση] Dashboard uses bucketOverlapFraction for correct period metrics (same as Campaigns page)",
-    "[Νέο χαρακτηριστικό] Dashboard period selector (current month / last 30d / current year)",
-    "[Διόρθωση] Consistent conversion metrics, brand-scoped filters, AI briefing brand reset"
+    "[Νέο χαρακτηριστικό] Dashboard period selector (current month / last 30d / current year)"
   ]
 }

@@ -263,9 +263,7 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
       const since = new Date();
       since.setFullYear(since.getFullYear() - 3);
       const sinceStr = since.toISOString().split('T')[0];
-      // yesterday: Meta finalizes data overnight, today is always incomplete
-      const yesterdayMeta = new Date(); yesterdayMeta.setUTCDate(yesterdayMeta.getUTCDate() - 1);
-      const untilStr = yesterdayMeta.toISOString().split('T')[0];
+      const untilStr = new Date().toISOString().split('T')[0];
 
       // Fetch data per-month (individual API call per calendar month).
       // time_increment=monthly is unreliable (some accounts silently ignore it),

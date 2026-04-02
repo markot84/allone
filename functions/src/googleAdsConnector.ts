@@ -52,9 +52,8 @@ const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const SCOPES = ['https://www.googleapis.com/auth/adwords'];
 
 /**
- * Uses metrics.conversions / metrics.conversions_value to match what Google Ads UI shows by default.
- * all_conversions is stored separately but NOT used for primary metrics — it inflates counts with
- * view-through, cross-device and other micro-conversions not shown in the Google Ads standard column.
+ * REST JSON uses camelCase; some fields may be missing. If primary conversions are 0,
+ * fall back to all_conversions / all_conversions_value (common when attribution uses "all conv." reporting).
  */
 function parseCampaignDayMetrics(m: Record<string, unknown> | undefined | null): {
   impressions: number;
@@ -70,9 +69,14 @@ function parseCampaignDayMetrics(m: Record<string, unknown> | undefined | null):
   const impressions = parseInt(String(x.impressions ?? '0'), 10) || 0;
   const clicks = parseInt(String(x.clicks ?? '0'), 10) || 0;
   const costMicros = parseInt(String(x.costMicros ?? x.cost_micros ?? '0'), 10) || 0;
-  const conversions = parseFloat(String(x.conversions ?? '0')) || 0;
-  const conversionValue = parseFloat(String(x.conversionsValue ?? x.conversions_value ?? '0')) || 0;
-  // all_conversions stored for informational purposes only — not used as primary metric.
+  let conversions = parseFloat(String(x.conversions ?? '0'));
+  let conversionValue = parseFloat(String(x.conversionsValue ?? x.conversions_value ?? '0'));
+  if (!Number.isFinite(conversions)) conversions = 0;
+  if (!Number.isFinite(conversionValue)) conversionValue = 0;
+  const allConv = parseFloat(String(x.allConversions ?? x.all_conversions ?? '0'));
+  const allVal = parseFloat(String(x.allConversionsValue ?? x.all_conversions_value ?? '0'));
+  if (conversions === 0 && Number.isFinite(allConv) && allConv > 0) conversions = allConv;
+  if (conversionValue === 0 && Number.isFinite(allVal) && allVal > 0) conversionValue = allVal;
   return { impressions, clicks, conversions, conversion_value: conversionValue, cost_micros: costMicros };
 }
 
@@ -458,14 +462,12 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
     return { success: false, imported: 0, error: 'Ο Customer ID ταυτίζεται με τον MCC — χρησιμοποιήστε το ID του sub-account.' };
   }
 
-  // Build last 3 years date range.
-  // untilStr = yesterday (UTC): ad platforms finalize data overnight so today is always incomplete.
+  // Build last 365 days date range
   const now = new Date();
-  const yesterday = new Date(now); yesterday.setUTCDate(yesterday.getUTCDate() - 1);
   const since = new Date(now);
-  since.setUTCDate(since.getUTCDate() - 365 * 3);
+  since.setDate(since.getDate() - 365 * 3);
   const sinceStr = since.toISOString().slice(0, 10);
-  const untilStr = yesterday.toISOString().slice(0, 10);
+  const untilStr = now.toISOString().slice(0, 10);
 
   // Note: ORDER BY on metrics with date segmentation causes UNIMPLEMENTED in some accounts.
   // segments.date must be in SELECT when used in WHERE with date range.
@@ -485,6 +487,7 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
       metrics.cost_micros
     FROM campaign
     WHERE segments.date BETWEEN '${sinceStr}' AND '${untilStr}'
+      AND campaign.status != 'REMOVED'
   `;
 
   let totalImported = 0;
@@ -651,6 +654,7 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
                  metrics.conversions, metrics.conversions_value
           FROM campaign
           WHERE segments.date BETWEEN '${mr.since}' AND '${mr.until}'
+            AND campaign.status != 'REMOVED'
             AND metrics.conversions > 0
         `;
 

@@ -2,9 +2,6 @@ import type { Campaign } from '../types';
 
 /**
  * Returns the fraction [0,1] of a dailyMetrics bucket that overlaps [fromDate, toDate].
- * Daily keys (YYYY-MM-DD where day != '01'): exactly 0 or 1.
- * Monthly keys (day === '01', used by Meta): proportional overlap so a partial-month
- * date range doesn't include the full month's aggregate.
  */
 export function bucketOverlapFraction(date: string, fromDate: string, toDate: string): number {
   if (date.slice(8, 10) === '01') {
@@ -23,128 +20,55 @@ export function bucketOverlapFraction(date: string, fromDate: string, toDate: st
 // Purchase labels trusted for Meta — in priority order.
 // omni_purchase is excluded: it's a Meta-modeled superset that inflates counts.
 const META_PURCHASE_LABELS = ['Purchase (Pixel)', 'Purchase'];
-// omni_purchase kept for reference but no longer used in logic
-const _EXCLUDED_ACTION_LABELS = new Set(['omni_purchase']); void _EXCLUDED_ACTION_LABELS;
-
-// Keywords that identify Google Ads purchase/transaction conversion actions
-const GADS_PURCHASE_KEYWORDS = ['purchase', 'αγορά', 'αγορα', 'buy', 'order', 'transaction', 'checkout', 'ecommerce'];
-// Keywords that identify non-purchase Google Ads conversion actions (store visits, leads, calls, etc.)
-const GADS_NON_PURCHASE_KEYWORDS = [
-  'store visit', 'store_visit', 'επίσκεψη', 'phone call', 'calls from', 'direction',
-  'get direction', 'lead', 'form submit', 'form_submit', 'newsletter', 'download',
-  'scroll', 'page view', 'pageview', 'video', 'engagement',
-];
-
-type ConvActMap = Record<string, { conversions: number; value: number }>;
-
-/**
- * Classifies Google Ads conversionActions into purchase vs non-purchase,
- * returning proportions for filtering.
- * Note: when date-filtering is active, conversionActions may have monthly totals × days
- * but the FRACTION (purchase/total) remains correct regardless of overcounting.
- */
-function classifyGAdsActions(acts: ConvActMap): {
-  hasPurchase: boolean;
-  hasNonPurchase: boolean;
-  purchaseValueFraction: number;
-  purchaseConvFraction: number;
-} {
-  let purchaseValue = 0, totalValue = 0;
-  let purchaseConvs = 0, totalConvs = 0;
-  let hasPurchase = false, hasNonPurchase = false;
-
-  for (const [label, a] of Object.entries(acts)) {
-    const lower = label.toLowerCase();
-    const isPurchase = GADS_PURCHASE_KEYWORDS.some(kw => lower.includes(kw));
-    const isNonPurchase = !isPurchase && GADS_NON_PURCHASE_KEYWORDS.some(kw => lower.includes(kw));
-
-    const v = a?.value ?? 0;
-    const convs = a?.conversions ?? 0;
-    totalValue += v;
-    totalConvs += convs;
-
-    if (isPurchase) {
-      hasPurchase = true;
-      purchaseValue += v;
-      purchaseConvs += convs;
-    } else if (isNonPurchase) {
-      hasNonPurchase = true;
-    }
-  }
-
-  return {
-    hasPurchase,
-    hasNonPurchase,
-    purchaseValueFraction: totalValue > 0 ? purchaseValue / totalValue : 0,
-    purchaseConvFraction: totalConvs > 0 ? purchaseConvs / totalConvs : 0,
-  };
-}
+const EXCLUDED_ACTION_LABELS = new Set(['omni_purchase']);
 
 /**
  * Returns the reliable conversion value for a campaign.
  *
- * For Meta: reads only from trusted conversionActions labels ("Purchase (Pixel)" > "Purchase").
- * For Google Ads: filters conversionActions to purchase-type actions only, excluding
- *   store visits, phone calls, leads etc. that are NOT revenue-generating conversions.
- * For other channels: uses c.conversion_value directly.
+ * For Meta: reads only from trusted conversionActions labels ("Purchase (Pixel)" > "Purchase")
+ * to avoid stale Firestore documents that stored omni_purchase as the primary metric.
+ * For all other channels: uses c.conversion_value directly, falling back to conversionActions sum.
  */
 export function getEffectiveConversionValue(c: Campaign): number {
   if (c.channel === 'Meta') {
     if (c.conversionActions) {
       for (const label of META_PURCHASE_LABELS) {
-        const a = (c.conversionActions as ConvActMap)[label];
+        const a = (c.conversionActions as Record<string, { conversions: number; value: number }>)[label];
         if (a && a.value > 0) return a.value;
       }
     }
     return 0;
   }
-
-  if (c.conversionActions) {
-    const acts = c.conversionActions as ConvActMap;
-    const { hasPurchase, hasNonPurchase, purchaseValueFraction } = classifyGAdsActions(acts);
-    if (hasPurchase) {
-      // Has identifiable purchase actions — use their proportional share of conversion_value
-      return (c.conversion_value || 0) * purchaseValueFraction;
-    }
-    if (hasNonPurchase && !hasPurchase) {
-      // Only non-purchase actions (store visits, phone calls, etc.) — not e-commerce revenue
-      return 0;
-    }
-    // Labels not recognized — fall through to raw conversion_value
-  }
-
   const v = c.conversion_value || 0;
   if (v > 0) return v;
+  if (c.conversionActions) {
+    return Object.entries(c.conversionActions as Record<string, { conversions: number; value: number }>)
+      .filter(([label]) => !EXCLUDED_ACTION_LABELS.has(label))
+      .reduce((sum, [, a]) => sum + (a?.value ?? 0), 0);
+  }
   return 0;
 }
 
 /**
- * Returns the reliable conversion count for a campaign (mirrors getEffectiveConversionValue logic).
+ * Returns the reliable conversion count for a campaign (same logic as getEffectiveConversionValue).
  */
 export function getEffectiveConversions(c: Campaign): number {
   if (c.channel === 'Meta') {
     if (c.conversionActions) {
       for (const label of META_PURCHASE_LABELS) {
-        const a = (c.conversionActions as ConvActMap)[label];
+        const a = (c.conversionActions as Record<string, { conversions: number; value: number }>)[label];
         if (a && a.conversions > 0) return a.conversions;
       }
     }
     return 0;
   }
-
-  if (c.conversionActions) {
-    const acts = c.conversionActions as ConvActMap;
-    const { hasPurchase, hasNonPurchase, purchaseConvFraction } = classifyGAdsActions(acts);
-    if (hasPurchase) {
-      return (c.conversions || 0) * purchaseConvFraction;
-    }
-    if (hasNonPurchase && !hasPurchase) {
-      return 0;
-    }
-  }
-
   const v = c.conversions || 0;
   if (v > 0) return v;
+  if (c.conversionActions) {
+    return Object.entries(c.conversionActions as Record<string, { conversions: number; value: number }>)
+      .filter(([label]) => !EXCLUDED_ACTION_LABELS.has(label))
+      .reduce((sum, [, a]) => sum + (a?.conversions ?? 0), 0);
+  }
   return 0;
 }
 
