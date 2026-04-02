@@ -9,6 +9,7 @@ import { useSearchIntelligence } from '../../hooks/useSearchIntelligence';
 import { FirestoreService } from '../../services/firestore';
 import { formatCurrency, formatNumber, formatMultiplier, formatPercent, formatCompact } from '../../utils/format';
 import { getEffectiveConversionValue, getEffectiveConversions, bucketOverlapFraction } from '../../utils/roiUtils';
+import { BudgetOpportunitySection } from '../roi/BudgetOpportunitySection';
 import type { Campaign } from '../../types';
 
 function parseCampaignDate(d: string | number | undefined): Date | null {
@@ -862,6 +863,8 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
           </div>
         )}
       </Card>
+
+      <BudgetOpportunitySection campaigns={(campaigns ?? []) as Campaign[]} />
       </>}
     </div>
   );

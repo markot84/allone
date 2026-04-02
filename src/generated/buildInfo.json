@@ -1,10 +1,14 @@
 {
-  "version": "0.290.0",
-  "previousVersion": "0.289.0",
-  "commitHash": "0c36062",
+  "version": "0.291.0",
+  "previousVersion": "0.290.0",
+  "commitHash": "acedae0",
   "branch": "main",
-  "buildDate": "2026-04-02T06:03:31.474Z",
+  "buildDate": "2026-04-02T06:14:29.508Z",
   "commits": [
+    {
+      "hash": "acedae0",
+      "message": "fix: ROI page uses bucketOverlapFraction and aggregates conversionActions for correct period metrics"
+    },
     {
       "hash": "0c36062",
       "message": "feat: shared persistent period selector for Dashboard and ROI pages"
@@ -60,13 +64,10 @@
     {
       "hash": "bafcd13",
       "message": "chore: force functions redeploy trigger + git push"
-    },
-    {
-      "hash": "99b38db",
-      "message": "campaigns: fix conversions/value display fallback, cache policy, connector batch chunks, omni_purchase meta"
     }
   ],
   "changes": [
+    "[Διόρθωση] ROI page uses bucketOverlapFraction and aggregates conversionActions for correct period metrics",
     "[Νέο χαρακτηριστικό] Shared persistent period selector for Dashboard and ROI pages",
     "[Διόρθωση] Dashboard uses bucketOverlapFraction for correct period metrics (same as Campaigns page)",
     "[Νέο χαρακτηριστικό] Dashboard period selector (current month / last 30d / current year)",
@@ -75,7 +76,6 @@
     "[Διόρθωση] Recompute ROAS from cv/spent in frontend, never trust stale roas:0 from Firestore",
     "[Διόρθωση] Round all currency amounts to 0 decimals in Campaigns page",
     "[Βελτίωση απόδοσης] Cache-first campaigns load via Firestore IndexedDB + skip localStorage for large queries",
-    "[Διόρθωση] Proportional scaling for monthly Meta buckets in date filter",
-    "[Διόρθωση] ROAS display 0 decimals (5.095x not 5.095,28x)"
+    "[Διόρθωση] Proportional scaling for monthly Meta buckets in date filter"
   ]
 }

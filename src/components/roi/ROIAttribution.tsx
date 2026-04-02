@@ -33,7 +33,6 @@ import {
   getEffectiveConversionValue,
   bucketOverlapFraction,
 } from '../../utils/roiUtils';
-import { BudgetOpportunitySection } from './BudgetOpportunitySection';
 import { formatCurrencyCompact, formatNumber, formatPercent } from '../../utils/format';
 import type { Campaign } from '../../types';
 
@@ -344,8 +343,6 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
           />
         </div>
       </div>
-
-      <BudgetOpportunitySection campaigns={campaignsTyped} />
 
       {/* Section 2: Revenue Trend */}
       {trendData.length > 0 && (
