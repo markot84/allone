@@ -1,10 +1,14 @@
 {
-  "version": "0.287.0",
-  "previousVersion": "0.286.0",
-  "commitHash": "5ea82e6",
+  "version": "0.288.0",
+  "previousVersion": "0.287.0",
+  "commitHash": "c7488aa",
   "branch": "main",
-  "buildDate": "2026-04-02T05:16:01.288Z",
+  "buildDate": "2026-04-02T05:35:23.384Z",
   "commits": [
+    {
+      "hash": "c7488aa",
+      "message": "feat: dashboard period selector (current month / last 30d / current year)"
+    },
     {
       "hash": "5ea82e6",
       "message": "fix: consistent conversion metrics, brand-scoped filters, AI briefing brand reset"
@@ -60,13 +64,10 @@
     {
       "hash": "68ef024",
       "message": "Campaigns: conversions display, conversion value column, connector batch chunks; coordination/email tweaks"
-    },
-    {
-      "hash": "17dc697",
-      "message": "feat: budget opportunity engine v1, ROI section; GMC last sync KPI; coordination list limit 5 + history"
     }
   ],
   "changes": [
+    "[Νέο χαρακτηριστικό] Dashboard period selector (current month / last 30d / current year)",
     "[Διόρθωση] Consistent conversion metrics, brand-scoped filters, AI briefing brand reset",
     "[Διόρθωση] Remove omni_purchase - causes 1600%+ CTR due to modeled conversions inflation",
     "[Διόρθωση] Recompute ROAS from cv/spent in frontend, never trust stale roas:0 from Firestore",
@@ -75,7 +76,6 @@
     "[Διόρθωση] Proportional scaling for monthly Meta buckets in date filter",
     "[Διόρθωση] ROAS display 0 decimals (5.095x not 5.095,28x)",
     "[Διόρθωση] ROAS calc in meta, round conv decimals, add OpenCart/Magento connectors",
-    "[Διόρθωση] Resolve sync failures - CHUNK 100->15, delete try/catch, brandId+channel index",
-    "[Διόρθωση] Meta delete batch chunked, connectors panel cached via React Query (no reload on nav)"
+    "[Διόρθωση] Resolve sync failures - CHUNK 100->15, delete try/catch, brandId+channel index"
   ]
 }

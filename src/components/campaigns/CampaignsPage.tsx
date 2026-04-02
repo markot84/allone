@@ -8,7 +8,7 @@ import { useCampaigns, useBrand } from '../../hooks';
 import { useSearchIntelligence } from '../../hooks/useSearchIntelligence';
 import { FirestoreService } from '../../services/firestore';
 import { formatCurrency, formatNumber, formatMultiplier, formatPercent, formatCompact } from '../../utils/format';
-import { getEffectiveConversionValue, getEffectiveConversions } from '../../utils/roiUtils';
+import { getEffectiveConversionValue, getEffectiveConversions, bucketOverlapFraction } from '../../utils/roiUtils';
 import type { Campaign } from '../../types';
 
 function parseCampaignDate(d: string | number | undefined): Date | null {
@@ -30,23 +30,6 @@ function parseCampaignDate(d: string | number | undefined): Date | null {
   return isNaN(parsed.getTime()) ? null : parsed;
 }
 
-// Returns the fraction [0,1] of a dailyMetrics bucket that overlaps [fromDate, toDate].
-// Daily keys (YYYY-MM-DD): 0 or 1 exactly.
-// Monthly keys (day === '01'): proportional (e.g. "March 28 only" → 1/31 of March's aggregate).
-// This prevents showing full-month Meta data when the user selects a single day or partial month.
-function bucketOverlapFraction(date: string, fromDate: string, toDate: string): number {
-  if (date.slice(8, 10) === '01') {
-    const [year, month] = date.slice(0, 7).split('-').map(Number);
-    const daysInMonth = new Date(year, month, 0).getDate();
-    const monthEnd = `${date.slice(0, 7)}-${String(daysInMonth).padStart(2, '0')}`;
-    if (date > toDate || monthEnd < fromDate) return 0;
-    const overlapStart = date > fromDate ? date : fromDate;
-    const overlapEnd = monthEnd < toDate ? monthEnd : toDate;
-    const overlapDays = Math.round((new Date(overlapEnd).getTime() - new Date(overlapStart).getTime()) / 86400000) + 1;
-    return overlapDays / daysInMonth;
-  }
-  return date >= fromDate && date <= toDate ? 1 : 0;
-}
 
 // omni_purchase excluded from conversion filter dropdown too
 const EXCLUDED_ACTION_LABELS = new Set(['omni_purchase']);

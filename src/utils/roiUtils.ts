@@ -1,5 +1,25 @@
 import type { Campaign } from '../types';
 
+/**
+ * Returns the fraction [0,1] of a dailyMetrics bucket that overlaps [fromDate, toDate].
+ * Daily keys (YYYY-MM-DD where day != '01'): exactly 0 or 1.
+ * Monthly keys (day === '01', used by Meta): proportional overlap so a partial-month
+ * date range doesn't include the full month's aggregate.
+ */
+export function bucketOverlapFraction(date: string, fromDate: string, toDate: string): number {
+  if (date.slice(8, 10) === '01') {
+    const [year, month] = date.slice(0, 7).split('-').map(Number);
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const monthEnd = `${date.slice(0, 7)}-${String(daysInMonth).padStart(2, '0')}`;
+    if (date > toDate || monthEnd < fromDate) return 0;
+    const overlapStart = date > fromDate ? date : fromDate;
+    const overlapEnd = monthEnd < toDate ? monthEnd : toDate;
+    const overlapDays = Math.round((new Date(overlapEnd).getTime() - new Date(overlapStart).getTime()) / 86400000) + 1;
+    return overlapDays / daysInMonth;
+  }
+  return date >= fromDate && date <= toDate ? 1 : 0;
+}
+
 // Purchase labels trusted for Meta — in priority order.
 // omni_purchase is excluded: it's a Meta-modeled superset that inflates counts.
 const META_PURCHASE_LABELS = ['Purchase (Pixel)', 'Purchase'];

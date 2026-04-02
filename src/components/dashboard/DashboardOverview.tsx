@@ -20,7 +20,7 @@ import {
 import { Card, CardHeader, KPICard, Tooltip, AlertsBanner } from '../common';
 import { useSegments, useOrganic, useCampaigns, useActiveStrategy, useSuppliers, useProductSource, useBrand, useProductAggregates } from '../../hooks';
 import { useGA4Data } from '../../hooks/useGA4Data';
-import { calculateTotalRevenue, calculateCampaignMetrics, getCampaignDateForMonth, getEffectiveConversionValue } from '../../utils/roiUtils';
+import { calculateTotalRevenue, calculateCampaignMetrics, getCampaignDateForMonth, getEffectiveConversionValue, bucketOverlapFraction } from '../../utils/roiUtils';
 import { formatCurrencyCompact, formatNumber, formatMultiplier, formatPercent } from '../../utils/format';
 import type { Campaign } from '../../types';
 import { generateInsightsFromData } from '../../services/insights';
@@ -93,17 +93,18 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       const convActions: Record<string, { conversions: number; value: number }> = {};
 
       for (const [date, m] of Object.entries(dm)) {
-        if (date < fromDate || date > toDate) continue;
-        impressions += Math.round(m.impressions || 0);
-        clicks += Math.round(m.clicks || 0);
-        conversions += (m.conversions || 0);
-        amount_spent += (m.amount_spent || 0);
-        conversion_value += (m.conversion_value || 0);
+        const frac = bucketOverlapFraction(date, fromDate, toDate);
+        if (frac <= 0) continue;
+        impressions += Math.round((m.impressions || 0) * frac);
+        clicks += Math.round((m.clicks || 0) * frac);
+        conversions += (m.conversions || 0) * frac;
+        amount_spent += (m.amount_spent || 0) * frac;
+        conversion_value += (m.conversion_value || 0) * frac;
         if (m.conversionActions) {
           for (const [label, vals] of Object.entries(m.conversionActions as Record<string, { conversions: number; value: number }>)) {
             if (!convActions[label]) convActions[label] = { conversions: 0, value: 0 };
-            convActions[label].conversions += vals.conversions || 0;
-            convActions[label].value += vals.value || 0;
+            convActions[label].conversions += (vals.conversions || 0) * frac;
+            convActions[label].value += (vals.value || 0) * frac;
           }
         }
       }
