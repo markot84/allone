@@ -458,12 +458,14 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
     return { success: false, imported: 0, error: 'Ο Customer ID ταυτίζεται με τον MCC — χρησιμοποιήστε το ID του sub-account.' };
   }
 
-  // Build last 365 days date range
+  // Build last 3 years date range.
+  // untilStr = yesterday (UTC): ad platforms finalize data overnight so today is always incomplete.
   const now = new Date();
+  const yesterday = new Date(now); yesterday.setUTCDate(yesterday.getUTCDate() - 1);
   const since = new Date(now);
-  since.setDate(since.getDate() - 365 * 3);
+  since.setUTCDate(since.getUTCDate() - 365 * 3);
   const sinceStr = since.toISOString().slice(0, 10);
-  const untilStr = now.toISOString().slice(0, 10);
+  const untilStr = yesterday.toISOString().slice(0, 10);
 
   // Note: ORDER BY on metrics with date segmentation causes UNIMPLEMENTED in some accounts.
   // segments.date must be in SELECT when used in WHERE with date range.
@@ -483,7 +485,6 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
       metrics.cost_micros
     FROM campaign
     WHERE segments.date BETWEEN '${sinceStr}' AND '${untilStr}'
-      AND campaign.status != 'REMOVED'
   `;
 
   let totalImported = 0;
@@ -650,7 +651,6 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
                  metrics.conversions, metrics.conversions_value
           FROM campaign
           WHERE segments.date BETWEEN '${mr.since}' AND '${mr.until}'
-            AND campaign.status != 'REMOVED'
             AND metrics.conversions > 0
         `;
 
