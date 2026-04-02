@@ -233,8 +233,8 @@ export function computeBudgetOpportunities(
   };
   const ref = opts.referenceDate ? new Date(opts.referenceDate) : new Date();
   ref.setHours(12, 0, 0, 0);
-
-  const recentEnd = ref;
+  // Use yesterday as recentEnd: ad platforms finalize data overnight, today is always incomplete.
+  const recentEnd = addDays(ref, -1);
   const recentStart = addDays(recentEnd, -(opts.recentDays - 1));
   const baselineEnd = addDays(recentStart, -1);
   const baselineStart = addDays(baselineEnd, -(opts.baselineDays - 1));

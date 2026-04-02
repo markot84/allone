@@ -1,10 +1,14 @@
 {
-  "version": "0.292.0",
-  "previousVersion": "0.291.0",
-  "commitHash": "419bab5",
+  "version": "0.293.0",
+  "previousVersion": "0.292.0",
+  "commitHash": "4d4ce26",
   "branch": "main",
-  "buildDate": "2026-04-02T06:51:57.554Z",
+  "buildDate": "2026-04-02T11:36:26.343Z",
   "commits": [
+    {
+      "hash": "4d4ce26",
+      "message": "fix: AI Briefing scoped to selected period - cache, prompt and reset on period change"
+    },
     {
       "hash": "419bab5",
       "message": "feat: move BudgetOpportunitySection from ROI to Campaigns page"
@@ -60,13 +64,10 @@
     {
       "hash": "b1e6bb0",
       "message": "fix(meta): resolve sync failures - CHUNK 100->15, delete try/catch, brandId+channel index"
-    },
-    {
-      "hash": "9d097c5",
-      "message": "fix: meta delete batch chunked, connectors panel cached via React Query (no reload on nav)"
     }
   ],
   "changes": [
+    "[Διόρθωση] AI Briefing scoped to selected period - cache, prompt and reset on period change",
     "[Νέο χαρακτηριστικό] Move BudgetOpportunitySection from ROI to Campaigns page",
     "[Διόρθωση] ROI page uses bucketOverlapFraction and aggregates conversionActions for correct period metrics",
     "[Νέο χαρακτηριστικό] Shared persistent period selector for Dashboard and ROI pages",
@@ -75,7 +76,6 @@
     "[Διόρθωση] Consistent conversion metrics, brand-scoped filters, AI briefing brand reset",
     "[Διόρθωση] Remove omni_purchase - causes 1600%+ CTR due to modeled conversions inflation",
     "[Διόρθωση] Recompute ROAS from cv/spent in frontend, never trust stale roas:0 from Firestore",
-    "[Διόρθωση] Round all currency amounts to 0 decimals in Campaigns page",
-    "[Βελτίωση απόδοσης] Cache-first campaigns load via Firestore IndexedDB + skip localStorage for large queries"
+    "[Διόρθωση] Round all currency amounts to 0 decimals in Campaigns page"
   ]
 }

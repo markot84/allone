@@ -30,11 +30,14 @@ export function useDashPeriod() {
     try { localStorage.setItem(LS_KEY, p); } catch { /* ignore */ }
   }, []);
 
-  /** Returns { fromDate, toDate } as YYYY-MM-DD strings */
+  /** Returns { fromDate, toDate } as YYYY-MM-DD strings.
+   *  toDate = yesterday: ad platforms finalize data overnight so today is always incomplete. */
   const periodDates = (() => {
     const now = new Date();
     const pad = (n: number) => String(n).padStart(2, '0');
-    const toDate = now.toISOString().slice(0, 10);
+    // yesterday — aligns with Google Ads / Meta which report up to D-1
+    const yesterday = new Date(now); yesterday.setDate(yesterday.getDate() - 1);
+    const toDate = yesterday.toISOString().slice(0, 10);
     if (period === 'current_month') {
       return { fromDate: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`, toDate };
     }
