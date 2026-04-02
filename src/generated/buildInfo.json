@@ -1,10 +1,22 @@
 {
-  "version": "0.293.0",
-  "previousVersion": "0.292.0",
-  "commitHash": "4d4ce26",
+  "version": "0.295.0",
+  "previousVersion": "0.294.0",
+  "commitHash": "5219744",
   "branch": "main",
-  "buildDate": "2026-04-02T11:36:26.343Z",
+  "buildDate": "2026-04-02T15:16:34.702Z",
   "commits": [
+    {
+      "hash": "5219744",
+      "message": "fix: force function redeploy with updated build comment"
+    },
+    {
+      "hash": "1451841",
+      "message": "fix: remove REMOVED campaign filter and use yesterday as untilStr in connectors"
+    },
+    {
+      "hash": "16b8c41",
+      "message": "fix: align date ranges with ad platforms (toDate=yesterday) and remove all_conversions inflation"
+    },
     {
       "hash": "4d4ce26",
       "message": "fix: AI Briefing scoped to selected period - cache, prompt and reset on period change"
@@ -52,30 +64,18 @@
     {
       "hash": "84ee79c",
       "message": "fix(campaigns): proportional scaling for monthly Meta buckets in date filter"
-    },
-    {
-      "hash": "1ae4e5a",
-      "message": "fix: ROAS display 0 decimals (5.095x not 5.095,28x)"
-    },
-    {
-      "hash": "e01827a",
-      "message": "fix: ROAS calc in meta, round conv decimals, add OpenCart/Magento connectors"
-    },
-    {
-      "hash": "b1e6bb0",
-      "message": "fix(meta): resolve sync failures - CHUNK 100->15, delete try/catch, brandId+channel index"
     }
   ],
   "changes": [
+    "[Διόρθωση] Force function redeploy with updated build comment",
+    "[Διόρθωση] Remove REMOVED campaign filter and use yesterday as untilStr in connectors",
+    "[Διόρθωση] Align date ranges with ad platforms (toDate=yesterday) and remove all_conversions inflation",
     "[Διόρθωση] AI Briefing scoped to selected period - cache, prompt and reset on period change",
     "[Νέο χαρακτηριστικό] Move BudgetOpportunitySection from ROI to Campaigns page",
     "[Διόρθωση] ROI page uses bucketOverlapFraction and aggregates conversionActions for correct period metrics",
     "[Νέο χαρακτηριστικό] Shared persistent period selector for Dashboard and ROI pages",
     "[Διόρθωση] Dashboard uses bucketOverlapFraction for correct period metrics (same as Campaigns page)",
     "[Νέο χαρακτηριστικό] Dashboard period selector (current month / last 30d / current year)",
-    "[Διόρθωση] Consistent conversion metrics, brand-scoped filters, AI briefing brand reset",
-    "[Διόρθωση] Remove omni_purchase - causes 1600%+ CTR due to modeled conversions inflation",
-    "[Διόρθωση] Recompute ROAS from cv/spent in frontend, never trust stale roas:0 from Firestore",
-    "[Διόρθωση] Round all currency amounts to 0 decimals in Campaigns page"
+    "[Διόρθωση] Consistent conversion metrics, brand-scoped filters, AI briefing brand reset"
   ]
 }
