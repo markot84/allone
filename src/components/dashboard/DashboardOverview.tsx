@@ -19,6 +19,7 @@ import {
 } from 'recharts';
 import { Card, CardHeader, KPICard, Tooltip, AlertsBanner } from '../common';
 import { useSegments, useOrganic, useCampaigns, useActiveStrategy, useSuppliers, useProductSource, useBrand, useProductAggregates } from '../../hooks';
+import { useDashPeriod, PERIOD_OPTIONS } from '../../hooks/useDashPeriod';
 import { useGA4Data } from '../../hooks/useGA4Data';
 import { calculateTotalRevenue, calculateCampaignMetrics, getCampaignDateForMonth, getEffectiveConversionValue, bucketOverlapFraction } from '../../utils/roiUtils';
 import { formatCurrencyCompact, formatNumber, formatMultiplier, formatPercent } from '../../utils/format';
@@ -57,30 +58,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   
   const campaignsTyped = (campaigns ?? []) as Campaign[];
 
-  type DashPeriod = 'current_month' | 'last_30' | 'current_year';
-  const [dashPeriod, setDashPeriod] = useState<DashPeriod>('current_month');
-
-  const PERIOD_OPTIONS: { key: DashPeriod; label: string }[] = [
-    { key: 'current_month', label: 'Τρέχων Μήνας' },
-    { key: 'last_30',       label: 'Τελευταίες 30ημ.' },
-    { key: 'current_year',  label: 'Τρέχον Έτος' },
-  ];
-
-  const periodDates = useMemo((): { fromDate: string; toDate: string; label: string } => {
-    const now = new Date();
-    const pad = (n: number) => String(n).padStart(2, '0');
-    const toDate = now.toISOString().slice(0, 10);
-    if (dashPeriod === 'current_month') {
-      const fromDate = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`;
-      return { fromDate, toDate, label: 'Τρέχων Μήνας' };
-    }
-    if (dashPeriod === 'last_30') {
-      const cutoff = new Date(now); cutoff.setDate(cutoff.getDate() - 30);
-      return { fromDate: cutoff.toISOString().slice(0, 10), toDate, label: 'Τελευταίες 30ημ.' };
-    }
-    // current_year
-    return { fromDate: `${now.getFullYear()}-01-01`, toDate, label: 'Τρέχον Έτος' };
-  }, [dashPeriod]);
+  const { period: dashPeriod, setPeriod: setDashPeriod, periodDates } = useDashPeriod();
 
   // Filter campaigns to the selected period using dailyMetrics for accurate period metrics.
   const periodCampaigns = useMemo(() => {

@@ -10,7 +10,6 @@ import {
   ArrowUpRight,
   Loader2,
   Database,
-  Calendar,
 } from 'lucide-react';
 import {
   AreaChart,
@@ -23,6 +22,7 @@ import {
 } from 'recharts';
 import { Card, CardHeader, Badge, Button } from '../common';
 import { useOrganic, useCampaigns, useActiveStrategy, useBrand } from '../../hooks';
+import { useDashPeriod, PERIOD_OPTIONS } from '../../hooks/useDashPeriod';
 import { CampaignsService, OrganicService } from '../../services/firestore';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -81,31 +81,21 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
   const { currentBrand } = useBrand();
   const queryClient = useQueryClient();
   const [seeding, setSeeding] = useState(false);
-  const [dateRange, setDateRange] = useState<'30d' | '90d' | '6m' | '12m' | 'all'>('all');
-
-  const cutoffDate = useMemo(() => {
-    if (dateRange === 'all') return null;
-    const cutoff = new Date();
-    if (dateRange === '30d') cutoff.setDate(cutoff.getDate() - 30);
-    else if (dateRange === '90d') cutoff.setDate(cutoff.getDate() - 90);
-    else if (dateRange === '6m') cutoff.setMonth(cutoff.getMonth() - 6);
-    else if (dateRange === '12m') cutoff.setFullYear(cutoff.getFullYear() - 1);
-    return cutoff;
-  }, [dateRange]);
+  const { period: dashPeriod, setPeriod: setDashPeriod, cutoffDate } = useDashPeriod();
 
   const dateFilteredCampaigns = useMemo(() => {
     const all = campaigns as Campaign[];
-    if (!cutoffDate) return all;
+    const cutoff = cutoffDate;
 
     return all.filter(c => {
       const dm = (c as any).dailyMetrics as Record<string, any> | undefined;
       if (dm && Object.keys(dm).length > 0) {
-        return Object.keys(dm).some(dateKey => new Date(dateKey) >= cutoffDate);
+        return Object.keys(dm).some(dateKey => new Date(dateKey) >= cutoff);
       }
       const start = c.start_date ? new Date(c.start_date) : null;
       const period = c.period ? new Date(c.period) : null;
-      if (start && start >= cutoffDate) return true;
-      if (period && !isNaN(period.getTime()) && period >= cutoffDate) return true;
+      if (start && start >= cutoff) return true;
+      if (period && !isNaN(period.getTime()) && period >= cutoff) return true;
       if (!start && !period) return true;
       return false;
     }).map(c => {
@@ -115,14 +105,12 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
       const filteredDm: Record<string, any> = {};
       let spend = 0, impr = 0, clicks = 0, convs = 0, convValue = 0;
       for (const [dateKey, metrics] of Object.entries(dm)) {
-        if (new Date(dateKey) >= cutoffDate) {
+        if (new Date(dateKey) >= cutoff) {
           filteredDm[dateKey] = metrics;
           spend += (metrics as any).amount_spent || 0;
           impr += (metrics as any).impressions || 0;
           clicks += (metrics as any).clicks || 0;
           convs += (metrics as any).conversions || 0;
-          // For Meta: read from trusted purchase labels in dailyMetrics.conversionActions
-          // to avoid summing inflated omni_purchase values stored in conversion_value.
           if (c.channel === 'Meta') {
             const ma = (metrics as any).conversionActions;
             convValue += ma?.['Purchase (Pixel)']?.value || ma?.['Purchase']?.value || 0;
@@ -262,25 +250,18 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
             <h2 className="text-2xl font-bold text-[var(--nts-charcoal)]">ROI & Απόδοση</h2>
             <p className="text-[var(--nts-medium-gray)] mt-1">Μέτρηση απόδοσης καμπανιών και εσόδων</p>
           </div>
-          <div className="flex items-center gap-1 bg-[#F3F4F6] p-1 rounded-lg">
-            <Calendar size={14} className="text-[#9CA3AF] ml-2 mr-1" />
-            {([
-              ['30d', '30 ημ.'],
-              ['90d', '90 ημ.'],
-              ['6m', '6 μήνες'],
-              ['12m', '12 μήνες'],
-              ['all', 'Όλα'],
-            ] as const).map(([key, label]) => (
+          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+            {PERIOD_OPTIONS.map(opt => (
               <button
-                key={key}
-                onClick={() => setDateRange(key)}
+                key={opt.key}
+                onClick={() => setDashPeriod(opt.key)}
                 className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                  dateRange === key
-                    ? 'bg-white text-[#111827] shadow-sm'
-                    : 'text-[#6B7280] hover:text-[#374151]'
+                  dashPeriod === opt.key
+                    ? 'bg-white text-[var(--nts-orange)] shadow-sm font-semibold'
+                    : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                {label}
+                {opt.label}
               </button>
             ))}
           </div>
