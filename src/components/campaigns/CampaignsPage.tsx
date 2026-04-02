@@ -321,13 +321,15 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
 
     for (const action of convActionFilter) {
       if (action === 'Purchase') {
+        // Sum every purchase-related action (Pixel, Google Ads, etc.). Picking only one row
+        // undercounted conv/value when multiple purchase types exist per campaign.
         const purchaseKeys = Object.keys(c.conversionActions).filter(k => k.toLowerCase().includes('purchase'));
-        const priority = ['Purchase (Pixel)', 'Purchase Completed (Google Ads)'];
-        const picked = purchaseKeys.find(k => priority.includes(k)) || purchaseKeys[0];
-        if (picked) {
-          const row = c.conversionActions[picked];
-          filteredConversions += row.conversions;
-          filteredValue += row.value ?? 0;
+        for (const pk of purchaseKeys) {
+          const row = c.conversionActions[pk];
+          if (row) {
+            filteredConversions += row.conversions ?? 0;
+            filteredValue += row.value ?? 0;
+          }
         }
       } else {
         if (purchaseSelected && action.toLowerCase().includes('purchase')) continue;
