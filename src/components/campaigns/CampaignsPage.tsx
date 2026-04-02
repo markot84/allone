@@ -350,9 +350,17 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
     if (convActionFilter.length === 0) return campaignsWithDateMetrics;
     return campaignsWithDateMetrics.map(applyConvFilter);
   }, [campaignsWithDateMetrics, convActionFilter]);
+  /** With a conv. action filter, hide rows that have no matching conversions/value (e.g. Store Visits PMax when filtering Purchase). */
+  const campaignsInConvView = useMemo(() => {
+    if (!convFilterActive) return campaignsWithConvFilter;
+    return campaignsWithConvFilter.filter(
+      c => getDisplayConversions(c, true) > 0 || getDisplayConversionValue(c, true) > 0
+    );
+  }, [campaignsWithConvFilter, convFilterActive]);
+
 
   const handleExportCampaigns = useCallback(() => {
-    const list = campaignsWithConvFilter;
+    const list = campaignsInConvView;
     if (list.length === 0) return;
     const headers = ['Name', 'Channel', 'Status', 'Impressions', 'Clicks', 'CTR %', 'Spend', 'Conversions', 'Conv. Value', 'ROAS', 'CPA', 'Start Date', 'End Date'];
     const rows = list.map(c => [
@@ -372,11 +380,11 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
     a.download = `campaigns_export_${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [campaignsWithConvFilter, convFilterActive]);
+  }, [campaignsInConvView, convFilterActive]);
 
   const sortedCampaigns = useMemo(() => {
-    if (!sortColumn) return campaignsWithConvFilter;
-    const sorted = [...campaignsWithConvFilter].sort((a, b) => {
+    if (!sortColumn) return campaignsInConvView;
+    const sorted = [...campaignsInConvView].sort((a, b) => {
       let va: string | number = 0;
       let vb: string | number = 0;
       switch (sortColumn) {
@@ -396,7 +404,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
       return sortDirection === 'asc' ? (va as number) - (vb as number) : (vb as number) - (va as number);
     });
     return sorted;
-  }, [campaignsWithConvFilter, sortColumn, sortDirection, convFilterActive]);
+  }, [campaignsInConvView, sortColumn, sortDirection, convFilterActive]);
 
   const handleSort = (col: string) => {
     if (sortColumn === col) {
@@ -408,10 +416,9 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
     }
   };
 
-  // Summary stats derived from the already-filtered pipeline
-  // (campaignsWithConvFilter has date-filtered + conv-action-filtered metrics)
+  // Summary stats: same rows as the table (excludes zero-match campaigns when conv filter is on)
   const summaryStats = useMemo(() => {
-    const list = campaignsWithConvFilter;
+    const list = campaignsInConvView;
     const total = list.length;
 
     let totalSpent = 0;
@@ -440,7 +447,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
       avgROAS,
       byChannel,
     };
-  }, [campaignsWithConvFilter, convFilterActive]);
+  }, [campaignsInConvView, convFilterActive]);
 
   // Standard channels + unique from data (sorted: standard first, then data-derived)
   const STANDARD_CHANNELS = ['Meta', 'Google Ads', 'Google Shopping', 'Other'];
@@ -587,7 +594,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
           >
             {isDeleting ? 'Διαγραφή…' : 'Διαγραφή δεδομένων'}
           </Button>
-          <Button variant="secondary" icon={<Download size={16} />} onClick={handleExportCampaigns} disabled={campaignsWithConvFilter.length === 0}>
+          <Button variant="secondary" icon={<Download size={16} />} onClick={handleExportCampaigns} disabled={campaignsInConvView.length === 0}>
             Export .csv
           </Button>
         </div>
@@ -794,7 +801,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
         <div className="flex items-center justify-between">
           <CardHeader
             title="Campaigns List"
-            subtitle={`${filteredCampaigns.length} ${filteredCampaigns.length === 1 ? 'campaign' : 'campaigns'}`}
+            subtitle={`${campaignsInConvView.length} ${campaignsInConvView.length === 1 ? 'campaign' : 'campaigns'}`}
           />
           {sortedCampaigns.length > COLLAPSED_LIMIT && (
             <button
@@ -809,6 +816,12 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
         {filteredCampaigns.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-[#4A4A4A]">Δεν βρέθηκαν campaigns με τα επιλεγμένα filters.</p>
+          </div>
+        ) : convFilterActive && sortedCampaigns.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-[#4A4A4A]">
+              Καμία καμπάνια με τις επιλεγμένες ενέργειες μετατροπής για αυτή την περίοδο (π.χ. καμπάνιες μόνο με επισκέψεις καταστήματος δεν εμφανίζονται όταν φιλτράρετε Purchase).
+            </p>
           </div>
         ) : (
           <div className="overflow-x-auto mt-4">
