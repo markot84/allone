@@ -90,7 +90,10 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
     return all.filter(c => {
       const dm = (c as any).dailyMetrics as Record<string, any> | undefined;
       if (dm && Object.keys(dm).length > 0) {
-        return Object.keys(dm).some(dateKey => bucketOverlapFraction(dateKey, fromDate, toDate) > 0);
+        const metaMonthBuckets = (c.channel || '').toLowerCase() === 'meta';
+        return Object.keys(dm).some(dateKey =>
+          bucketOverlapFraction(dateKey, fromDate, toDate, { metaMonthBuckets }) > 0
+        );
       }
       const start = c.start_date ? new Date(c.start_date) : null;
       const period = c.period ? new Date(c.period) : null;
@@ -107,8 +110,9 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
       let spend = 0, impr = 0, clicks = 0, convs = 0, convValue = 0;
       const convActions: Record<string, { conversions: number; value: number }> = {};
 
+      const metaMonthBuckets = (c.channel || '').toLowerCase() === 'meta';
       for (const [dateKey, metrics] of Object.entries(dm)) {
-        const frac = bucketOverlapFraction(dateKey, fromDate, toDate);
+        const frac = bucketOverlapFraction(dateKey, fromDate, toDate, { metaMonthBuckets });
         if (frac <= 0) continue;
         filteredDm[dateKey] = metrics;
         spend += ((metrics as any).amount_spent || 0) * frac;

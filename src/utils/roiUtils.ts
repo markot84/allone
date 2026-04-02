@@ -1,10 +1,23 @@
 import type { Campaign } from '../types';
 
+export type BucketOverlapOptions = {
+  /**
+   * Meta `dailyMetrics` can use YYYY-MM-01 as a bucket for the **whole month** (spread when filtering).
+   * Google Ads (and similar) use YYYY-MM-01 as a normal calendar day — never apply month spreading.
+   */
+  metaMonthBuckets?: boolean;
+};
+
 /**
  * Returns the fraction [0,1] of a dailyMetrics bucket that overlaps [fromDate, toDate].
  */
-export function bucketOverlapFraction(date: string, fromDate: string, toDate: string): number {
-  if (date.slice(8, 10) === '01') {
+export function bucketOverlapFraction(
+  date: string,
+  fromDate: string,
+  toDate: string,
+  options?: BucketOverlapOptions
+): number {
+  if (options?.metaMonthBuckets && date.slice(8, 10) === '01') {
     const [year, month] = date.slice(0, 7).split('-').map(Number);
     const daysInMonth = new Date(year, month, 0).getDate();
     const monthEnd = `${date.slice(0, 7)}-${String(daysInMonth).padStart(2, '0')}`;

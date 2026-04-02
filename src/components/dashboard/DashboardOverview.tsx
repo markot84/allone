@@ -70,8 +70,9 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       let impressions = 0, clicks = 0, conversions = 0, amount_spent = 0, conversion_value = 0;
       const convActions: Record<string, { conversions: number; value: number }> = {};
 
+      const metaMonthBuckets = (c.channel || '').toLowerCase() === 'meta';
       for (const [date, m] of Object.entries(dm)) {
-        const frac = bucketOverlapFraction(date, fromDate, toDate);
+        const frac = bucketOverlapFraction(date, fromDate, toDate, { metaMonthBuckets });
         if (frac <= 0) continue;
         impressions += Math.round((m.impressions || 0) * frac);
         clicks += Math.round((m.clicks || 0) * frac);
