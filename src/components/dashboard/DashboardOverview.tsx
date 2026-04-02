@@ -20,7 +20,7 @@ import {
 import { Card, CardHeader, KPICard, Tooltip, AlertsBanner } from '../common';
 import { useSegments, useOrganic, useCampaigns, useActiveStrategy, useSuppliers, useProductSource, useBrand, useProductAggregates } from '../../hooks';
 import { useGA4Data } from '../../hooks/useGA4Data';
-import { calculateTotalRevenue, calculateCampaignMetrics, getCampaignDateForMonth } from '../../utils/roiUtils';
+import { calculateTotalRevenue, calculateCampaignMetrics, getCampaignDateForMonth, getEffectiveConversionValue } from '../../utils/roiUtils';
 import { formatCurrencyCompact, formatNumber, formatMultiplier, formatPercent } from '../../utils/format';
 import type { Campaign } from '../../types';
 import { generateInsightsFromData } from '../../services/insights';
@@ -56,10 +56,67 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   const hasAnyData = hasOrganic || hasSegments || productsCount > 0 || hasCampaigns;
   
   const campaignsTyped = (campaigns ?? []) as Campaign[];
-  const campaignMetrics = useMemo(() => calculateCampaignMetrics(campaignsTyped), [campaignsTyped]);
+
+  type DashPeriod = 'current_month' | 'last_30' | 'current_year';
+  const [dashPeriod, setDashPeriod] = useState<DashPeriod>('current_month');
+
+  const PERIOD_OPTIONS: { key: DashPeriod; label: string }[] = [
+    { key: 'current_month', label: 'Τρέχων Μήνας' },
+    { key: 'last_30',       label: 'Τελευταίες 30ημ.' },
+    { key: 'current_year',  label: 'Τρέχον Έτος' },
+  ];
+
+  const periodDates = useMemo((): { fromDate: string; toDate: string; label: string } => {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const toDate = now.toISOString().slice(0, 10);
+    if (dashPeriod === 'current_month') {
+      const fromDate = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`;
+      return { fromDate, toDate, label: 'Τρέχων Μήνας' };
+    }
+    if (dashPeriod === 'last_30') {
+      const cutoff = new Date(now); cutoff.setDate(cutoff.getDate() - 30);
+      return { fromDate: cutoff.toISOString().slice(0, 10), toDate, label: 'Τελευταίες 30ημ.' };
+    }
+    // current_year
+    return { fromDate: `${now.getFullYear()}-01-01`, toDate, label: 'Τρέχον Έτος' };
+  }, [dashPeriod]);
+
+  // Filter campaigns to the selected period using dailyMetrics for accurate period metrics.
+  const periodCampaigns = useMemo(() => {
+    const { fromDate, toDate } = periodDates;
+    return campaignsTyped.map(c => {
+      const dm = (c as any).dailyMetrics as Record<string, any> | undefined;
+      if (!dm || Object.keys(dm).length === 0) return c;
+
+      let impressions = 0, clicks = 0, conversions = 0, amount_spent = 0, conversion_value = 0;
+      const convActions: Record<string, { conversions: number; value: number }> = {};
+
+      for (const [date, m] of Object.entries(dm)) {
+        if (date < fromDate || date > toDate) continue;
+        impressions += Math.round(m.impressions || 0);
+        clicks += Math.round(m.clicks || 0);
+        conversions += (m.conversions || 0);
+        amount_spent += (m.amount_spent || 0);
+        conversion_value += (m.conversion_value || 0);
+        if (m.conversionActions) {
+          for (const [label, vals] of Object.entries(m.conversionActions as Record<string, { conversions: number; value: number }>)) {
+            if (!convActions[label]) convActions[label] = { conversions: 0, value: 0 };
+            convActions[label].conversions += vals.conversions || 0;
+            convActions[label].value += vals.value || 0;
+          }
+        }
+      }
+      const ctr = impressions > 0 ? (clicks / impressions) * 100 : 0;
+      amount_spent = Math.round(amount_spent * 100) / 100;
+      return { ...c, impressions, clicks, conversions, amount_spent, conversion_value, ctr, conversionActions: convActions };
+    });
+  }, [campaignsTyped, periodDates]);
+
+  const campaignMetrics = useMemo(() => calculateCampaignMetrics(periodCampaigns), [periodCampaigns]);
   const dashboardTotalRevenue = useMemo(
-    () => calculateTotalRevenue(totalOrganicRevenue || 0, campaignsTyped),
-    [totalOrganicRevenue, campaignsTyped]
+    () => calculateTotalRevenue(totalOrganicRevenue || 0, periodCampaigns),
+    [totalOrganicRevenue, periodCampaigns]
   );
   
 
@@ -69,13 +126,14 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     organicByMonth.forEach((val, key) => {
       byMonth.set(key, { total: val / 1000, attributed: 0 });
     });
-    campaignsTyped.forEach(c => {
+    periodCampaigns.forEach(c => {
       const date = getCampaignDateForMonth(c);
       const key = date ? date.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }) : 'Other';
       const ex = byMonth.get(key) || { total: 0, attributed: 0 };
+      const cv = getEffectiveConversionValue(c);
       byMonth.set(key, {
-        total: ex.total + (c.conversion_value || 0) / 1000,
-        attributed: ex.attributed + (c.conversion_value || 0) / 1000,
+        total: ex.total + cv / 1000,
+        attributed: ex.attributed + cv / 1000,
       });
     });
     if (byMonth.size === 0) return [];
@@ -182,7 +240,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           brandId={currentBrand.id}
           brandName={currentBrand.name}
           products={products}
-          campaigns={campaignsTyped}
+          campaigns={periodCampaigns}
           segments={rfmSegments}
           totalOrganicRevenue={totalOrganicRevenue || 0}
           ga4={{
@@ -195,6 +253,25 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           onSectionChange={onSectionChange}
           hasAnyData={hasAnyData}
         />
+      )}
+
+      {/* Period selector for KPI cards */}
+      {(hasOrganic || hasCampaigns) && (
+        <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1 w-fit">
+          {PERIOD_OPTIONS.map(opt => (
+            <button
+              key={opt.key}
+              onClick={() => setDashPeriod(opt.key)}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                dashPeriod === opt.key
+                  ? 'bg-white text-[var(--nts-orange)] shadow-sm font-semibold'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
       )}
 
       {/* KPI Cards — Financial Overview */}
@@ -215,12 +292,13 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         const convsByMonth: Record<string, number> = {};
 
         organicByMonth.forEach((v, k) => { revenueByMonth[k] = (revenueByMonth[k] || 0) + v; });
-        campaignsTyped.forEach(c => {
+        periodCampaigns.forEach(c => {
           const d = getCampaignDateForMonth(c);
           const k = d ? d.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }) : 'Other';
-          revenueByMonth[k] = (revenueByMonth[k] || 0) + (c.conversion_value || 0);
+          const cv = getEffectiveConversionValue(c);
+          revenueByMonth[k] = (revenueByMonth[k] || 0) + cv;
           spendByMonth[k] = (spendByMonth[k] || 0) + (c.amount_spent || 0);
-          convsValueByMonth[k] = (convsValueByMonth[k] || 0) + (c.conversion_value || 0);
+          convsValueByMonth[k] = (convsValueByMonth[k] || 0) + cv;
           convsByMonth[k] = (convsByMonth[k] || 0) + (c.conversions || 0);
         });
 

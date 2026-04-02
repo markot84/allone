@@ -1,10 +1,14 @@
 {
-  "version": "0.285.0",
-  "previousVersion": "0.284.0",
-  "commitHash": "ef26624",
+  "version": "0.287.0",
+  "previousVersion": "0.286.0",
+  "commitHash": "5ea82e6",
   "branch": "main",
-  "buildDate": "2026-04-01T20:42:11.060Z",
+  "buildDate": "2026-04-02T05:16:01.288Z",
   "commits": [
+    {
+      "hash": "5ea82e6",
+      "message": "fix: consistent conversion metrics, brand-scoped filters, AI briefing brand reset"
+    },
     {
       "hash": "ef26624",
       "message": "fix(meta): remove omni_purchase - causes 1600%+ CTR due to modeled conversions inflation"
@@ -60,13 +64,10 @@
     {
       "hash": "17dc697",
       "message": "feat: budget opportunity engine v1, ROI section; GMC last sync KPI; coordination list limit 5 + history"
-    },
-    {
-      "hash": "c5e557a",
-      "message": "chore: ignore Cloud Functions env files except .env.example; stop tracking project env"
     }
   ],
   "changes": [
+    "[Διόρθωση] Consistent conversion metrics, brand-scoped filters, AI briefing brand reset",
     "[Διόρθωση] Remove omni_purchase - causes 1600%+ CTR due to modeled conversions inflation",
     "[Διόρθωση] Recompute ROAS from cv/spent in frontend, never trust stale roas:0 from Firestore",
     "[Διόρθωση] Round all currency amounts to 0 decimals in Campaigns page",
@@ -75,7 +76,6 @@
     "[Διόρθωση] ROAS display 0 decimals (5.095x not 5.095,28x)",
     "[Διόρθωση] ROAS calc in meta, round conv decimals, add OpenCart/Magento connectors",
     "[Διόρθωση] Resolve sync failures - CHUNK 100->15, delete try/catch, brandId+channel index",
-    "[Διόρθωση] Meta delete batch chunked, connectors panel cached via React Query (no reload on nav)",
-    "[Συντήρηση] Force functions redeploy trigger + git push"
+    "[Διόρθωση] Meta delete batch chunked, connectors panel cached via React Query (no reload on nav)"
   ]
 }
