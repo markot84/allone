@@ -61,8 +61,10 @@ function sumConversionActions(ca: Campaign['conversionActions'] | undefined): { 
 
 /**
  * Display conversions / value. When a conversion-action filter is active, `c` is already
- * narrowed by applyConvFilter — do not fall back to sumConversionActions (avoids
+ * narrowed by applyConvFilter - do not fall back to sumConversionActions (avoids
  * unrelated actions when purchase-only filter yields 0 for a row).
+ * Without filter: use max(aggregate, per-action sum) so totals align with Google Ads when
+ * daily aggregate and conversion-action breakdown differ slightly.
  */
 function getDisplayConversions(c: Campaign, convFilterActive: boolean): number {
   const raw = c.conversions;
@@ -71,7 +73,10 @@ function getDisplayConversions(c: Campaign, convFilterActive: boolean): number {
     return Number.isNaN(n) ? 0 : n;
   }
   const fromActions = sumConversionActions(c.conversionActions).conv;
-  if (!Number.isNaN(n) && n > 0) return n;
+  if (!Number.isNaN(n) && n > 0) {
+    if (fromActions > 0) return Math.max(n, fromActions);
+    return n;
+  }
   if (fromActions > 0) return fromActions;
   return Number.isNaN(n) ? 0 : n;
 }
@@ -84,7 +89,10 @@ function getDisplayConversionValue(c: Campaign, convFilterActive: boolean): numb
     return Number.isNaN(n) ? 0 : n;
   }
   const fromActions = sumConversionActions(c.conversionActions).value;
-  if (!Number.isNaN(n) && n > 0) return n;
+  if (!Number.isNaN(n) && n > 0) {
+    if (fromActions > 0) return Math.max(n, fromActions);
+    return n;
+  }
   if (fromActions > 0) return fromActions;
   return Number.isNaN(n) ? 0 : n;
 }
