@@ -31,6 +31,7 @@ import {
   calculateChannelPerformance,
   getCampaignDateForMonth,
   getEffectiveConversionValue,
+  bucketOverlapFraction,
 } from '../../utils/roiUtils';
 import { BudgetOpportunitySection } from './BudgetOpportunitySection';
 import { formatCurrencyCompact, formatNumber, formatPercent } from '../../utils/format';
@@ -81,19 +82,20 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
   const { currentBrand } = useBrand();
   const queryClient = useQueryClient();
   const [seeding, setSeeding] = useState(false);
-  const { period: dashPeriod, setPeriod: setDashPeriod, cutoffDate } = useDashPeriod();
+  const { period: dashPeriod, setPeriod: setDashPeriod, periodDates } = useDashPeriod();
 
   const dateFilteredCampaigns = useMemo(() => {
     const all = campaigns as Campaign[];
-    const cutoff = cutoffDate;
+    const { fromDate, toDate } = periodDates;
 
     return all.filter(c => {
       const dm = (c as any).dailyMetrics as Record<string, any> | undefined;
       if (dm && Object.keys(dm).length > 0) {
-        return Object.keys(dm).some(dateKey => new Date(dateKey) >= cutoff);
+        return Object.keys(dm).some(dateKey => bucketOverlapFraction(dateKey, fromDate, toDate) > 0);
       }
       const start = c.start_date ? new Date(c.start_date) : null;
       const period = c.period ? new Date(c.period) : null;
+      const cutoff = new Date(fromDate);
       if (start && start >= cutoff) return true;
       if (period && !isNaN(period.getTime()) && period >= cutoff) return true;
       if (!start && !period) return true;
@@ -104,34 +106,43 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
 
       const filteredDm: Record<string, any> = {};
       let spend = 0, impr = 0, clicks = 0, convs = 0, convValue = 0;
+      const convActions: Record<string, { conversions: number; value: number }> = {};
+
       for (const [dateKey, metrics] of Object.entries(dm)) {
-        if (new Date(dateKey) >= cutoff) {
-          filteredDm[dateKey] = metrics;
-          spend += (metrics as any).amount_spent || 0;
-          impr += (metrics as any).impressions || 0;
-          clicks += (metrics as any).clicks || 0;
-          convs += (metrics as any).conversions || 0;
-          if (c.channel === 'Meta') {
-            const ma = (metrics as any).conversionActions;
-            convValue += ma?.['Purchase (Pixel)']?.value || ma?.['Purchase']?.value || 0;
-          } else {
-            convValue += (metrics as any).conversion_value || 0;
+        const frac = bucketOverlapFraction(dateKey, fromDate, toDate);
+        if (frac <= 0) continue;
+        filteredDm[dateKey] = metrics;
+        spend += ((metrics as any).amount_spent || 0) * frac;
+        impr += ((metrics as any).impressions || 0) * frac;
+        clicks += ((metrics as any).clicks || 0) * frac;
+        convs += ((metrics as any).conversions || 0) * frac;
+        convValue += ((metrics as any).conversion_value || 0) * frac;
+        // Aggregate conversionActions with fractional scaling so getEffectiveConversionValue
+        // reads filtered (not full-history) values for Meta campaigns.
+        const ma = (metrics as any).conversionActions;
+        if (ma) {
+          for (const [label, vals] of Object.entries(ma as Record<string, { conversions: number; value: number }>)) {
+            if (!convActions[label]) convActions[label] = { conversions: 0, value: 0 };
+            convActions[label].conversions += (vals.conversions || 0) * frac;
+            convActions[label].value += (vals.value || 0) * frac;
           }
         }
       }
+      spend = Math.round(spend * 100) / 100;
       return {
         ...c,
         dailyMetrics: filteredDm,
+        conversionActions: convActions,
         amount_spent: spend,
-        impressions: impr,
-        clicks: clicks,
+        impressions: Math.round(impr),
+        clicks: Math.round(clicks),
         conversions: convs,
         conversion_value: convValue,
         ctr: impr > 0 ? (clicks / impr) * 100 : 0,
         roas: spend > 0 ? convValue / spend : 0,
       };
     });
-  }, [campaigns, cutoffDate]);
+  }, [campaigns, periodDates]);
 
   const campaignsTyped = dateFilteredCampaigns;
   const hasData = hasOrganic || hasCampaigns;

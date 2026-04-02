@@ -125,7 +125,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         return ia !== ib ? ia - ib : (ya || '').localeCompare(yb || '');
       })
       .map(([month, d]) => ({ month, total: d.total, attributed: d.attributed }));
-  }, [organicByMonth, campaignsTyped]);
+  }, [organicByMonth, periodCampaigns]);
 
   // Debug logging
   useEffect(() => {

@@ -1,10 +1,18 @@
 {
-  "version": "0.288.0",
-  "previousVersion": "0.287.0",
-  "commitHash": "c7488aa",
+  "version": "0.290.0",
+  "previousVersion": "0.289.0",
+  "commitHash": "0c36062",
   "branch": "main",
-  "buildDate": "2026-04-02T05:35:23.384Z",
+  "buildDate": "2026-04-02T06:03:31.474Z",
   "commits": [
+    {
+      "hash": "0c36062",
+      "message": "feat: shared persistent period selector for Dashboard and ROI pages"
+    },
+    {
+      "hash": "58a12bf",
+      "message": "fix: dashboard uses bucketOverlapFraction for correct period metrics (same as Campaigns page)"
+    },
     {
       "hash": "c7488aa",
       "message": "feat: dashboard period selector (current month / last 30d / current year)"
@@ -56,17 +64,11 @@
     {
       "hash": "99b38db",
       "message": "campaigns: fix conversions/value display fallback, cache policy, connector batch chunks, omni_purchase meta"
-    },
-    {
-      "hash": "b2f50a5",
-      "message": "fix: CampaignsPage strict TS for conversion getters (post-build)"
-    },
-    {
-      "hash": "68ef024",
-      "message": "Campaigns: conversions display, conversion value column, connector batch chunks; coordination/email tweaks"
     }
   ],
   "changes": [
+    "[Νέο χαρακτηριστικό] Shared persistent period selector for Dashboard and ROI pages",
+    "[Διόρθωση] Dashboard uses bucketOverlapFraction for correct period metrics (same as Campaigns page)",
     "[Νέο χαρακτηριστικό] Dashboard period selector (current month / last 30d / current year)",
     "[Διόρθωση] Consistent conversion metrics, brand-scoped filters, AI briefing brand reset",
     "[Διόρθωση] Remove omni_purchase - causes 1600%+ CTR due to modeled conversions inflation",
@@ -74,8 +76,6 @@
     "[Διόρθωση] Round all currency amounts to 0 decimals in Campaigns page",
     "[Βελτίωση απόδοσης] Cache-first campaigns load via Firestore IndexedDB + skip localStorage for large queries",
     "[Διόρθωση] Proportional scaling for monthly Meta buckets in date filter",
-    "[Διόρθωση] ROAS display 0 decimals (5.095x not 5.095,28x)",
-    "[Διόρθωση] ROAS calc in meta, round conv decimals, add OpenCart/Magento connectors",
-    "[Διόρθωση] Resolve sync failures - CHUNK 100->15, delete try/catch, brandId+channel index"
+    "[Διόρθωση] ROAS display 0 decimals (5.095x not 5.095,28x)"
   ]
 }
