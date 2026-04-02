@@ -231,6 +231,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           supplierTodMap={supplierTodMap}
           onSectionChange={onSectionChange}
           hasAnyData={hasAnyData}
+          period={dashPeriod}
+          periodLabel={PERIOD_OPTIONS.find(o => o.key === dashPeriod)?.label ?? 'Τρέχων Μήνας'}
         />
       )}
 

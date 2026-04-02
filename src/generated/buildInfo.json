@@ -1,10 +1,14 @@
 {
-  "version": "0.291.0",
-  "previousVersion": "0.290.0",
-  "commitHash": "acedae0",
+  "version": "0.292.0",
+  "previousVersion": "0.291.0",
+  "commitHash": "419bab5",
   "branch": "main",
-  "buildDate": "2026-04-02T06:14:29.508Z",
+  "buildDate": "2026-04-02T06:51:57.554Z",
   "commits": [
+    {
+      "hash": "419bab5",
+      "message": "feat: move BudgetOpportunitySection from ROI to Campaigns page"
+    },
     {
       "hash": "acedae0",
       "message": "fix: ROI page uses bucketOverlapFraction and aggregates conversionActions for correct period metrics"
@@ -60,13 +64,10 @@
     {
       "hash": "9d097c5",
       "message": "fix: meta delete batch chunked, connectors panel cached via React Query (no reload on nav)"
-    },
-    {
-      "hash": "bafcd13",
-      "message": "chore: force functions redeploy trigger + git push"
     }
   ],
   "changes": [
+    "[Νέο χαρακτηριστικό] Move BudgetOpportunitySection from ROI to Campaigns page",
     "[Διόρθωση] ROI page uses bucketOverlapFraction and aggregates conversionActions for correct period metrics",
     "[Νέο χαρακτηριστικό] Shared persistent period selector for Dashboard and ROI pages",
     "[Διόρθωση] Dashboard uses bucketOverlapFraction for correct period metrics (same as Campaigns page)",
@@ -75,7 +76,6 @@
     "[Διόρθωση] Remove omni_purchase - causes 1600%+ CTR due to modeled conversions inflation",
     "[Διόρθωση] Recompute ROAS from cv/spent in frontend, never trust stale roas:0 from Firestore",
     "[Διόρθωση] Round all currency amounts to 0 decimals in Campaigns page",
-    "[Βελτίωση απόδοσης] Cache-first campaigns load via Firestore IndexedDB + skip localStorage for large queries",
-    "[Διόρθωση] Proportional scaling for monthly Meta buckets in date filter"
+    "[Βελτίωση απόδοσης] Cache-first campaigns load via Firestore IndexedDB + skip localStorage for large queries"
   ]
 }

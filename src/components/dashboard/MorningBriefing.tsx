@@ -29,6 +29,10 @@ interface MorningBriefingProps {
   supplierTodMap?: Map<string, number>;
   onSectionChange?: (section: string, opts?: { hashQuery?: string }) => void;
   hasAnyData: boolean;
+  /** Selected dashboard period key (e.g. 'current_month'). Scopes cache & prompt. */
+  period?: string;
+  /** Human-readable label for the period (e.g. 'Τελευταίες 30ημ.'). */
+  periodLabel?: string;
 }
 
 /** Πραγματικές ενότητες εφαρμογής — όχι `inventory` (δεν υπάρχει route). */
@@ -70,13 +74,13 @@ function guessRoute(action: string): GuessResult {
 const SIGNIFICANCE_CHECK_INTERVAL = 15 * 60 * 1000; // 15 minutes
 const INIT_DELAY_MS = 3_000; // defer init so KPIs paint first
 
-function briefingStorageKey(brandId: string) {
-  return `perf-plus-ai-briefing-v1:${brandId}:${getLocalDateKey()}`;
+function briefingStorageKey(brandId: string, period = 'current_month') {
+  return `perf-plus-ai-briefing-v1:${brandId}:${getLocalDateKey()}:${period}`;
 }
 
-function loadBriefingFromStorage(brandId: string): BriefingResult | null {
+function loadBriefingFromStorage(brandId: string, period = 'current_month'): BriefingResult | null {
   try {
-    const raw = localStorage.getItem(briefingStorageKey(brandId));
+    const raw = localStorage.getItem(briefingStorageKey(brandId, period));
     if (!raw) return null;
     const p = JSON.parse(raw) as BriefingResult;
     if (typeof p.narrative !== 'string' || typeof p.generatedAt !== 'string') return null;
@@ -87,9 +91,9 @@ function loadBriefingFromStorage(brandId: string): BriefingResult | null {
   }
 }
 
-function saveBriefingToStorage(brandId: string, b: BriefingResult) {
+function saveBriefingToStorage(brandId: string, b: BriefingResult, period = 'current_month') {
   try {
-    localStorage.setItem(briefingStorageKey(brandId), JSON.stringify(b));
+    localStorage.setItem(briefingStorageKey(brandId, period), JSON.stringify(b));
   } catch {
     /* quota */
   }
@@ -105,8 +109,11 @@ function loadCollapsedPref(brandId: string): boolean {
 
 export function MorningBriefing(props: MorningBriefingProps) {
   const { brandId, brandName, hasAnyData, onSectionChange } = props;
+  const period = props.period ?? 'current_month';
+  const periodLabel = props.periodLabel ?? 'Τρέχων Μήνας';
+
   const [briefing, setBriefing] = useState<BriefingResult | null>(() =>
-    brandId ? loadBriefingFromStorage(brandId) : null
+    brandId ? loadBriefingFromStorage(brandId, period) : null
   );
   const [collapsed, setCollapsed] = useState(() => (brandId ? loadCollapsedPref(brandId) : false));
   const [loading, setLoading] = useState(false);
@@ -127,69 +134,83 @@ export function MorningBriefing(props: MorningBriefingProps) {
 
   const buildDataRef = useRef(buildData);
   buildDataRef.current = buildData;
+  const periodRef = useRef(period);
+  periodRef.current = period;
+  const periodLabelRef = useRef(periodLabel);
+  periodLabelRef.current = periodLabel;
 
-  // Reset both collapsed pref and briefing immediately when brand changes.
-  // Without this, the previous brand's briefing stays visible until the async Firestore fetch completes.
+  // Reset when brand changes.
   useEffect(() => {
     if (!brandId) return;
     setCollapsed(loadCollapsedPref(brandId));
-    setBriefing(loadBriefingFromStorage(brandId));
+    setBriefing(loadBriefingFromStorage(brandId, periodRef.current));
     setError(null);
+    initRef.current = null;
   }, [brandId]);
 
-  // Firestore: συγχρονισμός με server (νεότερο briefing) — το κείμενο της ημέρας παραμένει σταθερό στον browser μέχρι νέα γεννήτρια από κανόνες
+  // Reset + trigger new briefing when period changes.
   useEffect(() => {
     if (!brandId) return;
+    setBriefing(loadBriefingFromStorage(brandId, period));
+    setError(null);
     initRef.current = null;
+  }, [brandId, period]);
+
+  // Firestore: sync με server — per brand + period
+  useEffect(() => {
+    if (!brandId) return;
 
     (async () => {
-      const cached = await getCachedBriefing(brandId);
+      const cached = await getCachedBriefing(brandId, period);
       if (!cached) return;
       const result = briefingResultFromCache(cached);
       setBriefing((prev) => {
         if (!prev) {
-          saveBriefingToStorage(brandId, result);
+          saveBriefingToStorage(brandId, result, period);
           return result;
         }
         const tNew = new Date(result.generatedAt).getTime();
         const tPrev = new Date(prev.generatedAt).getTime();
         if (tNew >= tPrev) {
-          saveBriefingToStorage(brandId, result);
+          saveBriefingToStorage(brandId, result, period);
           return result;
         }
         return prev;
       });
     })();
-  }, [brandId]);
+  }, [brandId, period]);
 
-  // Αποθήκευση τοπικά ανά ημερολογιακή ημέρα (επιβιώνει navigation / refresh)
+  // Αποθήκευση τοπικά ανά ημερολογιακή ημέρα + period
   useEffect(() => {
     if (!brandId || !briefing) return;
-    saveBriefingToStorage(brandId, briefing);
-  }, [brandId, briefing]);
+    saveBriefingToStorage(brandId, briefing, period);
+  }, [brandId, briefing, period]);
 
-  // Πρώτη γεννήτρια μόνο αν δεν υπάρχει briefing για σήμερα (ούτε local ούτε Firestore)
+  // Πρώτη γεννήτρια μόνο αν δεν υπάρχει briefing για σήμερα + period
   const hasSubstantiveData = props.products.length > 0 || props.campaigns.length > 0;
 
   useEffect(() => {
-    if (!brandId || !hasAnyData || !hasSubstantiveData || briefing || initRef.current === brandId) return;
-    initRef.current = brandId;
+    const cacheKey = `${brandId}:${period}`;
+    if (!brandId || !hasAnyData || !hasSubstantiveData || briefing || initRef.current === cacheKey) return;
+    initRef.current = cacheKey;
 
     const timer = setTimeout(() => {
+      const p = periodRef.current;
+      const pl = periodLabelRef.current;
       (async () => {
-        const cached = await getCachedBriefing(brandId);
+        const cached = await getCachedBriefing(brandId, p);
         if (cached) {
           setBriefing(briefingResultFromCache(cached));
           return;
         }
-        const local = loadBriefingFromStorage(brandId);
+        const local = loadBriefingFromStorage(brandId, p);
         if (local) {
           setBriefing(local);
           return;
         }
         setLoading(true);
         try {
-          const result = await generateMorningBriefing(brandId, buildDataRef.current());
+          const result = await generateMorningBriefing(brandId, buildDataRef.current(), { period: p, periodLabel: pl });
           setBriefing(result);
         } catch (e) {
           setError(e instanceof Error ? e.message : 'Briefing generation failed');
@@ -199,7 +220,7 @@ export function MorningBriefing(props: MorningBriefingProps) {
     }, INIT_DELAY_MS);
 
     return () => clearTimeout(timer);
-  }, [brandId, hasAnyData, hasSubstantiveData, briefing]);
+  }, [brandId, hasAnyData, hasSubstantiveData, briefing, period]);
 
   // Έλεγχος σημαντικής αλλαγής (κανόνες) — μόνο όταν το tab είναι ορατό
   useEffect(() => {
@@ -210,7 +231,7 @@ export function MorningBriefing(props: MorningBriefingProps) {
     checkInterval.current = setInterval(async () => {
       if (document.hidden) return;
       try {
-        const { updated, result } = await checkAndAutoUpdate(brandId, buildDataRef.current());
+        const { updated, result } = await checkAndAutoUpdate(brandId, buildDataRef.current(), periodRef.current, periodLabelRef.current);
         if (updated && result) setBriefing(result);
       } catch { /* silent */ }
     }, SIGNIFICANCE_CHECK_INTERVAL);
@@ -285,6 +306,7 @@ export function MorningBriefing(props: MorningBriefingProps) {
                 {timeLabel && (
                   <p className="text-[11px] text-[var(--nts-medium-gray)] flex items-center gap-1 mt-0.5">
                     <Clock size={10} /> {timeLabel}
+                    <span className="ml-1 px-1.5 py-0 rounded bg-[var(--nts-accent)]/10 text-[var(--nts-accent)] text-[10px] font-medium">{periodLabel}</span>
                     {briefing?.updateReason && !collapsed && (
                       <span className="ml-1 text-amber-600">— {briefing.updateReason}</span>
                     )}

@@ -238,11 +238,12 @@ export function detectSignificantChange(
 
 // ── Prompt Builder ───────────────────────────────────────────────────────────
 
-function buildBriefingPrompt(data: BriefingData, updateContext?: string): string {
+function buildBriefingPrompt(data: BriefingData, periodLabel: string, updateContext?: string): string {
   const sections: string[] = [];
   const totalRevenue = data.revenue.totalOrganic + data.revenue.totalCampaignRevenue;
 
   sections.push(`[BRAND] ${data.brandName}`);
+  sections.push(`[ΠΕΡΙΟΔΟΣ ΑΝΑΛΥΣΗΣ] ${periodLabel} — όλα τα νούμερα αφορούν ΜΟΝΟ αυτήν την περίοδο.`);
 
   sections.push(`[ΕΣΟΔΑ] Σύνολο: ${formatCurrency(totalRevenue)} (Organic: ${formatCurrency(data.revenue.totalOrganic)}, Campaigns: ${formatCurrency(data.revenue.totalCampaignRevenue)}), Ad Spend: ${formatCurrency(data.revenue.totalSpend)}, ROAS: ${data.revenue.roas > 0 ? data.revenue.roas.toFixed(2) + 'x' : 'N/A'}, Ενεργές Καμπάνιες: ${data.revenue.campaignCount}`);
 
@@ -344,19 +345,13 @@ export function briefingResultFromCache(c: CachedBriefing): BriefingResult {
   };
 }
 
-export async function getCachedBriefing(brandId: string): Promise<CachedBriefing | null> {
+export async function getCachedBriefing(brandId: string, period = 'current_month'): Promise<CachedBriefing | null> {
   try {
     const localKey = getLocalDateKey();
-    const refLocal = doc(db, 'brands', brandId, 'briefings', localKey);
-    let snap = await getDoc(refLocal);
+    const docId = `${localKey}:${period}`;
+    const refLocal = doc(db, 'brands', brandId, 'briefings', docId);
+    const snap = await getDoc(refLocal);
     if (snap.exists()) return snap.data() as CachedBriefing;
-    // Παλιές εγγραφές με UTC ημερομηνία (πριν το local key)
-    const utcKey = new Date().toISOString().split('T')[0];
-    if (utcKey !== localKey) {
-      const refUtc = doc(db, 'brands', brandId, 'briefings', utcKey);
-      snap = await getDoc(refUtc);
-      if (snap.exists()) return snap.data() as CachedBriefing;
-    }
     return null;
   } catch {
     return null;
@@ -368,10 +363,12 @@ async function saveBriefingCache(
   result: BriefingResult,
   snapshot: MetricsSnapshot,
   prevGenCount: number,
+  period = 'current_month',
 ): Promise<void> {
   try {
     const today = getLocalDateKey();
-    const ref = doc(db, 'brands', brandId, 'briefings', today);
+    const docId = `${today}:${period}`;
+    const ref = doc(db, 'brands', brandId, 'briefings', docId);
     const cached: CachedBriefing = {
       ...result,
       _cachedAt: Date.now(),
@@ -387,15 +384,17 @@ async function saveBriefingCache(
 export async function generateMorningBriefing(
   brandId: string,
   data: BriefingData,
-  options: { updateReason?: string } = {},
+  options: { updateReason?: string; period?: string; periodLabel?: string } = {},
 ): Promise<BriefingResult> {
+  const period = options.period ?? 'current_month';
+  const periodLabel = options.periodLabel ?? 'Τρέχων Μήνας';
   const dataHash = computeDataHash(data);
   const snapshot = extractSnapshot(data);
-  const existing = await getCachedBriefing(brandId);
+  const existing = await getCachedBriefing(brandId, period);
 
   const prevGenCount = existing?._genCount ?? 0;
 
-  const userPrompt = buildBriefingPrompt(data, options.updateReason);
+  const userPrompt = buildBriefingPrompt(data, periodLabel, options.updateReason);
 
   const raw = await callGemini({
     systemPrompt: SYSTEM_PROMPT,
@@ -425,7 +424,7 @@ export async function generateMorningBriefing(
     updateReason: options.updateReason,
   };
 
-  await saveBriefingCache(brandId, result, snapshot, prevGenCount);
+  await saveBriefingCache(brandId, result, snapshot, prevGenCount, period);
   return result;
 }
 
@@ -434,11 +433,13 @@ export async function generateMorningBriefing(
 export async function checkAndAutoUpdate(
   brandId: string,
   data: BriefingData,
+  period = 'current_month',
+  periodLabel = 'Τρέχων Μήνας',
 ): Promise<{ updated: boolean; result: BriefingResult | null }> {
-  const cached = await getCachedBriefing(brandId);
+  const cached = await getCachedBriefing(brandId, period);
 
   if (!cached) {
-    const result = await generateMorningBriefing(brandId, data);
+    const result = await generateMorningBriefing(brandId, data, { period, periodLabel });
     return { updated: true, result };
   }
 
@@ -461,6 +462,8 @@ export async function checkAndAutoUpdate(
 
   const result = await generateMorningBriefing(brandId, data, {
     updateReason: signal.reason,
+    period,
+    periodLabel,
   });
   return { updated: true, result };
 }
