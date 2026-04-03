@@ -1,10 +1,14 @@
 {
-  "version": "0.306.0",
-  "previousVersion": "0.305.0",
-  "commitHash": "7255404",
+  "version": "0.307.0",
+  "previousVersion": "0.306.0",
+  "commitHash": "7ee821e",
   "branch": "main",
-  "buildDate": "2026-04-03T05:27:31.806Z",
+  "buildDate": "2026-04-03T05:40:53.116Z",
   "commits": [
+    {
+      "hash": "7ee821e",
+      "message": "chore: sync buildInfo after deploy (v0.306.0)"
+    },
     {
       "hash": "7255404",
       "message": "chore(hosting): UTF-8 headers, el lang; campaigns: budget section below table"
@@ -60,13 +64,10 @@
     {
       "hash": "1451841",
       "message": "fix: remove REMOVED campaign filter and use yesterday as untilStr in connectors"
-    },
-    {
-      "hash": "16b8c41",
-      "message": "fix: align date ranges with ad platforms (toDate=yesterday) and remove all_conversions inflation"
     }
   ],
   "changes": [
+    "[Συντήρηση] Sync buildInfo after deploy (v0.306.0)",
     "[Συντήρηση] UTF-8 headers, el lang; campaigns: budget section below table",
     "[Νέο χαρακτηριστικό] Purchase filter, GA-first Ads actions, phantom store visits",
     "[Διόρθωση] Only spread month-bucket spend for Meta, not Google day=01",
@@ -75,7 +76,6 @@
     "[Διόρθωση] Hide zero-match rows when conversion filter is on",
     "[Διόρθωση] Purchase filter sums all purchase conversion actions",
     "[Διόρθωση] Restore UTF-8 strings and conv-filter pipeline",
-    "[Διόρθωση] Respect purchase conv filter — no fallback to all actions; sum value per action; export uses same pipeline",
-    "Revert(campaigns): restore CampaignsPage to ef26624 (pre-5ea82e6 display logic) + BudgetOpportunitySection"
+    "[Διόρθωση] Respect purchase conv filter — no fallback to all actions; sum value per action; export uses same pipeline"
   ]
 }

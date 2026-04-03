@@ -12,6 +12,9 @@ import { BudgetOpportunitySection } from '../roi/BudgetOpportunitySection';
 import { bucketOverlapFraction } from '../../utils/roiUtils';
 import type { Campaign } from '../../types';
 
+/** Euro sign as ASCII-safe escape (avoids mojibake if source encoding drifts). */
+const EUR = '\u20AC';
+
 function parseCampaignDate(d: string | number | undefined): Date | null {
   if (d === null || d === undefined || d === '') return null;
   const str = String(d).trim();
@@ -44,7 +47,7 @@ function sumConversionActions(ca: Campaign['conversionActions'] | undefined): { 
 
 
 /**
- * PMax / store-visit campaigns: GA may label the action as Purchase with ~1??? per conversion.
+ * PMax / store-visit campaigns: GA may label the action as Purchase with ~1 EUR per conversion.
  */
 function isPhantomStoreVisitPurchaseRow(
   actionName: string,
@@ -125,7 +128,7 @@ function isGoogleAdsLikeChannel(channel: string | undefined): boolean {
 
 /**
  * Display conversions / value. When a conversion-action filter is active, `c` is already
- * narrowed by applyConvFilter ??? do not fall back to sumConversionActions.
+ * narrowed by applyConvFilter ? do not fall back to sumConversionActions.
  */
 function getDisplayConversions(c: Campaign, convFilterActive: boolean): number {
   const raw = c.conversions;
@@ -216,15 +219,15 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
 
   const handleDeleteCampaigns = async () => {
     if (!currentBrand?.id) return;
-    if (!window.confirm(`?????????? ?????? ????? campaigns (${campaigns.length}) ??? ??? brand "${currentBrand.name}"; ??????? ? ???????? ??? ???????????.`)) return;
+    if (!window.confirm(`Delete all ${campaigns.length} campaigns for brand "${currentBrand.name}"? This cannot be undone.`)) return;
     setIsDeleting(true);
     try {
       await FirestoreService.deleteCollection('campaigns', currentBrand.id);
       queryClient.invalidateQueries({ queryKey: ['campaigns', currentBrand.id] });
       queryClient.invalidateQueries({ queryKey: ['campaigns'] });
-      toast.success('?? campaigns ???????????? ??????????????.');
+      toast.success('Campaigns deleted successfully.');
     } catch (e) {
-      toast.error(`??????? ???????????: ${e instanceof Error ? e.message : 'Unknown error'}`);
+      toast.error(`Delete failed: ${e instanceof Error ? e.message : 'Unknown error'}`);
     } finally {
       setIsDeleting(false);
     }
@@ -304,7 +307,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
         let start = parseCampaignDate(c.start_date);
         let end = parseCampaignDate(c.end_date);
         if (!start && !end && c.period) {
-          const m = c.period.match(/(\d{4}-\d{2}-\d{2})\s*[-???]\s*(\d{4}-\d{2}-\d{2})/);
+          const m = c.period.match(/(\d{4}-\d{2}-\d{2})\s*[-??]\s*(\d{4}-\d{2}-\d{2})/);
           if (m) {
             start = parseCampaignDate(m[1]);
             end = parseCampaignDate(m[2]);
@@ -586,7 +589,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
-        <Spinner size="lg" label="??????????? campaigns???" />
+        <Spinner size="lg" label="Loading campaigns..." />
       </div>
     );
   }
@@ -597,18 +600,18 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
         <div>
           <h2 className="text-2xl font-bold text-[#1A1A1A]">Campaigns</h2>
           <p className="text-[#4A4A4A] mt-1">
-            ????????????? ??? ????????? marketing campaigns
+            Overview and analysis of your marketing campaigns
           </p>
         </div>
         <Card padding="lg" className="text-center py-12 space-y-3">
           <p className="text-[#4A4A4A]">
-            ???? ???????????? imported campaigns ??????.
+            No imported campaigns yet.
           </p>
           {connectorsStatusPending ? (
-            <p className="text-sm text-[#6B7280]">?????????? ??????????? ??????????????????</p>
+            <p className="text-sm text-[#6B7280]">Checking connector status?</p>
           ) : hasConnectedAdsOrMeta ? (
             <p className="text-sm text-[#4A4A4A] max-w-xl mx-auto">
-              ?? ????????? Google Ads / Meta ??? ???????? ???????????? campaigns ????? ???????. ????????? ???{' '}
+              Google Ads / Meta are connected but no campaigns appear yet. Open{' '}
               <button
                 type="button"
                 onClick={() => onSectionChange?.('data-campaigns')}
@@ -617,12 +620,12 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                 Data Import
               </button>
               {' '}
-              ??? ??????????? <strong className="font-semibold text-[#1A1A1A]">Sync ??????</strong> ??? ????
-              ????????????? (? ???????????? ??? ??????????????????? ????????? sync).
+              and run <strong className="font-semibold text-[#1A1A1A]">Sync data</strong> to import or
+              refresh campaigns from the last sync.
             </p>
           ) : (
             <p className="text-sm text-[#4A4A4A]">
-              ???????????? ?????{' '}
+              Connect{' '}
               <button
                 type="button"
                 onClick={() => onSectionChange?.('data-campaigns')}
@@ -631,7 +634,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                 Data Import
               </button>
               {' '}
-              ??? ?? ????????????? Google Ads ? Meta ??? ?? ?????????? campaigns.
+              and connect Google Ads or Meta to load campaigns.
             </p>
           )}
         </Card>
@@ -669,7 +672,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
             disabled={isDeleting || !hasImported}
             className="text-[#DC2626] hover:bg-[#FEE2E2]"
           >
-            {isDeleting ? '?????????????' : '?????????? ??????????'}
+            {isDeleting ? 'Deleting?' : 'Delete all'}
           </Button>
           <Button variant="secondary" icon={<Download size={16} />} onClick={handleExportCampaigns} disabled={campaignsInConvView.length === 0}>
             Export .csv
@@ -720,7 +723,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
           onClear={() => { setDateFrom(''); setDateTo(''); localStorage.removeItem(LS_FROM); localStorage.removeItem(LS_TO); }}
         />
         <span className="text-xs text-[#9CA3AF]">
-          ????????? ????? 3 ???????? ???????????
+          Totals reflect the selected date range.
         </span>
       </div>
 
@@ -729,9 +732,9 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
         <Card padding="md">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-[#4A4A4A] flex items-center gap-1">Total Spent <Tooltip content="?????????? ??????? ????? ??????????? ??? ?????????????? ???????? ????? ????????????? ???????? ????????????." size={13} /></p>
+              <p className="text-sm text-[#4A4A4A] flex items-center gap-1">Total Spent <Tooltip content="Total ad spend for the current filters (dates, channel, search, etc.)." size={13} /></p>
               <p className="text-2xl font-bold text-[#1A1A1A] font-mono mt-1">
-                ???{formatCurrency(summaryStats.totalSpent, 2)}
+                {EUR}{formatCurrency(summaryStats.totalSpent, 2)}
               </p>
             </div>
             <div className="w-12 h-12 bg-[var(--nts-light-gray)] rounded-lg flex items-center justify-center">
@@ -743,7 +746,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
         <Card padding="md">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-[#4A4A4A] flex items-center gap-1">Total Conversions <Tooltip content="?????????? ?????????????? (???????, leads) ????? ????????????? ??????? ??????????? ???????? ????? ????????????? ???????????." size={13} /></p>
+              <p className="text-sm text-[#4A4A4A] flex items-center gap-1">Total Conversions <Tooltip content="Total conversions (purchases, leads). With a conversion filter, only selected actions count." size={13} /></p>
               <p className="text-2xl font-bold text-[#1A1A1A] font-mono mt-1">
                 {formatConvCount(summaryStats.totalConversions)}
               </p>
@@ -757,9 +760,9 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
         <Card padding="md">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-[#4A4A4A] flex items-center gap-1">Conversion Value <Tooltip content="????????? ???? (???) ????? ?????????????? ????? ????????????? ??????? ???????????." size={13} /></p>
+              <p className="text-sm text-[#4A4A4A] flex items-center gap-1">Conversion Value <Tooltip content="Conversion value (EUR) per the active conversion filter when set; otherwise total value." size={13} /></p>
               <p className="text-2xl font-bold text-[#1A1A1A] font-mono mt-1">
-                ???{formatCurrency(summaryStats.totalConversionValue, 2)}
+                {EUR}{formatCurrency(summaryStats.totalConversionValue, 2)}
               </p>
             </div>
             <div className="w-12 h-12 bg-[#F5F5F5] rounded-lg flex items-center justify-center">
@@ -771,7 +774,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
         <Card padding="md">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-[#4A4A4A] flex items-center gap-1">Avg ROAS <Tooltip content="?????? Return on Ad Spend ???????? ???????????: ????? ??????????????? ÷ Spend." size={13} /></p>
+              <p className="text-sm text-[#4A4A4A] flex items-center gap-1">Avg ROAS <Tooltip content="Average ROAS (Return on Ad Spend): conversion value ? spend." size={13} /></p>
               <p className="text-2xl font-bold text-[#1A1A1A] font-mono mt-1">
                 {formatMultiplier(summaryStats.avgROAS, 2)}
               </p>
@@ -791,7 +794,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
               <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#4A4A4A]" />
               <input
                 type="text"
-                placeholder="???????????? campaigns..."
+                placeholder="Search campaigns..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all"
@@ -806,7 +809,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
               onChange={(e) => setChannelFilter(e.target.value)}
               className="px-3 py-2 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all"
             >
-              <option value="all">???? ??? Channels</option>
+              <option value="all">All channels</option>
               {channels.map(ch => (
                 <option key={ch} value={ch}>{ch}</option>
               ))}
@@ -817,8 +820,8 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
               onChange={(e) => setStatusFilter(e.target.value)}
               className="px-3 py-2 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all"
             >
-              <option value="all">???? ??? Status</option>
-              <option value="active">???????</option>
+              <option value="all">All status</option>
+              <option value="active">Active</option>
               {statuses.filter(s => s !== 'active' && s !== 'enabled' && s !== 'eligible').map(status => (
                 <option key={status} value={status}>{status}</option>
               ))}
@@ -885,18 +888,18 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
               onClick={() => setTableExpanded(!tableExpanded)}
               className="text-xs font-medium text-[var(--nts-accent)] hover:underline px-3 py-1.5 rounded-md hover:bg-[var(--nts-accent)]/5 transition-colors"
             >
-              {tableExpanded ? '???????????' : `??????????? ?????? (${sortedCampaigns.length})`}
+              {tableExpanded ? 'Collapse' : `Show all (${sortedCampaigns.length})`}
             </button>
           )}
         </div>
 
         {filteredCampaigns.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-[#4A4A4A]">???? ???????? campaigns ?? ??? ??????????? filters.</p>
+            <p className="text-[#4A4A4A]">No campaigns match the current filters.</p>
           </div>
         ) : convFilterActive && sortedCampaigns.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-[#4A4A4A]">?????? ????????? ?? ????? ????????????? ?????????? ?????????????? ??? ?????? ???? ???????? (??.??. ??????????? ????? ?? ?????????????? ????????????????? ??? ?????????????? ?????? ????????????? Purchase).</p>
+            <p className="text-[#4A4A4A]">No campaigns have the selected conversions. Try different filters (e.g. remove Purchase if there are no real purchases).</p>
           </div>
         ) : (
           <div className="overflow-x-auto mt-4">
@@ -911,7 +914,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                   <SortableHeader col="ctr" label="CTR" current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="whitespace-nowrap hidden lg:table-cell" />
                   <SortableHeader col="conversions" label="Conv." current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="whitespace-nowrap hidden sm:table-cell" />
                   <SortableHeader col="spent" label="Spent" current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="whitespace-nowrap hidden sm:table-cell" />
-                  <SortableHeader col="conversion_value" label="???????" title="Conversion value" current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="whitespace-nowrap hidden sm:table-cell" />
+                  <SortableHeader col="conversion_value" label="Value" title="Conversion value" current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="whitespace-nowrap hidden sm:table-cell" />
                   <SortableHeader col="roas" label="ROAS" current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="whitespace-nowrap" />
                 </tr>
               </thead>
@@ -955,10 +958,10 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                       {formatConvCount(getDisplayConversions(campaign, convFilterActive))}
                     </td>
                     <td className="py-2 px-3 text-right font-mono text-xs whitespace-nowrap hidden sm:table-cell">
-                      {campaign.amount_spent ? `???${formatCurrency(campaign.amount_spent, 2)}` : '-'}
+                      {campaign.amount_spent ? `${EUR}${formatCurrency(campaign.amount_spent, 2)}` : '-'}
                     </td>
-                    <td className="py-2 px-3 text-right font-mono text-xs whitespace-nowrap hidden sm:table-cell" title="Conversion value (???????? ????? conversions)">
-                      ???{formatCurrency(getDisplayConversionValue(campaign, convFilterActive), 2)}
+                    <td className="py-2 px-3 text-right font-mono text-xs whitespace-nowrap hidden sm:table-cell" title="Conversion value">
+                      {EUR}{formatCurrency(getDisplayConversionValue(campaign, convFilterActive), 2)}
                     </td>
                     <td className="py-3 px-2 text-right">
                       {Number.isFinite(campaign.roas ?? NaN) ? (
@@ -984,7 +987,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
   );
 }
 
-// ????????? Search Intelligence Tab ????????????????????????????????????????????????????????????????????????????????????????????????????????????
+// Search Intelligence tab (Google Ads search terms / keywords)
 
 function SearchIntelligenceTab({ type, searchTerms, keywords, hasData, search, onSearchChange }: {
   type: 'search_terms' | 'keywords';
@@ -1007,9 +1010,9 @@ function SearchIntelligenceTab({ type, searchTerms, keywords, hasData, search, o
     return (
       <Card padding="lg" className="text-center py-12">
         <p className="text-[#6B7280]">
-          {type === 'search_terms' ? 'Search Terms' : 'Keywords'} ?? ?????????????? ????? ??? ????????? Google Ads sync.
+          {type === 'search_terms' ? 'Search Terms' : 'Keywords'} ? no data yet after the last Google Ads sync.
         </p>
-        <p className="text-xs text-[#9CA3AF] mt-2">Data Import ??? Google Ads ??? Sync ??????</p>
+        <p className="text-xs text-[#9CA3AF] mt-2">Use Data Import for Google Ads and run Sync</p>
       </Card>
     );
   }
@@ -1019,7 +1022,7 @@ function SearchIntelligenceTab({ type, searchTerms, keywords, hasData, search, o
       <div className="flex items-center justify-between mb-4">
         <CardHeader
           title={type === 'search_terms' ? 'Search Terms' : 'Keywords'}
-          subtitle={`${filtered.length} ${type === 'search_terms' ? 'search terms' : 'keywords'} · ?????????????? 90 ???????`}
+          subtitle={`${filtered.length} ${type === 'search_terms' ? 'search terms' : 'keywords'} ? last 90 days`}
         />
         <div className="relative w-64">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
@@ -1027,7 +1030,7 @@ function SearchIntelligenceTab({ type, searchTerms, keywords, hasData, search, o
             type="text"
             value={search}
             onChange={e => onSearchChange(e.target.value)}
-            placeholder={type === 'search_terms' ? '???????????? term...' : '???????????? keyword...'}
+            placeholder={type === 'search_terms' ? 'Search term...' : 'Search keyword...'}
             className="w-full pl-9 pr-3 py-2 rounded-lg bg-[#F5F5F5] border-none text-sm focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)]/20"
           />
         </div>
@@ -1072,17 +1075,17 @@ function SearchIntelligenceTab({ type, searchTerms, keywords, hasData, search, o
                         <span className="inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold" style={{ backgroundColor: qsBg, color: qsColor }}>
                           {item.qualityScore}
                         </span>
-                      ) : <span className="text-[#9CA3AF]">???</span>}
+                      ) : <span className="text-[#9CA3AF]">?</span>}
                     </td>
                   )}
                   <td className="py-2 px-2 text-[#6B7280] text-xs max-w-[180px] truncate">{item.campaign}</td>
                   <td className="py-2 px-2 text-right font-mono text-[#374151]">{item.impressions.toLocaleString()}</td>
                   <td className="py-2 px-2 text-right font-mono text-[#374151]">{item.clicks.toLocaleString()}</td>
                   <td className="py-2 px-2 text-right font-mono text-[#374151]">{ctr}%</td>
-                  <td className="py-2 px-2 text-right font-mono text-[#374151]">{item.conversions > 0 ? item.conversions.toFixed(1) : '???'}</td>
-                  <td className="py-2 px-2 text-right font-mono text-[#374151]">???{item.cost.toFixed(2)}</td>
+                  <td className="py-2 px-2 text-right font-mono text-[#374151]">{item.conversions > 0 ? item.conversions.toFixed(1) : '?'}</td>
+                  <td className="py-2 px-2 text-right font-mono text-[#374151]">{EUR}{formatCurrency(item.cost, 2)}</td>
                   <td className="py-2 px-2 text-right font-mono text-[#374151]">
-                    {item.conversionValue > 0 ? `???${item.conversionValue.toFixed(2)}` : '???'}
+                    {item.conversionValue > 0 ? `${EUR}${formatCurrency(item.conversionValue, 2)}` : '?'}
                   </td>
                 </tr>
               );
@@ -1091,12 +1094,12 @@ function SearchIntelligenceTab({ type, searchTerms, keywords, hasData, search, o
         </table>
         {filtered.length === 0 && (
           <p className="text-sm text-[#9CA3AF] text-center py-8">
-            {search ? '???? ???????? ????????????????.' : '???? ???????????? ????????.'}
+            {search ? 'No results match your search.' : 'No data available.'}
           </p>
         )}
         {filtered.length > 200 && (
           <p className="text-xs text-[#9CA3AF] text-center py-3">
-            ??????????????? ??? ???????? 200 ????? {filtered.length} ????????????????
+            Showing first 200 of {filtered.length} total
           </p>
         )}
       </div>
