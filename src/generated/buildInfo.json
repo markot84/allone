@@ -1,10 +1,14 @@
 {
-  "version": "0.305.0",
-  "previousVersion": "0.304.0",
-  "commitHash": "ff8d4b9",
+  "version": "0.306.0",
+  "previousVersion": "0.305.0",
+  "commitHash": "7255404",
   "branch": "main",
-  "buildDate": "2026-04-03T05:26:40.338Z",
+  "buildDate": "2026-04-03T05:27:31.806Z",
   "commits": [
+    {
+      "hash": "7255404",
+      "message": "chore(hosting): UTF-8 headers, el lang; campaigns: budget section below table"
+    },
     {
       "hash": "ff8d4b9",
       "message": "feat(campaigns): Purchase filter, GA-first Ads actions, phantom store visits"
@@ -60,13 +64,10 @@
     {
       "hash": "16b8c41",
       "message": "fix: align date ranges with ad platforms (toDate=yesterday) and remove all_conversions inflation"
-    },
-    {
-      "hash": "4d4ce26",
-      "message": "fix: AI Briefing scoped to selected period - cache, prompt and reset on period change"
     }
   ],
   "changes": [
+    "[Συντήρηση] UTF-8 headers, el lang; campaigns: budget section below table",
     "[Νέο χαρακτηριστικό] Purchase filter, GA-first Ads actions, phantom store visits",
     "[Διόρθωση] Only spread month-bucket spend for Meta, not Google day=01",
     "Revert(campaigns): remove Math.max of aggregate vs conversionActions",
@@ -75,7 +76,6 @@
     "[Διόρθωση] Purchase filter sums all purchase conversion actions",
     "[Διόρθωση] Restore UTF-8 strings and conv-filter pipeline",
     "[Διόρθωση] Respect purchase conv filter — no fallback to all actions; sum value per action; export uses same pipeline",
-    "Revert(campaigns): restore CampaignsPage to ef26624 (pre-5ea82e6 display logic) + BudgetOpportunitySection",
-    "Revert: restore CampaignsPage, roiUtils, connectors to stable 5ea82e6 + re-add BudgetOpportunitySection and bucketOverlapFraction export"
+    "Revert(campaigns): restore CampaignsPage to ef26624 (pre-5ea82e6 display logic) + BudgetOpportunitySection"
   ]
 }
