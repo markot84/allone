@@ -109,9 +109,10 @@ t = t.replace(
 )
 
 if "<BudgetOpportunitySection" not in t:
+    # Below campaigns table, not between summary cards and filters
     t = t.replace(
-        "      </div>\n\n      {/* Filters */}\n      <Card padding=\"md\">",
-        "      </div>\n\n      <BudgetOpportunitySection campaigns={(campaigns ?? []) as Campaign[]} />\n\n      {/* Filters */}\n      <Card padding=\"md\">",
+        "        )}\n      </Card>\n      </>}",
+        "        )}\n      </Card>\n\n      <BudgetOpportunitySection campaigns={(campaigns ?? []) as Campaign[]} />\n\n      </>}",
         1,
     )
 

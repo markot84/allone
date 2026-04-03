@@ -1,12 +1,12 @@
 {
-  "version": "0.303.0",
-  "previousVersion": "0.302.0",
-  "commitHash": "a986eaa",
+  "version": "0.305.0",
+  "previousVersion": "0.304.0",
+  "commitHash": "ff8d4b9",
   "branch": "main",
-  "buildDate": "2026-04-03T05:03:10.729Z",
+  "buildDate": "2026-04-03T05:26:40.338Z",
   "commits": [
     {
-      "hash": "a986eaa",
+      "hash": "ff8d4b9",
       "message": "feat(campaigns): Purchase filter, GA-first Ads actions, phantom store visits"
     },
     {
