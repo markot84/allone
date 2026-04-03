@@ -42,10 +42,90 @@ function sumConversionActions(ca: Campaign['conversionActions'] | undefined): { 
   );
 }
 
+
+/**
+ * PMax / store-visit campaigns: GA may label the action as Purchase with ~1€ per conversion.
+ */
+function isPhantomStoreVisitPurchaseRow(
+  actionName: string,
+  row: { conversions?: number; value?: number },
+  campaignName?: string
+): boolean {
+  const conv = row.conversions ?? 0;
+  const val = row.value ?? 0;
+  const avgPerConv = conv > 0 ? val / conv : val;
+
+  const cn = (campaignName || '').toLowerCase();
+  if (
+    (/store\s*visits?|shop\s*visits?/i.test(cn) || (/visit/i.test(cn) && /store|shop/i.test(cn))) &&
+    avgPerConv >= 0.99 &&
+    avgPerConv <= 1.01
+  ) {
+    return true;
+  }
+
+  if (val < 0.99 || val > 1.01) return false;
+  const n = actionName.toLowerCase();
+  if (/store\s*visits?|shop\s*visits?/i.test(n)) return true;
+  if (/visit/i.test(n) && /store|shop/i.test(n)) return true;
+  const gEp = '\u03b5\u03c0\u03af\u03c3\u03ba\u03b5\u03c8\u03b7';
+  const gEp2 = '\u03b5\u03c0\u03b9\u03c3\u03ba\u03b5\u03c8\u03b7';
+  const gKat = '\u03ba\u03b1\u03c4\u03ac\u03c3\u03c4\u03b7\u03bc\u03b1';
+  const gKat2 = '\u03ba\u03b1\u03c4\u03b1\u03c3\u03c4\u03b7\u03bc\u03b1';
+  if ((n.includes(gEp) || n.includes(gEp2)) && (n.includes(gKat) || n.includes(gKat2))) return true;
+  return false;
+}
+
+function isGoogleAnalyticsImportLabel(name: string): boolean {
+  const n = name.toLowerCase();
+  if (/imported?\s+from\s+google\s+analytics/.test(n)) return true;
+  if (/from\s+google\s+analytics/.test(n)) return true;
+  if (/\bgoogle\s+analytics\s*(\(4\)|4)?\b/.test(n)) return true;
+  if (/\bga4\b/.test(n)) return true;
+  if (/\bga\s*\(?4\)?\b/.test(n)) return true;
+  if (/import.*\b(ga4|google\s+analytics)\b/.test(n)) return true;
+  return false;
+}
+
+function pickPrimaryGoogleAdsPurchaseKey(
+  purchaseKeys: string[],
+  ca: Record<string, { conversions: number; value: number }>,
+  campaignName: string
+): string | null {
+  const ok = purchaseKeys.filter(k => {
+    const row = ca[k];
+    if (!row) return false;
+    return !isPhantomStoreVisitPurchaseRow(k, row, campaignName);
+  });
+  if (ok.length === 0) return null;
+  if (ok.length === 1) return ok[0];
+  const lower = (s: string) => s.trim().toLowerCase();
+  const hasData = (k: string) => (ca[k]?.conversions ?? 0) > 0 || (ca[k]?.value ?? 0) > 0;
+
+  const gaImport = ok.find(k => isGoogleAnalyticsImportLabel(k) && hasData(k));
+  if (gaImport) return gaImport;
+
+  const exact = ok.find(k => lower(k) === 'purchase');
+  if (exact && hasData(exact)) return exact;
+
+  const paren = ok.find(k => /^purchase\s*\(/i.test(k.trim()) && hasData(k));
+  if (paren) return paren;
+
+  const web = ok.find(k => /website|web\s*store|ecommerce|shopify|woocommerce/i.test(k) && hasData(k));
+  if (web) return web;
+
+  const byConv = [...ok].sort((a, b) => (ca[b]?.conversions ?? 0) - (ca[a]?.conversions ?? 0));
+  return byConv[0] ?? null;
+}
+
+function isGoogleAdsLikeChannel(channel: string | undefined): boolean {
+  const ch = (channel || '').trim().toLowerCase();
+  return ch === 'google ads' || ch === 'google shopping' || /^google\s*ads\b/.test(ch);
+}
+
 /**
  * Display conversions / value. When a conversion-action filter is active, `c` is already
- * narrowed by applyConvFilter - do not fall back to sumConversionActions (avoids
- * unrelated actions when purchase-only filter yields 0 for a row).
+ * narrowed by applyConvFilter — do not fall back to sumConversionActions.
  */
 function getDisplayConversions(c: Campaign, convFilterActive: boolean): number {
   const raw = c.conversions;
@@ -73,7 +153,8 @@ function getDisplayConversionValue(c: Campaign, convFilterActive: boolean): numb
 }
 
 function formatConvCount(n: number): string {
-  return formatNumber(Math.round(n), 0);
+  const dec = Math.abs(n % 1) > 1e-6 ? 2 : 0;
+  return formatNumber(n, dec);
 }
 
 interface CampaignsPageProps {
@@ -124,9 +205,9 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
   const [convActionFilter, setConvActionFilter] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem(LS_CONV) || '[]'); } catch { return []; }
   });
+  const convFilterActive = convActionFilter.length > 0;
   const [showConvDropdown, setShowConvDropdown] = useState(false);
   const [activeTab, setActiveTab] = useState<'campaigns' | 'search_terms' | 'keywords'>('campaigns');
-  const convFilterActive = convActionFilter.length > 0;
   const COLLAPSED_LIMIT = 12;
   const [tableExpanded, setTableExpanded] = useState(false);
   const { searchTerms, keywords, hasData: hasSearchData } = useSearchIntelligence();
@@ -135,15 +216,15 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
 
   const handleDeleteCampaigns = async () => {
     if (!currentBrand?.id) return;
-    if (!window.confirm(`?????????? ?????? ????? campaigns (${campaigns.length}) ??? ??? brand "${currentBrand.name}"; ??????? ? ???????? ??? ???????????.`)) return;
+    if (!window.confirm(`Διαγραφή όλων των campaigns (${campaigns.length}) για το brand "${currentBrand.name}"; Αυτή η ενέργεια δεν αναιρείται.`)) return;
     setIsDeleting(true);
     try {
       await FirestoreService.deleteCollection('campaigns', currentBrand.id);
       queryClient.invalidateQueries({ queryKey: ['campaigns', currentBrand.id] });
       queryClient.invalidateQueries({ queryKey: ['campaigns'] });
-      toast.success('?? campaigns ???????????? ??????????????.');
+      toast.success('Τα campaigns διαγράφηκαν επιτυχώς.');
     } catch (e) {
-      toast.error(`??????? ???????????: ${e instanceof Error ? e.message : 'Unknown error'}`);
+      toast.error(`Σφάλμα διαγραφής: ${e instanceof Error ? e.message : 'Unknown error'}`);
     } finally {
       setIsDeleting(false);
     }
@@ -223,7 +304,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
         let start = parseCampaignDate(c.start_date);
         let end = parseCampaignDate(c.end_date);
         if (!start && !end && c.period) {
-          const m = c.period.match(/(\d{4}-\d{2}-\d{2})\s*[-???]\s*(\d{4}-\d{2}-\d{2})/);
+          const m = c.period.match(/(\d{4}-\d{2}-\d{2})\s*[-–]\s*(\d{4}-\d{2}-\d{2})/);
           if (m) {
             start = parseCampaignDate(m[1]);
             end = parseCampaignDate(m[2]);
@@ -238,15 +319,9 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
       });
     }
 
-    // Always recompute ROAS from first principles so stale roas:0 from old syncs never shows.
-    return filtered.map(c => {
-      const spent = c.amount_spent ?? 0;
-      const cv = c.conversion_value ?? 0;
-      return spent > 0 && cv > 0
-        ? { ...c, roas: cv / spent }
-        : c;
-    });
+    return filtered;
   }, [campaigns, searchQuery, channelFilter, statusFilter, dateFrom, dateTo]);
+
 
   // Compute date-range-aware metrics per campaign
   const campaignsWithDateMetrics = useMemo(() => {
@@ -287,7 +362,6 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
         }
       }
 
-      // Date filter active: always use date-filtered conversionActions only
       const conversionActions = dateConvActions;
 
       const ctr = impressions > 0 ? Math.round((clicks / impressions) * 10000) / 100 : 0;
@@ -297,28 +371,48 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
     });
   }, [filteredCampaigns, dateFrom, dateTo]);
 
+
   const applyConvFilter = (c: Campaign): Campaign => {
-    if (convActionFilter.length === 0 || !c.conversionActions) return c;
+    if (convActionFilter.length === 0) return c;
+    const ca = c.conversionActions;
+    if (!ca || Object.keys(ca).length === 0) {
+      return {
+        ...c,
+        conversions: 0,
+        conversion_value: 0,
+        roas: 0,
+      };
+    }
     let filteredConversions = 0;
     let filteredValue = 0;
     const purchaseSelected = convActionFilter.includes('Purchase');
+    const campaignName = c.name || '';
 
     for (const action of convActionFilter) {
       if (action === 'Purchase') {
-        // Sum every purchase-related action (Pixel, Google Ads, etc.). Picking only one row
-        // undercounted conv/value when multiple purchase types exist per campaign.
-        const purchaseKeys = Object.keys(c.conversionActions).filter(k => k.toLowerCase().includes('purchase'));
+        let purchaseKeys = Object.keys(ca).filter(k => k.toLowerCase().includes('purchase'));
+        const googleAdsLike = isGoogleAdsLikeChannel(c.channel);
+        if (googleAdsLike) {
+          const primary = pickPrimaryGoogleAdsPurchaseKey(purchaseKeys, ca, campaignName);
+          purchaseKeys = primary ? [primary] : [];
+        }
         for (const pk of purchaseKeys) {
-          const row = c.conversionActions[pk];
-          if (row) {
-            filteredConversions += row.conversions ?? 0;
-            filteredValue += row.value ?? 0;
-          }
+          const row = ca[pk];
+          if (!row) continue;
+          if (isPhantomStoreVisitPurchaseRow(pk, row, campaignName)) continue;
+          filteredConversions += row.conversions ?? 0;
+          filteredValue += row.value ?? 0;
         }
       } else {
         if (purchaseSelected && action.toLowerCase().includes('purchase')) continue;
-        const a = c.conversionActions[action];
-        if (a) {
+        const a = ca[action];
+        if (
+          a &&
+          !(
+            action.toLowerCase().includes('purchase') &&
+            isPhantomStoreVisitPurchaseRow(action, a, campaignName)
+          )
+        ) {
           filteredConversions += a.conversions;
           filteredValue += a.value ?? 0;
         }
@@ -334,37 +428,13 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
     if (convActionFilter.length === 0) return campaignsWithDateMetrics;
     return campaignsWithDateMetrics.map(applyConvFilter);
   }, [campaignsWithDateMetrics, convActionFilter]);
-  /** With a conv. action filter, hide rows that have no matching conversions/value (e.g. Store Visits PMax when filtering Purchase). */
+
   const campaignsInConvView = useMemo(() => {
     if (!convFilterActive) return campaignsWithConvFilter;
     return campaignsWithConvFilter.filter(
       c => getDisplayConversions(c, true) > 0 || getDisplayConversionValue(c, true) > 0
     );
   }, [campaignsWithConvFilter, convFilterActive]);
-
-
-  const handleExportCampaigns = useCallback(() => {
-    const list = campaignsInConvView;
-    if (list.length === 0) return;
-    const headers = ['Name', 'Channel', 'Status', 'Impressions', 'Clicks', 'CTR %', 'Spend', 'Conversions', 'Conv. Value', 'ROAS', 'CPA', 'Start Date', 'End Date'];
-    const rows = list.map(c => [
-      c.name || '', c.channel || '', c.status || '',
-      c.impressions ?? '', c.clicks ?? '',
-      c.impressions ? ((c.clicks || 0) / c.impressions * 100).toFixed(2) : '',
-      c.amount_spent ?? '', getDisplayConversions(c, convFilterActive), getDisplayConversionValue(c, convFilterActive),
-      c.amount_spent ? (getDisplayConversionValue(c, convFilterActive) / c.amount_spent).toFixed(2) : '',
-      getDisplayConversions(c, convFilterActive) ? ((c.amount_spent || 0) / getDisplayConversions(c, convFilterActive)).toFixed(2) : '',
-      c.start_date || '', c.end_date || '',
-    ]);
-    const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
-    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `campaigns_export_${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [campaignsInConvView, convFilterActive]);
 
   const sortedCampaigns = useMemo(() => {
     if (!sortColumn) return campaignsInConvView;
@@ -390,6 +460,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
     return sorted;
   }, [campaignsInConvView, sortColumn, sortDirection, convFilterActive]);
 
+
   const handleSort = (col: string) => {
     if (sortColumn === col) {
       setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
@@ -400,7 +471,6 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
     }
   };
 
-  // Summary stats: same rows as the table (excludes zero-match campaigns when conv filter is on)
   const summaryStats = useMemo(() => {
     const list = campaignsInConvView;
     const total = list.length;
@@ -431,6 +501,29 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
       avgROAS,
       byChannel,
     };
+  }, [campaignsInConvView, convFilterActive]);
+
+  const handleExportCampaigns = useCallback(() => {
+    const list = campaignsInConvView;
+    if (list.length === 0) return;
+    const headers = ['Name', 'Channel', 'Status', 'Impressions', 'Clicks', 'CTR %', 'Spend', 'Conversions', 'Conv. Value', 'ROAS', 'CPA', 'Start Date', 'End Date'];
+    const rows = list.map(c => [
+      c.name || '', c.channel || '', c.status || '',
+      c.impressions ?? '', c.clicks ?? '',
+      c.impressions ? ((c.clicks || 0) / c.impressions * 100).toFixed(2) : '',
+      c.amount_spent ?? '', getDisplayConversions(c, convFilterActive), getDisplayConversionValue(c, convFilterActive),
+      c.amount_spent ? (getDisplayConversionValue(c, convFilterActive) / c.amount_spent).toFixed(2) : '',
+      getDisplayConversions(c, convFilterActive) ? ((c.amount_spent || 0) / getDisplayConversions(c, convFilterActive)).toFixed(2) : '',
+      c.start_date || '', c.end_date || '',
+    ]);
+    const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `campaigns_export_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   }, [campaignsInConvView, convFilterActive]);
 
   // Standard channels + unique from data (sorted: standard first, then data-derived)
@@ -493,7 +586,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
-        <Spinner size="lg" label="??????????? campaigns???" />
+        <Spinner size="lg" label="Φόρτωση campaigns…" />
       </div>
     );
   }
@@ -504,18 +597,18 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
         <div>
           <h2 className="text-2xl font-bold text-[#1A1A1A]">Campaigns</h2>
           <p className="text-[#4A4A4A] mt-1">
-            ????????????? ??? ????????? marketing campaigns
+            Διαχείριση και ανάλυση marketing campaigns
           </p>
         </div>
         <Card padding="lg" className="text-center py-12 space-y-3">
           <p className="text-[#4A4A4A]">
-            ???? ???????????? imported campaigns ??????.
+            Δεν υπάρχουν imported campaigns ακόμα.
           </p>
           {connectorsStatusPending ? (
-            <p className="text-sm text-[#6B7280]">?????????? ??????????? ??????????????????</p>
+            <p className="text-sm text-[#6B7280]">Έλεγχος σύνδεσης πλατφόρμων…</p>
           ) : hasConnectedAdsOrMeta ? (
             <p className="text-sm text-[#4A4A4A] max-w-xl mx-auto">
-              ?? ????????? Google Ads / Meta ??? ???????? ???????????? campaigns ????? ???????. ????????? ???{' '}
+              Η σύνδεση Google Ads / Meta δεν εισάγει αυτόματα campaigns στη λίστα. Ανοίξτε το{' '}
               <button
                 type="button"
                 onClick={() => onSectionChange?.('data-campaigns')}
@@ -524,12 +617,12 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                 Data Import
               </button>
               {' '}
-              ??? ??????????? <strong className="font-semibold text-[#1A1A1A]">Sync ??????</strong> ??? ????
-              ????????????? (? ???????????? ??? ??????????????????? ????????? sync).
+              και πατήστε <strong className="font-semibold text-[#1A1A1A]">Sync τώρα</strong> για κάθε
+              πλατφόρμα (ή περιμένετε το προγραμματισμένο ημερήσιο sync).
             </p>
           ) : (
             <p className="text-sm text-[#4A4A4A]">
-              ???????????? ?????{' '}
+              Μεταβείτε στο{' '}
               <button
                 type="button"
                 onClick={() => onSectionChange?.('data-campaigns')}
@@ -538,7 +631,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                 Data Import
               </button>
               {' '}
-              ??? ?? ????????????? Google Ads ? Meta ??? ?? ?????????? campaigns.
+              για να συνδέσετε Google Ads ή Meta και να εισάγετε campaigns.
             </p>
           )}
         </Card>
@@ -576,7 +669,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
             disabled={isDeleting || !hasImported}
             className="text-[#DC2626] hover:bg-[#FEE2E2]"
           >
-            {isDeleting ? '?????????????' : '?????????? ??????????'}
+            {isDeleting ? 'Διαγραφή…' : 'Διαγραφή δεδομένων'}
           </Button>
           <Button variant="secondary" icon={<Download size={16} />} onClick={handleExportCampaigns} disabled={campaignsInConvView.length === 0}>
             Export .csv
@@ -627,7 +720,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
           onClear={() => { setDateFrom(''); setDateTo(''); localStorage.removeItem(LS_FROM); localStorage.removeItem(LS_TO); }}
         />
         <span className="text-xs text-[#9CA3AF]">
-          ????????? ????? 3 ???????? ???????????
+          Δεδομένα έως 3 χρόνια ιστορικού
         </span>
       </div>
 
@@ -636,9 +729,9 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
         <Card padding="md">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-[#4A4A4A] flex items-center gap-1">Total Spent <Tooltip content="?????????? ??????? ????? ??????????? ??? ?????????????? ???????? ????? ????????????? ???????? ????????????." size={13} /></p>
+              <p className="text-sm text-[#4A4A4A] flex items-center gap-1">Total Spent <Tooltip content="Συνολικό ποσό που δαπανήθηκε σε διαφημίσεις εντός του επιλεγμένου εύρους ημερομηνιών." size={13} /></p>
               <p className="text-2xl font-bold text-[#1A1A1A] font-mono mt-1">
-                ???{formatCurrency(summaryStats.totalSpent, 0)}
+                €{formatCurrency(summaryStats.totalSpent, 2)}
               </p>
             </div>
             <div className="w-12 h-12 bg-[var(--nts-light-gray)] rounded-lg flex items-center justify-center">
@@ -650,7 +743,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
         <Card padding="md">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-[#4A4A4A] flex items-center gap-1">Total Conversions <Tooltip content="?????????? ?????????????? (???????, leads) ????? ????????????? ??????? ??????????? ???????? ????? ????????????? ???????????." size={13} /></p>
+              <p className="text-sm text-[#4A4A4A] flex items-center gap-1">Total Conversions <Tooltip content="Αριθμός μετατροπών (αγορές, leads) που αποδίδονται στις καμπάνιες εντός της επιλεγμένης περιόδου." size={13} /></p>
               <p className="text-2xl font-bold text-[#1A1A1A] font-mono mt-1">
                 {formatConvCount(summaryStats.totalConversions)}
               </p>
@@ -664,9 +757,9 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
         <Card padding="md">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-[#4A4A4A] flex items-center gap-1">Conversion Value <Tooltip content="????????? ???? (???) ????? ?????????????? ????? ????????????? ??????? ???????????." size={13} /></p>
+              <p className="text-sm text-[#4A4A4A] flex items-center gap-1">Conversion Value <Tooltip content="Συνολική αξία (€) των μετατροπών που αποδίδονται στις καμπάνιες." size={13} /></p>
               <p className="text-2xl font-bold text-[#1A1A1A] font-mono mt-1">
-                ???{formatCurrency(summaryStats.totalConversionValue, 0)}
+                €{formatCurrency(summaryStats.totalConversionValue, 2)}
               </p>
             </div>
             <div className="w-12 h-12 bg-[#F5F5F5] rounded-lg flex items-center justify-center">
@@ -678,9 +771,9 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
         <Card padding="md">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-[#4A4A4A] flex items-center gap-1">Avg ROAS <Tooltip content="?????? Return on Ad Spend ???????? ???????????: ????? ??????????????? ? Spend." size={13} /></p>
+              <p className="text-sm text-[#4A4A4A] flex items-center gap-1">Avg ROAS <Tooltip content="Μέσο Return on Ad Spend εντός περιόδου: Αξία Μετατροπών ÷ Spend." size={13} /></p>
               <p className="text-2xl font-bold text-[#1A1A1A] font-mono mt-1">
-                {formatMultiplier(summaryStats.avgROAS, 0)}
+                {formatMultiplier(summaryStats.avgROAS, 2)}
               </p>
             </div>
             <div className="w-12 h-12 bg-[#FEF3C7] rounded-lg flex items-center justify-center">
@@ -690,6 +783,8 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
         </Card>
       </div>
 
+      <BudgetOpportunitySection campaigns={(campaigns ?? []) as Campaign[]} />
+
       {/* Filters */}
       <Card padding="md">
         <div className="flex flex-wrap items-center gap-4">
@@ -698,7 +793,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
               <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#4A4A4A]" />
               <input
                 type="text"
-                placeholder="???????????? campaigns..."
+                placeholder="Αναζήτηση campaigns..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all"
@@ -713,7 +808,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
               onChange={(e) => setChannelFilter(e.target.value)}
               className="px-3 py-2 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all"
             >
-              <option value="all">???? ??? Channels</option>
+              <option value="all">Όλα τα Channels</option>
               {channels.map(ch => (
                 <option key={ch} value={ch}>{ch}</option>
               ))}
@@ -724,8 +819,8 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
               onChange={(e) => setStatusFilter(e.target.value)}
               className="px-3 py-2 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all"
             >
-              <option value="all">???? ??? Status</option>
-              <option value="active">???????</option>
+              <option value="all">Όλα τα Status</option>
+              <option value="active">Ενεργά</option>
               {statuses.filter(s => s !== 'active' && s !== 'enabled' && s !== 'eligible').map(status => (
                 <option key={status} value={status}>{status}</option>
               ))}
@@ -785,27 +880,25 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
         <div className="flex items-center justify-between">
           <CardHeader
             title="Campaigns List"
-            subtitle={`${campaignsInConvView.length} ${campaignsInConvView.length === 1 ? 'campaign' : 'campaigns'}`}
+            subtitle={`${sortedCampaigns.length} ${sortedCampaigns.length === 1 ? 'campaign' : 'campaigns'}`}
           />
           {sortedCampaigns.length > COLLAPSED_LIMIT && (
             <button
               onClick={() => setTableExpanded(!tableExpanded)}
               className="text-xs font-medium text-[var(--nts-accent)] hover:underline px-3 py-1.5 rounded-md hover:bg-[var(--nts-accent)]/5 transition-colors"
             >
-              {tableExpanded ? '???????????' : `??????????? ?????? (${sortedCampaigns.length})`}
+              {tableExpanded ? 'Σύμπτυξη' : `Εμφάνιση όλων (${sortedCampaigns.length})`}
             </button>
           )}
         </div>
 
         {filteredCampaigns.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-[#4A4A4A]">???? ???????? campaigns ?? ??? ??????????? filters.</p>
+            <p className="text-[#4A4A4A]">Δεν βρέθηκαν campaigns με τα επιλεγμένα filters.</p>
           </div>
         ) : convFilterActive && sortedCampaigns.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-[#4A4A4A]">
-              ?????? ????????? ?? ????? ????????????? ?????????? ?????????????? ??? ?????? ???? ???????? (??.??. ??????????? ????? ?? ?????????????? ????????????????? ??? ?????????????? ?????? ????????????? Purchase).
-            </p>
+            <p className="text-[#4A4A4A]">Καμία καμπάνια με τις επιλεγμένες ενέργειες μετατροπής για αυτή την περίοδο (π.χ. καμπάνιες μόνο με επισκέψεις καταστήματος δεν εμφανίζονται όταν φιλτράρετε Purchase).</p>
           </div>
         ) : (
           <div className="overflow-x-auto mt-4">
@@ -820,7 +913,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                   <SortableHeader col="ctr" label="CTR" current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="whitespace-nowrap hidden lg:table-cell" />
                   <SortableHeader col="conversions" label="Conv." current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="whitespace-nowrap hidden sm:table-cell" />
                   <SortableHeader col="spent" label="Spent" current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="whitespace-nowrap hidden sm:table-cell" />
-                  <SortableHeader col="conversion_value" label="???????" title="Conversion value" current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="whitespace-nowrap hidden sm:table-cell" />
+                  <SortableHeader col="conversion_value" label="Τζίρος" title="Conversion value" current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="whitespace-nowrap hidden sm:table-cell" />
                   <SortableHeader col="roas" label="ROAS" current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="whitespace-nowrap" />
                 </tr>
               </thead>
@@ -864,15 +957,15 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                       {formatConvCount(getDisplayConversions(campaign, convFilterActive))}
                     </td>
                     <td className="py-2 px-3 text-right font-mono text-xs whitespace-nowrap hidden sm:table-cell">
-                      {campaign.amount_spent ? `???${formatCurrency(campaign.amount_spent, 0)}` : '-'}
+                      {campaign.amount_spent ? `€${formatCurrency(campaign.amount_spent, 2)}` : '-'}
                     </td>
-                    <td className="py-2 px-3 text-right font-mono text-xs whitespace-nowrap hidden sm:table-cell" title="Conversion value (???????? ????? conversions)">
-                      ???{formatCurrency(getDisplayConversionValue(campaign, convFilterActive), 0)}
+                    <td className="py-2 px-3 text-right font-mono text-xs whitespace-nowrap hidden sm:table-cell" title="Conversion value (τζίρος από conversions)">
+                      €{formatCurrency(getDisplayConversionValue(campaign, convFilterActive), 2)}
                     </td>
                     <td className="py-3 px-2 text-right">
                       {Number.isFinite(campaign.roas ?? NaN) ? (
                         <Badge variant={(campaign.roas ?? 0) > 0 ? 'success' : 'default'} size="sm">
-                          {formatMultiplier(campaign.roas ?? 0, 0)}
+                          {formatMultiplier(campaign.roas ?? 0, 2)}
                         </Badge>
                       ) : (
                         '-'
@@ -885,14 +978,12 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
           </div>
         )}
       </Card>
-
-      <BudgetOpportunitySection campaigns={(campaigns ?? []) as Campaign[]} />
       </>}
     </div>
   );
 }
 
-// ????????? Search Intelligence Tab ????????????????????????????????????????????????????????????????????????????????????????????????????????????
+// ─── Search Intelligence Tab ────────────────────────────────────
 
 function SearchIntelligenceTab({ type, searchTerms, keywords, hasData, search, onSearchChange }: {
   type: 'search_terms' | 'keywords';
@@ -915,9 +1006,9 @@ function SearchIntelligenceTab({ type, searchTerms, keywords, hasData, search, o
     return (
       <Card padding="lg" className="text-center py-12">
         <p className="text-[#6B7280]">
-          {type === 'search_terms' ? 'Search Terms' : 'Keywords'} ?? ?????????????? ????? ??? ????????? Google Ads sync.
+          {type === 'search_terms' ? 'Search Terms' : 'Keywords'} θα εμφανιστούν μετά το επόμενο Google Ads sync.
         </p>
-        <p className="text-xs text-[#9CA3AF] mt-2">Data Import ??? Google Ads ??? Sync ??????</p>
+        <p className="text-xs text-[#9CA3AF] mt-2">Data Import → Google Ads → Sync τώρα</p>
       </Card>
     );
   }
@@ -927,7 +1018,7 @@ function SearchIntelligenceTab({ type, searchTerms, keywords, hasData, search, o
       <div className="flex items-center justify-between mb-4">
         <CardHeader
           title={type === 'search_terms' ? 'Search Terms' : 'Keywords'}
-          subtitle={`${filtered.length} ${type === 'search_terms' ? 'search terms' : 'keywords'} ? ?????????????? 90 ???????`}
+          subtitle={`${filtered.length} ${type === 'search_terms' ? 'search terms' : 'keywords'} · τελευταίες 90 ημέρες`}
         />
         <div className="relative w-64">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
@@ -935,7 +1026,7 @@ function SearchIntelligenceTab({ type, searchTerms, keywords, hasData, search, o
             type="text"
             value={search}
             onChange={e => onSearchChange(e.target.value)}
-            placeholder={type === 'search_terms' ? '???????????? term...' : '???????????? keyword...'}
+            placeholder={type === 'search_terms' ? 'Αναζήτηση term...' : 'Αναζήτηση keyword...'}
             className="w-full pl-9 pr-3 py-2 rounded-lg bg-[#F5F5F5] border-none text-sm focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)]/20"
           />
         </div>
@@ -980,17 +1071,17 @@ function SearchIntelligenceTab({ type, searchTerms, keywords, hasData, search, o
                         <span className="inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold" style={{ backgroundColor: qsBg, color: qsColor }}>
                           {item.qualityScore}
                         </span>
-                      ) : <span className="text-[#9CA3AF]">???</span>}
+                      ) : <span className="text-[#9CA3AF]">—</span>}
                     </td>
                   )}
                   <td className="py-2 px-2 text-[#6B7280] text-xs max-w-[180px] truncate">{item.campaign}</td>
                   <td className="py-2 px-2 text-right font-mono text-[#374151]">{item.impressions.toLocaleString()}</td>
                   <td className="py-2 px-2 text-right font-mono text-[#374151]">{item.clicks.toLocaleString()}</td>
                   <td className="py-2 px-2 text-right font-mono text-[#374151]">{ctr}%</td>
-                  <td className="py-2 px-2 text-right font-mono text-[#374151]">{item.conversions > 0 ? item.conversions.toFixed(1) : '???'}</td>
-                  <td className="py-2 px-2 text-right font-mono text-[#374151]">???{item.cost.toFixed(2)}</td>
+                  <td className="py-2 px-2 text-right font-mono text-[#374151]">{item.conversions > 0 ? item.conversions.toFixed(1) : '—'}</td>
+                  <td className="py-2 px-2 text-right font-mono text-[#374151]">€{item.cost.toFixed(2)}</td>
                   <td className="py-2 px-2 text-right font-mono text-[#374151]">
-                    {item.conversionValue > 0 ? `???${item.conversionValue.toFixed(2)}` : '???'}
+                    {item.conversionValue > 0 ? `€${item.conversionValue.toFixed(2)}` : '—'}
                   </td>
                 </tr>
               );
@@ -999,12 +1090,12 @@ function SearchIntelligenceTab({ type, searchTerms, keywords, hasData, search, o
         </table>
         {filtered.length === 0 && (
           <p className="text-sm text-[#9CA3AF] text-center py-8">
-            {search ? '???? ???????? ????????????????.' : '???? ???????????? ????????.'}
+            {search ? 'Δεν βρέθηκαν αποτελέσματα.' : 'Δεν υπάρχουν δεδομένα.'}
           </p>
         )}
         {filtered.length > 200 && (
           <p className="text-xs text-[#9CA3AF] text-center py-3">
-            ??????????????? ??? ???????? 200 ????? {filtered.length} ????????????????
+            Εμφανίζονται τα πρώτα 200 από {filtered.length} αποτελέσματα
           </p>
         )}
       </div>

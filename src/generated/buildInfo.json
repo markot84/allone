@@ -1,10 +1,50 @@
 {
-  "version": "0.296.0",
-  "previousVersion": "0.295.0",
-  "commitHash": "dcb277c",
+  "version": "0.303.0",
+  "previousVersion": "0.302.0",
+  "commitHash": "a986eaa",
   "branch": "main",
-  "buildDate": "2026-04-02T15:40:01.239Z",
+  "buildDate": "2026-04-03T05:03:10.729Z",
   "commits": [
+    {
+      "hash": "a986eaa",
+      "message": "feat(campaigns): Purchase filter, GA-first Ads actions, phantom store visits"
+    },
+    {
+      "hash": "0dc3da3",
+      "message": "fix(roi): only spread month-bucket spend for Meta, not Google day=01"
+    },
+    {
+      "hash": "4edf54d",
+      "message": "revert(campaigns): remove Math.max of aggregate vs conversionActions"
+    },
+    {
+      "hash": "be5dbb8",
+      "message": "fix(campaigns): reconcile conversions with per-action sum vs aggregate"
+    },
+    {
+      "hash": "f9c33b5",
+      "message": "fix(campaigns): hide zero-match rows when conversion filter is on"
+    },
+    {
+      "hash": "c8e4ceb",
+      "message": "fix(campaigns): Purchase filter sums all purchase conversion actions"
+    },
+    {
+      "hash": "1181e46",
+      "message": "fix(campaigns): restore UTF-8 strings and conv-filter pipeline"
+    },
+    {
+      "hash": "1240910",
+      "message": "fix(campaigns): respect purchase conv filter — no fallback to all actions; sum value per action; export uses same pipeline"
+    },
+    {
+      "hash": "c3f7087",
+      "message": "revert(campaigns): restore CampaignsPage to ef26624 (pre-5ea82e6 display logic) + BudgetOpportunitySection"
+    },
+    {
+      "hash": "fe98da7",
+      "message": "revert: restore CampaignsPage, roiUtils, connectors to stable 5ea82e6 + re-add BudgetOpportunitySection and bucketOverlapFraction export"
+    },
     {
       "hash": "dcb277c",
       "message": "fix: filter Google Ads non-purchase conversions (store visits, calls) from ROAS/revenue metrics"
@@ -24,58 +64,18 @@
     {
       "hash": "4d4ce26",
       "message": "fix: AI Briefing scoped to selected period - cache, prompt and reset on period change"
-    },
-    {
-      "hash": "419bab5",
-      "message": "feat: move BudgetOpportunitySection from ROI to Campaigns page"
-    },
-    {
-      "hash": "acedae0",
-      "message": "fix: ROI page uses bucketOverlapFraction and aggregates conversionActions for correct period metrics"
-    },
-    {
-      "hash": "0c36062",
-      "message": "feat: shared persistent period selector for Dashboard and ROI pages"
-    },
-    {
-      "hash": "58a12bf",
-      "message": "fix: dashboard uses bucketOverlapFraction for correct period metrics (same as Campaigns page)"
-    },
-    {
-      "hash": "c7488aa",
-      "message": "feat: dashboard period selector (current month / last 30d / current year)"
-    },
-    {
-      "hash": "5ea82e6",
-      "message": "fix: consistent conversion metrics, brand-scoped filters, AI briefing brand reset"
-    },
-    {
-      "hash": "ef26624",
-      "message": "fix(meta): remove omni_purchase - causes 1600%+ CTR due to modeled conversions inflation"
-    },
-    {
-      "hash": "95c0c59",
-      "message": "fix: recompute ROAS from cv/spent in frontend, never trust stale roas:0 from Firestore"
-    },
-    {
-      "hash": "5a8e931",
-      "message": "fix: round all currency amounts to 0 decimals in Campaigns page"
-    },
-    {
-      "hash": "d34eded",
-      "message": "perf: cache-first campaigns load via Firestore IndexedDB + skip localStorage for large queries"
     }
   ],
   "changes": [
-    "[Διόρθωση] Filter Google Ads non-purchase conversions (store visits, calls) from ROAS/revenue metrics",
-    "[Διόρθωση] Force function redeploy with updated build comment",
-    "[Διόρθωση] Remove REMOVED campaign filter and use yesterday as untilStr in connectors",
-    "[Διόρθωση] Align date ranges with ad platforms (toDate=yesterday) and remove all_conversions inflation",
-    "[Διόρθωση] AI Briefing scoped to selected period - cache, prompt and reset on period change",
-    "[Νέο χαρακτηριστικό] Move BudgetOpportunitySection from ROI to Campaigns page",
-    "[Διόρθωση] ROI page uses bucketOverlapFraction and aggregates conversionActions for correct period metrics",
-    "[Νέο χαρακτηριστικό] Shared persistent period selector for Dashboard and ROI pages",
-    "[Διόρθωση] Dashboard uses bucketOverlapFraction for correct period metrics (same as Campaigns page)",
-    "[Νέο χαρακτηριστικό] Dashboard period selector (current month / last 30d / current year)"
+    "[Νέο χαρακτηριστικό] Purchase filter, GA-first Ads actions, phantom store visits",
+    "[Διόρθωση] Only spread month-bucket spend for Meta, not Google day=01",
+    "Revert(campaigns): remove Math.max of aggregate vs conversionActions",
+    "[Διόρθωση] Reconcile conversions with per-action sum vs aggregate",
+    "[Διόρθωση] Hide zero-match rows when conversion filter is on",
+    "[Διόρθωση] Purchase filter sums all purchase conversion actions",
+    "[Διόρθωση] Restore UTF-8 strings and conv-filter pipeline",
+    "[Διόρθωση] Respect purchase conv filter — no fallback to all actions; sum value per action; export uses same pipeline",
+    "Revert(campaigns): restore CampaignsPage to ef26624 (pre-5ea82e6 display logic) + BudgetOpportunitySection",
+    "Revert: restore CampaignsPage, roiUtils, connectors to stable 5ea82e6 + re-add BudgetOpportunitySection and bucketOverlapFraction export"
   ]
 }
