@@ -137,7 +137,9 @@ service cloud.firestore {
       allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
     }
     match /import_jobs/{jobId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
     }
     match /custom/{docId} {
       allow read, write: if request.auth != null;
@@ -290,6 +292,44 @@ service cloud.firestore {
     // GA4 analytics data (keyed by brandId)
     match /ga4_data/{brandId} {
       allow read, write: if isBrandMember(brandId);
+    }
+    // E-commerce summary (keyed by brandId, server-write only)
+    match /ecommerce_summary/{brandId} {
+      allow read: if isBrandMember(brandId);
+      allow write: if false;
+    }
+    // E-commerce connector data (Shopify, WooCommerce, OpenCart, Magento)
+    match /shopify_orders/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    match /shopify_products/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    match /woo_orders/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    match /woo_products/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    match /opencart_orders/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    match /opencart_products/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    match /magento_orders/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    match /magento_products/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
     }
     // Shared strategy packages: public read (shareable links), auth write
     match /shared_packages/{packageId} {

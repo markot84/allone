@@ -179,9 +179,11 @@ async function fetchCustomerIsManager(accessToken: string, customerId: string): 
 /**
  * Generate the OAuth consent URL for Google Ads
  */
-export function getGoogleAdsAuthUrl(brandId: string, redirectUri: string): string {
+export function getGoogleAdsAuthUrl(brandId: string, redirectUri: string, returnOrigin?: string): string {
   const { clientId } = getCredentials();
-  const state = Buffer.from(JSON.stringify({ brandId, provider: 'google_ads', redirectUri })).toString('base64url');
+  const payload: Record<string, string> = { brandId, provider: 'google_ads', redirectUri };
+  if (returnOrigin?.trim()) payload.returnOrigin = returnOrigin.trim();
+  const state = Buffer.from(JSON.stringify(payload)).toString('base64url');
 
   const params = new URLSearchParams({
     client_id: clientId,
@@ -558,7 +560,7 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
     if (effectiveLoginId) headers['login-customer-id'] = effectiveLoginId;
 
     let nextPageToken: string | undefined;
-    const campaignMap = new Map<string, any>();
+    const campaignMap = new Map<string | number, any>();
 
     do {
       const body: Record<string, any> = { query: gaqlQuery };
@@ -636,21 +638,17 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
       }
     } while (nextPageToken);
 
-    // Second query: per-conversion-action breakdown per month (last 12 months only).
-    // Older data uses total metrics without per-action breakdown.
+    // Second query: per-conversion-action **per calendar day** (same window as campaign daily metrics).
+    // Never attach monthly totals to each day — that multiplies counts when summing a date range.
     const convActionMap = new Map<string, Record<string, { conversions: number; value: number }>>();
-    const monthlyConvActions = new Map<string, Map<string, Record<string, { conversions: number; value: number }>>>();
 
     try {
-      const oneYearAgo = new Date();
-      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-      const convSinceStr = `${oneYearAgo.getFullYear()}-${String(oneYearAgo.getMonth() + 1).padStart(2, '0')}-01`;
-      const monthRanges = generateMonthRanges(convSinceStr, untilStr);
-      logger.info(`[GoogleAds] Fetching conversion actions for ${monthRanges.length} months (last 12)...`);
+      const monthRanges = generateMonthRanges(sinceStr, untilStr);
+      logger.info(`[GoogleAds] Fetching daily conversion actions (${monthRanges.length} month chunks)...`);
 
       for (const mr of monthRanges) {
         const caQuery = `
-          SELECT campaign.id, segments.conversion_action_name,
+          SELECT campaign.id, segments.conversion_action_name, segments.date,
                  metrics.conversions, metrics.conversions_value
           FROM campaign
           WHERE segments.date BETWEEN '${mr.since}' AND '${mr.until}'
@@ -680,26 +678,38 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
             for (const row of caPage.results || []) {
               const cId = row.campaign?.id;
               const actionName = row.segments?.conversionActionName || 'Unknown';
+              const segDate = row.segments?.date || '';
               const convs = parseFloat(row.metrics?.conversions || '0');
               const convVal = parseFloat(row.metrics?.conversionsValue || '0');
-              if (!cId || convs === 0) continue;
+              if (!cId || convs === 0 || !segDate) continue;
               const docId = `gads_${customerId}_${cId}`;
 
-              // Aggregate totals
               if (!convActionMap.has(docId)) convActionMap.set(docId, {});
               const totals = convActionMap.get(docId)!;
               if (!totals[actionName]) totals[actionName] = { conversions: 0, value: 0 };
               totals[actionName].conversions += convs;
               totals[actionName].value += convVal;
 
-              // Store per-month
-              if (!monthlyConvActions.has(docId)) monthlyConvActions.set(docId, new Map());
-              const months = monthlyConvActions.get(docId)!;
-              if (!months.has(mr.since)) months.set(mr.since, {});
-              const monthActions = months.get(mr.since)!;
-              if (!monthActions[actionName]) monthActions[actionName] = { conversions: 0, value: 0 };
-              monthActions[actionName].conversions += convs;
-              monthActions[actionName].value += convVal;
+              const camp =
+                campaignMap.get(cId) ??
+                campaignMap.get(String(cId)) ??
+                campaignMap.get(Number(cId));
+              if (!camp) continue;
+              const prev = camp.dailyMetrics[segDate] || {
+                impressions: 0,
+                clicks: 0,
+                conversions: 0,
+                amount_spent: 0,
+                conversion_value: 0,
+              };
+              const caByDay =
+                (prev as { conversionActions?: Record<string, { conversions: number; value: number }> })
+                  .conversionActions || {};
+              if (!caByDay[actionName]) caByDay[actionName] = { conversions: 0, value: 0 };
+              caByDay[actionName].conversions += convs;
+              caByDay[actionName].value += convVal;
+              (prev as { conversionActions?: typeof caByDay }).conversionActions = caByDay;
+              camp.dailyMetrics[segDate] = prev;
             }
           } while (caNextToken);
         } catch (e) {
@@ -707,7 +717,7 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
         }
       }
 
-      logger.info(`[GoogleAds] Fetched conversion actions for ${convActionMap.size} campaigns across ${monthRanges.length} months`);
+      logger.info(`[GoogleAds] Fetched conversion actions for ${convActionMap.size} campaigns (daily per action)`);
     } catch (caErr) {
       logger.warn(`[GoogleAds] Conversion action query error, skipping:`, caErr);
     }
@@ -726,20 +736,6 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
       campaign.amount_spent = Math.round(campaign.amount_spent * 100) / 100;
 
       campaign.conversionActions = convActionMap.get(campaign.id) || {};
-
-      // Merge monthly conversionActions into dailyMetrics entries.
-      // For each month, find all daily entries in that month and attach the monthly conv actions.
-      const campaignMonths = monthlyConvActions.get(campaign.id);
-      if (campaignMonths) {
-        for (const [monthStart, actions] of campaignMonths) {
-          const monthPrefix = monthStart.slice(0, 7); // "2026-01"
-          for (const [dateKey, metrics] of Object.entries(campaign.dailyMetrics)) {
-            if (dateKey.startsWith(monthPrefix)) {
-              (metrics as any).conversionActions = actions;
-            }
-          }
-        }
-      }
 
       campaign.createdAt = FieldValue.serverTimestamp();
       campaign.updatedAt = FieldValue.serverTimestamp();

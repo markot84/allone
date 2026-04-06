@@ -100,6 +100,13 @@ export const knowledgeCategories = [
     color: '#6B7280'
   },
   {
+    id: 'connectors',
+    title: 'Connectors & E-commerce',
+    icon: 'EC',
+    description: 'Σύνδεση e-shop, analytics και e-commerce explorer',
+    color: '#F97316'
+  },
+  {
     id: 'competitive',
     title: 'Ανταγωνισμός & Τιμές',
     icon: 'CI',
@@ -127,7 +134,10 @@ export const knowledgeArticles: KnowledgeArticle[] = [
 - RFM Analysis για customer segmentation
 - Commercial Strategy για προσαρμοσμένη στρατηγική
 - Channel Activation για budget optimization
-- ROI Attribution για μέτρηση επιπτώσεων`,
+- ROI Attribution για μέτρηση επιπτώσεων
+- E-commerce Explorer για ενοποιημένα δεδομένα e-shop (Shopify, WooCommerce, OpenCart, Magento)
+- Web Analytics (GA4) για traffic, sessions και conversions
+- Connectors για αυτόματο sync δεδομένων από εξωτερικές πλατφόρμες`,
     tags: ['basics', 'overview', 'introduction'],
     related: ['data-import-basics', 'dashboard-overview']
   },
@@ -149,9 +159,13 @@ Charts & Visualizations:
 - Customer Segments: Κατανομή πελατών ανά segment
 - Performance Summary: Stock Clearance, Cost Savings, ROI
 
+E-commerce Card: Αν έχετε συνδεδεμένο e-shop (Shopify, WooCommerce κλπ), εμφανίζεται summary card με Store Revenue, Παραγγελίες, AOV, top platform και mini sparkline. Κλικ → E-commerce Explorer.
+
+GA4 Card: Αν είναι συνδεδεμένο το GA4, εμφανίζεται summary card με sessions, users, conversions. Κλικ → Web Analytics.
+
 AI Insights: Προτάσεις για βελτίωση απόδοσης
 
-Κάθε KPI card είναι clickable και σας οδηγεί στην αντίστοιχη λεπτομερή ανάλυση.`,
+Κάθε KPI card και summary card είναι clickable και σας οδηγεί στην αντίστοιχη λεπτομερή ανάλυση.`,
     tags: ['dashboard', 'kpis', 'metrics'],
     related: ['understanding-kpis', 'roi-attribution-basics', 'ai-briefing'],
     tips: [
@@ -239,6 +253,7 @@ AI Insights: Προτάσεις για βελτίωση απόδοσης
 Μέθοδοι εισαγωγής:
 - CSV/XLSX files: Upload από τον υπολογιστή σας
 - URL links: Direct link σε CSV/Excel files online
+- Connectors: Αυτόματο sync μέσω API — Google Ads, Meta, GA4, Shopify, WooCommerce, OpenCart, Magento, Merchant Center
 
 Βήματα:
 1. Μεταβείτε στο Data Import section
@@ -854,9 +869,16 @@ Cost Savings:
 - Warehousing costs avoided
 - Google CSS savings
 - Ad spend efficiency
-- Content production savings`,
-    tags: ['roi', 'attribution', 'performance'],
-    related: ['dashboard-overview', 'analytics-import'],
+- Content production savings
+
+E-commerce Integration:
+Αν έχετε συνδεδεμένο e-shop, εμφανίζονται επιπλέον:
+- Store Revenue: Πραγματικά έσοδα από παραγγελίες e-shop
+- True ROAS: Store Revenue ÷ Ad Spend (vs attributed ROAS)
+- Revenue Gap: Διαφορά μεταξύ πραγματικών εσόδων και attributed
+- Store Revenue line στο monthly trend chart (πράσινη γραμμή)`,
+    tags: ['roi', 'attribution', 'performance', 'true roas', 'store revenue'],
+    related: ['dashboard-overview', 'analytics-import', 'store-revenue-vs-attributed'],
     faq: [
       {
         question: 'Πώς υπολογίζεται το ROI Multiplier;',
@@ -1228,13 +1250,16 @@ Side drawer που δείχνει χρονολογικά όλες τις ενέ�
 
 ## Performance+ (Growth Plan)
 Η βασική έκδοση για e-commerce SMBs:
-- Dashboard — KPIs, revenue chart, AI insights
+- Dashboard — KPIs, revenue chart, AI insights, e-commerce summary
 - Commercial Strategy — 7 εμπορικά σενάρια, composite scoring
 - RFM Analysis — Customer segmentation
 - Product Intelligence — Stock health, inventory analytics
 - Campaigns — Google Ads & Meta tracking, 3 χρόνια ιστορικό
 - Content Strategy — AI-generated content directions
-- ROI Attribution — Channel performance, ROAS, ROI
+- ROI Attribution — Channel performance, ROAS, ROI, Store Revenue, True ROAS
+- E-commerce Explorer — Ενοποιημένα δεδομένα e-shop (Shopify, WooCommerce, OpenCart, Magento)
+- Web Analytics — GA4 integration (sessions, users, conversions, traffic sources)
+- Connectors — Αυτόματο sync από 8+ πλατφόρμες (Google Ads, Meta, GA4, Shopify, WooCommerce, OpenCart, Magento, Merchant Center)
 - Συντονισμός Τμημάτων — Briefing Board, αποφάσεις, εργασίες
 - Αυτοματισμοί — 10 smart triggers (Απόθεμα, Καμπάνιες, Πελατολόγιο, Εποχικότητα)
 - AI Insights — Πρακτικές συστάσεις βασισμένες στα δεδομένα
@@ -1261,6 +1286,269 @@ Side drawer που δείχνει χρονολογικά όλες τις ενέ�
       }
     ]
   },
+  // ── Connectors & E-commerce ──────────────────────────────────────────
+  {
+    id: 'connectors-overview',
+    category: 'connectors',
+    title: 'Connectors — Επισκόπηση',
+    description: 'Πώς να συνδέσετε τα ad accounts, analytics και e-shop σας.',
+    content: `# Connectors — Επισκόπηση
+
+Η σελίδα Data Import → Connectors σας επιτρέπει να συνδέσετε εξωτερικές πλατφόρμες για αυτόματο sync δεδομένων.
+
+## Υποστηριζόμενοι Connectors
+
+### Διαφημιστικά (OAuth)
+- **Google Ads** — Campaigns, spend, conversions, ROAS
+- **Meta (Facebook/Instagram)** — Campaigns, spend, purchases
+
+### Analytics (OAuth)
+- **GA4 (Google Analytics 4)** — Sessions, users, conversions, traffic sources, top pages
+
+### E-commerce
+- **Shopify** (OAuth) — Παραγγελίες, προϊόντα (τελευταίες 90 ημέρες)
+- **WooCommerce** (API Key) — Παραγγελίες, προϊόντα
+- **OpenCart** (API Key) — Παραγγελίες, προϊόντα
+- **Magento** (Access Token) — Παραγγελίες, προϊόντα
+
+### Ανταγωνισμός (OAuth)
+- **Merchant Center** — Price benchmarking
+
+## Τύποι Σύνδεσης
+
+### OAuth (Google Ads, Meta, GA4, Shopify)
+1. Κλικ "Σύνδεση" → ανοίγει OAuth παράθυρο
+2. Συνδεθείτε με τον λογαριασμό σας
+3. Εγκρίνετε πρόσβαση
+4. Αυτόματη επιστροφή στο Performance+
+
+### API Key (WooCommerce, OpenCart, Magento)
+1. Κλικ "Σύνδεση" → εμφανίζεται modal
+2. Εισάγετε Store URL + API credentials
+3. Κλικ "Σύνδεση" — γίνεται test σε πραγματικό χρόνο
+
+## Sync
+- **Αυτόματο**: Καθημερινό sync (06:00)
+- **Χειροκίνητο**: Κλικ "Sync τώρα" ανά connector
+- **Τελευταίο sync**: Εμφανίζεται κάτω από κάθε connector`,
+    tags: ['connectors', 'oauth', 'api', 'shopify', 'woocommerce', 'opencart', 'magento', 'ga4', 'google ads', 'meta', 'sync'],
+    related: ['ecommerce-explorer', 'ga4-connector', 'ecommerce-shopify', 'ecommerce-woo'],
+    steps: [
+      'Μεταβείτε στο Data Import από το sidebar',
+      'Επιλέξτε τον connector που θέλετε (π.χ. Shopify)',
+      'Κλικ "Σύνδεση" και ολοκληρώστε τη ροή OAuth ή API Key',
+      'Μετά τη σύνδεση, κλικ "Sync τώρα" για πρώτο sync',
+      'Τα δεδομένα εμφανίζονται στις αντίστοιχες σελίδες'
+    ],
+    faq: [
+      {
+        question: 'Μπορώ να αποσυνδέσω κάποιον connector;',
+        answer: 'Ναι, κλικ "Αποσύνδεση" στον connector. Τα credentials διαγράφονται αμέσως. Τα ήδη synced δεδομένα παραμένουν.'
+      },
+      {
+        question: 'Τι δεδομένα αποθηκεύονται;',
+        answer: 'Μόνο εμπορικά δεδομένα (παραγγελίες, προϊόντα, campaigns). Δεν αποθηκεύονται προσωπικά δεδομένα πελατών (email, τηλέφωνο κλπ).'
+      },
+      {
+        question: 'Πόσο συχνά γίνεται sync;',
+        answer: 'Αυτόματα κάθε μέρα. Μπορείτε επίσης να κάνετε χειροκίνητο sync οποιαδήποτε στιγμή.'
+      }
+    ]
+  },
+  {
+    id: 'ecommerce-shopify',
+    category: 'connectors',
+    title: 'Shopify Connector',
+    description: 'Σύνδεση Shopify e-shop για παραγγελίες και προϊόντα.',
+    content: `# Shopify Connector
+
+## Σύνδεση
+1. Κλικ "Σύνδεση" στον Shopify connector
+2. Εισάγετε το Shopify domain σας (π.χ. myshop.myshopify.com)
+3. Ανοίγει OAuth παράθυρο — εγκρίνετε πρόσβαση
+4. Αυτόματη επιστροφή στο Performance+
+
+## Τι συγχρονίζεται
+- **Παραγγελίες** (τελευταίες 90 ημέρες): order ID, ημερομηνία, ποσό, status, line items, νόμισμα
+- **Προϊόντα**: τίτλος, handle, vendor, κατάσταση, variants, τιμές
+
+## Πού εμφανίζονται τα δεδομένα
+- **E-commerce Explorer** (#ecommerce): Έσοδα, παραγγελίες, AOV, top products
+- **Dashboard**: E-commerce summary card
+- **ROI Attribution**: Store Revenue, True ROAS
+
+## Σημειώσεις
+- Δεν αποθηκεύονται PII (email, τηλέφωνο πελατών)
+- Τα δεδομένα ανανεώνονται αυτόματα καθημερινά
+- Υποστηρίζονται μόνο Shopify stores (όχι Shopify POS)`,
+    tags: ['shopify', 'ecommerce', 'connector', 'orders', 'products'],
+    related: ['connectors-overview', 'ecommerce-explorer']
+  },
+  {
+    id: 'ecommerce-woo',
+    category: 'connectors',
+    title: 'WooCommerce / OpenCart / Magento',
+    description: 'Σύνδεση WooCommerce, OpenCart ή Magento με API credentials.',
+    content: `# WooCommerce / OpenCart / Magento Connectors
+
+Αυτοί οι connectors χρησιμοποιούν API Key αντί για OAuth.
+
+## WooCommerce
+- **Credentials**: Store URL, Consumer Key, Consumer Secret
+- **Πού τα βρίσκετε**: WooCommerce → Settings → Advanced → REST API → Add Key
+- **Δικαιώματα**: Read access αρκεί
+
+## OpenCart
+- **Credentials**: Store URL, API Username, API Key
+- **Πού τα βρίσκετε**: System → Users → API → Add New
+- **Υποστηρίζει**: Native OpenCart API (3.x+) και REST extensions
+
+## Magento
+- **Credentials**: Store URL, Access Token (Bearer)
+- **Πού το βρίσκετε**: System → Integrations → Add New → Activate → Access Token
+- **Δικαιώματα**: Sales (read), Catalog (read)
+
+## Κοινά χαρακτηριστικά
+- Παραγγελίες τελευταίων 90 ημερών
+- Κατάλογος προϊόντων
+- Καθημερινό αυτόματο sync
+- Δεδομένα εμφανίζονται στο E-commerce Explorer, Dashboard και ROI`,
+    tags: ['woocommerce', 'opencart', 'magento', 'ecommerce', 'connector', 'api key'],
+    related: ['connectors-overview', 'ecommerce-explorer'],
+    faq: [
+      {
+        question: 'Χρειάζεται SSL (https) στο store μου;',
+        answer: 'Ναι, συνιστάται ισχυρά. Η σύνδεση γίνεται μέσω HTTPS. Αν δεν έχετε SSL, ορισμένοι connectors ενδέχεται να μη λειτουργήσουν.'
+      },
+      {
+        question: 'Τι γίνεται αν αλλάξω τα API credentials στο store;',
+        answer: 'Θα χρειαστεί να αποσυνδέσετε και να ξανασυνδέσετε τον connector με τα νέα credentials.'
+      }
+    ]
+  },
+  {
+    id: 'ga4-connector',
+    category: 'connectors',
+    title: 'GA4 (Google Analytics 4)',
+    description: 'Σύνδεση GA4 για traffic analytics, sessions, conversions.',
+    content: `# GA4 Connector
+
+## Σύνδεση
+1. Κλικ "Σύνδεση" στον GA4 connector
+2. Εγκρίνετε πρόσβαση μέσω Google OAuth
+3. Επιλέξτε το GA4 Property που θέλετε
+4. Κλικ "Σύνδεση"
+
+## Τι συγχρονίζεται (τελευταίες 90 ημέρες)
+- **Daily Metrics**: Sessions, users, new users, page views, bounce rate, avg session duration, conversions, event count
+- **Traffic Sources**: Κανάλια (Organic Search, Paid Search, Direct, Social κλπ) με sessions, users, conversions
+- **Top Pages**: Σελίδες με page views, sessions, bounce rate
+
+## Πού εμφανίζονται τα δεδομένα
+- **Web Analytics** (#analytics): Πλήρης dashboard με KPIs, charts, πίνακες
+- **Dashboard**: GA4 summary card
+- **AI Briefing**: Traffic insights στο morning briefing
+
+## Σημειώσεις
+- Χρειάζεται τουλάχιστον Viewer access στο GA4 property
+- Η πρώτη σύνδεση ζητά επιλογή property αν έχετε πολλαπλά
+- Τα δεδομένα ανανεώνονται καθημερινά`,
+    tags: ['ga4', 'analytics', 'google analytics', 'traffic', 'sessions', 'conversions', 'connector'],
+    related: ['connectors-overview', 'dashboard-overview']
+  },
+  {
+    id: 'ecommerce-explorer',
+    category: 'connectors',
+    title: 'E-commerce Explorer',
+    description: 'Η σελίδα E-commerce: έσοδα, παραγγελίες, προϊόντα, platform breakdown.',
+    content: `# E-commerce Explorer
+
+Η σελίδα E-commerce (#ecommerce) δίνει ενοποιημένη εικόνα των e-shop δεδομένων σας από όλες τις συνδεδεμένες πλατφόρμες.
+
+## Προϋπόθεση
+Τουλάχιστον ένας e-commerce connector (Shopify, WooCommerce, OpenCart ή Magento) πρέπει να είναι συνδεδεμένος και synced.
+
+## Τι βλέπετε
+
+### KPI Cards (κορυφή)
+- **Store Revenue**: Σύνολο εσόδων τελευταίων 90 ημερών
+- **Παραγγελίες**: Αριθμός παραγγελιών
+- **AOV**: Average Order Value (μέσο ποσό ανά παραγγελία)
+- **Platforms**: Αριθμός συνδεδεμένων e-shop
+
+### Revenue Chart
+Area chart με ημερήσια έσοδα (90 ημέρες). Hover για ακριβή ποσά.
+
+### Platform Breakdown
+Horizontal bar chart + progress bars που δείχνουν πόσα έσοδα και παραγγελίες αντιστοιχούν σε κάθε πλατφόρμα.
+
+### Top Products
+Πίνακας με τα 20 κορυφαία προϊόντα κατά έσοδα. Sortable κατά έσοδα ή ποσότητα. Κάθε γραμμή εμφανίζει inline bar για οπτική σύγκριση.
+
+### Πρόσφατες Παραγγελίες
+Πίνακας με τις 50 πιο πρόσφατες παραγγελίες. Sortable κατά ημ/νία, total ή platform. Color-coded status badges:
+- Πράσινο: paid, completed, fulfilled
+- Κίτρινο: pending, on-hold
+- Κόκκινο: refunded, cancelled
+
+## Πώς υπολογίζονται τα δεδομένα
+Τα aggregated metrics (revenue, AOV, top products) υπολογίζονται server-side κατά το sync και αποθηκεύονται σε ένα summary document. Αυτό εξασφαλίζει γρήγορη φόρτωση χωρίς heavy client-side queries.`,
+    tags: ['ecommerce', 'explorer', 'revenue', 'orders', 'products', 'aov', 'dashboard'],
+    related: ['connectors-overview', 'ecommerce-shopify', 'ecommerce-woo', 'store-revenue-vs-attributed'],
+    tips: [
+      'Κάντε κλικ στις κεφαλίδες στηλών στους πίνακες για sorting',
+      'Αν δεν εμφανίζονται δεδομένα, ελέγξτε ότι έχετε κάνει Sync στον connector',
+      'Τα δεδομένα ανανεώνονται αυτόματα μετά από κάθε sync'
+    ]
+  },
+  {
+    id: 'store-revenue-vs-attributed',
+    category: 'connectors',
+    title: 'Store Revenue vs Attributed Revenue',
+    description: 'Τι σημαίνει Store Revenue, True ROAS και Revenue Gap στο ROI.',
+    content: `# Store Revenue vs Attributed Revenue
+
+## Ορισμοί
+
+### Store Revenue
+Τα **πραγματικά έσοδα** από παραγγελίες στο e-shop σας (Shopify, WooCommerce κλπ). Αυτά είναι τα πραγματικά χρήματα που μπήκαν στο ταμείο.
+
+### Attributed Revenue
+Τα **εκτιμώμενα έσοδα** από organic πωλήσεις + conversion value που αναφέρουν οι ad platforms (Google Ads, Meta). Αυτό είναι attribution-based και δεν αντιστοιχεί πάντα 1:1 στα πραγματικά έσοδα.
+
+### True ROAS
+\`Store Revenue ÷ Ad Spend\`
+
+Πόσα πραγματικά κέρδισε το e-shop σας για κάθε €1 σε διαφήμιση. Πιο αξιόπιστο από τον standard ROAS (attributed revenue / spend).
+
+### Revenue Gap
+\`Store Revenue − Attributed Revenue\`
+
+- **Θετικό**: Πουλάτε περισσότερα από ό,τι δείχνουν τα ad platforms (π.χ. word-of-mouth, repeat purchases)
+- **Αρνητικό**: Τα ad platforms over-report conversions (common σε cross-platform attribution)
+
+## Πού εμφανίζεται
+Στο **ROI Attribution** (#roi), εμφανίζεται μόνο όταν υπάρχουν e-commerce δεδομένα:
+- 4 MetricCards: Store Revenue, Attributed Revenue, True ROAS, Revenue Gap
+- Γραμμή Store Revenue (πράσινη) στο monthly trend chart
+- Επεξηγηματικό κείμενο κάτω από τα cards
+
+## Γιατί είναι σημαντικό
+Ο κλασικός ROAS βασίζεται σε attribution models που μπορεί να μετράνε duplicates (ένα conversion σε Google + Meta). Ο True ROAS χρησιμοποιεί πραγματικά δεδομένα παραγγελιών, δίνοντας πιο ρεαλιστική εικόνα.`,
+    tags: ['store revenue', 'attributed', 'true roas', 'revenue gap', 'roi', 'ecommerce'],
+    related: ['roi-attribution-basics', 'ecommerce-explorer', 'understanding-financial-kpis'],
+    faq: [
+      {
+        question: 'Γιατί διαφέρει το Store Revenue από το Attributed;',
+        answer: 'Τα ad platforms (Google, Meta) χρησιμοποιούν attribution models που μπορεί να υπερεκτιμούν ή υποεκτιμούν τις πωλήσεις. Το Store Revenue είναι τα πραγματικά χρήματα από παραγγελίες.'
+      },
+      {
+        question: 'Ποιο ROAS πρέπει να χρησιμοποιώ;',
+        answer: 'Χρησιμοποιήστε τον True ROAS για business decisions. Ο standard ROAS (attributed) είναι χρήσιμος για optimization ανά campaign αλλά δεν δείχνει τη συνολική πραγματικότητα.'
+      }
+    ]
+  },
+
   // ── Competitive Intelligence ──
   {
     id: 'price-benchmarking',

@@ -13,6 +13,7 @@ const GEMINI_SECRET = defineSecret('GEMINI_API_KEY');
 const SMTP_EMAIL_SECRET = defineSecret('SMTP_EMAIL');
 /** SMTP: κωδικός ή App Password */
 const SMTP_PASSWORD_SECRET = defineSecret('SMTP_PASSWORD');
+import { sanitizeOAuthReturnOrigin } from './oauthRedirect';
 import { parseCSV, parseXLSXBuffer, parseXLSXAllSheets, csvToObjects } from './parseFile';
 import { validateProduct, type ProductData } from './validateProduct';
 import { validateCampaign, type CampaignData } from './validateCampaign';
@@ -58,6 +59,20 @@ import {
   setDb as setWooDb,
 } from './woocommerceConnector';
 import {
+  saveOpenCartCredentials,
+  fetchOpenCartData,
+  setDb as setOpenCartDb,
+} from './opencartConnector';
+import {
+  saveMagentoCredentials,
+  fetchMagentoData,
+  setDb as setMagentoDb,
+} from './magentoConnector';
+import {
+  computeEcommerceSummary,
+  setDb as setEcommerceAggDb,
+} from './ecommerceAggregator';
+import {
   getGA4AuthUrl,
   handleGA4Callback,
   fetchGA4Data,
@@ -74,6 +89,9 @@ setMerchantDb(db);
 setCompetitorDb(db);
 setShopifyDb(db);
 setWooDb(db);
+setOpenCartDb(db);
+setMagentoDb(db);
+setEcommerceAggDb(db);
 setGA4Db(db);
 
 const BATCH_SIZE = 500;
@@ -625,8 +643,13 @@ export const connectorAuth = onRequest(
       const idToken = authHeader.slice(7).trim();
       const decoded = await admin.auth().verifyIdToken(idToken);
 
-      const { brandId, provider, redirectUri, shopDomain } = req.body as {
-        brandId?: string; provider?: string; redirectUri?: string; shopDomain?: string;
+      const { brandId, provider, redirectUri, shopDomain, returnOrigin } = req.body as {
+        brandId?: string;
+        provider?: string;
+        redirectUri?: string;
+        shopDomain?: string;
+        /** Browser origin where OAuth started — post-login redirect must match for Firebase Auth session */
+        returnOrigin?: string;
       };
 
       if (!brandId || !provider || !redirectUri) {
@@ -641,19 +664,19 @@ export const connectorAuth = onRequest(
 
       let authUrl: string;
       if (provider === 'google_ads') {
-        authUrl = getGoogleAdsAuthUrl(brandId, redirectUri);
+        authUrl = getGoogleAdsAuthUrl(brandId, redirectUri, returnOrigin);
       } else if (provider === 'meta') {
-        authUrl = getMetaAuthUrl(brandId, redirectUri);
+        authUrl = getMetaAuthUrl(brandId, redirectUri, returnOrigin);
       } else if (provider === 'merchant') {
-        authUrl = getMerchantAuthUrl(brandId, redirectUri);
+        authUrl = getMerchantAuthUrl(brandId, redirectUri, returnOrigin);
       } else if (provider === 'ga4') {
-        authUrl = getGA4AuthUrl(brandId, redirectUri);
+        authUrl = getGA4AuthUrl(brandId, redirectUri, returnOrigin);
       } else if (provider === 'shopify') {
         if (!shopDomain) {
           res.status(400).json({ error: 'Missing shopDomain for Shopify' });
           return;
         }
-        authUrl = getShopifyAuthUrl(brandId, shopDomain, redirectUri);
+        authUrl = getShopifyAuthUrl(brandId, shopDomain, redirectUri, returnOrigin);
       } else {
         res.status(400).json({ error: `Unknown provider: ${provider}` });
         return;
@@ -681,9 +704,16 @@ export const connectorCallback = onRequest(
     // Google OAuth may redirect with ?error=access_denied instead of ?code=xxx
     if (oauthError && state) {
       try {
-        const { provider } = JSON.parse(Buffer.from(state, 'base64url').toString());
+        const parsed = JSON.parse(Buffer.from(state, 'base64url').toString()) as {
+          provider?: string;
+          returnOrigin?: string;
+        };
+        const provider = parsed.provider || 'unknown';
+        const origin = sanitizeOAuthReturnOrigin(parsed.returnOrigin);
         logger.warn(`[ConnectorCallback] OAuth denied: ${oauthError} for ${provider}`);
-        res.redirect(`https://www.performanceplus.gr/#data?connector=${provider}&status=error&message=${encodeURIComponent(oauthError === 'access_denied' ? 'Η πρόσβαση απορρίφθηκε' : oauthError)}`);
+        res.redirect(
+          `${origin}/?pp_oauth=1&connector=${encodeURIComponent(provider)}&status=error&message=${encodeURIComponent(oauthError === 'access_denied' ? 'Η πρόσβαση απορρίφθηκε' : oauthError)}`
+        );
       } catch {
         res.status(400).send(`OAuth error: ${oauthError}`);
       }
@@ -696,9 +726,15 @@ export const connectorCallback = onRequest(
     }
 
     try {
-      const { brandId, provider, redirectUri } = JSON.parse(
-        Buffer.from(state, 'base64url').toString()
-      );
+      const parsed = JSON.parse(Buffer.from(state, 'base64url').toString()) as {
+        brandId: string;
+        provider: string;
+        redirectUri: string;
+        returnOrigin?: string;
+        shopDomain?: string;
+      };
+      const { brandId, provider, redirectUri } = parsed;
+      const appOrigin = sanitizeOAuthReturnOrigin(parsed.returnOrigin);
       logger.info(`[ConnectorCallback] provider=${provider} brandId=${brandId}`);
 
       if (!redirectUri) {
@@ -739,7 +775,11 @@ export const connectorCallback = onRequest(
       } else if (provider === 'ga4') {
         result = await handleGA4Callback(code, brandId, redirectUri);
       } else if (provider === 'shopify') {
-        const shopDomain = JSON.parse(Buffer.from(state, 'base64url').toString()).shopDomain;
+        const shopDomain = parsed.shopDomain;
+        if (!shopDomain) {
+          res.status(400).send('Missing shopDomain in state');
+          return;
+        }
         result = await handleShopifyCallback(code, brandId, shopDomain);
       } else {
         res.status(400).send(`Unknown provider: ${provider}`);
@@ -747,10 +787,11 @@ export const connectorCallback = onRequest(
       }
 
       if (result.success) {
-        // Redirect back to the app with success
-        res.redirect(`https://www.performanceplus.gr/#data?connector=${provider}&status=success`);
+        res.redirect(`${appOrigin}/?pp_oauth=1&connector=${encodeURIComponent(provider)}&status=success`);
       } else {
-        res.redirect(`https://www.performanceplus.gr/#data?connector=${provider}&status=error&message=${encodeURIComponent(result.error || 'Unknown error')}`);
+        res.redirect(
+          `${appOrigin}/?pp_oauth=1&connector=${encodeURIComponent(provider)}&status=error&message=${encodeURIComponent(result.error || 'Unknown error')}`
+        );
       }
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
@@ -786,8 +827,29 @@ export const connectorDisconnect = onRequest(
         return;
       }
 
+      const clearPayload: Record<string, unknown> = {
+        connected: false,
+        accessToken: '',
+        refreshToken: '',
+      };
+      if (provider === 'woocommerce') {
+        clearPayload.consumerKey = '';
+        clearPayload.consumerSecret = '';
+      }
+      if (provider === 'opencart') {
+        clearPayload.apiKey = '';
+        clearPayload.apiUsername = '';
+        clearPayload.apiToken = '';
+      }
+      if (provider === 'magento') {
+        clearPayload.accessToken = '';
+      }
+      if (provider === 'shopify') {
+        clearPayload.accessToken = '';
+      }
+
       await db.doc(`connectors/${brandId}`).set(
-        { [provider]: { connected: false, accessToken: '', refreshToken: '' } },
+        { [provider]: clearPayload },
         { merge: true }
       );
 
@@ -905,11 +967,22 @@ export const connectorSync = onRequest(
         result = await fetchShopifyData(brandId);
       } else if (provider === 'woocommerce') {
         result = await fetchWooCommerceData(brandId);
+      } else if (provider === 'opencart') {
+        result = await fetchOpenCartData(brandId);
+      } else if (provider === 'magento') {
+        result = await fetchMagentoData(brandId);
       } else if (provider === 'ga4') {
         result = await fetchGA4Data(brandId);
       } else {
         res.status(400).json({ error: `Unknown provider: ${provider}` });
         return;
+      }
+
+      // Refresh e-commerce summary after any e-commerce platform sync
+      if (['shopify', 'woocommerce', 'opencart', 'magento'].includes(provider)) {
+        computeEcommerceSummary(brandId).catch((e) =>
+          logger.warn(`[connectorSync] ecommerce summary refresh failed for ${brandId}:`, e)
+        );
       }
 
       res.status(200).json(result);
@@ -958,6 +1031,22 @@ export const connectorSaveCredentials = onRequest(
           return;
         }
         const result = await saveWooCredentials(brandId, storeUrl, consumerKey, consumerSecret);
+        res.status(200).json(result);
+      } else if (provider === 'opencart') {
+        const { apiUsername, apiKey: ocApiKey } = req.body as { apiUsername?: string; apiKey?: string };
+        if (!storeUrl || !apiUsername || !ocApiKey) {
+          res.status(400).json({ error: 'Missing storeUrl, apiUsername, or apiKey' });
+          return;
+        }
+        const result = await saveOpenCartCredentials(brandId, storeUrl, apiUsername, ocApiKey);
+        res.status(200).json(result);
+      } else if (provider === 'magento') {
+        const { accessToken: magToken } = req.body as { accessToken?: string };
+        if (!storeUrl || !magToken) {
+          res.status(400).json({ error: 'Missing storeUrl or accessToken' });
+          return;
+        }
+        const result = await saveMagentoCredentials(brandId, storeUrl, magToken);
         res.status(200).json(result);
       } else {
         res.status(400).json({ error: `Credentials auth not supported for ${provider}` });
@@ -1031,6 +1120,44 @@ export const scheduledSync = onSchedule(
           logger.info(`[ScheduledSync] WooCommerce for ${brandId}: imported ${result.imported}`);
         } catch (err) {
           logger.error(`[ScheduledSync] WooCommerce failed for ${brandId}:`, err);
+        }
+      }
+
+      if (data.opencart?.connected) {
+        try {
+          const result = await fetchOpenCartData(brandId);
+          logger.info(`[ScheduledSync] OpenCart for ${brandId}: imported ${result.imported}`);
+        } catch (err) {
+          logger.error(`[ScheduledSync] OpenCart failed for ${brandId}:`, err);
+        }
+      }
+
+      if (data.magento?.connected) {
+        try {
+          const result = await fetchMagentoData(brandId);
+          logger.info(`[ScheduledSync] Magento for ${brandId}: imported ${result.imported}`);
+        } catch (err) {
+          logger.error(`[ScheduledSync] Magento failed for ${brandId}:`, err);
+        }
+      }
+
+      if (data.ga4?.connected && data.ga4?.propertyId) {
+        try {
+          const result = await fetchGA4Data(brandId);
+          logger.info(`[ScheduledSync] GA4 for ${brandId}: imported ${result.imported} days`);
+        } catch (err) {
+          logger.error(`[ScheduledSync] GA4 failed for ${brandId}:`, err);
+        }
+      }
+
+      // Refresh e-commerce summary if any e-commerce platform is connected
+      const hasEcommerce = data.shopify?.connected || data.woocommerce?.connected || data.opencart?.connected || data.magento?.connected;
+      if (hasEcommerce) {
+        try {
+          await computeEcommerceSummary(brandId);
+          logger.info(`[ScheduledSync] E-commerce summary updated for ${brandId}`);
+        } catch (err) {
+          logger.error(`[ScheduledSync] E-commerce summary failed for ${brandId}:`, err);
         }
       }
     }

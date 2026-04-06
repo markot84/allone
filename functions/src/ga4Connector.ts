@@ -135,11 +135,11 @@ export interface GA4Property {
 /**
  * Generate the OAuth consent URL for GA4
  */
-export function getGA4AuthUrl(brandId: string, redirectUri: string): string {
+export function getGA4AuthUrl(brandId: string, redirectUri: string, returnOrigin?: string): string {
   const { clientId } = getCredentials();
-  const state = Buffer.from(
-    JSON.stringify({ brandId, provider: 'ga4', redirectUri })
-  ).toString('base64url');
+  const payload: Record<string, string> = { brandId, provider: 'ga4', redirectUri };
+  if (returnOrigin?.trim()) payload.returnOrigin = returnOrigin.trim();
+  const state = Buffer.from(JSON.stringify(payload)).toString('base64url');
 
   const params = new URLSearchParams({
     client_id: clientId,
@@ -556,8 +556,22 @@ export async function fetchGA4Data(
     });
 
     const dayCount = Object.keys(dailyMetrics).length;
-    logger.info(`[GA4] Saved ${dayCount} days of data for brand ${brandId}`);
 
+    // Log import_jobs so "Τελευταίο sync" shows in UI
+    await db.collection('import_jobs').add({
+      brandId,
+      type: 'analytics',
+      source: 'ga4_api',
+      status: 'completed',
+      imported: dayCount,
+      trafficChannels: Object.keys(trafficSources).length,
+      topPagesCount: topPages.length,
+      failed: 0,
+      errors: [],
+      createdAt: FieldValue.serverTimestamp(),
+    });
+
+    logger.info(`[GA4] Saved ${dayCount} days of data for brand ${brandId}`);
     return { success: true, imported: dayCount };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

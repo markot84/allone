@@ -1,4 +1,5 @@
 import { Timestamp, writeBatch, doc, orderBy, limit } from 'firebase/firestore';
+import { coerceToDate } from '../utils/coerceDate';
 import * as XLSX from 'xlsx';
 import { db } from '../config/firebase';
 import { FirestoreService, CampaignsService, ProcurementService, PROCUREMENT_COLLECTIONS } from './firestore';
@@ -2039,8 +2040,10 @@ export async function getImportJobs(brandId?: string | null): Promise<ImportJob[
   const jobs = await FirestoreService.getDocuments<ImportJob>('import_jobs', [], brandId);
   return jobs.map(job => ({
     ...job,
-    createdAt: (job.createdAt as any)?.toDate?.() || new Date(job.createdAt as any),
-    completedAt: (job.completedAt as any)?.toDate?.() || (job.completedAt ? new Date(job.completedAt as any) : undefined),
+    createdAt: coerceToDate(job.createdAt as unknown) ?? new Date(0),
+    completedAt: job.completedAt
+      ? coerceToDate(job.completedAt as unknown) ?? undefined
+      : undefined,
   }));
 }
 
@@ -2057,7 +2060,9 @@ export async function getLastImportDates(brandId: string | null | undefined): Pr
   );
   const normalized = jobs.map((job) => ({
     ...job,
-    createdAt: (job.createdAt as { toDate?: () => Date } | undefined)?.toDate?.() ?? new Date(job.createdAt as string | number | Date),
+    createdAt:
+      coerceToDate(job.createdAt as unknown) ??
+      new Date(0),
   }));
   const result: Record<string, Date> = {};
   for (const job of normalized) {

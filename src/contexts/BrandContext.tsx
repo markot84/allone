@@ -37,7 +37,17 @@ export function BrandProvider({ children }: { children: ReactNode }) {
     }
     setLoading(true);
     try {
-      const profile = await FirestoreService.getDocument<{ brandIds?: string[]; defaultBrandId?: string }>('users', user.uid);
+      let profile: { brandIds?: string[]; defaultBrandId?: string } | null = null;
+      try {
+        profile = await FirestoreService.getDocumentWithTimeout<{ brandIds?: string[]; defaultBrandId?: string }>(
+          'users',
+          user.uid,
+          15000
+        );
+      } catch (e) {
+        console.error('refreshBrands: user profile fetch failed or timed out', e);
+        profile = null;
+      }
       const brandIds = profile?.brandIds ?? [];
       if (brandIds.length === 0) {
         setBrands([]);

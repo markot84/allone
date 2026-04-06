@@ -5,6 +5,8 @@ import {
   Users,
   Target,
   BarChart3,
+  ShoppingBag,
+  ArrowRight,
 } from 'lucide-react';
 import {
   AreaChart,
@@ -15,13 +17,15 @@ import {
   Tooltip as RechartsTooltip,
   PieChart,
   Pie,
-  Cell
+  Cell,
+  ResponsiveContainer,
 } from 'recharts';
 import { Card, CardHeader, KPICard, Tooltip, AlertsBanner } from '../common';
 import { useSegments, useOrganic, useCampaigns, useActiveStrategy, useSuppliers, useProductSource, useBrand, useProductAggregates } from '../../hooks';
 import { useDashPeriod, PERIOD_OPTIONS } from '../../hooks/useDashPeriod';
 import { useGA4Data } from '../../hooks/useGA4Data';
-import { calculateTotalRevenue, calculateCampaignMetrics, getCampaignDateForMonth, getEffectiveConversionValue, bucketOverlapFraction } from '../../utils/roiUtils';
+import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
+import { calculateTotalRevenue, calculateCampaignMetrics, getCampaignDateForMonth, getEffectiveConversionValue, bucketOverlapFraction, metaUsesLegacyMonthBuckets } from '../../utils/roiUtils';
 import { formatCurrencyCompact, formatNumber, formatMultiplier, formatPercent } from '../../utils/format';
 import type { Campaign } from '../../types';
 import { generateInsightsFromData } from '../../services/insights';
@@ -47,6 +51,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   const { activeStrategy, getStrategyName } = useActiveStrategy();
   useAutomationRunner();
   const ga4 = useGA4Data();
+  const ecomm = useEcommerceSummary();
   const { alerts: automationAlerts } = useAutomationAlerts();
 
   const supplierTodMap = useMemo(() => {
@@ -70,7 +75,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       let impressions = 0, clicks = 0, conversions = 0, amount_spent = 0, conversion_value = 0;
       const convActions: Record<string, { conversions: number; value: number }> = {};
 
-      const metaMonthBuckets = (c.channel || '').toLowerCase() === 'meta';
+      const metaMonthBuckets = metaUsesLegacyMonthBuckets(c);
       for (const [date, m] of Object.entries(dm)) {
         const frac = bucketOverlapFraction(date, fromDate, toDate, { metaMonthBuckets });
         if (frac <= 0) continue;
@@ -472,6 +477,67 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   </p>
                 )}
               </div>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* E-commerce Summary */}
+      {ecomm.hasData && (
+        <Card hover onClick={() => onSectionChange?.('ecommerce')}>
+          <div className="p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-[var(--nts-accent)]/10 flex items-center justify-center">
+                  <ShoppingBag size={16} className="text-[var(--nts-accent)]" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-[#1A1A1A]">E-commerce</h4>
+                  <span className="text-[10px] text-[#9CA3AF]">
+                    {ecomm.connectedPlatforms.length} platform{ecomm.connectedPlatforms.length > 1 ? 's' : ''} · 90 ημέρες
+                  </span>
+                </div>
+              </div>
+              <ArrowRight size={16} className="text-[#D1D5DB] group-hover:text-[var(--nts-accent)] transition-colors" />
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 items-end">
+              <div>
+                <p className="text-[11px] text-[#6B7280] mb-0.5">Store Revenue</p>
+                <p className="text-lg font-bold text-[#1A1A1A]">{formatCurrencyCompact(ecomm.totalRevenue)}</p>
+              </div>
+              <div>
+                <p className="text-[11px] text-[#6B7280] mb-0.5">Παραγγελίες</p>
+                <p className="text-lg font-bold text-[#1A1A1A]">{formatNumber(ecomm.orderCount)}</p>
+              </div>
+              <div>
+                <p className="text-[11px] text-[#6B7280] mb-0.5">AOV</p>
+                <p className="text-lg font-bold text-[#1A1A1A]">{formatCurrencyCompact(ecomm.aov)}</p>
+              </div>
+              <div>
+                <p className="text-[11px] text-[#6B7280] mb-0.5">Top Platform</p>
+                <p className="text-lg font-bold text-[#1A1A1A]">
+                  {ecomm.platformBreakdown[0]
+                    ? ({ shopify: 'Shopify', woocommerce: 'WooCommerce', opencart: 'OpenCart', magento: 'Magento' }[ecomm.platformBreakdown[0].platform] || ecomm.platformBreakdown[0].platform)
+                    : '—'}
+                </p>
+              </div>
+              {/* Mini sparkline */}
+              {ecomm.dailyRevenue.length > 7 && (
+                <div className="hidden md:block">
+                  <ResponsiveContainer width="100%" height={40}>
+                    <AreaChart data={ecomm.dailyRevenue.slice(-30)}>
+                      <defs>
+                        <linearGradient id="ecommDashSparkGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="var(--nts-accent)" stopOpacity={0.2} />
+                          <stop offset="95%" stopColor="var(--nts-accent)" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <Area type="monotone" dataKey="revenue" stroke="var(--nts-accent)" strokeWidth={1.5} fill="url(#ecommDashSparkGrad)" dot={false} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
             </div>
           </div>
         </Card>

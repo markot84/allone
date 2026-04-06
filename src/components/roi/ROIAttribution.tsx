@@ -7,6 +7,7 @@ import {
   BarChart3,
   Wallet,
   ShoppingCart,
+  ShoppingBag,
   ArrowUpRight,
   Loader2,
   Database,
@@ -23,6 +24,7 @@ import {
 import { Card, CardHeader, Badge, Button } from '../common';
 import { useOrganic, useCampaigns, useActiveStrategy, useBrand } from '../../hooks';
 import { useDashPeriod, PERIOD_OPTIONS } from '../../hooks/useDashPeriod';
+import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import { CampaignsService, OrganicService } from '../../services/firestore';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -32,6 +34,7 @@ import {
   getCampaignDateForMonth,
   getEffectiveConversionValue,
   bucketOverlapFraction,
+  metaUsesLegacyMonthBuckets,
 } from '../../utils/roiUtils';
 import { formatCurrencyCompact, formatNumber, formatPercent } from '../../utils/format';
 import type { Campaign } from '../../types';
@@ -78,6 +81,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
   const { totalOrganicRevenue, byMonth: organicByMonth, hasImported: hasOrganic } = useOrganic();
   const { campaigns, hasImported: hasCampaigns } = useCampaigns();
   const { activeStrategy } = useActiveStrategy();
+  const ecomm = useEcommerceSummary();
   const { currentBrand } = useBrand();
   const queryClient = useQueryClient();
   const [seeding, setSeeding] = useState(false);
@@ -90,7 +94,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
     return all.filter(c => {
       const dm = (c as any).dailyMetrics as Record<string, any> | undefined;
       if (dm && Object.keys(dm).length > 0) {
-        const metaMonthBuckets = (c.channel || '').toLowerCase() === 'meta';
+        const metaMonthBuckets = metaUsesLegacyMonthBuckets(c);
         return Object.keys(dm).some(dateKey =>
           bucketOverlapFraction(dateKey, fromDate, toDate, { metaMonthBuckets }) > 0
         );
@@ -110,7 +114,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
       let spend = 0, impr = 0, clicks = 0, convs = 0, convValue = 0;
       const convActions: Record<string, { conversions: number; value: number }> = {};
 
-      const metaMonthBuckets = (c.channel || '').toLowerCase() === 'meta';
+      const metaMonthBuckets = metaUsesLegacyMonthBuckets(c);
       for (const [dateKey, metrics] of Object.entries(dm)) {
         const frac = bucketOverlapFraction(dateKey, fromDate, toDate, { metaMonthBuckets });
         if (frac <= 0) continue;
@@ -190,16 +194,30 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
   const channelPerf = useMemo(() => calculateChannelPerformance(campaignsTyped), [campaignsTyped]);
 
   const trendData = useMemo(() => {
-    const byMonth = new Map<string, { organic: number; campaigns: number }>();
+    const byMonth = new Map<string, { organic: number; campaigns: number; storeRevenue: number }>();
     organicByMonth.forEach((val, key) => {
-      byMonth.set(key, { organic: val, campaigns: 0 });
+      byMonth.set(key, { organic: val, campaigns: 0, storeRevenue: 0 });
     });
     campaignsTyped.forEach((c) => {
       const date = getCampaignDateForMonth(c);
       const key = date ? date.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }) : 'Other';
-      const ex = byMonth.get(key) || { organic: 0, campaigns: 0 };
+      const ex = byMonth.get(key) || { organic: 0, campaigns: 0, storeRevenue: 0 };
       byMonth.set(key, { ...ex, campaigns: ex.campaigns + getEffectiveConversionValue(c) });
     });
+
+    // Merge monthly store revenue from e-commerce summary
+    if (ecomm.hasData && ecomm.monthlyRevenue.length > 0) {
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      for (const mr of ecomm.monthlyRevenue) {
+        const [y, m] = mr.month.split('-');
+        const monthIdx = parseInt(m, 10) - 1;
+        if (monthIdx < 0 || monthIdx > 11) continue;
+        const key = `${monthNames[monthIdx]} ${y.slice(2)}`;
+        const ex = byMonth.get(key) || { organic: 0, campaigns: 0, storeRevenue: 0 };
+        byMonth.set(key, { ...ex, storeRevenue: mr.revenue });
+      }
+    }
+
     if (byMonth.size === 0) return [];
     const order = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return Array.from(byMonth.entries())
@@ -213,8 +231,9 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
         month,
         organic: Math.round(d.organic),
         campaigns: Math.round(d.campaigns),
+        storeRevenue: Math.round(d.storeRevenue),
       }));
-  }, [organicByMonth, campaignsTyped]);
+  }, [organicByMonth, campaignsTyped, ecomm.hasData, ecomm.monthlyRevenue]);
 
   const topCampaigns = useMemo(() => {
     return [...campaignsTyped]
@@ -348,12 +367,61 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
         </div>
       </div>
 
+      {/* E-commerce vs Attributed Revenue */}
+      {ecomm.hasData && ecomm.totalRevenue > 0 && (
+        <Card padding="lg">
+          <div className="flex items-center gap-2 mb-4">
+            <ShoppingBag size={18} className="text-[var(--nts-accent)]" />
+            <h3 className="text-sm font-semibold text-[#1A1A1A]">Store Revenue vs Attributed Revenue</h3>
+            <span className="text-[10px] text-[#9CA3AF] bg-[#F3F4F6] px-1.5 py-0.5 rounded ml-auto">90 ημέρες</span>
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <MetricCard
+              icon={<ShoppingBag size={20} />}
+              label="Store Revenue"
+              value={formatCurrencyCompact(ecomm.totalRevenue)}
+              subtitle="Πραγματικά έσοδα e-shop"
+              color="#10B981"
+            />
+            <MetricCard
+              icon={<Euro size={20} />}
+              label="Attributed Revenue"
+              value={formatCurrencyCompact(totalRevenue)}
+              subtitle="Organic + Campaign value"
+              color="var(--nts-charcoal)"
+            />
+            <MetricCard
+              icon={<TrendingUp size={20} />}
+              label="True ROAS"
+              value={metrics.totalSpend > 0 ? `${formatNumber(ecomm.totalRevenue / metrics.totalSpend, 2)}x` : '—'}
+              subtitle="Store Revenue / Ad Spend"
+              color="#8B5CF6"
+            />
+            <MetricCard
+              icon={<BarChart3 size={20} />}
+              label="Revenue Gap"
+              value={(() => {
+                const gap = ecomm.totalRevenue - totalRevenue;
+                return gap >= 0 ? `+${formatCurrencyCompact(gap)}` : formatCurrencyCompact(gap);
+              })()}
+              subtitle="Store − Attributed"
+              color={ecomm.totalRevenue >= totalRevenue ? '#22C55E' : '#EF4444'}
+            />
+          </div>
+          <p className="text-[11px] text-[#9CA3AF] mt-3 leading-relaxed">
+            <strong>Store Revenue</strong> = πραγματικά έσοδα από παραγγελίες e-shop.{' '}
+            <strong>Attributed Revenue</strong> = organic + conversion value από ad platforms.{' '}
+            <strong>True ROAS</strong> = Store Revenue / Ad Spend (vs Attributed ROAS: {metrics.roas > 0 ? `${formatNumber(metrics.roas, 2)}x` : '—'}).
+          </p>
+        </Card>
+      )}
+
       {/* Section 2: Revenue Trend */}
       {trendData.length > 0 && (
         <Card padding="lg">
           <CardHeader
             title="Τάση Εσόδων"
-            subtitle="Organic vs Campaign revenue ανά μήνα"
+            subtitle={ecomm.hasData ? 'Organic vs Campaign vs Store Revenue ανά μήνα' : 'Organic vs Campaign revenue ανά μήνα'}
             icon={<TrendingUp size={20} className="text-[var(--nts-accent)]" />}
           />
           <div ref={chartRef} className="w-full" style={{ minHeight: 320, position: 'relative' }}>
@@ -366,6 +434,10 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                 <linearGradient id="campaignGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#F97316" stopOpacity={0.3} />
                   <stop offset="95%" stopColor="#F97316" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="storeRevGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#10B981" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" vertical={false} />
@@ -391,12 +463,12 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                 }}
                 formatter={(value: any, name?: string) => [
                   formatCurrencyCompact((value as number) || 0),
-                  name === 'organic' ? 'Organic Revenue' : 'Campaign Revenue',
+                  name === 'organic' ? 'Organic Revenue' : name === 'storeRevenue' ? 'Store Revenue' : 'Campaign Revenue',
                 ]}
                 labelStyle={{ color: '#24292f', fontWeight: 600, marginBottom: 4 }}
               />
               <Legend
-                formatter={(value) => (value === 'organic' ? 'Organic' : 'Campaigns')}
+                formatter={(value) => value === 'organic' ? 'Organic' : value === 'storeRevenue' ? 'Store Revenue' : 'Campaigns'}
                 wrapperStyle={{ fontSize: 12 }}
               />
               <Area
@@ -417,6 +489,17 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                 fill="url(#campaignGrad)"
                 name="campaigns"
               />
+              {ecomm.hasData && (
+                <Area
+                  type="monotone"
+                  dataKey="storeRevenue"
+                  stroke="#10B981"
+                  strokeWidth={2}
+                  fillOpacity={1}
+                  fill="url(#storeRevGrad)"
+                  name="storeRevenue"
+                />
+              )}
             </AreaChart>
           </div>
         </Card>

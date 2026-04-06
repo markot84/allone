@@ -1,10 +1,14 @@
 {
-  "version": "0.307.0",
-  "previousVersion": "0.306.0",
-  "commitHash": "7ee821e",
+  "version": "0.316.0",
+  "previousVersion": "0.315.0",
+  "commitHash": "5a8ad75",
   "branch": "main",
-  "buildDate": "2026-04-03T05:40:53.116Z",
+  "buildDate": "2026-04-04T09:34:26.589Z",
   "commits": [
+    {
+      "hash": "5a8ad75",
+      "message": "fix(campaigns): restore EUR display and UI copy (fix mojibake from bad encoding)"
+    },
     {
       "hash": "7ee821e",
       "message": "chore: sync buildInfo after deploy (v0.306.0)"
@@ -60,13 +64,10 @@
     {
       "hash": "5219744",
       "message": "fix: force function redeploy with updated build comment"
-    },
-    {
-      "hash": "1451841",
-      "message": "fix: remove REMOVED campaign filter and use yesterday as untilStr in connectors"
     }
   ],
   "changes": [
+    "[Διόρθωση] Restore EUR display and UI copy (fix mojibake from bad encoding)",
     "[Συντήρηση] Sync buildInfo after deploy (v0.306.0)",
     "[Συντήρηση] UTF-8 headers, el lang; campaigns: budget section below table",
     "[Νέο χαρακτηριστικό] Purchase filter, GA-first Ads actions, phantom store visits",
@@ -75,7 +76,6 @@
     "[Διόρθωση] Reconcile conversions with per-action sum vs aggregate",
     "[Διόρθωση] Hide zero-match rows when conversion filter is on",
     "[Διόρθωση] Purchase filter sums all purchase conversion actions",
-    "[Διόρθωση] Restore UTF-8 strings and conv-filter pipeline",
-    "[Διόρθωση] Respect purchase conv filter — no fallback to all actions; sum value per action; export uses same pipeline"
+    "[Διόρθωση] Restore UTF-8 strings and conv-filter pipeline"
   ]
 }

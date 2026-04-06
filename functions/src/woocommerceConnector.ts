@@ -1,11 +1,11 @@
 /**
- * WooCommerce Connector — Phase 1: Infrastructure Only
+ * WooCommerce Connector
  *
  * Flow:
  * 1. User enters Store URL + Consumer Key + Consumer Secret
  * 2. We validate with a test API call (GET /wp-json/wc/v3/system_status)
  * 3. Credentials stored in Firestore (connectors/{brandId}.woocommerce)
- * 4. Data sync is stubbed — pending GDPR review
+ * 4. Sync fetches orders (90 days) + products → Firestore (no PII stored)
  *
  * No OAuth redirect needed — WooCommerce uses REST API keys.
  */
@@ -109,7 +109,8 @@ export async function testWooConnection(
 }
 
 /**
- * Fetch WooCommerce data — STUB (pending GDPR review)
+ * Fetch WooCommerce orders (last 90 days) + products and store in Firestore.
+ * Only aggregated/anonymized order data is stored (no PII).
  */
 export async function fetchWooCommerceData(brandId: string): Promise<{
   success: boolean;
@@ -117,20 +118,177 @@ export async function fetchWooCommerceData(brandId: string): Promise<{
   error?: string;
   message?: string;
 }> {
-  const connectorDoc = await getDb().doc(`connectors/${brandId}`).get();
+  const db = getDb();
+  const connectorDoc = await db.doc(`connectors/${brandId}`).get();
   const connector = connectorDoc.data()?.woocommerce;
 
   if (!connector?.connected || !connector?.consumerKey) {
     return { success: false, imported: 0, error: 'WooCommerce not connected' };
   }
 
-  logger.info(`[WooCommerce] Sync requested for brand ${brandId} — stub only (GDPR pending)`);
+  const { storeUrl, consumerKey, consumerSecret } = connector;
+  const authHeader = 'Basic ' + Buffer.from(`${consumerKey}:${consumerSecret}`).toString('base64');
+  const baseHeaders = { Authorization: authHeader, 'Content-Type': 'application/json' };
 
-  return {
-    success: true,
-    imported: 0,
-    message: 'WooCommerce sync infrastructure ready. Data fetching will be enabled after GDPR review.',
-  };
+  let totalImported = 0;
+
+  try {
+    // ── Orders (last 90 days, no PII) ──────────────────────────────────
+    const since = new Date();
+    since.setDate(since.getDate() - 90);
+
+    let orderPage = 1;
+    let hasMore = true;
+    const orderItems: { id: string; data: Record<string, unknown> }[] = [];
+
+    while (hasMore) {
+      const params = new URLSearchParams({
+        after: since.toISOString(),
+        per_page: '100',
+        page: String(orderPage),
+        orderby: 'date',
+        order: 'desc',
+      });
+
+      const res = await fetch(`${storeUrl}/wp-json/wc/v3/orders?${params}`, { headers: baseHeaders });
+      if (!res.ok) {
+        logger.error(`[WooCommerce] Orders fetch failed (${res.status})`);
+        break;
+      }
+
+      const orders = await res.json();
+      if (!Array.isArray(orders) || orders.length === 0) { hasMore = false; break; }
+
+      for (const o of orders) {
+        orderItems.push({
+          id: `woo_${o.id}`,
+          data: {
+            orderId: String(o.id),
+            orderNumber: o.number || '',
+            createdAt: o.date_created || '',
+            updatedAt: o.date_modified || '',
+            status: o.status || '',
+            total: parseFloat(o.total || '0'),
+            subtotal: (o.line_items || []).reduce((s: number, li: any) => s + parseFloat(li.subtotal || '0'), 0),
+            totalTax: parseFloat(o.total_tax || '0'),
+            discountTotal: parseFloat(o.discount_total || '0'),
+            currency: o.currency || 'EUR',
+            paymentMethod: o.payment_method_title || '',
+            lineItemCount: o.line_items?.length || 0,
+            lineItems: (o.line_items || []).slice(0, 50).map((li: any) => ({
+              sku: li.sku || '',
+              name: li.name || '',
+              quantity: li.quantity || 0,
+              price: parseFloat(li.price || '0'),
+              productId: li.product_id || null,
+            })),
+            source: 'woocommerce_api',
+            brandId,
+          },
+        });
+      }
+
+      const totalPages = parseInt(res.headers.get('x-wp-totalpages') || '1', 10);
+      hasMore = orderPage < totalPages;
+      orderPage++;
+      if (orderPage > 30) break;
+    }
+
+    if (orderItems.length > 0) {
+      for (let i = 0; i < orderItems.length; i += 500) {
+        const batch = db.batch();
+        const chunk = orderItems.slice(i, i + 500);
+        for (const item of chunk) {
+          batch.set(db.collection('woo_orders').doc(item.id), { ...item.data, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        }
+        await batch.commit();
+      }
+      totalImported += orderItems.length;
+      logger.info(`[WooCommerce] Orders: ${orderItems.length} imported for brand ${brandId}`);
+    }
+
+    // ── Products ───────────────────────────────────────────────────────
+    let prodPage = 1;
+    let prodMore = true;
+    const prodItems: { id: string; data: Record<string, unknown> }[] = [];
+
+    while (prodMore) {
+      const params = new URLSearchParams({
+        per_page: '100',
+        page: String(prodPage),
+      });
+
+      const res = await fetch(`${storeUrl}/wp-json/wc/v3/products?${params}`, { headers: baseHeaders });
+      if (!res.ok) break;
+
+      const products = await res.json();
+      if (!Array.isArray(products) || products.length === 0) { prodMore = false; break; }
+
+      for (const p of products) {
+        prodItems.push({
+          id: `woo_${p.id}`,
+          data: {
+            productId: String(p.id),
+            name: p.name || '',
+            slug: p.slug || '',
+            type: p.type || '',
+            status: p.status || '',
+            sku: p.sku || '',
+            price: p.price || '0',
+            regularPrice: p.regular_price || '0',
+            salePrice: p.sale_price || '',
+            stockStatus: p.stock_status || '',
+            stockQuantity: p.stock_quantity ?? null,
+            categories: (p.categories || []).map((c: any) => c.name || ''),
+            tags: (p.tags || []).map((t: any) => t.name || ''),
+            createdAt: p.date_created || '',
+            updatedAt: p.date_modified || '',
+            source: 'woocommerce_api',
+            brandId,
+          },
+        });
+      }
+
+      const totalPages = parseInt(res.headers.get('x-wp-totalpages') || '1', 10);
+      prodMore = prodPage < totalPages;
+      prodPage++;
+      if (prodPage > 30) break;
+    }
+
+    if (prodItems.length > 0) {
+      for (let i = 0; i < prodItems.length; i += 500) {
+        const batch = db.batch();
+        const chunk = prodItems.slice(i, i + 500);
+        for (const item of chunk) {
+          batch.set(db.collection('woo_products').doc(item.id), { ...item.data, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        }
+        await batch.commit();
+      }
+      totalImported += prodItems.length;
+      logger.info(`[WooCommerce] Products: ${prodItems.length} imported for brand ${brandId}`);
+    }
+
+    // ── Log import_jobs ────────────────────────────────────────────────
+    await db.collection('import_jobs').add({
+      brandId,
+      type: 'ecommerce',
+      source: 'woocommerce_api',
+      status: 'completed',
+      imported: totalImported,
+      orders: orderItems.length,
+      products: prodItems.length,
+      failed: 0,
+      errors: [],
+      createdAt: FieldValue.serverTimestamp(),
+    });
+
+    logger.info(`[WooCommerce] Sync complete for brand ${brandId}: ${totalImported} total items`);
+    return { success: true, imported: totalImported };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.error(`[WooCommerce] fetchWooCommerceData error for ${brandId}:`, msg);
+    return { success: false, imported: totalImported, error: msg };
+  }
 }
 
 /**

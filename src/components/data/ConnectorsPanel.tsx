@@ -3,6 +3,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useBrand, useAuth, useBrandMembers } from '../../hooks';
 import { auth } from '../../config/firebase';
 import { getLastImportDates } from '../../services/import';
+import { coerceToDate } from '../../utils/coerceDate';
+import { clearOAuthSession, readOAuthSessionPayload } from '../../utils/oauthSession';
 import { FirestoreService } from '../../services/firestore';
 import { Card, Button, Spinner, useToast } from '../common';
 import {
@@ -127,7 +129,6 @@ const CONNECTORS: ConnectorConfig[] = [
     borderColor: 'border-sky-200',
     syncLabel: 'items',
     authType: 'credentials',
-    comingSoon: true,
   },
   {
     id: 'magento',
@@ -139,7 +140,6 @@ const CONNECTORS: ConnectorConfig[] = [
     borderColor: 'border-orange-200',
     syncLabel: 'items',
     authType: 'credentials',
-    comingSoon: true,
   },
 ];
 
@@ -495,6 +495,280 @@ function WooCredentialsModal({
   );
 }
 
+// ─── Magento Credentials Modal ─────────────────────────────────────
+
+function MagentoCredentialsModal({
+  brandId,
+  onSuccess,
+  onCancel,
+}: {
+  brandId: string;
+  onSuccess: () => void;
+  onCancel: () => void;
+}) {
+  const [storeUrl, setStoreUrl] = useState('');
+  const [accessToken, setAccessToken] = useState('');
+  const [showToken, setShowToken] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const toast = useToast();
+
+  const handleConnect = async () => {
+    if (!storeUrl.trim() || !accessToken.trim()) return;
+    setLoading(true);
+    setError('');
+
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error('Not authenticated');
+
+      const res = await fetch(`${FUNCTIONS_BASE}/connectorSaveCredentials`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          brandId,
+          provider: 'magento',
+          storeUrl: storeUrl.trim(),
+          accessToken: accessToken.trim(),
+        }),
+      });
+
+      const result = await res.json();
+      if (result.success) {
+        toast.success(`Magento συνδέθηκε: ${result.shopName || storeUrl}`);
+        onSuccess();
+      } else {
+        setError(result.error || 'Connection failed');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const inputStyle = { width: '100%', borderRadius: '8px', border: '1px solid #E5E7EB', padding: '10px 12px', fontSize: '14px', backgroundColor: '#F9FAFB', outline: 'none', boxSizing: 'border-box' as const };
+  const isValid = storeUrl.trim() && accessToken.trim();
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)', padding: '16px' }}>
+      <div style={{ maxWidth: '460px', width: '100%', backgroundColor: '#fff', borderRadius: '16px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid #F3F4F6' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontSize: '24px' }}>🔶</span>
+            <div>
+              <p style={{ margin: 0, fontWeight: 600, fontSize: '14px', color: '#111827' }}>Σύνδεση Magento</p>
+              <p style={{ margin: 0, fontSize: '12px', color: '#6B7280' }}>Integration Access Token από το Magento Admin</p>
+            </div>
+          </div>
+          <button onClick={onCancel} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: '4px' }}>
+            <X size={18} />
+          </button>
+        </div>
+
+        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>Store URL</label>
+            <input type="text" value={storeUrl} onChange={(e) => setStoreUrl(e.target.value)} placeholder="https://mymagentostore.com" style={inputStyle} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>Access Token</label>
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showToken ? 'text' : 'password'}
+                value={accessToken}
+                onChange={(e) => setAccessToken(e.target.value)}
+                placeholder="Integration access token"
+                style={{ ...inputStyle, paddingRight: '40px' }}
+                onKeyDown={(e) => e.key === 'Enter' && handleConnect()}
+              />
+              <button
+                type="button"
+                onClick={() => setShowToken(!showToken)}
+                style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: '2px' }}
+              >
+                {showToken ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+          </div>
+
+          <p style={{ margin: 0, fontSize: '11px', color: '#9CA3AF', lineHeight: '1.5' }}>
+            Magento Admin → System → Integrations → Add New → Activate. Αντιγράψτε το Access Token. Χρειάζονται permissions: Sales, Catalog, Stores.
+          </p>
+
+          {error && (
+            <div style={{ display: 'flex', gap: '8px', backgroundColor: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '10px 12px' }}>
+              <AlertTriangle size={16} style={{ color: '#DC2626', flexShrink: 0, marginTop: '1px' }} />
+              <p style={{ margin: 0, fontSize: '12px', color: '#991B1B' }}>{error}</p>
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', gap: '10px', padding: '0 24px 20px' }}>
+          <button
+            onClick={onCancel}
+            disabled={loading}
+            style={{ flex: 1, padding: '9px 16px', borderRadius: '8px', border: '1px solid #E5E7EB', backgroundColor: '#fff', fontSize: '13px', fontWeight: 500, cursor: 'pointer', color: '#374151' }}
+          >
+            Άκυρο
+          </button>
+          <button
+            onClick={handleConnect}
+            disabled={!isValid || loading}
+            style={{ flex: 1, padding: '9px 16px', borderRadius: '8px', border: 'none', backgroundColor: (!isValid || loading) ? '#FDBA74' : '#F97316', fontSize: '13px', fontWeight: 600, cursor: (!isValid || loading) ? 'not-allowed' : 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+          >
+            {loading && <Spinner size="sm" />}
+            {loading ? 'Σύνδεση...' : 'Σύνδεση & Επαλήθευση'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── OpenCart Credentials Modal ────────────────────────────────────
+
+function OpenCartCredentialsModal({
+  brandId,
+  onSuccess,
+  onCancel,
+}: {
+  brandId: string;
+  onSuccess: () => void;
+  onCancel: () => void;
+}) {
+  const [storeUrl, setStoreUrl] = useState('');
+  const [apiUsername, setApiUsername] = useState('');
+  const [apiKey, setApiKey] = useState('');
+  const [showKey, setShowKey] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const toast = useToast();
+
+  const handleConnect = async () => {
+    if (!storeUrl.trim() || !apiUsername.trim() || !apiKey.trim()) return;
+    setLoading(true);
+    setError('');
+
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error('Not authenticated');
+
+      const res = await fetch(`${FUNCTIONS_BASE}/connectorSaveCredentials`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          brandId,
+          provider: 'opencart',
+          storeUrl: storeUrl.trim(),
+          apiUsername: apiUsername.trim(),
+          apiKey: apiKey.trim(),
+        }),
+      });
+
+      const result = await res.json();
+      if (result.success) {
+        toast.success(`OpenCart συνδέθηκε: ${result.shopName || storeUrl}`);
+        onSuccess();
+      } else {
+        setError(result.error || 'Connection failed');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const inputStyle = { width: '100%', borderRadius: '8px', border: '1px solid #E5E7EB', padding: '10px 12px', fontSize: '14px', backgroundColor: '#F9FAFB', outline: 'none', boxSizing: 'border-box' as const };
+  const isValid = storeUrl.trim() && apiUsername.trim() && apiKey.trim();
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)', padding: '16px' }}>
+      <div style={{ maxWidth: '460px', width: '100%', backgroundColor: '#fff', borderRadius: '16px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid #F3F4F6' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontSize: '24px' }}>🛍️</span>
+            <div>
+              <p style={{ margin: 0, fontWeight: 600, fontSize: '14px', color: '#111827' }}>Σύνδεση OpenCart</p>
+              <p style={{ margin: 0, fontSize: '12px', color: '#6B7280' }}>API credentials από το OpenCart Admin</p>
+            </div>
+          </div>
+          <button onClick={onCancel} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: '4px' }}>
+            <X size={18} />
+          </button>
+        </div>
+
+        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>Store URL</label>
+            <input type="text" value={storeUrl} onChange={(e) => setStoreUrl(e.target.value)} placeholder="https://myopencartstore.com" style={inputStyle} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>API Username</label>
+            <input type="text" value={apiUsername} onChange={(e) => setApiUsername(e.target.value)} placeholder="π.χ. Default" style={inputStyle} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>API Key</label>
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showKey ? 'text' : 'password'}
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder="Το API key από System → Users → API"
+                style={{ ...inputStyle, paddingRight: '40px' }}
+                onKeyDown={(e) => e.key === 'Enter' && handleConnect()}
+              />
+              <button
+                type="button"
+                onClick={() => setShowKey(!showKey)}
+                style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: '2px' }}
+              >
+                {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+          </div>
+
+          <p style={{ margin: 0, fontSize: '11px', color: '#9CA3AF', lineHeight: '1.5' }}>
+            OpenCart Admin → System → Users → API → Add New ή χρησιμοποίησε υπάρχον API user. Βεβαιωθείτε ότι είναι ενεργοποιημένο (Status: Enabled).
+          </p>
+
+          {error && (
+            <div style={{ display: 'flex', gap: '8px', backgroundColor: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '10px 12px' }}>
+              <AlertTriangle size={16} style={{ color: '#DC2626', flexShrink: 0, marginTop: '1px' }} />
+              <p style={{ margin: 0, fontSize: '12px', color: '#991B1B' }}>{error}</p>
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', gap: '10px', padding: '0 24px 20px' }}>
+          <button
+            onClick={onCancel}
+            disabled={loading}
+            style={{ flex: 1, padding: '9px 16px', borderRadius: '8px', border: '1px solid #E5E7EB', backgroundColor: '#fff', fontSize: '13px', fontWeight: 500, cursor: 'pointer', color: '#374151' }}
+          >
+            Άκυρο
+          </button>
+          <button
+            onClick={handleConnect}
+            disabled={!isValid || loading}
+            style={{ flex: 1, padding: '9px 16px', borderRadius: '8px', border: 'none', backgroundColor: (!isValid || loading) ? '#7DD3FC' : '#0EA5E9', fontSize: '13px', fontWeight: 600, cursor: (!isValid || loading) ? 'not-allowed' : 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+          >
+            {loading && <Spinner size="sm" />}
+            {loading ? 'Σύνδεση...' : 'Σύνδεση & Επαλήθευση'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Component ──────────────────────────────────────────────
 
 export function ConnectorsPanel() {
@@ -519,6 +793,8 @@ export function ConnectorsPanel() {
   const [confirmingAccount, setConfirmingAccount] = useState(false);
   const [shopDomainModal, setShopDomainModal] = useState(false);
   const [wooModal, setWooModal] = useState(false);
+  const [opencartModal, setOpencartModal] = useState(false);
+  const [magentoModal, setMagentoModal] = useState(false);
 
   const emptyStates: Record<string, ConnectorState> = {
     google_ads: { connected: false },
@@ -527,6 +803,8 @@ export function ConnectorsPanel() {
     ga4: { connected: false },
     shopify: { connected: false },
     woocommerce: { connected: false },
+    opencart: { connected: false },
+    magento: { connected: false },
   };
 
   // Connectors doc — cached, refetch only after sync/connect/disconnect
@@ -554,6 +832,8 @@ export function ConnectorsPanel() {
         ga4: connectorsData.ga4 || { connected: false },
         shopify: connectorsData.shopify || { connected: false },
         woocommerce: connectorsData.woocommerce || { connected: false },
+        opencart: connectorsData.opencart || { connected: false },
+        magento: connectorsData.magento || { connected: false },
       }
     : emptyStates;
 
@@ -570,6 +850,8 @@ export function ConnectorsPanel() {
         ga4: dates['ga4_api'] || dates['ga4'],
         shopify: dates['shopify_api'],
         woocommerce: dates['woocommerce_api'],
+        opencart: dates['opencart_api'],
+        magento: dates['magento_api'],
       } as Record<string, Date>;
     },
     enabled: !!brandId,
@@ -587,23 +869,57 @@ export function ConnectorsPanel() {
     queryClient.invalidateQueries({ queryKey: ['lastSyncDates', brandId] });
   }, [brandId, refetchConnectors, queryClient]);
 
-  // Listen for OAuth callback results via URL hash params
+  const runOAuthSuccessFlow = useCallback(
+    async (connectorKey: string) => {
+      await fetchStates();
+      queryClient.invalidateQueries({ queryKey: ['connectorsSummary', brandId] });
+      const label =
+        connectorKey === 'meta'
+          ? 'Το Meta συνδέθηκε επιτυχώς.'
+          : connectorKey === 'google_ads'
+            ? 'Το Google Ads συνδέθηκε επιτυχώς.'
+            : connectorKey === 'ga4'
+              ? 'Το GA4 συνδέθηκε επιτυχώς.'
+              : connectorKey === 'merchant'
+                ? 'Το Merchant Center συνδέθηκε επιτυχώς.'
+                : connectorKey === 'shopify'
+                  ? 'Το Shopify συνδέθηκε επιτυχώς.'
+                  : connectorKey === 'opencart'
+                    ? 'Το OpenCart συνδέθηκε επιτυχώς.'
+                    : connectorKey === 'magento'
+                      ? 'Το Magento συνδέθηκε επιτυχώς.'
+                      : 'Η σύνδεση ολοκληρώθηκε.';
+      toast.success(label);
+    },
+    [brandId, fetchStates, queryClient, toast]
+  );
+
+  // OAuth payload αποθηκεύεται στο App (useLayoutEffect + oauthSession) πριν χαθεί το hash.
   useEffect(() => {
-    const hash = window.location.hash;
-    if (hash.includes('connector=')) {
-      const params = new URLSearchParams(hash.split('?')[1] || '');
-      const connector = params.get('connector');
-      const status = params.get('status');
-      if (connector && status === 'success') {
-        // Clear hash first, then reload so Firestore state is fresh
-        history.replaceState(null, '', window.location.pathname + '#data');
-        window.location.reload();
-      } else if (connector && status === 'error') {
-        toast.error(`Σφάλμα σύνδεσης: ${params.get('message') || 'Unknown'}`);
-        history.replaceState(null, '', window.location.pathname + '#data');
+    const payload = readOAuthSessionPayload();
+    if (!payload) return;
+
+    if (payload.status === 'error') {
+      let msg = payload.message || 'Unknown';
+      try {
+        msg = decodeURIComponent(msg);
+      } catch {
+        /* keep raw */
       }
+      toast.error(`Σφάλμα σύνδεσης: ${msg}`);
+      clearOAuthSession();
+      return;
     }
-  }, [toast, fetchStates]);
+
+    if (payload.status === 'success' && !brandId) {
+      return;
+    }
+
+    if (payload.status === 'success' && brandId) {
+      clearOAuthSession();
+      void runOAuthSuccessFlow(payload.connector);
+    }
+  }, [brandId, toast, runOAuthSuccessFlow]);
 
   // Auto-open picker if pending (μόνο owner/admin/δημιουργός)
   useEffect(() => {
@@ -632,6 +948,14 @@ export function ConnectorsPanel() {
       setWooModal(true);
       return;
     }
+    if (provider === 'opencart') {
+      setOpencartModal(true);
+      return;
+    }
+    if (provider === 'magento') {
+      setMagentoModal(true);
+      return;
+    }
 
     setConnecting(provider);
 
@@ -641,7 +965,12 @@ export function ConnectorsPanel() {
 
       const callbackUrl = `${FUNCTIONS_BASE}/connectorCallback`;
 
-      const body: Record<string, string> = { brandId, provider, redirectUri: callbackUrl };
+      const body: Record<string, string> = {
+        brandId,
+        provider,
+        redirectUri: callbackUrl,
+        returnOrigin: typeof window !== 'undefined' ? window.location.origin : '',
+      };
       if (provider === 'shopify' && shopDomain) body.shopDomain = shopDomain;
 
       const res = await fetch(`${FUNCTIONS_BASE}/connectorAuth`, {
@@ -847,6 +1176,28 @@ export function ConnectorsPanel() {
         />
       )}
 
+      {opencartModal && brandId && (
+        <OpenCartCredentialsModal
+          brandId={brandId}
+          onSuccess={() => {
+            setOpencartModal(false);
+            fetchStates();
+          }}
+          onCancel={() => setOpencartModal(false)}
+        />
+      )}
+
+      {magentoModal && brandId && (
+        <MagentoCredentialsModal
+          brandId={brandId}
+          onSuccess={() => {
+            setMagentoModal(false);
+            fetchStates();
+          }}
+          onCancel={() => setMagentoModal(false)}
+        />
+      )}
+
       <Card>
         <div className="p-6">
           <div className="flex items-center justify-between mb-4">
@@ -936,17 +1287,36 @@ export function ConnectorsPanel() {
                         {conn.id === 'merchant' && (state as any).merchantName && (
                           <p>{(state as any).merchantName} ({(state as any).merchantId})</p>
                         )}
+                        {conn.id === 'ga4' && (state as any).propertyName && (
+                          <p>{(state as any).propertyName} ({(state as any).propertyId})</p>
+                        )}
                         {conn.id === 'shopify' && (state as any).shopName && (
                           <p>{(state as any).shopName} ({(state as any).shopDomain})</p>
                         )}
                         {conn.id === 'woocommerce' && (state as any).shopName && (
                           <p>{(state as any).shopName}</p>
                         )}
-                        {lastSyncDates[conn.id] && (
-                          <p className="text-[#9CA3AF]">
-                            Τελευταίο sync: {lastSyncDates[conn.id].toLocaleDateString('el-GR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                          </p>
+                        {conn.id === 'opencart' && (state as any).shopName && (
+                          <p>{(state as any).shopName}</p>
                         )}
+                        {conn.id === 'magento' && (state as any).shopName && (
+                          <p>{(state as any).shopName}</p>
+                        )}
+                        {(() => {
+                          const d = coerceToDate(lastSyncDates[conn.id] as unknown);
+                          return d ? (
+                            <p className="text-[#9CA3AF]">
+                              Τελευταίο sync:{' '}
+                              {d.toLocaleDateString('el-GR', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </p>
+                          ) : null;
+                        })()}
                       </div>
                     )}
 

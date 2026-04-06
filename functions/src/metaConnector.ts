@@ -69,9 +69,11 @@ function getCredentials() {
 /**
  * Generate the OAuth consent URL for Meta
  */
-export function getMetaAuthUrl(brandId: string, redirectUri: string): string {
+export function getMetaAuthUrl(brandId: string, redirectUri: string, returnOrigin?: string): string {
   const { appId } = getCredentials();
-  const state = Buffer.from(JSON.stringify({ brandId, provider: 'meta', redirectUri })).toString('base64url');
+  const statePayload: Record<string, string> = { brandId, provider: 'meta', redirectUri };
+  if (returnOrigin?.trim()) statePayload.returnOrigin = returnOrigin.trim();
+  const state = Buffer.from(JSON.stringify(statePayload)).toString('base64url');
 
   const params = new URLSearchParams({
     client_id: appId,
@@ -143,6 +145,14 @@ export async function handleMetaCallback(
     // Step 3: Get all accessible ad accounts
     const adAccounts = await listAdAccounts(longToken);
     logger.info(`[Meta] Got ${adAccounts.length} ad accounts`);
+
+    if (adAccounts.length === 0) {
+      return {
+        success: false,
+        error:
+          'Δεν βρέθηκαν ενεργοί διαφημιστικοί λογαριασμοί. Έλεγξε ότι ο Facebook χρήστης έχει πρόσβαση σε Ad Account (Business Manager / διαφημιστικό) και ότι το app έχει ads_read.',
+      };
+    }
 
     return {
       success: true,
@@ -265,15 +275,14 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
       const sinceStr = since.toISOString().split('T')[0];
       const untilStr = new Date().toISOString().split('T')[0];
 
-      // Fetch data per-month (individual API call per calendar month).
-      // time_increment=monthly is unreliable (some accounts silently ignore it),
-      // so we make explicit per-month calls for accurate date-range filtering.
+      // One API call per calendar month (keeps responses bounded; avoids long sync timeouts).
+      // time_increment=1 returns one row per campaign per day; use API date_start (do not override).
       const allRows: any[] = [];
       const usedFallback = false;
       const monthRanges = generateMonthRanges(sinceStr, untilStr);
       const insightsFields = ['campaign_name','campaign_id','impressions','clicks','spend','actions','action_values','reach','frequency'].join(',');
 
-      logger.info(`[Meta] Fetching ${monthRanges.length} months of data for ${accountId}...`);
+      logger.info(`[Meta] Fetching ${monthRanges.length} months (daily breakdown) for ${accountId}...`);
 
       for (const mr of monthRanges) {
         try {
@@ -281,12 +290,14 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
             fields: insightsFields,
             time_range: JSON.stringify({ since: mr.since, until: mr.until }),
             level: 'campaign',
+            time_increment: '1',
             limit: '500',
             access_token: accessToken,
           });
           let monthUrl: string | null = `${META_GRAPH_URL}/${accountId}/insights?${monthParams}`;
           let monthPageCount = 0;
-          while (monthUrl && monthPageCount < 5) {
+          const MAX_PAGES = 200;
+          while (monthUrl && monthPageCount < MAX_PAGES) {
             const monthRes: Response = await fetch(monthUrl);
             if (!monthRes.ok) {
               if (monthPageCount === 0) {
@@ -296,11 +307,13 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
             }
             const monthData: any = await monthRes.json();
             for (const row of (monthData.data || [])) {
-              row.date_start = mr.since;
               allRows.push(row);
             }
             monthUrl = monthData.paging?.next || null;
             monthPageCount++;
+          }
+          if (monthUrl && monthPageCount >= MAX_PAGES) {
+            logger.warn(`[Meta] Month ${mr.since} hit page cap (${MAX_PAGES}) for ${accountId}; some rows may be missing`);
           }
         } catch (e) {
           logger.warn(`[Meta] Per-month call failed for ${mr.since}: ${e}`);
@@ -329,14 +342,14 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
         logger.warn(`[Meta] Failed to fetch campaign statuses for ${accountId}: ${e}`);
       }
 
-      // Aggregate monthly rows per campaign, building dailyMetrics map (keyed by month start date)
+      // Aggregate per campaign; dailyMetrics keyed by date_start (YYYY-MM-DD) from daily insights
       const campaignMap = new Map<string, any>();
 
       for (const row of allRows) {
         const campaignId = row.campaign_id;
         const campaignName = row.campaign_name;
         const rowDate: string = row.date_start || '';
-        if (!campaignId || !campaignName) continue;
+        if (!campaignId || !campaignName || !rowDate) continue;
 
         // Use only pixel-tracked and standard purchase events.
         // omni_purchase is excluded because it includes Meta-modeled (estimated) conversions
@@ -441,10 +454,8 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
           existing.conversionActions[label].value += v.value;
         }
 
-        // Only store dailyMetrics for monthly-granularity rows (not aggregated fallback)
-        // Monthly rows have date_start on the 1st of each month; fallback aggregated rows
-        // have date_start = range start (e.g., "2023-03-26") which would break date filtering.
-        if (rowDate && !usedFallback) {
+        // One entry per calendar day per campaign (time_increment=1).
+        if (!usedFallback) {
           existing.dailyMetrics[rowDate] = {
             impressions: rowImpressions,
             clicks: rowClicks,
@@ -468,7 +479,7 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
       }
 
       // Firestore: max 500 ops/batch and ~10MB payload.
-      // Meta campaigns carry 36 months of dailyMetrics + conversionActions — keep chunks small.
+      // Meta campaigns carry ~36 months of daily rows per campaign — keep chunks small.
       const CHUNK = 15;
       for (let i = 0; i < allCampaigns.length; i += CHUNK) {
         const chunk = allCampaigns.slice(i, i + CHUNK);

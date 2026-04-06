@@ -2,11 +2,22 @@ import type { Campaign } from '../types';
 
 export type BucketOverlapOptions = {
   /**
-   * Meta `dailyMetrics` can use YYYY-MM-01 as a bucket for the **whole month** (spread when filtering).
-   * Google Ads (and similar) use YYYY-MM-01 as a normal calendar day — never apply month spreading.
+   * Legacy Meta imports stored one row per month (key `YYYY-MM-01` = entire month). Spread overlap by calendar days.
+   * When `dailyMetrics` includes any day other than the 1st, pass false — each key is a real calendar day.
    */
   metaMonthBuckets?: boolean;
 };
+
+/** True if Meta campaign uses legacy monthly-only keys (every key is YYYY-MM-01). */
+export function metaUsesLegacyMonthBuckets(c: {
+  channel?: string;
+  dailyMetrics?: Record<string, unknown>;
+}): boolean {
+  if ((c.channel || '').toLowerCase() !== 'meta') return false;
+  const dm = c.dailyMetrics;
+  if (!dm || Object.keys(dm).length === 0) return false;
+  return !Object.keys(dm).some(k => k.slice(8, 10) !== '01');
+}
 
 /**
  * Returns the fraction [0,1] of a dailyMetrics bucket that overlaps [fromDate, toDate].

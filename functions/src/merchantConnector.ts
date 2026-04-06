@@ -38,11 +38,11 @@ function getCredentials() {
   };
 }
 
-export function getMerchantAuthUrl(brandId: string, redirectUri: string): string {
+export function getMerchantAuthUrl(brandId: string, redirectUri: string, returnOrigin?: string): string {
   const { clientId } = getCredentials();
-  const state = Buffer.from(
-    JSON.stringify({ brandId, provider: 'merchant', redirectUri })
-  ).toString('base64url');
+  const payload: Record<string, string> = { brandId, provider: 'merchant', redirectUri };
+  if (returnOrigin?.trim()) payload.returnOrigin = returnOrigin.trim();
+  const state = Buffer.from(JSON.stringify(payload)).toString('base64url');
 
   const params = new URLSearchParams({
     client_id: clientId,

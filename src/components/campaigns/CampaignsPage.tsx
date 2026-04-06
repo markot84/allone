@@ -9,7 +9,12 @@ import { useSearchIntelligence } from '../../hooks/useSearchIntelligence';
 import { FirestoreService } from '../../services/firestore';
 import { formatCurrency, formatNumber, formatMultiplier, formatPercent } from '../../utils/format';
 import { BudgetOpportunitySection } from '../roi/BudgetOpportunitySection';
-import { bucketOverlapFraction } from '../../utils/roiUtils';
+import {
+  bucketOverlapFraction,
+  getEffectiveConversionValue,
+  getEffectiveConversions,
+  metaUsesLegacyMonthBuckets,
+} from '../../utils/roiUtils';
 import type { Campaign } from '../../types';
 
 /** Euro sign as ASCII-safe escape (avoids mojibake if source encoding drifts). */
@@ -136,6 +141,11 @@ function getDisplayConversions(c: Campaign, convFilterActive: boolean): number {
   if (convFilterActive) {
     return Number.isNaN(n) ? 0 : n;
   }
+  // Meta: conversionActions mixes purchases with engagement metrics (link_click, video_view, …)
+  // stored under the same shape — never sum all keys as "conversions".
+  if ((c.channel || '').toLowerCase() === 'meta') {
+    return getEffectiveConversions(c);
+  }
   const fromActions = sumConversionActions(c.conversionActions).conv;
   if (!Number.isNaN(n) && n > 0) return n;
   if (fromActions > 0) return fromActions;
@@ -148,6 +158,9 @@ function getDisplayConversionValue(c: Campaign, convFilterActive: boolean): numb
   const n = raw != null ? (typeof raw === 'number' ? raw : parseFloat(String(raw))) : NaN;
   if (convFilterActive) {
     return Number.isNaN(n) ? 0 : n;
+  }
+  if ((c.channel || '').toLowerCase() === 'meta') {
+    return getEffectiveConversionValue(c);
   }
   const fromActions = sumConversionActions(c.conversionActions).value;
   if (!Number.isNaN(n) && n > 0) return n;
@@ -336,10 +349,9 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
 
     return filteredCampaigns.map(c => {
       if (!c.dailyMetrics || Object.keys(c.dailyMetrics).length === 0) return c;
-      const metaMonthBuckets = (c.channel || '').toLowerCase() === 'meta';
+      const metaMonthBuckets = metaUsesLegacyMonthBuckets(c);
       let impressions = 0, clicks = 0, conversions = 0, amount_spent = 0, conversion_value = 0;
       const dateConvActions: Record<string, { conversions: number; value: number }> = {};
-      const countedConvMonths = new Set<string>();
 
       for (const [date, m] of Object.entries(c.dailyMetrics)) {
         const frac = bucketOverlapFraction(date, fromDate, toDate, { metaMonthBuckets });
@@ -353,14 +365,10 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
 
         const mAny = m as Record<string, any>;
         if (mAny.conversionActions && typeof mAny.conversionActions === 'object') {
-          const monthKey = date.slice(0, 7);
-          if (!countedConvMonths.has(monthKey)) {
-            countedConvMonths.add(monthKey);
-            for (const [label, vals] of Object.entries(mAny.conversionActions as Record<string, { conversions: number; value: number }>)) {
-              if (!dateConvActions[label]) dateConvActions[label] = { conversions: 0, value: 0 };
-              dateConvActions[label].conversions += (vals.conversions || 0) * frac;
-              dateConvActions[label].value += (vals.value || 0) * frac;
-            }
+          for (const [label, vals] of Object.entries(mAny.conversionActions as Record<string, { conversions: number; value: number }>)) {
+            if (!dateConvActions[label]) dateConvActions[label] = { conversions: 0, value: 0 };
+            dateConvActions[label].conversions += (vals.conversions || 0) * frac;
+            dateConvActions[label].value += (vals.value || 0) * frac;
           }
         }
       }

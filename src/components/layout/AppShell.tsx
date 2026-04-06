@@ -25,7 +25,7 @@ import {
   ThreeBarsIcon,
   XIcon
 } from '@primer/octicons-react';
-import { Upload, UserPlus, Building2, Target, Euro, Truck, FileSpreadsheet, GitPullRequestArrow, Zap, BarChart3 } from 'lucide-react';
+import { Upload, UserPlus, Building2, Target, Euro, Truck, FileSpreadsheet, GitPullRequestArrow, Zap, BarChart3, ShoppingBag } from 'lucide-react';
 import { NotificationBell } from '../coordination/NotificationBell';
 
 const SIDEBAR_PIN_KEY = 'perf-plus-sidebar-pinned';
@@ -49,6 +49,7 @@ type SectionId =
   | 'coordination'
   | 'automation'
   | 'analytics'
+  | 'ecommerce'
   | 'data'
   | 'invite'
   | 'help'
@@ -443,6 +444,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
         { id: 'products', label: 'Product Intelligence', icon: PackageIcon, group: 'intelligence' },
         { id: 'competitive', label: 'Competitive Intel', icon: SearchIcon, group: 'intelligence' },
         { id: 'analytics', label: 'Web Analytics', icon: BarChart3, group: 'intelligence' },
+        { id: 'ecommerce', label: 'E-commerce', icon: ShoppingBag, group: 'intelligence' },
         { id: 'insights', label: 'AI Insights', icon: LightBulbIcon, group: 'intelligence' },
         // Strategy
         { id: 'strategy', label: 'Commercial Strategy', icon: GraphIcon, group: 'strategy', ...(strategyBadge ? { badge: strategyBadge.text, badgeColor: strategyBadge.color } : {}) },

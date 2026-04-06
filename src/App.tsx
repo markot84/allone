@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
+import { useState, useEffect, useLayoutEffect, useCallback, lazy, Suspense } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
@@ -27,6 +27,7 @@ import { EnterpriseBadge } from './components/common';
 import { usePlan } from './hooks/usePlan';
 import { PrivacyPolicy } from './components/legal/PrivacyPolicy';
 import { TermsOfService } from './components/legal/TermsOfService';
+import { captureOAuthParamsFromLocation } from './utils/oauthSession';
 
 const ProductIntelligence = lazy(() => import('./components/inventory').then(m => ({ default: m.ProductIntelligence })));
 const ROIAttribution = lazy(() => import('./components/roi').then(m => ({ default: m.ROIAttribution })));
@@ -36,6 +37,7 @@ const WeightConfigurator = lazy(() => import('./components/strategy').then(m => 
 const Reports = lazy(() => import('./components/reports').then(m => ({ default: m.Reports })));
 const BusinessFinances = lazy(() => import('./components/finances').then(m => ({ default: m.BusinessFinances })));
 const ProcurementPage = lazy(() => import('./components/procurement/ProcurementPage').then(m => ({ default: m.ProcurementPage })));
+const EcommerceDashboard = lazy(() => import('./components/ecommerce/EcommerceDashboard').then(m => ({ default: m.EcommerceDashboard })));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -83,11 +85,16 @@ function QueryProvider({ children }: { children: React.ReactNode }) {
 }
 
 function App() {
-  const VALID_SECTIONS = ['brands', 'dashboard', 'strategy', 'rfm', 'products', 'suppliers', 'procurement', 'channels', 'campaigns', 'competitive', 'analytics', 'finances', 'calendar', 'reports', 'roi', 'data', 'data-products', 'data-segments', 'data-campaigns', 'data-organic', 'data-procurement', 'invite', 'concept', 'help', 'admin', 'coordination', 'automation'] as const;
+  const VALID_SECTIONS = ['brands', 'dashboard', 'strategy', 'rfm', 'products', 'suppliers', 'procurement', 'channels', 'campaigns', 'competitive', 'analytics', 'ecommerce', 'finances', 'calendar', 'reports', 'roi', 'data', 'data-products', 'data-segments', 'data-campaigns', 'data-organic', 'data-procurement', 'invite', 'concept', 'help', 'admin', 'coordination', 'automation'] as const;
 
   // Initialize from URL hash or default to dashboard (υποστηρίζει #products?stock=low)
   const getInitialSection = () => {
     if (typeof window === 'undefined') return 'dashboard';
+    try {
+      if (new URLSearchParams(window.location.search).get('pp_oauth') === '1') return 'data';
+    } catch {
+      /* ignore */
+    }
     const hash = window.location.hash.replace('#', '');
     const baseSection = hash.split('?')[0];
     if (baseSection && VALID_SECTIONS.includes(baseSection as (typeof VALID_SECTIONS)[number])) return baseSection;
@@ -97,11 +104,17 @@ function App() {
   const [activeSection, setActiveSection] = useState(getInitialSection);
   const [insightsPanelOpen, setInsightsPanelOpen] = useState(false);
 
+  // Πριν από child effects: αποθήκευση OAuth query (connector/status) — αλλιώς χάνεται από hash sync ή race.
+  useLayoutEffect(() => {
+    captureOAuthParamsFromLocation();
+  }, []);
+
   // Sync active section → hash (μόνο path — διατηρεί query όταν ήδη ταιριάζει το section)
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const hash = window.location.hash.replace('#', '');
     const base = hash.split('?')[0];
+    if (hash.includes('connector=')) return;
     if (base !== activeSection && activeSection !== 'insights') {
       window.history.replaceState(null, '', `#${activeSection}`);
     }
@@ -254,6 +267,8 @@ function App() {
         return <CompetitorInsights />;
       case 'analytics':
         return <GA4Analytics />;
+      case 'ecommerce':
+        return <EcommerceDashboard />;
       case 'finances':
         return <BusinessFinances onSectionChange={handleSectionChange} />;
       case 'calendar':
