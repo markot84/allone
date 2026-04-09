@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Euro, Trash2, TrendingUp, Calendar } from 'lucide-react';
-import { Card, Button, Spinner, useToast } from '../common';
+import { Card, Button, Spinner, useToast, Tooltip } from '../common';
 import { useOrganic, useBrand } from '../../hooks';
+import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import { FirestoreService } from '../../services/firestore';
 import { formatCurrency, formatNumber } from '../../utils/format';
 import type { OrganicRevenue } from '../../types';
@@ -14,6 +15,7 @@ interface BusinessFinancesProps {
 export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}) {
   const { currentBrand } = useBrand();
   const { records, totalOrganicRevenue, hasImported, isLoading } = useOrganic();
+  const ecomm = useEcommerceSummary();
   const queryClient = useQueryClient();
   const toast = useToast();
   const [isDeleting, setIsDeleting] = useState(false);
@@ -41,7 +43,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
     );
   }
 
-  if (!hasImported) {
+  if (!hasImported && !ecomm.hasData) {
     return (
       <div className="space-y-6">
         <div>
@@ -90,7 +92,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card padding="md" className="border-l-4 border-l-[#22C55E]">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-[#DCFCE7] rounded-lg flex items-center justify-center">
@@ -128,31 +130,63 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
             </div>
           </div>
         </Card>
+        <Card padding="md" className={ecomm.hasData ? 'border-l-4 border-l-[#10B981]' : ''}>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-[#ECFDF5] rounded-lg flex items-center justify-center">
+              <Euro size={20} className="text-[#10B981]" />
+            </div>
+            <div>
+              <div className="flex items-center gap-1">
+                <p className="text-sm text-[#4A4A4A]">Store Revenue (E-commerce)</p>
+                <Tooltip content="Πραγματικά έσοδα από παραγγελίες των συνδεδεμένων e-shop connectors." size={12} />
+              </div>
+              <p className="text-xl font-bold text-[#1A1A1A] font-mono">
+                {ecomm.hasData ? `€${formatCurrency(ecomm.totalRevenue, 0)}` : '—'}
+              </p>
+              <p className="text-xs text-[#4A4A4A]">
+                {ecomm.hasData ? `${formatNumber(ecomm.orderCount)} orders` : 'Χωρίς e-commerce sync'}
+              </p>
+            </div>
+          </div>
+        </Card>
       </div>
 
-      <Card padding="lg">
-        <h3 className="font-semibold text-[#1A1A1A] mb-4">Λεπτομέρειες ανά περίοδο</h3>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="text-left text-xs text-[#4A4A4A] border-b border-[#E5E5E5]">
-                <th className="pb-3 font-medium">Περίοδος</th>
-                <th className="pb-3 font-medium text-right">Οργανικά Έσοδα</th>
-              </tr>
-            </thead>
-            <tbody>
-              {([...records] as OrganicRevenue[]).sort((a, b) => (b.period || '').localeCompare(a.period || '')).map((r) => (
-                <tr key={r.id} className="border-b border-[#E5E5E5] last:border-0 hover:bg-[#F5F5F5]">
-                  <td className="py-3 font-medium text-[#1A1A1A]">{r.period}</td>
-                  <td className="py-3 text-right font-mono">
-                    €{formatCurrency(r.organic_revenue || 0)}
-                  </td>
+      {ecomm.hasData && (
+        <Card padding="md" className="bg-[#F9FAFB] border-[#E5E7EB]">
+          <p className="text-sm text-[#4A4A4A]">
+            Revenue Gap (Store − Organic):{' '}
+            <strong className={(ecomm.totalRevenue - totalOrganicRevenue) >= 0 ? 'text-[#16A34A]' : 'text-[#DC2626]'}>
+              €{formatCurrency(ecomm.totalRevenue - totalOrganicRevenue, 0)}
+            </strong>
+          </p>
+        </Card>
+      )}
+
+      {records.length > 0 && (
+        <Card padding="lg">
+          <h3 className="font-semibold text-[#1A1A1A] mb-4">Λεπτομέρειες ανά περίοδο</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="text-left text-xs text-[#4A4A4A] border-b border-[#E5E5E5]">
+                  <th className="pb-3 font-medium">Περίοδος</th>
+                  <th className="pb-3 font-medium text-right">Οργανικά Έσοδα</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+              </thead>
+              <tbody>
+                {([...records] as OrganicRevenue[]).sort((a, b) => (b.period || '').localeCompare(a.period || '')).map((r) => (
+                  <tr key={r.id} className="border-b border-[#E5E5E5] last:border-0 hover:bg-[#F5F5F5]">
+                    <td className="py-3 font-medium text-[#1A1A1A]">{r.period}</td>
+                    <td className="py-3 text-right font-mono">
+                      €{formatCurrency(r.organic_revenue || 0)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

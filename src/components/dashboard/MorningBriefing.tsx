@@ -27,6 +27,14 @@ interface MorningBriefingProps {
   };
   alerts: AutomationAlert[];
   supplierTodMap?: Map<string, number>;
+  ecommerce?: {
+    hasData: boolean;
+    totalRevenue: number;
+    orderCount: number;
+    aov: number;
+    connectedPlatforms: string[];
+    platformBreakdown: { platform: string; revenue: number; orders: number }[];
+  };
   onSectionChange?: (section: string, opts?: { hashQuery?: string }) => void;
   hasAnyData: boolean;
   /** Selected dashboard period key (e.g. 'current_month'). Scopes cache & prompt. */
@@ -40,6 +48,9 @@ type GuessResult = { section: string; hashQuery?: string };
 
 function guessRoute(action: string): GuessResult {
   const lower = action.toLowerCase();
+  if (lower.includes('ecom') || lower.includes('eshop') || lower.includes('παραγγελι') || lower.includes('aov') || lower.includes('true roas')) {
+    return { section: 'ecommerce' };
+  }
   if (lower.includes('dead') || lower.includes('νεκρ')) {
     return { section: 'products', hashQuery: 'stock=dead' };
   }
@@ -130,7 +141,17 @@ export function MorningBriefing(props: MorningBriefingProps) {
     alerts: props.alerts,
     brandName,
     supplierTodMap: props.supplierTodMap,
-  }), [props.products, props.campaigns, props.segments, props.totalOrganicRevenue, props.ga4, props.alerts, brandName, props.supplierTodMap]);
+    ecommerce: props.ecommerce
+      ? {
+          hasData: props.ecommerce.hasData,
+          totalRevenue: props.ecommerce.totalRevenue,
+          orderCount: props.ecommerce.orderCount,
+          aov: props.ecommerce.aov,
+          connectedPlatforms: props.ecommerce.connectedPlatforms,
+          topPlatform: props.ecommerce.platformBreakdown?.[0]?.platform,
+        }
+      : undefined,
+  }), [props.products, props.campaigns, props.segments, props.totalOrganicRevenue, props.ga4, props.alerts, brandName, props.supplierTodMap, props.ecommerce]);
 
   const buildDataRef = useRef(buildData);
   buildDataRef.current = buildData;

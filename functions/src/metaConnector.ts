@@ -59,6 +59,26 @@ const SCOPES = [
   'business_management',
 ].join(',');
 
+function normalizeAdAccountId(accountId: string): string {
+  const trimmed = String(accountId || '').trim();
+  if (!trimmed) return trimmed;
+  return trimmed.startsWith('act_') ? trimmed : `act_${trimmed}`;
+}
+
+function toYmd(d: Date): string {
+  return d.toISOString().split('T')[0];
+}
+
+function fromYmd(ymd: string): Date {
+  return new Date(`${ymd}T00:00:00.000Z`);
+}
+
+function addDays(ymd: string, days: number): string {
+  const d = fromYmd(ymd);
+  d.setUTCDate(d.getUTCDate() + days);
+  return toYmd(d);
+}
+
 function getCredentials() {
   return {
     appId: process.env.META_APP_ID || '',
@@ -244,42 +264,40 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
     return { success: false, imported: 0, error: 'No ad accounts found' };
   }
 
-  // Delete existing Meta campaigns before re-importing to avoid stale data.
-  // Chunk deletions — Firestore batch limit is 500.
-  try {
-    const existingSnap = await getDb().collection('campaigns')
-      .where('brandId', '==', brandId)
-      .where('channel', '==', 'Meta')
-      .get();
-    if (!existingSnap.empty) {
-      const DEL_CHUNK = 400;
-      const docs = existingSnap.docs;
-      for (let i = 0; i < docs.length; i += DEL_CHUNK) {
-        const delBatch = getDb().batch();
-        docs.slice(i, i + DEL_CHUNK).forEach(d => delBatch.delete(d.ref));
-        await delBatch.commit();
-      }
-      logger.info(`[Meta] Deleted ${existingSnap.size} stale Meta campaigns for brand ${brandId} before re-import`);
-    }
-  } catch (delErr) {
-    logger.warn(`[Meta] Could not delete stale campaigns (non-fatal): ${delErr}`);
-  }
-
   let totalImported = 0;
   const accessToken = connector.accessToken;
+  const now = new Date();
+  const currentYear = now.getUTCFullYear();
+  const currentYearStart = `${currentYear}-01-01`;
+  const today = toYmd(now);
+  const historyStart = `${currentYear - 2}-01-01`;
+  const historyEnd = `${currentYear - 1}-12-31`;
+  const historyLoaded = Boolean(connector.historyLoadedUntilYear);
+
+  const syncWindows: Array<{ since: string; until: string; tag: 'history' | 'current' }> = [];
+  if (!historyLoaded) {
+    syncWindows.push({ since: historyStart, until: historyEnd, tag: 'history' });
+  }
+  syncWindows.push({ since: currentYearStart, until: today, tag: 'current' });
+
+  logger.info(
+    `[Meta] Sync windows for ${brandId}: ${syncWindows
+      .map((w) => `${w.tag}:${w.since}->${w.until}`)
+      .join(', ')}`
+  );
 
   for (const accountId of adAccountIds) {
     try {
-      const since = new Date();
-      since.setFullYear(since.getFullYear() - 3);
-      const sinceStr = since.toISOString().split('T')[0];
-      const untilStr = new Date().toISOString().split('T')[0];
+      const actAccountId = normalizeAdAccountId(accountId);
 
       // One API call per calendar month (keeps responses bounded; avoids long sync timeouts).
       // time_increment=1 returns one row per campaign per day; use API date_start (do not override).
       const allRows: any[] = [];
-      const usedFallback = false;
-      const monthRanges = generateMonthRanges(sinceStr, untilStr);
+      let usedFallback = false;
+      const monthRanges: Array<{ since: string; until: string }> = [];
+      for (const w of syncWindows) {
+        monthRanges.push(...generateMonthRanges(w.since, w.until));
+      }
       const insightsFields = ['campaign_name','campaign_id','impressions','clicks','spend','actions','action_values','reach','frequency'].join(',');
 
       logger.info(`[Meta] Fetching ${monthRanges.length} months (daily breakdown) for ${accountId}...`);
@@ -294,7 +312,7 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
             limit: '500',
             access_token: accessToken,
           });
-          let monthUrl: string | null = `${META_GRAPH_URL}/${accountId}/insights?${monthParams}`;
+          let monthUrl: string | null = `${META_GRAPH_URL}/${actAccountId}/insights?${monthParams}`;
           let monthPageCount = 0;
           const MAX_PAGES = 200;
           while (monthUrl && monthPageCount < MAX_PAGES) {
@@ -320,12 +338,13 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
         }
       }
 
-      logger.info(`[Meta] Fetched ${allRows.length} total rows across ${monthRanges.length} months for ${accountId}`);
+      logger.info(`[Meta] Fetched ${allRows.length} total rows across ${monthRanges.length} months for ${actAccountId}`);
 
       // Fetch campaign statuses (effective_status) from the Campaigns API
       const campaignStatusMap = new Map<string, string>();
+      const campaignNameMap = new Map<string, string>();
       try {
-        let statusUrl: string | null = `${META_GRAPH_URL}/${accountId}/campaigns?fields=id,effective_status&limit=500&access_token=${accessToken}`;
+        let statusUrl: string | null = `${META_GRAPH_URL}/${actAccountId}/campaigns?fields=id,name,effective_status&limit=500&access_token=${accessToken}`;
         while (statusUrl) {
           const statusRes: Response = await fetch(statusUrl);
           if (!statusRes.ok) break;
@@ -334,12 +353,43 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
             if (c.id && c.effective_status) {
               campaignStatusMap.set(c.id, c.effective_status.toLowerCase());
             }
+            if (c.id && c.name) campaignNameMap.set(c.id, c.name);
           }
           statusUrl = statusData.paging?.next || null;
         }
-        logger.info(`[Meta] Fetched statuses for ${campaignStatusMap.size} campaigns in ${accountId}`);
+        logger.info(`[Meta] Fetched statuses for ${campaignStatusMap.size} campaigns in ${actAccountId}`);
       } catch (e) {
-        logger.warn(`[Meta] Failed to fetch campaign statuses for ${accountId}: ${e}`);
+        logger.warn(`[Meta] Failed to fetch campaign statuses for ${actAccountId}: ${e}`);
+      }
+
+      // Fallback: if monthly daily insights returned empty, fetch a compact account-level snapshot.
+      if (allRows.length === 0) {
+        try {
+          const fallbackParams = new URLSearchParams({
+            fields: insightsFields,
+            time_range: JSON.stringify({ since: currentYearStart, until: today }),
+            level: 'campaign',
+            limit: '500',
+            access_token: accessToken,
+          });
+          let fallbackUrl: string | null = `${META_GRAPH_URL}/${actAccountId}/insights?${fallbackParams}`;
+          let pageCount = 0;
+          while (fallbackUrl && pageCount < 100) {
+            const fallbackRes: Response = await fetch(fallbackUrl);
+            if (!fallbackRes.ok) {
+              logger.warn(`[Meta] Fallback insights failed for ${actAccountId}: ${await fallbackRes.text()}`);
+              break;
+            }
+            const fallbackData: any = await fallbackRes.json();
+            for (const row of (fallbackData.data || [])) allRows.push(row);
+            fallbackUrl = fallbackData.paging?.next || null;
+            pageCount++;
+          }
+          usedFallback = allRows.length > 0;
+          logger.info(`[Meta] Fallback fetched ${allRows.length} rows for ${actAccountId}`);
+        } catch (e) {
+          logger.warn(`[Meta] Fallback call failed for ${actAccountId}: ${e}`);
+        }
       }
 
       // Aggregate per campaign; dailyMetrics keyed by date_start (YYYY-MM-DD) from daily insights
@@ -347,9 +397,9 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
 
       for (const row of allRows) {
         const campaignId = row.campaign_id;
-        const campaignName = row.campaign_name;
+        const campaignName = row.campaign_name || campaignNameMap.get(campaignId) || `Campaign ${campaignId}`;
         const rowDate: string = row.date_start || '';
-        if (!campaignId || !campaignName || !rowDate) continue;
+        if (!campaignId || !campaignName) continue;
 
         // Use only pixel-tracked and standard purchase events.
         // omni_purchase is excluded because it includes Meta-modeled (estimated) conversions
@@ -416,7 +466,7 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
           : (metaStatus === 'archived' || metaStatus === 'deleted') ? 'completed'
           : metaStatus;
         const existing = campaignMap.get(campaignId) || {
-          id: `meta_${accountId}_${campaignId}`,
+          id: `meta_${actAccountId}_${campaignId}`,
           name: campaignName,
           channel: 'Meta',
           status: normalizedStatus,
@@ -429,9 +479,9 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
           roas: 0,
           reach: 0,
           frequency: 0,
-          start_date: sinceStr,
-          end_date: untilStr,
-          period: `${sinceStr} – ${untilStr}`,
+          start_date: historyStart,
+          end_date: today,
+          period: `${historyStart} – ${today}`,
           dailyMetrics: {} as Record<string, any>,
           conversionActions: {} as Record<string, { conversions: number; value: number }>,
           brandId,
@@ -469,7 +519,100 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
         campaignMap.set(campaignId, existing);
       }
 
+      // If insights still returned no rows, at least sync campaign shells from Campaigns API
+      // so users can verify connection/account selection in UI.
+      if (campaignMap.size === 0 && campaignStatusMap.size > 0) {
+        for (const [campaignId, status] of campaignStatusMap.entries()) {
+          const normalizedStatus = status === 'active' ? 'active'
+            : status === 'paused' ? 'paused'
+            : (status === 'archived' || status === 'deleted') ? 'completed'
+            : status;
+          campaignMap.set(campaignId, {
+            id: `meta_${actAccountId}_${campaignId}`,
+            name: campaignNameMap.get(campaignId) || `Campaign ${campaignId}`,
+            channel: 'Meta',
+            status: normalizedStatus,
+            impressions: 0,
+            clicks: 0,
+            conversions: 0,
+            conversion_value: 0,
+            amount_spent: 0,
+            ctr: 0,
+            roas: 0,
+            reach: 0,
+            frequency: 0,
+            start_date: historyStart,
+            end_date: today,
+            period: `${historyStart} – ${today}`,
+            dailyMetrics: {},
+            conversionActions: {},
+            brandId,
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+        }
+        logger.info(`[Meta] Imported campaign shells (${campaignMap.size}) from campaign list for ${actAccountId}`);
+      }
+
       const allCampaigns = Array.from(campaignMap.values());
+
+      // Merge with existing docs so historical 2-year data remains intact and current-year refreshes incrementally.
+      if (allCampaigns.length > 0) {
+        const existingRefs = allCampaigns.map((c) => getDb().collection('campaigns').doc(c.id));
+        const existingDocs = await getDb().getAll(...existingRefs);
+        const existingMap = new Map<string, any>();
+        for (const d of existingDocs) {
+          if (d.exists) existingMap.set(d.id, d.data());
+        }
+
+        for (const c of allCampaigns) {
+          const existing = existingMap.get(c.id);
+          if (!existing) continue;
+
+          const existingDaily = (existing.dailyMetrics || {}) as Record<string, any>;
+          const incomingDaily = (c.dailyMetrics || {}) as Record<string, any>;
+          const mergedDaily: Record<string, any> = { ...existingDaily, ...incomingDaily };
+          c.dailyMetrics = mergedDaily;
+
+          // Recompute derived totals from merged daily metrics.
+          let spend = 0;
+          let impressions = 0;
+          let clicks = 0;
+          let conversions = 0;
+          let convValue = 0;
+          let reach = 0;
+          const mergedActions: Record<string, { conversions: number; value: number }> = {};
+          for (const m of Object.values(mergedDaily)) {
+            const mm = m as any;
+            spend += Number(mm.amount_spent || 0);
+            impressions += Number(mm.impressions || 0);
+            clicks += Number(mm.clicks || 0);
+            conversions += Number(mm.conversions || 0);
+            convValue += Number(mm.conversion_value || 0);
+            reach += Number(mm.reach || 0);
+            const actions = (mm.conversionActions || {}) as Record<string, { conversions: number; value: number }>;
+            for (const [k, v] of Object.entries(actions)) {
+              if (!mergedActions[k]) mergedActions[k] = { conversions: 0, value: 0 };
+              mergedActions[k].conversions += Number(v.conversions || 0);
+              mergedActions[k].value += Number(v.value || 0);
+            }
+          }
+
+          c.amount_spent = spend;
+          c.impressions = impressions;
+          c.clicks = clicks;
+          c.conversions = conversions;
+          c.conversion_value = convValue;
+          c.reach = reach;
+          c.conversionActions = mergedActions;
+          c.ctr = impressions > 0 ? (clicks / impressions) * 100 : 0;
+          c.roas = spend > 0 ? convValue / spend : 0;
+          c.frequency = reach > 0 ? impressions / reach : 0;
+          c.start_date = existing.start_date || historyStart;
+          c.end_date = today;
+          c.period = `${c.start_date} – ${today}`;
+        }
+      }
 
       // Compute derived metrics after full aggregation
       for (const c of allCampaigns) {
@@ -480,7 +623,7 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
 
       // Firestore: max 500 ops/batch and ~10MB payload.
       // Meta campaigns carry ~36 months of daily rows per campaign — keep chunks small.
-      const CHUNK = 15;
+      const CHUNK = 50;
       for (let i = 0; i < allCampaigns.length; i += CHUNK) {
         const chunk = allCampaigns.slice(i, i + CHUNK);
         const batch = getDb().batch();
@@ -493,7 +636,7 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
 
       if (allCampaigns.length > 0) {
         totalImported += allCampaigns.length;
-        logger.info(`[Meta] Imported ${allCampaigns.length} campaigns for account ${accountId}`);
+        logger.info(`[Meta] Imported ${allCampaigns.length} campaigns for account ${actAccountId}`);
       }
     } catch (err) {
       logger.error(`[Meta] Error for account ${accountId}:`, err);
@@ -511,6 +654,17 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
     errors: [],
     createdAt: FieldValue.serverTimestamp(),
   });
+
+  // Save last successful sync marker.
+  await getDb().doc(`connectors/${brandId}`).set(
+    {
+      meta: {
+        lastDataSyncAt: Date.now(),
+        historyLoadedUntilYear: connector.historyLoadedUntilYear || currentYear - 1,
+      },
+    },
+    { merge: true }
+  );
 
   return { success: true, imported: totalImported };
 }

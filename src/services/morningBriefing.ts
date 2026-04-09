@@ -12,6 +12,11 @@ export interface BriefingData {
   revenue: {
     totalOrganic: number;
     totalCampaignRevenue: number;
+    storeRevenue: number;
+    trueRoas: number;
+    revenueGap: number;
+    orderCount: number;
+    aov: number;
     totalSpend: number;
     roas: number;
     campaignCount: number;
@@ -94,8 +99,16 @@ export function collectBriefingData(params: {
   alerts: AutomationAlert[];
   brandName: string;
   supplierTodMap?: Map<string, number>;
+  ecommerce?: {
+    hasData: boolean;
+    totalRevenue: number;
+    orderCount: number;
+    aov: number;
+    connectedPlatforms: string[];
+    topPlatform?: string;
+  };
 }): BriefingData {
-  const { products, campaigns, segments, totalOrganicRevenue, ga4, alerts, brandName, supplierTodMap } = params;
+  const { products, campaigns, segments, totalOrganicRevenue, ga4, alerts, brandName, supplierTodMap, ecommerce } = params;
 
   const classify = (p: Product) => classifyStockHealth(p, getProductTod(p, supplierTodMap));
   const deadStock = products.filter(p => classify(p) === 'dead');
@@ -109,6 +122,9 @@ export function collectBriefingData(params: {
     .map(p => p.name);
 
   const metrics = calculateCampaignMetrics(campaigns);
+  const storeRevenue = ecommerce?.hasData ? (ecommerce.totalRevenue || 0) : 0;
+  const trueRoas = metrics.totalSpend > 0 ? storeRevenue / metrics.totalSpend : 0;
+  const revenueGap = storeRevenue - (totalOrganicRevenue + metrics.totalRevenue);
 
   const atRisk = segments.find(s => s.id === 'at_risk' || s.name.toLowerCase().includes('at risk'));
   const champions = segments.find(s => s.id === 'champions' || s.name.toLowerCase().includes('champion'));
@@ -130,6 +146,11 @@ export function collectBriefingData(params: {
     revenue: {
       totalOrganic: totalOrganicRevenue,
       totalCampaignRevenue: metrics.totalRevenue,
+      storeRevenue,
+      trueRoas,
+      revenueGap,
+      orderCount: ecommerce?.orderCount || 0,
+      aov: ecommerce?.aov || 0,
       totalSpend: metrics.totalSpend,
       roas: metrics.roas,
       campaignCount: campaigns.length,
@@ -171,7 +192,9 @@ export function collectBriefingData(params: {
 
 function extractSnapshot(data: BriefingData): MetricsSnapshot {
   return {
-    totalRevenue: data.revenue.totalOrganic + data.revenue.totalCampaignRevenue,
+    totalRevenue: data.revenue.storeRevenue > 0
+      ? data.revenue.storeRevenue
+      : data.revenue.totalOrganic + data.revenue.totalCampaignRevenue,
     totalSpend: data.revenue.totalSpend,
     roas: data.revenue.roas,
     deadStock: data.inventory.deadStock,
@@ -240,12 +263,16 @@ export function detectSignificantChange(
 
 function buildBriefingPrompt(data: BriefingData, periodLabel: string, updateContext?: string): string {
   const sections: string[] = [];
-  const totalRevenue = data.revenue.totalOrganic + data.revenue.totalCampaignRevenue;
+  const attributedRevenue = data.revenue.totalOrganic + data.revenue.totalCampaignRevenue;
+  const effectiveRevenue = data.revenue.storeRevenue > 0 ? data.revenue.storeRevenue : attributedRevenue;
 
   sections.push(`[BRAND] ${data.brandName}`);
   sections.push(`[ΠΕΡΙΟΔΟΣ ΑΝΑΛΥΣΗΣ] ${periodLabel} — όλα τα νούμερα αφορούν ΜΟΝΟ αυτήν την περίοδο.`);
 
-  sections.push(`[ΕΣΟΔΑ] Σύνολο: ${formatCurrency(totalRevenue)} (Organic: ${formatCurrency(data.revenue.totalOrganic)}, Campaigns: ${formatCurrency(data.revenue.totalCampaignRevenue)}), Ad Spend: ${formatCurrency(data.revenue.totalSpend)}, ROAS: ${data.revenue.roas > 0 ? data.revenue.roas.toFixed(2) + 'x' : 'N/A'}, Ενεργές Καμπάνιες: ${data.revenue.campaignCount}`);
+  sections.push(`[ΕΣΟΔΑ] Σύνολο: ${formatCurrency(effectiveRevenue)} (Organic: ${formatCurrency(data.revenue.totalOrganic)}, Campaigns: ${formatCurrency(data.revenue.totalCampaignRevenue)}), Ad Spend: ${formatCurrency(data.revenue.totalSpend)}, ROAS(attributed): ${data.revenue.roas > 0 ? data.revenue.roas.toFixed(2) + 'x' : 'N/A'}, Ενεργές Καμπάνιες: ${data.revenue.campaignCount}`);
+  if (data.revenue.storeRevenue > 0) {
+    sections.push(`[ECOMMERCE] Store Revenue: ${formatCurrency(data.revenue.storeRevenue)}, Orders: ${formatNumber(data.revenue.orderCount)}, AOV: ${formatCurrency(data.revenue.aov)}, True ROAS: ${data.revenue.trueRoas > 0 ? data.revenue.trueRoas.toFixed(2) + 'x' : 'N/A'}, Revenue Gap vs attributed: ${formatCurrency(data.revenue.revenueGap)}`);
+  }
 
   if (data.ga4) {
     const wc = data.ga4.weeklyChange;
@@ -286,7 +313,8 @@ const SYSTEM_PROMPT = `Είσαι ο AI business analyst του Performance+. Δ
 }
 
 ΚΑΝΟΝΕΣ NARRATIVE:
-- Ξεκίνα με τα συνολικά έσοδα και ROAS, μετά αναφέρσου στο πιο σημαντικό inventory risk, μετά στην πιο αξιοσημείωτη καμπάνια.
+- Ξεκίνα με τα συνολικά έσοδα και ROAS. Αν υπάρχει [ECOMMERCE], σύγκρινε attributed vs store revenue και τόνισε True ROAS/Revenue Gap.
+- Μετά αναφέρσου στο πιο σημαντικό inventory risk και στην πιο αξιοσημείωτη καμπάνια.
 - Χρησιμοποίησε πραγματικά νούμερα από τα data. Μην επαναλαμβάνεις πληροφορίες.
 - Τόνος: σύντομος, επαγγελματικός, decision-oriented. Σαν να μιλάς σε CEO στο πρωινό standup.
 - Αν υπάρχει [ΣΗΜΑΝΤΙΚΗ ΑΛΛΑΓΗ], ξεκίνα το narrative με αυτήν.
@@ -306,6 +334,8 @@ function computeDataHash(data: BriefingData): string {
   const key = [
     data.revenue.totalOrganic,
     data.revenue.totalCampaignRevenue,
+    data.revenue.storeRevenue,
+    data.revenue.orderCount,
     data.revenue.totalSpend,
     data.inventory.totalProducts,
     data.inventory.deadStock,

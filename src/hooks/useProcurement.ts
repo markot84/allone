@@ -28,10 +28,12 @@ export function useProcurement() {
   const brandId = currentBrand?.id ?? null;
   const queryClient = useQueryClient();
 
-  const { data, isPending } = useQuery({
+  const { data, isPending, isFetching } = useQuery({
     queryKey: ['procurement', brandId],
     queryFn: () => (brandId ? fetchAllSheets(brandId) : Promise.resolve(null)),
-    staleTime: 15 * 60 * 1000,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
     enabled: !!brandId,
   });
 
@@ -45,6 +47,7 @@ export function useProcurement() {
   return {
     data: allData,
     isLoading: isPending,
+    isRefreshing: !isPending && isFetching,
     hasData: Object.values(allData).some((arr) => (arr?.length ?? 0) > 0),
     invalidate: () => queryClient.invalidateQueries({ queryKey: ['procurement'] }),
   };

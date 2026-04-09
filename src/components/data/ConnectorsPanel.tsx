@@ -787,7 +787,7 @@ export function ConnectorsPanel() {
     myRole === 'owner' ||
     myRole === 'admin';
 
-  const [syncing, setSyncing] = useState<string | null>(null);
+  const [syncingProviders, setSyncingProviders] = useState<Set<ConnectorConfig['id']>>(new Set());
   const [connecting, setConnecting] = useState<string | null>(null);
   const [accountPickerFor, setAccountPickerFor] = useState<string | null>(null);
   const [confirmingAccount, setConfirmingAccount] = useState(false);
@@ -866,7 +866,7 @@ export function ConnectorsPanel() {
   // Keep fetchStates for OAuth callback compatibility (force refetch after OAuth redirect)
   const fetchStates = useCallback(async () => {
     await refetchConnectors();
-    queryClient.invalidateQueries({ queryKey: ['lastSyncDates', brandId] });
+    queryClient.removeQueries({ queryKey: ['lastSyncDates', brandId] });
   }, [brandId, refetchConnectors, queryClient]);
 
   const runOAuthSuccessFlow = useCallback(
@@ -932,6 +932,22 @@ export function ConnectorsPanel() {
   useEffect(() => {
     if (!canManageConnectors) setAccountPickerFor(null);
   }, [canManageConnectors]);
+
+  const markSyncStart = useCallback((provider: ConnectorConfig['id']) => {
+    setSyncingProviders((prev) => {
+      const next = new Set(prev);
+      next.add(provider);
+      return next;
+    });
+  }, []);
+
+  const markSyncEnd = useCallback((provider: ConnectorConfig['id']) => {
+    setSyncingProviders((prev) => {
+      const next = new Set(prev);
+      next.delete(provider);
+      return next;
+    });
+  }, []);
 
   const handleConnect = async (provider: ConnectorConfig['id'], shopDomain?: string) => {
     if (!brandId || !user) return;
@@ -1017,7 +1033,10 @@ export function ConnectorsPanel() {
         body: JSON.stringify({ brandId, provider }),
       });
 
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        const errPayload = await res.json().catch(() => null as { error?: string } | null);
+        throw new Error(errPayload?.error || `HTTP ${res.status}`);
+      }
       toast.success('Αποσυνδέθηκε');
       await fetchStates();
     } catch (err) {
@@ -1032,7 +1051,11 @@ export function ConnectorsPanel() {
       toast.error('Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να κάνει sync.');
       return;
     }
-    setSyncing(provider);
+    if (syncingProviders.has(provider)) {
+      toast.info('Το συγκεκριμένο connector κάνει ήδη sync.');
+      return;
+    }
+    markSyncStart(provider);
 
     try {
       const token = await auth.currentUser?.getIdToken();
@@ -1053,6 +1076,11 @@ export function ConnectorsPanel() {
       if (result.success) {
         const syncedConnector = CONNECTORS.find((c) => c.id === provider);
         const label = syncedConnector?.syncLabel || 'campaigns';
+        // Optimistic last-sync UI update (prevents stale date display while background queries refresh)
+        queryClient.setQueryData<Record<string, Date> | undefined>(
+          ['lastSyncDates', brandId],
+          (prev) => ({ ...(prev || {}), [provider]: new Date() })
+        );
         if (provider === 'merchant' && (result.imported === 0 || result.imported == null)) {
           toast.info(
             'GMC: sync ολοκληρώθηκε — 0 SKUs με benchmark. Έλεγξε GTIN στο feed και Price Competitiveness στο Merchant Center.'
@@ -1067,15 +1095,21 @@ export function ConnectorsPanel() {
           queryClient.invalidateQueries({ queryKey: ['search_intelligence', brandId] });
         }
         if (provider === 'merchant') queryClient.invalidateQueries({ queryKey: ['priceBenchmarks', brandId] });
+        if (['shopify', 'woocommerce', 'opencart', 'magento'].includes(provider)) {
+          // Force immediate refetch so #ecommerce reflects latest sync right away
+          queryClient.removeQueries({ queryKey: ['ecommerce_summary', brandId] });
+          queryClient.invalidateQueries({ queryKey: ['ecommerce_summary', brandId] });
+        }
         fetchStates();
       } else {
         toast.error(result.error || 'Sync failed');
       }
     } catch (err) {
-      toast.error('Σφάλμα sync');
-      console.error(err);
+      const msg = err instanceof Error ? err.message : 'Σφάλμα sync';
+      toast.error(msg);
+      console.error('[ConnectorsPanel] connectorSync failed:', err);
     } finally {
-      setSyncing(null);
+      markSyncEnd(provider);
     }
   };
 
@@ -1110,24 +1144,9 @@ export function ConnectorsPanel() {
 
       // Auto-trigger sync after account selection
       try {
-        setSyncing(provider as ConnectorConfig['id']);
-        const syncRes = await fetch(`${FUNCTIONS_BASE}/connectorSync`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ brandId, provider }),
-        });
-        if (syncRes.ok) {
-          const syncResult = await syncRes.json();
-          toast.success(`Sync ολοκληρώθηκε: ${syncResult.imported ?? 0} εγγραφές`);
-          queryClient.invalidateQueries();
-        }
+        await handleSync(provider as ConnectorConfig['id']);
       } catch {
         // Non-blocking — user can retry via Sync button
-      } finally {
-        setSyncing(null);
       }
     } catch (err) {
       toast.error('Σφάλμα επιλογής λογαριασμού');
@@ -1207,7 +1226,7 @@ export function ConnectorsPanel() {
                 Platform Connectors
               </h3>
               <p className="text-sm text-[#6B7280] mt-0.5">
-                Σύνδεσε Ad Platforms & E-shop για αυτόματη εισαγωγή δεδομένων (06:00)
+                Σύνδεσε Ad Platforms & E-shop για αυτόματη εισαγωγή δεδομένων (23:00)
               </p>
               {!canManageConnectors && (
                 <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-3 max-w-xl">
@@ -1227,7 +1246,7 @@ export function ConnectorsPanel() {
                 const state = states[conn.id] || { connected: false };
                 const isConnected = state.connected;
                 const isPending = !!state.pendingAccountSelection;
-                const isSyncing = syncing === conn.id;
+                const isSyncing = syncingProviders.has(conn.id);
                 const isConnecting = connecting === conn.id;
 
                 return (

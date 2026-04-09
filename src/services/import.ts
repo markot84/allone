@@ -164,6 +164,8 @@ export interface ImportProgress {
   batchIndex: number;
   totalBatches: number;
   fileName: string;
+  /** Optional phase label for multi-stage imports (e.g. procurement). */
+  phase?: string;
 }
 
 // CSV Parser (simple implementation, can be replaced with papaparse later)
@@ -1438,6 +1440,75 @@ const PROCUREMENT_SHEET_ORDER: ProcurementSheetType[] = [
   'inventory', 'costing', 'item_evaluation', 'customer_evaluation', 'pricing_policy', 'fiscal_year', 'statistics'
 ];
 
+/** Known Greek column headers used in procurement sheets (for header row detection). */
+const KNOWN_PROCUREMENT_HEADERS = new Set([
+  'ΚΩΔΙΚΟΣ', 'ΠΕΡΙΓΡΑΦΗ', 'ΚΑΤΗΓΟΡΙΑ', 'ΠΡΟΜΗΘΕΥΤΗΣ',
+  'ΟΜΑΔΑ ΡΟΗΣ', 'ΑΞΙΟΛΟΓΗΣΗ ΕΙΔΟΥΣ', 'STATUS ΚΩΔΙΚΟΥ',
+  'ΠΡΩΤΟΓΕΝΕΣ ΚΟΣΤΟΣ', 'ΠΡΩΤΟΓΕΝΕΣ ΚΟΣΤΟΣ Μ.Μ.',
+  'ΔΕΥΤΕΡΟΓΕΝΕΣ ΚΟΣΤΟΣ', 'ΔΙΑΘΕΣΙΜΟ ΥΠΟΛΟΙΠΟ', 'ΔΥΝΑΜΙΚΟ ΥΠΟΛΟΙΠΟ',
+  'ΣΥΝΟΛΙΚΕΣ ΠΩΛΗΣΕΙΣ', 'ΚΙΒΩΤΟΛΟΓΙΟ', 'ΑΞΙΟΛΟΓΗΣΗ', 'ΒΑΘΜΟΛΟΓΙΑ',
+  'ΑΞΙΟΛΟΓΗΣΗ ΑΝΑ ΔΕΙΚΤΗ', 'ΕΠΩΝΥΜΙΑ', 'ΚΟΣΤΟΣ ΑΓΟΡΑΣ',
+  'ΣΥΝΟΛΙΚΟ ΚΟΣΤΟΣ', 'ΜΕΣΗ ΤΙΜΗ ΠΩΛΗΣΗΣ', 'ΤΙΜΟΚΑΤΑΛΟΓΟΣ ΒΑΣΗΣ',
+  'ΕΤΑΙΡΙΚΟΣ ΚΑΤΑΛΟΓΟΣ', 'ΕΚΠΤΩΤΙΚΟΣ Α', 'ΕΚΠΤΩΤΙΚΟΣ Β', 'ΕΚΠΤΩΤΙΚΟΣ C',
+  'MARKETING BASED COSTING', 'ACTIVITY BASED COSTING',
+  'ΑΠΟΛΟΓΙΣΤΙΚΟΣ ΤΖΙΡΟΣ', 'ΑΠΟΛΟΓΙΣΤΙΚΟ ΚΕΡΔΟΣ',
+  'ΠΡΟΤΑΣΗ ΤΙΜΟΛΟΓΙΑΚΗΣ ΠΟΛΙΤΙΚΗΣ', 'ΜΕΣΟ ΚΟΣΤΟΣ ΚΑΤΗΓΟΡΙΑΣ',
+  'ΠΟΣΟΤΗΤΑ ΑΝΑΤΡΟΦΟΔΟΣΙΑΣ', 'ΑΞΙΑ ΑΝΑΤΡΟΦΟΔΟΣΙΑΣ',
+  'ΠΟΣΟΤΗΤΑ ΑΜΕΣΗΣ ΑΝΑΤΡΟΦΟΔΟΣΙΑΣ', 'ΠΟΣΟΤΗΤΑ ΠΡΟΣ ΠΡΟΩΘΗΣΗ',
+  'ΗΜΕΡΕΣ ΕΠΑΡΚΕΙΑΣ ΔΙΑΘΕΣΙΜΟΥ ΑΠΟΘΕΜΑΤΟΣ',
+  'ΑΝΑΛΥΣΗ ΚΟΣΤΟΥΣ ΑΝΑ ΔΡΑΣΤΗΡΙΟΤΗΤΑ',
+  'ΣΤΑΤΙΣΤΙΚΑ ΑΝΑ ΠΕΡΙΟΔΟ', 'ΣΤΑΤΙΣΤΙΚΑ ΑΝΑ ΠΕΡΙΟΔΟ (ΜΗΝΑΣ)',
+]);
+
+/**
+ * Detects which row in the cleaned array contains the actual column headers.
+ * Handles common XLSX variations:
+ *  - Row 0 = headers (standard)
+ *  - Row 0 = numeric column IDs → Row 1 = headers
+ *  - Row 0 = title/blank → Row 1 = headers
+ *  - Scans up to the first 5 rows to find the best header candidate
+ */
+function detectHeaderRow(cleaned: string[][]): number {
+  const MAX_SCAN = Math.min(5, cleaned.length - 1);
+
+  // Score each candidate row: how many cells match known header names
+  let bestIdx = 0;
+  let bestScore = -1;
+
+  for (let r = 0; r < MAX_SCAN; r++) {
+    const cells = cleaned[r].filter(c => c !== '');
+    if (cells.length === 0) continue;
+
+    // Count known header matches
+    const knownHits = cells.filter(c => KNOWN_PROCUREMENT_HEADERS.has(c.toUpperCase())).length;
+
+    // Count how many cells are purely text (not numbers)
+    const textCells = cells.filter(c => isNaN(Number(c)));
+
+    // Heuristic score: known header matches are worth 10 points each,
+    // text cells (non-numeric) are worth 1 point each.
+    // A row with many known headers wins. A text-heavy row beats a numeric row.
+    const score = knownHits * 10 + textCells.length;
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestIdx = r;
+    }
+  }
+
+  // Fallback checks if bestIdx is still 0
+  if (bestIdx === 0) {
+    const cells = cleaned[0].filter(c => c !== '');
+    const allNumeric = cells.length > 0 && cells.every(c => !isNaN(Number(c)));
+    const singleCell = cells.length <= 1 && cleaned.length >= 3;
+    if ((allNumeric || singleCell) && cleaned.length >= 3) {
+      bestIdx = 1;
+    }
+  }
+
+  return bestIdx;
+}
+
 /** Import procurement Excel (7 sheets). Replaces all data; saves snapshot before replace (max 5 per brand). */
 async function importProcurementFile(
   file: File,
@@ -1450,35 +1521,20 @@ async function importProcurementFile(
     result.errors.push('Απαιτείται brand');
     return result;
   }
-  try {
-    // 1. Snapshot: αν υπάρχουν δεδομένα, αποθηκεύουμε πριν την αντικατάσταση
-    const snapKeys: (keyof typeof PROCUREMENT_SHEET_NAMES)[] = ['inventory', 'costing', 'item_evaluation', 'customer_evaluation', 'pricing_policy', 'fiscal_year', 'statistics'];
-    const existingArrays = await Promise.all(
-      PROCUREMENT_COLLECTIONS.map((coll) => ProcurementService.getAll(coll, brandId))
-    );
-    const hasExisting = existingArrays.some((arr) => arr.length > 0);
-    if (hasExisting) {
-      const snapshotData: Record<string, unknown[]> = {};
-      snapKeys.forEach((key, idx) => {
-        snapshotData[key] = existingArrays[idx] as unknown[];
-      });
-      await ProcurementService.saveSnapshot(brandId, snapshotData, file.name);
-    }
 
-    // 2. Replace: διαγραφή + εισαγωγή νέων
+  const emitPhase = (phase: string, rowsProcessed = 0, totalRows = 1) => {
+    onProgress?.({ rowsProcessed, totalRows, batchIndex: 0, totalBatches: 1, fileName: file.name, phase });
+  };
+
+  try {
+    // ── Phase 1: Parse XLSX (client-side, fast) ──────────────────────────
+    emitPhase('Ανάγνωση αρχείου…');
     const buffer = await file.arrayBuffer();
     const wb = XLSX.read(buffer, { type: 'array' });
-    let totalImported = 0;
 
-    // Pre-calculate total rows across all sheets for accurate progress
+    // Pre-parse all sheets
+    const parsedSheets: { sheetType: ProcurementSheetType; coll: string; headers: string[]; objects: Record<string, string>[] }[] = [];
     let grandTotalRows = 0;
-    for (const sheetType of PROCUREMENT_SHEET_ORDER) {
-      const sheet = wb.Sheets[PROCUREMENT_SHEET_NAMES[sheetType]];
-      if (sheet) {
-        const rows = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, defval: '' }) as string[][];
-        grandTotalRows += Math.max(0, rows.length - 1);
-      }
-    }
 
     for (let i = 0; i < PROCUREMENT_SHEET_ORDER.length; i++) {
       const sheetType = PROCUREMENT_SHEET_ORDER[i];
@@ -1499,42 +1555,58 @@ async function importProcurementFile(
         continue;
       }
 
-      const headers = cleaned[0].map(h => String(h || '').trim());
-      const dataRows = cleaned.slice(1).filter(r => r.some(c => c !== ''));
+      const headerRowIdx = detectHeaderRow(cleaned);
+      const headers = cleaned[headerRowIdx].map(h => String(h || '').trim());
+      const dataRows = cleaned.slice(headerRowIdx + 1).filter(r => r.some(c => c !== ''));
 
       const objects: Record<string, string>[] = dataRows.map(row => {
         const obj: Record<string, string> = {};
         headers.forEach((h, idx) => {
-          if (!h) return; // skip empty header columns
+          if (!h) return;
           obj[h] = row[idx] != null ? String(row[idx]).trim() : '';
         });
         return obj;
       });
 
+      grandTotalRows += objects.length;
+      parsedSheets.push({ sheetType, coll, headers, objects });
+    }
+
+    // ── Phase 2: Delete old + Insert new (per sheet) ─────────────────────
+    let totalImported = 0;
+
+    for (const { sheetType, coll, objects } of parsedSheets) {
+      const collKey = coll as (typeof PROCUREMENT_COLLECTIONS)[number];
+
       if (objects.length === 0) {
-        await ProcurementService.deleteAll(coll as typeof PROCUREMENT_COLLECTIONS[number], brandId);
+        await ProcurementService.deleteAll(collKey, brandId);
         continue;
       }
 
-      await ProcurementService.deleteAll(coll as typeof PROCUREMENT_COLLECTIONS[number], brandId);
+      emitPhase(`Διαγραφή παλιών: ${sheetType}…`, totalImported, grandTotalRows);
+      await ProcurementService.deleteAll(collKey, brandId);
 
+      const ts = Date.now();
       const items = objects.map((row, idx) => ({
-        id: `${sheetType}_${idx}_${Date.now()}`,
+        id: `${sheetType}_${idx}_${ts}`,
         data: { ...row, rowIndex: idx, sheetType } as Record<string, unknown>
       }));
 
-      const chunks = chunk(items, BATCH_SIZE);
-      for (let b = 0; b < chunks.length; b++) {
-        await ProcurementService.batchSet(coll as typeof PROCUREMENT_COLLECTIONS[number], chunks[b], brandId);
-        totalImported += chunks[b].length;
-        onProgress?.({ rowsProcessed: totalImported, totalRows: grandTotalRows, batchIndex: b, totalBatches: chunks.length, fileName: file.name });
-      }
+      const batches = chunk(items, BATCH_SIZE);
+
+      // Write batches with concurrency for speed
+      await runWithConcurrency(batches, BATCH_CONCURRENCY, async (batch, b) => {
+        await ProcurementService.batchSet(collKey, batch, brandId);
+        totalImported += batch.length;
+        onProgress?.({
+          rowsProcessed: totalImported, totalRows: grandTotalRows,
+          batchIndex: b, totalBatches: batches.length,
+          fileName: file.name, phase: `Εγγραφή: ${sheetType}`,
+        });
+      });
     }
 
     result.imported = totalImported;
-    if (hasExisting) {
-      result.warnings.push('Αρχειοθετήθηκε snapshot προηγούμενων δεδομένων (τελευταία 5).');
-    }
   } catch (err) {
     result.success = false;
     result.errors.push(err instanceof Error ? err.message : String(err));

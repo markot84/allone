@@ -13,6 +13,7 @@ import {
 import { useMemo } from 'react';
 import { Badge, Button, useToast, FormattedProse } from '../common';
 import { useSegments, useProducts, useSuppliers } from '../../hooks';
+import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import { generateInsightsFromData } from '../../services/insights';
 import type { AIInsight } from '../../types';
 import { AIAssistant } from './AIAssistant';
@@ -30,6 +31,8 @@ const INSIGHT_NAV: Record<
   champions_segment: { section: 'campaigns' },
   top_segment: { section: 'rfm' },
   cross_sell: { section: 'channels' },
+  ecomm_low_aov: { section: 'ecommerce' },
+  ecomm_platform_risk: { section: 'ecommerce' },
 };
 
 const APPLY_ALL_PRIORITY = [
@@ -41,6 +44,8 @@ const APPLY_ALL_PRIORITY = [
   'champions_segment',
   'top_segment',
   'cross_sell',
+  'ecomm_platform_risk',
+  'ecomm_low_aov',
 ] as const;
 
 interface AIInsightsPanelProps {
@@ -55,6 +60,7 @@ export function AIInsightsPanel({ isOpen, onClose, onNavigate }: AIInsightsPanel
   const { segments } = useSegments();
   const { products } = useProducts();
   const { suppliers } = useSuppliers();
+  const ecomm = useEcommerceSummary();
   const [filter, setFilter] = useState<'all' | 'opportunity' | 'warning' | 'recommendation'>('all');
   const [activeTab, setActiveTab] = useState<'insights' | 'assistant'>('insights');
   const [assistantOpen, setAssistantOpen] = useState(false);
@@ -66,8 +72,14 @@ export function AIInsightsPanel({ isOpen, onClose, onNavigate }: AIInsightsPanel
   }, [suppliers]);
 
   const aiInsights = useMemo(() => {
-    return generateInsightsFromData(products, segments, supplierTodMap);
-  }, [products, segments, supplierTodMap]);
+    return generateInsightsFromData(products, segments, supplierTodMap, {
+      hasData: ecomm.hasData,
+      totalRevenue: ecomm.totalRevenue,
+      orderCount: ecomm.orderCount,
+      aov: ecomm.aov,
+      platformBreakdown: ecomm.platformBreakdown,
+    });
+  }, [products, segments, supplierTodMap, ecomm.hasData, ecomm.totalRevenue, ecomm.orderCount, ecomm.aov, ecomm.platformBreakdown]);
 
   const filteredInsights = aiInsights.filter(
     insight => filter === 'all' || insight.type === filter
@@ -387,14 +399,21 @@ export function AIInsightsTriggerWrapper({ onClick }: { onClick: () => void }) {
   const { products } = useProducts();
   const { segments } = useSegments();
   const { suppliers } = useSuppliers();
+  const ecomm = useEcommerceSummary();
   const supplierTodMap2 = useMemo(() => {
     const m = new Map<string, number>();
     suppliers.forEach(s => m.set(s.name, s.tod));
     return m;
   }, [suppliers]);
   const insightCount = useMemo(() => {
-    const insights = generateInsightsFromData(products, segments, supplierTodMap2);
+    const insights = generateInsightsFromData(products, segments, supplierTodMap2, {
+      hasData: ecomm.hasData,
+      totalRevenue: ecomm.totalRevenue,
+      orderCount: ecomm.orderCount,
+      aov: ecomm.aov,
+      platformBreakdown: ecomm.platformBreakdown,
+    });
     return insights.filter((i) => i.impact === 'high').length;
-  }, [products, segments, supplierTodMap2]);
+  }, [products, segments, supplierTodMap2, ecomm.hasData, ecomm.totalRevenue, ecomm.orderCount, ecomm.aov, ecomm.platformBreakdown]);
   return <AIInsightsTrigger onClick={onClick} insightCount={insightCount} />;
 }

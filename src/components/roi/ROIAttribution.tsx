@@ -18,10 +18,10 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
+  Tooltip as RechartsTooltip,
   Legend,
 } from 'recharts';
-import { Card, CardHeader, Badge, Button } from '../common';
+import { Card, CardHeader, Badge, Button, Tooltip } from '../common';
 import { useOrganic, useCampaigns, useActiveStrategy, useBrand } from '../../hooks';
 import { useDashPeriod, PERIOD_OPTIONS } from '../../hooks/useDashPeriod';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
@@ -342,6 +342,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
             value={formatCurrencyCompact(totalRevenue)}
             subtitle={hasOrganic && hasCampaigns ? 'Organic + Campaigns' : hasOrganic ? 'Organic' : 'Campaigns'}
             color="var(--nts-charcoal)"
+            tooltip="Συνδυασμός οργανικών εσόδων και attributed revenue από campaigns."
           />
           <MetricCard
             icon={<Wallet size={20} />}
@@ -349,6 +350,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
             value={formatCurrencyCompact(metrics.totalSpend)}
             subtitle={`${campaignsTyped.length} campaigns`}
             color="#EF4444"
+            tooltip="Συνολικό κόστος διαφήμισης για το επιλεγμένο διάστημα."
           />
           <MetricCard
             icon={<TrendingUp size={20} />}
@@ -356,6 +358,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
             value={metrics.roas > 0 ? `${formatNumber(metrics.roas, 2)}x` : '—'}
             subtitle="Revenue / Ad Spend"
             color="#22C55E"
+            tooltip="Attributed Revenue / Ad Spend."
           />
           <MetricCard
             icon={<ShoppingCart size={20} />}
@@ -363,6 +366,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
             value={formatNumber(metrics.totalConversions)}
             subtitle={metrics.cpa > 0 ? `CPA: €${formatNumber(metrics.cpa, 2)}` : ''}
             color="var(--nts-accent)"
+            tooltip="Συνολικές μετατροπές από καμπάνιες."
           />
         </div>
       </div>
@@ -382,6 +386,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
               value={formatCurrencyCompact(ecomm.totalRevenue)}
               subtitle="Πραγματικά έσοδα e-shop"
               color="#10B981"
+              tooltip="Καθαρά έσοδα παραγγελιών από τις e-commerce πλατφόρμες."
             />
             <MetricCard
               icon={<Euro size={20} />}
@@ -389,6 +394,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
               value={formatCurrencyCompact(totalRevenue)}
               subtitle="Organic + Campaign value"
               color="var(--nts-charcoal)"
+              tooltip="Έσοδα που προκύπτουν από organic import + ad platform conversion values."
             />
             <MetricCard
               icon={<TrendingUp size={20} />}
@@ -396,6 +402,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
               value={metrics.totalSpend > 0 ? `${formatNumber(ecomm.totalRevenue / metrics.totalSpend, 2)}x` : '—'}
               subtitle="Store Revenue / Ad Spend"
               color="#8B5CF6"
+              tooltip="Store Revenue / Ad Spend για πιο ρεαλιστική αποτύπωση απόδοσης."
             />
             <MetricCard
               icon={<BarChart3 size={20} />}
@@ -406,6 +413,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
               })()}
               subtitle="Store − Attributed"
               color={ecomm.totalRevenue >= totalRevenue ? '#22C55E' : '#EF4444'}
+              tooltip="Διαφορά πραγματικού store revenue από attributed revenue."
             />
           </div>
           <p className="text-[11px] text-[#9CA3AF] mt-3 leading-relaxed">
@@ -453,7 +461,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                 axisLine={{ stroke: '#d0d7de' }}
                 tickLine={{ stroke: '#d0d7de' }}
               />
-              <Tooltip
+              <RechartsTooltip
                 contentStyle={{
                   backgroundColor: '#fff',
                   border: '1px solid #d0d7de',
@@ -704,13 +712,14 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
 }
 
 function MetricCard({
-  icon, label, value, subtitle, color,
+  icon, label, value, subtitle, color, tooltip,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
   subtitle: string;
   color: string;
+  tooltip?: string;
 }) {
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
@@ -720,7 +729,10 @@ function MetricCard({
             {icon}
           </div>
           <div className="min-w-0">
-            <p className="text-xs text-[var(--nts-medium-gray)]">{label}</p>
+            <div className="flex items-center gap-1">
+              <p className="text-xs text-[var(--nts-medium-gray)]">{label}</p>
+              {tooltip && <Tooltip content={tooltip} size={12} />}
+            </div>
             <p className="text-xl font-bold font-mono mt-0.5" style={{ color }}>{value}</p>
             {subtitle && <p className="text-[10px] text-[var(--nts-medium-gray)] mt-0.5">{subtitle}</p>}
           </div>

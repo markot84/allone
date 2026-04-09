@@ -118,7 +118,15 @@ function BrandMenu({
           color: 'rgba(255,255,255,0.8)'
         }}
       >
-        <Text as="span" size="small" weight="semibold" style={{ color: 'rgba(255,255,255,0.8)' }}>{currentBrand.name}</Text>
+        <Text
+          as="span"
+          size="small"
+          weight="semibold"
+          className="hidden xl:inline"
+          style={{ color: 'rgba(255,255,255,0.8)', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+        >
+          {currentBrand.name}
+        </Text>
         {brands.length > 1 && (
           <span style={{ opacity: 0.7, fontSize: 12 }}>▼</span>
         )}
@@ -237,7 +245,7 @@ function AccountMenu({
         >
           {(user.email?.[0] || user.displayName?.[0] || '?').toUpperCase()}
         </div>
-        <Text as="span" size="small" className="hidden sm:inline" style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'rgba(255,255,255,0.75)' }}>
+        <Text as="span" size="small" className="hidden xl:inline" style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'rgba(255,255,255,0.75)' }}>
           {user.email || user.displayName || 'Account'}
         </Text>
       </button>
@@ -530,12 +538,17 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
             size="sm"
             icon={<ThreeBarsIcon />}
             onClick={() => { if (sidebarPinned) { togglePin(); } else { setSidebarOpen((o) => !o); } }}
-            style={{ color: 'rgba(255,255,255,0.85)' }}
+            style={{
+              color: 'rgba(255,255,255,0.95)',
+              border: '1px solid rgba(255,255,255,0.16)',
+              background: 'rgba(255,255,255,0.08)',
+              borderRadius: 8
+            }}
             aria-label="Menu"
           />
         </PrimerHeader.Item>
 
-        <PrimerHeader.Item full style={{ minWidth: 0 }}>
+        <PrimerHeader.Item style={{ flex: '0 0 auto', minWidth: 0 }}>
           <PrimerHeader.Link
             as="button"
             type="button"
@@ -551,11 +564,11 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
               cursor: 'default',
             }}
           >
-            <PerformancePlusLogo height={40} className="max-h-10" variant="onDark" />
+            <PerformancePlusLogo height={34} className="max-h-9" variant="onDark" />
           </PrimerHeader.Link>
         </PrimerHeader.Item>
 
-        <PrimerHeader.Item full className="hidden md:block" style={{ maxWidth: 520 }}>
+        <PrimerHeader.Item full className="hidden lg:block" style={{ maxWidth: 460, minWidth: 220 }}>
           <div style={{ position: 'relative', width: '100%' }}>
             <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.3)', display: 'flex' }}><SearchIcon /></span>
             <input
@@ -596,7 +609,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
         </PrimerHeader.Item>
 
         {currentBrand && (
-          <PrimerHeader.Item>
+          <PrimerHeader.Item className="hidden lg:block">
             <BrandMenu
               currentBrand={currentBrand}
               brands={brands}

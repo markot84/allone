@@ -427,19 +427,39 @@ export const ProcurementService = {
     FirestoreService.batchSet(collectionKey, items, brandId),
   deleteAll: (collectionKey: (typeof PROCUREMENT_COLLECTIONS)[number], brandId?: string | null) =>
     FirestoreService.deleteCollection(collectionKey, brandId),
-  /** Save current state to snapshot before replace. Keeps last N snapshots per brand. */
+  /** Save current state to snapshot before replace. Keeps last N snapshots per brand.
+   *  Data is split into subcollection chunks to avoid the 1MB Firestore doc limit. */
   async saveSnapshot(
     brandId: string,
     snapshotData: Record<string, unknown[]>,
     replacedByFileName?: string
   ): Promise<void> {
     const id = `snap_${brandId}_${Date.now()}`;
+    const sheetKeys = Object.keys(snapshotData);
+
+    // Parent doc: metadata only (small)
     await FirestoreService.setDocument('procurement_snapshots', id, {
       brandId,
       createdAt: Timestamp.now(),
       replacedByFileName: replacedByFileName ?? null,
-      ...snapshotData,
+      sheetKeys,
     });
+
+    // Each sheet's rows → subcollection doc (stays under 1MB per sheet)
+    const CHUNK_ROWS = 500;
+    for (const key of sheetKeys) {
+      const rows = snapshotData[key] || [];
+      if (rows.length === 0) continue;
+      for (let i = 0; i < rows.length; i += CHUNK_ROWS) {
+        const chunkIdx = Math.floor(i / CHUNK_ROWS);
+        const chunkId = `${key}_${chunkIdx}`;
+        const chunk = rows.slice(i, i + CHUNK_ROWS);
+        const chunkRef = doc(db, 'procurement_snapshots', id, 'chunks', chunkId);
+        await setDoc(chunkRef, { key, chunkIdx, rows: chunk });
+      }
+    }
+
+    // Prune old snapshots
     const existing = await FirestoreService.getDocuments<{ id: string; createdAt: unknown }>(
       'procurement_snapshots',
       [where('brandId', '==', brandId), orderBy('createdAt', 'asc')],
@@ -447,8 +467,13 @@ export const ProcurementService = {
     );
     if (existing.length > PROCUREMENT_MAX_SNAPSHOTS) {
       const toDelete = existing.slice(0, existing.length - PROCUREMENT_MAX_SNAPSHOTS);
-      for (const doc of toDelete) {
-        await FirestoreService.deleteDocument('procurement_snapshots', doc.id);
+      for (const snap of toDelete) {
+        // Delete chunk subcollection first
+        const chunksSnap = await getDocs(collection(db, 'procurement_snapshots', snap.id, 'chunks'));
+        for (const chunkDoc of chunksSnap.docs) {
+          await deleteDoc(chunkDoc.ref);
+        }
+        await FirestoreService.deleteDocument('procurement_snapshots', snap.id);
       }
     }
   },

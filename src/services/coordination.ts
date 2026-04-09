@@ -12,6 +12,12 @@ import type {
 import { DEFAULT_NOTIFICATION_CHANNELS, DEPARTMENT_LABELS, normalizeBrandMemberRole } from '../types';
 
 const ts = () => new Date().toISOString();
+const FUNCTIONS_REGION = import.meta.env.VITE_FIREBASE_FUNCTIONS_REGION || 'europe-west1';
+const FUNCTIONS_PROJECT =
+  import.meta.env.VITE_FIREBASE_PROJECT_ID || 'performance-plus-4a5b2';
+const FUNCTIONS_BASE =
+  import.meta.env.VITE_FUNCTIONS_BASE_URL ||
+  `https://${FUNCTIONS_REGION}-${FUNCTIONS_PROJECT}.cloudfunctions.net`;
 
 // ── Members ─────────────────────────────────────────────────────────────────
 
@@ -298,16 +304,13 @@ export async function broadcastNotification(
   let emailSent = 0;
   let emailFailed = 0;
   if (emailTargets.length > 0) {
-    // SMTP μέσω Cloud Function μπορεί να πάρει πολλά δευτερόλεπτα ανά παραλήπτη — μην μπλοκάρουμε το UI
-    void sendEmailNotifications(emailTargets, data)
-      .then((r) => {
-        if (r.failed > 0) {
-          console.warn('sendEmailNotification: κάποια email απέτυχαν', r);
-        }
-      })
-      .catch((e) => {
-        console.warn('sendEmailNotification:', e);
-      });
+    // Περιμένουμε το αποτέλεσμα ώστε ο caller να γνωρίζει αν τα email όντως στάλθηκαν.
+    const emailResult = await sendEmailNotifications(emailTargets, data);
+    emailSent = emailResult.sent;
+    emailFailed = emailResult.failed;
+    if (emailFailed > 0) {
+      console.warn('sendEmailNotification: κάποια email απέτυχαν', emailResult);
+    }
   }
 
   return {
@@ -331,7 +334,7 @@ async function sendEmailNotifications(
       return { sent: 0, failed: userIds.length };
     }
 
-    const endpoint = 'https://europe-west1-performance-plus-4a5b2.cloudfunctions.net/sendEmailNotification';
+    const endpoint = `${FUNCTIONS_BASE}/sendEmailNotification`;
     const res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },

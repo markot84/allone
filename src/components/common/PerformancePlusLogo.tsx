@@ -17,36 +17,18 @@ export function PerformancePlusLogo({
 }: PerformancePlusLogoProps) {
   const v = encodeURIComponent(buildInfo.version);
   const lockupSrc = `/Performance.png?v=${v}`;
-  const fontSize = Math.round(height * 0.46);
+  const darkLockupSrc = `/notthesame-logo.png?v=${v}`;
 
   if (variant === 'onDark') {
     return (
-      <div
-        className={`perf-plus-logo perf-plus-logo--on-dark flex items-center gap-1.5 ${className}`}
+      <img
+        src={darkLockupSrc}
+        alt="Performance+ by notthesame.ai"
+        className={`block w-auto max-w-[min(100%,340px)] object-contain object-left ${className}`}
         style={{ height }}
-        role="img"
-        aria-label="Performance+ by notthesame.ai"
-      >
-        <div className="shrink-0 overflow-hidden" style={{ height, width: height }}>
-          <img
-            src={lockupSrc}
-            alt=""
-            className="block h-full w-auto max-w-none select-none"
-            style={{ height: '100%', width: 'auto' }}
-            draggable={false}
-            aria-hidden
-          />
-        </div>
-        <span
-          className="perf-plus-logo-word font-bold tracking-tight whitespace-nowrap leading-none font-sans"
-          style={{ fontSize }}
-        >
-          Performance
-        </span>
-        <span className="perf-plus-logo-plus font-bold leading-none font-sans" style={{ fontSize }}>
-          +
-        </span>
-      </div>
+        loading="eager"
+        decoding="async"
+      />
     );
   }
 

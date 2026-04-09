@@ -140,8 +140,14 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     }
   }, [totalOrganicRevenue, hasOrganic]);
   const aiInsights = useMemo(() => {
-    return generateInsightsFromData(products, rfmSegments, supplierTodMap);
-  }, [products, rfmSegments, supplierTodMap]);
+    return generateInsightsFromData(products, rfmSegments, supplierTodMap, {
+      hasData: ecomm.hasData,
+      totalRevenue: ecomm.totalRevenue,
+      orderCount: ecomm.orderCount,
+      aov: ecomm.aov,
+      platformBreakdown: ecomm.platformBreakdown,
+    });
+  }, [products, rfmSegments, supplierTodMap, ecomm.hasData, ecomm.totalRevenue, ecomm.orderCount, ecomm.aov, ecomm.platformBreakdown]);
 
   // Handle insight action clicks
   const handleInsightAction = (insight: { action: string; title: string }) => {
@@ -235,6 +241,14 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           }}
           alerts={automationAlerts}
           supplierTodMap={supplierTodMap}
+          ecommerce={{
+            hasData: ecomm.hasData,
+            totalRevenue: ecomm.totalRevenue,
+            orderCount: ecomm.orderCount,
+            aov: ecomm.aov,
+            connectedPlatforms: ecomm.connectedPlatforms,
+            platformBreakdown: ecomm.platformBreakdown,
+          }}
           onSectionChange={onSectionChange}
           hasAnyData={hasAnyData}
           period={dashPeriod}
@@ -503,15 +517,24 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
 
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4 items-end">
               <div>
-                <p className="text-[11px] text-[#6B7280] mb-0.5">Store Revenue</p>
+                <div className="flex items-center gap-1 mb-0.5">
+                  <p className="text-[11px] text-[#6B7280]">Store Revenue</p>
+                  <Tooltip content="Πραγματικά έσοδα e-shop από τις συνδεδεμένες πλατφόρμες για το επιλεγμένο διάστημα." size={12} />
+                </div>
                 <p className="text-lg font-bold text-[#1A1A1A]">{formatCurrencyCompact(ecomm.totalRevenue)}</p>
               </div>
               <div>
-                <p className="text-[11px] text-[#6B7280] mb-0.5">Παραγγελίες</p>
+                <div className="flex items-center gap-1 mb-0.5">
+                  <p className="text-[11px] text-[#6B7280]">Παραγγελίες</p>
+                  <Tooltip content="Συνολικός αριθμός παραγγελιών από Shopify/WooCommerce/OpenCart/Magento." size={12} />
+                </div>
                 <p className="text-lg font-bold text-[#1A1A1A]">{formatNumber(ecomm.orderCount)}</p>
               </div>
               <div>
-                <p className="text-[11px] text-[#6B7280] mb-0.5">AOV</p>
+                <div className="flex items-center gap-1 mb-0.5">
+                  <p className="text-[11px] text-[#6B7280]">AOV</p>
+                  <Tooltip content="Average Order Value: Store Revenue / Παραγγελίες." size={12} />
+                </div>
                 <p className="text-lg font-bold text-[#1A1A1A]">{formatCurrencyCompact(ecomm.aov)}</p>
               </div>
               <div>

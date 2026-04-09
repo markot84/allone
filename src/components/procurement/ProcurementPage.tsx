@@ -160,13 +160,36 @@ function getFiscalYearTotals(rows: Record<string, unknown>[]): { turnover: numbe
   return { turnover, profit, marginPct: turnover > 0 ? profit / turnover : 0 };
 }
 
-/** Returns the first non-numeric column key whose name contains the keyword (case-insensitive). */
+/** Keyword → alternative search terms (checked in order). */
+const COL_ALIASES: Record<string, string[]> = {
+  'ΔΙΑΘΕΣΙΜΟ ΥΠΟΛΟΙΠΟ': ['ΔΙΑΘΕΣΙΜΟ ΥΠΟΛΟΙΠΟ', 'ΔΙΑΘΕΣΙΜΟ', 'ΥΠΟΛΟΙΠΟ', 'ΑΠΟΘΕΜΑ', 'STOCK', 'AVAILABLE'],
+  'ΠΡΩΤΟΓΕΝΕΣ ΚΟΣΤΟΣ':  ['ΠΡΩΤΟΓΕΝΕΣ ΚΟΣΤΟΣ', 'ΠΡΩΤΟΓΕΝΕΣ', 'ΚΟΣΤΟΣ ΑΓΟΡΑΣ', 'ΚΟΣΤΟΣ', 'ΤΙΜΗ ΑΓΟΡΑΣ', 'ΑΓΟΡΑ', 'COST'],
+  'ΑΝΑΤΡΟΦΟΔΟΣΙΑ':       ['ΑΝΑΤΡΟΦΟΔΟΣΙΑ', 'ΑΝΑΤΡΟΦΟΔΟΤΗΣΗ', 'REORDER', 'REFILL'],
+  'ΒΑΘΜΟΛΟΓΙΑ':          ['ΒΑΘΜΟΛΟΓΙΑ', 'ΒΑΘΜΟΣ', 'SCORE', 'RATING'],
+  'ΑΞΙΟΛΟΓΗΣΗ':          ['ΑΞΙΟΛΟΓΗΣΗ', 'EVALUATION', 'RATING'],
+  'ΤΙΜΗ ΠΩΛΗΣΗΣ':        ['ΤΙΜΗ ΠΩΛΗΣΗΣ', 'ΠΩΛΗΣΗΣ', 'ΤΙΜΗ', 'PRICE', 'ΠΩΛΗΣΗ'],
+  'ΔΕΥΤΕΡΟΓΕΝΕΣ':        ['ΔΕΥΤΕΡΟΓΕΝΕΣ', 'ΔΕΥΤΕΡ'],
+  'ΤΖΙΡΟΣ':              ['ΤΖΙΡΟΣ', 'TURNOVER', 'ΕΣΟΔΑ', 'REVENUE'],
+  'ΚΕΡΔΟΣ':              ['ΚΕΡΔΟΣ', 'PROFIT', 'ΚΕΡΔΗ'],
+  'ΠΕΡΙΓΡΑΦΗ':           ['ΠΕΡΙΓΡΑΦΗ', 'ΟΝΟΜΑ', 'DESCRIPTION', 'NAME'],
+  'ΚΩΔΙΚΟΣ':             ['ΚΩΔΙΚΟΣ', 'SKU', 'CODE', 'BARCODE'],
+};
+
+/** Returns the first non-numeric column key whose name contains the keyword (case-insensitive).
+ *  Tries multiple aliases when the primary keyword doesn't match. */
 function findCol(rows: Record<string, unknown>[], keyword: string): string {
   if (rows.length === 0) return keyword;
-  const kUp = keyword.toUpperCase();
-  return Object.keys(rows[0])
-    .filter(k => !isNumericColName(k))
-    .find(k => k.toUpperCase().includes(kUp)) ?? keyword;
+  const keys = Object.keys(rows[0]).filter(k => !isNumericColName(k));
+  const aliases = COL_ALIASES[keyword.toUpperCase()] ?? [keyword];
+  for (const alias of aliases) {
+    const aUp = alias.toUpperCase();
+    const found = keys.find(k => k.toUpperCase().includes(aUp));
+    if (found) return found;
+  }
+  if (import.meta.env.DEV) {
+    console.warn(`[Procurement] Column "${keyword}" not found. Available:`, keys);
+  }
+  return keyword;
 }
 
 function isNumericLike(v: string): boolean {
@@ -599,7 +622,7 @@ interface ProcurementPageProps {
 export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) {
   const toast = useToast();
   const { currentBrand } = useBrand();
-  const { data, isLoading, hasData, invalidate } = useProcurement();
+  const { data, isLoading, isRefreshing, hasData, invalidate } = useProcurement();
   const [viewMode, setViewMode] = useState<'overview' | 'detail'>('overview');
   const [activeTab, setActiveTab] = useState<ProcurementSheetType>('inventory');
   const [isSeeding, setIsSeeding] = useState(false);
@@ -756,11 +779,19 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
     <div className="space-y-6">
 
       {/* Page header */}
-      <div>
-        <h2 className="text-2xl font-bold text-[var(--nts-charcoal)] tracking-tight">Procurement</h2>
-        <p className="text-[14px] text-[var(--nts-medium-gray)] mt-1">
-          Δεδομένα από 7 αναλύσεις (PROCUREMENT_TEMPLATE.xlsx). Εισαγωγή από Data Import.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-bold text-[var(--nts-charcoal)] tracking-tight">Procurement</h2>
+          <p className="text-[14px] text-[var(--nts-medium-gray)] mt-1">
+            Δεδομένα από 7 αναλύσεις (PROCUREMENT_TEMPLATE.xlsx). Εισαγωγή από Data Import.
+          </p>
+        </div>
+        {isRefreshing && (
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-[var(--nts-border-gray)] bg-[var(--nts-light-gray)] text-[11px] text-[var(--nts-medium-gray)]">
+            <Spinner size="sm" />
+            Updating...
+          </div>
+        )}
       </div>
 
       {!hasData ? (
@@ -793,6 +824,11 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
           {actionsBar(false)}
 
           {/* 4 global KPI cards */}
+          {isRefreshing && (
+            <div className="text-[11px] text-[var(--nts-medium-gray)] -mt-1">
+              Γίνεται ανανέωση KPI από το τελευταίο import...
+            </div>
+          )}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {globalKPIs.map(({ label, value, Icon }) => (
               <div

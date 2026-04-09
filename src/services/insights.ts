@@ -5,7 +5,14 @@ import { classifyStockHealth, getProductTod } from '../utils/productUtils';
 export function generateInsightsFromData(
   products: Product[],
   segments: RFMSegment[],
-  supplierTodMap?: Map<string, number>
+  supplierTodMap?: Map<string, number>,
+  ecommerce?: {
+    hasData: boolean;
+    totalRevenue: number;
+    orderCount: number;
+    aov: number;
+    platformBreakdown: { platform: string; revenue: number; orders: number }[];
+  }
 ): AIInsight[] {
   const insights: AIInsight[] = [];
 
@@ -123,6 +130,37 @@ export function generateInsightsFromData(
         action: 'Setup Sequence',
         impact: 'medium',
       });
+    }
+  }
+
+  // E-commerce insights
+  if (ecommerce?.hasData && ecommerce.totalRevenue > 0) {
+    if (ecommerce.aov > 0 && ecommerce.aov < 35) {
+      insights.push({
+        insightKey: 'ecomm_low_aov',
+        type: 'opportunity',
+        icon: '',
+        title: 'Χαμηλό AOV στο e-shop',
+        insight: `Το AOV είναι €${ecommerce.aov.toFixed(2)}. Προτείνονται bundles/thresholds για αύξηση μέσης αξίας καλαθιού.`,
+        action: 'Δείτε E-commerce Explorer',
+        impact: 'medium',
+      });
+    }
+
+    if (ecommerce.platformBreakdown?.length > 0) {
+      const top = ecommerce.platformBreakdown[0];
+      const topShare = ecommerce.totalRevenue > 0 ? (top.revenue / ecommerce.totalRevenue) * 100 : 0;
+      if (topShare >= 70) {
+        insights.push({
+          insightKey: 'ecomm_platform_risk',
+          type: 'warning',
+          icon: '',
+          title: 'Υψηλή εξάρτηση από μία πλατφόρμα',
+          insight: `${top.platform} παράγει ~${Math.round(topShare)}% του store revenue. Υπάρχει concentration risk.`,
+          action: 'Ανάλυση ανά πλατφόρμα',
+          impact: 'high',
+        });
+      }
     }
   }
 

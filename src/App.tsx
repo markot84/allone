@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useCallback, lazy, Suspense } from 'react';
+import { useState, useEffect, useLayoutEffect, useCallback, lazy, Suspense, type ComponentType, type LazyExoticComponent } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
@@ -29,15 +29,46 @@ import { PrivacyPolicy } from './components/legal/PrivacyPolicy';
 import { TermsOfService } from './components/legal/TermsOfService';
 import { captureOAuthParamsFromLocation } from './utils/oauthSession';
 
-const ProductIntelligence = lazy(() => import('./components/inventory').then(m => ({ default: m.ProductIntelligence })));
-const ROIAttribution = lazy(() => import('./components/roi').then(m => ({ default: m.ROIAttribution })));
-const CompetitorInsights = lazy(() => import('./components/competitive/CompetitorInsights').then(m => ({ default: m.CompetitorInsights })));
-const SuperAdminDashboard = lazy(() => import('./components/admin').then(m => ({ default: m.SuperAdminDashboard })));
-const WeightConfigurator = lazy(() => import('./components/strategy').then(m => ({ default: m.WeightConfigurator })));
-const Reports = lazy(() => import('./components/reports').then(m => ({ default: m.Reports })));
-const BusinessFinances = lazy(() => import('./components/finances').then(m => ({ default: m.BusinessFinances })));
-const ProcurementPage = lazy(() => import('./components/procurement/ProcurementPage').then(m => ({ default: m.ProcurementPage })));
-const EcommerceDashboard = lazy(() => import('./components/ecommerce/EcommerceDashboard').then(m => ({ default: m.EcommerceDashboard })));
+const CHUNK_RELOAD_ONCE_KEY = 'pp_chunk_reload_once';
+const isChunkLoadError = (msg: string) =>
+  /Failed to fetch dynamically imported module|Loading chunk|ChunkLoadError|Unexpected token|Importing a module script failed/i.test(msg);
+
+type AnyComponent = ComponentType<any>;
+function lazyNamedWithRetry<T extends Record<string, unknown>, K extends keyof T>(
+  importer: () => Promise<T>,
+  exportName: K
+): LazyExoticComponent<Extract<T[K], AnyComponent>> {
+  return lazy(async () => {
+    try {
+      const mod = await importer();
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.removeItem(CHUNK_RELOAD_ONCE_KEY);
+      }
+      return { default: mod[exportName] as Extract<T[K], AnyComponent> };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (typeof window !== 'undefined' && isChunkLoadError(message)) {
+        const alreadyRetried = window.sessionStorage.getItem(CHUNK_RELOAD_ONCE_KEY) === '1';
+        if (!alreadyRetried) {
+          window.sessionStorage.setItem(CHUNK_RELOAD_ONCE_KEY, '1');
+          window.location.reload();
+          await new Promise<never>(() => {});
+        }
+      }
+      throw err;
+    }
+  });
+}
+
+const ProductIntelligence = lazyNamedWithRetry(() => import('./components/inventory'), 'ProductIntelligence');
+const ROIAttribution = lazyNamedWithRetry(() => import('./components/roi'), 'ROIAttribution');
+const CompetitorInsights = lazyNamedWithRetry(() => import('./components/competitive/CompetitorInsights'), 'CompetitorInsights');
+const SuperAdminDashboard = lazyNamedWithRetry(() => import('./components/admin'), 'SuperAdminDashboard');
+const WeightConfigurator = lazyNamedWithRetry(() => import('./components/strategy'), 'WeightConfigurator');
+const Reports = lazyNamedWithRetry(() => import('./components/reports'), 'Reports');
+const BusinessFinances = lazyNamedWithRetry(() => import('./components/finances'), 'BusinessFinances');
+const ProcurementPage = lazyNamedWithRetry(() => import('./components/procurement/ProcurementPage'), 'ProcurementPage');
+const EcommerceDashboard = lazyNamedWithRetry(() => import('./components/ecommerce/EcommerceDashboard'), 'EcommerceDashboard');
 
 const queryClient = new QueryClient({
   defaultOptions: {

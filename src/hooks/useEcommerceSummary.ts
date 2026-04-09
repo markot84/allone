@@ -53,7 +53,9 @@ export function useEcommerceSummary() {
   const { data, isPending } = useQuery({
     queryKey: ['ecommerce_summary', brandId],
     queryFn: () => (brandId ? fetchEcommerceSummary(brandId) : Promise.resolve(null)),
-    staleTime: 10 * 60 * 1000,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
     enabled: !!brandId,
   });
 

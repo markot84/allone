@@ -21,7 +21,7 @@ import {
   Tooltip as RechartsTooltip,
   ResponsiveContainer,
 } from 'recharts';
-import { Card, CardHeader, KPICard } from '../common';
+import { Card, CardHeader, KPICard, Tooltip } from '../common';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import { formatCurrencyCompact, formatNumber } from '../../utils/format';
 import type { KPICardData } from '../common/KPICard';
@@ -41,6 +41,7 @@ const PLATFORM_COLORS: Record<string, string> = {
 };
 
 type OrderSortField = 'createdAt' | 'total' | 'platform';
+type RowsPerPage = 10 | 20 | 50 | 100 | 'all';
 
 const TOOLTIP_STYLE: React.CSSProperties = {
   backgroundColor: '#fff',
@@ -80,6 +81,14 @@ export function EcommerceDashboard() {
   const ecomm = useEcommerceSummary();
   const [orderSort, setOrderSort] = useState<{ field: OrderSortField; dir: 'asc' | 'desc' }>({ field: 'createdAt', dir: 'desc' });
   const [prodSort, setProdSort] = useState<{ field: 'revenue' | 'quantity'; dir: 'asc' | 'desc' }>({ field: 'revenue', dir: 'desc' });
+  const [orderSearch, setOrderSearch] = useState('');
+  const [orderPlatform, setOrderPlatform] = useState('all');
+  const [orderStatus, setOrderStatus] = useState('all');
+  const [orderRows, setOrderRows] = useState<RowsPerPage>(20);
+  const [orderPage, setOrderPage] = useState(1);
+  const [prodSearch, setProdSearch] = useState('');
+  const [prodRows, setProdRows] = useState<RowsPerPage>(20);
+  const [prodPage, setProdPage] = useState(1);
 
   const kpis: KPICardData[] = useMemo(() => [
     {
@@ -130,6 +139,50 @@ export function EcommerceDashboard() {
     });
     return arr;
   }, [ecomm.topProducts, prodSort]);
+
+  const orderPlatforms = useMemo(
+    () => Array.from(new Set(ecomm.recentOrders.map((o) => o.platform).filter(Boolean))).sort(),
+    [ecomm.recentOrders]
+  );
+  const orderStatuses = useMemo(
+    () => Array.from(new Set(ecomm.recentOrders.map((o) => (o.status || '').toLowerCase()).filter(Boolean))).sort(),
+    [ecomm.recentOrders]
+  );
+
+  const filteredOrders = useMemo(() => {
+    const q = orderSearch.trim().toLowerCase();
+    return sortedOrders.filter((o) => {
+      if (orderPlatform !== 'all' && o.platform !== orderPlatform) return false;
+      if (orderStatus !== 'all' && (o.status || '').toLowerCase() !== orderStatus) return false;
+      if (!q) return true;
+      const hay = `${o.orderId} ${o.orderName || ''} ${o.platform} ${o.status}`.toLowerCase();
+      return hay.includes(q);
+    });
+  }, [sortedOrders, orderSearch, orderPlatform, orderStatus]);
+
+  const filteredProducts = useMemo(() => {
+    const q = prodSearch.trim().toLowerCase();
+    if (!q) return sortedProducts;
+    return sortedProducts.filter((p) => `${p.name || ''} ${p.sku || ''}`.toLowerCase().includes(q));
+  }, [sortedProducts, prodSearch]);
+
+  const orderTotalPages = orderRows === 'all' ? 1 : Math.max(1, Math.ceil(filteredOrders.length / orderRows));
+  const prodTotalPages = prodRows === 'all' ? 1 : Math.max(1, Math.ceil(filteredProducts.length / prodRows));
+  const safeOrderPage = Math.min(orderPage, orderTotalPages);
+  const safeProdPage = Math.min(prodPage, prodTotalPages);
+
+  const pagedOrders = useMemo(() => {
+    if (orderRows === 'all') return filteredOrders;
+    const start = (safeOrderPage - 1) * orderRows;
+    return filteredOrders.slice(start, start + orderRows);
+  }, [filteredOrders, orderRows, safeOrderPage]);
+
+  const pagedProducts = useMemo(() => {
+    if (prodRows === 'all') return filteredProducts;
+    const start = (safeProdPage - 1) * prodRows;
+    return filteredProducts.slice(start, start + prodRows);
+  }, [filteredProducts, prodRows, safeProdPage]);
+
 
   const toggleOrderSort = (field: OrderSortField) => {
     setOrderSort((prev) => ({
@@ -339,7 +392,36 @@ export function EcommerceDashboard() {
         <Card>
           <CardHeader title="Top Products" subtitle="Κατά έσοδα (90 ημ.)" icon={<Package size={16} />} />
           <div className="px-5 pb-5">
-            {sortedProducts.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <input
+                value={prodSearch}
+                onChange={(e) => {
+                  setProdSearch(e.target.value);
+                  setProdPage(1);
+                }}
+                placeholder="Αναζήτηση προϊόντος / SKU"
+                className="h-8 px-2.5 rounded-md border border-[#E5E7EB] text-xs min-w-[220px]"
+              />
+              <select
+                value={String(prodRows)}
+                onChange={(e) => {
+                  const v = e.target.value === 'all' ? 'all' : Number(e.target.value);
+                  setProdRows(v as RowsPerPage);
+                  setProdPage(1);
+                }}
+                className="h-8 px-2 rounded-md border border-[#E5E7EB] text-xs"
+              >
+                <option value="10">10 / σελίδα</option>
+                <option value="20">20 / σελίδα</option>
+                <option value="50">50 / σελίδα</option>
+                <option value="100">100 / σελίδα</option>
+                <option value="all">Προβολή όλων</option>
+              </select>
+              <Tooltip content="Φίλτρα και pagination για γρήγορη εύρεση προϊόντων. Η επιλογή 'Προβολή όλων' δείχνει όλο το σύνολο.">
+                <span className="text-[11px] text-[#9CA3AF]">Filters</span>
+              </Tooltip>
+            </div>
+            {pagedProducts.length > 0 ? (
               <div className="overflow-x-auto -mx-5 px-5">
                 <table className="w-full text-left text-xs" style={{ minWidth: 340 }}>
                   <thead>
@@ -364,8 +446,8 @@ export function EcommerceDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {sortedProducts.map((p, i) => {
-                      const maxRev = sortedProducts[0]?.revenue || 1;
+                    {pagedProducts.map((p, i) => {
+                      const maxRev = filteredProducts[0]?.revenue || 1;
                       const barPct = Math.min(100, (p.revenue / maxRev) * 100);
                       return (
                         <tr
@@ -392,8 +474,30 @@ export function EcommerceDashboard() {
                 </table>
               </div>
             ) : (
-              <p className="text-sm text-[#9CA3AF] py-4 text-center">Δεν υπάρχουν δεδομένα προϊόντων</p>
+              <p className="text-sm text-[#9CA3AF] py-4 text-center">Δεν βρέθηκαν προϊόντα με τα τρέχοντα φίλτρα</p>
             )}
+            <div className="mt-3 flex items-center justify-between text-[11px] text-[#6B7280]">
+              <span>Σύνολο: {filteredProducts.length} προϊόντα</span>
+              {prodRows !== 'all' && (
+                <div className="inline-flex items-center gap-1">
+                  <button
+                    className="px-2 py-1 rounded border border-[#E5E7EB] disabled:opacity-40"
+                    disabled={safeProdPage <= 1}
+                    onClick={() => setProdPage((p) => Math.max(1, p - 1))}
+                  >
+                    Προηγ.
+                  </button>
+                  <span>{safeProdPage}/{prodTotalPages}</span>
+                  <button
+                    className="px-2 py-1 rounded border border-[#E5E7EB] disabled:opacity-40"
+                    disabled={safeProdPage >= prodTotalPages}
+                    onClick={() => setProdPage((p) => Math.min(prodTotalPages, p + 1))}
+                  >
+                    Επόμ.
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </Card>
 
@@ -401,7 +505,62 @@ export function EcommerceDashboard() {
         <Card>
           <CardHeader title="Πρόσφατες Παραγγελίες" subtitle="Τελευταίες 50" icon={<ShoppingCart size={16} />} />
           <div className="px-5 pb-5">
-            {sortedOrders.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <input
+                value={orderSearch}
+                onChange={(e) => {
+                  setOrderSearch(e.target.value);
+                  setOrderPage(1);
+                }}
+                placeholder="Αναζήτηση order / όνομα / status"
+                className="h-8 px-2.5 rounded-md border border-[#E5E7EB] text-xs min-w-[220px]"
+              />
+              <select
+                value={orderPlatform}
+                onChange={(e) => {
+                  setOrderPlatform(e.target.value);
+                  setOrderPage(1);
+                }}
+                className="h-8 px-2 rounded-md border border-[#E5E7EB] text-xs"
+              >
+                <option value="all">Όλες οι πλατφόρμες</option>
+                {orderPlatforms.map((p) => (
+                  <option key={p} value={p}>{PLATFORM_LABELS[p] || p}</option>
+                ))}
+              </select>
+              <select
+                value={orderStatus}
+                onChange={(e) => {
+                  setOrderStatus(e.target.value);
+                  setOrderPage(1);
+                }}
+                className="h-8 px-2 rounded-md border border-[#E5E7EB] text-xs"
+              >
+                <option value="all">Όλα τα statuses</option>
+                {orderStatuses.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+              <select
+                value={String(orderRows)}
+                onChange={(e) => {
+                  const v = e.target.value === 'all' ? 'all' : Number(e.target.value);
+                  setOrderRows(v as RowsPerPage);
+                  setOrderPage(1);
+                }}
+                className="h-8 px-2 rounded-md border border-[#E5E7EB] text-xs"
+              >
+                <option value="10">10 / σελίδα</option>
+                <option value="20">20 / σελίδα</option>
+                <option value="50">50 / σελίδα</option>
+                <option value="100">100 / σελίδα</option>
+                <option value="all">Προβολή όλων</option>
+              </select>
+              <Tooltip content="Συνδυάστε platform/status/search για drill-down. Τα φίλτρα εφαρμόζονται πριν το sort και την pagination.">
+                <span className="text-[11px] text-[#9CA3AF]">Filters</span>
+              </Tooltip>
+            </div>
+            {pagedOrders.length > 0 ? (
               <div className="overflow-x-auto -mx-5 px-5">
                 <table className="w-full text-left text-xs" style={{ minWidth: 480 }}>
                   <thead>
@@ -435,7 +594,7 @@ export function EcommerceDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {sortedOrders.map((o, i) => (
+                    {pagedOrders.map((o, i) => (
                       <tr
                         key={o.orderId + i}
                         className="border-b border-[#F9FAFB] last:border-0 hover:bg-[#F9FAFB] transition-colors"
@@ -464,8 +623,30 @@ export function EcommerceDashboard() {
                 </table>
               </div>
             ) : (
-              <p className="text-sm text-[#9CA3AF] py-4 text-center">Δεν υπάρχουν παραγγελίες</p>
+              <p className="text-sm text-[#9CA3AF] py-4 text-center">Δεν βρέθηκαν παραγγελίες με τα τρέχοντα φίλτρα</p>
             )}
+            <div className="mt-3 flex items-center justify-between text-[11px] text-[#6B7280]">
+              <span>Σύνολο: {filteredOrders.length} παραγγελίες</span>
+              {orderRows !== 'all' && (
+                <div className="inline-flex items-center gap-1">
+                  <button
+                    className="px-2 py-1 rounded border border-[#E5E7EB] disabled:opacity-40"
+                    disabled={safeOrderPage <= 1}
+                    onClick={() => setOrderPage((p) => Math.max(1, p - 1))}
+                  >
+                    Προηγ.
+                  </button>
+                  <span>{safeOrderPage}/{orderTotalPages}</span>
+                  <button
+                    className="px-2 py-1 rounded border border-[#E5E7EB] disabled:opacity-40"
+                    disabled={safeOrderPage >= orderTotalPages}
+                    onClick={() => setOrderPage((p) => Math.min(orderTotalPages, p + 1))}
+                  >
+                    Επόμ.
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </Card>
       </div>

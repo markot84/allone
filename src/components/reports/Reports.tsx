@@ -19,6 +19,8 @@ import {
 } from 'lucide-react';
 import { Card, CardHeader, Badge, Button, Spinner } from '../common';
 import { useProductSource, useSegments, useCampaigns, useOrganic, useBrand } from '../../hooks';
+import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
+import { formatCurrencyCompact, formatNumber } from '../../utils/format';
 import { useToast } from '../common/Toast';
 import {
   exportReport,
@@ -104,6 +106,7 @@ export function Reports() {
   const segmentsCount = segments.length;
   const { campaigns } = useCampaigns();
   const { records: organicRecords, totalOrganicRevenue, hasImported: hasOrganic } = useOrganic();
+  const ecomm = useEcommerceSummary();
   const campaignsTyped = (campaigns ?? []) as import('../../types').Campaign[];
 
   const [scheduledReports, setScheduledReports] = useState<ScheduledReport[]>(() => {
@@ -154,7 +157,7 @@ export function Reports() {
     toast.success('Διαγράφηκε');
   };
 
-  const hasFinancialData = hasOrganic || (campaignsTyped.length > 0);
+  const hasFinancialData = hasOrganic || (campaignsTyped.length > 0) || ecomm.hasData;
   const reportDataCounts: Record<string, number | string> = {
     executive: hasFinancialData ? '✓' : 0,
     segment: segmentsCount,
@@ -343,7 +346,7 @@ export function Reports() {
       </Card>
 
       {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <Card padding="md">
           <div className="text-center">
             <p className="text-3xl font-bold text-[#1A1A1A] font-mono">{productsCount}</p>
@@ -370,6 +373,13 @@ export function Reports() {
             <p className="text-3xl font-bold text-[#1A1A1A] font-mono">{hasOrganic ? '✓' : '—'}</p>
             <p className="text-sm text-[#4A4A4A] mt-1">Οργανικά Έσοδα</p>
             <p className="text-xs text-[#22C55E]">{hasOrganic ? 'Εισαγόμενα' : 'Χωρίς δεδομένα'}</p>
+          </div>
+        </Card>
+        <Card padding="md">
+          <div className="text-center">
+            <p className="text-3xl font-bold text-[#1A1A1A] font-mono">{ecomm.hasData ? formatNumber(ecomm.orderCount) : '—'}</p>
+            <p className="text-sm text-[#4A4A4A] mt-1">E-shop Orders</p>
+            <p className="text-xs text-[#4A4A4A]">{ecomm.hasData ? formatCurrencyCompact(ecomm.totalRevenue) : 'Χωρίς δεδομένα'}</p>
           </div>
         </Card>
       </div>

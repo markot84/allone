@@ -942,11 +942,15 @@ export const connectorSync = onRequest(
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
 
+    let brandId = '';
+    let provider = '';
     try {
       const idToken = authHeader.slice(7).trim();
       const decoded = await admin.auth().verifyIdToken(idToken);
 
-      const { brandId, provider } = req.body as { brandId?: string; provider?: string };
+      const body = req.body as { brandId?: string; provider?: string };
+      brandId = body.brandId || '';
+      provider = body.provider || '';
       if (!brandId || !provider) { res.status(400).json({ error: 'Missing params' }); return; }
 
       if (!(await verifyBrandConnectorManagement(decoded.uid, brandId))) {
@@ -980,14 +984,17 @@ export const connectorSync = onRequest(
 
       // Refresh e-commerce summary after any e-commerce platform sync
       if (['shopify', 'woocommerce', 'opencart', 'magento'].includes(provider)) {
-        computeEcommerceSummary(brandId).catch((e) =>
-          logger.warn(`[connectorSync] ecommerce summary refresh failed for ${brandId}:`, e)
-        );
+        try {
+          await computeEcommerceSummary(brandId);
+        } catch (e) {
+          logger.warn(`[connectorSync] ecommerce summary refresh failed for ${brandId}:`, e);
+        }
       }
 
       res.status(200).json(result);
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
+      logger.error(`[connectorSync] failed for brand=${brandId || 'unknown'} provider=${provider || 'unknown'}: ${msg}`);
       res.status(500).json({ error: msg });
     }
   }
@@ -1058,11 +1065,51 @@ export const connectorSaveCredentials = onRequest(
   }
 );
 
-// ─── Scheduled: Daily Sync (06:00 Europe/Athens) ───────────────
+// ─── Nightly Jobs Health Monitor ────────────────────────────────
+
+type NightlyJobKey =
+  | 'scheduledSync'
+  | 'scheduledAggregates'
+  | 'scheduledAlerts'
+  | 'scheduledDigest';
+
+async function markNightlyJob(
+  job: NightlyJobKey,
+  state: 'running' | 'success' | 'failed',
+  opts?: { message?: string; durationMs?: number }
+): Promise<void> {
+  const patch: Record<string, unknown> = {
+    timezone: 'Europe/Athens',
+    updatedAt: FieldValue.serverTimestamp(),
+    [`jobs.${job}.status`]: state,
+    [`jobs.${job}.updatedAt`]: FieldValue.serverTimestamp(),
+  };
+
+  if (opts?.message) {
+    patch[`jobs.${job}.lastMessage`] = opts.message.slice(0, 500);
+  }
+  if (typeof opts?.durationMs === 'number') {
+    patch[`jobs.${job}.lastDurationMs`] = Math.max(0, Math.round(opts.durationMs));
+  }
+
+  if (state === 'running') {
+    patch[`jobs.${job}.lastStartedAt`] = FieldValue.serverTimestamp();
+  } else if (state === 'success') {
+    patch[`jobs.${job}.lastFinishedAt`] = FieldValue.serverTimestamp();
+    patch[`jobs.${job}.lastSuccessAt`] = FieldValue.serverTimestamp();
+  } else {
+    patch[`jobs.${job}.lastFinishedAt`] = FieldValue.serverTimestamp();
+    patch[`jobs.${job}.lastErrorAt`] = FieldValue.serverTimestamp();
+  }
+
+  await db.doc('system_health/nightly_jobs').set(patch, { merge: true });
+}
+
+// ─── Scheduled: Daily Sync (23:00 Europe/Athens) ───────────────
 
 export const scheduledSync = onSchedule(
   {
-    schedule: 'every day 06:00',
+    schedule: 'every day 23:00',
     timeZone: 'Europe/Athens',
     region: 'europe-west1',
     memory: '512MiB',
@@ -1070,114 +1117,129 @@ export const scheduledSync = onSchedule(
     secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID', 'SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET'],
   },
   async () => {
+    const startedAt = Date.now();
+    await markNightlyJob('scheduledSync', 'running', { message: 'Nightly connector sync started' });
     logger.info('[ScheduledSync] Starting daily connector sync');
 
-    const connectorsSnap = await db.collection('connectors').get();
+    try {
+      const connectorsSnap = await db.collection('connectors').get();
 
-    for (const doc of connectorsSnap.docs) {
-      const brandId = doc.id;
-      const data = doc.data();
+      for (const doc of connectorsSnap.docs) {
+        const brandId = doc.id;
+        const data = doc.data();
 
-      if (data.google_ads?.connected) {
-        try {
-          const result = await fetchGoogleAdsCampaigns(brandId);
-          logger.info(`[ScheduledSync] Google Ads for ${brandId}: imported ${result.imported}`);
-        } catch (err) {
-          logger.error(`[ScheduledSync] Google Ads failed for ${brandId}:`, err);
+        if (data.google_ads?.connected) {
+          try {
+            const result = await fetchGoogleAdsCampaigns(brandId);
+            logger.info(`[ScheduledSync] Google Ads for ${brandId}: imported ${result.imported}`);
+          } catch (err) {
+            logger.error(`[ScheduledSync] Google Ads failed for ${brandId}:`, err);
+          }
+        }
+
+        if (data.meta?.connected) {
+          try {
+            const result = await fetchMetaCampaigns(brandId);
+            logger.info(`[ScheduledSync] Meta for ${brandId}: imported ${result.imported}`);
+          } catch (err) {
+            logger.error(`[ScheduledSync] Meta failed for ${brandId}:`, err);
+          }
+        }
+
+        if (data.merchant?.connected) {
+          try {
+            const result = await fetchPriceBenchmarks(brandId);
+            logger.info(`[ScheduledSync] Merchant for ${brandId}: imported ${result.imported}`);
+          } catch (err) {
+            logger.error(`[ScheduledSync] Merchant failed for ${brandId}:`, err);
+          }
+        }
+
+        if (data.shopify?.connected) {
+          try {
+            const result = await fetchShopifyData(brandId);
+            logger.info(`[ScheduledSync] Shopify for ${brandId}: imported ${result.imported}`);
+          } catch (err) {
+            logger.error(`[ScheduledSync] Shopify failed for ${brandId}:`, err);
+          }
+        }
+
+        if (data.woocommerce?.connected) {
+          try {
+            const result = await fetchWooCommerceData(brandId);
+            logger.info(`[ScheduledSync] WooCommerce for ${brandId}: imported ${result.imported}`);
+          } catch (err) {
+            logger.error(`[ScheduledSync] WooCommerce failed for ${brandId}:`, err);
+          }
+        }
+
+        if (data.opencart?.connected) {
+          try {
+            const result = await fetchOpenCartData(brandId);
+            logger.info(`[ScheduledSync] OpenCart for ${brandId}: imported ${result.imported}`);
+          } catch (err) {
+            logger.error(`[ScheduledSync] OpenCart failed for ${brandId}:`, err);
+          }
+        }
+
+        if (data.magento?.connected) {
+          try {
+            const result = await fetchMagentoData(brandId);
+            logger.info(`[ScheduledSync] Magento for ${brandId}: imported ${result.imported}`);
+          } catch (err) {
+            logger.error(`[ScheduledSync] Magento failed for ${brandId}:`, err);
+          }
+        }
+
+        if (data.ga4?.connected && data.ga4?.propertyId) {
+          try {
+            const result = await fetchGA4Data(brandId);
+            logger.info(`[ScheduledSync] GA4 for ${brandId}: imported ${result.imported} days`);
+          } catch (err) {
+            logger.error(`[ScheduledSync] GA4 failed for ${brandId}:`, err);
+          }
+        }
+
+        // Refresh e-commerce summary if any e-commerce platform is connected
+        const hasEcommerce = data.shopify?.connected || data.woocommerce?.connected || data.opencart?.connected || data.magento?.connected;
+        if (hasEcommerce) {
+          try {
+            await computeEcommerceSummary(brandId);
+            logger.info(`[ScheduledSync] E-commerce summary updated for ${brandId}`);
+          } catch (err) {
+            logger.error(`[ScheduledSync] E-commerce summary failed for ${brandId}:`, err);
+          }
         }
       }
 
-      if (data.meta?.connected) {
-        try {
-          const result = await fetchMetaCampaigns(brandId);
-          logger.info(`[ScheduledSync] Meta for ${brandId}: imported ${result.imported}`);
-        } catch (err) {
-          logger.error(`[ScheduledSync] Meta failed for ${brandId}:`, err);
+      // Competitor monitoring — runs for all brands with competitor settings
+      const competitorSnap = await db.collection('competitor_settings').get();
+      for (const doc of competitorSnap.docs) {
+        const brandId = doc.id;
+        const data = doc.data();
+        if (data.competitors?.length > 0) {
+          try {
+            const result = await fetchCompetitorAds(brandId);
+            logger.info(`[ScheduledSync] Competitors for ${brandId}: ${result.totalAds} ads (${result.newAds} new)`);
+          } catch (err) {
+            logger.error(`[ScheduledSync] Competitors failed for ${brandId}:`, err);
+          }
         }
       }
 
-      if (data.merchant?.connected) {
-        try {
-          const result = await fetchPriceBenchmarks(brandId);
-          logger.info(`[ScheduledSync] Merchant for ${brandId}: imported ${result.imported}`);
-        } catch (err) {
-          logger.error(`[ScheduledSync] Merchant failed for ${brandId}:`, err);
-        }
-      }
-
-      if (data.shopify?.connected) {
-        try {
-          const result = await fetchShopifyData(brandId);
-          logger.info(`[ScheduledSync] Shopify for ${brandId}: imported ${result.imported}`);
-        } catch (err) {
-          logger.error(`[ScheduledSync] Shopify failed for ${brandId}:`, err);
-        }
-      }
-
-      if (data.woocommerce?.connected) {
-        try {
-          const result = await fetchWooCommerceData(brandId);
-          logger.info(`[ScheduledSync] WooCommerce for ${brandId}: imported ${result.imported}`);
-        } catch (err) {
-          logger.error(`[ScheduledSync] WooCommerce failed for ${brandId}:`, err);
-        }
-      }
-
-      if (data.opencart?.connected) {
-        try {
-          const result = await fetchOpenCartData(brandId);
-          logger.info(`[ScheduledSync] OpenCart for ${brandId}: imported ${result.imported}`);
-        } catch (err) {
-          logger.error(`[ScheduledSync] OpenCart failed for ${brandId}:`, err);
-        }
-      }
-
-      if (data.magento?.connected) {
-        try {
-          const result = await fetchMagentoData(brandId);
-          logger.info(`[ScheduledSync] Magento for ${brandId}: imported ${result.imported}`);
-        } catch (err) {
-          logger.error(`[ScheduledSync] Magento failed for ${brandId}:`, err);
-        }
-      }
-
-      if (data.ga4?.connected && data.ga4?.propertyId) {
-        try {
-          const result = await fetchGA4Data(brandId);
-          logger.info(`[ScheduledSync] GA4 for ${brandId}: imported ${result.imported} days`);
-        } catch (err) {
-          logger.error(`[ScheduledSync] GA4 failed for ${brandId}:`, err);
-        }
-      }
-
-      // Refresh e-commerce summary if any e-commerce platform is connected
-      const hasEcommerce = data.shopify?.connected || data.woocommerce?.connected || data.opencart?.connected || data.magento?.connected;
-      if (hasEcommerce) {
-        try {
-          await computeEcommerceSummary(brandId);
-          logger.info(`[ScheduledSync] E-commerce summary updated for ${brandId}`);
-        } catch (err) {
-          logger.error(`[ScheduledSync] E-commerce summary failed for ${brandId}:`, err);
-        }
-      }
+      const durationMs = Date.now() - startedAt;
+      await markNightlyJob('scheduledSync', 'success', {
+        durationMs,
+        message: `Completed. connectors=${connectorsSnap.size} competitorBrands=${competitorSnap.size}`,
+      });
+      logger.info('[ScheduledSync] Daily sync completed');
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      const durationMs = Date.now() - startedAt;
+      await markNightlyJob('scheduledSync', 'failed', { durationMs, message: msg });
+      logger.error('[ScheduledSync] Fatal error:', msg);
+      throw error;
     }
-
-    // Competitor monitoring — runs for all brands with competitor settings
-    const competitorSnap = await db.collection('competitor_settings').get();
-    for (const doc of competitorSnap.docs) {
-      const brandId = doc.id;
-      const data = doc.data();
-      if (data.competitors?.length > 0) {
-        try {
-          const result = await fetchCompetitorAds(brandId);
-          logger.info(`[ScheduledSync] Competitors for ${brandId}: ${result.totalAds} ads (${result.newAds} new)`);
-        } catch (err) {
-          logger.error(`[ScheduledSync] Competitors failed for ${brandId}:`, err);
-        }
-      }
-    }
-
-    logger.info('[ScheduledSync] Daily sync completed');
   }
 );
 
@@ -1411,16 +1473,31 @@ export const refreshAggregates = onRequest(
 
 export const scheduledAggregates = onSchedule(
   {
-    schedule: 'every day 06:30',
+    schedule: 'every day 23:20',
     timeZone: 'Europe/Athens',
     region: 'europe-west1',
     memory: '512MiB',
     timeoutSeconds: 300,
   },
   async () => {
-    logger.info('[scheduledAggregates] Starting daily aggregate computation');
-    const count = await computeAggregatesForAllBrands();
-    logger.info(`[scheduledAggregates] Completed for ${count} brands`);
+    const startedAt = Date.now();
+    await markNightlyJob('scheduledAggregates', 'running', { message: 'Aggregate computation started' });
+    try {
+      logger.info('[scheduledAggregates] Starting daily aggregate computation');
+      const count = await computeAggregatesForAllBrands();
+      const durationMs = Date.now() - startedAt;
+      await markNightlyJob('scheduledAggregates', 'success', {
+        durationMs,
+        message: `Completed for ${count} brands`,
+      });
+      logger.info(`[scheduledAggregates] Completed for ${count} brands`);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      const durationMs = Date.now() - startedAt;
+      await markNightlyJob('scheduledAggregates', 'failed', { durationMs, message: msg });
+      logger.error('[scheduledAggregates] Fatal error:', msg);
+      throw error;
+    }
   }
 );
 
@@ -1428,16 +1505,31 @@ export const scheduledAggregates = onSchedule(
 
 export const scheduledAlerts = onSchedule(
   {
-    schedule: 'every day 07:00',
+    schedule: 'every day 23:35',
     timeZone: 'Europe/Athens',
     region: 'europe-west1',
     memory: '512MiB',
     timeoutSeconds: 300,
   },
   async () => {
-    logger.info('[scheduledAlerts] Starting server-side alert evaluation');
-    const { brands, alerts } = await evaluateAllBrandsServerSide();
-    logger.info(`[scheduledAlerts] Completed: ${brands} brands, ${alerts} new alerts`);
+    const startedAt = Date.now();
+    await markNightlyJob('scheduledAlerts', 'running', { message: 'Alert evaluation started' });
+    try {
+      logger.info('[scheduledAlerts] Starting server-side alert evaluation');
+      const { brands, alerts } = await evaluateAllBrandsServerSide();
+      const durationMs = Date.now() - startedAt;
+      await markNightlyJob('scheduledAlerts', 'success', {
+        durationMs,
+        message: `Completed: brands=${brands}, newAlerts=${alerts}`,
+      });
+      logger.info(`[scheduledAlerts] Completed: ${brands} brands, ${alerts} new alerts`);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      const durationMs = Date.now() - startedAt;
+      await markNightlyJob('scheduledAlerts', 'failed', { durationMs, message: msg });
+      logger.error('[scheduledAlerts] Fatal error:', msg);
+      throw error;
+    }
   }
 );
 
@@ -1445,7 +1537,7 @@ export const scheduledAlerts = onSchedule(
 
 export const scheduledDigest = onSchedule(
   {
-    schedule: 'every day 07:30',
+    schedule: 'every day 23:50',
     timeZone: 'Europe/Athens',
     region: 'europe-west1',
     memory: '512MiB',
@@ -1453,9 +1545,24 @@ export const scheduledDigest = onSchedule(
     secrets: [SMTP_EMAIL_SECRET, SMTP_PASSWORD_SECRET],
   },
   async () => {
-    logger.info('[scheduledDigest] Starting daily email digest');
-    const { brands, emails } = await sendDigestForAllBrands();
-    logger.info(`[scheduledDigest] Completed: ${brands} brands, ${emails} emails sent`);
+    const startedAt = Date.now();
+    await markNightlyJob('scheduledDigest', 'running', { message: 'Daily digest started' });
+    try {
+      logger.info('[scheduledDigest] Starting daily email digest');
+      const { brands, emails } = await sendDigestForAllBrands();
+      const durationMs = Date.now() - startedAt;
+      await markNightlyJob('scheduledDigest', 'success', {
+        durationMs,
+        message: `Completed: brands=${brands}, emails=${emails}`,
+      });
+      logger.info(`[scheduledDigest] Completed: ${brands} brands, ${emails} emails sent`);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      const durationMs = Date.now() - startedAt;
+      await markNightlyJob('scheduledDigest', 'failed', { durationMs, message: msg });
+      logger.error('[scheduledDigest] Fatal error:', msg);
+      throw error;
+    }
   }
 );
 

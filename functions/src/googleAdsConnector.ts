@@ -48,6 +48,7 @@ const GOOGLE_ADS_API_VERSION = 'v22';
 const GOOGLE_ADS_BASE_URL = `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}`;
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
+const GOOGLE_ADS_HISTORY_YEARS = 2;
 
 const SCOPES = ['https://www.googleapis.com/auth/adwords'];
 
@@ -433,7 +434,10 @@ async function refreshAccessToken(refreshToken: string): Promise<string | null> 
 }
 
 /**
- * Fetch campaign performance data from Google Ads API (last 365 days)
+ * Fetch campaign performance data from Google Ads API.
+ * Strategy:
+ * - Previous 2 years load once (history)
+ * - Current year loads on every sync
  */
 export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
   success: boolean;
@@ -464,12 +468,20 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
     return { success: false, imported: 0, error: 'Ο Customer ID ταυτίζεται με τον MCC — χρησιμοποιήστε το ID του sub-account.' };
   }
 
-  // Build last 365 days date range
+  // Date window policy:
+  // - First historical load: (currentYear-2)-01-01 -> today
+  // - Subsequent syncs: currentYear-01-01 -> today
   const now = new Date();
-  const since = new Date(now);
-  since.setDate(since.getDate() - 365 * 3);
-  const sinceStr = since.toISOString().slice(0, 10);
+  const currentYear = now.getUTCFullYear();
+  const historyStartYear = currentYear - GOOGLE_ADS_HISTORY_YEARS;
+  const historyLoaded = Boolean(connector.historyLoadedUntilYear);
+  const sinceStr = historyLoaded
+    ? `${currentYear}-01-01`
+    : `${historyStartYear}-01-01`;
   const untilStr = now.toISOString().slice(0, 10);
+  logger.info(
+    `[GoogleAds] Sync window for ${brandId}: ${sinceStr} -> ${untilStr} (${historyLoaded ? 'current-year' : 'history+current'})`
+  );
 
   // Note: ORDER BY on metrics with date segmentation causes UNIMPLEMENTED in some accounts.
   // segments.date must be in SELECT when used in WHERE with date range.
@@ -742,6 +754,60 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
       prepared.push(campaign);
     }
 
+    // Merge existing daily metrics so historical years are loaded once and preserved.
+    if (prepared.length > 0) {
+      const refs = prepared.map((c) => getDb().collection('campaigns').doc(c.id));
+      const existingDocs = await getDb().getAll(...refs);
+      const existingById = new Map<string, any>();
+      for (const d of existingDocs) {
+        if (d.exists) existingById.set(d.id, d.data());
+      }
+
+      for (const campaign of prepared) {
+        const existing = existingById.get(campaign.id);
+        if (!existing) continue;
+
+        const existingDaily = (existing.dailyMetrics || {}) as Record<string, any>;
+        const incomingDaily = (campaign.dailyMetrics || {}) as Record<string, any>;
+        const mergedDaily: Record<string, any> = { ...existingDaily, ...incomingDaily };
+        campaign.dailyMetrics = mergedDaily;
+
+        let impressions = 0;
+        let clicks = 0;
+        let conversions = 0;
+        let amountSpent = 0;
+        let convValue = 0;
+        const mergedActions: Record<string, { conversions: number; value: number }> = {};
+
+        for (const dm of Object.values(mergedDaily)) {
+          const m = dm as any;
+          impressions += Number(m.impressions || 0);
+          clicks += Number(m.clicks || 0);
+          conversions += Number(m.conversions || 0);
+          amountSpent += Number(m.amount_spent || 0);
+          convValue += Number(m.conversion_value || 0);
+          const ca = (m.conversionActions || {}) as Record<string, { conversions: number; value: number }>;
+          for (const [k, v] of Object.entries(ca)) {
+            if (!mergedActions[k]) mergedActions[k] = { conversions: 0, value: 0 };
+            mergedActions[k].conversions += Number(v.conversions || 0);
+            mergedActions[k].value += Number(v.value || 0);
+          }
+        }
+
+        campaign.impressions = impressions;
+        campaign.clicks = clicks;
+        campaign.conversions = conversions;
+        campaign.amount_spent = Math.round(amountSpent * 100) / 100;
+        campaign.conversion_value = convValue;
+        campaign.ctr = impressions > 0 ? Math.round((clicks / impressions) * 10000) / 100 : 0;
+        campaign.roas = campaign.amount_spent > 0 ? Math.round((convValue / campaign.amount_spent) * 100) / 100 : 0;
+        campaign.conversionActions = mergedActions;
+        campaign.start_date = existing.start_date || `${historyStartYear}-01-01`;
+        campaign.end_date = untilStr;
+        campaign.period = `${campaign.start_date} – ${untilStr}`;
+      }
+    }
+
     const WRITE_CHUNK = 25;
     for (let i = 0; i < prepared.length; i += WRITE_CHUNK) {
       const slice = prepared.slice(i, i + WRITE_CHUNK);
@@ -781,6 +847,16 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
     errors: [],
     createdAt: FieldValue.serverTimestamp(),
   });
+
+  await getDb().doc(`connectors/${brandId}`).set(
+    {
+      google_ads: {
+        lastDataSyncAt: Date.now(),
+        historyLoadedUntilYear: connector.historyLoadedUntilYear || currentYear - 1,
+      },
+    },
+    { merge: true }
+  );
 
   return { success: true, imported: totalImported };
 }

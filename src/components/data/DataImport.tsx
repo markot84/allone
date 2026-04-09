@@ -395,7 +395,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
           }
         }
         if (typesImported.has('procurement')) {
-          queryClient.invalidateQueries({ queryKey: ['procurement'] });
+          queryClient.removeQueries({ queryKey: ['procurement'] });
         }
       } else {
         toast.error(
@@ -518,9 +518,11 @@ export function DataImport({ initialType }: DataImportProps = {}) {
                 <div className="flex items-center gap-2 min-w-0">
                   <Spinner size="sm" />
                   <span className="text-sm font-semibold text-[#4A4A4A]">
-                    {importProgress.fileProgress
-                      ? `Εισαγωγή ${importProgress.fileProgress.rowsProcessed.toLocaleString()} / ${importProgress.fileProgress.totalRows.toLocaleString()} εγγραφών`
-                      : `Εισαγωγή αρχείου ${importProgress.current} από ${importProgress.total}`}
+                    {importProgress.fileProgress?.phase
+                      ? importProgress.fileProgress.phase
+                      : importProgress.fileProgress
+                        ? `Εισαγωγή ${importProgress.fileProgress.rowsProcessed.toLocaleString()} / ${importProgress.fileProgress.totalRows.toLocaleString()} εγγραφών`
+                        : `Εισαγωγή αρχείου ${importProgress.current} από ${importProgress.total}`}
                   </span>
                 </div>
                 <span className="text-sm font-mono font-semibold text-[#4A4A4A] flex-shrink-0">

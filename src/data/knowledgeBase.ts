@@ -188,6 +188,7 @@ AI Insights: Προτάσεις για βελτίωση απόδοσης
 ### Αυτόματη δημιουργία (1x/ημέρα)
 Κατά την πρώτη σας είσοδο στην εφαρμογή κάθε ημέρα, το σύστημα δημιουργεί αυτόματα ένα νέο briefing. Αναλύει:
 - Έσοδα & ROAS — organic + campaign revenue, ad spend
+- E-commerce performance — Store Revenue, Orders, AOV, True ROAS, Revenue Gap (όταν υπάρχουν συνδεδεμένα e-shop δεδομένα)
 - Traffic — sessions, users, conversions, εβδομαδιαίες μεταβολές (GA4)
 - Απόθεμα — dead stock, low stock σε best sellers, δεσμευμένο κεφάλαιο
 - Segments — At Risk %, Champions %, μεγέθη segments
@@ -220,7 +221,8 @@ AI Insights: Προτάσεις για βελτίωση απόδοσης
     tips: [
       'Το briefing δημιουργείται αυτόματα — δεν χρειάζεται κάποια ενέργεια από εσάς',
       'Αν δείτε amber border, σημαίνει ότι κάτι σημαντικό άλλαξε στα δεδομένα',
-      'Κάντε κλικ στις ενέργειες για να πλοηγηθείτε άμεσα στη σχετική σελίδα'
+      'Κάντε κλικ στις ενέργειες για να πλοηγηθείτε άμεσα στη σχετική σελίδα',
+      'Τα e-commerce metrics (Store Revenue, AOV, True ROAS) συμμετέχουν πλέον στη λογική του briefing όταν υπάρχουν connector δεδομένα'
     ],
     faq: [
       {
@@ -233,7 +235,7 @@ AI Insights: Προτάσεις για βελτίωση απόδοσης
       },
       {
         question: 'Ποια δεδομένα χρησιμοποιεί;',
-        answer: 'Αξιοποιεί όλα τα υπάρχοντα δεδομένα: organic revenue, campaigns, GA4 analytics, product inventory, RFM segments και automation alerts.'
+        answer: 'Αξιοποιεί όλα τα υπάρχοντα δεδομένα: organic revenue, campaigns, GA4 analytics, product inventory, RFM segments, automation alerts και (όταν υπάρχουν) e-commerce metrics όπως Store Revenue, Orders, AOV και True ROAS.'
       }
     ]
   },
@@ -1483,10 +1485,19 @@ Area chart με ημερήσια έσοδα (90 ημέρες). Hover για ακ
 Horizontal bar chart + progress bars που δείχνουν πόσα έσοδα και παραγγελίες αντιστοιχούν σε κάθε πλατφόρμα.
 
 ### Top Products
-Πίνακας με τα 20 κορυφαία προϊόντα κατά έσοδα. Sortable κατά έσοδα ή ποσότητα. Κάθε γραμμή εμφανίζει inline bar για οπτική σύγκριση.
+Πίνακας με top προϊόντα κατά έσοδα. Sortable κατά έσοδα ή ποσότητα, με:
+- Search (όνομα/SKU)
+- Rows per page (10/20/50/100/All)
+- Pagination και "Προβολή όλων"
+- Inline bars για οπτική σύγκριση
 
 ### Πρόσφατες Παραγγελίες
-Πίνακας με τις 50 πιο πρόσφατες παραγγελίες. Sortable κατά ημ/νία, total ή platform. Color-coded status badges:
+Πίνακας παραγγελιών με:
+- Search (order/status/platform)
+- Filters ανά platform και status
+- Rows per page + pagination + "Προβολή όλων"
+- Sortable κατά ημ/νία, total ή platform
+- Color-coded status badges:
 - Πράσινο: paid, completed, fulfilled
 - Κίτρινο: pending, on-hold
 - Κόκκινο: refunded, cancelled
@@ -1496,9 +1507,12 @@ Horizontal bar chart + progress bars που δείχνουν πόσα έσοδα
     tags: ['ecommerce', 'explorer', 'revenue', 'orders', 'products', 'aov', 'dashboard'],
     related: ['connectors-overview', 'ecommerce-shopify', 'ecommerce-woo', 'store-revenue-vs-attributed'],
     tips: [
-      'Κάντε κλικ στις κεφαλίδες στηλών στους πίνακες για sorting',
+      'Χρησιμοποιήστε search + platform/status filters για γρήγορο drill-down',
+      'Αλλάξτε rows-per-page ή επιλέξτε "Προβολή όλων" για full list',
+      'Κάντε κλικ στις κεφαλίδες στηλών για sorting',
       'Αν δεν εμφανίζονται δεδομένα, ελέγξτε ότι έχετε κάνει Sync στον connector',
-      'Τα δεδομένα ανανεώνονται αυτόματα μετά από κάθε sync'
+      'Τα δεδομένα ανανεώνονται αυτόματα μετά από κάθε sync',
+      'Κάντε hover στα labels για tooltip εξήγηση KPI (Store Revenue, Orders, AOV)'
     ]
   },
   {
@@ -1532,6 +1546,7 @@ Horizontal bar chart + progress bars που δείχνουν πόσα έσοδα
 - 4 MetricCards: Store Revenue, Attributed Revenue, True ROAS, Revenue Gap
 - Γραμμή Store Revenue (πράσινη) στο monthly trend chart
 - Επεξηγηματικό κείμενο κάτω από τα cards
+- Tooltips στα metric labels για γρήγορη κατανόηση ορισμών
 
 ## Γιατί είναι σημαντικό
 Ο κλασικός ROAS βασίζεται σε attribution models που μπορεί να μετράνε duplicates (ένα conversion σε Google + Meta). Ο True ROAS χρησιμοποιεί πραγματικά δεδομένα παραγγελιών, δίνοντας πιο ρεαλιστική εικόνα.`,
