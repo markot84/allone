@@ -608,35 +608,37 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
           </div>
         </PrimerHeader.Item>
 
-        {currentBrand && (
-          <PrimerHeader.Item className="hidden lg:block">
-            <BrandMenu
-              currentBrand={currentBrand}
-              brands={brands}
-              isOpen={brandMenuOpen}
-              onToggle={() => setBrandMenuOpen((o) => !o)}
-              onClose={() => setBrandMenuOpen(false)}
-              onSelect={setCurrentBrand}
-            />
-          </PrimerHeader.Item>
-        )}
-
-        <PrimerHeader.Item style={{ position: 'relative', overflow: 'visible' }}>
-          <NotificationBell onNavigate={(s) => onSectionChange(s)} />
-        </PrimerHeader.Item>
-
-        <PrimerHeader.Item style={{ position: 'relative', overflow: 'visible' }}>
-          <AccountMenu
-            user={user}
-            onSignOut={signOut}
-            isOpen={userMenuOpen}
-            onToggle={() => setUserMenuOpen((o) => !o)}
-            onClose={() => setUserMenuOpen(false)}
-            hasPasswordProvider={hasPasswordProvider}
-            hasGoogleProvider={hasGoogleProvider}
-            onLinkPassword={linkPassword}
-            onLinkGoogle={linkGoogle}
-          />
+        <PrimerHeader.Item style={{ marginLeft: 'auto', minWidth: 0 }}>
+          <div className="flex items-center gap-2 lg:gap-3">
+            {currentBrand && (
+              <div className="hidden lg:block">
+                <BrandMenu
+                  currentBrand={currentBrand}
+                  brands={brands}
+                  isOpen={brandMenuOpen}
+                  onToggle={() => setBrandMenuOpen((o) => !o)}
+                  onClose={() => setBrandMenuOpen(false)}
+                  onSelect={setCurrentBrand}
+                />
+              </div>
+            )}
+            <div style={{ position: 'relative', overflow: 'visible' }}>
+              <NotificationBell onNavigate={(s) => onSectionChange(s)} />
+            </div>
+            <div style={{ position: 'relative', overflow: 'visible' }}>
+              <AccountMenu
+                user={user}
+                onSignOut={signOut}
+                isOpen={userMenuOpen}
+                onToggle={() => setUserMenuOpen((o) => !o)}
+                onClose={() => setUserMenuOpen(false)}
+                hasPasswordProvider={hasPasswordProvider}
+                hasGoogleProvider={hasGoogleProvider}
+                onLinkPassword={linkPassword}
+                onLinkGoogle={linkGoogle}
+              />
+            </div>
+          </div>
         </PrimerHeader.Item>
       </PrimerHeader>
 

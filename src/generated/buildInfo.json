@@ -1,10 +1,14 @@
 {
-  "version": "0.346.0",
-  "previousVersion": "0.345.0",
-  "commitHash": "80998cd",
+  "version": "0.351.0",
+  "previousVersion": "0.350.0",
+  "commitHash": "9dc85cd",
   "branch": "main",
-  "buildDate": "2026-04-09T19:07:18.769Z",
+  "buildDate": "2026-04-09T20:19:33.637Z",
   "commits": [
+    {
+      "hash": "9dc85cd",
+      "message": "feat: stabilize connector sync, nightly health, and UI responsiveness"
+    },
     {
       "hash": "80998cd",
       "message": "chore: add project context rule for agent continuity"
@@ -60,13 +64,10 @@
     {
       "hash": "c3f7087",
       "message": "revert(campaigns): restore CampaignsPage to ef26624 (pre-5ea82e6 display logic) + BudgetOpportunitySection"
-    },
-    {
-      "hash": "fe98da7",
-      "message": "revert: restore CampaignsPage, roiUtils, connectors to stable 5ea82e6 + re-add BudgetOpportunitySection and bucketOverlapFraction export"
     }
   ],
   "changes": [
+    "[Νέο χαρακτηριστικό] Stabilize connector sync, nightly health, and UI responsiveness",
     "[Συντήρηση] Add project context rule for agent continuity",
     "[Νέο χαρακτηριστικό] E-commerce connectors, explorer page, dashboard/ROI integration, help docs",
     "[Διόρθωση] Restore EUR display and UI copy (fix mojibake from bad encoding)",
@@ -75,7 +76,6 @@
     "[Νέο χαρακτηριστικό] Purchase filter, GA-first Ads actions, phantom store visits",
     "[Διόρθωση] Only spread month-bucket spend for Meta, not Google day=01",
     "Revert(campaigns): remove Math.max of aggregate vs conversionActions",
-    "[Διόρθωση] Reconcile conversions with per-action sum vs aggregate",
-    "[Διόρθωση] Hide zero-match rows when conversion filter is on"
+    "[Διόρθωση] Reconcile conversions with per-action sum vs aggregate"
   ]
 }

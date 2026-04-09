@@ -649,6 +649,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
                 }
               }}
               className="hidden"
+              style={{ display: 'none' }}
               id="file-input"
             />
             <label
@@ -895,13 +896,13 @@ export function DataImport({ initialType }: DataImportProps = {}) {
 
 
           {/* Import Button */}
-          <div className="flex items-center gap-3 pt-4 border-t border-[#E5E5E5]">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 pt-4 border-t border-[#E5E5E5]">
             <Button
               variant="primary"
               loading={isImporting}
               onClick={handleImport}
               disabled={selectedFiles.length === 0 || isImporting}
-              className="flex-1"
+              className="w-full sm:flex-1"
             >
               {isImporting ? (
                 <>
@@ -916,6 +917,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
             </Button>
             <Button
               variant="secondary"
+              className="w-full sm:w-auto sm:flex-none"
               onClick={() => {
                 setShowHistory(!showHistory);
                 if (!showHistory) {

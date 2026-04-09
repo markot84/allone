@@ -79,6 +79,36 @@ function addDays(ymd: string, days: number): string {
   return toYmd(d);
 }
 
+function isRetriableFirestoreWriteError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /DEADLINE_EXCEEDED|Transaction too big|Request payload size exceeds|4 DEADLINE_EXCEEDED/i.test(msg);
+}
+
+async function commitCampaignSliceAdaptive(campaigns: any[]): Promise<void> {
+  if (campaigns.length === 0) return;
+  const batch = getDb().batch();
+  for (const campaign of campaigns) {
+    const ref = getDb().collection('campaigns').doc(campaign.id);
+    batch.set(ref, campaign, { merge: true });
+  }
+  try {
+    await batch.commit();
+  } catch (err) {
+    if (campaigns.length > 1 && isRetriableFirestoreWriteError(err)) {
+      const mid = Math.floor(campaigns.length / 2);
+      const left = campaigns.slice(0, mid);
+      const right = campaigns.slice(mid);
+      logger.warn(
+        `[Meta] Batch write retry via split (${campaigns.length} -> ${left.length}+${right.length})`
+      );
+      await commitCampaignSliceAdaptive(left);
+      await commitCampaignSliceAdaptive(right);
+      return;
+    }
+    throw err;
+  }
+}
+
 function getCredentials() {
   return {
     appId: process.env.META_APP_ID || '',
@@ -623,15 +653,10 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
 
       // Firestore: max 500 ops/batch and ~10MB payload.
       // Meta campaigns carry ~36 months of daily rows per campaign — keep chunks small.
-      const CHUNK = 50;
+      const CHUNK = 12;
       for (let i = 0; i < allCampaigns.length; i += CHUNK) {
         const chunk = allCampaigns.slice(i, i + CHUNK);
-        const batch = getDb().batch();
-        for (const campaign of chunk) {
-          const ref = getDb().collection('campaigns').doc(campaign.id);
-          batch.set(ref, campaign, { merge: true });
-        }
-        await batch.commit();
+        await commitCampaignSliceAdaptive(chunk);
       }
 
       if (allCampaigns.length > 0) {
