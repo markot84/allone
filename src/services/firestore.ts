@@ -2,7 +2,8 @@ import {
   collection, 
   doc, 
   getDoc, 
-  getDocs, 
+  getDocs,
+  getDocsFromServer,
   setDoc, 
   updateDoc, 
   deleteDoc, 
@@ -78,10 +79,12 @@ export class FirestoreService {
   }
 
   // Get all documents from collection. When brandId is provided, filters by brandId.
+  // `forceServer`: skip local cache so new connector writes show up immediately after sync.
   static async getDocuments<T>(
     collectionName: string,
     constraints: QueryConstraint[] = [],
-    brandId?: string | null
+    brandId?: string | null,
+    options?: { forceServer?: boolean }
   ): Promise<T[]> {
     try {
       const allConstraints: QueryConstraint[] = [];
@@ -90,7 +93,9 @@ export class FirestoreService {
       }
       allConstraints.push(...constraints);
       const q = query(collection(db, collectionName), ...allConstraints);
-      const querySnapshot = await getDocs(q);
+      const querySnapshot = options?.forceServer
+        ? await getDocsFromServer(q)
+        : await getDocs(q);
 
       return querySnapshot.docs.map((d) => ({
         id: d.id,
@@ -364,10 +369,11 @@ export const SuppliersService = {
 };
 
 export const CampaignsService = {
-  getAll: (brandId?: string | null) => {
-    return FirestoreService.getDocuments('campaigns', [orderBy('createdAt', 'desc')], brandId)
+  getAll: (brandId?: string | null, opts?: { forceServer?: boolean }) => {
+    const force = opts?.forceServer === true;
+    return FirestoreService.getDocuments('campaigns', [orderBy('createdAt', 'desc')], brandId, { forceServer: force })
       .catch(() => {
-        return FirestoreService.getDocuments('campaigns', [], brandId)
+        return FirestoreService.getDocuments('campaigns', [], brandId, { forceServer: force })
           .then(campaigns => campaigns.sort((a: any, b: any) => {
             const aDate = a.createdAt?.toDate?.() || a.importedAt?.toDate?.() || new Date(0);
             const bDate = b.createdAt?.toDate?.() || b.importedAt?.toDate?.() || new Date(0);

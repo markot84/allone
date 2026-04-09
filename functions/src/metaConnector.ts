@@ -81,7 +81,76 @@ function addDays(ymd: string, days: number): string {
 
 function isRetriableFirestoreWriteError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
-  return /DEADLINE_EXCEEDED|Transaction too big|Request payload size exceeds|4 DEADLINE_EXCEEDED/i.test(msg);
+  return /DEADLINE_EXCEEDED|Transaction too big|Request payload size exceeds|exceeds the maximum allowed size|document too large|4 DEADLINE_EXCEEDED|Resource exhausted/i.test(
+    msg
+  );
+}
+
+/** Firestore doc ~1MB cap: keep recent days only + drop per-day action maps (totals stay on campaign). */
+const MAX_DAILY_KEYS_PERSIST = 420;
+
+const YMD_KEY = /^\d{4}-\d{2}-\d{2}$/;
+
+function trimCampaignForFirestore(c: Record<string, unknown>): void {
+  const dm = c.dailyMetrics as Record<string, unknown> | undefined;
+  if (!dm || typeof dm !== 'object') return;
+  delete dm[''];
+  for (const k of Object.keys(dm)) {
+    if (!YMD_KEY.test(k)) delete dm[k];
+  }
+  const keys = Object.keys(dm).sort();
+  if (keys.length > MAX_DAILY_KEYS_PERSIST) {
+    const drop = keys.length - MAX_DAILY_KEYS_PERSIST;
+    for (let i = 0; i < drop; i++) delete dm[keys[i]];
+  }
+  for (const k of Object.keys(dm)) {
+    const row = dm[k] as Record<string, unknown> | undefined;
+    if (row && typeof row === 'object' && 'conversionActions' in row) {
+      delete row.conversionActions;
+    }
+  }
+}
+
+/** Firestore rejects NaN/Infinity; normalize so writes never fail silently in batches. */
+function fin(n: unknown): number {
+  const x = typeof n === 'number' ? n : parseFloat(String(n));
+  return Number.isFinite(x) ? x : 0;
+}
+
+function sanitizeCampaignForFirestore(c: Record<string, any>): void {
+  c.impressions = fin(c.impressions);
+  c.clicks = fin(c.clicks);
+  c.conversions = fin(c.conversions);
+  c.conversion_value = fin(c.conversion_value);
+  c.amount_spent = fin(c.amount_spent);
+  c.reach = fin(c.reach);
+  c.ctr = fin(c.ctr);
+  c.roas = fin(c.roas);
+  c.frequency = fin(c.frequency);
+  if (c.brandId != null) c.brandId = String(c.brandId);
+
+  const ca = c.conversionActions;
+  if (ca && typeof ca === 'object') {
+    for (const v of Object.values(ca) as { conversions?: unknown; value?: unknown }[]) {
+      if (v && typeof v === 'object') {
+        v.conversions = fin(v.conversions);
+        v.value = fin(v.value);
+      }
+    }
+  }
+
+  const dm = c.dailyMetrics;
+  if (dm && typeof dm === 'object') {
+    for (const row of Object.values(dm) as Record<string, unknown>[]) {
+      if (!row || typeof row !== 'object') continue;
+      (row as any).impressions = fin((row as any).impressions);
+      (row as any).clicks = fin((row as any).clicks);
+      (row as any).conversions = fin((row as any).conversions);
+      (row as any).amount_spent = fin((row as any).amount_spent);
+      (row as any).conversion_value = fin((row as any).conversion_value);
+      (row as any).reach = fin((row as any).reach);
+    }
+  }
 }
 
 async function commitCampaignSliceAdaptive(campaigns: any[]): Promise<void> {
@@ -106,6 +175,14 @@ async function commitCampaignSliceAdaptive(campaigns: any[]): Promise<void> {
       return;
     }
     throw err;
+  }
+}
+
+/** Last resort: one doc per commit (avoids huge multi-doc batch payloads). */
+async function commitCampaignsOneByOne(campaigns: any[]): Promise<void> {
+  for (const campaign of campaigns) {
+    const ref = getDb().collection('campaigns').doc(campaign.id);
+    await ref.set(campaign, { merge: true });
   }
 }
 
@@ -426,10 +503,12 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
       const campaignMap = new Map<string, any>();
 
       for (const row of allRows) {
-        const campaignId = row.campaign_id;
-        const campaignName = row.campaign_name || campaignNameMap.get(campaignId) || `Campaign ${campaignId}`;
+        const rawId = row.campaign_id;
+        const campaignId = rawId != null && rawId !== '' ? String(rawId) : '';
+        const campaignName =
+          row.campaign_name || campaignNameMap.get(campaignId) || (campaignId ? `Campaign ${campaignId}` : '');
         const rowDate: string = row.date_start || '';
-        if (!campaignId || !campaignName) continue;
+        if (!campaignId) continue;
 
         // Use only pixel-tracked and standard purchase events.
         // omni_purchase is excluded because it includes Meta-modeled (estimated) conversions
@@ -586,63 +665,14 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
 
       const allCampaigns = Array.from(campaignMap.values());
 
-      // Merge with existing docs so historical 2-year data remains intact and current-year refreshes incrementally.
-      if (allCampaigns.length > 0) {
-        const existingRefs = allCampaigns.map((c) => getDb().collection('campaigns').doc(c.id));
-        const existingDocs = await getDb().getAll(...existingRefs);
-        const existingMap = new Map<string, any>();
-        for (const d of existingDocs) {
-          if (d.exists) existingMap.set(d.id, d.data());
-        }
-
-        for (const c of allCampaigns) {
-          const existing = existingMap.get(c.id);
-          if (!existing) continue;
-
-          const existingDaily = (existing.dailyMetrics || {}) as Record<string, any>;
-          const incomingDaily = (c.dailyMetrics || {}) as Record<string, any>;
-          const mergedDaily: Record<string, any> = { ...existingDaily, ...incomingDaily };
-          c.dailyMetrics = mergedDaily;
-
-          // Recompute derived totals from merged daily metrics.
-          let spend = 0;
-          let impressions = 0;
-          let clicks = 0;
-          let conversions = 0;
-          let convValue = 0;
-          let reach = 0;
-          const mergedActions: Record<string, { conversions: number; value: number }> = {};
-          for (const m of Object.values(mergedDaily)) {
-            const mm = m as any;
-            spend += Number(mm.amount_spent || 0);
-            impressions += Number(mm.impressions || 0);
-            clicks += Number(mm.clicks || 0);
-            conversions += Number(mm.conversions || 0);
-            convValue += Number(mm.conversion_value || 0);
-            reach += Number(mm.reach || 0);
-            const actions = (mm.conversionActions || {}) as Record<string, { conversions: number; value: number }>;
-            for (const [k, v] of Object.entries(actions)) {
-              if (!mergedActions[k]) mergedActions[k] = { conversions: 0, value: 0 };
-              mergedActions[k].conversions += Number(v.conversions || 0);
-              mergedActions[k].value += Number(v.value || 0);
-            }
-          }
-
-          c.amount_spent = spend;
-          c.impressions = impressions;
-          c.clicks = clicks;
-          c.conversions = conversions;
-          c.conversion_value = convValue;
-          c.reach = reach;
-          c.conversionActions = mergedActions;
-          c.ctr = impressions > 0 ? (clicks / impressions) * 100 : 0;
-          c.roas = spend > 0 ? convValue / spend : 0;
-          c.frequency = reach > 0 ? impressions / reach : 0;
-          c.start_date = existing.start_date || historyStart;
-          c.end_date = today;
-          c.period = `${c.start_date} – ${today}`;
-        }
-      }
+      // IMPORTANT:
+      // Avoid full getAll() readback of all campaign docs before write.
+      // On large Meta accounts these reads can exceed Firestore RPC deadline (60s)
+      // and cause sync to end with 0 imported despite successful API fetch.
+      //
+      // We write the freshly aggregated window directly with merge=true.
+      // For first sync, payload already includes history+current window.
+      // For subsequent syncs, payload includes current year refresh.
 
       // Compute derived metrics after full aggregation
       for (const c of allCampaigns) {
@@ -651,12 +681,31 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
         c.frequency = c.reach > 0 ? c.impressions / c.reach : 0;
       }
 
-      // Firestore: max 500 ops/batch and ~10MB payload.
-      // Meta campaigns carry ~36 months of daily rows per campaign — keep chunks small.
-      const CHUNK = 12;
-      for (let i = 0; i < allCampaigns.length; i += CHUNK) {
-        const chunk = allCampaigns.slice(i, i + CHUNK);
-        await commitCampaignSliceAdaptive(chunk);
+      // Shrink payloads: full daily + per-day conversionActions can exceed 1MB/doc or stall batch.commit.
+      for (const c of allCampaigns) trimCampaignForFirestore(c);
+      for (const c of allCampaigns) sanitizeCampaignForFirestore(c);
+
+      logger.info(`[Meta] Persisting ${allCampaigns.length} campaign docs for ${actAccountId}`);
+
+      // Small batches + brief pause reduces Firestore deadline pressure on large accounts.
+      const CHUNK = 4;
+      try {
+        for (let i = 0; i < allCampaigns.length; i += CHUNK) {
+          const chunk = allCampaigns.slice(i, i + CHUNK);
+          await commitCampaignSliceAdaptive(chunk);
+          await new Promise((r) => setTimeout(r, 80));
+        }
+      } catch (writeErr) {
+        logger.warn(
+          `[Meta] Batched writes failed for ${actAccountId}, falling back to sequential single-doc writes:`,
+          writeErr
+        );
+        try {
+          await commitCampaignsOneByOne(allCampaigns);
+        } catch (seqErr) {
+          logger.error(`[Meta] Sequential writes also failed for ${actAccountId}:`, seqErr);
+          throw seqErr;
+        }
       }
 
       if (allCampaigns.length > 0) {
@@ -668,28 +717,40 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
     }
   }
 
-  // Log import
+  const importStatus = totalImported > 0 ? 'completed' : 'failed';
   await getDb().collection('import_jobs').add({
     brandId,
     type: 'campaigns',
     source: 'meta_api',
-    status: 'completed',
+    status: importStatus,
     imported: totalImported,
-    failed: 0,
-    errors: [],
+    failed: totalImported > 0 ? 0 : 1,
+    errors: totalImported > 0 ? [] : ['Meta sync produced no campaign writes (check logs / Firestore limits)'],
     createdAt: FieldValue.serverTimestamp(),
   });
 
-  // Save last successful sync marker.
+  if (totalImported > 0) {
+    await getDb().doc(`connectors/${brandId}`).set(
+      {
+        meta: {
+          lastDataSyncAt: Date.now(),
+          historyLoadedUntilYear: connector.historyLoadedUntilYear || currentYear - 1,
+          lastImportError: FieldValue.delete(),
+        },
+      },
+      { merge: true }
+    );
+    return { success: true, imported: totalImported };
+  }
+
   await getDb().doc(`connectors/${brandId}`).set(
     {
       meta: {
-        lastDataSyncAt: Date.now(),
-        historyLoadedUntilYear: connector.historyLoadedUntilYear || currentYear - 1,
+        lastImportError: 'Meta: 0 campaigns written — see import_jobs and Cloud Logs',
+        lastImportErrorAt: Date.now(),
       },
     },
     { merge: true }
   );
-
-  return { success: true, imported: totalImported };
+  return { success: false, imported: 0, error: 'Meta sync completed with 0 campaigns imported' };
 }

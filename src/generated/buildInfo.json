@@ -1,10 +1,14 @@
 {
-  "version": "0.351.0",
-  "previousVersion": "0.350.0",
-  "commitHash": "9dc85cd",
+  "version": "0.353.0",
+  "previousVersion": "0.352.0",
+  "commitHash": "1036ef2",
   "branch": "main",
-  "buildDate": "2026-04-09T20:19:33.637Z",
+  "buildDate": "2026-04-09T22:06:15.598Z",
   "commits": [
+    {
+      "hash": "1036ef2",
+      "message": "fix(ui): unify header branding and topbar alignment"
+    },
     {
       "hash": "9dc85cd",
       "message": "feat: stabilize connector sync, nightly health, and UI responsiveness"
@@ -60,13 +64,10 @@
     {
       "hash": "1240910",
       "message": "fix(campaigns): respect purchase conv filter — no fallback to all actions; sum value per action; export uses same pipeline"
-    },
-    {
-      "hash": "c3f7087",
-      "message": "revert(campaigns): restore CampaignsPage to ef26624 (pre-5ea82e6 display logic) + BudgetOpportunitySection"
     }
   ],
   "changes": [
+    "[Διόρθωση] Unify header branding and topbar alignment",
     "[Νέο χαρακτηριστικό] Stabilize connector sync, nightly health, and UI responsiveness",
     "[Συντήρηση] Add project context rule for agent continuity",
     "[Νέο χαρακτηριστικό] E-commerce connectors, explorer page, dashboard/ROI integration, help docs",
@@ -75,7 +76,6 @@
     "[Συντήρηση] UTF-8 headers, el lang; campaigns: budget section below table",
     "[Νέο χαρακτηριστικό] Purchase filter, GA-first Ads actions, phantom store visits",
     "[Διόρθωση] Only spread month-bucket spend for Meta, not Google day=01",
-    "Revert(campaigns): remove Math.max of aggregate vs conversionActions",
-    "[Διόρθωση] Reconcile conversions with per-action sum vs aggregate"
+    "Revert(campaigns): remove Math.max of aggregate vs conversionActions"
   ]
 }

@@ -43,8 +43,30 @@ export function bucketOverlapFraction(
 
 // Purchase labels trusted for Meta — in priority order.
 // omni_purchase is excluded: it's a Meta-modeled superset that inflates counts.
-const META_PURCHASE_LABELS = ['Purchase (Pixel)', 'Purchase'];
+export const META_PURCHASE_LABEL_ORDER = ['Purchase (Pixel)', 'Purchase'] as const;
 const EXCLUDED_ACTION_LABELS = new Set(['omni_purchase']);
+
+export function isMetaChannel(channel: string | undefined): boolean {
+  return (channel || '').trim().toLowerCase() === 'meta';
+}
+
+/**
+ * Single Meta "purchase" row for display and filters: first trusted label with any data.
+ * Keeps conversions and value from the same action row.
+ */
+export function getMetaPrimaryPurchaseFromActions(
+  ca: Record<string, { conversions?: number; value?: number }> | undefined
+): { conversions: number; value: number } | null {
+  if (!ca) return null;
+  for (const label of META_PURCHASE_LABEL_ORDER) {
+    const a = ca[label];
+    if (!a) continue;
+    const conv = a.conversions ?? 0;
+    const val = a.value ?? 0;
+    if (conv > 0 || val > 0) return { conversions: conv, value: val };
+  }
+  return null;
+}
 
 /**
  * Returns the reliable conversion value for a campaign.
@@ -54,14 +76,11 @@ const EXCLUDED_ACTION_LABELS = new Set(['omni_purchase']);
  * For all other channels: uses c.conversion_value directly, falling back to conversionActions sum.
  */
 export function getEffectiveConversionValue(c: Campaign): number {
-  if (c.channel === 'Meta') {
-    if (c.conversionActions) {
-      for (const label of META_PURCHASE_LABELS) {
-        const a = (c.conversionActions as Record<string, { conversions: number; value: number }>)[label];
-        if (a && a.value > 0) return a.value;
-      }
-    }
-    return 0;
+  if (isMetaChannel(c.channel)) {
+    const row = getMetaPrimaryPurchaseFromActions(
+      c.conversionActions as Record<string, { conversions?: number; value?: number }> | undefined
+    );
+    return row?.value ?? 0;
   }
   const v = c.conversion_value || 0;
   if (v > 0) return v;
@@ -77,14 +96,11 @@ export function getEffectiveConversionValue(c: Campaign): number {
  * Returns the reliable conversion count for a campaign (same logic as getEffectiveConversionValue).
  */
 export function getEffectiveConversions(c: Campaign): number {
-  if (c.channel === 'Meta') {
-    if (c.conversionActions) {
-      for (const label of META_PURCHASE_LABELS) {
-        const a = (c.conversionActions as Record<string, { conversions: number; value: number }>)[label];
-        if (a && a.conversions > 0) return a.conversions;
-      }
-    }
-    return 0;
+  if (isMetaChannel(c.channel)) {
+    const row = getMetaPrimaryPurchaseFromActions(
+      c.conversionActions as Record<string, { conversions?: number; value?: number }> | undefined
+    );
+    return row?.conversions ?? 0;
   }
   const v = c.conversions || 0;
   if (v > 0) return v;

@@ -13,6 +13,8 @@ import {
   bucketOverlapFraction,
   getEffectiveConversionValue,
   getEffectiveConversions,
+  getMetaPrimaryPurchaseFromActions,
+  isMetaChannel,
   metaUsesLegacyMonthBuckets,
 } from '../../utils/roiUtils';
 import type { Campaign } from '../../types';
@@ -37,6 +39,80 @@ function parseCampaignDate(d: string | number | undefined): Date | null {
 
   const parsed = new Date(str);
   return isNaN(parsed.getTime()) ? null : parsed;
+}
+
+/** "2024-01-01 – 2024-12-31", "2024-01-01 to 2024-12-31", en-dash, etc. */
+function parsePeriodDateRange(period: string | undefined): { start: Date; end: Date } | null {
+  if (!period?.trim()) return null;
+  const m = period.trim().match(
+    /(\d{4}-\d{2}-\d{2})\s*(?:\s+to\s+|[-\u2013\u2014\u2015–—])\s*(\d{4}-\d{2}-\d{2})/i
+  );
+  if (!m) return null;
+  const start = parseCampaignDate(m[1]);
+  const end = parseCampaignDate(m[2]);
+  if (!start || !end) return null;
+  return { start, end };
+}
+
+function getCampaignScheduleBounds(c: Campaign): { start: Date | null; end: Date | null } {
+  let start = parseCampaignDate(c.start_date);
+  let end = parseCampaignDate(c.end_date);
+  if (!start && !end) {
+    const pr = parsePeriodDateRange(c.period);
+    if (pr) {
+      start = pr.start;
+      end = pr.end;
+    }
+  }
+  return { start, end };
+}
+
+/**
+ * When a campaign has no dailyMetrics, approximate slice of aggregate KPIs that fall inside
+ * the selected calendar range (same bounds logic as the list date filter).
+ */
+function overlapAggregateScale(c: Campaign, dateFrom: string, dateTo: string): number {
+  const filterFromMs = dateFrom ? new Date(dateFrom).getTime() : 0;
+  const filterToExcl = dateTo ? new Date(dateTo).getTime() + 86400000 : Infinity;
+  const { start, end } = getCampaignScheduleBounds(c);
+
+  if (!start && !end) return 1;
+
+  let campStartMs: number;
+  let campEndExcl: number;
+  if (start && end) {
+    campStartMs = start.getTime();
+    campEndExcl = end.getTime() + 86400000;
+  } else if (start && !end) {
+    campStartMs = start.getTime();
+    const tail = Math.max(Date.now(), filterToExcl === Infinity ? Date.now() : filterToExcl);
+    campEndExcl = tail;
+  } else {
+    const e = end!;
+    campStartMs = e.getTime();
+    campEndExcl = e.getTime() + 86400000;
+  }
+
+  const overlapStart = Math.max(campStartMs, filterFromMs);
+  const overlapEnd = Math.min(campEndExcl, filterToExcl);
+  const overlapMs = Math.max(0, overlapEnd - overlapStart);
+  const campSpanMs = Math.max(86400000, campEndExcl - campStartMs);
+  return Math.min(1, overlapMs / campSpanMs);
+}
+
+function scaleConversionActions(
+  ca: Campaign['conversionActions'] | undefined,
+  scale: number
+): Campaign['conversionActions'] | undefined {
+  if (!ca || scale >= 0.9999 && scale <= 1.0001) return ca;
+  const out: Record<string, { conversions: number; value: number }> = {};
+  for (const [k, v] of Object.entries(ca)) {
+    out[k] = {
+      conversions: (v.conversions || 0) * scale,
+      value: (v.value || 0) * scale,
+    };
+  }
+  return out;
 }
 
 function sumConversionActions(ca: Campaign['conversionActions'] | undefined): { conv: number; value: number } {
@@ -143,7 +219,7 @@ function getDisplayConversions(c: Campaign, convFilterActive: boolean): number {
   }
   // Meta: conversionActions mixes purchases with engagement metrics (link_click, video_view, …)
   // stored under the same shape — never sum all keys as "conversions".
-  if ((c.channel || '').toLowerCase() === 'meta') {
+  if (isMetaChannel(c.channel)) {
     return getEffectiveConversions(c);
   }
   const fromActions = sumConversionActions(c.conversionActions).conv;
@@ -159,7 +235,7 @@ function getDisplayConversionValue(c: Campaign, convFilterActive: boolean): numb
   if (convFilterActive) {
     return Number.isNaN(n) ? 0 : n;
   }
-  if ((c.channel || '').toLowerCase() === 'meta') {
+  if (isMetaChannel(c.channel)) {
     return getEffectiveConversionValue(c);
   }
   const fromActions = sumConversionActions(c.conversionActions).value;
@@ -312,20 +388,12 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
       });
     }
 
-    // Date range filter
+    // Date range filter (interval overlap vs [from, to) in local date semantics)
     if (dateFrom || dateTo) {
       const from = dateFrom ? new Date(dateFrom).getTime() : 0;
       const to = dateTo ? new Date(dateTo).getTime() + 86400000 : Infinity;
       filtered = filtered.filter(c => {
-        let start = parseCampaignDate(c.start_date);
-        let end = parseCampaignDate(c.end_date);
-        if (!start && !end && c.period) {
-          const m = c.period.match(/(\d{4}-\d{2}-\d{2})\s*[-??]\s*(\d{4}-\d{2}-\d{2})/);
-          if (m) {
-            start = parseCampaignDate(m[1]);
-            end = parseCampaignDate(m[2]);
-          }
-        }
+        const { start, end } = getCampaignScheduleBounds(c);
         const campStart = start ? start.getTime() : null;
         const campEnd = end ? end.getTime() : null;
         if (!campStart && !campEnd) return true;
@@ -336,7 +404,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
     }
 
     return filtered;
-  }, [campaigns, searchQuery, channelFilter, statusFilter, dateFrom, dateTo]);
+  }, [campaigns, searchQuery, channelFilter, statusFilter, dateFrom, dateTo, resolveStatus]);
 
 
   // Compute date-range-aware metrics per campaign
@@ -348,7 +416,33 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
     const toDate = dateTo || '9999-99-99';
 
     return filteredCampaigns.map(c => {
-      if (!c.dailyMetrics || Object.keys(c.dailyMetrics).length === 0) return c;
+      if (!c.dailyMetrics || Object.keys(c.dailyMetrics).length === 0) {
+        const scale = overlapAggregateScale(c, dateFrom, dateTo);
+        if (scale <= 0) {
+          return {
+            ...c,
+            impressions: 0,
+            clicks: 0,
+            conversions: 0,
+            amount_spent: 0,
+            conversion_value: 0,
+            ctr: 0,
+            roas: 0,
+            conversionActions: {},
+          };
+        }
+        if (scale >= 0.9999) return c;
+        const impressions = Math.round((c.impressions || 0) * scale);
+        const clicks = Math.round((c.clicks || 0) * scale);
+        const conversions = (typeof c.conversions === 'number' ? c.conversions : parseFloat(String(c.conversions || 0)) || 0) * scale;
+        const amount_spent = Math.round((c.amount_spent || 0) * scale * 100) / 100;
+        const rawVal = c.conversion_value ?? (c as { conversionValue?: number }).conversionValue;
+        const conversion_value = Math.round((typeof rawVal === 'number' ? rawVal : parseFloat(String(rawVal || 0)) || 0) * scale * 100) / 100;
+        const ctr = impressions > 0 ? Math.round((clicks / impressions) * 10000) / 100 : 0;
+        const roas = amount_spent > 0 ? Math.round((conversion_value / amount_spent) * 100) / 100 : 0;
+        const conversionActions = scaleConversionActions(c.conversionActions, scale);
+        return { ...c, impressions, clicks, conversions, amount_spent, conversion_value, ctr, roas, conversionActions };
+      }
       const metaMonthBuckets = metaUsesLegacyMonthBuckets(c);
       let impressions = 0, clicks = 0, conversions = 0, amount_spent = 0, conversion_value = 0;
       const dateConvActions: Record<string, { conversions: number; value: number }> = {};
@@ -399,20 +493,52 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
     const purchaseSelected = convActionFilter.includes('Purchase');
     const campaignName = c.name || '';
 
+    const purchaseKeysExcludingOmni = (keys: string[]) =>
+      keys.filter(k => k.toLowerCase() !== 'omni_purchase');
+
     for (const action of convActionFilter) {
       if (action === 'Purchase') {
-        let purchaseKeys = Object.keys(ca).filter(k => k.toLowerCase().includes('purchase'));
-        const googleAdsLike = isGoogleAdsLikeChannel(c.channel);
-        if (googleAdsLike) {
+        if (isMetaChannel(c.channel)) {
+          const primary = getMetaPrimaryPurchaseFromActions(
+            ca as Record<string, { conversions?: number; value?: number }>
+          );
+          if (primary) {
+            filteredConversions += primary.conversions;
+            filteredValue += primary.value;
+          } else {
+            for (const pk of purchaseKeysExcludingOmni(Object.keys(ca))) {
+              const low = pk.toLowerCase();
+              if (!low.includes('purchase')) continue;
+              const row = ca[pk];
+              if (!row) continue;
+              if (isPhantomStoreVisitPurchaseRow(pk, row, campaignName)) continue;
+              filteredConversions += row.conversions ?? 0;
+              filteredValue += row.value ?? 0;
+            }
+          }
+        } else if (isGoogleAdsLikeChannel(c.channel)) {
+          let purchaseKeys = purchaseKeysExcludingOmni(Object.keys(ca)).filter(k =>
+            k.toLowerCase().includes('purchase')
+          );
           const primary = pickPrimaryGoogleAdsPurchaseKey(purchaseKeys, ca, campaignName);
           purchaseKeys = primary ? [primary] : [];
-        }
-        for (const pk of purchaseKeys) {
-          const row = ca[pk];
-          if (!row) continue;
-          if (isPhantomStoreVisitPurchaseRow(pk, row, campaignName)) continue;
-          filteredConversions += row.conversions ?? 0;
-          filteredValue += row.value ?? 0;
+          for (const pk of purchaseKeys) {
+            const row = ca[pk];
+            if (!row) continue;
+            if (isPhantomStoreVisitPurchaseRow(pk, row, campaignName)) continue;
+            filteredConversions += row.conversions ?? 0;
+            filteredValue += row.value ?? 0;
+          }
+        } else {
+          for (const pk of purchaseKeysExcludingOmni(Object.keys(ca))) {
+            const low = pk.toLowerCase();
+            if (!low.includes('purchase')) continue;
+            const row = ca[pk];
+            if (!row) continue;
+            if (isPhantomStoreVisitPurchaseRow(pk, row, campaignName)) continue;
+            filteredConversions += row.conversions ?? 0;
+            filteredValue += row.value ?? 0;
+          }
         }
       } else {
         if (purchaseSelected && action.toLowerCase().includes('purchase')) continue;
@@ -442,9 +568,12 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
 
   const campaignsInConvView = useMemo(() => {
     if (!convFilterActive) return campaignsWithConvFilter;
-    return campaignsWithConvFilter.filter(
-      c => getDisplayConversions(c, true) > 0 || getDisplayConversionValue(c, true) > 0
-    );
+    return campaignsWithConvFilter.filter((c) => {
+      if (getDisplayConversions(c, true) > 0 || getDisplayConversionValue(c, true) > 0) return true;
+      // Any channel: spend/impressions without a matching conversion-action row should still list the campaign.
+      if ((c.amount_spent ?? 0) > 0 || (c.impressions ?? 0) > 0) return true;
+      return false;
+    });
   }, [campaignsWithConvFilter, convFilterActive]);
 
   const sortedCampaigns = useMemo(() => {
@@ -559,17 +688,19 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
   const statuses = useMemo(() => {
     const unique = new Set<string>();
     (campaigns as Campaign[]).forEach(c => {
-      const status = (c.status || 'active').toLowerCase();
-      unique.add(status);
+      unique.add(resolveStatus(c).toLowerCase());
     });
-    return Array.from(unique);
-  }, [campaigns]);
+    return Array.from(unique).sort();
+  }, [campaigns, resolveStatus]);
 
   const allConversionActions = useMemo(() => {
     const actions = new Set<string>();
     campaignsWithDateMetrics.forEach(c => {
       if (c.conversionActions) {
-        Object.keys(c.conversionActions).forEach(a => actions.add(a));
+        Object.keys(c.conversionActions).forEach(a => {
+          if (a.toLowerCase() === 'omni_purchase') return;
+          actions.add(a);
+        });
       }
     });
     // Add unified "Purchase" if any platform-specific purchase type exists
