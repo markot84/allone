@@ -117,11 +117,28 @@ function fin(n: unknown): number {
   return Number.isFinite(x) ? x : 0;
 }
 
+/** Aligns with frontend roiUtils Meta purchase primary (Pixel > Purchase). */
+function metaPrimaryPurchaseFromCa(
+  ca: Record<string, { conversions?: number; value?: number }> | undefined
+): { conv: number; value: number } {
+  if (!ca || typeof ca !== 'object') return { conv: 0, value: 0 };
+  for (const label of ['Purchase (Pixel)', 'Purchase'] as const) {
+    const a = ca[label];
+    if (!a) continue;
+    const conv = Number(a.conversions ?? 0);
+    const val = Number(a.value ?? 0);
+    if (conv > 0 || val > 0) return { conv, value: val };
+  }
+  return { conv: 0, value: 0 };
+}
+
 function sanitizeCampaignForFirestore(c: Record<string, any>): void {
   c.impressions = fin(c.impressions);
   c.clicks = fin(c.clicks);
   c.conversions = fin(c.conversions);
   c.conversion_value = fin(c.conversion_value);
+  c.purchase_conversions = fin(c.purchase_conversions);
+  c.purchase_conversion_value = fin(c.purchase_conversion_value);
   c.amount_spent = fin(c.amount_spent);
   c.reach = fin(c.reach);
   c.ctr = fin(c.ctr);
@@ -148,6 +165,8 @@ function sanitizeCampaignForFirestore(c: Record<string, any>): void {
       (row as any).conversions = fin((row as any).conversions);
       (row as any).amount_spent = fin((row as any).amount_spent);
       (row as any).conversion_value = fin((row as any).conversion_value);
+      (row as any).purchase_conversions = fin((row as any).purchase_conversions);
+      (row as any).purchase_conversion_value = fin((row as any).purchase_conversion_value);
       (row as any).reach = fin((row as any).reach);
     }
   }
@@ -674,11 +693,26 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
       // For first sync, payload already includes history+current window.
       // For subsequent syncs, payload includes current year refresh.
 
-      // Compute derived metrics after full aggregation
+      // Purchase/Sales (Meta): primary Purchase row — same idea as Google PURCHASE category
       for (const c of allCampaigns) {
-        c.roas = c.amount_spent > 0 ? c.conversion_value / c.amount_spent : 0;
+        const p = metaPrimaryPurchaseFromCa(c.conversionActions);
+        c.purchase_conversions = p.conv;
+        c.purchase_conversion_value = Math.round(p.value * 100) / 100;
+        c.roas = c.amount_spent > 0 ? c.purchase_conversion_value / c.amount_spent : 0;
         c.ctr = c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0;
         c.frequency = c.reach > 0 ? c.impressions / c.reach : 0;
+        const dm = c.dailyMetrics as Record<string, Record<string, unknown>> | undefined;
+        if (dm && typeof dm === 'object') {
+          for (const row of Object.values(dm)) {
+            if (!row || typeof row !== 'object') continue;
+            const caDay = row.conversionActions as
+              | Record<string, { conversions?: number; value?: number }>
+              | undefined;
+            const pd = metaPrimaryPurchaseFromCa(caDay);
+            row.purchase_conversions = pd.conv;
+            row.purchase_conversion_value = Math.round(pd.value * 100) / 100;
+          }
+        }
       }
 
       // Shrink payloads: full daily + per-day conversionActions can exceed 1MB/doc or stall batch.commit.

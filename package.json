@@ -9,6 +9,8 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "firebase:deploy": "npm run build && firebase deploy --only hosting",
     "firebase:deploy:functions": "cd functions && npm run build && cd .. && firebase deploy --only functions",
     "firebase:deploy:full": "npm run build && cd functions && npm run build && cd .. && firebase deploy",
@@ -49,6 +51,7 @@
     "globals": "^16.5.0",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
-    "vite": "^7.2.4"
+    "vite": "^7.2.4",
+    "vitest": "^3.2.4"
   }
 }

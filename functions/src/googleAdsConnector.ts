@@ -53,8 +53,10 @@ const GOOGLE_ADS_HISTORY_YEARS = 2;
 const SCOPES = ['https://www.googleapis.com/auth/adwords'];
 
 /**
- * REST JSON uses camelCase; some fields may be missing. If primary conversions are 0,
- * fall back to all_conversions / all_conversions_value (common when attribution uses "all conv." reporting).
+ * REST JSON uses camelCase. Use **only** metrics.conversions / metrics.conversions_value
+ * (same fields as the default “Conversions” / conv. value columns in Google Ads UI).
+ * Do not substitute all_conversions — summing per-action rows also does not reproduce totals.
+ * @see https://developers.google.com/google-ads/api/fields/v22/metrics
  */
 function parseCampaignDayMetrics(m: Record<string, unknown> | undefined | null): {
   impressions: number;
@@ -74,10 +76,6 @@ function parseCampaignDayMetrics(m: Record<string, unknown> | undefined | null):
   let conversionValue = parseFloat(String(x.conversionsValue ?? x.conversions_value ?? '0'));
   if (!Number.isFinite(conversions)) conversions = 0;
   if (!Number.isFinite(conversionValue)) conversionValue = 0;
-  const allConv = parseFloat(String(x.allConversions ?? x.all_conversions ?? '0'));
-  const allVal = parseFloat(String(x.allConversionsValue ?? x.all_conversions_value ?? '0'));
-  if (conversions === 0 && Number.isFinite(allConv) && allConv > 0) conversions = allConv;
-  if (conversionValue === 0 && Number.isFinite(allVal) && allVal > 0) conversionValue = allVal;
   return { impressions, clicks, conversions, conversion_value: conversionValue, cost_micros: costMicros };
 }
 
@@ -496,8 +494,6 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
       metrics.clicks,
       metrics.conversions,
       metrics.conversions_value,
-      metrics.all_conversions,
-      metrics.all_conversions_value,
       metrics.cost_micros
     FROM campaign
     WHERE segments.date BETWEEN '${sinceStr}' AND '${untilStr}'
@@ -650,6 +646,63 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
       }
     } while (nextPageToken);
 
+    // Purchase (online) — matches Google Ads Overview «Purchases/Sales – Quantity» for typical e‑commerce:
+    // category PURCHASE only. STORE_SALES is offline/store; including it often diverges from that chart.
+    const gaqlPurchaseQuery = `
+      SELECT
+        campaign.id,
+        campaign.name,
+        segments.date,
+        segments.conversion_action_category,
+        metrics.conversions,
+        metrics.conversions_value
+      FROM campaign
+      WHERE segments.date BETWEEN '${sinceStr}' AND '${untilStr}'
+        AND campaign.status != 'REMOVED'
+        AND segments.conversion_action_category = 'PURCHASE'
+    `;
+    try {
+      let purNext: string | undefined;
+      do {
+        const body: Record<string, unknown> = { query: gaqlPurchaseQuery };
+        if (purNext) body.pageToken = purNext;
+        const purRes = await fetch(
+          `${GOOGLE_ADS_BASE_URL}/customers/${customerId}/googleAds:search`,
+          { method: 'POST', headers, body: JSON.stringify(body) }
+        );
+        if (!purRes.ok) {
+          const t = await purRes.text();
+          logger.warn(`[GoogleAds] PURCHASE category query failed (${purRes.status}): ${t.slice(0, 400)}`);
+          break;
+        }
+        const purPage = await purRes.json();
+        purNext = purPage.nextPageToken;
+        for (const row of purPage.results || []) {
+          const campaignId = row.campaign?.id;
+          const segDate = row.segments?.date || '';
+          if (!campaignId || !segDate) continue;
+          const day = parseCampaignDayMetrics(row.metrics as Record<string, unknown> | undefined);
+          const existing = campaignMap.get(campaignId);
+          if (!existing) continue;
+          existing.purchase_conversions = (existing.purchase_conversions || 0) + day.conversions;
+          existing.purchase_conversion_value = (existing.purchase_conversion_value || 0) + day.conversion_value;
+          const prev = existing.dailyMetrics[segDate] || {
+            impressions: 0,
+            clicks: 0,
+            conversions: 0,
+            amount_spent: 0,
+            conversion_value: 0,
+          };
+          prev.purchase_conversions = (prev.purchase_conversions || 0) + day.conversions;
+          prev.purchase_conversion_value = (prev.purchase_conversion_value || 0) + day.conversion_value;
+          existing.dailyMetrics[segDate] = prev;
+        }
+      } while (purNext);
+      logger.info('[GoogleAds] Merged PURCHASE (category) metrics into campaigns');
+    } catch (purErr) {
+      logger.warn('[GoogleAds] Purchase category query error (non-fatal):', purErr);
+    }
+
     // Second query: per-conversion-action **per calendar day** (same window as campaign daily metrics).
     // Never attach monthly totals to each day — that multiplies counts when summing a date range.
     const convActionMap = new Map<string, Record<string, { conversions: number; value: number }>>();
@@ -742,8 +795,12 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
       campaign.ctr = campaign.impressions > 0
         ? Math.round((campaign.clicks / campaign.impressions) * 10000) / 100
         : 0;
+      const hasPurchase =
+        typeof campaign.purchase_conversion_value === 'number' &&
+        !Number.isNaN(campaign.purchase_conversion_value);
+      const roasBase = hasPurchase ? campaign.purchase_conversion_value : campaign.conversion_value;
       campaign.roas = campaign.amount_spent > 0
-        ? Math.round((campaign.conversion_value / campaign.amount_spent) * 100) / 100
+        ? Math.round(((roasBase || 0) / campaign.amount_spent) * 100) / 100
         : 0;
       campaign.amount_spent = Math.round(campaign.amount_spent * 100) / 100;
 
@@ -777,6 +834,8 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
         let conversions = 0;
         let amountSpent = 0;
         let convValue = 0;
+        let purchaseConv = 0;
+        let purchaseVal = 0;
         const mergedActions: Record<string, { conversions: number; value: number }> = {};
 
         for (const dm of Object.values(mergedDaily)) {
@@ -786,6 +845,8 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
           conversions += Number(m.conversions || 0);
           amountSpent += Number(m.amount_spent || 0);
           convValue += Number(m.conversion_value || 0);
+          purchaseConv += Number(m.purchase_conversions || 0);
+          purchaseVal += Number(m.purchase_conversion_value || 0);
           const ca = (m.conversionActions || {}) as Record<string, { conversions: number; value: number }>;
           for (const [k, v] of Object.entries(ca)) {
             if (!mergedActions[k]) mergedActions[k] = { conversions: 0, value: 0 };
@@ -799,8 +860,12 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
         campaign.conversions = conversions;
         campaign.amount_spent = Math.round(amountSpent * 100) / 100;
         campaign.conversion_value = convValue;
+        campaign.purchase_conversions = purchaseConv;
+        campaign.purchase_conversion_value = Math.round(purchaseVal * 100) / 100;
         campaign.ctr = impressions > 0 ? Math.round((clicks / impressions) * 10000) / 100 : 0;
-        campaign.roas = campaign.amount_spent > 0 ? Math.round((convValue / campaign.amount_spent) * 100) / 100 : 0;
+        campaign.roas = campaign.amount_spent > 0
+          ? Math.round((purchaseVal / campaign.amount_spent) * 100) / 100
+          : 0;
         campaign.conversionActions = mergedActions;
         campaign.start_date = existing.start_date || `${historyStartYear}-01-01`;
         campaign.end_date = untilStr;

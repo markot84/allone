@@ -2,13 +2,13 @@
  * OpenCart Connector
  *
  * Flow:
- * 1. User enters Store URL + API username + API key
+ * 1. User enters e-shop URL + API username + API key
  * 2. We login via POST /index.php?route=api/login to get a session token
  * 3. Credentials stored in Firestore (connectors/{brandId}.opencart)
  * 4. Sync fetches orders (90 days) + products → Firestore (no PII stored)
  *
  * Compatible with OpenCart 3.x+ REST API.
- * For stores using third-party REST extensions, the token header approach is also supported.
+ * For e-shops using third-party REST extensions, the token header approach is also supported.
  */
 
 import * as admin from 'firebase-admin';
@@ -96,7 +96,7 @@ export async function testOpenCartConnection(
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (msg.includes('ENOTFOUND') || msg.includes('getaddrinfo')) {
-      return { success: false, error: 'Store URL not reachable. Check the domain.' };
+      return { success: false, error: 'e-shop URL not reachable. Check the domain.' };
     }
     logger.warn('[OpenCart] Native login failed, trying REST extension:', msg);
   }
@@ -119,7 +119,7 @@ export async function testOpenCartConnection(
     // ignore
   }
 
-  return { success: false, error: 'Could not authenticate. Verify the Store URL, API username, and API key. Ensure the API user is enabled in System → Users → API.' };
+  return { success: false, error: 'Could not authenticate. Verify the e-shop URL, API username, and API key. Ensure the API user is enabled in System → Users → API.' };
 }
 
 /**

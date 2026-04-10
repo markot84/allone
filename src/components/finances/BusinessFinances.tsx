@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Euro, Trash2, TrendingUp, Calendar } from 'lucide-react';
-import { Card, Button, Spinner, useToast, Tooltip } from '../common';
+import { Card, Button, Spinner, useToast, Tooltip, PageHeader } from '../common';
 import { useOrganic, useBrand } from '../../hooks';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import { FirestoreService } from '../../services/firestore';
@@ -46,12 +46,10 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
   if (!hasImported && !ecomm.hasData) {
     return (
       <div className="space-y-6">
-        <div>
-          <h2 className="text-2xl font-bold text-[#1A1A1A]">Οικονομικά Επιχείρησης</h2>
-          <p className="text-[#4A4A4A] mt-1">
-            Τζίρος και οργανικά έσοδα (χωρίς campaigns)
-          </p>
-        </div>
+        <PageHeader
+          title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Οικονομικά Επιχείρησης</h2>}
+          description={<p className="text-sm text-[#4A4A4A] sm:text-base">Τζίρος και οργανικά έσοδα (χωρίς campaigns)</p>}
+        />
         <Card padding="lg" className="text-center py-12">
           <p className="text-[#4A4A4A] mb-4">
             Δεν υπάρχουν εισαγόμενα οργανικά έσοδα ακόμα.
@@ -74,23 +72,34 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-[#1A1A1A]">Οικονομικά Επιχείρησης</h2>
-          <p className="text-[#4A4A4A] mt-1">
+      <PageHeader
+        toolbarAriaLabel="Διαχείριση δεδομένων"
+        title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Οικονομικά Επιχείρησης</h2>}
+        description={
+          <p className="text-sm text-[#4A4A4A] sm:text-base">
             Τζίρος οργανικός (χωρίς έσοδα από campaigns) · {records.length} περίοδοι
           </p>
-        </div>
-        <Button
-          variant="secondary"
-          icon={<Trash2 size={16} />}
-          onClick={handleDelete}
-          disabled={isDeleting}
-          className="text-[#DC2626] hover:bg-[#FEE2E2]"
-        >
-          {isDeleting ? 'Διαγραφή…' : 'Διαγραφή δεδομένων'}
-        </Button>
-      </div>
+        }
+        actions={
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<Trash2 size={14} />}
+            onClick={handleDelete}
+            disabled={isDeleting}
+            className="min-h-[36px] w-full text-[#DC2626] hover:bg-[#FEE2E2] sm:w-auto"
+          >
+            {isDeleting ? (
+              'Διαγραφή…'
+            ) : (
+              <>
+                <span className="sm:hidden">Διαγραφή</span>
+                <span className="hidden sm:inline">Διαγραφή δεδομένων</span>
+              </>
+            )}
+          </Button>
+        }
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card padding="md" className="border-l-4 border-l-[#22C55E]">
@@ -137,7 +146,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
             </div>
             <div>
               <div className="flex items-center gap-1">
-                <p className="text-sm text-[#4A4A4A]">Store Revenue (E-commerce)</p>
+                <p className="text-sm text-[#4A4A4A]">e-shop Revenue (E-commerce)</p>
                 <Tooltip content="Πραγματικά έσοδα από παραγγελίες των συνδεδεμένων e-shop connectors." size={12} />
               </div>
               <p className="text-xl font-bold text-[#1A1A1A] font-mono">
@@ -154,7 +163,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
       {ecomm.hasData && (
         <Card padding="md" className="bg-[#F9FAFB] border-[#E5E7EB]">
           <p className="text-sm text-[#4A4A4A]">
-            Revenue Gap (Store − Organic):{' '}
+            Revenue Gap (e-shop − Organic):{' '}
             <strong className={(ecomm.totalRevenue - totalOrganicRevenue) >= 0 ? 'text-[#16A34A]' : 'text-[#DC2626]'}>
               €{formatCurrency(ecomm.totalRevenue - totalOrganicRevenue, 0)}
             </strong>

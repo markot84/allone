@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Zap, Lock, Bell, BellOff, Save, AlertTriangle, CheckCircle2, Info, X } from 'lucide-react';
-import { Card, Button, Spinner, useToast, EnterpriseBadge } from '../common';
+import { Card, Button, Spinner, useToast, EnterpriseBadge, PageHeader } from '../common';
 import { useAutomationSettings, useAutomationAlerts } from '../../hooks/useAutomation';
 import { usePlan } from '../../hooks/usePlan';
 import { useBrand } from '../../hooks';
@@ -70,28 +70,34 @@ export function AutomationSettingsPage() {
 
   return (
     <div className="space-y-6 max-w-3xl">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold text-[#111827] flex items-center gap-2">
-            <Zap size={22} className="text-[var(--nts-accent)]" />
+      <PageHeader
+        toolbarAriaLabel="Αποθήκευση ρυθμίσεων"
+        title={
+          <h1 className="flex flex-wrap items-center gap-2 text-xl font-bold text-[#111827] sm:text-2xl">
+            <Zap size={20} className="shrink-0 text-[var(--nts-accent)] sm:h-[22px] sm:w-[22px]" />
             Αυτοματισμοί Εμπορικών Αποφάσεων
           </h1>
-          <p className="text-sm text-[#6B7280] mt-0.5">
+        }
+        description={
+          <p className="text-sm text-[#6B7280]">
             Ενεργοποιήστε τα σήματα που θέλετε να παρακολουθεί η εφαρμογή
           </p>
-        </div>
-        {dirty && (
-          <Button
-            variant="primary"
-            icon={<Save size={15} />}
-            onClick={handleSave}
-            disabled={saving}
-          >
-            {saving ? 'Αποθήκευση...' : 'Αποθήκευση'}
-          </Button>
-        )}
-      </div>
+        }
+        actions={
+          dirty ? (
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<Save size={14} />}
+              onClick={handleSave}
+              disabled={saving}
+              className="min-h-[36px] w-full sm:w-auto"
+            >
+              {saving ? 'Αποθήκευση...' : 'Αποθήκευση'}
+            </Button>
+          ) : null
+        }
+      />
 
       {/* Active Alerts */}
       {newAlerts.length > 0 && (
@@ -144,13 +150,13 @@ export function AutomationSettingsPage() {
 
         return (
           <Card key={group.id} padding="none" className={isLocked ? 'opacity-60' : ''}>
-            <div className="px-5 py-3.5 border-b border-[#F3F4F6] flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-[#111827] flex items-center gap-2">
+            <div className="flex flex-col gap-2 border-b border-[#F3F4F6] px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between">
+              <h2 className="flex flex-wrap items-center gap-2 text-sm font-semibold text-[#111827]">
                 {group.label}
                 {isLocked && <EnterpriseBadge inline />}
               </h2>
               {!isLocked && (
-                <span className="text-[10px] text-[#9CA3AF]">
+                <span className="shrink-0 text-[10px] text-[#9CA3AF]">
                   {groupTriggers.filter(t => triggers[t.id]?.enabled).length}/{groupTriggers.length} ενεργά
                 </span>
               )}

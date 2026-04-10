@@ -21,7 +21,7 @@ import {
   Tooltip as RechartsTooltip,
   Legend,
 } from 'recharts';
-import { Card, CardHeader, Badge, Button, Tooltip } from '../common';
+import { Card, CardHeader, Badge, Button, Tooltip, PageHeader } from '../common';
 import { useOrganic, useCampaigns, useActiveStrategy, useBrand } from '../../hooks';
 import { useDashPeriod, PERIOD_OPTIONS } from '../../hooks/useDashPeriod';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
@@ -35,6 +35,7 @@ import {
   getEffectiveConversionValue,
   bucketOverlapFraction,
   metaUsesLegacyMonthBuckets,
+  ROI_PERCENT_CALC_TOOLTIP,
 } from '../../utils/roiUtils';
 import { formatCurrencyCompact, formatNumber, formatPercent } from '../../utils/format';
 import type { Campaign } from '../../types';
@@ -249,10 +250,14 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
     return (
       <div className="space-y-6">
         {!embedded && (
-          <div>
-            <h2 className="text-2xl font-bold text-[var(--nts-charcoal)]">ROI & Απόδοση</h2>
-            <p className="text-[var(--nts-medium-gray)] mt-1">Μέτρηση απόδοσης καμπανιών και εσόδων</p>
-          </div>
+          <PageHeader
+            title={<h2 className="text-xl font-bold text-[var(--nts-charcoal)] sm:text-2xl">ROI & Απόδοση</h2>}
+            description={
+              <p className="text-sm text-[var(--nts-medium-gray)] sm:text-base">
+                Μέτρηση απόδοσης καμπανιών και εσόδων
+              </p>
+            }
+          />
         )}
         <Card padding="lg">
           <div className="text-center py-16">
@@ -278,27 +283,33 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
   return (
     <div className="space-y-6">
       {!embedded && (
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold text-[var(--nts-charcoal)]">ROI & Απόδοση</h2>
-            <p className="text-[var(--nts-medium-gray)] mt-1">Μέτρηση απόδοσης καμπανιών και εσόδων</p>
-          </div>
-          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
-            {PERIOD_OPTIONS.map(opt => (
-              <button
-                key={opt.key}
-                onClick={() => setDashPeriod(opt.key)}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                  dashPeriod === opt.key
-                    ? 'bg-white text-[var(--nts-orange)] shadow-sm font-semibold'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        </div>
+        <PageHeader
+          toolbarAriaLabel="Επιλογή περιόδου"
+          title={<h2 className="text-xl font-bold text-[var(--nts-charcoal)] sm:text-2xl">ROI & Απόδοση</h2>}
+          description={
+            <p className="text-sm text-[var(--nts-medium-gray)] sm:text-base">
+              Μέτρηση απόδοσης καμπανιών και εσόδων
+            </p>
+          }
+          actions={
+            <div className="flex w-full flex-wrap justify-end gap-1 rounded-lg bg-gray-100 p-1 lg:w-auto">
+              {PERIOD_OPTIONS.map(opt => (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => setDashPeriod(opt.key)}
+                  className={`min-h-[32px] flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-all sm:flex-initial sm:px-3 ${
+                    dashPeriod === opt.key
+                      ? 'bg-white font-semibold text-[var(--nts-orange)] shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          }
+        />
       )}
 
       {/* ROI Hero + Key Metrics */}
@@ -317,8 +328,11 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
               className="lg:col-span-1 rounded-2xl bg-white border-2 border-[var(--nts-accent)]/20 p-6 flex flex-col justify-between shadow-sm"
             >
               <div className="flex items-center justify-between mb-4">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--nts-accent)]">Return on Investment</span>
-                <div className="w-8 h-8 rounded-lg bg-[var(--nts-accent)]/10 flex items-center justify-center">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--nts-accent)]">ROI %</span>
+                  <Tooltip content={ROI_PERCENT_CALC_TOOLTIP} size={13} />
+                </div>
+                <div className="w-8 h-8 rounded-lg bg-[var(--nts-accent)]/10 flex items-center justify-center shrink-0">
                   <TrendingUp size={16} className="text-[var(--nts-accent)]" />
                 </div>
               </div>
@@ -376,13 +390,13 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
         <Card padding="lg">
           <div className="flex items-center gap-2 mb-4">
             <ShoppingBag size={18} className="text-[var(--nts-accent)]" />
-            <h3 className="text-sm font-semibold text-[#1A1A1A]">Store Revenue vs Attributed Revenue</h3>
+            <h3 className="text-sm font-semibold text-[#1A1A1A]">e-shop Revenue vs Attributed Revenue</h3>
             <span className="text-[10px] text-[#9CA3AF] bg-[#F3F4F6] px-1.5 py-0.5 rounded ml-auto">90 ημέρες</span>
           </div>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <MetricCard
               icon={<ShoppingBag size={20} />}
-              label="Store Revenue"
+              label="e-shop Revenue"
               value={formatCurrencyCompact(ecomm.totalRevenue)}
               subtitle="Πραγματικά έσοδα e-shop"
               color="#10B981"
@@ -400,9 +414,9 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
               icon={<TrendingUp size={20} />}
               label="True ROAS"
               value={metrics.totalSpend > 0 ? `${formatNumber(ecomm.totalRevenue / metrics.totalSpend, 2)}x` : '—'}
-              subtitle="Store Revenue / Ad Spend"
+              subtitle="e-shop Revenue / Ad Spend"
               color="#8B5CF6"
-              tooltip="Store Revenue / Ad Spend για πιο ρεαλιστική αποτύπωση απόδοσης."
+              tooltip="e-shop Revenue / Ad Spend για πιο ρεαλιστική αποτύπωση απόδοσης."
             />
             <MetricCard
               icon={<BarChart3 size={20} />}
@@ -411,15 +425,15 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                 const gap = ecomm.totalRevenue - totalRevenue;
                 return gap >= 0 ? `+${formatCurrencyCompact(gap)}` : formatCurrencyCompact(gap);
               })()}
-              subtitle="Store − Attributed"
+              subtitle="e-shop − Attributed"
               color={ecomm.totalRevenue >= totalRevenue ? '#22C55E' : '#EF4444'}
-              tooltip="Διαφορά πραγματικού store revenue από attributed revenue."
+              tooltip="Διαφορά πραγματικού e-shop revenue από attributed revenue."
             />
           </div>
           <p className="text-[11px] text-[#9CA3AF] mt-3 leading-relaxed">
-            <strong>Store Revenue</strong> = πραγματικά έσοδα από παραγγελίες e-shop.{' '}
+            <strong>e-shop Revenue</strong> = πραγματικά έσοδα από παραγγελίες e-shop.{' '}
             <strong>Attributed Revenue</strong> = organic + conversion value από ad platforms.{' '}
-            <strong>True ROAS</strong> = Store Revenue / Ad Spend (vs Attributed ROAS: {metrics.roas > 0 ? `${formatNumber(metrics.roas, 2)}x` : '—'}).
+            <strong>True ROAS</strong> = e-shop Revenue / Ad Spend (vs Attributed ROAS: {metrics.roas > 0 ? `${formatNumber(metrics.roas, 2)}x` : '—'}).
           </p>
         </Card>
       )}
@@ -429,7 +443,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
         <Card padding="lg">
           <CardHeader
             title="Τάση Εσόδων"
-            subtitle={ecomm.hasData ? 'Organic vs Campaign vs Store Revenue ανά μήνα' : 'Organic vs Campaign revenue ανά μήνα'}
+            subtitle={ecomm.hasData ? 'Organic vs Campaign vs e-shop Revenue ανά μήνα' : 'Organic vs Campaign revenue ανά μήνα'}
             icon={<TrendingUp size={20} className="text-[var(--nts-accent)]" />}
           />
           <div ref={chartRef} className="w-full" style={{ minHeight: 320, position: 'relative' }}>
@@ -471,12 +485,12 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                 }}
                 formatter={(value: any, name?: string) => [
                   formatCurrencyCompact((value as number) || 0),
-                  name === 'organic' ? 'Organic Revenue' : name === 'storeRevenue' ? 'Store Revenue' : 'Campaign Revenue',
+                  name === 'organic' ? 'Organic Revenue' : name === 'storeRevenue' ? 'e-shop Revenue' : 'Campaign Revenue',
                 ]}
                 labelStyle={{ color: '#24292f', fontWeight: 600, marginBottom: 4 }}
               />
               <Legend
-                formatter={(value) => value === 'organic' ? 'Organic' : value === 'storeRevenue' ? 'Store Revenue' : 'Campaigns'}
+                formatter={(value) => value === 'organic' ? 'Organic' : value === 'storeRevenue' ? 'e-shop Revenue' : 'Campaigns'}
                 wrapperStyle={{ fontSize: 12 }}
               />
               <Area

@@ -4,41 +4,41 @@ import { Badge, FormattedProse } from '../common';
 import type { ChannelRecommendation, RFMSegment } from '../../types';
 
 const FUNNEL_STAGE: Record<string, { label: string; color: string }> = {
-  'google search ads': { label: 'Conversion', color: '#22C55E' },
-  'google shopping': { label: 'Conversion', color: '#22C55E' },
-  'google performance max': { label: 'Full-funnel', color: '#6B7280' },
-  'meta ads (facebook/instagram)': { label: 'Awareness', color: '#3B82F6' },
-  'meta ads': { label: 'Awareness', color: '#3B82F6' },
-  'youtube ads': { label: 'Consideration', color: '#F97316' },
-  'google display network': { label: 'Awareness', color: '#3B82F6' },
-  'video/connected tv': { label: 'Awareness', color: '#3B82F6' },
-  'programmatic display': { label: 'Awareness', color: '#3B82F6' },
-  'email marketing': { label: 'Loyalty', color: '#8B5CF6' },
-  'sms marketing': { label: 'Loyalty', color: '#8B5CF6' },
-  'sms': { label: 'Loyalty', color: '#8B5CF6' },
-  'push notifications': { label: 'Loyalty', color: '#8B5CF6' },
-  'loyalty programs': { label: 'Loyalty', color: '#8B5CF6' },
-  'dynamic remarketing': { label: 'Conversion', color: '#22C55E' },
-  'meta retargeting': { label: 'Conversion', color: '#22C55E' },
-  'google remarketing': { label: 'Conversion', color: '#22C55E' },
-  'remarketing': { label: 'Conversion', color: '#22C55E' },
-  'organic social media': { label: 'Awareness', color: '#3B82F6' },
-  'influencer marketing': { label: 'Consideration', color: '#F97316' },
-  'content marketing/seo': { label: 'Consideration', color: '#F97316' },
-  'content marketing': { label: 'Consideration', color: '#F97316' },
-  'seo (on-page & technical)': { label: 'Consideration', color: '#F97316' },
-  'seo': { label: 'Consideration', color: '#F97316' },
-  'blog / editorial content': { label: 'Awareness', color: '#3B82F6' },
-  'blog': { label: 'Awareness', color: '#3B82F6' },
-  'product content optimization': { label: 'Conversion', color: '#22C55E' },
-  'ugc (user-generated content)': { label: 'Consideration', color: '#F97316' },
-  'ugc': { label: 'Consideration', color: '#F97316' },
-  'marketplace ads (skroutz, amazon)': { label: 'Conversion', color: '#22C55E' },
-  'marketplace ads (skroutz)': { label: 'Conversion', color: '#22C55E' },
-  'affiliate marketing': { label: 'Conversion', color: '#22C55E' },
-  'tiktok ads': { label: 'Awareness', color: '#3B82F6' },
-  'pinterest ads': { label: 'Consideration', color: '#F97316' },
-  'whatsapp business': { label: 'Loyalty', color: '#8B5CF6' },
+  'google search ads': { label: 'Μετατροπή', color: '#22C55E' },
+  'google shopping': { label: 'Μετατροπή', color: '#22C55E' },
+  'google performance max': { label: 'Πλήρες funnel', color: '#6B7280' },
+  'meta ads (facebook/instagram)': { label: 'Επίγνωση', color: '#3B82F6' },
+  'meta ads': { label: 'Επίγνωση', color: '#3B82F6' },
+  'youtube ads': { label: 'Σκέψη', color: '#F97316' },
+  'google display network': { label: 'Επίγνωση', color: '#3B82F6' },
+  'video/connected tv': { label: 'Επίγνωση', color: '#3B82F6' },
+  'programmatic display': { label: 'Επίγνωση', color: '#3B82F6' },
+  'email marketing': { label: 'Αφοσίωση', color: '#8B5CF6' },
+  'sms marketing': { label: 'Αφοσίωση', color: '#8B5CF6' },
+  'sms': { label: 'Αφοσίωση', color: '#8B5CF6' },
+  'push notifications': { label: 'Αφοσίωση', color: '#8B5CF6' },
+  'loyalty programs': { label: 'Αφοσίωση', color: '#8B5CF6' },
+  'dynamic remarketing': { label: 'Μετατροπή', color: '#22C55E' },
+  'meta retargeting': { label: 'Μετατροπή', color: '#22C55E' },
+  'google remarketing': { label: 'Μετατροπή', color: '#22C55E' },
+  'remarketing': { label: 'Μετατροπή', color: '#22C55E' },
+  'organic social media': { label: 'Επίγνωση', color: '#3B82F6' },
+  'influencer marketing': { label: 'Σκέψη', color: '#F97316' },
+  'content marketing/seo': { label: 'Σκέψη', color: '#F97316' },
+  'content marketing': { label: 'Σκέψη', color: '#F97316' },
+  'seo (on-page & technical)': { label: 'Σκέψη', color: '#F97316' },
+  'seo': { label: 'Σκέψη', color: '#F97316' },
+  'blog / editorial content': { label: 'Επίγνωση', color: '#3B82F6' },
+  'blog': { label: 'Επίγνωση', color: '#3B82F6' },
+  'product content optimization': { label: 'Μετατροπή', color: '#22C55E' },
+  'ugc (user-generated content)': { label: 'Σκέψη', color: '#F97316' },
+  'ugc': { label: 'Σκέψη', color: '#F97316' },
+  'marketplace ads (skroutz, amazon)': { label: 'Μετατροπή', color: '#22C55E' },
+  'marketplace ads (skroutz)': { label: 'Μετατροπή', color: '#22C55E' },
+  'affiliate marketing': { label: 'Μετατροπή', color: '#22C55E' },
+  'tiktok ads': { label: 'Επίγνωση', color: '#3B82F6' },
+  'pinterest ads': { label: 'Σκέψη', color: '#F97316' },
+  'whatsapp business': { label: 'Αφοσίωση', color: '#8B5CF6' },
 };
 
 function getFunnelStage(channel: string) {
@@ -47,7 +47,7 @@ function getFunnelStage(channel: string) {
   for (const [k, v] of Object.entries(FUNNEL_STAGE)) {
     if (key.includes(k) || k.includes(key)) return v;
   }
-  return { label: 'Other', color: '#9CA3AF' };
+  return { label: 'Άλλο', color: '#9CA3AF' };
 }
 
 function getBudgetForChannel(channel: string, allocation: Record<string, number>): number | null {
@@ -103,17 +103,17 @@ export function ChannelRecommendations({
           {/* no emoji icons in enterprise UI */}
         </div>
         <div className="flex-1">
-          <h4 className="font-semibold text-[#1A1A1A]">{segment.name} Segment</h4>
+          <h4 className="font-semibold text-[#1A1A1A]">Τμήμα: {segment.name}</h4>
           <p className="text-sm text-[#4A4A4A]">{segment.description}</p>
         </div>
         <div className="text-right">
-          <p className="text-sm text-[#4A4A4A]">Customers</p>
+          <p className="text-sm text-[#4A4A4A]">Πελάτες</p>
           <p className="text-lg font-bold text-[#1A1A1A] font-mono">
             {segment.count.toLocaleString()}
           </p>
         </div>
         <div className="text-right">
-          <p className="text-sm text-[#4A4A4A]">Revenue Share</p>
+          <p className="text-sm text-[#4A4A4A]">Μερίδιο εσόδων</p>
           <p className="text-lg font-bold font-mono" style={{ color: segment.color }}>
             {segment.revenue_share}%
           </p>
@@ -126,7 +126,7 @@ export function ChannelRecommendations({
         <div>
           <h5 className="text-sm font-medium text-[#1A1A1A] mb-3 flex items-center gap-2">
             <Zap size={16} className="text-[var(--nts-accent)]" />
-            Primary Channels
+            Κύρια κανάλια
           </h5>
           <div className="space-y-2">
             {recommendations.primary.map((channel, index) => {
@@ -165,7 +165,7 @@ export function ChannelRecommendations({
         <div>
           <h5 className="text-sm font-medium text-[#1A1A1A] mb-3 flex items-center gap-2">
             <Target size={16} className="text-[#4A4A4A]" />
-            Secondary Channels
+            Δευτερεύοντα κανάλια
           </h5>
           <div className="space-y-2">
             {recommendations.secondary.map((channel, index) => {
@@ -205,7 +205,7 @@ export function ChannelRecommendations({
 
       {/* Rationale */}
       <div className="p-4 bg-gradient-to-r from-[#F5F5F5] to-white rounded-lg border border-[#E5E5E5]">
-        <h5 className="font-medium text-[#1A1A1A] text-sm mb-3">AI Rationale</h5>
+        <h5 className="font-medium text-[#1A1A1A] text-sm mb-3">Αιτιολόγηση AI</h5>
         {(() => {
           const parts = recommendations.rationale.split('||').map(s => s.trim());
           const hasStructure = parts.length >= 3 && parts[0].startsWith('Πελάτες:');

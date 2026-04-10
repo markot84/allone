@@ -16,7 +16,7 @@ import {
   TrendingDown,
   Trash2
 } from 'lucide-react';
-import { Card, Badge, Button, ProgressBar, Spinner, Tooltip, useToast, AlertsBanner } from '../common';
+import { Card, Badge, Button, ProgressBar, Spinner, Tooltip, useToast, AlertsBanner, PageHeader } from '../common';
 import { useProducts, useProductSource, useBrand, useSuppliers, usePlan, useProcurement } from '../../hooks';
 import { usePriceBenchmarks } from '../../hooks/usePriceBenchmarks';
 import { formatCurrency, formatCurrencyCompact, formatNumber, formatPercent } from '../../utils/format';
@@ -362,12 +362,12 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   if (!hasImported && !usingProcurement) {
     return (
       <div className="space-y-6">
-        <div>
-          <h2 className="text-2xl font-bold text-[#1A1A1A]">Product Intelligence</h2>
-          <p className="text-[#4A4A4A] mt-1">
-            Monitor inventory health and product performance
-          </p>
-        </div>
+        <PageHeader
+          title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Product Intelligence</h2>}
+          description={
+            <p className="text-sm text-[#4A4A4A] sm:text-base">Παρακολούθηση αποθέματος και απόδοσης προϊόντων</p>
+          }
+        />
         <Card padding="lg" className="text-center py-12">
           <p className="text-[#4A4A4A] mb-4">
             Δεν υπάρχουν imported προϊόντα ακόμα.
@@ -390,38 +390,53 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-[#1A1A1A]">Product Intelligence</h2>
-          <p className="text-[#4A4A4A] mt-1">
-            Monitor inventory health and product performance
-            {sourceProducts.length > 0 && (
-              <span className="ml-2 text-[#22C55E] font-medium">
-                · Showing {sourceProducts.length} {usingProcurement ? 'procurement' : 'imported'} product(s)
-              </span>
-            )}
+      <PageHeader
+        toolbarAriaLabel="Εξαγωγή και διαγραφή προϊόντων"
+        title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Product Intelligence</h2>}
+        description={
+          <p className="text-sm text-[#4A4A4A] sm:text-base">
+            Παρακολούθηση αποθέματος και απόδοσης προϊόντων
           </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Button
-            variant="secondary"
-            icon={<Trash2 size={16} />}
-            onClick={handleDeleteProducts}
-            disabled={isDeleting || !rawHasImported}
-            className="text-[#DC2626] hover:bg-[#FEE2E2]"
-          >
-            {isDeleting ? 'Διαγραφή…' : 'Διαγραφή δεδομένων'}
-          </Button>
-          <Button 
-            variant="secondary" 
-            icon={<Download size={16} />}
-            onClick={() => setShowExportModal(true)}
-          >
-            Export Report
-          </Button>
-        </div>
-      </div>
+        }
+        meta={
+          sourceProducts.length > 0 ? (
+            <p className="text-xs font-medium text-[#22C55E] sm:text-sm">
+              Showing {sourceProducts.length} {usingProcurement ? 'procurement' : 'imported'} product(s)
+            </p>
+          ) : null
+        }
+        actions={
+          <>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<Trash2 size={14} />}
+              onClick={handleDeleteProducts}
+              disabled={isDeleting || !rawHasImported}
+              className="min-h-[36px] flex-1 basis-[calc(50%-0.1875rem)] text-[#DC2626] hover:bg-[#FEE2E2] sm:flex-initial sm:basis-auto"
+            >
+              {isDeleting ? (
+                'Διαγραφή…'
+              ) : (
+                <>
+                  <span className="sm:hidden">Διαγραφή</span>
+                  <span className="hidden sm:inline">Διαγραφή δεδομένων</span>
+                </>
+              )}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<Download size={14} />}
+              onClick={() => setShowExportModal(true)}
+              className="min-h-[36px] flex-1 basis-[calc(50%-0.1875rem)] sm:flex-initial sm:basis-auto"
+            >
+              <span className="hidden min-[380px]:inline">Εξαγωγή αναφοράς</span>
+              <span className="min-[380px]:hidden">Εξαγωγή</span>
+            </Button>
+          </>
+        }
+      />
 
       {/* Inventory Alerts */}
       <AlertsBanner filterGroup="inventory" maxAlerts={2} compact onNavigate={onSectionChange} />
@@ -624,7 +639,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           <DropdownFilter
             value={selectedCategory}
             onChange={setSelectedCategory}
-            options={[{ value: 'all', label: 'All Categories' }, ...categories.map(c => ({ value: c, label: c }))]}
+            options={[{ value: 'all', label: 'Όλες οι κατηγορίες' }, ...categories.map(c => ({ value: c, label: c }))]}
           />
 
           {/* Margin Filter */}
@@ -632,10 +647,10 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
             value={marginFilter}
             onChange={setMarginFilter}
             options={[
-              { value: 'all', label: 'All Margins' },
-              { value: 'high', label: 'High Margin' },
-              { value: 'medium', label: 'Medium Margin' },
-              { value: 'low', label: 'Low Margin' }
+              { value: 'all', label: 'Όλα τα margins' },
+              { value: 'high', label: 'Υψηλό margin' },
+              { value: 'medium', label: 'Μέτριο margin' },
+              { value: 'low', label: 'Χαμηλό margin' }
             ]}
           />
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X, CheckCircle2, AlertCircle, ArrowRight } from 'lucide-react';
-import { Button, Spinner } from '../common';
+import { Button, Spinner, ModalHeader } from '../common';
 import { previewFileForProducts } from '../../services/import';
 import { FEED_SOURCE_CONFIG, type FeedSourceType } from '../../data/feedSourceConfig';
 
@@ -58,14 +58,19 @@ export function FeedPreviewModal({
     <>
       <div className="fixed inset-0 bg-black/30 z-40" onClick={onClose} />
       <div className="fixed inset-4 md:inset-8 lg:inset-12 bg-white rounded-xl shadow-2xl z-50 flex flex-col overflow-hidden">
-        <div className="p-4 border-b border-[#E5E5E5] flex items-center justify-between">
-          <h3 className="text-lg font-bold text-[#1A1A1A]">
-            Preview — {file?.name ?? 'αρχείο'}
-          </h3>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-[#F5F5F5]">
-            <X size={20} />
-          </button>
-        </div>
+        <ModalHeader
+          toolbarAriaLabel="Κλείσιμο preview"
+          title={
+            <h3 className="break-words text-lg font-bold text-[#1A1A1A]">
+              Preview — {file?.name ?? 'αρχείο'}
+            </h3>
+          }
+          actions={
+            <button type="button" onClick={onClose} className="rounded-lg p-2 hover:bg-[#F5F5F5]">
+              <X size={20} />
+            </button>
+          }
+        />
         <div className="flex-1 overflow-auto p-4">
           {loading && (
             <div className="flex flex-col items-center justify-center py-16">

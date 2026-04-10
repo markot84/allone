@@ -2,7 +2,7 @@
  * Magento / Adobe Commerce Connector
  *
  * Flow:
- * 1. User enters Store URL + Access Token (from Admin → System → Integrations)
+ * 1. User enters e-shop URL + Access Token (from Admin → System → Integrations)
  * 2. We validate via GET /rest/V1/store/storeConfigs
  * 3. Credentials stored in Firestore (connectors/{brandId}.magento)
  * 4. Sync fetches orders (90 days) + products → Firestore (no PII stored)
@@ -77,7 +77,7 @@ export async function testMagentoConnection(
         return { success: false, error: 'Invalid Access Token. Verify the token in System → Integrations.' };
       }
       if (res.status === 404) {
-        return { success: false, error: 'Magento REST API not found. Verify the Store URL.' };
+        return { success: false, error: 'Magento REST API not found. Verify the e-shop URL.' };
       }
       const errText = await res.text();
       return { success: false, error: `Connection failed (${res.status}): ${errText.slice(0, 200)}` };
@@ -110,7 +110,7 @@ export async function testMagentoConnection(
     const msg = error instanceof Error ? error.message : String(error);
     logger.error('[Magento] Connection test failed:', msg);
     if (msg.includes('ENOTFOUND') || msg.includes('getaddrinfo')) {
-      return { success: false, error: 'Store URL not reachable. Check the domain.' };
+      return { success: false, error: 'e-shop URL not reachable. Check the domain.' };
     }
     return { success: false, error: msg };
   }

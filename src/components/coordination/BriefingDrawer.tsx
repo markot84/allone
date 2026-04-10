@@ -148,15 +148,15 @@ export function BriefingDrawer({ strategyName, initialTitle, onClose, onSent }: 
         <div className="max-w-2xl mx-auto px-5 py-5 w-full overflow-y-auto">
           <div className="w-10 h-1 bg-[#E5E7EB] rounded-full mx-auto mb-4" />
 
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="font-semibold text-[#111827] text-base">Αποστολή Briefing</h3>
-              <p className="text-xs text-[#9CA3AF] mt-0.5">Ειδοποίηση τμημάτων για νέα στρατηγική</p>
+          <div className="mb-4 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <h3 className="text-base font-semibold text-[#111827]">Αποστολή Briefing</h3>
+              <p className="mt-0.5 text-xs text-[#9CA3AF]">Ειδοποίηση τμημάτων για νέα στρατηγική</p>
             </div>
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 hover:bg-[#F3F4F6] rounded-lg transition-colors"
+              className="shrink-0 self-end p-1.5 transition-colors hover:bg-[#F3F4F6] rounded-lg sm:self-start"
             >
               <X size={17} className="text-[#6B7280]" />
             </button>

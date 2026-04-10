@@ -96,20 +96,20 @@ export function Help() {
     return (
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-center gap-4">
+        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
           <button
             onClick={handleBack}
-            className="p-2 hover:bg-[#F5F5F5] rounded-lg transition-colors"
+            className="shrink-0 self-start rounded-lg p-2 transition-colors hover:bg-[#F5F5F5]"
           >
             <ArrowLeft size={20} className="text-[#4A4A4A]" />
           </button>
-          <div>
-            <div className="flex items-center gap-2 text-sm text-[#9CA3AF] mb-1">
+          <div className="min-w-0">
+            <div className="mb-1 flex flex-wrap items-center gap-2 text-sm text-[#9CA3AF]">
               <span>{category?.icon}</span>
               <span>{category?.title}</span>
             </div>
-            <h1 className="text-2xl font-bold text-[#1A1A1A]">{currentArticle.title}</h1>
-            <p className="text-sm text-[#4A4A4A] mt-1">{currentArticle.description}</p>
+            <h1 className="break-words text-xl font-bold text-[#1A1A1A] sm:text-2xl">{currentArticle.title}</h1>
+            <p className="mt-1 text-sm text-[#4A4A4A]">{currentArticle.description}</p>
           </div>
         </div>
 
@@ -201,15 +201,15 @@ export function Help() {
     return (
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-center gap-4">
+        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
           <button
             onClick={handleBack}
-            className="p-2 hover:bg-[#F5F5F5] rounded-lg transition-colors"
+            className="shrink-0 self-start rounded-lg p-2 transition-colors hover:bg-[#F5F5F5]"
           >
             <ArrowLeft size={20} className="text-[#4A4A4A]" />
           </button>
-          <div>
-            <h1 className="text-2xl font-bold text-[#1A1A1A] flex items-center gap-2">
+          <div className="min-w-0">
+            <h1 className="flex flex-wrap items-center gap-2 text-xl font-bold text-[#1A1A1A] sm:text-2xl">
               <span>{category?.icon}</span>
               {category?.title}
             </h1>
@@ -259,7 +259,7 @@ export function Help() {
     <div className="space-y-6">
       {/* Header */}
       <div className="text-center py-8">
-        <h2 className="text-3xl font-bold text-[#1A1A1A]">Knowledge Library</h2>
+        <h2 className="text-3xl font-bold text-[#1A1A1A]">Βιβλιοθήκη γνώσης</h2>
         <p className="text-[#4A4A4A] mt-2 max-w-md mx-auto">
           Βρείτε απαντήσεις και οδηγούς για τη χρήση του Performance+
         </p>

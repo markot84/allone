@@ -86,7 +86,7 @@ export function BrandCreateForm({ onCreated }: BrandCreateFormProps) {
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="π.χ. My Store"
+            placeholder="π.χ. My e-shop"
             className="w-full pl-10 pr-4 py-2.5 bg-[var(--nts-light-gray)] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white"
           />
         </div>

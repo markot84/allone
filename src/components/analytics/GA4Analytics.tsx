@@ -18,7 +18,7 @@ import {
   Pie,
   Cell,
 } from 'recharts';
-import { Card, CardHeader, KPICard } from '../common';
+import { Card, CardHeader, KPICard, PageHeader } from '../common';
 import { useGA4Data } from '../../hooks/useGA4Data';
 import type { KPICardData } from '../common/KPICard';
 
@@ -141,79 +141,83 @@ export function GA4Analytics() {
 
   const primaryKpis: KPICardData[] = [
     {
-      label: 'Sessions',
+      label: 'Συνεδρίες',
       value: fmt(totals.sessions),
       change: round1(weeklyChange?.sessions),
-      changeLabel: 'vs 7d',
+      changeLabel: 'vs 7 ημ.',
       trend: weeklyChange?.sessions != null ? (weeklyChange.sessions >= 0 ? 'up' : 'down') : undefined,
       sparklineData: dailyEntries.slice(-14).map((d) => d.sessions),
       tooltip: 'Σύνολο sessions τελευταίων 90 ημερών',
     },
     {
-      label: 'Users',
+      label: 'Χρήστες',
       value: fmt(totals.users),
       change: round1(weeklyChange?.users),
-      changeLabel: 'vs 7d',
+      changeLabel: 'vs 7 ημ.',
       trend: weeklyChange?.users != null ? (weeklyChange.users >= 0 ? 'up' : 'down') : undefined,
       sparklineData: dailyEntries.slice(-14).map((d) => d.totalUsers),
       tooltip: 'Μοναδικοί χρήστες τελευταίων 90 ημερών',
     },
     {
-      label: 'New Users',
+      label: 'Νέοι χρήστες',
       value: fmt(totals.newUsers),
       change: round1(weeklyChange?.newUsers),
-      changeLabel: 'vs 7d',
+      changeLabel: 'vs 7 ημ.',
       trend: weeklyChange?.newUsers != null ? (weeklyChange.newUsers >= 0 ? 'up' : 'down') : undefined,
       sparklineData: dailyEntries.slice(-14).map((d) => d.newUsers),
       tooltip: 'Νέοι χρήστες τελευταίων 90 ημερών',
     },
     {
-      label: 'Conversions',
+      label: 'Μετατροπές',
       value: fmt(totals.conversions),
       change: round1(weeklyChange?.conversions),
-      changeLabel: 'vs 7d',
+      changeLabel: 'vs 7 ημ.',
       trend: weeklyChange?.conversions != null ? (weeklyChange.conversions >= 0 ? 'up' : 'down') : undefined,
       sparklineData: dailyEntries.slice(-14).map((d) => d.conversions),
-      tooltip: 'Σύνολο conversions (90d)',
+      tooltip: 'Σύνολο μετατροπών (90 ημ.)',
     },
   ];
 
   const secondaryKpis: KPICardData[] = [
     {
-      label: 'Bounce Rate',
+      label: 'Bounce rate',
       value: fmtPct(totals.bounceRate),
-      tooltip: 'Μέσος bounce rate (90d)',
+      tooltip: 'Μέσος bounce rate (90 ημ.)',
     },
     {
-      label: 'Avg Duration',
+      label: 'Μέση διάρκεια',
       value: fmtDuration(totals.avgDuration),
-      tooltip: 'Μέση διάρκεια session',
+      tooltip: 'Μέση διάρκεια session (GA4)',
     },
     {
-      label: 'Page Views',
+      label: 'Προβολές σελίδων',
       value: fmt(totals.pageViews),
       sparklineData: dailyEntries.slice(-14).map((d) => d.pageViews),
-      tooltip: 'Σύνολο page views (90d)',
+      tooltip: 'Σύνολο προβολών σελίδων (90 ημ.)',
     },
   ];
 
   return (
     <div className="space-y-8">
-      {/* Header */}
-      <div>
-        <h2 className="text-2xl font-bold text-[var(--nts-charcoal)] tracking-tight flex items-center gap-2">
-          <BarChart3 size={24} className="text-orange-500" />
-          Web Analytics
-        </h2>
-        <p className="text-[14px] text-[var(--nts-medium-gray)] mt-1">
-          GA4 Property: <span className="font-medium text-[var(--nts-charcoal)]">{propertyName}</span>
-          {dateRange && (
-            <span className="ml-2 text-xs">
-              ({dateRange.start} — {dateRange.end})
-            </span>
-          )}
-        </p>
-      </div>
+      <PageHeader
+        title={
+          <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight text-[var(--nts-charcoal)] sm:text-2xl">
+            <BarChart3 size={24} className="shrink-0 text-orange-500" />
+            Αναλυτικά ιστού (GA4)
+          </h2>
+        }
+        description={
+          <p className="text-[14px] text-[var(--nts-medium-gray)]">
+            Ιδιότητα GA4:{' '}
+            <span className="font-medium text-[var(--nts-charcoal)]">{propertyName}</span>
+            {dateRange && (
+              <span className="ml-2 text-xs">
+                ({dateRange.start} — {dateRange.end})
+              </span>
+            )}
+          </p>
+        }
+      />
 
       {/* KPI Cards — Primary row */}
       <div className="space-y-3">
@@ -233,7 +237,7 @@ export function GA4Analytics() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Sessions & Users Trend */}
         <Card className="lg:col-span-2">
-          <CardHeader title="Sessions & Users Trend" subtitle="Ημερήσια/εβδομαδιαία εξέλιξη" />
+          <CardHeader title="Τάση συνεδριών & χρηστών" subtitle="Ημερήσια/εβδομαδιαία εξέλιξη" />
           <div className="p-4 pt-0">
             <ResponsiveContainer width="100%" height={280}>
               <AreaChart data={chartData}>
@@ -276,7 +280,7 @@ export function GA4Analytics() {
 
         {/* Traffic Sources Pie */}
         <Card>
-          <CardHeader title="Traffic Sources" subtitle="Κατανομή sessions ανά κανάλι" />
+          <CardHeader title="Πηγές κίνησης" subtitle="Κατανομή sessions ανά κανάλι" />
           <div className="p-4 pt-0">
             <div className="flex flex-col items-center">
               <ResponsiveContainer width="100%" height={200}>
@@ -319,18 +323,18 @@ export function GA4Analytics() {
 
       {/* Traffic Sources Detail Table */}
       <Card>
-        <CardHeader title="Channel Breakdown" subtitle="Αναλυτικά ανά κανάλι κίνησης" />
+        <CardHeader title="Ανάλυση καναλιών" subtitle="Αναλυτικά ανά κανάλι κίνησης" />
         <div className="p-4 pt-0 overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-[#6B7280] border-b border-[#F3F4F6]">
-                <th className="pb-2 font-medium">Channel</th>
+                <th className="pb-2 font-medium">Κανάλι</th>
                 <th className="pb-2 font-medium text-right">Sessions</th>
-                <th className="pb-2 font-medium text-right">Users</th>
-                <th className="pb-2 font-medium text-right">New Users</th>
-                <th className="pb-2 font-medium text-right">Conversions</th>
-                <th className="pb-2 font-medium text-right">Conv. Rate</th>
-                <th className="pb-2 font-medium text-right">Share</th>
+                <th className="pb-2 font-medium text-right">Χρήστες</th>
+                <th className="pb-2 font-medium text-right">Νέοι χρήστες</th>
+                <th className="pb-2 font-medium text-right">Μετατροπές</th>
+                <th className="pb-2 font-medium text-right">Conv. rate</th>
+                <th className="pb-2 font-medium text-right">Μερίδιο</th>
               </tr>
             </thead>
             <tbody>
@@ -378,7 +382,7 @@ export function GA4Analytics() {
 
       {/* Top Pages */}
       <Card>
-        <CardHeader title="Top Pages" subtitle="Σελίδες με τη μεγαλύτερη κίνηση" />
+        <CardHeader title="Κορυφαίες σελίδες" subtitle="Σελίδες με τη μεγαλύτερη κίνηση" />
         <div className="p-4 pt-0">
           {/* Search */}
           <div className="relative mb-3">
@@ -396,12 +400,12 @@ export function GA4Analytics() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs text-[#6B7280] border-b border-[#F3F4F6]">
-                  <th className="pb-2 font-medium">Page Path</th>
+                  <th className="pb-2 font-medium">Διαδρομή σελίδας</th>
                   <th
                     className="pb-2 font-medium text-right cursor-pointer select-none"
                     onClick={() => handleSort('pageViews')}
                   >
-                    Page Views <SortIcon field="pageViews" />
+                    Προβολές <SortIcon field="pageViews" />
                   </th>
                   <th
                     className="pb-2 font-medium text-right cursor-pointer select-none"
@@ -409,12 +413,12 @@ export function GA4Analytics() {
                   >
                     Sessions <SortIcon field="sessions" />
                   </th>
-                  <th className="pb-2 font-medium text-right">New Users</th>
+                  <th className="pb-2 font-medium text-right">Νέοι χρήστες</th>
                   <th
                     className="pb-2 font-medium text-right cursor-pointer select-none"
                     onClick={() => handleSort('bounceRate')}
                   >
-                    Bounce Rate <SortIcon field="bounceRate" />
+                    Bounce rate <SortIcon field="bounceRate" />
                   </th>
                 </tr>
               </thead>

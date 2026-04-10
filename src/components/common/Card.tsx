@@ -67,14 +67,17 @@ interface CardHeaderProps {
   subtitle?: string;
   icon?: ReactNode;
   action?: ReactNode;
+  className?: string;
 }
 
-export function CardHeader({ title, subtitle, icon, action }: CardHeaderProps) {
+export function CardHeader({ title, subtitle, icon, action, className = '' }: CardHeaderProps) {
   return (
-    <div className="flex flex-col gap-3 mb-4">
-      <div className="flex items-center gap-2 min-w-0">
+    <div
+      className={`mb-4 flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between lg:gap-4 ${className}`.trim()}
+    >
+      <div className="flex min-w-0 flex-1 items-start gap-2">
         {icon && (
-          <span style={{ color: 'var(--fgColor-muted, #57606a)' }}>
+          <span className="shrink-0" style={{ color: 'var(--fgColor-muted, #57606a)' }}>
             {icon}
           </span>
         )}
@@ -86,7 +89,7 @@ export function CardHeader({ title, subtitle, icon, action }: CardHeaderProps) {
             <Text
               as="p"
               size="small"
-              className="truncate"
+              className="line-clamp-2 lg:line-clamp-none lg:truncate"
               style={{ margin: 0, marginTop: 2, color: 'var(--fgColor-muted, #57606a)' }}
             >
               {subtitle}
@@ -94,7 +97,11 @@ export function CardHeader({ title, subtitle, icon, action }: CardHeaderProps) {
           )}
         </div>
       </div>
-      {action && <div className="w-full">{action}</div>}
+      {action && (
+        <div className="flex w-full min-w-0 flex-wrap items-stretch gap-2 lg:w-auto lg:flex-nowrap lg:justify-end lg:items-center">
+          {action}
+        </div>
+      )}
     </div>
   );
 }

@@ -2,7 +2,7 @@
  * WooCommerce Connector
  *
  * Flow:
- * 1. User enters Store URL + Consumer Key + Consumer Secret
+ * 1. User enters e-shop URL + Consumer Key + Consumer Secret
  * 2. We validate with a test API call (GET /wp-json/wc/v3/system_status)
  * 3. Credentials stored in Firestore (connectors/{brandId}.woocommerce)
  * 4. Sync fetches orders (90 days) + products → Firestore (no PII stored)
@@ -102,7 +102,7 @@ export async function testWooConnection(
     const msg = error instanceof Error ? error.message : String(error);
     logger.error('[WooCommerce] Connection test failed:', msg);
     if (msg.includes('ENOTFOUND') || msg.includes('getaddrinfo')) {
-      return { success: false, error: 'Store URL not reachable. Check the domain.' };
+      return { success: false, error: 'e-shop URL not reachable. Check the domain.' };
     }
     return { success: false, error: msg };
   }

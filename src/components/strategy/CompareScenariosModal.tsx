@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { ArrowDown, ArrowUp, Minus, X } from 'lucide-react';
-import { Button, Tooltip } from '../common';
+import { Button, Tooltip, ModalHeader } from '../common';
 import { scenarios, weightFactors } from '../../data';
 import { calculateCompositeScore } from '../../utils/compositeScore';
 import type { Product } from '../../types';
@@ -126,17 +126,22 @@ export function CompareScenariosModal({
     <>
       <div className="fixed inset-0 bg-black/30 z-40" onClick={onClose} />
       <div className="fixed inset-4 md:inset-8 lg:inset-12 bg-white rounded-xl shadow-2xl z-50 flex flex-col overflow-hidden">
-        <div className="p-4 border-b border-[#E5E5E5] flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h3 className="text-lg font-bold text-[#1A1A1A]">Σύγκριση Scenarios</h3>
-            <Tooltip content="Συγκρίνετε δύο στρατηγικές πριν την εφαρμογή. Top N = τα N προϊόντα με τα υψηλότερα composite scores. Δείτε πώς αλλάζουν οι προτεραιότητες, το revenue/margin και ποια προϊόντα κερδίζουν ή χάνουν θέση." size={14}>
-              <span />
-            </Tooltip>
-          </div>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-[#F5F5F5]">
-            <X size={20} />
-          </button>
-        </div>
+        <ModalHeader
+          toolbarAriaLabel="Κλείσιμο"
+          title={
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-lg font-bold text-[#1A1A1A]">Σύγκριση Scenarios</h3>
+              <Tooltip content="Συγκρίνετε δύο στρατηγικές πριν την εφαρμογή. Top N = τα N προϊόντα με τα υψηλότερα composite scores. Δείτε πώς αλλάζουν οι προτεραιότητες, το revenue/margin και ποια προϊόντα κερδίζουν ή χάνουν θέση." size={14}>
+                <span />
+              </Tooltip>
+            </div>
+          }
+          actions={
+            <button type="button" onClick={onClose} className="rounded-lg p-2 hover:bg-[#F5F5F5]">
+              <X size={20} />
+            </button>
+          }
+        />
         <div className="flex-1 overflow-auto p-4">
           <div className="flex flex-wrap gap-4 mb-4">
             <div>

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Building2, Plus, ChevronRight } from 'lucide-react';
-import { Card, Button } from '../common';
+import { Card, Button, PageHeader } from '../common';
 import { useBrand } from '../../hooks';
 import { BrandCreateForm } from '../auth/BrandCreateForm';
 import { getAssetUrl } from '../../services/storage';
@@ -29,21 +29,26 @@ export function BrandsPage({ onNavigateToDashboard }: BrandsPageProps) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-[#1A1A1A]">Τα Brands μου</h2>
-          <p className="text-[#4A4A4A] mt-1">
+      <PageHeader
+        toolbarAriaLabel="Brand"
+        title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Τα Brands μου</h2>}
+        description={
+          <p className="text-sm text-[#4A4A4A] sm:text-base">
             Επιλέξτε brand για να δείτε τα δεδομένα και την ανάλυσή του
           </p>
-        </div>
-        <Button
-          variant="primary"
-          icon={<Plus size={16} />}
-          onClick={() => setShowAddForm(!showAddForm)}
-        >
-          {showAddForm ? 'Ακύρωση' : 'Νέο Brand'}
-        </Button>
-      </div>
+        }
+        actions={
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<Plus size={14} />}
+            onClick={() => setShowAddForm(!showAddForm)}
+            className="min-h-[36px] w-full sm:w-auto"
+          >
+            {showAddForm ? 'Ακύρωση' : 'Νέο Brand'}
+          </Button>
+        }
+      />
 
       {showAddForm && (
         <motion.div

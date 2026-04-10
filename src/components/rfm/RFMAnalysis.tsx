@@ -26,7 +26,7 @@ import {
   Tooltip,
   CartesianGrid
 } from 'recharts';
-import { Card, CardHeader, Badge, Button, Spinner, Tooltip as InfoTooltip, useToast } from '../common';
+import { Card, CardHeader, Badge, Button, Spinner, Tooltip as InfoTooltip, useToast, PageHeader } from '../common';
 import { useSegments, useBrand } from '../../hooks';
 import { FirestoreService } from '../../services/firestore';
 import { segmentCategoryMatrix } from '../../data';
@@ -182,12 +182,14 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
   if (!hasImportedSegments) {
     return (
       <div className="space-y-6">
-        <div>
-          <h2 className="text-2xl font-bold text-[#1A1A1A]">Data Analysis</h2>
-          <p className="text-[#4A4A4A] mt-1">
-            Analyze customer segments through RFM, behavioral and firmographic lenses
-          </p>
-        </div>
+        <PageHeader
+          title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Data Analysis</h2>}
+          description={
+            <p className="text-sm text-[#4A4A4A] sm:text-base leading-snug">
+              Ανάλυση τμημάτων πελατών (RFM, behavioral, firmographic)
+            </p>
+          }
+        />
         <Card padding="lg" className="text-center py-12">
           <p className="text-[#4A4A4A] mb-4">
             Δεν υπάρχουν imported segments ακόμα.
@@ -210,45 +212,73 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-        <h2 className="text-2xl font-bold text-[#1A1A1A]">Data Analysis</h2>
-        <p className="text-[#4A4A4A] mt-1">
-          Analyze customer segments through RFM, behavioral and firmographic lenses
-          {hasImportedSegments && (
-            <span className="ml-2 text-[#22C55E] font-medium">· {rfmSegments.length} segment(s) · {formatNumber(totalCustomersDisplay)} customers</span>
-          )}
-        </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
+      <PageHeader
+        toolbarAriaLabel="Εξαγωγή και διαγραφή segments"
+        title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Data Analysis</h2>}
+        description={
+          <p className="text-sm text-[#4A4A4A] sm:text-base leading-snug">
+            Ανάλυση τμημάτων πελατών (RFM, behavioral, firmographic)
+          </p>
+        }
+        meta={
+          hasImportedSegments ? (
+            <p className="text-xs font-medium text-[#22C55E] sm:text-sm">
+              {rfmSegments.length} τμήματα · {formatNumber(totalCustomersDisplay)} πελάτες
+            </p>
+          ) : null
+        }
+        actions={
+          <>
           <Button
             variant="primary"
-            icon={<Users size={16} />}
+            size="sm"
+            icon={<Users size={14} className="shrink-0" />}
             onClick={() => handleExportCustomerList(null, 'csv')}
             disabled={isExporting || !hasImportedSegments}
+            className="min-h-[36px] flex-1 basis-[calc(50%-0.1875rem)] sm:flex-initial sm:basis-auto"
           >
-            Customer Lists .csv
+            <span className="hidden min-[380px]:inline">Λίστες πελατών </span>
+            <span className="min-[380px]:hidden">Λίστες </span>
+            .csv
           </Button>
           <Button
             variant="secondary"
-            icon={<FileSpreadsheet size={16} />}
+            size="sm"
+            icon={<FileSpreadsheet size={14} className="shrink-0" />}
             onClick={() => handleExportAll('xlsx')}
             disabled={isExporting || !hasImportedSegments}
+            className="min-h-[36px] flex-1 basis-[calc(50%-0.1875rem)] sm:flex-initial sm:basis-auto"
           >
-            {isExporting ? 'Exporting…' : 'Action Packs .xlsx'}
+            {isExporting ? (
+              'Exporting…'
+            ) : (
+              <>
+                <span className="hidden min-[380px]:inline">Action Packs </span>
+                <span className="min-[380px]:hidden">Packs </span>
+                .xlsx
+              </>
+            )}
           </Button>
           <Button
             variant="secondary"
-            icon={<Trash2 size={16} />}
+            size="sm"
+            icon={<Trash2 size={14} className="shrink-0" />}
             onClick={handleDeleteSegments}
             disabled={isDeleting || !hasImportedSegments}
-            className="text-[#DC2626] hover:bg-[#FEE2E2]"
+            className="min-h-[36px] w-full text-[#DC2626] hover:bg-[#FEE2E2] sm:w-auto"
           >
-            {isDeleting ? 'Διαγραφή…' : 'Διαγραφή δεδομένων'}
+            {isDeleting ? (
+              'Διαγραφή…'
+            ) : (
+              <>
+                <span className="sm:hidden">Διαγραφή</span>
+                <span className="hidden sm:inline">Διαγραφή δεδομένων</span>
+              </>
+            )}
           </Button>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {/* Analysis Tabs */}
       <div className="flex items-center gap-1 bg-[var(--nts-light-gray)] p-1 rounded-xl w-fit">
@@ -269,7 +299,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
               <Users size={20} className="text-[var(--nts-accent)]" />
             </div>
             <div>
-              <p className="text-sm text-[#4A4A4A]"><InfoTooltip content="Συνολικός αριθμός πελατών από τα εισαγμένα RFM segments. Περιλαμβάνει ενεργούς και ανενεργούς.">Σύνολο Πελατών</InfoTooltip></p>
+              <p className="text-sm text-[#4A4A4A]"><InfoTooltip content="Συνολικός αριθμός πελατών από τα imported RFM segments. Περιλαμβάνει ενεργούς και ανενεργούς.">Σύνολο Πελατών</InfoTooltip></p>
               <p className="text-xl font-bold text-[#1A1A1A] font-mono">
                 {formatNumber(totalCustomersDisplay)}
               </p>
@@ -558,7 +588,7 @@ function SegmentCard({ segment, index, isSelected, onSelect, onExport }: Segment
 
         <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-[#E5E5E5]">
           <div>
-            <p className="text-xs text-[#4A4A4A]">Customers</p>
+            <p className="text-xs text-[#4A4A4A]">Πελάτες</p>
             <p className="font-bold text-[#1A1A1A] font-mono">
               {formatNumber(segment.count)}
             </p>
@@ -688,7 +718,7 @@ function SegmentDetail({ segment, onClose, onExportCustomers, onExportActionPack
           </div>
 
           <div className="p-4 bg-[#F5F5F5] rounded-lg">
-            <h5 className="text-sm font-medium text-[#1A1A1A] mb-2">Preferred Channels</h5>
+            <h5 className="text-sm font-medium text-[#1A1A1A] mb-2">Προτιμώμενα κανάλια</h5>
             <div className="flex flex-wrap gap-2">
               {categoryData?.preferred_channels && categoryData.preferred_channels.length > 0 ? (
                 categoryData.preferred_channels.map((channel) => (
@@ -702,14 +732,14 @@ function SegmentDetail({ segment, onClose, onExportCustomers, onExportActionPack
 
           <div className="space-y-2">
             <Button variant="primary" className="w-full" icon={<Users size={16} />} onClick={() => onExportCustomers?.('csv')}>
-              Export Customer IDs (.csv)
+              Εξαγωγή ID πελατών (.csv)
             </Button>
             <div className="flex gap-2">
               <Button variant="secondary" className="flex-1" icon={<FileSpreadsheet size={14} />} onClick={() => onExportActionPack?.('xlsx')}>
                 Action Pack
               </Button>
               <Button variant="secondary" className="flex-1" icon={<Download size={14} />} onClick={() => onExportCustomers?.('xlsx')}>
-                Customers .xlsx
+                Πελάτες .xlsx
               </Button>
             </div>
           </div>

@@ -1,6 +1,7 @@
 import { useState, useMemo, type ComponentType } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Plus, Trash2, Calendar, Zap, Tag, Gift, Percent, Sun, Thermometer, BookOpen, Flower2, Heart, HeartHandshake, Pin, type LucideProps } from 'lucide-react';
+import { ModalHeader } from '../common';
 import { SEASONAL_PERIODS, type SeasonalPeriod, getActiveSeasons } from '../../data/seasonalPeriods';
 
 const ICON_MAP: Record<string, ComponentType<LucideProps>> = {
@@ -111,15 +112,21 @@ export function SeasonalPeriodsModal({
         className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col"
         onClick={e => e.stopPropagation()}
       >
-        <div className="p-6 border-b border-[#E5E5E5] flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-2">
-            <Calendar size={20} className="text-[var(--nts-accent)]" />
-            <h2 className="text-lg font-bold text-[#1A1A1A]">Εποχιακές περίοδοι</h2>
-          </div>
-          <button onClick={onClose} className="p-2 hover:bg-[#F5F5F5] rounded-lg transition-colors">
-            <X size={20} className="text-[#4A4A4A]" />
-          </button>
-        </div>
+        <ModalHeader
+          className="flex-shrink-0"
+          toolbarAriaLabel="Κλείσιμο"
+          title={
+            <div className="flex min-w-0 items-center gap-2">
+              <Calendar size={20} className="shrink-0 text-[var(--nts-accent)]" />
+              <h2 className="text-lg font-bold text-[#1A1A1A]">Εποχιακές περίοδοι</h2>
+            </div>
+          }
+          actions={
+            <button type="button" onClick={onClose} className="rounded-lg p-2 transition-colors hover:bg-[#F5F5F5]">
+              <X size={20} className="text-[#4A4A4A]" />
+            </button>
+          }
+        />
 
         <div className="p-6 overflow-y-auto flex-1">
           <div className="space-y-3">

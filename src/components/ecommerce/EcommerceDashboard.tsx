@@ -21,7 +21,7 @@ import {
   Tooltip as RechartsTooltip,
   ResponsiveContainer,
 } from 'recharts';
-import { Card, CardHeader, KPICard, Tooltip } from '../common';
+import { Card, CardHeader, KPICard, Tooltip, PageHeader } from '../common';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import { formatCurrencyCompact, formatNumber } from '../../utils/format';
 import type { KPICardData } from '../common/KPICard';
@@ -92,7 +92,7 @@ export function EcommerceDashboard() {
 
   const kpis: KPICardData[] = useMemo(() => [
     {
-      label: 'Store Revenue',
+      label: 'Έσοδα e-shop',
       value: formatCurrencyCompact(ecomm.totalRevenue),
       tooltip: 'Σύνολο εσόδων από e-commerce (90 ημέρες)',
       sparklineData: ecomm.dailyRevenue.slice(-30).map((d) => d.revenue),
@@ -114,7 +114,7 @@ export function EcommerceDashboard() {
       tooltip: 'Μέσο ποσό ανά παραγγελία',
     },
     {
-      label: 'Platforms',
+      label: 'Πλατφόρμες',
       value: String(ecomm.connectedPlatforms.length),
       tooltip: ecomm.connectedPlatforms.map((p) => PLATFORM_LABELS[p] || p).join(', ') || 'Κανένα',
     },
@@ -205,13 +205,17 @@ export function EcommerceDashboard() {
   if (ecomm.isLoading) {
     return (
       <div className="space-y-6">
-        <div>
-          <h2 className="text-xl font-bold text-[#1A1A1A] flex items-center gap-2">
-            <ShoppingBag size={22} className="text-[var(--nts-accent)]" />
-            E-commerce
-          </h2>
-          <p className="text-sm text-[#6B7280] mt-1">Δεδομένα παραγγελιών και προϊόντων από τα συνδεδεμένα e-shop</p>
-        </div>
+        <PageHeader
+          title={
+            <h2 className="flex items-center gap-2 text-xl font-bold text-[#1A1A1A]">
+              <ShoppingBag size={22} className="shrink-0 text-[var(--nts-accent)]" />
+              E-commerce
+            </h2>
+          }
+          description={
+            <p className="text-sm text-[#6B7280]">Δεδομένα παραγγελιών και προϊόντων από τα συνδεδεμένα e-shop</p>
+          }
+        />
         <div className="py-16 text-center text-[#6B7280]">
           <div className="animate-spin h-8 w-8 border-2 border-orange-400 border-t-transparent rounded-full mx-auto mb-3" />
           Φόρτωση e-commerce δεδομένων…
@@ -224,13 +228,17 @@ export function EcommerceDashboard() {
   if (!ecomm.hasData) {
     return (
       <div className="space-y-6">
-        <div>
-          <h2 className="text-xl font-bold text-[#1A1A1A] flex items-center gap-2">
-            <ShoppingBag size={22} className="text-[var(--nts-accent)]" />
-            E-commerce
-          </h2>
-          <p className="text-sm text-[#6B7280] mt-1">Δεδομένα παραγγελιών και προϊόντων από τα συνδεδεμένα e-shop</p>
-        </div>
+        <PageHeader
+          title={
+            <h2 className="flex items-center gap-2 text-xl font-bold text-[#1A1A1A]">
+              <ShoppingBag size={22} className="shrink-0 text-[var(--nts-accent)]" />
+              E-commerce
+            </h2>
+          }
+          description={
+            <p className="text-sm text-[#6B7280]">Δεδομένα παραγγελιών και προϊόντων από τα συνδεδεμένα e-shop</p>
+          }
+        />
 
         <Card>
           <div className="p-10 text-center">
@@ -254,25 +262,29 @@ export function EcommerceDashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-end justify-between flex-wrap gap-2">
-        <div>
-          <h2 className="text-xl font-bold text-[#1A1A1A] flex items-center gap-2">
-            <ShoppingBag size={22} className="text-[var(--nts-accent)]" />
+      <PageHeader
+        title={
+          <h2 className="flex items-center gap-2 text-xl font-bold text-[#1A1A1A]">
+            <ShoppingBag size={22} className="shrink-0 text-[var(--nts-accent)]" />
             E-commerce
           </h2>
-          <p className="text-sm text-[#6B7280] mt-1">
+        }
+        description={
+          <p className="text-sm text-[#6B7280]">
             Δεδομένα {ecomm.connectedPlatforms.map((p) => PLATFORM_LABELS[p] || p).join(', ')} — τελευταίες 90 ημέρες
           </p>
-        </div>
-        {ecomm.syncedAt && (
-          <span className="text-[10px] text-[#9CA3AF]">
-            Τελευταίο sync: {ecomm.syncedAt?.toDate?.()
-              ? ecomm.syncedAt.toDate().toLocaleDateString('el-GR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-              : '—'}
-          </span>
-        )}
-      </div>
+        }
+        meta={
+          ecomm.syncedAt ? (
+            <p className="text-[10px] text-[#9CA3AF]">
+              Τελευταίο sync:{' '}
+              {ecomm.syncedAt?.toDate?.()
+                ? ecomm.syncedAt.toDate().toLocaleDateString('el-GR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                : '—'}
+            </p>
+          ) : undefined
+        }
+      />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

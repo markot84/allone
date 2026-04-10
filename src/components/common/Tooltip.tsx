@@ -110,7 +110,7 @@ export function Tooltip({ content, children, size = 14 }: TooltipProps) {
           ref={tooltipRef}
           className="fixed z-[99999] px-3 py-2 bg-[#1A1A1A] text-white text-xs rounded-lg shadow-lg pointer-events-none"
           style={{
-            whiteSpace: 'normal',
+            whiteSpace: 'pre-line',
             wordWrap: 'break-word',
             maxWidth: '400px',
             minWidth: '250px',

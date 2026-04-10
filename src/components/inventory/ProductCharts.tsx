@@ -1,7 +1,7 @@
 import { useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, TrendingUp, Package, AlertTriangle, BarChart3 } from 'lucide-react';
-import { Card, Button } from '../common';
+import { Card, Button, ModalHeader } from '../common';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { getStockAgeDays, classifyStockHealth, getProductTod } from '../../utils/productUtils';
 import type { Product } from '../../types';
@@ -116,10 +116,10 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap }: Pro
     });
 
     const result = [
-      { name: 'Healthy', value: healthy, color: '#22C55E' },
-      { name: 'Low Stock', value: low, color: '#F59E0B' },
-      { name: 'Excess Stock', value: excess, color: '#EF4444' },
-      { name: 'Dead Stock', value: dead, color: '#9CA3AF' }
+      { name: 'Φυσιολογικό απόθεμα', value: healthy, color: '#22C55E' },
+      { name: 'Χαμηλό απόθεμα', value: low, color: '#F59E0B' },
+      { name: 'Υπερβολικό απόθεμα', value: excess, color: '#EF4444' },
+      { name: 'Νεκρό απόθεμα', value: dead, color: '#9CA3AF' }
     ];
     console.log('[ProductCharts] Stock status:', result);
     return result;
@@ -174,22 +174,24 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap }: Pro
             className="bg-white rounded-2xl shadow-2xl max-w-7xl w-full max-h-[90vh] overflow-auto my-8"
             onClick={(e) => e.stopPropagation()}
           >
-        {/* Header */}
-        <div className="p-6 border-b border-[#E5E5E5] flex items-center justify-between sticky top-0 bg-white z-10">
-          <div className="flex items-center gap-3">
-            <BarChart3 size={24} className="text-[var(--nts-accent)]" />
-            <div>
-              <h2 className="text-xl font-bold text-[#1A1A1A]">Product Data Visualization</h2>
-              <p className="text-sm text-[#4A4A4A]">{products.length} products analyzed</p>
+        <ModalHeader
+          className="sticky top-0 z-10 bg-white"
+          toolbarAriaLabel="Κλείσιμο"
+          title={
+            <div className="flex min-w-0 items-start gap-3">
+              <BarChart3 size={24} className="shrink-0 text-[var(--nts-accent)]" />
+              <div className="min-w-0">
+                <h2 className="text-xl font-bold text-[#1A1A1A]">Οπτικοποίηση δεδομένων προϊόντων</h2>
+                <p className="text-sm text-[#4A4A4A]">{products.length} προϊόντα σε ανάλυση</p>
+              </div>
             </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-[#F5F5F5] rounded-lg transition-colors"
-          >
-            <X size={20} className="text-[#4A4A4A]" />
-          </button>
-        </div>
+          }
+          actions={
+            <button type="button" onClick={onClose} className="rounded-lg p-2 transition-colors hover:bg-[#F5F5F5]">
+              <X size={20} className="text-[#4A4A4A]" />
+            </button>
+          }
+        />
 
         {/* Charts Grid */}
         <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -197,7 +199,7 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap }: Pro
           <Card padding="lg">
             <div className="flex items-center gap-2 mb-4">
               <TrendingUp size={18} className="text-[#22C55E]" />
-              <h3 className="font-semibold text-[#1A1A1A]">Margin Distribution</h3>
+              <h3 className="font-semibold text-[#1A1A1A]">Κατανομή margin</h3>
             </div>
             {(() => {
               const hasData = marginDistribution.some(r => r.count > 0);
@@ -217,11 +219,11 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap }: Pro
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center h-[300px] text-[#4A4A4A]">
-                  <p>Δεν υπάρχουν δεδομένα για margin distribution</p>
-                  <p className="text-xs mt-2">Products: {products.length}</p>
+                  <p>Δεν υπάρχουν δεδομένα για κατανομή margin</p>
+                  <p className="text-xs mt-2">Προϊόντα: {products.length}</p>
                   {products.length > 0 && (
                     <>
-                      <p className="text-xs mt-1">Sample margins: {products.slice(0, 5).map(p => (p.margin_percentage || 0).toFixed(1)).join(', ')}%</p>
+                      <p className="text-xs mt-1">Δείγμα margin: {products.slice(0, 5).map(p => (p.margin_percentage || 0).toFixed(1)).join(', ')}%</p>
                       <p className="text-xs mt-1">Distribution: {JSON.stringify(marginDistribution)}</p>
                     </>
                   )}
@@ -234,7 +236,7 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap }: Pro
           <Card padding="lg">
             <div className="flex items-center gap-2 mb-4">
               <AlertTriangle size={18} className="text-[#F59E0B]" />
-              <h3 className="font-semibold text-[#1A1A1A]">Stock Age Distribution</h3>
+              <h3 className="font-semibold text-[#1A1A1A]">Κατανομή ηλικίας αποθέματος</h3>
             </div>
             {stockAgeDistribution.some(r => r.count > 0) ? (
               <div style={{ width: '100%', height: '300px' }}>
@@ -251,7 +253,7 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap }: Pro
               </div>
             ) : (
               <div className="flex items-center justify-center h-[300px] text-[#4A4A4A]">
-                <p>Δεν υπάρχουν δεδομένα για stock age distribution</p>
+                <p>Δεν υπάρχουν δεδομένα για ηλικία αποθέματος</p>
               </div>
             )}
           </Card>
@@ -260,7 +262,7 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap }: Pro
           <Card padding="lg">
             <div className="flex items-center gap-2 mb-4">
               <Package size={18} className="text-[#78716C]" />
-              <h3 className="font-semibold text-[#1A1A1A]">Stock Status</h3>
+              <h3 className="font-semibold text-[#1A1A1A]">Κατάσταση αποθέματος</h3>
             </div>
             {stockStatus.some((s: { value: number }) => s.value > 0) ? (
               <div style={{ width: '100%', height: '300px' }}>
@@ -286,7 +288,7 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap }: Pro
               </div>
             ) : (
               <div className="flex items-center justify-center h-[300px] text-[#4A4A4A]">
-                <p>Δεν υπάρχουν δεδομένα για stock status</p>
+                <p>Δεν υπάρχουν δεδομένα για κατάσταση αποθέματος</p>
               </div>
             )}
           </Card>
@@ -295,7 +297,7 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap }: Pro
           <Card padding="lg">
             <div className="flex items-center gap-2 mb-4">
               <BarChart3 size={18} className="text-[#8B5CF6]" />
-              <h3 className="font-semibold text-[#1A1A1A]">Top Categories</h3>
+              <h3 className="font-semibold text-[#1A1A1A]">Κύριες κατηγορίες</h3>
             </div>
             {categoryBreakdown.length > 0 ? (
               <div style={{ width: '100%', height: '300px' }}>
@@ -312,7 +314,7 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap }: Pro
               </div>
             ) : (
               <div className="flex items-center justify-center h-[300px] text-[#4A4A4A]">
-                <p>Δεν υπάρχουν δεδομένα για categories</p>
+                <p>Δεν υπάρχουν δεδομένα για κατηγορίες</p>
               </div>
             )}
           </Card>
@@ -321,7 +323,7 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap }: Pro
           <Card padding="lg" className="lg:col-span-2">
             <div className="flex items-center gap-2 mb-4">
               <TrendingUp size={18} className="text-[#22C55E]" />
-              <h3 className="font-semibold text-[#1A1A1A]">Top 10 Products by Margin</h3>
+              <h3 className="font-semibold text-[#1A1A1A]">Top 10 προϊόντα ανά margin</h3>
             </div>
             {topProductsByMargin.length > 0 ? (
               <div style={{ width: '100%', height: '300px' }}>
@@ -333,13 +335,13 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap }: Pro
                     <Tooltip />
                     <Legend />
                     <Bar dataKey="margin" fill="#22C55E" name="Margin %" />
-                    <Bar dataKey="price" fill="#78716C" name="Price (€)" />
+                    <Bar dataKey="price" fill="#78716C" name="Τιμή (€)" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             ) : (
               <div className="flex items-center justify-center h-[300px] text-[#4A4A4A]">
-                <p>Δεν υπάρχουν δεδομένα για top products</p>
+                <p>Δεν υπάρχουν δεδομένα για κορυφαία προϊόντα</p>
               </div>
             )}
           </Card>
@@ -348,26 +350,26 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap }: Pro
           <Card padding="lg" className="lg:col-span-2">
             <div className="flex items-center gap-2 mb-4">
               <BarChart3 size={18} className="text-[var(--nts-accent)]" />
-              <h3 className="font-semibold text-[#1A1A1A]">Stock Age vs Stock Level (Sample)</h3>
+              <h3 className="font-semibold text-[#1A1A1A]">Ηλικία vs επίπεδο αποθέματος (δείγμα)</h3>
             </div>
             {stockAgeVsLevel.length > 0 ? (
               <div style={{ width: '100%', height: '300px' }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={stockAgeVsLevel} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="age" name="Age (days)" />
+                    <XAxis dataKey="age" name="Ημέρες" />
                     <YAxis yAxisId="left" />
                     <YAxis yAxisId="right" orientation="right" />
                     <Tooltip />
                     <Legend />
-                    <Line yAxisId="left" type="monotone" dataKey="level" stroke="#78716C" name="Stock Level" />
+                    <Line yAxisId="left" type="monotone" dataKey="level" stroke="#78716C" name="Απόθεμα" />
                     <Line yAxisId="right" type="monotone" dataKey="margin" stroke="#22C55E" name="Margin %" />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
             ) : (
               <div className="flex items-center justify-center h-[300px] text-[#4A4A4A]">
-                <p>Δεν υπάρχουν δεδομένα για stock age vs level</p>
+                <p>Δεν υπάρχουν δεδομένα για ηλικία vs επίπεδο αποθέματος</p>
               </div>
             )}
           </Card>

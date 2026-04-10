@@ -6,7 +6,7 @@ import { getLastImportDates } from '../../services/import';
 import { coerceToDate } from '../../utils/coerceDate';
 import { clearOAuthSession, readOAuthSessionPayload } from '../../utils/oauthSession';
 import { FirestoreService } from '../../services/firestore';
-import { Card, Button, Spinner, useToast } from '../common';
+import { Card, Button, Spinner, useToast, PageHeader } from '../common';
 import {
   Link2,
   Unlink,
@@ -433,7 +433,7 @@ function WooCredentialsModal({
 
         <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>Store URL</label>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>e-shop URL</label>
             <input type="text" value={storeUrl} onChange={(e) => setStoreUrl(e.target.value)} placeholder="https://mystore.com" style={inputStyle} />
           </div>
           <div>
@@ -571,7 +571,7 @@ function MagentoCredentialsModal({
 
         <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>Store URL</label>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>e-shop URL</label>
             <input type="text" value={storeUrl} onChange={(e) => setStoreUrl(e.target.value)} placeholder="https://mymagentostore.com" style={inputStyle} />
           </div>
           <div>
@@ -596,7 +596,7 @@ function MagentoCredentialsModal({
           </div>
 
           <p style={{ margin: 0, fontSize: '11px', color: '#9CA3AF', lineHeight: '1.5' }}>
-            Magento Admin → System → Integrations → Add New → Activate. Αντιγράψτε το Access Token. Χρειάζονται permissions: Sales, Catalog, Stores.
+            Magento Admin → System → Integrations → Add New → Activate. Αντιγράψτε το Access Token. Χρειάζονται permissions: Sales, Catalog, και ρυθμίσεις e-shop (στο Magento admin: μενού «Stores»).
           </p>
 
           {error && (
@@ -707,7 +707,7 @@ function OpenCartCredentialsModal({
 
         <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>Store URL</label>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>e-shop URL</label>
             <input type="text" value={storeUrl} onChange={(e) => setStoreUrl(e.target.value)} placeholder="https://myopencartstore.com" style={inputStyle} />
           </div>
           <div>
@@ -1219,22 +1219,28 @@ export function ConnectorsPanel() {
 
       <Card>
         <div className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-lg font-semibold text-[#1A1A1A] flex items-center gap-2">
-                <Link2 size={20} className="text-[var(--nts-accent)]" />
+          <PageHeader
+            className="mb-4"
+            toolbarAriaLabel="Platform connectors"
+            title={
+              <h3 className="flex items-center gap-2 text-base font-semibold text-[#1A1A1A] sm:text-lg">
+                <Link2 size={20} className="shrink-0 text-[var(--nts-accent)]" />
                 Platform Connectors
               </h3>
-              <p className="text-sm text-[#6B7280] mt-0.5">
+            }
+            description={
+              <p className="text-sm text-[#6B7280]">
                 Σύνδεσε Ad Platforms & E-shop για αυτόματη εισαγωγή δεδομένων (23:00)
               </p>
-              {!canManageConnectors && (
-                <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-3 max-w-xl">
+            }
+            meta={
+              !canManageConnectors ? (
+                <p className="mt-3 max-w-xl rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
                   Οι συνδέσεις διαχειρίζονται μόνο από <strong>ιδιοκτήτη</strong> ή <strong>διαχειριστή</strong> του brand.
                 </p>
-              )}
-            </div>
-          </div>
+              ) : undefined
+            }
+          />
 
           {loading ? (
             <div className="py-8 flex justify-center">

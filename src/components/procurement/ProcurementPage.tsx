@@ -9,7 +9,7 @@ import {
   Tooltip as RechartsTooltip,
   LineChart, Line, Legend, Cell,
 } from 'recharts';
-import { Card, Spinner, Button, useToast } from '../common';
+import { Card, Spinner, Button, useToast, PageHeader } from '../common';
 import { useProcurement } from '../../hooks/useProcurement';
 import { useBrand } from '../../hooks';
 import { ProcurementService } from '../../services/firestore';
@@ -778,21 +778,23 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
   return (
     <div className="space-y-6">
 
-      {/* Page header */}
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-bold text-[var(--nts-charcoal)] tracking-tight">Procurement</h2>
-          <p className="text-[14px] text-[var(--nts-medium-gray)] mt-1">
+      <PageHeader
+        toolbarAriaLabel="Κατάσταση procurement"
+        title={<h2 className="text-xl font-bold tracking-tight text-[var(--nts-charcoal)] sm:text-2xl">Procurement</h2>}
+        description={
+          <p className="text-[14px] text-[var(--nts-medium-gray)]">
             Δεδομένα από 7 αναλύσεις (PROCUREMENT_TEMPLATE.xlsx). Εισαγωγή από Data Import.
           </p>
-        </div>
-        {isRefreshing && (
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-[var(--nts-border-gray)] bg-[var(--nts-light-gray)] text-[11px] text-[var(--nts-medium-gray)]">
-            <Spinner size="sm" />
-            Updating...
-          </div>
-        )}
-      </div>
+        }
+        actions={
+          isRefreshing ? (
+            <div className="inline-flex min-h-[36px] items-center gap-1.5 self-start rounded-full border border-[var(--nts-border-gray)] bg-[var(--nts-light-gray)] px-2.5 py-1 text-[11px] text-[var(--nts-medium-gray)] lg:self-center">
+              <Spinner size="sm" />
+              Ανανέωση…
+            </div>
+          ) : undefined
+        }
+      />
 
       {!hasData ? (
 

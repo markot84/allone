@@ -5,7 +5,7 @@ import { db, auth } from '../../config/firebase';
 import { useBrand } from '../../hooks';
 import { usePriceBenchmarks } from '../../hooks/usePriceBenchmarks';
 import { usePriceInsights, type PriceInsight } from '../../hooks/usePriceInsights';
-import { Card, Button, Spinner, Badge, Tooltip, useToast } from '../common';
+import { Card, Button, Spinner, Badge, Tooltip, useToast, PageHeader } from '../common';
 import {
   Search,
   Plus,
@@ -331,19 +331,20 @@ export function CompetitorInsights() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-[#1A1A1A] flex items-center gap-2">
-            <Search size={24} className="text-[var(--nts-accent)]" />
-            Competitive Intelligence
+      <PageHeader
+        title={
+          <h2 className="flex flex-wrap items-center gap-2 text-xl font-bold text-[#1A1A1A] sm:text-2xl">
+            <Search size={22} className="shrink-0 text-[var(--nts-accent)] sm:h-6 sm:w-6" />
+            <span>Competitive Intelligence</span>
             <Tooltip content={TOOLTIP_CI_REFRESH} size={18} />
           </h2>
-          <p className="text-[#4A4A4A] mt-1">
+        }
+        description={
+          <p className="text-sm text-[#4A4A4A] sm:text-base">
             Price benchmarking (Google Merchant Center) & Ad monitoring (Meta Ad Library)
           </p>
-        </div>
-      </div>
+        }
+      />
 
       {/* Tabs */}
       <div className="flex items-center gap-1 bg-[#F3F4F6] p-1 rounded-lg w-fit">

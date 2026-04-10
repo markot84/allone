@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Key, Copy, Trash2, Plus, Check, Eye, EyeOff, Code, ExternalLink } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Card, Button, Badge, Spinner, useToast } from '../common';
+import { Card, Button, Badge, Spinner, useToast, PageHeader } from '../common';
 import { useBrand, useAuth } from '../../hooks';
 import { FirestoreService } from '../../services/firestore';
 
@@ -124,35 +124,46 @@ export function ApiKeyManager() {
   return (
     <Card>
       <div className="p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <Key size={20} className="text-[var(--nts-accent)]" />
-            <h3 className="text-lg font-semibold text-[#1A1A1A]">API Keys</h3>
-            <Badge variant="info" size="sm">Automated Import</Badge>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowDocs(!showDocs)}
-              className="text-xs text-[var(--nts-accent)] hover:underline flex items-center gap-1"
-            >
-              <Code size={12} />
-              {showDocs ? 'Κλείσιμο docs' : 'API Documentation'}
-            </button>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={handleGenerate}
-              disabled={generating || !brandId}
-            >
-              {generating ? <Spinner size="sm" /> : <Plus size={14} className="mr-1" />}
-              Νέο Key
-            </Button>
-          </div>
-        </div>
-
-        <p className="text-sm text-[var(--nts-medium-gray)] mb-4">
-          Χρησιμοποίησε API keys για αυτόματη εισαγωγή δεδομένων από ERP ή άλλα συστήματα μέσω HTTP request.
-        </p>
+        <PageHeader
+          className="mb-4"
+          toolbarAriaLabel="API keys"
+          title={
+            <div className="flex flex-wrap items-center gap-2">
+              <Key size={20} className="shrink-0 text-[var(--nts-accent)]" />
+              <h3 className="text-base font-semibold text-[#1A1A1A] sm:text-lg">API Keys</h3>
+              <Badge variant="info" size="sm">
+                Automated Import
+              </Badge>
+            </div>
+          }
+          description={
+            <p className="text-sm text-[var(--nts-medium-gray)]">
+              Χρησιμοποίησε API keys για αυτόματη εισαγωγή δεδομένων από ERP ή άλλα συστήματα μέσω HTTP request.
+            </p>
+          }
+          actions={
+            <>
+              <button
+                type="button"
+                onClick={() => setShowDocs(!showDocs)}
+                className="inline-flex min-h-[36px] w-full items-center justify-center gap-1 rounded-lg px-2 text-xs text-[var(--nts-accent)] hover:underline sm:w-auto sm:justify-start"
+              >
+                <Code size={12} className="shrink-0" />
+                {showDocs ? 'Κλείσιμο docs' : 'API Documentation'}
+              </button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleGenerate}
+                disabled={generating || !brandId}
+                className="min-h-[36px] w-full sm:w-auto"
+              >
+                {generating ? <Spinner size="sm" /> : <Plus size={14} className="mr-1" />}
+                Νέο Key
+              </Button>
+            </>
+          }
+        />
 
         {/* API Docs */}
         <AnimatePresence>

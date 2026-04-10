@@ -445,36 +445,36 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
       const items: NavItem[] = [
         // Overview
         { id: 'brands', label: 'Τα Brands μου', icon: Building2, group: 'overview' },
-        { id: 'dashboard', label: 'Dashboard', icon: HomeIcon, group: 'overview' },
+        { id: 'dashboard', label: 'Πίνακας ελέγχου', icon: HomeIcon, group: 'overview' },
         { id: 'roi', label: 'ROI & Απόδοση', icon: GraphIcon, group: 'overview' },
         // Data & Intelligence
-        { id: 'rfm', label: 'Data Analysis', icon: OrganizationIcon, group: 'intelligence' },
-        { id: 'products', label: 'Product Intelligence', icon: PackageIcon, group: 'intelligence' },
-        { id: 'competitive', label: 'Competitive Intel', icon: SearchIcon, group: 'intelligence' },
-        { id: 'analytics', label: 'Web Analytics', icon: BarChart3, group: 'intelligence' },
+        { id: 'rfm', label: 'Ανάλυση δεδομένων', icon: OrganizationIcon, group: 'intelligence' },
+        { id: 'products', label: 'Προϊόντα & απόθεμα', icon: PackageIcon, group: 'intelligence' },
+        { id: 'competitive', label: 'Ανταγωνισμός', icon: SearchIcon, group: 'intelligence' },
+        { id: 'analytics', label: 'Αναλυτικά ιστού (GA4)', icon: BarChart3, group: 'intelligence' },
         { id: 'ecommerce', label: 'E-commerce', icon: ShoppingBag, group: 'intelligence' },
         { id: 'insights', label: 'AI Insights', icon: LightBulbIcon, group: 'intelligence' },
         // Strategy
-        { id: 'strategy', label: 'Commercial Strategy', icon: GraphIcon, group: 'strategy', ...(strategyBadge ? { badge: strategyBadge.text, badgeColor: strategyBadge.color } : {}) },
-        { id: 'channels', label: 'Channel Activation', icon: MegaphoneIcon, group: 'strategy' },
-        { id: 'campaigns', label: 'Campaigns', icon: Target, group: 'strategy' },
-        { id: 'calendar', label: 'Content Strategy', icon: PencilIcon, group: 'strategy' },
+        { id: 'strategy', label: 'Εμπορική στρατηγική', icon: GraphIcon, group: 'strategy', ...(strategyBadge ? { badge: strategyBadge.text, badgeColor: strategyBadge.color } : {}) },
+        { id: 'channels', label: 'Ενεργοποίηση καναλιών', icon: MegaphoneIcon, group: 'strategy' },
+        { id: 'campaigns', label: 'Καμπάνιες', icon: Target, group: 'strategy' },
+        { id: 'calendar', label: 'Στρατηγική περιεχομένου', icon: PencilIcon, group: 'strategy' },
         // Execution
         { id: 'finances', label: 'Οικονομικά', icon: Euro, group: 'execution' },
         { id: 'suppliers', label: 'Προμηθευτές', icon: Truck, group: 'execution' },
       ];
       if (isEnterprise) {
-        items.push({ id: 'procurement', label: 'Procurement', icon: FileSpreadsheet, group: 'execution' });
+        items.push({ id: 'procurement', label: 'Προμήθειες', icon: FileSpreadsheet, group: 'execution' });
       }
       items.push(
         // Coordination
         { id: 'coordination', label: 'Συντονισμός Τμημάτων', icon: GitPullRequestArrow, group: 'coordination' },
         { id: 'automation', label: 'Αυτοματισμοί', icon: Zap, group: 'coordination' },
-        { id: 'reports', label: 'Reports', icon: ReportIcon, group: 'coordination' },
+        { id: 'reports', label: 'Αναφορές', icon: ReportIcon, group: 'coordination' },
         // Utilities
-        { id: 'data', label: 'Data Import', icon: Upload, group: 'utility' },
+        { id: 'data', label: 'Εισαγωγή δεδομένων', icon: Upload, group: 'utility' },
         { id: 'invite', label: 'Καλέστε χρήστη', icon: UserPlus, group: 'utility' },
-        { id: 'help', label: 'Help & Support', icon: GearIcon, group: 'utility' },
+        { id: 'help', label: 'Βοήθεια', icon: GearIcon, group: 'utility' },
       );
       if (isSuperAdmin) {
         items.push({ id: 'admin', label: 'Super Admin', icon: ShieldIcon, group: 'utility' });

@@ -271,7 +271,7 @@ function buildBriefingPrompt(data: BriefingData, periodLabel: string, updateCont
 
   sections.push(`[ΕΣΟΔΑ] Σύνολο: ${formatCurrency(effectiveRevenue)} (Organic: ${formatCurrency(data.revenue.totalOrganic)}, Campaigns: ${formatCurrency(data.revenue.totalCampaignRevenue)}), Ad Spend: ${formatCurrency(data.revenue.totalSpend)}, ROAS(attributed): ${data.revenue.roas > 0 ? data.revenue.roas.toFixed(2) + 'x' : 'N/A'}, Ενεργές Καμπάνιες: ${data.revenue.campaignCount}`);
   if (data.revenue.storeRevenue > 0) {
-    sections.push(`[ECOMMERCE] Store Revenue: ${formatCurrency(data.revenue.storeRevenue)}, Orders: ${formatNumber(data.revenue.orderCount)}, AOV: ${formatCurrency(data.revenue.aov)}, True ROAS: ${data.revenue.trueRoas > 0 ? data.revenue.trueRoas.toFixed(2) + 'x' : 'N/A'}, Revenue Gap vs attributed: ${formatCurrency(data.revenue.revenueGap)}`);
+    sections.push(`[ECOMMERCE] e-shop Revenue: ${formatCurrency(data.revenue.storeRevenue)}, Orders: ${formatNumber(data.revenue.orderCount)}, AOV: ${formatCurrency(data.revenue.aov)}, True ROAS: ${data.revenue.trueRoas > 0 ? data.revenue.trueRoas.toFixed(2) + 'x' : 'N/A'}, Revenue Gap vs attributed: ${formatCurrency(data.revenue.revenueGap)}`);
   }
 
   if (data.ga4) {

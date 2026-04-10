@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { TrendingUp, Filter, Download, Search, DollarSign, Trash2, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
-import { Card, CardHeader, Badge, Button, Spinner, useToast, Tooltip, AlertsBanner } from '../common';
+import { Card, CardHeader, Badge, Button, Spinner, useToast, Tooltip, AlertsBanner, PageHeader } from '../common';
 import { DateRangePicker } from '../ui/DateRangePicker';
 import { useCampaigns, useBrand } from '../../hooks';
 import { useSearchIntelligence } from '../../hooks/useSearchIntelligence';
@@ -208,8 +208,31 @@ function isGoogleAdsLikeChannel(channel: string | undefined): boolean {
 }
 
 /**
+ * Προεπιλογή φίλτρου «Active»: ταυτίζεται με **Enabled** στο Google Ads και **ACTIVE** στο Meta
+ * (όχι Paused, Completed/Archived, Removed, Ended).
+ * Άγνωστο/κενό status: εμφανίζεται (legacy imports).
+ */
+function isActiveLikeCampaignStatus(status: string | undefined): boolean {
+  const s = (status || '').toLowerCase().trim();
+  if (!s) return true;
+  const excluded = new Set([
+    'paused',
+    'completed',
+    'removed',
+    'archived',
+    'deleted',
+    'ended',
+    'campaign_paused',
+  ]);
+  return !excluded.has(s);
+}
+
+/**
  * Display conversions / value. When a conversion-action filter is active, `c` is already
- * narrowed by applyConvFilter ? do not fall back to sumConversionActions.
+ * narrowed by applyConvFilter — do not fall back to sumConversionActions.
+ *
+ * Χωρίς φίλτρο: **Purchase/Sales** — `purchase_*` από sync (Google: category PURCHASE+STORE_SALES,
+ * Meta: primary Purchase Pixel/Purchase). Αν λείπουν, fallback σε metrics.conversions / effective Meta.
  */
 function getDisplayConversions(c: Campaign, convFilterActive: boolean): number {
   const raw = c.conversions;
@@ -217,9 +240,14 @@ function getDisplayConversions(c: Campaign, convFilterActive: boolean): number {
   if (convFilterActive) {
     return Number.isNaN(n) ? 0 : n;
   }
-  // Meta: conversionActions mixes purchases with engagement metrics (link_click, video_view, …)
-  // stored under the same shape — never sum all keys as "conversions".
+  const pConv = c.purchase_conversions;
+  if (isGoogleAdsLikeChannel(c.channel)) {
+    if (typeof pConv === 'number' && !Number.isNaN(pConv)) return pConv;
+    if (!Number.isNaN(n)) return n;
+    return 0;
+  }
   if (isMetaChannel(c.channel)) {
+    if (typeof pConv === 'number' && !Number.isNaN(pConv)) return pConv;
     return getEffectiveConversions(c);
   }
   const fromActions = sumConversionActions(c.conversionActions).conv;
@@ -235,7 +263,14 @@ function getDisplayConversionValue(c: Campaign, convFilterActive: boolean): numb
   if (convFilterActive) {
     return Number.isNaN(n) ? 0 : n;
   }
+  const pVal = c.purchase_conversion_value;
+  if (isGoogleAdsLikeChannel(c.channel)) {
+    if (typeof pVal === 'number' && !Number.isNaN(pVal)) return pVal;
+    if (!Number.isNaN(n)) return n;
+    return 0;
+  }
   if (isMetaChannel(c.channel)) {
+    if (typeof pVal === 'number' && !Number.isNaN(pVal)) return pVal;
     return getEffectiveConversionValue(c);
   }
   const fromActions = sumConversionActions(c.conversionActions).value;
@@ -282,7 +317,20 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
   const [channelFilter, setChannelFilter] = useState<string>('all');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const LS_STATUS = 'campaigns_statusFilter';
+  const [statusFilter, setStatusFilterState] = useState<string>(() => {
+    try {
+      return localStorage.getItem(LS_STATUS) ?? 'active';
+    } catch {
+      return 'active';
+    }
+  });
+  const setStatusFilter = (v: string) => {
+    setStatusFilterState(v);
+    try {
+      localStorage.setItem(LS_STATUS, v);
+    } catch { /* ignore */ }
+  };
   const LS_FROM = 'campaigns_dateFrom';
   const LS_TO   = 'campaigns_dateTo';
   const [dateFrom, setDateFromState] = useState<string>(() => localStorage.getItem(LS_FROM) ?? '');
@@ -308,15 +356,15 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
 
   const handleDeleteCampaigns = async () => {
     if (!currentBrand?.id) return;
-    if (!window.confirm(`Delete all ${campaigns.length} campaigns for brand "${currentBrand.name}"? This cannot be undone.`)) return;
+    if (!window.confirm(`Διαγραφή και των ${campaigns.length} καμπανιών του brand «${currentBrand.name}»; Η ενέργεια δεν αναιρείται.`)) return;
     setIsDeleting(true);
     try {
       await FirestoreService.deleteCollection('campaigns', currentBrand.id);
       queryClient.invalidateQueries({ queryKey: ['campaigns', currentBrand.id] });
       queryClient.invalidateQueries({ queryKey: ['campaigns'] });
-      toast.success('Campaigns deleted successfully.');
+      toast.success('Οι καμπάνιες διαγράφηκαν.');
     } catch (e) {
-      toast.error(`Delete failed: ${e instanceof Error ? e.message : 'Unknown error'}`);
+      toast.error(`Η διαγραφή απέτυχε: ${e instanceof Error ? e.message : 'άγνωστο σφάλμα'}`);
     } finally {
       setIsDeleting(false);
     }
@@ -377,12 +425,12 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
       });
     }
 
-    // Status filter
+    // Status filter (default: active ≈ Google Enabled + Meta ACTIVE)
     if (statusFilter !== 'all') {
       filtered = filtered.filter(c => {
         const status = (c.status || '').toLowerCase();
         if (statusFilter === 'active') {
-          return status === 'active' || status === 'enabled' || status === 'eligible' || !status;
+          return isActiveLikeCampaignStatus(c.status);
         }
         return status === statusFilter;
       });
@@ -426,6 +474,8 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
             conversions: 0,
             amount_spent: 0,
             conversion_value: 0,
+            purchase_conversions: 0,
+            purchase_conversion_value: 0,
             ctr: 0,
             roas: 0,
             conversionActions: {},
@@ -438,13 +488,39 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
         const amount_spent = Math.round((c.amount_spent || 0) * scale * 100) / 100;
         const rawVal = c.conversion_value ?? (c as { conversionValue?: number }).conversionValue;
         const conversion_value = Math.round((typeof rawVal === 'number' ? rawVal : parseFloat(String(rawVal || 0)) || 0) * scale * 100) / 100;
+        const pc0 = c.purchase_conversions;
+        const pv0 = c.purchase_conversion_value;
+        const purchase_conversions =
+          typeof pc0 === 'number' && !Number.isNaN(pc0) ? pc0 * scale : undefined;
+        const purchase_conversion_value =
+          typeof pv0 === 'number' && !Number.isNaN(pv0)
+            ? Math.round(pv0 * scale * 100) / 100
+            : undefined;
         const ctr = impressions > 0 ? Math.round((clicks / impressions) * 10000) / 100 : 0;
-        const roas = amount_spent > 0 ? Math.round((conversion_value / amount_spent) * 100) / 100 : 0;
+        const roasVal =
+          typeof purchase_conversion_value === 'number'
+            ? purchase_conversion_value
+            : conversion_value;
+        const roas = amount_spent > 0 ? Math.round((roasVal / amount_spent) * 100) / 100 : 0;
         const conversionActions = scaleConversionActions(c.conversionActions, scale);
-        return { ...c, impressions, clicks, conversions, amount_spent, conversion_value, ctr, roas, conversionActions };
+        return {
+          ...c,
+          impressions,
+          clicks,
+          conversions,
+          amount_spent,
+          conversion_value,
+          purchase_conversions,
+          purchase_conversion_value,
+          ctr,
+          roas,
+          conversionActions,
+        };
       }
       const metaMonthBuckets = metaUsesLegacyMonthBuckets(c);
       let impressions = 0, clicks = 0, conversions = 0, amount_spent = 0, conversion_value = 0;
+      let purchase_conversions = 0, purchase_conversion_value = 0;
+      let purchaseSlicePresent = false;
       const dateConvActions: Record<string, { conversions: number; value: number }> = {};
 
       for (const [date, m] of Object.entries(c.dailyMetrics)) {
@@ -456,6 +532,12 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
         conversions += (m.conversions || 0) * frac;
         amount_spent += (m.amount_spent || 0) * frac;
         conversion_value += (m.conversion_value || 0) * frac;
+        const mAny0 = m as Record<string, unknown>;
+        if (mAny0.purchase_conversions !== undefined || mAny0.purchase_conversion_value !== undefined) {
+          purchaseSlicePresent = true;
+        }
+        purchase_conversions += Number(mAny0.purchase_conversions ?? 0) * frac;
+        purchase_conversion_value += Number(mAny0.purchase_conversion_value ?? 0) * frac;
 
         const mAny = m as Record<string, any>;
         if (mAny.conversionActions && typeof mAny.conversionActions === 'object') {
@@ -470,9 +552,25 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
       const conversionActions = dateConvActions;
 
       const ctr = impressions > 0 ? Math.round((clicks / impressions) * 10000) / 100 : 0;
-      const roas = amount_spent > 0 ? Math.round((conversion_value / amount_spent) * 100) / 100 : 0;
+      const roasBase = purchaseSlicePresent ? purchase_conversion_value : conversion_value;
+      const roas = amount_spent > 0 ? Math.round((roasBase / amount_spent) * 100) / 100 : 0;
       amount_spent = Math.round(amount_spent * 100) / 100;
-      return { ...c, impressions, clicks, conversions, amount_spent, conversion_value, ctr, roas, conversionActions };
+      const out: Campaign & { purchase_conversions?: number; purchase_conversion_value?: number } = {
+        ...c,
+        impressions,
+        clicks,
+        conversions,
+        amount_spent,
+        conversion_value,
+        ctr,
+        roas,
+        conversionActions,
+      };
+      if (purchaseSlicePresent) {
+        out.purchase_conversions = purchase_conversions;
+        out.purchase_conversion_value = Math.round(purchase_conversion_value * 100) / 100;
+      }
+      return out;
     });
   }, [filteredCampaigns, dateFrom, dateTo]);
 
@@ -576,6 +674,14 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
     });
   }, [campaignsWithConvFilter, convFilterActive]);
 
+  /** KPI labels: Purchase/Sales όταν τα δεδομένα sync έχουν purchase_* (Google PURCHASE/STORE_SALES, Meta Pixel/Purchase). */
+  const showPurchaseSalesHeadlines = useMemo(() => {
+    if (convFilterActive) return false;
+    return campaignsInConvView.some(
+      x => typeof x.purchase_conversions === 'number' && !Number.isNaN(x.purchase_conversions as number)
+    );
+  }, [campaignsInConvView, convFilterActive]);
+
   const sortedCampaigns = useMemo(() => {
     if (!sortColumn) return campaignsInConvView;
     const sorted = [...campaignsInConvView].sort((a, b) => {
@@ -646,7 +752,21 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
   const handleExportCampaigns = useCallback(() => {
     const list = campaignsInConvView;
     if (list.length === 0) return;
-    const headers = ['Name', 'Channel', 'Status', 'Impressions', 'Clicks', 'CTR %', 'Spend', 'Conversions', 'Conv. Value', 'ROAS', 'CPA', 'Start Date', 'End Date'];
+    const headers = [
+      'Name',
+      'Channel',
+      'Status',
+      'Impressions',
+      'Clicks',
+      'CTR %',
+      'Spend',
+      'Conversions',
+      'Conv. Value',
+      'ROAS',
+      'CPA',
+      'Start Date',
+      'End Date',
+    ];
     const rows = list.map(c => [
       c.name || '', c.channel || '', c.status || '',
       c.impressions ?? '', c.clicks ?? '',
@@ -703,13 +823,18 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
         });
       }
     });
-    // Add unified "Purchase" if any platform-specific purchase type exists
+    // Synthetic "Purchase" only when no action name contains "purchase" — otherwise it
+    // duplicates e.g. "Purchase Completed (Google Ads)" (same totals, confusing UX).
     const hasPurchaseVariant = Array.from(actions).some(a => a.toLowerCase().includes('purchase'));
-    if (hasPurchaseVariant && !actions.has('Purchase')) {
+    if (!hasPurchaseVariant && !actions.has('Purchase')) {
       actions.add('Purchase');
     }
+    // Legacy / saved filter may still reference "Purchase" — keep it visible in the list.
+    convActionFilter.forEach(a => {
+      if (a) actions.add(a);
+    });
     return Array.from(actions).sort();
-  }, [campaignsWithDateMetrics]);
+  }, [campaignsWithDateMetrics, convActionFilter]);
 
   const toggleConvAction = (action: string) => {
     setConvActionFilter(prev => {
@@ -728,7 +853,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
-        <Spinner size="lg" label="Loading campaigns..." />
+        <Spinner size="lg" label="Loading campaigns…" />
       </div>
     );
   }
@@ -736,21 +861,21 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
   if (!hasImported) {
     return (
       <div className="space-y-6">
-        <div>
-          <h2 className="text-2xl font-bold text-[#1A1A1A]">Campaigns</h2>
-          <p className="text-[#4A4A4A] mt-1">
-            Overview and analysis of your marketing campaigns
-          </p>
-        </div>
+        <PageHeader
+          title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Campaigns</h2>}
+          description={
+            <p className="text-sm text-[#4A4A4A] sm:text-base">Επισκόπηση και ανάλυση των καμπανιών σας</p>
+          }
+        />
         <Card padding="lg" className="text-center py-12 space-y-3">
           <p className="text-[#4A4A4A]">
-            No imported campaigns yet.
+            Δεν υπάρχουν ακόμα imported campaigns.
           </p>
           {connectorsStatusPending ? (
-            <p className="text-sm text-[#6B7280]">Checking connector status?</p>
+            <p className="text-sm text-[#6B7280]">Έλεγχος κατάστασης συνδέσεων…</p>
           ) : hasConnectedAdsOrMeta ? (
             <p className="text-sm text-[#4A4A4A] max-w-xl mx-auto">
-              Google Ads / Meta are connected but no campaigns appear yet. Open{' '}
+              Τα Google Ads / Meta είναι συνδεδεμένα αλλά δεν εμφανίζονται ακόμα campaigns. Ανοίξτε το{' '}
               <button
                 type="button"
                 onClick={() => onSectionChange?.('data-campaigns')}
@@ -759,12 +884,12 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                 Data Import
               </button>
               {' '}
-              and run <strong className="font-semibold text-[#1A1A1A]">Sync data</strong> to import or
-              refresh campaigns from the last sync.
+              και εκτελέστε <strong className="font-semibold text-[#1A1A1A]">Sync</strong> για import ή refresh των
+              campaigns από τον τελευταίο συγχρονισμό.
             </p>
           ) : (
             <p className="text-sm text-[#4A4A4A]">
-              Connect{' '}
+              Συνδέστε από το{' '}
               <button
                 type="button"
                 onClick={() => onSectionChange?.('data-campaigns')}
@@ -773,7 +898,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                 Data Import
               </button>
               {' '}
-              and connect Google Ads or Meta to load campaigns.
+              τα Google Ads ή Meta για φόρτωση campaigns.
             </p>
           )}
         </Card>
@@ -783,41 +908,55 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-[#1A1A1A]">Campaigns</h2>
-          <p className="text-[#4A4A4A] mt-1">
-            {summaryStats.total} {summaryStats.total === 1 ? 'campaign' : 'campaigns'} imported
+      <PageHeader
+        toolbarAriaLabel="Export and delete campaigns"
+        title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Campaigns</h2>}
+        description={
+          <p className="text-sm text-[#4A4A4A] sm:text-base">
+            Imported campaigns: {summaryStats.total}
           </p>
-          {import.meta.env.MODE === 'development' && (() => {
-            const bySource: Record<string, number> = {};
-            (campaigns as Campaign[]).forEach(c => {
-              const source = (c as any).source || 'Unknown';
-              bySource[source] = (bySource[source] || 0) + 1;
-            });
-            return (
-              <p className="text-xs text-[#9CA3AF] mt-1">
-                Sources: {Object.entries(bySource).map(([src, count]) => `${src}: ${count}`).join(', ')}
-              </p>
-            );
-          })()}
-        </div>
-        <div className="flex items-center gap-3">
-          <Button
-            variant="secondary"
-            icon={<Trash2 size={16} />}
-            onClick={handleDeleteCampaigns}
-            disabled={isDeleting || !hasImported}
-            className="text-[#DC2626] hover:bg-[#FEE2E2]"
-          >
-            {isDeleting ? 'Deleting?' : 'Delete all'}
-          </Button>
-          <Button variant="secondary" icon={<Download size={16} />} onClick={handleExportCampaigns} disabled={campaignsInConvView.length === 0}>
-            Export .csv
-          </Button>
-        </div>
-      </div>
+        }
+        meta={
+          import.meta.env.MODE === 'development'
+            ? (() => {
+                const bySource: Record<string, number> = {};
+                (campaigns as Campaign[]).forEach(c => {
+                  const source = (c as any).source || 'Unknown';
+                  bySource[source] = (bySource[source] || 0) + 1;
+                });
+                return (
+                  <p className="text-xs text-[#9CA3AF]">
+                    Πηγές: {Object.entries(bySource).map(([src, count]) => `${src}: ${count}`).join(', ')}
+                  </p>
+                );
+              })()
+            : null
+        }
+        actions={
+          <>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<Trash2 size={14} />}
+              onClick={handleDeleteCampaigns}
+              disabled={isDeleting || !hasImported}
+              className="min-h-[36px] flex-1 basis-[calc(50%-0.1875rem)] text-[#DC2626] hover:bg-[#FEE2E2] sm:flex-initial sm:basis-auto"
+            >
+              {isDeleting ? 'Διαγραφή…' : 'Διαγραφή όλων'}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<Download size={14} />}
+              onClick={handleExportCampaigns}
+              disabled={campaignsInConvView.length === 0}
+              className="min-h-[36px] flex-1 basis-[calc(50%-0.1875rem)] sm:flex-initial sm:basis-auto"
+            >
+              Εξαγωγή .csv
+            </Button>
+          </>
+        }
+      />
 
       {/* Automation Alerts */}
       <AlertsBanner filterGroup="campaigns" maxAlerts={3} onNavigate={onSectionChange} />
@@ -862,7 +1001,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
           onClear={() => { setDateFrom(''); setDateTo(''); localStorage.removeItem(LS_FROM); localStorage.removeItem(LS_TO); }}
         />
         <span className="text-xs text-[#9CA3AF]">
-          Totals reflect the selected date range.
+          Τα σύνολα αφορούν το επιλεγμένο εύρος ημερομηνιών.
         </span>
       </div>
 
@@ -871,7 +1010,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
         <Card padding="md">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-[#4A4A4A] flex items-center gap-1">Total Spent <Tooltip content="Total ad spend for the current filters (dates, channel, search, etc.)." size={13} /></p>
+              <p className="text-sm text-[#4A4A4A] flex items-center gap-1">Total spend <Tooltip content="Συνολική διαφημιστική δαπάνη για τα τρέχοντα φίλτρα (ημερομηνίες, κανάλι, αναζήτηση κ.λπ.)." size={13} /></p>
               <p className="text-2xl font-bold text-[#1A1A1A] font-mono mt-1">
                 {EUR}{formatCurrency(summaryStats.totalSpent, 2)}
               </p>
@@ -885,7 +1024,19 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
         <Card padding="md">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-[#4A4A4A] flex items-center gap-1">Total Conversions <Tooltip content="Total conversions (purchases, leads). With a conversion filter, only selected actions count." size={13} /></p>
+              <p className="text-sm text-[#4A4A4A] flex items-center gap-1">
+                {showPurchaseSalesHeadlines ? 'Sales' : 'Conversions'}{' '}
+                <Tooltip
+                  content={
+                    convFilterActive
+                      ? 'Μόνο οι επιλεγμένες conversion actions.'
+                      : showPurchaseSalesHeadlines
+                        ? 'Google Ads: conversion_action_category PURCHASE + STORE_SALES (όπως Purchases στο UI). Meta: Purchase (Pixel) / Purchase. Με φίλτρο ενέργειας το νόημα αλλάζει.'
+                        : 'Conversion counts από το sync.'
+                  }
+                  size={13}
+                />
+              </p>
               <p className="text-2xl font-bold text-[#1A1A1A] font-mono mt-1">
                 {formatConvCount(summaryStats.totalConversions)}
               </p>
@@ -899,7 +1050,19 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
         <Card padding="md">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-[#4A4A4A] flex items-center gap-1">Conversion Value <Tooltip content="Conversion value (EUR) per the active conversion filter when set; otherwise total value." size={13} /></p>
+              <p className="text-sm text-[#4A4A4A] flex items-center gap-1">
+                {showPurchaseSalesHeadlines ? 'Sales value' : 'Conversion value'}{' '}
+                <Tooltip
+                  content={
+                    convFilterActive
+                      ? 'Αξία μόνο για τις επιλεγμένες ενέργειες.'
+                      : showPurchaseSalesHeadlines
+                        ? 'Αξία από τις ίδιες ενέργειες πώλησης με την κάρτα Sales.'
+                        : 'Συνολική conversion value.'
+                  }
+                  size={13}
+                />
+              </p>
               <p className="text-2xl font-bold text-[#1A1A1A] font-mono mt-1">
                 {EUR}{formatCurrency(summaryStats.totalConversionValue, 2)}
               </p>
@@ -913,7 +1076,17 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
         <Card padding="md">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-[#4A4A4A] flex items-center gap-1">Avg ROAS <Tooltip content="Average ROAS (Return on Ad Spend): conversion value ? spend." size={13} /></p>
+              <p className="text-sm text-[#4A4A4A] flex items-center gap-1">
+                Μέσος ROAS{' '}
+                <Tooltip
+                  content={
+                    showPurchaseSalesHeadlines && !convFilterActive
+                      ? 'Τζίρος πωλήσεων / δαπάνη (ίδιο παρονομαστής με Google/Meta για πωλήσεις).'
+                      : 'Μέσος όρος ROAS για τα εμφανιζόμενα campaigns.'
+                  }
+                  size={13}
+                />
+              </p>
               <p className="text-2xl font-bold text-[#1A1A1A] font-mono mt-1">
                 {formatMultiplier(summaryStats.avgROAS, 2)}
               </p>
@@ -933,7 +1106,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
               <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#4A4A4A]" />
               <input
                 type="text"
-                placeholder="Search campaigns..."
+                placeholder="Search campaigns…"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all"
@@ -948,7 +1121,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
               onChange={(e) => setChannelFilter(e.target.value)}
               className="px-3 py-2 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all"
             >
-              <option value="all">All channels</option>
+              <option value="all">Όλα τα κανάλια</option>
               {channels.map(ch => (
                 <option key={ch} value={ch}>{ch}</option>
               ))}
@@ -957,10 +1130,11 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-2 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all"
+              title="Ενεργές μόνο: Google Ads = Enabled, Meta = ACTIVE — όχι paused, ολοκληρωμένες ή removed."
+              className="px-3 py-2 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all max-w-[min(100%,220px)]"
             >
-              <option value="all">All status</option>
-              <option value="active">Active</option>
+              <option value="all">All statuses</option>
+              <option value="active">Ενεργές μόνο</option>
               {statuses.filter(s => s !== 'active' && s !== 'enabled' && s !== 'eligible').map(status => (
                 <option key={status} value={status}>{status}</option>
               ))}
@@ -980,16 +1154,16 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                   <Filter size={14} />
                   {convActionFilter.length > 0
                     ? `Conversions (${convActionFilter.length})`
-                    : 'Conversion Type'}
+                    : 'Conversion type'}
                 </button>
                 {showConvDropdown && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setShowConvDropdown(false)} />
                     <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-[#E5E5E5] rounded-xl shadow-lg py-2 min-w-[220px] max-h-[320px] overflow-y-auto">
                       <div className="px-3 py-1.5 border-b border-[#F0F0F0] flex items-center justify-between">
-                        <span className="text-[10px] font-semibold uppercase tracking-wider text-[#9CA3AF]">Conversion Actions</span>
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-[#9CA3AF]">Conversion actions</span>
                         {convActionFilter.length > 0 && (
-                          <button onClick={clearConvFilter} className="text-[10px] text-[var(--nts-accent)] hover:underline">Clear</button>
+                          <button onClick={clearConvFilter} className="text-[10px] text-[var(--nts-accent)] hover:underline">Καθαρισμός</button>
                         )}
                       </div>
                       {allConversionActions.map(action => (
@@ -1019,26 +1193,30 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
       <Card padding="lg">
         <div className="flex items-center justify-between">
           <CardHeader
-            title="Campaigns List"
-            subtitle={`${sortedCampaigns.length} ${sortedCampaigns.length === 1 ? 'campaign' : 'campaigns'}`}
+            title="Campaign list"
+            subtitle={
+              sortedCampaigns.length === 1
+                ? '1 campaign'
+                : `${sortedCampaigns.length} campaigns`
+            }
           />
           {sortedCampaigns.length > COLLAPSED_LIMIT && (
             <button
               onClick={() => setTableExpanded(!tableExpanded)}
               className="text-xs font-medium text-[var(--nts-accent)] hover:underline px-3 py-1.5 rounded-md hover:bg-[var(--nts-accent)]/5 transition-colors"
             >
-              {tableExpanded ? 'Collapse' : `Show all (${sortedCampaigns.length})`}
+              {tableExpanded ? 'Σύμπτυξη' : `Εμφάνιση όλων (${sortedCampaigns.length})`}
             </button>
           )}
         </div>
 
         {filteredCampaigns.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-[#4A4A4A]">No campaigns match the current filters.</p>
+            <p className="text-[#4A4A4A]">Δεν υπάρχουν campaigns που να ταιριάζουν με τα φίλτρα.</p>
           </div>
         ) : convFilterActive && sortedCampaigns.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-[#4A4A4A]">No campaigns have the selected conversions. Try different filters (e.g. remove Purchase if there are no real purchases).</p>
+            <p className="text-[#4A4A4A]">Κανένα campaign δεν έχει τις επιλεγμένες conversions. Δοκιμάστε άλλα φίλτρα (π.χ. αφαιρέστε την ενέργεια Purchase αν δεν υπάρχουν πραγματικές αγορές).</p>
           </div>
         ) : (
           <div className="overflow-x-auto mt-4">
@@ -1051,9 +1229,27 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                   <SortableHeader col="impressions" label="Impr." current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="whitespace-nowrap hidden lg:table-cell" />
                   <SortableHeader col="clicks" label="Clicks" current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="whitespace-nowrap hidden md:table-cell" />
                   <SortableHeader col="ctr" label="CTR" current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="whitespace-nowrap hidden lg:table-cell" />
-                  <SortableHeader col="conversions" label="Conv." current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="whitespace-nowrap hidden sm:table-cell" />
+                  <SortableHeader
+                    col="conversions"
+                    label={showPurchaseSalesHeadlines && !convFilterActive ? 'Πωλ.' : 'Conv.'}
+                    title={showPurchaseSalesHeadlines && !convFilterActive ? 'Πωλήσεις (Purchase/Sales)' : 'Conversions'}
+                    current={sortColumn}
+                    dir={sortDirection}
+                    onSort={handleSort}
+                    align="right"
+                    className="whitespace-nowrap hidden sm:table-cell"
+                  />
                   <SortableHeader col="spent" label="Spent" current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="whitespace-nowrap hidden sm:table-cell" />
-                  <SortableHeader col="conversion_value" label="Value" title="Conversion value" current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="whitespace-nowrap hidden sm:table-cell" />
+                  <SortableHeader
+                    col="conversion_value"
+                    label={showPurchaseSalesHeadlines && !convFilterActive ? 'Τζίρ.' : 'Value'}
+                    title={showPurchaseSalesHeadlines && !convFilterActive ? 'Τζίρος πωλήσεων' : 'Conversion value'}
+                    current={sortColumn}
+                    dir={sortDirection}
+                    onSort={handleSort}
+                    align="right"
+                    className="whitespace-nowrap hidden sm:table-cell"
+                  />
                   <SortableHeader col="roas" label="ROAS" current={sortColumn} dir={sortDirection} onSort={handleSort} align="right" className="whitespace-nowrap" />
                 </tr>
               </thead>
@@ -1145,13 +1341,30 @@ function SearchIntelligenceTab({ type, searchTerms, keywords, hasData, search, o
       })
     : items;
 
+  const searchIntelSubtitle =
+    type === 'search_terms'
+      ? filtered.length === 0
+        ? 'No search terms in current filter · last 90 days'
+        : filtered.length === 1
+          ? '1 search term · last 90 days'
+          : `${filtered.length} search terms · last 90 days`
+      : filtered.length === 0
+        ? 'No keywords in current filter · last 90 days'
+        : filtered.length === 1
+          ? '1 keyword · last 90 days'
+          : `${filtered.length} keywords · last 90 days`;
+
   if (!hasData) {
     return (
       <Card padding="lg" className="text-center py-12">
         <p className="text-[#6B7280]">
-          {type === 'search_terms' ? 'Search Terms' : 'Keywords'} ? no data yet after the last Google Ads sync.
+          {type === 'search_terms'
+            ? 'Δεν υπάρχουν ακόμη search terms μετά τον τελευταίο Google Ads sync.'
+            : 'Δεν υπάρχουν ακόμη keywords μετά τον τελευταίο Google Ads sync.'}
         </p>
-        <p className="text-xs text-[#9CA3AF] mt-2">Use Data Import for Google Ads and run Sync</p>
+        <p className="text-xs text-[#9CA3AF] mt-2">
+          Ανοίξτε το Data Import για Google Ads και εκτελέστε Sync.
+        </p>
       </Card>
     );
   }
@@ -1161,7 +1374,7 @@ function SearchIntelligenceTab({ type, searchTerms, keywords, hasData, search, o
       <div className="flex items-center justify-between mb-4">
         <CardHeader
           title={type === 'search_terms' ? 'Search Terms' : 'Keywords'}
-          subtitle={`${filtered.length} ${type === 'search_terms' ? 'search terms' : 'keywords'} ? last 90 days`}
+          subtitle={searchIntelSubtitle}
         />
         <div className="relative w-64">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
@@ -1169,7 +1382,7 @@ function SearchIntelligenceTab({ type, searchTerms, keywords, hasData, search, o
             type="text"
             value={search}
             onChange={e => onSearchChange(e.target.value)}
-            placeholder={type === 'search_terms' ? 'Search term...' : 'Search keyword...'}
+            placeholder={type === 'search_terms' ? 'Search term…' : 'Search keyword…'}
             className="w-full pl-9 pr-3 py-2 rounded-lg bg-[#F5F5F5] border-none text-sm focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)]/20"
           />
         </div>

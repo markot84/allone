@@ -19,7 +19,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
-import { Card, CardHeader, Button, Slider, Badge, Spinner } from '../common';
+import { Card, CardHeader, Button, Slider, Badge, Spinner, PageHeader, ModalHeader } from '../common';
 import { ScenarioSelector } from './ScenarioSelector';
 import { ChannelRecommendations } from './ChannelRecommendations';
 import { StrategyPackage } from './StrategyPackage';
@@ -791,14 +791,18 @@ export function WeightConfigurator() {
       <div className="grid grid-cols-1 lg:grid-cols-[1fr,minmax(280px,400px)] gap-6 lg:gap-8 items-start max-w-full overflow-x-hidden">
         {/* Left column: title, subtitle, strategy package, tabs */}
         <div className="min-w-0 space-y-4 flex flex-col">
-          <div>
-            <h2 className="text-2xl font-bold text-[var(--nts-charcoal)] tracking-tight">
-              Commercial Strategy
-            </h2>
-            <p className="text-[14px] text-[var(--nts-medium-gray)] mt-1">
-              Καθορισμός εμπορικών προτεραιοτήτων, κατανομή πόρων και συντονισμός εκτέλεσης
-            </p>
-          </div>
+          <PageHeader
+            title={
+              <h2 className="text-xl font-bold tracking-tight text-[var(--nts-charcoal)] sm:text-2xl">
+                Commercial Strategy
+              </h2>
+            }
+            description={
+              <p className="text-[14px] text-[var(--nts-medium-gray)]">
+                Καθορισμός εμπορικών προτεραιοτήτων, κατανομή πόρων και συντονισμός εκτέλεσης
+              </p>
+            }
+          />
 
           {/* Strategy Package — share/copy active strategy */}
           {selectedScenario && selectedScenario !== 'custom' && (
@@ -1322,16 +1326,19 @@ export function WeightConfigurator() {
               className="bg-white rounded-2xl shadow-2xl max-w-md w-full"
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Header */}
-              <div className="p-6 border-b border-[#E5E5E5] flex items-center justify-between">
-                <h2 className="text-xl font-bold text-[#1A1A1A]">Generate Product Feed</h2>
-                <button
-                  onClick={() => setShowFeedFormatModal(false)}
-                  className="p-2 hover:bg-[#F5F5F5] rounded-lg transition-colors"
-                >
-                  <X size={20} className="text-[#4A4A4A]" />
-                </button>
-              </div>
+              <ModalHeader
+                toolbarAriaLabel="Κλείσιμο"
+                title={<h2 className="text-xl font-bold text-[#1A1A1A]">Generate Product Feed</h2>}
+                actions={
+                  <button
+                    type="button"
+                    onClick={() => setShowFeedFormatModal(false)}
+                    className="rounded-lg p-2 transition-colors hover:bg-[#F5F5F5]"
+                  >
+                    <X size={20} className="text-[#4A4A4A]" />
+                  </button>
+                }
+              />
 
               {/* Content */}
               <div className="p-6 space-y-3">
@@ -1348,7 +1355,7 @@ export function WeightConfigurator() {
                   </div>
                   <div className="flex-1">
                     <h3 className="font-semibold text-[#1A1A1A]">Excel (.xlsx)</h3>
-                    <p className="text-xs text-[#4A4A4A]">Download as Excel file</p>
+                    <p className="text-xs text-[#4A4A4A]">Λήψη ως αρχείο Excel</p>
                   </div>
                 </button>
 
@@ -1361,7 +1368,7 @@ export function WeightConfigurator() {
                   </div>
                   <div className="flex-1">
                     <h3 className="font-semibold text-[#1A1A1A]">CSV (.csv)</h3>
-                    <p className="text-xs text-[#4A4A4A]">Download as CSV file</p>
+                    <p className="text-xs text-[#4A4A4A]">Λήψη ως αρχείο CSV</p>
                   </div>
                 </button>
               </div>

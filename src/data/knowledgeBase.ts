@@ -159,7 +159,7 @@ Charts & Visualizations:
 - Customer Segments: Κατανομή πελατών ανά segment
 - Performance Summary: Stock Clearance, Cost Savings, ROI
 
-E-commerce Card: Αν έχετε συνδεδεμένο e-shop (Shopify, WooCommerce κλπ), εμφανίζεται summary card με Store Revenue, Παραγγελίες, AOV, top platform και mini sparkline. Κλικ → E-commerce Explorer.
+E-commerce Card: Αν έχετε συνδεδεμένο e-shop (Shopify, WooCommerce κλπ), εμφανίζεται summary card με e-shop Revenue, Παραγγελίες, AOV, top platform και mini sparkline. Κλικ → E-commerce Explorer.
 
 GA4 Card: Αν είναι συνδεδεμένο το GA4, εμφανίζεται summary card με sessions, users, conversions. Κλικ → Web Analytics.
 
@@ -188,7 +188,7 @@ AI Insights: Προτάσεις για βελτίωση απόδοσης
 ### Αυτόματη δημιουργία (1x/ημέρα)
 Κατά την πρώτη σας είσοδο στην εφαρμογή κάθε ημέρα, το σύστημα δημιουργεί αυτόματα ένα νέο briefing. Αναλύει:
 - Έσοδα & ROAS — organic + campaign revenue, ad spend
-- E-commerce performance — Store Revenue, Orders, AOV, True ROAS, Revenue Gap (όταν υπάρχουν συνδεδεμένα e-shop δεδομένα)
+- E-commerce performance — e-shop Revenue, Orders, AOV, True ROAS, Revenue Gap (όταν υπάρχουν συνδεδεμένα e-shop δεδομένα)
 - Traffic — sessions, users, conversions, εβδομαδιαίες μεταβολές (GA4)
 - Απόθεμα — dead stock, low stock σε best sellers, δεσμευμένο κεφάλαιο
 - Segments — At Risk %, Champions %, μεγέθη segments
@@ -222,7 +222,7 @@ AI Insights: Προτάσεις για βελτίωση απόδοσης
       'Το briefing δημιουργείται αυτόματα — δεν χρειάζεται κάποια ενέργεια από εσάς',
       'Αν δείτε amber border, σημαίνει ότι κάτι σημαντικό άλλαξε στα δεδομένα',
       'Κάντε κλικ στις ενέργειες για να πλοηγηθείτε άμεσα στη σχετική σελίδα',
-      'Τα e-commerce metrics (Store Revenue, AOV, True ROAS) συμμετέχουν πλέον στη λογική του briefing όταν υπάρχουν connector δεδομένα'
+      'Τα e-commerce metrics (e-shop Revenue, AOV, True ROAS) συμμετέχουν πλέον στη λογική του briefing όταν υπάρχουν connector δεδομένα'
     ],
     faq: [
       {
@@ -235,7 +235,7 @@ AI Insights: Προτάσεις για βελτίωση απόδοσης
       },
       {
         question: 'Ποια δεδομένα χρησιμοποιεί;',
-        answer: 'Αξιοποιεί όλα τα υπάρχοντα δεδομένα: organic revenue, campaigns, GA4 analytics, product inventory, RFM segments, automation alerts και (όταν υπάρχουν) e-commerce metrics όπως Store Revenue, Orders, AOV και True ROAS.'
+        answer: 'Αξιοποιεί όλα τα υπάρχοντα δεδομένα: organic revenue, campaigns, GA4 analytics, product inventory, RFM segments, automation alerts και (όταν υπάρχουν) e-commerce metrics όπως e-shop Revenue, Orders, AOV και True ROAS.'
       }
     ]
   },
@@ -875,11 +875,11 @@ Cost Savings:
 
 E-commerce Integration:
 Αν έχετε συνδεδεμένο e-shop, εμφανίζονται επιπλέον:
-- Store Revenue: Πραγματικά έσοδα από παραγγελίες e-shop
-- True ROAS: Store Revenue ÷ Ad Spend (vs attributed ROAS)
+- e-shop Revenue: Πραγματικά έσοδα από παραγγελίες e-shop
+- True ROAS: e-shop Revenue ÷ Ad Spend (vs attributed ROAS)
 - Revenue Gap: Διαφορά μεταξύ πραγματικών εσόδων και attributed
-- Store Revenue line στο monthly trend chart (πράσινη γραμμή)`,
-    tags: ['roi', 'attribution', 'performance', 'true roas', 'store revenue'],
+- e-shop Revenue line στο monthly trend chart (πράσινη γραμμή)`,
+    tags: ['roi', 'attribution', 'performance', 'true roas', 'e-shop revenue'],
     related: ['dashboard-overview', 'analytics-import', 'store-revenue-vs-attributed'],
     faq: [
       {
@@ -1258,7 +1258,7 @@ Side drawer που δείχνει χρονολογικά όλες τις ενέ�
 - Product Intelligence — Stock health, inventory analytics
 - Campaigns — Google Ads & Meta tracking, 3 χρόνια ιστορικό
 - Content Strategy — AI-generated content directions
-- ROI Attribution — Channel performance, ROAS, ROI, Store Revenue, True ROAS
+- ROI Attribution — Channel performance, ROAS, ROI, e-shop Revenue, True ROAS
 - E-commerce Explorer — Ενοποιημένα δεδομένα e-shop (Shopify, WooCommerce, OpenCart, Magento)
 - Web Analytics — GA4 integration (sessions, users, conversions, traffic sources)
 - Connectors — Αυτόματο sync από 8+ πλατφόρμες (Google Ads, Meta, GA4, Shopify, WooCommerce, OpenCart, Magento, Merchant Center)
@@ -1326,7 +1326,7 @@ Side drawer που δείχνει χρονολογικά όλες τις ενέ�
 
 ### API Key (WooCommerce, OpenCart, Magento)
 1. Κλικ "Σύνδεση" → εμφανίζεται modal
-2. Εισάγετε Store URL + API credentials
+2. Εισάγετε e-shop URL + API credentials
 3. Κλικ "Σύνδεση" — γίνεται test σε πραγματικό χρόνο
 
 ## Sync
@@ -1377,12 +1377,12 @@ Side drawer που δείχνει χρονολογικά όλες τις ενέ�
 ## Πού εμφανίζονται τα δεδομένα
 - **E-commerce Explorer** (#ecommerce): Έσοδα, παραγγελίες, AOV, top products
 - **Dashboard**: E-commerce summary card
-- **ROI Attribution**: Store Revenue, True ROAS
+- **ROI Attribution**: e-shop Revenue, True ROAS
 
 ## Σημειώσεις
 - Δεν αποθηκεύονται PII (email, τηλέφωνο πελατών)
 - Τα δεδομένα ανανεώνονται αυτόματα καθημερινά
-- Υποστηρίζονται μόνο Shopify stores (όχι Shopify POS)`,
+- Υποστηρίζονται μόνο Shopify e-shops (όχι Shopify POS)`,
     tags: ['shopify', 'ecommerce', 'connector', 'orders', 'products'],
     related: ['connectors-overview', 'ecommerce-explorer']
   },
@@ -1396,17 +1396,17 @@ Side drawer που δείχνει χρονολογικά όλες τις ενέ�
 Αυτοί οι connectors χρησιμοποιούν API Key αντί για OAuth.
 
 ## WooCommerce
-- **Credentials**: Store URL, Consumer Key, Consumer Secret
+- **Credentials**: e-shop URL, Consumer Key, Consumer Secret
 - **Πού τα βρίσκετε**: WooCommerce → Settings → Advanced → REST API → Add Key
 - **Δικαιώματα**: Read access αρκεί
 
 ## OpenCart
-- **Credentials**: Store URL, API Username, API Key
+- **Credentials**: e-shop URL, API Username, API Key
 - **Πού τα βρίσκετε**: System → Users → API → Add New
 - **Υποστηρίζει**: Native OpenCart API (3.x+) και REST extensions
 
 ## Magento
-- **Credentials**: Store URL, Access Token (Bearer)
+- **Credentials**: e-shop URL, Access Token (Bearer)
 - **Πού το βρίσκετε**: System → Integrations → Add New → Activate → Access Token
 - **Δικαιώματα**: Sales (read), Catalog (read)
 
@@ -1419,7 +1419,7 @@ Side drawer που δείχνει χρονολογικά όλες τις ενέ�
     related: ['connectors-overview', 'ecommerce-explorer'],
     faq: [
       {
-        question: 'Χρειάζεται SSL (https) στο store μου;',
+        question: 'Χρειάζεται SSL (https) στο e-shop μου;',
         answer: 'Ναι, συνιστάται ισχυρά. Η σύνδεση γίνεται μέσω HTTPS. Αν δεν έχετε SSL, ορισμένοι connectors ενδέχεται να μη λειτουργήσουν.'
       },
       {
@@ -1473,7 +1473,7 @@ Side drawer που δείχνει χρονολογικά όλες τις ενέ�
 ## Τι βλέπετε
 
 ### KPI Cards (κορυφή)
-- **Store Revenue**: Σύνολο εσόδων τελευταίων 90 ημερών
+- **e-shop Revenue**: Σύνολο εσόδων τελευταίων 90 ημερών
 - **Παραγγελίες**: Αριθμός παραγγελιών
 - **AOV**: Average Order Value (μέσο ποσό ανά παραγγελία)
 - **Platforms**: Αριθμός συνδεδεμένων e-shop
@@ -1512,50 +1512,50 @@ Horizontal bar chart + progress bars που δείχνουν πόσα έσοδα
       'Κάντε κλικ στις κεφαλίδες στηλών για sorting',
       'Αν δεν εμφανίζονται δεδομένα, ελέγξτε ότι έχετε κάνει Sync στον connector',
       'Τα δεδομένα ανανεώνονται αυτόματα μετά από κάθε sync',
-      'Κάντε hover στα labels για tooltip εξήγηση KPI (Store Revenue, Orders, AOV)'
+      'Κάντε hover στα labels για tooltip εξήγηση KPI (e-shop Revenue, Orders, AOV)'
     ]
   },
   {
     id: 'store-revenue-vs-attributed',
     category: 'connectors',
-    title: 'Store Revenue vs Attributed Revenue',
-    description: 'Τι σημαίνει Store Revenue, True ROAS και Revenue Gap στο ROI.',
-    content: `# Store Revenue vs Attributed Revenue
+    title: 'e-shop Revenue vs Attributed Revenue',
+    description: 'Τι σημαίνει e-shop Revenue, True ROAS και Revenue Gap στο ROI.',
+    content: `# e-shop Revenue vs Attributed Revenue
 
 ## Ορισμοί
 
-### Store Revenue
+### e-shop Revenue
 Τα **πραγματικά έσοδα** από παραγγελίες στο e-shop σας (Shopify, WooCommerce κλπ). Αυτά είναι τα πραγματικά χρήματα που μπήκαν στο ταμείο.
 
 ### Attributed Revenue
 Τα **εκτιμώμενα έσοδα** από organic πωλήσεις + conversion value που αναφέρουν οι ad platforms (Google Ads, Meta). Αυτό είναι attribution-based και δεν αντιστοιχεί πάντα 1:1 στα πραγματικά έσοδα.
 
 ### True ROAS
-\`Store Revenue ÷ Ad Spend\`
+\`e-shop Revenue ÷ Ad Spend\`
 
 Πόσα πραγματικά κέρδισε το e-shop σας για κάθε €1 σε διαφήμιση. Πιο αξιόπιστο από τον standard ROAS (attributed revenue / spend).
 
 ### Revenue Gap
-\`Store Revenue − Attributed Revenue\`
+\`e-shop Revenue − Attributed Revenue\`
 
 - **Θετικό**: Πουλάτε περισσότερα από ό,τι δείχνουν τα ad platforms (π.χ. word-of-mouth, repeat purchases)
 - **Αρνητικό**: Τα ad platforms over-report conversions (common σε cross-platform attribution)
 
 ## Πού εμφανίζεται
 Στο **ROI Attribution** (#roi), εμφανίζεται μόνο όταν υπάρχουν e-commerce δεδομένα:
-- 4 MetricCards: Store Revenue, Attributed Revenue, True ROAS, Revenue Gap
-- Γραμμή Store Revenue (πράσινη) στο monthly trend chart
+- 4 MetricCards: e-shop Revenue, Attributed Revenue, True ROAS, Revenue Gap
+- Γραμμή e-shop Revenue (πράσινη) στο monthly trend chart
 - Επεξηγηματικό κείμενο κάτω από τα cards
 - Tooltips στα metric labels για γρήγορη κατανόηση ορισμών
 
 ## Γιατί είναι σημαντικό
 Ο κλασικός ROAS βασίζεται σε attribution models που μπορεί να μετράνε duplicates (ένα conversion σε Google + Meta). Ο True ROAS χρησιμοποιεί πραγματικά δεδομένα παραγγελιών, δίνοντας πιο ρεαλιστική εικόνα.`,
-    tags: ['store revenue', 'attributed', 'true roas', 'revenue gap', 'roi', 'ecommerce'],
+    tags: ['e-shop revenue', 'attributed', 'true roas', 'revenue gap', 'roi', 'ecommerce'],
     related: ['roi-attribution-basics', 'ecommerce-explorer', 'understanding-financial-kpis'],
     faq: [
       {
-        question: 'Γιατί διαφέρει το Store Revenue από το Attributed;',
-        answer: 'Τα ad platforms (Google, Meta) χρησιμοποιούν attribution models που μπορεί να υπερεκτιμούν ή υποεκτιμούν τις πωλήσεις. Το Store Revenue είναι τα πραγματικά χρήματα από παραγγελίες.'
+        question: 'Γιατί διαφέρει το e-shop Revenue από το Attributed;',
+        answer: 'Τα ad platforms (Google, Meta) χρησιμοποιούν attribution models που μπορεί να υπερεκτιμούν ή υποεκτιμούν τις πωλήσεις. Το e-shop Revenue είναι τα πραγματικά χρήματα από παραγγελίες.'
       },
       {
         question: 'Ποιο ROAS πρέπει να χρησιμοποιώ;',

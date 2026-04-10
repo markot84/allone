@@ -102,7 +102,7 @@ firebase deploy        # Full deploy: hosting + functions + firestore rules + st
 - All connectors operational: Google Ads, Meta, GA4, Shopify, WooCommerce, OpenCart, Magento, Merchant Center
 - E-commerce Explorer page (`#ecommerce`) with KPIs, daily revenue chart, platform breakdown, top products, recent orders
 - Dashboard e-commerce summary card with sparkline
-- ROI Attribution: Store Revenue, True ROAS, Revenue Gap, store revenue trend line
+- ROI Attribution: e-shop Revenue, True ROAS, Revenue Gap, store revenue trend line
 - Firestore security rules: tenant isolation on all collections
 - Help/Knowledge Base: 6 articles for Connectors & E-commerce category
 - UX polish: loading states, status badges, table hover/sort, responsive tables, chart tooltip consistency

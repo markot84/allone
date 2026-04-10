@@ -20,12 +20,20 @@ import {
   Cell,
   ResponsiveContainer,
 } from 'recharts';
-import { Card, CardHeader, KPICard, Tooltip, AlertsBanner } from '../common';
+import { Card, CardHeader, KPICard, Tooltip, AlertsBanner, PageHeader } from '../common';
 import { useSegments, useOrganic, useCampaigns, useActiveStrategy, useSuppliers, useProductSource, useBrand, useProductAggregates } from '../../hooks';
 import { useDashPeriod, PERIOD_OPTIONS } from '../../hooks/useDashPeriod';
 import { useGA4Data } from '../../hooks/useGA4Data';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
-import { calculateTotalRevenue, calculateCampaignMetrics, getCampaignDateForMonth, getEffectiveConversionValue, bucketOverlapFraction, metaUsesLegacyMonthBuckets } from '../../utils/roiUtils';
+import {
+  calculateTotalRevenue,
+  calculateCampaignMetrics,
+  getCampaignDateForMonth,
+  getEffectiveConversionValue,
+  bucketOverlapFraction,
+  metaUsesLegacyMonthBuckets,
+  ROI_PERCENT_CALC_TOOLTIP,
+} from '../../utils/roiUtils';
 import { formatCurrencyCompact, formatNumber, formatMultiplier, formatPercent } from '../../utils/format';
 import type { Campaign } from '../../types';
 import { generateInsightsFromData } from '../../services/insights';
@@ -197,20 +205,26 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
 
   return (
     <div className="space-y-8">
-      {/* Page Header */}
-      <div>
-        <h2 className="text-2xl font-bold text-[var(--nts-charcoal)] tracking-tight">
-          Dashboard
-        </h2>
-        <p className="text-[14px] text-[var(--nts-medium-gray)] mt-1">
-          {activeStrategy
-            ? <>Στρατηγική: <span className="font-medium text-[var(--nts-charcoal)]">{getStrategyName(activeStrategy.scenarioId)}</span></>
-            : 'Καλώς ήρθατε στο Performance+'}
-          {activeStrategy?.approvalStatus === 'implementing' && (
-            <span className="ml-2 inline-flex items-center px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-green-100 text-green-700 align-middle">ενεργή</span>
-          )}
-        </p>
-      </div>
+      <PageHeader
+        title={<h2 className="text-xl font-bold tracking-tight text-[var(--nts-charcoal)] sm:text-2xl">Dashboard</h2>}
+        description={
+          <p className="text-[14px] text-[var(--nts-medium-gray)]">
+            {activeStrategy ? (
+              <>
+                Στρατηγική:{' '}
+                <span className="font-medium text-[var(--nts-charcoal)]">{getStrategyName(activeStrategy.scenarioId)}</span>
+              </>
+            ) : (
+              'Καλώς ήρθατε στο Performance+'
+            )}
+            {activeStrategy?.approvalStatus === 'implementing' && (
+              <span className="ml-2 inline-flex items-center rounded-full bg-green-100 px-1.5 py-0.5 align-middle text-[10px] font-semibold text-green-700">
+                ενεργή
+              </span>
+            )}
+          </p>
+        }
+      />
 
       {/* Automation Alerts */}
       <AlertsBanner maxAlerts={3} onNavigate={onSectionChange} />
@@ -365,7 +379,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             />
             <KPICard
               kpi={{
-                label: 'Ad Spend',
+                label: 'Δαπάνη διαφημίσεων',
                 value: hasCampaigns ? formatCurrencyCompact(campaignMetrics.totalSpend) : '€0',
                 change: spendMoM !== null ? Math.round(spendMoM) : undefined,
                 changeLabel: spendMoM !== null ? 'vs προηγ. μήνα' : hasCampaigns && campaignMetrics.cpa > 0 ? `CPA €${formatNumber(campaignMetrics.cpa, 1)}` : undefined,
@@ -390,7 +404,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-1.5">
                       <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--nts-accent)]">ROI</span>
-                      <Tooltip content="Return on Investment — Ποσοστό κέρδους σε σχέση με το κόστος διαφήμισης: (Έσοδα campaigns − Ad Spend) ÷ Ad Spend × 100." size={13} />
+                      <Tooltip content={ROI_PERCENT_CALC_TOOLTIP} size={13} />
                     </div>
                     {roiPercent > 0 && (
                       <div className="w-7 h-7 rounded-lg bg-[#22C55E]/20 flex items-center justify-center">
@@ -402,7 +416,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                     {roiPercent > 0 ? `+${formatNumber(roiPercent, 0)}%` : '—'}
                   </p>
                   {roiPercent > 0 && (
-                    <p className="text-[11px] text-white/50">return on investment</p>
+                    <p className="text-[11px] text-white/50">κέρδος ÷ spend (όχι ROAS)</p>
                   )}
                 </div>
               </div>
@@ -518,7 +532,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4 items-end">
               <div>
                 <div className="flex items-center gap-1 mb-0.5">
-                  <p className="text-[11px] text-[#6B7280]">Store Revenue</p>
+                  <p className="text-[11px] text-[#6B7280]">e-shop Revenue</p>
                   <Tooltip content="Πραγματικά έσοδα e-shop από τις συνδεδεμένες πλατφόρμες για το επιλεγμένο διάστημα." size={12} />
                 </div>
                 <p className="text-lg font-bold text-[#1A1A1A]">{formatCurrencyCompact(ecomm.totalRevenue)}</p>
@@ -533,7 +547,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               <div>
                 <div className="flex items-center gap-1 mb-0.5">
                   <p className="text-[11px] text-[#6B7280]">AOV</p>
-                  <Tooltip content="Average Order Value: Store Revenue / Παραγγελίες." size={12} />
+                  <Tooltip content="Average Order Value: e-shop Revenue / Παραγγελίες." size={12} />
                 </div>
                 <p className="text-lg font-bold text-[#1A1A1A]">{formatCurrencyCompact(ecomm.aov)}</p>
               </div>

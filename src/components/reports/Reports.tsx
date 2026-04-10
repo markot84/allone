@@ -17,7 +17,7 @@ import {
   Target,
   Tag,
 } from 'lucide-react';
-import { Card, CardHeader, Badge, Button, Spinner } from '../common';
+import { Card, CardHeader, Badge, Button, Spinner, PageHeader, ModalHeader } from '../common';
 import { useProductSource, useSegments, useCampaigns, useOrganic, useBrand } from '../../hooks';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import { formatCurrencyCompact, formatNumber } from '../../utils/format';
@@ -169,18 +169,27 @@ export function Reports() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-[#1A1A1A]">Reports & Analytics</h2>
-          <p className="text-[#4A4A4A] mt-1">
+      <PageHeader
+        toolbarAriaLabel="Αναφορές"
+        title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Reports & Analytics</h2>}
+        description={
+          <p className="text-sm text-[#4A4A4A] sm:text-base">
             Generate, schedule, and export performance reports
           </p>
-        </div>
-        <Button variant="primary" icon={<Plus size={16} />} onClick={() => setShowCustomModal(true)}>
-          Custom Report
-        </Button>
-      </div>
+        }
+        actions={
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<Plus size={14} />}
+            onClick={() => setShowCustomModal(true)}
+            className="min-h-[36px] w-full sm:w-auto"
+          >
+            <span className="hidden sm:inline">Προσαρμοσμένη αναφορά</span>
+            <span className="sm:hidden">Custom</span>
+          </Button>
+        }
+      />
 
       {/* Report Types */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -453,12 +462,15 @@ function ScheduleModal({
         className="bg-white rounded-2xl shadow-2xl max-w-md w-full"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-6 border-b border-[#E5E5E5] flex items-center justify-between">
-          <h3 className="text-lg font-bold text-[#1A1A1A]">Νέος Προγραμματισμός Report</h3>
-          <button onClick={onClose} className="p-2 hover:bg-[#F5F5F5] rounded-lg">
-            <X size={20} className="text-[#4A4A4A]" />
-          </button>
-        </div>
+        <ModalHeader
+          toolbarAriaLabel="Κλείσιμο"
+          title={<h3 className="text-lg font-bold text-[#1A1A1A]">Νέος Προγραμματισμός Report</h3>}
+          actions={
+            <button type="button" onClick={onClose} className="rounded-lg p-2 hover:bg-[#F5F5F5]">
+              <X size={20} className="text-[#4A4A4A]" />
+            </button>
+          }
+        />
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
             <label className="block text-sm font-medium text-[#4A4A4A] mb-1">Όνομα</label>
@@ -543,12 +555,15 @@ function CustomReportModal({
         className="bg-white rounded-2xl shadow-2xl max-w-md w-full"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-6 border-b border-[#E5E5E5] flex items-center justify-between">
-          <h3 className="text-lg font-bold text-[#1A1A1A]">Custom Report</h3>
-          <button onClick={onClose} className="p-2 hover:bg-[#F5F5F5] rounded-lg">
-            <X size={20} className="text-[#4A4A4A]" />
-          </button>
-        </div>
+        <ModalHeader
+          toolbarAriaLabel="Κλείσιμο"
+          title={<h3 className="text-lg font-bold text-[#1A1A1A]">Προσαρμοσμένη αναφορά</h3>}
+          actions={
+            <button type="button" onClick={onClose} className="rounded-lg p-2 hover:bg-[#F5F5F5]">
+              <X size={20} className="text-[#4A4A4A]" />
+            </button>
+          }
+        />
         <div className="p-6 space-y-4">
           <div>
             <label className="block text-sm font-medium text-[#4A4A4A] mb-2">Επιλέξτε τύπο report</label>

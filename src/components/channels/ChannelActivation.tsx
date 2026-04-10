@@ -37,7 +37,7 @@ import {
   Line,
   Legend,
 } from 'recharts';
-import { Card, CardHeader, Badge, Button, Spinner, FormattedProse } from '../common';
+import { Card, CardHeader, Badge, Button, Spinner, FormattedProse, PageHeader, ModalHeader } from '../common';
 import { useToast } from '../common/Toast';
 import { useProductSource, useCampaigns, useBrand, useSegments, useActiveStrategy, useChannelActivations } from '../../hooks';
 import { exportSegmentActionPack, exportAllSegmentActionPacks, exportStrategyPlan, exportAllSegmentCustomerLists } from '../../services/segmentActionPack';
@@ -54,39 +54,39 @@ import type { Campaign, ChannelRecommendation, BudgetAction } from '../../types'
 const COLORS = ['var(--nts-accent)', '#78716C', '#22C55E', '#8B5CF6', '#F59E0B', '#3B82F6', '#EC4899'];
 
 const FUNNEL_STAGE: Record<string, { label: string; color: string }> = {
-  'google search ads': { label: 'Sales', color: '#22C55E' },
-  'google shopping': { label: 'Sales', color: '#22C55E' },
-  'google performance max': { label: 'Sales', color: '#22C55E' },
-  'meta ads (facebook/instagram)': { label: 'Awareness', color: '#3B82F6' },
-  'meta ads': { label: 'Awareness', color: '#3B82F6' },
-  'youtube ads': { label: 'Consideration', color: '#F97316' },
-  'google display network': { label: 'Awareness', color: '#3B82F6' },
-  'email marketing': { label: 'Loyalty', color: '#8B5CF6' },
-  'sms marketing': { label: 'Loyalty', color: '#8B5CF6' },
-  'sms': { label: 'Loyalty', color: '#8B5CF6' },
-  'push notifications': { label: 'Loyalty', color: '#8B5CF6' },
-  'loyalty programs': { label: 'Loyalty', color: '#8B5CF6' },
-  'dynamic remarketing': { label: 'Sales', color: '#22C55E' },
-  'meta retargeting': { label: 'Sales', color: '#22C55E' },
-  'google remarketing': { label: 'Sales', color: '#22C55E' },
-  'remarketing': { label: 'Sales', color: '#22C55E' },
-  'organic social media': { label: 'Awareness', color: '#3B82F6' },
-  'influencer marketing': { label: 'Consideration', color: '#F97316' },
-  'content marketing/seo': { label: 'Consideration', color: '#F97316' },
-  'content marketing': { label: 'Consideration', color: '#F97316' },
-  'seo': { label: 'Consideration', color: '#F97316' },
-  'seo (on-page & technical)': { label: 'Consideration', color: '#F97316' },
-  'blog / editorial content': { label: 'Consideration', color: '#F97316' },
-  'product content optimization': { label: 'Consideration', color: '#F97316' },
-  'marketplace ads (skroutz, amazon)': { label: 'Sales', color: '#22C55E' },
-  'marketplace ads (skroutz)': { label: 'Sales', color: '#22C55E' },
-  'affiliate marketing': { label: 'Sales', color: '#22C55E' },
-  'tiktok ads': { label: 'Awareness', color: '#3B82F6' },
-  'pinterest ads': { label: 'Consideration', color: '#F97316' },
-  'whatsapp business': { label: 'Loyalty', color: '#8B5CF6' },
-  'ugc (user-generated content)': { label: 'Consideration', color: '#F97316' },
-  'video/connected tv': { label: 'Awareness', color: '#3B82F6' },
-  'programmatic display': { label: 'Awareness', color: '#3B82F6' },
+  'google search ads': { label: 'Πωλήσεις', color: '#22C55E' },
+  'google shopping': { label: 'Πωλήσεις', color: '#22C55E' },
+  'google performance max': { label: 'Πωλήσεις', color: '#22C55E' },
+  'meta ads (facebook/instagram)': { label: 'Επίγνωση', color: '#3B82F6' },
+  'meta ads': { label: 'Επίγνωση', color: '#3B82F6' },
+  'youtube ads': { label: 'Σκέψη', color: '#F97316' },
+  'google display network': { label: 'Επίγνωση', color: '#3B82F6' },
+  'email marketing': { label: 'Αφοσίωση', color: '#8B5CF6' },
+  'sms marketing': { label: 'Αφοσίωση', color: '#8B5CF6' },
+  'sms': { label: 'Αφοσίωση', color: '#8B5CF6' },
+  'push notifications': { label: 'Αφοσίωση', color: '#8B5CF6' },
+  'loyalty programs': { label: 'Αφοσίωση', color: '#8B5CF6' },
+  'dynamic remarketing': { label: 'Πωλήσεις', color: '#22C55E' },
+  'meta retargeting': { label: 'Πωλήσεις', color: '#22C55E' },
+  'google remarketing': { label: 'Πωλήσεις', color: '#22C55E' },
+  'remarketing': { label: 'Πωλήσεις', color: '#22C55E' },
+  'organic social media': { label: 'Επίγνωση', color: '#3B82F6' },
+  'influencer marketing': { label: 'Σκέψη', color: '#F97316' },
+  'content marketing/seo': { label: 'Σκέψη', color: '#F97316' },
+  'content marketing': { label: 'Σκέψη', color: '#F97316' },
+  'seo': { label: 'Σκέψη', color: '#F97316' },
+  'seo (on-page & technical)': { label: 'Σκέψη', color: '#F97316' },
+  'blog / editorial content': { label: 'Σκέψη', color: '#F97316' },
+  'product content optimization': { label: 'Σκέψη', color: '#F97316' },
+  'marketplace ads (skroutz, amazon)': { label: 'Πωλήσεις', color: '#22C55E' },
+  'marketplace ads (skroutz)': { label: 'Πωλήσεις', color: '#22C55E' },
+  'affiliate marketing': { label: 'Πωλήσεις', color: '#22C55E' },
+  'tiktok ads': { label: 'Επίγνωση', color: '#3B82F6' },
+  'pinterest ads': { label: 'Σκέψη', color: '#F97316' },
+  'whatsapp business': { label: 'Αφοσίωση', color: '#8B5CF6' },
+  'ugc (user-generated content)': { label: 'Σκέψη', color: '#F97316' },
+  'video/connected tv': { label: 'Επίγνωση', color: '#3B82F6' },
+  'programmatic display': { label: 'Επίγνωση', color: '#3B82F6' },
 };
 
 function getFunnelStage(channel: string) {
@@ -95,11 +95,11 @@ function getFunnelStage(channel: string) {
   for (const [k, v] of Object.entries(FUNNEL_STAGE)) {
     if (key.includes(k) || k.includes(key)) return v;
   }
-  if (key.includes('ads') || key.includes('search') || key.includes('shopping') || key.includes('remarketing')) return { label: 'Sales', color: '#22C55E' };
-  if (key.includes('display') || key.includes('video') || key.includes('social') || key.includes('tiktok')) return { label: 'Awareness', color: '#3B82F6' };
-  if (key.includes('content') || key.includes('seo') || key.includes('influencer') || key.includes('blog')) return { label: 'Consideration', color: '#F97316' };
-  if (key.includes('email') || key.includes('sms') || key.includes('push') || key.includes('loyalty') || key.includes('crm')) return { label: 'Loyalty', color: '#8B5CF6' };
-  return { label: 'Awareness', color: '#3B82F6' };
+  if (key.includes('ads') || key.includes('search') || key.includes('shopping') || key.includes('remarketing')) return { label: 'Πωλήσεις', color: '#22C55E' };
+  if (key.includes('display') || key.includes('video') || key.includes('social') || key.includes('tiktok')) return { label: 'Επίγνωση', color: '#3B82F6' };
+  if (key.includes('content') || key.includes('seo') || key.includes('influencer') || key.includes('blog')) return { label: 'Σκέψη', color: '#F97316' };
+  if (key.includes('email') || key.includes('sms') || key.includes('push') || key.includes('loyalty') || key.includes('crm')) return { label: 'Αφοσίωση', color: '#8B5CF6' };
+  return { label: 'Επίγνωση', color: '#3B82F6' };
 }
 
 function getBudgetForChannel(channel: string, allocation: Record<string, number>): number | null {
@@ -116,16 +116,16 @@ function getBudgetForChannel(channel: string, allocation: Record<string, number>
 }
 
 const STATUS_CONFIG = {
-  pending: { label: 'Pending', icon: Circle, color: '#9CA3AF', bg: '#F5F5F5' },
-  in_progress: { label: 'In Progress', icon: Clock, color: '#F97316', bg: '#FFF7ED' },
-  done: { label: 'Done', icon: CheckCircle2, color: '#22C55E', bg: '#F0FDF4' },
+  pending: { label: 'Εκκρεμεί', icon: Circle, color: '#9CA3AF', bg: '#F5F5F5' },
+  in_progress: { label: 'Σε εξέλιξη', icon: Clock, color: '#F97316', bg: '#FFF7ED' },
+  done: { label: 'Ολοκληρώθηκε', icon: CheckCircle2, color: '#22C55E', bg: '#F0FDF4' },
 } as const;
 
 const ACTION_TYPE_CONFIG = {
   increase: { label: 'Αύξηση', icon: ArrowUpRight, color: '#22C55E', bg: '#F0FDF4' },
   decrease: { label: 'Μείωση', icon: ArrowDownRight, color: '#EF4444', bg: '#FEF2F2' },
   push: { label: 'Push', icon: Zap, color: '#F97316', bg: '#FFF7ED' },
-  pause: { label: 'Pause', icon: Pause, color: '#9CA3AF', bg: '#F5F5F5' },
+  pause: { label: 'Παύση', icon: Pause, color: '#9CA3AF', bg: '#F5F5F5' },
   maintain: { label: 'Διατήρηση', icon: Minus, color: '#6B7280', bg: '#F9FAFB' },
 } as const;
 
@@ -450,7 +450,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
 
   const hasRealStrategy = !!activeStrategy?.id && !activeStrategy.id.startsWith('default_') && !!scenarioId;
   const strategyName = scenarioId ? getStrategyName(scenarioId) : null;
-  const durationLabel = activeStrategy?.duration === 'ongoing' ? 'Ongoing' : activeStrategy?.duration ? `${activeStrategy.duration} ημ.` : null;
+  const durationLabel = activeStrategy?.duration === 'ongoing' ? 'Συνεχής' : activeStrategy?.duration ? `${activeStrategy.duration} ημ.` : null;
 
   // Progress summary
   const progressSummary = useMemo(() => {
@@ -464,10 +464,12 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   if (!hasRealStrategy) {
     return (
       <div className="space-y-6">
-        <div>
-          <h2 className="text-2xl font-bold text-[#1A1A1A]">Channel Activation</h2>
-          <p className="text-[#4A4A4A] mt-1">AI-powered channel mix βάσει εμπορικής στρατηγικής</p>
-        </div>
+        <PageHeader
+          title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Ενεργοποίηση καναλιών</h2>}
+          description={
+            <p className="text-sm text-[#4A4A4A] sm:text-base">Μίξη καναλιών με AI βάσει εμπορικής στρατηγικής</p>
+          }
+        />
         <Card padding="lg">
           <div className="text-center py-20">
             <Settings size={48} className="mx-auto text-[var(--nts-medium-gray)] mb-4" />
@@ -489,12 +491,12 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         {realChannelPerformance && realChannelPerformance.length > 0 && (
           <Card padding="lg">
             <CardHeader
-              title="Campaign Performance"
-              subtitle="Πραγματικά δεδομένα από imported campaigns"
+              title="Απόδοση καμπανιών"
+              subtitle="Πραγματικά δεδομένα από εισαγόμενες καμπάνιες"
               icon={<TrendingUp size={20} className="text-[var(--nts-accent)]" />}
             />
             <div className="mt-2">
-              <Badge variant="default" size="sm">Avg ROAS: {formatMultiplier(realChannelPerformance.reduce((sum, c) => sum + c.roas * c.spent, 0) / Math.max(realChannelPerformance.reduce((sum, c) => sum + c.spent, 0), 1), 1)}</Badge>
+              <Badge variant="default" size="sm">Μέσο ROAS: {formatMultiplier(realChannelPerformance.reduce((sum, c) => sum + c.roas * c.spent, 0) / Math.max(realChannelPerformance.reduce((sum, c) => sum + c.spent, 0), 1), 1)}</Badge>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
               {realChannelPerformance.map((ch) => (
@@ -504,8 +506,8 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                     <Badge variant={ch.roas >= 3 ? 'success' : ch.roas >= 1 ? 'warning' : 'default'} size="sm">ROAS: {formatMultiplier(ch.roas, 2)}</Badge>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div><span className="text-[#9CA3AF]">Spent</span><p className="font-mono">€{formatCurrency(ch.spent)}</p></div>
-                    <div><span className="text-[#9CA3AF]">Conversions</span><p className="font-mono">{formatNumber(ch.conversions)}</p></div>
+                    <div><span className="text-[#9CA3AF]">Δαπάνη</span><p className="font-mono">€{formatCurrency(ch.spent)}</p></div>
+                    <div><span className="text-[#9CA3AF]">Μετατροπές</span><p className="font-mono">{formatNumber(ch.conversions)}</p></div>
                   </div>
                 </div>
               ))}
@@ -518,84 +520,91 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-[#1A1A1A]">Channel Activation</h2>
-          <p className="text-[#4A4A4A] mt-1">
+      <PageHeader
+        toolbarAriaLabel="Channel activation"
+        title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Ενεργοποίηση καναλιών</h2>}
+        description={
+          <p className="text-[#4A4A4A]">
             <span className="font-medium text-[#1A1A1A]">{strategyName}</span>
             {durationLabel && <span className="text-[#9CA3AF]"> · {durationLabel}</span>}
           </p>
-        </div>
-        <div className="flex items-center gap-3">
-          {/* Monthly Budget */}
-          <div className="flex items-center gap-2">
-            <Wallet size={16} className="text-[#9CA3AF]" />
-            {editingBudget ? (
-              <div className="flex items-center gap-1.5">
-                <span className="text-sm text-[#4A4A4A]">€</span>
-                <input
-                  type="text"
-                  value={budgetInput}
-                  onChange={e => setBudgetInput(e.target.value)}
-                  placeholder="π.χ. 5000"
-                  className="w-24 text-sm px-2 py-1.5 border border-[#E5E5E5] rounded-lg focus:outline-none focus:border-[var(--nts-accent)] font-mono"
-                  autoFocus
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') handleBudgetSave();
-                    if (e.key === 'Escape') { setEditingBudget(false); setBudgetInput(''); }
-                  }}
-                />
+        }
+        actions={
+          <div className="flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-stretch sm:justify-end sm:gap-3">
+            <div className="flex min-w-0 items-center gap-2 sm:justify-end">
+              <Wallet size={16} className="shrink-0 text-[#9CA3AF]" />
+              {editingBudget ? (
+                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 sm:flex-initial">
+                  <span className="text-sm text-[#4A4A4A]">€</span>
+                  <input
+                    type="text"
+                    value={budgetInput}
+                    onChange={e => setBudgetInput(e.target.value)}
+                    placeholder="π.χ. 5000"
+                    className="min-w-0 flex-1 rounded-lg border border-[#E5E5E5] px-2 py-1.5 font-mono text-sm focus:border-[var(--nts-accent)] focus:outline-none sm:w-24 sm:flex-initial"
+                    autoFocus
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') handleBudgetSave();
+                      if (e.key === 'Escape') { setEditingBudget(false); setBudgetInput(''); }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleBudgetSave}
+                    disabled={isSavingBudget}
+                    className="rounded-lg bg-[#1A1A1A] px-3 py-1.5 text-xs text-white hover:bg-[#333] disabled:opacity-50"
+                  >
+                    OK
+                  </button>
+                </div>
+              ) : (
                 <button
-                  onClick={handleBudgetSave}
-                  disabled={isSavingBudget}
-                  className="text-xs px-3 py-1.5 bg-[#1A1A1A] text-white rounded-lg hover:bg-[#333] disabled:opacity-50"
+                  type="button"
+                  onClick={() => {
+                    setBudgetInput(monthlyBudget ? String(monthlyBudget) : '');
+                    setEditingBudget(true);
+                  }}
+                  className="min-h-[36px] rounded-lg border border-[#E5E5E5] px-3 py-1.5 text-left text-sm font-medium transition-colors hover:border-[var(--nts-accent)]"
                 >
-                  OK
+                  {monthlyBudget
+                    ? <span className="font-mono">€{monthlyBudget.toLocaleString('el-GR')}<span className="font-normal text-[#9CA3AF]">/μήνα</span></span>
+                    : <span className="text-[#9CA3AF]">Ορισμός budget</span>
+                  }
                 </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => {
-                  setBudgetInput(monthlyBudget ? String(monthlyBudget) : '');
-                  setEditingBudget(true);
-                }}
-                className="text-sm font-medium px-3 py-1.5 rounded-lg border border-[#E5E5E5] hover:border-[var(--nts-accent)] transition-colors"
-              >
-                {monthlyBudget
-                  ? <span className="font-mono">€{monthlyBudget.toLocaleString('el-GR')}<span className="text-[#9CA3AF] font-normal">/μήνα</span></span>
-                  : <span className="text-[#9CA3AF]">Ορισμός budget</span>
-                }
-              </button>
-            )}
-          </div>
+              )}
+            </div>
 
-          {aiRecommendation && activeStrategy && (
+            {aiRecommendation && activeStrategy && (
+              <Button
+                variant="primary"
+                size="sm"
+                className="min-h-[36px] w-full sm:w-auto"
+                icon={<FileDown size={16} />}
+                onClick={handleExportBrief}
+              >
+                Εξαγωγή brief
+              </Button>
+            )}
             <Button
-              variant="primary"
-              icon={<FileDown size={16} />}
-              onClick={handleExportBrief}
+              variant="secondary"
+              size="sm"
+              className="min-h-[36px] w-full sm:w-auto"
+              icon={<Download size={16} />}
+              onClick={() => setShowExportAllModal(true)}
             >
-              Export Brief
+              Εξαγωγή feeds
             </Button>
-          )}
-          <Button
-            variant="secondary"
-            icon={<Download size={16} />}
-            onClick={() => setShowExportAllModal(true)}
-          >
-            Export Feeds
-          </Button>
-        </div>
-      </div>
+          </div>
+        }
+      />
 
       {/* Progress bar */}
       {progressSummary && progressSummary.total > 0 && (
         <div className="flex items-center gap-4 px-4 py-3 bg-[#FAFAFA] rounded-xl border border-[#E5E5E5]">
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-xs font-medium text-[#4A4A4A]">Activation Progress</span>
-              <span className="text-xs text-[#9CA3AF]">{progressSummary.done}/{progressSummary.total} channels</span>
+              <span className="text-xs font-medium text-[#4A4A4A]">Πρόοδος ενεργοποίησης</span>
+              <span className="text-xs text-[#9CA3AF]">{progressSummary.done}/{progressSummary.total} κανάλια</span>
             </div>
             <div className="h-1.5 bg-[#E5E5E5] rounded-full overflow-hidden flex">
               {progressSummary.done > 0 && (
@@ -607,9 +616,9 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
             </div>
           </div>
           <div className="flex items-center gap-3 text-xs">
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#22C55E]" />{progressSummary.done} done</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#F97316]" />{progressSummary.inProgress} in progress</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#9CA3AF]" />{progressSummary.pending} pending</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#22C55E]" />{progressSummary.done} ολοκληρώθηκαν</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#F97316]" />{progressSummary.inProgress} σε εξέλιξη</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#9CA3AF]" />{progressSummary.pending} εκκρεμούν</span>
           </div>
         </div>
       )}
@@ -619,8 +628,8 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         {/* Channel Mix Pie */}
         <Card padding="lg">
           <CardHeader
-            title="Channel Mix"
-            subtitle={hasCampaigns ? 'Πραγματική budget allocation' : 'AI-recommended allocation'}
+            title="Μίξη καναλιών"
+            subtitle={hasCampaigns ? 'Πραγματική κατανομή budget' : 'Κατανομή προτεινόμενη από AI'}
             icon={<PieChartIcon size={20} className="text-[var(--nts-accent)]" />}
           />
           {(aiLoading || campaignsLoading) ? (
@@ -649,7 +658,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                   <Tooltip
                     contentStyle={{ backgroundColor: '#fff', border: '1px solid #E5E5E5', borderRadius: '8px', padding: '8px 12px' }}
                     formatter={(value: number | string | undefined, name: string | undefined) => [
-                      formatPercent(typeof value === 'number' ? value : 0, 1), name || 'Channel'
+                      formatPercent(typeof value === 'number' ? value : 0, 1), name || 'Κανάλι'
                     ]}
                   />
                 </PieChart>
@@ -684,7 +693,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
             <div className="flex items-center justify-center h-64">
               <div className="text-center">
                 <p className="text-sm text-[#4A4A4A]">Δεν υπάρχουν AI συστάσεις για αυτή τη στρατηγική</p>
-                <p className="text-xs text-[#9CA3AF] mt-1 mb-3">Πατήστε για δημιουργία AI recommendations</p>
+                <p className="text-xs text-[#9CA3AF] mt-1 mb-3">Πατήστε για δημιουργία συστάσεων AI</p>
                 <Button
                   variant="primary"
                   size="sm"
@@ -701,12 +710,12 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         {/* Channel Brief Cards */}
         <Card className="lg:col-span-2" padding="lg">
           <CardHeader
-            title="Channel Briefs"
-            subtitle={aiRecommendation ? `${allChannels.length} κανάλια — AI-recommended` : 'Αναμονή στρατηγικής'}
+            title="Σύνοψη καναλιών"
+            subtitle={aiRecommendation ? `${allChannels.length} κανάλια — προτεινόμενα από AI` : 'Αναμονή στρατηγικής'}
             action={
               aiRecommendation && (
                 <Badge variant="default" size="md">
-                  {allChannels.filter(c => c.isPrimary).length} primary · {allChannels.filter(c => !c.isPrimary).length} secondary
+                  {allChannels.filter(c => c.isPrimary).length} κύρια · {allChannels.filter(c => !c.isPrimary).length} δευτερεύοντα
                 </Badge>
               )
             }
@@ -714,7 +723,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
 
           {aiLoading ? (
             <div className="flex items-center justify-center py-12">
-              <Spinner size="lg" label="AI analysis..." />
+              <Spinner size="lg" label="Ανάλυση AI…" />
             </div>
           ) : allChannels.length > 0 ? (
             <div className="space-y-3">
@@ -1056,7 +1065,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
 
       {/* Feed Generation */}
       <Card padding="lg">
-        <CardHeader title="Feed Generation" subtitle="Preview and export product feeds" icon={<Settings size={20} className="text-[var(--nts-accent)]" />} />
+        <CardHeader title="Δημιουργία feeds" subtitle="Προεπισκόπηση και εξαγωγή product feeds" icon={<Settings size={20} className="text-[var(--nts-accent)]" />} />
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {['Google Shopping', 'Meta Catalog', 'Email Feed', 'Display Feed'].map((feed, index) => (
             <motion.div key={feed} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.1 }} className="p-4 border border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:shadow-md transition-all cursor-pointer">
@@ -1068,8 +1077,8 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                 <div className="flex justify-between"><span>Products</span><span className="font-mono">{formatNumber(productsCount)}</span></div>
               </div>
               <div className="flex gap-2 mt-4">
-                <Button variant="ghost" size="sm" icon={<Eye size={14} />} className="flex-1" onClick={(e) => { e.stopPropagation(); setPreviewFeed(feed); }}>Preview</Button>
-                <Button variant="secondary" size="sm" icon={<Download size={14} />} className="flex-1" onClick={(e) => { e.stopPropagation(); setSelectedFeed(feed); setShowExportModal(true); }}>Export</Button>
+                <Button variant="ghost" size="sm" icon={<Eye size={14} />} className="flex-1" onClick={(e) => { e.stopPropagation(); setPreviewFeed(feed); }}>Προεπισκόπηση</Button>
+                <Button variant="secondary" size="sm" icon={<Download size={14} />} className="flex-1" onClick={(e) => { e.stopPropagation(); setSelectedFeed(feed); setShowExportModal(true); }}>Εξαγωγή</Button>
               </div>
             </motion.div>
           ))}
@@ -1081,19 +1090,24 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         {showExportModal && selectedFeed && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => { setShowExportModal(false); setSelectedFeed(null); }}>
             <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white rounded-2xl shadow-2xl max-w-md w-full" onClick={(e) => e.stopPropagation()}>
-              <div className="p-6 border-b border-[#E5E5E5] flex items-center justify-between">
-                <h2 className="text-xl font-bold text-[#1A1A1A]">Επιλογή Format</h2>
-                <button onClick={() => { setShowExportModal(false); setSelectedFeed(null); }} className="p-2 hover:bg-[#F5F5F5] rounded-lg transition-colors"><X size={20} className="text-[#4A4A4A]" /></button>
-              </div>
+              <ModalHeader
+                toolbarAriaLabel="Κλείσιμο"
+                title={<h2 className="text-xl font-bold text-[#1A1A1A]">Επιλογή Format</h2>}
+                actions={
+                  <button type="button" onClick={() => { setShowExportModal(false); setSelectedFeed(null); }} className="rounded-lg p-2 transition-colors hover:bg-[#F5F5F5]">
+                    <X size={20} className="text-[#4A4A4A]" />
+                  </button>
+                }
+              />
               <div className="p-6 space-y-3">
                 <p className="text-sm text-[#4A4A4A] mb-4">Επιλέξτε format για <strong>{selectedFeed}</strong></p>
                 <button onClick={() => { exportFeed(selectedFeed, 'xlsx'); setShowExportModal(false); setSelectedFeed(null); }} className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group">
                   <div className="p-3 bg-[#22C55E]/10 rounded-lg group-hover:bg-[#22C55E]/20 transition-colors"><FileSpreadsheet size={24} className="text-[#22C55E]" /></div>
-                  <div className="flex-1"><h3 className="font-semibold text-[#1A1A1A]">Excel (.xlsx)</h3><p className="text-xs text-[#4A4A4A]">Download as Excel file</p></div>
+                  <div className="flex-1"><h3 className="font-semibold text-[#1A1A1A]">Excel (.xlsx)</h3><p className="text-xs text-[#4A4A4A]">Λήψη ως αρχείο Excel</p></div>
                 </button>
                 <button onClick={() => { exportFeed(selectedFeed, 'csv'); setShowExportModal(false); setSelectedFeed(null); }} className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group">
                   <div className="p-3 bg-[#F5F5F5] rounded-lg group-hover:bg-[#E5E5E5] transition-colors"><FileText size={24} className="text-[#4A4A4A]" /></div>
-                  <div className="flex-1"><h3 className="font-semibold text-[#1A1A1A]">CSV (.csv)</h3><p className="text-xs text-[#4A4A4A]">Download as CSV file</p></div>
+                  <div className="flex-1"><h3 className="font-semibold text-[#1A1A1A]">CSV (.csv)</h3><p className="text-xs text-[#4A4A4A]">Λήψη ως αρχείο CSV</p></div>
                 </button>
               </div>
               <div className="p-6 border-t border-[#E5E5E5] flex justify-end"><Button variant="ghost" onClick={() => { setShowExportModal(false); setSelectedFeed(null); }}>Ακύρωση</Button></div>
@@ -1119,17 +1133,21 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
               className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[85vh] flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="p-6 border-b border-[#E5E5E5] flex items-center justify-between flex-shrink-0">
-                <div>
-                  <h2 className="text-xl font-bold text-[#1A1A1A]">Προεπισκόπηση feed</h2>
-                  <p className="text-sm text-[#4A4A4A] mt-1">
+              <ModalHeader
+                className="flex-shrink-0"
+                toolbarAriaLabel="Κλείσιμο"
+                title={<h2 className="text-xl font-bold text-[#1A1A1A]">Προεπισκόπηση feed</h2>}
+                description={
+                  <p className="text-sm text-[#4A4A4A]">
                     {previewFeed} · {formatNumber(productsCount)} προϊόντα · δείγμα {Math.min(8, productsCount)} γραμμών
                   </p>
-                </div>
-                <button type="button" onClick={() => setPreviewFeed(null)} className="p-2 hover:bg-[#F5F5F5] rounded-lg transition-colors" aria-label="Κλείσιμο">
-                  <X size={20} className="text-[#4A4A4A]" />
-                </button>
-              </div>
+                }
+                actions={
+                  <button type="button" onClick={() => setPreviewFeed(null)} className="rounded-lg p-2 transition-colors hover:bg-[#F5F5F5]" aria-label="Κλείσιμο">
+                    <X size={20} className="text-[#4A4A4A]" />
+                  </button>
+                }
+              />
               <div className="p-6 overflow-auto flex-1 min-h-0">
                 {products.length === 0 ? (
                   <p className="text-sm text-[#4A4A4A] text-center py-8">Δεν υπάρχουν προϊόντα στο catalog για προεπισκόπηση.</p>
@@ -1189,18 +1207,23 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         {showExportAllModal && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowExportAllModal(false)}>
             <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white rounded-2xl shadow-2xl max-w-md w-full" onClick={(e) => e.stopPropagation()}>
-              <div className="p-6 border-b border-[#E5E5E5] flex items-center justify-between">
-                <h2 className="text-xl font-bold text-[#1A1A1A]">Export All Feeds</h2>
-                <button onClick={() => setShowExportAllModal(false)} className="p-2 hover:bg-[#F5F5F5] rounded-lg transition-colors"><X size={20} className="text-[#4A4A4A]" /></button>
-              </div>
+              <ModalHeader
+                toolbarAriaLabel="Κλείσιμο"
+                title={<h2 className="text-xl font-bold text-[#1A1A1A]">Εξαγωγή όλων των feeds</h2>}
+                actions={
+                  <button type="button" onClick={() => setShowExportAllModal(false)} className="rounded-lg p-2 transition-colors hover:bg-[#F5F5F5]">
+                    <X size={20} className="text-[#4A4A4A]" />
+                  </button>
+                }
+              />
               <div className="p-6 space-y-3">
                 <button onClick={() => { ['Google Shopping', 'Meta Catalog', 'Email Feed', 'Display Feed'].forEach((f, i) => { setTimeout(() => exportFeed(f, 'xlsx'), i * 500); }); setShowExportAllModal(false); toast.success('Export όλων των feeds ξεκίνησε'); }} className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group">
                   <div className="p-3 bg-[#22C55E]/10 rounded-lg"><FileSpreadsheet size={24} className="text-[#22C55E]" /></div>
-                  <div className="flex-1"><h3 className="font-semibold text-[#1A1A1A]">Excel (.xlsx)</h3><p className="text-xs text-[#4A4A4A]">Export all feeds as Excel</p></div>
+                  <div className="flex-1"><h3 className="font-semibold text-[#1A1A1A]">Excel (.xlsx)</h3><p className="text-xs text-[#4A4A4A]">Εξαγωγή όλων των feeds ως Excel</p></div>
                 </button>
                 <button onClick={() => { ['Google Shopping', 'Meta Catalog', 'Email Feed', 'Display Feed'].forEach((f, i) => { setTimeout(() => exportFeed(f, 'csv'), i * 500); }); setShowExportAllModal(false); toast.success('Export όλων των feeds ξεκίνησε'); }} className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group">
                   <div className="p-3 bg-[#F5F5F5] rounded-lg"><FileText size={24} className="text-[#4A4A4A]" /></div>
-                  <div className="flex-1"><h3 className="font-semibold text-[#1A1A1A]">CSV (.csv)</h3><p className="text-xs text-[#4A4A4A]">Export all feeds as CSV</p></div>
+                  <div className="flex-1"><h3 className="font-semibold text-[#1A1A1A]">CSV (.csv)</h3><p className="text-xs text-[#4A4A4A]">Εξαγωγή όλων των feeds ως CSV</p></div>
                 </button>
               </div>
               <div className="p-6 border-t border-[#E5E5E5] flex justify-end"><Button variant="ghost" onClick={() => setShowExportAllModal(false)}>Ακύρωση</Button></div>

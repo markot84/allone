@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, FileSpreadsheet, FileText, FileCode, BarChart3, ExternalLink } from 'lucide-react';
-import { Button } from '../common';
+import { Button, ModalHeader } from '../common';
 import { getStockAgeDays } from '../../utils/productUtils';
 import { safeBrandName } from '../../services/reportExport';
 import type { Product } from '../../types';
@@ -203,7 +203,7 @@ export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts, b
           >
             {/* Header */}
             <div className="p-6 border-b border-[#E5E5E5] flex items-center justify-between">
-              <h2 className="text-xl font-bold text-[#1A1A1A]">Export Options</h2>
+              <h2 className="text-xl font-bold text-[#1A1A1A]">Επιλογές εξαγωγής</h2>
               <button
                 onClick={onClose}
                 className="p-2 hover:bg-[#F5F5F5] rounded-lg transition-colors"
@@ -226,8 +226,8 @@ export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts, b
                   <FileSpreadsheet size={24} className="text-[#22C55E]" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-semibold text-[#1A1A1A]">Export to Excel</h3>
-                  <p className="text-xs text-[#4A4A4A]">Download as .xlsx file</p>
+                  <h3 className="font-semibold text-[#1A1A1A]">Εξαγωγή σε Excel (.xlsx)</h3>
+                  <p className="text-xs text-[#4A4A4A]">Λήψη αρχείου .xlsx</p>
                 </div>
               </button>
 
@@ -239,8 +239,8 @@ export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts, b
                   <FileText size={24} className="text-[#4A4A4A]" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-semibold text-[#1A1A1A]">Export to CSV</h3>
-                  <p className="text-xs text-[#4A4A4A]">Download as .csv file</p>
+                  <h3 className="font-semibold text-[#1A1A1A]">Εξαγωγή σε CSV</h3>
+                  <p className="text-xs text-[#4A4A4A]">Λήψη αρχείου .csv</p>
                 </div>
               </button>
 
@@ -252,8 +252,8 @@ export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts, b
                   <FileCode size={24} className="text-[#EA4335]" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-semibold text-[#1A1A1A]">Export to Google Ads XML</h3>
-                  <p className="text-xs text-[#4A4A4A]">Product feed για Merchant Center</p>
+                  <h3 className="font-semibold text-[#1A1A1A]">Εξαγωγή XML Google Ads</h3>
+                  <p className="text-xs text-[#4A4A4A]">Product feed για Google Merchant Center</p>
                 </div>
               </button>
 
@@ -265,8 +265,8 @@ export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts, b
                   <ExternalLink size={24} className="text-[#34A853]" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-semibold text-[#1A1A1A]">Open in Google Sheets</h3>
-                  <p className="text-xs text-[#4A4A4A]">Import data to new spreadsheet</p>
+                  <h3 className="font-semibold text-[#1A1A1A]">Άνοιγμα στο Google Sheets</h3>
+                  <p className="text-xs text-[#4A4A4A]">Εισαγωγή δεδομένων σε νέο spreadsheet</p>
                 </div>
               </button>
 
@@ -278,8 +278,8 @@ export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts, b
                   <BarChart3 size={24} className="text-[#8B5CF6]" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-semibold text-[#1A1A1A]">View Charts</h3>
-                  <p className="text-xs text-[#4A4A4A]">Visualize data with charts</p>
+                  <h3 className="font-semibold text-[#1A1A1A]">Προβολή διαγραμμάτων</h3>
+                  <p className="text-xs text-[#4A4A4A]">Οπτικοποίηση δεδομένων με γραφήματα</p>
                 </div>
               </button>
             </div>
@@ -315,19 +315,22 @@ export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts, b
               className="bg-white rounded-2xl shadow-2xl max-w-md w-full"
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Header */}
-              <div className="p-6 border-b border-[#E5E5E5] flex items-center justify-between">
-                <h2 className="text-xl font-bold text-[#1A1A1A]">CSV Downloaded</h2>
-                <button
-                  onClick={() => {
-                    setShowGoogleSheetsModal(false);
-                    onClose();
-                  }}
-                  className="p-2 hover:bg-[#F5F5F5] rounded-lg transition-colors"
-                >
-                  <X size={20} className="text-[#4A4A4A]" />
-                </button>
-              </div>
+              <ModalHeader
+                toolbarAriaLabel="Κλείσιμο"
+                title={<h2 className="text-xl font-bold text-[#1A1A1A]">Η λήψη CSV ολοκληρώθηκε</h2>}
+                actions={
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowGoogleSheetsModal(false);
+                      onClose();
+                    }}
+                    className="rounded-lg p-2 transition-colors hover:bg-[#F5F5F5]"
+                  >
+                    <X size={20} className="text-[#4A4A4A]" />
+                  </button>
+                }
+              />
 
               {/* Content */}
               <div className="p-6 space-y-4">

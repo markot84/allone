@@ -16,7 +16,7 @@ import {
   FileText,
   Send,
 } from 'lucide-react';
-import { Card, Badge, Spinner, FormattedProse, toPlainProseText } from '../common';
+import { Card, Badge, Spinner, FormattedProse, toPlainProseText, PageHeader } from '../common';
 // Data is now read from activeStrategy.contentSuggestions (persisted on strategy save)
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import { useBrand } from '../../hooks/useBrand';
@@ -126,31 +126,32 @@ export function ContentStrategy() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-[#1A1A1A]">Στρατηγική Περιεχομένου</h2>
-          <p className="text-[#4A4A4A] mt-1">
+      <PageHeader
+        toolbarAriaLabel="Εξαγωγή περιεχομένου"
+        title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Στρατηγική Περιεχομένου</h2>}
+        description={
+          <p className="text-sm text-[#4A4A4A] sm:text-base">
             {strategyLoading
               ? 'Φόρτωση στρατηγικής...'
               : activeStrategy
               ? `Θεματικές κατευθύνσεις & παραδείγματα βάσει: ${strategyName}`
               : 'Πήγαινε στην Εμπορική Στρατηγική για να ορίσεις ενεργή στρατηγική'}
           </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {hasStrategy && !suggestionsLoading && buildFullExportText && (
+        }
+        actions={
+          hasStrategy && !suggestionsLoading && buildFullExportText ? (
             <button
+              type="button"
               onClick={handleCopyAll}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all bg-[#F5F5F5] hover:bg-[#E5E5E5] text-[#1A1A1A]"
+              className="flex min-h-[36px] w-full items-center justify-center gap-1.5 rounded-lg bg-[#F5F5F5] px-3 py-1.5 text-xs font-medium text-[#1A1A1A] transition-all hover:bg-[#E5E5E5] sm:w-auto"
               title="Αντιγραφή όλου του περιεχομένου για αποστολή"
             >
               {allCopied ? <Check size={14} className="text-[#22C55E]" /> : <Copy size={14} />}
               {allCopied ? 'Αντιγράφηκε!' : 'Αντιγραφή όλων'}
             </button>
-          )}
-        </div>
-      </div>
+          ) : null
+        }
+      />
 
       {/* Loading state */}
       {hasStrategy && suggestionsLoading && (

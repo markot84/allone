@@ -3,7 +3,7 @@ import { flushSync } from 'react-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useBrand } from '../../hooks';
 import { FileText, CheckCircle2, XCircle, AlertCircle, Clock, Trash2, FileUp, Link as LinkIcon, HelpCircle, ExternalLink, Package, Users, BarChart3, Euro, ClipboardList } from 'lucide-react';
-import { Card, Button, Spinner, ProgressBar, useToast, Badge } from '../common';
+import { Card, Button, Spinner, ProgressBar, useToast, Badge, PageHeader } from '../common';
 import { importFile, saveImportJob, getImportJobs, getLastImportDates, isSupportedFile, PRODUCT_COLUMN_MAPPING, type ImportType, type ImportResult, type ImportJob, type ImportProgress, type CampaignChannelOverride } from '../../services/import';
 import { FEED_SOURCE_OPTIONS, downloadGoogleAdsCsvTemplate, type FeedSourceType } from '../../data/feedSourceConfig';
 import { FeedPreviewModal } from './FeedPreviewModal';
@@ -142,9 +142,9 @@ export function DataImport({ initialType }: DataImportProps = {}) {
   const queryClient = useQueryClient();
 
   const importTypes: { value: ImportType; label: string; icon: React.ReactNode }[] = [
-    { value: 'products', label: 'Products', icon: <Package size={16} /> },
-    { value: 'segments', label: 'Segments', icon: <Users size={16} /> },
-    { value: 'campaigns', label: 'Campaigns', icon: <BarChart3 size={16} /> },
+    { value: 'products', label: 'Προϊόντα', icon: <Package size={16} /> },
+    { value: 'segments', label: 'Segments (RFM)', icon: <Users size={16} /> },
+    { value: 'campaigns', label: 'Καμπάνιες', icon: <BarChart3 size={16} /> },
     { value: 'organic', label: 'Οργανικά Έσοδα', icon: <Euro size={16} /> },
     { value: 'procurement', label: 'Procurement (7 καρτέλες)', icon: <ClipboardList size={16} /> },
   ];
@@ -472,13 +472,14 @@ export function DataImport({ initialType }: DataImportProps = {}) {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h2 className="text-2xl font-bold text-[#1A1A1A]">Data Import</h2>
-        <p className="text-[#4A4A4A] mt-1">
-          Import από CSV/Excel ή URL. Υποστηρίζονται: Products, Segments, Campaigns, Analytics. Για προϊόντα: ERP export, Google Ads, Meta Catalog.
-        </p>
-      </div>
+      <PageHeader
+        title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Data Import</h2>}
+        description={
+          <p className="text-sm text-[#4A4A4A] sm:text-base">
+            Import από CSV/Excel ή URL. Υποστηρίζονται: Products, Segments, Campaigns, Analytics. Για προϊόντα: ERP export, Google Ads, Meta Catalog.
+          </p>
+        }
+      />
 
       {/* Import Mode: Standard vs Feed Sources */}
       <div className="flex flex-wrap gap-2">

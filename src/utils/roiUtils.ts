@@ -194,3 +194,15 @@ export function calculateChannelPerformance(campaigns: Campaign[]) {
     }))
     .sort((a, b) => b.spent - a.spent);
 }
+
+/** Κείμενο tooltip (Dashboard + ROI): πώς υπολογίζεται το ROI % — όχι ο ROAS ως ×. */
+export const ROI_PERCENT_CALC_TOOLTIP =
+  `Υπολογισμός ROI % (απόδοση έναντι ad spend)
+
+Φόρμουλα: (Attributed έσοδα καμπανιών − Ad spend) ÷ Ad spend × 100
+
+Ερμηνεία: πόσο ποσοστό «κέρδους» (έσοδα μείον διαφήμιση) παίρνεις πάνω σε κάθε € spend — όχι πόσα € έσοδα ανά €1 spend.
+
+Σχέση με ROAS: ROAS = έσοδα ÷ spend. Άρα ROI % = (ROAS − 1) × 100 (ίδια έσοδα & spend). Το −1 αντιστοιχεί στο «αφαίρεση» του κόστους: έσοδα/spend − spend/spend.
+
+Ο ROAS εμφανίζεται ξεχωριστά ως πολλαπλάσιο (×).`;

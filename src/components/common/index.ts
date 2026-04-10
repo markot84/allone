@@ -14,3 +14,7 @@ export { AlertsBanner, type AlertsBannerNavigateOptions } from './AlertsBanner';
 export { PerformancePlusLogo } from './PerformancePlusLogo';
 export { FormattedProse, toPlainProseText, parseInlineSegments } from './FormattedProse';
 export type { FormattedProseVariant } from './FormattedProse';
+export { PageHeader } from './PageHeader';
+export type { PageHeaderProps } from './PageHeader';
+export { ModalHeader } from './ModalHeader';
+export type { ModalHeaderProps } from './ModalHeader';

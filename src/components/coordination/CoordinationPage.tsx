@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Plus, MessageSquare, CheckSquare, Activity, ChevronRight, X, AlertTriangle, CheckCircle2, Users, Flag, Pencil, Zap, ThumbsUp, ThumbsDown, History } from 'lucide-react';
-import { Card, Button, Spinner, useToast, FormattedProse } from '../common';
+import { Card, Button, Spinner, useToast, FormattedProse, PageHeader } from '../common';
 import { CommentsPanel } from './CommentsPanel';
 import { DecisionNotifyStrip } from './DecisionNotifyStrip';
 import { useDecisions, useTasks, useActivity, useBrandMembers, useAuth } from '../../hooks';
@@ -139,41 +139,51 @@ export function CoordinationPage() {
 
   return (
     <div className="space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold text-[#111827]">Συντονισμός Τμημάτων</h1>
-          <p className="text-sm text-[#6B7280] mt-0.5">
+      <PageHeader
+        toolbarAriaLabel="Ενέργειες συντονισμού"
+        title={<h1 className="text-xl font-bold text-[#111827] sm:text-2xl">Συντονισμός Τμημάτων</h1>}
+        description={
+          <p className="text-sm text-[#6B7280]">
             Ειδοποιήστε τα τμήματα από την εμπορική πολιτική σε ένα βήμα — οι λεπτομερείς εργασίες είναι προαιρετικές.
           </p>
-        </div>
-        <div className="flex gap-2 flex-wrap justify-end">
-          <Button
-            variant="primary"
-            icon={<Zap size={15} />}
-            title="Καταχώρηση ενεργής εμπορικής πολιτικής — ειδοποίηση τμημάτων"
-            onClick={() => { setShowDecisionForm(true); setTaskFromDecision(null); }}
-          >
-            Νέα Εμπορική Πολιτική
-          </Button>
-          <Button
-            variant="secondary"
-            icon={<Plus size={15} />}
-            title="Υποβολή πρότασης τμήματος προς έγκριση"
-            onClick={() => setShowProposalForm(true)}
-          >
-            Προτάσεις Τμημάτων
-          </Button>
-          <Button
-            variant="ghost"
-            icon={<Activity size={15} />}
-            title="Χρονολογική ροή ενεργειών και ειδοποιήσεων"
-            onClick={() => setShowActivityDrawer(true)}
-          >
-            Ροή Ενεργειών
-          </Button>
-        </div>
-      </div>
+        }
+        actions={
+          <>
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<Zap size={14} />}
+              title="Καταχώρηση ενεργής εμπορικής πολιτικής — ειδοποίηση τμημάτων"
+              onClick={() => { setShowDecisionForm(true); setTaskFromDecision(null); }}
+              className="min-h-[36px] w-full sm:w-auto"
+            >
+              <span className="hidden sm:inline">Νέα Εμπορική Πολιτική</span>
+              <span className="sm:hidden">Νέα πολιτική</span>
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<Plus size={14} />}
+              title="Υποβολή πρότασης τμήματος προς έγκριση"
+              onClick={() => setShowProposalForm(true)}
+              className="min-h-[36px] w-full sm:w-auto"
+            >
+              <span className="hidden sm:inline">Προτάσεις Τμημάτων</span>
+              <span className="sm:hidden">Προτάσεις</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={<Activity size={14} />}
+              title="Χρονολογική ροή ενεργειών και ειδοποιήσεων"
+              onClick={() => setShowActivityDrawer(true)}
+              className="min-h-[36px] w-full sm:w-auto"
+            >
+              Ροή Ενεργειών
+            </Button>
+          </>
+        }
+      />
 
       {/* Zone A — Last Briefing bar */}
       {decisionsLoading ? (

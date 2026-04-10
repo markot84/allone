@@ -6,7 +6,7 @@
  */
 
 import { createElement } from 'react';
-import { Database, ShoppingCart, Smartphone, Store } from 'lucide-react';
+import { Database, ShoppingCart, Smartphone, Store as LucideStoreIcon } from 'lucide-react';
 import type { FeedSourceType } from '../types';
 export type { FeedSourceType };
 
@@ -88,7 +88,7 @@ export const FEED_SOURCE_CONFIG: Record<FeedSourceType, FeedSourceInfo> = {
     name: 'Skroutz (XML)',
     description:
       'Επίσημο XML καταλόγου Skroutz — unique_id, name, price (με ΦΠΑ), link, image, category, manufacturer. Το URL δίνεται από το merchant panel του Skroutz.',
-    icon: createElement(Store, { size: 20, className: 'text-orange-600' }),
+    icon: createElement(LucideStoreIcon, { size: 20, className: 'text-orange-600' }),
     columnAliases: [
       { feedColumn: 'unique_id', appField: 'sku', required: true },
       { feedColumn: 'id', appField: 'sku' },

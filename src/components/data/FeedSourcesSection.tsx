@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Plus, RefreshCw, Trash2, Pencil, Link as LinkIcon, FileText } from 'lucide-react';
-import { Card, Button, Spinner, useToast } from '../common';
+import { Card, Button, Spinner, useToast, PageHeader } from '../common';
 import { useFeedSources } from '../../hooks';
 import { useBrand } from '../../hooks';
 import { FEED_SOURCE_OPTIONS } from '../../data/feedSourceConfig';
@@ -126,21 +126,28 @@ export function FeedSourcesSection() {
     <div id="feed-sources-section">
     <Card>
       <div className="p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-[#1A1A1A] flex items-center gap-2">
-            <LinkIcon size={20} />
-            Αποθηκευμένα Feed Sources
-          </h3>
-          <Button
-            variant="primary"
-            size="sm"
-            icon={<Plus size={16} />}
-            onClick={() => { resetForm(); setShowForm(true); }}
-            disabled={!currentBrand}
-          >
-            Προσθήκη
-          </Button>
-        </div>
+        <PageHeader
+          className="mb-4"
+          toolbarAriaLabel="Feed sources"
+          title={
+            <h3 className="flex items-center gap-2 text-base font-semibold text-[#1A1A1A] sm:text-lg">
+              <LinkIcon size={20} className="shrink-0" />
+              Αποθηκευμένα Feed Sources
+            </h3>
+          }
+          actions={
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<Plus size={14} />}
+              onClick={() => { resetForm(); setShowForm(true); }}
+              disabled={!currentBrand}
+              className="min-h-[36px] w-full sm:w-auto"
+            >
+              Προσθήκη
+            </Button>
+          }
+        />
 
         {showForm && (
           <form onSubmit={handleSubmit} className="mb-4 p-4 bg-[#F9FAFB] rounded-lg border border-[#E5E5E5]">
