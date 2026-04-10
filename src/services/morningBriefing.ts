@@ -269,9 +269,29 @@ function buildBriefingPrompt(data: BriefingData, periodLabel: string, updateCont
   sections.push(`[BRAND] ${data.brandName}`);
   sections.push(`[ΠΕΡΙΟΔΟΣ ΑΝΑΛΥΣΗΣ] ${periodLabel} — όλα τα νούμερα αφορούν ΜΟΝΟ αυτήν την περίοδο.`);
 
-  sections.push(`[ΕΣΟΔΑ] Σύνολο: ${formatCurrency(effectiveRevenue)} (Organic: ${formatCurrency(data.revenue.totalOrganic)}, Campaigns: ${formatCurrency(data.revenue.totalCampaignRevenue)}), Ad Spend: ${formatCurrency(data.revenue.totalSpend)}, ROAS(attributed): ${data.revenue.roas > 0 ? data.revenue.roas.toFixed(2) + 'x' : 'N/A'}, Ενεργές Καμπάνιες: ${data.revenue.campaignCount}`);
+  const evPerAdEuro =
+    data.revenue.totalSpend > 0 && data.revenue.roas > 0
+      ? `Από τα συστήματα διαφημίσεων: περίπου ${formatNumber(data.revenue.roas, 1)}€ έσοδα για κάθε 1€ διαφημιστικής δαπάνης.`
+      : 'Δεν υπάρχει αξιόπιστος λόγος έσοδα προς δαπάνη για την περίοδο.';
+  sections.push(
+    `[ΕΣΟΔΑ — για το κείμενο, μίλα με απλά λόγια]` +
+      ` Συνολικά έσοδα (όπως τα βλέπουμε): ${formatCurrency(effectiveRevenue)}.` +
+      ` Από «οργανική» καταγραφή: ${formatCurrency(data.revenue.totalOrganic)}, από διαφημίσεις (platforms): ${formatCurrency(data.revenue.totalCampaignRevenue)}.` +
+      ` Δαπάνη διαφημίσεων: ${formatCurrency(data.revenue.totalSpend)}.` +
+      ` ${evPerAdEuro}` +
+      ` Ενεργές καμπάνιες (για πλάτος): ${data.revenue.campaignCount}.`
+  );
   if (data.revenue.storeRevenue > 0) {
-    sections.push(`[ECOMMERCE] e-shop Revenue: ${formatCurrency(data.revenue.storeRevenue)}, Orders: ${formatNumber(data.revenue.orderCount)}, AOV: ${formatCurrency(data.revenue.aov)}, True ROAS: ${data.revenue.trueRoas > 0 ? data.revenue.trueRoas.toFixed(2) + 'x' : 'N/A'}, Revenue Gap vs attributed: ${formatCurrency(data.revenue.revenueGap)}`);
+    const storePerAd =
+      data.revenue.totalSpend > 0 && data.revenue.trueRoas > 0
+        ? `Από πραγματικές παραγγελίες e-shop: περίπου ${formatNumber(data.revenue.trueRoas, 1)}€ τζίρος ανά 1€ διαφήμισης.`
+        : '';
+    sections.push(
+      `[ΗΛΕΚΤΡΟΝΙΚΟ ΚΑΤΑΣΤΗΜΑ]` +
+        ` Τζίρος από παραγγελίες: ${formatCurrency(data.revenue.storeRevenue)}, παραγγελίες: ${formatNumber(data.revenue.orderCount)}, μέσο καλάθι: ${formatCurrency(data.revenue.aov)}.` +
+        ` ${storePerAd}` +
+        ` Διαφορά τζίρου καταστήματος έναντι αυτού που «φαίνεται» από τις διαφημίσεις: ${formatCurrency(data.revenue.revenueGap)} (θετικό = ο καταστηματάρχης εισπράττει περισσότερα από όσα καταγράφει μόνο το ads attribution).`
+    );
   }
 
   if (data.ga4) {
@@ -288,9 +308,17 @@ function buildBriefingPrompt(data: BriefingData, periodLabel: string, updateCont
   }
 
   const campParts: string[] = [];
-  if (data.campaigns.topPerformer) campParts.push(`Best: "${data.campaigns.topPerformer.name}" ROAS ${data.campaigns.topPerformer.roas.toFixed(2)}x`);
-  if (data.campaigns.worstPerformer) campParts.push(`Worst: "${data.campaigns.worstPerformer.name}" ROAS ${data.campaigns.worstPerformer.roas.toFixed(2)}x, Spend ${formatCurrency(data.campaigns.worstPerformer.spend)}`);
-  if (campParts.length > 0) sections.push(`[CAMPAIGNS] ${campParts.join(' | ')}`);
+  if (data.campaigns.topPerformer) {
+    campParts.push(
+      `Ισχυρότερη: «${data.campaigns.topPerformer.name}» — περίπου ${data.campaigns.topPerformer.roas.toFixed(1)}× έσοδα ανά 1€ δαπάνης (όρος τεχνικός: μην τον επαναλάβεις στο κείμενο πάνω από μία φορά).`
+    );
+  }
+  if (data.campaigns.worstPerformer) {
+    campParts.push(
+      `Αδύναμη: «${data.campaigns.worstPerformer.name}» — ~${data.campaigns.worstPerformer.roas.toFixed(1)}× έσοδα/δαπάνη, δαπάνη ${formatCurrency(data.campaigns.worstPerformer.spend)}`
+    );
+  }
+  if (campParts.length > 0) sections.push(`[ΚΑΜΠΑΝΙΕΣ — μία φράση στο narrative] ${campParts.join(' | ')}`);
 
   if (data.alerts.count > 0) {
     sections.push(`[ALERTS] ${data.alerts.count} ενεργά (${data.alerts.critical} critical)${data.alerts.topAlerts.length > 0 ? ': ' + data.alerts.topAlerts.join(' | ') : ''}`);
@@ -300,33 +328,41 @@ function buildBriefingPrompt(data: BriefingData, periodLabel: string, updateCont
     sections.push(`\n[ΣΗΜΑΝΤΙΚΗ ΑΛΛΑΓΗ] ${updateContext} — Δώσε έμφαση σε αυτήν την αλλαγή στο narrative.`);
   }
 
+  sections.push(
+    '\n[ΣΤΥΛ BRIEFING] Γλώσσα επιχειρηματία: ζεστός, προσιτός τόνος· τα νούμερα εξηγούνται με απλά λόγια (τι σημαίνουν για την τσέπη και τις αποφάσεις), όχι λίστα τεχνικών όρων ή αγγλικών ακρωνύμων.'
+  );
+
   return sections.join('\n');
 }
 
-const SYSTEM_PROMPT = `Είσαι ο AI business analyst του Performance+. Δημιούργησε ένα σύντομο briefing στα Ελληνικά για τον ιδιοκτήτη eshop.
+const SYSTEM_PROMPT = `Είσαι σύμβουλος ανάπτυξης για μικρομεσαίο e-commerce. Γράφεις το «πρωινό briefing» στο Performance+ — όχι τεχνικό manual, αλλά κείμενο που θέλει να διαβάσει ιδιοκτήτης καταστήματος χωρίς marketing background.
 
-ΜΟΡΦΗ ΑΠΑΝΤΗΣΗΣ (ΑΥΣΤΗΡΑ):
-Γράψε ΜΟΝΟ valid JSON σε αυτή τη δομή:
+ΜΟΡΦΗ (ΑΥΣΤΗΡΑ):
+Μόνο valid JSON:
 {
   "narrative": "1 παράγραφος (3-5 προτάσεις)",
   "actions": ["Ενέργεια 1", "Ενέργεια 2", "Ενέργεια 3"]
 }
 
-ΚΑΝΟΝΕΣ NARRATIVE:
-- Ξεκίνα με τα συνολικά έσοδα και ROAS. Αν υπάρχει [ECOMMERCE], σύγκρινε attributed vs store revenue και τόνισε True ROAS/Revenue Gap.
-- Μετά αναφέρσου στο πιο σημαντικό inventory risk και στην πιο αξιοσημείωτη καμπάνια.
-- Χρησιμοποίησε πραγματικά νούμερα από τα data. Μην επαναλαμβάνεις πληροφορίες.
-- Τόνος: σύντομος, επαγγελματικός, decision-oriented. Σαν να μιλάς σε CEO στο πρωινό standup.
-- Αν υπάρχει [ΣΗΜΑΝΤΙΚΗ ΑΛΛΑΓΗ], ξεκίνα το narrative με αυτήν.
+ΓΛΩΣΣΑ & ΤΟΝΟΣ:
+- Απλά, ζεστά ελληνικά. Φυσική ροή — σαν σύντομη συζήτηση στο γραφείο, όχι λίστα KPI.
+- Απόφυγε αγγλικούς όρους (ROAS, attributed, blended, gap) στο narrative. Αν χρειάζεται έννοια, πες την με δικά σου λόγια: π.χ. «για κάθε ευρώ που βάζεις σε διαφήμιση, γυρίζουν περίπου Χ ευρώ», «οι πραγματικές πωλήσεις από το site είναι Χ έναντι των Υ που φαίνονται από τις διαφημίσεις».
+- ΜΗΝ εξηγείς τρεις «εκδοχές» απόδοσης στο ίδιο κείμενο. Μία σαφής αναφορά στην απόδοση της διαφημιστικής δαπάνης αρκεί· αν υπάρχουν στοιχεία ηλεκτρονικού καταστήματος, μία επιπλέον φράση για το αν ο τζίρος «ταιριάζει» με όσα δείχνουν οι διαφημίσεις.
+- Ξεκίνα με κάτι συγκεκριμένο και ενδιαφέρον (νούμερο ή αλλαγή), όχι με γενικόλογο εισαγωγικό.
+- Χρησιμοποίησε τα νούμερα από τα blocks δεδομένων· μην επινοείς.
+- Αν υπάρχει [ΣΗΜΑΝΤΙΚΗ ΑΛΛΑΓΗ], ξεκίνα με αυτή — με ανθρώπινη λέξη γιατί μετράει.
 
-ΚΑΝΟΝΕΣ ACTIONS (ΚΡΙΤΙΚΟ):
-- Ακριβώς 3 ενέργειες. Κάθε μία σε 1 σύντομη πρόταση (max 15 λέξεις).
-- ΚΑΘΕ ΕΝΕΡΓΕΙΑ ΠΡΕΠΕΙ ΝΑ ΑΦΟΡΑ ΔΙΑΦΟΡΕΤΙΚΟ ΤΟΜΕΑ. Επέλεξε 3 από: Campaigns, Inventory, Segments, Traffic, Pricing, Content.
-- ΜΗΝ επαναλαμβάνεις τον ίδιο τομέα σε 2 ενέργειες. Αν π.χ. η 1η αφορά inventory, οι άλλες 2 ΠΡΕΠΕΙ να αφορούν campaigns/segments/traffic/content.
-- Πρόκριση: πρώτα ό,τι χάνει χρήματα, μετά ό,τι μπορεί να φέρει ανάπτυξη.
-- Κάθε action να ξεκινά με ρήμα (Ελέγξτε, Βελτιστοποιήστε, Ενεργοποιήστε, Αναλύστε, Σταματήστε, Αυξήστε κτλ).
+ΠΕΡΙΕΧΟΜΕΝΟ NARRATIVE:
+- Κάλυψε με ισορροπία: έσοδα/δαπάνη (απλά), έπειτα το πιο επείγον από απόθεμα ή καμπάνια, χωρίς επανάληψη.
+- Μην γεμίζεις με αρνητικότητα· αν υπάρχει θετικό σημείο, χώρεσέ το μία φορά.
 
-ΜΗΝ γράψεις τίποτα εκτός του JSON. ΜΗΝ χρησιμοποιείς markdown ή emojis.`;
+ACTIONS (ακριβώς 3):
+- Σύντομες, εφαρμόσιμες, φιλικές — σαν «τι να κοιτάξει σήμερα», όχι jargon.
+- Κάθε ενέργεια διαφορετικός τομέας (καμπάνιες, απόθεμα, πελάτες/segments, traffic, τιμές, περιεχόμενο).
+- Ξεκίνα με ρήμα (Ελέγξτε, Δείτε, Σταματήστε, Ενεργοποιήστε, Ανοίξτε, Αυξήστε…).
+- Max ~15 λέξεις ανά ενέργεια.
+
+ΜΗΝ βάλεις markdown ή emojis. ΜΗΝ γράψεις τίποτα εκτός JSON.`;
 
 // ── Data Hash ────────────────────────────────────────────────────────────────
 

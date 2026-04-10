@@ -29,12 +29,13 @@ import {
   calculateTotalRevenue,
   calculateCampaignMetrics,
   getCampaignDateForMonth,
-  getEffectiveConversionValue,
+  getCampaignMonthlyAttributedValueInPeriod,
+  monthKeyFromDate,
+  buildRoiTrendSeries,
   bucketOverlapFraction,
   metaUsesLegacyMonthBuckets,
-  ROI_PERCENT_CALC_TOOLTIP,
 } from '../../utils/roiUtils';
-import { formatCurrencyCompact, formatNumber, formatMultiplier, formatPercent } from '../../utils/format';
+import { formatCurrencyCompact, formatNumber, formatPercent } from '../../utils/format';
 import type { Campaign } from '../../types';
 import { generateInsightsFromData } from '../../services/insights';
 import { useAutomationRunner } from '../../hooks/useAutomationRunner';
@@ -113,33 +114,19 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   );
   
 
-  // Revenue chart data: οργανικά + campaigns ανά μήνα
+  // Revenue chart: organic + campaign attributed value ανά μήνα (YYYY-MM merge, χρονολογική σειρά)
   const revenueChartData = useMemo(() => {
-    const byMonth = new Map<string, { total: number; attributed: number }>();
-    organicByMonth.forEach((val, key) => {
-      byMonth.set(key, { total: val / 1000, attributed: 0 });
+    const fromYm = periodDates.fromDate.slice(0, 7);
+    const toYm = periodDates.toDate.slice(0, 7);
+    const rows = buildRoiTrendSeries(organicByMonth, periodCampaigns as Campaign[], [], fromYm, toYm, false, {
+      periodClip: { fromDate: periodDates.fromDate, toDate: periodDates.toDate },
     });
-    periodCampaigns.forEach(c => {
-      const date = getCampaignDateForMonth(c);
-      const key = date ? date.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }) : 'Other';
-      const ex = byMonth.get(key) || { total: 0, attributed: 0 };
-      const cv = getEffectiveConversionValue(c);
-      byMonth.set(key, {
-        total: ex.total + cv / 1000,
-        attributed: ex.attributed + cv / 1000,
-      });
-    });
-    if (byMonth.size === 0) return [];
-    const order = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    return Array.from(byMonth.entries())
-      .sort((a, b) => {
-        const [ma, ya] = a[0].split(' ');
-        const [mb, yb] = b[0].split(' ');
-        const ia = order.indexOf(ma); const ib = order.indexOf(mb);
-        return ia !== ib ? ia - ib : (ya || '').localeCompare(yb || '');
-      })
-      .map(([month, d]) => ({ month, total: d.total, attributed: d.attributed }));
-  }, [organicByMonth, periodCampaigns]);
+    return rows.map((r) => ({
+      month: r.month,
+      total: (r.organic + r.campaigns) / 1000,
+      attributed: r.campaigns / 1000,
+    }));
+  }, [organicByMonth, periodCampaigns, periodDates.fromDate, periodDates.toDate]);
 
   // Debug logging
   useEffect(() => {
@@ -291,30 +278,33 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
 
       {/* KPI Cards — Financial Overview */}
       {(hasOrganic || hasCampaigns) && (() => {
-        const monthOrder = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
         const sortMonthKeys = (entries: [string, any][]) =>
           entries
-            .filter(([k]) => k !== 'Other')
-            .sort((a, b) => {
-              const [ma, ya] = a[0].split(' ');
-              const [mb, yb] = b[0].split(' ');
-              return (ya || '').localeCompare(yb || '') || monthOrder.indexOf(ma) - monthOrder.indexOf(mb);
-            });
+            .filter(([k]) => k !== 'Other' && /^\d{4}-\d{2}$/.test(k))
+            .sort((a, b) => a[0].localeCompare(b[0]));
 
         const revenueByMonth: Record<string, number> = {};
         const spendByMonth: Record<string, number> = {};
         const convsValueByMonth: Record<string, number> = {};
         const convsByMonth: Record<string, number> = {};
 
-        organicByMonth.forEach((v, k) => { revenueByMonth[k] = (revenueByMonth[k] || 0) + v; });
-        periodCampaigns.forEach(c => {
+        const kFromYm = periodDates.fromDate.slice(0, 7);
+        const kToYm = periodDates.toDate.slice(0, 7);
+        organicByMonth.forEach((v, ym) => {
+          if (ym < kFromYm || ym > kToYm) return;
+          revenueByMonth[ym] = (revenueByMonth[ym] || 0) + v;
+        });
+        periodCampaigns.forEach((c) => {
+          for (const [ym, val] of getCampaignMonthlyAttributedValueInPeriod(c, periodDates.fromDate, periodDates.toDate)) {
+            revenueByMonth[ym] = (revenueByMonth[ym] || 0) + val;
+            convsValueByMonth[ym] = (convsValueByMonth[ym] || 0) + val;
+          }
           const d = getCampaignDateForMonth(c);
-          const k = d ? d.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }) : 'Other';
-          const cv = getEffectiveConversionValue(c);
-          revenueByMonth[k] = (revenueByMonth[k] || 0) + cv;
-          spendByMonth[k] = (spendByMonth[k] || 0) + (c.amount_spent || 0);
-          convsValueByMonth[k] = (convsValueByMonth[k] || 0) + cv;
-          convsByMonth[k] = (convsByMonth[k] || 0) + (c.conversions || 0);
+          const ymSpend = d ? monthKeyFromDate(d) : null;
+          if (ymSpend) {
+            spendByMonth[ymSpend] = (spendByMonth[ymSpend] || 0) + (c.amount_spent || 0);
+            convsByMonth[ymSpend] = (convsByMonth[ymSpend] || 0) + (c.conversions || 0);
+          }
         });
 
         const calcMoM = (byMonth: Record<string, number>) => {
@@ -328,21 +318,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         const revenueMoM = calcMoM(revenueByMonth);
         const spendMoM = calcMoM(spendByMonth);
 
-        const sortedSpend = sortMonthKeys(Object.entries(spendByMonth));
         const sortedConvVal = sortMonthKeys(Object.entries(convsValueByMonth));
         const sortedConvs = sortMonthKeys(Object.entries(convsByMonth));
-
-        const prevRoas = sortedSpend.length >= 2 && sortedSpend[sortedSpend.length - 2][1] > 0
-          ? (sortedConvVal.length >= 2 ? sortedConvVal[sortedConvVal.length - 2][1] : 0) / sortedSpend[sortedSpend.length - 2][1]
-          : 0;
-        const currRoas = sortedSpend.length >= 1 && sortedSpend[sortedSpend.length - 1][1] > 0
-          ? (sortedConvVal.length >= 1 ? sortedConvVal[sortedConvVal.length - 1][1] : 0) / sortedSpend[sortedSpend.length - 1][1]
-          : 0;
-        const roasMoM = prevRoas > 0 ? ((currRoas - prevRoas) / prevRoas) * 100 : null;
-
-        const roiPercent = campaignMetrics.totalSpend > 0
-          ? ((campaignMetrics.totalRevenue - campaignMetrics.totalSpend) / campaignMetrics.totalSpend) * 100
-          : 0;
 
         const aov = campaignMetrics.totalConversions > 0
           ? campaignMetrics.totalRevenue / campaignMetrics.totalConversions
@@ -355,107 +332,63 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           : 0;
         const aovMoM = prevAov > 0 ? ((currAov - prevAov) / prevAov) * 100 : null;
 
-        const blendedRoas = campaignMetrics.totalSpend > 0
-          ? dashboardTotalRevenue / campaignMetrics.totalSpend
-          : 0;
-
         const revenueSpark = sortMonthKeys(Object.entries(revenueByMonth)).map(([, v]) => v / 1000);
         const spendSpark = sortMonthKeys(Object.entries(spendByMonth)).map(([, v]) => v / 1000);
 
         return (
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 sm:gap-5">
-            <KPICard
-              kpi={{
-                label: 'Σύνολο Εσόδων',
-                value: formatCurrencyCompact(dashboardTotalRevenue),
-                change: revenueMoM !== null ? Math.round(revenueMoM) : undefined,
-                changeLabel: revenueMoM !== null ? 'vs προηγ. μήνα' : undefined,
-                trend: revenueMoM !== null ? (revenueMoM >= 0 ? 'up' : 'down') : 'up',
-                sparklineData: revenueSpark,
-                tooltip: 'Συνολικά έσοδα από οργανικές πωλήσεις και campaigns. Περιλαμβάνει conversion value από Google Ads και Meta.',
-              }}
-              index={0}
-              onClick={() => onSectionChange?.('roi')}
-            />
-            <KPICard
-              kpi={{
-                label: 'Δαπάνη διαφημίσεων',
-                value: hasCampaigns ? formatCurrencyCompact(campaignMetrics.totalSpend) : '€0',
-                change: spendMoM !== null ? Math.round(spendMoM) : undefined,
-                changeLabel: spendMoM !== null ? 'vs προηγ. μήνα' : hasCampaigns && campaignMetrics.cpa > 0 ? `CPA €${formatNumber(campaignMetrics.cpa, 1)}` : undefined,
-                trend: spendMoM !== null ? (spendMoM >= 0 ? 'up' : 'down') : hasCampaigns ? 'up' : undefined,
-                sparklineData: spendSpark,
-                tooltip: 'Συνολικό κόστος διαφήμισης σε Google Ads και Meta. CPA = Κόστος ανά μετατροπή.',
-              }}
-              index={1}
-              onClick={() => onSectionChange?.('campaigns')}
-            />
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="h-full cursor-pointer"
-              onClick={() => onSectionChange?.('roi')}
-            >
-              <div className="relative h-full rounded-xl bg-gradient-to-br from-[#1A1A2E] to-[#16213E] p-5 overflow-hidden group hover:shadow-lg transition-shadow">
-                <div className="absolute inset-0 bg-gradient-to-br from-[var(--nts-accent)]/10 to-transparent" />
-                <div className="absolute -right-6 -bottom-6 w-28 h-28 rounded-full bg-[var(--nts-accent)]/10 blur-2xl" />
-                <div className="relative z-10">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--nts-accent)]">ROI</span>
-                      <Tooltip content={ROI_PERCENT_CALC_TOOLTIP} size={13} />
-                    </div>
-                    {roiPercent > 0 && (
-                      <div className="w-7 h-7 rounded-lg bg-[#22C55E]/20 flex items-center justify-center">
-                        <TrendingUp size={14} className="text-[#22C55E]" />
-                      </div>
-                    )}
-                  </div>
-                  <p className="text-3xl font-bold tracking-tight font-mono text-white mb-1">
-                    {roiPercent > 0 ? `+${formatNumber(roiPercent, 0)}%` : '—'}
-                  </p>
-                  {roiPercent > 0 && (
-                    <p className="text-[11px] text-white/50">κέρδος ÷ spend (όχι ROAS)</p>
-                  )}
-                </div>
-              </div>
-            </motion.div>
-            <KPICard
-              kpi={{
-                label: 'ROAS',
-                value: campaignMetrics.roas > 0 ? formatMultiplier(campaignMetrics.roas, 2) : '—',
-                change: roasMoM !== null ? Math.round(roasMoM) : undefined,
-                changeLabel: roasMoM !== null ? 'vs προηγ. μήνα' : campaignMetrics.roas > 0 ? `€1 → €${formatNumber(campaignMetrics.roas, 1)}` : undefined,
-                trend: campaignMetrics.roas > 0 ? (roasMoM !== null && roasMoM < 0 ? 'down' : 'up') : undefined,
-                tooltip: 'Return on Ad Spend — Πόσα ευρώ επιστρέφει κάθε 1€ διαφήμισης. ROAS 4x = €4 έσοδα ανά €1 spend.',
-              }}
-              index={3}
-              onClick={() => onSectionChange?.('roi')}
-            />
-            <KPICard
-              kpi={{
-                label: 'Blended ROAS',
-                value: blendedRoas > 0 ? formatMultiplier(blendedRoas, 2) : '—',
-                changeLabel: blendedRoas > 0 ? `€1 → €${formatNumber(blendedRoas, 1)}` : undefined,
-                trend: blendedRoas > 0 ? 'up' : undefined,
-                tooltip: 'Συνολικά έσοδα (οργανικά + paid) ÷ Ad Spend. Πιο ρεαλιστική μέτρηση απόδοσης γιατί συμπεριλαμβάνει τα οργανικά.',
-              }}
-              index={4}
-              onClick={() => onSectionChange?.('roi')}
-            />
-            <KPICard
-              kpi={{
-                label: 'Μέσο Καλάθι (AOV)',
-                value: aov > 0 ? `€${formatNumber(aov, 1)}` : '—',
-                change: aovMoM !== null ? Math.round(aovMoM) : undefined,
-                changeLabel: aovMoM !== null ? 'vs προηγ. μήνα' : undefined,
-                trend: aov > 0 ? (aovMoM !== null && aovMoM < 0 ? 'down' : 'up') : undefined,
-                tooltip: 'Average Order Value — Μέση αξία παραγγελίας: Αξία Μετατροπών ÷ Αριθμός Μετατροπών.',
-              }}
-              index={5}
-              onClick={() => onSectionChange?.('campaigns')}
-            />
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5">
+              <KPICard
+                kpi={{
+                  label: 'Σύνολο Εσόδων',
+                  value: formatCurrencyCompact(dashboardTotalRevenue),
+                  change: revenueMoM !== null ? Math.round(revenueMoM) : undefined,
+                  changeLabel: revenueMoM !== null ? 'vs προηγ. μήνα' : undefined,
+                  trend: revenueMoM !== null ? (revenueMoM >= 0 ? 'up' : 'down') : 'up',
+                  sparklineData: revenueSpark,
+                  tooltip: 'Συνολικά έσοδα από οργανικές πωλήσεις και campaigns. Περιλαμβάνει conversion value από Google Ads και Meta.',
+                }}
+                index={0}
+                onClick={() => onSectionChange?.('roi')}
+              />
+              <KPICard
+                kpi={{
+                  label: 'Δαπάνη διαφημίσεων',
+                  value: hasCampaigns ? formatCurrencyCompact(campaignMetrics.totalSpend) : '€0',
+                  change: spendMoM !== null ? Math.round(spendMoM) : undefined,
+                  changeLabel: spendMoM !== null ? 'vs προηγ. μήνα' : hasCampaigns && campaignMetrics.cpa > 0 ? `CPA €${formatNumber(campaignMetrics.cpa, 1)}` : undefined,
+                  trend: spendMoM !== null ? (spendMoM >= 0 ? 'up' : 'down') : hasCampaigns ? 'up' : undefined,
+                  sparklineData: spendSpark,
+                  tooltip: 'Συνολικό κόστος διαφήμισης σε Google Ads και Meta. CPA = Κόστος ανά μετατροπή.',
+                }}
+                index={1}
+                onClick={() => onSectionChange?.('campaigns')}
+              />
+              <KPICard
+                kpi={{
+                  label: 'Μέσο Καλάθι (AOV)',
+                  value: aov > 0 ? `€${formatNumber(aov, 1)}` : '—',
+                  change: aovMoM !== null ? Math.round(aovMoM) : undefined,
+                  changeLabel: aovMoM !== null ? 'vs προηγ. μήνα' : undefined,
+                  trend: aov > 0 ? (aovMoM !== null && aovMoM < 0 ? 'down' : 'up') : undefined,
+                  tooltip: 'Average Order Value — Μέση αξία παραγγελίας: Αξία Μετατροπών ÷ Αριθμός Μετατροπών.',
+                }}
+                index={2}
+                onClick={() => onSectionChange?.('campaigns')}
+              />
+            </div>
+            <p className="text-[12px] text-[#6B7280] leading-relaxed">
+              Για <strong className="text-[#4B5563] font-medium">ROAS</strong>,{' '}
+              <strong className="text-[#4B5563] font-medium">True ROAS</strong>, blended απόδοση και σύγκριση με e-shop, ανοίξτε{' '}
+              <button
+                type="button"
+                onClick={() => onSectionChange?.('roi')}
+                className="font-semibold text-[var(--nts-accent)] hover:underline focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)] focus:ring-offset-1 rounded"
+              >
+                ROI &amp; Απόδοση
+              </button>
+              .
+            </p>
           </div>
         );
       })()}
@@ -651,22 +584,24 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   labelStyle={{ color: '#24292f', fontWeight: 600, marginBottom: 4 }}
                 />
                 <Area
-                  type="monotone"
+                  type="linear"
                   dataKey="total"
                   stroke="#9CA3AF"
                   strokeWidth={2}
                   fillOpacity={1}
                   fill="url(#totalGradient)"
                   name="total"
+                  isAnimationActive={false}
                 />
                 <Area
-                  type="monotone"
+                  type="linear"
                   dataKey="attributed"
                   stroke="#78716C"
                   strokeWidth={2}
                   fillOpacity={1}
                   fill="url(#attributedGradient)"
                   name="attributed"
+                  isAnimationActive={false}
                 />
               </AreaChart>
             </div>

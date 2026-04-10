@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { OrganicService } from '../services/firestore';
+import { normalizeOrganicPeriodToYm } from '../utils/roiUtils';
 import { useBrand } from './useBrand';
 import type { OrganicRevenue } from '../types';
 
@@ -24,15 +25,9 @@ export function useOrganic() {
   const byMonth = useMemo(() => {
     const map = new Map<string, number>();
     records.forEach((r) => {
-      const period = r.period || '';
-      let key = period;
-      if (period.match(/^\d{4}-\d{2}-\d{2}/)) {
-        const d = new Date(period);
-        key = d.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' });
-      } else if (period.match(/(\w+)\s+(\d{4})/)) {
-        key = period;
-      }
-      map.set(key, (map.get(key) || 0) + (r.organic_revenue || 0));
+      const ym = normalizeOrganicPeriodToYm(r.period);
+      if (!ym) return;
+      map.set(ym, (map.get(ym) || 0) + (r.organic_revenue || 0));
     });
     return map;
   }, [records]);

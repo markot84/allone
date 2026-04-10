@@ -142,6 +142,209 @@ export function getCampaignDateForMonth(c: Campaign): Date | null {
   return null;
 }
 
+/** Stable calendar month key `YYYY-MM` from a Date (local). */
+export function monthKeyFromDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+/**
+ * Normalize organic `period` (ISO date, YYYY-MM, or "Month YYYY") to `YYYY-MM`.
+ */
+export function normalizeOrganicPeriodToYm(period: string | undefined): string | null {
+  if (!period?.trim()) return null;
+  const p = period.trim();
+  if (/^\d{4}-\d{2}/.test(p)) return p.slice(0, 7);
+  const d = new Date(p);
+  if (!isNaN(d.getTime())) return monthKeyFromDate(d);
+  const m = p.match(/(\w+)\s+(\d{4})/);
+  if (m) {
+    const parsed = new Date(`${m[1]} 1, ${m[2]}`);
+    return isNaN(parsed.getTime()) ? null : monthKeyFromDate(parsed);
+  }
+  return null;
+}
+
+/** Short axis label e.g. `Apr 23` — uses English month abbreviations (stable, not locale `Sept` vs `Sep`). */
+export function formatMonthKeyShort(ym: string): string {
+  const [y, mo] = ym.split('-').map(Number);
+  if (!y || !mo || mo < 1 || mo > 12) return ym;
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${monthNames[mo - 1]} ${String(y).slice(-2)}`;
+}
+
+/** Inclusive list of YYYY-MM from fromYm through toYm. */
+export function eachCalendarMonthInclusive(fromYm: string, toYm: string): string[] {
+  const out: string[] = [];
+  const [fy, fm] = fromYm.split('-').map(Number);
+  const [ty, tm] = toYm.split('-').map(Number);
+  if (!fy || !fm || !ty || !tm) return out;
+  let y = fy;
+  let m = fm;
+  while (y < ty || (y === ty && m <= tm)) {
+    out.push(`${y}-${String(m).padStart(2, '0')}`);
+    m += 1;
+    if (m > 12) {
+      m = 1;
+      y += 1;
+    }
+  }
+  return out;
+}
+
+/**
+ * Per-calendar-month attributed conversion value for trend charts.
+ * Prefers summing `dailyMetrics` by month; otherwise one bucket from campaign-level metrics.
+ */
+export function getCampaignMonthlyAttributedValue(c: Campaign): Map<string, number> {
+  const out = new Map<string, number>();
+  const dm = c.dailyMetrics;
+  if (dm && Object.keys(dm).length > 0) {
+    const metaMonthBuckets = metaUsesLegacyMonthBuckets(c);
+    for (const [dateKey, raw] of Object.entries(dm)) {
+      const metrics = raw as { conversion_value?: number };
+      const val = Number(metrics.conversion_value) || 0;
+      let ym: string;
+      if (metaMonthBuckets && dateKey.slice(8, 10) === '01') {
+        ym = dateKey.slice(0, 7);
+      } else if (dateKey.length >= 7) {
+        ym = dateKey.slice(0, 7);
+      } else continue;
+      if (!/^\d{4}-\d{2}$/.test(ym)) continue;
+      out.set(ym, (out.get(ym) || 0) + val);
+    }
+    const dmSum = [...out.values()].reduce((a, b) => a + b, 0);
+    const eff = getEffectiveConversionValue(c);
+    if (dmSum === 0 && eff > 0) {
+      out.clear();
+      const d = getCampaignDateForMonth(c);
+      if (d) out.set(monthKeyFromDate(d), eff);
+    }
+    return out;
+  }
+  const d = getCampaignDateForMonth(c);
+  if (!d) return out;
+  out.set(monthKeyFromDate(d), getEffectiveConversionValue(c));
+  return out;
+}
+
+/**
+ * Like {@link getCampaignMonthlyAttributedValue}, but only counts `dailyMetrics` days overlapping
+ * `[fromDate, toDate]` (with Meta month-bucket overlap). For dashboard charts scoped to the period selector.
+ */
+export function getCampaignMonthlyAttributedValueInPeriod(
+  c: Campaign,
+  fromDate: string,
+  toDate: string
+): Map<string, number> {
+  const out = new Map<string, number>();
+  const dm = c.dailyMetrics;
+  const fromYm = fromDate.slice(0, 7);
+  const toYm = toDate.slice(0, 7);
+  if (dm && Object.keys(dm).length > 0) {
+    const metaMonthBuckets = metaUsesLegacyMonthBuckets(c);
+    for (const [dateKey, raw] of Object.entries(dm)) {
+      const frac = bucketOverlapFraction(dateKey, fromDate, toDate, { metaMonthBuckets });
+      if (frac <= 0) continue;
+      const metrics = raw as { conversion_value?: number };
+      const val = (Number(metrics.conversion_value) || 0) * frac;
+      let ym = dateKey.slice(0, 7);
+      if (!/^\d{4}-\d{2}$/.test(ym)) continue;
+      out.set(ym, (out.get(ym) || 0) + val);
+    }
+    const dmSum = [...out.values()].reduce((a, b) => a + b, 0);
+    const eff = getEffectiveConversionValue(c);
+    if (dmSum === 0 && eff > 0) {
+      const d = getCampaignDateForMonth(c);
+      if (d) {
+        const ym = monthKeyFromDate(d);
+        if (ym >= fromYm && ym <= toYm) out.set(ym, eff);
+      }
+    }
+    return out;
+  }
+  const d = getCampaignDateForMonth(c);
+  if (!d) return out;
+  const ym = monthKeyFromDate(d);
+  if (ym < fromYm || ym > toYm) return out;
+  out.set(ym, getEffectiveConversionValue(c));
+  return out;
+}
+
+export type RoiTrendRow = {
+  month: string;
+  monthSort: string;
+  organic: number;
+  campaigns: number;
+  storeRevenue: number;
+};
+
+/**
+ * Merge organic, campaign (per-month from dailyMetrics), and e-shop revenue on `YYYY-MM`,
+ * fill every month in [fromYm, toYm], sort chronologically.
+ */
+export type BuildRoiTrendOptions = {
+  /** When set, campaign revenue per month respects the date range (dashboard period selector). */
+  periodClip?: { fromDate: string; toDate: string };
+};
+
+export function buildRoiTrendSeries(
+  organicByMonth: Map<string, number>,
+  allCampaigns: Campaign[],
+  monthlyStore: { month: string; revenue: number }[],
+  fromYm: string,
+  toYm: string,
+  includeStore: boolean,
+  options?: BuildRoiTrendOptions
+): RoiTrendRow[] {
+  const byMonth = new Map<string, { organic: number; campaigns: number; storeRevenue: number }>();
+  const clip = options?.periodClip;
+
+  organicByMonth.forEach((val, ym) => {
+    if (ym < fromYm || ym > toYm) return;
+    byMonth.set(ym, { organic: val, campaigns: 0, storeRevenue: 0 });
+  });
+
+  const campaignMonths = (c: Campaign) =>
+    clip
+      ? getCampaignMonthlyAttributedValueInPeriod(c, clip.fromDate, clip.toDate)
+      : getCampaignMonthlyAttributedValue(c);
+
+  for (const c of allCampaigns) {
+    for (const [ym, v] of campaignMonths(c)) {
+      if (ym < fromYm || ym > toYm) continue;
+      const ex = byMonth.get(ym) || { organic: 0, campaigns: 0, storeRevenue: 0 };
+      byMonth.set(ym, { ...ex, campaigns: ex.campaigns + v });
+    }
+  }
+
+  if (includeStore && monthlyStore.length > 0) {
+    for (const mr of monthlyStore) {
+      const ym = mr.month.slice(0, 7);
+      if (ym < fromYm || ym > toYm) continue;
+      const ex = byMonth.get(ym) || { organic: 0, campaigns: 0, storeRevenue: 0 };
+      byMonth.set(ym, { ...ex, storeRevenue: mr.revenue });
+    }
+  }
+
+  const months = eachCalendarMonthInclusive(fromYm, toYm);
+  for (const ym of months) {
+    if (!byMonth.has(ym)) {
+      byMonth.set(ym, { organic: 0, campaigns: 0, storeRevenue: 0 });
+    }
+  }
+
+  return months.map((ym) => {
+    const d = byMonth.get(ym)!;
+    return {
+      month: formatMonthKeyShort(ym),
+      monthSort: ym,
+      organic: Math.round(d.organic),
+      campaigns: Math.round(d.campaigns),
+      storeRevenue: Math.round(d.storeRevenue),
+    };
+  });
+}
+
 /**
  * Calculate real campaign metrics summary.
  */
