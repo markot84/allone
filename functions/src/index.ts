@@ -662,15 +662,66 @@ export const connectorAuth = onRequest(
         return;
       }
 
+      // Drop stale account-picker lists from a prior OAuth attempt so the UI never shows another session's options.
+      if (provider === 'ga4' || provider === 'google_ads' || provider === 'merchant' || provider === 'meta') {
+        const docRef = db.doc(`connectors/${brandId}`);
+        if (provider === 'ga4') {
+          await docRef.set(
+            {
+              ga4: {
+                pendingAccountSelection: false,
+                availableAccounts: FieldValue.delete(),
+                oauthInitiatedByUid: FieldValue.delete(),
+              },
+            },
+            { merge: true }
+          );
+        } else if (provider === 'google_ads') {
+          await docRef.set(
+            {
+              google_ads: {
+                pendingAccountSelection: false,
+                availableAccounts: FieldValue.delete(),
+                oauthInitiatedByUid: FieldValue.delete(),
+              },
+            },
+            { merge: true }
+          );
+        } else if (provider === 'merchant') {
+          await docRef.set(
+            {
+              merchant: {
+                pendingAccountSelection: false,
+                availableAccounts: FieldValue.delete(),
+                oauthInitiatedByUid: FieldValue.delete(),
+              },
+            },
+            { merge: true }
+          );
+        } else {
+          await docRef.set(
+            {
+              meta: {
+                pendingAccountSelection: false,
+                availableAccounts: FieldValue.delete(),
+                oauthInitiatedByUid: FieldValue.delete(),
+              },
+            },
+            { merge: true }
+          );
+        }
+      }
+
+      const oauthInitiator = decoded.uid;
       let authUrl: string;
       if (provider === 'google_ads') {
-        authUrl = getGoogleAdsAuthUrl(brandId, redirectUri, returnOrigin);
+        authUrl = getGoogleAdsAuthUrl(brandId, redirectUri, returnOrigin, oauthInitiator);
       } else if (provider === 'meta') {
-        authUrl = getMetaAuthUrl(brandId, redirectUri, returnOrigin);
+        authUrl = getMetaAuthUrl(brandId, redirectUri, returnOrigin, oauthInitiator);
       } else if (provider === 'merchant') {
-        authUrl = getMerchantAuthUrl(brandId, redirectUri, returnOrigin);
+        authUrl = getMerchantAuthUrl(brandId, redirectUri, returnOrigin, oauthInitiator);
       } else if (provider === 'ga4') {
-        authUrl = getGA4AuthUrl(brandId, redirectUri, returnOrigin);
+        authUrl = getGA4AuthUrl(brandId, redirectUri, returnOrigin, oauthInitiator);
       } else if (provider === 'shopify') {
         if (!shopDomain) {
           res.status(400).json({ error: 'Missing shopDomain for Shopify' });
@@ -732,8 +783,11 @@ export const connectorCallback = onRequest(
         redirectUri: string;
         returnOrigin?: string;
         shopDomain?: string;
+        /** Firebase uid of admin who started OAuth (embedded in state from connectorAuth) */
+        oauthInitiatedByUid?: string;
       };
       const { brandId, provider, redirectUri } = parsed;
+      const oauthInitiatedByUid = parsed.oauthInitiatedByUid?.trim();
       const appOrigin = sanitizeOAuthReturnOrigin(parsed.returnOrigin);
       logger.info(`[ConnectorCallback] provider=${provider} brandId=${brandId}`);
 
@@ -745,7 +799,7 @@ export const connectorCallback = onRequest(
       let result: { success: boolean; error?: string };
 
       if (provider === 'google_ads') {
-        result = await handleGoogleAdsCallback(code, brandId, redirectUri);
+        result = await handleGoogleAdsCallback(code, brandId, redirectUri, oauthInitiatedByUid);
       } else if (provider === 'meta') {
         const metaResult = await handleMetaCallback(code, redirectUri);
         if (metaResult.success && metaResult.data) {
@@ -761,6 +815,8 @@ export const connectorCallback = onRequest(
                 adAccountIds: needsSelection ? [] : availableAccounts.map((a) => a.id),
                 adAccountNames: needsSelection ? [] : availableAccounts.map((a) => a.name),
                 connectedAt: FieldValue.serverTimestamp(),
+                oauthInitiatedByUid:
+                  needsSelection && oauthInitiatedByUid ? oauthInitiatedByUid : FieldValue.delete(),
               },
             },
             { merge: true }
@@ -771,9 +827,9 @@ export const connectorCallback = onRequest(
           result = { success: false, error: metaResult.error };
         }
       } else if (provider === 'merchant') {
-        result = await handleMerchantCallback(code, brandId, redirectUri);
+        result = await handleMerchantCallback(code, brandId, redirectUri, oauthInitiatedByUid);
       } else if (provider === 'ga4') {
-        result = await handleGA4Callback(code, brandId, redirectUri);
+        result = await handleGA4Callback(code, brandId, redirectUri, oauthInitiatedByUid);
       } else if (provider === 'shopify') {
         const shopDomain = parsed.shopDomain;
         if (!shopDomain) {
@@ -893,6 +949,20 @@ export const connectorSelectAccount = onRequest(
         return;
       }
 
+      const snap = await db.doc(`connectors/${brandId}`).get();
+      const conn = snap.data() as Record<string, Record<string, unknown>> | undefined;
+      const sub = conn?.[provider];
+      if (sub?.pendingAccountSelection) {
+        const owner = sub.oauthInitiatedByUid as string | undefined;
+        if (!owner || owner !== decoded.uid) {
+          res.status(403).json({
+            error:
+              'Η επιλογή λογαριασμού δεν ταιριάζει με τον τρέχοντα χρήστη. Αποσυνδέστε ή ξανασυνδέστε το connector από Συνδέσεις.',
+          });
+          return;
+        }
+      }
+
       let result: { success: boolean; error?: string };
       if (provider === 'meta') {
         result = await selectMetaAccount(brandId, accountId, accountName || accountId);
@@ -910,6 +980,7 @@ export const connectorSelectAccount = onRequest(
               pendingAccountSelection: false,
               propertyId: accountId,
               propertyName: accountName || `Property ${accountId}`,
+              oauthInitiatedByUid: FieldValue.delete(),
             },
           },
           { merge: true }

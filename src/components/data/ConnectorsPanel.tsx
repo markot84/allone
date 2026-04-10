@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useBrand, useAuth, useBrandMembers } from '../../hooks';
 import { auth } from '../../config/firebase';
@@ -28,6 +28,8 @@ interface AdAccount {
 interface ConnectorState {
   connected: boolean;
   pendingAccountSelection?: boolean;
+  /** Firebase uid of the admin who started the last OAuth (must match to use account picker). */
+  oauthInitiatedByUid?: string;
   availableAccounts?: AdAccount[];
   connectedAt?: any;
   // Google Ads
@@ -275,7 +277,9 @@ function AccountPickerModal({
 
         {/* Footer */}
         <div style={S.footer}>
-          <button style={S.btnSecondary} onClick={onCancel} disabled={loading}>Άκυρο</button>
+          <button style={S.btnSecondary} onClick={onCancel} type="button">
+            Άκυρο
+          </button>
           <button
             style={S.btnPrimary((manualMode ? !manualId.trim() : !selected) || loading)}
             onClick={handleConfirm}
@@ -790,6 +794,8 @@ export function ConnectorsPanel() {
   const [syncingProviders, setSyncingProviders] = useState<Set<ConnectorConfig['id']>>(new Set());
   const [connecting, setConnecting] = useState<string | null>(null);
   const [accountPickerFor, setAccountPickerFor] = useState<string | null>(null);
+  /** Prevents auto-reopen while Firestore still has pendingAccountSelection (user closed modal). */
+  const dismissedAccountPickerRef = useRef<Set<string>>(new Set());
   const [confirmingAccount, setConfirmingAccount] = useState(false);
   const [shopDomainModal, setShopDomainModal] = useState(false);
   const [wooModal, setWooModal] = useState(false);
@@ -809,13 +815,14 @@ export function ConnectorsPanel() {
 
   // Connectors doc — cached, refetch only after sync/connect/disconnect
   const { data: connectorsData, isPending: loading, refetch: refetchConnectors } = useQuery({
-    queryKey: ['connectorsPanel', brandId],
+    // Include Firebase uid so switching app users never shows another user's cached connector doc (same brand).
+    queryKey: ['connectorsPanel', brandId, user?.uid ?? ''],
     queryFn: async () => {
       if (!brandId) return null;
       const doc = await FirestoreService.getDocumentWithTimeout<Record<string, any>>('connectors', brandId, 10000);
       return doc;
     },
-    enabled: !!brandId,
+    enabled: !!brandId && !!user?.uid,
     staleTime: Infinity,
     gcTime: 24 * 60 * 60 * 1000,
     refetchOnMount: false,
@@ -921,13 +928,30 @@ export function ConnectorsPanel() {
     }
   }, [brandId, toast, runOAuthSuccessFlow]);
 
-  // Auto-open picker if pending (μόνο owner/admin/δημιουργός)
+  // Drop dismiss flags when server clears pending (επιτυχής επιλογή / αποσύνδεση αλλού)
   useEffect(() => {
+    for (const id of [...dismissedAccountPickerRef.current]) {
+      if (!states[id]?.pendingAccountSelection) {
+        dismissedAccountPickerRef.current.delete(id);
+      }
+    }
+  }, [states]);
+
+  // Auto-open picker μόνο αν το pending OAuth ανήκει στον τρέχοντα χρήστη (όχι άλλου admin / παλιά δεδομένα)
+  useEffect(() => {
+    const uid = user?.uid;
     const pendingProvider = Object.entries(states).find(
-      ([, s]) => s.pendingAccountSelection
+      ([, s]) =>
+        s.pendingAccountSelection && uid && (s as ConnectorState).oauthInitiatedByUid === uid
     )?.[0];
-    if (pendingProvider && canManageConnectors) setAccountPickerFor(pendingProvider);
-  }, [states, canManageConnectors]);
+    if (
+      pendingProvider &&
+      canManageConnectors &&
+      !dismissedAccountPickerRef.current.has(pendingProvider)
+    ) {
+      setAccountPickerFor(pendingProvider);
+    }
+  }, [states, canManageConnectors, user?.uid]);
 
   useEffect(() => {
     if (!canManageConnectors) setAccountPickerFor(null);
@@ -1094,9 +1118,12 @@ export function ConnectorsPanel() {
         if (provider === 'google_ads') {
           queryClient.invalidateQueries({ queryKey: ['search_intelligence', brandId] });
         }
+        if (provider === 'ga4') {
+          queryClient.removeQueries({ queryKey: ['ga4_data', brandId] });
+          queryClient.invalidateQueries({ queryKey: ['ga4_data', brandId] });
+        }
         if (provider === 'merchant') queryClient.invalidateQueries({ queryKey: ['priceBenchmarks', brandId] });
         if (['shopify', 'woocommerce', 'opencart', 'magento'].includes(provider)) {
-          // Force immediate refetch so #ecommerce reflects latest sync right away
           queryClient.removeQueries({ queryKey: ['ecommerce_summary', brandId] });
           queryClient.invalidateQueries({ queryKey: ['ecommerce_summary', brandId] });
         }
@@ -1135,7 +1162,17 @@ export function ConnectorsPanel() {
         }),
       });
 
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        const raw = await res.text();
+        let msg = `HTTP ${res.status}`;
+        try {
+          const j = JSON.parse(raw) as { error?: string };
+          if (j.error) msg = j.error;
+        } catch {
+          /* keep msg */
+        }
+        throw new Error(msg);
+      }
 
       toast.success(`Λογαριασμός "${account.name}" επιλέχθηκε — γίνεται sync...`);
       const provider = accountPickerFor;
@@ -1149,12 +1186,21 @@ export function ConnectorsPanel() {
         // Non-blocking — user can retry via Sync button
       }
     } catch (err) {
-      toast.error('Σφάλμα επιλογής λογαριασμού');
+      const m = err instanceof Error ? err.message : 'Σφάλμα επιλογής λογαριασμού';
+      toast.error(m);
       console.error(err);
     } finally {
       setConfirmingAccount(false);
     }
   };
+
+  useEffect(() => {
+    if (!accountPickerFor || !user?.uid) return;
+    const s = states[accountPickerFor];
+    if (s?.pendingAccountSelection && s.oauthInitiatedByUid !== user.uid) {
+      setAccountPickerFor(null);
+    }
+  }, [accountPickerFor, states, user?.uid]);
 
   if (!brandId) return null;
 
@@ -1162,13 +1208,19 @@ export function ConnectorsPanel() {
 
   return (
     <>
-      {accountPickerFor && pendingState?.pendingAccountSelection && (
+      {accountPickerFor &&
+        pendingState?.pendingAccountSelection &&
+        user?.uid &&
+        pendingState.oauthInitiatedByUid === user.uid && (
         <AccountPickerModal
           accounts={pendingState.availableAccounts || []}
           brandName={brandName}
           provider={accountPickerFor}
           onConfirm={handleConfirmAccount}
-          onCancel={() => setAccountPickerFor(null)}
+          onCancel={() => {
+            if (accountPickerFor) dismissedAccountPickerRef.current.add(accountPickerFor);
+            setAccountPickerFor(null);
+          }}
           loading={confirmingAccount}
         />
       )}
@@ -1252,6 +1304,13 @@ export function ConnectorsPanel() {
                 const state = states[conn.id] || { connected: false };
                 const isConnected = state.connected;
                 const isPending = !!state.pendingAccountSelection;
+                const pickerOwnerUid = state.oauthInitiatedByUid;
+                const uid = user?.uid;
+                const isPickerForMe = isPending && Boolean(uid) && pickerOwnerUid === uid;
+                const isPickerForeign =
+                  isPending &&
+                  Boolean(uid) &&
+                  (pickerOwnerUid === undefined || pickerOwnerUid !== uid);
                 const isSyncing = syncingProviders.has(conn.id);
                 const isConnecting = connecting === conn.id;
 
@@ -1296,8 +1355,12 @@ export function ConnectorsPanel() {
                     </div>
 
                     {isPending && (
-                      <p className="mb-3 text-xs text-amber-700 font-medium">
-                        Απαιτείται επιλογή διαφημιστικού λογαριασμού
+                      <p className="mb-3 text-xs text-amber-800 font-medium leading-relaxed">
+                        {isPickerForMe
+                          ? conn.id === 'ga4'
+                            ? 'Απαιτείται επιλογή GA4 Property.'
+                            : 'Απαιτείται επιλογή λογαριασμού.'
+                          : 'Η εκκρεμής σύνδεση ανήκει σε άλλη συνεδρία. Πατήστε «Σύνδεση ξανά» για να επιλέξετε τον δικό σας λογαριασμό.'}
                       </p>
                     )}
 
@@ -1355,17 +1418,36 @@ export function ConnectorsPanel() {
                         >
                           Σύντομα διαθέσιμο
                         </Button>
-                      ) : isPending ? (
+                      ) : isPending && isPickerForMe ? (
                         <Button
                           variant="primary"
                           size="sm"
-                          onClick={() => setAccountPickerFor(conn.id)}
+                          onClick={() => {
+                            dismissedAccountPickerRef.current.delete(conn.id);
+                            setAccountPickerFor(conn.id);
+                          }}
                           disabled={!canManageConnectors}
                           className="w-full"
                           title={!canManageConnectors ? 'Μόνο ιδιοκτήτης ή διαχειριστής' : undefined}
                         >
                           <Building2 size={14} className="mr-1" />
                           Επιλογή λογαριασμού
+                        </Button>
+                      ) : isPending && (isPickerForeign || !isPickerForMe) ? (
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={() => handleConnect(conn.id)}
+                          disabled={!canManageConnectors || isConnecting}
+                          className="w-full"
+                          title={!canManageConnectors ? 'Μόνο ιδιοκτήτης ή διαχειριστής' : undefined}
+                        >
+                          {isConnecting ? (
+                            <Spinner size="sm" className="mr-1" />
+                          ) : (
+                            <ExternalLink size={14} className="mr-1" />
+                          )}
+                          Σύνδεση ξανά
                         </Button>
                       ) : isConnected ? (
                         <>

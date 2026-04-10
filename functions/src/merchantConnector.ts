@@ -94,10 +94,16 @@ function getCredentials() {
   };
 }
 
-export function getMerchantAuthUrl(brandId: string, redirectUri: string, returnOrigin?: string): string {
+export function getMerchantAuthUrl(
+  brandId: string,
+  redirectUri: string,
+  returnOrigin?: string,
+  oauthInitiatedByUid?: string
+): string {
   const { clientId } = getCredentials();
   const payload: Record<string, string> = { brandId, provider: 'merchant', redirectUri };
   if (returnOrigin?.trim()) payload.returnOrigin = returnOrigin.trim();
+  if (oauthInitiatedByUid?.trim()) payload.oauthInitiatedByUid = oauthInitiatedByUid.trim();
   const state = Buffer.from(JSON.stringify(payload)).toString('base64url');
 
   const params = new URLSearchParams({
@@ -106,7 +112,7 @@ export function getMerchantAuthUrl(brandId: string, redirectUri: string, returnO
     response_type: 'code',
     scope: SCOPES.join(' '),
     access_type: 'offline',
-    prompt: 'consent',
+    prompt: 'select_account consent',
     state,
   });
 
@@ -116,7 +122,8 @@ export function getMerchantAuthUrl(brandId: string, redirectUri: string, returnO
 export async function handleMerchantCallback(
   code: string,
   brandId: string,
-  redirectUri: string
+  redirectUri: string,
+  oauthInitiatedByUid?: string
 ): Promise<{ success: boolean; error?: string }> {
   const { clientId, clientSecret } = getCredentials();
 
@@ -146,6 +153,10 @@ export async function handleMerchantCallback(
     const accounts = await listMerchantAccounts(accessToken);
     logger.info(`[Merchant] Found ${accounts.length} accounts for brand ${brandId}`);
 
+    const oauthUidPatch = oauthInitiatedByUid?.trim()
+      ? { oauthInitiatedByUid: oauthInitiatedByUid.trim() }
+      : { oauthInitiatedByUid: FieldValue.delete() };
+
     if (accounts.length === 0) {
       await getDb().doc(`connectors/${brandId}`).set(
         {
@@ -157,6 +168,7 @@ export async function handleMerchantCallback(
             pendingAccountSelection: true,
             availableAccounts: [],
             connectedAt: FieldValue.serverTimestamp(),
+            ...oauthUidPatch,
           },
         },
         { merge: true }
@@ -176,6 +188,7 @@ export async function handleMerchantCallback(
             merchantName: accounts[0].name,
             pendingAccountSelection: false,
             connectedAt: FieldValue.serverTimestamp(),
+            oauthInitiatedByUid: FieldValue.delete(),
           },
         },
         { merge: true }
@@ -193,6 +206,7 @@ export async function handleMerchantCallback(
           pendingAccountSelection: true,
           availableAccounts: accounts,
           connectedAt: FieldValue.serverTimestamp(),
+          ...oauthUidPatch,
         },
       },
       { merge: true }
@@ -218,6 +232,7 @@ export async function selectMerchantAccount(
         merchantName,
         pendingAccountSelection: false,
         availableAccounts: FieldValue.delete(),
+        oauthInitiatedByUid: FieldValue.delete(),
       },
     },
     { merge: true }

@@ -742,7 +742,7 @@ export function CompetitorInsights() {
                   <label className="flex items-center gap-1 text-xs font-medium text-[#374151] mb-1">
                     Φίλτρο χωρών (reach)
                     <Tooltip
-                      content="Φιλτράρει κατά χώρα που είδε η διαφήμιση. Κενό = προεπιλογή server (GR, EU, US, κ.λπ.). Αν δεν εμφανίζονται ads, δοκιμάστε επιπλέον χώρες (π.χ. DE, BG) ή επιβεβαιώστε το Page ID στο facebook.com/ads/library."
+                      content="Φιλτράρει κατά χώρα που η Meta καταγράφει ως «reached». Με μία μόνο χώρα (π.χ. GR) πολλές καμπάνιες εμφανίζονται ως 0 — άδειασε το πεδίο και Αποθήκευση για πλήρη λίστα (GR, EU, US…). Έλεγξε το ίδιο Page ID στο facebook.com/ads/library."
                       size={11}
                     />
                   </label>
@@ -750,7 +750,7 @@ export function CompetitorInsights() {
                     type="text"
                     value={reachCountriesInput}
                     onChange={(e) => setReachCountriesInput(e.target.value)}
-                    placeholder="Κενό = προεπιλογή (GR + EU + US…). Π.χ. DE, BG αν δεν εμφανίζονται ads"
+                    placeholder="Κενό = προεπιλογή (GR+EU+US…). Μόνο GR συχνά → 0 ads· άδειασμα πεδίου + Αποθήκευση"
                     className="w-full px-3 py-2 border border-[#D1D5DB] rounded-lg text-sm focus:ring-2 focus:ring-[var(--nts-accent)] focus:border-transparent"
                   />
                 </div>

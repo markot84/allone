@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { TrendingUp, Filter, Download, Search, DollarSign, Trash2, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import { Card, CardHeader, Badge, Button, Spinner, useToast, Tooltip, AlertsBanner, PageHeader } from '../common';
 import { DateRangePicker } from '../ui/DateRangePicker';
-import { useCampaigns, useBrand } from '../../hooks';
+import { useCampaigns, useBrand, useAuth } from '../../hooks';
 import { useSearchIntelligence } from '../../hooks/useSearchIntelligence';
 import { FirestoreService } from '../../services/firestore';
 import { formatCurrency, formatNumber, formatMultiplier, formatPercent } from '../../utils/format';
@@ -291,10 +291,11 @@ interface CampaignsPageProps {
 
 export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
   const { currentBrand } = useBrand();
+  const { user } = useAuth();
   const { campaigns, isLoading, hasImported } = useCampaigns();
   const brandId = currentBrand?.id ?? null;
   const { data: connectorsDoc, isPending: connectorsStatusPending } = useQuery({
-    queryKey: ['connectorsSummary', brandId],
+    queryKey: ['connectorsSummary', brandId, user?.uid ?? ''],
     queryFn: async () =>
       brandId
         ? FirestoreService.getDocumentWithTimeout<Record<string, { connected?: boolean }>>(
@@ -303,7 +304,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
             15000
           )
         : null,
-    enabled: Boolean(brandId && !isLoading && !hasImported),
+    enabled: Boolean(brandId && user?.uid && !isLoading && !hasImported),
     staleTime: Infinity,
     gcTime: 24 * 60 * 60 * 1000,
     refetchOnMount: false,

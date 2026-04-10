@@ -201,8 +201,10 @@ function App() {
     }
   }
 
-  // Handle /invite/:token route (no AuthGuard - page works for both logged-in and logged-out users)
-  const pathMatch = typeof window !== 'undefined' && window.location.pathname.match(/^\/invite\/([^/]+)$/);
+  // Handle /invite/:token and /redeem/:token (alias — same flow as some invite emails say "redeem")
+  const pathMatch =
+    typeof window !== 'undefined' &&
+    window.location.pathname.match(/^\/(?:invite|redeem)\/([^/]+)$/);
   if (pathMatch) {
     return (
       <QueryProvider>

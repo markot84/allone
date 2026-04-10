@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { BarChart3, Target } from 'lucide-react';
 import { Card, CardHeader, Badge } from '../common';
@@ -21,6 +21,31 @@ const CHANNEL_DOT_COLORS: Record<string, string> = {
   SMS: '#8B5CF6',
 };
 
+const CHANNEL_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+  'Google Ads':      { bg: '#E8F5E9', text: '#2E7D32', border: '#A5D6A7' },
+  'Google Shopping': { bg: '#E8F5E9', text: '#2E7D32', border: '#A5D6A7' },
+  'Meta':            { bg: '#E3F2FD', text: '#1565C0', border: '#90CAF9' },
+  'Facebook':        { bg: '#E3F2FD', text: '#1565C0', border: '#90CAF9' },
+  'Instagram':       { bg: '#FCE4EC', text: '#C62828', border: '#F48FB1' },
+  'TikTok':          { bg: '#F3E5F5', text: '#6A1B9A', border: '#CE93D8' },
+  'Email':           { bg: '#FFF8E1', text: '#F57F17', border: '#FFE082' },
+  'SMS':             { bg: '#EDE7F6', text: '#4527A0', border: '#B39DDB' },
+  'LinkedIn':        { bg: '#E3F2FD', text: '#0D47A1', border: '#90CAF9' },
+};
+const DEFAULT_CHANNEL_COLOR = { bg: '#F5F5F5', text: '#616161', border: '#E0E0E0' };
+
+function ChannelBadge({ channel }: { channel: string }) {
+  const c = CHANNEL_COLORS[channel] || DEFAULT_CHANNEL_COLOR;
+  return (
+    <span
+      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[12px] font-medium border whitespace-nowrap"
+      style={{ backgroundColor: c.bg, color: c.text, borderColor: c.border }}
+    >
+      {channel}
+    </span>
+  );
+}
+
 function CampaignStatusBadge({ status }: { status?: string }) {
   const s = (status || '').toLowerCase();
   if (s === 'active' || s === 'enabled') return <Badge variant="success" size="sm">Active</Badge>;
@@ -30,15 +55,27 @@ function CampaignStatusBadge({ status }: { status?: string }) {
 }
 
 export function CampaignsChannelInsights({ campaigns }: { campaigns: Campaign[] }) {
+  const [channelFilter, setChannelFilter] = useState<string>('all');
+
   const channelPerf = useMemo(() => calculateChannelPerformance(campaigns), [campaigns]);
-  const topCampaigns = useMemo(
-    () =>
-      [...campaigns]
-        .filter(c => (c.amount_spent || 0) > 0)
-        .sort((a, b) => (b.roas || 0) - (a.roas || 0))
-        .slice(0, 10),
-    [campaigns],
-  );
+
+  const availableChannels = useMemo(() => {
+    const seen = new Set<string>();
+    for (const c of campaigns) {
+      if (c.channel) seen.add(c.channel);
+    }
+    return Array.from(seen).sort();
+  }, [campaigns]);
+
+  const topCampaigns = useMemo(() => {
+    const filtered = channelFilter === 'all'
+      ? campaigns
+      : campaigns.filter(c => c.channel === channelFilter);
+    return [...filtered]
+      .filter(c => (c.amount_spent || 0) > 0)
+      .sort((a, b) => (b.roas || 0) - (a.roas || 0))
+      .slice(0, 10);
+  }, [campaigns, channelFilter]);
 
   return (
     <>
@@ -111,14 +148,48 @@ export function CampaignsChannelInsights({ campaigns }: { campaigns: Campaign[] 
         </Card>
       )}
 
-      {topCampaigns.length > 0 && (
+      {(topCampaigns.length > 0 || channelFilter !== 'all') && (
         <Card padding="md">
-          <CardHeader
-            className="!mb-3 !gap-2"
-            title="Top Campaigns"
-            subtitle="Ταξινόμηση κατά ROAS"
-            icon={<Target size={18} className="text-[var(--nts-accent)]" />}
-          />
+          <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
+            <CardHeader
+              className="!mb-0 !gap-2"
+              title="Top Campaigns"
+              subtitle="Ταξινόμηση κατά ROAS"
+              icon={<Target size={18} className="text-[var(--nts-accent)]" />}
+            />
+            {availableChannels.length > 1 && (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <button
+                  onClick={() => setChannelFilter('all')}
+                  className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                    channelFilter === 'all'
+                      ? 'bg-[var(--nts-charcoal)] text-white border-[var(--nts-charcoal)]'
+                      : 'bg-white text-[var(--nts-medium-gray)] border-[var(--nts-border-gray)] hover:border-[var(--nts-charcoal)] hover:text-[var(--nts-charcoal)]'
+                  }`}
+                >
+                  Όλα
+                </button>
+                {availableChannels.map(ch => {
+                  const c = CHANNEL_COLORS[ch] || DEFAULT_CHANNEL_COLOR;
+                  const active = channelFilter === ch;
+                  return (
+                    <button
+                      key={ch}
+                      onClick={() => setChannelFilter(ch)}
+                      className="px-3 py-1 rounded-full text-xs font-medium border transition-colors"
+                      style={
+                        active
+                          ? { backgroundColor: c.text, color: '#fff', borderColor: c.text }
+                          : { backgroundColor: c.bg, color: c.text, borderColor: c.border }
+                      }
+                    >
+                      {ch}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
           <div className="overflow-x-auto mt-1">
             <table className="w-full" style={{ minWidth: 700 }}>
               <thead>
@@ -133,6 +204,13 @@ export function CampaignsChannelInsights({ campaigns }: { campaigns: Campaign[] 
                 </tr>
               </thead>
               <tbody>
+                {topCampaigns.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="py-8 text-center text-sm text-[var(--nts-medium-gray)]">
+                      Δεν υπάρχουν campaigns για το επιλεγμένο κανάλι.
+                    </td>
+                  </tr>
+                )}
                 {topCampaigns.map((c, index) => (
                   <motion.tr
                     key={c.id}
@@ -147,7 +225,7 @@ export function CampaignsChannelInsights({ campaigns }: { campaigns: Campaign[] 
                       </span>
                     </td>
                     <td className="py-3 pr-3">
-                      <Badge variant="default" size="sm">{c.channel}</Badge>
+                      <ChannelBadge channel={c.channel || 'Other'} />
                     </td>
                     <td className="py-3 text-right font-mono text-sm pr-3">
                       {formatCurrencyCompact(c.amount_spent || 0)}

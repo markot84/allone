@@ -215,10 +215,16 @@ function getCredentials() {
 /**
  * Generate the OAuth consent URL for Meta
  */
-export function getMetaAuthUrl(brandId: string, redirectUri: string, returnOrigin?: string): string {
+export function getMetaAuthUrl(
+  brandId: string,
+  redirectUri: string,
+  returnOrigin?: string,
+  oauthInitiatedByUid?: string
+): string {
   const { appId } = getCredentials();
   const statePayload: Record<string, string> = { brandId, provider: 'meta', redirectUri };
   if (returnOrigin?.trim()) statePayload.returnOrigin = returnOrigin.trim();
+  if (oauthInitiatedByUid?.trim()) statePayload.oauthInitiatedByUid = oauthInitiatedByUid.trim();
   const state = Buffer.from(JSON.stringify(statePayload)).toString('base64url');
 
   const params = new URLSearchParams({
@@ -332,6 +338,8 @@ export async function selectMetaAccount(
           pendingAccountSelection: false,
           adAccountIds: [accountId],
           adAccountNames: [accountName],
+          availableAccounts: FieldValue.delete(),
+          oauthInitiatedByUid: FieldValue.delete(),
         },
       },
       { merge: true }

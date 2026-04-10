@@ -384,13 +384,18 @@ export function GA4Analytics() {
         </Card>
       </div>
 
-      {/* Traffic Sources Detail Table */}
+        {/* Traffic Sources Detail Table */}
         <Card>
-        <CardHeader
-          title="Ανάλυση καναλιών"
-          subtitle="Αναλυτικά ανά κανάλι κίνησης · έσοδα από GA4 (total revenue) · κανάλια εκτός οργανικού / paid / direct ως «Άλλα κανάλια»"
-        />
+        <CardHeader title="Ανάλυση καναλιών" />
         <div className="p-4 pt-0 overflow-x-auto">
+          {displayTrafficSources.length === 0 ? (
+            <div className="py-6 text-center text-sm text-[#6B7280]">
+              <BarChart3 size={32} className="mx-auto mb-2 text-[#D1D5DB]" />
+              <p className="font-medium text-[#374151] mb-1">Δεν υπάρχουν δεδομένα καναλιών</p>
+              <p>Το report των channel groups δεν ήταν διαθέσιμο κατά το τελευταίο sync.<br />
+                Δοκιμάστε <strong>Sync τώρα</strong> από τη σελίδα Συνδέσεις.</p>
+            </div>
+          ) : (
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-[#6B7280] border-b border-[#F3F4F6]">
@@ -400,6 +405,7 @@ export function GA4Analytics() {
                 <th className="pb-2 font-medium text-right">Νέοι χρήστες</th>
                 <th className="pb-2 font-medium text-right">Μετατροπές</th>
                 <th className="pb-2 font-medium text-right">Έσοδα (GA4)</th>
+                <th className="pb-2 font-medium text-right">Έσοδο / μετ.</th>
                 <th className="pb-2 font-medium text-right">Conv. rate</th>
                 <th className="pb-2 font-medium text-right">Μερίδιο</th>
               </tr>
@@ -426,6 +432,11 @@ export function GA4Analytics() {
                     <td className="py-2 text-right font-mono text-[#1A1A1A]">
                       €{formatCurrency(s.totalRevenue ?? 0, 0)}
                     </td>
+                    <td className="py-2 text-right font-mono text-[#374151] text-xs">
+                      {s.conversions > 0
+                        ? `€${formatCurrency((s.totalRevenue ?? 0) / s.conversions, 2)}`
+                        : '—'}
+                    </td>
                     <td className="py-2 text-right">{convRate.toFixed(1)}%</td>
                     <td className="py-2 text-right">
                       <div className="flex items-center justify-end gap-2">
@@ -447,6 +458,7 @@ export function GA4Analytics() {
               })()}
             </tbody>
           </table>
+          )}
         </div>
       </Card>
 

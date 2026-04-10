@@ -178,10 +178,16 @@ async function fetchCustomerIsManager(accessToken: string, customerId: string): 
 /**
  * Generate the OAuth consent URL for Google Ads
  */
-export function getGoogleAdsAuthUrl(brandId: string, redirectUri: string, returnOrigin?: string): string {
+export function getGoogleAdsAuthUrl(
+  brandId: string,
+  redirectUri: string,
+  returnOrigin?: string,
+  oauthInitiatedByUid?: string
+): string {
   const { clientId } = getCredentials();
   const payload: Record<string, string> = { brandId, provider: 'google_ads', redirectUri };
   if (returnOrigin?.trim()) payload.returnOrigin = returnOrigin.trim();
+  if (oauthInitiatedByUid?.trim()) payload.oauthInitiatedByUid = oauthInitiatedByUid.trim();
   const state = Buffer.from(JSON.stringify(payload)).toString('base64url');
 
   const params = new URLSearchParams({
@@ -190,7 +196,7 @@ export function getGoogleAdsAuthUrl(brandId: string, redirectUri: string, return
     response_type: 'code',
     scope: SCOPES.join(' '),
     access_type: 'offline',
-    prompt: 'consent',
+    prompt: 'select_account consent',
     state,
   });
 
@@ -203,7 +209,8 @@ export function getGoogleAdsAuthUrl(brandId: string, redirectUri: string, return
 export async function handleGoogleAdsCallback(
   code: string,
   brandId: string,
-  redirectUri: string
+  redirectUri: string,
+  oauthInitiatedByUid?: string
 ): Promise<{ success: boolean; needsSelection?: boolean; availableAccounts?: GoogleAdsCustomer[]; accessToken?: string; refreshToken?: string; error?: string }> {
   const { clientId, clientSecret } = getCredentials();
 
@@ -234,6 +241,10 @@ export async function handleGoogleAdsCallback(
     const customers = await listAccessibleCustomers(accessToken);
     logger.info(`[GoogleAds] Found ${customers.length} customers for brand ${brandId}`);
 
+    const oauthUidPatch = oauthInitiatedByUid?.trim()
+      ? { oauthInitiatedByUid: oauthInitiatedByUid.trim() }
+      : { oauthInitiatedByUid: FieldValue.delete() };
+
     if (customers.length === 0) {
       // Store tokens anyway — user will enter Customer ID manually
       await getDb().doc(`connectors/${brandId}`).set(
@@ -246,6 +257,7 @@ export async function handleGoogleAdsCallback(
             pendingAccountSelection: true,
             availableAccounts: [],
             connectedAt: FieldValue.serverTimestamp(),
+            ...oauthUidPatch,
           },
         },
         { merge: true }
@@ -267,6 +279,7 @@ export async function handleGoogleAdsCallback(
             customerName: customer.name,
             pendingAccountSelection: false,
             connectedAt: FieldValue.serverTimestamp(),
+            oauthInitiatedByUid: FieldValue.delete(),
           },
         },
         { merge: true }
@@ -286,6 +299,7 @@ export async function handleGoogleAdsCallback(
           pendingAccountSelection: true,
           availableAccounts: customers,
           connectedAt: FieldValue.serverTimestamp(),
+          ...oauthUidPatch,
         },
       },
       { merge: true }
@@ -311,6 +325,7 @@ export async function selectGoogleAdsAccount(brandId: string, customerId: string
         customerName,
         pendingAccountSelection: false,
         availableAccounts: FieldValue.delete(),
+        oauthInitiatedByUid: FieldValue.delete(),
       },
     },
     { merge: true }

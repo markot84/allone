@@ -1,12 +1,12 @@
 {
-  "version": "0.378.0",
-  "previousVersion": "0.377.0",
-  "commitHash": "57b3bad",
+  "version": "0.390.0",
+  "previousVersion": "0.389.0",
+  "commitHash": "cc82960",
   "branch": "main",
-  "buildDate": "2026-04-10T16:44:40.282Z",
+  "buildDate": "2026-04-10T20:19:26.152Z",
   "commits": [
     {
-      "hash": "57b3bad",
+      "hash": "cc82960",
       "message": "GA4: channel revenue, organic fallback; UI and data updates"
     },
     {

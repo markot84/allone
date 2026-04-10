@@ -135,10 +135,17 @@ export interface GA4Property {
 /**
  * Generate the OAuth consent URL for GA4
  */
-export function getGA4AuthUrl(brandId: string, redirectUri: string, returnOrigin?: string): string {
+export function getGA4AuthUrl(
+  brandId: string,
+  redirectUri: string,
+  returnOrigin?: string,
+  /** Firebase Auth uid of the admin who clicked Connect — stored with pending picker so other users never see their list. */
+  oauthInitiatedByUid?: string
+): string {
   const { clientId } = getCredentials();
   const payload: Record<string, string> = { brandId, provider: 'ga4', redirectUri };
   if (returnOrigin?.trim()) payload.returnOrigin = returnOrigin.trim();
+  if (oauthInitiatedByUid?.trim()) payload.oauthInitiatedByUid = oauthInitiatedByUid.trim();
   const state = Buffer.from(JSON.stringify(payload)).toString('base64url');
 
   const params = new URLSearchParams({
@@ -147,7 +154,8 @@ export function getGA4AuthUrl(brandId: string, redirectUri: string, returnOrigin
     response_type: 'code',
     scope: SCOPES.join(' '),
     access_type: 'offline',
-    prompt: 'consent',
+    // Force Google account chooser so a new Performance+ user is not tied to the previous browser Google session.
+    prompt: 'select_account consent',
     state,
   });
 
@@ -160,7 +168,8 @@ export function getGA4AuthUrl(brandId: string, redirectUri: string, returnOrigin
 export async function handleGA4Callback(
   code: string,
   brandId: string,
-  redirectUri: string
+  redirectUri: string,
+  oauthInitiatedByUid?: string
 ): Promise<{ success: boolean; error?: string }> {
   const { clientId, clientSecret } = getCredentials();
 
@@ -196,6 +205,7 @@ export async function handleGA4Callback(
           accessToken,
           expiresAt: Date.now() + (tokens.expires_in || 3600) * 1000,
           connectedAt: FieldValue.serverTimestamp(),
+          oauthInitiatedByUid: FieldValue.delete(),
         },
       },
       { merge: true }
@@ -229,6 +239,7 @@ export async function handleGA4Callback(
             propertyId: properties[0].id,
             propertyName: properties[0].name,
             connectedAt: FieldValue.serverTimestamp(),
+            oauthInitiatedByUid: FieldValue.delete(),
           },
         },
         { merge: true }
@@ -236,7 +247,7 @@ export async function handleGA4Callback(
       return { success: true };
     }
 
-    // Multiple properties — let user pick
+    // Multiple properties — let user pick (scoped to whoever started OAuth)
     await getDb().doc(`connectors/${brandId}`).set(
       {
         ga4: {
@@ -247,6 +258,9 @@ export async function handleGA4Callback(
           pendingAccountSelection: true,
           availableAccounts: properties.map((p) => ({ id: p.id, name: p.name })),
           connectedAt: FieldValue.serverTimestamp(),
+          ...(oauthInitiatedByUid?.trim()
+            ? { oauthInitiatedByUid: oauthInitiatedByUid.trim() }
+            : { oauthInitiatedByUid: FieldValue.delete() }),
         },
       },
       { merge: true }
@@ -297,11 +311,36 @@ async function listGA4Properties(accessToken: string): Promise<GA4Property[]> {
   return properties;
 }
 
+/** Parse Google OAuth token error body for clearer operator-facing messages. */
+function explainGoogleTokenError(status: number, rawText: string): string {
+  try {
+    const j = JSON.parse(rawText) as { error?: string; error_description?: string };
+    if (j.error === 'invalid_grant') {
+      return `Token refresh failed: ${status}. Το refresh token δεν είναι πλέον έγκυρο (ληγμένο, ανακλημένο ή μετά από αλλαγή κωδικού Google). Αποσυνδέστε το GA4 και συνδέστε το ξανά από Συνδέσεις.`;
+    }
+    if (j.error === 'invalid_client') {
+      return `Token refresh failed: ${status}. Έλεγξε ότι τα GOOGLE_ADS_CLIENT_ID και GOOGLE_ADS_CLIENT_SECRET στο Cloud Functions (secrets) ταιριάζουν με το ίδιο OAuth 2.0 Client στο Google Cloud Console.`;
+    }
+    if (j.error_description) {
+      return `Token refresh failed: ${status} — ${j.error_description}`;
+    }
+  } catch {
+    /* not JSON */
+  }
+  const slice = rawText.replace(/\s+/g, ' ').trim().slice(0, 200);
+  return slice ? `Token refresh failed: ${status} — ${slice}` : `Token refresh failed: ${status}`;
+}
+
 /**
  * Refresh the access token
  */
 async function refreshAccessToken(refreshToken: string): Promise<string> {
   const { clientId, clientSecret } = getCredentials();
+  if (!clientId || !clientSecret) {
+    throw new Error(
+      'GA4: λείπουν GOOGLE_ADS_CLIENT_ID / GOOGLE_ADS_CLIENT_SECRET (χρησιμοποιούνται και για GA4 OAuth).'
+    );
+  }
 
   const res = await fetch(GOOGLE_TOKEN_URL, {
     method: 'POST',
@@ -314,8 +353,22 @@ async function refreshAccessToken(refreshToken: string): Promise<string> {
     }),
   });
 
-  if (!res.ok) throw new Error(`Token refresh failed: ${res.status}`);
-  const data = await res.json();
+  const rawText = await res.text();
+  if (!res.ok) {
+    logger.error(`[GA4] Token refresh HTTP ${res.status}:`, rawText.slice(0, 500));
+    throw new Error(explainGoogleTokenError(res.status, rawText));
+  }
+
+  let data: { access_token?: string };
+  try {
+    data = JSON.parse(rawText) as { access_token?: string };
+  } catch {
+    throw new Error('Token refresh failed: invalid JSON response from Google');
+  }
+  if (!data.access_token) {
+    logger.error('[GA4] Token refresh: missing access_token in body:', rawText.slice(0, 300));
+    throw new Error('Token refresh failed: no access_token in response');
+  }
   return data.access_token;
 }
 
@@ -400,52 +453,286 @@ export async function fetchGA4Data(
       };
     }
 
-    // Traffic source breakdown (session-scoped channel).
-    // Do not request `newUsers` with `sessionDefaultChannelGroup` — often incompatible or all zeros.
-    // New users by acquisition channel: `firstUserDefaultChannelGroup` + `newUsers`, merged below (normalized keys).
-    const sourceBody = {
-      dateRanges: [{ startDate: formatDate(startDate), endDate: formatDate(endDate) }],
-      dimensions: [
-        { name: 'sessionDefaultChannelGroup' },
-      ],
-      metrics: [
-        { name: 'sessions' },
-        { name: 'totalUsers' },
-        { name: 'conversions' },
-        { name: 'totalRevenue' },
-      ],
-    };
+    // Traffic source breakdown.
+    const authHeaders = { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` };
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+    /** Map sessionSource + sessionMedium to GA4-like default channel group labels. */
+    function channelFromSourceMedium(source: string, medium: string): string {
+      const s = source.toLowerCase().trim();
+      const m = medium.toLowerCase().trim();
+      if (s === '(direct)' && (m === '(none)' || m === '(not set)')) return 'Direct';
+      if (m === 'organic') {
+        if (/google|bing|yahoo|duckduckgo|baidu|yandex|naver/.test(s)) return 'Organic Search';
+        if (/facebook|instagram|twitter|tiktok|linkedin|pinterest/.test(s)) return 'Organic Social';
+        return 'Organic Search';
+      }
+      if (m === 'cpc' || m === 'ppc' || m === 'paid') {
+        if (/facebook|instagram|meta/.test(s)) return 'Paid Social';
+        if (/google|bing/.test(s)) return 'Paid Search';
+        return 'Paid Search';
+      }
+      if (m === 'display') return 'Display';
+      if (m === 'email' || m === 'e-mail' || m === 'mail') return 'Email';
+      if (m === 'referral') return 'Referral';
+      if (m === 'affiliate') return 'Affiliates';
+      if (m === 'social') {
+        if (/facebook|instagram|meta/.test(s)) return 'Paid Social';
+        return 'Organic Social';
+      }
+      return 'Referral';
+    }
+
+    function parseTrafficRows(
+      rows: any[],
+      dimCount: number,
+      valIdxSessions: number,
+      valIdxUsers: number,
+      valIdxNewUsers: number | null,
+      valIdxConversions: number,
+      valIdxPurchaseRev: number | null,
+      valIdxTotalRev: number | null,
+      useChannelDimension: boolean,
+    ): Record<string, any> {
+      const out: Record<string, any> = {};
+      for (const row of rows) {
+        const dims = row.dimensionValues || [];
+        const vals = row.metricValues || [];
+        const channel = useChannelDimension
+          ? (dims[0]?.value || 'Unknown')
+          : channelFromSourceMedium(dims[0]?.value || '', dims[1]?.value || '');
+
+        const sessions = parseInt(vals[valIdxSessions]?.value || '0', 10);
+        const users = parseInt(vals[valIdxUsers]?.value || '0', 10);
+        const newUsers = valIdxNewUsers != null ? (parseInt(vals[valIdxNewUsers]?.value || '0', 10) || 0) : 0;
+        const conversions = parseInt(vals[valIdxConversions]?.value || '0', 10);
+        const pr = valIdxPurchaseRev != null ? (parseFloat(vals[valIdxPurchaseRev]?.value || '0') || 0) : 0;
+        const tr = valIdxTotalRev != null ? (parseFloat(vals[valIdxTotalRev]?.value || '0') || 0) : 0;
+        const revenue = Math.max(pr, tr);
+
+        if (!out[channel]) {
+          out[channel] = { sessions: 0, users: 0, newUsers: 0, conversions: 0, totalRevenue: 0 };
+        }
+        out[channel].sessions += sessions;
+        out[channel].users += users;
+        out[channel].newUsers += newUsers;
+        out[channel].conversions += conversions;
+        out[channel].totalRevenue = Math.max(out[channel].totalRevenue, revenue);
+      }
+      return out;
+    }
 
     let trafficSources: Record<string, any> = {};
     try {
-      const srcRes = await fetch(
-        `${GA4_DATA_API}/properties/${propertyId}:runReport`,
-        {
+      const dateRange = { startDate: formatDate(startDate), endDate: formatDate(endDate) };
+
+      // ── Attempt A: sessionDefaultChannelGroup with revenue metrics ──
+      // Metrics order: [0]sessions [1]totalUsers [2]newUsers [3]conversions [4]purchaseRevenue [5]totalRevenue
+      let usedChannelDimension = true;
+      let channelRes = await fetch(`${GA4_DATA_API}/properties/${propertyId}:runReport`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({
+          languageCode: 'en',
+          dateRanges: [dateRange],
+          dimensions: [{ name: 'sessionDefaultChannelGroup' }],
+          metrics: [
+            { name: 'sessions' },
+            { name: 'totalUsers' },
+            { name: 'newUsers' },
+            { name: 'conversions' },
+            { name: 'purchaseRevenue' },
+            { name: 'totalRevenue' },
+          ],
+        }),
+      });
+
+      // 400 → some metric unsupported, retry minimal (no revenue)
+      // Metrics order: [0]sessions [1]totalUsers [2]newUsers [3]conversions
+      if (!channelRes.ok && channelRes.status === 400) {
+        const e400 = await channelRes.text();
+        logger.warn(`[GA4] channelGroup full rejected (400): ${e400.slice(0, 200)}`);
+        channelRes = await fetch(`${GA4_DATA_API}/properties/${propertyId}:runReport`, {
+          method: 'POST',
+          headers: authHeaders,
+          body: JSON.stringify({
+            languageCode: 'en',
+            dateRanges: [dateRange],
+            dimensions: [{ name: 'sessionDefaultChannelGroup' }],
+            metrics: [{ name: 'sessions' }, { name: 'totalUsers' }, { name: 'newUsers' }, { name: 'conversions' }],
+          }),
+        });
+      }
+
+      if (channelRes.ok) {
+        const d = await channelRes.json();
+        const hasRevenue = (d.rows?.[0]?.metricValues?.length ?? 0) >= 6;
+        // indices: sessions=0, users=1, newUsers=2, conversions=3, purchaseRev=4, totalRev=5
+        trafficSources = parseTrafficRows(d.rows || [], 1, 0, 1, 2, 3, hasRevenue ? 4 : null, hasRevenue ? 5 : null, true);
+        logger.info(`[GA4] Channel group report: ${Object.keys(trafficSources).length} channels`);
+      } else {
+        // ── Attempt B: sessionDefaultChannelGroup failed → fallback source/medium ──
+        const errTxt = await channelRes.text();
+        logger.warn(`[GA4] channelGroup failed (${channelRes.status}), falling back to source/medium: ${errTxt.slice(0, 200)}`);
+        usedChannelDimension = false;
+
+        if (channelRes.status === 429) await sleep(3000);
+        else await sleep(500);
+
+        // Attempt B: Metrics order: [0]sessions [1]totalUsers [2]newUsers [3]conversions [4]purchaseRevenue [5]totalRevenue
+        const smRes = await fetch(`${GA4_DATA_API}/properties/${propertyId}:runReport`, {
+          method: 'POST',
+          headers: authHeaders,
+          body: JSON.stringify({
+            dateRanges: [dateRange],
+            dimensions: [{ name: 'sessionSource' }, { name: 'sessionMedium' }],
+            metrics: [{ name: 'sessions' }, { name: 'totalUsers' }, { name: 'newUsers' }, { name: 'conversions' }, { name: 'purchaseRevenue' }, { name: 'totalRevenue' }],
+            limit: '100',
+          }),
+        });
+
+        if (smRes.ok) {
+          const sd = await smRes.json();
+          trafficSources = parseTrafficRows(sd.rows || [], 2, 0, 1, 2, 3, 4, 5, false);
+          logger.info(`[GA4] source/medium fallback: ${Object.keys(trafficSources).length} channels derived`);
+        } else {
+          const smErr = await smRes.text();
+          logger.warn(`[GA4] source/medium also failed (${smRes.status}): ${smErr.slice(0, 200)}`);
+
+          // ── Attempt C: absolute minimum — sessionMedium only ──
+          await sleep(1000);
+          const medRes = await fetch(`${GA4_DATA_API}/properties/${propertyId}:runReport`, {
+            method: 'POST',
+            headers: authHeaders,
+            body: JSON.stringify({
+              dateRanges: [dateRange],
+              dimensions: [{ name: 'sessionMedium' }],
+              metrics: [{ name: 'sessions' }, { name: 'totalUsers' }, { name: 'newUsers' }],
+              limit: '50',
+            }),
+          });
+          if (medRes.ok) {
+            const md = await medRes.json();
+            for (const row of md.rows || []) {
+              const medium = (row.dimensionValues?.[0]?.value || '(none)').toLowerCase();
+              let channel = 'Referral';
+              if (medium === '(none)' || medium === '') channel = 'Direct';
+              else if (medium === 'organic') channel = 'Organic Search';
+              else if (medium === 'cpc' || medium === 'ppc') channel = 'Paid Search';
+              else if (medium === 'email' || medium === 'e-mail') channel = 'Email';
+              else if (medium === 'display') channel = 'Display';
+              const sessions = parseInt(row.metricValues?.[0]?.value || '0', 10);
+              const users = parseInt(row.metricValues?.[1]?.value || '0', 10);
+              const newUsers = parseInt(row.metricValues?.[2]?.value || '0', 10);
+              if (!trafficSources[channel]) {
+                trafficSources[channel] = { sessions: 0, users: 0, newUsers: 0, conversions: 0, totalRevenue: 0 };
+              }
+              trafficSources[channel].sessions += sessions;
+              trafficSources[channel].users += users;
+              trafficSources[channel].newUsers += newUsers;
+            }
+            logger.info(`[GA4] sessionMedium last-resort: ${Object.keys(trafficSources).length} channels`);
+          } else {
+            const medErr = await medRes.text();
+            logger.error(`[GA4] All channel attempts failed. Last error (${medRes.status}): ${medErr.slice(0, 300)}`);
+          }
+        }
+      }
+      void usedChannelDimension;
+    } catch (e) {
+      logger.warn('[GA4] Traffic sources query failed:', e);
+    }
+
+    /**
+     * Many properties send purchase `value` on the event but return 0 for purchaseRevenue/totalRevenue
+     * on sessionDefaultChannelGroup alone. Sum eventValue for purchase-like events per channel.
+     */
+    try {
+      const purchaseByChannelBody = {
+        languageCode: 'en',
+        dateRanges: [{ startDate: formatDate(startDate), endDate: formatDate(endDate) }],
+        dimensions: [{ name: 'sessionDefaultChannelGroup' }],
+        metrics: [{ name: 'eventValue' }, { name: 'purchaseRevenue' }],
+        dimensionFilter: {
+          orGroup: {
+            expressions: [
+              {
+                filter: {
+                  fieldName: 'eventName',
+                  stringFilter: { matchType: 'EXACT', value: 'purchase' },
+                },
+              },
+              {
+                filter: {
+                  fieldName: 'eventName',
+                  stringFilter: { matchType: 'EXACT', value: 'ecommerce_purchase' },
+                },
+              },
+            ],
+          },
+        },
+      };
+
+      let purRes = await fetch(`${GA4_DATA_API}/properties/${propertyId}:runReport`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify(purchaseByChannelBody),
+      });
+
+      if (!purRes.ok && purRes.status === 400) {
+        const errTxt = await purRes.text();
+        logger.warn(
+          `[GA4] Purchase-by-channel (eventValue+purchaseRevenue) rejected, retry eventValue only: ${errTxt.slice(0, 300)}`
+        );
+        purRes = await fetch(`${GA4_DATA_API}/properties/${propertyId}:runReport`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${accessToken}`,
           },
-          body: JSON.stringify(sourceBody),
-        }
-      );
+          body: JSON.stringify({
+            ...purchaseByChannelBody,
+            metrics: [{ name: 'eventValue' }],
+          }),
+        });
+      }
 
-      if (srcRes.ok) {
-        const srcData = await srcRes.json();
-        for (const row of srcData.rows || []) {
+      if (purRes.ok) {
+        const purData = await purRes.json();
+        let mergedRev = 0;
+        for (const row of purData.rows || []) {
           const channel = row.dimensionValues?.[0]?.value || 'Unknown';
           const vals = row.metricValues || [];
-          trafficSources[channel] = {
-            sessions: parseInt(vals[0]?.value || '0', 10),
-            users: parseInt(vals[1]?.value || '0', 10),
-            conversions: parseInt(vals[2]?.value || '0', 10),
-            totalRevenue: parseFloat(vals[3]?.value || '0') || 0,
-            newUsers: 0,
-          };
+          const eventVal = parseFloat(vals[0]?.value || '0') || 0;
+          const pr = vals[1] != null ? parseFloat(vals[1]?.value || '0') || 0 : 0;
+          const extra = Math.max(eventVal, pr);
+          if (extra <= 0) continue;
+          mergedRev += extra;
+          if (!trafficSources[channel]) {
+            trafficSources[channel] = {
+              sessions: 0,
+              users: 0,
+              conversions: 0,
+              newUsers: 0,
+              totalRevenue: extra,
+            };
+          } else {
+            const prev = typeof trafficSources[channel].totalRevenue === 'number' ? trafficSources[channel].totalRevenue : 0;
+            trafficSources[channel].totalRevenue = Math.max(prev, extra);
+          }
         }
+        if (mergedRev > 0) {
+          logger.info(`[GA4] Merged purchase/ecommerce_purchase revenue by channel: total extra=${mergedRev}`);
+        }
+      } else {
+        const t = await purRes.text();
+        logger.warn(`[GA4] Purchase-by-channel report failed: ${purRes.status}`, t.slice(0, 400));
       }
     } catch (e) {
-      logger.warn('[GA4] Traffic sources query failed:', e);
+      logger.warn('[GA4] Purchase-by-channel merge failed:', e);
     }
 
     // New users per acquisition channel — merge onto session-channel rows (same labels via languageCode + fuzzy match)
@@ -469,10 +756,7 @@ export async function fetchGA4Data(
         const trafficKeys = Object.keys(trafficSources);
         let totalNuReport = 0;
         let mergedNu = 0;
-
-        for (const ch of trafficKeys) {
-          trafficSources[ch].newUsers = 0;
-        }
+        const acquisitionByChannel: Record<string, number> = {};
 
         for (const row of nuData.rows || []) {
           const rawChannel = row.dimensionValues?.[0]?.value || 'Unknown';
@@ -480,17 +764,30 @@ export async function fetchGA4Data(
           totalNuReport += nu;
           const match = pickTrafficChannelForNu(rawChannel, trafficKeys);
           if (match) {
-            trafficSources[match].newUsers += nu;
+            acquisitionByChannel[match] = (acquisitionByChannel[match] || 0) + nu;
             mergedNu += nu;
           }
         }
 
-        if (totalNuReport > 0 && mergedNu === 0) {
-          applyProportionalNewUsers(trafficSources, totalNuReport);
-        } else if (totalNuReport > 0 && mergedNu > 0 && mergedNu < totalNuReport) {
-          logger.warn(
-            `[GA4] New users: matched ${mergedNu}/${totalNuReport} — some acquisition rows had no session channel (locale or extra channel)`
-          );
+        // Only override inline newUsers if the acquisition report matched channels successfully.
+        // This avoids zeroing out inline newUsers when the report fails to match.
+        if (mergedNu > 0) {
+          for (const ch of trafficKeys) {
+            trafficSources[ch].newUsers = acquisitionByChannel[ch] ?? 0;
+          }
+          if (mergedNu < totalNuReport) {
+            logger.warn(
+              `[GA4] New users (acquisition): matched ${mergedNu}/${totalNuReport} — some rows had no session channel match`
+            );
+          }
+        } else if (totalNuReport > 0) {
+          // Acquisition report returned data but no channel matched — check inline totals
+          const inlineTotal = trafficKeys.reduce((s, k) => s + (trafficSources[k].newUsers || 0), 0);
+          if (inlineTotal === 0) {
+            applyProportionalNewUsers(trafficSources, totalNuReport);
+          } else {
+            logger.info(`[GA4] New users: keeping inline newUsers (${inlineTotal}) — acquisition channels did not match session channels`);
+          }
         }
       } else {
         const errText = await nuRes.text();

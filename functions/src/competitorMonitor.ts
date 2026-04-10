@@ -116,6 +116,31 @@ function normalizePagingNext(next: string | undefined | null): string | null {
   return `${META_GRAPH_URL}/${next.replace(/^\//, '')}`;
 }
 
+/** Body for ads_archive — POST avoids very long GET URLs (access_token + many params). */
+function buildAdLibrarySearchParams(
+  accessToken: string,
+  mode: 'plain' | 'jsonArray',
+  pageIdTrim: string,
+  reachCountries: string[]
+): URLSearchParams {
+  const params = new URLSearchParams({
+    access_token: accessToken,
+    ad_active_status: 'ALL',
+    ad_type: 'ALL',
+    media_type: 'ALL',
+    fields:
+      'id,ad_creative_bodies,ad_delivery_start_time,ad_delivery_stop_time,page_name,publisher_platforms,page_id',
+    limit: '100',
+    ad_reached_countries: JSON.stringify(reachCountries),
+  });
+  if (mode === 'plain') {
+    params.set('search_page_ids', pageIdTrim);
+  } else {
+    params.set('search_page_ids', JSON.stringify([pageIdTrim]));
+  }
+  return params;
+}
+
 function adCreativeFirstLine(ad: { ad_creative_bodies?: unknown }): string {
   const b = ad.ad_creative_bodies;
   if (Array.isArray(b) && b.length > 0) return String(b[0]);
@@ -235,28 +260,6 @@ export async function fetchCompetitorAds(brandId: string): Promise<{
       let adsFetchedForPage = 0;
       let hadAdLibraryHttpError = false;
       let usedSearchPageIdsMode: 'plain' | 'jsonArray' | null = null;
-      /** Avoid double-counting the same ad id when we run multi-query fallbacks (e.g. per-country). */
-      const seenAdIdsThisCompetitor = new Set<string>();
-
-      const makeStartUrl = (mode: 'plain' | 'jsonArray', reachCountries: string[]): string => {
-        const params = new URLSearchParams({
-          access_token: accessToken,
-          ad_active_status: 'ALL',
-          ad_type: 'ALL',
-          /** Aligns with Ad Library web UI (media_type=all). */
-          media_type: 'ALL',
-          fields:
-            'id,ad_creative_bodies,ad_delivery_start_time,ad_delivery_stop_time,page_name,publisher_platforms,page_id',
-          limit: '100',
-        });
-        if (mode === 'plain') {
-          params.set('search_page_ids', pageIdTrim);
-        } else {
-          params.set('search_page_ids', JSON.stringify([pageIdTrim]));
-        }
-        params.set('ad_reached_countries', JSON.stringify(reachCountries));
-        return `${META_GRAPH_URL}/ads_archive?${params.toString()}`;
-      };
 
       const processOnePage = async (data: any): Promise<boolean> => {
         if (data.error) {
@@ -339,20 +342,37 @@ export async function fetchCompetitorAds(brandId: string): Promise<{
         return true;
       };
 
-      const runPagination = async (
-        startUrl: string,
-        mode: 'plain' | 'jsonArray',
-        reachCountriesForLog: string[]
-      ): Promise<void> => {
+      const runPagination = async (mode: 'plain' | 'jsonArray', reachCountriesForQuery: string[]): Promise<void> => {
         usedSearchPageIdsMode = mode;
         adsFetchedForPage = 0;
-        let nextUrl: string | null = startUrl;
+        let nextUrl: string | null = null;
+        let isFirst = true;
 
-        while (nextUrl) {
+        while (isFirst || nextUrl) {
           logger.info(
-            `[Competitor] GET ${competitor.name} (page ${pageIdTrim}), mode=${mode}, countries=${JSON.stringify(reachCountriesForLog)}`
+            `[Competitor] ${nextUrl ? 'GET page' : 'POST'} ${competitor.name} (page ${pageIdTrim}), mode=${mode}, countries=${JSON.stringify(reachCountriesForQuery)}`
           );
-          const res: Response = await fetch(nextUrl);
+          let res: Response;
+          if (nextUrl) {
+            res = await fetch(nextUrl);
+          } else {
+            const paramsStr = buildAdLibrarySearchParams(
+              accessToken,
+              mode,
+              pageIdTrim,
+              reachCountriesForQuery
+            ).toString();
+            res = await fetch(`${META_GRAPH_URL}/ads_archive`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: paramsStr,
+            });
+            if (!res.ok && res.status === 405) {
+              const peek = await res.text();
+              logger.warn(`[Competitor] ads_archive POST 405, GET fallback: ${peek.slice(0, 200)}`);
+              res = await fetch(`${META_GRAPH_URL}/ads_archive?${paramsStr}`);
+            }
+          }
 
           if (!res.ok) {
             hadAdLibraryHttpError = true;
@@ -380,14 +400,15 @@ export async function fetchCompetitorAds(brandId: string): Promise<{
           }
 
           nextUrl = normalizePagingNext(data.paging?.next);
+          isFirst = false;
         }
       };
 
-      await runPagination(makeStartUrl('plain', countries), 'plain', countries);
+      await runPagination('plain', countries);
 
       if (!hadAdLibraryHttpError && adsFetchedForPage === 0) {
         logger.info(`[Competitor] Retrying ${competitor.name} with search_page_ids JSON array format`);
-        await runPagination(makeStartUrl('jsonArray', countries), 'jsonArray', countries);
+        await runPagination('jsonArray', countries);
       }
 
       /**
@@ -418,12 +439,12 @@ export async function fetchCompetitorAds(brandId: string): Promise<{
           if (hadAdLibraryHttpError) break;
           const one = [c];
           logger.info(`[Competitor] ${competitor.name}: single-country probe ${c} (plain)`);
-          await runPagination(makeStartUrl('plain', one), 'plain', one);
+          await runPagination('plain', one);
           if (adsFetchedForPage > 0) {
             logger.info(`[Competitor] ${competitor.name}: single-country probe hit with ${c}`);
             break;
           }
-          await runPagination(makeStartUrl('jsonArray', one), 'jsonArray', one);
+          await runPagination('jsonArray', one);
           if (adsFetchedForPage > 0) {
             logger.info(`[Competitor] ${competitor.name}: single-country JSON probe hit with ${c}`);
             break;
