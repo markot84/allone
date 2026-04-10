@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
+import { useMemo, useState, useCallback, useRef, useEffect, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import {
   Euro,
@@ -6,7 +6,6 @@ import {
   Target,
   BarChart3,
   Wallet,
-  ShoppingCart,
   ShoppingBag,
   ArrowUpRight,
   Loader2,
@@ -21,7 +20,7 @@ import {
   Tooltip as RechartsTooltip,
   Legend,
 } from 'recharts';
-import { Card, CardHeader, Badge, Button, Tooltip, PageHeader } from '../common';
+import { Card, CardHeader, Button, Tooltip, PageHeader } from '../common';
 import { useOrganic, useCampaigns, useActiveStrategy, useBrand } from '../../hooks';
 import { useDashPeriod, PERIOD_OPTIONS } from '../../hooks/useDashPeriod';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
@@ -30,8 +29,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import {
   calculateTotalRevenue,
   calculateCampaignMetrics,
-  calculateChannelPerformance,
-  getEffectiveConversionValue,
   bucketOverlapFraction,
   metaUsesLegacyMonthBuckets,
   buildRoiTrendSeries,
@@ -39,18 +36,6 @@ import {
 } from '../../utils/roiUtils';
 import { formatCurrencyCompact, formatNumber, formatPercent } from '../../utils/format';
 import type { Campaign } from '../../types';
-
-const CHANNEL_COLORS: Record<string, string> = {
-  'Google Ads': '#4285F4',
-  'Meta': '#1877F2',
-  'Other': '#78716C',
-  'Google Shopping': '#34A853',
-  'Facebook': '#1877F2',
-  'Instagram': '#E4405F',
-  'TikTok': '#000000',
-  'Email': '#F59E0B',
-  'SMS': '#8B5CF6',
-};
 
 const DEMO_CAMPAIGNS: Omit<Campaign, 'id'>[] = [
   { name: 'Google Shopping — Ρούχα Εργασίας', channel: 'Google Ads', period: 'Jan 2026', start_date: '2026-01-01', end_date: '2026-01-31', status: 'completed', amount_spent: 1200, impressions: 84000, clicks: 3360, conversions: 142, conversion_value: 8520, roas: 7.1, ctr: 4.0 },
@@ -77,6 +62,11 @@ const DEMO_ORGANIC = [
 interface ROIAttributionProps {
   embedded?: boolean;
 }
+
+type KpiTabId = 'roi' | 'revenue' | 'adsRevenue' | 'conversionsRate';
+
+/** Σειρά εμφάνισης — ίδιο visual language με Campaigns / Competitive Intelligence (segmented strip). */
+const KPI_ORDER: KpiTabId[] = ['roi', 'revenue', 'adsRevenue', 'conversionsRate'];
 
 export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
   const { totalOrganicRevenue, byMonth: organicByMonth, hasImported: hasOrganic } = useOrganic();
@@ -189,12 +179,89 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
   const monthlyBudget = activeStrategy?.monthlyBudget || 0;
 
   const metrics = useMemo(() => calculateCampaignMetrics(campaignsTyped), [campaignsTyped]);
+  const totalClicks = useMemo(
+    () => campaignsTyped.reduce((sum, c) => sum + (c.clicks || 0), 0),
+    [campaignsTyped],
+  );
   const totalRevenue = useMemo(
     () => calculateTotalRevenue(totalOrganicRevenue || 0, campaignsTyped),
     [totalOrganicRevenue, campaignsTyped]
   );
-  const channelPerf = useMemo(() => calculateChannelPerformance(campaignsTyped), [campaignsTyped]);
 
+  const kpiPanelConfig = useMemo(() => {
+    const cvr = totalClicks > 0 ? (metrics.totalConversions / totalClicks) * 100 : 0;
+    const roiPct =
+      metrics.totalSpend > 0 ? ((metrics.totalRevenue - metrics.totalSpend) / metrics.totalSpend) * 100 : null;
+    const revenueSubtitle =
+      hasOrganic && hasCampaigns
+        ? 'Organic + ads'
+        : hasOrganic
+          ? 'Organic'
+          : 'Ads conversion value';
+    return {
+      roi: {
+        icon: <TrendingUp size={22} strokeWidth={2} />,
+        label: 'ROI',
+        value:
+          roiPct != null && !Number.isNaN(roiPct)
+            ? `${roiPct > 0 ? '+' : ''}${formatNumber(roiPct, 1)}%`
+            : '—',
+        subtitle: '',
+        color:
+          roiPct != null && !Number.isNaN(roiPct)
+            ? roiPct >= 0
+              ? '#059669'
+              : '#EF4444'
+            : '#111827',
+        iconWrapClass: 'bg-emerald-50 text-emerald-600',
+        tooltip:
+          'ROI %: (έσοδα καμπανιών − ad spend) ÷ ad spend. Ο πολλαπλασιαστής ROAS (×) και οι υπόλοιπες εκδοχές απόδοσης είναι στον πίνακα «Ανάλυση απόδοσης (ROAS & ROI)» παρακάτω.',
+      },
+      revenue: {
+        icon: <Euro size={22} strokeWidth={2} />,
+        label: 'Revenue',
+        value: formatCurrencyCompact(totalRevenue),
+        subtitle: revenueSubtitle,
+        color: '#111827',
+        iconWrapClass: 'bg-slate-100 text-slate-600',
+        tooltip:
+          'Σύνολο: οργανικά έσοδα (import) + conversion value από Google Ads / Meta κ.λπ. Το organic μπορεί να είναι 0 αν δεν έχει εισαχθεί.',
+      },
+      adsRevenue: {
+        icon: <BarChart3 size={22} strokeWidth={2} />,
+        label: 'Ads Revenue',
+        value: formatCurrencyCompact(metrics.totalRevenue),
+        subtitle: `${campaignsTyped.length} campaigns · conversion value`,
+        color: '#111827',
+        iconWrapClass: 'bg-green-50 text-green-700',
+        tooltip:
+          'Έσοδα που αποδίδουν οι πλατφόρμες διαφήμισης (conversion value) στο επιλεγμένο διάστημα.',
+      },
+      conversionsRate: {
+        icon: <Target size={22} strokeWidth={2} />,
+        label: 'Conversions Rate',
+        value: cvr > 0 ? formatPercent(cvr, 2) : '—',
+        subtitle:
+          totalClicks > 0
+            ? `${formatNumber(metrics.totalConversions, 0)} μετατροπές / ${formatNumber(totalClicks, 0)} κλικ`
+            : 'Μετατροπές / κλικ (CVR)',
+        color: '#111827',
+        iconWrapClass: 'bg-amber-50 text-amber-600',
+        tooltip: 'Ποσοστό μετατροπών προς κλικ όλων των καμπανιών στο διάστημα (conversion rate, όχι CTR).',
+      },
+    } satisfies Record<
+      KpiTabId,
+      {
+        icon: ReactNode;
+        label: string;
+        value: string;
+        subtitle: string;
+        color: string;
+        iconWrapClass: string;
+        tooltip?: string;
+      }
+    >;
+  }, [metrics, totalRevenue, totalClicks, hasOrganic, hasCampaigns, campaignsTyped]);
   const trendData = useMemo(() => {
     const fromYm = periodDates.fromDate.slice(0, 7);
     const toYm = periodDates.toDate.slice(0, 7);
@@ -207,13 +274,6 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
       ecomm.hasData
     );
   }, [organicByMonth, campaignsAll, ecomm.hasData, ecomm.monthlyRevenue, periodDates.fromDate, periodDates.toDate]);
-
-  const topCampaigns = useMemo(() => {
-    return [...campaignsTyped]
-      .filter(c => (c.amount_spent || 0) > 0)
-      .sort((a, b) => (b.roas || 0) - (a.roas || 0))
-      .slice(0, 10);
-  }, [campaignsTyped]);
 
   const totalSpendForBudget = metrics.totalSpend;
   const budgetUtilization = monthlyBudget > 0 ? (totalSpendForBudget / monthlyBudget) * 100 : 0;
@@ -284,52 +344,23 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
         />
       )}
 
-      {/* Key Metrics — χωρίς ROAS εδώ: οι εκδοχές ROAS είναι συγκεντρωμένες στο επόμενο block */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard
-          icon={<Euro size={20} />}
-          label="Συνολικά Έσοδα"
-          value={formatCurrencyCompact(totalRevenue)}
-          subtitle={hasOrganic && hasCampaigns ? 'Organic + Campaigns' : hasOrganic ? 'Organic' : 'Campaigns'}
-          color="var(--nts-charcoal)"
-          tooltip="Συνδυασμός οργανικών εσόδων και attributed revenue από campaigns."
-        />
-        <MetricCard
-          icon={<Wallet size={20} />}
-          label="Ad Spend"
-          value={formatCurrencyCompact(metrics.totalSpend)}
-          subtitle={`${campaignsTyped.length} campaigns`}
-          color="#EF4444"
-          tooltip="Συνολικό κόστος διαφήμισης για το επιλεγμένο διάστημα."
-        />
-        <MetricCard
-          icon={<ShoppingCart size={20} />}
-          label="Conversions"
-          value={formatNumber(metrics.totalConversions)}
-          subtitle={metrics.cpa > 0 ? `CPA: €${formatNumber(metrics.cpa, 2)}` : ''}
-          color="var(--nts-accent)"
-          tooltip="Συνολικές μετατροπές από καμπάνιες."
-        />
-        <MetricCard
-          icon={<Target size={20} />}
-          label="CTR"
-          value={metrics.ctr > 0 ? formatPercent(metrics.ctr, 2) : '—'}
-          subtitle="Κλικ / Εμφανίσεις"
-          color="#6366F1"
-          tooltip="Μέσος όρος CTR των καμπανιών στο επιλεγμένο διάστημα."
-        />
+      {/* KPI row: εικονίδιο αριστερά (pastel box), label + τιμή + υπότιτλος δεξιά */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+        {KPI_ORDER.map((id) => (
+          <RoiKpiTabCard key={id} {...kpiPanelConfig[id]} />
+        ))}
       </div>
 
       {/* ROAS Analysis — όλες οι εκδοχές απόδοσης σε ένα block */}
       <div id="roas-analysis" className="scroll-mt-4">
       <Card padding="lg" className="border border-[var(--nts-border-gray)]">
         <CardHeader
-          title="Ανάλυση απόδοσης (ROAS)"
+          title="Ανάλυση απόδοσης (ROAS & ROI)"
           subtitle="Όλες οι μετρήσεις απόδοσης διαφήμισης σε ένα σημείο — αποφεύγεται η σύγχυση με πολλαπλά KPI στον πίνακα ελέγχου."
           icon={<BarChart3 size={20} className="text-[var(--nts-accent)]" />}
         />
         {(() => {
-          const attributedRoas = metrics.roas;
+          const campaignsRoas = metrics.roas;
           const blendedRoas = metrics.totalSpend > 0 ? totalRevenue / metrics.totalSpend : 0;
           const trueRoas = ecomm.hasData && metrics.totalSpend > 0 ? ecomm.totalRevenue / metrics.totalSpend : null;
           const roiPct =
@@ -337,14 +368,14 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
           const profit = metrics.totalRevenue - metrics.totalSpend;
           const rows: { k: string; v: string; note: string }[] = [
             {
-              k: 'Attributed ROAS',
-              v: attributedRoas > 0 ? `${formatNumber(attributedRoas, 2)}x` : '—',
-              note: 'Έσοδα που αποδίδονται στις διαφημίσεις (platforms) ÷ Ad Spend. Χρήσιμο για βελτιστοποίηση ανά καμπάνια.',
+              k: 'Campaigns ROAS',
+              v: campaignsRoas > 0 ? `${formatNumber(campaignsRoas, 2)}x` : '—',
+              note: 'Έσοδα καμπανιών (conversion value από platforms) ÷ Ad Spend. Χρήσιμο για βελτιστοποίηση ανά καμπάνια.',
             },
             {
               k: 'Blended ROAS',
               v: blendedRoas > 0 ? `${formatNumber(blendedRoas, 2)}x` : '—',
-              note: 'Συνολικά έσοδα (organic + attributed) ÷ Ad Spend. Ευρύτερη εικόνα από τον απλό ROAS.',
+              note: 'Συνολικά έσοδα (organic + campaigns revenue) ÷ Ad Spend. Ευρύτερη εικόνα από τον Campaigns ROAS.',
             },
             ...(trueRoas != null && trueRoas > 0
               ? [
@@ -358,7 +389,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
             {
               k: 'ROI % (κέρδος vs spend)',
               v: roiPct != null && roiPct !== 0 ? `${roiPct > 0 ? '+' : ''}${formatNumber(roiPct, 0)}%` : '—',
-              note: '(Attributed έσοδα − Ad Spend) ÷ Ad Spend. Δεν είναι ROAS — μετρά το περιθώριο κέρδους από τις διαφημίσεις.',
+              note: '(Έσοδα καμπανιών − Ad Spend) ÷ Ad Spend. Δεν είναι ROAS — μετρά το περιθώριο κέρδους από τις διαφημίσεις.',
             },
           ];
           return (
@@ -385,7 +416,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
               </div>
               {profit !== 0 && metrics.totalSpend > 0 && (
                 <p className="text-[12px] text-[var(--nts-medium-gray)] flex flex-wrap items-center gap-1.5">
-                  Απόδοση σε ευρώ: κέρδος από attributed έσοδα έναντι spend ≈{' '}
+                  Απόδοση σε ευρώ: κέρδος από έσοδα καμπανιών έναντι spend ≈{' '}
                   <span className="font-mono font-medium">{formatCurrencyCompact(profit)}</span> σε{' '}
                   {formatCurrencyCompact(metrics.totalSpend)} spend.
                   <Tooltip content={ROI_PERCENT_CALC_TOOLTIP} size={12}>
@@ -401,12 +432,12 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
       </Card>
       </div>
 
-      {/* E-commerce vs Attributed Revenue */}
+      {/* E-commerce vs Campaigns Revenue */}
       {ecomm.hasData && ecomm.totalRevenue > 0 && (
         <Card padding="lg">
           <div className="flex items-center gap-2 mb-4">
             <ShoppingBag size={18} className="text-[var(--nts-accent)]" />
-            <h3 className="text-sm font-semibold text-[#1A1A1A]">e-shop vs Attributed Revenue</h3>
+            <h3 className="text-sm font-semibold text-[#1A1A1A]">e-shop vs Campaigns Revenue</h3>
             <span className="text-[10px] text-[#9CA3AF] bg-[#F3F4F6] px-1.5 py-0.5 rounded ml-auto">90 ημέρες</span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -420,11 +451,11 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
             />
             <MetricCard
               icon={<Euro size={20} />}
-              label="Attributed Revenue"
+              label="Campaigns Revenue"
               value={formatCurrencyCompact(totalRevenue)}
               subtitle="Organic + Campaign value"
               color="var(--nts-charcoal)"
-              tooltip="Έσοδα που προκύπτουν από organic import + ad platform conversion values."
+              tooltip="Έσοδα που προκύπτουν από organic import + conversion values από καμπάνιες (platforms)."
             />
             <MetricCard
               icon={<BarChart3 size={20} />}
@@ -433,13 +464,13 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                 const gap = ecomm.totalRevenue - totalRevenue;
                 return gap >= 0 ? `+${formatCurrencyCompact(gap)}` : formatCurrencyCompact(gap);
               })()}
-              subtitle="e-shop − Attributed"
+              subtitle="e-shop − Campaigns Revenue"
               color={ecomm.totalRevenue >= totalRevenue ? '#22C55E' : '#EF4444'}
-              tooltip="Διαφορά πραγματικού e-shop revenue από attributed revenue."
+              tooltip="Διαφορά πραγματικού e-shop revenue από campaigns revenue."
             />
           </div>
           <p className="text-[11px] text-[#9CA3AF] mt-3 leading-relaxed">
-            Οι εκδοχές <strong>ROAS</strong> (συμπεριλαμβανομένου του <strong>True ROAS</strong> από e-shop) εξηγούνται στο παραπάνω block «Ανάλυση απόδοσης (ROAS)».
+            Οι εκδοχές <strong>ROAS</strong> (συμπεριλαμβανομένου του <strong>True ROAS</strong> από e-shop) εξηγούνται στο παραπάνω block «Ανάλυση απόδοσης (ROAS & ROI)».
           </p>
         </Card>
       )}
@@ -536,146 +567,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
         </Card>
       )}
 
-      {/* Section 3: Channel ROI Comparison */}
-      {channelPerf.length > 0 && (
-        <Card padding="lg">
-          <CardHeader
-            title="Απόδοση ανά Κανάλι"
-            subtitle="Σύγκριση ROAS, spend και conversions"
-            icon={<BarChart3 size={20} className="text-[var(--nts-accent)]" />}
-          />
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mt-4">
-            {channelPerf.map((ch, i) => (
-              <motion.div
-                key={ch.channel}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05 }}
-                className="p-4 rounded-lg border border-[var(--nts-border-gray)] bg-white hover:shadow-sm transition-shadow"
-              >
-                <div className="flex items-center gap-2 mb-3">
-                  <div
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: CHANNEL_COLORS[ch.channel] || '#78716C' }}
-                  />
-                  <span className="font-medium text-[var(--nts-charcoal)] text-sm">{ch.channel}</span>
-                  <span className="text-xs text-[var(--nts-medium-gray)] ml-auto">
-                    {ch.campaignCount} campaign{ch.campaignCount !== 1 ? 's' : ''}
-                  </span>
-                </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <p className="text-[10px] text-[var(--nts-medium-gray)] uppercase tracking-wider">Spend</p>
-                    <p className="text-sm font-bold font-mono text-[var(--nts-charcoal)]">
-                      {formatCurrencyCompact(ch.spent)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-[var(--nts-medium-gray)] uppercase tracking-wider">Revenue</p>
-                    <p className="text-sm font-bold font-mono text-[var(--nts-charcoal)]">
-                      {formatCurrencyCompact(ch.revenue)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-[var(--nts-medium-gray)] uppercase tracking-wider">ROAS</p>
-                    <p className={`text-sm font-bold font-mono ${ch.roas >= 1 ? 'text-[#22C55E]' : 'text-[#EF4444]'}`}>
-                      {ch.roas > 0 ? `${formatNumber(ch.roas, 2)}x` : '—'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-[var(--nts-medium-gray)] uppercase tracking-wider">Conv.</p>
-                    <p className="text-sm font-mono text-[var(--nts-charcoal)]">{formatNumber(ch.conversions)}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-[var(--nts-medium-gray)] uppercase tracking-wider">CPA</p>
-                    <p className="text-sm font-mono text-[var(--nts-charcoal)]">
-                      {ch.cpa > 0 ? `€${formatNumber(ch.cpa, 2)}` : '—'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-[var(--nts-medium-gray)] uppercase tracking-wider">CTR</p>
-                    <p className="text-sm font-mono text-[var(--nts-charcoal)]">
-                      {ch.ctr > 0 ? formatPercent(ch.ctr) : '—'}
-                    </p>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </Card>
-      )}
-
-      {/* Section 4: Campaign Table */}
-      {topCampaigns.length > 0 && (
-        <Card padding="lg">
-          <CardHeader
-            title="Top Campaigns"
-            subtitle="Ταξινόμηση κατά ROAS"
-            icon={<Target size={20} className="text-[var(--nts-accent)]" />}
-          />
-          <div className="overflow-x-auto mt-2">
-            <table className="w-full" style={{ minWidth: 700 }}>
-              <thead>
-                <tr className="text-left text-xs text-[var(--nts-medium-gray)] border-b border-[var(--nts-border-gray)]">
-                  <th className="pb-3 font-medium" style={{ width: '30%' }}>Campaign</th>
-                  <th className="pb-3 font-medium" style={{ width: '12%' }}>Κανάλι</th>
-                  <th className="pb-3 font-medium text-right" style={{ width: '12%' }}>Spend</th>
-                  <th className="pb-3 font-medium text-right" style={{ width: '12%' }}>Revenue</th>
-                  <th className="pb-3 font-medium text-right" style={{ width: '10%' }}>ROAS</th>
-                  <th className="pb-3 font-medium text-right" style={{ width: '10%' }}>Conv.</th>
-                  <th className="pb-3 font-medium text-center" style={{ width: '10%' }}>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {topCampaigns.map((c, index) => (
-                  <motion.tr
-                    key={c.id}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: index * 0.03 }}
-                    className="border-b border-[var(--nts-border-gray)] last:border-0 hover:bg-[var(--nts-light-gray)]"
-                  >
-                    <td className="py-3 pr-3">
-                      <span className="text-sm font-medium text-[var(--nts-charcoal)] truncate block max-w-[280px]" title={c.name}>
-                        {c.name}
-                      </span>
-                    </td>
-                    <td className="py-3 pr-3">
-                      <Badge variant="default" size="sm">{c.channel}</Badge>
-                    </td>
-                    <td className="py-3 text-right font-mono text-sm pr-3">
-                      {formatCurrencyCompact(c.amount_spent || 0)}
-                    </td>
-                    <td className="py-3 text-right font-mono text-sm font-bold pr-3">
-                      {formatCurrencyCompact(getEffectiveConversionValue(c))}
-                    </td>
-                    <td className="py-3 text-right pr-3">
-                      {(() => {
-                        const cv = getEffectiveConversionValue(c);
-                        const spent = c.amount_spent || 0;
-                        const roas = spent > 0 && cv > 0 ? cv / spent : 0;
-                        return (
-                          <span className={`font-mono text-sm font-bold ${roas >= 1 ? 'text-[#22C55E]' : 'text-[#EF4444]'}`}>
-                            {roas > 0 ? `${formatNumber(roas, 2)}x` : '—'}
-                          </span>
-                        );
-                      })()}
-                    </td>
-                    <td className="py-3 text-right font-mono text-sm pr-3">
-                      {formatNumber(c.conversions || 0)}
-                    </td>
-                    <td className="py-3 text-center">
-                      <CampaignStatusBadge status={c.status} />
-                    </td>
-                  </motion.tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      )}
-
-      {/* Section 5: Budget Utilization */}
+      {/* Section 3: Budget Utilization */}
       {monthlyBudget > 0 && (
         <Card padding="lg">
           <CardHeader
@@ -734,10 +626,56 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
   );
 }
 
+function RoiKpiTabCard({
+  icon,
+  label,
+  value,
+  subtitle,
+  color,
+  tooltip,
+  iconWrapClass,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  subtitle: string;
+  color: string;
+  tooltip?: string;
+  iconWrapClass: string;
+}) {
+  return (
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="h-full">
+      <div className="group flex h-full min-h-[92px] items-center gap-3 rounded-xl border border-[#E8EAED] bg-white px-3.5 py-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.06)] transition-[box-shadow,border-color] duration-200 hover:border-[#D1D5DB] hover:shadow-[0_4px_12px_rgba(15,23,42,0.08)] sm:gap-4 sm:px-4 sm:py-4">
+        <div
+          className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${iconWrapClass}`}
+          aria-hidden
+        >
+          {icon}
+        </div>
+        <div className="flex min-w-0 flex-1 flex-col justify-center gap-1">
+          <div className="flex items-center gap-1">
+            <span className="text-[11px] font-medium leading-snug text-[#6B7280] sm:text-xs">{label}</span>
+            {tooltip ? <Tooltip content={tooltip} size={12} /> : null}
+          </div>
+          <p
+            className="text-lg font-bold font-mono leading-tight tracking-tight tabular-nums sm:text-xl"
+            style={{ color }}
+          >
+            {value}
+          </p>
+          {subtitle ? (
+            <p className="line-clamp-2 text-[10px] leading-snug text-[#9CA3AF] sm:text-[11px]">{subtitle}</p>
+          ) : null}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
 function MetricCard({
   icon, label, value, subtitle, color, tooltip,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   label: string;
   value: string;
   subtitle: string;
@@ -765,10 +703,3 @@ function MetricCard({
   );
 }
 
-function CampaignStatusBadge({ status }: { status?: string }) {
-  const s = (status || '').toLowerCase();
-  if (s === 'active' || s === 'enabled') return <Badge variant="success" size="sm">Active</Badge>;
-  if (s === 'paused') return <Badge variant="warning" size="sm">Paused</Badge>;
-  if (s === 'completed' || s === 'removed') return <Badge variant="default" size="sm">Ended</Badge>;
-  return <Badge variant="default" size="sm">{status || '—'}</Badge>;
-}

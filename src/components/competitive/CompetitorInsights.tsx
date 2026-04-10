@@ -71,6 +71,46 @@ const TOOLTIP_INSIGHTS_SOURCE =
 const TOOLTIP_ADS_LAST_SCAN =
   'Τελευταίος έλεγχος Meta Ad Library. Πλήρης ανανέωση: καθημερινά ~06:00 Europe/Athens + «Scan τώρα». Προβολή: cache ~5 λεπτά. Οι διαφημίσεις φιλτράρονται κατά χώρα reach — βλ. πεδίο χωρών παρακάτω.';
 
+/** Μία γραμμή στα KPI (αποφυγή wrap ημερομηνίας/ώρας σε el-GR). */
+function formatKpiDateTime(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}, ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** Εμφανίσιμο κείμενο + τεχνικό απόθεμα για παλιές/αποθηκευμένες προειδοποιήσεις με raw JSON από Meta. */
+function parseAdLibraryWarningLine(raw: string): {
+  friendly: string;
+  technical?: string;
+  isPermission: boolean;
+} {
+  const t = raw.trim();
+  /* Ήδη φιλικό μήνυμα από Cloud Function (νέα scans) */
+  if (t.includes('Δεν είναι δυνατή η παρακολούθηση') && t.includes('META_APP_ID')) {
+    return { isPermission: true, friendly: t, technical: undefined };
+  }
+  const lower = t.toLowerCase();
+  const permission =
+    lower.includes('does not have permission') ||
+    lower.includes('application does not have') ||
+    (lower.includes('permission') &&
+      (lower.includes('ad library') || lower.includes('ads_archive') || lower.includes('(400)')));
+  let competitor = '';
+  const mHttp = t.match(/Ad Library API error for ([^(]+?)\s*\(\s*400\s*\)/i);
+  const mGraph = t.match(/Ad Library API \(([^)]+)\)/);
+  if (mHttp) competitor = mHttp[1].trim();
+  else if (mGraph) competitor = mGraph[1].trim();
+
+  if (permission) {
+    const who = competitor ? `για «${competitor}» ` : '';
+    return {
+      isPermission: true,
+      friendly: `Δεν είναι δυνατή η παρακολούθηση διαφημίσεων ανταγωνιστών ${who}από την εφαρμογή: το Meta App του server δεν έχει έγκριση για το Ad Library API (Facebook Developers → εφαρμογή σε Live mode, σωστά προϊόντα/δικαιώματα). Μέχρι να διορθωθεί η ρύθμιση (META_APP_ID / META_APP_SECRET), η Meta απορρίπτει τα αιτήματα και δεν εμφανίζονται διαφημίσεις.`,
+      technical: t.length > 80 && (t.includes('{') || t.includes('error')) ? t : undefined,
+    };
+  }
+  return { isPermission: false, friendly: t, technical: undefined };
+}
+
 // ── Data fetchers ────────────────────────────────────────
 
 async function fetchSettings(brandId: string): Promise<CompetitorSettings> {
@@ -299,10 +339,16 @@ export function CompetitorInsights() {
     return list;
   }, [benchmarks, benchmarkSearch, benchmarkSort]);
 
-  if (!brandId) return null;
-
-  const insightsSellerLabel =
-    (priceInsightsSellerName && priceInsightsSellerName.trim()) || currentBrand?.name || '';
+  const insightsSellerLabel = useMemo(() => {
+    const raw = (priceInsightsSellerName || '').trim();
+    const brandName = (currentBrand?.name || '').trim();
+    const looksLikePlaceholder =
+      !raw ||
+      /^account$/i.test(raw) ||
+      /^account\s+\d+$/i.test(raw.replace(/\u00a0/g, ' '));
+    if (looksLikePlaceholder) return brandName || raw || '—';
+    return raw || brandName || '—';
+  }, [priceInsightsSellerName, currentBrand?.name]);
 
   const filteredInsights = useMemo(() => {
     let list = [...priceInsights];
@@ -322,6 +368,8 @@ export function CompetitorInsights() {
     });
     return list;
   }, [priceInsights, insightsSearch, insightsSort, insightsSellerLabel]);
+
+  if (!brandId) return null;
 
   const tabs: { id: Tab; label: string; count?: number; icon: React.ReactNode }[] = [
     { id: 'pricing', label: 'Price Benchmarks', count: benchmarkCount, icon: <ShoppingCart size={15} /> },
@@ -377,7 +425,7 @@ export function CompetitorInsights() {
           {/* KPI Strip */}
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
             <KpiBox
-              label="SKUs με benchmark GMC"
+              label="SKUs με benchmark"
               value={benchmarkCount > 0 ? String(benchmarkCount) : '—'}
               tooltip="Προϊόντα όπου το Google Merchant Center (αναφορά Price Competitiveness) επιστρέφει μέση τιμή αγοράς για σύγκριση. Εμφανίζονται μόνο αυτά — προϊόντα χωρίς διαθέσιμο benchmark δεν εμφανίζονται. Ο συνολικός κατάλογος στο GMC μπορεί να είναι μεγαλύτερος."
               icon={<ShoppingCart size={18} />}
@@ -406,17 +454,7 @@ export function CompetitorInsights() {
             />
             <KpiBox
               label="Τελ. ενημέρωση"
-              value={
-                lastBenchmarkSyncedAt
-                  ? lastBenchmarkSyncedAt.toLocaleString('el-GR', {
-                      day: '2-digit',
-                      month: '2-digit',
-                      year: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })
-                  : '—'
-              }
+              value={lastBenchmarkSyncedAt ? formatKpiDateTime(lastBenchmarkSyncedAt) : '—'}
               tooltip={TOOLTIP_BENCHMARK_UPDATED}
               icon={<Calendar size={18} />}
               color="#8B5CF6"
@@ -475,12 +513,14 @@ export function CompetitorInsights() {
                   <table className="w-full text-left">
                     <thead className="sticky top-0 bg-[#F9FAFB] z-10">
                       <tr className="text-xs text-[#6B7280] uppercase tracking-wider">
-                        <th className="px-3 py-2.5 font-medium">Προϊόν</th>
-                        <th className="px-3 py-2.5 font-medium hidden md:table-cell">Brand</th>
-                        <th className="px-3 py-2.5 font-medium text-right">Η τιμή σας</th>
-                        <th className="px-3 py-2.5 font-medium text-right">Benchmark</th>
-                        <th className="px-3 py-2.5 font-medium text-right">Απόκλιση</th>
-                        <th className="px-3 py-2.5 font-medium hidden lg:table-cell">GTIN</th>
+                        <th className="px-3 py-2.5 font-medium whitespace-nowrap">Προϊόν</th>
+                        <th className="px-3 py-2.5 font-medium hidden md:table-cell whitespace-nowrap">Brand</th>
+                        <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">Η τιμή σας</th>
+                        <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">Benchmark</th>
+                        <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">
+                          Διαφ.&nbsp;τιμής
+                        </th>
+                        <th className="px-3 py-2.5 font-medium hidden lg:table-cell whitespace-nowrap">GTIN</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#F3F4F6]">
@@ -556,15 +596,17 @@ export function CompetitorInsights() {
                   <table className="w-full text-left">
                     <thead className="sticky top-0 bg-[#F9FAFB] z-10">
                       <tr className="text-xs text-[#6B7280] uppercase tracking-wider">
-                        <th className="px-3 py-2.5 font-medium">Προϊόν</th>
-                        <th className="px-3 py-2.5 font-medium hidden md:table-cell">Πωλητής</th>
-                        <th className="px-3 py-2.5 font-medium hidden md:table-cell">Brand</th>
-                        <th className="px-3 py-2.5 font-medium text-right">Τρέχουσα</th>
-                        <th className="px-3 py-2.5 font-medium text-right">Προτεινόμενη</th>
-                        <th className="px-3 py-2.5 font-medium text-right">Δ Τιμής</th>
-                        <th className="px-3 py-2.5 font-medium text-right">Impr.</th>
-                        <th className="px-3 py-2.5 font-medium text-right">Clicks</th>
-                        <th className="px-3 py-2.5 font-medium text-right">Conv.</th>
+                        <th className="px-3 py-2.5 font-medium whitespace-nowrap">Προϊόν</th>
+                        <th className="px-3 py-2.5 font-medium hidden md:table-cell whitespace-nowrap">Πωλητής</th>
+                        <th className="px-3 py-2.5 font-medium hidden md:table-cell whitespace-nowrap">Brand</th>
+                        <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">Τρέχουσα</th>
+                        <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">Προτεινόμενη</th>
+                        <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">
+                          Δ&nbsp;τιμής
+                        </th>
+                        <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">Impr.</th>
+                        <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">Clicks</th>
+                        <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">Conv.</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#F3F4F6]">
@@ -622,16 +664,33 @@ export function CompetitorInsights() {
           </div>
 
           {adLibraryWarningsList && adLibraryWarningsList.length > 0 && !dismissedAdWarnings && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-amber-950">
               <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="font-medium mb-1">Meta Ad Library</p>
-                  <ul className="list-disc pl-5 space-y-1 text-xs">
-                    {adLibraryWarningsList.map((w, i) => (
-                      <li key={i} className="break-words">
-                        {w}
-                      </li>
-                    ))}
+                <div className="min-w-0 space-y-2">
+                  <p className="font-semibold text-sm text-amber-950">
+                    {adLibraryWarningsList.some((w) => parseAdLibraryWarningLine(w).isPermission)
+                      ? 'Περιορισμός πρόσβασης — δεν φορτώνονται διαφημίσεις ανταγωνιστών'
+                      : 'Σημείωση Meta Ad Library'}
+                  </p>
+                  <ul className="space-y-2 text-xs leading-snug">
+                    {adLibraryWarningsList.map((w, i) => {
+                      const p = parseAdLibraryWarningLine(w);
+                      return (
+                        <li key={i} className="break-words">
+                          <p>{p.friendly}</p>
+                          {p.technical && (
+                            <details className="mt-1 text-[10px] text-amber-900/80">
+                              <summary className="cursor-pointer select-none hover:underline">
+                                Τεχνικές λεπτομέρειες (από Meta)
+                              </summary>
+                              <pre className="mt-1 max-h-28 overflow-auto whitespace-pre-wrap break-words rounded border border-amber-200/80 bg-amber-100/40 p-2 font-mono">
+                                {p.technical}
+                              </pre>
+                            </details>
+                          )}
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
                 <button
@@ -843,19 +902,24 @@ function KpiBox({
 }) {
   return (
     <Card padding="md" hover>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
         <div
           className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
           style={{ backgroundColor: `${color}15` }}
         >
           <span style={{ color }}>{icon}</span>
         </div>
-        <div>
-          <p className="text-xs text-[#6B7280] flex items-center gap-1">
+        <div className="min-w-0 flex-1">
+          <p className="text-xs text-[#6B7280] flex items-center gap-1 leading-tight">
             {label}
             <Tooltip content={tooltip} size={11} />
           </p>
-          <p className="text-lg font-bold text-[#1A1A1A] font-mono">{value}</p>
+          <p
+            className="text-base sm:text-lg font-bold text-[#1A1A1A] font-mono leading-tight whitespace-nowrap truncate"
+            title={value}
+          >
+            {value}
+          </p>
         </div>
       </div>
     </Card>

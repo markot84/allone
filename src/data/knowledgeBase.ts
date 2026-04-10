@@ -155,7 +155,7 @@ export const knowledgeArticles: KnowledgeArticle[] = [
 - Campaigns: Ενεργά campaigns
 
 Charts & Visualizations:
-- Revenue Performance: Total vs Performance+ Attributed revenue
+- Revenue Performance: Total vs Campaigns Revenue
 - Customer Segments: Κατανομή πελατών ανά segment
 - Performance Summary: Stock Clearance, Cost Savings, ROI
 
@@ -421,7 +421,7 @@ Description: Description, Desc, Note, Notes, Behavioral_Persona, Tier
     content: `Υποχρεωτικά πεδία:
 - Date: Ημερομηνία σε format YYYY-MM-DD
 - Total Revenue: Συνολικό εισόδημα (σε units, π.χ. 50000 για €50K)
-- Attributed Revenue: Revenue που αποδίδεται στο Performance+ (σε units)
+- Campaigns Revenue: Έσοδα από καμπάνιες / Performance+ (σε units). (Παλιά στήλη: Attributed Revenue — υποστηρίζεται ακόμα στο import.)
 - Attribution Rate: Ποσοστό attribution (π.χ. 30.0 για 30%)
 
 Πιθανές Εκδοχές Ονομάτων Στηλών:
@@ -432,15 +432,15 @@ Date, date, Date_Time, date_time, Timestamp, timestamp, Period, period, Month, m
 Total Revenue:
 Total_Revenue, Total Revenue, total_revenue, Revenue, revenue, Total, total, Total_Rev, total_rev, Revenue_Total, revenue_total
 
-Attributed Revenue:
-Attributed_Revenue, Attributed Revenue, attributed_revenue, Attributed, attributed, Attributed_Rev, attributed_rev, Performance_Plus_Revenue, performance_plus_revenue, PP_Revenue, pp_revenue
+Campaigns Revenue:
+Campaigns_Revenue, Campaigns Revenue, campaigns_revenue, campaigns_rev, Attributed_Revenue, Attributed Revenue, attributed_revenue, Attributed, attributed, Attributed_Rev, attributed_rev, Performance_Plus_Revenue, performance_plus_revenue, PP_Revenue, pp_revenue
 
 Attribution Rate:
 Attribution_Rate, Attribution Rate, attribution_rate, Attribution_%, attribution_%, Attribution_Percentage, attribution_percentage, Rate, rate
 
 Format:
 \`\`\`csv
-Date,Total Revenue,Attributed Revenue,Attribution Rate
+Date,Total Revenue,Campaigns Revenue,Attribution Rate
 2026-01-01,50000,15000,30.0
 2026-02-01,52000,18000,34.6
 \`\`\`
@@ -851,8 +851,8 @@ Budget Allocation:
 
 Κύρια Metrics:
 - Total Revenue: Συνολικό εισόδημα
-- P+ Attributed: Revenue που αποδίδεται στο Performance+
-- Attribution Rate: Ποσοστό του total revenue που είναι attributed
+- Campaigns Revenue: Έσοδα καμπανιών / Performance+
+- Attribution Rate: Ποσοστό του total revenue που αποδίδεται στο Performance+
 - ROI Multiplier: Πόσες φορές επιστρέφει το investment (π.χ. 64x)
 
 Attribution Methodology:
@@ -876,19 +876,19 @@ Cost Savings:
 E-commerce Integration:
 Αν έχετε συνδεδεμένο e-shop, εμφανίζονται επιπλέον:
 - e-shop Revenue: Πραγματικά έσοδα από παραγγελίες e-shop
-- True ROAS: e-shop Revenue ÷ Ad Spend (vs attributed ROAS)
-- Revenue Gap: Διαφορά μεταξύ πραγματικών εσόδων και attributed
+- True ROAS: e-shop Revenue ÷ Ad Spend (vs ROAS από conversion value καμπανιών)
+- Revenue Gap: Διαφορά μεταξύ πραγματικών εσόδων και campaigns revenue
 - e-shop Revenue line στο monthly trend chart (πράσινη γραμμή)`,
     tags: ['roi', 'attribution', 'performance', 'true roas', 'e-shop revenue'],
     related: ['dashboard-overview', 'analytics-import', 'store-revenue-vs-attributed'],
     faq: [
       {
         question: 'Πώς υπολογίζεται το ROI Multiplier;',
-        answer: 'Είναι το Performance+ Attributed Revenue διαιρεμένο με το Subscription Cost. Αν το attributed revenue είναι €64K και το subscription €1K, το ROI είναι 64x.'
+        answer: 'Είναι το Campaigns Revenue διαιρεμένο με το Subscription Cost. Αν το campaigns revenue είναι €64K και το subscription €1K, το ROI είναι 64x.'
       },
       {
         question: 'Τι σημαίνει "Attribution Rate";',
-        answer: 'Είναι το ποσοστό του total revenue που αποδίδεται στο Performance+. Αν το total είναι €100K και το attributed €30K, το rate είναι 30%.'
+        answer: 'Είναι το ποσοστό του total revenue που αποδίδεται στο Performance+. Αν το total είναι €100K και το campaigns revenue €30K, το rate είναι 30%.'
       }
     ]
   },
@@ -957,7 +957,7 @@ Currency symbols:
     faq: [
       {
         question: 'Γιατί δεν βλέπω revenue data στο chart;',
-        answer: 'Βεβαιωθείτε ότι έχετε importάρει analytics data με Date, Total Revenue, και Attributed Revenue fields. Ελέγξτε ότι το date format είναι YYYY-MM-DD.'
+        answer: 'Βεβαιωθείτε ότι έχετε importάρει analytics data με Date, Total Revenue, και Campaigns Revenue (ή παλιά στήλη Attributed Revenue) fields. Ελέγξτε ότι το date format είναι YYYY-MM-DD.'
       },
       {
         question: 'Πώς μπορώ να διορθώσω validation errors;',
@@ -1170,7 +1170,7 @@ Side drawer που δείχνει χρονολογικά όλες τις ενέ�
 
 Παράδειγμα: ROAS 4.0x = Κάθε €1 που ξοδεύετε σε διαφήμιση φέρνει €4 σε πωλήσεις.
 
-Σημαντική διαφορά: Ο ROAS μετράει μόνο τα έσοδα campaigns, ενώ ο Blended ROAS περιλαμβάνει και τα οργανικά.
+Σημαντική διαφορά: Ο **Campaigns ROAS** μετράει μόνο τα έσοδα καμπανιών (από platforms), ενώ ο Blended ROAS περιλαμβάνει και τα οργανικά.
 
 ## Blended ROAS
 Υπολογισμός: Συνολικά Έσοδα (οργανικά + paid) ÷ Ad Spend
@@ -1193,7 +1193,7 @@ Side drawer που δείχνει χρονολογικά όλες τις ενέ�
     related: ['understanding-kpis', 'roi-attribution-basics'],
     tips: [
       'ROAS > 4x θεωρείται πολύ καλός στα περισσότερα industries',
-      'Blended ROAS είναι πιο σημαντικός από τον απλό ROAS για τη συνολική εικόνα',
+      'Blended ROAS είναι πιο σημαντικός από τον Campaigns ROAS για τη συνολική εικόνα',
       'Αν το AOV μειώνεται, σκεφτείτε στρατηγικές αύξησης μέσου καλαθιού (bundles, free shipping thresholds)',
       'MoM comparison έχει νόημα μόνο αν συγκρίνεται μήνες χωρίς ιδιαιτερότητες (π.χ. μη συγκρίνετε Δεκέμβριο με Ιανουάριο)'
     ]
@@ -1518,48 +1518,48 @@ Horizontal bar chart + progress bars που δείχνουν πόσα έσοδα
   {
     id: 'store-revenue-vs-attributed',
     category: 'connectors',
-    title: 'e-shop Revenue vs Attributed Revenue',
+    title: 'e-shop Revenue vs Campaigns Revenue',
     description: 'Τι σημαίνει e-shop Revenue, True ROAS και Revenue Gap στο ROI.',
-    content: `# e-shop Revenue vs Attributed Revenue
+    content: `# e-shop Revenue vs Campaigns Revenue
 
 ## Ορισμοί
 
 ### e-shop Revenue
 Τα **πραγματικά έσοδα** από παραγγελίες στο e-shop σας (Shopify, WooCommerce κλπ). Αυτά είναι τα πραγματικά χρήματα που μπήκαν στο ταμείο.
 
-### Attributed Revenue
+### Campaigns Revenue
 Τα **εκτιμώμενα έσοδα** από organic πωλήσεις + conversion value που αναφέρουν οι ad platforms (Google Ads, Meta). Αυτό είναι attribution-based και δεν αντιστοιχεί πάντα 1:1 στα πραγματικά έσοδα.
 
 ### True ROAS
 \`e-shop Revenue ÷ Ad Spend\`
 
-Πόσα πραγματικά κέρδισε το e-shop σας για κάθε €1 σε διαφήμιση. Πιο αξιόπιστο από τον standard ROAS (attributed revenue / spend).
+Πόσα πραγματικά κέρδισε το e-shop σας για κάθε €1 σε διαφήμιση. Πιο αξιόπιστο από τον Campaigns ROAS (έσοδα καμπανιών ÷ spend).
 
 ### Revenue Gap
-\`e-shop Revenue − Attributed Revenue\`
+\`e-shop Revenue − Campaigns Revenue\`
 
 - **Θετικό**: Πουλάτε περισσότερα από ό,τι δείχνουν τα ad platforms (π.χ. word-of-mouth, repeat purchases)
 - **Αρνητικό**: Τα ad platforms over-report conversions (common σε cross-platform attribution)
 
 ## Πού εμφανίζεται
 Στο **ROI Attribution** (#roi), εμφανίζεται μόνο όταν υπάρχουν e-commerce δεδομένα:
-- 4 MetricCards: e-shop Revenue, Attributed Revenue, True ROAS, Revenue Gap
+- 4 MetricCards: e-shop Revenue, Campaigns Revenue, True ROAS, Revenue Gap
 - Γραμμή e-shop Revenue (πράσινη) στο monthly trend chart
 - Επεξηγηματικό κείμενο κάτω από τα cards
 - Tooltips στα metric labels για γρήγορη κατανόηση ορισμών
 
 ## Γιατί είναι σημαντικό
-Ο κλασικός ROAS βασίζεται σε attribution models που μπορεί να μετράνε duplicates (ένα conversion σε Google + Meta). Ο True ROAS χρησιμοποιεί πραγματικά δεδομένα παραγγελιών, δίνοντας πιο ρεαλιστική εικόνα.`,
-    tags: ['e-shop revenue', 'attributed', 'true roas', 'revenue gap', 'roi', 'ecommerce'],
+Ο Campaigns ROAS βασίζεται σε attribution models που μπορεί να μετράνε duplicates (ένα conversion σε Google + Meta). Ο True ROAS χρησιμοποιεί πραγματικά δεδομένα παραγγελιών, δίνοντας πιο ρεαλιστική εικόνα.`,
+    tags: ['e-shop revenue', 'campaigns revenue', 'true roas', 'revenue gap', 'roi', 'ecommerce'],
     related: ['roi-attribution-basics', 'ecommerce-explorer', 'understanding-financial-kpis'],
     faq: [
       {
-        question: 'Γιατί διαφέρει το e-shop Revenue από το Attributed;',
+        question: 'Γιατί διαφέρει το e-shop Revenue από το Campaigns Revenue;',
         answer: 'Τα ad platforms (Google, Meta) χρησιμοποιούν attribution models που μπορεί να υπερεκτιμούν ή υποεκτιμούν τις πωλήσεις. Το e-shop Revenue είναι τα πραγματικά χρήματα από παραγγελίες.'
       },
       {
         question: 'Ποιο ROAS πρέπει να χρησιμοποιώ;',
-        answer: 'Χρησιμοποιήστε τον True ROAS για business decisions. Ο standard ROAS (attributed) είναι χρήσιμος για optimization ανά campaign αλλά δεν δείχνει τη συνολική πραγματικότητα.'
+        answer: 'Χρησιμοποιήστε τον True ROAS για business decisions. Ο Campaigns ROAS είναι χρήσιμος για optimization ανά campaign αλλά δεν δείχνει τη συνολική πραγματικότητα.'
       }
     ]
   },

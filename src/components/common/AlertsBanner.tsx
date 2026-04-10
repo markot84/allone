@@ -73,7 +73,7 @@ export function AlertsBanner({ filterGroup, maxAlerts = 3, compact = false, onNa
   const useGrid = !compact && displayed.length > 1;
 
   return (
-    <div className="space-y-2">
+    <div className={compact ? 'space-y-1' : 'space-y-2'}>
       {!compact && (
         <div className="flex items-center gap-2">
           <Zap size={14} className="text-[var(--nts-accent)] shrink-0" />
@@ -137,8 +137,8 @@ export function AlertsBanner({ filterGroup, maxAlerts = 3, compact = false, onNa
                     />
                   </button>
 
-                  <div className="flex flex-wrap items-center gap-x-1 gap-y-1">
-                    <span className="text-[9px] uppercase tracking-wide text-[#9CA3AF] mr-0.5">Αξιολόγηση</span>
+                  <div className={`flex flex-wrap items-center gap-x-1 gap-y-1 ${compact ? 'pt-0' : ''}`}>
+                    <span className={`uppercase tracking-wide text-[#9CA3AF] mr-0.5 ${compact ? 'text-[8px]' : 'text-[9px]'}`}>Αξιολόγηση</span>
                     {(['urgent', 'interested', 'not_interested'] as const).map(ev => {
                       const label =
                         ev === 'urgent'
@@ -163,7 +163,9 @@ export function AlertsBanner({ filterGroup, maxAlerts = 3, compact = false, onNa
                             e.stopPropagation();
                             void handleEvaluate(alert, ev);
                           }}
-                          className={`text-[10px] leading-none px-2 py-1 rounded-md border transition-colors flex items-center gap-1 min-h-[26px] ${
+                          className={`leading-none px-2 rounded-md border transition-colors flex items-center gap-1 ${
+                            compact ? 'text-[9px] py-0.5 min-h-[22px]' : 'text-[10px] py-1 min-h-[26px]'
+                          } ${
                             isActive
                               ? 'ring-2 ring-[var(--nts-accent)] border-[var(--nts-accent)] bg-[var(--nts-accent)]/12 text-[var(--nts-accent)] font-semibold shadow-sm'
                               : 'border-[#E5E7EB] bg-white/95 text-[#4B5563] hover:border-[var(--nts-accent)]/60 hover:text-[var(--nts-accent)]'

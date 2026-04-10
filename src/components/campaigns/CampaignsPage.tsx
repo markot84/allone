@@ -9,6 +9,7 @@ import { useSearchIntelligence } from '../../hooks/useSearchIntelligence';
 import { FirestoreService } from '../../services/firestore';
 import { formatCurrency, formatNumber, formatMultiplier, formatPercent } from '../../utils/format';
 import { BudgetOpportunitySection } from '../roi/BudgetOpportunitySection';
+import { CampaignsChannelInsights } from './CampaignsChannelInsights';
 import {
   bucketOverlapFraction,
   getEffectiveConversionValue,
@@ -907,12 +908,13 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <PageHeader
+        className="!gap-2 lg:!gap-4 lg:!items-center"
         toolbarAriaLabel="Export and delete campaigns"
-        title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Campaigns</h2>}
+        title={<h2 className="text-lg font-bold text-[#1A1A1A] sm:text-xl">Campaigns</h2>}
         description={
-          <p className="text-sm text-[#4A4A4A] sm:text-base">
+          <p className="text-xs text-[#6B7280] sm:text-sm">
             Imported campaigns: {summaryStats.total}
           </p>
         }
@@ -958,27 +960,142 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
         }
       />
 
-      {/* Automation Alerts */}
-      <AlertsBanner filterGroup="campaigns" maxAlerts={3} onNavigate={onSectionChange} />
+      {/* Automation Alerts — compact ώστε να μένει χώρος για πίνακες */}
+      <AlertsBanner filterGroup="campaigns" maxAlerts={3} compact onNavigate={onSectionChange} />
 
-      {/* Tabs */}
-      <div className="flex gap-1 bg-[#F5F5F5] p-1 rounded-lg w-fit">
-        {(['campaigns', 'search_terms', 'keywords'] as const).map(tab => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-              activeTab === tab
-                ? 'bg-white text-[#111827] shadow-sm'
-                : 'text-[#6B7280] hover:text-[#111827]'
-            }`}
-          >
-            {tab === 'campaigns' ? `Campaigns (${summaryStats.total})` :
-             tab === 'search_terms' ? `Search Terms ${hasSearchData ? `(${searchTerms.length})` : ''}` :
-             `Keywords ${hasSearchData ? `(${keywords.length})` : ''}`}
-          </button>
-        ))}
+      {/* KPI σύνοψης — αμέσως κάτω από ειδοποιήσεις (μόνο στο tab Campaigns) */}
+      {activeTab === 'campaigns' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+          <Card padding="sm">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs text-[#4A4A4A] flex items-center gap-1">Total spend <Tooltip content="Συνολική διαφημιστική δαπάνη για τα τρέχοντα φίλτρα (ημερομηνίες, κανάλι, αναζήτηση κ.λπ.)." size={13} /></p>
+                <p className="text-xl font-bold text-[#1A1A1A] font-mono mt-0.5 tabular-nums">
+                  {EUR}{formatCurrency(summaryStats.totalSpent, 2)}
+                </p>
+              </div>
+              <div className="w-10 h-10 shrink-0 bg-[var(--nts-light-gray)] rounded-lg flex items-center justify-center">
+                <DollarSign size={20} className="text-[var(--nts-accent)]" />
+              </div>
+            </div>
+          </Card>
+
+          <Card padding="sm">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs text-[#4A4A4A] flex items-center gap-1">
+                  {showPurchaseSalesHeadlines ? 'Sales' : 'Conversions'}{' '}
+                  <Tooltip
+                    content={
+                      convFilterActive
+                        ? 'Μόνο οι επιλεγμένες conversion actions.'
+                        : showPurchaseSalesHeadlines
+                          ? 'Google Ads: conversion_action_category PURCHASE + STORE_SALES (όπως Purchases στο UI). Meta: Purchase (Pixel) / Purchase. Με φίλτρο ενέργειας το νόημα αλλάζει.'
+                          : 'Conversion counts από το sync.'
+                    }
+                    size={13}
+                  />
+                </p>
+                <p className="text-xl font-bold text-[#1A1A1A] font-mono mt-0.5 tabular-nums">
+                  {formatConvCount(summaryStats.totalConversions)}
+                </p>
+              </div>
+              <div className="w-10 h-10 shrink-0 bg-[#DCFCE7] rounded-lg flex items-center justify-center">
+                <TrendingUp size={20} className="text-[#22C55E]" />
+              </div>
+            </div>
+          </Card>
+
+          <Card padding="sm">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs text-[#4A4A4A] flex items-center gap-1">
+                  {showPurchaseSalesHeadlines ? 'Sales value' : 'Conversion value'}{' '}
+                  <Tooltip
+                    content={
+                      convFilterActive
+                        ? 'Αξία μόνο για τις επιλεγμένες ενέργειες.'
+                        : showPurchaseSalesHeadlines
+                          ? 'Αξία από τις ίδιες ενέργειες πώλησης με την κάρτα Sales.'
+                          : 'Συνολική conversion value.'
+                    }
+                    size={13}
+                  />
+                </p>
+                <p className="text-xl font-bold text-[#1A1A1A] font-mono mt-0.5 tabular-nums">
+                  {EUR}{formatCurrency(summaryStats.totalConversionValue, 2)}
+                </p>
+              </div>
+              <div className="w-10 h-10 shrink-0 bg-[#F5F5F5] rounded-lg flex items-center justify-center">
+                <TrendingUp size={20} className="text-[#4A4A4A]" />
+              </div>
+            </div>
+          </Card>
+
+          <Card padding="sm">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs text-[#4A4A4A] flex items-center gap-1">
+                  Μέσος ROAS{' '}
+                  <Tooltip
+                    content={
+                      showPurchaseSalesHeadlines && !convFilterActive
+                        ? 'Τζίρος πωλήσεων / δαπάνη (ίδιο παρονομαστής με Google/Meta για πωλήσεις).'
+                        : 'Μέσος όρος ROAS για τα εμφανιζόμενα campaigns.'
+                    }
+                    size={13}
+                  />
+                </p>
+                <p className="text-xl font-bold text-[#1A1A1A] font-mono mt-0.5 tabular-nums">
+                  {formatMultiplier(summaryStats.avgROAS, 2)}
+                </p>
+              </div>
+              <div className="w-10 h-10 shrink-0 bg-[#FEF3C7] rounded-lg flex items-center justify-center">
+                <TrendingUp size={20} className="text-[#F59E0B]" />
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Tabs + εύρος ημερομηνιών (ίδια γραμμή σε md+) */}
+      <div className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center md:justify-between md:gap-x-4 md:gap-y-2">
+        <div className="flex gap-0.5 bg-[#F5F5F5] p-0.5 rounded-lg w-fit shrink-0">
+          {(['campaigns', 'search_terms', 'keywords'] as const).map(tab => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setActiveTab(tab)}
+              className={`px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all ${
+                activeTab === tab
+                  ? 'bg-white text-[#111827] shadow-sm'
+                  : 'text-[#6B7280] hover:text-[#111827]'
+              }`}
+            >
+              {tab === 'campaigns' ? `Campaigns (${summaryStats.total})` :
+               tab === 'search_terms' ? `Search Terms ${hasSearchData ? `(${searchTerms.length})` : ''}` :
+               `Keywords ${hasSearchData ? `(${keywords.length})` : ''}`}
+            </button>
+          ))}
+        </div>
+        {activeTab === 'campaigns' && (
+          <div className="flex flex-wrap items-center gap-2 md:justify-end min-w-0 md:flex-1">
+            <DateRangePicker
+              from={dateFrom}
+              to={dateTo}
+              onChange={(f, t) => { setDateFrom(f); setDateTo(t); }}
+              onClear={() => { setDateFrom(''); setDateTo(''); localStorage.removeItem(LS_FROM); localStorage.removeItem(LS_TO); }}
+            />
+            <span className="text-[10px] text-[#9CA3AF] leading-snug max-w-[220px] md:max-w-none md:truncate">
+              Σύνολα = επιλεγμένο εύρος ημερομηνιών.
+            </span>
+          </div>
+        )}
       </div>
+
+      {activeTab === 'campaigns' && (
+        <CampaignsChannelInsights campaigns={campaignsInConvView} />
+      )}
 
       {activeTab !== 'campaigns' && (
         <SearchIntelligenceTab
@@ -992,116 +1109,10 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
       )}
 
       {activeTab === 'campaigns' && <>
-      {/* Date range picker */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <DateRangePicker
-          from={dateFrom}
-          to={dateTo}
-          onChange={(f, t) => { setDateFrom(f); setDateTo(t); }}
-          onClear={() => { setDateFrom(''); setDateTo(''); localStorage.removeItem(LS_FROM); localStorage.removeItem(LS_TO); }}
-        />
-        <span className="text-xs text-[#9CA3AF]">
-          Τα σύνολα αφορούν το επιλεγμένο εύρος ημερομηνιών.
-        </span>
-      </div>
-
-      {/* Summary Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card padding="md">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-[#4A4A4A] flex items-center gap-1">Total spend <Tooltip content="Συνολική διαφημιστική δαπάνη για τα τρέχοντα φίλτρα (ημερομηνίες, κανάλι, αναζήτηση κ.λπ.)." size={13} /></p>
-              <p className="text-2xl font-bold text-[#1A1A1A] font-mono mt-1">
-                {EUR}{formatCurrency(summaryStats.totalSpent, 2)}
-              </p>
-            </div>
-            <div className="w-12 h-12 bg-[var(--nts-light-gray)] rounded-lg flex items-center justify-center">
-              <DollarSign size={24} className="text-[var(--nts-accent)]" />
-            </div>
-          </div>
-        </Card>
-
-        <Card padding="md">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-[#4A4A4A] flex items-center gap-1">
-                {showPurchaseSalesHeadlines ? 'Sales' : 'Conversions'}{' '}
-                <Tooltip
-                  content={
-                    convFilterActive
-                      ? 'Μόνο οι επιλεγμένες conversion actions.'
-                      : showPurchaseSalesHeadlines
-                        ? 'Google Ads: conversion_action_category PURCHASE + STORE_SALES (όπως Purchases στο UI). Meta: Purchase (Pixel) / Purchase. Με φίλτρο ενέργειας το νόημα αλλάζει.'
-                        : 'Conversion counts από το sync.'
-                  }
-                  size={13}
-                />
-              </p>
-              <p className="text-2xl font-bold text-[#1A1A1A] font-mono mt-1">
-                {formatConvCount(summaryStats.totalConversions)}
-              </p>
-            </div>
-            <div className="w-12 h-12 bg-[#DCFCE7] rounded-lg flex items-center justify-center">
-              <TrendingUp size={24} className="text-[#22C55E]" />
-            </div>
-          </div>
-        </Card>
-
-        <Card padding="md">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-[#4A4A4A] flex items-center gap-1">
-                {showPurchaseSalesHeadlines ? 'Sales value' : 'Conversion value'}{' '}
-                <Tooltip
-                  content={
-                    convFilterActive
-                      ? 'Αξία μόνο για τις επιλεγμένες ενέργειες.'
-                      : showPurchaseSalesHeadlines
-                        ? 'Αξία από τις ίδιες ενέργειες πώλησης με την κάρτα Sales.'
-                        : 'Συνολική conversion value.'
-                  }
-                  size={13}
-                />
-              </p>
-              <p className="text-2xl font-bold text-[#1A1A1A] font-mono mt-1">
-                {EUR}{formatCurrency(summaryStats.totalConversionValue, 2)}
-              </p>
-            </div>
-            <div className="w-12 h-12 bg-[#F5F5F5] rounded-lg flex items-center justify-center">
-              <TrendingUp size={24} className="text-[#4A4A4A]" />
-            </div>
-          </div>
-        </Card>
-
-        <Card padding="md">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-[#4A4A4A] flex items-center gap-1">
-                Μέσος ROAS{' '}
-                <Tooltip
-                  content={
-                    showPurchaseSalesHeadlines && !convFilterActive
-                      ? 'Τζίρος πωλήσεων / δαπάνη (ίδιο παρονομαστής με Google/Meta για πωλήσεις).'
-                      : 'Μέσος όρος ROAS για τα εμφανιζόμενα campaigns.'
-                  }
-                  size={13}
-                />
-              </p>
-              <p className="text-2xl font-bold text-[#1A1A1A] font-mono mt-1">
-                {formatMultiplier(summaryStats.avgROAS, 2)}
-              </p>
-            </div>
-            <div className="w-12 h-12 bg-[#FEF3C7] rounded-lg flex items-center justify-center">
-              <TrendingUp size={24} className="text-[#F59E0B]" />
-            </div>
-          </div>
-        </Card>
-      </div>
-
       {/* Filters */}
-      <Card padding="md">
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="flex-1 min-w-[200px]">
+      <Card padding="sm">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex-1 min-w-[180px]">
             <div className="relative">
               <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#4A4A4A]" />
               <input
@@ -1190,9 +1201,10 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
       </Card>
 
       {/* Campaigns Table */}
-      <Card padding="lg">
-        <div className="flex items-center justify-between">
+      <Card padding="md">
+        <div className="flex items-center justify-between gap-2">
           <CardHeader
+            className="!mb-0"
             title="Campaign list"
             subtitle={
               sortedCampaigns.length === 1
@@ -1219,7 +1231,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
             <p className="text-[#4A4A4A]">Κανένα campaign δεν έχει τις επιλεγμένες conversions. Δοκιμάστε άλλα φίλτρα (π.χ. αφαιρέστε την ενέργεια Purchase αν δεν υπάρχουν πραγματικές αγορές).</p>
           </div>
         ) : (
-          <div className="overflow-x-auto mt-4">
+          <div className="overflow-x-auto mt-3">
             <table className="w-full">
               <thead>
                 <tr className="text-left text-[11px] text-[#4A4A4A] border-b border-[#E5E5E5]">

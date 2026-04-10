@@ -900,7 +900,18 @@ function validateSegmentRow(row: Record<string, string>, index: number): { valid
 function validateAnalyticsRow(row: Record<string, string>, index: number): { valid: boolean; data?: { id: string; date: Timestamp; total_revenue?: number; attributed_revenue?: number; attribution_rate?: number }; error?: string } {
   const date = pick(row, 'date', 'date_time', 'timestamp', 'period', 'month', 'year_month');
   const totalRevenue = pick(row, 'total_revenue', 'total revenue', 'revenue', 'total', 'total_rev', 'revenue_total');
-  const attributedRevenue = pick(row, 'attributed_revenue', 'attributed revenue', 'attributed', 'attributed_rev', 'performance_plus_revenue', 'pp_revenue');
+  const attributedRevenue = pick(
+    row,
+    'campaigns_revenue',
+    'campaigns revenue',
+    'campaigns_rev',
+    'attributed_revenue',
+    'attributed revenue',
+    'attributed',
+    'attributed_rev',
+    'performance_plus_revenue',
+    'pp_revenue',
+  );
   const attributionRate = pick(row, 'attribution_rate', 'attribution rate', 'attribution_%', 'attribution_percentage', 'rate');
 
   if (!date) {

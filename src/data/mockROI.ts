@@ -47,7 +47,7 @@ export const roiCalculator = {
   roi_percentage: 6417,
   display: {
     headline: '64x ROI',
-    subheadline: 'Κάθε €1 στο Performance+ απέφερε €64 σε attributed revenue',
+    subheadline: 'Κάθε €1 στο Performance+ απέφερε €64 σε campaigns revenue',
     disclaimer: 'Βάσει conservative attribution methodology'
   }
 };

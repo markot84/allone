@@ -115,7 +115,7 @@ export function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
           response = 'Το Commercial Strategy σας επιτρέπει να προσαρμόσετε πώς προτεραιοποιούνται τα προϊόντα. Μπορείτε να χρησιμοποιήσετε preset scenarios ή να δημιουργήσετε custom.';
           articleRefs = ['strategy-weights', 'scenarios'];
         } else if (query.includes('roi') || query.includes('attribution')) {
-          response = 'Το ROI Attribution μετράει την επιπτώση του Performance+ στο business σας. Δείχνει total revenue, attributed revenue, και ROI multiplier.';
+          response = 'Το ROI Attribution μετράει την επιπτώση του Performance+ στο business σας. Δείχνει total revenue, campaigns revenue, και ROI multiplier.';
           articleRefs = ['roi-attribution-basics'];
         } else if (query.includes('dashboard') || query.includes('kpi')) {
           response = 'Το Dashboard σας δίνει μια ολοκληρωμένη εικόνα της απόδοσης. Βλέπετε KPIs όπως Total Revenue, Products, Segments, και Campaigns. Κάθε KPI είναι clickable για λεπτομερή ανάλυση.';

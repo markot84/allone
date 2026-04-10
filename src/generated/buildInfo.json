@@ -1,10 +1,18 @@
 {
-  "version": "0.364.0",
-  "previousVersion": "0.363.0",
-  "commitHash": "71328a0",
+  "version": "0.374.0",
+  "previousVersion": "0.373.0",
+  "commitHash": "3de5a79",
   "branch": "main",
-  "buildDate": "2026-04-10T06:38:08.007Z",
+  "buildDate": "2026-04-10T11:08:18.580Z",
   "commits": [
+    {
+      "hash": "3de5a79",
+      "message": "Dashboard: απλοποίηση KPI, ROI ROAS block, διόρθωση τάσης· AI briefing φιλικότερο prompt· tooltip"
+    },
+    {
+      "hash": "4e93e7e",
+      "message": "feat: shared page headers, campaigns copy (EN tech terms), connector and UI updates"
+    },
     {
       "hash": "71328a0",
       "message": "Add campaign helper files, Performance image variants, apply_campaigns patch script"
@@ -56,17 +64,11 @@
     {
       "hash": "be5dbb8",
       "message": "fix(campaigns): reconcile conversions with per-action sum vs aggregate"
-    },
-    {
-      "hash": "f9c33b5",
-      "message": "fix(campaigns): hide zero-match rows when conversion filter is on"
-    },
-    {
-      "hash": "c8e4ceb",
-      "message": "fix(campaigns): Purchase filter sums all purchase conversion actions"
     }
   ],
   "changes": [
+    "Dashboard: απλοποίηση KPI, ROI ROAS block, διόρθωση τάσης· AI briefing φιλικότερο prompt· tooltip",
+    "[Νέο χαρακτηριστικό] Shared page headers, campaigns copy (EN tech terms), connector and UI updates",
     "Add campaign helper files, Performance image variants, apply_campaigns patch script",
     "Campaigns: filters, server-side fetch, Meta sync resilience, purchase/conversion alignment",
     "[Διόρθωση] Unify header branding and topbar alignment",
@@ -74,8 +76,6 @@
     "[Συντήρηση] Add project context rule for agent continuity",
     "[Νέο χαρακτηριστικό] E-commerce connectors, explorer page, dashboard/ROI integration, help docs",
     "[Διόρθωση] Restore EUR display and UI copy (fix mojibake from bad encoding)",
-    "[Συντήρηση] Sync buildInfo after deploy (v0.306.0)",
-    "[Συντήρηση] UTF-8 headers, el lang; campaigns: budget section below table",
-    "[Νέο χαρακτηριστικό] Purchase filter, GA-first Ads actions, phantom store visits"
+    "[Συντήρηση] Sync buildInfo after deploy (v0.306.0)"
   ]
 }

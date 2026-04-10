@@ -393,56 +393,6 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         );
       })()}
 
-      {/* GA4 Web Analytics Summary */}
-      {ga4.hasData && (
-        <Card hover onClick={() => onSectionChange?.('analytics')}>
-          <div className="p-5">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <BarChart3 size={18} className="text-orange-500" />
-                <h4 className="text-sm font-semibold text-[#1A1A1A]">Web Analytics</h4>
-                <span className="text-[10px] text-[#9CA3AF] bg-[#F3F4F6] px-1.5 py-0.5 rounded">{ga4.propertyName}</span>
-              </div>
-              <span className="text-[10px] text-[#9CA3AF]">90 ημέρες</span>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div>
-                <p className="text-[11px] text-[#6B7280] mb-0.5">Sessions</p>
-                <p className="text-lg font-bold text-[#1A1A1A]">{ga4.totals.sessions >= 1000 ? `${(ga4.totals.sessions / 1000).toFixed(1)}K` : ga4.totals.sessions.toLocaleString()}</p>
-                {ga4.weeklyChange?.sessions != null && (
-                  <p className={`text-[10px] font-medium ${ga4.weeklyChange.sessions >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                    {ga4.weeklyChange.sessions >= 0 ? '+' : ''}{ga4.weeklyChange.sessions.toFixed(1)}% vs prev 7d
-                  </p>
-                )}
-              </div>
-              <div>
-                <p className="text-[11px] text-[#6B7280] mb-0.5">Users</p>
-                <p className="text-lg font-bold text-[#1A1A1A]">{ga4.totals.users >= 1000 ? `${(ga4.totals.users / 1000).toFixed(1)}K` : ga4.totals.users.toLocaleString()}</p>
-                {ga4.weeklyChange?.users != null && (
-                  <p className={`text-[10px] font-medium ${ga4.weeklyChange.users >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                    {ga4.weeklyChange.users >= 0 ? '+' : ''}{ga4.weeklyChange.users.toFixed(1)}% vs prev 7d
-                  </p>
-                )}
-              </div>
-              <div>
-                <p className="text-[11px] text-[#6B7280] mb-0.5">Bounce Rate</p>
-                <p className="text-lg font-bold text-[#1A1A1A]">{(ga4.totals.bounceRate * 100).toFixed(1)}%</p>
-                <p className="text-[10px] text-[#9CA3AF]">μέσος (90d)</p>
-              </div>
-              <div>
-                <p className="text-[11px] text-[#6B7280] mb-0.5">Conversions</p>
-                <p className="text-lg font-bold text-[#1A1A1A]">{ga4.totals.conversions.toLocaleString()}</p>
-                {ga4.weeklyChange?.conversions != null && (
-                  <p className={`text-[10px] font-medium ${ga4.weeklyChange.conversions >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                    {ga4.weeklyChange.conversions >= 0 ? '+' : ''}{ga4.weeklyChange.conversions.toFixed(1)}% vs prev 7d
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-        </Card>
-      )}
-
       {/* E-commerce Summary */}
       {ecomm.hasData && (
         <Card hover onClick={() => onSectionChange?.('ecommerce')}>
@@ -513,6 +463,56 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         </Card>
       )}
 
+      {/* GA4 Web Analytics Summary */}
+      {ga4.hasData && (
+        <Card hover onClick={() => onSectionChange?.('analytics')}>
+          <div className="p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <BarChart3 size={18} className="text-orange-500" />
+                <h4 className="text-sm font-semibold text-[#1A1A1A]">Web Analytics</h4>
+                <span className="text-[10px] text-[#9CA3AF] bg-[#F3F4F6] px-1.5 py-0.5 rounded">{ga4.propertyName}</span>
+              </div>
+              <span className="text-[10px] text-[#9CA3AF]">90 ημέρες</span>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <p className="text-[11px] text-[#6B7280] mb-0.5">Sessions</p>
+                <p className="text-lg font-bold text-[#1A1A1A]">{ga4.totals.sessions >= 1000 ? `${(ga4.totals.sessions / 1000).toFixed(1)}K` : ga4.totals.sessions.toLocaleString()}</p>
+                {ga4.weeklyChange?.sessions != null && (
+                  <p className={`text-[10px] font-medium ${ga4.weeklyChange.sessions >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                    {ga4.weeklyChange.sessions >= 0 ? '+' : ''}{ga4.weeklyChange.sessions.toFixed(1)}% vs prev 7d
+                  </p>
+                )}
+              </div>
+              <div>
+                <p className="text-[11px] text-[#6B7280] mb-0.5">Users</p>
+                <p className="text-lg font-bold text-[#1A1A1A]">{ga4.totals.users >= 1000 ? `${(ga4.totals.users / 1000).toFixed(1)}K` : ga4.totals.users.toLocaleString()}</p>
+                {ga4.weeklyChange?.users != null && (
+                  <p className={`text-[10px] font-medium ${ga4.weeklyChange.users >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                    {ga4.weeklyChange.users >= 0 ? '+' : ''}{ga4.weeklyChange.users.toFixed(1)}% vs prev 7d
+                  </p>
+                )}
+              </div>
+              <div>
+                <p className="text-[11px] text-[#6B7280] mb-0.5">Bounce Rate</p>
+                <p className="text-lg font-bold text-[#1A1A1A]">{(ga4.totals.bounceRate * 100).toFixed(1)}%</p>
+                <p className="text-[10px] text-[#9CA3AF]">μέσος (90d)</p>
+              </div>
+              <div>
+                <p className="text-[11px] text-[#6B7280] mb-0.5">Conversions</p>
+                <p className="text-lg font-bold text-[#1A1A1A]">{ga4.totals.conversions.toLocaleString()}</p>
+                {ga4.weeklyChange?.conversions != null && (
+                  <p className={`text-[10px] font-medium ${ga4.weeklyChange.conversions >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                    {ga4.weeklyChange.conversions >= 0 ? '+' : ''}{ga4.weeklyChange.conversions.toFixed(1)}% vs prev 7d
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* Main Charts Row */}
       {hasAnyData && (
         <>
@@ -526,7 +526,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         >
           <CardHeader
             title="Revenue Performance"
-            subtitle="Σύνολο vs Performance+ Attributed"
+            subtitle="Σύνολο vs Campaigns Revenue"
             icon={<TrendingUp size={18} className="text-[var(--nts-medium-gray)]" />}
           />
           {revenueChartData.length > 0 ? (
@@ -579,7 +579,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   }}
                   formatter={(value: any, name?: string) => [
                     formatCurrencyCompact((value as number) || 0),
-                    name === 'total' ? 'Total Revenue' : 'Performance+ Attributed'
+                    name === 'total' ? 'Total Revenue' : 'Campaigns Revenue'
                   ]}
                   labelStyle={{ color: '#24292f', fontWeight: 600, marginBottom: 4 }}
                 />
@@ -622,7 +622,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded-full bg-[var(--nts-orange)]" />
-                <span className="text-sm text-[var(--nts-medium-gray)]">Performance+ Attributed</span>
+                <span className="text-sm text-[var(--nts-medium-gray)]">Campaigns Revenue</span>
               </div>
             </div>
           )}

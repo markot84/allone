@@ -59,6 +59,36 @@ function getAppToken(): string {
   return `${appId}|${appSecret}`;
 }
 
+/**
+ * Το Graph endpoint `ads_archive` συχνά απορρίπτει το app access token («Application does not have permission»).
+ * Το user access token από το Meta OAuth (ίδιο app, scopes ads_read/ads_management) συνήθως λειτουργεί.
+ * Σειρά: έγκυρο OAuth token → app token.
+ */
+async function resolveAdLibraryAccessToken(
+  brandId: string
+): Promise<{ token: string; source: 'user' | 'app' } | null> {
+  try {
+    const snap = await getDb().doc(`connectors/${brandId}`).get();
+    const meta = snap.data()?.meta as
+      | { connected?: boolean; accessToken?: string; expiresAt?: number }
+      | undefined;
+    const tok = meta?.accessToken;
+    if (meta?.connected && typeof tok === 'string' && tok.length > 20) {
+      if (!meta.expiresAt || meta.expiresAt > Date.now()) {
+        logger.info(`[Competitor] ads_archive: χρήση Meta OAuth token (brand ${brandId})`);
+        return { token: tok, source: 'user' };
+      }
+      logger.warn(`[Competitor] Meta OAuth token expired για ${brandId} — δοκιμή app token για ads_archive`);
+    }
+  } catch (e) {
+    logger.warn(`[Competitor] Ανάγνωση connectors/${brandId}:`, e);
+  }
+  const app = getAppToken();
+  if (!app || app === '|') return null;
+  logger.info(`[Competitor] ads_archive: χρήση app access token (brand ${brandId})`);
+  return { token: app, source: 'app' };
+}
+
 interface CompetitorConfig {
   pageId: string;
   name: string;
@@ -93,6 +123,25 @@ function adCreativeFirstLine(ad: { ad_creative_bodies?: unknown }): string {
   return '';
 }
 
+/** User-facing Greek message when Meta rejects Ad Library calls (permission / app config). */
+function isAdLibraryPermissionDenied(message: string): boolean {
+  const m = message.toLowerCase();
+  return (
+    m.includes('does not have permission') ||
+    m.includes('permission denied') ||
+    m.includes('invalid oauth') ||
+    (m.includes('permission') && (m.includes('application') || m.includes('this action')))
+  );
+}
+
+function friendlyAdLibraryPermissionMessage(competitorName: string, usedUserToken: boolean): string {
+  const base = `${competitorName}: Δεν είναι δυνατή η παρακολούθηση διαφημίσεων — η Meta απορρίπτει την πρόσβαση στο Ad Library (ads_archive).`;
+  if (usedUserToken) {
+    return `${base} Το συνδεδεμένο Meta token δεν έχει επαρκή δικαιώματα· στο Facebook Developers ελέγξτε ότι η εφαρμογή είναι Live και ότι τα permissions (π.χ. ads_read) έχουν περάσει App Review όπου απαιτείται.`;
+  }
+  return `${base} Συνδέστε το Meta από το Data Import ώστε να χρησιμοποιείται το OAuth token σας (συνήθως λύνει το πρόβλημα)· εναλλακτικά ρυθμίστε META_APP_ID/SECRET και Ad Library/Marketing API στο ίδιο Meta App (Live).`;
+}
+
 /**
  * Fetch competitor ads from Meta Ad Library for a brand.
  */
@@ -111,11 +160,18 @@ export async function fetchCompetitorAds(brandId: string): Promise<{
   }
 
   const competitors: CompetitorConfig[] = settings.competitors;
-  const appToken = getAppToken();
-
-  if (!appToken || appToken === '|') {
-    return { success: false, totalAds: 0, newAds: 0, error: 'META_APP_ID or META_APP_SECRET not configured' };
+  const resolved = await resolveAdLibraryAccessToken(brandId);
+  if (!resolved) {
+    return {
+      success: false,
+      totalAds: 0,
+      newAds: 0,
+      error:
+        'Δεν υπάρχει έγκυρο Meta token για Ad Library. Συνδέστε το Meta στο Data Import (προτείνεται) ή ορίστε META_APP_ID / META_APP_SECRET στα Cloud Functions.',
+    };
   }
+  const accessToken = resolved.token;
+  const tokenSourceUser = resolved.source === 'user';
 
   let totalAds = 0;
   let newAds = 0;
@@ -153,7 +209,7 @@ export async function fetchCompetitorAds(brandId: string): Promise<{
 
       const makeStartUrl = (mode: 'plain' | 'jsonArray', reachCountries: string[]): string => {
         const params = new URLSearchParams({
-          access_token: appToken,
+          access_token: accessToken,
           ad_active_status: 'ALL',
           ad_type: 'ALL',
           /** Aligns with Ad Library web UI (media_type=all). */
@@ -174,8 +230,11 @@ export async function fetchCompetitorAds(brandId: string): Promise<{
       const processOnePage = async (data: any): Promise<boolean> => {
         if (data.error) {
           const err = data.error as { message?: string; code?: number };
-          const msg = `Ad Library API (${competitor.name}): ${err.message || JSON.stringify(err)} (code ${err.code ?? '?'})`;
-          logger.warn(`[Competitor] ${msg}`);
+          const raw = err.message || JSON.stringify(err);
+          logger.warn(`[Competitor] Ad Library API (${competitor.name}): ${raw} (code ${err.code ?? '?'})`);
+          const msg = isAdLibraryPermissionDenied(raw)
+            ? friendlyAdLibraryPermissionMessage(competitor.name, tokenSourceUser)
+            : `Ad Library API (${competitor.name}): ${raw} (code ${err.code ?? '?'})`;
           warnings.push(msg);
           return false;
         }
@@ -264,9 +323,17 @@ export async function fetchCompetitorAds(brandId: string): Promise<{
           if (!res.ok) {
             hadAdLibraryHttpError = true;
             const errText = await res.text();
-            const msg = `Ad Library API error for ${competitor.name} (${res.status}): ${errText.slice(0, 200)}`;
-            logger.warn(`[Competitor] ${msg}`);
-            warnings.push(msg);
+            logger.warn(`[Competitor] Ad Library HTTP ${res.status} for ${competitor.name}: ${errText.slice(0, 500)}`);
+            let userMsg: string;
+            if (
+              (res.status === 400 || res.status === 403) &&
+              isAdLibraryPermissionDenied(errText)
+            ) {
+              userMsg = friendlyAdLibraryPermissionMessage(competitor.name, tokenSourceUser);
+            } else {
+              userMsg = `Ad Library API error for ${competitor.name} (${res.status}): ${errText.slice(0, 200)}`;
+            }
+            warnings.push(userMsg);
             return;
           }
 

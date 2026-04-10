@@ -402,7 +402,7 @@ export function calculateChannelPerformance(campaigns: Campaign[]) {
 export const ROI_PERCENT_CALC_TOOLTIP =
   `Υπολογισμός ROI % (απόδοση έναντι ad spend)
 
-Φόρμουλα: (Attributed έσοδα καμπανιών − Ad spend) ÷ Ad spend × 100
+Φόρμουλα: (Έσοδα καμπανιών − Ad spend) ÷ Ad spend × 100
 
 Ερμηνεία: πόσο ποσοστό «κέρδους» (έσοδα μείον διαφήμιση) παίρνεις πάνω σε κάθε € spend — όχι πόσα € έσοδα ανά €1 spend.
 

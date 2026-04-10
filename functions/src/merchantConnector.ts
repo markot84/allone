@@ -30,6 +30,62 @@ const SCOPES = [
   'https://www.googleapis.com/auth/content',
 ];
 
+/** True when Google returns placeholder labels instead of a real business name. */
+function isGenericMerchantAccountName(name: string): boolean {
+  const t = name.trim();
+  if (!t) return true;
+  if (/^account$/i.test(t)) return true;
+  if (/^account\s+\d+$/i.test(t)) return true;
+  return false;
+}
+
+/** Prefer API display name; if generic, use verified website hostname when available. */
+function pickMerchantDisplayName(accData: Record<string, unknown>, mid: string): string {
+  const raw = typeof accData.name === 'string' ? accData.name.trim() : '';
+  if (!isGenericMerchantAccountName(raw)) return raw;
+
+  const urlRaw = accData.websiteUrl;
+  if (typeof urlRaw === 'string' && urlRaw.trim().length > 0) {
+    try {
+      const u = urlRaw.trim().startsWith('http') ? urlRaw.trim() : `https://${urlRaw.trim()}`;
+      const host = new URL(u).hostname.replace(/^www\./i, '');
+      if (host) return host;
+    } catch {
+      /* ignore invalid URL */
+    }
+  }
+
+  return raw || `Merchant\u00A0${mid}`;
+}
+
+async function fetchMerchantAccountJson(
+  merchantId: string,
+  accessToken: string
+): Promise<Record<string, unknown> | null> {
+  try {
+    const accRes = await fetch(`${MERCHANT_API_BASE}/${merchantId}/accounts/${merchantId}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!accRes.ok) return null;
+    return (await accRes.json()) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+async function resolveMerchantSellerLabel(
+  merchantId: string,
+  accessToken: string,
+  storedName: string
+): Promise<string> {
+  const accData = await fetchMerchantAccountJson(merchantId, accessToken);
+  if (accData) {
+    return pickMerchantDisplayName(accData, merchantId);
+  }
+  const t = storedName.trim();
+  return t || `Merchant\u00A0${merchantId}`;
+}
+
 function getCredentials() {
   const raw = (s?: string) => (s?.trim().split(/\s+/)[0] || '');
   return {
@@ -194,13 +250,13 @@ async function listMerchantAccounts(
           headers: { Authorization: `Bearer ${accessToken}` },
         });
         if (accRes.ok) {
-          const accData = await accRes.json();
-          accounts.push({ id: mid, name: accData.name || `Account ${mid}` });
+          const accData = (await accRes.json()) as Record<string, unknown>;
+          accounts.push({ id: mid, name: pickMerchantDisplayName(accData, mid) });
         } else {
-          accounts.push({ id: mid, name: `Account ${mid}` });
+          accounts.push({ id: mid, name: `Merchant\u00A0${mid}` });
         }
       } catch {
-        accounts.push({ id: mid, name: `Account ${mid}` });
+        accounts.push({ id: mid, name: `Merchant\u00A0${mid}` });
       }
     }
     return accounts;
@@ -596,11 +652,23 @@ export async function fetchPriceBenchmarks(brandId: string): Promise<{
     // Also fetch PriceInsightsProductView (non-blocking)
     let insightsCount = 0;
     try {
+      const storedName = typeof connector.merchantName === 'string' ? connector.merchantName : '';
+      const resolvedSellerLabel = await resolveMerchantSellerLabel(merchantId, accessToken, storedName);
+      if (
+        resolvedSellerLabel &&
+        isGenericMerchantAccountName(storedName) &&
+        !isGenericMerchantAccountName(resolvedSellerLabel)
+      ) {
+        await getDb().doc(`connectors/${brandId}`).set(
+          { merchant: { merchantName: resolvedSellerLabel } },
+          { merge: true }
+        );
+      }
       insightsCount = await fetchPriceInsights(
         brandId,
         merchantId,
         accessToken,
-        typeof connector.merchantName === 'string' ? connector.merchantName : ''
+        resolvedSellerLabel
       );
     } catch (e) {
       logger.warn('[Merchant] PriceInsights fetch failed (non-blocking):', e);
