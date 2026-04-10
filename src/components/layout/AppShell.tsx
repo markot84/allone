@@ -472,7 +472,8 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
         { id: 'automation', label: 'Automations', icon: Zap, group: 'coordination' },
         { id: 'reports', label: 'Reports', icon: ReportIcon, group: 'coordination' },
         // Utilities
-        { id: 'data', label: 'Data Import', icon: Upload, group: 'utility' },
+        /** Όχι «Data Import» — μπερδεύει όταν ήδη υπάρχουν δεδομένα· εδώ είναι συνδέσεις + αρχεία. */
+        { id: 'data', label: 'Συνδέσεις', icon: Upload, group: 'utility' },
         { id: 'invite', label: 'Invite users', icon: UserPlus, group: 'utility' },
         { id: 'help', label: 'Help', icon: GearIcon, group: 'utility' },
       );

@@ -412,6 +412,7 @@ export async function fetchGA4Data(
         { name: 'sessions' },
         { name: 'totalUsers' },
         { name: 'conversions' },
+        { name: 'totalRevenue' },
       ],
     };
 
@@ -438,6 +439,7 @@ export async function fetchGA4Data(
             sessions: parseInt(vals[0]?.value || '0', 10),
             users: parseInt(vals[1]?.value || '0', 10),
             conversions: parseInt(vals[2]?.value || '0', 10),
+            totalRevenue: parseFloat(vals[3]?.value || '0') || 0,
             newUsers: 0,
           };
         }

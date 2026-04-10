@@ -63,7 +63,7 @@ const TOOLTIP_CI_REFRESH =
   'Πλήρης συγχρονισμός connectors (GMC, Meta Ad Library κ.λπ.): καθημερινά ~06:00 (Europe/Athens). Στη σελίδα: cache Price Benchmarks ~10 λεπτά, Ad Monitoring ~5 λεπτά. Για άμεση ενημέρωση: Sync GMC ή Scan τώρα.';
 
 const TOOLTIP_BENCHMARK_UPDATED =
-  'Ημερομηνία/ώρα από το νεότερο αποθηκευμένο SKU benchmark (τελευταία επιτυχημένη εγγραφή στη βάση). Προγραμματισμένος συγχρονισμός connectors ~06:00 Europe/Athens ισχύει όταν το GMC είναι συνδεδεμένο — αν η ημερομηνία μένει παλιά, πατήστε «Sync GMC» (Data Import). Προβολή σελίδας: cache ~10 λεπτά.';
+  'Ημερομηνία/ώρα από το νεότερο αποθηκευμένο SKU benchmark (τελευταία επιτυχημένη εγγραφή στη βάση). Προγραμματισμένος συγχρονισμός connectors ~06:00 Europe/Athens ισχύει όταν το GMC είναι συνδεδεμένο — αν η ημερομηνία μένει παλιά, πατήστε «Sync GMC» (Συνδέσεις). Προβολή σελίδας: cache ~10 λεπτά.';
 
 const TOOLTIP_INSIGHTS_SOURCE =
   'Βάση: τελευταία 7 ημέρες GMC. Ανανέωση δεδομένων: ίδιο πρόγραμμα με τα benchmarks (ημερήσιο ~06:00 + Sync GMC).';
@@ -84,30 +84,58 @@ function parseAdLibraryWarningLine(raw: string): {
   isPermission: boolean;
 } {
   const t = raw.trim();
-  /* Ήδη φιλικό μήνυμα από Cloud Function (νέα scans) */
-  if (t.includes('Δεν είναι δυνατή η παρακολούθηση') && t.includes('META_APP_ID')) {
+
+  let competitor = '';
+  const mHttp = t.match(/Ad Library API error for ([^(]+?)\s*\(\s*400\s*\)/i);
+  const mGraph = t.match(/Ad Library API \(([^)]+)\)/);
+  const mGreek = t.match(/για\s*[«"]([^»"]+)[»"]/u);
+  if (mHttp) competitor = mHttp[1].trim();
+  else if (mGraph) competitor = mGraph[1].trim();
+  else if (mGreek) competitor = mGreek[1].trim();
+
+  const who = competitor ? `για «${competitor}» ` : '';
+
+  /** Πρώτα 2332004: το παλιό early-return «META_APP_ID» έκρυβε το JSON και έδειχνε λάθος κείμενο. */
+  const isAppRole2332004 =
+    /2332004|"error_subcode"\s*:\s*2332004|app role required/i.test(t);
+
+  if (isAppRole2332004) {
+    return {
+      isPermission: true,
+      friendly: `Δεν είναι δυνατή η παρακολούθηση διαφημίσεων ανταγωνιστών ${who}(Meta σφάλμα 2332004 — «App role required»): ο λογαριασμός Facebook με τον οποίο κάνατε «Σύνδεση Meta» στις Συνδέσεις πρέπει να έχει ρόλο Administrator ή Developer στην ίδια εφαρμογή (developers.facebook.com → App → App roles) — όχι μόνο διαχειριστής Business Manager. Αν άλλος έκανε τη σύνδεση, προσθέστε τον στους ρόλους ή ξανασυνδεθείτε με εκείνον τον λογαριασμό· μετά «Scan τώρα». Το app token μόνο (META_APP_ID/SECRET) συχνά απορρίπτεται για Ad Library — χρειάζεται έγκυρο user token.`,
+      technical: t.length > 80 && (t.includes('{') || t.includes('error')) ? t : undefined,
+    };
+  }
+
+  /* Ήδη ενημερωμένο μήνυμα από Cloud Function (μετά deploy) */
+  if (t.includes('Κωδικός σφάλματος Meta 2332004') || t.includes('Κωδικός 2332004:')) {
     return { isPermission: true, friendly: t, technical: undefined };
   }
+
   const lower = t.toLowerCase();
   const permission =
     lower.includes('does not have permission') ||
     lower.includes('application does not have') ||
     (lower.includes('permission') &&
       (lower.includes('ad library') || lower.includes('ads_archive') || lower.includes('(400)')));
-  let competitor = '';
-  const mHttp = t.match(/Ad Library API error for ([^(]+?)\s*\(\s*400\s*\)/i);
-  const mGraph = t.match(/Ad Library API \(([^)]+)\)/);
-  if (mHttp) competitor = mHttp[1].trim();
-  else if (mGraph) competitor = mGraph[1].trim();
 
   if (permission) {
-    const who = competitor ? `για «${competitor}» ` : '';
     return {
       isPermission: true,
-      friendly: `Δεν είναι δυνατή η παρακολούθηση διαφημίσεων ανταγωνιστών ${who}από την εφαρμογή: το Meta App του server δεν έχει έγκριση για το Ad Library API (Facebook Developers → εφαρμογή σε Live mode, σωστά προϊόντα/δικαιώματα). Μέχρι να διορθωθεί η ρύθμιση (META_APP_ID / META_APP_SECRET), η Meta απορρίπτει τα αιτήματα και δεν εμφανίζονται διαφημίσεις.`,
+      friendly: `Δεν είναι δυνατή η παρακολούθηση διαφημίσεων ανταγωνιστών ${who}από την εφαρμογή: ελέγξτε Live mode, App roles για τον λογαριασμό που συνδέει το Meta στις Συνδέσεις, permissions (ads_read) και σύνδεση Meta. Το META_APP_ID/SECRET πρέπει να αντιστοιχεί στο ίδιο app.`,
       technical: t.length > 80 && (t.includes('{') || t.includes('error')) ? t : undefined,
     };
   }
+
+  /* Παλιό αποθηκευμένο κείμενο (χωρίς raw JSON) — αναβάθμιση εμφάνισης */
+  if (t.includes('Δεν είναι δυνατή η παρακολούθηση') && t.includes('META_APP_ID')) {
+    return {
+      isPermission: true,
+      friendly: `Δεν είναι δυνατή η παρακολούθηση διαφημίσεων ανταγωνιστών ${who}από την εφαρμογή: ελέγξτε Live mode και ότι ο λογαριασμός Facebook της «Σύνδεσης Meta» έχει ρόλο Admin/Developer στα App roles. Αν εμφανίζεται σφάλμα 2332004, δείτε το τεχνικό απόσπασμα παρακάτω ή κάντε νέο «Scan τώρα» μετά deploy.`,
+      technical: t.length > 80 ? t : undefined,
+    };
+  }
+
   return { isPermission: false, friendly: t, technical: undefined };
 }
 
@@ -506,7 +534,7 @@ export function CompetitorInsights() {
                 <div className="text-center py-10">
                   <ShoppingCart size={40} className="mx-auto text-[#D1D5DB] mb-3" />
                   <p className="text-sm text-[#9CA3AF] mb-1">Δεν υπάρχουν δεδομένα benchmarking.</p>
-                  <p className="text-xs text-[#D1D5DB]">Συνδέστε Google Merchant Center από το <strong className="text-[#9CA3AF]">Data Import</strong> (sidebar) και πατήστε "Sync GMC".</p>
+                  <p className="text-xs text-[#D1D5DB]">Συνδέστε Google Merchant Center από τις <strong className="text-[#9CA3AF]">Συνδέσεις</strong> (sidebar) και πατήστε «Sync GMC».</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto max-h-[55vh] overflow-y-auto">

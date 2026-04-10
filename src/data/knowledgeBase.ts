@@ -258,7 +258,7 @@ AI Insights: Προτάσεις για βελτίωση απόδοσης
 - Connectors: Αυτόματο sync μέσω API — Google Ads, Meta, GA4, Shopify, WooCommerce, OpenCart, Magento, Merchant Center
 
 Βήματα:
-1. Μεταβείτε στο Data Import section
+1. Μεταβείτε στο τμήμα Συνδέσεις & εισαγωγή
 2. Επιλέξτε τον τύπο δεδομένων
 3. Κάντε κλικ "Download Template" για να δείτε το format
 4. Συμπληρώστε το template με τα δεδομένα σας
@@ -352,7 +352,7 @@ Validation:
       },
       {
         question: 'Τι γίνεται αν οι στήλες μου έχουν διαφορετικά ονόματα;',
-        answer: 'Το σύστημα αναγνωρίζει αυτόματα πολλές εκδοχές ονομάτων. Δείτε το πίνακα "Αντιστοίχιση Στηλών" στο Data Import για όλες τις πιθανές εκδοχές.'
+        answer: 'Το σύστημα αναγνωρίζει αυτόματα πολλές εκδοχές ονομάτων. Δείτε το πίνακα "Αντιστοίχιση Στηλών" στις Συνδέσεις για όλες τις πιθανές εκδοχές.'
       }
     ]
   },
@@ -1296,7 +1296,7 @@ Side drawer που δείχνει χρονολογικά όλες τις ενέ�
     description: 'Πώς να συνδέσετε τα ad accounts, analytics και e-shop σας.',
     content: `# Connectors — Επισκόπηση
 
-Η σελίδα Data Import → Connectors σας επιτρέπει να συνδέσετε εξωτερικές πλατφόρμες για αυτόματο sync δεδομένων.
+Η σελίδα Συνδέσεις → Connectors σας επιτρέπει να συνδέσετε εξωτερικές πλατφόρμες για αυτόματο sync δεδομένων.
 
 ## Υποστηριζόμενοι Connectors
 
@@ -1336,7 +1336,7 @@ Side drawer που δείχνει χρονολογικά όλες τις ενέ�
     tags: ['connectors', 'oauth', 'api', 'shopify', 'woocommerce', 'opencart', 'magento', 'ga4', 'google ads', 'meta', 'sync'],
     related: ['ecommerce-explorer', 'ga4-connector', 'ecommerce-shopify', 'ecommerce-woo'],
     steps: [
-      'Μεταβείτε στο Data Import από το sidebar',
+      'Μεταβείτε στις Συνδέσεις από το sidebar',
       'Επιλέξτε τον connector που θέλετε (π.χ. Shopify)',
       'Κλικ "Σύνδεση" και ολοκληρώστε τη ροή OAuth ή API Key',
       'Μετά τη σύνδεση, κλικ "Sync τώρα" για πρώτο sync',
@@ -1576,7 +1576,7 @@ Horizontal bar chart + progress bars που δείχνουν πόσα έσοδα
 Χρησιμοποιεί το Google Merchant Center (Content API — PriceCompetitivenessProductView) για να ανακτήσει τη μέση τιμή αγοράς ανά GTIN/SKU.
 
 ## Πώς λειτουργεί
-1. Συνδέστε τον λογαριασμό Merchant Center μέσω Data Import → Connectors
+1. Συνδέστε τον λογαριασμό Merchant Center μέσω Συνδέσεις → Connectors
 2. Πατήστε "Sync τώρα" για εισαγωγή benchmarks
 3. Στο Product Intelligence εμφανίζεται η στήλη vs Market (ποσοστιαία απόκλιση)
 

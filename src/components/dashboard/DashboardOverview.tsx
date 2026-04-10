@@ -55,7 +55,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   const { count: productsCount, products } = useProductSource();
   const { productStats } = useProductAggregates();
   const { suppliers } = useSuppliers();
-  const { totalOrganicRevenue, byMonth: organicByMonth, hasImported: hasOrganic } = useOrganic();
+  const { totalOrganicRevenue, byMonth: organicByMonth, hasOrganicRevenue: hasOrganic } = useOrganic();
   const { count: campaignsCount, campaigns, hasImported: hasCampaigns } = useCampaigns();
   const { activeStrategy, getStrategyName } = useActiveStrategy();
   useAutomationRunner();

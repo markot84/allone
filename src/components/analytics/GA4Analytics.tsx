@@ -21,6 +21,56 @@ import {
 import { Card, CardHeader, KPICard, PageHeader } from '../common';
 import { useGA4Data } from '../../hooks/useGA4Data';
 import type { KPICardData } from '../common/KPICard';
+import { formatCurrency } from '../../utils/format';
+
+const OTHER_CHANNELS_LABEL = 'Άλλα κανάλια';
+
+/** GA4 default channel groups: keep organic / paid / direct rows; merge referral, email, unassigned, etc. */
+function channelBucket(channel: string): 'organic' | 'paid' | 'direct' | 'other' {
+  const c = channel.toLowerCase().trim();
+  if (c.includes('organic')) return 'organic';
+  if (c.includes('paid') || c.includes('cross-network') || c.includes('cross network')) return 'paid';
+  if (c === 'display') return 'paid';
+  if (c.includes('direct') || c === '(direct)') return 'direct';
+  return 'other';
+}
+
+type TrafficRow = {
+  channel: string;
+  sessions: number;
+  users: number;
+  newUsers: number;
+  conversions: number;
+  totalRevenue: number;
+};
+
+function aggregateOtherChannels(rows: TrafficRow[]): TrafficRow[] {
+  const other: TrafficRow = {
+    channel: OTHER_CHANNELS_LABEL,
+    sessions: 0,
+    users: 0,
+    newUsers: 0,
+    conversions: 0,
+    totalRevenue: 0,
+  };
+  const kept: TrafficRow[] = [];
+  for (const r of rows) {
+    if (channelBucket(r.channel) === 'other') {
+      other.sessions += r.sessions;
+      other.users += r.users;
+      other.newUsers += r.newUsers ?? 0;
+      other.conversions += r.conversions;
+      other.totalRevenue += r.totalRevenue ?? 0;
+    } else {
+      kept.push(r);
+    }
+  }
+  const out = [...kept];
+  if (other.sessions > 0 || other.conversions > 0 || other.totalRevenue > 0) {
+    out.push(other);
+  }
+  return out.sort((a, b) => b.sessions - a.sessions);
+}
 
 const CHANNEL_COLORS: Record<string, string> = {
   'Organic Search': '#34D399',
@@ -35,6 +85,7 @@ const CHANNEL_COLORS: Record<string, string> = {
   'Display': '#06B6D4',
   'Social': '#F472B6',
   '(Other)': '#9CA3AF',
+  [OTHER_CHANNELS_LABEL]: '#78716C',
 };
 const DEFAULT_COLOR = '#94A3B8';
 
@@ -52,6 +103,18 @@ export function GA4Analytics() {
     isLoading,
     hasData,
   } = useGA4Data();
+
+  const displayTrafficSources = useMemo(() => {
+    const rows: TrafficRow[] = trafficSources.map((s) => ({
+      channel: s.channel,
+      sessions: s.sessions,
+      users: s.users,
+      newUsers: s.newUsers ?? 0,
+      conversions: s.conversions,
+      totalRevenue: s.totalRevenue ?? 0,
+    }));
+    return aggregateOtherChannels(rows);
+  }, [trafficSources]);
 
   const [pageSearch, setPageSearch] = useState('');
   const [sortField, setSortField] = useState<SortField>('pageViews');
@@ -77,12 +140,12 @@ export function GA4Analytics() {
 
   const pieData = useMemo(
     () =>
-      trafficSources.slice(0, 8).map((s) => ({
+      displayTrafficSources.slice(0, 8).map((s) => ({
         name: s.channel,
         value: s.sessions,
         color: CHANNEL_COLORS[s.channel] || DEFAULT_COLOR,
       })),
-    [trafficSources]
+    [displayTrafficSources]
   );
 
   const filteredPages = useMemo(() => {
@@ -123,7 +186,7 @@ export function GA4Analytics() {
         <Globe size={48} className="mx-auto mb-4 text-[#D1D5DB]" />
         <h3 className="text-lg font-semibold text-[#1A1A1A] mb-2">Δεν υπάρχουν GA4 δεδομένα</h3>
         <p className="text-sm text-[#6B7280]">
-          Συνδέστε το Google Analytics 4 από τη σελίδα Data Import και κάντε Sync.
+          Συνδέστε το Google Analytics 4 από τις Συνδέσεις (sidebar) και κάντε Sync.
         </p>
       </div>
     );
@@ -322,8 +385,11 @@ export function GA4Analytics() {
       </div>
 
       {/* Traffic Sources Detail Table */}
-      <Card>
-        <CardHeader title="Ανάλυση καναλιών" subtitle="Αναλυτικά ανά κανάλι κίνησης" />
+        <Card>
+        <CardHeader
+          title="Ανάλυση καναλιών"
+          subtitle="Αναλυτικά ανά κανάλι κίνησης · έσοδα από GA4 (total revenue) · κανάλια εκτός οργανικού / paid / direct ως «Άλλα κανάλια»"
+        />
         <div className="p-4 pt-0 overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -333,14 +399,15 @@ export function GA4Analytics() {
                 <th className="pb-2 font-medium text-right">Χρήστες</th>
                 <th className="pb-2 font-medium text-right">Νέοι χρήστες</th>
                 <th className="pb-2 font-medium text-right">Μετατροπές</th>
+                <th className="pb-2 font-medium text-right">Έσοδα (GA4)</th>
                 <th className="pb-2 font-medium text-right">Conv. rate</th>
                 <th className="pb-2 font-medium text-right">Μερίδιο</th>
               </tr>
             </thead>
             <tbody>
               {(() => {
-                const totalSessions = trafficSources.reduce((a, x) => a + x.sessions, 0);
-                return trafficSources.map((s) => {
+                const totalSessions = displayTrafficSources.reduce((a, x) => a + x.sessions, 0);
+                return displayTrafficSources.map((s) => {
                 const share = totalSessions > 0 ? (s.sessions / totalSessions) * 100 : 0;
                 const convRate = s.sessions > 0 ? (s.conversions / s.sessions) * 100 : 0;
                 return (
@@ -356,6 +423,9 @@ export function GA4Analytics() {
                     <td className="py-2 text-right">{s.users.toLocaleString()}</td>
                     <td className="py-2 text-right">{(s.newUsers || 0).toLocaleString()}</td>
                     <td className="py-2 text-right">{s.conversions.toLocaleString()}</td>
+                    <td className="py-2 text-right font-mono text-[#1A1A1A]">
+                      €{formatCurrency(s.totalRevenue ?? 0, 0)}
+                    </td>
                     <td className="py-2 text-right">{convRate.toFixed(1)}%</td>
                     <td className="py-2 text-right">
                       <div className="flex items-center justify-end gap-2">

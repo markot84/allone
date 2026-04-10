@@ -195,15 +195,15 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
             Δεν υπάρχουν imported segments ακόμα.
           </p>
           <p className="text-sm text-[#4A4A4A]">
-            Μεταβείτε στο{' '}
+            Ανεβάστε segments από την{' '}
             <button
               type="button"
               onClick={() => onSectionChange?.('data-segments')}
               className="font-semibold text-[var(--nts-accent)] hover:underline focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)] focus:ring-offset-1 rounded"
             >
-              Data Import
+              καρτέλα εισαγωγής segments
             </button>
-            {' '}για να εισάγετε segment δεδομένα.
+            .
           </p>
         </Card>
       </div>

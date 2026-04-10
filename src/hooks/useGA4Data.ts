@@ -20,6 +20,8 @@ export interface GA4TrafficSource {
   users: number;
   newUsers: number;
   conversions: number;
+  /** Purchase-related revenue attributed to the session default channel (GA4 `totalRevenue`). */
+  totalRevenue?: number;
 }
 
 export interface GA4TopPage {
@@ -109,9 +111,20 @@ export function useGA4Data() {
   const trafficSources = useMemo(() => {
     if (!data?.trafficSources) return [];
     return Object.entries(data.trafficSources)
-      .map(([channel, d]) => ({ channel, ...d }))
+      .map(([channel, d]) => ({
+        channel,
+        ...d,
+        totalRevenue: typeof d.totalRevenue === 'number' ? d.totalRevenue : 0,
+      }))
       .sort((a, b) => b.sessions - a.sessions);
   }, [data]);
+
+  /** Sum of `totalRevenue` for channels whose name includes "organic" (matches GA4 default channel labels). */
+  const totalOrganicRevenueFromChannels = useMemo(() => {
+    return trafficSources
+      .filter((s) => s.channel.toLowerCase().includes('organic'))
+      .reduce((sum, s) => sum + (s.totalRevenue ?? 0), 0);
+  }, [trafficSources]);
 
   return {
     propertyName: data?.propertyName ?? '',
@@ -119,6 +132,7 @@ export function useGA4Data() {
     totals,
     weeklyChange,
     trafficSources,
+    totalOrganicRevenueFromChannels,
     topPages: data?.topPages ?? [],
     syncedAt: data?.syncedAt,
     dateRange: data?.dateRange,

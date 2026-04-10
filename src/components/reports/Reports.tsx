@@ -105,7 +105,7 @@ export function Reports() {
   const { segments } = useSegments();
   const segmentsCount = segments.length;
   const { campaigns } = useCampaigns();
-  const { records: organicRecords, totalOrganicRevenue, hasImported: hasOrganic } = useOrganic();
+  const { records: organicRecords, totalOrganicRevenue, hasOrganicRevenue: hasOrganic } = useOrganic();
   const ecomm = useEcommerceSummary();
   const campaignsTyped = (campaigns ?? []) as import('../../types').Campaign[];
 

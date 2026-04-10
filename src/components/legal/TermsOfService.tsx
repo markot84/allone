@@ -131,7 +131,7 @@ export function TermsOfService() {
           </li>
           <li>
             Μπορείτε ανά πάσα στιγμή να αποσυνδέσετε οποιαδήποτε πλατφόρμα μέσω
-            Data Import → Disconnect.
+            Συνδέσεις → Disconnect.
           </li>
         </ul>
       </Section>

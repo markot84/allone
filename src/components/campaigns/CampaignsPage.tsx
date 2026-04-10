@@ -876,13 +876,13 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
             <p className="text-sm text-[#6B7280]">Έλεγχος κατάστασης συνδέσεων…</p>
           ) : hasConnectedAdsOrMeta ? (
             <p className="text-sm text-[#4A4A4A] max-w-xl mx-auto">
-              Τα Google Ads / Meta είναι συνδεδεμένα αλλά δεν εμφανίζονται ακόμα campaigns. Ανοίξτε το{' '}
+              Τα Google Ads / Meta είναι συνδεδεμένα αλλά δεν εμφανίζονται ακόμα campaigns. Ανοίξτε τις{' '}
               <button
                 type="button"
                 onClick={() => onSectionChange?.('data-campaigns')}
                 className="font-semibold text-[var(--nts-accent)] hover:underline focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)] focus:ring-offset-1 rounded"
               >
-                Data Import
+                ρυθμίσεις καμπανιών
               </button>
               {' '}
               και εκτελέστε <strong className="font-semibold text-[#1A1A1A]">Sync</strong> για import ή refresh των
@@ -890,16 +890,15 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
             </p>
           ) : (
             <p className="text-sm text-[#4A4A4A]">
-              Συνδέστε από το{' '}
+              Συνδέστε Google Ads ή Meta από τις{' '}
               <button
                 type="button"
                 onClick={() => onSectionChange?.('data-campaigns')}
                 className="font-semibold text-[var(--nts-accent)] hover:underline focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)] focus:ring-offset-1 rounded"
               >
-                Data Import
+                ρυθμίσεις καμπανιών
               </button>
-              {' '}
-              τα Google Ads ή Meta για φόρτωση campaigns.
+              .
             </p>
           )}
         </Card>
@@ -1375,7 +1374,7 @@ function SearchIntelligenceTab({ type, searchTerms, keywords, hasData, search, o
             : 'Δεν υπάρχουν ακόμη keywords μετά τον τελευταίο Google Ads sync.'}
         </p>
         <p className="text-xs text-[#9CA3AF] mt-2">
-          Ανοίξτε το Data Import για Google Ads και εκτελέστε Sync.
+          Εκτελέστε ξανά Sync για Google Ads από τις ρυθμίσεις συνδέσεων καμπανιών.
         </p>
       </Card>
     );

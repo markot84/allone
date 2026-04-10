@@ -26,7 +26,7 @@ function parseNum(v: unknown): number {
 export function useProductSource() {
   const productHook = useProducts();
   const { isEnterprise } = usePlan();
-  const { data: procData } = useProcurement();
+  const { data: procData, isLoading: procurementLoading } = useProcurement();
 
   const procProducts = useMemo((): Product[] => {
     if (!isEnterprise) return [];
@@ -81,10 +81,14 @@ export function useProductSource() {
   const usingProcurement = procProducts.length > 0;
   const products = usingProcurement ? procProducts : productHook.products;
 
+  /** Μέχρι να ολοκληρωθεί και το procurement (Enterprise), μην εμφανίζεις κενή σελίδα «χωρίς προϊόντα». */
+  const isLoading =
+    productHook.isLoading || (isEnterprise && procurementLoading);
+
   return {
     products,
     count: products.length,
-    isLoading: productHook.isLoading,
+    isLoading,
     hasImported: productHook.hasImported || usingProcurement,
     usingProcurement,
   };

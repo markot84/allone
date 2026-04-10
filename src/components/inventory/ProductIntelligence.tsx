@@ -14,9 +14,10 @@ import {
   Download,
   TrendingUp,
   TrendingDown,
-  Trash2
+  Trash2,
+  Loader2
 } from 'lucide-react';
-import { Card, Badge, Button, ProgressBar, Spinner, Tooltip, useToast, AlertsBanner, PageHeader } from '../common';
+import { Card, Badge, Button, ProgressBar, Tooltip, useToast, AlertsBanner, PageHeader } from '../common';
 import { useProducts, useProductSource, useBrand, useSuppliers, usePlan, useProcurement } from '../../hooks';
 import { usePriceBenchmarks } from '../../hooks/usePriceBenchmarks';
 import { formatCurrency, formatCurrencyCompact, formatNumber, formatPercent } from '../../utils/format';
@@ -98,6 +99,94 @@ function computeInventoryAlerts(products: Product[], supplierTodMap?: Map<string
   return alerts.length > 0 ? alerts : [];
 }
 
+/** Skeleton: ίδια δομή με τη σελίδα (κάρτες + πίνακας) — όχι κενή οθόνη κατά τη φόρτωση. */
+function ProductIntelligenceSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div
+        className="rounded-xl border border-[var(--nts-accent)]/25 bg-gradient-to-r from-orange-50/90 via-amber-50/50 to-white px-4 py-3.5 flex flex-wrap items-center gap-3 text-sm shadow-sm"
+        role="status"
+        aria-live="polite"
+      >
+        <Loader2 className="h-5 w-5 animate-spin text-[var(--nts-accent)] flex-shrink-0" aria-hidden />
+        <span className="font-semibold text-[#9A3412]">Φόρτωση δεδομένων προϊόντων…</span>
+        <span className="text-[#78716C] text-xs sm:text-sm">
+          Εμφανίζεται το layout· τα νούμερα ενημερώνονται όταν ολοκληρωθεί το sync.
+        </span>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div
+            key={i}
+            className="rounded-xl border border-[#E8E8E8] bg-white p-4 h-[108px] shadow-sm"
+          >
+            <div className="h-3 w-28 bg-[#E5E7EB] rounded-md mb-4 animate-pulse" />
+            <div className="h-8 w-24 bg-[#E5E7EB] rounded-md animate-pulse" />
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="h-[88px] rounded-xl border border-[#E8E8E8] bg-[#FAFAFA] animate-pulse" />
+        ))}
+      </div>
+
+      <Card padding="none" className="overflow-hidden border-[#E8E8E8] shadow-sm">
+        <div className="p-4 border-b border-[#E5E5E5] flex flex-wrap gap-3">
+          <div className="h-10 flex-1 min-w-[200px] max-w-md bg-[#F3F4F6] rounded-lg animate-pulse" />
+          <div className="h-10 w-36 bg-[#F3F4F6] rounded-lg animate-pulse hidden sm:block" />
+          <div className="h-10 w-36 bg-[#F3F4F6] rounded-lg animate-pulse hidden md:block" />
+        </div>
+        <div className="overflow-x-auto max-h-[min(52vh,480px)]">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-[#F5F5F5]">
+                {['Προϊόν', 'Margin', 'Stock', 'DOS', 'Τιμή', ''].map((label, i) => (
+                  <th key={label + i} className="px-3 py-2.5 text-left">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-[#9CA3AF]">
+                      {label || '\u00A0'}
+                    </span>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {Array.from({ length: 14 }).map((_, row) => (
+                <tr key={row} className="border-b border-[#F3F4F6]">
+                  <td className="px-3 py-3">
+                    <div className="h-4 bg-[#E5E7EB] rounded animate-pulse w-[min(100%,14rem)]" />
+                  </td>
+                  <td className="px-3 py-3">
+                    <div className="h-4 w-12 bg-[#E5E7EB] rounded animate-pulse" />
+                  </td>
+                  <td className="px-3 py-3 hidden sm:table-cell">
+                    <div className="h-4 w-10 bg-[#E5E7EB] rounded animate-pulse" />
+                  </td>
+                  <td className="px-3 py-3 hidden md:table-cell">
+                    <div className="h-4 w-8 bg-[#E5E7EB] rounded animate-pulse" />
+                  </td>
+                  <td className="px-3 py-3 hidden sm:table-cell">
+                    <div className="h-4 w-16 bg-[#E5E7EB] rounded animate-pulse" />
+                  </td>
+                  <td className="px-3 py-3 w-12">
+                    <div className="h-8 w-8 bg-[#F3F4F6] rounded-md animate-pulse ml-auto" />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="p-4 border-t border-[#E5E5E5] flex justify-between">
+          <div className="h-4 w-48 bg-[#F3F4F6] rounded animate-pulse" />
+          <div className="h-9 w-56 bg-[#F3F4F6] rounded-lg animate-pulse" />
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 interface ProductIntelligenceProps {
   onSectionChange?: (section: string) => void;
 }
@@ -139,12 +228,17 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   }, []);
 
   const { currentBrand } = useBrand();
-  const { products: rawProducts, isLoading: productsLoading, hasImported: rawHasImported } = useProducts();
-  const { products: sourceProducts, hasImported, usingProcurement } = useProductSource();
+  const { products: rawProducts, hasImported: rawHasImported } = useProducts();
+  const {
+    products: sourceProducts,
+    hasImported,
+    usingProcurement,
+    isLoading: sourceLoading,
+  } = useProductSource();
   const { suppliers } = useSuppliers();
   const { isEnterprise } = usePlan();
   const { data: procData } = useProcurement();
-  const { benchmarks, count: benchmarkCount, aboveMarket, belowMarket, avgDiff } = usePriceBenchmarks();
+  const { benchmarks, count: benchmarkCount } = usePriceBenchmarks();
   const queryClient = useQueryClient();
   const toast = useToast();
 
@@ -351,15 +445,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     }
   };
 
-  if (productsLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <Spinner size="lg" label="Φόρτωση προϊόντων…" />
-      </div>
-    );
-  }
-
-  if (!hasImported && !usingProcurement) {
+  if (!sourceLoading && !hasImported && !usingProcurement) {
     return (
       <div className="space-y-6">
         <PageHeader
@@ -373,15 +459,15 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
             Δεν υπάρχουν imported προϊόντα ακόμα.
           </p>
           <p className="text-sm text-[#4A4A4A]">
-            Μεταβείτε στο{' '}
+            Ανεβάστε αρχείο ή συνδέστε πλατφόρμα από την{' '}
             <button
               type="button"
               onClick={() => onSectionChange?.('data-products')}
               className="font-semibold text-[var(--nts-accent)] hover:underline focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)] focus:ring-offset-1 rounded"
             >
-              Data Import
+              καρτέλα εισαγωγής προϊόντων
             </button>
-            {' '}για να εισάγετε προϊόντα.
+            .
           </p>
         </Card>
       </div>
@@ -399,7 +485,12 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           </p>
         }
         meta={
-          sourceProducts.length > 0 ? (
+          sourceLoading ? (
+            <p className="text-xs font-medium text-[var(--nts-accent)] sm:text-sm flex items-center gap-2">
+              <Loader2 className="h-3.5 w-3.5 animate-spin flex-shrink-0" aria-hidden />
+              Φόρτωση inventory…
+            </p>
+          ) : sourceProducts.length > 0 ? (
             <p className="text-xs font-medium text-[#22C55E] sm:text-sm">
               Showing {sourceProducts.length} {usingProcurement ? 'procurement' : 'imported'} product(s)
             </p>
@@ -412,7 +503,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
               size="sm"
               icon={<Trash2 size={14} />}
               onClick={handleDeleteProducts}
-              disabled={isDeleting || !rawHasImported}
+              disabled={sourceLoading || isDeleting || !rawHasImported}
               className="min-h-[36px] flex-1 basis-[calc(50%-0.1875rem)] text-[#DC2626] hover:bg-[#FEE2E2] sm:flex-initial sm:basis-auto"
             >
               {isDeleting ? (
@@ -429,6 +520,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
               size="sm"
               icon={<Download size={14} />}
               onClick={() => setShowExportModal(true)}
+              disabled={sourceLoading}
               className="min-h-[36px] flex-1 basis-[calc(50%-0.1875rem)] sm:flex-initial sm:basis-auto"
             >
               <span className="hidden min-[380px]:inline">Εξαγωγή αναφοράς</span>
@@ -438,6 +530,10 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
         }
       />
 
+      {sourceLoading ? (
+        <ProductIntelligenceSkeleton />
+      ) : (
+        <>
       {/* Inventory Alerts */}
       <AlertsBanner filterGroup="inventory" maxAlerts={2} compact onNavigate={onSectionChange} />
 
@@ -515,45 +611,6 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                 <strong className="text-[#111827]">{formatCurrencyCompact(procFiscalTurnover)}</strong>
               </div>
             )}
-          </div>
-        </div>
-      )}
-
-      {/* Price Benchmark Strip */}
-      {benchmarkCount > 0 && (
-        <div className="flex items-center gap-4 px-4 py-3 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl">
-          <span className="text-lg">🛒</span>
-          <div className="flex items-center gap-6 text-sm">
-            <div>
-              <span className="text-[#6B7280] flex items-center gap-1">
-                SKUs με benchmark:
-                <Tooltip content="Πλήθος SKU που έχουν αντιστοιχιστεί με τιμές αγοράς (Google Merchant Center)." size={12} />
-              </span>
-              <strong className="text-[#111827]">{formatNumber(benchmarkCount)}</strong>
-            </div>
-            <div>
-              <span className="text-[#6B7280] flex items-center gap-1">
-                Πάνω από αγορά:
-                <Tooltip content="SKU με τιμή υψηλότερη από τη μέση τιμή αγοράς." size={12} />
-              </span>
-              <strong className="text-red-600">{aboveMarket}</strong>
-            </div>
-            <div>
-              <span className="text-[#6B7280] flex items-center gap-1">
-                Κάτω από αγορά:
-                <Tooltip content="SKU με τιμή χαμηλότερη από τη μέση τιμή αγοράς." size={12} />
-              </span>
-              <strong className="text-green-600">{belowMarket}</strong>
-            </div>
-            <div>
-              <span className="text-[#6B7280] flex items-center gap-1">
-                Μέση απόκλιση:
-                <Tooltip content="Μέση ποσοστιαία απόκλιση τιμών σας vs αγοράς. Θετικό = ακριβότεροι, αρνητικό = φθηνότεροι." size={12} />
-              </span>
-              <strong className={avgDiff > 0 ? 'text-red-600' : avgDiff < 0 ? 'text-green-600' : 'text-[#111827]'}>
-                {avgDiff > 0 ? '+' : ''}{avgDiff}%
-              </strong>
-            </div>
           </div>
         </div>
       )}
@@ -792,6 +849,8 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
         products={filteredProducts}
         supplierTodMap={supplierTodMap}
       />
+        </>
+      )}
     </div>
   );
 }

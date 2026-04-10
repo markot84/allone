@@ -783,7 +783,7 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
         title={<h2 className="text-xl font-bold tracking-tight text-[var(--nts-charcoal)] sm:text-2xl">Procurement</h2>}
         description={
           <p className="text-[14px] text-[var(--nts-medium-gray)]">
-            Δεδομένα από 7 αναλύσεις (PROCUREMENT_TEMPLATE.xlsx). Εισαγωγή από Data Import.
+            Δεδομένα από 7 αναλύσεις (PROCUREMENT_TEMPLATE.xlsx). Εισαγωγή από την καρτέλα Procurement.
           </p>
         }
         actions={
@@ -804,7 +804,7 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
             <Upload size={48} className="text-[var(--nts-medium-gray)] mx-auto mb-4" />
             <p className="text-lg font-medium text-[var(--nts-charcoal)] mb-1">Δεν υπάρχουν δεδομένα Procurement</p>
             <p className="text-sm text-[var(--nts-medium-gray)] max-w-md mx-auto mb-6">
-              Φόρτωσε αρχείο Excel με τη δομή PROCUREMENT_TEMPLATE.xlsx (7 καρτέλες) από Data Import → Procurement.
+              Φόρτωσε αρχείο Excel με τη δομή PROCUREMENT_TEMPLATE.xlsx (7 καρτέλες) στην ενότητα Procurement.
             </p>
             <div className="flex flex-wrap justify-center gap-3">
               <Button onClick={handleSeedDemo} disabled={isSeeding} variant="secondary" size="sm">
@@ -812,7 +812,7 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
               </Button>
               {onSectionChange && (
                 <Button onClick={() => onSectionChange('data-procurement')} variant="primary">
-                  Μετάβαση σε Data Import
+                  Άνοιγμα εισαγωγής Procurement
                 </Button>
               )}
             </div>

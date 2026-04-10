@@ -69,7 +69,7 @@ type KpiTabId = 'roi' | 'revenue' | 'adsRevenue' | 'conversionsRate';
 const KPI_ORDER: KpiTabId[] = ['roi', 'revenue', 'adsRevenue', 'conversionsRate'];
 
 export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
-  const { totalOrganicRevenue, byMonth: organicByMonth, hasImported: hasOrganic } = useOrganic();
+  const { totalOrganicRevenue, byMonth: organicByMonth, hasOrganicRevenue: hasOrganic } = useOrganic();
   const { campaigns, hasImported: hasCampaigns } = useCampaigns();
   const campaignsAll = campaigns as Campaign[];
   const { activeStrategy } = useActiveStrategy();
@@ -296,7 +296,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
             <BarChart3 size={48} className="mx-auto text-[var(--nts-medium-gray)] mb-4" />
             <h3 className="text-lg font-semibold text-[var(--nts-charcoal)] mb-2">Δεν υπάρχουν δεδομένα</h3>
             <p className="text-[var(--nts-medium-gray)] max-w-md mx-auto mb-6">
-              Φόρτωσε campaigns και organic revenue στο Data Import για να δεις την απόδοση.
+              Συνδέστε campaigns και organic έσοδα από τις Συνδέσεις για να εμφανιστεί η απόδοση — ή φόρτωσε ενδεικτικά δεδομένα.
             </p>
             <Button
               variant="secondary"

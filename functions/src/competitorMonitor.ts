@@ -134,12 +134,43 @@ function isAdLibraryPermissionDenied(message: string): boolean {
   );
 }
 
-function friendlyAdLibraryPermissionMessage(competitorName: string, usedUserToken: boolean): string {
-  const base = `${competitorName}: Δεν είναι δυνατή η παρακολούθηση διαφημίσεων — η Meta απορρίπτει την πρόσβαση στο Ad Library (ads_archive).`;
-  if (usedUserToken) {
-    return `${base} Το συνδεδεμένο Meta token δεν έχει επαρκή δικαιώματα· στο Facebook Developers ελέγξτε ότι η εφαρμογή είναι Live και ότι τα permissions (π.χ. ads_read) έχουν περάσει App Review όπου απαιτείται.`;
+/** Parse Graph error JSON (full body or embedded) for error_subcode e.g. 2332004. */
+function extractMetaErrorSubcode(raw: string): number | undefined {
+  const s = raw.trim();
+  try {
+    const j = JSON.parse(s) as { error?: { error_subcode?: number } };
+    const sc = j?.error?.error_subcode;
+    if (typeof sc === 'number') return sc;
+  } catch {
+    /* not JSON */
   }
-  return `${base} Συνδέστε το Meta από το Data Import ώστε να χρησιμοποιείται το OAuth token σας (συνήθως λύνει το πρόβλημα)· εναλλακτικά ρυθμίστε META_APP_ID/SECRET και Ad Library/Marketing API στο ίδιο Meta App (Live).`;
+  const m = s.match(/["']error_subcode["']\s*:\s*(\d+)/);
+  if (m) return parseInt(m[1], 10);
+  return undefined;
+}
+
+/**
+ * Subcode 2332004 = "App role required": the Facebook *user* tied to the token must be
+ * Admin/Developer on this exact Meta app — not only Business Manager admins.
+ */
+function friendlyAdLibraryPermissionMessage(
+  competitorName: string,
+  usedUserToken: boolean,
+  errorSubcode?: number
+): string {
+  const base = `${competitorName}: Δεν είναι δυνατή η παρακολούθηση διαφημίσεων — η Meta απορρίπτει την πρόσβαση στο Ad Library (ads_archive).`;
+
+  if (errorSubcode === 2332004) {
+    if (usedUserToken) {
+      return `${base} Κωδικός σφάλματος Meta 2332004 («App role required»): ο λογαριασμός Facebook με τον οποίο κάνατε «Σύνδεση Meta» στις Συνδέσεις πρέπει να έχει ρόλο Administrator ή Developer στην ίδια εφαρμογή (developers.facebook.com → App → App roles). Αν άλλος λογαριασμός έκανε τη σύνδεση, προσθέστε κι αυτόν στους ρόλους ή αποσυνδέστε και συνδέστε ξανά με λογαριασμό που είναι ήδη στη λίστα· μετά «Scan τώρα».`;
+    }
+    return `${base} Κωδικός 2332004: το Ad Library χρειάζεται user token από λογαριασμό με ρόλο Admin/Developer στο Meta App. Συνδέστε το Meta από τις Συνδέσεις — το app token (μόνο META_APP_ID/SECRET) συχνά απορρίπτεται για ads_archive.`;
+  }
+
+  if (usedUserToken) {
+    return `${base} Ελέγξτε ότι η εφαρμογή είναι Live και τα permissions (ads_read κ.λπ.)· αν χρειάζεται, App Review. Δοκιμάστε αποσύνδεση και επανασύνδεση Meta στις Συνδέσεις.`;
+  }
+  return `${base} Συνδέστε το Meta από τις Συνδέσεις ώστε να χρησιμοποιείται user OAuth token (ο λογαριασμός που συνδέεται πρέπει να έχει ρόλο Admin/Developer στην εφαρμογή).`;
 }
 
 /**
@@ -167,7 +198,7 @@ export async function fetchCompetitorAds(brandId: string): Promise<{
       totalAds: 0,
       newAds: 0,
       error:
-        'Δεν υπάρχει έγκυρο Meta token για Ad Library. Συνδέστε το Meta στο Data Import (προτείνεται) ή ορίστε META_APP_ID / META_APP_SECRET στα Cloud Functions.',
+        'Δεν υπάρχει έγκυρο Meta token για Ad Library. Συνδέστε το Meta στις Συνδέσεις (προτείνεται) ή ορίστε META_APP_ID / META_APP_SECRET στα Cloud Functions.',
     };
   }
   const accessToken = resolved.token;
@@ -229,11 +260,14 @@ export async function fetchCompetitorAds(brandId: string): Promise<{
 
       const processOnePage = async (data: any): Promise<boolean> => {
         if (data.error) {
-          const err = data.error as { message?: string; code?: number };
+          const err = data.error as { message?: string; code?: number; error_subcode?: number };
           const raw = err.message || JSON.stringify(err);
+          const fullJson = JSON.stringify(data.error);
+          const subcode =
+            typeof err.error_subcode === 'number' ? err.error_subcode : extractMetaErrorSubcode(fullJson);
           logger.warn(`[Competitor] Ad Library API (${competitor.name}): ${raw} (code ${err.code ?? '?'})`);
-          const msg = isAdLibraryPermissionDenied(raw)
-            ? friendlyAdLibraryPermissionMessage(competitor.name, tokenSourceUser)
+          const msg = isAdLibraryPermissionDenied(raw) || isAdLibraryPermissionDenied(fullJson)
+            ? friendlyAdLibraryPermissionMessage(competitor.name, tokenSourceUser, subcode)
             : `Ad Library API (${competitor.name}): ${raw} (code ${err.code ?? '?'})`;
           warnings.push(msg);
           return false;
@@ -329,7 +363,8 @@ export async function fetchCompetitorAds(brandId: string): Promise<{
               (res.status === 400 || res.status === 403) &&
               isAdLibraryPermissionDenied(errText)
             ) {
-              userMsg = friendlyAdLibraryPermissionMessage(competitor.name, tokenSourceUser);
+              const sub = extractMetaErrorSubcode(errText);
+              userMsg = friendlyAdLibraryPermissionMessage(competitor.name, tokenSourceUser, sub);
             } else {
               userMsg = `Ad Library API error for ${competitor.name} (${res.status}): ${errText.slice(0, 200)}`;
             }

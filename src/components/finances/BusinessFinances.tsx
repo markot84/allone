@@ -14,7 +14,13 @@ interface BusinessFinancesProps {
 
 export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}) {
   const { currentBrand } = useBrand();
-  const { records, totalOrganicRevenue, hasImported, isLoading } = useOrganic();
+  const {
+    records,
+    totalOrganicRevenue,
+    hasImported,
+    organicRevenueSource,
+    isLoading,
+  } = useOrganic();
   const ecomm = useEcommerceSummary();
   const queryClient = useQueryClient();
   const toast = useToast();
@@ -43,7 +49,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
     );
   }
 
-  if (!hasImported && !ecomm.hasData) {
+  if (!hasImported && !ecomm.hasData && totalOrganicRevenue <= 0) {
     return (
       <div className="space-y-6">
         <PageHeader
@@ -55,15 +61,15 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
             Δεν υπάρχουν εισαγόμενα οργανικά έσοδα ακόμα.
           </p>
           <p className="text-sm text-[#4A4A4A]">
-            Μεταβείτε στο{' '}
+            Εισάγετε οργανικό τζίρο από την{' '}
             <button
               type="button"
               onClick={() => onSectionChange?.('data-organic')}
               className="font-semibold text-[var(--nts-accent)] hover:underline focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)] focus:ring-offset-1 rounded"
             >
-              Data Import
+              καρτέλα οργανικών εσόδων
             </button>
-            {' '}για να εισάγετε τζίρο επιχείρησης (οργανικά έσοδα, χωρίς campaigns).
+            .
           </p>
         </Card>
       </div>
@@ -77,7 +83,8 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
         title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Οικονομικά Επιχείρησης</h2>}
         description={
           <p className="text-sm text-[#4A4A4A] sm:text-base">
-            Τζίρος οργανικός (χωρίς έσοδα από campaigns) · {records.length} περίοδοι
+            Τζίρος οργανικός (χωρίς έσοδα από campaigns)
+            {hasImported ? ` · ${records.length} περίοδοι εισαγωγής` : organicRevenueSource === 'ga4' ? ' · από GA4 (organic channels)' : ''}
           </p>
         }
         actions={
@@ -86,7 +93,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
             size="sm"
             icon={<Trash2 size={14} />}
             onClick={handleDelete}
-            disabled={isDeleting}
+            disabled={isDeleting || !hasImported}
             className="min-h-[36px] w-full text-[#DC2626] hover:bg-[#FEE2E2] sm:w-auto"
           >
             {isDeleting ? (
