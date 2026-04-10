@@ -1,10 +1,14 @@
 {
-  "version": "0.374.0",
-  "previousVersion": "0.373.0",
-  "commitHash": "3de5a79",
+  "version": "0.375.0",
+  "previousVersion": "0.374.0",
+  "commitHash": "14c9226",
   "branch": "main",
-  "buildDate": "2026-04-10T11:08:18.580Z",
+  "buildDate": "2026-04-10T11:09:09.759Z",
   "commits": [
+    {
+      "hash": "14c9226",
+      "message": "Competitive Intelligence: single-line table headers (Δ τιμής, Διαφ. τιμής), nowrap; merchant seller labels and related updates"
+    },
     {
       "hash": "3de5a79",
       "message": "Dashboard: απλοποίηση KPI, ROI ROAS block, διόρθωση τάσης· AI briefing φιλικότερο prompt· tooltip"
@@ -60,13 +64,10 @@
     {
       "hash": "4edf54d",
       "message": "revert(campaigns): remove Math.max of aggregate vs conversionActions"
-    },
-    {
-      "hash": "be5dbb8",
-      "message": "fix(campaigns): reconcile conversions with per-action sum vs aggregate"
     }
   ],
   "changes": [
+    "Competitive Intelligence: single-line table headers (Δ τιμής, Διαφ. τιμής), nowrap; merchant seller labels and related updates",
     "Dashboard: απλοποίηση KPI, ROI ROAS block, διόρθωση τάσης· AI briefing φιλικότερο prompt· tooltip",
     "[Νέο χαρακτηριστικό] Shared page headers, campaigns copy (EN tech terms), connector and UI updates",
     "Add campaign helper files, Performance image variants, apply_campaigns patch script",
@@ -75,7 +76,6 @@
     "[Νέο χαρακτηριστικό] Stabilize connector sync, nightly health, and UI responsiveness",
     "[Συντήρηση] Add project context rule for agent continuity",
     "[Νέο χαρακτηριστικό] E-commerce connectors, explorer page, dashboard/ROI integration, help docs",
-    "[Διόρθωση] Restore EUR display and UI copy (fix mojibake from bad encoding)",
-    "[Συντήρηση] Sync buildInfo after deploy (v0.306.0)"
+    "[Διόρθωση] Restore EUR display and UI copy (fix mojibake from bad encoding)"
   ]
 }
