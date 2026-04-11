@@ -5,6 +5,7 @@ import { TrendingUp, Filter, Download, Search, DollarSign, Trash2, ArrowUp, Arro
 import { Card, CardHeader, Badge, Button, Spinner, useToast, Tooltip, AlertsBanner, PageHeader } from '../common';
 import { DateRangePicker } from '../ui/DateRangePicker';
 import { useCampaigns, useBrand, useAuth } from '../../hooks';
+import { useGlobalDate } from '../../contexts/GlobalDateContext';
 import { useSearchIntelligence } from '../../hooks/useSearchIntelligence';
 import { FirestoreService } from '../../services/firestore';
 import { formatCurrency, formatNumber, formatMultiplier, formatPercent } from '../../utils/format';
@@ -333,13 +334,12 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
       localStorage.setItem(LS_STATUS, v);
     } catch { /* ignore */ }
   };
-  const LS_FROM = 'campaigns_dateFrom';
-  const LS_TO   = 'campaigns_dateTo';
-  const [dateFrom, setDateFromState] = useState<string>(() => localStorage.getItem(LS_FROM) ?? '');
-  const [dateTo,   setDateToState]   = useState<string>(() => localStorage.getItem(LS_TO)   ?? '');
-
-  const setDateFrom = (v: string) => { setDateFromState(v); localStorage.setItem(LS_FROM, v); };
-  const setDateTo   = (v: string) => { setDateToState(v);   localStorage.setItem(LS_TO,   v); };
+  const { fromDate: globalFrom, toDate: globalTo } = useGlobalDate();
+  // Local override: empty = use global. Resets to global on navigation (component unmount).
+  const [localDateFrom, setLocalDateFrom] = useState('');
+  const [localDateTo,   setLocalDateTo]   = useState('');
+  const dateFrom = localDateFrom || globalFrom;
+  const dateTo   = localDateTo   || globalTo;
 
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
@@ -1083,9 +1083,17 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
             <DateRangePicker
               from={dateFrom}
               to={dateTo}
-              onChange={(f, t) => { setDateFrom(f); setDateTo(t); }}
-              onClear={() => { setDateFrom(''); setDateTo(''); localStorage.removeItem(LS_FROM); localStorage.removeItem(LS_TO); }}
+              onChange={(f, t) => { setLocalDateFrom(f); setLocalDateTo(t); }}
+              onClear={() => { setLocalDateFrom(''); setLocalDateTo(''); }}
             />
+            {(localDateFrom || localDateTo) && (
+              <button
+                onClick={() => { setLocalDateFrom(''); setLocalDateTo(''); }}
+                className="text-[10px] text-[var(--nts-orange)] hover:underline whitespace-nowrap"
+              >
+                ↩ Επαναφορά global
+              </button>
+            )}
             <span className="text-[10px] text-[#9CA3AF] leading-snug max-w-[220px] md:max-w-none md:truncate">
               Σύνολα = επιλεγμένο εύρος ημερομηνιών.
             </span>

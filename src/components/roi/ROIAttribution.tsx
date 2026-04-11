@@ -22,7 +22,9 @@ import {
 } from 'recharts';
 import { Card, CardHeader, Button, Tooltip, PageHeader } from '../common';
 import { useOrganic, useCampaigns, useActiveStrategy, useBrand } from '../../hooks';
-import { useDashPeriod, PERIOD_OPTIONS } from '../../hooks/useDashPeriod';
+import { useDashPeriod } from '../../hooks/useDashPeriod';
+import { useGlobalDate, GLOBAL_PERIOD_OPTIONS } from '../../contexts/GlobalDateContext';
+import { DateRangePicker } from '../ui/DateRangePicker';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import { CampaignsService, OrganicService } from '../../services/firestore';
 import { useQueryClient } from '@tanstack/react-query';
@@ -78,6 +80,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
   const queryClient = useQueryClient();
   const [seeding, setSeeding] = useState(false);
   const { period: dashPeriod, setPeriod: setDashPeriod, periodDates } = useDashPeriod();
+  const { customFrom, customTo, setCustomRange } = useGlobalDate();
 
   const dateFilteredCampaigns = useMemo(() => {
     const all = campaigns as Campaign[];
@@ -324,21 +327,31 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
             </p>
           }
           actions={
-            <div className="flex w-full flex-wrap justify-end gap-1 rounded-lg bg-gray-100 p-1 lg:w-auto">
-              {PERIOD_OPTIONS.map(opt => (
-                <button
-                  key={opt.key}
-                  type="button"
-                  onClick={() => setDashPeriod(opt.key)}
-                  className={`min-h-[32px] flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-all sm:flex-initial sm:px-3 ${
-                    dashPeriod === opt.key
-                      ? 'bg-white font-semibold text-[var(--nts-orange)] shadow-sm'
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <div className="flex w-full flex-wrap gap-1 rounded-lg bg-gray-100 p-1 lg:w-auto">
+                {GLOBAL_PERIOD_OPTIONS.map(opt => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => setDashPeriod(opt.key)}
+                    className={`min-h-[32px] flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-all sm:flex-initial sm:px-3 ${
+                      dashPeriod === opt.key
+                        ? 'bg-white font-semibold text-[var(--nts-orange)] shadow-sm'
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              {dashPeriod === 'custom' && (
+                <DateRangePicker
+                  from={customFrom}
+                  to={customTo}
+                  onChange={(f, t) => setCustomRange(f, t)}
+                  onClear={() => setDashPeriod('current_month')}
+                />
+              )}
             </div>
           }
         />

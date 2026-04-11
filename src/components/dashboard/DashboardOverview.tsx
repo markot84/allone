@@ -22,7 +22,9 @@ import {
 } from 'recharts';
 import { Card, CardHeader, KPICard, Tooltip, AlertsBanner, PageHeader } from '../common';
 import { useSegments, useOrganic, useCampaigns, useActiveStrategy, useSuppliers, useProductSource, useBrand, useProductAggregates } from '../../hooks';
-import { useDashPeriod, PERIOD_OPTIONS } from '../../hooks/useDashPeriod';
+import { useDashPeriod } from '../../hooks/useDashPeriod';
+import { useGlobalDate, GLOBAL_PERIOD_OPTIONS } from '../../contexts/GlobalDateContext';
+import { DateRangePicker } from '../ui/DateRangePicker';
 import { useGA4Data } from '../../hooks/useGA4Data';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import {
@@ -73,6 +75,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   const campaignsTyped = (campaigns ?? []) as Campaign[];
 
   const { period: dashPeriod, setPeriod: setDashPeriod, periodDates } = useDashPeriod();
+  const { customFrom, customTo, setCustomRange } = useGlobalDate();
 
   // Filter campaigns to the selected period using dailyMetrics for accurate period metrics.
   const periodCampaigns = useMemo(() => {
@@ -253,26 +256,36 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           onSectionChange={onSectionChange}
           hasAnyData={hasAnyData}
           period={dashPeriod}
-          periodLabel={PERIOD_OPTIONS.find(o => o.key === dashPeriod)?.label ?? 'Τρέχων Μήνας'}
+          periodLabel={dashPeriod === 'custom' ? `${periodDates.fromDate} — ${periodDates.toDate}` : (GLOBAL_PERIOD_OPTIONS.find(o => o.key === dashPeriod)?.label ?? 'Τρέχων Μήνας')}
         />
       )}
 
-      {/* Period selector for KPI cards */}
+      {/* Global period selector — applies to all pages as default */}
       {(hasOrganic || hasCampaigns) && (
-        <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1 w-fit">
-          {PERIOD_OPTIONS.map(opt => (
-            <button
-              key={opt.key}
-              onClick={() => setDashPeriod(opt.key)}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                dashPeriod === opt.key
-                  ? 'bg-white text-[var(--nts-orange)] shadow-sm font-semibold'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+            {GLOBAL_PERIOD_OPTIONS.map(opt => (
+              <button
+                key={opt.key}
+                onClick={() => setDashPeriod(opt.key)}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  dashPeriod === opt.key
+                    ? 'bg-white text-[var(--nts-orange)] shadow-sm font-semibold'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          {dashPeriod === 'custom' && (
+            <DateRangePicker
+              from={customFrom}
+              to={customTo}
+              onChange={(f, t) => setCustomRange(f, t)}
+              onClear={() => setDashPeriod('current_month')}
+            />
+          )}
         </div>
       )}
 

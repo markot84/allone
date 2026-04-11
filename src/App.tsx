@@ -28,6 +28,7 @@ import { usePlan } from './hooks/usePlan';
 import { PrivacyPolicy } from './components/legal/PrivacyPolicy';
 import { TermsOfService } from './components/legal/TermsOfService';
 import { captureOAuthParamsFromLocation } from './utils/oauthSession';
+import { GlobalDateProvider } from './contexts/GlobalDateContext';
 
 const CHUNK_RELOAD_ONCE_KEY = 'pp_chunk_reload_once';
 const isChunkLoadError = (msg: string) =>
@@ -345,6 +346,7 @@ function App() {
 
   return (
     <QueryProvider>
+      <GlobalDateProvider>
       <ToastProvider>
       <AuthGuard>
       <div style={{ 
@@ -379,6 +381,7 @@ function App() {
       </div>
       </AuthGuard>
       </ToastProvider>
+      </GlobalDateProvider>
     </QueryProvider>
   );
 }

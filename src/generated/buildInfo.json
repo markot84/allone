@@ -1,10 +1,14 @@
 {
-  "version": "0.390.0",
-  "previousVersion": "0.389.0",
-  "commitHash": "cc82960",
+  "version": "0.392.0",
+  "previousVersion": "0.391.0",
+  "commitHash": "6920eaf",
   "branch": "main",
-  "buildDate": "2026-04-10T20:19:26.152Z",
+  "buildDate": "2026-04-11T05:55:33.016Z",
   "commits": [
+    {
+      "hash": "6920eaf",
+      "message": "GA4 new users inline + campaign channel filters"
+    },
     {
       "hash": "cc82960",
       "message": "GA4: channel revenue, organic fallback; UI and data updates"
@@ -60,13 +64,10 @@
     {
       "hash": "7255404",
       "message": "chore(hosting): UTF-8 headers, el lang; campaigns: budget section below table"
-    },
-    {
-      "hash": "ff8d4b9",
-      "message": "feat(campaigns): Purchase filter, GA-first Ads actions, phantom store visits"
     }
   ],
   "changes": [
+    "GA4 new users inline + campaign channel filters",
     "GA4: channel revenue, organic fallback; UI and data updates",
     "[Συντήρηση] Sync buildInfo after deploy",
     "Competitive Intelligence: single-line table headers (Δ τιμής, Διαφ. τιμής), nowrap; merchant seller labels and related updates",
@@ -75,7 +76,6 @@
     "Add campaign helper files, Performance image variants, apply_campaigns patch script",
     "Campaigns: filters, server-side fetch, Meta sync resilience, purchase/conversion alignment",
     "[Διόρθωση] Unify header branding and topbar alignment",
-    "[Νέο χαρακτηριστικό] Stabilize connector sync, nightly health, and UI responsiveness",
-    "[Συντήρηση] Add project context rule for agent continuity"
+    "[Νέο χαρακτηριστικό] Stabilize connector sync, nightly health, and UI responsiveness"
   ]
 }

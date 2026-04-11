@@ -25,6 +25,8 @@ import { Card, CardHeader, KPICard, Tooltip, PageHeader } from '../common';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import { formatCurrencyCompact, formatNumber } from '../../utils/format';
 import type { KPICardData } from '../common/KPICard';
+import { useGlobalDate, GLOBAL_PERIOD_OPTIONS } from '../../contexts/GlobalDateContext';
+import { DateRangePicker } from '../ui/DateRangePicker';
 
 const PLATFORM_LABELS: Record<string, string> = {
   shopify: 'Shopify',
@@ -79,6 +81,35 @@ function OrderStatusBadge({ status }: { status: string }) {
 
 export function EcommerceDashboard() {
   const ecomm = useEcommerceSummary();
+
+  // Date range: local override (session-only) falls back to global
+  const { fromDate: globalFrom, toDate: globalTo, period: globalPeriod, setPeriod: setGlobalPeriod } = useGlobalDate();
+  const [localDateFrom, setLocalDateFrom] = useState('');
+  const [localDateTo,   setLocalDateTo]   = useState('');
+  const effectiveFrom = localDateFrom || globalFrom;
+  const effectiveTo   = localDateTo   || globalTo;
+  const hasLocalOverride = !!(localDateFrom || localDateTo);
+
+  // Date-filtered daily revenue
+  const filteredDailyRevenue = useMemo(() => {
+    return ecomm.dailyRevenue.filter(d => d.date >= effectiveFrom && d.date <= effectiveTo);
+  }, [ecomm.dailyRevenue, effectiveFrom, effectiveTo]);
+
+  // Recomputed KPIs from filtered orders
+  const filteredOrdersForKpi = useMemo(() => {
+    return ecomm.recentOrders.filter(o => {
+      const d = (o.createdAt || '').slice(0, 10);
+      return d >= effectiveFrom && d <= effectiveTo;
+    });
+  }, [ecomm.recentOrders, effectiveFrom, effectiveTo]);
+
+  const filteredTotalRevenue = useMemo(
+    () => filteredDailyRevenue.reduce((s, d) => s + d.revenue, 0),
+    [filteredDailyRevenue]
+  );
+  const filteredOrderCount = filteredOrdersForKpi.length;
+  const filteredAov = filteredOrderCount > 0 ? filteredTotalRevenue / filteredOrderCount : 0;
+
   const [orderSort, setOrderSort] = useState<{ field: OrderSortField; dir: 'asc' | 'desc' }>({ field: 'createdAt', dir: 'desc' });
   const [prodSort, setProdSort] = useState<{ field: 'revenue' | 'quantity'; dir: 'asc' | 'desc' }>({ field: 'revenue', dir: 'desc' });
   const [orderSearch, setOrderSearch] = useState('');
@@ -93,35 +124,33 @@ export function EcommerceDashboard() {
   const kpis: KPICardData[] = useMemo(() => [
     {
       label: 'Έσοδα e-shop',
-      value: formatCurrencyCompact(ecomm.totalRevenue),
-      tooltip: 'Σύνολο εσόδων από e-commerce (90 ημέρες)',
-      sparklineData: ecomm.dailyRevenue.slice(-30).map((d) => d.revenue),
+      value: formatCurrencyCompact(filteredTotalRevenue),
+      tooltip: 'Σύνολο εσόδων από e-commerce για το επιλεγμένο διάστημα',
+      sparklineData: filteredDailyRevenue.slice(-30).map((d) => d.revenue),
     },
     {
       label: 'Παραγγελίες',
-      value: formatNumber(ecomm.orderCount),
-      tooltip: 'Σύνολο παραγγελιών (90 ημέρες)',
-      sparklineData: ecomm.dailyRevenue.slice(-30).map((_, i) => {
-        const date = ecomm.dailyRevenue[ecomm.dailyRevenue.length - 30 + i]?.date;
-        if (!date) return 0;
-        const orders = ecomm.recentOrders.filter((o) => o.createdAt?.startsWith(date));
+      value: formatNumber(filteredOrderCount),
+      tooltip: 'Σύνολο παραγγελιών για το επιλεγμένο διάστημα',
+      sparklineData: filteredDailyRevenue.slice(-30).map((d) => {
+        const orders = filteredOrdersForKpi.filter((o) => o.createdAt?.startsWith(d.date));
         return orders.length;
       }),
     },
     {
       label: 'AOV',
-      value: formatCurrencyCompact(ecomm.aov),
-      tooltip: 'Μέσο ποσό ανά παραγγελία',
+      value: formatCurrencyCompact(filteredAov),
+      tooltip: 'Μέσο ποσό ανά παραγγελία για το επιλεγμένο διάστημα',
     },
     {
       label: 'Πλατφόρμες',
       value: String(ecomm.connectedPlatforms.length),
       tooltip: ecomm.connectedPlatforms.map((p) => PLATFORM_LABELS[p] || p).join(', ') || 'Κανένα',
     },
-  ], [ecomm]);
+  ], [filteredTotalRevenue, filteredOrderCount, filteredAov, filteredDailyRevenue, filteredOrdersForKpi, ecomm.connectedPlatforms]);
 
   const sortedOrders = useMemo(() => {
-    const arr = [...ecomm.recentOrders];
+    const arr = [...filteredOrdersForKpi];
     arr.sort((a, b) => {
       const dir = orderSort.dir === 'asc' ? 1 : -1;
       if (orderSort.field === 'createdAt') return dir * a.createdAt.localeCompare(b.createdAt);
@@ -129,7 +158,7 @@ export function EcommerceDashboard() {
       return dir * a.platform.localeCompare(b.platform);
     });
     return arr;
-  }, [ecomm.recentOrders, orderSort]);
+  }, [filteredOrdersForKpi, orderSort]);
 
   const sortedProducts = useMemo(() => {
     const arr = [...ecomm.topProducts];
@@ -271,7 +300,7 @@ export function EcommerceDashboard() {
         }
         description={
           <p className="text-sm text-[#6B7280]">
-            Δεδομένα {ecomm.connectedPlatforms.map((p) => PLATFORM_LABELS[p] || p).join(', ')} — τελευταίες 90 ημέρες
+            Δεδομένα {ecomm.connectedPlatforms.map((p) => PLATFORM_LABELS[p] || p).join(', ')}
           </p>
         }
         meta={
@@ -283,6 +312,39 @@ export function EcommerceDashboard() {
                 : '—'}
             </p>
           ) : undefined
+        }
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+              {GLOBAL_PERIOD_OPTIONS.map(opt => (
+                <button
+                  key={opt.key}
+                  onClick={() => { setGlobalPeriod(opt.key); setLocalDateFrom(''); setLocalDateTo(''); }}
+                  className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-all ${
+                    !hasLocalOverride && globalPeriod === opt.key
+                      ? 'bg-white text-[var(--nts-orange)] shadow-sm font-semibold'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <DateRangePicker
+              from={effectiveFrom}
+              to={effectiveTo}
+              onChange={(f, t) => { setLocalDateFrom(f); setLocalDateTo(t); }}
+              onClear={() => { setLocalDateFrom(''); setLocalDateTo(''); }}
+            />
+            {hasLocalOverride && (
+              <button
+                onClick={() => { setLocalDateFrom(''); setLocalDateTo(''); }}
+                className="text-xs text-[var(--nts-orange)] hover:underline whitespace-nowrap"
+              >
+                ↩ Global
+              </button>
+            )}
+          </div>
         }
       />
 
@@ -297,11 +359,11 @@ export function EcommerceDashboard() {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* Revenue Trend */}
         <Card className="xl:col-span-2">
-          <CardHeader title="Έσοδα ανά ημέρα" subtitle="90 ημέρες" />
+          <CardHeader title="Έσοδα ανά ημέρα" subtitle={`${effectiveFrom} — ${effectiveTo}`} />
           <div className="px-5 pb-5">
-            {ecomm.dailyRevenue.length > 0 ? (
+            {filteredDailyRevenue.length > 0 ? (
               <ResponsiveContainer width="100%" height={280}>
-                <AreaChart data={ecomm.dailyRevenue}>
+                <AreaChart data={filteredDailyRevenue}>
                   <defs>
                     <linearGradient id="ecommRevGrad" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#F97316" stopOpacity={0.25} />

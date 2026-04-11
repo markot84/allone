@@ -22,6 +22,8 @@ import { Card, CardHeader, KPICard, PageHeader } from '../common';
 import { useGA4Data } from '../../hooks/useGA4Data';
 import type { KPICardData } from '../common/KPICard';
 import { formatCurrency } from '../../utils/format';
+import { useGlobalDate, GLOBAL_PERIOD_OPTIONS } from '../../contexts/GlobalDateContext';
+import { DateRangePicker } from '../ui/DateRangePicker';
 
 const OTHER_CHANNELS_LABEL = 'Άλλα κανάλια';
 
@@ -95,14 +97,61 @@ export function GA4Analytics() {
   const {
     propertyName,
     dailyEntries,
-    totals,
-    weeklyChange,
     trafficSources,
     topPages,
     dateRange,
     isLoading,
     hasData,
   } = useGA4Data();
+
+  // Date range: local override (session-only) falls back to global
+  const { fromDate: globalFrom, toDate: globalTo, period: globalPeriod, setPeriod: setGlobalPeriod } = useGlobalDate();
+  const [localDateFrom, setLocalDateFrom] = useState('');
+  const [localDateTo,   setLocalDateTo]   = useState('');
+  const effectiveFrom = localDateFrom || globalFrom;
+  const effectiveTo   = localDateTo   || globalTo;
+  const hasLocalOverride = !!(localDateFrom || localDateTo);
+
+  // Filter daily entries by effective date range
+  const filteredDailyEntries = useMemo(
+    () => dailyEntries.filter(d => d.date >= effectiveFrom && d.date <= effectiveTo),
+    [dailyEntries, effectiveFrom, effectiveTo]
+  );
+
+  // Recompute totals from filtered entries
+  const totals = useMemo(() => {
+    if (filteredDailyEntries.length === 0)
+      return { sessions: 0, users: 0, newUsers: 0, pageViews: 0, bounceRate: 0, conversions: 0, avgDuration: 0 };
+    const sum = filteredDailyEntries.reduce(
+      (acc, d) => ({
+        sessions: acc.sessions + d.sessions,
+        users: acc.users + d.totalUsers,
+        newUsers: acc.newUsers + d.newUsers,
+        pageViews: acc.pageViews + d.pageViews,
+        bounceRate: acc.bounceRate + d.bounceRate,
+        conversions: acc.conversions + d.conversions,
+        avgDuration: acc.avgDuration + d.avgSessionDuration,
+      }),
+      { sessions: 0, users: 0, newUsers: 0, pageViews: 0, bounceRate: 0, conversions: 0, avgDuration: 0 }
+    );
+    const n = filteredDailyEntries.length;
+    return { ...sum, bounceRate: sum.bounceRate / n, avgDuration: sum.avgDuration / n };
+  }, [filteredDailyEntries]);
+
+  // weeklyChange from filtered data
+  const weeklyChange = useMemo(() => {
+    if (filteredDailyEntries.length < 14) return null;
+    const last7 = filteredDailyEntries.slice(-7);
+    const prev7 = filteredDailyEntries.slice(-14, -7);
+    const sum = (arr: typeof filteredDailyEntries, fn: (d: typeof filteredDailyEntries[0]) => number) => arr.reduce((a, d) => a + fn(d), 0);
+    const pct = (prev: number, curr: number) => prev > 0 ? ((curr - prev) / prev) * 100 : null;
+    return {
+      sessions: pct(sum(prev7, d => d.sessions), sum(last7, d => d.sessions)),
+      users: pct(sum(prev7, d => d.totalUsers), sum(last7, d => d.totalUsers)),
+      conversions: pct(sum(prev7, d => d.conversions), sum(last7, d => d.conversions)),
+      newUsers: pct(sum(prev7, d => d.newUsers), sum(last7, d => d.newUsers)),
+    };
+  }, [filteredDailyEntries]);
 
   const displayTrafficSources = useMemo(() => {
     const rows: TrafficRow[] = trafficSources.map((s) => ({
@@ -122,12 +171,11 @@ export function GA4Analytics() {
   const [showAllPages, setShowAllPages] = useState(false);
 
   const chartData = useMemo(() => {
-    if (dailyEntries.length === 0) return [];
-    const step = dailyEntries.length > 30 ? 7 : 1;
+    if (filteredDailyEntries.length === 0) return [];
+    const step = filteredDailyEntries.length > 30 ? 7 : 1;
     const aggregated: { date: string; sessions: number; users: number; conversions: number }[] = [];
-
-    for (let i = 0; i < dailyEntries.length; i += step) {
-      const chunk = dailyEntries.slice(i, i + step);
+    for (let i = 0; i < filteredDailyEntries.length; i += step) {
+      const chunk = filteredDailyEntries.slice(i, i + step);
       aggregated.push({
         date: chunk[0].date.slice(5),
         sessions: chunk.reduce((a, d) => a + d.sessions, 0),
@@ -136,7 +184,7 @@ export function GA4Analytics() {
       });
     }
     return aggregated;
-  }, [dailyEntries]);
+  }, [filteredDailyEntries]);
 
   const pieData = useMemo(
     () =>
@@ -275,10 +323,43 @@ export function GA4Analytics() {
             <span className="font-medium text-[var(--nts-charcoal)]">{propertyName}</span>
             {dateRange && (
               <span className="ml-2 text-xs">
-                ({dateRange.start} — {dateRange.end})
+                (synced: {dateRange.start} — {dateRange.end})
               </span>
             )}
           </p>
+        }
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+              {GLOBAL_PERIOD_OPTIONS.map(opt => (
+                <button
+                  key={opt.key}
+                  onClick={() => { setGlobalPeriod(opt.key); setLocalDateFrom(''); setLocalDateTo(''); }}
+                  className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-all ${
+                    !hasLocalOverride && globalPeriod === opt.key
+                      ? 'bg-white text-[var(--nts-orange)] shadow-sm font-semibold'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <DateRangePicker
+              from={effectiveFrom}
+              to={effectiveTo}
+              onChange={(f, t) => { setLocalDateFrom(f); setLocalDateTo(t); }}
+              onClear={() => { setLocalDateFrom(''); setLocalDateTo(''); }}
+            />
+            {hasLocalOverride && (
+              <button
+                onClick={() => { setLocalDateFrom(''); setLocalDateTo(''); }}
+                className="text-xs text-[var(--nts-orange)] hover:underline whitespace-nowrap"
+              >
+                ↩ Global
+              </button>
+            )}
+          </div>
         }
       />
 
