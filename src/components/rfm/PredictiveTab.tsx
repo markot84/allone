@@ -90,6 +90,7 @@ export function PredictiveTab({ segments }: PredictiveTabProps) {
     })).sort((a, b) => b.ltv - a.ltv),
   [enriched]);
 
+  /** x = churn %, y = LTV, z = αριθμός πελατών στο segment (ίδιο με `segment.count` στα imports) */
   const scatterData = useMemo(() =>
     enriched.map(e => ({
       name: e.segment.name,
@@ -226,13 +227,36 @@ export function PredictiveTab({ segments }: PredictiveTabProps) {
                       tickFormatter={(v) => `€${(v / 1000).toFixed(0)}K`}
                       tick={{ fill: '#9CA3AF', fontSize: 11 }}
                     />
-                    <ZAxis type="number" dataKey="z" range={[100, 800]} />
+                    <ZAxis type="number" dataKey="z" name="Πελάτες" range={[100, 800]} />
                     <RechartsTooltip
                       contentStyle={{ backgroundColor: '#fff', border: '1px solid #E5E5E5', borderRadius: 6, fontSize: 12 }}
-                      formatter={(v: number | undefined, name?: string) => [
-                        name === 'Churn Risk' ? `${(v as number) || 0}%` : name === 'LTV' ? formatCurrencyCompact((v as number) || 0) : formatNumber((v as number) || 0),
-                        (name as string) === 'x' ? 'Churn Risk' : (name as string) === 'y' ? 'LTV' : 'Πελάτες',
-                      ]}
+                      content={({ active, payload }) => {
+                        if (!active || !payload?.length) return null;
+                        const row = payload[0].payload as {
+                          name: string;
+                          x: number;
+                          y: number;
+                          z: number;
+                          color: string;
+                        };
+                        return (
+                          <div className="rounded-md border border-[#E5E5E5] bg-white px-3 py-2 text-xs shadow-sm">
+                            <p className="mb-1.5 font-semibold text-[#1A1A1A]">{row.name}</p>
+                            <p className="text-[#4A4A4A]">
+                              <span className="text-[#9CA3AF]">Churn Risk: </span>
+                              {formatNumber(row.x, 0)}%
+                            </p>
+                            <p className="text-[#4A4A4A]">
+                              <span className="text-[#9CA3AF]">LTV: </span>
+                              {formatCurrencyCompact(row.y)}
+                            </p>
+                            <p className="text-[#4A4A4A]">
+                              <span className="text-[#9CA3AF]">Πελάτες: </span>
+                              {formatNumber(row.z)}
+                            </p>
+                          </div>
+                        );
+                      }}
                     />
                     <Scatter data={scatterData}>
                       {scatterData.map((entry, i) => (

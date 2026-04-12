@@ -11,6 +11,7 @@ import { FirestoreService } from '../../services/firestore';
 import { formatCurrency, formatNumber, formatMultiplier, formatPercent } from '../../utils/format';
 import { BudgetOpportunitySection } from '../roi/BudgetOpportunitySection';
 import { CampaignsChannelInsights } from './CampaignsChannelInsights';
+import { ChannelPerformanceHistoryCard } from './ChannelPerformanceHistoryCard';
 import {
   bucketOverlapFraction,
   getEffectiveConversionValue,
@@ -1100,6 +1101,8 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
           </div>
         )}
       </div>
+
+      {activeTab === 'campaigns' && <ChannelPerformanceHistoryCard />}
 
       {activeTab === 'campaigns' && (
         <CampaignsChannelInsights campaigns={campaignsInConvView} />

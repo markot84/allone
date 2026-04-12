@@ -13,7 +13,7 @@ import { CampaignsPage } from './components/campaigns/CampaignsPage';
 import { ContentStrategy } from './components/content';
 import { Help } from './components/help';
 import { Concept } from './components/concept';
-import { AIInsightsPanel, AIInsightsTriggerWrapper } from './components/insights';
+import { AIInsightsPage, AIInsightsTriggerWrapper } from './components/insights';
 import { DataImport } from './components/data';
 import { SuppliersPage } from './components/inventory/SuppliersPage';
 import { BrandsPage } from './components/brands';
@@ -117,7 +117,7 @@ function QueryProvider({ children }: { children: React.ReactNode }) {
 }
 
 function App() {
-  const VALID_SECTIONS = ['brands', 'dashboard', 'strategy', 'rfm', 'products', 'suppliers', 'procurement', 'channels', 'campaigns', 'competitive', 'analytics', 'ecommerce', 'finances', 'calendar', 'reports', 'roi', 'data', 'data-products', 'data-segments', 'data-campaigns', 'data-organic', 'data-procurement', 'invite', 'concept', 'help', 'admin', 'coordination', 'automation'] as const;
+  const VALID_SECTIONS = ['brands', 'dashboard', 'strategy', 'rfm', 'products', 'suppliers', 'procurement', 'channels', 'campaigns', 'competitive', 'analytics', 'ecommerce', 'finances', 'calendar', 'reports', 'roi', 'insights', 'data', 'data-products', 'data-segments', 'data-campaigns', 'data-organic', 'data-procurement', 'invite', 'concept', 'help', 'admin', 'coordination', 'automation'] as const;
 
   // Initialize from URL hash or default to dashboard (υποστηρίζει #products?stock=low)
   const getInitialSection = () => {
@@ -134,7 +134,6 @@ function App() {
   };
 
   const [activeSection, setActiveSection] = useState(getInitialSection);
-  const [insightsPanelOpen, setInsightsPanelOpen] = useState(false);
 
   // Πριν από child effects: αποθήκευση OAuth query (connector/status) — αλλιώς χάνεται από hash sync ή race.
   useLayoutEffect(() => {
@@ -147,7 +146,7 @@ function App() {
     const hash = window.location.hash.replace('#', '');
     const base = hash.split('?')[0];
     if (hash.includes('connector=')) return;
-    if (base !== activeSection && activeSection !== 'insights') {
+    if (base !== activeSection) {
       window.history.replaceState(null, '', `#${activeSection}`);
     }
   }, [activeSection]);
@@ -158,10 +157,6 @@ function App() {
       const full = window.location.hash.replace('#', '');
       const base = full.split('?')[0];
       if (!full) return;
-      if (base === 'insights') {
-        setInsightsPanelOpen(true);
-        return;
-      }
       if (VALID_SECTIONS.includes(base as (typeof VALID_SECTIONS)[number]) && base !== activeSection) {
         setActiveSection(base);
       }
@@ -258,17 +253,12 @@ function App() {
 
   const handleSectionChange = useCallback((section: string, opts?: { hashQuery?: string }) => {
     requestAnimationFrame(() => {
-      if (section === 'insights') {
-        setInsightsPanelOpen(true);
-      } else {
-        setActiveSection(section);
-        window.scrollTo({ top: 0 });
-        if (typeof window !== 'undefined') {
-          const q = opts?.hashQuery ? (opts.hashQuery.startsWith('?') ? opts.hashQuery : `?${opts.hashQuery}`) : '';
-          window.history.pushState(null, '', `#${section}${q}`);
-          // pushState δεν ενεργοποιεί πάντα hashchange — χρειάζεται για deep links (π.χ. Product Intelligence filters)
-          window.dispatchEvent(new HashChangeEvent('hashchange'));
-        }
+      setActiveSection(section);
+      window.scrollTo({ top: 0 });
+      if (typeof window !== 'undefined') {
+        const q = opts?.hashQuery ? (opts.hashQuery.startsWith('?') ? opts.hashQuery : `?${opts.hashQuery}`) : '';
+        window.history.pushState(null, '', `#${section}${q}`);
+        window.dispatchEvent(new HashChangeEvent('hashchange'));
       }
     });
   }, []);
@@ -278,7 +268,7 @@ function App() {
       case 'brands':
         return <BrandsPage onNavigateToDashboard={() => handleSectionChange('dashboard')} />;
       case 'dashboard':
-        return <DashboardOverview onSectionChange={handleSectionChange} onOpenInsights={() => setInsightsPanelOpen(true)} />;
+        return <DashboardOverview onSectionChange={handleSectionChange} onOpenInsights={() => handleSectionChange('insights')} />;
       case 'strategy':
         return <WeightConfigurator />;
       case 'rfm':
@@ -311,6 +301,8 @@ function App() {
         return <Reports />;
       case 'roi':
         return <ROIAttribution />;
+      case 'insights':
+        return <AIInsightsPage onSectionChange={handleSectionChange} />;
       case 'data':
       case 'data-products':
       case 'data-segments':
@@ -335,12 +327,12 @@ function App() {
         const u = auth.currentUser;
         if (!isSuperAdminEmail(u?.email)) {
           handleSectionChange('dashboard');
-          return <DashboardOverview onSectionChange={handleSectionChange} onOpenInsights={() => setInsightsPanelOpen(true)} />;
+          return <DashboardOverview onSectionChange={handleSectionChange} onOpenInsights={() => handleSectionChange('insights')} />;
         }
         return <SuperAdminDashboard />;
       }
       default:
-        return <DashboardOverview onSectionChange={handleSectionChange} onOpenInsights={() => setInsightsPanelOpen(true)} />;
+        return <DashboardOverview onSectionChange={handleSectionChange} onOpenInsights={() => handleSectionChange('insights')} />;
     }
   };
 
@@ -369,15 +361,9 @@ function App() {
           </ErrorBoundary>
         </AppShell>
 
-        {/* AI Insights Floating Button */}
-        <AIInsightsTriggerWrapper onClick={() => setInsightsPanelOpen(true)} />
-
-        {/* AI Insights Panel */}
-        <AIInsightsPanel
-          isOpen={insightsPanelOpen}
-          onClose={() => setInsightsPanelOpen(false)}
-          onNavigate={handleSectionChange}
-        />
+        {activeSection !== 'insights' && (
+          <AIInsightsTriggerWrapper onClick={() => handleSectionChange('insights')} />
+        )}
       </div>
       </AuthGuard>
       </ToastProvider>

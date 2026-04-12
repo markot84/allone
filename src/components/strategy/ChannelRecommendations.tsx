@@ -120,6 +120,49 @@ export function ChannelRecommendations({
         </div>
       </div>
 
+      {/* Budget Allocation Visualization — πάνω από Κύρια κανάλια */}
+      <div>
+        <h5 className="text-sm font-medium text-[#1A1A1A] mb-3">
+          Budget Allocation
+        </h5>
+        <div className="flex h-4 rounded-full overflow-hidden">
+          {Object.entries(recommendations.budget_allocation).map(
+            ([channel, percentage], index) => {
+              const colors = ['var(--nts-accent)', '#78716C', '#22C55E', '#8B5CF6', '#F59E0B'];
+              return (
+                <motion.div
+                  key={channel}
+                  initial={{ width: 0 }}
+                  animate={{ width: `${percentage}%` }}
+                  transition={{ delay: 0.5 + index * 0.1 }}
+                  className="h-full"
+                  style={{ backgroundColor: colors[index % colors.length] }}
+                  title={`${channel}: ${percentage}%`}
+                />
+              );
+            }
+          )}
+        </div>
+        <div className="flex flex-wrap gap-4 mt-3">
+          {Object.entries(recommendations.budget_allocation).map(
+            ([channel, percentage], index) => {
+              const colors = ['var(--nts-accent)', '#78716C', '#22C55E', '#8B5CF6', '#F59E0B'];
+              return (
+                <div key={channel} className="flex items-center gap-2">
+                  <div
+                    className="w-3 h-3 rounded-full"
+                    style={{ backgroundColor: colors[index % colors.length] }}
+                  />
+                  <span className="text-xs text-[#4A4A4A] capitalize">
+                    {channel}: {percentage}%
+                  </span>
+                </div>
+              );
+            }
+          )}
+        </div>
+      </div>
+
       {/* Channel Mix */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Primary Channels */}
@@ -244,49 +287,6 @@ export function ChannelRecommendations({
             </div>
           );
         })()}
-      </div>
-
-      {/* Budget Allocation Visualization */}
-      <div>
-        <h5 className="text-sm font-medium text-[#1A1A1A] mb-3">
-          Budget Allocation
-        </h5>
-        <div className="flex h-4 rounded-full overflow-hidden">
-          {Object.entries(recommendations.budget_allocation).map(
-            ([channel, percentage], index) => {
-              const colors = ['var(--nts-accent)', '#78716C', '#22C55E', '#8B5CF6', '#F59E0B'];
-              return (
-                <motion.div
-                  key={channel}
-                  initial={{ width: 0 }}
-                  animate={{ width: `${percentage}%` }}
-                  transition={{ delay: 0.5 + index * 0.1 }}
-                  className="h-full"
-                  style={{ backgroundColor: colors[index % colors.length] }}
-                  title={`${channel}: ${percentage}%`}
-                />
-              );
-            }
-          )}
-        </div>
-        <div className="flex flex-wrap gap-4 mt-3">
-          {Object.entries(recommendations.budget_allocation).map(
-            ([channel, percentage], index) => {
-              const colors = ['var(--nts-accent)', '#78716C', '#22C55E', '#8B5CF6', '#F59E0B'];
-              return (
-                <div key={channel} className="flex items-center gap-2">
-                  <div
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: colors[index % colors.length] }}
-                  />
-                  <span className="text-xs text-[#4A4A4A] capitalize">
-                    {channel}: {percentage}%
-                  </span>
-                </div>
-              );
-            }
-          )}
-        </div>
       </div>
     </div>
   );

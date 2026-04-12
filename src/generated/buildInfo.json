@@ -1,10 +1,14 @@
 {
-  "version": "0.392.0",
-  "previousVersion": "0.391.0",
-  "commitHash": "6920eaf",
+  "version": "0.399.0",
+  "previousVersion": "0.398.0",
+  "commitHash": "09cf150",
   "branch": "main",
-  "buildDate": "2026-04-11T05:55:33.016Z",
+  "buildDate": "2026-04-12T16:18:41.854Z",
   "commits": [
+    {
+      "hash": "09cf150",
+      "message": "feat: global date range context shared across all pages"
+    },
     {
       "hash": "6920eaf",
       "message": "GA4 new users inline + campaign channel filters"
@@ -60,13 +64,10 @@
     {
       "hash": "7ee821e",
       "message": "chore: sync buildInfo after deploy (v0.306.0)"
-    },
-    {
-      "hash": "7255404",
-      "message": "chore(hosting): UTF-8 headers, el lang; campaigns: budget section below table"
     }
   ],
   "changes": [
+    "[Νέο χαρακτηριστικό] Global date range context shared across all pages",
     "GA4 new users inline + campaign channel filters",
     "GA4: channel revenue, organic fallback; UI and data updates",
     "[Συντήρηση] Sync buildInfo after deploy",
@@ -75,7 +76,6 @@
     "[Νέο χαρακτηριστικό] Shared page headers, campaigns copy (EN tech terms), connector and UI updates",
     "Add campaign helper files, Performance image variants, apply_campaigns patch script",
     "Campaigns: filters, server-side fetch, Meta sync resilience, purchase/conversion alignment",
-    "[Διόρθωση] Unify header branding and topbar alignment",
-    "[Νέο χαρακτηριστικό] Stabilize connector sync, nightly health, and UI responsiveness"
+    "[Διόρθωση] Unify header branding and topbar alignment"
   ]
 }

@@ -40,7 +40,7 @@ function getChannelIcon(channel: string) {
 export function ContentStrategy() {
   const { currentBrand } = useBrand();
   const { activeStrategy, getStrategyName, isLoading: strategyLoading } = useActiveStrategy();
-  const [showExamples, setShowExamples] = useState(false);
+  const [showExamples, setShowExamples] = useState(true);
   const [briefCopied, setBriefCopied] = useState(false);
   const [allCopied, setAllCopied] = useState(false);
 
@@ -152,6 +152,36 @@ export function ContentStrategy() {
           ) : null
         }
       />
+
+      {/* Content Brief for Marketing Team — πρώτο περιεχόμενο όταν υπάρχει */}
+      {hasStrategy && !suggestionsLoading && brief && (
+        <Card padding="lg">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-[#F5F5F5] rounded-xl flex items-center justify-center">
+                <Send size={20} className="text-[#4A4A4A]" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-[#1A1A1A]">Brief για ομάδα marketing</h3>
+                <p className="text-sm text-[#4A4A4A]">
+                  Κείμενο κατευθύνσεων για αποστολή σε marketing team ή agency
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleCopyBrief}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all bg-[#F5F5F5] hover:bg-[#E5E5E5] text-[#1A1A1A]"
+            >
+              {briefCopied ? <Check size={14} className="text-[#22C55E]" /> : <Copy size={14} />}
+              {briefCopied ? 'Αντιγράφηκε!' : 'Αντιγραφή'}
+            </button>
+          </div>
+
+          <div className="p-5 bg-gradient-to-br from-[#FAFAFA] to-white border border-[#E5E5E5] rounded-xl">
+            <FormattedProse content={brief} variant="default" />
+          </div>
+        </Card>
+      )}
 
       {/* Loading state */}
       {hasStrategy && suggestionsLoading && (
@@ -293,36 +323,6 @@ export function ContentStrategy() {
               </motion.div>
             )}
           </AnimatePresence>
-        </Card>
-      )}
-
-      {/* Content Brief for Marketing Team */}
-      {hasStrategy && !suggestionsLoading && brief && (
-        <Card padding="lg">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-[#F5F5F5] rounded-xl flex items-center justify-center">
-                <Send size={20} className="text-[#4A4A4A]" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-[#1A1A1A]">Brief για ομάδα marketing</h3>
-                <p className="text-sm text-[#4A4A4A]">
-                  Κείμενο κατευθύνσεων για αποστολή σε marketing team ή agency
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={handleCopyBrief}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all bg-[#F5F5F5] hover:bg-[#E5E5E5] text-[#1A1A1A]"
-            >
-              {briefCopied ? <Check size={14} className="text-[#22C55E]" /> : <Copy size={14} />}
-              {briefCopied ? 'Αντιγράφηκε!' : 'Αντιγραφή'}
-            </button>
-          </div>
-
-          <div className="p-5 bg-gradient-to-br from-[#FAFAFA] to-white border border-[#E5E5E5] rounded-xl">
-            <FormattedProse content={brief} variant="default" />
-          </div>
         </Card>
       )}
 

@@ -37,7 +37,8 @@ export const SEASONAL_PERIODS: SeasonalPeriod[] = [
     id: 'easter',
     name: 'Πάσχα',
     icon: 'sun',
-    dateRange: { startMonth: 4, startDay: 1, endMonth: 4, endDay: 20 },
+    /** Τελευταία ημέρα εμφάνισης = Κυριακή του Πάσχα (κινητή εορτή· ενημερώστε ετήσια το endDay αν χρειάζεται). */
+    dateRange: { startMonth: 4, startDay: 1, endMonth: 4, endDay: 12 },
     suggestedMix: { scenarioA: 'revenue_push', scenarioB: 'brand_launch', percentA: 60 },
     description: 'Εποχιακή ώθηση πωλήσεων με ευκαιρία προβολής νέων προϊόντων.',
   },

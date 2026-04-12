@@ -29,13 +29,7 @@ import {
   PieChart,
   Pie,
   Cell,
-  XAxis,
-  YAxis,
   Tooltip,
-  CartesianGrid,
-  LineChart,
-  Line,
-  Legend,
 } from 'recharts';
 import { Card, CardHeader, Badge, Button, Spinner, FormattedProse, PageHeader, ModalHeader } from '../common';
 import { useToast } from '../common/Toast';
@@ -44,12 +38,12 @@ import { exportSegmentActionPack, exportAllSegmentActionPacks, exportStrategyPla
 import { derivePredictiveMetrics } from '../../services/behavioralEngine';
 import { getStockAgeDays } from '../../utils/productUtils';
 import { safeBrandName } from '../../services/reportExport';
-import { formatCurrency, formatNumber, formatPercent, formatMultiplier } from '../../utils/format';
+import { formatCurrency, formatNumber, formatPercent } from '../../utils/format';
 import { scenarios } from '../../data';
 import { generateChannelRecommendations } from '../../services/aiChannelRecommendations';
 import { FirestoreService } from '../../services/firestore';
 import { useQueryClient } from '@tanstack/react-query';
-import type { Campaign, ChannelRecommendation, BudgetAction } from '../../types';
+import type { ChannelRecommendation, BudgetAction } from '../../types';
 
 const COLORS = ['var(--nts-accent)', '#78716C', '#22C55E', '#8B5CF6', '#F59E0B', '#3B82F6', '#EC4899'];
 
@@ -138,14 +132,12 @@ interface ChannelActivationProps {
 export function ChannelActivation({ onSectionChange }: ChannelActivationProps = {}) {
   const { currentBrand } = useBrand();
   const { products, count: productsCount } = useProductSource();
-  const { campaigns, isLoading: campaignsLoading, hasImported: hasCampaigns } = useCampaigns();
+  const { isLoading: campaignsLoading, hasImported: hasCampaigns } = useCampaigns();
   const { segments: rfmSegments } = useSegments();
   const { activeStrategy, getStrategyName, updateBudget, isSavingBudget } = useActiveStrategy();
   const queryClient = useQueryClient();
   const toast = useToast();
 
-  const historyChartRef = useRef<HTMLDivElement>(null);
-  const [historyChartSize, setHistoryChartSize] = useState({ width: 800, height: 288 });
   const [showExportModal, setShowExportModal] = useState(false);
   const [selectedFeed, setSelectedFeed] = useState<string | null>(null);
   const [previewFeed, setPreviewFeed] = useState<string | null>(null);
@@ -233,95 +225,6 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
       .sort((a, b) => b[1] - a[1])
       .map(([channel, pct]) => ({ channel, percentage: pct }));
   }, [aiRecommendation]);
-
-  // Real campaign performance
-  const realChannelPerformance = useMemo(() => {
-    if (!hasCampaigns || campaigns.length === 0) return null;
-    const channelStats: Record<string, { totalSpent: number; totalConversions: number; totalConversionValue: number; totalImpressions: number; totalClicks: number; campaignCount: number }> = {};
-    (campaigns as Campaign[]).forEach(c => {
-      const channel = c.channel || 'Other';
-      if (!channelStats[channel]) channelStats[channel] = { totalSpent: 0, totalConversions: 0, totalConversionValue: 0, totalImpressions: 0, totalClicks: 0, campaignCount: 0 };
-      const s = channelStats[channel];
-      s.totalSpent += c.amount_spent || 0;
-      s.totalConversions += c.conversions || 0;
-      s.totalConversionValue += c.conversion_value || 0;
-      s.totalImpressions += c.impressions || 0;
-      s.totalClicks += c.clicks || 0;
-      s.campaignCount += 1;
-    });
-    return Object.entries(channelStats).map(([channel, s]) => ({
-      channel,
-      spent: s.totalSpent,
-      roas: s.totalSpent > 0 ? s.totalConversionValue / s.totalSpent : 0,
-      conversions: s.totalConversions,
-      ctr: s.totalImpressions > 0 ? (s.totalClicks / s.totalImpressions) * 100 : 0,
-      cpc: s.totalClicks > 0 ? s.totalSpent / s.totalClicks : 0,
-      campaignCount: s.campaignCount,
-    })).sort((a, b) => b.spent - a.spent);
-  }, [campaigns, hasCampaigns]);
-
-  // Performance history: weighted-average ROAS per channel per month (dynamic channels)
-  const CHANNEL_COLORS: Record<string, string> = {
-    'Google Ads': '#4285F4',
-    'Meta': '#8B5CF6',
-    'Other': '#F59E0B',
-    'TikTok': '#000000',
-    'LinkedIn': '#0A66C2',
-    'Pinterest': '#E60023',
-    'Skroutz': '#F68B24',
-  };
-
-  const realPerformanceHistory = useMemo(() => {
-    if (!hasCampaigns || campaigns.length === 0) return null;
-
-    const buckets: Record<string, Record<string, { spend: number; value: number }>> = {};
-
-    (campaigns as Campaign[]).forEach(c => {
-      const dateStr = c.start_date || c.period || '';
-      if (!dateStr) return;
-      const parsed = new Date(dateStr);
-      if (isNaN(parsed.getTime())) return;
-      const key = `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}`;
-      const channel = c.channel || 'Other';
-
-      if (!buckets[key]) buckets[key] = {};
-      if (!buckets[key][channel]) buckets[key][channel] = { spend: 0, value: 0 };
-      buckets[key][channel].spend += c.amount_spent || 0;
-      buckets[key][channel].value += c.conversion_value || 0;
-    });
-
-    const allChannelKeys = new Set<string>();
-    Object.values(buckets).forEach(chMap => Object.keys(chMap).forEach(ch => allChannelKeys.add(ch)));
-
-    const rows = Object.entries(buckets)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .slice(-6)
-      .map(([ym, data]) => {
-        const [y, m] = ym.split('-');
-        const label = new Date(Number(y), Number(m) - 1).toLocaleDateString('el-GR', { month: 'short', year: '2-digit' });
-        const row: Record<string, string | number> = { month: label };
-        allChannelKeys.forEach(ch => {
-          const d = data[ch];
-          row[ch] = d && d.spend > 0 ? Math.round((d.value / d.spend) * 100) / 100 : 0;
-        });
-        return row;
-      });
-
-    return rows.length > 0 ? { rows, channels: Array.from(allChannelKeys) } : null;
-  }, [campaigns, hasCampaigns]);
-
-  useEffect(() => {
-    const update = () => {
-      if (historyChartRef.current) {
-        const w = historyChartRef.current.offsetWidth || 800;
-        setHistoryChartSize({ width: Math.max(w, 400), height: 288 });
-      }
-    };
-    update();
-    const ro = new ResizeObserver(update);
-    if (historyChartRef.current) ro.observe(historyChartRef.current);
-    return () => ro.disconnect();
-  }, []);
 
   const handleStatusChange = useCallback(async (channel: string, status: ChannelStatus) => {
     await updateActivation({ channel, status });
@@ -486,34 +389,6 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
             </Button>
           </div>
         </Card>
-
-        {/* Campaign Performance - always visible */}
-        {realChannelPerformance && realChannelPerformance.length > 0 && (
-          <Card padding="lg">
-            <CardHeader
-              title="Απόδοση καμπανιών"
-              subtitle="Πραγματικά δεδομένα από εισαγόμενες καμπάνιες"
-              icon={<TrendingUp size={20} className="text-[var(--nts-accent)]" />}
-            />
-            <div className="mt-2">
-              <Badge variant="default" size="sm">Μέσο ROAS: {formatMultiplier(realChannelPerformance.reduce((sum, c) => sum + c.roas * c.spent, 0) / Math.max(realChannelPerformance.reduce((sum, c) => sum + c.spent, 0), 1), 1)}</Badge>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-              {realChannelPerformance.map((ch) => (
-                <div key={ch.channel} className="p-4 rounded-lg border border-[#E5E5E5] bg-white">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-medium text-[#1A1A1A] text-sm">{ch.channel}</span>
-                    <Badge variant={ch.roas >= 3 ? 'success' : ch.roas >= 1 ? 'warning' : 'default'} size="sm">ROAS: {formatMultiplier(ch.roas, 2)}</Badge>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div><span className="text-[#9CA3AF]">Δαπάνη</span><p className="font-mono">€{formatCurrency(ch.spent)}</p></div>
-                    <div><span className="text-[#9CA3AF]">Μετατροπές</span><p className="font-mono">{formatNumber(ch.conversions)}</p></div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Card>
-        )}
       </div>
     );
   }
@@ -936,120 +811,6 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
           </Card>
         );
       })()}
-
-      {/* Actual Campaign Performance (when campaigns exist) */}
-      {hasCampaigns && realChannelPerformance && realChannelPerformance.length > 0 && (
-        <Card padding="lg">
-          <CardHeader
-            title="Campaign Performance"
-            subtitle="Πραγματικά δεδομένα από imported campaigns"
-            icon={<TrendingUp size={20} className="text-[var(--nts-accent)]" />}
-            action={
-              <Badge variant="success" size="md">
-                Avg ROAS: {formatMultiplier(
-                  realChannelPerformance.reduce((sum, ch) => sum + ch.roas * ch.spent, 0) / Math.max(realChannelPerformance.reduce((sum, ch) => sum + ch.spent, 0), 1), 1
-                )}
-              </Badge>
-            }
-          />
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-2">
-            {realChannelPerformance.map((channel, index) => (
-              <motion.div
-                key={channel.channel}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05 }}
-                className="p-4 bg-[#F5F5F5] rounded-xl"
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <h4 className="font-semibold text-[#1A1A1A] text-sm">{channel.channel}</h4>
-                  <Badge variant="success" size="sm">
-                    ROAS: {formatMultiplier(channel.roas, 2)}
-                  </Badge>
-                </div>
-                <div className="space-y-1.5 text-xs text-[#4A4A4A]">
-                  <div className="flex justify-between"><span>Spent</span><span className="font-mono font-medium text-[#1A1A1A]">€{formatCurrency(channel.spent)}</span></div>
-                  <div className="flex justify-between"><span>Conversions</span><span className="font-mono font-medium">{formatNumber(channel.conversions)}</span></div>
-                  <div className="flex justify-between"><span>CTR</span><span className="font-mono">{formatPercent(channel.ctr, 2)}</span></div>
-                  <div className="flex justify-between"><span>CPC</span><span className="font-mono">€{formatCurrency(channel.cpc, 2)}</span></div>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </Card>
-      )}
-
-      {/* Performance History */}
-      {hasCampaigns && (
-        <Card padding="lg">
-          <CardHeader
-            title="Channel Performance History"
-            subtitle="ROAS trend τελευταίων 6 μηνών"
-            icon={<TrendingUp size={20} className="text-[var(--nts-accent)]" />}
-          />
-          <div ref={historyChartRef} className="w-full" style={{ width: '100%', height: 288, minHeight: 288, position: 'relative' }}>
-            {realPerformanceHistory && realPerformanceHistory.rows.length > 0 ? (
-              <LineChart width={historyChartSize.width} height={historyChartSize.height} data={realPerformanceHistory.rows} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" />
-                <XAxis dataKey="month" tick={{ fill: '#4A4A4A', fontSize: 12 }} axisLine={{ stroke: '#E5E5E5' }} />
-                <YAxis
-                  tick={{ fill: '#4A4A4A', fontSize: 12 }}
-                  axisLine={{ stroke: '#E5E5E5' }}
-                  tickFormatter={(v) => `${v.toFixed(1)}x`}
-                  domain={[0, 'auto']}
-                />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #E5E5E5', borderRadius: '8px', padding: '10px 14px' }}
-                  formatter={(v, name) => [`${((v as number) || 0).toFixed(2)}x`, name as string]}
-                  labelFormatter={(label) => label}
-                />
-                <Legend />
-                {realPerformanceHistory.channels.map((ch) => {
-                  const hasData = realPerformanceHistory.rows.some(d => (d[ch] as number) > 0);
-                  if (!hasData) return null;
-                  const color = CHANNEL_COLORS[ch] || '#6B7280';
-                  return (
-                    <Line key={ch} type="monotone" dataKey={ch} stroke={color} strokeWidth={2.5} name={ch} dot={{ r: 4, fill: color }} connectNulls />
-                  );
-                })}
-              </LineChart>
-            ) : (
-              <div className="flex items-center justify-center h-full">
-                <p className="text-sm text-[#4A4A4A]">Δεν υπάρχουν δεδομένα performance history</p>
-              </div>
-            )}
-          </div>
-        </Card>
-      )}
-
-      {/* Active campaigns */}
-      {hasCampaigns && campaigns.length > 0 && (
-        <Card padding="lg">
-          <CardHeader
-            title="Active Campaigns"
-            subtitle={`${campaigns.length} ${campaigns.length === 1 ? 'campaign' : 'campaigns'} imported`}
-            icon={<TrendingUp size={20} className="text-[var(--nts-accent)]" />}
-            action={<Button variant="ghost" size="sm" onClick={() => onSectionChange?.('campaigns')}>View All</Button>}
-          />
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
-            {(campaigns as Campaign[]).slice(0, 6).map((campaign) => (
-              <motion.div key={campaign.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-4 border border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] transition-all">
-                <div className="flex items-start justify-between mb-2">
-                  <h4 className="font-medium text-[#1A1A1A] text-sm truncate flex-1">{campaign.name}</h4>
-                  <Badge variant={campaign.status === 'active' || campaign.status === 'enabled' ? 'success' : 'default'} size="sm">{campaign.status || 'Active'}</Badge>
-                </div>
-                <p className="text-xs text-[#4A4A4A] mb-3">{campaign.channel}</p>
-                <div className="space-y-1 text-xs">
-                  {campaign.amount_spent && <div className="flex justify-between"><span className="text-[#4A4A4A]">Spent:</span><span className="font-mono font-medium">€{formatCurrency(campaign.amount_spent)}</span></div>}
-                  {campaign.roas && <div className="flex justify-between"><span className="text-[#4A4A4A]">ROAS:</span><span className="font-mono font-medium text-[#22C55E]">{formatMultiplier(campaign.roas, 2)}</span></div>}
-                  {campaign.conversions && <div className="flex justify-between"><span className="text-[#4A4A4A]">Conversions:</span><span className="font-mono font-medium">{formatNumber(campaign.conversions)}</span></div>}
-                </div>
-              </motion.div>
-            ))}
-          </div>
-          {campaigns.length > 6 && <p className="text-sm text-[#4A4A4A] mt-4 text-center">και {campaigns.length - 6} ακόμα campaigns...</p>}
-        </Card>
-      )}
 
       {/* Downloads Hub */}
       <DownloadsHub
