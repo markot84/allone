@@ -4,6 +4,7 @@ import { XAxis, YAxis, Tooltip, CartesianGrid, LineChart, Line, Legend } from 'r
 import { Card, CardHeader } from '../common';
 import { useCampaigns } from '../../hooks';
 import type { Campaign } from '../../types';
+import { getEffectiveConversionValue } from '../../utils/roiUtils';
 
 const CHANNEL_COLORS: Record<string, string> = {
   'Google Ads': '#4285F4',
@@ -39,7 +40,7 @@ export function ChannelPerformanceHistoryCard() {
       if (!buckets[key]) buckets[key] = {};
       if (!buckets[key][channel]) buckets[key][channel] = { spend: 0, value: 0 };
       buckets[key][channel].spend += c.amount_spent || 0;
-      buckets[key][channel].value += c.conversion_value || 0;
+      buckets[key][channel].value += getEffectiveConversionValue(c);
     });
 
     const allChannelKeys = new Set<string>();

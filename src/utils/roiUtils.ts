@@ -277,8 +277,60 @@ export type RoiTrendDailyRow = {
   storeRevenue: number;
 };
 
+/** Άθροισμα `revenueByDay[day]` για κλειστό [fromDate, toDate]. */
+export function sumDailyRevenueInPeriod(
+  revenueByDay: Record<string, number> | undefined,
+  fromDate: string,
+  toDate: string
+): number {
+  if (!revenueByDay) return 0;
+  let s = 0;
+  for (const day of eachDateInclusive(fromDate, toDate)) {
+    s += Number(revenueByDay[day]) || 0;
+  }
+  return Math.round(s);
+}
+
+/**
+ * Ίδια λογική με `buildRoiTrendSeriesDaily` για μία ημέρα (import spread vs GA4).
+ */
+export function organicRevenueForSingleDay(
+  day: string,
+  organicByMonth: Map<string, number>,
+  ga4OrganicByDay?: Record<string, number>
+): number {
+  const ym = day.slice(0, 7);
+  const monthTotal = organicByMonth.get(ym) || 0;
+  const [yy, mm] = ym.split('-').map(Number);
+  const dim = daysInMonthYm(yy, mm);
+  const importSpread = dim > 0 && monthTotal > 0 ? monthTotal / dim : 0;
+  const ga4Day = ga4OrganicByDay ? Number(ga4OrganicByDay[day]) || 0 : 0;
+  return Math.round(monthTotal > 0 ? importSpread : ga4Day);
+}
+
+/** Για μηνιαίο chart: αν δεν υπάρχει import για YYYY-MM, συμπληρώνει από ημερήσιο GA4 (ανά μήνα). */
+export function mergeOrganicByMonthWithGa4(
+  organicByMonth: Map<string, number>,
+  ga4OrganicByDay: Record<string, number> | undefined
+): Map<string, number> {
+  const out = new Map(organicByMonth);
+  if (!ga4OrganicByDay || Object.keys(ga4OrganicByDay).length === 0) return out;
+  const ga4ByMonth = new Map<string, number>();
+  for (const [day, rev] of Object.entries(ga4OrganicByDay)) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) continue;
+    const ym = day.slice(0, 7);
+    ga4ByMonth.set(ym, (ga4ByMonth.get(ym) || 0) + (Number(rev) || 0));
+  }
+  ga4ByMonth.forEach((v, ym) => {
+    if ((out.get(ym) || 0) === 0 && v > 0) out.set(ym, Math.round(v));
+  });
+  return out;
+}
+
 /**
  * Συγχώνευση organic (ισοκατανομή μηνιαίων imports ανά ημέρα), campaigns (ημερήσια metrics), e-shop revenueByDay.
+ * Αν για κάποιον μήνα δεν υπάρχει μηνιαίο import (`organicByMonth`), χρησιμοποιείται προαιρετικά
+ * `ga4OrganicByDay` (ημερήσιο organic revenue από GA4 ανά default channel group).
  */
 export function buildRoiTrendSeriesDaily(
   organicByMonth: Map<string, number>,
@@ -286,16 +338,13 @@ export function buildRoiTrendSeriesDaily(
   revenueByDay: Record<string, number> | undefined,
   fromDate: string,
   toDate: string,
-  includeStore: boolean
+  includeStore: boolean,
+  ga4OrganicByDay?: Record<string, number>
 ): RoiTrendDailyRow[] {
   const days = eachDateInclusive(fromDate, toDate);
   const organicByDay = new Map<string, number>();
   for (const day of days) {
-    const ym = day.slice(0, 7);
-    const monthTotal = organicByMonth.get(ym) || 0;
-    const [yy, mm] = ym.split('-').map(Number);
-    const dim = daysInMonthYm(yy, mm);
-    organicByDay.set(day, dim > 0 ? monthTotal / dim : 0);
+    organicByDay.set(day, organicRevenueForSingleDay(day, organicByMonth, ga4OrganicByDay));
   }
 
   const campaignsByDay = new Map<string, number>();

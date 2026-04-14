@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Euro, Trash2, TrendingUp, Calendar } from 'lucide-react';
 import { Card, Button, Spinner, useToast, Tooltip, PageHeader } from '../common';
 import { useOrganic, useBrand } from '../../hooks';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
+import { useGA4Data } from '../../hooks/useGA4Data';
+import { organicRevenueForSingleDay } from '../../utils/roiUtils';
 import { FirestoreService } from '../../services/firestore';
 import { formatCurrency, formatNumber } from '../../utils/format';
 import type { OrganicRevenue } from '../../types';
@@ -17,11 +19,24 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
   const {
     records,
     totalOrganicRevenue,
+    byMonth: organicByMonth,
     hasImported,
     organicRevenueSource,
     isLoading,
   } = useOrganic();
+  const { organicRevenueByDay: ga4OrganicByDay } = useGA4Data();
   const ecomm = useEcommerceSummary();
+
+  /** Organic ανά ημέρα (import ή GA4) στις ίδιες ημερομηνίες με το ημερήσιο e-shop summary — για δίκαιο gap. */
+  const organicAlignedToEcommDays = useMemo(() => {
+    if (!ecomm.hasData || ecomm.dailyRevenue.length === 0) return totalOrganicRevenue;
+    let s = 0;
+    for (const { date } of ecomm.dailyRevenue) {
+      if (!date) continue;
+      s += organicRevenueForSingleDay(date, organicByMonth, ga4OrganicByDay);
+    }
+    return s;
+  }, [ecomm.hasData, ecomm.dailyRevenue, totalOrganicRevenue, organicByMonth, ga4OrganicByDay]);
   const queryClient = useQueryClient();
   const toast = useToast();
   const [isDeleting, setIsDeleting] = useState(false);
@@ -154,7 +169,10 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
             <div>
               <div className="flex items-center gap-1">
                 <p className="text-sm text-[#4A4A4A]">e-shop Revenue (E-commerce)</p>
-                <Tooltip content="Πραγματικά έσοδα από παραγγελίες των συνδεδεμένων e-shop connectors." size={12} />
+                <Tooltip
+                  content="Άθροισμα από τη σύνοψη e-commerce (συνήθως τελευταίες ~90 ημέρες sync). Το gap από κάτω χρησιμοποιεί organic στις ίδιες ημερομηνίες με το ημερήσιο e-shop."
+                  size={12}
+                />
               </div>
               <p className="text-xl font-bold text-[#1A1A1A] font-mono">
                 {ecomm.hasData ? `€${formatCurrency(ecomm.totalRevenue, 0)}` : '—'}
@@ -170,10 +188,17 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
       {ecomm.hasData && (
         <Card padding="md" className="bg-[#F9FAFB] border-[#E5E7EB]">
           <p className="text-sm text-[#4A4A4A]">
-            Revenue Gap (e-shop − Organic):{' '}
-            <strong className={(ecomm.totalRevenue - totalOrganicRevenue) >= 0 ? 'text-[#16A34A]' : 'text-[#DC2626]'}>
-              €{formatCurrency(ecomm.totalRevenue - totalOrganicRevenue, 0)}
+            Revenue Gap (e-shop − Organic, ίδιες ημέρες ημερ. σύνοψης):{' '}
+            <strong
+              className={
+                ecomm.totalRevenue - organicAlignedToEcommDays >= 0 ? 'text-[#16A34A]' : 'text-[#DC2626]'
+              }
+            >
+              €{formatCurrency(ecomm.totalRevenue - organicAlignedToEcommDays, 0)}
             </strong>
+          </p>
+          <p className="text-xs text-[#6B7280] mt-2">
+            Το «Σύνολο Οργανικών» παραπάνω μπορεί να είναι συνολικό import ή GA4· εδώ το organic στο gap ευθυγραμμίζεται με τις ημερομηνίες του ημερήσιου e-shop.
           </p>
         </Card>
       )}

@@ -90,6 +90,7 @@ export function collectBriefingData(params: {
   products: Product[];
   campaigns: Campaign[];
   segments: RFMSegment[];
+  /** Organic $ για την ίδια περίοδο με τα campaigns / e-shop στο snapshot (π.χ. dashboard period). */
   totalOrganicRevenue: number;
   ga4: {
     totals: { sessions: number; users: number; newUsers: number; bounceRate: number; conversions: number };

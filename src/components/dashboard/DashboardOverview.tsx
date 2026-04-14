@@ -28,12 +28,14 @@ import { DateRangePicker } from '../ui/DateRangePicker';
 import { useGA4Data } from '../../hooks/useGA4Data';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import {
-  calculateTotalRevenue,
   calculateCampaignMetrics,
   getCampaignDateForMonth,
   getCampaignMonthlyAttributedValueInPeriod,
   monthKeyFromDate,
   buildRoiTrendSeries,
+  buildRoiTrendSeriesDaily,
+  mergeOrganicByMonthWithGa4,
+  sumDailyRevenueInPeriod,
   bucketOverlapFraction,
   metaUsesLegacyMonthBuckets,
 } from '../../utils/roiUtils';
@@ -111,17 +113,55 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   }, [campaignsTyped, periodDates]);
 
   const campaignMetrics = useMemo(() => calculateCampaignMetrics(periodCampaigns), [periodCampaigns]);
-  const dashboardTotalRevenue = useMemo(
-    () => calculateTotalRevenue(totalOrganicRevenue || 0, periodCampaigns),
-    [totalOrganicRevenue, periodCampaigns]
+
+  const mergedOrganicByMonth = useMemo(
+    () => mergeOrganicByMonthWithGa4(organicByMonth, ga4.organicRevenueByDay),
+    [organicByMonth, ga4.organicRevenueByDay]
   );
-  
+
+  const organicRevenueInPeriod = useMemo(() => {
+    const rows = buildRoiTrendSeriesDaily(
+      mergedOrganicByMonth,
+      [],
+      undefined,
+      periodDates.fromDate,
+      periodDates.toDate,
+      false,
+      ga4.organicRevenueByDay
+    );
+    return rows.reduce((s, r) => s + r.organic, 0);
+  }, [mergedOrganicByMonth, ga4.organicRevenueByDay, periodDates.fromDate, periodDates.toDate]);
+
+  const ecommRevenueByDayRecord = useMemo(() => {
+    const o: Record<string, number> = {};
+    for (const r of ecomm.dailyRevenue) o[r.date] = r.revenue;
+    return o;
+  }, [ecomm.dailyRevenue]);
+
+  const storeRevenueInPeriod = useMemo(
+    () => sumDailyRevenueInPeriod(ecommRevenueByDayRecord, periodDates.fromDate, periodDates.toDate),
+    [ecommRevenueByDayRecord, periodDates.fromDate, periodDates.toDate]
+  );
+
+  const ordersInPeriod = useMemo(
+    () =>
+      ecomm.recentOrders.filter(o => {
+        const d = (o.createdAt || '').slice(0, 10);
+        return d >= periodDates.fromDate && d <= periodDates.toDate;
+      }).length,
+    [ecomm.recentOrders, periodDates.fromDate, periodDates.toDate]
+  );
+
+  const dashboardTotalRevenue = useMemo(
+    () => organicRevenueInPeriod + campaignMetrics.totalRevenue,
+    [organicRevenueInPeriod, campaignMetrics.totalRevenue]
+  );
 
   // Revenue chart: organic + campaign attributed value ανά μήνα (YYYY-MM merge, χρονολογική σειρά)
   const revenueChartData = useMemo(() => {
     const fromYm = periodDates.fromDate.slice(0, 7);
     const toYm = periodDates.toDate.slice(0, 7);
-    const rows = buildRoiTrendSeries(organicByMonth, periodCampaigns as Campaign[], [], fromYm, toYm, false, {
+    const rows = buildRoiTrendSeries(mergedOrganicByMonth, periodCampaigns as Campaign[], [], fromYm, toYm, false, {
       periodClip: { fromDate: periodDates.fromDate, toDate: periodDates.toDate },
     });
     return rows.map((r) => ({
@@ -129,7 +169,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       total: (r.organic + r.campaigns) / 1000,
       attributed: r.campaigns / 1000,
     }));
-  }, [organicByMonth, periodCampaigns, periodDates.fromDate, periodDates.toDate]);
+  }, [mergedOrganicByMonth, periodCampaigns, periodDates.fromDate, periodDates.toDate]);
 
   // Debug logging
   useEffect(() => {
@@ -237,7 +277,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           products={products}
           campaigns={periodCampaigns}
           segments={rfmSegments}
-          totalOrganicRevenue={totalOrganicRevenue || 0}
+          totalOrganicRevenue={organicRevenueInPeriod}
           ga4={{
             totals: ga4.totals,
             weeklyChange: ga4.weeklyChange,
@@ -247,9 +287,9 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           supplierTodMap={supplierTodMap}
           ecommerce={{
             hasData: ecomm.hasData,
-            totalRevenue: ecomm.totalRevenue,
-            orderCount: ecomm.orderCount,
-            aov: ecomm.aov,
+            totalRevenue: storeRevenueInPeriod,
+            orderCount: ordersInPeriod,
+            aov: ordersInPeriod > 0 ? storeRevenueInPeriod / ordersInPeriod : ecomm.aov,
             connectedPlatforms: ecomm.connectedPlatforms,
             platformBreakdown: ecomm.platformBreakdown,
           }}

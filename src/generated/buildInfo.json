@@ -1,10 +1,14 @@
 {
-  "version": "0.404.0",
-  "previousVersion": "0.403.0",
-  "commitHash": "9cc143a",
+  "version": "0.411.0",
+  "previousVersion": "0.410.0",
+  "commitHash": "858eb1f",
   "branch": "main",
-  "buildDate": "2026-04-14T19:19:44.808Z",
+  "buildDate": "2026-04-14T19:44:15.231Z",
   "commits": [
+    {
+      "hash": "858eb1f",
+      "message": "feat(roi): marketing overhead, daily trend, e-shop tabs, DateRangePicker portal"
+    },
     {
       "hash": "9cc143a",
       "message": "feat: AI Insights full page, campaigns LTV chart, UX polish"
@@ -60,13 +64,10 @@
     {
       "hash": "a0b9976",
       "message": "feat: e-commerce connectors, explorer page, dashboard/ROI integration, help docs"
-    },
-    {
-      "hash": "5a8ad75",
-      "message": "fix(campaigns): restore EUR display and UI copy (fix mojibake from bad encoding)"
     }
   ],
   "changes": [
+    "[Νέο χαρακτηριστικό] Marketing overhead, daily trend, e-shop tabs, DateRangePicker portal",
     "[Νέο χαρακτηριστικό] AI Insights full page, campaigns LTV chart, UX polish",
     "[Νέο χαρακτηριστικό] Global date range context shared across all pages",
     "GA4 new users inline + campaign channel filters",
@@ -75,7 +76,6 @@
     "Competitive Intelligence: single-line table headers (Δ τιμής, Διαφ. τιμής), nowrap; merchant seller labels and related updates",
     "Dashboard: απλοποίηση KPI, ROI ROAS block, διόρθωση τάσης· AI briefing φιλικότερο prompt· tooltip",
     "[Νέο χαρακτηριστικό] Shared page headers, campaigns copy (EN tech terms), connector and UI updates",
-    "Add campaign helper files, Performance image variants, apply_campaigns patch script",
-    "Campaigns: filters, server-side fetch, Meta sync resilience, purchase/conversion alignment"
+    "Add campaign helper files, Performance image variants, apply_campaigns patch script"
   ]
 }

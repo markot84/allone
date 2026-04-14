@@ -74,6 +74,11 @@ function canonicalChannelComparable(name: string): string {
   return CHANNEL_LABEL_CANONICAL[n] ?? n;
 }
 
+/** True if GA4 default channel group row counts as organic (Search, Social, Shopping, Video, …). */
+function isOrganicDefaultChannelGroup(raw: string): boolean {
+  return canonicalChannelComparable(raw).includes('organic');
+}
+
 /** Map acquisition-channel row onto a session-channel row (exact normalized match, then loose substring match). */
 function pickTrafficChannelForNu(rawNuChannel: string, trafficKeys: string[]): string | null {
   const n = canonicalChannelComparable(rawNuChannel);
@@ -797,6 +802,63 @@ export async function fetchGA4Data(
       logger.warn('[GA4] New users by channel query failed:', e);
     }
 
+    // Daily organic revenue (sessionDefaultChannelGroup rows whose canonical label includes "organic") — ROI revenue trend.
+    let organicRevenueByDay: Record<string, number> = {};
+    try {
+      const dateRangeOr = { startDate: formatDate(startDate), endDate: formatDate(endDate) };
+      const orgDailyBody = {
+        languageCode: 'en',
+        dateRanges: [dateRangeOr],
+        dimensions: [{ name: 'date' }, { name: 'sessionDefaultChannelGroup' }],
+        metrics: [{ name: 'totalRevenue' }],
+        limit: '250000',
+      };
+      let orgDailyRes = await fetch(`${GA4_DATA_API}/properties/${propertyId}:runReport`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify(orgDailyBody),
+      });
+      if (!orgDailyRes.ok && orgDailyRes.status === 400) {
+        const e400 = await orgDailyRes.text();
+        logger.warn(`[GA4] daily organic totalRevenue rejected (400), retry purchaseRevenue: ${e400.slice(0, 200)}`);
+        orgDailyRes = await fetch(`${GA4_DATA_API}/properties/${propertyId}:runReport`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            ...orgDailyBody,
+            metrics: [{ name: 'purchaseRevenue' }],
+          }),
+        });
+      }
+      if (orgDailyRes.ok) {
+        const od = await orgDailyRes.json();
+        for (const row of od.rows || []) {
+          const dateRaw = row.dimensionValues?.[0]?.value;
+          const ch = row.dimensionValues?.[1]?.value || '';
+          if (!dateRaw || !isOrganicDefaultChannelGroup(ch)) continue;
+          const formattedDate = `${dateRaw.slice(0, 4)}-${dateRaw.slice(4, 6)}-${dateRaw.slice(6, 8)}`;
+          const rev = parseFloat(row.metricValues?.[0]?.value || '0') || 0;
+          if (rev <= 0) continue;
+          organicRevenueByDay[formattedDate] = (organicRevenueByDay[formattedDate] || 0) + rev;
+        }
+        const sumOd = Object.values(organicRevenueByDay).reduce((a, b) => a + b, 0);
+        logger.info(
+          `[GA4] organicRevenueByDay: ${Object.keys(organicRevenueByDay).length} days with rows, revenue sum=${sumOd.toFixed(2)}`
+        );
+      } else {
+        const txt = await orgDailyRes.text();
+        logger.warn(`[GA4] daily organic by channel failed (${orgDailyRes.status}): ${txt.slice(0, 400)}`);
+      }
+    } catch (e) {
+      logger.warn('[GA4] organicRevenueByDay query failed:', e);
+    }
+
     // Top pages
     const pagesBody = {
       dateRanges: [{ startDate: formatDate(startDate), endDate: formatDate(endDate) }],
@@ -846,6 +908,7 @@ export async function fetchGA4Data(
       propertyName: conn.propertyName || '',
       dailyMetrics,
       trafficSources,
+      organicRevenueByDay,
       topPages,
       syncedAt: FieldValue.serverTimestamp(),
       dateRange: {

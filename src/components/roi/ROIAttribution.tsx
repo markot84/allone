@@ -27,11 +27,12 @@ import { useDashPeriod } from '../../hooks/useDashPeriod';
 import { useGlobalDate, GLOBAL_PERIOD_OPTIONS } from '../../contexts/GlobalDateContext';
 import { DateRangePicker } from '../ui/DateRangePicker';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
+import { useGA4Data } from '../../hooks/useGA4Data';
 import { CampaignsService, OrganicService } from '../../services/firestore';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  calculateTotalRevenue,
   calculateCampaignMetrics,
+  sumDailyRevenueInPeriod,
   bucketOverlapFraction,
   metaUsesLegacyMonthBuckets,
   buildRoiTrendSeriesDaily,
@@ -74,17 +75,18 @@ interface ROIAttributionProps {
   embedded?: boolean;
 }
 
-type KpiTabId = 'roi' | 'revenue' | 'adsRevenue' | 'conversionsRate';
+type KpiTabId = 'roi' | 'revenue' | 'organic' | 'conversionsRate';
 
 /** Σειρά εμφάνισης — ίδιο visual language με Campaigns / Competitive Intelligence (segmented strip). */
-const KPI_ORDER: KpiTabId[] = ['roi', 'revenue', 'adsRevenue', 'conversionsRate'];
+const KPI_ORDER: KpiTabId[] = ['roi', 'revenue', 'organic', 'conversionsRate'];
 
 export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
-  const { totalOrganicRevenue, byMonth: organicByMonth, hasOrganicRevenue: hasOrganic } = useOrganic();
+  const { byMonth: organicByMonth, hasOrganicRevenue: hasOrganic } = useOrganic();
   const { campaigns, hasImported: hasCampaigns } = useCampaigns();
   const campaignsAll = campaigns as Campaign[];
   const { activeStrategy } = useActiveStrategy();
   const ecomm = useEcommerceSummary();
+  const { organicRevenueByDay: ga4OrganicByDay } = useGA4Data();
   const { currentBrand } = useBrand();
   const queryClient = useQueryClient();
   const [seeding, setSeeding] = useState(false);
@@ -210,21 +212,57 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
     () => campaignsTyped.reduce((sum, c) => sum + (c.clicks || 0), 0),
     [campaignsTyped],
   );
-  const totalRevenue = useMemo(
-    () => calculateTotalRevenue(totalOrganicRevenue || 0, campaignsTyped),
-    [totalOrganicRevenue, campaignsTyped]
+  const ecommRevenueByDay = useMemo(() => {
+    const o: Record<string, number> = {};
+    for (const r of ecomm.dailyRevenue) {
+      o[r.date] = r.revenue;
+    }
+    return o;
+  }, [ecomm.dailyRevenue]);
+
+  const ecommRevenueInPeriod = useMemo(
+    () => sumDailyRevenueInPeriod(ecommRevenueByDay, periodDates.fromDate, periodDates.toDate),
+    [ecommRevenueByDay, periodDates.fromDate, periodDates.toDate]
+  );
+
+  const trendData = useMemo(
+    () =>
+      buildRoiTrendSeriesDaily(
+        organicByMonth,
+        campaignsAll,
+        ecommRevenueByDay,
+        periodDates.fromDate,
+        periodDates.toDate,
+        ecomm.hasData,
+        ga4OrganicByDay
+      ),
+    [
+      organicByMonth,
+      campaignsAll,
+      ecommRevenueByDay,
+      ecomm.hasData,
+      periodDates.fromDate,
+      periodDates.toDate,
+      ga4OrganicByDay,
+    ]
+  );
+
+  /** Organic στην επιλεγμένη περίοδο (ίδιο άθροισμα με τη γραμμή Organic στο chart τάσης). */
+  const organicRevenueInPeriod = useMemo(
+    () => trendData.reduce((s, r) => s + (r.organic || 0), 0),
+    [trendData]
+  );
+
+  /** Organic (περίοδος) + conversion value καμπανιών (περίοδος) — για Blended ROAS. */
+  const periodBlendedRevenue = useMemo(
+    () => organicRevenueInPeriod + metrics.totalRevenue,
+    [organicRevenueInPeriod, metrics.totalRevenue]
   );
 
   const kpiPanelConfig = useMemo(() => {
     const cvr = totalClicks > 0 ? (metrics.totalConversions / totalClicks) * 100 : 0;
     const roiPct =
       metrics.totalSpend > 0 ? ((metrics.totalRevenue - metrics.totalSpend) / metrics.totalSpend) * 100 : null;
-    const revenueSubtitle =
-      hasOrganic && hasCampaigns
-        ? 'Organic + ads'
-        : hasOrganic
-          ? 'Organic'
-          : 'Ads conversion value';
     return {
       roi: {
         icon: <TrendingUp size={22} strokeWidth={2} />,
@@ -247,22 +285,31 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
       revenue: {
         icon: <Euro size={22} strokeWidth={2} />,
         label: 'Revenue',
-        value: formatCurrencyCompact(totalRevenue),
-        subtitle: revenueSubtitle,
+        value: formatCurrencyCompact(metrics.totalRevenue),
+        subtitle: hasCampaigns
+          ? `${campaignsTyped.length} καμπάνιες · conversion value`
+          : 'Conversion value (ads)',
         color: '#111827',
         iconWrapClass: 'bg-slate-100 text-slate-600',
         tooltip:
-          'Σύνολο: οργανικά έσοδα (import) + conversion value από Google Ads / Meta κ.λπ. Το organic μπορεί να είναι 0 αν δεν έχει εισαχθεί.',
+          'Έσοδα μόνο από καμπάνιες: conversion value Google Ads / Meta κ.λπ. για την επιλεγμένη περίοδο (όχι organic). Το organic εμφανίζεται στο επόμενο KPI και στο chart.',
       },
-      adsRevenue: {
-        icon: <BarChart3 size={22} strokeWidth={2} />,
-        label: 'Ads Revenue',
-        value: formatCurrencyCompact(metrics.totalRevenue),
-        subtitle: `${campaignsTyped.length} campaigns · conversion value`,
+      organic: {
+        icon: <Leaf size={22} strokeWidth={2} />,
+        label: 'Organic',
+        value:
+          hasOrganic || organicRevenueInPeriod > 0
+            ? formatCurrencyCompact(organicRevenueInPeriod)
+            : '—',
+        subtitle: hasOrganic
+          ? 'Στην περίοδο (import · κατανομή ανά ημέρα)'
+          : organicRevenueInPeriod > 0
+            ? 'Στην περίοδο (GA4 · ημερήσια ανά κανάλι)'
+            : 'Χωρίς import · συγχρονίστε GA4',
         color: '#111827',
-        iconWrapClass: 'bg-green-50 text-green-700',
+        iconWrapClass: 'bg-emerald-50 text-emerald-700',
         tooltip:
-          'Έσοδα που αποδίδουν οι πλατφόρμες διαφήμισης (conversion value) στο επιλεγμένο διάστημα.',
+          'Οργανικά έσοδα για την επιλεγμένη περίοδο (ίδιο με τη γραμμή Organic στο chart). Αν υπάρχει μηνιαίο import, προτεραιότητα έχει η ομοιόμορφη κατανομή ανά ημέρα· αλλιώς χρησιμοποιούνται τα ημερήσια organic revenue από το τελευταίο GA4 sync (default channel groups).',
       },
       conversionsRate: {
         icon: <Target size={22} strokeWidth={2} />,
@@ -288,33 +335,14 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
         tooltip?: string;
       }
     >;
-  }, [metrics, totalRevenue, totalClicks, hasOrganic, hasCampaigns, campaignsTyped]);
-  const ecommRevenueByDay = useMemo(() => {
-    const o: Record<string, number> = {};
-    for (const r of ecomm.dailyRevenue) {
-      o[r.date] = r.revenue;
-    }
-    return o;
-  }, [ecomm.dailyRevenue]);
-
-  const trendData = useMemo(
-    () =>
-      buildRoiTrendSeriesDaily(
-        organicByMonth,
-        campaignsAll,
-        ecommRevenueByDay,
-        periodDates.fromDate,
-        periodDates.toDate,
-        ecomm.hasData
-      ),
-    [organicByMonth, campaignsAll, ecommRevenueByDay, ecomm.hasData, periodDates.fromDate, periodDates.toDate]
-  );
-
-  /** Organic στην επιλεγμένη περίοδο (ίδιο άθροισμα με τη γραμμή Organic στο chart τάσης). */
-  const organicRevenueInPeriod = useMemo(
-    () => trendData.reduce((s, r) => s + (r.organic || 0), 0),
-    [trendData]
-  );
+  }, [
+    metrics,
+    totalClicks,
+    hasOrganic,
+    hasCampaigns,
+    campaignsTyped.length,
+    organicRevenueInPeriod,
+  ]);
 
   const totalSpendForBudget = metrics.totalSpend;
   const budgetUtilization = monthlyBudget > 0 ? (totalSpendForBudget / monthlyBudget) * 100 : 0;
@@ -421,14 +449,15 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
         />
         {(() => {
           const campaignsRoas = metrics.roas;
-          const blendedRoas = metrics.totalSpend > 0 ? totalRevenue / metrics.totalSpend : 0;
-          const trueRoas = ecomm.hasData && metrics.totalSpend > 0 ? ecomm.totalRevenue / metrics.totalSpend : null;
+          const blendedRoas = metrics.totalSpend > 0 ? periodBlendedRevenue / metrics.totalSpend : 0;
+          const trueRoas =
+            ecomm.hasData && metrics.totalSpend > 0 ? ecommRevenueInPeriod / metrics.totalSpend : null;
           const roiPct =
             metrics.totalSpend > 0 ? ((metrics.totalRevenue - metrics.totalSpend) / metrics.totalSpend) * 100 : null;
           const profit = metrics.totalRevenue - metrics.totalSpend;
-          const fullBlendedRoas = totalMarketingCost > 0 ? totalRevenue / totalMarketingCost : 0;
+          const fullBlendedRoas = totalMarketingCost > 0 ? periodBlendedRevenue / totalMarketingCost : 0;
           const fullTrueRoas =
-            ecomm.hasData && totalMarketingCost > 0 ? ecomm.totalRevenue / totalMarketingCost : null;
+            ecomm.hasData && totalMarketingCost > 0 ? ecommRevenueInPeriod / totalMarketingCost : null;
           const fullRoiPct =
             totalMarketingCost > 0
               ? ((metrics.totalRevenue - totalMarketingCost) / totalMarketingCost) * 100
@@ -460,14 +489,14 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
             {
               k: 'Blended ROAS',
               v: blendedRoas > 0 ? `${formatNumber(blendedRoas, 2)}x` : '—',
-              note: 'Συνολικά έσοδα (organic + campaigns revenue) ÷ Ad Spend. Ευρύτερη εικόνα από τον Campaigns ROAS.',
+              note: 'Έσοδα organic + καμπανιών για την επιλεγμένη περίοδο (ίδια βάση με το chart) ÷ Ad Spend. Ευρύτερη εικόνα από τον Campaigns ROAS.',
             },
             ...(trueRoas != null && trueRoas > 0
               ? [
                   {
                     k: 'True ROAS',
                     v: `${formatNumber(trueRoas, 2)}x`,
-                    note: 'Πραγματικά έσοδα e-shop ÷ Ad Spend. Σύγκριση με τα δεδομένα παραγγελιών, όχι μόνο attribution.',
+                    note: 'Άθροισμα ημερήσιου e-shop revenue στην επιλεγμένη περίοδο ÷ Ad Spend (όχι το σύνολο 90ημ. της σύνοψης).',
                   } as const,
                 ]
               : []),
@@ -514,14 +543,14 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
             {
               k: 'Blended ROAS (πλήρες κόστος)',
               v: fullBlendedRoas > 0 ? `${formatNumber(fullBlendedRoas, 2)}x` : '—',
-              note: 'Συνολικά έσοδα (organic + campaigns) ÷ σύνολο κόστους marketing. Πιο ρεαλιστικό όταν υπάρχουν σημαντικά έξοδα εκτός media.',
+              note: 'Organic + καμπανιών (για την επιλεγμένη περίοδο) ÷ σύνολο κόστους marketing. Πιο ρεαλιστικό όταν υπάρχουν σημαντικά έξοδα εκτός media.',
             },
             ...(fullTrueRoas != null && fullTrueRoas > 0
               ? [
                   {
                     k: 'True ROAS (πλήρες κόστος)',
                     v: `${formatNumber(fullTrueRoas, 2)}x`,
-                    note: 'Πραγματικά έσοδα e-shop ÷ σύνολο κόστους marketing.',
+                    note: 'Άθροισμα e-shop revenue στην περίοδο ÷ σύνολο κόστους marketing.',
                   } as const,
                 ]
               : []),
@@ -582,7 +611,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
       </div>
 
       {/* E-commerce vs Campaigns Revenue */}
-      {ecomm.hasData && ecomm.totalRevenue > 0 && (
+      {ecomm.hasData && (
         <Card padding="lg">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-3">
             <div className="flex items-center gap-2 min-w-0">
@@ -615,7 +644,9 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                   Organic
                 </button>
               </div>
-              <span className="text-[10px] text-[#9CA3AF] bg-[#F3F4F6] px-1.5 py-0.5 rounded">e-shop: 90 ημέρες</span>
+              <span className="text-[10px] text-[#9CA3AF] bg-[#F3F4F6] px-1.5 py-0.5 rounded">
+                e-shop: επιλεγμένη περίοδος
+              </span>
             </div>
           </div>
 
@@ -625,10 +656,10 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                 <MetricCard
                   icon={<ShoppingBag size={20} />}
                   label="e-shop Revenue"
-                  value={formatCurrencyCompact(ecomm.totalRevenue)}
-                  subtitle="Πραγματικά έσοδα e-shop"
+                  value={formatCurrencyCompact(ecommRevenueInPeriod)}
+                  subtitle="Άθροισμα ημερήσιων παραγγελιών στην περίοδο"
                   color="#10B981"
-                  tooltip="Καθαρά έσοδα παραγγελιών από τις e-commerce πλατφόρμες (σύνοψη backend, τυπικά 90 ημέρες)."
+                  tooltip="Καθαρά έσοδα από συνδεδεμένα e-shop για τις ημερομηνίες που καλύπτει η επιλογή πάνω (ίδιο άθροισμα με τη πράσινη γραμμή στο chart τάσης)."
                 />
                 <MetricCard
                   icon={<Euro size={20} />}
@@ -642,16 +673,16 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                   icon={<BarChart3 size={20} />}
                   label="Revenue Gap"
                   value={(() => {
-                    const gap = ecomm.totalRevenue - metrics.totalRevenue;
+                    const gap = ecommRevenueInPeriod - metrics.totalRevenue;
                     return gap >= 0 ? `+${formatCurrencyCompact(gap)}` : formatCurrencyCompact(gap);
                   })()}
-                  subtitle="e-shop − έσοδα καμπανιών (ads)"
-                  color={ecomm.totalRevenue >= metrics.totalRevenue ? '#22C55E' : '#EF4444'}
-                  tooltip="Διαφορά πραγματικού e-shop revenue από τα έσοδα καμπανιών (μόνο ads) στο ίδιο context με τη σύγκριση."
+                  subtitle="e-shop − έσοδα καμπανιών (ads), ίδια περίοδος"
+                  color={ecommRevenueInPeriod >= metrics.totalRevenue ? '#22C55E' : '#EF4444'}
+                  tooltip="Διαφορά e-shop (άθροισμα ημερών στην περίοδο) μείον conversion value καμπανιών για την ίδια περίοδο."
                 />
               </div>
               <p className="text-[11px] text-[#9CA3AF] mt-3 leading-relaxed">
-                Οι εκδοχές <strong>ROAS</strong> (συμπεριλαμβανομένου του <strong>True ROAS</strong> από e-shop) εξηγούνται στο παραπάνω block «Ανάλυση απόδοσης (ROAS & ROI)». Τα organic του import εμφανίζονται στο tab <strong>Organic</strong>.
+                Οι εκδοχές <strong>ROAS</strong> (συμπεριλαμβανομένου του <strong>True ROAS</strong> από e-shop) εξηγούνται στο παραπάνω block «Ανάλυση απόδοσης (ROAS & ROI)». Στο tab <strong>Organic</strong>: μηνιαίο import (αν υπάρχει) ή ημερήσιο organic revenue από το <strong>GA4</strong> sync.
               </p>
             </>
           ) : (
@@ -666,15 +697,24 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                     {formatCurrencyCompact(organicRevenueInPeriod)}
                   </p>
                   <p className="text-[12px] text-[#4B5563] leading-relaxed">
-                    Οργανικά έσοδα (από import ανά μήνα) κατανεμημένα ανά ημέρα για την περίοδο{' '}
+                    {hasOrganic
+                      ? 'Οργανικά έσοδα από μηνιαίο import (ομοιόμορφη κατανομή ανά ημέρα)'
+                      : 'Οργανικά έσοδα από το τελευταίο GA4 sync (ημερήσια ανά default channel group, όπου δεν υπάρχει μηνιαίο import για τον μήνα)'}
+                    {' '}
+                    για την περίοδο{' '}
                     <span className="font-medium">
                       {formatPeriodDate(periodDates.fromDate)} — {formatPeriodDate(periodDates.toDate)}
                     </span>
-                    . Το ίδιο ποσό αθροίζει τη γραμμή <strong>Organic</strong> στο διάγραμμα «Τάση Εσόδων» παρακάτω.
+                    . Το ίδιο ποσό αθροίζει τη γραμμή <strong>Organic</strong> στο «Τάση Εσόδων».
                   </p>
-                  {!hasOrganic && (
+                  {!hasOrganic && organicRevenueInPeriod === 0 && (
                     <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-100 rounded-md px-2 py-1.5 mt-2">
-                      Δεν υπάρχει organic import — η τιμή μπορεί να είναι 0. Συνδέστε δεδομένα από τις Συνδέσεις ή χρησιμοποιήστε το σύνολο KPI «Revenue» πάνω για GA4.
+                      Δεν υπάρχει organic import και δεν βρέθηκαν ημερήσια organic έσοδα στο GA4 για αυτές τις ημέρες. Συγχρονίστε το GA4 από τις Συνδέσεις ή εισάγετε μηνιαία organic.
+                    </p>
+                  )}
+                  {!hasOrganic && organicRevenueInPeriod > 0 && (
+                    <p className="text-[11px] text-emerald-900/90 bg-emerald-100/60 border border-emerald-200/80 rounded-md px-2 py-1.5 mt-2">
+                      Πηγή: GA4 (organic channel groups). Αν κάνετε και import ανά μήνα, εκείνο υπερισχύει ανά μήνα για τη γραμμή Organic.
                     </p>
                   )}
                 </div>

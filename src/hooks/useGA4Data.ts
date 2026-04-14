@@ -37,6 +37,8 @@ interface GA4RawData {
   propertyName: string;
   dailyMetrics: Record<string, GA4DailyMetrics>;
   trafficSources: Record<string, GA4TrafficSource>;
+  /** YYYY-MM-DD → organic-channel revenue (from GA4 sync; used in ROI daily trend when no monthly import). */
+  organicRevenueByDay?: Record<string, number>;
   topPages: GA4TopPage[];
   syncedAt: any;
   dateRange: { start: string; end: string };
@@ -126,6 +128,16 @@ export function useGA4Data() {
       .reduce((sum, s) => sum + (s.totalRevenue ?? 0), 0);
   }, [trafficSources]);
 
+  const organicRevenueByDay = useMemo((): Record<string, number> => {
+    const raw = data?.organicRevenueByDay;
+    if (!raw || typeof raw !== 'object') return {};
+    const out: Record<string, number> = {};
+    for (const [k, v] of Object.entries(raw)) {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(k) && typeof v === 'number' && v > 0) out[k] = v;
+    }
+    return out;
+  }, [data?.organicRevenueByDay]);
+
   return {
     propertyName: data?.propertyName ?? '',
     dailyEntries,
@@ -133,6 +145,7 @@ export function useGA4Data() {
     weeklyChange,
     trafficSources,
     totalOrganicRevenueFromChannels,
+    organicRevenueByDay,
     topPages: data?.topPages ?? [],
     syncedAt: data?.syncedAt,
     dateRange: data?.dateRange,

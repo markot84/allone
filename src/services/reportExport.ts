@@ -115,7 +115,7 @@ async function exportReportToPdf(
     case 'executive': {
       const campaigns = data.campaigns ?? [];
       const organicRevenue = data.totalOrganicRevenue ?? (data.organicRecords ?? []).reduce((s, r) => s + (r.organic_revenue ?? 0), 0);
-      const campaignValue = campaigns.reduce((s, c) => s + (c.conversion_value ?? 0), 0);
+      const campaignValue = campaigns.reduce((s, c) => s + getEffectiveConversionValue(c), 0);
       const totalRevenue = organicRevenue + campaignValue;
       doc.text('Executive Summary', 14, 40);
       autoTable(doc, {
