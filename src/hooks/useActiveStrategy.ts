@@ -4,7 +4,7 @@ import { FirestoreService } from '../services/firestore';
 import { useBrand } from './useBrand';
 import { scenarios } from '../data';
 import { useMemo } from 'react';
-import type { ChannelRecommendation } from '../types';
+import type { ChannelRecommendation, MarketingCostLine } from '../types';
 import type { ContentSuggestionsResult } from '../services/aiContentSuggestions';
 
 export interface MixConfig {
@@ -26,6 +26,8 @@ export interface ActiveStrategy {
   implementedAt?: string;
   mixConfig?: MixConfig;
   monthlyBudget?: number;
+  /** Επιπλέον κόστη marketing για πληρέστερο ROI (εκτός ad spend). */
+  marketingCostLines?: MarketingCostLine[];
   channelRecommendation?: ChannelRecommendation;
   activationRecommendation?: ChannelRecommendation;
   contentSuggestions?: ContentSuggestionsResult;
@@ -171,6 +173,24 @@ export function useActiveStrategy() {
     },
   });
 
+  const updateMarketingCostLines = useMutation({
+    mutationFn: async (marketingCostLines: MarketingCostLine[]) => {
+      if (!activeStrategy?.id || !brandId) throw new Error('No active strategy');
+      if (activeStrategy.id.startsWith('default_')) throw new Error('Cannot save to default strategy');
+      const now = new Date().toISOString();
+      const clean = JSON.parse(JSON.stringify(marketingCostLines)) as MarketingCostLine[];
+      await FirestoreService.setDocument('active_strategies', activeStrategy.id, {
+        ...activeStrategy,
+        marketingCostLines: clean,
+        updatedAt: now,
+      } as Record<string, unknown>);
+      return { ...activeStrategy, marketingCostLines: clean, updatedAt: now } as ActiveStrategy;
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(['activeStrategy', brandId], updated);
+    },
+  });
+
   const saveRecommendation = useMutation({
     mutationFn: async (recommendation: ChannelRecommendation) => {
       if (!activeStrategy?.id || !brandId) throw new Error('No active strategy');
@@ -259,6 +279,8 @@ export function useActiveStrategy() {
     isSaving: saveActiveStrategy.isPending,
     updateBudget: updateBudget.mutateAsync,
     isSavingBudget: updateBudget.isPending,
+    updateMarketingCostLines: updateMarketingCostLines.mutateAsync,
+    isSavingMarketingCostLines: updateMarketingCostLines.isPending,
     saveRecommendation: saveRecommendation.mutateAsync,
     saveActivationRecommendation: saveActivationRecommendation.mutateAsync,
     saveContentSuggestions: saveContentSuggestions.mutateAsync,

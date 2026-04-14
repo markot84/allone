@@ -1,7 +1,9 @@
+import { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Zap, Target, Users, MessageSquare, TrendingUp } from 'lucide-react';
 import { Badge, FormattedProse } from '../common';
 import type { ChannelRecommendation, RFMSegment } from '../../types';
+import { formatBudgetChannelLabel, budgetKeyMatchesListedChannel } from '../../utils/budgetChannelLabels';
 
 const FUNNEL_STAGE: Record<string, { label: string; color: string }> = {
   'google search ads': { label: 'Μετατροπή', color: '#22C55E' },
@@ -87,10 +89,12 @@ export function ChannelRecommendations({
     );
   }
 
-  // const totalBudget = Object.values(recommendations.budget_allocation).reduce(
-  //   (a, b) => a + b,
-  //   0
-  // );
+  const orphanBudgetChannels = useMemo(() => {
+    const listed = [...recommendations.primary, ...recommendations.secondary];
+    return Object.entries(recommendations.budget_allocation)
+      .filter(([key]) => !listed.some((ch) => budgetKeyMatchesListedChannel(key, ch)))
+      .sort((a, b) => b[1] - a[1]);
+  }, [recommendations]);
 
   return (
     <div className="space-y-6">
@@ -137,7 +141,7 @@ export function ChannelRecommendations({
                   transition={{ delay: 0.5 + index * 0.1 }}
                   className="h-full"
                   style={{ backgroundColor: colors[index % colors.length] }}
-                  title={`${channel}: ${percentage}%`}
+                  title={`${formatBudgetChannelLabel(channel)}: ${percentage}%`}
                 />
               );
             }
@@ -153,8 +157,8 @@ export function ChannelRecommendations({
                     className="w-3 h-3 rounded-full"
                     style={{ backgroundColor: colors[index % colors.length] }}
                   />
-                  <span className="text-xs text-[#4A4A4A] capitalize">
-                    {channel}: {percentage}%
+                  <span className="text-xs text-[#4A4A4A]">
+                    {formatBudgetChannelLabel(channel)}: {percentage}%
                   </span>
                 </div>
               );
@@ -245,6 +249,49 @@ export function ChannelRecommendations({
           </div>
         </div>
       </div>
+
+      {/* Κανάλια που υπάρχουν στο budget_allocation αλλά όχι στα primary/secondary (π.χ. Google Search Ads) */}
+      {orphanBudgetChannels.length > 0 && (
+        <div className="rounded-xl border border-[#E8E8ED] bg-[#FAFBFC] p-4">
+          <h5 className="text-sm font-medium text-[#1A1A1A] mb-2">
+            Κανάλια στο budget mix
+          </h5>
+          <p className="text-xs text-[#6B7280] mb-3">
+            Εμφανίζονται όσα έχουν ποσοστό στο budget αλλά δεν συμπεριλήφθηκαν στις λίστες κύριων/δευτερευόντων.
+          </p>
+          <div className="space-y-2">
+            {orphanBudgetChannels.map(([allocKey, pct], index) => {
+              const label = formatBudgetChannelLabel(allocKey);
+              const stage = getFunnelStage(label);
+              return (
+                <motion.div
+                  key={allocKey}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                  className="flex items-center justify-between p-3 bg-white rounded-lg border border-[#E5E5E5]"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-8 h-8 bg-[#64748B] rounded-lg flex items-center justify-center flex-shrink-0">
+                      <span className="text-white text-xs font-mono">%</span>
+                    </div>
+                    <div className="min-w-0">
+                      <span className="font-medium text-[#1A1A1A] text-sm">{label}</span>
+                      <span
+                        className="ml-2 text-[10px] font-medium px-1.5 py-0.5 rounded-full"
+                        style={{ backgroundColor: `${stage.color}15`, color: stage.color }}
+                      >
+                        {stage.label}
+                      </span>
+                    </div>
+                  </div>
+                  <Badge variant="orange">{pct}%</Badge>
+                </motion.div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Rationale */}
       <div className="p-4 bg-gradient-to-r from-[#F5F5F5] to-white rounded-lg border border-[#E5E5E5]">

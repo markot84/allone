@@ -1,4 +1,5 @@
 import type { Campaign } from '../types';
+import { eachDateInclusive } from './marketingCostPeriod';
 
 export type BucketOverlapOptions = {
   /**
@@ -164,12 +165,159 @@ export function normalizeOrganicPeriodToYm(period: string | undefined): string |
   return null;
 }
 
-/** Short axis label e.g. `Apr 23` — uses English month abbreviations (stable, not locale `Sept` vs `Sep`). */
+/** Short axis label e.g. `Apr 2026` — full year (όχι 2 ψηφία έτους που μπερδεύονται με ημέρα). */
 export function formatMonthKeyShort(ym: string): string {
   const [y, mo] = ym.split('-').map(Number);
   if (!y || !mo || mo < 1 || mo > 12) return ym;
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `${monthNames[mo - 1]} ${String(y).slice(-2)}`;
+  return `${monthNames[mo - 1]} ${y}`;
+}
+
+function daysInMonthYm(y: number, m: number): number {
+  return new Date(y, m, 0).getDate();
+}
+
+function dateStrMax(a: string, b: string): string {
+  return a >= b ? a : b;
+}
+
+function dateStrMin(a: string, b: string): string {
+  return a <= b ? a : b;
+}
+
+/** Ετικέτα ημέρας για άξονα τάσης (ελληνικό short date). */
+export function formatTrendDayLabel(ymd: string): string {
+  const [y, m, d] = ymd.split('-').map(Number);
+  if (!y || !m || !d) return ymd;
+  try {
+    return new Date(y, m - 1, d, 12, 0, 0).toLocaleDateString('el-GR', {
+      day: 'numeric',
+      month: 'short',
+    });
+  } catch {
+    return ymd;
+  }
+}
+
+/**
+ * Ημερήσια attributed conversion value ανά YYYY-MM-DD μέσα στο [fromDate, toDate].
+ * Κανονικές σειρές: μία γραμμή ανά ημέρα. Meta legacy (ένα bucket ανά μήνα): ισοκατανομή στις ημέρες που τέμνουν την περίοδο.
+ */
+export function getCampaignDailyAttributedValueInPeriod(
+  c: Campaign,
+  fromDate: string,
+  toDate: string
+): Map<string, number> {
+  const out = new Map<string, number>();
+  const add = (day: string, v: number) => {
+    if (!v) return;
+    out.set(day, (out.get(day) || 0) + v);
+  };
+
+  const dm = c.dailyMetrics;
+  if (dm && Object.keys(dm).length > 0) {
+    const metaMonthBuckets = metaUsesLegacyMonthBuckets(c);
+    if (!metaMonthBuckets) {
+      for (const [dateKey, raw] of Object.entries(dm)) {
+        if (dateKey.length < 10 || dateKey[4] !== '-' || dateKey[7] !== '-') continue;
+        if (dateKey < fromDate || dateKey > toDate) continue;
+        const metrics = raw as { conversion_value?: number };
+        add(dateKey, Number(metrics.conversion_value) || 0);
+      }
+    } else {
+      for (const [dateKey, raw] of Object.entries(dm)) {
+        if (dateKey.slice(8, 10) !== '01') continue;
+        const metrics = raw as { conversion_value?: number };
+        const monthTotal = Number(metrics.conversion_value) || 0;
+        const ym = dateKey.slice(0, 7);
+        const [yy, mm] = ym.split('-').map(Number);
+        if (!yy || !mm) continue;
+        const dim = daysInMonthYm(yy, mm);
+        const monthEnd = `${ym}-${String(dim).padStart(2, '0')}`;
+        const monthStart = `${ym}-01`;
+        const attributedMonth =
+          monthTotal * bucketOverlapFraction(dateKey, fromDate, toDate, { metaMonthBuckets: true });
+        if (attributedMonth <= 0) continue;
+        const overlapStart = dateStrMax(monthStart, fromDate);
+        const overlapEnd = dateStrMin(monthEnd, toDate);
+        if (overlapStart > overlapEnd) continue;
+        const daysInOverlap = eachDateInclusive(overlapStart, overlapEnd).filter((d) => d.slice(0, 7) === ym);
+        const n = daysInOverlap.length;
+        if (n <= 0) continue;
+        const perDay = attributedMonth / n;
+        for (const d of daysInOverlap) {
+          add(d, perDay);
+        }
+      }
+    }
+    const dmSum = [...out.values()].reduce((a, b) => a + b, 0);
+    const eff = getEffectiveConversionValue(c);
+    if (dmSum === 0 && eff > 0) {
+      const cd = getCampaignDateForMonth(c);
+      if (cd) {
+        const ymd = `${cd.getFullYear()}-${String(cd.getMonth() + 1).padStart(2, '0')}-${String(cd.getDate()).padStart(2, '0')}`;
+        if (ymd >= fromDate && ymd <= toDate) add(ymd, eff);
+      }
+    }
+    return out;
+  }
+
+  const cd = getCampaignDateForMonth(c);
+  if (!cd) return out;
+  const ymd = `${cd.getFullYear()}-${String(cd.getMonth() + 1).padStart(2, '0')}-${String(cd.getDate()).padStart(2, '0')}`;
+  if (ymd >= fromDate && ymd <= toDate) add(ymd, getEffectiveConversionValue(c));
+  return out;
+}
+
+export type RoiTrendDailyRow = {
+  date: string;
+  label: string;
+  organic: number;
+  campaigns: number;
+  storeRevenue: number;
+};
+
+/**
+ * Συγχώνευση organic (ισοκατανομή μηνιαίων imports ανά ημέρα), campaigns (ημερήσια metrics), e-shop revenueByDay.
+ */
+export function buildRoiTrendSeriesDaily(
+  organicByMonth: Map<string, number>,
+  allCampaigns: Campaign[],
+  revenueByDay: Record<string, number> | undefined,
+  fromDate: string,
+  toDate: string,
+  includeStore: boolean
+): RoiTrendDailyRow[] {
+  const days = eachDateInclusive(fromDate, toDate);
+  const organicByDay = new Map<string, number>();
+  for (const day of days) {
+    const ym = day.slice(0, 7);
+    const monthTotal = organicByMonth.get(ym) || 0;
+    const [yy, mm] = ym.split('-').map(Number);
+    const dim = daysInMonthYm(yy, mm);
+    organicByDay.set(day, dim > 0 ? monthTotal / dim : 0);
+  }
+
+  const campaignsByDay = new Map<string, number>();
+  for (const c of allCampaigns) {
+    const m = getCampaignDailyAttributedValueInPeriod(c, fromDate, toDate);
+    m.forEach((v, d) => campaignsByDay.set(d, (campaignsByDay.get(d) || 0) + v));
+  }
+
+  const storeByDay = new Map<string, number>();
+  if (includeStore && revenueByDay) {
+    for (const day of days) {
+      storeByDay.set(day, Number(revenueByDay[day]) || 0);
+    }
+  }
+
+  return days.map((day) => ({
+    date: day,
+    label: formatTrendDayLabel(day),
+    organic: Math.round(organicByDay.get(day) || 0),
+    campaigns: Math.round(campaignsByDay.get(day) || 0),
+    storeRevenue: Math.round(storeByDay.get(day) || 0),
+  }));
 }
 
 /** Inclusive list of YYYY-MM from fromYm through toYm. */

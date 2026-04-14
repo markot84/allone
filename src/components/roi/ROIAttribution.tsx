@@ -10,6 +10,7 @@ import {
   ArrowUpRight,
   Loader2,
   Database,
+  Leaf,
 } from 'lucide-react';
 import {
   AreaChart,
@@ -33,11 +34,19 @@ import {
   calculateCampaignMetrics,
   bucketOverlapFraction,
   metaUsesLegacyMonthBuckets,
-  buildRoiTrendSeries,
+  buildRoiTrendSeriesDaily,
+  formatTrendDayLabel,
   ROI_PERCENT_CALC_TOOLTIP,
 } from '../../utils/roiUtils';
-import { formatCurrencyCompact, formatNumber, formatPercent } from '../../utils/format';
-import type { Campaign } from '../../types';
+import { computeMarketingOverheadForPeriod, eachDateInclusive } from '../../utils/marketingCostPeriod';
+import { formatCurrency, formatCurrencyCompact, formatNumber, formatPercent } from '../../utils/format';
+import type { Campaign, MarketingCostLine } from '../../types';
+
+function formatPeriodDate(ymd: string): string {
+  const [y, m, d] = ymd.split('-').map(Number);
+  if (!y || !m || !d) return ymd;
+  return `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}`;
+}
 
 const DEMO_CAMPAIGNS: Omit<Campaign, 'id'>[] = [
   { name: 'Google Shopping — Ρούχα Εργασίας', channel: 'Google Ads', period: 'Jan 2026', start_date: '2026-01-01', end_date: '2026-01-31', status: 'completed', amount_spent: 1200, impressions: 84000, clicks: 3360, conversions: 142, conversion_value: 8520, roas: 7.1, ctr: 4.0 },
@@ -79,6 +88,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
   const { currentBrand } = useBrand();
   const queryClient = useQueryClient();
   const [seeding, setSeeding] = useState(false);
+  const [eshopCompareTab, setEshopCompareTab] = useState<'compare' | 'organic'>('compare');
   const { period: dashPeriod, setPeriod: setDashPeriod, periodDates } = useDashPeriod();
   const { customFrom, customTo, setCustomRange } = useGlobalDate();
 
@@ -180,8 +190,22 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
     }
   }, [currentBrand, queryClient]);
   const monthlyBudget = activeStrategy?.monthlyBudget || 0;
+  const marketingOverhead = useMemo(
+    () =>
+      computeMarketingOverheadForPeriod(
+        activeStrategy?.marketingCostLines,
+        monthlyBudget,
+        periodDates.fromDate,
+        periodDates.toDate
+      ),
+    [activeStrategy?.marketingCostLines, monthlyBudget, periodDates.fromDate, periodDates.toDate]
+  );
 
   const metrics = useMemo(() => calculateCampaignMetrics(campaignsTyped), [campaignsTyped]);
+  const totalMarketingCost = useMemo(
+    () => Math.round((metrics.totalSpend + marketingOverhead.total) * 100) / 100,
+    [metrics.totalSpend, marketingOverhead.total]
+  );
   const totalClicks = useMemo(
     () => campaignsTyped.reduce((sum, c) => sum + (c.clicks || 0), 0),
     [campaignsTyped],
@@ -265,18 +289,32 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
       }
     >;
   }, [metrics, totalRevenue, totalClicks, hasOrganic, hasCampaigns, campaignsTyped]);
-  const trendData = useMemo(() => {
-    const fromYm = periodDates.fromDate.slice(0, 7);
-    const toYm = periodDates.toDate.slice(0, 7);
-    return buildRoiTrendSeries(
-      organicByMonth,
-      campaignsAll,
-      ecomm.monthlyRevenue,
-      fromYm,
-      toYm,
-      ecomm.hasData
-    );
-  }, [organicByMonth, campaignsAll, ecomm.hasData, ecomm.monthlyRevenue, periodDates.fromDate, periodDates.toDate]);
+  const ecommRevenueByDay = useMemo(() => {
+    const o: Record<string, number> = {};
+    for (const r of ecomm.dailyRevenue) {
+      o[r.date] = r.revenue;
+    }
+    return o;
+  }, [ecomm.dailyRevenue]);
+
+  const trendData = useMemo(
+    () =>
+      buildRoiTrendSeriesDaily(
+        organicByMonth,
+        campaignsAll,
+        ecommRevenueByDay,
+        periodDates.fromDate,
+        periodDates.toDate,
+        ecomm.hasData
+      ),
+    [organicByMonth, campaignsAll, ecommRevenueByDay, ecomm.hasData, periodDates.fromDate, periodDates.toDate]
+  );
+
+  /** Organic στην επιλεγμένη περίοδο (ίδιο άθροισμα με τη γραμμή Organic στο chart τάσης). */
+  const organicRevenueInPeriod = useMemo(
+    () => trendData.reduce((s, r) => s + (r.organic || 0), 0),
+    [trendData]
+  );
 
   const totalSpendForBudget = metrics.totalSpend;
   const budgetUtilization = monthlyBudget > 0 ? (totalSpendForBudget / monthlyBudget) * 100 : 0;
@@ -369,7 +407,16 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
       <Card padding="lg" className="border border-[var(--nts-border-gray)]">
         <CardHeader
           title="Ανάλυση απόδοσης (ROAS & ROI)"
-          subtitle="Όλες οι μετρήσεις απόδοσης διαφήμισης σε ένα σημείο — αποφεύγεται η σύγχυση με πολλαπλά KPI στον πίνακα ελέγχου."
+          subtitle={
+            <>
+              Όλες οι μετρήσεις απόδοσης διαφήμισης σε ένα σημείο. Περίοδος πίνακα:{' '}
+              <span className="font-medium text-[var(--nts-charcoal)]">
+                {formatPeriodDate(periodDates.fromDate)} — {formatPeriodDate(periodDates.toDate)}
+              </span>{' '}
+              ({eachDateInclusive(periodDates.fromDate, periodDates.toDate).length} ημέρες). Τα μηνιαία κόστη (π.χ. agency) εμφανίζονται ως{' '}
+              <strong>αναλογία</strong> σε αυτές τις ημέρες, όχι ως πλήρες μηνιαία ποσά.
+            </>
+          }
           icon={<BarChart3 size={20} className="text-[var(--nts-accent)]" />}
         />
         {(() => {
@@ -379,7 +426,32 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
           const roiPct =
             metrics.totalSpend > 0 ? ((metrics.totalRevenue - metrics.totalSpend) / metrics.totalSpend) * 100 : null;
           const profit = metrics.totalRevenue - metrics.totalSpend;
-          const rows: { k: string; v: string; note: string }[] = [
+          const fullBlendedRoas = totalMarketingCost > 0 ? totalRevenue / totalMarketingCost : 0;
+          const fullTrueRoas =
+            ecomm.hasData && totalMarketingCost > 0 ? ecomm.totalRevenue / totalMarketingCost : null;
+          const fullRoiPct =
+            totalMarketingCost > 0
+              ? ((metrics.totalRevenue - totalMarketingCost) / totalMarketingCost) * 100
+              : null;
+          const periodDayCount = eachDateInclusive(periodDates.fromDate, periodDates.toDate).length;
+          const mcl: MarketingCostLine[] = activeStrategy?.marketingCostLines ?? [];
+          const monthlyRateHints: string[] = [];
+          for (const l of mcl) {
+            if (l.kind === 'fixed_monthly' && l.amountEUR > 0) {
+              monthlyRateHints.push(`${l.label?.trim() || 'Γραμμή'}: ${formatCurrency(l.amountEUR, 0)}/μήνα`);
+            }
+            if (l.kind === 'percent_of_budget' && l.percent > 0) {
+              monthlyRateHints.push(
+                `${l.label?.trim() || 'Γραμμή'}: ${formatNumber(l.percent, 1)}% του μην. budget`
+              );
+            }
+            if (l.kind === 'one_off_month' && l.amountEUR > 0) {
+              monthlyRateHints.push(
+                `${l.label?.trim() || 'Εφάπαξ'}: ${formatCurrency(l.amountEUR, 0)} (${l.month})`
+              );
+            }
+          }
+          const rows: { k: string; v: ReactNode; note: ReactNode }[] = [
             {
               k: 'Campaigns ROAS',
               v: campaignsRoas > 0 ? `${formatNumber(campaignsRoas, 2)}x` : '—',
@@ -403,6 +475,63 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
               k: 'ROI % (κέρδος vs spend)',
               v: roiPct != null && roiPct !== 0 ? `${roiPct > 0 ? '+' : ''}${formatNumber(roiPct, 0)}%` : '—',
               note: '(Έσοδα καμπανιών − Ad Spend) ÷ Ad Spend. Δεν είναι ROAS — μετρά το περιθώριο κέρδους από τις διαφημίσεις.',
+            },
+            {
+              k: 'Επιπλέον κόστη (εκτός ad spend)',
+              v:
+                marketingOverhead.total > 0 ||
+                (activeStrategy?.marketingCostLines && activeStrategy.marketingCostLines.length > 0) ? (
+                  <div className="flex flex-col items-end gap-1">
+                    <span>
+                      {marketingOverhead.total > 0
+                        ? formatCurrencyCompact(marketingOverhead.total)
+                        : formatCurrencyCompact(0)}{' '}
+                      <span className="text-[10px] font-normal text-[#6B7280]">στην περίοδο</span>
+                    </span>
+                    {monthlyRateHints.length > 0 && (
+                      <span className="max-w-[240px] text-right text-[10px] font-normal font-sans leading-snug text-[#059669]">
+                        {monthlyRateHints.join(' · ')}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  '—'
+                ),
+              note: (
+                <>
+                  Ποσό που αντιστοιχεί στις {periodDayCount} ημέρες ({formatPeriodDate(periodDates.fromDate)} —{' '}
+                  {formatPeriodDate(periodDates.toDate)}). Τα σταθερά μηνιαία (π.χ. €800) χρεώνονται{' '}
+                  <strong>ημέρα-ημέρα</strong>· για πλήρη μήνα στον πίνακα χρειάζεται περίοδος ~όλου του μήνα. Ρυθμίσεις: Channel
+                  Activation.
+                </>
+              ),
+            },
+            {
+              k: 'Σύνολο κόστους marketing',
+              v: metrics.totalSpend > 0 || marketingOverhead.total > 0 ? formatCurrencyCompact(totalMarketingCost) : '—',
+              note: 'Ad Spend + επιπλέον κόστη. Βάση για «πλήρες» ROAS/ROI παρακάτω.',
+            },
+            {
+              k: 'Blended ROAS (πλήρες κόστος)',
+              v: fullBlendedRoas > 0 ? `${formatNumber(fullBlendedRoas, 2)}x` : '—',
+              note: 'Συνολικά έσοδα (organic + campaigns) ÷ σύνολο κόστους marketing. Πιο ρεαλιστικό όταν υπάρχουν σημαντικά έξοδα εκτός media.',
+            },
+            ...(fullTrueRoas != null && fullTrueRoas > 0
+              ? [
+                  {
+                    k: 'True ROAS (πλήρες κόστος)',
+                    v: `${formatNumber(fullTrueRoas, 2)}x`,
+                    note: 'Πραγματικά έσοδα e-shop ÷ σύνολο κόστους marketing.',
+                  } as const,
+                ]
+              : []),
+            {
+              k: 'ROI % (πλήρες κόστος marketing)',
+              v:
+                fullRoiPct != null && fullRoiPct !== 0
+                  ? `${fullRoiPct > 0 ? '+' : ''}${formatNumber(fullRoiPct, 0)}%`
+                  : '—',
+              note: '(Έσοδα καμπανιών − σύνολο κόστους marketing) ÷ σύνολο κόστους marketing. Συμπληρώνει το ROI % έναντι μόνο του ad spend.',
             },
           ];
           return (
@@ -439,6 +568,13 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                   </Tooltip>
                 </p>
               )}
+              <p className="text-[11px] text-[#9CA3AF] leading-relaxed">
+                Επιπλέον κόστη marketing ορίζονται στο{' '}
+                <a href="#channels" className="font-medium text-[var(--nts-accent)] hover:underline">
+                  Channel Activation
+                </a>
+                .
+              </p>
             </div>
           );
         })()}
@@ -448,43 +584,103 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
       {/* E-commerce vs Campaigns Revenue */}
       {ecomm.hasData && ecomm.totalRevenue > 0 && (
         <Card padding="lg">
-          <div className="flex items-center gap-2 mb-4">
-            <ShoppingBag size={18} className="text-[var(--nts-accent)]" />
-            <h3 className="text-sm font-semibold text-[#1A1A1A]">e-shop vs Campaigns Revenue</h3>
-            <span className="text-[10px] text-[#9CA3AF] bg-[#F3F4F6] px-1.5 py-0.5 rounded ml-auto">90 ημέρες</span>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <ShoppingBag size={18} className="text-[var(--nts-accent)] shrink-0" />
+              <h3 className="text-sm font-semibold text-[#1A1A1A]">e-shop vs Campaigns Revenue</h3>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex gap-0.5 rounded-lg bg-[#F5F5F5] p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setEshopCompareTab('compare')}
+                  className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                    eshopCompareTab === 'compare'
+                      ? 'bg-white text-[#111827] shadow-sm'
+                      : 'text-[#6B7280] hover:text-[#111827]'
+                  }`}
+                >
+                  Σύγκριση
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEshopCompareTab('organic')}
+                  className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors inline-flex items-center gap-1.5 ${
+                    eshopCompareTab === 'organic'
+                      ? 'bg-white text-[#111827] shadow-sm'
+                      : 'text-[#6B7280] hover:text-[#111827]'
+                  }`}
+                >
+                  <Leaf size={12} className="text-emerald-600" />
+                  Organic
+                </button>
+              </div>
+              <span className="text-[10px] text-[#9CA3AF] bg-[#F3F4F6] px-1.5 py-0.5 rounded">e-shop: 90 ημέρες</span>
+            </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <MetricCard
-              icon={<ShoppingBag size={20} />}
-              label="e-shop Revenue"
-              value={formatCurrencyCompact(ecomm.totalRevenue)}
-              subtitle="Πραγματικά έσοδα e-shop"
-              color="#10B981"
-              tooltip="Καθαρά έσοδα παραγγελιών από τις e-commerce πλατφόρμες."
-            />
-            <MetricCard
-              icon={<Euro size={20} />}
-              label="Campaigns Revenue"
-              value={formatCurrencyCompact(totalRevenue)}
-              subtitle="Organic + Campaign value"
-              color="var(--nts-charcoal)"
-              tooltip="Έσοδα που προκύπτουν από organic import + conversion values από καμπάνιες (platforms)."
-            />
-            <MetricCard
-              icon={<BarChart3 size={20} />}
-              label="Revenue Gap"
-              value={(() => {
-                const gap = ecomm.totalRevenue - totalRevenue;
-                return gap >= 0 ? `+${formatCurrencyCompact(gap)}` : formatCurrencyCompact(gap);
-              })()}
-              subtitle="e-shop − Campaigns Revenue"
-              color={ecomm.totalRevenue >= totalRevenue ? '#22C55E' : '#EF4444'}
-              tooltip="Διαφορά πραγματικού e-shop revenue από campaigns revenue."
-            />
-          </div>
-          <p className="text-[11px] text-[#9CA3AF] mt-3 leading-relaxed">
-            Οι εκδοχές <strong>ROAS</strong> (συμπεριλαμβανομένου του <strong>True ROAS</strong> από e-shop) εξηγούνται στο παραπάνω block «Ανάλυση απόδοσης (ROAS & ROI)».
-          </p>
+
+          {eshopCompareTab === 'compare' ? (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <MetricCard
+                  icon={<ShoppingBag size={20} />}
+                  label="e-shop Revenue"
+                  value={formatCurrencyCompact(ecomm.totalRevenue)}
+                  subtitle="Πραγματικά έσοδα e-shop"
+                  color="#10B981"
+                  tooltip="Καθαρά έσοδα παραγγελιών από τις e-commerce πλατφόρμες (σύνοψη backend, τυπικά 90 ημέρες)."
+                />
+                <MetricCard
+                  icon={<Euro size={20} />}
+                  label="Campaigns Revenue"
+                  value={formatCurrencyCompact(metrics.totalRevenue)}
+                  subtitle="Μόνο conversion value καμπανιών (ίδιο πεδίο με τη σελίδα Campaigns)"
+                  color="var(--nts-charcoal)"
+                  tooltip="Άθροισμα conversion value από Google Ads / Meta κ.λπ. για την επιλεγμένη περίοδο — χωρίς organic import."
+                />
+                <MetricCard
+                  icon={<BarChart3 size={20} />}
+                  label="Revenue Gap"
+                  value={(() => {
+                    const gap = ecomm.totalRevenue - metrics.totalRevenue;
+                    return gap >= 0 ? `+${formatCurrencyCompact(gap)}` : formatCurrencyCompact(gap);
+                  })()}
+                  subtitle="e-shop − έσοδα καμπανιών (ads)"
+                  color={ecomm.totalRevenue >= metrics.totalRevenue ? '#22C55E' : '#EF4444'}
+                  tooltip="Διαφορά πραγματικού e-shop revenue από τα έσοδα καμπανιών (μόνο ads) στο ίδιο context με τη σύγκριση."
+                />
+              </div>
+              <p className="text-[11px] text-[#9CA3AF] mt-3 leading-relaxed">
+                Οι εκδοχές <strong>ROAS</strong> (συμπεριλαμβανομένου του <strong>True ROAS</strong> από e-shop) εξηγούνται στο παραπάνω block «Ανάλυση απόδοσης (ROAS & ROI)». Τα organic του import εμφανίζονται στο tab <strong>Organic</strong>.
+              </p>
+            </>
+          ) : (
+            <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 px-4 py-5">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white border border-emerald-200">
+                  <Leaf size={20} className="text-emerald-700" />
+                </div>
+                <div className="min-w-0 flex-1 space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800/90">Organic revenue</p>
+                  <p className="text-2xl font-bold font-mono tabular-nums text-[#111827]">
+                    {formatCurrencyCompact(organicRevenueInPeriod)}
+                  </p>
+                  <p className="text-[12px] text-[#4B5563] leading-relaxed">
+                    Οργανικά έσοδα (από import ανά μήνα) κατανεμημένα ανά ημέρα για την περίοδο{' '}
+                    <span className="font-medium">
+                      {formatPeriodDate(periodDates.fromDate)} — {formatPeriodDate(periodDates.toDate)}
+                    </span>
+                    . Το ίδιο ποσό αθροίζει τη γραμμή <strong>Organic</strong> στο διάγραμμα «Τάση Εσόδων» παρακάτω.
+                  </p>
+                  {!hasOrganic && (
+                    <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-100 rounded-md px-2 py-1.5 mt-2">
+                      Δεν υπάρχει organic import — η τιμή μπορεί να είναι 0. Συνδέστε δεδομένα από τις Συνδέσεις ή χρησιμοποιήστε το σύνολο KPI «Revenue» πάνω για GA4.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </Card>
       )}
 
@@ -493,11 +689,15 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
         <Card padding="lg">
           <CardHeader
             title="Τάση Εσόδων"
-            subtitle={ecomm.hasData ? 'Organic vs Campaign vs e-shop Revenue ανά μήνα' : 'Organic vs Campaign revenue ανά μήνα'}
+            subtitle={
+              ecomm.hasData
+                ? `Organic vs Campaign vs e-shop ανά ημέρα (${formatPeriodDate(periodDates.fromDate)} — ${formatPeriodDate(periodDates.toDate)})`
+                : `Organic vs Campaign ανά ημέρα (${formatPeriodDate(periodDates.fromDate)} — ${formatPeriodDate(periodDates.toDate)})`
+            }
             icon={<TrendingUp size={20} className="text-[var(--nts-accent)]" />}
           />
           <div ref={chartRef} className="w-full" style={{ minHeight: 320, position: 'relative' }}>
-            <AreaChart width={chartWidth} height={300} data={trendData} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
+            <AreaChart width={chartWidth} height={300} data={trendData} margin={{ top: 10, right: 10, left: 10, bottom: 24 }}>
               <defs>
                 <linearGradient id="organicGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3} />
@@ -514,13 +714,21 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" vertical={false} />
               <XAxis
-                dataKey="month"
-                tick={{ fill: '#57606a', fontSize: 12 }}
+                dataKey="date"
+                tickFormatter={(d) => (typeof d === 'string' ? formatTrendDayLabel(d) : String(d))}
+                interval="preserveStartEnd"
+                minTickGap={28}
+                angle={trendData.length > 14 ? -35 : 0}
+                textAnchor={trendData.length > 14 ? 'end' : 'middle'}
+                height={trendData.length > 14 ? 56 : 32}
+                tick={{ fill: '#57606a', fontSize: 11 }}
                 axisLine={{ stroke: '#d0d7de' }}
                 tickLine={{ stroke: '#d0d7de' }}
               />
               <YAxis
-                tickFormatter={(v) => `€${(v / 1000).toFixed(0)}K`}
+                tickFormatter={(v) =>
+                  Math.abs(v) >= 1000 ? `€${(v / 1000).toFixed(v >= 10_000 ? 0 : 1)}K` : `€${Math.round(v)}`
+                }
                 tick={{ fill: '#57606a', fontSize: 12 }}
                 axisLine={{ stroke: '#d0d7de' }}
                 tickLine={{ stroke: '#d0d7de' }}
@@ -537,6 +745,11 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                   formatCurrencyCompact((value as number) || 0),
                   name === 'organic' ? 'Organic Revenue' : name === 'storeRevenue' ? 'e-shop Revenue' : 'Campaign Revenue',
                 ]}
+                labelFormatter={(label) =>
+                  typeof label === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(label)
+                    ? formatTrendDayLabel(label)
+                    : String(label)
+                }
                 labelStyle={{ color: '#24292f', fontWeight: 600, marginBottom: 4 }}
               />
               <Legend

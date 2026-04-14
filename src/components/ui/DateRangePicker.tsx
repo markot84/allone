@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Calendar, ChevronLeft, ChevronRight, ChevronDown, X } from 'lucide-react';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -185,6 +186,8 @@ export function DateRangePicker({ from, to, onChange, onClear }: DateRangePicker
   const [hoverDate, setHoverDate] = useState('');
   const [pickingSecond, setPickingSecond] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [panelPos, setPanelPos] = useState<{ left: number; top: number } | null>(null);
 
   const now = new Date();
   const [rightYear, setRightYear] = useState(now.getFullYear());
@@ -198,13 +201,50 @@ export function DateRangePicker({ from, to, onChange, onClear }: DateRangePicker
     if (!open) { setPendingFrom(from); setPendingTo(to); }
   }, [from, to, open]);
 
-  // Close on outside click
+  const updatePanelPosition = useCallback(() => {
+    const trigger = containerRef.current;
+    const panel = panelRef.current;
+    if (!trigger || !panel) return;
+    const cr = trigger.getBoundingClientRect();
+    const pw = panel.offsetWidth || 680;
+    const ph = panel.offsetHeight || 420;
+    const pad = 10;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    // Δεξιά στοίχιση με το trigger (όπως τα campaigns), ώστε να μην «βγαίνει» έξω από το viewport
+    let left = cr.right - pw;
+    left = Math.min(Math.max(pad, left), vw - pw - pad);
+    let top = cr.bottom + 8;
+    if (top + ph > vh - pad) {
+      top = Math.max(pad, cr.top - ph - 8);
+    }
+    setPanelPos({ left, top });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setPanelPos(null);
+      return;
+    }
+    updatePanelPosition();
+    const id = requestAnimationFrame(() => updatePanelPosition());
+    window.addEventListener('resize', updatePanelPosition);
+    window.addEventListener('scroll', updatePanelPosition, true);
+    return () => {
+      cancelAnimationFrame(id);
+      window.removeEventListener('resize', updatePanelPosition);
+      window.removeEventListener('scroll', updatePanelPosition, true);
+    };
+  }, [open, updatePanelPosition, rightYear, rightMonth, pendingFrom, pendingTo, pickingSecond, hoverDate]);
+
+  // Close on outside click (συμπεριλαμβανομένου του portal panel)
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
+      const t = e.target as Node;
+      if (containerRef.current?.contains(t)) return;
+      if (panelRef.current?.contains(t)) return;
+      setOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -280,14 +320,21 @@ export function DateRangePicker({ from, to, onChange, onClear }: DateRangePicker
         )}
       </div>
 
-      {/* ── Dropdown ── */}
-      {open && (
-        <div
-          className="absolute top-full mt-2 left-0 z-50 bg-white rounded-xl shadow-2xl border border-[#E5E7EB] flex overflow-hidden"
-          style={{ minWidth: 660 }}
-        >
+      {/* ── Dropdown: portal + fixed ώστε να μην κόβεται από overflow / δεξί άκρο ── */}
+      {open &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            ref={panelRef}
+            className="fixed z-[10050] flex max-h-[min(520px,calc(100vh-24px))] w-[min(680px,calc(100vw-20px))] min-w-0 flex-col overflow-hidden rounded-xl border border-[#E5E7EB] bg-white shadow-2xl sm:w-auto sm:max-w-none sm:flex-row"
+            style={
+              panelPos
+                ? { left: panelPos.left, top: panelPos.top, minWidth: 'min(660px, calc(100vw - 20px))' }
+                : { left: -9999, top: -9999, visibility: 'hidden', minWidth: 'min(660px, calc(100vw - 20px))' }
+            }
+          >
           {/* Presets sidebar */}
-          <div className="w-44 border-r border-[#F3F4F6] py-3 flex flex-col shrink-0">
+          <div className="w-44 shrink-0 border-r border-[#F3F4F6] py-3 flex flex-col overflow-y-auto">
             <div className="px-3 pb-2 text-[10px] font-semibold text-[#9CA3AF] uppercase tracking-wider">
               Γρήγορη επιλογή
             </div>
@@ -307,8 +354,8 @@ export function DateRangePicker({ from, to, onChange, onClear }: DateRangePicker
           </div>
 
           {/* Calendar area */}
-          <div className="flex flex-col flex-1">
-            <div className="flex divide-x divide-[#F3F4F6]">
+          <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
+            <div className="flex min-w-0 flex-1 flex-col divide-y divide-[#F3F4F6] sm:flex-row sm:divide-y-0 sm:divide-x">
               <MonthCalendar
                 year={leftYear}
                 month={leftMonth}
@@ -376,8 +423,9 @@ export function DateRangePicker({ from, to, onChange, onClear }: DateRangePicker
               </div>
             </div>
           </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

@@ -64,7 +64,7 @@ export function Card({
 
 interface CardHeaderProps {
   title: string;
-  subtitle?: string;
+  subtitle?: ReactNode;
   icon?: ReactNode;
   action?: ReactNode;
   className?: string;

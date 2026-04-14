@@ -242,6 +242,29 @@ export interface ChannelRecommendation {
   actions?: BudgetAction[];
 }
 
+/** Επιπλέον κόστη marketing (agency, εργαλεία, one-off) — αποθηκεύονται στην ενεργή στρατηγική, χρησιμοποιούνται στο ROI. */
+export type MarketingCostLine =
+  | {
+      id: string;
+      label: string;
+      kind: 'fixed_monthly';
+      amountEUR: number;
+    }
+  | {
+      id: string;
+      label: string;
+      kind: 'percent_of_budget';
+      percent: number;
+    }
+  | {
+      id: string;
+      label: string;
+      kind: 'one_off_month';
+      amountEUR: number;
+      /** YYYY-MM */
+      month: string;
+    };
+
 // Content Calendar Types
 export interface ContentItem {
   week: number;
