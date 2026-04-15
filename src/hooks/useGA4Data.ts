@@ -20,7 +20,7 @@ export interface GA4TrafficSource {
   users: number;
   newUsers: number;
   conversions: number;
-  /** Purchase-related revenue attributed to the session default channel (GA4 `totalRevenue`). */
+  /** Έσοδα αγορών ανά default channel group στο GA4 (`totalRevenue`). */
   totalRevenue?: number;
 }
 

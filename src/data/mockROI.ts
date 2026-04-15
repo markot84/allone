@@ -169,7 +169,7 @@ export const attributionMethodology = {
     },
     {
       name: 'Channel Optimization Lift',
-      description: 'Incremental ROAS improvement attributed to optimized channel mix',
+      description: 'Incremental ROAS improvement from optimized channel mix',
       tracking: 'Before/after comparison με control period',
       confidence: 'medium'
     }

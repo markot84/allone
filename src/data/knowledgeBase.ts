@@ -149,13 +149,13 @@ export const knowledgeArticles: KnowledgeArticle[] = [
     content: `Το Dashboard σας δίνει μια ολοκληρωμένη εικόνα της απόδοσης σας.
 
 Κύρια KPIs:
-- Total Revenue: Συνολικό εισόδημα με attribution rate
+- Total Revenue: Συνολικό εισόδημα (και ποσοστό εσόδων καμπανιών όπου υπάρχει στο import)
 - Products: Συνολικός αριθμός προϊόντων στο σύστημα
 - Segments: RFM segments με μέσο score
 - Campaigns: Ενεργά campaigns
 
 Charts & Visualizations:
-- Revenue Performance: Total vs Campaigns Revenue
+- Revenue Performance: τζίρος e-shop (αν υπάρχει σύνδεση) vs έσοδα που αναφέρουν οι πλατφόρμες διαφημίσεων (conversion value)
 - Customer Segments: Κατανομή πελατών ανά segment
 - Performance Summary: Stock Clearance, Cost Savings, ROI
 
@@ -421,7 +421,7 @@ Description: Description, Desc, Note, Notes, Behavioral_Persona, Tier
     content: `Υποχρεωτικά πεδία:
 - Date: Ημερομηνία σε format YYYY-MM-DD
 - Total Revenue: Συνολικό εισόδημα (σε units, π.χ. 50000 για €50K)
-- Campaigns Revenue: Έσοδα από καμπάνιες / Performance+ (σε units). (Παλιά στήλη: Attributed Revenue — υποστηρίζεται ακόμα στο import.)
+- Campaigns Revenue: Έσοδα καμπανιών / Performance+ (σε units). (Στο CSV import υποστηρίζονται και παλιά ονόματα στηλών — δες τη λίστα «Πιθανές εκδοχές» παρακάτω.)
 - Attribution Rate: Ποσοστό attribution (π.χ. 30.0 για 30%)
 
 Πιθανές Εκδοχές Ονομάτων Στηλών:
@@ -434,6 +434,7 @@ Total_Revenue, Total Revenue, total_revenue, Revenue, revenue, Total, total, Tot
 
 Campaigns Revenue:
 Campaigns_Revenue, Campaigns Revenue, campaigns_revenue, campaigns_rev, Attributed_Revenue, Attributed Revenue, attributed_revenue, Attributed, attributed, Attributed_Rev, attributed_rev, Performance_Plus_Revenue, performance_plus_revenue, PP_Revenue, pp_revenue
+(σημ.: τα «Attributed*» / «attributed*» είναι μόνο συμβατότητα με παλιά exports — το νόημα είναι «έσοδα καμπανιών».)
 
 Attribution Rate:
 Attribution_Rate, Attribution Rate, attribution_rate, Attribution_%, attribution_%, Attribution_Percentage, attribution_percentage, Rate, rate
@@ -900,7 +901,7 @@ E-commerce Integration:
     description: 'Τι σημαίνει κάθε KPI στο Dashboard',
     content: `Total Revenue (€XK)
 - Συνολικό εισόδημα από όλες τις πωλήσεις
-- Δείχνει "X% attributed" για το ποσοστό που αποδίδεται στο Performance+
+- Δείχνει "X%" για το ποσοστό εσόδων καμπανιών έναντι του συνολικού (όπου υπάρχει στο import)
 
 Products
 - Συνολικός αριθμός προϊόντων στο σύστημα
@@ -957,7 +958,7 @@ Currency symbols:
     faq: [
       {
         question: 'Γιατί δεν βλέπω revenue data στο chart;',
-        answer: 'Βεβαιωθείτε ότι έχετε importάρει analytics data με Date, Total Revenue, και Campaigns Revenue (ή παλιά στήλη Attributed Revenue) fields. Ελέγξτε ότι το date format είναι YYYY-MM-DD.'
+        answer: 'Βεβαιωθείτε ότι έχετε importάρει analytics data με Date, Total Revenue, και Campaigns Revenue (ή ισοδύναμη στήλη από παλιό export — δες Help → Εισαγωγή Analytics). Ελέγξτε ότι το date format είναι YYYY-MM-DD.'
       },
       {
         question: 'Πώς μπορώ να διορθώσω validation errors;',
@@ -1503,7 +1504,9 @@ Horizontal bar chart + progress bars που δείχνουν πόσα έσοδα
 - Κόκκινο: refunded, cancelled
 
 ## Πώς υπολογίζονται τα δεδομένα
-Τα aggregated metrics (revenue, AOV, top products) υπολογίζονται server-side κατά το sync και αποθηκεύονται σε ένα summary document. Αυτό εξασφαλίζει γρήγορη φόρτωση χωρίς heavy client-side queries.`,
+Τα aggregated metrics (revenue, AOV, top products) υπολογίζονται server-side κατά το sync και αποθηκεύονται σε ένα summary document. Αυτό εξασφαλίζει γρήγορη φόρτωση χωρίς heavy client-side queries.
+
+**Καταστάσεις παραγγελιών:** το ημερήσιο έσοδο αθροίζει το αποθηκευμένο total κάθε παραγγελίας στο εύρος sync — χωρίς ξεχωριστό φιλτράρισμα «μόνο επιβεβαιωμένες». Για ακυρώσεις, το ποσό εξαρτάται από το τι επιστρέφει το API της πλατφόρμας (π.χ. Magento \`grand_total\`).`,
     tags: ['ecommerce', 'explorer', 'revenue', 'orders', 'products', 'aov', 'dashboard'],
     related: ['connectors-overview', 'ecommerce-shopify', 'ecommerce-woo', 'store-revenue-vs-attributed'],
     tips: [
@@ -1525,10 +1528,13 @@ Horizontal bar chart + progress bars που δείχνουν πόσα έσοδα
 ## Ορισμοί
 
 ### e-shop Revenue
-Τα **πραγματικά έσοδα** από παραγγελίες στο e-shop σας (Shopify, WooCommerce κλπ). Αυτά είναι τα πραγματικά χρήματα που μπήκαν στο ταμείο.
+Τα **έσοδα από παραγγελίες** όπως τα συγχρονίζουμε από το e-shop (Shopify, WooCommerce, Magento κ.λπ.): άθροισμα του αποθηκευμένου total ανά παραγγελία, κατά **ημερομηνία δημιουργίας** παραγγελίας. **Δεν** φιλτράρουμε εκ των υστέρων κατάσταση (π.χ. ακύρωση): αν η πλατφόρμα αφήνει μη μηδενικό total για ακυρωμένη παραγγελία, αυτό μετράει· αν το μηδενίζει, μετράει 0.
 
-### Campaigns Revenue
-Τα **εκτιμώμενα έσοδα** από organic πωλήσεις + conversion value που αναφέρουν οι ad platforms (Google Ads, Meta). Αυτό είναι attribution-based και δεν αντιστοιχεί πάντα 1:1 στα πραγματικά έσοδα.
+### Campaigns Revenue (έσοδα από πλατφόρμες διαφημίσεων)
+Το **conversion value** που αναφέρουν Google Ads / Meta (και ισοδύναμα) για τις καμπάνιες — **όχι** ταμειακός τζίρος καταστήματος και **όχι** «πόσο απομένει» μετά τον τζίρο e-shop. Μπορεί να διαφέρει από τον τζίρο λόγω attribution, ημερομηνίας conversion vs ημερομηνίας παραγγελίας, και άλλων καναλιών.
+
+### Γιατί η καμπύλη διαφημίσεων μπορεί να είναι πιο ψηλή από τον τζίρο e-shop;
+Οι δύο σειρές **δεν** είναι δύο κομμάτια του ίδιου ταμειακού συνόλου την ίδια μέρα. Σε κάποιες ημέρες το conversion value των πλατφορμών μπορεί να **ξεπερνά** τον ημερήσιο τζίρο e-shop (διαφορετική ημέρα αναφοράς, ζώνη ώρας, μοντέλα μέτρησης, πωλήσεις που δεν εμφανίζονται ως παραγγελία e-shop εκείνη τη μέρα).
 
 ### True ROAS
 \`e-shop Revenue ÷ Ad Spend\`
@@ -1555,7 +1561,11 @@ Horizontal bar chart + progress bars που δείχνουν πόσα έσοδα
     faq: [
       {
         question: 'Γιατί διαφέρει το e-shop Revenue από το Campaigns Revenue;',
-        answer: 'Τα ad platforms (Google, Meta) χρησιμοποιούν attribution models που μπορεί να υπερεκτιμούν ή υποεκτιμούν τις πωλήσεις. Το e-shop Revenue είναι τα πραγματικά χρήματα από παραγγελίες.'
+        answer: 'Ο τζίρος e-shop προέρχεται από παραγγελίες στο κατάστημα. Τα έσοδα καμπανιών είναι conversion value που αναφέρουν οι πλατφόρμες διαφημίσεων — διαφορετικός ορισμός και ημερομηνία, όχι «δεύτερο κομμάτι» του ίδιου ταμείου.'
+      },
+      {
+        question: 'Γιατί βλέπω ημέρα που οι διαφημίσεις «δείχνουν» περισσότερα από τον τζίρο e-shop;',
+        answer: 'Είναι δυνατό: οι πλατφόρμες μετρούν conversion value με δικό τους τρόπο και ημερομηνία, ενώ ο τζίρος e-shop είναι άθροισμα παραγγελιών. Δεν σημαίνει αυτόματα λάθος στα δεδομένα — σημαίνει ότι δεν συγκρίνεις δύο ίδιες ποσότητες.'
       },
       {
         question: 'Ποιο ROAS πρέπει να χρησιμοποιώ;',

@@ -85,16 +85,24 @@ export function CardHeader({ title, subtitle, icon, action, className = '' }: Ca
           <Heading as="h3" variant="small" style={{ margin: 0 }}>
             {title}
           </Heading>
-          {subtitle && (
-            <Text
-              as="p"
-              size="small"
-              className="line-clamp-2 lg:line-clamp-none lg:truncate"
-              style={{ margin: 0, marginTop: 2, color: 'var(--fgColor-muted, #57606a)' }}
-            >
-              {subtitle}
-            </Text>
-          )}
+          {subtitle &&
+            (typeof subtitle === 'string' ? (
+              <Text
+                as="p"
+                size="small"
+                className="line-clamp-2 lg:line-clamp-none lg:truncate"
+                style={{ margin: 0, marginTop: 2, color: 'var(--fgColor-muted, #57606a)' }}
+              >
+                {subtitle}
+              </Text>
+            ) : (
+              <div
+                className="mt-0.5 max-w-full space-y-1.5 text-[13px] leading-snug [&_p]:m-0"
+                style={{ color: 'var(--fgColor-muted, #57606a)' }}
+              >
+                {subtitle}
+              </div>
+            ))}
         </div>
       </div>
       {action && (

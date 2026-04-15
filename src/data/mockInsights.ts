@@ -96,7 +96,7 @@ export const dashboardKPIs = [
     label: 'Performance+ ROI',
     value: '64x',
     change: 36.9,
-    changeLabel: 'attributed',
+    changeLabel: 'campaigns_revenue_share',
     trend: 'up' as const,
     sparklineData: [0, 12, 28, 42, 56, 64]
   }

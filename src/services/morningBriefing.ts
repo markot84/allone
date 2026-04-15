@@ -264,8 +264,8 @@ export function detectSignificantChange(
 
 function buildBriefingPrompt(data: BriefingData, periodLabel: string, updateContext?: string): string {
   const sections: string[] = [];
-  const attributedRevenue = data.revenue.totalOrganic + data.revenue.totalCampaignRevenue;
-  const effectiveRevenue = data.revenue.storeRevenue > 0 ? data.revenue.storeRevenue : attributedRevenue;
+  const fallbackBlendedRevenue = data.revenue.totalOrganic + data.revenue.totalCampaignRevenue;
+  const effectiveRevenue = data.revenue.storeRevenue > 0 ? data.revenue.storeRevenue : fallbackBlendedRevenue;
 
   sections.push(`[BRAND] ${data.brandName}`);
   sections.push(`[ΠΕΡΙΟΔΟΣ ΑΝΑΛΥΣΗΣ] ${periodLabel} — όλα τα νούμερα αφορούν ΜΟΝΟ αυτήν την περίοδο.`);
@@ -347,7 +347,7 @@ const SYSTEM_PROMPT = `Είσαι σύμβουλος ανάπτυξης για �
 
 ΓΛΩΣΣΑ & ΤΟΝΟΣ:
 - Απλά, ζεστά ελληνικά. Φυσική ροή — σαν σύντομη συζήτηση στο γραφείο, όχι λίστα KPI.
-- Απόφυγε αγγλικούς όρους (ROAS, attributed, blended, gap) στο narrative. Αν χρειάζεται έννοια, πες την με δικά σου λόγια: π.χ. «για κάθε ευρώ που βάζεις σε διαφήμιση, γυρίζουν περίπου Χ ευρώ», «οι πραγματικές πωλήσεις από το site είναι Χ έναντι των Υ που φαίνονται από τις διαφημίσεις».
+- Απόφυγε αγγλικούς όρους (ROAS, blended, gap) στο narrative. Αν χρειάζεται έννοια, πες την με δικά σου λόγια: π.χ. «για κάθε ευρώ που βάζεις σε διαφήμιση, γυρίζουν περίπου Χ ευρώ», «οι πραγματικές πωλήσεις από το site είναι Χ έναντι των Υ που φαίνονται από τις διαφημίσεις».
 - ΜΗΝ εξηγείς τρεις «εκδοχές» απόδοσης στο ίδιο κείμενο. Μία σαφής αναφορά στην απόδοση της διαφημιστικής δαπάνης αρκεί· αν υπάρχουν στοιχεία ηλεκτρονικού καταστήματος, μία επιπλέον φράση για το αν ο τζίρος «ταιριάζει» με όσα δείχνουν οι διαφημίσεις.
 - Ξεκίνα με κάτι συγκεκριμένο και ενδιαφέρον (νούμερο ή αλλαγή), όχι με γενικόλογο εισαγωγικό.
 - Χρησιμοποίησε τα νούμερα από τα blocks δεδομένων· μην επινοείς.

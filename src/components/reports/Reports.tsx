@@ -68,8 +68,8 @@ const reportTypes: ReportTypeItem[] = [
   },
   {
     id: 'channel',
-    name: 'Channel Attribution',
-    description: 'Ανάλυση ROAS breakdown και budget allocation',
+    name: 'Απόδοση ανά κανάλι',
+    description: 'Ανάλυση ROAS ανά κανάλι και κατανομή budget',
     icon: <Megaphone size={20} />,
     format: 'PDF/Excel',
     lastGenerated: 'πριν 6 ώρες'

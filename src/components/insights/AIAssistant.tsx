@@ -114,8 +114,8 @@ export function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
         } else if (query.includes('strategy') || query.includes('στρατηγική') || query.includes('weights')) {
           response = 'Το Commercial Strategy σας επιτρέπει να προσαρμόσετε πώς προτεραιοποιούνται τα προϊόντα. Μπορείτε να χρησιμοποιήσετε preset scenarios ή να δημιουργήσετε custom.';
           articleRefs = ['strategy-weights', 'scenarios'];
-        } else if (query.includes('roi') || query.includes('attribution')) {
-          response = 'Το ROI Attribution μετράει την επιπτώση του Performance+ στο business σας. Δείχνει total revenue, campaigns revenue, και ROI multiplier.';
+        } else if (query.includes('roi') || query.includes('attribution') || query.includes('απόδοση')) {
+          response = 'Το ROI & Απόδοση συγκρίνει τζίρο e-shop, έσοδα που αναφέρουν οι πλατφόρμες διαφημίσεων και δαπάνη, για True ROAS και Revenue Gap.';
           articleRefs = ['roi-attribution-basics'];
         } else if (query.includes('dashboard') || query.includes('kpi')) {
           response = 'Το Dashboard σας δίνει μια ολοκληρωμένη εικόνα της απόδοσης. Βλέπετε KPIs όπως Total Revenue, Products, Segments, και Campaigns. Κάθε KPI είναι clickable για λεπτομερή ανάλυση.';

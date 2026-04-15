@@ -38,7 +38,7 @@ export function KPICard({ kpi, index, onClick, className }: KPICardProps) {
   const formatChange = () => {
     if (kpi.change == null) return null;
     if (isPlainLabel) return `${kpi.change}`;
-    if (kpi.changeLabel === 'attributed') return `${kpi.change}%`;
+    if (kpi.changeLabel === 'campaigns_revenue_share') return `${kpi.change}%`;
     return `${kpi.change > 0 ? '+' : ''}${kpi.change}%`;
   };
 

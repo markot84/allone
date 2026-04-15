@@ -63,9 +63,13 @@ import { eachDateInclusive } from '../../utils/marketingCostPeriod';
 /** Ημερήσια σημεία στο chart· πάνω από αυτό → μηνιαία σύνοψη (αναγνώσιμο άξονα). */
 const REVENUE_CHART_MAX_DAILY_POINTS = 90;
 
-/** Revenue Performance — e-shop: brand orange · campaigns: blue για ξεκάθαρη διάκριση των δύο καμπυλών. */
+/** Revenue Performance — e-shop: orange · έσοδα καμπανιών (πλατφόρμα): blue */
 const REV_CHART_ESHOP = '#F97316';
 const REV_CHART_CAMPAIGNS = '#2563EB';
+
+const REV_PERF_LABEL_ESHOP = 'Τζίρος e-shop (παραγγελίες)';
+const REV_PERF_LABEL_ESHOP_BLEND = 'Organic + καμπάνιες (εκτίμηση)';
+const REV_PERF_LABEL_CAMPAIGNS_PLATFORM = 'Έσοδα καμπανιών από πλατφόρμες (conversion value)';
 
 /** Chart series values are full EUR; axis shows K when ≥ €1.000 (tooltip uses formatCurrencyCompact on same basis). */
 function formatRevenueChartYAxisTick(value: number): string {
@@ -181,11 +185,11 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   );
 
   /**
-   * Revenue chart — «σύνολο» γραμμή:
-   * - Με συνδεδεμένο e-shop (Magento/Shopify/Woo/OpenCart): **πραγματικός ημερήσιος τζίρος** από `ecommerce_summary.revenueByDay`
-   *   (άθροιση παραγγελιών ανά ημέρα — ίδια πηγή με E-commerce).
-   * - Χωρίς e-shop: blended organic (import + GA4) + έσοδα καμπανιών (όπως πριν).
-   * Η γραμμή campaigns παραμένει conversion value από Google Ads / Meta κ.λπ. (`dailyMetrics`).
+   * Revenue chart — πορτοκαλί:
+   * - Με e-shop: `ecommerce_summary.revenueByDay` = άθροισμα `grand_total`/`total` ανά ημέρα δημιουργίας παραγγελίας,
+   *   **χωρίς φιλτράρισμα κατάστασης** (ακυρωμένες κ.λπ. μετράνε με το ποσό που έχει αποθηκευτεί στο sync).
+   * - Χωρίς e-shop: organic (import + GA4) + conversion value καμπανιών.
+   * Μπλε: ημερήσιο conversion value από Google Ads / Meta (`dailyMetrics`) — δεν είναι «υπόλοιπο» του τζίρου· μπορεί > πορτοκαλί.
    */
   const revenueChartData = useMemo(() => {
     const { fromDate, toDate } = periodDates;
@@ -204,11 +208,15 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         useEshopTotals,
         ga4OrganicEffective
       );
-      return dailyRows.map((r) => ({
-        month: r.label,
-        total: useEshopTotals ? r.storeRevenue : r.organic + r.campaigns,
-        attributed: r.campaigns,
-      }));
+      return dailyRows.map((r) => {
+        const total = useEshopTotals ? r.storeRevenue : r.organic + r.campaigns;
+        const campaignsPlatformRevenue = r.campaigns;
+        return {
+          month: r.label,
+          total,
+          campaignsPlatformRevenue,
+        };
+      });
     }
 
     const fromYm = fromDate.slice(0, 7);
@@ -224,11 +232,15 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         periodClip: { fromDate, toDate },
       }
     );
-    return rows.map((r) => ({
-      month: r.month,
-      total: useEshopTotals ? r.storeRevenue : r.organic + r.campaigns,
-      attributed: r.campaigns,
-    }));
+    return rows.map((r) => {
+      const total = useEshopTotals ? r.storeRevenue : r.organic + r.campaigns;
+      const campaignsPlatformRevenue = r.campaigns;
+      return {
+        month: r.month,
+        total,
+        campaignsPlatformRevenue,
+      };
+    });
   }, [
     mergedOrganicByMonth,
     periodCampaigns,
@@ -504,7 +516,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   changeLabel: revenueMoM !== null ? 'vs προηγ. μήνα' : undefined,
                   trend: revenueMoM !== null ? (revenueMoM >= 0 ? 'up' : 'down') : 'up',
                   sparklineData: revenueSpark,
-                  tooltip: 'Συνολικά έσοδα από οργανικές πωλήσεις και campaigns. Περιλαμβάνει conversion value από Google Ads και Meta.',
+                  tooltip:
+                    'Συνολικά έσοδα: organic (όπου υπάρχει) + conversion value από Google Ads και Meta (πλατφόρμες διαφημίσεων). Δεν είναι ταμειακός τζίρος e-shop — για αυτόν δες E-commerce / ROI.',
                 }}
                 index={0}
                 onClick={() => onSectionChange?.('roi')}
@@ -686,9 +699,24 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           <CardHeader
             title="Revenue Performance"
             subtitle={
-              ecomm.hasData
-                ? 'E-shop revenue (παραγγελίες · Magento/άλλα) vs έσοδα καμπανιών (Google Ads / Meta).'
-                : 'Σύνολο organic + καμπανιών (import/GA4) vs έσοδα καμπανιών — σύνδεσε e-shop για πραγματικό τζίρο.'
+              ecomm.hasData ? (
+                <>
+                  <p>
+                    <span className="font-semibold text-[var(--fgColor-default,#24292f)]">Πορτοκαλί:</span> ημερήσιος τζίρος
+                    e-shop — άθροισμα παραγγελιών από το συγχρονισμό (Magento κ.λπ.). Συμπεριλαμβάνονται όλες οι καταστάσεις· το
+                    ποσό είναι το αποθηκευμένο total ανά παραγγελία (σε ακύρωση εξαρτάται από το πώς η πλατφόρμα ενημερώνει το
+                    total).
+                  </p>
+                  <p className="text-[12px] leading-relaxed">
+                    <span className="font-semibold text-[var(--fgColor-default,#24292f)]">Μπλε:</span> έσοδα που αναφέρουν οι
+                    πλατφόρμες διαφημίσεων (conversion value Google Ads / Meta) —{' '}
+                    <span className="italic">όχι</span> «υπόλοιπο» του τζίρου. Μπορεί να ξεπερνά τον τζίρο σε κάποιες ημέρες
+                    (διαφορετική ημερομηνία/ζώνη, μοντέλα μέτρησης των πλατφορμών, πωλήσεις εκτός e-shop).
+                  </p>
+                </>
+              ) : (
+                'Χωρίς e-shop: εκτίμηση organic + καμπανιών vs έσοδα καμπανιών από πλατφόρμες. Σύνδεσε e-shop για τζίρο από παραγγελίες.'
+              )
             }
             icon={<TrendingUp size={18} className="text-[var(--nts-accent)]" />}
           />
@@ -714,7 +742,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                     <stop offset="8%" stopColor={REV_CHART_ESHOP} stopOpacity={0.22} />
                     <stop offset="100%" stopColor={REV_CHART_ESHOP} stopOpacity={0} />
                   </linearGradient>
-                  <linearGradient id="attributedGradient" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id="campaignsRevenueGradient" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="6%" stopColor={REV_CHART_CAMPAIGNS} stopOpacity={0.35} />
                     <stop offset="100%" stopColor={REV_CHART_CAMPAIGNS} stopOpacity={0} />
                   </linearGradient>
@@ -747,9 +775,9 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                     formatCurrencyCompact((value as number) || 0),
                     name === 'total'
                       ? ecomm.hasData
-                        ? 'E-shop revenue'
-                        : 'Organic + campaigns'
-                      : 'Campaigns Revenue',
+                        ? REV_PERF_LABEL_ESHOP
+                        : REV_PERF_LABEL_ESHOP_BLEND
+                      : REV_PERF_LABEL_CAMPAIGNS_PLATFORM,
                   ]}
                   labelStyle={{ color: '#24292f', fontWeight: 600, marginBottom: 4 }}
                 />
@@ -765,12 +793,12 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 />
                 <Area
                   type="monotone"
-                  dataKey="attributed"
+                  dataKey="campaignsPlatformRevenue"
                   stroke={REV_CHART_CAMPAIGNS}
                   strokeWidth={2.5}
                   fillOpacity={1}
-                  fill="url(#attributedGradient)"
-                  name="attributed"
+                  fill="url(#campaignsRevenueGradient)"
+                  name="campaignsPlatformRevenue"
                   isAnimationActive={false}
                 />
               </AreaChart>
@@ -792,7 +820,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   style={{ backgroundColor: REV_CHART_ESHOP }}
                 />
                 <span className="text-sm text-[var(--nts-medium-gray)]">
-                  {ecomm.hasData ? 'E-shop revenue' : 'Organic + campaigns'}
+                  {ecomm.hasData ? REV_PERF_LABEL_ESHOP : REV_PERF_LABEL_ESHOP_BLEND}
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -800,7 +828,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   className="h-3 w-3 shrink-0 rounded-full ring-2 ring-white shadow-sm"
                   style={{ backgroundColor: REV_CHART_CAMPAIGNS }}
                 />
-                <span className="text-sm text-[var(--nts-medium-gray)]">Campaigns revenue</span>
+                <span className="text-sm text-[var(--nts-medium-gray)]">{REV_PERF_LABEL_CAMPAIGNS_PLATFORM}</span>
               </div>
             </div>
           )}

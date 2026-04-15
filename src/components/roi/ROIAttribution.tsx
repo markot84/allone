@@ -580,14 +580,14 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
           }
           const adSpendRows: RoasAnalysisMetricRow[] = [
             {
-              k: 'Campaigns ROAS',
+              k: 'ROAS καμπανιών (πλατφόρμα)',
               v: campaignsRoas > 0 ? `${formatNumber(campaignsRoas, 2)}x` : '—',
               note: 'Έσοδα καμπανιών (conversion value από platforms) ÷ Ad Spend. Χρήσιμο για βελτιστοποίηση ανά καμπάνια.',
             },
             {
               k: 'Blended ROAS',
               v: blendedRoas > 0 ? `${formatNumber(blendedRoas, 2)}x` : '—',
-              note: 'Έσοδα organic + καμπανιών για την επιλεγμένη περίοδο (ίδια βάση με το chart) ÷ Ad Spend. Ευρύτερη εικόνα από τον Campaigns ROAS.',
+              note: 'Έσοδα organic + καμπανιών για την επιλεγμένη περίοδο (ίδια βάση με το chart) ÷ Ad Spend. Ευρύτερη εικόνα από τον ROAS καμπανιών (πλατφόρμα).',
             },
             ...(trueRoas != null && trueRoas > 0
               ? [
@@ -738,7 +738,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-3">
             <div className="flex items-center gap-2 min-w-0">
               <ShoppingBag size={18} className="text-[var(--nts-accent)] shrink-0" />
-              <h3 className="text-sm font-semibold text-[#1A1A1A]">e-shop vs Campaigns Revenue</h3>
+              <h3 className="text-sm font-semibold text-[#1A1A1A]">e-shop vs έσοδα καμπανιών (πλατφόρμα)</h3>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <div className="flex gap-0.5 rounded-lg bg-[#F5F5F5] p-0.5">
@@ -785,11 +785,11 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                 />
                 <MetricCard
                   icon={<Euro size={20} />}
-                  label="Campaigns Revenue"
+                  label="Έσοδα καμπανιών (πλατφόρμα)"
                   value={formatCurrencyCompact(metrics.totalRevenue)}
-                  subtitle="Μόνο conversion value καμπανιών (ίδιο πεδίο με τη σελίδα Campaigns)"
+                  subtitle="Conversion value όπως το αναφέρουν Google Ads / Meta (ίδια λογική με τη σελίδα Campaigns)"
                   color="var(--nts-charcoal)"
-                  tooltip="Άθροισμα conversion value από Google Ads / Meta κ.λπ. για την επιλεγμένη περίοδο — χωρίς organic import."
+                  tooltip="Άθροισμα conversion value από Google Ads / Meta για την επιλεγμένη περίοδο — χωρίς organic import."
                 />
                 <MetricCard
                   icon={<BarChart3 size={20} />}
@@ -912,7 +912,11 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                 }}
                 formatter={(value: any, name?: string) => [
                   formatCurrencyCompact((value as number) || 0),
-                  name === 'organic' ? 'Organic Revenue' : name === 'storeRevenue' ? 'e-shop Revenue' : 'Campaign Revenue',
+                  name === 'organic'
+                    ? 'Organic revenue'
+                    : name === 'storeRevenue'
+                      ? 'e-shop revenue'
+                      : 'Έσοδα καμπανιών (πλατφόρμα)',
                 ]}
                 labelFormatter={(label) =>
                   typeof label === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(label)
@@ -922,7 +926,9 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                 labelStyle={{ color: '#24292f', fontWeight: 600, marginBottom: 4 }}
               />
               <Legend
-                formatter={(value) => value === 'organic' ? 'Organic' : value === 'storeRevenue' ? 'e-shop Revenue' : 'Campaigns'}
+                formatter={(value) =>
+                  value === 'organic' ? 'Organic' : value === 'storeRevenue' ? 'e-shop revenue' : 'Καμπάνιες (πλατφόρμα)'
+                }
                 wrapperStyle={{ fontSize: 12 }}
               />
               <Area

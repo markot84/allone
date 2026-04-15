@@ -200,7 +200,7 @@ export function formatTrendDayLabel(ymd: string): string {
 }
 
 /**
- * Ημερήσια attributed conversion value ανά YYYY-MM-DD μέσα στο [fromDate, toDate].
+ * Ημερήσιο conversion value (έσοδα που αναφέρει η πλατφόρμα διαφημίσεων) ανά YYYY-MM-DD μέσα στο [fromDate, toDate].
  * Κανονικές σειρές: μία γραμμή ανά ημέρα. Meta legacy (ένα bucket ανά μήνα): ισοκατανομή στις ημέρες που τέμνουν την περίοδο.
  */
 export function getCampaignDailyAttributedValueInPeriod(
@@ -270,7 +270,7 @@ export function getCampaignDailyAttributedValueInPeriod(
 }
 
 /**
- * Ημερήσια attributed spend (`amount_spent`) ανά YYYY-MM-DD μέσα στο [fromDate, toDate].
+ * Ημερήσια δαπάνη διαφήμισης (`amount_spent`) ανά YYYY-MM-DD μέσα στο [fromDate, toDate].
  * Ίδια δομή κουβακιών με {@link getCampaignDailyAttributedValueInPeriod} για συνεπές ROAS ανά ημέρα.
  */
 export function getCampaignDailyAttributedSpendInPeriod(
@@ -340,7 +340,7 @@ export function getCampaignDailyAttributedSpendInPeriod(
 }
 
 /**
- * Ημερήσια attributed conversions ανά YYYY-MM-DD μέσα στο [fromDate, toDate].
+ * Ημερήσιες μετατροπές (conversions) ανά YYYY-MM-DD μέσα στο [fromDate, toDate].
  * Ίδια κουβάκια με {@link getCampaignDailyAttributedSpendInPeriod} (για AOV / τάση ανά ημέρα).
  */
 export function getCampaignDailyAttributedConversionsInPeriod(
@@ -588,7 +588,7 @@ export function eachCalendarMonthInclusive(fromYm: string, toYm: string): string
 }
 
 /**
- * Per-calendar-month attributed conversion value for trend charts.
+ * Conversion value ανά ημερολογιακό μήνα (για trend charts).
  * Prefers summing `dailyMetrics` by month; otherwise one bucket from campaign-level metrics.
  */
 export function getCampaignMonthlyAttributedValue(c: Campaign): Map<string, number> {

@@ -285,8 +285,8 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
       <section className="space-y-3">
         <h3 className="text-sm font-semibold text-[#111827]">Τζίρος e-shop (ανάλυση περιόδου)</h3>
         <p className="text-xs text-[#6B7280]">
-          Σύνολο από παραγγελίες (Magento κ.λπ.) · campaigns από Google Ads/Meta · organic από import ή GA4 · λοιπά =
-          σύνολο − campaigns − organic (ενδέχεται αρνητική τιμή όταν τα attribution επικαλύπτονται).
+          Σύνολο από παραγγελίες (Magento κ.λπ.) · campaigns από Google Ads/Meta · organic από import ή GA4 ·           λοιπά =
+          σύνολο − campaigns − organic (ενδέχεται αρνητική τιμή όταν τα ποσά από διαφορετικές πηγές επικαλύπτονται ή έχουν διαφορετικό ορισμό).
         </p>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Card padding="md" className="border-l-4 border-l-[var(--nts-accent)] bg-gradient-to-br from-orange-50/60 to-white">
@@ -310,7 +310,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
                 <Megaphone size={20} className="text-amber-700" />
               </div>
               <div className="min-w-0">
-                <p className="text-sm text-[#4A4A4A]">Campaigns revenue</p>
+                <p className="text-sm text-[#4A4A4A]">Έσοδα καμπανιών (πλατφόρμα)</p>
                 <p className="text-xl font-bold font-mono text-[#1A1A1A] tabular-nums">
                   {formatCurrencyCompact(eshopTotals.campaigns)}
                 </p>
@@ -348,7 +348,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
                 <div className="flex items-center gap-1">
                   <p className="text-sm text-[#4A4A4A]">Λοιπά / μη αντιστοιχισμένο</p>
                   <Tooltip
-                    content="e-shop σύνολο μείον campaigns μείον organic. Αρνητική τιμή = επικάλυψη attribution ή διαφορά ορισμών."
+                    content="e-shop σύνολο μείον έσοδα καμπανιών (πλατφόρμα) μείον organic. Αρνητική τιμή = επικάλυψη μετρήσεων ή διαφορά ορισμών μεταξύ πηγών."
                     size={12}
                   />
                 </div>

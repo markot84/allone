@@ -60,7 +60,8 @@ export function useAnalytics() {
       return {
         month: date.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }),
         total: ((r as any).total_revenue ?? 0) / 1000,
-        attributed: ((r as any).attributed_revenue ?? 0) / 1000,
+        /** Έσοδα καμπανιών (Firestore: `attributed_revenue` — legacy όνομα στήλης στο import). */
+        campaignsRevenue: ((r as any).attributed_revenue ?? 0) / 1000,
       };
     });
     if (import.meta.env.MODE === 'development') {
