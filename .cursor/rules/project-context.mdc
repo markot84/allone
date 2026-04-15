@@ -92,9 +92,14 @@ Sync: `connectorSync` (manual) or `scheduledSync` (daily cron). Each connector w
 
 ## Deploy
 ```bash
-npm run build          # Frontend build (tsc + vite)
-firebase deploy        # Full deploy: hosting + functions + firestore rules + storage rules
+npm run build                    # Frontend only (tsc + vite)
+npm run firebase:deploy:full     # Frontend build + functions build + `firebase deploy` (hosting, functions, rules)
+npm run deploy:full              # `firebase:deploy:full` → `git add -A` → commit αν υπάρχουν αλλαγές → `git push`
 ```
+
+Προαιρετικό μήνυμα commit: `DEPLOY_COMMIT_MSG="μήνυμα" npm run deploy:full`
+
+**Agent:** Όταν ο χρήστης ζητάει **«full deploy»** (ή ισοδύναμο), εκτέλεσε `npm run deploy:full` από το root του repo.
 
 ## Current Status (April 2026)
 

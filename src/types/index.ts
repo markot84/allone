@@ -14,6 +14,11 @@ export interface Brand {
     images?: string[];
     documents?: string[];
   };
+  /**
+   * Προαιρετικός τζίρος εκτός των online συνδέσεων του Performance+ (φυσικά καταστήματα, B2B, τιμολόγια ERP).
+   * Χειροκίνητη τιμή στο Firestore — όταν υπάρχει, εμφανίζεται στη σελίδα Οικονομικά.
+   */
+  enterpriseTurnoverEUR?: number;
 }
 
 export interface UserProfile {

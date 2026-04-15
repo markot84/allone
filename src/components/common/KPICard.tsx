@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { AreaChart, Area, ResponsiveContainer } from 'recharts';
@@ -21,7 +22,12 @@ interface KPICardProps {
   className?: string;
 }
 
+/** Matches --nts-accent; use literal hex in SVG so fill/stroke resolve reliably (var() in url(#id) breaks if id contains ')'). */
+const ACCENT_ORANGE = '#F97316';
+
 export function KPICard({ kpi, index, onClick, className }: KPICardProps) {
+  const sparkGradientId = `kpi-spark-${useId().replace(/:/g, '')}`;
+
   const isPlainLabel =
     kpi.changeLabel === 'active' ||
     kpi.changeLabel === 'ενεργά' ||
@@ -74,16 +80,16 @@ export function KPICard({ kpi, index, onClick, className }: KPICardProps) {
             <ResponsiveContainer width="100%" height={32}>
               <AreaChart data={kpi.sparklineData.map((v, i) => ({ v, i }))} margin={{ top: 2, right: 4, left: 4, bottom: 2 }}>
                 <defs>
-                  <linearGradient id={`spark-${kpi.label.replace(/\s/g, '')}`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--nts-accent, #E8590C)" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="var(--nts-accent, #E8590C)" stopOpacity={0} />
+                  <linearGradient id={sparkGradientId} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={ACCENT_ORANGE} stopOpacity={0.2} />
+                    <stop offset="95%" stopColor={ACCENT_ORANGE} stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <Area
                   type="monotone"
                   dataKey="v"
-                  stroke="var(--nts-accent, #E8590C)"
-                  fill={`url(#spark-${kpi.label.replace(/\s/g, '')})`}
+                  stroke={ACCENT_ORANGE}
+                  fill={`url(#${sparkGradientId})`}
                   strokeWidth={1.5}
                   dot={false}
                   isAnimationActive={false}

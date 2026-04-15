@@ -21,7 +21,17 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { Card, CardHeader, KPICard, Tooltip, AlertsBanner, PageHeader } from '../common';
-import { useSegments, useOrganic, useCampaigns, useActiveStrategy, useSuppliers, useProductSource, useBrand, useProductAggregates } from '../../hooks';
+import {
+  useSegments,
+  useOrganic,
+  useCampaigns,
+  useActiveStrategy,
+  useSuppliers,
+  useProductSource,
+  useBrand,
+  useProductAggregates,
+  usePeriodScopedCampaigns,
+} from '../../hooks';
 import { useDashPeriod } from '../../hooks/useDashPeriod';
 import { useGlobalDate, GLOBAL_PERIOD_OPTIONS } from '../../contexts/GlobalDateContext';
 import { DateRangePicker } from '../ui/DateRangePicker';
@@ -40,8 +50,6 @@ import {
   mergeOrganicByMonthWithGa4,
   mergeGa4OrganicDailyWithChannelFallback,
   sumDailyRevenueInPeriod,
-  bucketOverlapFraction,
-  metaUsesLegacyMonthBuckets,
 } from '../../utils/roiUtils';
 import { formatCurrencyCompact, formatNumber, formatPercent } from '../../utils/format';
 import type { Campaign } from '../../types';
@@ -54,6 +62,18 @@ import { eachDateInclusive } from '../../utils/marketingCostPeriod';
 
 /** Ημερήσια σημεία στο chart· πάνω από αυτό → μηνιαία σύνοψη (αναγνώσιμο άξονα). */
 const REVENUE_CHART_MAX_DAILY_POINTS = 90;
+
+/** Revenue Performance — e-shop: brand orange · campaigns: blue για ξεκάθαρη διάκριση των δύο καμπυλών. */
+const REV_CHART_ESHOP = '#F97316';
+const REV_CHART_CAMPAIGNS = '#2563EB';
+
+/** Chart series values are full EUR; axis shows K when ≥ €1.000 (tooltip uses formatCurrencyCompact on same basis). */
+function formatRevenueChartYAxisTick(value: number): string {
+  const v = Number(value);
+  if (!Number.isFinite(v)) return '';
+  if (Math.abs(v) >= 1000) return `€${formatNumber(v / 1000, 1)}K`;
+  return `€${formatNumber(v, 0)}`;
+}
 
 /** Το Recharts Area χρειάζεται ≥2 σημεία· αν υπάρχει 1 μήνας μόνο, διπλασιάζουμε για ορατή γραμμή. */
 function padSparklineForChart(values: number[]): number[] {
@@ -94,38 +114,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   const { period: dashPeriod, setPeriod: setDashPeriod, periodDates } = useDashPeriod();
   const { customFrom, customTo, setCustomRange } = useGlobalDate();
 
-  // Filter campaigns to the selected period using dailyMetrics for accurate period metrics.
-  const periodCampaigns = useMemo(() => {
-    const { fromDate, toDate } = periodDates;
-    return campaignsTyped.map(c => {
-      const dm = (c as any).dailyMetrics as Record<string, any> | undefined;
-      if (!dm || Object.keys(dm).length === 0) return c;
-
-      let impressions = 0, clicks = 0, conversions = 0, amount_spent = 0, conversion_value = 0;
-      const convActions: Record<string, { conversions: number; value: number }> = {};
-
-      const metaMonthBuckets = metaUsesLegacyMonthBuckets(c);
-      for (const [date, m] of Object.entries(dm)) {
-        const frac = bucketOverlapFraction(date, fromDate, toDate, { metaMonthBuckets });
-        if (frac <= 0) continue;
-        impressions += Math.round((m.impressions || 0) * frac);
-        clicks += Math.round((m.clicks || 0) * frac);
-        conversions += (m.conversions || 0) * frac;
-        amount_spent += (m.amount_spent || 0) * frac;
-        conversion_value += (m.conversion_value || 0) * frac;
-        if (m.conversionActions) {
-          for (const [label, vals] of Object.entries(m.conversionActions as Record<string, { conversions: number; value: number }>)) {
-            if (!convActions[label]) convActions[label] = { conversions: 0, value: 0 };
-            convActions[label].conversions += (vals.conversions || 0) * frac;
-            convActions[label].value += (vals.value || 0) * frac;
-          }
-        }
-      }
-      const ctr = impressions > 0 ? (clicks / impressions) * 100 : 0;
-      amount_spent = Math.round(amount_spent * 100) / 100;
-      return { ...c, impressions, clicks, conversions, amount_spent, conversion_value, ctr, conversionActions: convActions };
-    });
-  }, [campaignsTyped, periodDates]);
+  const periodCampaigns = usePeriodScopedCampaigns(campaignsTyped, periodDates);
 
   const campaignMetrics = useMemo(() => calculateCampaignMetrics(periodCampaigns), [periodCampaigns]);
 
@@ -191,40 +180,64 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     [organicRevenueInPeriod, campaignMetrics.totalRevenue]
   );
 
-  // Revenue chart: τάση στο επιλεγμένο εύρος — ημερήσια σειρά (ώστε ο τρέχων μήνας να μην είναι 1 σημείο), αλλιώς μηνιαία αν το εύρος είναι πολύ μεγάλο
+  /**
+   * Revenue chart — «σύνολο» γραμμή:
+   * - Με συνδεδεμένο e-shop (Magento/Shopify/Woo/OpenCart): **πραγματικός ημερήσιος τζίρος** από `ecommerce_summary.revenueByDay`
+   *   (άθροιση παραγγελιών ανά ημέρα — ίδια πηγή με E-commerce).
+   * - Χωρίς e-shop: blended organic (import + GA4) + έσοδα καμπανιών (όπως πριν).
+   * Η γραμμή campaigns παραμένει conversion value από Google Ads / Meta κ.λπ. (`dailyMetrics`).
+   */
   const revenueChartData = useMemo(() => {
     const { fromDate, toDate } = periodDates;
     const dayCount = eachDateInclusive(fromDate, toDate).length;
     if (dayCount === 0) return [];
 
+    const useEshopTotals = ecomm.hasData;
+
     if (dayCount <= REVENUE_CHART_MAX_DAILY_POINTS) {
       const dailyRows = buildRoiTrendSeriesDaily(
         mergedOrganicByMonth,
         periodCampaigns as Campaign[],
-        undefined,
+        useEshopTotals ? ecommRevenueByDayRecord : undefined,
         fromDate,
         toDate,
-        false,
+        useEshopTotals,
         ga4OrganicEffective
       );
       return dailyRows.map((r) => ({
         month: r.label,
-        total: (r.organic + r.campaigns) / 1000,
-        attributed: r.campaigns / 1000,
+        total: useEshopTotals ? r.storeRevenue : r.organic + r.campaigns,
+        attributed: r.campaigns,
       }));
     }
 
     const fromYm = fromDate.slice(0, 7);
     const toYm = toDate.slice(0, 7);
-    const rows = buildRoiTrendSeries(mergedOrganicByMonth, periodCampaigns as Campaign[], [], fromYm, toYm, false, {
-      periodClip: { fromDate, toDate },
-    });
+    const rows = buildRoiTrendSeries(
+      mergedOrganicByMonth,
+      periodCampaigns as Campaign[],
+      useEshopTotals ? ecomm.monthlyRevenue : [],
+      fromYm,
+      toYm,
+      useEshopTotals,
+      {
+        periodClip: { fromDate, toDate },
+      }
+    );
     return rows.map((r) => ({
       month: r.month,
-      total: (r.organic + r.campaigns) / 1000,
-      attributed: r.campaigns / 1000,
+      total: useEshopTotals ? r.storeRevenue : r.organic + r.campaigns,
+      attributed: r.campaigns,
     }));
-  }, [mergedOrganicByMonth, periodCampaigns, periodDates, ga4OrganicEffective]);
+  }, [
+    mergedOrganicByMonth,
+    periodCampaigns,
+    periodDates,
+    ga4OrganicEffective,
+    ecomm.hasData,
+    ecomm.monthlyRevenue,
+    ecommRevenueByDayRecord,
+  ]);
 
   // Debug logging
   useEffect(() => {
@@ -672,8 +685,12 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         >
           <CardHeader
             title="Revenue Performance"
-            subtitle="Σύνολο vs Campaigns Revenue"
-            icon={<TrendingUp size={18} className="text-[var(--nts-medium-gray)]" />}
+            subtitle={
+              ecomm.hasData
+                ? 'E-shop revenue (παραγγελίες · Magento/άλλα) vs έσοδα καμπανιών (Google Ads / Meta).'
+                : 'Σύνολο organic + καμπανιών (import/GA4) vs έσοδα καμπανιών — σύνδεσε e-shop για πραγματικό τζίρο.'
+            }
+            icon={<TrendingUp size={18} className="text-[var(--nts-accent)]" />}
           />
           {revenueChartData.length > 0 ? (
             <div 
@@ -694,15 +711,15 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               >
                 <defs>
                   <linearGradient id="totalGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#9CA3AF" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#9CA3AF" stopOpacity={0}/>
+                    <stop offset="8%" stopColor={REV_CHART_ESHOP} stopOpacity={0.22} />
+                    <stop offset="100%" stopColor={REV_CHART_ESHOP} stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="attributedGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#78716C" stopOpacity={0.4}/>
-                    <stop offset="95%" stopColor="#78716C" stopOpacity={0}/>
+                    <stop offset="6%" stopColor={REV_CHART_CAMPAIGNS} stopOpacity={0.35} />
+                    <stop offset="100%" stopColor={REV_CHART_CAMPAIGNS} stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F0" vertical={false} />
                 <XAxis
                   dataKey="month"
                   tick={{ fill: '#57606a', fontSize: 12 }}
@@ -710,40 +727,47 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   tickLine={{ stroke: '#d0d7de' }}
                 />
                 <YAxis
+                  width={52}
                   tick={{ fill: '#57606a', fontSize: 12 }}
                   axisLine={{ stroke: '#d0d7de' }}
                   tickLine={{ stroke: '#d0d7de' }}
-                  tickFormatter={(value) => `€${formatNumber(value)}K`}
+                  tickFormatter={formatRevenueChartYAxisTick}
+                  tickCount={6}
                 />
                 <RechartsTooltip
                   contentStyle={{
                     backgroundColor: '#fff',
-                    border: '1px solid #d0d7de',
-                    borderRadius: '6px',
+                    border: '1px solid #E8EAED',
+                    borderRadius: '8px',
                     fontSize: '12px',
-                    padding: '8px 12px'
+                    padding: '10px 14px',
+                    boxShadow: '0 8px 24px rgba(15, 23, 42, 0.08)',
                   }}
                   formatter={(value: any, name?: string) => [
                     formatCurrencyCompact((value as number) || 0),
-                    name === 'total' ? 'Total Revenue' : 'Campaigns Revenue'
+                    name === 'total'
+                      ? ecomm.hasData
+                        ? 'E-shop revenue'
+                        : 'Organic + campaigns'
+                      : 'Campaigns Revenue',
                   ]}
                   labelStyle={{ color: '#24292f', fontWeight: 600, marginBottom: 4 }}
                 />
                 <Area
-                  type="linear"
+                  type="monotone"
                   dataKey="total"
-                  stroke="#9CA3AF"
-                  strokeWidth={2}
+                  stroke={REV_CHART_ESHOP}
+                  strokeWidth={2.5}
                   fillOpacity={1}
                   fill="url(#totalGradient)"
                   name="total"
                   isAnimationActive={false}
                 />
                 <Area
-                  type="linear"
+                  type="monotone"
                   dataKey="attributed"
-                  stroke="#78716C"
-                  strokeWidth={2}
+                  stroke={REV_CHART_CAMPAIGNS}
+                  strokeWidth={2.5}
                   fillOpacity={1}
                   fill="url(#attributedGradient)"
                   name="attributed"
@@ -761,14 +785,22 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             </div>
           )}
           {revenueChartData.length > 0 && (
-            <div className="flex items-center gap-6 mt-4 pt-4 border-t border-[var(--nts-border-gray)]">
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mt-4 pt-4 border-t border-[var(--nts-border-gray)]">
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-[#9CA3AF]" />
-                <span className="text-sm text-[var(--nts-medium-gray)]">Total Revenue</span>
+                <div
+                  className="h-3 w-3 shrink-0 rounded-full ring-2 ring-white shadow-sm"
+                  style={{ backgroundColor: REV_CHART_ESHOP }}
+                />
+                <span className="text-sm text-[var(--nts-medium-gray)]">
+                  {ecomm.hasData ? 'E-shop revenue' : 'Organic + campaigns'}
+                </span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-[var(--nts-orange)]" />
-                <span className="text-sm text-[var(--nts-medium-gray)]">Campaigns Revenue</span>
+                <div
+                  className="h-3 w-3 shrink-0 rounded-full ring-2 ring-white shadow-sm"
+                  style={{ backgroundColor: REV_CHART_CAMPAIGNS }}
+                />
+                <span className="text-sm text-[var(--nts-medium-gray)]">Campaigns revenue</span>
               </div>
             </div>
           )}

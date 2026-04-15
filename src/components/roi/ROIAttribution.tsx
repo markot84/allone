@@ -50,6 +50,69 @@ function formatPeriodDate(ymd: string): string {
   return `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}`;
 }
 
+type RoasAnalysisMetricRow = { k: string; v: ReactNode; note: ReactNode };
+
+function RoasAnalysisMetricCard({ row }: { row: RoasAnalysisMetricRow }) {
+  return (
+    <div className="flex flex-col rounded-xl border border-[#ECECEE] bg-white/95 p-3 shadow-sm ring-1 ring-black/[0.02] sm:p-3.5">
+      <p className="text-[11px] font-semibold leading-snug text-[#57534E]">{row.k}</p>
+      <div className="mt-1 min-h-[1.75rem] font-mono text-xl font-bold tabular-nums text-[var(--nts-charcoal)] sm:text-2xl">
+        {row.v}
+      </div>
+      <div className="mt-2 border-t border-[#F3F4F6] pt-2 text-[11px] leading-snug text-[#6B7280] sm:text-[12px]">{row.note}</div>
+    </div>
+  );
+}
+
+type RoasGroupVariant = 'ad' | 'cost' | 'full';
+
+const ROAS_GROUP_SHELL: Record<
+  RoasGroupVariant,
+  { wrap: string; bar: string; titleClass: string }
+> = {
+  ad: {
+    wrap: 'border-orange-200/90 bg-gradient-to-br from-orange-50/95 via-white to-white',
+    bar: 'bg-[var(--nts-accent)]',
+    titleClass: 'text-orange-900/90',
+  },
+  cost: {
+    wrap: 'border-slate-200/90 bg-gradient-to-br from-slate-50/90 via-white to-white',
+    bar: 'bg-slate-500',
+    titleClass: 'text-slate-800',
+  },
+  full: {
+    wrap: 'border-amber-200/90 bg-gradient-to-br from-amber-50/85 via-white to-white',
+    bar: 'bg-amber-600',
+    titleClass: 'text-amber-950/90',
+  },
+};
+
+function RoasAnalysisGroupSection({
+  variant,
+  title,
+  description,
+  children,
+}: {
+  variant: RoasGroupVariant;
+  title: string;
+  description: string;
+  children: ReactNode;
+}) {
+  const s = ROAS_GROUP_SHELL[variant];
+  return (
+    <section className={`rounded-2xl border p-4 shadow-sm sm:p-5 ${s.wrap}`}>
+      <div className="mb-4 flex gap-3">
+        <div className={`w-1 shrink-0 self-stretch rounded-full ${s.bar}`} aria-hidden />
+        <div className="min-w-0">
+          <h3 className={`text-[11px] font-bold uppercase tracking-wide ${s.titleClass}`}>{title}</h3>
+          <p className="mt-1 text-[11px] leading-relaxed text-[#6B7280] sm:text-[12px]">{description}</p>
+        </div>
+      </div>
+      {children}
+    </section>
+  );
+}
+
 const DEMO_CAMPAIGNS: Omit<Campaign, 'id'>[] = [
   { name: 'Google Shopping — Ρούχα Εργασίας', channel: 'Google Ads', period: 'Jan 2026', start_date: '2026-01-01', end_date: '2026-01-31', status: 'completed', amount_spent: 1200, impressions: 84000, clicks: 3360, conversions: 142, conversion_value: 8520, roas: 7.1, ctr: 4.0 },
   { name: 'Google Shopping — Παπούτσια Ασφαλείας', channel: 'Google Ads', period: 'Jan 2026', start_date: '2026-01-01', end_date: '2026-01-31', status: 'completed', amount_spent: 980, impressions: 67000, clicks: 2680, conversions: 98, conversion_value: 6370, roas: 6.5, ctr: 4.0 },
@@ -515,7 +578,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
               );
             }
           }
-          const rows: { k: string; v: ReactNode; note: ReactNode }[] = [
+          const adSpendRows: RoasAnalysisMetricRow[] = [
             {
               k: 'Campaigns ROAS',
               v: campaignsRoas > 0 ? `${formatNumber(campaignsRoas, 2)}x` : '—',
@@ -532,7 +595,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                     k: 'True ROAS',
                     v: `${formatNumber(trueRoas, 2)}x`,
                     note: 'Άθροισμα ημερήσιου e-shop revenue στην επιλεγμένη περίοδο ÷ Ad Spend (όχι το σύνολο 90ημ. της σύνοψης).',
-                  } as const,
+                  } satisfies RoasAnalysisMetricRow,
                 ]
               : []),
             {
@@ -540,12 +603,15 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
               v: roiPct != null && roiPct !== 0 ? `${roiPct > 0 ? '+' : ''}${formatNumber(roiPct, 0)}%` : '—',
               note: '(Έσοδα καμπανιών − Ad Spend) ÷ Ad Spend. Δεν είναι ROAS — μετρά το περιθώριο κέρδους από τις διαφημίσεις.',
             },
+          ];
+
+          const costRows: RoasAnalysisMetricRow[] = [
             {
               k: 'Επιπλέον κόστη (εκτός ad spend)',
               v:
                 marketingOverhead.total > 0 ||
                 (activeStrategy?.marketingCostLines && activeStrategy.marketingCostLines.length > 0) ? (
-                  <div className="flex flex-col items-end gap-1">
+                  <div className="flex flex-col items-start gap-1">
                     <span>
                       {marketingOverhead.total > 0
                         ? formatCurrencyCompact(marketingOverhead.total)
@@ -553,7 +619,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                       <span className="text-[10px] font-normal text-[#6B7280]">στην περίοδο</span>
                     </span>
                     {monthlyRateHints.length > 0 && (
-                      <span className="max-w-[240px] text-right text-[10px] font-normal font-sans leading-snug text-[#059669]">
+                      <span className="max-w-full text-[10px] font-normal font-sans leading-snug text-[#059669]">
                         {monthlyRateHints.join(' · ')}
                       </span>
                     )}
@@ -575,6 +641,9 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
               v: metrics.totalSpend > 0 || marketingOverhead.total > 0 ? formatCurrencyCompact(totalMarketingCost) : '—',
               note: 'Ad Spend + επιπλέον κόστη. Βάση για «πλήρες» ROAS/ROI παρακάτω.',
             },
+          ];
+
+          const fullCostRows: RoasAnalysisMetricRow[] = [
             {
               k: 'Blended ROAS (πλήρες κόστος)',
               v: fullBlendedRoas > 0 ? `${formatNumber(fullBlendedRoas, 2)}x` : '—',
@@ -586,7 +655,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                     k: 'True ROAS (πλήρες κόστος)',
                     v: `${formatNumber(fullTrueRoas, 2)}x`,
                     note: 'Άθροισμα e-shop revenue στην περίοδο ÷ σύνολο κόστους marketing.',
-                  } as const,
+                  } satisfies RoasAnalysisMetricRow,
                 ]
               : []),
             {
@@ -598,27 +667,45 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
               note: '(Έσοδα καμπανιών − σύνολο κόστους marketing) ÷ σύνολο κόστους marketing. Συμπληρώνει το ROI % έναντι μόνο του ad spend.',
             },
           ];
+
           return (
-            <div className="mt-4 space-y-3">
-              <div className="overflow-x-auto rounded-lg border border-[#E5E7EB]">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-[#F9FAFB] text-left text-[11px] uppercase tracking-wide text-[#6B7280]">
-                      <th className="px-3 py-2 font-semibold">Μέτρηση</th>
-                      <th className="px-3 py-2 font-semibold text-right whitespace-nowrap">Τιμή</th>
-                      <th className="px-3 py-2 font-semibold min-w-[200px]">Ερμηνεία</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#F3F4F6]">
-                    {rows.map((row) => (
-                      <tr key={row.k} className="hover:bg-[#FAFAFA]">
-                        <td className="px-3 py-2.5 font-medium text-[var(--nts-charcoal)]">{row.k}</td>
-                        <td className="px-3 py-2.5 text-right font-mono font-semibold text-[var(--nts-charcoal)]">{row.v}</td>
-                        <td className="px-3 py-2.5 text-[#6B7280] text-[12px] leading-snug">{row.note}</td>
-                      </tr>
+            <div className="mt-4 space-y-4">
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+                <RoasAnalysisGroupSection
+                  variant="ad"
+                  title="Με βάση το ad spend"
+                  description="ROAS και ROI όταν στον παρονομαστή είναι μόνο η δαπάνη διαφημίσεων (όχι agency κ.λπ.)."
+                >
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {adSpendRows.map((row) => (
+                      <RoasAnalysisMetricCard key={row.k} row={row} />
                     ))}
-                  </tbody>
-                </table>
+                  </div>
+                </RoasAnalysisGroupSection>
+
+                <RoasAnalysisGroupSection
+                  variant="cost"
+                  title="Κόστη εκτός media"
+                  description="Τι προστίθεται στο ad spend για να σχηματίσει το πλήρες κόστος marketing."
+                >
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {costRows.map((row) => (
+                      <RoasAnalysisMetricCard key={row.k} row={row} />
+                    ))}
+                  </div>
+                </RoasAnalysisGroupSection>
+
+                <RoasAnalysisGroupSection
+                  variant="full"
+                  title="Πλήρες κόστος marketing"
+                  description="Απόδοση όταν στο κόστος συμπεριλαμβάνονται και τα επιπλέον έξοδα (ίδια έσοδα, ευρύτερος παρονομαστής)."
+                >
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {fullCostRows.map((row) => (
+                      <RoasAnalysisMetricCard key={row.k} row={row} />
+                    ))}
+                  </div>
+                </RoasAnalysisGroupSection>
               </div>
               {profit !== 0 && metrics.totalSpend > 0 && (
                 <p className="text-[12px] text-[var(--nts-medium-gray)] flex flex-wrap items-center gap-1.5">

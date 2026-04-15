@@ -14,6 +14,7 @@
     "firebase:deploy": "npm run build && firebase deploy --only hosting",
     "firebase:deploy:functions": "cd functions && npm run build && cd .. && firebase deploy --only functions",
     "firebase:deploy:full": "npm run build && cd functions && npm run build && cd .. && firebase deploy",
+    "deploy:full": "node scripts/deploy-full.mjs",
     "firebase:serve": "npm run build && firebase serve",
     "migrate:brandid": "node scripts/migrate-add-brandid.mjs",
     "fix:user-brand": "node scripts/fix-user-brand.mjs"

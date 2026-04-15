@@ -6,6 +6,7 @@ export { useAnalytics } from './useAnalytics';
 export { useOrganic } from './useOrganic';
 export { useContent } from './useContent';
 export { useCampaigns } from './useCampaigns';
+export { usePeriodScopedCampaigns } from './usePeriodScopedCampaigns';
 export { useBudgetSuggestions } from './useBudgetSuggestions';
 export { useActiveStrategy } from './useActiveStrategy';
 export { useAIContentSuggestions } from './useAIContentSuggestions';

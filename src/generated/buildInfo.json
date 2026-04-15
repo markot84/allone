@@ -1,10 +1,14 @@
 {
-  "version": "0.420.0",
-  "previousVersion": "0.419.0",
-  "commitHash": "9fb6adf",
+  "version": "0.428.0",
+  "previousVersion": "0.427.0",
+  "commitHash": "82acf3b",
   "branch": "main",
-  "buildDate": "2026-04-15T02:53:34.766Z",
+  "buildDate": "2026-04-15T04:14:23.434Z",
   "commits": [
+    {
+      "hash": "82acf3b",
+      "message": "UI: dashboard & analytics KPIs, campaigns ROI chart, nav scroll-to-top"
+    },
     {
       "hash": "9fb6adf",
       "message": "Align revenue metrics with selected period (ROI, dashboard, briefing)"
@@ -60,13 +64,10 @@
     {
       "hash": "9dc85cd",
       "message": "feat: stabilize connector sync, nightly health, and UI responsiveness"
-    },
-    {
-      "hash": "80998cd",
-      "message": "chore: add project context rule for agent continuity"
     }
   ],
   "changes": [
+    "UI: dashboard & analytics KPIs, campaigns ROI chart, nav scroll-to-top",
     "Align revenue metrics with selected period (ROI, dashboard, briefing)",
     "[Νέο χαρακτηριστικό] Marketing overhead, daily trend, e-shop tabs, DateRangePicker portal",
     "[Νέο χαρακτηριστικό] AI Insights full page, campaigns LTV chart, UX polish",
@@ -75,7 +76,6 @@
     "GA4: channel revenue, organic fallback; UI and data updates",
     "[Συντήρηση] Sync buildInfo after deploy",
     "Competitive Intelligence: single-line table headers (Δ τιμής, Διαφ. τιμής), nowrap; merchant seller labels and related updates",
-    "Dashboard: απλοποίηση KPI, ROI ROAS block, διόρθωση τάσης· AI briefing φιλικότερο prompt· tooltip",
-    "[Νέο χαρακτηριστικό] Shared page headers, campaigns copy (EN tech terms), connector and UI updates"
+    "Dashboard: απλοποίηση KPI, ROI ROAS block, διόρθωση τάσης· AI briefing φιλικότερο prompt· tooltip"
   ]
 }

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Plus, Trash2, PiggyBank } from 'lucide-react';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import { Plus, Trash2, PiggyBank, Check } from 'lucide-react';
 import type { MarketingCostLine } from '../../types';
 
 function newId(): string {
@@ -34,6 +34,18 @@ function normalizeLines(raw: MarketingCostLine[] | undefined): MarketingCostLine
     });
 }
 
+function serializeLinesForCompare(rows: MarketingCostLine[]): string {
+  return JSON.stringify(normalizeLines(rows));
+}
+
+function isLineSyncedWithBaseline(line: MarketingCostLine, baseline: MarketingCostLine[]): boolean {
+  const b = baseline.find((x) => x.id === line.id);
+  if (!b) return false;
+  const aNorm = normalizeLines([line])[0];
+  const bNorm = normalizeLines([b])[0];
+  return JSON.stringify(aNorm) === JSON.stringify(bNorm);
+}
+
 export interface MarketingCostLinesEditorProps {
   initialLines: MarketingCostLine[] | undefined;
   monthlyBudget: number | null;
@@ -49,7 +61,37 @@ export function MarketingCostLinesEditor({
   disabled,
   isSaving,
 }: MarketingCostLinesEditorProps) {
+  const initialNorm = useMemo(() => normalizeLines(initialLines), [initialLines]);
+  const initialSerialized = useMemo(() => serializeLinesForCompare(initialNorm), [initialNorm]);
+
+  /** Χρήση normalizeLines(initialLines) στο initializer — όχι closure από useMemo (ασφαλές async load). */
   const [lines, setLines] = useState<MarketingCostLine[]>(() => normalizeLines(initialLines));
+  /** Τελευταία αποθηκευμένη κατάσταση (server ή επιτυχές Save) — για dirty check & πράσινο ανά γραμμή. */
+  const [baselineLines, setBaselineLines] = useState<MarketingCostLine[]>(() => normalizeLines(initialLines));
+
+  const parentSerializedRef = useRef<string | null>(null);
+  useEffect(() => {
+    const incoming = normalizeLines(initialLines);
+    const snap = serializeLinesForCompare(incoming);
+    if (parentSerializedRef.current === null) {
+      parentSerializedRef.current = snap;
+      if (incoming.length > 0) {
+        setLines(incoming);
+        setBaselineLines(incoming);
+      }
+      return;
+    }
+    if (snap !== parentSerializedRef.current) {
+      parentSerializedRef.current = snap;
+      setLines(incoming);
+      setBaselineLines(incoming);
+    }
+  }, [initialLines, initialSerialized]);
+
+  const isDirty = useMemo(
+    () => serializeLinesForCompare(lines) !== serializeLinesForCompare(baselineLines),
+    [lines, baselineLines]
+  );
 
   const budgetHint = monthlyBudget != null && monthlyBudget > 0;
 
@@ -89,6 +131,10 @@ export function MarketingCostLinesEditor({
       return { ...l, label, amountEUR: Math.max(0, l.amountEUR) };
     });
     await onSave(trimmed);
+    const norm = normalizeLines(trimmed);
+    setLines(norm);
+    setBaselineLines(norm);
+    parentSerializedRef.current = serializeLinesForCompare(norm);
   };
 
   return (
@@ -111,11 +157,25 @@ export function MarketingCostLinesEditor({
       )}
 
       <div className="space-y-3">
-        {lines.map((line) => (
+        {lines.map((line) => {
+          const synced = isLineSyncedWithBaseline(line, baselineLines);
+          return (
           <div
             key={line.id}
-            className="flex flex-col gap-2 rounded-lg border border-[#E5E7EB] bg-white p-3 sm:flex-row sm:flex-wrap sm:items-end"
+            className={`relative flex flex-col gap-2 rounded-lg border p-3 transition-colors sm:flex-row sm:flex-wrap sm:items-end ${
+              synced
+                ? 'border-emerald-300 bg-[#ecfdf5] shadow-[inset_3px_0_0_0_#10b981]'
+                : 'border-[#E5E7EB] bg-white'
+            }`}
           >
+            {synced && (
+              <span
+                className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200/80"
+                title="Αποθηκευμένο"
+              >
+                <Check size={14} strokeWidth={2.5} aria-hidden />
+              </span>
+            )}
             <label className="flex-1 min-w-[140px]">
               <span className="text-[10px] font-medium uppercase tracking-wide text-[#9CA3AF]">Περιγραφή</span>
               <input
@@ -213,7 +273,8 @@ export function MarketingCostLinesEditor({
               <Trash2 size={16} />
             </button>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {!budgetHint && lines.some((l) => l.kind === 'percent_of_budget') && (
@@ -235,11 +296,21 @@ export function MarketingCostLinesEditor({
         <button
           type="button"
           onClick={() => void handleSave()}
-          disabled={disabled || isSaving}
-          className="inline-flex items-center rounded-lg bg-[#111827] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#1f2937] disabled:opacity-50"
+          disabled={disabled || isSaving || !isDirty}
+          className={`inline-flex items-center rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+            disabled || isSaving
+              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              : !isDirty
+                ? 'bg-gray-200 text-gray-500 cursor-not-allowed ring-1 ring-gray-300/80'
+                : 'bg-[#111827] text-white hover:bg-[#1f2937] shadow-sm'
+          }`}
+          title={!isDirty && !disabled && !isSaving ? 'Δεν υπάρχουν αλλαγές προς αποθήκευση' : undefined}
         >
           {isSaving ? 'Αποθήκευση...' : 'Αποθήκευση'}
         </button>
+        {!isDirty && !disabled && !isSaving && (
+          <span className="text-[11px] text-[#9CA3AF]">Καμία αλλαγή προς αποθήκευση</span>
+        )}
       </div>
     </div>
   );
