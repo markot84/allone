@@ -25,10 +25,15 @@ const smtpPortParam = defineString('SMTP_PORT', { default: '465' });
  * Πάντα explicit SMTP host (όχι magic Gmail) — για Gmail βάλτε SMTP_HOST=smtp.gmail.com, π.χ. port 587.
  * Απαιτεί secrets: SMTP_EMAIL, SMTP_PASSWORD (πλήρες email + κωδικός mailbox).
  */
-export function createTransporter(): nodemailer.Transporter | null {
+export type SmtpCredentialInput = { email: string; password: string };
+
+/**
+ * @param credentials — Προαιρετικά από `defineSecret().value()` (Gen2)· αλλιώς `process.env` (τοπικά / CI).
+ */
+export function createTransporter(credentials?: Partial<SmtpCredentialInput>): nodemailer.Transporter | null {
   // Trim: secrets που κόβουν με newline/space στο τέλος → 535 παρά «σωστό» password στο webmail
-  const user = (process.env.SMTP_EMAIL || '').trim();
-  const pass = (process.env.SMTP_PASSWORD || '').trim();
+  const user = (credentials?.email ?? process.env.SMTP_EMAIL ?? '').trim();
+  const pass = (credentials?.password ?? process.env.SMTP_PASSWORD ?? '').trim();
   if (!user || !pass) {
     logger.warn('[SMTP] Credentials not configured (SMTP_EMAIL / SMTP_PASSWORD)');
     return null;

@@ -1409,10 +1409,24 @@ export const sendEmailNotification = onRequest(
       type: type || '',
     });
 
+    const transporter = createTransporter({
+      email: SMTP_EMAIL_SECRET.value(),
+      password: SMTP_PASSWORD_SECRET.value(),
+    });
+    if (!transporter) {
+      logger.warn('[sendEmailNotification] SMTP secrets empty or invalid');
+      res.status(503).json({ ok: false, reason: 'smtp_not_configured' });
+      return;
+    }
+
     const results: string[] = [];
     for (const uid of userIds) {
       try {
-        await sendNotificationEmail(uid, { title, body: body || '', type: type || '', brandId: brandId || '', entityType, entityId });
+        await sendNotificationEmail(
+          uid,
+          { title, body: body || '', type: type || '', brandId: brandId || '', entityType, entityId },
+          transporter
+        );
         results.push(`${uid}: sent`);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -1454,7 +1468,10 @@ export const sendInviteEmail = onRequest(
       return;
     }
 
-    const transporter = createTransporter();
+    const transporter = createTransporter({
+      email: SMTP_EMAIL_SECRET.value(),
+      password: SMTP_PASSWORD_SECRET.value(),
+    });
     if (!transporter) {
       logger.warn('SMTP not configured — skipping invite email');
       res.status(200).json({ ok: false, reason: 'smtp_not_configured' });
@@ -1620,7 +1637,10 @@ export const scheduledDigest = onSchedule(
     await markNightlyJob('scheduledDigest', 'running', { message: 'Daily digest started' });
     try {
       logger.info('[scheduledDigest] Starting daily email digest');
-      const { brands, emails } = await sendDigestForAllBrands();
+      const { brands, emails } = await sendDigestForAllBrands({
+        email: SMTP_EMAIL_SECRET.value(),
+        password: SMTP_PASSWORD_SECRET.value(),
+      });
       const durationMs = Date.now() - startedAt;
       await markNightlyJob('scheduledDigest', 'success', {
         durationMs,
@@ -1662,7 +1682,13 @@ export const submitInterestLead = onRequest(
           : {};
       const forwardedFor = req.headers['x-forwarded-for'];
       const ff = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor;
-      const result = await persistInterestLead(db, body, { forwardedFor: ff });
+      const result = await persistInterestLead(db, body, {
+        forwardedFor: ff,
+        smtp: {
+          email: SMTP_EMAIL_SECRET.value(),
+          password: SMTP_PASSWORD_SECRET.value(),
+        },
+      });
       if (!result.ok) {
         res.status(400).json({ error: result.error || 'Invalid request' });
         return;

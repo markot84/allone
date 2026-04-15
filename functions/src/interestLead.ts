@@ -1,6 +1,6 @@
 import { FieldValue, type Firestore } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
-import { createTransporter, SENDER } from './smtpConfig';
+import { createTransporter, SENDER, type SmtpCredentialInput } from './smtpConfig';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -11,14 +11,17 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-async function sendInterestLeadEmails(data: {
-  fullName: string;
-  email: string;
-  phone: string | null;
-  company: string | null;
-  message: string | null;
-}): Promise<void> {
-  const transporter = createTransporter();
+async function sendInterestLeadEmails(
+  data: {
+    fullName: string;
+    email: string;
+    phone: string | null;
+    company: string | null;
+    message: string | null;
+  },
+  smtp?: SmtpCredentialInput
+): Promise<void> {
+  const transporter = createTransporter(smtp);
   if (!transporter) {
     logger.warn('[interestLead] SMTP not configured — lead saved in Firestore only');
     return;
@@ -83,7 +86,7 @@ function clamp(s: unknown, max: number): string {
 export async function persistInterestLead(
   db: Firestore,
   body: Record<string, unknown>,
-  meta: { forwardedFor?: string }
+  meta: { forwardedFor?: string; smtp?: SmtpCredentialInput }
 ): Promise<{ ok: boolean; silent?: boolean; error?: string }> {
   const hp = typeof body.hp === 'string' ? body.hp : '';
   if (hp.length > 0) {
@@ -122,13 +125,16 @@ export async function persistInterestLead(
 
   logger.info(`[interestLead] Saved lead from ${email}`);
 
-  await sendInterestLeadEmails({
-    fullName,
-    email,
-    phone: phone || null,
-    company: company || null,
-    message: message || null,
-  });
+  await sendInterestLeadEmails(
+    {
+      fullName,
+      email,
+      phone: phone || null,
+      company: company || null,
+      message: message || null,
+    },
+    meta.smtp
+  );
 
   return { ok: true };
 }

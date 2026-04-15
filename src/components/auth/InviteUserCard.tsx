@@ -2,13 +2,11 @@ import { useState } from 'react';
 import { UserPlus, Mail, CheckCircle2 } from 'lucide-react';
 import { Button } from '../common';
 import { createInvite } from '../../services/invites';
-import { APP_URL, auth } from '../../config/firebase';
+import { APP_URL, auth, FUNCTIONS_BASE_URL } from '../../config/firebase';
 import { useAuth } from '../../hooks';
 import { useBrand } from '../../hooks';
 import type { BrandDepartment } from '../../types';
 import { DEPARTMENT_LABELS } from '../../types';
-
-const INVITE_EMAIL_URL = 'https://europe-west1-performance-plus-4a5b2.cloudfunctions.net/sendInviteEmail';
 
 interface InviteUserCardProps {
   onInviteCreated?: (link: string) => void;
@@ -24,11 +22,13 @@ export function InviteUserCard({ onInviteCreated }: InviteUserCardProps) {
   const [error, setError] = useState('');
   const [inviteLink, setInviteLink] = useState('');
   const [emailSent, setEmailSent] = useState(false);
+  const [emailSendNote, setEmailSendNote] = useState<string | null>(null);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setEmailSent(false);
+    setEmailSendNote(null);
     if (!currentBrand || !user?.uid) {
       setError('Επιλέξτε brand');
       return;
@@ -45,7 +45,8 @@ export function InviteUserCard({ onInviteCreated }: InviteUserCardProps) {
           const idToken = await auth.currentUser?.getIdToken();
           if (idToken) {
             const deptLabel = DEPARTMENT_LABELS[department] || '';
-            await fetch(INVITE_EMAIL_URL, {
+            const inviteUrl = `${FUNCTIONS_BASE_URL.replace(/\/$/, '')}/sendInviteEmail`;
+            const res = await fetch(inviteUrl, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
               body: JSON.stringify({
@@ -56,10 +57,24 @@ export function InviteUserCard({ onInviteCreated }: InviteUserCardProps) {
                 department: deptLabel,
               }),
             });
-            setEmailSent(true);
+            const json = (await res.json().catch(() => ({}))) as {
+              ok?: boolean;
+              reason?: string;
+            };
+            if (res.ok && json.ok === true) {
+              setEmailSent(true);
+            } else if (json.reason === 'smtp_not_configured') {
+              setEmailSendNote(
+                'Το email δεν στάλθηκε: δεν είναι ρυθμισμένο SMTP στο backend (Firebase secrets SMTP_EMAIL / SMTP_PASSWORD). Χρησιμοποιήστε το link παρακάτω ή ρυθμίστε τα secrets και ξαναδοκιμάστε.'
+              );
+            } else {
+              setEmailSendNote(
+                `Αποτυχία αποστολής email (${res.status}). Το link παραμένει έγκυρο — αντιγράψτε το χειροκίνητα.`
+              );
+            }
           }
         } catch {
-          // Email failed silently — link is still available
+          setEmailSendNote('Σφάλμα δικτύου κατά την αποστολή email. Αντιγράψτε το link παρακάτω.');
         }
       }
     } catch (err) {
@@ -90,6 +105,11 @@ export function InviteUserCard({ onInviteCreated }: InviteUserCardProps) {
               </p>
             </div>
           )}
+          {emailSendNote && (
+            <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 leading-relaxed">
+              {emailSendNote}
+            </div>
+          )}
           <p className="text-sm text-[var(--nts-medium-gray)]">Invite link:</p>
           <div className="flex gap-2">
             <input
@@ -106,7 +126,7 @@ export function InviteUserCard({ onInviteCreated }: InviteUserCardProps) {
               Αντιγραφή
             </Button>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => { setInviteLink(''); setEmail(''); setEmailSent(false); setDepartment('other'); }}>
+          <Button variant="ghost" size="sm" onClick={() => { setInviteLink(''); setEmail(''); setEmailSent(false); setEmailSendNote(null); setDepartment('other'); }}>
             Νέο invite
           </Button>
         </div>

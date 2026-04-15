@@ -1,6 +1,7 @@
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
-import { createTransporter, SENDER, NOREPLY_EMAIL } from './smtpConfig';
+import type { Transporter } from 'nodemailer';
+import { createTransporter, SENDER, NOREPLY_EMAIL, type SmtpCredentialInput } from './smtpConfig';
 
 let _db: Firestore;
 function db() {
@@ -148,7 +149,7 @@ function kpiCell(label: string, value: string): string {
     </td>`;
 }
 
-async function sendDigestForBrand(brandId: string, brandName: string): Promise<number> {
+async function sendDigestForBrand(brandId: string, brandName: string, transporter: Transporter): Promise<number> {
   const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
   const alertsSnap = await db().collection('automation_alerts')
@@ -178,9 +179,6 @@ async function sendDigestForBrand(brandId: string, brandName: string): Promise<n
 
   const membersSnap = await db().collection('brands').doc(brandId).collection('members').get();
   if (membersSnap.empty) return 0;
-
-  const transporter = createTransporter();
-  if (!transporter) return 0;
 
   let sent = 0;
   for (const memberDoc of membersSnap.docs) {
@@ -214,7 +212,15 @@ async function sendDigestForBrand(brandId: string, brandName: string): Promise<n
   return sent;
 }
 
-export async function sendDigestForAllBrands(): Promise<{ brands: number; emails: number }> {
+export async function sendDigestForAllBrands(
+  smtp?: SmtpCredentialInput
+): Promise<{ brands: number; emails: number }> {
+  const transporter = createTransporter(smtp);
+  if (!transporter) {
+    logger.warn('[Digest] SMTP not configured — skipping daily digest');
+    return { brands: 0, emails: 0 };
+  }
+
   const brandsSnap = await db().collection('brands').get();
   let totalEmails = 0;
   let brandsProcessed = 0;
@@ -222,7 +228,7 @@ export async function sendDigestForAllBrands(): Promise<{ brands: number; emails
   for (const brandDoc of brandsSnap.docs) {
     try {
       const brandName = (brandDoc.data().name as string) || brandDoc.id;
-      const sent = await sendDigestForBrand(brandDoc.id, brandName);
+      const sent = await sendDigestForBrand(brandDoc.id, brandName, transporter);
       totalEmails += sent;
       brandsProcessed++;
     } catch (err) {

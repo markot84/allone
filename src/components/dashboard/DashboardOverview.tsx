@@ -7,18 +7,23 @@ import {
   BarChart3,
   ShoppingBag,
   ArrowRight,
+  Megaphone,
 } from 'lucide-react';
 import {
   AreaChart,
   Area,
+  Bar,
+  CartesianGrid,
+  ComposedChart,
+  Line,
   XAxis,
   YAxis,
-  CartesianGrid,
   Tooltip as RechartsTooltip,
   PieChart,
   Pie,
   Cell,
   ResponsiveContainer,
+  Legend,
 } from 'recharts';
 import { Card, CardHeader, KPICard, Tooltip, AlertsBanner, PageHeader } from '../common';
 import {
@@ -50,6 +55,9 @@ import {
   mergeOrganicByMonthWithGa4,
   mergeGa4OrganicDailyWithChannelFallback,
   sumDailyRevenueInPeriod,
+  eachCalendarMonthInclusive,
+  formatMonthKeyShort,
+  formatTrendDayLabel,
 } from '../../utils/roiUtils';
 import { formatCurrencyCompact, formatNumber, formatPercent } from '../../utils/format';
 import type { Campaign } from '../../types';
@@ -63,13 +71,14 @@ import { eachDateInclusive } from '../../utils/marketingCostPeriod';
 /** Ημερήσια σημεία στο chart· πάνω από αυτό → μηνιαία σύνοψη (αναγνώσιμο άξονα). */
 const REVENUE_CHART_MAX_DAILY_POINTS = 90;
 
-/** Revenue Performance — e-shop: orange · έσοδα καμπανιών (πλατφόρμα): blue */
+/** Revenue Performance — κύριο chart τζίρου */
 const REV_CHART_ESHOP = '#F97316';
-const REV_CHART_CAMPAIGNS = '#2563EB';
 
 const REV_PERF_LABEL_ESHOP = 'Τζίρος e-shop (παραγγελίες)';
 const REV_PERF_LABEL_ESHOP_BLEND = 'Organic + καμπάνιες (εκτίμηση)';
-const REV_PERF_LABEL_CAMPAIGNS_PLATFORM = 'Έσοδα καμπανιών από πλατφόρμες (conversion value)';
+/** Διαφήμιση — ξεχωριστό mini chart (όχι σύγκριση με τζίρο). */
+const ADS_SPEND_COLOR = '#94A3B8';
+const ADS_CONV_COLOR = '#2563EB';
 
 /** Chart series values are full EUR; axis shows K when ≥ €1.000 (tooltip uses formatCurrencyCompact on same basis). */
 function formatRevenueChartYAxisTick(value: number): string {
@@ -185,11 +194,10 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   );
 
   /**
-   * Revenue chart — πορτοκαλί:
-   * - Με e-shop: `ecommerce_summary.revenueByDay` = άθροισμα `grand_total`/`total` ανά ημέρα δημιουργίας παραγγελίας,
-   *   **χωρίς φιλτράρισμα κατάστασης** (ακυρωμένες κ.λπ. μετράνε με το ποσό που έχει αποθηκευτεί στο sync).
-   * - Χωρίς e-shop: organic (import + GA4) + conversion value καμπανιών.
-   * Μπλε: ημερήσιο conversion value από Google Ads / Meta (`dailyMetrics`) — δεν είναι «υπόλοιπο» του τζίρου· μπορεί > πορτοκαλί.
+   * Κύριο chart — μία σειρά τζίρου:
+   * - Με e-shop: `ecommerce_summary.revenueByDay` (server-side aggregate μετά το sync).
+   * - Χωρίς e-shop: εκτίμηση organic + conversion value καμπανιών (ίδια λογική ROI).
+   * Η απόδοση διαφημίσεων (δαπάνη vs conversion value) είναι στο ξεχωριστό block από κάτω.
    */
   const revenueChartData = useMemo(() => {
     const { fromDate, toDate } = periodDates;
@@ -210,11 +218,9 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       );
       return dailyRows.map((r) => {
         const total = useEshopTotals ? r.storeRevenue : r.organic + r.campaigns;
-        const campaignsPlatformRevenue = r.campaigns;
         return {
           month: r.label,
           total,
-          campaignsPlatformRevenue,
         };
       });
     }
@@ -234,11 +240,9 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     );
     return rows.map((r) => {
       const total = useEshopTotals ? r.storeRevenue : r.organic + r.campaigns;
-      const campaignsPlatformRevenue = r.campaigns;
       return {
         month: r.month,
         total,
-        campaignsPlatformRevenue,
       };
     });
   }, [
@@ -250,6 +254,52 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     ecomm.monthlyRevenue,
     ecommRevenueByDayRecord,
   ]);
+
+  /** Ημερήσια ή μηνιαία σειρά για mini chart διαφήμισης (δαπάνη + conversion value από synced campaigns). */
+  const adsPerformanceSeries = useMemo(() => {
+    if (!hasCampaigns || periodCampaigns.length === 0) return [];
+    const { fromDate, toDate } = periodDates;
+    const dayList = eachDateInclusive(fromDate, toDate);
+    if (dayList.length === 0) return [];
+
+    const spendByDay: Record<string, number> = {};
+    const valByDay: Record<string, number> = {};
+    (periodCampaigns as Campaign[]).forEach((c) => {
+      getCampaignDailyAttributedSpendInPeriod(c, fromDate, toDate).forEach((v, d) => {
+        spendByDay[d] = (spendByDay[d] || 0) + v;
+      });
+      getCampaignDailyAttributedValueInPeriod(c, fromDate, toDate).forEach((v, d) => {
+        valByDay[d] = (valByDay[d] || 0) + v;
+      });
+    });
+
+    if (dayList.length <= REVENUE_CHART_MAX_DAILY_POINTS) {
+      return dayList.map((day) => ({
+        label: formatTrendDayLabel(day),
+        adSpend: Math.round((spendByDay[day] || 0) * 100) / 100,
+        adConvValue: Math.round((valByDay[day] || 0) * 100) / 100,
+      }));
+    }
+
+    const byMonth = new Map<string, { adSpend: number; adConvValue: number }>();
+    for (const ym of eachCalendarMonthInclusive(fromDate.slice(0, 7), toDate.slice(0, 7))) {
+      byMonth.set(ym, { adSpend: 0, adConvValue: 0 });
+    }
+    for (const day of dayList) {
+      const ym = day.slice(0, 7);
+      const ex = byMonth.get(ym);
+      if (!ex) continue;
+      ex.adSpend += spendByDay[day] || 0;
+      ex.adConvValue += valByDay[day] || 0;
+    }
+    return [...byMonth.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([ym, v]) => ({
+        label: formatMonthKeyShort(ym),
+        adSpend: Math.round(v.adSpend * 100) / 100,
+        adConvValue: Math.round(v.adConvValue * 100) / 100,
+      }));
+  }, [hasCampaigns, periodCampaigns, periodDates]);
 
   // Debug logging
   useEffect(() => {
@@ -700,27 +750,20 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             title="Revenue Performance"
             subtitle={
               ecomm.hasData ? (
-                <>
-                  <p>
-                    <span className="font-semibold text-[var(--fgColor-default,#24292f)]">Πορτοκαλί:</span> ημερήσιος τζίρος
-                    e-shop — άθροισμα παραγγελιών από το συγχρονισμό (Magento κ.λπ.). Συμπεριλαμβάνονται όλες οι καταστάσεις· το
-                    ποσό είναι το αποθηκευμένο total ανά παραγγελία (σε ακύρωση εξαρτάται από το πώς η πλατφόρμα ενημερώνει το
-                    total).
-                  </p>
-                  <p className="text-[12px] leading-relaxed">
-                    <span className="font-semibold text-[var(--fgColor-default,#24292f)]">Μπλε:</span> έσοδα που αναφέρουν οι
-                    πλατφόρμες διαφημίσεων (conversion value Google Ads / Meta) —{' '}
-                    <span className="italic">όχι</span> «υπόλοιπο» του τζίρου. Μπορεί να ξεπερνά τον τζίρο σε κάποιες ημέρες
-                    (διαφορετική ημερομηνία/ζώνη, μοντέλα μέτρησης των πλατφορμών, πωλήσεις εκτός e-shop).
-                  </p>
-                </>
+                <p>
+                  Ημερήσιος/μηνιαίος <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">τζίρος από παραγγελίες</strong> (συγχρονισμός e-shop, server-side aggregate). Κάτω:{' '}
+                  <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">διαφήμιση</strong> (δαπάνη vs conversion value πλατφορμών) — ξεχωριστή κλίμακα, δεν αθροίζεται στον τζίρο.
+                </p>
               ) : (
-                'Χωρίς e-shop: εκτίμηση organic + καμπανιών vs έσοδα καμπανιών από πλατφόρμες. Σύνδεσε e-shop για τζίρο από παραγγελίες.'
+                <p>
+                  Εκτίμηση <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">organic + καμπανιών</strong> όταν δεν υπάρχει σύνδεση e-shop. Για πραγματικό τζίρο παραγγελιών, σύνδεσε το κατάστημα.
+                </p>
               )
             }
             icon={<TrendingUp size={18} className="text-[var(--nts-accent)]" />}
           />
           {revenueChartData.length > 0 ? (
+            <>
             <div 
               ref={revenueContainerRef}
               className="w-full" 
@@ -741,10 +784,6 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   <linearGradient id="totalGradient" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="8%" stopColor={REV_CHART_ESHOP} stopOpacity={0.22} />
                     <stop offset="100%" stopColor={REV_CHART_ESHOP} stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="campaignsRevenueGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="6%" stopColor={REV_CHART_CAMPAIGNS} stopOpacity={0.35} />
-                    <stop offset="100%" stopColor={REV_CHART_CAMPAIGNS} stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F0" vertical={false} />
@@ -771,13 +810,9 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                     padding: '10px 14px',
                     boxShadow: '0 8px 24px rgba(15, 23, 42, 0.08)',
                   }}
-                  formatter={(value: any, name?: string) => [
+                  formatter={(value: any) => [
                     formatCurrencyCompact((value as number) || 0),
-                    name === 'total'
-                      ? ecomm.hasData
-                        ? REV_PERF_LABEL_ESHOP
-                        : REV_PERF_LABEL_ESHOP_BLEND
-                      : REV_PERF_LABEL_CAMPAIGNS_PLATFORM,
+                    ecomm.hasData ? REV_PERF_LABEL_ESHOP : REV_PERF_LABEL_ESHOP_BLEND,
                   ]}
                   labelStyle={{ color: '#24292f', fontWeight: 600, marginBottom: 4 }}
                 />
@@ -791,28 +826,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   name="total"
                   isAnimationActive={false}
                 />
-                <Area
-                  type="monotone"
-                  dataKey="campaignsPlatformRevenue"
-                  stroke={REV_CHART_CAMPAIGNS}
-                  strokeWidth={2.5}
-                  fillOpacity={1}
-                  fill="url(#campaignsRevenueGradient)"
-                  name="campaignsPlatformRevenue"
-                  isAnimationActive={false}
-                />
               </AreaChart>
             </div>
-          ) : (
-            <div className="w-full h-[288px] flex items-center justify-center bg-[#F5F5F5] rounded-lg">
-              <div className="text-center">
-                <TrendingUp size={32} className="text-[#9CA3AF] mx-auto mb-2" />
-                <p className="text-sm text-[#4A4A4A] font-medium">Δεν υπάρχουν δεδομένα</p>
-                <p className="text-xs text-[#9CA3AF] mt-1">Φόρτωσε Analytics ή Campaigns για να δεις το Revenue Performance</p>
-              </div>
-            </div>
-          )}
-          {revenueChartData.length > 0 && (
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mt-4 pt-4 border-t border-[var(--nts-border-gray)]">
               <div className="flex items-center gap-2">
                 <div
@@ -823,12 +838,101 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   {ecomm.hasData ? REV_PERF_LABEL_ESHOP : REV_PERF_LABEL_ESHOP_BLEND}
                 </span>
               </div>
-              <div className="flex items-center gap-2">
-                <div
-                  className="h-3 w-3 shrink-0 rounded-full ring-2 ring-white shadow-sm"
-                  style={{ backgroundColor: REV_CHART_CAMPAIGNS }}
-                />
-                <span className="text-sm text-[var(--nts-medium-gray)]">{REV_PERF_LABEL_CAMPAIGNS_PLATFORM}</span>
+            </div>
+
+            {hasCampaigns && adsPerformanceSeries.length > 0 && (
+              <div
+                className="mt-6 border-t border-[var(--nts-border-gray)] pt-5"
+                onClick={(e) => e.stopPropagation()}
+                role="presentation"
+              >
+                <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+                  <div className="flex items-start gap-2 min-w-0">
+                    <Megaphone size={16} className="mt-0.5 shrink-0 text-[#64748B]" />
+                    <div>
+                      <p className="text-[13px] font-semibold text-[#1A1A1A]">Διαφήμιση (Google Ads / Meta)</p>
+                      <p className="text-[11px] text-[#6B7280] leading-relaxed mt-0.5">
+                        Δαπάνη (στήλες) και conversion value που αναφέρουν οι πλατφόρμες (γραμμή) — ίδια περίοδος με το chart τζίρου, χωρίς σύγκριση € προς € με τον τζίρο του καταστήματος.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onSectionChange?.('campaigns')}
+                    className="shrink-0 text-xs font-semibold text-[var(--nts-accent)] hover:underline"
+                  >
+                    Campaigns →
+                  </button>
+                </div>
+                <div className="w-full" style={{ height: 200, minHeight: 200 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={adsPerformanceSeries} margin={{ top: 8, right: 8, left: 4, bottom: 4 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F0" vertical={false} />
+                      <XAxis dataKey="label" tick={{ fill: '#57606a', fontSize: 11 }} axisLine={{ stroke: '#d0d7de' }} tickLine={{ stroke: '#d0d7de' }} />
+                      <YAxis
+                        width={48}
+                        tick={{ fill: '#57606a', fontSize: 11 }}
+                        axisLine={{ stroke: '#d0d7de' }}
+                        tickLine={{ stroke: '#d0d7de' }}
+                        tickFormatter={formatRevenueChartYAxisTick}
+                        tickCount={5}
+                      />
+                      <RechartsTooltip
+                        contentStyle={{
+                          backgroundColor: '#fff',
+                          border: '1px solid #E8EAED',
+                          borderRadius: '8px',
+                          fontSize: '12px',
+                          padding: '8px 12px',
+                        }}
+                        formatter={(value: unknown, name?: string) => [
+                          formatCurrencyCompact(Number(value) || 0),
+                          name === 'adSpend' ? 'Δαπάνη διαφήμισης' : 'Conversion value (πλατφόρμα)',
+                        ]}
+                      />
+                      <Legend
+                        wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
+                        formatter={(value) =>
+                          value === 'adSpend' ? 'Δαπάνη' : value === 'adConvValue' ? 'Conversion value' : value
+                        }
+                      />
+                      <Bar dataKey="adSpend" name="adSpend" fill={ADS_SPEND_COLOR} radius={[2, 2, 0, 0]} maxBarSize={28} />
+                      <Line
+                        type="monotone"
+                        dataKey="adConvValue"
+                        name="adConvValue"
+                        stroke={ADS_CONV_COLOR}
+                        strokeWidth={2}
+                        dot={false}
+                        isAnimationActive={false}
+                      />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-[11px] text-[#6B7280]">
+                  <span>
+                    Σύνολο περιόδου: δαπάνη{' '}
+                    <strong className="text-[#374151]">{formatCurrencyCompact(campaignMetrics.totalSpend)}</strong>
+                    {' · '}
+                    conv. value{' '}
+                    <strong className="text-[#374151]">{formatCurrencyCompact(campaignMetrics.totalRevenue)}</strong>
+                  </span>
+                  {campaignMetrics.totalSpend > 0 && (
+                    <span>
+                      ROAS (πλατφόρμα):{' '}
+                      <strong className="text-[#374151]">{formatNumber(campaignMetrics.roas, 2)}×</strong>
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+            </>
+          ) : (
+            <div className="w-full h-[288px] flex items-center justify-center bg-[#F5F5F5] rounded-lg">
+              <div className="text-center">
+                <TrendingUp size={32} className="text-[#9CA3AF] mx-auto mb-2" />
+                <p className="text-sm text-[#4A4A4A] font-medium">Δεν υπάρχουν δεδομένα</p>
+                <p className="text-xs text-[#9CA3AF] mt-1">Φόρτωσε Analytics ή Campaigns για να δεις το Revenue Performance</p>
               </div>
             </div>
           )}

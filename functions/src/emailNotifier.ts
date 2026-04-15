@@ -1,6 +1,7 @@
 import * as admin from 'firebase-admin';
 import { logger } from 'firebase-functions/v2';
 import type { Firestore } from 'firebase-admin/firestore';
+import type { Transporter } from 'nodemailer';
 import { createTransporter, SENDER, NOREPLY_EMAIL } from './smtpConfig';
 
 let _db: Firestore;
@@ -15,14 +16,16 @@ export async function sendNotificationEmail(
     brandId: string;
     entityType?: string;
     entityId?: string;
-  }
+  },
+  /** Αν δοθεί (π.χ. από HTTP handler με secrets), αποφεύγεται δεύτερο createTransporter. */
+  reuseTransporter?: Transporter
 ): Promise<void> {
   if (!_db) {
     logger.error('emailNotifier: db not set');
     throw new Error('emailNotifier db not set');
   }
 
-  const transporter = createTransporter();
+  const transporter = reuseTransporter ?? createTransporter();
   if (!transporter) {
     logger.warn('[emailNotifier] SMTP not configured — cannot send');
     throw new Error('SMTP not configured');

@@ -3,7 +3,7 @@ import {
   query, where, orderBy, Timestamp, onSnapshot, type Unsubscribe
 } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
-import { db } from '../config/firebase';
+import { db, FUNCTIONS_BASE_URL } from '../config/firebase';
 import type {
   BrandMember, BrandDepartment, Decision, CoordinationTask, CoordinationComment,
   ActivityEntry, UserNotification, ActivityType,
@@ -12,12 +12,6 @@ import type {
 import { DEFAULT_NOTIFICATION_CHANNELS, DEPARTMENT_LABELS, normalizeBrandMemberRole } from '../types';
 
 const ts = () => new Date().toISOString();
-const FUNCTIONS_REGION = import.meta.env.VITE_FIREBASE_FUNCTIONS_REGION || 'europe-west1';
-const FUNCTIONS_PROJECT =
-  import.meta.env.VITE_FIREBASE_PROJECT_ID || 'performance-plus-4a5b2';
-const FUNCTIONS_BASE =
-  import.meta.env.VITE_FUNCTIONS_BASE_URL ||
-  `https://${FUNCTIONS_REGION}-${FUNCTIONS_PROJECT}.cloudfunctions.net`;
 
 // ── Members ─────────────────────────────────────────────────────────────────
 
@@ -334,7 +328,8 @@ async function sendEmailNotifications(
       return { sent: 0, failed: userIds.length };
     }
 
-    const endpoint = `${FUNCTIONS_BASE}/sendEmailNotification`;
+    const base = FUNCTIONS_BASE_URL.replace(/\/$/, '');
+    const endpoint = `${base}/sendEmailNotification`;
     const res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -350,6 +345,18 @@ async function sendEmailNotifications(
     });
     if (!res.ok) {
       const errText = await res.text();
+      if (res.status === 503) {
+        try {
+          const j = JSON.parse(errText) as { reason?: string };
+          if (j.reason === 'smtp_not_configured') {
+            console.warn(
+              'sendEmailNotification: SMTP δεν είναι ρυθμισμένο στο backend (secrets SMTP_EMAIL / SMTP_PASSWORD)'
+            );
+          }
+        } catch {
+          /* ignore */
+        }
+      }
       console.warn('sendEmailNotification HTTP', res.status, errText);
       return { sent: 0, failed: userIds.length };
     }

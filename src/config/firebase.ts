@@ -37,3 +37,13 @@ export default app;
 /** App base URL for invite links (production). Set VITE_APP_URL in .env */
 export const APP_URL =
   import.meta.env.VITE_APP_URL || 'https://performance-plus-4a5b2.web.app';
+
+const FUNCTIONS_REGION = import.meta.env.VITE_FIREBASE_FUNCTIONS_REGION || 'europe-west1';
+/** Ίδιο fallback με coordination — όχι το placeholder projectId του firebaseConfig */
+const FUNCTIONS_PROJECT =
+  import.meta.env.VITE_FIREBASE_PROJECT_ID || 'performance-plus-4a5b2';
+
+/** Βάση URL για HTTP Cloud Functions (email, connectors, κ.λπ.) */
+export const FUNCTIONS_BASE_URL =
+  import.meta.env.VITE_FUNCTIONS_BASE_URL ||
+  `https://${FUNCTIONS_REGION}-${FUNCTIONS_PROJECT}.cloudfunctions.net`;
