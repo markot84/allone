@@ -1102,7 +1102,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
         )}
       </div>
 
-      {activeTab === 'campaigns' && <ChannelPerformanceHistoryCard />}
+      {activeTab === 'campaigns' && <ChannelPerformanceHistoryCard dateFrom={dateFrom} dateTo={dateTo} />}
 
       {activeTab === 'campaigns' && (
         <CampaignsChannelInsights campaigns={campaignsInConvView} />

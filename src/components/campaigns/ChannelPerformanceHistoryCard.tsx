@@ -4,7 +4,14 @@ import { XAxis, YAxis, Tooltip, CartesianGrid, LineChart, Line, Legend } from 'r
 import { Card, CardHeader } from '../common';
 import { useCampaigns } from '../../hooks';
 import type { Campaign } from '../../types';
-import { getEffectiveConversionValue } from '../../utils/roiUtils';
+import { eachDateInclusive } from '../../utils/marketingCostPeriod';
+import {
+  eachCalendarMonthInclusive,
+  formatMonthKeyShort,
+  formatTrendDayLabel,
+  getCampaignDailyAttributedSpendInPeriod,
+  getCampaignDailyAttributedValueInPeriod,
+} from '../../utils/roiUtils';
 
 const CHANNEL_COLORS: Record<string, string> = {
   'Google Ads': '#4285F4',
@@ -16,52 +23,113 @@ const CHANNEL_COLORS: Record<string, string> = {
   Skroutz: '#F68B24',
 };
 
+const MAX_DAILY_POINTS = 90;
+
+function formatRangeSubtitle(from: string, to: string): string {
+  const a = new Date(from + 'T12:00:00');
+  const b = new Date(to + 'T12:00:00');
+  if (isNaN(a.getTime()) || isNaN(b.getTime())) return '';
+  const opt: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' };
+  return `${a.toLocaleDateString('el-GR', opt)} – ${b.toLocaleDateString('el-GR', opt)}`;
+}
+
+type ChannelSv = { spend: number; value: number };
+
 /**
- * Weighted-average ROAS per channel per month (last 6 buckets), from imported campaigns.
+ * Weighted ROAS per channel per time bucket within [dateFrom, dateTo] (daily or monthly if range is long).
  */
-export function ChannelPerformanceHistoryCard() {
+export function ChannelPerformanceHistoryCard({
+  dateFrom,
+  dateTo,
+}: {
+  dateFrom: string;
+  dateTo: string;
+}) {
   const { campaigns, hasImported: hasCampaigns } = useCampaigns();
   const historyChartRef = useRef<HTMLDivElement>(null);
   const [historyChartSize, setHistoryChartSize] = useState({ width: 800, height: 288 });
 
   const realPerformanceHistory = useMemo(() => {
-    if (!hasCampaigns || campaigns.length === 0) return null;
+    if (!hasCampaigns || campaigns.length === 0 || !dateFrom || !dateTo) return null;
 
-    const buckets: Record<string, Record<string, { spend: number; value: number }>> = {};
+    const days = eachDateInclusive(dateFrom, dateTo);
+    if (days.length === 0) return null;
 
-    (campaigns as Campaign[]).forEach(c => {
-      const dateStr = c.start_date || c.period || '';
-      if (!dateStr) return;
-      const parsed = new Date(dateStr);
-      if (isNaN(parsed.getTime())) return;
-      const key = `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}`;
-      const channel = c.channel || 'Other';
+    const byDayCh: Record<string, Record<string, ChannelSv>> = {};
 
-      if (!buckets[key]) buckets[key] = {};
-      if (!buckets[key][channel]) buckets[key][channel] = { spend: 0, value: 0 };
-      buckets[key][channel].spend += c.amount_spent || 0;
-      buckets[key][channel].value += getEffectiveConversionValue(c);
+    const ensure = (day: string, ch: string) => {
+      if (!byDayCh[day]) byDayCh[day] = {};
+      if (!byDayCh[day][ch]) byDayCh[day][ch] = { spend: 0, value: 0 };
+    };
+
+    (campaigns as Campaign[]).forEach((c) => {
+      const ch = c.channel || 'Other';
+      const vMap = getCampaignDailyAttributedValueInPeriod(c, dateFrom, dateTo);
+      const sMap = getCampaignDailyAttributedSpendInPeriod(c, dateFrom, dateTo);
+      const daySet = new Set<string>([...vMap.keys(), ...sMap.keys()]);
+      daySet.forEach((day) => {
+        if (day < dateFrom || day > dateTo) return;
+        ensure(day, ch);
+        byDayCh[day][ch].value += vMap.get(day) || 0;
+        byDayCh[day][ch].spend += sMap.get(day) || 0;
+      });
     });
 
     const allChannelKeys = new Set<string>();
-    Object.values(buckets).forEach(chMap => Object.keys(chMap).forEach(ch => allChannelKeys.add(ch)));
+    for (const day of days) {
+      const dm = byDayCh[day];
+      if (dm) Object.keys(dm).forEach((ch) => allChannelKeys.add(ch));
+    }
+    if (allChannelKeys.size === 0) return null;
 
-    const rows = Object.entries(buckets)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .slice(-6)
-      .map(([ym, data]) => {
-        const [y, m] = ym.split('-');
-        const label = new Date(Number(y), Number(m) - 1).toLocaleDateString('el-GR', { month: 'short', year: '2-digit' });
-        const row: Record<string, string | number> = { month: label };
-        allChannelKeys.forEach(ch => {
-          const d = data[ch];
-          row[ch] = d && d.spend > 0 ? Math.round((d.value / d.spend) * 100) / 100 : 0;
-        });
-        return row;
+    const roasRow = (label: string, agg: Record<string, ChannelSv>) => {
+      const row: Record<string, string | number> = { label };
+      allChannelKeys.forEach((ch) => {
+        const cell = agg[ch];
+        row[ch] = cell && cell.spend > 0 ? Math.round((cell.value / cell.spend) * 100) / 100 : 0;
       });
+      return row;
+    };
 
-    return rows.length > 0 ? { rows, channels: Array.from(allChannelKeys) } : null;
-  }, [campaigns, hasCampaigns]);
+    const useMonthly = days.length > MAX_DAILY_POINTS;
+    const fromYm = dateFrom.slice(0, 7);
+    const toYm = dateTo.slice(0, 7);
+
+    if (!useMonthly) {
+      const rows = days.map((day) => roasRow(formatTrendDayLabel(day), byDayCh[day] || {}));
+      return { rows, channels: Array.from(allChannelKeys) };
+    }
+
+    const months = eachCalendarMonthInclusive(fromYm, toYm);
+    const rows = months.map((ym) => {
+      const agg: Record<string, ChannelSv> = {};
+      for (const day of days) {
+        if (day.slice(0, 7) !== ym) continue;
+        const dm = byDayCh[day];
+        if (!dm) continue;
+        for (const [ch, sv] of Object.entries(dm)) {
+          if (!agg[ch]) agg[ch] = { spend: 0, value: 0 };
+          agg[ch].spend += sv.spend;
+          agg[ch].value += sv.value;
+        }
+      }
+      return roasRow(formatMonthKeyShort(ym), agg);
+    });
+
+    return { rows, channels: Array.from(allChannelKeys) };
+  }, [campaigns, hasCampaigns, dateFrom, dateTo]);
+
+  const rangeDayCount = useMemo(() => {
+    if (!dateFrom || !dateTo) return 0;
+    return eachDateInclusive(dateFrom, dateTo).length;
+  }, [dateFrom, dateTo]);
+
+  const subtitle = useMemo(() => {
+    const r = formatRangeSubtitle(dateFrom, dateTo);
+    if (!r) return 'ROAS ανά κανάλι στο επιλεγμένο εύρος';
+    const span = rangeDayCount > MAX_DAILY_POINTS ? 'μηνιαία σημεία (μεγάλο εύρος)' : 'ημερήσια σειρά';
+    return `ROAS trend (${span}) · ${r}`;
+  }, [dateFrom, dateTo, rangeDayCount]);
 
   useEffect(() => {
     const update = () => {
@@ -82,14 +150,14 @@ export function ChannelPerformanceHistoryCard() {
     <Card padding="lg">
       <CardHeader
         title="Channel Performance History"
-        subtitle="ROAS trend τελευταίων 6 μηνών"
+        subtitle={subtitle}
         icon={<TrendingUp size={20} className="text-[var(--nts-accent)]" />}
       />
       <div ref={historyChartRef} className="w-full" style={{ width: '100%', height: 288, minHeight: 288, position: 'relative' }}>
         {realPerformanceHistory && realPerformanceHistory.rows.length > 0 ? (
           <LineChart width={historyChartSize.width} height={historyChartSize.height} data={realPerformanceHistory.rows} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" />
-            <XAxis dataKey="month" tick={{ fill: '#4A4A4A', fontSize: 12 }} axisLine={{ stroke: '#E5E5E5' }} />
+            <XAxis dataKey="label" tick={{ fill: '#4A4A4A', fontSize: 12 }} axisLine={{ stroke: '#E5E5E5' }} />
             <YAxis
               tick={{ fill: '#4A4A4A', fontSize: 12 }}
               axisLine={{ stroke: '#E5E5E5' }}
@@ -103,7 +171,7 @@ export function ChannelPerformanceHistoryCard() {
             />
             <Legend />
             {realPerformanceHistory.channels.map((ch) => {
-              const hasData = realPerformanceHistory.rows.some(d => (d[ch] as number) > 0);
+              const hasData = realPerformanceHistory.rows.some((d) => (d[ch] as number) > 0);
               if (!hasData) return null;
               const color = CHANNEL_COLORS[ch] || '#6B7280';
               return (
@@ -113,7 +181,7 @@ export function ChannelPerformanceHistoryCard() {
           </LineChart>
         ) : (
           <div className="flex items-center justify-center h-full">
-            <p className="text-sm text-[#4A4A4A]">Δεν υπάρχουν δεδομένα performance history</p>
+            <p className="text-sm text-[#4A4A4A]">Δεν υπάρχουν δεδομένα performance history για αυτό το εύρος</p>
           </div>
         )}
       </div>

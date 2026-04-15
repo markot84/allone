@@ -5,7 +5,7 @@ import { Card, Button, Spinner, useToast, Tooltip, PageHeader } from '../common'
 import { useOrganic, useBrand } from '../../hooks';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import { useGA4Data } from '../../hooks/useGA4Data';
-import { organicRevenueForSingleDay } from '../../utils/roiUtils';
+import { organicRevenueForSingleDay, mergeGa4OrganicDailyWithChannelFallback } from '../../utils/roiUtils';
 import { FirestoreService } from '../../services/firestore';
 import { formatCurrency, formatNumber } from '../../utils/format';
 import type { OrganicRevenue } from '../../types';
@@ -24,8 +24,38 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
     organicRevenueSource,
     isLoading,
   } = useOrganic();
-  const { organicRevenueByDay: ga4OrganicByDay } = useGA4Data();
+  const {
+    organicRevenueByDay: ga4OrganicByDay,
+    totalOrganicRevenueFromChannels,
+    dateRange: ga4DateRange,
+  } = useGA4Data();
   const ecomm = useEcommerceSummary();
+
+  const ecommDailyRange = useMemo(() => {
+    const dates = ecomm.dailyRevenue.map((r) => r.date).filter(Boolean) as string[];
+    if (dates.length === 0) return { from: '', to: '' };
+    const sorted = [...dates].sort();
+    return { from: sorted[0], to: sorted[sorted.length - 1] };
+  }, [ecomm.dailyRevenue]);
+
+  const ga4OrganicEffective = useMemo(
+    () =>
+      mergeGa4OrganicDailyWithChannelFallback(
+        ga4OrganicByDay,
+        totalOrganicRevenueFromChannels,
+        ga4DateRange ?? undefined,
+        ecommDailyRange.from,
+        ecommDailyRange.to
+      ),
+    [
+      ga4OrganicByDay,
+      totalOrganicRevenueFromChannels,
+      ga4DateRange?.start,
+      ga4DateRange?.end,
+      ecommDailyRange.from,
+      ecommDailyRange.to,
+    ]
+  );
 
   /** Organic ανά ημέρα (import ή GA4) στις ίδιες ημερομηνίες με το ημερήσιο e-shop summary — για δίκαιο gap. */
   const organicAlignedToEcommDays = useMemo(() => {
@@ -33,10 +63,10 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
     let s = 0;
     for (const { date } of ecomm.dailyRevenue) {
       if (!date) continue;
-      s += organicRevenueForSingleDay(date, organicByMonth, ga4OrganicByDay);
+      s += organicRevenueForSingleDay(date, organicByMonth, ga4OrganicEffective);
     }
     return s;
-  }, [ecomm.hasData, ecomm.dailyRevenue, totalOrganicRevenue, organicByMonth, ga4OrganicByDay]);
+  }, [ecomm.hasData, ecomm.dailyRevenue, totalOrganicRevenue, organicByMonth, ga4OrganicEffective]);
   const queryClient = useQueryClient();
   const toast = useToast();
   const [isDeleting, setIsDeleting] = useState(false);

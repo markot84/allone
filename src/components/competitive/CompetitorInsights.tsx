@@ -489,6 +489,13 @@ export function CompetitorInsights() {
             />
           </div>
 
+          {insightsCount > benchmarkCount && (
+            <p className="text-xs text-[#6B7280] bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg px-3 py-2">
+              Γιατί λιγότερα εδώ ({benchmarkCount}) από τα Price Insights ({insightsCount}); Εδώ εμφανίζονται μόνο SKUs όπου το GMC επιστρέφει{' '}
+              <strong>μέση τιμή αγοράς</strong> (Price Competitiveness). Τα Insights είναι άλλη αναφορά με ευρύτερη κάλυψη (προτάσεις τιμής κ.λπ.).
+            </p>
+          )}
+
           {/* Sync + Filters */}
           <Card>
             <div className="p-5">

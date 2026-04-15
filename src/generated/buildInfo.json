@@ -1,10 +1,14 @@
 {
-  "version": "0.411.0",
-  "previousVersion": "0.410.0",
-  "commitHash": "858eb1f",
+  "version": "0.420.0",
+  "previousVersion": "0.419.0",
+  "commitHash": "9fb6adf",
   "branch": "main",
-  "buildDate": "2026-04-14T19:44:15.231Z",
+  "buildDate": "2026-04-15T02:53:34.766Z",
   "commits": [
+    {
+      "hash": "9fb6adf",
+      "message": "Align revenue metrics with selected period (ROI, dashboard, briefing)"
+    },
     {
       "hash": "858eb1f",
       "message": "feat(roi): marketing overhead, daily trend, e-shop tabs, DateRangePicker portal"
@@ -60,13 +64,10 @@
     {
       "hash": "80998cd",
       "message": "chore: add project context rule for agent continuity"
-    },
-    {
-      "hash": "a0b9976",
-      "message": "feat: e-commerce connectors, explorer page, dashboard/ROI integration, help docs"
     }
   ],
   "changes": [
+    "Align revenue metrics with selected period (ROI, dashboard, briefing)",
     "[Νέο χαρακτηριστικό] Marketing overhead, daily trend, e-shop tabs, DateRangePicker portal",
     "[Νέο χαρακτηριστικό] AI Insights full page, campaigns LTV chart, UX polish",
     "[Νέο χαρακτηριστικό] Global date range context shared across all pages",
@@ -75,7 +76,6 @@
     "[Συντήρηση] Sync buildInfo after deploy",
     "Competitive Intelligence: single-line table headers (Δ τιμής, Διαφ. τιμής), nowrap; merchant seller labels and related updates",
     "Dashboard: απλοποίηση KPI, ROI ROAS block, διόρθωση τάσης· AI briefing φιλικότερο prompt· tooltip",
-    "[Νέο χαρακτηριστικό] Shared page headers, campaigns copy (EN tech terms), connector and UI updates",
-    "Add campaign helper files, Performance image variants, apply_campaigns patch script"
+    "[Νέο χαρακτηριστικό] Shared page headers, campaigns copy (EN tech terms), connector and UI updates"
   ]
 }

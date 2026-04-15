@@ -54,6 +54,13 @@ const TOOLTIP_STYLE: React.CSSProperties = {
   boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
 };
 
+/** Το Recharts Area χρειάζεται ≥2 σημεία για ορατή γραμμή. */
+function padSparklineForChart(values: number[]): number[] {
+  if (values.length === 0) return [];
+  if (values.length === 1) return [values[0], values[0]];
+  return values;
+}
+
 function OrderStatusBadge({ status }: { status: string }) {
   const s = (status || '').toLowerCase();
   let bg = '#F3F4F6';
@@ -121,33 +128,41 @@ export function EcommerceDashboard() {
   const [prodRows, setProdRows] = useState<RowsPerPage>(20);
   const [prodPage, setProdPage] = useState(1);
 
-  const kpis: KPICardData[] = useMemo(() => [
+  const kpis: KPICardData[] = useMemo(() => {
+    const last30 = filteredDailyRevenue.slice(-30);
+    const ordersPerDay = last30.map((d) =>
+      filteredOrdersForKpi.filter((o) => o.createdAt?.startsWith(d.date)).length
+    );
+    const aovPerDay = last30.map((d, i) => {
+      const n = ordersPerDay[i] ?? 0;
+      return n > 0 ? d.revenue / n : 0;
+    });
+    return [
     {
       label: 'Έσοδα e-shop',
       value: formatCurrencyCompact(filteredTotalRevenue),
       tooltip: 'Σύνολο εσόδων από e-commerce για το επιλεγμένο διάστημα',
-      sparklineData: filteredDailyRevenue.slice(-30).map((d) => d.revenue),
+      sparklineData: padSparklineForChart(last30.map((d) => d.revenue)),
     },
     {
       label: 'Παραγγελίες',
       value: formatNumber(filteredOrderCount),
       tooltip: 'Σύνολο παραγγελιών για το επιλεγμένο διάστημα',
-      sparklineData: filteredDailyRevenue.slice(-30).map((d) => {
-        const orders = filteredOrdersForKpi.filter((o) => o.createdAt?.startsWith(d.date));
-        return orders.length;
-      }),
+      sparklineData: padSparklineForChart(ordersPerDay),
     },
     {
       label: 'AOV',
       value: formatCurrencyCompact(filteredAov),
       tooltip: 'Μέσο ποσό ανά παραγγελία για το επιλεγμένο διάστημα',
+      sparklineData: padSparklineForChart(aovPerDay),
     },
     {
       label: 'Πλατφόρμες',
       value: String(ecomm.connectedPlatforms.length),
       tooltip: ecomm.connectedPlatforms.map((p) => PLATFORM_LABELS[p] || p).join(', ') || 'Κανένα',
     },
-  ], [filteredTotalRevenue, filteredOrderCount, filteredAov, filteredDailyRevenue, filteredOrdersForKpi, ecomm.connectedPlatforms]);
+    ];
+  }, [filteredTotalRevenue, filteredOrderCount, filteredAov, filteredDailyRevenue, filteredOrdersForKpi, ecomm.connectedPlatforms]);
 
   const sortedOrders = useMemo(() => {
     const arr = [...filteredOrdersForKpi];

@@ -69,7 +69,7 @@ export function KPICard({ kpi, index, onClick, className }: KPICardProps) {
           {kpi.value}
         </p>
 
-        {kpi.sparklineData && kpi.sparklineData.length > 1 && (
+        {kpi.sparklineData && kpi.sparklineData.length > 0 && (
           <div className="h-[32px] w-full my-1 -mx-1">
             <ResponsiveContainer width="100%" height={32}>
               <AreaChart data={kpi.sparklineData.map((v, i) => ({ v, i }))} margin={{ top: 2, right: 4, left: 4, bottom: 2 }}>

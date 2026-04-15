@@ -104,32 +104,34 @@ export function AIInsightsPage({ onSectionChange }: AIInsightsPageProps) {
         <motion.section
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          className="relative overflow-hidden rounded-2xl border border-[#E8E8ED] bg-gradient-to-br from-[#1A1A2E] via-[#252542] to-[#1e293b] text-white px-6 py-8 sm:px-10 sm:py-10 shadow-lg"
+          className="relative overflow-hidden rounded-2xl border border-[#E8E8ED] bg-gradient-to-br from-white via-[#FAFBFC] to-[#F4F6F9] px-6 py-8 sm:px-10 sm:py-10 shadow-sm"
         >
-          <div className="absolute -right-16 -top-16 h-48 w-48 rounded-full bg-[var(--nts-accent)]/15 blur-3xl pointer-events-none" />
-          <div className="absolute -bottom-20 -left-10 h-40 w-40 rounded-full bg-violet-500/10 blur-3xl pointer-events-none" />
+          <div className="absolute -right-12 -top-12 h-44 w-44 rounded-full bg-[var(--nts-accent)]/10 blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-14 -left-10 h-36 w-36 rounded-full bg-sky-400/5 blur-3xl pointer-events-none" />
           <div className="relative flex flex-col lg:flex-row lg:items-center lg:justify-between gap-8">
             <div className="flex items-start gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-white/10 border border-white/15 flex items-center justify-center shrink-0">
-                <Sparkles size={28} className="text-amber-300" />
+              <div className="w-14 h-14 rounded-2xl bg-[var(--nts-accent)]/10 border border-[var(--nts-accent)]/20 flex items-center justify-center shrink-0 shadow-sm">
+                <Sparkles size={28} className="text-[var(--nts-accent)]" />
               </div>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-white/60">Σύνοψη</p>
-                <h2 className="mt-1 text-2xl sm:text-3xl font-bold tracking-tight">Έξυπνες προτάσεις για την ομάδα σας</h2>
-                <p className="mt-2 text-sm text-white/75 max-w-xl leading-relaxed">
+                <p className="text-xs font-semibold uppercase tracking-wider text-[var(--nts-accent)]">Σύνοψη</p>
+                <h2 className="mt-1 text-2xl sm:text-3xl font-bold tracking-tight text-[#1A1A1A]">
+                  Έξυπνες προτάσεις για την ομάδα σας
+                </h2>
+                <p className="mt-2 text-sm text-[#6B7280] max-w-xl leading-relaxed">
                   Κάθε κάρτα συνδέεται με συγκεκριμένη ενότητα της πλατφόρμας (π.χ. προϊόντα, RFM, campaigns) ώστε να
                   μην χάνεται το context.
                 </p>
               </div>
             </div>
             <div className="flex flex-wrap gap-3 lg:justify-end">
-              <div className="rounded-xl bg-white/10 border border-white/15 px-5 py-4 min-w-[120px]">
-                <p className="text-[11px] uppercase tracking-wide text-white/55">Insights</p>
-                <p className="text-2xl font-bold font-mono tabular-nums">{aiInsights.length}</p>
+              <div className="rounded-xl bg-white border border-[#E5E7EB] px-5 py-4 min-w-[120px] shadow-sm">
+                <p className="text-[11px] uppercase tracking-wide text-[#9CA3AF]">Insights</p>
+                <p className="text-2xl font-bold font-mono tabular-nums text-[#1A1A1A]">{aiInsights.length}</p>
               </div>
-              <div className="rounded-xl bg-white/10 border border-white/15 px-5 py-4 min-w-[120px]">
-                <p className="text-[11px] uppercase tracking-wide text-white/55">Υψηλής προτεραιότητας</p>
-                <p className="text-2xl font-bold font-mono tabular-nums text-amber-200">{highImpactCount}</p>
+              <div className="rounded-xl bg-white border border-[#E5E7EB] px-5 py-4 min-w-[120px] shadow-sm">
+                <p className="text-[11px] uppercase tracking-wide text-[#9CA3AF]">Υψηλής προτεραιότητας</p>
+                <p className="text-2xl font-bold font-mono tabular-nums text-amber-600">{highImpactCount}</p>
               </div>
             </div>
           </div>
@@ -146,7 +148,7 @@ export function AIInsightsPage({ onSectionChange }: AIInsightsPageProps) {
                   onClick={() => setFilter(type)}
                   className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all border ${
                     filter === type
-                      ? 'bg-[#1A1A2E] text-white border-[#1A1A2E] shadow-sm'
+                      ? 'bg-[var(--nts-accent)] text-white border-[var(--nts-accent)] shadow-sm'
                       : 'bg-white text-[#4A5568] border-[#E5E7EB] hover:border-[#CBD5E1] hover:bg-[#F9FAFB]'
                   }`}
                 >

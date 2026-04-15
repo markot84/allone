@@ -269,6 +269,146 @@ export function getCampaignDailyAttributedValueInPeriod(
   return out;
 }
 
+/**
+ * Ημερήσια attributed spend (`amount_spent`) ανά YYYY-MM-DD μέσα στο [fromDate, toDate].
+ * Ίδια δομή κουβακιών με {@link getCampaignDailyAttributedValueInPeriod} για συνεπές ROAS ανά ημέρα.
+ */
+export function getCampaignDailyAttributedSpendInPeriod(
+  c: Campaign,
+  fromDate: string,
+  toDate: string
+): Map<string, number> {
+  const out = new Map<string, number>();
+  const add = (day: string, v: number) => {
+    if (!v) return;
+    out.set(day, (out.get(day) || 0) + v);
+  };
+
+  const dm = c.dailyMetrics;
+  if (dm && Object.keys(dm).length > 0) {
+    const metaMonthBuckets = metaUsesLegacyMonthBuckets(c);
+    if (!metaMonthBuckets) {
+      for (const [dateKey, raw] of Object.entries(dm)) {
+        if (dateKey.length < 10 || dateKey[4] !== '-' || dateKey[7] !== '-') continue;
+        if (dateKey < fromDate || dateKey > toDate) continue;
+        const metrics = raw as { amount_spent?: number };
+        add(dateKey, Number(metrics.amount_spent) || 0);
+      }
+    } else {
+      for (const [dateKey, raw] of Object.entries(dm)) {
+        if (dateKey.slice(8, 10) !== '01') continue;
+        const metrics = raw as { amount_spent?: number };
+        const monthTotal = Number(metrics.amount_spent) || 0;
+        const ym = dateKey.slice(0, 7);
+        const [yy, mm] = ym.split('-').map(Number);
+        if (!yy || !mm) continue;
+        const dim = daysInMonthYm(yy, mm);
+        const monthEnd = `${ym}-${String(dim).padStart(2, '0')}`;
+        const monthStart = `${ym}-01`;
+        const attributedMonth =
+          monthTotal * bucketOverlapFraction(dateKey, fromDate, toDate, { metaMonthBuckets: true });
+        if (attributedMonth <= 0) continue;
+        const overlapStart = dateStrMax(monthStart, fromDate);
+        const overlapEnd = dateStrMin(monthEnd, toDate);
+        if (overlapStart > overlapEnd) continue;
+        const daysInOverlap = eachDateInclusive(overlapStart, overlapEnd).filter((d) => d.slice(0, 7) === ym);
+        const n = daysInOverlap.length;
+        if (n <= 0) continue;
+        const perDay = attributedMonth / n;
+        for (const d of daysInOverlap) {
+          add(d, perDay);
+        }
+      }
+    }
+    const dmSum = [...out.values()].reduce((a, b) => a + b, 0);
+    const agg = c.amount_spent || 0;
+    if (dmSum === 0 && agg > 0) {
+      const cd = getCampaignDateForMonth(c);
+      if (cd) {
+        const ymd = `${cd.getFullYear()}-${String(cd.getMonth() + 1).padStart(2, '0')}-${String(cd.getDate()).padStart(2, '0')}`;
+        if (ymd >= fromDate && ymd <= toDate) add(ymd, agg);
+      }
+    }
+    return out;
+  }
+
+  const cd = getCampaignDateForMonth(c);
+  if (!cd) return out;
+  const ymd = `${cd.getFullYear()}-${String(cd.getMonth() + 1).padStart(2, '0')}-${String(cd.getDate()).padStart(2, '0')}`;
+  if (ymd >= fromDate && ymd <= toDate) add(ymd, c.amount_spent || 0);
+  return out;
+}
+
+/**
+ * Ημερήσια attributed conversions ανά YYYY-MM-DD μέσα στο [fromDate, toDate].
+ * Ίδια κουβάκια με {@link getCampaignDailyAttributedSpendInPeriod} (για AOV / τάση ανά ημέρα).
+ */
+export function getCampaignDailyAttributedConversionsInPeriod(
+  c: Campaign,
+  fromDate: string,
+  toDate: string
+): Map<string, number> {
+  const out = new Map<string, number>();
+  const add = (day: string, v: number) => {
+    if (!v) return;
+    out.set(day, (out.get(day) || 0) + v);
+  };
+
+  const dm = c.dailyMetrics;
+  if (dm && Object.keys(dm).length > 0) {
+    const metaMonthBuckets = metaUsesLegacyMonthBuckets(c);
+    if (!metaMonthBuckets) {
+      for (const [dateKey, raw] of Object.entries(dm)) {
+        if (dateKey.length < 10 || dateKey[4] !== '-' || dateKey[7] !== '-') continue;
+        if (dateKey < fromDate || dateKey > toDate) continue;
+        const metrics = raw as { conversions?: number };
+        add(dateKey, Number(metrics.conversions) || 0);
+      }
+    } else {
+      for (const [dateKey, raw] of Object.entries(dm)) {
+        if (dateKey.slice(8, 10) !== '01') continue;
+        const metrics = raw as { conversions?: number };
+        const monthTotal = Number(metrics.conversions) || 0;
+        const ym = dateKey.slice(0, 7);
+        const [yy, mm] = ym.split('-').map(Number);
+        if (!yy || !mm) continue;
+        const dim = daysInMonthYm(yy, mm);
+        const monthEnd = `${ym}-${String(dim).padStart(2, '0')}`;
+        const monthStart = `${ym}-01`;
+        const attributedMonth =
+          monthTotal * bucketOverlapFraction(dateKey, fromDate, toDate, { metaMonthBuckets: true });
+        if (attributedMonth <= 0) continue;
+        const overlapStart = dateStrMax(monthStart, fromDate);
+        const overlapEnd = dateStrMin(monthEnd, toDate);
+        if (overlapStart > overlapEnd) continue;
+        const daysInOverlap = eachDateInclusive(overlapStart, overlapEnd).filter((d) => d.slice(0, 7) === ym);
+        const n = daysInOverlap.length;
+        if (n <= 0) continue;
+        const perDay = attributedMonth / n;
+        for (const d of daysInOverlap) {
+          add(d, perDay);
+        }
+      }
+    }
+    const dmSum = [...out.values()].reduce((a, b) => a + b, 0);
+    const agg = getEffectiveConversions(c);
+    if (dmSum === 0 && agg > 0) {
+      const cd = getCampaignDateForMonth(c);
+      if (cd) {
+        const ymd = `${cd.getFullYear()}-${String(cd.getMonth() + 1).padStart(2, '0')}-${String(cd.getDate()).padStart(2, '0')}`;
+        if (ymd >= fromDate && ymd <= toDate) add(ymd, agg);
+      }
+    }
+    return out;
+  }
+
+  const cd = getCampaignDateForMonth(c);
+  if (!cd) return out;
+  const ymd = `${cd.getFullYear()}-${String(cd.getMonth() + 1).padStart(2, '0')}-${String(cd.getDate()).padStart(2, '0')}`;
+  if (ymd >= fromDate && ymd <= toDate) add(ymd, getEffectiveConversions(c));
+  return out;
+}
+
 export type RoiTrendDailyRow = {
   date: string;
   label: string;
@@ -325,6 +465,65 @@ export function mergeOrganicByMonthWithGa4(
     if ((out.get(ym) || 0) === 0 && v > 0) out.set(ym, Math.round(v));
   });
   return out;
+}
+
+/**
+ * Όταν λείπει το `organicRevenueByDay` στο Firestore (ή το άθροισμα στην περίοδο είναι ~0), εκτιμούμε
+ * ημερήσιο organic από το συνολικό organic των καναλιών GA4 (`trafficSources`, ίδιο με τον πίνακα «Ανάλυση καναλιών»),
+ * με ομοιόμορφη κατανομή στο [syncStart–syncEnd] και κλιμάκωση στο τομή με την επιλεγμένη περίοδο.
+ */
+export function mergeGa4OrganicDailyWithChannelFallback(
+  ga4OrganicByDay: Record<string, number> | undefined,
+  channelOrganicTotal: number,
+  syncDateRange: { start: string; end: string } | undefined,
+  periodFrom: string,
+  periodTo: string
+): Record<string, number> {
+  const base: Record<string, number> = {};
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(periodFrom) || !/^\d{4}-\d{2}-\d{2}$/.test(periodTo)) {
+    if (ga4OrganicByDay) {
+      for (const [k, v] of Object.entries(ga4OrganicByDay)) {
+        if (/^\d{4}-\d{2}-\d{2}$/.test(k) && typeof v === 'number' && v > 0) base[k] = v;
+      }
+    }
+    return base;
+  }
+  if (ga4OrganicByDay) {
+    for (const [k, v] of Object.entries(ga4OrganicByDay)) {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(k) && typeof v === 'number' && v > 0) base[k] = v;
+    }
+  }
+
+  const periodDays = eachDateInclusive(periodFrom, periodTo);
+  const sumInPeriod = periodDays.reduce((s, d) => s + (base[d] || 0), 0);
+  if (sumInPeriod >= 0.5) return base;
+  if (channelOrganicTotal <= 0 || !syncDateRange?.start || !syncDateRange?.end) return base;
+
+  const syncStart = syncDateRange.start;
+  const syncEnd = syncDateRange.end;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(syncStart) || !/^\d{4}-\d{2}-\d{2}$/.test(syncEnd)) return base;
+
+  const syncDayCount = eachDateInclusive(syncStart, syncEnd).length;
+  if (syncDayCount <= 0) return base;
+
+  const overlapFrom = dateStrMax(periodFrom, syncStart);
+  const overlapTo = dateStrMin(periodTo, syncEnd);
+  if (overlapFrom > overlapTo) return base;
+
+  const overlapArr = eachDateInclusive(overlapFrom, overlapTo);
+  const n = overlapArr.length;
+  if (n <= 0) return base;
+
+  const scaledTotal = channelOrganicTotal * (n / syncDayCount);
+  const perDay = scaledTotal / n;
+
+  for (const d of overlapArr) {
+    base[d] = (base[d] || 0) + perDay;
+  }
+  for (const k of Object.keys(base)) {
+    base[k] = Math.round(base[k] * 100) / 100;
+  }
+  return base;
 }
 
 /**

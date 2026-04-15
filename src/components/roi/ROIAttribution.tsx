@@ -36,6 +36,7 @@ import {
   bucketOverlapFraction,
   metaUsesLegacyMonthBuckets,
   buildRoiTrendSeriesDaily,
+  mergeGa4OrganicDailyWithChannelFallback,
   formatTrendDayLabel,
   ROI_PERCENT_CALC_TOOLTIP,
 } from '../../utils/roiUtils';
@@ -86,13 +87,47 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
   const campaignsAll = campaigns as Campaign[];
   const { activeStrategy } = useActiveStrategy();
   const ecomm = useEcommerceSummary();
-  const { organicRevenueByDay: ga4OrganicByDay } = useGA4Data();
+  const {
+    organicRevenueByDay: ga4OrganicByDay,
+    totalOrganicRevenueFromChannels,
+    dateRange: ga4DateRange,
+  } = useGA4Data();
   const { currentBrand } = useBrand();
   const queryClient = useQueryClient();
   const [seeding, setSeeding] = useState(false);
   const [eshopCompareTab, setEshopCompareTab] = useState<'compare' | 'organic'>('compare');
   const { period: dashPeriod, setPeriod: setDashPeriod, periodDates } = useDashPeriod();
   const { customFrom, customTo, setCustomRange } = useGlobalDate();
+
+  const ga4OrganicEffective = useMemo(
+    () =>
+      mergeGa4OrganicDailyWithChannelFallback(
+        ga4OrganicByDay,
+        totalOrganicRevenueFromChannels,
+        ga4DateRange ?? undefined,
+        periodDates.fromDate,
+        periodDates.toDate
+      ),
+    [
+      ga4OrganicByDay,
+      totalOrganicRevenueFromChannels,
+      ga4DateRange?.start,
+      ga4DateRange?.end,
+      periodDates.fromDate,
+      periodDates.toDate,
+    ]
+  );
+
+  /** Όταν δεν υπάρχει organicRevenueByDay στο Firestore, εφαρμόζεται κατανομή από σύνολο καναλιών. */
+  const organicUsesChannelFallback = useMemo(() => {
+    let sumRaw = 0;
+    if (ga4OrganicByDay) {
+      for (const d of eachDateInclusive(periodDates.fromDate, periodDates.toDate)) {
+        sumRaw += Number(ga4OrganicByDay[d]) || 0;
+      }
+    }
+    return sumRaw < 0.5 && totalOrganicRevenueFromChannels > 0;
+  }, [ga4OrganicByDay, periodDates.fromDate, periodDates.toDate, totalOrganicRevenueFromChannels]);
 
   const dateFilteredCampaigns = useMemo(() => {
     const all = campaigns as Campaign[];
@@ -234,7 +269,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
         periodDates.fromDate,
         periodDates.toDate,
         ecomm.hasData,
-        ga4OrganicByDay
+        ga4OrganicEffective
       ),
     [
       organicByMonth,
@@ -243,7 +278,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
       ecomm.hasData,
       periodDates.fromDate,
       periodDates.toDate,
-      ga4OrganicByDay,
+      ga4OrganicEffective,
     ]
   );
 
@@ -730,9 +765,16 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
           <CardHeader
             title="Τάση Εσόδων"
             subtitle={
-              ecomm.hasData
-                ? `Organic vs Campaign vs e-shop ανά ημέρα (${formatPeriodDate(periodDates.fromDate)} — ${formatPeriodDate(periodDates.toDate)})`
-                : `Organic vs Campaign ανά ημέρα (${formatPeriodDate(periodDates.fromDate)} — ${formatPeriodDate(periodDates.toDate)})`
+              <>
+                {ecomm.hasData
+                  ? `Organic vs Campaign vs e-shop ανά ημέρα (${formatPeriodDate(periodDates.fromDate)} — ${formatPeriodDate(periodDates.toDate)})`
+                  : `Organic vs Campaign ανά ημέρα (${formatPeriodDate(periodDates.fromDate)} — ${formatPeriodDate(periodDates.toDate)})`}
+                {organicUsesChannelFallback && (
+                  <span className="block text-[11px] font-normal text-[#9CA3AF] mt-1.5 leading-snug">
+                    Όταν λείπει το ημερήσιο organic στο sync, η γραμμή Organic εκτιμάται από το σύνολο organic στους πίνακες καναλιών GA4 (ομοιόμορφα στο εύρος sync, κλιμακωμένα στην περίοδο).
+                  </span>
+                )}
+              </>
             }
             icon={<TrendingUp size={20} className="text-[var(--nts-accent)]" />}
           />

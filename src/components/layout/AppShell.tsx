@@ -411,6 +411,13 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
   const { activeStrategy } = useActiveStrategy();
   useBrandMembers();
 
+  /** Το κύριο scroll είναι εδώ (όχι το window) — ώστε νέα σελίδα από το μενού να ξεκινά από πάνω. */
+  const mainContentScrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = mainContentScrollRef.current;
+    if (el) el.scrollTop = 0;
+  }, [activeSection]);
+
   const strategyBadge = useMemo(() => {
     if (!activeStrategy?.duration || activeStrategy.duration === 'ongoing') return null;
     const dur = typeof activeStrategy.duration === 'string' ? parseInt(activeStrategy.duration as string, 10) : activeStrategy.duration;
@@ -702,6 +709,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
 
         {/* Main Content */}
         <div 
+          ref={mainContentScrollRef}
           style={{ 
             flex: 1,
             minWidth: 0,

@@ -91,6 +91,13 @@ const CHANNEL_COLORS: Record<string, string> = {
 };
 const DEFAULT_COLOR = '#94A3B8';
 
+/** Το Recharts Area χρειάζεται ≥2 σημεία για ορατή γραμμή. */
+function padSparklineForChart(values: number[]): number[] {
+  if (values.length === 0) return [];
+  if (values.length === 1) return [values[0], values[0]];
+  return values;
+}
+
 type SortField = 'pageViews' | 'sessions' | 'bounceRate';
 
 export function GA4Analytics() {
@@ -138,18 +145,23 @@ export function GA4Analytics() {
     return { ...sum, bounceRate: sum.bounceRate / n, avgDuration: sum.avgDuration / n };
   }, [filteredDailyEntries]);
 
-  // weeklyChange from filtered data
+  // weeklyChange από τα φιλτραρισμένα ημερήσια (τελευταία 7 vs προηγούμενες 7)
   const weeklyChange = useMemo(() => {
     if (filteredDailyEntries.length < 14) return null;
     const last7 = filteredDailyEntries.slice(-7);
     const prev7 = filteredDailyEntries.slice(-14, -7);
     const sum = (arr: typeof filteredDailyEntries, fn: (d: typeof filteredDailyEntries[0]) => number) => arr.reduce((a, d) => a + fn(d), 0);
+    const avg = (arr: typeof filteredDailyEntries, fn: (d: typeof filteredDailyEntries[0]) => number) =>
+      arr.length ? sum(arr, fn) / arr.length : 0;
     const pct = (prev: number, curr: number) => prev > 0 ? ((curr - prev) / prev) * 100 : null;
     return {
       sessions: pct(sum(prev7, d => d.sessions), sum(last7, d => d.sessions)),
       users: pct(sum(prev7, d => d.totalUsers), sum(last7, d => d.totalUsers)),
       conversions: pct(sum(prev7, d => d.conversions), sum(last7, d => d.conversions)),
       newUsers: pct(sum(prev7, d => d.newUsers), sum(last7, d => d.newUsers)),
+      pageViews: pct(sum(prev7, d => d.pageViews), sum(last7, d => d.pageViews)),
+      bounceRate: pct(avg(prev7, d => d.bounceRate), avg(last7, d => d.bounceRate)),
+      avgDuration: pct(avg(prev7, d => d.avgSessionDuration), avg(last7, d => d.avgSessionDuration)),
     };
   }, [filteredDailyEntries]);
 
@@ -289,21 +301,34 @@ export function GA4Analytics() {
     },
   ];
 
+  const sparkWindow = dailyEntries.slice(-14);
+
   const secondaryKpis: KPICardData[] = [
     {
       label: 'Bounce rate',
       value: fmtPct(totals.bounceRate),
+      change: round1(weeklyChange?.bounceRate),
+      changeLabel: 'vs 7 ημ.',
+      trend: weeklyChange?.bounceRate != null ? (weeklyChange.bounceRate >= 0 ? 'up' : 'down') : undefined,
+      sparklineData: padSparklineForChart(sparkWindow.map((d) => d.bounceRate * 100)),
       tooltip: 'Μέσος bounce rate (90 ημ.)',
     },
     {
       label: 'Μέση διάρκεια',
       value: fmtDuration(totals.avgDuration),
+      change: round1(weeklyChange?.avgDuration),
+      changeLabel: 'vs 7 ημ.',
+      trend: weeklyChange?.avgDuration != null ? (weeklyChange.avgDuration >= 0 ? 'up' : 'down') : undefined,
+      sparklineData: padSparklineForChart(sparkWindow.map((d) => d.avgSessionDuration)),
       tooltip: 'Μέση διάρκεια session (GA4)',
     },
     {
       label: 'Προβολές σελίδων',
       value: fmt(totals.pageViews),
-      sparklineData: dailyEntries.slice(-14).map((d) => d.pageViews),
+      change: round1(weeklyChange?.pageViews),
+      changeLabel: 'vs 7 ημ.',
+      trend: weeklyChange?.pageViews != null ? (weeklyChange.pageViews >= 0 ? 'up' : 'down') : undefined,
+      sparklineData: padSparklineForChart(sparkWindow.map((d) => d.pageViews)),
       tooltip: 'Σύνολο προβολών σελίδων (90 ημ.)',
     },
   ];

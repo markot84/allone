@@ -31,10 +31,14 @@ import {
   calculateCampaignMetrics,
   getCampaignDateForMonth,
   getCampaignMonthlyAttributedValueInPeriod,
+  getCampaignDailyAttributedValueInPeriod,
+  getCampaignDailyAttributedSpendInPeriod,
+  getCampaignDailyAttributedConversionsInPeriod,
   monthKeyFromDate,
   buildRoiTrendSeries,
   buildRoiTrendSeriesDaily,
   mergeOrganicByMonthWithGa4,
+  mergeGa4OrganicDailyWithChannelFallback,
   sumDailyRevenueInPeriod,
   bucketOverlapFraction,
   metaUsesLegacyMonthBuckets,
@@ -46,6 +50,17 @@ import { useAutomationRunner } from '../../hooks/useAutomationRunner';
 import { useAutomationAlerts } from '../../hooks/useAutomation';
 import { MorningBriefing } from './MorningBriefing';
 import { StrategyBriefingQuickStrip } from '../coordination/StrategyBriefingQuickStrip';
+import { eachDateInclusive } from '../../utils/marketingCostPeriod';
+
+/** Ημερήσια σημεία στο chart· πάνω από αυτό → μηνιαία σύνοψη (αναγνώσιμο άξονα). */
+const REVENUE_CHART_MAX_DAILY_POINTS = 90;
+
+/** Το Recharts Area χρειάζεται ≥2 σημεία· αν υπάρχει 1 μήνας μόνο, διπλασιάζουμε για ορατή γραμμή. */
+function padSparklineForChart(values: number[]): number[] {
+  if (values.length === 0) return [];
+  if (values.length === 1) return [values[0], values[0]];
+  return values;
+}
 
 interface DashboardOverviewProps {
   /** Προαιρετικό `hashQuery` για deep link (π.χ. ειδοποιήσεις → `#products?stock=low`) */
@@ -114,9 +129,28 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
 
   const campaignMetrics = useMemo(() => calculateCampaignMetrics(periodCampaigns), [periodCampaigns]);
 
+  const ga4OrganicEffective = useMemo(
+    () =>
+      mergeGa4OrganicDailyWithChannelFallback(
+        ga4.organicRevenueByDay,
+        ga4.totalOrganicRevenueFromChannels,
+        ga4.dateRange ?? undefined,
+        periodDates.fromDate,
+        periodDates.toDate
+      ),
+    [
+      ga4.organicRevenueByDay,
+      ga4.totalOrganicRevenueFromChannels,
+      ga4.dateRange?.start,
+      ga4.dateRange?.end,
+      periodDates.fromDate,
+      periodDates.toDate,
+    ]
+  );
+
   const mergedOrganicByMonth = useMemo(
-    () => mergeOrganicByMonthWithGa4(organicByMonth, ga4.organicRevenueByDay),
-    [organicByMonth, ga4.organicRevenueByDay]
+    () => mergeOrganicByMonthWithGa4(organicByMonth, ga4OrganicEffective),
+    [organicByMonth, ga4OrganicEffective]
   );
 
   const organicRevenueInPeriod = useMemo(() => {
@@ -127,10 +161,10 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       periodDates.fromDate,
       periodDates.toDate,
       false,
-      ga4.organicRevenueByDay
+      ga4OrganicEffective
     );
     return rows.reduce((s, r) => s + r.organic, 0);
-  }, [mergedOrganicByMonth, ga4.organicRevenueByDay, periodDates.fromDate, periodDates.toDate]);
+  }, [mergedOrganicByMonth, ga4OrganicEffective, periodDates.fromDate, periodDates.toDate]);
 
   const ecommRevenueByDayRecord = useMemo(() => {
     const o: Record<string, number> = {};
@@ -157,19 +191,40 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     [organicRevenueInPeriod, campaignMetrics.totalRevenue]
   );
 
-  // Revenue chart: organic + campaign attributed value ανά μήνα (YYYY-MM merge, χρονολογική σειρά)
+  // Revenue chart: τάση στο επιλεγμένο εύρος — ημερήσια σειρά (ώστε ο τρέχων μήνας να μην είναι 1 σημείο), αλλιώς μηνιαία αν το εύρος είναι πολύ μεγάλο
   const revenueChartData = useMemo(() => {
-    const fromYm = periodDates.fromDate.slice(0, 7);
-    const toYm = periodDates.toDate.slice(0, 7);
+    const { fromDate, toDate } = periodDates;
+    const dayCount = eachDateInclusive(fromDate, toDate).length;
+    if (dayCount === 0) return [];
+
+    if (dayCount <= REVENUE_CHART_MAX_DAILY_POINTS) {
+      const dailyRows = buildRoiTrendSeriesDaily(
+        mergedOrganicByMonth,
+        periodCampaigns as Campaign[],
+        undefined,
+        fromDate,
+        toDate,
+        false,
+        ga4OrganicEffective
+      );
+      return dailyRows.map((r) => ({
+        month: r.label,
+        total: (r.organic + r.campaigns) / 1000,
+        attributed: r.campaigns / 1000,
+      }));
+    }
+
+    const fromYm = fromDate.slice(0, 7);
+    const toYm = toDate.slice(0, 7);
     const rows = buildRoiTrendSeries(mergedOrganicByMonth, periodCampaigns as Campaign[], [], fromYm, toYm, false, {
-      periodClip: { fromDate: periodDates.fromDate, toDate: periodDates.toDate },
+      periodClip: { fromDate, toDate },
     });
     return rows.map((r) => ({
       month: r.month,
       total: (r.organic + r.campaigns) / 1000,
       attributed: r.campaigns / 1000,
     }));
-  }, [mergedOrganicByMonth, periodCampaigns, periodDates.fromDate, periodDates.toDate]);
+  }, [mergedOrganicByMonth, periodCampaigns, periodDates, ga4OrganicEffective]);
 
   // Debug logging
   useEffect(() => {
@@ -385,8 +440,45 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           : 0;
         const aovMoM = prevAov > 0 ? ((currAov - prevAov) / prevAov) * 100 : null;
 
-        const revenueSpark = sortMonthKeys(Object.entries(revenueByMonth)).map(([, v]) => v / 1000);
-        const spendSpark = sortMonthKeys(Object.entries(spendByMonth)).map(([, v]) => v / 1000);
+        const { fromDate: kFrom, toDate: kTo } = periodDates;
+        const dayList = eachDateInclusive(kFrom, kTo);
+
+        const dailyTrendKpi = buildRoiTrendSeriesDaily(
+          mergedOrganicByMonth,
+          periodCampaigns as Campaign[],
+          undefined,
+          kFrom,
+          kTo,
+          false,
+          ga4OrganicEffective
+        );
+        const revenueSpark = padSparklineForChart(dailyTrendKpi.map((r) => (r.organic + r.campaigns) / 1000));
+
+        const spendByDay: Record<string, number> = {};
+        periodCampaigns.forEach((c) => {
+          getCampaignDailyAttributedSpendInPeriod(c, kFrom, kTo).forEach((v, d) => {
+            spendByDay[d] = (spendByDay[d] || 0) + v;
+          });
+        });
+        const spendSpark = padSparklineForChart(dayList.map((d) => (spendByDay[d] || 0) / 1000));
+
+        const valByDay: Record<string, number> = {};
+        const convByDay: Record<string, number> = {};
+        periodCampaigns.forEach((c) => {
+          getCampaignDailyAttributedValueInPeriod(c, kFrom, kTo).forEach((v, d) => {
+            valByDay[d] = (valByDay[d] || 0) + v;
+          });
+          getCampaignDailyAttributedConversionsInPeriod(c, kFrom, kTo).forEach((v, d) => {
+            convByDay[d] = (convByDay[d] || 0) + v;
+          });
+        });
+        const aovSpark = padSparklineForChart(
+          dayList.map((d) => {
+            const conv = convByDay[d] || 0;
+            const val = valByDay[d] || 0;
+            return conv > 0 ? val / conv : 0;
+          })
+        );
 
         return (
           <div className="space-y-3">
@@ -424,6 +516,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   change: aovMoM !== null ? Math.round(aovMoM) : undefined,
                   changeLabel: aovMoM !== null ? 'vs προηγ. μήνα' : undefined,
                   trend: aov > 0 ? (aovMoM !== null && aovMoM < 0 ? 'down' : 'up') : undefined,
+                  sparklineData: aovSpark,
                   tooltip: 'Average Order Value — Μέση αξία παραγγελίας: Αξία Μετατροπών ÷ Αριθμός Μετατροπών.',
                 }}
                 index={2}
