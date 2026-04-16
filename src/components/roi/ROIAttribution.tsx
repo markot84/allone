@@ -139,10 +139,10 @@ interface ROIAttributionProps {
   embedded?: boolean;
 }
 
-type KpiTabId = 'roi' | 'revenue' | 'organic' | 'conversionsRate';
+type KpiTabId = 'roi' | 'eshopRevenue' | 'revenue' | 'organic' | 'conversionsRate';
 
 /** Σειρά εμφάνισης — ίδιο visual language με Campaigns / Competitive Intelligence (segmented strip). */
-const KPI_ORDER: KpiTabId[] = ['roi', 'revenue', 'organic', 'conversionsRate'];
+const KPI_ORDER: KpiTabId[] = ['roi', 'eshopRevenue', 'revenue', 'organic', 'conversionsRate'];
 
 export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
   const { byMonth: organicByMonth, hasOrganicRevenue: hasOrganic } = useOrganic();
@@ -380,6 +380,16 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
         tooltip:
           'ROI %: (έσοδα καμπανιών − ad spend) ÷ ad spend. Ο πολλαπλασιαστής ROAS (×) και οι υπόλοιπες εκδοχές απόδοσης είναι στον πίνακα «Ανάλυση απόδοσης (ROAS & ROI)» παρακάτω.',
       },
+      eshopRevenue: {
+        icon: <ShoppingBag size={22} strokeWidth={2} />,
+        label: 'e-shop Revenue',
+        value: ecomm.hasData ? formatCurrencyCompact(ecommRevenueInPeriod) : '—',
+        subtitle: ecomm.hasData ? 'Στην επιλεγμένη περίοδο · synced e-shop revenue' : 'Χωρίς synced e-shop data',
+        color: '#111827',
+        iconWrapClass: 'bg-emerald-50 text-emerald-600',
+        tooltip:
+          'Συνολικό e-shop Revenue για την επιλεγμένη περίοδο, από τα συνδεδεμένα καταστήματα και το συγχρονισμένο ημερήσιο revenue.',
+      },
       revenue: {
         icon: <Euro size={22} strokeWidth={2} />,
         label: 'Revenue',
@@ -440,6 +450,8 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
     hasCampaigns,
     campaignsTyped.length,
     organicRevenueInPeriod,
+    ecommRevenueInPeriod,
+    ecomm.hasData,
   ]);
 
   const totalSpendForBudget = metrics.totalSpend;
@@ -522,7 +534,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
       )}
 
       {/* KPI row: εικονίδιο αριστερά (pastel box), label + τιμή + υπότιτλος δεξιά */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5 lg:gap-4">
         {KPI_ORDER.map((id) => (
           <RoiKpiTabCard key={id} {...kpiPanelConfig[id]} />
         ))}

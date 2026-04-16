@@ -1,10 +1,14 @@
 {
-  "version": "0.437.0",
-  "previousVersion": "0.436.0",
-  "commitHash": "6dc99b9",
+  "version": "0.438.0",
+  "previousVersion": "0.437.0",
+  "commitHash": "5667f94",
   "branch": "main",
-  "buildDate": "2026-04-15T19:13:15.043Z",
+  "buildDate": "2026-04-16T04:31:38.341Z",
   "commits": [
+    {
+      "hash": "5667f94",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "6dc99b9",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "71328a0",
       "message": "Add campaign helper files, Performance image variants, apply_campaigns patch script"
-    },
-    {
-      "hash": "e7fad11",
-      "message": "Campaigns: filters, server-side fetch, Meta sync resilience, purchase/conversion alignment"
     }
   ],
   "changes": [
