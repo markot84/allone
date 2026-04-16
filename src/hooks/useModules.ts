@@ -1,5 +1,11 @@
 import { useMemo } from 'react';
-import { getDefaultSectionForBrand, getModuleIdForSection, getModuleLabel, resolveEnabledModules } from '../config/modules';
+import {
+  effectiveBrandTypeForModules,
+  getDefaultSectionForBrand,
+  getModuleIdForSection,
+  getModuleLabel,
+  resolveEnabledModules,
+} from '../config/modules';
 import type { AppSectionId, ModuleId } from '../types';
 import { useBrand } from './useBrand';
 import { usePlan } from './usePlan';
@@ -14,7 +20,7 @@ export function useModules() {
   const { currentBrand } = useBrand();
   const { canAccess } = usePlan();
 
-  const brandType = currentBrand?.type ?? 'B2C';
+  const brandType = effectiveBrandTypeForModules(currentBrand);
   const isB2B = brandType === 'B2B';
 
   const enabledModules = useMemo(

@@ -107,7 +107,7 @@ function QueryProvider({ children }: { children: React.ReactNode }) {
               // Large Firestore collections: served by Firestore's own IndexedDB cache —
               // keeping them out of localStorage prevents quota-exceeded errors that
               // silently wipe the entire persisted cache.
-              if (key === 'campaigns' || key === 'search_intelligence') return false;
+              if (key === 'campaigns' || key === 'search_intelligence' || key === 'priceBenchmarks' || key === 'priceInsights') return false;
               // Don't persist empty / null results
               if (query.state.data === null || query.state.data === undefined) return false;
               return true;
@@ -122,7 +122,8 @@ function QueryProvider({ children }: { children: React.ReactNode }) {
   return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
 }
 
-function App() {
+/** Hash routing + AppShell — must render under AuthGuard → BrandProvider (useModules → useBrand). */
+function AppMain() {
   const { isSectionEnabled, getFallbackSection } = useModules();
   const VALID_SECTIONS = APP_SECTIONS;
 
@@ -196,80 +197,6 @@ function App() {
       window.removeEventListener('navigate-to-help' as any, handleNavigateToHelp);
     };
   }, []);
-
-  // Handle Firebase Auth action URLs (password reset, email verification)
-  if (typeof window !== 'undefined') {
-    const params = new URLSearchParams(window.location.search);
-    const authMode = params.get('mode');
-    const oobCode = params.get('oobCode');
-    if (authMode && oobCode) {
-      return (
-        <QueryProvider>
-          <ToastProvider>
-            <AuthActionPage
-              mode={authMode}
-              oobCode={oobCode}
-              onDone={() => { window.location.href = '/?auth=1'; }}
-            />
-          </ToastProvider>
-        </QueryProvider>
-      );
-    }
-  }
-
-  // Handle /invite/:token and /redeem/:token (alias — same flow as some invite emails say "redeem")
-  const pathMatch =
-    typeof window !== 'undefined' &&
-    window.location.pathname.match(/^\/(?:invite|redeem)\/([^/]+)$/);
-  if (pathMatch) {
-    return (
-      <QueryProvider>
-        <ToastProvider>
-          <InviteAcceptPage
-            token={pathMatch[1]}
-            onAccepted={() => {
-              window.location.href = '/';
-            }}
-          />
-        </ToastProvider>
-      </QueryProvider>
-    );
-  }
-
-  // Public legal pages (no auth required)
-  if (typeof window !== 'undefined' && window.location.pathname === '/privacy') {
-    return (
-      <QueryProvider>
-        <ToastProvider>
-          <PrivacyPolicy />
-        </ToastProvider>
-      </QueryProvider>
-    );
-  }
-
-  if (typeof window !== 'undefined' && window.location.pathname === '/terms') {
-    return (
-      <QueryProvider>
-        <ToastProvider>
-          <TermsOfService />
-        </ToastProvider>
-      </QueryProvider>
-    );
-  }
-
-  // Handle #shared/ID route — public viewer for shared strategy packages
-  const sharedMatch = typeof window !== 'undefined' && window.location.hash.match(/^#shared\/([a-zA-Z0-9]+)$/);
-  if (sharedMatch) {
-    return (
-      <QueryProvider>
-        <ToastProvider>
-          <div style={{ minHeight: '100vh', backgroundColor: '#fff', padding: 24 }}>
-            <SharedPackageViewer packageId={sharedMatch[1]} />
-          </div>
-        </ToastProvider>
-      </QueryProvider>
-    );
-  }
 
   const handleSectionChange = useCallback((section: string, opts?: { hashQuery?: string }) => {
     requestAnimationFrame(() => {
@@ -364,36 +291,116 @@ function App() {
   };
 
   return (
+    <div style={{
+      height: '100vh',
+      width: '100vw',
+      maxWidth: '100vw',
+      display: 'flex',
+      flexDirection: 'column',
+      overflow: 'hidden',
+      position: 'relative'
+    }}>
+      <AppShell
+        activeSection={activeSection}
+        onSectionChange={handleSectionChange}
+      >
+        <ErrorBoundary>
+          <Suspense fallback={<div className="flex items-center justify-center h-64"><Spinner size="lg" /></div>}>
+            {renderContent()}
+          </Suspense>
+        </ErrorBoundary>
+      </AppShell>
+
+      {activeSection !== 'insights' && (
+        <AIInsightsTriggerWrapper onClick={() => handleSectionChange('insights')} />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Static / public routes first (no hooks). Main SPA uses AppMain only under AuthGuard → BrandProvider
+ * so useModules() → useBrand() does not throw for logged-out users.
+ */
+function App() {
+  if (typeof window !== 'undefined') {
+    const params = new URLSearchParams(window.location.search);
+    const authMode = params.get('mode');
+    const oobCode = params.get('oobCode');
+    if (authMode && oobCode) {
+      return (
+        <QueryProvider>
+          <ToastProvider>
+            <AuthActionPage
+              mode={authMode}
+              oobCode={oobCode}
+              onDone={() => { window.location.href = '/?auth=1'; }}
+            />
+          </ToastProvider>
+        </QueryProvider>
+      );
+    }
+  }
+
+  const pathMatch =
+    typeof window !== 'undefined' &&
+    window.location.pathname.match(/^\/(?:invite|redeem)\/([^/]+)$/);
+  if (pathMatch) {
+    return (
+      <QueryProvider>
+        <ToastProvider>
+          <InviteAcceptPage
+            token={pathMatch[1]}
+            onAccepted={() => {
+              window.location.href = '/';
+            }}
+          />
+        </ToastProvider>
+      </QueryProvider>
+    );
+  }
+
+  if (typeof window !== 'undefined' && window.location.pathname === '/privacy') {
+    return (
+      <QueryProvider>
+        <ToastProvider>
+          <PrivacyPolicy />
+        </ToastProvider>
+      </QueryProvider>
+    );
+  }
+
+  if (typeof window !== 'undefined' && window.location.pathname === '/terms') {
+    return (
+      <QueryProvider>
+        <ToastProvider>
+          <TermsOfService />
+        </ToastProvider>
+      </QueryProvider>
+    );
+  }
+
+  const sharedMatch = typeof window !== 'undefined' && window.location.hash.match(/^#shared\/([a-zA-Z0-9]+)$/);
+  if (sharedMatch) {
+    return (
+      <QueryProvider>
+        <ToastProvider>
+          <div style={{ minHeight: '100vh', backgroundColor: '#fff', padding: 24 }}>
+            <SharedPackageViewer packageId={sharedMatch[1]} />
+          </div>
+        </ToastProvider>
+      </QueryProvider>
+    );
+  }
+
+  return (
     <QueryProvider>
       <GlobalDateProvider>
-      <ToastProvider>
-      <AuthGuard>
-      <div style={{ 
-        height: '100vh', 
-        width: '100vw',
-        maxWidth: '100vw',
-        display: 'flex', 
-        flexDirection: 'column', 
-        overflow: 'hidden',
-        position: 'relative'
-      }}>
-        <AppShell
-          activeSection={activeSection}
-          onSectionChange={handleSectionChange}
-        >
-          <ErrorBoundary>
-            <Suspense fallback={<div className="flex items-center justify-center h-64"><Spinner size="lg" /></div>}>
-              {renderContent()}
-            </Suspense>
-          </ErrorBoundary>
-        </AppShell>
-
-        {activeSection !== 'insights' && (
-          <AIInsightsTriggerWrapper onClick={() => handleSectionChange('insights')} />
-        )}
-      </div>
-      </AuthGuard>
-      </ToastProvider>
+        <ToastProvider>
+          <AuthGuard>
+            <AppMain />
+          </AuthGuard>
+        </ToastProvider>
       </GlobalDateProvider>
     </QueryProvider>
   );

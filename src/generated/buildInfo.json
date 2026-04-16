@@ -1,10 +1,14 @@
 {
-  "version": "0.450.0",
-  "previousVersion": "0.449.0",
-  "commitHash": "9f45577",
+  "version": "0.459.0",
+  "previousVersion": "0.458.0",
+  "commitHash": "87f8526",
   "branch": "main",
-  "buildDate": "2026-04-16T08:07:15.852Z",
+  "buildDate": "2026-04-16T11:24:21.331Z",
   "commits": [
+    {
+      "hash": "87f8526",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "9f45577",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "53d20d6",
       "message": "chore: sync buildInfo after deploy"
-    },
-    {
-      "hash": "14c9226",
-      "message": "Competitive Intelligence: single-line table headers (Δ τιμής, Διαφ. τιμής), nowrap; merchant seller labels and related updates"
     }
   ],
   "changes": [

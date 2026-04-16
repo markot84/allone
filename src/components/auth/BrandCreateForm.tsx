@@ -22,7 +22,6 @@ interface BrandCreateFormProps {
 export function BrandCreateForm({ onCreated }: BrandCreateFormProps) {
   const { user } = useAuth();
   const [name, setName] = useState('');
-  const [type, setType] = useState<'B2B' | 'B2C'>('B2C');
   const [logoUrl, setLogoUrl] = useState<string>('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -43,7 +42,7 @@ export function BrandCreateForm({ onCreated }: BrandCreateFormProps) {
       const brand: Brand = {
         id: brandId,
         name: trimmed,
-        type,
+        type: 'B2C',
         createdAt: new Date().toISOString(),
         createdBy: user.uid,
         ...(logoUrl ? { logoUrl } : {}),
@@ -89,29 +88,6 @@ export function BrandCreateForm({ onCreated }: BrandCreateFormProps) {
             placeholder="π.χ. My e-shop"
             className="w-full pl-10 pr-4 py-2.5 bg-[var(--nts-light-gray)] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white"
           />
-        </div>
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-[var(--nts-charcoal)] mb-1.5">Τύπος</label>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => setType('B2B')}
-            className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
-              type === 'B2B' ? 'bg-[var(--nts-accent)] text-white' : 'bg-[var(--nts-light-gray)] text-[var(--nts-medium-gray)]'
-            }`}
-          >
-            B2B
-          </button>
-          <button
-            type="button"
-            onClick={() => setType('B2C')}
-            className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
-              type === 'B2C' ? 'bg-[var(--nts-accent)] text-white' : 'bg-[var(--nts-light-gray)] text-[var(--nts-medium-gray)]'
-            }`}
-          >
-            B2C
-          </button>
         </div>
       </div>
       

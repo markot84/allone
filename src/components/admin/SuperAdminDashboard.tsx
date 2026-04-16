@@ -107,6 +107,7 @@ function BrandsTab() {
   const [userCounts, setUserCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [updatingPlan, setUpdatingPlan] = useState<string | null>(null);
+  const [updatingBrandType, setUpdatingBrandType] = useState<string | null>(null);
   const [updatingModule, setUpdatingModule] = useState<string | null>(null);
   const moduleToggleIds: ModuleId[] = ['ecommerce', 'analytics', 'competitive', 'roi', 'sales', 'accounts', 'markets', 'procurement'];
 
@@ -149,8 +150,21 @@ function BrandsTab() {
     }
   };
 
+  const handleBrandTypeChange = async (brandId: string, newType: 'B2B' | 'B2C') => {
+    setUpdatingBrandType(brandId);
+    try {
+      await FirestoreService.updateDocument('brands', brandId, { type: newType });
+      setBrands((prev) => prev.map((b) => (b.id === brandId ? { ...b, type: newType } : b)));
+    } catch (err) {
+      console.error('Failed to update brand type:', err);
+    } finally {
+      setUpdatingBrandType(null);
+    }
+  };
+
   const handleModuleToggle = async (brand: Brand, moduleId: ModuleId) => {
-    const brandType = brand.type;
+    const brandType = brand.type ?? 'B2C';
+    if (getEditionStatus(moduleId, brandType) === 'hidden') return;
     const baseValue = brand.enabledModules?.[moduleId] ?? getDefaultModuleEnabled(moduleId, brandType);
     const nextValue = !baseValue;
     const nextOverrides = { ...(brand.enabledModules ?? {}) };
@@ -186,6 +200,7 @@ function BrandsTab() {
         {brands.map((brand) => {
           const plan = brand.plan ?? 'growth';
           const isEnterprise = plan === 'enterprise';
+          const brandKind = brand.type ?? 'B2C';
           return (
             <div
               key={brand.id}
@@ -217,7 +232,7 @@ function BrandsTab() {
                 <div>
                   <Text as="div" weight="semibold" style={{ fontSize: 15 }}>{brand.name}</Text>
                   <Text as="div" size="small" style={{ color: 'var(--fgColor-muted)' }}>
-                    {brand.type} · Created {new Date(brand.createdAt).toLocaleDateString('el-GR')}
+                    {brandKind} · Created {new Date(brand.createdAt).toLocaleDateString('el-GR')}
                   </Text>
                 </div>
               </div>
@@ -225,6 +240,7 @@ function BrandsTab() {
                 {/* Plan Selector */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 0, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--borderColor-default, #d0d7de)' }}>
                   <button
+                    type="button"
                     onClick={() => plan !== 'growth' && handlePlanChange(brand.id, 'growth')}
                     disabled={updatingPlan === brand.id}
                     style={{
@@ -241,6 +257,7 @@ function BrandsTab() {
                     Growth
                   </button>
                   <button
+                    type="button"
                     onClick={() => plan !== 'enterprise' && handlePlanChange(brand.id, 'enterprise')}
                     disabled={updatingPlan === brand.id}
                     style={{
@@ -259,48 +276,82 @@ function BrandsTab() {
                   </button>
                 </div>
 
+                <div style={{ display: 'flex', alignItems: 'center', gap: 0, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--borderColor-default, #d0d7de)' }}>
+                  <button
+                    type="button"
+                    onClick={() => brandKind !== 'B2C' && handleBrandTypeChange(brand.id, 'B2C')}
+                    disabled={updatingBrandType === brand.id}
+                    style={{
+                      padding: '5px 12px',
+                      fontSize: 12,
+                      fontWeight: brandKind === 'B2C' ? 700 : 400,
+                      border: 'none',
+                      cursor: updatingBrandType === brand.id ? 'wait' : 'pointer',
+                      background: brandKind === 'B2C' ? '#d4854a' : 'var(--bgColor-default, #fff)',
+                      color: brandKind === 'B2C' ? '#fff' : 'var(--fgColor-muted)',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    B2C
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => brandKind !== 'B2B' && handleBrandTypeChange(brand.id, 'B2B')}
+                    disabled={updatingBrandType === brand.id}
+                    style={{
+                      padding: '5px 12px',
+                      fontSize: 12,
+                      fontWeight: brandKind === 'B2B' ? 700 : 400,
+                      border: 'none',
+                      borderLeft: '1px solid var(--borderColor-default, #d0d7de)',
+                      cursor: updatingBrandType === brand.id ? 'wait' : 'pointer',
+                      background: brandKind === 'B2B' ? '#3b82f6' : 'var(--bgColor-default, #fff)',
+                      color: brandKind === 'B2B' ? '#fff' : 'var(--fgColor-muted)',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    B2B
+                  </button>
+                </div>
+
                 <div style={{ textAlign: 'center', minWidth: 40 }}>
                   <Text as="div" weight="semibold" style={{ fontSize: 16 }}>{userCounts[brand.id] || 0}</Text>
                   <Text as="div" size="small" style={{ color: 'var(--fgColor-muted)' }}>χρήστες</Text>
                 </div>
-                <span style={{
-                  padding: '2px 8px',
-                  borderRadius: 12,
-                  fontSize: 12,
-                  fontWeight: 600,
-                  background: brand.type === 'B2C' ? 'rgba(212,133,74,0.12)' : 'rgba(59,130,246,0.12)',
-                  color: brand.type === 'B2C' ? '#d4854a' : '#3b82f6'
-                }}>
-                  {brand.type}
-                </span>
               </div>
               <div style={{ width: '100%', borderTop: '1px solid var(--borderColor-muted, #e5e7eb)', paddingTop: 12 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 8 }}>
                   <Text as="div" size="small" style={{ color: 'var(--fgColor-muted)' }}>
-                    Edition matrix: core / optional / hidden defaults based on <strong>{brand.type}</strong>, με granular overrides ανά brand.
+                    Edition matrix (Growth/Enterprise · B2C/B2B από πάνω): defaults ανά <strong>{brandKind}</strong>, με granular overrides.
                   </Text>
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                   {moduleToggleIds.map((moduleId) => {
-                    const label = getModuleLabel(moduleId, brand.type);
-                    const status = getEditionStatus(moduleId, brand.type);
-                    const enabled = brand.enabledModules?.[moduleId] ?? getDefaultModuleEnabled(moduleId, brand.type);
+                    const label = getModuleLabel(moduleId, brandKind);
+                    const status = getEditionStatus(moduleId, brandKind);
+                    const hiddenEdition = status === 'hidden';
+                    const enabled = hiddenEdition
+                      ? false
+                      : (brand.enabledModules?.[moduleId] ?? getDefaultModuleEnabled(moduleId, brandKind));
                     const pending = updatingModule === `${brand.id}:${moduleId}`;
+                    const disabled = pending || hiddenEdition;
                     return (
                       <button
                         key={moduleId}
-                        onClick={() => !pending && handleModuleToggle(brand, moduleId)}
+                        type="button"
+                        onClick={() => !disabled && handleModuleToggle(brand, moduleId)}
                         style={{
                           padding: '6px 10px',
                           borderRadius: 999,
                           border: enabled ? '1px solid rgba(34,197,94,0.35)' : '1px solid rgba(148,163,184,0.35)',
-                          background: enabled ? 'rgba(34,197,94,0.10)' : 'rgba(148,163,184,0.08)',
-                          color: enabled ? '#15803d' : '#475569',
+                          background: hiddenEdition ? 'rgba(148,163,184,0.04)' : enabled ? 'rgba(34,197,94,0.10)' : 'rgba(148,163,184,0.08)',
+                          color: hiddenEdition ? '#94a3b8' : enabled ? '#15803d' : '#475569',
                           fontSize: 12,
                           fontWeight: 600,
-                          cursor: pending ? 'wait' : 'pointer',
+                          cursor: disabled ? (pending ? 'wait' : 'not-allowed') : 'pointer',
+                          opacity: hiddenEdition ? 0.75 : 1,
                         }}
-                        title={`Default for ${brand.type}: ${status}`}
+                        title={hiddenEdition ? `Hidden για ${brandKind} — άλλαξε B2C/B2B για να ενεργοποιηθεί` : `Default για ${brandKind}: ${status}`}
                       >
                         {pending ? 'Updating...' : `${label}: ${enabled ? 'ON' : 'OFF'}`}
                       </button>

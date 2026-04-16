@@ -251,6 +251,9 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
       spend = Math.round(spend * 100) / 100;
       return {
         ...c,
+        // Doc-level purchase_* είναι συχνά όχι ανά περίοδο — μόνο conversion_value/conversions από daily sum
+        purchase_conversion_value: undefined,
+        purchase_conversions: undefined,
         dailyMetrics: filteredDm,
         conversionActions: convActions,
         amount_spent: spend,

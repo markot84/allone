@@ -1167,10 +1167,18 @@ export function ConnectorsPanel() {
           ['lastSyncDates', brandId],
           (prev) => ({ ...(prev || {}), [provider]: new Date() })
         );
-        if (provider === 'merchant' && (result.imported === 0 || result.imported == null)) {
-          toast.info(
-            'GMC: sync ολοκληρώθηκε — 0 SKUs με benchmark. Έλεγξε GTIN στο feed και Price Competitiveness στο Merchant Center.'
-          );
+        if (provider === 'merchant') {
+          const imp = result.imported ?? 0;
+          const wm = typeof result.withMarketBenchmark === 'number' ? result.withMarketBenchmark : undefined;
+          if (imp === 0) {
+            toast.info('GMC: 0 προϊόντα από ProductView — έλεγξε ότι ο λογαριασμός GMC έχει ενεργό κατάλογο.');
+          } else if (wm === 0) {
+            toast.info(
+              `GMC: ${imp} SKUs στο catalog — κανένα με benchmark τιμάς αγοράς ακόμα. Έλεγξε GTIN στο feed και Growth › Price competitiveness.`
+            );
+          } else {
+            toast.success(`GMC: ${imp} SKUs (${wm} με benchmark αγοράς)`);
+          }
         } else {
           toast.success(`Εισήχθησαν ${result.imported} ${label}`);
         }

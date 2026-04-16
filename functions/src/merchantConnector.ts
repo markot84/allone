@@ -240,9 +240,36 @@ export async function selectMerchantAccount(
   logger.info(`[Merchant] Account selected for brand ${brandId}: ${merchantId}`);
 }
 
+/**
+ * Lists Merchant Center accounts the user may select.
+ *
+ * `accounts/authinfo` only returns **identifiers tied to the user** (standalone + samples of MCA
+ * access) — not every sub-account under a Multi-Client Account. For each MCA (`aggregatorId`),
+ * we paginate `GET /{mcaId}/accounts` so Performance+ shows the same breadth as the GMC switcher.
+ */
 async function listMerchantAccounts(
   accessToken: string
 ): Promise<{ id: string; name: string }[]> {
+  const byId = new Map<string, { id: string; name: string }>();
+
+  const fetchOneAccount = async (merchantId: string) => {
+    if (byId.has(merchantId)) return;
+    try {
+      const accRes = await fetch(`${MERCHANT_API_BASE}/${merchantId}/accounts/${merchantId}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (accRes.ok) {
+        const accData = (await accRes.json()) as Record<string, unknown>;
+        byId.set(merchantId, { id: merchantId, name: pickMerchantDisplayName(accData, merchantId) });
+      } else {
+        byId.set(merchantId, { id: merchantId, name: `Merchant\u00A0${merchantId}` });
+      }
+    } catch {
+      byId.set(merchantId, { id: merchantId, name: `Merchant\u00A0${merchantId}` });
+    }
+  };
+
+  let identifiers: { merchantId?: string; aggregatorId?: string }[] = [];
   try {
     const res = await fetch(`${MERCHANT_API_BASE}/accounts/authinfo`, {
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -253,34 +280,78 @@ async function listMerchantAccounts(
       return [];
     }
 
-    const data = await res.json();
-    const accountIds: { merchantId: string }[] = data.accountIdentifiers || [];
-
-    const accounts: { id: string; name: string }[] = [];
-    for (const entry of accountIds) {
-      const mid = entry.merchantId;
-      if (!mid) continue;
-      try {
-        const accRes = await fetch(`${MERCHANT_API_BASE}/${mid}/accounts/${mid}`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
-        if (accRes.ok) {
-          const accData = (await accRes.json()) as Record<string, unknown>;
-          accounts.push({ id: mid, name: pickMerchantDisplayName(accData, mid) });
-        } else {
-          accounts.push({ id: mid, name: `Merchant\u00A0${mid}` });
-        }
-      } catch {
-        accounts.push({ id: mid, name: `Merchant\u00A0${mid}` });
-      }
-    }
-    return accounts;
+    const data = (await res.json()) as { accountIdentifiers?: typeof identifiers };
+    identifiers = data.accountIdentifiers || [];
   } catch {
     return [];
   }
+
+  const mcaIds = new Set<string>();
+  for (const entry of identifiers) {
+    if (entry.aggregatorId) mcaIds.add(String(entry.aggregatorId));
+  }
+
+  const MCA_PAGE = 250;
+  const MAX_MCA_PAGES = 200;
+
+  for (const mcaId of mcaIds) {
+    let pageToken: string | undefined;
+    for (let page = 0; page < MAX_MCA_PAGES; page++) {
+      const url = new URL(`${MERCHANT_API_BASE}/${mcaId}/accounts`);
+      url.searchParams.set('maxResults', String(MCA_PAGE));
+      if (pageToken) url.searchParams.set('pageToken', pageToken);
+
+      const res = await fetch(url.toString(), {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+
+      if (!res.ok) {
+        logger.warn(`[Merchant] accounts.list MCA ${mcaId} HTTP ${res.status}`);
+        break;
+      }
+
+      const listData = (await res.json()) as {
+        resources?: Record<string, unknown>[];
+        nextPageToken?: string;
+      };
+
+      for (const acc of listData.resources || []) {
+        const raw = acc.id as string | number | undefined;
+        const id = raw != null ? String(raw) : '';
+        if (!id) continue;
+        const name = pickMerchantDisplayName(acc, id);
+        byId.set(id, { id, name });
+      }
+
+      pageToken = listData.nextPageToken;
+      if (!pageToken) break;
+    }
+  }
+
+  // Standalone merchants + any authinfo ID not returned by MCA list (permissions / edge cases)
+  for (const entry of identifiers) {
+    const mid = entry.merchantId != null && String(entry.merchantId).trim() !== ''
+      ? String(entry.merchantId)
+      : '';
+    if (mid) await fetchOneAccount(mid);
+  }
+
+  const accounts = [...byId.values()].sort((a, b) =>
+    a.name.localeCompare(b.name, 'el', { sensitivity: 'base' })
+  );
+
+  logger.info(
+    `[Merchant] listMerchantAccounts: ${identifiers.length} authinfo rows, ${mcaIds.size} MCA(s), ${accounts.length} account(s) total`
+  );
+
+  return accounts;
 }
 
-async function refreshAccessToken(refreshToken: string): Promise<string | null> {
+type RefreshResult =
+  | { ok: true; accessToken: string }
+  | { ok: false; httpStatus: number; googleError?: string; googleErrorDescription?: string; rawBody?: string };
+
+async function refreshAccessToken(refreshToken: string): Promise<RefreshResult> {
   const { clientId, clientSecret } = getCredentials();
 
   const res = await fetch(GOOGLE_TOKEN_URL, {
@@ -294,18 +365,63 @@ async function refreshAccessToken(refreshToken: string): Promise<string | null> 
     }),
   });
 
-  if (!res.ok) {
-    logger.error(`[Merchant] Token refresh failed (${res.status})`);
-    return null;
+  const text = await res.text();
+  let data: Record<string, unknown> = {};
+  try {
+    data = JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    /* non-JSON */
   }
 
-  const data = await res.json();
-  return data.access_token || null;
+  if (!res.ok) {
+    const googleError = typeof data.error === 'string' ? data.error : undefined;
+    const googleErrorDescription =
+      typeof data.error_description === 'string' ? data.error_description : undefined;
+    logger.error(
+      `[Merchant] Token refresh failed HTTP ${res.status} error=${googleError || 'n/a'}: ${text.slice(0, 800)}`
+    );
+    return {
+      ok: false,
+      httpStatus: res.status,
+      googleError,
+      googleErrorDescription,
+      rawBody: text.slice(0, 500),
+    };
+  }
+
+  const accessToken = typeof data.access_token === 'string' ? data.access_token : '';
+  if (!accessToken) {
+    logger.error('[Merchant] Token refresh OK but missing access_token in body');
+    return { ok: false, httpStatus: res.status, rawBody: text.slice(0, 500) };
+  }
+
+  return { ok: true, accessToken };
+}
+
+/** Μήνυμα για UI όταν το refresh token δεν είναι πλέον έγκυρο. */
+function merchantRefreshErrorMessage(ref: Extract<RefreshResult, { ok: false }>): string {
+  const code = ref.googleError || '';
+  if (code === 'invalid_grant') {
+    return (
+      'Η σύνδεση Google Merchant Center έληξε ή ανακλήθηκε. Στις Συνδέσεις: «Αποσύνδεση» στο Merchant Center και συνδέστε ξανά με Google (νέο OAuth).'
+    );
+  }
+  if (code === 'invalid_client') {
+    return (
+      'Σφάλμα ρυθμίσεων OAuth (invalid_client). Έλεγξε ότι το Google Cloud OAuth client ταιριάζει με το Performance+ (ίδιο client ID/secret με Google Ads).'
+    );
+  }
+  const hint = ref.googleErrorDescription
+    ? ` (${ref.googleErrorDescription.slice(0, 120)})`
+    : '';
+  return `Αποτυχία ανανέωσης token Google${code ? `: ${code}` : ''}${hint}. Δοκίμασε αποσύνδεση και ξανά σύνδεση Merchant Center.`;
 }
 
 const REPORT_PAGE_SIZE = 5000;
 /** Safety cap per report type — Merchant API allows up to 5000/page; we paginate until this total. */
 const MAX_REPORT_ROWS = 25000;
+/** Max SKU docs στη Firestore ανά sync — καλύπτει μεγάλους καταλόγους χωρίς unbounded writes. */
+const MAX_SKU_DOCS_PER_SYNC = 20000;
 
 /**
  * Paginated reports.search — uses max page size and tolerates alternate next-page field names.
@@ -381,11 +497,29 @@ function getPriceInsightsBlock(row: any): Record<string, unknown> | null {
   return pi && typeof pi === 'object' ? (pi as Record<string, unknown>) : null;
 }
 
+/**
+ * REST product id: `channel:contentLanguage:targetCountry:offerId` (offerId may contain `:`).
+ * Reports can return the same offer with different `contentLanguage` (e.g. el vs en); full-string
+ * equality then misses the join — we match on channel + country + offer tail instead.
+ */
+function productMergeKey(fullId: string): string {
+  const s = String(fullId).trim();
+  const parts = s.split(':');
+  if (parts.length < 4) return s;
+  const channel = parts[0];
+  const country = parts[2];
+  const offerRest = parts.slice(3).join(':');
+  return `${channel}:${country}:${offerRest}`;
+}
+
 function microsFrom(obj: Record<string, unknown> | null | undefined, camel: string, snake: string): number {
   if (!obj) return 0;
   const v = obj[camel] ?? obj[snake];
   if (v == null) return 0;
-  if (typeof v === 'string') return parseInt(v, 10) || 0;
+  if (typeof v === 'string') {
+    const t = v.trim();
+    return t ? parseInt(t, 10) || 0 : 0;
+  }
   if (typeof v === 'number' && !Number.isNaN(v)) return Math.round(v);
   return 0;
 }
@@ -421,23 +555,24 @@ function pickPreferredCompetitivenessRow(arr: any[]): any {
   return grOnly ?? arr[0];
 }
 
-/** One competitiveness row per product. */
+/** One competitiveness row per product (keyed by productMergeKey, not raw id). */
 function groupCompetitivenessByProduct(rows: any[]): Map<string, any> {
   const groups = new Map<string, any[]>();
   for (const row of rows) {
     const id = getProductView(row)?.id as string | undefined;
     if (!id) continue;
-    if (!groups.has(id)) groups.set(id, []);
-    groups.get(id)!.push(row);
+    const key = productMergeKey(id);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(row);
   }
   const out = new Map<string, any>();
-  for (const [id, arr] of groups) {
-    out.set(id, pickPreferredCompetitivenessRow(arr));
+  for (const [key, arr] of groups) {
+    out.set(key, pickPreferredCompetitivenessRow(arr));
   }
   return out;
 }
 
-/** Replace benchmark docs: only SKUs with benchmarkPrice > 0 are stored (no stale zero rows). */
+/** Καθαρίζει όλα τα SKU docs πριν από πλήρη re-import μετά το sync. */
 async function clearPriceBenchmarkSkus(brandId: string): Promise<void> {
   const col = getDb().collection('price_benchmarks').doc(brandId).collection('skus');
   const snap = await col.get();
@@ -456,12 +591,14 @@ async function clearPriceBenchmarkSkus(brandId: string): Promise<void> {
 
 /**
  * Fetch price benchmarks from Google Merchant Center.
- * Merges ProductView with PriceCompetitivenessProductView but **persists only SKUs where Google
- * returns a market benchmark price** — others are omitted (not useful for comparison UI).
+ * Αποθηκεύει όλα τα SKUs από ProductView (κατάλογος) + στοιχεία από PriceCompetitiveness όταν υπάρχουν.
+ * Η στήλη benchmark μπορεί να είναι 0 όταν η Google δεν έχει ακόμη benchmark για την αγορά/SKU.
  */
 export async function fetchPriceBenchmarks(brandId: string): Promise<{
   success: boolean;
   imported: number;
+  /** Πόσα από τα `imported` έχουν benchmark τιμάς αγοράς > 0 */
+  withMarketBenchmark?: number;
   error?: string;
 }> {
   const connectorDoc = await getDb().doc(`connectors/${brandId}`).get();
@@ -476,10 +613,15 @@ export async function fetchPriceBenchmarks(brandId: string): Promise<{
     return { success: false, imported: 0, error: 'No Merchant Center account selected' };
   }
 
-  const accessToken = await refreshAccessToken(connector.refreshToken);
-  if (!accessToken) {
-    return { success: false, imported: 0, error: 'Failed to refresh token' };
+  const tokenResult = await refreshAccessToken(connector.refreshToken);
+  if (!tokenResult.ok) {
+    return {
+      success: false,
+      imported: 0,
+      error: merchantRefreshErrorMessage(tokenResult),
+    };
   }
+  const accessToken = tokenResult.accessToken;
 
   try {
     const competitivenessQuery = `
@@ -573,7 +715,7 @@ export async function fetchPriceBenchmarks(brandId: string): Promise<{
       const productId = pv?.id as string | undefined;
       if (!productId) continue;
 
-      const comp = compByProduct.get(productId);
+      const comp = compByProduct.get(productMergeKey(productId));
       const yourPriceMicros = microsFrom(pv, 'priceMicros', 'price_micros');
       const yourPrice = yourPriceMicros / 1_000_000;
 
@@ -596,28 +738,42 @@ export async function fetchPriceBenchmarks(brandId: string): Promise<{
       }
     }
 
-    // Competitiveness rows not present in ProductView (unusual)
-    for (const [pid, compRow] of compByProduct) {
-      if (!merged.has(pid)) {
-        const sku = skuFromCompRow(compRow);
-        if (sku) merged.set(pid, sku);
-      }
+    const catalogMergeKeys = new Set<string>();
+    for (const row of catalogRows) {
+      const pid = getProductView(row)?.id as string | undefined;
+      if (pid) catalogMergeKeys.add(productMergeKey(pid));
     }
 
-    const rowsToWrite = [...merged.values()].filter((r) => r.benchmarkPrice > 0);
+    // Competitiveness rows whose offer did not appear in ProductView catalog (unusual)
+    for (const [mkey, compRow] of compByProduct) {
+      if (catalogMergeKeys.has(mkey)) continue;
+      const pv = getProductView(compRow);
+      const pid = pv?.id as string | undefined;
+      if (!pid) continue;
+      const sku = skuFromCompRow(compRow);
+      if (sku) merged.set(pid, sku);
+    }
 
-    if (compRows.length > 0 && rowsToWrite.length === 0) {
+    const allMerged = [...merged.values()];
+    const withMarketBenchmarkCount = allMerged.filter((r) => r.benchmarkPrice > 0).length;
+    if (compRows.length > 0 && withMarketBenchmarkCount === 0 && allMerged.length > 0) {
       const sample = compRows[0];
       logger.warn(
-        `[Merchant] ${compRows.length} competitiveness rows αλλά 0 με benchmark>0 (έλεγξε parsing). Keys γραμμής: ${Object.keys(sample || {}).join(',')}`
+        `[Merchant] ${compRows.length} competitiveness rows, catalog ${allMerged.length} SKUs, αλλά 0 με benchmark>0 (parsing ή Google χωρίς τιμή αγοράς). Keys δείγματος: ${Object.keys(sample || {}).join(',')}`
+      );
+    }
+
+    const rowsToWrite = allMerged.slice(0, MAX_SKU_DOCS_PER_SYNC);
+    if (allMerged.length > MAX_SKU_DOCS_PER_SYNC) {
+      logger.warn(
+        `[Merchant] Catalog ${allMerged.length} SKUs — αποθήκευση πρώτων ${MAX_SKU_DOCS_PER_SYNC} (όριο ανά sync).`
       );
     }
 
     await clearPriceBenchmarkSkus(brandId);
 
     if (rowsToWrite.length === 0) {
-      logger.info(`[Merchant] No SKUs with market benchmark for brand ${brandId} (catalog merged ${merged.size})`);
-      // Πάντα καταγραφή job — αλλιώς το UI δεν δείχνει «Τελευταίο sync» (νομίζουν ότι δεν τρέχει sync).
+      logger.info(`[Merchant] No catalog SKUs for brand ${brandId} (merged ${merged.size})`);
       await getDb().collection('import_jobs').add({
         brandId,
         type: 'price_benchmarks',
@@ -629,13 +785,11 @@ export async function fetchPriceBenchmarks(brandId: string): Promise<{
         failed: 0,
         errors: [],
         warnings: [
-          merged.size === 0
-            ? 'Δεν επιστράφηκαν γραμμές από ProductView/PriceCompetitiveness (έλεγξε Merchant ID, feed, API).'
-            : 'Δεν βρέθηκαν SKUs με benchmark τιμής αγοράς (>0). Χρειάζονται GTIN/διαθέσιμα benchmark για την αγορά σου στο Google Shopping.',
+          'Δεν επιστράφηκαν γραμμές από ProductView (έλεγξε Merchant ID, OAuth, ότι ο λογαριασμός GMC έχει ενεργά προϊόντα στο feed).',
         ],
         createdAt: FieldValue.serverTimestamp(),
       });
-      return { success: true, imported: 0 };
+      return { success: true, imported: 0, withMarketBenchmark: 0 };
     }
 
     let count = 0;
@@ -660,8 +814,10 @@ export async function fetchPriceBenchmarks(brandId: string): Promise<{
       await batch.commit();
     }
 
+    const withMarketBenchmarkWritten = rowsToWrite.filter((r) => r.benchmarkPrice > 0).length;
+
     logger.info(
-      `[Merchant] Imported ${count} price benchmark SKUs for brand ${brandId} (all have market benchmark)`
+      `[Merchant] Imported ${count} SKU docs for ${brandId} (${withMarketBenchmarkWritten} με benchmark τιμάς αγοράς > 0)`
     );
 
     // Also fetch PriceInsightsProductView (non-blocking)
@@ -695,14 +851,20 @@ export async function fetchPriceBenchmarks(brandId: string): Promise<{
       source: 'merchant_center_api',
       status: 'completed',
       imported: count,
-      withMarketBenchmark: count,
+      withMarketBenchmark: withMarketBenchmarkWritten,
       insightsImported: insightsCount,
       failed: 0,
       errors: [],
+      warnings:
+        withMarketBenchmarkWritten === 0 && count > 0
+          ? [
+              'Ο κατάλογος εισήχθη, αλλά το GMC δεν επέστρεψε benchmark τιμάς αγοράς για κανένα SKU (συχνό για νέους λογαριασμούς ή όταν λείπουν GTIN). Ελέγξτε feed & Growth › Price competitiveness στο Merchant Center.',
+            ]
+          : [],
       createdAt: FieldValue.serverTimestamp(),
     });
 
-    return { success: true, imported: count };
+    return { success: true, imported: count, withMarketBenchmark: withMarketBenchmarkWritten };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     logger.error(`[Merchant] Error:`, msg);

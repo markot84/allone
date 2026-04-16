@@ -1,5 +1,11 @@
 import type { AppSectionId, Brand, ModuleId } from '../types';
 
+/**
+ * Όταν είναι false, όλα τα brands αντιμετωπίζονται ως B2C (π.χ. maintenance).
+ * Ο τύπος B2B/B2C ορίζεται μόνο από Super Admin· νέα brands μένουν B2C.
+ */
+export const B2B_EDITION_ENABLED = true;
+
 export type ModuleEditionStatus = 'core' | 'optional' | 'hidden';
 
 export interface ModuleDefinition {
@@ -121,14 +127,26 @@ export function getDefaultModuleEnabled(moduleId: ModuleId, brandType: 'B2B' | '
   return getEditionStatus(moduleId, brandType) !== 'hidden';
 }
 
+/** Τύπος brand για modules / ναβ — σέβεται το `B2B_EDITION_ENABLED`. */
+export function effectiveBrandTypeForModules(brand: Pick<Brand, 'type'> | null): 'B2B' | 'B2C' {
+  if (!B2B_EDITION_ENABLED) return 'B2C';
+  return brand?.type ?? 'B2C';
+}
+
 export function resolveEnabledModules(
   brand: Pick<Brand, 'type' | 'enabledModules'> | null,
   options?: { canAccess?: (feature: string) => boolean }
 ): Record<ModuleId, boolean> {
-  const brandType = brand?.type ?? 'B2C';
+  const brandType = effectiveBrandTypeForModules(brand);
   const overrides = brand?.enabledModules ?? {};
 
   return MODULE_DEFINITIONS.reduce((acc, def) => {
+    const editionStatus = getEditionStatus(def.id, brandType);
+    // Κρυφά modules για την έκδοση (π.χ. B2B-only σε B2C) ποτέ ενεργά, ακόμη κι αν υπάρχει παλιό override στη Firestore
+    if (editionStatus === 'hidden') {
+      acc[def.id] = false;
+      return acc;
+    }
     const baseEnabled = overrides[def.id] ?? getDefaultModuleEnabled(def.id, brandType);
     const planAllowed = def.planFeature ? options?.canAccess?.(def.planFeature) ?? false : true;
     acc[def.id] = Boolean(baseEnabled && planAllowed);

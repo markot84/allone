@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useBrand } from './useBrand';
 
@@ -19,7 +19,8 @@ export interface PriceBenchmark {
 
 async function fetchBenchmarks(brandId: string): Promise<PriceBenchmark[]> {
   const colRef = collection(db, 'price_benchmarks', brandId, 'skus');
-  const snap = await getDocs(colRef);
+  const q = query(colRef, where('benchmarkPrice', '>', 0));
+  const snap = await getDocs(q);
   return snap.docs.map((d) => ({ ...d.data() } as PriceBenchmark));
 }
 
@@ -27,12 +28,21 @@ export function usePriceBenchmarks() {
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
 
-  const { data: benchmarks = [], isPending } = useQuery({
+  const {
+    data: benchmarks = [],
+    isPending,
+    isError,
+    error,
+    refetch,
+    isFetching,
+  } = useQuery({
     queryKey: ['priceBenchmarks', brandId],
     queryFn: () => (brandId ? fetchBenchmarks(brandId) : Promise.resolve([])),
-    staleTime: 10 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
+    staleTime: 2 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
     enabled: !!brandId,
+    retry: 1,
+    meta: { persist: false },
   });
 
   const withMarket = benchmarks.filter((b) => b.benchmarkPrice > 0);
@@ -57,6 +67,10 @@ export function usePriceBenchmarks() {
   return {
     benchmarks,
     isLoading: isPending,
+    isFetching,
+    isError,
+    error: error instanceof Error ? error : error != null ? new Error(String(error)) : null,
+    refetch,
     count: benchmarks.length,
     withMarketBenchmarkCount: withMarket.length,
     aboveMarket,

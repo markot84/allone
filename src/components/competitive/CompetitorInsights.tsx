@@ -181,7 +181,11 @@ export function CompetitorInsights() {
   const {
     benchmarks,
     isLoading: benchmarksLoading,
+    isError: benchmarksQueryError,
+    error: benchmarksError,
+    refetch: refetchBenchmarks,
     count: benchmarkCount,
+    withMarketBenchmarkCount,
     aboveMarket,
     belowMarket,
     avgDiff,
@@ -316,8 +320,19 @@ export function CompetitorInsights() {
       const result = await res.json();
       if (result.success) {
         if (provider === 'merchant') {
-          toast.success(`Ενημερώθηκαν ${result.imported} SKU benchmarks`);
+          const imp = result.imported ?? 0;
+          const wm = typeof result.withMarketBenchmark === 'number' ? result.withMarketBenchmark : undefined;
+          if (imp === 0) {
+            toast.info('GMC: 0 προϊόντα από ProductView — έλεγξε feed και Merchant ID.');
+          } else if (wm === 0) {
+            toast.info(
+              `GMC: ${imp} SKUs στο catalog — κανένα με benchmark τιμάς αγοράς ακόμα (GTIN / Price competitiveness στο Merchant Center).`
+            );
+          } else {
+            toast.success(`GMC: ${imp} SKUs (${wm} με benchmark αγοράς)`);
+          }
           queryClient.invalidateQueries({ queryKey: ['priceBenchmarks', brandId] });
+          await queryClient.refetchQueries({ queryKey: ['priceBenchmarks', brandId] });
         } else {
           setCompetitorSyncWarnings(result.warnings?.length ? result.warnings : null);
           toast.success(`Βρέθηκαν ${result.totalAds} ads (${result.newAds} νέες)`);
@@ -360,7 +375,12 @@ export function CompetitorInsights() {
       );
     }
     list.sort((a, b) => {
-      if (benchmarkSort === 'diff') return b.priceDiff - a.priceDiff;
+      if (benchmarkSort === 'diff') {
+        const ab = a.benchmarkPrice > 0;
+        const bb = b.benchmarkPrice > 0;
+        if (ab !== bb) return ab ? -1 : 1;
+        return b.priceDiff - a.priceDiff;
+      }
       if (benchmarkSort === 'price') return b.yourPrice - a.yourPrice;
       return a.title.localeCompare(b.title);
     });
@@ -450,14 +470,36 @@ export function CompetitorInsights() {
       {/* ════════════════ PRICING TAB ════════════════ */}
       {activeTab === 'pricing' && (
         <>
+          {benchmarksQueryError && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <p className="font-medium">Αποτυχία φόρτωσης benchmarks από Firestore</p>
+                <p className="text-xs text-red-800/90 mt-1">
+                  {benchmarksError?.message ||
+                    'Έλεγξε σύνδεση· αν το σφάλμα αναφέρει «permission», επιβεβαίωσε ότι είσαι μέλος του brand (brands/…/members).'}
+                </p>
+              </div>
+              <Button variant="secondary" size="sm" onClick={() => refetchBenchmarks()}>
+                Επανάληψη
+              </Button>
+            </div>
+          )}
+
           {/* KPI Strip */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
             <KpiBox
-              label="SKUs με benchmark"
+              label="Σύνολο SKUs (GMC)"
               value={benchmarkCount > 0 ? String(benchmarkCount) : '—'}
-              tooltip="Προϊόντα όπου το Google Merchant Center (αναφορά Price Competitiveness) επιστρέφει μέση τιμή αγοράς για σύγκριση. Εμφανίζονται μόνο αυτά — προϊόντα χωρίς διαθέσιμο benchmark δεν εμφανίζονται. Ο συνολικός κατάλογος στο GMC μπορεί να είναι μεγαλύτερος."
+              tooltip="Προϊόντα από την αναφορά ProductView του Merchant Center μετά το sync. Περιλαμβάνει όλο τον κατάλογο που επιστρέφει η Google — όχι μόνο όσα έχουν benchmark."
               icon={<ShoppingCart size={18} />}
               color="#6366F1"
+            />
+            <KpiBox
+              label="Με benchmark αγοράς"
+              value={withMarketBenchmarkCount > 0 ? String(withMarketBenchmarkCount) : '—'}
+              tooltip="SKUs όπου το GMC επιστρέφει μέση τιμή αγοράς (Price Competitiveness) — αυτά εμφανίζουν σύγκριση στη στήλη Benchmark."
+              icon={<Activity size={18} />}
+              color="#4F46E5"
             />
             <KpiBox
               label="Πάνω από αγορά"
@@ -489,10 +531,11 @@ export function CompetitorInsights() {
             />
           </div>
 
-          {insightsCount > benchmarkCount && (
+          {insightsCount > withMarketBenchmarkCount && (
             <p className="text-xs text-[#6B7280] bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg px-3 py-2">
-              Γιατί λιγότερα εδώ ({benchmarkCount}) από τα Price Insights ({insightsCount}); Εδώ εμφανίζονται μόνο SKUs όπου το GMC επιστρέφει{' '}
-              <strong>μέση τιμή αγοράς</strong> (Price Competitiveness). Τα Insights είναι άλλη αναφορά με ευρύτερη κάλυψη (προτάσεις τιμής κ.λπ.).
+              Γιατί τα Price Insights ({insightsCount}) μπορεί να ξεπερνούν τα SKUs με{' '}
+              <strong>benchmark αγοράς</strong> ({withMarketBenchmarkCount}); τα Insights (προτεινόμενες τιμές) προέρχονται από άλλη αναφορά GMC. Ο πίνακας από κάτω δείχνει{' '}
+              <strong>όλο</strong> τον κατάλογο που επέστρεψε το sync — στη στήλη Benchmark εμφανίζεται «—» όταν η Google δεν έχει ακόμη τιμή αγοράς για το SKU.
             </p>
           )}
 
@@ -536,6 +579,10 @@ export function CompetitorInsights() {
               {benchmarksLoading ? (
                 <div className="py-8 flex justify-center">
                   <Spinner size="md" label="Φόρτωση benchmarks..." />
+                </div>
+              ) : benchmarksQueryError ? (
+                <div className="text-center py-10 text-sm text-[#9CA3AF]">
+                  Δεν εμφανίζονται δεδομένα λόγω σφάλματος ανάγνωσης. Πατήστε «Επανάληψη» παραπάνω ή ανανεώστε τη σελίδα.
                 </div>
               ) : benchmarkCount === 0 ? (
                 <div className="text-center py-10">
@@ -961,6 +1008,9 @@ function KpiBox({
   );
 }
 
+const fmtEur = (v: number) =>
+  v.toLocaleString('el-GR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 function BenchmarkRow({ item }: { item: { productId: string; title: string; brand?: string; gtin: string; yourPrice: number; benchmarkPrice: number; priceDiff: number; currency: string } }) {
   const diffColor = item.priceDiff > 5 ? '#EF4444' : item.priceDiff < -5 ? '#22C55E' : '#6B7280';
   const diffBg = item.priceDiff > 5 ? '#FEF2F2' : item.priceDiff < -5 ? '#F0FDF4' : '#F9FAFB';
@@ -975,11 +1025,11 @@ function BenchmarkRow({ item }: { item: { productId: string; title: string; bran
         <span className="text-xs text-[#374151]">{item.brand || '—'}</span>
       </td>
       <td className="px-3 py-2.5 text-right">
-        <span className="text-sm font-mono text-[#1A1A1A]">€{item.yourPrice.toFixed(2)}</span>
+        <span className="text-sm font-mono text-[#1A1A1A]">{fmtEur(item.yourPrice)}</span>
       </td>
       <td className="px-3 py-2.5 text-right">
         <span className="text-sm font-mono text-[#6B7280]">
-          {item.benchmarkPrice > 0 ? `€${item.benchmarkPrice.toFixed(2)}` : '—'}
+          {item.benchmarkPrice > 0 ? fmtEur(item.benchmarkPrice) : '—'}
         </span>
       </td>
       <td className="px-3 py-2.5 text-right">
@@ -1034,12 +1084,12 @@ function InsightRow({ item, sellerLabel }: { item: PriceInsight; sellerLabel: st
         <span className="text-xs text-[#374151]">{item.brand || '—'}</span>
       </td>
       <td className="px-3 py-2.5 text-right">
-        <span className="text-sm font-mono text-[#1A1A1A]">€{item.currentPrice.toFixed(2)}</span>
+        <span className="text-sm font-mono text-[#1A1A1A]">{fmtEur(item.currentPrice)}</span>
       </td>
       <td className="px-3 py-2.5 text-right">
         {hasSuggestion ? (
           <span className={`text-sm font-mono font-semibold ${priceLower ? 'text-[#22C55E]' : 'text-[#F59E0B]'}`}>
-            €{item.suggestedPrice.toFixed(2)}
+            {fmtEur(item.suggestedPrice)}
           </span>
         ) : (
           <span className="text-sm font-mono text-[#9CA3AF]">—</span>

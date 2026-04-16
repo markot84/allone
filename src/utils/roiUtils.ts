@@ -83,6 +83,12 @@ export function getEffectiveConversionValue(c: Campaign): number {
     );
     return row?.value ?? 0;
   }
+  /**
+   * ΜΗΝ προτιμάς `purchase_conversion_value` από το parent campaign doc εδώ: στο ROI/Dashboard τα
+   * campaigns περνούν από date-filter σε `dailyMetrics` — το `conversion_value` είναι άθροισμα περιόδου,
+   * ενώ το purchase_* στο doc είναι συχνά lifetime ή πλήρες sync → ROAS πλασματικά υψηλό.
+   * Η σελίδα Campaigns χρησιμοποιεί ξεχωριστή λογική εμφάνισης (getDisplayConversionValue).
+   */
   const v = c.conversion_value || 0;
   if (v > 0) return v;
   if (c.conversionActions) {
@@ -90,6 +96,8 @@ export function getEffectiveConversionValue(c: Campaign): number {
       .filter(([label]) => !EXCLUDED_ACTION_LABELS.has(label))
       .reduce((sum, [, a]) => sum + (a?.value ?? 0), 0);
   }
+  const pv = (c as Campaign & { purchase_conversion_value?: number }).purchase_conversion_value;
+  if (typeof pv === 'number' && !Number.isNaN(pv) && pv > 0) return pv;
   return 0;
 }
 
@@ -110,6 +118,8 @@ export function getEffectiveConversions(c: Campaign): number {
       .filter(([label]) => !EXCLUDED_ACTION_LABELS.has(label))
       .reduce((sum, [, a]) => sum + (a?.conversions ?? 0), 0);
   }
+  const pc = (c as Campaign & { purchase_conversions?: number }).purchase_conversions;
+  if (typeof pc === 'number' && !Number.isNaN(pc) && pc > 0) return pc;
   return 0;
 }
 
