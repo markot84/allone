@@ -1,10 +1,14 @@
 {
-  "version": "0.481.0",
-  "previousVersion": "0.480.0",
-  "commitHash": "00ccc14",
+  "version": "0.482.0",
+  "previousVersion": "0.481.0",
+  "commitHash": "7350fdf",
   "branch": "main",
-  "buildDate": "2026-04-16T18:47:00.968Z",
+  "buildDate": "2026-04-16T19:01:15.225Z",
   "commits": [
+    {
+      "hash": "7350fdf",
+      "message": "ui(suppliers): keep header labels single-line (whitespace-nowrap + wider cols)"
+    },
     {
       "hash": "00ccc14",
       "message": "ui(suppliers): keep header labels single-line (whitespace-nowrap + wider cols)"
@@ -60,10 +64,6 @@
     {
       "hash": "eb2746a",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "5667f94",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [
@@ -75,7 +75,6 @@
     "[Νέο χαρακτηριστικό] Ignore demo products globally + suppliers column filters/sort",
     "[Συντήρηση] Full deploy",
     "UI: dashboard & analytics KPIs, campaigns ROI chart, nav scroll-to-top",
-    "Align revenue metrics with selected period (ROI, dashboard, briefing)",
-    "[Νέο χαρακτηριστικό] Marketing overhead, daily trend, e-shop tabs, DateRangePicker portal"
+    "Align revenue metrics with selected period (ROI, dashboard, briefing)"
   ]
 }

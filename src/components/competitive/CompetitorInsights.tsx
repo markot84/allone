@@ -1,4 +1,5 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { collection, doc, getDocs, setDoc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../../config/firebase';
@@ -21,6 +22,8 @@ import {
   ArrowUp,
   ArrowDown,
   BarChart3,
+  Filter,
+  X as XIcon,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -60,6 +63,59 @@ interface CompetitorSettings {
 }
 
 type Tab = 'pricing' | 'insights' | 'ads';
+
+/** Στήλες πίνακα Price Benchmarks — χρησιμοποιούνται σε sort & column filters (xlsx-style). */
+type BenchmarkCol =
+  | 'title'
+  | 'brand'
+  | 'yourPrice'
+  | 'benchmarkPrice'
+  | 'priceDiff'
+  | 'stock'
+  | 'sold'
+  | 'gtin';
+
+type SortDir = 'asc' | 'desc';
+
+interface BenchmarkColumnFilters {
+  title?: string;
+  /** Σετ επιλεγμένων brands· αν undefined/κενό → όλα. */
+  brand?: Set<string>;
+  yourPrice?: string;
+  benchmarkPrice?: string;
+  priceDiff?: string;
+  stock?: string;
+  sold?: string;
+  gtin?: string;
+}
+
+/** Excel-like numeric expressions: `>10`, `<5`, `>=3`, `<=8`, `5-20`, `=8`, ή σκέτος αριθμός. */
+function matchNumericExpr(value: number | null | undefined, expr: string): boolean {
+  const e = (expr || '').trim();
+  if (!e) return true;
+  if (value == null || Number.isNaN(value)) return false;
+  const range = e.match(/^(-?\d+(?:[.,]\d+)?)\s*[-–]\s*(-?\d+(?:[.,]\d+)?)$/);
+  if (range) {
+    const a = parseFloat(range[1].replace(',', '.'));
+    const b = parseFloat(range[2].replace(',', '.'));
+    const lo = Math.min(a, b), hi = Math.max(a, b);
+    return value >= lo && value <= hi;
+  }
+  const op = e.match(/^(>=|<=|>|<|=)\s*(-?\d+(?:[.,]\d+)?)$/);
+  if (op) {
+    const n = parseFloat(op[2].replace(',', '.'));
+    switch (op[1]) {
+      case '>': return value > n;
+      case '<': return value < n;
+      case '>=': return value >= n;
+      case '<=': return value <= n;
+      default: return value === n;
+    }
+  }
+  const n = parseFloat(e.replace(',', '.'));
+  if (!Number.isNaN(n)) return value === n;
+  return true;
+}
 
 const TOOLTIP_CI_REFRESH =
   'Πλήρης συγχρονισμός connectors (GMC, Meta Ad Library κ.λπ.): καθημερινά ~06:00 (Europe/Athens). Στη σελίδα: cache Price Benchmarks ~10 λεπτά, Ad Monitoring ~5 λεπτά. Για άμεση ενημέρωση: Sync GMC ή Scan τώρα.';
@@ -407,30 +463,110 @@ export function CompetitorInsights() {
 
   const activeAds = ads.filter((a) => a.isActive);
 
-  // Benchmark sorting / filtering
+  // Benchmark search + column filters (xlsx-style) + column sort
   const [benchmarkSearch, setBenchmarkSearch] = useState('');
-  const [benchmarkSort, setBenchmarkSort] = useState<'diff' | 'price' | 'name'>('diff');
+  const [colFilters, setColFilters] = useState<BenchmarkColumnFilters>({});
+  const [sortCol, setSortCol] = useState<BenchmarkCol | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
+
+  /** Μοναδικά brands για το categorical φίλτρο «Brand». */
+  const brandOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const b of benchmarks) set.add(((b.brand || '').trim()) || '—');
+    return [...set].sort((a, b) => a.localeCompare(b, 'el'));
+  }, [benchmarks]);
+
+  const hasActiveColumnFilters = useMemo(() => {
+    const f = colFilters;
+    const brandActive = Boolean(f.brand && f.brand.size < brandOptions.length);
+    return Boolean(
+      f.title || f.gtin || f.yourPrice || f.benchmarkPrice || f.priceDiff || f.stock || f.sold || brandActive
+    );
+  }, [colFilters, brandOptions.length]);
+
+  const clearColumnFilters = useCallback(() => setColFilters({}), []);
+
+  const updateColFilter = useCallback(<K extends keyof BenchmarkColumnFilters>(key: K, value: BenchmarkColumnFilters[K]) => {
+    setColFilters((prev) => ({ ...prev, [key]: value }));
+  }, []);
+
+  const toggleBrand = useCallback((brand: string) => {
+    setColFilters((prev) => {
+      const current = prev.brand ? new Set(prev.brand) : new Set(brandOptions);
+      if (current.has(brand)) current.delete(brand); else current.add(brand);
+      return { ...prev, brand: current };
+    });
+  }, [brandOptions]);
 
   const filteredBenchmarks = useMemo(() => {
     let list = [...benchmarks];
+
     if (benchmarkSearch) {
       const q = benchmarkSearch.toLowerCase();
       list = list.filter(
         (b) => b.title.toLowerCase().includes(q) || b.productId.toLowerCase().includes(q) || b.gtin.toLowerCase().includes(q) || (b.brand || '').toLowerCase().includes(q)
       );
     }
-    list.sort((a, b) => {
-      if (benchmarkSort === 'diff') {
+
+    const f = colFilters;
+    if (f.title) {
+      const q = f.title.toLowerCase();
+      list = list.filter((b) => b.title.toLowerCase().includes(q) || b.productId.toLowerCase().includes(q));
+    }
+    if (f.gtin) {
+      const q = f.gtin.toLowerCase();
+      list = list.filter((b) => (b.gtin || '').toLowerCase().includes(q));
+    }
+    if (f.brand && f.brand.size < brandOptions.length) {
+      list = list.filter((b) => f.brand!.has(((b.brand || '').trim()) || '—'));
+    }
+    if (f.yourPrice) list = list.filter((b) => matchNumericExpr(b.yourPrice, f.yourPrice!));
+    if (f.benchmarkPrice) list = list.filter((b) => matchNumericExpr(b.benchmarkPrice, f.benchmarkPrice!));
+    if (f.priceDiff) list = list.filter((b) => matchNumericExpr(b.priceDiff, f.priceDiff!));
+    if (f.stock) {
+      list = list.filter((b) => {
+        const inv = lookupInventory(b.productId, b.gtin);
+        return matchNumericExpr(inv?.stock, f.stock!);
+      });
+    }
+    if (f.sold) {
+      list = list.filter((b) => {
+        const inv = lookupInventory(b.productId, b.gtin);
+        return matchNumericExpr(inv?.sold, f.sold!);
+      });
+    }
+
+    // Sort: αν υπάρχει column sort, υπερισχύει. Αλλιώς default (benchmark> priceDiff desc).
+    if (sortCol) {
+      const dir = sortDir === 'asc' ? 1 : -1;
+      const getVal = (b: (typeof benchmarks)[number]): string | number => {
+        switch (sortCol) {
+          case 'title': return (b.title || b.productId || '').toLowerCase();
+          case 'brand': return (b.brand || '').toLowerCase();
+          case 'yourPrice': return b.yourPrice || 0;
+          case 'benchmarkPrice': return b.benchmarkPrice || 0;
+          case 'priceDiff': return b.priceDiff || 0;
+          case 'stock': return lookupInventory(b.productId, b.gtin)?.stock ?? -Infinity;
+          case 'sold': return lookupInventory(b.productId, b.gtin)?.sold ?? -Infinity;
+          case 'gtin': return (b.gtin || '').toLowerCase();
+        }
+      };
+      list.sort((a, b) => {
+        const va = getVal(a); const vb = getVal(b);
+        if (typeof va === 'string' && typeof vb === 'string') return va.localeCompare(vb, 'el') * dir;
+        return ((va as number) - (vb as number)) * dir;
+      });
+    } else {
+      list.sort((a, b) => {
         const ab = a.benchmarkPrice > 0;
         const bb = b.benchmarkPrice > 0;
         if (ab !== bb) return ab ? -1 : 1;
         return b.priceDiff - a.priceDiff;
-      }
-      if (benchmarkSort === 'price') return b.yourPrice - a.yourPrice;
-      return a.title.localeCompare(b.title);
-    });
+      });
+    }
+
     return list;
-  }, [benchmarks, benchmarkSearch, benchmarkSort]);
+  }, [benchmarks, benchmarkSearch, colFilters, sortCol, sortDir, brandOptions.length, lookupInventory]);
 
   const insightsSellerLabel = useMemo(() => {
     const raw = (priceInsightsSellerName || '').trim();
@@ -573,18 +709,20 @@ export function CompetitorInsights() {
           {/* Sync + Filters */}
           <Card>
             <div className="p-5">
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
                 <h3 className="text-base font-semibold text-[#1A1A1A]">Price Benchmarks — Google Merchant Center</h3>
-                <div className="flex items-center gap-2">
-                  <select
-                    value={benchmarkSort}
-                    onChange={(e) => setBenchmarkSort(e.target.value as any)}
-                    className="px-3 py-1.5 border border-[#D1D5DB] rounded-lg text-xs bg-white focus:ring-2 focus:ring-[var(--nts-accent)]"
-                  >
-                    <option value="diff">Ταξινόμηση: Απόκλιση ↓</option>
-                    <option value="price">Ταξινόμηση: Τιμή ↓</option>
-                    <option value="name">Ταξινόμηση: Όνομα A-Z</option>
-                  </select>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {hasActiveColumnFilters && (
+                    <button
+                      type="button"
+                      onClick={clearColumnFilters}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-[var(--nts-accent)] bg-[var(--nts-accent)]/5 hover:bg-[var(--nts-accent)]/10 border border-[var(--nts-accent)]/30 rounded-lg transition-colors"
+                      title="Καθαρισμός όλων των φίλτρων στηλών"
+                    >
+                      <XIcon size={12} />
+                      Καθαρισμός φίλτρων
+                    </button>
+                  )}
                   <div className="relative">
                     <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
                     <input
@@ -626,20 +764,61 @@ export function CompetitorInsights() {
                   <table className="w-full text-left">
                     <thead className="sticky top-0 bg-[#F9FAFB] z-10">
                       <tr className="text-xs text-[#6B7280] uppercase tracking-wider">
-                        <th className="px-3 py-2.5 font-medium whitespace-nowrap">Προϊόν</th>
-                        <th className="px-3 py-2.5 font-medium hidden md:table-cell whitespace-nowrap">Brand</th>
-                        <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">Η τιμή σας</th>
-                        <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">Benchmark</th>
+                        <th className="px-3 py-2.5 font-medium whitespace-nowrap">
+                          <HeaderFilter label="Προϊόν" col="title" kind="text" align="left"
+                            textValue={colFilters.title ?? ''} onTextChange={(v) => updateColFilter('title', v || undefined)}
+                            sortCol={sortCol} sortDir={sortDir} setSort={(c, d) => { setSortCol(c); setSortDir(d); }}
+                            isActive={Boolean(colFilters.title)} />
+                        </th>
+                        <th className="px-3 py-2.5 font-medium hidden md:table-cell whitespace-nowrap">
+                          <HeaderFilter label="Brand" col="brand" kind="categorical" align="left"
+                            options={brandOptions}
+                            selected={colFilters.brand}
+                            onToggle={toggleBrand}
+                            onSelectAll={() => updateColFilter('brand', undefined)}
+                            onClearSelection={() => updateColFilter('brand', new Set<string>())}
+                            sortCol={sortCol} sortDir={sortDir} setSort={(c, d) => { setSortCol(c); setSortDir(d); }}
+                            isActive={Boolean(colFilters.brand && colFilters.brand.size < brandOptions.length)} />
+                        </th>
                         <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">
-                          Διαφ.&nbsp;τιμής
+                          <HeaderFilter label="Η τιμή σας" col="yourPrice" kind="number" align="right"
+                            textValue={colFilters.yourPrice ?? ''} onTextChange={(v) => updateColFilter('yourPrice', v || undefined)}
+                            sortCol={sortCol} sortDir={sortDir} setSort={(c, d) => { setSortCol(c); setSortDir(d); }}
+                            isActive={Boolean(colFilters.yourPrice)} />
                         </th>
-                        <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap" title="Διαθέσιμο απόθεμα e-shop">
-                          Στοκ
+                        <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">
+                          <HeaderFilter label="Benchmark" col="benchmarkPrice" kind="number" align="right"
+                            textValue={colFilters.benchmarkPrice ?? ''} onTextChange={(v) => updateColFilter('benchmarkPrice', v || undefined)}
+                            sortCol={sortCol} sortDir={sortDir} setSort={(c, d) => { setSortCol(c); setSortDir(d); }}
+                            isActive={Boolean(colFilters.benchmarkPrice)} />
                         </th>
-                        <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap" title="Πωλήσεις περιόδου (από import αποθεμάτων/παραγγελιών)">
-                          Πωλήσεις
+                        <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">
+                          <HeaderFilter label="Διαφ. τιμής" col="priceDiff" kind="number" align="right"
+                            textValue={colFilters.priceDiff ?? ''} onTextChange={(v) => updateColFilter('priceDiff', v || undefined)}
+                            hint="Σε %. Π.χ. >0 (ακριβότερα), <-10 (10% φθηνότερα)."
+                            sortCol={sortCol} sortDir={sortDir} setSort={(c, d) => { setSortCol(c); setSortDir(d); }}
+                            isActive={Boolean(colFilters.priceDiff)} />
                         </th>
-                        <th className="px-3 py-2.5 font-medium hidden lg:table-cell whitespace-nowrap">GTIN</th>
+                        <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">
+                          <HeaderFilter label="Στοκ" col="stock" kind="number" align="right"
+                            textValue={colFilters.stock ?? ''} onTextChange={(v) => updateColFilter('stock', v || undefined)}
+                            hint="Απόθεμα e-shop. Π.χ. =0 (εκτός), <=5 (χαμηλό)."
+                            sortCol={sortCol} sortDir={sortDir} setSort={(c, d) => { setSortCol(c); setSortDir(d); }}
+                            isActive={Boolean(colFilters.stock)} />
+                        </th>
+                        <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">
+                          <HeaderFilter label="Πωλήσεις" col="sold" kind="number" align="right"
+                            textValue={colFilters.sold ?? ''} onTextChange={(v) => updateColFilter('sold', v || undefined)}
+                            hint="Πωλήσεις περιόδου. Π.χ. >10, 5-20."
+                            sortCol={sortCol} sortDir={sortDir} setSort={(c, d) => { setSortCol(c); setSortDir(d); }}
+                            isActive={Boolean(colFilters.sold)} />
+                        </th>
+                        <th className="px-3 py-2.5 font-medium hidden lg:table-cell whitespace-nowrap">
+                          <HeaderFilter label="GTIN" col="gtin" kind="text" align="left"
+                            textValue={colFilters.gtin ?? ''} onTextChange={(v) => updateColFilter('gtin', v || undefined)}
+                            sortCol={sortCol} sortDir={sortDir} setSort={(c, d) => { setSortCol(c); setSortDir(d); }}
+                            isActive={Boolean(colFilters.gtin)} />
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#F3F4F6]">
@@ -1174,6 +1353,191 @@ function InsightRow({ item, sellerLabel }: { item: PriceInsight; sellerLabel: st
       <td className="px-3 py-2.5 text-right">{fmtPct(item.predictedClicksChange)}</td>
       <td className="px-3 py-2.5 text-right">{fmtPct(item.predictedConversionsChange)}</td>
     </tr>
+  );
+}
+
+// ── Excel-style column filter popover (Price Benchmarks) ────────────
+
+interface HeaderFilterProps {
+  label: string;
+  col: BenchmarkCol;
+  kind: 'text' | 'number' | 'categorical';
+  align?: 'left' | 'right';
+  /** text/number */
+  textValue?: string;
+  onTextChange?: (v: string) => void;
+  hint?: string;
+  /** categorical */
+  options?: string[];
+  selected?: Set<string>;
+  onToggle?: (v: string) => void;
+  onSelectAll?: () => void;
+  onClearSelection?: () => void;
+  /** sort */
+  sortCol: BenchmarkCol | null;
+  sortDir: SortDir;
+  setSort: (col: BenchmarkCol, dir: SortDir) => void;
+  isActive: boolean;
+}
+
+function HeaderFilter(props: HeaderFilterProps) {
+  const {
+    label, col, kind, align = 'left',
+    textValue, onTextChange, hint,
+    options = [], selected, onToggle, onSelectAll, onClearSelection,
+    sortCol, sortDir, setSort, isActive,
+  } = props;
+
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+  const [catSearch, setCatSearch] = useState('');
+
+  useEffect(() => {
+    if (!open) return;
+    const rect = btnRef.current?.getBoundingClientRect();
+    if (rect) {
+      const popWidth = 260;
+      let left = align === 'right' ? rect.right - popWidth : rect.left;
+      left = Math.max(8, Math.min(left, window.innerWidth - popWidth - 8));
+      setPos({ top: rect.bottom + 4, left });
+    }
+    const onDown = (e: MouseEvent) => {
+      if (popRef.current?.contains(e.target as Node)) return;
+      if (btnRef.current?.contains(e.target as Node)) return;
+      setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open, align]);
+
+  const sortedHere = sortCol === col;
+  const filteredOptions = useMemo(() => {
+    if (!catSearch) return options;
+    const q = catSearch.toLowerCase();
+    return options.filter((o) => o.toLowerCase().includes(q));
+  }, [options, catSearch]);
+
+  return (
+    <span className={`inline-flex items-center gap-1 ${align === 'right' ? 'flex-row-reverse' : ''}`}>
+      <span>{label}</span>
+      {sortedHere && (
+        sortDir === 'asc'
+          ? <ArrowUp size={10} className="text-[var(--nts-accent)]" />
+          : <ArrowDown size={10} className="text-[var(--nts-accent)]" />
+      )}
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={`inline-flex items-center justify-center p-0.5 rounded transition-colors ${
+          isActive
+            ? 'text-[var(--nts-accent)] bg-[var(--nts-accent)]/10'
+            : 'text-[#9CA3AF] hover:text-[#4B5563] hover:bg-[#E5E7EB]'
+        }`}
+        aria-label={`Φίλτρο ${label}`}
+      >
+        <Filter size={11} />
+      </button>
+
+      {open && pos && createPortal(
+        <div
+          ref={popRef}
+          style={{ position: 'fixed', top: pos.top, left: pos.left, width: 260, zIndex: 60 }}
+          className="bg-white border border-[#E5E7EB] rounded-lg shadow-xl p-3 normal-case tracking-normal"
+        >
+          <div className="flex items-center gap-1 mb-2 pb-2 border-b border-[#F3F4F6]">
+            <button
+              type="button"
+              onClick={() => { setSort(col, 'asc'); setOpen(false); }}
+              className={`flex-1 inline-flex items-center justify-center gap-1 text-[11px] px-2 py-1 rounded hover:bg-[#F5F5F5] ${
+                sortedHere && sortDir === 'asc' ? 'bg-[#F5F5F5] font-semibold text-[#111827]' : 'text-[#4B5563]'
+              }`}
+            >
+              <ArrowUp size={11} /> Αύξουσα
+            </button>
+            <button
+              type="button"
+              onClick={() => { setSort(col, 'desc'); setOpen(false); }}
+              className={`flex-1 inline-flex items-center justify-center gap-1 text-[11px] px-2 py-1 rounded hover:bg-[#F5F5F5] ${
+                sortedHere && sortDir === 'desc' ? 'bg-[#F5F5F5] font-semibold text-[#111827]' : 'text-[#4B5563]'
+              }`}
+            >
+              <ArrowDown size={11} /> Φθίνουσα
+            </button>
+          </div>
+
+          {kind === 'categorical' ? (
+            <div>
+              <div className="relative mb-1.5">
+                <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
+                <input
+                  type="text"
+                  autoFocus
+                  value={catSearch}
+                  onChange={(e) => setCatSearch(e.target.value)}
+                  placeholder="Αναζήτηση τιμής…"
+                  className="w-full pl-7 pr-2 py-1.5 text-xs border border-[#E5E7EB] rounded focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]"
+                />
+              </div>
+              <div className="flex items-center justify-between mb-1">
+                <button type="button" onClick={onSelectAll} className="text-[10px] text-[var(--nts-accent)] hover:underline">Επιλογή όλων</button>
+                <button type="button" onClick={onClearSelection} className="text-[10px] text-[#9CA3AF] hover:underline">Αποεπιλογή</button>
+              </div>
+              <div className="max-h-44 overflow-y-auto border border-[#F3F4F6] rounded p-1.5 space-y-0.5">
+                {filteredOptions.length === 0 && (
+                  <p className="text-[10px] text-[#9CA3AF] px-1 py-0.5">Χωρίς τιμές</p>
+                )}
+                {filteredOptions.map((v) => {
+                  const checked = selected ? selected.has(v) : true;
+                  return (
+                    <label key={v} className="flex items-center gap-1.5 text-xs cursor-pointer hover:bg-[#F9FAFB] px-1 py-0.5 rounded">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => onToggle?.(v)}
+                        className="accent-[var(--nts-accent)]"
+                      />
+                      <span className="truncate" title={v}>{v}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div>
+              <input
+                type="text"
+                autoFocus
+                value={textValue ?? ''}
+                onChange={(e) => onTextChange?.(e.target.value)}
+                placeholder={kind === 'number' ? 'π.χ. >10, <5, 5-20, =8' : 'περιέχει…'}
+                className="w-full px-2 py-1.5 text-xs border border-[#E5E7EB] rounded focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]"
+              />
+              <p className="text-[10px] text-[#9CA3AF] mt-1 leading-tight">
+                {hint || (kind === 'number' ? 'Υποστηρίζεται: >, <, >=, <=, εύρος (5-10), ίσο (=8).' : 'Αναζήτηση που περιέχει το κείμενο.')}
+              </p>
+              {textValue && (
+                <button
+                  type="button"
+                  onClick={() => onTextChange?.('')}
+                  className="mt-2 text-[10px] text-[var(--nts-accent)] hover:underline"
+                >
+                  Καθαρισμός φίλτρου
+                </button>
+              )}
+            </div>
+          )}
+        </div>,
+        document.body
+      )}
+    </span>
   );
 }
 
