@@ -15,122 +15,20 @@ import { BudgetOpportunitySection } from '../roi/BudgetOpportunitySection';
 import { CampaignsChannelInsights } from './CampaignsChannelInsights';
 import { ChannelPerformanceHistoryCard } from './ChannelPerformanceHistoryCard';
 import {
-  bucketOverlapFraction,
-  getEffectiveConversionValue,
-  getEffectiveConversions,
+  getDisplayConversionValue,
+  getDisplayConversions,
   getMetaPrimaryPurchaseFromActions,
+  isGoogleAdsLikeChannel,
   isMetaChannel,
-  metaUsesLegacyMonthBuckets,
 } from '../../utils/roiUtils';
+import {
+  applyCampaignDateRangeToMetrics,
+  filterCampaignsByScheduleDateOverlap,
+} from '../../utils/campaignDateRangeMetrics';
 import type { Campaign } from '../../types';
 
 /** Euro sign as ASCII-safe escape (avoids mojibake if source encoding drifts). */
 const EUR = '\u20AC';
-
-function parseCampaignDate(d: string | number | undefined): Date | null {
-  if (d === null || d === undefined || d === '') return null;
-  const str = String(d).trim();
-  if (!str) return null;
-
-  // Excel serial date number (e.g. 45658 = 2025-01-01)
-  if (/^\d+$/.test(str)) {
-    const serial = parseInt(str, 10);
-    if (serial > 30000 && serial < 60000) {
-      const date = new Date((serial - 25569) * 86400 * 1000);
-      return isNaN(date.getTime()) ? null : date;
-    }
-    return null;
-  }
-
-  const parsed = new Date(str);
-  return isNaN(parsed.getTime()) ? null : parsed;
-}
-
-/** "2024-01-01 – 2024-12-31", "2024-01-01 to 2024-12-31", en-dash, etc. */
-function parsePeriodDateRange(period: string | undefined): { start: Date; end: Date } | null {
-  if (!period?.trim()) return null;
-  const m = period.trim().match(
-    /(\d{4}-\d{2}-\d{2})\s*(?:\s+to\s+|[-\u2013\u2014\u2015–—])\s*(\d{4}-\d{2}-\d{2})/i
-  );
-  if (!m) return null;
-  const start = parseCampaignDate(m[1]);
-  const end = parseCampaignDate(m[2]);
-  if (!start || !end) return null;
-  return { start, end };
-}
-
-function getCampaignScheduleBounds(c: Campaign): { start: Date | null; end: Date | null } {
-  let start = parseCampaignDate(c.start_date);
-  let end = parseCampaignDate(c.end_date);
-  if (!start && !end) {
-    const pr = parsePeriodDateRange(c.period);
-    if (pr) {
-      start = pr.start;
-      end = pr.end;
-    }
-  }
-  return { start, end };
-}
-
-/**
- * When a campaign has no dailyMetrics, approximate slice of aggregate KPIs that fall inside
- * the selected calendar range (same bounds logic as the list date filter).
- */
-function overlapAggregateScale(c: Campaign, dateFrom: string, dateTo: string): number {
-  const filterFromMs = dateFrom ? new Date(dateFrom).getTime() : 0;
-  const filterToExcl = dateTo ? new Date(dateTo).getTime() + 86400000 : Infinity;
-  const { start, end } = getCampaignScheduleBounds(c);
-
-  if (!start && !end) return 1;
-
-  let campStartMs: number;
-  let campEndExcl: number;
-  if (start && end) {
-    campStartMs = start.getTime();
-    campEndExcl = end.getTime() + 86400000;
-  } else if (start && !end) {
-    campStartMs = start.getTime();
-    const tail = Math.max(Date.now(), filterToExcl === Infinity ? Date.now() : filterToExcl);
-    campEndExcl = tail;
-  } else {
-    const e = end!;
-    campStartMs = e.getTime();
-    campEndExcl = e.getTime() + 86400000;
-  }
-
-  const overlapStart = Math.max(campStartMs, filterFromMs);
-  const overlapEnd = Math.min(campEndExcl, filterToExcl);
-  const overlapMs = Math.max(0, overlapEnd - overlapStart);
-  const campSpanMs = Math.max(86400000, campEndExcl - campStartMs);
-  return Math.min(1, overlapMs / campSpanMs);
-}
-
-function scaleConversionActions(
-  ca: Campaign['conversionActions'] | undefined,
-  scale: number
-): Campaign['conversionActions'] | undefined {
-  if (!ca || scale >= 0.9999 && scale <= 1.0001) return ca;
-  const out: Record<string, { conversions: number; value: number }> = {};
-  for (const [k, v] of Object.entries(ca)) {
-    out[k] = {
-      conversions: (v.conversions || 0) * scale,
-      value: (v.value || 0) * scale,
-    };
-  }
-  return out;
-}
-
-function sumConversionActions(ca: Campaign['conversionActions'] | undefined): { conv: number; value: number } {
-  if (!ca) return { conv: 0, value: 0 };
-  return Object.values(ca).reduce(
-    (acc, a) => ({
-      conv: acc.conv + (a?.conversions ?? 0),
-      value: acc.value + (a?.value ?? 0),
-    }),
-    { conv: 0, value: 0 }
-  );
-}
-
 
 /**
  * PMax / store-visit campaigns: GA may label the action as Purchase with ~1 EUR per conversion.
@@ -207,11 +105,6 @@ function pickPrimaryGoogleAdsPurchaseKey(
   return byConv[0] ?? null;
 }
 
-function isGoogleAdsLikeChannel(channel: string | undefined): boolean {
-  const ch = (channel || '').trim().toLowerCase();
-  return ch === 'google ads' || ch === 'google shopping' || /^google\s*ads\b/.test(ch);
-}
-
 /**
  * Προεπιλογή φίλτρου «Active»: ταυτίζεται με **Enabled** στο Google Ads και **ACTIVE** στο Meta
  * (όχι Paused, Completed/Archived, Removed, Ended).
@@ -230,58 +123,6 @@ function isActiveLikeCampaignStatus(status: string | undefined): boolean {
     'campaign_paused',
   ]);
   return !excluded.has(s);
-}
-
-/**
- * Display conversions / value. When a conversion-action filter is active, `c` is already
- * narrowed by applyConvFilter — do not fall back to sumConversionActions.
- *
- * Χωρίς φίλτρο: **Purchase/Sales** — `purchase_*` από sync (Google: category PURCHASE+STORE_SALES,
- * Meta: primary Purchase Pixel/Purchase). Αν λείπουν, fallback σε metrics.conversions / effective Meta.
- */
-function getDisplayConversions(c: Campaign, convFilterActive: boolean): number {
-  const raw = c.conversions;
-  const n = raw != null ? (typeof raw === 'number' ? raw : parseFloat(String(raw))) : NaN;
-  if (convFilterActive) {
-    return Number.isNaN(n) ? 0 : n;
-  }
-  const pConv = c.purchase_conversions;
-  if (isGoogleAdsLikeChannel(c.channel)) {
-    if (typeof pConv === 'number' && !Number.isNaN(pConv)) return pConv;
-    if (!Number.isNaN(n)) return n;
-    return 0;
-  }
-  if (isMetaChannel(c.channel)) {
-    if (typeof pConv === 'number' && !Number.isNaN(pConv)) return pConv;
-    return getEffectiveConversions(c);
-  }
-  const fromActions = sumConversionActions(c.conversionActions).conv;
-  if (!Number.isNaN(n) && n > 0) return n;
-  if (fromActions > 0) return fromActions;
-  return Number.isNaN(n) ? 0 : n;
-}
-
-function getDisplayConversionValue(c: Campaign, convFilterActive: boolean): number {
-  const any = c as Campaign & { conversionValue?: number };
-  const raw = c.conversion_value ?? any.conversionValue;
-  const n = raw != null ? (typeof raw === 'number' ? raw : parseFloat(String(raw))) : NaN;
-  if (convFilterActive) {
-    return Number.isNaN(n) ? 0 : n;
-  }
-  const pVal = c.purchase_conversion_value;
-  if (isGoogleAdsLikeChannel(c.channel)) {
-    if (typeof pVal === 'number' && !Number.isNaN(pVal)) return pVal;
-    if (!Number.isNaN(n)) return n;
-    return 0;
-  }
-  if (isMetaChannel(c.channel)) {
-    if (typeof pVal === 'number' && !Number.isNaN(pVal)) return pVal;
-    return getEffectiveConversionValue(c);
-  }
-  const fromActions = sumConversionActions(c.conversionActions).value;
-  if (!Number.isNaN(n) && n > 0) return n;
-  if (fromActions > 0) return fromActions;
-  return Number.isNaN(n) ? 0 : n;
 }
 
 function formatConvCount(n: number): string {
@@ -443,24 +284,14 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
 
     // Date range filter (interval overlap vs [from, to) in local date semantics)
     if (dateFrom || dateTo) {
-      const from = dateFrom ? new Date(dateFrom).getTime() : 0;
-      const to = dateTo ? new Date(dateTo).getTime() + 86400000 : Infinity;
-      filtered = filtered.filter(c => {
-        const { start, end } = getCampaignScheduleBounds(c);
-        const campStart = start ? start.getTime() : null;
-        const campEnd = end ? end.getTime() : null;
-        if (!campStart && !campEnd) return true;
-        const overlapStart = campStart ? campStart <= to : campEnd ? campEnd >= from : true;
-        const overlapEnd = campEnd ? campEnd >= from : campStart ? campStart <= to : true;
-        return overlapStart && overlapEnd;
-      });
+      filtered = filterCampaignsByScheduleDateOverlap(filtered, dateFrom || '', dateTo || '') as typeof filtered;
     }
 
     return filtered;
   }, [campaigns, searchQuery, channelFilter, statusFilter, dateFrom, dateTo, resolveStatus]);
 
 
-  // Compute date-range-aware metrics per campaign
+  // Compute date-range-aware metrics per campaign (κοινό με ROI — `campaignDateRangeMetrics`)
   const campaignsWithDateMetrics = useMemo(() => {
     const useDateFilter = !!(dateFrom || dateTo);
     if (!useDateFilter) return filteredCampaigns;
@@ -468,115 +299,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
     const fromDate = dateFrom || '0000-00-00';
     const toDate = dateTo || '9999-99-99';
 
-    return filteredCampaigns.map(c => {
-      if (!c.dailyMetrics || Object.keys(c.dailyMetrics).length === 0) {
-        const scale = overlapAggregateScale(c, dateFrom, dateTo);
-        if (scale <= 0) {
-          return {
-            ...c,
-            impressions: 0,
-            clicks: 0,
-            conversions: 0,
-            amount_spent: 0,
-            conversion_value: 0,
-            purchase_conversions: 0,
-            purchase_conversion_value: 0,
-            ctr: 0,
-            roas: 0,
-            conversionActions: {},
-          };
-        }
-        if (scale >= 0.9999) return c;
-        const impressions = Math.round((c.impressions || 0) * scale);
-        const clicks = Math.round((c.clicks || 0) * scale);
-        const conversions = (typeof c.conversions === 'number' ? c.conversions : parseFloat(String(c.conversions || 0)) || 0) * scale;
-        const amount_spent = Math.round((c.amount_spent || 0) * scale * 100) / 100;
-        const rawVal = c.conversion_value ?? (c as { conversionValue?: number }).conversionValue;
-        const conversion_value = Math.round((typeof rawVal === 'number' ? rawVal : parseFloat(String(rawVal || 0)) || 0) * scale * 100) / 100;
-        const pc0 = c.purchase_conversions;
-        const pv0 = c.purchase_conversion_value;
-        const purchase_conversions =
-          typeof pc0 === 'number' && !Number.isNaN(pc0) ? pc0 * scale : undefined;
-        const purchase_conversion_value =
-          typeof pv0 === 'number' && !Number.isNaN(pv0)
-            ? Math.round(pv0 * scale * 100) / 100
-            : undefined;
-        const ctr = impressions > 0 ? Math.round((clicks / impressions) * 10000) / 100 : 0;
-        const roasVal =
-          typeof purchase_conversion_value === 'number'
-            ? purchase_conversion_value
-            : conversion_value;
-        const roas = amount_spent > 0 ? Math.round((roasVal / amount_spent) * 100) / 100 : 0;
-        const conversionActions = scaleConversionActions(c.conversionActions, scale);
-        return {
-          ...c,
-          impressions,
-          clicks,
-          conversions,
-          amount_spent,
-          conversion_value,
-          purchase_conversions,
-          purchase_conversion_value,
-          ctr,
-          roas,
-          conversionActions,
-        };
-      }
-      const metaMonthBuckets = metaUsesLegacyMonthBuckets(c);
-      let impressions = 0, clicks = 0, conversions = 0, amount_spent = 0, conversion_value = 0;
-      let purchase_conversions = 0, purchase_conversion_value = 0;
-      let purchaseSlicePresent = false;
-      const dateConvActions: Record<string, { conversions: number; value: number }> = {};
-
-      for (const [date, m] of Object.entries(c.dailyMetrics)) {
-        const frac = bucketOverlapFraction(date, fromDate, toDate, { metaMonthBuckets });
-        if (frac <= 0) continue;
-
-        impressions += Math.round((m.impressions || 0) * frac);
-        clicks += Math.round((m.clicks || 0) * frac);
-        conversions += (m.conversions || 0) * frac;
-        amount_spent += (m.amount_spent || 0) * frac;
-        conversion_value += (m.conversion_value || 0) * frac;
-        const mAny0 = m as Record<string, unknown>;
-        if (mAny0.purchase_conversions !== undefined || mAny0.purchase_conversion_value !== undefined) {
-          purchaseSlicePresent = true;
-        }
-        purchase_conversions += Number(mAny0.purchase_conversions ?? 0) * frac;
-        purchase_conversion_value += Number(mAny0.purchase_conversion_value ?? 0) * frac;
-
-        const mAny = m as Record<string, any>;
-        if (mAny.conversionActions && typeof mAny.conversionActions === 'object') {
-          for (const [label, vals] of Object.entries(mAny.conversionActions as Record<string, { conversions: number; value: number }>)) {
-            if (!dateConvActions[label]) dateConvActions[label] = { conversions: 0, value: 0 };
-            dateConvActions[label].conversions += (vals.conversions || 0) * frac;
-            dateConvActions[label].value += (vals.value || 0) * frac;
-          }
-        }
-      }
-
-      const conversionActions = dateConvActions;
-
-      const ctr = impressions > 0 ? Math.round((clicks / impressions) * 10000) / 100 : 0;
-      const roasBase = purchaseSlicePresent ? purchase_conversion_value : conversion_value;
-      const roas = amount_spent > 0 ? Math.round((roasBase / amount_spent) * 100) / 100 : 0;
-      amount_spent = Math.round(amount_spent * 100) / 100;
-      const out: Campaign & { purchase_conversions?: number; purchase_conversion_value?: number } = {
-        ...c,
-        impressions,
-        clicks,
-        conversions,
-        amount_spent,
-        conversion_value,
-        ctr,
-        roas,
-        conversionActions,
-      };
-      if (purchaseSlicePresent) {
-        out.purchase_conversions = purchase_conversions;
-        out.purchase_conversion_value = Math.round(purchase_conversion_value * 100) / 100;
-      }
-      return out;
-    });
+    return applyCampaignDateRangeToMetrics(filteredCampaigns, fromDate, toDate) as typeof filteredCampaigns;
   }, [filteredCampaigns, dateFrom, dateTo]);
 
 

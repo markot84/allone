@@ -123,6 +123,72 @@ export function getEffectiveConversions(c: Campaign): number {
   return 0;
 }
 
+export function sumConversionActions(
+  ca: Campaign['conversionActions'] | undefined
+): { conv: number; value: number } {
+  if (!ca) return { conv: 0, value: 0 };
+  return Object.values(ca).reduce(
+    (acc, a) => ({
+      conv: acc.conv + (a?.conversions ?? 0),
+      value: acc.value + (a?.value ?? 0),
+    }),
+    { conv: 0, value: 0 }
+  );
+}
+
+export function isGoogleAdsLikeChannel(channel: string | undefined): boolean {
+  const ch = (channel || '').trim().toLowerCase();
+  return ch === 'google ads' || ch === 'google shopping' || /^google\s*ads\b/.test(ch);
+}
+
+/**
+ * Ίδια λογική με το summary της σελίδας Campaigns (Purchase/Sales όταν δεν υπάρχει φίλτρο conversion action).
+ */
+export function getDisplayConversions(c: Campaign, convFilterActive: boolean): number {
+  const raw = c.conversions;
+  const n = raw != null ? (typeof raw === 'number' ? raw : parseFloat(String(raw))) : NaN;
+  if (convFilterActive) {
+    return Number.isNaN(n) ? 0 : n;
+  }
+  const pConv = c.purchase_conversions;
+  if (isGoogleAdsLikeChannel(c.channel)) {
+    if (typeof pConv === 'number' && !Number.isNaN(pConv)) return pConv;
+    if (!Number.isNaN(n)) return n;
+    return 0;
+  }
+  if (isMetaChannel(c.channel)) {
+    if (typeof pConv === 'number' && !Number.isNaN(pConv)) return pConv;
+    return getEffectiveConversions(c);
+  }
+  const fromActions = sumConversionActions(c.conversionActions).conv;
+  if (!Number.isNaN(n) && n > 0) return n;
+  if (fromActions > 0) return fromActions;
+  return Number.isNaN(n) ? 0 : n;
+}
+
+export function getDisplayConversionValue(c: Campaign, convFilterActive: boolean): number {
+  const any = c as Campaign & { conversionValue?: number };
+  const raw = c.conversion_value ?? any.conversionValue;
+  const n = raw != null ? (typeof raw === 'number' ? raw : parseFloat(String(raw))) : NaN;
+  if (convFilterActive) {
+    return Number.isNaN(n) ? 0 : n;
+  }
+  const pVal = c.purchase_conversion_value;
+  if (isGoogleAdsLikeChannel(c.channel)) {
+    if (typeof pVal === 'number' && !Number.isNaN(pVal)) return pVal;
+    if (!Number.isNaN(n)) return n;
+    return 0;
+  }
+  if (isMetaChannel(c.channel)) {
+    if (typeof pVal === 'number' && !Number.isNaN(pVal)) return pVal;
+    return getEffectiveConversionValue(c);
+  }
+  const fromActions = sumConversionActions(c.conversionActions).value;
+  if (!Number.isNaN(n) && n > 0) return n;
+  if (fromActions > 0) return fromActions;
+  return Number.isNaN(n) ? 0 : n;
+}
+
 /**
  * Calculate total revenue: organic revenue + campaign conversion value.
  */
@@ -130,7 +196,7 @@ export function calculateTotalRevenue(
   organicRevenue: number,
   campaigns: Campaign[]
 ): number {
-  const campaignsRevenue = campaigns.reduce((sum, c) => sum + getEffectiveConversionValue(c), 0);
+  const campaignsRevenue = campaigns.reduce((sum, c) => sum + getDisplayConversionValue(c, false), 0);
   return organicRevenue + campaignsRevenue;
 }
 
@@ -209,6 +275,31 @@ export function formatTrendDayLabel(ymd: string): string {
   }
 }
 
+/** Συμβατό με `applyCampaignDateRangeToMetrics`: αν κάποιο daily row έχει purchase fields, χρησιμοποιούμε purchase ανά ημέρα. */
+function dailyMetricsHasPurchaseSlice(dm: Record<string, unknown>): boolean {
+  for (const raw of Object.values(dm)) {
+    const m = raw as { purchase_conversions?: unknown; purchase_conversion_value?: unknown };
+    if (m.purchase_conversions !== undefined || m.purchase_conversion_value !== undefined) return true;
+  }
+  return false;
+}
+
+function attributedRevenueFromDailyRow(raw: unknown, usePurchaseSlice: boolean): number {
+  const m = raw as { conversion_value?: number; purchase_conversion_value?: number };
+  if (usePurchaseSlice && m.purchase_conversion_value !== undefined && m.purchase_conversion_value !== null) {
+    return Number(m.purchase_conversion_value) || 0;
+  }
+  return Number(m.conversion_value) || 0;
+}
+
+function attributedConversionsFromDailyRow(raw: unknown, usePurchaseSlice: boolean): number {
+  const m = raw as { conversions?: number; purchase_conversions?: number };
+  if (usePurchaseSlice && m.purchase_conversions !== undefined && m.purchase_conversions !== null) {
+    return Number(m.purchase_conversions) || 0;
+  }
+  return Number(m.conversions) || 0;
+}
+
 /**
  * Ημερήσιο conversion value (έσοδα που αναφέρει η πλατφόρμα διαφημίσεων) ανά YYYY-MM-DD μέσα στο [fromDate, toDate].
  * Κανονικές σειρές: μία γραμμή ανά ημέρα. Meta legacy (ένα bucket ανά μήνα): ισοκατανομή στις ημέρες που τέμνουν την περίοδο.
@@ -226,19 +317,18 @@ export function getCampaignDailyAttributedValueInPeriod(
 
   const dm = c.dailyMetrics;
   if (dm && Object.keys(dm).length > 0) {
+    const usePurchase = dailyMetricsHasPurchaseSlice(dm as Record<string, unknown>);
     const metaMonthBuckets = metaUsesLegacyMonthBuckets(c);
     if (!metaMonthBuckets) {
       for (const [dateKey, raw] of Object.entries(dm)) {
         if (dateKey.length < 10 || dateKey[4] !== '-' || dateKey[7] !== '-') continue;
         if (dateKey < fromDate || dateKey > toDate) continue;
-        const metrics = raw as { conversion_value?: number };
-        add(dateKey, Number(metrics.conversion_value) || 0);
+        add(dateKey, attributedRevenueFromDailyRow(raw, usePurchase));
       }
     } else {
       for (const [dateKey, raw] of Object.entries(dm)) {
         if (dateKey.slice(8, 10) !== '01') continue;
-        const metrics = raw as { conversion_value?: number };
-        const monthTotal = Number(metrics.conversion_value) || 0;
+        const monthTotal = attributedRevenueFromDailyRow(raw, usePurchase);
         const ym = dateKey.slice(0, 7);
         const [yy, mm] = ym.split('-').map(Number);
         if (!yy || !mm) continue;
@@ -261,7 +351,7 @@ export function getCampaignDailyAttributedValueInPeriod(
       }
     }
     const dmSum = [...out.values()].reduce((a, b) => a + b, 0);
-    const eff = getEffectiveConversionValue(c);
+    const eff = getDisplayConversionValue(c, false);
     if (dmSum === 0 && eff > 0) {
       const cd = getCampaignDateForMonth(c);
       if (cd) {
@@ -275,7 +365,7 @@ export function getCampaignDailyAttributedValueInPeriod(
   const cd = getCampaignDateForMonth(c);
   if (!cd) return out;
   const ymd = `${cd.getFullYear()}-${String(cd.getMonth() + 1).padStart(2, '0')}-${String(cd.getDate()).padStart(2, '0')}`;
-  if (ymd >= fromDate && ymd <= toDate) add(ymd, getEffectiveConversionValue(c));
+  if (ymd >= fromDate && ymd <= toDate) add(ymd, getDisplayConversionValue(c, false));
   return out;
 }
 
@@ -366,19 +456,18 @@ export function getCampaignDailyAttributedConversionsInPeriod(
 
   const dm = c.dailyMetrics;
   if (dm && Object.keys(dm).length > 0) {
+    const usePurchase = dailyMetricsHasPurchaseSlice(dm as Record<string, unknown>);
     const metaMonthBuckets = metaUsesLegacyMonthBuckets(c);
     if (!metaMonthBuckets) {
       for (const [dateKey, raw] of Object.entries(dm)) {
         if (dateKey.length < 10 || dateKey[4] !== '-' || dateKey[7] !== '-') continue;
         if (dateKey < fromDate || dateKey > toDate) continue;
-        const metrics = raw as { conversions?: number };
-        add(dateKey, Number(metrics.conversions) || 0);
+        add(dateKey, attributedConversionsFromDailyRow(raw, usePurchase));
       }
     } else {
       for (const [dateKey, raw] of Object.entries(dm)) {
         if (dateKey.slice(8, 10) !== '01') continue;
-        const metrics = raw as { conversions?: number };
-        const monthTotal = Number(metrics.conversions) || 0;
+        const monthTotal = attributedConversionsFromDailyRow(raw, usePurchase);
         const ym = dateKey.slice(0, 7);
         const [yy, mm] = ym.split('-').map(Number);
         if (!yy || !mm) continue;
@@ -401,7 +490,7 @@ export function getCampaignDailyAttributedConversionsInPeriod(
       }
     }
     const dmSum = [...out.values()].reduce((a, b) => a + b, 0);
-    const agg = getEffectiveConversions(c);
+    const agg = getDisplayConversions(c, false);
     if (dmSum === 0 && agg > 0) {
       const cd = getCampaignDateForMonth(c);
       if (cd) {
@@ -415,7 +504,7 @@ export function getCampaignDailyAttributedConversionsInPeriod(
   const cd = getCampaignDateForMonth(c);
   if (!cd) return out;
   const ymd = `${cd.getFullYear()}-${String(cd.getMonth() + 1).padStart(2, '0')}-${String(cd.getDate()).padStart(2, '0')}`;
-  if (ymd >= fromDate && ymd <= toDate) add(ymd, getEffectiveConversions(c));
+  if (ymd >= fromDate && ymd <= toDate) add(ymd, getDisplayConversions(c, false));
   return out;
 }
 
@@ -605,10 +694,10 @@ export function getCampaignMonthlyAttributedValue(c: Campaign): Map<string, numb
   const out = new Map<string, number>();
   const dm = c.dailyMetrics;
   if (dm && Object.keys(dm).length > 0) {
+    const usePurchase = dailyMetricsHasPurchaseSlice(dm as Record<string, unknown>);
     const metaMonthBuckets = metaUsesLegacyMonthBuckets(c);
     for (const [dateKey, raw] of Object.entries(dm)) {
-      const metrics = raw as { conversion_value?: number };
-      const val = Number(metrics.conversion_value) || 0;
+      const val = attributedRevenueFromDailyRow(raw, usePurchase);
       let ym: string;
       if (metaMonthBuckets && dateKey.slice(8, 10) === '01') {
         ym = dateKey.slice(0, 7);
@@ -619,7 +708,7 @@ export function getCampaignMonthlyAttributedValue(c: Campaign): Map<string, numb
       out.set(ym, (out.get(ym) || 0) + val);
     }
     const dmSum = [...out.values()].reduce((a, b) => a + b, 0);
-    const eff = getEffectiveConversionValue(c);
+    const eff = getDisplayConversionValue(c, false);
     if (dmSum === 0 && eff > 0) {
       out.clear();
       const d = getCampaignDateForMonth(c);
@@ -629,7 +718,7 @@ export function getCampaignMonthlyAttributedValue(c: Campaign): Map<string, numb
   }
   const d = getCampaignDateForMonth(c);
   if (!d) return out;
-  out.set(monthKeyFromDate(d), getEffectiveConversionValue(c));
+  out.set(monthKeyFromDate(d), getDisplayConversionValue(c, false));
   return out;
 }
 
@@ -647,18 +736,18 @@ export function getCampaignMonthlyAttributedValueInPeriod(
   const fromYm = fromDate.slice(0, 7);
   const toYm = toDate.slice(0, 7);
   if (dm && Object.keys(dm).length > 0) {
+    const usePurchase = dailyMetricsHasPurchaseSlice(dm as Record<string, unknown>);
     const metaMonthBuckets = metaUsesLegacyMonthBuckets(c);
     for (const [dateKey, raw] of Object.entries(dm)) {
       const frac = bucketOverlapFraction(dateKey, fromDate, toDate, { metaMonthBuckets });
       if (frac <= 0) continue;
-      const metrics = raw as { conversion_value?: number };
-      const val = (Number(metrics.conversion_value) || 0) * frac;
+      const val = attributedRevenueFromDailyRow(raw, usePurchase) * frac;
       let ym = dateKey.slice(0, 7);
       if (!/^\d{4}-\d{2}$/.test(ym)) continue;
       out.set(ym, (out.get(ym) || 0) + val);
     }
     const dmSum = [...out.values()].reduce((a, b) => a + b, 0);
-    const eff = getEffectiveConversionValue(c);
+    const eff = getDisplayConversionValue(c, false);
     if (dmSum === 0 && eff > 0) {
       const d = getCampaignDateForMonth(c);
       if (d) {
@@ -672,7 +761,7 @@ export function getCampaignMonthlyAttributedValueInPeriod(
   if (!d) return out;
   const ym = monthKeyFromDate(d);
   if (ym < fromYm || ym > toYm) return out;
-  out.set(ym, getEffectiveConversionValue(c));
+  out.set(ym, getDisplayConversionValue(c, false));
   return out;
 }
 
@@ -756,8 +845,8 @@ export function buildRoiTrendSeries(
  */
 export function calculateCampaignMetrics(campaigns: Campaign[]) {
   const totalSpend = campaigns.reduce((sum, c) => sum + (c.amount_spent || 0), 0);
-  const totalRevenue = campaigns.reduce((sum, c) => sum + getEffectiveConversionValue(c), 0);
-  const totalConversions = campaigns.reduce((sum, c) => sum + getEffectiveConversions(c), 0);
+  const totalRevenue = campaigns.reduce((sum, c) => sum + getDisplayConversionValue(c, false), 0);
+  const totalConversions = campaigns.reduce((sum, c) => sum + getDisplayConversions(c, false), 0);
   const totalImpressions = campaigns.reduce((sum, c) => sum + (c.impressions || 0), 0);
   const totalClicks = campaigns.reduce((sum, c) => sum + (c.clicks || 0), 0);
   const roas = totalSpend > 0 ? totalRevenue / totalSpend : 0;
@@ -783,8 +872,8 @@ export function calculateChannelPerformance(campaigns: Campaign[]) {
     }
     const s = channelStats[channel];
     s.spent += c.amount_spent || 0;
-    s.revenue += getEffectiveConversionValue(c);
-    s.conversions += getEffectiveConversions(c);
+    s.revenue += getDisplayConversionValue(c, false);
+    s.conversions += getDisplayConversions(c, false);
     s.impressions += c.impressions || 0;
     s.clicks += c.clicks || 0;
     s.count += 1;

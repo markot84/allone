@@ -1,10 +1,14 @@
 {
-  "version": "0.459.0",
-  "previousVersion": "0.458.0",
-  "commitHash": "87f8526",
+  "version": "0.464.0",
+  "previousVersion": "0.463.0",
+  "commitHash": "25292a5",
   "branch": "main",
-  "buildDate": "2026-04-16T11:24:21.331Z",
+  "buildDate": "2026-04-16T11:35:25.924Z",
   "commits": [
+    {
+      "hash": "25292a5",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "87f8526",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "cc82960",
       "message": "GA4: channel revenue, organic fallback; UI and data updates"
-    },
-    {
-      "hash": "53d20d6",
-      "message": "chore: sync buildInfo after deploy"
     }
   ],
   "changes": [

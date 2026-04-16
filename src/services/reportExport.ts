@@ -6,7 +6,7 @@ import autoTable from 'jspdf-autotable';
 import type { Product, RFMSegment, Campaign } from '../types';
 import { getStockAgeDays } from '../utils/productUtils';
 import { formatCurrencyCompact, formatNumber } from '../utils/format';
-import { getEffectiveConversionValue, getEffectiveConversions } from '../utils/roiUtils';
+import { getDisplayConversionValue, getDisplayConversions } from '../utils/roiUtils';
 
 export type ReportFormat = 'excel' | 'pdf';
 
@@ -115,7 +115,7 @@ async function exportReportToPdf(
     case 'executive': {
       const campaigns = data.campaigns ?? [];
       const organicRevenue = data.totalOrganicRevenue ?? (data.organicRecords ?? []).reduce((s, r) => s + (r.organic_revenue ?? 0), 0);
-      const campaignValue = campaigns.reduce((s, c) => s + getEffectiveConversionValue(c), 0);
+      const campaignValue = campaigns.reduce((s, c) => s + getDisplayConversionValue(c, false), 0);
       const totalRevenue = organicRevenue + campaignValue;
       doc.text('Executive Summary', 14, 40);
       autoTable(doc, {
@@ -148,7 +148,7 @@ async function exportReportToPdf(
         const ch = c.channel || 'Other';
         if (!byChannel[ch]) byChannel[ch] = { spent: 0, value: 0, count: 0 };
         byChannel[ch].spent += c.amount_spent ?? 0;
-        byChannel[ch].value += getEffectiveConversionValue(c);
+        byChannel[ch].value += getDisplayConversionValue(c, false);
         byChannel[ch].count += 1;
       });
       doc.text('Channel Attribution', 14, 40);
@@ -195,7 +195,7 @@ async function exportReportToExcel(
     case 'executive': {
       const campaigns = data.campaigns ?? [];
       const organicRevenue = data.totalOrganicRevenue ?? (data.organicRecords ?? []).reduce((s, r) => s + (r.organic_revenue ?? 0), 0);
-      const campaignValue = campaigns.reduce((s, c) => s + getEffectiveConversionValue(c), 0);
+      const campaignValue = campaigns.reduce((s, c) => s + getDisplayConversionValue(c, false), 0);
       const totalRevenue = organicRevenue + campaignValue;
       ws = XLSX.utils.aoa_to_sheet([
         ['Executive Summary', ''],
@@ -256,7 +256,7 @@ async function exportReportToExcel(
         const ch = c.channel || 'Other';
         if (!byChannel[ch]) byChannel[ch] = { spent: 0, value: 0, count: 0 };
         byChannel[ch].spent += c.amount_spent ?? 0;
-        byChannel[ch].value += getEffectiveConversionValue(c);
+        byChannel[ch].value += getDisplayConversionValue(c, false);
         byChannel[ch].count += 1;
       });
       ws = XLSX.utils.aoa_to_sheet([
@@ -290,9 +290,9 @@ async function exportReportToExcel(
           c.amount_spent ?? 0,
           c.impressions ?? 0,
           c.clicks ?? 0,
-          getEffectiveConversions(c),
-          getEffectiveConversionValue(c),
-          c.amount_spent ? (getEffectiveConversionValue(c) / c.amount_spent).toFixed(2) : '-',
+          getDisplayConversions(c, false),
+          getDisplayConversionValue(c, false),
+          c.amount_spent ? (getDisplayConversionValue(c, false) / c.amount_spent).toFixed(2) : '-',
         ]),
       ]);
       sheetName = 'Campaigns';

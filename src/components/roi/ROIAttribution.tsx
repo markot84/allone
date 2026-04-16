@@ -36,13 +36,15 @@ import { useQueryClient } from '@tanstack/react-query';
 import {
   calculateCampaignMetrics,
   sumDailyRevenueInPeriod,
-  bucketOverlapFraction,
-  metaUsesLegacyMonthBuckets,
   buildRoiTrendSeriesDaily,
   mergeGa4OrganicDailyWithChannelFallback,
   formatTrendDayLabel,
   ROI_PERCENT_CALC_TOOLTIP,
 } from '../../utils/roiUtils';
+import {
+  applyCampaignDateRangeToMetrics,
+  filterCampaignsByScheduleDateOverlap,
+} from '../../utils/campaignDateRangeMetrics';
 import { computeMarketingOverheadForPeriod, eachDateInclusive } from '../../utils/marketingCostPeriod';
 import { formatCurrency, formatCurrencyCompact, formatNumber, formatPercent } from '../../utils/format';
 import type { Campaign, MarketingCostLine } from '../../types';
@@ -200,71 +202,12 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
     return sumRaw < 0.5 && totalOrganicRevenueFromChannels > 0;
   }, [ga4OrganicByDay, periodDates.fromDate, periodDates.toDate, totalOrganicRevenueFromChannels]);
 
+  /** Ίδια pipeline με Campaigns: schedule overlap → applyCampaignDateRangeToMetrics (όχι ξεχωριστός τύπος slice). */
   const dateFilteredCampaigns = useMemo(() => {
     const all = campaigns as Campaign[];
     const { fromDate, toDate } = periodDates;
-
-    return all.filter(c => {
-      const dm = (c as any).dailyMetrics as Record<string, any> | undefined;
-      if (dm && Object.keys(dm).length > 0) {
-        const metaMonthBuckets = metaUsesLegacyMonthBuckets(c);
-        return Object.keys(dm).some(dateKey =>
-          bucketOverlapFraction(dateKey, fromDate, toDate, { metaMonthBuckets }) > 0
-        );
-      }
-      const start = c.start_date ? new Date(c.start_date) : null;
-      const period = c.period ? new Date(c.period) : null;
-      const cutoff = new Date(fromDate);
-      if (start && start >= cutoff) return true;
-      if (period && !isNaN(period.getTime()) && period >= cutoff) return true;
-      if (!start && !period) return true;
-      return false;
-    }).map(c => {
-      const dm = (c as any).dailyMetrics as Record<string, any> | undefined;
-      if (!dm || Object.keys(dm).length === 0) return c;
-
-      const filteredDm: Record<string, any> = {};
-      let spend = 0, impr = 0, clicks = 0, convs = 0, convValue = 0;
-      const convActions: Record<string, { conversions: number; value: number }> = {};
-
-      const metaMonthBuckets = metaUsesLegacyMonthBuckets(c);
-      for (const [dateKey, metrics] of Object.entries(dm)) {
-        const frac = bucketOverlapFraction(dateKey, fromDate, toDate, { metaMonthBuckets });
-        if (frac <= 0) continue;
-        filteredDm[dateKey] = metrics;
-        spend += ((metrics as any).amount_spent || 0) * frac;
-        impr += ((metrics as any).impressions || 0) * frac;
-        clicks += ((metrics as any).clicks || 0) * frac;
-        convs += ((metrics as any).conversions || 0) * frac;
-        convValue += ((metrics as any).conversion_value || 0) * frac;
-        // Aggregate conversionActions with fractional scaling so getEffectiveConversionValue
-        // reads filtered (not full-history) values for Meta campaigns.
-        const ma = (metrics as any).conversionActions;
-        if (ma) {
-          for (const [label, vals] of Object.entries(ma as Record<string, { conversions: number; value: number }>)) {
-            if (!convActions[label]) convActions[label] = { conversions: 0, value: 0 };
-            convActions[label].conversions += (vals.conversions || 0) * frac;
-            convActions[label].value += (vals.value || 0) * frac;
-          }
-        }
-      }
-      spend = Math.round(spend * 100) / 100;
-      return {
-        ...c,
-        // Doc-level purchase_* είναι συχνά όχι ανά περίοδο — μόνο conversion_value/conversions από daily sum
-        purchase_conversion_value: undefined,
-        purchase_conversions: undefined,
-        dailyMetrics: filteredDm,
-        conversionActions: convActions,
-        amount_spent: spend,
-        impressions: Math.round(impr),
-        clicks: Math.round(clicks),
-        conversions: convs,
-        conversion_value: convValue,
-        ctr: impr > 0 ? (clicks / impr) * 100 : 0,
-        roas: spend > 0 ? convValue / spend : 0,
-      };
-    });
+    const scheduleScoped = filterCampaignsByScheduleDateOverlap(all, fromDate, toDate);
+    return applyCampaignDateRangeToMetrics(scheduleScoped, fromDate, toDate);
   }, [campaigns, periodDates]);
 
   const campaignsTyped = dateFilteredCampaigns;
