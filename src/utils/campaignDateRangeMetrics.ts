@@ -220,6 +220,10 @@ export function applyCampaignDateRangeToMetrics(
     const roasBase = purchaseSlicePresent ? purchase_conversion_value : conversion_value;
     const roas = amount_spent > 0 ? Math.round((roasBase / amount_spent) * 100) / 100 : 0;
     amount_spent = Math.round(amount_spent * 100) / 100;
+    /**
+     * Το `...c` φέρνει parent `purchase_*` (συχνά lifetime). Αν τα ημερήσια δεν έχουν purchase columns,
+     * πρέπει να τα σβήνουμε αλλιώς το getDisplayConversionValue (Google) ξαναδιαβάζει doc-level purchase.
+     */
     const out: Campaign & { purchase_conversions?: number; purchase_conversion_value?: number } = {
       ...c,
       impressions,
@@ -230,11 +234,11 @@ export function applyCampaignDateRangeToMetrics(
       ctr,
       roas,
       conversionActions,
+      purchase_conversions: purchaseSlicePresent ? purchase_conversions : undefined,
+      purchase_conversion_value: purchaseSlicePresent
+        ? Math.round(purchase_conversion_value * 100) / 100
+        : undefined,
     };
-    if (purchaseSlicePresent) {
-      out.purchase_conversions = purchase_conversions;
-      out.purchase_conversion_value = Math.round(purchase_conversion_value * 100) / 100;
-    }
     return out;
   });
 }

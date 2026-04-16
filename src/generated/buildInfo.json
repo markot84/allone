@@ -1,10 +1,14 @@
 {
-  "version": "0.466.0",
-  "previousVersion": "0.465.0",
-  "commitHash": "92b5626",
+  "version": "0.468.0",
+  "previousVersion": "0.467.0",
+  "commitHash": "29c6aa0",
   "branch": "main",
-  "buildDate": "2026-04-16T11:39:17.763Z",
+  "buildDate": "2026-04-16T11:42:53.974Z",
   "commits": [
+    {
+      "hash": "29c6aa0",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "92b5626",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "09cf150",
       "message": "feat: global date range context shared across all pages"
-    },
-    {
-      "hash": "6920eaf",
-      "message": "GA4 new users inline + campaign channel filters"
     }
   ],
   "changes": [
