@@ -27,13 +27,14 @@ import {
   CartesianGrid
 } from 'recharts';
 import { Card, CardHeader, Badge, Button, Spinner, Tooltip as InfoTooltip, useToast, PageHeader } from '../common';
-import { useSegments, useBrand } from '../../hooks';
+import { useSegments } from '../../hooks/useSegments';
+import { useBrand } from '../../hooks/useBrand';
 import { FirestoreService } from '../../services/firestore';
 import { segmentCategoryMatrix } from '../../data';
 import { BehavioralTab } from './BehavioralTab';
 import { PredictiveTab } from './PredictiveTab';
 import { exportSegmentActionPack, exportAllSegmentActionPacks, exportSegmentCustomerList, exportAllSegmentCustomerLists } from '../../services/segmentActionPack';
-import { useActiveStrategy } from '../../hooks';
+import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import type { RFMSegment } from '../../types';
 
 import { formatNumber, formatPercent } from '../../utils/format';

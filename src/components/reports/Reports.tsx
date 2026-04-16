@@ -18,7 +18,11 @@ import {
   Tag,
 } from 'lucide-react';
 import { Card, CardHeader, Badge, Button, Spinner, PageHeader, ModalHeader } from '../common';
-import { useProductSource, useSegments, useCampaigns, useOrganic, useBrand } from '../../hooks';
+import { useProductSource } from '../../hooks/useProductSource';
+import { useSegments } from '../../hooks/useSegments';
+import { useCampaigns } from '../../hooks/useCampaigns';
+import { useOrganic } from '../../hooks/useOrganic';
+import { useBrand } from '../../hooks/useBrand';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import { formatCurrencyCompact, formatNumber } from '../../utils/format';
 import { useToast } from '../common/Toast';

@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useBrand, useAuth, useBrandMembers } from '../../hooks';
+import { useBrand } from '../../hooks/useBrand';
+import { useAuth } from '../../hooks/useAuth';
+import { useBrandMembers } from '../../hooks/useCoordination';
 import { auth } from '../../config/firebase';
 import { getLastImportDates } from '../../services/import';
 import { coerceToDate } from '../../utils/coerceDate';

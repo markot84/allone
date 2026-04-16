@@ -2,7 +2,7 @@ import { useMemo, useEffect, useRef, useState } from 'react';
 import { TrendingUp } from 'lucide-react';
 import { XAxis, YAxis, Tooltip, CartesianGrid, LineChart, Line, Legend } from 'recharts';
 import { Card, CardHeader } from '../common';
-import { useCampaigns } from '../../hooks';
+import { useCampaigns } from '../../hooks/useCampaigns';
 import type { Campaign } from '../../types';
 import { eachDateInclusive } from '../../utils/marketingCostPeriod';
 import {

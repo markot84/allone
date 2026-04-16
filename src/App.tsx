@@ -6,23 +6,10 @@ import { ToastProvider, ErrorBoundary, Spinner } from './components/common';
 import { auth } from './config/firebase';
 import { AuthGuard, InviteAcceptPage, InviteUserSection } from './components/auth';
 import { AppShell } from './components/layout';
-import { DashboardOverview } from './components/dashboard/DashboardOverview';
-import { RFMAnalysis } from './components/rfm';
-import { ChannelActivation } from './components/channels';
-import { CampaignsPage } from './components/campaigns/CampaignsPage';
-import { ContentStrategy } from './components/content';
-import { Help } from './components/help';
-import { Concept } from './components/concept';
-import { AIInsightsPage, AIInsightsTriggerWrapper } from './components/insights';
-import { DataImport } from './components/data';
-import { SuppliersPage } from './components/inventory/SuppliersPage';
-import { BrandsPage } from './components/brands';
+import { AIInsightsTriggerWrapper } from './components/insights/AIInsightsPanel';
 import { AuthActionPage } from './components/auth/AuthActionPage';
 import { isSuperAdminEmail } from './config/superAdmins';
 import { SharedPackageViewer } from './components/strategy/SharedPackageViewer';
-import { CoordinationPage } from './components/coordination';
-import { AutomationSettingsPage } from './components/settings';
-import { GA4Analytics } from './components/analytics/GA4Analytics';
 import { EnterpriseBadge } from './components/common';
 import { usePlan } from './hooks/usePlan';
 import { PrivacyPolicy } from './components/legal/PrivacyPolicy';
@@ -70,6 +57,20 @@ const Reports = lazyNamedWithRetry(() => import('./components/reports'), 'Report
 const BusinessFinances = lazyNamedWithRetry(() => import('./components/finances'), 'BusinessFinances');
 const ProcurementPage = lazyNamedWithRetry(() => import('./components/procurement/ProcurementPage'), 'ProcurementPage');
 const EcommerceDashboard = lazyNamedWithRetry(() => import('./components/ecommerce/EcommerceDashboard'), 'EcommerceDashboard');
+const BrandsPage = lazyNamedWithRetry(() => import('./components/brands'), 'BrandsPage');
+const DashboardOverview = lazyNamedWithRetry(() => import('./components/dashboard/DashboardOverview'), 'DashboardOverview');
+const RFMAnalysis = lazyNamedWithRetry(() => import('./components/rfm'), 'RFMAnalysis');
+const ChannelActivation = lazyNamedWithRetry(() => import('./components/channels'), 'ChannelActivation');
+const CampaignsPage = lazyNamedWithRetry(() => import('./components/campaigns/CampaignsPage'), 'CampaignsPage');
+const ContentStrategy = lazyNamedWithRetry(() => import('./components/content'), 'ContentStrategy');
+const Help = lazyNamedWithRetry(() => import('./components/help'), 'Help');
+const Concept = lazyNamedWithRetry(() => import('./components/concept'), 'Concept');
+const AIInsightsPage = lazyNamedWithRetry(() => import('./components/insights/AIInsightsPage'), 'AIInsightsPage');
+const DataImport = lazyNamedWithRetry(() => import('./components/data'), 'DataImport');
+const SuppliersPage = lazyNamedWithRetry(() => import('./components/inventory/SuppliersPage'), 'SuppliersPage');
+const CoordinationPage = lazyNamedWithRetry(() => import('./components/coordination'), 'CoordinationPage');
+const AutomationSettingsPage = lazyNamedWithRetry(() => import('./components/settings'), 'AutomationSettingsPage');
+const GA4Analytics = lazyNamedWithRetry(() => import('./components/analytics/GA4Analytics'), 'GA4Analytics');
 
 const queryClient = new QueryClient({
   defaultOptions: {

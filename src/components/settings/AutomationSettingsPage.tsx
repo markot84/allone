@@ -3,7 +3,7 @@ import { Zap, Lock, Bell, BellOff, Save, AlertTriangle, CheckCircle2, Info, X } 
 import { Card, Button, Spinner, useToast, EnterpriseBadge, PageHeader } from '../common';
 import { useAutomationSettings, useAutomationAlerts } from '../../hooks/useAutomation';
 import { usePlan } from '../../hooks/usePlan';
-import { useBrand } from '../../hooks';
+import { useBrand } from '../../hooks/useBrand';
 import { AutomationSettingsService, AutomationAlertsService } from '../../services/automationSettings';
 import { TRIGGERS_CATALOG, TRIGGER_GROUPS, getDefaultTriggerConfigs } from '../../data/triggersCatalog';
 import type { TriggerConfig, AutomationAlert } from '../../types';

@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Send } from 'lucide-react';
-import { useComments, useBrandMembers, useAuth } from '../../hooks';
+import { useAuth } from '../../hooks/useAuth';
+import { useBrand } from '../../hooks/useBrand';
+import { useComments, useBrandMembers } from '../../hooks/useCoordination';
 import { CommentsService } from '../../services/coordination';
 import { logAndNotify } from '../../services/coordination';
-import { useBrand } from '../../hooks';
 import type { CommentEntityType } from '../../types';
 
 interface CommentsPanelProps {

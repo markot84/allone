@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Plus, RefreshCw, Trash2, Pencil, Link as LinkIcon, FileText } from 'lucide-react';
 import { Card, Button, Spinner, useToast, PageHeader } from '../common';
-import { useFeedSources } from '../../hooks';
-import { useBrand } from '../../hooks';
+import { useFeedSources } from '../../hooks/useFeedSources';
+import { useBrand } from '../../hooks/useBrand';
 import { FEED_SOURCE_OPTIONS } from '../../data/feedSourceConfig';
 import { FeedSourcesService } from '../../services/feedSources';
 import { importFile } from '../../services/import';

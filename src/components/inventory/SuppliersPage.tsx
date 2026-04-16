@@ -14,7 +14,9 @@ import {
   Package,
 } from 'lucide-react';
 import { Card, Button, Spinner, useToast } from '../common';
-import { useSuppliers, useBrand, useProducts } from '../../hooks';
+import { useSuppliers } from '../../hooks/useSuppliers';
+import { useBrand } from '../../hooks/useBrand';
+import { useProducts } from '../../hooks/useProducts';
 import { SuppliersService } from '../../services/firestore';
 import { DEFAULT_TOD } from '../../utils/productUtils';
 // format utility — currently unused but available for future formatting needs

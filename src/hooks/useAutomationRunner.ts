@@ -1,5 +1,9 @@
 import { useEffect, useRef } from 'react';
-import { useBrand, useProducts, useSegments, useCampaigns, useSuppliers } from '.';
+import { useBrand } from './useBrand';
+import { useProducts } from './useProducts';
+import { useSegments } from './useSegments';
+import { useCampaigns } from './useCampaigns';
+import { useSuppliers } from './useSuppliers';
 import { useAuth } from './useAuth';
 import { usePlan } from './usePlan';
 import { usePriceBenchmarks } from './usePriceBenchmarks';

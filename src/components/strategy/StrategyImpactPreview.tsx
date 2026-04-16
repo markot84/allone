@@ -15,7 +15,9 @@ import {
   Infinity
 } from 'lucide-react';
 import { Button } from '../common';
-import { useProductSource, useCampaigns, useContent } from '../../hooks';
+import { useProductSource } from '../../hooks/useProductSource';
+import { useCampaigns } from '../../hooks/useCampaigns';
+import { useContent } from '../../hooks/useContent';
 import { calculateCompositeScore } from '../../utils/compositeScore';
 import { scenarios } from '../../data/mockScenarios';
 import type { Product } from '../../types';

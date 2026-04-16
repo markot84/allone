@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Building2, Plus, ChevronRight } from 'lucide-react';
 import { Card, Button, PageHeader } from '../common';
-import { useBrand } from '../../hooks';
+import { useBrand } from '../../hooks/useBrand';
 import { BrandCreateForm } from '../auth/BrandCreateForm';
 import { getAssetUrl } from '../../services/storage';
 import type { Brand } from '../../types';

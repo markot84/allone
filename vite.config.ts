@@ -28,5 +28,22 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
+    chunkSizeWarningLimit: 650,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return
+
+          if (id.includes('recharts') || id.includes('victory-vendor')) return 'charts'
+          if (id.includes('xlsx')) return 'xlsx'
+          if (id.includes('firebase')) return 'firebase'
+          if (id.includes('jspdf') || id.includes('jspdf-autotable')) return 'pdf-tools'
+          if (id.includes('html2canvas')) return 'canvas-tools'
+          if (id.includes('@primer')) return 'primer'
+          if (id.includes('framer-motion')) return 'motion'
+          if (id.includes('lucide-react')) return 'icons'
+        },
+      },
+    },
   },
 })

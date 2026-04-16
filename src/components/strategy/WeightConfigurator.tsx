@@ -30,9 +30,11 @@ import { CompareScenariosModal } from './CompareScenariosModal';
 import { MixedStrategyPanel, type MixConfig, computeBlendedWeights } from './MixedStrategyPanel';
 import { SeasonalBanner } from './SeasonalBanner';
 import { SeasonalPeriodsModal } from './SeasonalPeriodsModal';
-import { useProductSource, useSegments, useBrand } from '../../hooks';
+import { useProductSource } from '../../hooks/useProductSource';
+import { useSegments } from '../../hooks/useSegments';
+import { useBrand } from '../../hooks/useBrand';
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
-import { useAuth } from '../../hooks';
+import { useAuth } from '../../hooks/useAuth';
 import {
   scenarios,
   defaultWeights,

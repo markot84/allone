@@ -1,10 +1,14 @@
 {
-  "version": "0.439.0",
-  "previousVersion": "0.438.0",
-  "commitHash": "eb2746a",
+  "version": "0.445.0",
+  "previousVersion": "0.444.0",
+  "commitHash": "02259de",
   "branch": "main",
-  "buildDate": "2026-04-16T04:39:49.371Z",
+  "buildDate": "2026-04-16T04:58:14.211Z",
   "commits": [
+    {
+      "hash": "02259de",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "eb2746a",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "3de5a79",
       "message": "Dashboard: απλοποίηση KPI, ROI ROAS block, διόρθωση τάσης· AI briefing φιλικότερο prompt· tooltip"
-    },
-    {
-      "hash": "4e93e7e",
-      "message": "feat: shared page headers, campaigns copy (EN tech terms), connector and UI updates"
     }
   ],
   "changes": [

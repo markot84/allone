@@ -26,17 +26,15 @@ import {
   Legend,
 } from 'recharts';
 import { Card, CardHeader, KPICard, Tooltip, AlertsBanner, PageHeader } from '../common';
-import {
-  useSegments,
-  useOrganic,
-  useCampaigns,
-  useActiveStrategy,
-  useSuppliers,
-  useProductSource,
-  useBrand,
-  useProductAggregates,
-  usePeriodScopedCampaigns,
-} from '../../hooks';
+import { useSegments } from '../../hooks/useSegments';
+import { useOrganic } from '../../hooks/useOrganic';
+import { useCampaigns } from '../../hooks/useCampaigns';
+import { useActiveStrategy } from '../../hooks/useActiveStrategy';
+import { useSuppliers } from '../../hooks/useSuppliers';
+import { useProductSource } from '../../hooks/useProductSource';
+import { useBrand } from '../../hooks/useBrand';
+import { useProductAggregates } from '../../hooks/useAggregates';
+import { usePeriodScopedCampaigns } from '../../hooks/usePeriodScopedCampaigns';
 import { useDashPeriod } from '../../hooks/useDashPeriod';
 import { useGlobalDate, GLOBAL_PERIOD_OPTIONS } from '../../contexts/GlobalDateContext';
 import { DateRangePicker } from '../ui/DateRangePicker';

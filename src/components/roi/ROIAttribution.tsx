@@ -22,7 +22,10 @@ import {
   Legend,
 } from 'recharts';
 import { Card, CardHeader, Button, Tooltip, PageHeader } from '../common';
-import { useOrganic, useCampaigns, useActiveStrategy, useBrand } from '../../hooks';
+import { useOrganic } from '../../hooks/useOrganic';
+import { useCampaigns } from '../../hooks/useCampaigns';
+import { useActiveStrategy } from '../../hooks/useActiveStrategy';
+import { useBrand } from '../../hooks/useBrand';
 import { useDashPeriod } from '../../hooks/useDashPeriod';
 import { useGlobalDate, GLOBAL_PERIOD_OPTIONS } from '../../contexts/GlobalDateContext';
 import { DateRangePicker } from '../ui/DateRangePicker';
@@ -51,6 +54,11 @@ function formatPeriodDate(ymd: string): string {
 }
 
 type RoasAnalysisMetricRow = { k: string; v: ReactNode; note: ReactNode };
+
+function formatMultiplierValue(value: number | null | undefined, decimals = 2): string {
+  if (value == null || Number.isNaN(value)) return '—';
+  return `${formatNumber(value, decimals)}x`;
+}
 
 function RoasAnalysisMetricCard({ row }: { row: RoasAnalysisMetricRow }) {
   return (
@@ -142,7 +150,7 @@ interface ROIAttributionProps {
 type KpiTabId = 'campaignRoi' | 'trueRoi' | 'eshopRevenue' | 'revenue' | 'organic' | 'conversionsRate';
 
 /** Σειρά εμφάνισης — ίδιο visual language με Campaigns / Competitive Intelligence (segmented strip). */
-const KPI_ORDER: KpiTabId[] = ['campaignRoi', 'trueRoi', 'eshopRevenue', 'revenue', 'organic', 'conversionsRate'];
+const KPI_ORDER: KpiTabId[] = ['trueRoi', 'campaignRoi', 'eshopRevenue', 'revenue', 'organic', 'conversionsRate'];
 
 export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
   const { byMonth: organicByMonth, hasOrganicRevenue: hasOrganic } = useOrganic();
@@ -359,48 +367,42 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
 
   const kpiPanelConfig = useMemo(() => {
     const cvr = totalClicks > 0 ? (metrics.totalConversions / totalClicks) * 100 : 0;
-    const campaignRoiPct =
-      metrics.totalSpend > 0 ? ((metrics.totalRevenue - metrics.totalSpend) / metrics.totalSpend) * 100 : null;
-    const trueRoiPct =
+    const campaignRoiMultiple =
+      metrics.totalSpend > 0 ? metrics.totalRevenue / metrics.totalSpend : null;
+    const trueRoiMultiple =
       ecomm.hasData && metrics.totalSpend > 0
-        ? ((ecommRevenueInPeriod - metrics.totalSpend) / metrics.totalSpend) * 100
+        ? ecommRevenueInPeriod / metrics.totalSpend
         : null;
     return {
       campaignRoi: {
         icon: <TrendingUp size={22} strokeWidth={2} />,
         label: 'Campaign ROI',
-        value:
-          campaignRoiPct != null && !Number.isNaN(campaignRoiPct)
-            ? `${campaignRoiPct > 0 ? '+' : ''}${formatNumber(campaignRoiPct, 1)}%`
-            : '—',
-        subtitle: 'Conversion value καμπανιών − ad spend',
+        value: formatMultiplierValue(campaignRoiMultiple),
+        subtitle: 'Conversion value καμπανιών / ad spend',
         color:
-          campaignRoiPct != null && !Number.isNaN(campaignRoiPct)
-            ? campaignRoiPct >= 0
+          campaignRoiMultiple != null && !Number.isNaN(campaignRoiMultiple)
+            ? campaignRoiMultiple >= 1
               ? '#059669'
               : '#EF4444'
             : '#111827',
         iconWrapClass: 'bg-emerald-50 text-emerald-600',
         tooltip:
-          'Campaign ROI %: (έσοδα καμπανιών / conversion value − ad spend) ÷ ad spend. Δεν χρησιμοποιεί e-shop revenue.',
+          'Campaign ROI σε multiplier μορφή: έσοδα καμπανιών / ad spend. Το 1,00x είναι break-even. Δεν χρησιμοποιεί e-shop revenue.',
       },
       trueRoi: {
         icon: <ShoppingBag size={22} strokeWidth={2} />,
         label: 'True ROI',
-        value:
-          trueRoiPct != null && !Number.isNaN(trueRoiPct)
-            ? `${trueRoiPct > 0 ? '+' : ''}${formatNumber(trueRoiPct, 1)}%`
-            : '—',
-        subtitle: ecomm.hasData ? 'e-shop revenue − ad spend' : 'Χωρίς synced e-shop data',
+        value: formatMultiplierValue(trueRoiMultiple),
+        subtitle: ecomm.hasData ? 'e-shop revenue / ad spend' : 'Χωρίς synced e-shop data',
         color:
-          trueRoiPct != null && !Number.isNaN(trueRoiPct)
-            ? trueRoiPct >= 0
+          trueRoiMultiple != null && !Number.isNaN(trueRoiMultiple)
+            ? trueRoiMultiple >= 1
               ? '#059669'
               : '#EF4444'
             : '#111827',
         iconWrapClass: 'bg-emerald-50 text-emerald-600',
         tooltip:
-          'True ROI %: (e-shop revenue − ad spend) ÷ ad spend, για την επιλεγμένη περίοδο.',
+          'True ROI σε multiplier μορφή: e-shop revenue / ad spend, για την επιλεγμένη περίοδο. Το 1,00x είναι break-even.',
       },
       eshopRevenue: {
         icon: <ShoppingBag size={22} strokeWidth={2} />,
@@ -584,16 +586,12 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
           const blendedRoas = metrics.totalSpend > 0 ? periodBlendedRevenue / metrics.totalSpend : 0;
           const trueRoas =
             ecomm.hasData && metrics.totalSpend > 0 ? ecommRevenueInPeriod / metrics.totalSpend : null;
-          const roiPct =
-            metrics.totalSpend > 0 ? ((metrics.totalRevenue - metrics.totalSpend) / metrics.totalSpend) * 100 : null;
+          const campaignRoiMultiple = metrics.totalSpend > 0 ? metrics.totalRevenue / metrics.totalSpend : null;
           const profit = metrics.totalRevenue - metrics.totalSpend;
           const fullBlendedRoas = totalMarketingCost > 0 ? periodBlendedRevenue / totalMarketingCost : 0;
           const fullTrueRoas =
             ecomm.hasData && totalMarketingCost > 0 ? ecommRevenueInPeriod / totalMarketingCost : null;
-          const fullRoiPct =
-            totalMarketingCost > 0
-              ? ((metrics.totalRevenue - totalMarketingCost) / totalMarketingCost) * 100
-              : null;
+          const fullRoiMultiple = totalMarketingCost > 0 ? metrics.totalRevenue / totalMarketingCost : null;
           const periodDayCount = eachDateInclusive(periodDates.fromDate, periodDates.toDate).length;
           const mcl: MarketingCostLine[] = activeStrategy?.marketingCostLines ?? [];
           const monthlyRateHints: string[] = [];
@@ -633,9 +631,9 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                 ]
               : []),
             {
-              k: 'ROI % (κέρδος vs spend)',
-              v: roiPct != null && roiPct !== 0 ? `${roiPct > 0 ? '+' : ''}${formatNumber(roiPct, 0)}%` : '—',
-              note: '(Έσοδα καμπανιών − Ad Spend) ÷ Ad Spend. Δεν είναι ROAS — μετρά το περιθώριο κέρδους από τις διαφημίσεις.',
+              k: 'Campaign ROI',
+              v: formatMultiplierValue(campaignRoiMultiple),
+              note: 'Ίδιος υπολογισμός σε multiplier μορφή: έσοδα καμπανιών ÷ Ad Spend. Το 1,00x είναι break-even.',
             },
           ];
 
@@ -693,12 +691,9 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                 ]
               : []),
             {
-              k: 'ROI % (πλήρες κόστος marketing)',
-              v:
-                fullRoiPct != null && fullRoiPct !== 0
-                  ? `${fullRoiPct > 0 ? '+' : ''}${formatNumber(fullRoiPct, 0)}%`
-                  : '—',
-              note: '(Έσοδα καμπανιών − σύνολο κόστους marketing) ÷ σύνολο κόστους marketing. Συμπληρώνει το ROI % έναντι μόνο του ad spend.',
+              k: 'ROI (πλήρες κόστος marketing)',
+              v: formatMultiplierValue(fullRoiMultiple),
+              note: 'Έσοδα καμπανιών ÷ σύνολο κόστους marketing, σε multiplier μορφή. Το 1,00x είναι break-even.',
             },
           ];
 
@@ -708,7 +703,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                 <RoasAnalysisGroupSection
                   variant="ad"
                   title="Με βάση το ad spend"
-                  description="ROAS και ROI όταν στον παρονομαστή είναι μόνο η δαπάνη διαφημίσεων (όχι agency κ.λπ.)."
+                  description="ROAS και ROI σε μορφή multiplier όταν στον παρονομαστή είναι μόνο η δαπάνη διαφημίσεων (όχι agency κ.λπ.)."
                 >
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     {adSpendRows.map((row) => (

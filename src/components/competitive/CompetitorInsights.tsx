@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { collection, doc, getDocs, setDoc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../../config/firebase';
-import { useBrand } from '../../hooks';
+import { useBrand } from '../../hooks/useBrand';
 import { usePriceBenchmarks } from '../../hooks/usePriceBenchmarks';
 import { usePriceInsights, type PriceInsight } from '../../hooks/usePriceInsights';
 import { Card, Button, Spinner, Badge, Tooltip, useToast, PageHeader } from '../common';

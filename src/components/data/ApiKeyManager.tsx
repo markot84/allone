@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { Key, Copy, Trash2, Plus, Check, Eye, EyeOff, Code, ExternalLink } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card, Button, Badge, Spinner, useToast, PageHeader } from '../common';
-import { useBrand, useAuth } from '../../hooks';
+import { useBrand } from '../../hooks/useBrand';
+import { useAuth } from '../../hooks/useAuth';
 import { FirestoreService } from '../../services/firestore';
 
 interface ApiKeyDoc {

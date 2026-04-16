@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { X, Send } from 'lucide-react';
 import { Button, useToast } from '../common';
 import { DecisionsService, logAndNotify } from '../../services/coordination';
-import { useBrand, useAuth, useBrandMembers } from '../../hooks';
+import { useBrand } from '../../hooks/useBrand';
+import { useAuth } from '../../hooks/useAuth';
+import { useBrandMembers } from '../../hooks/useCoordination';
 import type { BrandDepartment } from '../../types';
 import { DepartmentBriefingFields } from './DepartmentBriefingFields';
 import {

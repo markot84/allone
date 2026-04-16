@@ -3,8 +3,9 @@ import { Plus, MessageSquare, CheckSquare, Activity, ChevronRight, X, AlertTrian
 import { Card, Button, Spinner, useToast, FormattedProse, PageHeader } from '../common';
 import { CommentsPanel } from './CommentsPanel';
 import { DecisionNotifyStrip } from './DecisionNotifyStrip';
-import { useDecisions, useTasks, useActivity, useBrandMembers, useAuth } from '../../hooks';
-import { useBrand } from '../../hooks';
+import { useAuth } from '../../hooks/useAuth';
+import { useBrand } from '../../hooks/useBrand';
+import { useDecisions, useTasks, useActivity, useBrandMembers } from '../../hooks/useCoordination';
 import { DecisionsService, TasksService, logAndNotify } from '../../services/coordination';
 import type {
   Decision, CoordinationTask, DecisionCategory, DecisionPriority,

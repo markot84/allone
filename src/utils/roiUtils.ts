@@ -794,14 +794,14 @@ export function calculateChannelPerformance(campaigns: Campaign[]) {
     .sort((a, b) => b.spent - a.spent);
 }
 
-/** Κείμενο tooltip (Dashboard + ROI): πώς υπολογίζεται το ROI % — όχι ο ROAS ως ×. */
+/** Κείμενο tooltip (Dashboard + ROI): πώς διαβάζεται το ROI σε multiplier μορφή. */
 export const ROI_PERCENT_CALC_TOOLTIP =
-  `Υπολογισμός ROI % (απόδοση έναντι ad spend)
+  `Υπολογισμός ROI σε multiplier μορφή
 
-Φόρμουλα: (Έσοδα καμπανιών − Ad spend) ÷ Ad spend × 100
+Φόρμουλα εμφάνισης: Έσοδα καμπανιών ÷ Ad spend
 
-Ερμηνεία: πόσο ποσοστό «κέρδους» (έσοδα μείον διαφήμιση) παίρνεις πάνω σε κάθε € spend — όχι πόσα € έσοδα ανά €1 spend.
+Ερμηνεία: πόσα € έσοδα αντιστοιχούν σε κάθε €1 spend. Το 1,00x είναι break-even, κάτω από 1,00x είσαι αρνητικά, πάνω από 1,00x θετικά.
 
-Σχέση με ROAS: ROAS = έσοδα ÷ spend. Άρα ROI % = (ROAS − 1) × 100 (ίδια έσοδα & spend). Το −1 αντιστοιχεί στο «αφαίρεση» του κόστους: έσοδα/spend − spend/spend.
+Σχέση με το παλιό ROI %: ROI % = (ROI multiplier − 1) × 100. Δηλαδή το παλιό +608,9% αντιστοιχεί σε 7,09x.
 
-Ο ROAS εμφανίζεται ξεχωριστά ως πολλαπλάσιο (×).`;
+Χρησιμοποιούμε multiplier μορφή γιατί διαβάζεται πιο εύκολα στο UI.`;

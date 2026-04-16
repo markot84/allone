@@ -33,7 +33,12 @@ import {
 } from 'recharts';
 import { Card, CardHeader, Badge, Button, Spinner, FormattedProse, PageHeader, ModalHeader } from '../common';
 import { useToast } from '../common/Toast';
-import { useProductSource, useCampaigns, useBrand, useSegments, useActiveStrategy, useChannelActivations } from '../../hooks';
+import { useProductSource } from '../../hooks/useProductSource';
+import { useCampaigns } from '../../hooks/useCampaigns';
+import { useBrand } from '../../hooks/useBrand';
+import { useSegments } from '../../hooks/useSegments';
+import { useActiveStrategy } from '../../hooks/useActiveStrategy';
+import { useChannelActivations } from '../../hooks/useChannelActivations';
 import { exportSegmentActionPack, exportAllSegmentActionPacks, exportStrategyPlan, exportAllSegmentCustomerLists } from '../../services/segmentActionPack';
 import { derivePredictiveMetrics } from '../../services/behavioralEngine';
 import { getStockAgeDays } from '../../utils/productUtils';

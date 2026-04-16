@@ -18,7 +18,12 @@ import {
   Loader2
 } from 'lucide-react';
 import { Card, Badge, Button, ProgressBar, Tooltip, useToast, AlertsBanner, PageHeader } from '../common';
-import { useProducts, useProductSource, useBrand, useSuppliers, usePlan, useProcurement } from '../../hooks';
+import { useProducts } from '../../hooks/useProducts';
+import { useProductSource } from '../../hooks/useProductSource';
+import { useBrand } from '../../hooks/useBrand';
+import { useSuppliers } from '../../hooks/useSuppliers';
+import { usePlan } from '../../hooks/usePlan';
+import { useProcurement } from '../../hooks/useProcurement';
 import { usePriceBenchmarks } from '../../hooks/usePriceBenchmarks';
 import { formatCurrency, formatCurrencyCompact, formatNumber, formatPercent } from '../../utils/format';
 import { FirestoreService } from '../../services/firestore';

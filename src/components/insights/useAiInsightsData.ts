@@ -1,5 +1,7 @@
 import { useMemo } from 'react';
-import { useSegments, useProducts, useSuppliers } from '../../hooks';
+import { useSegments } from '../../hooks/useSegments';
+import { useProducts } from '../../hooks/useProducts';
+import { useSuppliers } from '../../hooks/useSuppliers';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import { generateInsightsFromData } from '../../services/insights';
 

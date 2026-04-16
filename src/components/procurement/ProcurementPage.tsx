@@ -11,7 +11,7 @@ import {
 } from 'recharts';
 import { Card, Spinner, Button, useToast, PageHeader } from '../common';
 import { useProcurement } from '../../hooks/useProcurement';
-import { useBrand } from '../../hooks';
+import { useBrand } from '../../hooks/useBrand';
 import { ProcurementService } from '../../services/firestore';
 import { seedProcurementDemoData } from '../../services/procurementDemoData';
 import {
