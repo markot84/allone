@@ -67,6 +67,56 @@ const COLLECTION_MAP: Record<string, string> = {
   magento: 'magento_orders',
 };
 
+const PRODUCT_COLLECTION_MAP: Record<string, string> = {
+  shopify: 'shopify_products',
+  woocommerce: 'woo_products',
+  opencart: 'opencart_products',
+  magento: 'magento_products',
+};
+
+/**
+ * Reads product collections από κάθε platform και επιστρέφει map SKU → stock.
+ * Χρησιμοποιείται για τον πίνακα Price Benchmarking (στήλη «Στοκ»).
+ */
+async function readPlatformStockBySku(
+  db: Firestore,
+  brandId: string,
+  platform: string
+): Promise<Map<string, number>> {
+  const coll = PRODUCT_COLLECTION_MAP[platform];
+  const out = new Map<string, number>();
+  if (!coll) return out;
+
+  const snap = await db.collection(coll).where('brandId', '==', brandId).get();
+  for (const doc of snap.docs) {
+    const d = doc.data();
+    if (platform === 'shopify') {
+      for (const v of (d.variants || []) as Array<{ sku?: string; inventoryQuantity?: number | null }>) {
+        const sku = (v.sku || '').trim();
+        if (!sku) continue;
+        const qty = typeof v.inventoryQuantity === 'number' ? v.inventoryQuantity : 0;
+        out.set(sku, (out.get(sku) || 0) + qty);
+      }
+    } else if (platform === 'woocommerce') {
+      const sku = (d.sku || '').trim();
+      if (!sku) continue;
+      const qty = typeof d.stockQuantity === 'number' ? d.stockQuantity : 0;
+      out.set(sku, (out.get(sku) || 0) + qty);
+    } else if (platform === 'opencart') {
+      const sku = (d.sku || d.model || '').trim();
+      if (!sku) continue;
+      const qty = typeof d.quantity === 'number' ? d.quantity : 0;
+      out.set(sku, (out.get(sku) || 0) + qty);
+    } else if (platform === 'magento') {
+      const sku = (d.sku || '').trim();
+      if (!sku) continue;
+      const qty = typeof d.stockQuantity === 'number' ? d.stockQuantity : 0;
+      out.set(sku, (out.get(sku) || 0) + qty);
+    }
+  }
+  return out;
+}
+
 const REVENUE_FIELD: Record<string, string> = {
   shopify: 'totalPrice',
   woocommerce: 'total',
@@ -200,6 +250,37 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
     .slice(0, 20)
     .map(([sku, data]) => ({ sku, name: data.name, revenue: data.revenue, quantity: data.quantity }));
 
+  // SKU stats (stock + sold) — τροφοδοτεί τον πίνακα Price Benchmarking.
+  // Stock: από τα product docs κάθε platform.
+  // Sold:  sum qty από όλα τα line items (ίδιο 90-day window με τα orders).
+  const stockArrays = await Promise.all(
+    connectedPlatforms.map((p) => readPlatformStockBySku(db, brandId, p))
+  );
+  const stockBySku = new Map<string, number>();
+  for (const m of stockArrays) {
+    for (const [sku, qty] of m.entries()) {
+      stockBySku.set(sku, (stockBySku.get(sku) || 0) + qty);
+    }
+  }
+  const soldBySku = new Map<string, number>();
+  for (const o of allOrders) {
+    for (const li of o.lineItems || []) {
+      if (isDemoLineItem(li)) continue;
+      const sku = (li.sku || '').trim();
+      if (!sku) continue;
+      soldBySku.set(sku, (soldBySku.get(sku) || 0) + (li.quantity || 0));
+    }
+  }
+  const skuStats: Record<string, { stock: number; sold: number }> = {};
+  const allSkus = new Set<string>([...stockBySku.keys(), ...soldBySku.keys()]);
+  for (const sku of allSkus) {
+    skuStats[sku] = {
+      stock: Math.round(stockBySku.get(sku) || 0),
+      sold: Math.round(soldBySku.get(sku) || 0),
+    };
+  }
+  logger.info(`[EcommerceAgg] skuStats populated: ${allSkus.size} SKUs for brand ${brandId}`);
+
   // Orders by day (count)
   const ordersByDay: Record<string, number> = {};
   for (const o of allOrders) {
@@ -232,6 +313,7 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
     ordersByDay,
     recentOrders,
     connectedPlatforms,
+    skuStats,
     syncedAt: FieldValue.serverTimestamp(),
   };
 

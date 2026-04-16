@@ -1,10 +1,14 @@
 {
-  "version": "0.473.0",
-  "previousVersion": "0.472.0",
-  "commitHash": "41c200d",
+  "version": "0.475.0",
+  "previousVersion": "0.474.0",
+  "commitHash": "66ae2ae",
   "branch": "main",
-  "buildDate": "2026-04-16T17:05:17.407Z",
+  "buildDate": "2026-04-16T17:16:00.493Z",
   "commits": [
+    {
+      "hash": "66ae2ae",
+      "message": "feat: price-benchmarks stock/sold + campaigns geo tab (GAds+Meta country breakdown)"
+    },
     {
       "hash": "41c200d",
       "message": "feat: ignore demo products globally + suppliers column filters/sort"
@@ -60,13 +64,10 @@
     {
       "hash": "9fb6adf",
       "message": "Align revenue metrics with selected period (ROI, dashboard, briefing)"
-    },
-    {
-      "hash": "858eb1f",
-      "message": "feat(roi): marketing overhead, daily trend, e-shop tabs, DateRangePicker portal"
     }
   ],
   "changes": [
+    "[Νέο χαρακτηριστικό] Price-benchmarks stock/sold + campaigns geo tab (GAds+Meta country breakdown)",
     "[Νέο χαρακτηριστικό] Ignore demo products globally + suppliers column filters/sort",
     "[Συντήρηση] Full deploy",
     "UI: dashboard & analytics KPIs, campaigns ROI chart, nav scroll-to-top",
@@ -75,7 +76,6 @@
     "[Νέο χαρακτηριστικό] AI Insights full page, campaigns LTV chart, UX polish",
     "[Νέο χαρακτηριστικό] Global date range context shared across all pages",
     "GA4 new users inline + campaign channel filters",
-    "GA4: channel revenue, organic fallback; UI and data updates",
-    "[Συντήρηση] Sync buildInfo after deploy"
+    "GA4: channel revenue, organic fallback; UI and data updates"
   ]
 }

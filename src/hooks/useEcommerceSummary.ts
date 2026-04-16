@@ -37,6 +37,7 @@ interface EcommerceSummaryRaw {
   ordersByDay: Record<string, number>;
   recentOrders: EcommerceRecentOrder[];
   connectedPlatforms: string[];
+  skuStats?: Record<string, { stock: number; sold: number }>;
   syncedAt: any;
 }
 
@@ -93,6 +94,7 @@ export function useEcommerceSummary() {
     topProducts: data?.topProducts ?? [],
     recentOrders: data?.recentOrders ?? [],
     connectedPlatforms: data?.connectedPlatforms ?? [],
+    skuStats: data?.skuStats ?? {},
     syncedAt: data?.syncedAt,
     isLoading: isPending,
     hasData: !!data && (data.orderCount > 0 || data.connectedPlatforms.length > 0),

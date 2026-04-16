@@ -1617,6 +1617,12 @@ export const refreshAggregates = onRequest(
       }
 
       await computeAggregatesForBrand(brandId);
+      // Refresh e-commerce summary (skuStats, revenueByDay, topProducts) — χωρίς re-sync platforms.
+      try {
+        await computeEcommerceSummary(brandId);
+      } catch (e) {
+        logger.warn('[refreshAggregates] ecommerce summary refresh failed (non-fatal):', e);
+      }
       res.status(200).json({ success: true, brandId });
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);

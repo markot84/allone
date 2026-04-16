@@ -6,6 +6,7 @@ import { useBrand } from '../../hooks/useBrand';
 import { usePriceBenchmarks } from '../../hooks/usePriceBenchmarks';
 import { usePriceInsights, type PriceInsight } from '../../hooks/usePriceInsights';
 import { useProducts } from '../../hooks/useProducts';
+import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import { Card, Button, Spinner, Badge, Tooltip, useToast, PageHeader } from '../common';
 import {
   Search,
@@ -193,10 +194,15 @@ export function CompetitorInsights() {
     lastBenchmarkSyncedAt,
   } = usePriceBenchmarks();
 
-  // Inventory/sales enrichment για τον πίνακα benchmarks (στοιχεία e-shop).
+  // Inventory/sales enrichment για τον πίνακα benchmarks.
+  // Πηγές (με προτεραιότητα):
+  //   1) ecommerce_summary.skuStats (Shopify/Woo/OpenCart/Magento — live stock + sold)
+  //   2) products collection (manual import) — stock_level / qty_sold_period
   const { products } = useProducts();
+  const { skuStats } = useEcommerceSummary();
   const skuInventoryMap = useMemo(() => {
     const map = new Map<string, { stock: number; sold: number }>();
+    // Τοποθέτησε πρώτα τα manual imports…
     for (const p of products) {
       const key = (p.sku || '').trim().toLowerCase();
       if (!key) continue;
@@ -205,12 +211,25 @@ export function CompetitorInsights() {
         sold: Number(p.qty_sold_period) || 0,
       });
     }
+    // …και μετά άφησε τα live e-shop stats να υπερισχύσουν.
+    for (const [sku, s] of Object.entries(skuStats || {})) {
+      const key = (sku || '').trim().toLowerCase();
+      if (!key) continue;
+      map.set(key, { stock: Number(s.stock) || 0, sold: Number(s.sold) || 0 });
+    }
     return map;
-  }, [products]);
+  }, [products, skuStats]);
+
+  /** GMC productId συνήθως είναι `online:el:GR:SKU123` — δοκιμάζουμε όλα τα τμήματα. */
+  const benchmarkKeyCandidates = (productId: string, gtin: string): string[] => {
+    const raw = (productId || '').trim();
+    const parts = raw ? raw.split(':').map((s) => s.trim()).filter(Boolean) : [];
+    const candidates = [raw, ...parts, gtin || ''];
+    return candidates.map((k) => k.toLowerCase()).filter(Boolean);
+  };
   const lookupInventory = useCallback(
     (productId: string, gtin: string) => {
-      const keys = [productId, gtin].map((k) => (k || '').trim().toLowerCase()).filter(Boolean);
-      for (const k of keys) {
+      for (const k of benchmarkKeyCandidates(productId, gtin)) {
         const hit = skuInventoryMap.get(k);
         if (hit) return hit;
       }
