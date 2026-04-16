@@ -18,7 +18,8 @@ import { FirestoreService } from '../../services/firestore';
 import { db, auth, storage } from '../../config/firebase';
 import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 import { SUPER_ADMIN_EMAILS, SUPPORT_EMAIL, APP_NAME } from '../../config/superAdmins';
-import type { Brand, ChangelogEntry } from '../../types';
+import { getDefaultModuleEnabled, getEditionStatus, getModuleLabel } from '../../config/modules';
+import type { Brand, ChangelogEntry, ModuleId } from '../../types';
 import { useAuth } from '../../hooks';
 import buildInfo from '../../generated/buildInfo.json';
 
@@ -106,6 +107,8 @@ function BrandsTab() {
   const [userCounts, setUserCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [updatingPlan, setUpdatingPlan] = useState<string | null>(null);
+  const [updatingModule, setUpdatingModule] = useState<string | null>(null);
+  const moduleToggleIds: ModuleId[] = ['ecommerce', 'analytics', 'competitive', 'roi', 'sales', 'accounts', 'markets', 'procurement'];
 
   useEffect(() => {
     async function load() {
@@ -143,6 +146,30 @@ function BrandsTab() {
       console.error('Failed to update plan:', err);
     } finally {
       setUpdatingPlan(null);
+    }
+  };
+
+  const handleModuleToggle = async (brand: Brand, moduleId: ModuleId) => {
+    const brandType = brand.type;
+    const baseValue = brand.enabledModules?.[moduleId] ?? getDefaultModuleEnabled(moduleId, brandType);
+    const nextValue = !baseValue;
+    const nextOverrides = { ...(brand.enabledModules ?? {}) };
+    if (nextValue === getDefaultModuleEnabled(moduleId, brandType)) {
+      delete nextOverrides[moduleId];
+    } else {
+      nextOverrides[moduleId] = nextValue;
+    }
+
+    setUpdatingModule(`${brand.id}:${moduleId}`);
+    try {
+      await FirestoreService.updateDocument('brands', brand.id, { enabledModules: nextOverrides });
+      setBrands((prev) => prev.map((item) => (
+        item.id === brand.id ? { ...item, enabledModules: nextOverrides } : item
+      )));
+    } catch (err) {
+      console.error('Failed to update modules:', err);
+    } finally {
+      setUpdatingModule(null);
     }
   };
 
@@ -246,6 +273,40 @@ function BrandsTab() {
                 }}>
                   {brand.type}
                 </span>
+              </div>
+              <div style={{ width: '100%', borderTop: '1px solid var(--borderColor-muted, #e5e7eb)', paddingTop: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 8 }}>
+                  <Text as="div" size="small" style={{ color: 'var(--fgColor-muted)' }}>
+                    Edition matrix: core / optional / hidden defaults based on <strong>{brand.type}</strong>, με granular overrides ανά brand.
+                  </Text>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {moduleToggleIds.map((moduleId) => {
+                    const label = getModuleLabel(moduleId, brand.type);
+                    const status = getEditionStatus(moduleId, brand.type);
+                    const enabled = brand.enabledModules?.[moduleId] ?? getDefaultModuleEnabled(moduleId, brand.type);
+                    const pending = updatingModule === `${brand.id}:${moduleId}`;
+                    return (
+                      <button
+                        key={moduleId}
+                        onClick={() => !pending && handleModuleToggle(brand, moduleId)}
+                        style={{
+                          padding: '6px 10px',
+                          borderRadius: 999,
+                          border: enabled ? '1px solid rgba(34,197,94,0.35)' : '1px solid rgba(148,163,184,0.35)',
+                          background: enabled ? 'rgba(34,197,94,0.10)' : 'rgba(148,163,184,0.08)',
+                          color: enabled ? '#15803d' : '#475569',
+                          fontSize: 12,
+                          fontWeight: 600,
+                          cursor: pending ? 'wait' : 'pointer',
+                        }}
+                        title={`Default for ${brand.type}: ${status}`}
+                      >
+                        {pending ? 'Updating...' : `${label}: ${enabled ? 'ON' : 'OFF'}`}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           );

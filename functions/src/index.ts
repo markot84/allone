@@ -78,6 +78,13 @@ import {
   fetchGA4Data,
   setDb as setGA4Db,
 } from './ga4Connector';
+import {
+  getTikTokAuthUrl,
+  handleTikTokCallback,
+  fetchTikTokCampaigns,
+  selectTikTokAccount,
+  setDb as setTikTokDb,
+} from './tiktokConnector';
 import { persistInterestLead } from './interestLead';
 
 admin.initializeApp();
@@ -93,6 +100,7 @@ setOpenCartDb(db);
 setMagentoDb(db);
 setEcommerceAggDb(db);
 setGA4Db(db);
+setTikTokDb(db);
 
 const BATCH_SIZE = 500;
 
@@ -628,11 +636,11 @@ export const generateApiKey = onRequest(
 
 /**
  * POST /connectorAuth
- * Body: { brandId, provider: "google_ads" | "meta", redirectUri }
+ * Body: { brandId, provider: "google_ads" | "meta" | "tiktok", redirectUri }
  * Returns: { authUrl }
  */
 export const connectorAuth = onRequest(
-  { region: 'europe-west1', cors: true, secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID', 'SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET'] },
+  { region: 'europe-west1', cors: true, secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID', 'SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET', 'TIKTOK_APP_ID', 'TIKTOK_APP_SECRET'] },
   async (req, res) => {
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
@@ -663,7 +671,7 @@ export const connectorAuth = onRequest(
       }
 
       // Drop stale account-picker lists from a prior OAuth attempt so the UI never shows another session's options.
-      if (provider === 'ga4' || provider === 'google_ads' || provider === 'merchant' || provider === 'meta') {
+      if (provider === 'ga4' || provider === 'google_ads' || provider === 'merchant' || provider === 'meta' || provider === 'tiktok') {
         const docRef = db.doc(`connectors/${brandId}`);
         if (provider === 'ga4') {
           await docRef.set(
@@ -698,10 +706,21 @@ export const connectorAuth = onRequest(
             },
             { merge: true }
           );
-        } else {
+        } else if (provider === 'meta') {
           await docRef.set(
             {
               meta: {
+                pendingAccountSelection: false,
+                availableAccounts: FieldValue.delete(),
+                oauthInitiatedByUid: FieldValue.delete(),
+              },
+            },
+            { merge: true }
+          );
+        } else {
+          await docRef.set(
+            {
+              tiktok: {
                 pendingAccountSelection: false,
                 availableAccounts: FieldValue.delete(),
                 oauthInitiatedByUid: FieldValue.delete(),
@@ -718,6 +737,8 @@ export const connectorAuth = onRequest(
         authUrl = getGoogleAdsAuthUrl(brandId, redirectUri, returnOrigin, oauthInitiator);
       } else if (provider === 'meta') {
         authUrl = getMetaAuthUrl(brandId, redirectUri, returnOrigin, oauthInitiator);
+      } else if (provider === 'tiktok') {
+        authUrl = getTikTokAuthUrl(brandId, redirectUri, returnOrigin, oauthInitiator);
       } else if (provider === 'merchant') {
         authUrl = getMerchantAuthUrl(brandId, redirectUri, returnOrigin, oauthInitiator);
       } else if (provider === 'ga4') {
@@ -748,7 +769,7 @@ export const connectorAuth = onRequest(
  * Handles OAuth redirect from Google/Meta
  */
 export const connectorCallback = onRequest(
-  { region: 'europe-west1', cors: true, secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID', 'SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET'] },
+  { region: 'europe-west1', cors: true, secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID', 'SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET', 'TIKTOK_APP_ID', 'TIKTOK_APP_SECRET'] },
   async (req, res) => {
     const { code, state, error: oauthError } = req.query as { code?: string; state?: string; error?: string };
 
@@ -825,6 +846,41 @@ export const connectorCallback = onRequest(
           result = { success: true };
         } else {
           result = { success: false, error: metaResult.error };
+        }
+      } else if (provider === 'tiktok') {
+        const tiktokResult = await handleTikTokCallback(code, redirectUri);
+        if (tiktokResult.success && tiktokResult.data) {
+          const {
+            accessToken,
+            refreshToken,
+            expiresIn,
+            refreshExpiresIn,
+            availableAccounts,
+            needsSelection,
+          } = tiktokResult.data;
+          await db.doc(`connectors/${brandId}`).set(
+            {
+              tiktok: {
+                connected: !needsSelection,
+                pendingAccountSelection: needsSelection,
+                accessToken,
+                refreshToken,
+                expiresAt: Date.now() + expiresIn * 1000,
+                refreshExpiresAt: Date.now() + refreshExpiresIn * 1000,
+                availableAccounts,
+                adAccountIds: needsSelection ? [] : availableAccounts.map((a) => a.id),
+                adAccountNames: needsSelection ? [] : availableAccounts.map((a) => a.name),
+                connectedAt: FieldValue.serverTimestamp(),
+                oauthInitiatedByUid:
+                  needsSelection && oauthInitiatedByUid ? oauthInitiatedByUid : FieldValue.delete(),
+              },
+            },
+            { merge: true }
+          );
+          logger.info(`[TikTok] Saved to Firestore for brand ${brandId}`);
+          result = { success: true };
+        } else {
+          result = { success: false, error: tiktokResult.error };
         }
       } else if (provider === 'merchant') {
         result = await handleMerchantCallback(code, brandId, redirectUri, oauthInitiatedByUid);
@@ -966,6 +1022,8 @@ export const connectorSelectAccount = onRequest(
       let result: { success: boolean; error?: string };
       if (provider === 'meta') {
         result = await selectMetaAccount(brandId, accountId, accountName || accountId);
+      } else if (provider === 'tiktok') {
+        result = await selectTikTokAccount(brandId, accountId, accountName || accountId);
       } else if (provider === 'google_ads') {
         await selectGoogleAdsAccount(brandId, accountId, accountName || accountId);
         result = { success: true };
@@ -1006,7 +1064,7 @@ export const connectorSelectAccount = onRequest(
  * Body: { brandId, provider }
  */
 export const connectorSync = onRequest(
-  { region: 'europe-west1', cors: true, timeoutSeconds: 300, memory: '1GiB', secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID', 'SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET'] },
+  { region: 'europe-west1', cors: true, timeoutSeconds: 300, memory: '1GiB', secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID', 'SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET', 'TIKTOK_APP_ID', 'TIKTOK_APP_SECRET'] },
   async (req, res) => {
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
@@ -1034,6 +1092,8 @@ export const connectorSync = onRequest(
         result = await fetchGoogleAdsCampaigns(brandId);
       } else if (provider === 'meta') {
         result = await fetchMetaCampaigns(brandId);
+      } else if (provider === 'tiktok') {
+        result = await fetchTikTokCampaigns(brandId);
       } else if (provider === 'merchant') {
         result = await fetchPriceBenchmarks(brandId);
       } else if (provider === 'competitor') {
@@ -1185,7 +1245,7 @@ export const scheduledSync = onSchedule(
     region: 'europe-west1',
     memory: '1GiB',
     timeoutSeconds: 540,
-    secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID', 'SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET'],
+    secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID', 'SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET', 'TIKTOK_APP_ID', 'TIKTOK_APP_SECRET'],
   },
   async () => {
     const startedAt = Date.now();
@@ -1214,6 +1274,15 @@ export const scheduledSync = onSchedule(
             logger.info(`[ScheduledSync] Meta for ${brandId}: imported ${result.imported}`);
           } catch (err) {
             logger.error(`[ScheduledSync] Meta failed for ${brandId}:`, err);
+          }
+        }
+
+        if (data.tiktok?.connected) {
+          try {
+            const result = await fetchTikTokCampaigns(brandId);
+            logger.info(`[ScheduledSync] TikTok for ${brandId}: imported ${result.imported}`);
+          } catch (err) {
+            logger.error(`[ScheduledSync] TikTok failed for ${brandId}:`, err);
           }
         }
 

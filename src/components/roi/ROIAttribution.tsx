@@ -416,7 +416,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
       },
       revenue: {
         icon: <Euro size={22} strokeWidth={2} />,
-        label: 'Revenue',
+        label: 'Campaigns Revenue',
         value: formatCurrencyCompact(metrics.totalRevenue),
         subtitle: hasCampaigns
           ? `${campaignsTyped.length} καμπάνιες · conversion value`
@@ -428,7 +428,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
       },
       organic: {
         icon: <Leaf size={22} strokeWidth={2} />,
-        label: 'Organic',
+        label: 'Organic Revenue',
         value:
           hasOrganic || organicRevenueInPeriod > 0
             ? formatCurrencyCompact(organicRevenueInPeriod)

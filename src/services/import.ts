@@ -1315,7 +1315,7 @@ function aggregateCustomersToSegments(objects: Record<string, string>[]): { segm
         email: pick(row, 'email', 'e-mail', 'mail') || undefined,
         segmentId: sanitizeDocId(key),
         segmentName: displayName,
-        recency: parseFloat(pick(row, 'recency', 'r', 'r_score') || '') || undefined,
+        recency: parseFloat(pick(row, 'recency_days', 'recency', 'r', 'r_score') || '') || undefined,
         frequency: parseFloat(pick(row, 'frequency', 'f', 'f_score') || '') || undefined,
         monetary: monetary || undefined,
         rfmScore: pick(row, 'rfm_score', 'rfmscore', 'score') || undefined,

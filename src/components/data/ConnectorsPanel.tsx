@@ -3,12 +3,14 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useBrand } from '../../hooks/useBrand';
 import { useAuth } from '../../hooks/useAuth';
 import { useBrandMembers } from '../../hooks/useCoordination';
+import { useModules } from '../../hooks/useModules';
 import { auth } from '../../config/firebase';
 import { getLastImportDates } from '../../services/import';
 import { coerceToDate } from '../../utils/coerceDate';
 import { clearOAuthSession, readOAuthSessionPayload } from '../../utils/oauthSession';
 import { FirestoreService } from '../../services/firestore';
 import { Card, Button, Spinner, useToast, PageHeader } from '../common';
+import type { ModuleId } from '../../types';
 import {
   Link2,
   Unlink,
@@ -43,7 +45,7 @@ interface ConnectorState {
   expiresAt?: number;
 }
 
-type ConnectorId = 'google_ads' | 'meta' | 'merchant' | 'ga4' | 'shopify' | 'woocommerce' | 'opencart' | 'magento';
+type ConnectorId = 'google_ads' | 'meta' | 'tiktok' | 'merchant' | 'ga4' | 'shopify' | 'woocommerce' | 'opencart' | 'magento';
 
 interface ConnectorConfig {
   id: ConnectorId;
@@ -57,6 +59,8 @@ interface ConnectorConfig {
   authType?: 'oauth' | 'credentials';
   readOnlyNotice?: string;
   comingSoon?: boolean;
+  moduleId?: ModuleId;
+  category: 'core' | 'commerce';
 }
 
 const CONNECTORS: ConnectorConfig[] = [
@@ -69,6 +73,8 @@ const CONNECTORS: ConnectorConfig[] = [
     bgColor: 'bg-blue-50',
     borderColor: 'border-blue-200',
     readOnlyNotice: 'Αποκλειστικά ανάγνωση δεδομένων — δεν τροποποιούμε τον λογαριασμό σας',
+    moduleId: 'campaigns',
+    category: 'core',
   },
   {
     id: 'meta',
@@ -79,6 +85,20 @@ const CONNECTORS: ConnectorConfig[] = [
     bgColor: 'bg-indigo-50',
     borderColor: 'border-indigo-200',
     readOnlyNotice: 'Αποκλειστικά ανάγνωση δεδομένων — δεν τροποποιούμε τον λογαριασμό σας',
+    moduleId: 'campaigns',
+    category: 'core',
+  },
+  {
+    id: 'tiktok',
+    name: 'TikTok Ads',
+    description: 'Αυτόματη εισαγωγή campaigns, spend, conversions και revenue metrics',
+    icon: '🎵',
+    color: '#111111',
+    bgColor: 'bg-fuchsia-50',
+    borderColor: 'border-fuchsia-200',
+    readOnlyNotice: 'Αποκλειστικά ανάγνωση δεδομένων — δεν τροποποιούμε τον λογαριασμό σας',
+    moduleId: 'campaigns',
+    category: 'core',
   },
   {
     id: 'merchant',
@@ -90,6 +110,8 @@ const CONNECTORS: ConnectorConfig[] = [
     borderColor: 'border-emerald-200',
     syncLabel: 'benchmarks',
     readOnlyNotice: 'Read-only — αποκλειστικά ανάγνωση αναφορών τιμών',
+    moduleId: 'competitive',
+    category: 'core',
   },
   {
     id: 'ga4',
@@ -101,6 +123,8 @@ const CONNECTORS: ConnectorConfig[] = [
     borderColor: 'border-orange-200',
     syncLabel: 'days',
     readOnlyNotice: 'Read-only — analytics.readonly scope',
+    moduleId: 'analytics',
+    category: 'core',
   },
   {
     id: 'shopify',
@@ -111,6 +135,8 @@ const CONNECTORS: ConnectorConfig[] = [
     bgColor: 'bg-lime-50',
     borderColor: 'border-lime-200',
     syncLabel: 'items',
+    moduleId: 'ecommerce',
+    category: 'commerce',
   },
   {
     id: 'woocommerce',
@@ -122,6 +148,8 @@ const CONNECTORS: ConnectorConfig[] = [
     borderColor: 'border-purple-200',
     syncLabel: 'items',
     authType: 'credentials',
+    moduleId: 'ecommerce',
+    category: 'commerce',
   },
   {
     id: 'opencart',
@@ -133,6 +161,8 @@ const CONNECTORS: ConnectorConfig[] = [
     borderColor: 'border-sky-200',
     syncLabel: 'items',
     authType: 'credentials',
+    moduleId: 'ecommerce',
+    category: 'commerce',
   },
   {
     id: 'magento',
@@ -144,6 +174,8 @@ const CONNECTORS: ConnectorConfig[] = [
     borderColor: 'border-orange-200',
     syncLabel: 'items',
     authType: 'credentials',
+    moduleId: 'ecommerce',
+    category: 'commerce',
   },
 ];
 
@@ -174,6 +206,7 @@ function AccountPickerModal({
 
   const isMerchant = provider === 'merchant';
   const isGA4 = provider === 'ga4';
+  const isTikTok = provider === 'tiktok';
   const modalTitle = isGA4
     ? 'Επιλογή GA4 Property'
     : isMerchant
@@ -183,13 +216,17 @@ function AccountPickerModal({
     ? 'Εισάγετε το GA4 Property ID σας.'
     : isMerchant
       ? 'Εισάγετε το Merchant Center ID σας.'
-      : 'Εισάγετε το ID του διαφημιστικού sub-account, όχι του Manager Account (MCC).';
+      : isTikTok
+        ? 'Εισάγετε το TikTok Advertiser ID σας.'
+        : 'Εισάγετε το ID του διαφημιστικού sub-account, όχι του Manager Account (MCC).';
   const manualHelp = isGA4
     ? 'GA4 → Admin → Property Settings → Property ID'
     : isMerchant
       ? 'Merchant Center → Ρυθμίσεις → Account ID'
-      : 'Google Ads → επιλογή sub-account → Ρυθμίσεις → Customer ID';
-  const manualPlaceholder = isGA4 ? 'π.χ. 123456789' : isMerchant ? 'π.χ. 123456789' : 'π.χ. 123-456-7890';
+      : isTikTok
+        ? 'TikTok Ads Manager → Advertiser ID'
+        : 'Google Ads → επιλογή sub-account → Ρυθμίσεις → Customer ID';
+  const manualPlaceholder = isGA4 ? 'π.χ. 123456789' : isMerchant ? 'π.χ. 123456789' : isTikTok ? 'π.χ. 7123456789012345678' : 'π.χ. 123-456-7890';
 
   const handleConfirm = () => {
     if (manualMode) {
@@ -779,12 +816,30 @@ function OpenCartCredentialsModal({
 
 export function ConnectorsPanel() {
   const { currentBrand } = useBrand();
+  const { isB2B, enabledModules } = useModules();
   const { user, isSuperAdmin } = useAuth();
   const { members } = useBrandMembers();
   const queryClient = useQueryClient();
   const brandId = currentBrand?.id ?? null;
   const brandName = currentBrand?.name ?? 'Brand';
   const toast = useToast();
+  const visibleConnectors = CONNECTORS.filter((connector) => !connector.moduleId || enabledModules[connector.moduleId]);
+  const connectorGroups = [
+    {
+      id: 'core',
+      title: isB2B ? 'Core B2B data' : 'Performance data',
+      description: isB2B
+        ? 'Demand generation, analytics και market signals που χρειάζεται ο owner για εμπορικές αποφάσεις.'
+        : 'Ads, analytics και intelligence connectors για performance και attribution.',
+      connectors: visibleConnectors.filter((connector) => connector.category === 'core'),
+    },
+    {
+      id: 'commerce',
+      title: 'E-commerce',
+      description: 'Shop connectors για products, orders και inventory from e-shop platforms.',
+      connectors: visibleConnectors.filter((connector) => connector.category === 'commerce'),
+    },
+  ].filter((group) => group.connectors.length > 0);
 
   const myRole = members.find((m) => m.userId === user?.uid)?.role ?? 'member';
   const canManageConnectors =
@@ -807,6 +862,7 @@ export function ConnectorsPanel() {
   const emptyStates: Record<string, ConnectorState> = {
     google_ads: { connected: false },
     meta: { connected: false },
+    tiktok: { connected: false },
     merchant: { connected: false },
     ga4: { connected: false },
     shopify: { connected: false },
@@ -837,6 +893,7 @@ export function ConnectorsPanel() {
     ? {
         google_ads: connectorsData.google_ads || { connected: false },
         meta: connectorsData.meta || { connected: false },
+        tiktok: connectorsData.tiktok || { connected: false },
         merchant: connectorsData.merchant || { connected: false },
         ga4: connectorsData.ga4 || { connected: false },
         shopify: connectorsData.shopify || { connected: false },
@@ -855,6 +912,7 @@ export function ConnectorsPanel() {
       return {
         google_ads: dates['google_ads_api'] || dates['campaigns'],
         meta: dates['meta_api'] || dates['campaigns'],
+        tiktok: dates['tiktok_api'] || dates['campaigns'],
         merchant: dates['merchant_center_api'] || dates['price_benchmarks'],
         ga4: dates['ga4_api'] || dates['ga4'],
         shopify: dates['shopify_api'],
@@ -885,6 +943,8 @@ export function ConnectorsPanel() {
       const label =
         connectorKey === 'meta'
           ? 'Το Meta συνδέθηκε επιτυχώς.'
+          : connectorKey === 'tiktok'
+            ? 'Το TikTok Ads συνδέθηκε επιτυχώς.'
           : connectorKey === 'google_ads'
             ? 'Το Google Ads συνδέθηκε επιτυχώς.'
             : connectorKey === 'ga4'
@@ -1284,7 +1344,9 @@ export function ConnectorsPanel() {
             }
             description={
               <p className="text-sm text-[#6B7280]">
-                Σύνδεσε Ad Platforms & E-shop για αυτόματη εισαγωγή δεδομένων (23:00)
+                {isB2B
+                  ? 'Σύνδεσε demand, analytics και B2B-ready data sources. Τα disabled modules δεν εμφανίζονται.'
+                  : 'Σύνδεσε Ad Platforms & E-shop για αυτόματη εισαγωγή δεδομένων (23:00)'}
               </p>
             }
             meta={
@@ -1301,8 +1363,15 @@ export function ConnectorsPanel() {
               <Spinner size="md" label="Φόρτωση connectors..." />
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {CONNECTORS.map((conn) => {
+            <div className="space-y-6">
+              {connectorGroups.map((group) => (
+                <div key={group.id}>
+                  <div className="mb-3">
+                    <h4 className="text-sm font-semibold text-[#1A1A1A]">{group.title}</h4>
+                    <p className="mt-1 text-xs text-[#6B7280]">{group.description}</p>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {group.connectors.map((conn) => {
                 const state = states[conn.id] || { connected: false };
                 const isConnected = state.connected;
                 const isPending = !!state.pendingAccountSelection;
@@ -1372,6 +1441,9 @@ export function ConnectorsPanel() {
                           <p>{state.customerName} ({state.customerId})</p>
                         )}
                         {conn.id === 'meta' && state.adAccountNames && (
+                          <p>{state.adAccountNames.join(', ')}</p>
+                        )}
+                        {conn.id === 'tiktok' && state.adAccountNames && (
                           <p>{state.adAccountNames.join(', ')}</p>
                         )}
                         {conn.id === 'merchant' && (state as any).merchantName && (
@@ -1500,9 +1572,13 @@ export function ConnectorsPanel() {
                   </div>
                 );
               })}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 
+          {enabledModules.ecommerce && (
           <div className="mt-4 rounded-xl border border-orange-200 bg-orange-50/60 p-4">
             <div className="flex items-start gap-3">
               <span className="text-xl shrink-0" aria-hidden>🛍️</span>
@@ -1533,6 +1609,7 @@ export function ConnectorsPanel() {
               </div>
             </div>
           </div>
+          )}
 
           <p className="text-xs text-[#9CA3AF] mt-4">
             Κάθε brand συνδέεται με τους δικούς του λογαριασμούς. Τα credentials αποθηκεύονται ασφαλώς στο Firebase.

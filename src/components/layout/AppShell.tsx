@@ -6,9 +6,11 @@ import {
   Text
 } from '@primer/react';
 import { Button, PerformancePlusLogo } from '../common';
-import { useAuth, useBrand, usePlan, useBrandMembers } from '../../hooks';
+import { useAuth, useBrand, useBrandMembers } from '../../hooks';
+import { useModules } from '../../hooks/useModules';
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
-import type { Brand } from '../../types';
+import type { AppSectionId, Brand } from '../../types';
+import { getModuleIdForSection } from '../../config/modules';
 import {
   GearIcon,
   GraphIcon,
@@ -25,35 +27,10 @@ import {
   ThreeBarsIcon,
   XIcon
 } from '@primer/octicons-react';
-import { Upload, UserPlus, Building2, Target, Euro, Truck, FileSpreadsheet, GitPullRequestArrow, Zap, BarChart3, ShoppingBag } from 'lucide-react';
+import { Upload, UserPlus, Building2, Target, Euro, Truck, FileSpreadsheet, GitPullRequestArrow, Zap, BarChart3, ShoppingBag, Handshake, Users, Globe2 } from 'lucide-react';
 import { NotificationBell } from '../coordination/NotificationBell';
 
 const SIDEBAR_PIN_KEY = 'perf-plus-sidebar-pinned';
-
-type SectionId =
-  | 'brands'
-  | 'dashboard'
-  | 'strategy'
-  | 'calendar'
-  | 'rfm'
-  | 'products'
-  | 'suppliers'
-  | 'procurement'
-  | 'channels'
-  | 'campaigns'
-  | 'competitive'
-  | 'finances'
-  | 'reports'
-  | 'roi'
-  | 'insights'
-  | 'coordination'
-  | 'automation'
-  | 'analytics'
-  | 'ecommerce'
-  | 'data'
-  | 'invite'
-  | 'help'
-  | 'admin';
 
 export interface AppShellProps {
   activeSection: string;
@@ -62,7 +39,7 @@ export interface AppShellProps {
 }
 
 type NavGroup = 'overview' | 'intelligence' | 'strategy' | 'execution' | 'coordination' | 'utility';
-type NavItem = { id: SectionId; label: string; icon: any; badge?: string; badgeColor?: string; group: NavGroup };
+type NavItem = { id: AppSectionId; label: string; icon: any; badge?: string; badgeColor?: string; group: NavGroup };
 
 function BrandMenu({
   currentBrand,
@@ -407,7 +384,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
   const [headerSearch, setHeaderSearch] = useState('');
   const { user, signOut, isSuperAdmin, hasPasswordProvider, hasGoogleProvider, linkPassword, linkGoogle } = useAuth();
   const { currentBrand, brands, setCurrentBrand } = useBrand();
-  const { isEnterprise } = usePlan();
+  const { isB2B, enabledModules, moduleConfig } = useModules();
   const { activeStrategy } = useActiveStrategy();
   useBrandMembers();
 
@@ -449,50 +426,62 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
 
   const navItems = useMemo<NavItem[]>(
     () => {
-      const items: NavItem[] = [
-        // Overview
+      const commonItems: NavItem[] = [
         { id: 'brands', label: 'My Brands', icon: Building2, group: 'overview' },
-        { id: 'dashboard', label: 'Dashboard', icon: HomeIcon, group: 'overview' },
-        { id: 'roi', label: 'ROI & Performance', icon: GraphIcon, group: 'overview' },
-        // Data & Intelligence (E-commerce first)
-        { id: 'ecommerce', label: 'E-commerce', icon: ShoppingBag, group: 'intelligence' },
-        { id: 'rfm', label: 'Data Analysis', icon: OrganizationIcon, group: 'intelligence' },
-        { id: 'products', label: 'Products & Inventory', icon: PackageIcon, group: 'intelligence' },
-        { id: 'competitive', label: 'Competitive Intelligence', icon: SearchIcon, group: 'intelligence' },
-        { id: 'analytics', label: 'Web Analytics (GA4)', icon: BarChart3, group: 'intelligence' },
-        { id: 'insights', label: 'AI Insights', icon: LightBulbIcon, group: 'intelligence' },
-        // Strategy
+        { id: 'dashboard', label: moduleConfig.dashboard.label, icon: HomeIcon, group: 'overview' },
+        { id: 'roi', label: moduleConfig.roi.label, icon: GraphIcon, group: 'overview' },
+        { id: 'ecommerce', label: moduleConfig.ecommerce.label, icon: ShoppingBag, group: 'intelligence' },
+        { id: 'rfm', label: moduleConfig.rfm.label, icon: OrganizationIcon, group: 'intelligence' },
+        { id: 'accounts', label: moduleConfig.accounts.label, icon: Users, group: 'intelligence' },
+        { id: 'products', label: moduleConfig.products.label, icon: PackageIcon, group: 'intelligence' },
+        { id: 'competitive', label: moduleConfig.competitive.label, icon: SearchIcon, group: 'intelligence' },
+        { id: 'analytics', label: moduleConfig.analytics.label, icon: BarChart3, group: 'intelligence' },
+        { id: 'insights', label: moduleConfig.insights.label, icon: LightBulbIcon, group: 'intelligence' },
         { id: 'strategy', label: 'Commercial Strategy', icon: GraphIcon, group: 'strategy', ...(strategyBadge ? { badge: strategyBadge.text, badgeColor: strategyBadge.color } : {}) },
-        { id: 'channels', label: 'Channel Activation', icon: MegaphoneIcon, group: 'strategy' },
-        { id: 'campaigns', label: 'Campaigns', icon: Target, group: 'strategy' },
-        { id: 'calendar', label: 'Content Strategy', icon: PencilIcon, group: 'strategy' },
-        // Execution
-        { id: 'finances', label: 'Finances', icon: Euro, group: 'execution' },
-        { id: 'suppliers', label: 'Suppliers', icon: Truck, group: 'execution' },
-      ];
-      if (isEnterprise) {
-        items.push({ id: 'procurement', label: 'Procurement', icon: FileSpreadsheet, group: 'execution' });
-      }
-      items.push(
-        // Coordination
-        { id: 'coordination', label: 'Department Coordination', icon: GitPullRequestArrow, group: 'coordination' },
-        { id: 'automation', label: 'Automations', icon: Zap, group: 'coordination' },
-        { id: 'reports', label: 'Reports', icon: ReportIcon, group: 'coordination' },
-        // Utilities
-        /** Όχι «Data Import» — μπερδεύει όταν ήδη υπάρχουν δεδομένα· εδώ είναι συνδέσεις + αρχεία. */
-        { id: 'data', label: 'Συνδέσεις', icon: Upload, group: 'utility' },
+        { id: 'markets', label: moduleConfig.markets.label, icon: Globe2, group: 'strategy' },
+        { id: 'channels', label: moduleConfig.channels.label, icon: MegaphoneIcon, group: 'strategy' },
+        { id: 'sales', label: moduleConfig.sales.label, icon: Handshake, group: 'strategy' },
+        { id: 'campaigns', label: moduleConfig.campaigns.label, icon: Target, group: 'strategy' },
+        { id: 'calendar', label: moduleConfig.calendar.label, icon: PencilIcon, group: 'strategy' },
+        { id: 'finances', label: moduleConfig.finances.label, icon: Euro, group: 'execution' },
+        { id: 'suppliers', label: moduleConfig.suppliers.label, icon: Truck, group: 'execution' },
+        { id: 'procurement', label: moduleConfig.procurement.label, icon: FileSpreadsheet, group: 'execution' },
+        { id: 'coordination', label: moduleConfig.coordination.label, icon: GitPullRequestArrow, group: 'coordination' },
+        { id: 'automation', label: moduleConfig.automation.label, icon: Zap, group: 'coordination' },
+        { id: 'reports', label: moduleConfig.reports.label, icon: ReportIcon, group: 'coordination' },
+        { id: 'data', label: isB2B ? moduleConfig.data.label : 'Συνδέσεις', icon: Upload, group: 'utility' },
         { id: 'invite', label: 'Invite users', icon: UserPlus, group: 'utility' },
         { id: 'help', label: 'Help', icon: GearIcon, group: 'utility' },
-      );
+      ];
+
+      const ordered = isB2B
+        ? [
+            'brands', 'dashboard', 'accounts', 'products', 'suppliers', 'procurement', 'strategy', 'markets', 'channels', 'sales', 'campaigns',
+            'competitive', 'analytics', 'roi', 'finances', 'calendar', 'insights', 'coordination', 'automation', 'reports', 'data', 'invite', 'help',
+          ]
+        : [
+            'brands', 'dashboard', 'roi', 'ecommerce', 'rfm', 'products', 'competitive', 'analytics', 'insights', 'strategy', 'channels',
+            'campaigns', 'calendar', 'finances', 'suppliers', 'procurement', 'coordination', 'automation', 'reports', 'data', 'invite', 'help',
+          ];
+
+      const itemMap = new Map(commonItems.map((item) => [item.id, item]));
+      const items = ordered
+        .map((id) => itemMap.get(id as AppSectionId))
+        .filter((item): item is NavItem => Boolean(item))
+        .filter((item) => {
+          const moduleId = getModuleIdForSection(item.id);
+          return moduleId ? enabledModules[moduleId] : true;
+        });
+
       if (isSuperAdmin) {
         items.push({ id: 'admin', label: 'Super Admin', icon: ShieldIcon, group: 'utility' });
       }
       return items;
     },
-    [isSuperAdmin, isEnterprise, strategyBadge]
+    [enabledModules, isB2B, isSuperAdmin, moduleConfig, strategyBadge]
   );
 
-  const Nav = ({ onSelect }: { onSelect: (id: SectionId) => void }) => {
+  const Nav = ({ onSelect }: { onSelect: (id: AppSectionId) => void }) => {
     let lastGroup: NavGroup | null = null;
     return (
       <NavList aria-label="Primary">

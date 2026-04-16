@@ -8,6 +8,9 @@ import {
   ShoppingBag,
   ArrowRight,
   Megaphone,
+  Building2,
+  Globe2,
+  Handshake,
 } from 'lucide-react';
 import {
   AreaChart,
@@ -35,11 +38,13 @@ import { useProductSource } from '../../hooks/useProductSource';
 import { useBrand } from '../../hooks/useBrand';
 import { useProductAggregates } from '../../hooks/useAggregates';
 import { usePeriodScopedCampaigns } from '../../hooks/usePeriodScopedCampaigns';
+import { useTasks } from '../../hooks/useCoordination';
 import { useDashPeriod } from '../../hooks/useDashPeriod';
 import { useGlobalDate, GLOBAL_PERIOD_OPTIONS } from '../../contexts/GlobalDateContext';
 import { DateRangePicker } from '../ui/DateRangePicker';
 import { useGA4Data } from '../../hooks/useGA4Data';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
+import { useModules } from '../../hooks/useModules';
 import {
   calculateCampaignMetrics,
   getCampaignDateForMonth,
@@ -101,10 +106,12 @@ interface DashboardOverviewProps {
 
 export function DashboardOverview({ onSectionChange, onOpenInsights }: DashboardOverviewProps = {}) {
   const { currentBrand } = useBrand();
+  const { isB2B, enabledModules } = useModules();
   const { segments: rfmSegments, hasImported: hasSegments } = useSegments();
   const { count: productsCount, products } = useProductSource();
   const { productStats } = useProductAggregates();
   const { suppliers } = useSuppliers();
+  const { tasks } = useTasks();
   const { totalOrganicRevenue, byMonth: organicByMonth, hasOrganicRevenue: hasOrganic } = useOrganic();
   const { count: campaignsCount, campaigns, hasImported: hasCampaigns } = useCampaigns();
   const { activeStrategy, getStrategyName } = useActiveStrategy();
@@ -190,6 +197,22 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     () => organicRevenueInPeriod + campaignMetrics.totalRevenue,
     [organicRevenueInPeriod, campaignMetrics.totalRevenue]
   );
+  const inventoryValueEstimate = productStats?.totalInventoryValue ?? 0;
+  const openCommercialTasks = useMemo(
+    () => tasks.filter((task) => task.status === 'pending' || task.status === 'in_progress').length,
+    [tasks]
+  );
+  const b2bReadinessScore = useMemo(() => {
+    const checks = [
+      productsCount > 0,
+      suppliers.length > 0,
+      campaignsCount > 0,
+      ga4.hasData,
+      Boolean(currentBrand?.enterpriseTurnoverEUR || totalOrganicRevenue > 0),
+      openCommercialTasks > 0,
+    ];
+    return Math.round((checks.filter(Boolean).length / checks.length) * 100);
+  }, [campaignsCount, currentBrand?.enterpriseTurnoverEUR, ga4.hasData, openCommercialTasks, productsCount, suppliers.length, totalOrganicRevenue]);
 
   /**
    * Κύριο chart — μία σειρά τζίρου:
@@ -202,7 +225,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     const dayCount = eachDateInclusive(fromDate, toDate).length;
     if (dayCount === 0) return [];
 
-    const useEshopTotals = ecomm.hasData;
+    const useEshopTotals = enabledModules.ecommerce && ecomm.hasData;
 
     if (dayCount <= REVENUE_CHART_MAX_DAILY_POINTS) {
       const dailyRows = buildRoiTrendSeriesDaily(
@@ -248,6 +271,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     periodCampaigns,
     periodDates,
     ga4OrganicEffective,
+    enabledModules.ecommerce,
     ecomm.hasData,
     ecomm.monthlyRevenue,
     ecommRevenueByDayRecord,
@@ -307,13 +331,13 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   }, [totalOrganicRevenue, hasOrganic]);
   const aiInsights = useMemo(() => {
     return generateInsightsFromData(products, rfmSegments, supplierTodMap, {
-      hasData: ecomm.hasData,
+      hasData: enabledModules.ecommerce && ecomm.hasData,
       totalRevenue: ecomm.totalRevenue,
       orderCount: ecomm.orderCount,
       aov: ecomm.aov,
       platformBreakdown: ecomm.platformBreakdown,
     });
-  }, [products, rfmSegments, supplierTodMap, ecomm.hasData, ecomm.totalRevenue, ecomm.orderCount, ecomm.aov, ecomm.platformBreakdown]);
+  }, [products, rfmSegments, supplierTodMap, enabledModules.ecommerce, ecomm.hasData, ecomm.totalRevenue, ecomm.orderCount, ecomm.aov, ecomm.platformBreakdown]);
 
   // Handle insight action clicks
   const handleInsightAction = (insight: { action: string; title: string }) => {
@@ -364,10 +388,20 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   return (
     <div className="space-y-8">
       <PageHeader
-        title={<h2 className="text-xl font-bold tracking-tight text-[var(--nts-charcoal)] sm:text-2xl">Dashboard</h2>}
+        title={<h2 className="text-xl font-bold tracking-tight text-[var(--nts-charcoal)] sm:text-2xl">{isB2B ? 'Owner Dashboard' : 'Dashboard'}</h2>}
         description={
           <p className="text-[14px] text-[var(--nts-medium-gray)]">
-            {activeStrategy ? (
+            {isB2B ? (
+              <>
+                Stock, supplier health, sales execution και market readiness σε ένα control tower.
+                {activeStrategy && (
+                  <>
+                    {' '}Active motion:{' '}
+                    <span className="font-medium text-[var(--nts-charcoal)]">{getStrategyName(activeStrategy.scenarioId)}</span>
+                  </>
+                )}
+              </>
+            ) : activeStrategy ? (
               <>
                 Στρατηγική:{' '}
                 <span className="font-medium text-[var(--nts-charcoal)]">{getStrategyName(activeStrategy.scenarioId)}</span>
@@ -414,7 +448,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           alerts={automationAlerts}
           supplierTodMap={supplierTodMap}
           ecommerce={{
-            hasData: ecomm.hasData,
+            hasData: enabledModules.ecommerce && ecomm.hasData,
             totalRevenue: storeRevenueInPeriod,
             orderCount: ordersInPeriod,
             aov: ordersInPeriod > 0 ? storeRevenueInPeriod / ordersInPeriod : ecomm.aov,
@@ -454,6 +488,51 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               onClear={() => setDashPeriod('current_month')}
             />
           )}
+        </div>
+      )}
+
+      {isB2B && (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <KPICard
+            index={0}
+            kpi={{
+              label: 'Inventory value',
+              value: inventoryValueEstimate > 0 ? formatCurrencyCompact(inventoryValueEstimate) : 'Pending',
+              changeLabel: `${formatNumber(productsCount || productStats?.totalSkus || 0)} SKUs`,
+              tooltip: 'Αξία αποθέματος από aggregates για γρήγορη owner εικόνα.',
+            }}
+            onClick={() => onSectionChange?.('products')}
+          />
+          <KPICard
+            index={1}
+            kpi={{
+              label: 'Supplier network',
+              value: `${suppliers.length}`,
+              changeLabel: suppliers.length > 0 ? 'supplier nodes' : 'needs setup',
+              tooltip: 'Προμηθευτές που επηρεάζουν lead times, replenishment και expansion feasibility.',
+            }}
+            onClick={() => onSectionChange?.('suppliers')}
+          />
+          <KPICard
+            index={2}
+            kpi={{
+              label: 'Sales execution',
+              value: `${openCommercialTasks}`,
+              changeLabel: 'open actions',
+              tooltip: 'Ανοιχτές coordination tasks που λειτουργούν ως execution queue για την εμπορική ομάδα.',
+            }}
+            onClick={() => onSectionChange?.('sales')}
+          />
+          <KPICard
+            index={3}
+            kpi={{
+              label: 'Expansion readiness',
+              value: `${b2bReadinessScore}%`,
+              changeLabel: 'market motion',
+              tooltip: 'Συνδυασμός assortment, suppliers, finance baseline, campaigns και execution readiness.',
+            }}
+            onClick={() => onSectionChange?.('markets')}
+          />
         </div>
       )}
 
@@ -558,63 +637,65 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5">
               <KPICard
                 kpi={{
-                  label: 'Σύνολο Εσόδων',
+                  label: isB2B ? 'Revenue baseline' : 'Σύνολο Εσόδων',
                   value: formatCurrencyCompact(dashboardTotalRevenue),
                   change: revenueMoM !== null ? Math.round(revenueMoM) : undefined,
                   changeLabel: revenueMoM !== null ? 'vs προηγ. μήνα' : undefined,
                   trend: revenueMoM !== null ? (revenueMoM >= 0 ? 'up' : 'down') : 'up',
                   sparklineData: revenueSpark,
                   tooltip:
-                    'Συνολικά έσοδα: organic (όπου υπάρχει) + conversion value από Google Ads και Meta (πλατφόρμες διαφημίσεων). Δεν είναι ταμειακός τζίρος e-shop — για αυτόν δες E-commerce / ROI.',
+                    isB2B
+                      ? 'Baseline εσόδων από organic revenue και demand generation. Για B2B τζίρο ανά account χρειάζεται invoicing / ERP import.'
+                      : 'Συνολικά έσοδα: organic (όπου υπάρχει) + conversion value από Google Ads και Meta (πλατφόρμες διαφημίσεων). Δεν είναι ταμειακός τζίρος e-shop — για αυτόν δες E-commerce / ROI.',
                 }}
                 index={0}
-                onClick={() => onSectionChange?.('roi')}
+                onClick={() => onSectionChange?.(isB2B ? 'finances' : 'roi')}
               />
               <KPICard
                 kpi={{
-                  label: 'Δαπάνη διαφημίσεων',
+                  label: isB2B ? 'Demand spend' : 'Δαπάνη διαφημίσεων',
                   value: hasCampaigns ? formatCurrencyCompact(campaignMetrics.totalSpend) : '€0',
                   change: spendMoM !== null ? Math.round(spendMoM) : undefined,
                   changeLabel: spendMoM !== null ? 'vs προηγ. μήνα' : hasCampaigns && campaignMetrics.cpa > 0 ? `CPA €${formatNumber(campaignMetrics.cpa, 1)}` : undefined,
                   trend: spendMoM !== null ? (spendMoM >= 0 ? 'up' : 'down') : hasCampaigns ? 'up' : undefined,
                   sparklineData: spendSpark,
-                  tooltip: 'Συνολικό κόστος διαφήμισης σε Google Ads και Meta. CPA = Κόστος ανά μετατροπή.',
+                  tooltip: isB2B ? 'Spend για market validation και demand generation σε Google Ads / Meta.' : 'Συνολικό κόστος διαφήμισης σε Google Ads και Meta. CPA = Κόστος ανά μετατροπή.',
                 }}
                 index={1}
                 onClick={() => onSectionChange?.('campaigns')}
               />
               <KPICard
                 kpi={{
-                  label: 'Μέσο Καλάθι (AOV)',
-                  value: aov > 0 ? `€${formatNumber(aov, 1)}` : '—',
-                  change: aovMoM !== null ? Math.round(aovMoM) : undefined,
-                  changeLabel: aovMoM !== null ? 'vs προηγ. μήνα' : undefined,
-                  trend: aov > 0 ? (aovMoM !== null && aovMoM < 0 ? 'down' : 'up') : undefined,
-                  sparklineData: aovSpark,
-                  tooltip: 'Average Order Value — Μέση αξία παραγγελίας: Αξία Μετατροπών ÷ Αριθμός Μετατροπών.',
+                  label: isB2B ? 'Demand conversions' : 'Μέσο Καλάθι (AOV)',
+                  value: isB2B ? formatNumber(campaignMetrics.totalConversions) : aov > 0 ? `€${formatNumber(aov, 1)}` : '—',
+                  change: isB2B ? undefined : aovMoM !== null ? Math.round(aovMoM) : undefined,
+                  changeLabel: isB2B ? 'qualified actions' : aovMoM !== null ? 'vs προηγ. μήνα' : undefined,
+                  trend: isB2B ? (campaignMetrics.totalConversions > 0 ? 'up' : undefined) : aov > 0 ? (aovMoM !== null && aovMoM < 0 ? 'down' : 'up') : undefined,
+                  sparklineData: isB2B ? spendSpark : aovSpark,
+                  tooltip: isB2B ? 'Conversions ή qualified actions από τις demand channels μέχρι να μπει full pipeline tracking.' : 'Average Order Value — Μέση αξία παραγγελίας: Αξία Μετατροπών ÷ Αριθμός Μετατροπών.',
                 }}
                 index={2}
-                onClick={() => onSectionChange?.('campaigns')}
+                onClick={() => onSectionChange?.(isB2B ? 'sales' : 'campaigns')}
               />
             </div>
             <p className="text-[12px] text-[#6B7280] leading-relaxed">
-              Για <strong className="text-[#4B5563] font-medium">ROAS</strong>,{' '}
-              <strong className="text-[#4B5563] font-medium">True ROAS</strong>, blended απόδοση και σύγκριση με e-shop, ανοίξτε{' '}
+              {isB2B ? 'Για deeper οικονομική ανάλυση, baseline revenue και νέα B2B data feeds άνοιξε ' : <>Για <strong className="text-[#4B5563] font-medium">ROAS</strong>,{' '}
+              <strong className="text-[#4B5563] font-medium">True ROAS</strong>, blended απόδοση και σύγκριση με e-shop, ανοίξτε </>}
               <button
                 type="button"
-                onClick={() => onSectionChange?.('roi')}
+                onClick={() => onSectionChange?.(isB2B ? 'finances' : 'roi')}
                 className="font-semibold text-[var(--nts-accent)] hover:underline focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)] focus:ring-offset-1 rounded"
               >
-                ROI &amp; Απόδοση
+                {isB2B ? 'Finances' : 'ROI & Απόδοση'}
               </button>
-              .
+              {!isB2B && '.'}
             </p>
           </div>
         );
       })()}
 
       {/* E-commerce Summary */}
-      {ecomm.hasData && (
+      {enabledModules.ecommerce && ecomm.hasData && (
         <Card hover onClick={() => onSectionChange?.('ecommerce')}>
           <div className="p-5">
             <div className="flex items-center justify-between mb-4">
@@ -684,7 +765,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       )}
 
       {/* GA4 Web Analytics Summary */}
-      {ga4.hasData && (
+      {enabledModules.analytics && ga4.hasData && (
         <Card hover onClick={() => onSectionChange?.('analytics')}>
           <div className="p-5">
             <div className="flex items-center justify-between mb-4">
@@ -742,19 +823,27 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           className="xl:col-span-2" 
           padding="lg"
           hover={!!onSectionChange}
-          onClick={() => onSectionChange?.('roi')}
+          onClick={() => onSectionChange?.(isB2B ? 'finances' : 'roi')}
         >
           <CardHeader
             title="Revenue Performance"
             subtitle={
-              ecomm.hasData ? (
+              enabledModules.ecommerce && ecomm.hasData ? (
                 <p>
                   Ημερήσιος/μηνιαίος <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">τζίρος από παραγγελίες</strong> (συγχρονισμός e-shop, server-side aggregate). Κάτω:{' '}
                   <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">διαφήμιση</strong> (δαπάνη vs conversion value πλατφορμών) — ξεχωριστή κλίμακα, δεν αθροίζεται στον τζίρο.
                 </p>
               ) : (
                 <p>
-                  Εκτίμηση <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">organic + καμπανιών</strong> όταν δεν υπάρχει σύνδεση e-shop. Για πραγματικό τζίρο παραγγελιών, σύνδεσε το κατάστημα.
+                  {isB2B ? (
+                    <>
+                      Baseline <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">organic + demand generation</strong> μέχρι να προστεθεί invoicing / ERP feed για account-level revenue truth.
+                    </>
+                  ) : (
+                    <>
+                      Εκτίμηση <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">organic + καμπανιών</strong> όταν δεν υπάρχει σύνδεση e-shop. Για πραγματικό τζίρο παραγγελιών, σύνδεσε το κατάστημα.
+                    </>
+                  )}
                 </p>
               )
             }
@@ -810,7 +899,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   }}
                   formatter={(value: any) => [
                     formatCurrencyCompact((value as number) || 0),
-                    ecomm.hasData ? REV_PERF_LABEL_ESHOP : REV_PERF_LABEL_ESHOP_BLEND,
+                    enabledModules.ecommerce && ecomm.hasData ? REV_PERF_LABEL_ESHOP : REV_PERF_LABEL_ESHOP_BLEND,
                   ]}
                   labelStyle={{ color: '#24292f', fontWeight: 600, marginBottom: 4 }}
                 />
@@ -833,7 +922,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   style={{ backgroundColor: REV_CHART_ESHOP }}
                 />
                 <span className="text-sm text-[var(--nts-medium-gray)]">
-                  {ecomm.hasData ? REV_PERF_LABEL_ESHOP : REV_PERF_LABEL_ESHOP_BLEND}
+                  {enabledModules.ecommerce && ecomm.hasData ? REV_PERF_LABEL_ESHOP : REV_PERF_LABEL_ESHOP_BLEND}
                 </span>
               </div>
             </div>
@@ -936,75 +1025,120 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           )}
         </Card>
 
-        {/* Segment Distribution */}
-        <Card 
-          padding="lg"
-          hover={!!onSectionChange}
-          onClick={() => onSectionChange?.('rfm')}
-        >
-          <CardHeader
-            title="Customer Segments"
-            subtitle="Κατανομή RFM"
-            icon={<Users size={18} className="text-[var(--nts-medium-gray)]" />}
-          />
-          <div 
-            ref={segmentContainerRef}
-            className="w-full" 
-            style={{ 
-              width: '100%', 
-              height: '224px', 
-              minHeight: '224px', 
-              position: 'relative'
-            }}
-          >
-            <PieChart width={chartDimensions.segment.width} height={chartDimensions.segment.height}>
-                <Pie
-                  data={rfmSegments as any}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={50}
-                  outerRadius={85}
-                  paddingAngle={3}
-                  dataKey="percentage"
-                  nameKey="name"
-                  labelLine={false}
-                >
-                  {rfmSegments.map((segment) => (
-                    <Cell key={segment.id} fill={segment.color ?? '#6B7280'} stroke="#fff" strokeWidth={2} />
-                  ))}
-                </Pie>
-                <RechartsTooltip
-                  contentStyle={{
-                    backgroundColor: '#fff',
-                    border: '1px solid #d0d7de',
-                    borderRadius: '6px',
-                    fontSize: '12px',
-                    padding: '8px 12px'
-                  }}
-                  formatter={(value: any, _name?: string, props?: any) => [
-                    formatPercent((value as number) || 0, 1),
-                    props?.payload?.name || ''
-                  ]}
-                />
-              </PieChart>
-          </div>
-          <div className="space-y-2 mt-4">
-            {rfmSegments.map((segment) => (
-              <div key={segment.id} className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-2.5 h-2.5 rounded-full"
-                    style={{ backgroundColor: segment.color }}
-                  />
-                  <span className="text-[#4A4A4A]">{segment.name}</span>
+        {/* Segment / B2B Priority Distribution */}
+        {isB2B ? (
+          <Card padding="lg">
+            <CardHeader
+              title="B2B Priorities"
+              subtitle="Accounts, sales και νέα markets"
+              icon={<Building2 size={18} className="text-[var(--nts-medium-gray)]" />}
+            />
+            <div className="grid grid-cols-1 gap-3">
+              <button
+                type="button"
+                onClick={() => onSectionChange?.('accounts')}
+                className="rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] p-4 text-left transition-colors hover:border-[var(--nts-accent)]"
+              >
+                <div className="flex items-center gap-2 text-[#1A1A1A]">
+                  <Building2 size={16} className="text-[var(--nts-accent)]" />
+                  <span className="font-semibold">Account Intelligence</span>
                 </div>
-                <span className="font-medium text-[#1A1A1A] font-mono">
-                  {formatPercent(segment.percentage ?? 0, 1)}
-                </span>
-              </div>
-            ))}
-          </div>
-        </Card>
+                <p className="mt-2 text-sm text-[#6B7280]">Scoring framework για top accounts, renewal risk και cross-sell opportunity.</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => onSectionChange?.('sales')}
+                className="rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] p-4 text-left transition-colors hover:border-[var(--nts-accent)]"
+              >
+                <div className="flex items-center gap-2 text-[#1A1A1A]">
+                  <Handshake size={16} className="text-[var(--nts-accent)]" />
+                  <span className="font-semibold">Sales Pipeline</span>
+                </div>
+                <p className="mt-2 text-sm text-[#6B7280]">Operational cadence για opportunities, pricing blockers και next-step discipline.</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => onSectionChange?.('markets')}
+                className="rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] p-4 text-left transition-colors hover:border-[var(--nts-accent)]"
+              >
+                <div className="flex items-center gap-2 text-[#1A1A1A]">
+                  <Globe2 size={16} className="text-[var(--nts-accent)]" />
+                  <span className="font-semibold">Market Exploration</span>
+                </div>
+                <p className="mt-2 text-sm text-[#6B7280]">Go-to-market planning για νέες αγορές, verticals και distributor motions.</p>
+              </button>
+            </div>
+          </Card>
+        ) : (
+          <Card 
+            padding="lg"
+            hover={!!onSectionChange}
+            onClick={() => onSectionChange?.('rfm')}
+          >
+            <CardHeader
+              title="Customer Segments"
+              subtitle="Κατανομή RFM"
+              icon={<Users size={18} className="text-[var(--nts-medium-gray)]" />}
+            />
+            <div 
+              ref={segmentContainerRef}
+              className="w-full" 
+              style={{ 
+                width: '100%', 
+                height: '224px', 
+                minHeight: '224px', 
+                position: 'relative'
+              }}
+            >
+              <PieChart width={chartDimensions.segment.width} height={chartDimensions.segment.height}>
+                  <Pie
+                    data={rfmSegments as any}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={50}
+                    outerRadius={85}
+                    paddingAngle={3}
+                    dataKey="percentage"
+                    nameKey="name"
+                    labelLine={false}
+                  >
+                    {rfmSegments.map((segment) => (
+                      <Cell key={segment.id} fill={segment.color ?? '#6B7280'} stroke="#fff" strokeWidth={2} />
+                    ))}
+                  </Pie>
+                  <RechartsTooltip
+                    contentStyle={{
+                      backgroundColor: '#fff',
+                      border: '1px solid #d0d7de',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      padding: '8px 12px'
+                    }}
+                    formatter={(value: any, _name?: string, props?: any) => [
+                      formatPercent((value as number) || 0, 1),
+                      props?.payload?.name || ''
+                    ]}
+                  />
+                </PieChart>
+            </div>
+            <div className="space-y-2 mt-4">
+              {rfmSegments.map((segment) => (
+                <div key={segment.id} className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-2.5 h-2.5 rounded-full"
+                      style={{ backgroundColor: segment.color }}
+                    />
+                    <span className="text-[#4A4A4A]">{segment.name}</span>
+                  </div>
+                  <span className="font-medium text-[#1A1A1A] font-mono">
+                    {formatPercent(segment.percentage ?? 0, 1)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
       </div>
 
       {/* AI Insights & Strategy */}
@@ -1074,8 +1208,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         {/* Strategy & Health */}
         <Card padding="lg" className="h-full flex flex-col">
           <CardHeader
-            title="Strategy & Status"
-            subtitle="Ενεργή στρατηγική & δεδομένα"
+            title={isB2B ? 'B2B Control Tower' : 'Strategy & Status'}
+            subtitle={isB2B ? 'Στρατηγική, εμπορική εκτέλεση και readiness' : 'Ενεργή στρατηγική & δεδομένα'}
             icon={<Target size={18} className="text-[var(--nts-medium-gray)]" />}
           />
           <div className="flex-1 flex flex-col gap-4">
@@ -1104,14 +1238,14 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 onClick={(e) => { e.stopPropagation(); onSectionChange?.('campaigns'); }}
               >
                 <p className="text-lg font-bold text-[var(--nts-charcoal)] font-mono">{formatNumber(campaignsCount)}</p>
-                <p className="text-[11px] text-[var(--nts-medium-gray)]">Campaigns</p>
+                <p className="text-[11px] text-[var(--nts-medium-gray)]">{isB2B ? 'Demand' : 'Campaigns'}</p>
               </div>
               <div
                 className="text-center p-3 rounded-lg bg-white border border-[var(--nts-border-gray)] cursor-pointer hover:border-[var(--nts-accent)] transition-colors"
-                onClick={(e) => { e.stopPropagation(); onSectionChange?.('rfm'); }}
+                onClick={(e) => { e.stopPropagation(); onSectionChange?.(isB2B ? 'accounts' : 'rfm'); }}
               >
-                <p className="text-lg font-bold text-[var(--nts-charcoal)] font-mono">{rfmSegments.length}</p>
-                <p className="text-[11px] text-[var(--nts-medium-gray)]">Segments</p>
+                <p className="text-lg font-bold text-[var(--nts-charcoal)] font-mono">{isB2B ? formatNumber(openCommercialTasks) : rfmSegments.length}</p>
+                <p className="text-[11px] text-[var(--nts-medium-gray)]">{isB2B ? 'Open sales tasks' : 'Segments'}</p>
               </div>
             </div>
           </div>

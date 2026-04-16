@@ -11,11 +11,13 @@ import { AuthActionPage } from './components/auth/AuthActionPage';
 import { isSuperAdminEmail } from './config/superAdmins';
 import { SharedPackageViewer } from './components/strategy/SharedPackageViewer';
 import { EnterpriseBadge } from './components/common';
+import { useModules } from './hooks/useModules';
 import { usePlan } from './hooks/usePlan';
 import { PrivacyPolicy } from './components/legal/PrivacyPolicy';
 import { TermsOfService } from './components/legal/TermsOfService';
 import { captureOAuthParamsFromLocation } from './utils/oauthSession';
 import { GlobalDateProvider } from './contexts/GlobalDateContext';
+import { APP_SECTIONS } from './config/modules';
 
 const CHUNK_RELOAD_ONCE_KEY = 'pp_chunk_reload_once';
 const isChunkLoadError = (msg: string) =>
@@ -57,6 +59,9 @@ const Reports = lazyNamedWithRetry(() => import('./components/reports'), 'Report
 const BusinessFinances = lazyNamedWithRetry(() => import('./components/finances'), 'BusinessFinances');
 const ProcurementPage = lazyNamedWithRetry(() => import('./components/procurement/ProcurementPage'), 'ProcurementPage');
 const EcommerceDashboard = lazyNamedWithRetry(() => import('./components/ecommerce/EcommerceDashboard'), 'EcommerceDashboard');
+const SalesPipelinePage = lazyNamedWithRetry(() => import('./components/b2b/SalesPipelinePage'), 'SalesPipelinePage');
+const AccountIntelligencePage = lazyNamedWithRetry(() => import('./components/b2b/AccountIntelligencePage'), 'AccountIntelligencePage');
+const MarketExplorationPage = lazyNamedWithRetry(() => import('./components/b2b/MarketExplorationPage'), 'MarketExplorationPage');
 const BrandsPage = lazyNamedWithRetry(() => import('./components/brands'), 'BrandsPage');
 const DashboardOverview = lazyNamedWithRetry(() => import('./components/dashboard/DashboardOverview'), 'DashboardOverview');
 const RFMAnalysis = lazyNamedWithRetry(() => import('./components/rfm'), 'RFMAnalysis');
@@ -118,7 +123,8 @@ function QueryProvider({ children }: { children: React.ReactNode }) {
 }
 
 function App() {
-  const VALID_SECTIONS = ['brands', 'dashboard', 'strategy', 'rfm', 'products', 'suppliers', 'procurement', 'channels', 'campaigns', 'competitive', 'analytics', 'ecommerce', 'finances', 'calendar', 'reports', 'roi', 'insights', 'data', 'data-products', 'data-segments', 'data-campaigns', 'data-organic', 'data-procurement', 'invite', 'concept', 'help', 'admin', 'coordination', 'automation'] as const;
+  const { isSectionEnabled, getFallbackSection } = useModules();
+  const VALID_SECTIONS = APP_SECTIONS;
 
   // Initialize from URL hash or default to dashboard (υποστηρίζει #products?stock=low)
   const getInitialSection = () => {
@@ -130,8 +136,8 @@ function App() {
     }
     const hash = window.location.hash.replace('#', '');
     const baseSection = hash.split('?')[0];
-    if (baseSection && VALID_SECTIONS.includes(baseSection as (typeof VALID_SECTIONS)[number])) return baseSection;
-    return 'dashboard';
+    if (baseSection && VALID_SECTIONS.includes(baseSection as (typeof VALID_SECTIONS)[number]) && isSectionEnabled(baseSection)) return baseSection;
+    return getFallbackSection();
   };
 
   const [activeSection, setActiveSection] = useState(getInitialSection);
@@ -158,13 +164,26 @@ function App() {
       const full = window.location.hash.replace('#', '');
       const base = full.split('?')[0];
       if (!full) return;
+      if (!isSectionEnabled(base)) {
+        setActiveSection(getFallbackSection());
+        return;
+      }
       if (VALID_SECTIONS.includes(base as (typeof VALID_SECTIONS)[number]) && base !== activeSection) {
         setActiveSection(base);
       }
     };
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
-  }, [activeSection]);
+  }, [activeSection, getFallbackSection, isSectionEnabled]);
+
+  useEffect(() => {
+    if (isSectionEnabled(activeSection)) return;
+    const fallback = getFallbackSection();
+    setActiveSection(fallback);
+    if (typeof window !== 'undefined') {
+      window.history.replaceState(null, '', `#${fallback}`);
+    }
+  }, [activeSection, getFallbackSection, isSectionEnabled]);
 
   // Listen for navigate-to-help events
   useEffect(() => {
@@ -254,15 +273,16 @@ function App() {
 
   const handleSectionChange = useCallback((section: string, opts?: { hashQuery?: string }) => {
     requestAnimationFrame(() => {
-      setActiveSection(section);
+      const targetSection = isSectionEnabled(section) ? section : getFallbackSection();
+      setActiveSection(targetSection);
       window.scrollTo({ top: 0 });
       if (typeof window !== 'undefined') {
-        const q = opts?.hashQuery ? (opts.hashQuery.startsWith('?') ? opts.hashQuery : `?${opts.hashQuery}`) : '';
-        window.history.pushState(null, '', `#${section}${q}`);
+        const q = targetSection === section && opts?.hashQuery ? (opts.hashQuery.startsWith('?') ? opts.hashQuery : `?${opts.hashQuery}`) : '';
+        window.history.pushState(null, '', `#${targetSection}${q}`);
         window.dispatchEvent(new HashChangeEvent('hashchange'));
       }
     });
-  }, []);
+  }, [getFallbackSection, isSectionEnabled]);
 
   const renderContent = () => {
     switch (activeSection) {
@@ -270,6 +290,12 @@ function App() {
         return <BrandsPage onNavigateToDashboard={() => handleSectionChange('dashboard')} />;
       case 'dashboard':
         return <DashboardOverview onSectionChange={handleSectionChange} onOpenInsights={() => handleSectionChange('insights')} />;
+      case 'sales':
+        return <SalesPipelinePage onSectionChange={handleSectionChange} />;
+      case 'accounts':
+        return <AccountIntelligencePage onSectionChange={handleSectionChange} />;
+      case 'markets':
+        return <MarketExplorationPage onSectionChange={handleSectionChange} />;
       case 'strategy':
         return <WeightConfigurator />;
       case 'rfm':

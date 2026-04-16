@@ -27,6 +27,33 @@ export const createOrderBy = (field: string, direction: 'asc' | 'desc' = 'desc')
 import { db } from '../config/firebase';
 import type { Product } from '../types';
 
+/**
+ * Firestore rejects `undefined` anywhere in the payload (including nested objects in arrays).
+ * Recursively omit undefined; preserve null, Timestamp, Date, and non-plain objects (e.g. FieldValue).
+ */
+function stripUndefinedDeep(value: unknown): unknown {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (typeof value !== 'object') return value;
+  if (Array.isArray(value)) {
+    return value.map((item) => stripUndefinedDeep(item));
+  }
+  if (value instanceof Timestamp) return value;
+  if (value instanceof Date) return value;
+  const proto = Object.getPrototypeOf(value);
+  if (proto !== null && proto !== Object.prototype) {
+    return value;
+  }
+  const obj = value as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const k of Object.keys(obj)) {
+    const v = obj[k];
+    if (v === undefined) continue;
+    out[k] = stripUndefinedDeep(v);
+  }
+  return out;
+}
+
 // Generic CRUD operations
 export class FirestoreService {
   // Get single document
@@ -157,11 +184,12 @@ export class FirestoreService {
       const batch = writeBatch(db);
       for (const item of chunk) {
         const docRef = doc(db, collectionName, item.id);
-        const clean: Record<string, unknown> = {
+        const merged: Record<string, unknown> = {
           ...item.data,
           updatedAt: Timestamp.now(),
           ...(brandId ? { brandId } : {}),
         };
+        const clean = stripUndefinedDeep(merged) as Record<string, unknown>;
         Object.keys(clean).forEach((k) => clean[k] === undefined && delete clean[k]);
         batch.set(docRef, clean, { merge: true });
       }
@@ -180,16 +208,15 @@ export class FirestoreService {
   ): Promise<void> {
     try {
       const docRef = doc(db, collectionName, docId);
-      // Remove undefined and null values (Firestore doesn't accept undefined)
+      const deep = stripUndefinedDeep(data) as Record<string, unknown>;
+      // Remove undefined and null values at top level (legacy: callers relied on null being dropped)
       const clean: Record<string, unknown> = {};
-      // Only copy non-undefined and non-null values
-      for (const key in data) {
-        const value = data[key];
+      for (const key in deep) {
+        const value = deep[key];
         if (value !== undefined && value !== null) {
           clean[key] = value;
         }
       }
-      // Always set updatedAt
       clean.updatedAt = Timestamp.now();
       // Use setDoc with merge to update existing fields, but clean object ensures no undefined values
       await setDoc(docRef, clean, { merge: true });
@@ -207,10 +234,11 @@ export class FirestoreService {
   ): Promise<void> {
     try {
       const docRef = doc(db, collectionName, docId);
-      await updateDoc(docRef, {
+      const payload = stripUndefinedDeep({
         ...data,
-        updatedAt: Timestamp.now()
-      });
+        updatedAt: Timestamp.now(),
+      }) as DocumentData;
+      await updateDoc(docRef, payload);
     } catch (error) {
       console.error(`Error updating document ${docId} in ${collectionName}:`, error);
       throw error;

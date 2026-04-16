@@ -1,10 +1,14 @@
 {
-  "version": "0.445.0",
-  "previousVersion": "0.444.0",
-  "commitHash": "02259de",
+  "version": "0.450.0",
+  "previousVersion": "0.449.0",
+  "commitHash": "9f45577",
   "branch": "main",
-  "buildDate": "2026-04-16T04:58:14.211Z",
+  "buildDate": "2026-04-16T08:07:15.852Z",
   "commits": [
+    {
+      "hash": "9f45577",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "02259de",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "14c9226",
       "message": "Competitive Intelligence: single-line table headers (Δ τιμής, Διαφ. τιμής), nowrap; merchant seller labels and related updates"
-    },
-    {
-      "hash": "3de5a79",
-      "message": "Dashboard: απλοποίηση KPI, ROI ROAS block, διόρθωση τάσης· AI briefing φιλικότερο prompt· tooltip"
     }
   ],
   "changes": [

@@ -1,11 +1,68 @@
-// Auth & Brand Types
+// Auth, routing & module types
 export type BrandPlan = 'growth' | 'enterprise';
+export type ModuleId =
+  | 'dashboard'
+  | 'roi'
+  | 'ecommerce'
+  | 'rfm'
+  | 'products'
+  | 'suppliers'
+  | 'procurement'
+  | 'channels'
+  | 'campaigns'
+  | 'competitive'
+  | 'analytics'
+  | 'finances'
+  | 'calendar'
+  | 'reports'
+  | 'insights'
+  | 'data'
+  | 'coordination'
+  | 'automation'
+  | 'sales'
+  | 'accounts'
+  | 'markets';
+export type BrandModuleOverrides = Partial<Record<ModuleId, boolean>>;
+export type AppSectionId =
+  | 'brands'
+  | 'dashboard'
+  | 'strategy'
+  | 'calendar'
+  | 'rfm'
+  | 'products'
+  | 'suppliers'
+  | 'procurement'
+  | 'channels'
+  | 'campaigns'
+  | 'competitive'
+  | 'finances'
+  | 'reports'
+  | 'roi'
+  | 'insights'
+  | 'coordination'
+  | 'automation'
+  | 'analytics'
+  | 'ecommerce'
+  | 'sales'
+  | 'accounts'
+  | 'markets'
+  | 'data'
+  | 'data-products'
+  | 'data-segments'
+  | 'data-campaigns'
+  | 'data-organic'
+  | 'data-procurement'
+  | 'invite'
+  | 'concept'
+  | 'help'
+  | 'admin';
 
 export interface Brand {
   id: string;
   name: string;
   type: 'B2B' | 'B2C';
   plan?: BrandPlan;
+  enabledModules?: BrandModuleOverrides;
   createdAt: string;
   createdBy: string;
   logoUrl?: string;
