@@ -502,22 +502,22 @@ export function SuppliersPage() {
             <table className="w-full text-sm table-fixed">
               <thead>
                 <tr className="bg-[#F9F9F9] border-b border-[#E5E5E5]">
-                  <th className="text-left px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider cursor-pointer select-none hover:text-[var(--nts-charcoal)]" onClick={() => toggleSort('name')}>
+                  <th className="text-left px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider whitespace-nowrap cursor-pointer select-none hover:text-[var(--nts-charcoal)]" onClick={() => toggleSort('name')}>
                     Προμηθευτής <SortIcon col="name" />
                   </th>
-                  <th className="text-center px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider w-20 cursor-pointer select-none hover:text-[var(--nts-charcoal)]" onClick={() => toggleSort('tod')}>
+                  <th className="text-center px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider whitespace-nowrap w-24 cursor-pointer select-none hover:text-[var(--nts-charcoal)]" onClick={() => toggleSort('tod')}>
                     TOD <SortIcon col="tod" />
                   </th>
-                  <th className="text-center px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider w-20 hidden sm:table-cell cursor-pointer select-none hover:text-[var(--nts-charcoal)]" onClick={() => toggleSort('lead')}>
+                  <th className="text-center px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider whitespace-nowrap w-28 hidden sm:table-cell cursor-pointer select-none hover:text-[var(--nts-charcoal)]" onClick={() => toggleSort('lead')}>
                     Lead Time <SortIcon col="lead" />
                   </th>
-                  <th className="text-center px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider w-16 cursor-pointer select-none hover:text-[var(--nts-charcoal)]" onClick={() => toggleSort('products')}>
+                  <th className="text-center px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider whitespace-nowrap w-24 cursor-pointer select-none hover:text-[var(--nts-charcoal)]" onClick={() => toggleSort('products')}>
                     Προϊόντα <SortIcon col="products" />
                   </th>
-                  <th className="text-left px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider hidden md:table-cell cursor-pointer select-none hover:text-[var(--nts-charcoal)]" onClick={() => toggleSort('contact')}>
+                  <th className="text-left px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider whitespace-nowrap hidden md:table-cell cursor-pointer select-none hover:text-[var(--nts-charcoal)]" onClick={() => toggleSort('contact')}>
                     Επικοινωνία <SortIcon col="contact" />
                   </th>
-                  <th className="text-right px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider w-20">
+                  <th className="text-right px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider whitespace-nowrap w-24">
                     Ενέργειες
                   </th>
                 </tr>
