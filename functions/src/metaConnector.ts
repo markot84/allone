@@ -53,6 +53,14 @@ export function setDb(db: Firestore) {
 const META_GRAPH_URL = 'https://graph.facebook.com/v21.0';
 const META_AUTH_URL = 'https://www.facebook.com/v21.0/dialog/oauth';
 
+/**
+ * Attribution windows που ζητάμε από Meta για να υπολογιστούν ξεχωριστά counts/values
+ * των purchase events ανά window. Ο χρήστης μπορεί να επιλέξει window στο UI.
+ * Η `default` τιμή ("value") ήδη εξαρτάται από το account-level setting.
+ */
+const META_ATTRIBUTION_WINDOWS = ['1d_click', '7d_click', '28d_click', '1d_view', '7d_view', '28d_view'] as const;
+type MetaAttribWindow = typeof META_ATTRIBUTION_WINDOWS[number];
+
 const SCOPES = [
   'ads_read',
   'ads_management',
@@ -152,6 +160,29 @@ function sanitizeCampaignForFirestore(c: Record<string, any>): void {
       if (v && typeof v === 'object') {
         v.conversions = fin(v.conversions);
         v.value = fin(v.value);
+      }
+    }
+  }
+
+  const mw = c.metaWindows;
+  if (mw && typeof mw === 'object') {
+    for (const v of Object.values(mw) as { conversions?: unknown; value?: unknown }[]) {
+      if (v && typeof v === 'object') {
+        v.conversions = fin(v.conversions);
+        v.value = fin(v.value);
+      }
+    }
+  }
+
+  const geo = c.geo;
+  if (geo && typeof geo === 'object' && geo.byCountry && typeof geo.byCountry === 'object') {
+    for (const v of Object.values(geo.byCountry) as Record<string, unknown>[]) {
+      if (v && typeof v === 'object') {
+        (v as any).impressions = fin((v as any).impressions);
+        (v as any).clicks = fin((v as any).clicks);
+        (v as any).conversions = fin((v as any).conversions);
+        (v as any).conversion_value = fin((v as any).conversion_value);
+        (v as any).amount_spent = fin((v as any).amount_spent);
       }
     }
   }
@@ -433,6 +464,7 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
         monthRanges.push(...generateMonthRanges(w.since, w.until));
       }
       const insightsFields = ['campaign_name','campaign_id','impressions','clicks','spend','actions','action_values','reach','frequency'].join(',');
+      const attribWindowsParam = META_ATTRIBUTION_WINDOWS.join(',');
 
       logger.info(`[Meta] Fetching ${monthRanges.length} months (daily breakdown) for ${accountId}...`);
 
@@ -444,6 +476,7 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
             level: 'campaign',
             time_increment: '1',
             limit: '500',
+            action_attribution_windows: attribWindowsParam,
             access_token: accessToken,
           });
           let monthUrl: string | null = `${META_GRAPH_URL}/${actAccountId}/insights?${monthParams}`;
@@ -473,6 +506,75 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
       }
 
       logger.info(`[Meta] Fetched ${allRows.length} total rows across ${monthRanges.length} months for ${actAccountId}`);
+
+      // ── Geographic breakdown (country-level) ────────────────────────────
+      // Δεύτερο call χωρίς time_increment (aggregate ανά χώρα για ολόκληρο το εύρος history+current).
+      const geoByCampaign = new Map<string, Record<string, {
+        impressions: number; clicks: number; conversions: number;
+        conversion_value: number; amount_spent: number;
+      }>>();
+      try {
+        for (const w of syncWindows) {
+          const geoParams = new URLSearchParams({
+            fields: ['campaign_id','impressions','clicks','spend','actions','action_values'].join(','),
+            time_range: JSON.stringify({ since: w.since, until: w.until }),
+            level: 'campaign',
+            breakdowns: 'country',
+            limit: '500',
+            action_attribution_windows: attribWindowsParam,
+            access_token: accessToken,
+          });
+          let geoUrl: string | null = `${META_GRAPH_URL}/${actAccountId}/insights?${geoParams}`;
+          let geoPages = 0;
+          while (geoUrl && geoPages < 100) {
+            const geoRes: Response = await fetch(geoUrl);
+            if (!geoRes.ok) {
+              logger.warn(`[Meta] Geo breakdown failed (${w.tag}) for ${actAccountId}: ${await geoRes.text()}`);
+              break;
+            }
+            const geoData: any = await geoRes.json();
+            for (const row of (geoData.data || [])) {
+              const cid = String(row.campaign_id || '');
+              const country = String(row.country || '').toUpperCase();
+              if (!cid || !country) continue;
+              const imp = parseInt(row.impressions || '0', 10);
+              const clk = parseInt(row.clicks || '0', 10);
+              const spd = parseFloat(row.spend || '0');
+              // Purchase conversions/value (ίδια λογική με αρχικό: pixel → standard)
+              let convs = 0;
+              let convVal = 0;
+              const actions = row.actions || [];
+              const av = row.action_values || [];
+              for (const t of ['offsite_conversion.fb_pixel_purchase', 'purchase']) {
+                const a = actions.find((x: any) => x.action_type === t);
+                if (!a) continue;
+                const cv = parseFloat(a.value || '0');
+                if (cv <= 0) continue;
+                const v = av.find((x: any) => x.action_type === t);
+                convs = cv;
+                convVal = parseFloat(v?.value || '0');
+                break;
+              }
+              const perCampaign = geoByCampaign.get(cid) || {};
+              const entry = perCampaign[country] || {
+                impressions: 0, clicks: 0, conversions: 0, conversion_value: 0, amount_spent: 0,
+              };
+              entry.impressions += imp;
+              entry.clicks += clk;
+              entry.conversions += convs;
+              entry.conversion_value += convVal;
+              entry.amount_spent += spd;
+              perCampaign[country] = entry;
+              geoByCampaign.set(cid, perCampaign);
+            }
+            geoUrl = geoData.paging?.next || null;
+            geoPages++;
+          }
+        }
+        logger.info(`[Meta] Geo breakdown aggregated for ${geoByCampaign.size} campaigns`);
+      } catch (e) {
+        logger.warn(`[Meta] Geo breakdown call failed: ${e}`);
+      }
 
       // Fetch campaign statuses (effective_status) from the Campaigns API
       const campaignStatusMap = new Map<string, string>();
@@ -504,6 +606,7 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
             time_range: JSON.stringify({ since: currentYearStart, until: today }),
             level: 'campaign',
             limit: '500',
+            action_attribution_windows: attribWindowsParam,
             access_token: accessToken,
           });
           let fallbackUrl: string | null = `${META_GRAPH_URL}/${actAccountId}/insights?${fallbackParams}`;
@@ -548,6 +651,8 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
         ];
         let rowConversions = 0;
         let rowConvValue = 0;
+        // Purchase counts/value ανά attribution window (default + 6 επιλογές)
+        const rowWindowPurchases: Record<string, { conversions: number; value: number }> = {};
         for (const t of purchaseTypes) {
           const a = actions.find((x: any) => x.action_type === t);
           if (!a) continue;
@@ -556,6 +661,14 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
           const av = actionValues.find((x: any) => x.action_type === t);
           rowConversions = cv;
           rowConvValue = parseFloat(av?.value || '0');
+          // Per-window: Meta επιστρέφει π.χ. a['1d_click'] = "3", av['1d_click'] = "45.00"
+          for (const win of META_ATTRIBUTION_WINDOWS) {
+            const cw = parseFloat(a[win] || '0');
+            const vw = parseFloat(av?.[win] || '0');
+            if (cw > 0 || vw > 0) {
+              rowWindowPurchases[win] = { conversions: cw, value: vw };
+            }
+          }
           break;
         }
         const rowSpend = parseFloat(row.spend || '0');
@@ -620,6 +733,8 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
           period: `${historyStart} – ${today}`,
           dailyMetrics: {} as Record<string, any>,
           conversionActions: {} as Record<string, { conversions: number; value: number }>,
+          // Purchase metrics ανά Meta attribution window (π.χ. '1d_click', '7d_click', '28d_click', ...)
+          metaWindows: {} as Record<MetaAttribWindow, { conversions: number; value: number }>,
           brandId,
           createdAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
@@ -638,6 +753,13 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
           if (!existing.conversionActions[label]) existing.conversionActions[label] = { conversions: 0, value: 0 };
           existing.conversionActions[label].conversions += v.conversions;
           existing.conversionActions[label].value += v.value;
+        }
+
+        // Merge per-window purchases
+        for (const [win, vals] of Object.entries(rowWindowPurchases)) {
+          if (!existing.metaWindows[win]) existing.metaWindows[win] = { conversions: 0, value: 0 };
+          existing.metaWindows[win].conversions += vals.conversions;
+          existing.metaWindows[win].value += vals.value;
         }
 
         // One entry per calendar day per campaign (time_increment=1).
@@ -700,6 +822,25 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
       // We write the freshly aggregated window directly with merge=true.
       // For first sync, payload already includes history+current window.
       // For subsequent syncs, payload includes current year refresh.
+
+      // Attach geo breakdown per-campaign (μόνο για όσες έχουν δεδομένα)
+      for (const c of allCampaigns) {
+        const short = String(c.id).startsWith('meta_') ? String(c.id).split('_').pop() : String(c.id);
+        const g = geoByCampaign.get(short || '');
+        if (g) {
+          const rounded: Record<string, Record<string, number>> = {};
+          for (const [country, m] of Object.entries(g)) {
+            rounded[country] = {
+              impressions: Math.round(m.impressions),
+              clicks: Math.round(m.clicks),
+              conversions: Math.round(m.conversions * 100) / 100,
+              conversion_value: Math.round(m.conversion_value * 100) / 100,
+              amount_spent: Math.round(m.amount_spent * 100) / 100,
+            };
+          }
+          (c as any).geo = { byCountry: rounded };
+        }
+      }
 
       // Purchase/Sales (Meta): primary Purchase row — same idea as Google PURCHASE category
       for (const c of allCampaigns) {

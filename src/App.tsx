@@ -17,6 +17,7 @@ import { PrivacyPolicy } from './components/legal/PrivacyPolicy';
 import { TermsOfService } from './components/legal/TermsOfService';
 import { captureOAuthParamsFromLocation } from './utils/oauthSession';
 import { GlobalDateProvider } from './contexts/GlobalDateContext';
+import { AttributionProvider } from './contexts/AttributionContext';
 import { APP_SECTIONS } from './config/modules';
 
 const CHUNK_RELOAD_ONCE_KEY = 'pp_chunk_reload_once';
@@ -396,11 +397,13 @@ function App() {
   return (
     <QueryProvider>
       <GlobalDateProvider>
-        <ToastProvider>
-          <AuthGuard>
-            <AppMain />
-          </AuthGuard>
-        </ToastProvider>
+        <AttributionProvider>
+          <ToastProvider>
+            <AuthGuard>
+              <AppMain />
+            </AuthGuard>
+          </ToastProvider>
+        </AttributionProvider>
       </GlobalDateProvider>
     </QueryProvider>
   );

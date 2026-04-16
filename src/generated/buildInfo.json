@@ -1,10 +1,14 @@
 {
-  "version": "0.470.0",
-  "previousVersion": "0.469.0",
-  "commitHash": "06ba29f",
+  "version": "0.473.0",
+  "previousVersion": "0.472.0",
+  "commitHash": "41c200d",
   "branch": "main",
-  "buildDate": "2026-04-16T16:41:14.121Z",
+  "buildDate": "2026-04-16T17:05:17.407Z",
   "commits": [
+    {
+      "hash": "41c200d",
+      "message": "feat: ignore demo products globally + suppliers column filters/sort"
+    },
     {
       "hash": "06ba29f",
       "message": "chore: full deploy"
@@ -60,13 +64,10 @@
     {
       "hash": "858eb1f",
       "message": "feat(roi): marketing overhead, daily trend, e-shop tabs, DateRangePicker portal"
-    },
-    {
-      "hash": "9cc143a",
-      "message": "feat: AI Insights full page, campaigns LTV chart, UX polish"
     }
   ],
   "changes": [
+    "[Νέο χαρακτηριστικό] Ignore demo products globally + suppliers column filters/sort",
     "[Συντήρηση] Full deploy",
     "UI: dashboard & analytics KPIs, campaigns ROI chart, nav scroll-to-top",
     "Align revenue metrics with selected period (ROI, dashboard, briefing)",
@@ -75,7 +76,6 @@
     "[Νέο χαρακτηριστικό] Global date range context shared across all pages",
     "GA4 new users inline + campaign channel filters",
     "GA4: channel revenue, organic fallback; UI and data updates",
-    "[Συντήρηση] Sync buildInfo after deploy",
-    "Competitive Intelligence: single-line table headers (Δ τιμής, Διαφ. τιμής), nowrap; merchant seller labels and related updates"
+    "[Συντήρηση] Sync buildInfo after deploy"
   ]
 }

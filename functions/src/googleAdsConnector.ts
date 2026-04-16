@@ -802,6 +802,109 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
       logger.warn(`[GoogleAds] Conversion action query error, skipping:`, caErr);
     }
 
+    // ── Geographic breakdown (country-level) ──────────────────────────────────
+    // Per-country aggregates per καμπάνια. Χρήσιμο για Campaigns → Γεωγραφικά.
+    const geoByCampaign = new Map<string, Record<string, {
+      impressions: number; clicks: number; conversions: number;
+      conversion_value: number; amount_spent: number;
+    }>>();
+    try {
+      // Βήμα 1: geo_target_constants για χώρες (id → code/name).
+      const countryLookup = new Map<string, { code: string; name: string }>();
+      try {
+        const countryQuery = `
+          SELECT geo_target_constant.id, geo_target_constant.country_code, geo_target_constant.name
+          FROM geo_target_constant
+          WHERE geo_target_constant.target_type = 'Country'
+        `;
+        let countryNext: string | undefined;
+        do {
+          const body: Record<string, unknown> = { query: countryQuery };
+          if (countryNext) body.pageToken = countryNext;
+          const res = await fetch(
+            `${GOOGLE_ADS_BASE_URL}/customers/${customerId}/googleAds:search`,
+            { method: 'POST', headers, body: JSON.stringify(body) }
+          );
+          if (!res.ok) {
+            logger.warn(`[GoogleAds] geo_target_constant query failed (${res.status})`);
+            break;
+          }
+          const page = await res.json();
+          countryNext = page.nextPageToken;
+          for (const row of page.results || []) {
+            const id = row.geoTargetConstant?.id;
+            const code = row.geoTargetConstant?.countryCode;
+            const name = row.geoTargetConstant?.name;
+            if (id) countryLookup.set(String(id), { code: code || '', name: name || '' });
+          }
+        } while (countryNext);
+        logger.info(`[GoogleAds] Loaded ${countryLookup.size} country targets`);
+      } catch (e) {
+        logger.warn(`[GoogleAds] country target lookup failed: ${e}`);
+      }
+
+      // Βήμα 2: geographic_view (country criterion) ανά καμπάνια.
+      const geoQuery = `
+        SELECT
+          campaign.id,
+          geographic_view.country_criterion_id,
+          metrics.impressions,
+          metrics.clicks,
+          metrics.conversions,
+          metrics.conversions_value,
+          metrics.cost_micros
+        FROM geographic_view
+        WHERE segments.date BETWEEN '${sinceStr}' AND '${untilStr}'
+      `;
+      let geoNext: string | undefined;
+      do {
+        const body: Record<string, unknown> = { query: geoQuery };
+        if (geoNext) body.pageToken = geoNext;
+        const res = await fetch(
+          `${GOOGLE_ADS_BASE_URL}/customers/${customerId}/googleAds:search`,
+          { method: 'POST', headers, body: JSON.stringify(body) }
+        );
+        if (!res.ok) {
+          logger.warn(`[GoogleAds] geographic_view query failed (${res.status})`);
+          break;
+        }
+        const page = await res.json();
+        geoNext = page.nextPageToken;
+        for (const row of page.results || []) {
+          const campaignId = row.campaign?.id;
+          const rawCid = row.geographicView?.countryCriterionId;
+          if (!campaignId || !rawCid) continue;
+          // To countryCriterionId έρχεται ως resource path 'geoTargetConstants/2300' ή id 2300.
+          const cidStr = String(rawCid);
+          const cid = cidStr.includes('/') ? cidStr.split('/').pop()! : cidStr;
+          const country = countryLookup.get(cid) || { code: '', name: `country_${cid}` };
+          const key = country.code || country.name || `country_${cid}`;
+
+          const m = row.metrics || {};
+          const impressions = Number(m.impressions) || 0;
+          const clicks = Number(m.clicks) || 0;
+          const conversions = Number(m.conversions) || 0;
+          const conversion_value = Number(m.conversionsValue) || 0;
+          const amount_spent = (Number(m.costMicros) || 0) / 1_000_000;
+
+          const perCampaign = geoByCampaign.get(campaignId) || {};
+          const entry = perCampaign[key] || {
+            impressions: 0, clicks: 0, conversions: 0, conversion_value: 0, amount_spent: 0,
+          };
+          entry.impressions += impressions;
+          entry.clicks += clicks;
+          entry.conversions += conversions;
+          entry.conversion_value += conversion_value;
+          entry.amount_spent += amount_spent;
+          perCampaign[key] = entry;
+          geoByCampaign.set(campaignId, perCampaign);
+        }
+      } while (geoNext);
+      logger.info(`[GoogleAds] Fetched geo breakdown for ${geoByCampaign.size} campaigns`);
+    } catch (geoErr) {
+      logger.warn(`[GoogleAds] geographic_view query error, skipping:`, geoErr);
+    }
+
     // Firestore allows max 500 ops per batch but also ~10MB total payload per commit.
     // Campaign docs include multi-year dailyMetrics + nested conversionActions — one huge batch fails with
     // INVALID_ARGUMENT: Transaction too big.
@@ -820,6 +923,22 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
       campaign.amount_spent = Math.round(campaign.amount_spent * 100) / 100;
 
       campaign.conversionActions = convActionMap.get(campaign.id) || {};
+
+      const geoForCamp = geoByCampaign.get(campaign.id);
+      if (geoForCamp) {
+        // Στρογγυλοποίηση τιμών για να μένουν μικρά τα docs.
+        const rounded: Record<string, Record<string, number>> = {};
+        for (const [country, m] of Object.entries(geoForCamp)) {
+          rounded[country] = {
+            impressions: Math.round(m.impressions),
+            clicks: Math.round(m.clicks),
+            conversions: Math.round(m.conversions * 100) / 100,
+            conversion_value: Math.round(m.conversion_value * 100) / 100,
+            amount_spent: Math.round(m.amount_spent * 100) / 100,
+          };
+        }
+        campaign.geo = { byCountry: rounded };
+      }
 
       campaign.createdAt = FieldValue.serverTimestamp();
       campaign.updatedAt = FieldValue.serverTimestamp();

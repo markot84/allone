@@ -21,7 +21,7 @@ import {
   Tooltip as RechartsTooltip,
   Legend,
 } from 'recharts';
-import { Card, CardHeader, Button, Tooltip, PageHeader } from '../common';
+import { Card, CardHeader, Button, Tooltip, PageHeader, MetaAttributionSelector } from '../common';
 import { useOrganic } from '../../hooks/useOrganic';
 import { useCampaigns } from '../../hooks/useCampaigns';
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
@@ -498,6 +498,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                   onClear={() => setDashPeriod('current_month')}
                 />
               )}
+              <MetaAttributionSelector compact />
             </div>
           }
         />

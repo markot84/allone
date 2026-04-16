@@ -442,7 +442,46 @@ export interface Campaign {
     conversions: number;
     value: number;
   }>;
+  /**
+   * Meta only: purchase conversions/value ανά attribution window.
+   * Keys: '1d_click' | '7d_click' | '28d_click' | '1d_view' | '7d_view' | '28d_view'.
+   * Χρησιμοποιείται από το UI για να επιτρέψει επιλογή attribution window στα reports.
+   */
+  metaWindows?: Record<string, { conversions: number; value: number }>;
+  /**
+   * Γεωγραφική κατανομή αποδόσεων ανά χώρα (ISO-2 code ή όνομα).
+   * Γεμίζει από Google Ads (geographic_view) & Meta (breakdowns=country).
+   */
+  geo?: {
+    byCountry: Record<string, {
+      impressions: number;
+      clicks: number;
+      conversions: number;
+      conversion_value: number;
+      amount_spent: number;
+    }>;
+  };
 }
+
+export const META_ATTRIBUTION_WINDOWS = [
+  '1d_click',
+  '7d_click',
+  '28d_click',
+  '1d_view',
+  '7d_view',
+  '28d_view',
+] as const;
+export type MetaAttributionWindow = typeof META_ATTRIBUTION_WINDOWS[number] | 'default';
+
+export const META_ATTRIBUTION_WINDOW_LABELS: Record<MetaAttributionWindow, string> = {
+  default: 'Default (Account)',
+  '1d_click': '1-day click',
+  '7d_click': '7-day click',
+  '28d_click': '28-day click',
+  '1d_view': '1-day view',
+  '7d_view': '7-day view',
+  '28d_view': '28-day view',
+};
 
 // ── Coordination System Types ───────────────────────────────────────────────
 

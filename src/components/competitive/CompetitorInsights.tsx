@@ -5,6 +5,7 @@ import { db, auth } from '../../config/firebase';
 import { useBrand } from '../../hooks/useBrand';
 import { usePriceBenchmarks } from '../../hooks/usePriceBenchmarks';
 import { usePriceInsights, type PriceInsight } from '../../hooks/usePriceInsights';
+import { useProducts } from '../../hooks/useProducts';
 import { Card, Button, Spinner, Badge, Tooltip, useToast, PageHeader } from '../common';
 import {
   Search,
@@ -191,6 +192,32 @@ export function CompetitorInsights() {
     avgDiff,
     lastBenchmarkSyncedAt,
   } = usePriceBenchmarks();
+
+  // Inventory/sales enrichment για τον πίνακα benchmarks (στοιχεία e-shop).
+  const { products } = useProducts();
+  const skuInventoryMap = useMemo(() => {
+    const map = new Map<string, { stock: number; sold: number }>();
+    for (const p of products) {
+      const key = (p.sku || '').trim().toLowerCase();
+      if (!key) continue;
+      map.set(key, {
+        stock: Number(p.stock_level) || 0,
+        sold: Number(p.qty_sold_period) || 0,
+      });
+    }
+    return map;
+  }, [products]);
+  const lookupInventory = useCallback(
+    (productId: string, gtin: string) => {
+      const keys = [productId, gtin].map((k) => (k || '').trim().toLowerCase()).filter(Boolean);
+      for (const k of keys) {
+        const hit = skuInventoryMap.get(k);
+        if (hit) return hit;
+      }
+      return null;
+    },
+    [skuInventoryMap]
+  );
   // Price insights
   const {
     insights: priceInsights,
@@ -602,12 +629,22 @@ export function CompetitorInsights() {
                         <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">
                           Διαφ.&nbsp;τιμής
                         </th>
+                        <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap" title="Διαθέσιμο απόθεμα e-shop">
+                          Στοκ
+                        </th>
+                        <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap" title="Πωλήσεις περιόδου (από import αποθεμάτων/παραγγελιών)">
+                          Πωλήσεις
+                        </th>
                         <th className="px-3 py-2.5 font-medium hidden lg:table-cell whitespace-nowrap">GTIN</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#F3F4F6]">
                       {filteredBenchmarks.map((b) => (
-                        <BenchmarkRow key={b.productId} item={b} />
+                        <BenchmarkRow
+                          key={b.productId}
+                          item={b}
+                          inventory={lookupInventory(b.productId, b.gtin)}
+                        />
                       ))}
                     </tbody>
                   </table>
@@ -1011,9 +1048,17 @@ function KpiBox({
 const fmtEur = (v: number) =>
   v.toLocaleString('el-GR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-function BenchmarkRow({ item }: { item: { productId: string; title: string; brand?: string; gtin: string; yourPrice: number; benchmarkPrice: number; priceDiff: number; currency: string } }) {
+function BenchmarkRow({
+  item,
+  inventory,
+}: {
+  item: { productId: string; title: string; brand?: string; gtin: string; yourPrice: number; benchmarkPrice: number; priceDiff: number; currency: string };
+  inventory?: { stock: number; sold: number } | null;
+}) {
   const diffColor = item.priceDiff > 5 ? '#EF4444' : item.priceDiff < -5 ? '#22C55E' : '#6B7280';
   const diffBg = item.priceDiff > 5 ? '#FEF2F2' : item.priceDiff < -5 ? '#F0FDF4' : '#F9FAFB';
+  const stock = inventory?.stock;
+  const sold = inventory?.sold;
 
   return (
     <tr className="hover:bg-[#FAFAFA] transition-colors">
@@ -1043,6 +1088,25 @@ function BenchmarkRow({ item }: { item: { productId: string; title: string; bran
           </span>
         ) : (
           <span className="text-[10px] text-[#9CA3AF]">—</span>
+        )}
+      </td>
+      <td className="px-3 py-2.5 text-right">
+        {stock != null ? (
+          <span
+            className={`text-sm font-mono ${stock === 0 ? 'text-[#EF4444]' : stock <= 5 ? 'text-[#F59E0B]' : 'text-[#111827]'}`}
+            title={stock === 0 ? 'Εκτός αποθέματος' : stock <= 5 ? 'Χαμηλό απόθεμα' : 'Απόθεμα e-shop'}
+          >
+            {stock}
+          </span>
+        ) : (
+          <span className="text-[10px] text-[#D1D5DB]">—</span>
+        )}
+      </td>
+      <td className="px-3 py-2.5 text-right">
+        {sold != null ? (
+          <span className="text-sm font-mono text-[#111827]">{sold}</span>
+        ) : (
+          <span className="text-[10px] text-[#D1D5DB]">—</span>
         )}
       </td>
       <td className="px-3 py-2.5 hidden lg:table-cell">

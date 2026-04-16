@@ -2,7 +2,8 @@ import { useState, useMemo, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { TrendingUp, Filter, Download, Search, DollarSign, Trash2, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
-import { Card, CardHeader, Badge, Button, Spinner, useToast, Tooltip, AlertsBanner, PageHeader } from '../common';
+import { Card, CardHeader, Badge, Button, Spinner, useToast, Tooltip, AlertsBanner, PageHeader, MetaAttributionSelector } from '../common';
+import { CampaignsGeoTab } from './CampaignsGeoTab';
 import { DateRangePicker } from '../ui/DateRangePicker';
 import { useCampaigns } from '../../hooks/useCampaigns';
 import { useBrand } from '../../hooks/useBrand';
@@ -193,7 +194,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
   });
   const convFilterActive = convActionFilter.length > 0;
   const [showConvDropdown, setShowConvDropdown] = useState(false);
-  const [activeTab, setActiveTab] = useState<'campaigns' | 'search_terms' | 'keywords'>('campaigns');
+  const [activeTab, setActiveTab] = useState<'campaigns' | 'search_terms' | 'keywords' | 'geo'>('campaigns');
   const COLLAPSED_LIMIT = 12;
   const [tableExpanded, setTableExpanded] = useState(false);
   const { searchTerms, keywords, hasData: hasSearchData } = useSearchIntelligence();
@@ -662,6 +663,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
         }
         actions={
           <>
+            <MetaAttributionSelector />
             <Button
               variant="secondary"
               size="sm"
@@ -787,7 +789,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
       {/* Tabs + εύρος ημερομηνιών (ίδια γραμμή σε md+) */}
       <div className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center md:justify-between md:gap-x-4 md:gap-y-2">
         <div className="flex gap-0.5 bg-[#F5F5F5] p-0.5 rounded-lg w-fit shrink-0">
-          {(['campaigns', 'search_terms', 'keywords'] as const).map(tab => (
+          {(['campaigns', 'search_terms', 'keywords', 'geo'] as const).map(tab => (
             <button
               key={tab}
               type="button"
@@ -800,7 +802,8 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
             >
               {tab === 'campaigns' ? `Campaigns (${summaryStats.total})` :
                tab === 'search_terms' ? `Search Terms ${hasSearchData ? `(${searchTerms.length})` : ''}` :
-               `Keywords ${hasSearchData ? `(${keywords.length})` : ''}`}
+               tab === 'keywords' ? `Keywords ${hasSearchData ? `(${keywords.length})` : ''}` :
+               'Γεωγραφικά'}
             </button>
           ))}
         </div>
@@ -833,7 +836,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
         <CampaignsChannelInsights campaigns={campaignsInConvView} />
       )}
 
-      {activeTab !== 'campaigns' && (
+      {(activeTab === 'search_terms' || activeTab === 'keywords') && (
         <SearchIntelligenceTab
           type={activeTab}
           searchTerms={searchTerms}
@@ -842,6 +845,10 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
           search={activeTab === 'search_terms' ? stSearch : kwSearch}
           onSearchChange={activeTab === 'search_terms' ? setStSearch : setKwSearch}
         />
+      )}
+
+      {activeTab === 'geo' && (
+        <CampaignsGeoTab campaigns={filteredCampaigns} />
       )}
 
       {activeTab === 'campaigns' && <>
