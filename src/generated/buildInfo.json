@@ -1,10 +1,14 @@
 {
-  "version": "0.482.0",
-  "previousVersion": "0.481.0",
-  "commitHash": "7350fdf",
+  "version": "0.483.0",
+  "previousVersion": "0.482.0",
+  "commitHash": "2648fc3",
   "branch": "main",
-  "buildDate": "2026-04-16T19:01:15.225Z",
+  "buildDate": "2026-04-16T19:46:58.188Z",
   "commits": [
+    {
+      "hash": "2648fc3",
+      "message": "feat(competitive): Excel-style column filters + sort στον πίνακα Price Benchmarks"
+    },
     {
       "hash": "7350fdf",
       "message": "ui(suppliers): keep header labels single-line (whitespace-nowrap + wider cols)"
@@ -60,13 +64,10 @@
     {
       "hash": "02259de",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "eb2746a",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [
+    "[Νέο χαρακτηριστικό] Excel-style column filters + sort στον πίνακα Price Benchmarks",
     "Ui(suppliers): keep header labels single-line (whitespace-nowrap + wider cols)",
     "Ui(suppliers): move column filters into a clean top toolbar",
     "[Συντήρηση] Remove 'Με benchmark αγοράς' KPI card",
@@ -74,7 +75,6 @@
     "[Νέο χαρακτηριστικό] Price-benchmarks stock/sold + campaigns geo tab (GAds+Meta country breakdown)",
     "[Νέο χαρακτηριστικό] Ignore demo products globally + suppliers column filters/sort",
     "[Συντήρηση] Full deploy",
-    "UI: dashboard & analytics KPIs, campaigns ROI chart, nav scroll-to-top",
-    "Align revenue metrics with selected period (ROI, dashboard, briefing)"
+    "UI: dashboard & analytics KPIs, campaigns ROI chart, nav scroll-to-top"
   ]
 }

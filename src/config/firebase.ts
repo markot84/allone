@@ -2,6 +2,7 @@ import { initializeApp } from 'firebase/app';
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
+import { initializeAppCheck, ReCaptchaV3Provider, getToken as getAppCheckToken, type AppCheck } from 'firebase/app-check';
 
 // Firebase configuration
 // TODO: Replace with your Firebase project configuration
@@ -16,6 +17,41 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
+
+// ── App Check (bot/abuse protection) ─────────────────────────────────────────
+// Ενεργοποιείται αυτόματα όταν υπάρχει VITE_RECAPTCHA_V3_SITE_KEY στο .env.
+// Για dev/emulator debug token: localStorage.setItem('pp:appcheck-debug', '1') → reload.
+// Τα Firestore/Auth SDK επισυνάπτουν το token αυτόματα.
+// Για HTTP Cloud Functions χρησιμοποίησε `getAppCheckHeader()` παρακάτω.
+let appCheckInstance: AppCheck | null = null;
+if (typeof window !== 'undefined') {
+  const recaptchaSiteKey = import.meta.env.VITE_RECAPTCHA_V3_SITE_KEY;
+  if (recaptchaSiteKey) {
+    try {
+      if (import.meta.env.DEV && window.localStorage.getItem('pp:appcheck-debug') === '1') {
+        (self as unknown as { FIREBASE_APPCHECK_DEBUG_TOKEN?: boolean | string }).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+      }
+      appCheckInstance = initializeAppCheck(app, {
+        provider: new ReCaptchaV3Provider(recaptchaSiteKey),
+        isTokenAutoRefreshEnabled: true,
+      });
+    } catch (err) {
+      console.warn('[AppCheck] Init failed — continuing χωρίς App Check:', err);
+    }
+  }
+}
+
+/** Επιστρέφει `X-Firebase-AppCheck` header αν υπάρχει active instance, αλλιώς {} */
+export async function getAppCheckHeader(): Promise<Record<string, string>> {
+  if (!appCheckInstance) return {};
+  try {
+    const { token } = await getAppCheckToken(appCheckInstance, /* forceRefresh */ false);
+    return token ? { 'X-Firebase-AppCheck': token } : {};
+  } catch (err) {
+    console.warn('[AppCheck] token fetch failed:', err);
+    return {};
+  }
+}
 
 // Initialize Firestore with IndexedDB persistence so cached data survives page refreshes.
 // On reload, queries are served from local disk in <100ms without a network round-trip.

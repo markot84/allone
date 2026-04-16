@@ -1,4 +1,5 @@
 import { getAuth } from 'firebase/auth';
+import { getAppCheckHeader } from '../config/firebase';
 
 const PROXY_URL =
   'https://europe-west1-performance-plus-4a5b2.cloudfunctions.net/geminiProxy';
@@ -20,15 +21,22 @@ export async function callGemini(params: GeminiProxyParams): Promise<string> {
   if (!user) throw new Error('User not authenticated');
 
   const idToken = await user.getIdToken();
+  const appCheck = await getAppCheckHeader();
 
   const response = await fetch(PROXY_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${idToken}`,
+      ...appCheck,
     },
     body: JSON.stringify(params),
   });
+
+  if (response.status === 429) {
+    const err = await response.json().catch(() => ({ error: 'Too many requests' }));
+    throw new Error((err as { error?: string }).error ?? 'Rate limit exceeded — δοκίμασε ξανά σε λίγο.');
+  }
 
   if (!response.ok) {
     const err = await response.json().catch(() => ({ error: response.statusText }));

@@ -86,6 +86,7 @@ import {
   setDb as setTikTokDb,
 } from './tiktokConnector';
 import { persistInterestLead } from './interestLead';
+import { applyStrictCors, enforceRateLimit, getClientIp, sendRateLimitExceeded } from './security';
 
 admin.initializeApp();
 const db = getFirestore();
@@ -1393,8 +1394,9 @@ export const scheduledSync = onSchedule(
  * The API key never leaves the server — stored as Firebase Secret.
  */
 export const geminiProxy = onRequest(
-  { region: 'europe-west1', secrets: [GEMINI_SECRET], cors: true },
+  { region: 'europe-west1', secrets: [GEMINI_SECRET] },
   async (req, res) => {
+    if (applyStrictCors(req, res)) return;
     if (req.method !== 'POST') {
       res.status(405).json({ error: 'Method not allowed' });
       return;
@@ -1407,10 +1409,23 @@ export const geminiProxy = onRequest(
       return;
     }
     const idToken = authHeader.slice(7);
+    let decodedUid = '';
     try {
-      await admin.auth().verifyIdToken(idToken);
+      const decoded = await admin.auth().verifyIdToken(idToken);
+      decodedUid = decoded.uid;
     } catch {
       res.status(401).json({ error: 'Invalid or expired token' });
+      return;
+    }
+
+    // Rate limit: 30 Gemini calls / 5 λεπτά ανά χρήστη — αποτρέπει κατάχρηση/κόστος
+    const rl = await enforceRateLimit({
+      key: `gemini:${decodedUid}`,
+      limit: 30,
+      windowSeconds: 300,
+    });
+    if (!rl.allowed) {
+      sendRateLimitExceeded(res, rl.resetInSeconds, 'gemini');
       return;
     }
 
@@ -1737,18 +1752,25 @@ export const scheduledDigest = onSchedule(
 export const submitInterestLead = onRequest(
   { region: 'europe-west1', secrets: [SMTP_EMAIL_SECRET, SMTP_PASSWORD_SECRET] },
   async (req, res) => {
-    // Ρητό CORS: η φόρμα καλεί απευθείας cloudfunctions.net (αποφεύγει 404 από Hosting rewrites)
-    res.set('Access-Control-Allow-Origin', '*');
-    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.set('Access-Control-Allow-Headers', 'Content-Type');
-    if (req.method === 'OPTIONS') {
-      res.status(204).send('');
-      return;
-    }
+    // Strict CORS (whitelisted origins only) — αποτρέπει scraping/abuse από τυχαία domains
+    if (applyStrictCors(req, res)) return;
     if (req.method !== 'POST') {
       res.status(405).json({ error: 'POST only' });
       return;
     }
+
+    // Rate limit: 5 υποβολές / 15 λεπτά ανά IP — αποτρέπει spam submissions
+    const ip = getClientIp(req);
+    const rl = await enforceRateLimit({
+      key: `lead:${ip}`,
+      limit: 5,
+      windowSeconds: 15 * 60,
+    });
+    if (!rl.allowed) {
+      sendRateLimitExceeded(res, rl.resetInSeconds, 'interest_lead');
+      return;
+    }
+
     try {
       const raw = req.body;
       const body: Record<string, unknown> =

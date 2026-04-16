@@ -351,5 +351,11 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow write: if false;
     }
+
+    // Rate limiter counters — write/read μόνο από Cloud Functions (Admin SDK).
+    // Κανένας client δεν πρέπει να τα διαβάσει ή να τα παρακάμψει.
+    match /rate_limits/{docId} {
+      allow read, write: if false;
+    }
   }
 }
