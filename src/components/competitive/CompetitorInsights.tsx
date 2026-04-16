@@ -187,7 +187,6 @@ export function CompetitorInsights() {
     error: benchmarksError,
     refetch: refetchBenchmarks,
     count: benchmarkCount,
-    withMarketBenchmarkCount,
     aboveMarket,
     belowMarket,
     avgDiff,
@@ -532,20 +531,13 @@ export function CompetitorInsights() {
           )}
 
           {/* KPI Strip */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
             <KpiBox
               label="Σύνολο SKUs (GMC)"
               value={benchmarkCount > 0 ? String(benchmarkCount) : '—'}
               tooltip="Προϊόντα από την αναφορά ProductView του Merchant Center μετά το sync. Περιλαμβάνει όλο τον κατάλογο που επιστρέφει η Google — όχι μόνο όσα έχουν benchmark."
               icon={<ShoppingCart size={18} />}
               color="#6366F1"
-            />
-            <KpiBox
-              label="Με benchmark αγοράς"
-              value={withMarketBenchmarkCount > 0 ? String(withMarketBenchmarkCount) : '—'}
-              tooltip="SKUs όπου το GMC επιστρέφει μέση τιμή αγοράς (Price Competitiveness) — αυτά εμφανίζουν σύγκριση στη στήλη Benchmark."
-              icon={<Activity size={18} />}
-              color="#4F46E5"
             />
             <KpiBox
               label="Πάνω από αγορά"
@@ -577,13 +569,6 @@ export function CompetitorInsights() {
             />
           </div>
 
-          {insightsCount > withMarketBenchmarkCount && (
-            <p className="text-xs text-[#6B7280] bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg px-3 py-2">
-              Γιατί τα Price Insights ({insightsCount}) μπορεί να ξεπερνούν τα SKUs με{' '}
-              <strong>benchmark αγοράς</strong> ({withMarketBenchmarkCount}); τα Insights (προτεινόμενες τιμές) προέρχονται από άλλη αναφορά GMC. Ο πίνακας από κάτω δείχνει{' '}
-              <strong>όλο</strong> τον κατάλογο που επέστρεψε το sync — στη στήλη Benchmark εμφανίζεται «—» όταν η Google δεν έχει ακόμη τιμή αγοράς για το SKU.
-            </p>
-          )}
 
           {/* Sync + Filters */}
           <Card>

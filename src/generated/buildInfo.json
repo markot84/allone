@@ -1,10 +1,14 @@
 {
-  "version": "0.475.0",
-  "previousVersion": "0.474.0",
-  "commitHash": "66ae2ae",
+  "version": "0.477.0",
+  "previousVersion": "0.476.0",
+  "commitHash": "f5ccdf1",
   "branch": "main",
-  "buildDate": "2026-04-16T17:16:00.493Z",
+  "buildDate": "2026-04-16T17:19:53.310Z",
   "commits": [
+    {
+      "hash": "f5ccdf1",
+      "message": "fix(price-benchmarks): populate stock/sold from ecommerce skuStats + GMC productId parse"
+    },
     {
       "hash": "66ae2ae",
       "message": "feat: price-benchmarks stock/sold + campaigns geo tab (GAds+Meta country breakdown)"
@@ -60,13 +64,10 @@
     {
       "hash": "82acf3b",
       "message": "UI: dashboard & analytics KPIs, campaigns ROI chart, nav scroll-to-top"
-    },
-    {
-      "hash": "9fb6adf",
-      "message": "Align revenue metrics with selected period (ROI, dashboard, briefing)"
     }
   ],
   "changes": [
+    "[Διόρθωση] Populate stock/sold from ecommerce skuStats + GMC productId parse",
     "[Νέο χαρακτηριστικό] Price-benchmarks stock/sold + campaigns geo tab (GAds+Meta country breakdown)",
     "[Νέο χαρακτηριστικό] Ignore demo products globally + suppliers column filters/sort",
     "[Συντήρηση] Full deploy",
@@ -75,7 +76,6 @@
     "[Νέο χαρακτηριστικό] Marketing overhead, daily trend, e-shop tabs, DateRangePicker portal",
     "[Νέο χαρακτηριστικό] AI Insights full page, campaigns LTV chart, UX polish",
     "[Νέο χαρακτηριστικό] Global date range context shared across all pages",
-    "GA4 new users inline + campaign channel filters",
-    "GA4: channel revenue, organic fallback; UI and data updates"
+    "GA4 new users inline + campaign channel filters"
   ]
 }
