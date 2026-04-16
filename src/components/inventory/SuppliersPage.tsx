@@ -413,17 +413,81 @@ export function SuppliersPage() {
         ))}
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-sm">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--nts-medium-gray)]" />
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={e => setSearchQuery(e.target.value)}
-          placeholder="Αναζήτηση προμηθευτή..."
-          className="w-full pl-9 pr-4 py-2 text-sm border border-[#E5E5E5] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)]/30"
-        />
-      </div>
+      {/* Search + column filters (toolbar) */}
+      <Card className="p-3">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="relative flex-1 min-w-[200px] max-w-sm">
+            <label className="text-[10px] uppercase tracking-wider text-[var(--nts-medium-gray)] mb-1 block">Αναζήτηση</label>
+            <Search size={14} className="absolute left-2.5 top-[26px] text-[var(--nts-medium-gray)]" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Όνομα ή επικοινωνία…"
+              className="w-full pl-8 pr-2 py-1.5 text-sm border border-[#E5E5E5] rounded-md focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/40"
+            />
+          </div>
+          <div className="min-w-[140px]">
+            <label className="text-[10px] uppercase tracking-wider text-[var(--nts-medium-gray)] mb-1 block">Προμηθευτής</label>
+            <input
+              type="text"
+              value={filterName}
+              onChange={e => setFilterName(e.target.value)}
+              placeholder="περιέχει…"
+              className="w-full px-2 py-1.5 text-sm border border-[#E5E5E5] rounded-md focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/40"
+            />
+          </div>
+          <div className="w-[110px]">
+            <label className="text-[10px] uppercase tracking-wider text-[var(--nts-medium-gray)] mb-1 block" title="Υποστηρίζει >30, <=20, 10-20">TOD</label>
+            <input
+              type="text"
+              value={filterTod}
+              onChange={e => setFilterTod(e.target.value)}
+              placeholder=">30"
+              className="w-full px-2 py-1.5 text-sm text-center border border-[#E5E5E5] rounded-md focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/40"
+            />
+          </div>
+          <div className="w-[110px]">
+            <label className="text-[10px] uppercase tracking-wider text-[var(--nts-medium-gray)] mb-1 block" title="Υποστηρίζει >5, 5-10">Lead Time</label>
+            <input
+              type="text"
+              value={filterLead}
+              onChange={e => setFilterLead(e.target.value)}
+              placeholder="5-10"
+              className="w-full px-2 py-1.5 text-sm text-center border border-[#E5E5E5] rounded-md focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/40"
+            />
+          </div>
+          <div className="w-[100px]">
+            <label className="text-[10px] uppercase tracking-wider text-[var(--nts-medium-gray)] mb-1 block" title="Αριθμός συνδεδεμένων προϊόντων">Προϊόντα</label>
+            <input
+              type="text"
+              value={filterProducts}
+              onChange={e => setFilterProducts(e.target.value)}
+              placeholder=">0"
+              className="w-full px-2 py-1.5 text-sm text-center border border-[#E5E5E5] rounded-md focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/40"
+            />
+          </div>
+          <div className="min-w-[140px]">
+            <label className="text-[10px] uppercase tracking-wider text-[var(--nts-medium-gray)] mb-1 block">Επικοινωνία</label>
+            <input
+              type="text"
+              value={filterContact}
+              onChange={e => setFilterContact(e.target.value)}
+              placeholder="περιέχει…"
+              className="w-full px-2 py-1.5 text-sm border border-[#E5E5E5] rounded-md focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/40"
+            />
+          </div>
+          {hasColumnFilters && (
+            <button
+              type="button"
+              onClick={resetColumnFilters}
+              className="h-[34px] px-3 text-xs font-medium text-[var(--nts-accent)] hover:bg-[var(--nts-accent)]/5 rounded-md border border-[var(--nts-accent)]/30"
+            >
+              Καθαρισμός
+            </button>
+          )}
+        </div>
+      </Card>
 
       {/* Suppliers Table */}
       <Card className="overflow-hidden">
@@ -454,58 +518,8 @@ export function SuppliersPage() {
                     Επικοινωνία <SortIcon col="contact" />
                   </th>
                   <th className="text-right px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider w-20">
-                    {hasColumnFilters ? (
-                      <button onClick={resetColumnFilters} className="text-[10px] text-[var(--nts-accent)] hover:underline" title="Καθαρισμός φίλτρων">Clear</button>
-                    ) : 'Ενέργειες'}
+                    Ενέργειες
                   </th>
-                </tr>
-                <tr className="bg-white border-b border-[#E5E5E5]">
-                  <th className="px-3 py-1.5">
-                    <input
-                      type="text"
-                      value={filterName}
-                      onChange={e => setFilterName(e.target.value)}
-                      placeholder="Φιλτράρισμα…"
-                      className="w-full text-xs border border-[#E5E5E5] rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/30"
-                    />
-                  </th>
-                  <th className="px-2 py-1.5">
-                    <input
-                      type="text"
-                      value={filterTod}
-                      onChange={e => setFilterTod(e.target.value)}
-                      placeholder="π.χ. >30"
-                      className="w-full text-xs text-center border border-[#E5E5E5] rounded px-1 py-1 focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/30"
-                    />
-                  </th>
-                  <th className="px-2 py-1.5 hidden sm:table-cell">
-                    <input
-                      type="text"
-                      value={filterLead}
-                      onChange={e => setFilterLead(e.target.value)}
-                      placeholder="π.χ. 5-10"
-                      className="w-full text-xs text-center border border-[#E5E5E5] rounded px-1 py-1 focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/30"
-                    />
-                  </th>
-                  <th className="px-2 py-1.5">
-                    <input
-                      type="text"
-                      value={filterProducts}
-                      onChange={e => setFilterProducts(e.target.value)}
-                      placeholder=">0"
-                      className="w-full text-xs text-center border border-[#E5E5E5] rounded px-1 py-1 focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/30"
-                    />
-                  </th>
-                  <th className="px-3 py-1.5 hidden md:table-cell">
-                    <input
-                      type="text"
-                      value={filterContact}
-                      onChange={e => setFilterContact(e.target.value)}
-                      placeholder="Φιλτράρισμα…"
-                      className="w-full text-xs border border-[#E5E5E5] rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/30"
-                    />
-                  </th>
-                  <th className="px-3 py-1.5" />
                 </tr>
               </thead>
               <tbody>
