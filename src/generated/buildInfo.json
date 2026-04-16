@@ -1,10 +1,14 @@
 {
-  "version": "0.464.0",
-  "previousVersion": "0.463.0",
-  "commitHash": "25292a5",
+  "version": "0.466.0",
+  "previousVersion": "0.465.0",
+  "commitHash": "92b5626",
   "branch": "main",
-  "buildDate": "2026-04-16T11:35:25.924Z",
+  "buildDate": "2026-04-16T11:39:17.763Z",
   "commits": [
+    {
+      "hash": "92b5626",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "25292a5",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "6920eaf",
       "message": "GA4 new users inline + campaign channel filters"
-    },
-    {
-      "hash": "cc82960",
-      "message": "GA4: channel revenue, organic fallback; UI and data updates"
     }
   ],
   "changes": [

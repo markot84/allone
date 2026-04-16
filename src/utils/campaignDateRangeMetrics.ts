@@ -138,14 +138,18 @@ export function applyCampaignDateRangeToMetrics(
           conversions: 0,
           amount_spent: 0,
           conversion_value: 0,
-          purchase_conversions: 0,
-          purchase_conversion_value: 0,
+          purchase_conversions: undefined,
+          purchase_conversion_value: undefined,
           ctr: 0,
           roas: 0,
           conversionActions: {},
         };
       }
-      if (scale >= 0.9999) return c;
+      /**
+       * ΠΟΤΕ raw `return c`: με scale≈1 τα parent `purchase_*` είναι συχνά lifetime / όχι η περίοδος → ROAS εκατοντάδες x.
+       * Χωρίς ημερήσια σειρά δεν εμπιστευόμαστε doc-level purchase — μόνο κλιμακωμένο `conversion_value` / `conversions`.
+       * (Με `dailyMetrics` τα purchase ανά ημέρα κρατούν κανονικά.)
+       */
       const impressions = Math.round((c.impressions || 0) * scale);
       const clicks = Math.round((c.clicks || 0) * scale);
       const conversions =
@@ -154,15 +158,8 @@ export function applyCampaignDateRangeToMetrics(
       const rawVal = c.conversion_value ?? (c as { conversionValue?: number }).conversionValue;
       const conversion_value =
         Math.round((typeof rawVal === 'number' ? rawVal : parseFloat(String(rawVal || 0)) || 0) * scale * 100) / 100;
-      const pc0 = c.purchase_conversions;
-      const pv0 = c.purchase_conversion_value;
-      const purchase_conversions =
-        typeof pc0 === 'number' && !Number.isNaN(pc0) ? pc0 * scale : undefined;
-      const purchase_conversion_value =
-        typeof pv0 === 'number' && !Number.isNaN(pv0) ? Math.round(pv0 * scale * 100) / 100 : undefined;
       const ctr = impressions > 0 ? Math.round((clicks / impressions) * 10000) / 100 : 0;
-      const roasVal = typeof purchase_conversion_value === 'number' ? purchase_conversion_value : conversion_value;
-      const roas = amount_spent > 0 ? Math.round((roasVal / amount_spent) * 100) / 100 : 0;
+      const roas = amount_spent > 0 ? Math.round((conversion_value / amount_spent) * 100) / 100 : 0;
       const conversionActions = scaleConversionActions(c.conversionActions, scale);
       return {
         ...c,
@@ -171,8 +168,8 @@ export function applyCampaignDateRangeToMetrics(
         conversions,
         amount_spent,
         conversion_value,
-        purchase_conversions,
-        purchase_conversion_value,
+        purchase_conversions: undefined,
+        purchase_conversion_value: undefined,
         ctr,
         roas,
         conversionActions,
