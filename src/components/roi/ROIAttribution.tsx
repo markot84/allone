@@ -139,10 +139,10 @@ interface ROIAttributionProps {
   embedded?: boolean;
 }
 
-type KpiTabId = 'roi' | 'eshopRevenue' | 'revenue' | 'organic' | 'conversionsRate';
+type KpiTabId = 'campaignRoi' | 'trueRoi' | 'eshopRevenue' | 'revenue' | 'organic' | 'conversionsRate';
 
 /** Σειρά εμφάνισης — ίδιο visual language με Campaigns / Competitive Intelligence (segmented strip). */
-const KPI_ORDER: KpiTabId[] = ['roi', 'eshopRevenue', 'revenue', 'organic', 'conversionsRate'];
+const KPI_ORDER: KpiTabId[] = ['campaignRoi', 'trueRoi', 'eshopRevenue', 'revenue', 'organic', 'conversionsRate'];
 
 export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
   const { byMonth: organicByMonth, hasOrganicRevenue: hasOrganic } = useOrganic();
@@ -359,26 +359,48 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
 
   const kpiPanelConfig = useMemo(() => {
     const cvr = totalClicks > 0 ? (metrics.totalConversions / totalClicks) * 100 : 0;
-    const roiPct =
+    const campaignRoiPct =
       metrics.totalSpend > 0 ? ((metrics.totalRevenue - metrics.totalSpend) / metrics.totalSpend) * 100 : null;
+    const trueRoiPct =
+      ecomm.hasData && metrics.totalSpend > 0
+        ? ((ecommRevenueInPeriod - metrics.totalSpend) / metrics.totalSpend) * 100
+        : null;
     return {
-      roi: {
+      campaignRoi: {
         icon: <TrendingUp size={22} strokeWidth={2} />,
-        label: 'ROI',
+        label: 'Campaign ROI',
         value:
-          roiPct != null && !Number.isNaN(roiPct)
-            ? `${roiPct > 0 ? '+' : ''}${formatNumber(roiPct, 1)}%`
+          campaignRoiPct != null && !Number.isNaN(campaignRoiPct)
+            ? `${campaignRoiPct > 0 ? '+' : ''}${formatNumber(campaignRoiPct, 1)}%`
             : '—',
-        subtitle: '',
+        subtitle: 'Conversion value καμπανιών − ad spend',
         color:
-          roiPct != null && !Number.isNaN(roiPct)
-            ? roiPct >= 0
+          campaignRoiPct != null && !Number.isNaN(campaignRoiPct)
+            ? campaignRoiPct >= 0
               ? '#059669'
               : '#EF4444'
             : '#111827',
         iconWrapClass: 'bg-emerald-50 text-emerald-600',
         tooltip:
-          'ROI %: (έσοδα καμπανιών − ad spend) ÷ ad spend. Ο πολλαπλασιαστής ROAS (×) και οι υπόλοιπες εκδοχές απόδοσης είναι στον πίνακα «Ανάλυση απόδοσης (ROAS & ROI)» παρακάτω.',
+          'Campaign ROI %: (έσοδα καμπανιών / conversion value − ad spend) ÷ ad spend. Δεν χρησιμοποιεί e-shop revenue.',
+      },
+      trueRoi: {
+        icon: <ShoppingBag size={22} strokeWidth={2} />,
+        label: 'True ROI',
+        value:
+          trueRoiPct != null && !Number.isNaN(trueRoiPct)
+            ? `${trueRoiPct > 0 ? '+' : ''}${formatNumber(trueRoiPct, 1)}%`
+            : '—',
+        subtitle: ecomm.hasData ? 'e-shop revenue − ad spend' : 'Χωρίς synced e-shop data',
+        color:
+          trueRoiPct != null && !Number.isNaN(trueRoiPct)
+            ? trueRoiPct >= 0
+              ? '#059669'
+              : '#EF4444'
+            : '#111827',
+        iconWrapClass: 'bg-emerald-50 text-emerald-600',
+        tooltip:
+          'True ROI %: (e-shop revenue − ad spend) ÷ ad spend, για την επιλεγμένη περίοδο.',
       },
       eshopRevenue: {
         icon: <ShoppingBag size={22} strokeWidth={2} />,
@@ -534,7 +556,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
       )}
 
       {/* KPI row: εικονίδιο αριστερά (pastel box), label + τιμή + υπότιτλος δεξιά */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5 lg:gap-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6 lg:gap-4">
         {KPI_ORDER.map((id) => (
           <RoiKpiTabCard key={id} {...kpiPanelConfig[id]} />
         ))}
