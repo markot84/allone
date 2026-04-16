@@ -1,5 +1,21 @@
 import type { Product } from '../types';
 
+/**
+ * Καμπάνιες demo/τεστ: αν το όνομα ή το SKU περιέχει `demo` (case-insensitive), αγνόησέ τα.
+ * Χρησιμοποιείται κεντρικά πριν από κάθε aggregate (KPIs, RFM, reports, exports).
+ */
+export function isDemoProduct(p: Pick<Product, 'name' | 'sku'> | { name?: string; sku?: string }): boolean {
+  const needle = 'demo';
+  const name = (p?.name || '').toString().toLowerCase();
+  const sku = (p?.sku || '').toString().toLowerCase();
+  return name.includes(needle) || sku.includes(needle);
+}
+
+/** Φίλτρο που αφαιρεί τα demo προϊόντα από λίστα. */
+export function excludeDemoProducts<T extends Pick<Product, 'name' | 'sku'>>(items: T[]): T[] {
+  return items.filter(p => !isDemoProduct(p));
+}
+
 /** Days from date string (Excel serial or ISO) to today */
 function daysFromDate(val: string): number | null {
   if (!val || !String(val).trim()) return null;

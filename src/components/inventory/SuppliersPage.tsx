@@ -12,6 +12,9 @@ import {
   FileSpreadsheet,
   Clock,
   Package,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
 } from 'lucide-react';
 import { Card, Button, Spinner, useToast } from '../common';
 import { useSuppliers } from '../../hooks/useSuppliers';
@@ -40,6 +43,15 @@ export function SuppliersPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [searchQuery, setSearchQuery] = useState('');
+  // Per-column filters + sort
+  const [filterName, setFilterName] = useState('');
+  const [filterTod, setFilterTod] = useState('');
+  const [filterLead, setFilterLead] = useState('');
+  const [filterProducts, setFilterProducts] = useState('');
+  const [filterContact, setFilterContact] = useState('');
+  type SortKey = 'name' | 'tod' | 'lead' | 'products' | 'contact';
+  const [sortBy, setSortBy] = useState<SortKey | null>(null);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTod, setEditTod] = useState<number>(DEFAULT_TOD);
   const [editLeadTime, setEditLeadTime] = useState<number>(0);
@@ -59,13 +71,89 @@ export function SuppliersPage() {
     return map;
   }, [products]);
 
+  /** Numeric filter: υποστηρίζει "10", ">=10", "<=20", "10-20". Κενό = όλα. */
+  const matchNumeric = (val: number, expr: string): boolean => {
+    const e = expr.trim();
+    if (!e) return true;
+    const range = e.match(/^(\d+)\s*-\s*(\d+)$/);
+    if (range) {
+      const a = parseInt(range[1], 10);
+      const b = parseInt(range[2], 10);
+      return val >= Math.min(a, b) && val <= Math.max(a, b);
+    }
+    const op = e.match(/^(>=|<=|>|<|=)\s*(\d+)$/);
+    if (op) {
+      const n = parseInt(op[2], 10);
+      switch (op[1]) {
+        case '>=': return val >= n;
+        case '<=': return val <= n;
+        case '>': return val > n;
+        case '<': return val < n;
+        default: return val === n;
+      }
+    }
+    const n = parseInt(e, 10);
+    if (!Number.isNaN(n)) return val === n;
+    return true;
+  };
+
   const filteredSuppliers = useMemo(() => {
-    if (!searchQuery.trim()) return suppliers;
-    const q = searchQuery.toLowerCase();
-    return suppliers.filter(s =>
-      s.name.toLowerCase().includes(q) || (s.contact || '').toLowerCase().includes(q)
-    );
-  }, [suppliers, searchQuery]);
+    const q = searchQuery.trim().toLowerCase();
+    const fn = filterName.trim().toLowerCase();
+    const fc = filterContact.trim().toLowerCase();
+
+    const result = suppliers.filter(s => {
+      if (q && !(s.name.toLowerCase().includes(q) || (s.contact || '').toLowerCase().includes(q))) return false;
+      if (fn && !s.name.toLowerCase().includes(fn)) return false;
+      if (fc && !(s.contact || '').toLowerCase().includes(fc)) return false;
+      if (!matchNumeric(s.tod || 0, filterTod)) return false;
+      if (!matchNumeric(s.lead_time || 0, filterLead)) return false;
+      if (!matchNumeric(productCountBySupplier.get(s.name) || 0, filterProducts)) return false;
+      return true;
+    });
+
+    if (!sortBy) return result;
+    const dir = sortDir === 'asc' ? 1 : -1;
+    return [...result].sort((a, b) => {
+      let av: string | number = '';
+      let bv: string | number = '';
+      switch (sortBy) {
+        case 'name': av = a.name.toLowerCase(); bv = b.name.toLowerCase(); break;
+        case 'tod': av = a.tod || 0; bv = b.tod || 0; break;
+        case 'lead': av = a.lead_time || 0; bv = b.lead_time || 0; break;
+        case 'products':
+          av = productCountBySupplier.get(a.name) || 0;
+          bv = productCountBySupplier.get(b.name) || 0;
+          break;
+        case 'contact': av = (a.contact || '').toLowerCase(); bv = (b.contact || '').toLowerCase(); break;
+      }
+      if (av < bv) return -1 * dir;
+      if (av > bv) return 1 * dir;
+      return 0;
+    });
+  }, [suppliers, searchQuery, filterName, filterTod, filterLead, filterProducts, filterContact, productCountBySupplier, sortBy, sortDir]);
+
+  const toggleSort = useCallback((key: 'name' | 'tod' | 'lead' | 'products' | 'contact') => {
+    setSortBy(prev => {
+      if (prev !== key) { setSortDir('asc'); return key; }
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+      return key;
+    });
+  }, []);
+
+  const SortIcon = ({ col }: { col: 'name' | 'tod' | 'lead' | 'products' | 'contact' }) => {
+    if (sortBy !== col) return <ArrowUpDown size={11} className="inline opacity-40" />;
+    return sortDir === 'asc' ? <ArrowUp size={11} className="inline" /> : <ArrowDown size={11} className="inline" />;
+  };
+
+  const resetColumnFilters = () => {
+    setFilterName('');
+    setFilterTod('');
+    setFilterLead('');
+    setFilterProducts('');
+    setFilterContact('');
+  };
+  const hasColumnFilters = !!(filterName || filterTod || filterLead || filterProducts || filterContact);
 
   const handleImportFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -350,12 +438,74 @@ export function SuppliersPage() {
             <table className="w-full text-sm table-fixed">
               <thead>
                 <tr className="bg-[#F9F9F9] border-b border-[#E5E5E5]">
-                  <th className="text-left px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider">Προμηθευτής</th>
-                  <th className="text-center px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider w-20">TOD</th>
-                  <th className="text-center px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider w-20 hidden sm:table-cell">Lead Time</th>
-                  <th className="text-center px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider w-16">Προϊόντα</th>
-                  <th className="text-left px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider hidden md:table-cell">Επικοινωνία</th>
-                  <th className="text-right px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider w-20">Ενέργειες</th>
+                  <th className="text-left px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider cursor-pointer select-none hover:text-[var(--nts-charcoal)]" onClick={() => toggleSort('name')}>
+                    Προμηθευτής <SortIcon col="name" />
+                  </th>
+                  <th className="text-center px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider w-20 cursor-pointer select-none hover:text-[var(--nts-charcoal)]" onClick={() => toggleSort('tod')}>
+                    TOD <SortIcon col="tod" />
+                  </th>
+                  <th className="text-center px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider w-20 hidden sm:table-cell cursor-pointer select-none hover:text-[var(--nts-charcoal)]" onClick={() => toggleSort('lead')}>
+                    Lead Time <SortIcon col="lead" />
+                  </th>
+                  <th className="text-center px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider w-16 cursor-pointer select-none hover:text-[var(--nts-charcoal)]" onClick={() => toggleSort('products')}>
+                    Προϊόντα <SortIcon col="products" />
+                  </th>
+                  <th className="text-left px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider hidden md:table-cell cursor-pointer select-none hover:text-[var(--nts-charcoal)]" onClick={() => toggleSort('contact')}>
+                    Επικοινωνία <SortIcon col="contact" />
+                  </th>
+                  <th className="text-right px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider w-20">
+                    {hasColumnFilters ? (
+                      <button onClick={resetColumnFilters} className="text-[10px] text-[var(--nts-accent)] hover:underline" title="Καθαρισμός φίλτρων">Clear</button>
+                    ) : 'Ενέργειες'}
+                  </th>
+                </tr>
+                <tr className="bg-white border-b border-[#E5E5E5]">
+                  <th className="px-3 py-1.5">
+                    <input
+                      type="text"
+                      value={filterName}
+                      onChange={e => setFilterName(e.target.value)}
+                      placeholder="Φιλτράρισμα…"
+                      className="w-full text-xs border border-[#E5E5E5] rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/30"
+                    />
+                  </th>
+                  <th className="px-2 py-1.5">
+                    <input
+                      type="text"
+                      value={filterTod}
+                      onChange={e => setFilterTod(e.target.value)}
+                      placeholder="π.χ. >30"
+                      className="w-full text-xs text-center border border-[#E5E5E5] rounded px-1 py-1 focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/30"
+                    />
+                  </th>
+                  <th className="px-2 py-1.5 hidden sm:table-cell">
+                    <input
+                      type="text"
+                      value={filterLead}
+                      onChange={e => setFilterLead(e.target.value)}
+                      placeholder="π.χ. 5-10"
+                      className="w-full text-xs text-center border border-[#E5E5E5] rounded px-1 py-1 focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/30"
+                    />
+                  </th>
+                  <th className="px-2 py-1.5">
+                    <input
+                      type="text"
+                      value={filterProducts}
+                      onChange={e => setFilterProducts(e.target.value)}
+                      placeholder=">0"
+                      className="w-full text-xs text-center border border-[#E5E5E5] rounded px-1 py-1 focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/30"
+                    />
+                  </th>
+                  <th className="px-3 py-1.5 hidden md:table-cell">
+                    <input
+                      type="text"
+                      value={filterContact}
+                      onChange={e => setFilterContact(e.target.value)}
+                      placeholder="Φιλτράρισμα…"
+                      className="w-full text-xs border border-[#E5E5E5] rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/30"
+                    />
+                  </th>
+                  <th className="px-3 py-1.5" />
                 </tr>
               </thead>
               <tbody>

@@ -33,6 +33,33 @@ interface OrderRow {
 
 const ECOMMERCE_PROVIDERS = ['shopify', 'woocommerce', 'opencart', 'magento'] as const;
 
+/** Demo products (όνομα/SKU περιέχει "demo") εξαιρούνται από κάθε aggregate. */
+function isDemoLineItem(li: { sku?: string; title?: string; name?: string }): boolean {
+  const needle = 'demo';
+  const s = `${li.sku || ''} ${li.title || ''} ${li.name || ''}`.toLowerCase();
+  return s.includes(needle);
+}
+
+/** Καθαρό revenue μιας παραγγελίας μετά την αφαίρεση των demo line items. */
+function nonDemoRevenue(o: OrderRow): { revenue: number; isAllDemo: boolean } {
+  const items = o.lineItems || [];
+  if (items.length === 0) {
+    // Fallback: δεν ξέρουμε lineItems → κράτα την παραγγελία
+    return { revenue: o.totalPrice, isAllDemo: false };
+  }
+  let demoTotal = 0;
+  let nonDemoCount = 0;
+  for (const li of items) {
+    if (isDemoLineItem(li)) {
+      demoTotal += (li.price || 0) * (li.quantity || 1);
+    } else {
+      nonDemoCount++;
+    }
+  }
+  const revenue = Math.max(0, o.totalPrice - demoTotal);
+  return { revenue, isAllDemo: nonDemoCount === 0 };
+}
+
 const COLLECTION_MAP: Record<string, string> = {
   shopify: 'shopify_orders',
   woocommerce: 'woo_orders',
@@ -114,28 +141,34 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
   const allOrderArrays = await Promise.all(
     connectedPlatforms.map((p) => readPlatformOrders(db, brandId, p))
   );
-  const allOrders = allOrderArrays.flat();
+  const rawOrders = allOrderArrays.flat();
+
+  // Demo cleanup: αφαίρεσε παραγγελίες που είναι 100% demo items
+  // και σκέπασε το totalPrice με καθαρό (non-demo) revenue.
+  const allOrders: OrderRow[] = [];
+  for (const o of rawOrders) {
+    const { revenue, isAllDemo } = nonDemoRevenue(o);
+    if (isAllDemo) continue;
+    allOrders.push({ ...o, totalPrice: revenue });
+  }
 
   // --- Aggregation ---
   const totalRevenue = allOrders.reduce((s, o) => s + o.totalPrice, 0);
   const orderCount = allOrders.length;
   const aov = orderCount > 0 ? totalRevenue / orderCount : 0;
 
-  // Revenue by day (YYYY-MM-DD)
   const revenueByDay: Record<string, number> = {};
   for (const o of allOrders) {
     const day = o.createdAt?.slice(0, 10) || 'unknown';
     revenueByDay[day] = (revenueByDay[day] || 0) + o.totalPrice;
   }
 
-  // Revenue by month (YYYY-MM)
   const revenueByMonth: Record<string, number> = {};
   for (const o of allOrders) {
     const month = o.createdAt?.slice(0, 7) || 'unknown';
     revenueByMonth[month] = (revenueByMonth[month] || 0) + o.totalPrice;
   }
 
-  // Revenue by platform
   const revenueByPlatform: Record<string, { revenue: number; orders: number }> = {};
   for (const p of ECOMMERCE_PROVIDERS) {
     revenueByPlatform[p] = { revenue: 0, orders: 0 };
@@ -148,10 +181,11 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
     revenueByPlatform[o.platform].orders += 1;
   }
 
-  // Top products by revenue (from line items)
+  // Top products: αγνοεί εντελώς τα demo line items
   const productMap = new Map<string, { name: string; revenue: number; quantity: number }>();
   for (const o of allOrders) {
     for (const li of o.lineItems || []) {
+      if (isDemoLineItem(li)) continue;
       const key = li.sku || li.title || li.name || 'unknown';
       const name = li.title || li.name || key;
       const existing = productMap.get(key) || { name, revenue: 0, quantity: 0 };

@@ -1,10 +1,14 @@
 {
-  "version": "0.468.0",
-  "previousVersion": "0.467.0",
-  "commitHash": "29c6aa0",
+  "version": "0.470.0",
+  "previousVersion": "0.469.0",
+  "commitHash": "06ba29f",
   "branch": "main",
-  "buildDate": "2026-04-16T11:42:53.974Z",
+  "buildDate": "2026-04-16T16:41:14.121Z",
   "commits": [
+    {
+      "hash": "06ba29f",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "29c6aa0",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "9cc143a",
       "message": "feat: AI Insights full page, campaigns LTV chart, UX polish"
-    },
-    {
-      "hash": "09cf150",
-      "message": "feat: global date range context shared across all pages"
     }
   ],
   "changes": [

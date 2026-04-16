@@ -3,6 +3,7 @@ import { useProducts } from './useProducts';
 import { useProcurement } from './useProcurement';
 import { usePlan } from './usePlan';
 import type { Product } from '../types';
+import { excludeDemoProducts } from '../utils/productUtils';
 
 function findCol(rows: Record<string, unknown>[], keyword: string): string {
   if (!rows.length) return keyword;
@@ -79,7 +80,8 @@ export function useProductSource() {
   }, [isEnterprise, procData.inventory]);
 
   const usingProcurement = procProducts.length > 0;
-  const products = usingProcurement ? procProducts : productHook.products;
+  // Demo products φιλτράρονται και εδώ για να ισχύει σε όλους τους aggregates.
+  const products = excludeDemoProducts(usingProcurement ? procProducts : productHook.products);
 
   /** Μέχρι να ολοκληρωθεί και το procurement (Enterprise), μην εμφανίζεις κενή σελίδα «χωρίς προϊόντα». */
   const isLoading =
