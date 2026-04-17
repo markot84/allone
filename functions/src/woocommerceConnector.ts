@@ -13,6 +13,7 @@
 import * as admin from 'firebase-admin';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
+import { encryptToken, decryptToken } from './tokenCrypto';
 
 let _db: Firestore | null = null;
 
@@ -48,8 +49,8 @@ export async function saveWooCredentials(
         storeUrl: normalizedUrl,
         shopName: testResult.shopName || normalizedUrl,
         wooVersion: testResult.version || '',
-        consumerKey,
-        consumerSecret,
+        consumerKey: encryptToken(consumerKey),
+        consumerSecret: encryptToken(consumerSecret),
         connectedAt: FieldValue.serverTimestamp(),
       },
     },
@@ -126,7 +127,12 @@ export async function fetchWooCommerceData(brandId: string): Promise<{
     return { success: false, imported: 0, error: 'WooCommerce not connected' };
   }
 
-  const { storeUrl, consumerKey, consumerSecret } = connector;
+  const { storeUrl } = connector;
+  const consumerKey = decryptToken(connector.consumerKey);
+  const consumerSecret = decryptToken(connector.consumerSecret);
+  if (!consumerKey || !consumerSecret) {
+    return { success: false, imported: 0, error: 'WooCommerce credentials unavailable — reconnect required' };
+  }
   const authHeader = 'Basic ' + Buffer.from(`${consumerKey}:${consumerSecret}`).toString('base64');
   const baseHeaders = { Authorization: authHeader, 'Content-Type': 'application/json' };
 

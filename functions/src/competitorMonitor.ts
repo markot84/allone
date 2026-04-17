@@ -8,6 +8,7 @@
 import * as admin from 'firebase-admin';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
+import { decryptToken } from './tokenCrypto';
 
 let _db: Firestore | null = null;
 
@@ -72,7 +73,7 @@ async function resolveAdLibraryAccessToken(
     const meta = snap.data()?.meta as
       | { connected?: boolean; accessToken?: string; expiresAt?: number }
       | undefined;
-    const tok = meta?.accessToken;
+    const tok = decryptToken(meta?.accessToken);
     if (meta?.connected && typeof tok === 'string' && tok.length > 20) {
       if (!meta.expiresAt || meta.expiresAt > Date.now()) {
         logger.info(`[Competitor] ads_archive: χρήση Meta OAuth token (brand ${brandId})`);

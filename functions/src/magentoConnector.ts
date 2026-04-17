@@ -13,6 +13,7 @@
 import * as admin from 'firebase-admin';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
+import { encryptToken, decryptToken } from './tokenCrypto';
 
 let _db: Firestore | null = null;
 
@@ -46,7 +47,7 @@ export async function saveMagentoCredentials(
         storeUrl: normalizedUrl,
         shopName: testResult.shopName || normalizedUrl,
         magentoVersion: testResult.version || '',
-        accessToken,
+        accessToken: encryptToken(accessToken),
         connectedAt: FieldValue.serverTimestamp(),
       },
     },
@@ -134,7 +135,11 @@ export async function fetchMagentoData(brandId: string): Promise<{
     return { success: false, imported: 0, error: 'Magento not connected' };
   }
 
-  const { storeUrl, accessToken } = connector;
+  const { storeUrl } = connector;
+  const accessToken = decryptToken(connector.accessToken);
+  if (!accessToken) {
+    return { success: false, imported: 0, error: 'Magento token unavailable — reconnect required' };
+  }
   const headers = { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' };
 
   let totalImported = 0;

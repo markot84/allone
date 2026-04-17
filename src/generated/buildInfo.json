@@ -1,10 +1,14 @@
 {
-  "version": "0.483.0",
-  "previousVersion": "0.482.0",
-  "commitHash": "2648fc3",
+  "version": "0.484.0",
+  "previousVersion": "0.483.0",
+  "commitHash": "15b68af",
   "branch": "main",
-  "buildDate": "2026-04-16T19:46:58.188Z",
+  "buildDate": "2026-04-17T05:50:37.984Z",
   "commits": [
+    {
+      "hash": "15b68af",
+      "message": "feat(security): App Check + rate limit + strict CORS + robots.txt"
+    },
     {
       "hash": "2648fc3",
       "message": "feat(competitive): Excel-style column filters + sort στον πίνακα Price Benchmarks"
@@ -60,13 +64,10 @@
     {
       "hash": "9f45577",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "02259de",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [
+    "[Νέο χαρακτηριστικό] App Check + rate limit + strict CORS + robots.txt",
     "[Νέο χαρακτηριστικό] Excel-style column filters + sort στον πίνακα Price Benchmarks",
     "Ui(suppliers): keep header labels single-line (whitespace-nowrap + wider cols)",
     "Ui(suppliers): move column filters into a clean top toolbar",
@@ -74,7 +75,6 @@
     "[Διόρθωση] Populate stock/sold from ecommerce skuStats + GMC productId parse",
     "[Νέο χαρακτηριστικό] Price-benchmarks stock/sold + campaigns geo tab (GAds+Meta country breakdown)",
     "[Νέο χαρακτηριστικό] Ignore demo products globally + suppliers column filters/sort",
-    "[Συντήρηση] Full deploy",
-    "UI: dashboard & analytics KPIs, campaigns ROI chart, nav scroll-to-top"
+    "[Συντήρηση] Full deploy"
   ]
 }

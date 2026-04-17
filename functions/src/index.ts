@@ -87,6 +87,7 @@ import {
 } from './tiktokConnector';
 import { persistInterestLead } from './interestLead';
 import { applyStrictCors, enforceRateLimit, getClientIp, sendRateLimitExceeded } from './security';
+import { encryptToken } from './tokenCrypto';
 
 admin.initializeApp();
 const db = getFirestore();
@@ -831,7 +832,7 @@ export const connectorCallback = onRequest(
               meta: {
                 connected: !needsSelection,
                 pendingAccountSelection: needsSelection,
-                accessToken,
+                accessToken: encryptToken(accessToken),
                 expiresAt: Date.now() + expiresIn * 1000,
                 availableAccounts,
                 adAccountIds: needsSelection ? [] : availableAccounts.map((a) => a.id),
@@ -864,8 +865,8 @@ export const connectorCallback = onRequest(
               tiktok: {
                 connected: !needsSelection,
                 pendingAccountSelection: needsSelection,
-                accessToken,
-                refreshToken,
+                accessToken: encryptToken(accessToken),
+                refreshToken: encryptToken(refreshToken),
                 expiresAt: Date.now() + expiresIn * 1000,
                 refreshExpiresAt: Date.now() + refreshExpiresIn * 1000,
                 availableAccounts,

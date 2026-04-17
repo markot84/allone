@@ -15,6 +15,7 @@
 import * as admin from 'firebase-admin';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
+import { encryptToken, decryptToken } from './tokenCrypto';
 
 let _db: Firestore | null = null;
 
@@ -130,7 +131,7 @@ export async function handleShopifyCallback(
           connected: true,
           shopDomain: normalizedDomain,
           shopName,
-          accessToken,
+          accessToken: encryptToken(accessToken),
           scope,
           connectedAt: FieldValue.serverTimestamp(),
         },
@@ -165,7 +166,11 @@ export async function fetchShopifyData(brandId: string): Promise<{
     return { success: false, imported: 0, error: 'Shopify not connected' };
   }
 
-  const { accessToken, shopDomain } = connector;
+  const { shopDomain } = connector;
+  const accessToken = decryptToken(connector.accessToken);
+  if (!accessToken) {
+    return { success: false, imported: 0, error: 'Shopify token unavailable — reconnect required' };
+  }
   const baseUrl = `https://${shopDomain}/admin/api/${SHOPIFY_API_VERSION}`;
   const headers = { 'X-Shopify-Access-Token': accessToken, 'Content-Type': 'application/json' };
 

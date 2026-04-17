@@ -14,6 +14,7 @@
 import * as admin from 'firebase-admin';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
+import { encryptToken, decryptToken } from './tokenCrypto';
 
 let _db: Firestore | null = null;
 
@@ -49,8 +50,8 @@ export async function saveOpenCartCredentials(
         storeUrl: normalizedUrl,
         shopName: testResult.shopName || normalizedUrl,
         apiUsername,
-        apiKey,
-        apiToken: testResult.apiToken || '',
+        apiKey: encryptToken(apiKey),
+        apiToken: encryptToken(testResult.apiToken || ''),
         connectedAt: FieldValue.serverTimestamp(),
       },
     },
@@ -161,7 +162,11 @@ export async function fetchOpenCartData(brandId: string): Promise<{
     return { success: false, imported: 0, error: 'OpenCart not connected' };
   }
 
-  const { storeUrl, apiUsername, apiKey } = connector;
+  const { storeUrl, apiUsername } = connector;
+  const apiKey = decryptToken(connector.apiKey);
+  if (!apiKey) {
+    return { success: false, imported: 0, error: 'OpenCart credentials unavailable — reconnect required' };
+  }
   let token = await refreshApiToken(storeUrl, apiUsername, apiKey);
   const useRestExtension = !token;
 

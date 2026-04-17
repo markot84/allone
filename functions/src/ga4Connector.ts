@@ -11,6 +11,7 @@
 import * as admin from 'firebase-admin';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
+import { encryptToken, decryptToken } from './tokenCrypto';
 
 let _db: Firestore | null = null;
 
@@ -206,8 +207,8 @@ export async function handleGA4Callback(
     await getDb().doc(`connectors/${brandId}`).set(
       {
         ga4: {
-          refreshToken,
-          accessToken,
+          refreshToken: encryptToken(refreshToken),
+          accessToken: encryptToken(accessToken),
           expiresAt: Date.now() + (tokens.expires_in || 3600) * 1000,
           connectedAt: FieldValue.serverTimestamp(),
           oauthInitiatedByUid: FieldValue.delete(),
@@ -238,8 +239,8 @@ export async function handleGA4Callback(
         {
           ga4: {
             connected: true,
-            refreshToken,
-            accessToken,
+            refreshToken: encryptToken(refreshToken),
+            accessToken: encryptToken(accessToken),
             expiresAt: Date.now() + (tokens.expires_in || 3600) * 1000,
             propertyId: properties[0].id,
             propertyName: properties[0].name,
@@ -257,8 +258,8 @@ export async function handleGA4Callback(
       {
         ga4: {
           connected: false,
-          refreshToken,
-          accessToken,
+          refreshToken: encryptToken(refreshToken),
+          accessToken: encryptToken(accessToken),
           expiresAt: Date.now() + (tokens.expires_in || 3600) * 1000,
           pendingAccountSelection: true,
           availableAccounts: properties.map((p) => ({ id: p.id, name: p.name })),
@@ -392,7 +393,11 @@ export async function fetchGA4Data(
   }
 
   try {
-    const accessToken = await refreshAccessToken(conn.refreshToken);
+    const refreshTokenPlain = decryptToken(conn.refreshToken);
+    if (!refreshTokenPlain) {
+      return { success: false, imported: 0, error: 'GA4 token unavailable — reconnect required' };
+    }
+    const accessToken = await refreshAccessToken(refreshTokenPlain);
     const propertyId = conn.propertyId;
 
     // Fetch last 90 days of data

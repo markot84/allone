@@ -15,6 +15,7 @@
 import * as admin from 'firebase-admin';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
+import { decryptToken } from './tokenCrypto';
 
 let _db: Firestore | null = null;
 
@@ -430,7 +431,10 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
   }
 
   let totalImported = 0;
-  const accessToken = connector.accessToken;
+  const accessToken = decryptToken(connector.accessToken);
+  if (!accessToken) {
+    return { success: false, imported: 0, error: 'Meta token unavailable — reconnect required' };
+  }
   const now = new Date();
   const currentYear = now.getUTCFullYear();
   const currentYearStart = `${currentYear}-01-01`;

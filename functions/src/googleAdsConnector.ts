@@ -17,6 +17,7 @@
 import * as admin from 'firebase-admin';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
+import { encryptToken, decryptToken } from './tokenCrypto';
 
 let _db: Firestore | null = null;
 
@@ -251,8 +252,8 @@ export async function handleGoogleAdsCallback(
         {
           google_ads: {
             connected: false,
-            refreshToken,
-            accessToken,
+            refreshToken: encryptToken(refreshToken),
+            accessToken: encryptToken(accessToken),
             expiresAt: Date.now() + (tokens.expires_in || 3600) * 1000,
             pendingAccountSelection: true,
             availableAccounts: [],
@@ -272,8 +273,8 @@ export async function handleGoogleAdsCallback(
         {
           google_ads: {
             connected: true,
-            refreshToken,
-            accessToken,
+            refreshToken: encryptToken(refreshToken),
+            accessToken: encryptToken(accessToken),
             expiresAt: Date.now() + (tokens.expires_in || 3600) * 1000,
             customerId: customer.id,
             customerName: customer.name,
@@ -293,8 +294,8 @@ export async function handleGoogleAdsCallback(
       {
         google_ads: {
           connected: false,
-          refreshToken,
-          accessToken,
+          refreshToken: encryptToken(refreshToken),
+          accessToken: encryptToken(accessToken),
           expiresAt: Date.now() + (tokens.expires_in || 3600) * 1000,
           pendingAccountSelection: true,
           availableAccounts: customers,
@@ -470,7 +471,11 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
     return { success: false, imported: 0, error: 'No customer account selected' };
   }
 
-  const accessToken = await refreshAccessToken(connector.refreshToken);
+  const refreshTokenPlain = decryptToken(connector.refreshToken);
+  if (!refreshTokenPlain) {
+    return { success: false, imported: 0, error: 'Google Ads token unavailable — reconnect required' };
+  }
+  const accessToken = await refreshAccessToken(refreshTokenPlain);
   if (!accessToken) {
     return { success: false, imported: 0, error: 'Failed to refresh token' };
   }

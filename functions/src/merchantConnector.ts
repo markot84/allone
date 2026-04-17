@@ -11,6 +11,7 @@
 import * as admin from 'firebase-admin';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
+import { encryptToken, decryptToken } from './tokenCrypto';
 
 let _db: Firestore | null = null;
 
@@ -162,8 +163,8 @@ export async function handleMerchantCallback(
         {
           merchant: {
             connected: false,
-            refreshToken,
-            accessToken,
+            refreshToken: encryptToken(refreshToken),
+            accessToken: encryptToken(accessToken),
             expiresAt: Date.now() + (tokens.expires_in || 3600) * 1000,
             pendingAccountSelection: true,
             availableAccounts: [],
@@ -181,8 +182,8 @@ export async function handleMerchantCallback(
         {
           merchant: {
             connected: true,
-            refreshToken,
-            accessToken,
+            refreshToken: encryptToken(refreshToken),
+            accessToken: encryptToken(accessToken),
             expiresAt: Date.now() + (tokens.expires_in || 3600) * 1000,
             merchantId: accounts[0].id,
             merchantName: accounts[0].name,
@@ -200,8 +201,8 @@ export async function handleMerchantCallback(
       {
         merchant: {
           connected: false,
-          refreshToken,
-          accessToken,
+          refreshToken: encryptToken(refreshToken),
+          accessToken: encryptToken(accessToken),
           expiresAt: Date.now() + (tokens.expires_in || 3600) * 1000,
           pendingAccountSelection: true,
           availableAccounts: accounts,
@@ -613,7 +614,11 @@ export async function fetchPriceBenchmarks(brandId: string): Promise<{
     return { success: false, imported: 0, error: 'No Merchant Center account selected' };
   }
 
-  const tokenResult = await refreshAccessToken(connector.refreshToken);
+  const refreshTokenPlain = decryptToken(connector.refreshToken);
+  if (!refreshTokenPlain) {
+    return { success: false, imported: 0, error: 'Merchant token unavailable — reconnect required' };
+  }
+  const tokenResult = await refreshAccessToken(refreshTokenPlain);
   if (!tokenResult.ok) {
     return {
       success: false,

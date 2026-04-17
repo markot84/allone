@@ -1,6 +1,7 @@
 import * as admin from 'firebase-admin';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
+import { encryptToken, decryptToken } from './tokenCrypto';
 
 let _db: Firestore | null = null;
 
@@ -410,7 +411,11 @@ export async function fetchTikTokCampaigns(brandId: string): Promise<{
     return { success: false, imported: 0, error: 'No TikTok advertiser selected' };
   }
 
-  const refreshed = await refreshTikTokAccessToken(String(connector.refreshToken));
+  const refreshTokenPlain = decryptToken(String(connector.refreshToken));
+  if (!refreshTokenPlain) {
+    return { success: false, imported: 0, error: 'TikTok token unavailable — reconnect required' };
+  }
+  const refreshed = await refreshTikTokAccessToken(refreshTokenPlain);
   if (!refreshed) {
     return { success: false, imported: 0, error: 'Failed to refresh TikTok access token' };
   }
@@ -556,8 +561,8 @@ export async function fetchTikTokCampaigns(brandId: string): Promise<{
     await getDb().doc(`connectors/${brandId}`).set(
       {
         tiktok: {
-          accessToken: refreshed.accessToken,
-          refreshToken: refreshed.refreshToken,
+          accessToken: encryptToken(refreshed.accessToken),
+          refreshToken: encryptToken(refreshed.refreshToken),
           expiresAt: Date.now() + refreshed.expiresIn * 1000,
           refreshExpiresAt: Date.now() + refreshed.refreshExpiresIn * 1000,
           lastDataSyncAt: Date.now(),
