@@ -106,3 +106,35 @@ export function classifyStockHealth(product: Product, tod: number = DEFAULT_TOD)
   if (dos > tod * 2) return 'excess';
   return 'healthy';
 }
+
+function ymdLocal(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/**
+ * YYYY-MM-DD για φίλτρο περιόδου στο Product Intelligence.
+ * - imported: Firestore createdAt / import
+ * - first_available: στήλη First Available (και Excel serial όπως στο stock age)
+ */
+export function getProductYmdForFilter(product: Product, mode: 'imported' | 'first_available'): string | null {
+  if (mode === 'first_available') {
+    const raw = product.first_available_date;
+    if (!raw || !String(raw).trim()) return null;
+    const str = String(raw).trim();
+    const n = parseFloat(str);
+    let d: Date;
+    if (!isNaN(n) && n > 0) {
+      d = new Date((n - 25569) * 86400 * 1000);
+    } else {
+      d = new Date(str);
+    }
+    if (isNaN(d.getTime())) return null;
+    return ymdLocal(d);
+  }
+  const c = toDate(product.createdAt);
+  if (!c || isNaN(c.getTime())) return null;
+  return ymdLocal(c);
+}

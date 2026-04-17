@@ -27,7 +27,8 @@ import { useProcurement } from '../../hooks/useProcurement';
 import { usePriceBenchmarks } from '../../hooks/usePriceBenchmarks';
 import { formatCurrency, formatCurrencyCompact, formatNumber, formatPercent } from '../../utils/format';
 import { FirestoreService } from '../../services/firestore';
-import { classifyStockHealth, getDaysOfStock, getProductTod } from '../../utils/productUtils';
+import { classifyStockHealth, getDaysOfStock, getProductTod, getProductYmdForFilter } from '../../utils/productUtils';
+import { DateRangePicker } from '../ui/DateRangePicker';
 import { ExportModal } from './ExportModal';
 import { ProductCharts } from './ProductCharts';
 import type { Product, InventorySummary, InventoryAlert } from '../../types';
@@ -208,6 +209,10 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   const [showCharts, setShowCharts] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const PAGE_SIZE = 150;
+  /** Φίλτρο περιόδου (εισαγωγή / πρώτη διαθεσιμότητα) — μόνο για εισαγόμενα SKU, όχι ERP procurement */
+  const [productDateFrom, setProductDateFrom] = useState('');
+  const [productDateTo, setProductDateTo] = useState('');
+  const [productDateMode, setProductDateMode] = useState<'imported' | 'first_available'>('imported');
 
   /** Deep link: `#products?stock=low|dead|excess|healthy` ή `#products?filter=high-margin-low-stock` */
   useEffect(() => {
@@ -273,8 +278,41 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     return m;
   }, [suppliers]);
 
-  const inventorySummary = useMemo(() => computeInventorySummary(rawProducts, supplierTodMap), [rawProducts, supplierTodMap]);
-  const inventoryAlerts = useMemo(() => computeInventoryAlerts(rawProducts, supplierTodMap), [rawProducts, supplierTodMap]);
+  const productsScopedByDate = useMemo(() => {
+    if (usingProcurement) return sourceProducts;
+    if (!productDateFrom || !productDateTo) return sourceProducts;
+    return sourceProducts.filter((p) => {
+      const ymd = getProductYmdForFilter(p, productDateMode);
+      if (!ymd) return false;
+      return ymd >= productDateFrom && ymd <= productDateTo;
+    });
+  }, [sourceProducts, usingProcurement, productDateFrom, productDateTo, productDateMode]);
+
+  const inventorySummary = useMemo(() => {
+    if (usingProcurement) return computeInventorySummary(rawProducts, supplierTodMap);
+    if (productDateFrom && productDateTo) {
+      const base = rawProducts.filter((p) => {
+        const ymd = getProductYmdForFilter(p, productDateMode);
+        if (!ymd) return false;
+        return ymd >= productDateFrom && ymd <= productDateTo;
+      });
+      return computeInventorySummary(base, supplierTodMap);
+    }
+    return computeInventorySummary(rawProducts, supplierTodMap);
+  }, [rawProducts, usingProcurement, supplierTodMap, productDateFrom, productDateTo, productDateMode]);
+
+  const inventoryAlerts = useMemo(() => {
+    if (usingProcurement) return computeInventoryAlerts(rawProducts, supplierTodMap);
+    if (productDateFrom && productDateTo) {
+      const base = rawProducts.filter((p) => {
+        const ymd = getProductYmdForFilter(p, productDateMode);
+        if (!ymd) return false;
+        return ymd >= productDateFrom && ymd <= productDateTo;
+      });
+      return computeInventoryAlerts(base, supplierTodMap);
+    }
+    return computeInventoryAlerts(rawProducts, supplierTodMap);
+  }, [rawProducts, usingProcurement, supplierTodMap, productDateFrom, productDateTo, productDateMode]);
 
   // Procurement-based inventory summary (replaces product-based when available)
   const procInventorySummary = useMemo((): InventorySummary | null => {
@@ -366,13 +404,13 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   const displaySummary = procInventorySummary ?? inventorySummary;
 
   const categories = useMemo(() => {
-    const fromProducts = [...new Set(sourceProducts.map(p => p.category))].filter(Boolean).sort();
+    const fromProducts = [...new Set(productsScopedByDate.map(p => p.category))].filter(Boolean).sort();
     return fromProducts;
-  }, [sourceProducts]);
+  }, [productsScopedByDate]);
 
   // Filter and sort products
   const filteredProducts = useMemo(() => {
-    return sourceProducts
+    return productsScopedByDate
       .filter((p) => {
         const matchesSearch = (p.name ?? '').toLowerCase().includes(searchQuery.toLowerCase()) ||
                              (p.sku ?? '').toLowerCase().includes(searchQuery.toLowerCase());
@@ -413,7 +451,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           ? (aVal as number) - (bVal as number) 
           : (bVal as number) - (aVal as number);
       });
-  }, [sourceProducts, searchQuery, selectedCategory, marginFilter, stockAgeFilter, stockCardFilter, sortField, sortDirection, supplierTodMap]);
+  }, [productsScopedByDate, searchQuery, selectedCategory, marginFilter, stockAgeFilter, stockCardFilter, sortField, sortDirection, supplierTodMap]);
 
   const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE));
   const paginatedProducts = filteredProducts.slice(
@@ -423,7 +461,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, selectedCategory, marginFilter, stockAgeFilter, stockCardFilter, sortField, sortDirection]);
+  }, [searchQuery, selectedCategory, marginFilter, stockAgeFilter, stockCardFilter, sortField, sortDirection, productDateFrom, productDateTo, productDateMode]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -683,6 +721,51 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
 
       {/* Product Table */}
       <Card padding="none" data-product-table>
+        {/* Περίοδος ημερομηνίας (εισαγόμενα προϊόντα) */}
+        {!usingProcurement && (
+          <div className="px-4 pt-4 pb-3 border-b border-[#E5E5E5] flex flex-wrap items-end gap-3 bg-[#FAFAFA]/60">
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">Βάση ημερομηνίας</span>
+              <select
+                value={productDateMode}
+                onChange={(e) => setProductDateMode(e.target.value as 'imported' | 'first_available')}
+                className="min-w-[200px] rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-sm text-[#374151] focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]"
+                aria-label="Βάση ημερομηνίας για φίλτρο"
+              >
+                <option value="imported">Ημερομηνία εισαγωγής</option>
+                <option value="first_available">Πρώτη διαθεσιμότητα (SKU)</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">Περίοδος</span>
+              <DateRangePicker
+                from={productDateFrom}
+                to={productDateTo}
+                onChange={(f, t) => {
+                  setProductDateFrom(f);
+                  setProductDateTo(t);
+                }}
+                onClear={() => {
+                  setProductDateFrom('');
+                  setProductDateTo('');
+                }}
+              />
+            </div>
+            {productDateFrom && productDateTo && (
+              <p className="text-xs text-[#78716C] max-w-md pb-1">
+                Εμφανίζονται SKU με {productDateMode === 'imported' ? 'ημερομηνία εισαγωγής' : 'πρώτη διαθεσιμότητα'} εντός της περιόδου. Προϊόντα χωρίς ημερομηνία αποκλείονται.
+              </p>
+            )}
+          </div>
+        )}
+        {usingProcurement && (
+          <div className="px-4 pt-3 pb-2 border-b border-[#E5E5E5] flex items-start gap-2 text-xs text-[#78716C] bg-amber-50/40">
+            <Info size={14} className="mt-0.5 shrink-0 text-amber-700" aria-hidden />
+            <span>
+              Προβολή ERP: η επιλογή περιόδου ημερομηνίας ισχύει για <strong className="font-medium text-[#57534E]">εισαγόμενα</strong> προϊόντα. Στο Enterprise εμφανίζονται τα δεδομένα procurement χωρίς φίλτρο ημερομηνίας.
+            </span>
+          </div>
+        )}
         {/* Filters */}
         <div className="p-4 border-b border-[#E5E5E5] flex flex-wrap gap-4 items-center">
           {/* Search */}
