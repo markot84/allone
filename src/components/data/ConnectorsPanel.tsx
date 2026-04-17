@@ -639,7 +639,10 @@ function MagentoCredentialsModal({
           </div>
 
           <p style={{ margin: 0, fontSize: '11px', color: '#9CA3AF', lineHeight: '1.5' }}>
-            Magento Admin → System → Integrations → Add New → Activate. Αντιγράψτε το Access Token. Χρειάζονται permissions: Sales, Catalog, και ρυθμίσεις e-shop (στο Magento admin: μενού «Stores»).
+            <strong style={{ color: '#6B7280' }}>Σημαντικό:</strong> στο βήμα «Add New Integration», τα πεδία{' '}
+            <strong>Callback URL</strong> και <strong>Identity Link URL</strong> πρέπει να μείνουν{' '}
+            <strong>κενά</strong> — αλλιώς το Magento ανοίγει OAuth (Reauthorize) και το token δεν λειτουργεί με το Performance+.
+            Μετά: Save → Activate → στο popup με τα 4 keys αντιγράψτε μόνο το <strong>Access Token</strong>. Permissions: Sales, Catalog, Stores (ρυθμίσεις e-shop).
           </p>
 
           {error && (
