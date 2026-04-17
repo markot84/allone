@@ -639,10 +639,11 @@ function MagentoCredentialsModal({
           </div>
 
           <p style={{ margin: 0, fontSize: '11px', color: '#9CA3AF', lineHeight: '1.5' }}>
-            <strong style={{ color: '#6B7280' }}>Σημαντικό:</strong> στο βήμα «Add New Integration», τα πεδία{' '}
-            <strong>Callback URL</strong> και <strong>Identity Link URL</strong> πρέπει να μείνουν{' '}
-            <strong>κενά</strong> — αλλιώς το Magento ανοίγει OAuth (Reauthorize) και το token δεν λειτουργεί με το Performance+.
-            Μετά: Save → Activate → στο popup με τα 4 keys αντιγράψτε μόνο το <strong>Access Token</strong>. Permissions: Sales, Catalog, Stores (ρυθμίσεις e-shop).
+            <strong style={{ color: '#6B7280' }}>Magento:</strong> αν εμφανίζεται «Integration not secure», συνήθως τα πεδία{' '}
+            <strong>Callback URL</strong> / <strong>Identity Link URL</strong> είναι κενά — το Magento 2.4 το θεωρεί «μη ασφαλές».
+            Συμπληρώστε και τα δύο με το <strong>HTTPS base URL του e-shop</strong> (π.χ. https://www.toshop.gr/) και Save.
+            Το Performance+ χρησιμοποιεί μόνο το <strong>Access Token</strong> (Bearer) — όχι OAuth redirect. Μετά: Activate → αντιγράψτε το Access Token από τα 4 keys.
+            Permissions: Sales, Catalog, Stores.
           </p>
 
           {error && (
