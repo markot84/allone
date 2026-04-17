@@ -25,6 +25,109 @@ function getDb(): Firestore {
   return _db ?? (admin.firestore() as unknown as Firestore);
 }
 
+/** BOM / whitespace από copy-paste */
+function normalizeMagentoToken(raw: string): string {
+  return raw.replace(/^\uFEFF/, '').trim();
+}
+
+/** Βάσεις URL: canonical + εναλλακτικό www / non-www (πολλά shops redirect και χάνεται auth) */
+function getCandidateStoreBases(normalizedStoreUrl: string): string[] {
+  const base = normalizedStoreUrl.replace(/\/+$/, '');
+  const out = new Set<string>([base]);
+  try {
+    const u = new URL(base);
+    const host = u.hostname;
+    if (host.startsWith('www.')) {
+      const alt = new URL(base);
+      alt.hostname = host.slice(4);
+      out.add(alt.toString().replace(/\/+$/, ''));
+    } else {
+      const alt = new URL(base);
+      alt.hostname = 'www.' + host;
+      out.add(alt.toString().replace(/\/+$/, ''));
+    }
+  } catch {
+    /* ignore */
+  }
+  return [...out];
+}
+
+const MAGENTO_UA = 'PerformancePlus-MagentoConnector/1.0';
+
+type ProbeFail = { lastStatus: number; lastBody: string; lastUrl: string };
+
+/**
+ * Δοκιμάζει όλους τους συνήθεις τρόπους πρόσβασης στο REST API.
+ * Σημαντικό: μερικά Magento χωρίς rewrite θέλουν /index.php/rest/...
+ */
+async function probeMagentoStoreConfigs(
+  normalizedStoreUrl: string,
+  accessToken: string
+): Promise<
+  | { ok: true; restApiBase: string; configs: unknown[] }
+  | { ok: false; fail: ProbeFail }
+> {
+  const token = normalizeMagentoToken(accessToken);
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${token}`,
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+    'User-Agent': MAGENTO_UA,
+  };
+
+  let lastFail: ProbeFail = { lastStatus: 0, lastBody: '', lastUrl: '' };
+
+  for (const base of getCandidateStoreBases(normalizedStoreUrl)) {
+    const paths = [`${base}/rest/V1/store/storeConfigs`, `${base}/index.php/rest/V1/store/storeConfigs`];
+    for (const url of paths) {
+      lastFail = { ...lastFail, lastUrl: url };
+      try {
+        const res = await fetch(url, { headers, redirect: 'follow' });
+        const text = await res.text();
+        lastFail = { lastStatus: res.status, lastBody: text, lastUrl: url };
+
+        if (!res.ok) {
+          logger.warn(`[Magento] probe ${res.status} ${url} → ${text.slice(0, 280)}`);
+          continue;
+        }
+
+        let configs: unknown;
+        try {
+          configs = JSON.parse(text);
+        } catch {
+          continue;
+        }
+        if (!Array.isArray(configs)) continue;
+
+        const restApiBase = url.includes('/index.php/rest/')
+          ? `${base.replace(/\/+$/, '')}/index.php`
+          : base.replace(/\/+$/, '');
+
+        return { ok: true, restApiBase, configs };
+      } catch (e) {
+        logger.warn(`[Magento] probe fetch error ${url}:`, e);
+      }
+    }
+  }
+
+  return { ok: false, fail: lastFail };
+}
+
+function formatMagentoProbeError(fail: ProbeFail): string {
+  const { lastStatus, lastBody, lastUrl } = fail;
+  if (lastStatus === 401) {
+    return (
+      'HTTP 401 — το Magento απέρριψε το Bearer token. Αν το Access Token είναι σωστό, συχνά φταίει ο server (Apache/nginx) που δεν περνάει το header Authorization στο PHP — ζητήστε από τον host: SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1 (ή ισοδύναμο). ' +
+      `Δοκιμή: ${lastUrl}`
+    );
+  }
+  if (lastStatus === 404) {
+    return 'Magento REST API δεν βρέθηκε (404). Δοκιμάστε άλλο e-shop URL ή ενεργοποιήστε τα Magento web APIs.';
+  }
+  const snippet = lastBody.replace(/\s+/g, ' ').slice(0, 160);
+  return `Σύνδεση απέτυχε (HTTP ${lastStatus || '—'}): ${snippet || lastUrl}`;
+}
+
 /**
  * Validate Magento credentials and save them.
  */
@@ -34,7 +137,8 @@ export async function saveMagentoCredentials(
   accessToken: string
 ): Promise<{ success: boolean; shopName?: string; error?: string }> {
   const normalizedUrl = normalizeStoreUrl(storeUrl);
-  const testResult = await testMagentoConnection(normalizedUrl, accessToken);
+  const tokenPlain = normalizeMagentoToken(accessToken);
+  const testResult = await testMagentoConnection(normalizedUrl, tokenPlain);
 
   if (!testResult.success) {
     return { success: false, error: testResult.error };
@@ -45,9 +149,11 @@ export async function saveMagentoCredentials(
       magento: {
         connected: true,
         storeUrl: normalizedUrl,
+        /** Πρόθεμα για όλα τα REST calls — μπορεί να τελειώνει σε /index.php */
+        restApiBase: testResult.restApiBase || normalizedUrl,
         shopName: testResult.shopName || normalizedUrl,
         magentoVersion: testResult.version || '',
-        accessToken: encryptToken(accessToken),
+        accessToken: encryptToken(tokenPlain),
         connectedAt: FieldValue.serverTimestamp(),
       },
     },
@@ -60,37 +166,39 @@ export async function saveMagentoCredentials(
 
 /**
  * Test Magento REST API connection via store config endpoint.
+ * Δοκιμάζει πολλαπλά URL patterns (rewrite vs index.php, www vs bare host).
  */
 export async function testMagentoConnection(
   storeUrl: string,
   accessToken: string
-): Promise<{ success: boolean; shopName?: string; version?: string; error?: string }> {
-  const headers = {
-    Authorization: `Bearer ${accessToken}`,
-    'Content-Type': 'application/json',
-  };
-
+): Promise<{
+  success: boolean;
+  shopName?: string;
+  version?: string;
+  restApiBase?: string;
+  error?: string;
+}> {
   try {
-    const res = await fetch(`${storeUrl}/rest/V1/store/storeConfigs`, { headers });
-
-    if (!res.ok) {
-      if (res.status === 401) {
-        return { success: false, error: 'Invalid Access Token. Verify the token in System → Integrations.' };
-      }
-      if (res.status === 404) {
-        return { success: false, error: 'Magento REST API not found. Verify the e-shop URL.' };
-      }
-      const errText = await res.text();
-      return { success: false, error: `Connection failed (${res.status}): ${errText.slice(0, 200)}` };
+    const probe = await probeMagentoStoreConfigs(storeUrl, accessToken);
+    if (!probe.ok) {
+      return { success: false, error: formatMagentoProbeError(probe.fail) };
     }
 
-    const configs = await res.json();
-    const storeName = configs?.[0]?.base_url || configs?.[0]?.store_name || storeUrl;
+    const { configs, restApiBase } = probe;
+    const storeName = (configs[0] as { base_url?: string; store_name?: string })?.base_url
+      || (configs[0] as { store_name?: string })?.store_name
+      || storeUrl;
 
-    // Try to get Magento version from modules endpoint (non-critical)
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${normalizeMagentoToken(accessToken)}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      'User-Agent': MAGENTO_UA,
+    };
+
     let version = '';
     try {
-      const modRes = await fetch(`${storeUrl}/rest/V1/modules`, { headers });
+      const modRes = await fetch(`${restApiBase}/rest/V1/modules`, { headers });
       if (modRes.ok) {
         const modules = await modRes.json();
         if (Array.isArray(modules) && modules.includes('Magento_Store')) {
@@ -101,9 +209,10 @@ export async function testMagentoConnection(
       // non-critical
     }
 
-    logger.info(`[Magento] Connection test OK — store: ${storeName}`);
+    logger.info(`[Magento] Connection test OK — store: ${storeName}, restApiBase=${restApiBase}`);
     return {
       success: true,
+      restApiBase,
       shopName: String(storeName).replace(/^https?:\/\//, '').replace(/\/+$/, ''),
       version,
     };
@@ -135,12 +244,18 @@ export async function fetchMagentoData(brandId: string): Promise<{
     return { success: false, imported: 0, error: 'Magento not connected' };
   }
 
-  const { storeUrl } = connector;
+  const storeUrl = String(connector.storeUrl || '').replace(/\/+$/, '');
+  const restApiBase = String((connector as { restApiBase?: string }).restApiBase || storeUrl).replace(/\/+$/, '');
   const accessToken = decryptToken(connector.accessToken);
   if (!accessToken) {
     return { success: false, imported: 0, error: 'Magento token unavailable — reconnect required' };
   }
-  const headers = { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' };
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${accessToken}`,
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+    'User-Agent': MAGENTO_UA,
+  };
 
   let totalImported = 0;
 
@@ -166,7 +281,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
         'fields': 'items[entity_id,increment_id,created_at,updated_at,status,grand_total,subtotal,tax_amount,discount_amount,total_item_count,order_currency_code,items[sku,name,qty_ordered,price,product_id]],total_count',
       });
 
-      const res = await fetch(`${storeUrl}/rest/V1/orders?${searchParams}`, { headers });
+      const res = await fetch(`${restApiBase}/rest/V1/orders?${searchParams}`, { headers });
       if (!res.ok) {
         logger.error(`[Magento] Orders fetch failed (${res.status})`);
         break;
@@ -234,7 +349,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
         'fields': 'items[id,sku,name,type_id,status,price,weight,created_at,updated_at,extension_attributes[stock_item[qty,is_in_stock]],custom_attributes],total_count',
       });
 
-      const res = await fetch(`${storeUrl}/rest/V1/products?${searchParams}`, { headers });
+      const res = await fetch(`${restApiBase}/rest/V1/products?${searchParams}`, { headers });
       if (!res.ok) break;
 
       const body = await res.json();
