@@ -1,10 +1,14 @@
 {
-  "version": "0.495.0",
-  "previousVersion": "0.494.0",
-  "commitHash": "b3ef434",
+  "version": "0.497.0",
+  "previousVersion": "0.496.0",
+  "commitHash": "0950ce0",
   "branch": "main",
-  "buildDate": "2026-04-17T11:25:29.541Z",
+  "buildDate": "2026-04-17T13:43:42.441Z",
   "commits": [
+    {
+      "hash": "0950ce0",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "b3ef434",
       "message": "feat(products): date range filter on Product Intelligence (import vs first available)"
@@ -60,13 +64,10 @@
     {
       "hash": "66ae2ae",
       "message": "feat: price-benchmarks stock/sold + campaigns geo tab (GAds+Meta country breakdown)"
-    },
-    {
-      "hash": "41c200d",
-      "message": "feat: ignore demo products globally + suppliers column filters/sort"
     }
   ],
   "changes": [
+    "[Συντήρηση] Full deploy",
     "[Νέο χαρακτηριστικό] Date range filter on Product Intelligence (import vs first available)",
     "[Διόρθωση] Probe REST paths (index.php, www) + store restApiBase for sync",
     "[Τεκμηρίωση] Magento — HTTPS base URLs fix 'Integration not secure' (empty fields)",
@@ -75,7 +76,6 @@
     "[Νέο χαρακτηριστικό] Connector token encryption-at-rest (AES-256-GCM, dormant)",
     "[Νέο χαρακτηριστικό] App Check + rate limit + strict CORS + robots.txt",
     "[Νέο χαρακτηριστικό] Excel-style column filters + sort στον πίνακα Price Benchmarks",
-    "Ui(suppliers): keep header labels single-line (whitespace-nowrap + wider cols)",
-    "Ui(suppliers): move column filters into a clean top toolbar"
+    "Ui(suppliers): keep header labels single-line (whitespace-nowrap + wider cols)"
   ]
 }

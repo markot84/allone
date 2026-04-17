@@ -809,11 +809,11 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
 
     // ── Geographic breakdown (country-level) ──────────────────────────────────
     // Per-country aggregates per καμπάνια. Χρήσιμο για Campaigns → Τοποθεσία.
-    const geoByCampaign = new Map<string, Record<string, {
+    const geoByCampaign = new Map<string | number, Record<string, {
       impressions: number; clicks: number; conversions: number;
       conversion_value: number; amount_spent: number;
     }>>();
-    const geoCityByCampaign = new Map<string, Record<string, {
+    const geoCityByCampaign = new Map<string | number, Record<string, {
       impressions: number; clicks: number; conversions: number;
       conversion_value: number; amount_spent: number;
     }>>();
@@ -912,7 +912,16 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
       logger.info(`[GoogleAds] Fetched geo breakdown for ${geoByCampaign.size} campaigns`);
 
       // Βήμα 3: user_location_view — πόλεις (και παρόμοια επίπεδα) ανά καμπάνια.
-      const cityTypes = new Set(['CITY', 'MUNICIPALITY']);
+      // Το API μπορεί να επιστρέφει target_type ως string (CITY) ή ως enum αριθμό (π.χ. 4 = CITY).
+      const cityTypes = new Set(['CITY', 'MUNICIPALITY', 'POSTAL_CODE', 'NEIGHBORHOOD']);
+      const cityTypeNums = new Set([4, 5, 6, 7, 8]); // CITY, POSTAL_CODE, κ.λπ. ανά έκδοση API
+      const isCityTarget = (raw: unknown): boolean => {
+        if (raw == null || raw === '') return false;
+        if (typeof raw === 'number' && Number.isFinite(raw)) return cityTypeNums.has(raw);
+        const n = parseInt(String(raw), 10);
+        if (String(raw) === String(n) && !Number.isNaN(n)) return cityTypeNums.has(n);
+        return cityTypes.has(String(raw).toUpperCase());
+      };
       const cityQuery = `
         SELECT
           campaign.id,
@@ -945,8 +954,7 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
           for (const row of page.results || []) {
             const campaignId = row.campaign?.id;
             const gtc = row.geoTargetConstant;
-            const tt = String(gtc?.targetType || '').toUpperCase();
-            if (!campaignId || !gtc?.name || !cityTypes.has(tt)) continue;
+            if (!campaignId || !gtc?.name || !isCityTarget(gtc?.targetType)) continue;
             const cc = String(gtc.countryCode || '').trim().toUpperCase() || '??';
             const cityName = String(gtc.name || '').trim();
             if (!cityName) continue;
@@ -999,8 +1007,17 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
 
       campaign.conversionActions = convActionMap.get(campaign.id) || {};
 
-      const geoForCamp = geoByCampaign.get(campaign.id);
-      const geoCityForCamp = geoCityByCampaign.get(campaign.id);
+      // Τα geo maps κρατούν κλειδί το Google Ads campaign.id (αριθμός API), όχι το Firestore doc id (gads_...).
+      const gadsNumericKey = String(campaign.id).startsWith('gads_')
+        ? String(campaign.id).split('_').pop()!
+        : String(campaign.id);
+      const numKey = Number(gadsNumericKey);
+      const geoForCamp =
+        geoByCampaign.get(gadsNumericKey) ??
+        (Number.isFinite(numKey) ? geoByCampaign.get(numKey) : undefined);
+      const geoCityForCamp =
+        geoCityByCampaign.get(gadsNumericKey) ??
+        (Number.isFinite(numKey) ? geoCityByCampaign.get(numKey) : undefined);
       if (geoForCamp || geoCityForCamp) {
         const geoOut: { byCountry?: Record<string, Record<string, number>>; byCity?: Record<string, Record<string, number>> } = {};
         if (geoForCamp) {
