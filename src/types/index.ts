@@ -449,11 +449,19 @@ export interface Campaign {
    */
   metaWindows?: Record<string, { conversions: number; value: number }>;
   /**
-   * Γεωγραφική κατανομή αποδόσεων ανά χώρα (ISO-2 code ή όνομα).
-   * Γεμίζει από Google Ads (geographic_view) & Meta (breakdowns=country).
+   * Γεωγραφική κατανομή: ανά χώρα και (προαιρετικά) ανά πόλη/περιοχή.
+   * byCountry: Google geographic_view · Meta breakdowns=country.
+   * byCity: κλειδιά `CC|Όνομα` — Google user_location_view (πόλεις) · Meta country+region (περιοχή, όχι πάντα πόλη).
    */
   geo?: {
     byCountry: Record<string, {
+      impressions: number;
+      clicks: number;
+      conversions: number;
+      conversion_value: number;
+      amount_spent: number;
+    }>;
+    byCity?: Record<string, {
       impressions: number;
       clicks: number;
       conversions: number;

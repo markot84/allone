@@ -1,10 +1,34 @@
 {
-  "version": "0.484.0",
-  "previousVersion": "0.483.0",
-  "commitHash": "15b68af",
+  "version": "0.495.0",
+  "previousVersion": "0.494.0",
+  "commitHash": "b3ef434",
   "branch": "main",
-  "buildDate": "2026-04-17T05:50:37.984Z",
+  "buildDate": "2026-04-17T11:25:29.541Z",
   "commits": [
+    {
+      "hash": "b3ef434",
+      "message": "feat(products): date range filter on Product Intelligence (import vs first available)"
+    },
+    {
+      "hash": "c0053af",
+      "message": "fix(magento): probe REST paths (index.php, www) + store restApiBase for sync"
+    },
+    {
+      "hash": "dbf42f4",
+      "message": "docs(ui): Magento — HTTPS base URLs fix 'Integration not secure' (empty fields)"
+    },
+    {
+      "hash": "d87a2b1",
+      "message": "docs(ui): Magento modal — empty Callback/Identity URLs for token-only flow"
+    },
+    {
+      "hash": "39fed51",
+      "message": "feat(security): activate connector token encryption (CONNECTOR_TOKEN_KEY wired)"
+    },
+    {
+      "hash": "457f3c6",
+      "message": "feat(security): connector token encryption-at-rest (AES-256-GCM, dormant)"
+    },
     {
       "hash": "15b68af",
       "message": "feat(security): App Check + rate limit + strict CORS + robots.txt"
@@ -40,41 +64,18 @@
     {
       "hash": "41c200d",
       "message": "feat: ignore demo products globally + suppliers column filters/sort"
-    },
-    {
-      "hash": "06ba29f",
-      "message": "chore: full deploy"
-    },
-    {
-      "hash": "29c6aa0",
-      "message": "chore: full deploy"
-    },
-    {
-      "hash": "92b5626",
-      "message": "chore: full deploy"
-    },
-    {
-      "hash": "25292a5",
-      "message": "chore: full deploy"
-    },
-    {
-      "hash": "87f8526",
-      "message": "chore: full deploy"
-    },
-    {
-      "hash": "9f45577",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [
+    "[Νέο χαρακτηριστικό] Date range filter on Product Intelligence (import vs first available)",
+    "[Διόρθωση] Probe REST paths (index.php, www) + store restApiBase for sync",
+    "[Τεκμηρίωση] Magento — HTTPS base URLs fix 'Integration not secure' (empty fields)",
+    "[Τεκμηρίωση] Magento modal — empty Callback/Identity URLs for token-only flow",
+    "[Νέο χαρακτηριστικό] Activate connector token encryption (CONNECTOR_TOKEN_KEY wired)",
+    "[Νέο χαρακτηριστικό] Connector token encryption-at-rest (AES-256-GCM, dormant)",
     "[Νέο χαρακτηριστικό] App Check + rate limit + strict CORS + robots.txt",
     "[Νέο χαρακτηριστικό] Excel-style column filters + sort στον πίνακα Price Benchmarks",
     "Ui(suppliers): keep header labels single-line (whitespace-nowrap + wider cols)",
-    "Ui(suppliers): move column filters into a clean top toolbar",
-    "[Συντήρηση] Remove 'Με benchmark αγοράς' KPI card",
-    "[Διόρθωση] Populate stock/sold from ecommerce skuStats + GMC productId parse",
-    "[Νέο χαρακτηριστικό] Price-benchmarks stock/sold + campaigns geo tab (GAds+Meta country breakdown)",
-    "[Νέο χαρακτηριστικό] Ignore demo products globally + suppliers column filters/sort",
-    "[Συντήρηση] Full deploy"
+    "Ui(suppliers): move column filters into a clean top toolbar"
   ]
 }

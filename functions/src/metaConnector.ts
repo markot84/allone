@@ -176,14 +176,27 @@ function sanitizeCampaignForFirestore(c: Record<string, any>): void {
   }
 
   const geo = c.geo;
-  if (geo && typeof geo === 'object' && geo.byCountry && typeof geo.byCountry === 'object') {
-    for (const v of Object.values(geo.byCountry) as Record<string, unknown>[]) {
-      if (v && typeof v === 'object') {
-        (v as any).impressions = fin((v as any).impressions);
-        (v as any).clicks = fin((v as any).clicks);
-        (v as any).conversions = fin((v as any).conversions);
-        (v as any).conversion_value = fin((v as any).conversion_value);
-        (v as any).amount_spent = fin((v as any).amount_spent);
+  if (geo && typeof geo === 'object') {
+    if (geo.byCountry && typeof geo.byCountry === 'object') {
+      for (const v of Object.values(geo.byCountry) as Record<string, unknown>[]) {
+        if (v && typeof v === 'object') {
+          (v as any).impressions = fin((v as any).impressions);
+          (v as any).clicks = fin((v as any).clicks);
+          (v as any).conversions = fin((v as any).conversions);
+          (v as any).conversion_value = fin((v as any).conversion_value);
+          (v as any).amount_spent = fin((v as any).amount_spent);
+        }
+      }
+    }
+    if (geo.byCity && typeof geo.byCity === 'object') {
+      for (const v of Object.values(geo.byCity) as Record<string, unknown>[]) {
+        if (v && typeof v === 'object') {
+          (v as any).impressions = fin((v as any).impressions);
+          (v as any).clicks = fin((v as any).clicks);
+          (v as any).conversions = fin((v as any).conversions);
+          (v as any).conversion_value = fin((v as any).conversion_value);
+          (v as any).amount_spent = fin((v as any).amount_spent);
+        }
       }
     }
   }
@@ -580,6 +593,75 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
         logger.warn(`[Meta] Geo breakdown call failed: ${e}`);
       }
 
+      // ── Geographic sub-country: country + region (Meta naming: «region» ≈ περιοχή, όχι πάντα πόλη) ──
+      const geoCityByCampaign = new Map<string, Record<string, {
+        impressions: number; clicks: number; conversions: number;
+        conversion_value: number; amount_spent: number;
+      }>>();
+      try {
+        for (const w of syncWindows) {
+          const regParams = new URLSearchParams({
+            fields: ['campaign_id', 'impressions', 'clicks', 'spend', 'actions', 'action_values'].join(','),
+            time_range: JSON.stringify({ since: w.since, until: w.until }),
+            level: 'campaign',
+            breakdowns: 'country,region',
+            limit: '500',
+            action_attribution_windows: attribWindowsParam,
+            access_token: accessToken,
+          });
+          let regUrl: string | null = `${META_GRAPH_URL}/${actAccountId}/insights?${regParams}`;
+          let regPages = 0;
+          while (regUrl && regPages < 100) {
+            const regRes: Response = await fetch(regUrl);
+            if (!regRes.ok) {
+              logger.warn(`[Meta] Geo country+region breakdown failed (${w.tag}) for ${actAccountId}: ${await regRes.text()}`);
+              break;
+            }
+            const regData: any = await regRes.json();
+            for (const row of (regData.data || [])) {
+              const cid = String(row.campaign_id || '');
+              const country = String(row.country || '').trim().toUpperCase();
+              const region = String(row.region || '').trim();
+              if (!cid || !country || !region) continue;
+              const locKey = `${country}|${region}`;
+              const imp = parseInt(row.impressions || '0', 10);
+              const clk = parseInt(row.clicks || '0', 10);
+              const spd = parseFloat(row.spend || '0');
+              let convs = 0;
+              let convVal = 0;
+              const actions = row.actions || [];
+              const av = row.action_values || [];
+              for (const t of ['offsite_conversion.fb_pixel_purchase', 'purchase']) {
+                const a = actions.find((x: any) => x.action_type === t);
+                if (!a) continue;
+                const cv = parseFloat(a.value || '0');
+                if (cv <= 0) continue;
+                const v = av.find((x: any) => x.action_type === t);
+                convs = cv;
+                convVal = parseFloat(v?.value || '0');
+                break;
+              }
+              const perCampaign = geoCityByCampaign.get(cid) || {};
+              const entry = perCampaign[locKey] || {
+                impressions: 0, clicks: 0, conversions: 0, conversion_value: 0, amount_spent: 0,
+              };
+              entry.impressions += imp;
+              entry.clicks += clk;
+              entry.conversions += convs;
+              entry.conversion_value += convVal;
+              entry.amount_spent += spd;
+              perCampaign[locKey] = entry;
+              geoCityByCampaign.set(cid, perCampaign);
+            }
+            regUrl = regData.paging?.next || null;
+            regPages++;
+          }
+        }
+        logger.info(`[Meta] Country+region geo aggregated for ${geoCityByCampaign.size} campaigns`);
+      } catch (e) {
+        logger.warn(`[Meta] Geo country+region breakdown failed: ${e}`);
+      }
+
       // Fetch campaign statuses (effective_status) from the Campaigns API
       const campaignStatusMap = new Map<string, string>();
       const campaignNameMap = new Map<string, string>();
@@ -831,6 +913,8 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
       for (const c of allCampaigns) {
         const short = String(c.id).startsWith('meta_') ? String(c.id).split('_').pop() : String(c.id);
         const g = geoByCampaign.get(short || '');
+        const gc = geoCityByCampaign.get(short || '');
+        const geoPayload: { byCountry?: Record<string, Record<string, number>>; byCity?: Record<string, Record<string, number>> } = {};
         if (g) {
           const rounded: Record<string, Record<string, number>> = {};
           for (const [country, m] of Object.entries(g)) {
@@ -842,8 +926,22 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
               amount_spent: Math.round(m.amount_spent * 100) / 100,
             };
           }
-          (c as any).geo = { byCountry: rounded };
+          geoPayload.byCountry = rounded;
         }
+        if (gc) {
+          const roundedCity: Record<string, Record<string, number>> = {};
+          for (const [loc, m] of Object.entries(gc)) {
+            roundedCity[loc] = {
+              impressions: Math.round(m.impressions),
+              clicks: Math.round(m.clicks),
+              conversions: Math.round(m.conversions * 100) / 100,
+              conversion_value: Math.round(m.conversion_value * 100) / 100,
+              amount_spent: Math.round(m.amount_spent * 100) / 100,
+            };
+          }
+          geoPayload.byCity = roundedCity;
+        }
+        if (Object.keys(geoPayload).length > 0) (c as any).geo = geoPayload;
       }
 
       // Purchase/Sales (Meta): primary Purchase row — same idea as Google PURCHASE category

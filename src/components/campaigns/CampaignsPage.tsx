@@ -803,7 +803,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
               {tab === 'campaigns' ? `Campaigns (${summaryStats.total})` :
                tab === 'search_terms' ? `Search Terms ${hasSearchData ? `(${searchTerms.length})` : ''}` :
                tab === 'keywords' ? `Keywords ${hasSearchData ? `(${keywords.length})` : ''}` :
-               'Γεωγραφικά'}
+               'Τοποθεσία'}
             </button>
           ))}
         </div>

@@ -57,7 +57,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   { id: 'roi', label: 'ROI & Performance', b2bLabel: 'Revenue & ROI', b2bStatus: 'optional', b2cStatus: 'core' },
   { id: 'ecommerce', label: 'E-commerce', b2bStatus: 'hidden', b2cStatus: 'core' },
   { id: 'rfm', label: 'Data Analysis', b2bStatus: 'hidden', b2cStatus: 'core' },
-  { id: 'products', label: 'Products & Inventory', b2bLabel: 'Inventory & Materials', b2bStatus: 'core', b2cStatus: 'core' },
+  { id: 'products', label: 'Product Intelligence', b2bLabel: 'Product Intelligence', b2bStatus: 'core', b2cStatus: 'core' },
   { id: 'suppliers', label: 'Suppliers', b2bLabel: 'Supplier Management', b2bStatus: 'core', b2cStatus: 'optional' },
   { id: 'procurement', label: 'Procurement', b2bLabel: 'Procurement', b2bStatus: 'core', b2cStatus: 'optional', planFeature: 'procurement' },
   { id: 'channels', label: 'Channel Activation', b2bLabel: 'Sales Activation', b2bStatus: 'core', b2cStatus: 'core' },

@@ -808,8 +808,12 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
     }
 
     // ── Geographic breakdown (country-level) ──────────────────────────────────
-    // Per-country aggregates per καμπάνια. Χρήσιμο για Campaigns → Γεωγραφικά.
+    // Per-country aggregates per καμπάνια. Χρήσιμο για Campaigns → Τοποθεσία.
     const geoByCampaign = new Map<string, Record<string, {
+      impressions: number; clicks: number; conversions: number;
+      conversion_value: number; amount_spent: number;
+    }>>();
+    const geoCityByCampaign = new Map<string, Record<string, {
       impressions: number; clicks: number; conversions: number;
       conversion_value: number; amount_spent: number;
     }>>();
@@ -906,6 +910,72 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
         }
       } while (geoNext);
       logger.info(`[GoogleAds] Fetched geo breakdown for ${geoByCampaign.size} campaigns`);
+
+      // Βήμα 3: user_location_view — πόλεις (και παρόμοια επίπεδα) ανά καμπάνια.
+      const cityTypes = new Set(['CITY', 'MUNICIPALITY']);
+      const cityQuery = `
+        SELECT
+          campaign.id,
+          geo_target_constant.country_code,
+          geo_target_constant.name,
+          geo_target_constant.target_type,
+          metrics.impressions,
+          metrics.clicks,
+          metrics.conversions,
+          metrics.conversions_value,
+          metrics.cost_micros
+        FROM user_location_view
+        WHERE segments.date BETWEEN '${sinceStr}' AND '${untilStr}'
+      `;
+      let cityNext: string | undefined;
+      try {
+        do {
+          const body: Record<string, unknown> = { query: cityQuery };
+          if (cityNext) body.pageToken = cityNext;
+          const res = await fetch(
+            `${GOOGLE_ADS_BASE_URL}/customers/${customerId}/googleAds:search`,
+            { method: 'POST', headers, body: JSON.stringify(body) }
+          );
+          if (!res.ok) {
+            logger.warn(`[GoogleAds] user_location_view query failed (${res.status}): ${await res.text()}`);
+            break;
+          }
+          const page = await res.json();
+          cityNext = page.nextPageToken;
+          for (const row of page.results || []) {
+            const campaignId = row.campaign?.id;
+            const gtc = row.geoTargetConstant;
+            const tt = String(gtc?.targetType || '').toUpperCase();
+            if (!campaignId || !gtc?.name || !cityTypes.has(tt)) continue;
+            const cc = String(gtc.countryCode || '').trim().toUpperCase() || '??';
+            const cityName = String(gtc.name || '').trim();
+            if (!cityName) continue;
+            const key = `${cc}|${cityName}`;
+
+            const m = row.metrics || {};
+            const impressions = Number(m.impressions) || 0;
+            const clicks = Number(m.clicks) || 0;
+            const conversions = Number(m.conversions) || 0;
+            const conversion_value = Number(m.conversionsValue) || 0;
+            const amount_spent = (Number(m.costMicros) || 0) / 1_000_000;
+
+            const perCampaign = geoCityByCampaign.get(campaignId) || {};
+            const entry = perCampaign[key] || {
+              impressions: 0, clicks: 0, conversions: 0, conversion_value: 0, amount_spent: 0,
+            };
+            entry.impressions += impressions;
+            entry.clicks += clicks;
+            entry.conversions += conversions;
+            entry.conversion_value += conversion_value;
+            entry.amount_spent += amount_spent;
+            perCampaign[key] = entry;
+            geoCityByCampaign.set(campaignId, perCampaign);
+          }
+        } while (cityNext);
+        logger.info(`[GoogleAds] Fetched city-level geo for ${geoCityByCampaign.size} campaigns`);
+      } catch (cityErr) {
+        logger.warn(`[GoogleAds] user_location_view query error, skipping:`, cityErr);
+      }
     } catch (geoErr) {
       logger.warn(`[GoogleAds] geographic_view query error, skipping:`, geoErr);
     }
@@ -930,19 +1000,36 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
       campaign.conversionActions = convActionMap.get(campaign.id) || {};
 
       const geoForCamp = geoByCampaign.get(campaign.id);
-      if (geoForCamp) {
-        // Στρογγυλοποίηση τιμών για να μένουν μικρά τα docs.
-        const rounded: Record<string, Record<string, number>> = {};
-        for (const [country, m] of Object.entries(geoForCamp)) {
-          rounded[country] = {
-            impressions: Math.round(m.impressions),
-            clicks: Math.round(m.clicks),
-            conversions: Math.round(m.conversions * 100) / 100,
-            conversion_value: Math.round(m.conversion_value * 100) / 100,
-            amount_spent: Math.round(m.amount_spent * 100) / 100,
-          };
+      const geoCityForCamp = geoCityByCampaign.get(campaign.id);
+      if (geoForCamp || geoCityForCamp) {
+        const geoOut: { byCountry?: Record<string, Record<string, number>>; byCity?: Record<string, Record<string, number>> } = {};
+        if (geoForCamp) {
+          const rounded: Record<string, Record<string, number>> = {};
+          for (const [country, m] of Object.entries(geoForCamp)) {
+            rounded[country] = {
+              impressions: Math.round(m.impressions),
+              clicks: Math.round(m.clicks),
+              conversions: Math.round(m.conversions * 100) / 100,
+              conversion_value: Math.round(m.conversion_value * 100) / 100,
+              amount_spent: Math.round(m.amount_spent * 100) / 100,
+            };
+          }
+          geoOut.byCountry = rounded;
         }
-        campaign.geo = { byCountry: rounded };
+        if (geoCityForCamp) {
+          const roundedCity: Record<string, Record<string, number>> = {};
+          for (const [loc, m] of Object.entries(geoCityForCamp)) {
+            roundedCity[loc] = {
+              impressions: Math.round(m.impressions),
+              clicks: Math.round(m.clicks),
+              conversions: Math.round(m.conversions * 100) / 100,
+              conversion_value: Math.round(m.conversion_value * 100) / 100,
+              amount_spent: Math.round(m.amount_spent * 100) / 100,
+            };
+          }
+          geoOut.byCity = roundedCity;
+        }
+        campaign.geo = geoOut as typeof campaign.geo;
       }
 
       campaign.createdAt = FieldValue.serverTimestamp();
