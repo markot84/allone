@@ -132,6 +132,16 @@ export function useEcommerceSummary() {
   const skuStats = useMemo(() => parseSkuStats(data), [data]);
   const skuMovement = useMemo(() => parseSkuMovement(data), [data]);
 
+  // Per-day order counts — full aggregate (NOT capped όπως το recentOrders).
+  // Χρειάζεται για date-range KPIs χωρίς το 50-row cap του recentOrders.
+  const ordersByDay = useMemo(() => {
+    if (!data?.ordersByDay) return [];
+    return Object.entries(data.ordersByDay)
+      .filter(([d]) => d !== 'unknown')
+      .map(([date, orders]) => ({ date, orders: Number(orders) || 0 }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }, [data]);
+
   return {
     totalRevenue: data?.totalRevenue ?? 0,
     orderCount: data?.orderCount ?? 0,
@@ -141,6 +151,7 @@ export function useEcommerceSummary() {
     platformBreakdown,
     topProducts: data?.topProducts ?? [],
     recentOrders: data?.recentOrders ?? [],
+    ordersByDay,
     connectedPlatforms: data?.connectedPlatforms ?? [],
     skuStats,
     skuMovement,

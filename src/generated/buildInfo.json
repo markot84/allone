@@ -1,10 +1,14 @@
 {
-  "version": "0.560.0",
-  "previousVersion": "0.559.0",
-  "commitHash": "7232184",
+  "version": "0.561.0",
+  "previousVersion": "0.560.0",
+  "commitHash": "612f2bb",
   "branch": "cursor/sales-opt-foundation-and-stock-movement",
-  "buildDate": "2026-04-18T20:15:47.741Z",
+  "buildDate": "2026-04-18T20:30:30.232Z",
   "commits": [
+    {
+      "hash": "612f2bb",
+      "message": "UX: redesign TriageCard for merchant clarity"
+    },
     {
       "hash": "7232184",
       "message": "Sprint 2 Phase 3+4: triage origin persistence + AI context wiring"
@@ -60,13 +64,10 @@
     {
       "hash": "d87a2b1",
       "message": "docs(ui): Magento modal — empty Callback/Identity URLs for token-only flow"
-    },
-    {
-      "hash": "39fed51",
-      "message": "feat(security): activate connector token encryption (CONNECTOR_TOKEN_KEY wired)"
     }
   ],
   "changes": [
+    "UX: redesign TriageCard for merchant clarity",
     "Sprint 2 Phase 3+4: triage origin persistence + AI context wiring",
     "[Νέο χαρακτηριστικό] Universal data layer + decision buckets triage",
     "[Νέο χαρακτηριστικό] Sales opt foundation + universal stock movement",
@@ -75,7 +76,6 @@
     "[Νέο χαρακτηριστικό] Strategy commerce tools, campaigns geo Mekko, and related updates",
     "[Νέο χαρακτηριστικό] Date range filter on Product Intelligence (import vs first available)",
     "[Διόρθωση] Probe REST paths (index.php, www) + store restApiBase for sync",
-    "[Τεκμηρίωση] Magento — HTTPS base URLs fix 'Integration not secure' (empty fields)",
-    "[Τεκμηρίωση] Magento modal — empty Callback/Identity URLs for token-only flow"
+    "[Τεκμηρίωση] Magento — HTTPS base URLs fix 'Integration not secure' (empty fields)"
   ]
 }
