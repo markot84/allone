@@ -1,10 +1,14 @@
 {
-  "version": "0.558.0",
-  "previousVersion": "0.557.0",
-  "commitHash": "98bcb5c",
+  "version": "0.560.0",
+  "previousVersion": "0.559.0",
+  "commitHash": "7232184",
   "branch": "cursor/sales-opt-foundation-and-stock-movement",
-  "buildDate": "2026-04-18T19:42:51.505Z",
+  "buildDate": "2026-04-18T20:15:47.741Z",
   "commits": [
+    {
+      "hash": "7232184",
+      "message": "Sprint 2 Phase 3+4: triage origin persistence + AI context wiring"
+    },
     {
       "hash": "98bcb5c",
       "message": "feat(strategy): universal data layer + decision buckets triage"
@@ -60,13 +64,10 @@
     {
       "hash": "39fed51",
       "message": "feat(security): activate connector token encryption (CONNECTOR_TOKEN_KEY wired)"
-    },
-    {
-      "hash": "457f3c6",
-      "message": "feat(security): connector token encryption-at-rest (AES-256-GCM, dormant)"
     }
   ],
   "changes": [
+    "Sprint 2 Phase 3+4: triage origin persistence + AI context wiring",
     "[Νέο χαρακτηριστικό] Universal data layer + decision buckets triage",
     "[Νέο χαρακτηριστικό] Sales opt foundation + universal stock movement",
     "[Συντήρηση] Full deploy",
@@ -75,7 +76,6 @@
     "[Νέο χαρακτηριστικό] Date range filter on Product Intelligence (import vs first available)",
     "[Διόρθωση] Probe REST paths (index.php, www) + store restApiBase for sync",
     "[Τεκμηρίωση] Magento — HTTPS base URLs fix 'Integration not secure' (empty fields)",
-    "[Τεκμηρίωση] Magento modal — empty Callback/Identity URLs for token-only flow",
-    "[Νέο χαρακτηριστικό] Activate connector token encryption (CONNECTOR_TOKEN_KEY wired)"
+    "[Τεκμηρίωση] Magento modal — empty Callback/Identity URLs for token-only flow"
   ]
 }

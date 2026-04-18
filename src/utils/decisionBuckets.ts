@@ -146,6 +146,54 @@ export const BUCKET_ORDER: BucketId[] = [
 ];
 
 /**
+ * Thematic groups για το UI — ομαδοποιούν τα 8 buckets σε νοηματικές
+ * κατηγορίες ώστε ο merchant να βλέπει το «τι κατάσταση είναι» πριν τη
+ * δράση. Σχεδιαστική επιλογή: Επείγον = χάνεις χρήμα/πωλήσεις τώρα,
+ * Ευκαιρίες = προς ανάπτυξη, Παρακολούθηση = γνωστό αλλά μη επείγον,
+ * Διερεύνηση = δεν ξέρουμε ακόμα.
+ */
+export type BucketGroupId = 'critical' | 'opportunity' | 'watch' | 'investigate';
+
+export interface BucketGroup {
+  id: BucketGroupId;
+  label: string;
+  subtitle: string;
+  buckets: BucketId[];
+  color: 'rose' | 'emerald' | 'amber' | 'slate';
+}
+
+export const BUCKET_GROUPS: BucketGroup[] = [
+  {
+    id: 'critical',
+    label: 'Επείγον — χάνεις χρήμα τώρα',
+    subtitle: 'SKUs που δεσμεύουν κεφάλαιο, αιμορραγούν περιθώριο ή κινδυνεύουν με stockout.',
+    buckets: ['dead_capital', 'stockout_risk', 'margin_bleeder'],
+    color: 'rose',
+  },
+  {
+    id: 'opportunity',
+    label: 'Ευκαιρίες — επιτάχυνε τώρα',
+    subtitle: 'Bestsellers προς scale-up και SKUs που χρειάζονται ανατροφοδοσία.',
+    buckets: ['hot_seller', 'replenish_now'],
+    color: 'emerald',
+  },
+  {
+    id: 'watch',
+    label: 'Παρακολούθηση',
+    subtitle: 'Αργές κινήσεις και υποψήφια κατάργησης — όχι επείγον αλλά να ληφθούν αποφάσεις.',
+    buckets: ['slow_mover', 'discontinue'],
+    color: 'amber',
+  },
+  {
+    id: 'investigate',
+    label: 'Προς διερεύνηση',
+    subtitle: 'SKUs χωρίς αρκετά δεδομένα για ταξινόμηση.',
+    buckets: ['new_or_unknown'],
+    color: 'slate',
+  },
+];
+
+/**
  * Tunable thresholds. Defaults βασισμένα σε εμπορικά benchmarks του domain
  * (B2C retail). Θα γίνουν per-brand overrides σε επόμενο sprint.
  */
@@ -181,6 +229,13 @@ export const DEFAULT_THRESHOLDS: BucketThresholds = {
   newSkuMaxAgeDays: 30,
 };
 
+/**
+ * Sub-categorization για το «Νέα / άγνωστο» bucket. Αναγκαίο γιατί το bucket
+ * πιάνει ΟΥΣΙΑΣΤΙΚΑ διαφορετικά cases (π.χ. ένα νέο SKU vs ένα gift card vs
+ * ένα παλιό SKU χωρίς integrations) και ο merchant πρέπει να ξεχωρίσει.
+ */
+export type UnknownReason = 'new_sku' | 'no_signals' | 'virtual_sku';
+
 export interface BucketAssignment {
   sku: string;
   productId: string;
@@ -191,6 +246,18 @@ export interface BucketAssignment {
   severity: number;
   /** Tied capital (€) — βασικό KPI για prioritization. */
   tiedCapital: number;
+  /** Επιπλέον context για το UI (rich SKU rows). */
+  meta: {
+    stock?: number;
+    qty30d?: number;
+    qty90d?: number;
+    daysOfCover?: number;
+    ageDays?: number;
+    marginPct?: number;
+    lastSaleAt?: string | null;
+    /** Συμπληρωματικός λόγος για new_or_unknown classification. */
+    unknownReason?: UnknownReason;
+  };
 }
 
 interface ClassifierContext {
@@ -318,13 +385,22 @@ function classifyOne(
   }
 
   // 8) New / Unknown — fallback όταν δεν έχουμε classification ή πολύ νέο SKU
+  let unknownReason: UnknownReason | undefined;
   if (buckets.length === 0) {
-    if (ageDays >= 0 && ageDays < t.newSkuMaxAgeDays) {
+    // Προτεραιότητα: virtual SKU (gift cards κλπ) → new → no signals
+    const isVirtual = (stock <= 0 && (cost === undefined || cost === 0));
+    if (isVirtual) {
       buckets.push('new_or_unknown');
-      reasons.new_or_unknown = `Νέο SKU (${ageDays} ημέρες).`;
+      unknownReason = 'virtual_sku';
+      reasons.new_or_unknown = 'Virtual SKU — χωρίς απόθεμα/κόστος (π.χ. gift card, υπηρεσία).';
+    } else if (ageDays >= 0 && ageDays < t.newSkuMaxAgeDays) {
+      buckets.push('new_or_unknown');
+      unknownReason = 'new_sku';
+      reasons.new_or_unknown = `Νέο SKU — μόλις ${ageDays} ${ageDays === 1 ? 'ημέρα' : 'ημέρες'} στον κατάλογο.`;
     } else if (!hasWindowSource && !signal?.hasProcurement) {
       buckets.push('new_or_unknown');
-      reasons.new_or_unknown = 'Δεν υπάρχουν αρκετά σήματα — χρειάζεται data.';
+      unknownReason = 'no_signals';
+      reasons.new_or_unknown = 'Λείπουν δεδομένα κίνησης — σύνδεσε e-shop ή ανέβασε procurement export.';
     }
   }
 
@@ -349,6 +425,16 @@ function classifyOne(
     reasons,
     severity,
     tiedCapital: tied,
+    meta: {
+      stock,
+      qty30d,
+      qty90d,
+      daysOfCover: dco,
+      ageDays,
+      marginPct: typeof margin === 'number' ? margin : undefined,
+      lastSaleAt: r?.last_sale_at ?? null,
+      ...(unknownReason ? { unknownReason } : {}),
+    },
   };
 }
 
