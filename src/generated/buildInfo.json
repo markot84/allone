@@ -1,10 +1,14 @@
 {
-  "version": "0.533.0",
-  "previousVersion": "0.532.0",
-  "commitHash": "7441058",
+  "version": "0.553.0",
+  "previousVersion": "0.552.0",
+  "commitHash": "9c39351",
   "branch": "main",
-  "buildDate": "2026-04-18T11:31:03.444Z",
+  "buildDate": "2026-04-18T17:19:07.136Z",
   "commits": [
+    {
+      "hash": "9c39351",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "7441058",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "2648fc3",
       "message": "feat(competitive): Excel-style column filters + sort στον πίνακα Price Benchmarks"
-    },
-    {
-      "hash": "7350fdf",
-      "message": "ui(suppliers): keep header labels single-line (whitespace-nowrap + wider cols)"
     }
   ],
   "changes": [

@@ -31,7 +31,7 @@ interface OrderRow {
   lineItems?: Array<{ sku?: string; title?: string; name?: string; quantity?: number; price?: number }>;
 }
 
-const ECOMMERCE_PROVIDERS = ['shopify', 'woocommerce', 'opencart', 'magento'] as const;
+export const ECOMMERCE_PROVIDERS = ['shopify', 'woocommerce', 'opencart', 'magento'] as const;
 
 /** Demo products (όνομα/SKU περιέχει "demo") εξαιρούνται από κάθε aggregate. */
 function isDemoLineItem(li: { sku?: string; title?: string; name?: string }): boolean {
@@ -78,7 +78,7 @@ const PRODUCT_COLLECTION_MAP: Record<string, string> = {
  * Reads product collections από κάθε platform και επιστρέφει map SKU → stock.
  * Χρησιμοποιείται για τον πίνακα Price Benchmarking (στήλη «Στοκ»).
  */
-async function readPlatformStockBySku(
+export async function readPlatformStockBySku(
   db: Firestore,
   brandId: string,
   platform: string
@@ -262,24 +262,71 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
       stockBySku.set(sku, (stockBySku.get(sku) || 0) + qty);
     }
   }
+  // Windowed sold per SKU (7d / 30d / 90d) + lastSaleAt
+  const now = Date.now();
+  const MS_DAY = 24 * 60 * 60 * 1000;
+  const cut7 = now - 7 * MS_DAY;
+  const cut30 = now - 30 * MS_DAY;
+  const cut90 = now - 90 * MS_DAY;
+
   const soldBySku = new Map<string, number>();
+  const sold7BySku = new Map<string, number>();
+  const sold30BySku = new Map<string, number>();
+  const sold90BySku = new Map<string, number>();
+  const lastSaleBySku = new Map<string, number>();
+
   for (const o of allOrders) {
+    const ts = o.createdAt ? new Date(o.createdAt).getTime() : NaN;
+    const inWindow7 = Number.isFinite(ts) && ts >= cut7;
+    const inWindow30 = Number.isFinite(ts) && ts >= cut30;
+    const inWindow90 = Number.isFinite(ts) && ts >= cut90;
+
     for (const li of o.lineItems || []) {
       if (isDemoLineItem(li)) continue;
       const sku = (li.sku || '').trim();
       if (!sku) continue;
-      soldBySku.set(sku, (soldBySku.get(sku) || 0) + (li.quantity || 0));
+      const qty = li.quantity || 0;
+      soldBySku.set(sku, (soldBySku.get(sku) || 0) + qty);
+      if (inWindow7) sold7BySku.set(sku, (sold7BySku.get(sku) || 0) + qty);
+      if (inWindow30) sold30BySku.set(sku, (sold30BySku.get(sku) || 0) + qty);
+      if (inWindow90) sold90BySku.set(sku, (sold90BySku.get(sku) || 0) + qty);
+      if (Number.isFinite(ts)) {
+        const prev = lastSaleBySku.get(sku) || 0;
+        if (ts > prev) lastSaleBySku.set(sku, ts);
+      }
     }
   }
-  const skuStats: Record<string, { stock: number; sold: number }> = {};
-  const allSkus = new Set<string>([...stockBySku.keys(), ...soldBySku.keys()]);
+
+  const skuStats: Record<string, {
+    stock: number;
+    sold: number;
+    sold7d: number;
+    sold30d: number;
+    sold90d: number;
+    lastSaleAt: string | null;
+  }> = {};
+  const allSkus = new Set<string>([
+    ...stockBySku.keys(),
+    ...soldBySku.keys(),
+    ...lastSaleBySku.keys(),
+  ]);
   for (const sku of allSkus) {
+    const lastTs = lastSaleBySku.get(sku);
     skuStats[sku] = {
       stock: Math.round(stockBySku.get(sku) || 0),
       sold: Math.round(soldBySku.get(sku) || 0),
+      sold7d: Math.round(sold7BySku.get(sku) || 0),
+      sold30d: Math.round(sold30BySku.get(sku) || 0),
+      sold90d: Math.round(sold90BySku.get(sku) || 0),
+      lastSaleAt: lastTs ? new Date(lastTs).toISOString() : null,
     };
   }
-  logger.info(`[EcommerceAgg] skuStats populated: ${allSkus.size} SKUs for brand ${brandId}`);
+  // Αποθήκευση ως serialized JSON για να ΜΗΝ indexed κάθε subfield
+  // (απέφυγε Firestore "too many index entries" όριο των 40k για μεγάλα catalogs).
+  const skuStatsJson = JSON.stringify(skuStats);
+  logger.info(
+    `[EcommerceAgg] skuStats populated: ${allSkus.size} SKUs for brand ${brandId} (windowed, ${(skuStatsJson.length / 1024).toFixed(1)}KB)`
+  );
 
   // Orders by day (count)
   const ordersByDay: Record<string, number> = {};
@@ -313,11 +360,20 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
     ordersByDay,
     recentOrders,
     connectedPlatforms,
-    skuStats,
+    // skuStats serialized — αποφυγή Firestore index limits για μεγάλα catalogs.
+    skuStatsJson,
+    skuStatsCount: allSkus.size,
     syncedAt: FieldValue.serverTimestamp(),
   };
 
-  await db.doc(`ecommerce_summary/${brandId}`).set(summary);
+  const ref = db.doc(`ecommerce_summary/${brandId}`);
+  await ref.set(summary);
+  // Καθάρισμα παλιού indexed map field (μη fatal αν δεν υπάρχει).
+  try {
+    await ref.update({ skuStats: FieldValue.delete() });
+  } catch {
+    // ignore
+  }
   logger.info(
     `[EcommerceAgg] Summary for ${brandId}: ${orderCount} orders, €${totalRevenue.toFixed(2)} revenue, ${connectedPlatforms.length} platforms`
   );

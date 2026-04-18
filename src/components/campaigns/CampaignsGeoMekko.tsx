@@ -148,11 +148,11 @@ function ChartTooltip({
 }
 
 export function CampaignsGeoMekko({ columns, level, metric, onMetricChange }: Props) {
+  const metricMeta = METRIC_META[metric];
   const grandTotal = useMemo(
     () => columns.reduce((s, c) => s + c.totalValue, 0),
     [columns],
   );
-  const metricMeta = METRIC_META[metric];
 
   const chartData = useMemo<ChartRow[]>(
     () =>
@@ -177,8 +177,6 @@ export function CampaignsGeoMekko({ columns, level, metric, onMetricChange }: Pr
     }
     return (['Google Ads', 'Meta', 'Other'] as const).filter((ch) => set.has(ch));
   }, [columns]);
-
-  if (columns.length === 0 || grandTotal <= 0) return null;
 
   const chartHeight = Math.max(220, chartData.length * 42);
 
@@ -226,48 +224,56 @@ export function CampaignsGeoMekko({ columns, level, metric, onMetricChange }: Pr
       </div>
 
       <div className="rounded-md border border-[#E5E7EB] bg-white px-2 py-3">
-        <div style={{ width: '100%', height: chartHeight }}>
-          <ResponsiveContainer>
-            <BarChart
-              data={chartData}
-              layout="vertical"
-              margin={{ top: 4, right: 12, left: 12, bottom: 4 }}
-              barCategoryGap={10}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" horizontal={false} />
-              <XAxis
-                type="number"
-                tick={{ fontSize: 11, fill: '#6B7280' }}
-                tickFormatter={(value) => METRIC_META[metric].tick(Number(value))}
-                stroke="#D1D5DB"
-              />
-              <YAxis
-                type="category"
-                dataKey="label"
-                width={130}
-                tick={{ fontSize: 11, fill: '#374151' }}
-                stroke="#D1D5DB"
-              />
-              <RechartsTooltip content={<ChartTooltip metric={metric} />} cursor={{ fill: 'rgba(249, 115, 22, 0.08)' }} />
-              <Bar dataKey="googleAds" stackId="spend" fill={CHANNEL_FILL['Google Ads']} name={CHANNEL_LABEL['Google Ads']} radius={[0, 0, 0, 0]} />
-              <Bar dataKey="meta" stackId="spend" fill={CHANNEL_FILL.Meta} name={CHANNEL_LABEL.Meta} radius={[0, 0, 0, 0]} />
-              <Bar dataKey="other" stackId="spend" fill={CHANNEL_FILL.Other} name={CHANNEL_LABEL.Other} radius={[0, 4, 4, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+        {columns.length === 0 || grandTotal <= 0 ? (
+          <div className="flex h-[220px] items-center justify-center text-center text-sm text-[#9CA3AF]">
+            Δεν υπάρχουν διαθέσιμα δεδομένα για το metric `{metricMeta.shortLabel}` σε αυτό το επίπεδο τοποθεσίας.
+          </div>
+        ) : (
+          <div style={{ width: '100%', height: chartHeight }}>
+            <ResponsiveContainer>
+              <BarChart
+                data={chartData}
+                layout="vertical"
+                margin={{ top: 4, right: 12, left: 12, bottom: 4 }}
+                barCategoryGap={10}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" horizontal={false} />
+                <XAxis
+                  type="number"
+                  tick={{ fontSize: 11, fill: '#6B7280' }}
+                  tickFormatter={(value) => METRIC_META[metric].tick(Number(value))}
+                  stroke="#D1D5DB"
+                />
+                <YAxis
+                  type="category"
+                  dataKey="label"
+                  width={130}
+                  tick={{ fontSize: 11, fill: '#374151' }}
+                  stroke="#D1D5DB"
+                />
+                <RechartsTooltip content={<ChartTooltip metric={metric} />} cursor={{ fill: 'rgba(249, 115, 22, 0.08)' }} />
+                <Bar dataKey="googleAds" stackId="spend" fill={CHANNEL_FILL['Google Ads']} name={CHANNEL_LABEL['Google Ads']} radius={[0, 0, 0, 0]} />
+                <Bar dataKey="meta" stackId="spend" fill={CHANNEL_FILL.Meta} name={CHANNEL_LABEL.Meta} radius={[0, 0, 0, 0]} />
+                <Bar dataKey="other" stackId="spend" fill={CHANNEL_FILL.Other} name={CHANNEL_LABEL.Other} radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </div>
 
-      <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 justify-center text-[10px] text-[#4B5563]">
-        {channelsInUse.map((ch) => (
-          <span key={ch} className="inline-flex items-center gap-1">
-            <span
-              className="inline-block size-2 rounded-sm shrink-0"
-              style={{ backgroundColor: CHANNEL_FILL[ch] }}
-            />
-            {CHANNEL_LABEL[ch]}
-          </span>
-        ))}
-      </div>
+      {channelsInUse.length > 0 && (
+        <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 justify-center text-[10px] text-[#4B5563]">
+          {channelsInUse.map((ch) => (
+            <span key={ch} className="inline-flex items-center gap-1">
+              <span
+                className="inline-block size-2 rounded-sm shrink-0"
+                style={{ backgroundColor: CHANNEL_FILL[ch] }}
+              />
+              {CHANNEL_LABEL[ch]}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

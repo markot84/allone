@@ -60,6 +60,8 @@ import {
 } from '../../utils/priceBenchmarkStrategy';
 import { usePriceBenchmarks } from '../../hooks/usePriceBenchmarks';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
+import { useRefreshAggregates } from '../../hooks/useAggregates';
+import { useProcurement } from '../../hooks/useProcurement';
 import { getStockAgeDays } from '../../utils/productUtils';
 import { rankSegments, type ScoredSegment } from '../../utils/segmentRelevance';
 import { safeBrandName } from '../../services/reportExport';
@@ -242,7 +244,14 @@ const PreviewCell = memo(function PreviewCell({
 export function WeightConfigurator() {
   const { currentBrand } = useBrand();
   const { products, hasImported } = useProductSource();
-  const { skuStats } = useEcommerceSummary();
+  const {
+    skuStats,
+    skuMovement,
+    stockMovementBaselineDate,
+    connectedPlatforms,
+  } = useEcommerceSummary();
+  const { data: procurementData } = useProcurement();
+  const { refresh: refreshAggregates } = useRefreshAggregates();
   const { segments: rfmSegments } = useSegments();
   const { user } = useAuth();
   const { activeStrategy, saveActiveStrategy, isLoading: strategyLoading } = useActiveStrategy();
@@ -250,20 +259,163 @@ export function WeightConfigurator() {
   const toast = useToast();
 
   const benchmarkLookupMap = useMemo(() => buildBenchmarkLookup(benchmarks), [benchmarks]);
+  const normalizedSkuStats = useMemo(() => {
+    if (!skuStats) return null;
+    const entries = Object.entries(skuStats).map(([sku, stats]) => [sku.trim().toLowerCase(), stats] as const);
+    return Object.fromEntries(entries);
+  }, [skuStats]);
+
+  const normalizedSkuMovement = useMemo(() => {
+    if (!skuMovement) return null;
+    const entries = Object.entries(skuMovement).map(([sku, m]) => [sku.trim().toLowerCase(), m] as const);
+    return Object.fromEntries(entries);
+  }, [skuMovement]);
+
+  // sku → { procurement_category, procurement_status } από procurement_inventory.
+  // Δίνει δεύτερη πηγή κατηγοριοποίησης (lifecycle status π.χ. «Επί παραγγελία», «Προς κατάργηση»),
+  // χωριστή από την εμπορική κατηγορία προϊόντος.
+  const procurementBySku = useMemo(() => {
+    const out = new Map<string, { category: string; status: string }>();
+    const inventory = (procurementData?.inventory ?? []) as Array<Record<string, unknown>>;
+    for (const row of inventory) {
+      const sku = String(row.ΚΩΔΙΚΟΣ ?? '').trim().toLowerCase();
+      if (!sku) continue;
+      const category = String(row.ΚΑΤΗΓΟΡΙΑ ?? '').trim();
+      // Status priority: explicit STATUS_ΚΩΔΙΚΟΥ → ΑΞΙΟΛΟΓΗΣΗ_ΕΙΔΟΥΣ → ΟΜΑΔΑ_ΡΟΗΣ
+      const status =
+        String(row.STATUS_ΚΩΔΙΚΟΥ ?? '').trim() ||
+        String(row.ΑΞΙΟΛΟΓΗΣΗ_ΕΙΔΟΥΣ ?? '').trim() ||
+        String(row.ΟΜΑΔΑ_ΡΟΗΣ ?? '').trim();
+      out.set(sku, { category, status });
+    }
+    return out;
+  }, [procurementData]);
+
+  const hasProcurementCategories = procurementBySku.size > 0;
+
+  // Source-of-truth προτεραιότητα για τα φίλτρα Sales Optimization:
+  //   1) Connector orders (skuStats.sold*) — αυθεντικά δεδομένα παραγγελιών.
+  //   2) Stock movement (skuMovement.dec*) — καθολικός μηχανισμός που λειτουργεί για κάθε brand
+  //      και αποτυπώνει net κινητικότητα (πωλήσεις μείον επιστροφές/ακυρώσεις).
+  //   3) Import lifetime/period — fallback όταν δεν υπάρχει τίποτα από τα παραπάνω.
+  //
+  // Σημείωση: το stock movement δεν δίνει `last_sale_at` (δεν γνωρίζουμε ημερομηνία ακριβούς πώλησης
+  // από snapshots), αλλά καλύπτει 7/30/90d windows. Αν δεν είχαμε καμία μείωση σε όλα τα windows,
+  // το προϊόν θεωρείται "πάγωμα αποθέματος" → 0 πωλήσεις στο αντίστοιχο window.
+  const hasConnector = (connectedPlatforms?.length ?? 0) > 0;
+  const skuStatsHasWindows = useMemo(() => {
+    if (!normalizedSkuStats) return false;
+    for (const stats of Object.values(normalizedSkuStats)) {
+      if (stats.sold7d != null || stats.sold30d != null || stats.sold90d != null) return true;
+    }
+    return false;
+  }, [normalizedSkuStats]);
+
+  const hasMovementData = useMemo(() => {
+    if (!normalizedSkuMovement) return { d7: false, d30: false, d90: false, any: false };
+    let d7 = false, d30 = false, d90 = false;
+    for (const m of Object.values(normalizedSkuMovement)) {
+      if (m.dec7d != null) d7 = true;
+      if (m.dec30d != null) d30 = true;
+      if (m.dec90d != null) d90 = true;
+      if (d7 && d30 && d90) break;
+    }
+    return { d7, d30, d90, any: d7 || d30 || d90 };
+  }, [normalizedSkuMovement]);
 
   const salesBaseProducts = useMemo(() => {
-    return products.map((p) => {
+    const enrichSales = (p: Product): Product => {
       const key = (p.sku || '').trim().toLowerCase();
-      if (!key) return p;
-      const stats = skuStats?.[key];
+      const stats = key ? normalizedSkuStats?.[key] : undefined;
+      const move = key ? normalizedSkuMovement?.[key] : undefined;
+
+      // Αν υπάρχουν αυθεντικά connector orders → κυρίαρχη πηγή.
+      if (hasConnector && skuStatsHasWindows) {
+        const sold7 = stats?.sold7d != null ? Math.max(0, Math.round(stats.sold7d)) : 0;
+        const sold30 = stats?.sold30d != null ? Math.max(0, Math.round(stats.sold30d)) : 0;
+        const sold90 = stats?.sold90d != null ? Math.max(0, Math.round(stats.sold90d)) : 0;
+        return {
+          ...p,
+          qty_sold_last_7d: sold7,
+          qty_sold_last_30d: sold30,
+          qty_sold_last_90d: sold90,
+          ...(p.stock_level == null && stats?.stock != null
+            ? { stock_level: Math.max(0, Math.round(stats.stock)) }
+            : {}),
+          ...(stats?.lastSaleAt ? { last_sale_at: stats.lastSaleAt } : {}),
+        } as Product;
+      }
+
+      // Αλλιώς: stock movement (universal) ως κυρίαρχη πηγή για windowed sales.
+      if (hasMovementData.any && move) {
+        const out: Product = { ...p };
+        if (hasMovementData.d7 && move.dec7d != null) {
+          out.qty_sold_last_7d = Math.max(0, Math.round(move.dec7d));
+        }
+        if (hasMovementData.d30 && move.dec30d != null) {
+          out.qty_sold_last_30d = Math.max(0, Math.round(move.dec30d));
+        }
+        if (hasMovementData.d90 && move.dec90d != null) {
+          out.qty_sold_last_90d = Math.max(0, Math.round(move.dec90d));
+        }
+        // Στο connector skuStats μπορεί να έχουμε stock & lastSaleAt — γράψ' τα αν λείπουν.
+        if (out.stock_level == null && stats?.stock != null) {
+          out.stock_level = Math.max(0, Math.round(stats.stock));
+        }
+        if (!out.last_sale_at && stats?.lastSaleAt) {
+          out.last_sale_at = stats.lastSaleAt;
+        }
+        return out;
+      }
+
+      // Τέλος: συμπλήρωσε από connector skuStats (αν υπάρχει) χωρίς override.
       if (!stats) return p;
+      const sold90Fallback = stats.sold90d ?? stats.sold;
       return {
         ...p,
-        ...(p.qty_sold_last_90d == null ? { qty_sold_last_90d: Math.max(0, Math.round(stats.sold || 0)) } : {}),
-        ...(p.stock_level == null ? { stock_level: Math.max(0, Math.round(stats.stock || 0)) } : {}),
+        ...(p.qty_sold_last_7d == null && stats.sold7d != null
+          ? { qty_sold_last_7d: Math.max(0, Math.round(stats.sold7d)) }
+          : {}),
+        ...(p.qty_sold_last_30d == null && stats.sold30d != null
+          ? { qty_sold_last_30d: Math.max(0, Math.round(stats.sold30d)) }
+          : {}),
+        ...(p.qty_sold_last_90d == null && sold90Fallback != null
+          ? { qty_sold_last_90d: Math.max(0, Math.round(sold90Fallback)) }
+          : {}),
+        ...(p.stock_level == null
+          ? { stock_level: Math.max(0, Math.round(stats.stock || 0)) }
+          : {}),
+        ...(p.last_sale_at == null && stats.lastSaleAt
+          ? { last_sale_at: stats.lastSaleAt }
+          : {}),
+      } as Product;
+    };
+
+    // Wrap: εφαρμογή sales enrichment + procurement enrichment σε όλα τα products.
+    return products.map((p) => {
+      const enriched = enrichSales(p);
+      const key = (p.sku || '').trim().toLowerCase();
+      const proc = key ? procurementBySku.get(key) : undefined;
+      if (!proc) return enriched;
+      return {
+        ...enriched,
+        ...(proc.category && !enriched.procurement_category
+          ? { procurement_category: proc.category }
+          : {}),
+        ...(proc.status && !enriched.procurement_status
+          ? { procurement_status: proc.status }
+          : {}),
       };
     });
-  }, [products, skuStats]);
+  }, [
+    normalizedSkuStats,
+    normalizedSkuMovement,
+    products,
+    hasConnector,
+    skuStatsHasWindows,
+    hasMovementData,
+    procurementBySku,
+  ]);
 
   const salesBaseProductById = useMemo(() => {
     const map = new Map<string, Product>();
@@ -416,7 +568,16 @@ export function WeightConfigurator() {
           brandContext: currentBrand ? { brandName: currentBrand.name, brandType: currentBrand.type, topCategories: topCats } : undefined,
           segmentFitList: rankedSegments.map(rs => ({ name: rs.segment.name, fit: rs.fit, description: rs.segment.description, count: rs.segment.count, revenueShare: rs.segment.revenue_share })),
           context: 'activation',
-        }).then(rec => { if (rec) return saveField('activationRecommendation', rec); })
+        }).then(async rec => {
+          if (!rec) return;
+          // Mirror στα 2 πεδία ώστε Channel page (activation) και RFM exports (channel) να μη διαφωνούν.
+          const clean = JSON.parse(JSON.stringify(rec));
+          await FirestoreService.setDocument('active_strategies', savedStrategyId, {
+            activationRecommendation: clean,
+            channelRecommendation: clean,
+            updatedAt: new Date().toISOString(),
+          } as Record<string, unknown>);
+        })
           .catch(err => console.error('[AI] Activation failed:', err))
       );
     }
@@ -582,7 +743,7 @@ export function WeightConfigurator() {
       approvalStatus: 'implementing',
       approvedBy: user.email || user.displayName || 'User',
       seasonalDiscount: config,
-    } as any).then((saved) => {
+    }).then((saved) => {
       setStrategySaveVersion(v => v + 1);
       if (saved?.id) triggerAIGeneration(saved.id, 'seasonal_discount', weights);
       createStrategyDecision(`Εκπτωτική: ${config.periodName} (-${config.discountPercent}%)`);
@@ -1066,6 +1227,13 @@ export function WeightConfigurator() {
         setMixConfig(saved as MixConfig);
       } else {
         setMixConfig(null);
+      }
+      // Rehydrate seasonal discount config — αλλιώς reload χάνει την επιλογή του χρήστη.
+      const savedSeasonal = (activeStrategy as any).seasonalDiscount as SeasonalDiscountConfig | undefined;
+      if (activeStrategy.scenarioId === 'seasonal_discount' && savedSeasonal) {
+        setSeasonalDiscountConfig(savedSeasonal);
+      } else {
+        setSeasonalDiscountConfig(null);
       }
     }
   }, [activeStrategy?.id, strategyLoading]);
@@ -1621,6 +1789,19 @@ export function WeightConfigurator() {
             setSalesBaseSetupOpen(false);
             setPendingScenarioChange('sales_base');
           });
+        }}
+        hasConnector={hasConnector}
+        hasFreshWindowedStats={skuStatsHasWindows}
+        stockMovementBaselineDate={stockMovementBaselineDate}
+        hasMovementWindows={hasMovementData}
+        hasProcurementCategories={hasProcurementCategories}
+        onRefreshStats={async () => {
+          const r = await refreshAggregates();
+          if (r.ok) {
+            toast.success('Τα stats ενημερώθηκαν. Ανανεώστε τη σελίδα για να δείτε τα νέα αποτελέσματα.');
+          } else {
+            toast.error(`Αποτυχία: ${r.error ?? 'άγνωστο σφάλμα'}`);
+          }
         }}
       />
 

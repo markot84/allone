@@ -1,5 +1,27 @@
-import type { Product, SalesBasePresetId, SalesBaseScope } from '../types';
+import type { Product, SalesBaseCategorySource, SalesBasePresetId, SalesBaseScope } from '../types';
 import { coerceToDate } from './coerceDate';
+import { getStockAgeDays } from './productUtils';
+
+/**
+ * Επιλογή effective category ανά SKU με βάση την πηγή κατηγοριοποίησης.
+ *  - 'product'    → χρησιμοποιεί το `product.category` (ευρύτερη εμπορική κατηγορία από import products)
+ *  - 'procurement'→ χρησιμοποιεί το `procurement_status` (lifecycle: «Επί παραγγελία», «Προς κατάργηση»)
+ *                   με fallback στο `procurement_category` και τέλος στο `category`.
+ */
+export function categoryForSource(
+  product: Product,
+  source: SalesBaseCategorySource | undefined,
+): string {
+  if (source === 'procurement') {
+    return (
+      product.procurement_status?.trim() ||
+      product.procurement_category?.trim() ||
+      product.category?.trim() ||
+      ''
+    );
+  }
+  return product.category?.trim() ?? '';
+}
 
 function daysSince(iso: string | undefined): number | null {
   if (!iso?.trim()) return null;
@@ -29,29 +51,36 @@ function hasZeroSalesInWindow(
   return lastDays > days;
 }
 
+/**
+ * Αυστηρή λογική για «0 πωλήσεις τις τελευταίες N ημέρες»:
+ *  - Αν υπάρχει το αντίστοιχο window field, αυτό είναι authoritative.
+ *  - Αν lifetime=0, όλα τα windows είναι 0 (μαθηματικά ασφαλές).
+ *  - Αν last_sale_at υπάρχει και είναι > N ημ. πίσω, ισχύει.
+ *  - ΔΕΝ γίνεται διασταυρούμενο fallback μεταξύ διαφορετικών windows
+ *    (π.χ. qty_sold_period=0 ⇒ δεν συνεπάγεται ότι 7d=0, διότι το import
+ *    μπορεί να είναι παλιό και να μη γνωρίζουμε τι έγινε τις τελευταίες 7 ημ.).
+ *  - Σημείωση: η μόνη μαθηματικά ασφαλής συνεπαγωγή 30d=0 ⇒ 7d=0 αφαιρέθηκε
+ *    σκόπιμα, διότι στην πράξη το `qty_sold_period`/`qty_sold_last_30d` που
+ *    διαβάζουμε από import αναφέρεται σε παλιό window και όχι σε «κυλιόμενες
+ *    τελευταίες 30 ημέρες».
+ */
 function hasZeroSalesByAvailableWindows(product: Product, days: 7 | 30 | 90): boolean {
-  const q7 = product.qty_sold_last_7d;
-  const q30 = product.qty_sold_last_30d ?? product.qty_sold_period;
-  const q90 = product.qty_sold_last_90d;
   const life = product.qty_sold_lifetime;
-  const lastSaleAt = product.last_sale_at;
-
   if (typeof life === 'number' && life === 0) return true;
 
+  const lastSaleAt = product.last_sale_at;
+
   if (days === 7) {
-    if (typeof q7 === 'number') return q7 === 0;
-    if (typeof q30 === 'number') return q30 === 0;
-    if (typeof q90 === 'number') return q90 === 0;
+    if (typeof product.qty_sold_last_7d === 'number') return product.qty_sold_last_7d === 0;
     return hasZeroSalesInWindow(undefined, lastSaleAt, 7);
   }
 
   if (days === 30) {
-    if (typeof q30 === 'number') return q30 === 0;
-    if (typeof q90 === 'number') return q90 === 0;
+    if (typeof product.qty_sold_last_30d === 'number') return product.qty_sold_last_30d === 0;
     return hasZeroSalesInWindow(undefined, lastSaleAt, 30);
   }
 
-  if (typeof q90 === 'number') return q90 === 0;
+  if (typeof product.qty_sold_last_90d === 'number') return product.qty_sold_last_90d === 0;
   return hasZeroSalesInWindow(undefined, lastSaleAt, 90);
 }
 
@@ -117,41 +146,58 @@ export function salesMomentumLabel(product: Product): string {
   return 'Ενεργό';
 }
 
+/** Ομαδοποίηση presets για το UI του Sales Optimization modal. */
+export type SalesBasePresetGroup = 'all' | 'zero_window' | 'other';
+
 export const SALES_BASE_PRESET_OPTIONS: {
   id: SalesBasePresetId;
   label: string;
   hint: string;
+  group: SalesBasePresetGroup;
 }[] = [
-  { id: 'all', label: 'Όλα τα SKU', hint: 'Χωρίς φίλτρο ρυθμού πωλήσεων — μόνο τα φίλτρα πίνακα από κάτω.' },
   {
-    id: 'never_sold',
-    label: 'Χωρίς πωλήσεις (lifetime)',
-    hint: 'Όταν υπάρχει στήλη lifetime = 0 (αλλιώς δεν εφαρμόζεται αυτόματα).',
+    id: 'all',
+    label: 'Όλα τα SKU',
+    hint: 'Χωρίς φίλτρο ρυθμού πωλήσεων — εφαρμόζονται μόνο τα φίλτρα μάρκας/κατηγορίας/αναζήτησης.',
+    group: 'all',
   },
+  // ── Αριστερή στήλη: 0 πωλήσεις σε χρονικό window ───────────────────────
   {
     id: 'zero_last_7d',
     label: '0 πωλήσεις (7 ημέρες)',
-    hint: 'Στήλη 7ημ. = 0, αλλιώς fallback από 30/90ημ.=0 ή last sale όταν λείπουν window πεδία.',
+    hint: 'Καμία μείωση αποθέματος τις τελευταίες 7 ημ. (από orders connector ή κινητικότητα αποθέματος).',
+    group: 'zero_window',
   },
   {
     id: 'zero_last_30d',
-    label: '0 πωλήσεις (~30 ημέρες)',
-    hint: 'Qty 30ημ. / Qty_Sold_Period = 0, αλλιώς fallback από 90ημ.=0 ή last sale όταν λείπουν window πεδία.',
+    label: '0 πωλήσεις (30 ημέρες)',
+    hint: 'Καμία μείωση αποθέματος τις τελευταίες 30 ημ. (από orders connector ή κινητικότητα αποθέματος).',
+    group: 'zero_window',
   },
   {
     id: 'zero_last_90d',
     label: '0 πωλήσεις (90 ημέρες)',
-    hint: 'Στήλη 90ημ. = 0, ή fallback από last sale όταν δεν υπάρχουν 7/30/90 πεδία.',
+    hint: 'Καμία μείωση αποθέματος τις τελευταίες 90 ημ. (από orders connector ή κινητικότητα αποθέματος).',
+    group: 'zero_window',
   },
+  // ── Δεξιά στήλη: Χωρίς πωλήσεις & Πάγωμα ───────────────────────────────
   {
-    id: 'stalled_7_vs_90',
-    label: '«Πάγωμα» πρόσφατα',
-    hint: '0 στις 7 ημέρες αλλά υπήρχε παλαιότερη κίνηση, με fallback από last sale όταν λείπουν window πεδία.',
+    id: 'never_sold',
+    label: 'Χωρίς πωλήσεις (lifetime)',
+    hint: 'lifetime=0, ή στο catalog ≥30 ημ. χωρίς καμία κίνηση αποθέματος και χωρίς ημ/νία τελευταίας πώλησης.',
+    group: 'other',
   },
   {
     id: 'cold_last_sale_30d',
     label: 'Χωρίς πώληση >30 ημέρες',
-    hint: 'Από στήλη τελευταίας πώλης (last sale), με απόθεμα > 0.',
+    hint: 'Η τελευταία καταγεγραμμένη πώληση (last_sale_at) είναι πάνω από 30 ημ. πίσω, με απόθεμα > 0.',
+    group: 'other',
+  },
+  {
+    id: 'stalled_7_vs_90',
+    label: '«Πάγωμα» πρόσφατα',
+    hint: '0 πωλήσεις τις 7 ημ. αλλά υπήρχε κίνηση στις προηγούμενες 90 ημ. (ή lifetime > 0).',
+    group: 'other',
   },
 ];
 
@@ -168,11 +214,18 @@ export function productMatchesSalesBaseTextFilters(
   brandFilter: string,
   categoryFilter: string,
   search: string,
+  excludedCategories?: string[] | null,
+  categorySource?: SalesBaseCategorySource,
 ): boolean {
   const bf = brandFilter.trim().toLowerCase();
   if (bf && !productBrandLabel(product).toLowerCase().includes(bf)) return false;
   const cf = categoryFilter.trim().toLowerCase();
-  if (cf && !(product.category ?? '').toLowerCase().includes(cf)) return false;
+  const productCategory = categoryForSource(product, categorySource);
+  if (cf && !productCategory.toLowerCase().includes(cf)) return false;
+  if (excludedCategories && excludedCategories.length > 0) {
+    const cat = productCategory.toLowerCase();
+    if (excludedCategories.some((ex) => ex.trim().toLowerCase() === cat)) return false;
+  }
   const q = search.trim().toLowerCase();
   if (q) {
     const hay = `${product.name ?? ''} ${product.sku ?? ''}`.toLowerCase();
@@ -190,8 +243,20 @@ export function productMatchesSalesBasePreset(product: Product, preset: SalesBas
   switch (preset) {
     case 'all':
       return true;
-    case 'never_sold':
-      return typeof life === 'number' && life === 0;
+    case 'never_sold': {
+      // Authoritative: import lifetime field
+      if (typeof life === 'number') return life === 0;
+      // Fallback (όταν δεν υπάρχει lifetime field, π.χ. brands μόνο με connector):
+      // Κανένα ίχνος πώλησης σε διαθέσιμο 90d window + καμία ημ/νία τελευταίας πώλησης.
+      // Επιπλέον: το SKU να βρίσκεται στο catalog αρκετό καιρό (>=30 ημ.) ώστε η απουσία
+      // πωλήσεων να είναι σημαντική (όχι νεοεισαχθέν με stock χωρίς χρόνο να πουληθεί).
+      const q90 = product.qty_sold_last_90d;
+      const noRecentSales = typeof q90 === 'number' ? q90 === 0 : false;
+      const noLastSale = !product.last_sale_at;
+      const ageInCatalog = getStockAgeDays(product);
+      const oldEnough = ageInCatalog >= 30;
+      return noRecentSales && noLastSale && oldEnough && stock > 0;
+    }
     case 'zero_last_7d':
       return hasZeroSalesByAvailableWindows(product, 7) && stock > 0;
     case 'zero_last_30d':
@@ -218,7 +283,16 @@ export function productParticipatesInSalesBase(product: Product, scope: SalesBas
   if (scope.selectedProductIds && scope.selectedProductIds.length > 0) {
     return scope.selectedProductIds.includes(product.id);
   }
-  if (!productMatchesSalesBaseTextFilters(product, scope.brandFilter, scope.categoryFilter, scope.search)) {
+  if (
+    !productMatchesSalesBaseTextFilters(
+      product,
+      scope.brandFilter,
+      scope.categoryFilter,
+      scope.search,
+      scope.excludedCategories ?? null,
+      scope.categorySource,
+    )
+  ) {
     return false;
   }
   return productMatchesSalesBasePreset(product, scope.preset);

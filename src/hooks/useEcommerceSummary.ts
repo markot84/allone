@@ -37,8 +37,53 @@ interface EcommerceSummaryRaw {
   ordersByDay: Record<string, number>;
   recentOrders: EcommerceRecentOrder[];
   connectedPlatforms: string[];
-  skuStats?: Record<string, { stock: number; sold: number }>;
+  skuStats?: Record<string, {
+    stock: number;
+    sold: number;
+    sold7d?: number;
+    sold30d?: number;
+    sold90d?: number;
+    lastSaleAt?: string | null;
+  }>;
+  skuStatsJson?: string;
+  skuStatsCount?: number;
+  /** Stock movement (καθολικό — δουλεύει για όλα τα brands ανεξάρτητα από connector) */
+  skuMovementJson?: string;
+  skuMovementCount?: number;
+  stockMovementBaselineDate?: string | null;
+  stockMovementUpdatedAt?: any;
   syncedAt: any;
+}
+
+type SkuStatsMap = Record<
+  string,
+  { stock: number; sold: number; sold7d?: number; sold30d?: number; sold90d?: number; lastSaleAt?: string | null }
+>;
+
+export type SkuMovementMap = Record<
+  string,
+  { dec7d?: number; dec30d?: number; dec90d?: number }
+>;
+
+function parseSkuStats(raw: EcommerceSummaryRaw | null | undefined): SkuStatsMap {
+  if (!raw) return {};
+  if (raw.skuStatsJson) {
+    try {
+      return JSON.parse(raw.skuStatsJson) as SkuStatsMap;
+    } catch {
+      return {};
+    }
+  }
+  return raw.skuStats ?? {};
+}
+
+function parseSkuMovement(raw: EcommerceSummaryRaw | null | undefined): SkuMovementMap {
+  if (!raw?.skuMovementJson) return {};
+  try {
+    return JSON.parse(raw.skuMovementJson) as SkuMovementMap;
+  } catch {
+    return {};
+  }
 }
 
 async function fetchEcommerceSummary(brandId: string): Promise<EcommerceSummaryRaw | null> {
@@ -84,6 +129,9 @@ export function useEcommerceSummary() {
       .sort((a, b) => b.revenue - a.revenue);
   }, [data]);
 
+  const skuStats = useMemo(() => parseSkuStats(data), [data]);
+  const skuMovement = useMemo(() => parseSkuMovement(data), [data]);
+
   return {
     totalRevenue: data?.totalRevenue ?? 0,
     orderCount: data?.orderCount ?? 0,
@@ -94,7 +142,10 @@ export function useEcommerceSummary() {
     topProducts: data?.topProducts ?? [],
     recentOrders: data?.recentOrders ?? [],
     connectedPlatforms: data?.connectedPlatforms ?? [],
-    skuStats: data?.skuStats ?? {},
+    skuStats,
+    skuMovement,
+    stockMovementBaselineDate: data?.stockMovementBaselineDate ?? null,
+    stockMovementUpdatedAt: data?.stockMovementUpdatedAt ?? null,
     syncedAt: data?.syncedAt,
     isLoading: isPending,
     hasData: !!data && (data.orderCount > 0 || data.connectedPlatforms.length > 0),

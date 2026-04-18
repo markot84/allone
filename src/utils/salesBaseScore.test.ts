@@ -47,4 +47,14 @@ describe('productMatchesSalesBasePreset', () => {
     expect(productMatchesSalesBasePreset(product, 'zero_last_7d')).toBe(true);
     expect(productMatchesSalesBasePreset(product, 'zero_last_30d')).toBe(true);
   });
+
+  it('δεν θεωρεί 30d=0 ως never_sold χωρίς explicit lifetime signal', () => {
+    const product = makeProduct({ qty_sold_period: 0, revenue_period: 0 });
+    expect(productMatchesSalesBasePreset(product, 'never_sold')).toBe(false);
+  });
+
+  it('δεν θεωρεί 30d=0 ως cold_last_sale_30d όταν λείπει last_sale_at', () => {
+    const product = makeProduct({ qty_sold_period: 0, revenue_period: 0 });
+    expect(productMatchesSalesBasePreset(product, 'cold_last_sale_30d')).toBe(false);
+  });
 });

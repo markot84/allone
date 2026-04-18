@@ -169,6 +169,9 @@ export type SalesBasePresetId =
   | 'stalled_7_vs_90'
   | 'cold_last_sale_30d';
 
+/** Πηγή κατηγοριοποίησης στο Sales Optimization. */
+export type SalesBaseCategorySource = 'product' | 'procurement';
+
 /** Αποθηκευμένο πεδίο ενεργής στρατηγικής — ποια SKU «μετράνε» στο Sales Optimization (sales_base). */
 export interface SalesBaseScope {
   preset: SalesBasePresetId;
@@ -177,6 +180,10 @@ export interface SalesBaseScope {
   search: string;
   /** null = όλα όσα ταιριάζουν στο preset + φίλτρα κειμένου (δυναμικά). Διαφορετικά allowlist. */
   selectedProductIds: string[] | null;
+  /** Κατηγορίες που εξαιρούνται από την ανάλυση (π.χ. lifecycle status «Επί παραγγελία»). */
+  excludedCategories?: string[];
+  /** Πηγή κατηγοριών: 'product' = από import products, 'procurement' = από procurement_inventory. */
+  categorySource?: SalesBaseCategorySource;
 }
 
 /** Φίλτρο preset για στρατηγική Price Benchmarking (GMC). */
@@ -303,6 +310,10 @@ export interface Product {
   supplier?: string;
   /** Εμπορική μάρκα (στήλη Brand στο import) — προαιρετικό */
   brand?: string;
+  /** Από procurement_inventory.ΚΑΤΗΓΟΡΙΑ — εμπορική κατηγορία στο procurement */
+  procurement_category?: string;
+  /** Από procurement_inventory.STATUS_ΚΩΔΙΚΟΥ ή ΑΞΙΟΛΟΓΗΣΗ_ΕΙΔΟΥΣ — lifecycle status (π.χ. «Επί παραγγελία», «Προς κατάργηση») */
+  procurement_status?: string;
 }
 
 export interface InventorySummary {
