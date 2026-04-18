@@ -31,7 +31,7 @@ export function useProductSource() {
 
   const procProducts = useMemo((): Product[] => {
     if (!isEnterprise) return [];
-    const invRows = (procData.inventory ?? []) as Record<string, unknown>[];
+    const invRows = ((procData?.inventory ?? []) as unknown[]) as Record<string, unknown>[];
     if (!invRows.length) return [];
 
     const codeCol = findCol(invRows, 'ΚΩΔΙΚΟΣ');
@@ -77,7 +77,7 @@ export function useProductSource() {
         cost_price: cost,
       } as Product;
     });
-  }, [isEnterprise, procData.inventory]);
+  }, [isEnterprise, procData?.inventory]);
 
   const usingProcurement = procProducts.length > 0;
   // Demo products φιλτράρονται και εδώ για να ισχύει σε όλους τους aggregates.

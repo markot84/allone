@@ -1,10 +1,18 @@
 {
-  "version": "0.561.0",
-  "previousVersion": "0.560.0",
-  "commitHash": "612f2bb",
-  "branch": "cursor/sales-opt-foundation-and-stock-movement",
-  "buildDate": "2026-04-18T20:30:30.232Z",
+  "version": "0.563.0",
+  "previousVersion": "0.562.0",
+  "commitHash": "ce915fd",
+  "branch": "main",
+  "buildDate": "2026-04-18T21:34:47.326Z",
   "commits": [
+    {
+      "hash": "ce915fd",
+      "message": "merge: Sprint 2 — universal data layer, decision buckets, AI context, ecommerce fix"
+    },
+    {
+      "hash": "a94a09d",
+      "message": "fix(ecommerce): KPI Παραγγελίες counted only capped recentOrders"
+    },
     {
       "hash": "612f2bb",
       "message": "UX: redesign TriageCard for merchant clarity"
@@ -56,17 +64,11 @@
     {
       "hash": "c0053af",
       "message": "fix(magento): probe REST paths (index.php, www) + store restApiBase for sync"
-    },
-    {
-      "hash": "dbf42f4",
-      "message": "docs(ui): Magento — HTTPS base URLs fix 'Integration not secure' (empty fields)"
-    },
-    {
-      "hash": "d87a2b1",
-      "message": "docs(ui): Magento modal — empty Callback/Identity URLs for token-only flow"
     }
   ],
   "changes": [
+    "Merge: Sprint 2 — universal data layer, decision buckets, AI context, ecommerce fix",
+    "[Διόρθωση] KPI Παραγγελίες counted only capped recentOrders",
     "UX: redesign TriageCard for merchant clarity",
     "Sprint 2 Phase 3+4: triage origin persistence + AI context wiring",
     "[Νέο χαρακτηριστικό] Universal data layer + decision buckets triage",
@@ -74,8 +76,6 @@
     "[Συντήρηση] Full deploy",
     "[Διόρθωση] Grouped setup modals, impact dismiss UX, price benchmark filter perf",
     "[Νέο χαρακτηριστικό] Strategy commerce tools, campaigns geo Mekko, and related updates",
-    "[Νέο χαρακτηριστικό] Date range filter on Product Intelligence (import vs first available)",
-    "[Διόρθωση] Probe REST paths (index.php, www) + store restApiBase for sync",
-    "[Τεκμηρίωση] Magento — HTTPS base URLs fix 'Integration not secure' (empty fields)"
+    "[Νέο χαρακτηριστικό] Date range filter on Product Intelligence (import vs first available)"
   ]
 }

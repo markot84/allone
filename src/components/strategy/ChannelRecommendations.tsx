@@ -89,12 +89,22 @@ export function ChannelRecommendations({
     );
   }
 
+  // Firestore / partial AI payloads may omit arrays — never assume .primary/.secondary exist.
+  const primary = Array.isArray(recommendations.primary) ? recommendations.primary : [];
+  const secondary = Array.isArray(recommendations.secondary) ? recommendations.secondary : [];
+  const budget_allocation =
+    recommendations.budget_allocation && typeof recommendations.budget_allocation === 'object'
+      ? recommendations.budget_allocation
+      : {};
+  const rationale =
+    typeof recommendations.rationale === 'string' ? recommendations.rationale : '';
+
   const orphanBudgetChannels = useMemo(() => {
-    const listed = [...recommendations.primary, ...recommendations.secondary];
-    return Object.entries(recommendations.budget_allocation)
+    const listed = [...primary, ...secondary];
+    return Object.entries(budget_allocation)
       .filter(([key]) => !listed.some((ch) => budgetKeyMatchesListedChannel(key, ch)))
       .sort((a, b) => b[1] - a[1]);
-  }, [recommendations]);
+  }, [primary, secondary, budget_allocation]);
 
   return (
     <div className="space-y-6">
@@ -130,7 +140,7 @@ export function ChannelRecommendations({
           Budget Allocation
         </h5>
         <div className="flex h-4 rounded-full overflow-hidden">
-          {Object.entries(recommendations.budget_allocation).map(
+          {Object.entries(budget_allocation).map(
             ([channel, percentage], index) => {
               const colors = ['var(--nts-accent)', '#78716C', '#22C55E', '#8B5CF6', '#F59E0B'];
               return (
@@ -148,7 +158,7 @@ export function ChannelRecommendations({
           )}
         </div>
         <div className="flex flex-wrap gap-4 mt-3">
-          {Object.entries(recommendations.budget_allocation).map(
+          {Object.entries(budget_allocation).map(
             ([channel, percentage], index) => {
               const colors = ['var(--nts-accent)', '#78716C', '#22C55E', '#8B5CF6', '#F59E0B'];
               return (
@@ -176,9 +186,9 @@ export function ChannelRecommendations({
             Κύρια κανάλια
           </h5>
           <div className="space-y-2">
-            {recommendations.primary.map((channel, index) => {
+            {primary.map((channel, index) => {
               const stage = getFunnelStage(channel);
-              const pct = getBudgetForChannel(channel, recommendations.budget_allocation);
+              const pct = getBudgetForChannel(channel, budget_allocation);
               return (
                 <motion.div
                   key={channel}
@@ -215,9 +225,9 @@ export function ChannelRecommendations({
             Δευτερεύοντα κανάλια
           </h5>
           <div className="space-y-2">
-            {recommendations.secondary.map((channel, index) => {
+            {secondary.map((channel, index) => {
               const stage = getFunnelStage(channel);
-              const pct = getBudgetForChannel(channel, recommendations.budget_allocation);
+              const pct = getBudgetForChannel(channel, budget_allocation);
               return (
                 <motion.div
                   key={channel}
@@ -229,7 +239,7 @@ export function ChannelRecommendations({
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="w-8 h-8 bg-[#4A4A4A] rounded-lg flex items-center justify-center flex-shrink-0">
                       <span className="text-white text-sm">
-                        {recommendations.primary.length + index + 1}
+                        {primary.length + index + 1}
                       </span>
                     </div>
                     <div className="min-w-0">
@@ -297,11 +307,11 @@ export function ChannelRecommendations({
       <div className="p-4 bg-gradient-to-r from-[#F5F5F5] to-white rounded-lg border border-[#E5E5E5]">
         <h5 className="font-medium text-[#1A1A1A] text-sm mb-3">Αιτιολόγηση AI</h5>
         {(() => {
-          const parts = recommendations.rationale.split('||').map(s => s.trim());
+          const parts = rationale.split('||').map(s => s.trim());
           const hasStructure = parts.length >= 3 && parts[0].startsWith('Πελάτες:');
           if (!hasStructure) {
             return (
-              <FormattedProse content={recommendations.rationale.replace(/—/g, ',')} variant="compact" />
+              <FormattedProse content={rationale.replace(/—/g, ',')} variant="compact" />
             );
           }
           const sections = [

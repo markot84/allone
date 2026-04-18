@@ -344,8 +344,10 @@ export function StrategyImpactModal({
   scoreContext,
 }: StrategyImpactModalProps) {
   const { products } = useProductSource();
-  const { campaigns } = useCampaigns();
-  const { contentItems } = useContent();
+  const { campaigns: campaignsFromHook } = useCampaigns();
+  const { contentItems: contentFromHook } = useContent();
+  const campaigns = campaignsFromHook ?? [];
+  const contentItems = contentFromHook ?? [];
   const [showProducts, setShowProducts] = useState(true);
 
   const fromName = scenarios.find(s => s.id === currentScenarioId)?.name ?? 'Τρέχουσα';

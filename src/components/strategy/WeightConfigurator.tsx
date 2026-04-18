@@ -1269,7 +1269,14 @@ export function WeightConfigurator() {
       }
       // Rehydrate triage origin annotation (Decision Buckets → policy provenance).
       const savedTriage = (activeStrategy as any).triageOrigin as TriageOrigin | undefined;
-      setTriageOrigin(savedTriage ?? null);
+      if (savedTriage) {
+        setTriageOrigin({
+          ...savedTriage,
+          skus: Array.isArray(savedTriage.skus) ? savedTriage.skus : [],
+        });
+      } else {
+        setTriageOrigin(null);
+      }
     }
   }, [activeStrategy?.id, strategyLoading]);
 
@@ -1330,7 +1337,7 @@ export function WeightConfigurator() {
                 <span className="text-gray-700 truncate">
                   Triage: <strong>{triageOrigin.label}</strong>
                   <span className="text-gray-500 ml-1.5">
-                    · {triageOrigin.skus.length} SKUs επιλεγμένα
+                    · {(triageOrigin.skus?.length ?? 0)} SKUs επιλεγμένα
                     {typeof triageOrigin.tiedCapital === 'number' && triageOrigin.tiedCapital > 0
                       ? ` · ${Math.round(triageOrigin.tiedCapital).toLocaleString('el-GR')}€ κεφάλαια`
                       : ''}

@@ -69,6 +69,9 @@ export function StrategyPackage(props: StrategyPackageProps) {
     [rankedSegments]
   );
 
+  const primaryCh = Array.isArray(channelRecommendation?.primary) ? channelRecommendation.primary : [];
+  const secondaryCh = Array.isArray(channelRecommendation?.secondary) ? channelRecommendation.secondary : [];
+
   const handlePdf = useCallback(() => {
     const data = buildSharedData(props, strategyName);
     openPackagePdf(data);
@@ -111,7 +114,7 @@ export function StrategyPackage(props: StrategyPackageProps) {
             </div>
             <p className="text-[11px] text-[#9CA3AF] mt-0.5">
               {idealSegs.length > 0 && `${idealSegs.join(', ')}`}
-              {channelRecommendation && ` · ${channelRecommendation.primary.length + channelRecommendation.secondary.length} κανάλια`}
+              {channelRecommendation && ` · ${primaryCh.length + secondaryCh.length} κανάλια`}
             </p>
           </div>
         </div>
@@ -185,11 +188,11 @@ export function StrategyPackage(props: StrategyPackageProps) {
                   {channelRecommendation && (
                     <>
                       <p className="text-sm text-[#1A1A1A]">
-                        {channelRecommendation.primary.slice(0, 2).join(', ')}
-                        {channelRecommendation.primary.length > 2 && ` +${channelRecommendation.primary.length - 2}`}
+                        {primaryCh.slice(0, 2).join(', ')}
+                        {primaryCh.length > 2 && ` +${primaryCh.length - 2}`}
                       </p>
                       <p className="text-[11px] text-[#9CA3AF] mt-0.5">
-                        +{channelRecommendation.secondary.length} secondary
+                        +{secondaryCh.length} secondary
                       </p>
                     </>
                   )}
