@@ -124,7 +124,7 @@ export function useEcommerceSummary() {
   const platformBreakdown = useMemo(() => {
     if (!data?.revenueByPlatform) return [];
     return Object.entries(data.revenueByPlatform)
-      .filter(([, v]) => v.orders > 0)
+      .filter(([, v]) => (v?.orders ?? 0) > 0)
       .map(([platform, v]) => ({ platform, ...v }))
       .sort((a, b) => b.revenue - a.revenue);
   }, [data]);
@@ -159,6 +159,8 @@ export function useEcommerceSummary() {
     stockMovementUpdatedAt: data?.stockMovementUpdatedAt ?? null,
     syncedAt: data?.syncedAt,
     isLoading: isPending,
-    hasData: !!data && (data.orderCount > 0 || data.connectedPlatforms.length > 0),
+    hasData:
+      !!data &&
+      (data.orderCount > 0 || (data.connectedPlatforms?.length ?? 0) > 0),
   };
 }
