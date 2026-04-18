@@ -1,10 +1,14 @@
 {
-  "version": "0.515.0",
-  "previousVersion": "0.514.0",
-  "commitHash": "4e89514",
+  "version": "0.517.0",
+  "previousVersion": "0.516.0",
+  "commitHash": "552881f",
   "branch": "main",
-  "buildDate": "2026-04-18T08:49:24.974Z",
+  "buildDate": "2026-04-18T09:10:41.992Z",
   "commits": [
+    {
+      "hash": "552881f",
+      "message": "feat: strategy commerce tools, campaigns geo Mekko, and related updates"
+    },
     {
       "hash": "4e89514",
       "message": "chore: full deploy"
@@ -60,13 +64,10 @@
     {
       "hash": "d3f99f7",
       "message": "chore(pricing): remove 'Με benchmark αγοράς' KPI card"
-    },
-    {
-      "hash": "f5ccdf1",
-      "message": "fix(price-benchmarks): populate stock/sold from ecommerce skuStats + GMC productId parse"
     }
   ],
   "changes": [
+    "[Νέο χαρακτηριστικό] Strategy commerce tools, campaigns geo Mekko, and related updates",
     "[Συντήρηση] Full deploy",
     "[Νέο χαρακτηριστικό] Date range filter on Product Intelligence (import vs first available)",
     "[Διόρθωση] Probe REST paths (index.php, www) + store restApiBase for sync",
@@ -75,7 +76,6 @@
     "[Νέο χαρακτηριστικό] Activate connector token encryption (CONNECTOR_TOKEN_KEY wired)",
     "[Νέο χαρακτηριστικό] Connector token encryption-at-rest (AES-256-GCM, dormant)",
     "[Νέο χαρακτηριστικό] App Check + rate limit + strict CORS + robots.txt",
-    "[Νέο χαρακτηριστικό] Excel-style column filters + sort στον πίνακα Price Benchmarks",
-    "Ui(suppliers): keep header labels single-line (whitespace-nowrap + wider cols)"
+    "[Νέο χαρακτηριστικό] Excel-style column filters + sort στον πίνακα Price Benchmarks"
   ]
 }

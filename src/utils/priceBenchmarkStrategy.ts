@@ -120,15 +120,33 @@ export function productParticipatesInPriceBenchmarkStrategy(
   return productMatchesPriceBenchmarkPreset(product, scope.preset, benchmark);
 }
 
+/**
+ * Έλεγχος συμμετοχής SKU στο scope Price Benchmarking.
+ * Όταν υπάρχουν `selectedProductIds`, **δεν** καλεί `findBenchmarkForProduct` (αποφυγή freeze σε μεγάλο κατάλογο).
+ */
+export function productInPriceBenchmarkScope<T extends BenchmarkPriceFields>(
+  product: Product,
+  scope: PriceBenchmarkStrategyScope | null | undefined,
+  benchmarks: readonly T[],
+): boolean {
+  if (!scope) return true;
+  if (scope.selectedProductIds && scope.selectedProductIds.length > 0) {
+    return scope.selectedProductIds.includes(product.id);
+  }
+  return productParticipatesInPriceBenchmarkStrategy(
+    product,
+    scope,
+    findBenchmarkForProduct(product, benchmarks),
+  );
+}
+
 export function filterProductsByPriceBenchmarkScope<T extends BenchmarkPriceFields>(
   products: Product[],
   scope: PriceBenchmarkStrategyScope | null | undefined,
   benchmarks: readonly T[],
 ): Product[] {
   if (!scope) return products;
-  const filtered = products.filter((p) =>
-    productParticipatesInPriceBenchmarkStrategy(p, scope, findBenchmarkForProduct(p, benchmarks)),
-  );
+  const filtered = products.filter((p) => productInPriceBenchmarkScope(p, scope, benchmarks));
   return filtered.length > 0 ? filtered : products;
 }
 

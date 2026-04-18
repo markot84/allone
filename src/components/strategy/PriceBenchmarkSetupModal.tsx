@@ -1,6 +1,6 @@
-import { useMemo, useState, useEffect, useCallback } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Search, ArrowUpDown } from 'lucide-react';
+import { X, Search, Layers } from 'lucide-react';
 import type { Product, PriceBenchmarkPresetId, PriceBenchmarkStrategyScope } from '../../types';
 import type { PriceBenchmark } from '../../hooks/usePriceBenchmarks';
 import {
@@ -10,21 +10,43 @@ import {
   productMatchesPriceBenchmarkTextFilters,
 } from '../../utils/priceBenchmarkStrategy';
 
-const MAX_EXPLICIT_IDS = 2500;
-
-export type PriceBenchmarkSortKey =
-  | 'diff'
-  | 'yourPrice'
-  | 'benchmarkPrice'
-  | 'brand'
-  | 'category'
-  | 'name';
-
 function brandOf(p: Product): string {
   const b = p.brand?.trim();
   if (b) return b;
   return p.supplier?.trim() ?? '';
 }
+
+type GroupRow = { label: string; count: number; avgDiff: number };
+
+function buildBrandGroups(rows: { product: Product; benchmark: PriceBenchmark }[]): GroupRow[] {
+  const m = new Map<string, { count: number; sumDiff: number }>();
+  for (const { product: p, benchmark: b } of rows) {
+    const label = brandOf(p) || '—';
+    const cur = m.get(label) ?? { count: 0, sumDiff: 0 };
+    cur.count += 1;
+    cur.sumDiff += b.priceDiff;
+    m.set(label, cur);
+  }
+  return [...m.entries()]
+    .map(([label, v]) => ({ label, count: v.count, avgDiff: v.sumDiff / v.count }))
+    .sort((a, b) => b.count - a.count);
+}
+
+function buildCategoryGroups(rows: { product: Product; benchmark: PriceBenchmark }[]): GroupRow[] {
+  const m = new Map<string, { count: number; sumDiff: number }>();
+  for (const { product: p, benchmark: b } of rows) {
+    const label = (p.category ?? '').trim() || '—';
+    const cur = m.get(label) ?? { count: 0, sumDiff: 0 };
+    cur.count += 1;
+    cur.sumDiff += b.priceDiff;
+    m.set(label, cur);
+  }
+  return [...m.entries()]
+    .map(([label, v]) => ({ label, count: v.count, avgDiff: v.sumDiff / v.count }))
+    .sort((a, b) => b.count - a.count);
+}
+
+const MAX_GROUP_ROWS = 18;
 
 export interface PriceBenchmarkSetupModalProps {
   isOpen: boolean;
@@ -47,9 +69,6 @@ export function PriceBenchmarkSetupModal({
   const [brandFilter, setBrandFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [search, setSearch] = useState('');
-  const [sortKey, setSortKey] = useState<PriceBenchmarkSortKey>('diff');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
-  const [checked, setChecked] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (!isOpen) return;
@@ -64,9 +83,6 @@ export function PriceBenchmarkSetupModal({
     setBrandFilter(s.brandFilter);
     setCategoryFilter(s.categoryFilter);
     setSearch(s.search);
-    setSortKey('diff');
-    setSortDir('asc');
-    setChecked({});
   }, [isOpen, initialScope]);
 
   const brandOptions = useMemo(() => {
@@ -99,84 +115,76 @@ export function PriceBenchmarkSetupModal({
     return rows;
   }, [products, benchmarks, preset, brandFilter, categoryFilter, search]);
 
-  const sortedRows = useMemo(() => {
-    const rows = [...matchedRows];
-    const dir = sortDir === 'asc' ? 1 : -1;
-    rows.sort((a, b) => {
-      let cmp = 0;
-      switch (sortKey) {
-        case 'diff':
-          cmp = a.benchmark.priceDiff - b.benchmark.priceDiff;
-          break;
-        case 'yourPrice':
-          cmp = a.benchmark.yourPrice - b.benchmark.yourPrice;
-          break;
-        case 'benchmarkPrice':
-          cmp = a.benchmark.benchmarkPrice - b.benchmark.benchmarkPrice;
-          break;
-        case 'brand':
-          cmp = brandOf(a.product).localeCompare(brandOf(b.product), 'el');
-          break;
-        case 'category':
-          cmp = (a.product.category ?? '').localeCompare(b.product.category ?? '', 'el');
-          break;
-        case 'name':
-        default:
-          cmp = (a.product.name ?? '').localeCompare(b.product.name ?? '', 'el');
-      }
-      return cmp * dir;
-    });
-    return rows;
-  }, [matchedRows, sortKey, sortDir]);
-
-  useEffect(() => {
-    if (!isOpen || sortedRows.length === 0) return;
-    setChecked((prev) => {
-      const next: Record<string, boolean> = {};
-      for (const { product: p } of sortedRows) {
-        next[p.id] = prev[p.id] !== false;
-      }
-      return next;
-    });
-  }, [isOpen, sortedRows, preset, brandFilter, categoryFilter, search]);
-
-  const toggleSort = useCallback((key: PriceBenchmarkSortKey) => {
-    setSortKey((k) => {
-      if (k === key) {
-        setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-        return k;
-      }
-      setSortDir(key === 'name' || key === 'brand' || key === 'category' ? 'asc' : key === 'diff' ? 'asc' : 'desc');
-      return key;
-    });
-  }, []);
-
-  const selectedCount = useMemo(
-    () => sortedRows.filter(({ product: p }) => checked[p.id] !== false).length,
-    [sortedRows, checked],
-  );
+  const totalMatched = matchedRows.length;
+  const brandGroups = useMemo(() => buildBrandGroups(matchedRows), [matchedRows]);
+  const categoryGroups = useMemo(() => buildCategoryGroups(matchedRows), [matchedRows]);
 
   const handleContinue = () => {
-    if (sortedRows.length === 0) return;
-    const allOn = sortedRows.every(({ product: p }) => checked[p.id] !== false);
-    const ids = sortedRows.filter(({ product: p }) => checked[p.id] !== false).map(({ product: p }) => p.id);
-    if (ids.length === 0) return;
-    if (ids.length > MAX_EXPLICIT_IDS) {
-      window.alert(`Επιλέχθηκαν πάνω από ${MAX_EXPLICIT_IDS} SKU. Στενέψτε με φίλτρα.`);
-      return;
-    }
+    if (matchedRows.length === 0) return;
     onContinue({
       preset,
       brandFilter,
       categoryFilter,
       search,
-      selectedProductIds: allOn ? null : ids,
+      selectedProductIds: null,
     });
   };
 
   const hasBenchmarkData = benchmarks.some((b) => b.benchmarkPrice > 0);
 
   if (!isOpen) return null;
+
+  const renderGroupTable = (title: string, shown: GroupRow[], restCount: number, totalGroups: number) => (
+    <div className="rounded-xl border border-[#E5E5E5] overflow-hidden">
+      <div className="px-3 py-2 bg-[#F9FAFB] border-b border-[#E5E5E5] flex items-center gap-2">
+        <Layers size={14} className="text-[#6B7280]" />
+        <span className="text-xs font-semibold text-[#374151]">{title}</span>
+        <span className="text-[10px] text-[#9CA3AF] ml-auto">{totalGroups} ομάδες</span>
+      </div>
+      <div className="max-h-[220px] overflow-auto">
+        <table className="w-full text-left text-[11px]">
+          <thead className="sticky top-0 bg-white border-b border-[#F3F4F6] z-[1]">
+            <tr className="text-[#9CA3AF]">
+              <th className="px-3 py-2 font-medium">Ομάδα</th>
+              <th className="px-3 py-2 font-medium text-right">SKU</th>
+              <th className="px-3 py-2 font-medium text-right">Μέσος Διαφορά %</th>
+            </tr>
+          </thead>
+          <tbody>
+            {shown.map((g) => (
+              <tr key={g.label} className="border-b border-[#F9FAFB]">
+                <td className="px-3 py-1.5 text-[#111827] truncate max-w-[180px]" title={g.label}>
+                  {g.label}
+                </td>
+                <td className="px-3 py-1.5 text-right font-mono text-[#4B5563]">{g.count}</td>
+                <td
+                  className={`px-3 py-1.5 text-right font-mono font-medium ${
+                    g.avgDiff < 0 ? 'text-emerald-700' : g.avgDiff > 0 ? 'text-rose-700' : 'text-[#6B7280]'
+                  }`}
+                >
+                  {g.avgDiff > 0 ? '+' : ''}
+                  {g.avgDiff.toFixed(1)}%
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {restCount > 0 && (
+          <p className="text-[10px] text-[#9CA3AF] px-3 py-2 border-t border-[#F3F4F6]">
+            +{restCount} ακόμα ομάδες με λιγότερα SKU (από κοινού στο σύνολο παραπάνω).
+          </p>
+        )}
+      </div>
+    </div>
+  );
+
+  const sliceGroups = (groups: GroupRow[]) => {
+    if (groups.length <= MAX_GROUP_ROWS) return { shown: groups, rest: 0 };
+    return { shown: groups.slice(0, MAX_GROUP_ROWS), rest: groups.length - MAX_GROUP_ROWS };
+  };
+
+  const brandS = sliceGroups(brandGroups);
+  const catS = sliceGroups(categoryGroups);
 
   return (
     <AnimatePresence>
@@ -196,10 +204,10 @@ export function PriceBenchmarkSetupModal({
         >
           <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-[#E5E5E5]">
             <div>
-              <h2 className="text-base font-bold text-[#1A1A1A]">Price Benchmarking — επιλογή SKU</h2>
+              <h2 className="text-base font-bold text-[#1A1A1A]">Price Benchmarking — εύρος με φίλτρα</h2>
               <p className="text-xs text-[#6B7280] mt-1 leading-relaxed">
-                Προϊόντα με δεδομένα GMC έναντι αγοράς. Προεπιλογή: φθηνότερα από το benchmark. Μετά ακολουθεί η
-                επιλογή διάρκειας στρατηγικής.
+                Ορίστε preset και φίλτρα· η στρατηγική εφαρμόζεται σε <strong>όλα</strong> τα SKU που ταιριάζουν. Παρακάτω
+                σύνοψη ανά μάρκα και κατηγορία (χωρίς αναλυτική λίστα SKU).
               </p>
             </div>
             <button type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-[#F5F5F5] text-[#9CA3AF]">
@@ -285,118 +293,29 @@ export function PriceBenchmarkSetupModal({
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-1 text-[11px] text-[#6B7280]">
-                <ArrowUpDown size={12} />
-                <span>
-                  {sortedRows.length} SKU · επιλεγμένα {selectedCount}
-                </span>
-              </div>
-              <div className="flex flex-wrap gap-1">
-                {(
-                  [
-                    ['diff', 'Διαφορά %'],
-                    ['yourPrice', 'Τιμή σας'],
-                    ['benchmarkPrice', 'Αγορά'],
-                    ['brand', 'Μάρκα'],
-                    ['category', 'Κατηγορία'],
-                    ['name', 'Όνομα'],
-                  ] as const
-                ).map(([key, label]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => toggleSort(key)}
-                    className={`px-2 py-0.5 rounded-md text-[10px] font-medium border transition-colors ${
-                      sortKey === key
-                        ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/10 text-[var(--nts-accent)]'
-                        : 'border-[#E5E5E5] text-[#4B5563] hover:border-[var(--nts-accent)]/40'
-                    }`}
-                  >
-                    {label}
-                    {sortKey === key ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
-                  </button>
-                ))}
-              </div>
+            <div className="rounded-lg border border-[var(--nts-accent)]/25 bg-[var(--nts-accent)]/5 px-3 py-2">
+              <p className="text-xs font-medium text-[#1A1A1A]">
+                Σύνολο <span className="text-[var(--nts-accent)]">{totalMatched.toLocaleString('el-GR')}</span> SKU
+                ταιριάζουν με τα κριτήρια.
+              </p>
+              <p className="text-[10px] text-[#6B7280] mt-1">
+                Στην επόμενη οθόνη επιλέγετε διάρκεια· η στρατηγική θα ισχύει για όλα αυτά τα SKU (όχι επιλογή ανά
+                γραμμή).
+              </p>
             </div>
 
-            <div className="flex gap-2 text-[11px]">
-              <button
-                type="button"
-                className="px-2 py-1 rounded-md border border-[#E5E5E5] hover:bg-[#F9FAFB]"
-                onClick={() => {
-                  const next: Record<string, boolean> = {};
-                  for (const { product: p } of sortedRows) next[p.id] = true;
-                  setChecked(next);
-                }}
-              >
-                Επιλογή όλων (ορατά)
-              </button>
-              <button
-                type="button"
-                className="px-2 py-1 rounded-md border border-[#E5E5E5] hover:bg-[#F9FAFB]"
-                onClick={() => {
-                  const next: Record<string, boolean> = {};
-                  for (const { product: p } of sortedRows) next[p.id] = false;
-                  setChecked(next);
-                }}
-              >
-                Καμία
-              </button>
-            </div>
-
-            <div className="border border-[#E5E5E5] rounded-xl overflow-hidden">
-              <div className="max-h-[min(40vh,320px)] overflow-auto">
-                <table className="w-full text-left text-[11px]">
-                  <thead className="sticky top-0 bg-[#F9FAFB] border-b border-[#E5E5E5] z-[1]">
-                    <tr>
-                      <th className="w-8 px-2 py-2" />
-                      <th className="px-2 py-2 font-semibold text-[#6B7280]">SKU</th>
-                      <th className="px-2 py-2 font-semibold text-[#6B7280]">Όνομα</th>
-                      <th className="px-2 py-2 font-semibold text-[#6B7280] hidden sm:table-cell">Μάρκα</th>
-                      <th className="px-2 py-2 font-semibold text-[#6B7280] text-right">Εσείς</th>
-                      <th className="px-2 py-2 font-semibold text-[#6B7280] text-right">Αγορά</th>
-                      <th className="px-2 py-2 font-semibold text-[#6B7280] text-right">Διαφορά</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortedRows.map(({ product: p, benchmark: b }) => (
-                      <tr key={p.id} className="border-b border-[#F3F4F6] hover:bg-[#FAFAFA]">
-                        <td className="px-2 py-1.5">
-                          <input
-                            type="checkbox"
-                            checked={checked[p.id] !== false}
-                            onChange={(e) => setChecked((c) => ({ ...c, [p.id]: e.target.checked }))}
-                          />
-                        </td>
-                        <td className="px-2 py-1.5 font-mono text-[#4B5563] whitespace-nowrap">{p.sku}</td>
-                        <td className="px-2 py-1.5 text-[#111827] max-w-[200px] truncate">{p.name}</td>
-                        <td className="px-2 py-1.5 text-[#6B7280] hidden sm:table-cell max-w-[100px] truncate">
-                          {brandOf(p) || '—'}
-                        </td>
-                        <td className="px-2 py-1.5 text-right font-mono">€{b.yourPrice.toFixed(2)}</td>
-                        <td className="px-2 py-1.5 text-right font-mono">€{b.benchmarkPrice.toFixed(2)}</td>
-                        <td
-                          className={`px-2 py-1.5 text-right font-mono font-medium ${
-                            b.priceDiff < 0 ? 'text-emerald-700' : b.priceDiff > 0 ? 'text-rose-700' : 'text-[#6B7280]'
-                          }`}
-                        >
-                          {b.priceDiff > 0 ? '+' : ''}
-                          {b.priceDiff}%
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {sortedRows.length === 0 && (
-                  <p className="text-xs text-center text-[#9CA3AF] py-8">
-                    {hasBenchmarkData
-                      ? 'Δεν ταιριάζει κανένα SKU με τα φίλτρα / preset.'
-                      : 'Δεν υπάρχουν benchmarks για εμφάνιση.'}
-                  </p>
-                )}
+            {totalMatched > 0 && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                {renderGroupTable('Ανά μάρκα / προμηθευτή', brandS.shown, brandS.rest, brandGroups.length)}
+                {renderGroupTable('Ανά κατηγορία', catS.shown, catS.rest, categoryGroups.length)}
               </div>
-            </div>
+            )}
+
+            {totalMatched === 0 && hasBenchmarkData && (
+              <p className="text-xs text-center text-[#9CA3AF] py-6">
+                Δεν ταιριάζει κανένα SKU με τα φίλτρα / preset.
+              </p>
+            )}
           </div>
 
           <div className="flex justify-end gap-2 px-5 py-3 border-t border-[#E5E5E5] bg-[#FAFAFA]">
@@ -410,7 +329,7 @@ export function PriceBenchmarkSetupModal({
             <button
               type="button"
               onClick={handleContinue}
-              disabled={!hasBenchmarkData || sortedRows.length === 0 || selectedCount === 0}
+              disabled={!hasBenchmarkData || totalMatched === 0}
               className="px-4 py-1.5 text-xs font-medium rounded-lg bg-[var(--nts-accent)] text-white hover:opacity-90 disabled:opacity-40 disabled:pointer-events-none"
             >
               Συνέχεια — διάρκεια στρατηγικής

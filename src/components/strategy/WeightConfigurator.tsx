@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef, startTransition } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -57,7 +57,7 @@ import {
 import {
   filterProductsByPriceBenchmarkScope,
   findBenchmarkForProduct,
-  productParticipatesInPriceBenchmarkStrategy,
+  productInPriceBenchmarkScope,
 } from '../../utils/priceBenchmarkStrategy';
 import { usePriceBenchmarks } from '../../hooks/usePriceBenchmarks';
 import { getStockAgeDays } from '../../utils/productUtils';
@@ -617,7 +617,9 @@ export function WeightConfigurator() {
     
     setMixPanelOpen(false);
     setSeasonalPanelOpen(false);
-    setPendingScenarioChange(scenarioId);
+    startTransition(() => {
+      setPendingScenarioChange(scenarioId);
+    });
   }, [selectedScenario, applyScenarioChange]);
 
   // Confirm strategy change after impact preview
@@ -1185,12 +1187,7 @@ export function WeightConfigurator() {
               pendingScenarioChange === 'sales_base' && pendingSalesBaseScope
                 ? (p) => productParticipatesInSalesBase(p, pendingSalesBaseScope)
                 : pendingScenarioChange === 'price_benchmark' && pendingPriceBenchmarkScope
-                  ? (p) =>
-                      productParticipatesInPriceBenchmarkStrategy(
-                        p,
-                        pendingPriceBenchmarkScope,
-                        findBenchmarkForProduct(p, benchmarks),
-                      )
+                  ? (p) => productInPriceBenchmarkScope(p, pendingPriceBenchmarkScope, benchmarks)
                   : undefined
             }
             scoreContext={
@@ -1561,12 +1558,7 @@ export function WeightConfigurator() {
             pendingScenarioChange === 'sales_base' && pendingSalesBaseScope
               ? (p) => productParticipatesInSalesBase(p, pendingSalesBaseScope)
               : pendingScenarioChange === 'price_benchmark' && pendingPriceBenchmarkScope
-                ? (p) =>
-                    productParticipatesInPriceBenchmarkStrategy(
-                      p,
-                      pendingPriceBenchmarkScope,
-                      findBenchmarkForProduct(p, benchmarks),
-                    )
+                ? (p) => productInPriceBenchmarkScope(p, pendingPriceBenchmarkScope, benchmarks)
                 : undefined
           }
           scoreContext={
@@ -1585,9 +1577,11 @@ export function WeightConfigurator() {
             : undefined
         }
         onContinue={(scope) => {
-          setPendingSalesBaseScope(scope);
-          setSalesBaseSetupOpen(false);
-          setPendingScenarioChange('sales_base');
+          startTransition(() => {
+            setPendingSalesBaseScope(scope);
+            setSalesBaseSetupOpen(false);
+            setPendingScenarioChange('sales_base');
+          });
         }}
       />
 
@@ -1602,9 +1596,11 @@ export function WeightConfigurator() {
             : undefined
         }
         onContinue={(scope) => {
-          setPendingPriceBenchmarkScope(scope);
-          setPriceBenchmarkSetupOpen(false);
-          setPendingScenarioChange('price_benchmark');
+          startTransition(() => {
+            setPendingPriceBenchmarkScope(scope);
+            setPriceBenchmarkSetupOpen(false);
+            setPendingScenarioChange('price_benchmark');
+          });
         }}
       />
 

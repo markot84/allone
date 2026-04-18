@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import {
   ArrowRight,
   ArrowUp,
@@ -48,6 +48,34 @@ function truncateName(name: string, max = 30) {
   return name.slice(0, max) + '…';
 }
 
+/** Άνω όριο SKU για σκορ επίδρασης — αποφεύγει freeze του UI σε μεγάλους καταλόγους. */
+const IMPACT_SCORE_MAX_PRODUCTS = 2500;
+
+function subsampleProductsEvenly(list: Product[], max: number): Product[] {
+  if (list.length <= max) return list;
+  const n = list.length;
+  const out: Product[] = [];
+  for (let k = 0; k < max; k++) {
+    const idx = Math.floor((k / Math.max(1, max - 1)) * (n - 1));
+    out.push(list[idx]);
+  }
+  return out;
+}
+
+type ProductImpactStats = {
+  up: number;
+  down: number;
+  same: number;
+  samplesUp: Product[];
+  samplesDown: Product[];
+  /** Σύνολο SKU στο πεδίο εφαρμογής (μετά το φίλτρο, αν υπάρχει). */
+  catalogTotal: number;
+  /** Πραγματικό μέγεθος λίστας που σκοράρεται (≤ catalogTotal). */
+  sampleSize: number;
+  /** Αν true, τα νούμερα ↑/↓/ίδια αφορούν μόνο το δείγμα (όχι ολόκληρο τον κατάλογο). */
+  usedSample: boolean;
+};
+
 function useProductImpacts(
   products: Product[],
   currentWeights: Record<string, number>,
@@ -56,12 +84,28 @@ function useProductImpacts(
   newScenarioId?: string,
   impactProductFilter?: (p: Product) => boolean,
   scoreContext?: CompositeScoreContext,
-) {
+): ProductImpactStats {
   return useMemo(() => {
-    const scoped = impactProductFilter ? products.filter(impactProductFilter) : products;
-    if (scoped.length === 0) {
-      return { up: 0, down: 0, same: 0, samplesUp: [] as Product[], samplesDown: [] as Product[] };
-    }
+    const empty = (): ProductImpactStats => ({
+      up: 0,
+      down: 0,
+      same: 0,
+      samplesUp: [],
+      samplesDown: [],
+      catalogTotal: 0,
+      sampleSize: 0,
+      usedSample: false,
+    });
+
+    const scopedRaw = impactProductFilter ? products.filter(impactProductFilter) : products;
+    const catalogTotal = scopedRaw.length;
+    if (catalogTotal === 0) return empty();
+
+    const scoped =
+      catalogTotal > IMPACT_SCORE_MAX_PRODUCTS
+        ? subsampleProductsEvenly(scopedRaw, IMPACT_SCORE_MAX_PRODUCTS)
+        : scopedRaw;
+    const usedSample = scoped.length < catalogTotal;
 
     const changes = scoped.map((product) => {
       const currentScore = calculateCompositeScore(
@@ -98,6 +142,9 @@ function useProductImpacts(
       same: same.length,
       samplesUp: up.slice(0, 5).map(c => c.product),
       samplesDown: down.slice(0, 5).map(c => c.product),
+      catalogTotal,
+      sampleSize: scoped.length,
+      usedSample,
     };
   }, [products, currentWeights, newWeights, currentScenarioId, newScenarioId, impactProductFilter, scoreContext]);
 }
@@ -134,15 +181,41 @@ export function StrategyImpactSummary({
   const fromName = scenarios.find(s => s.id === currentScenarioId)?.name ?? 'Τρέχουσα';
   const toName = scenarios.find(s => s.id === newScenarioId)?.name ?? 'Νέα';
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCancel();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onCancel]);
+
   return (
     <motion.div
-      initial={{ opacity: 0, y: 40 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 40 }}
-      className="fixed bottom-0 left-0 right-0 z-50 px-4 pb-4 pointer-events-none"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex flex-col justify-end pointer-events-auto"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="strategy-impact-summary-title"
     >
-      <div className="max-w-3xl mx-auto pointer-events-auto rounded-2xl border border-[#E5E5E5] bg-white shadow-[0_-4px_24px_rgba(0,0,0,0.12)] p-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <button
+        type="button"
+        tabIndex={-1}
+        className="absolute inset-0 bg-black/30 cursor-default border-0 p-0"
+        aria-label="Κλείσιμο διαλόγου (κλικ εκτός πίνακα)"
+        onClick={onCancel}
+      />
+      <motion.div
+        initial={{ opacity: 0, y: 40 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 40 }}
+        className="relative z-[1] w-full max-w-3xl mx-auto px-4 pb-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="rounded-2xl border border-[#E5E5E5] bg-white shadow-[0_-4px_24px_rgba(0,0,0,0.12)] p-4">
+        <div className="flex items-start justify-between gap-2">
+          <div id="strategy-impact-summary-title" className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 flex-1 min-w-0">
           <div className="flex items-center gap-2 text-sm min-w-0">
             <span className="font-medium text-[#1A1A1A] truncate">{fromName}</span>
             <ArrowRight size={14} className="text-[var(--nts-accent)] flex-shrink-0" />
@@ -166,7 +239,24 @@ export function StrategyImpactSummary({
               </span>
             )}
           </div>
+          </div>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="shrink-0 p-2 rounded-lg hover:bg-[#F3F4F6] text-[#6B7280] hover:text-[#111827] transition-colors"
+            aria-label="Ακύρωση (κλείσιμο)"
+          >
+            <X size={18} />
+          </button>
         </div>
+
+        {impacts.usedSample && (
+          <p className="text-[10px] text-[#9CA3AF] mt-2 leading-snug">
+            Έλεγχος επίδρασης σε {impacts.sampleSize.toLocaleString('el-GR')} από{' '}
+            {impacts.catalogTotal.toLocaleString('el-GR')} SKU (δείγμα για ταχύτητα· τα ↑/↓/ίδια αφορούν μόνο αυτό το
+            υποσύνολο).
+          </p>
+        )}
 
         {/* Duration selector */}
         <div className="flex items-center gap-2 mt-3 pt-3 border-t border-[#F5F5F5]">
@@ -199,8 +289,17 @@ export function StrategyImpactSummary({
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-2 mt-3">
+        <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 mt-3">
           <button
+            type="button"
+            onClick={onCancel}
+            className="w-full sm:w-auto px-4 py-2 text-xs font-medium rounded-lg border border-[#D1D5DB] text-[#374151] bg-white hover:bg-[#F9FAFB] transition-colors"
+          >
+            Ακύρωση
+          </button>
+          <div className="flex items-center justify-end gap-2 w-full sm:w-auto">
+          <button
+            type="button"
             onClick={onDetails}
             className="px-3 py-1.5 text-xs font-medium text-[#4A4A4A] hover:text-[var(--nts-accent)] transition-colors"
           >
@@ -208,20 +307,17 @@ export function StrategyImpactSummary({
             Λεπτομέρειες
           </button>
           <button
-            onClick={onCancel}
-            className="px-3 py-1.5 text-xs font-medium text-[#9CA3AF] hover:text-[#4A4A4A] transition-colors"
-          >
-            Ακύρωση
-          </button>
-          <button
+            type="button"
             onClick={() => onConfirm(duration)}
-            className="px-4 py-1.5 text-xs font-medium bg-[var(--nts-accent)] text-white rounded-lg hover:opacity-90 transition-opacity flex items-center gap-1.5"
+            className="px-4 py-2 text-xs font-medium bg-[var(--nts-accent)] text-white rounded-lg hover:opacity-90 transition-opacity flex items-center justify-center gap-1.5 flex-1 sm:flex-initial min-w-[120px]"
           >
             <Check size={12} />
             Εφαρμογή
           </button>
+          </div>
         </div>
-      </div>
+        </div>
+      </motion.div>
     </motion.div>
   );
 }
@@ -292,6 +388,15 @@ export function StrategyImpactModal({
     return { active };
   }, [campaigns, hasCampaigns]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   return (
@@ -301,6 +406,8 @@ export function StrategyImpactModal({
       exit={{ opacity: 0 }}
       className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
       onClick={onClose}
+      role="dialog"
+      aria-modal="true"
     >
       <motion.div
         initial={{ scale: 0.95, opacity: 0 }}
@@ -313,8 +420,13 @@ export function StrategyImpactModal({
         <div className="p-5 border-b border-[#E5E5E5]">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-bold text-[#1A1A1A]">Αλλαγή στρατηγικής</h2>
-            <button onClick={onClose} className="p-1 rounded hover:bg-[#F5F5F5] text-[#9CA3AF]">
-              <X size={16} />
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 rounded-lg hover:bg-[#F3F4F6] text-[#6B7280] hover:text-[#111827]"
+              aria-label="Ακύρωση (κλείσιμο)"
+            >
+              <X size={18} />
             </button>
           </div>
 
@@ -376,7 +488,13 @@ export function StrategyImpactModal({
                   exit={{ height: 0, opacity: 0 }}
                   className="overflow-hidden"
                 >
-                  <div className="mt-3 space-y-1.5">
+                  {impacts.usedSample && (
+                    <p className="text-[10px] text-[#9CA3AF] mb-2">
+                      Δείγμα {impacts.sampleSize.toLocaleString('el-GR')} /{' '}
+                      {impacts.catalogTotal.toLocaleString('el-GR')} SKU.
+                    </p>
+                  )}
+                  <div className="space-y-1.5">
                     {impacts.samplesUp.map((p, i) => (
                       <div key={`up-${i}`} className="flex items-center gap-2 text-xs px-2 py-1.5 rounded bg-[#F0FDF4]">
                         <ArrowUp size={11} className="text-[#22C55E] flex-shrink-0" />
