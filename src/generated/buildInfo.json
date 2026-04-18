@@ -1,10 +1,14 @@
 {
-  "version": "0.556.0",
-  "previousVersion": "0.555.0",
-  "commitHash": "bc53a7e",
+  "version": "0.558.0",
+  "previousVersion": "0.557.0",
+  "commitHash": "98bcb5c",
   "branch": "cursor/sales-opt-foundation-and-stock-movement",
-  "buildDate": "2026-04-18T18:12:08.883Z",
+  "buildDate": "2026-04-18T19:42:51.505Z",
   "commits": [
+    {
+      "hash": "98bcb5c",
+      "message": "feat(strategy): universal data layer + decision buckets triage"
+    },
     {
       "hash": "bc53a7e",
       "message": "feat(strategy): sales opt foundation + universal stock movement"
@@ -60,13 +64,10 @@
     {
       "hash": "457f3c6",
       "message": "feat(security): connector token encryption-at-rest (AES-256-GCM, dormant)"
-    },
-    {
-      "hash": "15b68af",
-      "message": "feat(security): App Check + rate limit + strict CORS + robots.txt"
     }
   ],
   "changes": [
+    "[Νέο χαρακτηριστικό] Universal data layer + decision buckets triage",
     "[Νέο χαρακτηριστικό] Sales opt foundation + universal stock movement",
     "[Συντήρηση] Full deploy",
     "[Διόρθωση] Grouped setup modals, impact dismiss UX, price benchmark filter perf",
@@ -75,7 +76,6 @@
     "[Διόρθωση] Probe REST paths (index.php, www) + store restApiBase for sync",
     "[Τεκμηρίωση] Magento — HTTPS base URLs fix 'Integration not secure' (empty fields)",
     "[Τεκμηρίωση] Magento modal — empty Callback/Identity URLs for token-only flow",
-    "[Νέο χαρακτηριστικό] Activate connector token encryption (CONNECTOR_TOKEN_KEY wired)",
-    "[Νέο χαρακτηριστικό] Connector token encryption-at-rest (AES-256-GCM, dormant)"
+    "[Νέο χαρακτηριστικό] Activate connector token encryption (CONNECTOR_TOKEN_KEY wired)"
   ]
 }

@@ -46,6 +46,9 @@ import { safeBrandName } from '../../services/reportExport';
 import { formatCurrency, formatNumber, formatPercent } from '../../utils/format';
 import { scenarios } from '../../data';
 import { generateChannelRecommendations } from '../../services/aiChannelRecommendations';
+import { useProductSignals } from '../../hooks/useProductSignals';
+import { buildTriagePromptContext, buildProvenancePromptContext } from '../../utils/aiPromptContext';
+import type { TriageOrigin } from '../../hooks/useActiveStrategy';
 import { FirestoreService } from '../../services/firestore';
 import { useQueryClient } from '@tanstack/react-query';
 import type { ChannelRecommendation, BudgetAction, MarketingCostLine } from '../../types';
@@ -151,6 +154,10 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   const queryClient = useQueryClient();
   const toast = useToast();
 
+  // Provenance snapshot — δίνει στο AI το mix πηγών δεδομένων (connector vs
+  // movement vs procurement vs import) ώστε να calibrate το rationale.
+  const { coverage: signalCoverage } = useProductSignals(products);
+
   const [showExportModal, setShowExportModal] = useState(false);
   const [selectedFeed, setSelectedFeed] = useState<string | null>(null);
   const [previewFeed, setPreviewFeed] = useState<string | null>(null);
@@ -183,12 +190,19 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     setAiGenerating(true);
     try {
       const topCats = [...new Set(products.map(p => p.category).filter(Boolean))].slice(0, 5);
+      // Pull triage origin από το αποθηκευμένο active_strategies doc — αν η
+      // στρατηγική προέκυψε από Decision Bucket, το AI πρέπει να ευθυγραμμιστεί.
+      const savedTriage = (activeStrategy as { triageOrigin?: TriageOrigin } | null)?.triageOrigin ?? null;
+      const triagePromptCtx = buildTriagePromptContext(savedTriage);
+      const provenancePromptCtx = buildProvenancePromptContext(signalCoverage, products.length);
       const rec = await generateChannelRecommendations({
         scenario,
         segment,
         fitLevel: 'good',
         brandContext: { brandName: currentBrand.name, brandType: currentBrand.type, topCategories: topCats },
         context: 'activation',
+        triage: triagePromptCtx,
+        provenance: provenancePromptCtx,
       });
 
       const clean = JSON.parse(JSON.stringify(rec));
@@ -205,7 +219,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     } finally {
       setAiGenerating(false);
     }
-  }, [strategyId, scenarioId, currentBrand, rfmSegments, products, queryClient, toast]);
+  }, [strategyId, scenarioId, currentBrand, rfmSegments, products, queryClient, toast, activeStrategy, signalCoverage]);
 
   useEffect(() => {
     if (autoGenTriggered.current) return;

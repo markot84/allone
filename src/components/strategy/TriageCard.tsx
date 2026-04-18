@@ -42,8 +42,15 @@ function fmtEur(n: number): string {
 }
 
 interface TriageCardProps {
-  /** Καλείται όταν ο χρήστης επιλέγει "Open in policy" — ο parent αλλάζει scenario. */
-  onSelectPolicy?: (policy: NonNullable<RecommendedPolicy>, fromBucket: BucketId) => void;
+  /**
+   * Καλείται όταν ο χρήστης επιλέγει "Open in policy".
+   * Ο parent αλλάζει scenario και χρησιμοποιεί τα `skus` ως scope.
+   */
+  onSelectPolicy?: (
+    policy: NonNullable<RecommendedPolicy>,
+    fromBucket: BucketId,
+    payload: { skus: string[]; label: string; tiedCapital: number }
+  ) => void;
 }
 
 export function TriageCard({ onSelectPolicy }: TriageCardProps) {
@@ -134,7 +141,16 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
             </div>
             {defs[expanded].recommendedPolicy && onSelectPolicy && (
               <button
-                onClick={() => onSelectPolicy(defs[expanded].recommendedPolicy as NonNullable<RecommendedPolicy>, expanded)}
+                onClick={() => {
+                  const skus = topByBucket[expanded]
+                    .map((a) => a.sku)
+                    .filter((s): s is string => typeof s === 'string' && s.length > 0);
+                  onSelectPolicy(
+                    defs[expanded].recommendedPolicy as NonNullable<RecommendedPolicy>,
+                    expanded,
+                    { skus, label: defs[expanded].label, tiedCapital: tiedByBucket[expanded] }
+                  );
+                }}
                 className="shrink-0 inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-[var(--nts-accent)] text-white text-[11px] font-semibold hover:opacity-90"
               >
                 {defs[expanded].cta}

@@ -1,5 +1,11 @@
 import { callGemini } from './geminiProxy';
-import { CONTENT_SUGGESTIONS_SYSTEM_PROMPT, buildContentSuggestionsUserPrompt, type StrategyContext } from '../data/contentSuggestionsPrompt';
+import {
+  CONTENT_SUGGESTIONS_SYSTEM_PROMPT,
+  buildContentSuggestionsUserPrompt,
+  type StrategyContext,
+  type TriageContentContext,
+  type ProvenanceContentContext,
+} from '../data/contentSuggestionsPrompt';
 import { strategyContentMap } from '../data/mockContent';
 import { scenarios } from '../data/mockScenarios';
 
@@ -98,12 +104,14 @@ export interface GenerateContentSuggestionsParams {
   brandName?: string;
   topCategories?: string[];
   segmentNames?: string[];
+  triage?: TriageContentContext;
+  provenance?: ProvenanceContentContext;
 }
 
 export async function generateContentSuggestions(
   params: GenerateContentSuggestionsParams
 ): Promise<ContentSuggestionsResult | null> {
-  const { scenarioId, scenarioName, weights, brandName, topCategories, segmentNames } = params;
+  const { scenarioId, scenarioName, weights, brandName, topCategories, segmentNames, triage, provenance } = params;
 
   const mapEntry = scenarioId && scenarioId !== 'custom'
     ? strategyContentMap[scenarioId as keyof typeof strategyContentMap]
@@ -123,6 +131,8 @@ export async function generateContentSuggestions(
     brandName,
     topCategories,
     segmentNames,
+    triage,
+    provenance,
   };
 
   try {

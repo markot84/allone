@@ -43,8 +43,24 @@ export interface ActiveStrategy {
   priceBenchmarkScope?: PriceBenchmarkStrategyScope;
   /** Παράμετροι εποχιακής/εκπτωτικής περιόδου (seasonal_discount) */
   seasonalDiscount?: SeasonalDiscountConfig;
+  /** Προέλευση από Decision Buckets triage (αν η στρατηγική προήλθε από bucket CTA). */
+  triageOrigin?: TriageOrigin;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Snapshot της επιλογής bucket από το TriageCard — καρφώνει SKU scope στην ενεργή πολιτική. */
+export interface TriageOrigin {
+  /** Αναγνωριστικό bucket — βλ. utils/decisionBuckets.BucketId */
+  bucket: string;
+  /** Ανθρώπινο label (π.χ. «Νεκρά κεφάλαια»). */
+  label: string;
+  /** Λίστα SKUs που σκοπεύονται από το bucket (capped — βλ. topByBucket). */
+  skus: string[];
+  /** Συνολικά δεσμευμένα κεφάλαια (€) — KPI για context. */
+  tiedCapital?: number;
+  /** ISO timestamp όταν επιλέχθηκε το bucket. */
+  selectedAt: string;
 }
 
 export function useActiveStrategy() {
@@ -114,6 +130,7 @@ export function useActiveStrategy() {
       salesBaseScope?: SalesBaseScope;
       priceBenchmarkScope?: PriceBenchmarkStrategyScope;
       seasonalDiscount?: SeasonalDiscountConfig;
+      triageOrigin?: TriageOrigin;
     }) => {
       if (!brandId) throw new Error('No brand selected');
 
@@ -160,6 +177,10 @@ export function useActiveStrategy() {
 
       if (strategy.seasonalDiscount) {
         strategyData.seasonalDiscount = JSON.parse(JSON.stringify(strategy.seasonalDiscount));
+      }
+
+      if (strategy.triageOrigin) {
+        strategyData.triageOrigin = JSON.parse(JSON.stringify(strategy.triageOrigin));
       }
 
       // Only add optional fields if they have values (Firestore doesn't accept undefined)

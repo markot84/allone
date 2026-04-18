@@ -32,9 +32,11 @@ import { MixedStrategyPanel, type MixConfig, computeBlendedWeights } from './Mix
 import { SeasonalBanner } from './SeasonalBanner';
 import { SeasonalPeriodsModal } from './SeasonalPeriodsModal';
 import { useProductSource } from '../../hooks/useProductSource';
+import { useProductSignals } from '../../hooks/useProductSignals';
+import { buildTriagePromptContext, buildProvenancePromptContext } from '../../utils/aiPromptContext';
 import { useSegments } from '../../hooks/useSegments';
 import { useBrand } from '../../hooks/useBrand';
-import { useActiveStrategy } from '../../hooks/useActiveStrategy';
+import { useActiveStrategy, type TriageOrigin } from '../../hooks/useActiveStrategy';
 import { useAuth } from '../../hooks/useAuth';
 import {
   scenarios,
@@ -258,6 +260,10 @@ export function WeightConfigurator() {
   const { activeStrategy, saveActiveStrategy, isLoading: strategyLoading } = useActiveStrategy();
   const { benchmarks } = usePriceBenchmarks();
   const toast = useToast();
+
+  // Source provenance — δίνεται στα Gemini prompts ώστε να calibrate το AI
+  // confidence (π.χ. αν λείπει connector, δεν υπόσχεται real-time ROAS).
+  const { coverage: signalCoverage } = useProductSignals(products);
 
   const benchmarkLookupMap = useMemo(() => buildBenchmarkLookup(benchmarks), [benchmarks]);
   const normalizedSkuStats = useMemo(() => {
@@ -513,6 +519,21 @@ export function WeightConfigurator() {
   });
   const [seasonalDiscountConfig, setSeasonalDiscountConfig] = useState<SeasonalDiscountConfig | null>(null);
   const [seasonalPanelOpen, setSeasonalPanelOpen] = useState(false);
+  // Triage origin: ποιο decision bucket γέννησε την επιλογή πολιτικής & SKU scope.
+  // Persists στο active_strategies — επιτρέπει downstream consumers (Channel
+  // Activation, AI prompts, exports) να γνωρίζουν την αιτία της στρατηγικής.
+  const [triageOrigin, setTriageOrigin] = useState<TriageOrigin | null>(null);
+
+  // Memoized AI prompt contexts — αναγεννώνται μόνο όταν αλλάζει το triage ή
+  // η κάλυψη πηγών (όχι σε κάθε render).
+  const triagePromptCtx = useMemo(
+    () => buildTriagePromptContext(triageOrigin),
+    [triageOrigin]
+  );
+  const provenancePromptCtx = useMemo(
+    () => buildProvenancePromptContext(signalCoverage, products.length),
+    [signalCoverage, products.length]
+  );
   const [customSeasons, setCustomSeasons] = useState<SeasonalPeriod[]>(() => {
     try {
       const raw = localStorage.getItem('perf-plus-custom-seasons');
@@ -569,6 +590,8 @@ export function WeightConfigurator() {
           brandContext: currentBrand ? { brandName: currentBrand.name, brandType: currentBrand.type, topCategories: topCats } : undefined,
           segmentFitList: rankedSegments.map(rs => ({ name: rs.segment.name, fit: rs.fit, description: rs.segment.description, count: rs.segment.count, revenueShare: rs.segment.revenue_share })),
           context: 'activation',
+          triage: triagePromptCtx,
+          provenance: provenancePromptCtx,
         }).then(async rec => {
           if (!rec) return;
           // Mirror στα 2 πεδία ώστε Channel page (activation) και RFM exports (channel) να μη διαφωνούν.
@@ -586,13 +609,15 @@ export function WeightConfigurator() {
     promises.push(
       generateContentSuggestions({
         scenarioId, scenarioName, weights: strategyWeights, brandName: currentBrand?.name, topCategories: topCats, segmentNames,
+        triage: triagePromptCtx,
+        provenance: provenancePromptCtx,
       }).then(result => { if (result) return saveField('contentSuggestions', result); })
         .catch(err => console.error('[AI] Content failed:', err))
     );
 
     await Promise.allSettled(promises);
     queryClient.invalidateQueries({ queryKey: ['activeStrategy'] });
-  }, [rfmSegments, selectedSegment, products, currentBrand, rankedSegments, segmentFitMap, queryClient]);
+  }, [rfmSegments, selectedSegment, products, currentBrand, rankedSegments, segmentFitMap, queryClient, triagePromptCtx, provenancePromptCtx]);
 
   const applyScenarioChange = useCallback((
     scenarioId: string,
@@ -656,6 +681,7 @@ export function WeightConfigurator() {
       ...(scenarioId === 'price_benchmark'
         ? { priceBenchmarkScope: saveOptions?.priceBenchmarkScope ?? defaultPriceBenchmarkScope }
         : {}),
+      ...(triageOrigin ? { triageOrigin } : {}),
     }).then((saved) => {
       toast.success(`Στρατηγική "${scenarioName}" αποθηκεύτηκε`);
       setStrategySaveVersion(v => v + 1);
@@ -688,6 +714,7 @@ export function WeightConfigurator() {
       approvalStatus: 'implementing',
       approvedBy: user.email || user.displayName || 'User',
       mixConfig: config,
+      ...(triageOrigin ? { triageOrigin } : {}),
     } as any).then((saved) => {
       const mixName = `${nameA} ${config.percentA}% / ${nameB} ${config.percentB}%`;
       toast.success(`Μικτή στρατηγική "${mixName}" αποθηκεύτηκε`);
@@ -722,6 +749,7 @@ export function WeightConfigurator() {
       approvalStatus: 'implementing',
       approvedBy: user.email || user.displayName || 'User',
       mixConfig: config,
+      ...(triageOrigin ? { triageOrigin } : {}),
     } as any).then((saved) => {
       toast.success(`Εποχιακή στρατηγική "${period.name}" εφαρμόστηκε`);
       setStrategySaveVersion(v => v + 1);
@@ -744,6 +772,7 @@ export function WeightConfigurator() {
       approvalStatus: 'implementing',
       approvedBy: user.email || user.displayName || 'User',
       seasonalDiscount: config,
+      ...(triageOrigin ? { triageOrigin } : {}),
     }).then((saved) => {
       setStrategySaveVersion(v => v + 1);
       if (saved?.id) triggerAIGeneration(saved.id, 'seasonal_discount', weights);
@@ -1191,6 +1220,8 @@ export function WeightConfigurator() {
     })),
     useAI: true,
     saveVersion: strategySaveVersion,
+    triage: triagePromptCtx ?? null,
+    provenance: provenancePromptCtx ?? null,
   });
 
   // On load: show saved recommendation. After save: show AI-only result (no static fallback), loading while pending.
@@ -1236,6 +1267,9 @@ export function WeightConfigurator() {
       } else {
         setSeasonalDiscountConfig(null);
       }
+      // Rehydrate triage origin annotation (Decision Buckets → policy provenance).
+      const savedTriage = (activeStrategy as any).triageOrigin as TriageOrigin | undefined;
+      setTriageOrigin(savedTriage ?? null);
     }
   }, [activeStrategy?.id, strategyLoading]);
 
@@ -1276,8 +1310,41 @@ export function WeightConfigurator() {
 
           {/* Decision Buckets — triage layer πάνω από τις πολιτικές */}
           <TriageCard
-            onSelectPolicy={(policy) => handleScenarioChange(policy)}
+            onSelectPolicy={(policy, bucket, payload) => {
+              setTriageOrigin({
+                bucket,
+                label: payload.label,
+                skus: payload.skus,
+                tiedCapital: payload.tiedCapital,
+                selectedAt: new Date().toISOString(),
+              });
+              handleScenarioChange(policy);
+            }}
           />
+
+          {/* Triage origin banner — δείχνει την προέλευση όταν επιλέχθηκε bucket */}
+          {triageOrigin && (
+            <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-[var(--nts-light-gray)] border border-[var(--nts-border-gray)] rounded-lg">
+              <div className="flex items-center gap-2 min-w-0 text-[12px]">
+                <span className="w-1.5 h-1.5 rounded-full bg-[var(--nts-accent)] shrink-0" />
+                <span className="text-gray-700 truncate">
+                  Triage: <strong>{triageOrigin.label}</strong>
+                  <span className="text-gray-500 ml-1.5">
+                    · {triageOrigin.skus.length} SKUs επιλεγμένα
+                    {typeof triageOrigin.tiedCapital === 'number' && triageOrigin.tiedCapital > 0
+                      ? ` · ${Math.round(triageOrigin.tiedCapital).toLocaleString('el-GR')}€ κεφάλαια`
+                      : ''}
+                  </span>
+                </span>
+              </div>
+              <button
+                onClick={() => setTriageOrigin(null)}
+                className="shrink-0 text-[11px] text-gray-500 hover:text-gray-800 underline-offset-2 hover:underline"
+              >
+                Καθάρισμα
+              </button>
+            </div>
+          )}
 
           {/* Scenario Selector (tabs) */}
           <ScenarioSelector
