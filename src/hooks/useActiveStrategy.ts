@@ -4,7 +4,12 @@ import { FirestoreService } from '../services/firestore';
 import { useBrand } from './useBrand';
 import { scenarios } from '../data';
 import { useMemo } from 'react';
-import type { ChannelRecommendation, MarketingCostLine } from '../types';
+import type {
+  ChannelRecommendation,
+  MarketingCostLine,
+  PriceBenchmarkStrategyScope,
+  SalesBaseScope,
+} from '../types';
 import type { ContentSuggestionsResult } from '../services/aiContentSuggestions';
 
 export interface MixConfig {
@@ -31,6 +36,10 @@ export interface ActiveStrategy {
   channelRecommendation?: ChannelRecommendation;
   activationRecommendation?: ChannelRecommendation;
   contentSuggestions?: ContentSuggestionsResult;
+  /** Φίλτρο συμμετοχής SKU για Sales Optimization (sales_base) */
+  salesBaseScope?: SalesBaseScope;
+  /** Φίλτρο συμμετοχής SKU για Price Benchmarking (price_benchmark) */
+  priceBenchmarkScope?: PriceBenchmarkStrategyScope;
   createdAt: string;
   updatedAt: string;
 }
@@ -99,6 +108,8 @@ export function useActiveStrategy() {
       mixConfig?: MixConfig;
       monthlyBudget?: number;
       channelRecommendation?: ChannelRecommendation;
+      salesBaseScope?: SalesBaseScope;
+      priceBenchmarkScope?: PriceBenchmarkStrategyScope;
     }) => {
       if (!brandId) throw new Error('No brand selected');
       
@@ -130,6 +141,14 @@ export function useActiveStrategy() {
 
       if (strategy.channelRecommendation) {
         strategyData.channelRecommendation = JSON.parse(JSON.stringify(strategy.channelRecommendation));
+      }
+
+      if (strategy.salesBaseScope) {
+        strategyData.salesBaseScope = JSON.parse(JSON.stringify(strategy.salesBaseScope));
+      }
+
+      if (strategy.priceBenchmarkScope) {
+        strategyData.priceBenchmarkScope = JSON.parse(JSON.stringify(strategy.priceBenchmarkScope));
       }
 
       // Only add optional fields if they have values (Firestore doesn't accept undefined)

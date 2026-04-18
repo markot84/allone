@@ -911,16 +911,15 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
       } while (geoNext);
       logger.info(`[GoogleAds] Fetched geo breakdown for ${geoByCampaign.size} campaigns`);
 
-      // Βήμα 3: user_location_view — πόλεις (και παρόμοια επίπεδα) ανά καμπάνια.
-      // Το API μπορεί να επιστρέφει target_type ως string (CITY) ή ως enum αριθμό (π.χ. 4 = CITY).
-      const cityTypes = new Set(['CITY', 'MUNICIPALITY', 'POSTAL_CODE', 'NEIGHBORHOOD']);
-      const cityTypeNums = new Set([4, 5, 6, 7, 8]); // CITY, POSTAL_CODE, κ.λπ. ανά έκδοση API
-      const isCityTarget = (raw: unknown): boolean => {
+      // Βήμα 3: user_location_view — υπο-εθνικό επίπεδο (περιφέρεια, πόλη, ταχ. κώδικας κ.λπ.) ανά καμπάνια.
+      // Προηγουμένως κρατούσαμε μόνο CITY· στην πράξη το API επιστρέφει συχνά REGION (3) ή άλλα επίπεδα,
+      // οπότε το byCity έμενε άδειο ενώ υπήρχαν country aggregates.
+      const isCountryOnlyTarget = (raw: unknown): boolean => {
         if (raw == null || raw === '') return false;
-        if (typeof raw === 'number' && Number.isFinite(raw)) return cityTypeNums.has(raw);
+        if (typeof raw === 'number' && Number.isFinite(raw)) return raw === 2;
         const n = parseInt(String(raw), 10);
-        if (String(raw) === String(n) && !Number.isNaN(n)) return cityTypeNums.has(n);
-        return cityTypes.has(String(raw).toUpperCase());
+        if (String(raw) === String(n) && !Number.isNaN(n)) return n === 2;
+        return String(raw).toUpperCase() === 'COUNTRY';
       };
       const cityQuery = `
         SELECT
@@ -954,7 +953,7 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
           for (const row of page.results || []) {
             const campaignId = row.campaign?.id;
             const gtc = row.geoTargetConstant;
-            if (!campaignId || !gtc?.name || !isCityTarget(gtc?.targetType)) continue;
+            if (!campaignId || !gtc?.name || isCountryOnlyTarget(gtc?.targetType)) continue;
             const cc = String(gtc.countryCode || '').trim().toUpperCase() || '??';
             const cityName = String(gtc.name || '').trim();
             if (!cityName) continue;

@@ -24,8 +24,17 @@ import {
   BarChart3,
   Filter,
   X as XIcon,
+  FileSpreadsheet,
+  FileText,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import {
+  exportBenchmarksCsv,
+  exportBenchmarksXlsx,
+  exportInsightsCsv,
+  exportInsightsXlsx,
+} from '../../utils/competitiveTableExport';
+import { safeBrandName } from '../../services/reportExport';
 
 const FUNCTIONS_BASE =
   import.meta.env.VITE_FUNCTIONS_URL ||
@@ -75,6 +84,20 @@ type BenchmarkCol =
   | 'sold'
   | 'gtin';
 
+/** Στήλες πίνακα Price Insights — φίλτρα / ταξινόμηση όπως στα benchmarks. */
+type InsightCol =
+  | 'title'
+  | 'seller'
+  | 'brand'
+  | 'stock'
+  | 'sold'
+  | 'currentPrice'
+  | 'suggestedPrice'
+  | 'priceDiffPercent'
+  | 'predImpr'
+  | 'predClicks'
+  | 'predConv';
+
 type SortDir = 'asc' | 'desc';
 
 interface BenchmarkColumnFilters {
@@ -87,6 +110,20 @@ interface BenchmarkColumnFilters {
   stock?: string;
   sold?: string;
   gtin?: string;
+}
+
+interface InsightColumnFilters {
+  title?: string;
+  seller?: string;
+  brand?: Set<string>;
+  stock?: string;
+  sold?: string;
+  currentPrice?: string;
+  suggestedPrice?: string;
+  priceDiffPercent?: string;
+  predImpr?: string;
+  predClicks?: string;
+  predConv?: string;
 }
 
 /** Excel-like numeric expressions: `>10`, `<5`, `>=3`, `<=8`, `5-20`, `=8`, ή σκέτος αριθμός. */
@@ -115,6 +152,44 @@ function matchNumericExpr(value: number | null | undefined, expr: string): boole
   const n = parseFloat(e.replace(',', '.'));
   if (!Number.isNaN(n)) return value === n;
   return true;
+}
+
+/** Από Firestore / import: κενό → null (όχι 0), ώστε το 0 πωλήσεων να ταξινομείται σωστά και το φίλτρο =0 να μην μπερδεύεται με «χωρίς δεδομένο». */
+function parseInventoryField(v: unknown): number | null {
+  if (v === null || v === undefined) return null;
+  if (typeof v === 'string' && v.trim() === '') return null;
+  const n = typeof v === 'number' ? v : Number(v);
+  if (!Number.isFinite(n)) return null;
+  return n;
+}
+
+type SkuInventoryRow = { stock: number | null; sold: number | null };
+
+/**
+ * Ταξινόμηση Στοκ/Πωλήσεις κατά τη σχέση (κόκκινο / πράσινο).
+ * 2 = στοκ > πωλήσεις, 0 = πωλήσεις > στοκ, 1 = ίσα ή ασύγκριτα (λείπει τιμή).
+ */
+function stockSoldRelationTier(inv: SkuInventoryRow | null | undefined): number {
+  const st = inv?.stock;
+  const sd = inv?.sold;
+  if (typeof st !== 'number' || typeof sd !== 'number' || !Number.isFinite(st) || !Number.isFinite(sd)) return 1;
+  if (st > sd) return 2;
+  if (sd > st) return 0;
+  return 1;
+}
+
+/** Δευτερεύων αριθμητικός συγκριτής: πραγματικοί αριθμοί (συμπ. 0) πριν από null/undefined. */
+function compareInventoryNumber(
+  a: number | null | undefined,
+  b: number | null | undefined,
+  dir: 1 | -1
+): number {
+  const ha = typeof a === 'number' && Number.isFinite(a);
+  const hb = typeof b === 'number' && Number.isFinite(b);
+  if (ha && hb) return (a - b) * dir;
+  if (ha && !hb) return -1;
+  if (!ha && hb) return 1;
+  return 0;
 }
 
 const TOOLTIP_CI_REFRESH =
@@ -256,21 +331,24 @@ export function CompetitorInsights() {
   const { products } = useProducts();
   const { skuStats } = useEcommerceSummary();
   const skuInventoryMap = useMemo(() => {
-    const map = new Map<string, { stock: number; sold: number }>();
+    const map = new Map<string, SkuInventoryRow>();
     // Τοποθέτησε πρώτα τα manual imports…
     for (const p of products) {
       const key = (p.sku || '').trim().toLowerCase();
       if (!key) continue;
       map.set(key, {
-        stock: Number(p.stock_level) || 0,
-        sold: Number(p.qty_sold_period) || 0,
+        stock: parseInventoryField(p.stock_level),
+        sold: parseInventoryField(p.qty_sold_period),
       });
     }
     // …και μετά άφησε τα live e-shop stats να υπερισχύσουν.
     for (const [sku, s] of Object.entries(skuStats || {})) {
       const key = (sku || '').trim().toLowerCase();
       if (!key) continue;
-      map.set(key, { stock: Number(s.stock) || 0, sold: Number(s.sold) || 0 });
+      map.set(key, {
+        stock: parseInventoryField(s.stock),
+        sold: parseInventoryField(s.sold),
+      });
     }
     return map;
   }, [products, skuStats]);
@@ -303,7 +381,13 @@ export function CompetitorInsights() {
     sellerName: priceInsightsSellerName,
   } = usePriceInsights();
   const [insightsSearch, setInsightsSearch] = useState('');
-  const [insightsSort, setInsightsSort] = useState<'conv' | 'diff' | 'name'>('conv');
+  const [insightColFilters, setInsightColFilters] = useState<InsightColumnFilters>({});
+  const [insightSortCol, setInsightSortCol] = useState<InsightCol | null>(null);
+  const [insightSortDir, setInsightSortDir] = useState<SortDir>('desc');
+  const setInsightSort = useCallback((col: string, dir: SortDir) => {
+    setInsightSortCol(col as InsightCol);
+    setInsightSortDir(dir);
+  }, []);
 
   // Competitor ads
   const { data: settings } = useQuery({
@@ -468,6 +552,10 @@ export function CompetitorInsights() {
   const [colFilters, setColFilters] = useState<BenchmarkColumnFilters>({});
   const [sortCol, setSortCol] = useState<BenchmarkCol | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const setBenchmarkSort = useCallback((col: string, dir: SortDir) => {
+    setSortCol(col as BenchmarkCol);
+    setSortDir(dir);
+  }, []);
 
   /** Μοναδικά brands για το categorical φίλτρο «Brand». */
   const brandOptions = useMemo(() => {
@@ -539,23 +627,34 @@ export function CompetitorInsights() {
     // Sort: αν υπάρχει column sort, υπερισχύει. Αλλιώς default (benchmark> priceDiff desc).
     if (sortCol) {
       const dir = sortDir === 'asc' ? 1 : -1;
-      const getVal = (b: (typeof benchmarks)[number]): string | number => {
-        switch (sortCol) {
-          case 'title': return (b.title || b.productId || '').toLowerCase();
-          case 'brand': return (b.brand || '').toLowerCase();
-          case 'yourPrice': return b.yourPrice || 0;
-          case 'benchmarkPrice': return b.benchmarkPrice || 0;
-          case 'priceDiff': return b.priceDiff || 0;
-          case 'stock': return lookupInventory(b.productId, b.gtin)?.stock ?? -Infinity;
-          case 'sold': return lookupInventory(b.productId, b.gtin)?.sold ?? -Infinity;
-          case 'gtin': return (b.gtin || '').toLowerCase();
-        }
-      };
-      list.sort((a, b) => {
-        const va = getVal(a); const vb = getVal(b);
-        if (typeof va === 'string' && typeof vb === 'string') return va.localeCompare(vb, 'el') * dir;
-        return ((va as number) - (vb as number)) * dir;
-      });
+      if (sortCol === 'stock' || sortCol === 'sold') {
+        list.sort((a, b) => {
+          const invA = lookupInventory(a.productId, a.gtin);
+          const invB = lookupInventory(b.productId, b.gtin);
+          const ta = stockSoldRelationTier(invA);
+          const tb = stockSoldRelationTier(invB);
+          if (ta !== tb) return (ta - tb) * dir;
+          const va = sortCol === 'stock' ? invA?.stock : invA?.sold;
+          const vb = sortCol === 'stock' ? invB?.stock : invB?.sold;
+          return compareInventoryNumber(va, vb, dir);
+        });
+      } else {
+        const getVal = (b: (typeof benchmarks)[number]): string | number => {
+          switch (sortCol) {
+            case 'title': return (b.title || b.productId || '').toLowerCase();
+            case 'brand': return (b.brand || '').toLowerCase();
+            case 'yourPrice': return b.yourPrice || 0;
+            case 'benchmarkPrice': return b.benchmarkPrice || 0;
+            case 'priceDiff': return b.priceDiff || 0;
+            case 'gtin': return (b.gtin || '').toLowerCase();
+          }
+        };
+        list.sort((a, b) => {
+          const va = getVal(a); const vb = getVal(b);
+          if (typeof va === 'string' && typeof vb === 'string') return va.localeCompare(vb, 'el') * dir;
+          return ((va as number) - (vb as number)) * dir;
+        });
+      }
     } else {
       list.sort((a, b) => {
         const ab = a.benchmarkPrice > 0;
@@ -579,6 +678,48 @@ export function CompetitorInsights() {
     return raw || brandName || '—';
   }, [priceInsightsSellerName, currentBrand?.name]);
 
+  const insightBrandOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const i of priceInsights) set.add(((i.brand || '').trim()) || '—');
+    return [...set].sort((a, b) => a.localeCompare(b, 'el'));
+  }, [priceInsights]);
+
+  const hasInsightActiveColumnFilters = useMemo(() => {
+    const f = insightColFilters;
+    const brandActive = Boolean(f.brand && f.brand.size < insightBrandOptions.length);
+    return Boolean(
+      f.title ||
+        f.seller ||
+        f.stock ||
+        f.sold ||
+        f.currentPrice ||
+        f.suggestedPrice ||
+        f.priceDiffPercent ||
+        f.predImpr ||
+        f.predClicks ||
+        f.predConv ||
+        brandActive
+    );
+  }, [insightColFilters, insightBrandOptions.length]);
+
+  const clearInsightColumnFilters = useCallback(() => setInsightColFilters({}), []);
+
+  const updateInsightColFilter = useCallback(<K extends keyof InsightColumnFilters>(key: K, value: InsightColumnFilters[K]) => {
+    setInsightColFilters((prev) => ({ ...prev, [key]: value }));
+  }, []);
+
+  const toggleInsightBrand = useCallback(
+    (brand: string) => {
+      setInsightColFilters((prev) => {
+        const current = prev.brand ? new Set(prev.brand) : new Set(insightBrandOptions);
+        if (current.has(brand)) current.delete(brand);
+        else current.add(brand);
+        return { ...prev, brand: current };
+      });
+    },
+    [insightBrandOptions]
+  );
+
   const filteredInsights = useMemo(() => {
     let list = [...priceInsights];
     if (insightsSearch) {
@@ -586,17 +727,150 @@ export function CompetitorInsights() {
       list = list.filter(
         (i) =>
           i.title.toLowerCase().includes(q) ||
+          i.productId.toLowerCase().includes(q) ||
           (i.brand || '').toLowerCase().includes(q) ||
           insightsSellerLabel.toLowerCase().includes(q)
       );
     }
-    list.sort((a, b) => {
-      if (insightsSort === 'conv') return b.predictedConversionsChange - a.predictedConversionsChange;
-      if (insightsSort === 'diff') return Math.abs(b.priceDiffPercent) - Math.abs(a.priceDiffPercent);
-      return a.title.localeCompare(b.title);
-    });
+
+    const f = insightColFilters;
+    if (f.title) {
+      const q = f.title.toLowerCase();
+      list = list.filter((i) => i.title.toLowerCase().includes(q) || i.productId.toLowerCase().includes(q));
+    }
+    if (f.seller) {
+      const q = f.seller.toLowerCase();
+      if (!insightsSellerLabel.toLowerCase().includes(q)) list = [];
+    }
+    if (f.brand && f.brand.size < insightBrandOptions.length) {
+      list = list.filter((i) => f.brand!.has(((i.brand || '').trim()) || '—'));
+    }
+    if (f.stock) {
+      list = list.filter((i) => {
+        const inv = lookupInventory(i.productId, '');
+        return matchNumericExpr(inv?.stock, f.stock!);
+      });
+    }
+    if (f.sold) {
+      list = list.filter((i) => {
+        const inv = lookupInventory(i.productId, '');
+        return matchNumericExpr(inv?.sold, f.sold!);
+      });
+    }
+    if (f.currentPrice) list = list.filter((i) => matchNumericExpr(i.currentPrice, f.currentPrice!));
+    if (f.suggestedPrice) list = list.filter((i) => matchNumericExpr(i.suggestedPrice, f.suggestedPrice!));
+    if (f.priceDiffPercent) list = list.filter((i) => matchNumericExpr(i.priceDiffPercent, f.priceDiffPercent!));
+    if (f.predImpr) list = list.filter((i) => matchNumericExpr(i.predictedImpressionsChange, f.predImpr!));
+    if (f.predClicks) list = list.filter((i) => matchNumericExpr(i.predictedClicksChange, f.predClicks!));
+    if (f.predConv) list = list.filter((i) => matchNumericExpr(i.predictedConversionsChange, f.predConv!));
+
+    const dir = insightSortDir === 'asc' ? 1 : -1;
+
+    if (insightSortCol === 'stock' || insightSortCol === 'sold') {
+      list.sort((a, b) => {
+        const invA = lookupInventory(a.productId, '');
+        const invB = lookupInventory(b.productId, '');
+        const ta = stockSoldRelationTier(invA);
+        const tb = stockSoldRelationTier(invB);
+        if (ta !== tb) return (ta - tb) * dir;
+        const va = insightSortCol === 'stock' ? invA?.stock : invA?.sold;
+        const vb = insightSortCol === 'stock' ? invB?.stock : invB?.sold;
+        return compareInventoryNumber(va, vb, dir);
+      });
+    } else if (insightSortCol) {
+      const getVal = (i: (typeof priceInsights)[number]): string | number => {
+        switch (insightSortCol) {
+          case 'title':
+            return (i.title || i.productId || '').toLowerCase();
+          case 'seller':
+            return insightsSellerLabel.toLowerCase();
+          case 'brand':
+            return (i.brand || '').toLowerCase();
+          case 'currentPrice':
+            return i.currentPrice || 0;
+          case 'suggestedPrice':
+            return i.suggestedPrice || 0;
+          case 'priceDiffPercent':
+            return i.priceDiffPercent || 0;
+          case 'predImpr':
+            return i.predictedImpressionsChange || 0;
+          case 'predClicks':
+            return i.predictedClicksChange || 0;
+          case 'predConv':
+            return i.predictedConversionsChange || 0;
+          default:
+            return 0;
+        }
+      };
+      list.sort((a, b) => {
+        const va = getVal(a);
+        const vb = getVal(b);
+        if (typeof va === 'string' && typeof vb === 'string') return va.localeCompare(vb, 'el') * dir;
+        return ((va as number) - (vb as number)) * dir;
+      });
+    } else {
+      list.sort((a, b) => b.predictedConversionsChange - a.predictedConversionsChange);
+    }
+
     return list;
-  }, [priceInsights, insightsSearch, insightsSort, insightsSellerLabel]);
+  }, [
+    priceInsights,
+    insightsSearch,
+    insightsSellerLabel,
+    insightColFilters,
+    insightBrandOptions.length,
+    insightSortCol,
+    insightSortDir,
+    lookupInventory,
+  ]);
+
+  const exportBrandSlug = useMemo(() => safeBrandName(currentBrand?.name), [currentBrand?.name]);
+
+  const handleExportBenchmarks = useCallback(
+    async (fmt: 'csv' | 'xlsx') => {
+      if (filteredBenchmarks.length === 0) {
+        toast.error('Δεν υπάρχουν γραμμές για εξαγωγή.');
+        return;
+      }
+      const stamp = new Date().toISOString().slice(0, 10);
+      const base = `price_benchmarks_${exportBrandSlug}_${stamp}`;
+      try {
+        if (fmt === 'csv') {
+          exportBenchmarksCsv(filteredBenchmarks, lookupInventory, `${base}.csv`);
+        } else {
+          await exportBenchmarksXlsx(filteredBenchmarks, lookupInventory, `${base}.xlsx`);
+        }
+        toast.success(`Εξαγωγή ${fmt === 'csv' ? 'CSV' : 'Excel'}: ${filteredBenchmarks.length} γραμμές.`);
+      } catch (e) {
+        console.error(e);
+        toast.error('Αποτυχία εξαγωγής.');
+      }
+    },
+    [filteredBenchmarks, lookupInventory, exportBrandSlug, toast]
+  );
+
+  const handleExportInsights = useCallback(
+    async (fmt: 'csv' | 'xlsx') => {
+      if (filteredInsights.length === 0) {
+        toast.error('Δεν υπάρχουν γραμμές για εξαγωγή.');
+        return;
+      }
+      const stamp = new Date().toISOString().slice(0, 10);
+      const base = `price_insights_${exportBrandSlug}_${stamp}`;
+      try {
+        if (fmt === 'csv') {
+          exportInsightsCsv(filteredInsights, insightsSellerLabel, lookupInventory, `${base}.csv`);
+        } else {
+          await exportInsightsXlsx(filteredInsights, insightsSellerLabel, lookupInventory, `${base}.xlsx`);
+        }
+        toast.success(`Εξαγωγή ${fmt === 'csv' ? 'CSV' : 'Excel'}: ${filteredInsights.length} γραμμές.`);
+      } catch (e) {
+        console.error(e);
+        toast.error('Αποτυχία εξαγωγής.');
+      }
+    },
+    [filteredInsights, insightsSellerLabel, lookupInventory, exportBrandSlug, toast]
+  );
 
   if (!brandId) return null;
 
@@ -723,6 +997,30 @@ export function CompetitorInsights() {
                       Καθαρισμός φίλτρων
                     </button>
                   )}
+                  {!benchmarksLoading && !benchmarksQueryError && benchmarkCount > 0 && (
+                    <>
+                      <button
+                        type="button"
+                        disabled={filteredBenchmarks.length === 0}
+                        onClick={() => void handleExportBenchmarks('csv')}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-[#374151] bg-white border border-[#E5E7EB] rounded-lg hover:bg-[#F9FAFB] disabled:opacity-40 disabled:pointer-events-none"
+                        title="Φιλτραρισμένα αποτελέσματα πίνακα. CSV UTF-8."
+                      >
+                        <FileText size={13} />
+                        .csv
+                      </button>
+                      <button
+                        type="button"
+                        disabled={filteredBenchmarks.length === 0}
+                        onClick={() => void handleExportBenchmarks('xlsx')}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-[#374151] bg-white border border-[#E5E7EB] rounded-lg hover:bg-[#F9FAFB] disabled:opacity-40 disabled:pointer-events-none"
+                        title="Φιλτραρισμένα αποτελέσματα πίνακα. Excel."
+                      >
+                        <FileSpreadsheet size={13} />
+                        .xlsx
+                      </button>
+                    </>
+                  )}
                   <div className="relative">
                     <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
                     <input
@@ -767,7 +1065,7 @@ export function CompetitorInsights() {
                         <th className="px-3 py-2.5 font-medium whitespace-nowrap">
                           <HeaderFilter label="Προϊόν" col="title" kind="text" align="left"
                             textValue={colFilters.title ?? ''} onTextChange={(v) => updateColFilter('title', v || undefined)}
-                            sortCol={sortCol} sortDir={sortDir} setSort={(c, d) => { setSortCol(c); setSortDir(d); }}
+                            sortCol={sortCol} sortDir={sortDir} setSort={setBenchmarkSort}
                             isActive={Boolean(colFilters.title)} />
                         </th>
                         <th className="px-3 py-2.5 font-medium hidden md:table-cell whitespace-nowrap">
@@ -777,46 +1075,46 @@ export function CompetitorInsights() {
                             onToggle={toggleBrand}
                             onSelectAll={() => updateColFilter('brand', undefined)}
                             onClearSelection={() => updateColFilter('brand', new Set<string>())}
-                            sortCol={sortCol} sortDir={sortDir} setSort={(c, d) => { setSortCol(c); setSortDir(d); }}
+                            sortCol={sortCol} sortDir={sortDir} setSort={setBenchmarkSort}
                             isActive={Boolean(colFilters.brand && colFilters.brand.size < brandOptions.length)} />
+                        </th>
+                        <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">
+                          <HeaderFilter label="Στοκ" col="stock" kind="number" align="right"
+                            textValue={colFilters.stock ?? ''} onTextChange={(v) => updateColFilter('stock', v || undefined)}
+                            hint="Φίλτρο: απόθεμα e-shop. Ταξ.: φθίνουσα → πρώτα στοκ>πωλήσεις (κόκκινο)· αύξουσα → πρώτα πωλήσεις>στοκ (πράσινο)."
+                            sortCol={sortCol} sortDir={sortDir} setSort={setBenchmarkSort}
+                            isActive={Boolean(colFilters.stock)} />
+                        </th>
+                        <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">
+                          <HeaderFilter label="Πωλήσεις" col="sold" kind="number" align="right"
+                            textValue={colFilters.sold ?? ''} onTextChange={(v) => updateColFilter('sold', v || undefined)}
+                            hint="Φίλτρο: πωλήσεις (=0, >10…). Το =0 ισχύει μόνο όταν υπάρχει πραγματικό 0, όχι για κενό SKU. Ταξ.: ίδια ομαδοποίηση με Στοκ."
+                            sortCol={sortCol} sortDir={sortDir} setSort={setBenchmarkSort}
+                            isActive={Boolean(colFilters.sold)} />
                         </th>
                         <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">
                           <HeaderFilter label="Η τιμή σας" col="yourPrice" kind="number" align="right"
                             textValue={colFilters.yourPrice ?? ''} onTextChange={(v) => updateColFilter('yourPrice', v || undefined)}
-                            sortCol={sortCol} sortDir={sortDir} setSort={(c, d) => { setSortCol(c); setSortDir(d); }}
+                            sortCol={sortCol} sortDir={sortDir} setSort={setBenchmarkSort}
                             isActive={Boolean(colFilters.yourPrice)} />
                         </th>
                         <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">
                           <HeaderFilter label="Benchmark" col="benchmarkPrice" kind="number" align="right"
                             textValue={colFilters.benchmarkPrice ?? ''} onTextChange={(v) => updateColFilter('benchmarkPrice', v || undefined)}
-                            sortCol={sortCol} sortDir={sortDir} setSort={(c, d) => { setSortCol(c); setSortDir(d); }}
+                            sortCol={sortCol} sortDir={sortDir} setSort={setBenchmarkSort}
                             isActive={Boolean(colFilters.benchmarkPrice)} />
                         </th>
                         <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">
                           <HeaderFilter label="Διαφ. τιμής" col="priceDiff" kind="number" align="right"
                             textValue={colFilters.priceDiff ?? ''} onTextChange={(v) => updateColFilter('priceDiff', v || undefined)}
                             hint="Σε %. Π.χ. >0 (ακριβότερα), <-10 (10% φθηνότερα)."
-                            sortCol={sortCol} sortDir={sortDir} setSort={(c, d) => { setSortCol(c); setSortDir(d); }}
+                            sortCol={sortCol} sortDir={sortDir} setSort={setBenchmarkSort}
                             isActive={Boolean(colFilters.priceDiff)} />
-                        </th>
-                        <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">
-                          <HeaderFilter label="Στοκ" col="stock" kind="number" align="right"
-                            textValue={colFilters.stock ?? ''} onTextChange={(v) => updateColFilter('stock', v || undefined)}
-                            hint="Απόθεμα e-shop. Π.χ. =0 (εκτός), <=5 (χαμηλό)."
-                            sortCol={sortCol} sortDir={sortDir} setSort={(c, d) => { setSortCol(c); setSortDir(d); }}
-                            isActive={Boolean(colFilters.stock)} />
-                        </th>
-                        <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">
-                          <HeaderFilter label="Πωλήσεις" col="sold" kind="number" align="right"
-                            textValue={colFilters.sold ?? ''} onTextChange={(v) => updateColFilter('sold', v || undefined)}
-                            hint="Πωλήσεις περιόδου. Π.χ. >10, 5-20."
-                            sortCol={sortCol} sortDir={sortDir} setSort={(c, d) => { setSortCol(c); setSortDir(d); }}
-                            isActive={Boolean(colFilters.sold)} />
                         </th>
                         <th className="px-3 py-2.5 font-medium hidden lg:table-cell whitespace-nowrap">
                           <HeaderFilter label="GTIN" col="gtin" kind="text" align="left"
                             textValue={colFilters.gtin ?? ''} onTextChange={(v) => updateColFilter('gtin', v || undefined)}
-                            sortCol={sortCol} sortDir={sortDir} setSort={(c, d) => { setSortCol(c); setSortDir(d); }}
+                            sortCol={sortCol} sortDir={sortDir} setSort={setBenchmarkSort}
                             isActive={Boolean(colFilters.gtin)} />
                         </th>
                       </tr>
@@ -858,16 +1156,42 @@ export function CompetitorInsights() {
                   <h3 className="text-base font-semibold text-[#1A1A1A]">Price Insights — Προτάσεις Τιμολόγησης</h3>
                   <p className="text-xs text-[#9CA3AF] mt-0.5">Predicted impact αν εφαρμοστεί η προτεινόμενη τιμή (τελ. 7 ημέρες)</p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <select
-                    value={insightsSort}
-                    onChange={e => setInsightsSort(e.target.value as any)}
-                    className="px-3 py-1.5 border border-[#D1D5DB] rounded-lg text-xs bg-white focus:ring-2 focus:ring-[var(--nts-accent)]"
-                  >
-                    <option value="conv">Conv. lift ↓</option>
-                    <option value="diff">Απόκλιση τιμής ↓</option>
-                    <option value="name">Όνομα A-Z</option>
-                  </select>
+                <div className="flex items-center gap-2 flex-wrap justify-end">
+                  {hasInsightActiveColumnFilters && (
+                    <button
+                      type="button"
+                      onClick={clearInsightColumnFilters}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-[var(--nts-accent)] bg-[var(--nts-accent)]/5 hover:bg-[var(--nts-accent)]/10 border border-[var(--nts-accent)]/30 rounded-lg transition-colors"
+                      title="Καθαρισμός όλων των φίλτρων στηλών"
+                    >
+                      <XIcon size={12} />
+                      Καθαρισμός φίλτρων
+                    </button>
+                  )}
+                  {!insightsLoading && hasInsightsData && insightsCount > 0 && (
+                    <>
+                      <button
+                        type="button"
+                        disabled={filteredInsights.length === 0}
+                        onClick={() => void handleExportInsights('csv')}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-[#374151] bg-white border border-[#E5E7EB] rounded-lg hover:bg-[#F9FAFB] disabled:opacity-40 disabled:pointer-events-none"
+                        title="Όλες οι φιλτραρισμένες γραμμές (όχι μόνο οι 300 στην οθόνη). CSV UTF-8."
+                      >
+                        <FileText size={13} />
+                        .csv
+                      </button>
+                      <button
+                        type="button"
+                        disabled={filteredInsights.length === 0}
+                        onClick={() => void handleExportInsights('xlsx')}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-[#374151] bg-white border border-[#E5E7EB] rounded-lg hover:bg-[#F9FAFB] disabled:opacity-40 disabled:pointer-events-none"
+                        title="Όλες οι φιλτραρισμένες γραμμές (όχι μόνο οι 300 στην οθόνη). Excel."
+                      >
+                        <FileSpreadsheet size={13} />
+                        .xlsx
+                      </button>
+                    </>
+                  )}
                   <div className="relative">
                     <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
                     <input
@@ -898,26 +1222,183 @@ export function CompetitorInsights() {
                   <table className="w-full text-left">
                     <thead className="sticky top-0 bg-[#F9FAFB] z-10">
                       <tr className="text-xs text-[#6B7280] uppercase tracking-wider">
-                        <th className="px-3 py-2.5 font-medium whitespace-nowrap">Προϊόν</th>
-                        <th className="px-3 py-2.5 font-medium hidden md:table-cell whitespace-nowrap">Πωλητής</th>
-                        <th className="px-3 py-2.5 font-medium hidden md:table-cell whitespace-nowrap">Brand</th>
-                        <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">Τρέχουσα</th>
-                        <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">Προτεινόμενη</th>
-                        <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">
-                          Δ&nbsp;τιμής
+                        <th className="px-3 py-2.5 font-medium whitespace-nowrap">
+                          <HeaderFilter
+                            label="Προϊόν"
+                            col="title"
+                            kind="text"
+                            align="left"
+                            textValue={insightColFilters.title ?? ''}
+                            onTextChange={(v) => updateInsightColFilter('title', v || undefined)}
+                            sortCol={insightSortCol}
+                            sortDir={insightSortDir}
+                            setSort={setInsightSort}
+                            isActive={Boolean(insightColFilters.title)}
+                          />
                         </th>
-                        <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">Impr.</th>
-                        <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">Clicks</th>
-                        <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">Conv.</th>
+                        <th className="px-3 py-2.5 font-medium hidden md:table-cell whitespace-nowrap">
+                          <HeaderFilter
+                            label="Πωλητής"
+                            col="seller"
+                            kind="text"
+                            align="left"
+                            textValue={insightColFilters.seller ?? ''}
+                            onTextChange={(v) => updateInsightColFilter('seller', v || undefined)}
+                            sortCol={insightSortCol}
+                            sortDir={insightSortDir}
+                            setSort={setInsightSort}
+                            isActive={Boolean(insightColFilters.seller)}
+                          />
+                        </th>
+                        <th className="px-3 py-2.5 font-medium hidden md:table-cell whitespace-nowrap">
+                          <HeaderFilter
+                            label="Brand"
+                            col="brand"
+                            kind="categorical"
+                            align="left"
+                            options={insightBrandOptions}
+                            selected={insightColFilters.brand}
+                            onToggle={toggleInsightBrand}
+                            onSelectAll={() => updateInsightColFilter('brand', undefined)}
+                            onClearSelection={() => updateInsightColFilter('brand', new Set<string>())}
+                            sortCol={insightSortCol}
+                            sortDir={insightSortDir}
+                            setSort={setInsightSort}
+                            isActive={Boolean(insightColFilters.brand && insightColFilters.brand.size < insightBrandOptions.length)}
+                          />
+                        </th>
+                        <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">
+                          <HeaderFilter
+                            label="Στοκ"
+                            col="stock"
+                            kind="number"
+                            align="right"
+                            textValue={insightColFilters.stock ?? ''}
+                            onTextChange={(v) => updateInsightColFilter('stock', v || undefined)}
+                            hint="Φίλτρο: απόθεμα e-shop. Ταξ.: φθίνουσα → πρώτα στοκ>πωλήσεις (κόκκινο)· αύξουσα → πρώτα πωλήσεις>στοκ (πράσινο)."
+                            sortCol={insightSortCol}
+                            sortDir={insightSortDir}
+                            setSort={setInsightSort}
+                            isActive={Boolean(insightColFilters.stock)}
+                          />
+                        </th>
+                        <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">
+                          <HeaderFilter
+                            label="Πωλήσεις"
+                            col="sold"
+                            kind="number"
+                            align="right"
+                            textValue={insightColFilters.sold ?? ''}
+                            onTextChange={(v) => updateInsightColFilter('sold', v || undefined)}
+                            hint="Φίλτρο: πωλήσεις (=0, >10…). Το =0 μόνο για πραγματικό 0. Ταξ.: ίδια ομαδοποίηση με Στοκ."
+                            sortCol={insightSortCol}
+                            sortDir={insightSortDir}
+                            setSort={setInsightSort}
+                            isActive={Boolean(insightColFilters.sold)}
+                          />
+                        </th>
+                        <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">
+                          <HeaderFilter
+                            label="Τρέχουσα"
+                            col="currentPrice"
+                            kind="number"
+                            align="right"
+                            textValue={insightColFilters.currentPrice ?? ''}
+                            onTextChange={(v) => updateInsightColFilter('currentPrice', v || undefined)}
+                            sortCol={insightSortCol}
+                            sortDir={insightSortDir}
+                            setSort={setInsightSort}
+                            isActive={Boolean(insightColFilters.currentPrice)}
+                          />
+                        </th>
+                        <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">
+                          <HeaderFilter
+                            label="Προτεινόμενη"
+                            col="suggestedPrice"
+                            kind="number"
+                            align="right"
+                            textValue={insightColFilters.suggestedPrice ?? ''}
+                            onTextChange={(v) => updateInsightColFilter('suggestedPrice', v || undefined)}
+                            sortCol={insightSortCol}
+                            sortDir={insightSortDir}
+                            setSort={setInsightSort}
+                            isActive={Boolean(insightColFilters.suggestedPrice)}
+                          />
+                        </th>
+                        <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">
+                          <HeaderFilter
+                            label="Δ τιμής"
+                            col="priceDiffPercent"
+                            kind="number"
+                            align="right"
+                            textValue={insightColFilters.priceDiffPercent ?? ''}
+                            onTextChange={(v) => updateInsightColFilter('priceDiffPercent', v || undefined)}
+                            hint="Σε %. Π.χ. <-5 (φθηνότερη πρόταση)."
+                            sortCol={insightSortCol}
+                            sortDir={insightSortDir}
+                            setSort={setInsightSort}
+                            isActive={Boolean(insightColFilters.priceDiffPercent)}
+                          />
+                        </th>
+                        <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">
+                          <HeaderFilter
+                            label="Impr."
+                            col="predImpr"
+                            kind="number"
+                            align="right"
+                            textValue={insightColFilters.predImpr ?? ''}
+                            onTextChange={(v) => updateInsightColFilter('predImpr', v || undefined)}
+                            hint="Κλάσμα από GMC (π.χ. 2 = +200%). Π.χ. >1."
+                            sortCol={insightSortCol}
+                            sortDir={insightSortDir}
+                            setSort={setInsightSort}
+                            isActive={Boolean(insightColFilters.predImpr)}
+                          />
+                        </th>
+                        <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">
+                          <HeaderFilter
+                            label="Clicks"
+                            col="predClicks"
+                            kind="number"
+                            align="right"
+                            textValue={insightColFilters.predClicks ?? ''}
+                            onTextChange={(v) => updateInsightColFilter('predClicks', v || undefined)}
+                            hint="Κλάσμα από GMC. Π.χ. >0.5."
+                            sortCol={insightSortCol}
+                            sortDir={insightSortDir}
+                            setSort={setInsightSort}
+                            isActive={Boolean(insightColFilters.predClicks)}
+                          />
+                        </th>
+                        <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">
+                          <HeaderFilter
+                            label="Conv."
+                            col="predConv"
+                            kind="number"
+                            align="right"
+                            textValue={insightColFilters.predConv ?? ''}
+                            onTextChange={(v) => updateInsightColFilter('predConv', v || undefined)}
+                            hint="Κλάσμα από GMC. Προεπιλογή ταξιν.: φθίνουσα conv. lift."
+                            sortCol={insightSortCol}
+                            sortDir={insightSortDir}
+                            setSort={setInsightSort}
+                            isActive={Boolean(insightColFilters.predConv)}
+                          />
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#F3F4F6]">
                       {filteredInsights.slice(0, 300).map((item) => (
-                        <InsightRow key={item.productId} item={item} sellerLabel={insightsSellerLabel} />
+                        <InsightRow
+                          key={item.productId}
+                          item={item}
+                          sellerLabel={insightsSellerLabel}
+                          inventory={lookupInventory(item.productId, '')}
+                        />
                       ))}
                     </tbody>
                   </table>
-                  {filteredInsights.length === 0 && insightsSearch && (
+                  {filteredInsights.length === 0 && (insightsSearch || hasInsightActiveColumnFilters) && (
                     <p className="text-sm text-[#9CA3AF] text-center py-6">Δεν βρέθηκαν αποτελέσματα.</p>
                   )}
                   {filteredInsights.length > 300 && (
@@ -1236,12 +1717,16 @@ function BenchmarkRow({
   inventory,
 }: {
   item: { productId: string; title: string; brand?: string; gtin: string; yourPrice: number; benchmarkPrice: number; priceDiff: number; currency: string };
-  inventory?: { stock: number; sold: number } | null;
+  inventory?: SkuInventoryRow | null;
 }) {
   const diffColor = item.priceDiff > 5 ? '#EF4444' : item.priceDiff < -5 ? '#22C55E' : '#6B7280';
   const diffBg = item.priceDiff > 5 ? '#FEF2F2' : item.priceDiff < -5 ? '#F0FDF4' : '#F9FAFB';
   const stock = inventory?.stock;
   const sold = inventory?.sold;
+  const canCompareStockSold =
+    typeof stock === 'number' && typeof sold === 'number' && Number.isFinite(stock) && Number.isFinite(sold);
+  const stockOverSold = canCompareStockSold && stock > sold;
+  const soldOverStock = canCompareStockSold && sold > stock;
 
   return (
     <tr className="hover:bg-[#FAFAFA] transition-colors">
@@ -1251,6 +1736,30 @@ function BenchmarkRow({
       </td>
       <td className="px-3 py-2.5 hidden md:table-cell">
         <span className="text-xs text-[#374151]">{item.brand || '—'}</span>
+      </td>
+      <td className="px-3 py-2.5 text-right">
+        {typeof stock === 'number' ? (
+          <span
+            className={`text-sm font-mono ${stockOverSold ? 'text-[#EF4444] font-semibold' : 'text-[#111827]'}`}
+            title={stockOverSold ? 'Στοκ μεγαλύτερο από πωλήσεις περιόδου' : undefined}
+          >
+            {stock}
+          </span>
+        ) : (
+          <span className="text-[10px] text-[#D1D5DB]">—</span>
+        )}
+      </td>
+      <td className="px-3 py-2.5 text-right">
+        {typeof sold === 'number' ? (
+          <span
+            className={`text-sm font-mono ${soldOverStock ? 'text-[#22C55E] font-semibold' : 'text-[#111827]'}`}
+            title={soldOverStock ? 'Πωλήσεις μεγαλύτερες από τρέχον στοκ' : undefined}
+          >
+            {sold}
+          </span>
+        ) : (
+          <span className="text-[10px] text-[#D1D5DB]">—</span>
+        )}
       </td>
       <td className="px-3 py-2.5 text-right">
         <span className="text-sm font-mono text-[#1A1A1A]">{fmtEur(item.yourPrice)}</span>
@@ -1273,25 +1782,6 @@ function BenchmarkRow({
           <span className="text-[10px] text-[#9CA3AF]">—</span>
         )}
       </td>
-      <td className="px-3 py-2.5 text-right">
-        {stock != null ? (
-          <span
-            className={`text-sm font-mono ${stock === 0 ? 'text-[#EF4444]' : stock <= 5 ? 'text-[#F59E0B]' : 'text-[#111827]'}`}
-            title={stock === 0 ? 'Εκτός αποθέματος' : stock <= 5 ? 'Χαμηλό απόθεμα' : 'Απόθεμα e-shop'}
-          >
-            {stock}
-          </span>
-        ) : (
-          <span className="text-[10px] text-[#D1D5DB]">—</span>
-        )}
-      </td>
-      <td className="px-3 py-2.5 text-right">
-        {sold != null ? (
-          <span className="text-sm font-mono text-[#111827]">{sold}</span>
-        ) : (
-          <span className="text-[10px] text-[#D1D5DB]">—</span>
-        )}
-      </td>
       <td className="px-3 py-2.5 hidden lg:table-cell">
         <span className="text-[11px] font-mono text-[#9CA3AF]">{item.gtin || '—'}</span>
       </td>
@@ -1299,7 +1789,15 @@ function BenchmarkRow({
   );
 }
 
-function InsightRow({ item, sellerLabel }: { item: PriceInsight; sellerLabel: string }) {
+function InsightRow({
+  item,
+  sellerLabel,
+  inventory,
+}: {
+  item: PriceInsight;
+  sellerLabel: string;
+  inventory?: SkuInventoryRow | null;
+}) {
   const hasSuggestion = item.suggestedPrice > 0 && item.suggestedPrice !== item.currentPrice;
   const priceLower = item.suggestedPrice < item.currentPrice;
 
@@ -1316,6 +1814,13 @@ function InsightRow({ item, sellerLabel }: { item: PriceInsight; sellerLabel: st
     );
   };
 
+  const stock = inventory?.stock;
+  const sold = inventory?.sold;
+  const canCompareStockSold =
+    typeof stock === 'number' && typeof sold === 'number' && Number.isFinite(stock) && Number.isFinite(sold);
+  const stockOverSold = canCompareStockSold && stock > sold;
+  const soldOverStock = canCompareStockSold && sold > stock;
+
   return (
     <tr className="hover:bg-[#FAFAFA] transition-colors">
       <td className="px-3 py-2.5">
@@ -1329,6 +1834,30 @@ function InsightRow({ item, sellerLabel }: { item: PriceInsight; sellerLabel: st
       </td>
       <td className="px-3 py-2.5 hidden md:table-cell">
         <span className="text-xs text-[#374151]">{item.brand || '—'}</span>
+      </td>
+      <td className="px-3 py-2.5 text-right">
+        {typeof stock === 'number' ? (
+          <span
+            className={`text-sm font-mono ${stockOverSold ? 'text-[#EF4444] font-semibold' : 'text-[#111827]'}`}
+            title={stockOverSold ? 'Στοκ μεγαλύτερο από πωλήσεις περιόδου' : undefined}
+          >
+            {stock}
+          </span>
+        ) : (
+          <span className="text-[10px] text-[#D1D5DB]">—</span>
+        )}
+      </td>
+      <td className="px-3 py-2.5 text-right">
+        {typeof sold === 'number' ? (
+          <span
+            className={`text-sm font-mono ${soldOverStock ? 'text-[#22C55E] font-semibold' : 'text-[#111827]'}`}
+            title={soldOverStock ? 'Πωλήσεις μεγαλύτερες από τρέχον στοκ' : undefined}
+          >
+            {sold}
+          </span>
+        ) : (
+          <span className="text-[10px] text-[#D1D5DB]">—</span>
+        )}
       </td>
       <td className="px-3 py-2.5 text-right">
         <span className="text-sm font-mono text-[#1A1A1A]">{fmtEur(item.currentPrice)}</span>
@@ -1360,7 +1889,8 @@ function InsightRow({ item, sellerLabel }: { item: PriceInsight; sellerLabel: st
 
 interface HeaderFilterProps {
   label: string;
-  col: BenchmarkCol;
+  /** Στήλη — `BenchmarkCol` ή `InsightCol` (string για κοινό UI). */
+  col: string;
   kind: 'text' | 'number' | 'categorical';
   align?: 'left' | 'right';
   /** text/number */
@@ -1374,9 +1904,9 @@ interface HeaderFilterProps {
   onSelectAll?: () => void;
   onClearSelection?: () => void;
   /** sort */
-  sortCol: BenchmarkCol | null;
+  sortCol: string | null;
   sortDir: SortDir;
-  setSort: (col: BenchmarkCol, dir: SortDir) => void;
+  setSort: (col: string, dir: SortDir) => void;
   isActive: boolean;
 }
 

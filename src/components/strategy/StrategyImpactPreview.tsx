@@ -18,7 +18,7 @@ import { Button } from '../common';
 import { useProductSource } from '../../hooks/useProductSource';
 import { useCampaigns } from '../../hooks/useCampaigns';
 import { useContent } from '../../hooks/useContent';
-import { calculateCompositeScore } from '../../utils/compositeScore';
+import { calculateCompositeScore, type CompositeScoreContext } from '../../utils/compositeScore';
 import { scenarios } from '../../data/mockScenarios';
 import type { Product } from '../../types';
 
@@ -54,15 +54,32 @@ function useProductImpacts(
   newWeights: Record<string, number>,
   currentScenarioId?: string,
   newScenarioId?: string,
+  impactProductFilter?: (p: Product) => boolean,
+  scoreContext?: CompositeScoreContext,
 ) {
   return useMemo(() => {
-    if (products.length === 0) {
+    const scoped = impactProductFilter ? products.filter(impactProductFilter) : products;
+    if (scoped.length === 0) {
       return { up: 0, down: 0, same: 0, samplesUp: [] as Product[], samplesDown: [] as Product[] };
     }
 
-    const changes = products.map((product) => {
-      const currentScore = calculateCompositeScore(product, currentWeights, undefined, currentScenarioId);
-      const newScore = calculateCompositeScore(product, newWeights, undefined, newScenarioId);
+    const changes = scoped.map((product) => {
+      const currentScore = calculateCompositeScore(
+        product,
+        currentWeights,
+        undefined,
+        currentScenarioId,
+        undefined,
+        currentScenarioId === 'price_benchmark' ? scoreContext : undefined,
+      );
+      const newScore = calculateCompositeScore(
+        product,
+        newWeights,
+        undefined,
+        newScenarioId,
+        undefined,
+        newScenarioId === 'price_benchmark' ? scoreContext : undefined,
+      );
       const diff = newScore - currentScore;
       const threshold = Math.max(1, Math.abs(currentScore) * 0.01);
       return { product, diff, change: diff > threshold ? 'up' : diff < -threshold ? 'down' : 'same' as const };
@@ -82,7 +99,7 @@ function useProductImpacts(
       samplesUp: up.slice(0, 5).map(c => c.product),
       samplesDown: down.slice(0, 5).map(c => c.product),
     };
-  }, [products, currentWeights, newWeights, currentScenarioId, newScenarioId]);
+  }, [products, currentWeights, newWeights, currentScenarioId, newScenarioId, impactProductFilter, scoreContext]);
 }
 
 /* ───────── Layer 1: Inline Summary Card ───────── */
@@ -92,15 +109,27 @@ interface StrategyImpactSummaryProps extends ImpactBaseProps {
   onCancel: () => void;
   onDetails: () => void;
   initialDuration: number | 'ongoing';
+  /** Περιορισμός προϊόντων στο impact preview (π.χ. Sales Optimization / sales_base scope). */
+  impactProductFilter?: (p: Product) => boolean;
+  /** Για Price Benchmarking — lookup GMC benchmark ανά SKU. */
+  scoreContext?: CompositeScoreContext;
 }
 
 export function StrategyImpactSummary({
   currentWeights, newWeights, currentScenarioId, newScenarioId,
-  onConfirm, onCancel, onDetails, initialDuration,
+  onConfirm, onCancel, onDetails, initialDuration, impactProductFilter, scoreContext,
 }: StrategyImpactSummaryProps) {
   const [duration, setDuration] = useState<number | 'ongoing'>(initialDuration);
   const { products } = useProductSource();
-  const impacts = useProductImpacts(products, currentWeights, newWeights, currentScenarioId, newScenarioId);
+  const impacts = useProductImpacts(
+    products,
+    currentWeights,
+    newWeights,
+    currentScenarioId,
+    newScenarioId,
+    impactProductFilter,
+    scoreContext,
+  );
 
   const fromName = scenarios.find(s => s.id === currentScenarioId)?.name ?? 'Τρέχουσα';
   const toName = scenarios.find(s => s.id === newScenarioId)?.name ?? 'Νέα';
@@ -203,6 +232,8 @@ interface StrategyImpactModalProps extends ImpactBaseProps {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: (selectedDuration: number | 'ongoing') => void;
+  impactProductFilter?: (p: Product) => boolean;
+  scoreContext?: CompositeScoreContext;
 }
 
 const formatDuration = (d?: number | 'ongoing') =>
@@ -213,6 +244,8 @@ export function StrategyImpactModal({
   currentWeights, newWeights,
   currentScenarioId, newScenarioId,
   currentDuration, newDuration,
+  impactProductFilter,
+  scoreContext,
 }: StrategyImpactModalProps) {
   const { products } = useProductSource();
   const { campaigns } = useCampaigns();
@@ -222,7 +255,15 @@ export function StrategyImpactModal({
   const fromName = scenarios.find(s => s.id === currentScenarioId)?.name ?? 'Τρέχουσα';
   const toName = scenarios.find(s => s.id === newScenarioId)?.name ?? 'Νέα';
 
-  const impacts = useProductImpacts(products, currentWeights, newWeights, currentScenarioId, newScenarioId);
+  const impacts = useProductImpacts(
+    products,
+    currentWeights,
+    newWeights,
+    currentScenarioId,
+    newScenarioId,
+    impactProductFilter,
+    scoreContext,
+  );
 
   const weightDiffs = useMemo(() => {
     return WEIGHT_KEYS.map(key => ({

@@ -1,10 +1,14 @@
 {
-  "version": "0.497.0",
-  "previousVersion": "0.496.0",
-  "commitHash": "0950ce0",
+  "version": "0.515.0",
+  "previousVersion": "0.514.0",
+  "commitHash": "4e89514",
   "branch": "main",
-  "buildDate": "2026-04-17T13:43:42.441Z",
+  "buildDate": "2026-04-18T08:49:24.974Z",
   "commits": [
+    {
+      "hash": "4e89514",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "0950ce0",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "f5ccdf1",
       "message": "fix(price-benchmarks): populate stock/sold from ecommerce skuStats + GMC productId parse"
-    },
-    {
-      "hash": "66ae2ae",
-      "message": "feat: price-benchmarks stock/sold + campaigns geo tab (GAds+Meta country breakdown)"
     }
   ],
   "changes": [

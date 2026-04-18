@@ -37,7 +37,7 @@ interface SeasonalPeriodsModalProps {
   onDeleteCustom: (id: string) => void;
 }
 
-const BASE_SCENARIOS = scenarios.filter(s => s.id !== 'custom' && s.id !== 'mixed' && s.weights);
+const BASE_SCENARIOS = scenarios.filter((s) => s.id !== 'mixed' && s.weights);
 
 const MONTH_NAMES = ['Ιαν', 'Φεβ', 'Μαρ', 'Απρ', 'Μαϊ', 'Ιουν', 'Ιουλ', 'Αυγ', 'Σεπ', 'Οκτ', 'Νοε', 'Δεκ'];
 

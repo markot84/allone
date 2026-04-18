@@ -58,14 +58,14 @@ export function CompareScenariosModal({
     const scoredA = products
       .map((p) => ({
         ...p,
-        composite_score: calculateCompositeScore(p, weightsA, undefined, scenarioA === 'custom' ? undefined : scenarioA),
+        composite_score: calculateCompositeScore(p, weightsA, undefined, scenarioA),
       }))
       .sort((a, b) => (b.composite_score || 0) - (a.composite_score || 0))
       .slice(0, sampleSize);
     const scoredB = products
       .map((p) => ({
         ...p,
-        composite_score: calculateCompositeScore(p, weightsB, undefined, scenarioB === 'custom' ? undefined : scenarioB),
+        composite_score: calculateCompositeScore(p, weightsB, undefined, scenarioB),
       }))
       .sort((a, b) => (b.composite_score || 0) - (a.composite_score || 0))
       .slice(0, sampleSize);

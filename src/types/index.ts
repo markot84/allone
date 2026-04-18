@@ -155,6 +155,39 @@ export interface Scenario {
   description: string;
   weights: Record<string, number> | null;
   duration?: number | 'ongoing';
+  /** Προαιρετικό footer στην κάρτα στρατηγικής (αν λείπει, υπολογίζεται από τα weights). */
+  cardHint?: string;
+}
+
+/** Προκαθορισμένα σενάρια φιλτραρίσματος SKU για Sales Optimization (sales_base). */
+export type SalesBasePresetId =
+  | 'all'
+  | 'never_sold'
+  | 'zero_last_7d'
+  | 'zero_last_30d'
+  | 'zero_last_90d'
+  | 'stalled_7_vs_90'
+  | 'cold_last_sale_30d';
+
+/** Αποθηκευμένο πεδίο ενεργής στρατηγικής — ποια SKU «μετράνε» στο Sales Optimization (sales_base). */
+export interface SalesBaseScope {
+  preset: SalesBasePresetId;
+  brandFilter: string;
+  categoryFilter: string;
+  search: string;
+  /** null = όλα όσα ταιριάζουν στο preset + φίλτρα κειμένου (δυναμικά). Διαφορετικά allowlist. */
+  selectedProductIds: string[] | null;
+}
+
+/** Φίλτρο preset για στρατηγική Price Benchmarking (GMC). */
+export type PriceBenchmarkPresetId = 'below_market' | 'all_benchmarked';
+
+export interface PriceBenchmarkStrategyScope {
+  preset: PriceBenchmarkPresetId;
+  brandFilter: string;
+  categoryFilter: string;
+  search: string;
+  selectedProductIds: string[] | null;
 }
 
 // RFM Types
@@ -255,12 +288,21 @@ export interface Product {
   revenue_period?: number;
   /** Qty sold in period (Qty_Sold_Period in template) - optional */
   qty_sold_period?: number;
+  /** Προαιρετικά παράθυρα πωλήσεων (import / connector) — Sales Optimization. */
+  qty_sold_last_7d?: number;
+  qty_sold_last_30d?: number;
+  qty_sold_last_90d?: number;
+  qty_sold_lifetime?: number;
+  /** ISO ή Excel date string — τελευταία καταγεγραμμένη πώληση SKU */
+  last_sale_at?: string;
   /** First available date (First_Available_Date in template) - for Stock Age calc when Stock_Age_Days empty */
   first_available_date?: string;
   /** Firestore: when product was imported - fallback for Stock Age when no date column */
   createdAt?: { toDate: () => Date } | Date | string;
   /** Supplier name — links to Supplier.name for TOD lookup */
   supplier?: string;
+  /** Εμπορική μάρκα (στήλη Brand στο import) — προαιρετικό */
+  brand?: string;
 }
 
 export interface InventorySummary {

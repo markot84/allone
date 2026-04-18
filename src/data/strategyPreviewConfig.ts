@@ -1,3 +1,7 @@
+import { scenarios } from './mockScenarios';
+
+const WEIGHT_KEYS_FOR_DRIFT = ['profit', 'stock', 'strategic', 'revenue', 'fit'] as const;
+
 export type PreviewColumnId =
   | 'rank'
   | 'product'
@@ -8,6 +12,8 @@ export type PreviewColumnId =
   | 'excess_pct'
   | 'priority_tag'
   | 'revenue_potential'
+  | 'sales_signal'
+  | 'benchmark_signal'
   | 'score';
 
 export interface PreviewColumnConfig {
@@ -54,8 +60,16 @@ const SCORE_TOOLTIPS: Record<string, string> = {
 • Customer Fit (20%): Segment affinity
 Προτεραιότητα σε προϊόντα με υψηλό revenue potential (τιμή × stock).`,
 
-  custom: `Score = weighted sum based on τις weights που επέλεξες.
-Κάθε factor συνεισφέρει ανάλογα με το ποσοστό του.`,
+  sales_base: `Score «Sales Optimization» (ενσωματωμένο μοντέλο ~52% momentum):
+• Προτεραιότητα σε SKU χωρίς/με στάσιμες πωλήσεις (0 σε παράθυρο, πάγωμα 7d/30d/90d όταν υπάρχουν στήλες, last_sale_at, lifetime).
+• Συνδυάζεται με margin, απόθεμα, strategic tags, revenue proxy, segment fit.
+Για ακριβή «ποτέ vs σταμάτησε» συμπληρώστε στο import qty_sold_lifetime, qty_sold_last_7d/30d/90d, last_sale_at.`,
+
+  price_benchmark: `Score «Price Benchmarking» (~50% price advantage vs GMC benchmark):
+• Υψηλότερο score όταν είστε φθηνότεροι από την αγορά (αρνητικό priceDiff %).
+• Συνδυάζεται με κερδοφορία, απόθεμα, strategic, revenue proxy, segment fit.
+Απαιτείται συγχρονισμός GMC και σύζευξη SKU (κωδικός / product id).`,
+
 };
 
 export const strategyPreviewConfigs: Record<string, StrategyPreviewConfig> = {
@@ -108,23 +122,41 @@ export const strategyPreviewConfigs: Record<string, StrategyPreviewConfig> = {
     scoreTooltip: SCORE_TOOLTIPS.revenue_push,
   },
 
-  custom: {
+  sales_base: {
     columns: [
       { id: 'rank', label: 'Rank' },
       { id: 'product', label: 'Product' },
       { id: 'category', label: 'Category' },
-      { id: 'margin', label: 'Margin' },
       { id: 'stock', label: 'Stock' },
-      { id: 'score', label: 'Score', tooltip: SCORE_TOOLTIPS.custom },
+      { id: 'sales_signal', label: 'Πωλήσεις' },
+      { id: 'margin', label: 'Margin' },
+      { id: 'score', label: 'Score', tooltip: SCORE_TOOLTIPS.sales_base },
     ],
-    scoreTooltip: SCORE_TOOLTIPS.custom,
+    scoreTooltip: SCORE_TOOLTIPS.sales_base,
+  },
+
+  price_benchmark: {
+    columns: [
+      { id: 'rank', label: 'Rank' },
+      { id: 'product', label: 'Product' },
+      { id: 'category', label: 'Category' },
+      { id: 'stock', label: 'Stock' },
+      { id: 'benchmark_signal', label: 'vs Αγορά' },
+      { id: 'margin', label: 'Margin' },
+      { id: 'score', label: 'Score', tooltip: SCORE_TOOLTIPS.price_benchmark },
+    ],
+    scoreTooltip: SCORE_TOOLTIPS.price_benchmark,
   },
 };
 
 export function getPreviewConfig(selectedScenario: string, weights: Record<string, number>): StrategyPreviewConfig {
-  const base = strategyPreviewConfigs[selectedScenario] ?? strategyPreviewConfigs.custom;
-  if (selectedScenario === 'custom') {
-    const customTooltip = `Score = weighted sum based on τις weights που επέλεξες:
+  const base = strategyPreviewConfigs[selectedScenario] ?? strategyPreviewConfigs.profit_max;
+  const canonical = scenarios.find((s) => s.id === selectedScenario)?.weights;
+  if (
+    canonical &&
+    WEIGHT_KEYS_FOR_DRIFT.some((k) => (weights[k] ?? 0) !== (canonical[k] ?? 0))
+  ) {
+    const driftTooltip = `Score = weighted sum με τα **τρέχοντα** weights (έχουν διαφοροποιηθεί από το preset «${selectedScenario}»):
 • Profitability: ${weights.profit ?? 0}%
 • Inventory: ${weights.stock ?? 0}%
 • Strategic: ${weights.strategic ?? 0}%
@@ -132,9 +164,9 @@ export function getPreviewConfig(selectedScenario: string, weights: Record<strin
 • Customer Fit: ${weights.fit ?? 0}%`;
     return {
       ...base,
-      scoreTooltip: customTooltip,
+      scoreTooltip: driftTooltip,
       columns: base.columns.map((c) =>
-        c.id === 'score' ? { ...c, tooltip: customTooltip } : c
+        c.id === 'score' ? { ...c, tooltip: driftTooltip } : c
       ),
     };
   }

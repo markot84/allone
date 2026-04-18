@@ -645,6 +645,11 @@ function validateProduct(row: Record<string, string>, index: number): { valid: b
   const costPrice = pick(row, 'τιμή_αγοράς', 'cost_price', 'Cost_Price', 'cost', 'Cost', 'κόστος');
   const revenuePeriod = pick(row, 'revenue_period', 'revenue', 'revenue_period');
   const qtySoldPeriod = pick(row, 'πωλήσεις', 'qty_sold_period', 'qty_sold', 'quantity_sold', 'sales', 'sold', 'units_sold');
+  const qtySoldLast7 = pick(row, 'qty_sold_last_7d', 'qty_sold_7d', 'sales_7d', 'πωλήσεις_7d', 'πωλήσεις_7ημερο');
+  const qtySoldLast30 = pick(row, 'qty_sold_last_30d', 'qty_sold_30d', 'sales_30d', 'πωλήσεις_30d', 'πωλήσεις_30ημερο');
+  const qtySoldLast90 = pick(row, 'qty_sold_last_90d', 'qty_sold_90d', 'sales_90d', 'πωλήσεις_90d', 'πωλήσεις_3μηνο');
+  const qtySoldLifetime = pick(row, 'qty_sold_lifetime', 'lifetime_qty_sold', 'total_qty_sold', 'συνολικές_πωλήσεις');
+  const lastSaleAt = pick(row, 'last_sale_at', 'last_sale_date', 'τελευταία_πώληση', 'τελευταια_πωληση');
   const priority = pick(row, 'priority_tag', 'priority_flag', 'priority', 'tag', 'label', 'alerts', 'κατάσταση');
   const supplier = pick(row, 'supplier', 'vendor', 'supplier_name', 'vendor_name', 'προμηθευτής');
   
@@ -751,6 +756,19 @@ function validateProduct(row: Record<string, string>, index: number): { valid: b
     ...(costPrice ? { cost_price: costPriceNum } : {}),
     ...(revenuePeriod ? { revenue_period: parseFloat(String(revenuePeriod || '0').replace(',', '.')) || 0 } : {}),
     ...(qtySoldPeriod ? { qty_sold_period: Math.round(parseFloat(String(qtySoldPeriod).replace(',', '.')) || 0) } : {}),
+    ...(qtySoldLast7?.trim()
+      ? { qty_sold_last_7d: Math.round(parseFloat(String(qtySoldLast7).replace(',', '.')) || 0) }
+      : {}),
+    ...(qtySoldLast30?.trim()
+      ? { qty_sold_last_30d: Math.round(parseFloat(String(qtySoldLast30).replace(',', '.')) || 0) }
+      : {}),
+    ...(qtySoldLast90?.trim()
+      ? { qty_sold_last_90d: Math.round(parseFloat(String(qtySoldLast90).replace(',', '.')) || 0) }
+      : {}),
+    ...(qtySoldLifetime?.trim()
+      ? { qty_sold_lifetime: Math.round(parseFloat(String(qtySoldLifetime).replace(',', '.')) || 0) }
+      : {}),
+    ...(lastSaleAt?.trim() ? { last_sale_at: lastSaleAt.trim() } : {}),
     ...(firstAvailableDate ? { first_available_date: firstAvailableDate } : {}),
     ...(supplier ? { supplier } : {}),
   };

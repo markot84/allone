@@ -170,7 +170,7 @@ export function CustomToolsCard({ weights, onWeightsChange, onCompareClick }: Cu
         )}
 
         {/* Compare */}
-        <Tooltip content="Συγκρίνετε το custom scenario με άλλες στρατηγικές: weights, Top N προϊόντα (τα N με τα υψηλότερα scores), revenue/margin.">
+        <Tooltip content="Συγκρίνετε δύο στρατηγικές: weights, Top N προϊόντα (scores), revenue/margin.">
           <Button variant="secondary" size="sm" icon={<GitCompare size={14} />} onClick={onCompareClick}>
             Σύγκριση scenarios
           </Button>

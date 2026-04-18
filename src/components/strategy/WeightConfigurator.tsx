@@ -24,6 +24,8 @@ import { ScenarioSelector } from './ScenarioSelector';
 import { ChannelRecommendations } from './ChannelRecommendations';
 import { StrategyPackage } from './StrategyPackage';
 import { StrategyImpactSummary, StrategyImpactModal } from './StrategyImpactPreview';
+import { SalesBaseSetupModal } from './SalesBaseSetupModal';
+import { PriceBenchmarkSetupModal } from './PriceBenchmarkSetupModal';
 import { SeasonalDiscountPanel, type SeasonalDiscountConfig } from './SeasonalDiscountPanel';
 import { CustomToolsCard } from './CustomToolsCard';
 import { CompareScenariosModal } from './CompareScenariosModal';
@@ -46,7 +48,18 @@ import { generateContentSuggestions } from '../../services/aiContentSuggestions'
 import { FirestoreService } from '../../services/firestore';
 import { BriefingDrawer } from '../coordination/BriefingDrawer';
 import { getPreviewConfig, type PreviewColumnId } from '../../data/strategyPreviewConfig';
-import { calculateCompositeScore } from '../../utils/compositeScore';
+import { calculateCompositeScore, type CompositeScoreContext } from '../../utils/compositeScore';
+import {
+  filterProductsBySalesBaseScope,
+  productParticipatesInSalesBase,
+  salesMomentumLabel,
+} from '../../utils/salesBaseScore';
+import {
+  filterProductsByPriceBenchmarkScope,
+  findBenchmarkForProduct,
+  productParticipatesInPriceBenchmarkStrategy,
+} from '../../utils/priceBenchmarkStrategy';
+import { usePriceBenchmarks } from '../../hooks/usePriceBenchmarks';
 import { getStockAgeDays } from '../../utils/productUtils';
 import { rankSegments, type ScoredSegment } from '../../utils/segmentRelevance';
 import { safeBrandName } from '../../services/reportExport';
@@ -54,7 +67,7 @@ import { exportStrategyPlan } from '../../services/segmentActionPack';
 import { useToast } from '../common/Toast';
 import { Tooltip } from '../common';
 import type { SeasonalPeriod } from '../../data/seasonalPeriods';
-import type { Product } from '../../types';
+import type { Product, PriceBenchmarkStrategyScope, SalesBaseScope } from '../../types';
 
 
 const PreviewCell = memo(function PreviewCell({
@@ -167,6 +180,47 @@ const PreviewCell = memo(function PreviewCell({
         </td>
       );
     }
+    case 'sales_signal': {
+      const label = salesMomentumLabel(product);
+      const tone =
+        label === 'Υψηλή' || label === 'Αυξημένη'
+          ? 'text-amber-700 bg-amber-50'
+          : label === 'Μέτρια'
+            ? 'text-[#4A4A4A] bg-[#F3F4F6]'
+            : 'text-emerald-800 bg-emerald-50';
+      return (
+        <td className="py-2 pr-2 w-20 hidden sm:table-cell">
+          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${tone}`}>{label}</span>
+        </td>
+      );
+    }
+    case 'benchmark_signal': {
+      type PBench = Product & {
+        __priceBenchmark?: { priceDiff: number; benchmarkPrice: number; yourPrice: number };
+      };
+      const bm = (product as PBench).__priceBenchmark;
+      if (!bm || bm.benchmarkPrice <= 0) {
+        return (
+          <td className="py-2 pr-2 w-20 hidden sm:table-cell">
+            <span className="text-[10px] text-[#9CA3AF]">—</span>
+          </td>
+        );
+      }
+      const tone =
+        bm.priceDiff < -2
+          ? 'text-emerald-800 bg-emerald-50'
+          : bm.priceDiff > 2
+            ? 'text-rose-800 bg-rose-50'
+            : 'text-[#4A4A4A] bg-[#F3F4F6]';
+      return (
+        <td className="py-2 pr-2 w-24 hidden sm:table-cell">
+          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${tone}`}>
+            {bm.priceDiff > 0 ? '+' : ''}
+            {bm.priceDiff}%
+          </span>
+        </td>
+      );
+    }
     case 'score':
       return (
         <td className={`py-2 w-14 ${alignRight}`}>
@@ -191,7 +245,18 @@ export function WeightConfigurator() {
   const { segments: rfmSegments } = useSegments();
   const { user } = useAuth();
   const { activeStrategy, saveActiveStrategy, isLoading: strategyLoading } = useActiveStrategy();
+  const { benchmarks } = usePriceBenchmarks();
   const toast = useToast();
+
+  const benchmarkLookup = useCallback(
+    (p: Product) => findBenchmarkForProduct(p, benchmarks),
+    [benchmarks],
+  );
+
+  const benchmarkScoreContext = useMemo<CompositeScoreContext>(
+    () => ({ benchmarkLookup }),
+    [benchmarkLookup],
+  );
 
   const [briefingName, setBriefingName] = useState<string | null>(null);
   const [showBriefingDrawer, setShowBriefingDrawer] = useState(false);
@@ -205,8 +270,9 @@ export function WeightConfigurator() {
   
   // Initialize from active strategy if available, otherwise no default
   const [selectedScenario, setSelectedScenario] = useState<string | null>(() => {
-    if (activeStrategy) return activeStrategy.scenarioId;
-    return null; // No default scenario - user must select
+    if (!activeStrategy) return null;
+    const sid = activeStrategy.scenarioId;
+    return sid === 'custom' ? 'profit_max' : sid;
   });
   const [weights, setWeights] = useState<Record<string, number>>(() => {
     if (activeStrategy) return activeStrategy.weights;
@@ -227,9 +293,7 @@ export function WeightConfigurator() {
     if (selectedScenario === 'mixed' && mixConfig?.scenarioA && mixConfig?.scenarioB) {
       return computeBlendedWeights(mixConfig.scenarioA, mixConfig.scenarioB, mixConfig.percentA);
     }
-    if (!selectedScenario || selectedScenario === 'custom') return weights;
-    const sc = scenarios.find(s => s.id === selectedScenario);
-    return sc?.weights ?? weights;
+    return weights;
   }, [selectedScenario, weights, mixConfig]);
 
   const rankedSegments = useMemo(
@@ -260,6 +324,11 @@ export function WeightConfigurator() {
   }, [selectedScenario, rankedSegments]);
 
   const [pendingScenarioChange, setPendingScenarioChange] = useState<string | null>(null);
+  const [salesBaseSetupOpen, setSalesBaseSetupOpen] = useState(false);
+  const [pendingSalesBaseScope, setPendingSalesBaseScope] = useState<SalesBaseScope | null>(null);
+  const [priceBenchmarkSetupOpen, setPriceBenchmarkSetupOpen] = useState(false);
+  const [pendingPriceBenchmarkScope, setPendingPriceBenchmarkScope] =
+    useState<PriceBenchmarkStrategyScope | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showCompareModal, setShowCompareModal] = useState(false);
   const [showFeedFormatModal, setShowFeedFormatModal] = useState(false);
@@ -285,7 +354,7 @@ export function WeightConfigurator() {
   const [debouncedWeights, setDebouncedWeights] = useState(weights);
 
   const getWeightsForScenario = useCallback((scenarioId: string | null) => {
-    if (!scenarioId || scenarioId === 'custom') return weights;
+    if (!scenarioId) return weights;
     if (scenarioId === 'mixed' || scenarioId === 'seasonal_discount') return weights;
     const scenario = scenarios.find((s) => s.id === scenarioId);
     return scenario?.weights ?? defaultWeights;
@@ -295,11 +364,7 @@ export function WeightConfigurator() {
   const totalWeight = Object.values(weights).reduce((a, b) => a + b, 0);
 
   // Get current weights for comparison
-  const getCurrentWeights = useCallback(() => {
-    if (!selectedScenario || selectedScenario === 'custom') return weights;
-    const scenario = scenarios.find((s) => s.id === selectedScenario);
-    return scenario?.weights ?? weights;
-  }, [selectedScenario, weights]);
+  const getCurrentWeights = useCallback(() => weights, [weights]);
 
   // Apply the scenario change and SAVE it
   // Generate activation + content AI and save directly to Firestore (called after strategy save)
@@ -344,7 +409,11 @@ export function WeightConfigurator() {
     queryClient.invalidateQueries({ queryKey: ['activeStrategy'] });
   }, [rfmSegments, selectedSegment, products, currentBrand, rankedSegments, segmentFitMap, queryClient]);
 
-  const applyScenarioChange = useCallback((scenarioId: string, overrideDuration?: number | 'ongoing') => {
+  const applyScenarioChange = useCallback((
+    scenarioId: string,
+    overrideDuration?: number | 'ongoing',
+    saveOptions?: { salesBaseScope?: SalesBaseScope; priceBenchmarkScope?: PriceBenchmarkStrategyScope },
+  ) => {
     setSelectedScenario(scenarioId);
 
     if (scenarioId === 'mixed' || scenarioId === 'seasonal_discount') {
@@ -371,14 +440,36 @@ export function WeightConfigurator() {
       return;
     }
     
-    const scenarioName = scenario?.name || (scenarioId === 'custom' ? 'Custom' : 'Unknown');
-    
+    const scenarioName = scenario?.name || 'Unknown';
+
+    const defaultSalesScope: SalesBaseScope = {
+      preset: 'all',
+      brandFilter: '',
+      categoryFilter: '',
+      search: '',
+      selectedProductIds: null,
+    };
+
+    const defaultPriceBenchmarkScope: PriceBenchmarkStrategyScope = {
+      preset: 'below_market',
+      brandFilter: '',
+      categoryFilter: '',
+      search: '',
+      selectedProductIds: null,
+    };
+
     saveActiveStrategy({
       scenarioId: scenarioId,
       weights: newWeights,
       duration: saveDuration,
       approvalStatus: 'implementing',
       approvedBy: user.email || user.displayName || 'User',
+      ...(scenarioId === 'sales_base'
+        ? { salesBaseScope: saveOptions?.salesBaseScope ?? defaultSalesScope }
+        : {}),
+      ...(scenarioId === 'price_benchmark'
+        ? { priceBenchmarkScope: saveOptions?.priceBenchmarkScope ?? defaultPriceBenchmarkScope }
+        : {}),
     }).then((saved) => {
       toast.success(`Στρατηγική "${scenarioName}" αποθηκεύτηκε`);
       setStrategySaveVersion(v => v + 1);
@@ -509,6 +600,20 @@ export function WeightConfigurator() {
       applyScenarioChange('seasonal_discount');
       return;
     }
+
+    if (scenarioId === 'sales_base') {
+      setMixPanelOpen(false);
+      setSeasonalPanelOpen(false);
+      setSalesBaseSetupOpen(true);
+      return;
+    }
+
+    if (scenarioId === 'price_benchmark') {
+      setMixPanelOpen(false);
+      setSeasonalPanelOpen(false);
+      setPriceBenchmarkSetupOpen(true);
+      return;
+    }
     
     setMixPanelOpen(false);
     setSeasonalPanelOpen(false);
@@ -517,17 +622,69 @@ export function WeightConfigurator() {
 
   // Confirm strategy change after impact preview
   const confirmStrategyChange = useCallback((selectedDuration: number | 'ongoing') => {
-    if (pendingScenarioChange) {
-      applyScenarioChange(pendingScenarioChange, selectedDuration);
-      setDuration(selectedDuration);
-      setPendingScenarioChange(null);
-      setShowDetailModal(false);
+    if (!pendingScenarioChange) return;
+    const saveOpts: {
+      salesBaseScope?: SalesBaseScope;
+      priceBenchmarkScope?: PriceBenchmarkStrategyScope;
+    } = {};
+    if (pendingScenarioChange === 'sales_base') {
+      saveOpts.salesBaseScope =
+        pendingSalesBaseScope ?? {
+          preset: 'all',
+          brandFilter: '',
+          categoryFilter: '',
+          search: '',
+          selectedProductIds: null,
+        };
     }
-  }, [pendingScenarioChange, applyScenarioChange]);
+    if (pendingScenarioChange === 'price_benchmark') {
+      saveOpts.priceBenchmarkScope =
+        pendingPriceBenchmarkScope ?? {
+          preset: 'below_market',
+          brandFilter: '',
+          categoryFilter: '',
+          search: '',
+          selectedProductIds: null,
+        };
+    }
+    applyScenarioChange(pendingScenarioChange, selectedDuration, saveOpts);
+    setPendingSalesBaseScope(null);
+    setPendingPriceBenchmarkScope(null);
+    setShowDetailModal(false);
+  }, [pendingScenarioChange, pendingSalesBaseScope, pendingPriceBenchmarkScope, applyScenarioChange]);
 
-  const previewConfig = getPreviewConfig(selectedScenario || 'profit_max', weights);
+  const previewUiScenarioId =
+    pendingScenarioChange === 'sales_base'
+      ? 'sales_base'
+      : pendingScenarioChange === 'price_benchmark'
+        ? 'price_benchmark'
+        : selectedScenario || 'profit_max';
+  const previewUiWeights =
+    pendingScenarioChange === 'sales_base'
+      ? getWeightsForScenario('sales_base')
+      : pendingScenarioChange === 'price_benchmark'
+        ? getWeightsForScenario('price_benchmark')
+        : weights;
 
-  // NO auto-save for custom weights - user must click "Save Strategy" button
+  const previewConfig = getPreviewConfig(previewUiScenarioId, previewUiWeights);
+
+  const salesBaseScopeForPreview = useMemo(() => {
+    if (pendingScenarioChange === 'sales_base' && pendingSalesBaseScope) return pendingSalesBaseScope;
+    if (selectedScenario === 'sales_base') return (activeStrategy as { salesBaseScope?: SalesBaseScope })?.salesBaseScope;
+    return undefined;
+  }, [pendingScenarioChange, pendingSalesBaseScope, selectedScenario, activeStrategy]);
+
+  const priceBenchmarkScopeForPreview = useMemo(() => {
+    if (pendingScenarioChange === 'price_benchmark' && pendingPriceBenchmarkScope) {
+      return pendingPriceBenchmarkScope;
+    }
+    if (selectedScenario === 'price_benchmark') {
+      return (activeStrategy as { priceBenchmarkScope?: PriceBenchmarkStrategyScope })?.priceBenchmarkScope;
+    }
+    return undefined;
+  }, [pendingScenarioChange, pendingPriceBenchmarkScope, selectedScenario, activeStrategy]);
+
+  // Weights auto-sync from scenario selection; slider edits stay on the selected preset until save.
 
   // Handle individual weight change with proportional adjustment
   const handleWeightChange = useCallback(
@@ -565,8 +722,7 @@ export function WeightConfigurator() {
       }
 
       setWeights(newWeights);
-      setSelectedScenario('custom');
-      
+
       // Debounce expensive calculations
       if (debounceTimerRef.current) {
         window.clearTimeout(debounceTimerRef.current);
@@ -588,25 +744,72 @@ export function WeightConfigurator() {
 
   // Reset to default
   const handleReset = useCallback(() => {
-    setWeights(defaultWeights);
-    setSelectedScenario('custom');
+    const pm = scenarios.find((s) => s.id === 'profit_max');
+    setWeights(pm?.weights ? { ...pm.weights } : defaultWeights);
+    setSelectedScenario('profit_max');
   }, []);
 
   // Calculate prioritized products (strategy-specific score logic)
   // Use debounced weights for expensive calculations, limit to top 100 for preview
   const prioritizedProducts = useMemo(() => {
-    if (!selectedScenario) return [];
-    const strategyId = selectedScenario === 'custom' ? undefined : selectedScenario;
-    const scored = products
-      .map((p) => ({
-        ...p,
-        composite_score: calculateCompositeScore(p, debouncedWeights, undefined, strategyId)
-      }))
+    const previewingSalesPending = pendingScenarioChange === 'sales_base';
+    const previewingPriceBenchPending = pendingScenarioChange === 'price_benchmark';
+    if (!selectedScenario && !previewingSalesPending && !previewingPriceBenchPending) return [];
+
+    const strategyId: string | undefined = previewingSalesPending
+      ? 'sales_base'
+      : previewingPriceBenchPending
+        ? 'price_benchmark'
+        : (selectedScenario ?? undefined);
+
+    const weightsForScore = previewingSalesPending
+      ? getWeightsForScenario('sales_base')
+      : previewingPriceBenchPending
+        ? getWeightsForScenario('price_benchmark')
+        : debouncedWeights;
+
+    let source = products;
+    if (strategyId === 'sales_base') {
+      source = filterProductsBySalesBaseScope(products, salesBaseScopeForPreview);
+    }
+    if (strategyId === 'price_benchmark') {
+      source = filterProductsByPriceBenchmarkScope(products, priceBenchmarkScopeForPreview, benchmarks);
+    }
+
+    const scoreCtx: CompositeScoreContext | undefined =
+      strategyId === 'price_benchmark' ? benchmarkScoreContext : undefined;
+
+    const scored = source
+      .map((p) => {
+        const bm = strategyId === 'price_benchmark' ? benchmarkLookup(p) : undefined;
+        return {
+          ...p,
+          ...(bm ? { __priceBenchmark: bm } : {}),
+          composite_score: calculateCompositeScore(
+            p,
+            weightsForScore,
+            undefined,
+            strategyId,
+            undefined,
+            scoreCtx,
+          ),
+        };
+      })
       .sort((a, b) => (b.composite_score || 0) - (a.composite_score || 0));
-    
-    // Return top 100 for preview (full list only needed for export)
+
     return scored.slice(0, 100);
-  }, [products, debouncedWeights, selectedScenario]);
+  }, [
+    products,
+    debouncedWeights,
+    selectedScenario,
+    pendingScenarioChange,
+    salesBaseScopeForPreview,
+    priceBenchmarkScopeForPreview,
+    benchmarks,
+    benchmarkLookup,
+    benchmarkScoreContext,
+    getWeightsForScenario,
+  ]);
 
   const previewTotalPages = Math.max(1, Math.ceil(prioritizedProducts.length / PREVIEW_PAGE_SIZE));
   const paginatedPreviewProducts = prioritizedProducts.slice(
@@ -616,19 +819,67 @@ export function WeightConfigurator() {
 
   useEffect(() => {
     setCurrentPreviewPage(1);
-  }, [selectedScenario, debouncedWeights]);
+  }, [
+    selectedScenario,
+    debouncedWeights,
+    pendingScenarioChange,
+    salesBaseScopeForPreview,
+    priceBenchmarkScopeForPreview,
+  ]);
 
   // Full list for export (only calculated when needed)
   const allPrioritizedProducts = useMemo(() => {
-    if (!selectedScenario) return [];
-    const strategyId = selectedScenario === 'custom' ? undefined : selectedScenario;
-    return products
+    const previewingSalesPending = pendingScenarioChange === 'sales_base';
+    const previewingPriceBenchPending = pendingScenarioChange === 'price_benchmark';
+    if (!selectedScenario && !previewingSalesPending && !previewingPriceBenchPending) return [];
+
+    const strategyId: string | undefined = previewingSalesPending
+      ? 'sales_base'
+      : previewingPriceBenchPending
+        ? 'price_benchmark'
+        : (selectedScenario ?? undefined);
+
+    const weightsForScore = previewingSalesPending
+      ? getWeightsForScenario('sales_base')
+      : previewingPriceBenchPending
+        ? getWeightsForScenario('price_benchmark')
+        : debouncedWeights;
+
+    let source = products;
+    if (strategyId === 'sales_base') {
+      source = filterProductsBySalesBaseScope(products, salesBaseScopeForPreview);
+    }
+    if (strategyId === 'price_benchmark') {
+      source = filterProductsByPriceBenchmarkScope(products, priceBenchmarkScopeForPreview, benchmarks);
+    }
+
+    const scoreCtx: CompositeScoreContext | undefined =
+      strategyId === 'price_benchmark' ? benchmarkScoreContext : undefined;
+
+    return source
       .map((p) => ({
         ...p,
-        composite_score: calculateCompositeScore(p, debouncedWeights, undefined, strategyId)
+        composite_score: calculateCompositeScore(
+          p,
+          weightsForScore,
+          undefined,
+          strategyId,
+          undefined,
+          scoreCtx,
+        ),
       }))
       .sort((a, b) => (b.composite_score || 0) - (a.composite_score || 0));
-  }, [products, debouncedWeights, selectedScenario]);
+  }, [
+    products,
+    debouncedWeights,
+    selectedScenario,
+    pendingScenarioChange,
+    salesBaseScopeForPreview,
+    priceBenchmarkScopeForPreview,
+    benchmarks,
+    benchmarkScoreContext,
+    getWeightsForScenario,
+  ]);
 
   // Generate product feed function
   const generateProductFeed = async (format: 'csv' | 'xlsx') => {
@@ -770,7 +1021,8 @@ export function WeightConfigurator() {
   // Load saved strategy from Firestore on mount/refresh
   useEffect(() => {
     if (!strategyLoading && activeStrategy) {
-      setSelectedScenario(activeStrategy.scenarioId);
+      const sid = activeStrategy.scenarioId === 'custom' ? 'profit_max' : activeStrategy.scenarioId;
+      setSelectedScenario(sid);
       setWeights(activeStrategy.weights);
       if (activeStrategy.duration !== undefined) {
         setDuration(activeStrategy.duration);
@@ -807,7 +1059,7 @@ export function WeightConfigurator() {
           />
 
           {/* Strategy Package — share/copy active strategy */}
-          {selectedScenario && selectedScenario !== 'custom' && (
+          {selectedScenario && (
             <StrategyPackage
               scenarioId={selectedScenario}
               weights={currentScenarioWeights}
@@ -922,9 +1174,28 @@ export function WeightConfigurator() {
             currentScenarioId={selectedScenario || undefined}
             newScenarioId={pendingScenarioChange}
             onConfirm={confirmStrategyChange}
-            onCancel={() => setPendingScenarioChange(null)}
+            onCancel={() => {
+              setPendingScenarioChange(null);
+              setPendingSalesBaseScope(null);
+              setPendingPriceBenchmarkScope(null);
+            }}
             onDetails={() => setShowDetailModal(true)}
             initialDuration={scenarios.find(s => s.id === pendingScenarioChange)?.duration ?? duration}
+            impactProductFilter={
+              pendingScenarioChange === 'sales_base' && pendingSalesBaseScope
+                ? (p) => productParticipatesInSalesBase(p, pendingSalesBaseScope)
+                : pendingScenarioChange === 'price_benchmark' && pendingPriceBenchmarkScope
+                  ? (p) =>
+                      productParticipatesInPriceBenchmarkStrategy(
+                        p,
+                        pendingPriceBenchmarkScope,
+                        findBenchmarkForProduct(p, benchmarks),
+                      )
+                  : undefined
+            }
+            scoreContext={
+              pendingScenarioChange === 'price_benchmark' ? benchmarkScoreContext : undefined
+            }
           />
         )}
       </AnimatePresence>
@@ -951,21 +1222,6 @@ export function WeightConfigurator() {
         )}
       </AnimatePresence>
       {/* Duration is now inside the impact summary popup */}
-
-      {/* Custom Tools - when Custom is selected */}
-      {selectedScenario === 'custom' && (
-        <Card padding="lg" className="border-l-4 border-l-[#8B5CF6]">
-          <CardHeader
-            title="Custom Tools"
-            subtitle="Clone, αποθήκευση presets, σύγκριση, export/import"
-          />
-          <CustomToolsCard
-            weights={weights}
-            onWeightsChange={setWeights}
-            onCompareClick={() => setShowCompareModal(true)}
-          />
-        </Card>
-      )}
 
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 max-w-full overflow-x-hidden">
@@ -1019,6 +1275,13 @@ export function WeightConfigurator() {
 
           {/* Actions */}
           <div className="mt-6 pt-6 border-t border-[var(--nts-border-gray)] space-y-2">
+            {selectedScenario && (
+              <CustomToolsCard
+                weights={weights}
+                onWeightsChange={setWeights}
+                onCompareClick={() => setShowCompareModal(true)}
+              />
+            )}
             <Button
               variant="secondary"
               className="w-full"
@@ -1051,12 +1314,6 @@ export function WeightConfigurator() {
             }
             icon={<Sparkles size={18} className="text-[var(--nts-medium-gray)]" />}
           />
-          {selectedScenario === 'custom' && (
-            <p className="text-xs text-[#6B7280] mb-3 -mt-2">
-              Προσαρμοσμένα weights – σύγκρινε scenarios ή αποθήκευσε preset για γρήγορη εναλλαγή.
-            </p>
-          )}
-
           <div className="-mx-2">
             <table className="w-full table-fixed">
               <thead>
@@ -1300,8 +1557,56 @@ export function WeightConfigurator() {
           newScenarioId={pendingScenarioChange}
           currentDuration={duration}
           newDuration={scenarios.find(s => s.id === pendingScenarioChange)?.duration ?? 'ongoing'}
+          impactProductFilter={
+            pendingScenarioChange === 'sales_base' && pendingSalesBaseScope
+              ? (p) => productParticipatesInSalesBase(p, pendingSalesBaseScope)
+              : pendingScenarioChange === 'price_benchmark' && pendingPriceBenchmarkScope
+                ? (p) =>
+                    productParticipatesInPriceBenchmarkStrategy(
+                      p,
+                      pendingPriceBenchmarkScope,
+                      findBenchmarkForProduct(p, benchmarks),
+                    )
+                : undefined
+          }
+          scoreContext={
+            pendingScenarioChange === 'price_benchmark' ? benchmarkScoreContext : undefined
+          }
         />
       )}
+
+      <SalesBaseSetupModal
+        isOpen={salesBaseSetupOpen}
+        onClose={() => setSalesBaseSetupOpen(false)}
+        products={products}
+        initialScope={
+          activeStrategy?.scenarioId === 'sales_base'
+            ? (activeStrategy as { salesBaseScope?: SalesBaseScope }).salesBaseScope
+            : undefined
+        }
+        onContinue={(scope) => {
+          setPendingSalesBaseScope(scope);
+          setSalesBaseSetupOpen(false);
+          setPendingScenarioChange('sales_base');
+        }}
+      />
+
+      <PriceBenchmarkSetupModal
+        isOpen={priceBenchmarkSetupOpen}
+        onClose={() => setPriceBenchmarkSetupOpen(false)}
+        products={products}
+        benchmarks={benchmarks}
+        initialScope={
+          activeStrategy?.scenarioId === 'price_benchmark'
+            ? (activeStrategy as { priceBenchmarkScope?: PriceBenchmarkStrategyScope }).priceBenchmarkScope
+            : undefined
+        }
+        onContinue={(scope) => {
+          setPendingPriceBenchmarkScope(scope);
+          setPriceBenchmarkSetupOpen(false);
+          setPendingScenarioChange('price_benchmark');
+        }}
+      />
 
       {/* Compare Scenarios Modal */}
       <CompareScenariosModal

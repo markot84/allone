@@ -1,5 +1,12 @@
 import type { Product } from '../types';
 import { getDaysOfStock, getProductTod } from './productUtils';
+import { calculateSalesMomentumScore } from './salesBaseScore';
+import type { BenchmarkPriceFields } from './priceBenchmarkStrategy';
+import { calculatePriceBenchmarkAdvantageScore } from './priceBenchmarkStrategy';
+
+export type CompositeScoreContext = {
+  benchmarkLookup?: (p: Product) => BenchmarkPriceFields | undefined;
+};
 
 /**
  * Calculate composite score for a product based on weights and strategy
@@ -9,7 +16,8 @@ export function calculateCompositeScore(
   weights: Record<string, number>,
   segmentAffinities?: Record<string, number>,
   strategyId?: string,
-  supplierTodMap?: Map<string, number>
+  supplierTodMap?: Map<string, number>,
+  scoreContext?: CompositeScoreContext,
 ): number {
   const profitScore = Math.min(100, Math.max(0, (product.margin_percentage || 0) / 60 * 100));
 
@@ -34,6 +42,31 @@ export function calculateCompositeScore(
   const fitScore = segmentAffinities ? 
     Object.values(segmentAffinities).reduce((sum, aff) => sum + aff, 0) / Object.keys(segmentAffinities).length :
     50;
+
+  if (strategyId === 'sales_base') {
+    const momentum = calculateSalesMomentumScore(product);
+    const total =
+      momentum * 0.52 +
+      profitScore * 0.13 +
+      inventoryScore * 0.13 +
+      strategicScore * 0.06 +
+      revenueScore * 0.09 +
+      fitScore * 0.07;
+    return Math.round(total);
+  }
+
+  if (strategyId === 'price_benchmark') {
+    const b = scoreContext?.benchmarkLookup?.(product);
+    const advantage = calculatePriceBenchmarkAdvantageScore(b);
+    const total =
+      advantage * 0.5 +
+      profitScore * 0.14 +
+      inventoryScore * 0.12 +
+      strategicScore * 0.08 +
+      revenueScore * 0.11 +
+      fitScore * 0.05;
+    return Math.round(total);
+  }
 
   // Weights are percentages (0-100), so divide by 100 to get multipliers (0-1)
   const total = 

@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Euro, Package, Rocket, TrendingUp, Check, ArrowUp, ArrowDown, X } from 'lucide-react';
+import { Euro, Package, Rocket, Scale, TrendingUp, Check, ArrowUp, ArrowDown, X } from 'lucide-react';
 import { scenarios } from '../../data';
 import { Button } from '../common';
 
@@ -17,9 +17,7 @@ interface MixedStrategyPanelProps {
   initialConfig?: MixConfig | null;
 }
 
-const BASE_SCENARIOS = scenarios.filter(
-  s => s.id !== 'custom' && s.id !== 'mixed' && s.weights
-);
+const BASE_SCENARIOS = scenarios.filter((s) => s.id !== 'mixed' && s.weights);
 
 function scenarioIcon(id: string) {
   const cls = 'text-[var(--nts-medium-gray)]';
@@ -28,6 +26,8 @@ function scenarioIcon(id: string) {
     case 'stock_clearance': return <Package size={16} className={cls} />;
     case 'brand_launch': return <Rocket size={16} className={cls} />;
     case 'revenue_push': return <TrendingUp size={16} className={cls} />;
+    case 'sales_base': return <Package size={16} className={cls} />;
+    case 'price_benchmark': return <Scale size={16} className={cls} />;
     default: return null;
   }
 }

@@ -33,6 +33,26 @@ export const scenarios: Scenario[] = [
     weights: { profit: 15, stock: 15, strategic: 15, revenue: 35, fit: 20 },
     duration: 90
   },
+  {
+    id: 'sales_base',
+    name: 'Sales Optimization',
+    icon: '',
+    description:
+      'Sales Optimization: ορίζετε ποια προϊόντα συμμετέχουν με άξονα τον ρυθμό πωλήσεών τους (παράθυρα 7/30/90 ημ., lifetime, τελευταία πώληση). Μετά την επιλογή σας, επιβεβαιώνετε τη διάρκεια εφαρμογής. Συμπληρώστε στο import τις στήλες πωλήσεων για ακριβέστερη κατάταξη.',
+    cardHint: 'Ρυθμός πωλήσεων & απόθεμα',
+    weights: { profit: 14, stock: 28, strategic: 10, revenue: 20, fit: 28 },
+    duration: 'ongoing' as const,
+  },
+  {
+    id: 'price_benchmark',
+    name: 'Price Benchmarking',
+    icon: '',
+    description:
+      'Price Benchmarking: στοχεύστε SKU όπου είστε φθηνότεροι από το benchmark αγοράς (GMC), με φίλτρα μάρκας/κατηγορίας και επιλογή SKU. Απαιτούνται συγχρονισμένα δεδομένα Merchant Center. Μετά το setup επιλέγετε διάρκεια στρατηγικής.',
+    cardHint: 'Έναντι αγοράς (GMC)',
+    weights: { profit: 22, stock: 18, strategic: 12, revenue: 26, fit: 22 },
+    duration: 'ongoing' as const,
+  },
   { 
     id: 'mixed', 
     name: 'Μικτή Στρατηγική', 
@@ -49,14 +69,6 @@ export const scenarios: Scenario[] = [
     weights: null,
     duration: 30
   },
-  { 
-    id: 'custom', 
-    name: 'Custom', 
-    icon: '',
-    description: 'Προσαρμοσμένη στρατηγική',
-    weights: null,
-    duration: 'ongoing' as const
-  }
 ];
 
 export const defaultWeights: Record<string, number> = {
@@ -233,7 +245,76 @@ export const channelRecommendations: Record<string, Record<string, ChannelRecomm
       budget_allocation: { google_shopping: 40, meta: 35, display: 25 },
       rationale: 'Πελάτες: Volume-focused broad targeting. || Κανάλια: Paid channels για broad reach με aggressive offers. || Αποτέλεσμα: Volume sales μέσω ευρείας στόχευσης.'
     }
-  }
+  },
+  sales_base: {
+    champions: {
+      primary: ['Google Shopping', 'Meta Ads (Facebook/Instagram)', 'Email Marketing'],
+      secondary: ['Dynamic Remarketing', 'SMS Marketing'],
+      budget_allocation: { google_shopping: 35, meta: 30, remarketing: 20, email: 15 },
+      rationale: 'Πελάτες: Champions — χρησιμοποιήστε τους για επανενεργοποίηση «νεκρών» SKU με bundled offers & VIP early access. || Κανάλια: Shopping/Meta για visibility σε SKU με 0 πρόσφατες πωλήσεις, email/SMS για owned push. || Αποτέλεσμα: Γρήγορη δοκιμή τιμής/προσφοράς σε προϊόντα με στάσιμη ζήτηση.'
+    },
+    loyal: {
+      primary: ['Email Marketing', 'Google Shopping', 'Meta Ads (Facebook/Instagram)'],
+      secondary: ['Dynamic Remarketing', 'Content Marketing'],
+      budget_allocation: { email: 35, google_shopping: 35, meta: 30 },
+      rationale: 'Πελάτες: Loyal — ενημερώστε για SKU που «κόπηκαν» σε πωλήσεις τελευταίας περιόδου. || Κανάλια: Email-first για κατάλογο/εκκαθάριση, paid για retarget. || Αποτέλεσμα: Ανακύκλωση προσοχής σε slow movers χωρίς χαμένο audience.'
+    },
+    potential: {
+      primary: ['Google Shopping', 'Meta Ads (Facebook/Instagram)', 'Google Search Ads'],
+      secondary: ['Email Marketing', 'YouTube Ads'],
+      budget_allocation: { google_shopping: 40, meta: 35, google_search: 25 },
+      rationale: 'Πελάτες: Potential — δοκιμή νέων hooks (τιμή, bundle) σε SKU χωρίς πρόσφατες πωλήσεις. || Κανάλια: High-intent search/shopping + social proof στο Meta. || Αποτέλεσμα: Μετατροπή trial σε πρώτη πώληση για «σιωπηλά» SKU.'
+    },
+    at_risk: {
+      primary: ['Dynamic Remarketing', 'Meta Retargeting', 'Email Marketing'],
+      secondary: ['SMS Marketing', 'Google Shopping'],
+      budget_allocation: { remarketing: 40, meta: 35, email: 25 },
+      rationale: 'Πελάτες: At Risk — στοχεύστε επαναστόχευση σε όσους αγόρασαν παλιά slow SKUs. || Κανάλια: Remarketing + owned για time-boxed promos. || Αποτέλεσμα: Καθαρίζει απόθεμα πριν χαθεί το ενδιαφέρον.'
+    },
+    lost: {
+      primary: ['Google Display Network', 'Meta Ads (Facebook/Instagram)'],
+      secondary: ['Google Shopping', 'Email Marketing'],
+      budget_allocation: { display: 45, meta: 35, google_shopping: 20 },
+      rationale: 'Πελάτες: Lost/broad — awareness + aggressive entry price για SKU ποτέ πωληθέντα. || Κανάλια: Display/Meta reach, shopping για intent catch. || Αποτέλεσμα: Δοκιμή product-market fit σε χαμηλότερο κόστος από premium search.'
+    }
+  },
+  price_benchmark: {
+    champions: {
+      primary: ['Google Shopping', 'Meta Ads (Facebook/Instagram)', 'Email Marketing'],
+      secondary: ['Dynamic Remarketing', 'SMS Marketing'],
+      budget_allocation: { google_shopping: 38, meta: 32, remarketing: 18, email: 12 },
+      rationale:
+        'Πελάτες: Champions — highlight SKU με τιμή κάτω από αγορά (value story, bundles). || Κανάλια: Shopping/Meta για price-led messaging, email για VIP lists. || Αποτέλεσμα: Μεγιστοποίηση μετατροπής όταν το προϊόν είναι ήδη ανταγωνιστικό στην τιμή.',
+    },
+    loyal: {
+      primary: ['Email Marketing', 'Google Shopping', 'Meta Ads (Facebook/Instagram)'],
+      secondary: ['Dynamic Remarketing', 'Content Marketing'],
+      budget_allocation: { email: 32, google_shopping: 38, meta: 30 },
+      rationale:
+        'Πελάτες: Loyal — ενημέρωση για «καλές τιμές» vs αγορά σε επιλεγμένα SKU. || Κανάλια: Email-first + paid για social proof. || Αποτέλεσμα: Ενίσχυση επαναλαμβανόμενων αγορών χωρίς race-to-bottom.',
+    },
+    potential: {
+      primary: ['Google Shopping', 'Google Search Ads', 'Meta Ads (Facebook/Instagram)'],
+      secondary: ['YouTube Ads', 'Email Marketing'],
+      budget_allocation: { google_shopping: 42, google_search: 28, meta: 30 },
+      rationale:
+        'Πελάτες: Potential — acquisition με ισχυρό price advantage έναντι benchmark. || Κανάλια: High-intent search/shopping + Meta value angles. || Αποτέλεσμα: Μετατροπή trial με βάση την τιμή έναντι ανταγωνισμού.',
+    },
+    at_risk: {
+      primary: ['Dynamic Remarketing', 'Meta Retargeting', 'Google Shopping'],
+      secondary: ['Email Marketing', 'SMS Marketing'],
+      budget_allocation: { remarketing: 38, meta: 32, google_shopping: 30 },
+      rationale:
+        'Πελάτες: At Risk — υπενθύμιση value (κάτω από αγορά) πριν χαθεί το ενδιαφέρον. || Κανάλια: Remarketing + owned με time-boxed προσφορές. || Αποτέλεσμα: Επανενεργοποίηση με βάση την τιμή.',
+    },
+    lost: {
+      primary: ['Google Shopping', 'Meta Ads (Facebook/Instagram)', 'Google Display Network'],
+      secondary: ['Email Marketing'],
+      budget_allocation: { google_shopping: 40, meta: 35, display: 25 },
+      rationale:
+        'Πελάτες: Lost/broad — δοκιμή entry με ισχυρό price vs market. || Κανάλια: Display/Meta reach + shopping για intent. || Αποτέλεσμα: Δοκιμή PMF με ανταγωνιστική τιμή.',
+    },
+  },
 };
 
 export const approvalStatuses = {

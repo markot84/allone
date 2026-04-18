@@ -1254,7 +1254,7 @@ Side drawer που δείχνει χρονολογικά όλες τις ενέ�
 ## Performance+ (Growth Plan)
 Η βασική έκδοση για e-commerce SMBs:
 - Dashboard — KPIs, revenue chart, AI insights, e-commerce summary
-- Commercial Strategy — 7 εμπορικά σενάρια, composite scoring
+- Commercial Strategy — εμπορικά σενάρια (συμπ. Sales Optimization, Price Benchmarking), composite scoring
 - RFM Analysis — Customer segmentation
 - Product Intelligence — Stock health, inventory analytics
 - Campaigns — Google Ads & Meta tracking, 3 χρόνια ιστορικό

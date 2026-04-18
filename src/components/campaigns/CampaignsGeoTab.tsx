@@ -1,13 +1,9 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Campaign } from '../../types';
 import { Card, CardHeader, Tooltip } from '../common';
 import { Search, Globe, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
-import type { CountryAgg } from './campaignGeoMapUtils';
-
-const CampaignsGeoChoropleth = lazy(async () => {
-  const m = await import('./CampaignsGeoChoropleth');
-  return { default: m.CampaignsGeoChoropleth };
-});
+import { buildGeoMekkoColumns, resolveCountryToIso2 } from './campaignGeoMapUtils';
+import { CampaignsGeoMekko } from './CampaignsGeoMekko';
 
 type GeoMetrics = {
   impressions: number;
@@ -40,8 +36,22 @@ type SortCol =
 const fmtNum = (n: number) => n.toLocaleString('el-GR', { maximumFractionDigits: 0 });
 const fmtMoney = (n: number) =>
   n.toLocaleString('el-GR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
+/** CPC συχνά < 1 €· με maxFractionDigits 0 το fmtMoney έδειχνε λάθος «0 €». */
+const fmtCpc = (n: number) =>
+  n.toLocaleString('el-GR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 4 });
 const fmtPct = (n: number) => `${n.toFixed(2)}%`;
 const fmtRoas = (n: number) => `${n.toFixed(2)}x`;
+const fmtConvGeo = (n: number) => {
+  const intish = Number.isFinite(n) && Math.abs(n - Math.round(n)) < 1e-6;
+  return n.toLocaleString('el-GR', { maximumFractionDigits: intish ? 0 : 2 });
+};
+
+function formatCountryLabel(raw: string): string {
+  const iso = resolveCountryToIso2(raw);
+  if (iso) return iso;
+  const t = (raw || '').trim();
+  return t || '—';
+}
 
 function flag(code: string): string {
   const c = (code || '').trim().toUpperCase();
@@ -78,35 +88,6 @@ export function CampaignsGeoTab({ campaigns }: Props) {
     setSortDir('desc');
   }, [level]);
 
-  /** Σύνολα ανά χώρα (για χάρτη — ανεξάρτητα από επιλογή Χώρα/Πόλη στον πίνακα). */
-  const countryRowsForMap = useMemo<CountryAgg[]>(() => {
-    const acc = new Map<
-      string,
-      { impressions: number; clicks: number; conversions: number; conversion_value: number; amount_spent: number }
-    >();
-    for (const c of campaigns) {
-      const byCountry = c.geo?.byCountry;
-      if (!byCountry) continue;
-      for (const [country, m] of Object.entries(byCountry)) {
-        const key = country || 'UNKNOWN';
-        const cur = acc.get(key) || {
-          impressions: 0,
-          clicks: 0,
-          conversions: 0,
-          conversion_value: 0,
-          amount_spent: 0,
-        };
-        cur.impressions += m.impressions || 0;
-        cur.clicks += m.clicks || 0;
-        cur.conversions += m.conversions || 0;
-        cur.conversion_value += m.conversion_value || 0;
-        cur.amount_spent += m.amount_spent || 0;
-        acc.set(key, cur);
-      }
-    }
-    return Array.from(acc.entries()).map(([country, v]) => ({ country, ...v }));
-  }, [campaigns]);
-
   const rows = useMemo<GeoRow[]>(() => {
     const acc = new Map<string, GeoRow>();
 
@@ -141,8 +122,32 @@ export function CampaignsGeoTab({ campaigns }: Props) {
       for (const c of campaigns) {
         const byCity = c.geo?.byCity;
         if (!byCity) continue;
-        for (const [locKey, m] of Object.entries(byCity)) {
+        const entries = Object.entries(byCity);
+        const totalSpent = entries.reduce((s, [, m]) => s + (m.amount_spent || 0), 0);
+        const totalRawConv = entries.reduce((s, [, m]) => s + (m.conversions || 0), 0);
+        const totalRawVal = entries.reduce((s, [, m]) => s + (m.conversion_value || 0), 0);
+        const campConv =
+          (typeof c.purchase_conversions === 'number' ? c.purchase_conversions : null) ??
+          c.conversions ??
+          0;
+        const campVal =
+          (typeof c.purchase_conversion_value === 'number' ? c.purchase_conversion_value : null) ??
+          c.conversion_value ??
+          0;
+        // Meta/ορισμένα APIs δεν δίνουν purchases ανά περιοχή (όλα 0) ενώ το campaign έχει σύνολα·
+        // κατανομή κατά spend share μόνο όταν το raw geo είναι ουσιαστικά κενό σε conversions.
+        const convSlack = Math.max(0, Number(campConv) - totalRawConv);
+        const valSlack = Math.max(0, Number(campVal) - totalRawVal);
+        const allocConv = convSlack > 0.01 && totalRawConv < 0.01 && totalSpent > 0;
+        const allocVal = valSlack > 0.01 && totalRawVal < 0.01 && totalSpent > 0;
+
+        for (const [locKey, m] of entries) {
           const { country, locality } = parseCityKey(locKey);
+          const spend = m.amount_spent || 0;
+          const share = totalSpent > 0 ? spend / totalSpent : 0;
+          const conv = (m.conversions || 0) + (allocConv ? convSlack * share : 0);
+          const cval = (m.conversion_value || 0) + (allocVal ? valSlack * share : 0);
+
           const cur = acc.get(locKey) as CityRow | undefined;
           const base: CityRow = cur || {
             kind: 'city',
@@ -160,9 +165,9 @@ export function CampaignsGeoTab({ campaigns }: Props) {
           };
           base.impressions += m.impressions || 0;
           base.clicks += m.clicks || 0;
-          base.conversions += m.conversions || 0;
-          base.conversion_value += m.conversion_value || 0;
-          base.amount_spent += m.amount_spent || 0;
+          base.conversions += conv;
+          base.conversion_value += cval;
+          base.amount_spent += spend;
           acc.set(locKey, base);
         }
       }
@@ -213,6 +218,14 @@ export function CampaignsGeoTab({ campaigns }: Props) {
 
     return sorted;
   }, [campaigns, search, sortCol, sortDir, level]);
+
+  const mekkoColumns = useMemo(() => {
+    const all = buildGeoMekkoColumns(campaigns, level);
+    const q = search.trim();
+    if (!q) return all;
+    const keys = new Set(rows.map((r) => (r.kind === 'country' ? r.country : r.key)));
+    return all.filter((c) => keys.has(c.id));
+  }, [campaigns, level, search, rows]);
 
   const totals = useMemo(() => {
     return rows.reduce(
@@ -279,8 +292,8 @@ export function CampaignsGeoTab({ campaigns }: Props) {
 
   const subtitle =
     level === 'country'
-      ? `${rows.length} χώρες — σύνολο ${fmtMoney(totals.amount_spent)} spend, ${fmtNum(totals.conversions)} αγορές.`
-      : `${rows.length} τοποθεσίες — σύνολο ${fmtMoney(totals.amount_spent)} spend, ${fmtNum(totals.conversions)} αγορές. Meta: περιοχή (όχι πάντα πόλη).`;
+      ? `${rows.length} χώρες — σύνολο ${fmtMoney(totals.amount_spent)} spend, ${fmtConvGeo(totals.conversions)} αγορές.`
+      : `${rows.length} τοποθεσίες — σύνολο ${fmtMoney(totals.amount_spent)} spend, ${fmtConvGeo(totals.conversions)} αγορές. Google: πόλη · Meta: περιοχή. Όπου το API δεν δίνει αγορές ανά γραμμή, εμφανίζεται εκτιμώμενη κατανομή κατά spend.`;
 
   return (
     <Card>
@@ -303,21 +316,14 @@ export function CampaignsGeoTab({ campaigns }: Props) {
           </div>
         }
       />
-      {countryRowsForMap.length > 0 && (
-        <Suspense
-          fallback={
-            <div className="mx-4 mb-4 h-[min(320px,45vh)] animate-pulse rounded-xl bg-[#F3F4F6] border border-[#E5E7EB]" />
-          }
-        >
-          <CampaignsGeoChoropleth countryRows={countryRowsForMap} />
-        </Suspense>
-      )}
       {emptyCity ? (
         <div className="px-4 pb-6 text-center text-sm text-[#9CA3AF]">
           Δεν υπάρχουν δεδομένα ανά πόλη/περιοχή ακόμα. Μετά το επόμενο sync (Google Ads / Meta) θα εμφανιστούν εδώ.
         </div>
       ) : (
-      <div className="overflow-x-auto max-h-[60vh] overflow-y-auto">
+      <>
+      <CampaignsGeoMekko columns={mekkoColumns} level={level} />
+      <div className="overflow-x-auto max-h-[min(78vh,920px)] overflow-y-auto">
         <table className="w-full text-left text-sm">
           <thead className="sticky top-0 bg-[#F9FAFB] z-10 text-xs text-[#6B7280] uppercase tracking-wider">
             <tr>
@@ -402,16 +408,16 @@ export function CampaignsGeoTab({ campaigns }: Props) {
                 <tr key={r.country} className="hover:bg-[#FAFAFA] transition-colors">
                   <td className="px-3 py-2.5">
                     <span className="inline-flex items-center gap-2 text-sm text-[#111827] font-medium">
-                      <span aria-hidden className="text-base leading-none">{flag(r.country)}</span>
-                      {r.country}
+                      <span aria-hidden className="text-base leading-none">{flag(formatCountryLabel(r.country))}</span>
+                      {formatCountryLabel(r.country)}
                     </span>
                   </td>
                   <td className="px-3 py-2.5 text-right font-mono text-[#111827]">{fmtNum(r.impressions)}</td>
                   <td className="px-3 py-2.5 text-right font-mono text-[#111827]">{fmtNum(r.clicks)}</td>
                   <td className="px-3 py-2.5 text-right font-mono text-[#6B7280]">{fmtPct(r.ctr)}</td>
                   <td className="px-3 py-2.5 text-right font-mono text-[#111827]">{fmtMoney(r.amount_spent)}</td>
-                  <td className="px-3 py-2.5 text-right font-mono text-[#6B7280]">{fmtMoney(r.cpc)}</td>
-                  <td className="px-3 py-2.5 text-right font-mono text-[#111827]">{fmtNum(r.conversions)}</td>
+                  <td className="px-3 py-2.5 text-right font-mono text-[#6B7280]">{fmtCpc(r.cpc)}</td>
+                  <td className="px-3 py-2.5 text-right font-mono text-[#111827]">{fmtConvGeo(r.conversions)}</td>
                   <td className="px-3 py-2.5 text-right font-mono text-[#111827]">{fmtMoney(r.conversion_value)}</td>
                   <td className="px-3 py-2.5 text-right font-mono">
                     <span
@@ -431,8 +437,8 @@ export function CampaignsGeoTab({ campaigns }: Props) {
                 <tr key={r.key} className="hover:bg-[#FAFAFA] transition-colors">
                   <td className="px-3 py-2.5">
                     <span className="inline-flex items-center gap-2 text-sm text-[#111827] font-medium">
-                      <span aria-hidden className="text-base leading-none">{flag(r.country)}</span>
-                      {r.country}
+                      <span aria-hidden className="text-base leading-none">{flag(formatCountryLabel(r.country))}</span>
+                      {formatCountryLabel(r.country)}
                     </span>
                   </td>
                   <td className="px-3 py-2.5 text-sm text-[#374151]">{r.locality}</td>
@@ -440,8 +446,8 @@ export function CampaignsGeoTab({ campaigns }: Props) {
                   <td className="px-3 py-2.5 text-right font-mono text-[#111827]">{fmtNum(r.clicks)}</td>
                   <td className="px-3 py-2.5 text-right font-mono text-[#6B7280]">{fmtPct(r.ctr)}</td>
                   <td className="px-3 py-2.5 text-right font-mono text-[#111827]">{fmtMoney(r.amount_spent)}</td>
-                  <td className="px-3 py-2.5 text-right font-mono text-[#6B7280]">{fmtMoney(r.cpc)}</td>
-                  <td className="px-3 py-2.5 text-right font-mono text-[#111827]">{fmtNum(r.conversions)}</td>
+                  <td className="px-3 py-2.5 text-right font-mono text-[#6B7280]">{fmtCpc(r.cpc)}</td>
+                  <td className="px-3 py-2.5 text-right font-mono text-[#111827]">{fmtConvGeo(r.conversions)}</td>
                   <td className="px-3 py-2.5 text-right font-mono text-[#111827]">{fmtMoney(r.conversion_value)}</td>
                   <td className="px-3 py-2.5 text-right font-mono">
                     <span
@@ -473,9 +479,9 @@ export function CampaignsGeoTab({ campaigns }: Props) {
                 </td>
                 <td className="px-3 py-2.5 text-right font-mono">{fmtMoney(totals.amount_spent)}</td>
                 <td className="px-3 py-2.5 text-right font-mono">
-                  {fmtMoney(totals.clicks > 0 ? totals.amount_spent / totals.clicks : 0)}
+                  {fmtCpc(totals.clicks > 0 ? totals.amount_spent / totals.clicks : 0)}
                 </td>
-                <td className="px-3 py-2.5 text-right font-mono">{fmtNum(totals.conversions)}</td>
+                <td className="px-3 py-2.5 text-right font-mono">{fmtConvGeo(totals.conversions)}</td>
                 <td className="px-3 py-2.5 text-right font-mono">{fmtMoney(totals.conversion_value)}</td>
                 <td className="px-3 py-2.5 text-right font-mono">
                   {fmtRoas(totals.amount_spent > 0 ? totals.conversion_value / totals.amount_spent : 0)}
@@ -488,6 +494,7 @@ export function CampaignsGeoTab({ campaigns }: Props) {
           <p className="text-sm text-[#9CA3AF] text-center py-6">Δεν βρέθηκαν αποτελέσματα.</p>
         )}
       </div>
+      </>
       )}
     </Card>
   );

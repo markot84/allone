@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Check, Clock, Euro, Infinity, Layers, Package, Percent, Rocket, Settings, TrendingUp } from 'lucide-react';
+import { Check, Clock, Euro, Infinity, Layers, Package, Percent, Rocket, Scale, Settings, ShoppingBag, TrendingUp } from 'lucide-react';
 import { scenarios } from '../../data';
 
 interface ScenarioSelectorProps {
@@ -24,6 +24,10 @@ export function ScenarioSelector({
         return <Rocket size={18} className={cls} />;
       case 'revenue_push':
         return <TrendingUp size={18} className={cls} />;
+      case 'sales_base':
+        return <ShoppingBag size={18} className={cls} />;
+      case 'price_benchmark':
+        return <Scale size={18} className={cls} />;
       case 'mixed':
         return <Layers size={18} className={cls} />;
       case 'seasonal_discount':
@@ -34,7 +38,7 @@ export function ScenarioSelector({
   };
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3 max-w-full overflow-x-hidden">
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-8 gap-3 max-w-full overflow-x-hidden">
       {scenarios.map((scenario, index) => {
         const isSelected = selectedScenario !== null && selectedScenario === scenario.id;
         
@@ -94,7 +98,7 @@ export function ScenarioSelector({
                       : <Clock size={12} className="text-[#9CA3AF]" />
                     }
                     <span className="text-[10px] text-[#9CA3AF]">
-                      {dur === 'ongoing' ? 'Ongoing' : `${dur} ημέρες`}
+                      {dur === 'ongoing' ? 'Συνεχής' : `${dur} ημέρες`}
                     </span>
                   </div>
                 );
@@ -123,11 +127,12 @@ export function ScenarioSelector({
                       ))}
                   </div>
                   <p className="text-[10px] text-[#9CA3AF] mt-1">
-                    {Object.entries(scenario.weights)
-                      .sort((a, b) => b[1] - a[1])
-                      .slice(0, 2)
-                      .map(([key]) => key.charAt(0).toUpperCase() + key.slice(1))
-                      .join(' + ')} focused
+                    {scenario.cardHint ??
+                      `${Object.entries(scenario.weights)
+                        .sort((a, b) => b[1] - a[1])
+                        .slice(0, 2)
+                        .map(([key]) => key.charAt(0).toUpperCase() + key.slice(1))
+                        .join(' + ')} focused`}
                   </p>
                 </div>
               )}
