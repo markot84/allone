@@ -53,12 +53,6 @@ function formatCountryLabel(raw: string): string {
   return t || '—';
 }
 
-function flag(code: string): string {
-  const c = (code || '').trim().toUpperCase();
-  if (c.length !== 2 || !/^[A-Z]{2}$/.test(c)) return '🌐';
-  return String.fromCodePoint(...[...c].map((ch) => 127397 + ch.charCodeAt(0)));
-}
-
 /** Κλειδί `CC|Τοπωνύμιο` από connectors (Google/Meta). */
 function parseCityKey(raw: string): { country: string; locality: string } {
   const key = raw || 'UNKNOWN';
@@ -338,14 +332,20 @@ export function CampaignsGeoTab({ campaigns }: Props) {
                   className="px-3 py-2.5 font-medium cursor-pointer hover:text-[#111827]"
                   onClick={() => toggleSort('locality')}
                 >
-                  <span className="inline-flex items-center gap-1">
-                    Πόλη / περιοχή
+                  <div className="inline-flex flex-col items-start gap-1 normal-case">
+                    <span className="inline-flex items-center gap-1 uppercase tracking-wider text-xs">
+                    Πόλη / Περιφέρεια
                     <Tooltip
-                      content="Google Ads: πόλη. Meta: περιοχή (region), όχι πάντα επίπεδο πόλης."
+                      content="Google Ads: city. Meta: region / περιφέρεια, όχι αξιόπιστο city-level."
                       size={11}
                     />
                     <SortIcon col="locality" />
-                  </span>
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-[10px] font-medium tracking-normal normal-case text-[#6B7280]">
+                      <span className="rounded bg-[#E8F5E9] px-1.5 py-0.5 text-[#2E7D32]">Google: city</span>
+                      <span className="rounded bg-[#E3F2FD] px-1.5 py-0.5 text-[#1565C0]">Meta: region</span>
+                    </span>
+                  </div>
                 </th>
               )}
               <th
@@ -408,7 +408,6 @@ export function CampaignsGeoTab({ campaigns }: Props) {
                 <tr key={r.country} className="hover:bg-[#FAFAFA] transition-colors">
                   <td className="px-3 py-2.5">
                     <span className="inline-flex items-center gap-2 text-sm text-[#111827] font-medium">
-                      <span aria-hidden className="text-base leading-none">{flag(formatCountryLabel(r.country))}</span>
                       {formatCountryLabel(r.country)}
                     </span>
                   </td>
@@ -437,7 +436,6 @@ export function CampaignsGeoTab({ campaigns }: Props) {
                 <tr key={r.key} className="hover:bg-[#FAFAFA] transition-colors">
                   <td className="px-3 py-2.5">
                     <span className="inline-flex items-center gap-2 text-sm text-[#111827] font-medium">
-                      <span aria-hidden className="text-base leading-none">{flag(formatCountryLabel(r.country))}</span>
                       {formatCountryLabel(r.country)}
                     </span>
                   </td>

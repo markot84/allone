@@ -57,14 +57,14 @@ export function CampaignsGeoMekko({ columns, level }: Props) {
       role="img"
       aria-label={
         level === 'country'
-          ? 'Διάγραμμα Mekko: spend ανά χώρα και κανάλι'
-          : 'Διάγραμμα Mekko: spend ανά τοποθεσία και κανάλι'
+          ? 'Διάγραμμα spend ανά χώρα και κανάλι'
+          : 'Διάγραμμα spend ανά τοποθεσία και κανάλι'
       }
     >
       <div className="flex items-start justify-between gap-2 mb-2">
         <div>
           <h3 className="text-xs font-semibold text-[#111827] uppercase tracking-wide">
-            Spend ανά {level === 'country' ? 'χώρα' : 'τοποθεσία'} vs κανάλι (Mekko)
+            Spend ανά {level === 'country' ? 'χώρα' : 'τοποθεσία'} vs κανάλι
           </h3>
           <p className="text-[11px] text-[#6B7280] mt-0.5">
             Πλάτος στήλης ∝ spend περιοχής · ύψος ∝ κατανομή καναλιού εντός περιοχής. Top{' '}
@@ -81,11 +81,16 @@ export function CampaignsGeoMekko({ columns, level }: Props) {
         {columns.map((col) => {
           const activeSegs = col.segments.filter((s) => s.spend > 0);
           const labelTitle = col.subtitle ? `${col.label} (${col.subtitle})` : col.label;
+          const widthPct = grandTotal > 0 ? (col.totalSpend / grandTotal) * 100 : 0;
+          const showLabel = widthPct >= 8;
+          const showDetail = widthPct >= 14;
+          const channelBadges = [...activeSegs].sort((a, b) => b.spend - a.spend);
           return (
             <div
               key={col.id}
-              className="flex flex-col min-w-0 h-full"
+              className="relative flex flex-col min-w-0 h-full overflow-hidden"
               style={{ flex: `${col.totalSpend} 1 0%`, minWidth: 2 }}
+              title={`${labelTitle} — ${fmtMoney(col.totalSpend)} (${widthPct.toFixed(1)}% του συνόλου)`}
             >
               <div className="flex flex-1 min-h-0 flex-col">
                 {activeSegs.map((seg) => (
@@ -111,19 +116,40 @@ export function CampaignsGeoMekko({ columns, level }: Props) {
                   />
                 ))}
               </div>
-              <div
-                className="shrink-0 pt-1 px-0.5 text-[9px] text-[#6B7280] leading-tight text-center truncate bg-[#F9FAFB]"
-                title={labelTitle}
-              >
-                {col.subtitle ? (
-                  <>
-                    <span className="block truncate">{col.label}</span>
-                    <span className="block truncate text-[#9CA3AF]">{col.subtitle}</span>
-                  </>
-                ) : (
-                  <span className="block truncate">{col.label}</span>
-                )}
-              </div>
+
+              {showLabel && (
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 p-1.5">
+                  <div className="rounded bg-black/35 px-1.5 py-1 text-white shadow-sm backdrop-blur-[1px]">
+                    <span className="block truncate text-[10px] font-medium leading-tight">{col.label}</span>
+                    {col.subtitle && (
+                      <span className="block truncate text-[9px] leading-tight text-white/80">{col.subtitle}</span>
+                    )}
+                    {showDetail && (
+                      <>
+                        <span className="mt-0.5 block truncate text-[9px] leading-tight text-white/90">
+                          {fmtMoney(col.totalSpend)} · {widthPct.toFixed(1)}%
+                        </span>
+                        <span className="mt-0.5 flex flex-wrap gap-1">
+                          {channelBadges.map((seg) => (
+                            <span
+                              key={seg.channel}
+                              className="inline-flex max-w-full items-center gap-1 rounded bg-white/15 px-1 py-0.5 text-[9px] leading-none text-white/95"
+                            >
+                              <span
+                                className="inline-block size-1.5 rounded-full shrink-0"
+                                style={{ backgroundColor: CHANNEL_FILL[seg.channel] }}
+                              />
+                              <span className="truncate">
+                                {CHANNEL_LABEL[seg.channel]} {((seg.spend / col.totalSpend) * 100).toFixed(0)}%
+                              </span>
+                            </span>
+                          ))}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           );
         })}

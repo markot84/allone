@@ -41,9 +41,25 @@ function parseCityGeoKey(raw: string): { country: string; locality: string } {
 }
 
 function normalizeCampaignChannel(c: Campaign): GeoMekkoChannel {
-  const ch = c.channel;
-  if (ch === 'Google Ads') return 'Google Ads';
-  if (ch === 'Meta') return 'Meta';
+  const ch = String(c.channel || '').trim().toLowerCase();
+  if (
+    ch === 'google ads' ||
+    ch === 'google shopping' ||
+    ch === 'shopping' ||
+    ch.startsWith('google ')
+  ) {
+    return 'Google Ads';
+  }
+  if (
+    ch === 'meta' ||
+    ch === 'facebook' ||
+    ch === 'instagram' ||
+    ch.startsWith('meta ') ||
+    ch.startsWith('facebook ') ||
+    ch.startsWith('instagram ')
+  ) {
+    return 'Meta';
+  }
   return 'Other';
 }
 
@@ -63,7 +79,7 @@ export function buildGeoMekkoColumns(
   level: 'country' | 'city',
   opts?: { maxColumns?: number },
 ): GeoMekkoColumn[] {
-  const maxColumns = opts?.maxColumns ?? 14;
+  const maxColumns = opts?.maxColumns ?? 10;
   type Bucket = {
     label: string;
     subtitle?: string;
@@ -131,5 +147,38 @@ export function buildGeoMekkoColumns(
   }
 
   cols.sort((a, b) => b.totalSpend - a.totalSpend);
-  return cols.slice(0, maxColumns);
+
+  if (cols.length <= maxColumns) return cols;
+
+  const visibleCount = Math.max(1, maxColumns - 1);
+  const head = cols.slice(0, visibleCount);
+  const tail = cols.slice(visibleCount);
+  const restTotalSpend = tail.reduce((sum, c) => sum + c.totalSpend, 0);
+  if (restTotalSpend <= 0) return head;
+
+  const restByChannel = tail.reduce(
+    (acc, c) => {
+      for (const seg of c.segments) {
+        if (seg.channel === 'Google Ads') acc.google += seg.spend;
+        else if (seg.channel === 'Meta') acc.meta += seg.spend;
+        else acc.other += seg.spend;
+      }
+      return acc;
+    },
+    { google: 0, meta: 0, other: 0 },
+  );
+
+  head.push({
+    id: '__other_geo__',
+    label: 'Λοιπά',
+    subtitle: `${tail.length} ${level === 'country' ? 'χώρες' : 'τοποθεσίες'}`,
+    totalSpend: restTotalSpend,
+    segments: [
+      { channel: 'Google Ads', spend: restByChannel.google },
+      { channel: 'Meta', spend: restByChannel.meta },
+      { channel: 'Other', spend: restByChannel.other },
+    ],
+  });
+
+  return head;
 }

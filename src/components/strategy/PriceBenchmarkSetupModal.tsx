@@ -4,8 +4,9 @@ import { X, Search, Layers } from 'lucide-react';
 import type { Product, PriceBenchmarkPresetId, PriceBenchmarkStrategyScope } from '../../types';
 import type { PriceBenchmark } from '../../hooks/usePriceBenchmarks';
 import {
+  buildBenchmarkLookup,
+  findBenchmarkForProductInLookup,
   PRICE_BENCHMARK_PRESET_OPTIONS,
-  findBenchmarkForProduct,
   isCheaperThanMarket,
   productMatchesPriceBenchmarkTextFilters,
 } from '../../utils/priceBenchmarkStrategy';
@@ -103,17 +104,19 @@ export function PriceBenchmarkSetupModal({
     return [...set].sort((a, b) => a.localeCompare(b, 'el'));
   }, [products]);
 
+  const benchmarkLookup = useMemo(() => buildBenchmarkLookup(benchmarks), [benchmarks]);
+
   const matchedRows = useMemo(() => {
     const rows: { product: Product; benchmark: PriceBenchmark }[] = [];
     for (const p of products) {
-      const b = findBenchmarkForProduct(p, benchmarks);
+      const b = findBenchmarkForProductInLookup(p, benchmarkLookup);
       if (!b || b.benchmarkPrice <= 0) continue;
       if (preset === 'below_market' && !isCheaperThanMarket(b)) continue;
       if (!productMatchesPriceBenchmarkTextFilters(p, brandFilter, categoryFilter, search)) continue;
       rows.push({ product: p, benchmark: b });
     }
     return rows;
-  }, [products, benchmarks, preset, brandFilter, categoryFilter, search]);
+  }, [products, benchmarkLookup, preset, brandFilter, categoryFilter, search]);
 
   const totalMatched = matchedRows.length;
   const brandGroups = useMemo(() => buildBrandGroups(matchedRows), [matchedRows]);

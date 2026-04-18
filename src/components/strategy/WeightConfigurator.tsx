@@ -12,7 +12,6 @@ import {
   Target,
   TrendingUp,
   Users,
-  GitCompare,
   X,
   FileSpreadsheet,
   FileText,
@@ -28,7 +27,6 @@ import { SalesBaseSetupModal } from './SalesBaseSetupModal';
 import { PriceBenchmarkSetupModal } from './PriceBenchmarkSetupModal';
 import { SeasonalDiscountPanel, type SeasonalDiscountConfig } from './SeasonalDiscountPanel';
 import { CustomToolsCard } from './CustomToolsCard';
-import { CompareScenariosModal } from './CompareScenariosModal';
 import { MixedStrategyPanel, type MixConfig, computeBlendedWeights } from './MixedStrategyPanel';
 import { SeasonalBanner } from './SeasonalBanner';
 import { SeasonalPeriodsModal } from './SeasonalPeriodsModal';
@@ -55,9 +53,10 @@ import {
   salesMomentumLabel,
 } from '../../utils/salesBaseScore';
 import {
+  buildBenchmarkLookup,
   filterProductsByPriceBenchmarkScope,
-  findBenchmarkForProduct,
-  productInPriceBenchmarkScope,
+  findBenchmarkForProductInLookup,
+  productInPriceBenchmarkScopeWithLookup,
 } from '../../utils/priceBenchmarkStrategy';
 import { usePriceBenchmarks } from '../../hooks/usePriceBenchmarks';
 import { getStockAgeDays } from '../../utils/productUtils';
@@ -248,9 +247,11 @@ export function WeightConfigurator() {
   const { benchmarks } = usePriceBenchmarks();
   const toast = useToast();
 
+  const benchmarkLookupMap = useMemo(() => buildBenchmarkLookup(benchmarks), [benchmarks]);
+
   const benchmarkLookup = useCallback(
-    (p: Product) => findBenchmarkForProduct(p, benchmarks),
-    [benchmarks],
+    (p: Product) => findBenchmarkForProductInLookup(p, benchmarkLookupMap),
+    [benchmarkLookupMap],
   );
 
   const benchmarkScoreContext = useMemo<CompositeScoreContext>(
@@ -330,7 +331,6 @@ export function WeightConfigurator() {
   const [pendingPriceBenchmarkScope, setPendingPriceBenchmarkScope] =
     useState<PriceBenchmarkStrategyScope | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
-  const [showCompareModal, setShowCompareModal] = useState(false);
   const [showFeedFormatModal, setShowFeedFormatModal] = useState(false);
   const [showSeasonalModal, setShowSeasonalModal] = useState(false);
   const [mixPanelOpen, setMixPanelOpen] = useState(() => {
@@ -352,6 +352,7 @@ export function WeightConfigurator() {
   
   // Debounced weights for expensive calculations
   const [debouncedWeights, setDebouncedWeights] = useState(weights);
+  const [hasManualWeightChanges, setHasManualWeightChanges] = useState(false);
 
   const getWeightsForScenario = useCallback((scenarioId: string | null) => {
     if (!scenarioId) return weights;
@@ -415,6 +416,7 @@ export function WeightConfigurator() {
     saveOptions?: { salesBaseScope?: SalesBaseScope; priceBenchmarkScope?: PriceBenchmarkStrategyScope },
   ) => {
     setSelectedScenario(scenarioId);
+    setHasManualWeightChanges(false);
 
     if (scenarioId === 'mixed' || scenarioId === 'seasonal_discount') {
       setPendingScenarioChange(null);
@@ -484,6 +486,7 @@ export function WeightConfigurator() {
   const handleMixedApply = useCallback((blendedWeights: Record<string, number>, config: MixConfig) => {
     setMixConfig(config);
     setWeights(blendedWeights);
+    setHasManualWeightChanges(false);
     setMixPanelOpen(false);
 
     if (!user) {
@@ -525,6 +528,7 @@ export function WeightConfigurator() {
     setSelectedScenario('mixed');
     setMixConfig(config);
     setWeights(blended);
+    setHasManualWeightChanges(false);
 
     if (!user) return;
     saveActiveStrategy({
@@ -545,6 +549,7 @@ export function WeightConfigurator() {
   const handleSeasonalDiscountApply = useCallback((config: SeasonalDiscountConfig) => {
     setSeasonalDiscountConfig(config);
     setSeasonalPanelOpen(false);
+    setHasManualWeightChanges(false);
     toast.success(`Εκπτωτική περίοδος "${config.periodName}" (-${config.discountPercent}%) εφαρμόστηκε`);
 
     if (!user) return;
@@ -724,6 +729,7 @@ export function WeightConfigurator() {
       }
 
       setWeights(newWeights);
+      setHasManualWeightChanges(true);
 
       // Debounce expensive calculations
       if (debounceTimerRef.current) {
@@ -749,6 +755,7 @@ export function WeightConfigurator() {
     const pm = scenarios.find((s) => s.id === 'profit_max');
     setWeights(pm?.weights ? { ...pm.weights } : defaultWeights);
     setSelectedScenario('profit_max');
+    setHasManualWeightChanges(false);
   }, []);
 
   // Calculate prioritized products (strategy-specific score logic)
@@ -1026,6 +1033,7 @@ export function WeightConfigurator() {
       const sid = activeStrategy.scenarioId === 'custom' ? 'profit_max' : activeStrategy.scenarioId;
       setSelectedScenario(sid);
       setWeights(activeStrategy.weights);
+      setHasManualWeightChanges(false);
       if (activeStrategy.duration !== undefined) {
         setDuration(activeStrategy.duration);
       }
@@ -1156,17 +1164,6 @@ export function WeightConfigurator() {
         onManageSeasons={() => setShowSeasonalModal(true)}
       />
 
-      {/* Compare button below scenario cards */}
-      <div className="flex justify-end">
-        <button
-          onClick={() => setShowCompareModal(true)}
-          className="group flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-[var(--nts-medium-gray)] hover:text-[var(--nts-accent)] border border-dashed border-[var(--nts-border-gray)] hover:border-[var(--nts-accent)] transition-all duration-200"
-        >
-          <GitCompare size={13} />
-          <span>Σύγκριση στρατηγικών</span>
-        </button>
-      </div>
-
       {/* Inline Impact Summary — appears when selecting a new scenario */}
       <AnimatePresence>
         {pendingScenarioChange && (
@@ -1187,7 +1184,12 @@ export function WeightConfigurator() {
               pendingScenarioChange === 'sales_base' && pendingSalesBaseScope
                 ? (p) => productParticipatesInSalesBase(p, pendingSalesBaseScope)
                 : pendingScenarioChange === 'price_benchmark' && pendingPriceBenchmarkScope
-                  ? (p) => productInPriceBenchmarkScope(p, pendingPriceBenchmarkScope, benchmarks)
+                  ? (p) =>
+                      productInPriceBenchmarkScopeWithLookup(
+                        p,
+                        pendingPriceBenchmarkScope,
+                        benchmarkLookupMap,
+                      )
                   : undefined
             }
             scoreContext={
@@ -1275,8 +1277,16 @@ export function WeightConfigurator() {
             {selectedScenario && (
               <CustomToolsCard
                 weights={weights}
-                onWeightsChange={setWeights}
-                onCompareClick={() => setShowCompareModal(true)}
+                onWeightsChange={(next) => {
+                  if (debounceTimerRef.current) {
+                    window.clearTimeout(debounceTimerRef.current);
+                  }
+                  setWeights(next);
+                  setDebouncedWeights(next);
+                  setHasManualWeightChanges(false);
+                }}
+                canSavePreset={hasManualWeightChanges}
+                onPresetSaved={() => setHasManualWeightChanges(false)}
               />
             )}
             <Button
@@ -1558,7 +1568,12 @@ export function WeightConfigurator() {
             pendingScenarioChange === 'sales_base' && pendingSalesBaseScope
               ? (p) => productParticipatesInSalesBase(p, pendingSalesBaseScope)
               : pendingScenarioChange === 'price_benchmark' && pendingPriceBenchmarkScope
-                ? (p) => productInPriceBenchmarkScope(p, pendingPriceBenchmarkScope, benchmarks)
+                ? (p) =>
+                    productInPriceBenchmarkScopeWithLookup(
+                      p,
+                      pendingPriceBenchmarkScope,
+                      benchmarkLookupMap,
+                    )
                 : undefined
           }
           scoreContext={
@@ -1602,14 +1617,6 @@ export function WeightConfigurator() {
             setPendingScenarioChange('price_benchmark');
           });
         }}
-      />
-
-      {/* Compare Scenarios Modal */}
-      <CompareScenariosModal
-        isOpen={showCompareModal}
-        onClose={() => setShowCompareModal(false)}
-        products={products}
-        getWeightsForScenario={getWeightsForScenario}
       />
 
       {/* Product Feed Format Modal */}

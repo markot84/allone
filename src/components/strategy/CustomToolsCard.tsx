@@ -1,31 +1,38 @@
-import { useState, useRef } from 'react';
-import { Save, FolderOpen, GitCompare, Download, Upload } from 'lucide-react';
-import { Button, Tooltip } from '../common';
+import { useEffect, useState } from 'react';
+import { Save, FolderOpen } from 'lucide-react';
+import { Button } from '../common';
 import { scenarios } from '../../data';
 import {
   getPresets,
   savePreset,
   loadPreset,
   deletePreset,
-  exportWeightsToJson,
-  importWeightsFromJson,
 } from '../../data/weightPresets';
 
 interface CustomToolsCardProps {
   weights: Record<string, number>;
   onWeightsChange: (w: Record<string, number>) => void;
-  onCompareClick: () => void;
+  canSavePreset: boolean;
+  onPresetSaved: () => void;
 }
 
-export function CustomToolsCard({ weights, onWeightsChange, onCompareClick }: CustomToolsCardProps) {
+export function CustomToolsCard({
+  weights,
+  onWeightsChange,
+  canSavePreset,
+  onPresetSaved,
+}: CustomToolsCardProps) {
   const [saveName, setSaveName] = useState('');
   const [showSaveInline, setShowSaveInline] = useState(false);
   const [loadPresetId, setLoadPresetId] = useState('');
   const [toast, setToast] = useState<string | null>(null);
   const [presets, setPresets] = useState(getPresets());
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const refreshPresets = () => setPresets(getPresets());
+
+  useEffect(() => {
+    if (!canSavePreset) setShowSaveInline(false);
+  }, [canSavePreset]);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -41,11 +48,13 @@ export function CustomToolsCard({ weights, onWeightsChange, onCompareClick }: Cu
   };
 
   const handleSave = () => {
+    if (!canSavePreset) return;
     const name = saveName.trim() || `Custom ${new Date().toLocaleDateString('el-GR')}`;
     savePreset({ name, weights, clonedFrom: undefined });
     setSaveName('');
     setShowSaveInline(false);
     refreshPresets();
+    onPresetSaved();
     showToast(`Saved: ${name}`);
   };
 
@@ -57,34 +66,6 @@ export function CustomToolsCard({ weights, onWeightsChange, onCompareClick }: Cu
       showToast(`Loaded: ${preset.name}`);
       setLoadPresetId('');
     }
-  };
-
-  const handleExport = () => {
-    const blob = new Blob([exportWeightsToJson(weights)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `weights-${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    showToast('Exported');
-  };
-
-  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = importWeightsFromJson(reader.result as string);
-      if (result) {
-        onWeightsChange(result.weights);
-        showToast(result.name ? `Imported: ${result.name}` : 'Imported');
-      } else {
-        showToast('Invalid file');
-      }
-    };
-    reader.readAsText(file);
-    e.target.value = '';
   };
 
   return (
@@ -121,7 +102,13 @@ export function CustomToolsCard({ weights, onWeightsChange, onCompareClick }: Cu
               className="px-3 py-2 w-40 bg-white border border-[#E5E5E5] rounded-lg text-sm"
               autoFocus
             />
-            <Button variant="primary" size="sm" icon={<Save size={14} />} onClick={handleSave}>
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<Save size={14} />}
+              onClick={handleSave}
+              disabled={!canSavePreset}
+            >
               Αποθήκευση
             </Button>
             <Button variant="ghost" size="sm" onClick={() => setShowSaveInline(false)}>
@@ -129,7 +116,13 @@ export function CustomToolsCard({ weights, onWeightsChange, onCompareClick }: Cu
             </Button>
           </div>
         ) : (
-          <Button variant="secondary" size="sm" icon={<Save size={14} />} onClick={() => setShowSaveInline(true)}>
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<Save size={14} />}
+            onClick={() => setShowSaveInline(true)}
+            disabled={!canSavePreset}
+          >
             Αποθήκευση preset
           </Button>
         )}
@@ -169,29 +162,6 @@ export function CustomToolsCard({ weights, onWeightsChange, onCompareClick }: Cu
           </div>
         )}
 
-        {/* Compare */}
-        <Tooltip content="Συγκρίνετε δύο στρατηγικές: weights, Top N προϊόντα (scores), revenue/margin.">
-          <Button variant="secondary" size="sm" icon={<GitCompare size={14} />} onClick={onCompareClick}>
-            Σύγκριση scenarios
-          </Button>
-        </Tooltip>
-
-        {/* Export */}
-        <Button variant="ghost" size="sm" icon={<Download size={14} />} onClick={handleExport}>
-          Εξαγωγή JSON
-        </Button>
-
-        {/* Import */}
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".json"
-          className="hidden"
-          onChange={handleImport}
-        />
-        <Button variant="ghost" size="sm" icon={<Upload size={14} />} onClick={() => fileInputRef.current?.click()}>
-          Εισαγωγή JSON
-        </Button>
       </div>
 
       {toast && (

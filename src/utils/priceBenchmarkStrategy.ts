@@ -36,18 +36,36 @@ export function productKeyCandidates(product: Product): string[] {
   return [...new Set(out)];
 }
 
+export type BenchmarkLookup<T extends BenchmarkPriceFields> = Map<string, T>;
+
+export function buildBenchmarkLookup<T extends BenchmarkPriceFields>(
+  benchmarks: readonly T[],
+): BenchmarkLookup<T> {
+  const lookup: BenchmarkLookup<T> = new Map();
+  for (const b of benchmarks) {
+    for (const key of benchmarkKeyCandidatesFromProductId(b.productId, b.gtin)) {
+      if (!lookup.has(key)) lookup.set(key, b);
+    }
+  }
+  return lookup;
+}
+
+export function findBenchmarkForProductInLookup<T extends BenchmarkPriceFields>(
+  product: Product,
+  lookup: ReadonlyMap<string, T>,
+): T | undefined {
+  for (const key of productKeyCandidates(product)) {
+    const match = lookup.get(key);
+    if (match) return match;
+  }
+  return undefined;
+}
+
 export function findBenchmarkForProduct<T extends BenchmarkPriceFields>(
   product: Product,
   benchmarks: readonly T[],
 ): T | undefined {
-  const keys = new Set(productKeyCandidates(product));
-  if (keys.size === 0) return undefined;
-  for (const b of benchmarks) {
-    for (const c of benchmarkKeyCandidatesFromProductId(b.productId, b.gtin)) {
-      if (keys.has(c)) return b;
-    }
-  }
-  return undefined;
+  return findBenchmarkForProductInLookup(product, buildBenchmarkLookup(benchmarks));
 }
 
 export function isCheaperThanMarket(b: BenchmarkPriceFields | undefined): boolean {
@@ -133,10 +151,27 @@ export function productInPriceBenchmarkScope<T extends BenchmarkPriceFields>(
   if (scope.selectedProductIds && scope.selectedProductIds.length > 0) {
     return scope.selectedProductIds.includes(product.id);
   }
+  const lookup = buildBenchmarkLookup(benchmarks);
   return productParticipatesInPriceBenchmarkStrategy(
     product,
     scope,
-    findBenchmarkForProduct(product, benchmarks),
+    findBenchmarkForProductInLookup(product, lookup),
+  );
+}
+
+export function productInPriceBenchmarkScopeWithLookup<T extends BenchmarkPriceFields>(
+  product: Product,
+  scope: PriceBenchmarkStrategyScope | null | undefined,
+  lookup: ReadonlyMap<string, T>,
+): boolean {
+  if (!scope) return true;
+  if (scope.selectedProductIds && scope.selectedProductIds.length > 0) {
+    return scope.selectedProductIds.includes(product.id);
+  }
+  return productParticipatesInPriceBenchmarkStrategy(
+    product,
+    scope,
+    findBenchmarkForProductInLookup(product, lookup),
   );
 }
 
@@ -146,7 +181,8 @@ export function filterProductsByPriceBenchmarkScope<T extends BenchmarkPriceFiel
   benchmarks: readonly T[],
 ): Product[] {
   if (!scope) return products;
-  const filtered = products.filter((p) => productInPriceBenchmarkScope(p, scope, benchmarks));
+  const lookup = buildBenchmarkLookup(benchmarks);
+  const filtered = products.filter((p) => productInPriceBenchmarkScopeWithLookup(p, scope, lookup));
   return filtered.length > 0 ? filtered : products;
 }
 
