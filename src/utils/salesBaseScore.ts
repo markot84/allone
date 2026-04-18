@@ -1,10 +1,32 @@
 import type { Product, SalesBasePresetId, SalesBaseScope } from '../types';
+import { coerceToDate } from './coerceDate';
 
 function daysSince(iso: string | undefined): number | null {
   if (!iso?.trim()) return null;
-  const d = new Date(iso.trim());
-  if (Number.isNaN(d.getTime())) return null;
+  const d = coerceToDate(iso.trim());
+  if (!d) return null;
   return Math.floor((Date.now() - d.getTime()) / 86400000);
+}
+
+function hasHistoricalSalesEvidence(product: Product): boolean {
+  if (typeof product.qty_sold_lifetime === 'number') return product.qty_sold_lifetime > 0;
+  if (typeof product.qty_sold_last_90d === 'number') return product.qty_sold_last_90d > 0;
+  if (typeof product.qty_sold_last_30d === 'number') return product.qty_sold_last_30d > 0;
+  if (typeof product.qty_sold_period === 'number') return product.qty_sold_period > 0;
+  if (typeof product.qty_sold_last_7d === 'number') return product.qty_sold_last_7d > 0;
+  if ((product.revenue_period ?? 0) > 0) return true;
+  return daysSince(product.last_sale_at) !== null;
+}
+
+function hasZeroSalesInWindow(
+  qty: number | undefined,
+  lastSaleAt: string | undefined,
+  days: number,
+): boolean {
+  if (typeof qty === 'number') return qty === 0;
+  const lastDays = daysSince(lastSaleAt);
+  if (lastDays === null) return false;
+  return lastDays > days;
 }
 
 /**
@@ -83,22 +105,22 @@ export const SALES_BASE_PRESET_OPTIONS: {
   {
     id: 'zero_last_7d',
     label: '0 πωλήσεις (7 ημέρες)',
-    hint: 'Όταν υπάρχει στήλη πωλήσεων 7ημ. = 0.',
+    hint: 'Στήλη 7ημ. = 0, ή fallback από last sale όταν δεν υπάρχουν 7/30/90 πεδία.',
   },
   {
     id: 'zero_last_30d',
     label: '0 πωλήσεις (~30 ημέρες)',
-    hint: 'Χρησιμοποιεί Qty 30ημ. ή Qty_Sold_Period όταν δεν υπάρχει ξεχωριστό 30ημ.',
+    hint: 'Qty 30ημ. / Qty_Sold_Period = 0, ή fallback από last sale όταν λείπουν window πεδία.',
   },
   {
     id: 'zero_last_90d',
     label: '0 πωλήσεις (90 ημέρες)',
-    hint: 'Όταν υπάρχει στήλη 90ημ. = 0.',
+    hint: 'Στήλη 90ημ. = 0, ή fallback από last sale όταν δεν υπάρχουν 7/30/90 πεδία.',
   },
   {
     id: 'stalled_7_vs_90',
     label: '«Πάγωμα» πρόσφατα',
-    hint: '0 στις 7 ημέρες αλλά >0 στις 90 (όταν υπάρχουν και τα δύο πεδία).',
+    hint: '0 στις 7 ημέρες αλλά υπήρχε παλαιότερη κίνηση, με fallback από last sale όταν λείπουν window πεδία.',
   },
   {
     id: 'cold_last_sale_30d',
@@ -139,6 +161,7 @@ export function productMatchesSalesBasePreset(product: Product, preset: SalesBas
   const q30 = product.qty_sold_last_30d ?? product.qty_sold_period;
   const q90 = product.qty_sold_last_90d;
   const life = product.qty_sold_lifetime;
+  const lastSaleAt = product.last_sale_at;
 
   switch (preset) {
     case 'all':
@@ -146,16 +169,16 @@ export function productMatchesSalesBasePreset(product: Product, preset: SalesBas
     case 'never_sold':
       return typeof life === 'number' && life === 0;
     case 'zero_last_7d':
-      if (typeof q7 !== 'number') return false;
-      return q7 === 0 && stock > 0;
+      return hasZeroSalesInWindow(q7, lastSaleAt, 7) && stock > 0;
     case 'zero_last_30d':
-      if (typeof q30 !== 'number') return false;
-      return q30 === 0 && stock > 0;
+      return hasZeroSalesInWindow(q30, lastSaleAt, 30) && stock > 0;
     case 'zero_last_90d':
-      if (typeof q90 !== 'number') return false;
-      return q90 === 0 && stock > 0;
+      return hasZeroSalesInWindow(q90, lastSaleAt, 90) && stock > 0;
     case 'stalled_7_vs_90':
-      return typeof q7 === 'number' && q7 === 0 && typeof q90 === 'number' && q90 > 0 && stock > 0;
+      if (typeof q7 === 'number' && q7 === 0 && typeof q90 === 'number' && q90 > 0) {
+        return stock > 0;
+      }
+      return hasZeroSalesInWindow(q7, lastSaleAt, 7) && hasHistoricalSalesEvidence(product) && stock > 0;
     case 'cold_last_sale_30d': {
       const d = daysSince(product.last_sale_at);
       return d !== null && d > 30 && stock > 0;

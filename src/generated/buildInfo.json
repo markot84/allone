@@ -1,10 +1,14 @@
 {
-  "version": "0.522.0",
-  "previousVersion": "0.521.0",
-  "commitHash": "2817021",
+  "version": "0.526.0",
+  "previousVersion": "0.525.0",
+  "commitHash": "a6dc958",
   "branch": "main",
-  "buildDate": "2026-04-18T10:13:45.827Z",
+  "buildDate": "2026-04-18T10:38:54.259Z",
   "commits": [
+    {
+      "hash": "a6dc958",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "2817021",
       "message": "fix(strategy): grouped setup modals, impact dismiss UX, price benchmark filter perf"
@@ -60,16 +64,12 @@
     {
       "hash": "00ccc14",
       "message": "ui(suppliers): keep header labels single-line (whitespace-nowrap + wider cols)"
-    },
-    {
-      "hash": "b5a096a",
-      "message": "ui(suppliers): move column filters into a clean top toolbar"
     }
   ],
   "changes": [
+    "[Συντήρηση] Full deploy",
     "[Διόρθωση] Grouped setup modals, impact dismiss UX, price benchmark filter perf",
     "[Νέο χαρακτηριστικό] Strategy commerce tools, campaigns geo Mekko, and related updates",
-    "[Συντήρηση] Full deploy",
     "[Νέο χαρακτηριστικό] Date range filter on Product Intelligence (import vs first available)",
     "[Διόρθωση] Probe REST paths (index.php, www) + store restApiBase for sync",
     "[Τεκμηρίωση] Magento — HTTPS base URLs fix 'Integration not secure' (empty fields)",

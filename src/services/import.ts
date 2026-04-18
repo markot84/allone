@@ -589,14 +589,8 @@ function pick(row: Record<string, string>, ...keys: string[]): string {
 // Parse date from Excel serial (number) or ISO string → days ago from today
 function daysFromFirstAvailable(val: string): number | null {
   if (!val || !val.trim()) return null;
-  const n = parseFloat(val);
-  let date: Date;
-  if (!isNaN(n) && n > 0) {
-    date = new Date((n - 25569) * 86400 * 1000); // Excel serial → JS Date
-  } else {
-    date = new Date(val.trim());
-  }
-  if (isNaN(date.getTime())) return null;
+  const date = coerceToDate(val.trim());
+  if (!date) return null;
   const now = new Date();
   return Math.floor((now.getTime() - date.getTime()) / 86400000);
 }
@@ -768,7 +762,12 @@ function validateProduct(row: Record<string, string>, index: number): { valid: b
     ...(qtySoldLifetime?.trim()
       ? { qty_sold_lifetime: Math.round(parseFloat(String(qtySoldLifetime).replace(',', '.')) || 0) }
       : {}),
-    ...(lastSaleAt?.trim() ? { last_sale_at: lastSaleAt.trim() } : {}),
+    ...(lastSaleAt?.trim()
+      ? {
+          last_sale_at:
+            coerceToDate(lastSaleAt.trim())?.toISOString() ?? lastSaleAt.trim(),
+        }
+      : {}),
     ...(firstAvailableDate ? { first_available_date: firstAvailableDate } : {}),
     ...(supplier ? { supplier } : {}),
   };

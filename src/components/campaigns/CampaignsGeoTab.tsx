@@ -76,11 +76,16 @@ export function CampaignsGeoTab({ campaigns }: Props) {
   const [search, setSearch] = useState('');
   const [sortCol, setSortCol] = useState<SortCol>('amount_spent');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [showAllRows, setShowAllRows] = useState(false);
 
   useEffect(() => {
     setSortCol('amount_spent');
     setSortDir('desc');
   }, [level]);
+
+  useEffect(() => {
+    setShowAllRows(false);
+  }, [level, campaigns]);
 
   const rows = useMemo<GeoRow[]>(() => {
     const acc = new Map<string, GeoRow>();
@@ -239,6 +244,20 @@ export function CampaignsGeoTab({ campaigns }: Props) {
     () => campaigns.some((c) => c.geo?.byCity && Object.keys(c.geo.byCity).length > 0),
     [campaigns]
   );
+
+  const topImpressionKeys = useMemo(() => {
+    const top = [...rows]
+      .sort((a, b) => b.impressions - a.impressions)
+      .slice(0, 5);
+    return new Set(top.map((r) => (r.kind === 'country' ? r.country : r.key)));
+  }, [rows]);
+
+  const hasSearch = search.trim().length > 0;
+  const visibleRows = useMemo(() => {
+    if (hasSearch || showAllRows || rows.length <= 5) return rows;
+    return rows.filter((r) => topImpressionKeys.has(r.kind === 'country' ? r.country : r.key));
+  }, [hasSearch, rows, showAllRows, topImpressionKeys]);
+  const hiddenRowCount = Math.max(0, rows.length - visibleRows.length);
 
   const toggleSort = (col: SortCol) => {
     if (sortCol === col) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -403,7 +422,7 @@ export function CampaignsGeoTab({ campaigns }: Props) {
             </tr>
           </thead>
           <tbody className="divide-y divide-[#F3F4F6]">
-            {rows.map((r) =>
+            {visibleRows.map((r) =>
               r.kind === 'country' ? (
                 <tr key={r.country} className="hover:bg-[#FAFAFA] transition-colors">
                   <td className="px-3 py-2.5">
@@ -488,6 +507,19 @@ export function CampaignsGeoTab({ campaigns }: Props) {
             </tfoot>
           )}
         </table>
+        {!hasSearch && rows.length > 5 && (
+          <div className="sticky bottom-0 flex justify-center border-t border-[#E5E7EB] bg-white/95 px-3 py-3 backdrop-blur">
+            <button
+              type="button"
+              onClick={() => setShowAllRows((v) => !v)}
+              className="rounded-md border border-[#E5E7EB] px-3 py-1.5 text-xs font-medium text-[#374151] transition-colors hover:bg-[#F9FAFB]"
+            >
+              {showAllRows
+                ? 'Εμφάνιση μόνο top 5 βάσει impressions'
+                : `Εμφάνιση ${hiddenRowCount} επιπλέον περιοχών`}
+            </button>
+          </div>
+        )}
         {rows.length === 0 && search && (
           <p className="text-sm text-[#9CA3AF] text-center py-6">Δεν βρέθηκαν αποτελέσματα.</p>
         )}
