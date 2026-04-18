@@ -1,10 +1,30 @@
 {
-  "version": "0.533.0",
-  "previousVersion": "0.532.0",
-  "commitHash": "7441058",
-  "branch": "main",
-  "buildDate": "2026-04-18T11:31:03.444Z",
+  "version": "0.561.0",
+  "previousVersion": "0.560.0",
+  "commitHash": "612f2bb",
+  "branch": "cursor/sales-opt-foundation-and-stock-movement",
+  "buildDate": "2026-04-18T20:30:30.232Z",
   "commits": [
+    {
+      "hash": "612f2bb",
+      "message": "UX: redesign TriageCard for merchant clarity"
+    },
+    {
+      "hash": "7232184",
+      "message": "Sprint 2 Phase 3+4: triage origin persistence + AI context wiring"
+    },
+    {
+      "hash": "98bcb5c",
+      "message": "feat(strategy): universal data layer + decision buckets triage"
+    },
+    {
+      "hash": "bc53a7e",
+      "message": "feat(strategy): sales opt foundation + universal stock movement"
+    },
+    {
+      "hash": "9c39351",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "7441058",
       "message": "chore: full deploy"
@@ -44,38 +64,18 @@
     {
       "hash": "d87a2b1",
       "message": "docs(ui): Magento modal — empty Callback/Identity URLs for token-only flow"
-    },
-    {
-      "hash": "39fed51",
-      "message": "feat(security): activate connector token encryption (CONNECTOR_TOKEN_KEY wired)"
-    },
-    {
-      "hash": "457f3c6",
-      "message": "feat(security): connector token encryption-at-rest (AES-256-GCM, dormant)"
-    },
-    {
-      "hash": "15b68af",
-      "message": "feat(security): App Check + rate limit + strict CORS + robots.txt"
-    },
-    {
-      "hash": "2648fc3",
-      "message": "feat(competitive): Excel-style column filters + sort στον πίνακα Price Benchmarks"
-    },
-    {
-      "hash": "7350fdf",
-      "message": "ui(suppliers): keep header labels single-line (whitespace-nowrap + wider cols)"
     }
   ],
   "changes": [
+    "UX: redesign TriageCard for merchant clarity",
+    "Sprint 2 Phase 3+4: triage origin persistence + AI context wiring",
+    "[Νέο χαρακτηριστικό] Universal data layer + decision buckets triage",
+    "[Νέο χαρακτηριστικό] Sales opt foundation + universal stock movement",
     "[Συντήρηση] Full deploy",
     "[Διόρθωση] Grouped setup modals, impact dismiss UX, price benchmark filter perf",
     "[Νέο χαρακτηριστικό] Strategy commerce tools, campaigns geo Mekko, and related updates",
     "[Νέο χαρακτηριστικό] Date range filter on Product Intelligence (import vs first available)",
     "[Διόρθωση] Probe REST paths (index.php, www) + store restApiBase for sync",
-    "[Τεκμηρίωση] Magento — HTTPS base URLs fix 'Integration not secure' (empty fields)",
-    "[Τεκμηρίωση] Magento modal — empty Callback/Identity URLs for token-only flow",
-    "[Νέο χαρακτηριστικό] Activate connector token encryption (CONNECTOR_TOKEN_KEY wired)",
-    "[Νέο χαρακτηριστικό] Connector token encryption-at-rest (AES-256-GCM, dormant)",
-    "[Νέο χαρακτηριστικό] App Check + rate limit + strict CORS + robots.txt"
+    "[Τεκμηρίωση] Magento — HTTPS base URLs fix 'Integration not secure' (empty fields)"
   ]
 }

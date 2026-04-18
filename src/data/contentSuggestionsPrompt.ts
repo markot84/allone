@@ -3,6 +3,22 @@
  * Προτείνει θεματικές κατευθύνσεις ανά κανάλι + παραδείγματα ενεργειών βάσει στρατηγικής.
  */
 
+export interface TriageContentContext {
+  bucketLabel: string;
+  bucketDescription?: string;
+  skuCount: number;
+  tiedCapital?: number;
+  topSkus?: string[];
+}
+
+export interface ProvenanceContentContext {
+  connectorPct: number;
+  movementPct: number;
+  procurementPct: number;
+  importPct: number;
+  totalProducts: number;
+}
+
 export interface StrategyContext {
   scenarioId: string;
   scenarioName: string;
@@ -16,6 +32,10 @@ export interface StrategyContext {
   brandName?: string;
   topCategories?: string[];
   segmentNames?: string[];
+  /** Διαγνωστική ρίζα από Decision Buckets (αν η στρατηγική προέκυψε από bucket triage). */
+  triage?: TriageContentContext;
+  /** Snapshot πηγών δεδομένων — βοηθά το AI να καλιμπράρει τη σιγουριά του copy. */
+  provenance?: ProvenanceContentContext;
 }
 
 export const CONTENT_SUGGESTIONS_SYSTEM_PROMPT = `Είσαι ειδικός content strategist για e-commerce. Απαντάς ΑΠΟΚΛΕΙΣΤΙΚΑ στα Ελληνικά.
@@ -81,6 +101,11 @@ ${ctx.channels?.length ? `Καλύτερα κανάλια: ${ctx.channels.join('
 ${ctx.ctaStyle ? `CTA στυλ: ${ctx.ctaStyle}` : ''}
 ${ctx.avoid?.length ? `Αποφυγή: ${ctx.avoid.join(', ')}` : ''}
 ${ctx.sampleHeadlines?.length ? `Παραδείγματα headlines: ${ctx.sampleHeadlines.slice(0, 3).join(' | ')}` : ''}
+${ctx.triage ? `\nΔΙΑΓΝΩΣΤΙΚΗ ΡΙΖΑ (Decision Bucket):
+- Bucket: «${ctx.triage.bucketLabel}»${ctx.triage.bucketDescription ? ` — ${ctx.triage.bucketDescription}` : ''}
+- Σκοπευμένα SKUs: ${ctx.triage.skuCount}${ctx.triage.tiedCapital ? ` | Δεσμευμένα κεφάλαια: €${Math.round(ctx.triage.tiedCapital).toLocaleString('el-GR')}` : ''}${ctx.triage.topSkus?.length ? `\n- Ενδεικτικά SKUs: ${ctx.triage.topSkus.slice(0, 5).join(', ')}` : ''}
 
+ΟΛΑ τα directions, actions, brief και headlines πρέπει να αντανακλούν αυτή τη ρίζα. Π.χ. dead capital → urgency clearance ("Τελευταίες ποσότητες", countdown), hot seller → social proof + restock alerts, stockout risk → waitlist/notify-me. Ανέφερε ρητά στο brief ότι η στρατηγική στοχεύει το πρόβλημα «${ctx.triage.bucketLabel}».
+` : ''}${ctx.provenance && ctx.provenance.totalProducts > 0 ? `\nΠΗΓΕΣ ΔΕΔΟΜΕΝΩΝ: connector ${ctx.provenance.connectorPct}% · stock movement ${ctx.provenance.movementPct}% · procurement ${ctx.provenance.procurementPct}% · import ${ctx.provenance.importPct}%${ctx.provenance.connectorPct < 30 ? '\nΧαμηλή κάλυψη real-time orders — απόφυγε υπεσχέσεις άμεσων αποτελεσμάτων στο copy.' : ''}\n` : ''}
 Δώσε directions (θεματικές κατευθύνσεις ανά κανάλι), actions (παραδείγματα ενεργειών) και brief (κείμενο κατευθύνσεων) σε JSON.${personalizationNote}`;
 }

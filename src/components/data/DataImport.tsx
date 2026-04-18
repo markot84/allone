@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { flushSync } from 'react-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useBrand } from '../../hooks/useBrand';
+import { useRefreshProcurementSignals } from '../../hooks/useProcurementSignals';
 import { FileText, CheckCircle2, XCircle, AlertCircle, Clock, Trash2, FileUp, Link as LinkIcon, HelpCircle, ExternalLink, Package, Users, BarChart3, Euro, ClipboardList } from 'lucide-react';
 import { Card, Button, Spinner, ProgressBar, useToast, Badge, PageHeader } from '../common';
 import { importFile, saveImportJob, getImportJobs, getLastImportDates, isSupportedFile, PRODUCT_COLUMN_MAPPING, type ImportType, type ImportResult, type ImportJob, type ImportProgress, type CampaignChannelOverride } from '../../services/import';
@@ -140,6 +141,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
   const queryClient = useQueryClient();
+  const { refresh: refreshProcurementSignals } = useRefreshProcurementSignals();
 
   const importTypes: { value: ImportType; label: string; icon: React.ReactNode }[] = [
     { value: 'products', label: 'Προϊόντα', icon: <Package size={16} /> },
@@ -396,6 +398,13 @@ export function DataImport({ initialType }: DataImportProps = {}) {
         }
         if (typesImported.has('procurement')) {
           queryClient.removeQueries({ queryKey: ['procurement'] });
+          // Re-aggregate procurement_signals server-side ώστε να ενημερωθούν
+          // οι εμπορικές πολιτικές (Sales Opt, Profit Max, Stock Clearance κλπ).
+          refreshProcurementSignals().then((r) => {
+            if (!r.ok && import.meta.env.MODE === 'development') {
+              console.warn('[DataImport] refreshProcurementSignals failed:', r.error);
+            }
+          });
         }
       } else {
         toast.error(

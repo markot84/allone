@@ -139,18 +139,45 @@ export function buildGeoMekkoColumns(
       }
     } else {
       const by = c.geo?.byCity;
-      if (!by) continue;
-      for (const [locKey, m] of Object.entries(by)) {
-        const value = getMetricValue(m, metric);
-        if (value <= 0) continue;
-        const { country, locality } = parseCityGeoKey(locKey);
-        const subtitle = formatGeoLabel(country);
-        addValue(
-          locKey,
-          { label: locality || '—', subtitle, google: 0, meta: 0, other: 0 },
-          channel,
-          value,
-        );
+      const hasCity = !!by && Object.keys(by).length > 0;
+      if (hasCity) {
+        const entries = Object.entries(by);
+        const totalSpent = entries.reduce((s, [, m]) => s + (m.amount_spent || 0), 0);
+        const totalRawConv = entries.reduce((s, [, m]) => s + (m.conversions || 0), 0);
+        const totalRawVal = entries.reduce((s, [, m]) => s + (m.conversion_value || 0), 0);
+        const campConv =
+          (typeof c.purchase_conversions === 'number' ? c.purchase_conversions : null) ??
+          c.conversions ??
+          0;
+        const campVal =
+          (typeof c.purchase_conversion_value === 'number' ? c.purchase_conversion_value : null) ??
+          c.conversion_value ??
+          0;
+        const convSlack = Math.max(0, Number(campConv) - totalRawConv);
+        const valSlack = Math.max(0, Number(campVal) - totalRawVal);
+        const allocConv = convSlack > 0.01 && totalRawConv < 0.01 && totalSpent > 0;
+        const allocVal = valSlack > 0.01 && totalRawVal < 0.01 && totalSpent > 0;
+
+        for (const [locKey, m] of entries) {
+          const spend = m.amount_spent || 0;
+          const share = totalSpent > 0 ? spend / totalSpent : 0;
+          const adjustedMetrics = {
+            ...m,
+            conversions: (m.conversions || 0) + (allocConv ? convSlack * share : 0),
+            conversion_value: (m.conversion_value || 0) + (allocVal ? valSlack * share : 0),
+          };
+          const value = getMetricValue(adjustedMetrics, metric);
+          if (value <= 0) continue;
+          const { country, locality } = parseCityGeoKey(locKey);
+          const subtitle = formatGeoLabel(country);
+          addValue(
+            locKey,
+            { label: locality || '—', subtitle, google: 0, meta: 0, other: 0 },
+            channel,
+            value,
+          );
+        }
+        continue;
       }
     }
   }

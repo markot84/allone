@@ -59,6 +59,66 @@ export const strategyContentMap = {
       'Γιατί 5.000+ επέλεξαν το [Product]',
       'Ό,τι χρειάζεσαι για [Need] - από €X'
     ]
+  },
+  sales_base: {
+    id: 'sales_base',
+    icon: '🎯',
+    name: 'Sales Optimization',
+    content_tone: 'Diagnostic, problem-solution, data-grounded',
+    content_types: ['Bucket-specific creatives', 'Re-engagement emails', 'Recovery sequences'],
+    channels: ['Email triggers', 'Remarketing', 'Targeted social', 'Direct outreach'],
+    cta_style: 'Specific to diagnosis: clearance / revival / restock alerts',
+    avoid: ['Generic catalog promos', 'One-size-fits-all messaging'],
+    sample_headlines: [
+      'Επιστροφή σε [Product]: αξίζει μια δεύτερη ματιά',
+      'Μην χάσεις [Product] — μόλις γύρισε σε διαθεσιμότητα',
+      'Επιλεγμένα για σένα από [Brand]'
+    ]
+  },
+  price_benchmark: {
+    id: 'price_benchmark',
+    icon: '💹',
+    name: 'Price Benchmarking',
+    content_tone: 'Confident, comparison-driven, transparent value',
+    content_types: ['Price match callouts', 'Best-price lists', 'Competitive guides'],
+    channels: ['Google Shopping', 'Comparison meta', 'PMax', 'SEO landing pages'],
+    cta_style: 'Hard value proof, "best price" anchors',
+    avoid: ['Soft brand storytelling', 'Premium-only positioning'],
+    sample_headlines: [
+      'Καλύτερη τιμή στην αγορά για [Product]',
+      'Σύγκρινε: γιατί επιλέγουν εμάς',
+      'Πιάσε [Product] κάτω από market price'
+    ]
+  },
+  mixed: {
+    id: 'mixed',
+    icon: '⚖️',
+    name: 'Μικτή Στρατηγική',
+    content_tone: 'Adaptive — blends τόνους των επιμέρους πολιτικών',
+    content_types: ['Hybrid hero pieces', 'Tiered campaigns', 'Cross-segment storytelling'],
+    channels: ['Mix από κανάλια των επιμέρους leg', 'Email segmentation', 'Multi-format social'],
+    cta_style: 'Διαφοροποιημένο ανά segment & leg ποσοστό',
+    avoid: ['Confused messaging', 'Conflicting offers στο ίδιο touchpoint'],
+    sample_headlines: [
+      'Δύο επιλογές, μία στρατηγική: [Brand]',
+      'Επιλέξτε τι σας ταιριάζει — value ή premium',
+      'Από ποιότητα μέχρι value: όλα στο [Brand]'
+    ]
+  },
+  seasonal_discount: {
+    id: 'seasonal_discount',
+    icon: '🎁',
+    name: 'Εποχιακή / Εκπτωτική',
+    content_tone: 'Festive, urgent, occasion-driven',
+    content_types: ['Countdown emails', 'Gift guides', 'Themed landing pages', 'Story takeovers'],
+    channels: ['Email blasts', 'SMS', 'Paid social', 'Display remarketing', 'Affiliate'],
+    cta_style: 'Time-bound urgency, period-specific savings',
+    avoid: ['Evergreen content', 'Slow-burn nurture flows'],
+    sample_headlines: [
+      '[Period]: Έως -[X]% σε επιλεγμένα',
+      'Μόνο για [Period]: η ευκαιρία της χρονιάς',
+      'Δώρα [Period] με έκπτωση -[X]%'
+    ]
   }
 };
 

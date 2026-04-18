@@ -5,7 +5,12 @@ import { channelRecommendations as staticRecommendations, scenarios } from '../d
 import type { ChannelRecommendation } from '../types';
 import type { RFMSegment } from '../types';
 import type { FitLevel } from '../utils/segmentRelevance';
-import type { CampaignPerformanceData, PromptContext } from '../data/channelRecommendationsPrompt';
+import type {
+  CampaignPerformanceData,
+  PromptContext,
+  TriagePromptContext,
+  ProvenancePromptContext,
+} from '../data/channelRecommendationsPrompt';
 
 export interface MixConfigForAI {
   scenarioA: string;
@@ -38,6 +43,10 @@ export interface UseAIChannelRecommendationsOptions {
   campaignPerformance?: CampaignPerformanceData[];
   context?: PromptContext;
   saveVersion?: number;
+  /** Triage origin (bucket → policy) — δίνει στο AI το διαγνωστικό root cause. */
+  triage?: TriagePromptContext | null;
+  /** Snapshot πηγών δεδομένων — calibrates AI confidence (real-time vs static). */
+  provenance?: ProvenancePromptContext | null;
 }
 
 const SEGMENT_NAME_MAP: Record<string, string> = {
@@ -85,6 +94,8 @@ export function useAIChannelRecommendations({
   campaignPerformance,
   context = 'strategy',
   saveVersion = 0,
+  triage,
+  provenance,
 }: UseAIChannelRecommendationsOptions) {
   const [aiEnabled, setAiEnabled] = useState(useAI);
 
@@ -133,7 +144,14 @@ export function useAIChannelRecommendations({
     error: aiError,
     refetch
   } = useQuery({
-    queryKey: ['aiChannelRecommendations', 'v10', selectedScenarioId, selectedSegmentId, fitLevel, aiEnabled, mixConfig?.scenarioA, mixConfig?.scenarioB, mixConfig?.percentA, brandContext?.brandName, totalBudget, context, saveVersion],
+    queryKey: [
+      'aiChannelRecommendations', 'v11',
+      selectedScenarioId, selectedSegmentId, fitLevel, aiEnabled,
+      mixConfig?.scenarioA, mixConfig?.scenarioB, mixConfig?.percentA,
+      brandContext?.brandName, totalBudget, context, saveVersion,
+      triage?.bucketLabel, triage?.skuCount,
+      provenance?.connectorPct, provenance?.totalProducts,
+    ],
     queryFn: async () => {
       if (!scenario || !segment || !aiEnabled) return null;
       return generateChannelRecommendations({
@@ -143,6 +161,8 @@ export function useAIChannelRecommendations({
         totalBudget,
         campaignPerformance,
         context,
+        triage: triage ?? undefined,
+        provenance: provenance ?? undefined,
       });
     },
     enabled: !!selectedScenarioId && !!scenario && !!segment && aiEnabled && selectedSegmentId !== '',

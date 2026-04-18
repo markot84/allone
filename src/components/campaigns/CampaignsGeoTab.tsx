@@ -122,8 +122,9 @@ export function CampaignsGeoTab({ campaigns }: Props) {
     } else {
       for (const c of campaigns) {
         const byCity = c.geo?.byCity;
-        if (!byCity) continue;
-        const entries = Object.entries(byCity);
+        const hasCity = !!byCity && Object.keys(byCity).length > 0;
+        const entries = hasCity ? Object.entries(byCity!) : [];
+        if (entries.length === 0) continue;
         const totalSpent = entries.reduce((s, [, m]) => s + (m.amount_spent || 0), 0);
         const totalRawConv = entries.reduce((s, [, m]) => s + (m.conversions || 0), 0);
         const totalRawVal = entries.reduce((s, [, m]) => s + (m.conversion_value || 0), 0);
@@ -308,7 +309,7 @@ export function CampaignsGeoTab({ campaigns }: Props) {
   const subtitle =
     level === 'country'
       ? `${rows.length} χώρες — σύνολο ${fmtMoney(totals.amount_spent)} spend, ${fmtConvGeo(totals.conversions)} αγορές.`
-      : `${rows.length} τοποθεσίες — σύνολο ${fmtMoney(totals.amount_spent)} spend, ${fmtConvGeo(totals.conversions)} αγορές. Google: πόλη · Meta: περιοχή. Όπου το API δεν δίνει αγορές ανά γραμμή, εμφανίζεται εκτιμώμενη κατανομή κατά spend.`;
+      : `${rows.length} τοποθεσίες — σύνολο ${fmtMoney(totals.amount_spent)} spend, ${fmtConvGeo(totals.conversions)} αγορές. Google: πόλη · Meta: περιοχή.`;
 
   return (
     <Card>

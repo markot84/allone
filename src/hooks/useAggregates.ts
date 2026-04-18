@@ -92,23 +92,34 @@ export function useRefreshAggregates() {
   const queryClient = useQueryClient();
   const { currentBrand } = useBrand();
 
-  const refresh = async () => {
+  const refresh = async (): Promise<{ ok: boolean; error?: string }> => {
     const brandId = currentBrand?.id;
-    if (!brandId) return;
+    if (!brandId) return { ok: false, error: 'no-brand' };
 
     const token = await auth.currentUser?.getIdToken();
-    if (!token) return;
+    if (!token) return { ok: false, error: 'no-auth' };
 
-    await fetch(REFRESH_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ brandId }),
-    });
-
-    await queryClient.invalidateQueries({ queryKey: ['aggregates'] });
+    try {
+      const res = await fetch(REFRESH_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ brandId }),
+      });
+      if (!res.ok) {
+        const txt = await res.text();
+        return { ok: false, error: `HTTP ${res.status}: ${txt}` };
+      }
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['aggregates'] }),
+        queryClient.invalidateQueries({ queryKey: ['ecommerce_summary', brandId] }),
+      ]);
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
   };
 
   return { refresh };

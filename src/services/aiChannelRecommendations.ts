@@ -5,6 +5,8 @@ import {
   type FitLevel,
   type CampaignPerformanceData,
   type PromptContext,
+  type TriagePromptContext,
+  type ProvenancePromptContext,
 } from '../data/channelRecommendationsPrompt';
 import type { ChannelRecommendation, BudgetAction } from '../types';
 import type { Scenario } from '../types';
@@ -97,12 +99,14 @@ export interface GenerateRecommendationsParams {
   totalBudget?: number;
   campaignPerformance?: CampaignPerformanceData[];
   context?: PromptContext;
+  triage?: TriagePromptContext;
+  provenance?: ProvenancePromptContext;
 }
 
 export async function generateChannelRecommendations(
   params: GenerateRecommendationsParams
 ): Promise<ChannelRecommendation | null> {
-  const { scenario, segment, fitLevel, brandContext, segmentFitList, totalBudget, campaignPerformance, context } = params;
+  const { scenario, segment, fitLevel, brandContext, segmentFitList, totalBudget, campaignPerformance, context, triage, provenance } = params;
 
   const behavioral = deriveBehavioralProfile(segment);
   const predictive = derivePredictiveMetrics(segment);
@@ -140,6 +144,8 @@ PREDICTIVE METRICS (${segment.name}):
     totalBudget,
     campaignPerformance,
     context,
+    triage,
+    provenance,
   }) + behavioralContext;
 
   const text = await callGemini({

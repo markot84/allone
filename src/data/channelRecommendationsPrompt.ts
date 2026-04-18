@@ -126,6 +126,32 @@ export interface CampaignPerformanceData {
 
 export type PromptContext = 'strategy' | 'activation';
 
+/**
+ * Triage origin context — αν η στρατηγική προέκυψε από Decision Bucket triage, μεταφέρουμε
+ * τη διαγνωστική ρίζα στο prompt ώστε το AI να ευθυγραμμίσει tone/CTA/budget με το πρόβλημα
+ * που εντοπίστηκε (π.χ. dead capital → urgency clearance, hot seller → scale-up).
+ */
+export interface TriagePromptContext {
+  bucketLabel: string;
+  bucketDescription?: string;
+  skuCount: number;
+  tiedCapital?: number;
+  topSkus?: string[];
+}
+
+/**
+ * Provenance snapshot — επιγραμματικά από ποιες πηγές προέρχεται το dataset (connector,
+ * stock movement, procurement, import). Βοηθά το AI να καλιμπράρει τη βεβαιότητα του
+ * rationale (π.χ. αν δεν υπάρχει connector, αποφεύγει υπεσχέσεις real-time ROAS).
+ */
+export interface ProvenancePromptContext {
+  connectorPct: number;
+  movementPct: number;
+  procurementPct: number;
+  importPct: number;
+  totalProducts: number;
+}
+
 export function buildChannelRecommendationsUserPrompt(params: {
   scenarioName: string;
   scenarioDescription: string;
@@ -141,6 +167,8 @@ export function buildChannelRecommendationsUserPrompt(params: {
   totalBudget?: number;
   campaignPerformance?: CampaignPerformanceData[];
   context?: PromptContext;
+  triage?: TriagePromptContext;
+  provenance?: ProvenancePromptContext;
 }): string {
   const {
     scenarioName,
@@ -157,7 +185,27 @@ export function buildChannelRecommendationsUserPrompt(params: {
     totalBudget,
     campaignPerformance,
     context = 'strategy',
+    triage,
+    provenance,
   } = params;
+
+  const triageSection = triage
+    ? `\n\nΔΙΑΓΝΩΣΤΙΚΗ ΡΙΖΑ (Decision Bucket):
+- Bucket: «${triage.bucketLabel}»${triage.bucketDescription ? ` — ${triage.bucketDescription}` : ''}
+- Σκοπευμένα SKUs: ${triage.skuCount}${triage.tiedCapital ? ` | Δεσμευμένα κεφάλαια: €${Math.round(triage.tiedCapital).toLocaleString('el-GR')}` : ''}${triage.topSkus && triage.topSkus.length > 0 ? `\n- Ενδεικτικά SKUs: ${triage.topSkus.slice(0, 5).join(', ')}` : ''}
+
+Η στρατηγική ΔΕΝ επιλέχθηκε γενικά — προέκυψε από συγκεκριμένο διαγνωστικό πρόβλημα. Ευθυγράμμισε ΟΛΕΣ τις προτάσεις (κανάλια, budget allocation, rationale, actions) με αυτή τη ρίζα. Π.χ. dead capital → urgency clearance messaging + retargeting + χαμηλό CPA target. Hot seller → scale-up budget + lookalike audiences. Stockout risk → pause/reduce ads μέχρι ανατροφοδοσία. Ανέφερε ρητά μέσα στο rationale ότι η ενέργεια στοχεύει το πρόβλημα «${triage.bucketLabel}».`
+    : '';
+
+  const provenanceSection = provenance && provenance.totalProducts > 0
+    ? `\n\nΠΗΓΕΣ ΔΕΔΟΜΕΝΩΝ (data provenance, ${provenance.totalProducts} SKUs):
+- Real-time orders connector: ${provenance.connectorPct}%
+- Stock movement (απόθεμα): ${provenance.movementPct}%
+- Procurement (ERP): ${provenance.procurementPct}%
+- Import-only (στατικά): ${provenance.importPct}%
+
+${provenance.connectorPct < 30 ? 'ΠΡΟΣΟΧΗ: Χαμηλή κάλυψη real-time orders. Απόφυγε υπεσχέσεις άμεσου ROAS — προτίμησε εκτιμήσεις βασισμένες σε stock κίνηση και ιστορικό. ' : ''}${provenance.procurementPct > 50 ? 'Έχουμε δυνατό procurement signal — μπορείς να αναφέρεις margin/τιμολόγηση με σιγουριά. ' : ''}`
+    : '';
 
   const fitContext = FIT_CONTEXT[fitLevel];
 
@@ -189,7 +237,7 @@ Segment πελατών: ${segmentName}
 
 Βαθμός ταιριάσματος segment-στρατηγικής: ${fitLevel === 'ideal' ? 'Ιδανικό' : fitLevel === 'good' ? 'Καλό' : 'Μερικό'}
 ${fitContext}
-${segmentMapSection}
+${segmentMapSection}${triageSection}${provenanceSection}
 Πρότεινε τα κατάλληλα κανάλια μάρκετινγκ (primary, secondary, budget_allocation, rationale) σε JSON.
 Η αιτιολόγηση πρέπει να είναι πλήρως στα Ελληνικά.${brandName ? ` Ανέφερε το brand «${brandName}» ονομαστικά μέσα στο rationale, αντί για γενικόλογο "η επιχείρηση" ή "το brand σας".${topCategories && topCategories.length > 0 ? ` Συνέδεσε τις προτάσεις με τα πραγματικά προϊόντα/κατηγορίες (${topCategories.slice(0, 3).join(', ')}).` : ''}` : ''}
 Στο "Πελάτες:" section:

@@ -102,7 +102,14 @@ export function EcommerceDashboard() {
     return ecomm.dailyRevenue.filter(d => d.date >= effectiveFrom && d.date <= effectiveTo);
   }, [ecomm.dailyRevenue, effectiveFrom, effectiveTo]);
 
-  // Recomputed KPIs from filtered orders
+  // Date-filtered daily orders — από το server aggregate (όχι από recentOrders
+  // που είναι capped στις 50).
+  const filteredOrdersByDay = useMemo(() => {
+    return ecomm.ordersByDay.filter(d => d.date >= effectiveFrom && d.date <= effectiveTo);
+  }, [ecomm.ordersByDay, effectiveFrom, effectiveTo]);
+
+  // Recent orders (capped 50) μόνο για το tab "Πρόσφατες Παραγγελίες"
+  // και τα tables πιο κάτω — ΟΧΙ για KPIs.
   const filteredOrdersForKpi = useMemo(() => {
     return ecomm.recentOrders.filter(o => {
       const d = (o.createdAt || '').slice(0, 10);
@@ -114,7 +121,14 @@ export function EcommerceDashboard() {
     () => filteredDailyRevenue.reduce((s, d) => s + d.revenue, 0),
     [filteredDailyRevenue]
   );
-  const filteredOrderCount = filteredOrdersForKpi.length;
+  // Πραγματικό count από aggregate. Fallback στο capped count μόνο αν λείπει
+  // η ordersByDay map (legacy brands πριν το server aggregate update).
+  const filteredOrderCount = useMemo(() => {
+    if (filteredOrdersByDay.length > 0) {
+      return filteredOrdersByDay.reduce((s, d) => s + d.orders, 0);
+    }
+    return filteredOrdersForKpi.length;
+  }, [filteredOrdersByDay, filteredOrdersForKpi]);
   const filteredAov = filteredOrderCount > 0 ? filteredTotalRevenue / filteredOrderCount : 0;
 
   const [orderSort, setOrderSort] = useState<{ field: OrderSortField; dir: 'asc' | 'desc' }>({ field: 'createdAt', dir: 'desc' });
@@ -130,9 +144,9 @@ export function EcommerceDashboard() {
 
   const kpis: KPICardData[] = useMemo(() => {
     const last30 = filteredDailyRevenue.slice(-30);
-    const ordersPerDay = last30.map((d) =>
-      filteredOrdersForKpi.filter((o) => o.createdAt?.startsWith(d.date)).length
-    );
+    // Map per-date orders από το server aggregate (όχι capped recentOrders).
+    const ordersByDateMap = new Map(filteredOrdersByDay.map((d) => [d.date, d.orders]));
+    const ordersPerDay = last30.map((d) => ordersByDateMap.get(d.date) ?? 0);
     const aovPerDay = last30.map((d, i) => {
       const n = ordersPerDay[i] ?? 0;
       return n > 0 ? d.revenue / n : 0;
@@ -162,7 +176,7 @@ export function EcommerceDashboard() {
       tooltip: ecomm.connectedPlatforms.map((p) => PLATFORM_LABELS[p] || p).join(', ') || 'Κανένα',
     },
     ];
-  }, [filteredTotalRevenue, filteredOrderCount, filteredAov, filteredDailyRevenue, filteredOrdersForKpi, ecomm.connectedPlatforms]);
+  }, [filteredTotalRevenue, filteredOrderCount, filteredAov, filteredDailyRevenue, filteredOrdersByDay, ecomm.connectedPlatforms]);
 
   const sortedOrders = useMemo(() => {
     const arr = [...filteredOrdersForKpi];

@@ -11,6 +11,7 @@ import type {
   SalesBaseScope,
 } from '../types';
 import type { ContentSuggestionsResult } from '../services/aiContentSuggestions';
+import type { SeasonalDiscountConfig } from '../components/strategy/SeasonalDiscountPanel';
 
 export interface MixConfig {
   scenarioA: string;
@@ -40,8 +41,26 @@ export interface ActiveStrategy {
   salesBaseScope?: SalesBaseScope;
   /** Φίλτρο συμμετοχής SKU για Price Benchmarking (price_benchmark) */
   priceBenchmarkScope?: PriceBenchmarkStrategyScope;
+  /** Παράμετροι εποχιακής/εκπτωτικής περιόδου (seasonal_discount) */
+  seasonalDiscount?: SeasonalDiscountConfig;
+  /** Προέλευση από Decision Buckets triage (αν η στρατηγική προήλθε από bucket CTA). */
+  triageOrigin?: TriageOrigin;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Snapshot της επιλογής bucket από το TriageCard — καρφώνει SKU scope στην ενεργή πολιτική. */
+export interface TriageOrigin {
+  /** Αναγνωριστικό bucket — βλ. utils/decisionBuckets.BucketId */
+  bucket: string;
+  /** Ανθρώπινο label (π.χ. «Νεκρά κεφάλαια»). */
+  label: string;
+  /** Λίστα SKUs που σκοπεύονται από το bucket (capped — βλ. topByBucket). */
+  skus: string[];
+  /** Συνολικά δεσμευμένα κεφάλαια (€) — KPI για context. */
+  tiedCapital?: number;
+  /** ISO timestamp όταν επιλέχθηκε το bucket. */
+  selectedAt: string;
 }
 
 export function useActiveStrategy() {
@@ -110,11 +129,16 @@ export function useActiveStrategy() {
       channelRecommendation?: ChannelRecommendation;
       salesBaseScope?: SalesBaseScope;
       priceBenchmarkScope?: PriceBenchmarkStrategyScope;
+      seasonalDiscount?: SeasonalDiscountConfig;
+      triageOrigin?: TriageOrigin;
     }) => {
       if (!brandId) throw new Error('No brand selected');
-      
+
       const now = new Date().toISOString();
-      const strategyId = `strategy_${brandId}_${Date.now()}`;
+      // Σταθερό id per brand → αποτρέπει το orphaning των channel_activations σε κάθε save.
+      // Παλιά timestamp-based docs παραμένουν στο Firestore αλλά δεν επιστρέφονται από τον reader,
+      // γιατί το νέο stable doc έχει πάντα πιο πρόσφατο updatedAt.
+      const strategyId = `strategy_${brandId}`;
       
       // Build clean object without undefined values
       const strategyData: Record<string, unknown> = {
@@ -149,6 +173,14 @@ export function useActiveStrategy() {
 
       if (strategy.priceBenchmarkScope) {
         strategyData.priceBenchmarkScope = JSON.parse(JSON.stringify(strategy.priceBenchmarkScope));
+      }
+
+      if (strategy.seasonalDiscount) {
+        strategyData.seasonalDiscount = JSON.parse(JSON.stringify(strategy.seasonalDiscount));
+      }
+
+      if (strategy.triageOrigin) {
+        strategyData.triageOrigin = JSON.parse(JSON.stringify(strategy.triageOrigin));
       }
 
       // Only add optional fields if they have values (Firestore doesn't accept undefined)
@@ -210,19 +242,21 @@ export function useActiveStrategy() {
     },
   });
 
+  // Channel ↔ Activation sync: όταν γράφεται οποιοδήποτε από τα δύο, mirror-άρει και τα δύο πεδία.
+  // Αποτρέπει divergence ανάμεσα σε Channel Activation page και RFM exports.
   const saveRecommendation = useMutation({
     mutationFn: async (recommendation: ChannelRecommendation) => {
       if (!activeStrategy?.id || !brandId) throw new Error('No active strategy');
       if (activeStrategy.id.startsWith('default_')) throw new Error('Cannot save to default strategy');
       const now = new Date().toISOString();
-      // Clean recommendation to remove undefined values that Firestore rejects
       const cleanRec = JSON.parse(JSON.stringify(recommendation));
       await FirestoreService.setDocument('active_strategies', activeStrategy.id, {
         ...activeStrategy,
         channelRecommendation: cleanRec,
+        activationRecommendation: cleanRec,
         updatedAt: now,
       } as Record<string, unknown>);
-      return { ...activeStrategy, channelRecommendation: cleanRec, updatedAt: now };
+      return { ...activeStrategy, channelRecommendation: cleanRec, activationRecommendation: cleanRec, updatedAt: now };
     },
     onSuccess: (updated) => {
       queryClient.setQueryData(['activeStrategy', brandId], updated);
@@ -238,9 +272,10 @@ export function useActiveStrategy() {
       await FirestoreService.setDocument('active_strategies', activeStrategy.id, {
         ...activeStrategy,
         activationRecommendation: cleanRec,
+        channelRecommendation: cleanRec,
         updatedAt: now,
       } as Record<string, unknown>);
-      return { ...activeStrategy, activationRecommendation: cleanRec, updatedAt: now };
+      return { ...activeStrategy, activationRecommendation: cleanRec, channelRecommendation: cleanRec, updatedAt: now };
     },
     onSuccess: (updated) => {
       queryClient.setQueryData(['activeStrategy', brandId], updated);
@@ -268,6 +303,15 @@ export function useActiveStrategy() {
   const getStrategyName = (scenarioId: string) => {
     const scenario = scenarios.find(s => s.id === scenarioId);
     return scenario?.name || 'Custom Strategy';
+  };
+
+  /** Single source of truth για channel recommendation. Προτιμά activation (Channel page),
+   * fallback σε channel (RFM/exports legacy). */
+  const getEffectiveChannelRecommendation = (
+    strategy?: Pick<ActiveStrategy, 'activationRecommendation' | 'channelRecommendation'> | null,
+  ): ChannelRecommendation | undefined => {
+    const s = strategy ?? effectiveStrategy ?? undefined;
+    return s?.activationRecommendation ?? s?.channelRecommendation;
   };
 
   // Fallback to default strategy if none exists
@@ -304,5 +348,6 @@ export function useActiveStrategy() {
     saveActivationRecommendation: saveActivationRecommendation.mutateAsync,
     saveContentSuggestions: saveContentSuggestions.mutateAsync,
     getStrategyName,
+    getEffectiveChannelRecommendation,
   };
 }

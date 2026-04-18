@@ -73,6 +73,16 @@ import {
   setDb as setEcommerceAggDb,
 } from './ecommerceAggregator';
 import {
+  captureStockSnapshot,
+  computeStockMovement,
+  refreshStockMovement,
+  setDb as setStockMovementDb,
+} from './stockMovementTracker';
+import {
+  refreshProcurementSignals,
+  setDb as setProcurementSignalsDb,
+} from './procurementSignals';
+import {
   getGA4AuthUrl,
   handleGA4Callback,
   fetchGA4Data,
@@ -101,6 +111,8 @@ setWooDb(db);
 setOpenCartDb(db);
 setMagentoDb(db);
 setEcommerceAggDb(db);
+setStockMovementDb(db);
+setProcurementSignalsDb(db);
 setGA4Db(db);
 setTikTokDb(db);
 
@@ -348,6 +360,13 @@ async function importProducts(
 
   if (items.length > 0) {
     await batchWrite('products', items, brandId);
+    // Stock snapshot μετά από product import — ξεκινά/ανανεώνει το tracking
+    // για brands χωρίς connector (e-tennis, και άλλα όπου το stock έρχεται από imports).
+    try {
+      await refreshStockMovement(brandId);
+    } catch (e) {
+      logger.warn(`[importProducts] stock movement refresh failed for ${brandId}:`, e);
+    }
   }
 
   if (suppliers.size > 0) {
@@ -1122,6 +1141,12 @@ export const connectorSync = onRequest(
         } catch (e) {
           logger.warn(`[connectorSync] ecommerce summary refresh failed for ${brandId}:`, e);
         }
+        // Stock movement tracking (universal — δουλεύει και για non-connector brands)
+        try {
+          await refreshStockMovement(brandId);
+        } catch (e) {
+          logger.warn(`[connectorSync] stock movement refresh failed for ${brandId}:`, e);
+        }
       }
 
       res.status(200).json(result);
@@ -1351,6 +1376,17 @@ export const scheduledSync = onSchedule(
           } catch (err) {
             logger.error(`[ScheduledSync] E-commerce summary failed for ${brandId}:`, err);
           }
+        }
+      }
+
+      // Stock movement tracking για ΟΛΑ τα brands (συμπεριλαμβανομένων non-connector)
+      const allBrandsSnap = await db.collection('brands').get();
+      for (const bdoc of allBrandsSnap.docs) {
+        const brandId = bdoc.id;
+        try {
+          await refreshStockMovement(brandId);
+        } catch (err) {
+          logger.warn(`[ScheduledSync] Stock movement failed for ${brandId}:`, err);
         }
       }
 
@@ -1639,10 +1675,99 @@ export const refreshAggregates = onRequest(
       } catch (e) {
         logger.warn('[refreshAggregates] ecommerce summary refresh failed (non-fatal):', e);
       }
+      // Stock movement: capture σημερινό snapshot + recompute deltas (universal)
+      try {
+        await refreshStockMovement(brandId);
+      } catch (e) {
+        logger.warn('[refreshAggregates] stock movement refresh failed (non-fatal):', e);
+      }
+      // Procurement signals: re-aggregate (status, tied capital, margin, lifetime κλπ)
+      try {
+        await refreshProcurementSignals(brandId);
+      } catch (e) {
+        logger.warn('[refreshAggregates] procurement signals refresh failed (non-fatal):', e);
+      }
       res.status(200).json({ success: true, brandId });
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       logger.error('[refreshAggregates]', msg);
+      res.status(500).json({ error: msg });
+    }
+  }
+);
+
+// ── Stock Movement: Manual Capture (callable) ───────────────────────────────
+
+/**
+ * POST /captureStock
+ * Body: { brandId }
+ * Καταγράφει σημερινό stock snapshot και υπολογίζει deltas (7d/30d/90d).
+ * Δουλεύει για κάθε brand — connector ή import-only.
+ */
+export const captureStock = onRequest(
+  { region: 'europe-west1', cors: true, timeoutSeconds: 120, memory: '512MiB' },
+  async (req, res) => {
+    if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+
+    try {
+      const idToken = authHeader.slice(7).trim();
+      const decoded = await admin.auth().verifyIdToken(idToken);
+
+      const { brandId } = req.body as { brandId?: string };
+      if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
+
+      if (!(await verifyBrandMembership(decoded.uid, brandId))) {
+        res.status(403).json({ error: 'Not a member of this brand' });
+        return;
+      }
+
+      const captured = await captureStockSnapshot(brandId);
+      const movement = await computeStockMovement(brandId);
+      res.status(200).json({ success: true, brandId, captured, movement });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      logger.error('[captureStock]', msg);
+      res.status(500).json({ error: msg });
+    }
+  }
+);
+
+// ── Procurement Signals: Manual Refresh (after upload) ─────────────────────
+
+/**
+ * POST /refreshSignals
+ * Body: { brandId }
+ * Re-aggregates procurement_inventory + pricing_policy + fiscal_year + item_evaluation
+ * σε procurement_signals/{brandId}.skuSignalsJson. Καλείται μετά από procurement upload.
+ */
+export const refreshSignals = onRequest(
+  { region: 'europe-west1', cors: true, timeoutSeconds: 120, memory: '512MiB' },
+  async (req, res) => {
+    if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+
+    try {
+      const idToken = authHeader.slice(7).trim();
+      const decoded = await admin.auth().verifyIdToken(idToken);
+
+      const { brandId } = req.body as { brandId?: string };
+      if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
+
+      if (!(await verifyBrandMembership(decoded.uid, brandId))) {
+        res.status(403).json({ error: 'Not a member of this brand' });
+        return;
+      }
+
+      const result = await refreshProcurementSignals(brandId);
+      res.status(200).json({ success: true, brandId, ...result });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      logger.error('[refreshSignals]', msg);
       res.status(500).json({ error: msg });
     }
   }

@@ -1,10 +1,11 @@
 import { useMemo, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Search, Layers } from 'lucide-react';
-import type { Product, SalesBasePresetId, SalesBaseScope } from '../../types';
+import { X, Search, Layers, Info, RefreshCw } from 'lucide-react';
+import type { Product, SalesBaseCategorySource, SalesBasePresetId, SalesBaseScope } from '../../types';
 import {
   SALES_BASE_PRESET_OPTIONS,
   calculateSalesMomentumScore,
+  categoryForSource,
   productMatchesSalesBasePreset,
   productMatchesSalesBaseTextFilters,
 } from '../../utils/salesBaseScore';
@@ -32,10 +33,10 @@ function buildBrandGroups(products: Product[]): GroupRow[] {
     .sort((a, b) => b.count - a.count);
 }
 
-function buildCategoryGroups(products: Product[]): GroupRow[] {
+function buildCategoryGroups(products: Product[], source: SalesBaseCategorySource): GroupRow[] {
   const m = new Map<string, { count: number; sumMom: number }>();
   for (const p of products) {
-    const label = (p.category ?? '').trim() || '—';
+    const label = categoryForSource(p, source) || '—';
     const cur = m.get(label) ?? { count: 0, sumMom: 0 };
     const mom = calculateSalesMomentumScore(p);
     cur.count += 1;
@@ -55,6 +56,8 @@ const defaultScope = (): SalesBaseScope => ({
   categoryFilter: '',
   search: '',
   selectedProductIds: null,
+  excludedCategories: [],
+  categorySource: 'product',
 });
 
 interface SalesBaseSetupModalProps {
@@ -63,6 +66,15 @@ interface SalesBaseSetupModalProps {
   products: Product[];
   initialScope?: SalesBaseScope | null;
   onContinue: (scope: SalesBaseScope) => void;
+  hasConnector?: boolean;
+  hasFreshWindowedStats?: boolean;
+  /** ISO YYYY-MM-DD — ημερομηνία πρώτου stock snapshot (lifetime baseline). */
+  stockMovementBaselineDate?: string | null;
+  /** Διαθέσιμα windows από stock movement tracking. */
+  hasMovementWindows?: { d7: boolean; d30: boolean; d90: boolean; any: boolean };
+  /** Αν υπάρχει procurement_inventory upload για το brand → ενεργοποιεί τον διακόπτη πηγής κατηγοριών. */
+  hasProcurementCategories?: boolean;
+  onRefreshStats?: () => Promise<void>;
 }
 
 export function SalesBaseSetupModal({
@@ -71,11 +83,21 @@ export function SalesBaseSetupModal({
   products,
   initialScope,
   onContinue,
+  hasConnector,
+  hasFreshWindowedStats,
+  stockMovementBaselineDate,
+  hasMovementWindows,
+  hasProcurementCategories,
+  onRefreshStats,
 }: SalesBaseSetupModalProps) {
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshDone, setRefreshDone] = useState(false);
   const [preset, setPreset] = useState<SalesBasePresetId>('all');
   const [brandFilter, setBrandFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [search, setSearch] = useState('');
+  const [excludedCategories, setExcludedCategories] = useState<string[]>([]);
+  const [categorySource, setCategorySource] = useState<SalesBaseCategorySource>('product');
 
   useEffect(() => {
     if (!isOpen) return;
@@ -84,7 +106,21 @@ export function SalesBaseSetupModal({
     setBrandFilter(s.brandFilter);
     setCategoryFilter(s.categoryFilter);
     setSearch(s.search);
+    setExcludedCategories(s.excludedCategories ?? []);
+    setCategorySource(s.categorySource ?? 'product');
   }, [isOpen, initialScope]);
+
+  // Όταν αλλάζει η πηγή κατηγοριών, καθάρισε excluded/filter — έχουν διαφορετικές ετικέτες.
+  useEffect(() => {
+    setExcludedCategories([]);
+    setCategoryFilter('');
+  }, [categorySource]);
+
+  const toggleExcludedCategory = (cat: string) => {
+    setExcludedCategories((prev) =>
+      prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat],
+    );
+  };
 
   const brandOptions = useMemo(() => {
     const set = new Set<string>();
@@ -98,23 +134,57 @@ export function SalesBaseSetupModal({
   const categoryOptions = useMemo(() => {
     const set = new Set<string>();
     for (const p of products) {
-      const c = (p.category ?? '').trim();
+      const c = categoryForSource(p, categorySource);
       if (c) set.add(c);
     }
     return [...set].sort((a, b) => a.localeCompare(b, 'el'));
-  }, [products]);
+  }, [products, categorySource]);
 
   const ruleFiltered = useMemo(() => {
     return products.filter(
       (p) =>
-        productMatchesSalesBaseTextFilters(p, brandFilter, categoryFilter, search) &&
-        productMatchesSalesBasePreset(p, preset),
+        productMatchesSalesBaseTextFilters(
+          p,
+          brandFilter,
+          categoryFilter,
+          search,
+          excludedCategories,
+          categorySource,
+        ) && productMatchesSalesBasePreset(p, preset),
     );
-  }, [products, brandFilter, categoryFilter, search, preset]);
+  }, [products, brandFilter, categoryFilter, search, preset, excludedCategories, categorySource]);
 
   const totalMatched = ruleFiltered.length;
   const brandGroups = useMemo(() => buildBrandGroups(ruleFiltered), [ruleFiltered]);
-  const categoryGroups = useMemo(() => buildCategoryGroups(ruleFiltered), [ruleFiltered]);
+  const categoryGroups = useMemo(
+    () => buildCategoryGroups(ruleFiltered, categorySource),
+    [ruleFiltered, categorySource],
+  );
+
+  // Detect data limitation: brand has no per-window sales nor last_sale_at anywhere.
+  // Time-windowed presets are not meaningful in that case (αν δεν υπάρχει ούτε movement tracking).
+  const lacksTimeWindowSignals = useMemo(() => {
+    if (!products.length) return false;
+    for (const p of products) {
+      if (
+        p.last_sale_at != null ||
+        p.qty_sold_last_7d != null ||
+        p.qty_sold_last_30d != null ||
+        p.qty_sold_last_90d != null
+      ) {
+        return false;
+      }
+    }
+    return true;
+  }, [products]);
+
+  // Πόσες ημέρες tracking κινητικότητας έχουμε ήδη.
+  const movementDaysAvailable = useMemo(() => {
+    if (!stockMovementBaselineDate) return null;
+    const baseline = new Date(stockMovementBaselineDate + 'T00:00:00Z');
+    if (Number.isNaN(baseline.getTime())) return null;
+    return Math.max(0, Math.floor((Date.now() - baseline.getTime()) / 86400000));
+  }, [stockMovementBaselineDate]);
 
   const handleContinue = () => {
     onContinue({
@@ -123,6 +193,8 @@ export function SalesBaseSetupModal({
       categoryFilter,
       search,
       selectedProductIds: null,
+      excludedCategories,
+      categorySource,
     });
   };
 
@@ -205,8 +277,65 @@ export function SalesBaseSetupModal({
           </div>
 
           <div className="px-5 py-3 space-y-3 overflow-y-auto flex-1 min-h-0">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {SALES_BASE_PRESET_OPTIONS.map((opt) => (
+            {hasConnector && !hasFreshWindowedStats && onRefreshStats && (
+              <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 flex gap-2 items-start">
+                <Info size={14} className="text-blue-600 mt-0.5 shrink-0" />
+                <div className="text-[11px] text-blue-900 leading-snug flex-1">
+                  <strong>Τα windowed sales stats είναι παλιά.</strong> Πατήστε «Φρεσκάρισμα» για να υπολογιστούν τα
+                  σήματα 7/30/90 ημερών και η ημ/νία τελευταίας πώλησης από τα orders του connector.
+                </div>
+                <button
+                  type="button"
+                  disabled={refreshing}
+                  onClick={async () => {
+                    setRefreshing(true);
+                    setRefreshDone(false);
+                    try {
+                      await onRefreshStats();
+                      setRefreshDone(true);
+                    } finally {
+                      setRefreshing(false);
+                    }
+                  }}
+                  className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-blue-600 text-white text-[11px] font-medium hover:bg-blue-700 disabled:opacity-50"
+                >
+                  <RefreshCw size={11} className={refreshing ? 'animate-spin' : ''} />
+                  {refreshing ? 'Φρεσκάρισμα…' : refreshDone ? 'Έτοιμο — ξανανοίξτε' : 'Φρεσκάρισμα'}
+                </button>
+              </div>
+            )}
+            {/* Stock movement tracking banner — universal source of truth */}
+            {movementDaysAvailable != null && (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 flex gap-2 items-start">
+                <Info size={14} className="text-emerald-600 mt-0.5 shrink-0" />
+                <div className="text-[11px] text-emerald-900 leading-snug flex-1">
+                  <strong>Παρακολούθηση κινητικότητας αποθέματος ενεργή.</strong> Καταγραφή από{' '}
+                  <code>{stockMovementBaselineDate}</code> ({movementDaysAvailable} ημ.).
+                  {' '}Διαθέσιμα windows: {hasMovementWindows?.d7 ? '7d ' : ''}
+                  {hasMovementWindows?.d30 ? '30d ' : ''}
+                  {hasMovementWindows?.d90 ? '90d ' : ''}
+                  {!hasMovementWindows?.any && '— θα ενεργοποιηθούν με την πρώτη ολοκληρωμένη μέρα tracking.'}
+                  {hasMovementWindows?.any &&
+                    ' Τα φίλτρα μειώσεων αποθέματος αποτυπώνουν πωλήσεις net of επιστροφών/ακυρώσεων.'}
+                </div>
+              </div>
+            )}
+            {movementDaysAvailable == null && !hasConnector && lacksTimeWindowSignals && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 flex gap-2 items-start">
+                <Info size={14} className="text-amber-600 mt-0.5 shrink-0" />
+                <div className="text-[11px] text-amber-900 leading-snug">
+                  <strong>Δεν υπάρχουν ημερομηνίες πωλήσεων</strong> για αυτό το brand. Η παρακολούθηση κινητικότητας
+                  αποθέματος θα ξεκινήσει αυτόματα στο επόμενο sync — εναλλακτικά συμπεριλάβετε στήλη{' '}
+                  <code>last_sale_at</code> στο import ή συνδέστε e-commerce connector.
+                </div>
+              </div>
+            )}
+            {(() => {
+              const allOpt = SALES_BASE_PRESET_OPTIONS.find((o) => o.group === 'all');
+              const zeroOpts = SALES_BASE_PRESET_OPTIONS.filter((o) => o.group === 'zero_window');
+              const otherOpts = SALES_BASE_PRESET_OPTIONS.filter((o) => o.group === 'other');
+
+              const renderOpt = (opt: typeof SALES_BASE_PRESET_OPTIONS[number]) => (
                 <label
                   key={opt.id}
                   className={`flex gap-2 rounded-xl border p-2.5 cursor-pointer text-left transition-colors ${
@@ -227,8 +356,62 @@ export function SalesBaseSetupModal({
                     <span className="text-[10px] text-[#6B7280] leading-snug">{opt.hint}</span>
                   </span>
                 </label>
-              ))}
-            </div>
+              );
+
+              return (
+                <div className="space-y-2">
+                  {allOpt && renderOpt(allOpt)}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF] px-1">
+                        0 πωλήσεις σε window
+                      </p>
+                      <div className="space-y-2">{zeroOpts.map(renderOpt)}</div>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF] px-1">
+                        Χωρίς πωλήσεις & Πάγωμα
+                      </p>
+                      <div className="space-y-2">{otherOpts.map(renderOpt)}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {hasProcurementCategories && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-[#E5E5E5] bg-[#FAFAFA]">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                  Πηγή κατηγοριών
+                </span>
+                <div className="ml-auto inline-flex rounded-lg border border-[#E5E5E5] bg-white p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setCategorySource('product')}
+                    className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ${
+                      categorySource === 'product'
+                        ? 'bg-[var(--nts-accent)] text-white'
+                        : 'text-[#4B5563] hover:bg-[#F5F5F5]'
+                    }`}
+                    title="Από στήλη Category του products import (ευρεία εμπορική κατηγορία)"
+                  >
+                    Προϊόντα
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCategorySource('procurement')}
+                    className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ${
+                      categorySource === 'procurement'
+                        ? 'bg-[var(--nts-accent)] text-white'
+                        : 'text-[#4B5563] hover:bg-[#F5F5F5]'
+                    }`}
+                    title="Από procurement_inventory: STATUS / ΑΞΙΟΛΟΓΗΣΗ ΕΙΔΟΥΣ (π.χ. «Επί παραγγελία», «Προς κατάργηση»)"
+                  >
+                    Procurement
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="flex flex-wrap items-end gap-2">
               <div className="flex-1 min-w-[140px]">
@@ -275,10 +458,58 @@ export function SalesBaseSetupModal({
               </div>
             </div>
 
+            {categoryOptions.length > 1 && (
+              <div className="rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] px-3 py-2.5">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-[10px] text-[#9CA3AF] uppercase tracking-wide">
+                    Εξαίρεση κατηγοριών
+                  </label>
+                  {excludedCategories.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setExcludedCategories([])}
+                      className="text-[10px] text-[var(--nts-accent)] hover:underline"
+                    >
+                      Καθαρισμός
+                    </button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {categoryOptions.map((c) => {
+                    const active = excludedCategories.includes(c);
+                    return (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => toggleExcludedCategory(c)}
+                        className={`text-[11px] px-2 py-0.5 rounded-full border transition-colors ${
+                          active
+                            ? 'bg-red-50 border-red-300 text-red-700 line-through'
+                            : 'bg-white border-[#E5E5E5] text-[#4B5563] hover:border-[var(--nts-accent)]/40'
+                        }`}
+                        title={active ? 'Κάντε κλικ για επανένταξη' : 'Κάντε κλικ για εξαίρεση'}
+                      >
+                        {c}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-[#9CA3AF] mt-1.5">
+                  Χρήσιμο για κατηγορίες-status (π.χ. «Επί παραγγελία», «Προς κατάργηση») που εκ φύσεως δεν έχουν
+                  πωλήσεις.
+                </p>
+              </div>
+            )}
+
             <div className="rounded-lg border border-[var(--nts-accent)]/25 bg-[var(--nts-accent)]/5 px-3 py-2">
               <p className="text-xs font-medium text-[#1A1A1A]">
                 Σύνολο <span className="text-[var(--nts-accent)]">{totalMatched.toLocaleString('el-GR')}</span> SKU
                 ταιριάζουν με τα κριτήρια.
+                {excludedCategories.length > 0 && (
+                  <span className="text-[10px] text-[#6B7280] font-normal ml-1">
+                    (εξαιρούνται {excludedCategories.length} κατηγορίες)
+                  </span>
+                )}
               </p>
               <p className="text-[10px] text-[#6B7280] mt-1">
                 Στην επόμενη οθόνη επιλέγετε διάρκεια· η στρατηγική ισχύει για όλα αυτά τα SKU (όχι επιλογή ανά
