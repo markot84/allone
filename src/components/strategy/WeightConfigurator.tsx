@@ -59,6 +59,7 @@ import {
   productInPriceBenchmarkScopeWithLookup,
 } from '../../utils/priceBenchmarkStrategy';
 import { usePriceBenchmarks } from '../../hooks/usePriceBenchmarks';
+import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import { getStockAgeDays } from '../../utils/productUtils';
 import { rankSegments, type ScoredSegment } from '../../utils/segmentRelevance';
 import { safeBrandName } from '../../services/reportExport';
@@ -241,6 +242,7 @@ const PreviewCell = memo(function PreviewCell({
 export function WeightConfigurator() {
   const { currentBrand } = useBrand();
   const { products, hasImported } = useProductSource();
+  const { skuStats } = useEcommerceSummary();
   const { segments: rfmSegments } = useSegments();
   const { user } = useAuth();
   const { activeStrategy, saveActiveStrategy, isLoading: strategyLoading } = useActiveStrategy();
@@ -248,6 +250,26 @@ export function WeightConfigurator() {
   const toast = useToast();
 
   const benchmarkLookupMap = useMemo(() => buildBenchmarkLookup(benchmarks), [benchmarks]);
+
+  const salesBaseProducts = useMemo(() => {
+    return products.map((p) => {
+      const key = (p.sku || '').trim().toLowerCase();
+      if (!key) return p;
+      const stats = skuStats?.[key];
+      if (!stats) return p;
+      return {
+        ...p,
+        ...(p.qty_sold_last_90d == null ? { qty_sold_last_90d: Math.max(0, Math.round(stats.sold || 0)) } : {}),
+        ...(p.stock_level == null ? { stock_level: Math.max(0, Math.round(stats.stock || 0)) } : {}),
+      };
+    });
+  }, [products, skuStats]);
+
+  const salesBaseProductById = useMemo(() => {
+    const map = new Map<string, Product>();
+    for (const p of salesBaseProducts) map.set(p.id, p);
+    return map;
+  }, [salesBaseProducts]);
 
   const benchmarkLookup = useCallback(
     (p: Product) => findBenchmarkForProductInLookup(p, benchmarkLookupMap),
@@ -779,7 +801,7 @@ export function WeightConfigurator() {
 
     let source = products;
     if (strategyId === 'sales_base') {
-      source = filterProductsBySalesBaseScope(products, salesBaseScopeForPreview);
+      source = filterProductsBySalesBaseScope(salesBaseProducts, salesBaseScopeForPreview);
     }
     if (strategyId === 'price_benchmark') {
       source = filterProductsByPriceBenchmarkScope(products, priceBenchmarkScopeForPreview, benchmarks);
@@ -809,6 +831,7 @@ export function WeightConfigurator() {
     return scored.slice(0, 100);
   }, [
     products,
+    salesBaseProducts,
     debouncedWeights,
     selectedScenario,
     pendingScenarioChange,
@@ -856,7 +879,7 @@ export function WeightConfigurator() {
 
     let source = products;
     if (strategyId === 'sales_base') {
-      source = filterProductsBySalesBaseScope(products, salesBaseScopeForPreview);
+      source = filterProductsBySalesBaseScope(salesBaseProducts, salesBaseScopeForPreview);
     }
     if (strategyId === 'price_benchmark') {
       source = filterProductsByPriceBenchmarkScope(products, priceBenchmarkScopeForPreview, benchmarks);
@@ -880,6 +903,7 @@ export function WeightConfigurator() {
       .sort((a, b) => (b.composite_score || 0) - (a.composite_score || 0));
   }, [
     products,
+    salesBaseProducts,
     debouncedWeights,
     selectedScenario,
     pendingScenarioChange,
@@ -1182,7 +1206,7 @@ export function WeightConfigurator() {
             initialDuration={scenarios.find(s => s.id === pendingScenarioChange)?.duration ?? duration}
             impactProductFilter={
               pendingScenarioChange === 'sales_base' && pendingSalesBaseScope
-                ? (p) => productParticipatesInSalesBase(p, pendingSalesBaseScope)
+                ? (p) => productParticipatesInSalesBase(salesBaseProductById.get(p.id) ?? p, pendingSalesBaseScope)
                 : pendingScenarioChange === 'price_benchmark' && pendingPriceBenchmarkScope
                   ? (p) =>
                       productInPriceBenchmarkScopeWithLookup(
@@ -1566,7 +1590,7 @@ export function WeightConfigurator() {
           newDuration={scenarios.find(s => s.id === pendingScenarioChange)?.duration ?? 'ongoing'}
           impactProductFilter={
             pendingScenarioChange === 'sales_base' && pendingSalesBaseScope
-              ? (p) => productParticipatesInSalesBase(p, pendingSalesBaseScope)
+              ? (p) => productParticipatesInSalesBase(salesBaseProductById.get(p.id) ?? p, pendingSalesBaseScope)
               : pendingScenarioChange === 'price_benchmark' && pendingPriceBenchmarkScope
                 ? (p) =>
                     productInPriceBenchmarkScopeWithLookup(
@@ -1585,7 +1609,7 @@ export function WeightConfigurator() {
       <SalesBaseSetupModal
         isOpen={salesBaseSetupOpen}
         onClose={() => setSalesBaseSetupOpen(false)}
-        products={products}
+        products={salesBaseProducts}
         initialScope={
           activeStrategy?.scenarioId === 'sales_base'
             ? (activeStrategy as { salesBaseScope?: SalesBaseScope }).salesBaseScope

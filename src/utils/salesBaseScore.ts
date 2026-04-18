@@ -29,6 +29,32 @@ function hasZeroSalesInWindow(
   return lastDays > days;
 }
 
+function hasZeroSalesByAvailableWindows(product: Product, days: 7 | 30 | 90): boolean {
+  const q7 = product.qty_sold_last_7d;
+  const q30 = product.qty_sold_last_30d ?? product.qty_sold_period;
+  const q90 = product.qty_sold_last_90d;
+  const life = product.qty_sold_lifetime;
+  const lastSaleAt = product.last_sale_at;
+
+  if (typeof life === 'number' && life === 0) return true;
+
+  if (days === 7) {
+    if (typeof q7 === 'number') return q7 === 0;
+    if (typeof q30 === 'number') return q30 === 0;
+    if (typeof q90 === 'number') return q90 === 0;
+    return hasZeroSalesInWindow(undefined, lastSaleAt, 7);
+  }
+
+  if (days === 30) {
+    if (typeof q30 === 'number') return q30 === 0;
+    if (typeof q90 === 'number') return q90 === 0;
+    return hasZeroSalesInWindow(undefined, lastSaleAt, 30);
+  }
+
+  if (typeof q90 === 'number') return q90 === 0;
+  return hasZeroSalesInWindow(undefined, lastSaleAt, 90);
+}
+
 /**
  * Εμπορική προτεραιότητα 0–100 για το σενάριο Sales Optimization (υψηλό = χρειάζεται έμφαση).
  *
@@ -105,12 +131,12 @@ export const SALES_BASE_PRESET_OPTIONS: {
   {
     id: 'zero_last_7d',
     label: '0 πωλήσεις (7 ημέρες)',
-    hint: 'Στήλη 7ημ. = 0, ή fallback από last sale όταν δεν υπάρχουν 7/30/90 πεδία.',
+    hint: 'Στήλη 7ημ. = 0, αλλιώς fallback από 30/90ημ.=0 ή last sale όταν λείπουν window πεδία.',
   },
   {
     id: 'zero_last_30d',
     label: '0 πωλήσεις (~30 ημέρες)',
-    hint: 'Qty 30ημ. / Qty_Sold_Period = 0, ή fallback από last sale όταν λείπουν window πεδία.',
+    hint: 'Qty 30ημ. / Qty_Sold_Period = 0, αλλιώς fallback από 90ημ.=0 ή last sale όταν λείπουν window πεδία.',
   },
   {
     id: 'zero_last_90d',
@@ -158,10 +184,8 @@ export function productMatchesSalesBaseTextFilters(
 export function productMatchesSalesBasePreset(product: Product, preset: SalesBasePresetId): boolean {
   const stock = product.stock_level ?? 0;
   const q7 = product.qty_sold_last_7d;
-  const q30 = product.qty_sold_last_30d ?? product.qty_sold_period;
   const q90 = product.qty_sold_last_90d;
   const life = product.qty_sold_lifetime;
-  const lastSaleAt = product.last_sale_at;
 
   switch (preset) {
     case 'all':
@@ -169,16 +193,16 @@ export function productMatchesSalesBasePreset(product: Product, preset: SalesBas
     case 'never_sold':
       return typeof life === 'number' && life === 0;
     case 'zero_last_7d':
-      return hasZeroSalesInWindow(q7, lastSaleAt, 7) && stock > 0;
+      return hasZeroSalesByAvailableWindows(product, 7) && stock > 0;
     case 'zero_last_30d':
-      return hasZeroSalesInWindow(q30, lastSaleAt, 30) && stock > 0;
+      return hasZeroSalesByAvailableWindows(product, 30) && stock > 0;
     case 'zero_last_90d':
-      return hasZeroSalesInWindow(q90, lastSaleAt, 90) && stock > 0;
+      return hasZeroSalesByAvailableWindows(product, 90) && stock > 0;
     case 'stalled_7_vs_90':
       if (typeof q7 === 'number' && q7 === 0 && typeof q90 === 'number' && q90 > 0) {
         return stock > 0;
       }
-      return hasZeroSalesInWindow(q7, lastSaleAt, 7) && hasHistoricalSalesEvidence(product) && stock > 0;
+      return hasZeroSalesByAvailableWindows(product, 7) && hasHistoricalSalesEvidence(product) && stock > 0;
     case 'cold_last_sale_30d': {
       const d = daysSince(product.last_sale_at);
       return d !== null && d > 30 && stock > 0;

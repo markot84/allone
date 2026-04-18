@@ -3,6 +3,7 @@ import type { Campaign } from '../../types';
 import { Card, CardHeader, Tooltip } from '../common';
 import { Search, Globe, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import { buildGeoMekkoColumns, resolveCountryToIso2 } from './campaignGeoMapUtils';
+import type { GeoChartMetric } from './campaignGeoMapUtils';
 import { CampaignsGeoMekko } from './CampaignsGeoMekko';
 
 type GeoMetrics = {
@@ -77,6 +78,7 @@ export function CampaignsGeoTab({ campaigns }: Props) {
   const [sortCol, setSortCol] = useState<SortCol>('amount_spent');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [showAllRows, setShowAllRows] = useState(false);
+  const [chartMetric, setChartMetric] = useState<GeoChartMetric>('amount_spent');
 
   useEffect(() => {
     setSortCol('amount_spent');
@@ -219,12 +221,12 @@ export function CampaignsGeoTab({ campaigns }: Props) {
   }, [campaigns, search, sortCol, sortDir, level]);
 
   const mekkoColumns = useMemo(() => {
-    const all = buildGeoMekkoColumns(campaigns, level);
+    const all = buildGeoMekkoColumns(campaigns, level, { metric: chartMetric });
     const q = search.trim();
     if (!q) return all;
     const keys = new Set(rows.map((r) => (r.kind === 'country' ? r.country : r.key)));
     return all.filter((c) => keys.has(c.id));
-  }, [campaigns, level, search, rows]);
+  }, [campaigns, chartMetric, level, search, rows]);
 
   const totals = useMemo(() => {
     return rows.reduce(
@@ -335,7 +337,7 @@ export function CampaignsGeoTab({ campaigns }: Props) {
         </div>
       ) : (
       <>
-      <CampaignsGeoMekko columns={mekkoColumns} level={level} />
+      <CampaignsGeoMekko columns={mekkoColumns} level={level} metric={chartMetric} onMetricChange={setChartMetric} />
       <div className="overflow-x-auto max-h-[min(78vh,920px)] overflow-y-auto">
         <table className="w-full text-left text-sm">
           <thead className="sticky top-0 bg-[#F9FAFB] z-10 text-xs text-[#6B7280] uppercase tracking-wider">
@@ -361,8 +363,8 @@ export function CampaignsGeoTab({ campaigns }: Props) {
                     <SortIcon col="locality" />
                     </span>
                     <span className="inline-flex items-center gap-1 text-[10px] font-medium tracking-normal normal-case text-[#6B7280]">
-                      <span className="rounded bg-[#E8F5E9] px-1.5 py-0.5 text-[#2E7D32]">Google: city</span>
-                      <span className="rounded bg-[#E3F2FD] px-1.5 py-0.5 text-[#1565C0]">Meta: region</span>
+                      <span className="rounded bg-[#FFEDD5] px-1.5 py-0.5 text-[#F97316]">Google: city</span>
+                      <span className="rounded bg-[#DBEAFE] px-1.5 py-0.5 text-[#3B82F6]">Meta: region</span>
                     </span>
                   </div>
                 </th>

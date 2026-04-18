@@ -19,14 +19,20 @@ export function resolveCountryToIso2(raw: string): string | undefined {
 
 /** Κανάλι για χρωματική στοίβαση στο Mekko (συμβατό με Campaign.channel). */
 export type GeoMekkoChannel = 'Google Ads' | 'Meta' | 'Other';
+export type GeoChartMetric =
+  | 'amount_spent'
+  | 'impressions'
+  | 'clicks'
+  | 'conversions'
+  | 'conversion_value';
 
-export type GeoMekkoSegment = { channel: GeoMekkoChannel; spend: number };
+export type GeoMekkoSegment = { channel: GeoMekkoChannel; value: number };
 
 export type GeoMekkoColumn = {
   id: string;
   label: string;
   subtitle?: string;
-  totalSpend: number;
+  totalValue: number;
   segments: GeoMekkoSegment[];
 };
 
@@ -43,24 +49,45 @@ function parseCityGeoKey(raw: string): { country: string; locality: string } {
 function normalizeCampaignChannel(c: Campaign): GeoMekkoChannel {
   const ch = String(c.channel || '').trim().toLowerCase();
   if (
-    ch === 'google ads' ||
-    ch === 'google shopping' ||
-    ch === 'shopping' ||
-    ch.startsWith('google ')
-  ) {
-    return 'Google Ads';
-  }
-  if (
-    ch === 'meta' ||
-    ch === 'facebook' ||
-    ch === 'instagram' ||
-    ch.startsWith('meta ') ||
-    ch.startsWith('facebook ') ||
-    ch.startsWith('instagram ')
+    ch.includes('meta') ||
+    ch.includes('facebook') ||
+    ch.includes('instagram') ||
+    ch === 'fb' ||
+    ch === 'ig'
   ) {
     return 'Meta';
   }
+  if (
+    ch === 'google ads' ||
+    ch === 'googleads' ||
+    ch === 'google shopping' ||
+    ch === 'shopping' ||
+    ch.includes('google') ||
+    ch.includes('gads') ||
+    ch.includes('shopping') ||
+    ch.includes('search') ||
+    ch.includes('display') ||
+    ch.includes('youtube') ||
+    ch.includes('demand gen') ||
+    ch.includes('performance max') ||
+    ch.includes('pmax')
+  ) {
+    return 'Google Ads';
+  }
   return 'Other';
+}
+
+function getMetricValue(
+  metrics: {
+    impressions: number;
+    clicks: number;
+    conversions: number;
+    conversion_value: number;
+    amount_spent: number;
+  },
+  metric: GeoChartMetric,
+): number {
+  return metrics[metric] || 0;
 }
 
 function formatGeoLabel(raw: string): string {
@@ -77,9 +104,10 @@ function formatGeoLabel(raw: string): string {
 export function buildGeoMekkoColumns(
   campaigns: Campaign[],
   level: 'country' | 'city',
-  opts?: { maxColumns?: number },
+  opts?: { maxColumns?: number; metric?: GeoChartMetric },
 ): GeoMekkoColumn[] {
   const maxColumns = opts?.maxColumns ?? 10;
+  const metric = opts?.metric ?? 'amount_spent';
   type Bucket = {
     label: string;
     subtitle?: string;
@@ -89,11 +117,11 @@ export function buildGeoMekkoColumns(
   };
   const acc = new Map<string, Bucket>();
 
-  const addSpend = (id: string, init: Bucket, channel: GeoMekkoChannel, spend: number) => {
+  const addValue = (id: string, init: Bucket, channel: GeoMekkoChannel, value: number) => {
     const b = acc.get(id) ?? { ...init };
-    if (channel === 'Google Ads') b.google += spend;
-    else if (channel === 'Meta') b.meta += spend;
-    else b.other += spend;
+    if (channel === 'Google Ads') b.google += value;
+    else if (channel === 'Meta') b.meta += value;
+    else b.other += value;
     acc.set(id, b);
   };
 
@@ -104,24 +132,24 @@ export function buildGeoMekkoColumns(
       if (!by) continue;
       for (const [country, m] of Object.entries(by)) {
         const id = country || 'UNKNOWN';
-        const spend = m.amount_spent || 0;
-        if (spend <= 0) continue;
+        const value = getMetricValue(m, metric);
+        if (value <= 0) continue;
         const label = formatGeoLabel(id);
-        addSpend(id, { label, google: 0, meta: 0, other: 0 }, channel, spend);
+        addValue(id, { label, google: 0, meta: 0, other: 0 }, channel, value);
       }
     } else {
       const by = c.geo?.byCity;
       if (!by) continue;
       for (const [locKey, m] of Object.entries(by)) {
-        const spend = m.amount_spent || 0;
-        if (spend <= 0) continue;
+        const value = getMetricValue(m, metric);
+        if (value <= 0) continue;
         const { country, locality } = parseCityGeoKey(locKey);
         const subtitle = formatGeoLabel(country);
-        addSpend(
+        addValue(
           locKey,
           { label: locality || '—', subtitle, google: 0, meta: 0, other: 0 },
           channel,
-          spend,
+          value,
         );
       }
     }
@@ -130,38 +158,38 @@ export function buildGeoMekkoColumns(
   const order: GeoMekkoChannel[] = ['Google Ads', 'Meta', 'Other'];
   const cols: GeoMekkoColumn[] = [];
   for (const [id, b] of acc.entries()) {
-    const totalSpend = b.google + b.meta + b.other;
-    if (totalSpend <= 0) continue;
+    const totalValue = b.google + b.meta + b.other;
+    if (totalValue <= 0) continue;
     const segments: GeoMekkoSegment[] = order.map((channel) => ({
       channel,
-      spend:
+      value:
         channel === 'Google Ads' ? b.google : channel === 'Meta' ? b.meta : b.other,
     }));
     cols.push({
       id,
       label: b.label,
       subtitle: b.subtitle,
-      totalSpend,
+      totalValue,
       segments,
     });
   }
 
-  cols.sort((a, b) => b.totalSpend - a.totalSpend);
+  cols.sort((a, b) => b.totalValue - a.totalValue);
 
   if (cols.length <= maxColumns) return cols;
 
   const visibleCount = Math.max(1, maxColumns - 1);
   const head = cols.slice(0, visibleCount);
   const tail = cols.slice(visibleCount);
-  const restTotalSpend = tail.reduce((sum, c) => sum + c.totalSpend, 0);
-  if (restTotalSpend <= 0) return head;
+  const restTotalValue = tail.reduce((sum, c) => sum + c.totalValue, 0);
+  if (restTotalValue <= 0) return head;
 
   const restByChannel = tail.reduce(
     (acc, c) => {
       for (const seg of c.segments) {
-        if (seg.channel === 'Google Ads') acc.google += seg.spend;
-        else if (seg.channel === 'Meta') acc.meta += seg.spend;
-        else acc.other += seg.spend;
+        if (seg.channel === 'Google Ads') acc.google += seg.value;
+        else if (seg.channel === 'Meta') acc.meta += seg.value;
+        else acc.other += seg.value;
       }
       return acc;
     },
@@ -172,11 +200,11 @@ export function buildGeoMekkoColumns(
     id: '__other_geo__',
     label: 'Λοιπά',
     subtitle: `${tail.length} ${level === 'country' ? 'χώρες' : 'τοποθεσίες'}`,
-    totalSpend: restTotalSpend,
+    totalValue: restTotalValue,
     segments: [
-      { channel: 'Google Ads', spend: restByChannel.google },
-      { channel: 'Meta', spend: restByChannel.meta },
-      { channel: 'Other', spend: restByChannel.other },
+      { channel: 'Google Ads', value: restByChannel.google },
+      { channel: 'Meta', value: restByChannel.meta },
+      { channel: 'Other', value: restByChannel.other },
     ],
   });
 
