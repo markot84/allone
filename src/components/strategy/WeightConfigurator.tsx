@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { Card, CardHeader, Button, Slider, Badge, Spinner, PageHeader, ModalHeader } from '../common';
 import { ScenarioSelector } from './ScenarioSelector';
+import { TriageCard } from './TriageCard';
 import { ChannelRecommendations } from './ChannelRecommendations';
 import { StrategyPackage } from './StrategyPackage';
 import { StrategyImpactSummary, StrategyImpactModal } from './StrategyImpactPreview';
@@ -1272,6 +1273,11 @@ export function WeightConfigurator() {
               mixConfig={mixConfig}
             />
           )}
+
+          {/* Decision Buckets — triage layer πάνω από τις πολιτικές */}
+          <TriageCard
+            onSelectPolicy={(policy) => handleScenarioChange(policy)}
+          />
 
           {/* Scenario Selector (tabs) */}
           <ScenarioSelector

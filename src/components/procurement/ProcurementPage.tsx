@@ -11,6 +11,7 @@ import {
 } from 'recharts';
 import { Card, Spinner, Button, useToast, PageHeader } from '../common';
 import { useProcurement } from '../../hooks/useProcurement';
+import { useRefreshProcurementSignals } from '../../hooks/useProcurementSignals';
 import { useBrand } from '../../hooks/useBrand';
 import { ProcurementService } from '../../services/firestore';
 import { seedProcurementDemoData } from '../../services/procurementDemoData';
@@ -623,6 +624,7 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
   const toast = useToast();
   const { currentBrand } = useBrand();
   const { data, isLoading, isRefreshing, hasData, invalidate } = useProcurement();
+  const { refresh: refreshProcurementSignals } = useRefreshProcurementSignals();
   const [viewMode, setViewMode] = useState<'overview' | 'detail'>('overview');
   const [activeTab, setActiveTab] = useState<ProcurementSheetType>('inventory');
   const [isSeeding, setIsSeeding] = useState(false);
@@ -636,6 +638,7 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
         (coll, items, bid) => ProcurementService.batchSet(coll, items, bid ?? undefined),
       );
       await invalidate();
+      refreshProcurementSignals().catch(() => {});
       toast.success(`Φορτώθηκαν ${count} ενδεικτικές εγγραφές.`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Σφάλμα κατά τη φόρτωση');

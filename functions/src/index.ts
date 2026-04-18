@@ -79,6 +79,10 @@ import {
   setDb as setStockMovementDb,
 } from './stockMovementTracker';
 import {
+  refreshProcurementSignals,
+  setDb as setProcurementSignalsDb,
+} from './procurementSignals';
+import {
   getGA4AuthUrl,
   handleGA4Callback,
   fetchGA4Data,
@@ -108,6 +112,7 @@ setOpenCartDb(db);
 setMagentoDb(db);
 setEcommerceAggDb(db);
 setStockMovementDb(db);
+setProcurementSignalsDb(db);
 setGA4Db(db);
 setTikTokDb(db);
 
@@ -1676,6 +1681,12 @@ export const refreshAggregates = onRequest(
       } catch (e) {
         logger.warn('[refreshAggregates] stock movement refresh failed (non-fatal):', e);
       }
+      // Procurement signals: re-aggregate (status, tied capital, margin, lifetime κλπ)
+      try {
+        await refreshProcurementSignals(brandId);
+      } catch (e) {
+        logger.warn('[refreshAggregates] procurement signals refresh failed (non-fatal):', e);
+      }
       res.status(200).json({ success: true, brandId });
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
@@ -1719,6 +1730,44 @@ export const captureStock = onRequest(
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       logger.error('[captureStock]', msg);
+      res.status(500).json({ error: msg });
+    }
+  }
+);
+
+// ── Procurement Signals: Manual Refresh (after upload) ─────────────────────
+
+/**
+ * POST /refreshSignals
+ * Body: { brandId }
+ * Re-aggregates procurement_inventory + pricing_policy + fiscal_year + item_evaluation
+ * σε procurement_signals/{brandId}.skuSignalsJson. Καλείται μετά από procurement upload.
+ */
+export const refreshSignals = onRequest(
+  { region: 'europe-west1', cors: true, timeoutSeconds: 120, memory: '512MiB' },
+  async (req, res) => {
+    if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+
+    try {
+      const idToken = authHeader.slice(7).trim();
+      const decoded = await admin.auth().verifyIdToken(idToken);
+
+      const { brandId } = req.body as { brandId?: string };
+      if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
+
+      if (!(await verifyBrandMembership(decoded.uid, brandId))) {
+        res.status(403).json({ error: 'Not a member of this brand' });
+        return;
+      }
+
+      const result = await refreshProcurementSignals(brandId);
+      res.status(200).json({ success: true, brandId, ...result });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      logger.error('[refreshSignals]', msg);
       res.status(500).json({ error: msg });
     }
   }
