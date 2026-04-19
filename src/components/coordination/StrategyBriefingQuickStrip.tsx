@@ -35,8 +35,8 @@ export function StrategyBriefingQuickStrip({
             </p>
             <p className="text-xs text-[var(--nts-medium-gray)] mt-0.5">
               {hasActiveStrategy
-                ? 'Ίδια ροή με την Εμπορική Στρατηγική — briefing, templates και παραλήπτες.'
-                : 'Χωρίς ενεργό σενάριο στο Dashboard — στείλτε γενικό briefing και προσαρμόστε τον τίτλο στο επόμενο βήμα.'}
+                ? 'Χρησιμοποιεί την ίδια ροή με την Εμπορική Στρατηγική, με briefing, templates και επιλογή παραληπτών.'
+                : 'Δεν υπάρχει ενεργό σενάριο στο Dashboard. Μπορείτε να στείλετε γενικό briefing και να προσαρμόσετε τον τίτλο στο επόμενο βήμα.'}
             </p>
           </div>
         </div>

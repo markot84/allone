@@ -523,6 +523,37 @@ export function WeightConfigurator() {
   // Persists στο active_strategies — επιτρέπει downstream consumers (Channel
   // Activation, AI prompts, exports) να γνωρίζουν την αιτία της στρατηγικής.
   const [triageOrigin, setTriageOrigin] = useState<TriageOrigin | null>(null);
+  const triageScopedProductIds = useMemo(() => {
+    if (!triageOrigin) return null;
+    if (triageOrigin.productIds && triageOrigin.productIds.length > 0) {
+      return new Set(triageOrigin.productIds);
+    }
+    if (triageOrigin.skus && triageOrigin.skus.length > 0) {
+      const skuSet = new Set(triageOrigin.skus.map((sku) => sku.trim().toLowerCase()).filter(Boolean));
+      const matchedIds = products
+        .filter((product) => skuSet.has((product.sku || '').trim().toLowerCase()))
+        .map((product) => product.id);
+      return matchedIds.length > 0 ? new Set(matchedIds) : null;
+    }
+    return null;
+  }, [triageOrigin, products]);
+  const filterProductsByTriageScope = useCallback(
+    (source: Product[]): Product[] => {
+      if (!triageScopedProductIds || triageScopedProductIds.size === 0) return source;
+      const filtered = source.filter((product) => triageScopedProductIds.has(product.id));
+      return filtered.length > 0 ? filtered : source;
+    },
+    [triageScopedProductIds]
+  );
+  const buildImpactProductFilter = useCallback(
+    (baseFilter?: (p: Product) => boolean) =>
+      (product: Product) => {
+        const inTriageScope = !triageScopedProductIds || triageScopedProductIds.has(product.id);
+        return inTriageScope && (baseFilter ? baseFilter(product) : true);
+      },
+    [triageScopedProductIds]
+  );
+  const triageScopeCount = triageScopedProductIds?.size ?? 0;
 
   // Memoized AI prompt contexts — αναγεννώνται μόνο όταν αλλάζει το triage ή
   // η κάλυψη πηγών (όχι σε κάθε render).
@@ -997,6 +1028,7 @@ export function WeightConfigurator() {
     if (strategyId === 'price_benchmark') {
       source = filterProductsByPriceBenchmarkScope(products, priceBenchmarkScopeForPreview, benchmarks);
     }
+    source = filterProductsByTriageScope(source);
 
     const scoreCtx: CompositeScoreContext | undefined =
       strategyId === 'price_benchmark' ? benchmarkScoreContext : undefined;
@@ -1029,6 +1061,7 @@ export function WeightConfigurator() {
     salesBaseScopeForPreview,
     priceBenchmarkScopeForPreview,
     benchmarks,
+    filterProductsByTriageScope,
     benchmarkLookup,
     benchmarkScoreContext,
     getWeightsForScenario,
@@ -1048,6 +1081,7 @@ export function WeightConfigurator() {
     pendingScenarioChange,
     salesBaseScopeForPreview,
     priceBenchmarkScopeForPreview,
+    triageScopeCount,
   ]);
 
   // Full list for export (only calculated when needed)
@@ -1075,6 +1109,7 @@ export function WeightConfigurator() {
     if (strategyId === 'price_benchmark') {
       source = filterProductsByPriceBenchmarkScope(products, priceBenchmarkScopeForPreview, benchmarks);
     }
+    source = filterProductsByTriageScope(source);
 
     const scoreCtx: CompositeScoreContext | undefined =
       strategyId === 'price_benchmark' ? benchmarkScoreContext : undefined;
@@ -1101,6 +1136,7 @@ export function WeightConfigurator() {
     salesBaseScopeForPreview,
     priceBenchmarkScopeForPreview,
     benchmarks,
+    filterProductsByTriageScope,
     benchmarkScoreContext,
     getWeightsForScenario,
   ]);
@@ -1273,6 +1309,7 @@ export function WeightConfigurator() {
         setTriageOrigin({
           ...savedTriage,
           skus: Array.isArray(savedTriage.skus) ? savedTriage.skus : [],
+          productIds: Array.isArray(savedTriage.productIds) ? savedTriage.productIds : undefined,
         });
       } else {
         setTriageOrigin(null);
@@ -1322,9 +1359,36 @@ export function WeightConfigurator() {
                 bucket,
                 label: payload.label,
                 skus: payload.skus,
+                productIds: payload.productIds,
                 tiedCapital: payload.tiedCapital,
                 selectedAt: new Date().toISOString(),
               });
+              if (policy === 'price_benchmark') {
+                setMixPanelOpen(false);
+                setSeasonalPanelOpen(false);
+                startTransition(() => {
+                  setPendingPriceBenchmarkScope({
+                    preset: 'all_benchmarked',
+                    brandFilter: '',
+                    categoryFilter: '',
+                    search: '',
+                    selectedProductIds: payload.productIds.length > 0 ? payload.productIds : null,
+                  });
+                  setPendingScenarioChange('price_benchmark');
+                });
+                return;
+              }
+
+              if (policy === 'seasonal_discount') {
+                setSeasonalDiscountConfig({
+                  periodName: '',
+                  discountPercent: 20,
+                  scope: 'products',
+                  selectedCategories: [],
+                  selectedProductIds: payload.productIds,
+                });
+              }
+
               handleScenarioChange(policy);
             }}
           />
@@ -1337,7 +1401,7 @@ export function WeightConfigurator() {
                 <span className="text-gray-700 truncate">
                   Triage: <strong>{triageOrigin.label}</strong>
                   <span className="text-gray-500 ml-1.5">
-                    · {(triageOrigin.skus?.length ?? 0)} SKUs επιλεγμένα
+                    · {(triageOrigin.productIds?.length ?? triageOrigin.skus?.length ?? 0)} προϊόντα στο scope
                     {typeof triageOrigin.tiedCapital === 'number' && triageOrigin.tiedCapital > 0
                       ? ` · ${Math.round(triageOrigin.tiedCapital).toLocaleString('el-GR')}€ κεφάλαια`
                       : ''}
@@ -1452,7 +1516,7 @@ export function WeightConfigurator() {
             }}
             onDetails={() => setShowDetailModal(true)}
             initialDuration={scenarios.find(s => s.id === pendingScenarioChange)?.duration ?? duration}
-            impactProductFilter={
+            impactProductFilter={buildImpactProductFilter(
               pendingScenarioChange === 'sales_base' && pendingSalesBaseScope
                 ? (p) => productParticipatesInSalesBase(salesBaseProductById.get(p.id) ?? p, pendingSalesBaseScope)
                 : pendingScenarioChange === 'price_benchmark' && pendingPriceBenchmarkScope
@@ -1463,7 +1527,7 @@ export function WeightConfigurator() {
                         benchmarkLookupMap,
                       )
                   : undefined
-            }
+            )}
             scoreContext={
               pendingScenarioChange === 'price_benchmark' ? benchmarkScoreContext : undefined
             }
@@ -1589,7 +1653,11 @@ export function WeightConfigurator() {
           <CardHeader
             title="Live Preview"
             subtitle={
-              hasImported ? `Top 100 από ${products.length} εισαγόμενα προϊόντα (10 ανά σελίδα)` : 'Top 100 Προτεραιοποιημένα Προϊόντα (10 ανά σελίδα)'
+              triageScopeCount > 0
+                ? `Scope triage: ${triageScopeCount} προϊόντα · προβολή top 100 (10 ανά σελίδα)`
+                : hasImported
+                  ? `Top 100 από ${products.length} εισαγόμενα προϊόντα (10 ανά σελίδα)`
+                  : 'Top 100 προτεραιοποιημένα προϊόντα (10 ανά σελίδα)'
             }
             icon={<Sparkles size={18} className="text-[var(--nts-medium-gray)]" />}
           />
@@ -1836,7 +1904,7 @@ export function WeightConfigurator() {
           newScenarioId={pendingScenarioChange}
           currentDuration={duration}
           newDuration={scenarios.find(s => s.id === pendingScenarioChange)?.duration ?? 'ongoing'}
-          impactProductFilter={
+          impactProductFilter={buildImpactProductFilter(
             pendingScenarioChange === 'sales_base' && pendingSalesBaseScope
               ? (p) => productParticipatesInSalesBase(salesBaseProductById.get(p.id) ?? p, pendingSalesBaseScope)
               : pendingScenarioChange === 'price_benchmark' && pendingPriceBenchmarkScope
@@ -1847,7 +1915,7 @@ export function WeightConfigurator() {
                       benchmarkLookupMap,
                     )
                 : undefined
-          }
+          )}
           scoreContext={
             pendingScenarioChange === 'price_benchmark' ? benchmarkScoreContext : undefined
           }

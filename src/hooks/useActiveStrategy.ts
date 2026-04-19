@@ -55,8 +55,10 @@ export interface TriageOrigin {
   bucket: string;
   /** Ανθρώπινο label (π.χ. «Νεκρά κεφάλαια»). */
   label: string;
-  /** Λίστα SKUs που σκοπεύονται από το bucket (capped — βλ. topByBucket). */
+  /** Λίστα SKUs που σκοπεύονται από το bucket. */
   skus: string[];
+  /** Προαιρετική allowlist product ids για UI filtering / strategy scopes. */
+  productIds?: string[];
   /** Συνολικά δεσμευμένα κεφάλαια (€) — KPI για context. */
   tiedCapital?: number;
   /** ISO timestamp όταν επιλέχθηκε το bucket. */

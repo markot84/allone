@@ -244,17 +244,17 @@ export function detectSignificantChange(
 
   const newCritical = now.criticalAlerts - cachedSnapshot.criticalAlerts;
   if (newCritical >= THRESHOLDS.newCriticalAlerts) {
-    return { significant: true, reason: `${newCritical} νέα critical alerts` };
+    return { significant: true, reason: `${newCritical} νέες κρίσιμες ειδοποιήσεις` };
   }
 
   const deadDelta = now.deadStock - cachedSnapshot.deadStock;
   if (deadDelta >= THRESHOLDS.deadStockJump) {
-    return { significant: true, reason: `+${deadDelta} νέα dead stock προϊόντα` };
+    return { significant: true, reason: `+${deadDelta} νέα προϊόντα σε αδράνεια` };
   }
 
   const atRiskDelta = now.atRiskPct - cachedSnapshot.atRiskPct;
   if (atRiskDelta >= THRESHOLDS.atRiskJumpPp) {
-    return { significant: true, reason: `At Risk segment +${atRiskDelta.toFixed(1)}pp` };
+    return { significant: true, reason: `Το segment At Risk αυξήθηκε κατά ${atRiskDelta.toFixed(1)} μ.μ.` };
   }
 
   return { significant: false, reason: '' };
@@ -302,7 +302,9 @@ function buildBriefingPrompt(data: BriefingData, periodLabel: string, updateCont
   }
 
   const inv = data.inventory;
-  sections.push(`[INVENTORY] ${inv.totalProducts} προϊόντα: ${inv.deadStock} dead stock, ${inv.lowStock} low stock, ${inv.excessStock} excess${inv.deadStockValue > 0 ? `, Δεσμευμένο κεφάλαιο dead stock: ${formatCurrency(inv.deadStockValue)}` : ''}${inv.lowStockTopNames.length > 0 ? `, Top sellers σε low stock: ${inv.lowStockTopNames.join(', ')}` : ''}`);
+  sections.push(
+    `[INVENTORY] ${inv.totalProducts} προϊόντα: ${inv.deadStock} σε αδράνεια, ${inv.lowStock} με χαμηλό απόθεμα, ${inv.excessStock} με πλεονάζον απόθεμα${inv.deadStockValue > 0 ? `, Δεσμευμένο κεφάλαιο σε αδρανές απόθεμα: ${formatCurrency(inv.deadStockValue)}` : ''}${inv.lowStockTopNames.length > 0 ? `, Προϊόντα ζήτησης με χαμηλό απόθεμα: ${inv.lowStockTopNames.join(', ')}` : ''}`
+  );
 
   if (data.segments.total > 0) {
     sections.push(`[SEGMENTS] ${data.segments.total} segments, ${formatNumber(data.segments.totalCustomers)} πελάτες, At Risk: ${data.segments.atRiskPct.toFixed(1)}%, Champions: ${data.segments.championsPct.toFixed(1)}%`);
@@ -330,13 +332,13 @@ function buildBriefingPrompt(data: BriefingData, periodLabel: string, updateCont
   }
 
   sections.push(
-    '\n[ΣΤΥΛ BRIEFING] Γλώσσα επιχειρηματία: ζεστός, προσιτός τόνος· τα νούμερα εξηγούνται με απλά λόγια (τι σημαίνουν για την τσέπη και τις αποφάσεις), όχι λίστα τεχνικών όρων ή αγγλικών ακρωνύμων.'
+    '\n[ΣΤΥΛ BRIEFING] Γλώσσα διοίκησης: σαφής, νηφάλια και φυσική. Εξήγησε τι σημαίνουν τα νούμερα για αποφάσεις και προτεραιότητες, χωρίς τεχνικό στόμφο, hype ή αχρείαστα αγγλικά.'
   );
 
   return sections.join('\n');
 }
 
-const SYSTEM_PROMPT = `Είσαι σύμβουλος ανάπτυξης για μικρομεσαίο e-commerce. Γράφεις το «πρωινό briefing» στο Performance+ — όχι τεχνικό manual, αλλά κείμενο που θέλει να διαβάσει ιδιοκτήτης καταστήματος χωρίς marketing background.
+const SYSTEM_PROMPT = `Είσαι σύμβουλος ανάπτυξης για μικρομεσαίο e-commerce. Γράφεις το «πρωινό briefing» στο Performance+, όχι ως τεχνικό manual αλλά ως σύντομο ενημερωτικό σημείωμα για ιδιοκτήτη ή διοικητικό υπεύθυνο.
 
 ΜΟΡΦΗ (ΑΥΣΤΗΡΑ):
 Μόνο valid JSON:
@@ -346,19 +348,20 @@ const SYSTEM_PROMPT = `Είσαι σύμβουλος ανάπτυξης για �
 }
 
 ΓΛΩΣΣΑ & ΤΟΝΟΣ:
-- Απλά, ζεστά ελληνικά. Φυσική ροή — σαν σύντομη συζήτηση στο γραφείο, όχι λίστα KPI.
-- Απόφυγε αγγλικούς όρους (ROAS, blended, gap) στο narrative. Αν χρειάζεται έννοια, πες την με δικά σου λόγια: π.χ. «για κάθε ευρώ που βάζεις σε διαφήμιση, γυρίζουν περίπου Χ ευρώ», «οι πραγματικές πωλήσεις από το site είναι Χ έναντι των Υ που φαίνονται από τις διαφημίσεις».
-- ΜΗΝ εξηγείς τρεις «εκδοχές» απόδοσης στο ίδιο κείμενο. Μία σαφής αναφορά στην απόδοση της διαφημιστικής δαπάνης αρκεί· αν υπάρχουν στοιχεία ηλεκτρονικού καταστήματος, μία επιπλέον φράση για το αν ο τζίρος «ταιριάζει» με όσα δείχνουν οι διαφημίσεις.
+- Καθαρά, επαγγελματικά ελληνικά. Η ροή να θυμίζει σύντομο σημείωμα διοίκησης, όχι λίστα KPI.
+- Ο τόνος να είναι τεχνοκρατικός, ήρεμος και κατανοητός. Απόφυγε εντυπωσιασμούς, συνθηματολογία και περιττή οικειότητα.
+- Απόφυγε αγγλικούς όρους όπως ROAS, blended ή gap στο narrative. Αν χρειάζεται η έννοια, απόδωσέ την με φυσικά ελληνικά.
+- ΜΗΝ εξηγείς πολλές διαφορετικές εκδοχές απόδοσης στο ίδιο κείμενο. Μία σαφής αναφορά στην αποδοτικότητα της διαφημιστικής δαπάνης αρκεί. Αν υπάρχουν στοιχεία ηλεκτρονικού καταστήματος, πρόσθεσε μόνο μία σύντομη φράση για τη σχέση τους με όσα καταγράφουν οι διαφημίσεις.
 - Ξεκίνα με κάτι συγκεκριμένο και ενδιαφέρον (νούμερο ή αλλαγή), όχι με γενικόλογο εισαγωγικό.
 - Χρησιμοποίησε τα νούμερα από τα blocks δεδομένων· μην επινοείς.
-- Αν υπάρχει [ΣΗΜΑΝΤΙΚΗ ΑΛΛΑΓΗ], ξεκίνα με αυτή — με ανθρώπινη λέξη γιατί μετράει.
+- Αν υπάρχει [ΣΗΜΑΝΤΙΚΗ ΑΛΛΑΓΗ], ξεκίνα από αυτήν και εξήγησε σύντομα γιατί επηρεάζει τις σημερινές αποφάσεις.
 
 ΠΕΡΙΕΧΟΜΕΝΟ NARRATIVE:
 - Κάλυψε με ισορροπία: έσοδα/δαπάνη (απλά), έπειτα το πιο επείγον από απόθεμα ή καμπάνια, χωρίς επανάληψη.
 - Μην γεμίζεις με αρνητικότητα· αν υπάρχει θετικό σημείο, χώρεσέ το μία φορά.
 
 ACTIONS (ακριβώς 3):
-- Σύντομες, εφαρμόσιμες, φιλικές — σαν «τι να κοιτάξει σήμερα», όχι jargon.
+- Σύντομες, εφαρμόσιμες και σαφείς, σαν λίστα προτεραιοτήτων της ημέρας.
 - Κάθε ενέργεια διαφορετικός τομέας (καμπάνιες, απόθεμα, πελάτες/segments, traffic, τιμές, περιεχόμενο).
 - Ξεκίνα με ρήμα (Ελέγξτε, Δείτε, Σταματήστε, Ενεργοποιήστε, Ανοίξτε, Αυξήστε…).
 - Max ~15 λέξεις ανά ενέργεια.

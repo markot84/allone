@@ -14,7 +14,7 @@ import { useMemo, useState } from 'react';
 import {
   AlertTriangle, TrendingUp, Zap, Snowflake, XCircle, Package, Sparkles,
   ChevronRight, ChevronDown, HelpCircle, Info, AlertOctagon, TrendingDown,
-  Clock, Boxes, Database, Plug,
+  Clock, Boxes, Database, Plug, X,
 } from 'lucide-react';
 import { useDecisionBuckets } from '../../hooks/useDecisionBuckets';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
@@ -87,17 +87,18 @@ interface TriageCardProps {
   onSelectPolicy?: (
     policy: NonNullable<RecommendedPolicy>,
     fromBucket: BucketId,
-    payload: { skus: string[]; label: string; tiedCapital: number }
+    payload: { skus: string[]; productIds: string[]; label: string; tiedCapital: number }
   ) => void;
 }
 
 export function TriageCard({ onSelectPolicy }: TriageCardProps) {
   const {
     counts, tiedByBucket, totalProducts, isLoading, defs,
-    totalTiedCapital, topByBucket, assignments,
+    totalTiedCapital, assignments,
   } = useDecisionBuckets();
   const [expanded, setExpanded] = useState<BucketId | null>(null);
   const [showSubtitle, setShowSubtitle] = useState(false);
+  const [viewAllBucket, setViewAllBucket] = useState<BucketId | null>(null);
 
   // Data availability — για empty state checklist
   const { connectedPlatforms, skuMovement, stockMovementBaselineDate } = useEcommerceSummary();
@@ -120,6 +121,28 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
       if (a.buckets.includes('new_or_unknown') && a.meta.unknownReason) {
         out[a.meta.unknownReason]++;
       }
+    }
+    return out;
+  }, [assignments]);
+
+  const allByBucket = useMemo(() => {
+    const out = {
+      dead_capital: [] as BucketAssignment[],
+      stockout_risk: [] as BucketAssignment[],
+      hot_seller: [] as BucketAssignment[],
+      margin_bleeder: [] as BucketAssignment[],
+      slow_mover: [] as BucketAssignment[],
+      discontinue: [] as BucketAssignment[],
+      replenish_now: [] as BucketAssignment[],
+      new_or_unknown: [] as BucketAssignment[],
+    };
+    for (const assignment of assignments) {
+      for (const bucket of assignment.buckets) {
+        out[bucket].push(assignment);
+      }
+    }
+    for (const bucket of Object.keys(out) as BucketId[]) {
+      out[bucket].sort((a, b) => b.severity - a.severity);
     }
     return out;
   }, [assignments]);
@@ -230,14 +253,14 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
             value={kpis.criticalCount.toLocaleString('el-GR')}
             tone="rose"
             icon={AlertOctagon}
-            sub="αδρανή κεφάλαια, ελλείψεις, χαμηλό περιθώριο"
+            sub="κωδικοί με αδρανές απόθεμα, κίνδυνο έλλειψης ή ανεπαρκές περιθώριο"
           />
           <KpiTile
             label="Ευκαιρίες"
             value={kpis.opportunityCount.toLocaleString('el-GR')}
             tone="emerald"
             icon={TrendingUp}
-            sub="υψηλή ζήτηση και ανάγκη αναπλήρωσης"
+            sub="κωδικοί υψηλής ζήτησης ή με ανάγκη άμεσης αναπλήρωσης"
           />
           <KpiTile
             label="Κεφάλαια σε ρίσκο"
@@ -251,7 +274,7 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
             value={counts.new_or_unknown.toLocaleString('el-GR')}
             tone="slate"
             icon={HelpCircle}
-            sub="νέα προϊόντα ή ελλιπή στοιχεία"
+            sub="κωδικοί με νέα προϊόντα ή ακόμη ανεπαρκή στοιχεία αξιολόγησης"
           />
         </div>
       </div>
@@ -268,21 +291,25 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
               key={group.id}
               className={`rounded-lg border ${style.border} ${style.bg} p-3.5`}
             >
-              <header className="flex items-start justify-between gap-3 mb-3">
+              <header className="mb-3">
                 <div className="flex items-start gap-2.5 min-w-0">
                   <div className={`shrink-0 mt-0.5 p-1.5 rounded ${style.chip}`}>
                     <GroupIcon size={14} />
                   </div>
                   <div className="min-w-0">
-                    <div className={`text-[13px] font-bold ${style.titleText}`}>{group.label}</div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <div className={`text-[13px] font-bold ${style.titleText}`}>{group.label}</div>
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${style.chip}`}>
+                        {groupCount.toLocaleString('el-GR')} προϊόντα
+                      </span>
+                      {groupTied > 0 && (
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${style.chip}`}>
+                          {fmtEur(groupTied)} δεσμευμένα
+                        </span>
+                      )}
+                    </div>
                     <div className={`text-[11px] mt-0.5 ${style.subtitleText}`}>{group.subtitle}</div>
                   </div>
-                </div>
-                <div className="shrink-0 text-right">
-                  <div className={`text-base font-bold ${style.titleText}`}>{groupCount.toLocaleString('el-GR')}</div>
-                  {groupTied > 0 && (
-                    <div className={`text-[10px] ${style.subtitleText}`}>{fmtEur(groupTied)}</div>
-                  )}
                 </div>
               </header>
 
@@ -344,17 +371,27 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
                 <ExpandedPanel
                   bucket={expanded}
                   defs={defs}
-                  topAssignments={topByBucket[expanded]}
+                  assignments={allByBucket[expanded]}
                   totalCount={counts[expanded]}
                   tiedTotal={tiedByBucket[expanded]}
                   unknownBreakdown={expanded === 'new_or_unknown' ? unknownBreakdown : undefined}
                   onSelectPolicy={onSelectPolicy}
+                  onViewAll={() => setViewAllBucket(expanded)}
                 />
               )}
             </section>
           );
         })}
       </div>
+
+      {viewAllBucket && (
+        <AllBucketProductsModal
+          bucket={viewAllBucket}
+          defs={defs}
+          assignments={allByBucket[viewAllBucket]}
+          onClose={() => setViewAllBucket(null)}
+        />
+      )}
     </div>
   );
 }
@@ -390,23 +427,164 @@ function KpiTile({
   );
 }
 
+function getPolicyName(policy: RecommendedPolicy | null | undefined): string | null {
+  if (!policy) return null;
+  switch (policy) {
+    case 'stock_clearance':
+      return 'Stock Clearance';
+    case 'profit_max':
+      return 'Profit Maximization';
+    case 'seasonal_discount':
+      return 'Εποχιακή / Εκπτωτική';
+    case 'price_benchmark':
+      return 'Price Benchmarking';
+    default:
+      return null;
+  }
+}
+
+function AllBucketProductsModal({
+  bucket,
+  defs,
+  assignments,
+  onClose,
+}: {
+  bucket: BucketId;
+  defs: ReturnType<typeof useDecisionBuckets>['defs'];
+  assignments: BucketAssignment[];
+  onClose: () => void;
+}) {
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 25;
+  const totalPages = Math.max(1, Math.ceil(assignments.length / PAGE_SIZE));
+  const visibleRows = assignments.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const def = defs[bucket];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-6xl rounded-2xl bg-white shadow-2xl overflow-hidden">
+        <div className="flex items-start justify-between gap-3 border-b border-gray-100 px-5 py-4">
+          <div className="min-w-0">
+            <div className="text-base font-bold text-gray-900">{def.label}</div>
+            <div className="mt-1 text-[12px] text-gray-600">
+              Προβάλλονται όλα τα προϊόντα της κατηγορίας, ταξινομημένα κατά προτεραιότητα.
+            </div>
+            <div className="mt-1.5 text-[11px] text-gray-500">
+              {assignments.length.toLocaleString('el-GR')} προϊόντα συνολικά
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="shrink-0 rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+            title="Κλείσιμο"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="max-h-[70vh] overflow-auto">
+          <table className="w-full text-[12px]">
+            <thead className="sticky top-0 bg-gray-50">
+              <tr className="text-[10px] uppercase tracking-wide text-gray-500">
+                <th className="text-left font-semibold px-3 py-2">SKU / Προϊόν</th>
+                <th className="text-right font-semibold px-2 py-2">Stock</th>
+                <th className="text-right font-semibold px-2 py-2">Πωλ. 30η</th>
+                <th className="text-right font-semibold px-2 py-2">Επάρκεια</th>
+                <th className="text-right font-semibold px-2 py-2">Margin</th>
+                <th className="text-right font-semibold px-2 py-2">Κεφάλαια</th>
+                <th className="text-right font-semibold px-3 py-2">Last sale</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {visibleRows.map((a) => (
+                <tr key={`${a.productId}-${a.sku}`} className="hover:bg-gray-50 transition-colors align-top">
+                  <td className="px-3 py-2.5 max-w-[320px]">
+                    <div className="font-mono text-[11px] text-gray-900 truncate">{a.sku}</div>
+                    <div className="text-[11px] text-gray-600 truncate">{a.productName}</div>
+                    {a.reasons[bucket] && (
+                      <div className="mt-1 text-[10px] text-gray-500 italic leading-snug">
+                        {a.reasons[bucket]}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-2 py-2.5 text-right tabular-nums text-gray-700">{fmtNum(a.meta.stock)}</td>
+                  <td className="px-2 py-2.5 text-right tabular-nums text-gray-700">{fmtNum(a.meta.qty30d)}</td>
+                  <td className="px-2 py-2.5 text-right tabular-nums">
+                    {typeof a.meta.daysOfCover === 'number' ? (
+                      <span className={a.meta.daysOfCover < 14 ? 'text-orange-700 font-semibold' : 'text-gray-700'}>
+                        {a.meta.daysOfCover}η
+                      </span>
+                    ) : <span className="text-gray-400">—</span>}
+                  </td>
+                  <td className="px-2 py-2.5 text-right tabular-nums">
+                    {typeof a.meta.marginPct === 'number' ? (
+                      <span className={a.meta.marginPct < 5 ? 'text-rose-700 font-semibold' : a.meta.marginPct >= 20 ? 'text-emerald-700' : 'text-gray-700'}>
+                        {a.meta.marginPct.toFixed(0)}%
+                      </span>
+                    ) : <span className="text-gray-400">—</span>}
+                  </td>
+                  <td className="px-2 py-2.5 text-right tabular-nums font-medium text-gray-900">{fmtEur(a.tiedCapital)}</td>
+                  <td className="px-3 py-2.5 text-right text-[11px] text-gray-500 whitespace-nowrap">
+                    <Clock size={9} className="inline mr-0.5 -mt-0.5" />
+                    {fmtRelative(a.meta.lastSaleAt)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {assignments.length > PAGE_SIZE && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 bg-gray-50 px-5 py-3 text-[11px] text-gray-600">
+            <span>
+              Εμφανίζονται {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, assignments.length)} από {assignments.length.toLocaleString('el-GR')} προϊόντα
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="rounded-md border border-gray-200 bg-white px-2.5 py-1 disabled:opacity-50"
+              >
+                Προηγούμενα
+              </button>
+              <span>Σελίδα {page} από {totalPages}</span>
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+                className="rounded-md border border-gray-200 bg-white px-2.5 py-1 disabled:opacity-50"
+              >
+                Επόμενα
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 interface ExpandedPanelProps {
   bucket: BucketId;
   defs: ReturnType<typeof useDecisionBuckets>['defs'];
-  topAssignments: BucketAssignment[];
+  assignments: BucketAssignment[];
   totalCount: number;
   tiedTotal: number;
   unknownBreakdown?: { new_sku: number; no_signals: number; virtual_sku: number };
   onSelectPolicy?: TriageCardProps['onSelectPolicy'];
+  onViewAll?: () => void;
 }
 
 function ExpandedPanel({
-  bucket, defs, topAssignments, totalCount, tiedTotal,
-  unknownBreakdown, onSelectPolicy,
+  bucket, defs, assignments, totalCount, tiedTotal,
+  unknownBreakdown, onSelectPolicy, onViewAll,
 }: ExpandedPanelProps) {
   const def = defs[bucket];
-  const showCount = Math.min(10, topAssignments.length);
+  const showCount = Math.min(10, assignments.length);
   const remaining = totalCount - showCount;
+  const recommendedPolicyName = getPolicyName(def.recommendedPolicy);
 
   return (
     <div className="mt-3 rounded-lg bg-white border border-gray-200 overflow-hidden">
@@ -420,24 +598,35 @@ function ExpandedPanel({
             <span>Ιεραρχημένα κατά προτεραιότητα, με βάση τη δέσμευση κεφαλαίου ή την ένταση της ζήτησης</span>
           </div>
         </div>
-        {def.recommendedPolicy && onSelectPolicy && (
-          <button
-            onClick={() => {
-              const skus = topAssignments
-                .map((a) => a.sku)
-                .filter((s): s is string => typeof s === 'string' && s.length > 0);
-              onSelectPolicy(
-                def.recommendedPolicy as NonNullable<RecommendedPolicy>,
-                bucket,
-                { skus, label: def.label, tiedCapital: tiedTotal }
-              );
-            }}
-            className="shrink-0 inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-[var(--nts-accent)] text-white text-[11px] font-semibold hover:opacity-90 transition-opacity"
-          >
-            {def.cta}
-            <ChevronRight size={12} />
-          </button>
-        )}
+        <div className="shrink-0 flex flex-col items-end gap-1.5">
+          {recommendedPolicyName && (
+            <div className="text-right">
+              <div className="text-[10px] uppercase tracking-wide text-gray-400">Προτεινόμενη πολιτική</div>
+              <div className="text-[11px] font-semibold text-gray-700">{recommendedPolicyName}</div>
+            </div>
+          )}
+          {def.recommendedPolicy && onSelectPolicy && (
+            <button
+              onClick={() => {
+                const skus = assignments
+                  .map((a) => a.sku)
+                  .filter((s): s is string => typeof s === 'string' && s.length > 0);
+                const productIds = assignments
+                  .map((a) => a.productId)
+                  .filter((id): id is string => typeof id === 'string' && id.length > 0);
+                onSelectPolicy(
+                  def.recommendedPolicy as NonNullable<RecommendedPolicy>,
+                  bucket,
+                  { skus, productIds, label: def.label, tiedCapital: tiedTotal }
+                );
+              }}
+              className="shrink-0 inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-[var(--nts-accent)] text-white text-[11px] font-semibold hover:opacity-90 transition-opacity"
+            >
+              {def.cta}
+              <ChevronRight size={12} />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Special breakdown για new_or_unknown */}
@@ -450,7 +639,7 @@ function ExpandedPanel({
       )}
 
       {/* SKU Table */}
-      {topAssignments.length > 0 ? (
+      {assignments.length > 0 ? (
         <div className="overflow-x-auto">
           <table className="w-full text-[12px]">
             <thead>
@@ -465,7 +654,7 @@ function ExpandedPanel({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {topAssignments.slice(0, 10).map((a) => (
+              {assignments.slice(0, 10).map((a) => (
                 <tr key={a.productId} className="hover:bg-gray-50 transition-colors align-top">
                   <td className="px-3 py-2.5 max-w-[280px]">
                     <div className="font-mono text-[11px] text-gray-900 truncate">{a.sku}</div>
@@ -507,15 +696,26 @@ function ExpandedPanel({
       )}
 
       {/* Footer */}
-      <div className="px-3.5 py-2 bg-gray-50 border-t border-gray-100 flex items-center justify-between text-[11px] text-gray-600">
-        <span>
-          Εμφανίζονται {showCount} από {totalCount.toLocaleString('el-GR')} SKUs
-          {remaining > 0 && <span className="text-gray-500"> · {remaining.toLocaleString('el-GR')} ακόμα κρυμμένα</span>}
-        </span>
+      <div className="px-3.5 py-2 bg-gray-50 border-t border-gray-100 flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-600">
+        <div className="flex flex-wrap items-center gap-2">
+          <span>
+            Εμφανίζονται {showCount} από {totalCount.toLocaleString('el-GR')} προϊόντα
+            {remaining > 0 && <span className="text-gray-500"> · {remaining.toLocaleString('el-GR')} ακόμη διαθέσιμα</span>}
+          </span>
+          {totalCount > showCount && onViewAll && (
+            <button
+              type="button"
+              onClick={onViewAll}
+              className="text-[11px] font-semibold text-[var(--nts-accent)] hover:underline"
+            >
+              Προβολή όλων
+            </button>
+          )}
+        </div>
         <span className="text-[10px] text-gray-500">
           {bucket === 'new_or_unknown' && (unknownBreakdown?.no_signals ?? 0) > 0 ? (
             <span className="inline-flex items-center gap-1">
-              <Plug size={10} /> Ενεργοποίησε integrations για περισσότερα signals
+              <Plug size={10} /> Ενεργοποίησε integrations για περισσότερα σήματα
             </span>
           ) : null}
         </span>

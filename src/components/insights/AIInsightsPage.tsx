@@ -83,8 +83,7 @@ export function AIInsightsPage({ onSectionChange }: AIInsightsPageProps) {
           title={<h1 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">AI Insights</h1>}
           description={
             <p className="text-sm text-[#4A5568] sm:text-base max-w-2xl">
-              Αυτόματες αναλύσεις από προϊόντα, segments, e-commerce και RFM — με συνδέσμους στα σχετικά modules για
-              άμεση ενέργεια.
+              Αυτόματες αναλύσεις από προϊόντα, segments, e-commerce και RFM, με σύνδεση στις σχετικές ενότητες για άμεση συνέχεια εργασίας.
             </p>
           }
           actions={
@@ -119,8 +118,7 @@ export function AIInsightsPage({ onSectionChange }: AIInsightsPageProps) {
                   Έξυπνες προτάσεις για την ομάδα σας
                 </h2>
                 <p className="mt-2 text-sm text-[#6B7280] max-w-xl leading-relaxed">
-                  Κάθε κάρτα συνδέεται με συγκεκριμένη ενότητα της πλατφόρμας (π.χ. προϊόντα, RFM, campaigns) ώστε να
-                  μην χάνεται το context.
+                  Κάθε κάρτα οδηγεί στη σχετική ενότητα της πλατφόρμας, ώστε η ανάλυση να μετατρέπεται άμεσα σε πρακτική ενέργεια.
                 </p>
               </div>
             </div>
@@ -167,7 +165,7 @@ export function AIInsightsPage({ onSectionChange }: AIInsightsPageProps) {
                 <div className="rounded-xl border border-dashed border-[#D1D5DB] bg-[#FAFAFA] px-8 py-16 text-center">
                   <Sparkles className="mx-auto text-[#9CA3AF] mb-3" size={36} />
                   <p className="text-[#4A5568] font-medium">Δεν υπάρχουν insights σε αυτό το φίλτρο</p>
-                  <p className="text-sm text-[#9CA3AF] mt-1">Δοκιμάστε «Όλα» ή εισάγετε περισσότερα δεδομένα.</p>
+                  <p className="text-sm text-[#9CA3AF] mt-1">Δοκιμάστε το φίλτρο «Όλα» ή εμπλουτίστε τα διαθέσιμα δεδομένα.</p>
                 </div>
               ) : (
                 filteredInsights.map((insight, index) => (
@@ -188,8 +186,7 @@ export function AIInsightsPage({ onSectionChange }: AIInsightsPageProps) {
                 <div>
                   <p className="font-semibold text-[#1A1A1A]">Εφαρμογή προτεραιότητας</p>
                   <p className="text-xs text-[#6B7280] mt-1 max-w-md leading-snug">
-                    Μεταφέρει στο πρώτο διαθέσιμο module κατά σειρά: dead stock → πλεόνασμα → high-margin χαμηλό απόθεμα →
-                    κ.λπ.
+                    Μεταφέρει στην πρώτη διαθέσιμη ενότητα με βάση τη σειρά προτεραιότητας των σημαντικότερων ευρημάτων.
                   </p>
                 </div>
                 <Button
@@ -199,7 +196,7 @@ export function AIInsightsPage({ onSectionChange }: AIInsightsPageProps) {
                   disabled={!onSectionChange || aiInsights.length === 0}
                   className="shrink-0 min-h-[44px] px-6"
                 >
-                  Apply all recommendations
+                  Μετάβαση στην πρώτη προτεραιότητα
                 </Button>
               </div>
             </div>
@@ -225,10 +222,10 @@ export function AIInsightsPage({ onSectionChange }: AIInsightsPageProps) {
                 </div>
               </div>
               <p className="text-sm text-[#4A5568] leading-relaxed mb-4">
-                Ανοίξτε τη συνομιλία για πρακτικές απαντήσεις σχετικά με connectors, αναφορές και workflows.
+                Ανοίξτε τη συνομιλία για πρακτικές απαντήσεις σχετικά με connectors, αναφορές και workflows της πλατφόρμας.
               </p>
               <Button variant="primary" className="w-full justify-center" icon={<MessageCircle size={16} />} onClick={() => setAssistantOpen(true)}>
-                Άνοιγμα chat
+                Άνοιγμα συνομιλίας
               </Button>
             </div>
 
@@ -238,19 +235,19 @@ export function AIInsightsPage({ onSectionChange }: AIInsightsPageProps) {
                 <li className="flex gap-2">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 mt-1.5 shrink-0" />
                   <span>
-                    <strong className="text-[#1A1A1A]">Ευκαιρία</strong> — αξιοποίηση τάσης ή underused potential
+                    <strong className="text-[#1A1A1A]">Ευκαιρία</strong>: αξιοποίηση τάσης ή δυναμικού που δεν έχει ακόμη αξιοποιηθεί επαρκώς
                   </span>
                 </li>
                 <li className="flex gap-2">
                   <span className="w-2 h-2 rounded-full bg-amber-500 mt-1.5 shrink-0" />
                   <span>
-                    <strong className="text-[#1A1A1A]">Προειδοποίηση</strong> — ρίσκο που απαιτεί προσοχή
+                    <strong className="text-[#1A1A1A]">Προειδοποίηση</strong>: ρίσκο που απαιτεί άμεση προσοχή
                   </span>
                 </li>
                 <li className="flex gap-2">
                   <span className="w-2 h-2 rounded-full bg-sky-500 mt-1.5 shrink-0" />
                   <span>
-                    <strong className="text-[#1A1A1A]">Σύσταση</strong> — επόμενο βήμα βελτιστοποίησης
+                    <strong className="text-[#1A1A1A]">Σύσταση</strong>: επόμενο βήμα βελτιστοποίησης ή οργάνωσης
                   </span>
                 </li>
               </ul>
@@ -261,7 +258,7 @@ export function AIInsightsPage({ onSectionChange }: AIInsightsPageProps) {
               onClick={() => onSectionChange?.('help')}
               className="w-full flex items-center justify-between rounded-xl border border-[#E8E8ED] bg-white px-4 py-3 text-sm font-medium text-[#4A5568] hover:bg-[#FAFAFA] transition-colors"
             >
-              Knowledge library (Help)
+              Μετάβαση στο Help
               <ArrowRight size={16} className="text-[#9CA3AF]" />
             </button>
           </aside>

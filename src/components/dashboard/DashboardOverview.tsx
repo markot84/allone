@@ -393,10 +393,10 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           <p className="text-[14px] text-[var(--nts-medium-gray)]">
             {isB2B ? (
               <>
-                Stock, supplier health, sales execution και market readiness σε ένα control tower.
+                Αποθέματα, δίκτυο προμηθευτών, εμπορική εκτέλεση και ετοιμότητα ανάπτυξης σε ενιαία διοικητική εικόνα.
                 {activeStrategy && (
                   <>
-                    {' '}Active motion:{' '}
+                    {' '}Ενεργή κατεύθυνση:{' '}
                     <span className="font-medium text-[var(--nts-charcoal)]">{getStrategyName(activeStrategy.scenarioId)}</span>
                   </>
                 )}
@@ -497,9 +497,9 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             index={0}
             kpi={{
               label: 'Inventory value',
-              value: inventoryValueEstimate > 0 ? formatCurrencyCompact(inventoryValueEstimate) : 'Pending',
+              value: inventoryValueEstimate > 0 ? formatCurrencyCompact(inventoryValueEstimate) : 'Σε αναμονή',
               changeLabel: `${formatNumber(productsCount || productStats?.totalSkus || 0)} SKUs`,
-              tooltip: 'Αξία αποθέματος από aggregates για γρήγορη owner εικόνα.',
+              tooltip: 'Εκτιμώμενη αξία αποθέματος από τα διαθέσιμα aggregates, για γρήγορη συνοπτική εικόνα.',
             }}
             onClick={() => onSectionChange?.('products')}
           />
@@ -508,8 +508,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             kpi={{
               label: 'Supplier network',
               value: `${suppliers.length}`,
-              changeLabel: suppliers.length > 0 ? 'supplier nodes' : 'needs setup',
-              tooltip: 'Προμηθευτές που επηρεάζουν lead times, replenishment και expansion feasibility.',
+              changeLabel: suppliers.length > 0 ? 'ενεργοί κόμβοι προμήθειας' : 'απαιτεί αρχική ρύθμιση',
+              tooltip: 'Το δίκτυο προμηθευτών επηρεάζει χρόνους παράδοσης, αναπλήρωση αποθέματος και δυνατότητα ανάπτυξης.',
             }}
             onClick={() => onSectionChange?.('suppliers')}
           />
@@ -518,8 +518,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             kpi={{
               label: 'Sales execution',
               value: `${openCommercialTasks}`,
-              changeLabel: 'open actions',
-              tooltip: 'Ανοιχτές coordination tasks που λειτουργούν ως execution queue για την εμπορική ομάδα.',
+              changeLabel: 'ανοικτές ενέργειες',
+              tooltip: 'Ανοικτές ενέργειες συντονισμού που λειτουργούν ως ουρά εκτέλεσης για την εμπορική ομάδα.',
             }}
             onClick={() => onSectionChange?.('sales')}
           />
@@ -528,8 +528,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             kpi={{
               label: 'Expansion readiness',
               value: `${b2bReadinessScore}%`,
-              changeLabel: 'market motion',
-              tooltip: 'Συνδυασμός assortment, suppliers, finance baseline, campaigns και execution readiness.',
+              changeLabel: 'ετοιμότητα αγοράς',
+              tooltip: 'Συνδυαστική ένδειξη που αποτυπώνει assortment, προμηθευτές, οικονομική βάση, καμπάνιες και οργανωτική ετοιμότητα.',
             }}
             onClick={() => onSectionChange?.('markets')}
           />
@@ -645,8 +645,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   sparklineData: revenueSpark,
                   tooltip:
                     isB2B
-                      ? 'Baseline εσόδων από organic revenue και demand generation. Για B2B τζίρο ανά account χρειάζεται invoicing / ERP import.'
-                      : 'Συνολικά έσοδα: organic (όπου υπάρχει) + conversion value από Google Ads και Meta (πλατφόρμες διαφημίσεων). Δεν είναι ταμειακός τζίρος e-shop — για αυτόν δες E-commerce / ROI.',
+                      ? 'Βασική εικόνα εσόδων από οργανική ζήτηση και demand generation. Για πλήρη αποτύπωση εσόδων ανά account απαιτείται invoicing ή ERP import.'
+                      : 'Συνολικά έσοδα όπως αποτυπώνονται από organic δεδομένα και conversion value των διαφημιστικών πλατφορμών. Δεν πρόκειται για ταμειακό τζίρο e-shop.',
                 }}
                 index={0}
                 onClick={() => onSectionChange?.(isB2B ? 'finances' : 'roi')}
@@ -669,17 +669,17 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   label: isB2B ? 'Demand conversions' : 'Μέσο Καλάθι (AOV)',
                   value: isB2B ? formatNumber(campaignMetrics.totalConversions) : aov > 0 ? `€${formatNumber(aov, 1)}` : '—',
                   change: isB2B ? undefined : aovMoM !== null ? Math.round(aovMoM) : undefined,
-                  changeLabel: isB2B ? 'qualified actions' : aovMoM !== null ? 'vs προηγ. μήνα' : undefined,
+                  changeLabel: isB2B ? 'ενέργειες υψηλής πρόθεσης' : aovMoM !== null ? 'vs προηγ. μήνα' : undefined,
                   trend: isB2B ? (campaignMetrics.totalConversions > 0 ? 'up' : undefined) : aov > 0 ? (aovMoM !== null && aovMoM < 0 ? 'down' : 'up') : undefined,
                   sparklineData: isB2B ? spendSpark : aovSpark,
-                  tooltip: isB2B ? 'Conversions ή qualified actions από τις demand channels μέχρι να μπει full pipeline tracking.' : 'Average Order Value — Μέση αξία παραγγελίας: Αξία Μετατροπών ÷ Αριθμός Μετατροπών.',
+                  tooltip: isB2B ? 'Μετατροπές ή ενέργειες υψηλής πρόθεσης από τα demand channels, έως ότου ενεργοποιηθεί πλήρης παρακολούθηση pipeline.' : 'Average Order Value, δηλαδή μέση αξία παραγγελίας: αξία μετατροπών διά του αριθμού μετατροπών.',
                 }}
                 index={2}
                 onClick={() => onSectionChange?.(isB2B ? 'sales' : 'campaigns')}
               />
             </div>
             <p className="text-[12px] text-[#6B7280] leading-relaxed">
-              {isB2B ? 'Για deeper οικονομική ανάλυση, baseline revenue και νέα B2B data feeds άνοιξε ' : <>Για <strong className="text-[#4B5563] font-medium">ROAS</strong>,{' '}
+              {isB2B ? 'Για αναλυτικότερη οικονομική εικόνα, baseline revenue και πρόσθετα B2B data feeds, άνοιξε ' : <>Για <strong className="text-[#4B5563] font-medium">ROAS</strong>,{' '}
               <strong className="text-[#4B5563] font-medium">True ROAS</strong>, blended απόδοση και σύγκριση με e-shop, ανοίξτε </>}
               <button
                 type="button"
@@ -706,7 +706,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 <div>
                   <h4 className="text-sm font-semibold text-[#1A1A1A]">E-commerce</h4>
                   <span className="text-[10px] text-[#9CA3AF]">
-                    {ecomm.connectedPlatforms.length} platform{ecomm.connectedPlatforms.length > 1 ? 's' : ''} · 90 ημέρες
+                    {ecomm.connectedPlatforms.length} πλατφόρμες · 90 ημέρες
                   </span>
                 </div>
               </div>
@@ -782,7 +782,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 <p className="text-lg font-bold text-[#1A1A1A]">{ga4.totals.sessions >= 1000 ? `${(ga4.totals.sessions / 1000).toFixed(1)}K` : ga4.totals.sessions.toLocaleString()}</p>
                 {ga4.weeklyChange?.sessions != null && (
                   <p className={`text-[10px] font-medium ${ga4.weeklyChange.sessions >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                    {ga4.weeklyChange.sessions >= 0 ? '+' : ''}{ga4.weeklyChange.sessions.toFixed(1)}% vs prev 7d
+                    {ga4.weeklyChange.sessions >= 0 ? '+' : ''}{ga4.weeklyChange.sessions.toFixed(1)}% vs προηγ. 7ημ.
                   </p>
                 )}
               </div>
@@ -791,21 +791,21 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 <p className="text-lg font-bold text-[#1A1A1A]">{ga4.totals.users >= 1000 ? `${(ga4.totals.users / 1000).toFixed(1)}K` : ga4.totals.users.toLocaleString()}</p>
                 {ga4.weeklyChange?.users != null && (
                   <p className={`text-[10px] font-medium ${ga4.weeklyChange.users >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                    {ga4.weeklyChange.users >= 0 ? '+' : ''}{ga4.weeklyChange.users.toFixed(1)}% vs prev 7d
+                    {ga4.weeklyChange.users >= 0 ? '+' : ''}{ga4.weeklyChange.users.toFixed(1)}% vs προηγ. 7ημ.
                   </p>
                 )}
               </div>
               <div>
                 <p className="text-[11px] text-[#6B7280] mb-0.5">Bounce Rate</p>
                 <p className="text-lg font-bold text-[#1A1A1A]">{(ga4.totals.bounceRate * 100).toFixed(1)}%</p>
-                <p className="text-[10px] text-[#9CA3AF]">μέσος (90d)</p>
+                <p className="text-[10px] text-[#9CA3AF]">μέσος όρος 90ημ.</p>
               </div>
               <div>
                 <p className="text-[11px] text-[#6B7280] mb-0.5">Conversions</p>
                 <p className="text-lg font-bold text-[#1A1A1A]">{ga4.totals.conversions.toLocaleString()}</p>
                 {ga4.weeklyChange?.conversions != null && (
                   <p className={`text-[10px] font-medium ${ga4.weeklyChange.conversions >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                    {ga4.weeklyChange.conversions >= 0 ? '+' : ''}{ga4.weeklyChange.conversions.toFixed(1)}% vs prev 7d
+                    {ga4.weeklyChange.conversions >= 0 ? '+' : ''}{ga4.weeklyChange.conversions.toFixed(1)}% vs προηγ. 7ημ.
                   </p>
                 )}
               </div>
@@ -830,18 +830,18 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             subtitle={
               enabledModules.ecommerce && ecomm.hasData ? (
                 <p>
-                  Ημερήσιος/μηνιαίος <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">τζίρος από παραγγελίες</strong> (συγχρονισμός e-shop, server-side aggregate). Κάτω:{' '}
-                  <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">διαφήμιση</strong> (δαπάνη vs conversion value πλατφορμών) — ξεχωριστή κλίμακα, δεν αθροίζεται στον τζίρο.
+                  Ημερήσια ή μηνιαία εικόνα <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">τζίρου από παραγγελίες</strong>, με βάση τον συγχρονισμό του e-shop και το server-side aggregate. Κάτω εμφανίζεται η{' '}
+                  <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">διαφημιστική απόδοση</strong> σε ξεχωριστή κλίμακα, χωρίς να αθροίζεται στον τζίρο.
                 </p>
               ) : (
                 <p>
                   {isB2B ? (
                     <>
-                      Baseline <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">organic + demand generation</strong> μέχρι να προστεθεί invoicing / ERP feed για account-level revenue truth.
+                      Βασική εικόνα <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">organic + demand generation</strong> έως ότου προστεθεί invoicing ή ERP feed για αποτύπωση εσόδων ανά account.
                     </>
                   ) : (
                     <>
-                      Εκτίμηση <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">organic + καμπανιών</strong> όταν δεν υπάρχει σύνδεση e-shop. Για πραγματικό τζίρο παραγγελιών, σύνδεσε το κατάστημα.
+                      Εκτίμηση <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">organic + καμπανιών</strong> όταν δεν υπάρχει σύνδεση e-shop. Για πραγματικό τζίρο παραγγελιών απαιτείται σύνδεση του καταστήματος.
                     </>
                   )}
                 </p>
@@ -939,7 +939,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                     <div>
                       <p className="text-[13px] font-semibold text-[#1A1A1A]">Διαφήμιση (Google Ads / Meta)</p>
                       <p className="text-[11px] text-[#6B7280] leading-relaxed mt-0.5">
-                        Δαπάνη (στήλες) και conversion value που αναφέρουν οι πλατφόρμες (γραμμή) — ίδια περίοδος με το chart τζίρου, χωρίς σύγκριση € προς € με τον τζίρο του καταστήματος.
+                        Δαπάνη (στήλες) και conversion value που αναφέρουν οι πλατφόρμες (γραμμή), για την ίδια περίοδο με το chart τζίρου. Η απεικόνιση είναι συγκριτική και όχι άμεση αντιστοίχιση με τον τζίρο του καταστήματος.
                       </p>
                     </div>
                   </div>
@@ -1019,7 +1019,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               <div className="text-center">
                 <TrendingUp size={32} className="text-[#9CA3AF] mx-auto mb-2" />
                 <p className="text-sm text-[#4A4A4A] font-medium">Δεν υπάρχουν δεδομένα</p>
-                <p className="text-xs text-[#9CA3AF] mt-1">Φόρτωσε Analytics ή Campaigns για να δεις το Revenue Performance</p>
+                <p className="text-xs text-[#9CA3AF] mt-1">Συνδέστε Analytics ή Campaigns για να εμφανιστεί η εικόνα απόδοσης εσόδων.</p>
               </div>
             </div>
           )}
@@ -1030,7 +1030,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           <Card padding="lg">
             <CardHeader
               title="B2B Priorities"
-              subtitle="Accounts, sales και νέα markets"
+              subtitle="Accounts, πωλήσεις και νέες αγορές"
               icon={<Building2 size={18} className="text-[var(--nts-medium-gray)]" />}
             />
             <div className="grid grid-cols-1 gap-3">
@@ -1043,7 +1043,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   <Building2 size={16} className="text-[var(--nts-accent)]" />
                   <span className="font-semibold">Account Intelligence</span>
                 </div>
-                <p className="mt-2 text-sm text-[#6B7280]">Scoring framework για top accounts, renewal risk και cross-sell opportunity.</p>
+                <p className="mt-2 text-sm text-[#6B7280]">Πλαίσιο αξιολόγησης για βασικούς λογαριασμούς, κίνδυνο ανανέωσης και δυνατότητες cross-sell.</p>
               </button>
               <button
                 type="button"
@@ -1054,7 +1054,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   <Handshake size={16} className="text-[var(--nts-accent)]" />
                   <span className="font-semibold">Sales Pipeline</span>
                 </div>
-                <p className="mt-2 text-sm text-[#6B7280]">Operational cadence για opportunities, pricing blockers και next-step discipline.</p>
+                <p className="mt-2 text-sm text-[#6B7280]">Λειτουργική παρακολούθηση για opportunities, pricing blockers και πειθαρχία στα επόμενα βήματα.</p>
               </button>
               <button
                 type="button"
@@ -1065,7 +1065,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   <Globe2 size={16} className="text-[var(--nts-accent)]" />
                   <span className="font-semibold">Market Exploration</span>
                 </div>
-                <p className="mt-2 text-sm text-[#6B7280]">Go-to-market planning για νέες αγορές, verticals και distributor motions.</p>
+                <p className="mt-2 text-sm text-[#6B7280]">Σχεδιασμός go-to-market για νέες αγορές, verticals και συνεργασίες διανομής.</p>
               </button>
             </div>
           </Card>
@@ -1152,7 +1152,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         >
           <CardHeader
             title="AI Insights"
-            subtitle="Πρακτικές συστάσεις"
+            subtitle="Σύντομες, εφαρμόσιμες συστάσεις"
             icon={<Target size={18} className="text-[var(--nts-medium-gray)]" />}
             action={
               aiInsights.length > 4 && (
@@ -1209,7 +1209,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         <Card padding="lg" className="h-full flex flex-col">
           <CardHeader
             title={isB2B ? 'B2B Control Tower' : 'Strategy & Status'}
-            subtitle={isB2B ? 'Στρατηγική, εμπορική εκτέλεση και readiness' : 'Ενεργή στρατηγική & δεδομένα'}
+            subtitle={isB2B ? 'Στρατηγική, εμπορική εκτέλεση και ετοιμότητα' : 'Ενεργή στρατηγική και κατάσταση δεδομένων'}
             icon={<Target size={18} className="text-[var(--nts-medium-gray)]" />}
           />
           <div className="flex-1 flex flex-col gap-4">

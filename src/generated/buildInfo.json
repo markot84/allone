@@ -1,10 +1,14 @@
 {
-  "version": "0.574.0",
-  "previousVersion": "0.573.0",
-  "commitHash": "10a9a9f",
+  "version": "0.578.0",
+  "previousVersion": "0.577.0",
+  "commitHash": "05de814",
   "branch": "main",
-  "buildDate": "2026-04-19T08:42:27.785Z",
+  "buildDate": "2026-04-19T15:13:44.384Z",
   "commits": [
+    {
+      "hash": "05de814",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "10a9a9f",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "a6dc958",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "2817021",
-      "message": "fix(strategy): grouped setup modals, impact dismiss UX, price benchmark filter perf"
     }
   ],
   "changes": [

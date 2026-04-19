@@ -36,6 +36,8 @@ interface InsightCardProps {
 
 export function InsightCard({ insight, index, onAction, canNavigate }: InsightCardProps) {
   const config = INSIGHT_CONFIG[insight.type] ?? INSIGHT_CONFIG.recommendation;
+  const impactLabel =
+    insight.impact === 'high' ? 'Υψηλή' : insight.impact === 'medium' ? 'Μεσαία' : 'Χαμηλή';
 
   return (
     <motion.article
@@ -60,7 +62,7 @@ export function InsightCard({ insight, index, onAction, canNavigate }: InsightCa
                 size="sm"
                 className="shrink-0"
               >
-                {insight.impact}
+                {impactLabel}
               </Badge>
             </div>
             <div className="mt-2 text-sm text-[#4A5568] [&_p]:text-sm [&_strong]:font-semibold [&_strong]:text-[#1A1A1A] leading-relaxed">

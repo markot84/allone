@@ -33,7 +33,7 @@ export function generateInsightsFromData(
       type: 'warning',
       icon: '',
       title: 'Dead stock — χωρίς πωλήσεις',
-      insight: `${deadStock.length} SKU(s) χωρίς πωλήσεις στην τελευταία περίοδο. Ιδανικό για clearance campaigns.`,
+      insight: `${deadStock.length} κωδικοί δεν εμφάνισαν πωλήσεις στην τελευταία περίοδο. Απαιτείται σχέδιο εκκαθάρισης ή επανατοποθέτησης.`,
       action: 'Δημιουργία Campaign',
       impact: 'high',
     });
@@ -45,7 +45,7 @@ export function generateInsightsFromData(
       type: 'warning',
       icon: '',
       title: 'Πλεόνασμα αποθέματος',
-      insight: `${excessStock.length} SKU(s) με απόθεμα > 2x του στόχου. Δεσμεύουν κεφάλαιο.`,
+      insight: `${excessStock.length} κωδικοί υπερβαίνουν σημαντικά τον στόχο αποθέματος και δεσμεύουν κεφάλαιο χωρίς επαρκή κυκλοφορία.`,
       action: 'Δημιουργία Προσφορών',
       impact: 'high',
     });
@@ -57,7 +57,7 @@ export function generateInsightsFromData(
       type: 'opportunity',
       icon: '',
       title: 'High-margin items με low stock',
-      insight: `${highMarginLowStock.length} high-margin προϊόντα κινδυνεύουν να εξαντληθούν. Προτεραιότητα αναπλήρωσης.`,
+      insight: `${highMarginLowStock.length} προϊόντα υψηλού περιθωρίου κινούνται προς έλλειψη. Χρειάζεται προτεραιοποίηση αναπλήρωσης.`,
       action: 'Πρόταση αναπλήρωσης',
       impact: 'medium',
     });
@@ -69,7 +69,7 @@ export function generateInsightsFromData(
       type: 'recommendation',
       icon: '',
       title: 'Χαμηλά αποθέματα',
-      insight: `${lowStock.length} προϊόντα (${Math.round((lowStock.length / products.length) * 100)}%) θα εξαντληθούν σε < ${Math.round(60 / 2)} ημέρες.`,
+      insight: `${lowStock.length} προϊόντα (${Math.round((lowStock.length / products.length) * 100)}%) κινούνται προς εξάντληση εντός περίπου ${Math.round(60 / 2)} ημερών.`,
       action: 'Ελέγξτε Inventory',
       impact: 'medium',
     });
@@ -86,7 +86,7 @@ export function generateInsightsFromData(
       type: 'warning',
       icon: '',
       title: 'At Risk segment σε αύξηση',
-      insight: `Το segment "${atRisk.name}" έχει ${atRisk.percentage}% των πελατών. Προτείνεται win-back campaign.`,
+      insight: `Το segment "${atRisk.name}" αντιστοιχεί στο ${atRisk.percentage}% της πελατειακής βάσης. Απαιτείται στοχευμένη ενέργεια επανενεργοποίησης.`,
       action: 'Launch Win-back',
       impact: 'high',
     });
@@ -98,7 +98,7 @@ export function generateInsightsFromData(
       type: 'opportunity',
       icon: '',
       title: 'Champions segment opportunity',
-      insight: `Τα Champions συνεισφέρουν ${champions.revenue_share}% του revenue. Exclusive offers για retention.`,
+      insight: `Τα Champions συνεισφέρουν ${champions.revenue_share}% των εσόδων. Αξίζει ελεγχόμενη αξιοποίηση για διατήρηση και επιλεκτικό upsell.`,
       action: 'Δημιουργία Campaign',
       impact: 'high',
     });
@@ -111,7 +111,7 @@ export function generateInsightsFromData(
       type: 'recommendation',
       icon: '',
       title: 'Κορυφαίο segment',
-      insight: `"${topSegment.name}" έχει το μεγαλύτερο revenue share (${topSegment.revenue_share}%). Προτεραιότητα στόχευσης.`,
+      insight: `Το "${topSegment.name}" εμφανίζει τη μεγαλύτερη συμμετοχή στα έσοδα (${topSegment.revenue_share}%). Αποτελεί βασική προτεραιότητα στόχευσης.`,
       action: 'Στόχευση Campaign',
       impact: 'medium',
     });
@@ -126,7 +126,7 @@ export function generateInsightsFromData(
         type: 'opportunity',
         icon: '',
         title: 'Δυνατότητα cross-sell',
-        insight: `${categories.length} κατηγορίες προϊόντων και ${segments.length} segments. Προσαρμόστε προσφορές ανά segment.`,
+        insight: `${categories.length} κατηγορίες προϊόντων και ${segments.length} segments δημιουργούν πεδίο για στοχευμένες προτάσεις cross-sell ανά κοινό.`,
         action: 'Setup Sequence',
         impact: 'medium',
       });
@@ -141,7 +141,7 @@ export function generateInsightsFromData(
         type: 'opportunity',
         icon: '',
         title: 'Χαμηλό AOV στο e-shop',
-        insight: `Το AOV είναι €${ecommerce.aov.toFixed(2)}. Προτείνονται bundles/thresholds για αύξηση μέσης αξίας καλαθιού.`,
+        insight: `Το AOV διαμορφώνεται στα €${ecommerce.aov.toFixed(2)}. Εξετάστε bundles ή όρια κινήτρων για ενίσχυση της μέσης αξίας καλαθιού.`,
         action: 'Δείτε E-commerce Explorer',
         impact: 'medium',
       });
@@ -156,7 +156,7 @@ export function generateInsightsFromData(
           type: 'warning',
           icon: '',
           title: 'Υψηλή εξάρτηση από μία πλατφόρμα',
-          insight: `${top.platform} παράγει ~${Math.round(topShare)}% του store revenue. Υπάρχει concentration risk.`,
+          insight: `${top.platform} παράγει περίπου το ${Math.round(topShare)}% του store revenue. Υπάρχει αυξημένη συγκέντρωση ρίσκου σε μία πλατφόρμα.`,
           action: 'Ανάλυση ανά πλατφόρμα',
           impact: 'high',
         });

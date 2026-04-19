@@ -234,7 +234,7 @@ export function MorningBriefing(props: MorningBriefingProps) {
           const result = await generateMorningBriefing(brandId, buildDataRef.current(), { period: p, periodLabel: pl });
           setBriefing(result);
         } catch (e) {
-          setError(e instanceof Error ? e.message : 'Briefing generation failed');
+          setError(e instanceof Error ? e.message : 'Η δημιουργία του briefing δεν ολοκληρώθηκε.');
         }
         setLoading(false);
       })();
@@ -309,7 +309,7 @@ export function MorningBriefing(props: MorningBriefingProps) {
                   <h3 className="text-[15px] font-semibold text-[var(--nts-charcoal)] flex items-center gap-1">
                     AI Briefing{' '}
                     <Tooltip
-                      content="Το briefing της ημέρας αποθηκεύεται τοπικά και μένει ίδιο όταν αλλάζετε σελίδα ή κάνετε refresh. Ανανεώνεται όταν υπάρχει ουσιαστική αλλαγή στα δεδομένα (έσοδα, απόδοση διαφημίσεων, κρίσιμες ειδοποιήσεις κ.λπ.). Μέχρι 4 ενημερώσεις την ημέρα· έλεγχος περίπου κάθε 15 λεπτά όταν το tab είναι ανοιχτό."
+                      content="Το briefing της ημέρας αποθηκεύεται τοπικά και παραμένει διαθέσιμο όταν αλλάζετε σελίδα ή κάνετε ανανέωση. Ανανεώνεται μόνο όταν προκύπτει ουσιαστική μεταβολή στα δεδομένα, όπως έσοδα, διαφημιστική απόδοση ή κρίσιμες ειδοποιήσεις. Γίνονται έως 4 ενημερώσεις ημερησίως, με έλεγχο περίπου ανά 15 λεπτά όταν το tab είναι ανοιχτό."
                       size={13}
                     />
                   </h3>
@@ -320,7 +320,7 @@ export function MorningBriefing(props: MorningBriefingProps) {
                   )}
                   {loading && (
                     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-[var(--nts-accent)]/10 text-[var(--nts-accent)]">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[var(--nts-accent)] animate-pulse" /> Generating...
+                      <span className="w-1.5 h-1.5 rounded-full bg-[var(--nts-accent)] animate-pulse" /> Σύνταξη briefing...
                     </span>
                   )}
                 </div>
@@ -329,7 +329,7 @@ export function MorningBriefing(props: MorningBriefingProps) {
                     <Clock size={10} /> {timeLabel}
                     <span className="ml-1 px-1.5 py-0 rounded bg-[var(--nts-accent)]/10 text-[var(--nts-accent)] text-[10px] font-medium">{periodLabel}</span>
                     {briefing?.updateReason && !collapsed && (
-                      <span className="ml-1 text-amber-600">— {briefing.updateReason}</span>
+                      <span className="ml-1 text-amber-600">· {briefing.updateReason}</span>
                     )}
                   </p>
                 )}
@@ -345,7 +345,7 @@ export function MorningBriefing(props: MorningBriefingProps) {
               onClick={toggleCollapsed}
               className="shrink-0 p-2 rounded-lg hover:bg-[#F3F4F6] text-[var(--nts-medium-gray)] transition-colors"
               aria-expanded={!collapsed}
-              title={collapsed ? 'Ανάπτυξη' : 'Μάζεμα'}
+              title={collapsed ? 'Ανάπτυξη' : 'Σύμπτυξη'}
             >
               {collapsed ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
             </button>

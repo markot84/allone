@@ -83,11 +83,11 @@ export function AlertsBanner({ filterGroup, maxAlerts = 3, compact = false, onNa
     setSavingId(alert.id);
     try {
       await AutomationAlertsService.archiveWithEvaluation(alert.id, evaluation, user?.uid);
-      toast.success('Η αξιολόγηση αποθηκεύτηκε');
+      toast.success('Η αξιολόγηση καταχωρίστηκε');
       await new Promise((r) => setTimeout(r, 450));
       invalidate();
     } catch {
-      toast.error('Αποτυχία αποθήκευσης αξιολόγησης');
+      toast.error('Δεν ήταν δυνατή η αποθήκευση της αξιολόγησης');
       setChosen((prev) => {
         const next = { ...prev };
         delete next[alert.id];
@@ -176,10 +176,10 @@ export function AlertsBanner({ filterGroup, maxAlerts = 3, compact = false, onNa
                       <div className="flex flex-wrap gap-1.5">
                         {(['urgent', 'interested', 'not_interested'] as const).map((ev) => {
                           const label =
-                            ev === 'urgent' ? 'Επείγον' : ev === 'interested' ? 'Με ενδιαφέρει' : 'Όχι';
+                            ev === 'urgent' ? 'Επείγον' : ev === 'interested' ? 'Με ενδιαφέρει' : 'Δεν με ενδιαφέρει';
                           const title =
                             ev === 'not_interested'
-                              ? 'Δεν με ενδιαφέρει — αρχειοθέτηση'
+                              ? 'Δεν με ενδιαφέρει, αρχειοθέτηση'
                               : ev === 'interested'
                                 ? 'Με ενδιαφέρει'
                                 : 'Επείγον';
