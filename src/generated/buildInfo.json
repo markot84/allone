@@ -1,10 +1,14 @@
 {
-  "version": "0.567.0",
-  "previousVersion": "0.566.0",
-  "commitHash": "48227f7",
+  "version": "0.568.0",
+  "previousVersion": "0.567.0",
+  "commitHash": "519010f",
   "branch": "main",
-  "buildDate": "2026-04-19T07:08:50.991Z",
+  "buildDate": "2026-04-19T07:18:44.880Z",
   "commits": [
+    {
+      "hash": "519010f",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "48227f7",
       "message": "fix(strategy): triage uses useProductSource for Enterprise procurement catalog"
@@ -60,16 +64,12 @@
     {
       "hash": "552881f",
       "message": "feat: strategy commerce tools, campaigns geo Mekko, and related updates"
-    },
-    {
-      "hash": "4e89514",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [
+    "[Συντήρηση] Full deploy",
     "[Διόρθωση] Triage uses useProductSource for Enterprise procurement catalog",
     "[Διόρθωση] Guard missing connectedPlatforms in useEcommerceSummary hasData",
-    "[Συντήρηση] Full deploy",
     "Merge: Sprint 2 — universal data layer, decision buckets, AI context, ecommerce fix",
     "[Διόρθωση] KPI Παραγγελίες counted only capped recentOrders",
     "UX: redesign TriageCard for merchant clarity",
