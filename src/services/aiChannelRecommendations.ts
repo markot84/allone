@@ -57,7 +57,7 @@ function parseAIResponse(text: string): ChannelRecommendation | null {
         ? (parsed.budget_allocation as Record<string, number>)
         : {};
     const rationale =
-      typeof parsed.rationale === 'string' ? parsed.rationale : 'AI-generated recommendation.';
+      typeof parsed.rationale === 'string' ? parsed.rationale : 'Δεν ήταν διαθέσιμη αιτιολόγηση από το AI.';
 
     if (primary.length === 0) return null;
 

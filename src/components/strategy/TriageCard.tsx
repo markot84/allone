@@ -211,9 +211,8 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
             </div>
             {showSubtitle && (
               <div className="mt-1.5 text-[12px] text-gray-600 max-w-2xl leading-relaxed">
-                Αυτό είναι το <strong>triage</strong> των προϊόντων σου — όπως στα Επείγοντα ενός νοσοκομείου,
-                ταξινομούμε τα SKUs κατά πόσο επείγει η δράση τους. Κάθε ομάδα προτείνει συγκεκριμένη
-                εμπορική πολιτική που μπορείς να εφαρμόσεις άμεσα.
+                Η ενότητα αυτή ιεραρχεί τους κωδικούς προϊόντων με βάση την εμπορική τους προτεραιότητα.
+                Κάθε ομάδα συνοδεύεται από σαφή ερμηνεία και προτεινόμενη κατεύθυνση ενεργειών.
               </div>
             )}
             <div className="text-[11px] text-gray-500 mt-1">
@@ -227,32 +226,32 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
         {/* KPI STRIP */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-4">
           <KpiTile
-            label="Επείγοντα"
+            label="Άμεση προτεραιότητα"
             value={kpis.criticalCount.toLocaleString('el-GR')}
             tone="rose"
             icon={AlertOctagon}
-            sub="dead capital + stockout + bleeders"
+            sub="αδρανή κεφάλαια, ελλείψεις, χαμηλό περιθώριο"
           />
           <KpiTile
             label="Ευκαιρίες"
             value={kpis.opportunityCount.toLocaleString('el-GR')}
             tone="emerald"
             icon={TrendingUp}
-            sub="hot sellers + ανατροφοδοσία"
+            sub="υψηλή ζήτηση και ανάγκη αναπλήρωσης"
           />
           <KpiTile
             label="Κεφάλαια σε ρίσκο"
             value={fmtEur(kpis.capitalAtRisk)}
             tone="amber"
             icon={AlertTriangle}
-            sub="dead + slow + discontinue"
+            sub="αδρανές, βραδυκίνητο και προς απόσυρση απόθεμα"
           />
           <KpiTile
-            label="Προς διερεύνηση"
+            label="Ανεπαρκή δεδομένα"
             value={counts.new_or_unknown.toLocaleString('el-GR')}
             tone="slate"
             icon={HelpCircle}
-            sub="νέα ή χωρίς δεδομένα"
+            sub="νέα προϊόντα ή ελλιπή στοιχεία"
           />
         </div>
       </div>
@@ -418,7 +417,7 @@ function ExpandedPanel({
           <div className="text-[11px] text-gray-600 mt-0.5 leading-relaxed">{def.description}</div>
           <div className="mt-1.5 inline-flex items-center gap-1 text-[10px] text-gray-500">
             <Info size={10} />
-            <span>Ταξινομημένα κατά severity (κεφάλαια ή ταχύτητα κίνησης)</span>
+            <span>Ιεραρχημένα κατά προτεραιότητα, με βάση τη δέσμευση κεφαλαίου ή την ένταση της ζήτησης</span>
           </div>
         </div>
         {def.recommendedPolicy && onSelectPolicy && (
@@ -557,19 +556,19 @@ function DataChecklist({
       ok: hasOrders,
       icon: Plug,
       label: 'Σύνδεση e-shop (Shopify, WooCommerce, Magento, OpenCart)',
-      help: 'Δίνει real-time orders → εντοπίζουμε hot sellers, stockout risk, margin bleeders.',
+      help: 'Παρέχει δεδομένα παραγγελιών σε πραγματικό χρόνο και ενισχύει την αναγνώριση ζήτησης, ελλείψεων και ασθενούς περιθωρίου.',
     },
     {
       ok: hasMovement,
       icon: TrendingDown,
       label: 'Stock movement (καθημερινά snapshots αποθέματος)',
-      help: 'Εναλλακτική για brands χωρίς orders connector — υπολογίζει πωλήσεις από μειώσεις stock.',
+      help: 'Λειτουργεί ως εναλλακτική πηγή για brands χωρίς σύνδεση παραγγελιών, εκτιμώντας την κίνηση από τις μεταβολές αποθέματος.',
     },
     {
       ok: hasProcurement,
       icon: Database,
       label: 'Procurement export (κόστη, lifetime, ταξινόμηση)',
-      help: 'Δίνει tied capital, margin, lifetime quantity, evaluation labels για dead capital + slow movers.',
+      help: 'Προσθέτει στοιχεία κόστους, δεσμευμένου κεφαλαίου, ιστορικής κίνησης και αξιολόγησης προϊόντων.',
     },
   ];
   return (

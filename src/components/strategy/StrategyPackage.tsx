@@ -170,7 +170,7 @@ export function StrategyPackage(props: StrategyPackageProps) {
                 <div className="p-3 rounded-lg bg-[#FAFAFA]">
                   <div className="flex items-center gap-1.5 mb-1.5">
                     <Users size={12} className="text-[#8B5CF6]" />
-                    <span className="text-[10px] font-semibold text-[#9CA3AF] uppercase tracking-wider">Segments</span>
+                    <span className="text-[10px] font-semibold text-[#9CA3AF] uppercase tracking-wider">Τμήματα πελατών</span>
                   </div>
                   {idealSegs.length > 0 && (
                     <p className="text-sm text-[#1A1A1A]">{idealSegs.join(', ')}</p>
@@ -192,7 +192,7 @@ export function StrategyPackage(props: StrategyPackageProps) {
                         {primaryCh.length > 2 && ` +${primaryCh.length - 2}`}
                       </p>
                       <p className="text-[11px] text-[#9CA3AF] mt-0.5">
-                        +{secondaryCh.length} secondary
+                        +{secondaryCh.length} δευτερεύοντα
                       </p>
                     </>
                   )}
@@ -201,7 +201,7 @@ export function StrategyPackage(props: StrategyPackageProps) {
                 <div className="p-3 rounded-lg bg-[#FAFAFA]">
                   <div className="flex items-center gap-1.5 mb-1.5">
                     <Sparkles size={12} className="text-[#1A1A1A]" />
-                    <span className="text-[10px] font-semibold text-[#9CA3AF] uppercase tracking-wider">AI Analysis</span>
+                    <span className="text-[10px] font-semibold text-[#9CA3AF] uppercase tracking-wider">AI ανάλυση</span>
                   </div>
                   <p className="text-sm text-[#1A1A1A]">
                     {channelRecommendation?.rationale ? 'Ολοκληρώθηκε' : 'Δεν είναι διαθέσιμη'}

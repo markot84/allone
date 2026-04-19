@@ -209,8 +209,8 @@ export function PriceBenchmarkSetupModal({
             <div>
               <h2 className="text-base font-bold text-[#1A1A1A]">Price Benchmarking — εύρος με φίλτρα</h2>
               <p className="text-xs text-[#6B7280] mt-1 leading-relaxed">
-                Ορίστε preset και φίλτρα· η στρατηγική εφαρμόζεται σε <strong>όλα</strong> τα SKU που ταιριάζουν. Παρακάτω
-                σύνοψη ανά μάρκα και κατηγορία (χωρίς αναλυτική λίστα SKU).
+                Ορίστε preset και φίλτρα. Η στρατηγική εφαρμόζεται σε <strong>όλα</strong> τα SKU που πληρούν τα κριτήρια.
+                Παρακάτω εμφανίζεται συνοπτική εικόνα ανά μάρκα και κατηγορία, χωρίς αναλυτική λίστα SKU.
               </p>
             </div>
             <button type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-[#F5F5F5] text-[#9CA3AF]">
@@ -316,7 +316,7 @@ export function PriceBenchmarkSetupModal({
 
             {totalMatched === 0 && hasBenchmarkData && (
               <p className="text-xs text-center text-[#9CA3AF] py-6">
-                Δεν ταιριάζει κανένα SKU με τα φίλτρα / preset.
+                Δεν βρέθηκε κανένα SKU που να ικανοποιεί τα επιλεγμένα φίλτρα ή preset.
               </p>
             )}
           </div>

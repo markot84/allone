@@ -38,7 +38,7 @@ export interface StrategyContext {
   provenance?: ProvenanceContentContext;
 }
 
-export const CONTENT_SUGGESTIONS_SYSTEM_PROMPT = `Είσαι ειδικός content strategist για e-commerce. Απαντάς ΑΠΟΚΛΕΙΣΤΙΚΑ στα Ελληνικά.
+export const CONTENT_SUGGESTIONS_SYSTEM_PROMPT = `Είσαι ανώτερο στέλεχος content strategy για e-commerce. Απαντάς ΑΠΟΚΛΕΙΣΤΙΚΑ στα Ελληνικά.
 
 Δημιουργείς 2 πράγματα:
 1. ΘΕΜΑΤΙΚΕΣ ΚΑΤΕΥΘΥΝΣΕΙΣ: Ανά κανάλι επικοινωνίας (Email, Blog, Social Media, Newsletter κλπ), ποιες θεματικές πρέπει να αναπτύξει η ομάδα marketing, βάσει στρατηγικής, segments πελατών και κατηγοριών προϊόντων.
@@ -78,14 +78,17 @@ export const CONTENT_SUGGESTIONS_SYSTEM_PROMPT = `Είσαι ειδικός cont
 - ΟΛΑ τα κείμενα 100% στα Ελληνικά
 - Χρήση πραγματικού brand name και κατηγοριών σε headlines και titles
 - ΑΠΑΓΟΡΕΥΕΤΑΙ η χρήση em-dash (—). Χρησιμοποίησε τελεία ή κόμμα αντί για παύλες.
-- Χρησιμοποίησε σαφή δομή στα κείμενα: σύντομες προτάσεις, bullets όπου βοηθά την ανάγνωση`;
+- Χρησιμοποίησε σαφή δομή στα κείμενα: σύντομες προτάσεις, bullets όπου βοηθά την ανάγνωση
+- Ο τόνος πρέπει να είναι τεχνοκρατικός, ώριμος και φυσικός. Απόφυγε εντυπωσιασμούς, ευκολίες, υπερβολές, συνθηματολογία και διαφημιστικό ύφος
+- Μην χρησιμοποιείς emojis, θαυμαστικά, γλώσσα υπερβολής ή γενικόλογες υποσχέσεις
+- Το brief πρέπει να διαβάζεται σαν σαφής εμπορική κατεύθυνση προς έμπειρη ομάδα marketing ή agency, όχι σαν διαφημιστικό concept note`;
 
 export function buildContentSuggestionsUserPrompt(ctx: StrategyContext): string {
   const w = ctx.weights || {};
-  const weightsStr = `Profit: ${w.profit ?? 0}%, Stock: ${w.stock ?? 0}%, Strategic: ${w.strategic ?? 0}%, Revenue: ${w.revenue ?? 0}%, Fit: ${w.fit ?? 0}%`;
+  const weightsStr = `Κερδοφορία: ${w.profit ?? 0}%, Απόθεμα: ${w.stock ?? 0}%, Στρατηγική προτεραιότητα: ${w.strategic ?? 0}%, Έσοδα: ${w.revenue ?? 0}%, Συνάφεια πελάτη: ${w.fit ?? 0}%`;
 
   const brandSection = ctx.brandName
-    ? `Επιχείρηση: ${ctx.brandName}${ctx.topCategories?.length ? `\nΚατηγορίες προϊόντων: ${ctx.topCategories.join(', ')}` : ''}${ctx.segmentNames?.length ? `\nSegments πελατών: ${ctx.segmentNames.join(', ')}` : ''}\n\n`
+    ? `Επιχείρηση: ${ctx.brandName}${ctx.topCategories?.length ? `\nΚατηγορίες προϊόντων: ${ctx.topCategories.join(', ')}` : ''}${ctx.segmentNames?.length ? `\nΤμήματα πελατών: ${ctx.segmentNames.join(', ')}` : ''}\n\n`
     : '';
 
   const personalizationNote = ctx.brandName
@@ -95,17 +98,18 @@ export function buildContentSuggestionsUserPrompt(ctx: StrategyContext): string 
   return `${brandSection}Ενεργή στρατηγική: ${ctx.scenarioName}
 Βάρη: ${weightsStr}
 
-${ctx.contentTone ? `Tone: ${ctx.contentTone}` : ''}
+${ctx.contentTone ? `Τόνος επικοινωνίας: ${ctx.contentTone}` : ''}
 ${ctx.contentTypes?.length ? `Τύποι περιεχομένου: ${ctx.contentTypes.join(', ')}` : ''}
-${ctx.channels?.length ? `Καλύτερα κανάλια: ${ctx.channels.join(', ')}` : ''}
-${ctx.ctaStyle ? `CTA στυλ: ${ctx.ctaStyle}` : ''}
+${ctx.channels?.length ? `Κατάλληλα κανάλια: ${ctx.channels.join(', ')}` : ''}
+${ctx.ctaStyle ? `Ύφος προτροπής: ${ctx.ctaStyle}` : ''}
 ${ctx.avoid?.length ? `Αποφυγή: ${ctx.avoid.join(', ')}` : ''}
-${ctx.sampleHeadlines?.length ? `Παραδείγματα headlines: ${ctx.sampleHeadlines.slice(0, 3).join(' | ')}` : ''}
+${ctx.sampleHeadlines?.length ? `Ενδεικτικοί τίτλοι: ${ctx.sampleHeadlines.slice(0, 3).join(' | ')}` : ''}
 ${ctx.triage ? `\nΔΙΑΓΝΩΣΤΙΚΗ ΡΙΖΑ (Decision Bucket):
 - Bucket: «${ctx.triage.bucketLabel}»${ctx.triage.bucketDescription ? ` — ${ctx.triage.bucketDescription}` : ''}
 - Σκοπευμένα SKUs: ${ctx.triage.skuCount}${ctx.triage.tiedCapital ? ` | Δεσμευμένα κεφάλαια: €${Math.round(ctx.triage.tiedCapital).toLocaleString('el-GR')}` : ''}${ctx.triage.topSkus?.length ? `\n- Ενδεικτικά SKUs: ${ctx.triage.topSkus.slice(0, 5).join(', ')}` : ''}
 
-ΟΛΑ τα directions, actions, brief και headlines πρέπει να αντανακλούν αυτή τη ρίζα. Π.χ. dead capital → urgency clearance ("Τελευταίες ποσότητες", countdown), hot seller → social proof + restock alerts, stockout risk → waitlist/notify-me. Ανέφερε ρητά στο brief ότι η στρατηγική στοχεύει το πρόβλημα «${ctx.triage.bucketLabel}».
+Όλα τα directions, actions, brief και headlines πρέπει να αντανακλούν αυτή τη ρίζα. Ενδεικτικά: dead capital → έμφαση σε εκκαθάριση και περιορισμένη διαθεσιμότητα. Hot seller → κοινωνική απόδειξη και ειδοποιήσεις αναπλήρωσης. Stockout risk → λίστα αναμονής ή ειδοποίηση διαθεσιμότητας. Ανέφερε ρητά στο brief ότι η στρατηγική στοχεύει το πρόβλημα «${ctx.triage.bucketLabel}».
 ` : ''}${ctx.provenance && ctx.provenance.totalProducts > 0 ? `\nΠΗΓΕΣ ΔΕΔΟΜΕΝΩΝ: connector ${ctx.provenance.connectorPct}% · stock movement ${ctx.provenance.movementPct}% · procurement ${ctx.provenance.procurementPct}% · import ${ctx.provenance.importPct}%${ctx.provenance.connectorPct < 30 ? '\nΧαμηλή κάλυψη real-time orders — απόφυγε υπεσχέσεις άμεσων αποτελεσμάτων στο copy.' : ''}\n` : ''}
-Δώσε directions (θεματικές κατευθύνσεις ανά κανάλι), actions (παραδείγματα ενεργειών) και brief (κείμενο κατευθύνσεων) σε JSON.${personalizationNote}`;
+Δώσε directions (θεματικές κατευθύνσεις ανά κανάλι), actions (παραδείγματα ενεργειών) και brief (κείμενο κατευθύνσεων) σε JSON.
+Το κείμενο πρέπει να είναι κατάλληλο για έμπειρο εμπορικό ή marketing κοινό: σαφές, επαγγελματικό, φυσικό και χωρίς εντυπωσιασμούς.${personalizationNote}`;
 }

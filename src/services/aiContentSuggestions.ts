@@ -28,7 +28,23 @@ export interface ContentDirection {
   suggestedCategories?: string[];
 }
 
-function getFallbackSuggestions(scenarioId: string, scenarioName: string): OrganicAction[] {
+function fillTemplate(text: string, brandName?: string, topCategories?: string[]): string {
+  const firstCategory = topCategories?.[0] ?? 'την κύρια κατηγορία';
+  return text
+    .replace(/\[Brand\]/g, brandName || 'το brand')
+    .replace(/\[Product\]/g, firstCategory)
+    .replace(/\[Need\]/g, 'την ανάγκη του πελάτη')
+    .replace(/\[Segment\]/g, 'βασικά κοινά')
+    .replace(/\[Period\]/g, 'την περίοδο')
+    .replace(/\[X\]/g, '15');
+}
+
+function getFallbackSuggestions(
+  scenarioId: string,
+  scenarioName: string,
+  brandName?: string,
+  topCategories?: string[]
+): OrganicAction[] {
   const mapEntry = scenarioId && scenarioId !== 'custom'
     ? strategyContentMap[scenarioId as keyof typeof strategyContentMap]
     : undefined;
@@ -41,11 +57,11 @@ function getFallbackSuggestions(scenarioId: string, scenarioName: string): Organ
 
   return types.slice(0, 6).map((type, i) => ({
     type,
-    title: `${type} – ${scenarioName}`,
-    description: `Δημιουργήστε ${type.toLowerCase()} με ${tone.toLowerCase()} τόνο. ${mapEntry.avoid?.length ? `Αποφύγετε: ${mapEntry.avoid.slice(0, 2).join(', ')}.` : ''}`,
+    title: `${type}: ${scenarioName}`,
+    description: `Προτείνεται ${type.toLowerCase()} με ύφος ${tone.toLowerCase()}. ${mapEntry.avoid?.length ? `Αποφύγετε κυρίως: ${mapEntry.avoid.slice(0, 2).join(', ')}.` : ''}`,
     channel: channels[i % channels.length] ?? 'Email',
     priority: (i < 2 ? 'high' : i < 4 ? 'medium' : 'low') as OrganicAction['priority'],
-    headline_suggestion: headlines[i % headlines.length],
+    headline_suggestion: fillTemplate(headlines[i % headlines.length], brandName, topCategories),
   }));
 }
 
@@ -146,13 +162,13 @@ export async function generateContentSuggestions(
     });
 
     if (!text) {
-      return { actions: getFallbackSuggestions(scenarioId, scenarioName), directions: [], brief: '' };
+      return { actions: getFallbackSuggestions(scenarioId, scenarioName, brandName, topCategories), directions: [], brief: '' };
     }
     const parsed = parseAIResponse(text);
     if (parsed && (parsed.actions.length > 0 || parsed.directions.length > 0)) return parsed;
-    return { actions: getFallbackSuggestions(scenarioId, scenarioName), directions: [], brief: '' };
+    return { actions: getFallbackSuggestions(scenarioId, scenarioName, brandName, topCategories), directions: [], brief: '' };
   } catch (error) {
     console.error('[aiContentSuggestions]', error);
-    return { actions: getFallbackSuggestions(scenarioId, scenarioName), directions: [], brief: '' };
+    return { actions: getFallbackSuggestions(scenarioId, scenarioName, brandName, topCategories), directions: [], brief: '' };
   }
 }

@@ -72,11 +72,11 @@ export function ApprovalWorkflow({ status, onStatusChange }: ApprovalWorkflowPro
   const getNextAction = () => {
     switch (status) {
       case 'draft':
-        return { label: 'Αποστολή για Αξιολόγηση', nextStatus: 'pending_review' as ApprovalStatus };
+        return { label: 'Αποστολή για αξιολόγηση', nextStatus: 'pending_review' as ApprovalStatus };
       case 'pending_review':
-        return { label: 'Έγκριση & Ενεργοποίηση', nextStatus: 'approved' as ApprovalStatus };
+        return { label: 'Έγκριση και ενεργοποίηση', nextStatus: 'approved' as ApprovalStatus };
       case 'approved':
-        return { label: 'Έναρξη Εφαρμογής', nextStatus: 'implementing' as ApprovalStatus };
+        return { label: 'Έναρξη εφαρμογής', nextStatus: 'implementing' as ApprovalStatus };
       case 'implementing':
         return null;
     }

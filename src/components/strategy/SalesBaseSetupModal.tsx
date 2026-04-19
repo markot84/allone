@@ -267,8 +267,8 @@ export function SalesBaseSetupModal({
             <div>
               <h2 className="text-base font-bold text-[#1A1A1A]">Sales Optimization — εύρος με φίλτρα</h2>
               <p className="text-xs text-[#6B7280] mt-1 leading-relaxed">
-                Ορίστε preset ρυθμού πωλήσεων και φίλτρα· η στρατηγική εφαρμόζεται σε <strong>όλα</strong> τα SKU που
-                ταιριάζουν. Σύνοψη ανά μάρκα και κατηγορία (χωρίς αναλυτική λίστα).
+                Ορίστε preset ρυθμού πωλήσεων και φίλτρα. Η στρατηγική εφαρμόζεται σε <strong>όλα</strong> τα SKU που
+                πληρούν τα κριτήρια. Παρακάτω εμφανίζεται συνοπτική εικόνα ανά μάρκα και κατηγορία, χωρίς αναλυτική λίστα προϊόντων.
               </p>
             </div>
             <button type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-[#F5F5F5] text-[#9CA3AF]">
@@ -281,8 +281,8 @@ export function SalesBaseSetupModal({
               <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 flex gap-2 items-start">
                 <Info size={14} className="text-blue-600 mt-0.5 shrink-0" />
                 <div className="text-[11px] text-blue-900 leading-snug flex-1">
-                  <strong>Τα windowed sales stats είναι παλιά.</strong> Πατήστε «Φρεσκάρισμα» για να υπολογιστούν τα
-                  σήματα 7/30/90 ημερών και η ημ/νία τελευταίας πώλησης από τα orders του connector.
+                  <strong>Τα στοιχεία πωλήσεων ανά χρονικό παράθυρο δεν είναι πρόσφατα.</strong> Πατήστε «Φρεσκάρισμα» για να
+                  επανυπολογιστούν τα σήματα 7/30/90 ημερών και η ημερομηνία τελευταίας πώλησης από τα orders του connector.
                 </div>
                 <button
                   type="button"
@@ -364,13 +364,13 @@ export function SalesBaseSetupModal({
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-2">
                       <p className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF] px-1">
-                        0 πωλήσεις σε window
+                        Μηδενικές πωλήσεις σε χρονικό παράθυρο
                       </p>
                       <div className="space-y-2">{zeroOpts.map(renderOpt)}</div>
                     </div>
                     <div className="space-y-2">
                       <p className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF] px-1">
-                        Χωρίς πωλήσεις & Πάγωμα
+                        Χωρίς πωλήσεις και στασιμότητα
                       </p>
                       <div className="space-y-2">{otherOpts.map(renderOpt)}</div>
                     </div>
@@ -525,7 +525,7 @@ export function SalesBaseSetupModal({
             )}
 
             {totalMatched === 0 && (
-              <p className="text-xs text-center text-[#9CA3AF] py-6">Δεν ταιριάζει κανένα SKU με τα φίλτρα / preset.</p>
+              <p className="text-xs text-center text-[#9CA3AF] py-6">Δεν βρέθηκε κανένα SKU που να ικανοποιεί τα επιλεγμένα φίλτρα ή preset.</p>
             )}
           </div>
 

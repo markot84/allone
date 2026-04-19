@@ -77,14 +77,14 @@ export function ChannelRecommendations({
   if (!segment) {
     return (
       <div className="p-8 text-center text-[#4A4A4A]">
-        <p>Φόρτωσε RFM segments για να δεις συστάσεις καναλιών.</p>
+        <p>Φορτώστε τα RFM segments για να εμφανιστούν οι συστάσεις καναλιών.</p>
       </div>
     );
   }
   if (!recommendations) {
     return (
       <div className="p-8 text-center text-[#4A4A4A]">
-        <p>Δεν υπάρχουν διαθέσιμες συστάσεις για αυτό το segment.</p>
+        <p>Δεν υπάρχουν διαθέσιμες συστάσεις για το συγκεκριμένο segment.</p>
       </div>
     );
   }
@@ -137,7 +137,7 @@ export function ChannelRecommendations({
       {/* Budget Allocation Visualization — πάνω από Κύρια κανάλια */}
       <div>
         <h5 className="text-sm font-medium text-[#1A1A1A] mb-3">
-          Budget Allocation
+          Κατανομή προϋπολογισμού
         </h5>
         <div className="flex h-4 rounded-full overflow-hidden">
           {Object.entries(budget_allocation).map(
@@ -264,10 +264,10 @@ export function ChannelRecommendations({
       {orphanBudgetChannels.length > 0 && (
         <div className="rounded-xl border border-[#E8E8ED] bg-[#FAFBFC] p-4">
           <h5 className="text-sm font-medium text-[#1A1A1A] mb-2">
-            Κανάλια στο budget mix
+            Πρόσθετα κανάλια κατανομής
           </h5>
           <p className="text-xs text-[#6B7280] mb-3">
-            Εμφανίζονται όσα έχουν ποσοστό στο budget αλλά δεν συμπεριλήφθηκαν στις λίστες κύριων/δευτερευόντων.
+            Εμφανίζονται τα κανάλια που έχουν ποσοστό στην κατανομή προϋπολογισμού, χωρίς να περιλαμβάνονται στις λίστες κύριων ή δευτερευόντων καναλιών.
           </p>
           <div className="space-y-2">
             {orphanBudgetChannels.map(([allocKey, pct], index) => {
@@ -305,7 +305,7 @@ export function ChannelRecommendations({
 
       {/* Rationale */}
       <div className="p-4 bg-gradient-to-r from-[#F5F5F5] to-white rounded-lg border border-[#E5E5E5]">
-        <h5 className="font-medium text-[#1A1A1A] text-sm mb-3">Αιτιολόγηση AI</h5>
+        <h5 className="font-medium text-[#1A1A1A] text-sm mb-3">Ανάλυση AI</h5>
         {(() => {
           const parts = rationale.split('||').map(s => s.trim());
           const hasStructure = parts.length >= 3 && parts[0].startsWith('Πελάτες:');

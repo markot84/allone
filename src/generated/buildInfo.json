@@ -1,10 +1,14 @@
 {
-  "version": "0.568.0",
-  "previousVersion": "0.567.0",
-  "commitHash": "519010f",
+  "version": "0.574.0",
+  "previousVersion": "0.573.0",
+  "commitHash": "10a9a9f",
   "branch": "main",
-  "buildDate": "2026-04-19T07:18:44.880Z",
+  "buildDate": "2026-04-19T08:42:27.785Z",
   "commits": [
+    {
+      "hash": "10a9a9f",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "519010f",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "2817021",
       "message": "fix(strategy): grouped setup modals, impact dismiss UX, price benchmark filter perf"
-    },
-    {
-      "hash": "552881f",
-      "message": "feat: strategy commerce tools, campaigns geo Mekko, and related updates"
     }
   ],
   "changes": [

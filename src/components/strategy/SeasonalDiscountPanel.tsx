@@ -206,7 +206,7 @@ export function SeasonalDiscountPanel({ onApply, onClose, initialConfig }: Seaso
         {scope === 'categories' && (
           <div>
             <label className="text-xs font-semibold text-[#4A4A4A] block mb-2">
-              Επιλέξτε κατηγορίες ({selectedCategories.size} επιλεγμένες)
+              Επιλογή κατηγοριών ({selectedCategories.size} επιλεγμένες)
             </label>
             <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
               {categories.map(cat => (
@@ -234,7 +234,7 @@ export function SeasonalDiscountPanel({ onApply, onClose, initialConfig }: Seaso
         {scope === 'products' && (
           <div>
             <label className="text-xs font-semibold text-[#4A4A4A] block mb-2">
-              Επιλέξτε προϊόντα ({selectedProductIds.size} επιλεγμένα)
+              Επιλογή προϊόντων ({selectedProductIds.size} επιλεγμένα)
             </label>
             <div className="space-y-1 max-h-40 overflow-y-auto">
               {products.slice(0, 50).map(p => (
@@ -256,7 +256,7 @@ export function SeasonalDiscountPanel({ onApply, onClose, initialConfig }: Seaso
                 <p className="text-xs text-[#9CA3AF]">Δεν βρέθηκαν προϊόντα</p>
               )}
               {products.length > 50 && (
-                <p className="text-[10px] text-[#9CA3AF] text-center pt-1">Εμφανίζονται τα πρώτα 50 προϊόντα</p>
+                <p className="text-[10px] text-[#9CA3AF] text-center pt-1">Για λόγους ευχρηστίας εμφανίζονται τα πρώτα 50 προϊόντα</p>
               )}
             </div>
           </div>

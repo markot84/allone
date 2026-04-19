@@ -528,24 +528,24 @@ export function StrategyImpactModal({
             <h3 className="text-sm font-semibold text-[#1A1A1A] flex-1">Περιεχόμενο</h3>
             {hasContent && contentStats ? (
               <div className="flex items-center gap-3 text-xs">
-                <span className="text-[#22C55E] font-medium">{contentStats.aligned} ευθυγρ.</span>
+                <span className="text-[#22C55E] font-medium">{contentStats.aligned} ευθυγραμμισμένα</span>
                 {contentStats.needsReview > 0 && (
                   <span className="text-[#F59E0B] font-medium">{contentStats.needsReview} επανέλεγχος</span>
                 )}
               </div>
             ) : (
-              <span className="text-[10px] text-[#9CA3AF]">Εισάγετε content για αναλυτικό impact</span>
+              <span className="text-[10px] text-[#9CA3AF]">Εισαγάγετε περιεχόμενο για αναλυτική αποτίμηση</span>
             )}
           </div>
 
           {/* Campaigns */}
           <div className="flex items-center gap-2">
             <Megaphone size={15} className="text-[#4A4A4A]" />
-            <h3 className="text-sm font-semibold text-[#1A1A1A] flex-1">Campaigns</h3>
+            <h3 className="text-sm font-semibold text-[#1A1A1A] flex-1">Καμπάνιες</h3>
             {hasCampaigns && campaignStats ? (
               <span className="text-xs text-[#78716C] font-medium">{campaignStats.active} ενεργά</span>
             ) : (
-              <span className="text-[10px] text-[#9CA3AF]">Εισάγετε campaigns για αναλυτικό impact</span>
+              <span className="text-[10px] text-[#9CA3AF]">Εισαγάγετε καμπάνιες για αναλυτική αποτίμηση</span>
             )}
           </div>
         </div>

@@ -1568,7 +1568,7 @@ export function WeightConfigurator() {
               disabled={!selectedScenario || products.length === 0}
               onClick={() => setShowFeedFormatModal(true)}
             >
-              Generate Product Feed
+              Εξαγωγή product feed
             </Button>
             {rfmSegments.length > 0 && (
               <Button
@@ -1578,7 +1578,7 @@ export function WeightConfigurator() {
                 disabled={!selectedScenario || isExportingStrategy}
                 onClick={handleExportStrategy}
               >
-                {isExportingStrategy ? 'Exporting…' : 'Export Strategy Plan'}
+                {isExportingStrategy ? 'Εξαγωγή…' : 'Εξαγωγή πλάνου στρατηγικής'}
               </Button>
             )}
           </div>
@@ -1690,13 +1690,13 @@ export function WeightConfigurator() {
           {/* Impact Summary */}
           <div className="mt-6 p-4 bg-[#F5F5F5] rounded-lg grid grid-cols-3 gap-4">
             <div>
-              <p className="text-xs text-[#4A4A4A]">Affected Categories</p>
+              <p className="text-xs text-[#4A4A4A]">Επηρεαζόμενες κατηγορίες</p>
               <p className="text-lg font-bold text-[#1A1A1A]">
                 {new Set(prioritizedProducts.map((p) => p.category)).size}
               </p>
             </div>
             <div>
-              <p className="text-xs text-[#4A4A4A]">Avg Score</p>
+              <p className="text-xs text-[#4A4A4A]">Μέση βαθμολογία</p>
               <p className="text-lg font-bold text-[#1A1A1A] font-mono">
                 {prioritizedProducts.length > 0
                   ? (
@@ -1709,10 +1709,10 @@ export function WeightConfigurator() {
             <div>
               <p className="text-xs text-[#4A4A4A]">
                 {selectedScenario === 'stock_clearance'
-                  ? 'With Excess Stock'
+                  ? 'Με πλεονάζον απόθεμα'
                   : selectedScenario === 'brand_launch'
-                  ? 'With Priority Tag'
-                  : 'High Margin'}
+                  ? 'Με στρατηγική επισήμανση'
+                  : 'Με υψηλό περιθώριο'}
               </p>
               <p className="text-lg font-bold text-[#22C55E]">
                 {selectedScenario === 'stock_clearance'
@@ -1731,15 +1731,15 @@ export function WeightConfigurator() {
       {/* Channel Recommendations */}
       <Card padding="lg">
         <CardHeader
-          title="Channel Recommendations"
+          title="Συστάσεις καναλιών"
           subtitle={
             aiEnabled
               ? isAIGenerated
-                ? 'AI-generated channel mix βάσει στρατηγικής + segment'
+                ? 'Σύνθεση καναλιών με υποστήριξη AI, βάσει στρατηγικής και segment'
                 : aiRecLoading
-                ? 'AI δημιουργεί συστάσεις…'
-                : 'AI-powered channel mix βάσει επιλεγμένης στρατηγικής'
-              : 'Στατικές συστάσεις (rule-based)'
+                ? 'Το AI επεξεργάζεται συστάσεις καναλιών…'
+                : 'Σύνθεση καναλιών με υποστήριξη AI, βάσει της επιλεγμένης στρατηγικής'
+              : 'Προκαθορισμένες συστάσεις βάσει κανόνων'
           }
           icon={<Sparkles size={18} className="text-[var(--nts-medium-gray)]" />}
           action={
@@ -1807,14 +1807,14 @@ export function WeightConfigurator() {
 
         {aiRecError && (
           <div className="text-xs text-amber-600 mb-2 p-3 bg-amber-50 rounded-lg border border-amber-200">
-            <p className="font-medium">AI απέτυχε – εμφανίζονται στατικές συστάσεις.</p>
+            <p className="font-medium">Η παραγωγή AI συστάσεων δεν ολοκληρώθηκε. Εμφανίζονται οι προκαθορισμένες συστάσεις.</p>
             <p className="mt-1 text-amber-500 break-all">{(aiRecError as Error)?.message || String(aiRecError)}</p>
           </div>
         )}
         {aiRecLoading ? (
           <div className="flex items-center gap-3 p-6">
             <Spinner size="md" />
-            <span className="text-sm text-[#4A4A4A]">Δημιουργία AI συστάσεων για {rfmSegments.find((s) => s.id === selectedSegment)?.name ?? selectedSegment}…</span>
+            <span className="text-sm text-[#4A4A4A]">Δημιουργούνται AI συστάσεις για το segment {rfmSegments.find((s) => s.id === selectedSegment)?.name ?? selectedSegment}…</span>
           </div>
         ) : (
           <ChannelRecommendations
@@ -1923,7 +1923,7 @@ export function WeightConfigurator() {
             >
               <ModalHeader
                 toolbarAriaLabel="Κλείσιμο"
-                title={<h2 className="text-xl font-bold text-[#1A1A1A]">Generate Product Feed</h2>}
+                title={<h2 className="text-xl font-bold text-[#1A1A1A]">Εξαγωγή product feed</h2>}
                 actions={
                   <button
                     type="button"
@@ -1938,7 +1938,7 @@ export function WeightConfigurator() {
               {/* Content */}
               <div className="p-6 space-y-3">
                 <p className="text-sm text-[#4A4A4A] mb-4">
-                  Generate feed με <strong>{allPrioritizedProducts.length}</strong> προϊόντα ταξινομημένα βάσει της τρέχουσας strategy
+                  Εξαγωγή feed με <strong>{allPrioritizedProducts.length}</strong> προϊόντα, ταξινομημένα βάσει της τρέχουσας στρατηγικής.
                 </p>
 
                 <button

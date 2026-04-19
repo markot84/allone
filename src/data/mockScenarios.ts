@@ -5,7 +5,7 @@ export const scenarios: Scenario[] = [
     id: 'profit_max', 
     name: 'Profit Maximization', 
     icon: '',
-    description: 'Μεγιστοποίηση κερδοφορίας',
+    description: 'Έμφαση σε προϊόντα και ενέργειες με ισχυρότερο περιθώριο κέρδους.',
     weights: { profit: 40, stock: 15, strategic: 15, revenue: 10, fit: 20 },
     duration: 'ongoing' as const
   },
@@ -13,7 +13,7 @@ export const scenarios: Scenario[] = [
     id: 'stock_clearance', 
     name: 'Stock Clearance', 
     icon: '',
-    description: 'Εκκαθάριση αποθέματος',
+    description: 'Προτεραιότητα σε προϊόντα με υψηλή δέσμευση αποθέματος ή περιορισμένη κυκλοφορία.',
     weights: { profit: 15, stock: 45, strategic: 10, revenue: 10, fit: 20 },
     duration: 30
   },
@@ -21,7 +21,7 @@ export const scenarios: Scenario[] = [
     id: 'brand_launch', 
     name: 'Brand Launch', 
     icon: '',
-    description: 'Λανσάρισμα νέου brand/προϊόντος',
+    description: 'Υποστήριξη νέας εμπορικής εισόδου με αυξημένο στρατηγικό βάρος.',
     weights: { profit: 10, stock: 10, strategic: 50, revenue: 10, fit: 20 },
     duration: 60
   },
@@ -29,7 +29,7 @@ export const scenarios: Scenario[] = [
     id: 'revenue_push', 
     name: 'Revenue Push', 
     icon: '',
-    description: 'Αύξηση τζίρου',
+    description: 'Προτεραιότητα σε ενέργειες που επιδιώκουν ταχύτερη αύξηση πωλήσεων.',
     weights: { profit: 15, stock: 15, strategic: 15, revenue: 35, fit: 20 },
     duration: 90
   },
@@ -38,8 +38,8 @@ export const scenarios: Scenario[] = [
     name: 'Sales Optimization',
     icon: '',
     description:
-      'Sales Optimization: ορίζετε ποια προϊόντα συμμετέχουν με άξονα τον ρυθμό πωλήσεών τους (παράθυρα 7/30/90 ημ., lifetime, τελευταία πώληση). Μετά την επιλογή σας, επιβεβαιώνετε τη διάρκεια εφαρμογής. Συμπληρώστε στο import τις στήλες πωλήσεων για ακριβέστερη κατάταξη.',
-    cardHint: 'Ρυθμός πωλήσεων & απόθεμα',
+      'Επιλογή προϊόντων με βάση τον ρυθμό πωλήσεων, τα πρόσφατα παράθυρα 7/30/90 ημερών, το ιστορικό πωλήσεων και την τελευταία πώληση. Μετά την επιλογή, ορίζεται η διάρκεια εφαρμογής της στρατηγικής.',
+    cardHint: 'Ρυθμός πωλήσεων και απόθεμα',
     weights: { profit: 14, stock: 28, strategic: 10, revenue: 20, fit: 28 },
     duration: 'ongoing' as const,
   },
@@ -48,7 +48,7 @@ export const scenarios: Scenario[] = [
     name: 'Price Benchmarking',
     icon: '',
     description:
-      'Price Benchmarking: στοχεύστε SKU όπου είστε φθηνότεροι από το benchmark αγοράς (GMC), με φίλτρα μάρκας/κατηγορίας και επιλογή SKU. Απαιτούνται συγχρονισμένα δεδομένα Merchant Center. Μετά το setup επιλέγετε διάρκεια στρατηγικής.',
+      'Εντοπισμός SKU με ανταγωνιστικό πλεονέκτημα τιμής έναντι της αγοράς, με φίλτρα μάρκας, κατηγορίας και επιλογής προϊόντων. Απαιτούνται συγχρονισμένα δεδομένα Merchant Center.',
     cardHint: 'Έναντι αγοράς (GMC)',
     weights: { profit: 22, stock: 18, strategic: 12, revenue: 26, fit: 22 },
     duration: 'ongoing' as const,
@@ -57,7 +57,7 @@ export const scenarios: Scenario[] = [
     id: 'mixed', 
     name: 'Μικτή Στρατηγική', 
     icon: '',
-    description: 'Συνδυασμός 2 στρατηγικών με ποσοστά',
+    description: 'Συνδυασμός δύο στρατηγικών με επιμερισμό βαρών.',
     weights: null,
     duration: 'ongoing' as const
   },
@@ -65,7 +65,7 @@ export const scenarios: Scenario[] = [
     id: 'seasonal_discount', 
     name: 'Εποχιακή / Εκπτωτική', 
     icon: '',
-    description: 'Εποχιακές προσφορές & εκπτώσεις σε προϊόντα',
+    description: 'Εφαρμογή περιόδων προσφορών και εκπτώσεων σε επιλεγμένα προϊόντα.',
     weights: null,
     duration: 30
   },
@@ -82,37 +82,37 @@ export const defaultWeights: Record<string, number> = {
 export const weightFactors: Omit<WeightFactor, 'value'>[] = [
   { 
     id: 'profit', 
-    name: 'Profitability', 
+    name: 'Κερδοφορία', 
     icon: '',
-    tooltip: 'Gross/net margin ανά προϊόν',
+    tooltip: 'Περιθώριο κέρδους ανά προϊόν',
     color: '#22C55E'
   },
   { 
     id: 'stock', 
-    name: 'Inventory Optimization', 
+    name: 'Βελτιστοποίηση αποθέματος', 
     icon: '',
-    tooltip: 'Stock levels, age, excess inventory',
+    tooltip: 'Επίπεδο αποθέματος, παλαιότητα και πλεονάζουσα ποσότητα',
     color: '#3B82F6'
   },
   { 
     id: 'strategic', 
-    name: 'Strategic Priority', 
+    name: 'Στρατηγική προτεραιότητα', 
     icon: '',
-    tooltip: 'Brand push, new launches, supplier deals',
+    tooltip: 'Νέα λανσαρίσματα, στρατηγικές συμφωνίες και εμπορικές προτεραιότητες',
     color: '#8B5CF6'
   },
   { 
     id: 'revenue', 
-    name: 'Revenue Targets', 
+    name: 'Στόχος εσόδων', 
     icon: '',
-    tooltip: 'Volume/revenue goals ανά category',
+    tooltip: 'Στόχοι όγκου και εσόδων ανά κατηγορία',
     color: '#F59E0B'
   },
   { 
     id: 'fit', 
-    name: 'Customer Fit', 
+    name: 'Συνάφεια πελάτη', 
     icon: '',
-    tooltip: 'Segment affinity, purchase history',
+    tooltip: 'Συνάφεια με το segment και ιστορικό αγορών',
     color: '#F97316'
   }
 ];
@@ -161,7 +161,7 @@ export const channelRecommendations: Record<string, Record<string, ChannelRecomm
       primary: ['Meta Ads (Facebook/Instagram)', 'Google Shopping'],
       secondary: ['Dynamic Remarketing', 'Email Marketing'],
       budget_allocation: { meta: 40, google_shopping: 35, remarketing: 25 },
-      rationale: 'Πελάτες: Οι «Loyal» ανταποκρίνονται σε early access deals. || Κανάλια: Meta Ads και Google Shopping για εκπτωτικές προσφορές, Email (owned) για exclusive early access. || Αποτέλεσμα: Αύξηση conversion rate μέσω exclusive deals.'
+      rationale: 'Πελάτες: Οι «Loyal» ανταποκρίνονται θετικά σε προνομιακή και έγκαιρη πρόσβαση σε προσφορές. || Κανάλια: Meta Ads και Google Shopping για προβολή εκπτωτικών επιλογών, Email Marketing για έγκαιρη ενημέρωση του υφιστάμενου κοινού. || Αποτέλεσμα: Βελτίωση του ποσοστού μετατροπής μέσω στοχευμένης και ελεγχόμενης ενεργοποίησης.'
     },
     potential: {
       primary: ['Google Shopping', 'Meta Ads (Facebook/Instagram)'],
@@ -187,7 +187,7 @@ export const channelRecommendations: Record<string, Record<string, ChannelRecomm
       primary: ['Meta Ads (Facebook/Instagram)', 'YouTube Ads', 'Google Display Network'],
       secondary: ['Email Marketing', 'Influencer Marketing'],
       budget_allocation: { meta: 40, youtube: 35, display: 25 },
-      rationale: 'Πελάτες: Οι «Champions» είναι brand advocates, ιδανικοί για word-of-mouth. || Κανάλια: Meta και YouTube για awareness, Display για reach, Email (owned) για VIP preview. || Αποτέλεσμα: Δημιουργία anticipation και viral engagement.'
+      rationale: 'Πελάτες: Οι «Champions» λειτουργούν ως ισχυρό κοινό αποδοχής και πρώιμης διάδοσης του νέου brand. || Κανάλια: Meta και YouTube για αναγνωρισιμότητα, Display για διεύρυνση κάλυψης, Email Marketing για προνομιακή πρώτη ενημέρωση. || Αποτέλεσμα: Ενίσχυση αρχικής αναγνωρισιμότητας και ταχύτερη διάχυση ενδιαφέροντος στο κατάλληλο κοινό.'
     },
     loyal: {
       primary: ['Meta Ads (Facebook/Instagram)', 'YouTube Ads'],
@@ -219,7 +219,7 @@ export const channelRecommendations: Record<string, Record<string, ChannelRecomm
       primary: ['Google Shopping', 'Google Search Ads', 'Meta Ads (Facebook/Instagram)'],
       secondary: ['Dynamic Remarketing', 'Email Marketing'],
       budget_allocation: { google_shopping: 35, google_search: 25, meta: 25, remarketing: 15 },
-      rationale: 'Πελάτες: Οι «Champions» έχουν υψηλό AOV, ιδανικοί για premium upselling. || Κανάλια: Google Shopping και Search για high-intent, Meta για lookalike audiences, Remarketing για repeat purchases, Email (owned) για premium bundles. || Αποτέλεσμα: Αύξηση εσόδων μέσω upselling σε high-value πελάτες.'
+      rationale: 'Πελάτες: Οι «Champions» εμφανίζουν υψηλή αξία καλαθιού και είναι κατάλληλοι για αναβάθμιση πωλήσεων σε προϊοντικές προτάσεις υψηλότερης αξίας. || Κανάλια: Google Shopping και Search για ζήτηση υψηλής πρόθεσης, Meta για διεύρυνση σε συναφή κοινά, Remarketing για επαναγορές, Email Marketing για προτάσεις συνδυαστικών αγορών. || Αποτέλεσμα: Ενίσχυση εσόδων από πελάτες υψηλής αξίας με καλύτερη αξιοποίηση της πρόθεσης αγοράς.'
     },
     loyal: {
       primary: ['Google Shopping', 'Meta Ads (Facebook/Instagram)'],
@@ -275,7 +275,7 @@ export const channelRecommendations: Record<string, Record<string, ChannelRecomm
       primary: ['Google Display Network', 'Meta Ads (Facebook/Instagram)'],
       secondary: ['Google Shopping', 'Email Marketing'],
       budget_allocation: { display: 45, meta: 35, google_shopping: 20 },
-      rationale: 'Πελάτες: Lost/broad — awareness + aggressive entry price για SKU ποτέ πωληθέντα. || Κανάλια: Display/Meta reach, shopping για intent catch. || Αποτέλεσμα: Δοκιμή product-market fit σε χαμηλότερο κόστος από premium search.'
+      rationale: 'Πελάτες: Για ευρύ ή ανενεργό κοινό, απαιτείται προσεκτική επαναεισαγωγή του προϊόντος με ανταγωνιστική αρχική τιμή. || Κανάλια: Display και Meta για ευρεία κάλυψη, Shopping για απορρόφηση ζήτησης όταν εκδηλωθεί πρόθεση αγοράς. || Αποτέλεσμα: Δοκιμή αποδοχής προϊόντος στην αγορά με ελεγχόμενο κόστος προσέγγισης.'
     }
   },
   price_benchmark: {
@@ -318,8 +318,8 @@ export const channelRecommendations: Record<string, Record<string, ChannelRecomm
 };
 
 export const approvalStatuses = {
-  draft: { label: 'Draft', color: 'gray', icon: '📝' },
-  pending_review: { label: 'Pending Review', color: 'orange', icon: '⏳' },
-  approved: { label: 'Approved', color: 'green', icon: '✅' },
-  implementing: { label: 'In Implementation', color: 'blue', icon: '🚀' }
+  draft: { label: 'Προσχέδιο', color: 'gray', icon: '📝' },
+  pending_review: { label: 'Υπό αξιολόγηση', color: 'orange', icon: '⏳' },
+  approved: { label: 'Εγκεκριμένο', color: 'green', icon: '✅' },
+  implementing: { label: 'Σε εφαρμογή', color: 'blue', icon: '🚀' }
 };

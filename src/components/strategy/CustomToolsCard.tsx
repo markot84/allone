@@ -63,7 +63,7 @@ export function CustomToolsCard({
     const preset = loadPreset(loadPresetId);
     if (preset) {
       onWeightsChange(preset.weights);
-      showToast(`Loaded: ${preset.name}`);
+      showToast(`Φορτώθηκε: ${preset.name}`);
       setLoadPresetId('');
     }
   };
@@ -73,7 +73,7 @@ export function CustomToolsCard({
       <div className="flex flex-wrap items-end gap-3">
         {/* Clone from */}
         <div>
-          <label className="text-xs text-[#4A4A4A] block mb-1">Clone from</label>
+          <label className="text-xs text-[#4A4A4A] block mb-1">Αντιγραφή από</label>
           <select
             value=""
             onChange={(e) => {
@@ -151,7 +151,7 @@ export function CustomToolsCard({
                   deletePreset(loadPresetId);
                   setLoadPresetId('');
                   refreshPresets();
-                  showToast('Deleted');
+                  showToast('Διαγράφηκε');
                 }
               }}
               disabled={!loadPresetId}
