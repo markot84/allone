@@ -1,13 +1,16 @@
 /**
- * useDecisionBuckets — συνδυάζει useProducts + useProductSignals με τον classifier
+ * useDecisionBuckets — συνδυάζει useProductSource + useProductSignals με τον classifier
  * για να επιστρέψει triage data έτοιμα για UI και AI prompts.
+ *
+ * Χρησιμοποιείται το ίδιο product feed με το WeightConfigurator (Firestore import ή,
+ * σε Enterprise, procurement inventory) — όχι μόνο `products` collection.
  *
  * Έξοδος είναι deterministic memoized — επανυπολογίζεται μόνο όταν αλλάξουν
  * products/signals/thresholds.
  */
 
 import { useMemo } from 'react';
-import { useProducts } from './useProducts';
+import { useProductSource } from './useProductSource';
 import { useProductSignals } from './useProductSignals';
 import {
   classifyAll,
@@ -33,7 +36,7 @@ export interface UseDecisionBucketsResult extends ClassifyResult {
 export function useDecisionBuckets(
   thresholds: BucketThresholds = DEFAULT_THRESHOLDS
 ): UseDecisionBucketsResult {
-  const { products, isLoading: productsLoading } = useProducts();
+  const { products, isLoading: productsLoading } = useProductSource();
   const { getSignal, isLoading: signalsLoading } = useProductSignals(products);
 
   const result = useMemo(() => {

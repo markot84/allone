@@ -1,10 +1,18 @@
 {
-  "version": "0.563.0",
-  "previousVersion": "0.562.0",
-  "commitHash": "ce915fd",
+  "version": "0.566.0",
+  "previousVersion": "0.565.0",
+  "commitHash": "c24ae55",
   "branch": "main",
-  "buildDate": "2026-04-18T21:34:47.326Z",
+  "buildDate": "2026-04-19T06:23:09.989Z",
   "commits": [
+    {
+      "hash": "c24ae55",
+      "message": "fix: guard missing connectedPlatforms in useEcommerceSummary hasData"
+    },
+    {
+      "hash": "b7e95d1",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "ce915fd",
       "message": "merge: Sprint 2 — universal data layer, decision buckets, AI context, ecommerce fix"
@@ -56,26 +64,18 @@
     {
       "hash": "0950ce0",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "b3ef434",
-      "message": "feat(products): date range filter on Product Intelligence (import vs first available)"
-    },
-    {
-      "hash": "c0053af",
-      "message": "fix(magento): probe REST paths (index.php, www) + store restApiBase for sync"
     }
   ],
   "changes": [
+    "[Διόρθωση] Guard missing connectedPlatforms in useEcommerceSummary hasData",
+    "[Συντήρηση] Full deploy",
     "Merge: Sprint 2 — universal data layer, decision buckets, AI context, ecommerce fix",
     "[Διόρθωση] KPI Παραγγελίες counted only capped recentOrders",
     "UX: redesign TriageCard for merchant clarity",
     "Sprint 2 Phase 3+4: triage origin persistence + AI context wiring",
     "[Νέο χαρακτηριστικό] Universal data layer + decision buckets triage",
     "[Νέο χαρακτηριστικό] Sales opt foundation + universal stock movement",
-    "[Συντήρηση] Full deploy",
     "[Διόρθωση] Grouped setup modals, impact dismiss UX, price benchmark filter perf",
-    "[Νέο χαρακτηριστικό] Strategy commerce tools, campaigns geo Mekko, and related updates",
-    "[Νέο χαρακτηριστικό] Date range filter on Product Intelligence (import vs first available)"
+    "[Νέο χαρακτηριστικό] Strategy commerce tools, campaigns geo Mekko, and related updates"
   ]
 }
