@@ -285,7 +285,8 @@ export interface Product {
   margin_percentage: number;
   stock_level: number;
   stock_capacity: number;
-  stock_age_days: number;
+  /** Ημέρες στο απόθεμα / κατάλογο — προαιρετικό (π.χ. procurement feed χωρίς στήλη ηλικίας). */
+  stock_age_days?: number;
   priority_tag?: string;
   price: number;
   composite_score?: number;

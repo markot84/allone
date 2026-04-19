@@ -1,19 +1,16 @@
 /**
- * TriageCard — «Ποια προϊόντα χρειάζονται προσοχή τώρα»
+ * TriageCard — «Διάγνωση προτεραιοτήτων» (πρώην triage)
  *
- * Decision Buckets snapshot με merchant-friendly UI. Ομαδοποιεί τα 8 buckets
- * σε 4 thematic sections (Επείγον / Ευκαιρίες / Παρακολούθηση / Διερεύνηση)
- * και δίνει rich SKU rows με stock, ημέρες επάρκειας, ηλικία, last sale,
- * λόγο ταξινόμησης και προτεινόμενη δράση.
+ * Εμφανίζει τα Decision Buckets: συνδυασμός καταλόγου με σήματα πωλήσεων/κίνησης.
+ * Δεν ταυτίζεται με τις κάρτες dead/excess του Product Intelligence (ERP view).
  *
- * Pure UI — όλη η classification logic ζει στο `useDecisionBuckets` /
- * `utils/decisionBuckets`.
+ * Pure UI — η λογική ταξινόμησης είναι στο `useDecisionBuckets` / `decisionBuckets`.
  */
 
 import { useMemo, useState } from 'react';
 import {
   AlertTriangle, TrendingUp, Zap, Snowflake, XCircle, Package, Sparkles,
-  ChevronRight, ChevronDown, HelpCircle, Info, AlertOctagon, TrendingDown,
+  ChevronRight, ChevronDown, ChevronUp, HelpCircle, Info, AlertOctagon, TrendingDown,
   Clock, Boxes, Database, Plug, X,
 } from 'lucide-react';
 import { useDecisionBuckets, type TriageDataQuality } from '../../hooks/useDecisionBuckets';
@@ -149,7 +146,7 @@ function TriageDataReliabilityCallout({
       </ul>
       {dominantUnknown && (
         <p className="mt-2 text-[11px] text-gray-800 font-medium">
-          Μεγάλο μέρος του καταλόγου παραμένει σε «ανεπαρκή σήματα» — η εικόνα triage είναι{' '}
+          Μεγάλο μέρος του καταλόγου παραμένει σε «ανεπαρκή σήματα» — η διάγνωση εδώ είναι{' '}
           <strong>μερική</strong> έως ότου ενισχυθούν οι πηγές.
         </p>
       )}
@@ -176,7 +173,7 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
     totalTiedCapital, assignments, dataQuality,
   } = useDecisionBuckets();
   const [expanded, setExpanded] = useState<BucketId | null>(null);
-  const [showSubtitle, setShowSubtitle] = useState(false);
+  const [showDocumentation, setShowDocumentation] = useState(false);
   const [viewAllBucket, setViewAllBucket] = useState<BucketId | null>(null);
 
   // Data availability — για empty state checklist
@@ -247,9 +244,9 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
             <Boxes size={18} className="text-slate-500" />
           </div>
           <div>
-            <div className="text-sm font-semibold text-gray-900">Καμία ανάλυση ακόμη</div>
+            <div className="text-sm font-semibold text-gray-900">Καμία διάγνωση ακόμη</div>
             <div className="text-[12px] text-gray-600 mt-1">
-              Ανέβασε κατάλογο προϊόντων για να ξεκινήσει η ταξινόμηση κατά προτεραιότητα.
+              Ανέβασε κατάλογο προϊόντων για να εμφανιστεί η διάγνωση προτεραιοτήτων (με βάση και τις διαθέσιμες πηγές σημάτων).
             </div>
           </div>
         </div>
@@ -271,7 +268,7 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
           </div>
           <div>
             <div className="text-sm font-semibold text-gray-900">
-              {totalProducts.toLocaleString('el-GR')} SKUs αλλά καμία ταξινόμηση
+              {totalProducts.toLocaleString('el-GR')} SKUs — χωρίς εμπορικές κατηγορίες διάγνωσης
             </div>
             <div className="text-[12px] text-gray-600 mt-1">
               Τα προϊόντα έχουν εισαχθεί αλλά χρειαζόμαστε δεδομένα κίνησης για να εντοπίσουμε
@@ -290,42 +287,76 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
       <div className="px-5 pt-4 pb-3 border-b border-gray-100">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <h3 className="text-base font-bold text-gray-900">
-                Ποια προϊόντα χρειάζονται προσοχή τώρα
+                Διάγνωση προτεραιοτήτων
               </h3>
               <button
-                onClick={() => setShowSubtitle((s) => !s)}
-                className="shrink-0 text-gray-400 hover:text-gray-600 transition-colors"
-                title="Τι είναι αυτή η ανάλυση;"
+                type="button"
+                onClick={() => setShowDocumentation((s) => !s)}
+                className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-700 transition-colors hover:bg-slate-100"
+                title="Προβολή τεκμηρίωσης και σημάτων αξιολόγησης"
               >
-                <HelpCircle size={14} />
+                Τεκμηρίωση Προτεραιοτήτων & Σήματα Αξιολόγησης
+                {showDocumentation ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
               </button>
             </div>
-            {showSubtitle && (
-              <div className="mt-1.5 text-[12px] text-gray-600 max-w-2xl leading-relaxed">
-                Η ενότητα αυτή ιεραρχεί τους κωδικούς με βάση τις διαθέσιμες πηγές (κατάλογος, πωλήσεις,
-                κίνηση αποθέματος, procurement). Δεν υποκαθιστά ERP ή λογιστική· για δεσμεύσεις κεφαλαίου και
-                αποφάσεις απόσυρσης επιβεβαιώνετε πάντα με τα εσωτερικά σας στοιχεία.
-              </div>
-            )}
             <div className="text-[11px] text-gray-500 mt-1">
               {totalProducts.toLocaleString('el-GR')} SKUs στον κατάλογο
               {' · '}
-              {skusWithAnyBucket.toLocaleString('el-GR')} με τουλάχιστον μία ετικέτα bucket
+              {skusWithAnyBucket.toLocaleString('el-GR')} με τουλάχιστον μία εμπορική κατηγορία παρακάτω
               {' · '}
-              άθροισμα εκτιμώμενων δεσμευμένων: <strong>{fmtEur(totalTiedCapital)}</strong>
+              εκτιμώμενα δεσμευμένα (άθροισμα): <strong>{fmtEur(totalTiedCapital)}</strong>
             </div>
-            {dataQuality && (
-              <TriageDataReliabilityCallout
-                quality={dataQuality}
-                totalTiedCapital={totalTiedCapital}
-                newOrUnknownCount={counts.new_or_unknown}
-              />
-            )}
           </div>
         </div>
       </div>
+
+      {showDocumentation && (
+        <div className="px-5 py-3 bg-slate-50/95 border-b border-gray-100 space-y-3">
+          <div className="text-[12px] text-gray-600 max-w-3xl leading-relaxed">
+            Εδώ οι κωδικοί ομαδοποιούνται με βάση <strong>συνδυασμό καταλόγου και σημάτων</strong> (πωλήσεις,
+            παράθυρα ζήτησης, κίνηση αποθέματος, κόστη από procurement). <strong>Δεν</strong> είναι το ίδιο με τις
+            κάρτες Dead / Excess στο Product Intelligence, που ακολουθούν απευθείας τους κανόνες του ERP.
+          </div>
+          {dataQuality && (
+            <TriageDataReliabilityCallout
+              quality={dataQuality}
+              totalTiedCapital={totalTiedCapital}
+              newOrUnknownCount={counts.new_or_unknown}
+            />
+          )}
+          <div>
+            <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-2">
+              Από πού προέρχονται τα δεδομένα
+            </div>
+            <div className="grid sm:grid-cols-2 gap-3 text-[12px]">
+              <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+                <div className="font-semibold text-slate-900 flex items-center gap-1.5">
+                  <Database size={14} className="text-slate-500 shrink-0" aria-hidden />
+                  Απόθεμα &amp; βαθμολόγηση (Procurement / ERP)
+                </div>
+                <p className="mt-1.5 text-slate-600 leading-snug">
+                  Στο <strong>Product Intelligence</strong> τα dead / excess / low προκύπτουν <strong>απευθείας από το φύλλο</strong>{' '}
+                  (αξιολόγηση είδους, status κωδικού, ανατροφοδότηση, απόθεμα × κόστος).
+                </p>
+              </div>
+              <div className="rounded-lg border border-indigo-200/70 bg-indigo-50/50 p-3 shadow-sm">
+                <div className="font-semibold text-indigo-950 flex items-center gap-1.5">
+                  <Plug size={14} className="text-indigo-600 shrink-0" aria-hidden />
+                  Εμπορική διάγνωση (ενότητες &amp; αριθμοί κάτω)
+                </div>
+                <p className="mt-1.5 text-indigo-900/85 leading-snug">
+                  Τα <strong>πλήθη προϊόντων</strong> δίπλα σε κάθε ενότητα (π.χ. «Άμεση προτεραιότητα», συγκεκριμένο bucket)
+                  μετρούν πόσα SKUs μπήκαν σε <strong>κανόνες αυτής της διάγνωσης</strong>, αφού συνδυαστεί ο κατάλογος με{' '}
+                  <strong>πωλήσεις, ζήτηση και κίνηση</strong> όπου υπάρχουν πηγές. <strong>Δεν</strong> είναι οι ίδιοι
+                  αριθμοί με τις κάρτες dead / excess / low στο <strong>Product Intelligence</strong>.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* GROUPED SECTIONS */}
       <div className="p-5 space-y-4">
@@ -368,6 +399,17 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
                   hasProcurement={!!hasProcurement}
                   noSignalsCount={unknownBreakdown.no_signals}
                   totalUnknown={counts.new_or_unknown}
+                />
+              )}
+
+              {group.id === 'critical' && onSelectPolicy && (
+                <PriorityPolicyActions
+                  buckets={group.activeBuckets}
+                  defs={defs}
+                  counts={counts}
+                  tiedByBucket={tiedByBucket}
+                  allByBucket={allByBucket}
+                  onSelectPolicy={onSelectPolicy}
                 />
               )}
 
@@ -482,7 +524,7 @@ function InsufficientSignalsHint({
     <div className="mb-3 rounded-lg border border-slate-200 bg-white/80 px-3 py-2.5 text-[11px] text-slate-700 leading-snug">
       <div className="font-semibold text-slate-800">Τι σημαίνει «ανεπαρκή σήματα»</div>
       <p className="mt-1 text-slate-600">
-        Ο κατάλογος και τα βασικά πεδία SKU υπάρχουν. Για να βγει ασφαλής εμπορική ταξινόμηση χρειαζόμαστε
+        Ο κατάλογος και τα βασικά πεδία SKU υπάρχουν. Για να βγει ασφαλής εμπορική διάγνωση χρειαζόμαστε
         τουλάχιστον μία πηγή κίνησης: παραγγελίες από e-shop, ιστορικό μεταβολών αποθέματος ή procurement
         (κόστη / κίνηση). Χωρίς αυτά ο κωδικός παραμένει εδώ — όχι επειδή «λείπει το προϊόν», αλλά επειδή
         δεν υπάρχει ακόμη επαρκές ιστορικό για ρίσκο ή ευκαιρία.
@@ -539,6 +581,88 @@ function getPolicyName(policy: RecommendedPolicy | null | undefined): string | n
   }
 }
 
+function buildPolicyPayload(
+  bucket: BucketId,
+  assignments: BucketAssignment[],
+  label: string,
+  tiedCapital: number
+) {
+  const skus = assignments
+    .map((a) => a.sku)
+    .filter((s): s is string => typeof s === 'string' && s.length > 0);
+  const productIds = assignments
+    .map((a) => a.productId)
+    .filter((id): id is string => typeof id === 'string' && id.length > 0);
+
+  return {
+    fromBucket: bucket,
+    payload: { skus, productIds, label, tiedCapital },
+  };
+}
+
+function PriorityPolicyActions({
+  buckets,
+  defs,
+  counts,
+  tiedByBucket,
+  allByBucket,
+  onSelectPolicy,
+}: {
+  buckets: BucketId[];
+  defs: ReturnType<typeof useDecisionBuckets>['defs'];
+  counts: ReturnType<typeof useDecisionBuckets>['counts'];
+  tiedByBucket: ReturnType<typeof useDecisionBuckets>['tiedByBucket'];
+  allByBucket: Record<BucketId, BucketAssignment[]>;
+  onSelectPolicy: NonNullable<TriageCardProps['onSelectPolicy']>;
+}) {
+  const actionable = buckets.filter((bucket) => !!defs[bucket].recommendedPolicy);
+  if (actionable.length === 0) return null;
+
+  return (
+    <div className="mb-3 grid grid-cols-1 lg:grid-cols-2 gap-2">
+      {actionable.map((bucket) => {
+        const def = defs[bucket];
+        const policyName = getPolicyName(def.recommendedPolicy);
+        if (!policyName) return null;
+
+        return (
+          <button
+            key={bucket}
+            type="button"
+            onClick={() => {
+              const { fromBucket, payload } = buildPolicyPayload(
+                bucket,
+                allByBucket[bucket],
+                def.label,
+                tiedByBucket[bucket]
+              );
+              onSelectPolicy(def.recommendedPolicy as NonNullable<RecommendedPolicy>, fromBucket, payload);
+            }}
+            className="rounded-lg border border-rose-200 bg-white px-3 py-3 text-left transition-all hover:border-rose-300 hover:shadow-sm"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-rose-600">
+                  Άμεση ενέργεια
+                </div>
+                <div className="mt-1 text-[13px] font-semibold text-gray-900">{def.label}</div>
+                <div className="mt-1 text-[11px] text-gray-600">
+                  {counts[bucket].toLocaleString('el-GR')} προϊόντα
+                  {tiedByBucket[bucket] > 0 ? ` · ${fmtEur(tiedByBucket[bucket])} δεσμευμένα` : ''}
+                </div>
+              </div>
+              <div className="shrink-0 inline-flex items-center gap-1 rounded-md bg-rose-50 px-2 py-1 text-[11px] font-semibold text-rose-700">
+                {policyName}
+                <ChevronRight size={12} />
+              </div>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function AllBucketProductsModal({
   bucket,
   defs,
@@ -587,7 +711,12 @@ function AllBucketProductsModal({
                 <th className="text-right font-semibold px-2 py-2">Stock</th>
                 <th className="text-right font-semibold px-2 py-2">Πωλ. 30η</th>
                 <th className="text-right font-semibold px-2 py-2">Επάρκεια</th>
-                <th className="text-right font-semibold px-2 py-2">Margin</th>
+                <th
+                  className="text-right font-semibold px-2 py-2"
+                  title="Τιμή πώλησης − κόστος, ως % επί της τιμής πώλησης. Δεν είναι καθαρό κέρδος μετά έξοδα."
+                >
+                  Μικτό %
+                </th>
                 <th className="text-right font-semibold px-2 py-2">Κεφάλαια</th>
                 <th className="text-right font-semibold px-3 py-2">Last sale</th>
               </tr>
@@ -699,16 +828,16 @@ function ExpandedPanel({
           {def.recommendedPolicy && onSelectPolicy && (
             <button
               onClick={() => {
-                const skus = assignments
-                  .map((a) => a.sku)
-                  .filter((s): s is string => typeof s === 'string' && s.length > 0);
-                const productIds = assignments
-                  .map((a) => a.productId)
-                  .filter((id): id is string => typeof id === 'string' && id.length > 0);
+                const { fromBucket, payload } = buildPolicyPayload(
+                  bucket,
+                  assignments,
+                  def.label,
+                  tiedTotal
+                );
                 onSelectPolicy(
                   def.recommendedPolicy as NonNullable<RecommendedPolicy>,
-                  bucket,
-                  { skus, productIds, label: def.label, tiedCapital: tiedTotal }
+                  fromBucket,
+                  payload
                 );
               }}
               className="shrink-0 inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-[var(--nts-accent)] text-white text-[11px] font-semibold hover:opacity-90 transition-opacity"
@@ -739,7 +868,12 @@ function ExpandedPanel({
                 <th className="text-right font-semibold px-2 py-2">Stock</th>
                 <th className="text-right font-semibold px-2 py-2">Πωλ. 30η</th>
                 <th className="text-right font-semibold px-2 py-2">Επάρκεια</th>
-                <th className="text-right font-semibold px-2 py-2">Margin</th>
+                <th
+                  className="text-right font-semibold px-2 py-2"
+                  title="Τιμή πώλησης − κόστος, ως % επί της τιμής πώλησης. Δεν είναι καθαρό κέρδος μετά έξοδα."
+                >
+                  Μικτό %
+                </th>
                 <th className="text-right font-semibold px-2 py-2">Κεφάλαια</th>
                 <th className="text-right font-semibold px-3 py-2">Last sale</th>
               </tr>
@@ -858,7 +992,7 @@ function DataChecklist({
     {
       ok: hasProcurement,
       icon: Database,
-      label: 'Procurement export (κόστη, lifetime, ταξινόμηση)',
+      label: 'Procurement export (κόστη, lifetime, αξιολόγηση SKU)',
       help: 'Προσθέτει στοιχεία κόστους, δεσμευμένου κεφαλαίου, ιστορικής κίνησης και αξιολόγησης προϊόντων.',
     },
   ];

@@ -31,6 +31,54 @@ function daysFromDate(val: string): number | null {
   return Math.floor((Date.now() - date.getTime()) / 86400000);
 }
 
+/**
+ * Κελί procurement / spreadsheet → `Product.first_available_date`.
+ * Διαχωρίζει Excel serial από epoch-ms ώστε μεγάλοι αριθμοί να μην ερμηνεύονται ως serial.
+ */
+export function normalizeSpreadsheetCellToFirstAvailableDate(raw: unknown): string | undefined {
+  if (raw == null || raw === '') return undefined;
+
+  const accept = (s: string): string | undefined => {
+    const t = s.trim();
+    if (!t) return undefined;
+    return daysFromDate(t) !== null ? t : undefined;
+  };
+
+  if (typeof raw === 'object' && raw !== null && 'toDate' in raw && typeof (raw as { toDate?: unknown }).toDate === 'function') {
+    const d = (raw as { toDate: () => Date }).toDate();
+    if (!(d instanceof Date) || isNaN(d.getTime())) return undefined;
+    return accept(d.toISOString().slice(0, 10));
+  }
+
+  const sec =
+    typeof raw === 'object' && raw !== null && typeof (raw as { seconds?: number }).seconds === 'number'
+      ? (raw as { seconds: number }).seconds
+      : typeof raw === 'object' && raw !== null && typeof (raw as { _seconds?: number })._seconds === 'number'
+        ? (raw as { _seconds: number })._seconds
+        : undefined;
+  if (typeof sec === 'number' && Number.isFinite(sec)) {
+    const d = new Date(sec * 1000);
+    if (isNaN(d.getTime())) return undefined;
+    return accept(d.toISOString().slice(0, 10));
+  }
+
+  if (raw instanceof Date) {
+    if (isNaN(raw.getTime())) return undefined;
+    return accept(raw.toISOString().slice(0, 10));
+  }
+
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    if (raw > 1e11) {
+      const d = new Date(raw);
+      if (isNaN(d.getTime())) return undefined;
+      return accept(d.toISOString().slice(0, 10));
+    }
+    return accept(String(raw));
+  }
+
+  return accept(String(raw));
+}
+
 /** Date from Firestore Timestamp or ISO string */
 function toDate(val: Product['createdAt']): Date | null {
   if (!val) return null;
@@ -42,18 +90,18 @@ function toDate(val: Product['createdAt']): Date | null {
   return null;
 }
 
-/** Resolve stock age: stock_age_days → first_available_date → createdAt (import date) */
+/** Ηλικία καταλόγου σε ημέρες. Επιστρέφει -1 όταν δεν υπάρχει αξιόπιστη ημερομηνία
+ * (όχι το ίδιο με «0 ημ.» = εισαγωγή σήμερα). */
 export function getStockAgeDays(product: Product): number {
-  const stored = product.stock_age_days ?? 0;
-  if (stored > 0) return stored;
+  const stored = product.stock_age_days;
+  if (typeof stored === 'number' && stored > 0) return stored;
   const fromDate = product.first_available_date ? daysFromDate(product.first_available_date) : null;
   if (fromDate !== null && fromDate >= 0) return fromDate;
-  // Fallback: μέρες από ημερομηνία import (createdAt)
   const created = toDate(product.createdAt);
   if (created && !isNaN(created.getTime())) {
     return Math.max(0, Math.floor((Date.now() - created.getTime()) / 86400000));
   }
-  return 0;
+  return -1;
 }
 
 /** Default Target Days of Stock — configurable per business */
@@ -105,6 +153,26 @@ export function classifyStockHealth(product: Product, tod: number = DEFAULT_TOD)
   if (dos <= tod / 2) return 'low';
   if (dos > tod * 2) return 'excess';
   return 'healthy';
+}
+
+/**
+ * Για Enterprise procurement: τα KPI (κάρτες) βασίζονται σε αξιολόγηση/ανατροφοδότηση
+ * και συμφωνούν με το `priority_tag` που χτίζει το `useProductSource`.
+ * Το κλασικό `classifyStockHealth` χρησιμοποιεί μόνο DOS από πωλήσεις· χωρίς qty
+ * επιστρέφει ∞ και τα εμφανίζει όλα ως dead — αποσυγχρονίζει τον πίνακα από τις κάρτες.
+ */
+export function resolveStockHealth(
+  product: Product,
+  supplierTodMap?: Map<string, number>,
+  useProcurementRowModel?: boolean
+): StockHealth {
+  if (useProcurementRowModel) {
+    const tag = product.priority_tag;
+    if (tag === 'dead' || tag === 'low' || tag === 'healthy' || tag === 'excess') {
+      return tag;
+    }
+  }
+  return classifyStockHealth(product, getProductTod(product, supplierTodMap));
 }
 
 function ymdLocal(d: Date): string {

@@ -122,7 +122,8 @@ export function calculateSalesMomentumScore(product: Product): number {
   }
 
   if (!hasMultiWindow && typeof q30 === 'number' && q30 === 0) {
-    const age = product.stock_age_days ?? 0;
+    const age = getStockAgeDays(product);
+    if (age < 0) return 42;
     return age > 90 ? 85 : age > 30 ? 76 : 68;
   }
 

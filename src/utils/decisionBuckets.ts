@@ -81,16 +81,18 @@ export const BUCKET_DEFS: Record<BucketId, BucketDef> = {
     id: 'hot_seller',
     label: 'Προϊόντα υψηλής ζήτησης',
     shortLabel: 'Υψηλή ζήτηση',
-    description: 'Προϊόντα με ισχυρή πρόσφατη ζήτηση και ικανοποιητικό περιθώριο κέρδους.',
+    description:
+      'Προϊόντα με ισχυρή πρόσφατη ζήτηση και ικανοποιητικό μικτό περιθώριο (ως % της τιμής πώλησης, όχι καθαρό κέρδος).',
     color: 'emerald',
     recommendedPolicy: 'profit_max',
     cta: 'Ενίσχυση με Profit Max',
   },
   margin_bleeder: {
     id: 'margin_bleeder',
-    label: 'Ανεπαρκές περιθώριο',
-    shortLabel: 'Χαμηλό περιθώριο',
-    description: 'Παρουσιάζει πωλήσεις, αλλά με αρνητικό ή οριακό περιθώριο, επιβαρύνοντας την κερδοφορία.',
+    label: 'Ανεπαρκές μικτό περιθώριο',
+    shortLabel: 'Χαμηλό μικτό περιθώριο',
+    description:
+      'Πωλήσεις με εκτιμώμενο μικτό περιθώριο επί της τιμής πώλησης (τιμή − κόστος) αρνητικό ή πολύ χαμηλό. Δεν περιλαμβάνει φόρους, logistics ή λειτουργικά — άρα όχι «καθαρό» κέρδος.',
     color: 'amber',
     recommendedPolicy: 'price_benchmark',
     cta: 'Έλεγχος τιμολόγησης',
@@ -167,7 +169,8 @@ export const BUCKET_GROUPS: BucketGroup[] = [
   {
     id: 'critical',
     label: 'Άμεση προτεραιότητα',
-    subtitle: 'Κωδικοί που δεσμεύουν κεφάλαιο, εμφανίζουν ασθενές περιθώριο ή ενέχουν κίνδυνο έλλειψης.',
+    subtitle:
+      'Κωδικοί που δεσμεύουν κεφάλαιο, εμφανίζουν ασθενές μικτό περιθώριο (επί τιμής πώλησης) ή ενέχουν κίνδυνο έλλειψης.',
     buckets: ['dead_capital', 'stockout_risk', 'margin_bleeder'],
     color: 'rose',
   },
@@ -358,7 +361,7 @@ function classifyOne(
     margin >= t.hotSellerMinMarginPct
   ) {
     buckets.push('hot_seller');
-    reasons.hot_seller = `${qty30d} τμχ/30d (top ${Math.round(t.hotSellerTopPercentile * 100)}%), περιθώριο ${margin.toFixed(0)}%.`;
+    reasons.hot_seller = `${qty30d} τμχ/30d (top ${Math.round(t.hotSellerTopPercentile * 100)}%), μικτό περιθώριο ${margin.toFixed(0)}%.`;
   }
 
   // 6) Margin Bleeder — πουλάει αλλά margin πολύ χαμηλό
@@ -369,7 +372,7 @@ function classifyOne(
     margin <= t.marginBleederMaxPct
   ) {
     buckets.push('margin_bleeder');
-    reasons.margin_bleeder = `${qty30d} τμχ/30d με περιθώριο ${margin.toFixed(1)}%.`;
+    reasons.margin_bleeder = `${qty30d} τμχ/30d με μικτό περιθώριο ${margin.toFixed(1)}% (επί πώλησης).`;
   }
 
   // 7) Slow Mover — όχι Dead Capital αλλά αξίζει προσοχή
@@ -389,7 +392,7 @@ function classifyOne(
   // 8) New / Unknown — fallback όταν δεν έχουμε classification ή πολύ νέο SKU
   let unknownReason: UnknownReason | undefined;
   if (buckets.length === 0) {
-    // Προτεραιότητα: virtual SKU (gift cards κλπ) → new → no signals
+    // Προτεραιότητα: virtual SKU (gift cards κλπ) → νέο με γνωστή ηλικία → χωρίς παράθυρο ζήτησης
     const isVirtual = (stock <= 0 && (cost === undefined || cost === 0));
     if (isVirtual) {
       buckets.push('new_or_unknown');
@@ -399,10 +402,18 @@ function classifyOne(
       buckets.push('new_or_unknown');
       unknownReason = 'new_sku';
       reasons.new_or_unknown = `Νέο SKU — μόλις ${ageDays} ${ageDays === 1 ? 'ημέρα' : 'ημέρες'} στον κατάλογο.`;
-    } else if (!hasWindowSource && !signal?.hasProcurement) {
+    } else if (!hasWindowSource) {
+      // Χωρίς orders/movement windows: ισχύει ακόμη κι αν υπάρχει procurement (ασύμφωνα SKU / μορφή κωδικού).
       buckets.push('new_or_unknown');
       unknownReason = 'no_signals';
-      reasons.new_or_unknown = 'Λείπουν δεδομένα κίνησης — σύνδεσε e-shop ή ανέβασε procurement export.';
+      reasons.new_or_unknown = signal?.hasProcurement
+        ? 'Δεν υπάρχουν επαληθευμένα παράθυρα ζήτησης (7/30/90 ημ.) για αυτό το SKU. Έλεγχος αντιστοίχισης κωδικού με e-shop ή ότι τα exports καλύπτουν το SKU.'
+        : 'Λείπουν δεδομένα κίνησης — σύνδεσε e-shop ή ανέβασε procurement export.';
+    } else {
+      buckets.push('new_or_unknown');
+      unknownReason = 'no_signals';
+      reasons.new_or_unknown =
+        'Υπάρχουν σήματα κίνησης αλλά δεν πληρούνται τα κριτήρια των εμπορικών buckets — απαιτείται χειροκίνητη αξιολόγηση.';
     }
   }
 

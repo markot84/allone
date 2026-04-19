@@ -19,14 +19,20 @@ function makeProduct(overrides: Partial<Product> = {}): Product {
 }
 
 describe('productMatchesSalesBasePreset', () => {
-  it('θεωρεί 30d=0 ως zero_last_7d όταν λείπει 7d πεδίο', () => {
+  it('zero_last_7d: απαιτείται authoritative 7d πεδίο ή last_sale_at (όχι συνεπαγωγή από 30d period)', () => {
     const product = makeProduct({ qty_sold_period: 0 });
-    expect(productMatchesSalesBasePreset(product, 'zero_last_7d')).toBe(true);
+    expect(productMatchesSalesBasePreset(product, 'zero_last_7d')).toBe(false);
+    expect(
+      productMatchesSalesBasePreset(makeProduct({ qty_sold_last_7d: 0 }), 'zero_last_7d'),
+    ).toBe(true);
   });
 
-  it('θεωρεί 90d=0 ως zero_last_30d όταν λείπει 30d πεδίο', () => {
+  it('zero_last_30d: απαιτείται authoritative 30d πεδίο ή last_sale_at (όχι μόνο 90d)', () => {
     const product = makeProduct({ qty_sold_last_90d: 0 });
-    expect(productMatchesSalesBasePreset(product, 'zero_last_30d')).toBe(true);
+    expect(productMatchesSalesBasePreset(product, 'zero_last_30d')).toBe(false);
+    expect(
+      productMatchesSalesBasePreset(makeProduct({ qty_sold_last_30d: 0 }), 'zero_last_30d'),
+    ).toBe(true);
   });
 
   it('δεν θεωρεί 30d=0 ως zero_last_90d χωρίς 90d ή παλιό last_sale_at', () => {
@@ -34,9 +40,9 @@ describe('productMatchesSalesBasePreset', () => {
     expect(productMatchesSalesBasePreset(product, 'zero_last_90d')).toBe(false);
   });
 
-  it('αναγνωρίζει stalled πρόσφατα από 30d=0 όταν υπάρχει ιστορικό sales', () => {
+  it('αναγνωρίζει stalled όταν 7d=0 με ιστορικό sales (ή ρητό 7d=0 + 90d>0)', () => {
     const product = makeProduct({
-      qty_sold_period: 0,
+      qty_sold_last_7d: 0,
       qty_sold_lifetime: 12,
     });
     expect(productMatchesSalesBasePreset(product, 'stalled_7_vs_90')).toBe(true);

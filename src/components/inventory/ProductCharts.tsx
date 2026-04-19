@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, TrendingUp, Package, AlertTriangle, BarChart3 } from 'lucide-react';
 import { Card, Button, ModalHeader } from '../common';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
-import { getStockAgeDays, classifyStockHealth, getProductTod } from '../../utils/productUtils';
+import { getStockAgeDays, resolveStockHealth } from '../../utils/productUtils';
 import type { Product } from '../../types';
 
 interface ProductChartsProps {
@@ -11,9 +11,10 @@ interface ProductChartsProps {
   onClose: () => void;
   products: Product[];
   supplierTodMap?: Map<string, number>;
+  useProcurementRowModel?: boolean;
 }
 
-export function ProductCharts({ isOpen, onClose, products, supplierTodMap }: ProductChartsProps) {
+export function ProductCharts({ isOpen, onClose, products, supplierTodMap, useProcurementRowModel }: ProductChartsProps) {
   // Debug: Log products count and sample data
   useEffect(() => {
     if (isOpen) {
@@ -74,6 +75,7 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap }: Pro
         const range = ranges.find(r => age >= r.min && age < (r.max === Infinity ? Infinity : r.max));
         if (range) range.count++;
       }
+      // age === -1: άγνωστη ηλικία — δεν κατανέμεται σε bucket (αποφεύγουμε ψευδο-«0 ημ.»)
     });
 
     const hasData = ranges.some(r => r.count > 0);
@@ -105,8 +107,7 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap }: Pro
     let dead = 0;
 
     products.forEach(p => {
-      const tod = getProductTod(p, supplierTodMap);
-      const health = classifyStockHealth(p, tod);
+      const health = resolveStockHealth(p, supplierTodMap, useProcurementRowModel);
       switch (health) {
         case 'dead': dead++; break;
         case 'low': low++; break;
@@ -117,13 +118,13 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap }: Pro
 
     const result = [
       { name: 'Φυσιολογικό απόθεμα', value: healthy, color: '#22C55E' },
-      { name: 'Χαμηλό απόθεμα', value: low, color: '#F59E0B' },
-      { name: 'Υπερβολικό απόθεμα', value: excess, color: '#EF4444' },
-      { name: 'Νεκρό απόθεμα', value: dead, color: '#9CA3AF' }
+      { name: 'Χαμηλό απόθεμα', value: low, color: '#8B5CF6' },
+      { name: 'Υπερβολικό απόθεμα', value: excess, color: '#F59E0B' },
+      { name: 'Νεκρό απόθεμα', value: dead, color: '#EF4444' }
     ];
     console.log('[ProductCharts] Stock status:', result);
     return result;
-  }, [products]);
+  }, [products, supplierTodMap, useProcurementRowModel]);
 
   // Top Products by Margin
   const topProductsByMargin = useMemo(() => {
@@ -142,7 +143,7 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap }: Pro
   // Stock Age vs Stock Level (scatter-like)
   const stockAgeVsLevel = useMemo(() => {
     const result = products
-      .filter(p => (p.stock_level || 0) > 0)
+      .filter((p) => (p.stock_level || 0) > 0 && getStockAgeDays(p) >= 0)
       .slice(0, 100) // Limit for performance
       .map(p => ({
         age: getStockAgeDays(p),

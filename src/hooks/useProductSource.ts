@@ -3,12 +3,37 @@ import { useProducts } from './useProducts';
 import { useProcurement } from './useProcurement';
 import { usePlan } from './usePlan';
 import type { Product } from '../types';
-import { excludeDemoProducts } from '../utils/productUtils';
+import { classifyProcurementInventoryRow } from '../utils/procurementInventoryClassify';
+import { excludeDemoProducts, normalizeSpreadsheetCellToFirstAvailableDate } from '../utils/productUtils';
 
 function findCol(rows: Record<string, unknown>[], keyword: string): string {
   if (!rows.length) return keyword;
   const kUp = keyword.toUpperCase();
   return Object.keys(rows[0]).find(k => k.toUpperCase().includes(kUp)) ?? keyword;
+}
+
+/** Σειρά από συγκεκριμένα προς γενικά — best-effort αν το template έχει διαφορετικές κεφαλίδες. */
+const PROCUREMENT_FIRST_AVAILABLE_KEYWORDS = [
+  'ΗΜ.ΠΡΩΤΗΣ',
+  'ΠΡΩΤΗΣ ΠΑΡΑΛ',
+  'ΠΡΩΤΗ ΠΑΡΑΛΑΒΗ',
+  'ΠΡΩΤΗ ΕΙΣΑΓΩΓΗ',
+  'ΗΜΕΡΟΜΗΝΙΑ ΠΡΩΤΗΣ ΠΑΡΑΛΑΒΗΣ',
+  'FIRST_AVAILABLE_DATE',
+  'FIRST_AVAILABLE',
+  'FIRST_RECEIPT',
+  'DATE_FIRST_RECEIPT',
+] as const;
+
+function findColByOrderedKeywords(rows: Record<string, unknown>[], keywords: readonly string[]): string | null {
+  if (!rows.length) return null;
+  const headers = Object.keys(rows[0]);
+  for (const kw of keywords) {
+    const kUp = kw.toUpperCase();
+    const hit = headers.find(h => h.toUpperCase().includes(kUp));
+    if (hit) return hit;
+  }
+  return null;
 }
 
 function parseNum(v: unknown): number {
@@ -42,6 +67,8 @@ export function useProductSource() {
     const refillCol = findCol(invRows, 'ΑΝΑΤΡΟΦΟΔΟΣΙΑ');
     const priceCol = findCol(invRows, 'ΤΙΜΗ ΠΩΛΗΣΗΣ');
     const groupCol = findCol(invRows, 'ΟΜΑΔΑ');
+    const statusCol = findCol(invRows, 'STATUS ΚΩΔΙΚΟΥ');
+    const firstAvailCol = findColByOrderedKeywords(invRows, PROCUREMENT_FIRST_AVAILABLE_KEYWORDS);
 
     return invRows.map((row, idx) => {
       const code = String(row[codeCol] ?? '').trim();
@@ -51,16 +78,21 @@ export function useProductSource() {
       const price = parseNum(row[priceCol]) || cost;
       const evalGrade = String(row[evalCol] ?? 'B').trim().toUpperCase();
       const needsRefill = parseNum(row[refillCol]) > 0;
+      const statusUpper = String(row[statusCol] ?? '').trim().toUpperCase();
       const group = String(row[groupCol] ?? '').trim();
+      const first_available_date = firstAvailCol
+        ? normalizeSpreadsheetCellToFirstAvailableDate(row[firstAvailCol])
+        : undefined;
 
       const marginPct = price > 0 && cost > 0 ? ((price - cost) / price) * 100 : 0;
       const marginTier: Product['margin_tier'] = marginPct > 30 ? 'high' : marginPct > 15 ? 'medium' : 'low';
 
-      let tag: string | undefined;
-      if (stock === 0 || evalGrade === 'C') tag = 'dead';
-      else if (needsRefill) tag = 'low';
-      else if (evalGrade === 'A') tag = 'healthy';
-      else tag = 'excess';
+      const tag = classifyProcurementInventoryRow({
+        stock,
+        evalGrade,
+        needsRefill,
+        statusUpper,
+      });
 
       return {
         id: code || `proc-${idx}`,
@@ -71,10 +103,12 @@ export function useProductSource() {
         margin_percentage: Math.round(marginPct * 10) / 10,
         stock_level: stock,
         stock_capacity: stock * 2,
-        stock_age_days: 0,
+        // Μην βάζουμε stock_age_days: 0 — ερμηνευόταν λανθασμένα ως «νέο SKU 0 ημ.» στο triage.
         priority_tag: tag,
+        procurement_status: statusUpper || undefined,
         price,
         cost_price: cost,
+        ...(first_available_date ? { first_available_date } : {}),
       } as Product;
     });
   }, [isEnterprise, procData?.inventory]);

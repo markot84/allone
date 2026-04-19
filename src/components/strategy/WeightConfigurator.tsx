@@ -21,9 +21,10 @@ import {
 import { Card, CardHeader, Button, Slider, Badge, Spinner, PageHeader, ModalHeader } from '../common';
 import { ScenarioSelector } from './ScenarioSelector';
 import { TriageCard } from './TriageCard';
+import { ProcurementStrategyBridge } from './ProcurementStrategyBridge';
 import { ChannelRecommendations } from './ChannelRecommendations';
 import { StrategyPackage } from './StrategyPackage';
-import { StrategyImpactSummary, StrategyImpactModal } from './StrategyImpactPreview';
+import { StrategyImpactModal } from './StrategyImpactPreview';
 import { SalesBaseSetupModal } from './SalesBaseSetupModal';
 import { PriceBenchmarkSetupModal } from './PriceBenchmarkSetupModal';
 import { SeasonalDiscountPanel, type SeasonalDiscountConfig } from './SeasonalDiscountPanel';
@@ -153,12 +154,14 @@ const PreviewCell = memo(function PreviewCell({
           </div>
         </td>
       );
-    case 'stock_age':
+    case 'stock_age': {
+      const d = getStockAgeDays(product);
       return (
         <td className="py-2 pr-2 w-16 hidden md:table-cell">
-          <span className="text-xs text-[#4A4A4A]">{product.stock_age_days ?? 0}d</span>
+          <span className="text-xs text-[#4A4A4A]">{d < 0 ? '—' : `${d}d`}</span>
         </td>
       );
+    }
     case 'excess_pct': {
       const excess = Math.max(0, (product.stock_level ?? 0) - cap);
       const pct = cap > 0 ? ((excess / cap) * 100).toFixed(0) : '0';
@@ -246,7 +249,22 @@ const PreviewCell = memo(function PreviewCell({
 
 export function WeightConfigurator() {
   const { currentBrand } = useBrand();
-  const { products, hasImported } = useProductSource();
+  const { products, hasImported, usingProcurement } = useProductSource();
+
+  const scenarioErpHints = useMemo(() => {
+    if (!usingProcurement || products.length === 0) return undefined;
+    const deadN = products.filter((p) => p.priority_tag === 'dead').length;
+    const excessN = products.filter((p) => p.priority_tag === 'excess').length;
+    const h: Record<string, string> = {};
+    if (deadN > 0 || excessN > 0) {
+      const scName = scenarios.find((s) => s.id === 'stock_clearance')?.name ?? 'Stock Clearance';
+      const parts: string[] = [];
+      if (deadN > 0) parts.push(`${deadN.toLocaleString('el-GR')} Dead Stock`);
+      if (excessN > 0) parts.push(`${excessN.toLocaleString('el-GR')} Excess Stock`);
+      h.stock_clearance = `${parts.join(' · ')} (ERP) — επιλέξτε «${scName}» (ίδιο preset για dead & excess)`;
+    }
+    return Object.keys(h).length ? h : undefined;
+  }, [usingProcurement, products]);
   const {
     skuStats,
     skuMovement,
@@ -514,6 +532,7 @@ export function WeightConfigurator() {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showFeedFormatModal, setShowFeedFormatModal] = useState(false);
   const [showSeasonalModal, setShowSeasonalModal] = useState(false);
+  const scenarioSelectorRef = useRef<HTMLDivElement | null>(null);
   const [mixPanelOpen, setMixPanelOpen] = useState(() => {
     return !((activeStrategy as any)?.mixConfig && activeStrategy?.scenarioId === 'mixed');
   });
@@ -523,6 +542,17 @@ export function WeightConfigurator() {
   // Persists στο active_strategies — επιτρέπει downstream consumers (Channel
   // Activation, AI prompts, exports) να γνωρίζουν την αιτία της στρατηγικής.
   const [triageOrigin, setTriageOrigin] = useState<TriageOrigin | null>(null);
+  const scrollToScenarioSelector = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      scenarioSelectorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, []);
+  const clearPendingScenario = useCallback(() => {
+    setPendingScenarioChange(null);
+    setPendingSalesBaseScope(null);
+    setPendingPriceBenchmarkScope(null);
+    setShowDetailModal(false);
+  }, []);
   const triageScopedProductIds = useMemo(() => {
     if (!triageOrigin) return null;
     if (triageOrigin.productIds && triageOrigin.productIds.length > 0) {
@@ -899,10 +929,8 @@ export function WeightConfigurator() {
         };
     }
     applyScenarioChange(pendingScenarioChange, selectedDuration, saveOpts);
-    setPendingSalesBaseScope(null);
-    setPendingPriceBenchmarkScope(null);
-    setShowDetailModal(false);
-  }, [pendingScenarioChange, pendingSalesBaseScope, pendingPriceBenchmarkScope, applyScenarioChange]);
+    clearPendingScenario();
+  }, [pendingScenarioChange, pendingSalesBaseScope, pendingPriceBenchmarkScope, applyScenarioChange, clearPendingScenario]);
 
   const previewUiScenarioId =
     pendingScenarioChange === 'sales_base'
@@ -1352,7 +1380,39 @@ export function WeightConfigurator() {
             />
           )}
 
-          {/* Decision Buckets — triage layer πάνω από τις πολιτικές */}
+          <ProcurementStrategyBridge
+            products={products}
+            enabled={usingProcurement}
+            onDeadToStockClearance={({ productIds, skus, tiedCapital, count }) => {
+              setTriageOrigin({
+                bucket: 'erp_dead_stock',
+                label: `Dead stock (ERP) — ${count.toLocaleString('el-GR')} SKU`,
+                skus,
+                productIds,
+                tiedCapital,
+                selectedAt: new Date().toISOString(),
+              });
+              handleScenarioChange('stock_clearance');
+              scrollToScenarioSelector();
+            }}
+            onExcessToStockClearance={({ productIds, skus, tiedCapital, count }) => {
+              setTriageOrigin({
+                bucket: 'erp_excess_stock',
+                label: `Excess Stock (ERP) — ${count.toLocaleString('el-GR')} SKU`,
+                skus,
+                productIds,
+                tiedCapital,
+                selectedAt: new Date().toISOString(),
+              });
+              handleScenarioChange('stock_clearance');
+              scrollToScenarioSelector();
+            }}
+            onOpenProductIntelligence={() => {
+              window.location.hash = '#products';
+            }}
+          />
+
+          {/* Διάγνωση προτεραιοτήτων (Decision Buckets) πάνω από τις πολιτικές */}
           <TriageCard
             onSelectPolicy={(policy, bucket, payload) => {
               setTriageOrigin({
@@ -1376,6 +1436,7 @@ export function WeightConfigurator() {
                   });
                   setPendingScenarioChange('price_benchmark');
                 });
+                scrollToScenarioSelector();
                 return;
               }
 
@@ -1390,16 +1451,17 @@ export function WeightConfigurator() {
               }
 
               handleScenarioChange(policy);
+              scrollToScenarioSelector();
             }}
           />
 
-          {/* Triage origin banner — δείχνει την προέλευση όταν επιλέχθηκε bucket */}
+          {/* Προέλευση από διάγνωση προτεραιοτήτων όταν επιλέχθηκε bucket */}
           {triageOrigin && (
             <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-[var(--nts-light-gray)] border border-[var(--nts-border-gray)] rounded-lg">
               <div className="flex items-center gap-2 min-w-0 text-[12px]">
                 <span className="w-1.5 h-1.5 rounded-full bg-[var(--nts-accent)] shrink-0" />
                 <span className="text-gray-700 truncate">
-                  Triage: <strong>{triageOrigin.label}</strong>
+                  Εστίαση διάγνωσης: <strong>{triageOrigin.label}</strong>
                   <span className="text-gray-500 ml-1.5">
                     · {(triageOrigin.productIds?.length ?? triageOrigin.skus?.length ?? 0)} προϊόντα στο scope
                     {typeof triageOrigin.tiedCapital === 'number' && triageOrigin.tiedCapital > 0
@@ -1418,11 +1480,46 @@ export function WeightConfigurator() {
           )}
 
           {/* Scenario Selector (tabs) */}
-          <ScenarioSelector
-            selectedScenario={selectedScenario}
-            onScenarioChange={handleScenarioChange}
-            activeDuration={duration}
-          />
+          <div ref={scenarioSelectorRef} className="space-y-3">
+            <ScenarioSelector
+              selectedScenario={pendingScenarioChange ?? selectedScenario}
+              onScenarioChange={handleScenarioChange}
+              activeDuration={duration}
+              erpHints={scenarioErpHints}
+            />
+            {pendingScenarioChange && (
+              <div className="flex flex-col gap-3 rounded-xl border border-[var(--nts-accent)]/20 bg-[var(--nts-light-gray)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--nts-accent)]">
+                    Επιλεγμένη πολιτική προς ενεργοποίηση
+                  </div>
+                  <div className="mt-1 text-sm font-semibold text-[var(--nts-charcoal)]">
+                    {scenarios.find((s) => s.id === pendingScenarioChange)?.name ?? pendingScenarioChange}
+                  </div>
+                  <p className="mt-1 text-[12px] text-[var(--nts-medium-gray)]">
+                    Έλεγξε πρώτα preview και ρυθμίσεις. Το popup διάρκειας ανοίγει μόνο όταν πατήσεις ενεργοποίηση.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={clearPendingScenario}
+                  >
+                    Κλείσιμο προεπιλογής
+                  </Button>
+                  <Button
+                    size="sm"
+                    icon={<ChevronRight size={14} />}
+                    iconPosition="right"
+                    onClick={() => setShowDetailModal(true)}
+                  >
+                    Επιλογή διάρκειας & ενεργοποίηση
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Briefing Banner — shown after strategy save */}
           {briefingName && !showBriefingDrawer && (
@@ -1499,41 +1596,6 @@ export function WeightConfigurator() {
         onApplySeason={handleSeasonApply}
         onManageSeasons={() => setShowSeasonalModal(true)}
       />
-
-      {/* Inline Impact Summary — appears when selecting a new scenario */}
-      <AnimatePresence>
-        {pendingScenarioChange && (
-          <StrategyImpactSummary
-            currentWeights={getCurrentWeights()}
-            newWeights={getWeightsForScenario(pendingScenarioChange)}
-            currentScenarioId={selectedScenario || undefined}
-            newScenarioId={pendingScenarioChange}
-            onConfirm={confirmStrategyChange}
-            onCancel={() => {
-              setPendingScenarioChange(null);
-              setPendingSalesBaseScope(null);
-              setPendingPriceBenchmarkScope(null);
-            }}
-            onDetails={() => setShowDetailModal(true)}
-            initialDuration={scenarios.find(s => s.id === pendingScenarioChange)?.duration ?? duration}
-            impactProductFilter={buildImpactProductFilter(
-              pendingScenarioChange === 'sales_base' && pendingSalesBaseScope
-                ? (p) => productParticipatesInSalesBase(salesBaseProductById.get(p.id) ?? p, pendingSalesBaseScope)
-                : pendingScenarioChange === 'price_benchmark' && pendingPriceBenchmarkScope
-                  ? (p) =>
-                      productInPriceBenchmarkScopeWithLookup(
-                        p,
-                        pendingPriceBenchmarkScope,
-                        benchmarkLookupMap,
-                      )
-                  : undefined
-            )}
-            scoreContext={
-              pendingScenarioChange === 'price_benchmark' ? benchmarkScoreContext : undefined
-            }
-          />
-        )}
-      </AnimatePresence>
 
       {/* Mixed Strategy Panel */}
       <AnimatePresence>
@@ -1654,7 +1716,7 @@ export function WeightConfigurator() {
             title="Live Preview"
             subtitle={
               triageScopeCount > 0
-                ? `Scope triage: ${triageScopeCount} προϊόντα · προβολή top 100 (10 ανά σελίδα)`
+                ? `Εστίαση από διάγνωση: ${triageScopeCount} προϊόντα · προβολή top 100 (10 ανά σελίδα)`
                 : hasImported
                   ? `Top 100 από ${products.length} εισαγόμενα προϊόντα (10 ανά σελίδα)`
                   : 'Top 100 προτεραιοποιημένα προϊόντα (10 ανά σελίδα)'

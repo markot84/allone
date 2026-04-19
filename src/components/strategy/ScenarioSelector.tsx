@@ -6,12 +6,15 @@ interface ScenarioSelectorProps {
   selectedScenario: string | null;
   onScenarioChange: (scenarioId: string) => void;
   activeDuration?: number | 'ongoing';
+  /** Προτεινόμενη ενέργεια από ERP (Product Intelligence) ανά scenario id */
+  erpHints?: Record<string, string>;
 }
 
 export function ScenarioSelector({
   selectedScenario,
   onScenarioChange,
   activeDuration,
+  erpHints,
 }: ScenarioSelectorProps) {
   const scenarioIcon = (id: string) => {
     const cls = 'text-[var(--nts-medium-gray)]';
@@ -38,7 +41,7 @@ export function ScenarioSelector({
   };
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-8 gap-3 max-w-full overflow-x-hidden">
+    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 max-w-full overflow-x-hidden">
       {scenarios.map((scenario, index) => {
         const isSelected = selectedScenario !== null && selectedScenario === scenario.id;
         
@@ -52,7 +55,7 @@ export function ScenarioSelector({
             <button
               onClick={() => onScenarioChange(scenario.id)}
               className={`
-                w-full h-full min-w-0 p-4 rounded-xl border-2 text-left transition-all duration-200 flex flex-col
+                w-full h-full min-w-0 min-h-[220px] p-4 rounded-xl border-2 text-left transition-all duration-200 flex flex-col
                 ${isSelected
                   ? 'border-[var(--nts-accent)] bg-[var(--nts-light-gray)]'
                   : 'border-[#E5E5E5] bg-white hover:border-[var(--nts-accent)]/50'
@@ -88,6 +91,11 @@ export function ScenarioSelector({
               <p className="text-xs text-[#4A4A4A] mt-1">
                 {scenario.description}
               </p>
+              {erpHints?.[scenario.id] && (
+                <p className="text-[10px] font-semibold text-[#92400E] mt-2 px-2 py-1.5 rounded-md bg-amber-50 border border-amber-100/80 leading-snug">
+                  {erpHints[scenario.id]}
+                </p>
+              )}
               {(() => {
                 const dur = isSelected && activeDuration !== undefined ? activeDuration : scenario.duration;
                 if (dur === undefined) return null;

@@ -22,8 +22,100 @@
 
 import { useMemo } from 'react';
 import { useEcommerceSummary } from './useEcommerceSummary';
-import { useProcurementSignals } from './useProcurementSignals';
+import { useProcurementSignals, type ProcurementSignal } from './useProcurementSignals';
 import type { Product } from '../types';
+
+/**
+ * Ενιαίο κλειδί SKU: NFC, trim, κενά, κεφαλαία — ώστε e-shop, ERP procurement και import
+ * να «δένουν» παρά μικροδιαφορές (π.χ. Abc-1 vs ABC-1). Χωρίς αυτό, η Διάγνωση
+ * προτεραιοτήτων αγνοούσε συχνά τα skuStats παρά ενεργό connector.
+ */
+export function normalizeSkuKeyForSignals(raw: string | undefined | null): string {
+  if (raw == null) return '';
+  const s = String(raw).normalize('NFC').trim().replace(/\s+/g, ' ');
+  return s ? s.toUpperCase() : '';
+}
+
+type SkuStatRow = {
+  stock: number;
+  sold: number;
+  sold7d?: number;
+  sold30d?: number;
+  sold90d?: number;
+  lastSaleAt?: string | null;
+};
+
+function mergeSkuStatRows(a: SkuStatRow, b: SkuStatRow): SkuStatRow {
+  const ta = a.lastSaleAt ? new Date(a.lastSaleAt).getTime() : NaN;
+  const tb = b.lastSaleAt ? new Date(b.lastSaleAt).getTime() : NaN;
+  let lastSaleAt: string | null = a.lastSaleAt ?? null;
+  if (Number.isFinite(tb) && (!Number.isFinite(ta) || tb > ta)) {
+    lastSaleAt = b.lastSaleAt ?? null;
+  }
+  return {
+    stock: Math.round((a.stock || 0) + (b.stock || 0)),
+    sold: Math.round((a.sold || 0) + (b.sold || 0)),
+    sold7d: Math.round((a.sold7d || 0) + (b.sold7d || 0)),
+    sold30d: Math.round((a.sold30d || 0) + (b.sold30d || 0)),
+    sold90d: Math.round((a.sold90d || 0) + (b.sold90d || 0)),
+    lastSaleAt,
+  };
+}
+
+function mergeMovementRows(
+  a: { dec7d?: number; dec30d?: number; dec90d?: number },
+  b: { dec7d?: number; dec30d?: number; dec90d?: number }
+): { dec7d?: number; dec30d?: number; dec90d?: number } {
+  return {
+    dec7d: (a.dec7d || 0) + (b.dec7d || 0),
+    dec30d: (a.dec30d || 0) + (b.dec30d || 0),
+    dec90d: (a.dec90d || 0) + (b.dec90d || 0),
+  };
+}
+
+function mergeProcurementRows(a: ProcurementSignal, b: ProcurementSignal): ProcurementSignal {
+  const out: ProcurementSignal = { ...a };
+  for (const [key, val] of Object.entries(b)) {
+    if (val === undefined || val === null) continue;
+    const k = key as keyof ProcurementSignal;
+    if (out[k] === undefined || out[k] === null) {
+      (out as Record<string, unknown>)[key] = val;
+    }
+  }
+  return out;
+}
+
+function aggregateSkuStatsByNorm(raw: Record<string, SkuStatRow>): Record<string, SkuStatRow> {
+  const out: Record<string, SkuStatRow> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    const nk = normalizeSkuKeyForSignals(k);
+    if (!nk) continue;
+    out[nk] = out[nk] ? mergeSkuStatRows(out[nk], v) : { ...v };
+  }
+  return out;
+}
+
+function aggregateMovementByNorm(
+  raw: Record<string, { dec7d?: number; dec30d?: number; dec90d?: number }>
+): Record<string, { dec7d?: number; dec30d?: number; dec90d?: number }> {
+  const out: Record<string, { dec7d?: number; dec30d?: number; dec90d?: number }> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    const nk = normalizeSkuKeyForSignals(k);
+    if (!nk) continue;
+    out[nk] = out[nk] ? mergeMovementRows(out[nk], v) : { ...v };
+  }
+  return out;
+}
+
+function aggregateProcurementByNorm(raw: Record<string, ProcurementSignal>): Record<string, ProcurementSignal> {
+  const out: Record<string, ProcurementSignal> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    const nk = normalizeSkuKeyForSignals(k);
+    if (!nk) continue;
+    out[nk] = out[nk] ? mergeProcurementRows(out[nk], v) : { ...v };
+  }
+  return out;
+}
 
 export type SignalSource =
   | 'connector'
@@ -130,18 +222,18 @@ export function useProductSignals(products?: Product[]): UseProductSignalsResult
   const ps = useProcurementSignals();
 
   const result = useMemo(() => {
-    const skuStats = ec.skuStats || {};
-    const skuMovement = ec.skuMovement || {};
-    const procSignals = ps.signalsBySku || {};
+    const skuStats = aggregateSkuStatsByNorm(ec.skuStats as Record<string, SkuStatRow>);
+    const skuMovement = aggregateMovementByNorm(ec.skuMovement || {});
+    const procSignals = aggregateProcurementByNorm(ps.signalsBySku || {});
 
-    // Συγκεντρώνουμε όλα τα γνωστά SKUs
+    // Συγκεντρώνουμε όλα τα γνωστά SKUs (κανονικοποιημένα κλειδιά)
     const allSkus = new Set<string>();
     for (const k of Object.keys(skuStats)) allSkus.add(k);
     for (const k of Object.keys(skuMovement)) allSkus.add(k);
     for (const k of Object.keys(procSignals)) allSkus.add(k);
     if (products) {
       for (const p of products) {
-        const s = (p.sku || '').trim();
+        const s = normalizeSkuKeyForSignals(p.sku || p.id);
         if (s) allSkus.add(s);
       }
     }
@@ -149,7 +241,7 @@ export function useProductSignals(products?: Product[]): UseProductSignalsResult
     const productsBySku = new Map<string, Product>();
     if (products) {
       for (const p of products) {
-        const s = (p.sku || '').trim();
+        const s = normalizeSkuKeyForSignals(p.sku || p.id);
         if (s && !productsBySku.has(s)) productsBySku.set(s, p);
       }
     }
@@ -247,7 +339,7 @@ export function useProductSignals(products?: Product[]): UseProductSignalsResult
 
   const enrichProduct = useMemo(() => {
     return (p: Product): Product => {
-      const sig = result.map.get((p.sku || '').trim());
+      const sig = result.map.get(normalizeSkuKeyForSignals(p.sku || p.id));
       if (!sig) return p;
       const r = sig.resolved;
       const out: Product = { ...p };
@@ -271,7 +363,7 @@ export function useProductSignals(products?: Product[]): UseProductSignalsResult
   return {
     signalsBySku: result.map,
     enrichProduct,
-    getSignal: (sku: string) => result.map.get((sku || '').trim()),
+    getSignal: (sku: string) => result.map.get(normalizeSkuKeyForSignals(sku)),
     coverage: result.coverage,
     isLoading: ec.isLoading || ps.isLoading,
   };

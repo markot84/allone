@@ -27,7 +27,12 @@ import { useProcurement } from '../../hooks/useProcurement';
 import { usePriceBenchmarks } from '../../hooks/usePriceBenchmarks';
 import { formatCurrency, formatCurrencyCompact, formatNumber, formatPercent } from '../../utils/format';
 import { FirestoreService } from '../../services/firestore';
-import { classifyStockHealth, getDaysOfStock, getProductTod, getProductYmdForFilter } from '../../utils/productUtils';
+import {
+  getDaysOfStock,
+  getProductYmdForFilter,
+  resolveStockHealth,
+} from '../../utils/productUtils';
+import { classifyProcurementInventoryRow } from '../../utils/procurementInventoryClassify';
 import { DateRangePicker } from '../ui/DateRangePicker';
 import { ExportModal } from './ExportModal';
 import { ProductCharts } from './ProductCharts';
@@ -36,7 +41,11 @@ import type { Product, InventorySummary, InventoryAlert } from '../../types';
 type SortField = 'name' | 'margin_percentage' | 'stock_level' | 'stock_age_days' | 'price';
 type SortDirection = 'asc' | 'desc';
 
-function computeInventorySummary(products: Product[], supplierTodMap?: Map<string, number>): InventorySummary {
+function computeInventorySummary(
+  products: Product[],
+  supplierTodMap?: Map<string, number>,
+  useProcurementRowModel?: boolean
+): InventorySummary {
   const total = products.length;
   if (total === 0) {
     return {
@@ -62,8 +71,7 @@ function computeInventorySummary(products: Product[], supplierTodMap?: Map<strin
     const price = p.price ?? 0;
     totalValue += level * price;
 
-    const tod = getProductTod(p, supplierTodMap);
-    const health = classifyStockHealth(p, tod);
+    const health = resolveStockHealth(p, supplierTodMap, useProcurementRowModel);
     switch (health) {
       case 'dead':
         deadCount++;
@@ -91,15 +99,24 @@ function computeInventorySummary(products: Product[], supplierTodMap?: Map<strin
   };
 }
 
-function computeInventoryAlerts(products: Product[], supplierTodMap?: Map<string, number>): InventoryAlert[] {
+function computeInventoryAlerts(
+  products: Product[],
+  supplierTodMap?: Map<string, number>,
+  useProcurementRowModel?: boolean
+): InventoryAlert[] {
   const alerts: InventoryAlert[] = [];
-  const classify = (p: Product) => classifyStockHealth(p, getProductTod(p, supplierTodMap));
+  const classify = (p: Product) => resolveStockHealth(p, supplierTodMap, useProcurementRowModel);
   const deadStock = products.filter((p) => classify(p) === 'dead');
   const excessStock = products.filter((p) => classify(p) === 'excess');
   const highMarginLowStock = products.filter(
     (p) => (p.margin_tier === 'high' || (p.margin_percentage ?? 0) > 25) && classify(p) === 'low'
   );
-  if (deadStock.length > 0) alerts.push({ type: 'critical', message: `${deadStock.length} SKU(s) χωρίς πωλήσεις (dead stock)`, action: 'Ελέγξτε για clearance' });
+  if (deadStock.length > 0) {
+    const deadMsg = useProcurementRowModel
+      ? `${deadStock.length} SKU(s) dead stock (ανενεργό status / αξιολόγηση C / μηδενικό απόθεμα).`
+      : `${deadStock.length} SKU(s) χωρίς πωλήσεις (dead stock)`;
+    alerts.push({ type: 'critical', message: deadMsg, action: 'Ελέγξτε για clearance' });
+  }
   if (excessStock.length > 0) alerts.push({ type: 'warning', message: `${excessStock.length} SKU(s) με πλεόνασμα αποθέματος`, action: 'Δημιουργήστε προσφορές' });
   if (highMarginLowStock.length > 0) alerts.push({ type: 'info', message: `${highMarginLowStock.length} high-margin items με low stock`, action: 'Πρόταση αναπλήρωσης' });
   return alerts.length > 0 ? alerts : [];
@@ -289,30 +306,30 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   }, [sourceProducts, usingProcurement, productDateFrom, productDateTo, productDateMode]);
 
   const inventorySummary = useMemo(() => {
-    if (usingProcurement) return computeInventorySummary(rawProducts, supplierTodMap);
+    if (usingProcurement) return computeInventorySummary(sourceProducts, supplierTodMap, true);
     if (productDateFrom && productDateTo) {
       const base = rawProducts.filter((p) => {
         const ymd = getProductYmdForFilter(p, productDateMode);
         if (!ymd) return false;
         return ymd >= productDateFrom && ymd <= productDateTo;
       });
-      return computeInventorySummary(base, supplierTodMap);
+      return computeInventorySummary(base, supplierTodMap, false);
     }
-    return computeInventorySummary(rawProducts, supplierTodMap);
-  }, [rawProducts, usingProcurement, supplierTodMap, productDateFrom, productDateTo, productDateMode]);
+    return computeInventorySummary(rawProducts, supplierTodMap, false);
+  }, [rawProducts, sourceProducts, usingProcurement, supplierTodMap, productDateFrom, productDateTo, productDateMode]);
 
   const inventoryAlerts = useMemo(() => {
-    if (usingProcurement) return computeInventoryAlerts(rawProducts, supplierTodMap);
+    if (usingProcurement) return computeInventoryAlerts(sourceProducts, supplierTodMap, true);
     if (productDateFrom && productDateTo) {
       const base = rawProducts.filter((p) => {
         const ymd = getProductYmdForFilter(p, productDateMode);
         if (!ymd) return false;
         return ymd >= productDateFrom && ymd <= productDateTo;
       });
-      return computeInventoryAlerts(base, supplierTodMap);
+      return computeInventoryAlerts(base, supplierTodMap, false);
     }
-    return computeInventoryAlerts(rawProducts, supplierTodMap);
-  }, [rawProducts, usingProcurement, supplierTodMap, productDateFrom, productDateTo, productDateMode]);
+    return computeInventoryAlerts(rawProducts, supplierTodMap, false);
+  }, [rawProducts, sourceProducts, usingProcurement, supplierTodMap, productDateFrom, productDateTo, productDateMode]);
 
   // Procurement-based inventory summary (replaces product-based when available)
   const procInventorySummary = useMemo((): InventorySummary | null => {
@@ -358,12 +375,18 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
       const itemValue = stock * cost;
       totalValue += itemValue;
 
-      if (stock === 0 || status.includes('ΑΝΕΝΕΡΓ') || evalGrade === 'C') {
+      const bucket = classifyProcurementInventoryRow({
+        stock,
+        evalGrade,
+        needsRefill,
+        statusUpper: status,
+      });
+      if (bucket === 'dead') {
         deadCount++;
         deadValue += itemValue;
-      } else if (needsRefill) {
+      } else if (bucket === 'low') {
         lowCount++;
-      } else if (evalGrade === 'A') {
+      } else if (bucket === 'healthy') {
         healthyCount++;
       } else {
         excessCount++;
@@ -418,14 +441,14 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
         const matchesMargin = marginFilter === 'all' || p.margin_tier === marginFilter;
         
         // Stock age filter
-        const tod = getProductTod(p, supplierTodMap);
-        const health = classifyStockHealth(p, tod);
+        const health = resolveStockHealth(p, supplierTodMap, usingProcurement);
         let matchesStockAge = true;
         if (stockAgeFilter === 'dead') {
           matchesStockAge = health === 'dead';
         } else if (stockAgeFilter === 'near-dead') {
           const dos = getDaysOfStock(p);
-          matchesStockAge = health === 'excess' && dos !== Infinity;
+          matchesStockAge =
+            health === 'excess' && (usingProcurement ? true : dos !== Infinity);
         } else if (stockAgeFilter === 'high-margin-low-stock') {
           const isHighMargin = p.margin_tier === 'high' || (p.margin_percentage ?? 0) > 25;
           matchesStockAge = isHighMargin && health === 'low';
@@ -451,7 +474,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           ? (aVal as number) - (bVal as number) 
           : (bVal as number) - (aVal as number);
       });
-  }, [productsScopedByDate, searchQuery, selectedCategory, marginFilter, stockAgeFilter, stockCardFilter, sortField, sortDirection, supplierTodMap]);
+  }, [productsScopedByDate, searchQuery, selectedCategory, marginFilter, stockAgeFilter, stockCardFilter, sortField, sortDirection, supplierTodMap, usingProcurement]);
 
   const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE));
   const paginatedProducts = filteredProducts.slice(
@@ -579,6 +602,22 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
         <>
       {/* Inventory Alerts */}
       <AlertsBanner filterGroup="inventory" maxAlerts={2} compact onNavigate={onSectionChange} />
+
+      {usingProcurement && procInventorySummary && (
+        <div className="rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-3 text-[13px] text-[#374151] shadow-sm">
+          <div className="font-semibold text-[#111827] flex items-center gap-2 mb-1.5">
+            <Info size={16} className="text-[#6B7280] shrink-0" aria-hidden />
+            Κατάσταση αποθέματος από Procurement (ERP)
+          </div>
+          <p className="leading-relaxed text-[#4B5563]">
+            Οι παρακάτω κάρτες και ειδοποιήσεις βασίζονται <strong>απευθείας</strong> στο φύλλο διαχείρισης αποθέματος
+            (αξιολόγηση είδους, status κωδικού, ανατροφοδότηση, απόθεμα × κόστος).             Στην <strong>Στρατηγική</strong>, η <strong>«Διάγνωση προτεραιοτήτων»</strong> δείχνει{' '}
+            <strong>πλήθη ανά εμπορική ομάδα/bucket</strong> (κατάλογος + πωλήσεις/ζήτηση/κίνηση όπου υπάρχουν). Αυτά τα
+            νούμερα <strong>δεν</strong> είναι τα ίδια με τα πλήθη των καρτών dead / excess / low <strong>εδώ</strong>· δεν
+            στοχεύουν σε ταύτιση 1-1.
+          </p>
+        </div>
+      )}
 
       {/* Summary Cards — uses procurement data when available */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -880,7 +919,14 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
             <tbody>
               <AnimatePresence mode="popLayout">
                 {paginatedProducts.map((product, index) => (
-                  <ProductRow key={product.id} product={product} index={index} supplierTodMap={supplierTodMap} benchmarkMap={benchmarkCount > 0 ? benchmarkMap : undefined} />
+                  <ProductRow
+                    key={product.id}
+                    product={product}
+                    index={index}
+                    supplierTodMap={supplierTodMap}
+                    benchmarkMap={benchmarkCount > 0 ? benchmarkMap : undefined}
+                    useProcurementRowModel={usingProcurement}
+                  />
                 ))}
               </AnimatePresence>
             </tbody>
@@ -936,6 +982,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
         onClose={() => setShowCharts(false)}
         products={filteredProducts}
         supplierTodMap={supplierTodMap}
+        useProcurementRowModel={usingProcurement}
       />
         </>
       )}
@@ -990,12 +1037,16 @@ interface ProductRowProps {
   supplierTodMap?: Map<string, number>;
   benchmarkMap?: Map<string, { priceDiff: number; benchmarkPrice: number }>;
   index: number;
+  useProcurementRowModel?: boolean;
 }
 
-function ProductRow({ product, index, supplierTodMap, benchmarkMap }: ProductRowProps) {
-  const tod = getProductTod(product, supplierTodMap);
-  const health = classifyStockHealth(product, tod);
-  const healthColor = health === 'dead' ? '#EF4444' : health === 'excess' ? '#EF4444' : health === 'low' ? '#F59E0B' : '#22C55E';
+function ProductRow({ product, index, supplierTodMap, benchmarkMap, useProcurementRowModel }: ProductRowProps) {
+  const health = resolveStockHealth(product, supplierTodMap, useProcurementRowModel);
+  const healthColor =
+    health === 'dead' ? '#EF4444' :
+    health === 'excess' ? '#F59E0B' :
+    health === 'low' ? '#8B5CF6' :
+    '#22C55E';
   const stockColor = healthColor;
   const ageColor = healthColor;
 
@@ -1049,13 +1100,23 @@ function ProductRow({ product, index, supplierTodMap, benchmarkMap }: ProductRow
           className="text-xs font-mono"
           style={{ color: ageColor }}
         >
-          {getDaysOfStock(product) === Infinity ? '∞' : `${Math.round(getDaysOfStock(product))}d`}
+          {(() => {
+            const dos = getDaysOfStock(product);
+            if (useProcurementRowModel && dos === Infinity) {
+              return <span className="text-[#9CA3AF]">—</span>;
+            }
+            return dos === Infinity ? '∞' : `${Math.round(dos)}d`;
+          })()}
         </span>
       </td>
       <td className="px-3 py-2 hidden lg:table-cell">
         {product.priority_tag ? (
           <Badge
             variant={
+              product.priority_tag === 'dead' ? 'danger' :
+              product.priority_tag === 'low' ? 'warning' :
+              product.priority_tag === 'healthy' ? 'success' :
+              product.priority_tag === 'excess' ? 'orange' :
               product.priority_tag === 'Brand Push' ? 'info' :
               product.priority_tag === 'New Launch' ? 'success' :
               product.priority_tag === 'Best Seller' ? 'orange' :
