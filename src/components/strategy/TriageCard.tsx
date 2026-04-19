@@ -16,7 +16,7 @@ import {
   ChevronRight, ChevronDown, HelpCircle, Info, AlertOctagon, TrendingDown,
   Clock, Boxes, Database, Plug, X,
 } from 'lucide-react';
-import { useDecisionBuckets } from '../../hooks/useDecisionBuckets';
+import { useDecisionBuckets, type TriageDataQuality } from '../../hooks/useDecisionBuckets';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import { useProcurement } from '../../hooks/useProcurement';
 import {
@@ -83,6 +83,85 @@ function fmtRelative(iso: string | undefined | null): string {
   return `${Math.floor(days / 365)} χρόνια πριν`;
 }
 
+/** Ρητή ενημέρωση: τι είναι επιβεβαιωμένο από συστήματα vs τι είναι εκτίμηση. */
+function TriageDataReliabilityCallout({
+  quality,
+  totalTiedCapital,
+  newOrUnknownCount,
+}: {
+  quality: TriageDataQuality;
+  totalTiedCapital: number;
+  newOrUnknownCount: number;
+}) {
+  const t = totalTiedCapital;
+  const procShare = t > 0 ? quality.tiedEurFromProcurement / t : 0;
+  const compShare = t > 0 ? quality.tiedEurComputed / t : 0;
+  const procPct = t > 0 ? Math.round(100 * procShare) : 0;
+  const compPct = t > 0 ? Math.round(100 * compShare) : 0;
+  const restPct = t > 0 ? Math.max(0, 100 - procPct - compPct) : 0;
+  const stockNoCostPct =
+    quality.skuCount > 0 ? Math.round((100 * quality.skusStockWithoutCost) / quality.skuCount) : 0;
+  const unknownShare =
+    quality.skuCount > 0 ? newOrUnknownCount / quality.skuCount : 0;
+
+  const weakDemand = quality.demandVerifiedPct < 28;
+  const weakTiedMix = t > 0 && procShare < 0.22 && compShare > 0.55;
+  const manyWithoutCost = stockNoCostPct > 22;
+  const dominantUnknown = unknownShare >= 0.45;
+
+  const caution = weakDemand || weakTiedMix || manyWithoutCost || dominantUnknown;
+
+  return (
+    <div
+      className={`mt-3 rounded-lg border px-3 py-2.5 text-[11px] leading-snug ${
+        caution
+          ? 'border-amber-300 bg-amber-50/80 text-amber-950'
+          : 'border-slate-200 bg-slate-50/90 text-slate-800'
+      }`}
+    >
+      <div className="font-semibold text-[12px] flex items-center gap-1.5 text-gray-900">
+        <AlertTriangle size={14} className={caution ? 'text-amber-700 shrink-0' : 'text-slate-500 shrink-0'} />
+        Αξιοπιστία δεδομένων · όρια χρήσης
+      </div>
+      <ul className="mt-2 space-y-1.5 text-gray-700 list-disc pl-4 marker:text-gray-400">
+        <li>
+          <strong>Ζήτηση / κίνηση (παράθυρα 7–90 ημ.):</strong> επαληθευμένη για{' '}
+          <strong>{quality.demandVerifiedPct}%</strong> των κωδικών μέσω σύνδεσης e-shop ή ιστορικού
+          μεταβολών αποθέματος. Αν το ποσοστό είναι χαμηλό, οι κατηγορίες που βασίζονται σε πρόσφατη
+          ζήτηση (ευκαιρία, έλλειψη, αδράνεια με βάση πωλήσεις) <strong>δεν</strong> αντικατοπτρίζουν
+          πλήρως την πραγματική εμπορική κίνηση.
+        </li>
+        <li>
+          <strong>Δεσμευμένα κεφάλαια (άθροισμα εκτιμήσεων):</strong> περίπου{' '}
+          <strong>{procPct}%</strong> από πεδίο procurement, <strong>{compPct}%</strong> υπολογιστικό
+          (κόστος × διαθέσιμο απόθεμα){restPct > 0 ? `, λοιπά ~${restPct}%` : ''}. Το υπολογιστικό μέρος
+          εξαρτάται από την ορθότητα κόστους και αποθέματος στις πηγές σας.
+        </li>
+        <li>
+          <strong>Κωδικοί με απόθεμα αλλά χωρίς κόστος για εκτίμηση:</strong>{' '}
+          {quality.skusStockWithoutCost.toLocaleString('el-GR')} (
+          <strong>{stockNoCostPct}%</strong>) — για αυτούς το δεσμευμένο εμφανίζεται ως μηδέν.
+        </li>
+        <li>
+          Το <strong>άθροισμα των μετρητών ανά κατηγορία</strong> μπορεί να υπερβαίνει τον αριθμό SKU,
+          όταν ένας κωδικός ικανοποιεί ταυτόχρονα περισσότερες από μία συνθήκες.
+        </li>
+      </ul>
+      {dominantUnknown && (
+        <p className="mt-2 text-[11px] text-gray-800 font-medium">
+          Μεγάλο μέρος του καταλόγου παραμένει σε «ανεπαρκή σήματα» — η εικόνα triage είναι{' '}
+          <strong>μερική</strong> έως ότου ενισχυθούν οι πηγές.
+        </p>
+      )}
+      <p className="mt-2 pt-2 border-t border-black/5 text-[11px] text-gray-700">
+        Οι κατηγορίες εδώ είναι <strong>υποστήριξη απόφασης</strong>, όχι υποκατάστατο ERP, απογραφής ή
+        λογιστικής. Για κρίσιμες αποφάσεις (αγορές, απόσυρση, τιμολόγηση, δεσμεύσεις κεφαλαίου)
+        επιβεβαιώστε με τα εσωτερικά σας στοιχεία και τις διαδικασίες ελέγχου.
+      </p>
+    </div>
+  );
+}
+
 interface TriageCardProps {
   onSelectPolicy?: (
     policy: NonNullable<RecommendedPolicy>,
@@ -94,7 +173,7 @@ interface TriageCardProps {
 export function TriageCard({ onSelectPolicy }: TriageCardProps) {
   const {
     counts, tiedByBucket, totalProducts, isLoading, defs,
-    totalTiedCapital, assignments,
+    totalTiedCapital, assignments, dataQuality,
   } = useDecisionBuckets();
   const [expanded, setExpanded] = useState<BucketId | null>(null);
   const [showSubtitle, setShowSubtitle] = useState(false);
@@ -105,14 +184,6 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
   const { hasData: hasProcurement } = useProcurement();
   const hasOrders = (connectedPlatforms?.length ?? 0) > 0;
   const hasMovementData = !!stockMovementBaselineDate || Object.keys(skuMovement || {}).length > 0;
-
-  // KPI summary
-  const kpis = useMemo(() => {
-    const criticalCount = counts.dead_capital + counts.stockout_risk + counts.margin_bleeder;
-    const opportunityCount = counts.hot_seller + counts.replenish_now;
-    const capitalAtRisk = tiedByBucket.dead_capital + tiedByBucket.slow_mover + tiedByBucket.discontinue;
-    return { criticalCount, opportunityCount, capitalAtRisk };
-  }, [counts, tiedByBucket]);
 
   // Νέα/άγνωστο breakdown
   const unknownBreakdown = useMemo(() => {
@@ -147,16 +218,17 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
     return out;
   }, [assignments]);
 
+  /** Μοναδικά SKU με ≥1 bucket (το άθροισμα counts ανά bucket μπορεί να είναι μεγαλύτερο). */
+  const skusWithAnyBucket = useMemo(
+    () => assignments.filter((a) => a.buckets.length > 0).length,
+    [assignments]
+  );
+
   // ── LOADING STATE ─────────────────────────────────────────────────
   if (isLoading) {
     return (
       <div className="rounded-xl border border-[var(--nts-border-gray)] bg-white p-5 animate-pulse">
         <div className="h-5 w-64 bg-gray-100 rounded mb-4" />
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-16 bg-gray-50 rounded-lg" />
-          ))}
-        </div>
         <div className="space-y-3">
           {Array.from({ length: 2 }).map((_, i) => (
             <div key={i} className="h-24 bg-gray-50 rounded-lg" />
@@ -188,8 +260,6 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
   const visibleGroups = BUCKET_GROUPS
     .map((g) => ({ ...g, activeBuckets: g.buckets.filter((b) => counts[b] > 0) }))
     .filter((g) => g.activeBuckets.length > 0);
-
-  const totalClassified = Object.values(counts).reduce((a, b) => a + b, 0);
 
   // ── EMPTY: NO SIGNALS AT ALL ─────────────────────────────────────
   if (visibleGroups.length === 0) {
@@ -234,48 +304,26 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
             </div>
             {showSubtitle && (
               <div className="mt-1.5 text-[12px] text-gray-600 max-w-2xl leading-relaxed">
-                Η ενότητα αυτή ιεραρχεί τους κωδικούς προϊόντων με βάση την εμπορική τους προτεραιότητα.
-                Κάθε ομάδα συνοδεύεται από σαφή ερμηνεία και προτεινόμενη κατεύθυνση ενεργειών.
+                Η ενότητα αυτή ιεραρχεί τους κωδικούς με βάση τις διαθέσιμες πηγές (κατάλογος, πωλήσεις,
+                κίνηση αποθέματος, procurement). Δεν υποκαθιστά ERP ή λογιστική· για δεσμεύσεις κεφαλαίου και
+                αποφάσεις απόσυρσης επιβεβαιώνετε πάντα με τα εσωτερικά σας στοιχεία.
               </div>
             )}
             <div className="text-[11px] text-gray-500 mt-1">
-              {totalProducts.toLocaleString('el-GR')} SKUs αναλύθηκαν
-              {' · '}{totalClassified.toLocaleString('el-GR')} ταξινομημένα
-              {' · '}σύνολο δεσμευμένων: <strong>{fmtEur(totalTiedCapital)}</strong>
+              {totalProducts.toLocaleString('el-GR')} SKUs στον κατάλογο
+              {' · '}
+              {skusWithAnyBucket.toLocaleString('el-GR')} με τουλάχιστον μία ετικέτα bucket
+              {' · '}
+              άθροισμα εκτιμώμενων δεσμευμένων: <strong>{fmtEur(totalTiedCapital)}</strong>
             </div>
+            {dataQuality && (
+              <TriageDataReliabilityCallout
+                quality={dataQuality}
+                totalTiedCapital={totalTiedCapital}
+                newOrUnknownCount={counts.new_or_unknown}
+              />
+            )}
           </div>
-        </div>
-
-        {/* KPI STRIP */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-4">
-          <KpiTile
-            label="Άμεση προτεραιότητα"
-            value={kpis.criticalCount.toLocaleString('el-GR')}
-            tone="rose"
-            icon={AlertOctagon}
-            sub="κωδικοί με αδρανές απόθεμα, κίνδυνο έλλειψης ή ανεπαρκές περιθώριο"
-          />
-          <KpiTile
-            label="Ευκαιρίες"
-            value={kpis.opportunityCount.toLocaleString('el-GR')}
-            tone="emerald"
-            icon={TrendingUp}
-            sub="κωδικοί υψηλής ζήτησης ή με ανάγκη άμεσης αναπλήρωσης"
-          />
-          <KpiTile
-            label="Κεφάλαια σε ρίσκο"
-            value={fmtEur(kpis.capitalAtRisk)}
-            tone="amber"
-            icon={AlertTriangle}
-            sub="αδρανές, βραδυκίνητο και προς απόσυρση απόθεμα"
-          />
-          <KpiTile
-            label="Ανεπαρκή δεδομένα"
-            value={counts.new_or_unknown.toLocaleString('el-GR')}
-            tone="slate"
-            icon={HelpCircle}
-            sub="κωδικοί με νέα προϊόντα ή ακόμη ανεπαρκή στοιχεία αξιολόγησης"
-          />
         </div>
       </div>
 
@@ -313,6 +361,16 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
                 </div>
               </header>
 
+              {group.id === 'investigate' && counts.new_or_unknown > 0 && (
+                <InsufficientSignalsHint
+                  hasOrders={hasOrders}
+                  hasMovement={hasMovementData}
+                  hasProcurement={!!hasProcurement}
+                  noSignalsCount={unknownBreakdown.no_signals}
+                  totalUnknown={counts.new_or_unknown}
+                />
+              )}
+
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                 {group.activeBuckets.map((b) => {
                   const def = defs[b];
@@ -322,6 +380,7 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
                   const tied = tiedByBucket[b];
                   const isOpen = expanded === b;
                   const tiedShare = totalTiedCapital > 0 ? Math.min(100, Math.round((tied / totalTiedCapital) * 100)) : 0;
+                  const soleInGroup = group.activeBuckets.length === 1;
 
                   return (
                     <button
@@ -331,17 +390,19 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
                         isOpen ? `ring-2 ${colors.ring} border-transparent` : ''
                       }`}
                     >
-                      <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <div className={`flex items-center gap-2 mb-1.5 ${soleInGroup ? '' : 'justify-between'}`}>
                         <div className={`inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded ${colors.bg}`}>
                           <Icon size={12} className={colors.text} />
                           <span className={`text-[10px] font-semibold ${colors.text} uppercase tracking-wide`}>
                             {def.shortLabel}
                           </span>
                         </div>
-                        <span className="text-lg font-bold text-gray-900 leading-none">{count}</span>
+                        {!soleInGroup && (
+                          <span className="text-lg font-bold text-gray-900 leading-none tabular-nums">{count}</span>
+                        )}
                       </div>
                       <div className="text-[12px] font-medium text-gray-800 leading-snug">{def.label}</div>
-                      {tied > 0 && (
+                      {!soleInGroup && tied > 0 && (
                         <>
                           <div className="text-[11px] text-gray-500 mt-1.5">
                             {fmtEur(tied)} δεσμευμένα · {tiedShare}% του συνόλου
@@ -400,29 +461,64 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
 // SUB-COMPONENTS
 // ─────────────────────────────────────────────────────────────────────
 
-function KpiTile({
-  label, value, sub, tone, icon: Icon,
+/** Συνοπτική εξήγηση γιατί πολλά SKU μένουν σε new_or_unknown — χωρίς επανάληψη των αριθμών της κάρτας. */
+function InsufficientSignalsHint({
+  hasOrders,
+  hasMovement,
+  hasProcurement,
+  noSignalsCount,
+  totalUnknown,
 }: {
-  label: string; value: string; sub?: string;
-  tone: 'rose' | 'emerald' | 'amber' | 'slate';
-  icon: React.ComponentType<{ size?: number; className?: string }>;
+  hasOrders: boolean;
+  hasMovement: boolean;
+  hasProcurement: boolean;
+  noSignalsCount: number;
+  totalUnknown: number;
 }) {
-  const styles = {
-    rose:    { ring: 'border-rose-200',    bg: 'bg-rose-50/40',    text: 'text-rose-700',    iconBg: 'bg-rose-100' },
-    emerald: { ring: 'border-emerald-200', bg: 'bg-emerald-50/40', text: 'text-emerald-700', iconBg: 'bg-emerald-100' },
-    amber:   { ring: 'border-amber-200',   bg: 'bg-amber-50/40',   text: 'text-amber-700',   iconBg: 'bg-amber-100' },
-    slate:   { ring: 'border-slate-200',   bg: 'bg-slate-50',      text: 'text-slate-700',   iconBg: 'bg-slate-200' },
-  }[tone];
+  const share = totalUnknown > 0 ? Math.round((noSignalsCount / totalUnknown) * 100) : 0;
+  const dominantNoSignals = totalUnknown > 0 && noSignalsCount / totalUnknown >= 0.4;
+
   return (
-    <div className={`rounded-lg border ${styles.ring} ${styles.bg} p-2.5`}>
-      <div className="flex items-center gap-2 mb-1">
-        <div className={`p-1 rounded ${styles.iconBg}`}>
-          <Icon size={11} className={styles.text} />
-        </div>
-        <span className="text-[10px] uppercase tracking-wide font-semibold text-gray-600">{label}</span>
-      </div>
-      <div className={`text-lg font-bold ${styles.text} leading-tight`}>{value}</div>
-      {sub && <div className="text-[10px] text-gray-500 mt-0.5 truncate">{sub}</div>}
+    <div className="mb-3 rounded-lg border border-slate-200 bg-white/80 px-3 py-2.5 text-[11px] text-slate-700 leading-snug">
+      <div className="font-semibold text-slate-800">Τι σημαίνει «ανεπαρκή σήματα»</div>
+      <p className="mt-1 text-slate-600">
+        Ο κατάλογος και τα βασικά πεδία SKU υπάρχουν. Για να βγει ασφαλής εμπορική ταξινόμηση χρειαζόμαστε
+        τουλάχιστον μία πηγή κίνησης: παραγγελίες από e-shop, ιστορικό μεταβολών αποθέματος ή procurement
+        (κόστη / κίνηση). Χωρίς αυτά ο κωδικός παραμένει εδώ — όχι επειδή «λείπει το προϊόν», αλλά επειδή
+        δεν υπάρχει ακόμη επαρκές ιστορικό για ρίσκο ή ευκαιρία.
+      </p>
+      {dominantNoSignals && (
+        <p className="mt-1.5 text-slate-600">
+          Στο τρέχον snapshot περίπου το <strong>{share}%</strong> αυτής της ομάδας έχει ετικέτα «λείπουν σήματα
+          κίνησης/κόστους» — έλεγξε τις παρακάτω συνδέσεις.
+        </p>
+      )}
+      <ul className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-1.5">
+        <li
+          className={`flex items-center gap-1.5 rounded-md px-2 py-1 ${
+            hasOrders ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-100 text-slate-700'
+          }`}
+        >
+          <Plug size={12} className="shrink-0 opacity-80" />
+          <span>{hasOrders ? 'E-shop: ενεργό' : 'E-shop: όχι σύνδεση'}</span>
+        </li>
+        <li
+          className={`flex items-center gap-1.5 rounded-md px-2 py-1 ${
+            hasMovement ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-100 text-slate-700'
+          }`}
+        >
+          <TrendingDown size={12} className="shrink-0 opacity-80" />
+          <span>{hasMovement ? 'Stock movement: ναι' : 'Stock movement: όχι'}</span>
+        </li>
+        <li
+          className={`flex items-center gap-1.5 rounded-md px-2 py-1 ${
+            hasProcurement ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-100 text-slate-700'
+          }`}
+        >
+          <Database size={12} className="shrink-0 opacity-80" />
+          <span>{hasProcurement ? 'Procurement: ναι' : 'Procurement: όχι'}</span>
+        </li>
+      </ul>
     </div>
   );
 }
@@ -588,15 +684,10 @@ function ExpandedPanel({
 
   return (
     <div className="mt-3 rounded-lg bg-white border border-gray-200 overflow-hidden">
-      {/* Panel header */}
+      {/* Panel header — χωρίς επανάληψη τίτλου από την κάρτα πάνω· μόνο περιγραφή + ενέργειες */}
       <div className="px-3.5 py-3 border-b border-gray-100 flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-sm font-semibold text-gray-900">{def.label}</div>
-          <div className="text-[11px] text-gray-600 mt-0.5 leading-relaxed">{def.description}</div>
-          <div className="mt-1.5 inline-flex items-center gap-1 text-[10px] text-gray-500">
-            <Info size={10} />
-            <span>Ιεραρχημένα κατά προτεραιότητα, με βάση τη δέσμευση κεφαλαίου ή την ένταση της ζήτησης</span>
-          </div>
+          <div className="text-[12px] text-gray-800 leading-relaxed">{def.description}</div>
         </div>
         <div className="shrink-0 flex flex-col items-end gap-1.5">
           {recommendedPolicyName && (
@@ -634,7 +725,7 @@ function ExpandedPanel({
         <div className="px-3.5 py-2.5 bg-slate-50 border-b border-gray-100 grid grid-cols-3 gap-2">
           <UnknownChip label="Νέα προϊόντα" sub="< 30 ημέρες" count={unknownBreakdown.new_sku} icon={Sparkles} />
           <UnknownChip label="Virtual SKUs" sub="gift cards / υπηρεσίες" count={unknownBreakdown.virtual_sku} icon={Package} />
-          <UnknownChip label="Λείπουν δεδομένα" sub="κίνησης ή κόστους" count={unknownBreakdown.no_signals} icon={Database} />
+          <UnknownChip label="Χωρίς σήματα" sub="πωλήσεις / κίνηση / κόστος" count={unknownBreakdown.no_signals} icon={Database} />
         </div>
       )}
 
@@ -715,7 +806,7 @@ function ExpandedPanel({
         <span className="text-[10px] text-gray-500">
           {bucket === 'new_or_unknown' && (unknownBreakdown?.no_signals ?? 0) > 0 ? (
             <span className="inline-flex items-center gap-1">
-              <Plug size={10} /> Ενεργοποίησε integrations για περισσότερα σήματα
+              <Plug size={10} /> Σύνδεση παραγγελιών ή procurement μειώνει αυτή την ομάδα
             </span>
           ) : null}
         </span>
