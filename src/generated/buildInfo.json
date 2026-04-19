@@ -1,10 +1,14 @@
 {
-  "version": "0.566.0",
-  "previousVersion": "0.565.0",
-  "commitHash": "c24ae55",
+  "version": "0.567.0",
+  "previousVersion": "0.566.0",
+  "commitHash": "48227f7",
   "branch": "main",
-  "buildDate": "2026-04-19T06:23:09.989Z",
+  "buildDate": "2026-04-19T07:08:50.991Z",
   "commits": [
+    {
+      "hash": "48227f7",
+      "message": "fix(strategy): triage uses useProductSource for Enterprise procurement catalog"
+    },
     {
       "hash": "c24ae55",
       "message": "fix: guard missing connectedPlatforms in useEcommerceSummary hasData"
@@ -60,13 +64,10 @@
     {
       "hash": "4e89514",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "0950ce0",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [
+    "[Διόρθωση] Triage uses useProductSource for Enterprise procurement catalog",
     "[Διόρθωση] Guard missing connectedPlatforms in useEcommerceSummary hasData",
     "[Συντήρηση] Full deploy",
     "Merge: Sprint 2 — universal data layer, decision buckets, AI context, ecommerce fix",
@@ -75,7 +76,6 @@
     "Sprint 2 Phase 3+4: triage origin persistence + AI context wiring",
     "[Νέο χαρακτηριστικό] Universal data layer + decision buckets triage",
     "[Νέο χαρακτηριστικό] Sales opt foundation + universal stock movement",
-    "[Διόρθωση] Grouped setup modals, impact dismiss UX, price benchmark filter perf",
-    "[Νέο χαρακτηριστικό] Strategy commerce tools, campaigns geo Mekko, and related updates"
+    "[Διόρθωση] Grouped setup modals, impact dismiss UX, price benchmark filter perf"
   ]
 }
