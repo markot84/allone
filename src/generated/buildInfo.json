@@ -1,10 +1,14 @@
 {
-  "version": "0.596.0",
-  "previousVersion": "0.595.0",
-  "commitHash": "b1b8f18",
+  "version": "0.598.0",
+  "previousVersion": "0.597.0",
+  "commitHash": "b9636dd",
   "branch": "main",
-  "buildDate": "2026-04-19T22:48:30.565Z",
+  "buildDate": "2026-04-20T06:15:10.083Z",
   "commits": [
+    {
+      "hash": "b9636dd",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "b1b8f18",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "bc53a7e",
       "message": "feat(strategy): sales opt foundation + universal stock movement"
-    },
-    {
-      "hash": "9c39351",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [

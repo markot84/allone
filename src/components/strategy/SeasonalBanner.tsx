@@ -19,15 +19,13 @@ function SeasonalIcon({ name }: { name: string }) {
 import { scenarios } from '../../data';
 
 interface SeasonalBannerProps {
-  currentScenarioId: string | null;
-  currentMixConfig?: { scenarioA: string; scenarioB: string; percentA: number } | null;
+  activeProposalId?: string | null;
   onApplySeason: (period: SeasonalPeriod) => void;
   onManageSeasons: () => void;
 }
 
 export function SeasonalBanner({
-  currentScenarioId,
-  currentMixConfig,
+  activeProposalId,
   onApplySeason,
   onManageSeasons,
 }: SeasonalBannerProps) {
@@ -38,18 +36,9 @@ export function SeasonalBanner({
   const visibleSeasons = useMemo(() => {
     return activeSeasons.filter(season => {
       if (dismissed.has(season.id)) return false;
-      if (
-        currentScenarioId === 'mixed' &&
-        currentMixConfig &&
-        currentMixConfig.scenarioA === season.suggestedMix.scenarioA &&
-        currentMixConfig.scenarioB === season.suggestedMix.scenarioB &&
-        Math.abs(currentMixConfig.percentA - season.suggestedMix.percentA) <= 5
-      ) {
-        return false;
-      }
       return true;
     });
-  }, [activeSeasons, dismissed, currentScenarioId, currentMixConfig]);
+  }, [activeSeasons, dismissed]);
 
   if (visibleSeasons.length === 0) return null;
 
@@ -58,6 +47,7 @@ export function SeasonalBanner({
   const nameB = scenarios.find(s => s.id === season.suggestedMix.scenarioB)?.name ?? season.suggestedMix.scenarioB;
   const pctA = season.suggestedMix.percentA;
   const pctB = 100 - pctA;
+  const isActive = activeProposalId === season.id;
 
   return (
     <AnimatePresence>
@@ -73,8 +63,12 @@ export function SeasonalBanner({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
               <h4 className="text-sm font-semibold text-[#1A1A1A]">{season.name}</h4>
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#F0FDF4] text-[#15803D] font-medium border border-[#BBF7D0]">
-                Εποχιακή πρόταση
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium border ${
+                isActive
+                  ? 'bg-[var(--nts-accent)]/10 text-[var(--nts-accent)] border-[var(--nts-accent)]/20'
+                  : 'bg-[#F0FDF4] text-[#15803D] border-[#BBF7D0]'
+              }`}>
+                {isActive ? 'Ενεργή εποχιακή πρόταση' : 'Εποχιακή πρόταση'}
               </span>
             </div>
             <p className="text-xs text-[#4A4A4A] mb-2 leading-relaxed">{season.description}</p>
@@ -87,7 +81,7 @@ export function SeasonalBanner({
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#4A4A4A] border border-[#E5E5E5] hover:bg-[#F5F5F5] transition-colors"
               >
                 <Zap size={12} />
-                Εφαρμογή
+                {isActive ? 'Ενημέρωση' : 'Εφαρμογή'}
               </button>
               <button
                 onClick={onManageSeasons}

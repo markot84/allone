@@ -20,6 +20,17 @@ export interface MixConfig {
   percentB: number;
 }
 
+export interface SeasonalProposal {
+  periodId: string;
+  periodName: string;
+  scenarioA: string;
+  scenarioB: string;
+  percentA: number;
+  percentB: number;
+  description?: string;
+  activatedAt: string;
+}
+
 export interface ActiveStrategy {
   id: string;
   brandId: string;
@@ -43,6 +54,8 @@ export interface ActiveStrategy {
   priceBenchmarkScope?: PriceBenchmarkStrategyScope;
   /** Παράμετροι εποχιακής/εκπτωτικής περιόδου (seasonal_discount) */
   seasonalDiscount?: SeasonalDiscountConfig;
+  /** Παράλληλη εποχιακή πρόταση που τρέχει δίπλα στην κύρια εμπορική πολιτική. */
+  seasonalProposal?: SeasonalProposal;
   /** Προέλευση από Decision Buckets triage (αν η στρατηγική προήλθε από bucket CTA). */
   triageOrigin?: TriageOrigin;
   createdAt: string;
@@ -132,6 +145,7 @@ export function useActiveStrategy() {
       salesBaseScope?: SalesBaseScope;
       priceBenchmarkScope?: PriceBenchmarkStrategyScope;
       seasonalDiscount?: SeasonalDiscountConfig;
+      seasonalProposal?: SeasonalProposal;
       triageOrigin?: TriageOrigin;
     }) => {
       if (!brandId) throw new Error('No brand selected');
@@ -179,6 +193,12 @@ export function useActiveStrategy() {
 
       if (strategy.seasonalDiscount) {
         strategyData.seasonalDiscount = JSON.parse(JSON.stringify(strategy.seasonalDiscount));
+      }
+
+      if (strategy.seasonalProposal ?? activeStrategy?.seasonalProposal) {
+        strategyData.seasonalProposal = JSON.parse(
+          JSON.stringify(strategy.seasonalProposal ?? activeStrategy?.seasonalProposal)
+        );
       }
 
       if (strategy.triageOrigin) {

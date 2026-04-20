@@ -72,13 +72,10 @@ export function ProcurementStrategyBridge({
           <div className="shrink-0 p-1.5 rounded-lg bg-[#7C3AED]/10">
             <Package size={16} className="text-[#7C3AED]" aria-hidden />
           </div>
-          <div className="min-w-0">
-            <h3 className="text-sm font-bold text-[#111827]">Από Product Intelligence (ERP)</h3>
-            <p className="text-[11px] text-[#6B7280] leading-snug">
-              Ίδια κατάταξη με το Product Intelligence· για επόμενο βήμα χρησιμοποιούνται οι{' '}
-              <strong>επίσημοι τίτλοι πολιτικών</strong> του συστήματος (π.χ. {stockClearanceTitle}).
-            </p>
-          </div>
+          <p className="min-w-0 text-[11px] text-[#6B7280] leading-snug">
+            Ίδια κατάταξη με το Product Intelligence· για επόμενο βήμα χρησιμοποιούνται οι{' '}
+            <strong>επίσημοι τίτλοι πολιτικών</strong> του συστήματος (π.χ. {stockClearanceTitle}).
+          </p>
         </div>
         {onOpenProductIntelligence && (
           <button

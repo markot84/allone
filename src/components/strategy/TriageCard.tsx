@@ -140,8 +140,9 @@ function TriageDataReliabilityCallout({
           <strong>{stockNoCostPct}%</strong>) — για αυτούς το δεσμευμένο εμφανίζεται ως μηδέν.
         </li>
         <li>
-          Το <strong>άθροισμα των μετρητών ανά κατηγορία</strong> μπορεί να υπερβαίνει τον αριθμό SKU,
-          όταν ένας κωδικός ικανοποιεί ταυτόχρονα περισσότερες από μία συνθήκες.
+          Το <strong>άθροισμα των προϊόντων που εμφανίζονται στις κατηγορίες</strong> μπορεί να είναι
+          μεγαλύτερο από το σύνολο των SKU, γιατί το ίδιο προϊόν μπορεί να ανήκει ταυτόχρονα σε
+          περισσότερες από μία κατηγορίες.
         </li>
       </ul>
       {dominantUnknown && (
@@ -289,7 +290,7 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="text-base font-bold text-gray-900">
-                Διάγνωση προτεραιοτήτων
+                Εμπορικές Προτεραιότητες
               </h3>
               <button
                 type="button"
@@ -330,7 +331,7 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
             <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-2">
               Από πού προέρχονται τα δεδομένα
             </div>
-            <div className="grid sm:grid-cols-2 gap-3 text-[12px]">
+              <div className="grid sm:grid-cols-2 gap-3 text-[12px]">
               <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
                 <div className="font-semibold text-slate-900 flex items-center gap-1.5">
                   <Database size={14} className="text-slate-500 shrink-0" aria-hidden />
@@ -413,7 +414,7 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
                 />
               )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2.5">
                 {group.activeBuckets.map((b) => {
                   const def = defs[b];
                   const Icon = ICONS[b];
@@ -428,26 +429,26 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
                     <button
                       key={b}
                       onClick={() => setExpanded(isOpen ? null : b)}
-                      className={`text-left rounded-lg border bg-white border-gray-200 p-3 transition-all hover:border-gray-300 hover:shadow-sm ${
+                      className={`text-left rounded-xl border bg-white/95 border-gray-200 px-3 py-2.5 min-h-[98px] transition-all hover:border-gray-300 hover:shadow-sm ${
                         isOpen ? `ring-2 ${colors.ring} border-transparent` : ''
                       }`}
                     >
-                      <div className={`flex items-center gap-2 mb-1.5 ${soleInGroup ? '' : 'justify-between'}`}>
-                        <div className={`inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded ${colors.bg}`}>
+                      <div className={`flex items-start gap-2 mb-1.5 ${soleInGroup ? '' : 'justify-between'}`}>
+                        <div className={`inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded-md ${colors.bg}`}>
                           <Icon size={12} className={colors.text} />
                           <span className={`text-[10px] font-semibold ${colors.text} uppercase tracking-wide`}>
                             {def.shortLabel}
                           </span>
                         </div>
                         {!soleInGroup && (
-                          <span className="text-lg font-bold text-gray-900 leading-none tabular-nums">{count}</span>
+                          <span className="text-base font-bold text-gray-900 leading-none tabular-nums">{count}</span>
                         )}
                       </div>
-                      <div className="text-[12px] font-medium text-gray-800 leading-snug">{def.label}</div>
+                      <div className="text-[12px] font-semibold text-gray-800 leading-snug">{def.label}</div>
                       {!soleInGroup && tied > 0 && (
                         <>
-                          <div className="text-[11px] text-gray-500 mt-1.5">
-                            {fmtEur(tied)} δεσμευμένα · {tiedShare}% του συνόλου
+                          <div className="text-[10px] text-gray-500 mt-1.5">
+                            {fmtEur(tied)} στο scope · {tiedShare}% της συνολικής αξίας
                           </div>
                           <div className="mt-1 h-1 rounded-full bg-gray-100 overflow-hidden">
                             <div
@@ -457,12 +458,12 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
                           </div>
                         </>
                       )}
-                      <div className="mt-2 inline-flex items-center gap-1 text-[10px] text-gray-500">
+                      <div className="mt-2 inline-flex items-center gap-1 text-[10px] font-medium text-gray-500">
                         <ChevronDown
                           size={10}
                           className={`transition-transform ${isOpen ? 'rotate-180' : ''}`}
                         />
-                        {isOpen ? 'Κλείσιμο' : 'Δες λεπτομέρειες'}
+                        {isOpen ? 'Κλείσιμο' : 'Ανάλυση'}
                       </div>
                     </button>
                   );
@@ -517,50 +518,70 @@ function InsufficientSignalsHint({
   noSignalsCount: number;
   totalUnknown: number;
 }) {
+  const [isOpen, setIsOpen] = useState(false);
   const share = totalUnknown > 0 ? Math.round((noSignalsCount / totalUnknown) * 100) : 0;
   const dominantNoSignals = totalUnknown > 0 && noSignalsCount / totalUnknown >= 0.4;
 
   return (
-    <div className="mb-3 rounded-lg border border-slate-200 bg-white/80 px-3 py-2.5 text-[11px] text-slate-700 leading-snug">
-      <div className="font-semibold text-slate-800">Τι σημαίνει «ανεπαρκή σήματα»</div>
-      <p className="mt-1 text-slate-600">
-        Ο κατάλογος και τα βασικά πεδία SKU υπάρχουν. Για να βγει ασφαλής εμπορική διάγνωση χρειαζόμαστε
-        τουλάχιστον μία πηγή κίνησης: παραγγελίες από e-shop, ιστορικό μεταβολών αποθέματος ή procurement
-        (κόστη / κίνηση). Χωρίς αυτά ο κωδικός παραμένει εδώ — όχι επειδή «λείπει το προϊόν», αλλά επειδή
-        δεν υπάρχει ακόμη επαρκές ιστορικό για ρίσκο ή ευκαιρία.
-      </p>
-      {dominantNoSignals && (
-        <p className="mt-1.5 text-slate-600">
-          Στο τρέχον snapshot περίπου το <strong>{share}%</strong> αυτής της ομάδας έχει ετικέτα «λείπουν σήματα
-          κίνησης/κόστους» — έλεγξε τις παρακάτω συνδέσεις.
-        </p>
+    <div className="mb-3 rounded-lg border border-slate-200 bg-white/80 overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setIsOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left"
+      >
+        <div className="min-w-0">
+          <div className="font-semibold text-slate-800 text-[12px]">Ανεπαρκή σήματα αξιολόγησης</div>
+          <div className="mt-0.5 text-[11px] text-slate-600">
+            Τι σημαίνει αυτή η ομάδα και ποια δεδομένα λείπουν.
+          </div>
+        </div>
+        <div className="shrink-0 inline-flex items-center gap-1 text-[11px] font-medium text-slate-600">
+          {isOpen ? 'Κλείσιμο' : 'Προβολή'}
+          {isOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+        </div>
+      </button>
+      {isOpen && (
+        <div className="border-t border-slate-200 px-3 py-2.5 text-[11px] text-slate-700 leading-snug">
+          <p className="text-slate-600">
+            Ο κατάλογος και τα βασικά πεδία SKU υπάρχουν. Για να βγει ασφαλής εμπορική διάγνωση χρειαζόμαστε
+            τουλάχιστον μία πηγή κίνησης: παραγγελίες από e-shop, ιστορικό μεταβολών αποθέματος ή procurement
+            (κόστη / κίνηση). Χωρίς αυτά ο κωδικός παραμένει εδώ, όχι επειδή «λείπει το προϊόν», αλλά επειδή
+            δεν υπάρχει ακόμη επαρκές ιστορικό για ρίσκο ή ευκαιρία.
+          </p>
+          {dominantNoSignals && (
+            <p className="mt-1.5 text-slate-600">
+              Στο τρέχον snapshot περίπου το <strong>{share}%</strong> αυτής της ομάδας έχει ετικέτα «λείπουν σήματα
+              κίνησης/κόστους» — έλεγξε τις παρακάτω συνδέσεις.
+            </p>
+          )}
+          <ul className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-1.5">
+            <li
+              className={`flex items-center gap-1.5 rounded-md px-2 py-1 ${
+                hasOrders ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-100 text-slate-700'
+              }`}
+            >
+              <Plug size={12} className="shrink-0 opacity-80" />
+              <span>{hasOrders ? 'E-shop: ενεργό' : 'E-shop: όχι σύνδεση'}</span>
+            </li>
+            <li
+              className={`flex items-center gap-1.5 rounded-md px-2 py-1 ${
+                hasMovement ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-100 text-slate-700'
+              }`}
+            >
+              <TrendingDown size={12} className="shrink-0 opacity-80" />
+              <span>{hasMovement ? 'Stock movement: ναι' : 'Stock movement: όχι'}</span>
+            </li>
+            <li
+              className={`flex items-center gap-1.5 rounded-md px-2 py-1 ${
+                hasProcurement ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-100 text-slate-700'
+              }`}
+            >
+              <Database size={12} className="shrink-0 opacity-80" />
+              <span>{hasProcurement ? 'Procurement: ναι' : 'Procurement: όχι'}</span>
+            </li>
+          </ul>
+        </div>
       )}
-      <ul className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-1.5">
-        <li
-          className={`flex items-center gap-1.5 rounded-md px-2 py-1 ${
-            hasOrders ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-100 text-slate-700'
-          }`}
-        >
-          <Plug size={12} className="shrink-0 opacity-80" />
-          <span>{hasOrders ? 'E-shop: ενεργό' : 'E-shop: όχι σύνδεση'}</span>
-        </li>
-        <li
-          className={`flex items-center gap-1.5 rounded-md px-2 py-1 ${
-            hasMovement ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-100 text-slate-700'
-          }`}
-        >
-          <TrendingDown size={12} className="shrink-0 opacity-80" />
-          <span>{hasMovement ? 'Stock movement: ναι' : 'Stock movement: όχι'}</span>
-        </li>
-        <li
-          className={`flex items-center gap-1.5 rounded-md px-2 py-1 ${
-            hasProcurement ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-100 text-slate-700'
-          }`}
-        >
-          <Database size={12} className="shrink-0 opacity-80" />
-          <span>{hasProcurement ? 'Procurement: ναι' : 'Procurement: όχι'}</span>
-        </li>
-      </ul>
     </div>
   );
 }
@@ -578,6 +599,64 @@ function getPolicyName(policy: RecommendedPolicy | null | undefined): string | n
       return 'Price Benchmarking';
     default:
       return null;
+  }
+}
+
+function getPriorityCardTone(bucket: BucketId): {
+  shell: string;
+  eyebrow: string;
+  metric: string;
+  cta: string;
+  border: string;
+} {
+  switch (bucket) {
+    case 'dead_capital':
+      return {
+        shell: 'border-rose-200 bg-gradient-to-br from-rose-50 via-white to-white',
+        eyebrow: 'bg-rose-100 text-rose-700',
+        metric: 'text-rose-700',
+        cta: 'bg-rose-600 text-white',
+        border: 'border-rose-100',
+      };
+    case 'stockout_risk':
+      return {
+        shell: 'border-orange-200 bg-gradient-to-br from-orange-50 via-white to-white',
+        eyebrow: 'bg-orange-100 text-orange-700',
+        metric: 'text-orange-700',
+        cta: 'bg-orange-600 text-white',
+        border: 'border-orange-100',
+      };
+    case 'margin_bleeder':
+      return {
+        shell: 'border-amber-200 bg-gradient-to-br from-amber-50 via-white to-white',
+        eyebrow: 'bg-amber-100 text-amber-800',
+        metric: 'text-amber-800',
+        cta: 'bg-amber-600 text-white',
+        border: 'border-amber-100',
+      };
+    default:
+      return {
+        shell: 'border-slate-200 bg-gradient-to-br from-slate-50 via-white to-white',
+        eyebrow: 'bg-slate-100 text-slate-700',
+        metric: 'text-slate-800',
+        cta: 'bg-slate-800 text-white',
+        border: 'border-slate-100',
+      };
+  }
+}
+
+function getPriorityCardOutcome(bucket: BucketId): string {
+  switch (bucket) {
+    case 'dead_capital':
+      return 'Απελευθέρωση κεφαλαίου από στάσιμο απόθεμα.';
+    case 'stockout_risk':
+      return 'Προστασία πωλήσεων πριν εμφανιστεί έλλειψη.';
+    case 'margin_bleeder':
+      return 'Βελτίωση κερδοφορίας μέσω τιμολόγησης και μίγματος.';
+    case 'slow_mover':
+      return 'Στοχευμένη τόνωση για κωδικούς με χαμηλή κίνηση.';
+    default:
+      return 'Στοχευμένη εμπορική ενέργεια για την παρούσα ομάδα.';
   }
 }
 
@@ -619,11 +698,14 @@ function PriorityPolicyActions({
   if (actionable.length === 0) return null;
 
   return (
-    <div className="mb-3 grid grid-cols-1 lg:grid-cols-2 gap-2">
+    <div className="mb-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
       {actionable.map((bucket) => {
         const def = defs[bucket];
         const policyName = getPolicyName(def.recommendedPolicy);
         if (!policyName) return null;
+        const tone = getPriorityCardTone(bucket);
+        const productCount = counts[bucket];
+        const tiedCapital = tiedByBucket[bucket];
 
         return (
           <button
@@ -638,22 +720,43 @@ function PriorityPolicyActions({
               );
               onSelectPolicy(def.recommendedPolicy as NonNullable<RecommendedPolicy>, fromBucket, payload);
             }}
-            className="rounded-lg border border-rose-200 bg-white px-3 py-3 text-left transition-all hover:border-rose-300 hover:shadow-sm"
+            className={`rounded-xl border px-4 py-4 min-h-[176px] text-left transition-all hover:shadow-md ${tone.shell}`}
           >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-[10px] font-semibold uppercase tracking-wide text-rose-600">
-                  Άμεση ενέργεια
-                </div>
-                <div className="mt-1 text-[13px] font-semibold text-gray-900">{def.label}</div>
-                <div className="mt-1 text-[11px] text-gray-600">
-                  {counts[bucket].toLocaleString('el-GR')} προϊόντα
-                  {tiedByBucket[bucket] > 0 ? ` · ${fmtEur(tiedByBucket[bucket])} δεσμευμένα` : ''}
+            <div className="flex h-full flex-col">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className={`inline-flex items-center rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${tone.eyebrow}`}>
+                    Άμεση προτεραιότητα
+                  </div>
+                  <div className="mt-2 text-[15px] font-semibold leading-snug text-gray-900">{def.label}</div>
+                  <div className="mt-1 text-[12px] leading-relaxed text-gray-600">
+                    {getPriorityCardOutcome(bucket)}
+                  </div>
                 </div>
               </div>
-              <div className="shrink-0 inline-flex items-center gap-1 rounded-md bg-rose-50 px-2 py-1 text-[11px] font-semibold text-rose-700">
-                {policyName}
-                <ChevronRight size={12} />
+              <div className={`mt-4 grid grid-cols-2 gap-2 rounded-lg border bg-white/80 p-3 ${tone.border}`}>
+                <div>
+                  <div className="text-[10px] uppercase tracking-wide text-gray-500">Προϊόντα</div>
+                  <div className="mt-1 text-lg font-bold tabular-nums text-gray-900">
+                    {productCount.toLocaleString('el-GR')}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-wide text-gray-500">Αξία στο scope</div>
+                  <div className={`mt-1 text-lg font-bold tabular-nums ${tiedCapital > 0 ? tone.metric : 'text-gray-900'}`}>
+                    {tiedCapital > 0 ? fmtEur(tiedCapital) : '—'}
+                  </div>
+                </div>
+              </div>
+              <div className="mt-auto pt-3 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-[10px] uppercase tracking-wide text-gray-500">Προτεινόμενη πολιτική</div>
+                  <div className="mt-1 text-[12px] font-semibold text-gray-800">{policyName}</div>
+                </div>
+                <div className={`shrink-0 inline-flex items-center gap-1 rounded-lg px-3 py-2 text-[11px] font-semibold ${tone.cta}`}>
+                  Άνοιγμα
+                  <ChevronRight size={12} />
+                </div>
               </div>
             </div>
           </button>

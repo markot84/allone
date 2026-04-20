@@ -37,7 +37,7 @@ import { useProductSignals } from '../../hooks/useProductSignals';
 import { buildTriagePromptContext, buildProvenancePromptContext } from '../../utils/aiPromptContext';
 import { useSegments } from '../../hooks/useSegments';
 import { useBrand } from '../../hooks/useBrand';
-import { useActiveStrategy, type TriageOrigin } from '../../hooks/useActiveStrategy';
+import { useActiveStrategy, type SeasonalProposal, type TriageOrigin } from '../../hooks/useActiveStrategy';
 import { useAuth } from '../../hooks/useAuth';
 import {
   scenarios,
@@ -789,35 +789,72 @@ export function WeightConfigurator() {
   }, [user, saveActiveStrategy, toast, duration, triggerAIGeneration, createStrategyDecision]);
 
   const handleSeasonApply = useCallback((period: SeasonalPeriod) => {
+    if (!user) {
+      toast.error('Πρέπει να είσαι συνδεδεμένος');
+      return;
+    }
+    if (!currentBrand?.id) {
+      toast.error('Δεν βρέθηκε επιλεγμένο brand');
+      return;
+    }
+
     const mix = period.suggestedMix;
-    const blended = computeBlendedWeights(mix.scenarioA, mix.scenarioB, mix.percentA);
-    const config: MixConfig = {
+    const proposal: SeasonalProposal = {
+      periodId: period.id,
+      periodName: period.name,
       scenarioA: mix.scenarioA,
       scenarioB: mix.scenarioB,
       percentA: mix.percentA,
       percentB: 100 - mix.percentA,
+      description: period.description,
+      activatedAt: new Date().toISOString(),
     };
-    setSelectedScenario('mixed');
-    setMixConfig(config);
-    setWeights(blended);
-    setHasManualWeightChanges(false);
 
-    if (!user) return;
-    saveActiveStrategy({
-      scenarioId: 'mixed',
-      weights: blended,
-      duration,
-      approvalStatus: 'implementing',
-      approvedBy: user.email || user.displayName || 'User',
-      mixConfig: config,
-      ...(triageOrigin ? { triageOrigin } : {}),
-    } as any).then((saved) => {
-      toast.success(`Εποχιακή στρατηγική "${period.name}" εφαρμόστηκε`);
-      setStrategySaveVersion(v => v + 1);
-      if (saved?.id) triggerAIGeneration(saved.id, 'mixed', blended);
-      createStrategyDecision(`Εποχιακή: ${period.name}`);
-    }).catch(() => {});
-  }, [user, saveActiveStrategy, toast, duration, triggerAIGeneration, createStrategyDecision]);
+    const currentScenarioId = selectedScenario || activeStrategy?.scenarioId || 'profit_max';
+    const currentWeights = currentScenarioId === 'mixed' && mixConfig
+      ? computeBlendedWeights(mixConfig.scenarioA, mixConfig.scenarioB, mixConfig.percentA)
+      : weights;
+    const currentDuration = activeStrategy?.duration ?? duration;
+
+    const now = new Date().toISOString();
+    const strategyId =
+      activeStrategy && !activeStrategy.id.startsWith('default_')
+        ? activeStrategy.id
+        : `strategy_${currentBrand.id}`;
+    const payload: Record<string, unknown> =
+      activeStrategy && !activeStrategy.id.startsWith('default_')
+        ? {
+            ...JSON.parse(JSON.stringify(activeStrategy)),
+            seasonalProposal: proposal,
+            updatedAt: now,
+          }
+        : {
+            id: strategyId,
+            brandId: currentBrand.id,
+            scenarioId: currentScenarioId,
+            weights: currentWeights,
+            duration: currentDuration,
+            approvalStatus: 'implementing',
+            approvedBy: user.email || user.displayName || 'User',
+            approvedAt: now,
+            implementedAt: now,
+            createdAt: now,
+            updatedAt: now,
+            ...(activeStrategy?.scenarioId === 'mixed' && mixConfig ? { mixConfig } : {}),
+            ...(triageOrigin ? { triageOrigin } : {}),
+            seasonalProposal: proposal,
+          };
+
+    FirestoreService.setDocument('active_strategies', strategyId, payload).then(() => {
+      queryClient.invalidateQueries({ queryKey: ['activeStrategy', currentBrand.id] }).catch(() => {});
+      toast.success(`Η εποχιακή πρόταση "${period.name}" ενεργοποιήθηκε παράλληλα με την κύρια πολιτική`);
+      setShowSeasonalModal(false);
+      createStrategyDecision(`Εποχική πρόταση: ${period.name}`);
+    }).catch((error) => {
+      console.error('Error saving seasonal proposal:', error);
+      toast.error(`Σφάλμα: ${error?.message || error}`);
+    });
+  }, [user, toast, currentBrand?.id, selectedScenario, activeStrategy, mixConfig, weights, duration, triageOrigin, createStrategyDecision, queryClient]);
 
   const handleSeasonalDiscountApply = useCallback((config: SeasonalDiscountConfig) => {
     setSeasonalDiscountConfig(config);
@@ -1380,6 +1417,12 @@ export function WeightConfigurator() {
             />
           )}
 
+          <SeasonalBanner
+            activeProposalId={(activeStrategy as { seasonalProposal?: SeasonalProposal | undefined } | null)?.seasonalProposal?.periodId ?? null}
+            onApplySeason={handleSeasonApply}
+            onManageSeasons={() => setShowSeasonalModal(true)}
+          />
+
           <ProcurementStrategyBridge
             products={products}
             enabled={usingProcurement}
@@ -1454,30 +1497,6 @@ export function WeightConfigurator() {
               scrollToScenarioSelector();
             }}
           />
-
-          {/* Προέλευση από διάγνωση προτεραιοτήτων όταν επιλέχθηκε bucket */}
-          {triageOrigin && (
-            <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-[var(--nts-light-gray)] border border-[var(--nts-border-gray)] rounded-lg">
-              <div className="flex items-center gap-2 min-w-0 text-[12px]">
-                <span className="w-1.5 h-1.5 rounded-full bg-[var(--nts-accent)] shrink-0" />
-                <span className="text-gray-700 truncate">
-                  Εστίαση διάγνωσης: <strong>{triageOrigin.label}</strong>
-                  <span className="text-gray-500 ml-1.5">
-                    · {(triageOrigin.productIds?.length ?? triageOrigin.skus?.length ?? 0)} προϊόντα στο scope
-                    {typeof triageOrigin.tiedCapital === 'number' && triageOrigin.tiedCapital > 0
-                      ? ` · ${Math.round(triageOrigin.tiedCapital).toLocaleString('el-GR')}€ κεφάλαια`
-                      : ''}
-                  </span>
-                </span>
-              </div>
-              <button
-                onClick={() => setTriageOrigin(null)}
-                className="shrink-0 text-[11px] text-gray-500 hover:text-gray-800 underline-offset-2 hover:underline"
-              >
-                Καθάρισμα
-              </button>
-            </div>
-          )}
 
           {/* Scenario Selector (tabs) */}
           <div ref={scenarioSelectorRef} className="space-y-3">
@@ -1588,14 +1607,6 @@ export function WeightConfigurator() {
           </motion.div>
         );
       })()}
-
-      {/* Seasonal Banner */}
-      <SeasonalBanner
-        currentScenarioId={selectedScenario}
-        currentMixConfig={mixConfig}
-        onApplySeason={handleSeasonApply}
-        onManageSeasons={() => setShowSeasonalModal(true)}
-      />
 
       {/* Mixed Strategy Panel */}
       <AnimatePresence>
