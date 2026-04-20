@@ -1,10 +1,18 @@
 {
-  "version": "0.599.0",
-  "previousVersion": "0.598.0",
-  "commitHash": "bdb0c38",
+  "version": "0.600.0",
+  "previousVersion": "0.599.0",
+  "commitHash": "cd465f1",
   "branch": "main",
-  "buildDate": "2026-04-20T06:55:28.626Z",
+  "buildDate": "2026-04-20T09:25:47.422Z",
   "commits": [
+    {
+      "hash": "cd465f1",
+      "message": "fix(procurement): resolve ERP column names and merge pricing for margin"
+    },
+    {
+      "hash": "06e5a0a",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "bdb0c38",
       "message": "chore: full deploy"
@@ -56,17 +64,10 @@
     {
       "hash": "612f2bb",
       "message": "UX: redesign TriageCard for merchant clarity"
-    },
-    {
-      "hash": "7232184",
-      "message": "Sprint 2 Phase 3+4: triage origin persistence + AI context wiring"
-    },
-    {
-      "hash": "98bcb5c",
-      "message": "feat(strategy): universal data layer + decision buckets triage"
     }
   ],
   "changes": [
+    "[Διόρθωση] Resolve ERP column names and merge pricing for margin",
     "[Συντήρηση] Full deploy",
     "[Διόρθωση] Triage uses useProductSource for Enterprise procurement catalog",
     "[Διόρθωση] Guard missing connectedPlatforms in useEcommerceSummary hasData",
@@ -75,7 +76,6 @@
     "UX: redesign TriageCard for merchant clarity",
     "Sprint 2 Phase 3+4: triage origin persistence + AI context wiring",
     "[Νέο χαρακτηριστικό] Universal data layer + decision buckets triage",
-    "[Νέο χαρακτηριστικό] Sales opt foundation + universal stock movement",
-    "[Διόρθωση] Grouped setup modals, impact dismiss UX, price benchmark filter perf"
+    "[Νέο χαρακτηριστικό] Sales opt foundation + universal stock movement"
   ]
 }

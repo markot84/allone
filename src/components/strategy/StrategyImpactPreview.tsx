@@ -353,6 +353,15 @@ export function StrategyImpactModal({
   const campaigns = campaignsFromHook ?? [];
   const contentItems = contentFromHook ?? [];
   const [showProducts, setShowProducts] = useState(true);
+  /** Επιλεγμένη διάρκεια εφαρμογής — ίδια λογική με StrategyImpactSummary (όχι μόνο default scenario). */
+  const [confirmDuration, setConfirmDuration] = useState<number | 'ongoing'>(() =>
+    newDuration === undefined ? 'ongoing' : newDuration,
+  );
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setConfirmDuration(newDuration === undefined ? 'ongoing' : newDuration);
+  }, [isOpen, newScenarioId, newDuration]);
 
   const fromName = scenarios.find(s => s.id === currentScenarioId)?.name ?? 'Τρέχουσα';
   const toName = scenarios.find(s => s.id === newScenarioId)?.name ?? 'Νέα';
@@ -443,9 +452,7 @@ export function StrategyImpactModal({
             )}
             <ArrowRight size={16} className="text-[var(--nts-accent)] flex-shrink-0" />
             <span className="font-medium text-[#1A1A1A]">{toName}</span>
-            {newDuration !== undefined && (
-              <span className="text-[10px] text-[#9CA3AF]">{formatDuration(newDuration)}</span>
-            )}
+            <span className="text-[10px] text-[#9CA3AF]">{formatDuration(confirmDuration)}</span>
           </div>
         </div>
 
@@ -552,6 +559,46 @@ export function StrategyImpactModal({
               <span className="text-[10px] text-[#9CA3AF]">Εισαγάγετε καμπάνιες για αναλυτική αποτίμηση</span>
             )}
           </div>
+
+          {/* Διάρκεια — πρέπει να είναι ορατή πριν την εφαρμογή (ίδιο UX με το summary layer). */}
+          <div className="flex flex-col gap-2 pt-2 border-t border-[#F5F5F5]">
+            <div className="flex items-center gap-2 text-xs text-[#4A4A4A]">
+              <Clock size={14} className="text-[#9CA3AF] flex-shrink-0" aria-hidden />
+              <span className="font-medium text-[#1A1A1A]">Διάρκεια νέας πολιτικής</span>
+            </div>
+            <p className="text-[10px] text-[#9CA3AF] leading-snug">
+              Επιλέξτε πόσες ημέρες ισχύει η πολιτική (ή συνεχής). Η ημερομηνία λήξης υπολογίζεται από την ημέρα ενεργοποίησης.
+            </p>
+            <div className="flex items-center gap-1 flex-wrap">
+              {[7, 14, 30, 60, 90].map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => setConfirmDuration(d)}
+                  className={`px-2.5 py-1 text-[11px] font-medium rounded-lg border transition-all ${
+                    confirmDuration === d
+                      ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)] text-white'
+                      : 'border-[#E5E5E5] text-[#4A4A4A] hover:border-[var(--nts-accent)]/50'
+                  }`}
+                >
+                  {d} ημ.
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setConfirmDuration('ongoing')}
+                className={`inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium rounded-lg border transition-all ${
+                  confirmDuration === 'ongoing'
+                    ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)] text-white'
+                    : 'border-[#E5E5E5] text-[#4A4A4A] hover:border-[var(--nts-accent)]/50'
+                }`}
+                title="Συνεχής — χωρίς αυτόματη λήξη"
+              >
+                <Infinity size={12} aria-hidden />
+                Συνεχής
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Actions */}
@@ -559,7 +606,7 @@ export function StrategyImpactModal({
           <Button variant="ghost" onClick={onClose}>
             Ακύρωση
           </Button>
-          <Button variant="primary" icon={<Check size={16} />} onClick={() => onConfirm(newDuration ?? 'ongoing')}>
+          <Button variant="primary" icon={<Check size={16} />} onClick={() => onConfirm(confirmDuration)}>
             Εφαρμογή αλλαγής
           </Button>
         </div>
