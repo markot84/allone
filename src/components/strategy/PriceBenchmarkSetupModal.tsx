@@ -207,9 +207,9 @@ export function PriceBenchmarkSetupModal({
         >
           <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-[#E5E5E5]">
             <div>
-              <h2 className="text-base font-bold text-[#1A1A1A]">Price Benchmarking — εύρος με φίλτρα</h2>
+              <h2 className="text-base font-bold text-[#1A1A1A]">Price Benchmarking — λειτουργία με φίλτρα</h2>
               <p className="text-xs text-[#6B7280] mt-1 leading-relaxed">
-                Ορίστε preset και φίλτρα. Η στρατηγική εφαρμόζεται σε <strong>όλα</strong> τα SKU που πληρούν τα κριτήρια.
+                Ορίστε preset και φίλτρα. Η λειτουργία εφαρμόζεται σε <strong>όλα</strong> τα SKU που πληρούν τα κριτήρια.
                 Παρακάτω εμφανίζεται συνοπτική εικόνα ανά μάρκα και κατηγορία, χωρίς αναλυτική λίστα SKU.
               </p>
             </div>
@@ -302,7 +302,7 @@ export function PriceBenchmarkSetupModal({
                 ταιριάζουν με τα κριτήρια.
               </p>
               <p className="text-[10px] text-[#6B7280] mt-1">
-                Στην επόμενη οθόνη επιλέγετε διάρκεια· η στρατηγική θα ισχύει για όλα αυτά τα SKU (όχι επιλογή ανά
+                Στην επόμενη οθόνη επιλέγετε διάρκεια· η λειτουργία θα ισχύει για όλα αυτά τα SKU (όχι επιλογή ανά
                 γραμμή).
               </p>
             </div>
@@ -335,7 +335,7 @@ export function PriceBenchmarkSetupModal({
               disabled={!hasBenchmarkData || totalMatched === 0}
               className="px-4 py-1.5 text-xs font-medium rounded-lg bg-[var(--nts-accent)] text-white hover:opacity-90 disabled:opacity-40 disabled:pointer-events-none"
             >
-              Συνέχεια — διάρκεια στρατηγικής
+              Συνέχεια — διάρκεια λειτουργίας
             </button>
           </div>
         </motion.div>

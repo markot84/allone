@@ -43,6 +43,10 @@ const WEIGHT_LABELS: Record<string, string> = {
   revenue: 'Τζίρος', fit: 'Ταίριασμα',
 };
 
+function getImpactModalTitle(newScenarioId?: string): string {
+  return newScenarioId === 'price_benchmark' ? 'Άνοιγμα λειτουργίας' : 'Αλλαγή στρατηγικής';
+}
+
 function truncateName(name: string, max = 30) {
   if (name.length <= max) return name;
   return name.slice(0, max) + '…';
@@ -421,7 +425,7 @@ export function StrategyImpactModal({
         {/* Header */}
         <div className="p-5 border-b border-[#E5E5E5]">
           <div className="flex items-center justify-between">
-            <h2 className="text-base font-bold text-[#1A1A1A]">Αλλαγή στρατηγικής</h2>
+            <h2 className="text-base font-bold text-[#1A1A1A]">{getImpactModalTitle(newScenarioId)}</h2>
             <button
               type="button"
               onClick={onClose}

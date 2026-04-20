@@ -247,6 +247,24 @@ const PreviewCell = memo(function PreviewCell({
   }
 });
 
+function getScenarioPendingLabel(scenarioId: string | null): string {
+  return scenarioId === 'price_benchmark'
+    ? 'Επιλεγμένη λειτουργία προς ενεργοποίηση'
+    : 'Επιλεγμένη πολιτική προς ενεργοποίηση';
+}
+
+function getScenarioPendingHelpText(scenarioId: string | null): string {
+  return scenarioId === 'price_benchmark'
+    ? 'Έλεγξε πρώτα preview και φίλτρα. Το popup διάρκειας ανοίγει μόνο όταν πατήσεις συνέχεια.'
+    : 'Έλεγξε πρώτα preview και ρυθμίσεις. Το popup διάρκειας ανοίγει μόνο όταν πατήσεις ενεργοποίηση.';
+}
+
+function getScenarioPendingActionText(scenarioId: string | null): string {
+  return scenarioId === 'price_benchmark'
+    ? 'Συνέχεια σε διάρκεια λειτουργίας'
+    : 'Επιλογή διάρκειας & ενεργοποίηση';
+}
+
 export function WeightConfigurator() {
   const { currentBrand } = useBrand();
   const { products, hasImported, usingProcurement } = useProductSource();
@@ -1510,13 +1528,13 @@ export function WeightConfigurator() {
               <div className="flex flex-col gap-3 rounded-xl border border-[var(--nts-accent)]/20 bg-[var(--nts-light-gray)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
                   <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--nts-accent)]">
-                    Επιλεγμένη πολιτική προς ενεργοποίηση
+                    {getScenarioPendingLabel(pendingScenarioChange)}
                   </div>
                   <div className="mt-1 text-sm font-semibold text-[var(--nts-charcoal)]">
                     {scenarios.find((s) => s.id === pendingScenarioChange)?.name ?? pendingScenarioChange}
                   </div>
                   <p className="mt-1 text-[12px] text-[var(--nts-medium-gray)]">
-                    Έλεγξε πρώτα preview και ρυθμίσεις. Το popup διάρκειας ανοίγει μόνο όταν πατήσεις ενεργοποίηση.
+                    {getScenarioPendingHelpText(pendingScenarioChange)}
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -1533,7 +1551,7 @@ export function WeightConfigurator() {
                     iconPosition="right"
                     onClick={() => setShowDetailModal(true)}
                   >
-                    Επιλογή διάρκειας & ενεργοποίηση
+                    {getScenarioPendingActionText(pendingScenarioChange)}
                   </Button>
                 </div>
               </div>

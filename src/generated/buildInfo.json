@@ -1,10 +1,14 @@
 {
-  "version": "0.598.0",
-  "previousVersion": "0.597.0",
-  "commitHash": "b9636dd",
+  "version": "0.599.0",
+  "previousVersion": "0.598.0",
+  "commitHash": "bdb0c38",
   "branch": "main",
-  "buildDate": "2026-04-20T06:15:10.083Z",
+  "buildDate": "2026-04-20T06:55:28.626Z",
   "commits": [
+    {
+      "hash": "bdb0c38",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "b9636dd",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "98bcb5c",
       "message": "feat(strategy): universal data layer + decision buckets triage"
-    },
-    {
-      "hash": "bc53a7e",
-      "message": "feat(strategy): sales opt foundation + universal stock movement"
     }
   ],
   "changes": [

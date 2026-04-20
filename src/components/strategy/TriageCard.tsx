@@ -602,6 +602,14 @@ function getPolicyName(policy: RecommendedPolicy | null | undefined): string | n
   }
 }
 
+function getRecommendationLabel(policy: RecommendedPolicy | null | undefined): string {
+  return policy === 'price_benchmark' ? 'Προτεινόμενη λειτουργία' : 'Προτεινόμενη πολιτική';
+}
+
+function getRecommendationActionText(policy: RecommendedPolicy | null | undefined): string {
+  return policy === 'price_benchmark' ? 'Άνοιγμα λειτουργίας' : 'Άνοιγμα';
+}
+
 function getPriorityCardTone(bucket: BucketId): {
   shell: string;
   eyebrow: string;
@@ -750,11 +758,13 @@ function PriorityPolicyActions({
               </div>
               <div className="mt-auto pt-3 flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="text-[10px] uppercase tracking-wide text-gray-500">Προτεινόμενη πολιτική</div>
+                  <div className="text-[10px] uppercase tracking-wide text-gray-500">
+                    {getRecommendationLabel(def.recommendedPolicy)}
+                  </div>
                   <div className="mt-1 text-[12px] font-semibold text-gray-800">{policyName}</div>
                 </div>
                 <div className={`shrink-0 inline-flex items-center gap-1 rounded-lg px-3 py-2 text-[11px] font-semibold ${tone.cta}`}>
-                  Άνοιγμα
+                  {getRecommendationActionText(def.recommendedPolicy)}
                   <ChevronRight size={12} />
                 </div>
               </div>
@@ -924,7 +934,9 @@ function ExpandedPanel({
         <div className="shrink-0 flex flex-col items-end gap-1.5">
           {recommendedPolicyName && (
             <div className="text-right">
-              <div className="text-[10px] uppercase tracking-wide text-gray-400">Προτεινόμενη πολιτική</div>
+              <div className="text-[10px] uppercase tracking-wide text-gray-400">
+                {getRecommendationLabel(def.recommendedPolicy)}
+              </div>
               <div className="text-[11px] font-semibold text-gray-700">{recommendedPolicyName}</div>
             </div>
           )}
