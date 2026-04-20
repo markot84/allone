@@ -6,10 +6,59 @@ import type { Product } from '../types';
 import { classifyProcurementInventoryRow } from '../utils/procurementInventoryClassify';
 import { excludeDemoProducts, normalizeSpreadsheetCellToFirstAvailableDate } from '../utils/productUtils';
 
-function findCol(rows: Record<string, unknown>[], keyword: string): string {
-  if (!rows.length) return keyword;
-  const kUp = keyword.toUpperCase();
-  return Object.keys(rows[0]).find(k => k.toUpperCase().includes(kUp)) ?? keyword;
+/** Πρώτο header που ταιριάζει (substring, case-insensitive) με κάποιο keyword — σειρά = προτεραιότητα. */
+function findColByKeywords(rows: Record<string, unknown>[], keywords: readonly string[]): string {
+  if (!rows.length) return keywords[0] ?? '';
+  const headers = Object.keys(rows[0]);
+  for (const kw of keywords) {
+    const kUp = kw.toUpperCase();
+    const hit = headers.find(h => h.toUpperCase().includes(kUp));
+    if (hit) return hit;
+  }
+  return keywords[0] ?? '';
+}
+
+type PricingSlice = {
+  avg?: number;
+  list?: number;
+  corp?: number;
+  totalCost?: number;
+  primaryCost?: number;
+};
+
+/** Αντιστοίχιση SKU → τιμές/κόστη από procurement_pricing_policy (ίδια λογική με procurementSignals). */
+function buildPricingBySku(pricingRows: Record<string, unknown>[]): Map<string, PricingSlice> {
+  const map = new Map<string, PricingSlice>();
+  if (!pricingRows.length) return map;
+
+  const skuCol = findColByKeywords(pricingRows, ['ΚΩΔΙΚΟΣ']);
+  const avgCol = findColByKeywords(pricingRows, ['ΜΕΣΗ_ΤΙΜΗ_ΠΩΛΗΣΗΣ', 'ΜΕΣΗ ΤΙΜΗ ΠΩΛΗΣΗΣ']);
+  const listCol = findColByKeywords(pricingRows, ['ΤΙΜΟΚΑΤΑΛΟΓΟΣ_ΒΑΣΗΣ', 'ΤΙΜΟΚΑΤΑΛΟΓΟΣ ΒΑΣΗΣ']);
+  const corpCol = findColByKeywords(pricingRows, ['ΕΤΑΙΡΙΚΟΣ_ΚΑΤΑΛΟΓΟΣ', 'ΕΤΑΙΡΙΚΟΣ ΚΑΤΑΛΟΓΟΣ']);
+  const totalCostCol = findColByKeywords(pricingRows, ['ΣΥΝΟΛΙΚΟ_ΚΟΣΤΟΣ', 'ΣΥΝΟΛΙΚΟ ΚΟΣΤΟΣ']);
+  const primaryCostCol = findColByKeywords(pricingRows, [
+    'ΠΡΩΤΟΓΕΝΕΣ_ΚΟΣΤΟΣ_Μ_Μ',
+    'ΠΡΩΤΟΓΕΝΕΣ_ΚΟΣΤΟΣ',
+    'ΠΡΩΤΟΓΕΝΕΣ ΚΟΣΤΟΣ',
+  ]);
+
+  for (const row of pricingRows) {
+    const sku = String(row[skuCol] ?? '').trim();
+    if (!sku) continue;
+    const slice: PricingSlice = {};
+    const avg = parseNum(row[avgCol]);
+    const list = parseNum(row[listCol]);
+    const corp = parseNum(row[corpCol]);
+    const totalCost = parseNum(row[totalCostCol]);
+    const primaryCost = parseNum(row[primaryCostCol]);
+    if (avg > 0) slice.avg = avg;
+    if (list > 0) slice.list = list;
+    if (corp > 0) slice.corp = corp;
+    if (totalCost > 0) slice.totalCost = totalCost;
+    if (primaryCost > 0) slice.primaryCost = primaryCost;
+    if (Object.keys(slice).length) map.set(sku, slice);
+  }
+  return map;
 }
 
 /** Σειρά από συγκεκριμένα προς γενικά — best-effort αν το template έχει διαφορετικές κεφαλίδες. */
@@ -59,23 +108,41 @@ export function useProductSource() {
     const invRows = ((procData?.inventory ?? []) as unknown[]) as Record<string, unknown>[];
     if (!invRows.length) return [];
 
-    const codeCol = findCol(invRows, 'ΚΩΔΙΚΟΣ');
-    const descCol = findCol(invRows, 'ΠΕΡΙΓΡΑΦΗ');
-    const stockCol = findCol(invRows, 'ΔΙΑΘΕΣΙΜΟ ΥΠΟΛΟΙΠΟ');
-    const costCol = findCol(invRows, 'ΠΡΩΤΟΓΕΝΕΣ ΚΟΣΤΟΣ');
-    const evalCol = findCol(invRows, 'ΑΞΙΟΛΟΓΗΣΗ ΕΙΔΟΥΣ');
-    const refillCol = findCol(invRows, 'ΑΝΑΤΡΟΦΟΔΟΣΙΑ');
-    const priceCol = findCol(invRows, 'ΤΙΜΗ ΠΩΛΗΣΗΣ');
-    const groupCol = findCol(invRows, 'ΟΜΑΔΑ');
-    const statusCol = findCol(invRows, 'STATUS ΚΩΔΙΚΟΥ');
+    const pricingRows = ((procData?.pricing_policy ?? []) as unknown[]) as Record<string, unknown>[];
+    const pricingBySku = buildPricingBySku(pricingRows);
+
+    const codeCol = findColByKeywords(invRows, ['ΚΩΔΙΚΟΣ']);
+    const descCol = findColByKeywords(invRows, ['ΠΕΡΙΓΡΑΦΗ']);
+    const stockCol = findColByKeywords(invRows, ['ΔΙΑΘΕΣΙΜΟ_ΥΠΟΛΟΙΠΟ', 'ΔΙΑΘΕΣΙΜΟ ΥΠΟΛΟΙΠΟ']);
+    const costCol = findColByKeywords(invRows, [
+      'ΠΡΩΤΟΓΕΝΕΣ_ΚΟΣΤΟΣ_Μ_Μ',
+      'ΠΡΩΤΟΓΕΝΕΣ_ΚΟΣΤΟΣ',
+      'ΠΡΩΤΟΓΕΝΕΣ ΚΟΣΤΟΣ',
+    ]);
+    const evalCol = findColByKeywords(invRows, ['ΑΞΙΟΛΟΓΗΣΗ_ΕΙΔΟΥΣ', 'ΑΞΙΟΛΟΓΗΣΗ ΕΙΔΟΥΣ']);
+    const refillCol = findColByKeywords(invRows, ['ΠΟΣΟΤΗΤΑ_ΑΝΑΤΡΟΦΟΔΟΣΗΣ', 'ΑΝΑΤΡΟΦΟΔΟΣΙΑ']);
+    const priceCol = findColByKeywords(invRows, ['ΤΙΜΗ ΠΩΛΗΣΗΣ', 'ΤΙΜΗ_ΠΩΛΗΣΗΣ', 'ΜΕΣΗ_ΤΙΜΗ_ΠΩΛΗΣΗΣ']);
+    const groupCol = findColByKeywords(invRows, ['ΟΜΑΔΑ_ΡΟΗΣ', 'ΚΑΤΗΓΟΡΙΑ', 'ΟΜΑΔΑ']);
+    const statusCol = findColByKeywords(invRows, ['STATUS_ΚΩΔΙΚΟΥ', 'STATUS ΚΩΔΙΚΟΥ']);
     const firstAvailCol = findColByOrderedKeywords(invRows, PROCUREMENT_FIRST_AVAILABLE_KEYWORDS);
 
     return invRows.map((row, idx) => {
       const code = String(row[codeCol] ?? '').trim();
       const desc = String(row[descCol] ?? '').trim();
       const stock = parseNum(row[stockCol]);
-      const cost = parseNum(row[costCol]);
-      const price = parseNum(row[priceCol]) || cost;
+      let cost = parseNum(row[costCol]);
+      const invPriceRaw = parseNum(row[priceCol]);
+      let price = invPriceRaw || cost;
+
+      const pr = code ? pricingBySku.get(code) : undefined;
+      if (pr) {
+        const fromPricingPrice = pr.avg || pr.list || pr.corp || 0;
+        if (invPriceRaw <= 0 && fromPricingPrice > 0) price = fromPricingPrice;
+        const costFromPricing =
+          pr.totalCost && pr.totalCost > 0 ? pr.totalCost : pr.primaryCost && pr.primaryCost > 0 ? pr.primaryCost : 0;
+        if (cost <= 0 && costFromPricing > 0) cost = costFromPricing;
+      }
+
       const evalGrade = String(row[evalCol] ?? 'B').trim().toUpperCase();
       const needsRefill = parseNum(row[refillCol]) > 0;
       const statusUpper = String(row[statusCol] ?? '').trim().toUpperCase();
@@ -111,7 +178,7 @@ export function useProductSource() {
         ...(first_available_date ? { first_available_date } : {}),
       } as Product;
     });
-  }, [isEnterprise, procData?.inventory]);
+  }, [isEnterprise, procData?.inventory, procData?.pricing_policy]);
 
   const usingProcurement = procProducts.length > 0;
   // Demo products φιλτράρονται και εδώ για να ισχύει σε όλους τους aggregates.
