@@ -1,10 +1,14 @@
 {
-  "version": "0.611.0",
-  "previousVersion": "0.610.0",
-  "commitHash": "251b2ce",
+  "version": "0.612.0",
+  "previousVersion": "0.611.0",
+  "commitHash": "8746468",
   "branch": "main",
-  "buildDate": "2026-04-23T08:15:55.229Z",
+  "buildDate": "2026-04-23T08:43:03.097Z",
   "commits": [
+    {
+      "hash": "8746468",
+      "message": "feat(channels): merge Channel Recommendations into Channel Activation"
+    },
     {
       "hash": "251b2ce",
       "message": "chore: buildInfo v0.609.0 after deploy"
@@ -60,13 +64,10 @@
     {
       "hash": "b9636dd",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "b1b8f18",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [
+    "[Νέο χαρακτηριστικό] Merge Channel Recommendations into Channel Activation",
     "[Συντήρηση] BuildInfo v0.609.0 after deploy",
     "[Συντήρηση] BuildInfo v0.608.0 after build",
     "[Συντήρηση] Remove unused helper; buildInfo v0.607.0",
@@ -75,7 +76,6 @@
     "[Συντήρηση] Regenerate buildInfo after merge",
     "[Νέο χαρακτηριστικό] Home session — GA4/search console, auth, ecommerce, connectors, ROI, firestore rules",
     "[Συντήρηση] Full deploy",
-    "[Διόρθωση] Resolve ERP column names and merge pricing for margin",
-    "[Διόρθωση] Triage uses useProductSource for Enterprise procurement catalog"
+    "[Διόρθωση] Resolve ERP column names and merge pricing for margin"
   ]
 }

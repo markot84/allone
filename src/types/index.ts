@@ -394,6 +394,10 @@ export interface ChannelPlaybookEntry {
   channel: string;
   message: string;
   marketingBrief: string;
+  /** Priority του καναλιού για το συγκεκριμένο segment (διαφέρει από το global primary/secondary). */
+  priority?: 'primary' | 'secondary';
+  /** Προτεινόμενο % budget ΓΙΑ ΤΟ SEGMENT (αθροίζει 100 ανά segment). */
+  budgetSharePct?: number;
 }
 
 export interface ChannelRecommendation {

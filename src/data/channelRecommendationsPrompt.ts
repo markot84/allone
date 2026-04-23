@@ -33,16 +33,26 @@ export const CHANNEL_RECOMMENDATIONS_SYSTEM_PROMPT = `Είσαι ανώτατο 
     { "name": "Champions", "fit": "ideal", "rationale": "Σύντομη αιτιολόγηση γιατί ταιριάζουν στην πολιτική (1-2 προτάσεις)." }
   ],
   "channelPlaybook": [
-    { "segment": "Champions", "channel": "Email Marketing", "message": "Σύντομο campaign copy 1-2 προτάσεις για τον επιχειρηματία.", "marketingBrief": "Αναλυτικό brief 3-5 προτάσεις για agency: campaign type, targeting (lookalike/CRM/RFM), ad format, bidding strategy, ενδεικτικά KPIs (target ROAS/CPA/CTR), A/B testing angle." }
+    { "segment": "Champions", "channel": "Email Marketing", "priority": "primary", "budgetSharePct": 30, "message": "Σύντομο campaign copy 1-2 προτάσεις για τον επιχειρηματία.", "marketingBrief": "Αναλυτικό brief 3-5 προτάσεις για agency: campaign type, targeting (lookalike/CRM/RFM), ad format, bidding strategy, ενδεικτικά KPIs (target ROAS/CPA/CTR), A/B testing angle." }
   ]
 }
 
 ΕΠΙΠΛΕΟΝ ΥΠΟΧΡΕΩΤΙΚΑ ΠΕΔΙΑ:
 - "targetSegments": ΥΠΟΧΡΕΩΤΙΚΟ. Λίστα με τα segments που ΤΑΙΡΙΑΖΟΥΝ στη συγκεκριμένη εμπορική πολιτική (ideal ή good fit). Μην βάλεις partial. Αν ο χρήστης έχει δηλώσει segmentFitList, βάλε ΑΚΡΙΒΩΣ τα ideal+good από εκεί. Κάθε entry έχει σύντομη αιτιολόγηση (1-2 προτάσεις) γιατί η πολιτική αξιοποιεί αυτό το segment.
-- "channelPlaybook": ΥΠΟΧΡΕΩΤΙΚΟ. Για ΚΑΘΕ συνδυασμό (segment του targetSegments × κανάλι του primary∪secondary), δώσε ένα entry. Δηλαδή αν έχεις 3 target segments × 5 κανάλια = 15 entries.
-  • "message": σύντομο, business-friendly campaign copy που μπορεί να διαβάσει ο ιδιοκτήτης (1-2 προτάσεις). Χωρίς jargon.
+
+- "channelPlaybook": ΥΠΟΧΡΕΩΤΙΚΟ και ΔΙΑΦΟΡΟΠΟΙΗΜΕΝΟ ΑΝΑ SEGMENT. Για ΚΑΘΕ targetSegment διάλεξε ΜΟΝΟ τα 3-5 πιο κατάλληλα κανάλια από το primary∪secondary set, ΟΧΙ όλα. Διαφορετικά segments πρέπει να έχουν ΔΙΑΦΟΡΕΤΙΚΟ μίγμα καναλιών — δεν μπορεί όλα τα segments να έχουν τα ίδια κανάλια. Παραδείγματα διαφοροποίησης:
+  • «Champions / Loyal»: Email + SMS + Loyalty + Dynamic Remarketing (όχι top-funnel awareness)
+  • «New / Promising»: Meta Ads + Google Search + Content/SEO + Influencer (όχι loyalty)
+  • «At Risk / Hibernating»: Email Win-back + Meta Retargeting + SMS (όχι cold acquisition)
+  • «Big Spenders»: Premium creative on Meta + Google Performance Max + WhatsApp Business
+  Κάθε entry έχει:
+  • "priority": "primary" ή "secondary" — η σχετική σημασία ΓΙΑ ΑΥΤΟ ΤΟ SEGMENT (όχι για όλη τη στρατηγική)
+  • "budgetSharePct": 0-100 — % budget που πρέπει να πάει σε αυτό το κανάλι ΕΝΤΟΣ του segment. Άθροισμα ανά segment = 100 ακριβώς. Owned/organic κανάλια (Email, SMS, SEO, Content, Loyalty κλπ) παίρνουν 0 budgetSharePct εφόσον δεν τρώνε διαφημιστικό budget — αλλά παραμένουν στο playbook ως primary/secondary δράσεις.
+  • "message": σύντομο, business-friendly campaign copy που μπορεί να διαβάσει ο ιδιοκτήτης (1-2 προτάσεις). Χωρίς jargon. ΟΦΕΙΛΕΙ να αναφέρει το segment ονομαστικά ή τη συμπεριφορά του.
   • "marketingBrief": τεχνικό brief 3-5 προτάσεις για agency/execution team: τύπος καμπάνιας, targeting (lookalike/CRM list/keywords/audience), ad format, bidding strategy, ενδεικτικά KPIs (ROAS, CPA, CTR), A/B angle. Χρησιμοποίησε marketing terminology.
   • Το όνομα segment ΠΡΕΠΕΙ να ταιριάζει ακριβώς (case-sensitive) με αυτό του targetSegments. Το όνομα channel ΠΡΕΠΕΙ να ταιριάζει ακριβώς με αυτό στο primary/secondary.
+
+ΕΛΕΓΧΟΣ: Πριν επιστρέψεις JSON, βεβαιώσου ότι το channelPlaybook ΕΧΕΙ ΔΙΑΦΟΡΟΠΟΙΗΣΗ — αν δύο segments έχουν 100% ίδια κανάλια, ξαναδιάλεξε.
 
 ΑΝ σου δοθεί μηνιαίο budget ΚΑΙ/Ή campaign performance data, πρέπει να συμπληρώσεις το πεδίο "actions" με smart recommendations. Κάθε action έχει:
 - "channel": το κανάλι στο οποίο αναφέρεται

@@ -237,8 +237,8 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
 
   const { getStatus, getNote, isIncluded, updateActivation, isSaving } = useChannelActivations(strategyId);
 
-  // Build channel list from AI recommendations
-  const allChannels = useMemo(() => {
+  // Build GLOBAL channel list (fallback όταν δεν έχουμε per-segment playbook)
+  const globalChannels = useMemo(() => {
     if (!aiRecommendation) return [];
     const channels: { name: string; isPrimary: boolean; budget: number | null }[] = [];
     for (const ch of aiRecommendation.primary) {
@@ -248,15 +248,6 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
       channels.push({ name: ch, isPrimary: false, budget: getBudgetForChannel(ch, aiRecommendation.budget_allocation) });
     }
     return channels;
-  }, [aiRecommendation]);
-
-  // Pie chart data from AI allocation
-  const aiPieData = useMemo(() => {
-    if (!aiRecommendation) return [];
-    return Object.entries(aiRecommendation.budget_allocation)
-      .filter(([, v]) => v > 0)
-      .sort((a, b) => b[1] - a[1])
-      .map(([channel, pct]) => ({ channel, percentage: pct }));
   }, [aiRecommendation]);
 
   /**
@@ -331,6 +322,57 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     },
     [aiRecommendation]
   );
+
+  /**
+   * Channel list ΓΙΑ ΤΟ ΕΠΙΛΕΓΜΕΝΟ SEGMENT.
+   * - Αν υπάρχει playbook entries για το segment → εμφανίζουμε ΜΟΝΟ αυτά (per-segment recommendation)
+   *   με priority/budgetSharePct από το AI.
+   * - Αλλιώς fallback στο global primary/secondary.
+   */
+  const allChannels = useMemo(() => {
+    if (!aiRecommendation) return [];
+    const playbook = aiRecommendation.channelPlaybook;
+    if (selectedSegmentName && playbook && playbook.length > 0) {
+      const segLower = selectedSegmentName.toLowerCase();
+      const segEntries = playbook.filter((e) => e.segment.toLowerCase() === segLower);
+      if (segEntries.length > 0) {
+        return segEntries
+          .map((e) => {
+            const isPrimary = e.priority
+              ? e.priority === 'primary'
+              : aiRecommendation.primary.some((p) => p.toLowerCase() === e.channel.toLowerCase());
+            const segBudget =
+              typeof e.budgetSharePct === 'number' && e.budgetSharePct >= 0
+                ? e.budgetSharePct
+                : getBudgetForChannel(e.channel, aiRecommendation.budget_allocation);
+            return { name: e.channel, isPrimary, budget: segBudget };
+          })
+          .sort((a, b) => {
+            if (a.isPrimary !== b.isPrimary) return a.isPrimary ? -1 : 1;
+            return (b.budget ?? 0) - (a.budget ?? 0);
+          });
+      }
+    }
+    return globalChannels;
+  }, [aiRecommendation, selectedSegmentName, globalChannels]);
+
+  /**
+   * Pie chart — αν έχουμε per-segment budgetSharePct, χρησιμοποιούμε αυτό.
+   * Αλλιώς πέφτουμε στο global allocation της στρατηγικής.
+   */
+  const aiPieData = useMemo(() => {
+    if (!aiRecommendation) return [];
+    const fromPerSegment = allChannels
+      .filter((c) => c.budget !== null && c.budget > 0)
+      .map((c) => ({ channel: c.name, percentage: c.budget as number }));
+    if (fromPerSegment.length > 0) {
+      return [...fromPerSegment].sort((a, b) => b.percentage - a.percentage);
+    }
+    return Object.entries(aiRecommendation.budget_allocation)
+      .filter(([, v]) => v > 0)
+      .sort((a, b) => b[1] - a[1])
+      .map(([channel, pct]) => ({ channel, percentage: pct }));
+  }, [aiRecommendation, allChannels]);
 
   const handleStatusChange = useCallback(async (channel: string, status: ChannelStatus) => {
     await updateActivation({ channel, status });
@@ -698,7 +740,17 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         <Card padding="lg">
           <CardHeader
             title="Μίξη καναλιών"
-            subtitle={hasCampaigns ? 'Πραγματική κατανομή budget' : 'Κατανομή προτεινόμενη από AI'}
+            subtitle={
+              hasCampaigns
+                ? 'Πραγματική κατανομή budget'
+                : selectedSegmentName && aiRecommendation?.channelPlaybook?.some(
+                    (e) =>
+                      e.segment.toLowerCase() === selectedSegmentName.toLowerCase() &&
+                      typeof e.budgetSharePct === 'number' && e.budgetSharePct > 0
+                  )
+                  ? `Κατανομή για «${selectedSegmentName}»`
+                  : 'Κατανομή προτεινόμενη από AI'
+            }
             icon={<PieChartIcon size={20} className="text-[var(--nts-accent)]" />}
           />
           {(aiLoading || campaignsLoading) ? (
@@ -780,7 +832,15 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         <Card className="lg:col-span-2" padding="lg">
           <CardHeader
             title="Σύνοψη καναλιών"
-            subtitle={aiRecommendation ? `${allChannels.length} κανάλια — προτεινόμενα από AI` : 'Αναμονή στρατηγικής'}
+            subtitle={
+              aiRecommendation
+                ? selectedSegmentName && aiRecommendation.channelPlaybook?.some(
+                    (e) => e.segment.toLowerCase() === selectedSegmentName.toLowerCase()
+                  )
+                  ? `${allChannels.length} κανάλια για «${selectedSegmentName}»`
+                  : `${allChannels.length} κανάλια — γενική σύσταση AI`
+                : 'Αναμονή στρατηγικής'
+            }
             action={
               aiRecommendation && (
                 <Badge variant="default" size="md">

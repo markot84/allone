@@ -91,12 +91,25 @@ function parseAIResponse(text: string): ChannelRecommendation | null {
               typeof e.channel === 'string' &&
               (typeof e.message === 'string' || typeof e.marketingBrief === 'string')
           )
-          .map((e) => ({
-            segment: String(e.segment),
-            channel: String(e.channel),
-            message: typeof e.message === 'string' ? e.message : '',
-            marketingBrief: typeof e.marketingBrief === 'string' ? e.marketingBrief : '',
-          }))
+          .map((e) => {
+            const priorityRaw = typeof e.priority === 'string' ? e.priority.toLowerCase() : '';
+            const priority: 'primary' | 'secondary' | undefined =
+              priorityRaw === 'primary' ? 'primary' : priorityRaw === 'secondary' ? 'secondary' : undefined;
+            const shareNum = typeof e.budgetSharePct === 'number'
+              ? e.budgetSharePct
+              : typeof e.budgetSharePct === 'string'
+                ? Number(e.budgetSharePct)
+                : NaN;
+            const budgetSharePct = Number.isFinite(shareNum) && shareNum >= 0 ? shareNum : undefined;
+            return {
+              segment: String(e.segment),
+              channel: String(e.channel),
+              message: typeof e.message === 'string' ? e.message : '',
+              marketingBrief: typeof e.marketingBrief === 'string' ? e.marketingBrief : '',
+              ...(priority ? { priority } : {}),
+              ...(budgetSharePct !== undefined ? { budgetSharePct } : {}),
+            };
+          })
       : [];
 
     return {
