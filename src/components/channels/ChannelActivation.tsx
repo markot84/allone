@@ -61,40 +61,47 @@ import type { ChannelRecommendation, BudgetAction } from '../../types';
 
 const COLORS = ['var(--nts-accent)', '#78716C', '#22C55E', '#8B5CF6', '#F59E0B', '#3B82F6', '#EC4899'];
 
+// Funnel stage palette — επιλεγμένα για μέγιστη οπτική διαφοροποίηση μεταξύ τους
+// (διαφορετικό hue ανά στάδιο, ισορροπημένο contrast σε λευκό background).
+const STAGE_AWARENESS = { label: 'Awareness', color: '#0EA5E9' };       // sky-500
+const STAGE_CONSIDERATION = { label: 'Consideration', color: '#F59E0B' }; // amber-500
+const STAGE_SALES = { label: 'Sales', color: '#10B981' };                // emerald-500
+const STAGE_LOYALTY = { label: 'Loyalty', color: '#D946EF' };            // fuchsia-500
+
 const FUNNEL_STAGE: Record<string, { label: string; color: string }> = {
-  'google search ads': { label: 'Πωλήσεις', color: '#22C55E' },
-  'google shopping': { label: 'Πωλήσεις', color: '#22C55E' },
-  'google performance max': { label: 'Πωλήσεις', color: '#22C55E' },
-  'meta ads (facebook/instagram)': { label: 'Επίγνωση', color: '#3B82F6' },
-  'meta ads': { label: 'Επίγνωση', color: '#3B82F6' },
-  'youtube ads': { label: 'Σκέψη', color: '#F97316' },
-  'google display network': { label: 'Επίγνωση', color: '#3B82F6' },
-  'email marketing': { label: 'Αφοσίωση', color: '#8B5CF6' },
-  'sms marketing': { label: 'Αφοσίωση', color: '#8B5CF6' },
-  'sms': { label: 'Αφοσίωση', color: '#8B5CF6' },
-  'push notifications': { label: 'Αφοσίωση', color: '#8B5CF6' },
-  'loyalty programs': { label: 'Αφοσίωση', color: '#8B5CF6' },
-  'dynamic remarketing': { label: 'Πωλήσεις', color: '#22C55E' },
-  'meta retargeting': { label: 'Πωλήσεις', color: '#22C55E' },
-  'google remarketing': { label: 'Πωλήσεις', color: '#22C55E' },
-  'remarketing': { label: 'Πωλήσεις', color: '#22C55E' },
-  'organic social media': { label: 'Επίγνωση', color: '#3B82F6' },
-  'influencer marketing': { label: 'Σκέψη', color: '#F97316' },
-  'content marketing/seo': { label: 'Σκέψη', color: '#F97316' },
-  'content marketing': { label: 'Σκέψη', color: '#F97316' },
-  'seo': { label: 'Σκέψη', color: '#F97316' },
-  'seo (on-page & technical)': { label: 'Σκέψη', color: '#F97316' },
-  'blog / editorial content': { label: 'Σκέψη', color: '#F97316' },
-  'product content optimization': { label: 'Σκέψη', color: '#F97316' },
-  'marketplace ads (skroutz, amazon)': { label: 'Πωλήσεις', color: '#22C55E' },
-  'marketplace ads (skroutz)': { label: 'Πωλήσεις', color: '#22C55E' },
-  'affiliate marketing': { label: 'Πωλήσεις', color: '#22C55E' },
-  'tiktok ads': { label: 'Επίγνωση', color: '#3B82F6' },
-  'pinterest ads': { label: 'Σκέψη', color: '#F97316' },
-  'whatsapp business': { label: 'Αφοσίωση', color: '#8B5CF6' },
-  'ugc (user-generated content)': { label: 'Σκέψη', color: '#F97316' },
-  'video/connected tv': { label: 'Επίγνωση', color: '#3B82F6' },
-  'programmatic display': { label: 'Επίγνωση', color: '#3B82F6' },
+  'google search ads': STAGE_SALES,
+  'google shopping': STAGE_SALES,
+  'google performance max': STAGE_SALES,
+  'meta ads (facebook/instagram)': STAGE_AWARENESS,
+  'meta ads': STAGE_AWARENESS,
+  'youtube ads': STAGE_CONSIDERATION,
+  'google display network': STAGE_AWARENESS,
+  'email marketing': STAGE_LOYALTY,
+  'sms marketing': STAGE_LOYALTY,
+  'sms': STAGE_LOYALTY,
+  'push notifications': STAGE_LOYALTY,
+  'loyalty programs': STAGE_LOYALTY,
+  'dynamic remarketing': STAGE_SALES,
+  'meta retargeting': STAGE_SALES,
+  'google remarketing': STAGE_SALES,
+  'remarketing': STAGE_SALES,
+  'organic social media': STAGE_AWARENESS,
+  'influencer marketing': STAGE_CONSIDERATION,
+  'content marketing/seo': STAGE_CONSIDERATION,
+  'content marketing': STAGE_CONSIDERATION,
+  'seo': STAGE_CONSIDERATION,
+  'seo (on-page & technical)': STAGE_CONSIDERATION,
+  'blog / editorial content': STAGE_CONSIDERATION,
+  'product content optimization': STAGE_CONSIDERATION,
+  'marketplace ads (skroutz, amazon)': STAGE_SALES,
+  'marketplace ads (skroutz)': STAGE_SALES,
+  'affiliate marketing': STAGE_SALES,
+  'tiktok ads': STAGE_AWARENESS,
+  'pinterest ads': STAGE_CONSIDERATION,
+  'whatsapp business': STAGE_LOYALTY,
+  'ugc (user-generated content)': STAGE_CONSIDERATION,
+  'video/connected tv': STAGE_AWARENESS,
+  'programmatic display': STAGE_AWARENESS,
 };
 
 function getFunnelStage(channel: string) {
@@ -103,11 +110,11 @@ function getFunnelStage(channel: string) {
   for (const [k, v] of Object.entries(FUNNEL_STAGE)) {
     if (key.includes(k) || k.includes(key)) return v;
   }
-  if (key.includes('ads') || key.includes('search') || key.includes('shopping') || key.includes('remarketing')) return { label: 'Πωλήσεις', color: '#22C55E' };
-  if (key.includes('display') || key.includes('video') || key.includes('social') || key.includes('tiktok')) return { label: 'Επίγνωση', color: '#3B82F6' };
-  if (key.includes('content') || key.includes('seo') || key.includes('influencer') || key.includes('blog')) return { label: 'Σκέψη', color: '#F97316' };
-  if (key.includes('email') || key.includes('sms') || key.includes('push') || key.includes('loyalty') || key.includes('crm')) return { label: 'Αφοσίωση', color: '#8B5CF6' };
-  return { label: 'Επίγνωση', color: '#3B82F6' };
+  if (key.includes('ads') || key.includes('search') || key.includes('shopping') || key.includes('remarketing')) return STAGE_SALES;
+  if (key.includes('display') || key.includes('video') || key.includes('social') || key.includes('tiktok')) return STAGE_AWARENESS;
+  if (key.includes('content') || key.includes('seo') || key.includes('influencer') || key.includes('blog')) return STAGE_CONSIDERATION;
+  if (key.includes('email') || key.includes('sms') || key.includes('push') || key.includes('loyalty') || key.includes('crm')) return STAGE_LOYALTY;
+  return STAGE_AWARENESS;
 }
 
 function getBudgetForChannel(channel: string, allocation: Record<string, number>): number | null {

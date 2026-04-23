@@ -1,10 +1,14 @@
 {
-  "version": "0.617.0",
-  "previousVersion": "0.616.0",
-  "commitHash": "986612a",
+  "version": "0.618.0",
+  "previousVersion": "0.617.0",
+  "commitHash": "b6506a6",
   "branch": "main",
-  "buildDate": "2026-04-23T09:12:58.067Z",
+  "buildDate": "2026-04-23T09:17:24.744Z",
   "commits": [
+    {
+      "hash": "b6506a6",
+      "message": "feat(channels): skeleton UI + silent upgrade indicator + immediate cache refetch"
+    },
     {
       "hash": "986612a",
       "message": "fix(channels): pass segmentFitList in silent regen + tooltip on segment cards"
@@ -60,13 +64,10 @@
     {
       "hash": "5fe1fa5",
       "message": "feat: home session — GA4/search console, auth, ecommerce, connectors, ROI, firestore rules"
-    },
-    {
-      "hash": "aa50acb",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [
+    "[Νέο χαρακτηριστικό] Skeleton UI + silent upgrade indicator + immediate cache refetch",
     "[Διόρθωση] Pass segmentFitList in silent regen + tooltip on segment cards",
     "[Διόρθωση] Silent auto-upgrade legacy AI payloads (no UI button)",
     "[Νέο χαρακτηριστικό] Expose Regenerate AI button in PageHeader",
@@ -75,7 +76,6 @@
     "[Νέο χαρακτηριστικό] Merge Channel Recommendations into Channel Activation",
     "[Συντήρηση] BuildInfo v0.609.0 after deploy",
     "[Συντήρηση] BuildInfo v0.608.0 after build",
-    "[Συντήρηση] Remove unused helper; buildInfo v0.607.0",
-    "[Διόρθωση] Pie aligns with period + center total; feat(strategy): commercial priorities bridge-style cards"
+    "[Συντήρηση] Remove unused helper; buildInfo v0.607.0"
   ]
 }
