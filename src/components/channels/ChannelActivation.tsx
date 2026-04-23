@@ -337,11 +337,42 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
       if (!e.message) return false;
       const seg = e.segment.toLowerCase();
       const msg = e.message.toLowerCase();
-      // exact word boundaries για να μην έχουμε false positives
       const re = new RegExp(`\\b${seg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
       return re.test(msg);
     });
-    if (hasPerSegmentSignal && !tooFewSegments && !segmentNamesInMessages) return;
+    // Trigger upgrade αν το message περιέχει εσωτερική εμπορική ορολογία.
+    const FORBIDDEN_TERMS = [
+      'dead stock',
+      'νεκρό απόθεμα',
+      'slow mover',
+      'αργοκίνητ',
+      'overstock',
+      'πλεόνασμα',
+      'stock clearance',
+      'εκκαθάριση αποθήκης',
+      'ξεπούλημα αποθήκης',
+      'liquidation',
+      'περιθώριο κέρδους',
+      'roas',
+      'scenario',
+      'segment',
+      'rfm',
+      'cohort',
+      'profit maximization',
+      'brand launch',
+    ];
+    const forbiddenTermsInMessages = playbook.some((e) => {
+      if (!e.message) return false;
+      const msg = e.message.toLowerCase();
+      return FORBIDDEN_TERMS.some((t) => msg.includes(t));
+    });
+    if (
+      hasPerSegmentSignal &&
+      !tooFewSegments &&
+      !segmentNamesInMessages &&
+      !forbiddenTermsInMessages
+    )
+      return;
     silentUpgradeTriggered.current = true;
     generateRecommendation(true);
   }, [hasRealStrategyId, aiRecommendation, aiGenerating, rfmSegments, generateRecommendation]);

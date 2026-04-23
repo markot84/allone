@@ -1,10 +1,14 @@
 {
-  "version": "0.619.0",
-  "previousVersion": "0.618.0",
-  "commitHash": "5cf9cf1",
+  "version": "0.620.0",
+  "previousVersion": "0.619.0",
+  "commitHash": "591d4d2",
   "branch": "main",
-  "buildDate": "2026-04-23T09:19:33.623Z",
+  "buildDate": "2026-04-23T09:22:14.435Z",
   "commits": [
+    {
+      "hash": "591d4d2",
+      "message": "fix(channels): forbid segment names in customer-facing campaign messages"
+    },
     {
       "hash": "5cf9cf1",
       "message": "style(channels): rename funnel stages to EN + distinct hue palette"
@@ -60,13 +64,10 @@
     {
       "hash": "dbb0c10",
       "message": "chore: regenerate buildInfo after merge"
-    },
-    {
-      "hash": "5196f99",
-      "message": "Merge home improvements onto main (after aa50acb — TriageCard/decisionBuckets preserved)"
     }
   ],
   "changes": [
+    "[Διόρθωση] Forbid segment names in customer-facing campaign messages",
     "[Βελτίωση εμφάνισης] Rename funnel stages to EN + distinct hue palette",
     "[Νέο χαρακτηριστικό] Skeleton UI + silent upgrade indicator + immediate cache refetch",
     "[Διόρθωση] Pass segmentFitList in silent regen + tooltip on segment cards",
@@ -75,7 +76,6 @@
     "[Συντήρηση] Remove temp commit message file",
     "[Νέο χαρακτηριστικό] Per-segment channel mix στο Channel Activation",
     "[Νέο χαρακτηριστικό] Merge Channel Recommendations into Channel Activation",
-    "[Συντήρηση] BuildInfo v0.609.0 after deploy",
-    "[Συντήρηση] BuildInfo v0.608.0 after build"
+    "[Συντήρηση] BuildInfo v0.609.0 after deploy"
   ]
 }
