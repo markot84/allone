@@ -165,12 +165,14 @@ export function GA4Analytics() {
     };
     type MixSource = 'daily' | 'proportional' | 'full';
 
+    /** Ίδιες ημέρες με τα φιλτραρισμένα ημερήσια KPI — όχι «όλα τα κλειδιά του map» που μπορεί να ξεφεύγουν. */
     const aggregateFromDaily = (): Row[] | null => {
       const daily = dailyTrafficByChannel;
       if (!daily || Object.keys(daily).length === 0) return null;
       const map = new Map<string, Row>();
-      for (const [date, chans] of Object.entries(daily)) {
-        if (date < effectiveFrom || date > effectiveTo) continue;
+      for (const { date } of filteredDailyEntries) {
+        const chans = daily[date];
+        if (!chans || typeof chans !== 'object') continue;
         for (const [channel, m] of Object.entries(chans)) {
           const cur = map.get(channel) || {
             channel,
@@ -275,6 +277,14 @@ export function GA4Analytics() {
       { name: 'Λοιπά κανάλια', value: restSessions, color: '#78716C' },
     ];
   }, [displayTrafficSources]);
+
+  /** Άθροισμα φετών πίτας (ισορροπεί με τον πίνακα· μπορεί να διαφέρει ελάχιστα από GA4 totals). */
+  const pieSlicesTotal = useMemo(
+    () => pieData.reduce((a, p) => a + Number(p.value || 0), 0),
+    [pieData]
+  );
+
+  const pieRechartsKey = `${effectiveFrom}|${effectiveTo}|${channelMixSource}|${pieData.map((p) => p.name).join(',')}|${pieData.map((p) => Number(p.value).toFixed(4)).join(',')}`;
 
   const filteredPages = useMemo(() => {
     let pages = topPages.filter(
@@ -656,39 +666,54 @@ export function GA4Analytics() {
             title="Πηγές κίνησης"
             subtitle={
               channelMixSource === 'daily'
-                ? `Συνεδρίες ανά default channel group για ${formatDateTooltipEl(effectiveFrom)} — ${formatDateTooltipEl(effectiveTo)} (αθροίσματα από ημερήσια δεδομένα sync).`
+                ? `Συνεδρίες ανά default channel group για ${formatDateTooltipEl(effectiveFrom)} — ${formatDateTooltipEl(effectiveTo)} (ημερήσια ανά κανάλι από sync). Οι γωνίες αλλάζουν όταν η κατανομή ανά ημέρα διαφέρει.`
                 : channelMixSource === 'proportional'
-                  ? `Συνεδρίες ανά κανάλι για ${formatDateTooltipEl(effectiveFrom)} — ${formatDateTooltipEl(effectiveTo)} · η κατανομή κλιμακώνεται αναλογικά με τις συνεδρίες της περιόδου (ή επικάλυψη ημερομηνιών με το sync).`
-                  : `Συνεδρίες ανά κανάλι από το property report του τελευταίου sync· χωρίς ημερήσια metrics δεν εφαρμόζεται φίλτρο ημερολογίου στα κανάλια.`
+                  ? `Για ${formatDateTooltipEl(effectiveFrom)} — ${formatDateTooltipEl(effectiveTo)}: τα μερίδια φετών ακολουθούν το σύνολο του τελευταίου GA4 sync (κλίμακα μόνο στο απόλυτο μέγεθος). Το κέντρο δείχνει τις συνεδρίες της περιόδου από τα ημερήσια KPI — κάντε επιτυχές sync με «ημερήσια ανά κανάλι» για δυναμική πίτα.`
+                  : `Συνεδρίες ανά κανάλι από το property report του τελευταίου sync· χωρίς ημερήσια ανά κανάλι το σχήμα πίτας δεν φιλτράρεται στο ημερολόγιο.`
             }
           />
           <div className="p-4 pt-0">
             <div className="flex flex-col items-center">
-              <ResponsiveContainer width="100%" height={200}>
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={50}
-                    outerRadius={85}
-                    paddingAngle={2}
-                    dataKey="value"
-                    nameKey="name"
-                  >
-                    {pieData.map((entry) => (
-                      <Cell key={entry.name} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <RechartsTooltip
-                    formatter={(value, name) => [
-                      `${Number(value ?? 0).toLocaleString('el-GR')} συνεδρίες`,
-                      String(name),
-                    ]}
-                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #E5E7EB' }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+              <div className="relative w-full h-[200px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      key={pieRechartsKey}
+                      data={pieData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={50}
+                      outerRadius={85}
+                      paddingAngle={2}
+                      dataKey="value"
+                      nameKey="name"
+                      isAnimationActive={pieData.length > 0}
+                    >
+                      {pieData.map((entry) => (
+                        <Cell key={entry.name} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <RechartsTooltip
+                      formatter={(value, name) => [
+                        `${Number(value ?? 0).toLocaleString('el-GR', { maximumFractionDigits: 1 })} συνεδρίες`,
+                        String(name),
+                      ]}
+                      contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #E5E7EB' }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div
+                  className="pointer-events-none absolute inset-0 flex items-center justify-center"
+                  aria-hidden
+                >
+                  <div className="text-center px-2">
+                    <div className="text-base font-bold text-[#111827] tabular-nums leading-tight">
+                      {Math.round(pieSlicesTotal).toLocaleString('el-GR')}
+                    </div>
+                    <div className="text-[10px] text-[#6B7280] mt-0.5">συνεδρίες (άθροισμα καναλιών)</div>
+                  </div>
+                </div>
+              </div>
               <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5 mt-2">
                 {pieData.map((entry) => (
                   <div key={entry.name} className="flex items-center gap-1.5">

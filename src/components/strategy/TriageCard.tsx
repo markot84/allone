@@ -11,7 +11,7 @@ import { useMemo, useState } from 'react';
 import {
   AlertTriangle, TrendingUp, Zap, Snowflake, XCircle, Package, Sparkles,
   ChevronRight, ChevronDown, ChevronUp, HelpCircle, Info, AlertOctagon, TrendingDown,
-  Clock, Boxes, Database, Plug, X,
+  Clock, Boxes, Database, Plug, X, ArrowRight, Target,
 } from 'lucide-react';
 import { useDecisionBuckets, type TriageDataQuality } from '../../hooks/useDecisionBuckets';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
@@ -51,40 +51,78 @@ const GROUP_TAB_PILL: Record<BucketGroupId, string> = {
 };
 
 const GROUP_STYLES: Record<BucketGroupId, {
-  border: string; leftBar: string; titleText: string; subtitleText: string; chip: string;
+  titleText: string; subtitleText: string; chip: string;
   icon: React.ComponentType<{ size?: number; className?: string }>;
 }> = {
   critical: {
-    border: 'border-gray-200/90',
-    leftBar: 'border-l-rose-500',
     titleText: 'text-gray-900',
     subtitleText: 'text-gray-600',
     chip: 'bg-rose-50 text-rose-800 ring-1 ring-inset ring-rose-100',
     icon: AlertOctagon,
   },
   opportunity: {
-    border: 'border-gray-200/90',
-    leftBar: 'border-l-emerald-500',
     titleText: 'text-gray-900',
     subtitleText: 'text-gray-600',
     chip: 'bg-emerald-50 text-emerald-900 ring-1 ring-inset ring-emerald-100',
     icon: TrendingUp,
   },
   watch: {
-    border: 'border-gray-200/90',
-    leftBar: 'border-l-amber-400',
     titleText: 'text-gray-900',
     subtitleText: 'text-gray-600',
     chip: 'bg-amber-50 text-amber-900 ring-1 ring-inset ring-amber-100',
     icon: TrendingDown,
   },
   investigate: {
-    border: 'border-gray-200/90',
-    leftBar: 'border-l-slate-400',
     titleText: 'text-gray-900',
     subtitleText: 'text-gray-600',
     chip: 'bg-slate-100 text-slate-800 ring-1 ring-inset ring-slate-200',
     icon: HelpCircle,
+  },
+};
+
+/** Ίδιο pattern με ProcurementStrategyBridge: tinted panel + κουμπί πλήρους πλάτους. */
+const GROUP_BRIDGE: Record<
+  BucketGroupId,
+  {
+    shell: string;
+    iconClass: string;
+    titleClass: string;
+    subtitleClass: string;
+    metricsClass: string;
+    btnClass: string;
+  }
+> = {
+  critical: {
+    shell: 'rounded-lg border border-[#FECACA] bg-[#FEF2F2]',
+    iconClass: 'text-[#DC2626]',
+    titleClass: 'text-[#991B1B]',
+    subtitleClass: 'text-[#7F1D1D]/90',
+    metricsClass: 'text-[#7F1D1D]/85',
+    btnClass: 'bg-[#DC2626] hover:bg-[#B91C1C]',
+  },
+  opportunity: {
+    shell: 'rounded-lg border border-[#A7F3D0] bg-[#ECFDF5]',
+    iconClass: 'text-[#059669]',
+    titleClass: 'text-[#065F46]',
+    subtitleClass: 'text-[#064E3B]/90',
+    metricsClass: 'text-[#047857]/90',
+    btnClass: 'bg-[#059669] hover:bg-[#047857]',
+  },
+  watch: {
+    shell: 'rounded-lg border border-[#FCD34D] bg-[#FFFBEB]',
+    iconClass: 'text-[#D97706]',
+    titleClass: 'text-[#92400E]',
+    subtitleClass: 'text-[#78350F]/90',
+    metricsClass: 'text-[#78350F]/85',
+    btnClass: 'bg-[#D97706] hover:bg-[#B45309]',
+  },
+  investigate: {
+    shell: 'rounded-lg border border-[#CBD5E1] bg-[#F8FAFC]',
+    iconClass: 'text-[#475569]',
+    titleClass: 'text-[#334155]',
+    subtitleClass: 'text-[#475569]/95',
+    metricsClass: 'text-[#64748B]',
+    btnClass: 'bg-[#475569] hover:bg-[#334155]',
   },
 };
 
@@ -270,11 +308,13 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
   // ── LOADING STATE ─────────────────────────────────────────────────
   if (isLoading) {
     return (
-      <div className="rounded-xl border border-[var(--nts-border-gray)] bg-white p-5 animate-pulse">
-        <div className="h-5 w-64 bg-gray-100 rounded mb-4" />
-        <div className="space-y-3">
+      <div className="rounded-xl border border-[#E5E7EB] bg-gradient-to-br from-[#FAFAFA] to-white overflow-hidden shadow-sm animate-pulse">
+        <div className="px-4 py-3 border-b border-[#E8E8E8] bg-white">
+          <div className="h-5 w-72 bg-gray-100 rounded" />
+        </div>
+        <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
           {Array.from({ length: 2 }).map((_, i) => (
-            <div key={i} className="h-24 bg-gray-50 rounded-lg" />
+            <div key={i} className="h-36 bg-gray-50 rounded-lg border border-gray-100" />
           ))}
         </div>
       </div>
@@ -332,11 +372,11 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
   };
 
   return (
-    <div className="rounded-xl border border-[var(--nts-border-gray)] bg-white overflow-hidden">
-      {/* HEADER — προεπιλογή συμπαγής: tabs + αριθμοί, ~1/4 του προηγούμενου ύψους */}
-      <div className="border-b border-gray-100 bg-white">
+    <div className="rounded-xl border border-[#E5E7EB] bg-gradient-to-br from-[#FAFAFA] to-white overflow-hidden shadow-sm">
+      {/* HEADER — ίδιο pattern με Product Intelligence bridge */}
+      <div className="border-b border-[#E8E8E8] bg-white">
         {!headerSummaryExpanded ? (
-          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 px-2 py-1 sm:px-2.5">
+          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 px-3 py-2 sm:px-4 sm:py-2.5">
             <button
               type="button"
               aria-expanded={false}
@@ -346,7 +386,10 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
             >
               <ChevronRight size={16} strokeWidth={2.25} />
             </button>
-            <span className="shrink-0 text-[11px] font-semibold tracking-tight text-gray-900 sm:text-xs">
+            <div className="shrink-0 p-1 rounded-lg bg-[#7C3AED]/10">
+              <Target size={14} className="text-[#7C3AED]" aria-hidden />
+            </div>
+            <span className="shrink-0 text-[11px] font-bold tracking-tight text-[#111827] sm:text-xs">
               Εμπορικές προτεραιότητες
             </span>
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1 sm:justify-center">
@@ -385,7 +428,7 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
             </button>
           </div>
         ) : (
-          <div className="px-3 pb-2 pt-2 sm:px-4 sm:pb-2.5 sm:pt-2.5">
+          <div className="px-4 py-3 sm:px-4 sm:py-3">
             <div className="flex items-start gap-2">
               <button
                 type="button"
@@ -399,9 +442,12 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
               >
                 <ChevronUp size={16} strokeWidth={2.25} />
               </button>
+              <div className="shrink-0 p-1.5 rounded-lg bg-[#7C3AED]/10 mt-0.5">
+                <Target size={16} className="text-[#7C3AED]" aria-hidden />
+              </div>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <h3 className="text-sm font-bold text-gray-900 sm:text-base">Εμπορικές Προτεραιότητες</h3>
+                  <h3 className="text-sm font-bold text-[#111827] sm:text-base">Εμπορικές Προτεραιότητες</h3>
                   <button
                     type="button"
                     onClick={() => setShowDocumentation((s) => !s)}
@@ -442,7 +488,7 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
       </div>
 
       {showDocumentation && (
-        <div className="px-5 py-3 bg-slate-50/95 border-b border-gray-100 space-y-3">
+        <div className="px-5 py-3 bg-slate-50/95 border-b border-[#E8E8E8] space-y-3">
           <div className="text-[12px] text-gray-600 max-w-3xl leading-relaxed">
             Εδώ οι κωδικοί ομαδοποιούνται με βάση <strong>συνδυασμό καταλόγου και σημάτων</strong> (πωλήσεις,
             παράθυρα ζήτησης, κίνηση αποθέματος, κόστη από procurement). <strong>Δεν</strong> είναι το ίδιο με τις
@@ -487,10 +533,11 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
         </div>
       )}
 
-      {/* GROUPED SECTIONS — compact cards, accent bar (όχι πλήρες tinted panels) */}
-      <div className="p-4 space-y-3">
+      {/* GROUPED SECTIONS — οριζόντιες tinted κάρτες όπως Product Intelligence (Απόθεμα) */}
+      <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
         {visibleGroups.map((group) => {
           const style = GROUP_STYLES[group.id];
+          const bridge = GROUP_BRIDGE[group.id];
           const GroupIcon = style.icon;
           const groupTied = group.activeBuckets.reduce((s, b) => s + tiedByBucket[b], 0);
           const groupCount = group.activeBuckets.reduce((s, b) => s + counts[b], 0);
@@ -498,34 +545,25 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
             <section
               id={`triage-section-${group.id}`}
               key={group.id}
-              className={`scroll-mt-3 rounded-xl border ${style.border} border-l-[3px] ${style.leftBar} bg-white shadow-sm pl-3 pr-3 py-2.5`}
+              className={`scroll-mt-3 ${bridge.shell} p-3 flex flex-col gap-2 h-full`}
             >
-              <header className="mb-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className={`shrink-0 p-1 rounded-md ${style.chip}`}>
-                    <GroupIcon size={13} className="opacity-90" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                      <h4 className={`text-sm font-semibold tracking-tight ${style.titleText}`}>{group.label}</h4>
-                      <span className="text-[11px] font-medium tabular-nums text-gray-500">
-                        {groupCount.toLocaleString('el-GR')}
-                        <span className="font-normal text-gray-400"> SKU</span>
-                        {groupTied > 0 && (
-                          <>
-                            <span className="mx-1 text-gray-300">·</span>
-                            <span className="text-gray-600">{fmtEur(groupTied)}</span>
-                            <span className="font-normal text-gray-400"> δεσμ.</span>
-                          </>
-                        )}
-                      </span>
-                    </div>
-                    <p className={`text-[11px] leading-snug mt-0.5 line-clamp-2 ${style.subtitleText}`}>
-                      {group.subtitle}
-                    </p>
-                  </div>
+              <div className="flex items-start gap-2">
+                <GroupIcon size={18} className={`${bridge.iconClass} shrink-0 mt-0.5`} aria-hidden />
+                <div className="min-w-0">
+                  <p className={`text-xs font-semibold ${bridge.titleClass}`}>{group.label}</p>
+                  <p className={`text-[11px] mt-0.5 leading-snug ${bridge.metricsClass}`}>
+                    <span className="font-medium tabular-nums">{groupCount.toLocaleString('el-GR')}</span>
+                    <span> SKU</span>
+                    {groupTied > 0 && (
+                      <>
+                        <span className="mx-1 opacity-60">·</span>
+                        <span className="tabular-nums">{fmtEur(groupTied)} δεσμ.</span>
+                      </>
+                    )}
+                  </p>
+                  <p className={`text-[11px] leading-snug mt-0.5 ${bridge.subtitleClass}`}>{group.subtitle}</p>
                 </div>
-              </header>
+              </div>
 
               {group.id === 'investigate' && counts.new_or_unknown > 0 && (
                 <InsufficientSignalsHint
@@ -537,18 +575,7 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
                 />
               )}
 
-              {group.id === 'critical' && onSelectPolicy && (
-                <PriorityPolicyActions
-                  buckets={group.activeBuckets}
-                  defs={defs}
-                  counts={counts}
-                  tiedByBucket={tiedByBucket}
-                  allByBucket={allByBucket}
-                  onSelectPolicy={onSelectPolicy}
-                />
-              )}
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 min-[1100px]:grid-cols-3 gap-2 pt-1 border-t border-black/[0.06]">
                 {group.activeBuckets.map((b) => {
                   const def = defs[b];
                   const Icon = ICONS[b];
@@ -604,7 +631,7 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
                 })}
               </div>
 
-              {/* EXPANDED PANEL */}
+              {/* EXPANDED PANEL — πριν το κύριο CTA ώστε η λεπτομέρεια να πέφτει πάνω στο κουμπί */}
               {expanded && group.activeBuckets.includes(expanded) && (
                 <ExpandedPanel
                   bucket={expanded}
@@ -617,6 +644,28 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
                   onViewAll={() => setViewAllBucket(expanded)}
                 />
               )}
+
+              <div className="mt-auto pt-1">
+                <GroupBridgeCta
+                  groupId={group.id}
+                  activeBuckets={group.activeBuckets}
+                  defs={defs}
+                  counts={counts}
+                  tiedByBucket={tiedByBucket}
+                  allByBucket={allByBucket}
+                  onSelectPolicy={onSelectPolicy}
+                  bridgeBtnClass={bridge.btnClass}
+                  onAnalyzeGroup={() => {
+                    const top = [...group.activeBuckets].sort((a, b) => counts[b] - counts[a])[0];
+                    if (top) setExpanded(top);
+                    scrollToGroup(group.id);
+                  }}
+                  onInvestigateOpen={() => {
+                    setExpanded('new_or_unknown');
+                    document.getElementById('triage-section-investigate')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }}
+                />
+              </div>
             </section>
           );
         })}
@@ -664,9 +713,9 @@ function InsufficientSignalsHint({
         className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left"
       >
         <div className="min-w-0">
-          <div className="font-semibold text-slate-800 text-[12px]">Ανεπαρκή σήματα αξιολόγησης</div>
+          <div className="font-semibold text-slate-800 text-[12px]">Λεπτομέρειες &amp; πηγές δεδομένων</div>
           <div className="mt-0.5 text-[11px] text-slate-600">
-            Τι σημαίνει αυτή η ομάδα και ποια δεδομένα λείπουν.
+            Τι σημαίνει αυτή η ομάδα και ποια σήματα λείπουν.
           </div>
         </div>
         <div className="shrink-0 inline-flex items-center gap-1 text-[11px] font-medium text-slate-600">
@@ -744,59 +793,6 @@ function getRecommendationActionText(policy: RecommendedPolicy | null | undefine
   return policy === 'price_benchmark' ? 'Άνοιγμα λειτουργίας' : 'Άνοιγμα';
 }
 
-function getPriorityCardTone(bucket: BucketId): {
-  shell: string;
-  eyebrow: string;
-  metric: string;
-  border: string;
-} {
-  switch (bucket) {
-    case 'dead_capital':
-      return {
-        shell: 'border-rose-200/80 bg-rose-50/40 hover:border-rose-300',
-        eyebrow: 'bg-rose-100/90 text-rose-800',
-        metric: 'text-rose-700',
-        border: 'border-rose-100/80',
-      };
-    case 'stockout_risk':
-      return {
-        shell: 'border-orange-200/80 bg-orange-50/35 hover:border-orange-300',
-        eyebrow: 'bg-orange-100/90 text-orange-800',
-        metric: 'text-orange-700',
-        border: 'border-orange-100/80',
-      };
-    case 'margin_bleeder':
-      return {
-        shell: 'border-amber-200/80 bg-amber-50/35 hover:border-amber-300',
-        eyebrow: 'bg-amber-100/90 text-amber-900',
-        metric: 'text-amber-800',
-        border: 'border-amber-100/80',
-      };
-    default:
-      return {
-        shell: 'border-slate-200 bg-slate-50/50 hover:border-slate-300',
-        eyebrow: 'bg-slate-100 text-slate-700',
-        metric: 'text-slate-800',
-        border: 'border-slate-100',
-      };
-  }
-}
-
-function getPriorityCardOutcome(bucket: BucketId): string {
-  switch (bucket) {
-    case 'dead_capital':
-      return 'Απελευθέρωση κεφαλαίου από στάσιμο απόθεμα.';
-    case 'stockout_risk':
-      return 'Προστασία πωλήσεων πριν εμφανιστεί έλλειψη.';
-    case 'margin_bleeder':
-      return 'Βελτίωση κερδοφορίας μέσω τιμολόγησης και μίγματος.';
-    case 'slow_mover':
-      return 'Στοχευμένη τόνωση για κωδικούς με χαμηλή κίνηση.';
-    default:
-      return 'Στοχευμένη εμπορική ενέργεια για την παρούσα ομάδα.';
-  }
-}
-
 function buildPolicyPayload(
   bucket: BucketId,
   assignments: BucketAssignment[],
@@ -816,93 +812,82 @@ function buildPolicyPayload(
   };
 }
 
-function PriorityPolicyActions({
-  buckets,
+/** Ένα κύριο CTA ανά ομάδα, όπως στο ProcurementStrategyBridge. */
+function GroupBridgeCta({
+  groupId,
+  activeBuckets,
   defs,
   counts,
   tiedByBucket,
   allByBucket,
   onSelectPolicy,
+  bridgeBtnClass,
+  onAnalyzeGroup,
+  onInvestigateOpen,
 }: {
-  buckets: BucketId[];
+  groupId: BucketGroupId;
+  activeBuckets: BucketId[];
   defs: ReturnType<typeof useDecisionBuckets>['defs'];
   counts: ReturnType<typeof useDecisionBuckets>['counts'];
   tiedByBucket: ReturnType<typeof useDecisionBuckets>['tiedByBucket'];
   allByBucket: Record<BucketId, BucketAssignment[]>;
-  onSelectPolicy: NonNullable<TriageCardProps['onSelectPolicy']>;
+  onSelectPolicy?: TriageCardProps['onSelectPolicy'];
+  bridgeBtnClass: string;
+  onAnalyzeGroup: () => void;
+  onInvestigateOpen: () => void;
 }) {
-  const actionable = buckets.filter((bucket) => !!defs[bucket].recommendedPolicy);
-  if (actionable.length === 0) return null;
+  const btnBase =
+    'inline-flex items-center justify-center gap-1.5 w-full py-2 px-3 rounded-lg text-white text-xs font-semibold transition-colors';
+
+  if (groupId === 'investigate') {
+    return (
+      <button type="button" onClick={onInvestigateOpen} className={`${btnBase} ${bridgeBtnClass}`}>
+        {defs.new_or_unknown.cta}
+        <ArrowRight size={14} aria-hidden />
+      </button>
+    );
+  }
+
+  const withPolicy = activeBuckets.filter((b) => defs[b].recommendedPolicy);
+  const priorityByGroup: Record<BucketGroupId, BucketId[]> = {
+    critical: ['dead_capital', 'margin_bleeder', 'stockout_risk'],
+    opportunity: ['hot_seller', 'replenish_now'],
+    watch: ['discontinue', 'slow_mover'],
+    investigate: [],
+  };
+  const order = priorityByGroup[groupId];
+  let bucket: BucketId | undefined = order.find((b) => withPolicy.includes(b) && counts[b] > 0);
+  if (!bucket && withPolicy.length > 0) {
+    bucket = [...withPolicy].sort((a, b) => counts[b] - counts[a])[0];
+  }
+
+  if (bucket && onSelectPolicy && defs[bucket].recommendedPolicy) {
+    const def = defs[bucket];
+    return (
+      <button
+        type="button"
+        className={`${btnBase} ${bridgeBtnClass}`}
+        onClick={() => {
+          const { fromBucket, payload } = buildPolicyPayload(
+            bucket!,
+            allByBucket[bucket!],
+            def.label,
+            tiedByBucket[bucket!]
+          );
+          onSelectPolicy(def.recommendedPolicy as NonNullable<RecommendedPolicy>, fromBucket, payload);
+        }}
+      >
+        {def.cta}
+        <ArrowRight size={14} aria-hidden />
+      </button>
+    );
+  }
 
   return (
-    <div className="mb-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-      {actionable.map((bucket) => {
-        const def = defs[bucket];
-        const policyName = getPolicyName(def.recommendedPolicy);
-        if (!policyName) return null;
-        const tone = getPriorityCardTone(bucket);
-        const productCount = counts[bucket];
-        const tiedCapital = tiedByBucket[bucket];
-
-        return (
-          <button
-            key={bucket}
-            type="button"
-            onClick={() => {
-              const { fromBucket, payload } = buildPolicyPayload(
-                bucket,
-                allByBucket[bucket],
-                def.label,
-                tiedByBucket[bucket]
-              );
-              onSelectPolicy(def.recommendedPolicy as NonNullable<RecommendedPolicy>, fromBucket, payload);
-            }}
-            className={`rounded-lg border text-left transition-all hover:shadow-sm ${tone.shell}`}
-          >
-            <div className="flex flex-col gap-2 p-3">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <div className={`inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${tone.eyebrow}`}>
-                    {def.shortLabel}
-                  </div>
-                  <div className="mt-1 text-[13px] font-semibold leading-snug text-gray-900 line-clamp-2">{def.label}</div>
-                  <div className="mt-0.5 text-[11px] leading-snug text-gray-600 line-clamp-2">
-                    {getPriorityCardOutcome(bucket)}
-                  </div>
-                </div>
-              </div>
-              <div className={`flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md border px-2.5 py-1.5 ${tone.border} bg-white/70`}>
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-[9px] uppercase tracking-wide text-gray-500">Προϊόντα</span>
-                  <span className="text-sm font-bold tabular-nums text-gray-900">
-                    {productCount.toLocaleString('el-GR')}
-                  </span>
-                </div>
-                <div className="h-3 w-px bg-gray-200 hidden sm:block" aria-hidden />
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-[9px] uppercase tracking-wide text-gray-500">Scope</span>
-                  <span className={`text-sm font-bold tabular-nums ${tiedCapital > 0 ? tone.metric : 'text-gray-900'}`}>
-                    {tiedCapital > 0 ? fmtEur(tiedCapital) : '—'}
-                  </span>
-                </div>
-              </div>
-              <div className="flex items-center justify-between gap-2 pt-0.5 border-t border-black/[0.06]">
-                <div className="min-w-0">
-                  <div className="text-[9px] uppercase tracking-wide text-gray-500">
-                    {getRecommendationLabel(def.recommendedPolicy)}
-                  </div>
-                  <div className="text-[11px] font-semibold text-gray-800 truncate">{policyName}</div>
-                </div>
-                <div className="shrink-0 inline-flex items-center gap-0.5 rounded-md bg-[var(--nts-accent)] px-2.5 py-1.5 text-[10px] font-semibold text-white hover:opacity-90">
-                  {getRecommendationActionText(def.recommendedPolicy)}
-                  <ChevronRight size={11} />
-                </div>
-              </div>
-            </div>
-          </button>
-        );
-      })}
-    </div>
+    <button type="button" className={`${btnBase} ${bridgeBtnClass}`} onClick={onAnalyzeGroup}>
+      Ανάλυση κατηγοριών
+      <ArrowRight size={14} aria-hidden />
+    </button>
   );
 }
 
