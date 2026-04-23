@@ -29,7 +29,6 @@ import {
   Target as TargetIcon,
   Check,
   Star,
-  RefreshCw,
 } from 'lucide-react';
 import {
   PieChart,
@@ -187,18 +186,20 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   // Auto-generate AI recommendation if strategy exists but recommendation is missing
   const hasRealStrategyId = !!strategyId && !strategyId.startsWith('default_') && !!scenarioId;
   const autoGenTriggered = useRef(false);
+  const silentUpgradeTriggered = useRef(false);
 
-  const generateRecommendation = useCallback(async () => {
+  /**
+   * Δημιουργία AI σύστασης. `silent=true` → δε δείχνει toast (background upgrade).
+   */
+  const generateRecommendation = useCallback(async (silent = false) => {
     if (!strategyId || !scenarioId || !currentBrand) return;
     const scenario = scenarios.find(s => s.id === scenarioId) ?? scenarios[0];
     const segment = rfmSegments[0];
     if (!segment) return;
 
-    setAiGenerating(true);
+    if (!silent) setAiGenerating(true);
     try {
       const topCats = [...new Set(products.map(p => p.category).filter(Boolean))].slice(0, 5);
-      // Pull triage origin από το αποθηκευμένο active_strategies doc — αν η
-      // στρατηγική προέκυψε από Decision Bucket, το AI πρέπει να ευθυγραμμιστεί.
       const savedTriage = (activeStrategy as { triageOrigin?: TriageOrigin } | null)?.triageOrigin ?? null;
       const triagePromptCtx = buildTriagePromptContext(savedTriage);
       const provenancePromptCtx = buildProvenancePromptContext(signalCoverage, products.length);
@@ -213,18 +214,20 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
       });
 
       const clean = JSON.parse(JSON.stringify(rec));
-        await FirestoreService.setDocument('active_strategies', strategyId, {
-          activationRecommendation: clean,
-          updatedAt: new Date().toISOString(),
-        } as Record<string, unknown>);
-        queryClient.invalidateQueries({ queryKey: ['activeStrategy'] });
-        toast.success('AI συστάσεις δημιουργήθηκαν');
+      await FirestoreService.setDocument('active_strategies', strategyId, {
+        activationRecommendation: clean,
+        updatedAt: new Date().toISOString(),
+      } as Record<string, unknown>);
+      queryClient.invalidateQueries({ queryKey: ['activeStrategy'] });
+      if (!silent) toast.success('AI συστάσεις δημιουργήθηκαν');
     } catch (err) {
       console.error('[ChannelActivation] AI generation failed:', err);
-      const msg = err instanceof Error ? err.message : 'Unknown error';
-      toast.error(`AI error: ${msg}`);
+      if (!silent) {
+        const msg = err instanceof Error ? err.message : 'Unknown error';
+        toast.error(`AI error: ${msg}`);
+      }
     } finally {
-      setAiGenerating(false);
+      if (!silent) setAiGenerating(false);
     }
   }, [strategyId, scenarioId, currentBrand, rfmSegments, products, queryClient, toast, activeStrategy, signalCoverage]);
 
@@ -234,6 +237,25 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     if (rfmSegments.length === 0) return;
     autoGenTriggered.current = true;
     generateRecommendation();
+  }, [hasRealStrategyId, aiRecommendation, aiGenerating, rfmSegments, generateRecommendation]);
+
+  /**
+   * Σιωπηλή αναβάθμιση legacy payloads:
+   * Αν η σύσταση υπάρχει αλλά λείπουν τα per-segment δεδομένα
+   * (channelPlaybook με priority/budgetSharePct), αναγεννούμε στο background.
+   * Δε δείχνουμε spinner ή toast — όταν τελειώσει, το cache invalidate ανανεώνει το UI.
+   */
+  useEffect(() => {
+    if (silentUpgradeTriggered.current) return;
+    if (!hasRealStrategyId || !aiRecommendation || aiGenerating) return;
+    if (rfmSegments.length === 0) return;
+    const playbook = aiRecommendation.channelPlaybook ?? [];
+    const hasPerSegmentSignal = playbook.some(
+      (e) => e.priority === 'primary' || e.priority === 'secondary' || (typeof e.budgetSharePct === 'number' && e.budgetSharePct > 0)
+    );
+    if (hasPerSegmentSignal) return;
+    silentUpgradeTriggered.current = true;
+    generateRecommendation(true);
   }, [hasRealStrategyId, aiRecommendation, aiGenerating, rfmSegments, generateRecommendation]);
 
   const { getStatus, getNote, isIncluded, updateActivation, isSaving } = useChannelActivations(strategyId);
@@ -607,19 +629,6 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
               )}
             </div>
 
-            {hasRealStrategyId && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="min-h-[36px] w-full sm:w-auto"
-                icon={aiGenerating ? <Spinner size="sm" /> : <RefreshCw size={15} />}
-                onClick={generateRecommendation}
-                disabled={aiGenerating}
-                title="Αναγέννηση AI Συστάσεων με per-segment διαφοροποίηση"
-              >
-                {aiGenerating ? 'Αναγέννηση…' : aiRecommendation ? 'Αναγέννηση AI' : 'Δημιουργία AI'}
-              </Button>
-            )}
             {aiRecommendation && activeStrategy && (
               <Button
                 variant="primary"
@@ -832,7 +841,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                 <Button
                   variant="primary"
                   size="sm"
-                  onClick={generateRecommendation}
+                  onClick={() => generateRecommendation()}
                   disabled={aiGenerating}
                 >
                   {aiGenerating ? <><Spinner size="sm" className="mr-1" /> Δημιουργία...</> : 'Δημιουργία AI Συστάσεων'}
@@ -1037,7 +1046,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                 <Button
                   variant="primary"
                   size="sm"
-                  onClick={generateRecommendation}
+                  onClick={() => generateRecommendation()}
                   disabled={aiGenerating}
                 >
                   {aiGenerating ? <><Spinner size="sm" className="mr-1" /> Δημιουργία...</> : 'Δημιουργία AI Briefs'}
@@ -1203,7 +1212,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                               variant="ghost"
                               size="sm"
                               className="mt-3"
-                              onClick={generateRecommendation}
+                              onClick={() => generateRecommendation()}
                               disabled={aiGenerating}
                             >
                               {aiGenerating ? 'Δημιουργία…' : 'Αναγέννηση AI Brief'}

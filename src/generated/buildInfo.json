@@ -1,10 +1,14 @@
 {
-  "version": "0.613.0",
-  "previousVersion": "0.612.0",
-  "commitHash": "3f2698e",
+  "version": "0.615.0",
+  "previousVersion": "0.614.0",
+  "commitHash": "264d446",
   "branch": "main",
-  "buildDate": "2026-04-23T08:52:27.866Z",
+  "buildDate": "2026-04-23T08:56:33.388Z",
   "commits": [
+    {
+      "hash": "264d446",
+      "message": "feat(channels): expose Regenerate AI button in PageHeader"
+    },
     {
       "hash": "3f2698e",
       "message": "chore: remove temp commit message file"
@@ -60,13 +64,10 @@
     {
       "hash": "cd465f1",
       "message": "fix(procurement): resolve ERP column names and merge pricing for margin"
-    },
-    {
-      "hash": "06e5a0a",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [
+    "[Νέο χαρακτηριστικό] Expose Regenerate AI button in PageHeader",
     "[Συντήρηση] Remove temp commit message file",
     "[Νέο χαρακτηριστικό] Per-segment channel mix στο Channel Activation",
     "[Νέο χαρακτηριστικό] Merge Channel Recommendations into Channel Activation",
@@ -75,7 +76,6 @@
     "[Συντήρηση] Remove unused helper; buildInfo v0.607.0",
     "[Διόρθωση] Pie aligns with period + center total; feat(strategy): commercial priorities bridge-style cards",
     "[Συντήρηση] BuildInfo after production deploy (v0.606.0)",
-    "[Συντήρηση] Regenerate buildInfo after merge",
-    "[Νέο χαρακτηριστικό] Home session — GA4/search console, auth, ecommerce, connectors, ROI, firestore rules"
+    "[Συντήρηση] Regenerate buildInfo after merge"
   ]
 }
