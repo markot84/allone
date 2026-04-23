@@ -36,7 +36,7 @@ import {
   Cell,
   Tooltip,
 } from 'recharts';
-import { Card, CardHeader, Badge, Button, Spinner, FormattedProse, PageHeader, ModalHeader } from '../common';
+import { Card, CardHeader, Badge, Button, Spinner, PageHeader, ModalHeader } from '../common';
 import { useToast } from '../common/Toast';
 import { useProductSource } from '../../hooks/useProductSource';
 import { useCampaigns } from '../../hooks/useCampaigns';
@@ -49,6 +49,7 @@ import { derivePredictiveMetrics } from '../../services/behavioralEngine';
 import { getStockAgeDays } from '../../utils/productUtils';
 import { safeBrandName } from '../../services/reportExport';
 import { formatCurrency, formatNumber, formatPercent } from '../../utils/format';
+import { sanitizeCustomerMessage, containsForbiddenContent } from '../../utils/customerMessageSanitizer';
 import { scenarios } from '../../data';
 import { generateChannelRecommendations } from '../../services/aiChannelRecommendations';
 import { useProductSignals } from '../../hooks/useProductSignals';
@@ -226,11 +227,10 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   const [aiGenerating, setAiGenerating] = useState(false);
   /** Background silent upgrade — δείχνουμε διακριτικό indicator, ΟΧΙ full skeleton. */
   const [isSilentUpgrading, setIsSilentUpgrading] = useState(false);
-  const [showAiBrief, setShowAiBrief] = useState(true);
+  /** Expand state ανά section του Marketing Brief — όλα κλειστά by default. */
+  const [expandedBriefSections, setExpandedBriefSections] = useState<Record<string, boolean>>({});
   /** Active segment context — οδηγεί τα per-segment campaign messages & marketing briefs. */
   const [selectedSegmentName, setSelectedSegmentName] = useState<string | null>(null);
-  /** Tab για το dual brief: «owner» = επιχειρηματίας · «exec» = ομάδα υλοποίησης. */
-  const [briefTab, setBriefTab] = useState<'owner' | 'exec'>('owner');
   const monthlyBudget = activeStrategy?.monthlyBudget ?? null;
 
   const strategyId = activeStrategy?.id ?? null;
@@ -243,7 +243,9 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   // Auto-generate AI recommendation if strategy exists but recommendation is missing
   const hasRealStrategyId = !!strategyId && !strategyId.startsWith('default_') && !!scenarioId;
   const autoGenTriggered = useRef(false);
-  const silentUpgradeTriggered = useRef(false);
+  /** Πόσες φορές έχουμε ξανατρέξει σιωπηλά για legacy/violating payloads (max 3). */
+  const silentUpgradeAttempts = useRef(0);
+  const MAX_SILENT_UPGRADES = 3;
 
   /**
    * Δημιουργία AI σύστασης. `silent=true` → δε δείχνει toast (background upgrade).
@@ -321,7 +323,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
    * Δε δείχνουμε spinner ή toast — όταν τελειώσει, το cache invalidate ανανεώνει το UI.
    */
   useEffect(() => {
-    if (silentUpgradeTriggered.current) return;
+    if (silentUpgradeAttempts.current >= MAX_SILENT_UPGRADES) return;
     if (!hasRealStrategyId || !aiRecommendation || aiGenerating) return;
     if (rfmSegments.length === 0) return;
     const playbook = aiRecommendation.channelPlaybook ?? [];
@@ -331,49 +333,16 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     // Πρόσθετο upgrade trigger: legacy payloads ή AI που έδωσε <2 segments
     // (είναι σχεδόν πάντα λάθος — ακόμη και για narrow πολιτικές υπάρχουν 2-4 fitting segments).
     const tooFewSegments = (aiRecommendation.targetSegments?.length ?? 0) < 2;
-    // Trigger upgrade αν το AI έχει αναφέρει το όνομα του segment ΜΕΣΑ στο customer-facing message
-    // (π.χ. "Ως Champions…", "Αγαπητοί At Risk…") — απαγορεύεται από το νέο prompt.
-    const segmentNamesInMessages = playbook.some((e) => {
-      if (!e.message) return false;
-      const seg = e.segment.toLowerCase();
-      const msg = e.message.toLowerCase();
-      const re = new RegExp(`\\b${seg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
-      return re.test(msg);
-    });
-    // Trigger upgrade αν το message περιέχει εσωτερική εμπορική ορολογία.
-    const FORBIDDEN_TERMS = [
-      'dead stock',
-      'νεκρό απόθεμα',
-      'slow mover',
-      'αργοκίνητ',
-      'overstock',
-      'πλεόνασμα',
-      'stock clearance',
-      'εκκαθάριση αποθήκης',
-      'ξεπούλημα αποθήκης',
-      'liquidation',
-      'περιθώριο κέρδους',
-      'roas',
-      'scenario',
-      'segment',
-      'rfm',
-      'cohort',
-      'profit maximization',
-      'brand launch',
-    ];
-    const forbiddenTermsInMessages = playbook.some((e) => {
-      if (!e.message) return false;
-      const msg = e.message.toLowerCase();
-      return FORBIDDEN_TERMS.some((t) => msg.includes(t));
-    });
+    // Trigger upgrade αν οποιοδήποτε customer-facing message περιέχει segment names ή internal jargon.
+    // Χρησιμοποιούμε τον κεντρικό sanitizer detector (DRY με render-time sanitization).
+    const violatingMessages = playbook.some((e) => containsForbiddenContent(e.message));
     if (
       hasPerSegmentSignal &&
       !tooFewSegments &&
-      !segmentNamesInMessages &&
-      !forbiddenTermsInMessages
+      !violatingMessages
     )
       return;
-    silentUpgradeTriggered.current = true;
+    silentUpgradeAttempts.current += 1;
     generateRecommendation(true);
   }, [hasRealStrategyId, aiRecommendation, aiGenerating, rfmSegments, generateRecommendation]);
 
@@ -1116,7 +1085,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                               <div className="text-[10px] font-semibold uppercase tracking-wider text-[#7C3AED] mb-0.5">
                                 Campaign message · {selectedSegmentName}
                               </div>
-                              <p className="text-xs text-[#4A4A4A] leading-snug">{playbook.message}</p>
+                              <p className="text-xs text-[#4A4A4A] leading-snug">{sanitizeCustomerMessage(playbook.message)}</p>
                             </div>
                           </div>
                         )}
@@ -1206,175 +1175,159 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         </Card>
       </div>
 
-      {/* Dual Brief — Campaign Brief (Owner) | Marketing Brief (Execution) */}
-      {aiRecommendation && (aiRecommendation.rationale || aiRecommendation.channelPlaybook?.length) && (() => {
-        const parts = aiRecommendation.rationale?.split('||').map(s => s.trim()) ?? [];
-        const hasStructure = parts.length >= 3 && parts[0].startsWith('Πελάτες:');
+      {/* AI Briefs — Campaign Brief (full visible) + Marketing Brief (3 sections, summary + expand) */}
+      {aiRecommendation && aiRecommendation.rationale && (() => {
+        const parts = aiRecommendation.rationale.split('||').map((s) => s.trim());
+        const hasStructure = parts.length >= 3 && /^Πελάτες:/i.test(parts[0]);
+
         const sections = [
-          { icon: Users, color: '#8B5CF6', label: 'Πελάτες' },
-          { icon: MessageSquare, color: '#3B82F6', label: 'Κανάλια' },
-          { icon: TrendingUp, color: '#22C55E', label: 'Αποτέλεσμα' },
-        ];
-        // Marketing brief entries: per (selected segment) × included channels
-        const includedChannelNames = allChannels.filter((c) => isIncluded(c.name)).map((c) => c.name);
-        const execEntries = (aiRecommendation.channelPlaybook ?? [])
-          .filter((e) =>
-            (!selectedSegmentName || e.segment.toLowerCase() === selectedSegmentName.toLowerCase()) &&
-            includedChannelNames.some((cn) => cn.toLowerCase() === e.channel.toLowerCase())
-          );
-        const hasExecData = execEntries.length > 0;
+          { key: 'customers', icon: Users, color: '#8B5CF6', label: 'Πελάτες', tagline: 'Σε ποιους απευθυνόμαστε' },
+          { key: 'channels', icon: MessageSquare, color: '#3B82F6', label: 'Κανάλια', tagline: 'Πού & πώς τους αγγίζουμε' },
+          { key: 'outcome', icon: TrendingUp, color: '#22C55E', label: 'Αποτέλεσμα', tagline: 'Τι περιμένουμε να επιτύχουμε' },
+        ] as const;
+
+        // Διαχωρίζει intro (πριν το πρώτο bullet) από τα bullets.
+        const splitIntro = (raw: string) => {
+          const text = raw.replace(/^(Πελάτες|Κανάλια|Αποτέλεσμα):\s*/i, '').replace(/—/g, ',').trim();
+          // bullets αναγνωρίζονται από • ή - στην αρχή γραμμής
+          const lines = text.split(/\n+/).map((l) => l.trim()).filter(Boolean);
+          const introLines: string[] = [];
+          const bulletLines: string[] = [];
+          let bulletsStarted = false;
+          for (const ln of lines) {
+            if (/^[•\-*]\s+/.test(ln)) {
+              bulletsStarted = true;
+              bulletLines.push(ln.replace(/^[•\-*]\s+/, '').trim());
+            } else if (!bulletsStarted) {
+              introLines.push(ln);
+            } else {
+              // continuation γραμμή του τελευταίου bullet
+              if (bulletLines.length > 0) {
+                bulletLines[bulletLines.length - 1] += ' ' + ln;
+              } else {
+                introLines.push(ln);
+              }
+            }
+          }
+          const intro = introLines.join(' ').trim();
+          return { intro, bullets: bulletLines, full: text };
+        };
+
+        const sectionData = hasStructure
+          ? sections.map((s, i) => ({ ...s, ...splitIntro(parts[i] ?? '') }))
+          : [];
+
+        // Σύντομο Campaign Brief: 1ο sentence από κάθε section intro (ή full αν δεν υπάρχει structure)
+        const firstSentence = (txt: string) => {
+          const m = txt.match(/[^.!?·]+[.!?·]?/);
+          return (m ? m[0] : txt).trim();
+        };
+        const campaignBriefText = hasStructure
+          ? sectionData.map((s) => firstSentence(s.intro)).filter(Boolean).join(' ')
+          : (aiRecommendation.rationale ?? '').replace(/—/g, ',');
+
+        const toggleSection = (key: string) =>
+          setExpandedBriefSections((prev) => ({ ...prev, [key]: !prev[key] }));
 
         return (
-          <Card padding="none">
-            <div className="px-5 py-3.5 flex items-center justify-between border-b border-[#F0F0F0]">
-              <button
-                onClick={() => setShowAiBrief(!showAiBrief)}
-                className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#9CA3AF] hover:text-[#4A4A4A] transition-colors"
-              >
+          <div className="space-y-4">
+            {/* CAMPAIGN BRIEF — fully expanded, για διοίκηση */}
+            <Card padding="none">
+              <div className="px-5 py-3.5 flex items-center gap-2 border-b border-[#F0F0F0]">
                 <Sparkles size={13} className="text-[var(--nts-accent)]" />
-                AI Briefs
-                <ChevronUp size={14} className={`transition-transform ${showAiBrief ? '' : 'rotate-180'}`} />
-              </button>
-              {showAiBrief && (
-                <div className="inline-flex p-0.5 rounded-lg bg-[#F5F5F5]">
-                  <button
-                    type="button"
-                    onClick={() => setBriefTab('owner')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
-                      briefTab === 'owner' ? 'bg-white text-[#1A1A1A] shadow-sm' : 'text-[#9CA3AF] hover:text-[#4A4A4A]'
-                    }`}
-                  >
-                    <Briefcase size={12} />
-                    Campaign Brief
-                    <span className="hidden sm:inline text-[10px] opacity-60 font-normal">· Επιχειρηματίας</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setBriefTab('exec')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
-                      briefTab === 'exec' ? 'bg-white text-[#1A1A1A] shadow-sm' : 'text-[#9CA3AF] hover:text-[#4A4A4A]'
-                    }`}
-                  >
-                    <TargetIcon size={12} />
-                    Marketing Brief
-                    <span className="hidden sm:inline text-[10px] opacity-60 font-normal">· Execution</span>
-                  </button>
-                </div>
-              )}
-            </div>
-            <AnimatePresence>
-              {showAiBrief && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="overflow-hidden"
-                >
-                  <div className="px-5 pb-5 pt-4">
-                    {briefTab === 'owner' ? (
-                      // OWNER VIEW: σύντομο, στρατηγικό
-                      <div>
-                        <div className="flex items-start gap-3 mb-4 p-3 rounded-lg bg-gradient-to-br from-[#FAFAFA] to-white border border-[#F0F0F0]">
-                          <div className="p-2 rounded-lg bg-[#7C3AED]/10 flex-shrink-0">
-                            <Briefcase size={16} className="text-[#7C3AED]" />
-                          </div>
-                          <div className="text-xs text-[#4A4A4A] leading-relaxed">
-                            <span className="font-semibold text-[#1A1A1A]">Σύντομο brief για τη διοίκηση.</span>{' '}
-                            Τι κάνουμε, σε ποιους απευθυνόμαστε, γιατί το επιλέγουμε και τι αναμένουμε από τη συγκεκριμένη πολιτική.
-                          </div>
-                        </div>
-                        {hasStructure ? (
-                          <div className="space-y-5">
-                            {parts.slice(0, 3).map((part, i) => {
-                              const s = sections[i];
-                              const text = part.replace(/^(Πελάτες|Κανάλια|Αποτέλεσμα):\s*/i, '');
-                              const Icon = s.icon;
-                              const cleaned = text.replace(/—/g, ',');
-                              return (
-                                <div key={i}>
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <div
-                                      className="w-6 h-6 rounded-md flex items-center justify-center"
-                                      style={{ backgroundColor: `${s.color}15` }}
-                                    >
-                                      <Icon size={13} style={{ color: s.color }} />
-                                    </div>
-                                    <span className="text-xs font-bold uppercase tracking-wide" style={{ color: s.color }}>{s.label}</span>
-                                  </div>
-                                  <FormattedProse content={cleaned} variant="compact" />
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ) : (
-                          <FormattedProse content={(aiRecommendation.rationale ?? '').replace(/—/g, ',')} variant="compact" />
-                        )}
-                      </div>
-                    ) : (
-                      // EXEC VIEW: αναλυτικό per-channel marketing brief
-                      <div>
-                        <div className="flex items-start gap-3 mb-4 p-3 rounded-lg bg-gradient-to-br from-[#EFF6FF] to-white border border-[#DBEAFE]">
-                          <div className="p-2 rounded-lg bg-[#3B82F6]/10 flex-shrink-0">
-                            <TargetIcon size={16} className="text-[#3B82F6]" />
-                          </div>
-                          <div className="text-xs text-[#4A4A4A] leading-relaxed">
-                            <span className="font-semibold text-[#1A1A1A]">
-                              Αναλυτικό brief για την ομάδα υλοποίησης
-                              {selectedSegmentName ? ` · segment «${selectedSegmentName}»` : ''}.
-                            </span>{' '}
-                            Campaign type, targeting, ad format, bidding strategy, KPIs &amp; A/B angle ανά κανάλι που συμμετέχει.
-                          </div>
-                        </div>
-                        {hasExecData ? (
-                          <div className="space-y-3">
-                            {execEntries.map((entry) => {
-                              const f = getFunnelStage(entry.channel);
-                              return (
-                                <div
-                                  key={`${entry.segment}-${entry.channel}`}
-                                  className="p-3 rounded-xl border border-[#E5E5E5]"
-                                  style={{ borderLeftWidth: 3, borderLeftColor: f.color }}
-                                >
-                                  <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                    <span className="text-sm font-semibold text-[#1A1A1A]">{entry.channel}</span>
-                                    <span
-                                      className="text-[10px] font-medium px-2 py-0.5 rounded-full"
-                                      style={{ backgroundColor: f.color + '18', color: f.color }}
-                                    >
-                                      {f.label}
-                                    </span>
-                                    <span className="text-[10px] text-[#9CA3AF]">→ {entry.segment}</span>
-                                  </div>
-                                  <p className="text-xs text-[#4A4A4A] leading-relaxed whitespace-pre-line">
-                                    {entry.marketingBrief || entry.message}
-                                  </p>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ) : (
-                          <div className="text-center py-8 text-xs text-[#9CA3AF]">
-                            <p>Δεν υπάρχει διαθέσιμο per-channel marketing brief για το συγκεκριμένο segment.</p>
-                            <p className="mt-1">Αναγέννησε τις AI συστάσεις για να δημιουργηθεί.</p>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="mt-3"
-                              onClick={() => generateRecommendation()}
-                              disabled={aiGenerating}
-                            >
-                              {aiGenerating ? 'Δημιουργία…' : 'Αναγέννηση AI Brief'}
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    )}
+                <span className="text-xs font-semibold uppercase tracking-wider text-[#9CA3AF]">Campaign Brief</span>
+                <span className="text-[10px] text-[#9CA3AF] font-normal">· σύντομο για τη διοίκηση</span>
+              </div>
+              <div className="px-5 py-4">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 rounded-lg bg-[#7C3AED]/10 flex-shrink-0">
+                    <Briefcase size={16} className="text-[#7C3AED]" />
                   </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </Card>
+                  <p className="text-sm text-[#1A1A1A] leading-relaxed flex-1">
+                    {campaignBriefText}
+                  </p>
+                </div>
+              </div>
+            </Card>
+
+            {/* MARKETING BRIEF — 3 sections (Πελάτες / Κανάλια / Αποτέλεσμα) με expand/collapse */}
+            {hasStructure && (
+              <Card padding="none">
+                <div className="px-5 py-3.5 flex items-center gap-2 border-b border-[#F0F0F0]">
+                  <TargetIcon size={13} className="text-[#3B82F6]" />
+                  <span className="text-xs font-semibold uppercase tracking-wider text-[#9CA3AF]">Marketing Brief</span>
+                  <span className="text-[10px] text-[#9CA3AF] font-normal">· πελάτες · κανάλια · αποτέλεσμα</span>
+                </div>
+                <div className="divide-y divide-[#F0F0F0]">
+                  {sectionData.map((s) => {
+                    const Icon = s.icon;
+                    const isOpen = !!expandedBriefSections[s.key];
+                    const hasDetails = s.bullets.length > 0;
+                    return (
+                      <div key={s.key} className="px-5 py-4">
+                        <div className="flex items-start gap-3">
+                          <div
+                            className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"
+                            style={{ backgroundColor: `${s.color}15` }}
+                          >
+                            <Icon size={15} style={{ color: s.color }} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                              <span className="text-xs font-bold uppercase tracking-wide" style={{ color: s.color }}>
+                                {s.label}
+                              </span>
+                              <span className="text-[10px] text-[#9CA3AF]">· {s.tagline}</span>
+                            </div>
+                            <p className="text-sm text-[#1A1A1A] leading-relaxed">
+                              {s.intro || s.full}
+                            </p>
+                            {hasDetails && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleSection(s.key)}
+                                  className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold transition-colors"
+                                  style={{ color: s.color }}
+                                >
+                                  {isOpen ? 'Κλείσιμο αναλυτικής παρουσίασης' : `Αναλυτική παρουσίαση (${s.bullets.length})`}
+                                  <ChevronUp
+                                    size={13}
+                                    className={`transition-transform ${isOpen ? '' : 'rotate-180'}`}
+                                  />
+                                </button>
+                                <AnimatePresence initial={false}>
+                                  {isOpen && (
+                                    <motion.ul
+                                      initial={{ height: 0, opacity: 0 }}
+                                      animate={{ height: 'auto', opacity: 1 }}
+                                      exit={{ height: 0, opacity: 0 }}
+                                      transition={{ duration: 0.18 }}
+                                      className="overflow-hidden mt-3 space-y-2 pl-1"
+                                    >
+                                      {s.bullets.map((b, idx) => (
+                                        <li key={idx} className="flex items-start gap-2 text-xs text-[#4A4A4A] leading-relaxed">
+                                          <span
+                                            className="mt-1.5 w-1.5 h-1.5 rounded-full flex-shrink-0"
+                                            style={{ backgroundColor: s.color }}
+                                          />
+                                          <span>{b}</span>
+                                        </li>
+                                      ))}
+                                    </motion.ul>
+                                  )}
+                                </AnimatePresence>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Card>
+            )}
+          </div>
         );
       })()}
 

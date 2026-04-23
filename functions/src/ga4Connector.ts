@@ -554,7 +554,9 @@ export async function fetchGA4Data(
         out[channel].users += users;
         out[channel].newUsers += newUsers;
         out[channel].conversions += conversions;
-        out[channel].totalRevenue = Math.max(out[channel].totalRevenue, revenue);
+        // ΣΗΜΑΝΤΙΚΟ: άθροιση και όχι max — στο source/medium fallback πολλαπλά rows αντιστοιχούν σε ίδιο channel.
+        // Στο sessionDefaultChannelGroup έχουμε μία γραμμή ανά channel οπότε άθροιση == max.
+        out[channel].totalRevenue += revenue;
       }
       return out;
     }

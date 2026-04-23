@@ -153,7 +153,11 @@ export function GA4Analytics() {
     };
   }, [filteredDailyEntries]);
 
-  /** Αθροίζει ημερήσια κανάλια στο εύρος· αν το άθροισμα βγει κενό, κλίμακα από trafficSources. */
+  /**
+   * Πραγματικό αθροιστικό ανά κανάλι **μόνο** από ημερήσια δεδομένα GA4 (sessionDefaultChannelGroup × date).
+   * Καμία αναλογική κλίμακα: αν δεν υπάρχουν ημερήσια ανά κανάλι, η πίτα/πίνακας δείχνουν whole-sync (90d) totals
+   * με προειδοποίηση — ποτέ ψεύτικη φιλτραρισμένη πίτα. Αυτό αποτρέπει το "νούμερα αλλάζουν, σχήμα ίδιο".
+   */
   const { trafficSourcesForPeriod, channelMixSource } = useMemo(() => {
     type Row = {
       channel: string;
@@ -163,12 +167,11 @@ export function GA4Analytics() {
       conversions: number;
       totalRevenue: number;
     };
-    type MixSource = 'daily' | 'proportional' | 'full';
+    type MixSource = 'daily' | 'full_sync' | 'empty';
 
-    /** Ίδιες ημέρες με τα φιλτραρισμένα ημερήσια KPI — όχι «όλα τα κλειδιά του map» που μπορεί να ξεφεύγουν. */
-    const aggregateFromDaily = (): Row[] | null => {
+    const aggregateFromDaily = (): Row[] => {
       const daily = dailyTrafficByChannel;
-      if (!daily || Object.keys(daily).length === 0) return null;
+      if (!daily || Object.keys(daily).length === 0) return [];
       const map = new Map<string, Row>();
       for (const { date } of filteredDailyEntries) {
         const chans = daily[date];
@@ -190,36 +193,32 @@ export function GA4Analytics() {
           map.set(channel, cur);
         }
       }
-      if (map.size === 0) return null;
-      return [...map.values()].sort((a, b) => b.sessions - a.sessions);
-    };
-
-    const scaleFullTrafficToPeriod = (): Row[] | null => {
-      const denom = dailyEntries.reduce((a, d) => a + d.sessions, 0);
-      const numer = filteredDailyEntries.reduce((a, d) => a + d.sessions, 0);
-      if (denom <= 0 || trafficSources.length === 0) return null;
-      const ratio = numer / denom;
-      const scaled = trafficSources
-        .map((s) => ({
-          channel: s.channel,
-          sessions: s.sessions * ratio,
-          users: s.users * ratio,
-          newUsers: (s.newUsers ?? 0) * ratio,
-          conversions: s.conversions * ratio,
-          totalRevenue: (s.totalRevenue ?? 0) * ratio,
-        }))
-        .filter((s) => s.sessions > 1e-6 || s.conversions > 1e-6 || (s.totalRevenue ?? 0) > 1e-6);
-      return scaled.length > 0 ? scaled : null;
+      return [...map.values()]
+        .filter((r) => r.sessions > 0 || r.conversions > 0 || r.totalRevenue > 0)
+        .sort((a, b) => b.sessions - a.sessions);
     };
 
     const fromDaily = aggregateFromDaily();
-    if (fromDaily) return { trafficSourcesForPeriod: fromDaily, channelMixSource: 'daily' satisfies MixSource };
+    if (fromDaily.length > 0) {
+      return { trafficSourcesForPeriod: fromDaily, channelMixSource: 'daily' satisfies MixSource };
+    }
 
-    const scaled = scaleFullTrafficToPeriod();
-    if (scaled) return { trafficSourcesForPeriod: scaled, channelMixSource: 'proportional' satisfies MixSource };
+    if (trafficSources.length > 0) {
+      return {
+        trafficSourcesForPeriod: trafficSources.map((s) => ({
+          channel: s.channel,
+          sessions: s.sessions,
+          users: s.users,
+          newUsers: s.newUsers ?? 0,
+          conversions: s.conversions,
+          totalRevenue: s.totalRevenue ?? 0,
+        })),
+        channelMixSource: 'full_sync' satisfies MixSource,
+      };
+    }
 
-    return { trafficSourcesForPeriod: trafficSources, channelMixSource: 'full' satisfies MixSource };
-  }, [dailyTrafficByChannel, effectiveFrom, effectiveTo, trafficSources, dailyEntries, filteredDailyEntries]);
+    return { trafficSourcesForPeriod: [], channelMixSource: 'empty' satisfies MixSource };
+  }, [dailyTrafficByChannel, filteredDailyEntries, trafficSources]);
 
   const displayTrafficSources = useMemo((): TrafficRow[] => {
     return trafficSourcesForPeriod.map((s) => ({
@@ -666,10 +665,10 @@ export function GA4Analytics() {
             title="Πηγές κίνησης"
             subtitle={
               channelMixSource === 'daily'
-                ? `Συνεδρίες ανά default channel group για ${formatDateTooltipEl(effectiveFrom)} — ${formatDateTooltipEl(effectiveTo)} (ημερήσια ανά κανάλι από sync). Οι γωνίες αλλάζουν όταν η κατανομή ανά ημέρα διαφέρει.`
-                : channelMixSource === 'proportional'
-                  ? `Για ${formatDateTooltipEl(effectiveFrom)} — ${formatDateTooltipEl(effectiveTo)}: τα μερίδια φετών ακολουθούν το σύνολο του τελευταίου GA4 sync (κλίμακα μόνο στο απόλυτο μέγεθος). Το κέντρο δείχνει τις συνεδρίες της περιόδου από τα ημερήσια KPI — κάντε επιτυχές sync με «ημερήσια ανά κανάλι» για δυναμική πίτα.`
-                  : `Συνεδρίες ανά κανάλι από το property report του τελευταίου sync· χωρίς ημερήσια ανά κανάλι το σχήμα πίτας δεν φιλτράρεται στο ημερολόγιο.`
+                ? `Sessions ανά Default Channel Group για ${formatDateTooltipEl(effectiveFrom)} — ${formatDateTooltipEl(effectiveTo)}. Φιλτράρεται δυναμικά από τα ημερήσια data του τελευταίου GA4 sync.`
+                : channelMixSource === 'full_sync'
+                  ? `⚠️ Δεν υπάρχουν ημερήσια ανά κανάλι στο τελευταίο sync — δείχνουμε σύνολο τελευταίων 90 ημερών. Κάντε νέο GA4 Sync από τις Συνδέσεις για δυναμικό φιλτράρισμα.`
+                  : `Δεν υπάρχουν δεδομένα GA4 ακόμη. Κάντε σύνδεση/sync από τις Συνδέσεις.`
             }
           />
           <div className="p-4 pt-0">
@@ -731,7 +730,11 @@ export function GA4Analytics() {
         <Card>
         <CardHeader
           title="Ανάλυση καναλιών"
-          subtitle={`Ίδιο εύρος με το ημερολόγιο (${formatDateTooltipEl(effectiveFrom)} — ${formatDateTooltipEl(effectiveTo)}). Χρήστες/νέοι: άθροιση ημερών (ενδέχεται να διαφέρει από το de-duplicated GA4). Όλα τα κανάλια του property εμφανίζονται ξεχωριστά.`}
+          subtitle={
+            channelMixSource === 'full_sync'
+              ? `⚠️ Σύνολο τελευταίων 90 ημερών (το sync δεν είχε ημερήσια ανά κανάλι). Sessions/Conversions ίδια με GA4 Acquisition Reports για το ίδιο εύρος. Users/New users: άθροιση ημερών (το GA4 UI κάνει deduplication χρηστών — αναμένονται μικρές διαφορές).`
+              : `Ίδιο εύρος με το ημερολόγιο (${formatDateTooltipEl(effectiveFrom)} — ${formatDateTooltipEl(effectiveTo)}). Sessions/Conversions ίδια με GA4 Acquisition Reports. Users/New users: άθροιση ημερών (το GA4 UI κάνει deduplication χρηστών — αναμένονται μικρές διαφορές).`
+          }
         />
         <div className="p-4 pt-0 overflow-x-auto">
           {displayTrafficSources.length === 0 ? (

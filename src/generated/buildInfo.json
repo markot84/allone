@@ -1,10 +1,14 @@
 {
-  "version": "0.620.0",
-  "previousVersion": "0.619.0",
-  "commitHash": "591d4d2",
+  "version": "0.628.0",
+  "previousVersion": "0.627.0",
+  "commitHash": "2f19d70",
   "branch": "main",
-  "buildDate": "2026-04-23T09:22:14.435Z",
+  "buildDate": "2026-04-23T10:23:20.589Z",
   "commits": [
+    {
+      "hash": "2f19d70",
+      "message": "fix(channels): forbid internal jargon (dead stock, ROAS, segment names) in customer messages"
+    },
     {
       "hash": "591d4d2",
       "message": "fix(channels): forbid segment names in customer-facing campaign messages"
@@ -60,13 +64,10 @@
     {
       "hash": "67937b2",
       "message": "chore: buildInfo after production deploy (v0.606.0)"
-    },
-    {
-      "hash": "dbb0c10",
-      "message": "chore: regenerate buildInfo after merge"
     }
   ],
   "changes": [
+    "[Διόρθωση] Forbid internal jargon (dead stock, ROAS, segment names) in customer messages",
     "[Διόρθωση] Forbid segment names in customer-facing campaign messages",
     "[Βελτίωση εμφάνισης] Rename funnel stages to EN + distinct hue palette",
     "[Νέο χαρακτηριστικό] Skeleton UI + silent upgrade indicator + immediate cache refetch",
@@ -75,7 +76,6 @@
     "[Νέο χαρακτηριστικό] Expose Regenerate AI button in PageHeader",
     "[Συντήρηση] Remove temp commit message file",
     "[Νέο χαρακτηριστικό] Per-segment channel mix στο Channel Activation",
-    "[Νέο χαρακτηριστικό] Merge Channel Recommendations into Channel Activation",
-    "[Συντήρηση] BuildInfo v0.609.0 after deploy"
+    "[Νέο χαρακτηριστικό] Merge Channel Recommendations into Channel Activation"
   ]
 }

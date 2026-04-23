@@ -121,6 +121,21 @@ async function fetchAndSaveMagentoPopularSearchTerms(
   storeCode: string,
   headers: Record<string, string>
 ): Promise<number> {
+  // Σεβόμαστε admin CSV upload: αν ο user έχει ανεβάσει χειροκίνητα search terms
+  // από Magento Admin (Marketing → Search Terms), ΔΕΝ τα overwrite-άρουμε.
+  try {
+    const existing = await db.doc(`magento_popular_searches/${brandId}`).get();
+    if (existing.exists) {
+      const data = existing.data() as { termsProvenance?: string } | undefined;
+      if (data?.termsProvenance === 'magento_admin_csv') {
+        logger.info(`[Magento] Skipping searchTerms REST (admin CSV present) for ${brandId}`);
+        return 0;
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+
   const paths = [
     'searchTerms?searchCriteria[pageSize]=50&searchCriteria[sortOrders][0][field]=popularity&searchCriteria[sortOrders][0][direction]=DESC',
     'searchTerms?searchCriteria[pageSize]=50',
@@ -138,7 +153,7 @@ async function fetchAndSaveMagentoPopularSearchTerms(
         const body = (await res.json()) as { items?: unknown[] };
         const items = Array.isArray(body.items) ? body.items : [];
         if (items.length === 0) continue;
-        const terms: { term: string; hits: number }[] = [];
+        const terms: { term: string; hits: number; results?: number }[] = [];
         for (const it of items as Record<string, unknown>[]) {
           const term = String(
             it.query_text ?? it.search_text ?? it.query ?? it.term ?? it.keyword ?? it.display_text ?? ''
@@ -146,14 +161,18 @@ async function fetchAndSaveMagentoPopularSearchTerms(
             .replace(/\s+/g, ' ')
             .trim();
           if (!term) continue;
-          const hits = Number(it.popularity ?? it.hits ?? it.num_results ?? it.count ?? 0) || 0;
-          terms.push({ term, hits });
+          const hits = Number(it.popularity ?? it.hits ?? it.count ?? 0) || 0;
+          const resultsNum = Number(it.num_results ?? it.results ?? 0);
+          const entry: { term: string; hits: number; results?: number } = { term, hits };
+          if (Number.isFinite(resultsNum) && resultsNum > 0) entry.results = resultsNum;
+          terms.push(entry);
         }
         if (terms.length === 0) continue;
+        terms.sort((a, b) => b.hits - a.hits);
         await db.doc(`magento_popular_searches/${brandId}`).set(
           {
             brandId,
-            terms: terms.slice(0, 50),
+            terms: terms.slice(0, 100),
             syncedAt: FieldValue.serverTimestamp(),
             source: 'magento_searchTerms_api',
             termsProvenance: 'magento_searchTerms_rest',
@@ -168,41 +187,6 @@ async function fetchAndSaveMagentoPopularSearchTerms(
     }
   }
   return 0;
-}
-
-/** Όταν δεν υπάρχει REST για search terms: top ονόματα προϊόντων από γραμμές παραγγελιών (ίδιο sync). */
-async function savePopularSearchesFromMagentoOrders(db: Firestore, brandId: string): Promise<number> {
-  const snap = await db.collection('magento_orders').where('brandId', '==', brandId).limit(800).get();
-  if (snap.empty) return 0;
-  const counts = new Map<string, number>();
-  for (const d of snap.docs) {
-    const lineItems = (d.data().lineItems as Record<string, unknown>[]) || [];
-    for (const li of lineItems) {
-      const name = String(li?.name ?? '')
-        .replace(/\s+/g, ' ')
-        .trim();
-      if (name.length < 2) continue;
-      const key = name.slice(0, 250);
-      counts.set(key, (counts.get(key) || 0) + 1);
-    }
-  }
-  const terms = [...counts.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 50)
-    .map(([term, hits]) => ({ term, hits }));
-  if (terms.length === 0) return 0;
-  await db.doc(`magento_popular_searches/${brandId}`).set(
-    {
-      brandId,
-      terms,
-      syncedAt: FieldValue.serverTimestamp(),
-      source: 'magento_orders_line_items',
-      termsProvenance: 'magento_orders_line_items',
-    },
-    { merge: true }
-  );
-  logger.info(`[Magento] Popular “search” proxy from order line items: ${terms.length} for brand ${brandId}`);
-  return terms.length;
 }
 
 function getMagentoShopLabel(config: MagentoStoreConfig | null, fallbackUrl: string): string {
@@ -583,10 +567,10 @@ export async function fetchMagentoData(brandId: string): Promise<{
       logger.info(`[Magento] Orders: ${orderItems.length} imported for brand ${brandId}`);
     }
 
-    const popularN = await fetchAndSaveMagentoPopularSearchTerms(db, brandId, restApiBase, storeCode, headers);
-    if (popularN === 0) {
-      await savePopularSearchesFromMagentoOrders(db, brandId);
-    }
+    // Real Magento search queries (popularity from /V1/searchTerms — Commerce/extension only).
+    // Magento Open Source ΔΕΝ εκθέτει αυτό το endpoint by default. Για OSS, ο χρήστης
+    // ανεβάζει CSV από Marketing → Search Terms (UI). ΔΕΝ χρησιμοποιούμε ονόματα προϊόντων ως proxy.
+    await fetchAndSaveMagentoPopularSearchTerms(db, brandId, restApiBase, storeCode, headers);
 
     // ── Products ───────────────────────────────────────────────────────
     const prodItems: { id: string; data: Record<string, unknown> }[] = [];

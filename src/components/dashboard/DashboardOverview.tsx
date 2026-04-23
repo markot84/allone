@@ -184,14 +184,48 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     [ecommRevenueByDayRecord, periodDates.fromDate, periodDates.toDate]
   );
 
+  // Πραγματικός αριθμός παραγγελιών στην περίοδο — από το πλήρες ordersByDay aggregate (όχι capped recentOrders).
   const ordersInPeriod = useMemo(
     () =>
-      ecomm.recentOrders.filter(o => {
-        const d = (o.createdAt || '').slice(0, 10);
-        return d >= periodDates.fromDate && d <= periodDates.toDate;
-      }).length,
-    [ecomm.recentOrders, periodDates.fromDate, periodDates.toDate]
+      ecomm.ordersByDay
+        .filter((d) => d.date >= periodDates.fromDate && d.date <= periodDates.toDate)
+        .reduce((sum, d) => sum + d.orders, 0),
+    [ecomm.ordersByDay, periodDates.fromDate, periodDates.toDate]
   );
+
+  /** AOV από πραγματικά e-shop data (revenue/orders της περιόδου). Αξιόπιστο, χωρίς ad-platform double-counting. */
+  const eshopAovInPeriod = useMemo(
+    () => (ordersInPeriod > 0 ? storeRevenueInPeriod / ordersInPeriod : 0),
+    [storeRevenueInPeriod, ordersInPeriod]
+  );
+
+  // GA4 totals για την επιλεγμένη περίοδο (αντί για 90ήμερα totals).
+  const ga4TotalsInPeriod = useMemo(() => {
+    const days = ga4.dailyEntries.filter(
+      (d) => d.date >= periodDates.fromDate && d.date <= periodDates.toDate
+    );
+    if (days.length === 0) {
+      return { sessions: 0, users: 0, newUsers: 0, conversions: 0, bounceRate: 0, hasData: false };
+    }
+    const sum = days.reduce(
+      (acc, d) => ({
+        sessions: acc.sessions + d.sessions,
+        users: acc.users + d.totalUsers,
+        newUsers: acc.newUsers + d.newUsers,
+        conversions: acc.conversions + d.conversions,
+        bounceRate: acc.bounceRate + d.bounceRate,
+      }),
+      { sessions: 0, users: 0, newUsers: 0, conversions: 0, bounceRate: 0 }
+    );
+    return {
+      sessions: sum.sessions,
+      users: sum.users,
+      newUsers: sum.newUsers,
+      conversions: sum.conversions,
+      bounceRate: sum.bounceRate / days.length,
+      hasData: true,
+    };
+  }, [ga4.dailyEntries, periodDates.fromDate, periodDates.toDate]);
 
   const dashboardTotalRevenue = useMemo(
     () => organicRevenueInPeriod + campaignMetrics.totalRevenue,
@@ -581,9 +615,15 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         const sortedConvVal = sortMonthKeys(Object.entries(convsValueByMonth));
         const sortedConvs = sortMonthKeys(Object.entries(convsByMonth));
 
-        const aov = campaignMetrics.totalConversions > 0
-          ? campaignMetrics.totalRevenue / campaignMetrics.totalConversions
-          : 0;
+        // AOV ΠΡΟΤΕΡΑΙΟΤΗΤΑ: πραγματικά e-shop data (revenue/orders της περιόδου). Αυτό αποφεύγει
+        // το double-counting των ad platforms (Google Ads + Meta συχνά μετρούν την ίδια μετατροπή).
+        // Fallback: campaign-attributed value/conversions μόνο όταν δεν υπάρχει e-shop σύνδεση.
+        const hasEshop = enabledModules.ecommerce && ecomm.hasData && ordersInPeriod > 0;
+        const aov = hasEshop
+          ? eshopAovInPeriod
+          : campaignMetrics.totalConversions > 0
+            ? campaignMetrics.totalRevenue / campaignMetrics.totalConversions
+            : 0;
         const prevAov = sortedConvs.length >= 2 && sortedConvs[sortedConvs.length - 2][1] > 0
           ? (sortedConvVal.length >= 2 ? sortedConvVal[sortedConvVal.length - 2][1] : 0) / sortedConvs[sortedConvs.length - 2][1]
           : 0;
@@ -672,7 +712,11 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   changeLabel: isB2B ? 'ενέργειες υψηλής πρόθεσης' : aovMoM !== null ? 'vs προηγ. μήνα' : undefined,
                   trend: isB2B ? (campaignMetrics.totalConversions > 0 ? 'up' : undefined) : aov > 0 ? (aovMoM !== null && aovMoM < 0 ? 'down' : 'up') : undefined,
                   sparklineData: isB2B ? spendSpark : aovSpark,
-                  tooltip: isB2B ? 'Μετατροπές ή ενέργειες υψηλής πρόθεσης από τα demand channels, έως ότου ενεργοποιηθεί πλήρης παρακολούθηση pipeline.' : 'Average Order Value, δηλαδή μέση αξία παραγγελίας: αξία μετατροπών διά του αριθμού μετατροπών.',
+                  tooltip: isB2B
+                    ? 'Μετατροπές ή ενέργειες υψηλής πρόθεσης από τα demand channels, έως ότου ενεργοποιηθεί πλήρης παρακολούθηση pipeline.'
+                    : hasEshop
+                      ? 'Average Order Value από πραγματικές παραγγελίες e-shop στην επιλεγμένη περίοδο: e-shop revenue / αριθμός παραγγελιών.'
+                      : 'Average Order Value από διαφημιστικές καμπάνιες (conversion value / conversions). Συνδέστε e-shop για ακριβές AOV χωρίς double-counting μεταξύ Google Ads & Meta.',
                 }}
                 index={2}
                 onClick={() => onSectionChange?.(isB2B ? 'sales' : 'campaigns')}
@@ -706,7 +750,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 <div>
                   <h4 className="text-sm font-semibold text-[#1A1A1A]">E-commerce</h4>
                   <span className="text-[10px] text-[#9CA3AF]">
-                    {ecomm.connectedPlatforms.length} πλατφόρμες · 90 ημέρες
+                    {ecomm.connectedPlatforms.length} πλατφόρμες · επιλεγμένη περίοδος
                   </span>
                 </div>
               </div>
@@ -717,23 +761,23 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               <div>
                 <div className="flex items-center gap-1 mb-0.5">
                   <p className="text-[11px] text-[#6B7280]">e-shop Revenue</p>
-                  <Tooltip content="Πραγματικά έσοδα e-shop από τις συνδεδεμένες πλατφόρμες για το επιλεγμένο διάστημα." size={12} />
+                  <Tooltip content="Πραγματικά έσοδα e-shop από τις συνδεδεμένες πλατφόρμες για την επιλεγμένη περίοδο." size={12} />
                 </div>
-                <p className="text-lg font-bold text-[#1A1A1A]">{formatCurrencyCompact(ecomm.totalRevenue)}</p>
+                <p className="text-lg font-bold text-[#1A1A1A]">{formatCurrencyCompact(storeRevenueInPeriod)}</p>
               </div>
               <div>
                 <div className="flex items-center gap-1 mb-0.5">
                   <p className="text-[11px] text-[#6B7280]">Παραγγελίες</p>
-                  <Tooltip content="Συνολικός αριθμός παραγγελιών από Shopify/WooCommerce/OpenCart/Magento." size={12} />
+                  <Tooltip content="Παραγγελίες από Shopify/WooCommerce/OpenCart/Magento για την επιλεγμένη περίοδο (εξαιρούνται cancelled)." size={12} />
                 </div>
-                <p className="text-lg font-bold text-[#1A1A1A]">{formatNumber(ecomm.orderCount)}</p>
+                <p className="text-lg font-bold text-[#1A1A1A]">{formatNumber(ordersInPeriod)}</p>
               </div>
               <div>
                 <div className="flex items-center gap-1 mb-0.5">
                   <p className="text-[11px] text-[#6B7280]">AOV</p>
-                  <Tooltip content="Average Order Value: e-shop Revenue / Παραγγελίες." size={12} />
+                  <Tooltip content="Average Order Value: e-shop Revenue / Παραγγελίες της επιλεγμένης περιόδου." size={12} />
                 </div>
-                <p className="text-lg font-bold text-[#1A1A1A]">{formatCurrencyCompact(ecomm.aov)}</p>
+                <p className="text-lg font-bold text-[#1A1A1A]">{formatCurrencyCompact(eshopAovInPeriod)}</p>
               </div>
               <div>
                 <p className="text-[11px] text-[#6B7280] mb-0.5">Top Platform</p>
@@ -743,11 +787,16 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                     : '—'}
                 </p>
               </div>
-              {/* Mini sparkline */}
-              {ecomm.dailyRevenue.length > 7 && (
+              {/* Mini sparkline — φιλτραρισμένο για την επιλεγμένη περίοδο */}
+              {(() => {
+                const periodDaily = ecomm.dailyRevenue.filter(
+                  (d) => d.date >= periodDates.fromDate && d.date <= periodDates.toDate
+                );
+                if (periodDaily.length <= 1) return null;
+                return (
                 <div className="hidden md:block">
                   <ResponsiveContainer width="100%" height={40}>
-                    <AreaChart data={ecomm.dailyRevenue.slice(-30)}>
+                    <AreaChart data={periodDaily}>
                       <defs>
                         <linearGradient id="ecommDashSparkGrad" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="5%" stopColor="var(--nts-accent)" stopOpacity={0.2} />
@@ -758,7 +807,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
-              )}
+                );
+              })()}
             </div>
           </div>
         </Card>
@@ -774,13 +824,19 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 <h4 className="text-sm font-semibold text-[#1A1A1A]">Web Analytics</h4>
                 <span className="text-[10px] text-[#9CA3AF] bg-[#F3F4F6] px-1.5 py-0.5 rounded">{ga4.propertyName}</span>
               </div>
-              <span className="text-[10px] text-[#9CA3AF]">90 ημέρες</span>
+              <span className="text-[10px] text-[#9CA3AF]">
+                {ga4TotalsInPeriod.hasData ? 'επιλεγμένη περίοδος' : 'χωρίς ημερήσια δεδομένα — εμφάνιση 90ημέρων'}
+              </span>
             </div>
+            {(() => {
+              const t = ga4TotalsInPeriod.hasData ? ga4TotalsInPeriod : { ...ga4.totals, hasData: false };
+              const fmt = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}K` : n.toLocaleString());
+              return (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
                 <p className="text-[11px] text-[#6B7280] mb-0.5">Sessions</p>
-                <p className="text-lg font-bold text-[#1A1A1A]">{ga4.totals.sessions >= 1000 ? `${(ga4.totals.sessions / 1000).toFixed(1)}K` : ga4.totals.sessions.toLocaleString()}</p>
-                {ga4.weeklyChange?.sessions != null && (
+                <p className="text-lg font-bold text-[#1A1A1A]">{fmt(t.sessions)}</p>
+                {!t.hasData && ga4.weeklyChange?.sessions != null && (
                   <p className={`text-[10px] font-medium ${ga4.weeklyChange.sessions >= 0 ? 'text-green-600' : 'text-red-500'}`}>
                     {ga4.weeklyChange.sessions >= 0 ? '+' : ''}{ga4.weeklyChange.sessions.toFixed(1)}% vs προηγ. 7ημ.
                   </p>
@@ -788,8 +844,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               </div>
               <div>
                 <p className="text-[11px] text-[#6B7280] mb-0.5">Users</p>
-                <p className="text-lg font-bold text-[#1A1A1A]">{ga4.totals.users >= 1000 ? `${(ga4.totals.users / 1000).toFixed(1)}K` : ga4.totals.users.toLocaleString()}</p>
-                {ga4.weeklyChange?.users != null && (
+                <p className="text-lg font-bold text-[#1A1A1A]">{fmt(t.users)}</p>
+                {!t.hasData && ga4.weeklyChange?.users != null && (
                   <p className={`text-[10px] font-medium ${ga4.weeklyChange.users >= 0 ? 'text-green-600' : 'text-red-500'}`}>
                     {ga4.weeklyChange.users >= 0 ? '+' : ''}{ga4.weeklyChange.users.toFixed(1)}% vs προηγ. 7ημ.
                   </p>
@@ -797,19 +853,21 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               </div>
               <div>
                 <p className="text-[11px] text-[#6B7280] mb-0.5">Bounce Rate</p>
-                <p className="text-lg font-bold text-[#1A1A1A]">{(ga4.totals.bounceRate * 100).toFixed(1)}%</p>
-                <p className="text-[10px] text-[#9CA3AF]">μέσος όρος 90ημ.</p>
+                <p className="text-lg font-bold text-[#1A1A1A]">{(t.bounceRate * 100).toFixed(1)}%</p>
+                <p className="text-[10px] text-[#9CA3AF]">μέσος όρος περιόδου</p>
               </div>
               <div>
                 <p className="text-[11px] text-[#6B7280] mb-0.5">Conversions</p>
-                <p className="text-lg font-bold text-[#1A1A1A]">{ga4.totals.conversions.toLocaleString()}</p>
-                {ga4.weeklyChange?.conversions != null && (
+                <p className="text-lg font-bold text-[#1A1A1A]">{t.conversions.toLocaleString()}</p>
+                {!t.hasData && ga4.weeklyChange?.conversions != null && (
                   <p className={`text-[10px] font-medium ${ga4.weeklyChange.conversions >= 0 ? 'text-green-600' : 'text-red-500'}`}>
                     {ga4.weeklyChange.conversions >= 0 ? '+' : ''}{ga4.weeklyChange.conversions.toFixed(1)}% vs προηγ. 7ημ.
                   </p>
                 )}
               </div>
             </div>
+              );
+            })()}
           </div>
         </Card>
       )}

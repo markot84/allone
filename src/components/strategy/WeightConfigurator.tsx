@@ -297,7 +297,7 @@ export function WeightConfigurator() {
 
   // Source provenance — δίνεται στα Gemini prompts ώστε να calibrate το AI
   // confidence (π.χ. αν λείπει connector, δεν υπόσχεται real-time ROAS).
-  const { coverage: signalCoverage } = useProductSignals(products);
+  const { coverage: signalCoverage, signalsBySku } = useProductSignals(products);
 
   const benchmarkLookupMap = useMemo(() => buildBenchmarkLookup(benchmarks), [benchmarks]);
   const normalizedSkuStats = useMemo(() => {
@@ -1396,6 +1396,7 @@ export function WeightConfigurator() {
 
           <ProcurementStrategyBridge
             products={products}
+            signalsBySku={signalsBySku}
             enabled={usingProcurement}
             onDeadToStockClearance={({ productIds, skus, tiedCapital, count }) => {
               setTriageOrigin({

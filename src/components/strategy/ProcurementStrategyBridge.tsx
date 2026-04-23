@@ -6,6 +6,7 @@ import { useMemo } from 'react';
 import { AlertCircle, AlertTriangle, ArrowRight, ExternalLink, Package } from 'lucide-react';
 import { scenarios } from '../../data';
 import type { Product } from '../../types';
+import { normalizeSkuKeyForSignals, type ProductSignal } from '../../hooks/useProductSignals';
 
 const stockClearanceScenario = scenarios.find((s) => s.id === 'stock_clearance');
 const stockClearanceTitle = stockClearanceScenario?.name ?? 'Stock Clearance';
@@ -14,6 +15,11 @@ export interface ProcurementStrategyBridgeProps {
   products: Product[];
   /** Enterprise feed από procurement inventory */
   enabled: boolean;
+  /**
+   * Resolved signals από useProductSignals (procurement, connector, movement, import).
+   * Χρησιμοποιείται για ακριβή tied_capital υπολογισμό όταν το product doc δεν έχει cost_price.
+   */
+  signalsBySku?: Map<string, ProductSignal>;
   onDeadToStockClearance: (args: {
     productIds: string[];
     skus: string[];
@@ -30,13 +36,33 @@ export interface ProcurementStrategyBridgeProps {
   onOpenProductIntelligence?: () => void;
 }
 
-function tiedFromProducts(list: Product[]): number {
-  return list.reduce((s, p) => s + (p.cost_price ?? 0) * (p.stock_level ?? 0), 0);
+/**
+ * Tied capital ανά προϊόν με ιεραρχία:
+ *  1. signal.resolved.tied_capital (ground truth από procurement, ή computed cost×stock στο signals layer)
+ *  2. product.cost_price * product.stock_level (raw fallback)
+ *
+ * Χωρίς signals layer χάνουμε όλο το procurement-based tied capital — γι' αυτό
+ * περνάμε από useProductSignals.
+ */
+function tiedFromProducts(
+  list: Product[],
+  signalsBySku?: Map<string, ProductSignal>
+): number {
+  return list.reduce((sum, p) => {
+    if (signalsBySku) {
+      const key = normalizeSkuKeyForSignals(p.sku || p.id);
+      const sig = key ? signalsBySku.get(key) : undefined;
+      const tied = sig?.resolved?.tied_capital;
+      if (typeof tied === 'number' && tied > 0) return sum + tied;
+    }
+    return sum + (p.cost_price ?? 0) * (p.stock_level ?? 0);
+  }, 0);
 }
 
 export function ProcurementStrategyBridge({
   products,
   enabled,
+  signalsBySku,
   onDeadToStockClearance,
   onExcessToStockClearance,
   onOpenProductIntelligence,
@@ -50,14 +76,14 @@ export function ProcurementStrategyBridge({
   const deadMeta = useMemo(() => {
     const skus = dead.map((p) => (p.sku || '').trim()).filter(Boolean);
     const productIds = dead.map((p) => p.id).filter(Boolean);
-    return { count: dead.length, skus, productIds, tied: tiedFromProducts(dead) };
-  }, [dead]);
+    return { count: dead.length, skus, productIds, tied: tiedFromProducts(dead, signalsBySku) };
+  }, [dead, signalsBySku]);
 
   const excessMeta = useMemo(() => {
     const skus = excess.map((p) => (p.sku || '').trim()).filter(Boolean);
     const productIds = excess.map((p) => p.id).filter(Boolean);
-    return { count: excess.length, skus, productIds, tied: tiedFromProducts(excess) };
-  }, [excess]);
+    return { count: excess.length, skus, productIds, tied: tiedFromProducts(excess, signalsBySku) };
+  }, [excess, signalsBySku]);
 
   if (!enabled || products.length === 0) return null;
   if (deadMeta.count === 0 && excessMeta.count === 0) return null;
