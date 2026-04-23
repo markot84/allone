@@ -53,6 +53,7 @@ import { scenarios } from '../../data';
 import { generateChannelRecommendations } from '../../services/aiChannelRecommendations';
 import { useProductSignals } from '../../hooks/useProductSignals';
 import { buildTriagePromptContext, buildProvenancePromptContext } from '../../utils/aiPromptContext';
+import { rankSegments } from '../../utils/segmentRelevance';
 import type { TriageOrigin } from '../../hooks/useActiveStrategy';
 import { FirestoreService } from '../../services/firestore';
 import { useQueryClient } from '@tanstack/react-query';
@@ -203,11 +204,24 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
       const savedTriage = (activeStrategy as { triageOrigin?: TriageOrigin } | null)?.triageOrigin ?? null;
       const triagePromptCtx = buildTriagePromptContext(savedTriage);
       const provenancePromptCtx = buildProvenancePromptContext(signalCoverage, products.length);
+      // Critical: pass ALL ranked segments (ideal+good) ώστε το AI να μη διαλέγει
+      // αυθαίρετα ένα μόνο segment. Χρησιμοποιούμε τα weights της ενεργής στρατηγικής.
+      const strategyWeights =
+        (activeStrategy as { weights?: Record<string, number> } | null)?.weights ?? scenario.weights;
+      const ranked = rankSegments(rfmSegments, strategyWeights);
+      const fittingSegments = ranked.filter((rs) => rs.fit === 'ideal' || rs.fit === 'good');
       const rec = await generateChannelRecommendations({
         scenario,
         segment,
         fitLevel: 'good',
         brandContext: { brandName: currentBrand.name, brandType: currentBrand.type, topCategories: topCats },
+        segmentFitList: fittingSegments.map((rs) => ({
+          name: rs.segment.name,
+          fit: rs.fit,
+          description: rs.segment.description,
+          count: rs.segment.count,
+          revenueShare: rs.segment.revenue_share,
+        })),
         context: 'activation',
         triage: triagePromptCtx,
         provenance: provenancePromptCtx,
@@ -253,7 +267,10 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     const hasPerSegmentSignal = playbook.some(
       (e) => e.priority === 'primary' || e.priority === 'secondary' || (typeof e.budgetSharePct === 'number' && e.budgetSharePct > 0)
     );
-    if (hasPerSegmentSignal) return;
+    // Πρόσθετο upgrade trigger: legacy payloads ή AI που έδωσε <2 segments
+    // (είναι σχεδόν πάντα λάθος — ακόμη και για narrow πολιτικές υπάρχουν 2-4 fitting segments).
+    const tooFewSegments = (aiRecommendation.targetSegments?.length ?? 0) < 2;
+    if (hasPerSegmentSignal && !tooFewSegments) return;
     silentUpgradeTriggered.current = true;
     generateRecommendation(true);
   }, [hasRealStrategyId, aiRecommendation, aiGenerating, rfmSegments, generateRecommendation]);
@@ -709,6 +726,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                   key={seg.name}
                   type="button"
                   onClick={() => setSelectedSegmentName(seg.name)}
+                  title={seg.rationale || undefined}
                   className="text-left rounded-xl border p-3 transition-all"
                   style={{
                     borderColor: isActive ? seg.color : '#E5E5E5',
@@ -748,7 +766,12 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                     )}
                   </div>
                   {seg.rationale && (
-                    <p className="text-[11px] text-[#4A4A4A] leading-snug line-clamp-2">{seg.rationale}</p>
+                    <p
+                      className="text-[11px] text-[#4A4A4A] leading-snug line-clamp-2"
+                      title={seg.rationale}
+                    >
+                      {seg.rationale}
+                    </p>
                   )}
                 </button>
               );

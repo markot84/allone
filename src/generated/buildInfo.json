@@ -1,10 +1,14 @@
 {
-  "version": "0.615.0",
-  "previousVersion": "0.614.0",
-  "commitHash": "264d446",
+  "version": "0.616.0",
+  "previousVersion": "0.615.0",
+  "commitHash": "7d1ecd3",
   "branch": "main",
-  "buildDate": "2026-04-23T08:56:33.388Z",
+  "buildDate": "2026-04-23T09:04:51.286Z",
   "commits": [
+    {
+      "hash": "7d1ecd3",
+      "message": "fix(channels): silent auto-upgrade legacy AI payloads (no UI button)"
+    },
     {
       "hash": "264d446",
       "message": "feat(channels): expose Regenerate AI button in PageHeader"
@@ -60,13 +64,10 @@
     {
       "hash": "6c8cbae",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "cd465f1",
-      "message": "fix(procurement): resolve ERP column names and merge pricing for margin"
     }
   ],
   "changes": [
+    "[Διόρθωση] Silent auto-upgrade legacy AI payloads (no UI button)",
     "[Νέο χαρακτηριστικό] Expose Regenerate AI button in PageHeader",
     "[Συντήρηση] Remove temp commit message file",
     "[Νέο χαρακτηριστικό] Per-segment channel mix στο Channel Activation",
@@ -75,7 +76,6 @@
     "[Συντήρηση] BuildInfo v0.608.0 after build",
     "[Συντήρηση] Remove unused helper; buildInfo v0.607.0",
     "[Διόρθωση] Pie aligns with period + center total; feat(strategy): commercial priorities bridge-style cards",
-    "[Συντήρηση] BuildInfo after production deploy (v0.606.0)",
-    "[Συντήρηση] Regenerate buildInfo after merge"
+    "[Συντήρηση] BuildInfo after production deploy (v0.606.0)"
   ]
 }

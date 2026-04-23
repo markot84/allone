@@ -38,7 +38,10 @@ export const CHANNEL_RECOMMENDATIONS_SYSTEM_PROMPT = `Είσαι ανώτατο 
 }
 
 ΕΠΙΠΛΕΟΝ ΥΠΟΧΡΕΩΤΙΚΑ ΠΕΔΙΑ:
-- "targetSegments": ΥΠΟΧΡΕΩΤΙΚΟ. Λίστα με τα segments που ΤΑΙΡΙΑΖΟΥΝ στη συγκεκριμένη εμπορική πολιτική (ideal ή good fit). Μην βάλεις partial. Αν ο χρήστης έχει δηλώσει segmentFitList, βάλε ΑΚΡΙΒΩΣ τα ideal+good από εκεί. Κάθε entry έχει σύντομη αιτιολόγηση (1-2 προτάσεις) γιατί η πολιτική αξιοποιεί αυτό το segment.
+- "targetSegments": ΥΠΟΧΡΕΩΤΙΚΟ.
+  • Αν ο χρήστης έχει δηλώσει segmentFitList, βάλε ΑΚΡΙΒΩΣ ΟΛΑ τα ideal+good από εκεί. ΑΠΑΓΟΡΕΥΕΤΑΙ να αφαιρέσεις segments που είναι στη λίστα ή να προσθέσεις άλλα.
+  • Αν δεν έχει δηλωθεί segmentFitList, διάλεξε από μόνος σου ΤΟΥΛΑΧΙΣΤΟΝ 2-4 segments. ΠΟΤΕ μόνο 1. Ακόμη και narrow πολιτικές (π.χ. Stock Clearance) ταιριάζουν σε πολλαπλά segments (π.χ. At Risk για επανενεργοποίηση + Promising για discovery + Champions για bulk-buy ευκαιρίες).
+  • Κάθε entry έχει σύντομη αιτιολόγηση (1-2 προτάσεις) γιατί η πολιτική αξιοποιεί αυτό το segment. Μην βάλεις partial.
 
 - "channelPlaybook": ΥΠΟΧΡΕΩΤΙΚΟ και ΔΙΑΦΟΡΟΠΟΙΗΜΕΝΟ ΑΝΑ SEGMENT. Για ΚΑΘΕ targetSegment διάλεξε ΜΟΝΟ τα 3-5 πιο κατάλληλα κανάλια από το primary∪secondary set, ΟΧΙ όλα. Διαφορετικά segments πρέπει να έχουν ΔΙΑΦΟΡΕΤΙΚΟ μίγμα καναλιών — δεν μπορεί όλα τα segments να έχουν τα ίδια κανάλια. Παραδείγματα διαφοροποίησης:
   • «Champions / Loyal»: Email + SMS + Loyalty + Dynamic Remarketing (όχι top-funnel awareness)
