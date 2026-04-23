@@ -825,7 +825,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 <span className="text-[10px] text-[#9CA3AF] bg-[#F3F4F6] px-1.5 py-0.5 rounded">{ga4.propertyName}</span>
               </div>
               <span className="text-[10px] text-[#9CA3AF]">
-                {ga4TotalsInPeriod.hasData ? 'επιλεγμένη περίοδος' : 'χωρίς ημερήσια δεδομένα — εμφάνιση 90ημέρων'}
+                {ga4TotalsInPeriod.hasData ? 'επιλεγμένη περίοδος' : 'χωρίς ημερήσια δεδομένα — εμφάνιση συνολικού ιστορικού'}
               </span>
             </div>
             {(() => {

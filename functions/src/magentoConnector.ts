@@ -5,7 +5,7 @@
  * 1. User enters e-shop URL + Access Token (from Admin → System → Integrations)
  * 2. We validate via GET /rest/V1/store/storeConfigs
  * 3. Credentials stored in Firestore (connectors/{brandId}.magento)
- * 4. Sync fetches orders (90 days) + products → Firestore (no PII stored)
+ * 4. Sync fetches orders (3 years) + products → Firestore (no PII stored)
  *
  * Compatible with Magento 2.x / Adobe Commerce REST API.
  */
@@ -443,7 +443,7 @@ export async function testMagentoConnection(
 }
 
 /**
- * Fetch Magento orders (last 90 days) + products and store in Firestore.
+ * Fetch Magento orders (last 3 years) + products and store in Firestore.
  * No PII is stored (no customer name/email/address).
  */
 export async function fetchMagentoData(brandId: string): Promise<{
@@ -478,9 +478,9 @@ export async function fetchMagentoData(brandId: string): Promise<{
   let totalImported = 0;
 
   try {
-    // ── Orders (last 90 days, no PII) ──────────────────────────────────
+    // ── Orders (last 3 years, no PII) ──────────────────────────────────
     const since = new Date();
-    since.setDate(since.getDate() - 90);
+    since.setUTCFullYear(since.getUTCFullYear() - 3);
     const sinceStr = since.toISOString().split('T')[0]; // YYYY-MM-DD
 
     const orderItems: { id: string; data: Record<string, unknown> }[] = [];

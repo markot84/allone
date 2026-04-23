@@ -49,7 +49,7 @@ const GOOGLE_ADS_API_VERSION = 'v22';
 const GOOGLE_ADS_BASE_URL = `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}`;
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
-const GOOGLE_ADS_HISTORY_YEARS = 2;
+const GOOGLE_ADS_HISTORY_YEARS = 3;
 
 const SCOPES = ['https://www.googleapis.com/auth/adwords'];
 
@@ -492,7 +492,12 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
   const now = new Date();
   const currentYear = now.getUTCFullYear();
   const historyStartYear = currentYear - GOOGLE_ADS_HISTORY_YEARS;
-  const historyLoaded = Boolean(connector.historyLoadedUntilYear);
+  // Auto-rebackfill: το `historyLoadedUntilYear` αποθηκεύει τον ΠΑΛΑΙΟΤΕΡΟ χρόνο
+  // που έχει φορτωθεί. Αν αυξήσουμε το παράθυρο (π.χ. 2 → 3 έτη), ξανατραβάμε
+  // αυτόματα το ιστορικό για να καλύψουμε και τα νέα παλαιότερα έτη.
+  const historyLoaded =
+    Boolean(connector.historyLoadedUntilYear) &&
+    Number(connector.historyLoadedUntilYear) <= historyStartYear;
   const sinceStr = historyLoaded
     ? `${currentYear}-01-01`
     : `${historyStartYear}-01-01`;
@@ -1159,7 +1164,10 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
     {
       google_ads: {
         lastDataSyncAt: Date.now(),
-        historyLoadedUntilYear: connector.historyLoadedUntilYear || currentYear - 1,
+        // Αποθηκεύουμε τον ΠΑΛΑΙΟΤΕΡΟ χρόνο που πραγματικά φορτώθηκε σε αυτό το sync.
+        historyLoadedUntilYear: historyLoaded
+          ? Number(connector.historyLoadedUntilYear) || historyStartYear
+          : historyStartYear,
       },
     },
     { merge: true }

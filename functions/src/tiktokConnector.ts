@@ -12,7 +12,7 @@ const TIKTOK_TOKEN_URL = `${TIKTOK_API_BASE}/open_api/${TIKTOK_API_VERSION}/oaut
 const TIKTOK_REFRESH_URL = `${TIKTOK_API_BASE}/open_api/${TIKTOK_API_VERSION}/oauth2/refresh_token/`;
 const TIKTOK_ADVERTISER_URL = `${TIKTOK_API_BASE}/open_api/${TIKTOK_API_VERSION}/oauth2/advertiser/get/`;
 const TIKTOK_REPORT_URL = `${TIKTOK_API_BASE}/open_api/${TIKTOK_API_VERSION}/report/integrated/get/`;
-const TIKTOK_HISTORY_YEARS = 2;
+const TIKTOK_HISTORY_YEARS = 3;
 
 const BASE_REPORT_METRICS = ['spend', 'impressions', 'clicks', 'ctr', 'conversion'];
 const VALUE_REPORT_METRICS = ['conversion_value', 'total_purchase_value', 'purchase_value'];
@@ -422,8 +422,12 @@ export async function fetchTikTokCampaigns(brandId: string): Promise<{
 
   const now = new Date();
   const currentYear = now.getUTCFullYear();
-  const historyLoaded = Boolean(connector.historyLoadedUntilYear);
-  const sinceStr = historyLoaded ? `${currentYear}-01-01` : `${currentYear - TIKTOK_HISTORY_YEARS}-01-01`;
+  const historyStartYear = currentYear - TIKTOK_HISTORY_YEARS;
+  // Auto-rebackfill όταν αυξήσουμε το παράθυρο: το flag κρατάει τον παλαιότερο χρόνο που έχει φορτωθεί.
+  const historyLoaded =
+    Boolean(connector.historyLoadedUntilYear) &&
+    Number(connector.historyLoadedUntilYear) <= historyStartYear;
+  const sinceStr = historyLoaded ? `${currentYear}-01-01` : `${historyStartYear}-01-01`;
   const untilStr = toYmd(now);
 
   let totalImported = 0;
@@ -566,7 +570,9 @@ export async function fetchTikTokCampaigns(brandId: string): Promise<{
           expiresAt: Date.now() + refreshed.expiresIn * 1000,
           refreshExpiresAt: Date.now() + refreshed.refreshExpiresIn * 1000,
           lastDataSyncAt: Date.now(),
-          historyLoadedUntilYear: connector.historyLoadedUntilYear || currentYear - 1,
+          historyLoadedUntilYear: historyLoaded
+            ? Number(connector.historyLoadedUntilYear) || historyStartYear
+            : historyStartYear,
           lastImportError: FieldValue.delete(),
           lastImportErrorAt: FieldValue.delete(),
         },

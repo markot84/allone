@@ -408,10 +408,11 @@ export async function fetchGA4Data(
     const accessToken = await refreshAccessToken(refreshTokenPlain);
     const propertyId = conn.propertyId;
 
-    // Fetch last 90 days of data
+    // Fetch last 3 years of data (GA4 free tier default retention is 14 months — older data
+    // returns empty, no error). Daily aggregates fit comfortably in Firestore docs (~150 bytes × 1095 = 165KB).
     const endDate = new Date();
     const startDate = new Date();
-    startDate.setDate(startDate.getDate() - 90);
+    startDate.setUTCFullYear(startDate.getUTCFullYear() - 3);
 
     const formatDate = (d: Date) =>
       `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -908,7 +909,7 @@ export async function fetchGA4Data(
             },
           },
         },
-        limit: '5000',
+        limit: '50000',
       };
 
       let fallbackRes = await fetch(`${GA4_DATA_API}/properties/${propertyId}:runReport`, {

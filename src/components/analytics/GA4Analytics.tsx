@@ -667,7 +667,7 @@ export function GA4Analytics() {
               channelMixSource === 'daily'
                 ? `Sessions ανά Default Channel Group για ${formatDateTooltipEl(effectiveFrom)} — ${formatDateTooltipEl(effectiveTo)}. Φιλτράρεται δυναμικά από τα ημερήσια data του τελευταίου GA4 sync.`
                 : channelMixSource === 'full_sync'
-                  ? `⚠️ Δεν υπάρχουν ημερήσια ανά κανάλι στο τελευταίο sync — δείχνουμε σύνολο τελευταίων 90 ημερών. Κάντε νέο GA4 Sync από τις Συνδέσεις για δυναμικό φιλτράρισμα.`
+                  ? `⚠️ Δεν υπάρχουν ημερήσια ανά κανάλι στο τελευταίο sync — δείχνουμε το συνολικό διαθέσιμο ιστορικό. Κάντε νέο GA4 Sync από τις Συνδέσεις για δυναμικό φιλτράρισμα.`
                   : `Δεν υπάρχουν δεδομένα GA4 ακόμη. Κάντε σύνδεση/sync από τις Συνδέσεις.`
             }
           />
@@ -732,7 +732,7 @@ export function GA4Analytics() {
           title="Ανάλυση καναλιών"
           subtitle={
             channelMixSource === 'full_sync'
-              ? `⚠️ Σύνολο τελευταίων 90 ημερών (το sync δεν είχε ημερήσια ανά κανάλι). Sessions/Conversions ίδια με GA4 Acquisition Reports για το ίδιο εύρος. Users/New users: άθροιση ημερών (το GA4 UI κάνει deduplication χρηστών — αναμένονται μικρές διαφορές).`
+              ? `⚠️ Σύνολο διαθέσιμου ιστορικού (το sync δεν είχε ημερήσια ανά κανάλι). Sessions/Conversions ίδια με GA4 Acquisition Reports για το ίδιο εύρος. Users/New users: άθροιση ημερών (το GA4 UI κάνει deduplication χρηστών — αναμένονται μικρές διαφορές).`
               : `Ίδιο εύρος με το ημερολόγιο (${formatDateTooltipEl(effectiveFrom)} — ${formatDateTooltipEl(effectiveTo)}). Sessions/Conversions ίδια με GA4 Acquisition Reports. Users/New users: άθροιση ημερών (το GA4 UI κάνει deduplication χρηστών — αναμένονται μικρές διαφορές).`
           }
         />

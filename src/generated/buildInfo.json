@@ -1,10 +1,14 @@
 {
-  "version": "0.629.0",
-  "previousVersion": "0.628.0",
-  "commitHash": "38d5d3c",
+  "version": "0.630.0",
+  "previousVersion": "0.629.0",
+  "commitHash": "d8fd36c",
   "branch": "main",
-  "buildDate": "2026-04-23T10:35:47.747Z",
+  "buildDate": "2026-04-23T12:28:03.306Z",
   "commits": [
+    {
+      "hash": "d8fd36c",
+      "message": "fix(magento): hide legacy product-name fallback in popular searches widget"
+    },
     {
       "hash": "38d5d3c",
       "message": "fix(dashboard): period-aware E-commerce/Web Analytics + correct AOV calculation"
@@ -60,13 +64,10 @@
     {
       "hash": "807aa5d",
       "message": "chore: remove unused helper; buildInfo v0.607.0"
-    },
-    {
-      "hash": "4eea94e",
-      "message": "fix(ga4): pie aligns with period + center total; feat(strategy): commercial priorities bridge-style cards"
     }
   ],
   "changes": [
+    "[Διόρθωση] Hide legacy product-name fallback in popular searches widget",
     "[Διόρθωση] Period-aware E-commerce/Web Analytics + correct AOV calculation",
     "[Διόρθωση] Forbid internal jargon (dead stock, ROAS, segment names) in customer messages",
     "[Διόρθωση] Forbid segment names in customer-facing campaign messages",
@@ -75,7 +76,6 @@
     "[Διόρθωση] Pass segmentFitList in silent regen + tooltip on segment cards",
     "[Διόρθωση] Silent auto-upgrade legacy AI payloads (no UI button)",
     "[Νέο χαρακτηριστικό] Expose Regenerate AI button in PageHeader",
-    "[Συντήρηση] Remove temp commit message file",
-    "[Νέο χαρακτηριστικό] Per-segment channel mix στο Channel Activation"
+    "[Συντήρηση] Remove temp commit message file"
   ]
 }

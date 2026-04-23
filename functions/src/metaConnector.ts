@@ -19,6 +19,8 @@ import { decryptToken } from './tokenCrypto';
 
 let _db: Firestore | null = null;
 
+const META_HISTORY_YEARS = 3;
+
 /**
  * Generate array of { since, until } for each calendar month in the range.
  * Uses string manipulation to avoid timezone issues.
@@ -452,9 +454,14 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
   const currentYear = now.getUTCFullYear();
   const currentYearStart = `${currentYear}-01-01`;
   const today = toYmd(now);
-  const historyStart = `${currentYear - 2}-01-01`;
+  const historyStartYear = currentYear - META_HISTORY_YEARS;
+  const historyStart = `${historyStartYear}-01-01`;
   const historyEnd = `${currentYear - 1}-12-31`;
-  const historyLoaded = Boolean(connector.historyLoadedUntilYear);
+  // Auto-rebackfill: το flag κρατάει τον παλαιότερο χρόνο που έχει φορτωθεί.
+  // Αν αυξήσουμε το META_HISTORY_YEARS, ξανατραβάμε το ιστορικό για να καλύψουμε τα νέα παλαιότερα έτη.
+  const historyLoaded =
+    Boolean(connector.historyLoadedUntilYear) &&
+    Number(connector.historyLoadedUntilYear) <= historyStartYear;
 
   const syncWindows: Array<{ since: string; until: string; tag: 'history' | 'current' }> = [];
   if (!historyLoaded) {
@@ -1019,7 +1026,9 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
       {
         meta: {
           lastDataSyncAt: Date.now(),
-          historyLoadedUntilYear: connector.historyLoadedUntilYear || currentYear - 1,
+          historyLoadedUntilYear: historyLoaded
+            ? Number(connector.historyLoadedUntilYear) || historyStartYear
+            : historyStartYear,
           lastImportError: FieldValue.delete(),
         },
       },

@@ -5,7 +5,7 @@
  * 1. User enters shop domain → redirected to Shopify OAuth
  * 2. Shopify redirects back with auth code → exchanged for permanent access token
  * 3. Token stored in Firestore (connectors/{brandId}.shopify)
- * 4. Sync fetches orders (90 days) + products → Firestore (no PII stored)
+ * 4. Sync fetches orders (3 years) + products → Firestore (no PII stored)
  *
  * Required secrets:
  * - SHOPIFY_API_KEY
@@ -149,7 +149,7 @@ export async function handleShopifyCallback(
 }
 
 /**
- * Fetch Shopify orders (last 90 days) + products and store in Firestore.
+ * Fetch Shopify orders (last 3 years) + products and store in Firestore.
  * Only aggregated/anonymized order data is stored (no PII: no customer name/email/address).
  */
 export async function fetchShopifyData(brandId: string): Promise<{
@@ -177,9 +177,9 @@ export async function fetchShopifyData(brandId: string): Promise<{
   let totalImported = 0;
 
   try {
-    // ── Orders (last 90 days, no PII) ──────────────────────────────────
+    // ── Orders (last 3 years, no PII) ──────────────────────────────────
     const since = new Date();
-    since.setDate(since.getDate() - 90);
+    since.setUTCFullYear(since.getUTCFullYear() - 3);
 
     let orderPage = 1;
     let hasMore = true;

@@ -5,7 +5,7 @@
  * 1. User enters e-shop URL + Consumer Key + Consumer Secret
  * 2. We validate with a test API call (GET /wp-json/wc/v3/system_status)
  * 3. Credentials stored in Firestore (connectors/{brandId}.woocommerce)
- * 4. Sync fetches orders (90 days) + products → Firestore (no PII stored)
+ * 4. Sync fetches orders (3 years) + products → Firestore (no PII stored)
  *
  * No OAuth redirect needed — WooCommerce uses REST API keys.
  */
@@ -110,7 +110,7 @@ export async function testWooConnection(
 }
 
 /**
- * Fetch WooCommerce orders (last 90 days) + products and store in Firestore.
+ * Fetch WooCommerce orders (last 3 years) + products and store in Firestore.
  * Only aggregated/anonymized order data is stored (no PII).
  */
 export async function fetchWooCommerceData(brandId: string): Promise<{
@@ -139,9 +139,9 @@ export async function fetchWooCommerceData(brandId: string): Promise<{
   let totalImported = 0;
 
   try {
-    // ── Orders (last 90 days, no PII) ──────────────────────────────────
+    // ── Orders (last 3 years, no PII) ──────────────────────────────────
     const since = new Date();
-    since.setDate(since.getDate() - 90);
+    since.setUTCFullYear(since.getUTCFullYear() - 3);
 
     let orderPage = 1;
     let hasMore = true;

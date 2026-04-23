@@ -5,7 +5,7 @@
  * 1. User enters e-shop URL + API username + API key
  * 2. We login via POST /index.php?route=api/login to get a session token
  * 3. Credentials stored in Firestore (connectors/{brandId}.opencart)
- * 4. Sync fetches orders (90 days) + products → Firestore (no PII stored)
+ * 4. Sync fetches orders (3 years) + products → Firestore (no PII stored)
  *
  * Compatible with OpenCart 3.x+ REST API.
  * For e-shops using third-party REST extensions, the token header approach is also supported.
@@ -145,7 +145,7 @@ async function refreshApiToken(storeUrl: string, apiUsername: string, apiKey: st
 }
 
 /**
- * Fetch OpenCart orders (last 90 days) + products and store in Firestore.
+ * Fetch OpenCart orders (last 3 years) + products and store in Firestore.
  * No PII is stored.
  */
 export async function fetchOpenCartData(brandId: string): Promise<{
@@ -187,7 +187,7 @@ export async function fetchOpenCartData(brandId: string): Promise<{
   let totalImported = 0;
 
   try {
-    // ── Orders (last 90 days) ──────────────────────────────────────
+    // ── Orders (last 3 years) ──────────────────────────────────────
     const orderItems: { id: string; data: Record<string, unknown> }[] = [];
     let orderPage = 1;
     let hasMore = true;
@@ -207,7 +207,7 @@ export async function fetchOpenCartData(brandId: string): Promise<{
       if (orders.length === 0) { hasMore = false; break; }
 
       const since = new Date();
-      since.setDate(since.getDate() - 90);
+      since.setUTCFullYear(since.getUTCFullYear() - 3);
 
       for (const o of orders) {
         const dateAdded = o.date_added || o.dateAdded || '';

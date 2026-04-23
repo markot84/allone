@@ -277,44 +277,56 @@ export async function handleSearchConsoleCallback(
 async function fetchSearchConsoleRows(accessToken: string, siteUrl: string, startDate: string, endDate: string): Promise<SearchQueryRow[]> {
   const rows: SearchQueryRow[] = [];
   const sitePath = encodeURIComponent(siteUrl);
+  // Pagination: η GSC API επιστρέφει μέγιστο 25.000 rows ανά request. Για 3ετές ιστορικό
+  // με χιλιάδες queries χρειάζεται multi-page fetch με startRow offset.
+  const pageSize = 25000;
+  const maxPages = 20; // ασφαλιστικό όριο: 500k rows
 
-  const res = await fetch(`${SEARCH_CONSOLE_API}/sites/${sitePath}/searchAnalytics/query`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify({
-      startDate,
-      endDate,
-      dimensions: ['date', 'query'],
-      type: 'web',
-      rowLimit: 5000,
-      startRow: 0,
-    }),
-  });
-
-  const raw = await res.text();
-  if (!res.ok) {
-    logger.error(`[SearchConsole] Query failed (${res.status})`, raw.slice(0, 300));
-    throw new Error(explainSearchConsoleError(res.status, raw));
-  }
-
-  const data = raw ? (JSON.parse(raw) as { rows?: Array<{ keys?: string[]; clicks?: number; impressions?: number; ctr?: number; position?: number }> }) : {};
-  for (const row of data.rows || []) {
-    const date = String(row.keys?.[0] || '').trim();
-    const query = String(row.keys?.[1] || '').trim();
-    if (!date || !query) continue;
-    rows.push({
-      date,
-      query,
-      clicks: Number(row.clicks || 0),
-      impressions: Number(row.impressions || 0),
-      ctr: Number(row.ctr || 0),
-      position: Number(row.position || 0),
+  for (let page = 0; page < maxPages; page++) {
+    const startRow = page * pageSize;
+    const res = await fetch(`${SEARCH_CONSOLE_API}/sites/${sitePath}/searchAnalytics/query`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        startDate,
+        endDate,
+        dimensions: ['date', 'query'],
+        type: 'web',
+        rowLimit: pageSize,
+        startRow,
+      }),
     });
+
+    const raw = await res.text();
+    if (!res.ok) {
+      logger.error(`[SearchConsole] Query failed (page ${page}, status ${res.status})`, raw.slice(0, 300));
+      throw new Error(explainSearchConsoleError(res.status, raw));
+    }
+
+    const data = raw ? (JSON.parse(raw) as { rows?: Array<{ keys?: string[]; clicks?: number; impressions?: number; ctr?: number; position?: number }> }) : {};
+    const pageRows = data.rows || [];
+    for (const row of pageRows) {
+      const date = String(row.keys?.[0] || '').trim();
+      const query = String(row.keys?.[1] || '').trim();
+      if (!date || !query) continue;
+      rows.push({
+        date,
+        query,
+        clicks: Number(row.clicks || 0),
+        impressions: Number(row.impressions || 0),
+        ctr: Number(row.ctr || 0),
+        position: Number(row.position || 0),
+      });
+    }
+
+    // Λιγότερες από pageSize → φτάσαμε στο τέλος.
+    if (pageRows.length < pageSize) break;
   }
 
+  logger.info(`[SearchConsole] Fetched ${rows.length} rows for ${siteUrl} (${startDate} → ${endDate})`);
   return rows;
 }
 
@@ -343,7 +355,8 @@ export async function fetchSearchConsoleData(
     const accessToken = await refreshAccessToken(refreshTokenPlain);
     const endDateObj = new Date();
     const startDateObj = new Date();
-    startDateObj.setDate(startDateObj.getDate() - 90);
+    // Request 3 years; Search Console API will return up to its own 16-month cap (silently truncated).
+    startDateObj.setUTCFullYear(startDateObj.getUTCFullYear() - 3);
 
     const startDate = formatDate(startDateObj);
     const endDate = formatDate(endDateObj);
