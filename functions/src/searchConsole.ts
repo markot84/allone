@@ -355,8 +355,9 @@ export async function fetchSearchConsoleData(
     const accessToken = await refreshAccessToken(refreshTokenPlain);
     const endDateObj = new Date();
     const startDateObj = new Date();
-    // Request 3 years; Search Console API will return up to its own 16-month cap (silently truncated).
-    startDateObj.setUTCFullYear(startDateObj.getUTCFullYear() - 3);
+    // Window: 1 έτος. Τραβάμε μόνο search terms (date+query) — δεν χρειαζόμαστε
+    // μεγαλύτερο ιστορικό και κρατάμε χαμηλό το request payload / Firestore doc size.
+    startDateObj.setUTCFullYear(startDateObj.getUTCFullYear() - 1);
 
     const startDate = formatDate(startDateObj);
     const endDate = formatDate(endDateObj);
