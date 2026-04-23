@@ -1,10 +1,18 @@
 {
-  "version": "0.606.0",
-  "previousVersion": "0.605.0",
-  "commitHash": "dbb0c10",
+  "version": "0.607.0",
+  "previousVersion": "0.606.0",
+  "commitHash": "4eea94e",
   "branch": "main",
-  "buildDate": "2026-04-23T06:23:03.603Z",
+  "buildDate": "2026-04-23T07:41:36.929Z",
   "commits": [
+    {
+      "hash": "4eea94e",
+      "message": "fix(ga4): pie aligns with period + center total; feat(strategy): commercial priorities bridge-style cards"
+    },
+    {
+      "hash": "67937b2",
+      "message": "chore: buildInfo after production deploy (v0.606.0)"
+    },
     {
       "hash": "dbb0c10",
       "message": "chore: regenerate buildInfo after merge"
@@ -56,25 +64,17 @@
     {
       "hash": "10a9a9f",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "519010f",
-      "message": "chore: full deploy"
-    },
-    {
-      "hash": "48227f7",
-      "message": "fix(strategy): triage uses useProductSource for Enterprise procurement catalog"
     }
   ],
   "changes": [
+    "[Διόρθωση] Pie aligns with period + center total; feat(strategy): commercial priorities bridge-style cards",
+    "[Συντήρηση] BuildInfo after production deploy (v0.606.0)",
     "[Συντήρηση] Regenerate buildInfo after merge",
     "[Νέο χαρακτηριστικό] Home session — GA4/search console, auth, ecommerce, connectors, ROI, firestore rules",
     "[Συντήρηση] Full deploy",
     "[Διόρθωση] Resolve ERP column names and merge pricing for margin",
     "[Διόρθωση] Triage uses useProductSource for Enterprise procurement catalog",
     "[Διόρθωση] Guard missing connectedPlatforms in useEcommerceSummary hasData",
-    "Merge: Sprint 2 — universal data layer, decision buckets, AI context, ecommerce fix",
-    "[Διόρθωση] KPI Παραγγελίες counted only capped recentOrders",
-    "UX: redesign TriageCard for merchant clarity"
+    "Merge: Sprint 2 — universal data layer, decision buckets, AI context, ecommerce fix"
   ]
 }

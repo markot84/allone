@@ -789,10 +789,6 @@ function getRecommendationLabel(policy: RecommendedPolicy | null | undefined): s
   return policy === 'price_benchmark' ? 'Προτεινόμενη λειτουργία' : 'Προτεινόμενη πολιτική';
 }
 
-function getRecommendationActionText(policy: RecommendedPolicy | null | undefined): string {
-  return policy === 'price_benchmark' ? 'Άνοιγμα λειτουργίας' : 'Άνοιγμα';
-}
-
 function buildPolicyPayload(
   bucket: BucketId,
   assignments: BucketAssignment[],
