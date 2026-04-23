@@ -139,6 +139,53 @@ const ACTION_TYPE_CONFIG = {
 
 type ChannelStatus = 'pending' | 'in_progress' | 'done';
 
+/** Pulse skeleton block — neutral gray, animated. */
+function Skeleton({ className = '', style }: { className?: string; style?: React.CSSProperties }) {
+  return (
+    <div
+      className={`animate-pulse rounded-md bg-gradient-to-r from-[#F0F0F0] via-[#F8F8F8] to-[#F0F0F0] ${className}`}
+      style={style}
+    />
+  );
+}
+
+function PieSkeleton() {
+  return (
+    <div className="flex items-center justify-center" style={{ width: '100%', height: 256 }}>
+      <div className="relative" style={{ width: 170, height: 170 }}>
+        <Skeleton className="!rounded-full" style={{ width: 170, height: 170 }} />
+        <div className="absolute inset-[22px] rounded-full bg-white" />
+      </div>
+    </div>
+  );
+}
+
+function ChannelCardSkeleton({ delay = 0 }: { delay?: number }) {
+  return (
+    <div
+      className="p-4 rounded-xl border border-[#E5E5E5]"
+      style={{ borderLeftWidth: 3, borderLeftColor: '#E5E5E5', animationDelay: `${delay}ms` }}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0 space-y-2">
+          <div className="flex items-center gap-2">
+            <Skeleton className="w-5 h-5 !rounded" />
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-4 w-16 !rounded-full" />
+          </div>
+          <Skeleton className="h-3 w-24" />
+          <div className="mt-2 p-2.5 rounded-lg bg-[#F5F3FF]/40 border border-[#E9D5FF]/40 space-y-1.5">
+            <Skeleton className="h-2 w-32" />
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-3/4" />
+          </div>
+        </div>
+        <Skeleton className="h-7 w-24 !rounded-lg flex-shrink-0" />
+      </div>
+    </div>
+  );
+}
+
 interface ChannelActivationProps {
   onSectionChange?: (section: string) => void;
 }
@@ -170,6 +217,8 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   const [budgetInput, setBudgetInput] = useState('');
   const [editingBudget, setEditingBudget] = useState(false);
   const [aiGenerating, setAiGenerating] = useState(false);
+  /** Background silent upgrade — δείχνουμε διακριτικό indicator, ΟΧΙ full skeleton. */
+  const [isSilentUpgrading, setIsSilentUpgrading] = useState(false);
   const [showAiBrief, setShowAiBrief] = useState(true);
   /** Active segment context — οδηγεί τα per-segment campaign messages & marketing briefs. */
   const [selectedSegmentName, setSelectedSegmentName] = useState<string | null>(null);
@@ -198,7 +247,8 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     const segment = rfmSegments[0];
     if (!segment) return;
 
-    if (!silent) setAiGenerating(true);
+    if (silent) setIsSilentUpgrading(true);
+    else setAiGenerating(true);
     try {
       const topCats = [...new Set(products.map(p => p.category).filter(Boolean))].slice(0, 5);
       const savedTriage = (activeStrategy as { triageOrigin?: TriageOrigin } | null)?.triageOrigin ?? null;
@@ -232,7 +282,10 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         activationRecommendation: clean,
         updatedAt: new Date().toISOString(),
       } as Record<string, unknown>);
-      queryClient.invalidateQueries({ queryKey: ['activeStrategy'] });
+      // Critical: refetchActive — αλλιώς το UI κρατά το παλιό payload για 1-2s
+      // μέχρι το επόμενο polling. Με refetchQueries εξαναγκάζουμε άμεση ανανέωση.
+      await queryClient.invalidateQueries({ queryKey: ['activeStrategy'] });
+      await queryClient.refetchQueries({ queryKey: ['activeStrategy'] });
       if (!silent) toast.success('AI συστάσεις δημιουργήθηκαν');
     } catch (err) {
       console.error('[ChannelActivation] AI generation failed:', err);
@@ -241,7 +294,8 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         toast.error(`AI error: ${msg}`);
       }
     } finally {
-      if (!silent) setAiGenerating(false);
+      if (silent) setIsSilentUpgrading(false);
+      else setAiGenerating(false);
     }
   }, [strategyId, scenarioId, currentBrand, rfmSegments, products, queryClient, toast, activeStrategy, signalCoverage]);
 
@@ -710,11 +764,22 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
             }
             icon={<Users size={18} className="text-[var(--nts-accent)]" />}
             action={
-              selectedSegmentName ? (
-                <span className="text-[11px] text-[#9CA3AF]">
-                  Ενεργό: <span className="font-semibold text-[#1A1A1A]">{selectedSegmentName}</span>
-                </span>
-              ) : null
+              <div className="flex items-center gap-3">
+                {isSilentUpgrading && (
+                  <span
+                    className="inline-flex items-center gap-1.5 text-[10px] font-medium px-2 py-1 rounded-full bg-[var(--nts-accent)]/10 text-[var(--nts-accent)]"
+                    title="Το AI ανανεώνει τις συστάσεις στο background — δε χρειάζεται να περιμένεις"
+                  >
+                    <Spinner size="sm" />
+                    Ανανέωση…
+                  </span>
+                )}
+                {selectedSegmentName && (
+                  <span className="text-[11px] text-[#9CA3AF]">
+                    Ενεργό: <span className="font-semibold text-[#1A1A1A]">{selectedSegmentName}</span>
+                  </span>
+                )}
+              </div>
             }
           />
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-2">
@@ -800,9 +865,20 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
             icon={<PieChartIcon size={20} className="text-[var(--nts-accent)]" />}
           />
           {(aiLoading || campaignsLoading) ? (
-            <div className="flex items-center justify-center h-64">
-              <Spinner size="lg" label="Φόρτωση..." />
-            </div>
+            <>
+              <PieSkeleton />
+              <div className="space-y-2 mt-4">
+                {[0, 1, 2, 3].map((i) => (
+                  <div key={i} className="flex items-center justify-between" style={{ animationDelay: `${i * 80}ms` }}>
+                    <div className="flex items-center gap-2">
+                      <Skeleton className="w-3 h-3 !rounded-full" />
+                      <Skeleton className="h-3 w-24" />
+                    </div>
+                    <Skeleton className="h-3 w-10" />
+                  </div>
+                ))}
+              </div>
+            </>
           ) : aiPieData.length > 0 ? (
             <>
               <div className="w-full flex items-center justify-center" style={{ width: '100%', height: '256px', minHeight: '256px', position: 'relative' }}>
@@ -897,8 +973,10 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
           />
 
           {aiLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Spinner size="lg" label="Ανάλυση AI…" />
+            <div className="space-y-3">
+              {[0, 1, 2, 3].map((i) => (
+                <ChannelCardSkeleton key={i} delay={i * 90} />
+              ))}
             </div>
           ) : allChannels.length > 0 ? (
             <div className="space-y-3">

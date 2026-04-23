@@ -1,10 +1,14 @@
 {
-  "version": "0.616.0",
-  "previousVersion": "0.615.0",
-  "commitHash": "7d1ecd3",
+  "version": "0.617.0",
+  "previousVersion": "0.616.0",
+  "commitHash": "986612a",
   "branch": "main",
-  "buildDate": "2026-04-23T09:04:51.286Z",
+  "buildDate": "2026-04-23T09:12:58.067Z",
   "commits": [
+    {
+      "hash": "986612a",
+      "message": "fix(channels): pass segmentFitList in silent regen + tooltip on segment cards"
+    },
     {
       "hash": "7d1ecd3",
       "message": "fix(channels): silent auto-upgrade legacy AI payloads (no UI button)"
@@ -60,13 +64,10 @@
     {
       "hash": "aa50acb",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "6c8cbae",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [
+    "[Διόρθωση] Pass segmentFitList in silent regen + tooltip on segment cards",
     "[Διόρθωση] Silent auto-upgrade legacy AI payloads (no UI button)",
     "[Νέο χαρακτηριστικό] Expose Regenerate AI button in PageHeader",
     "[Συντήρηση] Remove temp commit message file",
@@ -75,7 +76,6 @@
     "[Συντήρηση] BuildInfo v0.609.0 after deploy",
     "[Συντήρηση] BuildInfo v0.608.0 after build",
     "[Συντήρηση] Remove unused helper; buildInfo v0.607.0",
-    "[Διόρθωση] Pie aligns with period + center total; feat(strategy): commercial priorities bridge-style cards",
-    "[Συντήρηση] BuildInfo after production deploy (v0.606.0)"
+    "[Διόρθωση] Pie aligns with period + center total; feat(strategy): commercial priorities bridge-style cards"
   ]
 }
