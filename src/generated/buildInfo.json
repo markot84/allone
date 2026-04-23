@@ -1,10 +1,14 @@
 {
-  "version": "0.608.0",
-  "previousVersion": "0.607.0",
-  "commitHash": "807aa5d",
+  "version": "0.609.0",
+  "previousVersion": "0.608.0",
+  "commitHash": "7611619",
   "branch": "main",
-  "buildDate": "2026-04-23T07:42:36.325Z",
+  "buildDate": "2026-04-23T07:47:01.266Z",
   "commits": [
+    {
+      "hash": "7611619",
+      "message": "chore: buildInfo v0.608.0 after build"
+    },
     {
       "hash": "807aa5d",
       "message": "chore: remove unused helper; buildInfo v0.607.0"
@@ -60,13 +64,10 @@
     {
       "hash": "98e251d",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "05de814",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [
+    "[Συντήρηση] BuildInfo v0.608.0 after build",
     "[Συντήρηση] Remove unused helper; buildInfo v0.607.0",
     "[Διόρθωση] Pie aligns with period + center total; feat(strategy): commercial priorities bridge-style cards",
     "[Συντήρηση] BuildInfo after production deploy (v0.606.0)",
