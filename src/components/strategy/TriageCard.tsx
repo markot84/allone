@@ -35,14 +35,57 @@ const ICONS: Record<BucketId, React.ComponentType<{ size?: number; className?: s
   new_or_unknown: Sparkles,
 };
 
+/** Συντομεύσεις για compact tabs (κλειστή κεφαλίδα). */
+const GROUP_TAB_LABEL: Record<BucketGroupId, string> = {
+  critical: 'Άμεση',
+  opportunity: 'Ευκαιρίες',
+  watch: 'Παρακολ.',
+  investigate: 'Αξιολόγ.',
+};
+
+const GROUP_TAB_PILL: Record<BucketGroupId, string> = {
+  critical: 'bg-rose-100 text-rose-900 ring-1 ring-rose-200/70 hover:bg-rose-200/60',
+  opportunity: 'bg-emerald-100 text-emerald-900 ring-1 ring-emerald-200/70 hover:bg-emerald-200/55',
+  watch: 'bg-amber-100 text-amber-950 ring-1 ring-amber-200/70 hover:bg-amber-200/50',
+  investigate: 'bg-slate-100 text-slate-800 ring-1 ring-slate-200/80 hover:bg-slate-200/55',
+};
+
 const GROUP_STYLES: Record<BucketGroupId, {
-  bg: string; border: string; titleText: string; subtitleText: string; chip: string;
+  border: string; leftBar: string; titleText: string; subtitleText: string; chip: string;
   icon: React.ComponentType<{ size?: number; className?: string }>;
 }> = {
-  critical:    { bg: 'bg-rose-50/60',   border: 'border-rose-200',   titleText: 'text-rose-900',   subtitleText: 'text-rose-700/80',   chip: 'bg-rose-100 text-rose-700',   icon: AlertOctagon },
-  opportunity: { bg: 'bg-emerald-50/60',border: 'border-emerald-200',titleText: 'text-emerald-900',subtitleText: 'text-emerald-700/80',chip: 'bg-emerald-100 text-emerald-700', icon: TrendingUp },
-  watch:       { bg: 'bg-amber-50/60',  border: 'border-amber-200',  titleText: 'text-amber-900',  subtitleText: 'text-amber-700/80',  chip: 'bg-amber-100 text-amber-700', icon: TrendingDown },
-  investigate: { bg: 'bg-slate-50',     border: 'border-slate-200',  titleText: 'text-slate-800',  subtitleText: 'text-slate-600',     chip: 'bg-slate-200 text-slate-700', icon: HelpCircle },
+  critical: {
+    border: 'border-gray-200/90',
+    leftBar: 'border-l-rose-500',
+    titleText: 'text-gray-900',
+    subtitleText: 'text-gray-600',
+    chip: 'bg-rose-50 text-rose-800 ring-1 ring-inset ring-rose-100',
+    icon: AlertOctagon,
+  },
+  opportunity: {
+    border: 'border-gray-200/90',
+    leftBar: 'border-l-emerald-500',
+    titleText: 'text-gray-900',
+    subtitleText: 'text-gray-600',
+    chip: 'bg-emerald-50 text-emerald-900 ring-1 ring-inset ring-emerald-100',
+    icon: TrendingUp,
+  },
+  watch: {
+    border: 'border-gray-200/90',
+    leftBar: 'border-l-amber-400',
+    titleText: 'text-gray-900',
+    subtitleText: 'text-gray-600',
+    chip: 'bg-amber-50 text-amber-900 ring-1 ring-inset ring-amber-100',
+    icon: TrendingDown,
+  },
+  investigate: {
+    border: 'border-gray-200/90',
+    leftBar: 'border-l-slate-400',
+    titleText: 'text-gray-900',
+    subtitleText: 'text-gray-600',
+    chip: 'bg-slate-100 text-slate-800 ring-1 ring-inset ring-slate-200',
+    icon: HelpCircle,
+  },
 };
 
 const BUCKET_COLOR: Record<BucketId, { text: string; bg: string; ring: string }> = {
@@ -176,6 +219,8 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
   const [expanded, setExpanded] = useState<BucketId | null>(null);
   const [showDocumentation, setShowDocumentation] = useState(false);
   const [viewAllBucket, setViewAllBucket] = useState<BucketId | null>(null);
+  /** false = συμπαγής γραμμή (~1/4 ύψους), true = πλήρης κεφαλίδα + στατιστικά. */
+  const [headerSummaryExpanded, setHeaderSummaryExpanded] = useState(false);
 
   // Data availability — για empty state checklist
   const { connectedPlatforms, skuMovement, stockMovementBaselineDate } = useEcommerceSummary();
@@ -282,35 +327,118 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
     );
   }
 
+  const scrollToGroup = (groupId: BucketGroupId) => {
+    document.getElementById(`triage-section-${groupId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   return (
     <div className="rounded-xl border border-[var(--nts-border-gray)] bg-white overflow-hidden">
-      {/* HEADER */}
-      <div className="px-5 pt-4 pb-3 border-b border-gray-100">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-base font-bold text-gray-900">
-                Εμπορικές Προτεραιότητες
-              </h3>
+      {/* HEADER — προεπιλογή συμπαγής: tabs + αριθμοί, ~1/4 του προηγούμενου ύψους */}
+      <div className="border-b border-gray-100 bg-white">
+        {!headerSummaryExpanded ? (
+          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 px-2 py-1 sm:px-2.5">
+            <button
+              type="button"
+              aria-expanded={false}
+              aria-label="Ανάπτυξη κεφαλίδας διάγνωσης"
+              onClick={() => setHeaderSummaryExpanded(true)}
+              className="shrink-0 rounded-md p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+            >
+              <ChevronRight size={16} strokeWidth={2.25} />
+            </button>
+            <span className="shrink-0 text-[11px] font-semibold tracking-tight text-gray-900 sm:text-xs">
+              Εμπορικές προτεραιότητες
+            </span>
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1 sm:justify-center">
+              {visibleGroups.map((g) => {
+                const groupCount = g.activeBuckets.reduce((s, b) => s + counts[b], 0);
+                return (
+                  <button
+                    key={g.id}
+                    type="button"
+                    onClick={() => scrollToGroup(g.id)}
+                    className={`inline-flex max-w-full items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-semibold tabular-nums transition-colors ${GROUP_TAB_PILL[g.id]}`}
+                    title={`${g.label}: ${groupCount.toLocaleString('el-GR')} SKU`}
+                  >
+                    <span>{GROUP_TAB_LABEL[g.id]}</span>
+                    <span className="opacity-90">{groupCount.toLocaleString('el-GR')}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <span className="hidden shrink-0 text-[10px] tabular-nums text-gray-500 md:inline">
+              {totalProducts.toLocaleString('el-GR')} SKU
+              <span className="mx-1 text-gray-300">·</span>
+              {fmtEur(totalTiedCapital)}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setHeaderSummaryExpanded(true);
+                setShowDocumentation(true);
+              }}
+              className="ml-auto shrink-0 inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 hover:bg-slate-100"
+              title="Τεκμηρίωση προτεραιοτήτων και σήματα αξιολόγησης"
+            >
+              <HelpCircle size={12} className="text-slate-500" />
+              <span className="hidden sm:inline">Τεκμ.</span>
+            </button>
+          </div>
+        ) : (
+          <div className="px-3 pb-2 pt-2 sm:px-4 sm:pb-2.5 sm:pt-2.5">
+            <div className="flex items-start gap-2">
               <button
                 type="button"
-                onClick={() => setShowDocumentation((s) => !s)}
-                className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-700 transition-colors hover:bg-slate-100"
-                title="Προβολή τεκμηρίωσης και σημάτων αξιολόγησης"
+                aria-expanded
+                aria-label="Σύμπτυξη κεφαλίδας"
+                onClick={() => {
+                  setHeaderSummaryExpanded(false);
+                  setShowDocumentation(false);
+                }}
+                className="shrink-0 rounded-md p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-800 mt-0.5"
               >
-                Τεκμηρίωση Προτεραιοτήτων & Σήματα Αξιολόγησης
-                {showDocumentation ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                <ChevronUp size={16} strokeWidth={2.25} />
               </button>
-            </div>
-            <div className="text-[11px] text-gray-500 mt-1">
-              {totalProducts.toLocaleString('el-GR')} SKUs στον κατάλογο
-              {' · '}
-              {skusWithAnyBucket.toLocaleString('el-GR')} με τουλάχιστον μία εμπορική κατηγορία παρακάτω
-              {' · '}
-              εκτιμώμενα δεσμευμένα (άθροισμα): <strong>{fmtEur(totalTiedCapital)}</strong>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <h3 className="text-sm font-bold text-gray-900 sm:text-base">Εμπορικές Προτεραιότητες</h3>
+                  <button
+                    type="button"
+                    onClick={() => setShowDocumentation((s) => !s)}
+                    className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-700 hover:bg-slate-100 sm:text-[11px]"
+                    title="Προβολή τεκμηρίωσης και σημάτων αξιολόγησης"
+                  >
+                    Τεκμηρίωση &amp; σήματα
+                    {showDocumentation ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                  </button>
+                </div>
+                <div className="mt-0.5 text-[10px] text-gray-500 sm:text-[11px]">
+                  {totalProducts.toLocaleString('el-GR')} SKUs στον κατάλογο
+                  {' · '}
+                  {skusWithAnyBucket.toLocaleString('el-GR')} με κατηγορία παρακάτω
+                  {' · '}
+                  δεσμευμένα (άθροισμα): <strong className="text-gray-700">{fmtEur(totalTiedCapital)}</strong>
+                </div>
+                <div className="mt-1.5 flex flex-wrap gap-1">
+                  {visibleGroups.map((g) => {
+                    const groupCount = g.activeBuckets.reduce((s, b) => s + counts[b], 0);
+                    return (
+                      <button
+                        key={g.id}
+                        type="button"
+                        onClick={() => scrollToGroup(g.id)}
+                        className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-semibold tabular-nums transition-colors ${GROUP_TAB_PILL[g.id]}`}
+                      >
+                        {GROUP_TAB_LABEL[g.id]}
+                        <span className="font-bold opacity-90">{groupCount.toLocaleString('el-GR')}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {showDocumentation && (
@@ -359,8 +487,8 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
         </div>
       )}
 
-      {/* GROUPED SECTIONS */}
-      <div className="p-5 space-y-4">
+      {/* GROUPED SECTIONS — compact cards, accent bar (όχι πλήρες tinted panels) */}
+      <div className="p-4 space-y-3">
         {visibleGroups.map((group) => {
           const style = GROUP_STYLES[group.id];
           const GroupIcon = style.icon;
@@ -368,27 +496,33 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
           const groupCount = group.activeBuckets.reduce((s, b) => s + counts[b], 0);
           return (
             <section
+              id={`triage-section-${group.id}`}
               key={group.id}
-              className={`rounded-lg border ${style.border} ${style.bg} p-3.5`}
+              className={`scroll-mt-3 rounded-xl border ${style.border} border-l-[3px] ${style.leftBar} bg-white shadow-sm pl-3 pr-3 py-2.5`}
             >
-              <header className="mb-3">
-                <div className="flex items-start gap-2.5 min-w-0">
-                  <div className={`shrink-0 mt-0.5 p-1.5 rounded ${style.chip}`}>
-                    <GroupIcon size={14} />
+              <header className="mb-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className={`shrink-0 p-1 rounded-md ${style.chip}`}>
+                    <GroupIcon size={13} className="opacity-90" />
                   </div>
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <div className={`text-[13px] font-bold ${style.titleText}`}>{group.label}</div>
-                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${style.chip}`}>
-                        {groupCount.toLocaleString('el-GR')} προϊόντα
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                      <h4 className={`text-sm font-semibold tracking-tight ${style.titleText}`}>{group.label}</h4>
+                      <span className="text-[11px] font-medium tabular-nums text-gray-500">
+                        {groupCount.toLocaleString('el-GR')}
+                        <span className="font-normal text-gray-400"> SKU</span>
+                        {groupTied > 0 && (
+                          <>
+                            <span className="mx-1 text-gray-300">·</span>
+                            <span className="text-gray-600">{fmtEur(groupTied)}</span>
+                            <span className="font-normal text-gray-400"> δεσμ.</span>
+                          </>
+                        )}
                       </span>
-                      {groupTied > 0 && (
-                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${style.chip}`}>
-                          {fmtEur(groupTied)} δεσμευμένα
-                        </span>
-                      )}
                     </div>
-                    <div className={`text-[11px] mt-0.5 ${style.subtitleText}`}>{group.subtitle}</div>
+                    <p className={`text-[11px] leading-snug mt-0.5 line-clamp-2 ${style.subtitleText}`}>
+                      {group.subtitle}
+                    </p>
                   </div>
                 </div>
               </header>
@@ -414,7 +548,7 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
                 />
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
                 {group.activeBuckets.map((b) => {
                   const def = defs[b];
                   const Icon = ICONS[b];
@@ -429,22 +563,22 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
                     <button
                       key={b}
                       onClick={() => setExpanded(isOpen ? null : b)}
-                      className={`text-left rounded-xl border bg-white/95 border-gray-200 px-3 py-2.5 min-h-[98px] transition-all hover:border-gray-300 hover:shadow-sm ${
-                        isOpen ? `ring-2 ${colors.ring} border-transparent` : ''
+                      className={`text-left rounded-lg border bg-white border-gray-200/90 px-2.5 py-2 min-h-[84px] transition-all hover:border-gray-300 hover:shadow-sm ${
+                        isOpen ? `ring-1 ${colors.ring} border-gray-300` : ''
                       }`}
                     >
-                      <div className={`flex items-start gap-2 mb-1.5 ${soleInGroup ? '' : 'justify-between'}`}>
-                        <div className={`inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded-md ${colors.bg}`}>
-                          <Icon size={12} className={colors.text} />
-                          <span className={`text-[10px] font-semibold ${colors.text} uppercase tracking-wide`}>
+                      <div className={`flex items-start gap-1.5 mb-1 ${soleInGroup ? '' : 'justify-between'}`}>
+                        <div className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded ${colors.bg}`}>
+                          <Icon size={11} className={colors.text} />
+                          <span className={`text-[9px] font-semibold ${colors.text} uppercase tracking-wide`}>
                             {def.shortLabel}
                           </span>
                         </div>
                         {!soleInGroup && (
-                          <span className="text-base font-bold text-gray-900 leading-none tabular-nums">{count}</span>
+                          <span className="text-sm font-bold text-gray-900 leading-none tabular-nums">{count}</span>
                         )}
                       </div>
-                      <div className="text-[12px] font-semibold text-gray-800 leading-snug">{def.label}</div>
+                      <div className="text-[11px] font-semibold text-gray-800 leading-snug line-clamp-2">{def.label}</div>
                       {!soleInGroup && tied > 0 && (
                         <>
                           <div className="text-[10px] text-gray-500 mt-1.5">
@@ -614,40 +748,35 @@ function getPriorityCardTone(bucket: BucketId): {
   shell: string;
   eyebrow: string;
   metric: string;
-  cta: string;
   border: string;
 } {
   switch (bucket) {
     case 'dead_capital':
       return {
-        shell: 'border-rose-200 bg-gradient-to-br from-rose-50 via-white to-white',
-        eyebrow: 'bg-rose-100 text-rose-700',
+        shell: 'border-rose-200/80 bg-rose-50/40 hover:border-rose-300',
+        eyebrow: 'bg-rose-100/90 text-rose-800',
         metric: 'text-rose-700',
-        cta: 'bg-rose-600 text-white',
-        border: 'border-rose-100',
+        border: 'border-rose-100/80',
       };
     case 'stockout_risk':
       return {
-        shell: 'border-orange-200 bg-gradient-to-br from-orange-50 via-white to-white',
-        eyebrow: 'bg-orange-100 text-orange-700',
+        shell: 'border-orange-200/80 bg-orange-50/35 hover:border-orange-300',
+        eyebrow: 'bg-orange-100/90 text-orange-800',
         metric: 'text-orange-700',
-        cta: 'bg-orange-600 text-white',
-        border: 'border-orange-100',
+        border: 'border-orange-100/80',
       };
     case 'margin_bleeder':
       return {
-        shell: 'border-amber-200 bg-gradient-to-br from-amber-50 via-white to-white',
-        eyebrow: 'bg-amber-100 text-amber-800',
+        shell: 'border-amber-200/80 bg-amber-50/35 hover:border-amber-300',
+        eyebrow: 'bg-amber-100/90 text-amber-900',
         metric: 'text-amber-800',
-        cta: 'bg-amber-600 text-white',
-        border: 'border-amber-100',
+        border: 'border-amber-100/80',
       };
     default:
       return {
-        shell: 'border-slate-200 bg-gradient-to-br from-slate-50 via-white to-white',
+        shell: 'border-slate-200 bg-slate-50/50 hover:border-slate-300',
         eyebrow: 'bg-slate-100 text-slate-700',
         metric: 'text-slate-800',
-        cta: 'bg-slate-800 text-white',
         border: 'border-slate-100',
       };
   }
@@ -706,7 +835,7 @@ function PriorityPolicyActions({
   if (actionable.length === 0) return null;
 
   return (
-    <div className="mb-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+    <div className="mb-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
       {actionable.map((bucket) => {
         const def = defs[bucket];
         const policyName = getPolicyName(def.recommendedPolicy);
@@ -728,44 +857,45 @@ function PriorityPolicyActions({
               );
               onSelectPolicy(def.recommendedPolicy as NonNullable<RecommendedPolicy>, fromBucket, payload);
             }}
-            className={`rounded-xl border px-4 py-4 min-h-[176px] text-left transition-all hover:shadow-md ${tone.shell}`}
+            className={`rounded-lg border text-left transition-all hover:shadow-sm ${tone.shell}`}
           >
-            <div className="flex h-full flex-col">
-              <div className="flex items-start justify-between gap-3">
+            <div className="flex flex-col gap-2 p-3">
+              <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <div className={`inline-flex items-center rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${tone.eyebrow}`}>
-                    Άμεση προτεραιότητα
+                  <div className={`inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${tone.eyebrow}`}>
+                    {def.shortLabel}
                   </div>
-                  <div className="mt-2 text-[15px] font-semibold leading-snug text-gray-900">{def.label}</div>
-                  <div className="mt-1 text-[12px] leading-relaxed text-gray-600">
+                  <div className="mt-1 text-[13px] font-semibold leading-snug text-gray-900 line-clamp-2">{def.label}</div>
+                  <div className="mt-0.5 text-[11px] leading-snug text-gray-600 line-clamp-2">
                     {getPriorityCardOutcome(bucket)}
                   </div>
                 </div>
               </div>
-              <div className={`mt-4 grid grid-cols-2 gap-2 rounded-lg border bg-white/80 p-3 ${tone.border}`}>
-                <div>
-                  <div className="text-[10px] uppercase tracking-wide text-gray-500">Προϊόντα</div>
-                  <div className="mt-1 text-lg font-bold tabular-nums text-gray-900">
+              <div className={`flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md border px-2.5 py-1.5 ${tone.border} bg-white/70`}>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-[9px] uppercase tracking-wide text-gray-500">Προϊόντα</span>
+                  <span className="text-sm font-bold tabular-nums text-gray-900">
                     {productCount.toLocaleString('el-GR')}
-                  </div>
+                  </span>
                 </div>
-                <div>
-                  <div className="text-[10px] uppercase tracking-wide text-gray-500">Αξία στο scope</div>
-                  <div className={`mt-1 text-lg font-bold tabular-nums ${tiedCapital > 0 ? tone.metric : 'text-gray-900'}`}>
+                <div className="h-3 w-px bg-gray-200 hidden sm:block" aria-hidden />
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-[9px] uppercase tracking-wide text-gray-500">Scope</span>
+                  <span className={`text-sm font-bold tabular-nums ${tiedCapital > 0 ? tone.metric : 'text-gray-900'}`}>
                     {tiedCapital > 0 ? fmtEur(tiedCapital) : '—'}
-                  </div>
+                  </span>
                 </div>
               </div>
-              <div className="mt-auto pt-3 flex items-center justify-between gap-3">
+              <div className="flex items-center justify-between gap-2 pt-0.5 border-t border-black/[0.06]">
                 <div className="min-w-0">
-                  <div className="text-[10px] uppercase tracking-wide text-gray-500">
+                  <div className="text-[9px] uppercase tracking-wide text-gray-500">
                     {getRecommendationLabel(def.recommendedPolicy)}
                   </div>
-                  <div className="mt-1 text-[12px] font-semibold text-gray-800">{policyName}</div>
+                  <div className="text-[11px] font-semibold text-gray-800 truncate">{policyName}</div>
                 </div>
-                <div className={`shrink-0 inline-flex items-center gap-1 rounded-lg px-3 py-2 text-[11px] font-semibold ${tone.cta}`}>
+                <div className="shrink-0 inline-flex items-center gap-0.5 rounded-md bg-[var(--nts-accent)] px-2.5 py-1.5 text-[10px] font-semibold text-white hover:opacity-90">
                   {getRecommendationActionText(def.recommendedPolicy)}
-                  <ChevronRight size={12} />
+                  <ChevronRight size={11} />
                 </div>
               </div>
             </div>

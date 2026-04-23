@@ -1,10 +1,14 @@
 {
-  "version": "0.600.0",
-  "previousVersion": "0.599.0",
-  "commitHash": "cd465f1",
+  "version": "0.604.0",
+  "previousVersion": "0.603.0",
+  "commitHash": "6c8cbae",
   "branch": "main",
-  "buildDate": "2026-04-20T09:25:47.422Z",
+  "buildDate": "2026-04-23T04:57:06.880Z",
   "commits": [
+    {
+      "hash": "6c8cbae",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "cd465f1",
       "message": "fix(procurement): resolve ERP column names and merge pricing for margin"
@@ -60,15 +64,11 @@
     {
       "hash": "a94a09d",
       "message": "fix(ecommerce): KPI Παραγγελίες counted only capped recentOrders"
-    },
-    {
-      "hash": "612f2bb",
-      "message": "UX: redesign TriageCard for merchant clarity"
     }
   ],
   "changes": [
-    "[Διόρθωση] Resolve ERP column names and merge pricing for margin",
     "[Συντήρηση] Full deploy",
+    "[Διόρθωση] Resolve ERP column names and merge pricing for margin",
     "[Διόρθωση] Triage uses useProductSource for Enterprise procurement catalog",
     "[Διόρθωση] Guard missing connectedPlatforms in useEcommerceSummary hasData",
     "Merge: Sprint 2 — universal data layer, decision buckets, AI context, ecommerce fix",
