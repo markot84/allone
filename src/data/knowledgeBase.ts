@@ -286,57 +286,52 @@ AI Insights: Προτάσεις για βελτίωση απόδοσης
     category: 'data-import',
     title: 'Εισαγωγή Προϊόντων',
     description: 'Λεπτομερής οδηγός για import προϊόντων',
-    content: `Υποχρεωτικά πεδία:
-- SKU: Μοναδικό identifier προϊόντος
-- Name: Όνομα προϊόντος
-- Category: Κατηγορία (π.χ. Electronics, Fashion)
-- Price: Τιμή πώλησης
+    content: `Το official product import είναι πλέον ένα single flat ERP sheet για το products collection. Το Enterprise procurement workbook 7 sheets παραμένει ξεχωριστό και δεν αλλάζει.
 
-Προαιρετικά αλλά συνιστώμενα:
-- Cost Price: Κόστος για υπολογισμό margin
-- Margin Percentage: Ποσοστό κέρδους
-- Stock Level: Τρέχον απόθεμα
-- Stock Capacity: Μέγιστη χωρητικότητα
-- Stock Age Days: Ημέρες από την παραλαβή
-- Priority Tag: Strategic flags (New Launch, Brand Push, κλπ)
+Required:
+- SKU_ID
+- Product_Name
+- Category
+- Sell_Price
+- Cost_Price
+- Stock_On_Hand
+
+Strongly recommended:
+- Supplier
+- Brand
+- Barcode / GTIN
+- Qty_Sold_Period
+- Revenue_Period
+- Gross_Margin_%
+- First_Available_Date
+- Last_Sale_Date
+
+Optional αλλά χρήσιμα:
+- Subcategory
+- Status
+- List_Price / Compare_At_Price
+- Available_Stock
+- Reorder_Point
+- Reorder_Qty
+- ABC_Class
+- Flow_Group / Product_Segment
+- Seasonality_Tag
+- Priority_Flag
 
 Margin Tier:
 - high: >30%
 - medium: 15-30%
 - low: <15%
 
-Πιθανές Εκδοχές Ονομάτων Στηλών:
-
-Το σύστημα αναγνωρίζει αυτόματα διάφορες εκδοχές ονομάτων για κάθε πεδίο:
-
-SKU/ID:
-SKU_ID, SKU, sku_id, sku, ID, id, Product_ID, product_id, Item_ID, item_id, Code, code, Κωδικός, κωδικός, Barcode, barcode, EAN, ean
-
-Product Name:
-Product_Name, Product Name, product_name, Name, name, Product, product, Title, title, Item, item, Item_Name, item_name, Description, description, Product_Title, product_title, Όνομα, όνομα, Προϊόν, προϊόν, Περιγραφή, περιγραφή
-
-Category:
-Category, category, Product_Category, product_category, Group, group, Κατηγορία, κατηγορία, Type, type, Department, department, Προμηθευτής, προμηθευτής
-
-Price:
-Sell_Price, Sell Price, sell_price, Price, price, Unit_Price, unit_price, Retail_Price, retail_price, MSRP, msrp, Τιμή, τιμή
-
-Cost Price:
-Cost_Price, Cost Price, cost_price, Cost, cost, Κόστος, κόστος
-
-Stock Level:
-Stock_On_Hand, Stock On Hand, stock_on_hand, Stock_Level, stock_level, Stock, stock, Quantity, quantity, Qty, qty, Inventory, inventory, On_Hand, on_hand, Units, units, Απόθεμα, απόθεμα, Ποσότητα, ποσότητα, Available_Stock, available_stock, Δυναμικό_Υπόλοιπο, δυναμικό_υπόλοιπο, Κίνηση, κίνηση
-
-Date:
-First_Available_Date, First Available Date, first_available_date, First_Available, first_available, Available_Date, available_date, Date_Added, date_added, Created_Date, created_date, Creation_Date, creation_date, Inventory_Date, inventory_date, Data, data, Ημερομηνία, ημερομηνία, Ημ/νία, ημ/νία
-
-Margin:
-Gross_Margin_%, Gross Margin %, gross_margin_%, Margin_Percentage, margin_percentage, Margin_Pct, margin_pct, Margin, margin, Margin_%, margin_%, Gross_Margin, gross_margin, Profit_Margin, profit_margin
+Derive logic:
+- Αν λείπει το Gross_Margin_%, υπολογίζεται από Sell_Price και Cost_Price
+- Αν λείπει το Stock_Age_Days, υπολογίζεται από το First_Available_Date
+- Αν υπάρχει Available_Stock, χρησιμοποιείται ως βασικό διαθέσιμο stock στα downstream modules
 
 Validation:
 Το σύστημα ελέγχει ότι:
-- SKU είναι unique
-- Price > 0
+- SKU ή Name υπάρχει
+- Price >= 0
 - Stock Level >= 0
 - Dates είναι σε σωστό format`,
     tags: ['products', 'import', 'inventory'],
@@ -543,7 +538,7 @@ Month, month, Period, period, Date_Range, date_range, Reporting_Starts, reportin
     category: 'data-import',
     title: 'Πίνακας Αντιστοίχισης Στηλών - Products',
     description: 'Πλήρης πίνακας με όλες τις πιθανές εκδοχές ονομάτων για κάθε πεδίο προϊόντων',
-    content: `Ο παρακάτω πίνακας δείχνει όλες τις πιθανές εκδοχές ονομάτων που αναγνωρίζει το σύστημα για κάθε πεδίο προϊόντων.
+    content: `Ο παρακάτω πίνακας δείχνει όλες τις πιθανές εκδοχές ονομάτων που αναγνωρίζει το σύστημα για κάθε πεδίο προϊόντων στο flat ERP import.
 
 SKU/ID:
 SKU_ID, SKU, sku_id, sku, ID, id, Product_ID, product_id, Item_ID, item_id, Item ID, item id, Code, code, Κωδικός, κωδικός, Barcode, barcode, EAN, ean
@@ -552,19 +547,40 @@ Product Name:
 Product_Name, Product Name, product_name, Name, name, Product, product, Title, title, Item, item, Item_Name, item_name, Description, description, Product_Title, product_title, Όνομα, όνομα, Προϊόν, προϊόν, Περιγραφή, περιγραφή
 
 Category:
-Category, category, Product_Category, product_category, Group, group, Κατηγορία, κατηγορία, Type, type, Department, department, Προμηθευτής, προμηθευτής
+Category, category, Product_Category, product_category, Group, group, Κατηγορία, κατηγορία, Type, type, Department, department
+
+Subcategory:
+Subcategory, sub_category, sub-category, subcategory, Sub_Category, Sub Category, Υποκατηγορία, υποκατηγορία
+
+Brand:
+Brand, brand, Manufacturer, manufacturer, Vendor_Brand, vendor_brand, Μάρκα, μάρκα
+
+Barcode / GTIN:
+Barcode, barcode, GTIN, gtin, EAN, ean, UPC, upc, Bar_Code, bar_code
+
+Status:
+Status, status, Product_Status, product_status, Item_Status, item_status, Κατάσταση_Προϊόντος, κατάσταση_προϊόντος
 
 Price:
 Sell_Price, Sell Price, sell_price, Price, price, Unit_Price, unit_price, Retail_Price, retail_price, MSRP, msrp, Τιμή, τιμή
 
+List / Compare Price:
+List_Price, List Price, list_price, Compare_At_Price, compare_at_price, Compare At Price, compare_at, MSRP, Catalog_Price, catalog_price, Τιμοκατάλογος, τιμοκατάλογος
+
 Cost Price:
 Cost_Price, Cost Price, cost_price, Cost, cost, Κόστος, κόστος
 
-Stock Level:
+Stock On Hand / Stock Level:
 Stock_On_Hand, Stock On Hand, stock_on_hand, Stock_Level, stock_level, Stock, stock, Quantity, quantity, Qty, qty, Inventory, inventory, On_Hand, on_hand, Units, units, Απόθεμα, απόθεμα, Ποσότητα, ποσότητα, Available_Stock, available_stock, Δυναμικό_Υπόλοιπο, δυναμικό_υπόλοιπο, Κίνηση, κίνηση
+
+Available Stock:
+Available_Stock, Available Stock, available_stock, Sellable_Stock, sellable_stock, Free_Stock, free_stock, Διαθέσιμο_Απόθεμα, διαθέσιμο_απόθεμα
 
 Date:
 First_Available_Date, First Available Date, first_available_date, First_Available, first_available, Available_Date, available_date, Date_Added, date_added, Created_Date, created_date, Creation_Date, creation_date, Inventory_Date, inventory_date, Data, data, Ημερομηνία, ημερομηνία, Ημ/νία, ημ/νία
+
+Last Sale Date:
+Last_Sale_Date, Last Sale Date, last_sale_date, Last_Sale_At, last_sale_at, Last_Sold_Date, last_sold_date, Τελευταία_Πώληση, τελευταία_πώληση, Τελευταια_Πωληση, τελευταια_πωληση
 
 Margin:
 Gross_Margin_%, Gross Margin %, gross_margin_%, Margin_Percentage, margin_percentage, Margin_Pct, margin_pct, Margin, margin, Margin_%, margin_%, Gross_Margin, gross_margin, Profit_Margin, profit_margin
@@ -582,7 +598,25 @@ Priority:
 Priority_Flag, Priority Flag, priority_flag, Priority_Tag, priority_tag, Priority, priority, Tag, tag, Label, label, Alerts, alerts, Κατάσταση, κατάσταση
 
 Margin Tier:
-Margin_Tier, Margin Tier, margin_tier, Margin_Category, margin_category, Tier, tier`,
+Margin_Tier, Margin Tier, margin_tier, Margin_Category, margin_category, Tier, tier
+
+Supplier:
+Supplier, supplier, Vendor, vendor, Supplier_Name, supplier_name, Προμηθευτής, προμηθευτής, Vendor_Name, vendor_name
+
+Reorder Point:
+Reorder_Point, Reorder Point, reorder_point, Min_Stock, min_stock, Safety_Stock, safety_stock, Σημείο_Αναπαραγγελίας, σημείο_αναπαραγγελίας
+
+Reorder Qty:
+Reorder_Qty, Reorder Qty, reorder_qty, Reorder_Quantity, reorder_quantity, Order_Qty, order_qty, Ποσότητα_Αναπαραγγελίας, ποσότητα_αναπαραγγελίας
+
+ABC Class:
+ABC_Class, ABC Class, abc_class, ABC, abc, Abc_Class
+
+Flow Group:
+Flow_Group, Flow Group, flow_group, Product_Segment, product_segment, Segment, segment, Ομάδα_Ροής, ομάδα_ροής
+
+Seasonality:
+Seasonality_Tag, Seasonality Tag, seasonality_tag, Seasonality, seasonality, Season_Tag, season_tag, Εποχικότητα, εποχικότητα`,
     tags: ['products', 'import', 'columns', 'mapping', 'table'],
     related: ['products-import', 'column-names-guide']
   },

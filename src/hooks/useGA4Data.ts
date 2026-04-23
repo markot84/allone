@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, type DocumentSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useBrand } from './useBrand';
 
@@ -13,6 +13,8 @@ export interface GA4DailyMetrics {
   avgSessionDuration: number;
   conversions: number;
   eventCount: number;
+  /** GA4 ecommerce: φορές που προστέθηκαν προϊόντα στο καλάθι (ανά ημέρα). */
+  addToCarts?: number;
 }
 
 export interface GA4TrafficSource {
@@ -32,22 +34,93 @@ export interface GA4TopPage {
   bounceRate: number;
 }
 
+export interface GA4OrganicFallbackRow {
+  date: string;
+  path: string;
+  sessions: number;
+  users: number;
+  conversions: number;
+}
+
+export interface SearchConsoleQueryRow {
+  date: string;
+  query: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number;
+}
+
+export type OrganicSearchSource = 'gsc' | 'ga4_fallback' | 'none';
+
+/** YYYY-MM-DD → channel → metrics (για φίλτρο ημερολογίου στο UI). */
+export type GA4DailyTrafficByChannel = Record<
+  string,
+  Record<
+    string,
+    {
+      sessions: number;
+      users: number;
+      newUsers: number;
+      conversions: number;
+      totalRevenue: number;
+    }
+  >
+>;
+
 interface GA4RawData {
   propertyId: string;
   propertyName: string;
   dailyMetrics: Record<string, GA4DailyMetrics>;
   trafficSources: Record<string, GA4TrafficSource>;
+  dailyTrafficByChannel?: GA4DailyTrafficByChannel;
   /** YYYY-MM-DD → organic-channel revenue (from GA4 sync; used in ROI daily trend when no monthly import). */
   organicRevenueByDay?: Record<string, number>;
+  organicSearchFallbackRows?: GA4OrganicFallbackRow[];
   topPages: GA4TopPage[];
   syncedAt: any;
   dateRange: { start: string; end: string };
 }
 
-async function fetchGA4Data(brandId: string): Promise<GA4RawData | null> {
-  const snap = await getDoc(doc(db, 'ga4_data', brandId));
-  if (!snap.exists()) return null;
-  return snap.data() as GA4RawData;
+interface SearchConsoleRawData {
+  siteUrl: string;
+  siteName: string;
+  queryRows: SearchConsoleQueryRow[];
+  syncedAt: any;
+  dateRange: { start: string; end: string };
+}
+
+interface GA4PageRawData {
+  ga4: GA4RawData | null;
+  searchConsole: SearchConsoleRawData | null;
+  connectors: { search_console?: { connected?: boolean } } | null;
+}
+
+const missingSnap = (): DocumentSnapshot =>
+  ({ exists: () => false } as DocumentSnapshot);
+
+async function fetchGA4Data(brandId: string): Promise<GA4PageRawData> {
+  // GA4 doc must succeed for charts; Search Console / connectors are optional reads — missing rules or
+  // transient errors must not hide ga4_data (see Promise.all permission-denial on one collection).
+  const settled = await Promise.allSettled([
+    getDoc(doc(db, 'ga4_data', brandId)),
+    getDoc(doc(db, 'search_console_data', brandId)),
+    getDoc(doc(db, 'connectors', brandId)),
+  ]);
+
+  if (settled[0].status === 'rejected') throw settled[0].reason;
+
+  const ga4Snap = settled[0].value;
+  const searchConsoleSnap =
+    settled[1].status === 'fulfilled' ? settled[1].value : missingSnap();
+  const connectorsSnap =
+    settled[2].status === 'fulfilled' ? settled[2].value : missingSnap();
+
+  return {
+    ga4: ga4Snap.exists() ? (ga4Snap.data() as GA4RawData) : null,
+    searchConsole: searchConsoleSnap.exists() ? (searchConsoleSnap.data() as SearchConsoleRawData) : null,
+    connectors: connectorsSnap.exists() ? (connectorsSnap.data() as { search_console?: { connected?: boolean } }) : null,
+  };
 }
 
 export function useGA4Data() {
@@ -57,20 +130,22 @@ export function useGA4Data() {
   const { data, isPending } = useQuery({
     queryKey: ['ga4_data', brandId],
     queryFn: () => (brandId ? fetchGA4Data(brandId) : Promise.resolve(null)),
-    staleTime: 10 * 60 * 1000,
+    /** Short stale window: connector syncs must show on GA4 page without waiting on persisted RQ cache. */
+    staleTime: 60 * 1000,
+    refetchOnMount: 'always',
     enabled: !!brandId,
   });
 
   const dailyEntries = useMemo(() => {
-    if (!data?.dailyMetrics) return [];
-    return Object.entries(data.dailyMetrics)
+    if (!data?.ga4?.dailyMetrics) return [];
+    return Object.entries(data.ga4.dailyMetrics)
       .map(([date, m]) => ({ date, ...m }))
       .sort((a, b) => a.date.localeCompare(b.date));
   }, [data]);
 
   const totals = useMemo(() => {
     if (dailyEntries.length === 0)
-      return { sessions: 0, users: 0, newUsers: 0, pageViews: 0, bounceRate: 0, conversions: 0, avgDuration: 0 };
+      return { sessions: 0, users: 0, newUsers: 0, pageViews: 0, bounceRate: 0, conversions: 0, avgDuration: 0, addToCarts: 0 };
     const sum = dailyEntries.reduce(
       (acc, d) => ({
         sessions: acc.sessions + d.sessions,
@@ -80,8 +155,9 @@ export function useGA4Data() {
         bounceRate: acc.bounceRate + d.bounceRate,
         conversions: acc.conversions + d.conversions,
         avgDuration: acc.avgDuration + d.avgSessionDuration,
+        addToCarts: acc.addToCarts + (typeof d.addToCarts === 'number' ? d.addToCarts : 0),
       }),
-      { sessions: 0, users: 0, newUsers: 0, pageViews: 0, bounceRate: 0, conversions: 0, avgDuration: 0 }
+      { sessions: 0, users: 0, newUsers: 0, pageViews: 0, bounceRate: 0, conversions: 0, avgDuration: 0, addToCarts: 0 }
     );
     const n = dailyEntries.length;
     return {
@@ -102,17 +178,20 @@ export function useGA4Data() {
     const u1 = sum(prev7, d => d.totalUsers), u2 = sum(last7, d => d.totalUsers);
     const c1 = sum(prev7, d => d.conversions), c2 = sum(last7, d => d.conversions);
     const n1 = sum(prev7, d => d.newUsers), n2 = sum(last7, d => d.newUsers);
+    const cart1 = sum(prev7, d => (typeof d.addToCarts === 'number' ? d.addToCarts : 0));
+    const cart2 = sum(last7, d => (typeof d.addToCarts === 'number' ? d.addToCarts : 0));
     return {
       sessions: pctChange(s1, s2),
       users: pctChange(u1, u2),
       conversions: pctChange(c1, c2),
       newUsers: pctChange(n1, n2),
+      addToCarts: pctChange(cart1, cart2),
     };
   }, [dailyEntries]);
 
   const trafficSources = useMemo(() => {
-    if (!data?.trafficSources) return [];
-    return Object.entries(data.trafficSources)
+    if (!data?.ga4?.trafficSources) return [];
+    return Object.entries(data.ga4.trafficSources)
       .map(([channel, d]) => ({
         channel,
         ...d,
@@ -120,6 +199,38 @@ export function useGA4Data() {
       }))
       .sort((a, b) => b.sessions - a.sessions);
   }, [data]);
+
+  const dailyTrafficByChannel = useMemo((): GA4DailyTrafficByChannel | null => {
+    const raw = data?.ga4?.dailyTrafficByChannel;
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+
+    const normalizeDateKey = (k: string): string | null => {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(k)) return k;
+      if (/^\d{8}$/.test(k)) return `${k.slice(0, 4)}-${k.slice(4, 6)}-${k.slice(6, 8)}`;
+      return null;
+    };
+
+    const out: GA4DailyTrafficByChannel = {};
+    for (const [rawDate, chans] of Object.entries(raw)) {
+      const date = normalizeDateKey(String(rawDate));
+      if (!date) continue;
+      if (!chans || typeof chans !== 'object' || Array.isArray(chans)) continue;
+      out[date] = {};
+      for (const [channel, m] of Object.entries(chans as Record<string, unknown>)) {
+        if (!m || typeof m !== 'object' || Array.isArray(m)) continue;
+        const o = m as Record<string, unknown>;
+        out[date][channel] = {
+          sessions: Number(o.sessions) || 0,
+          users: Number(o.users) || 0,
+          newUsers: Number(o.newUsers) || 0,
+          conversions: Number(o.conversions) || 0,
+          totalRevenue: Number(o.totalRevenue) || 0,
+        };
+      }
+      if (Object.keys(out[date]).length === 0) delete out[date];
+    }
+    return Object.keys(out).length > 0 ? out : null;
+  }, [data?.ga4?.dailyTrafficByChannel]);
 
   /** Sum of `totalRevenue` for channels whose name includes "organic" (matches GA4 default channel labels). */
   const totalOrganicRevenueFromChannels = useMemo(() => {
@@ -129,27 +240,58 @@ export function useGA4Data() {
   }, [trafficSources]);
 
   const organicRevenueByDay = useMemo((): Record<string, number> => {
-    const raw = data?.organicRevenueByDay;
+    const raw = data?.ga4?.organicRevenueByDay;
     if (!raw || typeof raw !== 'object') return {};
     const out: Record<string, number> = {};
     for (const [k, v] of Object.entries(raw)) {
       if (/^\d{4}-\d{2}-\d{2}$/.test(k) && typeof v === 'number' && v > 0) out[k] = v;
     }
     return out;
-  }, [data?.organicRevenueByDay]);
+  }, [data?.ga4?.organicRevenueByDay]);
+
+  const organicSearchFallbackRows = useMemo(() => {
+    const rows = data?.ga4?.organicSearchFallbackRows;
+    if (!Array.isArray(rows)) return [] as GA4OrganicFallbackRow[];
+    return rows.filter((row) => Boolean(row?.date && row?.path));
+  }, [data?.ga4?.organicSearchFallbackRows]);
+
+  const searchConsoleRows = useMemo(() => {
+    const rows = data?.searchConsole?.queryRows;
+    if (!Array.isArray(rows)) return [] as SearchConsoleQueryRow[];
+    return rows.filter((row) => Boolean(row?.date && row?.query));
+  }, [data?.searchConsole?.queryRows]);
+
+  const isSearchConsoleConnected = Boolean(data?.connectors?.search_console?.connected);
+  const organicSearchSource: OrganicSearchSource =
+    isSearchConsoleConnected
+      ? searchConsoleRows.length > 0
+        ? 'gsc'
+        : 'none'
+      : organicSearchFallbackRows.length > 0
+        ? 'ga4_fallback'
+        : 'none';
 
   return {
-    propertyName: data?.propertyName ?? '',
+    propertyName: data?.ga4?.propertyName ?? '',
     dailyEntries,
     totals,
     weeklyChange,
     trafficSources,
+    dailyTrafficByChannel,
     totalOrganicRevenueFromChannels,
     organicRevenueByDay,
-    topPages: data?.topPages ?? [],
-    syncedAt: data?.syncedAt,
-    dateRange: data?.dateRange,
+    organicSearchFallbackRows,
+    searchConsoleRows,
+    organicSearchSource,
+    isSearchConsoleConnected,
+    searchConsoleSiteName: data?.searchConsole?.siteName ?? '',
+    searchConsoleSiteUrl: data?.searchConsole?.siteUrl ?? '',
+    searchConsoleSyncedAt: data?.searchConsole?.syncedAt,
+    searchConsoleDateRange: data?.searchConsole?.dateRange,
+    topPages: data?.ga4?.topPages ?? [],
+    syncedAt: data?.ga4?.syncedAt,
+    dateRange: data?.ga4?.dateRange,
     isLoading: isPending,
-    hasData: !!data,
+    hasData: Boolean(data?.ga4),
   };
 }

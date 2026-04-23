@@ -334,12 +334,16 @@ export function CompetitorInsights() {
     const map = new Map<string, SkuInventoryRow>();
     // Τοποθέτησε πρώτα τα manual imports…
     for (const p of products) {
-      const key = (p.sku || '').trim().toLowerCase();
-      if (!key) continue;
-      map.set(key, {
-        stock: parseInventoryField(p.stock_level),
+      const inventory = {
+        stock: parseInventoryField(p.available_stock ?? p.stock_level),
         sold: parseInventoryField(p.qty_sold_period),
-      });
+      };
+      const keys = [p.sku, p.barcode, p.gtin]
+        .map((value) => String(value || '').trim().toLowerCase())
+        .filter(Boolean);
+      for (const key of keys) {
+        map.set(key, inventory);
+      }
     }
     // …και μετά άφησε τα live e-shop stats να υπερισχύσουν.
     for (const [sku, s] of Object.entries(skuStats || {})) {
@@ -552,6 +556,7 @@ export function CompetitorInsights() {
   const [colFilters, setColFilters] = useState<BenchmarkColumnFilters>({});
   const [sortCol, setSortCol] = useState<BenchmarkCol | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const [benchmarkQuickFilter, setBenchmarkQuickFilter] = useState<'all' | 'aboveMarket' | 'belowMarket'>('all');
   const setBenchmarkSort = useCallback((col: string, dir: SortDir) => {
     setSortCol(col as BenchmarkCol);
     setSortDir(dir);
@@ -588,6 +593,12 @@ export function CompetitorInsights() {
 
   const filteredBenchmarks = useMemo(() => {
     let list = [...benchmarks];
+
+    if (benchmarkQuickFilter === 'aboveMarket') {
+      list = list.filter((b) => (b.priceDiff || 0) > 0);
+    } else if (benchmarkQuickFilter === 'belowMarket') {
+      list = list.filter((b) => (b.priceDiff || 0) < 0);
+    }
 
     if (benchmarkSearch) {
       const q = benchmarkSearch.toLowerCase();
@@ -657,6 +668,9 @@ export function CompetitorInsights() {
       }
     } else {
       list.sort((a, b) => {
+        if (benchmarkQuickFilter === 'belowMarket') {
+          return a.priceDiff - b.priceDiff;
+        }
         const ab = a.benchmarkPrice > 0;
         const bb = b.benchmarkPrice > 0;
         if (ab !== bb) return ab ? -1 : 1;
@@ -665,7 +679,7 @@ export function CompetitorInsights() {
     }
 
     return list;
-  }, [benchmarks, benchmarkSearch, colFilters, sortCol, sortDir, brandOptions.length, lookupInventory]);
+  }, [benchmarks, benchmarkQuickFilter, benchmarkSearch, colFilters, sortCol, sortDir, brandOptions.length, lookupInventory]);
 
   const insightsSellerLabel = useMemo(() => {
     const raw = (priceInsightsSellerName || '').trim();
@@ -955,6 +969,11 @@ export function CompetitorInsights() {
               tooltip="SKUs με τιμή ακριβότερη από τη μέση αγοράς."
               icon={<ArrowUp size={18} />}
               color="#EF4444"
+              clickable
+              active={benchmarkQuickFilter === 'aboveMarket'}
+              onClick={() =>
+                setBenchmarkQuickFilter((prev) => (prev === 'aboveMarket' ? 'all' : 'aboveMarket'))
+              }
             />
             <KpiBox
               label="Κάτω από αγορά"
@@ -962,6 +981,11 @@ export function CompetitorInsights() {
               tooltip="SKUs με τιμή φθηνότερη από τη μέση αγοράς."
               icon={<ArrowDown size={18} />}
               color="#22C55E"
+              clickable
+              active={benchmarkQuickFilter === 'belowMarket'}
+              onClick={() =>
+                setBenchmarkQuickFilter((prev) => (prev === 'belowMarket' ? 'all' : 'belowMarket'))
+              }
             />
             <KpiBox
               label="Μέση απόκλιση"
@@ -986,6 +1010,17 @@ export function CompetitorInsights() {
               <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
                 <h3 className="text-base font-semibold text-[#1A1A1A]">Price Benchmarks — Google Merchant Center</h3>
                 <div className="flex items-center gap-2 flex-wrap">
+                  {benchmarkQuickFilter !== 'all' && (
+                    <button
+                      type="button"
+                      onClick={() => setBenchmarkQuickFilter('all')}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-[var(--nts-accent)] bg-[var(--nts-accent)]/5 hover:bg-[var(--nts-accent)]/10 border border-[var(--nts-accent)]/30 rounded-lg transition-colors"
+                      title="Καθαρισμός quick filter benchmark"
+                    >
+                      <XIcon size={12} />
+                      {benchmarkQuickFilter === 'aboveMarket' ? 'Πάνω από αγορά' : 'Κάτω από αγορά'}
+                    </button>
+                  )}
                   {hasActiveColumnFilters && (
                     <button
                       type="button"
@@ -1042,6 +1077,16 @@ export function CompetitorInsights() {
                   </Button>
                 </div>
               </div>
+
+              {benchmarkQuickFilter !== 'all' && (
+                <p className="mb-3 text-xs text-[#6B7280]">
+                  Εμφανίζονται μόνο προϊόντα{' '}
+                  <span className="font-medium text-[#111827]">
+                    {benchmarkQuickFilter === 'aboveMarket' ? 'πάνω από αγορά' : 'κάτω από αγορά'}
+                  </span>
+                  .
+                </p>
+              )}
 
               {benchmarksLoading ? (
                 <div className="py-8 flex justify-center">
@@ -1676,19 +1721,32 @@ function KpiBox({
   tooltip,
   icon,
   color,
+  clickable = false,
+  active = false,
+  onClick,
 }: {
   label: string;
   value: string;
   tooltip: string;
   icon: React.ReactNode;
   color: string;
+  clickable?: boolean;
+  active?: boolean;
+  onClick?: () => void;
 }) {
   return (
-    <Card padding="md" hover>
-      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+    <Card padding="md" hover className={clickable ? 'cursor-pointer' : undefined}>
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={!clickable}
+        className={`flex w-full items-center gap-2 sm:gap-3 min-w-0 text-left ${
+          clickable ? 'focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)] focus:ring-offset-2 rounded-lg' : 'cursor-default'
+        }`}
+      >
         <div
           className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
-          style={{ backgroundColor: `${color}15` }}
+          style={{ backgroundColor: active ? `${color}22` : `${color}15` }}
         >
           <span style={{ color }}>{icon}</span>
         </div>
@@ -1704,7 +1762,7 @@ function KpiBox({
             {value}
           </p>
         </div>
-      </div>
+      </button>
     </Card>
   );
 }

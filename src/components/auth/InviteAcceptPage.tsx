@@ -113,7 +113,7 @@ export function InviteAcceptPage({ token, onAccepted }: InviteAcceptPageProps) {
               <button
                 onClick={() => {
                   const returnUrl = `/invite/${token}`;
-                  window.location.href = `/?returnUrl=${encodeURIComponent(returnUrl)}`;
+                  window.location.href = `/?auth=1&returnUrl=${encodeURIComponent(returnUrl)}`;
                 }}
                 className="w-full py-2.5 rounded-xl bg-[var(--nts-accent)] text-white text-sm font-semibold hover:opacity-90 transition-opacity"
               >

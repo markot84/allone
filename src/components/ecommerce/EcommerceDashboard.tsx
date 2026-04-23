@@ -1,5 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
+import { useBrand } from '../../hooks/useBrand';
 import {
   ShoppingBag,
   ShoppingCart,
@@ -8,6 +10,7 @@ import {
   ChevronDown,
   ChevronUp,
   ArrowRight,
+  Search,
 } from 'lucide-react';
 import {
   AreaChart,
@@ -20,9 +23,13 @@ import {
   CartesianGrid,
   Tooltip as RechartsTooltip,
   ResponsiveContainer,
+  PieChart,
+  Pie,
 } from 'recharts';
 import { Card, CardHeader, KPICard, Tooltip, PageHeader } from '../common';
-import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
+import { useEcommerceSummary, type EcommerceTopProduct } from '../../hooks/useEcommerceSummary';
+import { useMagentoPopularSearches } from '../../hooks/useMagentoPopularSearches';
+import { FirestoreService } from '../../services/firestore';
 import { formatCurrencyCompact, formatNumber } from '../../utils/format';
 import type { KPICardData } from '../common/KPICard';
 import { useGlobalDate, GLOBAL_PERIOD_OPTIONS } from '../../contexts/GlobalDateContext';
@@ -44,6 +51,8 @@ const PLATFORM_COLORS: Record<string, string> = {
 
 type OrderSortField = 'createdAt' | 'total' | 'platform';
 type RowsPerPage = 10 | 20 | 50 | 100 | 'all';
+type ProductScope = 'all' | 'parents_only';
+type TopProductRow = EcommerceTopProduct & { parentSku: string; hasDerivedParent: boolean };
 
 const TOOLTIP_STYLE: React.CSSProperties = {
   backgroundColor: '#fff',
@@ -54,11 +63,209 @@ const TOOLTIP_STYLE: React.CSSProperties = {
   boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
 };
 
+type RawLineItem = {
+  sku?: string;
+  title?: string;
+  name?: string;
+  quantity?: number;
+  price?: number;
+};
+
+type RawEcommerceOrder = {
+  orderId: string;
+  orderName?: string;
+  platform: string;
+  status: string;
+  total: number;
+  currency: string;
+  createdAt: string;
+  lineItems: RawLineItem[];
+  paymentMethod?: string;
+  shippingMethod?: string;
+};
+
+const ECOMMERCE_ORDER_COLLECTIONS: Record<string, string> = {
+  shopify: 'shopify_orders',
+  woocommerce: 'woo_orders',
+  opencart: 'opencart_orders',
+  magento: 'magento_orders',
+};
+
+const METHOD_CHART_COLORS = ['#F97316', '#FB923C', '#FDBA74', '#F59E0B', '#FACC15', '#A3A3A3', '#94A3B8', '#CBD5E1'];
+
+function isCancelledOrderStatus(status: string | null | undefined): boolean {
+  const normalized = String(status || '').trim().toLowerCase();
+  return normalized === 'cancelled' || normalized === 'canceled';
+}
+
+function isDemoLineItem(lineItem: RawLineItem): boolean {
+  const needle = `${lineItem.sku || ''} ${lineItem.title || ''} ${lineItem.name || ''}`.toLowerCase();
+  return needle.includes('demo');
+}
+
+function getNonDemoOrderRevenue(order: RawEcommerceOrder): { revenue: number; isAllDemo: boolean } {
+  if (!order.lineItems.length) return { revenue: order.total, isAllDemo: false };
+  let demoTotal = 0;
+  let nonDemoCount = 0;
+  for (const lineItem of order.lineItems) {
+    if (isDemoLineItem(lineItem)) {
+      demoTotal += (lineItem.price || 0) * (lineItem.quantity || 1);
+    } else {
+      nonDemoCount += 1;
+    }
+  }
+  return {
+    revenue: Math.max(0, order.total - demoTotal),
+    isAllDemo: nonDemoCount === 0,
+  };
+}
+
+function deriveParentSku(sku: string | null | undefined): string {
+  const normalized = String(sku || '').trim();
+  if (!normalized) return '';
+  const match = normalized.match(/^(.+)-([A-Za-z0-9]{1,5})$/);
+  return match ? match[1] : normalized;
+}
+
+function hasDerivedParentSku(sku: string | null | undefined): boolean {
+  const normalized = String(sku || '').trim();
+  if (!normalized) return false;
+  return deriveParentSku(normalized) !== normalized;
+}
+
+function normalizeRawOrder(platform: string, row: Record<string, unknown>): RawEcommerceOrder {
+  const totalValue =
+    platform === 'shopify'
+      ? row.totalPrice
+      : platform === 'woocommerce'
+        ? row.total
+        : platform === 'magento'
+          ? row.grandTotal
+          : row.total;
+
+  return {
+    orderId: String(row.orderId || row.incrementId || row.id || ''),
+    orderName: String(row.orderName || row.orderNumber || row.incrementId || row.orderId || ''),
+    platform,
+    status: String(row.status || row.financialStatus || row.financial_status || ''),
+    total: Number(totalValue || 0),
+    currency: String(row.currency || 'EUR'),
+    createdAt: String(row.createdAt || ''),
+    lineItems: Array.isArray(row.lineItems) ? (row.lineItems as RawLineItem[]) : [],
+    paymentMethod: String(row.paymentMethod || row.payment_method || ''),
+    shippingMethod: String(row.shippingMethod || row.shipping_method || row.shippingDescription || ''),
+  };
+}
+
+async function fetchAllEcommerceOrders(brandId: string, platforms: string[]): Promise<RawEcommerceOrder[]> {
+  const results = await Promise.all(
+    platforms.map(async (platform) => {
+      const collectionName = ECOMMERCE_ORDER_COLLECTIONS[platform];
+      if (!collectionName) return [] as RawEcommerceOrder[];
+      const rows = await FirestoreService.getDocuments<Record<string, unknown>>(collectionName, [], brandId);
+      return rows.map((row) => normalizeRawOrder(platform, row));
+    })
+  );
+  return results.flat();
+}
+
 /** Το Recharts Area χρειάζεται ≥2 σημεία για ορατή γραμμή. */
 function padSparklineForChart(values: number[]): number[] {
   if (values.length === 0) return [];
   if (values.length === 1) return [values[0], values[0]];
   return values;
+}
+
+function normalizeMethodLabel(value: string | null | undefined): string {
+  let s = String(value || '')
+    .replace(/\r\n/g, '\n')
+    .trim();
+  const firstPara = s.split(/\n+/)[0] ?? s;
+  return firstPara.replace(/\s+/g, ' ').trim();
+}
+
+/** Κείμενα τύπου «Προκειμένου να ταυτοποιηθεί…» / IBAN στο τέλος ετικετών πληρωμής Magento. */
+function stripPaymentInstructionTail(s: string): string {
+  let t = s.trim();
+  const boiler = t.search(/Προκειμένου\s+να/i);
+  if (boiler >= 0) t = t.slice(0, boiler).trim();
+  t = t.replace(/\s+GR\d{2}[0-9A-Z]+\s*$/i, '').trim();
+  t = t.replace(/\s*\.\s*$/, '').trim();
+  return t;
+}
+
+/** «Παραλαβή από το κατάστημα - διεύθυνση…» → μόνο ο τίτλος για το pie. */
+function stripStorePickupAddressSuffix(s: string): string {
+  const t = s.trim();
+  if (!/^παραλαβή\s+από\s+το\s+κατάστημα\b/i.test(t)) return t;
+  const m = t.match(/^(.+?)\s+-\s+/);
+  if (m && m[1]) return m[1].trim();
+  return t;
+}
+
+/**
+ * Ομαδοποίηση τρόπων αποστολής για charts: BOX/locker ανά locker → ένα slice,
+ * διπλές ετικέτες τύπου «ACS - ΕΛΤΑ Courier» (Magento shipping_description) → ένας φορέας.
+ */
+function canonicalShippingMethodLabel(raw: string | null | undefined): string {
+  let s = stripStorePickupAddressSuffix(normalizeMethodLabel(raw));
+  if (!s) return '';
+  const lower = s.toLowerCase();
+  if (/\bbox\b|box\s*now|i\s*-?\s*box|locker|θήκ/i.test(lower)) {
+    return 'BOX Now';
+  }
+  if (/\bacs\b/i.test(lower) && (/έλτα|elta/i.test(lower))) {
+    const acsIdx = lower.search(/\bacs\b/i);
+    const eltaCandidates = [lower.indexOf('έλτα'), lower.search(/\belta\b/i)].filter((i) => i >= 0);
+    const eltaIdx = eltaCandidates.length ? Math.min(...eltaCandidates) : -1;
+    if (eltaIdx < 0 || acsIdx <= eltaIdx) return 'ACS Courier';
+    return 'ΕΛΤΑ Courier';
+  }
+  s = s.replace(/^(table\s+rate|flat\s+rate|best\s+way)\s*[-–—]\s*/i, '').trim();
+  return s || normalizeMethodLabel(raw);
+}
+
+/** Για τραπεζική κατάθεση: το Magento βάζει πολλά μηνύματα με « • » — κρατάμε το πρώτο για ευανάγνωστο pie. */
+function canonicalPaymentMethodLabel(raw: string | null | undefined): string {
+  let s = stripPaymentInstructionTail(normalizeMethodLabel(raw));
+  if (!s) return '';
+  const lower = s.toLowerCase();
+  if (
+    lower.includes('bank') ||
+    lower.includes('τραπεζ') ||
+    lower.includes('κατάθεση') ||
+    lower.includes('deposit') ||
+    lower.includes('wire') ||
+    lower.includes('iban')
+  ) {
+    const parts = s.split(/\s*•\s+/).map((p) => p.trim()).filter(Boolean);
+    if (parts.length > 1) return stripPaymentInstructionTail(parts[0]);
+  }
+  return s;
+}
+
+function buildMethodPieData(
+  orders: RawEcommerceOrder[],
+  field: 'paymentMethod' | 'shippingMethod'
+): Array<{ name: string; value: number; color: string }> {
+  const counts = new Map<string, number>();
+  for (const order of orders) {
+    const raw = order[field];
+    const label =
+      field === 'shippingMethod'
+        ? canonicalShippingMethodLabel(raw)
+        : canonicalPaymentMethodLabel(raw);
+    if (!label) continue;
+    counts.set(label, (counts.get(label) || 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([name, value], index) => ({
+      name,
+      value,
+      color: METHOD_CHART_COLORS[index % METHOD_CHART_COLORS.length],
+    }));
 }
 
 function OrderStatusBadge({ status }: { status: string }) {
@@ -87,15 +294,39 @@ function OrderStatusBadge({ status }: { status: string }) {
 }
 
 export function EcommerceDashboard() {
+  const { currentBrand } = useBrand();
+  const brandId = currentBrand?.id ?? null;
   const ecomm = useEcommerceSummary();
+  const magentoSearches = useMagentoPopularSearches();
+
+  const magentoPopularMeta = useMemo(() => {
+    if (magentoSearches.termsProvenance === 'magento_orders_line_items') {
+      return {
+        subtitle:
+          'Προσέγγιση από συχνότητα ονομάτων προϊόντων σε παραγγελίες — το Magento Open Source συνήθως δεν εκθέτει GET /V1/searchTerms. Ενημέρωση με Magento sync.',
+        hitsLabel: 'Εμφανίσεις (παραγγελίες)',
+      };
+    }
+    return {
+      subtitle:
+        'Από Search Terms μέσω REST όταν διατίθεται (Commerce / επέκταση). Διαφορετικά συμπληρώνεται από παραγγελίες. Ενημέρωση: Magento sync.',
+      hitsLabel: 'Χρήσεις (popularity)',
+    };
+  }, [magentoSearches.termsProvenance]);
 
   // Date range: local override (session-only) falls back to global
   const { fromDate: globalFrom, toDate: globalTo, period: globalPeriod, setPeriod: setGlobalPeriod } = useGlobalDate();
   const [localDateFrom, setLocalDateFrom] = useState('');
   const [localDateTo,   setLocalDateTo]   = useState('');
+  /** Πίνακας «Δημοφιλείς αναζητήσεις»: 10 γραμμές, υπόλοιπο με ανάπτυξη */
+  const [magentoPopularExpanded, setMagentoPopularExpanded] = useState(false);
   const effectiveFrom = localDateFrom || globalFrom;
   const effectiveTo   = localDateTo   || globalTo;
   const hasLocalOverride = !!(localDateFrom || localDateTo);
+
+  useEffect(() => {
+    setMagentoPopularExpanded(false);
+  }, [brandId]);
 
   // Date-filtered daily revenue
   const filteredDailyRevenue = useMemo(() => {
@@ -108,14 +339,19 @@ export function EcommerceDashboard() {
     return ecomm.ordersByDay.filter(d => d.date >= effectiveFrom && d.date <= effectiveTo);
   }, [ecomm.ordersByDay, effectiveFrom, effectiveTo]);
 
-  // Recent orders (capped 50) μόνο για το tab "Πρόσφατες Παραγγελίες"
-  // και τα tables πιο κάτω — ΟΧΙ για KPIs.
-  const filteredOrdersForKpi = useMemo(() => {
+  // Recent orders (capped 50) για fallback rendering.
+  const filteredRecentOrdersVisible = useMemo(() => {
     return ecomm.recentOrders.filter(o => {
       const d = (o.createdAt || '').slice(0, 10);
       return d >= effectiveFrom && d <= effectiveTo;
     });
   }, [ecomm.recentOrders, effectiveFrom, effectiveTo]);
+
+  // Χρησιμοποιείται μόνο ως KPI fallback για legacy aggregates.
+  const filteredOrdersForKpi = useMemo(
+    () => filteredRecentOrdersVisible.filter((o) => !isCancelledOrderStatus(o.status)),
+    [filteredRecentOrdersVisible]
+  );
 
   const filteredTotalRevenue = useMemo(
     () => filteredDailyRevenue.reduce((s, d) => s + d.revenue, 0),
@@ -131,6 +367,15 @@ export function EcommerceDashboard() {
   }, [filteredOrdersByDay, filteredOrdersForKpi]);
   const filteredAov = filteredOrderCount > 0 ? filteredTotalRevenue / filteredOrderCount : 0;
 
+  const { data: rawOrders = [], isPending: rawOrdersLoading, isSuccess: rawOrdersLoaded } = useQuery({
+    queryKey: ['ecommerceOrdersRaw', brandId, [...ecomm.connectedPlatforms].sort().join('|')],
+    queryFn: () => (brandId ? fetchAllEcommerceOrders(brandId, ecomm.connectedPlatforms) : Promise.resolve([])),
+    enabled: !!brandId && ecomm.connectedPlatforms.length > 0,
+    staleTime: 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+
   const [orderSort, setOrderSort] = useState<{ field: OrderSortField; dir: 'asc' | 'desc' }>({ field: 'createdAt', dir: 'desc' });
   const [prodSort, setProdSort] = useState<{ field: 'revenue' | 'quantity'; dir: 'asc' | 'desc' }>({ field: 'revenue', dir: 'desc' });
   const [orderSearch, setOrderSearch] = useState('');
@@ -139,6 +384,7 @@ export function EcommerceDashboard() {
   const [orderRows, setOrderRows] = useState<RowsPerPage>(20);
   const [orderPage, setOrderPage] = useState(1);
   const [prodSearch, setProdSearch] = useState('');
+  const [prodScope, setProdScope] = useState<ProductScope>('all');
   const [prodRows, setProdRows] = useState<RowsPerPage>(20);
   const [prodPage, setProdPage] = useState(1);
 
@@ -178,8 +424,93 @@ export function EcommerceDashboard() {
     ];
   }, [filteredTotalRevenue, filteredOrderCount, filteredAov, filteredDailyRevenue, filteredOrdersByDay, ecomm.connectedPlatforms]);
 
+  const ordersForTables = useMemo(() => {
+    if (!rawOrdersLoaded) {
+      return filteredRecentOrdersVisible.map((order) => ({
+        ...order,
+        lineItems: [],
+      }));
+    }
+    return rawOrders
+      .filter((order) => {
+        const day = (order.createdAt || '').slice(0, 10);
+        return day >= effectiveFrom && day <= effectiveTo;
+      })
+      .map((order) => {
+        const { revenue, isAllDemo } = getNonDemoOrderRevenue(order);
+        return isAllDemo ? null : { ...order, total: revenue };
+      })
+      .filter((order): order is RawEcommerceOrder => Boolean(order));
+  }, [rawOrdersLoaded, rawOrders, filteredRecentOrdersVisible, effectiveFrom, effectiveTo]);
+
+  const revenueOrdersForTables = useMemo(
+    () => ordersForTables.filter((order) => !isCancelledOrderStatus(order.status)),
+    [ordersForTables]
+  );
+
+  const topProductsForTables = useMemo<TopProductRow[]>(() => {
+    if (!rawOrdersLoaded) {
+      return ecomm.topProducts.map((product) => ({
+        ...product,
+        parentSku: deriveParentSku(product.sku),
+        hasDerivedParent: hasDerivedParentSku(product.sku),
+      }));
+    }
+    const productMap = new Map<string, { name: string; revenue: number; quantity: number }>();
+    for (const order of revenueOrdersForTables) {
+      for (const lineItem of order.lineItems || []) {
+        if (isDemoLineItem(lineItem)) continue;
+        const key = String(lineItem.sku || lineItem.title || lineItem.name || 'unknown').trim();
+        if (!key) continue;
+        const name = String(lineItem.title || lineItem.name || key);
+        const existing = productMap.get(key) || { name, revenue: 0, quantity: 0 };
+        existing.revenue += (lineItem.price || 0) * (lineItem.quantity || 1);
+        existing.quantity += lineItem.quantity || 1;
+        productMap.set(key, existing);
+      }
+    }
+    return [...productMap.entries()]
+      .map(([sku, data]) => ({
+        sku,
+        name: data.name,
+        revenue: data.revenue,
+        quantity: data.quantity,
+        parentSku: deriveParentSku(sku),
+        hasDerivedParent: hasDerivedParentSku(sku),
+      }))
+      .sort((a, b) => b.revenue - a.revenue);
+  }, [rawOrdersLoaded, revenueOrdersForTables, ecomm.topProducts]);
+
+  /** Μόνο Parent SKU: ομαδοποίηση με deriveParentSku (και απλά SKUs χωρίς suffix παραλλαγής = δικό τους parent). */
+  const parentProductsForTables = useMemo<TopProductRow[]>(() => {
+    const parentMap = new Map<string, { revenue: number; quantity: number; name: string }>();
+    for (const product of topProductsForTables) {
+      const psku = deriveParentSku(product.sku) || product.sku;
+      if (!psku) continue;
+      const existing = parentMap.get(psku) || { revenue: 0, quantity: 0, name: '' };
+      existing.revenue += product.revenue;
+      existing.quantity += product.quantity;
+      const cand = String(product.name || '').trim();
+      if (cand && cand !== psku && cand !== product.sku) {
+        if (!existing.name || cand.length > existing.name.length) existing.name = cand;
+      }
+      parentMap.set(psku, existing);
+    }
+
+    return [...parentMap.entries()]
+      .map(([parentSku, data]) => ({
+        sku: parentSku,
+        name: data.name || parentSku,
+        revenue: data.revenue,
+        quantity: data.quantity,
+        parentSku,
+        hasDerivedParent: true,
+      }))
+      .sort((a, b) => b.revenue - a.revenue);
+  }, [topProductsForTables]);
+
   const sortedOrders = useMemo(() => {
-    const arr = [...filteredOrdersForKpi];
+    const arr = [...ordersForTables];
     arr.sort((a, b) => {
       const dir = orderSort.dir === 'asc' ? 1 : -1;
       if (orderSort.field === 'createdAt') return dir * a.createdAt.localeCompare(b.createdAt);
@@ -187,24 +518,29 @@ export function EcommerceDashboard() {
       return dir * a.platform.localeCompare(b.platform);
     });
     return arr;
-  }, [filteredOrdersForKpi, orderSort]);
+  }, [ordersForTables, orderSort]);
+
+  const productRows = useMemo(
+    () => (prodScope === 'parents_only' ? parentProductsForTables : topProductsForTables),
+    [prodScope, parentProductsForTables, topProductsForTables]
+  );
 
   const sortedProducts = useMemo(() => {
-    const arr = [...ecomm.topProducts];
+    const arr = [...productRows];
     arr.sort((a, b) => {
       const dir = prodSort.dir === 'asc' ? 1 : -1;
       return dir * (a[prodSort.field] - b[prodSort.field]);
     });
     return arr;
-  }, [ecomm.topProducts, prodSort]);
+  }, [productRows, prodSort]);
 
   const orderPlatforms = useMemo(
-    () => Array.from(new Set(ecomm.recentOrders.map((o) => o.platform).filter(Boolean))).sort(),
-    [ecomm.recentOrders]
+    () => Array.from(new Set(ordersForTables.map((o) => o.platform).filter(Boolean))).sort(),
+    [ordersForTables]
   );
   const orderStatuses = useMemo(
-    () => Array.from(new Set(ecomm.recentOrders.map((o) => (o.status || '').toLowerCase()).filter(Boolean))).sort(),
-    [ecomm.recentOrders]
+    () => Array.from(new Set(ordersForTables.map((o) => (o.status || '').toLowerCase()).filter(Boolean))).sort(),
+    [ordersForTables]
   );
 
   const filteredOrders = useMemo(() => {
@@ -220,9 +556,21 @@ export function EcommerceDashboard() {
 
   const filteredProducts = useMemo(() => {
     const q = prodSearch.trim().toLowerCase();
-    if (!q) return sortedProducts;
-    return sortedProducts.filter((p) => `${p.name || ''} ${p.sku || ''}`.toLowerCase().includes(q));
+    return sortedProducts.filter((p) => {
+      if (!q) return true;
+      return `${p.name || ''} ${p.sku || ''} ${p.parentSku || ''}`.toLowerCase().includes(q);
+    });
   }, [sortedProducts, prodSearch]);
+
+  const paymentMethodPieData = useMemo(
+    () => buildMethodPieData(ordersForTables, 'paymentMethod'),
+    [ordersForTables]
+  );
+
+  const shippingMethodPieData = useMemo(
+    () => buildMethodPieData(ordersForTables, 'shippingMethod'),
+    [ordersForTables]
+  );
 
   const orderTotalPages = orderRows === 'all' ? 1 : Math.max(1, Math.ceil(filteredOrders.length / orderRows));
   const prodTotalPages = prodRows === 'all' ? 1 : Math.max(1, Math.ceil(filteredProducts.length / prodRows));
@@ -489,11 +837,176 @@ export function EcommerceDashboard() {
         </Card>
       </div>
 
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader title="Τρόπος Πληρωμής" subtitle={`Κατανομή παραγγελιών (${effectiveFrom} — ${effectiveTo})`} />
+          <div className="px-5 pb-5">
+            {paymentMethodPieData.length > 0 ? (
+              <div className="flex flex-col items-center">
+                <ResponsiveContainer width="100%" height={220}>
+                  <PieChart>
+                    <Pie
+                      data={paymentMethodPieData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={52}
+                      outerRadius={88}
+                      paddingAngle={2}
+                      dataKey="value"
+                      nameKey="name"
+                    >
+                      {paymentMethodPieData.map((entry) => (
+                        <Cell key={entry.name} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <RechartsTooltip
+                      formatter={(value, name) => [`${Number(value ?? 0).toLocaleString()} παραγγελίες`, String(name)]}
+                      contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #E5E7EB' }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5 mt-2">
+                  {paymentMethodPieData.map((entry) => (
+                    <div key={entry.name} className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
+                      <span className="text-[11px] text-[#374151]">{entry.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-[#9CA3AF] py-10 text-center">Δεν υπάρχουν διαθέσιμα δεδομένα τρόπου πληρωμής</p>
+            )}
+          </div>
+        </Card>
+
+        <Card>
+          <CardHeader title="Τρόπος Αποστολής" subtitle={`Κατανομή παραγγελιών (${effectiveFrom} — ${effectiveTo})`} />
+          <div className="px-5 pb-5">
+            {shippingMethodPieData.length > 0 ? (
+              <div className="flex flex-col items-center">
+                <ResponsiveContainer width="100%" height={220}>
+                  <PieChart>
+                    <Pie
+                      data={shippingMethodPieData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={52}
+                      outerRadius={88}
+                      paddingAngle={2}
+                      dataKey="value"
+                      nameKey="name"
+                    >
+                      {shippingMethodPieData.map((entry) => (
+                        <Cell key={entry.name} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <RechartsTooltip
+                      formatter={(value, name) => [`${Number(value ?? 0).toLocaleString()} παραγγελίες`, String(name)]}
+                      contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #E5E7EB' }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5 mt-2">
+                  {shippingMethodPieData.map((entry) => (
+                    <div key={entry.name} className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
+                      <span className="text-[11px] text-[#374151]">{entry.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-[#9CA3AF] py-10 text-center">Δεν υπάρχουν διαθέσιμα δεδομένα τρόπου αποστολής</p>
+            )}
+          </div>
+        </Card>
+      </div>
+
+      {ecomm.connectedPlatforms.includes('magento') && (
+        <Card>
+          <CardHeader
+            title="Δημοφιλείς αναζητήσεις (Magento)"
+            subtitle={magentoPopularMeta.subtitle}
+            icon={<Search className="text-[#F46F25]" size={16} />}
+          />
+          <div className="px-5 pb-5">
+            {magentoSearches.isLoading ? (
+              <p className="text-sm text-[#9CA3AF] py-4 text-center">Φόρτωση…</p>
+            ) : magentoSearches.hasData ? (
+              <div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs" style={{ minWidth: 280 }}>
+                    <thead>
+                      <tr className="border-b border-[#E5E7EB] text-[#6B7280]">
+                        <th className="pb-2 font-medium">Όρος αναζήτησης</th>
+                        <th className="pb-2 font-medium text-right">{magentoPopularMeta.hitsLabel}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(magentoPopularExpanded
+                        ? magentoSearches.terms
+                        : magentoSearches.terms.slice(0, 10)
+                      ).map((row, i) => (
+                        <tr key={`${row.term}-${i}`} className="border-b border-[#F9FAFB] last:border-0">
+                          <td className="py-2 text-[#111827] font-medium">{row.term}</td>
+                          <td className="py-2 text-right tabular-nums text-[#6B7280]">{row.hits.toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {magentoSearches.terms.length > 10 && (
+                  <button
+                    type="button"
+                    aria-expanded={magentoPopularExpanded}
+                    onClick={() => setMagentoPopularExpanded((v) => !v)}
+                    className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold text-[#EA580C] transition-colors hover:bg-[#FFF7ED]"
+                  >
+                    {magentoPopularExpanded ? (
+                      <>
+                        Σύμπτυξη
+                        <ChevronUp size={16} strokeWidth={2} aria-hidden />
+                      </>
+                    ) : (
+                      <>
+                        Δείτε όλες ({magentoSearches.terms.length - 10} ακόμη)
+                        <ChevronDown size={16} strokeWidth={2} aria-hidden />
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="text-sm text-[#6B7280] py-4 space-y-2">
+                <p>
+                  Δεν υπάρχουν ακόμη δεδομένα. Μετά το επόμενο <strong>Magento sync</strong> γεμίζει αυτόματα από τις
+                  παραγγελίες (συχνά ονόματα προϊόντων), εκτός αν το κατάστημα εκθέτει{' '}
+                  <code className="text-xs bg-[#F3F4F6] px-1 rounded">GET /V1/searchTerms</code>.
+                </p>
+                <ul className="list-disc pl-5 text-[13px] space-y-1">
+                  <li>
+                    Το Magento Open Source <strong>συνήθως δεν</strong> παρέχει αυτό το endpoint στο βασικό REST — η
+                    λίστα «Search Terms» είναι στο admin DB, όχι στο module-search webapi.
+                  </li>
+                  <li>Χρειάζονται εισαγόμενες παραγγελίες στο sync για την προσέγγιση από γραμμές προϊόντων.</li>
+                  <li>Για αυθεντικά Search Terms μέσω API: Adobe Commerce ή επέκταση που τα εκθέτει στο REST.</li>
+                </ul>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
+
       {/* Top Products + Recent Orders */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         {/* Top Products */}
         <Card>
-          <CardHeader title="Top Products" subtitle="Κατά έσοδα (90 ημ.)" icon={<Package size={16} />} />
+          <CardHeader
+            title="Top Products"
+            subtitle={rawOrdersLoading ? 'Φόρτωση για το επιλεγμένο διάστημα…' : `Κατά έσοδα (${effectiveFrom} — ${effectiveTo})`}
+            icon={<Package size={16} />}
+          />
           <div className="px-5 pb-5">
             <div className="flex flex-wrap items-center gap-2 mb-3">
               <input
@@ -505,6 +1018,17 @@ export function EcommerceDashboard() {
                 placeholder="Αναζήτηση προϊόντος / SKU"
                 className="h-8 px-2.5 rounded-md border border-[#E5E7EB] text-xs min-w-[220px]"
               />
+              <select
+                value={prodScope}
+                onChange={(e) => {
+                  setProdScope(e.target.value as ProductScope);
+                  setProdPage(1);
+                }}
+                className="h-8 px-2 rounded-md border border-[#E5E7EB] text-xs min-w-[180px]"
+              >
+                <option value="all">Όλα τα SKUs</option>
+                <option value="parents_only">Μόνο Parent SKUs</option>
+              </select>
               <select
                 value={String(prodRows)}
                 onChange={(e) => {
@@ -520,7 +1044,7 @@ export function EcommerceDashboard() {
                 <option value="100">100 / σελίδα</option>
                 <option value="all">Προβολή όλων</option>
               </select>
-              <Tooltip content="Φίλτρα και pagination για γρήγορη εύρεση προϊόντων. Η επιλογή 'Προβολή όλων' δείχνει όλο το σύνολο.">
+              <Tooltip content="Όλα τα SKUs: κάθε γραμμή όπως στο κατάστημα. Μόνο Parent SKU: ομαδοποίηση ανά parent (π.χ. HAT-RED, HAT-BLUE → HAT) και απλά προϊόντα χωρίς παύλα-παραλλαγή μένουν ως δικό τους parent. Εμφανίζεται όνομα προϊόντος όταν υπάρχει από τις παραγγελίες.">
                 <span className="text-[11px] text-[#9CA3AF]">Filters</span>
               </Tooltip>
             </div>
@@ -606,7 +1130,11 @@ export function EcommerceDashboard() {
 
         {/* Recent Orders */}
         <Card>
-          <CardHeader title="Πρόσφατες Παραγγελίες" subtitle="Τελευταίες 50" icon={<ShoppingCart size={16} />} />
+          <CardHeader
+            title="Πρόσφατες Παραγγελίες"
+            subtitle={rawOrdersLoading ? 'Φόρτωση για το επιλεγμένο διάστημα…' : `Στο επιλεγμένο διάστημα (${effectiveFrom} — ${effectiveTo})`}
+            icon={<ShoppingCart size={16} />}
+          />
           <div className="px-5 pb-5">
             <div className="flex flex-wrap items-center gap-2 mb-3">
               <input

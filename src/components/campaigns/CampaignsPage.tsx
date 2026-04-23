@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { TrendingUp, Filter, Download, Search, DollarSign, Trash2, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
+import { TrendingUp, Filter, Download, Search, DollarSign, Trash2, ArrowUp, ArrowDown, ArrowUpDown, Wallet } from 'lucide-react';
 import { Card, CardHeader, Badge, Button, Spinner, useToast, Tooltip, AlertsBanner, PageHeader, MetaAttributionSelector } from '../common';
 import { CampaignsGeoTab } from './CampaignsGeoTab';
 import { DateRangePicker } from '../ui/DateRangePicker';
@@ -453,11 +453,21 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
     let totalSpent = 0;
     let totalConversions = 0;
     let totalConversionValue = 0;
+    /** Άθροισμα max(0, budget − spend) μόνο για καμπάνιες με δηλωμένο budget > 0. */
+    let availableBudget = 0;
+    let hasBudgetData = false;
 
     for (const c of list) {
       totalSpent += c.amount_spent || 0;
       totalConversions += getDisplayConversions(c, convFilterActive);
       totalConversionValue += getDisplayConversionValue(c, convFilterActive);
+
+      const cap = c.budget;
+      if (typeof cap === 'number' && !Number.isNaN(cap) && cap > 0) {
+        hasBudgetData = true;
+        const spent = c.amount_spent || 0;
+        availableBudget += Math.max(0, cap - spent);
+      }
     }
 
     const avgROAS = totalSpent > 0 ? totalConversionValue / totalSpent : 0;
@@ -475,6 +485,8 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
       totalConversionValue,
       avgROAS,
       byChannel,
+      availableBudget,
+      hasBudgetData,
     };
   }, [campaignsInConvView, convFilterActive]);
 
@@ -693,7 +705,27 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
 
       {/* KPI σύνοψης — αμέσως κάτω από ειδοποιήσεις (μόνο στο tab Campaigns) */}
       {activeTab === 'campaigns' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
+          <Card padding="sm">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs text-[#4A4A4A] flex items-center gap-1">
+                  Διαθέσιμο budget{' '}
+                  <Tooltip
+                    content="Άθροισμα (δηλωμένο budget − δαπάνη) ανά καμπάνια όπου υπάρχει budget στο import. Η δαπάνη ακολουθεί το επιλεγμένο εύρος ημερομηνιών· αν δεν εμφανίζεται τιμή, τα campaigns δεν έχουν πεδίο budget."
+                    size={13}
+                  />
+                </p>
+                <p className="text-xl font-bold text-[#1A1A1A] font-mono mt-0.5 tabular-nums">
+                  {summaryStats.hasBudgetData ? `${EUR}${formatCurrency(summaryStats.availableBudget, 2)}` : '—'}
+                </p>
+              </div>
+              <div className="w-10 h-10 shrink-0 bg-[#E0F2FE] rounded-lg flex items-center justify-center">
+                <Wallet size={20} className="text-[#0369A1]" />
+              </div>
+            </div>
+          </Card>
+
           <Card padding="sm">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { UserPlus, Mail, CheckCircle2 } from 'lucide-react';
 import { Button } from '../common';
 import { createInvite } from '../../services/invites';
-import { APP_URL, auth, FUNCTIONS_BASE_URL } from '../../config/firebase';
+import { APP_URL, auth, FUNCTIONS_BASE_URL, getAppCheckHeader } from '../../config/firebase';
 import { useAuth } from '../../hooks';
 import { useBrand } from '../../hooks';
 import type { BrandDepartment } from '../../types';
@@ -46,9 +46,14 @@ export function InviteUserCard({ onInviteCreated }: InviteUserCardProps) {
           if (idToken) {
             const deptLabel = DEPARTMENT_LABELS[department] || '';
             const inviteUrl = `${FUNCTIONS_BASE_URL.replace(/\/$/, '')}/sendInviteEmail`;
+            const appCheck = await getAppCheckHeader();
             const res = await fetch(inviteUrl, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${idToken}`,
+                ...appCheck,
+              },
               body: JSON.stringify({
                 to: email.trim(),
                 brandName: currentBrand.name,

@@ -55,6 +55,211 @@ function getCandidateStoreBases(normalizedStoreUrl: string): string[] {
 const MAGENTO_UA = 'PerformancePlus-MagentoConnector/1.0';
 
 type ProbeFail = { lastStatus: number; lastBody: string; lastUrl: string };
+type MagentoStoreConfig = {
+  id?: number | string;
+  code?: string;
+  website_id?: number | string;
+  store_name?: string;
+  website_name?: string;
+  base_url?: string;
+  secure_base_url?: string;
+};
+
+function normalizeComparableHost(input: string): string {
+  try {
+    const host = new URL(input).hostname.trim().toLowerCase();
+    return host.startsWith('www.') ? host.slice(4) : host;
+  } catch {
+    return String(input || '').trim().toLowerCase().replace(/^www\./, '');
+  }
+}
+
+function normalizeComparableUrl(input: string): string {
+  try {
+    const u = new URL(input);
+    const host = normalizeComparableHost(u.toString());
+    const pathname = u.pathname.replace(/\/+$/, '');
+    return `${host}${pathname}`;
+  } catch {
+    return String(input || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, '');
+  }
+}
+
+function getStoreConfigUrls(config: MagentoStoreConfig): string[] {
+  return [config.base_url, config.secure_base_url].filter((value): value is string => Boolean(value && String(value).trim()));
+}
+
+/** Συνεπής με το chart e-commerce: BOX/lockers σε ένα bucket, διπλές ετικέτες ACS+ΕΛΤΑ. */
+function normalizeMagentoShippingDescription(raw: string | null | undefined): string {
+  let s = String(raw || '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!s) return '';
+  const lower = s.toLowerCase();
+  if (/\bbox\b|box\s*now|i\s*-?\s*box|locker|θήκ/i.test(lower)) {
+    return 'BOX Now';
+  }
+  if (/\bacs\b/i.test(lower) && (/έλτα|elta/i.test(lower))) {
+    const acsIdx = lower.search(/\bacs\b/i);
+    const eltaCandidates = [lower.indexOf('έλτα'), lower.search(/\belta\b/i)].filter((i) => i >= 0);
+    const eltaIdx = eltaCandidates.length ? Math.min(...eltaCandidates) : -1;
+    if (eltaIdx < 0 || acsIdx <= eltaIdx) return 'ACS Courier';
+    return 'ΕΛΤΑ Courier';
+  }
+  return s.replace(/^(table\s+rate|flat\s+rate|best\s+way)\s*[-–—]\s*/i, '').trim() || s;
+}
+
+/**
+ * Τα Marketing › Search Terms του Magento κρατούνται στο DB, αλλά το Open Source **δεν** εκθέτει
+ * λίστα `GET /V1/searchTerms` στο module-search (μόνο `GET /V1/search` για catalog). Commerce / custom
+ * modules μπορεί να το προσθέτουν — δοκιμάζουμε πολλά store scopes. Αν αποτύχει παντού, βλ. fallback.
+ */
+async function fetchAndSaveMagentoPopularSearchTerms(
+  db: Firestore,
+  brandId: string,
+  restApiBase: string,
+  storeCode: string,
+  headers: Record<string, string>
+): Promise<number> {
+  const paths = [
+    'searchTerms?searchCriteria[pageSize]=50&searchCriteria[sortOrders][0][field]=popularity&searchCriteria[sortOrders][0][direction]=DESC',
+    'searchTerms?searchCriteria[pageSize]=50',
+  ];
+  const codeVariants = [...new Set([String(storeCode || '').trim(), '', 'all', 'default'])];
+  for (const code of codeVariants) {
+    for (const path of paths) {
+      try {
+        const url = buildMagentoRestUrl(restApiBase, path, code);
+        const res = await fetch(url, { headers });
+        if (!res.ok) {
+          logger.warn(`[Magento] searchTerms [store=${code || 'default'}] ${path}: HTTP ${res.status}`);
+          continue;
+        }
+        const body = (await res.json()) as { items?: unknown[] };
+        const items = Array.isArray(body.items) ? body.items : [];
+        if (items.length === 0) continue;
+        const terms: { term: string; hits: number }[] = [];
+        for (const it of items as Record<string, unknown>[]) {
+          const term = String(
+            it.query_text ?? it.search_text ?? it.query ?? it.term ?? it.keyword ?? it.display_text ?? ''
+          )
+            .replace(/\s+/g, ' ')
+            .trim();
+          if (!term) continue;
+          const hits = Number(it.popularity ?? it.hits ?? it.num_results ?? it.count ?? 0) || 0;
+          terms.push({ term, hits });
+        }
+        if (terms.length === 0) continue;
+        await db.doc(`magento_popular_searches/${brandId}`).set(
+          {
+            brandId,
+            terms: terms.slice(0, 50),
+            syncedAt: FieldValue.serverTimestamp(),
+            source: 'magento_searchTerms_api',
+            termsProvenance: 'magento_searchTerms_rest',
+          },
+          { merge: true }
+        );
+        logger.info(`[Magento] Popular search terms (REST): ${terms.length} for brand ${brandId}`);
+        return terms.length;
+      } catch (e) {
+        logger.warn(`[Magento] searchTerms failed [store=${code || 'default'}] (${path}):`, e);
+      }
+    }
+  }
+  return 0;
+}
+
+/** Όταν δεν υπάρχει REST για search terms: top ονόματα προϊόντων από γραμμές παραγγελιών (ίδιο sync). */
+async function savePopularSearchesFromMagentoOrders(db: Firestore, brandId: string): Promise<number> {
+  const snap = await db.collection('magento_orders').where('brandId', '==', brandId).limit(800).get();
+  if (snap.empty) return 0;
+  const counts = new Map<string, number>();
+  for (const d of snap.docs) {
+    const lineItems = (d.data().lineItems as Record<string, unknown>[]) || [];
+    for (const li of lineItems) {
+      const name = String(li?.name ?? '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (name.length < 2) continue;
+      const key = name.slice(0, 250);
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+  }
+  const terms = [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 50)
+    .map(([term, hits]) => ({ term, hits }));
+  if (terms.length === 0) return 0;
+  await db.doc(`magento_popular_searches/${brandId}`).set(
+    {
+      brandId,
+      terms,
+      syncedAt: FieldValue.serverTimestamp(),
+      source: 'magento_orders_line_items',
+      termsProvenance: 'magento_orders_line_items',
+    },
+    { merge: true }
+  );
+  logger.info(`[Magento] Popular “search” proxy from order line items: ${terms.length} for brand ${brandId}`);
+  return terms.length;
+}
+
+function getMagentoShopLabel(config: MagentoStoreConfig | null, fallbackUrl: string): string {
+  const candidateUrl = getStoreConfigUrls(config || {})[0];
+  if (candidateUrl) {
+    return candidateUrl.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+  }
+  return config?.store_name || fallbackUrl.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+}
+
+function pickMagentoStoreConfig(
+  configs: unknown[],
+  storeUrl: string,
+  preferredStoreCode?: string
+): { selected: MagentoStoreConfig | null; availableCodes: string[] } {
+  const typed = configs.filter((cfg): cfg is MagentoStoreConfig => typeof cfg === 'object' && cfg !== null);
+  const availableCodes = typed.map((cfg) => String(cfg.code || '').trim()).filter(Boolean);
+  const requestedCode = String(preferredStoreCode || '').trim().toLowerCase();
+  if (requestedCode) {
+    const exact = typed.find((cfg) => String(cfg.code || '').trim().toLowerCase() === requestedCode);
+    return { selected: exact || null, availableCodes };
+  }
+
+  const targetHost = normalizeComparableHost(storeUrl);
+  const targetUrl = normalizeComparableUrl(storeUrl);
+  const ranked = typed
+    .map((cfg) => {
+      let score = 0;
+      for (const rawUrl of getStoreConfigUrls(cfg)) {
+        const cfgHost = normalizeComparableHost(rawUrl);
+        const cfgUrl = normalizeComparableUrl(rawUrl);
+        if (cfgHost && cfgHost === targetHost) score = Math.max(score, 100);
+        if (cfgUrl && (cfgUrl === targetUrl || targetUrl.startsWith(cfgUrl) || cfgUrl.startsWith(targetUrl))) {
+          score = Math.max(score, 120);
+        }
+      }
+      if (String(cfg.code || '').trim().toLowerCase() === 'admin') score -= 1000;
+      return { cfg, score };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  const selected = ranked.find((item) => item.score > 0)?.cfg
+    || typed.find((cfg) => String(cfg.code || '').trim().toLowerCase() !== 'admin')
+    || typed[0]
+    || null;
+
+  return { selected, availableCodes };
+}
+
+function buildMagentoRestUrl(restApiBase: string, endpoint: string, storeCode?: string): string {
+  const cleanBase = restApiBase.replace(/\/+$/, '');
+  const cleanEndpoint = endpoint.replace(/^\/+/, '').replace(/^V1\/+/, '');
+  const encodedStoreCode = String(storeCode || '').trim();
+  return encodedStoreCode
+    ? `${cleanBase}/rest/${encodeURIComponent(encodedStoreCode)}/V1/${cleanEndpoint}`
+    : `${cleanBase}/rest/V1/${cleanEndpoint}`;
+}
 
 /**
  * Δοκιμάζει όλους τους συνήθεις τρόπους πρόσβασης στο REST API.
@@ -134,11 +339,12 @@ function formatMagentoProbeError(fail: ProbeFail): string {
 export async function saveMagentoCredentials(
   brandId: string,
   storeUrl: string,
-  accessToken: string
-): Promise<{ success: boolean; shopName?: string; error?: string }> {
+  accessToken: string,
+  preferredStoreCode?: string
+): Promise<{ success: boolean; shopName?: string; storeCode?: string; storeName?: string; error?: string }> {
   const normalizedUrl = normalizeStoreUrl(storeUrl);
   const tokenPlain = normalizeMagentoToken(accessToken);
-  const testResult = await testMagentoConnection(normalizedUrl, tokenPlain);
+  const testResult = await testMagentoConnection(normalizedUrl, tokenPlain, preferredStoreCode);
 
   if (!testResult.success) {
     return { success: false, error: testResult.error };
@@ -152,6 +358,9 @@ export async function saveMagentoCredentials(
         /** Πρόθεμα για όλα τα REST calls — μπορεί να τελειώνει σε /index.php */
         restApiBase: testResult.restApiBase || normalizedUrl,
         shopName: testResult.shopName || normalizedUrl,
+        storeCode: testResult.storeCode || '',
+        storeName: testResult.storeName || '',
+        storeId: testResult.storeId ?? null,
         magentoVersion: testResult.version || '',
         accessToken: encryptToken(tokenPlain),
         connectedAt: FieldValue.serverTimestamp(),
@@ -161,7 +370,12 @@ export async function saveMagentoCredentials(
   );
 
   logger.info(`[Magento] Connected brand ${brandId} to store ${normalizedUrl}`);
-  return { success: true, shopName: testResult.shopName };
+  return {
+    success: true,
+    shopName: testResult.shopName,
+    storeCode: testResult.storeCode,
+    storeName: testResult.storeName,
+  };
 }
 
 /**
@@ -170,10 +384,14 @@ export async function saveMagentoCredentials(
  */
 export async function testMagentoConnection(
   storeUrl: string,
-  accessToken: string
+  accessToken: string,
+  preferredStoreCode?: string
 ): Promise<{
   success: boolean;
   shopName?: string;
+  storeCode?: string;
+  storeName?: string;
+  storeId?: number;
   version?: string;
   restApiBase?: string;
   error?: string;
@@ -185,9 +403,20 @@ export async function testMagentoConnection(
     }
 
     const { configs, restApiBase } = probe;
-    const storeName = (configs[0] as { base_url?: string; store_name?: string })?.base_url
-      || (configs[0] as { store_name?: string })?.store_name
-      || storeUrl;
+    const { selected, availableCodes } = pickMagentoStoreConfig(configs, storeUrl, preferredStoreCode);
+    if (preferredStoreCode && !selected) {
+      return {
+        success: false,
+        error: availableCodes.length
+          ? `Το store code "${preferredStoreCode}" δεν βρέθηκε. Διαθέσιμα codes: ${availableCodes.join(', ')}`
+          : `Το store code "${preferredStoreCode}" δεν βρέθηκε στο Magento storeConfigs.`,
+      };
+    }
+
+    const storeName = getMagentoShopLabel(selected, storeUrl);
+    const resolvedStoreCode = String(selected?.code || preferredStoreCode || '').trim();
+    const resolvedStoreName = String(selected?.store_name || '').trim();
+    const storeIdNum = Number(selected?.id);
 
     const headers: Record<string, string> = {
       Authorization: `Bearer ${normalizeMagentoToken(accessToken)}`,
@@ -214,6 +443,9 @@ export async function testMagentoConnection(
       success: true,
       restApiBase,
       shopName: String(storeName).replace(/^https?:\/\//, '').replace(/\/+$/, ''),
+      storeCode: resolvedStoreCode || undefined,
+      storeName: resolvedStoreName || undefined,
+      storeId: Number.isFinite(storeIdNum) ? storeIdNum : undefined,
       version,
     };
   } catch (error) {
@@ -246,6 +478,8 @@ export async function fetchMagentoData(brandId: string): Promise<{
 
   const storeUrl = String(connector.storeUrl || '').replace(/\/+$/, '');
   const restApiBase = String((connector as { restApiBase?: string }).restApiBase || storeUrl).replace(/\/+$/, '');
+  const storeCode = String((connector as { storeCode?: string }).storeCode || '').trim();
+  const storeId = Number((connector as { storeId?: number | string }).storeId);
   const accessToken = decryptToken(connector.accessToken);
   if (!accessToken) {
     return { success: false, imported: 0, error: 'Magento token unavailable — reconnect required' };
@@ -278,10 +512,15 @@ export async function fetchMagentoData(brandId: string): Promise<{
         'searchCriteria[sortOrders][0][direction]': 'DESC',
         'searchCriteria[pageSize]': '100',
         'searchCriteria[currentPage]': String(currentPage),
-        'fields': 'items[entity_id,increment_id,created_at,updated_at,status,grand_total,subtotal,tax_amount,discount_amount,total_item_count,order_currency_code,items[sku,name,qty_ordered,price,product_id]],total_count',
+        'fields': 'items[entity_id,increment_id,created_at,updated_at,status,grand_total,subtotal,tax_amount,discount_amount,total_item_count,order_currency_code,shipping_description,payment[method,additional_information],items[sku,name,qty_ordered,price,product_id]],total_count',
       });
+      if (Number.isFinite(storeId) && storeId > 0) {
+        searchParams.set('searchCriteria[filter_groups][1][filters][0][field]', 'store_id');
+        searchParams.set('searchCriteria[filter_groups][1][filters][0][value]', String(storeId));
+        searchParams.set('searchCriteria[filter_groups][1][filters][0][condition_type]', 'eq');
+      }
 
-      const res = await fetch(`${restApiBase}/rest/V1/orders?${searchParams}`, { headers });
+      const res = await fetch(buildMagentoRestUrl(restApiBase, `orders?${searchParams.toString()}`, storeCode), { headers });
       if (!res.ok) {
         logger.error(`[Magento] Orders fetch failed (${res.status})`);
         break;
@@ -292,6 +531,11 @@ export async function fetchMagentoData(brandId: string): Promise<{
       const totalCount: number = body.total_count || 0;
 
       for (const o of orders) {
+        const paymentAdditionalInfo = Array.isArray(o.payment?.additional_information)
+          ? o.payment.additional_information.filter(Boolean).join(' • ')
+          : typeof o.payment?.additional_information === 'string'
+            ? o.payment.additional_information
+            : '';
         orderItems.push({
           id: `mag_${o.entity_id}`,
           data: {
@@ -306,6 +550,8 @@ export async function fetchMagentoData(brandId: string): Promise<{
             discountAmount: parseFloat(o.discount_amount || '0'),
             totalItemCount: parseInt(o.total_item_count || '0', 10),
             currency: o.order_currency_code || 'EUR',
+            paymentMethod: paymentAdditionalInfo || o.payment?.method || '',
+            shippingMethod: normalizeMagentoShippingDescription(o.shipping_description || ''),
             lineItems: (o.items || []).slice(0, 50).map((li: any) => ({
               sku: li.sku || '',
               name: li.name || '',
@@ -337,6 +583,11 @@ export async function fetchMagentoData(brandId: string): Promise<{
       logger.info(`[Magento] Orders: ${orderItems.length} imported for brand ${brandId}`);
     }
 
+    const popularN = await fetchAndSaveMagentoPopularSearchTerms(db, brandId, restApiBase, storeCode, headers);
+    if (popularN === 0) {
+      await savePopularSearchesFromMagentoOrders(db, brandId);
+    }
+
     // ── Products ───────────────────────────────────────────────────────
     const prodItems: { id: string; data: Record<string, unknown> }[] = [];
     let prodPage = 1;
@@ -349,7 +600,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
         'fields': 'items[id,sku,name,type_id,status,price,weight,created_at,updated_at,extension_attributes[stock_item[qty,is_in_stock]],custom_attributes],total_count',
       });
 
-      const res = await fetch(`${restApiBase}/rest/V1/products?${searchParams}`, { headers });
+      const res = await fetch(buildMagentoRestUrl(restApiBase, `products?${searchParams.toString()}`, storeCode), { headers });
       if (!res.ok) break;
 
       const body = await res.json();

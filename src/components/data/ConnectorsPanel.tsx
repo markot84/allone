@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo, type ComponentType } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useBrand } from '../../hooks/useBrand';
 import { useAuth } from '../../hooks/useAuth';
 import { useBrandMembers } from '../../hooks/useCoordination';
 import { useModules } from '../../hooks/useModules';
-import { auth } from '../../config/firebase';
+import { auth, FUNCTIONS_BASE_URL } from '../../config/firebase';
 import { getLastImportDates } from '../../services/import';
 import { coerceToDate } from '../../utils/coerceDate';
 import { clearOAuthSession, readOAuthSessionPayload } from '../../utils/oauthSession';
@@ -22,6 +22,11 @@ import {
   X,
   Eye,
   EyeOff,
+  Megaphone,
+  BarChart3,
+  ShoppingBag,
+  Boxes,
+  type LucideProps,
 } from 'lucide-react';
 
 interface AdAccount {
@@ -39,13 +44,97 @@ interface ConnectorState {
   // Google Ads
   customerId?: string;
   customerName?: string;
+  // Search Console
+  siteUrl?: string;
+  siteName?: string;
   // Meta
   adAccountIds?: string[];
   adAccountNames?: string[];
   expiresAt?: number;
+  // Magento / commerce
+  shopName?: string;
+  shopDomain?: string;
+  storeCode?: string;
+  storeName?: string;
+  // Megaventory
+  accountName?: string;
+  currency?: string;
 }
 
-type ConnectorId = 'google_ads' | 'meta' | 'tiktok' | 'merchant' | 'ga4' | 'shopify' | 'woocommerce' | 'opencart' | 'magento';
+type ConnectorId = 'google_ads' | 'meta' | 'tiktok' | 'merchant' | 'ga4' | 'search_console' | 'shopify' | 'woocommerce' | 'opencart' | 'magento' | 'megaventory';
+
+const CONNECTOR_GROUP_ORDER = ['marketing', 'analytics', 'commerce', 'operations'] as const;
+type ConnectorGroupId = (typeof CONNECTOR_GROUP_ORDER)[number];
+
+type GroupIcon = ComponentType<LucideProps>;
+
+/** Όλες οι ομάδες: ίδια διακριτική πράσινη παλέτα (χωρίς μπλε/πορτοκαλί ανά section). */
+const CONNECTOR_GROUP_VISUAL = {
+  blobA: 'bg-emerald-400/14',
+  blobB: 'bg-green-300/10',
+  blobC: 'bg-emerald-200/12',
+  stripe: 'border-emerald-500',
+  iconGradient: 'bg-gradient-to-br from-emerald-600 to-green-700',
+  iconShadow: 'shadow-lg shadow-emerald-600/15',
+  countChip: 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200/90',
+} as const;
+
+const CONNECTOR_GROUP_META: Record<
+  ConnectorGroupId,
+  {
+    title: string;
+    Icon: GroupIcon;
+    blobA: string;
+    blobB: string;
+    blobC: string;
+    stripe: string;
+    iconGradient: string;
+    iconShadow: string;
+    countChip: string;
+  }
+> = {
+  marketing: {
+    title: 'Διαφήμιση & ανάπτυξη',
+    Icon: Megaphone,
+    ...CONNECTOR_GROUP_VISUAL,
+  },
+  analytics: {
+    title: 'Analytics & organic',
+    Icon: BarChart3,
+    ...CONNECTOR_GROUP_VISUAL,
+  },
+  commerce: {
+    title: 'E-commerce & κανάλια πωλήσεων',
+    Icon: ShoppingBag,
+    ...CONNECTOR_GROUP_VISUAL,
+  },
+  operations: {
+    title: 'ERP & λειτουργίες',
+    Icon: Boxes,
+    ...CONNECTOR_GROUP_VISUAL,
+  },
+};
+
+function getConnectorGroupDescription(id: ConnectorGroupId, isB2B: boolean): string {
+  switch (id) {
+    case 'marketing':
+      return isB2B
+        ? 'Paid media, benchmarks και growth signals για B2B pipeline και demand.'
+        : 'Διαφημιστικές πλατφόρμες και εργαλεία ανάπτυξης (ROAS, spend, competitive pricing).';
+    case 'analytics':
+      return isB2B
+        ? 'Μετρήσεις ιστοτόπου και organic visibility για account-based και inbound.'
+        : 'GA4, Search Console — sessions, funnels, organic queries & CTR.';
+    case 'commerce':
+      return isB2B
+        ? 'Σύνδεση e-shop / καναλιών πώλησης για κατάλογο, παραγγελίες και απόθεμα.'
+        : 'Shopify, WooCommerce, OpenCart, Magento — προϊόντα, παραγγελίες, stock.';
+    case 'operations':
+      return 'Megaventory — τιμολόγια, αγορές, αποθέματα και προμηθευτές (λειτουργική εικόνα).';
+    default:
+      return '';
+  }
+}
 
 interface ConnectorConfig {
   id: ConnectorId;
@@ -53,14 +142,13 @@ interface ConnectorConfig {
   description: string;
   icon: string;
   color: string;
-  bgColor: string;
-  borderColor: string;
   syncLabel?: string;
   authType?: 'oauth' | 'credentials';
   readOnlyNotice?: string;
   comingSoon?: boolean;
   moduleId?: ModuleId;
-  category: 'core' | 'commerce';
+  /** Ομαδοποίηση στη σελίδα συνδέσεων */
+  group: ConnectorGroupId;
 }
 
 const CONNECTORS: ConnectorConfig[] = [
@@ -70,11 +158,9 @@ const CONNECTORS: ConnectorConfig[] = [
     description: 'Αυτόματη εισαγωγή campaigns, impressions, clicks, ROAS',
     icon: '🔍',
     color: '#4285F4',
-    bgColor: 'bg-blue-50',
-    borderColor: 'border-blue-200',
     readOnlyNotice: 'Αποκλειστικά ανάγνωση δεδομένων — δεν τροποποιούμε τον λογαριασμό σας',
     moduleId: 'campaigns',
-    category: 'core',
+    group: 'marketing',
   },
   {
     id: 'meta',
@@ -82,11 +168,9 @@ const CONNECTORS: ConnectorConfig[] = [
     description: 'Αυτόματη εισαγωγή campaigns, spend, conversions, ROAS',
     icon: '📘',
     color: '#1877F2',
-    bgColor: 'bg-indigo-50',
-    borderColor: 'border-indigo-200',
     readOnlyNotice: 'Αποκλειστικά ανάγνωση δεδομένων — δεν τροποποιούμε τον λογαριασμό σας',
     moduleId: 'campaigns',
-    category: 'core',
+    group: 'marketing',
   },
   {
     id: 'tiktok',
@@ -94,11 +178,9 @@ const CONNECTORS: ConnectorConfig[] = [
     description: 'Αυτόματη εισαγωγή campaigns, spend, conversions και revenue metrics',
     icon: '🎵',
     color: '#111111',
-    bgColor: 'bg-fuchsia-50',
-    borderColor: 'border-fuchsia-200',
     readOnlyNotice: 'Αποκλειστικά ανάγνωση δεδομένων — δεν τροποποιούμε τον λογαριασμό σας',
     moduleId: 'campaigns',
-    category: 'core',
+    group: 'marketing',
   },
   {
     id: 'merchant',
@@ -106,12 +188,10 @@ const CONNECTORS: ConnectorConfig[] = [
     description: 'Price benchmarking — σύγκριση τιμών σας vs αγορά ανά SKU',
     icon: '🛒',
     color: '#0D652D',
-    bgColor: 'bg-emerald-50',
-    borderColor: 'border-emerald-200',
     syncLabel: 'benchmarks',
     readOnlyNotice: 'Read-only — αποκλειστικά ανάγνωση αναφορών τιμών',
     moduleId: 'competitive',
-    category: 'core',
+    group: 'marketing',
   },
   {
     id: 'ga4',
@@ -119,12 +199,21 @@ const CONNECTORS: ConnectorConfig[] = [
     description: 'Sessions, users, traffic sources, top pages, bounce rate',
     icon: '📊',
     color: '#E37400',
-    bgColor: 'bg-orange-50',
-    borderColor: 'border-orange-200',
     syncLabel: 'days',
     readOnlyNotice: 'Read-only — analytics.readonly scope',
     moduleId: 'analytics',
-    category: 'core',
+    group: 'analytics',
+  },
+  {
+    id: 'search_console',
+    name: 'Google Search Console',
+    description: 'Organic queries, clicks, impressions, CTR και average position',
+    icon: '🔎',
+    color: '#0F9D58',
+    syncLabel: 'queries',
+    readOnlyNotice: 'Read-only — webmasters.readonly scope',
+    moduleId: 'analytics',
+    group: 'analytics',
   },
   {
     id: 'shopify',
@@ -132,11 +221,9 @@ const CONNECTORS: ConnectorConfig[] = [
     description: 'Σύνδεση e-shop — products, orders, customers, inventory',
     icon: '🟢',
     color: '#96BF48',
-    bgColor: 'bg-lime-50',
-    borderColor: 'border-lime-200',
     syncLabel: 'items',
     moduleId: 'ecommerce',
-    category: 'commerce',
+    group: 'commerce',
   },
   {
     id: 'woocommerce',
@@ -144,12 +231,10 @@ const CONNECTORS: ConnectorConfig[] = [
     description: 'Σύνδεση WordPress e-shop — products, orders, customers',
     icon: '🟣',
     color: '#7F54B3',
-    bgColor: 'bg-purple-50',
-    borderColor: 'border-purple-200',
     syncLabel: 'items',
     authType: 'credentials',
     moduleId: 'ecommerce',
-    category: 'commerce',
+    group: 'commerce',
   },
   {
     id: 'opencart',
@@ -157,12 +242,10 @@ const CONNECTORS: ConnectorConfig[] = [
     description: 'Σύνδεση OpenCart e-shop — products, orders, customers',
     icon: '🛍️',
     color: '#23AFFE',
-    bgColor: 'bg-sky-50',
-    borderColor: 'border-sky-200',
     syncLabel: 'items',
     authType: 'credentials',
     moduleId: 'ecommerce',
-    category: 'commerce',
+    group: 'commerce',
   },
   {
     id: 'magento',
@@ -170,18 +253,30 @@ const CONNECTORS: ConnectorConfig[] = [
     description: 'Σύνδεση Magento e-shop — products, orders, customers',
     icon: '🔶',
     color: '#F46F25',
-    bgColor: 'bg-orange-50',
-    borderColor: 'border-orange-200',
     syncLabel: 'items',
     authType: 'credentials',
     moduleId: 'ecommerce',
-    category: 'commerce',
+    group: 'commerce',
+  },
+  {
+    id: 'megaventory',
+    name: 'Megaventory ERP',
+    description: 'Τιμολόγια, παραγγελίες, αποθέματα, προμηθευτές από το Megaventory',
+    icon: '📦',
+    color: '#0EA5E9',
+    syncLabel: 'records',
+    authType: 'credentials',
+    moduleId: 'finances',
+    group: 'operations',
   },
 ];
 
-const FUNCTIONS_BASE =
+/** Ίδιο fallback με `firebase.ts` — αποφεύγει λάθος base URL (Failed to fetch). */
+const FUNCTIONS_BASE = (
   import.meta.env.VITE_FUNCTIONS_URL ||
-  'https://europe-west1-performance-plus-4a5b2.cloudfunctions.net';
+  FUNCTIONS_BASE_URL ||
+  'https://europe-west1-performance-plus-4a5b2.cloudfunctions.net'
+).replace(/\/$/, '');
 
 // ─── Account Picker Modal ────────────────────────────────────────
 
@@ -206,14 +301,19 @@ function AccountPickerModal({
 
   const isMerchant = provider === 'merchant';
   const isGA4 = provider === 'ga4';
+  const isSearchConsole = provider === 'search_console';
   const isTikTok = provider === 'tiktok';
   const modalTitle = isGA4
     ? 'Επιλογή GA4 Property'
+    : isSearchConsole
+      ? 'Επιλογή Search Console Property'
     : isMerchant
       ? 'Επιλογή Merchant Center Account'
       : 'Επιλογή Διαφημιστικού Λογαριασμού';
   const manualHint = isGA4
     ? 'Εισάγετε το GA4 Property ID σας.'
+    : isSearchConsole
+      ? 'Εισάγετε το Search Console property URL σας.'
     : isMerchant
       ? 'Εισάγετε το Merchant Center ID σας.'
       : isTikTok
@@ -221,12 +321,14 @@ function AccountPickerModal({
         : 'Εισάγετε το ID του διαφημιστικού sub-account, όχι του Manager Account (MCC).';
   const manualHelp = isGA4
     ? 'GA4 → Admin → Property Settings → Property ID'
+    : isSearchConsole
+      ? 'Search Console → Επιλογή property URL ή sc-domain property'
     : isMerchant
       ? 'Merchant Center → Ρυθμίσεις → Account ID'
       : isTikTok
         ? 'TikTok Ads Manager → Advertiser ID'
         : 'Google Ads → επιλογή sub-account → Ρυθμίσεις → Customer ID';
-  const manualPlaceholder = isGA4 ? 'π.χ. 123456789' : isMerchant ? 'π.χ. 123456789' : isTikTok ? 'π.χ. 7123456789012345678' : 'π.χ. 123-456-7890';
+  const manualPlaceholder = isGA4 ? 'π.χ. 123456789' : isSearchConsole ? 'π.χ. https://www.example.com/' : isMerchant ? 'π.χ. 123456789' : isTikTok ? 'π.χ. 7123456789012345678' : 'π.χ. 123-456-7890';
 
   const handleConfirm = () => {
     if (manualMode) {
@@ -551,6 +653,7 @@ function MagentoCredentialsModal({
 }) {
   const [storeUrl, setStoreUrl] = useState('');
   const [accessToken, setAccessToken] = useState('');
+  const [storeCode, setStoreCode] = useState('');
   const [showToken, setShowToken] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -576,6 +679,7 @@ function MagentoCredentialsModal({
           provider: 'magento',
           storeUrl: storeUrl.trim(),
           accessToken: accessToken.trim(),
+          storeCode: storeCode.trim() || undefined,
         }),
       });
 
@@ -637,6 +741,21 @@ function MagentoCredentialsModal({
               </button>
             </div>
           </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>Store Code (προαιρετικό)</label>
+            <input
+              type="text"
+              value={storeCode}
+              onChange={(e) => setStoreCode(e.target.value)}
+              placeholder="π.χ. base, webgreek, padel_com"
+              style={inputStyle}
+              onKeyDown={(e) => e.key === 'Enter' && handleConnect()}
+            />
+            <p style={{ margin: '6px 0 0', fontSize: '11px', color: '#9CA3AF', lineHeight: '1.45' }}>
+              Αν το Magento installation έχει πολλά store views, βάλε εδώ το σωστό code. Αν μείνει κενό,
+              το σύστημα προσπαθεί πρώτα να βρει το σωστό store από το URL του e-shop.
+            </p>
+          </div>
 
           <p style={{ margin: 0, fontSize: '11px', color: '#9CA3AF', lineHeight: '1.5' }}>
             <strong style={{ color: '#6B7280' }}>Magento:</strong> αν εμφανίζεται «Integration not secure», συνήθως τα πεδία{' '}
@@ -666,6 +785,136 @@ function MagentoCredentialsModal({
             onClick={handleConnect}
             disabled={!isValid || loading}
             style={{ flex: 1, padding: '9px 16px', borderRadius: '8px', border: 'none', backgroundColor: (!isValid || loading) ? '#FDBA74' : '#F97316', fontSize: '13px', fontWeight: 600, cursor: (!isValid || loading) ? 'not-allowed' : 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+          >
+            {loading && <Spinner size="sm" />}
+            {loading ? 'Σύνδεση...' : 'Σύνδεση & Επαλήθευση'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Megaventory Credentials Modal ─────────────────────────────────
+
+function MegaventoryCredentialsModal({
+  brandId,
+  onSuccess,
+  onCancel,
+}: {
+  brandId: string;
+  onSuccess: () => void;
+  onCancel: () => void;
+}) {
+  const [apiKey, setApiKey] = useState('');
+  const [showKey, setShowKey] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const toast = useToast();
+
+  const handleConnect = async () => {
+    if (!apiKey.trim()) return;
+    setLoading(true);
+    setError('');
+
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error('Not authenticated');
+
+      const res = await fetch(`${FUNCTIONS_BASE}/connectorSaveCredentials`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          brandId,
+          provider: 'megaventory',
+          apiKey: apiKey.trim(),
+        }),
+      });
+
+      const result = await res.json();
+      if (result.success) {
+        toast.success(`Megaventory συνδέθηκε${result.accountName ? `: ${result.accountName}` : ''}`);
+        onSuccess();
+      } else {
+        setError(result.error || 'Connection failed');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const inputStyle = { width: '100%', borderRadius: '8px', border: '1px solid #E5E7EB', padding: '10px 12px', fontSize: '14px', backgroundColor: '#F9FAFB', outline: 'none', boxSizing: 'border-box' as const };
+  const isValid = apiKey.trim().length > 0;
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)', padding: '16px' }}>
+      <div style={{ maxWidth: '460px', width: '100%', backgroundColor: '#fff', borderRadius: '16px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid #F3F4F6' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontSize: '24px' }}>📦</span>
+            <div>
+              <p style={{ margin: 0, fontWeight: 600, fontSize: '14px', color: '#111827' }}>Σύνδεση Megaventory</p>
+              <p style={{ margin: 0, fontSize: '12px', color: '#6B7280' }}>API key από Megaventory → My Profile</p>
+            </div>
+          </div>
+          <button onClick={onCancel} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: '4px' }}>
+            <X size={18} />
+          </button>
+        </div>
+
+        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>API Key</label>
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showKey ? 'text' : 'password'}
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder="π.χ. 8b5f6c... (32+ χαρακτήρες)"
+                style={{ ...inputStyle, paddingRight: '40px' }}
+                onKeyDown={(e) => e.key === 'Enter' && handleConnect()}
+              />
+              <button
+                type="button"
+                onClick={() => setShowKey(!showKey)}
+                style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: '2px' }}
+              >
+                {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+          </div>
+
+          <p style={{ margin: 0, fontSize: '11px', color: '#9CA3AF', lineHeight: '1.5' }}>
+            <strong style={{ color: '#6B7280' }}>Πού θα το βρεις:</strong> Megaventory → επάνω δεξιά (avatar) → <strong>My Profile</strong> →
+            καρτέλα <strong>API Access</strong> → Generate / Copy <strong>API key</strong>.
+            Χρειάζονται δικαιώματα ανάγνωσης σε Sales, Purchases, Documents, Products, Inventory & Suppliers.
+          </p>
+
+          {error && (
+            <div style={{ display: 'flex', gap: '8px', backgroundColor: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '10px 12px' }}>
+              <AlertTriangle size={16} style={{ color: '#DC2626', flexShrink: 0, marginTop: '1px' }} />
+              <p style={{ margin: 0, fontSize: '12px', color: '#991B1B' }}>{error}</p>
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', gap: '10px', padding: '0 24px 20px' }}>
+          <button
+            onClick={onCancel}
+            disabled={loading}
+            style={{ flex: 1, padding: '9px 16px', borderRadius: '8px', border: '1px solid #E5E7EB', backgroundColor: '#fff', fontSize: '13px', fontWeight: 500, cursor: 'pointer', color: '#374151' }}
+          >
+            Άκυρο
+          </button>
+          <button
+            onClick={handleConnect}
+            disabled={!isValid || loading}
+            style={{ flex: 1, padding: '9px 16px', borderRadius: '8px', border: 'none', backgroundColor: (!isValid || loading) ? '#7DD3FC' : '#0EA5E9', fontSize: '13px', fontWeight: 600, cursor: (!isValid || loading) ? 'not-allowed' : 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
           >
             {loading && <Spinner size="sm" />}
             {loading ? 'Σύνδεση...' : 'Σύνδεση & Επαλήθευση'}
@@ -827,23 +1076,15 @@ export function ConnectorsPanel() {
   const brandId = currentBrand?.id ?? null;
   const brandName = currentBrand?.name ?? 'Brand';
   const toast = useToast();
-  const visibleConnectors = CONNECTORS.filter((connector) => !connector.moduleId || enabledModules[connector.moduleId]);
-  const connectorGroups = [
-    {
-      id: 'core',
-      title: isB2B ? 'Core B2B data' : 'Performance data',
-      description: isB2B
-        ? 'Demand generation, analytics και market signals που χρειάζεται ο owner για εμπορικές αποφάσεις.'
-        : 'Ads, analytics και intelligence connectors για performance και attribution.',
-      connectors: visibleConnectors.filter((connector) => connector.category === 'core'),
-    },
-    {
-      id: 'commerce',
-      title: 'E-commerce',
-      description: 'Shop connectors για products, orders και inventory from e-shop platforms.',
-      connectors: visibleConnectors.filter((connector) => connector.category === 'commerce'),
-    },
-  ].filter((group) => group.connectors.length > 0);
+  const connectorGroups = useMemo(() => {
+    const visible = CONNECTORS.filter((connector) => !connector.moduleId || enabledModules[connector.moduleId]);
+    return CONNECTOR_GROUP_ORDER.map((id) => ({
+      id,
+      meta: CONNECTOR_GROUP_META[id],
+      description: getConnectorGroupDescription(id, isB2B),
+      connectors: visible.filter((c) => c.group === id),
+    })).filter((g) => g.connectors.length > 0);
+  }, [enabledModules, isB2B]);
 
   const myRole = members.find((m) => m.userId === user?.uid)?.role ?? 'member';
   const canManageConnectors =
@@ -862,6 +1103,7 @@ export function ConnectorsPanel() {
   const [wooModal, setWooModal] = useState(false);
   const [opencartModal, setOpencartModal] = useState(false);
   const [magentoModal, setMagentoModal] = useState(false);
+  const [megaventoryModal, setMegaventoryModal] = useState(false);
 
   const emptyStates: Record<string, ConnectorState> = {
     google_ads: { connected: false },
@@ -869,10 +1111,12 @@ export function ConnectorsPanel() {
     tiktok: { connected: false },
     merchant: { connected: false },
     ga4: { connected: false },
+    search_console: { connected: false },
     shopify: { connected: false },
     woocommerce: { connected: false },
     opencart: { connected: false },
     magento: { connected: false },
+    megaventory: { connected: false },
   };
 
   // Connectors doc — cached, refetch only after sync/connect/disconnect
@@ -900,10 +1144,12 @@ export function ConnectorsPanel() {
         tiktok: connectorsData.tiktok || { connected: false },
         merchant: connectorsData.merchant || { connected: false },
         ga4: connectorsData.ga4 || { connected: false },
+        search_console: connectorsData.search_console || { connected: false },
         shopify: connectorsData.shopify || { connected: false },
         woocommerce: connectorsData.woocommerce || { connected: false },
         opencart: connectorsData.opencart || { connected: false },
         magento: connectorsData.magento || { connected: false },
+        megaventory: connectorsData.megaventory || { connected: false },
       }
     : emptyStates;
 
@@ -919,10 +1165,12 @@ export function ConnectorsPanel() {
         tiktok: dates['tiktok_api'] || dates['campaigns'],
         merchant: dates['merchant_center_api'] || dates['price_benchmarks'],
         ga4: dates['ga4_api'] || dates['ga4'],
+        search_console: dates['search_console_api'],
         shopify: dates['shopify_api'],
         woocommerce: dates['woocommerce_api'],
         opencart: dates['opencart_api'],
         magento: dates['magento_api'],
+        megaventory: dates['megaventory_api'],
       } as Record<string, Date>;
     },
     enabled: !!brandId,
@@ -953,6 +1201,8 @@ export function ConnectorsPanel() {
             ? 'Το Google Ads συνδέθηκε επιτυχώς.'
             : connectorKey === 'ga4'
               ? 'Το GA4 συνδέθηκε επιτυχώς.'
+              : connectorKey === 'search_console'
+                ? 'Το Google Search Console συνδέθηκε επιτυχώς.'
               : connectorKey === 'merchant'
                 ? 'Το Merchant Center συνδέθηκε επιτυχώς.'
                 : connectorKey === 'shopify'
@@ -961,7 +1211,9 @@ export function ConnectorsPanel() {
                     ? 'Το OpenCart συνδέθηκε επιτυχώς.'
                     : connectorKey === 'magento'
                       ? 'Το Magento συνδέθηκε επιτυχώς.'
-                      : 'Η σύνδεση ολοκληρώθηκε.';
+                      : connectorKey === 'megaventory'
+                        ? 'Το Megaventory συνδέθηκε επιτυχώς.'
+                        : 'Η σύνδεση ολοκληρώθηκε.';
       toast.success(label);
     },
     [brandId, fetchStates, queryClient, toast]
@@ -1062,6 +1314,10 @@ export function ConnectorsPanel() {
       setMagentoModal(true);
       return;
     }
+    if (provider === 'megaventory') {
+      setMegaventoryModal(true);
+      return;
+    }
 
     setConnecting(provider);
 
@@ -1147,6 +1403,9 @@ export function ConnectorsPanel() {
     }
     markSyncStart(provider);
 
+    const syncAbort = new AbortController();
+    const syncTimer = window.setTimeout(() => syncAbort.abort(), 320_000);
+
     try {
       const token = await auth.currentUser?.getIdToken();
       if (!token) throw new Error('Not authenticated');
@@ -1158,6 +1417,7 @@ export function ConnectorsPanel() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ brandId, provider }),
+        signal: syncAbort.signal,
       });
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -1183,6 +1443,21 @@ export function ConnectorsPanel() {
           } else {
             toast.success(`GMC: ${imp} SKUs (${wm} με benchmark αγοράς)`);
           }
+        } else if (provider === 'megaventory') {
+          const total = result.imported ?? 0;
+          const bits = [
+            typeof result.invoices === 'number' ? `τιμολ. ${result.invoices}` : '',
+            typeof result.salesOrders === 'number' ? `πωλ. παραγγ. ${result.salesOrders}` : '',
+            typeof result.purchaseOrders === 'number' ? `αγορ. παραγγ. ${result.purchaseOrders}` : '',
+            typeof result.products === 'number' ? `προϊόντα ${result.products}` : '',
+            typeof result.stock === 'number' ? `απόθεμα ${result.stock}` : '',
+            typeof result.suppliers === 'number' ? `προμηθ. ${result.suppliers}` : '',
+          ].filter(Boolean);
+          toast.success(
+            bits.length
+              ? `Megaventory: ${total} εγγραφές συνολικά (${bits.join(' · ')})`
+              : `Megaventory: ${total} εγγραφές`
+          );
         } else {
           toast.success(`Εισήχθησαν ${result.imported} ${label}`);
         }
@@ -1192,24 +1467,39 @@ export function ConnectorsPanel() {
         if (provider === 'google_ads') {
           queryClient.invalidateQueries({ queryKey: ['search_intelligence', brandId] });
         }
-        if (provider === 'ga4') {
+        if (provider === 'ga4' || provider === 'search_console') {
           queryClient.removeQueries({ queryKey: ['ga4_data', brandId] });
           queryClient.invalidateQueries({ queryKey: ['ga4_data', brandId] });
+        }
+        if (provider === 'search_console') {
+          queryClient.removeQueries({ queryKey: ['search_console_data', brandId] });
+          queryClient.invalidateQueries({ queryKey: ['search_console_data', brandId] });
         }
         if (provider === 'merchant') queryClient.invalidateQueries({ queryKey: ['priceBenchmarks', brandId] });
         if (['shopify', 'woocommerce', 'opencart', 'magento'].includes(provider)) {
           queryClient.removeQueries({ queryKey: ['ecommerce_summary', brandId] });
           queryClient.invalidateQueries({ queryKey: ['ecommerce_summary', brandId] });
         }
+        if (provider === 'magento') {
+          queryClient.invalidateQueries({ queryKey: ['magento_popular_searches', brandId] });
+        }
         fetchStates();
       } else {
         toast.error(result.error || 'Sync failed');
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Σφάλμα sync';
+      let msg = err instanceof Error ? err.message : 'Σφάλμα sync';
+      if (err instanceof Error && err.name === 'AbortError') {
+        msg =
+          'Το sync ξεπέρασε το χρονικό όριο (~5 λεπτά). Για Megaventory με πολύ μεγάλο όγκο, δοκιμάστε ξανά ή ελέγξτε τα logs της function.';
+      } else if (msg === 'Failed to fetch') {
+        msg =
+          'Αποτυχία δικτύου (Failed to fetch). Έλεγχος: σύνδεση, firewall/adblock, και ότι το URL functions ταιριάζει με το deploy (VITE_FUNCTIONS_BASE_URL / VITE_FUNCTIONS_URL).';
+      }
       toast.error(msg);
       console.error('[ConnectorsPanel] connectorSync failed:', err);
     } finally {
+      window.clearTimeout(syncTimer);
       markSyncEnd(provider);
     }
   };
@@ -1343,6 +1633,17 @@ export function ConnectorsPanel() {
         />
       )}
 
+      {megaventoryModal && brandId && (
+        <MegaventoryCredentialsModal
+          brandId={brandId}
+          onSuccess={() => {
+            setMegaventoryModal(false);
+            fetchStates();
+          }}
+          onCancel={() => setMegaventoryModal(false)}
+        />
+      )}
+
       <Card>
         <div className="p-6">
           <PageHeader
@@ -1375,14 +1676,51 @@ export function ConnectorsPanel() {
               <Spinner size="md" label="Φόρτωση connectors..." />
             </div>
           ) : (
-            <div className="space-y-6">
-              {connectorGroups.map((group) => (
-                <div key={group.id}>
-                  <div className="mb-3">
-                    <h4 className="text-sm font-semibold text-[#1A1A1A]">{group.title}</h4>
-                    <p className="mt-1 text-xs text-[#6B7280]">{group.description}</p>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="space-y-8">
+              {connectorGroups.map((group) => {
+                const meta = group.meta;
+                const GroupIcon = meta.Icon;
+                return (
+                <div
+                  key={group.id}
+                  className="relative overflow-hidden rounded-2xl border border-neutral-200/90 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.06)]"
+                >
+                  <div
+                    className={`pointer-events-none absolute -right-20 -top-16 h-44 w-44 rounded-full blur-3xl ${meta.blobA}`}
+                    aria-hidden
+                  />
+                  <div
+                    className={`pointer-events-none absolute -left-16 top-1/2 h-36 w-36 -translate-y-1/2 rounded-full blur-3xl ${meta.blobB}`}
+                    aria-hidden
+                  />
+                  <div
+                    className={`pointer-events-none absolute bottom-0 right-1/4 h-28 w-28 rounded-full blur-2xl ${meta.blobC}`}
+                    aria-hidden
+                  />
+
+                  <div className={`relative border-l-4 ${meta.stripe} bg-white/90 backdrop-blur-[2px] pl-4 pr-3 py-5 md:pl-5 md:pr-4 md:py-6`}>
+                    <div className="mb-5 flex flex-wrap items-start gap-3 gap-y-2">
+                      <div
+                        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white ring-2 ring-white/90 ${meta.iconGradient} ${meta.iconShadow}`}
+                      >
+                        <GroupIcon size={22} strokeWidth={2} aria-hidden />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h4 className="text-base font-semibold tracking-tight text-[#1A1A1A]">{meta.title}</h4>
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums ${meta.countChip}`}
+                          >
+                            {group.connectors.length === 1
+                              ? '1 πλατφόρμα'
+                              : `${group.connectors.length} πλατφόρμες`}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-xs leading-relaxed text-[#6B7280]">{group.description}</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
               {group.connectors.map((conn) => {
                 const state = states[conn.id] || { connected: false };
                 const isConnected = state.connected;
@@ -1402,12 +1740,12 @@ export function ConnectorsPanel() {
                     key={conn.id}
                     className={`rounded-xl border-2 p-5 transition-all ${
                       conn.comingSoon
-                        ? 'bg-gray-50 border-gray-200 opacity-70'
+                        ? 'bg-neutral-50 border-neutral-200 opacity-70'
                         : isConnected
-                        ? `${conn.bgColor} ${conn.borderColor}`
+                        ? 'bg-emerald-50/90 border-emerald-200'
                         : isPending
-                        ? 'bg-amber-50 border-amber-300'
-                        : 'bg-white border-[#E5E5E5] hover:border-[#D1D5DB]'
+                        ? 'bg-white border-amber-300 ring-1 ring-amber-200/70'
+                        : 'bg-white border-neutral-200 hover:border-neutral-300'
                     }`}
                   >
                     <div className="flex items-start justify-between mb-3">
@@ -1442,6 +1780,8 @@ export function ConnectorsPanel() {
                         {isPickerForMe
                           ? conn.id === 'ga4'
                             ? 'Απαιτείται επιλογή GA4 Property.'
+                            : conn.id === 'search_console'
+                              ? 'Απαιτείται επιλογή Search Console Property.'
                             : 'Απαιτείται επιλογή λογαριασμού.'
                           : 'Η εκκρεμής σύνδεση ανήκει σε άλλη συνεδρία. Πατήστε «Σύνδεση ξανά» για να επιλέξετε τον δικό σας λογαριασμό.'}
                       </p>
@@ -1464,6 +1804,9 @@ export function ConnectorsPanel() {
                         {conn.id === 'ga4' && (state as any).propertyName && (
                           <p>{(state as any).propertyName} ({(state as any).propertyId})</p>
                         )}
+                        {conn.id === 'search_console' && (state as any).siteName && (
+                          <p>{(state as any).siteName}</p>
+                        )}
                         {conn.id === 'shopify' && (state as any).shopName && (
                           <p>{(state as any).shopName} ({(state as any).shopDomain})</p>
                         )}
@@ -1474,7 +1817,16 @@ export function ConnectorsPanel() {
                           <p>{(state as any).shopName}</p>
                         )}
                         {conn.id === 'magento' && (state as any).shopName && (
-                          <p>{(state as any).shopName}</p>
+                          <p>
+                            {(state as any).shopName}
+                            {(state as any).storeCode ? ` (${(state as any).storeCode})` : ''}
+                          </p>
+                        )}
+                        {conn.id === 'megaventory' && ((state as any).accountName || (state as any).currency) && (
+                          <p>
+                            {(state as any).accountName || 'Megaventory'}
+                            {(state as any).currency ? ` · ${(state as any).currency}` : ''}
+                          </p>
                         )}
                         {(() => {
                           const d = coerceToDate(lastSyncDates[conn.id] as unknown);
@@ -1584,9 +1936,11 @@ export function ConnectorsPanel() {
                   </div>
                 );
               })}
+                    </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
 

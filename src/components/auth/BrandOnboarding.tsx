@@ -34,7 +34,7 @@ const FEATURES = [
 
 export function BrandOnboarding({ children }: BrandOnboardingProps) {
   const { brands, loading, refreshBrands } = useBrand();
-  const { signOut, user } = useAuth();
+  const { signOut, user, isSuperAdmin } = useAuth();
   const [step, setStep] = useState<Step>('welcome');
   const [brandCreated, setBrandCreated] = useState(false);
 
@@ -51,6 +51,9 @@ export function BrandOnboarding({ children }: BrandOnboardingProps) {
       </div>
     );
   }
+
+  // Super admin: μπαίνει κατευθείαν στην εφαρμογή ακόμη χωρίς brand στο προφίλ (π.χ. διαχείριση, invites).
+  if (isSuperAdmin) return <>{children}</>;
 
   if (brands.length > 0 && !brandCreated) return <>{children}</>;
   if (brandCreated && step === 'done') return <>{children}</>;

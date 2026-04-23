@@ -38,7 +38,7 @@ interface CampaignAggregates {
 }
 
 function classifyStock(p: Record<string, unknown>, supplierTod = 60): string {
-  const stockLevel = (p.stock_level as number) || 0;
+  const stockLevel = ((p.available_stock as number) ?? (p.stock_level as number)) || 0;
   const stockAge = (p.stock_age_days as number) || 0;
   const avgDailySales = (p.avg_daily_sales as number) || 0;
 
@@ -71,8 +71,8 @@ async function aggregateProducts(brandId: string): Promise<ProductAggregates> {
 
   for (const doc of snap.docs) {
     const p = doc.data();
-    const price = (p.price as number) || 0;
-    const stockLevel = (p.stock_level as number) || 0;
+    const price = ((p.price as number) ?? (p.list_price as number) ?? (p.compare_at_price as number)) || 0;
+    const stockLevel = ((p.available_stock as number) ?? (p.stock_level as number)) || 0;
     const margin = (p.margin_percentage as number) || 0;
     const value = price * stockLevel;
 

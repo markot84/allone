@@ -87,7 +87,8 @@ const queryClient = new QueryClient({
 const persister = typeof window !== 'undefined'
   ? createSyncStoragePersister({
       storage: window.localStorage,
-      key: 'PERF_PLUS_QUERY_CACHE',
+      /** Bump when persisted shape can strand users on stale connector snapshots (e.g. ga4_data). */
+      key: 'PERF_PLUS_QUERY_CACHE_v4',
       throttleTime: 1000
     })
   : undefined;
@@ -109,6 +110,9 @@ function QueryProvider({ children }: { children: React.ReactNode }) {
               // keeping them out of localStorage prevents quota-exceeded errors that
               // silently wipe the entire persisted cache.
               if (key === 'campaigns' || key === 'search_intelligence' || key === 'priceBenchmarks' || key === 'priceInsights') return false;
+              // Connector-backed summaries: object shape `{ ga4: null }` is truthy — persisting it
+              // hides fresh data after sync until staleTime expires. Always refetch from Firestore.
+              if (key === 'ga4_data') return false;
               // Don't persist empty / null results
               if (query.state.data === null || query.state.data === undefined) return false;
               return true;

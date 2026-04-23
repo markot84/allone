@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Mail, Lock, ArrowLeft, Send } from 'lucide-react';
 import { PerformancePlusLogo } from '../common';
@@ -6,7 +6,11 @@ import { PerformancePlusLogo } from '../common';
 interface LoginPageProps {
   onSignIn: (email: string, password: string) => Promise<void>;
   onSignUp: (email: string, password: string) => Promise<void>;
-  onSignInWithGoogle: () => Promise<void>;
+  onSignInWithGoogle: (options?: { allowNewUsers?: boolean }) => Promise<void>;
+  /** Εγγραφή με email/κωδικό: μόνο αν open mode ή ροή πρόσκλησης */
+  allowEmailRegister: boolean;
+  /** Νέοι λογαριασμοί Google: ίδια πολιτική με το email register */
+  allowGoogleNewUsers: boolean;
   onResetPassword?: (email: string) => Promise<void>;
   loading?: boolean;
   onBackToLanding?: () => void;
@@ -16,6 +20,8 @@ export function LoginPage({
   onSignIn,
   onSignUp,
   onSignInWithGoogle,
+  allowEmailRegister,
+  allowGoogleNewUsers,
   onResetPassword,
   loading = false,
   onBackToLanding,
@@ -28,6 +34,10 @@ export function LoginPage({
   const [resetSent, setResetSent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  useEffect(() => {
+    if (!allowEmailRegister && mode === 'register') setMode('login');
+  }, [allowEmailRegister, mode]);
+
   const isLoading = loading || submitting;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -36,6 +46,7 @@ export function LoginPage({
     if (!email.trim()) { setError('Εισάγετε email'); return; }
     if (!password) { setError('Εισάγετε κωδικό'); return; }
     if (mode === 'register') {
+      if (!allowEmailRegister) { setError('Η εγγραφή με email δεν είναι διαθέσιμη.'); return; }
       if (password.length < 6) { setError('Κωδικός min 6 χαρακτήρες'); return; }
       if (password !== confirmPassword) { setError('Οι κωδικοί δεν ταιριάζουν'); return; }
     }
@@ -71,7 +82,7 @@ export function LoginPage({
     setError('');
     setSubmitting(true);
     try {
-      await onSignInWithGoogle();
+      await onSignInWithGoogle({ allowNewUsers: allowGoogleNewUsers });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Σφάλμα Google';
       setError(msg.includes('auth/') ? translateAuthError(msg) : msg);
@@ -161,23 +172,30 @@ export function LoginPage({
           ) : (
             /* ── Login / Register ── */
             <>
-              {/* Tab switcher */}
-              <div className="flex gap-1 mb-6 bg-[#F3F4F6] rounded-lg p-1">
-                {(['login', 'register'] as const).map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => { setMode(m); setError(''); }}
-                    className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-all ${
-                      mode === m
-                        ? 'bg-white text-[#1A1A1A] shadow-sm'
-                        : 'text-[#6B7280] hover:text-[#1A1A1A]'
-                    }`}
-                  >
-                    {m === 'login' ? 'Σύνδεση' : 'Εγγραφή'}
-                  </button>
-                ))}
-              </div>
+              {allowEmailRegister ? (
+                <div className="flex gap-1 mb-6 bg-[#F3F4F6] rounded-lg p-1">
+                  {(['login', 'register'] as const).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => { setMode(m); setError(''); }}
+                      className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-all ${
+                        mode === m
+                          ? 'bg-white text-[#1A1A1A] shadow-sm'
+                          : 'text-[#6B7280] hover:text-[#1A1A1A]'
+                      }`}
+                    >
+                      {m === 'login' ? 'Σύνδεση' : 'Εγγραφή'}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[11px] text-[#6B7280] text-center mb-5 leading-relaxed">
+                  Πρόσβαση έχουν μόνο <strong className="text-[#374151]">ενεργοί λογαριασμοί</strong> (εγκεκριμένοι χρήστες).
+                  Νέα μέλη ενεργοποιούνται μόνο αφού λάβουν <strong className="text-[#374151]">πρόσκληση</strong>, αποδεχτούν τον σύνδεσμο και ολοκληρώσουν την εγγραφή.
+                  Σύνδεση με email ή Google για λογαριασμό που έχει ήδη δημιουργηθεί.
+                </p>
+              )}
 
               <form onSubmit={handleSubmit} className="space-y-3">
                 <InputField
@@ -314,5 +332,6 @@ function translateAuthError(msg: string): string {
   if (msg.includes('auth/popup-closed-by-user')) return 'Άκυρη η σύνδεση με Google';
   if (msg.includes('auth/too-many-requests')) return 'Πολλές προσπάθειες. Δοκιμάστε αργότερα.';
   if (msg.includes('auth/missing-email')) return 'Εισάγετε email';
+  if (msg.includes('auth/signup-disabled')) return 'Δεν επιτρέπεται νέος λογαριασμός. Χρησιμοποιήστε πρόσκληση ή συνδεθείτε με υπάρχον email.';
   return msg;
 }

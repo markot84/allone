@@ -8,14 +8,13 @@ import { eachDateInclusive } from '../../utils/marketingCostPeriod';
 import {
   eachCalendarMonthInclusive,
   formatMonthKeyShort,
-  formatTrendDayLabel,
   getCampaignDailyAttributedSpendInPeriod,
   getCampaignDailyAttributedValueInPeriod,
 } from '../../utils/roiUtils';
 
 const CHANNEL_COLORS: Record<string, string> = {
-  'Google Ads': '#4285F4',
-  Meta: '#8B5CF6',
+  'Google Ads': '#22C55E',
+  Meta: '#2563EB',
   Other: '#F59E0B',
   TikTok: '#000000',
   LinkedIn: '#0A66C2',
@@ -24,6 +23,15 @@ const CHANNEL_COLORS: Record<string, string> = {
 };
 
 const MAX_DAILY_POINTS = 90;
+
+/** Ετικέτα άξονα ημερών σε μορφή MM-DD (όπως στο reference UI). */
+function formatChartDayLabelMmDd(ymd: string): string {
+  const parts = ymd.split('-');
+  const m = parts[1];
+  const d = parts[2];
+  if (!m || !d) return ymd;
+  return `${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+}
 
 function formatRangeSubtitle(from: string, to: string): string {
   const a = new Date(from + 'T12:00:00');
@@ -96,7 +104,7 @@ export function ChannelPerformanceHistoryCard({
     const toYm = dateTo.slice(0, 7);
 
     if (!useMonthly) {
-      const rows = days.map((day) => roasRow(formatTrendDayLabel(day), byDayCh[day] || {}));
+      const rows = days.map((day) => roasRow(formatChartDayLabelMmDd(day), byDayCh[day] || {}));
       return { rows, channels: Array.from(allChannelKeys) };
     }
 

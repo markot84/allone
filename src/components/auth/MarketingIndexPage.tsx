@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { ArrowRight, BarChart3, Brain, Database, FileSpreadsheet, HelpCircle, Mail, ShieldCheck, Target, Upload } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BarChart3, Brain, Database, ExternalLink, FileSpreadsheet, HelpCircle, Mail, ShieldCheck, Target, Upload } from 'lucide-react';
 import { MARKETING_CONTACT_MAILTO } from '../../config/superAdmins';
 import { InterestForm } from './InterestForm';
 import { PerformancePlusLogo } from '../common';
@@ -7,9 +7,12 @@ import { PerformancePlusLogo } from '../common';
 type LandingVariant = 'ceo' | 'ops';
 
 interface MarketingIndexPageProps {
-  onOpenAuth: () => void;
   variant?: LandingVariant;
   onVariantChange?: (variant: LandingVariant) => void;
+  /** Άνοιγμα οθόνης σύνδεσης (`?auth=1`) — για επισκέπτες landing */
+  onOpenAuth?: () => void;
+  /** Μόνο όταν ο χρήστης είναι ήδη συνδεδεμένος (π.χ. `?landing=1` preview) — ήπιο escape πίσω στο app */
+  onReturnToApp?: () => void;
 }
 
 // ─── Static data ─────────────────────────────────────────────────────────────
@@ -106,12 +109,11 @@ const appPreviewPoints = [
 ];
 
 const variantCopy: Record<LandingVariant, {
-  description: string; cta: string; uspTitle: string; uspPoints: string[];
+  description: string; uspTitle: string; uspPoints: string[];
   uspFooter: string; finalTitle: string; finalDescription: string;
 }> = {
   ceo: {
     description: 'Το λειτουργικό σύστημα που μετατρέπει μη αξιοποιήσιμα δεδομένα σε εμπορική νοημοσύνη και επιτρέπει άμεση και αποδοτική λήψη αποφάσεων, με συντονισμένο πλάνο ενεργειών.',
-    cta: 'Είσοδος στο Performance+',
     uspTitle: 'Γιατί ξεχωρίζει',
     uspPoints: [
       '8 εμπορικά σενάρια (κερδοφορία, εκκαθάριση, λανσάρισμα, τζίρος, βάση πωλήσεων, μικτή στρατηγική, εποχιακή/εκπτωτική, custom), με δυνατότητα σύγκρισης πριν από την εφαρμογή.',
@@ -125,7 +127,6 @@ const variantCopy: Record<LandingVariant, {
   },
   ops: {
     description: 'Το λειτουργικό σύστημα που μετατρέπει μη αξιοποιήσιμα δεδομένα σε εμπορική νοημοσύνη και επιτρέπει άμεση και αποδοτική λήψη αποφάσεων, με συντονισμένο πλάνο ενεργειών.',
-    cta: 'Είσοδος στο Performance+',
     uspTitle: 'Γιατί ξεχωρίζει',
     uspPoints: [
       '8 εμπορικά σενάρια (κερδοφορία, εκκαθάριση, λανσάρισμα, τζίρος, βάση πωλήσεων, μικτή στρατηγική, εποχιακή/εκπτωτική, custom), με δυνατότητα σύγκρισης πριν από την εφαρμογή.',
@@ -152,7 +153,12 @@ function isPreviewDarkHighlight(index: number) {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChange: _onVariantChange }: MarketingIndexPageProps) {
+export function MarketingIndexPage({
+  variant = 'ceo',
+  onVariantChange: _onVariantChange,
+  onOpenAuth,
+  onReturnToApp,
+}: MarketingIndexPageProps) {
   const copy = variantCopy[variant];
   void _onVariantChange;
 
@@ -165,21 +171,34 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
       <header className="relative z-20">
         <div className={`${LANDING_MAX} pt-5`}>
           <div className="rounded-[22px] border border-[#1f2328]/10 bg-[var(--nts-bg-pure)] px-4 py-3 shadow-[0_10px_24px_rgba(16,24,40,0.08)] md:px-5">
-            <div className="flex items-center justify-between gap-4">
+            <div className={`flex items-center gap-3 sm:gap-4 ${onReturnToApp || onOpenAuth ? 'justify-between' : ''}`}>
               <div className="flex min-w-0 flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-4">
                 <PerformancePlusLogo height={36} className="shrink-0" />
                 <p className="min-w-0 text-sm font-semibold leading-snug text-[var(--nts-charcoal)] sm:text-base">
                   {MARKETING_PAGE_TITLE}
                 </p>
               </div>
-
-              <button
-                type="button"
-                onClick={onOpenAuth}
-                className="rounded-xl border border-[var(--nts-accent-hover)] bg-[var(--nts-accent)] px-4 py-2 text-sm font-semibold text-white shadow-[0_6px_14px_rgba(249,115,22,0.35)] transition hover:bg-[var(--nts-accent-hover)]"
-              >
-                Είσοδος
-              </button>
+              <div className="flex shrink-0 items-center gap-2">
+                {onOpenAuth && (
+                  <button
+                    type="button"
+                    onClick={onOpenAuth}
+                    className="rounded-xl border border-[var(--nts-accent-hover)] bg-[var(--nts-accent)] px-3 py-2 text-sm font-semibold text-white shadow-[0_6px_14px_rgba(249,115,22,0.35)] transition hover:bg-[var(--nts-accent-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nts-accent)] sm:px-4"
+                  >
+                    Σύνδεση
+                  </button>
+                )}
+                {onReturnToApp && (
+                  <button
+                    type="button"
+                    onClick={onReturnToApp}
+                    className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-[#6B7280] transition hover:bg-[var(--nts-light-gray)] hover:text-[var(--nts-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nts-accent)]"
+                  >
+                    <ArrowLeft size={14} strokeWidth={2} aria-hidden />
+                    Επιστροφή στην εφαρμογή
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -205,14 +224,6 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
                 </p>
 
                 <div className="flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    onClick={onOpenAuth}
-                    className="inline-flex items-center gap-2 rounded-xl bg-[var(--nts-accent)] px-5 py-3 text-sm font-semibold text-white shadow-[0_10px_20px_rgba(249,115,22,0.35)] transition hover:bg-[var(--nts-accent-hover)]"
-                  >
-                    {copy.cta}
-                    <ArrowRight size={16} />
-                  </button>
                   <a
                     href={`mailto:${MARKETING_CONTACT_MAILTO}?subject=${encodeURIComponent('Performance+ Demo Request')}`}
                     className="inline-flex items-center gap-2 rounded-xl border border-[#1f2328]/10 bg-[var(--nts-bg-subtle)] px-5 py-3 text-sm font-semibold text-[var(--nts-charcoal)] transition hover:bg-[var(--nts-light-gray)]"
@@ -421,14 +432,6 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
           <p className="mt-2 max-w-none text-sm text-[var(--nts-medium-gray)] md:text-base">{copy.finalDescription}</p>
 
           <div className="mt-5 flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={onOpenAuth}
-              className="inline-flex items-center gap-2 rounded-xl bg-[var(--nts-accent)] px-5 py-3 text-sm font-semibold text-white shadow-[0_10px_20px_rgba(249,115,22,0.35)] transition hover:bg-[var(--nts-accent-hover)]"
-            >
-              Ενεργοποίηση χώρου εργασίας
-              <ArrowRight size={16} />
-            </button>
             <a
               href={`mailto:${MARKETING_CONTACT_MAILTO}?subject=${encodeURIComponent('Performance+ Demo Request')}`}
               className="inline-flex items-center gap-2 rounded-xl border border-[#1f2328] bg-[var(--nts-bg-pure)] px-5 py-3 text-sm font-semibold text-[#1f2328] transition hover:bg-[var(--nts-light-gray)]"
@@ -470,18 +473,18 @@ export function MarketingIndexPage({ onOpenAuth, variant = 'ceo', onVariantChang
 
       {/* ── Footer brand tag ──────────────────────────────────────────────── */}
       <footer className={`${LANDING_MAX} pb-10 pt-2`}>
-        <div className="flex flex-col gap-3 border-t border-[#1f2328]/10 pt-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--nts-medium-gray)]">
-            <img
-              src="/notthesame-logo.png"
-              alt="notthesame.ai"
-              className="h-6 w-auto max-w-[200px] object-contain object-left"
-            />
-            <span>
-              <a href="https://notthesame.gr" target="_blank" rel="noreferrer" className="font-semibold text-[var(--nts-charcoal)] hover:underline">
-                notthesame.ai
-              </a>
-            </span>
+        <div className="flex flex-col gap-4 border-t border-[#1f2328]/10 pt-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--nts-medium-gray)]">
+            <span className="shrink-0">Υποστήριξη και τεχνολογία:</span>
+            <a
+              href="https://notthesame.gr"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex shrink-0 items-center gap-1 font-semibold text-[var(--nts-charcoal)] underline-offset-2 transition hover:text-[var(--nts-accent)] hover:underline"
+            >
+              notthesame.ai
+              <ExternalLink size={12} className="opacity-70" aria-hidden />
+            </a>
           </div>
           <div className="flex flex-col items-start gap-1 text-xs sm:items-end">
             <p className="text-[var(--nts-medium-gray)]">AI-powered πλατφόρμα εμπορικής και επιχειρησιακής νοημοσύνης</p>

@@ -115,7 +115,7 @@ export function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
           response = 'Το Commercial Strategy σας επιτρέπει να προσαρμόσετε πώς προτεραιοποιούνται τα προϊόντα. Μπορείτε να χρησιμοποιήσετε preset scenarios ή να δημιουργήσετε custom.';
           articleRefs = ['strategy-weights', 'scenarios'];
         } else if (query.includes('roi') || query.includes('attribution') || query.includes('απόδοση')) {
-          response = 'Το ROI & Απόδοση συγκρίνει τζίρο e-shop, έσοδα που αναφέρουν οι πλατφόρμες διαφημίσεων και δαπάνη, για True ROAS και Revenue Gap.';
+          response = 'Το ROI & Απόδοση συγκρίνει e-shop Revenue, attributed Campaign Revenue και το συνολικό marketing cost, ώστε να βλέπετε e-shop ROI, Campaign ROI, ROAS και Revenue Gap.';
           articleRefs = ['roi-attribution-basics'];
         } else if (query.includes('dashboard') || query.includes('kpi')) {
           response = 'Το Dashboard σας δίνει μια ολοκληρωμένη εικόνα της απόδοσης. Βλέπετε KPIs όπως Total Revenue, Products, Segments, και Campaigns. Κάθε KPI είναι clickable για λεπτομερή ανάλυση.';

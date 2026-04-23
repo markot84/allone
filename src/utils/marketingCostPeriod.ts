@@ -53,7 +53,10 @@ export type MarketingOverheadBreakdown = { id: string; label: string; amount: nu
 
 /**
  * Επιπλέον κόστη marketing (εκτός ad spend) για το διάστημα [fromDate, toDate].
- * Μηνιαία ποσά κατανέμονται ανά ημέρα του ημερολογίου.
+ *
+ * - **fixed_monthly** (π.χ. agency retainer): πλήρες ποσό **ανά ημερολογιακό μήνα** που εμφανίζεται
+ *   στην περίοδο (όχι αναλογία ημερών μέσα στον μήνα). Έτσι «Τρέχων Μήνας» 1–20 Απριλίου = 1× το μηνιαίο κόστος, όχι 20/30.
+ * - **percent_of_budget** / **one_off_month**: παραμένω κατανομή ανά ημέρα.
  */
 export function computeMarketingOverheadForPeriod(
   lines: MarketingCostLine[] | undefined,
@@ -70,8 +73,22 @@ export function computeMarketingOverheadForPeriod(
     byId.set(line.id, 0);
   }
 
+  const monthKeys = new Set<string>();
+  for (const day of eachDateInclusive(fromDate, toDate)) {
+    monthKeys.add(day.slice(0, 7));
+  }
+  const distinctCalendarMonths = monthKeys.size;
+
+  for (const line of lines) {
+    if (line.kind === 'fixed_monthly') {
+      const amt = Math.max(0, line.amountEUR ?? 0);
+      byId.set(line.id, Math.round(amt * distinctCalendarMonths * 100) / 100);
+    }
+  }
+
   for (const day of eachDateInclusive(fromDate, toDate)) {
     for (const line of lines) {
+      if (line.kind === 'fixed_monthly') continue;
       const add = dailyRateForLine(line, day, monthlyBudget);
       if (add <= 0) continue;
       byId.set(line.id, (byId.get(line.id) ?? 0) + add);

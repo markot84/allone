@@ -3,7 +3,7 @@ import {
   query, where, orderBy, Timestamp, onSnapshot, type Unsubscribe
 } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
-import { db, FUNCTIONS_BASE_URL } from '../config/firebase';
+import { db, FUNCTIONS_BASE_URL, getAppCheckHeader } from '../config/firebase';
 import type {
   BrandMember, BrandDepartment, Decision, CoordinationTask, CoordinationComment,
   ActivityEntry, UserNotification, ActivityType,
@@ -330,9 +330,14 @@ async function sendEmailNotifications(
 
     const base = FUNCTIONS_BASE_URL.replace(/\/$/, '');
     const endpoint = `${base}/sendEmailNotification`;
+    const appCheck = await getAppCheckHeader();
     const res = await fetch(endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        ...appCheck,
+      },
       body: JSON.stringify({
         userIds,
         title: data.title,
