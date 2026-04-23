@@ -1,10 +1,14 @@
 {
-  "version": "0.628.0",
-  "previousVersion": "0.627.0",
-  "commitHash": "2f19d70",
+  "version": "0.629.0",
+  "previousVersion": "0.628.0",
+  "commitHash": "38d5d3c",
   "branch": "main",
-  "buildDate": "2026-04-23T10:23:20.589Z",
+  "buildDate": "2026-04-23T10:35:47.747Z",
   "commits": [
+    {
+      "hash": "38d5d3c",
+      "message": "fix(dashboard): period-aware E-commerce/Web Analytics + correct AOV calculation"
+    },
     {
       "hash": "2f19d70",
       "message": "fix(channels): forbid internal jargon (dead stock, ROAS, segment names) in customer messages"
@@ -60,13 +64,10 @@
     {
       "hash": "4eea94e",
       "message": "fix(ga4): pie aligns with period + center total; feat(strategy): commercial priorities bridge-style cards"
-    },
-    {
-      "hash": "67937b2",
-      "message": "chore: buildInfo after production deploy (v0.606.0)"
     }
   ],
   "changes": [
+    "[Διόρθωση] Period-aware E-commerce/Web Analytics + correct AOV calculation",
     "[Διόρθωση] Forbid internal jargon (dead stock, ROAS, segment names) in customer messages",
     "[Διόρθωση] Forbid segment names in customer-facing campaign messages",
     "[Βελτίωση εμφάνισης] Rename funnel stages to EN + distinct hue palette",
@@ -75,7 +76,6 @@
     "[Διόρθωση] Silent auto-upgrade legacy AI payloads (no UI button)",
     "[Νέο χαρακτηριστικό] Expose Regenerate AI button in PageHeader",
     "[Συντήρηση] Remove temp commit message file",
-    "[Νέο χαρακτηριστικό] Per-segment channel mix στο Channel Activation",
-    "[Νέο χαρακτηριστικό] Merge Channel Recommendations into Channel Activation"
+    "[Νέο χαρακτηριστικό] Per-segment channel mix στο Channel Activation"
   ]
 }

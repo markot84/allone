@@ -331,14 +331,6 @@ export function EcommerceDashboard() {
           badgeTone: 'success' as const,
         };
       case 'magento_orders_line_items':
-        return {
-          subtitle:
-            'Παλαιότερα δεδομένα: ονόματα προϊόντων από παραγγελίες (όχι πραγματικές αναζητήσεις). Παρακαλώ ανέβασε CSV από το Magento Admin.',
-          hitsLabel: 'Εμφανίσεις',
-          showResults: false,
-          badge: 'Όχι πραγματικά queries',
-          badgeTone: 'warning' as const,
-        };
       default:
         return {
           subtitle:
@@ -999,8 +991,6 @@ export function EcommerceDashboard() {
                   className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
                     magentoPopularMeta.badgeTone === 'success'
                       ? 'bg-[#ECFDF5] text-[#047857]'
-                      : magentoPopularMeta.badgeTone === 'warning'
-                      ? 'bg-[#FEF3C7] text-[#B45309]'
                       : 'bg-[#F3F4F6] text-[#6B7280]'
                   }`}
                 >
@@ -1042,20 +1032,10 @@ export function EcommerceDashboard() {
               </div>
             )}
 
-            {magentoSearches.termsProvenance === 'magento_orders_line_items' && (
-              <div className="flex items-start gap-2 rounded-lg border border-[#FDE68A] bg-[#FFFBEB] p-3 text-xs text-[#92400E]">
-                <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" />
-                <p>
-                  Τα τρέχοντα δεδομένα είναι <strong>ονόματα προϊόντων από παραγγελίες</strong>, όχι πραγματικές
-                  αναζητήσεις. Για σωστά queries, εξάγαγε CSV από Magento Admin → Marketing → Search Terms και κάνε
-                  upload.
-                </p>
-              </div>
-            )}
-
             {magentoSearches.isLoading ? (
               <p className="text-sm text-[#9CA3AF] py-4 text-center">Φόρτωση…</p>
-            ) : magentoSearches.hasData ? (
+            ) : magentoSearches.hasData &&
+              magentoSearches.termsProvenance !== 'magento_orders_line_items' ? (
               <div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs" style={{ minWidth: 320 }}>
