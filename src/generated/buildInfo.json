@@ -1,10 +1,14 @@
 {
-  "version": "0.607.0",
-  "previousVersion": "0.606.0",
-  "commitHash": "4eea94e",
+  "version": "0.608.0",
+  "previousVersion": "0.607.0",
+  "commitHash": "807aa5d",
   "branch": "main",
-  "buildDate": "2026-04-23T07:41:36.929Z",
+  "buildDate": "2026-04-23T07:42:36.325Z",
   "commits": [
+    {
+      "hash": "807aa5d",
+      "message": "chore: remove unused helper; buildInfo v0.607.0"
+    },
     {
       "hash": "4eea94e",
       "message": "fix(ga4): pie aligns with period + center total; feat(strategy): commercial priorities bridge-style cards"
@@ -60,13 +64,10 @@
     {
       "hash": "05de814",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "10a9a9f",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [
+    "[Συντήρηση] Remove unused helper; buildInfo v0.607.0",
     "[Διόρθωση] Pie aligns with period + center total; feat(strategy): commercial priorities bridge-style cards",
     "[Συντήρηση] BuildInfo after production deploy (v0.606.0)",
     "[Συντήρηση] Regenerate buildInfo after merge",
@@ -74,7 +75,6 @@
     "[Συντήρηση] Full deploy",
     "[Διόρθωση] Resolve ERP column names and merge pricing for margin",
     "[Διόρθωση] Triage uses useProductSource for Enterprise procurement catalog",
-    "[Διόρθωση] Guard missing connectedPlatforms in useEcommerceSummary hasData",
-    "Merge: Sprint 2 — universal data layer, decision buckets, AI context, ecommerce fix"
+    "[Διόρθωση] Guard missing connectedPlatforms in useEcommerceSummary hasData"
   ]
 }
