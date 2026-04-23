@@ -331,7 +331,17 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     // Πρόσθετο upgrade trigger: legacy payloads ή AI που έδωσε <2 segments
     // (είναι σχεδόν πάντα λάθος — ακόμη και για narrow πολιτικές υπάρχουν 2-4 fitting segments).
     const tooFewSegments = (aiRecommendation.targetSegments?.length ?? 0) < 2;
-    if (hasPerSegmentSignal && !tooFewSegments) return;
+    // Trigger upgrade αν το AI έχει αναφέρει το όνομα του segment ΜΕΣΑ στο customer-facing message
+    // (π.χ. "Ως Champions…", "Αγαπητοί At Risk…") — απαγορεύεται από το νέο prompt.
+    const segmentNamesInMessages = playbook.some((e) => {
+      if (!e.message) return false;
+      const seg = e.segment.toLowerCase();
+      const msg = e.message.toLowerCase();
+      // exact word boundaries για να μην έχουμε false positives
+      const re = new RegExp(`\\b${seg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+      return re.test(msg);
+    });
+    if (hasPerSegmentSignal && !tooFewSegments && !segmentNamesInMessages) return;
     silentUpgradeTriggered.current = true;
     generateRecommendation(true);
   }, [hasRealStrategyId, aiRecommendation, aiGenerating, rfmSegments, generateRecommendation]);

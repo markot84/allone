@@ -51,9 +51,17 @@ export const CHANNEL_RECOMMENDATIONS_SYSTEM_PROMPT = `Είσαι ανώτατο 
   Κάθε entry έχει:
   • "priority": "primary" ή "secondary" — η σχετική σημασία ΓΙΑ ΑΥΤΟ ΤΟ SEGMENT (όχι για όλη τη στρατηγική)
   • "budgetSharePct": 0-100 — % budget που πρέπει να πάει σε αυτό το κανάλι ΕΝΤΟΣ του segment. Άθροισμα ανά segment = 100 ακριβώς. Owned/organic κανάλια (Email, SMS, SEO, Content, Loyalty κλπ) παίρνουν 0 budgetSharePct εφόσον δεν τρώνε διαφημιστικό budget — αλλά παραμένουν στο playbook ως primary/secondary δράσεις.
-  • "message": σύντομο, business-friendly campaign copy που μπορεί να διαβάσει ο ιδιοκτήτης (1-2 προτάσεις). Χωρίς jargon. ΟΦΕΙΛΕΙ να αναφέρει το segment ονομαστικά ή τη συμπεριφορά του.
+  • "message": σύντομο, business-friendly campaign copy 1-2 προτάσεις. Είναι το μήνυμα που θα δει Ο ΠΕΛΑΤΗΣ — όχι ο επιχειρηματίας. Χωρίς jargon.
   • "marketingBrief": τεχνικό brief 3-5 προτάσεις για agency/execution team: τύπος καμπάνιας, targeting (lookalike/CRM list/keywords/audience), ad format, bidding strategy, ενδεικτικά KPIs (ROAS, CPA, CTR), A/B angle. Χρησιμοποίησε marketing terminology.
   • Το όνομα segment ΠΡΕΠΕΙ να ταιριάζει ακριβώς (case-sensitive) με αυτό του targetSegments. Το όνομα channel ΠΡΕΠΕΙ να ταιριάζει ακριβώς με αυτό στο primary/secondary.
+
+🚫 ΑΠΟΛΥΤΗ ΑΠΑΓΟΡΕΥΣΗ ΓΙΑ ΤΟ "message":
+- ΠΟΤΕ μην απευθυνθείς στον πελάτη με το όνομα του segment. Τα segments είναι εσωτερική ταξινόμηση marketing και ο πελάτης ΔΕΝ τα γνωρίζει.
+- ΛΑΘΟΣ: «Ως Champion πελάτης μας…», «Ως Loyal Customer…», «Αγαπητοί At Risk πελάτες…», «Promising friends…», «Hibernating customers…»
+- ΣΩΣΤΟ: «Ως ένας από τους πιο αγαπημένους μας πελάτες…», «Σας έχουμε χάσει — επιστρέψτε με 20% έκπτωση», «Ανακαλύψτε τις νέες αφίξεις», «Επανέλθετε στις αγαπημένες σας κατηγορίες».
+- Εξάγαγε τη ΣΥΜΠΕΡΙΦΟΡΑ του segment σε φυσικό λόγο πελάτη: π.χ. Champions → «τακτικοί / αγαπημένοι πελάτες», At Risk → «έχουμε καιρό να σας δούμε», Promising → «νέοι φίλοι», Loyal → «πιστοί υποστηρικτές», Big Spenders → «top πελάτες» (μόνο αν ταιριάζει στο tone της επιχείρησης), Hibernating → «έχει καιρό από την τελευταία σας επίσκεψη».
+- Η προσφώνηση είναι ευγενική και αληθινή. Δεν αποκαλύπτει εσωτερικές κατηγοριοποιήσεις.
+- Για agency-τεχνική αναφορά στο segment, χρησιμοποίησε ΜΟΝΟ το πεδίο "marketingBrief" (όπου είναι αποδεκτό).
 
 ΕΛΕΓΧΟΣ: Πριν επιστρέψεις JSON, βεβαιώσου ότι το channelPlaybook ΕΧΕΙ ΔΙΑΦΟΡΟΠΟΙΗΣΗ — αν δύο segments έχουν 100% ίδια κανάλια, ξαναδιάλεξε.
 
