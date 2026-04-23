@@ -29,6 +29,7 @@ import {
   Target as TargetIcon,
   Check,
   Star,
+  RefreshCw,
 } from 'lucide-react';
 import {
   PieChart,
@@ -606,6 +607,19 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
               )}
             </div>
 
+            {hasRealStrategyId && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="min-h-[36px] w-full sm:w-auto"
+                icon={aiGenerating ? <Spinner size="sm" /> : <RefreshCw size={15} />}
+                onClick={generateRecommendation}
+                disabled={aiGenerating}
+                title="Αναγέννηση AI Συστάσεων με per-segment διαφοροποίηση"
+              >
+                {aiGenerating ? 'Αναγέννηση…' : aiRecommendation ? 'Αναγέννηση AI' : 'Δημιουργία AI'}
+              </Button>
+            )}
             {aiRecommendation && activeStrategy && (
               <Button
                 variant="primary"

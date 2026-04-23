@@ -1,10 +1,18 @@
 {
-  "version": "0.612.0",
-  "previousVersion": "0.611.0",
-  "commitHash": "8746468",
+  "version": "0.613.0",
+  "previousVersion": "0.612.0",
+  "commitHash": "3f2698e",
   "branch": "main",
-  "buildDate": "2026-04-23T08:43:03.097Z",
+  "buildDate": "2026-04-23T08:52:27.866Z",
   "commits": [
+    {
+      "hash": "3f2698e",
+      "message": "chore: remove temp commit message file"
+    },
+    {
+      "hash": "ec3f04f",
+      "message": "feat(channels): per-segment channel mix στο Channel Activation"
+    },
     {
       "hash": "8746468",
       "message": "feat(channels): merge Channel Recommendations into Channel Activation"
@@ -56,17 +64,11 @@
     {
       "hash": "06e5a0a",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "bdb0c38",
-      "message": "chore: full deploy"
-    },
-    {
-      "hash": "b9636dd",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [
+    "[Συντήρηση] Remove temp commit message file",
+    "[Νέο χαρακτηριστικό] Per-segment channel mix στο Channel Activation",
     "[Νέο χαρακτηριστικό] Merge Channel Recommendations into Channel Activation",
     "[Συντήρηση] BuildInfo v0.609.0 after deploy",
     "[Συντήρηση] BuildInfo v0.608.0 after build",
@@ -74,8 +76,6 @@
     "[Διόρθωση] Pie aligns with period + center total; feat(strategy): commercial priorities bridge-style cards",
     "[Συντήρηση] BuildInfo after production deploy (v0.606.0)",
     "[Συντήρηση] Regenerate buildInfo after merge",
-    "[Νέο χαρακτηριστικό] Home session — GA4/search console, auth, ecommerce, connectors, ROI, firestore rules",
-    "[Συντήρηση] Full deploy",
-    "[Διόρθωση] Resolve ERP column names and merge pricing for margin"
+    "[Νέο χαρακτηριστικό] Home session — GA4/search console, auth, ecommerce, connectors, ROI, firestore rules"
   ]
 }
