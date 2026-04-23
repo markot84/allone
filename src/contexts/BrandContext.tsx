@@ -22,6 +22,12 @@ const BrandContext = createContext<BrandContextValue | null>(null);
 
 const STORAGE_KEY_PREFIX = 'perf-plus-last-brand';
 
+function sameStringSet(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  const s = new Set(b);
+  return a.every((x) => s.has(x));
+}
+
 export function BrandProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -48,7 +54,16 @@ export function BrandProvider({ children }: { children: ReactNode }) {
         console.error('refreshBrands: user profile fetch failed or timed out', e);
         profile = null;
       }
-      const brandIds = profile?.brandIds ?? [];
+      const fromProfile = profile?.brandIds ?? [];
+      const fromMembers = await FirestoreService.getBrandIdsFromMembershipDocuments(user.uid);
+      const brandIds = [...new Set([...fromProfile, ...fromMembers])];
+
+      if (!sameStringSet(fromProfile, brandIds) && brandIds.length > 0) {
+        FirestoreService.setDocument('users', user.uid, { brandIds } as Record<string, unknown>).catch((err) =>
+          console.warn('refreshBrands: could not sync brandIds on user profile', err)
+        );
+      }
+
       if (brandIds.length === 0) {
         setBrands([]);
         setCurrentBrandState(null);

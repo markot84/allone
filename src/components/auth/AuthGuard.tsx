@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { useEffect } from 'react';
 import { useAuth } from '../../hooks';
+import { getPublicSignupMode, isInviteReturnUrl } from '../../config/authAccess';
 import { BrandProvider } from '../../contexts/BrandContext';
 import { BrandOnboarding } from './BrandOnboarding';
 import { LoginPage } from './LoginPage';
@@ -17,6 +18,11 @@ export function AuthGuard({ children }: AuthGuardProps) {
   const showAuth = params.get('auth') === '1' || params.get('auth') === 'true';
   const forceLandingPreview = params.get('landing') === '1' || params.get('landing') === 'true';
   const landingVariant = params.get('lp') === 'ops' ? 'ops' : 'ceo';
+  const returnUrlParam = params.get('returnUrl');
+  const signupOpen = getPublicSignupMode() === 'open';
+  const fromInvite = isInviteReturnUrl(returnUrlParam);
+  const allowEmailRegister = signupOpen || fromInvite;
+  const allowGoogleNewUsers = signupOpen || fromInvite;
 
   // Redirect to returnUrl after login (e.g. /invite/:token)
   useEffect(() => {
@@ -62,6 +68,8 @@ export function AuthGuard({ children }: AuthGuardProps) {
         onSignIn={signIn}
         onSignUp={signUp}
         onSignInWithGoogle={signInWithGoogle}
+        allowEmailRegister={allowEmailRegister}
+        allowGoogleNewUsers={allowGoogleNewUsers}
         onResetPassword={resetPassword}
         onBackToLanding={() => {
           const next = new URLSearchParams(window.location.search);
@@ -84,7 +92,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
           const query = next.toString();
           window.location.href = `${window.location.pathname}${query ? `?${query}` : ''}`;
         }}
-        onOpenAuth={() => {
+        onReturnToApp={() => {
           const next = new URLSearchParams(window.location.search);
           next.delete('landing');
           next.delete('auth');

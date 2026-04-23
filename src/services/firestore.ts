@@ -1,5 +1,6 @@
 import { 
-  collection, 
+  collection,
+  collectionGroup,
   doc, 
   getDoc, 
   getDocs,
@@ -103,6 +104,30 @@ export class FirestoreService {
           reject(e);
         });
     });
+  }
+
+  /**
+   * Brand IDs όπου ο χρήστης έχει έγγραφο `brands/{brandId}/members/{userId}`.
+   * Χρησιμοποιείται όταν το `users/{uid}.brandIds` είναι άδειο ή ξεπερασμένο.
+   */
+  static async getBrandIdsFromMembershipDocuments(userId: string): Promise<string[]> {
+    try {
+      // Σε collection group το documentId() θέλει *πλήρες* path (ζυγό # segments), όχι μόνο το uid.
+      // Τα `brands/{brandId}/members/{uid}` έχουν πάντα `userId` στο data (βλ. MembersService.set).
+      const q = query(collectionGroup(db, 'members'), where('userId', '==', userId));
+      const snap = await getDocs(q);
+      const ids: string[] = [];
+      for (const d of snap.docs) {
+        const parts = d.ref.path.split('/');
+        if (parts[0] === 'brands' && parts[2] === 'members' && parts.length >= 4) {
+          ids.push(parts[1]);
+        }
+      }
+      return [...new Set(ids)];
+    } catch (error) {
+      console.error('getBrandIdsFromMembershipDocuments:', error);
+      return [];
+    }
   }
 
   // Get all documents from collection. When brandId is provided, filters by brandId.

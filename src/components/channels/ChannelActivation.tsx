@@ -51,8 +51,7 @@ import { buildTriagePromptContext, buildProvenancePromptContext } from '../../ut
 import type { TriageOrigin } from '../../hooks/useActiveStrategy';
 import { FirestoreService } from '../../services/firestore';
 import { useQueryClient } from '@tanstack/react-query';
-import type { ChannelRecommendation, BudgetAction, MarketingCostLine } from '../../types';
-import { MarketingCostLinesEditor } from './MarketingCostLinesEditor';
+import type { ChannelRecommendation, BudgetAction } from '../../types';
 
 const COLORS = ['var(--nts-accent)', '#78716C', '#22C55E', '#8B5CF6', '#F59E0B', '#3B82F6', '#EC4899'];
 
@@ -148,8 +147,6 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     getStrategyName,
     updateBudget,
     isSavingBudget,
-    updateMarketingCostLines,
-    isSavingMarketingCostLines,
   } = useActiveStrategy();
   const queryClient = useQueryClient();
   const toast = useToast();
@@ -498,18 +495,6 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
             </Button>
           </div>
         }
-      />
-
-      <MarketingCostLinesEditor
-        key={activeStrategy.id}
-        initialLines={activeStrategy.marketingCostLines}
-        monthlyBudget={monthlyBudget}
-        disabled={activeStrategy.id.startsWith('default_')}
-        isSaving={isSavingMarketingCostLines}
-        onSave={async (lines: MarketingCostLine[]) => {
-          await updateMarketingCostLines(lines);
-          toast.success('Αποθηκεύτηκαν τα επιπλέον κόστη marketing');
-        }}
       />
 
       {/* Progress bar */}

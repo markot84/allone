@@ -18,10 +18,12 @@ import {
   linkWithPopup,
   EmailAuthProvider,
   GoogleAuthProvider,
+  getAdditionalUserInfo,
   type User
 } from 'firebase/auth';
 import { Timestamp } from 'firebase/firestore';
 import { auth } from '../config/firebase';
+import { getPublicSignupMode, isInviteReturnUrl } from '../config/authAccess';
 import { FirestoreService } from '../services/firestore';
 import { isSuperAdminEmail, SUPER_ADMIN_EMAILS } from '../config/superAdmins';
 
@@ -31,7 +33,8 @@ interface AuthContextValue {
   isSuperAdmin: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
-  signInWithGoogle: () => Promise<void>;
+  /** allowNewUsers: αν false, νέοι λογαριασμοί Google απορρίπτονται (sign out + error). */
+  signInWithGoogle: (options?: { allowNewUsers?: boolean }) => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   linkPassword: (password: string) => Promise<void>;
@@ -89,17 +92,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [user?.uid]);
 
+  /** Πάντα επιτρέπεται για υπάρχοντες λογαριασμούς — η πολιτική signup δεν εφαρμόζεται εδώ. */
   const signIn = useCallback(async (email: string, password: string) => {
     await signInWithEmailAndPassword(auth, email, password);
   }, []);
 
   const signUp = useCallback(async (email: string, password: string) => {
+    const qs = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+    const ret = qs?.get('returnUrl') || '';
+    const allowed = getPublicSignupMode() === 'open' || isInviteReturnUrl(ret);
+    if (!allowed) {
+      throw new Error('auth/signup-disabled');
+    }
     await createUserWithEmailAndPassword(auth, email, password);
   }, []);
 
-  const signInWithGoogle = useCallback(async () => {
+  const signInWithGoogle = useCallback(async (options?: { allowNewUsers?: boolean }) => {
     const provider = new GoogleAuthProvider();
-    await signInWithPopup(auth, provider);
+    const result = await signInWithPopup(auth, provider);
+    const allowNew = options?.allowNewUsers === true;
+    const extra = getAdditionalUserInfo(result);
+    if (extra?.isNewUser && !allowNew) {
+      const uid = result.user.uid;
+      let hasProfile = false;
+      try {
+        const existingProfile = await FirestoreService.getDocument('users', uid);
+        hasProfile = existingProfile != null;
+      } catch {
+        /* Firestore απέτυχε — μην αποκλείουμε επιστρέφοντα χρήστη λόγω false negative */
+      }
+      if (hasProfile) return;
+
+      const createdAt = result.user.metadata.creationTime;
+      const createdMs = createdAt ? new Date(createdAt).getTime() : NaN;
+      const ageMs = Date.now() - createdMs;
+      if (Number.isFinite(createdMs) && ageMs > 5 * 60 * 1000) {
+        return;
+      }
+
+      await firebaseSignOut(auth);
+      throw new Error('auth/signup-disabled');
+    }
   }, []);
 
   const signOut = useCallback(async () => {

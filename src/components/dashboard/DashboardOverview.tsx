@@ -217,7 +217,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   /**
    * Κύριο chart — μία σειρά τζίρου:
    * - Με e-shop: `ecommerce_summary.revenueByDay` (server-side aggregate μετά το sync).
-   * - Χωρίς e-shop: εκτίμηση organic + conversion value καμπανιών (ίδια λογική ROI).
+   * - Χωρίς e-shop: εκτίμηση organic + conversion value καμπανιών (ίδια λογική efficiency / attributed revenue).
    * Η απόδοση διαφημίσεων (δαπάνη vs conversion value) είναι στο ξεχωριστό block από κάτω.
    */
   const revenueChartData = useMemo(() => {
@@ -679,8 +679,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               />
             </div>
             <p className="text-[12px] text-[#6B7280] leading-relaxed">
-              {isB2B ? 'Για αναλυτικότερη οικονομική εικόνα, baseline revenue και πρόσθετα B2B data feeds, άνοιξε ' : <>Για <strong className="text-[#4B5563] font-medium">ROAS</strong>,{' '}
-              <strong className="text-[#4B5563] font-medium">True ROAS</strong>, blended απόδοση και σύγκριση με e-shop, ανοίξτε </>}
+              {isB2B ? 'Για αναλυτικότερη οικονομική εικόνα, baseline revenue και πρόσθετα B2B data feeds, άνοιξε ' : <>Για <strong className="text-[#4B5563] font-medium">Campaign ROI</strong>,{' '}
+              <strong className="text-[#4B5563] font-medium">e-shop ROI</strong>, Platform ROAS και σύγκριση εσόδων με το e-shop, ανοίξτε </>}
               <button
                 type="button"
                 onClick={() => onSectionChange?.(isB2B ? 'finances' : 'roi')}

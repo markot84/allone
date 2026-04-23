@@ -33,6 +33,11 @@ interface OrderRow {
 
 export const ECOMMERCE_PROVIDERS = ['shopify', 'woocommerce', 'opencart', 'magento'] as const;
 
+function isCancelledOrderStatus(status: string | null | undefined): boolean {
+  const s = String(status || '').trim().toLowerCase();
+  return s === 'cancelled' || s === 'canceled';
+}
+
 /** Demo products (όνομα/SKU περιέχει "demo") εξαιρούνται από κάθε aggregate. */
 function isDemoLineItem(li: { sku?: string; title?: string; name?: string }): boolean {
   const needle = 'demo';
@@ -195,26 +200,32 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
 
   // Demo cleanup: αφαίρεσε παραγγελίες που είναι 100% demo items
   // και σκέπασε το totalPrice με καθαρό (non-demo) revenue.
-  const allOrders: OrderRow[] = [];
+  // Τα cancelled μένουν ορατά στα recent orders, αλλά δεν μπαίνουν στα revenue KPIs.
+  const visibleOrders: OrderRow[] = [];
+  const revenueOrders: OrderRow[] = [];
   for (const o of rawOrders) {
     const { revenue, isAllDemo } = nonDemoRevenue(o);
     if (isAllDemo) continue;
-    allOrders.push({ ...o, totalPrice: revenue });
+    const normalizedOrder = { ...o, totalPrice: revenue };
+    visibleOrders.push(normalizedOrder);
+    if (!isCancelledOrderStatus(o.status)) {
+      revenueOrders.push(normalizedOrder);
+    }
   }
 
   // --- Aggregation ---
-  const totalRevenue = allOrders.reduce((s, o) => s + o.totalPrice, 0);
-  const orderCount = allOrders.length;
+  const totalRevenue = revenueOrders.reduce((s, o) => s + o.totalPrice, 0);
+  const orderCount = revenueOrders.length;
   const aov = orderCount > 0 ? totalRevenue / orderCount : 0;
 
   const revenueByDay: Record<string, number> = {};
-  for (const o of allOrders) {
+  for (const o of revenueOrders) {
     const day = o.createdAt?.slice(0, 10) || 'unknown';
     revenueByDay[day] = (revenueByDay[day] || 0) + o.totalPrice;
   }
 
   const revenueByMonth: Record<string, number> = {};
-  for (const o of allOrders) {
+  for (const o of revenueOrders) {
     const month = o.createdAt?.slice(0, 7) || 'unknown';
     revenueByMonth[month] = (revenueByMonth[month] || 0) + o.totalPrice;
   }
@@ -223,7 +234,7 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
   for (const p of ECOMMERCE_PROVIDERS) {
     revenueByPlatform[p] = { revenue: 0, orders: 0 };
   }
-  for (const o of allOrders) {
+  for (const o of revenueOrders) {
     if (!revenueByPlatform[o.platform]) {
       revenueByPlatform[o.platform] = { revenue: 0, orders: 0 };
     }
@@ -233,7 +244,7 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
 
   // Top products: αγνοεί εντελώς τα demo line items
   const productMap = new Map<string, { name: string; revenue: number; quantity: number }>();
-  for (const o of allOrders) {
+  for (const o of revenueOrders) {
     for (const li of o.lineItems || []) {
       if (isDemoLineItem(li)) continue;
       const key = li.sku || li.title || li.name || 'unknown';
@@ -275,7 +286,7 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
   const sold90BySku = new Map<string, number>();
   const lastSaleBySku = new Map<string, number>();
 
-  for (const o of allOrders) {
+  for (const o of revenueOrders) {
     const ts = o.createdAt ? new Date(o.createdAt).getTime() : NaN;
     const inWindow7 = Number.isFinite(ts) && ts >= cut7;
     const inWindow30 = Number.isFinite(ts) && ts >= cut30;
@@ -330,13 +341,13 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
 
   // Orders by day (count)
   const ordersByDay: Record<string, number> = {};
-  for (const o of allOrders) {
+  for (const o of revenueOrders) {
     const day = o.createdAt?.slice(0, 10) || 'unknown';
     ordersByDay[day] = (ordersByDay[day] || 0) + 1;
   }
 
   // Recent orders (last 50, for quick display)
-  const recentOrders = allOrders
+  const recentOrders = visibleOrders
     .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
     .slice(0, 50)
     .map((o) => ({

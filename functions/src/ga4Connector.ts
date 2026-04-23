@@ -138,6 +138,14 @@ export interface GA4Property {
   name: string;
 }
 
+type GA4OrganicFallbackRow = {
+  date: string;
+  path: string;
+  sessions: number;
+  users: number;
+  conversions: number;
+};
+
 /**
  * Generate the OAuth consent URL for GA4
  */
@@ -408,33 +416,51 @@ export async function fetchGA4Data(
     const formatDate = (d: Date) =>
       `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-    // Main metrics report
-    const reportBody = {
-      dateRanges: [{ startDate: formatDate(startDate), endDate: formatDate(endDate) }],
+    // Main metrics report (optional addToCarts for ecommerce / cart activity)
+    const dateRangeMain = { startDate: formatDate(startDate), endDate: formatDate(endDate) };
+    const baseMetrics = [
+      { name: 'sessions' },
+      { name: 'totalUsers' },
+      { name: 'newUsers' },
+      { name: 'screenPageViews' },
+      { name: 'bounceRate' },
+      { name: 'averageSessionDuration' },
+      { name: 'conversions' },
+      { name: 'eventCount' },
+    ];
+    const reportBodyWithCarts = {
+      dateRanges: [dateRangeMain],
       dimensions: [{ name: 'date' }],
-      metrics: [
-        { name: 'sessions' },
-        { name: 'totalUsers' },
-        { name: 'newUsers' },
-        { name: 'screenPageViews' },
-        { name: 'bounceRate' },
-        { name: 'averageSessionDuration' },
-        { name: 'conversions' },
-        { name: 'eventCount' },
-      ],
+      metrics: [...baseMetrics, { name: 'addToCarts' }],
     };
 
-    const reportRes = await fetch(
-      `${GA4_DATA_API}/properties/${propertyId}:runReport`,
-      {
+    let reportRes = await fetch(`${GA4_DATA_API}/properties/${propertyId}:runReport`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(reportBodyWithCarts),
+    });
+
+    let includeAddToCarts = reportRes.ok;
+    if (!reportRes.ok) {
+      const errTxt = await reportRes.text();
+      logger.warn(`[GA4] Daily report with addToCarts failed (${reportRes.status}), retry without: ${errTxt.slice(0, 200)}`);
+      reportRes = await fetch(`${GA4_DATA_API}/properties/${propertyId}:runReport`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${accessToken}`,
         },
-        body: JSON.stringify(reportBody),
-      }
-    );
+        body: JSON.stringify({
+          dateRanges: [dateRangeMain],
+          dimensions: [{ name: 'date' }],
+          metrics: baseMetrics,
+        }),
+      });
+      includeAddToCarts = false;
+    }
 
     if (!reportRes.ok) {
       const err = await reportRes.text();
@@ -460,6 +486,7 @@ export async function fetchGA4Data(
         avgSessionDuration: parseFloat(vals[5]?.value || '0'),
         conversions: parseInt(vals[6]?.value || '0'),
         eventCount: parseInt(vals[7]?.value || '0'),
+        addToCarts: includeAddToCarts ? parseInt(vals[8]?.value || '0', 10) || 0 : 0,
       };
     }
 
@@ -864,6 +891,83 @@ export async function fetchGA4Data(
       logger.warn('[GA4] organicRevenueByDay query failed:', e);
     }
 
+    let organicSearchFallbackRows: GA4OrganicFallbackRow[] = [];
+    try {
+      const fallbackBaseBody = {
+        languageCode: 'en',
+        dateRanges: [{ startDate: formatDate(startDate), endDate: formatDate(endDate) }],
+        metrics: [{ name: 'sessions' }, { name: 'totalUsers' }, { name: 'conversions' }],
+        dimensionFilter: {
+          filter: {
+            fieldName: 'sessionDefaultChannelGroup',
+            stringFilter: {
+              matchType: 'EXACT',
+              value: 'Organic Search',
+            },
+          },
+        },
+        limit: '5000',
+      };
+
+      let fallbackRes = await fetch(`${GA4_DATA_API}/properties/${propertyId}:runReport`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          ...fallbackBaseBody,
+          dimensions: [{ name: 'date' }, { name: 'landingPagePlusQueryString' }],
+          orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
+        }),
+      });
+
+      let labelField: 'landingPagePlusQueryString' | 'pagePath' = 'landingPagePlusQueryString';
+      if (!fallbackRes.ok && fallbackRes.status === 400) {
+        const err400 = await fallbackRes.text();
+        logger.warn(`[GA4] organic landing pages (landingPagePlusQueryString) rejected: ${err400.slice(0, 220)}`);
+        labelField = 'pagePath';
+        fallbackRes = await fetch(`${GA4_DATA_API}/properties/${propertyId}:runReport`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            ...fallbackBaseBody,
+            dimensions: [{ name: 'date' }, { name: 'pagePath' }],
+            orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
+          }),
+        });
+      }
+
+      if (fallbackRes.ok) {
+        const fallbackData = await fallbackRes.json();
+        organicSearchFallbackRows = (fallbackData.rows || [])
+          .map((row: any) => {
+            const dateRaw = row.dimensionValues?.[0]?.value || '';
+            const label = String(row.dimensionValues?.[1]?.value || '').trim();
+            if (!dateRaw || !label || label === '(not set)') return null;
+            return {
+              date: `${dateRaw.slice(0, 4)}-${dateRaw.slice(4, 6)}-${dateRaw.slice(6, 8)}`,
+              path: label,
+              sessions: parseInt(row.metricValues?.[0]?.value || '0', 10),
+              users: parseInt(row.metricValues?.[1]?.value || '0', 10),
+              conversions: parseInt(row.metricValues?.[2]?.value || '0', 10),
+            };
+          })
+          .filter((row: GA4OrganicFallbackRow | null): row is GA4OrganicFallbackRow => Boolean(row));
+        logger.info(
+          `[GA4] organicSearchFallbackRows (${labelField}): ${organicSearchFallbackRows.length} rows`
+        );
+      } else {
+        const fallbackErr = await fallbackRes.text();
+        logger.warn(`[GA4] organic landing page fallback failed (${fallbackRes.status}): ${fallbackErr.slice(0, 300)}`);
+      }
+    } catch (e) {
+      logger.warn('[GA4] organicSearchFallbackRows query failed:', e);
+    }
+
     // Top pages
     const pagesBody = {
       dateRanges: [{ startDate: formatDate(startDate), endDate: formatDate(endDate) }],
@@ -906,6 +1010,104 @@ export async function fetchGA4Data(
       logger.warn('[GA4] Top pages query failed:', e);
     }
 
+    /** Ημερομηνία × κανάλι → metrics (για φίλτρο ημερολογίου στο Web Analytics). */
+    const dailyTrafficByChannel: Record<
+      string,
+      Record<
+        string,
+        { sessions: number; users: number; newUsers: number; conversions: number; totalRevenue: number }
+      >
+    > = {};
+    try {
+      const dr = { startDate: formatDate(startDate), endDate: formatDate(endDate) };
+      const authH = {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      };
+      let dcBody: Record<string, unknown> = {
+        languageCode: 'en',
+        dateRanges: [dr],
+        dimensions: [{ name: 'date' }, { name: 'sessionDefaultChannelGroup' }],
+        metrics: [
+          { name: 'sessions' },
+          { name: 'totalUsers' },
+          { name: 'newUsers' },
+          { name: 'conversions' },
+          { name: 'totalRevenue' },
+        ],
+        limit: '250000',
+      };
+      let dcRes = await fetch(`${GA4_DATA_API}/properties/${propertyId}:runReport`, {
+        method: 'POST',
+        headers: authH,
+        body: JSON.stringify(dcBody),
+      });
+      let revenueIdx: number | null = 4;
+      if (!dcRes.ok && dcRes.status === 400) {
+        const t = await dcRes.text();
+        logger.warn(`[GA4] dailyTrafficByChannel (with revenue) rejected, retry without: ${t.slice(0, 200)}`);
+        dcBody = {
+          languageCode: 'en',
+          dateRanges: [dr],
+          dimensions: [{ name: 'date' }, { name: 'sessionDefaultChannelGroup' }],
+          metrics: [
+            { name: 'sessions' },
+            { name: 'totalUsers' },
+            { name: 'newUsers' },
+            { name: 'conversions' },
+          ],
+          limit: '250000',
+        };
+        revenueIdx = null;
+        dcRes = await fetch(`${GA4_DATA_API}/properties/${propertyId}:runReport`, {
+          method: 'POST',
+          headers: authH,
+          body: JSON.stringify(dcBody),
+        });
+      }
+      if (dcRes.ok) {
+        const dj = await dcRes.json();
+        for (const row of dj.rows || []) {
+          const dateRaw = row.dimensionValues?.[0]?.value || '';
+          const ch = row.dimensionValues?.[1]?.value || 'Unknown';
+          const ymd =
+            dateRaw.length === 8
+              ? `${dateRaw.slice(0, 4)}-${dateRaw.slice(4, 6)}-${dateRaw.slice(6, 8)}`
+              : '';
+          if (!ymd) continue;
+          const vals = row.metricValues || [];
+          const sessions = parseInt(vals[0]?.value || '0', 10);
+          const users = parseInt(vals[1]?.value || '0', 10);
+          const newUsers = parseInt(vals[2]?.value || '0', 10);
+          const conversions = parseInt(vals[3]?.value || '0', 10);
+          const totalRevenue =
+            revenueIdx != null ? parseFloat(vals[revenueIdx]?.value || '0') || 0 : 0;
+          if (!dailyTrafficByChannel[ymd]) dailyTrafficByChannel[ymd] = {};
+          if (!dailyTrafficByChannel[ymd][ch]) {
+            dailyTrafficByChannel[ymd][ch] = {
+              sessions: 0,
+              users: 0,
+              newUsers: 0,
+              conversions: 0,
+              totalRevenue: 0,
+            };
+          }
+          const cell = dailyTrafficByChannel[ymd][ch];
+          cell.sessions += sessions;
+          cell.users += users;
+          cell.newUsers += newUsers;
+          cell.conversions += conversions;
+          cell.totalRevenue += totalRevenue;
+        }
+        logger.info(`[GA4] dailyTrafficByChannel: ${Object.keys(dailyTrafficByChannel).length} days`);
+      } else {
+        const err = await dcRes.text();
+        logger.warn(`[GA4] dailyTrafficByChannel failed (${dcRes.status}): ${err.slice(0, 300)}`);
+      }
+    } catch (e) {
+      logger.warn('[GA4] dailyTrafficByChannel exception:', e);
+    }
+
     // Save to Firestore
     const docRef = db.doc(`ga4_data/${brandId}`);
     await docRef.set({
@@ -913,7 +1115,9 @@ export async function fetchGA4Data(
       propertyName: conn.propertyName || '',
       dailyMetrics,
       trafficSources,
+      dailyTrafficByChannel,
       organicRevenueByDay,
+      organicSearchFallbackRows,
       topPages,
       syncedAt: FieldValue.serverTimestamp(),
       dateRange: {

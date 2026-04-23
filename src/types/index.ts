@@ -281,14 +281,22 @@ export interface Product {
   name: string;
   sku: string;
   category: string;
+  /** Optional finer grouping from ERP exports. */
+  subcategory?: string;
   margin_tier: 'high' | 'medium' | 'low';
   margin_percentage: number;
   stock_level: number;
   stock_capacity: number;
+  /** Raw ERP stock snapshots when available. */
+  stock_on_hand?: number;
+  available_stock?: number;
   /** Ημέρες στο απόθεμα / κατάλογο — προαιρετικό (π.χ. procurement feed χωρίς στήλη ηλικίας). */
   stock_age_days?: number;
   priority_tag?: string;
   price: number;
+  /** Compare/list price from ERP when available. */
+  compare_at_price?: number;
+  list_price?: number;
   composite_score?: number;
   /** Cost price (Cost_Price in template) - optional */
   cost_price?: number;
@@ -311,6 +319,18 @@ export interface Product {
   supplier?: string;
   /** Εμπορική μάρκα (στήλη Brand στο import) — προαιρετικό */
   brand?: string;
+  /** Product barcode / GTIN from ERP. */
+  barcode?: string;
+  gtin?: string;
+  /** Product status from ERP (e.g. active/inactive/discontinued). */
+  status?: string;
+  /** Commercial classification fields from ERP. */
+  abc_class?: string;
+  flow_group?: string;
+  product_segment?: string;
+  seasonality_tag?: string;
+  reorder_point?: number;
+  reorder_qty?: number;
   /** Από procurement_inventory.ΚΑΤΗΓΟΡΙΑ — εμπορική κατηγορία στο procurement */
   procurement_category?: string;
   /** Από procurement_inventory.STATUS_ΚΩΔΙΚΟΥ ή ΑΞΙΟΛΟΓΗΣΗ_ΕΙΔΟΥΣ — lifecycle status (π.χ. «Επί παραγγελία», «Προς κατάργηση») */

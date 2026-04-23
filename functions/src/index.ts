@@ -69,6 +69,11 @@ import {
   setDb as setMagentoDb,
 } from './magentoConnector';
 import {
+  saveMegaventoryCredentials,
+  fetchMegaventoryData,
+  setDb as setMegaventoryDb,
+} from './megaventoryConnector';
+import {
   computeEcommerceSummary,
   setDb as setEcommerceAggDb,
 } from './ecommerceAggregator';
@@ -88,6 +93,12 @@ import {
   fetchGA4Data,
   setDb as setGA4Db,
 } from './ga4Connector';
+import {
+  getSearchConsoleAuthUrl,
+  handleSearchConsoleCallback,
+  fetchSearchConsoleData,
+  setDb as setSearchConsoleDb,
+} from './searchConsole';
 import {
   getTikTokAuthUrl,
   handleTikTokCallback,
@@ -110,10 +121,12 @@ setShopifyDb(db);
 setWooDb(db);
 setOpenCartDb(db);
 setMagentoDb(db);
+setMegaventoryDb(db);
 setEcommerceAggDb(db);
 setStockMovementDb(db);
 setProcurementSignalsDb(db);
 setGA4Db(db);
+setSearchConsoleDb(db);
 setTikTokDb(db);
 
 const BATCH_SIZE = 500;
@@ -692,12 +705,23 @@ export const connectorAuth = onRequest(
       }
 
       // Drop stale account-picker lists from a prior OAuth attempt so the UI never shows another session's options.
-      if (provider === 'ga4' || provider === 'google_ads' || provider === 'merchant' || provider === 'meta' || provider === 'tiktok') {
+      if (provider === 'ga4' || provider === 'search_console' || provider === 'google_ads' || provider === 'merchant' || provider === 'meta' || provider === 'tiktok') {
         const docRef = db.doc(`connectors/${brandId}`);
         if (provider === 'ga4') {
           await docRef.set(
             {
               ga4: {
+                pendingAccountSelection: false,
+                availableAccounts: FieldValue.delete(),
+                oauthInitiatedByUid: FieldValue.delete(),
+              },
+            },
+            { merge: true }
+          );
+        } else if (provider === 'search_console') {
+          await docRef.set(
+            {
+              search_console: {
                 pendingAccountSelection: false,
                 availableAccounts: FieldValue.delete(),
                 oauthInitiatedByUid: FieldValue.delete(),
@@ -764,6 +788,8 @@ export const connectorAuth = onRequest(
         authUrl = getMerchantAuthUrl(brandId, redirectUri, returnOrigin, oauthInitiator);
       } else if (provider === 'ga4') {
         authUrl = getGA4AuthUrl(brandId, redirectUri, returnOrigin, oauthInitiator);
+      } else if (provider === 'search_console') {
+        authUrl = getSearchConsoleAuthUrl(brandId, redirectUri, returnOrigin, oauthInitiator);
       } else if (provider === 'shopify') {
         if (!shopDomain) {
           res.status(400).json({ error: 'Missing shopDomain for Shopify' });
@@ -907,6 +933,8 @@ export const connectorCallback = onRequest(
         result = await handleMerchantCallback(code, brandId, redirectUri, oauthInitiatedByUid);
       } else if (provider === 'ga4') {
         result = await handleGA4Callback(code, brandId, redirectUri, oauthInitiatedByUid);
+      } else if (provider === 'search_console') {
+        result = await handleSearchConsoleCallback(code, brandId, redirectUri, oauthInitiatedByUid);
       } else if (provider === 'shopify') {
         const shopDomain = parsed.shopDomain;
         if (!shopDomain) {
@@ -964,6 +992,9 @@ export const connectorDisconnect = onRequest(
         connected: false,
         accessToken: '',
         refreshToken: '',
+        pendingAccountSelection: false,
+        availableAccounts: FieldValue.delete(),
+        oauthInitiatedByUid: FieldValue.delete(),
       };
       if (provider === 'woocommerce') {
         clearPayload.consumerKey = '';
@@ -977,8 +1008,17 @@ export const connectorDisconnect = onRequest(
       if (provider === 'magento') {
         clearPayload.accessToken = '';
       }
+      if (provider === 'megaventory') {
+        clearPayload.apiKey = '';
+        clearPayload.accountName = '';
+        clearPayload.currency = '';
+      }
       if (provider === 'shopify') {
         clearPayload.accessToken = '';
+      }
+      if (provider === 'search_console') {
+        clearPayload.siteUrl = '';
+        clearPayload.siteName = '';
       }
 
       await db.doc(`connectors/${brandId}`).set(
@@ -1065,6 +1105,20 @@ export const connectorSelectAccount = onRequest(
           { merge: true }
         );
         result = { success: true };
+      } else if (provider === 'search_console') {
+        await db.doc(`connectors/${brandId}`).set(
+          {
+            search_console: {
+              connected: true,
+              pendingAccountSelection: false,
+              siteUrl: accountId,
+              siteName: accountName || accountId,
+              oauthInitiatedByUid: FieldValue.delete(),
+            },
+          },
+          { merge: true }
+        );
+        result = { success: true };
       } else {
         res.status(400).json({ error: `Account selection not supported for ${provider}` });
         return;
@@ -1127,8 +1181,12 @@ export const connectorSync = onRequest(
         result = await fetchOpenCartData(brandId);
       } else if (provider === 'magento') {
         result = await fetchMagentoData(brandId);
+      } else if (provider === 'megaventory') {
+        result = await fetchMegaventoryData(brandId);
       } else if (provider === 'ga4') {
         result = await fetchGA4Data(brandId);
+      } else if (provider === 'search_console') {
+        result = await fetchSearchConsoleData(brandId);
       } else {
         res.status(400).json({ error: `Unknown provider: ${provider}` });
         return;
@@ -1206,12 +1264,20 @@ export const connectorSaveCredentials = onRequest(
         const result = await saveOpenCartCredentials(brandId, storeUrl, apiUsername, ocApiKey);
         res.status(200).json(result);
       } else if (provider === 'magento') {
-        const { accessToken: magToken } = req.body as { accessToken?: string };
+        const { accessToken: magToken, storeCode } = req.body as { accessToken?: string; storeCode?: string };
         if (!storeUrl || !magToken) {
           res.status(400).json({ error: 'Missing storeUrl or accessToken' });
           return;
         }
-        const result = await saveMagentoCredentials(brandId, storeUrl, magToken);
+        const result = await saveMagentoCredentials(brandId, storeUrl, magToken, storeCode);
+        res.status(200).json(result);
+      } else if (provider === 'megaventory') {
+        const { apiKey: mvKey } = req.body as { apiKey?: string };
+        if (!mvKey) {
+          res.status(400).json({ error: 'Missing Megaventory apiKey' });
+          return;
+        }
+        const result = await saveMegaventoryCredentials(brandId, mvKey);
         res.status(200).json(result);
       } else {
         res.status(400).json({ error: `Credentials auth not supported for ${provider}` });
@@ -1355,6 +1421,15 @@ export const scheduledSync = onSchedule(
             logger.info(`[ScheduledSync] Magento for ${brandId}: imported ${result.imported}`);
           } catch (err) {
             logger.error(`[ScheduledSync] Magento failed for ${brandId}:`, err);
+          }
+        }
+
+        if (data.megaventory?.connected) {
+          try {
+            const result = await fetchMegaventoryData(brandId);
+            logger.info(`[ScheduledSync] Megaventory for ${brandId}: imported ${result.imported}`);
+          } catch (err) {
+            logger.error(`[ScheduledSync] Megaventory failed for ${brandId}:`, err);
           }
         }
 

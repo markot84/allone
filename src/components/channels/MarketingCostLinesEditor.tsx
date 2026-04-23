@@ -146,8 +146,7 @@ export function MarketingCostLinesEditor({
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-semibold text-[#111827]">Επιπλέον κόστη marketing (ROI)</h3>
           <p className="text-[11px] text-[#6B7280] mt-0.5 leading-snug">
-            Agency, εργαλεία, εφάπαξ έξοδα κ.λπ. — στη σελίδα ROI εμφανίζεται{' '}
-            <strong>αναλογία ανά ημέρα</strong> στο <strong>καθολικό διάστημα</strong> (Dashboard/ROI), όχι απαραίτητα ολόκληρο το μηνιαίο ποσό. Δεν αντικαθιστούν το μηνιαίο budget καναλιών.
+            Στο ROI: τα <strong>σταθερά μηνιαία</strong> (π.χ. agency) μετρούν <strong>πλήρες €/μήνα</strong> για κάθε ημερολογιακό μήνα που καλύπτει η περίοδο· ποσοστά επί budget και εφάπαξ γραμμές κατανέμονται ανά ημέρα. Δεν αντικαθιστούν το μηνιαίο budget καναλιών.
           </p>
         </div>
       </div>

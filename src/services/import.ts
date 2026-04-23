@@ -59,6 +59,30 @@ export const PRODUCT_COLUMN_MAPPING = [
     usedIn: 'Product Intelligence table',
     alternatives: ['Category', 'category', 'Product_Category', 'product_category', 'Group', 'group', 'Κατηγορία', 'κατηγορία', 'Type', 'type', 'Department', 'department']
   },
+  {
+    fileColumn: 'Subcategory',
+    appField: 'Subcategory',
+    usedIn: 'Optional, finer merchandising grouping',
+    alternatives: ['Subcategory', 'sub_category', 'sub-category', 'subcategory', 'Sub_Category', 'Sub Category', 'Υποκατηγορία', 'υποκατηγορία']
+  },
+  {
+    fileColumn: 'Brand',
+    appField: 'Brand',
+    usedIn: 'Competitive, search, merchandising',
+    alternatives: ['Brand', 'brand', 'Manufacturer', 'manufacturer', 'Vendor_Brand', 'vendor_brand', 'Μάρκα', 'μάρκα']
+  },
+  {
+    fileColumn: 'Barcode',
+    appField: 'Barcode / GTIN',
+    usedIn: 'Competitive matching, catalog identity',
+    alternatives: ['Barcode', 'barcode', 'GTIN', 'gtin', 'EAN', 'ean', 'UPC', 'upc', 'Bar_Code', 'bar_code']
+  },
+  {
+    fileColumn: 'Status',
+    appField: 'Product status',
+    usedIn: 'Lifecycle / filtering',
+    alternatives: ['Status', 'status', 'Product_Status', 'product_status', 'Item_Status', 'item_status', 'Κατάσταση_Προϊόντος', 'κατάσταση_προϊόντος']
+  },
   { 
     fileColumn: 'Sell_Price', 
     appField: 'Price', 
@@ -71,11 +95,23 @@ export const PRODUCT_COLUMN_MAPPING = [
     usedIn: 'Optional, margin derivation',
     alternatives: ['Cost_Price', 'Cost Price', 'cost_price', 'Cost', 'cost', 'Κόστος', 'κόστος']
   },
+  {
+    fileColumn: 'List_Price',
+    appField: 'List / compare price',
+    usedIn: 'Pricing comparisons, merchandising',
+    alternatives: ['List_Price', 'List Price', 'list_price', 'Compare_At_Price', 'compare_at_price', 'Compare At Price', 'compare_at', 'MSRP', 'Catalog_Price', 'catalog_price', 'Τιμοκατάλογος', 'τιμοκατάλογος']
+  },
   { 
     fileColumn: 'Stock_On_Hand', 
     appField: 'Stock Level', 
     usedIn: 'Product Intelligence, Total SKUs, Strategy',
     alternatives: ['Stock_On_Hand', 'Stock On Hand', 'stock_on_hand', 'Stock_Level', 'stock_level', 'Stock', 'stock', 'Quantity', 'quantity', 'Qty', 'qty', 'Inventory', 'inventory', 'On_Hand', 'on_hand', 'Units', 'units', 'Απόθεμα', 'απόθεμα', 'Ποσότητα', 'ποσότητα', 'Available_Stock', 'available_stock', 'Δυναμικό_Υπόλοιπο', 'δυναμικό_υπόλοιπο', 'Κίνηση', 'κίνηση']
+  },
+  {
+    fileColumn: 'Available_Stock',
+    appField: 'Available stock',
+    usedIn: 'Stock availability, competitive overlays',
+    alternatives: ['Available_Stock', 'Available Stock', 'available_stock', 'Sellable_Stock', 'sellable_stock', 'Free_Stock', 'free_stock', 'Διαθέσιμο_Απόθεμα', 'διαθέσιμο_απόθεμα']
   },
   { 
     fileColumn: 'Qty_Sold_Period', 
@@ -100,6 +136,12 @@ export const PRODUCT_COLUMN_MAPPING = [
     appField: 'Stock Age (αν λείπει Stock_Age_Days)', 
     usedIn: 'Υπολογισμός: σήμερα − ημερομηνία',
     alternatives: ['First_Available_Date', 'First Available Date', 'first_available_date', 'First_Available', 'first_available', 'Available_Date', 'available_date', 'Date_Added', 'date_added', 'Created_Date', 'created_date', 'Creation_Date', 'creation_date', 'Inventory_Date', 'inventory_date', 'Data', 'data', 'Ημερομηνία', 'ημερομηνία', 'Ημ/νία', 'ημ/νία']
+  },
+  {
+    fileColumn: 'Last_Sale_Date',
+    appField: 'Last sale date',
+    usedIn: 'Velocity and lifecycle reading',
+    alternatives: ['Last_Sale_Date', 'Last Sale Date', 'last_sale_date', 'Last_Sale_At', 'last_sale_at', 'Last_Sold_Date', 'last_sold_date', 'Τελευταία_Πώληση', 'τελευταία_πώληση', 'Τελευταια_Πωληση', 'τελευταια_πωληση']
   },
   { 
     fileColumn: 'Gross_Margin_%', 
@@ -130,6 +172,36 @@ export const PRODUCT_COLUMN_MAPPING = [
     appField: 'Supplier', 
     usedIn: 'Product Intelligence, TOD per supplier',
     alternatives: ['Supplier', 'supplier', 'Vendor', 'vendor', 'Supplier_Name', 'supplier_name', 'Προμηθευτής', 'προμηθευτής', 'Vendor_Name', 'vendor_name']
+  },
+  {
+    fileColumn: 'Reorder_Point',
+    appField: 'Reorder point',
+    usedIn: 'Replenishment planning',
+    alternatives: ['Reorder_Point', 'Reorder Point', 'reorder_point', 'Min_Stock', 'min_stock', 'Safety_Stock', 'safety_stock', 'Σημείο_Αναπαραγγελίας', 'σημείο_αναπαραγγελίας']
+  },
+  {
+    fileColumn: 'Reorder_Qty',
+    appField: 'Reorder quantity',
+    usedIn: 'Replenishment planning',
+    alternatives: ['Reorder_Qty', 'Reorder Qty', 'reorder_qty', 'Reorder_Quantity', 'reorder_quantity', 'Order_Qty', 'order_qty', 'Ποσότητα_Αναπαραγγελίας', 'ποσότητα_αναπαραγγελίας']
+  },
+  {
+    fileColumn: 'ABC_Class',
+    appField: 'ABC class',
+    usedIn: 'Commercial prioritization',
+    alternatives: ['ABC_Class', 'ABC Class', 'abc_class', 'ABC', 'abc', 'Abc_Class']
+  },
+  {
+    fileColumn: 'Flow_Group',
+    appField: 'Flow group',
+    usedIn: 'Commercial grouping',
+    alternatives: ['Flow_Group', 'Flow Group', 'flow_group', 'Product_Segment', 'product_segment', 'Segment', 'segment', 'Ομάδα_Ροής', 'ομάδα_ροής']
+  },
+  {
+    fileColumn: 'Seasonality_Tag',
+    appField: 'Seasonality',
+    usedIn: 'Seasonal strategy',
+    alternatives: ['Seasonality_Tag', 'Seasonality Tag', 'seasonality_tag', 'Seasonality', 'seasonality', 'Season_Tag', 'season_tag', 'Εποχικότητα', 'εποχικότητα']
   },
 ] as const;
 
@@ -601,6 +673,37 @@ function calcGrossMarginPct(sellPrice: number, costPrice: number): number | null
   return ((sellPrice - costPrice) / sellPrice) * 100;
 }
 
+function parseLooseNumber(value: string | number | null | undefined): number {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  const raw = String(value ?? '').trim();
+  if (!raw) return 0;
+
+  let normalized = raw
+    .replace(/[€$£%\s]/g, '')
+    .replace(/\u00a0/g, '')
+    .replace(/[−–—]/g, '-');
+
+  if (!normalized) return 0;
+
+  const hasComma = normalized.includes(',');
+  const hasDot = normalized.includes('.');
+  if (hasComma && hasDot) {
+    if (normalized.lastIndexOf(',') > normalized.lastIndexOf('.')) {
+      normalized = normalized.replace(/\./g, '').replace(',', '.');
+    } else {
+      normalized = normalized.replace(/,/g, '');
+    }
+  } else if (hasComma) {
+    normalized = /^-?\d{1,3}(,\d{3})+$/.test(normalized)
+      ? normalized.replace(/,/g, '')
+      : normalized.replace(',', '.');
+  } else if (hasDot && /^-?\d{1,3}(\.\d{3})+$/.test(normalized)) {
+    normalized = normalized.replace(/\./g, '');
+  }
+
+  return parseFloat(normalized) || 0;
+}
+
 // Validate and transform Products
 // Primary schema: FINAL_Unified_Production_Schema (SKU_ID, Product_Name, Category, Sell_Price, Cost_Price, Stock_On_Hand, Qty_Sold_Period, Revenue_Period, Supplier, Brand, First_Available_Date, Last_Sale_Date, Priority_Flag, Stock_Age_Days, Gross_Profit, Gross_Margin_%, Margin_Tier)
 function validateProduct(row: Record<string, string>, index: number): { valid: boolean; data?: Product; error?: string } {
@@ -623,10 +726,16 @@ function validateProduct(row: Record<string, string>, index: number): { valid: b
   const name = pick(row, 'περιγραφή', 'title', 'name', 'product_name', 'product', 'Title', 'item', 'item_name', 'description', 'product_title', 'όνομα', 'προϊόν');
   const sku = pick(row, 'κωδικός', 'item_id', 'sku', 'sku_id', 'id', 'product_id', 'Item ID', 'item id', 'Item_ID', 'code', 'barcode', 'ean');
   const category = pick(row, 'ομάδα', 'category', 'product_category', 'product_type', 'group', 'κατηγορία', 'type', 'department');
+  const subcategory = pick(row, 'subcategory', 'sub_category', 'sub-category', 'υποκατηγορία');
+  const brand = pick(row, 'brand', 'manufacturer', 'vendor_brand', 'μάρκα');
+  const barcode = pick(row, 'barcode', 'gtin', 'ean', 'upc');
+  const status = pick(row, 'status', 'product_status', 'item_status', 'κατάσταση_προϊόντος');
   const marginTier = pick(row, 'margin_tier', 'margin_category', 'tier');
   const marginPct = pick(row, 'margin_percentage', 'margin_pct', 'margin', 'margin_%', 'gross_margin_%', 'gross_margin', 'gross_margin_pct', 'profit_margin', 'profit', 'κέρδος', 'περιθώριο', 'μικτό_κέρδος');
   // Stock level - Greek: "Διαθεσιμότητα" = Availability/Stock Level (normalized: "διαθεσιμότητα")
   const stockLevel = pick(row, 'διαθεσιμότητα', 'stock_on_hand', 'Stock_On_Hand', 'stock_level', 'Stock_Level', 'stock', 'Stock', 'quantity', 'Quantity', 'qty', 'Qty', 'inventory', 'Inventory', 'on_hand', 'On_Hand', 'units', 'Units', 'απόθεμα', 'ποσότητα', 'available_stock', 'Available_Stock', 'δυναμικό_υπόλοιπο', 'κίνηση', 'availability');
+  const stockOnHand = pick(row, 'stock_on_hand', 'on_hand', 'stock', 'quantity', 'qty', 'inventory', 'units', 'απόθεμα', 'ποσότητα');
+  const availableStock = pick(row, 'available_stock', 'sellable_stock', 'free_stock', 'διαθέσιμο_απόθεμα', 'δυναμικό_υπόλοιπο');
   const stockCapacity = pick(row, 'stock_capacity', 'capacity', 'max_stock', 'max_quantity', 'χωρητικότητα', 'επιθυμητό_απόθεμα', 'αναμενόμενα', 'Αναμενόμενα');
   const stockAge = pick(row, 'stock_age_days', 'Stock_Age_Days', 'age_days', 'Age_Days', 'days_in_stock', 'Days_In_Stock', 'stock_age', 'Stock_Age', 'age', 'Age', 'mst_(ημέρες)', 'MST_(ημέρες)');
   // Greek: "Ημ.πρώτης παραλ." = First Available Date (normalized: "ημ.πρώτης_παραλ.")
@@ -634,6 +743,7 @@ function validateProduct(row: Record<string, string>, index: number): { valid: b
   // Headers are normalized: "Sell Price" -> "sell_price", "Price" -> "price"
   // Greek: "Λιανικής" = Retail Price (normalized: "λιανικής"), "Χονδρικής" = Wholesale Price (normalized: "χονδρικής")
   const price = pick(row, 'λιανικής', 'χονδρικής', 'sell_price', 'Sell_Price', 'price', 'Price', 'unit_price', 'Unit_Price', 'retail_price', 'Retail_Price', 'conv._value', 'conv_value', 'conversion_value', 'τιμή', 'msrp', 'MSRP');
+  const listPrice = pick(row, 'list_price', 'compare_at_price', 'compare_at', 'catalog_price', 'τιμοκατάλογος', 'msrp');
   // "cost" from campaigns could be cost_price
   // Greek: "Τιμή αγοράς" = Cost Price (normalized: "τιμή_αγοράς")
   const costPrice = pick(row, 'τιμή_αγοράς', 'cost_price', 'Cost_Price', 'cost', 'Cost', 'κόστος');
@@ -646,16 +756,28 @@ function validateProduct(row: Record<string, string>, index: number): { valid: b
   const lastSaleAt = pick(row, 'last_sale_at', 'last_sale_date', 'τελευταία_πώληση', 'τελευταια_πωληση');
   const priority = pick(row, 'priority_tag', 'priority_flag', 'priority', 'tag', 'label', 'alerts', 'κατάσταση');
   const supplier = pick(row, 'supplier', 'vendor', 'supplier_name', 'vendor_name', 'προμηθευτής');
-  
+  const reorderPoint = pick(row, 'reorder_point', 'min_stock', 'safety_stock', 'σημείο_αναπαραγγελίας');
+  const reorderQty = pick(row, 'reorder_qty', 'reorder_quantity', 'order_qty', 'ποσότητα_αναπαραγγελίας');
+  const abcClass = pick(row, 'abc_class', 'abc');
+  const flowGroup = pick(row, 'flow_group', 'ομάδα_ροής');
+  const productSegment = pick(row, 'product_segment', 'segment');
+  const seasonalityTag = pick(row, 'seasonality_tag', 'seasonality', 'season_tag', 'εποχικότητα');
+
   // Debug: Log what was found
   if (index < 3) {
     console.log(`[Product Row ${index}] Found values:`, {
       name: name || '(empty)',
       sku: sku || '(empty)',
       category: category || '(empty)',
+      subcategory: subcategory || '(empty)',
+      brand: brand || '(empty)',
+      barcode: barcode || '(empty)',
       price: price || '(empty)',
+      listPrice: listPrice || '(empty)',
       costPrice: costPrice || '(empty)',
       stockLevel: stockLevel || '(empty)',
+      stockOnHand: stockOnHand || '(empty)',
+      availableStock: availableStock || '(empty)',
       marginPct: marginPct || '(empty)',
       stockAge: stockAge || '(empty)',
       firstAvailableDate: firstAvailableDate || '(empty)'
@@ -681,17 +803,27 @@ function validateProduct(row: Record<string, string>, index: number): { valid: b
 
   const rawId = sku || name.slice(0, 60) || `product-${Date.now()}-${index}`;
   const sl = (stockLevel || '').toLowerCase();
-  const stockLevelNum =
+  const stockLevelNumRaw =
     sl.includes('in stock') || sl === 'in_stock' ? 1
     : sl.includes('out of stock') || sl === 'out_of_stock' ? 0
-    : Math.round(parseFloat(String(stockLevel || '0').replace(',', '.')) || 0);
-  const stockCapacityNum = parseInt(stockCapacity || '0', 10) || 0;
-  const sellPriceNum = parseFloat(String(price || '0').replace(',', '.')) || 0;
-  const costPriceNum = parseFloat(String(costPrice || '0').replace(',', '.')) || 0;
+    : Math.round(parseLooseNumber(stockLevel));
+  const hasStockOnHand = stockOnHand.trim() !== '';
+  const hasAvailableStock = availableStock.trim() !== '';
+  const stockOnHandNum = Math.round(parseLooseNumber(stockOnHand));
+  const availableStockNum = Math.round(parseLooseNumber(availableStock));
+  const stockLevelNum = hasAvailableStock
+    ? availableStockNum
+    : hasStockOnHand
+      ? stockOnHandNum
+      : stockLevelNumRaw;
+  const stockCapacityNum = Math.round(parseLooseNumber(stockCapacity)) || 0;
+  const sellPriceNum = parseLooseNumber(price);
+  const listPriceNum = parseLooseNumber(listPrice);
+  const costPriceNum = parseLooseNumber(costPrice);
 
   // Stock Age: prefer Stock_Age_Days from file, else compute from First_Available_Date
   // If neither exists, it will be calculated from createdAt (import date) when reading from Firestore
-  let stockAgeDays = parseInt(stockAge || '0', 10) || 0;
+  let stockAgeDays = Math.round(parseLooseNumber(stockAge)) || 0;
   if (stockAgeDays === 0 && firstAvailableDate && firstAvailableDate.trim() !== '') {
     const computed = daysFromFirstAvailable(firstAvailableDate);
     if (computed !== null && computed >= 0) {
@@ -701,7 +833,7 @@ function validateProduct(row: Record<string, string>, index: number): { valid: b
   // If still 0, it will be calculated from createdAt when reading products from Firestore
 
   // Gross Margin %: use file value when present, otherwise compute from (Sell_Price - Cost_Price) / Sell_Price
-  let marginPctNum = parseFloat(String(marginPct || '0').replace(',', '.')) || 0;
+  let marginPctNum = parseLooseNumber(marginPct);
   const hasFileMargin = !!(marginPct && marginPct.trim() !== '' && marginPctNum !== 0);
 
   // Detect decimal-form margins (e.g. 0.25 meaning 25%) and convert to percentage
@@ -721,11 +853,14 @@ function validateProduct(row: Record<string, string>, index: number): { valid: b
   if (index < 3) {
     console.log(`[Product Row ${index}] Calculations:`, {
       sellPriceNum,
+      listPriceNum,
       costPriceNum,
       marginPctFromFile: marginPct,
       marginPctCalculated: marginPctNum,
       stockLevelFromFile: stockLevel,
       stockLevelNum,
+      stockOnHandNum,
+      availableStockNum,
       stockAgeFromFile: stockAge,
       stockAgeDays,
       firstAvailableDate,
@@ -733,34 +868,41 @@ function validateProduct(row: Record<string, string>, index: number): { valid: b
     });
   }
 
+  const reorderPointNum = Math.round(parseLooseNumber(reorderPoint));
+  const reorderQtyNum = Math.round(parseLooseNumber(reorderQty));
+
   const product: Product = {
     id: sanitizeDocId(String(rawId)),
     name: name || sku,
     sku: sku || rawId,
     category: category || 'Uncategorized',
+    ...(subcategory ? { subcategory } : {}),
     margin_tier: (['high', 'medium', 'low'].includes((marginTier || '').toLowerCase())
       ? (marginTier!).toLowerCase()
       : marginPctNum > 25 ? 'high' : marginPctNum > 10 ? 'medium' : 'low') as 'high' | 'medium' | 'low',
     margin_percentage: marginPctNum,
     stock_level: stockLevelNum,
     stock_capacity: stockCapacityNum || stockLevelNum || 1,
+    ...(hasStockOnHand ? { stock_on_hand: stockOnHandNum } : {}),
+    ...(hasAvailableStock ? { available_stock: availableStockNum } : {}),
     stock_age_days: stockAgeDays,
     price: sellPriceNum,
     ...(priority ? { priority_tag: priority } : {}),
     ...(costPrice ? { cost_price: costPriceNum } : {}),
-    ...(revenuePeriod ? { revenue_period: parseFloat(String(revenuePeriod || '0').replace(',', '.')) || 0 } : {}),
-    ...(qtySoldPeriod ? { qty_sold_period: Math.round(parseFloat(String(qtySoldPeriod).replace(',', '.')) || 0) } : {}),
+    ...(listPrice ? { list_price: listPriceNum, compare_at_price: listPriceNum } : {}),
+    ...(revenuePeriod ? { revenue_period: parseLooseNumber(revenuePeriod) } : {}),
+    ...(qtySoldPeriod ? { qty_sold_period: Math.round(parseLooseNumber(qtySoldPeriod)) } : {}),
     ...(qtySoldLast7?.trim()
-      ? { qty_sold_last_7d: Math.round(parseFloat(String(qtySoldLast7).replace(',', '.')) || 0) }
+      ? { qty_sold_last_7d: Math.round(parseLooseNumber(qtySoldLast7)) }
       : {}),
     ...(qtySoldLast30?.trim()
-      ? { qty_sold_last_30d: Math.round(parseFloat(String(qtySoldLast30).replace(',', '.')) || 0) }
+      ? { qty_sold_last_30d: Math.round(parseLooseNumber(qtySoldLast30)) }
       : {}),
     ...(qtySoldLast90?.trim()
-      ? { qty_sold_last_90d: Math.round(parseFloat(String(qtySoldLast90).replace(',', '.')) || 0) }
+      ? { qty_sold_last_90d: Math.round(parseLooseNumber(qtySoldLast90)) }
       : {}),
     ...(qtySoldLifetime?.trim()
-      ? { qty_sold_lifetime: Math.round(parseFloat(String(qtySoldLifetime).replace(',', '.')) || 0) }
+      ? { qty_sold_lifetime: Math.round(parseLooseNumber(qtySoldLifetime)) }
       : {}),
     ...(lastSaleAt?.trim()
       ? {
@@ -770,6 +912,15 @@ function validateProduct(row: Record<string, string>, index: number): { valid: b
       : {}),
     ...(firstAvailableDate ? { first_available_date: firstAvailableDate } : {}),
     ...(supplier ? { supplier } : {}),
+    ...(brand ? { brand } : {}),
+    ...(barcode ? { barcode, gtin: barcode } : {}),
+    ...(status ? { status } : {}),
+    ...(abcClass ? { abc_class: abcClass } : {}),
+    ...(flowGroup ? { flow_group: flowGroup } : {}),
+    ...(productSegment ? { product_segment: productSegment } : flowGroup ? { product_segment: flowGroup } : {}),
+    ...(seasonalityTag ? { seasonality_tag: seasonalityTag } : {}),
+    ...(reorderPoint.trim() !== '' ? { reorder_point: reorderPointNum } : {}),
+    ...(reorderQty.trim() !== '' ? { reorder_qty: reorderQtyNum } : {}),
   };
 
   // Debug: Log final product for first few rows

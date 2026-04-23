@@ -792,7 +792,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
                     {importMode === 'feed' ? (
                       <>Για <strong>{FEED_SOURCE_OPTIONS.find(f => f.id === selectedFeedSource)?.name}</strong>: id→sku, title→name, price→price κλπ. Αυτόματη αντιστοίχιση.</>
                     ) : (
-                      'Οι στήλες του αρχείου σας αντιστοιχίζονται αυτόματα'
+                      'Οι στήλες του flat ERP αρχείου αντιστοιχίζονται αυτόματα'
                     )}
                   </p>
                   <button
@@ -820,16 +820,29 @@ export function DataImport({ initialType }: DataImportProps = {}) {
                         if (h === 'SKU_ID') return 'SKU-001';
                         if (h === 'Product_Name') return 'Sample Product';
                         if (h === 'Category') return 'Electronics';
+                        if (h === 'Subcategory') return 'Audio';
+                        if (h === 'Brand') return 'Performance Plus';
+                        if (h === 'Barcode') return '5201234567890';
+                        if (h === 'Status') return 'active';
                         if (h === 'Sell_Price') return '99.99';
                         if (h === 'Cost_Price') return '60.00';
+                        if (h === 'List_Price') return '119.99';
                         if (h === 'Stock_On_Hand') return '100';
+                        if (h === 'Available_Stock') return '88';
                         if (h === 'Stock_Age_Days') return '30';
+                        if (h === 'Last_Sale_Date') return '2026-03-10';
                         if (h === 'Gross_Margin_%') return '40.0';
                         if (h === 'Margin_Tier') return 'high';
                         if (h === 'Priority_Flag') return 'New Launch';
+                        if (h === 'Supplier') return 'Main Supplier';
                         if (h === 'First_Available_Date') return '2025-01-15';
                         if (h === 'Qty_Sold_Period') return '50';
                         if (h === 'Revenue_Period') return '4999.50';
+                        if (h === 'Reorder_Point') return '20';
+                        if (h === 'Reorder_Qty') return '60';
+                        if (h === 'ABC_Class') return 'A';
+                        if (h === 'Flow_Group') return 'Core';
+                        if (h === 'Seasonality_Tag') return 'All_Year';
                         return '';
                       }).join(',')
                     ].join('\n');
@@ -838,12 +851,12 @@ export function DataImport({ initialType }: DataImportProps = {}) {
                     const link = document.createElement('a');
                     const url = URL.createObjectURL(blob);
                     link.setAttribute('href', url);
-                    link.setAttribute('download', 'products_template.csv');
+                    link.setAttribute('download', 'products_erp_flat_template.csv');
                     link.style.visibility = 'hidden';
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
-                    toast.success('Template downloaded!');
+                    toast.success('ERP flat template downloaded!');
                   }}
                   variant="secondary"
                   size="sm"

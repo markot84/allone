@@ -9,8 +9,10 @@ import { usePeriodScopedCampaigns } from '../../hooks/usePeriodScopedCampaigns';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import { useGA4Data } from '../../hooks/useGA4Data';
 import { useDashPeriod } from '../../hooks/useDashPeriod';
+import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import { useGlobalDate, GLOBAL_PERIOD_OPTIONS } from '../../contexts/GlobalDateContext';
 import { DateRangePicker } from '../ui/DateRangePicker';
+import { MarketingCostLinesEditor } from '../channels/MarketingCostLinesEditor';
 import {
   buildRoiTrendSeriesDaily,
   mergeGa4OrganicDailyWithChannelFallback,
@@ -18,7 +20,7 @@ import {
 } from '../../utils/roiUtils';
 import { FirestoreService } from '../../services/firestore';
 import { formatCurrency, formatCurrencyCompact, formatNumber } from '../../utils/format';
-import type { OrganicRevenue } from '../../types';
+import type { OrganicRevenue, MarketingCostLine } from '../../types';
 
 interface BusinessFinancesProps {
   onSectionChange?: (section: string) => void;
@@ -47,6 +49,11 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
     dateRange: ga4DateRange,
   } = useGA4Data();
   const ecomm = useEcommerceSummary();
+  const {
+    activeStrategy,
+    updateMarketingCostLines,
+    isSavingMarketingCostLines,
+  } = useActiveStrategy();
 
   const { period: dashPeriod, setPeriod: setDashPeriod, periodDates } = useDashPeriod();
   const { customFrom, customTo, setCustomRange } = useGlobalDate();
@@ -197,6 +204,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
   }
 
   const enterpriseExtra = currentBrand?.enterpriseTurnoverEUR;
+  const monthlyBudget = activeStrategy?.monthlyBudget || 0;
 
   return (
     <div className="space-y-6">
@@ -255,6 +263,20 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
         {hasImported ? ` · ${records.length} περίοδοι εισαγωγής organic` : ''}
         {organicRevenueSource === 'ga4' ? ' · GA4 organic' : ''}
       </p>
+
+      {activeStrategy && (
+        <MarketingCostLinesEditor
+          key={activeStrategy.id}
+          initialLines={activeStrategy.marketingCostLines}
+          monthlyBudget={monthlyBudget}
+          disabled={activeStrategy.id.startsWith('default_')}
+          isSaving={isSavingMarketingCostLines}
+          onSave={async (lines: MarketingCostLine[]) => {
+            await updateMarketingCostLines(lines);
+            toast.success('Αποθηκεύτηκαν τα επιπλέον κόστη marketing');
+          }}
+        />
+      )}
 
       {/* Τζίρος επιχείρησης (ευρύτερη εικόνα) */}
       <section className="space-y-3">

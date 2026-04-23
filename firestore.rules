@@ -296,6 +296,11 @@ service cloud.firestore {
     match /ga4_data/{brandId} {
       allow read, write: if isBrandMember(brandId);
     }
+    // Search Console query rows (keyed by brandId; Cloud Functions write via Admin SDK)
+    match /search_console_data/{brandId} {
+      allow read: if isBrandMember(brandId);
+      allow write: if false;
+    }
     // E-commerce summary (keyed by brandId, server-write only)
     match /ecommerce_summary/{brandId} {
       allow read: if isBrandMember(brandId);
@@ -336,6 +341,36 @@ service cloud.firestore {
       allow write: if false;
     }
     match /magento_products/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    // Magento admin search terms (popular queries) — ένα doc ανά brand
+    match /magento_popular_searches/{brandId} {
+      allow read: if request.auth != null && isBrandMember(brandId);
+      allow write: if false;
+    }
+    // Megaventory ERP connector data (invoices/orders/products/stock/suppliers)
+    match /megaventory_invoices/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    match /megaventory_sales_orders/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    match /megaventory_purchase_orders/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    match /megaventory_products/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    match /megaventory_stock/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    match /megaventory_suppliers/{docId} {
       allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
       allow write: if false;
     }
