@@ -1,10 +1,14 @@
 {
-  "version": "0.609.0",
-  "previousVersion": "0.608.0",
-  "commitHash": "7611619",
+  "version": "0.611.0",
+  "previousVersion": "0.610.0",
+  "commitHash": "251b2ce",
   "branch": "main",
-  "buildDate": "2026-04-23T07:47:01.266Z",
+  "buildDate": "2026-04-23T08:15:55.229Z",
   "commits": [
+    {
+      "hash": "251b2ce",
+      "message": "chore: buildInfo v0.609.0 after deploy"
+    },
     {
       "hash": "7611619",
       "message": "chore: buildInfo v0.608.0 after build"
@@ -60,13 +64,10 @@
     {
       "hash": "b1b8f18",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "98e251d",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [
+    "[Συντήρηση] BuildInfo v0.609.0 after deploy",
     "[Συντήρηση] BuildInfo v0.608.0 after build",
     "[Συντήρηση] Remove unused helper; buildInfo v0.607.0",
     "[Διόρθωση] Pie aligns with period + center total; feat(strategy): commercial priorities bridge-style cards",
@@ -75,7 +76,6 @@
     "[Νέο χαρακτηριστικό] Home session — GA4/search console, auth, ecommerce, connectors, ROI, firestore rules",
     "[Συντήρηση] Full deploy",
     "[Διόρθωση] Resolve ERP column names and merge pricing for margin",
-    "[Διόρθωση] Triage uses useProductSource for Enterprise procurement catalog",
-    "[Διόρθωση] Guard missing connectedPlatforms in useEcommerceSummary hasData"
+    "[Διόρθωση] Triage uses useProductSource for Enterprise procurement catalog"
   ]
 }

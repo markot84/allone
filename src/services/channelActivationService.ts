@@ -8,6 +8,8 @@ export interface ChannelActivationStatus {
   channel: string;
   status: 'pending' | 'in_progress' | 'done';
   note: string;
+  /** Συμμετέχει ή όχι το κανάλι στην ενεργή καμπάνια. Αν undefined, default true. */
+  included?: boolean;
   updatedAt: string;
   updatedBy: string;
 }

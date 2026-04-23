@@ -8,7 +8,12 @@ import {
   type TriagePromptContext,
   type ProvenancePromptContext,
 } from '../data/channelRecommendationsPrompt';
-import type { ChannelRecommendation, BudgetAction } from '../types';
+import type {
+  ChannelRecommendation,
+  BudgetAction,
+  RecommendedSegment,
+  ChannelPlaybookEntry,
+} from '../types';
 import type { Scenario } from '../types';
 import type { RFMSegment } from '../types';
 import { deriveBehavioralProfile, derivePredictiveMetrics } from './behavioralEngine';
@@ -67,12 +72,41 @@ function parseAIResponse(text: string): ChannelRecommendation | null {
         )
       : [];
 
+    const targetSegments: RecommendedSegment[] = Array.isArray(parsed.targetSegments)
+      ? (parsed.targetSegments as Array<Record<string, unknown>>)
+          .filter((s) => s && typeof s.name === 'string')
+          .map((s) => ({
+            name: String(s.name),
+            fit: s.fit === 'ideal' ? 'ideal' : 'good',
+            rationale: typeof s.rationale === 'string' ? s.rationale : '',
+          }))
+      : [];
+
+    const channelPlaybook: ChannelPlaybookEntry[] = Array.isArray(parsed.channelPlaybook)
+      ? (parsed.channelPlaybook as Array<Record<string, unknown>>)
+          .filter(
+            (e) =>
+              e &&
+              typeof e.segment === 'string' &&
+              typeof e.channel === 'string' &&
+              (typeof e.message === 'string' || typeof e.marketingBrief === 'string')
+          )
+          .map((e) => ({
+            segment: String(e.segment),
+            channel: String(e.channel),
+            message: typeof e.message === 'string' ? e.message : '',
+            marketingBrief: typeof e.marketingBrief === 'string' ? e.marketingBrief : '',
+          }))
+      : [];
+
     return {
       primary,
       secondary,
       budget_allocation,
       rationale,
       ...(actions.length > 0 ? { actions } : {}),
+      ...(targetSegments.length > 0 ? { targetSegments } : {}),
+      ...(channelPlaybook.length > 0 ? { channelPlaybook } : {}),
     };
   } catch {
     return null;

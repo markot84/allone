@@ -24,6 +24,11 @@ import {
   MessageSquare,
   Sparkles,
   ChevronUp,
+  Megaphone,
+  Briefcase,
+  Target as TargetIcon,
+  Check,
+  Star,
 } from 'lucide-react';
 import {
   PieChart,
@@ -165,6 +170,10 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   const [editingBudget, setEditingBudget] = useState(false);
   const [aiGenerating, setAiGenerating] = useState(false);
   const [showAiBrief, setShowAiBrief] = useState(true);
+  /** Active segment context — οδηγεί τα per-segment campaign messages & marketing briefs. */
+  const [selectedSegmentName, setSelectedSegmentName] = useState<string | null>(null);
+  /** Tab για το dual brief: «owner» = επιχειρηματίας · «exec» = ομάδα υλοποίησης. */
+  const [briefTab, setBriefTab] = useState<'owner' | 'exec'>('owner');
   const monthlyBudget = activeStrategy?.monthlyBudget ?? null;
 
   const strategyId = activeStrategy?.id ?? null;
@@ -226,7 +235,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     generateRecommendation();
   }, [hasRealStrategyId, aiRecommendation, aiGenerating, rfmSegments, generateRecommendation]);
 
-  const { getStatus, getNote, updateActivation, isSaving } = useChannelActivations(strategyId);
+  const { getStatus, getNote, isIncluded, updateActivation, isSaving } = useChannelActivations(strategyId);
 
   // Build channel list from AI recommendations
   const allChannels = useMemo(() => {
@@ -250,10 +259,90 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
       .map(([channel, pct]) => ({ channel, percentage: pct }));
   }, [aiRecommendation]);
 
+  /**
+   * Recommended segments για την τρέχουσα εμπορική πολιτική.
+   * Προτεραιότητα: AI `targetSegments` (μόνο ideal+good). Fallback: όλα τα RFM segments
+   * (το AI κανονικά θα συμπληρώσει το πεδίο σε νέα generations).
+   */
+  const recommendedSegments = useMemo(() => {
+    const ai = aiRecommendation?.targetSegments;
+    if (ai && ai.length > 0) {
+      // join με RFM data για να πάρουμε χρώμα/πελάτες/revenue share
+      return ai.map((rs) => {
+        const match = rfmSegments.find((s) => s.name === rs.name);
+        return {
+          name: rs.name,
+          fit: rs.fit,
+          rationale: rs.rationale,
+          color: match?.color ?? '#7C3AED',
+          count: match?.count ?? 0,
+          revenueShare: match?.revenue_share ?? 0,
+        };
+      });
+    }
+    // Fallback: top-3 segments by revenue share
+    return [...rfmSegments]
+      .sort((a, b) => (b.revenue_share ?? 0) - (a.revenue_share ?? 0))
+      .slice(0, 3)
+      .map((s) => ({
+        name: s.name,
+        fit: 'good' as const,
+        rationale: '',
+        color: s.color,
+        count: s.count,
+        revenueShare: s.revenue_share,
+      }));
+  }, [aiRecommendation, rfmSegments]);
+
+  // Auto-select πρώτο recommended segment όταν αλλάζει η σύσταση
+  useEffect(() => {
+    if (recommendedSegments.length === 0) {
+      if (selectedSegmentName !== null) setSelectedSegmentName(null);
+      return;
+    }
+    if (
+      !selectedSegmentName ||
+      !recommendedSegments.some((s) => s.name === selectedSegmentName)
+    ) {
+      setSelectedSegmentName(recommendedSegments[0].name);
+    }
+  }, [recommendedSegments, selectedSegmentName]);
+
+  /** Επιστρέφει playbook entry για (segment, channel) — fuzzy match στα ονόματα. */
+  const getPlaybookFor = useCallback(
+    (segmentName: string | null, channelName: string) => {
+      if (!segmentName || !aiRecommendation?.channelPlaybook) return null;
+      const segLower = segmentName.toLowerCase();
+      const chLower = channelName.toLowerCase();
+      return (
+        aiRecommendation.channelPlaybook.find(
+          (e) =>
+            e.segment.toLowerCase() === segLower &&
+            e.channel.toLowerCase() === chLower
+        ) ??
+        aiRecommendation.channelPlaybook.find(
+          (e) =>
+            e.segment.toLowerCase() === segLower &&
+            (e.channel.toLowerCase().includes(chLower) ||
+              chLower.includes(e.channel.toLowerCase()))
+        ) ??
+        null
+      );
+    },
+    [aiRecommendation]
+  );
+
   const handleStatusChange = useCallback(async (channel: string, status: ChannelStatus) => {
     await updateActivation({ channel, status });
     toast.success(`${channel}: ${STATUS_CONFIG[status].label}`);
   }, [updateActivation, toast]);
+
+  const handleToggleIncluded = useCallback(
+    async (channel: string, next: boolean) => {
+      await updateActivation({ channel, included: next });
+    },
+    [updateActivation]
+  );
 
   const handleNoteSave = useCallback(async (channel: string) => {
     await updateActivation({ channel, note: noteText });
@@ -379,14 +468,16 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   const strategyName = scenarioId ? getStrategyName(scenarioId) : null;
   const durationLabel = activeStrategy?.duration === 'ongoing' ? 'Συνεχής' : activeStrategy?.duration ? `${activeStrategy.duration} ημ.` : null;
 
-  // Progress summary
+  // Progress summary — μόνο για κανάλια που συμμετέχουν στην ενέργεια
   const progressSummary = useMemo(() => {
     if (allChannels.length === 0) return null;
-    const total = allChannels.length;
-    const done = allChannels.filter(c => getStatus(c.name) === 'done').length;
-    const inProgress = allChannels.filter(c => getStatus(c.name) === 'in_progress').length;
-    return { total, done, inProgress, pending: total - done - inProgress };
-  }, [allChannels, getStatus]);
+    const active = allChannels.filter((c) => isIncluded(c.name));
+    const total = active.length;
+    if (total === 0) return { total: 0, done: 0, inProgress: 0, pending: 0, excluded: allChannels.length };
+    const done = active.filter(c => getStatus(c.name) === 'done').length;
+    const inProgress = active.filter(c => getStatus(c.name) === 'in_progress').length;
+    return { total, done, inProgress, pending: total - done - inProgress, excluded: allChannels.length - total };
+  }, [allChannels, getStatus, isIncluded]);
 
   if (!hasRealStrategy) {
     return (
@@ -503,7 +594,10 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-xs font-medium text-[#4A4A4A]">Πρόοδος ενεργοποίησης</span>
-              <span className="text-xs text-[#9CA3AF]">{progressSummary.done}/{progressSummary.total} κανάλια</span>
+              <span className="text-xs text-[#9CA3AF]">
+                {progressSummary.done}/{progressSummary.total} κανάλια σε εξέλιξη
+                {progressSummary.excluded > 0 ? ` · ${progressSummary.excluded} εκτός` : ''}
+              </span>
             </div>
             <div className="h-1.5 bg-[#E5E5E5] rounded-full overflow-hidden flex">
               {progressSummary.done > 0 && (
@@ -520,6 +614,82 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#9CA3AF]" />{progressSummary.pending} εκκρεμούν</span>
           </div>
         </div>
+      )}
+
+      {/* Recommended Segments — μόνο τα segments που ταιριάζουν στη συγκεκριμένη πολιτική */}
+      {recommendedSegments.length > 0 && (
+        <Card padding="lg">
+          <CardHeader
+            title="Στόχευση κοινού"
+            subtitle={
+              aiRecommendation?.targetSegments?.length
+                ? `${recommendedSegments.length} segments επιλεγμένα από AI για τη στρατηγική «${strategyName}»`
+                : `Top segments βάσει εσόδων (περιμένουμε AI σύσταση για segment-specific brief)`
+            }
+            icon={<Users size={18} className="text-[var(--nts-accent)]" />}
+            action={
+              selectedSegmentName ? (
+                <span className="text-[11px] text-[#9CA3AF]">
+                  Ενεργό: <span className="font-semibold text-[#1A1A1A]">{selectedSegmentName}</span>
+                </span>
+              ) : null
+            }
+          />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-2">
+            {recommendedSegments.map((seg) => {
+              const isActive = selectedSegmentName === seg.name;
+              const isIdeal = seg.fit === 'ideal';
+              return (
+                <button
+                  key={seg.name}
+                  type="button"
+                  onClick={() => setSelectedSegmentName(seg.name)}
+                  className="text-left rounded-xl border p-3 transition-all"
+                  style={{
+                    borderColor: isActive ? seg.color : '#E5E5E5',
+                    background: isActive ? `${seg.color}10` : '#FFFFFF',
+                    boxShadow: isActive ? `0 0 0 1px ${seg.color}` : 'none',
+                  }}
+                >
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span
+                      className="inline-flex items-center justify-center w-6 h-6 rounded-md text-[10px] font-bold text-white"
+                      style={{ background: seg.color }}
+                    >
+                      {seg.name.charAt(0)}
+                    </span>
+                    <span className="text-sm font-semibold text-[#1A1A1A] flex-1 truncate">{seg.name}</span>
+                    {isIdeal && (
+                      <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-[#22C55E]/10 text-[#22C55E]">
+                        <Star size={10} fill="currentColor" /> Ideal
+                      </span>
+                    )}
+                    {isActive && (
+                      <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#22C55E] text-white">
+                        <Check size={12} />
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 text-[11px] text-[#4A4A4A] mb-1">
+                    {seg.count > 0 && (
+                      <span><span className="font-mono font-semibold">{formatNumber(seg.count)}</span> πελάτες</span>
+                    )}
+                    {seg.revenueShare > 0 && (
+                      <span>
+                        <span className="font-mono font-semibold" style={{ color: seg.color }}>
+                          {formatPercent(seg.revenueShare, 1)}
+                        </span> εσόδων
+                      </span>
+                    )}
+                  </div>
+                  {seg.rationale && (
+                    <p className="text-[11px] text-[#4A4A4A] leading-snug line-clamp-2">{seg.rationale}</p>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </Card>
       )}
 
       {/* Main Grid: Pie + Brief Cards */}
@@ -630,11 +800,13 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                 const funnel = getFunnelStage(ch.name);
                 const status = getStatus(ch.name);
                 const note = getNote(ch.name);
+                const included = isIncluded(ch.name);
                 const statusCfg = STATUS_CONFIG[status];
                 const StatusIcon = statusCfg.icon;
                 const isEditing = editingNote === ch.name;
                 const eurAmount = (ch.budget !== null && monthlyBudget) ? Math.round((ch.budget / 100) * monthlyBudget) : null;
                 const action = getActionForChannel(ch.name);
+                const playbook = getPlaybookFor(selectedSegmentName, ch.name);
 
                 return (
                   <motion.div
@@ -643,11 +815,31 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.04 }}
                     className="p-4 rounded-xl border border-[#E5E5E5] hover:border-[#D4D4D4] transition-colors"
-                    style={{ borderLeftWidth: 3, borderLeftColor: funnel.color }}
+                    style={{
+                      borderLeftWidth: 3,
+                      borderLeftColor: included ? funnel.color : '#D1D5DB',
+                      opacity: included ? 1 : 0.6,
+                      background: included ? '#FFFFFF' : '#FAFAFA',
+                    }}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
+                          {/* Συμμετοχή toggle (checkbox) */}
+                          <button
+                            type="button"
+                            onClick={() => handleToggleIncluded(ch.name, !included)}
+                            disabled={isSaving}
+                            className="inline-flex items-center justify-center w-5 h-5 rounded border-2 transition-colors flex-shrink-0"
+                            style={{
+                              background: included ? '#22C55E' : '#FFFFFF',
+                              borderColor: included ? '#22C55E' : '#D1D5DB',
+                            }}
+                            title={included ? 'Συμμετέχει στην ενέργεια' : 'Εκτός ενέργειας'}
+                            aria-label={included ? 'Αφαίρεση από ενέργεια' : 'Προσθήκη στην ενέργεια'}
+                          >
+                            {included && <Check size={12} className="text-white" strokeWidth={3} />}
+                          </button>
                           <h4 className="font-semibold text-[#1A1A1A] text-sm">{ch.name}</h4>
                           <span
                             className="text-[10px] font-medium px-2 py-0.5 rounded-full"
@@ -683,6 +875,19 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                             </span>
                           )}
                         </div>
+
+                        {/* Per-segment campaign message (από AI playbook) */}
+                        {selectedSegmentName && playbook?.message && (
+                          <div className="mt-2 flex items-start gap-2 p-2.5 rounded-lg bg-[#F5F3FF] border border-[#E9D5FF]">
+                            <Megaphone size={13} className="text-[#7C3AED] flex-shrink-0 mt-0.5" />
+                            <div className="min-w-0">
+                              <div className="text-[10px] font-semibold uppercase tracking-wider text-[#7C3AED] mb-0.5">
+                                Campaign message · {selectedSegmentName}
+                              </div>
+                              <p className="text-xs text-[#4A4A4A] leading-snug">{playbook.message}</p>
+                            </div>
+                          </div>
+                        )}
 
                         {/* Note display / edit */}
                         {isEditing ? (
@@ -769,27 +974,62 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         </Card>
       </div>
 
-      {/* AI Strategy Brief — full-width collapsible */}
-      {aiRecommendation?.rationale && (() => {
-        const parts = aiRecommendation.rationale.split('||').map(s => s.trim());
+      {/* Dual Brief — Campaign Brief (Owner) | Marketing Brief (Execution) */}
+      {aiRecommendation && (aiRecommendation.rationale || aiRecommendation.channelPlaybook?.length) && (() => {
+        const parts = aiRecommendation.rationale?.split('||').map(s => s.trim()) ?? [];
         const hasStructure = parts.length >= 3 && parts[0].startsWith('Πελάτες:');
         const sections = [
           { icon: Users, color: '#8B5CF6', label: 'Πελάτες' },
           { icon: MessageSquare, color: '#3B82F6', label: 'Κανάλια' },
           { icon: TrendingUp, color: '#22C55E', label: 'Αποτέλεσμα' },
         ];
+        // Marketing brief entries: per (selected segment) × included channels
+        const includedChannelNames = allChannels.filter((c) => isIncluded(c.name)).map((c) => c.name);
+        const execEntries = (aiRecommendation.channelPlaybook ?? [])
+          .filter((e) =>
+            (!selectedSegmentName || e.segment.toLowerCase() === selectedSegmentName.toLowerCase()) &&
+            includedChannelNames.some((cn) => cn.toLowerCase() === e.channel.toLowerCase())
+          );
+        const hasExecData = execEntries.length > 0;
+
         return (
           <Card padding="none">
-            <button
-              onClick={() => setShowAiBrief(!showAiBrief)}
-              className="w-full px-5 py-3.5 flex items-center justify-between hover:bg-[#FAFAFA] transition-colors"
-            >
-              <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#9CA3AF]">
+            <div className="px-5 py-3.5 flex items-center justify-between border-b border-[#F0F0F0]">
+              <button
+                onClick={() => setShowAiBrief(!showAiBrief)}
+                className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#9CA3AF] hover:text-[#4A4A4A] transition-colors"
+              >
                 <Sparkles size={13} className="text-[var(--nts-accent)]" />
-                AI Strategy Brief
-              </span>
-              <ChevronUp size={16} className={`text-[#9CA3AF] transition-transform ${showAiBrief ? '' : 'rotate-180'}`} />
-            </button>
+                AI Briefs
+                <ChevronUp size={14} className={`transition-transform ${showAiBrief ? '' : 'rotate-180'}`} />
+              </button>
+              {showAiBrief && (
+                <div className="inline-flex p-0.5 rounded-lg bg-[#F5F5F5]">
+                  <button
+                    type="button"
+                    onClick={() => setBriefTab('owner')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                      briefTab === 'owner' ? 'bg-white text-[#1A1A1A] shadow-sm' : 'text-[#9CA3AF] hover:text-[#4A4A4A]'
+                    }`}
+                  >
+                    <Briefcase size={12} />
+                    Campaign Brief
+                    <span className="hidden sm:inline text-[10px] opacity-60 font-normal">· Επιχειρηματίας</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBriefTab('exec')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                      briefTab === 'exec' ? 'bg-white text-[#1A1A1A] shadow-sm' : 'text-[#9CA3AF] hover:text-[#4A4A4A]'
+                    }`}
+                  >
+                    <TargetIcon size={12} />
+                    Marketing Brief
+                    <span className="hidden sm:inline text-[10px] opacity-60 font-normal">· Execution</span>
+                  </button>
+                </div>
+              )}
+            </div>
             <AnimatePresence>
               {showAiBrief && (
                 <motion.div
@@ -799,33 +1039,103 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                   transition={{ duration: 0.2 }}
                   className="overflow-hidden"
                 >
-                  <div className="px-5 pb-5 border-t border-[#F0F0F0]">
-                    {hasStructure ? (
-                      <div className="space-y-5 pt-4">
-                        {parts.slice(0, 3).map((part, i) => {
-                          const s = sections[i];
-                          const text = part.replace(/^(Πελάτες|Κανάλια|Αποτέλεσμα):\s*/i, '');
-                          const Icon = s.icon;
-                          const cleaned = text.replace(/—/g, ',');
-                          return (
-                            <div key={i}>
-                              <div className="flex items-center gap-2 mb-2">
-                                <div
-                                  className="w-6 h-6 rounded-md flex items-center justify-center"
-                                  style={{ backgroundColor: `${s.color}15` }}
-                                >
-                                  <Icon size={13} style={{ color: s.color }} />
+                  <div className="px-5 pb-5 pt-4">
+                    {briefTab === 'owner' ? (
+                      // OWNER VIEW: σύντομο, στρατηγικό
+                      <div>
+                        <div className="flex items-start gap-3 mb-4 p-3 rounded-lg bg-gradient-to-br from-[#FAFAFA] to-white border border-[#F0F0F0]">
+                          <div className="p-2 rounded-lg bg-[#7C3AED]/10 flex-shrink-0">
+                            <Briefcase size={16} className="text-[#7C3AED]" />
+                          </div>
+                          <div className="text-xs text-[#4A4A4A] leading-relaxed">
+                            <span className="font-semibold text-[#1A1A1A]">Σύντομο brief για τη διοίκηση.</span>{' '}
+                            Τι κάνουμε, σε ποιους απευθυνόμαστε, γιατί το επιλέγουμε και τι αναμένουμε από τη συγκεκριμένη πολιτική.
+                          </div>
+                        </div>
+                        {hasStructure ? (
+                          <div className="space-y-5">
+                            {parts.slice(0, 3).map((part, i) => {
+                              const s = sections[i];
+                              const text = part.replace(/^(Πελάτες|Κανάλια|Αποτέλεσμα):\s*/i, '');
+                              const Icon = s.icon;
+                              const cleaned = text.replace(/—/g, ',');
+                              return (
+                                <div key={i}>
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <div
+                                      className="w-6 h-6 rounded-md flex items-center justify-center"
+                                      style={{ backgroundColor: `${s.color}15` }}
+                                    >
+                                      <Icon size={13} style={{ color: s.color }} />
+                                    </div>
+                                    <span className="text-xs font-bold uppercase tracking-wide" style={{ color: s.color }}>{s.label}</span>
+                                  </div>
+                                  <FormattedProse content={cleaned} variant="compact" />
                                 </div>
-                                <span className="text-xs font-bold uppercase tracking-wide" style={{ color: s.color }}>{s.label}</span>
-                              </div>
-                              <FormattedProse content={cleaned} variant="compact" />
-                            </div>
-                          );
-                        })}
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <FormattedProse content={(aiRecommendation.rationale ?? '').replace(/—/g, ',')} variant="compact" />
+                        )}
                       </div>
                     ) : (
-                      <div className="pt-4">
-                        <FormattedProse content={aiRecommendation.rationale.replace(/—/g, ',')} variant="compact" />
+                      // EXEC VIEW: αναλυτικό per-channel marketing brief
+                      <div>
+                        <div className="flex items-start gap-3 mb-4 p-3 rounded-lg bg-gradient-to-br from-[#EFF6FF] to-white border border-[#DBEAFE]">
+                          <div className="p-2 rounded-lg bg-[#3B82F6]/10 flex-shrink-0">
+                            <TargetIcon size={16} className="text-[#3B82F6]" />
+                          </div>
+                          <div className="text-xs text-[#4A4A4A] leading-relaxed">
+                            <span className="font-semibold text-[#1A1A1A]">
+                              Αναλυτικό brief για την ομάδα υλοποίησης
+                              {selectedSegmentName ? ` · segment «${selectedSegmentName}»` : ''}.
+                            </span>{' '}
+                            Campaign type, targeting, ad format, bidding strategy, KPIs &amp; A/B angle ανά κανάλι που συμμετέχει.
+                          </div>
+                        </div>
+                        {hasExecData ? (
+                          <div className="space-y-3">
+                            {execEntries.map((entry) => {
+                              const f = getFunnelStage(entry.channel);
+                              return (
+                                <div
+                                  key={`${entry.segment}-${entry.channel}`}
+                                  className="p-3 rounded-xl border border-[#E5E5E5]"
+                                  style={{ borderLeftWidth: 3, borderLeftColor: f.color }}
+                                >
+                                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                    <span className="text-sm font-semibold text-[#1A1A1A]">{entry.channel}</span>
+                                    <span
+                                      className="text-[10px] font-medium px-2 py-0.5 rounded-full"
+                                      style={{ backgroundColor: f.color + '18', color: f.color }}
+                                    >
+                                      {f.label}
+                                    </span>
+                                    <span className="text-[10px] text-[#9CA3AF]">→ {entry.segment}</span>
+                                  </div>
+                                  <p className="text-xs text-[#4A4A4A] leading-relaxed whitespace-pre-line">
+                                    {entry.marketingBrief || entry.message}
+                                  </p>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="text-center py-8 text-xs text-[#9CA3AF]">
+                            <p>Δεν υπάρχει διαθέσιμο per-channel marketing brief για το συγκεκριμένο segment.</p>
+                            <p className="mt-1">Αναγέννησε τις AI συστάσεις για να δημιουργηθεί.</p>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="mt-3"
+                              onClick={generateRecommendation}
+                              disabled={aiGenerating}
+                            >
+                              {aiGenerating ? 'Δημιουργία…' : 'Αναγέννηση AI Brief'}
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

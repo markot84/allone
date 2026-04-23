@@ -23,7 +23,12 @@ export function useChannelActivations(strategyId: string | null) {
   const currentActivations = activations.filter(a => a.strategyId === strategyId);
 
   const updateActivation = useMutation({
-    mutationFn: async (params: { channel: string; status?: ChannelActivationStatus['status']; note?: string }) => {
+    mutationFn: async (params: {
+      channel: string;
+      status?: ChannelActivationStatus['status'];
+      note?: string;
+      included?: boolean;
+    }) => {
       if (!brandId || !strategyId) return;
       const docId = `${brandId}_${strategyId}_${params.channel.replace(/[^a-zA-Z0-9]/g, '_')}`;
       const existing = currentActivations.find(a => a.channel === params.channel);
@@ -34,6 +39,7 @@ export function useChannelActivations(strategyId: string | null) {
         channel: params.channel,
         status: params.status ?? existing?.status ?? 'pending',
         note: params.note ?? existing?.note ?? '',
+        included: params.included ?? existing?.included ?? true,
         updatedAt: new Date().toISOString(),
         updatedBy: user?.email || user?.uid || 'unknown',
       };
@@ -53,6 +59,12 @@ export function useChannelActivations(strategyId: string | null) {
     return currentActivations.find(a => a.channel === channel)?.note ?? '';
   }
 
+  /** Default true για backward compat με παλιά docs χωρίς included flag. */
+  function isIncluded(channel: string): boolean {
+    const found = currentActivations.find(a => a.channel === channel);
+    return found?.included ?? true;
+  }
+
   return {
     activations: currentActivations,
     isLoading,
@@ -60,5 +72,6 @@ export function useChannelActivations(strategyId: string | null) {
     isSaving: updateActivation.isPending,
     getStatus,
     getNote,
+    isIncluded,
   };
 }

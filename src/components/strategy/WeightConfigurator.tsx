@@ -18,11 +18,10 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
-import { Card, CardHeader, Button, Slider, Badge, Spinner, PageHeader, ModalHeader } from '../common';
+import { Card, CardHeader, Button, Slider, Badge, PageHeader, ModalHeader } from '../common';
 import { ScenarioSelector } from './ScenarioSelector';
 import { TriageCard } from './TriageCard';
 import { ProcurementStrategyBridge } from './ProcurementStrategyBridge';
-import { ChannelRecommendations } from './ChannelRecommendations';
 import { StrategyPackage } from './StrategyPackage';
 import { StrategyImpactModal } from './StrategyImpactPreview';
 import { SalesBaseSetupModal } from './SalesBaseSetupModal';
@@ -44,7 +43,6 @@ import {
   defaultWeights,
   weightFactors
 } from '../../data';
-import { useAIChannelRecommendations } from '../../hooks/useAIChannelRecommendations';
 import { generateChannelRecommendations } from '../../services/aiChannelRecommendations';
 import { generateContentSuggestions } from '../../services/aiContentSuggestions';
 import { FirestoreService } from '../../services/firestore';
@@ -483,7 +481,8 @@ export function WeightConfigurator() {
     setBriefingName(strategyName);
   }, []);
 
-  const [strategySaveVersion, setStrategySaveVersion] = useState(0);
+  // strategySaveVersion bump triggers downstream effects (κρατείται για future use).
+  const [, setStrategySaveVersion] = useState(0);
   const queryClient = useQueryClient();
   
   // Initialize from active strategy if available, otherwise no default
@@ -1310,56 +1309,10 @@ export function WeightConfigurator() {
     setIsExportingStrategy(false);
   };
 
-  // AI channel recommendations — only triggered after strategy save (strategySaveVersion > 0)
-  const {
-    recommendation: freshAiRec,
-    aiOnlyResult,
-    isLoading: aiRecLoading,
-    error: aiRecError,
-    aiEnabled,
-    toggleAI,
-    isAIGenerated
-  } = useAIChannelRecommendations({
-    selectedScenarioId: strategySaveVersion > 0 ? selectedScenario : null,
-    segments: rfmSegments,
-    selectedSegmentId: selectedSegment,
-    fitLevel: segmentFitMap[selectedSegment]?.fit ?? 'good',
-    mixConfig: selectedScenario === 'mixed' && mixConfig ? mixConfig : undefined,
-    brandContext: currentBrand ? {
-      brandName: currentBrand.name,
-      brandType: currentBrand.type,
-      topCategories: [...new Set(products.map(p => p.category).filter(Boolean))].slice(0, 5),
-    } : null,
-    segmentFitList: rankedSegments.map(rs => ({
-      name: rs.segment.name,
-      fit: rs.fit,
-      description: rs.segment.description,
-      count: rs.segment.count,
-      revenueShare: rs.segment.revenue_share,
-    })),
-    useAI: true,
-    saveVersion: strategySaveVersion,
-    triage: triagePromptCtx ?? null,
-    provenance: provenancePromptCtx ?? null,
-  });
-
-  // On load: show saved recommendation. After save: show AI-only result (no static fallback), loading while pending.
-  const aiRecommendation = strategySaveVersion > 0
-    ? (aiOnlyResult ?? null)
-    : (activeStrategy?.channelRecommendation ?? freshAiRec);
-
-  // Save AI-generated strategy recommendation when ready
-  useEffect(() => {
-    if (!aiOnlyResult || !isAIGenerated || strategySaveVersion === 0 || !activeStrategy?.id || activeStrategy.id.startsWith('default_')) return;
-    const strategyId = activeStrategy.id;
-    const clean = JSON.parse(JSON.stringify(aiOnlyResult));
-    FirestoreService.setDocument('active_strategies', strategyId, {
-      channelRecommendation: clean,
-      updatedAt: new Date().toISOString(),
-    } as Record<string, unknown>).then(() => {
-      queryClient.invalidateQueries({ queryKey: ['activeStrategy'] });
-    }).catch(err => console.error('[WeightConfigurator] Save strategy rec failed:', err));
-  }, [aiOnlyResult, isAIGenerated, strategySaveVersion, activeStrategy?.id]);
+  // Channel recommendation πλέον προβάλλεται/παράγεται από το Channel Activation
+  // (single source of truth). Εδώ διαβάζουμε ΜΟΝΟ το αποθηκευμένο rec για να
+  // τροφοδοτήσουμε το StrategyPackage preview.
+  const aiRecommendation = activeStrategy?.channelRecommendation ?? null;
 
   // After strategy save: generate activation + content AI (directly to Firestore, no mutation closures)
 
@@ -1887,101 +1840,9 @@ export function WeightConfigurator() {
         </Card>
       </div>
 
-      {/* Channel Recommendations */}
-      <Card padding="lg">
-        <CardHeader
-          title="Συστάσεις καναλιών"
-          subtitle={
-            aiEnabled
-              ? isAIGenerated
-                ? 'Σύνθεση καναλιών με υποστήριξη AI, βάσει στρατηγικής και segment'
-                : aiRecLoading
-                ? 'Το AI επεξεργάζεται συστάσεις καναλιών…'
-                : 'Σύνθεση καναλιών με υποστήριξη AI, βάσει της επιλεγμένης στρατηγικής'
-              : 'Προκαθορισμένες συστάσεις βάσει κανόνων'
-          }
-          icon={<Sparkles size={18} className="text-[var(--nts-medium-gray)]" />}
-          action={
-            <div className="flex flex-wrap items-center gap-1.5">
-              <button
-                onClick={toggleAI}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all flex-shrink-0"
-                style={{
-                  background: aiEnabled
-                    ? '#1a1a1a'
-                    : '#E5E5E5',
-                  color: aiEnabled ? '#fff' : '#888',
-                  boxShadow: aiEnabled ? '0 2px 8px rgba(0,0,0,0.2)' : 'none',
-                }}
-                title={aiEnabled ? 'AI ενεργό – κλικ για απενεργοποίηση' : 'AI απενεργοποιημένο – κλικ για ενεργοποίηση'}
-              >
-                <Sparkles size={12} />
-                {aiEnabled ? 'AI' : 'AI'}
-                <span
-                  style={{
-                    width: 7, height: 7, borderRadius: '50%',
-                    background: aiEnabled ? '#4ade80' : '#aaa',
-                    boxShadow: aiEnabled ? '0 0 4px #4ade80' : 'none',
-                    flexShrink: 0,
-                  }}
-                />
-              </button>
-              {rankedSegments.map(({ segment, fit }) => {
-                const isSelected = selectedSegment === segment.id;
-                const isIdeal = fit === 'ideal';
-                const isGood = fit === 'good';
-                return (
-                  <button
-                    key={segment.id}
-                    onClick={() => setSelectedSegment(segment.id)}
-                    className="px-2.5 py-1 rounded-full text-[11px] font-medium transition-all whitespace-nowrap"
-                    style={{
-                      backgroundColor: isSelected
-                        ? segment.color
-                        : isIdeal
-                          ? 'rgba(34,197,94,0.08)'
-                          : '#F5F5F5',
-                      color: isSelected
-                        ? '#fff'
-                        : isIdeal
-                          ? '#4A4A4A'
-                          : '#4A4A4A',
-                      border: isIdeal && !isSelected
-                        ? '1.5px solid rgba(34,197,94,0.5)'
-                        : isGood && !isSelected
-                          ? '1.5px dashed rgba(34,197,94,0.35)'
-                          : '1.5px solid transparent',
-                      opacity: fit === 'partial' ? 0.6 : 1,
-                    }}
-                    title={fit === 'ideal' ? 'Ιδανικό segment για αυτή τη στρατηγική' : fit === 'good' ? 'Καλό ταίριασμα' : 'Μερικό ταίριασμα'}
-                  >
-                    {isIdeal && !isSelected && <span style={{ marginRight: 4, fontSize: 10, color: '#22C55E' }}>★</span>}
-                    {segment.name}
-                  </button>
-                );
-              })}
-            </div>
-          }
-        />
-
-        {aiRecError && (
-          <div className="text-xs text-amber-600 mb-2 p-3 bg-amber-50 rounded-lg border border-amber-200">
-            <p className="font-medium">Η παραγωγή AI συστάσεων δεν ολοκληρώθηκε. Εμφανίζονται οι προκαθορισμένες συστάσεις.</p>
-            <p className="mt-1 text-amber-500 break-all">{(aiRecError as Error)?.message || String(aiRecError)}</p>
-          </div>
-        )}
-        {aiRecLoading ? (
-          <div className="flex items-center gap-3 p-6">
-            <Spinner size="md" />
-            <span className="text-sm text-[#4A4A4A]">Δημιουργούνται AI συστάσεις για το segment {rfmSegments.find((s) => s.id === selectedSegment)?.name ?? selectedSegment}…</span>
-          </div>
-        ) : (
-          <ChannelRecommendations
-            recommendations={aiRecommendation}
-            segment={rfmSegments.find((s) => s.id === selectedSegment) ?? rfmSegments[0] ?? null}
-          />
-        )}
-      </Card>
+      {/* Συστάσεις καναλιών (segments + budget allocation + κανάλια + briefs) έχουν
+          μεταφερθεί στο Channel Activation. Εδώ ο ιδιοκτήτης ορίζει ΜΟΝΟ την εμπορική
+          πολιτική· οι λεπτομέρειες υλοποίησης ζουν δίπλα στους πίνακες ενεργοποίησης. */}
 
       {/* Strategy Impact Detail Modal */}
       {pendingScenarioChange && (

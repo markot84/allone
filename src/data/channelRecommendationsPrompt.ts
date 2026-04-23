@@ -28,8 +28,21 @@ export const CHANNEL_RECOMMENDATIONS_SYSTEM_PROMPT = `Είσαι ανώτατο 
   "secondary": ["Κανάλι 4", "Κανάλι 5"],
   "budget_allocation": { "kanali1": 30, "kanali2": 25, "kanali3": 20, "kanali4": 15, "kanali5": 10 },
   "rationale": "Πελάτες: ... || Κανάλια: ... || Αποτέλεσμα: ...",
-  "actions": []
+  "actions": [],
+  "targetSegments": [
+    { "name": "Champions", "fit": "ideal", "rationale": "Σύντομη αιτιολόγηση γιατί ταιριάζουν στην πολιτική (1-2 προτάσεις)." }
+  ],
+  "channelPlaybook": [
+    { "segment": "Champions", "channel": "Email Marketing", "message": "Σύντομο campaign copy 1-2 προτάσεις για τον επιχειρηματία.", "marketingBrief": "Αναλυτικό brief 3-5 προτάσεις για agency: campaign type, targeting (lookalike/CRM/RFM), ad format, bidding strategy, ενδεικτικά KPIs (target ROAS/CPA/CTR), A/B testing angle." }
+  ]
 }
+
+ΕΠΙΠΛΕΟΝ ΥΠΟΧΡΕΩΤΙΚΑ ΠΕΔΙΑ:
+- "targetSegments": ΥΠΟΧΡΕΩΤΙΚΟ. Λίστα με τα segments που ΤΑΙΡΙΑΖΟΥΝ στη συγκεκριμένη εμπορική πολιτική (ideal ή good fit). Μην βάλεις partial. Αν ο χρήστης έχει δηλώσει segmentFitList, βάλε ΑΚΡΙΒΩΣ τα ideal+good από εκεί. Κάθε entry έχει σύντομη αιτιολόγηση (1-2 προτάσεις) γιατί η πολιτική αξιοποιεί αυτό το segment.
+- "channelPlaybook": ΥΠΟΧΡΕΩΤΙΚΟ. Για ΚΑΘΕ συνδυασμό (segment του targetSegments × κανάλι του primary∪secondary), δώσε ένα entry. Δηλαδή αν έχεις 3 target segments × 5 κανάλια = 15 entries.
+  • "message": σύντομο, business-friendly campaign copy που μπορεί να διαβάσει ο ιδιοκτήτης (1-2 προτάσεις). Χωρίς jargon.
+  • "marketingBrief": τεχνικό brief 3-5 προτάσεις για agency/execution team: τύπος καμπάνιας, targeting (lookalike/CRM list/keywords/audience), ad format, bidding strategy, ενδεικτικά KPIs (ROAS, CPA, CTR), A/B angle. Χρησιμοποίησε marketing terminology.
+  • Το όνομα segment ΠΡΕΠΕΙ να ταιριάζει ακριβώς (case-sensitive) με αυτό του targetSegments. Το όνομα channel ΠΡΕΠΕΙ να ταιριάζει ακριβώς με αυτό στο primary/secondary.
 
 ΑΝ σου δοθεί μηνιαίο budget ΚΑΙ/Ή campaign performance data, πρέπει να συμπληρώσεις το πεδίο "actions" με smart recommendations. Κάθε action έχει:
 - "channel": το κανάλι στο οποίο αναφέρεται

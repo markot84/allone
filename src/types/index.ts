@@ -370,12 +370,42 @@ export interface BudgetAction {
   suggestedChange?: number;
 }
 
+/**
+ * Per-segment fit annotation παραγόμενο από AI — ΜΟΝΟ τα segments που ταιριάζουν στην
+ * εμπορική πολιτική. Ο πίνακας τα δείχνει σαν tabs στο Channel Activation.
+ */
+export interface RecommendedSegment {
+  /** Όνομα segment όπως εμφανίζεται στα RFM data (π.χ. «Champions»). */
+  name: string;
+  /** Επίπεδο ταιριάσματος προς την στρατηγική. */
+  fit: 'ideal' | 'good';
+  /** 1-2 προτάσεις γιατί επιλέγεται για αυτή την πολιτική. */
+  rationale: string;
+}
+
+/**
+ * Playbook entry per (segment, channel). Παράγεται από το AI και κρατά:
+ * - `message`: σύντομο campaign copy για τον επιχειρηματία
+ * - `marketingBrief`: αναλυτικό brief για agency / execution team (campaign type,
+ *   targeting, ad format, bidding strategy, KPIs, A/B testing notes).
+ */
+export interface ChannelPlaybookEntry {
+  segment: string;
+  channel: string;
+  message: string;
+  marketingBrief: string;
+}
+
 export interface ChannelRecommendation {
   primary: string[];
   secondary: string[];
   budget_allocation: Record<string, number>;
   rationale: string;
   actions?: BudgetAction[];
+  /** Mόνο τα segments που ταιριάζουν στην επιλεγμένη εμπορική πολιτική. */
+  targetSegments?: RecommendedSegment[];
+  /** Per (segment, channel) campaign brief / marketing brief — από AI. */
+  channelPlaybook?: ChannelPlaybookEntry[];
 }
 
 /** Επιπλέον κόστη marketing (agency, εργαλεία, one-off) — αποθηκεύονται στην ενεργή στρατηγική, χρησιμοποιούνται στο ROI. */
