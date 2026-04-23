@@ -1,10 +1,14 @@
 {
-  "version": "0.605.0",
-  "previousVersion": "0.604.0",
-  "commitHash": "5196f99",
+  "version": "0.606.0",
+  "previousVersion": "0.605.0",
+  "commitHash": "dbb0c10",
   "branch": "main",
-  "buildDate": "2026-04-23T06:22:01.007Z",
+  "buildDate": "2026-04-23T06:23:03.603Z",
   "commits": [
+    {
+      "hash": "dbb0c10",
+      "message": "chore: regenerate buildInfo after merge"
+    },
     {
       "hash": "5196f99",
       "message": "Merge home improvements onto main (after aa50acb — TriageCard/decisionBuckets preserved)"
@@ -60,13 +64,10 @@
     {
       "hash": "48227f7",
       "message": "fix(strategy): triage uses useProductSource for Enterprise procurement catalog"
-    },
-    {
-      "hash": "c24ae55",
-      "message": "fix: guard missing connectedPlatforms in useEcommerceSummary hasData"
     }
   ],
   "changes": [
+    "[Συντήρηση] Regenerate buildInfo after merge",
     "[Νέο χαρακτηριστικό] Home session — GA4/search console, auth, ecommerce, connectors, ROI, firestore rules",
     "[Συντήρηση] Full deploy",
     "[Διόρθωση] Resolve ERP column names and merge pricing for margin",
@@ -74,7 +75,6 @@
     "[Διόρθωση] Guard missing connectedPlatforms in useEcommerceSummary hasData",
     "Merge: Sprint 2 — universal data layer, decision buckets, AI context, ecommerce fix",
     "[Διόρθωση] KPI Παραγγελίες counted only capped recentOrders",
-    "UX: redesign TriageCard for merchant clarity",
-    "Sprint 2 Phase 3+4: triage origin persistence + AI context wiring"
+    "UX: redesign TriageCard for merchant clarity"
   ]
 }
