@@ -1006,7 +1006,18 @@ export const connectorDisconnect = onRequest(
         clearPayload.apiToken = '';
       }
       if (provider === 'magento') {
+        // Full wipe: αλλιώς μένουν stale shopName/storeUrl/storeWebUrl και μπορεί να εμφανιστεί
+        // λάθος store (π.χ. "e-tennis" αντί για "safeblock") στο connector card μετά από disconnect.
         clearPayload.accessToken = '';
+        clearPayload.storeUrl = '';
+        clearPayload.shopName = '';
+        clearPayload.storeCode = '';
+        clearPayload.storeName = '';
+        clearPayload.storeId = null;
+        clearPayload.restApiBase = '';
+        clearPayload.storeWebUrl = '';
+        clearPayload.mediaBaseUrl = '';
+        clearPayload.magentoVersion = '';
       }
       if (provider === 'megaventory') {
         clearPayload.apiKey = '';

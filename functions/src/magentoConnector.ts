@@ -63,6 +63,11 @@ type MagentoStoreConfig = {
   website_name?: string;
   base_url?: string;
   secure_base_url?: string;
+  /** Storefront media root (π.χ. https://shop.gr/pub/media/). */
+  base_media_url?: string;
+  secure_base_media_url?: string;
+  base_static_url?: string;
+  secure_base_static_url?: string;
 };
 
 function normalizeComparableHost(input: string): string {
@@ -72,6 +77,18 @@ function normalizeComparableHost(input: string): string {
   } catch {
     return String(input || '').trim().toLowerCase().replace(/^www\./, '');
   }
+}
+
+/**
+ * Apex (registrable) domain για χαλαρό subdomain match (π.χ. shop.safeblock.gr → safeblock.gr).
+ * Εδώ κρατάμε τα 2 τελευταία labels (αρκετό για .gr/.com/.net κ.λπ.). Δεν είναι Public Suffix List
+ * ακριβές (ξεγλιστράει το co.uk), αλλά αρκεί για να αποτρέψει σιωπηλό λάθος pick.
+ */
+function getApexDomain(host: string): string {
+  const clean = String(host || '').trim().toLowerCase().replace(/^www\./, '');
+  const parts = clean.split('.').filter(Boolean);
+  if (parts.length <= 2) return clean;
+  return parts.slice(-2).join('.');
 }
 
 function normalizeComparableUrl(input: string): string {
@@ -87,6 +104,20 @@ function normalizeComparableUrl(input: string): string {
 
 function getStoreConfigUrls(config: MagentoStoreConfig): string[] {
   return [config.base_url, config.secure_base_url].filter((value): value is string => Boolean(value && String(value).trim()));
+}
+
+/** Δημόσιο storefront URL (προτιμά https). */
+function getStorefrontWebUrl(config: MagentoStoreConfig | null): string {
+  if (!config) return '';
+  const candidate = (config.secure_base_url || config.base_url || '').trim().replace(/\/+$/, '');
+  return candidate;
+}
+
+/** Storefront media root (π.χ. https://shop.gr/pub/media/). */
+function getStoreMediaBaseUrl(config: MagentoStoreConfig | null): string {
+  if (!config) return '';
+  const candidate = (config.secure_base_media_url || config.base_media_url || '').trim().replace(/\/+$/, '');
+  return candidate;
 }
 
 /** Συνεπής με το chart e-commerce: BOX/lockers σε ένα bucket, διπλές ετικέτες ACS+ΕΛΤΑ. */
@@ -197,43 +228,107 @@ function getMagentoShopLabel(config: MagentoStoreConfig | null, fallbackUrl: str
   return config?.store_name || fallbackUrl.replace(/^https?:\/\//, '').replace(/\/+$/, '');
 }
 
+/**
+ * Επιλογή του σωστού storeConfig για το URL που έδωσε ο χρήστης.
+ *
+ * Σημαντικό: σε multi-website Magento (π.χ. ίδιο backend για Safeblock + e-tennis),
+ * το /storeConfigs επιστρέφει ΟΛΑ τα stores. Ποτέ μην πέφτουμε σιωπηλά στο "first non-admin"
+ * — αν το URL του χρήστη δεν ταιριάζει σε κανένα storeConfig και υπάρχουν >1 επιλογές,
+ * ζητάμε ρητά store_code (ambiguous). Αυτό αποτρέπει το να εμφανιστεί π.χ. e-tennis αντί για safeblock.
+ */
 function pickMagentoStoreConfig(
   configs: unknown[],
   storeUrl: string,
   preferredStoreCode?: string
-): { selected: MagentoStoreConfig | null; availableCodes: string[] } {
+): {
+  selected: MagentoStoreConfig | null;
+  availableCodes: string[];
+  ambiguous: boolean;
+  matchedByUrl: boolean;
+  candidates: { code: string; storeName: string; baseUrl: string }[];
+} {
   const typed = configs.filter((cfg): cfg is MagentoStoreConfig => typeof cfg === 'object' && cfg !== null);
-  const availableCodes = typed.map((cfg) => String(cfg.code || '').trim()).filter(Boolean);
+  const nonAdmin = typed.filter((cfg) => String(cfg.code || '').trim().toLowerCase() !== 'admin');
+  const availableCodes = nonAdmin.map((cfg) => String(cfg.code || '').trim()).filter(Boolean);
+  const candidates = nonAdmin.map((cfg) => ({
+    code: String(cfg.code || '').trim(),
+    storeName: String(cfg.store_name || cfg.website_name || '').trim(),
+    baseUrl: getStoreConfigUrls(cfg)[0] || '',
+  }));
+
   const requestedCode = String(preferredStoreCode || '').trim().toLowerCase();
   if (requestedCode) {
     const exact = typed.find((cfg) => String(cfg.code || '').trim().toLowerCase() === requestedCode);
-    return { selected: exact || null, availableCodes };
+    return {
+      selected: exact || null,
+      availableCodes,
+      ambiguous: false,
+      matchedByUrl: false,
+      candidates,
+    };
   }
 
   const targetHost = normalizeComparableHost(storeUrl);
   const targetUrl = normalizeComparableUrl(storeUrl);
+  const targetApex = getApexDomain(targetHost);
+
   const ranked = typed
     .map((cfg) => {
       let score = 0;
       for (const rawUrl of getStoreConfigUrls(cfg)) {
         const cfgHost = normalizeComparableHost(rawUrl);
         const cfgUrl = normalizeComparableUrl(rawUrl);
-        if (cfgHost && cfgHost === targetHost) score = Math.max(score, 100);
+        const cfgApex = getApexDomain(cfgHost);
         if (cfgUrl && (cfgUrl === targetUrl || targetUrl.startsWith(cfgUrl) || cfgUrl.startsWith(targetUrl))) {
           score = Math.max(score, 120);
         }
+        if (cfgHost && cfgHost === targetHost) score = Math.max(score, 100);
+        // Apex match (subdomain tolerant): shop.safeblock.gr ↔ safeblock.gr
+        if (cfgApex && targetApex && cfgApex === targetApex) score = Math.max(score, 80);
       }
       if (String(cfg.code || '').trim().toLowerCase() === 'admin') score -= 1000;
       return { cfg, score };
     })
     .sort((a, b) => b.score - a.score);
 
-  const selected = ranked.find((item) => item.score > 0)?.cfg
-    || typed.find((cfg) => String(cfg.code || '').trim().toLowerCase() !== 'admin')
-    || typed[0]
-    || null;
+  const best = ranked.find((item) => item.score > 0);
+  if (best) {
+    return {
+      selected: best.cfg,
+      availableCodes,
+      ambiguous: false,
+      matchedByUrl: true,
+      candidates,
+    };
+  }
 
-  return { selected, availableCodes };
+  // Δεν βρέθηκε URL match.
+  if (nonAdmin.length === 1) {
+    return {
+      selected: nonAdmin[0],
+      availableCodes,
+      ambiguous: false,
+      matchedByUrl: false,
+      candidates,
+    };
+  }
+  if (nonAdmin.length > 1) {
+    // Multi-store install και το URL δεν ταυτοποιεί ξεκάθαρα ποιο store θέλει ο χρήστης.
+    return {
+      selected: null,
+      availableCodes,
+      ambiguous: true,
+      matchedByUrl: false,
+      candidates,
+    };
+  }
+  return {
+    selected: typed[0] || null,
+    availableCodes,
+    ambiguous: false,
+    matchedByUrl: false,
+    candidates,
+  };
 }
 
 function buildMagentoRestUrl(restApiBase: string, endpoint: string, storeCode?: string): string {
@@ -325,13 +420,26 @@ export async function saveMagentoCredentials(
   storeUrl: string,
   accessToken: string,
   preferredStoreCode?: string
-): Promise<{ success: boolean; shopName?: string; storeCode?: string; storeName?: string; error?: string }> {
+): Promise<{
+  success: boolean;
+  shopName?: string;
+  storeCode?: string;
+  storeName?: string;
+  error?: string;
+  availableStoreCodes?: string[];
+  storeCandidates?: { code: string; storeName: string; baseUrl: string }[];
+}> {
   const normalizedUrl = normalizeStoreUrl(storeUrl);
   const tokenPlain = normalizeMagentoToken(accessToken);
   const testResult = await testMagentoConnection(normalizedUrl, tokenPlain, preferredStoreCode);
 
   if (!testResult.success) {
-    return { success: false, error: testResult.error };
+    return {
+      success: false,
+      error: testResult.error,
+      availableStoreCodes: testResult.availableStoreCodes,
+      storeCandidates: testResult.storeCandidates,
+    };
   }
 
   await getDb().doc(`connectors/${brandId}`).set(
@@ -346,6 +454,10 @@ export async function saveMagentoCredentials(
         storeName: testResult.storeName || '',
         storeId: testResult.storeId ?? null,
         magentoVersion: testResult.version || '',
+        /** Δημόσιο storefront base για product links στο Ads Feed */
+        storeWebUrl: testResult.storeWebUrl || '',
+        /** Storefront media root για image_link στο Ads Feed */
+        mediaBaseUrl: testResult.mediaBaseUrl || '',
         accessToken: encryptToken(tokenPlain),
         connectedAt: FieldValue.serverTimestamp(),
       },
@@ -378,7 +490,14 @@ export async function testMagentoConnection(
   storeId?: number;
   version?: string;
   restApiBase?: string;
+  /** Δημόσιο storefront base (π.χ. https://safeblock.gr) — για product link στο feed. */
+  storeWebUrl?: string;
+  /** Storefront media root (π.χ. https://safeblock.gr/pub/media/) — για image_link στο feed. */
+  mediaBaseUrl?: string;
   error?: string;
+  /** Όταν ambiguous ή λάθος storeCode, στέλνουμε τα διαθέσιμα στο frontend. */
+  availableStoreCodes?: string[];
+  storeCandidates?: { code: string; storeName: string; baseUrl: string }[];
 }> {
   try {
     const probe = await probeMagentoStoreConfigs(storeUrl, accessToken);
@@ -387,13 +506,38 @@ export async function testMagentoConnection(
     }
 
     const { configs, restApiBase } = probe;
-    const { selected, availableCodes } = pickMagentoStoreConfig(configs, storeUrl, preferredStoreCode);
+    const pick = pickMagentoStoreConfig(configs, storeUrl, preferredStoreCode);
+    const { selected, availableCodes, ambiguous, candidates } = pick;
+
+    // Πάντα logάρουμε όλα τα διαθέσιμα stores για debugging multi-website installs.
+    logger.info(
+      `[Magento] storeConfigs candidates (url=${storeUrl}, preferredCode=${preferredStoreCode || '—'}): ` +
+      JSON.stringify(candidates)
+    );
+
     if (preferredStoreCode && !selected) {
       return {
         success: false,
         error: availableCodes.length
           ? `Το store code "${preferredStoreCode}" δεν βρέθηκε. Διαθέσιμα codes: ${availableCodes.join(', ')}`
           : `Το store code "${preferredStoreCode}" δεν βρέθηκε στο Magento storeConfigs.`,
+        availableStoreCodes: availableCodes,
+        storeCandidates: candidates,
+      };
+    }
+
+    if (ambiguous) {
+      const listed = candidates
+        .map((c) => `${c.code}${c.storeName ? ` (${c.storeName})` : ''}${c.baseUrl ? ` → ${c.baseUrl}` : ''}`)
+        .join(' · ');
+      return {
+        success: false,
+        error:
+          `Το Magento επέστρεψε ${availableCodes.length} stores και το URL «${storeUrl}» δεν ταιριάζει ξεκάθαρα σε κάποιο. ` +
+          `Συμπλήρωσε το πεδίο «Store Code» με ένα από: ${availableCodes.join(', ')}. ` +
+          (listed ? `Λεπτομέρειες: ${listed}` : ''),
+        availableStoreCodes: availableCodes,
+        storeCandidates: candidates,
       };
     }
 
@@ -422,7 +566,9 @@ export async function testMagentoConnection(
       // non-critical
     }
 
-    logger.info(`[Magento] Connection test OK — store: ${storeName}, restApiBase=${restApiBase}`);
+    const storeWebUrl = getStorefrontWebUrl(selected);
+    const mediaBaseUrl = getStoreMediaBaseUrl(selected);
+    logger.info(`[Magento] Connection test OK — store: ${storeName}, restApiBase=${restApiBase}, web=${storeWebUrl}, media=${mediaBaseUrl}`);
     return {
       success: true,
       restApiBase,
@@ -431,6 +577,8 @@ export async function testMagentoConnection(
       storeName: resolvedStoreName || undefined,
       storeId: Number.isFinite(storeIdNum) ? storeIdNum : undefined,
       version,
+      storeWebUrl: storeWebUrl || undefined,
+      mediaBaseUrl: mediaBaseUrl || undefined,
     };
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
@@ -590,28 +738,71 @@ export async function fetchMagentoData(brandId: string): Promise<{
     await fetchAndSaveMagentoPopularSearchTerms(db, brandId, restApiBase, storeCode, headers);
 
     // ── Products ───────────────────────────────────────────────────────
+    // Δεν περιορίζουμε με `fields` ώστε να πάρουμε media_gallery_entries, custom_attributes,
+    // extension_attributes (configurable links), category_links — απαιτούνται για Ads Feed.
     const prodItems: { id: string; data: Record<string, unknown> }[] = [];
     let prodPage = 1;
     let prodMore = true;
+
+    // SKU lookup map (id → sku) ώστε για configurable parents να γράψουμε `parentSkus` στα variants.
+    const idToSku = new Map<string, string>();
+    const parentLinks: { childId: string; parentId: string }[] = [];
 
     while (prodMore) {
       const searchParams = new URLSearchParams({
         'searchCriteria[pageSize]': '100',
         'searchCriteria[currentPage]': String(prodPage),
-        'fields': 'items[id,sku,name,type_id,status,price,weight,created_at,updated_at,extension_attributes[stock_item[qty,is_in_stock]],custom_attributes],total_count',
       });
 
       const res = await fetch(buildMagentoRestUrl(restApiBase, `products?${searchParams.toString()}`, storeCode), { headers });
-      if (!res.ok) break;
+      if (!res.ok) {
+        logger.warn(`[Magento] Products fetch failed (${res.status}) page=${prodPage}`);
+        break;
+      }
 
       const body = await res.json();
       const products: any[] = body.items || [];
       const totalCount: number = body.total_count || 0;
 
       for (const p of products) {
-        const stockItem = p.extension_attributes?.stock_item;
         const customAttrs = p.custom_attributes || [];
-        const getAttr = (code: string) => customAttrs.find((a: any) => a.attribute_code === code)?.value || '';
+        const getAttr = (code: string): string => {
+          const v = customAttrs.find((a: any) => a.attribute_code === code)?.value;
+          return v == null ? '' : String(v);
+        };
+        const stockItem = p.extension_attributes?.stock_item;
+
+        // Image: προτεραιότητα custom_attributes.image (σχετικό path) → /catalog/product
+        // εναλλακτικά πρώτο media_gallery_entries[].file
+        const imagePath = getAttr('image') || getAttr('small_image') || getAttr('thumbnail') || '';
+        const galleryFirst = (p.media_gallery_entries || []).find((e: any) => !e?.disabled)?.file || '';
+        const imageRelative = imagePath || galleryFirst || '';
+
+        const urlKey = getAttr('url_key');
+        const description = getAttr('description');
+        const shortDescription = getAttr('short_description');
+        const metaTitle = getAttr('meta_title');
+        const metaDescription = getAttr('meta_description');
+        const gtin = getAttr('gtin') || getAttr('ean') || getAttr('upc') || getAttr('barcode');
+        const mpn = getAttr('mpn') || getAttr('manufacturer_part_number');
+        const color = getAttr('color');
+        const size = getAttr('size');
+        const visibility = Number(p.visibility ?? 0);
+
+        const categoryIds: string[] = (p.extension_attributes?.category_links || [])
+          .map((c: any) => String(c?.category_id || ''))
+          .filter(Boolean);
+
+        const configurableLinks: string[] = (p.extension_attributes?.configurable_product_links || [])
+          .map((id: any) => String(id))
+          .filter(Boolean);
+        if (p.type_id === 'configurable' && configurableLinks.length > 0) {
+          for (const childId of configurableLinks) {
+            parentLinks.push({ childId, parentId: String(p.id) });
+          }
+        }
+
+        idToSku.set(String(p.id), String(p.sku || ''));
 
         prodItems.push({
           id: `mag_${p.id}`,
@@ -621,12 +812,27 @@ export async function fetchMagentoData(brandId: string): Promise<{
             name: p.name || '',
             type: p.type_id || '',
             status: p.status === 1 ? 'active' : 'inactive',
+            visibility,
             price: parseFloat(p.price || '0'),
             weight: parseFloat(p.weight || '0'),
             stockQuantity: stockItem?.qty ?? null,
             inStock: stockItem?.is_in_stock ?? null,
             specialPrice: getAttr('special_price') ? parseFloat(getAttr('special_price')) : null,
             manufacturer: getAttr('manufacturer'),
+            // Feed-ready fields
+            urlKey,
+            description,
+            shortDescription,
+            metaTitle,
+            metaDescription,
+            imageRelative,
+            gtin,
+            mpn,
+            color,
+            size,
+            categoryIds,
+            // Variant relationships (αν configurable)
+            configurableLinks,
             createdAt: p.created_at || '',
             updatedAt: p.updated_at || '',
             source: 'magento_api',
@@ -637,7 +843,27 @@ export async function fetchMagentoData(brandId: string): Promise<{
 
       prodMore = prodPage * 100 < totalCount;
       prodPage++;
-      if (prodPage > 30) break;
+      // Hard cap αυξήθηκε από 30 → 100 (10.000 SKUs/sync)
+      if (prodPage > 100) break;
+    }
+
+    // Συμπλήρωση parentSku στα child variants (ώστε στο Ads Feed → item_group_id = parent SKU).
+    if (parentLinks.length > 0) {
+      const childToParents = new Map<string, Set<string>>();
+      for (const { childId, parentId } of parentLinks) {
+        if (!childToParents.has(childId)) childToParents.set(childId, new Set());
+        childToParents.get(childId)!.add(parentId);
+      }
+      for (const item of prodItems) {
+        const childId = String((item.data as any).productId || '');
+        const parents = childToParents.get(childId);
+        if (!parents || parents.size === 0) continue;
+        const parentSkus = [...parents].map((pid) => idToSku.get(pid)).filter((v): v is string => Boolean(v));
+        if (parentSkus.length > 0) {
+          (item.data as Record<string, unknown>).parentSkus = parentSkus;
+          (item.data as Record<string, unknown>).itemGroupId = parentSkus[0];
+        }
+      }
     }
 
     if (prodItems.length > 0) {
@@ -684,3 +910,12 @@ function normalizeStoreUrl(input: string): string {
   }
   return url;
 }
+
+// ─── Test-only exports ─────────────────────────────────────────────
+// Exposed for unit tests; not part of the public connector API.
+export const __test = {
+  pickMagentoStoreConfig,
+  getApexDomain,
+  normalizeComparableHost,
+  normalizeComparableUrl,
+};

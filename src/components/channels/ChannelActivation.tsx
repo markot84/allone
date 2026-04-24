@@ -59,6 +59,7 @@ import { FirestoreService } from '../../services/firestore';
 import { useQueryClient } from '@tanstack/react-query';
 import { getModuleLabel, effectiveBrandTypeForModules } from '../../config/modules';
 import { getProductStrategyLabels } from '../../utils/adsFeedStrategyLabels';
+import { useMagentoProductEnrichment } from '../../hooks/useMagentoProductEnrichment';
 import type { ChannelRecommendation, BudgetAction } from '../../types';
 
 const COLORS = ['var(--nts-accent)', '#78716C', '#22C55E', '#8B5CF6', '#F59E0B', '#3B82F6', '#EC4899'];
@@ -213,6 +214,10 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   } = useActiveStrategy();
   const queryClient = useQueryClient();
   const toast = useToast();
+
+  // Magento product enrichment — γεμίζει image_link, link, description, gtin, mpn,
+  // color, size, item_group_id στο Ads Feed από το ωμό `magento_products` collection.
+  const { bySku: magentoBySku, bySkuLower: magentoBySkuLower, config: magentoConnector, count: magentoEnrichedCount } = useMagentoProductEnrichment();
 
   // Provenance snapshot — δίνει στο AI το mix πηγών δεδομένων (connector vs
   // movement vs procurement vs import) ώστε να calibrate το rationale.
@@ -542,7 +547,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     let rows: any[][] = [];
     switch (feedType) {
       case 'Ads Feed':
-      case 'Google Shopping':
+      case 'Google Shopping': {
         headers = [
           'id', 'title', 'description', 'link', 'image_link',
           'availability', 'condition', 'price', 'sale_price',
@@ -551,11 +556,17 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
           'color', 'size',
           'custom_label_0', 'custom_label_1', 'custom_label_2', 'custom_label_3', 'custom_label_4',
         ];
+        const lookupEnrichment = (sku: string) => {
+          const trimmed = (sku || '').trim();
+          if (!trimmed) return null;
+          return magentoBySku.get(trimmed) || magentoBySkuLower.get(trimmed.toLowerCase()) || null;
+        };
         rows = products.map(p => {
           const labels = getProductStrategyLabels(p, activeStrategy ?? null);
-          const gtin = (p.gtin || p.barcode || '').toString();
-          const mpn = ''; // TODO: requires Magento attribute sync
-          const brandValue = p.brand || '';
+          const enrichment = lookupEnrichment(p.sku || '');
+          const gtin = String(enrichment?.gtin || p.gtin || p.barcode || '').trim();
+          const mpn = String(enrichment?.mpn || '').trim();
+          const brandValue = String(p.brand || enrichment?.manufacturer || '').trim();
           const identifierExists = (gtin || mpn || brandValue) ? 'yes' : 'no';
           const productType = [p.category, p.subcategory].filter(Boolean).join(' > ');
           const inStock = (p.stock_level || 0) > 0;
@@ -570,12 +581,18 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
             : (typeof p.list_price === 'number' && p.list_price > p.price)
               ? `${formatCurrency(p.list_price, 2)} EUR`
               : priceFmt;
+          // Description: Magento prevails (HTML αν υπάρχει). Fallback: name + category.
+          const descRich = (enrichment?.description || enrichment?.shortDescription || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+          const description = descRich || `${p.name || ''}${productType ? ` — ${productType}` : ''}`;
+          // Link: Magento storefront (αν έχει). Fallback: shop base + sku.
+          const link = enrichment?.link
+            || (magentoConnector.storeWebUrl ? `${magentoConnector.storeWebUrl.replace(/\/+$/, '')}/catalog/product/view/sku/${encodeURIComponent(p.sku || p.id)}` : '');
           return [
             p.sku || p.id,
             p.name || '',
-            `${p.name || ''}${productType ? ` — ${productType}` : ''}`,
-            `https://yoursite.com/products/${p.sku || p.id}`,
-            '', // image_link (TODO: Magento sync)
+            description,
+            link,
+            enrichment?.imageLink || '',
             inStock ? 'in stock' : 'out of stock',
             'new',
             basePrice,
@@ -585,10 +602,10 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
             mpn,
             identifierExists,
             productType,
-            '', // google_product_category (TODO: mapping table)
-            '', // item_group_id (TODO: configurable parent in Magento)
-            '', // color (TODO)
-            '', // size (TODO)
+            '', // google_product_category (απαιτεί manual mapping table — επόμενο step)
+            enrichment?.itemGroupId || '',
+            enrichment?.color || '',
+            enrichment?.size || '',
             labels.custom_label_0,
             labels.custom_label_1,
             labels.custom_label_2,
@@ -597,6 +614,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
           ];
         });
         break;
+      }
       default:
         headers = ['SKU', 'Name', 'Category', 'Price', 'Margin %', 'Stock Level', 'Stock Capacity', 'Stock Age Days', 'Priority Tag'];
         rows = products.map(p => [p.sku || '', p.name || '', p.category || '', formatCurrency(p.price || 0, 2), formatPercent(p.margin_percentage || 0, 1).replace('%', ''), p.stock_level || 0, p.stock_capacity || 0, getStockAgeDays(p), p.priority_tag || '']);
@@ -630,17 +648,21 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     (feedType: string) => {
       const slice = products.slice(0, 8);
       if (feedType === 'Ads Feed' || feedType === 'Google Shopping') {
-        const headers = ['id', 'title', 'price', 'availability', 'brand', 'custom_label_0', 'custom_label_1'];
+        const headers = ['id', 'title', 'price', 'availability', 'brand', 'image_link', 'gtin', 'item_group_id', 'custom_label_0'];
         const rows = slice.map((p) => {
           const labels = getProductStrategyLabels(p, activeStrategy ?? null);
+          const sku = (p.sku || '').trim();
+          const enrichment = sku ? (magentoBySku.get(sku) || magentoBySkuLower.get(sku.toLowerCase()) || null) : null;
           return [
             p.sku || p.id,
             p.name || '',
             `${formatCurrency(p.price || 0, 2)} EUR`,
             (p.stock_level || 0) > 0 ? 'in stock' : 'out of stock',
-            p.brand || '',
+            p.brand || enrichment?.manufacturer || '',
+            enrichment?.imageLink ? '✓' : '—',
+            enrichment?.gtin || '—',
+            enrichment?.itemGroupId || '—',
             labels.custom_label_0,
-            labels.custom_label_1,
           ];
         });
         return { headers, rows };
@@ -657,7 +679,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
       ]);
       return { headers, rows };
     },
-    [products, activeStrategy]
+    [products, activeStrategy, magentoBySku, magentoBySkuLower]
   );
 
   const hasRealStrategy = !!activeStrategy?.id && !activeStrategy.id.startsWith('default_') && !!scenarioId;
@@ -1399,9 +1421,20 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
               <div className="space-y-2 text-sm text-[#4A4A4A]">
                 <div className="flex justify-between"><span>Products</span><span className="font-mono">{formatNumber(productsCount)}</span></div>
                 {feed === 'Ads Feed' && (
-                  <div className="text-[11px] text-[#9CA3AF] leading-snug pt-1">
-                    Google-compatible columns + <span className="font-semibold text-[var(--nts-accent)]">custom_label_0..4</span> από την ενεργή στρατηγική.
-                  </div>
+                  <>
+                    <div className="flex justify-between">
+                      <span>Magento enrichment</span>
+                      <span className={`font-mono ${magentoEnrichedCount > 0 ? 'text-emerald-600' : 'text-[#9CA3AF]'}`}>
+                        {magentoConnector.connected ? `${formatNumber(magentoEnrichedCount)} SKUs` : '— off'}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-[#9CA3AF] leading-snug pt-1">
+                      Google-compatible columns + <span className="font-semibold text-[var(--nts-accent)]">custom_label_0..4</span> από την ενεργή στρατηγική.
+                      {magentoConnector.connected
+                        ? ' image_link / link / gtin / mpn / color / size / item_group_id έρχονται απευθείας από Magento.'
+                        : ' Συνδέστε Magento για image_link / link / gtin / mpn / color / size / item_group_id.'}
+                    </div>
+                  </>
                 )}
               </div>
               <div className="flex gap-2 mt-4">

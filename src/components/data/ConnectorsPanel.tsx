@@ -657,12 +657,14 @@ function MagentoCredentialsModal({
   const [showToken, setShowToken] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [storeCandidates, setStoreCandidates] = useState<{ code: string; storeName: string; baseUrl: string }[]>([]);
   const toast = useToast();
 
   const handleConnect = async () => {
     if (!storeUrl.trim() || !accessToken.trim()) return;
     setLoading(true);
     setError('');
+    setStoreCandidates([]);
 
     try {
       const token = await auth.currentUser?.getIdToken();
@@ -689,6 +691,9 @@ function MagentoCredentialsModal({
         onSuccess();
       } else {
         setError(result.error || 'Connection failed');
+        if (Array.isArray(result.storeCandidates)) {
+          setStoreCandidates(result.storeCandidates);
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
@@ -766,9 +771,40 @@ function MagentoCredentialsModal({
           </p>
 
           {error && (
-            <div style={{ display: 'flex', gap: '8px', backgroundColor: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '10px 12px' }}>
-              <AlertTriangle size={16} style={{ color: '#DC2626', flexShrink: 0, marginTop: '1px' }} />
-              <p style={{ margin: 0, fontSize: '12px', color: '#991B1B' }}>{error}</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', backgroundColor: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '10px 12px' }}>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <AlertTriangle size={16} style={{ color: '#DC2626', flexShrink: 0, marginTop: '1px' }} />
+                <p style={{ margin: 0, fontSize: '12px', color: '#991B1B' }}>{error}</p>
+              </div>
+              {storeCandidates.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', paddingLeft: '24px' }}>
+                  <p style={{ margin: 0, fontSize: '11px', fontWeight: 600, color: '#7F1D1D' }}>
+                    Διαθέσιμα stores — κάνε κλικ για να επιλέξεις store_code και ξανα-σύνδεση:
+                  </p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                    {storeCandidates.map((c) => (
+                      <button
+                        key={c.code}
+                        type="button"
+                        onClick={() => { setStoreCode(c.code); setError(''); }}
+                        title={c.baseUrl}
+                        style={{
+                          padding: '4px 10px',
+                          borderRadius: '999px',
+                          border: '1px solid #FCA5A5',
+                          background: storeCode === c.code ? '#DC2626' : '#FFF',
+                          color: storeCode === c.code ? '#FFF' : '#991B1B',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {c.code}{c.storeName ? ` · ${c.storeName}` : ''}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

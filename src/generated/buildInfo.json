@@ -1,10 +1,14 @@
 {
-  "version": "0.639.0",
-  "previousVersion": "0.638.0",
-  "commitHash": "7e8e09c",
+  "version": "0.640.0",
+  "previousVersion": "0.639.0",
+  "commitHash": "dbd1b5c",
   "branch": "main",
-  "buildDate": "2026-04-24T10:51:09.487Z",
+  "buildDate": "2026-04-24T14:17:05.243Z",
   "commits": [
+    {
+      "hash": "dbd1b5c",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "7e8e09c",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "7d1ecd3",
       "message": "fix(channels): silent auto-upgrade legacy AI payloads (no UI button)"
-    },
-    {
-      "hash": "264d446",
-      "message": "feat(channels): expose Regenerate AI button in PageHeader"
     }
   ],
   "changes": [
