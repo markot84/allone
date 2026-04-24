@@ -1,10 +1,14 @@
 {
-  "version": "0.636.0",
-  "previousVersion": "0.635.0",
-  "commitHash": "97c1ca9",
+  "version": "0.637.0",
+  "previousVersion": "0.636.0",
+  "commitHash": "7ee0043",
   "branch": "main",
-  "buildDate": "2026-04-24T08:45:28.034Z",
+  "buildDate": "2026-04-24T09:46:24.312Z",
   "commits": [
+    {
+      "hash": "7ee0043",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "97c1ca9",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "ec3f04f",
       "message": "feat(channels): per-segment channel mix στο Channel Activation"
-    },
-    {
-      "hash": "8746468",
-      "message": "feat(channels): merge Channel Recommendations into Channel Activation"
     }
   ],
   "changes": [

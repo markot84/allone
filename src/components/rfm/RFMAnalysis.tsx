@@ -230,36 +230,40 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
         }
         actions={
           <>
-          <Button
-            variant="primary"
-            size="sm"
-            icon={<Users size={14} className="shrink-0" />}
-            onClick={() => handleExportCustomerList(null, 'csv')}
-            disabled={isExporting || !hasImportedSegments}
-            className="min-h-[36px] flex-1 basis-[calc(50%-0.1875rem)] sm:flex-initial sm:basis-auto"
-          >
-            <span className="hidden min-[380px]:inline">Λίστες πελατών </span>
-            <span className="min-[380px]:hidden">Λίστες </span>
-            .csv
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={<FileSpreadsheet size={14} className="shrink-0" />}
-            onClick={() => handleExportAll('xlsx')}
-            disabled={isExporting || !hasImportedSegments}
-            className="min-h-[36px] flex-1 basis-[calc(50%-0.1875rem)] sm:flex-initial sm:basis-auto"
-          >
-            {isExporting ? (
-              'Exporting…'
-            ) : (
-              <>
-                <span className="hidden min-[380px]:inline">Action Packs </span>
-                <span className="min-[380px]:hidden">Packs </span>
-                .xlsx
-              </>
-            )}
-          </Button>
+          {activeTab === 'rfm' && (
+            <>
+              <Button
+                variant="primary"
+                size="sm"
+                icon={<Users size={14} className="shrink-0" />}
+                onClick={() => handleExportCustomerList(null, 'csv')}
+                disabled={isExporting || !hasImportedSegments}
+                className="min-h-[36px] flex-1 basis-[calc(50%-0.1875rem)] sm:flex-initial sm:basis-auto"
+              >
+                <span className="hidden min-[380px]:inline">Λίστες πελατών </span>
+                <span className="min-[380px]:hidden">Λίστες </span>
+                .csv
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<FileSpreadsheet size={14} className="shrink-0" />}
+                onClick={() => handleExportAll('xlsx')}
+                disabled={isExporting || !hasImportedSegments}
+                className="min-h-[36px] flex-1 basis-[calc(50%-0.1875rem)] sm:flex-initial sm:basis-auto"
+              >
+                {isExporting ? (
+                  'Exporting…'
+                ) : (
+                  <>
+                    <span className="hidden min-[380px]:inline">Action Packs </span>
+                    <span className="min-[380px]:hidden">Packs </span>
+                    .xlsx
+                  </>
+                )}
+              </Button>
+            </>
+          )}
           <Button
             variant="secondary"
             size="sm"
@@ -283,9 +287,45 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
 
       {/* Analysis Tabs */}
       <div className="flex items-center gap-1 bg-[var(--nts-light-gray)] p-1 rounded-xl w-fit">
-        <TabButton active={activeTab === 'rfm'} onClick={() => setActiveTab('rfm')} icon={<Users size={14} />} label="RFM Segments" />
-        <TabButton active={activeTab === 'behavioral'} onClick={() => setActiveTab('behavioral')} icon={<Brain size={14} />} label="Behavioral" />
-        <TabButton active={activeTab === 'predictive'} onClick={() => setActiveTab('predictive')} icon={<LineChart size={14} />} label="Predictive LTV" />
+        <TabButton
+          active={activeTab === 'rfm'}
+          onClick={() => setActiveTab('rfm')}
+          icon={<Users size={14} />}
+          label="RFM Segments"
+          tooltipTitle="RFM Segments"
+          tooltipBody="Ομαδοποίηση πελατών βάσει Recency (πόσο πρόσφατα αγόρασαν), Frequency (πόσο συχνά) και Monetary (πόση αξία)."
+          tooltipBullets={[
+            'Segments: Champions, Loyal, At Risk, Hibernating, Lost…',
+            'Δείχνει: μέγεθος, % πελατολογίου, revenue share',
+            'Παράγει: Action Packs & λίστες πελατών για campaigns',
+          ]}
+        />
+        <TabButton
+          active={activeTab === 'behavioral'}
+          onClick={() => setActiveTab('behavioral')}
+          icon={<Brain size={14} />}
+          label="Behavioral"
+          tooltipTitle="Behavioral Analysis"
+          tooltipBody="Συμπεριφορική ανάλυση πελατών — πέρα από το «πόσο» αγοράζουν, βλέπεις και το «πώς»."
+          tooltipBullets={[
+            'Lifecycle stage (Νέος, Ενεργός, Πιστός, Φθίνων, Αδρανής)',
+            'Engagement & upsell potential',
+            'Προτιμώμενα κανάλια, συσκευές & συχνότητα',
+          ]}
+        />
+        <TabButton
+          active={activeTab === 'predictive'}
+          onClick={() => setActiveTab('predictive')}
+          icon={<LineChart size={14} />}
+          label="Predictive LTV"
+          tooltipTitle="Predictive LTV"
+          tooltipBody="Πρόβλεψη μελλοντικής αξίας (Lifetime Value) και ρίσκου ανά segment."
+          tooltipBullets={[
+            'Εκτιμώμενο LTV (12 μηνών)',
+            'Πιθανότητα επόμενης αγοράς & churn risk',
+            'Στόχευση retention budget στα segments με μεγαλύτερο upside',
+          ]}
+        />
       </div>
 
       {activeTab === 'behavioral' && <BehavioralTab segments={rfmSegments} />}
@@ -510,19 +550,70 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
   );
 }
 
-function TabButton({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string }) {
+interface TabButtonProps {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+  tooltipTitle?: string;
+  tooltipBody?: string;
+  tooltipBullets?: string[];
+}
+
+function TabButton({ active, onClick, icon, label, tooltipTitle, tooltipBody, tooltipBullets }: TabButtonProps) {
+  const hasTooltip = !!(tooltipTitle || tooltipBody || (tooltipBullets && tooltipBullets.length));
+
   return (
-    <button
-      onClick={onClick}
-      className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-        active
-          ? 'bg-white text-[#1A1A1A] shadow-sm'
-          : 'text-[#4A4A4A] hover:text-[#1A1A1A]'
-      }`}
-    >
-      {icon}
-      {label}
-    </button>
+    <div className="relative group">
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={tooltipTitle ?? label}
+        className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+          active
+            ? 'bg-white text-[#1A1A1A] shadow-sm'
+            : 'text-[#4A4A4A] hover:text-[#1A1A1A]'
+        }`}
+      >
+        {icon}
+        {label}
+      </button>
+      {hasTooltip && (
+        <div
+          role="tooltip"
+          className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 opacity-0 transition-all duration-150 ease-out group-hover:opacity-100 group-focus-within:opacity-100"
+        >
+          <div className="relative w-[280px] rounded-xl border border-[#E5E5E5] bg-white p-3 shadow-[0_8px_24px_rgba(0,0,0,0.08)]">
+            <div
+              aria-hidden="true"
+              className="absolute -top-1.5 left-1/2 -translate-x-1/2 rotate-45 h-3 w-3 border-l border-t border-[#E5E5E5] bg-white"
+            />
+            {tooltipTitle && (
+              <p className="text-[13px] font-semibold text-[#1A1A1A]">{tooltipTitle}</p>
+            )}
+            {tooltipBody && (
+              <p className="mt-1 text-xs leading-snug text-[#4A4A4A]">{tooltipBody}</p>
+            )}
+            {tooltipBullets && tooltipBullets.length > 0 && (
+              <ul className="mt-2 space-y-1">
+                {tooltipBullets.map((b) => (
+                  <li
+                    key={b}
+                    className="flex items-start gap-1.5 text-[11.5px] leading-snug text-[#4A4A4A]"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="mt-1 h-1 w-1 flex-shrink-0 rounded-full bg-[var(--nts-accent)]"
+                    />
+                    <span>{b}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
