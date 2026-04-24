@@ -9,6 +9,10 @@
 import * as admin from 'firebase-admin';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
+import {
+  lineRevenueAndQtyForTopProducts,
+  shouldSkipMagentoLineForTopProducts,
+} from './productLineStats';
 
 let _db: Firestore | null = null;
 
@@ -28,7 +32,16 @@ interface OrderRow {
   orderId: string;
   orderName?: string;
   currency: string;
-  lineItems?: Array<{ sku?: string; title?: string; name?: string; quantity?: number; price?: number }>;
+  lineItems?: Array<{
+    sku?: string;
+    title?: string;
+    name?: string;
+    quantity?: number;
+    price?: number;
+    productType?: string;
+    parentItemId?: string | number | null;
+    rowTotal?: number;
+  }>;
 }
 
 export const ECOMMERCE_PROVIDERS = ['shopify', 'woocommerce', 'opencart', 'magento'] as const;
@@ -243,11 +256,13 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
   for (const o of revenueOrders) {
     for (const li of o.lineItems || []) {
       if (isDemoLineItem(li)) continue;
+      const contrib = lineRevenueAndQtyForTopProducts(o.platform, li);
+      if (!contrib) continue;
       const key = li.sku || li.title || li.name || 'unknown';
       const name = li.title || li.name || key;
       const existing = productMap.get(key) || { name, revenue: 0, quantity: 0 };
-      existing.revenue += (li.price || 0) * (li.quantity || 1);
-      existing.quantity += li.quantity || 1;
+      existing.revenue += contrib.revenue;
+      existing.quantity += contrib.quantity;
       if (!existing.name || existing.name === 'unknown') existing.name = name;
       productMap.set(key, existing);
     }
@@ -290,6 +305,7 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
 
     for (const li of o.lineItems || []) {
       if (isDemoLineItem(li)) continue;
+      if (o.platform === 'magento' && shouldSkipMagentoLineForTopProducts(li)) continue;
       const sku = (li.sku || '').trim();
       if (!sku) continue;
       const qty = li.quantity || 0;

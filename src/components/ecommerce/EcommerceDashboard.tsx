@@ -42,6 +42,7 @@ import { Card, CardHeader, KPICard, Tooltip, PageHeader } from '../common';
 import { useEcommerceSummary, type EcommerceTopProduct } from '../../hooks/useEcommerceSummary';
 import { useMagentoPopularSearches } from '../../hooks/useMagentoPopularSearches';
 import { formatCurrencyCompact, formatNumber } from '../../utils/format';
+import { lineRevenueAndQtyForTopProducts } from '../../utils/productLineStats';
 import type { KPICardData } from '../common/KPICard';
 import { useGlobalDate, GLOBAL_PERIOD_OPTIONS } from '../../contexts/GlobalDateContext';
 import { DateRangePicker } from '../ui/DateRangePicker';
@@ -470,12 +471,14 @@ export function EcommerceDashboard() {
     for (const order of revenueOrdersForTables) {
       for (const lineItem of order.lineItems || []) {
         if (isEcommerceDemoLineItem(lineItem)) continue;
+        const contrib = lineRevenueAndQtyForTopProducts(order.platform, lineItem);
+        if (!contrib) continue;
         const key = String(lineItem.sku || lineItem.title || lineItem.name || 'unknown').trim();
         if (!key) continue;
         const name = String(lineItem.title || lineItem.name || key);
         const existing = productMap.get(key) || { name, revenue: 0, quantity: 0 };
-        existing.revenue += (lineItem.price || 0) * (lineItem.quantity || 1);
-        existing.quantity += lineItem.quantity || 1;
+        existing.revenue += contrib.revenue;
+        existing.quantity += contrib.quantity;
         productMap.set(key, existing);
       }
     }
@@ -1104,6 +1107,12 @@ export function EcommerceDashboard() {
             icon={<Package size={16} />}
           />
           <div className="px-5 pb-5">
+            {ecomm.connectedPlatforms.includes('magento') && (
+              <p className="text-[10px] text-[#6B7280] leading-snug mb-3 max-w-prose">
+                Αθροίσματα από γραμμές παραγγελίας (έσοδο γραμμής, χωρίς διπλό μέτρημα configurable/bundle/γκρουπ). Μετά από{' '}
+                <strong>Sync</strong> στις Συνδέσεις τα νούμερα ευθυγραμμίζονται με Magento/Soft1.
+              </p>
+            )}
             <div className="flex flex-wrap items-center gap-2 mb-3">
               <input
                 value={prodSearch}

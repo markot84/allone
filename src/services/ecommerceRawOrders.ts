@@ -11,6 +11,11 @@ export type EcommerceRawLineItem = {
   name?: string;
   quantity?: number;
   price?: number;
+  /** Magento REST `product_type` */
+  productType?: string;
+  parentItemId?: string | number | null;
+  /** Magento γραμμή μετά εκπτώσεις (store currency) */
+  rowTotal?: number;
 };
 
 export type EcommerceRawOrder = {
@@ -61,6 +66,48 @@ export function getEcommerceOrderNetRevenue(order: EcommerceRawOrder): { revenue
   };
 }
 
+function parseOptionalNumber(v: unknown): number | undefined {
+  if (v === undefined || v === null || v === '') return undefined;
+  if (typeof v === 'number' && !Number.isNaN(v)) return v;
+  const n = parseFloat(String(v));
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function normalizeLineItemFromFirestore(raw: unknown): EcommerceRawLineItem {
+  const o = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  const rowTot =
+    parseOptionalNumber(o.rowTotal) ??
+    parseOptionalNumber(o.row_total) ??
+    parseOptionalNumber(o.base_row_total);
+  const rawParent = o.parentItemId ?? o.parent_item_id;
+  let parentItemId: string | number | null | undefined;
+  if (rawParent === undefined || rawParent === null || rawParent === false) {
+    parentItemId = null;
+  } else if (typeof rawParent === 'number' && Number.isFinite(rawParent)) {
+    parentItemId = rawParent;
+  } else if (typeof rawParent === 'string') {
+    parentItemId = rawParent;
+  } else {
+    parentItemId = null;
+  }
+
+  return {
+    sku: o.sku != null ? String(o.sku) : undefined,
+    title: o.title != null ? String(o.title) : undefined,
+    name: o.name != null ? String(o.name) : undefined,
+    quantity: parseOptionalNumber(o.quantity ?? o.qty_ordered) ?? 0,
+    price: parseOptionalNumber(o.price) ?? 0,
+    productType:
+      o.productType != null
+        ? String(o.productType)
+        : o.product_type != null
+          ? String(o.product_type)
+          : undefined,
+    parentItemId,
+    rowTotal: rowTot,
+  };
+}
+
 function normalizeRawOrder(platform: string, row: Record<string, unknown>): EcommerceRawOrder {
   const totalValue =
     platform === 'shopify'
@@ -71,6 +118,11 @@ function normalizeRawOrder(platform: string, row: Record<string, unknown>): Ecom
           ? row.grandTotal
           : row.total;
 
+  const rawItems = row.lineItems;
+  const lineItems: EcommerceRawLineItem[] = Array.isArray(rawItems)
+    ? rawItems.map(normalizeLineItemFromFirestore)
+    : [];
+
   return {
     orderId: String(row.orderId || row.incrementId || row.id || ''),
     orderName: String(row.orderName || row.orderNumber || row.incrementId || row.orderId || ''),
@@ -79,7 +131,7 @@ function normalizeRawOrder(platform: string, row: Record<string, unknown>): Ecom
     total: Number(totalValue || 0),
     currency: String(row.currency || 'EUR'),
     createdAt: String(row.createdAt || ''),
-    lineItems: Array.isArray(row.lineItems) ? (row.lineItems as EcommerceRawLineItem[]) : [],
+    lineItems,
     paymentMethod: String(row.paymentMethod || row.payment_method || ''),
     shippingMethod: String(row.shippingMethod || row.shipping_method || row.shippingDescription || ''),
   };

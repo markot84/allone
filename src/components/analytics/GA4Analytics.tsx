@@ -673,7 +673,7 @@ export function GA4Analytics() {
           />
           <div className="p-4 pt-0">
             <div className="flex flex-col items-center">
-              <div className="relative w-full h-[200px]">
+              <div className="relative w-full h-[200px] max-w-[280px] mx-auto">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
@@ -681,8 +681,8 @@ export function GA4Analytics() {
                       data={pieData}
                       cx="50%"
                       cy="50%"
-                      innerRadius={50}
-                      outerRadius={85}
+                      innerRadius={58}
+                      outerRadius={88}
                       paddingAngle={2}
                       dataKey="value"
                       nameKey="name"
@@ -705,19 +705,31 @@ export function GA4Analytics() {
                   className="pointer-events-none absolute inset-0 flex items-center justify-center"
                   aria-hidden
                 >
-                  <div className="text-center px-2">
-                    <div className="text-base font-bold text-[#111827] tabular-nums leading-tight">
+                  <div className="text-center px-1 min-w-0 max-w-[min(7rem,32%)]">
+                    <div className="text-lg font-bold text-[#111827] tabular-nums leading-none tracking-tight">
                       {Math.round(pieSlicesTotal).toLocaleString('el-GR')}
                     </div>
-                    <div className="text-[10px] text-[#6B7280] mt-0.5">συνεδρίες (άθροισμα καναλιών)</div>
                   </div>
                 </div>
               </div>
-              <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5 mt-2">
+              <p className="text-[11px] text-center text-[#6B7280] mt-1.5 mb-0 max-w-sm px-1 leading-snug">
+                Σύνολο συνεδριών (άθροισμα καναλιών)
+              </p>
+              <div
+                className="mt-3 grid w-full max-w-lg grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3 justify-items-start sm:justify-items-center"
+                role="list"
+              >
                 {pieData.map((entry) => (
-                  <div key={entry.name} className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
-                    <span className="text-[11px] text-[#374151]">{entry.name}</span>
+                  <div
+                    key={entry.name}
+                    className="flex min-w-0 max-w-full items-center gap-1.5"
+                    role="listitem"
+                    title={entry.name}
+                  >
+                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: entry.color }} />
+                    <span className="min-w-0 break-words text-left text-[11px] leading-snug text-[#374151]">
+                      {entry.name}
+                    </span>
                   </div>
                 ))}
               </div>

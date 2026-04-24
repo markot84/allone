@@ -80,27 +80,31 @@ function BrandMenu({
     <>
       <button
         ref={btnRef}
+        type="button"
+        title={currentBrand.name}
         onClick={onToggle}
         style={{
           display: 'flex',
           alignItems: 'center',
           gap: 6,
-          padding: '6px 12px',
+          padding: '6px 10px',
           border: '1px solid rgba(255,255,255,0.12)',
           borderRadius: 8,
           background: 'rgba(255,255,255,0.06)',
           cursor: brands.length > 1 ? 'pointer' : 'default',
           fontSize: 14,
           fontWeight: 600,
-          color: 'rgba(255,255,255,0.8)'
+          color: 'rgba(255,255,255,0.8)',
+          minWidth: 0,
+          maxWidth: 'min(100%, 12rem)',
         }}
       >
         <Text
           as="span"
           size="small"
           weight="semibold"
-          className="hidden xl:inline"
-          style={{ color: 'rgba(255,255,255,0.8)', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+          className="min-w-0 max-w-[5.5rem] truncate sm:max-w-[8rem] md:max-w-[10rem] lg:max-w-[12rem]"
+          style={{ color: 'rgba(255,255,255,0.9)' }}
         >
           {currentBrand.name}
         </Text>
@@ -608,16 +612,14 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
         <PrimerHeader.Item style={{ marginLeft: 'auto', minWidth: 0 }}>
           <div className="flex items-center gap-2 lg:gap-3">
             {currentBrand && (
-              <div className="hidden lg:block">
-                <BrandMenu
-                  currentBrand={currentBrand}
-                  brands={brands}
-                  isOpen={brandMenuOpen}
-                  onToggle={() => setBrandMenuOpen((o) => !o)}
-                  onClose={() => setBrandMenuOpen(false)}
-                  onSelect={setCurrentBrand}
-                />
-              </div>
+              <BrandMenu
+                currentBrand={currentBrand}
+                brands={brands}
+                isOpen={brandMenuOpen}
+                onToggle={() => setBrandMenuOpen((o) => !o)}
+                onClose={() => setBrandMenuOpen(false)}
+                onSelect={setCurrentBrand}
+              />
             )}
             <div style={{ position: 'relative', overflow: 'visible' }}>
               <NotificationBell onNavigate={(s) => onSectionChange(s)} />

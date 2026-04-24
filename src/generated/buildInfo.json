@@ -1,10 +1,14 @@
 {
-  "version": "0.634.0",
-  "previousVersion": "0.633.0",
-  "commitHash": "f5776fb",
+  "version": "0.636.0",
+  "previousVersion": "0.635.0",
+  "commitHash": "97c1ca9",
   "branch": "main",
-  "buildDate": "2026-04-24T08:30:34.015Z",
+  "buildDate": "2026-04-24T08:45:28.034Z",
   "commits": [
+    {
+      "hash": "97c1ca9",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "f5776fb",
       "message": "fix(search-console): reduce sync window 3 years -> 1 year (only search terms)"
@@ -60,13 +64,10 @@
     {
       "hash": "8746468",
       "message": "feat(channels): merge Channel Recommendations into Channel Activation"
-    },
-    {
-      "hash": "251b2ce",
-      "message": "chore: buildInfo v0.609.0 after deploy"
     }
   ],
   "changes": [
+    "[Συντήρηση] Full deploy",
     "[Διόρθωση] Reduce sync window 3 years -> 1 year (only search terms)",
     "[Νέο χαρακτηριστικό] Extend historical sync window to 3 years across all sources",
     "[Διόρθωση] Hide legacy product-name fallback in popular searches widget",
@@ -75,7 +76,6 @@
     "[Διόρθωση] Forbid segment names in customer-facing campaign messages",
     "[Βελτίωση εμφάνισης] Rename funnel stages to EN + distinct hue palette",
     "[Νέο χαρακτηριστικό] Skeleton UI + silent upgrade indicator + immediate cache refetch",
-    "[Διόρθωση] Pass segmentFitList in silent regen + tooltip on segment cards",
-    "[Διόρθωση] Silent auto-upgrade legacy AI payloads (no UI button)"
+    "[Διόρθωση] Pass segmentFitList in silent regen + tooltip on segment cards"
   ]
 }

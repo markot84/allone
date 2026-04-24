@@ -90,7 +90,7 @@ export function CardHeader({ title, subtitle, icon, action, className = '' }: Ca
               <Text
                 as="p"
                 size="small"
-                className="line-clamp-2 lg:line-clamp-none lg:truncate"
+                className="!mt-0.5 !block break-words text-pretty leading-relaxed [overflow-wrap:anywhere]"
                 style={{ margin: 0, marginTop: 2, color: 'var(--fgColor-muted, #57606a)' }}
               >
                 {subtitle}
