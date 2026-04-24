@@ -30,6 +30,7 @@ import { useDashPeriod } from '../../hooks/useDashPeriod';
 import { useGlobalDate, GLOBAL_PERIOD_OPTIONS } from '../../contexts/GlobalDateContext';
 import { DateRangePicker } from '../ui/DateRangePicker';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
+import { useEcommerceFullHistoryMetrics } from '../../hooks/useEcommerceFullHistoryMetrics';
 import { useGA4Data } from '../../hooks/useGA4Data';
 import { CampaignsService, OrganicService } from '../../services/firestore';
 import { useQueryClient } from '@tanstack/react-query';
@@ -168,6 +169,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
   const campaignsAll = campaigns as Campaign[];
   const { activeStrategy } = useActiveStrategy();
   const ecomm = useEcommerceSummary();
+  const ecommHist = useEcommerceFullHistoryMetrics();
   const {
     organicRevenueByDay: ga4OrganicByDay,
     totalOrganicRevenueFromChannels,
@@ -274,13 +276,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
     () => campaignsTyped.reduce((sum, c) => sum + (c.clicks || 0), 0),
     [campaignsTyped],
   );
-  const ecommRevenueByDay = useMemo(() => {
-    const o: Record<string, number> = {};
-    for (const r of ecomm.dailyRevenue) {
-      o[r.date] = r.revenue;
-    }
-    return o;
-  }, [ecomm.dailyRevenue]);
+  const ecommRevenueByDay = ecommHist.revenueByDayRecord;
 
   const ecommRevenueInPeriod = useMemo(
     () => sumDailyRevenueInPeriod(ecommRevenueByDay, periodDates.fromDate, periodDates.toDate),
@@ -289,11 +285,11 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
 
   /** Παραγγελίες e-shop (όλες οι συνδεδεμένες πλατφόρμες) στην επιλεγμένη περίοδο — για CVR καταστήματος. */
   const ordersCountInPeriod = useMemo(() => {
-    return ecomm.ordersByDay.reduce((sum, row) => {
+    return ecommHist.ordersByDay.reduce((sum, row) => {
       if (row.date >= periodDates.fromDate && row.date <= periodDates.toDate) return sum + row.orders;
       return sum;
     }, 0);
-  }, [ecomm.ordersByDay, periodDates.fromDate, periodDates.toDate]);
+  }, [ecommHist.ordersByDay, periodDates.fromDate, periodDates.toDate]);
 
   /** GA4 sessions στην επιλεγμένη περίοδο (ημερήσια σύνολα). */
   const ga4SessionsInPeriod = useMemo(() => {
@@ -351,6 +347,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
       periodDates.fromDate,
       periodDates.toDate,
       ga4OrganicEffective,
+      ecommHist.source,
     ]
   );
 

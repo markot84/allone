@@ -130,7 +130,7 @@ const REVENUE_FIELD: Record<string, string> = {
 };
 
 /**
- * Read orders from a single platform collection for the given brand (last 90 days).
+ * Read orders from a single platform collection for the given brand (full history in Firestore).
  */
 async function readPlatformOrders(
   db: Firestore,
@@ -139,9 +139,6 @@ async function readPlatformOrders(
 ): Promise<OrderRow[]> {
   const collection = COLLECTION_MAP[platform];
   if (!collection) return [];
-
-  const since = new Date();
-  since.setDate(since.getDate() - 90);
 
   const snap = await db
     .collection(collection)
@@ -154,7 +151,6 @@ async function readPlatformOrders(
   for (const doc of snap.docs) {
     const d = doc.data();
     const createdAt = d.createdAt || '';
-    if (createdAt && new Date(createdAt) < since) continue;
 
     const price = typeof d[revenueField] === 'number' ? d[revenueField] : parseFloat(d[revenueField] || '0');
 

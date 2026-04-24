@@ -686,6 +686,19 @@ export function eachCalendarMonthInclusive(fromYm: string, toYm: string): string
   return out;
 }
 
+/** Μηνιαία σειρά e-shop από ημερήσιο map (π.χ. από full-history raw orders). */
+export function monthlyRevenueFromDailyRecord(revenueByDay: Record<string, number>): { month: string; revenue: number }[] {
+  const byMonth: Record<string, number> = {};
+  for (const [day, rev] of Object.entries(revenueByDay)) {
+    const ym = day.slice(0, 7);
+    if (!/^\d{4}-\d{2}$/.test(ym)) continue;
+    byMonth[ym] = (byMonth[ym] || 0) + rev;
+  }
+  return Object.entries(byMonth)
+    .map(([month, revenue]) => ({ month, revenue }))
+    .sort((a, b) => a.month.localeCompare(b.month));
+}
+
 /**
  * Conversion value ανά ημερολογιακό μήνα (για trend charts).
  * Prefers summing `dailyMetrics` by month; otherwise one bucket from campaign-level metrics.

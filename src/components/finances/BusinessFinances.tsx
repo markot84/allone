@@ -7,6 +7,7 @@ import { useBrand } from '../../hooks/useBrand';
 import { useCampaigns } from '../../hooks/useCampaigns';
 import { usePeriodScopedCampaigns } from '../../hooks/usePeriodScopedCampaigns';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
+import { useEcommerceFullHistoryMetrics } from '../../hooks/useEcommerceFullHistoryMetrics';
 import { useGA4Data } from '../../hooks/useGA4Data';
 import { useDashPeriod } from '../../hooks/useDashPeriod';
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
@@ -49,6 +50,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
     dateRange: ga4DateRange,
   } = useGA4Data();
   const ecomm = useEcommerceSummary();
+  const ecommHist = useEcommerceFullHistoryMetrics();
   const {
     activeStrategy,
     updateMarketingCostLines,
@@ -84,11 +86,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
     [organicByMonth, ga4OrganicEffective]
   );
 
-  const ecommRevenueByDayRecord = useMemo(() => {
-    const o: Record<string, number> = {};
-    for (const r of ecomm.dailyRevenue) o[r.date] = r.revenue;
-    return o;
-  }, [ecomm.dailyRevenue]);
+  const ecommRevenueByDayRecord = ecommHist.revenueByDayRecord;
 
   /** Ίδια λογική με Dashboard/ROI: ημερήσια σειρά για την επιλεγμένη περίοδο. */
   const periodFinanceSeries = useMemo(() => {
@@ -111,6 +109,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
     periodDates.fromDate,
     periodDates.toDate,
     ga4OrganicEffective,
+    ecommHist.source,
   ]);
 
   const eshopTotals = useMemo(() => {

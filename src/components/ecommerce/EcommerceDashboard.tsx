@@ -18,6 +18,13 @@ import {
 } from 'lucide-react';
 import { importMagentoSearchTermsFile } from '../../services/magentoSearchTermsImport';
 import {
+  fetchAllEcommerceOrders,
+  getEcommerceOrderNetRevenue,
+  isEcommerceDemoLineItem,
+  isEcommerceOrderCancelled,
+  type EcommerceRawOrder,
+} from '../../services/ecommerceRawOrders';
+import {
   AreaChart,
   Area,
   BarChart,
@@ -34,7 +41,6 @@ import {
 import { Card, CardHeader, KPICard, Tooltip, PageHeader } from '../common';
 import { useEcommerceSummary, type EcommerceTopProduct } from '../../hooks/useEcommerceSummary';
 import { useMagentoPopularSearches } from '../../hooks/useMagentoPopularSearches';
-import { FirestoreService } from '../../services/firestore';
 import { formatCurrencyCompact, formatNumber } from '../../utils/format';
 import type { KPICardData } from '../common/KPICard';
 import { useGlobalDate, GLOBAL_PERIOD_OPTIONS } from '../../contexts/GlobalDateContext';
@@ -68,62 +74,7 @@ const TOOLTIP_STYLE: React.CSSProperties = {
   boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
 };
 
-type RawLineItem = {
-  sku?: string;
-  title?: string;
-  name?: string;
-  quantity?: number;
-  price?: number;
-};
-
-type RawEcommerceOrder = {
-  orderId: string;
-  orderName?: string;
-  platform: string;
-  status: string;
-  total: number;
-  currency: string;
-  createdAt: string;
-  lineItems: RawLineItem[];
-  paymentMethod?: string;
-  shippingMethod?: string;
-};
-
-const ECOMMERCE_ORDER_COLLECTIONS: Record<string, string> = {
-  shopify: 'shopify_orders',
-  woocommerce: 'woo_orders',
-  opencart: 'opencart_orders',
-  magento: 'magento_orders',
-};
-
 const METHOD_CHART_COLORS = ['#F97316', '#FB923C', '#FDBA74', '#F59E0B', '#FACC15', '#A3A3A3', '#94A3B8', '#CBD5E1'];
-
-function isCancelledOrderStatus(status: string | null | undefined): boolean {
-  const normalized = String(status || '').trim().toLowerCase();
-  return normalized === 'cancelled' || normalized === 'canceled';
-}
-
-function isDemoLineItem(lineItem: RawLineItem): boolean {
-  const needle = `${lineItem.sku || ''} ${lineItem.title || ''} ${lineItem.name || ''}`.toLowerCase();
-  return needle.includes('demo');
-}
-
-function getNonDemoOrderRevenue(order: RawEcommerceOrder): { revenue: number; isAllDemo: boolean } {
-  if (!order.lineItems.length) return { revenue: order.total, isAllDemo: false };
-  let demoTotal = 0;
-  let nonDemoCount = 0;
-  for (const lineItem of order.lineItems) {
-    if (isDemoLineItem(lineItem)) {
-      demoTotal += (lineItem.price || 0) * (lineItem.quantity || 1);
-    } else {
-      nonDemoCount += 1;
-    }
-  }
-  return {
-    revenue: Math.max(0, order.total - demoTotal),
-    isAllDemo: nonDemoCount === 0,
-  };
-}
 
 function deriveParentSku(sku: string | null | undefined): string {
   const normalized = String(sku || '').trim();
@@ -136,42 +87,6 @@ function hasDerivedParentSku(sku: string | null | undefined): boolean {
   const normalized = String(sku || '').trim();
   if (!normalized) return false;
   return deriveParentSku(normalized) !== normalized;
-}
-
-function normalizeRawOrder(platform: string, row: Record<string, unknown>): RawEcommerceOrder {
-  const totalValue =
-    platform === 'shopify'
-      ? row.totalPrice
-      : platform === 'woocommerce'
-        ? row.total
-        : platform === 'magento'
-          ? row.grandTotal
-          : row.total;
-
-  return {
-    orderId: String(row.orderId || row.incrementId || row.id || ''),
-    orderName: String(row.orderName || row.orderNumber || row.incrementId || row.orderId || ''),
-    platform,
-    status: String(row.status || row.financialStatus || row.financial_status || ''),
-    total: Number(totalValue || 0),
-    currency: String(row.currency || 'EUR'),
-    createdAt: String(row.createdAt || ''),
-    lineItems: Array.isArray(row.lineItems) ? (row.lineItems as RawLineItem[]) : [],
-    paymentMethod: String(row.paymentMethod || row.payment_method || ''),
-    shippingMethod: String(row.shippingMethod || row.shipping_method || row.shippingDescription || ''),
-  };
-}
-
-async function fetchAllEcommerceOrders(brandId: string, platforms: string[]): Promise<RawEcommerceOrder[]> {
-  const results = await Promise.all(
-    platforms.map(async (platform) => {
-      const collectionName = ECOMMERCE_ORDER_COLLECTIONS[platform];
-      if (!collectionName) return [] as RawEcommerceOrder[];
-      const rows = await FirestoreService.getDocuments<Record<string, unknown>>(collectionName, [], brandId);
-      return rows.map((row) => normalizeRawOrder(platform, row));
-    })
-  );
-  return results.flat();
 }
 
 /** Το Recharts Area χρειάζεται ≥2 σημεία για ορατή γραμμή. */
@@ -250,7 +165,7 @@ function canonicalPaymentMethodLabel(raw: string | null | undefined): string {
 }
 
 function buildMethodPieData(
-  orders: RawEcommerceOrder[],
+  orders: EcommerceRawOrder[],
   field: 'paymentMethod' | 'shippingMethod'
 ): Array<{ name: string; value: number; color: string }> {
   const counts = new Map<string, number>();
@@ -384,17 +299,6 @@ export function EcommerceDashboard() {
     setMagentoPopularExpanded(false);
   }, [brandId]);
 
-  // Date-filtered daily revenue
-  const filteredDailyRevenue = useMemo(() => {
-    return ecomm.dailyRevenue.filter(d => d.date >= effectiveFrom && d.date <= effectiveTo);
-  }, [ecomm.dailyRevenue, effectiveFrom, effectiveTo]);
-
-  // Date-filtered daily orders — από το server aggregate (όχι από recentOrders
-  // που είναι capped στις 50).
-  const filteredOrdersByDay = useMemo(() => {
-    return ecomm.ordersByDay.filter(d => d.date >= effectiveFrom && d.date <= effectiveTo);
-  }, [ecomm.ordersByDay, effectiveFrom, effectiveTo]);
-
   // Recent orders (capped 50) για fallback rendering.
   const filteredRecentOrdersVisible = useMemo(() => {
     return ecomm.recentOrders.filter(o => {
@@ -405,23 +309,9 @@ export function EcommerceDashboard() {
 
   // Χρησιμοποιείται μόνο ως KPI fallback για legacy aggregates.
   const filteredOrdersForKpi = useMemo(
-    () => filteredRecentOrdersVisible.filter((o) => !isCancelledOrderStatus(o.status)),
+    () => filteredRecentOrdersVisible.filter((o) => !isEcommerceOrderCancelled(o.status)),
     [filteredRecentOrdersVisible]
   );
-
-  const filteredTotalRevenue = useMemo(
-    () => filteredDailyRevenue.reduce((s, d) => s + d.revenue, 0),
-    [filteredDailyRevenue]
-  );
-  // Πραγματικό count από aggregate. Fallback στο capped count μόνο αν λείπει
-  // η ordersByDay map (legacy brands πριν το server aggregate update).
-  const filteredOrderCount = useMemo(() => {
-    if (filteredOrdersByDay.length > 0) {
-      return filteredOrdersByDay.reduce((s, d) => s + d.orders, 0);
-    }
-    return filteredOrdersForKpi.length;
-  }, [filteredOrdersByDay, filteredOrdersForKpi]);
-  const filteredAov = filteredOrderCount > 0 ? filteredTotalRevenue / filteredOrderCount : 0;
 
   const { data: rawOrders = [], isPending: rawOrdersLoading, isSuccess: rawOrdersLoaded } = useQuery({
     queryKey: ['ecommerceOrdersRaw', brandId, [...ecomm.connectedPlatforms].sort().join('|')],
@@ -444,42 +334,6 @@ export function EcommerceDashboard() {
   const [prodRows, setProdRows] = useState<RowsPerPage>(20);
   const [prodPage, setProdPage] = useState(1);
 
-  const kpis: KPICardData[] = useMemo(() => {
-    const last30 = filteredDailyRevenue.slice(-30);
-    // Map per-date orders από το server aggregate (όχι capped recentOrders).
-    const ordersByDateMap = new Map(filteredOrdersByDay.map((d) => [d.date, d.orders]));
-    const ordersPerDay = last30.map((d) => ordersByDateMap.get(d.date) ?? 0);
-    const aovPerDay = last30.map((d, i) => {
-      const n = ordersPerDay[i] ?? 0;
-      return n > 0 ? d.revenue / n : 0;
-    });
-    return [
-    {
-      label: 'Έσοδα e-shop',
-      value: formatCurrencyCompact(filteredTotalRevenue),
-      tooltip: 'Σύνολο εσόδων από e-commerce για το επιλεγμένο διάστημα',
-      sparklineData: padSparklineForChart(last30.map((d) => d.revenue)),
-    },
-    {
-      label: 'Παραγγελίες',
-      value: formatNumber(filteredOrderCount),
-      tooltip: 'Σύνολο παραγγελιών για το επιλεγμένο διάστημα',
-      sparklineData: padSparklineForChart(ordersPerDay),
-    },
-    {
-      label: 'AOV',
-      value: formatCurrencyCompact(filteredAov),
-      tooltip: 'Μέσο ποσό ανά παραγγελία για το επιλεγμένο διάστημα',
-      sparklineData: padSparklineForChart(aovPerDay),
-    },
-    {
-      label: 'Πλατφόρμες',
-      value: String(ecomm.connectedPlatforms.length),
-      tooltip: ecomm.connectedPlatforms.map((p) => PLATFORM_LABELS[p] || p).join(', ') || 'Κανένα',
-    },
-    ];
-  }, [filteredTotalRevenue, filteredOrderCount, filteredAov, filteredDailyRevenue, filteredOrdersByDay, ecomm.connectedPlatforms]);
-
   const ordersForTables = useMemo(() => {
     if (!rawOrdersLoaded) {
       return filteredRecentOrdersVisible.map((order) => ({
@@ -493,16 +347,116 @@ export function EcommerceDashboard() {
         return day >= effectiveFrom && day <= effectiveTo;
       })
       .map((order) => {
-        const { revenue, isAllDemo } = getNonDemoOrderRevenue(order);
+        const { revenue, isAllDemo } = getEcommerceOrderNetRevenue(order);
         return isAllDemo ? null : { ...order, total: revenue };
       })
-      .filter((order): order is RawEcommerceOrder => Boolean(order));
+      .filter((order): order is EcommerceRawOrder => Boolean(order));
   }, [rawOrdersLoaded, rawOrders, filteredRecentOrdersVisible, effectiveFrom, effectiveTo]);
 
   const revenueOrdersForTables = useMemo(
-    () => ordersForTables.filter((order) => !isCancelledOrderStatus(order.status)),
+    () => ordersForTables.filter((order) => !isEcommerceOrderCancelled(order.status)),
     [ordersForTables]
   );
+
+  /**
+   * Το `ecommerce_summary` (ecommerceAggregator) περιέχει μόνο ~90 ημέρες orders· το date picker
+   * μπορεί να ζητά παλιότερες περιόδους. Για ευθυγράμμιση με πίνακες/pie, χρησιμοποιούμε
+   * αθροίσεις από full raw orders μόλις φορτώσουν.
+   */
+  const periodMetricsFromRawOrders = useMemo(() => {
+    if (!rawOrdersLoaded) return null;
+    const dayRev: Record<string, number> = {};
+    const dayOrd: Record<string, number> = {};
+    const plat: Record<string, { revenue: number; orders: number }> = {};
+    for (const o of revenueOrdersForTables) {
+      const day = (o.createdAt || '').slice(0, 10);
+      if (!day) continue;
+      dayRev[day] = (dayRev[day] || 0) + o.total;
+      dayOrd[day] = (dayOrd[day] || 0) + 1;
+      if (!plat[o.platform]) plat[o.platform] = { revenue: 0, orders: 0 };
+      plat[o.platform].revenue += o.total;
+      plat[o.platform].orders += 1;
+    }
+    const dailyRevenue = Object.entries(dayRev)
+      .map(([date, revenue]) => ({ date, revenue }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+    const ordersByDay = Object.entries(dayOrd)
+      .map(([date, orders]) => ({ date, orders: Number(orders) || 0 }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+    const platformBreakdown = Object.entries(plat)
+      .map(([platform, v]) => ({ platform, revenue: v.revenue, orders: v.orders }))
+      .filter((row) => row.orders > 0)
+      .sort((a, b) => b.revenue - a.revenue);
+    return { dailyRevenue, ordersByDay, platformBreakdown };
+  }, [rawOrdersLoaded, revenueOrdersForTables]);
+
+  const filteredDailyRevenue = useMemo(() => {
+    if (rawOrdersLoaded && periodMetricsFromRawOrders) {
+      return periodMetricsFromRawOrders.dailyRevenue;
+    }
+    return ecomm.dailyRevenue.filter((d) => d.date >= effectiveFrom && d.date <= effectiveTo);
+  }, [rawOrdersLoaded, periodMetricsFromRawOrders, ecomm.dailyRevenue, effectiveFrom, effectiveTo]);
+
+  const filteredOrdersByDay = useMemo(() => {
+    if (rawOrdersLoaded && periodMetricsFromRawOrders) {
+      return periodMetricsFromRawOrders.ordersByDay;
+    }
+    return ecomm.ordersByDay.filter((d) => d.date >= effectiveFrom && d.date <= effectiveTo);
+  }, [rawOrdersLoaded, periodMetricsFromRawOrders, ecomm.ordersByDay, effectiveFrom, effectiveTo]);
+
+  const filteredTotalRevenue = useMemo(
+    () => filteredDailyRevenue.reduce((s, d) => s + d.revenue, 0),
+    [filteredDailyRevenue]
+  );
+  const filteredOrderCount = useMemo(() => {
+    if (filteredOrdersByDay.length > 0) {
+      return filteredOrdersByDay.reduce((s, d) => s + d.orders, 0);
+    }
+    return filteredOrdersForKpi.length;
+  }, [filteredOrdersByDay, filteredOrdersForKpi]);
+  const filteredAov = filteredOrderCount > 0 ? filteredTotalRevenue / filteredOrderCount : 0;
+
+  const displayPlatformBreakdown = useMemo(() => {
+    if (rawOrdersLoaded && periodMetricsFromRawOrders) {
+      return periodMetricsFromRawOrders.platformBreakdown;
+    }
+    return ecomm.platformBreakdown;
+  }, [rawOrdersLoaded, periodMetricsFromRawOrders, ecomm.platformBreakdown]);
+
+  const kpis: KPICardData[] = useMemo(() => {
+    const last30 = filteredDailyRevenue.slice(-30);
+    const ordersByDateMap = new Map(filteredOrdersByDay.map((d) => [d.date, d.orders]));
+    const ordersPerDay = last30.map((d) => ordersByDateMap.get(d.date) ?? 0);
+    const aovPerDay = last30.map((d, i) => {
+      const n = ordersPerDay[i] ?? 0;
+      return n > 0 ? d.revenue / n : 0;
+    });
+    return [
+      {
+        label: 'Έσοδα e-shop',
+        value: formatCurrencyCompact(filteredTotalRevenue),
+        tooltip: 'Σύνολο εσόδων από e-commerce για το επιλεγμένο διάστημα',
+        sparklineData: padSparklineForChart(last30.map((d) => d.revenue)),
+      },
+      {
+        label: 'Παραγγελίες',
+        value: formatNumber(filteredOrderCount),
+        tooltip: 'Σύνολο παραγγελιών για το επιλεγμένο διάστημα',
+        sparklineData: padSparklineForChart(ordersPerDay),
+      },
+      {
+        label: 'AOV',
+        value: formatCurrencyCompact(filteredAov),
+        tooltip: 'Μέσο ποσό ανά παραγγελία για το επιλεγμένο διάστημα',
+        sparklineData: padSparklineForChart(aovPerDay),
+      },
+      {
+        label: 'Πλατφόρμες',
+        value: String(ecomm.connectedPlatforms.length),
+        tooltip: ecomm.connectedPlatforms.map((p) => PLATFORM_LABELS[p] || p).join(', ') || 'Κανένα',
+      },
+    ];
+  }, [filteredTotalRevenue, filteredOrderCount, filteredAov, filteredDailyRevenue, filteredOrdersByDay, ecomm.connectedPlatforms]);
 
   const topProductsForTables = useMemo<TopProductRow[]>(() => {
     if (!rawOrdersLoaded) {
@@ -515,7 +469,7 @@ export function EcommerceDashboard() {
     const productMap = new Map<string, { name: string; revenue: number; quantity: number }>();
     for (const order of revenueOrdersForTables) {
       for (const lineItem of order.lineItems || []) {
-        if (isDemoLineItem(lineItem)) continue;
+        if (isEcommerceDemoLineItem(lineItem)) continue;
         const key = String(lineItem.sku || lineItem.title || lineItem.name || 'unknown').trim();
         if (!key) continue;
         const name = String(lineItem.title || lineItem.name || key);
@@ -833,12 +787,15 @@ export function EcommerceDashboard() {
 
         {/* Platform Breakdown */}
         <Card>
-          <CardHeader title="Ανά πλατφόρμα" />
+          <CardHeader title="Ανά πλατφόρμα" subtitle={`${effectiveFrom} — ${effectiveTo}`} />
           <div className="px-5 pb-5">
-            {ecomm.platformBreakdown.length > 0 ? (
+            {rawOrdersLoading && !rawOrdersLoaded && (
+              <p className="text-xs text-[#9CA3AF] mb-3">Φόρτωση πλήρους ιστορικού παραγγελιών για το εύρος…</p>
+            )}
+            {displayPlatformBreakdown.length > 0 ? (
               <>
                 <ResponsiveContainer width="100%" height={160}>
-                  <BarChart data={ecomm.platformBreakdown} layout="vertical">
+                  <BarChart data={displayPlatformBreakdown} layout="vertical">
                     <XAxis type="number" tick={{ fill: '#57606a', fontSize: 10 }} tickFormatter={(v: number) => `€${v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v}`} />
                     <YAxis
                       type="category"
@@ -854,15 +811,15 @@ export function EcommerceDashboard() {
                       labelFormatter={(l: string) => PLATFORM_LABELS[l] || l}
                     />
                     <Bar dataKey="revenue" radius={[0, 6, 6, 0]}>
-                      {ecomm.platformBreakdown.map((entry) => (
+                      {displayPlatformBreakdown.map((entry) => (
                         <Cell key={entry.platform} fill={PLATFORM_COLORS[entry.platform] || '#94A3B8'} />
                       ))}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
                 <div className="mt-4 space-y-2.5">
-                  {ecomm.platformBreakdown.map((p) => {
-                    const pct = ecomm.totalRevenue > 0 ? (p.revenue / ecomm.totalRevenue * 100) : 0;
+                  {displayPlatformBreakdown.map((p) => {
+                    const pct = filteredTotalRevenue > 0 ? (p.revenue / filteredTotalRevenue) * 100 : 0;
                     return (
                       <div key={p.platform}>
                         <div className="flex items-center justify-between text-xs mb-1">

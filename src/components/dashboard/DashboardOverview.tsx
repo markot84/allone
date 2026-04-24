@@ -44,6 +44,7 @@ import { useGlobalDate, GLOBAL_PERIOD_OPTIONS } from '../../contexts/GlobalDateC
 import { DateRangePicker } from '../ui/DateRangePicker';
 import { useGA4Data } from '../../hooks/useGA4Data';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
+import { useEcommerceFullHistoryMetrics } from '../../hooks/useEcommerceFullHistoryMetrics';
 import { useModules } from '../../hooks/useModules';
 import {
   calculateCampaignMetrics,
@@ -98,6 +99,13 @@ function padSparklineForChart(values: number[]): number[] {
   return values;
 }
 
+const ECOMM_TOP_PLATFORM_LABELS: Record<string, string> = {
+  shopify: 'Shopify',
+  woocommerce: 'WooCommerce',
+  opencart: 'OpenCart',
+  magento: 'Magento',
+};
+
 interface DashboardOverviewProps {
   /** Προαιρετικό `hashQuery` για deep link (π.χ. ειδοποιήσεις → `#products?stock=low`) */
   onSectionChange?: (section: string, opts?: { hashQuery?: string }) => void;
@@ -118,6 +126,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   useAutomationRunner();
   const ga4 = useGA4Data();
   const ecomm = useEcommerceSummary();
+  const ecommHist = useEcommerceFullHistoryMetrics();
   const { alerts: automationAlerts } = useAutomationAlerts();
 
   const supplierTodMap = useMemo(() => {
@@ -173,24 +182,20 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     return rows.reduce((s, r) => s + r.organic, 0);
   }, [mergedOrganicByMonth, ga4OrganicEffective, periodDates.fromDate, periodDates.toDate]);
 
-  const ecommRevenueByDayRecord = useMemo(() => {
-    const o: Record<string, number> = {};
-    for (const r of ecomm.dailyRevenue) o[r.date] = r.revenue;
-    return o;
-  }, [ecomm.dailyRevenue]);
+  const ecommRevenueByDayRecord = ecommHist.revenueByDayRecord;
 
   const storeRevenueInPeriod = useMemo(
     () => sumDailyRevenueInPeriod(ecommRevenueByDayRecord, periodDates.fromDate, periodDates.toDate),
     [ecommRevenueByDayRecord, periodDates.fromDate, periodDates.toDate]
   );
 
-  // Πραγματικός αριθμός παραγγελιών στην περίοδο — από το πλήρες ordersByDay aggregate (όχι capped recentOrders).
+  // Πραγματικός αριθμός παραγγελιών στην περίοδο — full-history raw όταν φορτώσει (summary ~90d).
   const ordersInPeriod = useMemo(
     () =>
-      ecomm.ordersByDay
+      ecommHist.ordersByDay
         .filter((d) => d.date >= periodDates.fromDate && d.date <= periodDates.toDate)
         .reduce((sum, d) => sum + d.orders, 0),
-    [ecomm.ordersByDay, periodDates.fromDate, periodDates.toDate]
+    [ecommHist.ordersByDay, periodDates.fromDate, periodDates.toDate]
   );
 
   /** AOV από πραγματικά e-shop data (revenue/orders της περιόδου). Αξιόπιστο, χωρίς ad-platform double-counting. */
@@ -198,6 +203,18 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     () => (ordersInPeriod > 0 ? storeRevenueInPeriod / ordersInPeriod : 0),
     [storeRevenueInPeriod, ordersInPeriod]
   );
+
+  const ecommTopPlatformDisplay = useMemo(() => {
+    const t = ecommHist.getTopPlatformInRange(periodDates.fromDate, periodDates.toDate);
+    if (t) return ECOMM_TOP_PLATFORM_LABELS[t.platform] || t.platform;
+    const p0 = ecomm.platformBreakdown[0];
+    return p0 ? ECOMM_TOP_PLATFORM_LABELS[p0.platform] || p0.platform : '—';
+  }, [
+    ecommHist,
+    ecomm.platformBreakdown,
+    periodDates.fromDate,
+    periodDates.toDate,
+  ]);
 
   // GA4 totals για την επιλεγμένη περίοδο (αντί για 90ήμερα totals).
   const ga4TotalsInPeriod = useMemo(() => {
@@ -285,7 +302,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     const rows = buildRoiTrendSeries(
       mergedOrganicByMonth,
       periodCampaigns as Campaign[],
-      useEshopTotals ? ecomm.monthlyRevenue : [],
+      useEshopTotals ? ecommHist.monthlyRevenue : [],
       fromYm,
       toYm,
       useEshopTotals,
@@ -307,7 +324,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     ga4OrganicEffective,
     enabledModules.ecommerce,
     ecomm.hasData,
-    ecomm.monthlyRevenue,
+    ecommHist.monthlyRevenue,
     ecommRevenueByDayRecord,
   ]);
 
@@ -781,15 +798,11 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               </div>
               <div>
                 <p className="text-[11px] text-[#6B7280] mb-0.5">Top Platform</p>
-                <p className="text-lg font-bold text-[#1A1A1A]">
-                  {ecomm.platformBreakdown[0]
-                    ? ({ shopify: 'Shopify', woocommerce: 'WooCommerce', opencart: 'OpenCart', magento: 'Magento' }[ecomm.platformBreakdown[0].platform] || ecomm.platformBreakdown[0].platform)
-                    : '—'}
-                </p>
+                <p className="text-lg font-bold text-[#1A1A1A]">{ecommTopPlatformDisplay}</p>
               </div>
               {/* Mini sparkline — φιλτραρισμένο για την επιλεγμένη περίοδο */}
               {(() => {
-                const periodDaily = ecomm.dailyRevenue.filter(
+                const periodDaily = ecommHist.dailyRevenueRows.filter(
                   (d) => d.date >= periodDates.fromDate && d.date <= periodDates.toDate
                 );
                 if (periodDaily.length <= 1) return null;
