@@ -109,6 +109,8 @@ function BrandsTab() {
   const [updatingPlan, setUpdatingPlan] = useState<string | null>(null);
   const [updatingBrandType, setUpdatingBrandType] = useState<string | null>(null);
   const [updatingModule, setUpdatingModule] = useState<string | null>(null);
+  const [updatingHistory, setUpdatingHistory] = useState<string | null>(null);
+  const [historyDrafts, setHistoryDrafts] = useState<Record<string, string>>({});
   const moduleToggleIds: ModuleId[] = ['ecommerce', 'analytics', 'competitive', 'roi', 'sales', 'accounts', 'markets', 'procurement'];
 
   useEffect(() => {
@@ -159,6 +161,25 @@ function BrandsTab() {
       console.error('Failed to update brand type:', err);
     } finally {
       setUpdatingBrandType(null);
+    }
+  };
+
+  const handleHistoryStartChange = async (brandId: string, isoDate: string) => {
+    const trimmed = (isoDate || '').trim();
+    const valid = !trimmed || /^\d{4}-\d{2}-\d{2}$/.test(trimmed);
+    if (!valid) return;
+    setUpdatingHistory(brandId);
+    try {
+      // Άδεια τιμή = remove cutoff (επιστροφή σε full history). Firestore: τίποτα να μην σταλεί ως undefined.
+      const payload: Partial<Brand> = trimmed
+        ? { historyStartDate: trimmed }
+        : { historyStartDate: '' };
+      await FirestoreService.updateDocument('brands', brandId, payload);
+      setBrands((prev) => prev.map((b) => (b.id === brandId ? { ...b, historyStartDate: trimmed || undefined } : b)));
+    } catch (err) {
+      console.error('Failed to update historyStartDate:', err);
+    } finally {
+      setUpdatingHistory(null);
     }
   };
 
@@ -324,6 +345,53 @@ function BrandsTab() {
                   <Text as="div" size="small" style={{ color: 'var(--fgColor-muted)' }}>
                     Edition matrix (Growth/Enterprise · B2C/B2B από πάνω): defaults ανά <strong>{brandKind}</strong>, με granular overrides.
                   </Text>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+                  <Text as="span" size="small" style={{ color: 'var(--fgColor-muted)' }}>
+                    History start (cutoff):
+                  </Text>
+                  <input
+                    type="date"
+                    value={historyDrafts[brand.id] ?? brand.historyStartDate ?? ''}
+                    onChange={(e) => setHistoryDrafts((prev) => ({ ...prev, [brand.id]: e.target.value }))}
+                    onBlur={(e) => {
+                      const next = e.target.value;
+                      const current = brand.historyStartDate ?? '';
+                      if (next !== current) handleHistoryStartChange(brand.id, next);
+                    }}
+                    disabled={updatingHistory === brand.id}
+                    style={{
+                      padding: '4px 8px',
+                      fontSize: 12,
+                      borderRadius: 6,
+                      border: '1px solid var(--borderColor-default, #d0d7de)',
+                      background: 'var(--bgColor-default, #fff)',
+                      color: 'var(--fgColor-default)',
+                      cursor: updatingHistory === brand.id ? 'wait' : 'text',
+                    }}
+                    title="Δεδομένα παλιότερα από αυτή τη ημερομηνία θα κρύβονται από όλες τις προβολές (e-shop, GA4, Top Products κ.λπ.). Άφησέ το κενό για πλήρες ιστορικό."
+                  />
+                  {brand.historyStartDate && (
+                    <button
+                      type="button"
+                      onClick={() => handleHistoryStartChange(brand.id, '')}
+                      disabled={updatingHistory === brand.id}
+                      style={{
+                        padding: '3px 8px',
+                        fontSize: 11,
+                        borderRadius: 6,
+                        border: '1px solid var(--borderColor-default, #d0d7de)',
+                        background: 'var(--bgColor-default, #fff)',
+                        color: 'var(--fgColor-muted)',
+                        cursor: updatingHistory === brand.id ? 'wait' : 'pointer',
+                      }}
+                    >
+                      Καθαρισμός
+                    </button>
+                  )}
+                  {updatingHistory === brand.id && (
+                    <Text as="span" size="small" style={{ color: 'var(--fgColor-muted)' }}>Saving…</Text>
+                  )}
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                   {moduleToggleIds.map((moduleId) => {

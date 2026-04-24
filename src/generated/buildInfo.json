@@ -1,10 +1,14 @@
 {
-  "version": "0.638.0",
-  "previousVersion": "0.637.0",
-  "commitHash": "34751bf",
+  "version": "0.639.0",
+  "previousVersion": "0.638.0",
+  "commitHash": "7e8e09c",
   "branch": "main",
-  "buildDate": "2026-04-24T10:00:15.705Z",
+  "buildDate": "2026-04-24T10:51:09.487Z",
   "commits": [
+    {
+      "hash": "7e8e09c",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "34751bf",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "264d446",
       "message": "feat(channels): expose Regenerate AI button in PageHeader"
-    },
-    {
-      "hash": "3f2698e",
-      "message": "chore: remove temp commit message file"
     }
   ],
   "changes": [

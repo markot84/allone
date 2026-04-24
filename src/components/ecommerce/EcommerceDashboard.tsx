@@ -43,6 +43,7 @@ import { useEcommerceSummary, type EcommerceTopProduct } from '../../hooks/useEc
 import { useMagentoPopularSearches } from '../../hooks/useMagentoPopularSearches';
 import { formatCurrencyCompact, formatNumber } from '../../utils/format';
 import { lineRevenueAndQtyForTopProducts } from '../../utils/productLineStats';
+import { getBrandHistoryStartISO } from '../../utils/brandHistoryStart';
 import type { KPICardData } from '../common/KPICard';
 import { useGlobalDate, GLOBAL_PERIOD_OPTIONS } from '../../contexts/GlobalDateContext';
 import { DateRangePicker } from '../ui/DateRangePicker';
@@ -292,8 +293,12 @@ export function EcommerceDashboard() {
   const [localDateTo,   setLocalDateTo]   = useState('');
   /** Πίνακας «Δημοφιλείς αναζητήσεις»: 10 γραμμές, υπόλοιπο με ανάπτυξη */
   const [magentoPopularExpanded, setMagentoPopularExpanded] = useState(false);
-  const effectiveFrom = localDateFrom || globalFrom;
-  const effectiveTo   = localDateTo   || globalTo;
+  // Per-brand history cutoff (π.χ. Safeblock 2025-09-01) — clamp στο read-side
+  const brandHistoryStartISO = getBrandHistoryStartISO(currentBrand);
+  const rawFrom = localDateFrom || globalFrom;
+  const rawTo   = localDateTo   || globalTo;
+  const effectiveFrom = brandHistoryStartISO && rawFrom < brandHistoryStartISO ? brandHistoryStartISO : rawFrom;
+  const effectiveTo   = rawTo;
   const hasLocalOverride = !!(localDateFrom || localDateTo);
 
   useEffect(() => {
@@ -345,6 +350,7 @@ export function EcommerceDashboard() {
     return rawOrders
       .filter((order) => {
         const day = (order.createdAt || '').slice(0, 10);
+        if (brandHistoryStartISO && day < brandHistoryStartISO) return false;
         return day >= effectiveFrom && day <= effectiveTo;
       })
       .map((order) => {
@@ -352,7 +358,7 @@ export function EcommerceDashboard() {
         return isAllDemo ? null : { ...order, total: revenue };
       })
       .filter((order): order is EcommerceRawOrder => Boolean(order));
-  }, [rawOrdersLoaded, rawOrders, filteredRecentOrdersVisible, effectiveFrom, effectiveTo]);
+  }, [rawOrdersLoaded, rawOrders, filteredRecentOrdersVisible, effectiveFrom, effectiveTo, brandHistoryStartISO]);
 
   const revenueOrdersForTables = useMemo(
     () => ordersForTables.filter((order) => !isEcommerceOrderCancelled(order.status)),
@@ -461,11 +467,10 @@ export function EcommerceDashboard() {
 
   const topProductsForTables = useMemo<TopProductRow[]>(() => {
     if (!rawOrdersLoaded) {
-      return ecomm.topProducts.map((product) => ({
-        ...product,
-        parentSku: deriveParentSku(product.sku),
-        hasDerivedParent: hasDerivedParentSku(product.sku),
-      }));
+      // Όταν φορτώνουν raw orders ή δεν υπάρχουν συνδεδεμένες πλατφόρμες → καμία fallback σε
+      // all-time `ecomm.topProducts` (παρερμηνεία για το επιλεγμένο range). Εμφανίζουμε empty
+      // και μήνυμα loading στον πίνακα.
+      return [];
     }
     const productMap = new Map<string, { name: string; revenue: number; quantity: number }>();
     for (const order of revenueOrdersForTables) {
@@ -492,7 +497,7 @@ export function EcommerceDashboard() {
         hasDerivedParent: hasDerivedParentSku(sku),
       }))
       .sort((a, b) => b.revenue - a.revenue);
-  }, [rawOrdersLoaded, revenueOrdersForTables, ecomm.topProducts]);
+  }, [rawOrdersLoaded, revenueOrdersForTables]);
 
   /** Μόνο Parent SKU: ομαδοποίηση με deriveParentSku (και απλά SKUs χωρίς suffix παραλλαγής = δικό τους parent). */
   const parentProductsForTables = useMemo<TopProductRow[]>(() => {
@@ -1206,7 +1211,11 @@ export function EcommerceDashboard() {
                 </table>
               </div>
             ) : (
-              <p className="text-sm text-[#9CA3AF] py-4 text-center">Δεν βρέθηκαν προϊόντα με τα τρέχοντα φίλτρα</p>
+              <p className="text-sm text-[#9CA3AF] py-4 text-center">
+                {rawOrdersLoading
+                  ? 'Φόρτωση παραγγελιών για το επιλεγμένο διάστημα…'
+                  : 'Δεν βρέθηκαν προϊόντα με τα τρέχοντα φίλτρα'}
+              </p>
             )}
             <div className="mt-3 flex items-center justify-between text-[11px] text-[#6B7280]">
               <span>Σύνολο: {filteredProducts.length} προϊόντα</span>

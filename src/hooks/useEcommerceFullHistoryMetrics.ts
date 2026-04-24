@@ -10,6 +10,7 @@ import {
   topPlatformInDateRange,
 } from '../services/ecommerceRawOrders';
 import { monthlyRevenueFromDailyRecord } from '../utils/roiUtils';
+import { filterByBrandHistory, getBrandHistoryStartISO, passesBrandHistory } from '../utils/brandHistoryStart';
 
 /**
  * E-shop metrics από Firestore: μετά τη φόρτωση raw orders, τα ημερήσια/μηνιαία στοιχεία
@@ -30,26 +31,45 @@ export function useEcommerceFullHistoryMetrics() {
     refetchOnWindowFocus: false,
   });
 
+  // Per-brand history cutoff (π.χ. Safeblock 2025-09-01)
+  const cutoffISO = getBrandHistoryStartISO(currentBrand);
+
+  const clampedRawOrders = useMemo(() => {
+    if (!data) return data;
+    if (!cutoffISO) return data;
+    return filterByBrandHistory(data, (o) => o.createdAt, currentBrand);
+  }, [data, cutoffISO, currentBrand]);
+
   const getTopPlatformInRange = useCallback(
     (fromDate: string, toDate: string) => {
-      if (!rawLoaded || !data) return null;
-      return topPlatformInDateRange(data, fromDate, toDate);
+      if (!rawLoaded || !clampedRawOrders) return null;
+      return topPlatformInDateRange(clampedRawOrders, fromDate, toDate);
     },
-    [rawLoaded, data]
+    [rawLoaded, clampedRawOrders]
   );
 
   return useMemo(() => {
     const fromSummary: Record<string, number> = {};
     for (const r of ecomm.dailyRevenue) {
+      if (cutoffISO && !passesBrandHistory(r.date, currentBrand)) continue;
       fromSummary[r.date] = r.revenue;
     }
+    const dailyRevenueClamped = cutoffISO
+      ? ecomm.dailyRevenue.filter((r) => passesBrandHistory(r.date, currentBrand))
+      : ecomm.dailyRevenue;
+    const ordersByDayClamped = cutoffISO
+      ? ecomm.ordersByDay.filter((r) => passesBrandHistory(r.date, currentBrand))
+      : ecomm.ordersByDay;
+    const monthlyRevenueClamped = cutoffISO
+      ? ecomm.monthlyRevenue.filter((r) => passesBrandHistory(`${r.month}-01`, currentBrand))
+      : ecomm.monthlyRevenue;
 
-    if (!rawLoaded || !data) {
+    if (!rawLoaded || !clampedRawOrders) {
       return {
         revenueByDayRecord: fromSummary,
-        dailyRevenueRows: ecomm.dailyRevenue,
-        ordersByDay: ecomm.ordersByDay,
-        monthlyRevenue: ecomm.monthlyRevenue,
+        dailyRevenueRows: dailyRevenueClamped,
+        ordersByDay: ordersByDayClamped,
+        monthlyRevenue: monthlyRevenueClamped,
         rawLoaded: false,
         rawLoading: rawLoading || isFetching,
         source: 'summary' as const,
@@ -57,7 +77,7 @@ export function useEcommerceFullHistoryMetrics() {
       };
     }
 
-    const { revenueByDay, ordersByDay: ordByDay } = aggregateRevenueOrdersFromRaw(data);
+    const { revenueByDay, ordersByDay: ordByDay } = aggregateRevenueOrdersFromRaw(clampedRawOrders);
     const dailyRevenueRows = sortDailyRevenueRows(revenueByDay);
     return {
       revenueByDayRecord: revenueByDay,
@@ -76,7 +96,9 @@ export function useEcommerceFullHistoryMetrics() {
     rawLoaded,
     rawLoading,
     isFetching,
-    data,
+    clampedRawOrders,
     getTopPlatformInRange,
+    cutoffISO,
+    currentBrand,
   ]);
 }

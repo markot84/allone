@@ -63,7 +63,7 @@ export function Card({
 }
 
 interface CardHeaderProps {
-  title: string;
+  title: ReactNode;
   subtitle?: ReactNode;
   icon?: ReactNode;
   action?: ReactNode;

@@ -24,6 +24,8 @@ import type { KPICardData } from '../common/KPICard';
 import { formatCurrency } from '../../utils/format';
 import { useGlobalDate, GLOBAL_PERIOD_OPTIONS } from '../../contexts/GlobalDateContext';
 import { DateRangePicker } from '../ui/DateRangePicker';
+import { useBrand } from '../../hooks/useBrand';
+import { getBrandHistoryStartISO } from '../../utils/brandHistoryStart';
 
 type TrafficRow = {
   channel: string;
@@ -101,8 +103,12 @@ export function GA4Analytics() {
   const { fromDate: globalFrom, toDate: globalTo, period: globalPeriod, setPeriod: setGlobalPeriod } = useGlobalDate();
   const [localDateFrom, setLocalDateFrom] = useState('');
   const [localDateTo,   setLocalDateTo]   = useState('');
-  const effectiveFrom = localDateFrom || globalFrom;
-  const effectiveTo   = localDateTo   || globalTo;
+  const { currentBrand } = useBrand();
+  const brandHistoryStartISO = getBrandHistoryStartISO(currentBrand);
+  const rawFrom = localDateFrom || globalFrom;
+  const rawTo   = localDateTo   || globalTo;
+  const effectiveFrom = brandHistoryStartISO && rawFrom < brandHistoryStartISO ? brandHistoryStartISO : rawFrom;
+  const effectiveTo   = rawTo;
   const hasLocalOverride = !!(localDateFrom || localDateTo);
 
   // Filter daily entries by effective date range
@@ -662,12 +668,21 @@ export function GA4Analytics() {
         {/* Traffic Sources Pie */}
         <Card>
           <CardHeader
-            title="Πηγές κίνησης"
+            title={
+              <span className="inline-flex items-center gap-2">
+                Πηγές κίνησης
+                {channelMixSource === 'full_sync' && (
+                  <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                    Πλήρης περίοδος συγχρονισμού
+                  </span>
+                )}
+              </span>
+            }
             subtitle={
               channelMixSource === 'daily'
                 ? `Sessions ανά Default Channel Group για ${formatDateTooltipEl(effectiveFrom)} — ${formatDateTooltipEl(effectiveTo)}. Φιλτράρεται δυναμικά από τα ημερήσια data του τελευταίου GA4 sync.`
                 : channelMixSource === 'full_sync'
-                  ? `⚠️ Δεν υπάρχουν ημερήσια ανά κανάλι στο τελευταίο sync — δείχνουμε το συνολικό διαθέσιμο ιστορικό. Κάντε νέο GA4 Sync από τις Συνδέσεις για δυναμικό φιλτράρισμα.`
+                  ? `⚠️ Δεν υπάρχουν ημερήσια ανά κανάλι στο τελευταίο sync — δείχνουμε το ΣΥΝΟΛΙΚΟ διαθέσιμο ιστορικό (αγνοεί το επιλεγμένο εύρος). Κάντε νέο GA4 Sync από τις Συνδέσεις για δυναμικό φιλτράρισμα.`
                   : `Δεν υπάρχουν δεδομένα GA4 ακόμη. Κάντε σύνδεση/sync από τις Συνδέσεις.`
             }
           />
@@ -741,10 +756,19 @@ export function GA4Analytics() {
         {/* Traffic Sources Detail Table */}
         <Card>
         <CardHeader
-          title="Ανάλυση καναλιών"
+          title={
+            <span className="inline-flex items-center gap-2">
+              Ανάλυση καναλιών
+              {channelMixSource === 'full_sync' && (
+                <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                  Πλήρης περίοδος συγχρονισμού
+                </span>
+              )}
+            </span>
+          }
           subtitle={
             channelMixSource === 'full_sync'
-              ? `⚠️ Σύνολο διαθέσιμου ιστορικού (το sync δεν είχε ημερήσια ανά κανάλι). Sessions/Conversions ίδια με GA4 Acquisition Reports για το ίδιο εύρος. Users/New users: άθροιση ημερών (το GA4 UI κάνει deduplication χρηστών — αναμένονται μικρές διαφορές).`
+              ? `⚠️ ΣΥΝΟΛΟ διαθέσιμου ιστορικού (το sync δεν είχε ημερήσια ανά κανάλι — αγνοείται το επιλεγμένο εύρος). Sessions/Conversions ίδια με GA4 Acquisition Reports για το ίδιο εύρος. Users/New users: άθροιση ημερών (το GA4 UI κάνει deduplication χρηστών — αναμένονται μικρές διαφορές).`
               : `Ίδιο εύρος με το ημερολόγιο (${formatDateTooltipEl(effectiveFrom)} — ${formatDateTooltipEl(effectiveTo)}). Sessions/Conversions ίδια με GA4 Acquisition Reports. Users/New users: άθροιση ημερών (το GA4 UI κάνει deduplication χρηστών — αναμένονται μικρές διαφορές).`
           }
         />

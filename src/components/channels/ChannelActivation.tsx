@@ -58,6 +58,7 @@ import type { TriageOrigin } from '../../hooks/useActiveStrategy';
 import { FirestoreService } from '../../services/firestore';
 import { useQueryClient } from '@tanstack/react-query';
 import { getModuleLabel, effectiveBrandTypeForModules } from '../../config/modules';
+import { getProductStrategyLabels } from '../../utils/adsFeedStrategyLabels';
 import type { ChannelRecommendation, BudgetAction } from '../../types';
 
 const COLORS = ['var(--nts-accent)', '#78716C', '#22C55E', '#8B5CF6', '#F59E0B', '#3B82F6', '#EC4899'];
@@ -542,8 +543,59 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     switch (feedType) {
       case 'Ads Feed':
       case 'Google Shopping':
-        headers = ['id', 'title', 'description', 'link', 'image_link', 'price', 'availability', 'brand', 'condition', 'google_product_category'];
-        rows = products.map(p => [p.sku || p.id, p.name || '', `${p.name || ''} - ${p.category || ''}`, `https://yoursite.com/products/${p.sku || p.id}`, '', `${formatCurrency(p.price || 0, 2)} EUR`, (p.stock_level || 0) > 0 ? 'in stock' : 'out of stock', '', 'new', p.category || '']);
+        headers = [
+          'id', 'title', 'description', 'link', 'image_link',
+          'availability', 'condition', 'price', 'sale_price',
+          'brand', 'gtin', 'mpn', 'identifier_exists',
+          'product_type', 'google_product_category', 'item_group_id',
+          'color', 'size',
+          'custom_label_0', 'custom_label_1', 'custom_label_2', 'custom_label_3', 'custom_label_4',
+        ];
+        rows = products.map(p => {
+          const labels = getProductStrategyLabels(p, activeStrategy ?? null);
+          const gtin = (p.gtin || p.barcode || '').toString();
+          const mpn = ''; // TODO: requires Magento attribute sync
+          const brandValue = p.brand || '';
+          const identifierExists = (gtin || mpn || brandValue) ? 'yes' : 'no';
+          const productType = [p.category, p.subcategory].filter(Boolean).join(' > ');
+          const inStock = (p.stock_level || 0) > 0;
+          const priceFmt = `${formatCurrency(p.price || 0, 2)} EUR`;
+          const salePrice = (typeof p.compare_at_price === 'number' && p.compare_at_price > 0 && p.compare_at_price > p.price)
+            ? `${formatCurrency(p.price, 2)} EUR`
+            : (typeof p.list_price === 'number' && p.list_price > 0 && p.list_price > p.price)
+              ? `${formatCurrency(p.price, 2)} EUR`
+              : '';
+          const basePrice = (typeof p.compare_at_price === 'number' && p.compare_at_price > p.price)
+            ? `${formatCurrency(p.compare_at_price, 2)} EUR`
+            : (typeof p.list_price === 'number' && p.list_price > p.price)
+              ? `${formatCurrency(p.list_price, 2)} EUR`
+              : priceFmt;
+          return [
+            p.sku || p.id,
+            p.name || '',
+            `${p.name || ''}${productType ? ` — ${productType}` : ''}`,
+            `https://yoursite.com/products/${p.sku || p.id}`,
+            '', // image_link (TODO: Magento sync)
+            inStock ? 'in stock' : 'out of stock',
+            'new',
+            basePrice,
+            salePrice,
+            brandValue,
+            gtin,
+            mpn,
+            identifierExists,
+            productType,
+            '', // google_product_category (TODO: mapping table)
+            '', // item_group_id (TODO: configurable parent in Magento)
+            '', // color (TODO)
+            '', // size (TODO)
+            labels.custom_label_0,
+            labels.custom_label_1,
+            labels.custom_label_2,
+            labels.custom_label_3,
+            labels.custom_label_4,
+          ];
+        });
         break;
       default:
         headers = ['SKU', 'Name', 'Category', 'Price', 'Margin %', 'Stock Level', 'Stock Capacity', 'Stock Age Days', 'Priority Tag'];
@@ -578,15 +630,19 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     (feedType: string) => {
       const slice = products.slice(0, 8);
       if (feedType === 'Ads Feed' || feedType === 'Google Shopping') {
-        const headers = ['id', 'title', 'description', 'link', 'price', 'availability'];
-        const rows = slice.map((p) => [
-          p.sku || p.id,
-          p.name || '',
-          `${p.name || ''} - ${p.category || ''}`,
-          `https://yoursite.com/products/${p.sku || p.id}`,
-          `${formatCurrency(p.price || 0, 2)} EUR`,
-          (p.stock_level || 0) > 0 ? 'in stock' : 'out of stock',
-        ]);
+        const headers = ['id', 'title', 'price', 'availability', 'brand', 'custom_label_0', 'custom_label_1'];
+        const rows = slice.map((p) => {
+          const labels = getProductStrategyLabels(p, activeStrategy ?? null);
+          return [
+            p.sku || p.id,
+            p.name || '',
+            `${formatCurrency(p.price || 0, 2)} EUR`,
+            (p.stock_level || 0) > 0 ? 'in stock' : 'out of stock',
+            p.brand || '',
+            labels.custom_label_0,
+            labels.custom_label_1,
+          ];
+        });
         return { headers, rows };
       }
       const headers = ['SKU', 'Name', 'Category', 'Price', 'Margin %', 'Stock', 'Priority'];
@@ -601,7 +657,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
       ]);
       return { headers, rows };
     },
-    [products]
+    [products, activeStrategy]
   );
 
   const hasRealStrategy = !!activeStrategy?.id && !activeStrategy.id.startsWith('default_') && !!scenarioId;
@@ -1342,6 +1398,11 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
               </div>
               <div className="space-y-2 text-sm text-[#4A4A4A]">
                 <div className="flex justify-between"><span>Products</span><span className="font-mono">{formatNumber(productsCount)}</span></div>
+                {feed === 'Ads Feed' && (
+                  <div className="text-[11px] text-[#9CA3AF] leading-snug pt-1">
+                    Google-compatible columns + <span className="font-semibold text-[var(--nts-accent)]">custom_label_0..4</span> από την ενεργή στρατηγική.
+                  </div>
+                )}
               </div>
               <div className="flex gap-2 mt-4">
                 <Button variant="ghost" size="sm" icon={<Eye size={14} />} className="flex-1" onClick={(e) => { e.stopPropagation(); setPreviewFeed(feed); }}>Προεπισκόπηση</Button>

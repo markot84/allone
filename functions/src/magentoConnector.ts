@@ -536,7 +536,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
             currency: o.order_currency_code || 'EUR',
             paymentMethod: paymentAdditionalInfo || o.payment?.method || '',
             shippingMethod: normalizeMagentoShippingDescription(o.shipping_description || ''),
-            lineItems: (o.items || []).slice(0, 50).map((li: any) => {
+            lineItems: (o.items || []).slice(0, 250).map((li: any) => {
               function pickRowTotal(): number {
                 for (const k of ['row_total', 'base_row_total'] as const) {
                   const v = li[k];
@@ -567,7 +567,8 @@ export async function fetchMagentoData(brandId: string): Promise<{
 
       hasMore = currentPage * 100 < totalCount;
       currentPage++;
-      if (currentPage > 30) break;
+      // Hard cap αυξήθηκε από 30 → 100 (10.000 παραγγελίες/sync) για brands με μεγάλο όγκο.
+      if (currentPage > 100) break;
     }
 
     if (orderItems.length > 0) {

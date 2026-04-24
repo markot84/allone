@@ -76,6 +76,13 @@ export interface Brand {
    * Χειροκίνητη τιμή στο Firestore — όταν υπάρχει, εμφανίζεται στη σελίδα Οικονομικά.
    */
   enterpriseTurnoverEUR?: number;
+  /**
+   * Προαιρετικό cutoff ιστορικότητας (ISO date YYYY-MM-DD).
+   * Δεδομένα παλαιότερα από αυτή τη ημερομηνία (orders, GA4 daily) δεν εμφανίζονται στα reads.
+   * Παράδειγμα: brand άλλαξε Magento την 2025-09-01 — `historyStartDate = "2025-09-01"`.
+   * Δεν διαγράφει τίποτα από το Firestore — απλά clamp στις προβολές.
+   */
+  historyStartDate?: string;
 }
 
 export interface UserProfile {
