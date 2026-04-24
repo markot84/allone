@@ -44,8 +44,7 @@ import { useBrand } from '../../hooks/useBrand';
 import { useSegments } from '../../hooks/useSegments';
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import { useChannelActivations } from '../../hooks/useChannelActivations';
-import { exportSegmentActionPack, exportAllSegmentActionPacks, exportStrategyPlan, exportAllSegmentCustomerLists } from '../../services/segmentActionPack';
-import { derivePredictiveMetrics } from '../../services/behavioralEngine';
+import { exportAllSegmentActionPacks, exportStrategyPlan, exportAllSegmentCustomerLists } from '../../services/segmentActionPack';
 import { getStockAgeDays } from '../../utils/productUtils';
 import { safeBrandName } from '../../services/reportExport';
 import { formatCurrency, formatNumber, formatPercent } from '../../utils/format';
@@ -58,6 +57,7 @@ import { rankSegments } from '../../utils/segmentRelevance';
 import type { TriageOrigin } from '../../hooks/useActiveStrategy';
 import { FirestoreService } from '../../services/firestore';
 import { useQueryClient } from '@tanstack/react-query';
+import { getModuleLabel, effectiveBrandTypeForModules } from '../../config/modules';
 import type { ChannelRecommendation, BudgetAction } from '../../types';
 
 const COLORS = ['var(--nts-accent)', '#78716C', '#22C55E', '#8B5CF6', '#F59E0B', '#3B82F6', '#EC4899'];
@@ -200,6 +200,7 @@ interface ChannelActivationProps {
 
 export function ChannelActivation({ onSectionChange }: ChannelActivationProps = {}) {
   const { currentBrand } = useBrand();
+  const pageTitle = getModuleLabel('channels', effectiveBrandTypeForModules(currentBrand));
   const { products, count: productsCount } = useProductSource();
   const { isLoading: campaignsLoading, hasImported: hasCampaigns } = useCampaigns();
   const { segments: rfmSegments } = useSegments();
@@ -539,13 +540,10 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     let headers: string[] = [];
     let rows: any[][] = [];
     switch (feedType) {
+      case 'Ads Feed':
       case 'Google Shopping':
         headers = ['id', 'title', 'description', 'link', 'image_link', 'price', 'availability', 'brand', 'condition', 'google_product_category'];
         rows = products.map(p => [p.sku || p.id, p.name || '', `${p.name || ''} - ${p.category || ''}`, `https://yoursite.com/products/${p.sku || p.id}`, '', `${formatCurrency(p.price || 0, 2)} EUR`, (p.stock_level || 0) > 0 ? 'in stock' : 'out of stock', '', 'new', p.category || '']);
-        break;
-      case 'Meta Catalog':
-        headers = ['id', 'title', 'description', 'availability', 'condition', 'price', 'link', 'image_link', 'brand'];
-        rows = products.map(p => [p.sku || p.id, p.name || '', `${p.name || ''} - ${p.category || ''}`, (p.stock_level || 0) > 0 ? 'in stock' : 'out of stock', 'new', `${formatCurrency(p.price || 0, 2)} EUR`, `https://yoursite.com/products/${p.sku || p.id}`, '', '']);
         break;
       default:
         headers = ['SKU', 'Name', 'Category', 'Price', 'Margin %', 'Stock Level', 'Stock Capacity', 'Stock Age Days', 'Priority Tag'];
@@ -579,7 +577,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   const getFeedPreviewTable = useCallback(
     (feedType: string) => {
       const slice = products.slice(0, 8);
-      if (feedType === 'Google Shopping') {
+      if (feedType === 'Ads Feed' || feedType === 'Google Shopping') {
         const headers = ['id', 'title', 'description', 'link', 'price', 'availability'];
         const rows = slice.map((p) => [
           p.sku || p.id,
@@ -588,17 +586,6 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
           `https://yoursite.com/products/${p.sku || p.id}`,
           `${formatCurrency(p.price || 0, 2)} EUR`,
           (p.stock_level || 0) > 0 ? 'in stock' : 'out of stock',
-        ]);
-        return { headers, rows };
-      }
-      if (feedType === 'Meta Catalog') {
-        const headers = ['id', 'title', 'availability', 'price', 'link'];
-        const rows = slice.map((p) => [
-          p.sku || p.id,
-          p.name || '',
-          (p.stock_level || 0) > 0 ? 'in stock' : 'out of stock',
-          `${formatCurrency(p.price || 0, 2)} EUR`,
-          `https://yoursite.com/products/${p.sku || p.id}`,
         ]);
         return { headers, rows };
       }
@@ -636,7 +623,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     return (
       <div className="space-y-6">
         <PageHeader
-          title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Ενεργοποίηση καναλιών</h2>}
+          title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">{pageTitle}</h2>}
           description={
             <p className="text-sm text-[#4A4A4A] sm:text-base">Μίξη καναλιών με AI βάσει εμπορικής στρατηγικής</p>
           }
@@ -665,7 +652,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     <div className="space-y-6">
       <PageHeader
         toolbarAriaLabel="Channel activation"
-        title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Ενεργοποίηση καναλιών</h2>}
+        title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">{pageTitle}</h2>}
         description={
           <p className="text-[#4A4A4A]">
             <span className="font-medium text-[#1A1A1A]">{strategyName}</span>
@@ -1345,9 +1332,9 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
 
       {/* Feed Generation */}
       <Card padding="lg">
-        <CardHeader title="Δημιουργία feeds" subtitle="Προεπισκόπηση και εξαγωγή product feeds" icon={<Settings size={20} className="text-[var(--nts-accent)]" />} />
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {['Google Shopping', 'Meta Catalog', 'Email Feed', 'Display Feed'].map((feed, index) => (
+        <CardHeader title="Campaign Feeds" subtitle="Προεπισκόπηση και εξαγωγή product feeds" icon={<Settings size={20} className="text-[var(--nts-accent)]" />} />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {['Ads Feed', 'Email Feed'].map((feed, index) => (
             <motion.div key={feed} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.1 }} className="p-4 border border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:shadow-md transition-all cursor-pointer">
               <div className="flex items-center justify-between mb-3">
                 <h4 className="font-medium text-[#1A1A1A]">{feed}</h4>
@@ -1497,11 +1484,11 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                 }
               />
               <div className="p-6 space-y-3">
-                <button onClick={() => { ['Google Shopping', 'Meta Catalog', 'Email Feed', 'Display Feed'].forEach((f, i) => { setTimeout(() => exportFeed(f, 'xlsx'), i * 500); }); setShowExportAllModal(false); toast.success('Export όλων των feeds ξεκίνησε'); }} className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group">
+                <button onClick={() => { ['Ads Feed', 'Email Feed'].forEach((f, i) => { setTimeout(() => exportFeed(f, 'xlsx'), i * 500); }); setShowExportAllModal(false); toast.success('Export όλων των feeds ξεκίνησε'); }} className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group">
                   <div className="p-3 bg-[#22C55E]/10 rounded-lg"><FileSpreadsheet size={24} className="text-[#22C55E]" /></div>
                   <div className="flex-1"><h3 className="font-semibold text-[#1A1A1A]">Excel (.xlsx)</h3><p className="text-xs text-[#4A4A4A]">Εξαγωγή όλων των feeds ως Excel</p></div>
                 </button>
-                <button onClick={() => { ['Google Shopping', 'Meta Catalog', 'Email Feed', 'Display Feed'].forEach((f, i) => { setTimeout(() => exportFeed(f, 'csv'), i * 500); }); setShowExportAllModal(false); toast.success('Export όλων των feeds ξεκίνησε'); }} className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group">
+                <button onClick={() => { ['Ads Feed', 'Email Feed'].forEach((f, i) => { setTimeout(() => exportFeed(f, 'csv'), i * 500); }); setShowExportAllModal(false); toast.success('Export όλων των feeds ξεκίνησε'); }} className="w-full p-4 border-2 border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:bg-[var(--nts-light-gray)] transition-all text-left flex items-center gap-4 group">
                   <div className="p-3 bg-[#F5F5F5] rounded-lg"><FileText size={24} className="text-[#4A4A4A]" /></div>
                   <div className="flex-1"><h3 className="font-semibold text-[#1A1A1A]">CSV (.csv)</h3><p className="text-xs text-[#4A4A4A]">Εξαγωγή όλων των feeds ως CSV</p></div>
                 </button>
@@ -1575,18 +1562,7 @@ function DownloadsHub({ segments, brandName, channelRecommendation, activeStrate
     setExporting(null);
   };
 
-  const handleExportSegment = async (seg: import('../../types').RFMSegment, fmt: Fmt = 'xlsx') => {
-    setExporting(seg.id);
-    try {
-      await exportSegmentActionPack(seg, brandName, channelRecommendation, fmt);
-      toast.success(`Action Pack: ${seg.name} (.${fmt})`);
-    } catch { toast.error('Export failed'); }
-    setExporting(null);
-  };
-
   if (!hasSegments) return null;
-
-  const topSegments = segments.slice(0, 6);
 
   return (
     <Card padding="lg">
@@ -1670,43 +1646,6 @@ function DownloadsHub({ segments, brandName, channelRecommendation, activeStrate
         </div>
       )}
 
-      {/* Per-segment quick downloads */}
-      <div>
-        <p className="text-xs font-semibold text-[#9CA3AF] uppercase tracking-wider mb-2">Per Segment</p>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
-          {topSegments.map(seg => {
-            const predictive = derivePredictiveMetrics(seg);
-            return (
-              <div
-                key={seg.id}
-                className="p-3 rounded-xl border border-[#E5E5E5] hover:border-[var(--nts-accent)] hover:shadow-sm transition-all text-left disabled:opacity-50"
-              >
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: seg.color }} />
-                  <span className="text-xs font-semibold text-[#1A1A1A] truncate">{seg.name}</span>
-                </div>
-                <div className="space-y-0.5 text-[10px] text-[#9CA3AF]">
-                  <div>{formatNumber(seg.count)} customers</div>
-                  <div>Churn: {predictive.churn_risk}%</div>
-                </div>
-                <div className="mt-2 flex gap-1">
-                  <button onClick={() => handleExportSegment(seg, 'xlsx')} disabled={exporting === seg.id} className="flex-1 flex items-center justify-center gap-1 px-1.5 py-1 text-[10px] font-medium rounded border border-[#E5E5E5] hover:border-[var(--nts-accent)] transition-colors disabled:opacity-50">
-                    <FileSpreadsheet size={10} className="text-[#22C55E]" /> xlsx
-                  </button>
-                  <button onClick={() => handleExportSegment(seg, 'csv')} disabled={exporting === seg.id} className="flex-1 flex items-center justify-center gap-1 px-1.5 py-1 text-[10px] font-medium rounded border border-[#E5E5E5] hover:border-[var(--nts-accent)] transition-colors disabled:opacity-50">
-                    <FileText size={10} className="text-[#9CA3AF]" /> csv
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        {segments.length > 6 && (
-          <p className="text-xs text-[#9CA3AF] mt-2 text-center">
-            +{segments.length - 6} segments · χρησιμοποιήστε "All Segments" για πλήρες export
-          </p>
-        )}
-      </div>
     </Card>
   );
 }
