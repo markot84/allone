@@ -5,7 +5,7 @@
  * 1. User enters e-shop URL + Access Token (from Admin → System → Integrations)
  * 2. We validate via GET /rest/V1/store/storeConfigs
  * 3. Credentials stored in Firestore (connectors/{brandId}.magento)
- * 4. Sync fetches orders (3 years) + products → Firestore (no PII stored)
+ * 4. Sync fetches orders (3 years) + products → Firestore
  *
  * Compatible with Magento 2.x / Adobe Commerce REST API.
  */
@@ -14,6 +14,7 @@ import * as admin from 'firebase-admin';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { encryptToken, decryptToken } from './tokenCrypto';
+import { getCustomerEmailIdentity } from './customerIdentity';
 
 let _db: Firestore | null = null;
 
@@ -592,7 +593,8 @@ export async function testMagentoConnection(
 
 /**
  * Fetch Magento orders (last 3 years) + products and store in Firestore.
- * No PII is stored (no customer name/email/address).
+ * Customer email is stored for audience exports, while `customerEmailHash` is used
+ * for analytics/matching.
  */
 export async function fetchMagentoData(brandId: string): Promise<{
   success: boolean;
@@ -626,7 +628,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
   let totalImported = 0;
 
   try {
-    // ── Orders (last 3 years, no PII) ──────────────────────────────────
+    // ── Orders (last 3 years) ──────────────────────────────────────────
     const since = new Date();
     since.setUTCFullYear(since.getUTCFullYear() - 3);
     const sinceStr = since.toISOString().split('T')[0]; // YYYY-MM-DD
@@ -672,12 +674,16 @@ export async function fetchMagentoData(brandId: string): Promise<{
           o.customer_id != null && String(o.customer_id) !== '0' && String(o.customer_id) !== ''
             ? String(o.customer_id)
             : '';
+        const emailIdentity = getCustomerEmailIdentity(
+          o.customer_email || o.billing_address?.email || o.extension_attributes?.customer_email
+        );
         orderItems.push({
           id: `mag_${o.entity_id}`,
           data: {
             orderId: String(o.entity_id || ''),
             incrementId: o.increment_id || '',
             ...(magCid ? { customerId: magCid } : {}),
+            ...emailIdentity,
             createdAt: o.created_at || '',
             updatedAt: o.updated_at || '',
             status: o.status || '',

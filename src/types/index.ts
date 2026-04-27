@@ -205,6 +205,15 @@ export interface PriceBenchmarkStrategyScope {
 }
 
 // RFM Types
+export interface SegmentCustomer {
+  customerId: string;
+  email?: string;
+  recency?: number;
+  frequency?: number;
+  monetary?: number;
+  rfmScore?: string;
+}
+
 export interface RFMSegment {
   id: string;
   name: string;
@@ -217,6 +226,8 @@ export interface RFMSegment {
   icon: string;
   behavioral?: BehavioralProfile;
   predictive?: PredictiveMetrics;
+  /** Customer-level rows for derived e-commerce segments; used for Ads/Email audience exports. */
+  customers?: SegmentCustomer[];
 }
 
 export interface BehavioralProfile {

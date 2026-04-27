@@ -5,7 +5,7 @@
  * 1. User enters e-shop URL + API username + API key
  * 2. We login via POST /index.php?route=api/login to get a session token
  * 3. Credentials stored in Firestore (connectors/{brandId}.opencart)
- * 4. Sync fetches orders (3 years) + products → Firestore (no PII stored)
+ * 4. Sync fetches orders (3 years) + products → Firestore
  *
  * Compatible with OpenCart 3.x+ REST API.
  * For e-shops using third-party REST extensions, the token header approach is also supported.
@@ -15,6 +15,7 @@ import * as admin from 'firebase-admin';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { encryptToken, decryptToken } from './tokenCrypto';
+import { getCustomerEmailIdentity } from './customerIdentity';
 
 let _db: Firestore | null = null;
 
@@ -146,7 +147,8 @@ async function refreshApiToken(storeUrl: string, apiUsername: string, apiKey: st
 
 /**
  * Fetch OpenCart orders (last 3 years) + products and store in Firestore.
- * No PII is stored.
+ * Customer email is stored for audience exports, while `customerEmailHash` is used
+ * for analytics/matching.
  */
 export async function fetchOpenCartData(brandId: string): Promise<{
   success: boolean;
@@ -219,11 +221,15 @@ export async function fetchOpenCartData(brandId: string): Promise<{
             : o.customerId != null && String(o.customerId) !== '0'
               ? String(o.customerId)
               : '';
+        const emailIdentity = getCustomerEmailIdentity(
+          o.email || o.customer_email || o.customerEmail || o.payment_email || o.billing_email
+        );
         orderItems.push({
           id: `oc_${o.order_id || o.orderId}`,
           data: {
             orderId: String(o.order_id || o.orderId || ''),
             ...(ocCid ? { customerId: ocCid } : {}),
+            ...emailIdentity,
             createdAt: dateAdded,
             status: o.order_status || o.status || '',
             total: parseFloat(o.total || '0'),

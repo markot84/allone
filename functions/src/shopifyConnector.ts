@@ -5,7 +5,7 @@
  * 1. User enters shop domain → redirected to Shopify OAuth
  * 2. Shopify redirects back with auth code → exchanged for permanent access token
  * 3. Token stored in Firestore (connectors/{brandId}.shopify)
- * 4. Sync fetches orders (3 years) + products → Firestore (no PII stored)
+ * 4. Sync fetches orders (3 years) + products → Firestore
  *
  * Required secrets:
  * - SHOPIFY_API_KEY
@@ -16,6 +16,7 @@ import * as admin from 'firebase-admin';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { encryptToken, decryptToken } from './tokenCrypto';
+import { getCustomerEmailIdentity } from './customerIdentity';
 
 let _db: Firestore | null = null;
 
@@ -177,7 +178,7 @@ export async function fetchShopifyData(brandId: string): Promise<{
   let totalImported = 0;
 
   try {
-    // ── Orders (last 3 years, no PII) ──────────────────────────────────
+    // ── Orders (last 3 years) ──────────────────────────────────────────
     const since = new Date();
     since.setUTCFullYear(since.getUTCFullYear() - 3);
 
@@ -191,7 +192,7 @@ export async function fetchShopifyData(brandId: string): Promise<{
         created_at_min: since.toISOString(),
         limit: '250',
         page: String(orderPage),
-        fields: 'id,name,created_at,updated_at,financial_status,fulfillment_status,total_price,subtotal_price,total_tax,total_discounts,currency,line_items,tags,customer_id',
+        fields: 'id,name,email,contact_email,created_at,updated_at,financial_status,fulfillment_status,total_price,subtotal_price,total_tax,total_discounts,currency,line_items,tags,customer_id',
       });
 
       const res = await fetch(`${baseUrl}/orders.json?${params}`, { headers });
@@ -206,12 +207,14 @@ export async function fetchShopifyData(brandId: string): Promise<{
 
       for (const o of orders) {
         const shopifyCid = o.customer_id != null && o.customer_id !== '' ? String(o.customer_id) : '';
+        const emailIdentity = getCustomerEmailIdentity(o.email || o.contact_email);
         batchItems.push({
           id: `shopify_${o.id}`,
           data: {
             orderId: String(o.id),
             orderName: o.name || '',
             ...(shopifyCid ? { customerId: shopifyCid } : {}),
+            ...emailIdentity,
             createdAt: o.created_at || '',
             updatedAt: o.updated_at || '',
             financialStatus: o.financial_status || '',

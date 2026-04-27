@@ -419,8 +419,9 @@ export async function exportSegmentCustomerList(
   brandName?: string,
   format: ExportFormat = 'csv',
 ): Promise<{ count: number }> {
-  const customers = await SegmentCustomersService.getForSegment(brandId, segment.id);
-  if (customers.length === 0) throw new Error('Δεν υπάρχουν customer-level δεδομένα. Κάντε import αρχείο με CustomerID + RFM_Segment.');
+  const importedCustomers = await SegmentCustomersService.getForSegment(brandId, segment.id);
+  const customers = importedCustomers.length > 0 ? importedCustomers : segment.customers ?? [];
+  if (customers.length === 0) throw new Error('Δεν υπάρχουν customer-level δεδομένα με email/customer id για αυτό το segment.');
 
   const date = new Date().toISOString().split('T')[0];
   const brand = safeBrandName(brandName);
@@ -466,7 +467,10 @@ export async function exportAllSegmentCustomerLists(
   format: ExportFormat = 'csv',
 ): Promise<{ count: number }> {
   const allCustomers = await SegmentCustomersService.getAllBySegment(brandId);
-  if (allCustomers.size === 0) throw new Error('Δεν υπάρχουν customer-level δεδομένα. Κάντε import αρχείο με CustomerID + RFM_Segment.');
+  const hasDerivedCustomers = segments.some((seg) => (seg.customers?.length ?? 0) > 0);
+  if (allCustomers.size === 0 && !hasDerivedCustomers) {
+    throw new Error('Δεν υπάρχουν customer-level δεδομένα με email/customer id για export.');
+  }
 
   const date = new Date().toISOString().split('T')[0];
   const brand = safeBrandName(brandName);
@@ -477,7 +481,8 @@ export async function exportAllSegmentCustomerLists(
   if (format === 'csv') {
     const allRows: (string | number)[][] = [headers];
     for (const seg of segments) {
-      const customers = allCustomers.get(seg.id) || [];
+      const importedCustomers = allCustomers.get(seg.id) || [];
+      const customers = importedCustomers.length > 0 ? importedCustomers : seg.customers ?? [];
       totalCount += customers.length;
       for (const c of customers) {
         allRows.push([c.customerId, c.email || '', seg.name, c.recency ?? '', c.frequency ?? '', c.monetary ?? '', c.rfmScore || '']);
@@ -488,7 +493,8 @@ export async function exportAllSegmentCustomerLists(
     const XLSX = await import('xlsx');
     const wb = XLSX.utils.book_new();
     for (const seg of segments) {
-      const customers = allCustomers.get(seg.id) || [];
+      const importedCustomers = allCustomers.get(seg.id) || [];
+      const customers = importedCustomers.length > 0 ? importedCustomers : seg.customers ?? [];
       if (customers.length === 0) continue;
       totalCount += customers.length;
       const rows = customers.map(c => [c.customerId, c.email || '', seg.name, c.recency ?? '', c.frequency ?? '', c.monetary ?? '', c.rfmScore || '']);

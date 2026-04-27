@@ -7,6 +7,7 @@ import { FirestoreService } from './firestore';
 
 export type EcommerceRawLineItem = {
   sku?: string;
+  productId?: string;
   title?: string;
   name?: string;
   quantity?: number;
@@ -30,10 +31,12 @@ export type EcommerceRawOrder = {
   paymentMethod?: string;
   shippingMethod?: string;
   /**
-   * Εσωτερικό id πελάτη από το κατάστημα (όχι email) — χρειάζεται για RFM από raw παραγγελίες.
-   * Κενό = guest / δεν συγχρονίστηκε id.
+   * Stable key για RFM από raw παραγγελίες.
+   * Προτιμά hashed email (cross-platform/guest matching), αλλιώς platform customer id.
    */
   customerKey?: string;
+  customerEmailHash?: string;
+  customerEmail?: string;
 };
 
 export const ECOMMERCE_ORDER_COLLECTIONS: Record<string, string> = {
@@ -98,6 +101,12 @@ function normalizeLineItemFromFirestore(raw: unknown): EcommerceRawLineItem {
 
   return {
     sku: o.sku != null ? String(o.sku) : undefined,
+    productId:
+      o.productId != null
+        ? String(o.productId)
+        : o.product_id != null
+          ? String(o.product_id)
+          : undefined,
     title: o.title != null ? String(o.title) : undefined,
     name: o.name != null ? String(o.name) : undefined,
     quantity: parseOptionalNumber(o.quantity ?? o.qty_ordered) ?? 0,
@@ -128,16 +137,22 @@ function normalizeRawOrder(platform: string, row: Record<string, unknown>): Ecom
     ? rawItems.map(normalizeLineItemFromFirestore)
     : [];
 
-  const rawCustomer =
-    row.customerKey ??
-    row.customer_key ??
-    row.customerId ??
-    row.customer_id;
   let customerKey = '';
-  const s = rawCustomer != null ? String(rawCustomer).trim() : '';
-  if (s !== '' && s !== '0' && s !== 'null' && s !== 'undefined') {
-    customerKey = `${platform}:${s}`;
+  const emailHash = String(row.customerEmailHash ?? row.customer_email_hash ?? '').trim().toLowerCase();
+  if (emailHash) {
+    customerKey = `email:${emailHash}`;
+  } else {
+    const rawCustomer =
+      row.customerKey ??
+      row.customer_key ??
+      row.customerId ??
+      row.customer_id;
+    const s = rawCustomer != null ? String(rawCustomer).trim() : '';
+    if (s !== '' && s !== '0' && s !== 'null' && s !== 'undefined') {
+      customerKey = `${platform}:${s}`;
+    }
   }
+  const customerEmail = String(row.customerEmail ?? row.customer_email ?? '').trim().toLowerCase();
 
   return {
     orderId: String(row.orderId || row.incrementId || row.id || ''),
@@ -151,6 +166,8 @@ function normalizeRawOrder(platform: string, row: Record<string, unknown>): Ecom
     paymentMethod: String(row.paymentMethod || row.payment_method || ''),
     shippingMethod: String(row.shippingMethod || row.shipping_method || row.shippingDescription || ''),
     ...(customerKey ? { customerKey } : {}),
+    ...(emailHash ? { customerEmailHash: emailHash } : {}),
+    ...(customerEmail ? { customerEmail } : {}),
   };
 }
 

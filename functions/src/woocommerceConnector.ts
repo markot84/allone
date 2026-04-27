@@ -5,7 +5,7 @@
  * 1. User enters e-shop URL + Consumer Key + Consumer Secret
  * 2. We validate with a test API call (GET /wp-json/wc/v3/system_status)
  * 3. Credentials stored in Firestore (connectors/{brandId}.woocommerce)
- * 4. Sync fetches orders (3 years) + products → Firestore (no PII stored)
+ * 4. Sync fetches orders (3 years) + products → Firestore
  *
  * No OAuth redirect needed — WooCommerce uses REST API keys.
  */
@@ -14,6 +14,7 @@ import * as admin from 'firebase-admin';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { encryptToken, decryptToken } from './tokenCrypto';
+import { getCustomerEmailIdentity } from './customerIdentity';
 
 let _db: Firestore | null = null;
 
@@ -111,7 +112,8 @@ export async function testWooConnection(
 
 /**
  * Fetch WooCommerce orders (last 3 years) + products and store in Firestore.
- * Only aggregated/anonymized order data is stored (no PII).
+ * Fetch WooCommerce orders + products. Customer email is stored for audience exports,
+ * while `customerEmailHash` is used for analytics/matching.
  */
 export async function fetchWooCommerceData(brandId: string): Promise<{
   success: boolean;
@@ -167,12 +169,14 @@ export async function fetchWooCommerceData(brandId: string): Promise<{
 
       for (const o of orders) {
         const wooCid = o.customer_id != null && Number(o.customer_id) > 0 ? String(o.customer_id) : '';
+        const emailIdentity = getCustomerEmailIdentity(o.billing?.email || o.shipping?.email);
         orderItems.push({
           id: `woo_${o.id}`,
           data: {
             orderId: String(o.id),
             orderNumber: o.number || '',
             ...(wooCid ? { customerId: wooCid } : {}),
+            ...emailIdentity,
             createdAt: o.date_created || '',
             updatedAt: o.date_modified || '',
             status: o.status || '',

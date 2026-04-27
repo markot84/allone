@@ -1,10 +1,14 @@
 {
-  "version": "0.646.0",
-  "previousVersion": "0.645.0",
-  "commitHash": "8483ea0",
+  "version": "0.648.0",
+  "previousVersion": "0.647.0",
+  "commitHash": "2769f31",
   "branch": "main",
-  "buildDate": "2026-04-27T11:14:41.933Z",
+  "buildDate": "2026-04-27T13:23:38.286Z",
   "commits": [
+    {
+      "hash": "2769f31",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "8483ea0",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "591d4d2",
       "message": "fix(channels): forbid segment names in customer-facing campaign messages"
-    },
-    {
-      "hash": "5cf9cf1",
-      "message": "style(channels): rename funnel stages to EN + distinct hue palette"
     }
   ],
   "changes": [
