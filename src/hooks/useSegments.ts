@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { SegmentsService } from '../services/firestore';
+import { SegmentCustomersService, SegmentsService } from '../services/firestore';
 import { mergeDuplicateSegmentRowsByName } from '../utils/mergeDuplicateSegments';
 import { getSegmentColor } from '../utils/segmentColors';
 import { useBrand } from './useBrand';
@@ -40,6 +40,41 @@ export interface SegmentDataCoverage {
   marketingPolicy: string;
 }
 
+type SegmentCustomerSummary = {
+  segmentName?: string;
+  count: number;
+  monetary: number;
+};
+
+function titleFromSegmentId(segmentId: string): string {
+  return segmentId
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function rebuildSegmentsFromCustomerSummaries(summariesBySegment: Map<string, SegmentCustomerSummary>): RFMSegment[] {
+  const entries = [...summariesBySegment.entries()].filter(([, summary]) => summary.count > 0);
+  const totalCount = entries.reduce((sum, [, summary]) => sum + summary.count, 0);
+  const totalMonetary = entries.reduce((sum, [, summary]) => sum + summary.monetary, 0);
+
+  return entries.map(([segmentId, summary]) => {
+    const name = summary.segmentName || titleFromSegmentId(segmentId);
+    return {
+      id: segmentId,
+      name,
+      rfm_score: '',
+      count: summary.count,
+      percentage: totalCount > 0 ? Math.round((summary.count / totalCount) * 10000) / 100 : 0,
+      revenue_share: totalMonetary > 0 ? Math.round((summary.monetary / totalMonetary) * 10000) / 100 : 0,
+      color: '#6B7280',
+      description: '',
+      icon: '',
+    } as RFMSegment;
+  });
+}
+
 export function useSegments() {
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
@@ -65,6 +100,14 @@ export function useSegments() {
     queryFn: () => (brandId ? SegmentsService.getAll(brandId) : Promise.resolve([])) as Promise<RFMSegment[]>,
   });
 
+  const { data: segmentCustomerSummaries = new Map<string, SegmentCustomerSummary>(), isPending: segmentCustomersPending } = useQuery({
+    queryKey: ['segmentCustomerSummaries', brandId],
+    queryFn: () => (brandId ? SegmentCustomersService.getSummariesBySegment(brandId) : Promise.resolve(new Map())),
+    enabled: !!brandId && sourcePref === 'external',
+    staleTime: 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+  });
+
   const ordersQueryEnabled = !!brandId && ecomm.connectedPlatforms.length > 0;
   const { data: rawOrders = [], isPending: ordersPending } = useQuery({
     queryKey: ['ecommerceOrdersRaw', brandId, platformsKey],
@@ -78,7 +121,20 @@ export function useSegments() {
   const orderRfm = useMemo(() => computeRfmSegmentsFromEcommerceOrders(rawOrders), [rawOrders]);
 
   const canComputeFromOrders = orderRfm.canCompute;
-  const importSegmentsAvailable = (firestoreSegments?.length ?? 0) > 0;
+  const rebuiltCustomerSegments = useMemo(
+    () => rebuildSegmentsFromCustomerSummaries(segmentCustomerSummaries),
+    [segmentCustomerSummaries]
+  );
+  const importSegmentsAvailable = (firestoreSegments?.length ?? 0) > 0 || rebuiltCustomerSegments.length > 0;
+
+  const externalSegments = useMemo(() => {
+    const raw = (brandId ? (firestoreSegments ?? []) : []) as RFMSegment[];
+    const cleaned = raw.filter((s): s is RFMSegment => s != null && typeof s.id === 'string');
+    const merged = mergeDuplicateSegmentRowsByName(cleaned);
+    const importedTotal = merged.reduce((sum, s) => sum + (s.count ?? 0), 0) || 0;
+    const rebuiltTotal = rebuiltCustomerSegments.reduce((sum, s) => sum + (s.count ?? 0), 0) || 0;
+    return rebuiltTotal > importedTotal ? rebuiltCustomerSegments : merged;
+  }, [brandId, firestoreSegments, rebuiltCustomerSegments]);
 
   const resolvedSource: SegmentsDataSource = useMemo(() => {
     if (sourcePref === 'external') return importSegmentsAvailable ? 'import' : canComputeFromOrders ? 'ecommerce' : 'none';
@@ -90,14 +146,12 @@ export function useSegments() {
     if (resolvedSource === 'ecommerce') {
       base = orderRfm.segments;
     } else if (resolvedSource === 'import') {
-      const raw = (brandId ? (firestoreSegments ?? []) : []) as RFMSegment[];
-      base = raw.filter((s): s is RFMSegment => s != null && typeof s.id === 'string');
-      base = mergeDuplicateSegmentRowsByName(base);
+      base = externalSegments;
     } else {
       base = [];
     }
     return base.map((s) => ({ ...s, color: getSegmentColor(s) }));
-  }, [resolvedSource, orderRfm.segments, firestoreSegments, brandId]);
+  }, [resolvedSource, orderRfm.segments, externalSegments]);
 
   const totalCustomers = useMemo(() => {
     if (resolvedSource === 'ecommerce') return orderRfm.totalCustomers;
@@ -106,12 +160,9 @@ export function useSegments() {
 
   const externalTotalCustomers = useMemo(
     () => {
-      const raw = (brandId ? (firestoreSegments ?? []) : []) as RFMSegment[];
-      const cleaned = raw.filter((s): s is RFMSegment => s != null && typeof s.id === 'string');
-      const merged = mergeDuplicateSegmentRowsByName(cleaned);
-      return merged.reduce((sum, s) => sum + (s.count ?? 0), 0) || 0;
+      return externalSegments.reduce((sum, s) => sum + (s.count ?? 0), 0) || 0;
     },
-    [brandId, firestoreSegments]
+    [externalSegments]
   );
 
   const dataCoverage = useMemo<SegmentDataCoverage>(() => {
@@ -142,7 +193,7 @@ export function useSegments() {
   }, [sourcePref, resolvedSource, orderRfm.totalCustomers, externalTotalCustomers]);
 
   const isLoading =
-    fsPending || (ordersQueryEnabled && ordersPending);
+    fsPending || (sourcePref === 'external' && segmentCustomersPending) || (ordersQueryEnabled && ordersPending);
 
   const hasImported =
     resolvedSource === 'ecommerce' ? orderRfm.totalCustomers > 0 : importSegmentsAvailable;

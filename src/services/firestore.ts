@@ -383,17 +383,17 @@ export const SegmentsService = {
 };
 
 export const SegmentCustomersService = {
-  async getForSegment(brandId: string, segmentId: string): Promise<{ customerId: string; email?: string; recency?: number; frequency?: number; monetary?: number; rfmScore?: string }[]> {
+  async getForSegment(brandId: string, segmentId: string): Promise<{ customerId: string; email?: string; segmentName?: string; recency?: number; frequency?: number; monetary?: number; rfmScore?: string }[]> {
     const docs = await FirestoreService.getDocuments<{
       segmentId: string;
-      customers: { customerId: string; email?: string; recency?: number; frequency?: number; monetary?: number; rfmScore?: string }[];
+      customers: { customerId: string; email?: string; segmentName?: string; recency?: number; frequency?: number; monetary?: number; rfmScore?: string }[];
     }>('segment_customers', [where('segmentId', '==', segmentId)], brandId);
     return docs.flatMap(d => d.customers || []);
   },
-  async getAllBySegment(brandId: string): Promise<Map<string, { customerId: string; email?: string; recency?: number; frequency?: number; monetary?: number; rfmScore?: string }[]>> {
+  async getAllBySegment(brandId: string): Promise<Map<string, { customerId: string; email?: string; segmentName?: string; recency?: number; frequency?: number; monetary?: number; rfmScore?: string }[]>> {
     const docs = await FirestoreService.getDocuments<{
       segmentId: string;
-      customers: { customerId: string; email?: string; recency?: number; frequency?: number; monetary?: number; rfmScore?: string }[];
+      customers: { customerId: string; email?: string; segmentName?: string; recency?: number; frequency?: number; monetary?: number; rfmScore?: string }[];
     }>('segment_customers', [], brandId);
     const map = new Map<string, typeof docs[0]['customers']>();
     for (const d of docs) {
@@ -402,6 +402,34 @@ export const SegmentCustomersService = {
       map.set(d.segmentId, existing);
     }
     return map;
+  },
+  async getSummariesBySegment(brandId: string): Promise<Map<string, { segmentName?: string; count: number; monetary: number }>> {
+    const docs = await FirestoreService.getDocuments<{
+      segmentId: string;
+      segmentName?: string;
+      totalInSegment?: number;
+      customers: { customerId: string; email?: string; segmentName?: string; monetary?: number }[];
+    }>('segment_customers', [], brandId);
+    const map = new Map<string, { segmentName?: string; count: number; monetary: number; fallbackCount: number }>();
+    for (const d of docs) {
+      if (!d.segmentId) continue;
+      const existing = map.get(d.segmentId) || { segmentName: d.segmentName, count: 0, monetary: 0, fallbackCount: 0 };
+      existing.segmentName = existing.segmentName || d.segmentName || d.customers?.find((c) => c.segmentName)?.segmentName;
+      existing.count = Math.max(existing.count, d.totalInSegment ?? 0);
+      existing.fallbackCount += d.customers?.length ?? 0;
+      existing.monetary += (d.customers || []).reduce((sum, c) => sum + (c.monetary ?? 0), 0);
+      map.set(d.segmentId, existing);
+    }
+    return new Map(
+      [...map.entries()].map(([segmentId, value]) => [
+        segmentId,
+        {
+          segmentName: value.segmentName,
+          count: value.count || value.fallbackCount,
+          monetary: value.monetary,
+        },
+      ])
+    );
   },
   hasData: async (brandId: string): Promise<boolean> => {
     const docs = await FirestoreService.getDocuments('segment_customers', [], brandId);

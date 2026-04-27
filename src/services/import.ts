@@ -2010,13 +2010,14 @@ export async function importFile(
             const CHUNK = 500;
             for (let i = 0; i < customers.length; i += CHUNK) {
               const slice = customers.slice(i, i + CHUNK);
-              const docId = i === 0 ? segId : `${segId}_${Math.floor(i / CHUNK)}`;
+              const chunkIndex = Math.floor(i / CHUNK);
+              const docId = sanitizeDocId(`${brandId}_${segId}_${chunkIndex}`);
               await FirestoreService.setDocument('segment_customers', docId, {
                 segmentId: segId,
                 segmentName: slice[0]?.segmentName || segKey,
                 customers: slice,
                 totalInSegment: customers.length,
-                chunkIndex: Math.floor(i / CHUNK),
+                chunkIndex,
                 brandId,
               } as Record<string, unknown>);
             }
@@ -2044,7 +2045,7 @@ export async function importFile(
         let segRowsProcessed = 0;
         await runWithConcurrency(segmentChunks, BATCH_CONCURRENCY, async (chunkItems, batchIndex) => {
           const batchItems = chunkItems.map((s) => ({
-            id: s.id,
+            id: sanitizeDocId(`${brandId}_${s.id}`),
             data: { ...s, createdAt: Timestamp.now() } as Record<string, unknown>,
           }));
           await FirestoreService.batchSet(segColl, batchItems, brandId);

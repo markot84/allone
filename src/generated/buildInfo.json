@@ -1,10 +1,14 @@
 {
-  "version": "0.650.0",
-  "previousVersion": "0.649.0",
-  "commitHash": "4733ca6",
+  "version": "0.651.0",
+  "previousVersion": "0.650.0",
+  "commitHash": "4ff146c",
   "branch": "main",
-  "buildDate": "2026-04-27T15:15:12.642Z",
+  "buildDate": "2026-04-27T15:56:21.110Z",
   "commits": [
+    {
+      "hash": "4ff146c",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "4733ca6",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "d8fd36c",
       "message": "fix(magento): hide legacy product-name fallback in popular searches widget"
-    },
-    {
-      "hash": "38d5d3c",
-      "message": "fix(dashboard): period-aware E-commerce/Web Analytics + correct AOV calculation"
     }
   ],
   "changes": [
@@ -75,7 +75,6 @@
     "[Διόρθωση] Forbid internal jargon (dead stock, ROAS, segment names) in customer messages",
     "[Διόρθωση] Forbid segment names in customer-facing campaign messages",
     "[Βελτίωση εμφάνισης] Rename funnel stages to EN + distinct hue palette",
-    "[Νέο χαρακτηριστικό] Skeleton UI + silent upgrade indicator + immediate cache refetch",
-    "[Διόρθωση] Pass segmentFitList in silent regen + tooltip on segment cards"
+    "[Νέο χαρακτηριστικό] Skeleton UI + silent upgrade indicator + immediate cache refetch"
   ]
 }
