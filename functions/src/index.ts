@@ -1441,7 +1441,7 @@ export const scheduledSync = onSchedule(
     try {
       const connectorsSnap = await db.collection('connectors').get();
 
-      for (const doc of connectorsSnap.docs) {
+      const connectorResults = await Promise.allSettled(connectorsSnap.docs.map(async (doc) => {
         const brandId = doc.id;
         const data = doc.data();
 
@@ -1545,6 +1545,10 @@ export const scheduledSync = onSchedule(
             logger.error(`[ScheduledSync] E-commerce summary failed for ${brandId}:`, err);
           }
         }
+      }));
+      const failedConnectorBrands = connectorResults.filter((result) => result.status === 'rejected').length;
+      if (failedConnectorBrands > 0) {
+        logger.error(`[ScheduledSync] ${failedConnectorBrands} connector brand tasks failed unexpectedly`);
       }
 
       // Stock movement tracking για ΟΛΑ τα brands (συμπεριλαμβανομένων non-connector)
@@ -1576,7 +1580,7 @@ export const scheduledSync = onSchedule(
       const durationMs = Date.now() - startedAt;
       await markNightlyJob('scheduledSync', 'success', {
         durationMs,
-        message: `Completed. connectors=${connectorsSnap.size} competitorBrands=${competitorSnap.size}`,
+        message: `Completed. connectors=${connectorsSnap.size} failedConnectorBrands=${failedConnectorBrands} competitorBrands=${competitorSnap.size}`,
       });
       logger.info('[ScheduledSync] Daily sync completed');
     } catch (error) {

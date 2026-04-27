@@ -1,10 +1,14 @@
 {
-  "version": "0.642.0",
-  "previousVersion": "0.641.0",
-  "commitHash": "2c26a88",
+  "version": "0.643.0",
+  "previousVersion": "0.642.0",
+  "commitHash": "8540ce9",
   "branch": "main",
-  "buildDate": "2026-04-27T06:31:31.808Z",
+  "buildDate": "2026-04-27T06:44:36.240Z",
   "commits": [
+    {
+      "hash": "8540ce9",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "2c26a88",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "b6506a6",
       "message": "feat(channels): skeleton UI + silent upgrade indicator + immediate cache refetch"
-    },
-    {
-      "hash": "986612a",
-      "message": "fix(channels): pass segmentFitList in silent regen + tooltip on segment cards"
     }
   ],
   "changes": [
