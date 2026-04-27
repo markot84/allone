@@ -668,11 +668,16 @@ export async function fetchMagentoData(brandId: string): Promise<{
           : typeof o.payment?.additional_information === 'string'
             ? o.payment.additional_information
             : '';
+        const magCid =
+          o.customer_id != null && String(o.customer_id) !== '0' && String(o.customer_id) !== ''
+            ? String(o.customer_id)
+            : '';
         orderItems.push({
           id: `mag_${o.entity_id}`,
           data: {
             orderId: String(o.entity_id || ''),
             incrementId: o.increment_id || '',
+            ...(magCid ? { customerId: magCid } : {}),
             createdAt: o.created_at || '',
             updatedAt: o.updated_at || '',
             status: o.status || '',

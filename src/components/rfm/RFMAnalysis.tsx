@@ -28,6 +28,7 @@ import {
 } from 'recharts';
 import { Card, CardHeader, Badge, Button, Spinner, Tooltip as InfoTooltip, useToast, PageHeader } from '../common';
 import { useSegments } from '../../hooks/useSegments';
+import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import { useBrand } from '../../hooks/useBrand';
 import { FirestoreService } from '../../services/firestore';
 import { segmentCategoryMatrix } from '../../data';
@@ -109,7 +110,19 @@ interface RFMAnalysisProps {
 export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
   const [selectedSegment, setSelectedSegment] = useState<RFMSegment | null>(null);
   const [activeTab, setActiveTab] = useState<AnalysisTab>('rfm');
-  const { segments: rfmSegments, totalCustomers, isLoading: segmentsLoading, hasImported: hasImportedSegments } = useSegments();
+  const {
+    segments: rfmSegments,
+    totalCustomers,
+    isLoading: segmentsLoading,
+    hasImported: hasImportedSegments,
+    dataSource: rfmDataSource,
+    setDataSourcePreference,
+    sourcePreference: rfmSourcePref,
+    canComputeFromOrders,
+    orderRfmMeta,
+    importSegmentsAvailable,
+  } = useSegments();
+  const ecomm = useEcommerceSummary();
   const { currentBrand } = useBrand();
   const queryClient = useQueryClient();
   const toast = useToast();
@@ -157,6 +170,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
   };
 
   const handleDeleteSegments = async () => {
+    if (rfmDataSource === 'ecommerce') return;
     if (!currentBrand?.id) return;
     if (!window.confirm(`Διαγραφή όλων των segments (${rfmSegments.length}) για το brand "${currentBrand.name}"; Αυτή η ενέργεια δεν αναιρείται.`)) return;
     setIsDeleting(true);
@@ -181,22 +195,31 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
   }
 
   if (!hasImportedSegments) {
+    const hasEcomm = ecomm.connectedPlatforms.length > 0;
     return (
       <div className="space-y-6">
         <PageHeader
           title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Data Analysis</h2>}
           description={
             <p className="text-sm text-[#4A4A4A] sm:text-base leading-snug">
-              Ανάλυση τμημάτων πελατών (RFM, behavioral, firmographic)
+              Ανάλυση τμημάτων πελατών (RFM, behavioral, firmographic) από raw δεδομένα ή import
             </p>
           }
         />
-        <Card padding="lg" className="text-center py-12">
+        <Card padding="lg" className="text-center py-12 max-w-2xl mx-auto">
           <p className="text-[#4A4A4A] mb-4">
-            Δεν υπάρχουν imported segments ακόμα.
+            {hasEcomm && !canComputeFromOrders
+              ? 'Συνδέσατε e-shop, αλλά δεν βρέθηκαν αρκετές παραγγελίες με αναγνωρισμένο πελάτη (συνήθως guest checkout).'
+              : 'Δεν υπάρχουν ακόμα δεδομένα προς ανάλυση.'}
           </p>
+          {hasEcomm && !canComputeFromOrders && (
+            <p className="text-sm text-[#4A4A4A] mb-4 text-left">
+              Μετά το deploy, κάντε ξανά <strong>sync</strong> το connector ώστε να αποθηκεύεται το εσωτερικό <code className="text-xs bg-[#F3F4F6] px-1 rounded">customerId</code> ανά
+              παραγγελία (όχι email). Guest-only καλάθια εξακολουθούν να μην μετράνε σε RFM.
+            </p>
+          )}
           <p className="text-sm text-[#4A4A4A]">
-            Ανεβάστε segments από την{' '}
+            Εναλλακτικά, ανεβάστε aggregate segments από την{' '}
             <button
               type="button"
               onClick={() => onSectionChange?.('data-segments')}
@@ -213,12 +236,45 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
 
   return (
     <div className="space-y-6">
+      {rfmDataSource === 'ecommerce' && orderRfmMeta && (
+        <div className="rounded-lg border border-[#A7F3D0] bg-[#ECFDF5] px-4 py-3 text-sm text-[#065F46]">
+          RFM, Behavioral και Predictive LTV βασίζονται σε <strong>υπολογισμό από raw παραγγελίες</strong> (εσωτερικό customerId).
+          {orderRfmMeta.guestOrdersSkipped > 0 && (
+            <span className="block mt-1 text-[#047857]">
+              {orderRfmMeta.guestOrdersSkipped} guest / χωρίς id παραγγελίες εξαιρέθηκαν του RFM.
+            </span>
+          )}
+        </div>
+      )}
+
+      {importSegmentsAvailable && canComputeFromOrders && (
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+          <span className="text-sm text-[#4A4A4A]">Πηγή δεδομένων</span>
+          <select
+            className="text-sm border border-[#E5E5E5] rounded-lg px-3 py-2 bg-white text-[#1A1A1A] max-w-md"
+            value={rfmSourcePref}
+            onChange={(e) => setDataSourcePreference(e.target.value as 'auto' | 'orders' | 'import')}
+            aria-label="Πηγή RFM segments"
+          >
+            <option value="auto">Αυτόματα: e-shop (raw) όταν υπάρχει</option>
+            <option value="orders">Μόνο e-shop (raw orders)</option>
+            <option value="import">Μόνο αρχείο (CSV στο Firestore)</option>
+          </select>
+        </div>
+      )}
+
       <PageHeader
         toolbarAriaLabel="Εξαγωγή και διαγραφή segments"
         title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Data Analysis</h2>}
         description={
           <p className="text-sm text-[#4A4A4A] sm:text-base leading-snug">
-            Ανάλυση τμημάτων πελατών (RFM, behavioral, firmographic)
+            RFM, behavioral, predictive — από raw παραγγελίες ή import
+            {rfmDataSource === 'ecommerce' && (
+              <span className="block text-xs text-[#22C55E] mt-1">Πρόοδος: e-commerce (quintiles σε πελάτες)</span>
+            )}
+            {rfmDataSource === 'import' && (
+              <span className="block text-xs text-[#4A4A4A] mt-1">Πρόοδος: αρχειοθετημένα segments</span>
+            )}
           </p>
         }
         meta={
@@ -269,8 +325,9 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
             size="sm"
             icon={<Trash2 size={14} className="shrink-0" />}
             onClick={handleDeleteSegments}
-            disabled={isDeleting || !hasImportedSegments}
+            disabled={isDeleting || !hasImportedSegments || rfmDataSource === 'ecommerce'}
             className="min-h-[36px] w-full text-[#DC2626] hover:bg-[#FEE2E2] sm:w-auto"
+            title={rfmDataSource === 'ecommerce' ? 'Η διαγραφή ισχύει μόνο για segments από import' : undefined}
           >
             {isDeleting ? (
               'Διαγραφή…'

@@ -2,6 +2,8 @@ import type { RFMSegment } from '../types';
 
 export const SEGMENT_COLORS: Record<string, string> = {
   champions: '#16A34A',
+  loyal: '#2563EB',
+  potential: '#7C3AED',
   loyal_customers: '#2563EB',
   promising: '#7C3AED',
   at_risk: '#EA580C',
@@ -11,6 +13,7 @@ export const SEGMENT_COLORS: Record<string, string> = {
   cant_lose_them: '#F59E0B',
   "can't_lose_them": '#F59E0B',
   customers_needing_attention: '#EC4899',
+  new_customers: '#0D9488',
 };
 
 export function getSegmentColor(segment: RFMSegment | null | undefined): string {

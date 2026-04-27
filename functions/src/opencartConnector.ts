@@ -213,10 +213,17 @@ export async function fetchOpenCartData(brandId: string): Promise<{
         const dateAdded = o.date_added || o.dateAdded || '';
         if (dateAdded && new Date(dateAdded) < since) continue;
 
+        const ocCid =
+          o.customer_id != null && String(o.customer_id) !== '0' && String(o.customer_id) !== ''
+            ? String(o.customer_id)
+            : o.customerId != null && String(o.customerId) !== '0'
+              ? String(o.customerId)
+              : '';
         orderItems.push({
           id: `oc_${o.order_id || o.orderId}`,
           data: {
             orderId: String(o.order_id || o.orderId || ''),
+            ...(ocCid ? { customerId: ocCid } : {}),
             createdAt: dateAdded,
             status: o.order_status || o.status || '',
             total: parseFloat(o.total || '0'),

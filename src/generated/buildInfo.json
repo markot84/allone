@@ -1,10 +1,14 @@
 {
-  "version": "0.643.0",
-  "previousVersion": "0.642.0",
-  "commitHash": "8540ce9",
+  "version": "0.646.0",
+  "previousVersion": "0.645.0",
+  "commitHash": "8483ea0",
   "branch": "main",
-  "buildDate": "2026-04-27T06:44:36.240Z",
+  "buildDate": "2026-04-27T11:14:41.933Z",
   "commits": [
+    {
+      "hash": "8483ea0",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "8540ce9",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "5cf9cf1",
       "message": "style(channels): rename funnel stages to EN + distinct hue palette"
-    },
-    {
-      "hash": "b6506a6",
-      "message": "feat(channels): skeleton UI + silent upgrade indicator + immediate cache refetch"
     }
   ],
   "changes": [

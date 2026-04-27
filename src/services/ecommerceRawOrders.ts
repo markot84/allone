@@ -29,6 +29,11 @@ export type EcommerceRawOrder = {
   lineItems: EcommerceRawLineItem[];
   paymentMethod?: string;
   shippingMethod?: string;
+  /**
+   * Εσωτερικό id πελάτη από το κατάστημα (όχι email) — χρειάζεται για RFM από raw παραγγελίες.
+   * Κενό = guest / δεν συγχρονίστηκε id.
+   */
+  customerKey?: string;
 };
 
 export const ECOMMERCE_ORDER_COLLECTIONS: Record<string, string> = {
@@ -123,6 +128,17 @@ function normalizeRawOrder(platform: string, row: Record<string, unknown>): Ecom
     ? rawItems.map(normalizeLineItemFromFirestore)
     : [];
 
+  const rawCustomer =
+    row.customerKey ??
+    row.customer_key ??
+    row.customerId ??
+    row.customer_id;
+  let customerKey = '';
+  const s = rawCustomer != null ? String(rawCustomer).trim() : '';
+  if (s !== '' && s !== '0' && s !== 'null' && s !== 'undefined') {
+    customerKey = `${platform}:${s}`;
+  }
+
   return {
     orderId: String(row.orderId || row.incrementId || row.id || ''),
     orderName: String(row.orderName || row.orderNumber || row.incrementId || row.orderId || ''),
@@ -134,6 +150,7 @@ function normalizeRawOrder(platform: string, row: Record<string, unknown>): Ecom
     lineItems,
     paymentMethod: String(row.paymentMethod || row.payment_method || ''),
     shippingMethod: String(row.shippingMethod || row.shipping_method || row.shippingDescription || ''),
+    ...(customerKey ? { customerKey } : {}),
   };
 }
 

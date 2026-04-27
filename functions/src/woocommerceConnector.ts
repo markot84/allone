@@ -139,7 +139,7 @@ export async function fetchWooCommerceData(brandId: string): Promise<{
   let totalImported = 0;
 
   try {
-    // ── Orders (last 3 years, no PII) ──────────────────────────────────
+    // ── Orders (last 3 years) — `customerId` από Woo (0 = guest) για RFM ─
     const since = new Date();
     since.setUTCFullYear(since.getUTCFullYear() - 3);
 
@@ -166,11 +166,13 @@ export async function fetchWooCommerceData(brandId: string): Promise<{
       if (!Array.isArray(orders) || orders.length === 0) { hasMore = false; break; }
 
       for (const o of orders) {
+        const wooCid = o.customer_id != null && Number(o.customer_id) > 0 ? String(o.customer_id) : '';
         orderItems.push({
           id: `woo_${o.id}`,
           data: {
             orderId: String(o.id),
             orderNumber: o.number || '',
+            ...(wooCid ? { customerId: wooCid } : {}),
             createdAt: o.date_created || '',
             updatedAt: o.date_modified || '',
             status: o.status || '',

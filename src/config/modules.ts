@@ -56,7 +56,8 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   { id: 'dashboard', label: 'Dashboard', b2bLabel: 'Owner Dashboard', b2bStatus: 'core', b2cStatus: 'core' },
   { id: 'roi', label: 'ROI & Performance', b2bLabel: 'Revenue & ROI', b2bStatus: 'optional', b2cStatus: 'core' },
   { id: 'ecommerce', label: 'E-commerce', b2bStatus: 'hidden', b2cStatus: 'core' },
-  { id: 'rfm', label: 'Data Analysis', b2bStatus: 'hidden', b2cStatus: 'core' },
+  /** RFM + Behavioral + Predictive — ίδια in-app λογική (behavioralEngine) για B2B/B2C. */
+  { id: 'rfm', label: 'Data Analysis', b2bStatus: 'core', b2cStatus: 'core' },
   { id: 'products', label: 'Product Intelligence', b2bLabel: 'Product Intelligence', b2bStatus: 'core', b2cStatus: 'core' },
   { id: 'suppliers', label: 'Suppliers', b2bLabel: 'Supplier Management', b2bStatus: 'core', b2cStatus: 'optional' },
   { id: 'procurement', label: 'Procurement', b2bLabel: 'Procurement', b2bStatus: 'core', b2cStatus: 'optional', planFeature: 'procurement' },

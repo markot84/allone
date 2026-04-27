@@ -150,7 +150,7 @@ export async function handleShopifyCallback(
 
 /**
  * Fetch Shopify orders (last 3 years) + products and store in Firestore.
- * Only aggregated/anonymized order data is stored (no PII: no customer name/email/address).
+ * Order docs include `customerId` (Shopify customer id — όχι email/όνομα) για RFM από raw orders.
  */
 export async function fetchShopifyData(brandId: string): Promise<{
   success: boolean;
@@ -191,7 +191,7 @@ export async function fetchShopifyData(brandId: string): Promise<{
         created_at_min: since.toISOString(),
         limit: '250',
         page: String(orderPage),
-        fields: 'id,name,created_at,updated_at,financial_status,fulfillment_status,total_price,subtotal_price,total_tax,total_discounts,currency,line_items,tags',
+        fields: 'id,name,created_at,updated_at,financial_status,fulfillment_status,total_price,subtotal_price,total_tax,total_discounts,currency,line_items,tags,customer_id',
       });
 
       const res = await fetch(`${baseUrl}/orders.json?${params}`, { headers });
@@ -205,11 +205,13 @@ export async function fetchShopifyData(brandId: string): Promise<{
       if (orders.length === 0) { hasMore = false; break; }
 
       for (const o of orders) {
+        const shopifyCid = o.customer_id != null && o.customer_id !== '' ? String(o.customer_id) : '';
         batchItems.push({
           id: `shopify_${o.id}`,
           data: {
             orderId: String(o.id),
             orderName: o.name || '',
+            ...(shopifyCid ? { customerId: shopifyCid } : {}),
             createdAt: o.created_at || '',
             updatedAt: o.updated_at || '',
             financialStatus: o.financial_status || '',
