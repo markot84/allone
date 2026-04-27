@@ -1,10 +1,14 @@
 {
-  "version": "0.649.0",
-  "previousVersion": "0.648.0",
-  "commitHash": "c671d94",
+  "version": "0.650.0",
+  "previousVersion": "0.649.0",
+  "commitHash": "4733ca6",
   "branch": "main",
-  "buildDate": "2026-04-27T14:27:07.422Z",
+  "buildDate": "2026-04-27T15:15:12.642Z",
   "commits": [
+    {
+      "hash": "4733ca6",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "c671d94",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "38d5d3c",
       "message": "fix(dashboard): period-aware E-commerce/Web Analytics + correct AOV calculation"
-    },
-    {
-      "hash": "2f19d70",
-      "message": "fix(channels): forbid internal jargon (dead stock, ROAS, segment names) in customer messages"
     }
   ],
   "changes": [

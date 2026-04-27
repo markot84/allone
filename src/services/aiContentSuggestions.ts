@@ -5,6 +5,7 @@ import {
   type StrategyContext,
   type TriageContentContext,
   type ProvenanceContentContext,
+  type AudienceContentContext,
 } from '../data/contentSuggestionsPrompt';
 import { strategyContentMap } from '../data/mockContent';
 import { scenarios } from '../data/mockScenarios';
@@ -122,12 +123,13 @@ export interface GenerateContentSuggestionsParams {
   segmentNames?: string[];
   triage?: TriageContentContext;
   provenance?: ProvenanceContentContext;
+  audience?: AudienceContentContext;
 }
 
 export async function generateContentSuggestions(
   params: GenerateContentSuggestionsParams
 ): Promise<ContentSuggestionsResult | null> {
-  const { scenarioId, scenarioName, weights, brandName, topCategories, segmentNames, triage, provenance } = params;
+  const { scenarioId, scenarioName, weights, brandName, topCategories, segmentNames, triage, provenance, audience } = params;
 
   const mapEntry = scenarioId && scenarioId !== 'custom'
     ? strategyContentMap[scenarioId as keyof typeof strategyContentMap]
@@ -149,6 +151,7 @@ export async function generateContentSuggestions(
     segmentNames,
     triage,
     provenance,
+    audience,
   };
 
   try {

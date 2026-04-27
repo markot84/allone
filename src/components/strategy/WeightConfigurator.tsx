@@ -289,7 +289,7 @@ export function WeightConfigurator() {
   } = useEcommerceSummary();
   const { data: procurementData } = useProcurement();
   const { refresh: refreshAggregates } = useRefreshAggregates();
-  const { segments: rfmSegments } = useSegments();
+  const { segments: rfmSegments, dataCoverage } = useSegments();
   const { user } = useAuth();
   const { activeStrategy, saveActiveStrategy, isLoading: strategyLoading } = useActiveStrategy();
   const { benchmarks } = usePriceBenchmarks();
@@ -670,6 +670,7 @@ export function WeightConfigurator() {
           context: 'activation',
           triage: triagePromptCtx,
           provenance: provenancePromptCtx,
+          audience: dataCoverage,
         }).then(async rec => {
           if (!rec) return;
           // Mirror στα 2 πεδία ώστε Channel page (activation) και RFM exports (channel) να μη διαφωνούν.
@@ -689,13 +690,14 @@ export function WeightConfigurator() {
         scenarioId, scenarioName, weights: strategyWeights, brandName: currentBrand?.name, topCategories: topCats, segmentNames,
         triage: triagePromptCtx,
         provenance: provenancePromptCtx,
+        audience: dataCoverage,
       }).then(result => { if (result) return saveField('contentSuggestions', result); })
         .catch(err => console.error('[AI] Content failed:', err))
     );
 
     await Promise.allSettled(promises);
     queryClient.invalidateQueries({ queryKey: ['activeStrategy'] });
-  }, [rfmSegments, selectedSegment, products, currentBrand, rankedSegments, segmentFitMap, queryClient, triagePromptCtx, provenancePromptCtx]);
+  }, [rfmSegments, selectedSegment, products, currentBrand, rankedSegments, segmentFitMap, queryClient, triagePromptCtx, provenancePromptCtx, dataCoverage]);
 
   const applyScenarioChange = useCallback((
     scenarioId: string,

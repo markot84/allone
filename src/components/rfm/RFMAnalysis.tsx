@@ -119,6 +119,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
     setDataSourcePreference,
     sourcePreference: rfmSourcePref,
     canComputeFromOrders,
+    dataCoverage,
     orderRfmMeta,
     importSegmentsAvailable,
   } = useSegments();
@@ -202,7 +203,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
           title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Data Analysis</h2>}
           description={
             <p className="text-sm text-[#4A4A4A] sm:text-base leading-snug">
-              Ανάλυση τμημάτων πελατών (RFM, behavioral, firmographic) από raw δεδομένα ή import
+              Ανάλυση τμημάτων πελατών (RFM, behavioral, firmographic) από e-shop orders ή ERP/other data
             </p>
           }
         />
@@ -253,12 +254,11 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
           <select
             className="text-sm border border-[#E5E5E5] rounded-lg px-3 py-2 bg-white text-[#1A1A1A] max-w-md"
             value={rfmSourcePref}
-            onChange={(e) => setDataSourcePreference(e.target.value as 'auto' | 'orders' | 'import')}
+            onChange={(e) => setDataSourcePreference(e.target.value as 'orders' | 'external')}
             aria-label="Πηγή RFM segments"
           >
-            <option value="auto">Αυτόματα: e-shop (raw) όταν υπάρχει</option>
-            <option value="orders">Μόνο e-shop (raw orders)</option>
-            <option value="import">Μόνο αρχείο (CSV στο Firestore)</option>
+            <option value="orders">e-shop orders</option>
+            <option value="external">e-shop &amp; others</option>
           </select>
         </div>
       )}
@@ -268,12 +268,12 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
         title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Data Analysis</h2>}
         description={
           <p className="text-sm text-[#4A4A4A] sm:text-base leading-snug">
-            RFM, behavioral, predictive — από raw παραγγελίες ή import
+            RFM, behavioral, predictive — από e-shop orders ή ERP/other data
             {rfmDataSource === 'ecommerce' && (
               <span className="block text-xs text-[#22C55E] mt-1">Πρόοδος: e-commerce (quintiles σε πελάτες)</span>
             )}
             {rfmDataSource === 'import' && (
-              <span className="block text-xs text-[#4A4A4A] mt-1">Πρόοδος: αρχειοθετημένα segments</span>
+              <span className="block text-xs text-[#4A4A4A] mt-1">Πρόοδος: e-shop &amp; others</span>
             )}
           </p>
         }
@@ -327,7 +327,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
             onClick={handleDeleteSegments}
             disabled={isDeleting || !hasImportedSegments || rfmDataSource === 'ecommerce'}
             className="min-h-[36px] w-full text-[#DC2626] hover:bg-[#FEE2E2] sm:w-auto"
-            title={rfmDataSource === 'ecommerce' ? 'Η διαγραφή ισχύει μόνο για segments από import' : undefined}
+            title={rfmDataSource === 'ecommerce' ? 'Η διαγραφή ισχύει μόνο για segments από e-shop & others' : undefined}
           >
             {isDeleting ? (
               'Διαγραφή…'
@@ -341,6 +341,26 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
           </>
         }
       />
+
+      <Card padding="md" className="border border-[#E5E5E5] bg-[#FAFAFA]">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#9CA3AF]">Data Coverage</p>
+            <h3 className="mt-1 text-sm font-bold text-[#1A1A1A]">
+              Πολιτική: {dataCoverage.policyLabel}
+            </h3>
+            <p className="mt-1 max-w-3xl text-xs leading-relaxed text-[#4A4A4A]">
+              {dataCoverage.marketingPolicy}
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:min-w-[32rem]">
+            <CoverageMetric label="Σύνολο" value={formatNumber(dataCoverage.totalCustomers)} />
+            <CoverageMetric label="E-shop" value={formatNumber(dataCoverage.eShopCustomers)} />
+            <CoverageMetric label="Others / ERP" value={formatNumber(dataCoverage.otherCustomers)} />
+            <CoverageMetric label="E-shop %" value={`${formatNumber(dataCoverage.eShopPenetration, 1)}%`} />
+          </div>
+        </div>
+      </Card>
 
       {/* Analysis Tabs */}
       <div className="flex items-center gap-1 bg-[var(--nts-light-gray)] p-1 rounded-xl w-fit">
@@ -410,9 +430,9 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
               <TrendingUp size={20} className="text-[#22C55E]" />
             </div>
             <div>
-              <p className="text-sm text-[#4A4A4A]"><InfoTooltip content="Αριθμός RFM segments (ομαδοποιημένοι πελάτες βάσει Recency, Frequency, Monetary).">Ενεργά Segments</InfoTooltip></p>
+              <p className="text-sm text-[#4A4A4A]"><InfoTooltip content="Συνολικός αριθμός RFM segments που εμφανίζονται στην ανάλυση. Περιλαμβάνει και ανενεργά / Lost segments.">Σύνολο Segments</InfoTooltip></p>
               <p className="text-xl font-bold text-[#1A1A1A]">
-                {rfmSegments.filter(s => s.id !== 'lost').length}
+                {rfmSegments.length}
               </p>
             </div>
           </div>
@@ -615,6 +635,15 @@ interface TabButtonProps {
   tooltipTitle?: string;
   tooltipBody?: string;
   tooltipBullets?: string[];
+}
+
+function CoverageMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-[#E5E5E5] bg-white px-3 py-2">
+      <p className="text-[11px] text-[#9CA3AF]">{label}</p>
+      <p className="mt-0.5 font-mono text-sm font-bold text-[#1A1A1A]">{value}</p>
+    </div>
+  );
 }
 
 function TabButton({ active, onClick, icon, label, tooltipTitle, tooltipBody, tooltipBullets }: TabButtonProps) {

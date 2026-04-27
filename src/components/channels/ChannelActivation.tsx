@@ -205,7 +205,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   const pageTitle = getModuleLabel('channels', effectiveBrandTypeForModules(currentBrand));
   const { products, count: productsCount } = useProductSource();
   const { isLoading: campaignsLoading, hasImported: hasCampaigns } = useCampaigns();
-  const { segments: rfmSegments } = useSegments();
+  const { segments: rfmSegments, dataCoverage } = useSegments();
   const {
     activeStrategy,
     getStrategyName,
@@ -291,6 +291,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         context: 'activation',
         triage: triagePromptCtx,
         provenance: provenancePromptCtx,
+        audience: dataCoverage,
       });
 
       const clean = JSON.parse(JSON.stringify(rec));
@@ -313,7 +314,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
       if (silent) setIsSilentUpgrading(false);
       else setAiGenerating(false);
     }
-  }, [strategyId, scenarioId, currentBrand, rfmSegments, products, queryClient, toast, activeStrategy, signalCoverage]);
+  }, [strategyId, scenarioId, currentBrand, rfmSegments, products, queryClient, toast, activeStrategy, signalCoverage, dataCoverage]);
 
   useEffect(() => {
     if (autoGenTriggered.current) return;

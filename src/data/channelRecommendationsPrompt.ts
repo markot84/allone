@@ -252,6 +252,15 @@ export interface ProvenancePromptContext {
   totalProducts: number;
 }
 
+export interface AudiencePromptContext {
+  policyLabel: 'e-shop orders' | 'e-shop & others';
+  eShopCustomers: number;
+  totalCustomers: number;
+  otherCustomers: number;
+  eShopPenetration: number;
+  marketingPolicy: string;
+}
+
 export function buildChannelRecommendationsUserPrompt(params: {
   scenarioName: string;
   scenarioDescription: string;
@@ -269,6 +278,7 @@ export function buildChannelRecommendationsUserPrompt(params: {
   context?: PromptContext;
   triage?: TriagePromptContext;
   provenance?: ProvenancePromptContext;
+  audience?: AudiencePromptContext;
 }): string {
   const {
     scenarioName,
@@ -287,6 +297,7 @@ export function buildChannelRecommendationsUserPrompt(params: {
     context = 'strategy',
     triage,
     provenance,
+    audience,
   } = params;
 
   const triageSection = triage
@@ -305,6 +316,20 @@ export function buildChannelRecommendationsUserPrompt(params: {
 - Import-only (στατικά): ${provenance.importPct}%
 
 ${provenance.connectorPct < 30 ? 'ΠΡΟΣΟΧΗ: Χαμηλή κάλυψη real-time orders. Απόφυγε υπεσχέσεις άμεσου ROAS — προτίμησε εκτιμήσεις βασισμένες σε stock κίνηση και ιστορικό. ' : ''}${provenance.procurementPct > 50 ? 'Έχουμε δυνατό procurement signal — μπορείς να αναφέρεις margin/τιμολόγηση με σιγουριά. ' : ''}`
+    : '';
+
+  const audienceSection = audience && audience.totalCustomers > 0
+    ? `\n\nΠΟΛΙΤΙΚΗ ΠΕΛΑΤΟΛΟΓΙΟΥ:
+- Επιλογή χρήστη: ${audience.policyLabel}
+- Σύνολο πελατών στη βάση ανάλυσης: ${audience.totalCustomers.toLocaleString('el-GR')}
+- Αναγνωρίσιμοι e-shop αγοραστές: ${audience.eShopCustomers.toLocaleString('el-GR')} (${audience.eShopPenetration}%)
+- Others / ERP-only ή offline-influenced κοινό: ${audience.otherCustomers.toLocaleString('el-GR')}
+
+${audience.marketingPolicy}
+
+Κανόνας ερμηνείας:
+- Αν η πολιτική είναι "e-shop orders", δώσε μεγαλύτερη βαρύτητα σε online intent, CRM, retargeting και μετρήσιμο online conversion.
+- Αν η πολιτική είναι "e-shop & others", μην θεωρείς ότι όλοι οι πελάτες αγοράζουν online. Πρότεινε digital influence campaigns που μπορούν να οδηγούν είτε σε e-shop είτε σε φυσικό κατάστημα, και γράψε τα marketingBriefs με omnichannel targeting, CRM matching και offline conversion measurement όπου ταιριάζει.`
     : '';
 
   const fitContext = FIT_CONTEXT[fitLevel];
@@ -337,7 +362,7 @@ Segment πελατών: ${segmentName}
 
 Βαθμός ταιριάσματος segment-στρατηγικής: ${fitLevel === 'ideal' ? 'Ιδανικό' : fitLevel === 'good' ? 'Καλό' : 'Μερικό'}
 ${fitContext}
-${segmentMapSection}${triageSection}${provenanceSection}
+${segmentMapSection}${triageSection}${provenanceSection}${audienceSection}
 Πρότεινε τα κατάλληλα κανάλια μάρκετινγκ (primary, secondary, budget_allocation, rationale) σε JSON.
 Η αιτιολόγηση πρέπει να είναι πλήρως στα Ελληνικά.${brandName ? ` Ανέφερε το brand «${brandName}» ονομαστικά μέσα στο rationale, αντί για γενικόλογο "η επιχείρηση" ή "το brand σας".${topCategories && topCategories.length > 0 ? ` Συνέδεσε τις προτάσεις με τα πραγματικά προϊόντα/κατηγορίες (${topCategories.slice(0, 3).join(', ')}).` : ''}` : ''}
 Στο "Πελάτες:" section:

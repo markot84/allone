@@ -11,13 +11,14 @@ import type { RFMSegment } from '../types';
 
 const STORAGE_KEY = (brandId: string) => `pp-rfm-data-source-${brandId}`;
 
-export type RfmDataSourcePreference = 'auto' | 'orders' | 'import';
+export type RfmDataSourcePreference = 'orders' | 'external';
 
 export function getStoredRfmSource(brandId: string | null): RfmDataSourcePreference {
-  if (!brandId || typeof localStorage === 'undefined') return 'auto';
+  if (!brandId || typeof localStorage === 'undefined') return 'orders';
   const v = localStorage.getItem(STORAGE_KEY(brandId));
-  if (v === 'orders' || v === 'import' || v === 'auto') return v;
-  return 'auto';
+  if (v === 'external' || v === 'import') return 'external';
+  if (v === 'orders' || v === 'auto') return 'orders';
+  return 'orders';
 }
 
 export function setStoredRfmSource(brandId: string, source: RfmDataSourcePreference): void {
@@ -26,13 +27,26 @@ export function setStoredRfmSource(brandId: string, source: RfmDataSourcePrefere
 
 export type SegmentsDataSource = 'import' | 'ecommerce' | 'none';
 
+export interface SegmentDataCoverage {
+  sourcePreference: RfmDataSourcePreference;
+  activeSource: SegmentsDataSource;
+  eShopCustomers: number;
+  totalCustomers: number;
+  otherCustomers: number;
+  eShopPenetration: number;
+  hasEshopOrders: boolean;
+  hasExternalData: boolean;
+  policyLabel: 'e-shop orders' | 'e-shop & others';
+  marketingPolicy: string;
+}
+
 export function useSegments() {
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
   const ecomm = useEcommerceSummary();
   const platformsKey = useMemo(() => [...ecomm.connectedPlatforms].sort().join('|'), [ecomm.connectedPlatforms]);
 
-  const [sourcePref, setSourcePrefState] = useState<RfmDataSourcePreference>('auto');
+  const [sourcePref, setSourcePrefState] = useState<RfmDataSourcePreference>('orders');
 
   useEffect(() => {
     if (brandId) setSourcePrefState(getStoredRfmSource(brandId));
@@ -67,12 +81,8 @@ export function useSegments() {
   const importSegmentsAvailable = (firestoreSegments?.length ?? 0) > 0;
 
   const resolvedSource: SegmentsDataSource = useMemo(() => {
-    if (sourcePref === 'import') return importSegmentsAvailable ? 'import' : canComputeFromOrders ? 'ecommerce' : 'none';
-    if (sourcePref === 'orders') return canComputeFromOrders ? 'ecommerce' : importSegmentsAvailable ? 'import' : 'none';
-    // auto
-    if (canComputeFromOrders) return 'ecommerce';
-    if (importSegmentsAvailable) return 'import';
-    return 'none';
+    if (sourcePref === 'external') return importSegmentsAvailable ? 'import' : canComputeFromOrders ? 'ecommerce' : 'none';
+    return canComputeFromOrders ? 'ecommerce' : importSegmentsAvailable ? 'import' : 'none';
   }, [sourcePref, canComputeFromOrders, importSegmentsAvailable]);
 
   const segments = useMemo(() => {
@@ -94,8 +104,45 @@ export function useSegments() {
     return segments.reduce((sum, s) => sum + (s.count ?? 0), 0) || 0;
   }, [resolvedSource, orderRfm.totalCustomers, segments]);
 
+  const externalTotalCustomers = useMemo(
+    () => {
+      const raw = (brandId ? (firestoreSegments ?? []) : []) as RFMSegment[];
+      const cleaned = raw.filter((s): s is RFMSegment => s != null && typeof s.id === 'string');
+      const merged = mergeDuplicateSegmentRowsByName(cleaned);
+      return merged.reduce((sum, s) => sum + (s.count ?? 0), 0) || 0;
+    },
+    [brandId, firestoreSegments]
+  );
+
+  const dataCoverage = useMemo<SegmentDataCoverage>(() => {
+    const eShopCustomers = orderRfm.totalCustomers;
+    const usesExternalPolicy = sourcePref === 'external' && externalTotalCustomers > 0;
+    const fullBase = usesExternalPolicy
+      ? Math.max(externalTotalCustomers, eShopCustomers)
+      : eShopCustomers;
+    const otherCustomers = Math.max(0, fullBase - eShopCustomers);
+    const eShopPenetration = fullBase > 0 ? Math.round((eShopCustomers / fullBase) * 1000) / 10 : 0;
+    const policyLabel = usesExternalPolicy ? 'e-shop & others' : 'e-shop orders';
+    const marketingPolicy =
+      usesExternalPolicy
+        ? 'Χρησιμοποιεί ευρύτερο πελατολόγιο από e-shop και ERP/other πηγές. Οι προτάσεις πρέπει να λαμβάνουν υπόψη ότι μέρος του κοινού επηρεάζεται ψηφιακά αλλά μπορεί να αγοράζει offline.'
+        : 'Χρησιμοποιεί μόνο αναγνωρίσιμους e-shop αγοραστές. Οι προτάσεις μπορούν να δίνουν μεγαλύτερη έμφαση σε performance, retargeting, CRM και online conversion.';
+    return {
+      sourcePreference: sourcePref,
+      activeSource: resolvedSource,
+      eShopCustomers,
+      totalCustomers: fullBase,
+      otherCustomers,
+      eShopPenetration,
+      hasEshopOrders: eShopCustomers > 0,
+      hasExternalData: externalTotalCustomers > 0,
+      policyLabel,
+      marketingPolicy,
+    };
+  }, [sourcePref, resolvedSource, orderRfm.totalCustomers, externalTotalCustomers]);
+
   const isLoading =
-    fsPending || (ordersQueryEnabled && ordersPending && (sourcePref === 'orders' || sourcePref === 'auto'));
+    fsPending || (ordersQueryEnabled && ordersPending);
 
   const hasImported =
     resolvedSource === 'ecommerce' ? orderRfm.totalCustomers > 0 : importSegmentsAvailable;
@@ -105,11 +152,12 @@ export function useSegments() {
     totalCustomers,
     isLoading,
     hasImported,
-    /** Πραγματική πηγή μετά auto / override */
+    /** Πραγματική πηγή μετά την επιλογή του χρήστη. */
     dataSource: resolvedSource,
     setDataSourcePreference,
     sourcePreference: sourcePref,
     canComputeFromOrders,
+    dataCoverage,
     orderRfmMeta:
       resolvedSource === 'ecommerce'
         ? {

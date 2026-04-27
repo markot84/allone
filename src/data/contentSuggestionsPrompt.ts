@@ -19,6 +19,15 @@ export interface ProvenanceContentContext {
   totalProducts: number;
 }
 
+export interface AudienceContentContext {
+  policyLabel: 'e-shop orders' | 'e-shop & others';
+  eShopCustomers: number;
+  totalCustomers: number;
+  otherCustomers: number;
+  eShopPenetration: number;
+  marketingPolicy: string;
+}
+
 export interface StrategyContext {
   scenarioId: string;
   scenarioName: string;
@@ -36,6 +45,8 @@ export interface StrategyContext {
   triage?: TriageContentContext;
   /** Snapshot πηγών δεδομένων — βοηθά το AI να καλιμπράρει τη σιγουριά του copy. */
   provenance?: ProvenanceContentContext;
+  /** Πολιτική πελατολογίου από Data Analysis. */
+  audience?: AudienceContentContext;
 }
 
 export const CONTENT_SUGGESTIONS_SYSTEM_PROMPT = `Είσαι ανώτερο στέλεχος content strategy για e-commerce. Απαντάς ΑΠΟΚΛΕΙΣΤΙΚΑ στα Ελληνικά.
@@ -109,7 +120,13 @@ ${ctx.triage ? `\nΔΙΑΓΝΩΣΤΙΚΗ ΡΙΖΑ (Decision Bucket):
 - Σκοπευμένα SKUs: ${ctx.triage.skuCount}${ctx.triage.tiedCapital ? ` | Δεσμευμένα κεφάλαια: €${Math.round(ctx.triage.tiedCapital).toLocaleString('el-GR')}` : ''}${ctx.triage.topSkus?.length ? `\n- Ενδεικτικά SKUs: ${ctx.triage.topSkus.slice(0, 5).join(', ')}` : ''}
 
 Όλα τα directions, actions, brief και headlines πρέπει να αντανακλούν αυτή τη ρίζα. Ενδεικτικά: dead capital → έμφαση σε εκκαθάριση και περιορισμένη διαθεσιμότητα. Hot seller → κοινωνική απόδειξη και ειδοποιήσεις αναπλήρωσης. Stockout risk → λίστα αναμονής ή ειδοποίηση διαθεσιμότητας. Ανέφερε ρητά στο brief ότι η στρατηγική στοχεύει το πρόβλημα «${ctx.triage.bucketLabel}».
-` : ''}${ctx.provenance && ctx.provenance.totalProducts > 0 ? `\nΠΗΓΕΣ ΔΕΔΟΜΕΝΩΝ: connector ${ctx.provenance.connectorPct}% · stock movement ${ctx.provenance.movementPct}% · procurement ${ctx.provenance.procurementPct}% · import ${ctx.provenance.importPct}%${ctx.provenance.connectorPct < 30 ? '\nΧαμηλή κάλυψη real-time orders — απόφυγε υπεσχέσεις άμεσων αποτελεσμάτων στο copy.' : ''}\n` : ''}
+` : ''}${ctx.provenance && ctx.provenance.totalProducts > 0 ? `\nΠΗΓΕΣ ΔΕΔΟΜΕΝΩΝ: connector ${ctx.provenance.connectorPct}% · stock movement ${ctx.provenance.movementPct}% · procurement ${ctx.provenance.procurementPct}% · import ${ctx.provenance.importPct}%${ctx.provenance.connectorPct < 30 ? '\nΧαμηλή κάλυψη real-time orders — απόφυγε υπεσχέσεις άμεσων αποτελεσμάτων στο copy.' : ''}\n` : ''}${ctx.audience && ctx.audience.totalCustomers > 0 ? `\nΠΟΛΙΤΙΚΗ ΠΕΛΑΤΟΛΟΓΙΟΥ:
+- Επιλογή χρήστη: ${ctx.audience.policyLabel}
+- Σύνολο πελατών στη βάση ανάλυσης: ${ctx.audience.totalCustomers.toLocaleString('el-GR')}
+- Αναγνωρίσιμοι e-shop αγοραστές: ${ctx.audience.eShopCustomers.toLocaleString('el-GR')} (${ctx.audience.eShopPenetration}%)
+- Others / ERP-only ή offline-influenced κοινό: ${ctx.audience.otherCustomers.toLocaleString('el-GR')}
+${ctx.audience.marketingPolicy}
+Αν η πολιτική είναι "e-shop & others", το content brief πρέπει να δίνει omnichannel κατεύθυνση: το digital περιεχόμενο μπορεί να επηρεάζει πελάτες που τελικά αγοράζουν σε φυσικό κατάστημα.\n` : ''}
 Δώσε directions (θεματικές κατευθύνσεις ανά κανάλι), actions (παραδείγματα ενεργειών) και brief (κείμενο κατευθύνσεων) σε JSON.
 Το κείμενο πρέπει να είναι κατάλληλο για έμπειρο εμπορικό ή marketing κοινό: σαφές, επαγγελματικό, φυσικό και χωρίς εντυπωσιασμούς.${personalizationNote}`;
 }
