@@ -1,10 +1,14 @@
 {
-  "version": "0.640.0",
-  "previousVersion": "0.639.0",
-  "commitHash": "dbd1b5c",
+  "version": "0.642.0",
+  "previousVersion": "0.641.0",
+  "commitHash": "2c26a88",
   "branch": "main",
-  "buildDate": "2026-04-24T14:17:05.243Z",
+  "buildDate": "2026-04-27T06:31:31.808Z",
   "commits": [
+    {
+      "hash": "2c26a88",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "dbd1b5c",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "986612a",
       "message": "fix(channels): pass segmentFitList in silent regen + tooltip on segment cards"
-    },
-    {
-      "hash": "7d1ecd3",
-      "message": "fix(channels): silent auto-upgrade legacy AI payloads (no UI button)"
     }
   ],
   "changes": [

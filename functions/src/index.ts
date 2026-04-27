@@ -189,6 +189,12 @@ async function verifyBrandConnectorManagement(uid: string, brandId: string): Pro
 
 type ImportType = 'products' | 'campaigns' | 'segments' | 'procurement';
 
+interface MagentoSearchTermInput {
+  term?: unknown;
+  hits?: unknown;
+  results?: unknown;
+}
+
 interface ImportResult {
   success: boolean;
   imported: number;
@@ -1295,6 +1301,82 @@ export const connectorSaveCredentials = onRequest(
       }
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
+      res.status(500).json({ error: msg });
+    }
+  }
+);
+
+// ─── Magento: Import Admin Search Terms ─────────────────────────
+
+/**
+ * POST /importMagentoSearchTerms
+ * Body: { brandId, terms: [{ term, hits, results? }], uploadedFileName? }
+ */
+export const importMagentoSearchTerms = onRequest(
+  { region: 'europe-west1', cors: true },
+  async (req, res) => {
+    if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+
+    try {
+      const idToken = authHeader.slice(7).trim();
+      const decoded = await admin.auth().verifyIdToken(idToken);
+      const { brandId, terms, uploadedFileName } = req.body as {
+        brandId?: string;
+        terms?: MagentoSearchTermInput[];
+        uploadedFileName?: string;
+      };
+
+      if (!brandId || !Array.isArray(terms)) {
+        res.status(400).json({ error: 'Missing brandId or terms' });
+        return;
+      }
+
+      if (!(await verifyBrandConnectorManagement(decoded.uid, brandId))) {
+        res.status(403).json({ error: 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να εισάγει Magento search terms' });
+        return;
+      }
+
+      const cleaned = terms
+        .map((t) => {
+          const term = String(t?.term ?? '').replace(/\s+/g, ' ').trim().slice(0, 250);
+          const hits = Math.max(0, Number(t?.hits ?? 0) || 0);
+          const results = Number(t?.results);
+          return {
+            term,
+            hits,
+            ...(Number.isFinite(results) && results >= 0 ? { results } : {}),
+          };
+        })
+        .filter((t) => t.term.length > 0)
+        .sort((a, b) => b.hits - a.hits)
+        .slice(0, 200);
+
+      if (cleaned.length === 0) {
+        res.status(400).json({ error: 'Δεν βρέθηκαν έγκυρα search terms στο αρχείο' });
+        return;
+      }
+
+      await db.doc(`magento_popular_searches/${brandId}`).set(
+        {
+          brandId,
+          terms: cleaned,
+          syncedAt: FieldValue.serverTimestamp(),
+          source: 'magento_admin_csv',
+          termsProvenance: 'magento_admin_csv',
+          uploadedFileName: String(uploadedFileName || '').slice(0, 180),
+          uploadedByUid: decoded.uid,
+        },
+        { merge: true }
+      );
+
+      logger.info(`[Magento] Admin search terms imported: ${cleaned.length} for brand ${brandId}`);
+      res.status(200).json({ success: true, imported: cleaned.length });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      logger.error('[Magento] Admin search terms import failed:', msg);
       res.status(500).json({ error: msg });
     }
   }

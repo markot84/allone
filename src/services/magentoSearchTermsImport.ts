@@ -1,6 +1,5 @@
-import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import * as XLSX from 'xlsx';
-import { db } from '../config/firebase';
+import { auth, FUNCTIONS_BASE_URL, getAppCheckHeader } from '../config/firebase';
 
 export interface ParsedSearchTerm {
   term: string;
@@ -216,26 +215,49 @@ export async function importMagentoSearchTermsFile(
   }
 
   const top = rows.slice(0, maxRows);
-  await setDoc(
-    doc(db, 'magento_popular_searches', brandId),
-    {
+  const token = await auth.currentUser?.getIdToken();
+  if (!token) {
+    return {
+      success: false,
+      imported: 0,
+      totalRows,
+      errors: ['Δεν υπάρχει ενεργό login. Κάνε refresh και ξαναδοκίμασε.'],
+      preview: [],
+    };
+  }
+
+  const res = await fetch(`${FUNCTIONS_BASE_URL.replace(/\/$/, '')}/importMagentoSearchTerms`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      ...(await getAppCheckHeader()),
+    },
+    body: JSON.stringify({
       brandId,
       terms: top.map((t) => ({
         term: t.term,
         hits: t.hits,
         ...(typeof t.results === 'number' ? { results: t.results } : {}),
       })),
-      syncedAt: serverTimestamp(),
-      source: 'magento_admin_csv',
-      termsProvenance: 'magento_admin_csv',
       uploadedFileName: file.name,
-    },
-    { merge: true }
-  );
+    }),
+  });
+
+  const body = (await res.json().catch(() => ({}))) as { error?: string; imported?: number };
+  if (!res.ok) {
+    return {
+      success: false,
+      imported: 0,
+      totalRows,
+      errors: [body.error || `Αποτυχία αποθήκευσης search terms (HTTP ${res.status}).`],
+      preview: [],
+    };
+  }
 
   return {
     success: true,
-    imported: top.length,
+    imported: body.imported ?? top.length,
     totalRows,
     errors,
     preview: top.slice(0, 10),
