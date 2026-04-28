@@ -6,12 +6,9 @@
  *   { connected, apiKey (encrypted), accountName, currency, connectedAt }
  *
  * Sync (90 ημέρες):
- *   - Invoices  → megaventory_invoices         (πηγή revenue κατά τη ρύθμιση: invoices)
- *   - Sales OR  → megaventory_sales_orders     (αναφορά για cross-check)
- *   - Purchase  → megaventory_purchase_orders  (κόστος εμπορευμάτων / supplier spend)
- *   - Products  → megaventory_products         (SKUs, τιμές αγοράς/πώλησης)
- *   - Stock     → megaventory_stock            (per-location stock — value εκτιμάται από purchase price)
- *   - Suppliers → megaventory_suppliers        (από SupplierClientGet, type=2 ή 3)
+ *   - Invoices → megaventory_invoices …
+ *   - Sales OR / Purchase / Products / Stock / Suppliers (τυπικά API)
+ *   - Προαιρετικό Custom Report → megaventory_custom_report_rows (αρ. σειρών + raw cells ανά report ID)
  */
 
 import * as admin from 'firebase-admin';
@@ -106,6 +103,145 @@ function asMvError(call: MvCallResult, label: string): string | null {
     return `${label}: ${msg} (code ${code})`;
   }
   return null;
+}
+
+const CUSTOM_REPORT_LIMIT = 1000;
+const CUSTOM_REPORT_COLLECTION = 'megaventory_custom_report_rows';
+const CUSTOM_REPORT_MAX_PAGES = 500;
+
+/** Απόσπαση array γραμμών από απάντηση CustomReportGetData (πιθανά κλειδιά ανά έκδοση API). */
+export function extractCustomReportRows(body: unknown): Record<string, unknown>[] {
+  if (!body || typeof body !== 'object') return [];
+  const b = body as Record<string, unknown>;
+
+  const pushIfArray = (v: unknown): Record<string, unknown>[] | null => {
+    if (!Array.isArray(v)) return null;
+    return v.filter(
+      (x): x is Record<string, unknown> => x !== null && typeof x === 'object' && !Array.isArray(x)
+    );
+  };
+
+  const keys = [
+    'mvCustomReportData',
+    'mvCustomReportRows',
+    'CustomReportData',
+    'CustomReportRows',
+    'mvCustomReportLines',
+    'mvCustomReport',
+    'data',
+    'rows',
+    'mvResult',
+  ];
+
+  for (const k of keys) {
+    const arr = pushIfArray(b[k]);
+    if (arr?.length) return arr;
+    const inner = b[k];
+    if (inner && typeof inner === 'object' && !Array.isArray(inner)) {
+      const ob = inner as Record<string, unknown>;
+      const innerKeys = ['data', 'rows', 'mvResult', 'CustomReportLines', 'mvCustomReportData'];
+      for (const ik of innerKeys) {
+        const ia = pushIfArray(ob[ik]);
+        if (ia?.length) return ia;
+      }
+    }
+  }
+
+  const firstArr = Object.values(b).find(
+    (x) =>
+      Array.isArray(x) &&
+      x.length > 0 &&
+      x.every((item) => item !== null && typeof item === 'object' && !Array.isArray(item))
+  );
+  return firstArr && Array.isArray(firstArr) ? (firstArr as Record<string, unknown>[]) : [];
+}
+
+async function fetchAllCustomReportPages(
+  apiKey: string,
+  reportId: string,
+  date1Iso: string,
+  date2Iso: string
+): Promise<Record<string, unknown>[]> {
+  const all: Record<string, unknown>[] = [];
+
+  for (let page = 1; page <= CUSTOM_REPORT_MAX_PAGES; page++) {
+    const call = await mvCall('CustomReportGetData', apiKey, {
+      CustomReportId: reportId,
+      CustomReportParameters: { Date1: date1Iso, Date2: date2Iso },
+      Page: page,
+      Limit: CUSTOM_REPORT_LIMIT,
+    });
+
+    const err = asMvError(call, `CustomReportGetData (page ${page})`);
+    if (err) {
+      throw new Error(err);
+    }
+
+    const rows = extractCustomReportRows(call.body);
+    if (rows.length === 0) {
+      break;
+    }
+
+    all.push(...rows);
+    if (rows.length < CUSTOM_REPORT_LIMIT) break;
+  }
+
+  return all;
+}
+
+async function deleteMegaventoryCustomReportRows(db: Firestore, brandId: string): Promise<number> {
+  let deleted = 0;
+  let snap = await db.collection(CUSTOM_REPORT_COLLECTION).where('brandId', '==', brandId).limit(400).get();
+  while (!snap.empty) {
+    const batch = db.batch();
+    for (const doc of snap.docs) {
+      batch.delete(doc.ref);
+    }
+    await batch.commit();
+    deleted += snap.size;
+    snap = await db.collection(CUSTOM_REPORT_COLLECTION).where('brandId', '==', brandId).limit(400).get();
+  }
+  return deleted;
+}
+
+/** Αλλαγή ID report / enable χωρίς νέο API key (απαιτεί ενεργή σύνδεση). */
+export async function updateMegaventoryConnectorSettings(
+  brandId: string,
+  updates: {
+    customReportId?: string | null;
+    customReportEnabled?: boolean | null;
+  }
+): Promise<{ ok: boolean; error?: string }> {
+  const db = getDb();
+  const snap = await db.doc(`connectors/${brandId}`).get();
+  if (!snap.exists) return { ok: false, error: 'Δεν υπάρχουν ρυθμίσεις Megaventory.' };
+
+  const data = snap.data() as Record<string, unknown>;
+  const mv = data?.megaventory as Record<string, unknown> | undefined;
+  if (!mv?.connected || !mv?.apiKey) {
+    return { ok: false, error: 'Το Megaventory δεν είναι συνδεδεμένο.' };
+  }
+
+  const patch: Record<string, unknown> = {};
+
+  if (updates.customReportId !== undefined) {
+    if (updates.customReportId === null || updates.customReportId === '') {
+      patch['megaventory.customReportId'] = FieldValue.delete();
+    } else {
+      patch['megaventory.customReportId'] = String(updates.customReportId).trim();
+    }
+  }
+
+  if (updates.customReportEnabled !== undefined && updates.customReportEnabled !== null) {
+    patch['megaventory.customReportEnabled'] = Boolean(updates.customReportEnabled);
+  }
+
+  if (Object.keys(patch).length === 0) {
+    return { ok: true };
+  }
+
+  await db.doc(`connectors/${brandId}`).update(patch);
+  return { ok: true };
 }
 
 /**
@@ -248,24 +384,35 @@ export async function testMegaventoryConnection(apiKey: string): Promise<Megaven
 
 export async function saveMegaventoryCredentials(
   brandId: string,
-  apiKey: string
+  apiKey: string,
+  options?: { customReportId?: string; customReportEnabled?: boolean }
 ): Promise<{ success: boolean; accountName?: string; currency?: string; error?: string }> {
   const key = normalizeApiKey(apiKey);
   const test = await testMegaventoryConnection(key);
   if (!test.success) return { success: false, error: test.error };
 
-  await getDb().doc(`connectors/${brandId}`).set(
-    {
-      megaventory: {
-        connected: true,
-        apiKey: encryptToken(key),
-        accountName: test.accountName || '',
-        currency: test.currency || 'EUR',
-        connectedAt: FieldValue.serverTimestamp(),
-      },
-    },
-    { merge: true }
-  );
+  const ref = getDb().doc(`connectors/${brandId}`);
+  const prevMv = ((await ref.get()).data()?.megaventory || {}) as Record<string, unknown>;
+
+  const megaventory: Record<string, unknown> = {
+    ...prevMv,
+    connected: true,
+    apiKey: encryptToken(key),
+    accountName: test.accountName || '',
+    currency: test.currency || 'EUR',
+    connectedAt: FieldValue.serverTimestamp(),
+  };
+
+  if (options?.customReportId !== undefined) {
+    const id = String(options.customReportId || '').trim();
+    if (id) megaventory.customReportId = id;
+    else delete megaventory.customReportId;
+  }
+  if (options?.customReportEnabled !== undefined) {
+    megaventory.customReportEnabled = Boolean(options.customReportEnabled);
+  }
+
+  await ref.set({ megaventory }, { merge: true });
 
   logger.info(`[Megaventory] Connected brand ${brandId} (${test.accountName || 'unnamed'})`);
   return { success: true, accountName: test.accountName, currency: test.currency };
@@ -331,6 +478,8 @@ export interface MegaventorySyncResult {
   products?: number;
   stock?: number;
   suppliers?: number;
+  /** Γραμμές custom saved report (π.χ. stock / κινητικότητα) — συλλογή megaventory_custom_report_rows */
+  customReportRows?: number;
   error?: string;
 }
 
@@ -341,13 +490,13 @@ export interface MegaventorySyncResult {
 export async function fetchMegaventoryData(brandId: string): Promise<MegaventorySyncResult> {
   const db = getDb();
   const docSnap = await db.doc(`connectors/${brandId}`).get();
-  const conn = docSnap.data()?.megaventory;
+  const conn = docSnap.data()?.megaventory as Record<string, unknown> | undefined;
 
   if (!conn?.connected || !conn?.apiKey) {
     return { success: false, imported: 0, error: 'Megaventory not connected' };
   }
 
-  const apiKey = decryptToken(conn.apiKey);
+  const apiKey = decryptToken(conn.apiKey as string);
   if (!apiKey) {
     return { success: false, imported: 0, error: 'Megaventory API key unavailable — reconnect required' };
   }
@@ -355,9 +504,18 @@ export async function fetchMegaventoryData(brandId: string): Promise<Megaventory
   const since = new Date();
   since.setDate(since.getDate() - 90);
   const sinceStr = since.toISOString().split('T')[0]; // YYYY-MM-DD
+  const todayStr = new Date().toISOString().split('T')[0];
 
   let totalImported = 0;
-  const counts = { invoices: 0, salesOrders: 0, purchaseOrders: 0, products: 0, stock: 0, suppliers: 0 };
+  const counts = {
+    invoices: 0,
+    salesOrders: 0,
+    purchaseOrders: 0,
+    products: 0,
+    stock: 0,
+    suppliers: 0,
+    customReportRows: 0,
+  };
   const errors: string[] = [];
 
   try {
@@ -588,6 +746,39 @@ export async function fetchMegaventoryData(brandId: string): Promise<Megaventory
       counts.suppliers = items.length;
       totalImported += items.length;
       logger.info(`[Megaventory] Suppliers: ${items.length} imported for brand ${brandId}`);
+    }
+
+    // ── Custom saved report (π.χ. Performance / αποθέματα — CustomReportGetData) ──
+    const reportId = String(conn.customReportId || '').trim();
+    const reportEnabled = conn.customReportEnabled !== false;
+    if (reportId && reportEnabled) {
+      try {
+        const removed = await deleteMegaventoryCustomReportRows(db, brandId);
+        logger.info(`[Megaventory] Custom report purge: removed ${removed} rows for brand ${brandId}`);
+        const crRows = await fetchAllCustomReportPages(apiKey, reportId, sinceStr, todayStr);
+        const rid = sanitizeFirestoreDocId(reportId);
+        const bid = sanitizeFirestoreDocId(brandId);
+        const crItems = crRows.map((row, idx) => ({
+          id: `mv_cr_${bid}_${rid}_${idx}`,
+          data: {
+            reportId,
+            rowIndex: idx,
+            row,
+            source: 'megaventory_custom_report',
+            fetchedAt: FieldValue.serverTimestamp(),
+          },
+        }));
+        if (crItems.length) {
+          await writeBatch(db, CUSTOM_REPORT_COLLECTION, brandId, crItems);
+        }
+        counts.customReportRows = crItems.length;
+        totalImported += crItems.length;
+        logger.info(`[Megaventory] Custom report ${reportId}: ${crItems.length} rows for brand ${brandId}`);
+      } catch (crErr) {
+        const msg = crErr instanceof Error ? crErr.message : String(crErr);
+        errors.push(`CustomReport (${reportId}): ${msg}`);
+        logger.warn(`[Megaventory] Custom report sync failed brand ${brandId}: ${msg}`);
+      }
     }
 
     // ── Log import_jobs ──────────────────────────────────────────────

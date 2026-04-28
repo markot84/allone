@@ -374,6 +374,10 @@ service cloud.firestore {
       allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
       allow write: if false;
     }
+    match /megaventory_custom_report_rows/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
     // Shared strategy packages: public read (shareable links), auth write
     match /shared_packages/{packageId} {
       allow read: if true;

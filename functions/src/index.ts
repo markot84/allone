@@ -71,6 +71,7 @@ import {
 import {
   saveMegaventoryCredentials,
   fetchMegaventoryData,
+  updateMegaventoryConnectorSettings,
   setDb as setMegaventoryDb,
 } from './megaventoryConnector';
 import {
@@ -1029,6 +1030,8 @@ export const connectorDisconnect = onRequest(
         clearPayload.apiKey = '';
         clearPayload.accountName = '';
         clearPayload.currency = '';
+        clearPayload.customReportId = '';
+        clearPayload.customReportEnabled = false;
       }
       if (provider === 'shopify') {
         clearPayload.accessToken = '';
@@ -1289,12 +1292,32 @@ export const connectorSaveCredentials = onRequest(
         const result = await saveMagentoCredentials(brandId, storeUrl, magToken, storeCode);
         res.status(200).json(result);
       } else if (provider === 'megaventory') {
-        const { apiKey: mvKey } = req.body as { apiKey?: string };
+        const { apiKey: mvKey, megaventorySettingsOnly, customReportId, customReportEnabled } = req.body as {
+          apiKey?: string;
+          megaventorySettingsOnly?: boolean;
+          customReportId?: string;
+          customReportEnabled?: boolean;
+        };
+        if (megaventorySettingsOnly) {
+          const updated = await updateMegaventoryConnectorSettings(brandId, {
+            customReportId: customReportId !== undefined ? customReportId : undefined,
+            customReportEnabled: customReportEnabled !== undefined ? customReportEnabled : undefined,
+          });
+          if (!updated.ok) {
+            res.status(400).json({ success: false, error: updated.error || 'Αποτυχία ενημέρωσης' });
+            return;
+          }
+          res.status(200).json({ success: true });
+          return;
+        }
         if (!mvKey) {
           res.status(400).json({ error: 'Missing Megaventory apiKey' });
           return;
         }
-        const result = await saveMegaventoryCredentials(brandId, mvKey);
+        const result = await saveMegaventoryCredentials(brandId, mvKey, {
+          ...(customReportId !== undefined ? { customReportId } : {}),
+          ...(customReportEnabled !== undefined ? { customReportEnabled } : {}),
+        });
         res.status(200).json(result);
       } else {
         res.status(400).json({ error: `Credentials auth not supported for ${provider}` });

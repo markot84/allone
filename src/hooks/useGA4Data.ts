@@ -207,8 +207,11 @@ export function useGA4Data() {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
 
     const normalizeDateKey = (k: string): string | null => {
-      if (/^\d{4}-\d{2}-\d{2}$/.test(k)) return k;
-      if (/^\d{8}$/.test(k)) return `${k.slice(0, 4)}-${k.slice(4, 6)}-${k.slice(6, 8)}`;
+      const s = String(k).trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+      if (/^\d{8}$/.test(s)) return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
+      const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
       return null;
     };
 

@@ -837,12 +837,24 @@ function MegaventoryCredentialsModal({
   brandId,
   onSuccess,
   onCancel,
+  initialCustomReportId,
+  initialCustomReportEnabled,
 }: {
   brandId: string;
   onSuccess: () => void;
   onCancel: () => void;
+  initialCustomReportId?: string | null;
+  initialCustomReportEnabled?: boolean | null;
 }) {
   const [apiKey, setApiKey] = useState('');
+  const [customReportId, setCustomReportId] = useState(
+    initialCustomReportId != null && String(initialCustomReportId).trim()
+      ? String(initialCustomReportId).trim()
+      : '4919'
+  );
+  const [customReportEnabled, setCustomReportEnabled] = useState<boolean>(
+    initialCustomReportEnabled === undefined || initialCustomReportEnabled === null ? true : Boolean(initialCustomReportEnabled)
+  );
   const [showKey, setShowKey] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -867,11 +879,13 @@ function MegaventoryCredentialsModal({
           brandId,
           provider: 'megaventory',
           apiKey: apiKey.trim(),
+          customReportId: customReportId.trim(),
+          customReportEnabled,
         }),
       });
 
       const result = await res.json();
-      if (result.success) {
+      if (res.ok && result.success !== false && !result.error) {
         toast.success(`Megaventory συνδέθηκε${result.accountName ? `: ${result.accountName}` : ''}`);
         onSuccess();
       } else {
@@ -889,7 +903,7 @@ function MegaventoryCredentialsModal({
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)', padding: '16px' }}>
-      <div style={{ maxWidth: '460px', width: '100%', backgroundColor: '#fff', borderRadius: '16px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)', overflow: 'hidden' }}>
+      <div style={{ maxWidth: '460px', width: '100%', maxHeight: '90vh', overflow: 'auto', backgroundColor: '#fff', borderRadius: '16px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid #F3F4F6' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <span style={{ fontSize: '24px' }}>📦</span>
@@ -925,6 +939,28 @@ function MegaventoryCredentialsModal({
             </div>
           </div>
 
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>
+              Custom Report ID <span style={{ fontWeight: 400, color: '#9CA3AF' }}>(Performance+)</span>
+            </label>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={customReportId}
+              onChange={(e) => setCustomReportId(e.target.value)}
+              placeholder="π.χ. 4919"
+              style={inputStyle}
+            />
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px', fontSize: '12px', color: '#374151', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={customReportEnabled}
+                onChange={(e) => setCustomReportEnabled(e.target.checked)}
+              />
+              Σύγχρονη λήψη custom report στο sync (ανά brand)
+            </label>
+          </div>
+
           <p style={{ margin: 0, fontSize: '11px', color: '#9CA3AF', lineHeight: '1.5' }}>
             <strong style={{ color: '#6B7280' }}>Πού θα το βρεις:</strong> Megaventory → επάνω δεξιά (avatar) → <strong>My Profile</strong> →
             καρτέλα <strong>API Access</strong> → Generate / Copy <strong>API key</strong>.
@@ -957,6 +993,105 @@ function MegaventoryCredentialsModal({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Ρυθμίσεις saved custom report χωρίς επανείσοδο API key · γράφει στο connectors doc. */
+function MegaventoryCustomReportSettingsInline({
+  brandId,
+  initialReportId,
+  initialEnabled,
+  canManage,
+  onSaved,
+}: {
+  brandId: string;
+  initialReportId: string;
+  initialEnabled: boolean;
+  canManage: boolean;
+  onSaved: () => void;
+}) {
+  const [reportId, setReportId] = useState(initialReportId);
+  const [enabled, setEnabled] = useState(initialEnabled);
+  const [saving, setSaving] = useState(false);
+  const toast = useToast();
+
+  useEffect(() => {
+    setReportId(initialReportId);
+    setEnabled(initialEnabled);
+  }, [initialReportId, initialEnabled]);
+
+  const handleSaveSettings = async () => {
+    if (!canManage || saving) return;
+    setSaving(true);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error('Not authenticated');
+
+      const res = await fetch(`${FUNCTIONS_BASE}/connectorSaveCredentials`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          brandId,
+          provider: 'megaventory',
+          megaventorySettingsOnly: true,
+          customReportId: reportId.trim(),
+          customReportEnabled: enabled,
+        }),
+      });
+
+      const result = await res.json();
+      if (res.ok && !result.error) {
+        toast.success('Οι ρυθμίσεις custom report αποθηκεύτηκαν.');
+        onSaved();
+      } else {
+        toast.error(result.error || 'Αποτυχία αποθήκευσης');
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Αποτυχία');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="rounded-lg border border-[#E5E7EB] bg-[#FAFAFA] p-3 shadow-sm">
+      <p className="mb-2 text-sm font-semibold text-[#111827]">Custom report (Performance+)</p>
+      <p className="mb-1 text-xs text-[#6B7280]">Τα δεδομένα του αποθηκευμένου report στο Megaventory συγχρονίζονται στο Firestore ανά brand.</p>
+      <label htmlFor={`mv-cr-id-${brandId}`} className="mb-1 block text-xs font-medium text-[#374151]">
+        Report ID
+      </label>
+      <input
+        id={`mv-cr-id-${brandId}`}
+        type="text"
+        inputMode="numeric"
+        value={reportId}
+        onChange={(e) => setReportId(e.target.value)}
+        disabled={!canManage || saving}
+        placeholder="4919"
+        className="mb-3 max-w-[220px] rounded-md border border-[#E5E7EB] bg-white px-2.5 py-1.5 text-sm text-[#111827] shadow-sm disabled:opacity-50"
+      />
+      <label className="mb-3 flex cursor-pointer items-start gap-3 text-sm leading-snug text-[#374151]">
+        <input
+          type="checkbox"
+          checked={enabled}
+          onChange={(e) => setEnabled(e.target.checked)}
+          disabled={!canManage || saving}
+          className="mt-0.5 h-5 w-5 shrink-0 rounded border-2 border-[#D1D5DB] text-[var(--nts-accent,#f97316)] accent-[var(--nts-accent,#f97316)] disabled:opacity-50"
+        />
+        <span>Να συμπεριλαμβάνεται το custom report στο Sync (χειροκίνητο / νυχτερινό)</span>
+      </label>
+      <button
+        type="button"
+        onClick={() => void handleSaveSettings()}
+        disabled={!canManage || saving}
+        className="rounded-md bg-[#0EA5E9] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#0284C7] disabled:cursor-not-allowed disabled:bg-[#9CA3AF]"
+      >
+        {saving ? 'Αποθήκευση...' : 'Αποθήκευση ρυθμίσεων'}
+      </button>
     </div>
   );
 }
@@ -1488,6 +1623,9 @@ export function ConnectorsPanel() {
             typeof result.products === 'number' ? `προϊόντα ${result.products}` : '',
             typeof result.stock === 'number' ? `απόθεμα ${result.stock}` : '',
             typeof result.suppliers === 'number' ? `προμηθ. ${result.suppliers}` : '',
+            typeof result.customReportRows === 'number' && result.customReportRows > 0
+              ? `custom report ${result.customReportRows}`
+              : '',
           ].filter(Boolean);
           toast.success(
             bits.length
@@ -1672,6 +1810,8 @@ export function ConnectorsPanel() {
       {megaventoryModal && brandId && (
         <MegaventoryCredentialsModal
           brandId={brandId}
+          initialCustomReportId={connectorsData?.megaventory?.customReportId}
+          initialCustomReportEnabled={connectorsData?.megaventory?.customReportEnabled}
           onSuccess={() => {
             setMegaventoryModal(false);
             fetchStates();
@@ -1879,6 +2019,22 @@ export function ConnectorsPanel() {
                             </p>
                           ) : null;
                         })()}
+                      </div>
+                    )}
+
+                    {isConnected && conn.id === 'megaventory' && brandId && (
+                      <div className="mb-3 w-full text-sm">
+                        <MegaventoryCustomReportSettingsInline
+                          brandId={brandId}
+                          initialReportId={
+                            String((state as any).customReportId ?? '4919').trim() || '4919'
+                          }
+                          initialEnabled={(state as any).customReportEnabled !== false}
+                          canManage={canManageConnectors}
+                          onSaved={() => {
+                            void fetchStates();
+                          }}
+                        />
                       </div>
                     )}
 

@@ -1,10 +1,14 @@
 {
-  "version": "0.662.0",
-  "previousVersion": "0.661.0",
-  "commitHash": "e66d580",
+  "version": "0.666.0",
+  "previousVersion": "0.665.0",
+  "commitHash": "9110400",
   "branch": "main",
-  "buildDate": "2026-04-28T05:48:32.309Z",
+  "buildDate": "2026-04-28T08:36:30.835Z",
   "commits": [
+    {
+      "hash": "9110400",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "e66d580",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "97c1ca9",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "f5776fb",
-      "message": "fix(search-console): reduce sync window 3 years -> 1 year (only search terms)"
     }
   ],
   "changes": [
@@ -72,7 +72,6 @@
     "[Νέο χαρακτηριστικό] Extend historical sync window to 3 years across all sources",
     "[Διόρθωση] Hide legacy product-name fallback in popular searches widget",
     "[Διόρθωση] Period-aware E-commerce/Web Analytics + correct AOV calculation",
-    "[Διόρθωση] Forbid internal jargon (dead stock, ROAS, segment names) in customer messages",
-    "[Διόρθωση] Forbid segment names in customer-facing campaign messages"
+    "[Διόρθωση] Forbid internal jargon (dead stock, ROAS, segment names) in customer messages"
   ]
 }
