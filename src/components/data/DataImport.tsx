@@ -6,6 +6,7 @@ import { useRefreshProcurementSignals } from '../../hooks/useProcurementSignals'
 import { FileText, CheckCircle2, XCircle, AlertCircle, Clock, Trash2, FileUp, Link as LinkIcon, HelpCircle, ExternalLink, Package, Users, BarChart3, Euro, ClipboardList } from 'lucide-react';
 import { Card, Button, Spinner, ProgressBar, useToast, Badge, PageHeader } from '../common';
 import { importFile, saveImportJob, getImportJobs, getLastImportDates, isSupportedFile, PRODUCT_COLUMN_MAPPING, type ImportType, type ImportResult, type ImportJob, type ImportProgress, type CampaignChannelOverride } from '../../services/import';
+import { buildFunctionUrl } from '../../config/firebase';
 import { FEED_SOURCE_OPTIONS, downloadGoogleAdsCsvTemplate, type FeedSourceType } from '../../data/feedSourceConfig';
 import { FeedPreviewModal } from './FeedPreviewModal';
 import { FeedSourcesSection } from './FeedSourcesSection';
@@ -19,8 +20,7 @@ interface DataImportProps {
   initialType?: ImportType;
 }
 
-const PROCUREMENT_ENDPOINT =
-  'https://europe-west1-performance-plus-4a5b2.cloudfunctions.net/importData';
+const PROCUREMENT_ENDPOINT = buildFunctionUrl('/importData');
 
 const CURL_SNIPPET = `curl -X POST \\
   ${PROCUREMENT_ENDPOINT} \\

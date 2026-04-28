@@ -1,20 +1,16 @@
 import { useState, type FormEvent } from 'react';
 import { Send } from 'lucide-react';
 import { Card, Button, Spinner, useToast } from '../common';
-
-/** Προεπιλογή: απευθείας HTTP function (το Hosting rewrite σε gen2 συχνά δίνει 404). */
-const DEFAULT_SUBMIT_FN =
-  'https://europe-west1-performance-plus-4a5b2.cloudfunctions.net/submitInterestLead';
+import { buildFunctionUrl } from '../../config/firebase';
 
 /**
- * Dev: Vite proxy → ίδιο origin. Prod: απευθείας function URL + CORS στη συνάρτηση.
- * Override: VITE_INTEREST_LEAD_URL
+ * Dev: Vite proxy. Prod: απευθείας HTTP function (όχι μέσω Hosting — όριο ~60s στο proxy).
  */
 function getSubmitInterestLeadUrl(): string {
   const override = import.meta.env.VITE_INTEREST_LEAD_URL as string | undefined;
   if (override?.trim()) return override.trim();
   if (import.meta.env.DEV) return '/api/submitInterestLead';
-  return DEFAULT_SUBMIT_FN;
+  return buildFunctionUrl('/submitInterestLead');
 }
 
 export function InterestForm() {

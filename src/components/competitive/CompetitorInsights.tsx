@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { collection, doc, getDocs, setDoc, getDoc } from 'firebase/firestore';
-import { db, auth } from '../../config/firebase';
+import { db, auth, FUNCTIONS_BASE_URL } from '../../config/firebase';
 import { useBrand } from '../../hooks/useBrand';
 import { usePriceBenchmarks } from '../../hooks/usePriceBenchmarks';
 import { usePriceInsights, type PriceInsight } from '../../hooks/usePriceInsights';
@@ -36,9 +36,7 @@ import {
 } from '../../utils/competitiveTableExport';
 import { safeBrandName } from '../../services/reportExport';
 
-const FUNCTIONS_BASE =
-  import.meta.env.VITE_FUNCTIONS_URL ||
-  'https://europe-west1-performance-plus-4a5b2.cloudfunctions.net';
+const FUNCTIONS_BASE = FUNCTIONS_BASE_URL.replace(/\/$/, '');
 
 // ── Types ────────────────────────────────────────────────
 

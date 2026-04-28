@@ -1,9 +1,9 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { doc, getDoc } from 'firebase/firestore';
-import { db, auth } from '../config/firebase';
+import { db, auth, FUNCTIONS_BASE_URL } from '../config/firebase';
 import { useBrand } from './useBrand';
 
-const REFRESH_URL = 'https://europe-west1-performance-plus-4a5b2.cloudfunctions.net/refreshAggregates';
+const REFRESH_URL = `${FUNCTIONS_BASE_URL.replace(/\/$/, '')}/refreshAggregates`;
 
 interface ProductAggregates {
   totalSkus: number;

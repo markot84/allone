@@ -109,10 +109,16 @@ const CUSTOM_REPORT_LIMIT = 1000;
 const CUSTOM_REPORT_COLLECTION = 'megaventory_custom_report_rows';
 const CUSTOM_REPORT_MAX_PAGES = 500;
 
-/** Απόσπαση array γραμμών από απάντηση CustomReportGetData (πιθανά κλειδιά ανά έκδοση API). */
+/** Απόσπαση array γραμμών από απάντηση CustomReportGetData (επίσημη μορφή: `Rows[]` με `{ Index, Data[] }`). */
 export function extractCustomReportRows(body: unknown): Record<string, unknown>[] {
   if (!body || typeof body !== 'object') return [];
   const b = body as Record<string, unknown>;
+
+  if ('Rows' in b && Array.isArray(b.Rows)) {
+    const rws = b.Rows as Record<string, unknown>[];
+    if (rws.length === 0) return [];
+    return rws.map((r) => normalizeMvCustomReportRow(r));
+  }
 
   const pushIfArray = (v: unknown): Record<string, unknown>[] | null => {
     if (!Array.isArray(v)) return null;
@@ -135,7 +141,15 @@ export function extractCustomReportRows(body: unknown): Record<string, unknown>[
 
   for (const k of keys) {
     const arr = pushIfArray(b[k]);
-    if (arr?.length) return arr;
+    if (arr?.length) {
+      const row0 = arr[0];
+      if ('Data' in row0 || 'data' in row0 || 'cells' in row0) {
+        return arr.map((r) =>
+          normalizeMvCustomReportRow(r as Record<string, unknown>)
+        );
+      }
+      return arr;
+    }
     const inner = b[k];
     if (inner && typeof inner === 'object' && !Array.isArray(inner)) {
       const ob = inner as Record<string, unknown>;
@@ -153,7 +167,37 @@ export function extractCustomReportRows(body: unknown): Record<string, unknown>[
       x.length > 0 &&
       x.every((item) => item !== null && typeof item === 'object' && !Array.isArray(item))
   );
-  return firstArr && Array.isArray(firstArr) ? (firstArr as Record<string, unknown>[]) : [];
+  if (firstArr && Array.isArray(firstArr)) {
+    const row0 = (firstArr as Record<string, unknown>[])[0];
+    if ('Data' in (row0 || {}) || 'data' in (row0 || {})) {
+      return (firstArr as Record<string, unknown>[]).map((r) =>
+        normalizeMvCustomReportRow(r as Record<string, unknown>)
+      );
+    }
+    return firstArr as Record<string, unknown>[];
+  }
+
+  return [];
+}
+
+/** Επίσημη δομή γραμμής: `{ Index?, Data?: [{ ColumnId, ColumnName, Value }] }` */
+function normalizeMvCustomReportRow(r: Record<string, unknown>): Record<string, unknown> {
+  const dataRaw = r.Data ?? r.data;
+  if (!Array.isArray(dataRaw)) {
+    return { ...r };
+  }
+  const cells = dataRaw as Record<string, unknown>[];
+  const flat: Record<string, unknown> = {
+    mvRowIndex: r.Index ?? r.index ?? null,
+    source: 'megaventory_custom_report_row',
+    cells,
+  };
+  for (const c of cells) {
+    const name = String((c as { ColumnName?: string }).ColumnName || '').trim();
+    if (!name) continue;
+    flat[name] = (c as { Value?: unknown }).Value;
+  }
+  return flat;
 }
 
 async function fetchAllCustomReportPages(
@@ -162,14 +206,34 @@ async function fetchAllCustomReportPages(
   date1Iso: string,
   date2Iso: string
 ): Promise<Record<string, unknown>[]> {
+  const ridNum = parseInt(String(reportId).trim(), 10);
+  /** API βλ.: CustomReportId (int)· στείλε αριθμό όταν υπάρχει. */
+  const customReportId: string | number = Number.isFinite(ridNum) ? ridNum : reportId.trim();
+
+  const baseBody: Record<string, unknown> = {
+    CustomReportId: customReportId,
+    CustomReportParameters: { Date1: date1Iso, Date2: date2Iso },
+  };
+
+  // 1) Χωρίς Page/Limit — το OFFSET/FETCH από pagination σπάει ορισμένα SQL reports (500).
+  const callNoPage = await mvCall('CustomReportGetData', apiKey, { ...baseBody });
+  const errNoPage = asMvError(callNoPage, 'CustomReportGetData (no Page/Limit)');
+  if (!errNoPage) {
+    const rows = extractCustomReportRows(callNoPage.body);
+    return rows;
+  }
+
+  logger.warn(`[Megaventory] CustomReportGetData without pagination: ${errNoPage} — fallback Page/Limit`);
+
+  // 2) Pagination (μικρότερο Limit μερικές φορές μειώνει SQL πίεση)
   const all: Record<string, unknown>[] = [];
+  const pageLimit = Math.min(CUSTOM_REPORT_LIMIT, 500);
 
   for (let page = 1; page <= CUSTOM_REPORT_MAX_PAGES; page++) {
     const call = await mvCall('CustomReportGetData', apiKey, {
-      CustomReportId: reportId,
-      CustomReportParameters: { Date1: date1Iso, Date2: date2Iso },
+      ...baseBody,
       Page: page,
-      Limit: CUSTOM_REPORT_LIMIT,
+      Limit: pageLimit,
     });
 
     const err = asMvError(call, `CustomReportGetData (page ${page})`);
@@ -183,7 +247,7 @@ async function fetchAllCustomReportPages(
     }
 
     all.push(...rows);
-    if (rows.length < CUSTOM_REPORT_LIMIT) break;
+    if (rows.length < pageLimit) break;
   }
 
   return all;

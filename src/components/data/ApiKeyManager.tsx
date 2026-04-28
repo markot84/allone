@@ -5,6 +5,7 @@ import { Card, Button, Badge, Spinner, useToast, PageHeader } from '../common';
 import { useBrand } from '../../hooks/useBrand';
 import { useAuth } from '../../hooks/useAuth';
 import { FirestoreService } from '../../services/firestore';
+import { buildFunctionUrl } from '../../config/firebase';
 
 interface ApiKeyDoc {
   id: string;
@@ -15,7 +16,7 @@ interface ApiKeyDoc {
   createdAt: { seconds: number } | string;
 }
 
-const IMPORT_ENDPOINT = 'https://importdata-edvzr6unva-ew.a.run.app';
+const IMPORT_ENDPOINT = buildFunctionUrl('/importData');
 
 export function ApiKeyManager() {
   const { currentBrand } = useBrand();

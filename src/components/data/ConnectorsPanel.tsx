@@ -4,7 +4,7 @@ import { useBrand } from '../../hooks/useBrand';
 import { useAuth } from '../../hooks/useAuth';
 import { useBrandMembers } from '../../hooks/useCoordination';
 import { useModules } from '../../hooks/useModules';
-import { auth, FUNCTIONS_BASE_URL } from '../../config/firebase';
+import { auth, FUNCTIONS_BASE_URL, getFunctionsOrigin } from '../../config/firebase';
 import { getLastImportDates } from '../../services/import';
 import { coerceToDate } from '../../utils/coerceDate';
 import { clearOAuthSession, readOAuthSessionPayload } from '../../utils/oauthSession';
@@ -271,12 +271,8 @@ const CONNECTORS: ConnectorConfig[] = [
   },
 ];
 
-/** Ίδιο fallback με `firebase.ts` — αποφεύγει λάθος base URL (Failed to fetch). */
-const FUNCTIONS_BASE = (
-  import.meta.env.VITE_FUNCTIONS_URL ||
-  FUNCTIONS_BASE_URL ||
-  'https://europe-west1-performance-plus-4a5b2.cloudfunctions.net'
-).replace(/\/$/, '');
+/** Απευθείας cloudfunctions.net ώστε μεγάλα sync (Megaventory) να μην κόβονται από όριο Hosting ~60s. */
+const FUNCTIONS_BASE = FUNCTIONS_BASE_URL.replace(/\/$/, '');
 
 // ─── Account Picker Modal ────────────────────────────────────────
 
@@ -1496,7 +1492,7 @@ export function ConnectorsPanel() {
       const token = await auth.currentUser?.getIdToken();
       if (!token) throw new Error('Not authenticated');
 
-      const callbackUrl = `${FUNCTIONS_BASE}/connectorCallback`;
+      const callbackUrl = `${getFunctionsOrigin().replace(/\/$/, '')}/connectorCallback`;
 
       const body: Record<string, string> = {
         brandId,

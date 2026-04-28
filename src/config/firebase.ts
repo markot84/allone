@@ -79,7 +79,40 @@ const FUNCTIONS_REGION = import.meta.env.VITE_FIREBASE_FUNCTIONS_REGION || 'euro
 const FUNCTIONS_PROJECT =
   import.meta.env.VITE_FIREBASE_PROJECT_ID || 'performance-plus-4a5b2';
 
-/** Βάση URL για HTTP Cloud Functions (email, connectors, κ.λπ.) */
-export const FUNCTIONS_BASE_URL =
-  import.meta.env.VITE_FUNCTIONS_BASE_URL ||
-  `https://${FUNCTIONS_REGION}-${FUNCTIONS_PROJECT}.cloudfunctions.net`;
+const DEFAULT_CF_BASE = `https://${FUNCTIONS_REGION}-${FUNCTIONS_PROJECT}.cloudfunctions.net`;
+
+/** Ρητό override από .env (staging / άλλο project). */
+function resolvedExplicitFunctionsBase(): string | null {
+  const raw = (import.meta.env.VITE_FUNCTIONS_BASE_URL || import.meta.env.VITE_FUNCTIONS_URL || '').trim();
+  if (!raw) return null;
+  return (raw.startsWith('http') ? raw : `https://${raw}`).replace(/\/$/, '');
+}
+
+/**
+ * Βάση για `fetch()` προς HTTP Cloud Functions.
+ *
+ * Σημαντικό: το **Firebase Hosting** κόβει τα requests που κάνει proxy σε function σε **~60s**.
+ * Το `connectorSync` (Megaventory κ.λπ.) μπορεί να τρέχει πολλά λεπτά — πρέπει **απευθείας**
+ * στο `*.cloudfunctions.net`, όχι μέσω Hosting rewrite (αλλιώς 502/504).
+ */
+export const FUNCTIONS_BASE_URL = resolvedExplicitFunctionsBase() ?? DEFAULT_CF_BASE;
+
+/**
+ * Απόλυτο origin για OAuth `redirect_uri`, curl snippets, κ.λπ.
+ * Σε production SPA = `window.location.origin` (custom domain ή web.app).
+ */
+export function getFunctionsOrigin(): string {
+  const ex = resolvedExplicitFunctionsBase();
+  if (ex) return ex;
+  if (import.meta.env.DEV) return DEFAULT_CF_BASE;
+  if (typeof window !== 'undefined' && window.location?.origin) return window.location.origin;
+  return DEFAULT_CF_BASE;
+}
+
+/** Σταθερό public URL function (curl / API keys) — πάντα cloudfunctions.net εκτός αν έχεις ρητό .env. */
+export function buildFunctionUrl(path: string): string {
+  const p = path.startsWith('/') ? path : `/${path}`;
+  const ex = resolvedExplicitFunctionsBase();
+  if (ex) return `${ex.replace(/\/$/, '')}${p}`;
+  return `${DEFAULT_CF_BASE}${p}`;
+}

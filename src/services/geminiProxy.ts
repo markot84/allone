@@ -1,8 +1,7 @@
 import { getAuth } from 'firebase/auth';
-import { getAppCheckHeader } from '../config/firebase';
+import { FUNCTIONS_BASE_URL, getAppCheckHeader } from '../config/firebase';
 
-const PROXY_URL =
-  'https://europe-west1-performance-plus-4a5b2.cloudfunctions.net/geminiProxy';
+const PROXY_URL = `${FUNCTIONS_BASE_URL.replace(/\/$/, '')}/geminiProxy`;
 
 export interface GeminiProxyParams {
   systemPrompt?: string;
