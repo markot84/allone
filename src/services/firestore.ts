@@ -27,6 +27,8 @@ export const createOrderBy = (field: string, direction: 'asc' | 'desc' = 'desc')
 };
 import { db } from '../config/firebase';
 import type { Product } from '../types';
+import type { MarketBrief } from './aiMarketBrief';
+import { marketBriefDocId } from './aiMarketBrief';
 
 /**
  * Firestore rejects `undefined` anywhere in the payload (including nested objects in arrays).
@@ -435,6 +437,48 @@ export const SegmentCustomersService = {
     const docs = await FirestoreService.getDocuments('segment_customers', [], brandId);
     return docs.length > 0;
   },
+};
+
+export type MarketBriefFirestoreDoc = {
+  id: string;
+  brandId: string;
+  countryCode: string;
+  countryName: string;
+  verticalFocus?: string;
+  brief: MarketBrief;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export const MarketBriefsService = {
+  getAll: (brandId: string) =>
+    FirestoreService.getDocuments<MarketBriefFirestoreDoc>('market_briefs', [], brandId),
+
+  getById: (id: string) => FirestoreService.getDocument<MarketBriefFirestoreDoc>('market_briefs', id),
+
+  async save(
+    brandId: string,
+    countryName: string,
+    countryCode: string,
+    verticalFocus: string | undefined,
+    brief: MarketBrief
+  ): Promise<string> {
+    const id = marketBriefDocId(brandId, countryCode);
+    const existing = await FirestoreService.getDocument<MarketBriefFirestoreDoc>('market_briefs', id);
+    const createdAt = existing?.createdAt ?? new Date().toISOString();
+    await FirestoreService.setDocument('market_briefs', id, {
+      brandId,
+      countryCode: countryCode.toUpperCase().slice(0, 2),
+      countryName,
+      verticalFocus: verticalFocus?.trim() || '',
+      brief,
+      createdAt,
+      updatedAt: new Date().toISOString(),
+    } as Record<string, unknown>);
+    return id;
+  },
+
+  delete: (id: string) => FirestoreService.deleteDocument('market_briefs', id),
 };
 
 export const SuppliersService = {

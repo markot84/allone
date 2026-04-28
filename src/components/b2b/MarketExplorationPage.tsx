@@ -1,5 +1,6 @@
 import { Compass, Globe2, MapPinned, Radar, Rocket } from 'lucide-react';
 import { Button, Card, KPICard, PageHeader } from '../common';
+import { MarketBriefExplorer } from './MarketBriefExplorer';
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import { useCampaigns } from '../../hooks/useCampaigns';
 import { useGA4Data } from '../../hooks/useGA4Data';
@@ -109,6 +110,8 @@ export function MarketExplorationPage({ onSectionChange }: MarketExplorationPage
           onClick={() => onSectionChange?.('campaigns')}
         />
       </div>
+
+      <MarketBriefExplorer />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         {expansionLanes.map((lane) => (

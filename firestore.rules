@@ -136,6 +136,11 @@ service cloud.firestore {
       allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
       allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
     }
+    match /market_briefs/{briefId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
     match /import_jobs/{jobId} {
       allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
       allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
