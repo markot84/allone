@@ -1,10 +1,14 @@
 {
-  "version": "0.673.0",
-  "previousVersion": "0.672.0",
-  "commitHash": "89e69f0",
+  "version": "0.675.0",
+  "previousVersion": "0.674.0",
+  "commitHash": "68d6bd6",
   "branch": "main",
-  "buildDate": "2026-04-28T13:38:32.694Z",
+  "buildDate": "2026-04-28T14:15:42.174Z",
   "commits": [
+    {
+      "hash": "68d6bd6",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "89e69f0",
       "message": "chore: full deploy"
@@ -60,16 +64,11 @@
     {
       "hash": "7e8e09c",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "34751bf",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [
     "[Συντήρηση] Full deploy",
     "[Διόρθωση] Reduce sync window 3 years -> 1 year (only search terms)",
-    "[Νέο χαρακτηριστικό] Extend historical sync window to 3 years across all sources",
-    "[Διόρθωση] Hide legacy product-name fallback in popular searches widget"
+    "[Νέο χαρακτηριστικό] Extend historical sync window to 3 years across all sources"
   ]
 }

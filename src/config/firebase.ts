@@ -98,8 +98,8 @@ function resolvedExplicitFunctionsBase(): string | null {
 export const FUNCTIONS_BASE_URL = resolvedExplicitFunctionsBase() ?? DEFAULT_CF_BASE;
 
 /**
- * Απόλυτο origin για OAuth `redirect_uri`, curl snippets, κ.λπ.
- * Σε production SPA = `window.location.origin` (custom domain ή web.app).
+ * Legacy / misc origin helper. Για OAuth `redirect_uri` χρησιμοποίησε `FUNCTIONS_BASE_URL` + `/connectorCallback`
+ * (ίδιο host με `connectorAuth`), όχι `window.location.origin` — αλλιώς `redirect_uri_mismatch` στο Google Console.
  */
 export function getFunctionsOrigin(): string {
   const ex = resolvedExplicitFunctionsBase();

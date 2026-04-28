@@ -4,7 +4,7 @@ import { useBrand } from '../../hooks/useBrand';
 import { useAuth } from '../../hooks/useAuth';
 import { useBrandMembers } from '../../hooks/useCoordination';
 import { useModules } from '../../hooks/useModules';
-import { auth, FUNCTIONS_BASE_URL, getFunctionsOrigin } from '../../config/firebase';
+import { auth, FUNCTIONS_BASE_URL } from '../../config/firebase';
 import { getLastImportDates } from '../../services/import';
 import { coerceToDate } from '../../utils/coerceDate';
 import { clearOAuthSession, readOAuthSessionPayload } from '../../utils/oauthSession';
@@ -1492,7 +1492,8 @@ export function ConnectorsPanel() {
       const token = await auth.currentUser?.getIdToken();
       if (!token) throw new Error('Not authenticated');
 
-      const callbackUrl = `${getFunctionsOrigin().replace(/\/$/, '')}/connectorCallback`;
+      // OAuth redirect must match Cloud Functions host (same as connectorAuth), not SPA origin — avoids redirect_uri_mismatch on custom domains / web.app.
+      const callbackUrl = `${FUNCTIONS_BASE}/connectorCallback`;
 
       const body: Record<string, string> = {
         brandId,
