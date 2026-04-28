@@ -1535,6 +1535,15 @@ export const scheduledSync = onSchedule(
           }
         }
 
+        if (data.search_console?.connected && data.search_console?.siteUrl) {
+          try {
+            const result = await fetchSearchConsoleData(brandId);
+            logger.info(`[ScheduledSync] Search Console for ${brandId}: imported ${result.imported} rows`);
+          } catch (err) {
+            logger.error(`[ScheduledSync] Search Console failed for ${brandId}:`, err);
+          }
+        }
+
         // Refresh e-commerce summary if any e-commerce platform is connected
         const hasEcommerce = data.shopify?.connected || data.woocommerce?.connected || data.opencart?.connected || data.magento?.connected;
         if (hasEcommerce) {

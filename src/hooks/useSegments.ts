@@ -6,7 +6,7 @@ import { getSegmentColor } from '../utils/segmentColors';
 import { useBrand } from './useBrand';
 import { useEcommerceSummary } from './useEcommerceSummary';
 import { fetchAllEcommerceOrders } from '../services/ecommerceRawOrders';
-import { computeRfmSegmentsFromEcommerceOrders } from '../services/rfmFromOrders';
+import { computeRfmSegmentsFromEcommerceOrders, computeSegmentMigrationFromEcommerceOrders } from '../services/rfmFromOrders';
 import type { RFMSegment } from '../types';
 
 const STORAGE_KEY = (brandId: string) => `pp-rfm-data-source-${brandId}`;
@@ -119,6 +119,7 @@ export function useSegments() {
   });
 
   const orderRfm = useMemo(() => computeRfmSegmentsFromEcommerceOrders(rawOrders), [rawOrders]);
+  const orderSegmentMigration = useMemo(() => computeSegmentMigrationFromEcommerceOrders(rawOrders, 30), [rawOrders]);
 
   const canComputeFromOrders = orderRfm.canCompute;
   const rebuiltCustomerSegments = useMemo(
@@ -216,6 +217,7 @@ export function useSegments() {
             guestOrdersSkipped: orderRfm.guestOrdersSkipped,
           }
         : undefined,
+    segmentMigration: resolvedSource === 'ecommerce' ? orderSegmentMigration : undefined,
     importSegmentsAvailable,
   };
 }

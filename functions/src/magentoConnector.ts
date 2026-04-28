@@ -151,7 +151,8 @@ async function fetchAndSaveMagentoPopularSearchTerms(
   brandId: string,
   restApiBase: string,
   storeCode: string,
-  headers: Record<string, string>
+  headers: Record<string, string>,
+  storeId?: number
 ): Promise<number> {
   // Σεβόμαστε admin CSV upload: αν ο user έχει ανεβάσει χειροκίνητα search terms
   // από Magento Admin (Marketing → Search Terms), ΔΕΝ τα overwrite-άρουμε.
@@ -168,7 +169,11 @@ async function fetchAndSaveMagentoPopularSearchTerms(
     /* ignore */
   }
 
+  const customModuleQuery = Number.isFinite(storeId) && storeId && storeId > 0
+    ? `performance-plus/search-terms?limit=100&storeId=${encodeURIComponent(String(storeId))}`
+    : 'performance-plus/search-terms?limit=100';
   const paths = [
+    customModuleQuery,
     'searchTerms?searchCriteria[pageSize]=50&searchCriteria[sortOrders][0][field]=popularity&searchCriteria[sortOrders][0][direction]=DESC',
     'searchTerms?searchCriteria[pageSize]=50',
   ];
@@ -206,8 +211,12 @@ async function fetchAndSaveMagentoPopularSearchTerms(
             brandId,
             terms: terms.slice(0, 100),
             syncedAt: FieldValue.serverTimestamp(),
-            source: 'magento_searchTerms_api',
-            termsProvenance: 'magento_searchTerms_rest',
+            source: path.startsWith('performance-plus/')
+              ? 'magento_performance_plus_search_terms_api'
+              : 'magento_searchTerms_api',
+            termsProvenance: path.startsWith('performance-plus/')
+              ? 'magento_performance_plus_module'
+              : 'magento_searchTerms_rest',
           },
           { merge: true }
         );
@@ -746,7 +755,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
     // Real Magento search queries (popularity from /V1/searchTerms — Commerce/extension only).
     // Magento Open Source ΔΕΝ εκθέτει αυτό το endpoint by default. Για OSS, ο χρήστης
     // ανεβάζει CSV από Marketing → Search Terms (UI). ΔΕΝ χρησιμοποιούμε ονόματα προϊόντων ως proxy.
-    await fetchAndSaveMagentoPopularSearchTerms(db, brandId, restApiBase, storeCode, headers);
+    await fetchAndSaveMagentoPopularSearchTerms(db, brandId, restApiBase, storeCode, headers, storeId);
 
     // ── Products ───────────────────────────────────────────────────────
     // Δεν περιορίζουμε με `fields` ώστε να πάρουμε media_gallery_entries, custom_attributes,

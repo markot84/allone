@@ -11,6 +11,22 @@ export type RfmFromOrdersResult = {
   canCompute: boolean;
 };
 
+export type SegmentMigrationFlow = {
+  from: string;
+  fromName: string;
+  to: string;
+  toName: string;
+  count: number;
+  percentage: number;
+};
+
+export type SegmentMigrationResult = {
+  periodDays: number;
+  comparedCustomers: number;
+  flows: SegmentMigrationFlow[];
+  canCompute: boolean;
+};
+
 type CustomerAgg = {
   key: string;
   email?: string;
@@ -37,6 +53,11 @@ type SegmentAgg = {
   hourCounts: Map<string, number>;
   affinity: Map<string, { revenue: number; quantity: number; orders: Set<string> }>;
   customers: NonNullable<RFMSegment['customers']>;
+};
+
+type CustomerSegmentAssignment = {
+  id: string;
+  name: string;
 };
 
 const DAY_LABELS = ['Κυριακή', 'Δευτέρα', 'Τρίτη', 'Τετάρτη', 'Πέμπτη', 'Παρασκευή', 'Σάββατο'];
@@ -291,6 +312,146 @@ function buildPredictiveMetrics(g: SegmentAgg, profile: BehavioralProfile): Pred
     revenue_forecast_90d: Math.round(revenuePerDay * 90 * (retentionScore / 100)),
     demand_trend: demandTrend,
     retention_score: retentionScore,
+  };
+}
+
+function validOrderRevenue(o: EcommerceRawOrder): { revenue: number; valid: boolean } {
+  const { revenue, isAllDemo } = getEcommerceOrderNetRevenue(o);
+  return {
+    revenue,
+    valid: !isAllDemo && !isEcommerceOrderCancelled(o.status) && revenue > 0,
+  };
+}
+
+function aggregateCustomersUntil(orders: EcommerceRawOrder[], asOf: Date): CustomerAgg[] {
+  const byKey = new Map<string, CustomerAgg>();
+  const asOfMs = asOf.getTime();
+
+  for (const o of orders) {
+    const key = o.customerKey?.trim();
+    if (!key) continue;
+    const createdAtMs = new Date(o.createdAt || '').getTime();
+    if (!Number.isFinite(createdAtMs) || createdAtMs > asOfMs) continue;
+    const { revenue, valid } = validOrderRevenue(o);
+    if (!valid) continue;
+
+    const cur = byKey.get(key);
+    if (!cur) {
+      byKey.set(key, {
+        key,
+        ...(o.customerEmail ? { email: o.customerEmail } : {}),
+        lastOrder: o.createdAt,
+        firstOrder: o.createdAt,
+        orderCount: 1,
+        revenue,
+        orders: [o],
+      });
+    } else {
+      cur.orderCount += 1;
+      cur.revenue += revenue;
+      cur.orders.push(o);
+      if (!cur.email && o.customerEmail) cur.email = o.customerEmail;
+      if (o.createdAt > cur.lastOrder) cur.lastOrder = o.createdAt;
+      if (o.createdAt < cur.firstOrder) cur.firstOrder = o.createdAt;
+    }
+  }
+
+  return [...byKey.values()];
+}
+
+function buildCustomerSegmentAssignments(customers: CustomerAgg[], asOf: Date): Map<string, CustomerSegmentAssignment> {
+  const assignments = new Map<string, CustomerSegmentAssignment>();
+  if (customers.length === 0) return assignments;
+
+  const recencyDays = customers.map((c) => {
+    const last = new Date(c.lastOrder);
+    const t = asOf.getTime() - last.getTime();
+    return Math.max(0, Math.floor(t / (24 * 60 * 60 * 1000)));
+  });
+  const frequencies = customers.map((c) => c.orderCount);
+  const monetaries = customers.map((c) => c.revenue);
+  const rScores = assignQuintileScores(recencyDays, true);
+  const fScores = assignQuintileScores(frequencies, false);
+  const mScores = assignQuintileScores(monetaries, false);
+
+  customers.forEach((customer, i) => {
+    const segment = segmentFromRfmScores(rScores[i] ?? 3, fScores[i] ?? 3, mScores[i] ?? 3);
+    assignments.set(customer.key, { id: segment.id, name: segment.name });
+  });
+
+  return assignments;
+}
+
+export function computeSegmentMigrationFromEcommerceOrders(
+  orders: EcommerceRawOrder[],
+  periodDays = 30
+): SegmentMigrationResult {
+  const validOrderDates = orders
+    .filter((o) => o.customerKey?.trim())
+    .filter((o) => validOrderRevenue(o).valid)
+    .map((o) => new Date(o.createdAt || ''))
+    .filter((d) => Number.isFinite(d.getTime()))
+    .sort((a, b) => b.getTime() - a.getTime());
+
+  const currentAsOf = validOrderDates[0];
+  if (!currentAsOf) {
+    return { periodDays, comparedCustomers: 0, flows: [], canCompute: false };
+  }
+
+  currentAsOf.setHours(23, 59, 59, 999);
+  const previousAsOf = new Date(currentAsOf);
+  previousAsOf.setDate(previousAsOf.getDate() - periodDays);
+  previousAsOf.setHours(23, 59, 59, 999);
+
+  const previousAssignments = buildCustomerSegmentAssignments(
+    aggregateCustomersUntil(orders, previousAsOf),
+    previousAsOf
+  );
+  const currentAssignments = buildCustomerSegmentAssignments(
+    aggregateCustomersUntil(orders, currentAsOf),
+    currentAsOf
+  );
+
+  if (previousAssignments.size === 0 || currentAssignments.size === 0) {
+    return { periodDays, comparedCustomers: 0, flows: [], canCompute: false };
+  }
+
+  const flows = new Map<string, SegmentMigrationFlow>();
+  let comparedCustomers = 0;
+  for (const [customerKey, prev] of previousAssignments.entries()) {
+    const current = currentAssignments.get(customerKey);
+    if (!current) continue;
+    comparedCustomers += 1;
+    if (prev.id === current.id) continue;
+    const key = `${prev.id}->${current.id}`;
+    const existing = flows.get(key);
+    if (existing) {
+      existing.count += 1;
+    } else {
+      flows.set(key, {
+        from: prev.id,
+        fromName: prev.name,
+        to: current.id,
+        toName: current.name,
+        count: 1,
+        percentage: 0,
+      });
+    }
+  }
+
+  const out = [...flows.values()]
+    .map((flow) => ({
+      ...flow,
+      percentage: comparedCustomers > 0 ? Math.round((flow.count / comparedCustomers) * 1000) / 10 : 0,
+    }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 8);
+
+  return {
+    periodDays,
+    comparedCustomers,
+    flows: out,
+    canCompute: comparedCustomers > 0 && out.length > 0,
   };
 }
 

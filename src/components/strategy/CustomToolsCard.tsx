@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Save, FolderOpen } from 'lucide-react';
 import { Button } from '../common';
-import { scenarios } from '../../data';
 import {
   getPresets,
   savePreset,
@@ -39,14 +38,6 @@ export function CustomToolsCard({
     setTimeout(() => setToast(null), 2500);
   };
 
-  const handleCloneFrom = (scenarioId: string) => {
-    const scenario = scenarios.find((s) => s.id === scenarioId);
-    if (scenario?.weights) {
-      onWeightsChange({ ...scenario.weights });
-      showToast(`Cloned from ${scenario.name}`);
-    }
-  };
-
   const handleSave = () => {
     if (!canSavePreset) return;
     const name = saveName.trim() || `Custom ${new Date().toLocaleDateString('el-GR')}`;
@@ -71,25 +62,6 @@ export function CustomToolsCard({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-3">
-        {/* Clone from */}
-        <div>
-          <label className="text-xs text-[#4A4A4A] block mb-1">Αντιγραφή από</label>
-          <select
-            value=""
-            onChange={(e) => {
-              const v = e.target.value;
-              if (v) handleCloneFrom(v);
-              e.target.value = '';
-            }}
-            className="px-3 py-2 bg-[#F5F5F5] border border-transparent rounded-lg text-sm"
-          >
-            <option value="">— Επέλεξε —</option>
-            {scenarios.filter((s) => s.weights).map((s) => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </select>
-        </div>
-
         {/* Save preset */}
         {showSaveInline ? (
           <div className="flex items-center gap-2">

@@ -1,10 +1,14 @@
 {
-  "version": "0.651.0",
-  "previousVersion": "0.650.0",
-  "commitHash": "4ff146c",
+  "version": "0.659.0",
+  "previousVersion": "0.658.0",
+  "commitHash": "23526ba",
   "branch": "main",
-  "buildDate": "2026-04-27T15:56:21.110Z",
+  "buildDate": "2026-04-28T05:06:33.930Z",
   "commits": [
+    {
+      "hash": "23526ba",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "4ff146c",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "cebd38e",
       "message": "feat(connectors): extend historical sync window to 3 years across all sources"
-    },
-    {
-      "hash": "d8fd36c",
-      "message": "fix(magento): hide legacy product-name fallback in popular searches widget"
     }
   ],
   "changes": [
@@ -74,7 +74,6 @@
     "[Διόρθωση] Period-aware E-commerce/Web Analytics + correct AOV calculation",
     "[Διόρθωση] Forbid internal jargon (dead stock, ROAS, segment names) in customer messages",
     "[Διόρθωση] Forbid segment names in customer-facing campaign messages",
-    "[Βελτίωση εμφάνισης] Rename funnel stages to EN + distinct hue palette",
-    "[Νέο χαρακτηριστικό] Skeleton UI + silent upgrade indicator + immediate cache refetch"
+    "[Βελτίωση εμφάνισης] Rename funnel stages to EN + distinct hue palette"
   ]
 }

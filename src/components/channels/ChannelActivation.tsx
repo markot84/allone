@@ -1285,8 +1285,17 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
 
         // Σύντομο Campaign Brief: 1ο sentence από κάθε section intro (ή full αν δεν υπάρχει structure)
         const firstSentence = (txt: string) => {
-          const m = txt.match(/[^.!?·]+[.!?·]?/);
-          return (m ? m[0] : txt).trim();
+          const text = txt.trim();
+          for (let i = 0; i < text.length; i++) {
+            const ch = text[i];
+            if (!'.!?·'.includes(ch)) continue;
+            const prev = text[i - 1] || '';
+            const next = text[i + 1] || '';
+            // Do not split Greek/European thousands or decimal numbers, e.g. 7.102 SKUs.
+            if (ch === '.' && /\d/.test(prev) && /\d/.test(next)) continue;
+            return text.slice(0, i + 1).trim();
+          }
+          return text;
         };
         const campaignBriefText = hasStructure
           ? sectionData.map((s) => firstSentence(s.intro)).filter(Boolean).join(' ')

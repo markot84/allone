@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState, useMemo, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { useBrand } from '../../hooks/useBrand';
 import {
@@ -11,12 +11,7 @@ import {
   ChevronUp,
   ArrowRight,
   Search,
-  Upload,
-  AlertTriangle,
-  CheckCircle2,
-  Info,
 } from 'lucide-react';
-import { importMagentoSearchTermsFile } from '../../services/magentoSearchTermsImport';
 import {
   fetchAllEcommerceOrders,
   getEcommerceOrderNetRevenue,
@@ -220,17 +215,17 @@ export function EcommerceDashboard() {
   const brandId = currentBrand?.id ?? null;
   const ecomm = useEcommerceSummary();
   const magentoSearches = useMagentoPopularSearches();
-  const queryClient = useQueryClient();
-  const searchTermsFileInputRef = useRef<HTMLInputElement | null>(null);
-  const [searchTermsUploading, setSearchTermsUploading] = useState(false);
-  const [searchTermsUploadResult, setSearchTermsUploadResult] = useState<
-    | { kind: 'success'; imported: number; total: number }
-    | { kind: 'error'; message: string }
-    | null
-  >(null);
 
   const magentoPopularMeta = useMemo(() => {
     switch (magentoSearches.termsProvenance) {
+      case 'magento_performance_plus_module':
+        return {
+          subtitle: 'Πραγματικά search queries από το Performance+ Magento module (search_query table).',
+          hitsLabel: 'Uses',
+          showResults: true,
+          badge: 'Auto Magento',
+          badgeTone: 'success' as const,
+        };
       case 'magento_admin_csv':
         return {
           subtitle: 'Πραγματικά search queries από εξαγωγή του Magento Admin (Marketing → Search Terms).',
@@ -251,7 +246,7 @@ export function EcommerceDashboard() {
       default:
         return {
           subtitle:
-            'Δεν υπάρχουν ακόμη πραγματικά search queries. Κάνε export CSV από Magento Admin (Marketing → Search Terms) και upload εδώ.',
+            'Δεν υπάρχουν ακόμη πραγματικά search queries. Για αυτόματο sync εγκατάστησε το Performance+ Magento module.',
           hitsLabel: 'Uses',
           showResults: true,
           badge: 'Χωρίς δεδομένα',
@@ -259,33 +254,6 @@ export function EcommerceDashboard() {
         };
     }
   }, [magentoSearches.termsProvenance]);
-
-  async function handleSearchTermsFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file || !brandId) return;
-    setSearchTermsUploading(true);
-    setSearchTermsUploadResult(null);
-    try {
-      const res = await importMagentoSearchTermsFile(brandId, file);
-      if (res.success) {
-        setSearchTermsUploadResult({ kind: 'success', imported: res.imported, total: res.totalRows });
-        await queryClient.invalidateQueries({ queryKey: ['magento_popular_searches', brandId] });
-      } else {
-        setSearchTermsUploadResult({
-          kind: 'error',
-          message: res.errors[0] ?? 'Άγνωστο σφάλμα κατά την επεξεργασία.',
-        });
-      }
-    } catch (err) {
-      setSearchTermsUploadResult({
-        kind: 'error',
-        message: err instanceof Error ? err.message : 'Σφάλμα uploading.',
-      });
-    } finally {
-      setSearchTermsUploading(false);
-    }
-  }
 
   // Date range: local override (session-only) falls back to global
   const { fromDate: globalFrom, toDate: globalTo, period: globalPeriod, setPeriod: setGlobalPeriod } = useGlobalDate();
@@ -951,52 +919,18 @@ export function EcommerceDashboard() {
             subtitle={magentoPopularMeta.subtitle}
             icon={<Search className="text-[#F46F25]" size={16} />}
             action={
-              <div className="flex items-center gap-2">
-                <span
-                  className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                    magentoPopularMeta.badgeTone === 'success'
-                      ? 'bg-[#ECFDF5] text-[#047857]'
-                      : 'bg-[#F3F4F6] text-[#6B7280]'
-                  }`}
-                >
-                  {magentoPopularMeta.badge}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => searchTermsFileInputRef.current?.click()}
-                  disabled={searchTermsUploading}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-[#F46F25] px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#EA580C] disabled:opacity-60"
-                >
-                  <Upload size={12} strokeWidth={2.5} />
-                  {searchTermsUploading ? 'Ανέβασμα…' : 'Upload CSV'}
-                </button>
-                <input
-                  ref={searchTermsFileInputRef}
-                  type="file"
-                  accept=".csv,.tsv,.txt,.xlsx,.xls"
-                  onChange={handleSearchTermsFile}
-                  className="hidden"
-                />
-              </div>
+              <span
+                className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                  magentoPopularMeta.badgeTone === 'success'
+                    ? 'bg-[#ECFDF5] text-[#047857]'
+                    : 'bg-[#F3F4F6] text-[#6B7280]'
+                }`}
+              >
+                {magentoPopularMeta.badge}
+              </span>
             }
           />
           <div className="px-5 pb-5 space-y-3">
-            {searchTermsUploadResult?.kind === 'success' && (
-              <div className="flex items-start gap-2 rounded-lg border border-[#A7F3D0] bg-[#ECFDF5] p-3 text-xs text-[#065F46]">
-                <CheckCircle2 size={14} className="mt-0.5 flex-shrink-0" />
-                <p>
-                  Επιτυχής εισαγωγή <strong>{searchTermsUploadResult.imported.toLocaleString()}</strong> search queries
-                  (από {searchTermsUploadResult.total.toLocaleString()} γραμμές αρχείου).
-                </p>
-              </div>
-            )}
-            {searchTermsUploadResult?.kind === 'error' && (
-              <div className="flex items-start gap-2 rounded-lg border border-[#FECACA] bg-[#FEF2F2] p-3 text-xs text-[#991B1B]">
-                <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" />
-                <p>{searchTermsUploadResult.message}</p>
-              </div>
-            )}
-
             {magentoSearches.isLoading ? (
               <p className="text-sm text-[#9CA3AF] py-4 text-center">Φόρτωση…</p>
             ) : magentoSearches.hasData &&
@@ -1066,38 +1000,11 @@ export function EcommerceDashboard() {
                 <Search className="mx-auto mb-2 text-[#D1D5DB]" size={28} />
                 <p className="text-sm font-medium text-[#374151] mb-1">Δεν υπάρχουν ακόμη search queries</p>
                 <p className="text-xs text-[#6B7280] mb-4 max-w-md mx-auto">
-                  Το Magento Open Source δεν εκθέτει το search_query table μέσω REST. Κάνε export CSV από Magento
-                  Admin και upload εδώ.
+                  Το Magento Open Source δεν εκθέτει το search_query table μέσω REST. Εγκατάστησε το
+                  Performance+ Magento module για πλήρως αυτόματο sync από το search_query table.
                 </p>
-                <button
-                  type="button"
-                  onClick={() => searchTermsFileInputRef.current?.click()}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-[#F46F25] px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-[#EA580C]"
-                >
-                  <Upload size={12} strokeWidth={2.5} /> Upload Search Terms CSV
-                </button>
               </div>
             )}
-
-            <details className="text-xs text-[#6B7280]">
-              <summary className="cursor-pointer flex items-center gap-1.5 font-medium text-[#374151] hover:text-[#111827]">
-                <Info size={12} /> Οδηγίες export από Magento Admin
-              </summary>
-              <ol className="mt-2 list-decimal pl-5 space-y-1 leading-relaxed">
-                <li>
-                  Magento Admin → <strong>Marketing</strong> → <em>SEO &amp; Search</em> → <strong>Search Terms</strong>
-                  .
-                </li>
-                <li>
-                  Στο grid πάνω-δεξιά: <strong>Export</strong> → επιλογή <em>CSV</em> → Export.
-                </li>
-                <li>
-                  Ανέβασε το αρχείο εδώ. Αναγνωρίζονται οι στήλες <code>Search Query</code>, <code>Results</code>,{' '}
-                  <code>Uses</code>.
-                </li>
-                <li>Τα queries ταξινομούνται αυτόματα κατά Uses (φθίνουσα).</li>
-              </ol>
-            </details>
           </div>
         </Card>
       )}

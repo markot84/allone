@@ -10,6 +10,7 @@ export interface MagentoPopularSearchTerm {
 }
 
 export type MagentoPopularSearchesProvenance =
+  | 'magento_performance_plus_module'
   | 'magento_searchTerms_rest'
   | 'magento_admin_csv'
   | 'magento_orders_line_items'

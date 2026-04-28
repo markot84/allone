@@ -767,7 +767,7 @@ function MagentoCredentialsModal({
             <strong>Callback URL</strong> / <strong>Identity Link URL</strong> είναι κενά — το Magento 2.4 το θεωρεί «μη ασφαλές».
             Συμπληρώστε και τα δύο με το <strong>HTTPS base URL του e-shop</strong> (π.χ. https://www.toshop.gr/) και Save.
             Το Performance+ χρησιμοποιεί μόνο το <strong>Access Token</strong> (Bearer) — όχι OAuth redirect. Μετά: Activate → αντιγράψτε το Access Token από τα 4 keys.
-            Permissions: Sales, Catalog, Stores.
+            Permissions: Sales, Catalog, Stores και Performance+ Search Terms αν έχει εγκατασταθεί το Magento module.
           </p>
 
           {error && (

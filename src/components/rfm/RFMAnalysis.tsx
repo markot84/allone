@@ -121,6 +121,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
     canComputeFromOrders,
     dataCoverage,
     orderRfmMeta,
+    segmentMigration,
     importSegmentsAvailable,
   } = useSegments();
   const ecomm = useEcommerceSummary();
@@ -132,6 +133,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
   const { activeStrategy } = useActiveStrategy();
   const channelRecommendation = activeStrategy?.channelRecommendation ?? null;
   const totalCustomersDisplay = totalCustomers;
+  const segmentColorById = new Map(rfmSegments.map((segment) => [segment.id, segment.color]));
 
   const handleExportAll = async (fmt: 'xlsx' | 'csv' = 'xlsx') => {
     if (rfmSegments.length === 0) return;
@@ -342,9 +344,9 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
         }
       />
 
-      <Card padding="md" className="border border-[#E5E5E5] bg-[#FAFAFA]">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
+      <Card padding="md" className="overflow-hidden border border-[#E5E5E5] bg-[#FAFAFA]">
+        <div className="flex min-w-0 flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-wide text-[#9CA3AF]">Data Coverage</p>
             <h3 className="mt-1 text-sm font-bold text-[#1A1A1A]">
               Πολιτική: {dataCoverage.policyLabel}
@@ -353,7 +355,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
               {dataCoverage.marketingPolicy}
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:min-w-[32rem]">
+          <div className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3 xl:min-w-[30rem]">
             <CoverageMetric label="Σύνολο" value={formatNumber(dataCoverage.totalCustomers)} />
             <CoverageMetric label="E-shop" value={formatNumber(dataCoverage.eShopCustomers)} />
             <CoverageMetric label="Others / ERP" value={formatNumber(dataCoverage.otherCustomers)} />
@@ -599,20 +601,41 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
       <Card padding="lg">
         <CardHeader
           title="Segment Migration"
-          subtitle={hasImportedSegments ? 'Τελευταίες 30 ημέρες' : ''}
+          subtitle={hasImportedSegments ? `Τελευταίες ${segmentMigration?.periodDays ?? 30} ημέρες` : ''}
           icon={<ArrowRight size={20} className="text-[var(--nts-accent)]" />}
         />
         <div className="space-y-3">
           {hasImportedSegments && rfmSegments.length > 0 ? (
-            // Show empty migration flows (zeros) when no comparison data exists
-            // In the future, this will be populated from actual migration comparison data
-            rfmSegments.length > 0 ? (
-              <p className="text-sm text-[#4A4A4A] py-4 text-center">
-                Δεν υπάρχουν συγκρινόμενα δεδομένα για την περίοδο. Φόρτωσε δεδομένα από διαφορετικές περιόδους για να δεις την μετακίνηση μεταξύ segments.
-              </p>
+            segmentMigration?.canCompute && segmentMigration.flows.length > 0 ? (
+              <>
+                <p className="text-xs text-[#6B7280]">
+                  Σύγκριση {formatNumber(segmentMigration.comparedCustomers)} αναγνωρίσιμων πελατών με e-shop ιστορικό πριν και μετά την περίοδο.
+                </p>
+                <div className="space-y-2">
+                  {segmentMigration.flows.map((flow) => {
+                    const fromColor = segmentColorById.get(flow.from) || '#9CA3AF';
+                    const toColor = segmentColorById.get(flow.to) || '#1A1A1A';
+                    return (
+                      <div key={`${flow.from}-${flow.to}`} className="rounded-xl border border-[#E5E5E5] bg-white p-3">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="flex min-w-0 items-center gap-2 text-sm">
+                            <span className="min-w-0 truncate font-medium" style={{ color: fromColor }}>{flow.fromName}</span>
+                            <ArrowRight size={14} className="shrink-0 text-[#9CA3AF]" />
+                            <span className="min-w-0 truncate font-semibold" style={{ color: toColor }}>{flow.toName}</span>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-3 font-mono text-xs">
+                            <span className="font-bold text-[#1A1A1A]">{formatNumber(flow.count)} πελάτες</span>
+                            <span className="rounded-full bg-[#F5F5F5] px-2 py-0.5 text-[#4A4A4A]">{formatNumber(flow.percentage, 1)}%</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
             ) : (
-              <p className="text-sm text-[#4A4A4A] py-4">
-                Φόρτωσε RFM δεδομένα για να δεις την μετακίνηση μεταξύ segments.
+              <p className="text-sm text-[#4A4A4A] py-4 text-center">
+                Δεν υπάρχουν αρκετές μετακινήσεις μεταξύ segments τις τελευταίες {segmentMigration?.periodDays ?? 30} ημέρες. Το σύστημα χρειάζεται αναγνωρίσιμους πελάτες με ιστορικό και πριν την περίοδο.
               </p>
             )
           ) : (
@@ -639,9 +662,9 @@ interface TabButtonProps {
 
 function CoverageMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-[#E5E5E5] bg-white px-3 py-2">
-      <p className="text-[11px] text-[#9CA3AF]">{label}</p>
-      <p className="mt-0.5 font-mono text-sm font-bold text-[#1A1A1A]">{value}</p>
+    <div className="min-w-0 rounded-lg border border-[#E5E5E5] bg-white px-2.5 py-2 sm:px-3">
+      <p className="truncate text-[10px] font-medium text-[#9CA3AF] sm:text-[11px]" title={label}>{label}</p>
+      <p className="mt-0.5 truncate font-mono text-sm font-bold text-[#1A1A1A] sm:text-base" title={value}>{value}</p>
     </div>
   );
 }
