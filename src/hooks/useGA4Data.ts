@@ -40,6 +40,8 @@ export interface GA4OrganicFallbackRow {
   sessions: number;
   users: number;
   conversions: number;
+  /** Εμπορικά έσοδα ανά ημέρα/path όταν τα επιστρέφει το GA4 για organic landing rows. */
+  totalRevenue?: number;
 }
 
 export interface SearchConsoleQueryRow {

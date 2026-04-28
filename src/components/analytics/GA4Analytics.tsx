@@ -53,6 +53,20 @@ const CHANNEL_COLORS: Record<string, string> = {
 };
 const DEFAULT_COLOR = '#94A3B8';
 
+/** Default channel group για Google organic search — EN / EL για GA4 σε διάφορες ρυθμίσεις locale. */
+function isOrganicSearchDefaultChannel(channel: string): boolean {
+  const n = channel.normalize('NFKC').trim().toLowerCase();
+  if (n === 'organic search' || n === 'οργανική αναζήτηση') return true;
+  const hasOrganic = n.includes('organic') || n.includes('οργανικ');
+  const searchLike = n.includes('search') || n.includes('αναζήτηση');
+  const excludesSocial =
+    !n.includes('social') &&
+    !n.includes('κοινων') &&
+    !n.includes('shopping') &&
+    !n.includes('αγορές');
+  return hasOrganic && searchLike && excludesSocial;
+}
+
 /** Το Recharts Area χρειάζεται ≥2 σημεία για ορατή γραμμή. */
 function padSparklineForChart(values: number[]): number[] {
   if (values.length === 0) return [];
@@ -68,7 +82,16 @@ function formatDateTooltipEl(ymd: string): string {
 }
 
 type SortField = 'pageViews' | 'sessions' | 'bounceRate';
-type OrganicSortField = 'clicks' | 'impressions' | 'position' | 'sessions' | 'users' | 'conversions';
+type OrganicSortField =
+  | 'clicks'
+  | 'impressions'
+  | 'position'
+  | 'sessions'
+  | 'users'
+  | 'conversions'
+  | 'estConversions'
+  | 'estRevenue'
+  | 'totalRevenue';
 
 type OrganicSearchRow = {
   label: string;
@@ -79,6 +102,10 @@ type OrganicSearchRow = {
   sessions?: number;
   users?: number;
   conversions?: number;
+  /** GSC + GA4 blended: προσαρμοσμένες τιμές κατά μέριο clicks ανάτημα με Organic Search στο GA4. */
+  estConversions?: number;
+  estRevenue?: number;
+  totalRevenue?: number;
 };
 
 export function GA4Analytics() {
@@ -161,8 +188,9 @@ export function GA4Analytics() {
 
   /**
    * Πραγματικό αθροιστικό ανά κανάλι **μόνο** από ημερήσια δεδομένα GA4 (sessionDefaultChannelGroup × date).
-   * Καμία αναλογική κλίμακα: αν δεν υπάρχουν ημερήσια ανά κανάλι, η πίτα/πίνακας δείχνουν whole-sync (90d) totals
-   * με προειδοποίηση — ποτέ ψεύτικη φιλτραρισμένη πίτα. Αυτό αποτρέπει το "νούμερα αλλάζουν, σχήμα ίδιο".
+   * Αθροίζουμε τις μέρες μέσα στο `dailyTrafficByChannel` που πέφτουν στην επιλεγμένη περίοδο — όχι μόνο τις μέρες
+   * που εμφανίζονται στο `dailyMetrics`: οι δύο αναφορές μπορούν να διαφέρουν ελαφρά και να δίνουν κενή τομή
+   * με τον παλιό loop («Πλήρης περίοδος» ενώ το sync ήταν έγκυρο).
    */
   const { trafficSourcesForPeriod, channelMixSource } = useMemo(() => {
     type Row = {
@@ -179,7 +207,8 @@ export function GA4Analytics() {
       const daily = dailyTrafficByChannel;
       if (!daily || Object.keys(daily).length === 0) return [];
       const map = new Map<string, Row>();
-      for (const { date } of filteredDailyEntries) {
+      for (const date of Object.keys(daily)) {
+        if (date < effectiveFrom || date > effectiveTo) continue;
         const chans = daily[date];
         if (!chans || typeof chans !== 'object') continue;
         for (const [channel, m] of Object.entries(chans)) {
@@ -224,7 +253,7 @@ export function GA4Analytics() {
     }
 
     return { trafficSourcesForPeriod: [], channelMixSource: 'empty' satisfies MixSource };
-  }, [dailyTrafficByChannel, filteredDailyEntries, trafficSources]);
+  }, [dailyTrafficByChannel, effectiveFrom, effectiveTo, trafficSources]);
 
   const displayTrafficSources = useMemo((): TrafficRow[] => {
     return trafficSourcesForPeriod.map((s) => ({
@@ -235,6 +264,18 @@ export function GA4Analytics() {
       conversions: s.conversions,
       totalRevenue: s.totalRevenue ?? 0,
     }));
+  }, [trafficSourcesForPeriod]);
+
+  /** Άθροισμα conversions και εσόδου μόνο για το GA4 default channel «Organic Search» (ίδια λογική με τον πίνακα καναλιών). */
+  const organicSearchChannelTotals = useMemo(() => {
+    let conversions = 0;
+    let totalRevenue = 0;
+    for (const s of trafficSourcesForPeriod) {
+      if (!isOrganicSearchDefaultChannel(s.channel)) continue;
+      conversions += s.conversions ?? 0;
+      totalRevenue += s.totalRevenue ?? 0;
+    }
+    return { conversions, totalRevenue };
   }, [trafficSourcesForPeriod]);
 
   const [pageSearch, setPageSearch] = useState('');
@@ -331,12 +372,13 @@ export function GA4Analytics() {
     }
 
     if (organicSearchSource === 'ga4_fallback') {
-      const grouped = new Map<string, { sessions: number; users: number; conversions: number }>();
+      const grouped = new Map<string, { sessions: number; users: number; conversions: number; totalRevenue: number }>();
       for (const row of filteredOrganicFallbackRows) {
-        const current = grouped.get(row.path) || { sessions: 0, users: 0, conversions: 0 };
+        const current = grouped.get(row.path) || { sessions: 0, users: 0, conversions: 0, totalRevenue: 0 };
         current.sessions += row.sessions;
         current.users += row.users;
         current.conversions += row.conversions;
+        current.totalRevenue += typeof row.totalRevenue === 'number' ? row.totalRevenue : 0;
         grouped.set(row.path, current);
       }
       return [...grouped.entries()].map(([label, value]) => ({
@@ -344,26 +386,39 @@ export function GA4Analytics() {
         sessions: value.sessions,
         users: value.users,
         conversions: value.conversions,
+        totalRevenue: value.totalRevenue > 0 ? value.totalRevenue : undefined,
       }));
     }
 
     return [];
   }, [organicSearchSource, filteredOrganicFallbackRows, filteredSearchConsoleRows]);
 
+  /** Εκτιμώμενες μετατροπές / έσοδο ανά GSC-query: το άθροισμα ταιριάζει με το κανάλι Organic Search στο GA4 για την ίδια περίοδο. */
+  const organicRowsDisplay = useMemo((): OrganicSearchRow[] => {
+    if (organicSearchSource !== 'gsc') return organicRows;
+    const sumClicks = organicRows.reduce((acc, r) => acc + (r.clicks || 0), 0);
+    const { conversions: osConv, totalRevenue: osRev } = organicSearchChannelTotals;
+    return organicRows.map((r) => ({
+      ...r,
+      estConversions: sumClicks > 0 ? (osConv * (r.clicks || 0)) / sumClicks : 0,
+      estRevenue: sumClicks > 0 ? (osRev * (r.clicks || 0)) / sumClicks : 0,
+    }));
+  }, [organicRows, organicSearchSource, organicSearchChannelTotals]);
+
   const visibleOrganicSortField: OrganicSortField =
     organicSearchSource === 'gsc'
-      ? ['clicks', 'impressions', 'position'].includes(organicSortField)
+      ? ['clicks', 'impressions', 'position', 'estConversions', 'estRevenue'].includes(organicSortField)
         ? organicSortField
         : 'clicks'
       : organicSearchSource === 'ga4_fallback'
-        ? ['sessions', 'users', 'conversions'].includes(organicSortField)
+        ? ['sessions', 'users', 'conversions', 'totalRevenue'].includes(organicSortField)
           ? organicSortField
           : 'sessions'
         : organicSortField;
 
   const filteredOrganicRows = useMemo(() => {
     const query = organicSearchText.trim().toLowerCase();
-    let rows = organicRows.filter((row) => !query || row.label.toLowerCase().includes(query));
+    let rows = organicRowsDisplay.filter((row) => !query || row.label.toLowerCase().includes(query));
     rows = [...rows].sort((a, b) => {
       const direction = organicSortAsc ? 1 : -1;
       const left = Number(a[visibleOrganicSortField] || 0);
@@ -371,7 +426,13 @@ export function GA4Analytics() {
       return direction * (left - right);
     });
     return showAllOrganicRows ? rows : rows.slice(0, 15);
-  }, [organicRows, organicSearchText, visibleOrganicSortField, organicSortAsc, showAllOrganicRows]);
+  }, [
+    organicRowsDisplay,
+    organicSearchText,
+    visibleOrganicSortField,
+    organicSortAsc,
+    showAllOrganicRows,
+  ]);
 
   /** Sparklines ευθυγραμμισμένα με το φίλτρο ημερομηνιών (όχι πάντα «τελευταίες 14» από όλο το sync). */
   const sparkFiltered = useMemo(() => filteredDailyEntries.slice(-14), [filteredDailyEntries]);
@@ -449,13 +510,14 @@ export function GA4Analytics() {
     gsc: {
       label: 'Google Search Console',
       subtitle: searchConsoleSiteName
-        ? `Πραγματικά search queries από ${searchConsoleSiteName}`
-        : 'Πραγματικά search queries από το Search Console',
+        ? `Πραγματικά search queries από ${searchConsoleSiteName}. Οι ενδείξεις «Μετατροπές (εκτ.)» και «Έσοδα (εκτ.)» προέρχονται από το GA4 (κανάλι Organic Search, ίδια περίοδο με τον πίνακα καναλιών) και κατανέμονται ανά query με βάση το μερίδιο clicks στο GSC — δεν είναι άμεσο keyword attribution.`
+        : 'Πραγματικά search queries από το Search Console. Οι ενδείξεις μετατροπών/έσοδου είναι εκτιμώμενες από το GA4 (Organic Search) κατά κατανομή με clicks GSC.',
       badgeClass: 'border-emerald-200 bg-emerald-50 text-emerald-700',
     },
     ga4_fallback: {
       label: 'GA4 (organic landing)',
-      subtitle: 'Οργανικές σελίδες εισόδου από το GA4 όταν δεν υπάρχει σύνδεση Search Console',
+      subtitle:
+        'Οργανικές σελίδες εισόδου από το GA4 όταν δεν υπάρχει σύνδεση Search Console. Τα έσοδα ανά path εμφανίζονται όταν το property επιστρέφει totalRevenue για αυτή την αναφορά.',
       badgeClass: 'border-orange-200 bg-orange-50 text-orange-700',
     },
     none: {
@@ -910,6 +972,20 @@ export function GA4Analytics() {
                           <th className="pb-2 font-medium text-right cursor-pointer select-none" onClick={() => handleOrganicSort('position')}>
                             Avg. position <OrganicSortIcon field="position" />
                           </th>
+                          <th
+                            className="pb-2 font-medium text-right cursor-pointer select-none max-w-[110px]"
+                            title="Από GA4 (Organic Search), κατανομή ανά clicks GSC"
+                            onClick={() => handleOrganicSort('estConversions')}
+                          >
+                            Μετ. (εκτ.) <OrganicSortIcon field="estConversions" />
+                          </th>
+                          <th
+                            className="pb-2 font-medium text-right cursor-pointer select-none max-w-[110px]"
+                            title="Από GA4 totalRevenue (Organic Search), κατανομή ανά clicks GSC"
+                            onClick={() => handleOrganicSort('estRevenue')}
+                          >
+                            Έσοδα (εκτ.) <OrganicSortIcon field="estRevenue" />
+                          </th>
                         </>
                       ) : (
                         <>
@@ -921,6 +997,13 @@ export function GA4Analytics() {
                           </th>
                           <th className="pb-2 font-medium text-right cursor-pointer select-none" onClick={() => handleOrganicSort('conversions')}>
                             Conversions <OrganicSortIcon field="conversions" />
+                          </th>
+                          <th
+                            className="pb-2 font-medium text-right cursor-pointer select-none"
+                            title="Από GA4 organic landing rows όταν το property επιτρέπει totalRevenue"
+                            onClick={() => handleOrganicSort('totalRevenue')}
+                          >
+                            Έσοδα (€) <OrganicSortIcon field="totalRevenue" />
                           </th>
                         </>
                       )}
@@ -938,12 +1021,26 @@ export function GA4Analytics() {
                             <td className="py-2 text-right">{(row.impressions || 0).toLocaleString('el-GR')}</td>
                             <td className="py-2 text-right">{fmtPct(row.ctr || 0)}</td>
                             <td className="py-2 text-right">{(row.position || 0).toFixed(1)}</td>
+                            <td className="py-2 text-right text-[#374151]">
+                              {(row.estConversions ?? 0).toLocaleString('el-GR', {
+                                maximumFractionDigits: 1,
+                                minimumFractionDigits: 0,
+                              })}
+                            </td>
+                            <td className="py-2 text-right text-[#374151] whitespace-nowrap">
+                              €{formatCurrency(row.estRevenue ?? 0, 0)}
+                            </td>
                           </>
                         ) : (
                           <>
                             <td className="py-2 text-right font-medium">{(row.sessions || 0).toLocaleString('el-GR')}</td>
                             <td className="py-2 text-right">{(row.users || 0).toLocaleString('el-GR')}</td>
                             <td className="py-2 text-right">{(row.conversions || 0).toLocaleString('el-GR')}</td>
+                            <td className="py-2 text-right whitespace-nowrap">
+                              {row.totalRevenue != null && row.totalRevenue > 0
+                                ? `€${formatCurrency(row.totalRevenue, 0)}`
+                                : '—'}
+                            </td>
                           </>
                         )}
                       </tr>
@@ -952,18 +1049,24 @@ export function GA4Analytics() {
                 </table>
               </div>
 
+              {organicSearchSource === 'gsc' && (
+                <p className="mt-2 text-[11px] leading-relaxed text-[#6B7280]">
+                  Το άθροισμα των στηλών «Μετ. (εκτ.)» και «Έσοδα (εκτ.)» στον πίνακα προσεγγίζει την αντίστοιχη γραμμή Organic Search στον πίνακα καναλιών πάνω (ίδια περίοδος), εκτός από στρογγυλοποίηση.
+                </p>
+              )}
+
               {filteredOrganicRows.length === 0 && (
                 <div className="py-6 text-center text-sm text-[#6B7280]">
                   Δεν βρέθηκαν organic rows για το επιλεγμένο διάστημα.
                 </div>
               )}
 
-              {organicRows.length > 15 && (
+              {organicRowsDisplay.length > 15 && (
                 <button
                   onClick={() => setShowAllOrganicRows(!showAllOrganicRows)}
                   className="mt-3 text-xs text-orange-600 hover:text-orange-700 font-medium"
                 >
-                  {showAllOrganicRows ? 'Λιγότερα' : `Εμφάνιση όλων (${organicRows.length})`}
+                  {showAllOrganicRows ? 'Λιγότερα' : `Εμφάνιση όλων (${organicRowsDisplay.length})`}
                 </button>
               )}
             </>

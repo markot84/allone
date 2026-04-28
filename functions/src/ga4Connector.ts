@@ -144,6 +144,8 @@ type GA4OrganicFallbackRow = {
   sessions: number;
   users: number;
   conversions: number;
+  /** ecommerce totalRevenue for organic landing row (αν το property το επιτρέπει) */
+  totalRevenue?: number;
 };
 
 /**
@@ -896,52 +898,62 @@ export async function fetchGA4Data(
 
     let organicSearchFallbackRows: GA4OrganicFallbackRow[] = [];
     try {
-      const fallbackBaseBody = {
-        languageCode: 'en',
-        dateRanges: [{ startDate: formatDate(startDate), endDate: formatDate(endDate) }],
-        metrics: [{ name: 'sessions' }, { name: 'totalUsers' }, { name: 'conversions' }],
-        dimensionFilter: {
-          filter: {
-            fieldName: 'sessionDefaultChannelGroup',
-            stringFilter: {
-              matchType: 'EXACT',
-              value: 'Organic Search',
-            },
+      const fallbackOrganicFilter = {
+        filter: {
+          fieldName: 'sessionDefaultChannelGroup',
+          stringFilter: {
+            matchType: 'EXACT',
+            value: 'Organic Search',
           },
         },
-        limit: '50000',
       };
+      let fallbackMetrics: Array<{ name: string }> = [
+        { name: 'sessions' },
+        { name: 'totalUsers' },
+        { name: 'conversions' },
+        { name: 'totalRevenue' },
+      ];
+      let revenueMetricIndex = 3;
 
-      let fallbackRes = await fetch(`${GA4_DATA_API}/properties/${propertyId}:runReport`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          ...fallbackBaseBody,
-          dimensions: [{ name: 'date' }, { name: 'landingPagePlusQueryString' }],
-          orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
-        }),
-      });
-
-      let labelField: 'landingPagePlusQueryString' | 'pagePath' = 'landingPagePlusQueryString';
-      if (!fallbackRes.ok && fallbackRes.status === 400) {
-        const err400 = await fallbackRes.text();
-        logger.warn(`[GA4] organic landing pages (landingPagePlusQueryString) rejected: ${err400.slice(0, 220)}`);
-        labelField = 'pagePath';
-        fallbackRes = await fetch(`${GA4_DATA_API}/properties/${propertyId}:runReport`, {
+      async function fetchOrganicLandingRows(
+        labelDim: 'landingPagePlusQueryString' | 'pagePath'
+      ): Promise<Response> {
+        return fetch(`${GA4_DATA_API}/properties/${propertyId}:runReport`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${accessToken}`,
           },
           body: JSON.stringify({
-            ...fallbackBaseBody,
-            dimensions: [{ name: 'date' }, { name: 'pagePath' }],
+            languageCode: 'en',
+            dateRanges: [{ startDate: formatDate(startDate), endDate: formatDate(endDate) }],
+            metrics: fallbackMetrics,
+            dimensions: [{ name: 'date' }, { name: labelDim }],
+            dimensionFilter: fallbackOrganicFilter,
             orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
+            limit: '50000',
           }),
         });
+      }
+
+      let fallbackRes = await fetchOrganicLandingRows('landingPagePlusQueryString');
+      let labelField: 'landingPagePlusQueryString' | 'pagePath' = 'landingPagePlusQueryString';
+      if (!fallbackRes.ok && fallbackRes.status === 400) {
+        const err400 = await fallbackRes.text();
+        logger.warn(`[GA4] organic landing pages (landingPagePlusQueryString) rejected: ${err400.slice(0, 220)}`);
+        labelField = 'pagePath';
+        fallbackRes = await fetchOrganicLandingRows('pagePath');
+      }
+      if (!fallbackRes.ok && fallbackRes.status === 400) {
+        const err400b = await fallbackRes.text();
+        logger.warn(`[GA4] organic landing with totalRevenue rejected, retry metrics without revenue: ${err400b.slice(0, 220)}`);
+        fallbackMetrics = [
+          { name: 'sessions' },
+          { name: 'totalUsers' },
+          { name: 'conversions' },
+        ];
+        revenueMetricIndex = -1;
+        fallbackRes = await fetchOrganicLandingRows(labelField);
       }
 
       if (fallbackRes.ok) {
@@ -951,17 +963,22 @@ export async function fetchGA4Data(
             const dateRaw = row.dimensionValues?.[0]?.value || '';
             const label = String(row.dimensionValues?.[1]?.value || '').trim();
             if (!dateRaw || !label || label === '(not set)') return null;
+            const revRaw =
+              revenueMetricIndex >= 0 ? row.metricValues?.[revenueMetricIndex]?.value : undefined;
             return {
               date: `${dateRaw.slice(0, 4)}-${dateRaw.slice(4, 6)}-${dateRaw.slice(6, 8)}`,
               path: label,
               sessions: parseInt(row.metricValues?.[0]?.value || '0', 10),
               users: parseInt(row.metricValues?.[1]?.value || '0', 10),
               conversions: parseInt(row.metricValues?.[2]?.value || '0', 10),
+              ...(revRaw != null && revenueMetricIndex >= 0
+                ? { totalRevenue: parseFloat(String(revRaw)) || 0 }
+                : {}),
             };
           })
           .filter((row: GA4OrganicFallbackRow | null): row is GA4OrganicFallbackRow => Boolean(row));
         logger.info(
-          `[GA4] organicSearchFallbackRows (${labelField}): ${organicSearchFallbackRows.length} rows`
+          `[GA4] organicSearchFallbackRows (${labelField}, revenue=${revenueMetricIndex >= 0}): ${organicSearchFallbackRows.length} rows`
         );
       } else {
         const fallbackErr = await fallbackRes.text();
