@@ -1,10 +1,14 @@
 {
-  "version": "0.675.11",
-  "previousVersion": "0.675.10",
-  "commitHash": "583ec81",
+  "version": "0.675.12",
+  "previousVersion": "0.675.11",
+  "commitHash": "2d1e09b",
   "branch": "main",
-  "buildDate": "2026-04-29T18:48:01.234Z",
+  "buildDate": "2026-04-29T18:56:43.013Z",
   "commits": [
+    {
+      "hash": "2d1e09b",
+      "message": "fix(ui): responsive channel progress summary"
+    },
     {
       "hash": "583ec81",
       "message": "fix(ui): responsive channel progress summary"
@@ -59,10 +63,6 @@
     },
     {
       "hash": "e66d580",
-      "message": "chore: full deploy"
-    },
-    {
-      "hash": "23526ba",
       "message": "chore: full deploy"
     }
   ],
