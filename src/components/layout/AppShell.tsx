@@ -62,11 +62,17 @@ function BrandMenu({
   useEffect(() => {
     if (isOpen && btnRef.current) {
       const rect = btnRef.current.getBoundingClientRect();
+      const gutter = 8;
+      const viewportWidth = window.innerWidth;
+      const width = Math.min(Math.max(180, rect.width), viewportWidth - gutter * 2);
+      const left = Math.min(Math.max(gutter, rect.left), viewportWidth - width - gutter);
       setMenuStyle({
         position: 'fixed',
         top: rect.bottom + 4,
-        right: window.innerWidth - rect.right,
-        minWidth: Math.max(180, rect.width),
+        left,
+        width,
+        minWidth: 0,
+        maxWidth: `calc(100vw - ${gutter * 2}px)`,
         maxHeight: 280,
         overflowY: 'auto',
         zIndex: 1000
@@ -103,7 +109,7 @@ function BrandMenu({
           as="span"
           size="small"
           weight="semibold"
-          className="min-w-0 max-w-[5.5rem] truncate sm:max-w-[8rem] md:max-w-[10rem] lg:max-w-[12rem]"
+          className="hidden min-w-0 max-w-[4.5rem] truncate min-[420px]:inline sm:max-w-[8rem] md:max-w-[10rem] lg:max-w-[12rem]"
           style={{ color: 'rgba(255,255,255,0.9)' }}
         >
           {currentBrand.name}
@@ -180,11 +186,17 @@ function AccountMenu({
   useEffect(() => {
     if (isOpen && btnRef.current) {
       const rect = btnRef.current.getBoundingClientRect();
+      const gutter = 8;
+      const viewportWidth = window.innerWidth;
+      const width = Math.min(260, viewportWidth - gutter * 2);
+      const left = Math.min(Math.max(gutter, rect.right - width), viewportWidth - width - gutter);
       setMenuStyle({
         position: 'fixed',
         top: rect.bottom + 4,
-        right: window.innerWidth - rect.right,
-        minWidth: 220,
+        left,
+        width,
+        minWidth: 0,
+        maxWidth: `calc(100vw - ${gutter * 2}px)`,
         zIndex: 1000
       });
     }
@@ -397,7 +409,6 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
   });
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [brandMenuOpen, setBrandMenuOpen] = useState(false);
-  const [headerSearch, setHeaderSearch] = useState('');
   const { user, signOut, isSuperAdmin, hasPasswordProvider, hasGoogleProvider, linkPassword, linkGoogle } = useAuth();
   const { currentBrand, brands, setCurrentBrand } = useBrand();
   const { isB2B, enabledModules, moduleConfig } = useModules();
@@ -583,48 +594,8 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
               cursor: 'default',
             }}
           >
-            <PerformancePlusLogo height={30} className="max-w-[9rem] sm:max-w-none" variant="onDark" />
+            <PerformancePlusLogo height={30} className="max-w-[6.5rem] min-[420px]:max-w-[9rem] sm:max-w-none" variant="onDark" />
           </PrimerHeader.Link>
-        </PrimerHeader.Item>
-
-        <PrimerHeader.Item full className="hidden lg:block" style={{ maxWidth: 460, minWidth: 220 }}>
-          <div style={{ position: 'relative', width: '100%' }}>
-            <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.3)', display: 'flex' }}><SearchIcon /></span>
-            <input
-              type="search"
-              aria-label="Search help"
-              placeholder="Search…"
-              value={headerSearch}
-              onChange={(e) => setHeaderSearch(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key !== 'Enter') return;
-                const q = headerSearch.trim();
-                if (!q) {
-                  onSectionChange('help');
-                  return;
-                }
-                onSectionChange('help', { hashQuery: `q=${encodeURIComponent(q)}` });
-              }}
-              style={{
-                width: '100%',
-                padding: '7px 12px 7px 34px',
-                background: 'transparent',
-                border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: 6,
-                color: 'rgba(255,255,255,0.7)',
-                fontSize: 14,
-                outline: 'none'
-              }}
-              onFocus={(e) => {
-                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)';
-                e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
-              }}
-              onBlur={(e) => {
-                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
-                e.currentTarget.style.background = 'transparent';
-              }}
-            />
-          </div>
         </PrimerHeader.Item>
 
         <PrimerHeader.Item style={{ marginLeft: 'auto', minWidth: 0 }} className="min-w-0 shrink">

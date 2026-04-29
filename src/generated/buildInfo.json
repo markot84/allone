@@ -1,10 +1,14 @@
 {
-  "version": "0.675.7",
-  "previousVersion": "0.675.6",
-  "commitHash": "b31bc3e",
+  "version": "0.675.8",
+  "previousVersion": "0.675.7",
+  "commitHash": "dce69b4",
   "branch": "main",
-  "buildDate": "2026-04-29T15:17:05.671Z",
+  "buildDate": "2026-04-29T15:28:32.323Z",
   "commits": [
+    {
+      "hash": "dce69b4",
+      "message": "fix(ui): responsive hardening across app"
+    },
     {
       "hash": "b31bc3e",
       "message": "fix(ui): mobile layout — sidebar drawer <1024px, chart measure + min-w, responsive grids"
@@ -60,13 +64,10 @@
     {
       "hash": "4733ca6",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "c671d94",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [
+    "[Διόρθωση] Responsive hardening across app",
     "[Διόρθωση] Mobile layout — sidebar drawer <1024px, chart measure + min-w, responsive grids",
     "[Διόρθωση] Members read — avoid circular isBrandMember for collection group",
     "[Διόρθωση] Organic composite index, tighten members read, guard empty uid",
