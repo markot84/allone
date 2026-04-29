@@ -70,10 +70,16 @@ service cloud.firestore {
       allow create: if request.auth != null;
       allow update, delete: if isBrandMember(brandId);
 
-      // Brand members subcollection — ανάγνωση μόνο για super admin ή μέλη του brand
-      // (απαραίτητο για collection group query `where userId == request.auth.uid` + λίστα μελών coordination)
+      // Brand members — προσοχή: collection group query `where userId == request.auth.uid` ΔΕΝ πρέπει
+      // να βασίζεται μόνο σε isBrandMember(), γιατί το exists(.../members/$(uid)) είναι το ίδιο doc
+      // και οδηγεί σε permission denied (κυκλική εξάρτηση κανόνων).
       match /members/{memberId} {
-        allow read: if request.auth != null && (isSuperAdmin() || isBrandMember(brandId));
+        allow read: if request.auth != null && (
+          isSuperAdmin()
+          || memberId == request.auth.uid
+          || (resource.data.userId is string && resource.data.userId == request.auth.uid)
+          || isBrandMember(brandId)
+        );
         allow create: if request.auth != null && request.auth.uid == memberId;
         allow update: if isSuperAdmin() || isBrandOwnerOrAdmin(brandId) || (
           request.auth.uid == memberId
