@@ -113,6 +113,7 @@ export class FirestoreService {
    * Χρησιμοποιείται όταν το `users/{uid}.brandIds` είναι άδειο ή ξεπερασμένο.
    */
   static async getBrandIdsFromMembershipDocuments(userId: string): Promise<string[]> {
+    if (!userId?.trim()) return [];
     try {
       // Σε collection group το documentId() θέλει *πλήρες* path (ζυγό # segments), όχι μόνο το uid.
       // Τα `brands/{brandId}/members/{uid}` έχουν πάντα `userId` στο data (βλ. MembersService.set).
