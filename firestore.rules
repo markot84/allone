@@ -383,6 +383,37 @@ service cloud.firestore {
       allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
       allow write: if false;
     }
+    // SoftOne Web Services (CUSTOMER / ITEM / SALDOC / PURDOC browsers)
+    match /softone_customers/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    match /softone_items/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    match /softone_sales_documents/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    match /softone_purchase_documents/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    // Epsilon Smart e-Shop API
+    match /epsilonnet_eshop_items/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    match /epsilonnet_eshop_balances/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
+    // Entersoft Web API — Public Query σειρές
+    match /entersoft_public_query_rows/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
     // Shared strategy packages: public read (shareable links), auth write
     match /shared_packages/{packageId} {
       allow read: if true;

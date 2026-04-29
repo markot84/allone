@@ -61,7 +61,7 @@ interface ConnectorState {
   currency?: string;
 }
 
-type ConnectorId = 'google_ads' | 'meta' | 'tiktok' | 'merchant' | 'ga4' | 'search_console' | 'shopify' | 'woocommerce' | 'opencart' | 'magento' | 'megaventory';
+type ConnectorId = 'google_ads' | 'meta' | 'tiktok' | 'merchant' | 'ga4' | 'search_console' | 'shopify' | 'woocommerce' | 'opencart' | 'magento' | 'megaventory' | 'softone' | 'epsilon_net' | 'entersoft';
 
 const CONNECTOR_GROUP_ORDER = ['marketing', 'analytics', 'commerce', 'operations'] as const;
 type ConnectorGroupId = (typeof CONNECTOR_GROUP_ORDER)[number];
@@ -130,7 +130,7 @@ function getConnectorGroupDescription(id: ConnectorGroupId, isB2B: boolean): str
         ? 'Σύνδεση e-shop / καναλιών πώλησης για κατάλογο, παραγγελίες και απόθεμα.'
         : 'Shopify, WooCommerce, OpenCart, Magento — προϊόντα, παραγγελίες, stock.';
     case 'operations':
-      return 'Megaventory — τιμολόγια, αγορές, αποθέματα και προμηθευτές (λειτουργική εικόνα).';
+      return 'Megaventory, SoftOne, Epsilon Net, Entersoft — ERP & λειτουργικά δεδομένα.';
     default:
       return '';
   }
@@ -264,6 +264,39 @@ const CONNECTORS: ConnectorConfig[] = [
     description: 'Τιμολόγια, παραγγελίες, αποθέματα, προμηθευτές από το Megaventory',
     icon: '📦',
     color: '#0EA5E9',
+    syncLabel: 'records',
+    authType: 'credentials',
+    moduleId: 'finances',
+    group: 'operations',
+  },
+  {
+    id: 'softone',
+    name: 'SoftOne (Soft1)',
+    description: 'Web Services — πελάτες, είδη, προαιρετικά πωλήσεις/αγορές (ανά εγκατάσταση)',
+    icon: '🏛️',
+    color: '#2563EB',
+    syncLabel: 'records',
+    authType: 'credentials',
+    moduleId: 'finances',
+    group: 'operations',
+  },
+  {
+    id: 'epsilon_net',
+    name: 'Epsilon Net (e-Shop API)',
+    description: 'Epsilon Smart e-Shop API — είδη & υπόλοιπα (myAccount + smartUrl)',
+    icon: '🔷',
+    color: '#0369A1',
+    syncLabel: 'records',
+    authType: 'credentials',
+    moduleId: 'finances',
+    group: 'operations',
+  },
+  {
+    id: 'entersoft',
+    name: 'Entersoft Web API',
+    description: 'Σύνδεση Entersoft Web API · προαιρετική Public Query για custom datasets',
+    icon: '🧩',
+    color: '#7C3AED',
     syncLabel: 'records',
     authType: 'credentials',
     moduleId: 'finances',
@@ -993,6 +1026,405 @@ function MegaventoryCredentialsModal({
   );
 }
 
+function SoftOneCredentialsModal({
+  brandId,
+  onSuccess,
+  onCancel,
+}: {
+  brandId: string;
+  onSuccess: () => void;
+  onCancel: () => void;
+}) {
+  const [serviceUrl, setServiceUrl] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [appId, setAppId] = useState('');
+  const [company, setCompany] = useState('');
+  const [branch, setBranch] = useState('');
+  const [module, setModule] = useState('');
+  const [refId, setRefId] = useState('');
+  const [syncSalesDocs, setSyncSalesDocs] = useState(false);
+  const [syncPurchaseDocs, setSyncPurchaseDocs] = useState(false);
+  const [showPw, setShowPw] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const toast = useToast();
+  const inputStyle = { width: '100%', borderRadius: '8px', border: '1px solid #E5E7EB', padding: '10px 12px', fontSize: '14px', backgroundColor: '#F9FAFB', outline: 'none', boxSizing: 'border-box' as const };
+
+  const handleConnect = async () => {
+    if (!serviceUrl.trim() || !username.trim() || !password || !appId.trim()) return;
+    setLoading(true);
+    setError('');
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error('Not authenticated');
+      const res = await fetch(`${FUNCTIONS_BASE}/connectorSaveCredentials`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          brandId,
+          provider: 'softone',
+          serviceUrl: serviceUrl.trim(),
+          username: username.trim(),
+          password,
+          appId: appId.trim(),
+          company: company.trim() || undefined,
+          branch: branch.trim() || undefined,
+          module: module.trim() || undefined,
+          refId: refId.trim() || undefined,
+          syncSalesDocs,
+          syncPurchaseDocs,
+        }),
+      });
+      const result = await res.json();
+      if (res.ok && result.success !== false && !result.error) {
+        toast.success(`SoftOne συνδέθηκε${result.company ? `: ${result.company}` : ''}`);
+        onSuccess();
+      } else {
+        setError(result.error || 'Connection failed');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)', padding: '16px' }}>
+      <div style={{ maxWidth: '480px', width: '100%', maxHeight: '90vh', overflow: 'auto', backgroundColor: '#fff', borderRadius: '16px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid #F3F4F6' }}>
+          <div>
+            <p style={{ margin: 0, fontWeight: 600, fontSize: '14px', color: '#111827' }}>Σύνδεση SoftOne</p>
+            <p style={{ margin: 0, fontSize: '12px', color: '#6B7280' }}>Web Services URL (…/s1services) — βλ. softone.gr/ws</p>
+          </div>
+          <button type="button" onClick={onCancel} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: '4px' }}>
+            <X size={18} />
+          </button>
+        </div>
+        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, marginBottom: '6px' }}>Service URL</label>
+            <input value={serviceUrl} onChange={(e) => setServiceUrl(e.target.value)} placeholder="https://xxx.oncloud.gr/s1services" style={inputStyle} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, marginBottom: '6px' }}>Username / AppId</label>
+            <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Χρήστης Web Service" style={inputStyle} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, marginBottom: '6px' }}>Password</label>
+            <div style={{ position: 'relative' }}>
+              <input type={showPw ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} style={{ ...inputStyle, paddingRight: '40px' }} />
+              <button type="button" onClick={() => setShowPw(!showPw)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}>
+                {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, marginBottom: '6px' }}>AppId</label>
+            <input value={appId} onChange={(e) => setAppId(e.target.value)} placeholder="π.χ. 2001" style={inputStyle} />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: 500, marginBottom: '4px' }}>COMPANY (προαιρ.)</label>
+              <input value={company} onChange={(e) => setCompany(e.target.value)} style={inputStyle} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: 500, marginBottom: '4px' }}>BRANCH (προαιρ.)</label>
+              <input value={branch} onChange={(e) => setBranch(e.target.value)} style={inputStyle} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: 500, marginBottom: '4px' }}>MODULE (προαιρ.)</label>
+              <input value={module} onChange={(e) => setModule(e.target.value)} style={inputStyle} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: 500, marginBottom: '4px' }}>REFID (προαιρ.)</label>
+              <input value={refId} onChange={(e) => setRefId(e.target.value)} style={inputStyle} />
+            </div>
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', cursor: 'pointer' }}>
+            <input type="checkbox" checked={syncSalesDocs} onChange={(e) => setSyncSalesDocs(e.target.checked)} />
+            Συγχρονισμός SALDOC (τελευταία 90 ημέρες) — απαιτεί ανάλογα δικαιώματα
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', cursor: 'pointer' }}>
+            <input type="checkbox" checked={syncPurchaseDocs} onChange={(e) => setSyncPurchaseDocs(e.target.checked)} />
+            Συγχρονισμός PURDOC (τελευταία 90 ημέρες)
+          </label>
+          {error && (
+            <div style={{ display: 'flex', gap: '8px', backgroundColor: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '10px 12px' }}>
+              <AlertTriangle size={16} className="text-red-600 flex-shrink-0" />
+              <p style={{ margin: 0, fontSize: '12px', color: '#991B1B' }}>{error}</p>
+            </div>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: '10px', padding: '0 24px 20px' }}>
+          <button type="button" onClick={onCancel} disabled={loading} style={{ flex: 1, padding: '9px 16px', borderRadius: '8px', border: '1px solid #E5E7EB', backgroundColor: '#fff', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>
+            Άκυρο
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleConnect()}
+            disabled={loading || !serviceUrl.trim() || !username.trim() || !password || !appId.trim()}
+            style={{ flex: 1, padding: '9px 16px', borderRadius: '8px', border: 'none', backgroundColor: '#2563EB', fontSize: '13px', fontWeight: 600, cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+          >
+            {loading && <Spinner size="sm" />}
+            {loading ? '...' : 'Σύνδεση'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EpsilonNetCredentialsModal({ brandId, onSuccess, onCancel }: { brandId: string; onSuccess: () => void; onCancel: () => void }) {
+  const [subscriptionKey, setSubscriptionKey] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPw, setShowPw] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const toast = useToast();
+  const inputStyle = { width: '100%', borderRadius: '8px', border: '1px solid #E5E7EB', padding: '10px 12px', fontSize: '14px', backgroundColor: '#F9FAFB', outline: 'none', boxSizing: 'border-box' as const };
+
+  const handleConnect = async () => {
+    if (!subscriptionKey.trim() || !email.trim() || !password) return;
+    setLoading(true);
+    setError('');
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error('Not authenticated');
+      const res = await fetch(`${FUNCTIONS_BASE}/connectorSaveCredentials`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          brandId,
+          provider: 'epsilon_net',
+          subscriptionKey: subscriptionKey.trim(),
+          email: email.trim(),
+          password,
+        }),
+      });
+      const result = await res.json();
+      if (res.ok && result.success !== false && !result.error) {
+        toast.success(`Epsilon Net συνδέθηκε${result.smartHost ? ` (${result.smartHost})` : ''}`);
+        onSuccess();
+      } else {
+        setError(result.error || 'Connection failed');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)', padding: '16px' }}>
+      <div style={{ maxWidth: '460px', width: '100%', backgroundColor: '#fff', borderRadius: '16px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid #F3F4F6' }}>
+          <div>
+            <p style={{ margin: 0, fontWeight: 600, fontSize: '14px', color: '#111827' }}>Epsilon Net e-Shop API</p>
+            <p style={{ margin: 0, fontSize: '12px', color: '#6B7280' }}>Κλειδί συνδρομής + διαπιστευτήρια (myaccount.epsilonnet.gr)</p>
+          </div>
+          <button type="button" onClick={onCancel} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}>
+            <X size={18} />
+          </button>
+        </div>
+        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, marginBottom: '6px' }}>Subscription key</label>
+            <input value={subscriptionKey} onChange={(e) => setSubscriptionKey(e.target.value)} style={inputStyle} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, marginBottom: '6px' }}>Email (χρήστης Smart)</label>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} style={inputStyle} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, marginBottom: '6px' }}>Password</label>
+            <div style={{ position: 'relative' }}>
+              <input type={showPw ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} style={{ ...inputStyle, paddingRight: '40px' }} />
+              <button type="button" onClick={() => setShowPw(!showPw)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}>
+                {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+          </div>
+          {error && (
+            <div style={{ display: 'flex', gap: '8px', backgroundColor: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '10px 12px' }}>
+              <AlertTriangle size={16} className="text-red-600 flex-shrink-0" />
+              <p style={{ margin: 0, fontSize: '12px', color: '#991B1B' }}>{error}</p>
+            </div>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: '10px', padding: '0 24px 20px' }}>
+          <button type="button" onClick={onCancel} disabled={loading} style={{ flex: 1, padding: '9px 16px', borderRadius: '8px', border: '1px solid #E5E7EB', backgroundColor: '#fff', fontSize: '13px' }}>
+            Άκυρο
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleConnect()}
+            disabled={loading || !subscriptionKey.trim() || !email.trim() || !password}
+            style={{ flex: 1, padding: '9px 16px', borderRadius: '8px', border: 'none', backgroundColor: '#0369A1', color: '#fff', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+          >
+            {loading && <Spinner size="sm" />}
+            Σύνδεση
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EntersoftCredentialsModal({ brandId, onSuccess, onCancel }: { brandId: string; onSuccess: () => void; onCancel: () => void }) {
+  const [webApiBaseUrl, setWebApiBaseUrl] = useState('');
+  const [userId, setUserId] = useState('');
+  const [password, setPassword] = useState('');
+  const [branchId, setBranchId] = useState('-');
+  const [langId, setLangId] = useState('el-GR');
+  const [subscriptionId, setSubscriptionId] = useState('');
+  const [subscriptionPassword, setSubscriptionPassword] = useState('');
+  const [bridgeId, setBridgeId] = useState('');
+  const [publicQueryGroupId, setPublicQueryGroupId] = useState('');
+  const [publicQueryFilterId, setPublicQueryFilterId] = useState('');
+  const [publicQueryMethod, setPublicQueryMethod] = useState<'GET' | 'POST'>('GET');
+  const [showPw, setShowPw] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const toast = useToast();
+  const inputStyle = { width: '100%', borderRadius: '8px', border: '1px solid #E5E7EB', padding: '10px 12px', fontSize: '14px', backgroundColor: '#F9FAFB', outline: 'none', boxSizing: 'border-box' as const };
+
+  const handleConnect = async () => {
+    if (!webApiBaseUrl.trim() || !userId.trim() || !password) return;
+    setLoading(true);
+    setError('');
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error('Not authenticated');
+      const res = await fetch(`${FUNCTIONS_BASE}/connectorSaveCredentials`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          brandId,
+          provider: 'entersoft',
+          webApiBaseUrl: webApiBaseUrl.trim(),
+          userId: userId.trim(),
+          password,
+          branchId: branchId.trim() || undefined,
+          langId: langId.trim() || undefined,
+          subscriptionId: subscriptionId.trim() || undefined,
+          subscriptionPassword: subscriptionPassword || undefined,
+          bridgeId: bridgeId.trim() || undefined,
+          publicQueryGroupId: publicQueryGroupId.trim() || undefined,
+          publicQueryFilterId: publicQueryFilterId.trim() || undefined,
+          publicQueryMethod,
+        }),
+      });
+      const result = await res.json();
+      if (res.ok && result.success !== false && !result.error) {
+        toast.success('Entersoft συνδέθηκε');
+        onSuccess();
+      } else {
+        setError(result.error || 'Connection failed');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)', padding: '16px' }}>
+      <div style={{ maxWidth: '480px', width: '100%', maxHeight: '90vh', overflow: 'auto', backgroundColor: '#fff', borderRadius: '16px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid #F3F4F6' }}>
+          <div>
+            <p style={{ margin: 0, fontWeight: 600, fontSize: '14px', color: '#111827' }}>Entersoft Web API</p>
+            <p style={{ margin: 0, fontSize: '12px', color: '#6B7280' }}>Βάση URL (με / στο τέλος) · api/Login/Login</p>
+          </div>
+          <button type="button" onClick={onCancel} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}>
+            <X size={18} />
+          </button>
+        </div>
+        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, marginBottom: '4px' }}>Web API base URL</label>
+            <input value={webApiBaseUrl} onChange={(e) => setWebApiBaseUrl(e.target.value)} placeholder="https://host/EntersoftWEBAPI/" style={inputStyle} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, marginBottom: '4px' }}>UserID</label>
+            <input value={userId} onChange={(e) => setUserId(e.target.value)} style={inputStyle} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, marginBottom: '4px' }}>Password</label>
+            <div style={{ position: 'relative' }}>
+              <input type={showPw ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} style={{ ...inputStyle, paddingRight: '40px' }} />
+              <button type="button" onClick={() => setShowPw(!showPw)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}>
+                {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: 500 }}>BranchID</label>
+              <input value={branchId} onChange={(e) => setBranchId(e.target.value)} style={inputStyle} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: 500 }}>LangID</label>
+              <input value={langId} onChange={(e) => setLangId(e.target.value)} style={inputStyle} />
+            </div>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '11px', fontWeight: 500 }}>SubscriptionID (προαιρ.)</label>
+            <input value={subscriptionId} onChange={(e) => setSubscriptionId(e.target.value)} style={inputStyle} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '11px', fontWeight: 500 }}>Subscription password (προαιρ.)</label>
+            <input value={subscriptionPassword} onChange={(e) => setSubscriptionPassword(e.target.value)} style={inputStyle} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '11px', fontWeight: 500 }}>BridgeID (προαιρ.)</label>
+            <input value={bridgeId} onChange={(e) => setBridgeId(e.target.value)} style={inputStyle} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '11px', fontWeight: 500 }}>Public Query — Group ID</label>
+            <input value={publicQueryGroupId} onChange={(e) => setPublicQueryGroupId(e.target.value)} placeholder="Για sync εγγραφών (προαιρ.)" style={inputStyle} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '11px', fontWeight: 500 }}>Public Query — Filter ID</label>
+            <input value={publicQueryFilterId} onChange={(e) => setPublicQueryFilterId(e.target.value)} style={inputStyle} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '11px', fontWeight: 500 }}>Μέθοδος PQ</label>
+            <select value={publicQueryMethod} onChange={(e) => setPublicQueryMethod(e.target.value as 'GET' | 'POST')} style={inputStyle}>
+              <option value="GET">GET</option>
+              <option value="POST">POST</option>
+            </select>
+          </div>
+          {error && (
+            <div style={{ display: 'flex', gap: '8px', backgroundColor: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '10px 12px' }}>
+              <AlertTriangle size={16} className="text-red-600 flex-shrink-0" />
+              <p style={{ margin: 0, fontSize: '12px', color: '#991B1B' }}>{error}</p>
+            </div>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: '10px', padding: '0 24px 20px' }}>
+          <button type="button" onClick={onCancel} disabled={loading} style={{ flex: 1, padding: '9px 16px', borderRadius: '8px', border: '1px solid #E5E7EB', backgroundColor: '#fff' }}>
+            Άκυρο
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleConnect()}
+            disabled={loading || !webApiBaseUrl.trim() || !userId.trim() || !password}
+            style={{ flex: 1, padding: '9px 16px', borderRadius: '8px', border: 'none', backgroundColor: '#7C3AED', color: '#fff', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+          >
+            {loading && <Spinner size="sm" />}
+            Σύνδεση
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** Ρυθμίσεις saved custom report χωρίς επανείσοδο API key · γράφει στο connectors doc. */
 function MegaventoryCustomReportSettingsInline({
   brandId,
@@ -1271,6 +1703,9 @@ export function ConnectorsPanel() {
   const [opencartModal, setOpencartModal] = useState(false);
   const [magentoModal, setMagentoModal] = useState(false);
   const [megaventoryModal, setMegaventoryModal] = useState(false);
+  const [softoneModal, setSoftoneModal] = useState(false);
+  const [epsilonNetModal, setEpsilonNetModal] = useState(false);
+  const [entersoftModal, setEntersoftModal] = useState(false);
 
   const emptyStates: Record<string, ConnectorState> = {
     google_ads: { connected: false },
@@ -1284,6 +1719,9 @@ export function ConnectorsPanel() {
     opencart: { connected: false },
     magento: { connected: false },
     megaventory: { connected: false },
+    softone: { connected: false },
+    epsilon_net: { connected: false },
+    entersoft: { connected: false },
   };
 
   // Connectors doc — cached, refetch only after sync/connect/disconnect
@@ -1317,6 +1755,9 @@ export function ConnectorsPanel() {
         opencart: connectorsData.opencart || { connected: false },
         magento: connectorsData.magento || { connected: false },
         megaventory: connectorsData.megaventory || { connected: false },
+        softone: connectorsData.softone || { connected: false },
+        epsilon_net: connectorsData.epsilon_net || { connected: false },
+        entersoft: connectorsData.entersoft || { connected: false },
       }
     : emptyStates;
 
@@ -1338,6 +1779,9 @@ export function ConnectorsPanel() {
         opencart: dates['opencart_api'],
         magento: dates['magento_api'],
         megaventory: dates['megaventory_api'],
+        softone: dates['softone_api'],
+        epsilon_net: dates['epsilon_net_eshop_api'],
+        entersoft: dates['entersoft_web_api'],
       } as Record<string, Date>;
     },
     enabled: !!brandId,
@@ -1364,23 +1808,29 @@ export function ConnectorsPanel() {
           ? 'Το Meta συνδέθηκε επιτυχώς.'
           : connectorKey === 'tiktok'
             ? 'Το TikTok Ads συνδέθηκε επιτυχώς.'
-          : connectorKey === 'google_ads'
-            ? 'Το Google Ads συνδέθηκε επιτυχώς.'
-            : connectorKey === 'ga4'
-              ? 'Το GA4 συνδέθηκε επιτυχώς.'
-              : connectorKey === 'search_console'
-                ? 'Το Google Search Console συνδέθηκε επιτυχώς.'
-              : connectorKey === 'merchant'
-                ? 'Το Merchant Center συνδέθηκε επιτυχώς.'
-                : connectorKey === 'shopify'
-                  ? 'Το Shopify συνδέθηκε επιτυχώς.'
-                  : connectorKey === 'opencart'
-                    ? 'Το OpenCart συνδέθηκε επιτυχώς.'
-                    : connectorKey === 'magento'
-                      ? 'Το Magento συνδέθηκε επιτυχώς.'
-                      : connectorKey === 'megaventory'
-                        ? 'Το Megaventory συνδέθηκε επιτυχώς.'
-                        : 'Η σύνδεση ολοκληρώθηκε.';
+            : connectorKey === 'google_ads'
+              ? 'Το Google Ads συνδέθηκε επιτυχώς.'
+              : connectorKey === 'ga4'
+                ? 'Το GA4 συνδέθηκε επιτυχώς.'
+                : connectorKey === 'search_console'
+                  ? 'Το Google Search Console συνδέθηκε επιτυχώς.'
+                  : connectorKey === 'merchant'
+                    ? 'Το Merchant Center συνδέθηκε επιτυχώς.'
+                    : connectorKey === 'shopify'
+                      ? 'Το Shopify συνδέθηκε επιτυχώς.'
+                      : connectorKey === 'opencart'
+                        ? 'Το OpenCart συνδέθηκε επιτυχώς.'
+                        : connectorKey === 'magento'
+                          ? 'Το Magento συνδέθηκε επιτυχώς.'
+                          : connectorKey === 'megaventory'
+                            ? 'Το Megaventory συνδέθηκε επιτυχώς.'
+                            : connectorKey === 'softone'
+                              ? 'Το SoftOne συνδέθηκε επιτυχώς.'
+                              : connectorKey === 'epsilon_net'
+                                ? 'Το Epsilon Net συνδέθηκε επιτυχώς.'
+                                : connectorKey === 'entersoft'
+                                  ? 'Το Entersoft συνδέθηκε επιτυχώς.'
+                                  : 'Η σύνδεση ολοκληρώθηκε.';
       toast.success(label);
     },
     [brandId, fetchStates, queryClient, toast]
@@ -1483,6 +1933,18 @@ export function ConnectorsPanel() {
     }
     if (provider === 'megaventory') {
       setMegaventoryModal(true);
+      return;
+    }
+    if (provider === 'softone') {
+      setSoftoneModal(true);
+      return;
+    }
+    if (provider === 'epsilon_net') {
+      setEpsilonNetModal(true);
+      return;
+    }
+    if (provider === 'entersoft') {
+      setEntersoftModal(true);
       return;
     }
 
@@ -1628,6 +2090,29 @@ export function ConnectorsPanel() {
             bits.length
               ? `Megaventory: ${total} εγγραφές συνολικά (${bits.join(' · ')})`
               : `Megaventory: ${total} εγγραφές`
+          );
+        } else if (provider === 'softone') {
+          const t = result.imported ?? 0;
+          const bits = [
+            typeof result.customers === 'number' ? `πελάτες ${result.customers}` : '',
+            typeof result.items === 'number' ? `είδη ${result.items}` : '',
+            typeof result.salesDocs === 'number' && result.salesDocs > 0 ? `πωλ. παραστ. ${result.salesDocs}` : '',
+            typeof result.purchaseDocs === 'number' && result.purchaseDocs > 0 ? `αγορ. παραστ. ${result.purchaseDocs}` : '',
+          ].filter(Boolean);
+          toast.success(bits.length ? `SoftOne: ${t} (${bits.join(' · ')})` : `SoftOne: ${t} εγγραφές`);
+        } else if (provider === 'epsilon_net') {
+          const t = result.imported ?? 0;
+          toast.success(
+            `Epsilon Net: ${t} εγγραφές` +
+              (typeof result.items === 'number' ? ` · είδη ${result.items}` : '') +
+              (typeof result.balances === 'number' ? ` · υπόλοιπα ${result.balances}` : '')
+          );
+        } else if (provider === 'entersoft') {
+          const t = result.imported ?? 0;
+          toast.success(
+            typeof result.publicQueryRows === 'number'
+              ? `Entersoft: ${t} εγγραφές (PQ ${result.publicQueryRows})`
+              : `Entersoft: ${t} εγγραφές`
           );
         } else {
           toast.success(`Εισήχθησαν ${result.imported} ${label}`);
@@ -1817,6 +2302,39 @@ export function ConnectorsPanel() {
         />
       )}
 
+      {softoneModal && brandId && (
+        <SoftOneCredentialsModal
+          brandId={brandId}
+          onSuccess={() => {
+            setSoftoneModal(false);
+            fetchStates();
+          }}
+          onCancel={() => setSoftoneModal(false)}
+        />
+      )}
+
+      {epsilonNetModal && brandId && (
+        <EpsilonNetCredentialsModal
+          brandId={brandId}
+          onSuccess={() => {
+            setEpsilonNetModal(false);
+            fetchStates();
+          }}
+          onCancel={() => setEpsilonNetModal(false)}
+        />
+      )}
+
+      {entersoftModal && brandId && (
+        <EntersoftCredentialsModal
+          brandId={brandId}
+          onSuccess={() => {
+            setEntersoftModal(false);
+            fetchStates();
+          }}
+          onCancel={() => setEntersoftModal(false)}
+        />
+      )}
+
       <Card>
         <div className="p-6">
           <PageHeader
@@ -2001,6 +2519,9 @@ export function ConnectorsPanel() {
                             {(state as any).currency ? ` · ${(state as any).currency}` : ''}
                           </p>
                         )}
+                        {conn.id === 'softone' && (state as any).company && <p>Εταιρεία: {(state as any).company}</p>}
+                        {conn.id === 'epsilon_net' && (state as any).email && <p>{(state as any).email}</p>}
+                        {conn.id === 'entersoft' && (state as any).userId && <p>User: {(state as any).userId}</p>}
                         {(() => {
                           const d = coerceToDate(lastSyncDates[conn.id] as unknown);
                           return d ? (

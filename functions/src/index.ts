@@ -75,6 +75,21 @@ import {
   setDb as setMegaventoryDb,
 } from './megaventoryConnector';
 import {
+  saveSoftOneCredentials,
+  fetchSoftOneData,
+  setDb as setSoftOneDb,
+} from './softoneConnector';
+import {
+  saveEpsilonNetCredentials,
+  fetchEpsilonNetData,
+  setDb as setEpsilonNetDb,
+} from './epsilonNetConnector';
+import {
+  saveEntersoftCredentials,
+  fetchEntersoftData,
+  setDb as setEntersoftDb,
+} from './entersoftConnector';
+import {
   computeEcommerceSummary,
   setDb as setEcommerceAggDb,
 } from './ecommerceAggregator';
@@ -123,6 +138,9 @@ setWooDb(db);
 setOpenCartDb(db);
 setMagentoDb(db);
 setMegaventoryDb(db);
+setSoftOneDb(db);
+setEpsilonNetDb(db);
+setEntersoftDb(db);
 setEcommerceAggDb(db);
 setStockMovementDb(db);
 setProcurementSignalsDb(db);
@@ -1033,6 +1051,38 @@ export const connectorDisconnect = onRequest(
         clearPayload.customReportId = '';
         clearPayload.customReportEnabled = false;
       }
+      if (provider === 'softone') {
+        clearPayload.serviceUrl = '';
+        clearPayload.username = '';
+        clearPayload.password = '';
+        clearPayload.appId = '';
+        clearPayload.company = '';
+        clearPayload.branch = '';
+        clearPayload.module = '';
+        clearPayload.refId = '';
+        clearPayload.syncSalesDocs = false;
+        clearPayload.syncPurchaseDocs = false;
+      }
+      if (provider === 'epsilon_net') {
+        clearPayload.subscriptionKey = '';
+        clearPayload.email = '';
+        clearPayload.password = '';
+        clearPayload.lastItemsMaxRevision = 0;
+      }
+      if (provider === 'entersoft') {
+        clearPayload.webApiBaseUrl = '';
+        clearPayload.userId = '';
+        clearPayload.password = '';
+        clearPayload.branchId = '';
+        clearPayload.langId = '';
+        clearPayload.subscriptionId = '';
+        clearPayload.subscriptionPassword = '';
+        clearPayload.bridgeId = '';
+        clearPayload.extraPin = '';
+        clearPayload.publicQueryGroupId = '';
+        clearPayload.publicQueryFilterId = '';
+        clearPayload.publicQueryMethod = 'GET';
+      }
       if (provider === 'shopify') {
         clearPayload.accessToken = '';
       }
@@ -1203,6 +1253,12 @@ export const connectorSync = onRequest(
         result = await fetchMagentoData(brandId);
       } else if (provider === 'megaventory') {
         result = await fetchMegaventoryData(brandId);
+      } else if (provider === 'softone') {
+        result = await fetchSoftOneData(brandId);
+      } else if (provider === 'epsilon_net') {
+        result = await fetchEpsilonNetData(brandId);
+      } else if (provider === 'entersoft') {
+        result = await fetchEntersoftData(brandId);
       } else if (provider === 'ga4') {
         result = await fetchGA4Data(brandId);
       } else if (provider === 'search_console') {
@@ -1317,6 +1373,93 @@ export const connectorSaveCredentials = onRequest(
         const result = await saveMegaventoryCredentials(brandId, mvKey, {
           ...(customReportId !== undefined ? { customReportId } : {}),
           ...(customReportEnabled !== undefined ? { customReportEnabled } : {}),
+        });
+        res.status(200).json(result);
+      } else if (provider === 'softone') {
+        const {
+          serviceUrl,
+          username,
+          password,
+          appId,
+          company,
+          branch,
+          module,
+          refId,
+          syncSalesDocs,
+          syncPurchaseDocs,
+        } = req.body as {
+          serviceUrl?: string;
+          username?: string;
+          password?: string;
+          appId?: string;
+          company?: string;
+          branch?: string;
+          module?: string;
+          refId?: string;
+          syncSalesDocs?: boolean;
+          syncPurchaseDocs?: boolean;
+        };
+        if (!serviceUrl || !username || !password || !appId) {
+          res.status(400).json({ error: 'Missing SoftOne serviceUrl, username, password, or appId' });
+          return;
+        }
+        const result = await saveSoftOneCredentials(brandId, {
+          serviceUrl,
+          username,
+          password,
+          appId,
+          company,
+          branch,
+          module,
+          refId,
+          syncSalesDocs,
+          syncPurchaseDocs,
+        });
+        res.status(200).json(result);
+      } else if (provider === 'epsilon_net') {
+        const { subscriptionKey, email, password } = req.body as {
+          subscriptionKey?: string;
+          email?: string;
+          password?: string;
+        };
+        if (!subscriptionKey || !email || !password) {
+          res.status(400).json({ error: 'Missing Epsilon Net subscriptionKey, email, or password' });
+          return;
+        }
+        const result = await saveEpsilonNetCredentials(brandId, { subscriptionKey, email, password });
+        res.status(200).json(result);
+      } else if (provider === 'entersoft') {
+        const b = req.body as {
+          webApiBaseUrl?: string;
+          userId?: string;
+          password?: string;
+          branchId?: string;
+          langId?: string;
+          subscriptionId?: string;
+          subscriptionPassword?: string;
+          bridgeId?: string;
+          extraPin?: string;
+          publicQueryGroupId?: string;
+          publicQueryFilterId?: string;
+          publicQueryMethod?: 'GET' | 'POST';
+        };
+        if (!b.webApiBaseUrl || !b.userId || !b.password) {
+          res.status(400).json({ error: 'Missing Entersoft webApiBaseUrl, userId, or password' });
+          return;
+        }
+        const result = await saveEntersoftCredentials(brandId, {
+          webApiBaseUrl: b.webApiBaseUrl,
+          userId: b.userId,
+          password: b.password,
+          branchId: b.branchId,
+          langId: b.langId,
+          subscriptionId: b.subscriptionId,
+          subscriptionPassword: b.subscriptionPassword,
+          bridgeId: b.bridgeId,
+          extraPin: b.extraPin,
+          publicQueryGroupId: b.publicQueryGroupId,
+          publicQueryFilterId: b.publicQueryFilterId,
+          publicQueryMethod: b.publicQueryMethod,
         });
         res.status(200).json(result);
       } else {
@@ -1546,6 +1689,33 @@ export const scheduledSync = onSchedule(
             logger.info(`[ScheduledSync] Megaventory for ${brandId}: imported ${result.imported}`);
           } catch (err) {
             logger.error(`[ScheduledSync] Megaventory failed for ${brandId}:`, err);
+          }
+        }
+
+        if (data.softone?.connected) {
+          try {
+            const result = await fetchSoftOneData(brandId);
+            logger.info(`[ScheduledSync] SoftOne for ${brandId}: imported ${result.imported}`);
+          } catch (err) {
+            logger.error(`[ScheduledSync] SoftOne failed for ${brandId}:`, err);
+          }
+        }
+
+        if (data.epsilon_net?.connected) {
+          try {
+            const result = await fetchEpsilonNetData(brandId);
+            logger.info(`[ScheduledSync] Epsilon Net for ${brandId}: imported ${result.imported}`);
+          } catch (err) {
+            logger.error(`[ScheduledSync] Epsilon Net failed for ${brandId}:`, err);
+          }
+        }
+
+        if (data.entersoft?.connected) {
+          try {
+            const result = await fetchEntersoftData(brandId);
+            logger.info(`[ScheduledSync] Entersoft for ${brandId}: imported ${result.imported}`);
+          } catch (err) {
+            logger.error(`[ScheduledSync] Entersoft failed for ${brandId}:`, err);
           }
         }
 

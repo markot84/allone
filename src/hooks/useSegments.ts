@@ -46,6 +46,19 @@ type SegmentCustomerSummary = {
   monetary: number;
 };
 
+/**
+ * Persisted React Query cache (localStorage) JSON-serializes Map → plain object.
+ * Rehydrated data then has no `.entries()` — normalize before any Map iteration.
+ */
+function coerceToSegmentSummaryMap(data: unknown): Map<string, SegmentCustomerSummary> {
+  if (!data) return new Map();
+  if (data instanceof Map) return data as Map<string, SegmentCustomerSummary>;
+  if (typeof data === 'object' && !Array.isArray(data)) {
+    return new Map(Object.entries(data as Record<string, SegmentCustomerSummary>));
+  }
+  return new Map();
+}
+
 function titleFromSegmentId(segmentId: string): string {
   return segmentId
     .replace(/[_-]+/g, ' ')
@@ -100,13 +113,18 @@ export function useSegments() {
     queryFn: () => (brandId ? SegmentsService.getAll(brandId) : Promise.resolve([])) as Promise<RFMSegment[]>,
   });
 
-  const { data: segmentCustomerSummaries = new Map<string, SegmentCustomerSummary>(), isPending: segmentCustomersPending } = useQuery({
+  const { data: rawSegmentCustomerSummaries, isPending: segmentCustomersPending } = useQuery({
     queryKey: ['segmentCustomerSummaries', brandId],
     queryFn: () => (brandId ? SegmentCustomersService.getSummariesBySegment(brandId) : Promise.resolve(new Map())),
     enabled: !!brandId && sourcePref === 'external',
     staleTime: 60 * 1000,
     gcTime: 10 * 60 * 1000,
   });
+
+  const segmentCustomerSummaries = useMemo(
+    () => coerceToSegmentSummaryMap(rawSegmentCustomerSummaries),
+    [rawSegmentCustomerSummaries]
+  );
 
   const ordersQueryEnabled = !!brandId && ecomm.connectedPlatforms.length > 0;
   const { data: rawOrders = [], isPending: ordersPending } = useQuery({
