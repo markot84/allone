@@ -413,28 +413,37 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   useEffect(() => {
     const updateDimensions = () => {
       if (revenueContainerRef.current) {
-        const width = revenueContainerRef.current.offsetWidth || 800;
-        setChartDimensions(prev => ({
-          ...prev,
-          revenue: { width: Math.max(width, 400), height: 288 }
-        }));
+        const w = revenueContainerRef.current.getBoundingClientRect().width;
+        if (w > 0) {
+          setChartDimensions((prev) => ({
+            ...prev,
+            revenue: { width: Math.max(1, Math.round(w)), height: 288 },
+          }));
+        }
       }
       if (segmentContainerRef.current) {
-        const width = segmentContainerRef.current.offsetWidth || 400;
-        setChartDimensions(prev => ({
-          ...prev,
-          segment: { width: Math.max(width, 300), height: 224 }
-        }));
+        const w = segmentContainerRef.current.getBoundingClientRect().width;
+        if (w > 0) {
+          setChartDimensions((prev) => ({
+            ...prev,
+            segment: { width: Math.max(1, Math.round(w)), height: 224 },
+          }));
+        }
       }
     };
 
-    updateDimensions();
-    const resizeObserver = new ResizeObserver(updateDimensions);
-    if (revenueContainerRef.current) resizeObserver.observe(revenueContainerRef.current);
-    if (segmentContainerRef.current) resizeObserver.observe(segmentContainerRef.current);
+    const ro = new ResizeObserver(updateDimensions);
+    if (revenueContainerRef.current) ro.observe(revenueContainerRef.current);
+    if (segmentContainerRef.current) ro.observe(segmentContainerRef.current);
+    const t = window.setTimeout(updateDimensions, 0);
+    const raf = requestAnimationFrame(updateDimensions);
 
-    return () => resizeObserver.disconnect();
-  }, []);
+    return () => {
+      window.clearTimeout(t);
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+    };
+  }, [hasAnyData, revenueChartData.length, isB2B, hasSegments]);
 
   return (
     <div className="space-y-8">
@@ -516,7 +525,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       {/* Global period selector — applies to all pages as default */}
       {(hasOrganic || hasCampaigns) && (
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+          <div className="-mx-1 max-w-full overflow-x-auto pb-1 sm:mx-0 sm:overflow-visible sm:pb-0">
+          <div className="flex w-max min-w-0 items-center gap-1 rounded-lg bg-gray-100 p-1 sm:w-auto">
             {GLOBAL_PERIOD_OPTIONS.map(opt => (
               <button
                 key={opt.key}
@@ -530,6 +540,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 {opt.label}
               </button>
             ))}
+          </div>
           </div>
           {dashPeriod === 'custom' && (
             <DateRangePicker
@@ -774,7 +785,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               <ArrowRight size={16} className="text-[#D1D5DB] group-hover:text-[var(--nts-accent)] transition-colors" />
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 items-end">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-5 md:items-end">
               <div>
                 <div className="flex items-center gap-1 mb-0.5">
                   <p className="text-[11px] text-[#6B7280]">e-shop Revenue</p>
@@ -845,7 +856,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               const t = ga4TotalsInPeriod.hasData ? ga4TotalsInPeriod : { ...ga4.totals, hasData: false };
               const fmt = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}K` : n.toLocaleString());
               return (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 md:grid-cols-4">
               <div>
                 <p className="text-[11px] text-[#6B7280] mb-0.5">Sessions</p>
                 <p className="text-lg font-bold text-[#1A1A1A]">{fmt(t.sessions)}</p>
@@ -888,10 +899,10 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       {/* Main Charts Row */}
       {hasAnyData && (
         <>
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 lg:gap-8">
+      <div className="grid min-w-0 grid-cols-1 gap-6 lg:gap-8 xl:grid-cols-3">
         {/* Revenue Trend */}
         <Card 
-          className="xl:col-span-2" 
+          className="min-w-0 xl:col-span-2" 
           padding="lg"
           hover={!!onSectionChange}
           onClick={() => onSectionChange?.(isB2B ? 'finances' : 'roi')}
@@ -924,12 +935,10 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             <>
             <div 
               ref={revenueContainerRef}
-              className="w-full" 
+              className="relative w-full min-w-0 max-w-full" 
               style={{ 
-                width: '100%', 
                 height: '288px', 
                 minHeight: '288px', 
-                position: 'relative'
               }}
             >
               <AreaChart 
@@ -1022,8 +1031,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                     Campaigns →
                   </button>
                 </div>
-                <div className="w-full" style={{ height: 200, minHeight: 200 }}>
-                  <ResponsiveContainer width="100%" height="100%">
+                <div className="w-full min-w-0" style={{ height: 200, minHeight: 200 }}>
+                  <ResponsiveContainer width="100%" height="100%" minHeight={200}>
                     <ComposedChart data={adsPerformanceSeries} margin={{ top: 8, right: 8, left: 4, bottom: 4 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F0" vertical={false} />
                       <XAxis dataKey="label" tick={{ fill: '#57606a', fontSize: 11 }} axisLine={{ stroke: '#d0d7de' }} tickLine={{ stroke: '#d0d7de' }} />
@@ -1153,12 +1162,10 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             />
             <div 
               ref={segmentContainerRef}
-              className="w-full" 
+              className="relative w-full min-w-0 max-w-full" 
               style={{ 
-                width: '100%', 
                 height: '224px', 
                 minHeight: '224px', 
-                position: 'relative'
               }}
             >
               <PieChart width={chartDimensions.segment.width} height={chartDimensions.segment.height}>

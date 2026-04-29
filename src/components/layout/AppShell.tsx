@@ -374,11 +374,23 @@ function AccountMenu({
   );
 }
 
+const LAYOUT_WIDE_MQ = '(min-width: 1024px)';
+
 export function AppShell({ activeSection, onSectionChange, children }: AppShellProps) {
-  const [sidebarOpen, setSidebarOpen] = useState(() => {
-    if (typeof localStorage !== 'undefined') return localStorage.getItem(SIDEBAR_PIN_KEY) === '1';
-    return false;
-  });
+  const [isWideLayout, setIsWideLayout] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia(LAYOUT_WIDE_MQ).matches : true
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia(LAYOUT_WIDE_MQ);
+    const onChange = () => setIsWideLayout(mq.matches);
+    onChange();
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarPinned, setSidebarPinned] = useState(() => {
     if (typeof localStorage !== 'undefined') return localStorage.getItem(SIDEBAR_PIN_KEY) === '1';
     return false;
@@ -391,6 +403,9 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
   const { isB2B, enabledModules, moduleConfig } = useModules();
   const { activeStrategy } = useActiveStrategy();
   useBrandMembers();
+
+  /** Σε οθόνες <1024px το καρφιτσωμένο μενού ΔΕΝ μένει στήλη (καταστρέφει το layout) — χρησιμοποιείται μόνο overlay drawer. */
+  const showPinnedColumn = sidebarPinned && isWideLayout;
 
   /** Το κύριο scroll είναι εδώ (όχι το window) — ώστε νέα σελίδα από το μενού να ξεκινά από πάνω. */
   const mainContentScrollRef = useRef<HTMLDivElement>(null);
@@ -532,13 +547,16 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
 
   return (
     <>
-      <PrimerHeader style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', backgroundColor: '#111111' }}>
-        <PrimerHeader.Item>
+      <PrimerHeader style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', backgroundColor: '#111111' }} className="min-w-0">
+        <PrimerHeader.Item className="min-w-0 shrink-0">
           <Button
             variant="ghost"
             size="sm"
             icon={<ThreeBarsIcon />}
-            onClick={() => { if (sidebarPinned) { togglePin(); } else { setSidebarOpen((o) => !o); } }}
+            onClick={() => {
+              if (showPinnedColumn) togglePin();
+              else setSidebarOpen((o) => !o);
+            }}
             style={{
               color: 'rgba(255,255,255,0.95)',
               border: '1px solid rgba(255,255,255,0.16)',
@@ -549,7 +567,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
           />
         </PrimerHeader.Item>
 
-        <PrimerHeader.Item style={{ flex: '0 0 auto', minWidth: 0 }}>
+        <PrimerHeader.Item style={{ flex: '0 1 auto', minWidth: 0 }} className="min-w-0">
           <PrimerHeader.Link
             as="button"
             type="button"
@@ -565,7 +583,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
               cursor: 'default',
             }}
           >
-            <PerformancePlusLogo height={34} className="max-h-9" variant="onDark" />
+            <PerformancePlusLogo height={30} className="max-w-[9rem] sm:max-w-none" variant="onDark" />
           </PrimerHeader.Link>
         </PrimerHeader.Item>
 
@@ -609,8 +627,8 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
           </div>
         </PrimerHeader.Item>
 
-        <PrimerHeader.Item style={{ marginLeft: 'auto', minWidth: 0 }}>
-          <div className="flex items-center gap-2 lg:gap-3">
+        <PrimerHeader.Item style={{ marginLeft: 'auto', minWidth: 0 }} className="min-w-0 shrink">
+          <div className="flex min-w-0 items-center gap-1.5 sm:gap-2 lg:gap-3">
             {currentBrand && (
               <BrandMenu
                 currentBrand={currentBrand}
@@ -651,7 +669,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
         maxWidth: '100%'
       }}>
         {/* Pinned Sidebar */}
-        {sidebarPinned && (
+        {showPinnedColumn && (
           <div 
             className="sidebar-dark"
             style={{
@@ -712,19 +730,14 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
             backgroundColor: 'var(--nts-bg-pure)'
           }}
         >
-          <div style={{ 
-            maxWidth: 1400,
-            margin: '0 auto',
-            padding: 24,
-            width: '100%'
-          }}>
+          <div className="mx-auto w-full max-w-[1400px] px-3 py-4 sm:px-4 sm:py-5 md:px-6 md:py-6">
             {children}
           </div>
         </div>
       </div>
 
       {/* Drawer Overlay (unpinned) */}
-      {sidebarOpen && !sidebarPinned && (
+      {sidebarOpen && !showPinnedColumn && (
         <>
           <div
             onClick={() => setSidebarOpen(false)}

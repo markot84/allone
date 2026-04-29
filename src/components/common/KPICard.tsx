@@ -47,7 +47,7 @@ export function KPICard({ kpi, index, onClick, className }: KPICardProps) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.05 }}
-      className="h-full"
+      className="h-full min-w-0"
     >
       <Card
         padding="lg"
@@ -76,7 +76,7 @@ export function KPICard({ kpi, index, onClick, className }: KPICardProps) {
         </p>
 
         {kpi.sparklineData && kpi.sparklineData.length > 0 && (
-          <div className="h-[32px] w-full my-1 -mx-1">
+          <div className="my-1 h-[32px] w-full min-w-0 -mx-1">
             <ResponsiveContainer width="100%" height={32}>
               <AreaChart data={kpi.sparklineData.map((v, i) => ({ v, i }))} margin={{ top: 2, right: 4, left: 4, bottom: 2 }}>
                 <defs>
