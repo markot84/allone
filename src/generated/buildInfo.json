@@ -1,10 +1,14 @@
 {
-  "version": "0.675.10",
-  "previousVersion": "0.675.9",
-  "commitHash": "b4e1c6a",
+  "version": "0.675.11",
+  "previousVersion": "0.675.10",
+  "commitHash": "583ec81",
   "branch": "main",
-  "buildDate": "2026-04-29T16:23:46.847Z",
+  "buildDate": "2026-04-29T18:48:01.234Z",
   "commits": [
+    {
+      "hash": "583ec81",
+      "message": "fix(ui): responsive channel progress summary"
+    },
     {
       "hash": "b4e1c6a",
       "message": "fix(ui): simplify app header for responsive"
@@ -60,13 +64,10 @@
     {
       "hash": "23526ba",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "4ff146c",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [
+    "[Διόρθωση] Responsive channel progress summary",
     "[Διόρθωση] Simplify app header for responsive",
     "[Διόρθωση] Responsive hardening across app",
     "[Διόρθωση] Mobile layout — sidebar drawer <1024px, chart measure + min-w, responsive grids",

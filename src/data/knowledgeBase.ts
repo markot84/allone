@@ -1190,7 +1190,7 @@ Side drawer που δείχνει χρονολογικά όλες τις ενέ�
     content: `# Κατανόηση Οικονομικών KPIs
 
 ## Σύνολο Εσόδων
-Συνολικά έσοδα από οργανικές πωλήσεις + conversion value από campaigns (Google Ads, Meta). Εμφανίζει MoM (month-over-month) μεταβολή.
+Συνολικά έσοδα από e-shop revenue (όταν υπάρχει σύνδεση) + οργανικά έσοδα + conversion value από campaigns (Google Ads, Meta). Εμφανίζει MoM (month-over-month) μεταβολή με την ίδια blended λογική.
 
 ## Ad Spend
 Συνολικό ποσό που δαπανήθηκε σε διαφημίσεις. Περιλαμβάνει Google Ads και Meta Ads spend. Εμφανίζει CPA (Cost Per Acquisition) ως subtitle.

@@ -244,9 +244,10 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     };
   }, [ga4.dailyEntries, periodDates.fromDate, periodDates.toDate]);
 
+  const hasEcommerceRevenue = enabledModules.ecommerce && ecomm.hasData;
   const dashboardTotalRevenue = useMemo(
-    () => organicRevenueInPeriod + campaignMetrics.totalRevenue,
-    [organicRevenueInPeriod, campaignMetrics.totalRevenue]
+    () => (hasEcommerceRevenue ? storeRevenueInPeriod : 0) + organicRevenueInPeriod + campaignMetrics.totalRevenue,
+    [hasEcommerceRevenue, storeRevenueInPeriod, organicRevenueInPeriod, campaignMetrics.totalRevenue]
   );
   const inventoryValueEstimate = productStats?.totalInventoryValue ?? 0;
   const openCommercialTasks = useMemo(
@@ -599,7 +600,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       )}
 
       {/* KPI Cards — Financial Overview */}
-      {(hasOrganic || hasCampaigns) && (() => {
+      {(hasOrganic || hasCampaigns || hasEcommerceRevenue) && (() => {
         const sortMonthKeys = (entries: [string, any][]) =>
           entries
             .filter(([k]) => k !== 'Other' && /^\d{4}-\d{2}$/.test(k))
@@ -616,6 +617,12 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           if (ym < kFromYm || ym > kToYm) return;
           revenueByMonth[ym] = (revenueByMonth[ym] || 0) + v;
         });
+        if (hasEcommerceRevenue) {
+          ecommHist.monthlyRevenue.forEach((r) => {
+            if (r.month < kFromYm || r.month > kToYm) return;
+            revenueByMonth[r.month] = (revenueByMonth[r.month] || 0) + r.revenue;
+          });
+        }
         periodCampaigns.forEach((c) => {
           for (const [ym, val] of getCampaignMonthlyAttributedValueInPeriod(c, periodDates.fromDate, periodDates.toDate)) {
             revenueByMonth[ym] = (revenueByMonth[ym] || 0) + val;
@@ -666,13 +673,13 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         const dailyTrendKpi = buildRoiTrendSeriesDaily(
           mergedOrganicByMonth,
           periodCampaigns as Campaign[],
-          undefined,
+          hasEcommerceRevenue ? ecommRevenueByDayRecord : undefined,
           kFrom,
           kTo,
-          false,
+          hasEcommerceRevenue,
           ga4OrganicEffective
         );
-        const revenueSpark = padSparklineForChart(dailyTrendKpi.map((r) => (r.organic + r.campaigns) / 1000));
+        const revenueSpark = padSparklineForChart(dailyTrendKpi.map((r) => (r.storeRevenue + r.organic + r.campaigns) / 1000));
 
         const spendByDay: Record<string, number> = {};
         periodCampaigns.forEach((c) => {
@@ -714,7 +721,9 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   tooltip:
                     isB2B
                       ? 'Βασική εικόνα εσόδων από οργανική ζήτηση και demand generation. Για πλήρη αποτύπωση εσόδων ανά account απαιτείται invoicing ή ERP import.'
-                      : 'Συνολικά έσοδα όπως αποτυπώνονται από organic δεδομένα και conversion value των διαφημιστικών πλατφορμών. Δεν πρόκειται για ταμειακό τζίρο e-shop.',
+                      : hasEcommerceRevenue
+                        ? 'Σύνολο επιλεγμένης περιόδου: πραγματικός τζίρος e-shop + organic revenue + conversion value από διαφημιστικές πλατφόρμες.'
+                        : 'Συνολικά έσοδα όπως αποτυπώνονται από organic δεδομένα και conversion value των διαφημιστικών πλατφορμών. Δεν πρόκειται για ταμειακό τζίρο e-shop.',
                 }}
                 index={0}
                 onClick={() => onSectionChange?.(isB2B ? 'finances' : 'roi')}

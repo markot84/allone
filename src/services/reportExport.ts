@@ -65,17 +65,29 @@ export function safeBrandName(name: string | undefined): string {
   return (name || 'Brand').replace(/[^a-zA-Z0-9Α-Ωα-ωά-ώ_-]/g, '_').replace(/_+/g, '_').slice(0, 40) || 'Brand';
 }
 
+type ReportExportData = {
+  products?: Product[];
+  segments?: RFMSegment[];
+  campaigns?: Campaign[];
+  organicRecords?: Array<{ period?: string; organic_revenue?: number }>;
+  totalOrganicRevenue?: number;
+  ecommerceRevenue?: number;
+  brandName?: string;
+};
+
+function getExecutiveRevenueBreakdown(data: ReportExportData) {
+  const campaigns = data.campaigns ?? [];
+  const organicRevenue = data.totalOrganicRevenue ?? (data.organicRecords ?? []).reduce((s, r) => s + (r.organic_revenue ?? 0), 0);
+  const campaignValue = campaigns.reduce((s, c) => s + getDisplayConversionValue(c, false), 0);
+  const ecommerceRevenue = data.ecommerceRevenue ?? 0;
+  const totalRevenue = ecommerceRevenue + organicRevenue + campaignValue;
+  return { campaigns, organicRevenue, campaignValue, ecommerceRevenue, totalRevenue };
+}
+
 export async function exportReport(
   reportId: string,
   format: ReportFormat,
-  data: {
-    products?: Product[];
-    segments?: RFMSegment[];
-    campaigns?: Campaign[];
-    organicRecords?: Array<{ period?: string; organic_revenue?: number }>;
-    totalOrganicRevenue?: number;
-    brandName?: string;
-  }
+  data: ReportExportData
 ): Promise<void> {
   if (format === 'pdf' && !PDF_SUPPORTED[reportId]) {
     throw new Error('PDF δεν υποστηρίζεται για αυτό το report');
@@ -88,14 +100,7 @@ export async function exportReport(
 
 async function exportReportToPdf(
   reportId: string,
-  data: {
-    products?: Product[];
-    segments?: RFMSegment[];
-    campaigns?: Campaign[];
-    organicRecords?: Array<{ period?: string; organic_revenue?: number }>;
-    totalOrganicRevenue?: number;
-    brandName?: string;
-  }
+  data: ReportExportData
 ): Promise<void> {
   const doc = new jsPDF();
   const date = new Date().toISOString().split('T')[0];
@@ -113,16 +118,14 @@ async function exportReportToPdf(
 
   switch (reportId) {
     case 'executive': {
-      const campaigns = data.campaigns ?? [];
-      const organicRevenue = data.totalOrganicRevenue ?? (data.organicRecords ?? []).reduce((s, r) => s + (r.organic_revenue ?? 0), 0);
-      const campaignValue = campaigns.reduce((s, c) => s + getDisplayConversionValue(c, false), 0);
-      const totalRevenue = organicRevenue + campaignValue;
+      const { campaigns, organicRevenue, campaignValue, ecommerceRevenue, totalRevenue } = getExecutiveRevenueBreakdown(data);
       doc.text('Executive Summary', 14, 40);
       autoTable(doc, {
         startY: 48,
         head: [['Metric', 'Value']],
         body: [
           ['Total Revenue', formatCurrencyCompact(totalRevenue)],
+          ['e-shop Revenue', formatCurrencyCompact(ecommerceRevenue)],
           ['Οργανικά Έσοδα', formatCurrencyCompact(organicRevenue)],
           ['Campaign Conversion Value', formatCurrencyCompact(campaignValue)],
           ['Περίοδοι Οργανικών', String((data.organicRecords ?? []).length)],
@@ -174,14 +177,7 @@ async function exportReportToPdf(
 
 async function exportReportToExcel(
   reportId: string,
-  data: {
-    products?: Product[];
-    segments?: RFMSegment[];
-    campaigns?: Campaign[];
-    organicRecords?: Array<{ period?: string; organic_revenue?: number }>;
-    totalOrganicRevenue?: number;
-    brandName?: string;
-  }
+  data: ReportExportData
 ): Promise<void> {
   const XLSX = await import('xlsx');
   const date = new Date().toISOString().split('T')[0];
@@ -193,10 +189,7 @@ async function exportReportToExcel(
 
   switch (reportId) {
     case 'executive': {
-      const campaigns = data.campaigns ?? [];
-      const organicRevenue = data.totalOrganicRevenue ?? (data.organicRecords ?? []).reduce((s, r) => s + (r.organic_revenue ?? 0), 0);
-      const campaignValue = campaigns.reduce((s, c) => s + getDisplayConversionValue(c, false), 0);
-      const totalRevenue = organicRevenue + campaignValue;
+      const { campaigns, organicRevenue, campaignValue, ecommerceRevenue, totalRevenue } = getExecutiveRevenueBreakdown(data);
       ws = XLSX.utils.aoa_to_sheet([
         ['Executive Summary', ''],
         ['Brand', data.brandName || '—'],
@@ -204,6 +197,7 @@ async function exportReportToExcel(
         [''],
         ['Metric', 'Value'],
         ['Total Revenue', totalRevenue],
+        ['e-shop Revenue', ecommerceRevenue],
         ['Οργανικά Έσοδα', organicRevenue],
         ['Campaign Conversion Value', campaignValue],
         ['Περίοδοι Οργανικών', (data.organicRecords ?? []).length],

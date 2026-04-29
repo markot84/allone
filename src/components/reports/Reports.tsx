@@ -137,6 +137,7 @@ export function Reports() {
         campaigns: campaignsTyped,
         organicRecords,
         totalOrganicRevenue,
+        ecommerceRevenue: ecomm.hasData ? ecomm.totalRevenue : 0,
         brandName: currentBrand?.name,
       });
       toast.success(`Το report κατέβηκε επιτυχώς (${format.toUpperCase()})`);

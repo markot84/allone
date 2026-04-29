@@ -729,12 +729,12 @@ export function GA4Analytics() {
           </div>
         </Card>
 
-        {/* Traffic Sources Pie */}
+        {/* Traffic Channels Pie */}
         <Card>
           <CardHeader
             title={
               <span className="inline-flex items-center gap-2">
-                Πηγές κίνησης
+                Κανάλια Επισκεψιμότητας
                 {channelMixSource === 'full_sync' && (
                   <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
                     Πλήρης περίοδος συγχρονισμού
@@ -751,6 +751,9 @@ export function GA4Analytics() {
             }
           />
           <div className="p-4 pt-0">
+            <p className="mb-3 text-[11px] leading-snug text-[#6B7280]">
+              Ομαδοποίηση GA4 ανά <strong>Default Channel Group</strong> (π.χ. Direct, Paid Search, Organic Search). Δεν είναι source/medium.
+            </p>
             <div className="flex flex-col items-center">
               <div className="relative w-full h-[200px] max-w-[280px] mx-auto">
                 <ResponsiveContainer width="100%" height="100%">
@@ -817,12 +820,12 @@ export function GA4Analytics() {
         </Card>
       </div>
 
-        {/* Traffic Sources Detail Table */}
+        {/* Traffic Channels Detail Table */}
         <Card>
         <CardHeader
           title={
             <span className="inline-flex items-center gap-2">
-              Ανάλυση καναλιών
+              Ανάλυση Καναλιών Επισκεψιμότητας
               {channelMixSource === 'full_sync' && (
                 <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
                   Πλήρης περίοδος συγχρονισμού
@@ -832,8 +835,8 @@ export function GA4Analytics() {
           }
           subtitle={
             channelMixSource === 'full_sync'
-              ? `⚠️ ΣΥΝΟΛΟ διαθέσιμου ιστορικού (το sync δεν είχε ημερήσια ανά κανάλι — αγνοείται το επιλεγμένο εύρος). Sessions/Conversions ίδια με GA4 Acquisition Reports για το ίδιο εύρος. Users/New users: άθροιση ημερών (το GA4 UI κάνει deduplication χρηστών — αναμένονται μικρές διαφορές).`
-              : `Ίδιο εύρος με το ημερολόγιο (${formatDateTooltipEl(effectiveFrom)} — ${formatDateTooltipEl(effectiveTo)}). Sessions/Conversions ίδια με GA4 Acquisition Reports. Users/New users: άθροιση ημερών (το GA4 UI κάνει deduplication χρηστών — αναμένονται μικρές διαφορές).`
+              ? `⚠️ Σύνολο διαθέσιμου ιστορικού: το τελευταίο sync δεν είχε ημερήσια breakdown ανά κανάλι, άρα αγνοείται το επιλεγμένο εύρος. Τα κανάλια είναι GA4 Default Channel Groups.`
+              : `Ίδιο εύρος με το ημερολόγιο (${formatDateTooltipEl(effectiveFrom)} — ${formatDateTooltipEl(effectiveTo)}). Τα κανάλια είναι GA4 Default Channel Groups. Users/New users: άθροιση ημερών (το GA4 UI κάνει deduplication χρηστών — αναμένονται μικρές διαφορές).`
           }
         />
         <div className="p-4 pt-0 overflow-x-auto">

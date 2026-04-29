@@ -189,9 +189,7 @@ export function getDisplayConversionValue(c: Campaign, convFilterActive: boolean
   return Number.isNaN(n) ? 0 : n;
 }
 
-/**
- * Calculate total revenue: organic revenue + campaign conversion value.
- */
+/** Legacy attribution-only revenue helper: organic revenue + campaign conversion value, excluding e-shop cash revenue. */
 export function calculateTotalRevenue(
   organicRevenue: number,
   campaigns: Campaign[]
