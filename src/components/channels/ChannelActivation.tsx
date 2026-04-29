@@ -809,9 +809,9 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
 
       {/* Progress bar */}
       {progressSummary && progressSummary.total > 0 && (
-        <div className="flex items-center gap-4 px-4 py-3 bg-[#FAFAFA] rounded-xl border border-[#E5E5E5]">
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-2">
+        <div className="flex min-w-0 flex-col gap-3 rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] px-4 py-3 sm:flex-row sm:items-center sm:gap-4">
+          <div className="min-w-0 flex-1">
+            <div className="mb-2 flex min-w-0 flex-col gap-0.5 min-[480px]:flex-row min-[480px]:items-center min-[480px]:gap-2">
               <span className="text-xs font-medium text-[#4A4A4A]">Πρόοδος ενεργοποίησης</span>
               <span className="text-xs text-[#9CA3AF]">
                 {progressSummary.done}/{progressSummary.total} κανάλια σε εξέλιξη
@@ -827,10 +827,10 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
               )}
             </div>
           </div>
-          <div className="flex items-center gap-3 text-xs">
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#22C55E]" />{progressSummary.done} ολοκληρώθηκαν</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#F97316]" />{progressSummary.inProgress} σε εξέλιξη</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#9CA3AF]" />{progressSummary.pending} εκκρεμούν</span>
+          <div className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#4A4A4A] sm:w-auto sm:justify-end">
+            <span className="inline-flex items-center gap-1 whitespace-nowrap"><span className="h-2 w-2 shrink-0 rounded-full bg-[#22C55E]" />{progressSummary.done} ολοκληρώθηκαν</span>
+            <span className="inline-flex items-center gap-1 whitespace-nowrap"><span className="h-2 w-2 shrink-0 rounded-full bg-[#F97316]" />{progressSummary.inProgress} σε εξέλιξη</span>
+            <span className="inline-flex items-center gap-1 whitespace-nowrap"><span className="h-2 w-2 shrink-0 rounded-full bg-[#9CA3AF]" />{progressSummary.pending} εκκρεμούν</span>
           </div>
         </div>
       )}
@@ -847,7 +847,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
             }
             icon={<Users size={18} className="text-[var(--nts-accent)]" />}
             action={
-              <div className="flex items-center gap-3">
+              <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
                 {isSilentUpgrading && (
                   <span
                     className="inline-flex items-center gap-1.5 text-[10px] font-medium px-2 py-1 rounded-full bg-[var(--nts-accent)]/10 text-[var(--nts-accent)]"
@@ -858,7 +858,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                   </span>
                 )}
                 {selectedSegmentName && (
-                  <span className="text-[11px] text-[#9CA3AF]">
+                  <span className="min-w-0 text-[11px] text-[#9CA3AF]">
                     Ενεργό: <span className="font-semibold text-[#1A1A1A]">{selectedSegmentName}</span>
                   </span>
                 )}
@@ -901,7 +901,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-3 text-[11px] text-[#4A4A4A] mb-1">
+                  <div className="mb-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-[#4A4A4A]">
                     {seg.count > 0 && (
                       <span><span className="font-mono font-semibold">{formatNumber(seg.count)}</span> πελάτες</span>
                     )}
