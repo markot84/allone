@@ -142,15 +142,20 @@ export function ChannelPerformanceHistoryCard({
   useEffect(() => {
     const update = () => {
       if (historyChartRef.current) {
-        const w = historyChartRef.current.offsetWidth || 800;
-        setHistoryChartSize({ width: Math.max(w, 400), height: 288 });
+        const w = historyChartRef.current.getBoundingClientRect().width;
+        if (w > 0) setHistoryChartSize({ width: Math.max(1, Math.round(w)), height: 288 });
       }
     };
-    update();
     const ro = new ResizeObserver(update);
     if (historyChartRef.current) ro.observe(historyChartRef.current);
-    return () => ro.disconnect();
-  }, []);
+    const t = window.setTimeout(update, 0);
+    const raf = requestAnimationFrame(update);
+    return () => {
+      window.clearTimeout(t);
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+    };
+  }, [realPerformanceHistory?.rows.length]);
 
   if (!hasCampaigns) return null;
 
@@ -161,7 +166,7 @@ export function ChannelPerformanceHistoryCard({
         subtitle={subtitle}
         icon={<TrendingUp size={20} className="text-[var(--nts-accent)]" />}
       />
-      <div ref={historyChartRef} className="w-full" style={{ width: '100%', height: 288, minHeight: 288, position: 'relative' }}>
+      <div ref={historyChartRef} className="relative w-full min-w-0 max-w-full" style={{ height: 288, minHeight: 288 }}>
         {realPerformanceHistory && realPerformanceHistory.rows.length > 0 ? (
           <LineChart width={historyChartSize.width} height={historyChartSize.height} data={realPerformanceHistory.rows} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" />

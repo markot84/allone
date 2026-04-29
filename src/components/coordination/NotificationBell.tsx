@@ -36,11 +36,16 @@ export function NotificationBell({
   const updatePosition = useCallback(() => {
     if (!btnRef.current) return;
     const rect = btnRef.current.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const gutter = 8;
+    const width = Math.min(380, Math.max(280, viewportWidth - gutter * 2));
+    const left = Math.min(Math.max(gutter, rect.right - width), viewportWidth - width - gutter);
     setMenuStyle({
       position: 'fixed',
       top: rect.bottom + 8,
-      right: window.innerWidth - rect.right,
-      width: 380,
+      left,
+      width,
+      maxWidth: `calc(100vw - ${gutter * 2}px)`,
       maxHeight: 460,
       overflowY: 'auto',
       background: '#fff',
@@ -64,7 +69,13 @@ export function NotificationBell({
       }
     };
     document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
   }, [open, updatePosition]);
 
   const handleMarkAllRead = async () => {

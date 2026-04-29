@@ -1,10 +1,26 @@
 {
-  "version": "0.675.5",
-  "previousVersion": "0.675.4",
-  "commitHash": "59256d6",
+  "version": "0.675.7",
+  "previousVersion": "0.675.6",
+  "commitHash": "b31bc3e",
   "branch": "main",
-  "buildDate": "2026-04-29T14:00:04.200Z",
+  "buildDate": "2026-04-29T15:17:05.671Z",
   "commits": [
+    {
+      "hash": "b31bc3e",
+      "message": "fix(ui): mobile layout — sidebar drawer <1024px, chart measure + min-w, responsive grids"
+    },
+    {
+      "hash": "b1899ae",
+      "message": "fix(firestore): members read — avoid circular isBrandMember for collection group"
+    },
+    {
+      "hash": "53e9237",
+      "message": "fix(firestore): organic composite index, tighten members read, guard empty uid"
+    },
+    {
+      "hash": "ac7c5a4",
+      "message": "fix: scheduled GA4/GSC sync — throttled phase + 20m timeout"
+    },
     {
       "hash": "59256d6",
       "message": "chore: full deploy"
@@ -48,25 +64,13 @@
     {
       "hash": "c671d94",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "2769f31",
-      "message": "chore: full deploy"
-    },
-    {
-      "hash": "8483ea0",
-      "message": "chore: full deploy"
-    },
-    {
-      "hash": "8540ce9",
-      "message": "chore: full deploy"
-    },
-    {
-      "hash": "2c26a88",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [
+    "[Διόρθωση] Mobile layout — sidebar drawer <1024px, chart measure + min-w, responsive grids",
+    "[Διόρθωση] Members read — avoid circular isBrandMember for collection group",
+    "[Διόρθωση] Organic composite index, tighten members read, guard empty uid",
+    "[Διόρθωση] Scheduled GA4/GSC sync — throttled phase + 20m timeout",
     "[Συντήρηση] Full deploy"
   ]
 }

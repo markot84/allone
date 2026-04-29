@@ -355,7 +355,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
               {dataCoverage.marketingPolicy}
             </p>
           </div>
-          <div className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3 xl:min-w-[30rem]">
+          <div className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3 xl:max-w-full">
             <CoverageMetric label="Σύνολο" value={formatNumber(dataCoverage.totalCustomers)} />
             <CoverageMetric label="E-shop" value={formatNumber(dataCoverage.eShopCustomers)} />
             <CoverageMetric label="Others / ERP" value={formatNumber(dataCoverage.otherCustomers)} />
@@ -365,7 +365,8 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
       </Card>
 
       {/* Analysis Tabs */}
-      <div className="flex items-center gap-1 bg-[var(--nts-light-gray)] p-1 rounded-xl w-fit">
+      <div className="-mx-1 max-w-full overflow-x-auto pb-1 sm:mx-0 sm:overflow-visible sm:pb-0">
+      <div className="flex w-max items-center gap-1 rounded-xl bg-[var(--nts-light-gray)] p-1 sm:w-fit">
         <TabButton
           active={activeTab === 'rfm'}
           onClick={() => setActiveTab('rfm')}
@@ -405,6 +406,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
             'Στόχευση retention budget στα segments με μεγαλύτερο upside',
           ]}
         />
+      </div>
       </div>
 
       {activeTab === 'behavioral' && <BehavioralTab segments={rfmSegments} />}
@@ -489,9 +491,9 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
       </div>
 
       {/* Segment Cards + Chart */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Segment Cards */}
-        <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2 lg:col-span-2">
           {rfmSegments.map((segment, index) => (
             <SegmentCard
               key={segment.id}
@@ -507,13 +509,13 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
         </div>
 
         {/* Distribution Chart */}
-        <Card padding="lg" className="min-w-[280px] flex flex-col">
+        <Card padding="lg" className="flex min-w-0 flex-col">
           <CardHeader
             title="Revenue Distribution"
             subtitle="Ανά segment"
           />
-          <div className="w-full flex-shrink-0" style={{ height: 240 }}>
-            <ResponsiveContainer width="100%" height={240}>
+          <div className="min-w-0 w-full flex-shrink-0" style={{ height: 240 }}>
+            <ResponsiveContainer width="100%" height={240} minHeight={240}>
               <PieChart margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
                 <Pie
                   data={rfmSegments}

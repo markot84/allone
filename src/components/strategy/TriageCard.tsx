@@ -1077,7 +1077,7 @@ function ExpandedPanel({
 
       {/* Special breakdown για new_or_unknown */}
       {bucket === 'new_or_unknown' && unknownBreakdown && (
-        <div className="px-3.5 py-2.5 bg-slate-50 border-b border-gray-100 grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 gap-2 border-b border-gray-100 bg-slate-50 px-3.5 py-2.5 sm:grid-cols-3">
           <UnknownChip label="Νέα προϊόντα" sub="< 30 ημέρες" count={unknownBreakdown.new_sku} icon={Sparkles} />
           <UnknownChip label="Virtual SKUs" sub="gift cards / υπηρεσίες" count={unknownBreakdown.virtual_sku} icon={Package} />
           <UnknownChip label="Χωρίς σήματα" sub="πωλήσεις / κίνηση / κόστος" count={unknownBreakdown.no_signals} icon={Database} />

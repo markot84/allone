@@ -1803,7 +1803,7 @@ export function WeightConfigurator() {
           )}
 
           {/* Impact Summary */}
-          <div className="mt-6 p-4 bg-[#F5F5F5] rounded-lg grid grid-cols-3 gap-4">
+          <div className="mt-6 grid grid-cols-1 gap-4 rounded-lg bg-[#F5F5F5] p-4 sm:grid-cols-3">
             <div>
               <p className="text-xs text-[#4A4A4A]">Επηρεαζόμενες κατηγορίες</p>
               <p className="text-lg font-bold text-[#1A1A1A]">

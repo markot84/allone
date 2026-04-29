@@ -1192,21 +1192,24 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                       {/* Status dropdown */}
                       <div className="relative group flex-shrink-0">
                         <button
-                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                          type="button"
+                          aria-haspopup="menu"
+                          className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)]/30"
                           style={{ backgroundColor: statusCfg.bg, color: statusCfg.color }}
                         >
                           <StatusIcon size={13} />
                           {statusCfg.label}
                           <ChevronDown size={11} />
                         </button>
-                        <div className="absolute right-0 top-full mt-1 bg-white border border-[#E5E5E5] rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10 min-w-[140px]">
+                        <div className="invisible absolute right-0 top-full z-10 mt-1 min-w-[140px] rounded-lg border border-[#E5E5E5] bg-white opacity-0 shadow-lg transition-all group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100">
                           {(Object.entries(STATUS_CONFIG) as [ChannelStatus, typeof STATUS_CONFIG.pending][]).map(([key, cfg]) => {
                             const Icon = cfg.icon;
                             return (
                               <button
+                                type="button"
                                 key={key}
                                 onClick={() => handleStatusChange(ch.name, key)}
-                                className="flex items-center gap-2 w-full px-3 py-2 text-xs hover:bg-[#FAFAFA] first:rounded-t-lg last:rounded-b-lg"
+                                className="flex w-full items-center gap-2 px-3 py-2 text-xs hover:bg-[#FAFAFA] focus:bg-[#FAFAFA] focus:outline-none first:rounded-t-lg last:rounded-b-lg"
                                 style={{ color: cfg.color }}
                               >
                                 <Icon size={13} />

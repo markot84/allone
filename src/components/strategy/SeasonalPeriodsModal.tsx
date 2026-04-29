@@ -209,7 +209,7 @@ export function SeasonalPeriodsModal({
                       className="w-full px-3 py-2 text-sm border border-[#E5E5E5] rounded-lg focus:outline-none focus:border-[var(--nts-accent)]"
                     />
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <div>
                         <label className="text-[11px] text-[#9CA3AF] block mb-1">Από</label>
                         <div className="flex gap-1">
@@ -234,7 +234,7 @@ export function SeasonalPeriodsModal({
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                       <div>
                         <label className="text-[11px] text-[#9CA3AF] block mb-1">Στρατηγική Α</label>
                         <select value={newScenarioA} onChange={e => setNewScenarioA(e.target.value)}

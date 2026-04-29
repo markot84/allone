@@ -394,29 +394,29 @@ export function SuppliersPage() {
       </AnimatePresence>
 
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
           { icon: <Truck size={16} />, color: 'text-[var(--nts-accent)]', bg: 'bg-[var(--nts-accent)]/10', value: suppliers.length, label: 'Προμηθευτές' },
           { icon: <Clock size={16} />, color: 'text-blue-500', bg: 'bg-blue-50', value: suppliers.length > 0 ? Math.round(suppliers.reduce((s, x) => s + x.tod, 0) / suppliers.length) : DEFAULT_TOD, label: 'Μέσο TOD' },
           { icon: <Clock size={16} />, color: 'text-amber-500', bg: 'bg-amber-50', value: suppliers.length > 0 ? Math.round(suppliers.filter(s => (s.lead_time || 0) > 0).reduce((s, x) => s + (x.lead_time || 0), 0) / Math.max(suppliers.filter(s => (s.lead_time || 0) > 0).length, 1)) : 0, label: 'Μέσο Lead Time' },
           { icon: <Package size={16} />, color: 'text-green-500', bg: 'bg-green-50', value: Array.from(productCountBySupplier.values()).reduce((a, b) => a + b, 0), label: 'Συνδ. Προϊόντα' },
         ].map((stat, i) => (
-          <Card key={i} className="px-4 py-3">
+          <Card key={i} className="px-3 py-3 sm:px-4">
             <div className="flex items-center gap-2 mb-1">
               <div className={`w-7 h-7 rounded-md ${stat.bg} flex items-center justify-center shrink-0 ${stat.color}`}>
                 {stat.icon}
               </div>
               <span className="text-[11px] text-[var(--nts-medium-gray)] leading-tight">{stat.label}</span>
             </div>
-            <p className="text-2xl font-bold text-[var(--nts-charcoal)] pl-9">{stat.value}</p>
+            <p className="pl-9 text-xl font-bold text-[var(--nts-charcoal)] sm:text-2xl">{stat.value}</p>
           </Card>
         ))}
       </div>
 
       {/* Search + column filters (toolbar) */}
       <Card className="p-3">
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="relative flex-1 min-w-[200px] max-w-sm">
+        <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap">
+          <div className="relative min-w-0 lg:min-w-[200px] lg:max-w-sm lg:flex-1">
             <label className="text-[10px] uppercase tracking-wider text-[var(--nts-medium-gray)] mb-1 block">Αναζήτηση</label>
             <Search size={14} className="absolute left-2.5 top-[26px] text-[var(--nts-medium-gray)]" />
             <input
@@ -427,7 +427,7 @@ export function SuppliersPage() {
               className="w-full pl-8 pr-2 py-1.5 text-sm border border-[#E5E5E5] rounded-md focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/40"
             />
           </div>
-          <div className="min-w-[140px]">
+          <div className="min-w-0 lg:min-w-[140px]">
             <label className="text-[10px] uppercase tracking-wider text-[var(--nts-medium-gray)] mb-1 block">Προμηθευτής</label>
             <input
               type="text"
@@ -437,7 +437,7 @@ export function SuppliersPage() {
               className="w-full px-2 py-1.5 text-sm border border-[#E5E5E5] rounded-md focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/40"
             />
           </div>
-          <div className="w-[110px]">
+          <div className="min-w-0 lg:w-[110px]">
             <label className="text-[10px] uppercase tracking-wider text-[var(--nts-medium-gray)] mb-1 block" title="Υποστηρίζει >30, <=20, 10-20">TOD</label>
             <input
               type="text"
@@ -447,7 +447,7 @@ export function SuppliersPage() {
               className="w-full px-2 py-1.5 text-sm text-center border border-[#E5E5E5] rounded-md focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/40"
             />
           </div>
-          <div className="w-[110px]">
+          <div className="min-w-0 lg:w-[110px]">
             <label className="text-[10px] uppercase tracking-wider text-[var(--nts-medium-gray)] mb-1 block" title="Υποστηρίζει >5, 5-10">Lead Time</label>
             <input
               type="text"
@@ -457,7 +457,7 @@ export function SuppliersPage() {
               className="w-full px-2 py-1.5 text-sm text-center border border-[#E5E5E5] rounded-md focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/40"
             />
           </div>
-          <div className="w-[100px]">
+          <div className="min-w-0 lg:w-[100px]">
             <label className="text-[10px] uppercase tracking-wider text-[var(--nts-medium-gray)] mb-1 block" title="Αριθμός συνδεδεμένων προϊόντων">Προϊόντα</label>
             <input
               type="text"
@@ -467,7 +467,7 @@ export function SuppliersPage() {
               className="w-full px-2 py-1.5 text-sm text-center border border-[#E5E5E5] rounded-md focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/40"
             />
           </div>
-          <div className="min-w-[140px]">
+          <div className="min-w-0 lg:min-w-[140px]">
             <label className="text-[10px] uppercase tracking-wider text-[var(--nts-medium-gray)] mb-1 block">Επικοινωνία</label>
             <input
               type="text"
@@ -481,7 +481,7 @@ export function SuppliersPage() {
             <button
               type="button"
               onClick={resetColumnFilters}
-              className="h-[34px] px-3 text-xs font-medium text-[var(--nts-accent)] hover:bg-[var(--nts-accent)]/5 rounded-md border border-[var(--nts-accent)]/30"
+              className="h-[34px] rounded-md border border-[var(--nts-accent)]/30 px-3 text-xs font-medium text-[var(--nts-accent)] hover:bg-[var(--nts-accent)]/5 sm:col-span-2 lg:col-span-1"
             >
               Καθαρισμός
             </button>

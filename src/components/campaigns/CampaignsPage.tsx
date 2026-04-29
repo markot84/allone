@@ -820,7 +820,8 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
 
       {/* Tabs + εύρος ημερομηνιών (ίδια γραμμή σε md+) */}
       <div className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center md:justify-between md:gap-x-4 md:gap-y-2">
-        <div className="flex gap-0.5 bg-[#F5F5F5] p-0.5 rounded-lg w-fit shrink-0">
+        <div className="-mx-1 max-w-full overflow-x-auto pb-1 sm:mx-0 sm:overflow-visible sm:pb-0">
+        <div className="flex w-max gap-0.5 rounded-lg bg-[#F5F5F5] p-0.5 sm:w-fit">
           {(['campaigns', 'search_terms', 'keywords', 'geo'] as const).map(tab => (
             <button
               key={tab}
@@ -838,6 +839,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                'Τοποθεσία'}
             </button>
           ))}
+        </div>
         </div>
         {activeTab === 'campaigns' && (
           <div className="flex flex-wrap items-center gap-2 md:justify-end min-w-0 md:flex-1">
@@ -886,8 +888,8 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
       {activeTab === 'campaigns' && <>
       {/* Filters */}
       <Card padding="sm">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex-1 min-w-[180px]">
+        <div className="grid grid-cols-1 items-center gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap">
+          <div className="min-w-0 lg:min-w-[180px] lg:flex-1">
             <div className="relative">
               <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#4A4A4A]" />
               <input
@@ -900,12 +902,12 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 flex-col gap-2 sm:col-span-2 sm:flex-row sm:items-center lg:col-span-1">
             <Filter size={18} className="text-[#4A4A4A]" />
             <select
               value={channelFilter}
               onChange={(e) => setChannelFilter(e.target.value)}
-              className="px-3 py-2 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all"
+              className="w-full rounded-lg border border-transparent bg-[#F5F5F5] px-3 py-2 text-sm transition-all focus:border-[var(--nts-accent)] focus:bg-white focus:outline-none sm:w-auto"
             >
               <option value="all">Όλα τα κανάλια</option>
               {channels.map(ch => (
@@ -917,7 +919,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
               title="Ενεργές μόνο: Google Ads = Enabled, Meta = ACTIVE — όχι paused, ολοκληρωμένες ή removed."
-              className="px-3 py-2 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all max-w-[min(100%,220px)]"
+              className="w-full max-w-full rounded-lg border border-transparent bg-[#F5F5F5] px-3 py-2 text-sm transition-all focus:border-[var(--nts-accent)] focus:bg-white focus:outline-none sm:w-auto sm:max-w-[220px]"
             >
               <option value="all">All statuses</option>
               <option value="active">Ενεργές μόνο</option>
@@ -1158,12 +1160,13 @@ function SearchIntelligenceTab({ type, searchTerms, keywords, hasData, search, o
 
   return (
     <Card padding="lg">
-      <div className="flex items-center justify-between mb-4">
+      <div className="mb-4 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <CardHeader
+          className="!mb-0 min-w-0"
           title={type === 'search_terms' ? 'Search Terms' : 'Keywords'}
           subtitle={searchIntelSubtitle}
         />
-        <div className="relative w-64">
+        <div className="relative w-full sm:w-64 sm:shrink-0">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
           <input
             type="text"

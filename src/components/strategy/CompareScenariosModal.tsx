@@ -171,7 +171,7 @@ export function CompareScenariosModal({
           </div>
 
           {/* Weights comparison */}
-          <div className="grid grid-cols-2 gap-4 mb-4">
+          <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="p-3 bg-[#F9FAFB] rounded-lg">
               <h5 className="text-xs font-semibold text-[#4A4A4A] mb-2">
                 {nameA} — <Tooltip content="Η κατανομή βαρών καθορίζει ποιοι παράγοντες, όπως το κέρδος, το απόθεμα και η στρατηγική προτεραιότητα, επηρεάζουν περισσότερο την κατάταξη." size={12}>Βάρη</Tooltip>
@@ -219,7 +219,7 @@ export function CompareScenariosModal({
           </div>
 
           {/* Impact summary */}
-          <div className="grid grid-cols-2 gap-4 mb-4">
+          <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="p-3 border border-[#E5E5E5] rounded-lg">
               <h5 className="text-xs font-semibold text-[#4A4A4A] mb-2">{nameA}</h5>
               <div className="text-sm space-y-1">
