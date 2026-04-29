@@ -1,10 +1,14 @@
 {
-  "version": "0.675.4",
-  "previousVersion": "0.675.3",
-  "commitHash": "12ff9cc",
+  "version": "0.675.5",
+  "previousVersion": "0.675.4",
+  "commitHash": "59256d6",
   "branch": "main",
-  "buildDate": "2026-04-29T13:33:05.754Z",
+  "buildDate": "2026-04-29T14:00:04.200Z",
   "commits": [
+    {
+      "hash": "59256d6",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "12ff9cc",
       "message": "chore: full deploy"
@@ -60,14 +64,9 @@
     {
       "hash": "2c26a88",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "dbd1b5c",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [
-    "[Συντήρηση] Full deploy",
-    "[Διόρθωση] Reduce sync window 3 years -> 1 year (only search terms)"
+    "[Συντήρηση] Full deploy"
   ]
 }

@@ -1588,6 +1588,21 @@ async function markNightlyJob(
   await db.doc('system_health/nightly_jobs').set(patch, { merge: true });
 }
 
+/** Περιορισμένη παραλληλία (χαμηλότερο σφάξιμο API της Google σε νυχτερινό batch). */
+async function runPool<T>(items: T[], concurrency: number, fn: (item: T) => Promise<void>): Promise<void> {
+  if (items.length === 0) return;
+  const n = Math.max(1, Math.min(concurrency, items.length));
+  let next = 0;
+  const worker = async () => {
+    for (;;) {
+      const i = next++;
+      if (i >= items.length) break;
+      await fn(items[i]);
+    }
+  };
+  await Promise.all(Array.from({ length: n }, () => worker()));
+}
+
 // ─── Scheduled: Daily Sync (23:00 Europe/Athens) ───────────────
 
 export const scheduledSync = onSchedule(
@@ -1596,7 +1611,7 @@ export const scheduledSync = onSchedule(
     timeZone: 'Europe/Athens',
     region: 'europe-west1',
     memory: '1GiB',
-    timeoutSeconds: 540,
+    timeoutSeconds: 1200,
     secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID', 'SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET', 'TIKTOK_APP_ID', 'TIKTOK_APP_SECRET', 'CONNECTOR_TOKEN_KEY'],
   },
   async () => {
@@ -1719,23 +1734,8 @@ export const scheduledSync = onSchedule(
           }
         }
 
-        if (data.ga4?.connected && data.ga4?.propertyId) {
-          try {
-            const result = await fetchGA4Data(brandId);
-            logger.info(`[ScheduledSync] GA4 for ${brandId}: imported ${result.imported} days`);
-          } catch (err) {
-            logger.error(`[ScheduledSync] GA4 failed for ${brandId}:`, err);
-          }
-        }
-
-        if (data.search_console?.connected && data.search_console?.siteUrl) {
-          try {
-            const result = await fetchSearchConsoleData(brandId);
-            logger.info(`[ScheduledSync] Search Console for ${brandId}: imported ${result.imported} rows`);
-          } catch (err) {
-            logger.error(`[ScheduledSync] Search Console failed for ${brandId}:`, err);
-          }
-        }
+        // GA4 + Search Console: όχι εδώ — τρέχουν σε ξεχωριστή φάση με περιορισμένη παραλληλία
+        // ώστε να μη «χτυπάμε» όλα τα properties ταυτόχρονα (quota / 429 / silent αποτυχίες).
 
         // Refresh e-commerce summary if any e-commerce platform is connected
         const hasEcommerce = data.shopify?.connected || data.woocommerce?.connected || data.opencart?.connected || data.magento?.connected;
@@ -1752,6 +1752,32 @@ export const scheduledSync = onSchedule(
       if (failedConnectorBrands > 0) {
         logger.error(`[ScheduledSync] ${failedConnectorBrands} connector brand tasks failed unexpectedly`);
       }
+
+      const ga4Brands: string[] = [];
+      const searchConsoleBrands: string[] = [];
+      for (const doc of connectorsSnap.docs) {
+        const d = doc.data();
+        if (d.ga4?.connected && d.ga4?.propertyId) ga4Brands.push(doc.id);
+        if (d.search_console?.connected && d.search_console?.siteUrl) searchConsoleBrands.push(doc.id);
+      }
+
+      const ANALYTICS_SYNC_CONCURRENCY = 2;
+      await runPool(ga4Brands, ANALYTICS_SYNC_CONCURRENCY, async (bid) => {
+        try {
+          const result = await fetchGA4Data(bid);
+          logger.info(`[ScheduledSync] GA4 for ${bid}: imported ${result.imported} days`);
+        } catch (err) {
+          logger.error(`[ScheduledSync] GA4 failed for ${bid}:`, err);
+        }
+      });
+      await runPool(searchConsoleBrands, ANALYTICS_SYNC_CONCURRENCY, async (bid) => {
+        try {
+          const result = await fetchSearchConsoleData(bid);
+          logger.info(`[ScheduledSync] Search Console for ${bid}: imported ${result.imported} rows`);
+        } catch (err) {
+          logger.error(`[ScheduledSync] Search Console failed for ${bid}:`, err);
+        }
+      });
 
       // Stock movement tracking για ΟΛΑ τα brands (συμπεριλαμβανομένων non-connector)
       const allBrandsSnap = await db.collection('brands').get();

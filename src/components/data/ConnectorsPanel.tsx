@@ -4,7 +4,7 @@ import { useBrand } from '../../hooks/useBrand';
 import { useAuth } from '../../hooks/useAuth';
 import { useBrandMembers } from '../../hooks/useCoordination';
 import { useModules } from '../../hooks/useModules';
-import { auth, FUNCTIONS_BASE_URL } from '../../config/firebase';
+import { auth, FUNCTIONS_BASE_URL, getAppCheckHeader } from '../../config/firebase';
 import { getLastImportDates } from '../../services/import';
 import { coerceToDate } from '../../utils/coerceDate';
 import { clearOAuthSession, readOAuthSessionPayload } from '../../utils/oauthSession';
@@ -307,6 +307,14 @@ const CONNECTORS: ConnectorConfig[] = [
 /** Απευθείας cloudfunctions.net ώστε μεγάλα sync (Megaventory) να μην κόβονται από όριο Hosting ~60s. */
 const FUNCTIONS_BASE = FUNCTIONS_BASE_URL.replace(/\/$/, '');
 
+async function connectorRequestHeaders(idToken: string): Promise<Record<string, string>> {
+  return {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${idToken}`,
+    ...(await getAppCheckHeader()),
+  };
+}
+
 // ─── Account Picker Modal ────────────────────────────────────────
 
 function AccountPickerModal({
@@ -560,10 +568,7 @@ function WooCredentialsModal({
 
       const res = await fetch(`${FUNCTIONS_BASE}/connectorSaveCredentials`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        headers: await connectorRequestHeaders(token),
         body: JSON.stringify({
           brandId,
           provider: 'woocommerce',
@@ -701,10 +706,7 @@ function MagentoCredentialsModal({
 
       const res = await fetch(`${FUNCTIONS_BASE}/connectorSaveCredentials`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        headers: await connectorRequestHeaders(token),
         body: JSON.stringify({
           brandId,
           provider: 'magento',
@@ -900,10 +902,7 @@ function MegaventoryCredentialsModal({
 
       const res = await fetch(`${FUNCTIONS_BASE}/connectorSaveCredentials`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        headers: await connectorRequestHeaders(token),
         body: JSON.stringify({
           brandId,
           provider: 'megaventory',
@@ -1060,7 +1059,7 @@ function SoftOneCredentialsModal({
       if (!token) throw new Error('Not authenticated');
       const res = await fetch(`${FUNCTIONS_BASE}/connectorSaveCredentials`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: await connectorRequestHeaders(token),
         body: JSON.stringify({
           brandId,
           provider: 'softone',
@@ -1195,7 +1194,7 @@ function EpsilonNetCredentialsModal({ brandId, onSuccess, onCancel }: { brandId:
       if (!token) throw new Error('Not authenticated');
       const res = await fetch(`${FUNCTIONS_BASE}/connectorSaveCredentials`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: await connectorRequestHeaders(token),
         body: JSON.stringify({
           brandId,
           provider: 'epsilon_net',
@@ -1301,7 +1300,7 @@ function EntersoftCredentialsModal({ brandId, onSuccess, onCancel }: { brandId: 
       if (!token) throw new Error('Not authenticated');
       const res = await fetch(`${FUNCTIONS_BASE}/connectorSaveCredentials`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: await connectorRequestHeaders(token),
         body: JSON.stringify({
           brandId,
           provider: 'entersoft',
@@ -1458,10 +1457,7 @@ function MegaventoryCustomReportSettingsInline({
 
       const res = await fetch(`${FUNCTIONS_BASE}/connectorSaveCredentials`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        headers: await connectorRequestHeaders(token),
         body: JSON.stringify({
           brandId,
           provider: 'megaventory',
@@ -1554,10 +1550,7 @@ function OpenCartCredentialsModal({
 
       const res = await fetch(`${FUNCTIONS_BASE}/connectorSaveCredentials`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        headers: await connectorRequestHeaders(token),
         body: JSON.stringify({
           brandId,
           provider: 'opencart',
@@ -1967,10 +1960,7 @@ export function ConnectorsPanel() {
 
       const res = await fetch(`${FUNCTIONS_BASE}/connectorAuth`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        headers: await connectorRequestHeaders(token),
         body: JSON.stringify(body),
       });
 
@@ -2002,10 +1992,7 @@ export function ConnectorsPanel() {
 
       const res = await fetch(`${FUNCTIONS_BASE}/connectorDisconnect`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        headers: await connectorRequestHeaders(token),
         body: JSON.stringify({ brandId, provider }),
       });
 
@@ -2042,10 +2029,7 @@ export function ConnectorsPanel() {
 
       const res = await fetch(`${FUNCTIONS_BASE}/connectorSync`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        headers: await connectorRequestHeaders(token),
         body: JSON.stringify({ brandId, provider }),
         signal: syncAbort.signal,
       });
@@ -2170,10 +2154,7 @@ export function ConnectorsPanel() {
 
       const res = await fetch(`${FUNCTIONS_BASE}/connectorSelectAccount`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        headers: await connectorRequestHeaders(token),
         body: JSON.stringify({
           brandId,
           provider: accountPickerFor,
