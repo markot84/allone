@@ -2068,7 +2068,7 @@ export function ConnectorsPanel() {
     markSyncStart(provider);
 
     const syncAbort = new AbortController();
-    const syncTimer = window.setTimeout(() => syncAbort.abort(), 320_000);
+    const syncTimer = window.setTimeout(() => syncAbort.abort(), 1_260_000);
 
     try {
       const token = await auth.currentUser?.getIdToken();
@@ -2178,7 +2178,7 @@ export function ConnectorsPanel() {
       let msg = err instanceof Error ? err.message : 'Σφάλμα sync';
       if (err instanceof Error && err.name === 'AbortError') {
         msg =
-          'Το sync ξεπέρασε το χρονικό όριο (~5 λεπτά). Για Megaventory με πολύ μεγάλο όγκο, δοκιμάστε ξανά ή ελέγξτε τα logs της function.';
+          'Το sync ξεπέρασε το χρονικό όριο (~21 λεπτά). Για Megaventory με πολύ μεγάλο όγκο, δοκιμάστε ξανά ή ελέγξτε τα logs της function.';
       } else if (msg === 'Failed to fetch') {
         msg =
           'Αποτυχία δικτύου (Failed to fetch). Έλεγχος: σύνδεση, firewall/adblock, και ότι το URL functions ταιριάζει με το deploy (VITE_FUNCTIONS_BASE_URL / VITE_FUNCTIONS_URL).';
