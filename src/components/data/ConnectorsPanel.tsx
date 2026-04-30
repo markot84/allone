@@ -2167,6 +2167,23 @@ export function ConnectorsPanel() {
           queryClient.removeQueries({ queryKey: ['ecommerce_summary', brandId] });
           queryClient.invalidateQueries({ queryKey: ['ecommerce_summary', brandId] });
         }
+        if (['megaventory', 'softone', 'epsilon_net', 'entersoft'].includes(provider)) {
+          queryClient.removeQueries({ queryKey: ['products', brandId] });
+          queryClient.removeQueries({ queryKey: ['products_paginated', brandId] });
+          queryClient.removeQueries({ queryKey: ['procurement', brandId] });
+          queryClient.removeQueries({ queryKey: ['procurement_signals', brandId] });
+          queryClient.removeQueries({ queryKey: ['ecommerce_summary', brandId] });
+          queryClient.removeQueries({ queryKey: ['segments', brandId] });
+          queryClient.removeQueries({ queryKey: ['segmentCustomerSummaries', brandId] });
+          queryClient.invalidateQueries({ queryKey: ['products', brandId] });
+          queryClient.invalidateQueries({ queryKey: ['products_paginated', brandId] });
+          queryClient.invalidateQueries({ queryKey: ['procurement', brandId] });
+          queryClient.invalidateQueries({ queryKey: ['procurement_signals', brandId] });
+          queryClient.invalidateQueries({ queryKey: ['ecommerce_summary', brandId] });
+          queryClient.invalidateQueries({ queryKey: ['segments', brandId] });
+          queryClient.invalidateQueries({ queryKey: ['segmentCustomerSummaries', brandId] });
+          queryClient.invalidateQueries({ queryKey: ['aggregates'] });
+        }
         if (provider === 'magento') {
           queryClient.invalidateQueries({ queryKey: ['magento_popular_searches', brandId] });
         }

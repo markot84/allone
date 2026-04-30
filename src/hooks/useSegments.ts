@@ -42,6 +42,7 @@ export interface SegmentDataCoverage {
 
 type SegmentCustomerSummary = {
   segmentName?: string;
+  source?: string;
   count: number;
   monetary: number;
 };
@@ -77,6 +78,7 @@ function rebuildSegmentsFromCustomerSummaries(summariesBySegment: Map<string, Se
     return {
       id: segmentId,
       name,
+      source: summary.source,
       rfm_score: '',
       count: summary.count,
       percentage: totalCount > 0 ? Math.round((summary.count / totalCount) * 10000) / 100 : 0,
@@ -110,7 +112,7 @@ export function useSegments() {
 
   const { data: firestoreSegments = [], isPending: fsPending } = useQuery({
     queryKey: ['segments', brandId],
-    queryFn: () => (brandId ? SegmentsService.getAll(brandId) : Promise.resolve([])) as Promise<RFMSegment[]>,
+    queryFn: () => (brandId ? SegmentsService.getAll(brandId, { forceServer: true }) : Promise.resolve([])) as Promise<RFMSegment[]>,
   });
 
   const { data: rawSegmentCustomerSummaries, isPending: segmentCustomersPending } = useQuery({
@@ -187,10 +189,15 @@ export function useSegments() {
   const dataCoverage = useMemo<SegmentDataCoverage>(() => {
     const eShopCustomers = orderRfm.totalCustomers;
     const usesExternalPolicy = sourcePref === 'external' && externalTotalCustomers > 0;
+    const usesConnectorRfm = usesExternalPolicy && externalSegments.some((s) => String((s as RFMSegment & { source?: string }).source || '').endsWith('_rfm'));
     const fullBase = usesExternalPolicy
-      ? Math.max(externalTotalCustomers, eShopCustomers)
+      ? usesConnectorRfm
+        ? eShopCustomers + externalTotalCustomers
+        : Math.max(externalTotalCustomers, eShopCustomers)
       : eShopCustomers;
-    const otherCustomers = Math.max(0, fullBase - eShopCustomers);
+    const otherCustomers = usesExternalPolicy && usesConnectorRfm
+      ? externalTotalCustomers
+      : Math.max(0, fullBase - eShopCustomers);
     const eShopPenetration = fullBase > 0 ? Math.round((eShopCustomers / fullBase) * 1000) / 10 : 0;
     const policyLabel = usesExternalPolicy ? 'e-shop & others' : 'e-shop orders';
     const marketingPolicy =
@@ -209,7 +216,7 @@ export function useSegments() {
       policyLabel,
       marketingPolicy,
     };
-  }, [sourcePref, resolvedSource, orderRfm.totalCustomers, externalTotalCustomers]);
+  }, [sourcePref, resolvedSource, orderRfm.totalCustomers, externalTotalCustomers, externalSegments]);
 
   const isLoading =
     fsPending || (sourcePref === 'external' && segmentCustomersPending) || (ordersQueryEnabled && ordersPending);

@@ -2,9 +2,13 @@ import { type Firestore, type Query } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 
 const BATCH_SIZE = 400;
+const PRESERVED_MEGAVENTORY_SOURCE = 'megaventory_custom_report';
+const PRESERVED_MEGAVENTORY_RFM_SOURCE = 'megaventory_rfm';
 
 const BRAND_SCOPED_MANUAL_COLLECTIONS = [
   'products',
+  'segments',
+  'segment_customers',
   'suppliers',
   'procurement_inventory',
   'procurement_costing',
@@ -41,11 +45,22 @@ async function deleteQueryBatch(
 }
 
 async function deleteBrandCollection(db: Firestore, collectionName: string, brandId: string): Promise<number> {
-  return deleteQueryBatch(
-    db,
-    collectionName,
-    db.collection(collectionName).where('brandId', '==', brandId),
-  );
+  let deleted = 0;
+  const snap = await db.collection(collectionName).where('brandId', '==', brandId).get();
+  const matching = snap.docs.filter((doc) => {
+    const source = doc.data().source;
+    return source !== PRESERVED_MEGAVENTORY_SOURCE && source !== PRESERVED_MEGAVENTORY_RFM_SOURCE;
+  });
+  for (let i = 0; i < matching.length; i += BATCH_SIZE) {
+    const batch = db.batch();
+    for (const doc of matching.slice(i, i + BATCH_SIZE)) {
+      batch.delete(doc.ref);
+    }
+    await batch.commit();
+    deleted += Math.min(BATCH_SIZE, matching.length - i);
+  }
+  logger.info(`[ManualCleanup] ${collectionName}: deleted ${deleted} manual/non-Megaventory rows`);
+  return deleted;
 }
 
 async function deleteDocumentIfExists(db: Firestore, path: string): Promise<number> {
@@ -106,7 +121,7 @@ async function deleteStockSnapshots(db: Firestore, brandId: string): Promise<Man
 
 async function deleteImportJobs(db: Firestore, brandId: string): Promise<number> {
   let deleted = 0;
-  const typesToDelete = new Set(['products', 'procurement']);
+  const typesToDelete = new Set(['products', 'procurement', 'segments']);
   const snap = await db.collection('import_jobs').where('brandId', '==', brandId).get();
   const matching = snap.docs.filter((doc) => typesToDelete.has(String(doc.data().type || '')));
   for (let i = 0; i < matching.length; i += BATCH_SIZE) {

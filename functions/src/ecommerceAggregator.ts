@@ -13,6 +13,13 @@ import {
   lineRevenueAndQtyForTopProducts,
   shouldSkipMagentoLineForTopProducts,
 } from './productLineStats';
+import {
+  classifyEcommerceOrder,
+  isExcludedEcommerceStatus,
+  normalizeSalesChannelRules,
+  type EcommerceExclusionReason,
+  type EcommerceSalesChannel,
+} from './ecommerceSalesChannel';
 
 let _db: Firestore | null = null;
 
@@ -24,6 +31,10 @@ function getDb(): Firestore {
   return _db ?? (admin.firestore() as unknown as Firestore);
 }
 
+function arrayOrEmpty(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
 interface OrderRow {
   totalPrice: number;
   createdAt: string;
@@ -32,6 +43,12 @@ interface OrderRow {
   orderId: string;
   orderName?: string;
   currency: string;
+  paymentMethod?: string;
+  shippingMethod?: string;
+  customerEmail?: string;
+  salesChannel?: EcommerceSalesChannel;
+  revenueIncluded?: boolean;
+  exclusionReason?: EcommerceExclusionReason;
   lineItems?: Array<{
     sku?: string;
     title?: string;
@@ -47,8 +64,7 @@ interface OrderRow {
 export const ECOMMERCE_PROVIDERS = ['shopify', 'woocommerce', 'opencart', 'magento'] as const;
 
 function isCancelledOrderStatus(status: string | null | undefined): boolean {
-  const s = String(status || '').trim().toLowerCase();
-  return s === 'cancelled' || s === 'canceled';
+  return isExcludedEcommerceStatus(status);
 }
 
 /** Demo products (όνομα/SKU περιέχει "demo") εξαιρούνται από κάθε aggregate. */
@@ -175,6 +191,9 @@ async function readPlatformOrders(
       orderId: d.orderId || d.incrementId || doc.id,
       orderName: d.orderName || d.orderNumber || d.incrementId || '',
       currency: d.currency || 'EUR',
+      paymentMethod: d.paymentMethod || d.payment_method || '',
+      shippingMethod: d.shippingMethod || d.shipping_method || d.shippingDescription || '',
+      customerEmail: d.customerEmail || d.customer_email || '',
       lineItems: d.lineItems || [],
     });
   }
@@ -195,6 +214,11 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
   const connectedPlatforms = ECOMMERCE_PROVIDERS.filter(
     (p) => connData[p]?.connected
   );
+  const salesChannelRules = normalizeSalesChannelRules([
+    ...arrayOrEmpty(connData.ecommerceSalesChannelRules),
+    ...arrayOrEmpty(connData.salesChannelRules),
+    ...arrayOrEmpty(connData.magento?.salesChannelRules),
+  ]);
 
   if (connectedPlatforms.length === 0) {
     logger.info(`[EcommerceAgg] No connected e-commerce platforms for brand ${brandId}`);
@@ -215,9 +239,10 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
   for (const o of rawOrders) {
     const { revenue, isAllDemo } = nonDemoRevenue(o);
     if (isAllDemo) continue;
-    const normalizedOrder = { ...o, totalPrice: revenue };
+    const classification = classifyEcommerceOrder(o, salesChannelRules);
+    const normalizedOrder = { ...o, totalPrice: revenue, ...classification };
     visibleOrders.push(normalizedOrder);
-    if (!isCancelledOrderStatus(o.status)) {
+    if (classification.revenueIncluded) {
       revenueOrders.push(normalizedOrder);
     }
   }
@@ -249,6 +274,26 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
     }
     revenueByPlatform[o.platform].revenue += o.totalPrice;
     revenueByPlatform[o.platform].orders += 1;
+  }
+
+  const revenueBySalesChannel: Record<string, number> = {};
+  const ordersBySalesChannel: Record<string, number> = {};
+  const includedRevenueBySalesChannel: Record<string, number> = {};
+  const includedOrdersBySalesChannel: Record<string, number> = {};
+  const excludedRevenueByReason: Record<string, number> = {};
+  const excludedOrdersByReason: Record<string, number> = {};
+  for (const o of visibleOrders) {
+    const channel = o.salesChannel || 'direct_eshop';
+    revenueBySalesChannel[channel] = (revenueBySalesChannel[channel] || 0) + o.totalPrice;
+    ordersBySalesChannel[channel] = (ordersBySalesChannel[channel] || 0) + 1;
+    if (o.revenueIncluded) {
+      includedRevenueBySalesChannel[channel] = (includedRevenueBySalesChannel[channel] || 0) + o.totalPrice;
+      includedOrdersBySalesChannel[channel] = (includedOrdersBySalesChannel[channel] || 0) + 1;
+    } else {
+      const reason = o.exclusionReason || 'review';
+      excludedRevenueByReason[reason] = (excludedRevenueByReason[reason] || 0) + o.totalPrice;
+      excludedOrdersByReason[reason] = (excludedOrdersByReason[reason] || 0) + 1;
+    }
   }
 
   // Top products: αγνοεί εντελώς τα demo line items
@@ -370,6 +415,11 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
       total: o.totalPrice,
       currency: o.currency,
       createdAt: o.createdAt,
+      paymentMethod: o.paymentMethod || '',
+      shippingMethod: o.shippingMethod || '',
+      salesChannel: o.salesChannel || 'direct_eshop',
+      revenueIncluded: o.revenueIncluded ?? !isCancelledOrderStatus(o.status),
+      exclusionReason: o.exclusionReason || 'none',
     }));
 
   const summary = {
@@ -379,6 +429,12 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
     revenueByDay,
     revenueByMonth,
     revenueByPlatform,
+    revenueBySalesChannel,
+    ordersBySalesChannel,
+    includedRevenueBySalesChannel,
+    includedOrdersBySalesChannel,
+    excludedRevenueByReason,
+    excludedOrdersByReason,
     topProducts,
     ordersByDay,
     recentOrders,

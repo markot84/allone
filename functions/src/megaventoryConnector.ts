@@ -20,6 +20,13 @@ import {
   cleanupManualImportsForMegaventoryMaster,
   type ManualImportCleanupCounts,
 } from './manualDataCleanup';
+import {
+  normalizeMegaventoryCustomReportRows,
+  type MegaventoryNormalizationCounts,
+} from './megaventoryNormalizer';
+import { refreshMegaventoryRfmSegments, type MegaventoryRfmCounts } from './megaventoryRfm';
+import { refreshProcurementSignals } from './procurementSignals';
+import { refreshStockMovement } from './stockMovementTracker';
 
 let _db: Firestore | null = null;
 
@@ -50,6 +57,19 @@ type MvFilter = {
 /** Καθαρισμός BOM/whitespace από copy-paste API keys */
 function normalizeApiKey(raw: string): string {
   return raw.replace(/^\uFEFF/, '').trim();
+}
+
+function pad2(n: number): string {
+  return String(n).padStart(2, '0');
+}
+
+/** Megaventory date filters expect `dd/MM/yyyy HH:mm:ss`, not ISO/`YYYY-MM-DD`. */
+function toMvFilterDateTime(date: Date): string {
+  return [
+    pad2(date.getUTCDate()),
+    pad2(date.getUTCMonth() + 1),
+    date.getUTCFullYear(),
+  ].join('/') + ` ${pad2(date.getUTCHours())}:${pad2(date.getUTCMinutes())}:${pad2(date.getUTCSeconds())}`;
 }
 
 interface MvCallResult {
@@ -351,17 +371,24 @@ async function fetchAllMvPages(
     idKeys: string[];
     label: string;
     pageSize?: number;
+    maxPages?: number;
   }
 ): Promise<{ rows: any[]; error: string | null }> {
   const pageSize = opts.pageSize ?? MV_PAGE_SIZE;
+  const maxPages = opts.maxPages ?? MV_MAX_PAGES;
   const rows: any[] = [];
   let cursor: number | null = null;
 
-  for (let page = 0; page < MV_MAX_PAGES; page++) {
+  for (let page = 0; page < maxPages; page++) {
     const filters = buildMvFiltersWithCursor(baseFilters, opts.cursorField, cursor);
-    const call = await mvCall(endpoint, apiKey, {
-      Filters: filters,
+    const body: Record<string, unknown> = {
       ReturnTopNRecords: pageSize,
+    };
+    if (filters.length > 0) {
+      body.Filters = filters;
+    }
+    const call = await mvCall(endpoint, apiKey, {
+      ...body,
     });
     const err = asMvError(call, opts.label);
     if (err) return { rows, error: err };
@@ -402,6 +429,91 @@ function normalizeInventoryStockRows(raw: any[]): any[] {
     }
   }
   return out;
+}
+
+type MvDocumentTypeInfo = {
+  id: string;
+  abbreviation: string;
+  description: string;
+};
+
+function mvField(row: Record<string, unknown>, ...names: string[]): unknown {
+  for (const name of names) {
+    if (row[name] !== undefined) return row[name];
+  }
+  const lowerNames = new Set(names.map((name) => name.toLowerCase()));
+  for (const [key, value] of Object.entries(row)) {
+    if (lowerNames.has(key.toLowerCase())) return value;
+  }
+  return undefined;
+}
+
+function mvText(row: Record<string, unknown>, ...names: string[]): string {
+  return String(mvField(row, ...names) ?? '').trim();
+}
+
+function mvNum(row: Record<string, unknown>, ...names: string[]): number {
+  return num(mvField(row, ...names));
+}
+
+async function fetchDocumentTypes(apiKey: string): Promise<{ types: MvDocumentTypeInfo[]; error: string | null }> {
+  const { rows, error } = await fetchAllMvPages('DocumentTypeGet', apiKey, [], {
+    responseArrayKey: 'mvDocumentTypes',
+    cursorField: 'DocumentTypeId',
+    idKeys: ['DocumentTypeId', 'DocumentTypeID'],
+    label: 'DocumentTypeGet',
+    pageSize: 500,
+  });
+  if (error) return { types: [], error };
+  return {
+    types: rows.map((row) => ({
+      id: mvText(row, 'DocumentTypeId', 'DocumentTypeID'),
+      abbreviation: mvText(row, 'DocumentTypeAbbreviation', 'DocumentTypeCode', 'Abbreviation'),
+      description: mvText(row, 'DocumentTypeDescription', 'DocumentTypeName', 'Description', 'Name'),
+    })).filter((type) => type.id || type.abbreviation || type.description),
+    error: null,
+  };
+}
+
+function documentTypeInfo(row: Record<string, unknown>, typesById: Map<string, MvDocumentTypeInfo>): MvDocumentTypeInfo {
+  const id = mvText(row, 'DocumentTypeId', 'DocumentTypeID');
+  const fromRef = id ? typesById.get(id) : undefined;
+  return {
+    id,
+    abbreviation: mvText(row, 'DocumentTypeAbbreviation', 'DocumentTypeCode', 'DocumentType') || fromRef?.abbreviation || '',
+    description: mvText(row, 'DocumentTypeDescription', 'DocumentTypeName') || fromRef?.description || '',
+  };
+}
+
+function isLikelySalesInvoice(row: Record<string, unknown>, type: MvDocumentTypeInfo): boolean {
+  const abbr = type.abbreviation.toUpperCase();
+  const desc = type.description.toLocaleLowerCase('el-GR');
+  const text = `${abbr} ${desc}`;
+  const amount = mvNum(row, 'DocumentAmountGrandTotal', 'DocumentTotalAmount', 'DocumentAmountTotal', 'DocumentTotal');
+  if (amount <= 0) return false;
+  if (/(purchase|supplier|vendor|credit|return|refund|quote|proforma|αγορ|προμηθευ|πιστωτ|επιστροφ)/i.test(text)) {
+    return false;
+  }
+  return (
+    ['SI', 'INV', 'SINV', 'SIV', 'RECEIPT', 'SR'].includes(abbr) ||
+    /(sales?\s*invoice|invoice|receipt|τιμολ|απόδειξη|αποδειξη|λιανικ|πώλη|πωλη)/i.test(text)
+  );
+}
+
+function documentTypeBreakdown(rows: Record<string, unknown>[], typesById: Map<string, MvDocumentTypeInfo>) {
+  const counts = new Map<string, { typeId: string; abbreviation: string; description: string; count: number; amount: number }>();
+  for (const row of rows) {
+    const type = documentTypeInfo(row, typesById);
+    const key = `${type.id || '-'}|${type.abbreviation || '-'}|${type.description || '-'}`;
+    const existing = counts.get(key) ?? { typeId: type.id, abbreviation: type.abbreviation, description: type.description, count: 0, amount: 0 };
+    existing.count += 1;
+    existing.amount += mvNum(row, 'DocumentAmountGrandTotal', 'DocumentTotalAmount', 'DocumentAmountTotal', 'DocumentTotal');
+    counts.set(key, existing);
+  }
+  return [...counts.values()]
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 25)
+    .map((row) => ({ ...row, amount: Math.round(row.amount * 100) / 100 }));
 }
 
 export interface MegaventoryTestResult {
@@ -497,6 +609,14 @@ function num(value: unknown): number {
 function isoDate(value: unknown): string {
   if (!value) return '';
   const s = String(value);
+  const mvMatch = s.match(/\/Date\((\-?\d+)(?:[+\-]\d+)?\)\//);
+  if (mvMatch) {
+    const millis = Number(mvMatch[1]);
+    if (Number.isFinite(millis)) {
+      const date = new Date(millis);
+      if (!Number.isNaN(date.getTime())) return date.toISOString().slice(0, 10);
+    }
+  }
   // Megaventory συνήθως επιστρέφει "YYYY-MM-DDThh:mm:ss"
   return s.length >= 10 ? s.slice(0, 10) : s;
 }
@@ -549,6 +669,8 @@ export interface MegaventorySyncResult {
   suppliers?: number;
   /** Γραμμές custom saved report (π.χ. stock / κινητικότητα) — συλλογή megaventory_custom_report_rows */
   customReportRows?: number;
+  normalized?: MegaventoryNormalizationCounts;
+  rfm?: MegaventoryRfmCounts;
   error?: string;
 }
 
@@ -570,13 +692,26 @@ export async function fetchMegaventoryData(brandId: string): Promise<Megaventory
     return { success: false, imported: 0, error: 'Megaventory API key unavailable — reconnect required' };
   }
 
-  const docsWindow = buildHistoricalOrIncrementalWindow(conn, 'lastDocsSyncAt');
+  let docsWindow = buildHistoricalOrIncrementalWindow(conn, 'lastDocsSyncAt');
+  const existingInvoiceCountSnap = await db.collection('megaventory_invoices').where('brandId', '==', brandId).count().get();
+  const shouldBackfillInvoiceDocuments =
+    existingInvoiceCountSnap.data().count === 0 &&
+    !conn.invoiceDocumentBackfillAt;
+  if (shouldBackfillInvoiceDocuments) {
+    docsWindow = {
+      mode: 'historical',
+      windowStart: new Date(Date.UTC(docsWindow.historyStartYear, 0, 1)),
+      windowEnd: new Date(),
+      historyStartYear: docsWindow.historyStartYear,
+    };
+  }
   const sinceStr = toYmd(docsWindow.windowStart);
   const todayStr = toYmd(docsWindow.windowEnd);
+  const sinceFilterDate = toMvFilterDateTime(docsWindow.windowStart);
   let docsOk = true;
   let referenceOk = true;
   logger.info(
-    `[Megaventory] Sync window for ${brandId}: docs=${docsWindow.mode}:${sinceStr}->${todayStr} reference=snapshot customReport=snapshot`
+    `[Megaventory] Sync window for ${brandId}: docs=${docsWindow.mode}:${sinceStr}->${todayStr} reference=snapshot customReport=snapshot invoiceBackfill=${shouldBackfillInvoiceDocuments}`
   );
 
   let totalImported = 0;
@@ -592,50 +727,82 @@ export async function fetchMegaventoryData(brandId: string): Promise<Megaventory
   const errors: string[] = [];
   let manualCleanupCounts: ManualImportCleanupCounts | null = null;
   let manualCleanupError = '';
+  let normalizedCounts: MegaventoryNormalizationCounts | null = null;
+  let rfmCounts: MegaventoryRfmCounts | null = null;
+  let postNormalizeRefresh: Record<string, unknown> | null = null;
+  let documentDiagnostics: Record<string, unknown> | null = null;
 
   try {
     // ── Invoices (Documents type=Sales Invoice) → revenue ────────────
-    const { rows: invRows, error: invFetchErr } = await fetchAllMvPages('DocumentGet', apiKey, [
-      { FieldName: 'DocumentTypeAbbreviation', SearchOperator: 'Equals', SearchValue: 'SI' },
-      { AndOr: 'And', FieldName: 'DocumentDate', SearchOperator: 'GreaterEqualTo', SearchValue: sinceStr },
-    ], {
-      responseArrayKey: 'mvDocuments',
-      cursorField: 'DocumentId',
-      idKeys: ['DocumentId', 'DocumentID'],
-      label: 'DocumentGet (invoices)',
-    });
+    const documentTypesResult = await fetchDocumentTypes(apiKey);
+    const documentTypesById = new Map(documentTypesResult.types.map((type) => [type.id, type]));
+    const documentFilters = shouldBackfillInvoiceDocuments
+      ? []
+      : [{ FieldName: 'DocumentDate', SearchOperator: 'GreaterEqualTo', SearchValue: sinceFilterDate }];
+    const { rows: invRows, error: invFetchErr } = await fetchAllMvPages(
+      'DocumentGet',
+      apiKey,
+      documentFilters,
+      {
+        responseArrayKey: 'mvDocuments',
+        cursorField: 'DocumentId',
+        idKeys: ['DocumentId', 'DocumentID'],
+        label: 'DocumentGet (invoices)',
+        pageSize: shouldBackfillInvoiceDocuments ? 100 : undefined,
+        maxPages: shouldBackfillInvoiceDocuments ? 1 : undefined,
+      }
+    );
     if (invFetchErr) {
       docsOk = false;
       errors.push(invFetchErr);
     } else {
-      const docs: any[] = invRows;
+      const rawDocs = invRows as Record<string, unknown>[];
+      const docs = rawDocs.filter((d) => isLikelySalesInvoice(d, documentTypeInfo(d, documentTypesById)));
+      documentDiagnostics = {
+        documentTypeError: documentTypesResult.error || '',
+        documentTypes: documentTypesResult.types.slice(0, 50),
+        rawDocumentRows: rawDocs.length,
+        matchedInvoiceRows: docs.length,
+        documentTypeBreakdown: documentTypeBreakdown(rawDocs, documentTypesById),
+      };
+      if (rawDocs.length === 0 || docs.length === 0) {
+        const sampleCall = await mvCall('DocumentGet', apiKey, { ReturnTopNRecords: 100 });
+        const sampleError = asMvError(sampleCall, 'DocumentGet (latest sample)');
+        const sampleRows = sampleError ? [] : (((sampleCall.body?.mvDocuments as unknown[]) || []) as Record<string, unknown>[]);
+        documentDiagnostics.latestSampleError = sampleError || '';
+        documentDiagnostics.latestSampleRows = sampleRows.length;
+        documentDiagnostics.latestSampleTypeBreakdown = documentTypeBreakdown(sampleRows, documentTypesById);
+      }
       const items = docs.map((d) => ({
-        id: `mv_inv_${d.DocumentId || d.DocumentNo || d.DocumentSerialNo || Math.random().toString(36).slice(2)}`,
+        id: `mv_inv_${mvText(d, 'DocumentId', 'DocumentID') || mvText(d, 'DocumentNo', 'DocumentSerialNo') || Math.random().toString(36).slice(2)}`,
         data: {
-          documentId: String(d.DocumentId || ''),
-          documentNo: d.DocumentNo || d.DocumentSerialNo || '',
-          documentType: d.DocumentTypeAbbreviation || 'SI',
-          date: isoDate(d.DocumentDate),
-          status: d.DocumentStatus || '',
-          totalAmount: num(d.DocumentTotalAmount),
-          taxAmount: num(d.DocumentTotalTaxAmount),
-          netAmount: Math.max(0, num(d.DocumentTotalAmount) - num(d.DocumentTotalTaxAmount)),
-          currency: d.DocumentCurrencyCode || conn.currency || 'EUR',
-          clientName: d.DocumentSupplierClientName || '',
+          documentId: mvText(d, 'DocumentId', 'DocumentID'),
+          documentNo: mvText(d, 'DocumentNo', 'DocumentSerialNo'),
+          documentType: documentTypeInfo(d, documentTypesById).abbreviation || documentTypeInfo(d, documentTypesById).description || 'sales_document',
+          documentTypeId: documentTypeInfo(d, documentTypesById).id,
+          documentTypeDescription: documentTypeInfo(d, documentTypesById).description,
+          date: isoDate(mvField(d, 'DocumentDate')),
+          status: mvText(d, 'DocumentStatus'),
+          totalAmount: mvNum(d, 'DocumentAmountGrandTotal', 'DocumentTotalAmount', 'DocumentAmountTotal', 'DocumentTotal'),
+          taxAmount: mvNum(d, 'DocumentAmountTotalTax', 'DocumentTotalTaxAmount'),
+          netAmount: Math.max(0, mvNum(d, 'DocumentAmountGrandTotal', 'DocumentTotalAmount', 'DocumentAmountTotal', 'DocumentTotal') - mvNum(d, 'DocumentAmountTotalTax', 'DocumentTotalTaxAmount')),
+          currency: mvText(d, 'DocumentCurrencyCode') || conn.currency || 'EUR',
+          clientName: mvText(d, 'DocumentSupplierClientName', 'SupplierClientName', 'ClientName'),
+          clientId: mvText(d, 'DocumentSupplierClientId', 'DocumentSupplierClientID', 'SupplierClientId', 'SupplierClientID'),
           source: 'megaventory_api',
         },
       }));
       if (items.length) await writeBatch(db, 'megaventory_invoices', brandId, items);
       counts.invoices = items.length;
       totalImported += items.length;
-      logger.info(`[Megaventory] Invoices: ${items.length} imported for brand ${brandId}`);
+      logger.info(`[Megaventory] Invoices: ${items.length}/${rawDocs.length} imported for brand ${brandId}`);
     }
 
     // ── Sales Orders (cross-reference) ───────────────────────────────
     const { rows: soRows, error: soFetchErr } = await fetchAllMvPages(
       'SalesOrderGet',
       apiKey,
-      [{ FieldName: 'SalesOrderDate', SearchOperator: 'GreaterEqualTo', SearchValue: sinceStr }],
+      [{ FieldName: 'SalesOrderDate', SearchOperator: 'GreaterEqualTo', SearchValue: sinceFilterDate }],
       {
         responseArrayKey: 'mvSalesOrders',
         cursorField: 'SalesOrderId',
@@ -657,7 +824,7 @@ export async function fetchMegaventoryData(brandId: string): Promise<Megaventory
           status: o.SalesOrderStatus || '',
           clientName: o.SalesOrderClientName || '',
           totalQuantity: num(o.SalesOrderTotalQuantity),
-          totalAmount: num(o.SalesOrderTotalAmount),
+          totalAmount: num(o.SalesOrderAmountGrandTotal),
           currency: o.SalesOrderCurrencyCode || conn.currency || 'EUR',
           lineItems: ((o.SalesOrderDetails || []) as any[]).slice(0, 50).map((li: any) => ({
             sku: li.SalesOrderRowProductSKU || li.ProductSKU || '',
@@ -679,7 +846,7 @@ export async function fetchMegaventoryData(brandId: string): Promise<Megaventory
     const { rows: poRows, error: poFetchErr } = await fetchAllMvPages(
       'PurchaseOrderGet',
       apiKey,
-      [{ FieldName: 'PurchaseOrderDate', SearchOperator: 'GreaterEqualTo', SearchValue: sinceStr }],
+      [{ FieldName: 'PurchaseOrderDate', SearchOperator: 'GreaterEqualTo', SearchValue: sinceFilterDate }],
       {
         responseArrayKey: 'mvPurchaseOrders',
         cursorField: 'PurchaseOrderId',
@@ -701,7 +868,7 @@ export async function fetchMegaventoryData(brandId: string): Promise<Megaventory
           status: o.PurchaseOrderStatus || '',
           supplierName: o.PurchaseOrderSupplierName || '',
           totalQuantity: num(o.PurchaseOrderTotalQuantity),
-          totalAmount: num(o.PurchaseOrderTotalAmount),
+          totalAmount: num(o.PurchaseOrderAmountGrandTotal),
           currency: o.PurchaseOrderCurrencyCode || conn.currency || 'EUR',
           lineItems: ((o.PurchaseOrderDetails || []) as any[]).slice(0, 50).map((li: any) => ({
             sku: li.PurchaseOrderRowProductSKU || li.ProductSKU || '',
@@ -796,7 +963,7 @@ export async function fetchMegaventoryData(brandId: string): Promise<Megaventory
     const { rows: supRows, error: supFetchErr } = await fetchAllMvPages(
       'SupplierClientGet',
       apiKey,
-      [{ FieldName: 'SupplierClientType', SearchOperator: 'GreaterEqualTo', SearchValue: '2' }],
+      [],
       {
         responseArrayKey: 'mvSupplierClients',
         cursorField: 'SupplierClientID',
@@ -810,7 +977,7 @@ export async function fetchMegaventoryData(brandId: string): Promise<Megaventory
     } else {
       const list: any[] = supRows;
       const items = list
-        .filter((s) => Number(s.SupplierClientType) >= 2)
+        .filter((s) => ['supplier', 'both'].includes(String(s.SupplierClientType || '').toLowerCase()))
         .map((s) => ({
           id: `mv_sup_${s.SupplierClientId || s.SupplierClientName || Math.random().toString(36).slice(2)}`,
           data: {
@@ -819,7 +986,7 @@ export async function fetchMegaventoryData(brandId: string): Promise<Megaventory
             email: s.SupplierClientEmail || '',
             phone: s.SupplierClientPhone1 || '',
             country: s.SupplierClientShippingCountry || '',
-            type: Number(s.SupplierClientType) === 3 ? 'both' : 'supplier',
+            type: String(s.SupplierClientType || '').toLowerCase() === 'both' ? 'both' : 'supplier',
             source: 'megaventory_api',
           },
         }));
@@ -852,9 +1019,12 @@ export async function fetchMegaventoryData(brandId: string): Promise<Megaventory
         if (crItems.length) {
           await writeBatch(db, CUSTOM_REPORT_COLLECTION, brandId, crItems);
         }
+        normalizedCounts = await normalizeMegaventoryCustomReportRows(db, brandId, crRows);
         counts.customReportRows = crItems.length;
         totalImported += crItems.length;
-        logger.info(`[Megaventory] Custom report ${reportId}: ${crItems.length} rows for brand ${brandId}`);
+        logger.info(
+          `[Megaventory] Custom report ${reportId}: ${crItems.length} rows for brand ${brandId}; normalized=${JSON.stringify(normalizedCounts)}`
+        );
       } catch (crErr) {
         const msg = crErr instanceof Error ? crErr.message : String(crErr);
         errors.push(`CustomReport (${reportId}): ${msg}`);
@@ -872,16 +1042,22 @@ export async function fetchMegaventoryData(brandId: string): Promise<Megaventory
       if (docsWindow.mode === 'historical') {
         patch['megaventory.historyLoadedUntilYear'] = docsWindow.historyStartYear;
       }
+      if (shouldBackfillInvoiceDocuments && counts.invoices > 0) {
+        patch['megaventory.invoiceDocumentBackfillAt'] = FieldValue.serverTimestamp();
+        patch['megaventory.invoiceDocumentBackfillCount'] = counts.invoices;
+      }
     }
 
     const shouldCleanupManualImports =
-      docsWindow.mode === 'historical' &&
       docsOk &&
-      !conn.manualImportCleanupAt;
+      normalizedCounts !== null &&
+      normalizedCounts.products > 0 &&
+      ((docsWindow.mode === 'historical' && !conn.manualImportCleanupAt) || !conn.manualSegmentCleanupAt);
     if (shouldCleanupManualImports) {
       try {
         manualCleanupCounts = await cleanupManualImportsForMegaventoryMaster(db, brandId);
         patch['megaventory.manualImportCleanupAt'] = FieldValue.serverTimestamp();
+        patch['megaventory.manualSegmentCleanupAt'] = FieldValue.serverTimestamp();
         patch['megaventory.manualImportCleanupCounts'] = manualCleanupCounts;
         patch['megaventory.manualImportCleanupReason'] = 'megaventory_historical_sync_master';
       } catch (cleanupErr) {
@@ -890,6 +1066,31 @@ export async function fetchMegaventoryData(brandId: string): Promise<Megaventory
         patch['megaventory.manualImportCleanupError'] = manualCleanupError.slice(0, 500);
         patch['megaventory.manualImportCleanupErrorAt'] = FieldValue.serverTimestamp();
         logger.error(`[Megaventory] Manual import cleanup failed for ${brandId}:`, manualCleanupError);
+      }
+    }
+
+    if (docsOk) {
+      try {
+        rfmCounts = await refreshMegaventoryRfmSegments(db, brandId);
+      } catch (rfmErr) {
+        const msg = rfmErr instanceof Error ? rfmErr.message : String(rfmErr);
+        errors.push(`MegaventoryRFM: ${msg}`);
+        logger.warn(`[Megaventory] RFM refresh failed for ${brandId}: ${msg}`);
+      }
+    }
+
+    if (normalizedCounts && normalizedCounts.products > 0) {
+      try {
+        const procurement = await refreshProcurementSignals(brandId);
+        await refreshStockMovement(brandId);
+        postNormalizeRefresh = {
+          procurementSignals: procurement,
+          stockMovement: 'refreshed',
+        };
+      } catch (refreshErr) {
+        const msg = refreshErr instanceof Error ? refreshErr.message : String(refreshErr);
+        errors.push(`MegaventoryPostNormalizeRefresh: ${msg}`);
+        logger.warn(`[Megaventory] Post-normalization refresh failed for ${brandId}: ${msg}`);
       }
     }
 
@@ -911,6 +1112,12 @@ export async function fetchMegaventoryData(brandId: string): Promise<Megaventory
       manualImportCleanupRan: manualCleanupCounts != null,
       ...(manualCleanupCounts ? { manualImportCleanupCounts: manualCleanupCounts } : {}),
       ...(manualCleanupError ? { manualImportCleanupError: manualCleanupError } : {}),
+      normalized: normalizedCounts != null,
+      ...(normalizedCounts ? { normalizedCounts } : {}),
+      rfmGenerated: rfmCounts != null,
+      ...(rfmCounts ? { rfmCounts } : {}),
+      ...(documentDiagnostics ? { documentDiagnostics } : {}),
+      ...(postNormalizeRefresh ? { postNormalizeRefresh } : {}),
       imported: totalImported,
       ...counts,
       failed: errors.length,
@@ -923,6 +1130,8 @@ export async function fetchMegaventoryData(brandId: string): Promise<Megaventory
       success: true,
       imported: totalImported,
       ...counts,
+      ...(normalizedCounts ? { normalized: normalizedCounts } : {}),
+      ...(rfmCounts ? { rfm: rfmCounts } : {}),
       ...(errors.length ? { error: errors[0] } : {}),
     };
   } catch (err) {

@@ -4,6 +4,14 @@
  * να εμφανίζονται σωστά στο UI (το server summary κρατά rolling ~90 ημέρες).
  */
 import { FirestoreService } from './firestore';
+import {
+  classifyEcommerceOrder,
+  isExcludedEcommerceStatus,
+  normalizeSalesChannelRules,
+  type EcommerceExclusionReason,
+  type EcommerceSalesChannel,
+  type EcommerceSalesChannelRule,
+} from './ecommerceSalesChannel';
 
 export type EcommerceRawLineItem = {
   sku?: string;
@@ -30,6 +38,9 @@ export type EcommerceRawOrder = {
   lineItems: EcommerceRawLineItem[];
   paymentMethod?: string;
   shippingMethod?: string;
+  salesChannel?: EcommerceSalesChannel;
+  revenueIncluded?: boolean;
+  exclusionReason?: EcommerceExclusionReason;
   /**
    * Stable key για RFM από raw παραγγελίες.
    * Προτιμά hashed email (cross-platform/guest matching), αλλιώς platform customer id.
@@ -47,8 +58,13 @@ export const ECOMMERCE_ORDER_COLLECTIONS: Record<string, string> = {
 };
 
 export function isEcommerceOrderCancelled(status: string | null | undefined): boolean {
-  const normalized = String(status || '').trim().toLowerCase();
-  return normalized === 'cancelled' || normalized === 'canceled';
+  return isExcludedEcommerceStatus(status);
+}
+
+export function isEcommerceOrderRevenueIncluded(order: Pick<EcommerceRawOrder, 'status' | 'revenueIncluded'>): boolean {
+  if (order.revenueIncluded === false) return false;
+  if (order.revenueIncluded === true) return true;
+  return !isEcommerceOrderCancelled(order.status);
 }
 
 export function isEcommerceDemoLineItem(lineItem: EcommerceRawLineItem): boolean {
@@ -165,22 +181,53 @@ function normalizeRawOrder(platform: string, row: Record<string, unknown>): Ecom
     lineItems,
     paymentMethod: String(row.paymentMethod || row.payment_method || ''),
     shippingMethod: String(row.shippingMethod || row.shipping_method || row.shippingDescription || ''),
+    salesChannel: row.salesChannel as EcommerceSalesChannel | undefined,
+    revenueIncluded: typeof row.revenueIncluded === 'boolean' ? row.revenueIncluded : undefined,
+    exclusionReason: row.exclusionReason as EcommerceExclusionReason | undefined,
     ...(customerKey ? { customerKey } : {}),
     ...(emailHash ? { customerEmailHash: emailHash } : {}),
     ...(customerEmail ? { customerEmail } : {}),
   };
 }
 
+function arrayOrEmpty(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+async function fetchSalesChannelRules(brandId: string): Promise<EcommerceSalesChannelRule[]> {
+  try {
+    const connector = await FirestoreService.getDocument<{
+      ecommerceSalesChannelRules?: unknown;
+      salesChannelRules?: unknown;
+      magento?: { salesChannelRules?: unknown };
+    }>('connectors', brandId);
+    if (!connector) return [];
+    return normalizeSalesChannelRules([
+      ...arrayOrEmpty(connector.ecommerceSalesChannelRules),
+      ...arrayOrEmpty(connector.salesChannelRules),
+      ...arrayOrEmpty(connector.magento?.salesChannelRules),
+    ]);
+  } catch {
+    return [];
+  }
+}
+
 export async function fetchAllEcommerceOrders(brandId: string, platforms: string[]): Promise<EcommerceRawOrder[]> {
-  const results = await Promise.all(
-    platforms.map(async (platform) => {
-      const collectionName = ECOMMERCE_ORDER_COLLECTIONS[platform];
-      if (!collectionName) return [] as EcommerceRawOrder[];
-      const rows = await FirestoreService.getDocuments<Record<string, unknown>>(collectionName, [], brandId);
-      return rows.map((row) => normalizeRawOrder(platform, row));
-    })
-  );
-  return results.flat();
+  const [rules, results] = await Promise.all([
+    fetchSalesChannelRules(brandId),
+    Promise.all(
+      platforms.map(async (platform) => {
+        const collectionName = ECOMMERCE_ORDER_COLLECTIONS[platform];
+        if (!collectionName) return [] as EcommerceRawOrder[];
+        const rows = await FirestoreService.getDocuments<Record<string, unknown>>(collectionName, [], brandId);
+        return rows.map((row) => normalizeRawOrder(platform, row));
+      })
+    ),
+  ]);
+  return results.flat().map((order) => ({
+    ...order,
+    ...classifyEcommerceOrder(order, rules),
+  }));
 }
 
 export type EcommerceRevenueDayAggregate = {
@@ -197,7 +244,7 @@ export function aggregateRevenueOrdersFromRaw(orders: EcommerceRawOrder[]): Ecom
   for (const o of orders) {
     const { revenue, isAllDemo } = getEcommerceOrderNetRevenue(o);
     if (isAllDemo) continue;
-    if (isEcommerceOrderCancelled(o.status)) continue;
+    if (!isEcommerceOrderRevenueIncluded(o)) continue;
     const day = (o.createdAt || '').slice(0, 10);
     if (!day) continue;
     revenueByDay[day] = (revenueByDay[day] || 0) + revenue;
@@ -233,7 +280,7 @@ export function topPlatformInDateRange(
     if (!day || day < fromDate || day > toDate) continue;
     const { revenue, isAllDemo } = getEcommerceOrderNetRevenue(o);
     if (isAllDemo) continue;
-    if (isEcommerceOrderCancelled(o.status)) continue;
+    if (!isEcommerceOrderRevenueIncluded(o)) continue;
     const p = o.platform;
     const ex = m.get(p) || { revenue: 0, orders: 0 };
     ex.revenue += revenue;

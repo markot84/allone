@@ -16,9 +16,13 @@ import {
   fetchAllEcommerceOrders,
   getEcommerceOrderNetRevenue,
   isEcommerceDemoLineItem,
-  isEcommerceOrderCancelled,
+  isEcommerceOrderRevenueIncluded,
   type EcommerceRawOrder,
 } from '../../services/ecommerceRawOrders';
+import {
+  SALES_CHANNEL_LABELS,
+  type EcommerceSalesChannel,
+} from '../../services/ecommerceSalesChannel';
 import {
   AreaChart,
   Area,
@@ -57,10 +61,27 @@ const PLATFORM_COLORS: Record<string, string> = {
   magento: '#F46F25',
 };
 
+const SALES_CHANNEL_COLORS: Record<EcommerceSalesChannel, string> = {
+  direct_eshop: '#16A34A',
+  marketplace_skroutz: '#2563EB',
+  intercompany: '#7C3AED',
+  needs_review: '#F59E0B',
+};
+
 type OrderSortField = 'createdAt' | 'total' | 'platform';
 type RowsPerPage = 10 | 20 | 50 | 100 | 'all';
 type ProductScope = 'all' | 'parents_only';
 type TopProductRow = EcommerceTopProduct & { parentSku: string; hasDerivedParent: boolean };
+type SalesChannelBreakdownRow = {
+  channel: EcommerceSalesChannel;
+  label: string;
+  revenue: number;
+  orders: number;
+  includedRevenue: number;
+  includedOrders: number;
+  excludedRevenue: number;
+  excludedOrders: number;
+};
 
 const TOOLTIP_STYLE: React.CSSProperties = {
   backgroundColor: '#fff',
@@ -185,6 +206,38 @@ function buildMethodPieData(
     }));
 }
 
+function salesChannelLabel(channel: string | null | undefined): string {
+  return SALES_CHANNEL_LABELS[(channel || 'direct_eshop') as EcommerceSalesChannel] || String(channel || 'Direct e-shop');
+}
+
+function buildSalesChannelBreakdownFromOrders(orders: EcommerceRawOrder[]): SalesChannelBreakdownRow[] {
+  const rows = new Map<EcommerceSalesChannel, SalesChannelBreakdownRow>();
+  for (const order of orders) {
+    const channel = (order.salesChannel || 'direct_eshop') as EcommerceSalesChannel;
+    const current = rows.get(channel) || {
+      channel,
+      label: salesChannelLabel(channel),
+      revenue: 0,
+      orders: 0,
+      includedRevenue: 0,
+      includedOrders: 0,
+      excludedRevenue: 0,
+      excludedOrders: 0,
+    };
+    current.revenue += order.total;
+    current.orders += 1;
+    if (isEcommerceOrderRevenueIncluded(order)) {
+      current.includedRevenue += order.total;
+      current.includedOrders += 1;
+    } else {
+      current.excludedRevenue += order.total;
+      current.excludedOrders += 1;
+    }
+    rows.set(channel, current);
+  }
+  return [...rows.values()].sort((a, b) => b.revenue - a.revenue);
+}
+
 function OrderStatusBadge({ status }: { status: string }) {
   const s = (status || '').toLowerCase();
   let bg = '#F3F4F6';
@@ -283,7 +336,7 @@ export function EcommerceDashboard() {
 
   // Χρησιμοποιείται μόνο ως KPI fallback για legacy aggregates.
   const filteredOrdersForKpi = useMemo(
-    () => filteredRecentOrdersVisible.filter((o) => !isEcommerceOrderCancelled(o.status)),
+    () => filteredRecentOrdersVisible.filter((o) => isEcommerceOrderRevenueIncluded(o)),
     [filteredRecentOrdersVisible]
   );
 
@@ -308,11 +361,13 @@ export function EcommerceDashboard() {
   const [prodRows, setProdRows] = useState<RowsPerPage>(20);
   const [prodPage, setProdPage] = useState(1);
 
-  const ordersForTables = useMemo(() => {
+  const ordersForTables = useMemo<EcommerceRawOrder[]>(() => {
     if (!rawOrdersLoaded) {
       return filteredRecentOrdersVisible.map((order) => ({
         ...order,
         lineItems: [],
+        paymentMethod: order.paymentMethod || '',
+        shippingMethod: order.shippingMethod || '',
       }));
     }
     return rawOrders
@@ -329,7 +384,7 @@ export function EcommerceDashboard() {
   }, [rawOrdersLoaded, rawOrders, filteredRecentOrdersVisible, effectiveFrom, effectiveTo, brandHistoryStartISO]);
 
   const revenueOrdersForTables = useMemo(
-    () => ordersForTables.filter((order) => !isEcommerceOrderCancelled(order.status)),
+    () => ordersForTables.filter((order) => isEcommerceOrderRevenueIncluded(order)),
     [ordersForTables]
   );
 
@@ -362,8 +417,9 @@ export function EcommerceDashboard() {
       .map(([platform, v]) => ({ platform, revenue: v.revenue, orders: v.orders }))
       .filter((row) => row.orders > 0)
       .sort((a, b) => b.revenue - a.revenue);
-    return { dailyRevenue, ordersByDay, platformBreakdown };
-  }, [rawOrdersLoaded, revenueOrdersForTables]);
+    const salesChannelBreakdown = buildSalesChannelBreakdownFromOrders(ordersForTables);
+    return { dailyRevenue, ordersByDay, platformBreakdown, salesChannelBreakdown };
+  }, [rawOrdersLoaded, revenueOrdersForTables, ordersForTables]);
 
   const filteredDailyRevenue = useMemo(() => {
     if (rawOrdersLoaded && periodMetricsFromRawOrders) {
@@ -398,6 +454,38 @@ export function EcommerceDashboard() {
     return ecomm.platformBreakdown;
   }, [rawOrdersLoaded, periodMetricsFromRawOrders, ecomm.platformBreakdown]);
 
+  const displaySalesChannelBreakdown = useMemo<SalesChannelBreakdownRow[]>(() => {
+    if (rawOrdersLoaded && periodMetricsFromRawOrders) {
+      return periodMetricsFromRawOrders.salesChannelBreakdown;
+    }
+    const channels = new Set<string>([
+      ...Object.keys(ecomm.revenueBySalesChannel),
+      ...Object.keys(ecomm.ordersBySalesChannel),
+      ...Object.keys(ecomm.includedRevenueBySalesChannel),
+      ...Object.keys(ecomm.includedOrdersBySalesChannel),
+    ]);
+    return [...channels]
+      .map((channel) => ({
+        channel: channel as EcommerceSalesChannel,
+        label: salesChannelLabel(channel),
+        revenue: ecomm.revenueBySalesChannel[channel] || 0,
+        orders: ecomm.ordersBySalesChannel[channel] || 0,
+        includedRevenue: ecomm.includedRevenueBySalesChannel[channel] || 0,
+        includedOrders: ecomm.includedOrdersBySalesChannel[channel] || 0,
+        excludedRevenue: Math.max(0, (ecomm.revenueBySalesChannel[channel] || 0) - (ecomm.includedRevenueBySalesChannel[channel] || 0)),
+        excludedOrders: Math.max(0, (ecomm.ordersBySalesChannel[channel] || 0) - (ecomm.includedOrdersBySalesChannel[channel] || 0)),
+      }))
+      .filter((row) => row.orders > 0)
+      .sort((a, b) => b.revenue - a.revenue);
+  }, [
+    rawOrdersLoaded,
+    periodMetricsFromRawOrders,
+    ecomm.revenueBySalesChannel,
+    ecomm.ordersBySalesChannel,
+    ecomm.includedRevenueBySalesChannel,
+    ecomm.includedOrdersBySalesChannel,
+  ]);
+
   const kpis: KPICardData[] = useMemo(() => {
     const last30 = filteredDailyRevenue.slice(-30);
     const ordersByDateMap = new Map(filteredOrdersByDay.map((d) => [d.date, d.orders]));
@@ -408,9 +496,9 @@ export function EcommerceDashboard() {
     });
     return [
       {
-        label: 'Έσοδα e-shop',
+        label: 'Καθαρός τζίρος e-shop',
         value: formatCurrencyCompact(filteredTotalRevenue),
-        tooltip: 'Σύνολο εσόδων από e-commerce για το επιλεγμένο διάστημα',
+        tooltip: 'Included έσοδα e-commerce για το επιλεγμένο διάστημα, εκτός statuses/κανάλια που εξαιρούνται',
         sparklineData: padSparklineForChart(last30.map((d) => d.revenue)),
       },
       {
@@ -535,7 +623,7 @@ export function EcommerceDashboard() {
       if (orderPlatform !== 'all' && o.platform !== orderPlatform) return false;
       if (orderStatus !== 'all' && (o.status || '').toLowerCase() !== orderStatus) return false;
       if (!q) return true;
-      const hay = `${o.orderId} ${o.orderName || ''} ${o.platform} ${o.status}`.toLowerCase();
+      const hay = `${o.orderId} ${o.orderName || ''} ${o.platform} ${o.status} ${o.salesChannel || ''} ${o.paymentMethod || ''} ${o.shippingMethod || ''}`.toLowerCase();
       return hay.includes(q);
     });
   }, [sortedOrders, orderSearch, orderPlatform, orderStatus]);
@@ -825,6 +913,45 @@ export function EcommerceDashboard() {
           </div>
         </Card>
       </div>
+
+      {displaySalesChannelBreakdown.length > 0 && (
+        <Card>
+          <CardHeader
+            title="Καθαρός τζίρος & εξαιρέσεις"
+            subtitle={`${effectiveFrom} — ${effectiveTo}`}
+          />
+          <div className="px-5 pb-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+              {displaySalesChannelBreakdown.map((row) => {
+                const color = SALES_CHANNEL_COLORS[row.channel] || '#6B7280';
+                const includedPct = row.revenue > 0 ? (row.includedRevenue / row.revenue) * 100 : 0;
+                return (
+                  <div key={row.channel} className="rounded-xl border border-[#E5E7EB] bg-white p-3">
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                        <span className="text-xs font-semibold text-[#111827] truncate">{row.label}</span>
+                      </div>
+                      <span className="text-[10px] text-[#6B7280] whitespace-nowrap">{row.orders} orders</span>
+                    </div>
+                    <div className="text-sm font-bold text-[#111827] tabular-nums">
+                      {formatCurrencyCompact(row.includedRevenue)}
+                    </div>
+                    <div className="mt-2 h-1.5 bg-[#F3F4F6] rounded-full overflow-hidden">
+                      <div className="h-full rounded-full" style={{ width: `${includedPct}%`, backgroundColor: color }} />
+                    </div>
+                    {row.excludedOrders > 0 && (
+                      <p className="mt-1.5 text-[10px] text-[#9CA3AF]">
+                        Εκτός core: {formatCurrencyCompact(row.excludedRevenue)} / {row.excludedOrders} orders
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <Card>
@@ -1214,7 +1341,7 @@ export function EcommerceDashboard() {
             </div>
             {pagedOrders.length > 0 ? (
               <div className="overflow-x-auto -mx-5 px-5">
-                <table className="w-full text-left text-xs" style={{ minWidth: 480 }}>
+                <table className="w-full text-left text-xs" style={{ minWidth: 580 }}>
                   <thead>
                     <tr className="border-b border-[#E5E7EB]">
                       <th
@@ -1234,6 +1361,7 @@ export function EcommerceDashboard() {
                           Platform <SortIcon active={orderSort.field === 'platform'} dir={orderSort.dir} />
                         </span>
                       </th>
+                      <th className="pb-2.5 font-medium text-[#6B7280]">Κανάλι</th>
                       <th className="pb-2.5 font-medium text-[#6B7280]">Status</th>
                       <th
                         className="pb-2.5 font-medium text-[#6B7280] text-right cursor-pointer select-none whitespace-nowrap"
@@ -1263,6 +1391,18 @@ export function EcommerceDashboard() {
                             style={{ backgroundColor: `${PLATFORM_COLORS[o.platform] || '#94A3B8'}18`, color: PLATFORM_COLORS[o.platform] || '#94A3B8' }}
                           >
                             {PLATFORM_LABELS[o.platform] || o.platform}
+                          </span>
+                        </td>
+                        <td className="py-2.5">
+                          <span
+                            className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full whitespace-nowrap"
+                            style={{
+                              backgroundColor: `${SALES_CHANNEL_COLORS[(o.salesChannel || 'direct_eshop') as EcommerceSalesChannel] || '#6B7280'}18`,
+                              color: SALES_CHANNEL_COLORS[(o.salesChannel || 'direct_eshop') as EcommerceSalesChannel] || '#6B7280',
+                            }}
+                            title={o.revenueIncluded === false ? `Εκτός core revenue: ${o.exclusionReason || 'review'}` : 'Included στο core revenue'}
+                          >
+                            {salesChannelLabel(o.salesChannel)}
                           </span>
                         </td>
                         <td className="py-2.5">

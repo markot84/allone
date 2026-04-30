@@ -132,7 +132,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
   const [isExporting, setIsExporting] = useState(false);
   const { activeStrategy } = useActiveStrategy();
   const channelRecommendation = activeStrategy?.channelRecommendation ?? null;
-  const totalCustomersDisplay = totalCustomers;
+  const totalCustomersDisplay = Math.max(totalCustomers, dataCoverage.totalCustomers);
   const segmentColorById = new Map(rfmSegments.map((segment) => [segment.id, segment.color]));
 
   const handleExportAll = async (fmt: 'xlsx' | 'csv' = 'xlsx') => {

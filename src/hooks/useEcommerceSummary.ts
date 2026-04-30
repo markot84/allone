@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useBrand } from './useBrand';
+import type { EcommerceExclusionReason, EcommerceSalesChannel } from '../services/ecommerceSalesChannel';
 
 export interface EcommerceTopProduct {
   sku: string;
@@ -19,6 +20,11 @@ export interface EcommerceRecentOrder {
   total: number;
   currency: string;
   createdAt: string;
+  paymentMethod?: string;
+  shippingMethod?: string;
+  salesChannel?: EcommerceSalesChannel;
+  revenueIncluded?: boolean;
+  exclusionReason?: EcommerceExclusionReason;
 }
 
 export interface PlatformBreakdown {
@@ -33,6 +39,12 @@ interface EcommerceSummaryRaw {
   revenueByDay: Record<string, number>;
   revenueByMonth: Record<string, number>;
   revenueByPlatform: Record<string, PlatformBreakdown>;
+  revenueBySalesChannel?: Record<string, number>;
+  ordersBySalesChannel?: Record<string, number>;
+  includedRevenueBySalesChannel?: Record<string, number>;
+  includedOrdersBySalesChannel?: Record<string, number>;
+  excludedRevenueByReason?: Record<string, number>;
+  excludedOrdersByReason?: Record<string, number>;
   topProducts: EcommerceTopProduct[];
   ordersByDay: Record<string, number>;
   recentOrders: EcommerceRecentOrder[];
@@ -169,6 +181,12 @@ export function useEcommerceSummary() {
     dailyRevenue,
     monthlyRevenue,
     platformBreakdown,
+    revenueBySalesChannel: data?.revenueBySalesChannel ?? {},
+    ordersBySalesChannel: data?.ordersBySalesChannel ?? {},
+    includedRevenueBySalesChannel: data?.includedRevenueBySalesChannel ?? {},
+    includedOrdersBySalesChannel: data?.includedOrdersBySalesChannel ?? {},
+    excludedRevenueByReason: data?.excludedRevenueByReason ?? {},
+    excludedOrdersByReason: data?.excludedOrdersByReason ?? {},
     topProducts: data?.topProducts ?? [],
     recentOrders: data?.recentOrders ?? [],
     ordersByDay,

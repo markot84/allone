@@ -377,7 +377,8 @@ export const ProductsService = {
 };
 
 export const SegmentsService = {
-  getAll: (brandId?: string | null) => FirestoreService.getDocuments('segments', [], brandId),
+  getAll: (brandId?: string | null, opts?: { forceServer?: boolean }) =>
+    FirestoreService.getDocuments('segments', [], brandId, opts),
   getById: (id: string) => FirestoreService.getDocument('segments', id),
   create: (id: string, data: Record<string, unknown>, brandId?: string | null) =>
     FirestoreService.setDocument('segments', id, { ...data, ...(brandId ? { brandId } : {}) }),
@@ -390,14 +391,14 @@ export const SegmentCustomersService = {
     const docs = await FirestoreService.getDocuments<{
       segmentId: string;
       customers: { customerId: string; email?: string; segmentName?: string; recency?: number; frequency?: number; monetary?: number; rfmScore?: string }[];
-    }>('segment_customers', [where('segmentId', '==', segmentId)], brandId);
+    }>('segment_customers', [where('segmentId', '==', segmentId)], brandId, { forceServer: true });
     return docs.flatMap(d => d.customers || []);
   },
   async getAllBySegment(brandId: string): Promise<Map<string, { customerId: string; email?: string; segmentName?: string; recency?: number; frequency?: number; monetary?: number; rfmScore?: string }[]>> {
     const docs = await FirestoreService.getDocuments<{
       segmentId: string;
       customers: { customerId: string; email?: string; segmentName?: string; recency?: number; frequency?: number; monetary?: number; rfmScore?: string }[];
-    }>('segment_customers', [], brandId);
+    }>('segment_customers', [], brandId, { forceServer: true });
     const map = new Map<string, typeof docs[0]['customers']>();
     for (const d of docs) {
       const existing = map.get(d.segmentId) || [];
@@ -411,13 +412,15 @@ export const SegmentCustomersService = {
       segmentId: string;
       segmentName?: string;
       totalInSegment?: number;
+      source?: string;
       customers: { customerId: string; email?: string; segmentName?: string; monetary?: number }[];
-    }>('segment_customers', [], brandId);
-    const map = new Map<string, { segmentName?: string; count: number; monetary: number; fallbackCount: number }>();
+    }>('segment_customers', [], brandId, { forceServer: true });
+    const map = new Map<string, { segmentName?: string; source?: string; count: number; monetary: number; fallbackCount: number }>();
     for (const d of docs) {
       if (!d.segmentId) continue;
-      const existing = map.get(d.segmentId) || { segmentName: d.segmentName, count: 0, monetary: 0, fallbackCount: 0 };
+      const existing = map.get(d.segmentId) || { segmentName: d.segmentName, source: d.source, count: 0, monetary: 0, fallbackCount: 0 };
       existing.segmentName = existing.segmentName || d.segmentName || d.customers?.find((c) => c.segmentName)?.segmentName;
+      existing.source = existing.source || d.source;
       existing.count = Math.max(existing.count, d.totalInSegment ?? 0);
       existing.fallbackCount += d.customers?.length ?? 0;
       existing.monetary += (d.customers || []).reduce((sum, c) => sum + (c.monetary ?? 0), 0);
@@ -428,6 +431,7 @@ export const SegmentCustomersService = {
         segmentId,
         {
           segmentName: value.segmentName,
+          source: value.source,
           count: value.count || value.fallbackCount,
           monetary: value.monetary,
         },
