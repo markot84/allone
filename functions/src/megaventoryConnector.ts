@@ -16,6 +16,10 @@ import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { encryptToken, decryptToken } from './tokenCrypto';
 import { buildHistoricalOrIncrementalWindow, toYmd } from './syncPolicy';
+import {
+  cleanupManualImportsForMegaventoryMaster,
+  type ManualImportCleanupCounts,
+} from './manualDataCleanup';
 
 let _db: Firestore | null = null;
 
@@ -586,6 +590,8 @@ export async function fetchMegaventoryData(brandId: string): Promise<Megaventory
     customReportRows: 0,
   };
   const errors: string[] = [];
+  let manualCleanupCounts: ManualImportCleanupCounts | null = null;
+  let manualCleanupError = '';
 
   try {
     // ── Invoices (Documents type=Sales Invoice) → revenue ────────────
@@ -867,6 +873,26 @@ export async function fetchMegaventoryData(brandId: string): Promise<Megaventory
         patch['megaventory.historyLoadedUntilYear'] = docsWindow.historyStartYear;
       }
     }
+
+    const shouldCleanupManualImports =
+      docsWindow.mode === 'historical' &&
+      docsOk &&
+      !conn.manualImportCleanupAt;
+    if (shouldCleanupManualImports) {
+      try {
+        manualCleanupCounts = await cleanupManualImportsForMegaventoryMaster(db, brandId);
+        patch['megaventory.manualImportCleanupAt'] = FieldValue.serverTimestamp();
+        patch['megaventory.manualImportCleanupCounts'] = manualCleanupCounts;
+        patch['megaventory.manualImportCleanupReason'] = 'megaventory_historical_sync_master';
+      } catch (cleanupErr) {
+        manualCleanupError = cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr);
+        errors.push(`ManualCleanup: ${manualCleanupError}`);
+        patch['megaventory.manualImportCleanupError'] = manualCleanupError.slice(0, 500);
+        patch['megaventory.manualImportCleanupErrorAt'] = FieldValue.serverTimestamp();
+        logger.error(`[Megaventory] Manual import cleanup failed for ${brandId}:`, manualCleanupError);
+      }
+    }
+
     if (Object.keys(patch).length) {
       await db.doc(`connectors/${brandId}`).update(patch);
     }
@@ -882,6 +908,9 @@ export async function fetchMegaventoryData(brandId: string): Promise<Megaventory
       customReportMode: reportId && reportEnabled ? 'snapshot' : 'disabled',
       windowStart: docsWindow.windowStart.toISOString(),
       windowEnd: docsWindow.windowEnd.toISOString(),
+      manualImportCleanupRan: manualCleanupCounts != null,
+      ...(manualCleanupCounts ? { manualImportCleanupCounts: manualCleanupCounts } : {}),
+      ...(manualCleanupError ? { manualImportCleanupError: manualCleanupError } : {}),
       imported: totalImported,
       ...counts,
       failed: errors.length,
