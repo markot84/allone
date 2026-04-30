@@ -5,7 +5,7 @@
  * 1. User enters e-shop URL + Access Token (from Admin → System → Integrations)
  * 2. We validate via GET /rest/V1/store/storeConfigs
  * 3. Credentials stored in Firestore (connectors/{brandId}.magento)
- * 4. Sync fetches orders (3 years) + products → Firestore
+ * 4. Sync performs historical backfill first, then incremental updates → Firestore
  *
  * Compatible with Magento 2.x / Adobe Commerce REST API.
  */
@@ -15,6 +15,14 @@ import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { encryptToken, decryptToken } from './tokenCrypto';
 import { getCustomerEmailIdentity } from './customerIdentity';
+import {
+  buildHistoricalOrIncrementalWindow,
+  coerceSyncDate,
+  subtractHours,
+  toMagentoDateTime,
+  toYmd,
+  type ConnectorSyncMode,
+} from './syncPolicy';
 
 let _db: Firestore | null = null;
 
@@ -601,7 +609,8 @@ export async function testMagentoConnection(
 }
 
 /**
- * Fetch Magento orders (last 3 years) + products and store in Firestore.
+ * Fetch Magento orders/products and store in Firestore.
+ * First runs backfill history; later runs use updated_at with overlap for status/stock changes.
  * Customer email is stored for audience exports, while `customerEmailHash` is used
  * for analytics/matching.
  */
@@ -635,24 +644,47 @@ export async function fetchMagentoData(brandId: string): Promise<{
   };
 
   let totalImported = 0;
+  const errors: string[] = [];
+
+  const orderWindow = buildHistoricalOrIncrementalWindow(connector, 'lastOrdersSyncAt');
+  const orderCursor = coerceSyncDate((connector as Record<string, unknown>).ordersHistoryCursor);
+  if (orderWindow.mode === 'historical' && orderCursor && orderCursor > orderWindow.windowStart) {
+    orderWindow.windowStart = orderCursor;
+  }
+
+  const lastProductsSyncAt = coerceSyncDate((connector as Record<string, unknown>).lastProductsSyncAt);
+  const productsCursor = coerceSyncDate((connector as Record<string, unknown>).productsHistoryCursor);
+  const productsMode: ConnectorSyncMode = lastProductsSyncAt ? 'incremental' : 'historical';
+  const productsWindowStart = lastProductsSyncAt
+    ? subtractHours(lastProductsSyncAt, 48)
+    : productsCursor;
+  const productsWindowEnd = new Date();
+
+  logger.info(
+    `[Magento] Sync windows for ${brandId}: orders=${orderWindow.mode}:${toMagentoDateTime(orderWindow.windowStart)}->${toMagentoDateTime(orderWindow.windowEnd)} products=${productsMode}:${productsWindowStart ? toMagentoDateTime(productsWindowStart) : 'full'}->${toMagentoDateTime(productsWindowEnd)}`
+  );
 
   try {
-    // ── Orders (last 3 years) ──────────────────────────────────────────
-    const since = new Date();
-    since.setUTCFullYear(since.getUTCFullYear() - 3);
-    const sinceStr = since.toISOString().split('T')[0]; // YYYY-MM-DD
-
+    // ── Orders ─────────────────────────────────────────────────────────
     const orderItems: { id: string; data: Record<string, unknown> }[] = [];
     let currentPage = 1;
     let hasMore = true;
+    let ordersOk = true;
+    let ordersBackfillIncomplete = false;
+    let lastOrderCreatedAt: Date | null = null;
 
     while (hasMore) {
+      const orderDateField = orderWindow.mode === 'incremental' ? 'updated_at' : 'created_at';
+      const orderSortDirection = orderWindow.mode === 'incremental' ? 'DESC' : 'ASC';
+      const orderWindowValue = orderWindow.mode === 'incremental'
+        ? toMagentoDateTime(orderWindow.windowStart)
+        : toYmd(orderWindow.windowStart);
       const searchParams = new URLSearchParams({
-        'searchCriteria[filter_groups][0][filters][0][field]': 'created_at',
-        'searchCriteria[filter_groups][0][filters][0][value]': sinceStr,
+        'searchCriteria[filter_groups][0][filters][0][field]': orderDateField,
+        'searchCriteria[filter_groups][0][filters][0][value]': orderWindowValue,
         'searchCriteria[filter_groups][0][filters][0][condition_type]': 'gteq',
-        'searchCriteria[sortOrders][0][field]': 'created_at',
-        'searchCriteria[sortOrders][0][direction]': 'DESC',
+        'searchCriteria[sortOrders][0][field]': orderDateField,
+        'searchCriteria[sortOrders][0][direction]': orderSortDirection,
         'searchCriteria[pageSize]': '100',
         'searchCriteria[currentPage]': String(currentPage),
         'fields': 'items[entity_id,increment_id,customer_id,customer_email,billing_address[email],created_at,updated_at,status,grand_total,subtotal,tax_amount,discount_amount,total_item_count,order_currency_code,shipping_description,payment[method,additional_information],items[sku,name,qty_ordered,price,product_id,product_type,parent_item_id,row_total,base_row_total]],total_count',
@@ -665,7 +697,10 @@ export async function fetchMagentoData(brandId: string): Promise<{
 
       const res = await fetch(buildMagentoRestUrl(restApiBase, `orders?${searchParams.toString()}`, storeCode), { headers });
       if (!res.ok) {
-        logger.error(`[Magento] Orders fetch failed (${res.status})`);
+        const error = `Orders fetch failed (${res.status})`;
+        logger.error(`[Magento] ${error}`);
+        errors.push(error);
+        ordersOk = false;
         break;
       }
 
@@ -686,6 +721,10 @@ export async function fetchMagentoData(brandId: string): Promise<{
         const emailIdentity = getCustomerEmailIdentity(
           o.customer_email || o.billing_address?.email || o.extension_attributes?.customer_email
         );
+        const created = o.created_at ? new Date(o.created_at) : null;
+        if (created && !Number.isNaN(created.getTime()) && (!lastOrderCreatedAt || created > lastOrderCreatedAt)) {
+          lastOrderCreatedAt = created;
+        }
         orderItems.push({
           id: `mag_${o.entity_id}`,
           data: {
@@ -735,8 +774,16 @@ export async function fetchMagentoData(brandId: string): Promise<{
 
       hasMore = currentPage * 100 < totalCount;
       currentPage++;
-      // Hard cap αυξήθηκε από 30 → 100 (10.000 παραγγελίες/sync) για brands με μεγάλο όγκο.
-      if (currentPage > 100) break;
+      // Backfill cap: συνεχίζουμε σε επόμενο sync με cursor αντί να ξανατραβάμε τα ίδια.
+      if (currentPage > 100) {
+        if (hasMore && orderWindow.mode === 'historical') {
+          ordersBackfillIncomplete = true;
+        } else if (hasMore) {
+          ordersOk = false;
+          errors.push('Orders incremental page cap reached');
+        }
+        break;
+      }
     }
 
     if (orderItems.length > 0) {
@@ -763,6 +810,9 @@ export async function fetchMagentoData(brandId: string): Promise<{
     const prodItems: { id: string; data: Record<string, unknown> }[] = [];
     let prodPage = 1;
     let prodMore = true;
+    let productsOk = true;
+    let productsBackfillIncomplete = false;
+    let lastProductUpdatedAt: Date | null = null;
 
     // SKU lookup map (id → sku) ώστε για configurable parents να γράψουμε `parentSkus` στα variants.
     const idToSku = new Map<string, string>();
@@ -772,11 +822,21 @@ export async function fetchMagentoData(brandId: string): Promise<{
       const searchParams = new URLSearchParams({
         'searchCriteria[pageSize]': '100',
         'searchCriteria[currentPage]': String(prodPage),
+        'searchCriteria[sortOrders][0][field]': 'updated_at',
+        'searchCriteria[sortOrders][0][direction]': productsMode === 'incremental' ? 'DESC' : 'ASC',
       });
+      if (productsWindowStart) {
+        searchParams.set('searchCriteria[filter_groups][0][filters][0][field]', 'updated_at');
+        searchParams.set('searchCriteria[filter_groups][0][filters][0][value]', toMagentoDateTime(productsWindowStart));
+        searchParams.set('searchCriteria[filter_groups][0][filters][0][condition_type]', 'gteq');
+      }
 
       const res = await fetch(buildMagentoRestUrl(restApiBase, `products?${searchParams.toString()}`, storeCode), { headers });
       if (!res.ok) {
-        logger.warn(`[Magento] Products fetch failed (${res.status}) page=${prodPage}`);
+        const error = `Products fetch failed (${res.status}) page=${prodPage}`;
+        logger.warn(`[Magento] ${error}`);
+        errors.push(error);
+        productsOk = false;
         break;
       }
 
@@ -823,6 +883,10 @@ export async function fetchMagentoData(brandId: string): Promise<{
         }
 
         idToSku.set(String(p.id), String(p.sku || ''));
+        const productUpdated = p.updated_at ? new Date(p.updated_at) : null;
+        if (productUpdated && !Number.isNaN(productUpdated.getTime()) && (!lastProductUpdatedAt || productUpdated > lastProductUpdatedAt)) {
+          lastProductUpdatedAt = productUpdated;
+        }
 
         prodItems.push({
           id: `mag_${p.id}`,
@@ -863,8 +927,16 @@ export async function fetchMagentoData(brandId: string): Promise<{
 
       prodMore = prodPage * 100 < totalCount;
       prodPage++;
-      // Hard cap αυξήθηκε από 30 → 100 (10.000 SKUs/sync)
-      if (prodPage > 100) break;
+      // Backfill cap: αν το catalog είναι μεγαλύτερο, συνεχίζει στο επόμενο sync.
+      if (prodPage > 100) {
+        if (prodMore && productsMode === 'historical') {
+          productsBackfillIncomplete = true;
+        } else if (prodMore) {
+          productsOk = false;
+          errors.push('Products incremental page cap reached');
+        }
+        break;
+      }
     }
 
     // Συμπλήρωση parentSku στα child variants (ώστε στο Ads Feed → item_group_id = parent SKU).
@@ -899,22 +971,56 @@ export async function fetchMagentoData(brandId: string): Promise<{
       logger.info(`[Magento] Products: ${prodItems.length} imported for brand ${brandId}`);
     }
 
+    const connectorPatch: Record<string, unknown> = {};
+    if (ordersOk) {
+      if (orderWindow.mode === 'historical' && ordersBackfillIncomplete && lastOrderCreatedAt) {
+        connectorPatch['magento.ordersHistoryCursor'] = new Date(lastOrderCreatedAt.getTime() + 1000);
+      } else {
+        connectorPatch['magento.ordersHistoryCursor'] = FieldValue.delete();
+        connectorPatch['magento.lastOrdersSyncAt'] = FieldValue.serverTimestamp();
+        if (orderWindow.mode === 'historical') {
+          connectorPatch['magento.historyLoadedUntilYear'] = orderWindow.historyStartYear;
+        }
+      }
+    }
+    if (productsOk) {
+      if (productsMode === 'historical' && productsBackfillIncomplete && lastProductUpdatedAt) {
+        connectorPatch['magento.productsHistoryCursor'] = new Date(lastProductUpdatedAt.getTime() + 1000);
+      } else {
+        connectorPatch['magento.productsHistoryCursor'] = FieldValue.delete();
+        connectorPatch['magento.lastProductsSyncAt'] = FieldValue.serverTimestamp();
+      }
+    }
+    if (Object.keys(connectorPatch).length) {
+      connectorPatch['magento.lastSyncAt'] = FieldValue.serverTimestamp();
+      await db.doc(`connectors/${brandId}`).update(connectorPatch);
+    }
+
     // ── Log import_jobs ────────────────────────────────────────────────
     await db.collection('import_jobs').add({
       brandId,
       type: 'ecommerce',
       source: 'magento_api',
-      status: 'completed',
+      status: errors.length ? 'partial' : 'completed',
+      mode: orderWindow.mode,
+      ordersMode: orderWindow.mode,
+      productsMode,
+      windowStart: orderWindow.windowStart.toISOString(),
+      windowEnd: orderWindow.windowEnd.toISOString(),
+      productsWindowStart: productsWindowStart ? productsWindowStart.toISOString() : null,
+      productsWindowEnd: productsWindowEnd.toISOString(),
+      ordersBackfillIncomplete,
+      productsBackfillIncomplete,
       imported: totalImported,
       orders: orderItems.length,
       products: prodItems.length,
-      failed: 0,
-      errors: [],
+      failed: errors.length,
+      errors: errors.slice(0, 20),
       createdAt: FieldValue.serverTimestamp(),
     });
 
-    logger.info(`[Magento] Sync complete for brand ${brandId}: ${totalImported} total items`);
-    return { success: true, imported: totalImported };
+    logger.info(`[Magento] Sync complete for brand ${brandId}: ${totalImported} total items (errors=${errors.length})`);
+    return { success: true, imported: totalImported, ...(errors.length ? { error: errors[0] } : {}) };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     logger.error(`[Magento] fetchMagentoData error for ${brandId}:`, msg);

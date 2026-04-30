@@ -5,7 +5,7 @@
  * Σχήμα Firestore (κάτω από connectors/{brandId}.megaventory):
  *   { connected, apiKey (encrypted), accountName, currency, connectedAt }
  *
- * Sync (90 ημέρες):
+ * Sync: historical backfill first, then incremental docs + snapshot reference data.
  *   - Invoices → megaventory_invoices …
  *   - Sales OR / Purchase / Products / Stock / Suppliers (τυπικά API)
  *   - Προαιρετικό Custom Report → megaventory_custom_report_rows (αρ. σειρών + raw cells ανά report ID)
@@ -15,6 +15,7 @@ import * as admin from 'firebase-admin';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { encryptToken, decryptToken } from './tokenCrypto';
+import { buildHistoricalOrIncrementalWindow, toYmd } from './syncPolicy';
 
 let _db: Firestore | null = null;
 
@@ -565,10 +566,14 @@ export async function fetchMegaventoryData(brandId: string): Promise<Megaventory
     return { success: false, imported: 0, error: 'Megaventory API key unavailable — reconnect required' };
   }
 
-  const since = new Date();
-  since.setDate(since.getDate() - 90);
-  const sinceStr = since.toISOString().split('T')[0]; // YYYY-MM-DD
-  const todayStr = new Date().toISOString().split('T')[0];
+  const docsWindow = buildHistoricalOrIncrementalWindow(conn, 'lastDocsSyncAt');
+  const sinceStr = toYmd(docsWindow.windowStart);
+  const todayStr = toYmd(docsWindow.windowEnd);
+  let docsOk = true;
+  let referenceOk = true;
+  logger.info(
+    `[Megaventory] Sync window for ${brandId}: docs=${docsWindow.mode}:${sinceStr}->${todayStr} reference=snapshot customReport=snapshot`
+  );
 
   let totalImported = 0;
   const counts = {
@@ -594,6 +599,7 @@ export async function fetchMegaventoryData(brandId: string): Promise<Megaventory
       label: 'DocumentGet (invoices)',
     });
     if (invFetchErr) {
+      docsOk = false;
       errors.push(invFetchErr);
     } else {
       const docs: any[] = invRows;
@@ -632,6 +638,7 @@ export async function fetchMegaventoryData(brandId: string): Promise<Megaventory
       }
     );
     if (soFetchErr) {
+      docsOk = false;
       errors.push(soFetchErr);
     } else {
       const orders: any[] = soRows;
@@ -675,6 +682,7 @@ export async function fetchMegaventoryData(brandId: string): Promise<Megaventory
       }
     );
     if (poFetchErr) {
+      docsOk = false;
       errors.push(poFetchErr);
     } else {
       const orders: any[] = poRows;
@@ -713,6 +721,7 @@ export async function fetchMegaventoryData(brandId: string): Promise<Megaventory
       label: 'ProductGet',
     });
     if (prFetchErr) {
+      referenceOk = false;
       errors.push(prFetchErr);
     } else {
       const products: any[] = prRows;
@@ -755,6 +764,7 @@ export async function fetchMegaventoryData(brandId: string): Promise<Megaventory
       }));
     }
     if (stFetchErr) {
+      referenceOk = false;
       errors.push(stFetchErr);
     } else {
       let stocks: any[] = normalizeInventoryStockRows(stRowsRaw);
@@ -789,6 +799,7 @@ export async function fetchMegaventoryData(brandId: string): Promise<Megaventory
       }
     );
     if (supFetchErr) {
+      referenceOk = false;
       errors.push(supFetchErr);
     } else {
       const list: any[] = supRows;
@@ -846,11 +857,31 @@ export async function fetchMegaventoryData(brandId: string): Promise<Megaventory
     }
 
     // ── Log import_jobs ──────────────────────────────────────────────
+    const patch: Record<string, unknown> = {};
+    if (referenceOk) {
+      patch['megaventory.lastReferenceSyncAt'] = FieldValue.serverTimestamp();
+    }
+    if (docsOk) {
+      patch['megaventory.lastDocsSyncAt'] = FieldValue.serverTimestamp();
+      if (docsWindow.mode === 'historical') {
+        patch['megaventory.historyLoadedUntilYear'] = docsWindow.historyStartYear;
+      }
+    }
+    if (Object.keys(patch).length) {
+      await db.doc(`connectors/${brandId}`).update(patch);
+    }
+
     await db.collection('import_jobs').add({
       brandId,
       type: 'finances',
       source: 'megaventory_api',
       status: errors.length ? 'partial' : 'completed',
+      mode: docsWindow.mode,
+      docsMode: docsWindow.mode,
+      referenceMode: 'snapshot',
+      customReportMode: reportId && reportEnabled ? 'snapshot' : 'disabled',
+      windowStart: docsWindow.windowStart.toISOString(),
+      windowEnd: docsWindow.windowEnd.toISOString(),
       imported: totalImported,
       ...counts,
       failed: errors.length,

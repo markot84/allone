@@ -284,6 +284,7 @@ export async function fetchEntersoftData(brandId: string): Promise<EntersoftSync
 
   let totalImported = 0;
   const counts = { publicQueryRows: 0 };
+  const mode = 'snapshot';
 
   try {
     if (group && filter) {
@@ -298,6 +299,8 @@ export async function fetchEntersoftData(brandId: string): Promise<EntersoftSync
             type: 'finances',
             source: 'entersoft_web_api',
             status: 'failed',
+            mode,
+            publicQueryMode: mode,
             imported: 0,
             errors: [`PublicQuery HTTP ${g.status}: ${String(g.raw).slice(0, 200)}`],
             createdAt: FieldValue.serverTimestamp(),
@@ -313,6 +316,8 @@ export async function fetchEntersoftData(brandId: string): Promise<EntersoftSync
             type: 'finances',
             source: 'entersoft_web_api',
             status: 'failed',
+            mode,
+            publicQueryMode: mode,
             imported: 0,
             errors: [`PublicQuery POST HTTP ${p.status}`],
             createdAt: FieldValue.serverTimestamp(),
@@ -338,11 +343,18 @@ export async function fetchEntersoftData(brandId: string): Promise<EntersoftSync
       totalImported += docs.length;
     }
 
+    await db.doc(`connectors/${brandId}`).update({
+      'entersoft.lastSyncAt': FieldValue.serverTimestamp(),
+      'entersoft.lastPublicQuerySyncAt': FieldValue.serverTimestamp(),
+    });
+
     await db.collection('import_jobs').add({
       brandId,
       type: 'finances',
       source: 'entersoft_web_api',
       status: 'completed',
+      mode,
+      publicQueryMode: mode,
       imported: totalImported,
       ...counts,
       createdAt: FieldValue.serverTimestamp(),

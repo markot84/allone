@@ -262,16 +262,21 @@ export async function fetchEpsilonNetData(brandId: string): Promise<EpsilonNetSy
 
   try {
     const storedMax = Number(conn.lastItemsMaxRevision || 0);
+    const itemsMode = storedMax > 0 ? 'incremental' : 'historical';
     let fromRevision = storedMax > 0 ? storedMax + 1 : 0;
     if (!Number.isFinite(fromRevision) || fromRevision < 0) fromRevision = 0;
+    const itemsRevisionStart = fromRevision;
+    logger.info(`[EpsilonNet] Sync window for ${brandId}: items=${itemsMode}:revision>=${fromRevision} balances=snapshot`);
 
     const allItems: Record<string, unknown>[] = [];
+    let itemsOk = true;
     let safety = 0;
     while (safety < 5000) {
       safety++;
       const path = `api/Eshop/GetItems?RevisionNumber=${fromRevision}`;
       const pack = await fetchWithAuth(path);
       if (!pack.ok) {
+        itemsOk = false;
         errors.push(`GetItems HTTP ${pack.status}`);
         break;
       }
@@ -319,7 +324,9 @@ export async function fetchEpsilonNetData(brandId: string): Promise<EpsilonNetSy
 
     const balRes = await fetchWithAuth('api/Eshop/GetItemsBalances');
     let balRows: Record<string, unknown>[] = [];
+    let balancesOk = true;
     if (!balRes.ok) {
+      balancesOk = false;
       errors.push(`GetItemsBalances HTTP ${balRes.status}`);
     } else {
       balRows = Array.isArray(balRes.json) ? (balRes.json as Record<string, unknown>[]) : [];
@@ -340,16 +347,28 @@ export async function fetchEpsilonNetData(brandId: string): Promise<EpsilonNetSy
       totalImported += balDocs.length;
     }
 
-    await db.doc(`connectors/${brandId}`).update({
-      'epsilon_net.lastItemsMaxRevision': maxRevStored,
+    const patch: Record<string, unknown> = {
       'epsilon_net.lastSyncAt': FieldValue.serverTimestamp(),
-    });
+    };
+    if (itemsOk) {
+      patch['epsilon_net.lastItemsMaxRevision'] = maxRevStored;
+      patch['epsilon_net.lastItemsSyncAt'] = FieldValue.serverTimestamp();
+    }
+    if (balancesOk) {
+      patch['epsilon_net.lastBalancesSyncAt'] = FieldValue.serverTimestamp();
+    }
+    await db.doc(`connectors/${brandId}`).update(patch);
 
     await db.collection('import_jobs').add({
       brandId,
       type: 'finances',
       source: 'epsilon_net_eshop_api',
       status: errors.length ? 'partial' : 'completed',
+      mode: itemsMode,
+      itemsMode,
+      balancesMode: 'snapshot',
+      itemsRevisionStart,
+      itemsRevisionEnd: maxRevStored,
       imported: totalImported,
       ...counts,
       failed: errors.length,

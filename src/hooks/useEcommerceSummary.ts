@@ -55,6 +55,13 @@ interface EcommerceSummaryRaw {
   syncedAt: any;
 }
 
+interface StockMovementRaw {
+  skuMovementJson?: string;
+  skuMovementCount?: number;
+  stockMovementBaselineDate?: string | null;
+  stockMovementUpdatedAt?: any;
+}
+
 type SkuStatsMap = Record<
   string,
   { stock: number; sold: number; sold7d?: number; sold30d?: number; sold90d?: number; lastSaleAt?: string | null }
@@ -87,9 +94,22 @@ function parseSkuMovement(raw: EcommerceSummaryRaw | null | undefined): SkuMovem
 }
 
 async function fetchEcommerceSummary(brandId: string): Promise<EcommerceSummaryRaw | null> {
-  const snap = await getDoc(doc(db, 'ecommerce_summary', brandId));
-  if (!snap.exists()) return null;
-  return snap.data() as EcommerceSummaryRaw;
+  const [summarySnap, movementSnap] = await Promise.all([
+    getDoc(doc(db, 'ecommerce_summary', brandId)),
+    getDoc(doc(db, 'stock_movement', brandId)),
+  ]);
+  if (!summarySnap.exists()) return null;
+  const summary = summarySnap.data() as EcommerceSummaryRaw;
+  if (!movementSnap.exists()) return summary;
+
+  const movement = movementSnap.data() as StockMovementRaw;
+  return {
+    ...summary,
+    skuMovementJson: movement.skuMovementJson ?? summary.skuMovementJson,
+    skuMovementCount: movement.skuMovementCount ?? summary.skuMovementCount,
+    stockMovementBaselineDate: movement.stockMovementBaselineDate ?? summary.stockMovementBaselineDate,
+    stockMovementUpdatedAt: movement.stockMovementUpdatedAt ?? summary.stockMovementUpdatedAt,
+  };
 }
 
 export function useEcommerceSummary() {

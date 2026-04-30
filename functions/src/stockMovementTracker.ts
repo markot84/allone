@@ -11,8 +11,8 @@
  *     { skuStockJson, skuCount, capturedAt, source }
  *
  * Υπολογίζει deltas (μειώσεις = πωλήσεις net of returns) και τα αποθηκεύει στο
- *   ecommerce_summary/{brandId}.skuMovementJson  →  { sku: { dec7d, dec30d, dec90d } }
- *   ecommerce_summary/{brandId}.firstSnapshotDate (ISO date YYYY-MM-DD)
+ *   stock_movement/{brandId}.skuMovementJson  →  { sku: { dec7d, dec30d, dec90d } }
+ * Το ecommerce_summary κρατά μόνο metadata για να μην ξεπερνά το Firestore 1MB doc limit.
  *
  * Σχεδιαστική σημείωση: τα deltas είναι "net of returns/cancellations" — αν
  * επιστραφεί ένα προϊόν, το stock ανεβαίνει και μειώνει το dec_window. Αυτό
@@ -251,12 +251,20 @@ export async function computeStockMovement(brandId: string): Promise<{
 
   const skuMovementJson = JSON.stringify(movement);
 
+  const stockMovementUpdatedAt = FieldValue.serverTimestamp();
+  await db.doc(`stock_movement/${brandId}`).set({
+    skuMovementJson,
+    skuMovementCount: allSkus.size,
+    stockMovementBaselineDate: baselineDate,
+    stockMovementUpdatedAt,
+  });
+
   await db.doc(`ecommerce_summary/${brandId}`).set(
     {
-      skuMovementJson,
+      skuMovementJson: FieldValue.delete(),
       skuMovementCount: allSkus.size,
       stockMovementBaselineDate: baselineDate,
-      stockMovementUpdatedAt: FieldValue.serverTimestamp(),
+      stockMovementUpdatedAt,
     },
     { merge: true }
   );

@@ -13,6 +13,7 @@ import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { encryptToken, decryptToken } from './tokenCrypto';
 import { erpWriteBatch, erpIsoDate, erpNum, normalizeHttpBase, sanitizeFirestoreDocId } from './erpConnectorFirestore';
+import { buildHistoricalOrIncrementalWindow, toYmd } from './syncPolicy';
 
 let _db: Firestore | null = null;
 
@@ -406,14 +407,21 @@ export async function fetchSoftOneData(brandId: string): Promise<SoftOneSyncResu
   const counts = { customers: 0, items: 0, salesDocs: 0, purchaseDocs: 0 };
   const errors: string[] = [];
 
-  const since = new Date();
-  since.setDate(since.getDate() - 90);
-  const sinceCompact = since.toISOString().slice(0, 10).replace(/-/g, '');
+  const docsWindow = buildHistoricalOrIncrementalWindow(conn, 'lastDocsSyncAt');
+  const sinceCompact = toYmd(docsWindow.windowStart).replace(/-/g, '');
+  let docsOk = true;
+  let referenceOk = true;
+  logger.info(
+    `[SoftOne] Sync window for ${brandId}: docs=${docsWindow.mode}:${toYmd(docsWindow.windowStart)}->${toYmd(docsWindow.windowEnd)} reference=snapshot`
+  );
 
   try {
     // CUSTOMER
     const cRes = await fetchBrowserAll(serviceUrl, clientID, appId, 'CUSTOMER', '', '', 'CUSTOMER');
-    if (cRes.error) errors.push(cRes.error);
+    if (cRes.error) {
+      referenceOk = false;
+      errors.push(cRes.error);
+    }
     else {
       const items = cRes.rows.map((r, idx) => ({
         id: `s1_c_${sanitizeFirestoreDocId(String(r['CUSTOMER.CODE'] || r.CODE || r['TRDR.CODE'] || idx))}`,
@@ -429,7 +437,10 @@ export async function fetchSoftOneData(brandId: string): Promise<SoftOneSyncResu
 
     // ITEM
     const iRes = await fetchBrowserAll(serviceUrl, clientID, appId, 'ITEM', '', '', 'ITEM');
-    if (iRes.error) errors.push(iRes.error);
+    if (iRes.error) {
+      referenceOk = false;
+      errors.push(iRes.error);
+    }
     else {
       const items = iRes.rows.map((r, idx) => ({
         id: `s1_i_${sanitizeFirestoreDocId(String(r['ITEM.CODE'] || r.CODE || r['MTRL.CODE'] || idx))}`,
@@ -446,7 +457,10 @@ export async function fetchSoftOneData(brandId: string): Promise<SoftOneSyncResu
     if (conn.syncSalesDocs === true) {
       const f = `SALDOC.TRNDATE>=${sinceCompact}`;
       const sRes = await fetchBrowserAll(serviceUrl, clientID, appId, 'SALDOC', '', f, 'SALDOC');
-      if (sRes.error) errors.push(sRes.error);
+      if (sRes.error) {
+        docsOk = false;
+        errors.push(sRes.error);
+      }
       else {
         const items = sRes.rows.map((r, idx) => ({
           id: `s1_sd_${sanitizeFirestoreDocId(String(r['SALDOC.FINDOC'] || r.FINDOC || r['SALDOC.SERIES'] || idx) + '_' + idx)}`,
@@ -465,7 +479,10 @@ export async function fetchSoftOneData(brandId: string): Promise<SoftOneSyncResu
     if (conn.syncPurchaseDocs === true) {
       const f = `PURDOC.TRNDATE>=${sinceCompact}`;
       const pRes = await fetchBrowserAll(serviceUrl, clientID, appId, 'PURDOC', '', f, 'PURDOC');
-      if (pRes.error) errors.push(pRes.error);
+      if (pRes.error) {
+        docsOk = false;
+        errors.push(pRes.error);
+      }
       else {
         const items = pRes.rows.map((r, idx) => ({
           id: `s1_pd_${sanitizeFirestoreDocId(String(r['PURDOC.FINDOC'] || r.FINDOC || idx) + '_' + idx)}`,
@@ -481,11 +498,30 @@ export async function fetchSoftOneData(brandId: string): Promise<SoftOneSyncResu
       }
     }
 
+    const patch: Record<string, unknown> = {};
+    if (referenceOk) {
+      patch['softone.lastReferenceSyncAt'] = FieldValue.serverTimestamp();
+    }
+    if (docsOk) {
+      patch['softone.lastDocsSyncAt'] = FieldValue.serverTimestamp();
+      if (docsWindow.mode === 'historical') {
+        patch['softone.historyLoadedUntilYear'] = docsWindow.historyStartYear;
+      }
+    }
+    if (Object.keys(patch).length) {
+      await db.doc(`connectors/${brandId}`).update(patch);
+    }
+
     await db.collection('import_jobs').add({
       brandId,
       type: 'finances',
       source: 'softone_api',
       status: errors.length ? 'partial' : 'completed',
+      mode: docsWindow.mode,
+      docsMode: docsWindow.mode,
+      referenceMode: 'snapshot',
+      windowStart: docsWindow.windowStart.toISOString(),
+      windowEnd: docsWindow.windowEnd.toISOString(),
       imported: totalImported,
       ...counts,
       failed: errors.length,

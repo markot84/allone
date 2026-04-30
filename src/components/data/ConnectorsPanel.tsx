@@ -26,6 +26,7 @@ import {
   BarChart3,
   ShoppingBag,
   Boxes,
+  ChevronDown,
   type LucideProps,
 } from 'lucide-react';
 
@@ -133,6 +134,51 @@ function getConnectorGroupDescription(id: ConnectorGroupId, isB2B: boolean): str
       return 'Megaventory, SoftOne, Epsilon Net, Entersoft — ERP & λειτουργικά δεδομένα.';
     default:
       return '';
+  }
+}
+
+function formatConnectorDate(date: Date): string {
+  return date.toLocaleDateString('el-GR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function getConnectorIdentityLines(id: ConnectorId, state: ConnectorState): string[] {
+  const s = state as ConnectorState & Record<string, any>;
+
+  switch (id) {
+    case 'google_ads':
+      return s.customerName ? [`${s.customerName} (${s.customerId || 'χωρίς ID'})`] : [];
+    case 'meta':
+    case 'tiktok':
+      return Array.isArray(s.adAccountNames) && s.adAccountNames.length ? [s.adAccountNames.join(', ')] : [];
+    case 'merchant':
+      return s.merchantName ? [`${s.merchantName} (${s.merchantId || 'χωρίς ID'})`] : [];
+    case 'ga4':
+      return s.propertyName ? [`${s.propertyName} (${s.propertyId || 'χωρίς ID'})`] : [];
+    case 'search_console':
+      return s.siteName ? [s.siteName] : [];
+    case 'shopify':
+      return s.shopName ? [`${s.shopName}${s.shopDomain ? ` (${s.shopDomain})` : ''}`] : [];
+    case 'woocommerce':
+    case 'opencart':
+      return s.shopName ? [s.shopName] : [];
+    case 'magento':
+      return s.shopName ? [`${s.shopName}${s.storeCode ? ` (${s.storeCode})` : ''}`] : [];
+    case 'megaventory':
+      return s.accountName || s.currency ? [`${s.accountName || 'Megaventory'}${s.currency ? ` · ${s.currency}` : ''}`] : [];
+    case 'softone':
+      return s.company ? [`Εταιρεία: ${s.company}`] : [];
+    case 'epsilon_net':
+      return s.email ? [s.email] : [];
+    case 'entersoft':
+      return s.userId ? [`User: ${s.userId}`] : [];
+    default:
+      return [];
   }
 }
 
@@ -1699,6 +1745,7 @@ export function ConnectorsPanel() {
   const [softoneModal, setSoftoneModal] = useState(false);
   const [epsilonNetModal, setEpsilonNetModal] = useState(false);
   const [entersoftModal, setEntersoftModal] = useState(false);
+  const [expandedConnectorDetails, setExpandedConnectorDetails] = useState<Partial<Record<ConnectorId, boolean>>>({});
 
   const emptyStates: Record<string, ConnectorState> = {
     google_ads: { connected: false },
@@ -2406,6 +2453,11 @@ export function ConnectorsPanel() {
                   (pickerOwnerUid === undefined || pickerOwnerUid !== uid);
                 const isSyncing = syncingProviders.has(conn.id);
                 const isConnecting = connecting === conn.id;
+                const lastSyncAt = coerceToDate(lastSyncDates[conn.id] as unknown);
+                const connectedAt = coerceToDate(state.connectedAt as unknown);
+                const identityLines = getConnectorIdentityLines(conn.id, state);
+                const usesCompactDetails = conn.id === 'magento' || conn.group === 'operations';
+                const detailsExpanded = !usesCompactDetails || expandedConnectorDetails[conn.id] === true;
 
                 return (
                   <div
@@ -2461,67 +2513,52 @@ export function ConnectorsPanel() {
 
                     {isConnected && (
                       <div className="mb-3 text-xs text-[#6B7280] space-y-1">
-                        {conn.id === 'google_ads' && state.customerName && (
-                          <p>{state.customerName} ({state.customerId})</p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                            <CheckCircle2 size={12} />
+                            Συνδεδεμένο
+                          </span>
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                              lastSyncAt
+                                ? 'bg-white text-[#6B7280] ring-1 ring-emerald-200'
+                                : 'bg-amber-50 text-amber-700 ring-1 ring-amber-200'
+                            }`}
+                          >
+                            {lastSyncAt ? `Sync: ${formatConnectorDate(lastSyncAt)}` : 'Δεν έχει γίνει sync'}
+                          </span>
+                          {usesCompactDetails && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setExpandedConnectorDetails((prev) => ({
+                                  ...prev,
+                                  [conn.id]: !prev[conn.id],
+                                }))
+                              }
+                              className="ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold text-[#374151] hover:bg-white/80"
+                            >
+                              {detailsExpanded ? 'Σύμπτυξη' : 'Λεπτομέρειες'}
+                              <ChevronDown
+                                size={12}
+                                className={`transition-transform ${detailsExpanded ? 'rotate-180' : ''}`}
+                              />
+                            </button>
+                          )}
+                        </div>
+                        {detailsExpanded && (
+                          <div className="pt-1">
+                            {identityLines.map((line) => (
+                              <p key={line}>{line}</p>
+                            ))}
+                            {connectedAt && <p className="text-[#9CA3AF]">Συνδέθηκε: {formatConnectorDate(connectedAt)}</p>}
+                            {lastSyncAt && <p className="text-[#9CA3AF]">Τελευταίο sync: {formatConnectorDate(lastSyncAt)}</p>}
+                          </div>
                         )}
-                        {conn.id === 'meta' && state.adAccountNames && (
-                          <p>{state.adAccountNames.join(', ')}</p>
-                        )}
-                        {conn.id === 'tiktok' && state.adAccountNames && (
-                          <p>{state.adAccountNames.join(', ')}</p>
-                        )}
-                        {conn.id === 'merchant' && (state as any).merchantName && (
-                          <p>{(state as any).merchantName} ({(state as any).merchantId})</p>
-                        )}
-                        {conn.id === 'ga4' && (state as any).propertyName && (
-                          <p>{(state as any).propertyName} ({(state as any).propertyId})</p>
-                        )}
-                        {conn.id === 'search_console' && (state as any).siteName && (
-                          <p>{(state as any).siteName}</p>
-                        )}
-                        {conn.id === 'shopify' && (state as any).shopName && (
-                          <p>{(state as any).shopName} ({(state as any).shopDomain})</p>
-                        )}
-                        {conn.id === 'woocommerce' && (state as any).shopName && (
-                          <p>{(state as any).shopName}</p>
-                        )}
-                        {conn.id === 'opencart' && (state as any).shopName && (
-                          <p>{(state as any).shopName}</p>
-                        )}
-                        {conn.id === 'magento' && (state as any).shopName && (
-                          <p>
-                            {(state as any).shopName}
-                            {(state as any).storeCode ? ` (${(state as any).storeCode})` : ''}
-                          </p>
-                        )}
-                        {conn.id === 'megaventory' && ((state as any).accountName || (state as any).currency) && (
-                          <p>
-                            {(state as any).accountName || 'Megaventory'}
-                            {(state as any).currency ? ` · ${(state as any).currency}` : ''}
-                          </p>
-                        )}
-                        {conn.id === 'softone' && (state as any).company && <p>Εταιρεία: {(state as any).company}</p>}
-                        {conn.id === 'epsilon_net' && (state as any).email && <p>{(state as any).email}</p>}
-                        {conn.id === 'entersoft' && (state as any).userId && <p>User: {(state as any).userId}</p>}
-                        {(() => {
-                          const d = coerceToDate(lastSyncDates[conn.id] as unknown);
-                          return d ? (
-                            <p className="text-[#9CA3AF]">
-                              Τελευταίο sync:{' '}
-                              {d.toLocaleDateString('el-GR', {
-                                day: '2-digit',
-                                month: '2-digit',
-                                year: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })}
-                            </p>
-                          ) : null;
-                        })()}
                       </div>
                     )}
 
-                    {isConnected && conn.id === 'megaventory' && brandId && (
+                    {isConnected && conn.id === 'megaventory' && brandId && detailsExpanded && (
                       <div className="mb-3 w-full text-sm">
                         <MegaventoryCustomReportSettingsInline
                           brandId={brandId}
