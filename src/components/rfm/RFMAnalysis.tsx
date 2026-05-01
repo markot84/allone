@@ -201,7 +201,7 @@ function SegmentConsumptionSummaryTable({
     <Card padding="lg" className="border border-[#E8EAED] shadow-[0_4px_24px_rgba(15,23,42,0.06)]">
       <CardHeader
         title="Segments & κατανάλωση"
-        subtitle="Κύριες μάρκες / κατηγορίες / υποκατηγορίες ανά segment (από catalog όταν υπάρχει match, αλλιώς από γραμμές παραγγελιών). Πάτησε γραμμή για πλήρες detail και charts."
+        subtitle="Κύριες μάρκες / κατηγορίες / υποκατηγορίες ανά segment (από catalog ή γραμμές παραγγελιών). Πάτησε γραμμή για detail και charts."
       />
       {ecommerceMode && isCatalogEnriching && (
         <p className="-mt-2 mb-3 text-xs text-[#92400E] bg-[#FFFBEB] border border-[#FDE68A] rounded-lg px-3 py-2">
@@ -396,60 +396,19 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
     );
   }
 
+  /** Μόνο e-shop RFM, χωρίς «άλλους» πελάτες — το μεγάλο μπλοκ κάλυψης διπλασιάζει τα ίδια νούμερα. */
+  const compactCoverageOk =
+    rfmDataSource === 'ecommerce' &&
+    rfmSourcePref === 'orders' &&
+    dataCoverage.otherCustomers <= 0 &&
+    dataCoverage.eShopPenetration >= 99;
+
   return (
-    <div className="space-y-6">
-      {rfmDataSource === 'ecommerce' && orderRfmMeta && (
-        <div className="rounded-lg border border-[#A7F3D0] bg-[#ECFDF5] px-4 py-3 text-sm text-[#065F46]">
-          RFM, Behavioral και Predictive LTV βασίζονται σε <strong>υπολογισμό από raw παραγγελίες</strong> (εσωτερικό customerId).
-          {orderRfmMeta.guestOrdersSkipped > 0 && (
-            <span className="block mt-1 text-[#047857]">
-              {orderRfmMeta.guestOrdersSkipped} guest / χωρίς id παραγγελίες εξαιρέθηκαν του RFM.
-            </span>
-          )}
-          {isCatalogEnriching && (
-            <span className="block mt-2 text-xs text-[#047857] border-t border-[#A7F3D0]/60 pt-2">
-              Φόρτωση καταλόγου προϊόντων (brand / κατηγορίες / SKU) στο παρασκήνιο — τα segments και ο πίνακας κάρτες είναι ήδη διαθέσιμα· τα tabs catalog στο detail ενημερώνονται όταν ολοκληρωθεί.
-            </span>
-          )}
-        </div>
-      )}
-
-      {importSegmentsAvailable && canComputeFromOrders && (
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-          <span className="text-sm text-[#4A4A4A]">Πηγή δεδομένων</span>
-          <select
-            className="text-sm border border-[#E5E5E5] rounded-lg px-3 py-2 bg-white text-[#1A1A1A] max-w-md"
-            value={rfmSourcePref}
-            onChange={(e) => setDataSourcePreference(e.target.value as 'orders' | 'external')}
-            aria-label="Πηγή RFM segments"
-          >
-            <option value="orders">e-shop orders</option>
-            <option value="external">e-shop &amp; others</option>
-          </select>
-        </div>
-      )}
-
+    <div className="space-y-3">
       <PageHeader
+        className="gap-2 lg:gap-4 [&_.space-y-1]:space-y-0"
         toolbarAriaLabel="Εξαγωγή και διαγραφή segments"
-        title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Data Analysis</h2>}
-        description={
-          <p className="text-sm text-[#4A4A4A] sm:text-base leading-snug">
-            RFM, behavioral και predictive· δεδομένα από e-shop ή εξωτερική εισαγωγή.
-            {rfmDataSource === 'ecommerce' && (
-              <span className="block text-xs text-[#22C55E] mt-1">Πρόοδος: e-commerce (quintiles σε πελάτες)</span>
-            )}
-            {rfmDataSource === 'import' && (
-              <span className="block text-xs text-[#4A4A4A] mt-1">Πρόοδος: e-shop &amp; others</span>
-            )}
-          </p>
-        }
-        meta={
-          hasImportedSegments ? (
-            <p className="text-xs font-medium text-[#22C55E] sm:text-sm">
-              {rfmSegments.length} τμήματα · {formatNumber(totalCustomersDisplay)} πελάτες
-            </p>
-          ) : null
-        }
+        title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl leading-tight">Data Analysis</h2>}
         actions={
           <>
           {activeTab === 'rfm' && (
@@ -508,7 +467,71 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
         }
       />
 
-      <DataCoverageBlock dataCoverage={dataCoverage} totalDisplayed={totalCustomersDisplay} />
+      {/* Μία συμπαγής γραμμή: πηγή + μεγέθη — χωρίς επανάληψη με κάλυψη όταν είναι καθαρό e-shop */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-[#E8EAED] bg-[#FAFBFC] px-3 py-2 text-[12px] text-[#374151]">
+        {importSegmentsAvailable && canComputeFromOrders ? (
+          <label className="flex items-center gap-2 shrink-0">
+            <span className="text-[#6B7280] whitespace-nowrap">Πηγή</span>
+            <select
+              className="rounded-md border border-[#E5E7EB] bg-white px-2 py-1 text-[12px] text-[#1A1A1A] max-w-[11rem]"
+              value={rfmSourcePref}
+              onChange={(e) => setDataSourcePreference(e.target.value as 'orders' | 'external')}
+              aria-label="Πηγή RFM segments"
+            >
+              <option value="orders">e-shop orders</option>
+              <option value="external">e-shop &amp; others</option>
+            </select>
+          </label>
+        ) : null}
+        {importSegmentsAvailable && canComputeFromOrders ? (
+          <span className="hidden sm:inline h-4 w-px shrink-0 bg-[#E5E7EB]" aria-hidden />
+        ) : null}
+        {hasImportedSegments ? (
+          <span className="font-semibold tabular-nums text-[#111827]">
+            {rfmSegments.length} segments · {formatNumber(totalCustomersDisplay)} πελάτες
+          </span>
+        ) : null}
+        {rfmDataSource === 'ecommerce' ? (
+          <span className="text-[#6B7280]">Raw παραγγελίες · quintiles</span>
+        ) : (
+          <span className="text-[#6B7280]">Εισαγωγή / ERP εκτός e-shop</span>
+        )}
+        {rfmDataSource === 'ecommerce' && orderRfmMeta && orderRfmMeta.guestOrdersSkipped > 0 ? (
+          <span className="text-[11px] font-medium text-[#B45309]" title="Δεν συμπεριλαμβάνονται στο RFM">
+            · guest χωρίς id: {formatNumber(orderRfmMeta.guestOrdersSkipped)}
+          </span>
+        ) : null}
+        {isCatalogEnriching ? (
+          <span className="text-[11px] text-amber-800">· catalog προϊόντων…</span>
+        ) : null}
+        <details className="sm:ml-auto min-w-0 max-w-full sm:max-w-[22rem] text-[11px]">
+          <summary className="cursor-pointer font-semibold text-[var(--nts-accent)] hover:underline">
+            Σημειώσεις υπολογισμού
+          </summary>
+          <div className="mt-2 space-y-2 rounded-md border border-[#E5E7EB] bg-white p-2.5 text-[#4A4A4A] leading-snug">
+            <p>
+              Οι καρτέλες <strong>RFM</strong>, <strong>Behavioral</strong>, <strong>Predictive</strong> μοιράζονται τα ίδια segments· αλλάζει μόνο η οπτικοποίηση (κατανομή / προφίλ / LTV).
+            </p>
+            {rfmDataSource === 'ecommerce' && (
+              <p className="text-[11px]">
+                Από εσωτερικό <strong>customerId</strong> ανά παραγγελία — όχι μόνο email guest.
+              </p>
+            )}
+            {isCatalogEnriching && (
+              <p className="text-[11px] text-amber-900 bg-amber-50 px-2 py-1 rounded border border-amber-100">
+                Φόρτωση catalog για brands/SKU· τα charts στο segment detail ενημερώνονται όταν ολοκληρωθεί.
+              </p>
+            )}
+            {compactCoverageOk && (
+              <p className="text-[11px] text-[#6B7280]">{dataCoverage.marketingPolicy}</p>
+            )}
+          </div>
+        </details>
+      </div>
+
+      {!compactCoverageOk ? (
+        <DataCoverageBlock dataCoverage={dataCoverage} totalDisplayed={totalCustomersDisplay} />
+      ) : null}
 
       {/* Analysis Tabs */}
       <div className="-mx-1 max-w-full overflow-x-auto pb-1 sm:mx-0 sm:overflow-visible sm:pb-0">
@@ -517,7 +540,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
           active={activeTab === 'rfm'}
           onClick={() => setActiveTab('rfm')}
           icon={<Users size={14} />}
-          label="RFM Segments"
+          label="RFM"
           tooltipTitle="RFM Segments"
           tooltipBody="Ομαδοποίηση πελατών βάσει Recency (πόσο πρόσφατα αγόρασαν), Frequency (πόσο συχνά) και Monetary (πόση αξία)."
           tooltipBullets={[
@@ -543,7 +566,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
           active={activeTab === 'predictive'}
           onClick={() => setActiveTab('predictive')}
           icon={<LineChart size={14} />}
-          label="Predictive LTV"
+          label="Predictive"
           tooltipTitle="Predictive LTV"
           tooltipBody="Πρόβλεψη μελλοντικής αξίας (Lifetime Value) και ρίσκου ανά segment."
           tooltipBullets={[
@@ -775,20 +798,32 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
         suppressConsumptionDemo={rfmDataSource === 'ecommerce'}
       />
 
-      <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {rfmSegments.map((segment, index) => (
-          <SegmentCard
-            key={segment.id}
-            segment={segment}
-            index={index}
-            isSelected={selectedSegment?.id === segment.id}
-            onSelect={() =>
-              setSelectedSegment(selectedSegment?.id === segment.id ? null : segment)
-            }
-            onExport={(fmt) => handleExportSegment(segment, fmt)}
-          />
-        ))}
-      </div>
+      <details className="rounded-xl border border-[#E8EAED] bg-[#FAFBFC] shadow-[0_2px_8px_rgba(15,23,42,0.04)]">
+        <summary className="cursor-pointer list-none px-4 py-3 [&::-webkit-details-marker]:hidden">
+          <span className="text-[13px] font-semibold text-[var(--nts-accent)] hover:underline">
+            Κάρτες ανά segment (προαιρετικά)
+          </span>
+          <span className="mt-1 block text-[11px] font-normal leading-snug text-[#6B7280]">
+            Ο πίνακας από πάνω είναι η κύρια λίστα· οι κάρτες επαναλαμβάνουν τα ίδια segments για γρήγορο export χωρίς να ανοίξει το πάνελ λεπτομερειών.
+          </span>
+        </summary>
+        <div className="border-t border-[#E5E7EB] px-4 pb-4 pt-3">
+          <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {rfmSegments.map((segment, index) => (
+              <SegmentCard
+                key={segment.id}
+                segment={segment}
+                index={index}
+                isSelected={selectedSegment?.id === segment.id}
+                onSelect={() =>
+                  setSelectedSegment(selectedSegment?.id === segment.id ? null : segment)
+                }
+                onExport={(fmt) => handleExportSegment(segment, fmt)}
+              />
+            ))}
+          </div>
+        </div>
+      </details>
 
       {/* Segment Detail Panel */}
       <AnimatePresence>

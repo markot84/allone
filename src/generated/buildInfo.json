@@ -1,10 +1,14 @@
 {
-  "version": "0.687.0",
-  "previousVersion": "0.686.0",
-  "commitHash": "d43f6ec",
+  "version": "0.690.0",
+  "previousVersion": "0.689.0",
+  "commitHash": "7c0a33b",
   "branch": "main",
-  "buildDate": "2026-05-01T20:48:59.846Z",
+  "buildDate": "2026-05-01T21:03:14.925Z",
   "commits": [
+    {
+      "hash": "7c0a33b",
+      "message": "feat(connectors): Shopify order line productId/variantId; OpenCart lineItems via api/order/info"
+    },
     {
       "hash": "d43f6ec",
       "message": "feat(connectors): Shopify order line productId/variantId; OpenCart lineItems via api/order/info"
@@ -60,16 +64,11 @@
     {
       "hash": "f6de117",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "5f3ed6c",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [
     "[Νέο χαρακτηριστικό] Shopify order line productId/variantId; OpenCart lineItems via api/order/info",
     "[Συντήρηση] Full deploy",
-    "[Διόρθωση] Responsive channel progress summary",
-    "[Διόρθωση] Simplify app header for responsive"
+    "[Διόρθωση] Responsive channel progress summary"
   ]
 }
