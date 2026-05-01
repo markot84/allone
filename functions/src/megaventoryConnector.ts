@@ -45,6 +45,10 @@ const MV_TIMEOUT_MS = 120_000;
 const MV_PAGE_SIZE = 500;
 /** Ασφάλεια: max ~2.5M εγγραφές ανά endpoint ανά sync */
 const MV_MAX_PAGES = 5000;
+const MV_INVOICE_BACKFILL_PAGE_SIZE = 100;
+/** 5λεπτο δοκιμαστικό backfill window, με cursor για καθαρή συνέχεια στο επόμενο sync. */
+const MV_INVOICE_BACKFILL_RUNTIME_MS = 5 * 60 * 1000;
+const MV_INVOICE_BACKFILL_MAX_PAGES_PER_SYNC = 50;
 
 type MvFilter = {
   FieldName: string;
@@ -359,6 +363,11 @@ function minNumericId(rows: any[], ...keys: string[]): number {
   return Number.isFinite(m) ? m : 0;
 }
 
+function positiveNumber(value: unknown): number | null {
+  const n = num(value);
+  return n > 0 ? n : null;
+}
+
 async function fetchAllMvPages(
   endpoint: string,
   apiKey: string,
@@ -372,14 +381,22 @@ async function fetchAllMvPages(
     label: string;
     pageSize?: number;
     maxPages?: number;
+    initialCursor?: number | null;
+    maxRuntimeMs?: number;
   }
-): Promise<{ rows: any[]; error: string | null }> {
+): Promise<{ rows: any[]; error: string | null; nextCursor: number | null; exhausted: boolean }> {
   const pageSize = opts.pageSize ?? MV_PAGE_SIZE;
   const maxPages = opts.maxPages ?? MV_MAX_PAGES;
+  const deadline = opts.maxRuntimeMs ? Date.now() + opts.maxRuntimeMs : null;
   const rows: any[] = [];
-  let cursor: number | null = null;
+  let cursor: number | null = opts.initialCursor ?? null;
+  let nextCursor: number | null = cursor;
+  let exhausted = false;
 
   for (let page = 0; page < maxPages; page++) {
+    if (deadline && Date.now() >= deadline) {
+      break;
+    }
     const filters = buildMvFiltersWithCursor(baseFilters, opts.cursorField, cursor);
     const body: Record<string, unknown> = {
       ReturnTopNRecords: pageSize,
@@ -391,18 +408,28 @@ async function fetchAllMvPages(
       ...body,
     });
     const err = asMvError(call, opts.label);
-    if (err) return { rows, error: err };
+    if (err) return { rows, error: err, nextCursor, exhausted: false };
 
     const batch = (call.body?.[opts.responseArrayKey] as any[]) || [];
-    if (!batch.length) break;
+    if (!batch.length) {
+      exhausted = true;
+      break;
+    }
 
     rows.push(...batch);
     const minId = minNumericId(batch, ...opts.idKeys);
-    if (batch.length < pageSize || minId <= 0) break;
+    if (minId > 0) nextCursor = minId;
+    if (batch.length < pageSize || minId <= 0) {
+      exhausted = true;
+      break;
+    }
     cursor = minId;
+    if (deadline && Date.now() >= deadline) {
+      break;
+    }
   }
 
-  return { rows, error: null };
+  return { rows, error: null, nextCursor, exhausted };
 }
 
 /** Το API επιστρέφει mvProductStockList με nested mvStock· ενοποιούμε σε flat rows όπως περιμένει το writeBatch. */
@@ -656,6 +683,16 @@ async function writeBatch(
   }
 }
 
+async function inferInvoiceBackfillCursor(db: Firestore, brandId: string): Promise<number | null> {
+  const snap = await db.collection('megaventory_invoices').where('brandId', '==', brandId).get();
+  let minId = Number.POSITIVE_INFINITY;
+  for (const doc of snap.docs) {
+    const candidate = positiveNumber(doc.data().documentId);
+    if (candidate !== null && candidate < minId) minId = candidate;
+  }
+  return Number.isFinite(minId) ? minId : null;
+}
+
 // ─── Sync ────────────────────────────────────────────────────────────────────
 
 export interface MegaventorySyncResult {
@@ -693,11 +730,12 @@ export async function fetchMegaventoryData(brandId: string): Promise<Megaventory
   }
 
   let docsWindow = buildHistoricalOrIncrementalWindow(conn, 'lastDocsSyncAt');
-  const existingInvoiceCountSnap = await db.collection('megaventory_invoices').where('brandId', '==', brandId).count().get();
-  const shouldBackfillInvoiceDocuments =
-    existingInvoiceCountSnap.data().count === 0 &&
-    !conn.invoiceDocumentBackfillAt;
-  if (shouldBackfillInvoiceDocuments) {
+  const shouldStageInvoiceBackfill = conn.invoiceDocumentBackfillComplete !== true;
+  let invoiceBackfillCursor = positiveNumber(conn.invoiceDocumentBackfillCursor);
+  if (shouldStageInvoiceBackfill && invoiceBackfillCursor === null && conn.invoiceDocumentBackfillAt) {
+    invoiceBackfillCursor = await inferInvoiceBackfillCursor(db, brandId);
+  }
+  if (shouldStageInvoiceBackfill) {
     docsWindow = {
       mode: 'historical',
       windowStart: new Date(Date.UTC(docsWindow.historyStartYear, 0, 1)),
@@ -711,7 +749,7 @@ export async function fetchMegaventoryData(brandId: string): Promise<Megaventory
   let docsOk = true;
   let referenceOk = true;
   logger.info(
-    `[Megaventory] Sync window for ${brandId}: docs=${docsWindow.mode}:${sinceStr}->${todayStr} reference=snapshot customReport=snapshot invoiceBackfill=${shouldBackfillInvoiceDocuments}`
+    `[Megaventory] Sync window for ${brandId}: docs=${docsWindow.mode}:${sinceStr}->${todayStr} reference=snapshot customReport=snapshot invoiceBackfill=${shouldStageInvoiceBackfill ? `staged cursor=${invoiceBackfillCursor ?? 'latest'}` : 'complete/incremental'}`
   );
 
   let totalImported = 0;
@@ -731,15 +769,22 @@ export async function fetchMegaventoryData(brandId: string): Promise<Megaventory
   let rfmCounts: MegaventoryRfmCounts | null = null;
   let postNormalizeRefresh: Record<string, unknown> | null = null;
   let documentDiagnostics: Record<string, unknown> | null = null;
+  let invoiceBackfillProgress: Record<string, unknown> | null = null;
+  let rfmSkippedReason = '';
 
   try {
     // ── Invoices (Documents type=Sales Invoice) → revenue ────────────
     const documentTypesResult = await fetchDocumentTypes(apiKey);
     const documentTypesById = new Map(documentTypesResult.types.map((type) => [type.id, type]));
-    const documentFilters = shouldBackfillInvoiceDocuments
+    const documentFilters = shouldStageInvoiceBackfill
       ? []
       : [{ FieldName: 'DocumentDate', SearchOperator: 'GreaterEqualTo', SearchValue: sinceFilterDate }];
-    const { rows: invRows, error: invFetchErr } = await fetchAllMvPages(
+    const {
+      rows: invRows,
+      error: invFetchErr,
+      nextCursor: invoiceBackfillNextCursor,
+      exhausted: invoiceBackfillExhausted,
+    } = await fetchAllMvPages(
       'DocumentGet',
       apiKey,
       documentFilters,
@@ -748,8 +793,10 @@ export async function fetchMegaventoryData(brandId: string): Promise<Megaventory
         cursorField: 'DocumentId',
         idKeys: ['DocumentId', 'DocumentID'],
         label: 'DocumentGet (invoices)',
-        pageSize: shouldBackfillInvoiceDocuments ? 100 : undefined,
-        maxPages: shouldBackfillInvoiceDocuments ? 1 : undefined,
+        pageSize: shouldStageInvoiceBackfill ? MV_INVOICE_BACKFILL_PAGE_SIZE : undefined,
+        maxPages: shouldStageInvoiceBackfill ? MV_INVOICE_BACKFILL_MAX_PAGES_PER_SYNC : undefined,
+        initialCursor: shouldStageInvoiceBackfill ? invoiceBackfillCursor : undefined,
+        maxRuntimeMs: shouldStageInvoiceBackfill ? MV_INVOICE_BACKFILL_RUNTIME_MS : undefined,
       }
     );
     if (invFetchErr) {
@@ -759,6 +806,10 @@ export async function fetchMegaventoryData(brandId: string): Promise<Megaventory
       const rawDocs = invRows as Record<string, unknown>[];
       const docs = rawDocs.filter((d) => isLikelySalesInvoice(d, documentTypeInfo(d, documentTypesById)));
       documentDiagnostics = {
+        invoiceBackfillMode: shouldStageInvoiceBackfill ? 'staged' : 'incremental',
+        invoiceBackfillCursor: invoiceBackfillCursor ?? null,
+        invoiceBackfillNextCursor: invoiceBackfillNextCursor ?? null,
+        invoiceBackfillExhausted,
         documentTypeError: documentTypesResult.error || '',
         documentTypes: documentTypesResult.types.slice(0, 50),
         rawDocumentRows: rawDocs.length,
@@ -795,6 +846,19 @@ export async function fetchMegaventoryData(brandId: string): Promise<Megaventory
       if (items.length) await writeBatch(db, 'megaventory_invoices', brandId, items);
       counts.invoices = items.length;
       totalImported += items.length;
+      if (shouldStageInvoiceBackfill) {
+        invoiceBackfillProgress = {
+          cursor: invoiceBackfillCursor ?? null,
+          nextCursor: invoiceBackfillNextCursor ?? null,
+          exhausted: invoiceBackfillExhausted,
+          rawRows: rawDocs.length,
+          matchedRows: docs.length,
+          imported: items.length,
+          pageSize: MV_INVOICE_BACKFILL_PAGE_SIZE,
+          maxPages: MV_INVOICE_BACKFILL_MAX_PAGES_PER_SYNC,
+          maxRuntimeMs: MV_INVOICE_BACKFILL_RUNTIME_MS,
+        };
+      }
       logger.info(`[Megaventory] Invoices: ${items.length}/${rawDocs.length} imported for brand ${brandId}`);
     }
 
@@ -1042,9 +1106,21 @@ export async function fetchMegaventoryData(brandId: string): Promise<Megaventory
       if (docsWindow.mode === 'historical') {
         patch['megaventory.historyLoadedUntilYear'] = docsWindow.historyStartYear;
       }
-      if (shouldBackfillInvoiceDocuments && counts.invoices > 0) {
+      if (shouldStageInvoiceBackfill) {
         patch['megaventory.invoiceDocumentBackfillAt'] = FieldValue.serverTimestamp();
-        patch['megaventory.invoiceDocumentBackfillCount'] = counts.invoices;
+        patch['megaventory.invoiceDocumentBackfillLastRunAt'] = FieldValue.serverTimestamp();
+        patch['megaventory.invoiceDocumentBackfillRawRowsLastRun'] =
+          Number(invoiceBackfillProgress?.rawRows ?? 0);
+        patch['megaventory.invoiceDocumentBackfillMatchedRowsLastRun'] =
+          Number(invoiceBackfillProgress?.matchedRows ?? 0);
+        patch['megaventory.invoiceDocumentBackfillCount'] = FieldValue.increment(counts.invoices);
+        if (invoiceBackfillProgress?.nextCursor) {
+          patch['megaventory.invoiceDocumentBackfillCursor'] = invoiceBackfillProgress.nextCursor;
+        }
+        if (invoiceBackfillProgress?.exhausted) {
+          patch['megaventory.invoiceDocumentBackfillComplete'] = true;
+          patch['megaventory.invoiceDocumentBackfillCompletedAt'] = FieldValue.serverTimestamp();
+        }
       }
     }
 
@@ -1069,7 +1145,9 @@ export async function fetchMegaventoryData(brandId: string): Promise<Megaventory
       }
     }
 
-    if (docsOk) {
+    const invoiceBackfillStillInProgress =
+      shouldStageInvoiceBackfill && invoiceBackfillProgress?.exhausted !== true;
+    if (docsOk && !invoiceBackfillStillInProgress) {
       try {
         rfmCounts = await refreshMegaventoryRfmSegments(db, brandId);
       } catch (rfmErr) {
@@ -1077,6 +1155,9 @@ export async function fetchMegaventoryData(brandId: string): Promise<Megaventory
         errors.push(`MegaventoryRFM: ${msg}`);
         logger.warn(`[Megaventory] RFM refresh failed for ${brandId}: ${msg}`);
       }
+    } else if (docsOk && invoiceBackfillStillInProgress) {
+      rfmSkippedReason = 'invoice_backfill_in_progress';
+      logger.info(`[Megaventory] RFM refresh skipped for ${brandId}: invoice backfill still in progress`);
     }
 
     if (normalizedCounts && normalizedCounts.products > 0) {
@@ -1115,8 +1196,10 @@ export async function fetchMegaventoryData(brandId: string): Promise<Megaventory
       normalized: normalizedCounts != null,
       ...(normalizedCounts ? { normalizedCounts } : {}),
       rfmGenerated: rfmCounts != null,
+      ...(rfmSkippedReason ? { rfmSkippedReason } : {}),
       ...(rfmCounts ? { rfmCounts } : {}),
       ...(documentDiagnostics ? { documentDiagnostics } : {}),
+      ...(invoiceBackfillProgress ? { invoiceBackfillProgress } : {}),
       ...(postNormalizeRefresh ? { postNormalizeRefresh } : {}),
       imported: totalImported,
       ...counts,
