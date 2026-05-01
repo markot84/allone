@@ -862,6 +862,54 @@ export async function fetchMegaventoryData(brandId: string): Promise<Megaventory
       logger.info(`[Megaventory] Invoices: ${items.length}/${rawDocs.length} imported for brand ${brandId}`);
     }
 
+    if (docsOk && shouldStageInvoiceBackfill && invoiceBackfillProgress && invoiceBackfillProgress.exhausted !== true) {
+      const patch: Record<string, unknown> = {
+        'megaventory.lastDocsSyncAt': FieldValue.serverTimestamp(),
+        'megaventory.historyLoadedUntilYear': docsWindow.historyStartYear,
+        'megaventory.invoiceDocumentBackfillAt': FieldValue.serverTimestamp(),
+        'megaventory.invoiceDocumentBackfillLastRunAt': FieldValue.serverTimestamp(),
+        'megaventory.invoiceDocumentBackfillRawRowsLastRun': Number(invoiceBackfillProgress.rawRows ?? 0),
+        'megaventory.invoiceDocumentBackfillMatchedRowsLastRun': Number(invoiceBackfillProgress.matchedRows ?? 0),
+        'megaventory.invoiceDocumentBackfillCount': FieldValue.increment(counts.invoices),
+      };
+      if (invoiceBackfillProgress.nextCursor) {
+        patch['megaventory.invoiceDocumentBackfillCursor'] = invoiceBackfillProgress.nextCursor;
+      }
+      await db.doc(`connectors/${brandId}`).update(patch);
+
+      await db.collection('import_jobs').add({
+        brandId,
+        type: 'finances',
+        source: 'megaventory_api',
+        status: errors.length ? 'partial' : 'completed',
+        mode: 'invoice_backfill_only',
+        docsMode: docsWindow.mode,
+        referenceMode: 'skipped_backfill_in_progress',
+        customReportMode: 'skipped_backfill_in_progress',
+        windowStart: docsWindow.windowStart.toISOString(),
+        windowEnd: docsWindow.windowEnd.toISOString(),
+        rfmGenerated: false,
+        rfmSkippedReason: 'invoice_backfill_in_progress',
+        ...(documentDiagnostics ? { documentDiagnostics } : {}),
+        invoiceBackfillProgress,
+        imported: totalImported,
+        ...counts,
+        failed: errors.length,
+        errors: errors.slice(0, 20),
+        createdAt: FieldValue.serverTimestamp(),
+      });
+
+      logger.info(
+        `[Megaventory] Invoice backfill-only run for ${brandId}: raw=${invoiceBackfillProgress.rawRows} matched=${invoiceBackfillProgress.matchedRows} imported=${counts.invoices}`
+      );
+      return {
+        success: true,
+        imported: totalImported,
+        ...counts,
+        ...(errors.length ? { error: errors[0] } : {}),
+      };
+    }
+
     // ── Sales Orders (cross-reference) ───────────────────────────────
     const { rows: soRows, error: soFetchErr } = await fetchAllMvPages(
       'SalesOrderGet',
