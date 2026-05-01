@@ -19,24 +19,38 @@ const LS_TO     = 'perf_global_to';
 
 function pad(n: number) { return String(n).padStart(2, '0'); }
 
+/**
+ * Το τέλος περιόδου είναι χθες (ολοκληρωμένα ημερήσια δεδομένα). Στην 1η του μήνα / έτους
+ * το χθες πέφτει πριν το start της περιόδου → κενό διάστημα και charts χωρίς σειρά.
+ * Clamp ώστε πάντα from ≤ to (τουλάχιστον μία ημέρα).
+ */
+function clampIsoRange(fromDate: string, toDate: string): { fromDate: string; toDate: string } {
+  if (!fromDate || !toDate) {
+    const d = fromDate || toDate;
+    return { fromDate: d, toDate: d };
+  }
+  if (fromDate <= toDate) return { fromDate, toDate };
+  return { fromDate, toDate: fromDate };
+}
+
 function computeDates(period: GlobalPeriod, customFrom: string, customTo: string): { fromDate: string; toDate: string } {
   const now = new Date();
   const yesterday = new Date(now);
   yesterday.setDate(yesterday.getDate() - 1);
   const toDate = yesterday.toISOString().slice(0, 10);
 
+  let range: { fromDate: string; toDate: string };
   if (period === 'custom') {
-    return { fromDate: customFrom || toDate, toDate: customTo || toDate };
-  }
-  if (period === 'last_30') {
+    range = { fromDate: customFrom || toDate, toDate: customTo || toDate };
+  } else if (period === 'last_30') {
     const d = new Date(now); d.setDate(d.getDate() - 30);
-    return { fromDate: d.toISOString().slice(0, 10), toDate };
+    range = { fromDate: d.toISOString().slice(0, 10), toDate };
+  } else if (period === 'current_year') {
+    range = { fromDate: `${now.getFullYear()}-01-01`, toDate };
+  } else {
+    range = { fromDate: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`, toDate };
   }
-  if (period === 'current_year') {
-    return { fromDate: `${now.getFullYear()}-01-01`, toDate };
-  }
-  // current_month
-  return { fromDate: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`, toDate };
+  return clampIsoRange(range.fromDate, range.toDate);
 }
 
 function loadPeriod(): GlobalPeriod {
