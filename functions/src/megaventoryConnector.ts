@@ -46,9 +46,9 @@ const MV_PAGE_SIZE = 500;
 /** Ασφάλεια: max ~2.5M εγγραφές ανά endpoint ανά sync */
 const MV_MAX_PAGES = 5000;
 const MV_INVOICE_BACKFILL_PAGE_SIZE = 100;
-/** 5λεπτο δοκιμαστικό backfill window, με cursor για καθαρή συνέχεια στο επόμενο sync. */
-const MV_INVOICE_BACKFILL_RUNTIME_MS = 5 * 60 * 1000;
-const MV_INVOICE_BACKFILL_MAX_PAGES_PER_SYNC = 50;
+/** Manual connectorSync έχει 20' timeout· κρατάμε buffer για Firestore writes / response. */
+const MV_INVOICE_BACKFILL_RUNTIME_MS = 18 * 60 * 1000;
+const MV_INVOICE_BACKFILL_MAX_PAGES_PER_SYNC = 500;
 
 type MvFilter = {
   FieldName: string;
