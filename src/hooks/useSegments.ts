@@ -139,10 +139,11 @@ export function useSegments() {
     refetchOnWindowFocus: false,
   });
 
+  /** Μετά τις παραγγελίες ώστε να μην «δένει» το UI σε διπλό βαρύ parallel fetch· τα segments εμφανίζονται χωρίς catalog enrichment. */
   const { data: catalogAlignment, isPending: catalogPending } = useQuery({
     queryKey: ['catalogAlignment', brandId, platformsKey],
     queryFn: () => (brandId ? fetchCatalogAlignmentData(brandId, ecomm.connectedPlatforms) : Promise.resolve(null)),
-    enabled: ordersQueryEnabled,
+    enabled: ordersQueryEnabled && !ordersPending,
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -236,10 +237,13 @@ export function useSegments() {
     };
   }, [sourcePref, resolvedSource, orderRfm.totalCustomers, externalTotalCustomers, externalSegments]);
 
+  /** Όχι catalogPending: μεγάλα brand catalogs θα κρατούσαν αόριστα το spinner· το enrichment είναι progressive. */
   const isLoading =
     fsPending ||
     (sourcePref === 'external' && segmentCustomersPending) ||
-    (ordersQueryEnabled && (ordersPending || catalogPending));
+    (ordersQueryEnabled && ordersPending);
+
+  const isCatalogEnriching = ordersQueryEnabled && catalogPending;
 
   const hasImported =
     resolvedSource === 'ecommerce' ? orderRfm.totalCustomers > 0 : importSegmentsAvailable;
@@ -248,6 +252,8 @@ export function useSegments() {
     segments,
     totalCustomers,
     isLoading,
+    /** Φόρτωση *_products + unified products για catalog tabs — δεν μπλοκάρει το κύριο RFM grid. */
+    isCatalogEnriching,
     hasImported,
     /** Πραγματική πηγή μετά την επιλογή του χρήστη. */
     dataSource: resolvedSource,

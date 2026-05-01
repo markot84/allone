@@ -1,10 +1,14 @@
 {
-  "version": "0.680.0",
-  "previousVersion": "0.679.0",
-  "commitHash": "38f4e88",
+  "version": "0.682.0",
+  "previousVersion": "0.681.0",
+  "commitHash": "b1ff603",
   "branch": "main",
-  "buildDate": "2026-05-01T20:29:56.211Z",
+  "buildDate": "2026-05-01T20:35:42.044Z",
   "commits": [
+    {
+      "hash": "b1ff603",
+      "message": "feat(connectors): Shopify order line productId/variantId; OpenCart lineItems via api/order/info"
+    },
     {
       "hash": "38f4e88",
       "message": "feat(connectors): Shopify order line productId/variantId; OpenCart lineItems via api/order/info"
@@ -60,10 +64,6 @@
     {
       "hash": "3032be8",
       "message": "fix(ui): responsive channel progress summary"
-    },
-    {
-      "hash": "2d1e09b",
-      "message": "fix(ui): responsive channel progress summary"
     }
   ],
   "changes": [
@@ -72,7 +72,6 @@
     "[Διόρθωση] Responsive channel progress summary",
     "[Διόρθωση] Simplify app header for responsive",
     "[Διόρθωση] Responsive hardening across app",
-    "[Διόρθωση] Mobile layout — sidebar drawer <1024px, chart measure + min-w, responsive grids",
-    "[Διόρθωση] Members read — avoid circular isBrandMember for collection group"
+    "[Διόρθωση] Mobile layout — sidebar drawer <1024px, chart measure + min-w, responsive grids"
   ]
 }

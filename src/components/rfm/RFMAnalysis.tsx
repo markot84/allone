@@ -123,6 +123,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
     orderRfmMeta,
     segmentMigration,
     importSegmentsAvailable,
+    isCatalogEnriching,
   } = useSegments();
   const ecomm = useEcommerceSummary();
   const { currentBrand } = useBrand();
@@ -245,6 +246,11 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
           {orderRfmMeta.guestOrdersSkipped > 0 && (
             <span className="block mt-1 text-[#047857]">
               {orderRfmMeta.guestOrdersSkipped} guest / χωρίς id παραγγελίες εξαιρέθηκαν του RFM.
+            </span>
+          )}
+          {isCatalogEnriching && (
+            <span className="block mt-2 text-xs text-[#047857] border-t border-[#A7F3D0]/60 pt-2">
+              Φόρτωση καταλόγου προϊόντων (brand / κατηγορίες / SKU) στο παρασκήνιο — τα segments και ο πίνακας κάρτες είναι ήδη διαθέσιμα· τα tabs catalog στο detail ενημερώνονται όταν ολοκληρωθεί.
             </span>
           )}
         </div>
@@ -625,6 +631,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
             <SegmentDetail
               segment={selectedSegment}
               hasImportedSegments={hasImportedSegments}
+              catalogEnriching={isCatalogEnriching}
               onClose={() => setSelectedSegment(null)}
               onExportCustomers={(fmt) => handleExportCustomerList(selectedSegment, fmt)}
               onExportActionPack={(fmt) => handleExportSegment(selectedSegment, fmt)}
@@ -903,6 +910,8 @@ function SegmentCard({ segment, index, isSelected, onSelect, onExport }: Segment
 interface SegmentDetailProps {
   segment: RFMSegment;
   hasImportedSegments: boolean;
+  /** Κατάλογος ακόμα φορτώνει — tabs heuristic μέχρι να έρθουν τα *_products. */
+  catalogEnriching?: boolean;
   onClose: () => void;
   onExportCustomers?: (fmt: 'xlsx' | 'csv') => void;
   onExportActionPack?: (fmt: 'xlsx' | 'csv') => void;
@@ -916,6 +925,7 @@ function truncateAffinityLabel(name: string, max = 40): string {
 function SegmentDetail({
   segment,
   hasImportedSegments,
+  catalogEnriching,
   onClose,
   onExportCustomers,
   onExportActionPack,
@@ -1003,6 +1013,11 @@ function SegmentDetail({
           <h4 className="font-medium text-[#1A1A1A] mb-2">
             {hasCatalogRollups ? `Mix ανά catalog · ${dimLabel[catalogDim]}` : 'Κατηγορίες'}
           </h4>
+          {catalogEnriching && !cm && (
+            <p className="text-[11px] text-[#92400E] bg-[#FFFBEB] border border-[#FDE68A] rounded px-2 py-1 mb-2">
+              Φόρτωση catalog… προσωρινά εμφανίζονται heuristic κατηγορίες· τα Brand/SKU tabs συμπληρώνονται μετά.
+            </p>
+          )}
           {cm && (
             <p className="text-[11px] text-[#6B7280] mb-2">
               Catalog match: {formatNumber(cm.revenue_matched_pct, 1)}% τζίρου γραμμών ·{' '}
