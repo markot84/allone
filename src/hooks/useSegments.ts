@@ -130,13 +130,14 @@ export function useSegments() {
   );
 
   const ordersQueryEnabled = !!brandId && ecomm.connectedPlatforms.length > 0;
-  const { data: rawOrders = [], isPending: ordersPending } = useQuery({
+  const { data: rawOrders = [], isPending: ordersPending, error: ordersError } = useQuery({
     queryKey: ['ecommerceOrdersRaw', brandId, platformsKey],
     queryFn: () => (brandId ? fetchAllEcommerceOrders(brandId, ecomm.connectedPlatforms) : Promise.resolve([])),
     enabled: ordersQueryEnabled,
     staleTime: 60 * 1000,
     gcTime: 10 * 60 * 1000,
     refetchOnWindowFocus: false,
+    retry: 1,
   });
 
   /** Μετά τις παραγγελίες ώστε να μην «δένει» το UI σε διπλό βαρύ parallel fetch· τα segments εμφανίζονται χωρίς catalog enrichment. */
@@ -238,12 +239,15 @@ export function useSegments() {
     };
   }, [sourcePref, resolvedSource, orderRfm.totalCustomers, externalTotalCustomers, externalSegments]);
 
-  /** Όχι catalogPending: μεγάλα brand catalogs θα κρατούσαν αόριστα το spinner· το enrichment είναι progressive. */
+  /**
+   * Loading γρήγορο: μόνο τα Firestore segments (ή summary για external preference).
+   * Τα raw orders φορτώνουν προοδευτικά — `ordersLoading` εμφανίζει inline status, χωρίς να μπλοκάρει την σελίδα.
+   */
   const isLoading =
     fsPending ||
-    (sourcePref === 'external' && segmentCustomersPending) ||
-    (ordersQueryEnabled && ordersPending);
+    (sourcePref === 'external' && segmentCustomersPending);
 
+  const ordersLoading = ordersQueryEnabled && ordersPending;
   const isCatalogEnriching = ordersQueryEnabled && catalogPending;
 
   const hasImported =
@@ -253,6 +257,9 @@ export function useSegments() {
     segments,
     totalCustomers,
     isLoading,
+    /** True όσο τραβάμε όλο το ιστορικό παραγγελιών για ecommerce RFM — UI δεν πρέπει να μπλοκάρει. */
+    ordersLoading,
+    ordersError: (ordersError as Error | null) ?? null,
     /** Φόρτωση *_products + unified products για catalog tabs — δεν μπλοκάρει το κύριο RFM grid. */
     isCatalogEnriching,
     hasImported,

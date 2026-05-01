@@ -272,6 +272,8 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
     segments: rfmSegments,
     totalCustomers,
     isLoading: segmentsLoading,
+    ordersLoading,
+    ordersError,
     hasImported: hasImportedSegments,
     dataSource: rfmDataSource,
     setDataSourcePreference,
@@ -358,6 +360,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
 
   if (!hasImportedSegments) {
     const hasEcomm = ecomm.connectedPlatforms.length > 0;
+    const stillLoadingOrders = ordersLoading && !ordersError;
     return (
       <div className="space-y-6">
         <PageHeader
@@ -368,29 +371,51 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
             </p>
           }
         />
-        <Card padding="lg" className="text-center py-12 max-w-2xl mx-auto">
-          <p className="text-[#4A4A4A] mb-4">
-            {hasEcomm && !canComputeFromOrders
-              ? 'Συνδέσατε e-shop, αλλά δεν βρέθηκαν αρκετές παραγγελίες με αναγνωρισμένο πελάτη (συνήθως guest checkout).'
-              : 'Δεν υπάρχουν ακόμα δεδομένα προς ανάλυση.'}
-          </p>
-          {hasEcomm && !canComputeFromOrders && (
-            <p className="text-sm text-[#4A4A4A] mb-4 text-left">
-              Μετά το deploy, κάντε ξανά <strong>sync</strong> το connector ώστε να αποθηκεύεται το εσωτερικό <code className="text-xs bg-[#F3F4F6] px-1 rounded">customerId</code> ανά
-              παραγγελία (όχι email). Guest-only καλάθια εξακολουθούν να μην μετράνε σε RFM.
-            </p>
+        <Card padding="lg" className="max-w-2xl mx-auto">
+          {stillLoadingOrders ? (
+            <div className="flex flex-col items-center gap-3 py-8 text-center">
+              <Spinner size="lg" />
+              <p className="text-sm font-semibold text-[#1A1A1A]">Φόρτωση παραγγελιών e-shop…</p>
+              <p className="text-xs leading-relaxed text-[#4A4A4A] max-w-md">
+                Σε μεγάλα brands ο αρχικός υπολογισμός RFM μπορεί να διαρκέσει 1–3 λεπτά. Μην κλείνετε τη σελίδα.
+              </p>
+            </div>
+          ) : ordersError ? (
+            <div className="text-center py-8">
+              <p className="text-sm font-semibold text-[#B91C1C] mb-2">Αδυναμία ανάγνωσης παραγγελιών</p>
+              <p className="text-xs text-[#4A4A4A] mb-4 max-w-md mx-auto">
+                {ordersError.message || 'Άγνωστο σφάλμα από Firestore. Δοκιμάστε refresh ή ξανά sync τους connectors.'}
+              </p>
+              <Button variant="secondary" size="sm" onClick={() => window.location.reload()}>
+                Επαναφόρτωση σελίδας
+              </Button>
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <p className="text-[#4A4A4A] mb-4">
+                {hasEcomm && !canComputeFromOrders
+                  ? 'Συνδέσατε e-shop, αλλά δεν βρέθηκαν αρκετές παραγγελίες με αναγνωρισμένο πελάτη (συνήθως guest checkout).'
+                  : 'Δεν υπάρχουν ακόμα δεδομένα προς ανάλυση.'}
+              </p>
+              {hasEcomm && !canComputeFromOrders && (
+                <p className="text-sm text-[#4A4A4A] mb-4 text-left">
+                  Μετά το deploy, κάντε ξανά <strong>sync</strong> το connector ώστε να αποθηκεύεται το εσωτερικό <code className="text-xs bg-[#F3F4F6] px-1 rounded">customerId</code> ανά
+                  παραγγελία (όχι email). Guest-only καλάθια εξακολουθούν να μην μετράνε σε RFM.
+                </p>
+              )}
+              <p className="text-sm text-[#4A4A4A]">
+                Εναλλακτικά, ανεβάστε aggregate segments από την{' '}
+                <button
+                  type="button"
+                  onClick={() => onSectionChange?.('data-segments')}
+                  className="font-semibold text-[var(--nts-accent)] hover:underline focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)] focus:ring-offset-1 rounded"
+                >
+                  καρτέλα εισαγωγής segments
+                </button>
+                .
+              </p>
+            </div>
           )}
-          <p className="text-sm text-[#4A4A4A]">
-            Εναλλακτικά, ανεβάστε aggregate segments από την{' '}
-            <button
-              type="button"
-              onClick={() => onSectionChange?.('data-segments')}
-              className="font-semibold text-[var(--nts-accent)] hover:underline focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)] focus:ring-offset-1 rounded"
-            >
-              καρτέλα εισαγωγής segments
-            </button>
-            .
-          </p>
         </Card>
       </div>
     );
