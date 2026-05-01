@@ -1,5 +1,17 @@
-import type { BehavioralProfile, PredictiveMetrics, RFMSegment } from '../types';
+import type { BehavioralProfile, CategoryAffinity, PredictiveMetrics, RFMSegment } from '../types';
 import { getEcommerceOrderNetRevenue, isEcommerceOrderCancelled, type EcommerceRawOrder } from './ecommerceRawOrders';
+import { ecommerceLineAffinityKey } from './ecommerceAffinityKey';
+import type { CatalogIndexes, ErpSkuDims } from './catalogAlignment';
+import { resolveCatalogLineForOrderLine } from './catalogAlignment';
+
+export type RfmCatalogContext = {
+  indexes: CatalogIndexes;
+  erpBySku: Map<string, ErpSkuDims>;
+};
+
+function itemAffinityKey(item: EcommerceRawOrder['lineItems'][number]): string {
+  return ecommerceLineAffinityKey(item);
+}
 
 export type RfmFromOrdersResult = {
   segments: RFMSegment[];
@@ -37,6 +49,8 @@ type CustomerAgg = {
   orders: EcommerceRawOrder[];
 };
 
+type CatalogLineAgg = { revenue: number; quantity: number; orders: Set<string> };
+
 type SegmentAgg = {
   id: string;
   name: string;
@@ -52,6 +66,14 @@ type SegmentAgg = {
   dayCounts: Map<string, number>;
   hourCounts: Map<string, number>;
   affinity: Map<string, { revenue: number; quantity: number; orders: Set<string> }>;
+  catalogBrand: Map<string, CatalogLineAgg>;
+  catalogCategory: Map<string, CatalogLineAgg>;
+  catalogSubcategory: Map<string, CatalogLineAgg>;
+  catalogSku: Map<string, CatalogLineAgg>;
+  catalogLineRev: number;
+  catalogMatchedRev: number;
+  catalogLineCount: number;
+  catalogMatchedLineCount: number;
   customers: NonNullable<RFMSegment['customers']>;
 };
 
@@ -190,12 +212,6 @@ function dayLabel(createdAt: string): string | null {
   return DAY_LABELS[d.getDay()] || null;
 }
 
-function itemAffinityKey(item: EcommerceRawOrder['lineItems'][number]): string {
-  const productType = item.productType?.trim();
-  if (productType && productType.toLowerCase() !== 'simple') return productType;
-  return item.name?.trim() || item.title?.trim() || item.sku?.trim() || item.productId?.trim() || 'Άλλο';
-}
-
 function itemRevenue(item: EcommerceRawOrder['lineItems'][number]): number {
   return item.rowTotal && item.rowTotal > 0
     ? item.rowTotal
@@ -215,6 +231,40 @@ function frequencyLabel(annualOrdersPerCustomer: number): BehavioralProfile['pur
   if (annualOrdersPerCustomer >= 8) return 'monthly';
   if (annualOrdersPerCustomer >= 2) return 'quarterly';
   return 'rare';
+}
+
+function bumpCatalogLine(
+  map: Map<string, CatalogLineAgg>,
+  key: string,
+  revenue: number,
+  quantity: number,
+  orderId: string
+): void {
+  const k = key.trim();
+  if (!k) return;
+  const cur = map.get(k) ?? { revenue: 0, quantity: 0, orders: new Set<string>() };
+  cur.revenue += revenue;
+  cur.quantity += quantity;
+  cur.orders.add(orderId);
+  map.set(k, cur);
+}
+
+function catalogMapToAffinity(
+  map: Map<string, CatalogLineAgg>,
+  segmentRevenue: number,
+  topN: number
+): CategoryAffinity[] {
+  const rows = [...map.entries()].sort((a, b) => b[1].revenue - a[1].revenue).slice(0, topN);
+  if (rows.length === 0) return [];
+  const maxR = rows[0]![1].revenue || 1;
+  const seg = Math.max(segmentRevenue, 1e-6);
+  return rows.map(([name, row]) => ({
+    name,
+    affinity: Math.round((row.revenue / maxR) * 100) / 100,
+    avg_order: row.quantity > 0 ? Math.round(row.revenue / row.quantity) : Math.round(row.revenue),
+    revenue_eur: Math.round(row.revenue * 100) / 100,
+    revenue_share_pct: Math.round((row.revenue / seg) * 1000) / 10,
+  }));
 }
 
 function buildCommunicationPreferences(channels: string[], peakHours: string[], lifecycle: BehavioralProfile['lifecycle_stage']) {
@@ -259,6 +309,31 @@ function buildBehavioralProfile(g: SegmentAgg, totalRevenue: number, globalAov: 
   const priceSensitivity: BehavioralProfile['price_sensitivity'] =
     avgBasket >= globalAov * 1.25 || avgM >= 4 ? 'low' : avgBasket < globalAov * 0.75 || avgM <= 2 ? 'high' : 'medium';
 
+  const catalogExtras: Partial<
+    Pick<
+      BehavioralProfile,
+      | 'catalog_match'
+      | 'brand_affinity'
+      | 'category_affinity_catalog'
+      | 'subcategory_affinity'
+      | 'sku_affinity'
+    >
+  > = {};
+  if (g.catalogLineCount > 0) {
+    catalogExtras.catalog_match = {
+      revenue_matched_pct:
+        g.catalogLineRev > 0 ? Math.round((g.catalogMatchedRev / g.catalogLineRev) * 1000) / 10 : 0,
+      lines_matched_pct:
+        g.catalogLineCount > 0 ? Math.round((g.catalogMatchedLineCount / g.catalogLineCount) * 1000) / 10 : 0,
+      lines_total: g.catalogLineCount,
+      lines_matched: g.catalogMatchedLineCount,
+    };
+    catalogExtras.brand_affinity = catalogMapToAffinity(g.catalogBrand, g.revenue, 10);
+    catalogExtras.category_affinity_catalog = catalogMapToAffinity(g.catalogCategory, g.revenue, 10);
+    catalogExtras.subcategory_affinity = catalogMapToAffinity(g.catalogSubcategory, g.revenue, 10);
+    catalogExtras.sku_affinity = catalogMapToAffinity(g.catalogSku, g.revenue, 10);
+  }
+
   return {
     preferred_channels: preferredChannels,
     purchase_frequency: frequencyLabel(annualOrdersPerCustomer),
@@ -268,6 +343,7 @@ function buildBehavioralProfile(g: SegmentAgg, totalRevenue: number, globalAov: 
     payment_method: topKey(g.paymentCounts, '—'),
     device_preference: 'mixed',
     category_affinity,
+    ...catalogExtras,
     upsell_score: Math.round(upsell),
     cross_sell_score: Math.round(crossSell),
     price_sensitivity: priceSensitivity,
@@ -462,7 +538,10 @@ export function computeSegmentMigrationFromEcommerceOrders(
  * RFM + συγκέντρωση segments από raw e-commerce παραγγελίες (εσωτερικό customer id ανά platform).
  * Αγνοεί guest/email-only orders, cancelled & 100% demo, όπως το υπόλοιπο e-commerce.
  */
-export function computeRfmSegmentsFromEcommerceOrders(orders: EcommerceRawOrder[]): RfmFromOrdersResult {
+export function computeRfmSegmentsFromEcommerceOrders(
+  orders: EcommerceRawOrder[],
+  catalog: RfmCatalogContext | null | undefined = undefined
+): RfmFromOrdersResult {
   const byKey = new Map<string, CustomerAgg>();
   let guestOrdersSkipped = 0;
   let ordersAttributed = 0;
@@ -551,6 +630,14 @@ export function computeRfmSegmentsFromEcommerceOrders(orders: EcommerceRawOrder[
         dayCounts: new Map<string, number>(),
         hourCounts: new Map<string, number>(),
         affinity: new Map<string, { revenue: number; quantity: number; orders: Set<string> }>(),
+        catalogBrand: new Map<string, CatalogLineAgg>(),
+        catalogCategory: new Map<string, CatalogLineAgg>(),
+        catalogSubcategory: new Map<string, CatalogLineAgg>(),
+        catalogSku: new Map<string, CatalogLineAgg>(),
+        catalogLineRev: 0,
+        catalogMatchedRev: 0,
+        catalogLineCount: 0,
+        catalogMatchedLineCount: 0,
         customers: [],
       };
     g.count += 1;
@@ -576,12 +663,30 @@ export function computeRfmSegmentsFromEcommerceOrders(orders: EcommerceRawOrder[
       if (day) increment(g.dayCounts, day);
       if (hour) increment(g.hourCounts, hour);
       for (const item of order.lineItems) {
+        const lineRev = itemRevenue(item);
+        const lineQty = Math.max(1, item.quantity || 1);
         const key = itemAffinityKey(item);
         const current = g.affinity.get(key) ?? { revenue: 0, quantity: 0, orders: new Set<string>() };
-        current.revenue += itemRevenue(item);
-        current.quantity += Math.max(1, item.quantity || 1);
+        current.revenue += lineRev;
+        current.quantity += lineQty;
         current.orders.add(order.orderId);
         g.affinity.set(key, current);
+
+        if (catalog) {
+          g.catalogLineRev += lineRev;
+          g.catalogLineCount += 1;
+          const resolved = resolveCatalogLineForOrderLine(order.platform, item, catalog.indexes, catalog.erpBySku);
+          if (resolved.match_source !== 'line_fallback') {
+            g.catalogMatchedRev += lineRev;
+            g.catalogMatchedLineCount += 1;
+          }
+          bumpCatalogLine(g.catalogBrand, resolved.brandLabel, lineRev, lineQty, order.orderId);
+          bumpCatalogLine(g.catalogCategory, resolved.categoryLabel, lineRev, lineQty, order.orderId);
+          if (resolved.subcategoryLabel.trim()) {
+            bumpCatalogLine(g.catalogSubcategory, resolved.subcategoryLabel, lineRev, lineQty, order.orderId);
+          }
+          bumpCatalogLine(g.catalogSku, resolved.skuLabel, lineRev, lineQty, order.orderId);
+        }
       }
     }
     bySegment.set(id, g);

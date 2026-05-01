@@ -1,10 +1,14 @@
 {
-  "version": "0.675.48",
-  "previousVersion": "0.675.47",
-  "commitHash": "d0c395a",
+  "version": "0.680.0",
+  "previousVersion": "0.679.0",
+  "commitHash": "38f4e88",
   "branch": "main",
-  "buildDate": "2026-05-01T20:06:11.332Z",
+  "buildDate": "2026-05-01T20:29:56.211Z",
   "commits": [
+    {
+      "hash": "38f4e88",
+      "message": "feat(connectors): Shopify order line productId/variantId; OpenCart lineItems via api/order/info"
+    },
     {
       "hash": "d0c395a",
       "message": "chore: full deploy"
@@ -60,19 +64,15 @@
     {
       "hash": "2d1e09b",
       "message": "fix(ui): responsive channel progress summary"
-    },
-    {
-      "hash": "583ec81",
-      "message": "fix(ui): responsive channel progress summary"
     }
   ],
   "changes": [
+    "[Νέο χαρακτηριστικό] Shopify order line productId/variantId; OpenCart lineItems via api/order/info",
     "[Συντήρηση] Full deploy",
     "[Διόρθωση] Responsive channel progress summary",
     "[Διόρθωση] Simplify app header for responsive",
     "[Διόρθωση] Responsive hardening across app",
     "[Διόρθωση] Mobile layout — sidebar drawer <1024px, chart measure + min-w, responsive grids",
-    "[Διόρθωση] Members read — avoid circular isBrandMember for collection group",
-    "[Διόρθωση] Organic composite index, tighten members read, guard empty uid"
+    "[Διόρθωση] Members read — avoid circular isBrandMember for collection group"
   ]
 }

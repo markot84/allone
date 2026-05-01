@@ -13,7 +13,6 @@ import {
   LineChart,
   Download,
   FileSpreadsheet,
-  Package,
 } from 'lucide-react';
 import {
   PieChart,
@@ -37,7 +36,7 @@ import { BehavioralTab } from './BehavioralTab';
 import { PredictiveTab } from './PredictiveTab';
 import { exportSegmentActionPack, exportAllSegmentActionPacks, exportSegmentCustomerList, exportAllSegmentCustomerLists } from '../../services/segmentActionPack';
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
-import type { RFMSegment } from '../../types';
+import type { CategoryAffinity, RFMSegment } from '../../types';
 
 import { formatNumber, formatPercent, formatCurrencyCompact } from '../../utils/format';
 const fmtPct = (n: number) => formatNumber(n, 2);
@@ -271,7 +270,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
         title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Data Analysis</h2>}
         description={
           <p className="text-sm text-[#4A4A4A] sm:text-base leading-snug">
-            RFM, behavioral, predictive — από e-shop orders ή ERP/other data
+            RFM, behavioral και predictive· δεδομένα από e-shop ή εξωτερική εισαγωγή.
             {rfmDataSource === 'ecommerce' && (
               <span className="block text-xs text-[#22C55E] mt-1">Πρόοδος: e-commerce (quintiles σε πελάτες)</span>
             )}
@@ -369,7 +368,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
           icon={<Brain size={14} />}
           label="Behavioral"
           tooltipTitle="Behavioral Analysis"
-          tooltipBody="Συμπεριφορική ανάλυση πελατών — πέρα από το «πόσο» αγοράζουν, βλέπεις και το «πώς»."
+          tooltipBody="Προτιμήσεις, κανάλια και ρυθμός αγορών ανά segment."
           tooltipBullets={[
             'Lifecycle stage (Νέος, Ενεργός, Πιστός, Φθίνων, Αδρανής)',
             'Engagement & upsell potential',
@@ -396,7 +395,6 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
       {activeTab === 'predictive' && <PredictiveTab segments={rfmSegments} />}
 
       {activeTab === 'rfm' && <>
-      {/* Σύνοψη KPI — συμπαγής */}
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
         <Card padding="sm" hover>
           <div className="flex items-center gap-2">
@@ -463,12 +461,10 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
         </Card>
       </div>
 
-      {/* Hero: κατανομή πελατών + τζίρου — πλήρες πλάτος */}
       <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2">
         <Card padding="lg" className="flex min-w-0 flex-col border border-[#E8EAED] shadow-[0_4px_24px_rgba(15,23,42,0.06)]">
           <CardHeader
             title="Κατανομή πελατών (RFM)"
-            subtitle="Ποσοστό επί της βάσης πελατών — συγκρίσιμο με το Dashboard."
             icon={<Users size={18} className="text-[var(--fgColor-muted,#57606a)] shrink-0" />}
           />
           <div className="min-h-[260px] w-full min-w-0 flex-1" style={{ height: 280 }}>
@@ -538,10 +534,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
         </Card>
 
         <Card padding="lg" className="flex min-w-0 flex-col border border-[#E8EAED] shadow-[0_4px_24px_rgba(15,23,42,0.06)]">
-          <CardHeader
-            title="Μερίδιο τζίρου ανά segment"
-            subtitle="Ποσοστό συνολικών εσόδων RFM — όχι πλήθος πελατών."
-          />
+          <CardHeader title="Μερίδιο τζίρου ανά segment" />
           <div className="min-h-[260px] w-full min-w-0 flex-1" style={{ height: 280 }}>
             <ResponsiveContainer width="100%" height={280} minHeight={260}>
               <PieChart margin={{ top: 12, right: 12, bottom: 12, left: 12 }}>
@@ -606,15 +599,6 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
         </Card>
       </div>
 
-      {rfmDataSource === 'ecommerce' && (
-        <SegmentAffinityConsumption
-          segments={rfmSegments}
-          selectedSegment={selectedSegment}
-          onSelectSegment={setSelectedSegment}
-        />
-      )}
-
-      {/* Κάρτες segments — πλήρες πλάτος */}
       <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         {rfmSegments.map((segment, index) => (
           <SegmentCard
@@ -640,6 +624,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
           >
             <SegmentDetail
               segment={selectedSegment}
+              hasImportedSegments={hasImportedSegments}
               onClose={() => setSelectedSegment(null)}
               onExportCustomers={(fmt) => handleExportCustomerList(selectedSegment, fmt)}
               onExportActionPack={(fmt) => handleExportSegment(selectedSegment, fmt)}
@@ -758,102 +743,6 @@ function DataCoverageBlock({
           <CoverageMetric label="Others / ERP" value={formatNumber(dataCoverage.otherCustomers)} />
           <CoverageMetric label="E-shop %" value={`${formatNumber(dataCoverage.eShopPenetration, 1)}%`} />
         </div>
-      </div>
-    </Card>
-  );
-}
-
-function SegmentAffinityConsumption({
-  segments,
-  selectedSegment,
-  onSelectSegment,
-}: {
-  segments: RFMSegment[];
-  selectedSegment: RFMSegment | null;
-  onSelectSegment: (s: RFMSegment | null) => void;
-}) {
-  const hasAffinity = segments.some((s) => (s.behavioral?.category_affinity?.length ?? 0) > 0);
-  if (!hasAffinity) return null;
-
-  const chartSegment =
-    selectedSegment ??
-    [...segments].sort((a, b) => (b.revenue_share ?? 0) - (a.revenue_share ?? 0))[0] ??
-    null;
-  if (!chartSegment) return null;
-
-  const raw = chartSegment.behavioral?.category_affinity ?? [];
-  const rows = raw.slice(0, 14).map((c, i) => ({
-    key: `${i}-${c.name}`,
-    label: c.name.length > 52 ? `${c.name.slice(0, 50)}…` : c.name,
-    fullLabel: c.name,
-    pct: c.revenue_share_pct ?? Math.round((c.affinity ?? 0) * 100 * 10) / 10,
-    revenue: c.revenue_eur ?? 0,
-  }));
-
-  const chartHeight = Math.min(480, 56 + rows.length * 34);
-
-  return (
-    <Card padding="lg" className="border border-[#E8EAED] shadow-[0_4px_24px_rgba(15,23,42,0.06)]">
-      <CardHeader
-        title="Κατανάλωση ανά γραμμή παραγγελίας"
-        subtitle={
-          <span>
-            Κορυφαίες γραμμές από το ιστορικό παραγγελιών e-shop (όνομα προϊόντος /{' '}
-            <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">SKU</strong> / configurable τύπος Magento όταν υπάρχει).
-            Δεν είναι αυτόματη αντιστοίχιση σε brand ή ERP κατηγορία — για πλήρη πίνακα κατηγοριών χρειάζεται σύνδεση με το product catalog.
-          </span>
-        }
-        icon={<Package size={18} className="text-[var(--fgColor-muted,#57606a)] shrink-0" />}
-        action={
-          <label className="flex flex-wrap items-center gap-2 text-xs text-[#4A4A4A]">
-            <span className="hidden sm:inline whitespace-nowrap">Segment:</span>
-            <select
-              className="min-w-0 max-w-[220px] rounded-lg border border-[#E5E5E5] bg-white px-2 py-1.5 text-sm font-medium text-[#1A1A1A]"
-              value={chartSegment.id}
-              onChange={(e) => {
-                const s = segments.find((x) => x.id === e.target.value);
-                onSelectSegment(s ?? null);
-              }}
-              aria-label="Επιλογή segment για ανάλυση κατανάλωσης"
-            >
-              {segments.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        }
-      />
-      <div className="mt-1 min-h-[220px] w-full min-w-0" style={{ height: chartHeight }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart layout="vertical" data={rows} margin={{ top: 4, right: 12, left: 4, bottom: 4 }}>
-            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#F0F0F0" />
-            <XAxis
-              type="number"
-              domain={[0, 'dataMax']}
-              tick={{ fontSize: 11 }}
-              tickFormatter={(v) => `${formatNumber(Number(v), 0)}%`}
-            />
-            <YAxis type="category" dataKey="label" width={148} tick={{ fontSize: 10 }} interval={0} />
-            <Tooltip
-              contentStyle={{
-                backgroundColor: '#fff',
-                border: '1px solid #E5E5E5',
-                borderRadius: '8px',
-                fontSize: '12px',
-              }}
-              formatter={(value: unknown, _name: unknown, item: { payload?: { revenue?: number; fullLabel?: string } }) => {
-                const v = Number(value) || 0;
-                const rev = item?.payload?.revenue != null && item.payload.revenue > 0
-                  ? `${formatCurrencyCompact(item.payload.revenue)} στο segment`
-                  : '';
-                return [`${formatNumber(v, 1)}% του τζίρου segment${rev ? ` · ${rev}` : ''}`, item?.payload?.fullLabel ?? 'Γραμμή'];
-              }}
-            />
-            <Bar dataKey="pct" fill="var(--nts-accent)" radius={[0, 6, 6, 0]} barSize={20} />
-          </BarChart>
-        </ResponsiveContainer>
       </div>
     </Card>
   );
@@ -1013,19 +902,83 @@ function SegmentCard({ segment, index, isSelected, onSelect, onExport }: Segment
 
 interface SegmentDetailProps {
   segment: RFMSegment;
+  hasImportedSegments: boolean;
   onClose: () => void;
   onExportCustomers?: (fmt: 'xlsx' | 'csv') => void;
   onExportActionPack?: (fmt: 'xlsx' | 'csv') => void;
 }
 
-const emptyCategoryData = { categories: [], brands: [], price_sensitivity: 'medium' as const, preferred_channels: [] };
+function truncateAffinityLabel(name: string, max = 40): string {
+  const t = name.trim();
+  return t.length > max ? `${t.slice(0, max - 1)}…` : t;
+}
 
-function SegmentDetail({ segment, onClose, onExportCustomers, onExportActionPack }: SegmentDetailProps) {
-  const { hasImported: hasImportedSegments } = useSegments();
-  // Use empty data when no imported segments exist (no mock data)
-  const categoryData = hasImportedSegments 
-    ? (segmentCategoryMatrix[segment.id] ?? emptyCategoryData)
-    : emptyCategoryData;
+function SegmentDetail({
+  segment,
+  hasImportedSegments,
+  onClose,
+  onExportCustomers,
+  onExportActionPack,
+}: SegmentDetailProps) {
+  type CatalogDim = 'brand' | 'category' | 'subcategory' | 'sku';
+  const [catalogDim, setCatalogDim] = useState<CatalogDim>('category');
+
+  const behavioral = segment.behavioral;
+  const hasCatalogRollups = behavioral?.catalog_match != null;
+  const heuristicCats = behavioral?.category_affinity ?? [];
+  const catalogCats = behavioral?.category_affinity_catalog ?? [];
+  const fromComputedOrders = heuristicCats.length > 0 || hasCatalogRollups;
+
+  const mockRow = hasImportedSegments ? segmentCategoryMatrix[segment.id] : undefined;
+  const mockCategories = mockRow?.categories?.length ? mockRow.categories : [];
+
+  const affinityForChart = (): CategoryAffinity[] => {
+    if (!fromComputedOrders) return mockCategories;
+    if (!hasCatalogRollups) return heuristicCats;
+    switch (catalogDim) {
+      case 'brand':
+        return behavioral?.brand_affinity ?? [];
+      case 'category':
+        return catalogCats.length > 0 ? catalogCats : heuristicCats;
+      case 'subcategory':
+        return behavioral?.subcategory_affinity ?? [];
+      case 'sku':
+        return behavioral?.sku_affinity ?? [];
+      default:
+        return [];
+    }
+  };
+
+  const chartCategories = affinityForChart();
+  const chartRows = chartCategories.slice(0, 12).map((c) => {
+    const pct =
+      c.revenue_share_pct != null && c.revenue_share_pct > 0
+        ? c.revenue_share_pct
+        : Math.round((c.affinity ?? 0) * 10000) / 100;
+    return {
+      label: truncateAffinityLabel(c.name),
+      fullLabel: c.name,
+      pct,
+      revenue: c.revenue_eur ?? 0,
+    };
+  });
+
+  const chartHeight = Math.min(420, Math.max(220, 48 + chartRows.length * 36));
+  const cm = behavioral?.catalog_match;
+
+  const mockBrands = !fromComputedOrders && mockRow?.brands?.length ? mockRow.brands : [];
+  const brandAff = behavioral?.brand_affinity ?? [];
+  const subAff = behavioral?.subcategory_affinity ?? [];
+  const priceSens = behavioral?.price_sensitivity ?? mockRow?.price_sensitivity ?? 'medium';
+  const channelPills =
+    behavioral?.preferred_channels?.length ? behavioral.preferred_channels : mockRow?.preferred_channels ?? [];
+
+  const dimLabel: Record<CatalogDim, string> = {
+    brand: 'Brands',
+    category: 'Κατηγορίες',
+    subcategory: 'Υποκατηγορίες',
+    sku: 'SKU',
+  };
 
   return (
     <Card padding="lg">
@@ -1046,82 +999,132 @@ function SegmentDetail({ segment, onClose, onExportCustomers, onExportActionPack
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Category Affinity */}
         <div>
-          <h4 className="font-medium text-[#1A1A1A] mb-4">Category Preferences</h4>
-          {categoryData?.categories && categoryData.categories.length > 0 ? (
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={categoryData.categories}
-                  layout="vertical"
-                  margin={{ left: 100 }}
+          <h4 className="font-medium text-[#1A1A1A] mb-2">
+            {hasCatalogRollups ? `Mix ανά catalog · ${dimLabel[catalogDim]}` : 'Κατηγορίες'}
+          </h4>
+          {cm && (
+            <p className="text-[11px] text-[#6B7280] mb-2">
+              Catalog match: {formatNumber(cm.revenue_matched_pct, 1)}% τζίρου γραμμών ·{' '}
+              {formatNumber(cm.lines_matched_pct, 1)}% γραμμών ({cm.lines_matched}/{cm.lines_total})
+            </p>
+          )}
+          {hasCatalogRollups && (
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {(['brand', 'category', 'subcategory', 'sku'] as const).map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => setCatalogDim(d)}
+                  className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+                    catalogDim === d
+                      ? 'bg-[var(--nts-accent)] text-white'
+                      : 'bg-[#F3F4F6] text-[#374151] hover:bg-[#E5E7EB]'
+                  }`}
                 >
-                <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" />
-                <XAxis
-                  type="number"
-                  domain={[0, 1]}
-                  tickFormatter={(v) => formatPercent((v as number) * 100, 0)}
-                  tick={{ fill: '#4A4A4A', fontSize: 12 }}
-                />
-                <YAxis
-                  type="category"
-                  dataKey="name"
-                  tick={{ fill: '#4A4A4A', fontSize: 12 }}
-                  width={95}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#fff',
-                    border: '1px solid #E5E5E5',
-                    borderRadius: '8px'
-                  }}
-                  formatter={(value) => [formatPercent(((value as number) || 0) * 100, 0), 'Affinity']}
-                />
-                  <Bar dataKey="affinity" fill={segment.color} radius={[0, 4, 4, 0]} />
+                  {dimLabel[d]}
+                </button>
+              ))}
+            </div>
+          )}
+          {chartRows.length > 0 ? (
+            <div className="w-full min-h-[220px]" style={{ height: chartHeight }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartRows} layout="vertical" margin={{ left: 6, right: 14, top: 8, bottom: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#F0F0F0" />
+                  <XAxis
+                    type="number"
+                    domain={[0, 'dataMax']}
+                    tick={{ fontSize: 11, fill: '#4A4A4A' }}
+                    tickFormatter={(v) => `${formatNumber(Number(v), Number(v) >= 10 ? 0 : 1)}%`}
+                  />
+                  <YAxis type="category" dataKey="label" width={120} tick={{ fontSize: 11 }} interval={0} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#fff',
+                      border: '1px solid #E5E5E5',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                    }}
+                    formatter={(value: unknown, _n: unknown, item: { payload?: { fullLabel?: string; revenue?: number } }) => {
+                      const v = Number(value) || 0;
+                      const r = item?.payload?.revenue;
+                      const extra = r != null && r > 0 ? ` · ${formatCurrencyCompact(r)}` : '';
+                      return [`${formatNumber(v, 1)}%${extra}`, item?.payload?.fullLabel ?? 'Γραμμή'];
+                    }}
+                  />
+                  <Bar dataKey="pct" fill={segment.color} radius={[0, 4, 4, 0]} barSize={22} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           ) : (
             <div className="h-64 flex items-center justify-center bg-[#F5F5F5] rounded-lg">
-              <p className="text-sm text-[#4A4A4A]">Δεν υπάρχουν δεδομένα category preferences</p>
+              <p className="text-sm text-[#4A4A4A]">Δεν υπάρχουν δεδομένα για αυτή τη διάσταση.</p>
             </div>
           )}
         </div>
 
-        {/* Segment Details */}
         <div className="space-y-4">
           <div className="p-4 bg-[#F5F5F5] rounded-lg">
-            <h5 className="text-sm font-medium text-[#1A1A1A] mb-2">Preferred Brands</h5>
-            <div className="flex flex-wrap gap-2">
-              {categoryData?.brands && categoryData.brands.length > 0 ? (
-                categoryData.brands.map((brand) => (
+            <h5 className="text-sm font-medium text-[#1A1A1A] mb-2">Brands</h5>
+            {brandAff.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {brandAff.slice(0, 12).map((row) => (
+                  <span key={row.name} title={row.revenue_eur != null ? `${formatCurrencyCompact(row.revenue_eur)}` : undefined}>
+                    <Badge variant="default">{row.name}</Badge>
+                  </span>
+                ))}
+              </div>
+            ) : fromComputedOrders && hasCatalogRollups ? (
+              <p className="text-xs text-[#6B7280] leading-relaxed">
+                Δεν εντοπίστηκε εμπορική μάρκα στο catalog για τις γραμμές του segment (ή όλα ως «Λοιπά»).
+              </p>
+            ) : mockBrands.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {mockBrands.map((brand) => (
                   <Badge key={brand} variant="default">{brand}</Badge>
-                ))
-              ) : (
-                <p className="text-xs text-[#4A4A4A]">Δεν υπάρχουν δεδομένα</p>
-              )}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-[#4A4A4A]">Δεν υπάρχουν δεδομένα</p>
+            )}
           </div>
 
           <div className="p-4 bg-[#F5F5F5] rounded-lg">
-            <h5 className="text-sm font-medium text-[#1A1A1A] mb-2">Price Sensitivity</h5>
+            <h5 className="text-sm font-medium text-[#1A1A1A] mb-2">Υποκατηγορίες</h5>
+            {subAff.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {subAff.slice(0, 12).map((row) => (
+                  <Badge key={row.name} variant="info">{row.name}</Badge>
+                ))}
+              </div>
+            ) : fromComputedOrders && hasCatalogRollups ? (
+              <p className="text-xs text-[#6B7280] leading-relaxed">
+                Δεν υπάρχουν υποκατηγορίες στο catalog (π.χ. δεύτερο επίπεδο Woo ή ERP subcategory).
+              </p>
+            ) : (
+              <p className="text-xs text-[#4A4A4A]">Δεν υπάρχουν δεδομένα</p>
+            )}
+          </div>
+
+          <div className="p-4 bg-[#F5F5F5] rounded-lg">
+            <h5 className="text-sm font-medium text-[#1A1A1A] mb-2">Ευαισθησία τιμής</h5>
             <Badge
               variant={
-                categoryData?.price_sensitivity === 'low' ? 'success' :
-                categoryData?.price_sensitivity === 'medium' ? 'warning' : 'danger'
+                priceSens === 'low' ? 'success' :
+                priceSens === 'medium' ? 'warning' : 'danger'
               }
               size="md"
             >
-              {categoryData?.price_sensitivity?.toUpperCase()}
+              {priceSens.toUpperCase()}
             </Badge>
           </div>
 
           <div className="p-4 bg-[#F5F5F5] rounded-lg">
             <h5 className="text-sm font-medium text-[#1A1A1A] mb-2">Προτιμώμενα κανάλια</h5>
             <div className="flex flex-wrap gap-2">
-              {categoryData?.preferred_channels && categoryData.preferred_channels.length > 0 ? (
-                categoryData.preferred_channels.map((channel) => (
+              {channelPills.length > 0 ? (
+                channelPills.map((channel) => (
                   <Badge key={channel} variant="info">{channel}</Badge>
                 ))
               ) : (

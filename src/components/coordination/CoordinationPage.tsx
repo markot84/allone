@@ -45,7 +45,7 @@ const STATUS_META: Record<string, { label: string; color: string }> = {
 
 const DEPT_LABELS = DEPARTMENT_LABELS;
 
-/** Μέγιστο πλήθος εμπορικών πολιτικών στην κύρια λίστα — οι υπόλοιπες στο αναδιπλούμενο «Ιστορικό». */
+/** Πρόσφατες πολιτικές στην κύρια λίστα· παλαιότερες στο «Ιστορικό». */
 const RECENT_DECISIONS_LIMIT = 5;
 
 // ── Main Page (Briefing Board) ───────────────────────────────────────────────

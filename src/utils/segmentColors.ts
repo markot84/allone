@@ -1,19 +1,20 @@
 import type { RFMSegment } from '../types';
 
+/** Distinct categorical hues — avoid clustering greens/teals for adjacent segments. */
 export const SEGMENT_COLORS: Record<string, string> = {
-  champions: '#16A34A',
-  loyal: '#2563EB',
-  potential: '#7C3AED',
-  loyal_customers: '#2563EB',
-  promising: '#7C3AED',
-  at_risk: '#EA580C',
-  hibernating: '#14B8A6',
-  lost: '#DC2626',
-  recent_customers: '#10B981',
-  cant_lose_them: '#F59E0B',
-  "can't_lose_them": '#F59E0B',
+  champions: '#F59E0B',
+  loyal: '#1D4ED8',
+  potential: '#6366F1',
+  loyal_customers: '#1D4ED8',
+  promising: '#6366F1',
+  at_risk: '#EF4444',
+  hibernating: '#64748B',
+  lost: '#991B1B',
+  recent_customers: '#06B6D4',
+  cant_lose_them: '#C026D3',
+  "can't_lose_them": '#C026D3',
   customers_needing_attention: '#EC4899',
-  new_customers: '#0D9488',
+  new_customers: '#84CC16',
 };
 
 export function getSegmentColor(segment: RFMSegment | null | undefined): string {

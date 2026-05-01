@@ -1169,19 +1169,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           >
             <CardHeader
               title="Customer Segments"
-              subtitle={
-                <>
-                  <p>
-                    Ίδια πηγή με την Ανάλυση δεδομένων· εδώ το donut είναι κατά{' '}
-                    <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">πλήθος πελατών</strong>.
-                  </p>
-                  <p>
-                    Το μερίδιο{' '}
-                    <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">τζίρου</strong> ανά segment
-                    βρίσκεται στην Ανάλυση δεδομένων (κάρτα «Revenue Distribution»).
-                  </p>
-                </>
-              }
+              subtitle="Μερίδιο πελατών ανά RFM segment."
               icon={<Users size={18} className="text-[var(--nts-medium-gray)]" />}
             />
             <div 

@@ -1498,18 +1498,19 @@ function aggregateCustomersToSegments(objects: Record<string, string>[]): { segm
   const totalMonetary = [...segmentMap.values()].reduce((s, v) => s + v.monetary, 0);
 
   const SEGMENT_COLORS: Record<string, string> = {
-    champions: '#16A34A',
-    loyal_customers: '#2563EB',
-    promising: '#7C3AED',
-    at_risk: '#EA580C',
-    hibernating: '#14B8A6',
-    lost: '#DC2626',
-    new_customers: '#0891B2',
-    recent_customers: '#10B981',
-    potential: '#9333EA',
-    potential_loyalists: '#A855F7',
-    cant_lose_them: '#F59E0B',
-    "can't_lose_them": '#F59E0B',
+    champions: '#F59E0B',
+    loyal: '#1D4ED8',
+    loyal_customers: '#1D4ED8',
+    promising: '#6366F1',
+    potential: '#6366F1',
+    potential_loyalists: '#6366F1',
+    at_risk: '#EF4444',
+    hibernating: '#64748B',
+    lost: '#991B1B',
+    new_customers: '#84CC16',
+    recent_customers: '#06B6D4',
+    cant_lose_them: '#C026D3',
+    "can't_lose_them": '#C026D3',
     customers_needing_attention: '#EC4899',
   };
 

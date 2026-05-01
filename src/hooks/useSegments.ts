@@ -6,7 +6,8 @@ import { getSegmentColor } from '../utils/segmentColors';
 import { useBrand } from './useBrand';
 import { useEcommerceSummary } from './useEcommerceSummary';
 import { fetchAllEcommerceOrders } from '../services/ecommerceRawOrders';
-import { computeRfmSegmentsFromEcommerceOrders, computeSegmentMigrationFromEcommerceOrders } from '../services/rfmFromOrders';
+import { fetchCatalogAlignmentData } from '../services/catalogAlignment';
+import { computeRfmSegmentsFromEcommerceOrders, computeSegmentMigrationFromEcommerceOrders, type RfmCatalogContext } from '../services/rfmFromOrders';
 import type { RFMSegment } from '../types';
 
 const STORAGE_KEY = (brandId: string) => `pp-rfm-data-source-${brandId}`;
@@ -138,7 +139,24 @@ export function useSegments() {
     refetchOnWindowFocus: false,
   });
 
-  const orderRfm = useMemo(() => computeRfmSegmentsFromEcommerceOrders(rawOrders), [rawOrders]);
+  const { data: catalogAlignment, isPending: catalogPending } = useQuery({
+    queryKey: ['catalogAlignment', brandId, platformsKey],
+    queryFn: () => (brandId ? fetchCatalogAlignmentData(brandId, ecomm.connectedPlatforms) : Promise.resolve(null)),
+    enabled: ordersQueryEnabled,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+
+  const catalogContext: RfmCatalogContext | null = useMemo(() => {
+    if (!catalogAlignment) return null;
+    return { indexes: catalogAlignment.indexes, erpBySku: catalogAlignment.erpBySku };
+  }, [catalogAlignment]);
+
+  const orderRfm = useMemo(
+    () => computeRfmSegmentsFromEcommerceOrders(rawOrders, catalogContext),
+    [rawOrders, catalogContext]
+  );
   const orderSegmentMigration = useMemo(() => computeSegmentMigrationFromEcommerceOrders(rawOrders, 30), [rawOrders]);
 
   const canComputeFromOrders = orderRfm.canCompute;
@@ -219,7 +237,9 @@ export function useSegments() {
   }, [sourcePref, resolvedSource, orderRfm.totalCustomers, externalTotalCustomers, externalSegments]);
 
   const isLoading =
-    fsPending || (sourcePref === 'external' && segmentCustomersPending) || (ordersQueryEnabled && ordersPending);
+    fsPending ||
+    (sourcePref === 'external' && segmentCustomersPending) ||
+    (ordersQueryEnabled && (ordersPending || catalogPending));
 
   const hasImported =
     resolvedSource === 'ecommerce' ? orderRfm.totalCustomers > 0 : importSegmentsAvailable;

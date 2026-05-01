@@ -1083,7 +1083,7 @@ export function GA4Analytics() {
       <Card>
         <CardHeader
           title="Κορυφαίες σελίδες"
-          subtitle="Από το τελευταίο GA4 sync (top paths ανά προβολές) — όχι φιλτραρισμένο από το ημερολόγιο"
+          subtitle="Τελευταίο GA4 sync· ανεξάρτητο από το ημερολόγιο της σελίδας."
         />
         <div className="p-4 pt-0">
           {/* Search */}

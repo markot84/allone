@@ -79,7 +79,7 @@ export function formatTenantPackForPrompt(pack: AssistantTenantPack): string {
   );
 
   lines.push(
-    `RFM / Segments — πηγή δεδομένων: ${pack.segments.dataSource}, σύνολο πελατών στη βάση RFM=${pack.segments.totalCustomers}`
+    `RFM / Segments· πηγή: ${pack.segments.dataSource}, σύνολο πελατών στη βάση RFM=${pack.segments.totalCustomers}`
   );
   if (pack.segments.ordersAttributed != null || pack.segments.guestOrdersSkipped != null) {
     lines.push(
@@ -88,7 +88,7 @@ export function formatTenantPackForPrompt(pack: AssistantTenantPack): string {
   }
 
   if (pack.segments.rows.length > 0) {
-    lines.push('Segments (κορυφαία με βάση πλήθος πελατών):');
+    lines.push('Segments (ταξινόμηση κατά μέγεθος):');
     for (const r of pack.segments.rows) {
       const pct = r.percentage != null ? `${r.percentage.toFixed(2)}% πελ.` : '—';
       const rev = r.revenue_share != null ? `${r.revenue_share.toFixed(2)}% τζίρου` : '—';

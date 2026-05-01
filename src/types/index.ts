@@ -238,7 +238,20 @@ export interface BehavioralProfile {
   peak_days: string[];
   payment_method: string;
   device_preference: 'mobile' | 'desktop' | 'mixed';
+  /** Legacy heuristic buckets (γραμμή/SKU) — χρησιμοποιείται όταν λείπει catalog. */
   category_affinity: CategoryAffinity[];
+  /** Catalog-backed κατηγορία (platform + ERP). */
+  category_affinity_catalog?: CategoryAffinity[];
+  brand_affinity?: CategoryAffinity[];
+  subcategory_affinity?: CategoryAffinity[];
+  sku_affinity?: CategoryAffinity[];
+  /** Ποσοστό τζίρου γραμμών που ταιριάζουν σε catalog (όχι line_fallback). */
+  catalog_match?: {
+    revenue_matched_pct: number;
+    lines_matched_pct: number;
+    lines_total: number;
+    lines_matched: number;
+  };
   upsell_score: number;
   cross_sell_score: number;
   price_sensitivity: 'low' | 'medium' | 'high';
