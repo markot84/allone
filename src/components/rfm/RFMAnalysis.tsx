@@ -27,7 +27,7 @@ import {
   CartesianGrid
 } from 'recharts';
 import { Card, CardHeader, Badge, Button, Spinner, Tooltip as InfoTooltip, useToast, PageHeader } from '../common';
-import { useSegments, type SegmentDataCoverage } from '../../hooks/useSegments';
+import { useSegments, type SegmentDataCoverage, type SegmentsDataSource } from '../../hooks/useSegments';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import { useBrand } from '../../hooks/useBrand';
 import { FirestoreService } from '../../services/firestore';
@@ -101,6 +101,164 @@ function calculateAvgRFMScore(rfmScore: string | undefined | null, segmentName?:
   
   const sum = numbers.reduce((a, b) => a + b, 0);
   return sum / numbers.length;
+}
+
+function sortAffinitiesByWeight(rows: CategoryAffinity[]): CategoryAffinity[] {
+  return [...rows].sort((a, b) => {
+    const ra = a.revenue_share_pct ?? (a.affinity ?? 0) * 100;
+    const rb = b.revenue_share_pct ?? (b.affinity ?? 0) * 100;
+    if (rb !== ra) return rb - ra;
+    return (b.revenue_eur ?? 0) - (a.revenue_eur ?? 0);
+  });
+}
+
+function topAffinityCell(rows: CategoryAffinity[] | undefined): { short: string; full: string } {
+  if (!rows?.length) return { short: '—', full: '' };
+  const top = sortAffinitiesByWeight(rows)[0];
+  const full = top?.name?.trim() || '';
+  if (!full) return { short: '—', full: '' };
+  const max = 34;
+  const short = full.length > max ? `${full.slice(0, max - 1)}…` : full;
+  return { short, full };
+}
+
+/** Μία γραμμή πίνακα: κύρια μάρκα / κατηγορία / υποκατηγορία από catalog ή heuristic· demo matrix μόνο όταν `suppressConsumptionDemo` είναι false (όχι e-shop RFM). */
+function segmentConsumptionSummary(
+  segment: RFMSegment,
+  hasImportedSegments: boolean,
+  suppressConsumptionDemo: boolean
+): {
+  brand: string;
+  category: string;
+  sub: string;
+  brandTitle: string;
+  categoryTitle: string;
+  subTitle: string;
+} {
+  const b = segment.behavioral;
+  const brands = b?.brand_affinity ?? [];
+  const subs = b?.subcategory_affinity ?? [];
+  const cats =
+    b?.category_affinity_catalog?.length ? b.category_affinity_catalog : (b?.category_affinity ?? []);
+
+  let bt = topAffinityCell(brands);
+  let ct = topAffinityCell(cats);
+  let st = topAffinityCell(subs);
+
+  if (!suppressConsumptionDemo && bt.short === '—' && ct.short === '—' && st.short === '—' && hasImportedSegments) {
+    const mockRow = segmentCategoryMatrix[segment.id];
+    if (mockRow) {
+      const mb = mockRow.brands?.[0]?.trim();
+      const mc = mockRow.categories?.[0]?.name?.trim();
+      if (mb) {
+        bt = {
+          full: mb,
+          short: mb.length > 34 ? `${mb.slice(0, 33)}…` : mb,
+        };
+      }
+      if (mc) {
+        ct = {
+          full: mc,
+          short: mc.length > 34 ? `${mc.slice(0, 33)}…` : mc,
+        };
+      }
+    }
+  }
+
+  return {
+    brand: bt.short,
+    category: ct.short,
+    sub: st.short,
+    brandTitle: bt.full || bt.short,
+    categoryTitle: ct.full || ct.short,
+    subTitle: st.full || st.short,
+  };
+}
+
+interface SegmentConsumptionTableProps {
+  segments: RFMSegment[];
+  selectedId: string | null;
+  onSelect: (segment: RFMSegment) => void;
+  hasImportedSegments: boolean;
+  isCatalogEnriching: boolean;
+  ecommerceMode: boolean;
+  /** Όταν true (RFM από e-shop orders), ποτέ demo matrix — μόνο πραγματικά affinities. */
+  suppressConsumptionDemo: boolean;
+}
+
+function SegmentConsumptionSummaryTable({
+  segments,
+  selectedId,
+  onSelect,
+  hasImportedSegments,
+  isCatalogEnriching,
+  ecommerceMode,
+  suppressConsumptionDemo,
+}: SegmentConsumptionTableProps) {
+  if (segments.length === 0) return null;
+
+  return (
+    <Card padding="lg" className="border border-[#E8EAED] shadow-[0_4px_24px_rgba(15,23,42,0.06)]">
+      <CardHeader
+        title="Segments & κατανάλωση"
+        subtitle="Κύριες μάρκες / κατηγορίες / υποκατηγορίες ανά segment (από catalog όταν υπάρχει match, αλλιώς από γραμμές παραγγελιών). Πάτησε γραμμή για πλήρες detail και charts."
+      />
+      {ecommerceMode && isCatalogEnriching && (
+        <p className="-mt-2 mb-3 text-xs text-[#92400E] bg-[#FFFBEB] border border-[#FDE68A] rounded-lg px-3 py-2">
+          Φόρτωση καταλόγου προϊόντων — τα πεδία brand / υποκατηγορία ενημερώνονται όταν ολοκληρωθεί το catalog alignment.
+        </p>
+      )}
+      <div className="overflow-x-auto rounded-lg border border-[#E5E7EB]">
+        <table className="w-full min-w-[760px] text-left text-[13px]">
+          <thead>
+            <tr className="border-b border-[#E5E7EB] bg-[#F9FAFB] text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
+              <th className="px-3 py-2.5">Segment</th>
+              <th className="px-3 py-2.5 text-right whitespace-nowrap">Πελάτες</th>
+              <th className="px-3 py-2.5 text-right whitespace-nowrap">% τζίρου</th>
+              <th className="px-3 py-2.5">Κύρια μάρκα</th>
+              <th className="px-3 py-2.5">Κύρια κατηγορία</th>
+              <th className="px-3 py-2.5">Υποκατηγορία</th>
+            </tr>
+          </thead>
+          <tbody>
+            {segments.map((segment) => {
+              const row = segmentConsumptionSummary(segment, hasImportedSegments, suppressConsumptionDemo);
+              const sel = selectedId === segment.id;
+              return (
+                <tr
+                  key={segment.id}
+                  className={`cursor-pointer border-b border-[#F3F4F6] transition-colors last:border-b-0 ${
+                    sel ? 'bg-[#EFF6FF]' : 'hover:bg-[#FAFAFA]'
+                  }`}
+                  onClick={() => onSelect(segment)}
+                >
+                  <td className="px-3 py-2.5">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: segment.color }} />
+                      <span className="min-w-0 font-medium text-[#111827] truncate">{segment.name}</span>
+                    </span>
+                  </td>
+                  <td className="px-3 py-2.5 text-right font-mono tabular-nums text-[#374151]">{formatNumber(segment.count ?? 0)}</td>
+                  <td className="px-3 py-2.5 text-right font-mono tabular-nums font-semibold text-[#374151]">
+                    {fmtPct(segment.revenue_share ?? 0)}%
+                  </td>
+                  <td className="max-w-[11rem] px-3 py-2.5 text-[#374151] truncate" title={row.brandTitle}>
+                    {row.brand}
+                  </td>
+                  <td className="max-w-[11rem] px-3 py-2.5 text-[#374151] truncate" title={row.categoryTitle}>
+                    {row.category}
+                  </td>
+                  <td className="max-w-[11rem] px-3 py-2.5 text-[#374151] truncate" title={row.subTitle}>
+                    {row.sub}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
 }
 
 interface RFMAnalysisProps {
@@ -605,6 +763,18 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
         </Card>
       </div>
 
+      <SegmentConsumptionSummaryTable
+        segments={rfmSegments}
+        selectedId={selectedSegment?.id ?? null}
+        onSelect={(segment) =>
+          setSelectedSegment(selectedSegment?.id === segment.id ? null : segment)
+        }
+        hasImportedSegments={hasImportedSegments}
+        isCatalogEnriching={isCatalogEnriching}
+        ecommerceMode={rfmDataSource === 'ecommerce'}
+        suppressConsumptionDemo={rfmDataSource === 'ecommerce'}
+      />
+
       <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         {rfmSegments.map((segment, index) => (
           <SegmentCard
@@ -632,6 +802,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
               segment={selectedSegment}
               hasImportedSegments={hasImportedSegments}
               catalogEnriching={isCatalogEnriching}
+              segmentsDataSource={rfmDataSource}
               onClose={() => setSelectedSegment(null)}
               onExportCustomers={(fmt) => handleExportCustomerList(selectedSegment, fmt)}
               onExportActionPack={(fmt) => handleExportSegment(selectedSegment, fmt)}
@@ -912,6 +1083,8 @@ interface SegmentDetailProps {
   hasImportedSegments: boolean;
   /** Κατάλογος ακόμα φορτώνει — tabs heuristic μέχρι να έρθουν τα *_products. */
   catalogEnriching?: boolean;
+  /** Από πού προέρχονται τα segments — για e-shop δεν χρησιμοποιούμε demo matrix κατανάλωσης. */
+  segmentsDataSource: SegmentsDataSource;
   onClose: () => void;
   onExportCustomers?: (fmt: 'xlsx' | 'csv') => void;
   onExportActionPack?: (fmt: 'xlsx' | 'csv') => void;
@@ -926,6 +1099,7 @@ function SegmentDetail({
   segment,
   hasImportedSegments,
   catalogEnriching,
+  segmentsDataSource,
   onClose,
   onExportCustomers,
   onExportActionPack,
@@ -933,17 +1107,19 @@ function SegmentDetail({
   type CatalogDim = 'brand' | 'category' | 'subcategory' | 'sku';
   const [catalogDim, setCatalogDim] = useState<CatalogDim>('category');
 
+  const allowConsumptionDemo = segmentsDataSource !== 'ecommerce';
+
   const behavioral = segment.behavioral;
   const hasCatalogRollups = behavioral?.catalog_match != null;
   const heuristicCats = behavioral?.category_affinity ?? [];
   const catalogCats = behavioral?.category_affinity_catalog ?? [];
   const fromComputedOrders = heuristicCats.length > 0 || hasCatalogRollups;
 
-  const mockRow = hasImportedSegments ? segmentCategoryMatrix[segment.id] : undefined;
+  const mockRow = allowConsumptionDemo && hasImportedSegments ? segmentCategoryMatrix[segment.id] : undefined;
   const mockCategories = mockRow?.categories?.length ? mockRow.categories : [];
 
   const affinityForChart = (): CategoryAffinity[] => {
-    if (!fromComputedOrders) return mockCategories;
+    if (!fromComputedOrders) return allowConsumptionDemo ? mockCategories : [];
     if (!hasCatalogRollups) return heuristicCats;
     switch (catalogDim) {
       case 'brand':
@@ -976,19 +1152,30 @@ function SegmentDetail({
   const chartHeight = Math.min(420, Math.max(220, 48 + chartRows.length * 36));
   const cm = behavioral?.catalog_match;
 
-  const mockBrands = !fromComputedOrders && mockRow?.brands?.length ? mockRow.brands : [];
+  const mockBrands = allowConsumptionDemo && !fromComputedOrders && mockRow?.brands?.length ? mockRow.brands : [];
   const brandAff = behavioral?.brand_affinity ?? [];
   const subAff = behavioral?.subcategory_affinity ?? [];
-  const priceSens = behavioral?.price_sensitivity ?? mockRow?.price_sensitivity ?? 'medium';
+  const priceSens =
+    behavioral?.price_sensitivity ??
+    (allowConsumptionDemo ? mockRow?.price_sensitivity : undefined) ??
+    'medium';
   const channelPills =
-    behavioral?.preferred_channels?.length ? behavioral.preferred_channels : mockRow?.preferred_channels ?? [];
+    behavioral?.preferred_channels?.length
+      ? behavioral.preferred_channels
+      : allowConsumptionDemo && mockRow?.preferred_channels?.length
+        ? mockRow.preferred_channels
+        : [];
 
   const dimLabel: Record<CatalogDim, string> = {
-    brand: 'Brands',
+    brand: 'Μάρκες',
     category: 'Κατηγορίες',
     subcategory: 'Υποκατηγορίες',
     sku: 'SKU',
   };
+
+  const leftChartTitle = hasCatalogRollups
+    ? `Mix κατανάλωσης · ${dimLabel[catalogDim]}`
+    : 'Προτιμώμενα categories / mix κατανάλωσης';
 
   return (
     <Card padding="lg">
@@ -1010,9 +1197,7 @@ function SegmentDetail({
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div>
-          <h4 className="font-medium text-[#1A1A1A] mb-2">
-            {hasCatalogRollups ? `Mix ανά catalog · ${dimLabel[catalogDim]}` : 'Κατηγορίες'}
-          </h4>
+          <h4 className="font-medium text-[#1A1A1A] mb-2">{leftChartTitle}</h4>
           {catalogEnriching && !cm && (
             <p className="text-[11px] text-[#92400E] bg-[#FFFBEB] border border-[#FDE68A] rounded px-2 py-1 mb-2">
               Φόρτωση catalog… προσωρινά εμφανίζονται heuristic κατηγορίες· τα Brand/SKU tabs συμπληρώνονται μετά.
@@ -1073,15 +1258,25 @@ function SegmentDetail({
               </ResponsiveContainer>
             </div>
           ) : (
-            <div className="h-64 flex items-center justify-center bg-[#F5F5F5] rounded-lg">
-              <p className="text-sm text-[#4A4A4A]">Δεν υπάρχουν δεδομένα για αυτή τη διάσταση.</p>
+            <div className="flex min-h-[16rem] flex-col items-center justify-center rounded-lg bg-[#F5F5F5] px-4 py-8 text-center">
+              <p className="text-sm font-medium text-[#374151]">
+                {segmentsDataSource === 'ecommerce'
+                  ? 'Δεν υπάρχουν δεδομένα γραμμών προϊόντων για αυτό το segment'
+                  : 'Δεν υπάρχουν δεδομένα για αυτή τη διάσταση'}
+              </p>
+              {segmentsDataSource === 'ecommerce' && (
+                <p className="mt-2 max-w-md text-xs leading-relaxed text-[#6B7280]">
+                  Το RFM από e-shop χρειάζεται γραμμές παραγγελίας (SKU/title/product id). Μετά από πλήρες sync των connectors,
+                  εδώ εμφανίζονται πραγματικές κατηγορίες και — όταν φορτώνει ο catalog — μάρκες/υποκατηγορίες από το κατάστημα και το ERP.
+                </p>
+              )}
             </div>
           )}
         </div>
 
         <div className="space-y-4">
           <div className="p-4 bg-[#F5F5F5] rounded-lg">
-            <h5 className="text-sm font-medium text-[#1A1A1A] mb-2">Brands</h5>
+            <h5 className="text-sm font-medium text-[#1A1A1A] mb-2">Προτιμώμενα brands</h5>
             {brandAff.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {brandAff.slice(0, 12).map((row) => (
