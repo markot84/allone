@@ -7,7 +7,9 @@ export function generateInsightsFromData(
   segments: RFMSegment[],
   supplierTodMap?: Map<string, number>,
   ecommerce?: {
+    /** Πραγματικός τζίρος/παραγγελίες — όχι απλά «υπάρχει connector». */
     hasData: boolean;
+    hasConnector?: boolean;
     totalRevenue: number;
     orderCount: number;
     aov: number;
@@ -15,6 +17,19 @@ export function generateInsightsFromData(
   }
 ): AIInsight[] {
   const insights: AIInsight[] = [];
+
+  if (ecommerce?.hasConnector && !ecommerce.hasData) {
+    insights.push({
+      insightKey: 'ecomm_metrics_pending',
+      type: 'recommendation',
+      icon: '',
+      title: 'E-shop: δεν φορτώθηκαν ακόμα παραγγελίες/τζίρος',
+      insight:
+        'Υπάρχει σύνδεση e-shop αλλά τα σύνολα παραγγελιών/εσόδων είναι κενά. Ανανέωση σελίδας ή sync connector — τα insights από προϊόντα/segments μπορεί να μην αντικατοπτρίζουν το οικονομικό αποτέλεσμα.',
+      action: 'Άνοιγμα Συνδέσεις / Sync',
+      impact: 'medium',
+    });
+  }
 
   const classify = (p: Product) => classifyStockHealth(p, getProductTod(p, supplierTodMap));
   const deadStock = products.filter((p) => classify(p) === 'dead');

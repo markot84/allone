@@ -227,6 +227,13 @@ export function detectSignificantChange(
 ): ChangeSignal {
   const now = extractSnapshot(current);
 
+  if (cachedSnapshot.totalRevenue === 0 && now.totalRevenue > 0) {
+    return { significant: true, reason: 'Εμφανίστηκαν έσοδα περιόδου μετά από κενή κατάσταση' };
+  }
+  if (cachedSnapshot.totalRevenue > 0 && now.totalRevenue === 0) {
+    return { significant: true, reason: 'Μηδενισμός εσόδων περιόδου — έλεγξε sync ή φόρτωση δεδομένων' };
+  }
+
   if (cachedSnapshot.totalRevenue > 0) {
     const revDelta = (now.totalRevenue - cachedSnapshot.totalRevenue) / cachedSnapshot.totalRevenue;
     if (Math.abs(revDelta) >= THRESHOLDS.revenueChangePct) {

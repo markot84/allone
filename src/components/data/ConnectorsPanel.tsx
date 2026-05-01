@@ -2165,7 +2165,9 @@ export function ConnectorsPanel() {
         if (provider === 'merchant') queryClient.invalidateQueries({ queryKey: ['priceBenchmarks', brandId] });
         if (['shopify', 'woocommerce', 'opencart', 'magento'].includes(provider)) {
           queryClient.removeQueries({ queryKey: ['ecommerce_summary', brandId] });
+          queryClient.removeQueries({ queryKey: ['ecommerceOrdersRaw', brandId] });
           queryClient.invalidateQueries({ queryKey: ['ecommerce_summary', brandId] });
+          queryClient.invalidateQueries({ queryKey: ['ecommerceOrdersRaw', brandId] });
         }
         if (['megaventory', 'softone', 'epsilon_net', 'entersoft'].includes(provider)) {
           queryClient.removeQueries({ queryKey: ['products', brandId] });

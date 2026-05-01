@@ -509,7 +509,10 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           alerts={automationAlerts}
           supplierTodMap={supplierTodMap}
           ecommerce={{
-            hasData: enabledModules.ecommerce && ecomm.hasData,
+            hasData:
+              enabledModules.ecommerce &&
+              ecomm.hasData &&
+              (storeRevenueInPeriod > 0 || ordersInPeriod > 0),
             totalRevenue: storeRevenueInPeriod,
             orderCount: ordersInPeriod,
             aov: ordersInPeriod > 0 ? storeRevenueInPeriod / ordersInPeriod : ecomm.aov,

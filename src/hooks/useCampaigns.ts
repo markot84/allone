@@ -72,12 +72,12 @@ export function useCampaigns() {
       return CampaignsService.getAll(brandId, { forceServer: true }) as Promise<Campaign[]>;
     },
     enabled: !!brandId,
-    // Never stale — only invalidated explicitly after sync or delete.
-    staleTime: Infinity,
+    /** Bounded staleness: Infinity με πρώτο fetch `[]` κλείδωνε το ROI σε κενά δεδομένα χωρίς refetch. */
+    staleTime: 5 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 
   // Εφαρμόζει on-the-fly το επιλεγμένο Meta attribution window σε όλα τα downstream reads.

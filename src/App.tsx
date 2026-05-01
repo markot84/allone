@@ -87,8 +87,8 @@ const queryClient = new QueryClient({
 const persister = typeof window !== 'undefined'
   ? createSyncStoragePersister({
       storage: window.localStorage,
-      /** Bump when persisted shape can strand users on stale connector snapshots (e.g. ga4_data). */
-      key: 'PERF_PLUS_QUERY_CACHE_v5',
+      /** Bump when persisted queries omit connector-critical keys or strand stale dashboards (see shouldDehydrateQuery). */
+      key: 'PERF_PLUS_QUERY_CACHE_v6',
       throttleTime: 1000
     })
   : undefined;
@@ -113,6 +113,15 @@ function QueryProvider({ children }: { children: React.ReactNode }) {
               // Connector-backed summaries: object shape `{ ga4: null }` is truthy — persisting it
               // hides fresh data after sync until staleTime expires. Always refetch from Firestore.
               if (key === 'ga4_data') return false;
+              // Server aggregates & heavy raw order pulls — persist hides post-sync reality and can bloat localStorage.
+              if (
+                key === 'ecommerce_summary' ||
+                key === 'ecommerceOrdersRaw' ||
+                key === 'segments' ||
+                key === 'segmentCustomerSummaries'
+              ) {
+                return false;
+              }
               // Don't persist empty / null results
               if (query.state.data === null || query.state.data === undefined) return false;
               return true;

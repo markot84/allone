@@ -20,7 +20,8 @@ export function useAiInsightsData() {
   const aiInsights = useMemo(
     () =>
       generateInsightsFromData(products, segments, supplierTodMap, {
-        hasData: ecomm.hasData,
+        hasData: ecomm.orderCount > 0 || ecomm.totalRevenue > 0,
+        hasConnector: ecomm.connectedPlatforms.length > 0,
         totalRevenue: ecomm.totalRevenue,
         orderCount: ecomm.orderCount,
         aov: ecomm.aov,
@@ -30,7 +31,8 @@ export function useAiInsightsData() {
       products,
       segments,
       supplierTodMap,
-      ecomm.hasData,
+      ecomm.orderCount > 0 || ecomm.totalRevenue > 0,
+      ecomm.connectedPlatforms.length > 0,
       ecomm.totalRevenue,
       ecomm.orderCount,
       ecomm.aov,
