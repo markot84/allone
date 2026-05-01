@@ -508,77 +508,173 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
           ))}
         </div>
 
-        {/* Distribution Chart */}
-        <Card padding="lg" className="flex min-w-0 flex-col">
-          <CardHeader
-            title="Revenue Distribution"
-            subtitle="Ανά segment"
-          />
-          <div className="min-w-0 w-full flex-shrink-0" style={{ height: 240 }}>
-            <ResponsiveContainer width="100%" height={240} minHeight={240}>
-              <PieChart margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
-                <Pie
-                  data={rfmSegments}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={55}
-                  outerRadius={85}
-                  paddingAngle={3}
-                  dataKey="revenue_share"
-                  nameKey="name"
-                  animationBegin={0}
-                  animationDuration={800}
-                >
-                  {rfmSegments.map((segment) => (
-                    <Cell
-                      key={segment.id}
-                      fill={segment.color}
-                      stroke={selectedSegment?.id === segment.id ? '#1A1A1A' : 'none'}
-                      strokeWidth={2}
-                      className="transition-opacity"
-                      opacity={selectedSegment ? (selectedSegment.id === segment.id ? 1 : 0.4) : 1}
-                    />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#fff',
-                    border: '1px solid #E5E5E5',
-                    borderRadius: '8px',
-                    fontSize: '12px',
-                    padding: '8px 12px',
-                  }}
-                  formatter={(value: number | undefined) => [`${fmtPct(value ?? 0)}%`, 'Revenue']}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="space-y-1 mt-2">
-            {rfmSegments.map((segment) => (
-              <div
-                key={segment.id}
-                className={`
+        {/* 1) RFM πελάτες → 2) τζίρος — σειρά πάντα έτσι */}
+        <div className="flex min-w-0 flex-col gap-6 lg:col-span-1">
+          <Card padding="lg" className="flex min-w-0 flex-col">
+            <CardHeader
+              title="RFM — Κατανομή πελατών"
+              subtitle={
+                <span className="block">
+                  Ποσοστό επί της βάσης RFM (όπως στο Dashboard). Στη συνέχεια εμφανίζεται το διάγραμμα{' '}
+                  <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">τζίρου</strong> ανά segment.
+                </span>
+              }
+              icon={<Users size={18} className="text-[var(--fgColor-muted,#57606a)] shrink-0" />}
+            />
+            <div className="min-w-0 w-full flex-shrink-0" style={{ height: 240 }}>
+              <ResponsiveContainer width="100%" height={240} minHeight={240}>
+                <PieChart margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+                  <Pie
+                    data={rfmSegments}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={55}
+                    outerRadius={85}
+                    paddingAngle={3}
+                    dataKey="percentage"
+                    nameKey="name"
+                    animationBegin={0}
+                    animationDuration={800}
+                  >
+                    {rfmSegments.map((segment) => (
+                      <Cell
+                        key={segment.id}
+                        fill={segment.color}
+                        stroke={selectedSegment?.id === segment.id ? '#1A1A1A' : 'none'}
+                        strokeWidth={2}
+                        className="transition-opacity"
+                        opacity={selectedSegment ? (selectedSegment.id === segment.id ? 1 : 0.4) : 1}
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#fff',
+                      border: '1px solid #E5E5E5',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                      padding: '8px 12px',
+                    }}
+                    formatter={(value: number | undefined, _name: string | undefined, item: { payload?: { name?: string } }) => [
+                      `${formatPercent(value ?? 0, 1)} πελάτες`,
+                      item?.payload?.name ?? '',
+                    ]}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="space-y-1 mt-2">
+              {rfmSegments.map((segment) => (
+                <div
+                  key={segment.id}
+                  className={`
                   flex items-center justify-between px-2.5 py-1.5 rounded-lg cursor-pointer transition-all
                   ${selectedSegment?.id === segment.id ? 'bg-[#F5F5F5] ring-1 ring-[#E5E5E5]' : 'hover:bg-[#F5F5F5]'}
                 `}
-                onClick={() => setSelectedSegment(
-                  selectedSegment?.id === segment.id ? null : segment
-                )}
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <div
-                    className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: segment.color }}
-                  />
-                  <span className="text-[13px] text-[#4A4A4A] truncate">{segment.name}</span>
+                  onClick={() =>
+                    setSelectedSegment(selectedSegment?.id === segment.id ? null : segment)
+                  }
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div
+                      className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: segment.color }}
+                    />
+                    <span className="text-[13px] text-[#4A4A4A] truncate">{segment.name}</span>
+                  </div>
+                  <span
+                    className="text-[13px] font-semibold font-mono flex-shrink-0 ml-2 text-[#1A1A1A]"
+                    title="Ποσοστό πελατών"
+                  >
+                    {formatPercent(segment.percentage ?? 0, 1)}
+                  </span>
                 </div>
-                <span className="text-[13px] font-semibold font-mono flex-shrink-0 ml-2" style={{ color: segment.color }}>
-                  {fmtPct(segment.revenue_share ?? 0)}%
-                </span>
-              </div>
-            ))}
-          </div>
-        </Card>
+              ))}
+            </div>
+          </Card>
+
+          <Card padding="lg" className="flex min-w-0 flex-col">
+            <CardHeader
+              title="Τζίρος — Κατανομή ανά segment"
+              subtitle={
+                <>
+                  <span className="block">
+                    Μετά το RFM ανωτέρω — μερίδιο <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">εσόδων</strong> ανά
+                    segment, όχι ποσοστό πελατών.
+                  </span>
+                </>
+              }
+            />
+            <div className="min-w-0 w-full flex-shrink-0" style={{ height: 240 }}>
+              <ResponsiveContainer width="100%" height={240} minHeight={240}>
+                <PieChart margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+                  <Pie
+                    data={rfmSegments}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={55}
+                    outerRadius={85}
+                    paddingAngle={3}
+                    dataKey="revenue_share"
+                    nameKey="name"
+                    animationBegin={0}
+                    animationDuration={800}
+                  >
+                    {rfmSegments.map((segment) => (
+                      <Cell
+                        key={segment.id}
+                        fill={segment.color}
+                        stroke={selectedSegment?.id === segment.id ? '#1A1A1A' : 'none'}
+                        strokeWidth={2}
+                        className="transition-opacity"
+                        opacity={selectedSegment ? (selectedSegment.id === segment.id ? 1 : 0.4) : 1}
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#fff',
+                      border: '1px solid #E5E5E5',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                      padding: '8px 12px',
+                    }}
+                    formatter={(value: number | undefined) => [`${fmtPct(value ?? 0)}% τζίρου`, 'Μερίδιο']}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="space-y-1 mt-2">
+              {rfmSegments.map((segment) => (
+                <div
+                  key={segment.id}
+                  className={`
+                  flex items-center justify-between px-2.5 py-1.5 rounded-lg cursor-pointer transition-all
+                  ${selectedSegment?.id === segment.id ? 'bg-[#F5F5F5] ring-1 ring-[#E5E5E5]' : 'hover:bg-[#F5F5F5]'}
+                `}
+                  onClick={() =>
+                    setSelectedSegment(selectedSegment?.id === segment.id ? null : segment)
+                  }
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div
+                      className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: segment.color }}
+                    />
+                    <span className="text-[13px] text-[#4A4A4A] truncate">{segment.name}</span>
+                  </div>
+                  <span
+                    className="text-[13px] font-semibold font-mono flex-shrink-0 ml-2"
+                    style={{ color: segment.color }}
+                    title="Μερίδιο τζίρου ανά segment"
+                  >
+                    {fmtPct(segment.revenue_share ?? 0)}%
+                  </span>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
       </div>
 
       {/* Segment Detail Panel */}
@@ -797,13 +893,13 @@ function SegmentCard({ segment, index, isSelected, onSelect, onExport }: Segment
             </p>
           </div>
           <div>
-            <p className="text-xs text-[#4A4A4A]">% of Base</p>
+            <p className="text-xs text-[#4A4A4A]">% πελατών</p>
             <p className="font-bold font-mono" style={{ color: segment.color }}>
               {fmtPct(segment.percentage ?? 0)}%
             </p>
           </div>
           <div>
-            <p className="text-xs text-[#4A4A4A]">Revenue</p>
+            <p className="text-xs text-[#4A4A4A]">% τζίρου</p>
             <p className="font-bold text-[#1A1A1A] font-mono">
               {fmtPct(segment.revenue_share ?? 0)}%
             </p>

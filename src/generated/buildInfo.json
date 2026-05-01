@@ -1,10 +1,14 @@
 {
-  "version": "0.675.41",
-  "previousVersion": "0.675.40",
-  "commitHash": "58d50dc",
+  "version": "0.675.44",
+  "previousVersion": "0.675.43",
+  "commitHash": "77c25bc",
   "branch": "main",
-  "buildDate": "2026-05-01T19:31:52.516Z",
+  "buildDate": "2026-05-01T19:46:11.531Z",
   "commits": [
+    {
+      "hash": "77c25bc",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "58d50dc",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "b4e1c6a",
       "message": "fix(ui): simplify app header for responsive"
-    },
-    {
-      "hash": "dce69b4",
-      "message": "fix(ui): responsive hardening across app"
     }
   ],
   "changes": [

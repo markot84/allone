@@ -1169,7 +1169,19 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           >
             <CardHeader
               title="Customer Segments"
-              subtitle="Κατανομή RFM"
+              subtitle={
+                <>
+                  <p>
+                    Ίδια πηγή με την Ανάλυση δεδομένων· εδώ το donut είναι κατά{' '}
+                    <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">πλήθος πελατών</strong>.
+                  </p>
+                  <p>
+                    Το μερίδιο{' '}
+                    <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">τζίρου</strong> ανά segment
+                    βρίσκεται στην Ανάλυση δεδομένων (κάρτα «Revenue Distribution»).
+                  </p>
+                </>
+              }
               icon={<Users size={18} className="text-[var(--nts-medium-gray)]" />}
             />
             <div 
@@ -1205,7 +1217,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                       padding: '8px 12px'
                     }}
                     formatter={(value: any, _name?: string, props?: any) => [
-                      formatPercent((value as number) || 0, 1),
+                      `${formatPercent((value as number) || 0, 1)} πελάτες`,
                       props?.payload?.name || ''
                     ]}
                   />
@@ -1221,7 +1233,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                     />
                     <span className="text-[#4A4A4A]">{segment.name}</span>
                   </div>
-                  <span className="font-medium text-[#1A1A1A] font-mono">
+                  <span className="font-medium text-[#1A1A1A] font-mono" title="Μερίδιο επί του συνόλου πελατών RFM">
                     {formatPercent(segment.percentage ?? 0, 1)}
                   </span>
                 </div>
