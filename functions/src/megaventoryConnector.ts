@@ -711,11 +711,18 @@ export interface MegaventorySyncResult {
   error?: string;
 }
 
+interface MegaventorySyncOptions {
+  mode?: 'manual' | 'scheduled';
+}
+
 /**
  * Πλήρες sync (last 90 days). Καλείται από manual button + nightly schedule.
  * Ο user έχει επιλέξει: revenue source = Invoices, Megaventory ως master.
  */
-export async function fetchMegaventoryData(brandId: string): Promise<MegaventorySyncResult> {
+export async function fetchMegaventoryData(
+  brandId: string,
+  options: MegaventorySyncOptions = {}
+): Promise<MegaventorySyncResult> {
   const db = getDb();
   const docSnap = await db.doc(`connectors/${brandId}`).get();
   const conn = docSnap.data()?.megaventory as Record<string, unknown> | undefined;
@@ -729,8 +736,10 @@ export async function fetchMegaventoryData(brandId: string): Promise<Megaventory
     return { success: false, imported: 0, error: 'Megaventory API key unavailable — reconnect required' };
   }
 
+  const mode = options.mode || 'manual';
   let docsWindow = buildHistoricalOrIncrementalWindow(conn, 'lastDocsSyncAt');
-  const shouldStageInvoiceBackfill = conn.invoiceDocumentBackfillComplete !== true;
+  const invoiceBackfillPending = conn.invoiceDocumentBackfillComplete !== true;
+  const shouldStageInvoiceBackfill = invoiceBackfillPending && mode !== 'scheduled';
   let invoiceBackfillCursor = positiveNumber(conn.invoiceDocumentBackfillCursor);
   if (shouldStageInvoiceBackfill && invoiceBackfillCursor === null && conn.invoiceDocumentBackfillAt) {
     invoiceBackfillCursor = await inferInvoiceBackfillCursor(db, brandId);
@@ -748,8 +757,13 @@ export async function fetchMegaventoryData(brandId: string): Promise<Megaventory
   const sinceFilterDate = toMvFilterDateTime(docsWindow.windowStart);
   let docsOk = true;
   let referenceOk = true;
+  const invoiceBackfillLabel = shouldStageInvoiceBackfill
+    ? `staged cursor=${invoiceBackfillCursor ?? 'latest'}`
+    : invoiceBackfillPending
+      ? 'pending/deferred_for_scheduled_sync'
+      : 'complete/incremental';
   logger.info(
-    `[Megaventory] Sync window for ${brandId}: docs=${docsWindow.mode}:${sinceStr}->${todayStr} reference=snapshot customReport=snapshot invoiceBackfill=${shouldStageInvoiceBackfill ? `staged cursor=${invoiceBackfillCursor ?? 'latest'}` : 'complete/incremental'}`
+    `[Megaventory] Sync window for ${brandId}: mode=${mode} docs=${docsWindow.mode}:${sinceStr}->${todayStr} reference=snapshot customReport=snapshot invoiceBackfill=${invoiceBackfillLabel}`
   );
 
   let totalImported = 0;
@@ -806,7 +820,7 @@ export async function fetchMegaventoryData(brandId: string): Promise<Megaventory
       const rawDocs = invRows as Record<string, unknown>[];
       const docs = rawDocs.filter((d) => isLikelySalesInvoice(d, documentTypeInfo(d, documentTypesById)));
       documentDiagnostics = {
-        invoiceBackfillMode: shouldStageInvoiceBackfill ? 'staged' : 'incremental',
+        invoiceBackfillMode: shouldStageInvoiceBackfill ? 'staged' : invoiceBackfillPending ? 'incremental_backfill_pending' : 'incremental',
         invoiceBackfillCursor: invoiceBackfillCursor ?? null,
         invoiceBackfillNextCursor: invoiceBackfillNextCursor ?? null,
         invoiceBackfillExhausted,
@@ -1194,7 +1208,7 @@ export async function fetchMegaventoryData(brandId: string): Promise<Megaventory
     }
 
     const invoiceBackfillStillInProgress =
-      shouldStageInvoiceBackfill && invoiceBackfillProgress?.exhausted !== true;
+      invoiceBackfillPending && (!shouldStageInvoiceBackfill || invoiceBackfillProgress?.exhausted !== true);
     if (docsOk && !invoiceBackfillStillInProgress) {
       try {
         rfmCounts = await refreshMegaventoryRfmSegments(db, brandId);

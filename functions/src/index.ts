@@ -1706,7 +1706,7 @@ export const scheduledSync = onSchedule(
 
           if (data.megaventory?.connected) {
             try {
-              const result = await fetchMegaventoryData(brandId);
+              const result = await fetchMegaventoryData(brandId, { mode: 'scheduled' });
               logger.info(`[ScheduledSync] Megaventory for ${brandId}: imported ${result.imported}`);
             } catch (err) {
               logger.error(`[ScheduledSync] Megaventory failed for ${brandId}:`, err);
