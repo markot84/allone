@@ -88,7 +88,7 @@ const persister = typeof window !== 'undefined'
   ? createSyncStoragePersister({
       storage: window.localStorage,
       /** Bump when persisted shape can strand users on stale connector snapshots (e.g. ga4_data). */
-      key: 'PERF_PLUS_QUERY_CACHE_v4',
+      key: 'PERF_PLUS_QUERY_CACHE_v5',
       throttleTime: 1000
     })
   : undefined;

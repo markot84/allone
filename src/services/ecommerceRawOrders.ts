@@ -43,7 +43,7 @@ export type EcommerceRawOrder = {
   exclusionReason?: EcommerceExclusionReason;
   /**
    * Stable key για RFM από raw παραγγελίες.
-   * Προτιμά hashed email (cross-platform/guest matching), αλλιώς platform customer id.
+   * Μόνο platform customer id. Email-only guest orders δεν μπαίνουν στο RFM.
    */
   customerKey?: string;
   customerEmailHash?: string;
@@ -153,20 +153,16 @@ function normalizeRawOrder(platform: string, row: Record<string, unknown>): Ecom
     ? rawItems.map(normalizeLineItemFromFirestore)
     : [];
 
-  let customerKey = '';
   const emailHash = String(row.customerEmailHash ?? row.customer_email_hash ?? '').trim().toLowerCase();
-  if (emailHash) {
-    customerKey = `email:${emailHash}`;
-  } else {
-    const rawCustomer =
-      row.customerKey ??
-      row.customer_key ??
-      row.customerId ??
-      row.customer_id;
-    const s = rawCustomer != null ? String(rawCustomer).trim() : '';
-    if (s !== '' && s !== '0' && s !== 'null' && s !== 'undefined') {
-      customerKey = `${platform}:${s}`;
-    }
+  let customerKey = '';
+  const rawCustomer =
+    row.customerKey ??
+    row.customer_key ??
+    row.customerId ??
+    row.customer_id;
+  const s = rawCustomer != null ? String(rawCustomer).trim() : '';
+  if (s !== '' && s !== '0' && s !== 'null' && s !== 'undefined') {
+    customerKey = `${platform}:${s}`;
   }
   const customerEmail = String(row.customerEmail ?? row.customer_email ?? '').trim().toLowerCase();
 

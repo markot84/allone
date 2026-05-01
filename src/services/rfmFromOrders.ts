@@ -457,7 +457,7 @@ export function computeSegmentMigrationFromEcommerceOrders(
 
 /**
  * RFM + συγκέντρωση segments από raw e-commerce παραγγελίες (εσωτερικό customer id ανά platform).
- * Αγνοεί cancelled & 100% demo, όπως το υπόλοιπο e-commerce.
+ * Αγνοεί guest/email-only orders, cancelled & 100% demo, όπως το υπόλοιπο e-commerce.
  */
 export function computeRfmSegmentsFromEcommerceOrders(orders: EcommerceRawOrder[]): RfmFromOrdersResult {
   const byKey = new Map<string, CustomerAgg>();

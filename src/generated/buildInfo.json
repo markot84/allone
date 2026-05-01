@@ -1,10 +1,14 @@
 {
-  "version": "0.675.35",
-  "previousVersion": "0.675.34",
-  "commitHash": "d614c8b",
+  "version": "0.675.37",
+  "previousVersion": "0.675.36",
+  "commitHash": "7e3c945",
   "branch": "main",
-  "buildDate": "2026-05-01T18:27:23.868Z",
+  "buildDate": "2026-05-01T19:11:40.101Z",
   "commits": [
+    {
+      "hash": "7e3c945",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "d614c8b",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "b1899ae",
       "message": "fix(firestore): members read — avoid circular isBrandMember for collection group"
-    },
-    {
-      "hash": "53e9237",
-      "message": "fix(firestore): organic composite index, tighten members read, guard empty uid"
     }
   ],
   "changes": [
