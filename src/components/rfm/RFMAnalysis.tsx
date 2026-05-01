@@ -13,6 +13,7 @@ import {
   LineChart,
   Download,
   FileSpreadsheet,
+  Package,
 } from 'lucide-react';
 import {
   PieChart,
@@ -27,7 +28,7 @@ import {
   CartesianGrid
 } from 'recharts';
 import { Card, CardHeader, Badge, Button, Spinner, Tooltip as InfoTooltip, useToast, PageHeader } from '../common';
-import { useSegments } from '../../hooks/useSegments';
+import { useSegments, type SegmentDataCoverage } from '../../hooks/useSegments';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import { useBrand } from '../../hooks/useBrand';
 import { FirestoreService } from '../../services/firestore';
@@ -38,7 +39,7 @@ import { exportSegmentActionPack, exportAllSegmentActionPacks, exportSegmentCust
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import type { RFMSegment } from '../../types';
 
-import { formatNumber, formatPercent } from '../../utils/format';
+import { formatNumber, formatPercent, formatCurrencyCompact } from '../../utils/format';
 const fmtPct = (n: number) => formatNumber(n, 2);
 
 type AnalysisTab = 'rfm' | 'behavioral' | 'predictive';
@@ -344,25 +345,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
         }
       />
 
-      <Card padding="md" className="overflow-hidden border border-[#E5E5E5] bg-[#FAFAFA]">
-        <div className="flex min-w-0 flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-          <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[#9CA3AF]">Data Coverage</p>
-            <h3 className="mt-1 text-sm font-bold text-[#1A1A1A]">
-              Πολιτική: {dataCoverage.policyLabel}
-            </h3>
-            <p className="mt-1 max-w-3xl text-xs leading-relaxed text-[#4A4A4A]">
-              {dataCoverage.marketingPolicy}
-            </p>
-          </div>
-          <div className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3 xl:max-w-full">
-            <CoverageMetric label="Σύνολο" value={formatNumber(dataCoverage.totalCustomers)} />
-            <CoverageMetric label="E-shop" value={formatNumber(dataCoverage.eShopCustomers)} />
-            <CoverageMetric label="Others / ERP" value={formatNumber(dataCoverage.otherCustomers)} />
-            <CoverageMetric label="E-shop %" value={`${formatNumber(dataCoverage.eShopPenetration, 1)}%`} />
-          </div>
-        </div>
-      </Card>
+      <DataCoverageBlock dataCoverage={dataCoverage} totalDisplayed={totalCustomersDisplay} />
 
       {/* Analysis Tabs */}
       <div className="-mx-1 max-w-full overflow-x-auto pb-1 sm:mx-0 sm:overflow-visible sm:pb-0">
@@ -413,268 +396,238 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
       {activeTab === 'predictive' && <PredictiveTab segments={rfmSegments} />}
 
       {activeTab === 'rfm' && <>
-      {/* Overview Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card padding="md" hover>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-[var(--nts-light-gray)] rounded-lg flex items-center justify-center">
-              <Users size={20} className="text-[var(--nts-accent)]" />
+      {/* Σύνοψη KPI — συμπαγής */}
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+        <Card padding="sm" hover>
+          <div className="flex items-center gap-2">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--nts-light-gray)]">
+              <Users size={18} className="text-[var(--nts-accent)]" />
             </div>
-            <div>
-              <p className="text-sm text-[#4A4A4A]"><InfoTooltip content="Συνολικός αριθμός πελατών από τα imported RFM segments. Περιλαμβάνει ενεργούς και ανενεργούς.">Σύνολο Πελατών</InfoTooltip></p>
-              <p className="text-xl font-bold text-[#1A1A1A] font-mono">
-                {formatNumber(totalCustomersDisplay)}
+            <div className="min-w-0">
+              <p className="truncate text-[11px] text-[#4A4A4A]">
+                <InfoTooltip content="Συνολικός αριθμός πελατών στη βάση RFM.">Πελάτες</InfoTooltip>
               </p>
+              <p className="font-mono text-lg font-bold text-[#1A1A1A]">{formatNumber(totalCustomersDisplay)}</p>
             </div>
           </div>
         </Card>
-        <Card padding="md" hover>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-[#DCFCE7] rounded-lg flex items-center justify-center">
-              <TrendingUp size={20} className="text-[#22C55E]" />
+        <Card padding="sm" hover>
+          <div className="flex items-center gap-2">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#DCFCE7]">
+              <TrendingUp size={18} className="text-[#22C55E]" />
             </div>
-            <div>
-              <p className="text-sm text-[#4A4A4A]"><InfoTooltip content="Συνολικός αριθμός RFM segments που εμφανίζονται στην ανάλυση. Περιλαμβάνει και ανενεργά / Lost segments.">Σύνολο Segments</InfoTooltip></p>
-              <p className="text-xl font-bold text-[#1A1A1A]">
-                {rfmSegments.length}
+            <div className="min-w-0">
+              <p className="truncate text-[11px] text-[#4A4A4A]">
+                <InfoTooltip content="Αριθμός RFM segments.">Segments</InfoTooltip>
               </p>
+              <p className="text-lg font-bold text-[#1A1A1A]">{rfmSegments.length}</p>
             </div>
           </div>
         </Card>
-        <Card padding="md" hover>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-[#F5F5F5] rounded-lg flex items-center justify-center">
-              <Zap size={20} className="text-[#4A4A4A]" />
+        <Card padding="sm" hover>
+          <div className="flex items-center gap-2">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#F5F5F5]">
+              <Zap size={18} className="text-[#4A4A4A]" />
             </div>
-            <div>
-              <p className="text-sm text-[#4A4A4A]"><InfoTooltip content="Μέσος όρος RFM score (1–5). Υψηλότερο = καλύτερη ποιότητα πελατολογίου. Κάτω από 3.0 σημαίνει ότι η πλειονότητα των πελατών είναι ανενεργή.">Μέσος Segment Score</InfoTooltip></p>
-              <p className="text-xl font-bold text-[#1A1A1A] font-mono">
+            <div className="min-w-0">
+              <p className="truncate text-[11px] text-[#4A4A4A]">
+                <InfoTooltip content="Μέσος RFM score (1–5).">Μέσος score</InfoTooltip>
+              </p>
+              <p className="font-mono text-lg font-bold text-[#1A1A1A]">
                 {(() => {
                   if (rfmSegments.length === 0) return '0';
-                  
                   const scores = rfmSegments
                     .map((s) => calculateAvgRFMScore(s.rfm_score, s.name))
                     .filter((score): score is number => score !== null && !isNaN(score) && isFinite(score));
-                  
-                  if (scores.length === 0) {
-                    // Debug: log segments without valid scores
-                    if (import.meta.env.MODE === 'development') {
-                      console.debug('No valid RFM scores found. Segments:', rfmSegments.map(s => ({ 
-                        name: s.name, 
-                        rfm_score: s.rfm_score,
-                        rfm_score_type: typeof s.rfm_score 
-                      })));
-                    }
-                    return '0';
-                  }
-                  
-                  const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
-                  return formatNumber(avg, 1);
+                  if (scores.length === 0) return '0';
+                  return formatNumber(scores.reduce((a, b) => a + b, 0) / scores.length, 1);
                 })()}
               </p>
             </div>
           </div>
         </Card>
-        <Card padding="md" hover>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-[#FEF3C7] rounded-lg flex items-center justify-center">
-              <TrendingDown size={20} className="text-[#F59E0B]" />
+        <Card padding="sm" hover>
+          <div className="flex items-center gap-2">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#FEF3C7]">
+              <TrendingDown size={18} className="text-[#F59E0B]" />
             </div>
-            <div>
-              <p className="text-sm text-[#4A4A4A]"><InfoTooltip content="Ποσοστό πελατών στο At Risk segment — πελάτες με μειωμένη δραστηριότητα που κινδυνεύουν να χαθούν. Πάνω από 20% απαιτεί άμεση δράση (win-back campaign).">Ποσοστό At Risk</InfoTooltip></p>
-              <p className="text-xl font-bold text-[#F59E0B] font-mono">
-                {fmtPct(rfmSegments.find(s => s.id === 'at_risk')?.percentage ?? 0)}%
+            <div className="min-w-0">
+              <p className="truncate text-[11px] text-[#4A4A4A]">
+                <InfoTooltip content="Ποσοστό πελατών At Risk.">At Risk</InfoTooltip>
+              </p>
+              <p className="font-mono text-lg font-bold text-[#F59E0B]">
+                {fmtPct(rfmSegments.find((s) => s.id === 'at_risk')?.percentage ?? 0)}%
               </p>
             </div>
           </div>
         </Card>
       </div>
 
-      {/* Segment Cards + Chart */}
-      <div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Segment Cards */}
-        <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2 lg:col-span-2">
-          {rfmSegments.map((segment, index) => (
-            <SegmentCard
-              key={segment.id}
-              segment={segment}
-              index={index}
-              isSelected={selectedSegment?.id === segment.id}
-              onSelect={() => setSelectedSegment(
-                selectedSegment?.id === segment.id ? null : segment
-              )}
-              onExport={(fmt) => handleExportSegment(segment, fmt)}
-            />
-          ))}
-        </div>
-
-        {/* 1) RFM πελάτες → 2) τζίρος — σειρά πάντα έτσι */}
-        <div className="flex min-w-0 flex-col gap-6 lg:col-span-1">
-          <Card padding="lg" className="flex min-w-0 flex-col">
-            <CardHeader
-              title="RFM — Κατανομή πελατών"
-              subtitle={
-                <span className="block">
-                  Ποσοστό επί της βάσης RFM (όπως στο Dashboard). Στη συνέχεια εμφανίζεται το διάγραμμα{' '}
-                  <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">τζίρου</strong> ανά segment.
+      {/* Hero: κατανομή πελατών + τζίρου — πλήρες πλάτος */}
+      <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2">
+        <Card padding="lg" className="flex min-w-0 flex-col border border-[#E8EAED] shadow-[0_4px_24px_rgba(15,23,42,0.06)]">
+          <CardHeader
+            title="Κατανομή πελατών (RFM)"
+            subtitle="Ποσοστό επί της βάσης πελατών — συγκρίσιμο με το Dashboard."
+            icon={<Users size={18} className="text-[var(--fgColor-muted,#57606a)] shrink-0" />}
+          />
+          <div className="min-h-[260px] w-full min-w-0 flex-1" style={{ height: 280 }}>
+            <ResponsiveContainer width="100%" height={280} minHeight={260}>
+              <PieChart margin={{ top: 12, right: 12, bottom: 12, left: 12 }}>
+                <Pie
+                  data={rfmSegments}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={68}
+                  outerRadius={108}
+                  paddingAngle={2}
+                  dataKey="percentage"
+                  nameKey="name"
+                  animationBegin={0}
+                  animationDuration={700}
+                >
+                  {rfmSegments.map((segment) => (
+                    <Cell
+                      key={segment.id}
+                      fill={segment.color}
+                      stroke={selectedSegment?.id === segment.id ? '#1A1A1A' : 'none'}
+                      strokeWidth={2}
+                      className="transition-opacity"
+                      opacity={selectedSegment ? (selectedSegment.id === segment.id ? 1 : 0.38) : 1}
+                    />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#fff',
+                    border: '1px solid #E5E5E5',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                    padding: '8px 12px',
+                  }}
+                  formatter={(value: number | undefined, _name: string | undefined, item: { payload?: { name?: string } }) => [
+                    `${formatPercent(value ?? 0, 1)} πελάτες`,
+                    item?.payload?.name ?? '',
+                  ]}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="mt-1 grid max-h-40 grid-cols-2 gap-1 overflow-y-auto sm:grid-cols-3">
+            {rfmSegments.map((segment) => (
+              <button
+                key={segment.id}
+                type="button"
+                onClick={() =>
+                  setSelectedSegment(selectedSegment?.id === segment.id ? null : segment)
+                }
+                className={`flex min-w-0 items-center justify-between gap-1 rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors ${
+                  selectedSegment?.id === segment.id ? 'bg-[#F3F4F6] ring-1 ring-[#E5E7EB]' : 'hover:bg-[#F9FAFB]'
+                }`}
+              >
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: segment.color }} />
+                  <span className="truncate text-[#374151]">{segment.name}</span>
                 </span>
-              }
-              icon={<Users size={18} className="text-[var(--fgColor-muted,#57606a)] shrink-0" />}
-            />
-            <div className="min-w-0 w-full flex-shrink-0" style={{ height: 240 }}>
-              <ResponsiveContainer width="100%" height={240} minHeight={240}>
-                <PieChart margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
-                  <Pie
-                    data={rfmSegments}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={55}
-                    outerRadius={85}
-                    paddingAngle={3}
-                    dataKey="percentage"
-                    nameKey="name"
-                    animationBegin={0}
-                    animationDuration={800}
-                  >
-                    {rfmSegments.map((segment) => (
-                      <Cell
-                        key={segment.id}
-                        fill={segment.color}
-                        stroke={selectedSegment?.id === segment.id ? '#1A1A1A' : 'none'}
-                        strokeWidth={2}
-                        className="transition-opacity"
-                        opacity={selectedSegment ? (selectedSegment.id === segment.id ? 1 : 0.4) : 1}
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#fff',
-                      border: '1px solid #E5E5E5',
-                      borderRadius: '8px',
-                      fontSize: '12px',
-                      padding: '8px 12px',
-                    }}
-                    formatter={(value: number | undefined, _name: string | undefined, item: { payload?: { name?: string } }) => [
-                      `${formatPercent(value ?? 0, 1)} πελάτες`,
-                      item?.payload?.name ?? '',
-                    ]}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="space-y-1 mt-2">
-              {rfmSegments.map((segment) => (
-                <div
-                  key={segment.id}
-                  className={`
-                  flex items-center justify-between px-2.5 py-1.5 rounded-lg cursor-pointer transition-all
-                  ${selectedSegment?.id === segment.id ? 'bg-[#F5F5F5] ring-1 ring-[#E5E5E5]' : 'hover:bg-[#F5F5F5]'}
-                `}
-                  onClick={() =>
-                    setSelectedSegment(selectedSegment?.id === segment.id ? null : segment)
-                  }
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div
-                      className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                      style={{ backgroundColor: segment.color }}
-                    />
-                    <span className="text-[13px] text-[#4A4A4A] truncate">{segment.name}</span>
-                  </div>
-                  <span
-                    className="text-[13px] font-semibold font-mono flex-shrink-0 ml-2 text-[#1A1A1A]"
-                    title="Ποσοστό πελατών"
-                  >
-                    {formatPercent(segment.percentage ?? 0, 1)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </Card>
+                <span className="shrink-0 font-mono font-semibold text-[#111827]">
+                  {formatPercent(segment.percentage ?? 0, 1)}
+                </span>
+              </button>
+            ))}
+          </div>
+        </Card>
 
-          <Card padding="lg" className="flex min-w-0 flex-col">
-            <CardHeader
-              title="Τζίρος — Κατανομή ανά segment"
-              subtitle={
-                <>
-                  <span className="block">
-                    Μετά το RFM ανωτέρω — μερίδιο <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">εσόδων</strong> ανά
-                    segment, όχι ποσοστό πελατών.
-                  </span>
-                </>
-              }
-            />
-            <div className="min-w-0 w-full flex-shrink-0" style={{ height: 240 }}>
-              <ResponsiveContainer width="100%" height={240} minHeight={240}>
-                <PieChart margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
-                  <Pie
-                    data={rfmSegments}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={55}
-                    outerRadius={85}
-                    paddingAngle={3}
-                    dataKey="revenue_share"
-                    nameKey="name"
-                    animationBegin={0}
-                    animationDuration={800}
-                  >
-                    {rfmSegments.map((segment) => (
-                      <Cell
-                        key={segment.id}
-                        fill={segment.color}
-                        stroke={selectedSegment?.id === segment.id ? '#1A1A1A' : 'none'}
-                        strokeWidth={2}
-                        className="transition-opacity"
-                        opacity={selectedSegment ? (selectedSegment.id === segment.id ? 1 : 0.4) : 1}
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#fff',
-                      border: '1px solid #E5E5E5',
-                      borderRadius: '8px',
-                      fontSize: '12px',
-                      padding: '8px 12px',
-                    }}
-                    formatter={(value: number | undefined) => [`${fmtPct(value ?? 0)}% τζίρου`, 'Μερίδιο']}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="space-y-1 mt-2">
-              {rfmSegments.map((segment) => (
-                <div
-                  key={segment.id}
-                  className={`
-                  flex items-center justify-between px-2.5 py-1.5 rounded-lg cursor-pointer transition-all
-                  ${selectedSegment?.id === segment.id ? 'bg-[#F5F5F5] ring-1 ring-[#E5E5E5]' : 'hover:bg-[#F5F5F5]'}
-                `}
-                  onClick={() =>
-                    setSelectedSegment(selectedSegment?.id === segment.id ? null : segment)
-                  }
+        <Card padding="lg" className="flex min-w-0 flex-col border border-[#E8EAED] shadow-[0_4px_24px_rgba(15,23,42,0.06)]">
+          <CardHeader
+            title="Μερίδιο τζίρου ανά segment"
+            subtitle="Ποσοστό συνολικών εσόδων RFM — όχι πλήθος πελατών."
+          />
+          <div className="min-h-[260px] w-full min-w-0 flex-1" style={{ height: 280 }}>
+            <ResponsiveContainer width="100%" height={280} minHeight={260}>
+              <PieChart margin={{ top: 12, right: 12, bottom: 12, left: 12 }}>
+                <Pie
+                  data={rfmSegments}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={68}
+                  outerRadius={108}
+                  paddingAngle={2}
+                  dataKey="revenue_share"
+                  nameKey="name"
+                  animationBegin={0}
+                  animationDuration={700}
                 >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div
-                      className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                      style={{ backgroundColor: segment.color }}
+                  {rfmSegments.map((segment) => (
+                    <Cell
+                      key={segment.id}
+                      fill={segment.color}
+                      stroke={selectedSegment?.id === segment.id ? '#1A1A1A' : 'none'}
+                      strokeWidth={2}
+                      className="transition-opacity"
+                      opacity={selectedSegment ? (selectedSegment.id === segment.id ? 1 : 0.38) : 1}
                     />
-                    <span className="text-[13px] text-[#4A4A4A] truncate">{segment.name}</span>
-                  </div>
-                  <span
-                    className="text-[13px] font-semibold font-mono flex-shrink-0 ml-2"
-                    style={{ color: segment.color }}
-                    title="Μερίδιο τζίρου ανά segment"
-                  >
-                    {fmtPct(segment.revenue_share ?? 0)}%
-                  </span>
-                </div>
-              ))}
-            </div>
-          </Card>
-        </div>
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#fff',
+                    border: '1px solid #E5E5E5',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                    padding: '8px 12px',
+                  }}
+                  formatter={(value: number | undefined) => [`${fmtPct(value ?? 0)}% τζίρου`, 'Μερίδιο']}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="mt-1 grid max-h-40 grid-cols-2 gap-1 overflow-y-auto sm:grid-cols-3">
+            {rfmSegments.map((segment) => (
+              <button
+                key={segment.id}
+                type="button"
+                onClick={() =>
+                  setSelectedSegment(selectedSegment?.id === segment.id ? null : segment)
+                }
+                className={`flex min-w-0 items-center justify-between gap-1 rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors ${
+                  selectedSegment?.id === segment.id ? 'bg-[#F3F4F6] ring-1 ring-[#E5E7EB]' : 'hover:bg-[#F9FAFB]'
+                }`}
+              >
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: segment.color }} />
+                  <span className="truncate text-[#374151]">{segment.name}</span>
+                </span>
+                <span className="shrink-0 font-mono font-semibold" style={{ color: segment.color }}>
+                  {fmtPct(segment.revenue_share ?? 0)}%
+                </span>
+              </button>
+            ))}
+          </div>
+        </Card>
+      </div>
+
+      {rfmDataSource === 'ecommerce' && (
+        <SegmentAffinityConsumption
+          segments={rfmSegments}
+          selectedSegment={selectedSegment}
+          onSelectSegment={setSelectedSegment}
+        />
+      )}
+
+      {/* Κάρτες segments — πλήρες πλάτος */}
+      <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {rfmSegments.map((segment, index) => (
+          <SegmentCard
+            key={segment.id}
+            segment={segment}
+            index={index}
+            isSelected={selectedSegment?.id === segment.id}
+            onSelect={() =>
+              setSelectedSegment(selectedSegment?.id === segment.id ? null : segment)
+            }
+            onExport={(fmt) => handleExportSegment(segment, fmt)}
+          />
+        ))}
       </div>
 
       {/* Segment Detail Panel */}
@@ -756,6 +709,154 @@ interface TabButtonProps {
   tooltipTitle?: string;
   tooltipBody?: string;
   tooltipBullets?: string[];
+}
+
+function DataCoverageBlock({
+  dataCoverage,
+  totalDisplayed,
+}: {
+  dataCoverage: SegmentDataCoverage;
+  totalDisplayed: number;
+}) {
+  const compact =
+    dataCoverage.otherCustomers <= 0 && dataCoverage.eShopPenetration >= 99.5;
+
+  if (compact) {
+    return (
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-[#E5E5E5] bg-gradient-to-r from-[#FAFAFA] via-white to-[#FAFAFA] px-3 py-2.5">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-[#9CA3AF]">Κάλυψη δεδομένων</span>
+        <span className="text-sm font-bold text-[#1A1A1A]">{formatNumber(totalDisplayed)} πελάτες</span>
+        <span className="hidden text-[#D1D5DB] sm:inline">|</span>
+        <span className="text-xs font-medium text-[#4A4A4A]">{dataCoverage.policyLabel}</span>
+        <details className="w-full sm:ml-auto sm:w-auto">
+          <summary className="cursor-pointer text-xs font-semibold text-[var(--nts-accent)] hover:underline">
+            Λεπτομέρειες κάλυψης
+          </summary>
+          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <CoverageMetric label="Σύνολο" value={formatNumber(dataCoverage.totalCustomers)} />
+            <CoverageMetric label="E-shop" value={formatNumber(dataCoverage.eShopCustomers)} />
+            <CoverageMetric label="Others" value={formatNumber(dataCoverage.otherCustomers)} />
+            <CoverageMetric label="E-shop %" value={`${formatNumber(dataCoverage.eShopPenetration, 1)}%`} />
+          </div>
+          <p className="mt-2 text-[11px] leading-relaxed text-[#6B7280]">{dataCoverage.marketingPolicy}</p>
+        </details>
+      </div>
+    );
+  }
+
+  return (
+    <Card padding="sm" className="overflow-hidden border border-[#E5E5E5] bg-[#FAFAFA]">
+      <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">Data Coverage</p>
+          <h3 className="mt-0.5 text-sm font-bold text-[#1A1A1A]">Πολιτική: {dataCoverage.policyLabel}</h3>
+          <p className="mt-1 max-w-3xl text-[11px] leading-relaxed text-[#4A4A4A]">{dataCoverage.marketingPolicy}</p>
+        </div>
+        <div className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-2">
+          <CoverageMetric label="Σύνολο" value={formatNumber(dataCoverage.totalCustomers)} />
+          <CoverageMetric label="E-shop" value={formatNumber(dataCoverage.eShopCustomers)} />
+          <CoverageMetric label="Others / ERP" value={formatNumber(dataCoverage.otherCustomers)} />
+          <CoverageMetric label="E-shop %" value={`${formatNumber(dataCoverage.eShopPenetration, 1)}%`} />
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function SegmentAffinityConsumption({
+  segments,
+  selectedSegment,
+  onSelectSegment,
+}: {
+  segments: RFMSegment[];
+  selectedSegment: RFMSegment | null;
+  onSelectSegment: (s: RFMSegment | null) => void;
+}) {
+  const hasAffinity = segments.some((s) => (s.behavioral?.category_affinity?.length ?? 0) > 0);
+  if (!hasAffinity) return null;
+
+  const chartSegment =
+    selectedSegment ??
+    [...segments].sort((a, b) => (b.revenue_share ?? 0) - (a.revenue_share ?? 0))[0] ??
+    null;
+  if (!chartSegment) return null;
+
+  const raw = chartSegment.behavioral?.category_affinity ?? [];
+  const rows = raw.slice(0, 14).map((c, i) => ({
+    key: `${i}-${c.name}`,
+    label: c.name.length > 52 ? `${c.name.slice(0, 50)}…` : c.name,
+    fullLabel: c.name,
+    pct: c.revenue_share_pct ?? Math.round((c.affinity ?? 0) * 100 * 10) / 10,
+    revenue: c.revenue_eur ?? 0,
+  }));
+
+  const chartHeight = Math.min(480, 56 + rows.length * 34);
+
+  return (
+    <Card padding="lg" className="border border-[#E8EAED] shadow-[0_4px_24px_rgba(15,23,42,0.06)]">
+      <CardHeader
+        title="Κατανάλωση ανά γραμμή παραγγελίας"
+        subtitle={
+          <span>
+            Κορυφαίες γραμμές από το ιστορικό παραγγελιών e-shop (όνομα προϊόντος /{' '}
+            <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">SKU</strong> / configurable τύπος Magento όταν υπάρχει).
+            Δεν είναι αυτόματη αντιστοίχιση σε brand ή ERP κατηγορία — για πλήρη πίνακα κατηγοριών χρειάζεται σύνδεση με το product catalog.
+          </span>
+        }
+        icon={<Package size={18} className="text-[var(--fgColor-muted,#57606a)] shrink-0" />}
+        action={
+          <label className="flex flex-wrap items-center gap-2 text-xs text-[#4A4A4A]">
+            <span className="hidden sm:inline whitespace-nowrap">Segment:</span>
+            <select
+              className="min-w-0 max-w-[220px] rounded-lg border border-[#E5E5E5] bg-white px-2 py-1.5 text-sm font-medium text-[#1A1A1A]"
+              value={chartSegment.id}
+              onChange={(e) => {
+                const s = segments.find((x) => x.id === e.target.value);
+                onSelectSegment(s ?? null);
+              }}
+              aria-label="Επιλογή segment για ανάλυση κατανάλωσης"
+            >
+              {segments.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        }
+      />
+      <div className="mt-1 min-h-[220px] w-full min-w-0" style={{ height: chartHeight }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart layout="vertical" data={rows} margin={{ top: 4, right: 12, left: 4, bottom: 4 }}>
+            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#F0F0F0" />
+            <XAxis
+              type="number"
+              domain={[0, 'dataMax']}
+              tick={{ fontSize: 11 }}
+              tickFormatter={(v) => `${formatNumber(Number(v), 0)}%`}
+            />
+            <YAxis type="category" dataKey="label" width={148} tick={{ fontSize: 10 }} interval={0} />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: '#fff',
+                border: '1px solid #E5E5E5',
+                borderRadius: '8px',
+                fontSize: '12px',
+              }}
+              formatter={(value: unknown, _name: unknown, item: { payload?: { revenue?: number; fullLabel?: string } }) => {
+                const v = Number(value) || 0;
+                const rev = item?.payload?.revenue != null && item.payload.revenue > 0
+                  ? `${formatCurrencyCompact(item.payload.revenue)} στο segment`
+                  : '';
+                return [`${formatNumber(v, 1)}% του τζίρου segment${rev ? ` · ${rev}` : ''}`, item?.payload?.fullLabel ?? 'Γραμμή'];
+              }}
+            />
+            <Bar dataKey="pct" fill="var(--nts-accent)" radius={[0, 6, 6, 0]} barSize={20} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </Card>
+  );
 }
 
 function CoverageMetric({ label, value }: { label: string; value: string }) {

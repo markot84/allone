@@ -16,6 +16,8 @@ import {
 export type EcommerceRawLineItem = {
   sku?: string;
   productId?: string;
+  /** Shopify line item variant id — optional join hint */
+  variantId?: string;
   title?: string;
   name?: string;
   quantity?: number;
@@ -122,6 +124,12 @@ function normalizeLineItemFromFirestore(raw: unknown): EcommerceRawLineItem {
         ? String(o.productId)
         : o.product_id != null
           ? String(o.product_id)
+          : undefined,
+    variantId:
+      o.variantId != null
+        ? String(o.variantId)
+        : o.variant_id != null
+          ? String(o.variant_id)
           : undefined,
     title: o.title != null ? String(o.title) : undefined,
     name: o.name != null ? String(o.name) : undefined,

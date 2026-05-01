@@ -1,10 +1,14 @@
 {
-  "version": "0.675.44",
-  "previousVersion": "0.675.43",
-  "commitHash": "77c25bc",
+  "version": "0.675.48",
+  "previousVersion": "0.675.47",
+  "commitHash": "d0c395a",
   "branch": "main",
-  "buildDate": "2026-05-01T19:46:11.531Z",
+  "buildDate": "2026-05-01T20:06:11.332Z",
   "commits": [
+    {
+      "hash": "d0c395a",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "77c25bc",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "583ec81",
       "message": "fix(ui): responsive channel progress summary"
-    },
-    {
-      "hash": "b4e1c6a",
-      "message": "fix(ui): simplify app header for responsive"
     }
   ],
   "changes": [
@@ -73,7 +73,6 @@
     "[Διόρθωση] Responsive hardening across app",
     "[Διόρθωση] Mobile layout — sidebar drawer <1024px, chart measure + min-w, responsive grids",
     "[Διόρθωση] Members read — avoid circular isBrandMember for collection group",
-    "[Διόρθωση] Organic composite index, tighten members read, guard empty uid",
-    "[Διόρθωση] Scheduled GA4/GSC sync — throttled phase + 20m timeout"
+    "[Διόρθωση] Organic composite index, tighten members read, guard empty uid"
   ]
 }

@@ -1,5 +1,6 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { getAuth } from 'firebase/auth';
 import {
   X,
   Send,
@@ -10,6 +11,20 @@ import {
 import { searchArticles, getArticleById } from '../../data/knowledgeBase';
 import { FormattedProse } from '../common';
 import { shouldSearchWeb, searchWeb, formatSearchResultsForResponse } from '../../services/webSearch';
+import {
+  formatTenantPackForPrompt,
+  formatKnowledgeExcerptsForPrompt,
+  formatWebSnippetsForPrompt,
+  generateAssistantReply,
+  fallbackKnowledgeAnswer,
+  type AssistantTenantPack,
+} from '../../services/aiAssistantChat';
+import { useBrand } from '../../hooks/useBrand';
+import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
+import { useSegments } from '../../hooks/useSegments';
+import { useCampaigns } from '../../hooks/useCampaigns';
+import { useGA4Data } from '../../hooks/useGA4Data';
+import { useProductSource } from '../../hooks/useProductSource';
 
 interface Message {
   id: string;
@@ -26,11 +41,94 @@ interface AIAssistantProps {
 }
 
 export function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
+  const { currentBrand } = useBrand();
+  const ecomm = useEcommerceSummary();
+  const {
+    segments: rfmSegments,
+    totalCustomers,
+    dataSource: segmentsDataSource,
+    orderRfmMeta,
+  } = useSegments();
+  const campaignsHook = useCampaigns();
+  const ga4 = useGA4Data();
+  const productSrc = useProductSource();
+
+  const tenantPack = useMemo((): AssistantTenantPack => {
+    const rows = [...rfmSegments]
+      .sort((a, b) => (b.count ?? 0) - (a.count ?? 0))
+      .slice(0, 12)
+      .map((s) => ({
+        name: s.name,
+        count: s.count,
+        percentage: s.percentage,
+        revenue_share: s.revenue_share,
+      }));
+
+    return {
+      brandName: currentBrand?.name ?? null,
+      brandId: currentBrand?.id ?? null,
+      ecommerce: {
+        hasData: ecomm.hasData,
+        totalRevenue: ecomm.totalRevenue,
+        orderCount: ecomm.orderCount,
+        aov: ecomm.aov,
+        connectedPlatforms: ecomm.connectedPlatforms,
+      },
+      segments: {
+        dataSource: segmentsDataSource,
+        totalCustomers,
+        guestOrdersSkipped: orderRfmMeta?.guestOrdersSkipped,
+        ordersAttributed: orderRfmMeta?.ordersAttributed,
+        rows,
+      },
+      campaigns: {
+        count: campaignsHook.count,
+        hasImported: campaignsHook.hasImported,
+      },
+      products: {
+        count: productSrc.count,
+        hasImported: productSrc.hasImported,
+      },
+      ga4: {
+        hasData: ga4.hasData,
+        propertyName: ga4.propertyName,
+        sessions: ga4.totals.sessions,
+        users: ga4.totals.users,
+        conversions: ga4.totals.conversions,
+      },
+    };
+  }, [
+    currentBrand?.id,
+    currentBrand?.name,
+    ecomm.hasData,
+    ecomm.totalRevenue,
+    ecomm.orderCount,
+    ecomm.aov,
+    ecomm.connectedPlatforms,
+    segmentsDataSource,
+    totalCustomers,
+    orderRfmMeta?.guestOrdersSkipped,
+    orderRfmMeta?.ordersAttributed,
+    rfmSegments,
+    campaignsHook.count,
+    campaignsHook.hasImported,
+    productSrc.count,
+    productSrc.hasImported,
+    ga4.hasData,
+    ga4.propertyName,
+    ga4.totals.sessions,
+    ga4.totals.users,
+    ga4.totals.conversions,
+  ]);
+
+  const tenantSnapshotText = useMemo(() => formatTenantPackForPrompt(tenantPack), [tenantPack]);
+
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 'welcome',
       type: 'assistant',
-      content: 'Γεια σας! Είμαι ο AI Assistant του Performance+. Μπορώ να σας βοηθήσω με ερωτήσεις σχετικά με τη χρήση της πλατφόρμας, τα features, και τη στρατηγική σας. Τι θα θέλατε να μάθετε;',
+      content:
+        'Γεια σας! Είμαι ο AI Assistant του Performance+. Με σύνδεση στο λογαριασμό σας χρησιμοποιώ και μια σύνοψη των τρεχόντων δεδομένων του brand (e-shop, segments, καμπάνιες κ.λπ.) μαζί με το Help και — όταν χρειάζεται — διαδικτυακές πηγές. Ρωτήστε με για τη χρήση της πλατφόρμας ή για ερμηνεία των δεδομένων σας.',
       timestamp: new Date()
     }
   ]);
@@ -65,73 +163,75 @@ export function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
     setIsTyping(true);
 
     try {
-      const query = userQuery.toLowerCase();
-      const relatedArticles = searchArticles(query).slice(0, 3);
-      
-      let response = '';
-      let articleRefs: string[] = [];
+      const articleCandidates = searchArticles(userQuery).slice(0, 5);
+      let articleRefs = articleCandidates.map((a) => a.id);
       let webSources: Array<{ title: string; url: string; snippet: string }> = [];
-
-      // Check if we should search the web
       const needsWebSearch = shouldSearchWeb(userQuery);
-      
+
       if (needsWebSearch) {
-        // Perform web search for marketing-related topics
         try {
           const webResults = await searchWeb(userQuery);
           if (webResults.results.length > 0) {
-            response = formatSearchResultsForResponse(webResults);
-            webSources = webResults.results.map(r => ({
+            webSources = webResults.results.map((r) => ({
               title: r.title,
               url: r.url,
-              snippet: r.snippet
+              snippet: r.snippet,
             }));
-            
-            // Also check knowledge base for Performance+ specific info
-            if (relatedArticles.length > 0) {
-              response += '\n\n—\n\nΣχετικά με το Performance+:\n';
-              relatedArticles.forEach(article => {
-                response += `• ${article.title}\n`;
-                articleRefs.push(article.id);
-              });
-            }
           }
         } catch (webError) {
           console.error('Web search error:', webError);
-          // Fallback to knowledge base
         }
       }
 
-      // If no web search or web search failed, use knowledge base
-      if (!response || !needsWebSearch) {
-        // Generate response based on query and knowledge base
-        if (query.includes('import') || query.includes('εισαγωγή') || query.includes('δεδομένα')) {
-          response = 'Για την εισαγωγή δεδομένων, μπορείτε να χρησιμοποιήσετε CSV ή XLSX αρχεία. Υπάρχουν templates για κάθε τύπο δεδομένων (Products, Segments, Analytics, Campaigns).';
-          articleRefs = ['data-import-basics', 'products-import', 'segments-import'];
-        } else if (query.includes('rfm') || query.includes('segment') || query.includes('data analysis')) {
-          response = 'Το Data Analysis σας βοηθά να κατανοήσετε τους πελάτες σας μέσω RFM, behavioral και firmographic ανάλυσης, ώστε κάθε segment να αποκτά σαφέστερη εμπορική ερμηνεία.';
-          articleRefs = ['rfm-analysis', 'understanding-segments'];
-        } else if (query.includes('strategy') || query.includes('στρατηγική') || query.includes('weights')) {
-          response = 'Το Commercial Strategy σας επιτρέπει να προσαρμόσετε πώς προτεραιοποιούνται τα προϊόντα. Μπορείτε να χρησιμοποιήσετε preset scenarios ή να δημιουργήσετε custom.';
-          articleRefs = ['strategy-weights', 'scenarios'];
-        } else if (query.includes('roi') || query.includes('attribution') || query.includes('απόδοση')) {
-          response = 'Το ROI & Απόδοση συγκρίνει e-shop Revenue, attributed Campaign Revenue και το συνολικό marketing cost, ώστε να βλέπετε e-shop ROI, Campaign ROI, ROAS και Revenue Gap.';
-          articleRefs = ['roi-attribution-basics'];
-        } else if (query.includes('dashboard') || query.includes('kpi')) {
-          response = 'Το Dashboard σας δίνει μια ολοκληρωμένη εικόνα της απόδοσης. Βλέπετε KPIs όπως Total Revenue, Products, Segments, και Campaigns. Κάθε KPI είναι clickable για λεπτομερή ανάλυση.';
-          articleRefs = ['dashboard-overview', 'understanding-kpis'];
-        } else if (query.includes('product') || query.includes('inventory') || query.includes('stock')) {
-          response = 'Το Product Intelligence σας βοηθά να διαχειριστείτε αποθέματα, να εντοπίσετε excess/dead stock, και να προτεραιοποιήσετε προϊόντα.';
-          articleRefs = ['products-intelligence', 'stock-clearance'];
-        } else if (query.includes('channel') || query.includes('campaign')) {
-          response = 'Το Channel Activation σας δίνει AI-powered recommendations για budget allocation, channel mix optimization, και target segments.';
-          articleRefs = ['channel-activation'];
-        } else if (relatedArticles.length > 0) {
-          const article = relatedArticles[0];
-          response = `Βρήκα σχετικό άρθρο: "${article.title}". ${article.description}`;
-          articleRefs = [article.id];
+      let response = '';
+      const firebaseUser = getAuth().currentUser;
+
+      if (firebaseUser) {
+        try {
+          const kbExcerpts = formatKnowledgeExcerptsForPrompt(userQuery);
+          const webBlock =
+            webSources.length > 0 ? formatWebSnippetsForPrompt(webSources) : undefined;
+          response = await generateAssistantReply({
+            userQuery,
+            tenantSnapshotText,
+            knowledgeExcerpts: kbExcerpts,
+            webContext: webBlock,
+          });
+        } catch (geminiErr) {
+          console.error('[AIAssistant] Gemini:', geminiErr);
+          response = fallbackKnowledgeAnswer(userQuery, articleCandidates);
+          const errMsg = geminiErr instanceof Error ? geminiErr.message : '';
+          if (errMsg.includes('Rate limit') || errMsg.includes('429')) {
+            response +=
+              '\n\n_Προσωρινό όριο αιτημάτων AI — δοκίμασε σε λίγα λεπτά._';
+          }
+          if (needsWebSearch && webSources.length > 0) {
+            response +=
+              '\n\n---\n\n' +
+              formatSearchResultsForResponse({
+                query: userQuery,
+                results: webSources,
+                totalResults: webSources.length,
+              });
+          }
+        }
+      } else {
+        if (needsWebSearch && webSources.length > 0) {
+          response = formatSearchResultsForResponse({
+            query: userQuery,
+            results: webSources,
+            totalResults: webSources.length,
+          });
+          if (articleCandidates.length > 0) {
+            response += '\n\n—\n\nΣχετικά με το Performance+:\n';
+            articleCandidates.forEach((article) => {
+              response += `• ${article.title}\n`;
+            });
+          }
         } else {
-          response = 'Μπορώ να σας βοηθήσω με ερωτήσεις σχετικά με:\n\n• Εισαγωγή δεδομένων\n• Data Analysis και Segments\n• Commercial Strategy\n• Product Intelligence\n• Channel Activation\n• ROI Attribution\n• Dashboard και KPIs\n• Marketing, Digital Marketing, Analytics, Content Marketing\n\nΤι θα θέλατε να μάθετε;';
+          response = fallbackKnowledgeAnswer(userQuery, articleCandidates);
+          response +=
+            '\n\n_Για απαντήσεις με βάση τα πραγματικά δεδομένα του brand σου (μέσω AI), συνδέσου στο λογαριασμό Performance+._';
         }
       }
 
@@ -141,10 +241,10 @@ export function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
         content: response,
         relatedArticles: articleRefs.length > 0 ? articleRefs : undefined,
         webSources: webSources.length > 0 ? webSources : undefined,
-        timestamp: new Date()
+        timestamp: new Date(),
       };
 
-      setMessages(prev => [...prev, assistantMessage]);
+      setMessages((prev) => [...prev, assistantMessage]);
       setIsTyping(false);
     } catch (error) {
       console.error('Error generating response:', error);
@@ -206,7 +306,7 @@ export function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
                   <div>
                     <h2 className="font-bold text-[var(--nts-charcoal)] text-[15px]">AI Assistant</h2>
                     <p className="text-[13px] text-[var(--nts-medium-gray)]">
-                      Ερώτησε με οτιδήποτε για το Performance+
+                      AI με σύνοψη λογαριασμού, Help και διαδίκτυο
                     </p>
                   </div>
                 </div>
@@ -366,8 +466,8 @@ export function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
                   <Send size={18} />
                 </button>
               </div>
-              <p className="text-xs text-[var(--nts-medium-gray)] mt-2 text-center">
-                Το AI Assistant έχει πρόσβαση στο Knowledge Library και στο διαδίκτυο
+              <p className="text-xs text-[var(--nts-medium-gray)] mt-2 text-center leading-snug">
+                Με σύνδεση: απαντήσεις μέσω cloud AI με βάση τα τρέχοντα KPIs του brand σας, αποσπάσματα Knowledge Library και (όταν χρειάζεται) διαδικτυακές πηγές. Όριο χρήσης για προστασία κόστους.
               </p>
             </div>
           </motion.div>

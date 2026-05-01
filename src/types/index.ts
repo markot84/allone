@@ -270,6 +270,10 @@ export interface CategoryAffinity {
   name: string;
   affinity: number;
   avg_order: number;
+  /** Αθροιστικό revenue γραμμών παραγγελίας για αυτό το κλειδί (όνομα/SKU/tύπος). */
+  revenue_eur?: number;
+  /** Μερίδιο επί του συνολικού τζίρου του segment (%). */
+  revenue_share_pct?: number;
 }
 
 export interface SegmentCategoryData {

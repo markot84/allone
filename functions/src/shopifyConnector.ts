@@ -187,12 +187,13 @@ export async function fetchShopifyData(brandId: string): Promise<{
     const batchItems: { id: string; data: Record<string, unknown> }[] = [];
 
     while (hasMore) {
+      // No `fields` filter: Shopify truncates nested line_items without product_id/variant_id,
+      // which we need for catalog alignment (join to shopify_products).
       const params = new URLSearchParams({
         status: 'any',
         created_at_min: since.toISOString(),
         limit: '250',
         page: String(orderPage),
-        fields: 'id,name,email,contact_email,created_at,updated_at,financial_status,fulfillment_status,total_price,subtotal_price,total_tax,total_discounts,currency,line_items,tags,customer_id',
       });
 
       const res = await fetch(`${baseUrl}/orders.json?${params}`, { headers });
@@ -230,6 +231,12 @@ export async function fetchShopifyData(brandId: string): Promise<{
               title: li.title || '',
               quantity: li.quantity || 0,
               price: parseFloat(li.price || '0'),
+              ...(li.product_id != null && li.product_id !== ''
+                ? { productId: String(li.product_id) }
+                : {}),
+              ...(li.variant_id != null && li.variant_id !== ''
+                ? { variantId: String(li.variant_id) }
+                : {}),
             })),
             tags: o.tags || '',
             source: 'shopify_api',

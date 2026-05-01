@@ -145,6 +145,59 @@ async function refreshApiToken(storeUrl: string, apiUsername: string, apiKey: st
   return null;
 }
 
+function ocParseMoney(v: unknown): number {
+  if (v === undefined || v === null || v === '') return 0;
+  const n = parseFloat(String(v));
+  return Number.isFinite(n) ? n : 0;
+}
+
+function ocParseQty(v: unknown): number {
+  const n = parseInt(String(v ?? ''), 10);
+  return Number.isFinite(n) && n > 0 ? n : 1;
+}
+
+/**
+ * Maps OpenCart order / order-info payloads → normalized lineItems (aligned with client normalizer).
+ */
+function parseOpenCartOrderProductsToLineItems(source: unknown): Record<string, unknown>[] {
+  if (!source || typeof source !== 'object') return [];
+  const o = source as Record<string, unknown>;
+  const raw = o.products ?? o.order_product ?? o.order_products;
+  if (!Array.isArray(raw) || raw.length === 0) return [];
+  return raw.slice(0, 50).map((p: unknown) => {
+    const row = p && typeof p === 'object' ? (p as Record<string, unknown>) : {};
+    const qty = ocParseQty(row.quantity ?? row.qty);
+    const price = ocParseMoney(row.price);
+    const rowTotRaw = row.total ?? row.sub_total ?? row.subtotal;
+    const rowTot =
+      rowTotRaw !== undefined && rowTotRaw !== null && rowTotRaw !== '' ? ocParseMoney(rowTotRaw) : undefined;
+    const line: Record<string, unknown> = {
+      productId: String(row.product_id ?? row.productId ?? ''),
+      sku: String(row.model ?? row.sku ?? ''),
+      name: String(row.name ?? ''),
+      quantity: qty,
+      price,
+    };
+    if (rowTot !== undefined && rowTot > 0) line.rowTotal = rowTot;
+    return line;
+  });
+}
+
+async function mapPool<T, R>(items: T[], poolSize: number, worker: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  async function runWorker() {
+    while (true) {
+      const i = next++;
+      if (i >= items.length) break;
+      results[i] = await worker(items[i]);
+    }
+  }
+  const n = Math.max(1, Math.min(poolSize, items.length));
+  await Promise.all(Array.from({ length: n }, () => runWorker()));
+  return results;
+}
+
 /**
  * Fetch OpenCart orders (last 3 years) + products and store in Firestore.
  * Customer email is stored for audience exports, while `customerEmailHash` is used
@@ -186,6 +239,53 @@ export async function fetchOpenCartData(brandId: string): Promise<{
     return `${storeUrl}/index.php?${params}`;
   };
 
+  /** Extra API calls per order only when list payload has no product lines (native OC). */
+  const fetchOcOrderLineItemsDetail = async (orderId: string): Promise<Record<string, unknown>[]> => {
+    const tryBodies = (json: unknown): Record<string, unknown>[] => {
+      if (!json || typeof json !== 'object') return [];
+      const j = json as Record<string, unknown>;
+      let lines = parseOpenCartOrderProductsToLineItems(json);
+      if (lines.length > 0) return lines;
+      if (j.order && typeof j.order === 'object') {
+        lines = parseOpenCartOrderProductsToLineItems(j.order);
+        if (lines.length > 0) return lines;
+      }
+      if (j.data && typeof j.data === 'object') {
+        lines = parseOpenCartOrderProductsToLineItems(j.data);
+        if (lines.length > 0) return lines;
+      }
+      return [];
+    };
+
+    if (useRestExtension) {
+      for (const key of ['id', 'order_id'] as const) {
+        const url = buildUrl('rest/order_admin/order', { [key]: orderId });
+        const res = await fetch(url, { headers: buildHeaders() });
+        if (res.ok) {
+          const json = await res.json();
+          const lines = tryBodies(json);
+          if (lines.length > 0) return lines;
+        }
+      }
+      return [];
+    }
+
+    const fetchInfo = async (): Promise<Response> =>
+      fetch(buildUrl('api/order/info', { order_id: orderId }), { headers: buildHeaders() });
+
+    let res = await fetchInfo();
+    if (res.status === 401) {
+      const t = await refreshApiToken(storeUrl, apiUsername, apiKey);
+      if (t) {
+        token = t;
+        res = await fetchInfo();
+      }
+    }
+    if (!res.ok) return [];
+    const json = await res.json();
+    return tryBodies(json);
+  };
+
   let totalImported = 0;
 
   try {
@@ -211,10 +311,25 @@ export async function fetchOpenCartData(brandId: string): Promise<{
       const since = new Date();
       since.setUTCFullYear(since.getUTCFullYear() - 3);
 
-      for (const o of orders) {
-        const dateAdded = o.date_added || o.dateAdded || '';
-        if (dateAdded && new Date(dateAdded) < since) continue;
+      const pageCandidates = orders.filter((o: Record<string, unknown>) => {
+        const dateAdded = String(o.date_added || o.dateAdded || '');
+        if (!dateAdded) return true;
+        const d = new Date(dateAdded);
+        if (Number.isNaN(d.getTime())) return true;
+        return d >= since;
+      });
 
+      const enriched = await mapPool(pageCandidates, 6, async (o: Record<string, unknown>) => {
+        let lineItems = parseOpenCartOrderProductsToLineItems(o);
+        if (lineItems.length === 0) {
+          const oid = String(o.order_id || o.orderId || '');
+          if (oid) lineItems = await fetchOcOrderLineItemsDetail(oid);
+        }
+        return { o, lineItems };
+      });
+
+      for (const { o, lineItems } of enriched) {
+        const dateAdded = String(o.date_added || o.dateAdded || '');
         const ocCid =
           o.customer_id != null && String(o.customer_id) !== '0' && String(o.customer_id) !== ''
             ? String(o.customer_id)
@@ -224,6 +339,8 @@ export async function fetchOpenCartData(brandId: string): Promise<{
         const emailIdentity = getCustomerEmailIdentity(
           o.email || o.customer_email || o.customerEmail || o.payment_email || o.billing_email
         );
+        const productCount =
+          lineItems.length > 0 ? lineItems.length : parseInt(String(o.products || '0'), 10) || 0;
         orderItems.push({
           id: `oc_${o.order_id || o.orderId}`,
           data: {
@@ -232,11 +349,12 @@ export async function fetchOpenCartData(brandId: string): Promise<{
             ...emailIdentity,
             createdAt: dateAdded,
             status: o.order_status || o.status || '',
-            total: parseFloat(o.total || '0'),
+            total: parseFloat(String(o.total || '0')),
             currency: o.currency_code || o.currency || 'EUR',
             paymentMethod: o.payment_method || '',
             shippingMethod: o.shipping_method || '',
-            productsCount: parseInt(o.products || '0', 10) || 0,
+            productsCount: productCount,
+            lineItems,
             source: 'opencart_api',
             brandId,
           },

@@ -244,10 +244,13 @@ function buildBehavioralProfile(g: SegmentAgg, totalRevenue: number, globalAov: 
     .sort((a, b) => b[1].revenue - a[1].revenue)
     .slice(0, 6);
   const maxCategoryRevenue = categoryRows[0]?.[1].revenue || 1;
+  const segmentRevenue = Math.max(g.revenue, 1e-6);
   const category_affinity = categoryRows.map(([name, row]) => ({
     name,
     affinity: Math.round((row.revenue / maxCategoryRevenue) * 100) / 100,
     avg_order: row.quantity > 0 ? Math.round(row.revenue / row.quantity) : Math.round(row.revenue),
+    revenue_eur: Math.round(row.revenue * 100) / 100,
+    revenue_share_pct: Math.round((row.revenue / segmentRevenue) * 1000) / 10,
   }));
   const diversity = Math.min(1, g.affinity.size / 6);
   const engagement = clamp(avgR * 13 + avgF * 8 + avgM * 4);
