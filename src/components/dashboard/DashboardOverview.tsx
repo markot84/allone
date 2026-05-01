@@ -11,6 +11,8 @@ import {
   Building2,
   Globe2,
   Handshake,
+  Plug,
+  Package,
 } from 'lucide-react';
 import {
   AreaChart,
@@ -28,7 +30,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
-import { Card, CardHeader, KPICard, Tooltip, AlertsBanner, PageHeader } from '../common';
+import { Card, CardHeader, KPICard, Tooltip, AlertsBanner, PageHeader, Spinner, Button } from '../common';
 import { useSegments } from '../../hooks/useSegments';
 import { useOrganic } from '../../hooks/useOrganic';
 import { useCampaigns } from '../../hooks/useCampaigns';
@@ -115,13 +117,13 @@ interface DashboardOverviewProps {
 export function DashboardOverview({ onSectionChange, onOpenInsights }: DashboardOverviewProps = {}) {
   const { currentBrand } = useBrand();
   const { isB2B, enabledModules } = useModules();
-  const { segments: rfmSegments, hasImported: hasSegments } = useSegments();
-  const { count: productsCount, products } = useProductSource();
+  const { segments: rfmSegments, hasImported: hasSegments, isLoading: segmentsLoading } = useSegments();
+  const { count: productsCount, products, isLoading: productsLoading } = useProductSource();
   const { productStats } = useProductAggregates();
   const { suppliers } = useSuppliers();
   const { tasks } = useTasks();
-  const { totalOrganicRevenue, byMonth: organicByMonth, hasOrganicRevenue: hasOrganic } = useOrganic();
-  const { count: campaignsCount, campaigns, hasImported: hasCampaigns } = useCampaigns();
+  const { totalOrganicRevenue, byMonth: organicByMonth, hasOrganicRevenue: hasOrganic, isLoading: organicLoading } = useOrganic();
+  const { count: campaignsCount, campaigns, hasImported: hasCampaigns, isLoading: campaignsLoading } = useCampaigns();
   const { activeStrategy, getStrategyName } = useActiveStrategy();
   useAutomationRunner();
   const ga4 = useGA4Data();
@@ -135,7 +137,24 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     return m;
   }, [suppliers]);
   const hasAnyData = hasOrganic || hasSegments || productsCount > 0 || hasCampaigns;
-  
+
+  const ga4AnalyticsLoading = enabledModules.analytics && ga4.isLoading && !ga4.hasData;
+  const ecommerceRawBusy =
+    Boolean(currentBrand) &&
+    enabledModules.ecommerce &&
+    ecomm.connectedPlatforms.length > 0 &&
+    ecommHist.rawLoading;
+
+  const dashboardOverviewLoading =
+    Boolean(currentBrand) &&
+    !hasAnyData &&
+    (segmentsLoading ||
+      campaignsLoading ||
+      organicLoading ||
+      productsLoading ||
+      ecommerceRawBusy ||
+      ga4AnalyticsLoading);
+
   const campaignsTyped = (campaigns ?? []) as Campaign[];
 
   const { period: dashPeriod, setPeriod: setDashPeriod, periodDates } = useDashPeriod();
@@ -482,6 +501,27 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       {/* Automation Alerts */}
       <AlertsBanner maxAlerts={3} onNavigate={onSectionChange} />
 
+      {!currentBrand && (
+        <Card padding="lg" className="border border-amber-200 bg-amber-50/70">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-800">
+                <Building2 size={20} />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-sm font-semibold text-[var(--nts-charcoal)]">Επιλέξτε εταιρικό brand</h3>
+                <p className="mt-1 text-xs leading-relaxed text-[var(--nts-medium-gray)]">
+                  Για KPI και συγχρονισμένα δεδομένα, διαλέξτε brand από το μενού ή ανοίξτε τη διαχείριση brands.
+                </p>
+              </div>
+            </div>
+            <Button variant="primary" size="sm" className="w-full shrink-0 sm:w-auto" onClick={() => onSectionChange?.('brands')}>
+              Διαχείριση brands
+            </Button>
+          </div>
+        </Card>
+      )}
+
       {/* Quick briefing — πάντα με brand, και χωρίς ενεργή στρατηγική */}
       {currentBrand && (
         <StrategyBriefingQuickStrip
@@ -524,6 +564,61 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           period={dashPeriod}
           periodLabel={dashPeriod === 'custom' ? `${periodDates.fromDate} — ${periodDates.toDate}` : (GLOBAL_PERIOD_OPTIONS.find(o => o.key === dashPeriod)?.label ?? 'Τρέχων Μήνας')}
         />
+      )}
+
+      {currentBrand && !hasAnyData && (
+        dashboardOverviewLoading ? (
+          <Card padding="lg" className="border border-[#E8EAED] bg-white">
+            <div className="flex gap-4 items-start">
+              <Spinner size="md" className="shrink-0" />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-[var(--nts-charcoal)]">Φόρτωση δεδομένων πίνακα ελέγχου…</p>
+                <p className="mt-1 text-xs leading-relaxed text-[var(--nts-medium-gray)]">
+                  Συλλογή παραγγελιών, καμπανιών και λοιπών πηγών — σε μεγάλα brands μπορεί να διαρκέσει λίγα λεπτά.
+                </p>
+              </div>
+            </div>
+          </Card>
+        ) : (
+          <Card padding="lg" className="border border-dashed border-[#D1D5DB] bg-[#FAFAFA]">
+            <h3 className="text-base font-semibold text-[var(--nts-charcoal)]">Γεμίστε το Dashboard</h3>
+            <p className="mt-1 text-sm leading-relaxed text-[var(--nts-medium-gray)]">
+              Δεν εμφανίζονται ακόμα τα στοιχεία που τροφοδοτούν τα κύρια charts (καμπάνιες, RFM από παραγγελίες ή προϊόντα). Συνδέστε πηγές ή κάντε εισαγωγή από το Data Hub.
+            </p>
+            <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {enabledModules.data && (
+                <Button
+                  variant="secondary"
+                  className="justify-center"
+                  icon={<Plug size={16} />}
+                  onClick={() => onSectionChange?.('data')}
+                >
+                  Connectors & εισαγωγή
+                </Button>
+              )}
+              {enabledModules.ecommerce && (
+                <Button
+                  variant="secondary"
+                  className="justify-center"
+                  icon={<ShoppingBag size={16} />}
+                  onClick={() => onSectionChange?.('ecommerce')}
+                >
+                  E-commerce
+                </Button>
+              )}
+              {enabledModules.rfm && (
+                <Button variant="secondary" className="justify-center" icon={<Target size={16} />} onClick={() => onSectionChange?.('rfm')}>
+                  RFM & segments
+                </Button>
+              )}
+              {enabledModules.products && (
+                <Button variant="secondary" className="justify-center" icon={<Package size={16} />} onClick={() => onSectionChange?.('products')}>
+                  Προϊόντα & stock
+                </Button>
+              )}
+            </div>
+          </Card>
+        )
       )}
 
       {/* Global period selector — applies to all pages as default */}

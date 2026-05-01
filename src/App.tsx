@@ -138,6 +138,13 @@ function QueryProvider({ children }: { children: React.ReactNode }) {
   return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
 }
 
+/** `#/section` → `section` ώστε να ταιριάζει σε VALID_SECTIONS και στο hashchange handler. */
+function normalizeHashPath(segmentPart: string): string {
+  const raw = segmentPart.trim();
+  if (!raw) return '';
+  return (raw.startsWith('/') ? raw.slice(1) : raw).trim();
+}
+
 /** Hash routing + AppShell — must render under AuthGuard → BrandProvider (useModules → useBrand). */
 function AppMain() {
   const { isSectionEnabled, getFallbackSection } = useModules();
@@ -152,7 +159,7 @@ function AppMain() {
       /* ignore */
     }
     const hash = window.location.hash.replace('#', '');
-    const baseSection = hash.split('?')[0];
+    const baseSection = normalizeHashPath(hash.split('?')[0]);
     if (baseSection && VALID_SECTIONS.includes(baseSection as (typeof VALID_SECTIONS)[number]) && isSectionEnabled(baseSection)) return baseSection;
     return getFallbackSection();
   };
@@ -168,7 +175,7 @@ function AppMain() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const hash = window.location.hash.replace('#', '');
-    const base = hash.split('?')[0];
+    const base = normalizeHashPath(hash.split('?')[0]);
     if (hash.includes('connector=')) return;
     if (base !== activeSection) {
       window.history.replaceState(null, '', `#${activeSection}`);
@@ -179,7 +186,7 @@ function AppMain() {
   useEffect(() => {
     const handleHashChange = () => {
       const full = window.location.hash.replace('#', '');
-      const base = full.split('?')[0];
+      const base = normalizeHashPath(full.split('?')[0]);
       if (!full) return;
       if (!isSectionEnabled(base)) {
         setActiveSection(getFallbackSection());

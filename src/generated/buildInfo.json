@@ -1,10 +1,14 @@
 {
-  "version": "0.690.0",
-  "previousVersion": "0.689.0",
-  "commitHash": "7c0a33b",
+  "version": "0.692.0",
+  "previousVersion": "0.691.0",
+  "commitHash": "619ac1f",
   "branch": "main",
-  "buildDate": "2026-05-01T21:03:14.925Z",
+  "buildDate": "2026-05-01T21:16:16.827Z",
   "commits": [
+    {
+      "hash": "619ac1f",
+      "message": "feat(connectors): Shopify order line productId/variantId; OpenCart lineItems via api/order/info"
+    },
     {
       "hash": "7c0a33b",
       "message": "feat(connectors): Shopify order line productId/variantId; OpenCart lineItems via api/order/info"
@@ -59,10 +63,6 @@
     },
     {
       "hash": "ff023d9",
-      "message": "chore: full deploy"
-    },
-    {
-      "hash": "f6de117",
       "message": "chore: full deploy"
     }
   ],
