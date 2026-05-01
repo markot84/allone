@@ -6,7 +6,7 @@ import { getSegmentColor } from '../utils/segmentColors';
 import { useBrand } from './useBrand';
 import { useEcommerceSummary } from './useEcommerceSummary';
 import { fetchAllEcommerceOrders } from '../services/ecommerceRawOrders';
-import { fetchCatalogAlignmentData } from '../services/catalogAlignment';
+import { fetchCatalogAlignmentData, normalizeCatalogAlignmentPayload } from '../services/catalogAlignment';
 import { computeRfmSegmentsFromEcommerceOrders, computeSegmentMigrationFromEcommerceOrders, type RfmCatalogContext } from '../services/rfmFromOrders';
 import type { RFMSegment } from '../types';
 
@@ -150,8 +150,9 @@ export function useSegments() {
   });
 
   const catalogContext: RfmCatalogContext | null = useMemo(() => {
-    if (!catalogAlignment) return null;
-    return { indexes: catalogAlignment.indexes, erpBySku: catalogAlignment.erpBySku };
+    const normalized = normalizeCatalogAlignmentPayload(catalogAlignment ?? null);
+    if (!normalized) return null;
+    return { indexes: normalized.indexes, erpBySku: normalized.erpBySku };
   }, [catalogAlignment]);
 
   const orderRfm = useMemo(

@@ -17,6 +17,56 @@ export type CatalogIndexes = {
   bySku: Map<string, ErpSkuDims>;
 };
 
+function coerceErpSkuDims(v: unknown): ErpSkuDims {
+  if (!v || typeof v !== 'object') return {};
+  const o = v as Record<string, unknown>;
+  return {
+    ...(typeof o.brand === 'string' && o.brand.trim() ? { brand: String(o.brand).trim() } : {}),
+    ...(typeof o.category === 'string' && o.category.trim() ? { category: String(o.category).trim() } : {}),
+    ...(typeof o.subcategory === 'string' && o.subcategory.trim() ? { subcategory: String(o.subcategory).trim() } : {}),
+  };
+}
+
+/**
+ * React Query persist (localStorage) serializes Map → `{}`. RFM catalog code calls `.has()` — revive Maps from Map or plain record.
+ */
+export function coerceToSkuDimsMap(raw: unknown): Map<string, ErpSkuDims> {
+  if (raw instanceof Map) {
+    const out = new Map<string, ErpSkuDims>();
+    for (const [k, v] of raw.entries()) {
+      if (typeof k === 'string') out.set(k, coerceErpSkuDims(v));
+    }
+    return out;
+  }
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return new Map();
+  const out = new Map<string, ErpSkuDims>();
+  for (const [k, v] of Object.entries(raw)) {
+    out.set(k, coerceErpSkuDims(v));
+  }
+  return out;
+}
+
+export function normalizeCatalogAlignmentPayload(
+  data: { indexes?: unknown; erpBySku?: unknown } | null | undefined
+): { indexes: CatalogIndexes; erpBySku: Map<string, ErpSkuDims> } | null {
+  if (!data || typeof data !== 'object') return null;
+  const idx = data.indexes;
+  let byProductId: unknown;
+  let bySku: unknown;
+  if (idx && typeof idx === 'object' && !Array.isArray(idx)) {
+    const i = idx as { byProductId?: unknown; bySku?: unknown };
+    byProductId = i.byProductId;
+    bySku = i.bySku;
+  }
+  return {
+    indexes: {
+      byProductId: coerceToSkuDimsMap(byProductId),
+      bySku: coerceToSkuDimsMap(bySku),
+    },
+    erpBySku: coerceToSkuDimsMap(data.erpBySku),
+  };
+}
+
 export type ResolvedCatalogLine = {
   match_source: CatalogMatchSource;
   brandLabel: string;

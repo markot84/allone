@@ -4,6 +4,7 @@ import type { EcommerceRawLineItem } from './ecommerceRawOrders';
 import {
   buildErpSkuMap,
   mergePlatformProductDocs,
+  normalizeCatalogAlignmentPayload,
   resolveCatalogLineForOrderLine,
   type CatalogIndexes,
 } from './catalogAlignment';
@@ -28,6 +29,25 @@ describe('buildErpSkuMap', () => {
   it('keys by normalized sku', () => {
     const m = buildErpSkuMap([makeProduct({ sku: ' ab-1 ', brand: 'B', category: 'C', subcategory: 'S' })]);
     expect(m.get('AB-1')).toEqual({ brand: 'B', category: 'C', subcategory: 'S' });
+  });
+});
+
+describe('normalizeCatalogAlignmentPayload', () => {
+  it('revives plain-object maps (React Query localStorage persist — Maps lose .has)', () => {
+    const plain = {
+      indexes: {
+        byProductId: { 'shopify:1': { brand: 'B', category: 'C' } },
+        bySku: {} as Record<string, unknown>,
+      },
+      erpBySku: {},
+    };
+    const n = normalizeCatalogAlignmentPayload(plain);
+    expect(n).not.toBeNull();
+    expect(n!.indexes.byProductId.has('shopify:1')).toBe(true);
+    const item: EcommerceRawLineItem = { productId: '1', sku: 'orphan' };
+    expect(() => resolveCatalogLineForOrderLine('shopify', item, n!.indexes, n!.erpBySku)).not.toThrow();
+    const r = resolveCatalogLineForOrderLine('shopify', item, n!.indexes, n!.erpBySku);
+    expect(r.brandLabel).toBe('B');
   });
 });
 

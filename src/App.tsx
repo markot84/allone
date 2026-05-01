@@ -87,8 +87,8 @@ const queryClient = new QueryClient({
 const persister = typeof window !== 'undefined'
   ? createSyncStoragePersister({
       storage: window.localStorage,
-      /** Bump when persisted queries omit connector-critical keys or strand stale dashboards (see shouldDehydrateQuery). */
-      key: 'PERF_PLUS_QUERY_CACHE_v6',
+      /** Bump when persisted queries omit connector-critical keys or strand stale dashboards (see shouldDehydrateQuery). v7: drop caches that persisted catalogAlignment (Maps broke → `.has` crash). */
+      key: 'PERF_PLUS_QUERY_CACHE_v7',
       throttleTime: 1000
     })
   : undefined;
@@ -118,7 +118,9 @@ function QueryProvider({ children }: { children: React.ReactNode }) {
                 key === 'ecommerce_summary' ||
                 key === 'ecommerceOrdersRaw' ||
                 key === 'segments' ||
-                key === 'segmentCustomerSummaries'
+                key === 'segmentCustomerSummaries' ||
+                /** Maps → broken `{}` after JSON; `.has()` crashes RFM. Heavy anyway — refetch like raw orders. */
+                key === 'catalogAlignment'
               ) {
                 return false;
               }
