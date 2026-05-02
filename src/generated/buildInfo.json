@@ -1,10 +1,14 @@
 {
-  "version": "0.724.0",
-  "previousVersion": "0.723.0",
-  "commitHash": "ed807fc",
+  "version": "0.726.0",
+  "previousVersion": "0.725.0",
+  "commitHash": "4f01cea",
   "branch": "main",
-  "buildDate": "2026-05-02T07:54:52.234Z",
+  "buildDate": "2026-05-02T08:15:15.313Z",
   "commits": [
+    {
+      "hash": "4f01cea",
+      "message": "rfm: clean segment consumption tooltip and chart ui"
+    },
     {
       "hash": "ed807fc",
       "message": "fix(rfm): prevent selected segment update loop crash"
@@ -60,13 +64,10 @@
     {
       "hash": "76e5b89",
       "message": "docs(tooltips): clarify ex-VAT (χωρίς ΦΠΑ) on revenue/AOV/ROI tooltips"
-    },
-    {
-      "hash": "faa10e6",
-      "message": "chore: deploy ex-VAT revenue fix"
     }
   ],
   "changes": [
+    "Rfm: clean segment consumption tooltip and chart ui",
     "[Διόρθωση] Prevent selected segment update loop crash",
     "Rfm: soften selected segment highlight in donut charts",
     "Rfm: auto-open segment consumption detail and show loading states",
@@ -75,7 +76,6 @@
     "Rfm: email-first customer dedup (cross-store) + top products table per segment + chevron on cards toggle",
     "Connectors: Revenue Source Mode + Sales Channel Rules Editor (UI for excluding intercompany/marketplace orders)",
     "Magento: multi-currency aware ex-VAT (base_* fields) for accurate multi-store revenue",
-    "Dashboard: subtle refreshing dot στα ecom KPIs όταν φορτώνουν raw orders (UX clarity)",
-    "ScheduledSync: ERP connectors run in Phase 2 (after critical path) for resilience"
+    "Dashboard: subtle refreshing dot στα ecom KPIs όταν φορτώνουν raw orders (UX clarity)"
   ]
 }

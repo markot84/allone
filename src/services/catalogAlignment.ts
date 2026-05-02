@@ -91,6 +91,69 @@ function trimLabel(s: unknown): string {
   return t;
 }
 
+function meaningfulLabel(value: unknown): string {
+  const text = trimLabel(value);
+  if (!text || text === '—') return '';
+  if (/^\d+$/.test(text)) return '';
+  return text;
+}
+
+function arrayLabels(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      if (typeof item === 'string' || typeof item === 'number') return meaningfulLabel(item);
+      if (item && typeof item === 'object') {
+        const o = item as Record<string, unknown>;
+        return (
+          meaningfulLabel(o.name) ||
+          meaningfulLabel(o.label) ||
+          meaningfulLabel(o.title) ||
+          meaningfulLabel(o.value)
+        );
+      }
+      return '';
+    })
+    .filter(Boolean);
+}
+
+function splitCategoryPath(value: unknown): string[] {
+  if (Array.isArray(value)) return arrayLabels(value);
+  const raw = trimLabel(value);
+  if (!raw) return [];
+  return raw
+    .split(/\s*(?:>|\/|»|\||→)\s*/g)
+    .map(meaningfulLabel)
+    .filter(Boolean)
+    .filter((label) => !/^(root catalog|default category|root|catalog)$/i.test(label));
+}
+
+function pickFirstLabel(row: Record<string, unknown>, keys: string[]): string {
+  for (const key of keys) {
+    const value = meaningfulLabel(row[key]);
+    if (value) return value;
+  }
+  return '';
+}
+
+function pickCategoryDims(row: Record<string, unknown>, fallbackCategory = ''): Pick<ErpSkuDims, 'category' | 'subcategory'> {
+  const path =
+    splitCategoryPath(row.categoryPath).length > 0
+      ? splitCategoryPath(row.categoryPath)
+      : arrayLabels(row.categoryNames).length > 0
+        ? arrayLabels(row.categoryNames)
+        : arrayLabels(row.categories);
+
+  const explicitCategory = pickFirstLabel(row, ['category', 'categoryName', 'productCategory']);
+  const explicitSubcategory = pickFirstLabel(row, ['subcategory', 'subCategory', 'subcategoryName', 'productSubcategory']);
+  const category = explicitCategory || path[0] || meaningfulLabel(fallbackCategory);
+  const subcategory = explicitSubcategory || (path.length > 1 ? path[path.length - 1] : '');
+  return {
+    ...(category ? { category } : {}),
+    ...(subcategory && subcategory !== category ? { subcategory } : {}),
+  };
+}
+
 function setDims(
   map: Map<string, ErpSkuDims>,
   key: string,
@@ -137,8 +200,7 @@ function ingestWooRows(rows: Record<string, unknown>[], indexes: CatalogIndexes)
     const tags = Array.isArray(d.tags) ? (d.tags as unknown[]).map((t) => trimLabel(t)) : [];
     const base: ErpSkuDims = {
       ...(tags[0] ? { brand: tags[0] } : {}),
-      ...(cats[0] ? { category: cats[0] } : {}),
-      ...(cats[1] ? { subcategory: cats[1] } : {}),
+      ...pickCategoryDims(d, cats[0]),
     };
     if (pid) setDims(indexes.byProductId, pk(platform, pid), base);
     const ns = normalizeSku(trimLabel(d.sku));
@@ -151,10 +213,10 @@ function ingestMagentoRows(rows: Record<string, unknown>[], indexes: CatalogInde
   for (const d of rows) {
     const pid = trimLabel(d.productId);
     const skuRaw = trimLabel(d.sku);
-    const mfg = trimLabel(d.manufacturer);
-    const brand = mfg && !/^\d+$/.test(mfg) ? mfg : undefined;
+    const brand = pickFirstLabel(d, ['brand', 'manufacturerLabel', 'manufacturer', 'vendor']);
     const base: ErpSkuDims = {
       ...(brand ? { brand } : {}),
+      ...pickCategoryDims(d),
     };
     if (pid) setDims(indexes.byProductId, pk(platform, pid), base);
     const ns = normalizeSku(skuRaw);
@@ -166,9 +228,10 @@ function ingestOpenCartRows(rows: Record<string, unknown>[], indexes: CatalogInd
   const platform = 'opencart';
   for (const d of rows) {
     const pid = trimLabel(d.productId);
-    const mfg = trimLabel(d.manufacturer);
+    const mfg = meaningfulLabel(d.manufacturer);
     const base: ErpSkuDims = {
       ...(mfg ? { brand: mfg } : {}),
+      ...pickCategoryDims(d),
     };
     if (pid) setDims(indexes.byProductId, pk(platform, pid), base);
     const ns = normalizeSku(trimLabel(d.sku)) || normalizeSku(trimLabel(d.model));
@@ -205,7 +268,7 @@ export function buildErpSkuMap(products: Product[]): Map<string, ErpSkuDims> {
     const subcategory = trimLabel(p.subcategory);
     out.set(ns, {
       ...(brand ? { brand } : {}),
-      ...(category ? { category } : {}),
+      ...pickCategoryDims(p as unknown as Record<string, unknown>, category),
       ...(subcategory ? { subcategory } : {}),
     });
   }

@@ -358,6 +358,65 @@ function buildMagentoRestUrl(restApiBase: string, endpoint: string, storeCode?: 
     : `${cleanBase}/rest/V1/${cleanEndpoint}`;
 }
 
+type MagentoCategoryNode = {
+  id?: number | string;
+  name?: string;
+  path?: string;
+  children_data?: MagentoCategoryNode[];
+};
+
+type MagentoCategoryInfo = {
+  id: string;
+  name: string;
+  pathIds: string[];
+  pathNames: string[];
+};
+
+function isUsefulMagentoCategoryName(name: string): boolean {
+  return !!name && !/^(root catalog|default category|root|catalog)$/i.test(name.trim());
+}
+
+function flattenMagentoCategoryTree(
+  node: MagentoCategoryNode,
+  out: Map<string, MagentoCategoryInfo>,
+  parentNames: string[] = []
+): void {
+  const id = String(node.id ?? '').trim();
+  const name = String(node.name ?? '').trim();
+  const nextNames = isUsefulMagentoCategoryName(name) ? [...parentNames, name] : parentNames;
+  if (id) {
+    out.set(id, {
+      id,
+      name,
+      pathIds: String(node.path || '')
+        .split('/')
+        .map((v) => v.trim())
+        .filter(Boolean),
+      pathNames: nextNames,
+    });
+  }
+  for (const child of node.children_data || []) {
+    flattenMagentoCategoryTree(child, out, nextNames);
+  }
+}
+
+async function fetchMagentoCategoryMap(
+  restApiBase: string,
+  storeCode: string | undefined,
+  headers: Record<string, string>
+): Promise<Map<string, MagentoCategoryInfo>> {
+  try {
+    const res = await fetch(buildMagentoRestUrl(restApiBase, 'categories', storeCode), { headers });
+    if (!res.ok) return new Map();
+    const root = (await res.json()) as MagentoCategoryNode;
+    const out = new Map<string, MagentoCategoryInfo>();
+    flattenMagentoCategoryTree(root, out);
+    return out;
+  } catch {
+    return new Map();
+  }
+}
+
 /**
  * Δοκιμάζει όλους τους συνήθεις τρόπους πρόσβασης στο REST API.
  * Σημαντικό: μερικά Magento χωρίς rewrite θέλουν /index.php/rest/...
@@ -825,6 +884,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
     // SKU lookup map (id → sku) ώστε για configurable parents να γράψουμε `parentSkus` στα variants.
     const idToSku = new Map<string, string>();
     const parentLinks: { childId: string; parentId: string }[] = [];
+    const categoryMap = await fetchMagentoCategoryMap(restApiBase, storeCode, headers);
 
     while (prodMore) {
       const searchParams = new URLSearchParams({
@@ -880,6 +940,15 @@ export async function fetchMagentoData(brandId: string): Promise<{
         const categoryIds: string[] = (p.extension_attributes?.category_links || [])
           .map((c: any) => String(c?.category_id || ''))
           .filter(Boolean);
+        const categoryPaths = categoryIds
+          .map((id) => categoryMap.get(id)?.pathNames || [])
+          .filter((path) => path.length > 0)
+          .sort((a, b) => b.length - a.length);
+        const primaryCategoryPath = categoryPaths[0] || [];
+        const categoryNames = [...new Set(categoryPaths.flat())];
+        const categoryName = primaryCategoryPath[0] || '';
+        const subcategoryName =
+          primaryCategoryPath.length > 1 ? primaryCategoryPath[primaryCategoryPath.length - 1] : '';
 
         const configurableLinks: string[] = (p.extension_attributes?.configurable_product_links || [])
           .map((id: any) => String(id))
@@ -911,6 +980,10 @@ export async function fetchMagentoData(brandId: string): Promise<{
             inStock: stockItem?.is_in_stock ?? null,
             specialPrice: getAttr('special_price') ? parseFloat(getAttr('special_price')) : null,
             manufacturer: getAttr('manufacturer'),
+            category: categoryName,
+            subcategory: subcategoryName,
+            categoryNames,
+            categoryPath: primaryCategoryPath,
             // Feed-ready fields
             urlKey,
             description,

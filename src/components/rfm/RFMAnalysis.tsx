@@ -1086,9 +1086,9 @@ function SegmentDetail({
       case 'brand':
         return behavioral?.brand_affinity ?? [];
       case 'category':
-        return catalogCats.length > 0 ? catalogCats : heuristicCats;
+        return (behavioral?.subcategory_affinity?.length ? behavioral.subcategory_affinity : catalogCats.length > 0 ? catalogCats : heuristicCats);
       case 'subcategory':
-        return behavioral?.subcategory_affinity ?? [];
+        return (behavioral?.subcategory_affinity?.length ? behavioral.subcategory_affinity : catalogCats.length > 0 ? catalogCats : heuristicCats);
       case 'sku':
         return behavioral?.sku_affinity ?? [];
       default:
@@ -1128,15 +1128,15 @@ function SegmentDetail({
         : [];
 
   const dimLabel: Record<CatalogDim, string> = {
-    brand: 'Μάρκες',
-    category: 'Κατηγορίες',
-    subcategory: 'Υποκατηγορίες',
+    brand: 'Brands',
+    category: 'Categories',
+    subcategory: 'Subcategories',
     sku: 'SKU',
   };
 
   const leftChartTitle = hasCatalogRollups
     ? `Mix κατανάλωσης · ${dimLabel[catalogDim]}`
-    : 'Προτιμώμενα categories / mix κατανάλωσης';
+    : 'Consumption mix · Categories';
 
   return (
     <Card padding="lg">
@@ -1251,7 +1251,7 @@ function SegmentDetail({
 
         <div className="space-y-4">
           <div className="p-4 bg-[#F5F5F5] rounded-lg">
-            <h5 className="text-sm font-medium text-[#1A1A1A] mb-2">Προτιμώμενα brands</h5>
+            <h5 className="text-sm font-medium text-[#1A1A1A] mb-2">Preferred Brands</h5>
             {brandAff.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {brandAff.slice(0, 12).map((row) => (
@@ -1262,7 +1262,7 @@ function SegmentDetail({
               </div>
             ) : fromComputedOrders && hasCatalogRollups ? (
               <p className="text-xs text-[#6B7280] leading-relaxed">
-                Δεν εντοπίστηκε εμπορική μάρκα στο catalog για τις γραμμές του segment (ή όλα ως «Λοιπά»).
+                Δεν εντοπίστηκε brand στο catalog για τις γραμμές του segment (ή όλα ως «Λοιπά»).
               </p>
             ) : mockBrands.length > 0 ? (
               <div className="flex flex-wrap gap-2">
@@ -1276,7 +1276,7 @@ function SegmentDetail({
           </div>
 
           <div className="p-4 bg-[#F5F5F5] rounded-lg">
-            <h5 className="text-sm font-medium text-[#1A1A1A] mb-2">Υποκατηγορίες</h5>
+            <h5 className="text-sm font-medium text-[#1A1A1A] mb-2">Subcategories</h5>
             {subAff.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {subAff.slice(0, 12).map((row) => (
