@@ -13,6 +13,11 @@ export interface KPICardData {
   trend?: 'up' | 'down';
   sparklineData?: number[];
   tooltip?: string;
+  /**
+   * Subtle pulsing dot στο label δίπλα στο tooltip — ένδειξη ότι το KPI ανανεώνεται
+   * (π.χ. raw orders ακόμα φορτώνουν, summary fallback εμφανίζεται προσωρινά).
+   */
+  refreshing?: boolean;
 }
 
 interface KPICardProps {
@@ -56,9 +61,16 @@ export function KPICard({ kpi, index, onClick, className }: KPICardProps) {
         onClick={onClick}
       >
         <div className="flex items-start justify-between mb-3">
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             <p className="text-[13px] font-medium text-[var(--nts-medium-gray)]">{kpi.label}</p>
             {kpi.tooltip && <Tooltip content={kpi.tooltip} size={13} />}
+            {kpi.refreshing && (
+              <span
+                className="inline-flex w-2 h-2 rounded-full bg-[var(--nts-accent)] animate-pulse"
+                title="Ανανέωση δεδομένων…"
+                aria-label="Ανανέωση δεδομένων"
+              />
+            )}
           </div>
           {kpi.trend === 'up' ? (
             <div className="p-1.5 bg-[var(--nts-light-gray)] rounded-md border border-[var(--nts-border-gray)]">

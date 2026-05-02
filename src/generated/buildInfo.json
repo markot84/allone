@@ -1,10 +1,14 @@
 {
-  "version": "0.700.0",
-  "previousVersion": "0.699.0",
-  "commitHash": "f86fd48",
+  "version": "0.702.0",
+  "previousVersion": "0.701.0",
+  "commitHash": "c5835d9",
   "branch": "main",
-  "buildDate": "2026-05-02T05:11:17.912Z",
+  "buildDate": "2026-05-02T05:26:06.734Z",
   "commits": [
+    {
+      "hash": "c5835d9",
+      "message": "scheduledSync: ERP connectors run in Phase 2 (after critical path) for resilience"
+    },
     {
       "hash": "f86fd48",
       "message": "dashboard: Marketing Expenses KPI + Magento subtotal-based ex-VAT for accounting parity"
@@ -60,13 +64,10 @@
     {
       "hash": "d0c395a",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "77c25bc",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [
+    "ScheduledSync: ERP connectors run in Phase 2 (after critical path) for resilience",
     "Dashboard: Marketing Expenses KPI + Magento subtotal-based ex-VAT for accounting parity",
     "[Διόρθωση] Parallel per-brand connectors, raise timeout to 1800s",
     "[Τεκμηρίωση] Clarify ex-VAT (χωρίς ΦΠΑ) on revenue/AOV/ROI tooltips",

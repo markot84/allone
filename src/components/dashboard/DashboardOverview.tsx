@@ -145,6 +145,14 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     ecomm.connectedPlatforms.length > 0 &&
     ecommHist.rawLoading;
 
+  /**
+   * Τα ecom KPIs ξεκινούν με τιμές από το server summary (1 Firestore read, instant) και
+   * αντικαθίστανται από client-side raw aggregates μόλις φορτωθούν τα orders. Όσο διαρκεί
+   * αυτό το second pass, εμφανίζουμε pulsing dot στα affected cards για να ξέρει ο user
+   * ότι το νούμερο ίσως ενημερωθεί ελαφρώς.
+   */
+  const ecomKpisRefreshing = ecommerceRawBusy && ecommHist.source === 'summary';
+
   const dashboardOverviewLoading =
     Boolean(currentBrand) &&
     !hasAnyData &&
@@ -874,6 +882,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   changeLabel: revenueMoM !== null ? 'vs προηγ. μήνα' : undefined,
                   trend: revenueMoM !== null ? (revenueMoM >= 0 ? 'up' : 'down') : 'up',
                   sparklineData: revenueSpark,
+                  refreshing: hasEcommerceRevenue && ecomKpisRefreshing,
                   tooltip:
                     isB2B
                       ? 'Βασική εικόνα εσόδων από οργανική ζήτηση και demand generation. Για πλήρη αποτύπωση εσόδων ανά account απαιτείται invoicing ή ERP import.'
@@ -926,6 +935,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   changeLabel: isB2B ? 'ενέργειες υψηλής πρόθεσης' : aovMoM !== null ? 'vs προηγ. μήνα' : undefined,
                   trend: isB2B ? (campaignMetrics.totalConversions > 0 ? 'up' : undefined) : aov > 0 ? (aovMoM !== null && aovMoM < 0 ? 'down' : 'up') : undefined,
                   sparklineData: isB2B ? spendSpark : aovSpark,
+                  refreshing: !isB2B && hasEshop && ecomKpisRefreshing,
                   tooltip: isB2B
                     ? 'Μετατροπές ή ενέργειες υψηλής πρόθεσης από τα demand channels, έως ότου ενεργοποιηθεί πλήρης παρακολούθηση pipeline.'
                     : hasEshop
@@ -962,7 +972,16 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   <ShoppingBag size={16} className="text-[var(--nts-accent)]" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-semibold text-[#1A1A1A]">E-commerce</h4>
+                  <div className="flex items-center gap-1.5">
+                    <h4 className="text-sm font-semibold text-[#1A1A1A]">E-commerce</h4>
+                    {ecomKpisRefreshing && (
+                      <span
+                        className="inline-flex w-2 h-2 rounded-full bg-[var(--nts-accent)] animate-pulse"
+                        title="Ανανέωση δεδομένων…"
+                        aria-label="Ανανέωση δεδομένων"
+                      />
+                    )}
+                  </div>
                   <span className="text-[10px] text-[#9CA3AF]">
                     {ecomm.connectedPlatforms.length} πλατφόρμες · επιλεγμένη περίοδος
                   </span>
