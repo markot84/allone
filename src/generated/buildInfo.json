@@ -1,10 +1,14 @@
 {
-  "version": "0.713.0",
-  "previousVersion": "0.712.0",
-  "commitHash": "d4d5b44",
+  "version": "0.716.0",
+  "previousVersion": "0.715.0",
+  "commitHash": "b503426",
   "branch": "main",
-  "buildDate": "2026-05-02T07:02:06.306Z",
+  "buildDate": "2026-05-02T07:16:25.413Z",
   "commits": [
+    {
+      "hash": "b503426",
+      "message": "rfm: keep guests out of customer counts and use rolling 12-month RFM"
+    },
     {
       "hash": "d4d5b44",
       "message": "rfm: email-first customer dedup (cross-store) + top products table per segment + chevron on cards toggle"
@@ -60,13 +64,10 @@
     {
       "hash": "619ac1f",
       "message": "feat(connectors): Shopify order line productId/variantId; OpenCart lineItems via api/order/info"
-    },
-    {
-      "hash": "7c0a33b",
-      "message": "feat(connectors): Shopify order line productId/variantId; OpenCart lineItems via api/order/info"
     }
   ],
   "changes": [
+    "Rfm: keep guests out of customer counts and use rolling 12-month RFM",
     "Rfm: email-first customer dedup (cross-store) + top products table per segment + chevron on cards toggle",
     "Connectors: Revenue Source Mode + Sales Channel Rules Editor (UI for excluding intercompany/marketplace orders)",
     "Magento: multi-currency aware ex-VAT (base_* fields) for accurate multi-store revenue",
@@ -75,7 +76,6 @@
     "Dashboard: Marketing Expenses KPI + Magento subtotal-based ex-VAT for accounting parity",
     "[Διόρθωση] Parallel per-brand connectors, raise timeout to 1800s",
     "[Τεκμηρίωση] Clarify ex-VAT (χωρίς ΦΠΑ) on revenue/AOV/ROI tooltips",
-    "[Συντήρηση] Deploy ex-VAT revenue fix",
-    "[Διόρθωση] Ex-VAT revenue across dashboard, aggregator and raw orders"
+    "[Συντήρηση] Deploy ex-VAT revenue fix"
   ]
 }
