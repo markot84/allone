@@ -479,7 +479,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
           </span>
         ) : null}
         {rfmDataSource === 'ecommerce' ? (
-          <span className="text-[#6B7280]">Raw παραγγελίες · quintiles</span>
+          <span className="text-[#6B7280]">Raw παραγγελίες 12μήνου · quintiles</span>
         ) : (
           <span className="text-[#6B7280]">Εισαγωγή / ERP εκτός e-shop</span>
         )}
@@ -501,7 +501,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
             </p>
             {rfmDataSource === 'ecommerce' && (
               <p className="text-[11px]">
-                Από εσωτερικό <strong>customerId</strong> ανά παραγγελία — όχι μόνο email guest.
+                Από αναγνωρίσιμο e-shop customer στο τελευταίο 12μηνο — email-only guest orders μένουν εκτός RFM.
               </p>
             )}
             {isCatalogEnriching && (

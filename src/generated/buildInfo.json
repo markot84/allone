@@ -1,10 +1,14 @@
 {
-  "version": "0.711.0",
-  "previousVersion": "0.710.0",
-  "commitHash": "f516b37",
+  "version": "0.713.0",
+  "previousVersion": "0.712.0",
+  "commitHash": "d4d5b44",
   "branch": "main",
-  "buildDate": "2026-05-02T06:45:36.580Z",
+  "buildDate": "2026-05-02T07:02:06.306Z",
   "commits": [
+    {
+      "hash": "d4d5b44",
+      "message": "rfm: email-first customer dedup (cross-store) + top products table per segment + chevron on cards toggle"
+    },
     {
       "hash": "f516b37",
       "message": "connectors: Revenue Source Mode + Sales Channel Rules Editor (UI for excluding intercompany/marketplace orders)"
@@ -60,13 +64,10 @@
     {
       "hash": "7c0a33b",
       "message": "feat(connectors): Shopify order line productId/variantId; OpenCart lineItems via api/order/info"
-    },
-    {
-      "hash": "d43f6ec",
-      "message": "feat(connectors): Shopify order line productId/variantId; OpenCart lineItems via api/order/info"
     }
   ],
   "changes": [
+    "Rfm: email-first customer dedup (cross-store) + top products table per segment + chevron on cards toggle",
     "Connectors: Revenue Source Mode + Sales Channel Rules Editor (UI for excluding intercompany/marketplace orders)",
     "Magento: multi-currency aware ex-VAT (base_* fields) for accurate multi-store revenue",
     "Dashboard: subtle refreshing dot στα ecom KPIs όταν φορτώνουν raw orders (UX clarity)",
@@ -75,7 +76,6 @@
     "[Διόρθωση] Parallel per-brand connectors, raise timeout to 1800s",
     "[Τεκμηρίωση] Clarify ex-VAT (χωρίς ΦΠΑ) on revenue/AOV/ROI tooltips",
     "[Συντήρηση] Deploy ex-VAT revenue fix",
-    "[Διόρθωση] Ex-VAT revenue across dashboard, aggregator and raw orders",
-    "[Διόρθωση] Non-blocking orders fetch with inline progress + error UI"
+    "[Διόρθωση] Ex-VAT revenue across dashboard, aggregator and raw orders"
   ]
 }

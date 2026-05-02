@@ -83,6 +83,7 @@ type CustomerSegmentAssignment = {
 };
 
 const DAY_LABELS = ['Κυριακή', 'Δευτέρα', 'Τρίτη', 'Τετάρτη', 'Πέμπτη', 'Παρασκευή', 'Σάββατο'];
+const RFM_LOOKBACK_DAYS = 365;
 
 /** Ανάθεση βαθμίδων 1–5: lowIsHighScore = true όταν μικρότερη τιμή = καλύτερο (recency days). */
 function assignQuintileScores(values: number[], lowIsHighScore: boolean): number[] {
@@ -535,8 +536,9 @@ export function computeSegmentMigrationFromEcommerceOrders(
 }
 
 /**
- * RFM + συγκέντρωση segments από raw e-commerce παραγγελίες (εσωτερικό customer id ανά platform).
+ * RFM + συγκέντρωση segments από raw e-commerce παραγγελίες.
  * Αγνοεί guest/email-only orders, cancelled & 100% demo, όπως το υπόλοιπο e-commerce.
+ * Χρησιμοποιεί rolling 12μηνο ώστε historical backfills να μη φουσκώνουν κάθε φορά το ενεργό πελατολόγιο.
  */
 export function computeRfmSegmentsFromEcommerceOrders(
   orders: EcommerceRawOrder[],
@@ -545,10 +547,22 @@ export function computeRfmSegmentsFromEcommerceOrders(
   const byKey = new Map<string, CustomerAgg>();
   let guestOrdersSkipped = 0;
   let ordersAttributed = 0;
-  const asOf = new Date();
+  const latestOrderTime = orders
+    .map((o) => new Date(o.createdAt || '').getTime())
+    .filter(Number.isFinite)
+    .sort((a, b) => b - a)[0];
+  const asOf = latestOrderTime ? new Date(latestOrderTime) : new Date();
   asOf.setHours(23, 59, 59, 999);
+  const cutoff = new Date(asOf);
+  cutoff.setDate(cutoff.getDate() - RFM_LOOKBACK_DAYS);
+  cutoff.setHours(0, 0, 0, 0);
+  const cutoffMs = cutoff.getTime();
 
   for (const o of orders) {
+    const createdAtMs = new Date(o.createdAt || '').getTime();
+    if (!Number.isFinite(createdAtMs) || createdAtMs < cutoffMs || createdAtMs > asOf.getTime()) {
+      continue;
+    }
     if (!o.customerKey?.trim()) {
       if (!isEcommerceOrderCancelled(o.status) && getEcommerceOrderNetRevenue(o).revenue > 0) {
         guestOrdersSkipped += 1;
