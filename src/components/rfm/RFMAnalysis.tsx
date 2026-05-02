@@ -372,7 +372,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
           </span>
         ) : null}
         {rfmDataSource === 'ecommerce' ? (
-          <span className="text-[#6B7280]">Raw παραγγελίες 12μήνου · quintiles</span>
+          <span className="text-[#6B7280]">12-month order history · quintiles</span>
         ) : (
           <span className="text-[#6B7280]">Εισαγωγή / ERP εκτός e-shop</span>
         )}
@@ -382,10 +382,10 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
           </span>
         ) : null}
         {ordersLoading ? (
-          <LoadingStatusPill label="φόρτωση raw orders…" />
+          <LoadingStatusPill label="Loading order history…" />
         ) : null}
         {isCatalogEnriching ? (
-          <LoadingStatusPill label="φόρτωση catalog προϊόντων…" />
+          <LoadingStatusPill label="Loading product catalog…" />
         ) : null}
         <details className="sm:ml-auto min-w-0 max-w-full sm:max-w-[22rem] text-[11px]">
           <summary className="cursor-pointer font-semibold text-[var(--nts-accent)] hover:underline">
@@ -1057,6 +1057,10 @@ function SegmentConsumptionTooltip({
   );
 }
 
+function isGenericCatalogLabel(name: string): boolean {
+  return /^(λοιπά|other|others|n\/a|unknown|άλλο)$/i.test(name.trim());
+}
+
 function SegmentDetail({
   segment,
   hasImportedSegments,
@@ -1084,11 +1088,11 @@ function SegmentDetail({
     if (!hasCatalogRollups) return heuristicCats;
     switch (catalogDim) {
       case 'brand':
-        return behavioral?.brand_affinity ?? [];
+        return (behavioral?.brand_affinity ?? []).filter((row) => !isGenericCatalogLabel(row.name));
       case 'category':
-        return (behavioral?.subcategory_affinity?.length ? behavioral.subcategory_affinity : catalogCats.length > 0 ? catalogCats : heuristicCats);
+        return catalogCats.length > 0 ? catalogCats : heuristicCats;
       case 'subcategory':
-        return (behavioral?.subcategory_affinity?.length ? behavioral.subcategory_affinity : catalogCats.length > 0 ? catalogCats : heuristicCats);
+        return (behavioral?.subcategory_affinity ?? []).filter((row) => !isGenericCatalogLabel(row.name));
       case 'sku':
         return behavioral?.sku_affinity ?? [];
       default:
@@ -1114,8 +1118,8 @@ function SegmentDetail({
   const cm = behavioral?.catalog_match;
 
   const mockBrands = allowConsumptionDemo && !fromComputedOrders && mockRow?.brands?.length ? mockRow.brands : [];
-  const brandAff = behavioral?.brand_affinity ?? [];
-  const subAff = behavioral?.subcategory_affinity ?? [];
+  const brandAff = (behavioral?.brand_affinity ?? []).filter((row) => !isGenericCatalogLabel(row.name));
+  const subAff = (behavioral?.subcategory_affinity ?? []).filter((row) => !isGenericCatalogLabel(row.name));
   const priceSens =
     behavioral?.price_sensitivity ??
     (allowConsumptionDemo ? mockRow?.price_sensitivity : undefined) ??

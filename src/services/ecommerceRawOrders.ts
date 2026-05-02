@@ -1,8 +1,9 @@
 /**
- * Client-side: πλήρες fetch παραγγελιών από Firestore (όλα τα e-shop connectors) και
+ * Client-side: fetch παραγγελιών από Firestore (όλα τα e-shop connectors) και
  * αθροίσεις ίδιες με το ecommerceAggregator (demo + cancelled) ώστε οι περίοδοι >90d
  * να εμφανίζονται σωστά στο UI (το server summary κρατά rolling ~90 ημέρες).
  */
+import { orderBy, where, type QueryConstraint } from 'firebase/firestore';
 import { FirestoreService } from './firestore';
 import {
   classifyEcommerceOrder,
@@ -268,7 +269,11 @@ async function fetchBrandRevenueSourceMode(brandId: string): Promise<'eshop_clas
   }
 }
 
-export async function fetchAllEcommerceOrders(brandId: string, platforms: string[]): Promise<EcommerceRawOrder[]> {
+export async function fetchAllEcommerceOrders(
+  brandId: string,
+  platforms: string[],
+  options: { sinceDate?: string; cacheFirst?: boolean } = {}
+): Promise<EcommerceRawOrder[]> {
   const [mode, allRules, results] = await Promise.all([
     fetchBrandRevenueSourceMode(brandId),
     fetchSalesChannelRules(brandId),
@@ -276,7 +281,22 @@ export async function fetchAllEcommerceOrders(brandId: string, platforms: string
       platforms.map(async (platform) => {
         const collectionName = ECOMMERCE_ORDER_COLLECTIONS[platform];
         if (!collectionName) return [] as EcommerceRawOrder[];
-        const rows = await FirestoreService.getDocuments<Record<string, unknown>>(collectionName, [], brandId);
+        const constraints: QueryConstraint[] = options.sinceDate
+          ? [where('createdAt', '>=', options.sinceDate), orderBy('createdAt', 'desc')]
+          : [];
+        let rows: Record<string, unknown>[];
+        try {
+          rows = await FirestoreService.getDocuments<Record<string, unknown>>(collectionName, constraints, brandId, {
+            cacheFirst: options.cacheFirst,
+          });
+        } catch (error) {
+          if (!options.sinceDate) throw error;
+          // If a composite index is still building/missing, keep the page functional and filter client-side.
+          const fallbackRows = await FirestoreService.getDocuments<Record<string, unknown>>(collectionName, [], brandId, {
+            cacheFirst: options.cacheFirst,
+          });
+          rows = fallbackRows.filter((row) => String(row.createdAt || '') >= options.sinceDate!);
+        }
         return rows.map((row) => normalizeRawOrder(platform, row));
       })
     ),

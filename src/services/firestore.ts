@@ -4,6 +4,7 @@ import {
   doc, 
   getDoc, 
   getDocs,
+  getDocsFromCache,
   getDocsFromServer,
   setDoc, 
   updateDoc, 
@@ -139,7 +140,7 @@ export class FirestoreService {
     collectionName: string,
     constraints: QueryConstraint[] = [],
     brandId?: string | null,
-    options?: { forceServer?: boolean }
+    options?: { forceServer?: boolean; cacheFirst?: boolean }
   ): Promise<T[]> {
     try {
       const allConstraints: QueryConstraint[] = [];
@@ -150,7 +151,9 @@ export class FirestoreService {
       const q = query(collection(db, collectionName), ...allConstraints);
       const querySnapshot = options?.forceServer
         ? await getDocsFromServer(q)
-        : await getDocs(q);
+        : options?.cacheFirst
+          ? await getDocsFromCache(q).then((snap) => (snap.empty ? getDocs(q) : snap)).catch(() => getDocs(q))
+          : await getDocs(q);
 
       return querySnapshot.docs.map((d) => ({
         id: d.id,

@@ -696,7 +696,10 @@ export function computeRfmSegmentsFromEcommerceOrders(
           }
           bumpCatalogLine(g.catalogBrand, resolved.brandLabel, lineRev, lineQty, order.orderId);
           bumpCatalogLine(g.catalogCategory, resolved.categoryLabel, lineRev, lineQty, order.orderId);
-          if (resolved.subcategoryLabel.trim()) {
+          if (
+            resolved.subcategoryLabel.trim() &&
+            resolved.subcategoryLabel.trim().toLowerCase() !== resolved.categoryLabel.trim().toLowerCase()
+          ) {
             bumpCatalogLine(g.catalogSubcategory, resolved.subcategoryLabel, lineRev, lineQty, order.orderId);
           }
           bumpCatalogLine(g.catalogSku, resolved.skuLabel, lineRev, lineQty, order.orderId);

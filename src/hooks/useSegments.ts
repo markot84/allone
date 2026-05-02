@@ -11,6 +11,7 @@ import { computeRfmSegmentsFromEcommerceOrders, computeSegmentMigrationFromEcomm
 import type { RFMSegment } from '../types';
 
 const STORAGE_KEY = (brandId: string) => `pp-rfm-data-source-${brandId}`;
+const RFM_ORDER_FETCH_WINDOW_DAYS = 400;
 
 export type RfmDataSourcePreference = 'orders' | 'external';
 
@@ -130,12 +131,21 @@ export function useSegments() {
   );
 
   const ordersQueryEnabled = !!brandId && ecomm.connectedPlatforms.length > 0;
+  const ordersSinceDate = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - RFM_ORDER_FETCH_WINDOW_DAYS);
+    d.setHours(0, 0, 0, 0);
+    return d.toISOString().slice(0, 10);
+  }, []);
   const { data: rawOrders = [], isPending: ordersPending, error: ordersError } = useQuery({
-    queryKey: ['ecommerceOrdersRaw', brandId, platformsKey],
-    queryFn: () => (brandId ? fetchAllEcommerceOrders(brandId, ecomm.connectedPlatforms) : Promise.resolve([])),
+    queryKey: ['ecommerceOrdersRaw', brandId, platformsKey, ordersSinceDate],
+    queryFn: () =>
+      brandId
+        ? fetchAllEcommerceOrders(brandId, ecomm.connectedPlatforms, { sinceDate: ordersSinceDate, cacheFirst: true })
+        : Promise.resolve([]),
     enabled: ordersQueryEnabled,
-    staleTime: 60 * 1000,
-    gcTime: 10 * 60 * 1000,
+    staleTime: 12 * 60 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
     refetchOnWindowFocus: false,
     retry: 1,
   });
@@ -257,7 +267,7 @@ export function useSegments() {
     segments,
     totalCustomers,
     isLoading,
-    /** True όσο τραβάμε όλο το ιστορικό παραγγελιών για ecommerce RFM — UI δεν πρέπει να μπλοκάρει. */
+    /** True όσο τραβάμε πρόσφατο order history για ecommerce RFM — UI δεν πρέπει να μπλοκάρει. */
     ordersLoading,
     ordersError: (ordersError as Error | null) ?? null,
     /** Φόρτωση *_products + unified products για catalog tabs — δεν μπλοκάρει το κύριο RFM grid. */

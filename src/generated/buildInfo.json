@@ -1,10 +1,14 @@
 {
-  "version": "0.726.0",
-  "previousVersion": "0.725.0",
-  "commitHash": "4f01cea",
+  "version": "0.726.3",
+  "previousVersion": "0.726.2",
+  "commitHash": "8393eee",
   "branch": "main",
-  "buildDate": "2026-05-02T08:15:15.313Z",
+  "buildDate": "2026-05-02T12:25:13.606Z",
   "commits": [
+    {
+      "hash": "8393eee",
+      "message": "rfm: enrich catalog category alignment for segment consumption"
+    },
     {
       "hash": "4f01cea",
       "message": "rfm: clean segment consumption tooltip and chart ui"
@@ -60,13 +64,10 @@
     {
       "hash": "56f51f7",
       "message": "fix(scheduledSync): parallel per-brand connectors, raise timeout to 1800s"
-    },
-    {
-      "hash": "76e5b89",
-      "message": "docs(tooltips): clarify ex-VAT (χωρίς ΦΠΑ) on revenue/AOV/ROI tooltips"
     }
   ],
   "changes": [
+    "Rfm: enrich catalog category alignment for segment consumption",
     "Rfm: clean segment consumption tooltip and chart ui",
     "[Διόρθωση] Prevent selected segment update loop crash",
     "Rfm: soften selected segment highlight in donut charts",
@@ -75,7 +76,6 @@
     "Rfm: keep guests out of customer counts and use rolling 12-month RFM",
     "Rfm: email-first customer dedup (cross-store) + top products table per segment + chevron on cards toggle",
     "Connectors: Revenue Source Mode + Sales Channel Rules Editor (UI for excluding intercompany/marketplace orders)",
-    "Magento: multi-currency aware ex-VAT (base_* fields) for accurate multi-store revenue",
-    "Dashboard: subtle refreshing dot στα ecom KPIs όταν φορτώνουν raw orders (UX clarity)"
+    "Magento: multi-currency aware ex-VAT (base_* fields) for accurate multi-store revenue"
   ]
 }
