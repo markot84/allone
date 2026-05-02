@@ -1,10 +1,14 @@
 {
-  "version": "0.697.0",
-  "previousVersion": "0.696.0",
-  "commitHash": "76e5b89",
+  "version": "0.699.0",
+  "previousVersion": "0.698.0",
+  "commitHash": "56f51f7",
   "branch": "main",
-  "buildDate": "2026-05-02T04:50:44.714Z",
+  "buildDate": "2026-05-02T05:02:06.251Z",
   "commits": [
+    {
+      "hash": "56f51f7",
+      "message": "fix(scheduledSync): parallel per-brand connectors, raise timeout to 1800s"
+    },
     {
       "hash": "76e5b89",
       "message": "docs(tooltips): clarify ex-VAT (χωρίς ΦΠΑ) on revenue/AOV/ROI tooltips"
@@ -60,13 +64,10 @@
     {
       "hash": "58d50dc",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "5a9a168",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [
+    "[Διόρθωση] Parallel per-brand connectors, raise timeout to 1800s",
     "[Τεκμηρίωση] Clarify ex-VAT (χωρίς ΦΠΑ) on revenue/AOV/ROI tooltips",
     "[Συντήρηση] Deploy ex-VAT revenue fix",
     "[Διόρθωση] Ex-VAT revenue across dashboard, aggregator and raw orders",

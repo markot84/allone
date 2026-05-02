@@ -175,6 +175,35 @@ function parseNumeric(value: unknown): number {
 }
 
 /**
+ * Net products revenue ex-VAT (όπως καταγράφεται στα λογιστικά «Total Income χωρίς ΦΠΑ»).
+ *
+ * Για Magento: `subtotal − |discount_amount|`. Το `subtotal` του Magento είναι items ex-tax,
+ * άρα δεν περιλαμβάνει μεταφορικά (αυτά πάνε σε ξεχωριστό income account και δεν θα έπρεπε να
+ * μπερδεύουν τον τζίρο εμπορεύματος). Αν τα στοιχεία λείπουν, fallback σε `grandTotal − taxAmount`
+ * για να μη γυρίσουμε 0 σε ιστορικά documents πριν το backfill.
+ *
+ * Για Shopify/WooCommerce: `totalPrice − totalTax` (περιλαμβάνει shipping ex-VAT, αλλά αυτές οι
+ * πλατφόρμες δεν εκθέτουν αξιόπιστο "subtotal-only" στο order list endpoint· κρατάμε consistency
+ * με το προηγούμενο aggregation και το βασικό use-case είναι το Magento e-tennis).
+ */
+function computeOrderExVatRevenue(platform: string, d: Record<string, unknown>): number {
+  if (platform === 'magento') {
+    const subtotal = parseNumeric(d.subtotal);
+    const discount = Math.abs(parseNumeric(d.discountAmount));
+    if (subtotal > 0) {
+      return Math.max(0, subtotal - discount);
+    }
+    // Fallback (παλιά documents χωρίς subtotal/discountAmount).
+    return Math.max(0, parseNumeric(d.grandTotal) - parseNumeric(d.taxAmount));
+  }
+  const revenueField = REVENUE_FIELD[platform] || 'totalPrice';
+  const taxField = TAX_FIELD[platform];
+  const gross = parseNumeric(d[revenueField]);
+  const tax = taxField ? parseNumeric(d[taxField]) : 0;
+  return Math.max(0, gross - tax);
+}
+
+/**
  * Read orders from a single platform collection for the given brand (full history in Firestore).
  */
 async function readPlatformOrders(
@@ -190,18 +219,13 @@ async function readPlatformOrders(
     .where('brandId', '==', brandId)
     .get();
 
-  const revenueField = REVENUE_FIELD[platform] || 'totalPrice';
-  const taxField = TAX_FIELD[platform];
   const rows: OrderRow[] = [];
 
   for (const doc of snap.docs) {
     const d = doc.data();
     const createdAt = d.createdAt || '';
 
-    const gross = parseNumeric(d[revenueField]);
-    const tax = taxField ? parseNumeric(d[taxField]) : 0;
-    // Ex-VAT revenue (αν λείπει tax field, fallback στο gross — αποφυγή 0 για OpenCart).
-    const price = Math.max(0, gross - tax);
+    const price = computeOrderExVatRevenue(platform, d);
 
     rows.push({
       totalPrice: price,

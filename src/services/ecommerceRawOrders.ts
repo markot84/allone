@@ -147,9 +147,13 @@ function normalizeLineItemFromFirestore(raw: unknown): EcommerceRawLineItem {
 }
 
 /**
- * Ex-VAT total — αφαιρούμε τον φόρο όταν υπάρχει στο payload (Shopify/Woo/Magento) ώστε το
- * `total` να είναι «καθαρός τζίρος χωρίς ΦΠΑ», συνεπές με το server aggregator και τον λογαριασμό
- * εσόδων του brand. OpenCart δεν εκθέτει tax στο list endpoint → fallback στο gross.
+ * Net products revenue ex-VAT — ίδια λογική με το server aggregator (computeOrderExVatRevenue).
+ *
+ * Magento: `subtotal − |discountAmount|` (items ex-tax μετά εκπτώσεων, ΧΩΡΙΣ μεταφορικά).
+ * Αυτό ταυτίζεται με το λογιστικό «Total Income χωρίς ΦΠΑ» που τηρούν τα brands στα books τους.
+ * Fallback σε `grandTotal − taxAmount` για παλιά documents.
+ *
+ * Shopify/WooCommerce: `total − totalTax`. OpenCart: gross fallback (δεν υπάρχει tax field).
  */
 function computeExVatTotal(platform: string, row: Record<string, unknown>): number {
   const num = (v: unknown) => {
@@ -157,9 +161,14 @@ function computeExVatTotal(platform: string, row: Record<string, unknown>): numb
     const n = parseFloat(String(v ?? '0'));
     return Number.isFinite(n) ? n : 0;
   };
+  if (platform === 'magento') {
+    const subtotal = num(row.subtotal);
+    const discount = Math.abs(num(row.discountAmount));
+    if (subtotal > 0) return Math.max(0, subtotal - discount);
+    return Math.max(0, num(row.grandTotal) - num(row.taxAmount));
+  }
   if (platform === 'shopify') return Math.max(0, num(row.totalPrice) - num(row.totalTax));
   if (platform === 'woocommerce') return Math.max(0, num(row.total) - num(row.totalTax));
-  if (platform === 'magento') return Math.max(0, num(row.grandTotal) - num(row.taxAmount));
   return num(row.total);
 }
 

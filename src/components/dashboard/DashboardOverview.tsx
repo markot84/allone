@@ -72,7 +72,7 @@ import { useAutomationRunner } from '../../hooks/useAutomationRunner';
 import { useAutomationAlerts } from '../../hooks/useAutomation';
 import { MorningBriefing } from './MorningBriefing';
 import { StrategyBriefingQuickStrip } from '../coordination/StrategyBriefingQuickStrip';
-import { eachDateInclusive } from '../../utils/marketingCostPeriod';
+import { eachDateInclusive, computeMarketingOverheadForPeriod } from '../../utils/marketingCostPeriod';
 
 /** Ημερήσια σημεία στο chart· πάνω από αυτό → μηνιαία σύνοψη (αναγνώσιμο άξονα). */
 const REVENUE_CHART_MAX_DAILY_POINTS = 90;
@@ -163,6 +163,27 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   const periodCampaigns = usePeriodScopedCampaigns(campaignsTyped, periodDates);
 
   const campaignMetrics = useMemo(() => calculateCampaignMetrics(periodCampaigns), [periodCampaigns]);
+
+  /**
+   * Marketing overhead = επιπλέον κόστη marketing εκτός ad spend (agency retainers, tools, one-off)
+   * όπως δηλωμένα στο active strategy. Μπαίνουν στο KPI «Marketing Expenses» μαζί με το ad spend
+   * ώστε ο owner να βλέπει συνολική marketing δαπάνη (όχι μόνο media), συνεπές με τη σελίδα ROI.
+   */
+  const marketingOverheadPeriod = useMemo(
+    () =>
+      computeMarketingOverheadForPeriod(
+        activeStrategy?.marketingCostLines,
+        activeStrategy?.monthlyBudget || 0,
+        periodDates.fromDate,
+        periodDates.toDate
+      ),
+    [activeStrategy?.marketingCostLines, activeStrategy?.monthlyBudget, periodDates.fromDate, periodDates.toDate]
+  );
+
+  const totalMarketingExpenses = useMemo(
+    () => Math.round((campaignMetrics.totalSpend + marketingOverheadPeriod.total) * 100) / 100,
+    [campaignMetrics.totalSpend, marketingOverheadPeriod.total]
+  );
 
   const ga4OrganicEffective = useMemo(
     () =>
@@ -712,6 +733,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
 
         const revenueByMonth: Record<string, number> = {};
         const spendByMonth: Record<string, number> = {};
+        const expensesByMonth: Record<string, number> = {};
         const convsValueByMonth: Record<string, number> = {};
         const convsByMonth: Record<string, number> = {};
 
@@ -745,6 +767,29 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           }
         });
 
+        // expensesByMonth = ad spend + marketing overhead εκείνου του μήνα. Marketing overhead
+        // υπολογίζεται ξεχωριστά ανά calendar month (fixed_monthly = full amount, percent_of_budget &
+        // one_off_month κατανέμονται), έτσι το MoM στο «Marketing Expenses» KPI είναι σωστό σε multi-month
+        // periods («Τελευταίες 30 ημέρες», «Τρέχον Έτος» κ.λπ.).
+        const monthsSet = new Set<string>([
+          ...Object.keys(spendByMonth),
+          ...Object.keys(revenueByMonth),
+        ]);
+        monthsSet.forEach((ym) => {
+          const [yy, mm] = ym.split('-').map(Number);
+          if (!yy || !mm) return;
+          const monthFrom = `${ym}-01`;
+          const lastDay = new Date(Date.UTC(yy, mm, 0)).getUTCDate();
+          const monthTo = `${ym}-${String(lastDay).padStart(2, '0')}`;
+          const overheadMonth = computeMarketingOverheadForPeriod(
+            activeStrategy?.marketingCostLines,
+            activeStrategy?.monthlyBudget || 0,
+            monthFrom,
+            monthTo
+          ).total;
+          expensesByMonth[ym] = (spendByMonth[ym] || 0) + overheadMonth;
+        });
+
         const calcMoM = (byMonth: Record<string, number>) => {
           const sorted = sortMonthKeys(Object.entries(byMonth));
           if (sorted.length < 2) return null;
@@ -754,7 +799,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         };
 
         const revenueMoM = calcMoM(revenueByMonth);
-        const spendMoM = calcMoM(spendByMonth);
+        const expensesMoM = calcMoM(expensesByMonth);
 
         const sortedConvVal = sortMonthKeys(Object.entries(convsValueByMonth));
         const sortedConvs = sortMonthKeys(Object.entries(convsByMonth));
@@ -841,13 +886,34 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               />
               <KPICard
                 kpi={{
-                  label: isB2B ? 'Demand spend' : 'Δαπάνη διαφημίσεων',
-                  value: hasCampaigns ? formatCurrencyCompact(campaignMetrics.totalSpend) : '€0',
-                  change: spendMoM !== null ? Math.round(spendMoM) : undefined,
-                  changeLabel: spendMoM !== null ? 'vs προηγ. μήνα' : hasCampaigns && campaignMetrics.cpa > 0 ? `CPA €${formatNumber(campaignMetrics.cpa, 1)}` : undefined,
-                  trend: spendMoM !== null ? (spendMoM >= 0 ? 'up' : 'down') : hasCampaigns ? 'up' : undefined,
+                  label: isB2B ? 'Demand spend' : 'Marketing Expenses',
+                  value:
+                    hasCampaigns || marketingOverheadPeriod.total > 0
+                      ? formatCurrencyCompact(totalMarketingExpenses)
+                      : '€0',
+                  change: expensesMoM !== null ? Math.round(expensesMoM) : undefined,
+                  changeLabel:
+                    expensesMoM !== null
+                      ? 'vs προηγ. μήνα'
+                      : hasCampaigns && campaignMetrics.cpa > 0
+                        ? `CPA €${formatNumber(campaignMetrics.cpa, 1)}`
+                        : marketingOverheadPeriod.total > 0
+                          ? `Ad spend €${formatNumber(campaignMetrics.totalSpend, 0)} + overhead €${formatNumber(marketingOverheadPeriod.total, 0)}`
+                          : undefined,
+                  trend:
+                    expensesMoM !== null
+                      ? expensesMoM >= 0
+                        ? 'up'
+                        : 'down'
+                      : hasCampaigns || marketingOverheadPeriod.total > 0
+                        ? 'up'
+                        : undefined,
                   sparklineData: spendSpark,
-                  tooltip: isB2B ? 'Spend για market validation και demand generation σε Google Ads / Meta.' : 'Συνολικό κόστος διαφήμισης σε Google Ads και Meta. CPA = Κόστος ανά μετατροπή.',
+                  tooltip: isB2B
+                    ? 'Spend για market validation και demand generation σε Google Ads / Meta.'
+                    : marketingOverheadPeriod.total > 0
+                      ? `Συνολικό κόστος marketing για την επιλεγμένη περίοδο: ad spend (Google Ads + Meta) €${formatNumber(campaignMetrics.totalSpend, 0)} + marketing overhead €${formatNumber(marketingOverheadPeriod.total, 0)} (agency, tools, one-off από το active strategy). CPA & ad-only spend στη σελίδα Καμπάνιες.`
+                      : 'Συνολικό κόστος marketing: ad spend (Google Ads + Meta). Πρόσθεσε agency / tools / one-off lines στη σελίδα Στρατηγικής για πλήρες marketing overhead.',
                 }}
                 index={1}
                 onClick={() => onSectionChange?.('campaigns')}
