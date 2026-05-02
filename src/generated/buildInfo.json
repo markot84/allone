@@ -1,10 +1,18 @@
 {
-  "version": "0.726.9",
-  "previousVersion": "0.726.8",
-  "commitHash": "bbe3499",
+  "version": "0.726.10",
+  "previousVersion": "0.726.9",
+  "commitHash": "b0c1047",
   "branch": "main",
-  "buildDate": "2026-05-02T18:30:39.731Z",
+  "buildDate": "2026-05-02T18:51:40.444Z",
   "commits": [
+    {
+      "hash": "b0c1047",
+      "message": "E‑commerce connectors: incremental orders/products sync like Magento syncPolicy window"
+    },
+    {
+      "hash": "4e8b93f",
+      "message": "Incremental marketing sync (yesterday-today): preserve merged dailyMetrics; TikTok merge-recompute"
+    },
     {
       "hash": "bbe3499",
       "message": "rfm: cache order history and separate category insights"
@@ -56,17 +64,11 @@
     {
       "hash": "e5022a9",
       "message": "magento: multi-currency aware ex-VAT (base_* fields) for accurate multi-store revenue"
-    },
-    {
-      "hash": "4b78848",
-      "message": "dashboard: subtle refreshing dot στα ecom KPIs όταν φορτώνουν raw orders (UX clarity)"
-    },
-    {
-      "hash": "c5835d9",
-      "message": "scheduledSync: ERP connectors run in Phase 2 (after critical path) for resilience"
     }
   ],
   "changes": [
+    "E‑commerce connectors: incremental orders/products sync like Magento syncPolicy window",
+    "Incremental marketing sync (yesterday-today): preserve merged dailyMetrics; TikTok merge-recompute",
     "Rfm: cache order history and separate category insights",
     "Rfm: enrich catalog category alignment for segment consumption",
     "Rfm: clean segment consumption tooltip and chart ui",
@@ -74,8 +76,6 @@
     "Rfm: soften selected segment highlight in donut charts",
     "Rfm: auto-open segment consumption detail and show loading states",
     "Rfm: make segment detail the primary consumption view",
-    "Rfm: keep guests out of customer counts and use rolling 12-month RFM",
-    "Rfm: email-first customer dedup (cross-store) + top products table per segment + chevron on cards toggle",
-    "Connectors: Revenue Source Mode + Sales Channel Rules Editor (UI for excluding intercompany/marketplace orders)"
+    "Rfm: keep guests out of customer counts and use rolling 12-month RFM"
   ]
 }
