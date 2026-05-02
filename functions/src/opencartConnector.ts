@@ -5,7 +5,7 @@
  * 1. User enters e-shop URL + API username + API key
  * 2. We login via POST /index.php?route=api/login to get a session token
  * 3. Credentials stored in Firestore (connectors/{brandId}.opencart)
- * 4. Sync fetches orders (3 years) + products → Firestore
+ * 4. Sync: πρώτο 3ετίας orders + full products catalog· incremental orders μετά
  *
  * Compatible with OpenCart 3.x+ REST API.
  * For e-shops using third-party REST extensions, the token header approach is also supported.
@@ -16,6 +16,7 @@ import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { encryptToken, decryptToken } from './tokenCrypto';
 import { getCustomerEmailIdentity } from './customerIdentity';
+import { buildHistoricalOrIncrementalWindow } from './syncPolicy';
 
 let _db: Firestore | null = null;
 
@@ -211,14 +212,21 @@ export async function fetchOpenCartData(brandId: string): Promise<{
 }> {
   const db = getDb();
   const connectorDoc = await db.doc(`connectors/${brandId}`).get();
-  const connector = connectorDoc.data()?.opencart;
+  const connector = connectorDoc.data()?.opencart as Record<string, unknown> | undefined;
 
-  if (!connector?.connected || !connector?.apiKey) {
+  if (!(connector?.connected as boolean | undefined) || !connector?.apiKey) {
     return { success: false, imported: 0, error: 'OpenCart not connected' };
   }
 
-  const { storeUrl, apiUsername } = connector;
-  const apiKey = decryptToken(connector.apiKey);
+  const orderWindow = buildHistoricalOrIncrementalWindow(connector || {}, 'lastOrdersSyncAt');
+
+  logger.info(
+    `[OpenCart] ${brandId} orders=${orderWindow.mode} (${orderWindow.windowStart.toISOString()}→${orderWindow.windowEnd.toISOString()})`
+  );
+
+  const storeUrl = String((connector as { storeUrl?: string }).storeUrl || '');
+  const apiUsername = String((connector as { apiUsername?: string }).apiUsername || '');
+  const apiKey = decryptToken(String(connector.apiKey ?? ''));
   if (!apiKey) {
     return { success: false, imported: 0, error: 'OpenCart credentials unavailable — reconnect required' };
   }
@@ -287,12 +295,16 @@ export async function fetchOpenCartData(brandId: string): Promise<{
   };
 
   let totalImported = 0;
+  let ordersAbort = false;
+  let productsAbort = false;
 
   try {
-    // ── Orders (last 3 years) ──────────────────────────────────────
+    // ── Orders ──────────────────────────────────────
     const orderItems: { id: string; data: Record<string, unknown> }[] = [];
     let orderPage = 1;
     let hasMore = true;
+
+    const filterSinceMs = orderWindow.windowStart.getTime();
 
     while (hasMore) {
       const route = useRestExtension ? 'rest/order_admin/orders' : 'api/order';
@@ -301,6 +313,7 @@ export async function fetchOpenCartData(brandId: string): Promise<{
 
       if (!res.ok) {
         logger.warn(`[OpenCart] Orders page ${orderPage} returned ${res.status}`);
+        ordersAbort = true;
         break;
       }
 
@@ -308,15 +321,12 @@ export async function fetchOpenCartData(brandId: string): Promise<{
       const orders: any[] = body.orders || body.data || (Array.isArray(body) ? body : []);
       if (orders.length === 0) { hasMore = false; break; }
 
-      const since = new Date();
-      since.setUTCFullYear(since.getUTCFullYear() - 3);
-
       const pageCandidates = orders.filter((o: Record<string, unknown>) => {
         const dateAdded = String(o.date_added || o.dateAdded || '');
         if (!dateAdded) return true;
         const d = new Date(dateAdded);
         if (Number.isNaN(d.getTime())) return true;
-        return d >= since;
+        return d.getTime() >= filterSinceMs;
       });
 
       const enriched = await mapPool(pageCandidates, 6, async (o: Record<string, unknown>) => {
@@ -363,8 +373,14 @@ export async function fetchOpenCartData(brandId: string): Promise<{
 
       hasMore = orders.length >= 100;
       orderPage++;
-      if (orderPage > 30) break;
+      if (orderPage > 30) {
+        ordersAbort = true;
+        logger.warn(`[OpenCart] Orders page cap (${orderPage}) ${brandId}`);
+        break;
+      }
     }
+
+    const ordersSyncComplete = !ordersAbort;
 
     if (orderItems.length > 0) {
       for (let i = 0; i < orderItems.length; i += 500) {
@@ -389,7 +405,10 @@ export async function fetchOpenCartData(brandId: string): Promise<{
       const url = buildUrl(route, { page: String(prodPage), limit: '100' });
       const res = await fetch(url, { headers: buildHeaders() });
 
-      if (!res.ok) break;
+      if (!res.ok) {
+        productsAbort = true;
+        break;
+      }
 
       const body = await res.json();
       const products: any[] = body.products || body.data || (Array.isArray(body) ? body : []);
@@ -417,8 +436,14 @@ export async function fetchOpenCartData(brandId: string): Promise<{
 
       prodMore = products.length >= 100;
       prodPage++;
-      if (prodPage > 30) break;
+      if (prodPage > 30) {
+        productsAbort = true;
+        logger.warn(`[OpenCart] Products page cap (${prodPage}) ${brandId}`);
+        break;
+      }
     }
+
+    const productsSyncComplete = !productsAbort;
 
     if (prodItems.length > 0) {
       for (let i = 0; i < prodItems.length; i += 500) {
@@ -433,12 +458,27 @@ export async function fetchOpenCartData(brandId: string): Promise<{
       logger.info(`[OpenCart] Products: ${prodItems.length} imported for brand ${brandId}`);
     }
 
+    const connectorPatch: Record<string, unknown> = {};
+    if (ordersSyncComplete) {
+      connectorPatch['opencart.lastOrdersSyncAt'] = FieldValue.serverTimestamp();
+      if (orderWindow.mode === 'historical') {
+        connectorPatch['opencart.historyLoadedUntilYear'] = orderWindow.historyStartYear;
+      }
+    }
+    if (productsSyncComplete) {
+      connectorPatch['opencart.lastProductsSyncAt'] = FieldValue.serverTimestamp();
+    }
+    if (Object.keys(connectorPatch).length > 0) {
+      await db.doc(`connectors/${brandId}`).update(connectorPatch);
+    }
+
     // ── Log import_jobs ────────────────────────────────────────────
     await db.collection('import_jobs').add({
       brandId,
       type: 'ecommerce',
       source: 'opencart_api',
-      status: 'completed',
+      mode: `${orderWindow.mode}_orders_full_products_catalog`,
+      status: ordersSyncComplete && productsSyncComplete ? 'completed' : 'partial',
       imported: totalImported,
       orders: orderItems.length,
       products: prodItems.length,
@@ -448,6 +488,14 @@ export async function fetchOpenCartData(brandId: string): Promise<{
     });
 
     logger.info(`[OpenCart] Sync complete for brand ${brandId}: ${totalImported} total items`);
+    const bothOk = ordersSyncComplete && productsSyncComplete;
+    if (!bothOk) {
+      return {
+        success: false,
+        imported: totalImported,
+        error: `OpenCart incomplete — orders:${ordersSyncComplete ? 'OK' : 'Aborted'}, products:${productsSyncComplete ? 'OK' : 'Aborted'}`,
+      };
+    }
     return { success: true, imported: totalImported };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

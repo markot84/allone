@@ -5,7 +5,7 @@
  * 1. User enters shop domain → redirected to Shopify OAuth
  * 2. Shopify redirects back with auth code → exchanged for permanent access token
  * 3. Token stored in Firestore (connectors/{brandId}.shopify)
- * 4. Sync fetches orders (3 years) + products → Firestore
+ * 4. Sync: πρώτο φόρτωμα 3ετίας παραγγελιών/προϊόντων· μετά incremental (API filters)
  *
  * Required secrets:
  * - SHOPIFY_API_KEY
@@ -17,6 +17,7 @@ import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { encryptToken, decryptToken } from './tokenCrypto';
 import { getCustomerEmailIdentity } from './customerIdentity';
+import { buildHistoricalOrIncrementalWindow, coerceSyncDate, subtractHours } from './syncPolicy';
 
 let _db: Firestore | null = null;
 
@@ -161,14 +162,25 @@ export async function fetchShopifyData(brandId: string): Promise<{
 }> {
   const db = getDb();
   const connectorDoc = await db.doc(`connectors/${brandId}`).get();
-  const connector = connectorDoc.data()?.shopify;
+  const connector = connectorDoc.data()?.shopify as Record<string, unknown> | undefined;
 
-  if (!connector?.connected || !connector?.accessToken) {
+  if (!(connector?.connected as boolean | undefined) || !connector?.accessToken) {
     return { success: false, imported: 0, error: 'Shopify not connected' };
   }
 
-  const { shopDomain } = connector;
-  const accessToken = decryptToken(connector.accessToken);
+  const orderWindow = buildHistoricalOrIncrementalWindow(connector || {}, 'lastOrdersSyncAt');
+  const ordersSinceIso = orderWindow.windowStart.toISOString();
+  const lastProdSync = coerceSyncDate(connector?.lastProductsSyncAt);
+  const productsUpdatedSinceIso = lastProdSync
+    ? subtractHours(lastProdSync, 48).toISOString()
+    : null;
+
+  logger.info(
+    `[Shopify] ${brandId} orders=${orderWindow.mode} (${ordersSinceIso} → ${orderWindow.windowEnd.toISOString()}) products=${productsUpdatedSinceIso ? 'incremental' : 'full'}`
+  );
+
+  const shopDomain = String(connector.shopDomain || '');
+  const accessToken = decryptToken(String(connector.accessToken));
   if (!accessToken) {
     return { success: false, imported: 0, error: 'Shopify token unavailable — reconnect required' };
   }
@@ -176,14 +188,14 @@ export async function fetchShopifyData(brandId: string): Promise<{
   const headers = { 'X-Shopify-Access-Token': accessToken, 'Content-Type': 'application/json' };
 
   let totalImported = 0;
+  let ordersSyncComplete = false;
+  let productsSyncComplete = false;
 
   try {
-    // ── Orders (last 3 years) ──────────────────────────────────────────
-    const since = new Date();
-    since.setUTCFullYear(since.getUTCFullYear() - 3);
-
+    // ── Orders: historical από 3 έτη, στη συνέχεια incremental (updated_at) ──
     let orderPage = 1;
     let hasMore = true;
+    let ordersAbort = false;
     const batchItems: { id: string; data: Record<string, unknown> }[] = [];
 
     while (hasMore) {
@@ -191,20 +203,28 @@ export async function fetchShopifyData(brandId: string): Promise<{
       // which we need for catalog alignment (join to shopify_products).
       const params = new URLSearchParams({
         status: 'any',
-        created_at_min: since.toISOString(),
         limit: '250',
         page: String(orderPage),
       });
+      if (orderWindow.mode === 'incremental') {
+        params.set('updated_at_min', ordersSinceIso);
+      } else {
+        params.set('created_at_min', ordersSinceIso);
+      }
 
       const res = await fetch(`${baseUrl}/orders.json?${params}`, { headers });
       if (!res.ok) {
         const errText = await res.text();
         logger.error(`[Shopify] Orders fetch failed (${res.status}):`, errText.slice(0, 300));
+        ordersAbort = true;
         break;
       }
 
       const { orders = [] } = await res.json();
-      if (orders.length === 0) { hasMore = false; break; }
+      if (orders.length === 0) {
+        hasMore = false;
+        break;
+      }
 
       for (const o of orders) {
         const shopifyCid = o.customer_id != null && o.customer_id !== '' ? String(o.customer_id) : '';
@@ -247,8 +267,14 @@ export async function fetchShopifyData(brandId: string): Promise<{
 
       hasMore = orders.length === 250;
       orderPage++;
-      if (orderPage > 20) break; // safety cap
+      if (orderPage > 20) {
+        ordersAbort = true;
+        logger.warn(`[Shopify] Orders paging safety cap (${orderPage}) for ${brandId} — rerun to continue`);
+        break;
+      }
     }
+
+    ordersSyncComplete = !ordersAbort;
 
     if (batchItems.length > 0) {
       for (let i = 0; i < batchItems.length; i += 500) {
@@ -263,9 +289,10 @@ export async function fetchShopifyData(brandId: string): Promise<{
       logger.info(`[Shopify] Orders: ${batchItems.length} imported for brand ${brandId}`);
     }
 
-    // ── Products ───────────────────────────────────────────────────────
+    // ── Products: πρώτο sync πλήρες catalog, έπειτα μόνο αλλαγές (`updated_at_min`) ──
     let prodPage = 1;
     let prodMore = true;
+    let productsAbort = false;
     const prodItems: { id: string; data: Record<string, unknown> }[] = [];
 
     while (prodMore) {
@@ -274,12 +301,21 @@ export async function fetchShopifyData(brandId: string): Promise<{
         page: String(prodPage),
         fields: 'id,title,handle,product_type,vendor,status,tags,variants,created_at,updated_at',
       });
+      if (productsUpdatedSinceIso) {
+        params.set('updated_at_min', productsUpdatedSinceIso);
+      }
 
       const res = await fetch(`${baseUrl}/products.json?${params}`, { headers });
-      if (!res.ok) break;
+      if (!res.ok) {
+        productsAbort = true;
+        break;
+      }
 
       const { products = [] } = await res.json();
-      if (products.length === 0) { prodMore = false; break; }
+      if (products.length === 0) {
+        prodMore = false;
+        break;
+      }
 
       for (const p of products) {
         prodItems.push({
@@ -309,8 +345,14 @@ export async function fetchShopifyData(brandId: string): Promise<{
 
       prodMore = products.length === 250;
       prodPage++;
-      if (prodPage > 20) break;
+      if (prodPage > 20) {
+        productsAbort = true;
+        logger.warn(`[Shopify] Products paging safety cap for ${brandId}`);
+        break;
+      }
     }
+
+    productsSyncComplete = !productsAbort;
 
     if (prodItems.length > 0) {
       for (let i = 0; i < prodItems.length; i += 500) {
@@ -325,12 +367,27 @@ export async function fetchShopifyData(brandId: string): Promise<{
       logger.info(`[Shopify] Products: ${prodItems.length} imported for brand ${brandId}`);
     }
 
+    const connectorPatch: Record<string, unknown> = {};
+    if (ordersSyncComplete) {
+      connectorPatch['shopify.lastOrdersSyncAt'] = FieldValue.serverTimestamp();
+      if (orderWindow.mode === 'historical') {
+        connectorPatch['shopify.historyLoadedUntilYear'] = orderWindow.historyStartYear;
+      }
+    }
+    if (productsSyncComplete) {
+      connectorPatch['shopify.lastProductsSyncAt'] = FieldValue.serverTimestamp();
+    }
+    if (Object.keys(connectorPatch).length > 0) {
+      await db.doc(`connectors/${brandId}`).update(connectorPatch);
+    }
+
     // ── Log import_jobs ────────────────────────────────────────────────
     await db.collection('import_jobs').add({
       brandId,
       type: 'ecommerce',
       source: 'shopify_api',
-      status: 'completed',
+      mode: `${orderWindow.mode}_orders_${productsUpdatedSinceIso ? 'incr' : 'full'}_products`,
+      status: ordersSyncComplete && productsSyncComplete ? 'completed' : 'partial',
       imported: totalImported,
       orders: batchItems.length,
       products: prodItems.length,
@@ -340,6 +397,15 @@ export async function fetchShopifyData(brandId: string): Promise<{
     });
 
     logger.info(`[Shopify] Sync complete for brand ${brandId}: ${totalImported} total items`);
+
+    const bothOk = ordersSyncComplete && productsSyncComplete;
+    if (!bothOk) {
+      return {
+        success: false,
+        imported: totalImported,
+        error: `Shopify sync incomplete — orders:${ordersSyncComplete ? 'OK' : 'Aborted'}, products:${productsSyncComplete ? 'OK' : 'Aborted'}`,
+      };
+    }
     return { success: true, imported: totalImported };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
