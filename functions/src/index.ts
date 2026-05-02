@@ -1639,45 +1639,56 @@ export const scheduledSync = onSchedule(
 
         try {
           /**
-           * Παράλληλη εκτέλεση όλων των connectors του brand. Πριν, GA4 + Search Console
-           * ξεκινούσαν μετά το πέρας ΟΛΩΝ των e-shop connectors → όταν το Magento αργούσε,
-           * ο 540s timeout τα έκοβε χωρίς να γίνει ποτέ sync. Έτσι κάθε API τρέχει στον
-           * δικό του χρόνο και χρησιμοποιείται όλο το παράθυρο των 30 λεπτών.
+           * Two-phase parallel execution per brand:
+           *
+           * **Phase 1 (priority):** Ads, Merchant, E-shop orders, Web Analytics — parallel.
+           *   Αυτά τρέχουν πρώτα ώστε ακόμα κι αν αργήσει κάποιο ERP, το Dashboard έχει
+           *   φρέσκα marketing/ecom KPIs. `computeEcommerceSummary` τρέχει αμέσως μετά
+           *   (depends μόνο σε ecom orders).
+           *
+           * **Phase 2 (background):** ERPs (Megaventory, SoftOne, Epsilon Net, Entersoft).
+           *   Είναι τα πιο αργά / fragile APIs (SOAP, tight rate limits). Τα τρέχουμε
+           *   τελευταία ώστε αν χτυπήσει timeout/error, να μην επηρεάσει τα critical KPIs.
+           *
+           * Ιστορικό: Πριν, GA4 + Search Console περίμεναν να τελειώσουν ΟΛΟΙ οι ecom
+           * connectors (sequential blocks) → όταν το Magento αργούσε, ο 540s timeout τα
+           * έκοβε. Τώρα κάθε API τρέχει στον δικό του χρόνο μέσα στο 30min παράθυρο.
            */
-          const tasks: Array<Promise<unknown>> = [];
+          const buildTasks = () => {
+            const tasks: Array<Promise<unknown>> = [];
+            const wrap = (label: string, p: Promise<unknown>) =>
+              tasks.push(
+                p
+                  .then((r) => {
+                    const imported = (r as { imported?: number })?.imported;
+                    logger.info(`[ScheduledSync] ${label} for ${brandId}: imported ${imported ?? '—'}`);
+                  })
+                  .catch((err) => logger.error(`[ScheduledSync] ${label} failed for ${brandId}:`, err))
+              );
+            return { tasks, wrap };
+          };
 
-          const wrap = (label: string, p: Promise<unknown>) =>
-            tasks.push(
-              p
-                .then((r) => {
-                  const imported = (r as { imported?: number })?.imported;
-                  logger.info(`[ScheduledSync] ${label} for ${brandId}: imported ${imported ?? '—'}`);
-                })
-                .catch((err) => logger.error(`[ScheduledSync] ${label} failed for ${brandId}:`, err))
-            );
+          // ---------- Phase 1: critical path (ads, ecom, web analytics) ----------
+          const phase1 = buildTasks();
+          if (data.google_ads?.connected) phase1.wrap('Google Ads', fetchGoogleAdsCampaigns(brandId));
+          if (data.meta?.connected) phase1.wrap('Meta', fetchMetaCampaigns(brandId));
+          if (data.tiktok?.connected) phase1.wrap('TikTok', fetchTikTokCampaigns(brandId));
+          if (data.merchant?.connected) phase1.wrap('Merchant', fetchPriceBenchmarks(brandId));
 
-          if (data.google_ads?.connected) wrap('Google Ads', fetchGoogleAdsCampaigns(brandId));
-          if (data.meta?.connected) wrap('Meta', fetchMetaCampaigns(brandId));
-          if (data.tiktok?.connected) wrap('TikTok', fetchTikTokCampaigns(brandId));
-          if (data.merchant?.connected) wrap('Merchant', fetchPriceBenchmarks(brandId));
+          if (data.shopify?.connected) phase1.wrap('Shopify', fetchShopifyData(brandId));
+          if (data.woocommerce?.connected) phase1.wrap('WooCommerce', fetchWooCommerceData(brandId));
+          if (data.opencart?.connected) phase1.wrap('OpenCart', fetchOpenCartData(brandId));
+          if (data.magento?.connected) phase1.wrap('Magento', fetchMagentoData(brandId));
 
-          if (data.shopify?.connected) wrap('Shopify', fetchShopifyData(brandId));
-          if (data.woocommerce?.connected) wrap('WooCommerce', fetchWooCommerceData(brandId));
-          if (data.opencart?.connected) wrap('OpenCart', fetchOpenCartData(brandId));
-          if (data.magento?.connected) wrap('Magento', fetchMagentoData(brandId));
-
-          if (data.megaventory?.connected) wrap('Megaventory', fetchMegaventoryData(brandId, { mode: 'scheduled' }));
-          if (data.softone?.connected) wrap('SoftOne', fetchSoftOneData(brandId));
-          if (data.epsilon_net?.connected) wrap('Epsilon Net', fetchEpsilonNetData(brandId));
-          if (data.entersoft?.connected) wrap('Entersoft', fetchEntersoftData(brandId));
-
-          if (data.ga4?.connected && data.ga4?.propertyId) wrap('GA4', fetchGA4Data(brandId));
+          if (data.ga4?.connected && data.ga4?.propertyId) phase1.wrap('GA4', fetchGA4Data(brandId));
           if (data.search_console?.connected && data.search_console?.siteUrl)
-            wrap('Search Console', fetchSearchConsoleData(brandId));
+            phase1.wrap('Search Console', fetchSearchConsoleData(brandId));
 
-          await Promise.all(tasks);
+          await Promise.all(phase1.tasks);
 
-          // Refresh e-commerce summary if any e-commerce platform is connected — μετά τα orders syncs.
+          // E-commerce summary recompute — εξαρτάται μόνο από ecom orders, οπότε τρέχει
+          // ΕΔΩ (πριν τα ERP) ώστε το `ecommerce_summary` να είναι φρέσκο ακόμα κι αν
+          // αργότερα κάποιο ERP κρεμάσει.
           const hasEcommerce = data.shopify?.connected || data.woocommerce?.connected || data.opencart?.connected || data.magento?.connected;
           if (hasEcommerce) {
             try {
@@ -1686,6 +1697,17 @@ export const scheduledSync = onSchedule(
             } catch (err) {
               logger.error(`[ScheduledSync] E-commerce summary failed for ${brandId}:`, err);
             }
+          }
+
+          // ---------- Phase 2: ERP & operations (slow / fragile APIs) ----------
+          const phase2 = buildTasks();
+          if (data.megaventory?.connected) phase2.wrap('Megaventory', fetchMegaventoryData(brandId, { mode: 'scheduled' }));
+          if (data.softone?.connected) phase2.wrap('SoftOne', fetchSoftOneData(brandId));
+          if (data.epsilon_net?.connected) phase2.wrap('Epsilon Net', fetchEpsilonNetData(brandId));
+          if (data.entersoft?.connected) phase2.wrap('Entersoft', fetchEntersoftData(brandId));
+
+          if (phase2.tasks.length > 0) {
+            await Promise.all(phase2.tasks);
           }
         } catch (err) {
           failedConnectorBrands += 1;
