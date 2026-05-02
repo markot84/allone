@@ -267,17 +267,35 @@ async function readPlatformOrders(
 export async function computeEcommerceSummary(brandId: string): Promise<void> {
   const db = getDb();
 
-  const connDoc = await db.doc(`connectors/${brandId}`).get();
+  const [connDoc, brandDoc] = await Promise.all([
+    db.doc(`connectors/${brandId}`).get(),
+    db.doc(`brands/${brandId}`).get(),
+  ]);
   const connData = connDoc.data() || {};
+  const brandData = brandDoc.data() || {};
+
+  /**
+   * `revenueSourceMode` καθορίζει αν το aggregator σέβεται τα sales channel rules ή μετράει
+   * όλες τις παραγγελίες ωμά. ERP mode pending — fallback στο classified.
+   */
+  const revenueSourceMode: 'eshop_classified' | 'eshop_all' | 'erp' =
+    brandData.revenueSourceMode === 'eshop_all' ||
+    brandData.revenueSourceMode === 'erp' ||
+    brandData.revenueSourceMode === 'eshop_classified'
+      ? brandData.revenueSourceMode
+      : 'eshop_classified';
 
   const connectedPlatforms = ECOMMERCE_PROVIDERS.filter(
     (p) => connData[p]?.connected
   );
-  const salesChannelRules = normalizeSalesChannelRules([
-    ...arrayOrEmpty(connData.ecommerceSalesChannelRules),
-    ...arrayOrEmpty(connData.salesChannelRules),
-    ...arrayOrEmpty(connData.magento?.salesChannelRules),
-  ]);
+  const salesChannelRules =
+    revenueSourceMode === 'eshop_all'
+      ? []
+      : normalizeSalesChannelRules([
+          ...arrayOrEmpty(connData.ecommerceSalesChannelRules),
+          ...arrayOrEmpty(connData.salesChannelRules),
+          ...arrayOrEmpty(connData.magento?.salesChannelRules),
+        ]);
 
   if (connectedPlatforms.length === 0) {
     logger.info(`[EcommerceAgg] No connected e-commerce platforms for brand ${brandId}`);

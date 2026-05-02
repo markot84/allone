@@ -29,6 +29,8 @@ import {
   ChevronDown,
   type LucideProps,
 } from 'lucide-react';
+import { RevenueSourceSettings } from './RevenueSourceSettings';
+import { SalesChannelRulesEditor } from './SalesChannelRulesEditor';
 
 interface AdAccount {
   id: string;
@@ -2729,6 +2731,13 @@ export function ConnectorsPanel() {
           </p>
         </div>
       </Card>
+
+      {canManageConnectors && (
+        <div className="mt-6 space-y-6">
+          <RevenueSourceSettings />
+          <SalesChannelRulesEditor />
+        </div>
+      )}
     </>
   );
 }

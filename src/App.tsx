@@ -88,7 +88,7 @@ const persister = typeof window !== 'undefined'
   ? createSyncStoragePersister({
       storage: window.localStorage,
       /** Bump when persisted queries omit connector-critical keys or strand stale dashboards (see shouldDehydrateQuery). v7: drop caches that persisted catalogAlignment (Maps broke → `.has` crash). */
-      key: 'PERF_PLUS_QUERY_CACHE_v9',
+      key: 'PERF_PLUS_QUERY_CACHE_v10',
       throttleTime: 1000
     })
   : undefined;

@@ -244,8 +244,20 @@ async function fetchSalesChannelRules(brandId: string): Promise<EcommerceSalesCh
   }
 }
 
+async function fetchBrandRevenueSourceMode(brandId: string): Promise<'eshop_classified' | 'eshop_all' | 'erp'> {
+  try {
+    const brand = await FirestoreService.getDocument<{ revenueSourceMode?: string }>('brands', brandId);
+    const mode = brand?.revenueSourceMode;
+    if (mode === 'eshop_all' || mode === 'erp' || mode === 'eshop_classified') return mode;
+    return 'eshop_classified';
+  } catch {
+    return 'eshop_classified';
+  }
+}
+
 export async function fetchAllEcommerceOrders(brandId: string, platforms: string[]): Promise<EcommerceRawOrder[]> {
-  const [rules, results] = await Promise.all([
+  const [mode, allRules, results] = await Promise.all([
+    fetchBrandRevenueSourceMode(brandId),
     fetchSalesChannelRules(brandId),
     Promise.all(
       platforms.map(async (platform) => {
@@ -256,6 +268,8 @@ export async function fetchAllEcommerceOrders(brandId: string, platforms: string
       })
     ),
   ]);
+  // Όταν revenueSourceMode = eshop_all, αγνοούμε τα rules ώστε όλα τα non-cancelled orders να μπουν.
+  const rules = mode === 'eshop_all' ? [] : allRules;
   return results.flat().map((order) => ({
     ...order,
     ...classifyEcommerceOrder(order, rules),

@@ -1,10 +1,14 @@
 {
-  "version": "0.704.0",
-  "previousVersion": "0.703.0",
-  "commitHash": "4b78848",
+  "version": "0.707.0",
+  "previousVersion": "0.706.0",
+  "commitHash": "e5022a9",
   "branch": "main",
-  "buildDate": "2026-05-02T05:32:48.498Z",
+  "buildDate": "2026-05-02T06:03:18.476Z",
   "commits": [
+    {
+      "hash": "e5022a9",
+      "message": "magento: multi-currency aware ex-VAT (base_* fields) for accurate multi-store revenue"
+    },
     {
       "hash": "4b78848",
       "message": "dashboard: subtle refreshing dot στα ecom KPIs όταν φορτώνουν raw orders (UX clarity)"
@@ -60,13 +64,10 @@
     {
       "hash": "b1ff603",
       "message": "feat(connectors): Shopify order line productId/variantId; OpenCart lineItems via api/order/info"
-    },
-    {
-      "hash": "38f4e88",
-      "message": "feat(connectors): Shopify order line productId/variantId; OpenCart lineItems via api/order/info"
     }
   ],
   "changes": [
+    "Magento: multi-currency aware ex-VAT (base_* fields) for accurate multi-store revenue",
     "Dashboard: subtle refreshing dot στα ecom KPIs όταν φορτώνουν raw orders (UX clarity)",
     "ScheduledSync: ERP connectors run in Phase 2 (after critical path) for resilience",
     "Dashboard: Marketing Expenses KPI + Magento subtotal-based ex-VAT for accounting parity",
@@ -75,7 +76,6 @@
     "[Συντήρηση] Deploy ex-VAT revenue fix",
     "[Διόρθωση] Ex-VAT revenue across dashboard, aggregator and raw orders",
     "[Διόρθωση] Non-blocking orders fetch with inline progress + error UI",
-    "[Διόρθωση] Hash path normalization, empty brand state, loading and setup CTAs",
-    "[Νέο χαρακτηριστικό] Shopify order line productId/variantId; OpenCart lineItems via api/order/info"
+    "[Διόρθωση] Hash path normalization, empty brand state, loading and setup CTAs"
   ]
 }

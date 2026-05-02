@@ -83,6 +83,16 @@ export interface Brand {
    * Δεν διαγράφει τίποτα από το Firestore — απλά clamp στις προβολές.
    */
   historyStartDate?: string;
+  /**
+   * Από πού αντλεί το brand το «Σύνολο Εσόδων» στο Dashboard:
+   * - `eshop_classified` (default): παραγγελίες e-shop που classified ως `direct_eshop` βάσει
+   *   sales channel rules (εξαιρούνται intercompany, Skroutz κ.λπ.).
+   * - `eshop_all`: όλες οι παραγγελίες e-shop χωρίς classification filter (ωμό sum).
+   * - `erp`: pending (Φάση 2) — τραβιέται από ERP `total_revenue` field.
+   *
+   * Όταν κενό, θεωρείται `eshop_classified` (default).
+   */
+  revenueSourceMode?: 'eshop_classified' | 'eshop_all' | 'erp';
 }
 
 export interface UserProfile {
