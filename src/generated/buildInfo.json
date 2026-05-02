@@ -1,10 +1,14 @@
 {
-  "version": "0.716.0",
-  "previousVersion": "0.715.0",
-  "commitHash": "b503426",
+  "version": "0.718.0",
+  "previousVersion": "0.717.0",
+  "commitHash": "c4fb945",
   "branch": "main",
-  "buildDate": "2026-05-02T07:16:25.413Z",
+  "buildDate": "2026-05-02T07:26:32.095Z",
   "commits": [
+    {
+      "hash": "c4fb945",
+      "message": "rfm: make segment detail the primary consumption view"
+    },
     {
       "hash": "b503426",
       "message": "rfm: keep guests out of customer counts and use rolling 12-month RFM"
@@ -60,13 +64,10 @@
     {
       "hash": "100bac4",
       "message": "fix(dashboard): hash path normalization, empty brand state, loading and setup CTAs"
-    },
-    {
-      "hash": "619ac1f",
-      "message": "feat(connectors): Shopify order line productId/variantId; OpenCart lineItems via api/order/info"
     }
   ],
   "changes": [
+    "Rfm: make segment detail the primary consumption view",
     "Rfm: keep guests out of customer counts and use rolling 12-month RFM",
     "Rfm: email-first customer dedup (cross-store) + top products table per segment + chevron on cards toggle",
     "Connectors: Revenue Source Mode + Sales Channel Rules Editor (UI for excluding intercompany/marketplace orders)",
@@ -75,7 +76,6 @@
     "ScheduledSync: ERP connectors run in Phase 2 (after critical path) for resilience",
     "Dashboard: Marketing Expenses KPI + Magento subtotal-based ex-VAT for accounting parity",
     "[Διόρθωση] Parallel per-brand connectors, raise timeout to 1800s",
-    "[Τεκμηρίωση] Clarify ex-VAT (χωρίς ΦΠΑ) on revenue/AOV/ROI tooltips",
-    "[Συντήρηση] Deploy ex-VAT revenue fix"
+    "[Τεκμηρίωση] Clarify ex-VAT (χωρίς ΦΠΑ) on revenue/AOV/ROI tooltips"
   ]
 }

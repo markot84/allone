@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -137,6 +137,14 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
   const channelRecommendation = activeStrategy?.channelRecommendation ?? null;
   const totalCustomersDisplay = Math.max(totalCustomers, dataCoverage.totalCustomers);
   const segmentColorById = new Map(rfmSegments.map((segment) => [segment.id, segment.color]));
+
+  useEffect(() => {
+    setSelectedSegment((current) => {
+      if (rfmSegments.length === 0) return null;
+      if (!current) return rfmSegments[0] ?? null;
+      return rfmSegments.find((segment) => segment.id === current.id) ?? rfmSegments[0] ?? null;
+    });
+  }, [rfmSegments]);
 
   const handleExportAll = async (fmt: 'xlsx' | 'csv' = 'xlsx') => {
     if (rfmSegments.length === 0) return;
@@ -368,8 +376,11 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
             · guest χωρίς id: {formatNumber(orderRfmMeta.guestOrdersSkipped)}
           </span>
         ) : null}
+        {ordersLoading ? (
+          <LoadingStatusPill label="φόρτωση raw orders…" />
+        ) : null}
         {isCatalogEnriching ? (
-          <span className="text-[11px] text-amber-800">· catalog προϊόντων…</span>
+          <LoadingStatusPill label="φόρτωση catalog προϊόντων…" />
         ) : null}
         <details className="sm:ml-auto min-w-0 max-w-full sm:max-w-[22rem] text-[11px]">
           <summary className="cursor-pointer font-semibold text-[var(--nts-accent)] hover:underline">
@@ -568,9 +579,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
               <button
                 key={segment.id}
                 type="button"
-                onClick={() =>
-                  setSelectedSegment(selectedSegment?.id === segment.id ? null : segment)
-                }
+                onClick={() => setSelectedSegment(segment)}
                 className={`flex min-w-0 items-center justify-between gap-1 rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors ${
                   selectedSegment?.id === segment.id ? 'bg-[#F3F4F6] ring-1 ring-[#E5E7EB]' : 'hover:bg-[#F9FAFB]'
                 }`}
@@ -633,9 +642,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
               <button
                 key={segment.id}
                 type="button"
-                onClick={() =>
-                  setSelectedSegment(selectedSegment?.id === segment.id ? null : segment)
-                }
+                onClick={() => setSelectedSegment(segment)}
                 className={`flex min-w-0 items-center justify-between gap-1 rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors ${
                   selectedSegment?.id === segment.id ? 'bg-[#F3F4F6] ring-1 ring-[#E5E7EB]' : 'hover:bg-[#F9FAFB]'
                 }`}
@@ -652,6 +659,26 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
           </div>
         </Card>
       </div>
+
+      {/* Segment Detail Panel */}
+      <AnimatePresence>
+        {selectedSegment && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+          >
+            <SegmentDetail
+              segment={selectedSegment}
+              hasImportedSegments={hasImportedSegments}
+              catalogEnriching={isCatalogEnriching}
+              segmentsDataSource={rfmDataSource}
+              onExportCustomers={(fmt) => handleExportCustomerList(selectedSegment, fmt)}
+              onExportActionPack={(fmt) => handleExportSegment(selectedSegment, fmt)}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <details className="group rounded-xl border border-[#E8EAED] bg-[#FAFBFC] shadow-[0_2px_8px_rgba(15,23,42,0.04)]">
         <summary className="cursor-pointer list-none px-4 py-3 [&::-webkit-details-marker]:hidden">
@@ -679,36 +706,13 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
                 segment={segment}
                 index={index}
                 isSelected={selectedSegment?.id === segment.id}
-                onSelect={() =>
-                  setSelectedSegment(selectedSegment?.id === segment.id ? null : segment)
-                }
+                onSelect={() => setSelectedSegment(segment)}
                 onExport={(fmt) => handleExportSegment(segment, fmt)}
               />
             ))}
           </div>
         </div>
       </details>
-
-      {/* Segment Detail Panel */}
-      <AnimatePresence>
-        {selectedSegment && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-          >
-            <SegmentDetail
-              segment={selectedSegment}
-              hasImportedSegments={hasImportedSegments}
-              catalogEnriching={isCatalogEnriching}
-              segmentsDataSource={rfmDataSource}
-              onClose={() => setSelectedSegment(null)}
-              onExportCustomers={(fmt) => handleExportCustomerList(selectedSegment, fmt)}
-              onExportActionPack={(fmt) => handleExportSegment(selectedSegment, fmt)}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Migration Flow */}
       <Card padding="lg">
@@ -831,6 +835,15 @@ function CoverageMetric({ label, value }: { label: string; value: string }) {
       <p className="truncate text-[10px] font-medium text-[#9CA3AF] sm:text-[11px]" title={label}>{label}</p>
       <p className="mt-0.5 truncate font-mono text-sm font-bold text-[#1A1A1A] sm:text-base" title={value}>{value}</p>
     </div>
+  );
+}
+
+function LoadingStatusPill({ label }: { label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+      <span className="h-2.5 w-2.5 rounded-full border-2 border-amber-200 border-t-[var(--nts-accent)] animate-spin" aria-hidden />
+      {label}
+    </span>
   );
 }
 
@@ -984,7 +997,6 @@ interface SegmentDetailProps {
   catalogEnriching?: boolean;
   /** Από πού προέρχονται τα segments — για e-shop δεν χρησιμοποιούμε demo matrix κατανάλωσης. */
   segmentsDataSource: SegmentsDataSource;
-  onClose: () => void;
   onExportCustomers?: (fmt: 'xlsx' | 'csv') => void;
   onExportActionPack?: (fmt: 'xlsx' | 'csv') => void;
 }
@@ -999,7 +1011,6 @@ function SegmentDetail({
   hasImportedSegments,
   catalogEnriching,
   segmentsDataSource,
-  onClose,
   onExportCustomers,
   onExportActionPack,
 }: SegmentDetailProps) {
@@ -1099,7 +1110,6 @@ function SegmentDetail({
             </div>
           </div>
         </div>
-        <Button variant="ghost" onClick={onClose}>Κλείσιμο</Button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
