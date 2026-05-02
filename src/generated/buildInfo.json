@@ -1,10 +1,14 @@
 {
-  "version": "0.722.0",
-  "previousVersion": "0.721.0",
-  "commitHash": "c7bb0ac",
+  "version": "0.724.0",
+  "previousVersion": "0.723.0",
+  "commitHash": "ed807fc",
   "branch": "main",
-  "buildDate": "2026-05-02T07:43:25.865Z",
+  "buildDate": "2026-05-02T07:54:52.234Z",
   "commits": [
+    {
+      "hash": "ed807fc",
+      "message": "fix(rfm): prevent selected segment update loop crash"
+    },
     {
       "hash": "c7bb0ac",
       "message": "rfm: soften selected segment highlight in donut charts"
@@ -60,13 +64,10 @@
     {
       "hash": "faa10e6",
       "message": "chore: deploy ex-VAT revenue fix"
-    },
-    {
-      "hash": "5e9d33d",
-      "message": "fix(ecommerce): ex-VAT revenue across dashboard, aggregator and raw orders"
     }
   ],
   "changes": [
+    "[Διόρθωση] Prevent selected segment update loop crash",
     "Rfm: soften selected segment highlight in donut charts",
     "Rfm: auto-open segment consumption detail and show loading states",
     "Rfm: make segment detail the primary consumption view",
@@ -75,7 +76,6 @@
     "Connectors: Revenue Source Mode + Sales Channel Rules Editor (UI for excluding intercompany/marketplace orders)",
     "Magento: multi-currency aware ex-VAT (base_* fields) for accurate multi-store revenue",
     "Dashboard: subtle refreshing dot στα ecom KPIs όταν φορτώνουν raw orders (UX clarity)",
-    "ScheduledSync: ERP connectors run in Phase 2 (after critical path) for resilience",
-    "Dashboard: Marketing Expenses KPI + Magento subtotal-based ex-VAT for accounting parity"
+    "ScheduledSync: ERP connectors run in Phase 2 (after critical path) for resilience"
   ]
 }

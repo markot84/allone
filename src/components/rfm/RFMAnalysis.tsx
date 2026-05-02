@@ -1019,6 +1019,44 @@ function truncateAffinityLabel(name: string, max = 40): string {
   return t.length > max ? `${t.slice(0, max - 1)}…` : t;
 }
 
+type SegmentConsumptionTooltipPayload = {
+  fullLabel?: string;
+  pct?: number;
+  revenue?: number;
+};
+
+function SegmentConsumptionTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: Array<{ payload?: SegmentConsumptionTooltipPayload }>;
+}) {
+  if (!active || !payload?.length) return null;
+  const row = payload[0]?.payload;
+  if (!row) return null;
+
+  return (
+    <div className="max-w-[260px] rounded-xl border border-[#E5E7EB] bg-white px-3 py-2.5 shadow-[0_10px_28px_rgba(15,23,42,0.12)]">
+      <p className="text-[12px] font-semibold leading-snug text-[#111827]">
+        {row.fullLabel || 'Γραμμή προϊόντος'}
+      </p>
+      <div className="mt-2 space-y-1 border-t border-[#F3F4F6] pt-2">
+        <div className="flex items-center justify-between gap-4 text-[11px]">
+          <span className="text-[#6B7280]">Μερίδιο segment</span>
+          <span className="font-mono font-semibold text-[#111827]">{formatNumber(row.pct ?? 0, 1)}%</span>
+        </div>
+        {row.revenue != null && row.revenue > 0 ? (
+          <div className="flex items-center justify-between gap-4 text-[11px]">
+            <span className="text-[#6B7280]">Τζίρος</span>
+            <span className="font-mono font-semibold text-[#111827]">{formatCurrencyCompact(row.revenue)}</span>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function SegmentDetail({
   segment,
   hasImportedSegments,
@@ -1158,32 +1196,39 @@ function SegmentDetail({
             </div>
           )}
           {chartRows.length > 0 ? (
-            <div className="w-full min-h-[220px]" style={{ height: chartHeight }}>
+            <div className="w-full min-h-[220px] rounded-xl border border-[#F3F4F6] bg-gradient-to-b from-white to-[#FAFAFA] px-2 py-3" style={{ height: chartHeight }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartRows} layout="vertical" margin={{ left: 6, right: 14, top: 8, bottom: 8 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#F0F0F0" />
+                <BarChart data={chartRows} layout="vertical" margin={{ left: 8, right: 18, top: 6, bottom: 6 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#F3F4F6" />
                   <XAxis
                     type="number"
                     domain={[0, 'dataMax']}
                     tick={{ fontSize: 11, fill: '#4A4A4A' }}
                     tickFormatter={(v) => `${formatNumber(Number(v), Number(v) >= 10 ? 0 : 1)}%`}
+                    axisLine={false}
+                    tickLine={false}
                   />
-                  <YAxis type="category" dataKey="label" width={120} tick={{ fontSize: 11 }} interval={0} />
+                  <YAxis
+                    type="category"
+                    dataKey="label"
+                    width={136}
+                    tick={{ fontSize: 11, fill: '#374151' }}
+                    tickLine={false}
+                    axisLine={false}
+                    interval={0}
+                  />
                   <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#fff',
-                      border: '1px solid #E5E5E5',
-                      borderRadius: '8px',
-                      fontSize: '12px',
-                    }}
-                    formatter={(value: unknown, _n: unknown, item: { payload?: { fullLabel?: string; revenue?: number } }) => {
-                      const v = Number(value) || 0;
-                      const r = item?.payload?.revenue;
-                      const extra = r != null && r > 0 ? ` · ${formatCurrencyCompact(r)}` : '';
-                      return [`${formatNumber(v, 1)}%${extra}`, item?.payload?.fullLabel ?? 'Γραμμή'];
-                    }}
+                    cursor={{ fill: '#FFF7ED' }}
+                    content={<SegmentConsumptionTooltip />}
                   />
-                  <Bar dataKey="pct" fill={segment.color} radius={[0, 4, 4, 0]} barSize={22} />
+                  <Bar
+                    dataKey="pct"
+                    fill={segment.color}
+                    fillOpacity={0.88}
+                    radius={[0, 6, 6, 0]}
+                    barSize={20}
+                    background={{ fill: '#F8FAFC', radius: 6 }}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </div>
