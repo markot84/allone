@@ -1,10 +1,14 @@
 {
-  "version": "0.718.0",
-  "previousVersion": "0.717.0",
-  "commitHash": "c4fb945",
+  "version": "0.720.0",
+  "previousVersion": "0.719.0",
+  "commitHash": "c416980",
   "branch": "main",
-  "buildDate": "2026-05-02T07:26:32.095Z",
+  "buildDate": "2026-05-02T07:39:12.372Z",
   "commits": [
+    {
+      "hash": "c416980",
+      "message": "rfm: auto-open segment consumption detail and show loading states"
+    },
     {
       "hash": "c4fb945",
       "message": "rfm: make segment detail the primary consumption view"
@@ -60,13 +64,10 @@
     {
       "hash": "10ad2a1",
       "message": "fix(rfm): non-blocking orders fetch with inline progress + error UI"
-    },
-    {
-      "hash": "100bac4",
-      "message": "fix(dashboard): hash path normalization, empty brand state, loading and setup CTAs"
     }
   ],
   "changes": [
+    "Rfm: auto-open segment consumption detail and show loading states",
     "Rfm: make segment detail the primary consumption view",
     "Rfm: keep guests out of customer counts and use rolling 12-month RFM",
     "Rfm: email-first customer dedup (cross-store) + top products table per segment + chevron on cards toggle",
@@ -75,7 +76,6 @@
     "Dashboard: subtle refreshing dot στα ecom KPIs όταν φορτώνουν raw orders (UX clarity)",
     "ScheduledSync: ERP connectors run in Phase 2 (after critical path) for resilience",
     "Dashboard: Marketing Expenses KPI + Magento subtotal-based ex-VAT for accounting parity",
-    "[Διόρθωση] Parallel per-brand connectors, raise timeout to 1800s",
-    "[Τεκμηρίωση] Clarify ex-VAT (χωρίς ΦΠΑ) on revenue/AOV/ROI tooltips"
+    "[Διόρθωση] Parallel per-brand connectors, raise timeout to 1800s"
   ]
 }

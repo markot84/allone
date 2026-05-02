@@ -40,6 +40,7 @@ import type { CategoryAffinity, RFMSegment } from '../../types';
 
 import { formatNumber, formatPercent, formatCurrencyCompact } from '../../utils/format';
 const fmtPct = (n: number) => formatNumber(n, 2);
+const SELECTED_SEGMENT_STROKE = '#FDBA74';
 
 type AnalysisTab = 'rfm' | 'behavioral' | 'predictive';
 
@@ -551,10 +552,14 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
                     <Cell
                       key={segment.id}
                       fill={segment.color}
-                      stroke={selectedSegment?.id === segment.id ? '#1A1A1A' : 'none'}
-                      strokeWidth={2}
-                      className="transition-opacity"
-                      opacity={selectedSegment ? (selectedSegment.id === segment.id ? 1 : 0.38) : 1}
+                      stroke={selectedSegment?.id === segment.id ? SELECTED_SEGMENT_STROKE : '#FFFFFF'}
+                      strokeWidth={selectedSegment?.id === segment.id ? 1.5 : 1}
+                      strokeOpacity={selectedSegment?.id === segment.id ? 0.9 : 0.7}
+                      className="transition-opacity outline-none focus:outline-none"
+                      style={{ outline: 'none' }}
+                      tabIndex={-1}
+                      focusable={false}
+                      opacity={selectedSegment ? (selectedSegment.id === segment.id ? 1 : 0.5) : 1}
                     />
                   ))}
                 </Pie>
@@ -580,8 +585,8 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
                 key={segment.id}
                 type="button"
                 onClick={() => setSelectedSegment(segment)}
-                className={`flex min-w-0 items-center justify-between gap-1 rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors ${
-                  selectedSegment?.id === segment.id ? 'bg-[#F3F4F6] ring-1 ring-[#E5E7EB]' : 'hover:bg-[#F9FAFB]'
+                className={`flex min-w-0 items-center justify-between gap-1 rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FDBA74]/50 ${
+                  selectedSegment?.id === segment.id ? 'bg-[#FFF7ED] ring-1 ring-[#FED7AA]' : 'hover:bg-[#F9FAFB]'
                 }`}
               >
                 <span className="flex min-w-0 items-center gap-1.5">
@@ -617,10 +622,14 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
                     <Cell
                       key={segment.id}
                       fill={segment.color}
-                      stroke={selectedSegment?.id === segment.id ? '#1A1A1A' : 'none'}
-                      strokeWidth={2}
-                      className="transition-opacity"
-                      opacity={selectedSegment ? (selectedSegment.id === segment.id ? 1 : 0.38) : 1}
+                      stroke={selectedSegment?.id === segment.id ? SELECTED_SEGMENT_STROKE : '#FFFFFF'}
+                      strokeWidth={selectedSegment?.id === segment.id ? 1.5 : 1}
+                      strokeOpacity={selectedSegment?.id === segment.id ? 0.9 : 0.7}
+                      className="transition-opacity outline-none focus:outline-none"
+                      style={{ outline: 'none' }}
+                      tabIndex={-1}
+                      focusable={false}
+                      opacity={selectedSegment ? (selectedSegment.id === segment.id ? 1 : 0.5) : 1}
                     />
                   ))}
                 </Pie>
@@ -643,8 +652,8 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
                 key={segment.id}
                 type="button"
                 onClick={() => setSelectedSegment(segment)}
-                className={`flex min-w-0 items-center justify-between gap-1 rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors ${
-                  selectedSegment?.id === segment.id ? 'bg-[#F3F4F6] ring-1 ring-[#E5E7EB]' : 'hover:bg-[#F9FAFB]'
+                className={`flex min-w-0 items-center justify-between gap-1 rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FDBA74]/50 ${
+                  selectedSegment?.id === segment.id ? 'bg-[#FFF7ED] ring-1 ring-[#FED7AA]' : 'hover:bg-[#F9FAFB]'
                 }`}
               >
                 <span className="flex min-w-0 items-center gap-1.5">
