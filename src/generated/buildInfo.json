@@ -1,10 +1,14 @@
 {
-  "version": "0.720.0",
-  "previousVersion": "0.719.0",
-  "commitHash": "c416980",
+  "version": "0.722.0",
+  "previousVersion": "0.721.0",
+  "commitHash": "c7bb0ac",
   "branch": "main",
-  "buildDate": "2026-05-02T07:39:12.372Z",
+  "buildDate": "2026-05-02T07:43:25.865Z",
   "commits": [
+    {
+      "hash": "c7bb0ac",
+      "message": "rfm: soften selected segment highlight in donut charts"
+    },
     {
       "hash": "c416980",
       "message": "rfm: auto-open segment consumption detail and show loading states"
@@ -60,13 +64,10 @@
     {
       "hash": "5e9d33d",
       "message": "fix(ecommerce): ex-VAT revenue across dashboard, aggregator and raw orders"
-    },
-    {
-      "hash": "10ad2a1",
-      "message": "fix(rfm): non-blocking orders fetch with inline progress + error UI"
     }
   ],
   "changes": [
+    "Rfm: soften selected segment highlight in donut charts",
     "Rfm: auto-open segment consumption detail and show loading states",
     "Rfm: make segment detail the primary consumption view",
     "Rfm: keep guests out of customer counts and use rolling 12-month RFM",
@@ -75,7 +76,6 @@
     "Magento: multi-currency aware ex-VAT (base_* fields) for accurate multi-store revenue",
     "Dashboard: subtle refreshing dot στα ecom KPIs όταν φορτώνουν raw orders (UX clarity)",
     "ScheduledSync: ERP connectors run in Phase 2 (after critical path) for resilience",
-    "Dashboard: Marketing Expenses KPI + Magento subtotal-based ex-VAT for accounting parity",
-    "[Διόρθωση] Parallel per-brand connectors, raise timeout to 1800s"
+    "Dashboard: Marketing Expenses KPI + Magento subtotal-based ex-VAT for accounting parity"
   ]
 }

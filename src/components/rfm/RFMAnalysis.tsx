@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -109,7 +109,7 @@ interface RFMAnalysisProps {
 }
 
 export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
-  const [selectedSegment, setSelectedSegment] = useState<RFMSegment | null>(null);
+  const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<AnalysisTab>('rfm');
   const {
     segments: rfmSegments,
@@ -138,12 +138,16 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
   const channelRecommendation = activeStrategy?.channelRecommendation ?? null;
   const totalCustomersDisplay = Math.max(totalCustomers, dataCoverage.totalCustomers);
   const segmentColorById = new Map(rfmSegments.map((segment) => [segment.id, segment.color]));
+  const selectedSegment = useMemo(
+    () => rfmSegments.find((segment) => segment.id === selectedSegmentId) ?? null,
+    [rfmSegments, selectedSegmentId]
+  );
 
   useEffect(() => {
-    setSelectedSegment((current) => {
+    setSelectedSegmentId((currentId) => {
       if (rfmSegments.length === 0) return null;
-      if (!current) return rfmSegments[0] ?? null;
-      return rfmSegments.find((segment) => segment.id === current.id) ?? rfmSegments[0] ?? null;
+      if (currentId && rfmSegments.some((segment) => segment.id === currentId)) return currentId;
+      return rfmSegments[0]?.id ?? null;
     });
   }, [rfmSegments]);
 
@@ -584,7 +588,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
               <button
                 key={segment.id}
                 type="button"
-                onClick={() => setSelectedSegment(segment)}
+                onClick={() => setSelectedSegmentId(segment.id)}
                 className={`flex min-w-0 items-center justify-between gap-1 rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FDBA74]/50 ${
                   selectedSegment?.id === segment.id ? 'bg-[#FFF7ED] ring-1 ring-[#FED7AA]' : 'hover:bg-[#F9FAFB]'
                 }`}
@@ -651,7 +655,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
               <button
                 key={segment.id}
                 type="button"
-                onClick={() => setSelectedSegment(segment)}
+                onClick={() => setSelectedSegmentId(segment.id)}
                 className={`flex min-w-0 items-center justify-between gap-1 rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FDBA74]/50 ${
                   selectedSegment?.id === segment.id ? 'bg-[#FFF7ED] ring-1 ring-[#FED7AA]' : 'hover:bg-[#F9FAFB]'
                 }`}
@@ -715,7 +719,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
                 segment={segment}
                 index={index}
                 isSelected={selectedSegment?.id === segment.id}
-                onSelect={() => setSelectedSegment(segment)}
+                onSelect={() => setSelectedSegmentId(segment.id)}
                 onExport={(fmt) => handleExportSegment(segment, fmt)}
               />
             ))}
