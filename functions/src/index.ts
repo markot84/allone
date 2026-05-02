@@ -1603,8 +1603,14 @@ async function runPool<T>(items: T[], concurrency: number, fn: (item: T) => Prom
   await Promise.all(Array.from({ length: n }, () => worker()));
 }
 
-const SCHEDULED_SYNC_TIMEOUT_SECONDS = 1200;
-const NIGHTLY_CONNECTOR_SYNC_CONCURRENCY = 2;
+/**
+ * Cloud Functions Gen 2 onSchedule supports up to 3600s. 1800s (30 min) δίνει περιθώριο για
+ * brands με βαριά Magento/Shopify ιστορικά + GA4/Search Console + competitor monitoring.
+ * Αν δεν δηλωθεί ρητά εδώ, το deployment μένει στον παλιό κωδικοποιημένο default των 540s.
+ */
+const SCHEDULED_SYNC_TIMEOUT_SECONDS = 1800;
+/** Παράλληλη επεξεργασία brands (κάθε brand εκτελεί ταυτόχρονα ολους τους connectors του). */
+const NIGHTLY_CONNECTOR_SYNC_CONCURRENCY = 3;
 const NIGHTLY_FOLLOWUP_CUTOFF_MS = SCHEDULED_SYNC_TIMEOUT_SECONDS * 1000 - 90_000;
 
 // ─── Scheduled: Daily Sync (23:00 Europe/Athens) ───────────────
@@ -1632,118 +1638,46 @@ export const scheduledSync = onSchedule(
         const data = doc.data();
 
         try {
-          if (data.google_ads?.connected) {
-            try {
-              const result = await fetchGoogleAdsCampaigns(brandId);
-              logger.info(`[ScheduledSync] Google Ads for ${brandId}: imported ${result.imported}`);
-            } catch (err) {
-              logger.error(`[ScheduledSync] Google Ads failed for ${brandId}:`, err);
-            }
-          }
+          /**
+           * Παράλληλη εκτέλεση όλων των connectors του brand. Πριν, GA4 + Search Console
+           * ξεκινούσαν μετά το πέρας ΟΛΩΝ των e-shop connectors → όταν το Magento αργούσε,
+           * ο 540s timeout τα έκοβε χωρίς να γίνει ποτέ sync. Έτσι κάθε API τρέχει στον
+           * δικό του χρόνο και χρησιμοποιείται όλο το παράθυρο των 30 λεπτών.
+           */
+          const tasks: Array<Promise<unknown>> = [];
 
-          if (data.meta?.connected) {
-            try {
-              const result = await fetchMetaCampaigns(brandId);
-              logger.info(`[ScheduledSync] Meta for ${brandId}: imported ${result.imported}`);
-            } catch (err) {
-              logger.error(`[ScheduledSync] Meta failed for ${brandId}:`, err);
-            }
-          }
+          const wrap = (label: string, p: Promise<unknown>) =>
+            tasks.push(
+              p
+                .then((r) => {
+                  const imported = (r as { imported?: number })?.imported;
+                  logger.info(`[ScheduledSync] ${label} for ${brandId}: imported ${imported ?? '—'}`);
+                })
+                .catch((err) => logger.error(`[ScheduledSync] ${label} failed for ${brandId}:`, err))
+            );
 
-          if (data.tiktok?.connected) {
-            try {
-              const result = await fetchTikTokCampaigns(brandId);
-              logger.info(`[ScheduledSync] TikTok for ${brandId}: imported ${result.imported}`);
-            } catch (err) {
-              logger.error(`[ScheduledSync] TikTok failed for ${brandId}:`, err);
-            }
-          }
+          if (data.google_ads?.connected) wrap('Google Ads', fetchGoogleAdsCampaigns(brandId));
+          if (data.meta?.connected) wrap('Meta', fetchMetaCampaigns(brandId));
+          if (data.tiktok?.connected) wrap('TikTok', fetchTikTokCampaigns(brandId));
+          if (data.merchant?.connected) wrap('Merchant', fetchPriceBenchmarks(brandId));
 
-          if (data.merchant?.connected) {
-            try {
-              const result = await fetchPriceBenchmarks(brandId);
-              logger.info(`[ScheduledSync] Merchant for ${brandId}: imported ${result.imported}`);
-            } catch (err) {
-              logger.error(`[ScheduledSync] Merchant failed for ${brandId}:`, err);
-            }
-          }
+          if (data.shopify?.connected) wrap('Shopify', fetchShopifyData(brandId));
+          if (data.woocommerce?.connected) wrap('WooCommerce', fetchWooCommerceData(brandId));
+          if (data.opencart?.connected) wrap('OpenCart', fetchOpenCartData(brandId));
+          if (data.magento?.connected) wrap('Magento', fetchMagentoData(brandId));
 
-          if (data.shopify?.connected) {
-            try {
-              const result = await fetchShopifyData(brandId);
-              logger.info(`[ScheduledSync] Shopify for ${brandId}: imported ${result.imported}`);
-            } catch (err) {
-              logger.error(`[ScheduledSync] Shopify failed for ${brandId}:`, err);
-            }
-          }
+          if (data.megaventory?.connected) wrap('Megaventory', fetchMegaventoryData(brandId, { mode: 'scheduled' }));
+          if (data.softone?.connected) wrap('SoftOne', fetchSoftOneData(brandId));
+          if (data.epsilon_net?.connected) wrap('Epsilon Net', fetchEpsilonNetData(brandId));
+          if (data.entersoft?.connected) wrap('Entersoft', fetchEntersoftData(brandId));
 
-          if (data.woocommerce?.connected) {
-            try {
-              const result = await fetchWooCommerceData(brandId);
-              logger.info(`[ScheduledSync] WooCommerce for ${brandId}: imported ${result.imported}`);
-            } catch (err) {
-              logger.error(`[ScheduledSync] WooCommerce failed for ${brandId}:`, err);
-            }
-          }
+          if (data.ga4?.connected && data.ga4?.propertyId) wrap('GA4', fetchGA4Data(brandId));
+          if (data.search_console?.connected && data.search_console?.siteUrl)
+            wrap('Search Console', fetchSearchConsoleData(brandId));
 
-          if (data.opencart?.connected) {
-            try {
-              const result = await fetchOpenCartData(brandId);
-              logger.info(`[ScheduledSync] OpenCart for ${brandId}: imported ${result.imported}`);
-            } catch (err) {
-              logger.error(`[ScheduledSync] OpenCart failed for ${brandId}:`, err);
-            }
-          }
+          await Promise.all(tasks);
 
-          if (data.magento?.connected) {
-            try {
-              const result = await fetchMagentoData(brandId);
-              logger.info(`[ScheduledSync] Magento for ${brandId}: imported ${result.imported}`);
-            } catch (err) {
-              logger.error(`[ScheduledSync] Magento failed for ${brandId}:`, err);
-            }
-          }
-
-          if (data.megaventory?.connected) {
-            try {
-              const result = await fetchMegaventoryData(brandId, { mode: 'scheduled' });
-              logger.info(`[ScheduledSync] Megaventory for ${brandId}: imported ${result.imported}`);
-            } catch (err) {
-              logger.error(`[ScheduledSync] Megaventory failed for ${brandId}:`, err);
-            }
-          }
-
-          if (data.softone?.connected) {
-            try {
-              const result = await fetchSoftOneData(brandId);
-              logger.info(`[ScheduledSync] SoftOne for ${brandId}: imported ${result.imported}`);
-            } catch (err) {
-              logger.error(`[ScheduledSync] SoftOne failed for ${brandId}:`, err);
-            }
-          }
-
-          if (data.epsilon_net?.connected) {
-            try {
-              const result = await fetchEpsilonNetData(brandId);
-              logger.info(`[ScheduledSync] Epsilon Net for ${brandId}: imported ${result.imported}`);
-            } catch (err) {
-              logger.error(`[ScheduledSync] Epsilon Net failed for ${brandId}:`, err);
-            }
-          }
-
-          if (data.entersoft?.connected) {
-            try {
-              const result = await fetchEntersoftData(brandId);
-              logger.info(`[ScheduledSync] Entersoft for ${brandId}: imported ${result.imported}`);
-            } catch (err) {
-              logger.error(`[ScheduledSync] Entersoft failed for ${brandId}:`, err);
-            }
-          }
-
-          // GA4 + Search Console: όχι εδώ — τρέχουν σε ξεχωριστή φάση με περιορισμένη παραλληλία
-          // ώστε να μη «χτυπάμε» όλα τα properties ταυτόχρονα (quota / 429 / silent αποτυχίες).
-
-          // Refresh e-commerce summary if any e-commerce platform is connected
+          // Refresh e-commerce summary if any e-commerce platform is connected — μετά τα orders syncs.
           const hasEcommerce = data.shopify?.connected || data.woocommerce?.connected || data.opencart?.connected || data.magento?.connected;
           if (hasEcommerce) {
             try {
@@ -1761,32 +1695,6 @@ export const scheduledSync = onSchedule(
       if (failedConnectorBrands > 0) {
         logger.error(`[ScheduledSync] ${failedConnectorBrands} connector brand tasks failed unexpectedly`);
       }
-
-      const ga4Brands: string[] = [];
-      const searchConsoleBrands: string[] = [];
-      for (const doc of connectorsSnap.docs) {
-        const d = doc.data();
-        if (d.ga4?.connected && d.ga4?.propertyId) ga4Brands.push(doc.id);
-        if (d.search_console?.connected && d.search_console?.siteUrl) searchConsoleBrands.push(doc.id);
-      }
-
-      const ANALYTICS_SYNC_CONCURRENCY = 2;
-      await runPool(ga4Brands, ANALYTICS_SYNC_CONCURRENCY, async (bid) => {
-        try {
-          const result = await fetchGA4Data(bid);
-          logger.info(`[ScheduledSync] GA4 for ${bid}: imported ${result.imported} days`);
-        } catch (err) {
-          logger.error(`[ScheduledSync] GA4 failed for ${bid}:`, err);
-        }
-      });
-      await runPool(searchConsoleBrands, ANALYTICS_SYNC_CONCURRENCY, async (bid) => {
-        try {
-          const result = await fetchSearchConsoleData(bid);
-          logger.info(`[ScheduledSync] Search Console for ${bid}: imported ${result.imported} rows`);
-        } catch (err) {
-          logger.error(`[ScheduledSync] Search Console failed for ${bid}:`, err);
-        }
-      });
 
       let skippedFollowups = false;
       let competitorSnapSize = 0;

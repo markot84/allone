@@ -1,10 +1,14 @@
 {
-  "version": "0.696.0",
-  "previousVersion": "0.695.0",
-  "commitHash": "faa10e6",
+  "version": "0.697.0",
+  "previousVersion": "0.696.0",
+  "commitHash": "76e5b89",
   "branch": "main",
-  "buildDate": "2026-05-02T04:44:42.010Z",
+  "buildDate": "2026-05-02T04:50:44.714Z",
   "commits": [
+    {
+      "hash": "76e5b89",
+      "message": "docs(tooltips): clarify ex-VAT (χωρίς ΦΠΑ) on revenue/AOV/ROI tooltips"
+    },
     {
       "hash": "faa10e6",
       "message": "chore: deploy ex-VAT revenue fix"
@@ -60,13 +64,10 @@
     {
       "hash": "5a9a168",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "7e3c945",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [
+    "[Τεκμηρίωση] Clarify ex-VAT (χωρίς ΦΠΑ) on revenue/AOV/ROI tooltips",
     "[Συντήρηση] Deploy ex-VAT revenue fix",
     "[Διόρθωση] Ex-VAT revenue across dashboard, aggregator and raw orders",
     "[Διόρθωση] Non-blocking orders fetch with inline progress + error UI",
