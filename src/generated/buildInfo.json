@@ -1,10 +1,14 @@
 {
-  "version": "0.726.10",
-  "previousVersion": "0.726.9",
-  "commitHash": "b0c1047",
+  "version": "0.726.11",
+  "previousVersion": "0.726.10",
+  "commitHash": "f387a1d",
   "branch": "main",
-  "buildDate": "2026-05-02T18:51:40.444Z",
+  "buildDate": "2026-05-02T19:06:18.706Z",
   "commits": [
+    {
+      "hash": "f387a1d",
+      "message": "build: hosting build info after full deploy (v0.726.10)"
+    },
     {
       "hash": "b0c1047",
       "message": "E‑commerce connectors: incremental orders/products sync like Magento syncPolicy window"
@@ -60,13 +64,10 @@
     {
       "hash": "44d4cc7",
       "message": "connectors: Revenue Source Mode + Sales Channel Rules Editor (UI for excluding intercompany/marketplace orders)"
-    },
-    {
-      "hash": "e5022a9",
-      "message": "magento: multi-currency aware ex-VAT (base_* fields) for accurate multi-store revenue"
     }
   ],
   "changes": [
+    "[Build] Hosting build info after full deploy (v0.726.10)",
     "E‑commerce connectors: incremental orders/products sync like Magento syncPolicy window",
     "Incremental marketing sync (yesterday-today): preserve merged dailyMetrics; TikTok merge-recompute",
     "Rfm: cache order history and separate category insights",
@@ -75,7 +76,6 @@
     "[Διόρθωση] Prevent selected segment update loop crash",
     "Rfm: soften selected segment highlight in donut charts",
     "Rfm: auto-open segment consumption detail and show loading states",
-    "Rfm: make segment detail the primary consumption view",
-    "Rfm: keep guests out of customer counts and use rolling 12-month RFM"
+    "Rfm: make segment detail the primary consumption view"
   ]
 }

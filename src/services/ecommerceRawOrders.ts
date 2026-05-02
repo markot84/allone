@@ -3,7 +3,7 @@
  * αθροίσεις ίδιες με το ecommerceAggregator (demo + cancelled) ώστε οι περίοδοι >90d
  * να εμφανίζονται σωστά στο UI (το server summary κρατά rolling ~90 ημέρες).
  */
-import { orderBy, where, type QueryConstraint } from 'firebase/firestore';
+import { orderBy, where, Timestamp, type QueryConstraint } from 'firebase/firestore';
 import { FirestoreService } from './firestore';
 import {
   classifyEcommerceOrder,
@@ -98,6 +98,33 @@ function parseOptionalNumber(v: unknown): number | undefined {
   if (typeof v === 'number' && !Number.isNaN(v)) return v;
   const n = parseFloat(String(v));
   return Number.isFinite(n) ? n : undefined;
+}
+
+function coerceFirestoreCreatedAtString(v: unknown): string {
+  if (v == null) return '';
+  if (typeof v === 'string') return v.trim();
+  if (v instanceof Timestamp) {
+    const d = v.toDate();
+    return Number.isNaN(d.getTime()) ? '' : d.toISOString();
+  }
+  const maybe = v as { toDate?: () => Date };
+  if (typeof maybe.toDate === 'function') {
+    try {
+      const d = maybe.toDate();
+      return Number.isNaN(d.getTime()) ? '' : d.toISOString();
+    } catch {
+      return '';
+    }
+  }
+  return '';
+}
+
+/** YYYY-MM-DD για φίλτρο εύρους (μετά coerce από Timestamp / Magento string). */
+function createdAtDayKeyFromRow(row: Record<string, unknown>): string {
+  const s = coerceFirestoreCreatedAtString(row.createdAt ?? row.created_at);
+  if (!s) return '';
+  const m = /^(\d{4}-\d{2}-\d{2})/.exec(s);
+  return m?.[1] ?? '';
 }
 
 function normalizeLineItemFromFirestore(raw: unknown): EcommerceRawLineItem {
@@ -223,7 +250,7 @@ function normalizeRawOrder(platform: string, row: Record<string, unknown>): Ecom
     status: String(row.status || row.financialStatus || row.financial_status || ''),
     total: Number(totalValue || 0),
     currency: String(row.currency || 'EUR'),
-    createdAt: String(row.createdAt || ''),
+    createdAt: coerceFirestoreCreatedAtString(row.createdAt ?? row.created_at),
     lineItems,
     paymentMethod: String(row.paymentMethod || row.payment_method || ''),
     shippingMethod: String(row.shippingMethod || row.shipping_method || row.shippingDescription || ''),
@@ -290,24 +317,56 @@ export async function fetchAllEcommerceOrders(
         if (options.sinceDate) constraints.push(where('createdAt', '>=', options.sinceDate));
         if (options.untilDate) constraints.push(where('createdAt', '<=', `${options.untilDate}T23:59:59.999Z`));
         if (options.sinceDate || options.untilDate) constraints.push(orderBy('createdAt', 'desc'));
-        let rows: Record<string, unknown>[];
-        try {
-          rows = await FirestoreService.getDocuments<Record<string, unknown>>(collectionName, constraints, brandId, {
-            cacheFirst: options.cacheFirst,
-          });
-        } catch (error) {
-          if (!options.sinceDate && !options.untilDate) throw error;
-          // If a composite index is still building/missing, keep the page functional and filter client-side.
-          const fallbackRows = await FirestoreService.getDocuments<Record<string, unknown>>(collectionName, [], brandId, {
-            cacheFirst: options.cacheFirst,
-          });
-          rows = fallbackRows.filter((row) => {
-            const createdAt = String(row.createdAt || '');
-            if (!createdAt) return false;
-            if (options.sinceDate && createdAt < options.sinceDate) return false;
-            if (options.untilDate && createdAt.slice(0, 10) > options.untilDate) return false;
+        const hasRange = Boolean(options.sinceDate || options.untilDate);
+        const rangedLoadOpts = {
+          cacheFirst: false,
+          forceServer: true,
+        } as const;
+
+        const filterRowsByDateWindow = (incoming: Record<string, unknown>[]) =>
+          incoming.filter((row) => {
+            const day = createdAtDayKeyFromRow(row);
+            if (!day) return false;
+            if (options.sinceDate && day < options.sinceDate) return false;
+            if (options.untilDate && day > options.untilDate) return false;
             return true;
           });
+
+        let rows: Record<string, unknown>[] = [];
+        try {
+          if (hasRange) {
+            rows = await FirestoreService.getDocuments<Record<string, unknown>>(
+              collectionName,
+              constraints,
+              brandId,
+              rangedLoadOpts
+            );
+            // Αν το query επέστρεψε κενό (π.χ. createdAt σε Timestamp έναντι strings, ή index/cache),
+            // κάνουμε ανάγνωση όλων των παραγγελιών brand και φιλτάρουμε client-side —
+            // ακριβές για μεγάλα catalogs, αλλά σωστό για τις dashboards.
+            if (rows.length === 0) {
+              const allRows = await FirestoreService.getDocuments<Record<string, unknown>>(
+                collectionName,
+                [],
+                brandId,
+                rangedLoadOpts
+              );
+              rows = filterRowsByDateWindow(allRows);
+            }
+          } else {
+            rows = await FirestoreService.getDocuments<Record<string, unknown>>(collectionName, [], brandId, {
+              cacheFirst: options.cacheFirst,
+            });
+          }
+        } catch (error) {
+          if (!hasRange) throw error;
+          const fallbackRows = await FirestoreService.getDocuments<Record<string, unknown>>(
+            collectionName,
+            [],
+            brandId,
+            rangedLoadOpts
+          );
+          rows = filterRowsByDateWindow(fallbackRows);
         }
         return rows.map((row) => normalizeRawOrder(platform, row));
       })
