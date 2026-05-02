@@ -17,7 +17,19 @@ const LS_PERIOD = 'perf_global_period';
 const LS_FROM   = 'perf_global_from';
 const LS_TO     = 'perf_global_to';
 
-function pad(n: number) { return String(n).padStart(2, '0'); }
+function pad(n: number) {
+  return String(n).padStart(2, '0');
+}
+
+/** YYYY-MM-DD στην **τοπική** ημερολογιακή ημέρα (ίδιο με first-of-month / year strings). */
+function formatLocalYMD(d: Date): string {
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/** Μετατόπιση κατά ημέρες στο **τοπικό** ημερολόγιο (αποφεύγει UTC skew του toISOString). */
+function addLocalDays(base: Date, deltaDays: number): Date {
+  return new Date(base.getFullYear(), base.getMonth(), base.getDate() + deltaDays);
+}
 
 /**
  * Το τέλος περιόδου είναι χθες (ολοκληρωμένα ημερήσια δεδομένα). Στην 1η του μήνα / έτους
@@ -35,16 +47,15 @@ function clampIsoRange(fromDate: string, toDate: string): { fromDate: string; to
 
 function computeDates(period: GlobalPeriod, customFrom: string, customTo: string): { fromDate: string; toDate: string } {
   const now = new Date();
-  const yesterday = new Date(now);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const toDate = yesterday.toISOString().slice(0, 10);
+  const yesterday = addLocalDays(now, -1);
+  const toDate = formatLocalYMD(yesterday);
 
   let range: { fromDate: string; toDate: string };
   if (period === 'custom') {
     range = { fromDate: customFrom || toDate, toDate: customTo || toDate };
   } else if (period === 'last_30') {
-    const d = new Date(now); d.setDate(d.getDate() - 30);
-    range = { fromDate: d.toISOString().slice(0, 10), toDate };
+    const start = addLocalDays(now, -30);
+    range = { fromDate: formatLocalYMD(start), toDate };
   } else if (period === 'current_year') {
     range = { fromDate: `${now.getFullYear()}-01-01`, toDate };
   } else {

@@ -1,10 +1,14 @@
 {
-  "version": "0.726.11",
-  "previousVersion": "0.726.10",
-  "commitHash": "f387a1d",
+  "version": "0.726.14",
+  "previousVersion": "0.726.13",
+  "commitHash": "208588d",
   "branch": "main",
-  "buildDate": "2026-05-02T19:06:18.706Z",
+  "buildDate": "2026-05-02T19:21:13.564Z",
   "commits": [
+    {
+      "hash": "208588d",
+      "message": "fix(ecommerce): robust raw orders fetch when date query returns empty (timestamp/coerce server)"
+    },
     {
       "hash": "f387a1d",
       "message": "build: hosting build info after full deploy (v0.726.10)"
@@ -60,13 +64,10 @@
     {
       "hash": "f516b37",
       "message": "connectors: Revenue Source Mode + Sales Channel Rules Editor (UI for excluding intercompany/marketplace orders)"
-    },
-    {
-      "hash": "44d4cc7",
-      "message": "connectors: Revenue Source Mode + Sales Channel Rules Editor (UI for excluding intercompany/marketplace orders)"
     }
   ],
   "changes": [
+    "[Διόρθωση] Robust raw orders fetch when date query returns empty (timestamp/coerce server)",
     "[Build] Hosting build info after full deploy (v0.726.10)",
     "E‑commerce connectors: incremental orders/products sync like Magento syncPolicy window",
     "Incremental marketing sync (yesterday-today): preserve merged dailyMetrics; TikTok merge-recompute",
@@ -75,7 +76,6 @@
     "Rfm: clean segment consumption tooltip and chart ui",
     "[Διόρθωση] Prevent selected segment update loop crash",
     "Rfm: soften selected segment highlight in donut charts",
-    "Rfm: auto-open segment consumption detail and show loading states",
-    "Rfm: make segment detail the primary consumption view"
+    "Rfm: auto-open segment consumption detail and show loading states"
   ]
 }

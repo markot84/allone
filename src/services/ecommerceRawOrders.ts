@@ -318,10 +318,11 @@ export async function fetchAllEcommerceOrders(
         if (options.untilDate) constraints.push(where('createdAt', '<=', `${options.untilDate}T23:59:59.999Z`));
         if (options.sinceDate || options.untilDate) constraints.push(orderBy('createdAt', 'desc'));
         const hasRange = Boolean(options.sinceDate || options.untilDate);
-        const rangedLoadOpts = {
-          cacheFirst: false,
-          forceServer: true,
-        } as const;
+        /** `cacheFirst: true` (RFM / dashboard) → γρήγορη επανεπίσκεψη· αλλιώς server για «φρέσκα» δεδομένα μετά sync. */
+        const rangedLoadOpts =
+          options.cacheFirst === true
+            ? ({ cacheFirst: true } as const)
+            : ({ cacheFirst: false, forceServer: true } as const);
 
         const filterRowsByDateWindow = (incoming: Record<string, unknown>[]) =>
           incoming.filter((row) => {

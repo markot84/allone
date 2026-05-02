@@ -114,7 +114,9 @@ export function useSegments() {
 
   const { data: firestoreSegments = [], isPending: fsPending } = useQuery({
     queryKey: ['segments', brandId],
-    queryFn: () => (brandId ? SegmentsService.getAll(brandId, { forceServer: true }) : Promise.resolve([])) as Promise<RFMSegment[]>,
+    queryFn: () => (brandId ? SegmentsService.getAll(brandId) : Promise.resolve([])) as Promise<RFMSegment[]>,
+    staleTime: 2 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
   });
 
   const { data: rawSegmentCustomerSummaries, isPending: segmentCustomersPending } = useQuery({
@@ -250,12 +252,18 @@ export function useSegments() {
   }, [sourcePref, resolvedSource, orderRfm.totalCustomers, externalTotalCustomers, externalSegments]);
 
   /**
-   * Loading γρήγορο: μόνο τα Firestore segments (ή summary για external preference).
-   * Τα raw orders φορτώνουν προοδευτικά — `ordersLoading` εμφανίζει inline status, χωρίς να μπλοκάρει την σελίδα.
+   * Μην μπλοκάρεις RFM όσο περιμένεις «άδεια» segments αν το brand έχει e-shop:
+   * το `ordersLoading` δείχνει την κατάσταση φόρτωσης παραγγελιών.
+   * Μπλοκ μόνο για import-only (όχι connectors) ή external preference (segment_customers).
    */
+  const ecommReady = !ecomm.isLoading;
+  const blocksOnImportedSegmentsOnly =
+    fsPending &&
+    ecommReady &&
+    ecomm.connectedPlatforms.length === 0 &&
+    !ecomm.hasData;
   const isLoading =
-    fsPending ||
-    (sourcePref === 'external' && segmentCustomersPending);
+    blocksOnImportedSegmentsOnly || (sourcePref === 'external' && segmentCustomersPending);
 
   const ordersLoading = ordersQueryEnabled && ordersPending;
   const isCatalogEnriching = ordersQueryEnabled && catalogPending;

@@ -231,7 +231,8 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
 
   if (!hasImportedSegments) {
     const hasEcomm = ecomm.connectedPlatforms.length > 0;
-    const stillLoadingOrders = ordersLoading && !ordersError;
+    const stillLoadingOrders =
+      (ordersLoading && !ordersError) || (ecomm.isLoading && !hasEcomm && !ordersError);
     return (
       <div className="space-y-6">
         <PageHeader

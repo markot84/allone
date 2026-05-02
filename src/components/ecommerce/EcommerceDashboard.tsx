@@ -318,8 +318,9 @@ export function EcommerceDashboard() {
   const brandHistoryStartISO = getBrandHistoryStartISO(currentBrand);
   const rawFrom = localDateFrom || globalFrom;
   const rawTo   = localDateTo   || globalTo;
-  const effectiveFrom = brandHistoryStartISO && rawFrom < brandHistoryStartISO ? brandHistoryStartISO : rawFrom;
-  const effectiveTo   = rawTo;
+  let effectiveFrom = brandHistoryStartISO && rawFrom < brandHistoryStartISO ? brandHistoryStartISO : rawFrom;
+  const effectiveTo = rawTo;
+  if (effectiveFrom > effectiveTo) effectiveFrom = effectiveTo;
   const hasLocalOverride = !!(localDateFrom || localDateTo);
 
   useEffect(() => {
