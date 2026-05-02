@@ -1,10 +1,14 @@
 {
-  "version": "0.693.0",
-  "previousVersion": "0.692.0",
-  "commitHash": "100bac4",
+  "version": "0.694.0",
+  "previousVersion": "0.693.0",
+  "commitHash": "10ad2a1",
   "branch": "main",
-  "buildDate": "2026-05-01T21:27:41.365Z",
+  "buildDate": "2026-05-02T04:31:34.579Z",
   "commits": [
+    {
+      "hash": "10ad2a1",
+      "message": "fix(rfm): non-blocking orders fetch with inline progress + error UI"
+    },
     {
       "hash": "100bac4",
       "message": "fix(dashboard): hash path normalization, empty brand state, loading and setup CTAs"
@@ -60,16 +64,12 @@
     {
       "hash": "0149fb5",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "3758579",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [
+    "[Διόρθωση] Non-blocking orders fetch with inline progress + error UI",
     "[Διόρθωση] Hash path normalization, empty brand state, loading and setup CTAs",
     "[Νέο χαρακτηριστικό] Shopify order line productId/variantId; OpenCart lineItems via api/order/info",
-    "[Συντήρηση] Full deploy",
-    "[Διόρθωση] Responsive channel progress summary"
+    "[Συντήρηση] Full deploy"
   ]
 }

@@ -159,6 +159,22 @@ const REVENUE_FIELD: Record<string, string> = {
 };
 
 /**
+ * Tax field per platform — αφαιρείται από το gross για ex-VAT revenue στα KPIs.
+ * OpenCart δεν εκθέτει total tax στο order list endpoint· χωρίς αυτό μένει incl. VAT (consistency note).
+ */
+const TAX_FIELD: Record<string, string> = {
+  shopify: 'totalTax',
+  woocommerce: 'totalTax',
+  magento: 'taxAmount',
+};
+
+function parseNumeric(value: unknown): number {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  const n = parseFloat(String(value ?? '0'));
+  return Number.isFinite(n) ? n : 0;
+}
+
+/**
  * Read orders from a single platform collection for the given brand (full history in Firestore).
  */
 async function readPlatformOrders(
@@ -175,13 +191,17 @@ async function readPlatformOrders(
     .get();
 
   const revenueField = REVENUE_FIELD[platform] || 'totalPrice';
+  const taxField = TAX_FIELD[platform];
   const rows: OrderRow[] = [];
 
   for (const doc of snap.docs) {
     const d = doc.data();
     const createdAt = d.createdAt || '';
 
-    const price = typeof d[revenueField] === 'number' ? d[revenueField] : parseFloat(d[revenueField] || '0');
+    const gross = parseNumeric(d[revenueField]);
+    const tax = taxField ? parseNumeric(d[taxField]) : 0;
+    // Ex-VAT revenue (αν λείπει tax field, fallback στο gross — αποφυγή 0 για OpenCart).
+    const price = Math.max(0, gross - tax);
 
     rows.push({
       totalPrice: price,

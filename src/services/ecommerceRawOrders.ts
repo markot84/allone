@@ -146,15 +146,25 @@ function normalizeLineItemFromFirestore(raw: unknown): EcommerceRawLineItem {
   };
 }
 
+/**
+ * Ex-VAT total — αφαιρούμε τον φόρο όταν υπάρχει στο payload (Shopify/Woo/Magento) ώστε το
+ * `total` να είναι «καθαρός τζίρος χωρίς ΦΠΑ», συνεπές με το server aggregator και τον λογαριασμό
+ * εσόδων του brand. OpenCart δεν εκθέτει tax στο list endpoint → fallback στο gross.
+ */
+function computeExVatTotal(platform: string, row: Record<string, unknown>): number {
+  const num = (v: unknown) => {
+    if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+    const n = parseFloat(String(v ?? '0'));
+    return Number.isFinite(n) ? n : 0;
+  };
+  if (platform === 'shopify') return Math.max(0, num(row.totalPrice) - num(row.totalTax));
+  if (platform === 'woocommerce') return Math.max(0, num(row.total) - num(row.totalTax));
+  if (platform === 'magento') return Math.max(0, num(row.grandTotal) - num(row.taxAmount));
+  return num(row.total);
+}
+
 function normalizeRawOrder(platform: string, row: Record<string, unknown>): EcommerceRawOrder {
-  const totalValue =
-    platform === 'shopify'
-      ? row.totalPrice
-      : platform === 'woocommerce'
-        ? row.total
-        : platform === 'magento'
-          ? row.grandTotal
-          : row.total;
+  const totalValue = computeExVatTotal(platform, row);
 
   const rawItems = row.lineItems;
   const lineItems: EcommerceRawLineItem[] = Array.isArray(rawItems)

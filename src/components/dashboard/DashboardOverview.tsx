@@ -264,8 +264,14 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   }, [ga4.dailyEntries, periodDates.fromDate, periodDates.toDate]);
 
   const hasEcommerceRevenue = enabledModules.ecommerce && ecomm.hasData;
+  /**
+   * «Σύνολο Εσόδων» = πραγματικά έσοδα παραγγελιών (e-shop + μελλοντικά ERP/others). Δεν αθροίζουμε organic
+   * revenue ή ad conversion value — αυτά είναι channel attribution και θα φουσκώσουν τον τζίρο με double-counting
+   * (μία πώληση μπορεί να πιστωθεί σε Organic + Google Ads + Meta ταυτόχρονα). Channel breakdown εμφανίζεται στο ROI.
+   * Όταν δεν υπάρχει e-shop σύνδεση, fallback σε εκτίμηση organic + ad conversion value.
+   */
   const dashboardTotalRevenue = useMemo(
-    () => (hasEcommerceRevenue ? storeRevenueInPeriod : 0) + organicRevenueInPeriod + campaignMetrics.totalRevenue,
+    () => (hasEcommerceRevenue ? storeRevenueInPeriod : organicRevenueInPeriod + campaignMetrics.totalRevenue),
     [hasEcommerceRevenue, storeRevenueInPeriod, organicRevenueInPeriod, campaignMetrics.totalRevenue]
   );
   const inventoryValueEstimate = productStats?.totalInventoryValue ?? 0;
@@ -711,19 +717,24 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
 
         const kFromYm = periodDates.fromDate.slice(0, 7);
         const kToYm = periodDates.toDate.slice(0, 7);
-        organicByMonth.forEach((v, ym) => {
-          if (ym < kFromYm || ym > kToYm) return;
-          revenueByMonth[ym] = (revenueByMonth[ym] || 0) + v;
-        });
         if (hasEcommerceRevenue) {
+          // Με e-shop: revenueByMonth = real e-shop monthly revenue (όχι organic + ad value).
           ecommHist.monthlyRevenue.forEach((r) => {
             if (r.month < kFromYm || r.month > kToYm) return;
             revenueByMonth[r.month] = (revenueByMonth[r.month] || 0) + r.revenue;
           });
+        } else {
+          // Χωρίς e-shop: εκτίμηση organic + ad conversion value (channel attribution).
+          organicByMonth.forEach((v, ym) => {
+            if (ym < kFromYm || ym > kToYm) return;
+            revenueByMonth[ym] = (revenueByMonth[ym] || 0) + v;
+          });
         }
         periodCampaigns.forEach((c) => {
           for (const [ym, val] of getCampaignMonthlyAttributedValueInPeriod(c, periodDates.fromDate, periodDates.toDate)) {
-            revenueByMonth[ym] = (revenueByMonth[ym] || 0) + val;
+            if (!hasEcommerceRevenue) {
+              revenueByMonth[ym] = (revenueByMonth[ym] || 0) + val;
+            }
             convsValueByMonth[ym] = (convsValueByMonth[ym] || 0) + val;
           }
           const d = getCampaignDateForMonth(c);
@@ -777,7 +788,9 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           hasEcommerceRevenue,
           ga4OrganicEffective
         );
-        const revenueSpark = padSparklineForChart(dailyTrendKpi.map((r) => (r.storeRevenue + r.organic + r.campaigns) / 1000));
+        const revenueSpark = padSparklineForChart(
+          dailyTrendKpi.map((r) => (hasEcommerceRevenue ? r.storeRevenue : r.organic + r.campaigns) / 1000)
+        );
 
         const spendByDay: Record<string, number> = {};
         periodCampaigns.forEach((c) => {
@@ -820,8 +833,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                     isB2B
                       ? 'Βασική εικόνα εσόδων από οργανική ζήτηση και demand generation. Για πλήρη αποτύπωση εσόδων ανά account απαιτείται invoicing ή ERP import.'
                       : hasEcommerceRevenue
-                        ? 'Σύνολο επιλεγμένης περιόδου: πραγματικός τζίρος e-shop + organic revenue + conversion value από διαφημιστικές πλατφόρμες.'
-                        : 'Συνολικά έσοδα όπως αποτυπώνονται από organic δεδομένα και conversion value των διαφημιστικών πλατφορμών. Δεν πρόκειται για ταμειακό τζίρο e-shop.',
+                        ? 'Πραγματικός τζίρος παραγγελιών e-shop στην επιλεγμένη περίοδο. Δεν αθροίζονται organic ή ad conversion value για να αποφεύγεται double-counting — αναλυτικό channel breakdown στο ROI & Απόδοση.'
+                        : 'Εκτίμηση εσόδων από organic δεδομένα και conversion value διαφημιστικών πλατφορμών (όχι ταμειακός τζίρος). Συνδέστε e-shop για πραγματικό revenue.',
                 }}
                 index={0}
                 onClick={() => onSectionChange?.(isB2B ? 'finances' : 'roi')}
