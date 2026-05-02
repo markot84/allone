@@ -36,6 +36,19 @@ export function toYmd(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
+/**
+ * Marketing APIs need a tiny overlap after the first historical import because late conversions
+ * can still settle, but we must not re-fetch the whole current year on every nightly sync.
+ */
+export function buildYesterdayToTodayWindow(now: Date = new Date()): { since: string; until: string } {
+  const yesterday = new Date(now);
+  yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+  return {
+    since: toYmd(yesterday),
+    until: toYmd(now),
+  };
+}
+
 export function toMagentoDateTime(date: Date): string {
   return date.toISOString().slice(0, 19).replace('T', ' ');
 }

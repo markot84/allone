@@ -18,6 +18,7 @@ import * as admin from 'firebase-admin';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { encryptToken, decryptToken } from './tokenCrypto';
+import { buildYesterdayToTodayWindow } from './syncPolicy';
 
 let _db: Firestore | null = null;
 
@@ -27,9 +28,11 @@ function generateMonthRanges(sinceStr: string, untilStr: string): Array<{ since:
   const [ey, em] = untilStr.split('-').map(Number);
   let y = sy, m = sm;
   while (y < ey || (y === ey && m <= em)) {
-    const since = `${y}-${String(m).padStart(2, '0')}-01`;
+    const monthStart = `${y}-${String(m).padStart(2, '0')}-01`;
     const lastDay = new Date(y, m, 0).getDate();
-    const until = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    const monthEnd = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    const since = y === sy && m === sm ? sinceStr : monthStart;
+    const until = y === ey && m === em ? untilStr : monthEnd;
     ranges.push({ since, until });
     m++;
     if (m > 12) { m = 1; y++; }
@@ -487,8 +490,8 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
   }
 
   // Date window policy:
-  // - First historical load: (currentYear-2)-01-01 -> today
-  // - Subsequent syncs: currentYear-01-01 -> today
+  // - First historical load: 3-year history -> today
+  // - Subsequent syncs: yesterday -> today (small overlap for late conversions)
   const now = new Date();
   const currentYear = now.getUTCFullYear();
   const historyStartYear = currentYear - GOOGLE_ADS_HISTORY_YEARS;
@@ -498,12 +501,11 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
   const historyLoaded =
     Boolean(connector.historyLoadedUntilYear) &&
     Number(connector.historyLoadedUntilYear) <= historyStartYear;
-  const sinceStr = historyLoaded
-    ? `${currentYear}-01-01`
-    : `${historyStartYear}-01-01`;
-  const untilStr = now.toISOString().slice(0, 10);
+  const incrementalWindow = buildYesterdayToTodayWindow(now);
+  const sinceStr = historyLoaded ? incrementalWindow.since : `${historyStartYear}-01-01`;
+  const untilStr = historyLoaded ? incrementalWindow.until : now.toISOString().slice(0, 10);
   logger.info(
-    `[GoogleAds] Sync window for ${brandId}: ${sinceStr} -> ${untilStr} (${historyLoaded ? 'current-year' : 'history+current'})`
+    `[GoogleAds] Sync window for ${brandId}: ${sinceStr} -> ${untilStr} (${historyLoaded ? 'incremental' : 'history+current'})`
   );
 
   // Note: ORDER BY on metrics with date segmentation causes UNIMPLEMENTED in some accounts.
@@ -1117,6 +1119,7 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
         campaign.start_date = existing.start_date || `${historyStartYear}-01-01`;
         campaign.end_date = untilStr;
         campaign.period = `${campaign.start_date} – ${untilStr}`;
+        if (historyLoaded && existing.geo) campaign.geo = existing.geo;
       }
     }
 

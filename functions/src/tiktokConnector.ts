@@ -2,6 +2,7 @@ import * as admin from 'firebase-admin';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { encryptToken, decryptToken } from './tokenCrypto';
+import { buildYesterdayToTodayWindow } from './syncPolicy';
 
 let _db: Firestore | null = null;
 
@@ -64,9 +65,11 @@ function generateMonthRanges(sinceStr: string, untilStr: string): Array<{ since:
   const [ey, em] = untilStr.split('-').map(Number);
   let y = sy, m = sm;
   while (y < ey || (y === ey && m <= em)) {
-    const since = `${y}-${String(m).padStart(2, '0')}-01`;
+    const monthStart = `${y}-${String(m).padStart(2, '0')}-01`;
     const lastDay = new Date(y, m, 0).getDate();
-    const until = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    const monthEnd = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    const since = y === sy && m === sm ? sinceStr : monthStart;
+    const until = y === ey && m === em ? untilStr : monthEnd;
     ranges.push({ since, until });
     m++;
     if (m > 12) {
@@ -394,6 +397,30 @@ type AggregatedTikTokCampaign = {
   updatedAt: unknown;
 };
 
+function recomputeTikTokCampaignFromDaily(campaign: AggregatedTikTokCampaign): void {
+  let impressions = 0;
+  let clicks = 0;
+  let conversions = 0;
+  let conversionValue = 0;
+  let amountSpent = 0;
+
+  for (const row of Object.values(campaign.dailyMetrics || {})) {
+    impressions += parseInteger(row.impressions);
+    clicks += parseInteger(row.clicks);
+    conversions += parseFiniteNumber(row.conversions);
+    conversionValue += parseFiniteNumber(row.conversion_value);
+    amountSpent += parseFiniteNumber(row.amount_spent);
+  }
+
+  campaign.impressions = impressions;
+  campaign.clicks = clicks;
+  campaign.conversions = conversions;
+  campaign.conversion_value = Math.round(conversionValue * 100) / 100;
+  campaign.amount_spent = Math.round(amountSpent * 100) / 100;
+  campaign.ctr = impressions > 0 ? (clicks / impressions) * 100 : 0;
+  campaign.roas = amountSpent > 0 ? conversionValue / amountSpent : 0;
+}
+
 export async function fetchTikTokCampaigns(brandId: string): Promise<{
   success: boolean;
   imported: number;
@@ -427,8 +454,9 @@ export async function fetchTikTokCampaigns(brandId: string): Promise<{
   const historyLoaded =
     Boolean(connector.historyLoadedUntilYear) &&
     Number(connector.historyLoadedUntilYear) <= historyStartYear;
-  const sinceStr = historyLoaded ? `${currentYear}-01-01` : `${historyStartYear}-01-01`;
-  const untilStr = toYmd(now);
+  const incrementalWindow = buildYesterdayToTodayWindow(now);
+  const sinceStr = historyLoaded ? incrementalWindow.since : `${historyStartYear}-01-01`;
+  const untilStr = historyLoaded ? incrementalWindow.until : toYmd(now);
 
   let totalImported = 0;
   let usingValueMetrics = true;
@@ -523,9 +551,30 @@ export async function fetchTikTokCampaigns(brandId: string): Promise<{
         } while (page <= totalPages);
       }
 
-      const campaigns = Array.from(campaignMap.values()).map((campaign) => {
-        campaign.ctr = campaign.impressions > 0 ? (campaign.clicks / campaign.impressions) * 100 : 0;
-        campaign.roas = campaign.amount_spent > 0 ? campaign.conversion_value / campaign.amount_spent : 0;
+      const campaigns = Array.from(campaignMap.values());
+
+      if (historyLoaded && campaigns.length > 0) {
+        const refs = campaigns.map((campaign) => getDb().collection('campaigns').doc(campaign.id));
+        const existingDocs = await getDb().getAll(...refs);
+        const existingById = new Map<string, Record<string, unknown>>();
+        for (const d of existingDocs) {
+          if (d.exists) existingById.set(d.id, d.data() || {});
+        }
+
+        for (const campaign of campaigns) {
+          const existing = existingById.get(campaign.id);
+          if (!existing) continue;
+          campaign.dailyMetrics = {
+            ...((existing.dailyMetrics || {}) as AggregatedTikTokCampaign['dailyMetrics']),
+            ...campaign.dailyMetrics,
+          };
+          campaign.start_date = String(existing.start_date || campaign.start_date);
+          campaign.period = `${campaign.start_date} – ${untilStr}`;
+        }
+      }
+
+      campaigns.map((campaign) => {
+        recomputeTikTokCampaignFromDaily(campaign);
         campaign.updatedAt = FieldValue.serverTimestamp();
         return campaign;
       });

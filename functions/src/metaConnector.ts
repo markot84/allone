@@ -16,6 +16,7 @@ import * as admin from 'firebase-admin';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { decryptToken } from './tokenCrypto';
+import { buildYesterdayToTodayWindow } from './syncPolicy';
 
 let _db: Firestore | null = null;
 
@@ -32,9 +33,11 @@ function generateMonthRanges(sinceStr: string, untilStr: string): Array<{ since:
 
   let y = sy, m = sm;
   while (y < ey || (y === ey && m <= em)) {
-    const since = `${y}-${String(m).padStart(2, '0')}-01`;
+    const monthStart = `${y}-${String(m).padStart(2, '0')}-01`;
     const lastDay = new Date(y, m, 0).getDate(); // day 0 of next month = last day of this month
-    const until = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    const monthEnd = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    const since = y === sy && m === sm ? sinceStr : monthStart;
+    const until = y === ey && m === em ? untilStr : monthEnd;
     ranges.push({ since, until });
     m++;
     if (m > 12) { m = 1; y++; }
@@ -217,6 +220,57 @@ function sanitizeCampaignForFirestore(c: Record<string, any>): void {
       (row as any).reach = fin((row as any).reach);
     }
   }
+}
+
+function recomputeMetaCampaignFromDaily(c: Record<string, any>): void {
+  const daily = (c.dailyMetrics || {}) as Record<string, Record<string, unknown>>;
+  let impressions = 0;
+  let clicks = 0;
+  let conversions = 0;
+  let conversionValue = 0;
+  let amountSpent = 0;
+  let reach = 0;
+  let purchaseConversions = 0;
+  let purchaseValue = 0;
+
+  for (const row of Object.values(daily)) {
+    impressions += fin(row.impressions);
+    clicks += fin(row.clicks);
+    conversions += fin(row.conversions);
+    conversionValue += fin(row.conversion_value);
+    amountSpent += fin(row.amount_spent);
+    reach += fin(row.reach);
+    purchaseConversions += fin(row.purchase_conversions);
+    purchaseValue += fin(row.purchase_conversion_value);
+  }
+
+  c.impressions = impressions;
+  c.clicks = clicks;
+  c.conversions = conversions;
+  c.conversion_value = Math.round(conversionValue * 100) / 100;
+  c.amount_spent = Math.round(amountSpent * 100) / 100;
+  c.reach = reach;
+  c.purchase_conversions = Math.round(purchaseConversions * 100) / 100;
+  c.purchase_conversion_value = Math.round(purchaseValue * 100) / 100;
+  c.ctr = impressions > 0 ? (clicks / impressions) * 100 : 0;
+  c.roas = amountSpent > 0 ? purchaseValue / amountSpent : 0;
+  c.frequency = reach > 0 ? impressions / reach : 0;
+}
+
+function mergeMetricMap(
+  older: Record<string, { conversions?: number; value?: number }> | undefined,
+  newer: Record<string, { conversions?: number; value?: number }> | undefined
+): Record<string, { conversions: number; value: number }> {
+  const out: Record<string, { conversions: number; value: number }> = {};
+  for (const source of [older, newer]) {
+    if (!source || typeof source !== 'object') continue;
+    for (const [key, value] of Object.entries(source)) {
+      if (!out[key]) out[key] = { conversions: 0, value: 0 };
+      out[key].conversions += fin(value?.conversions);
+      out[key].value += fin(value?.value);
+    }
+  }
+  return out;
 }
 
 async function commitCampaignSliceAdaptive(campaigns: any[]): Promise<void> {
@@ -452,8 +506,9 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
   }
   const now = new Date();
   const currentYear = now.getUTCFullYear();
-  const currentYearStart = `${currentYear}-01-01`;
+  const incrementalWindow = buildYesterdayToTodayWindow(now);
   const today = toYmd(now);
+  const currentYearStart = `${currentYear}-01-01`;
   const historyStartYear = currentYear - META_HISTORY_YEARS;
   const historyStart = `${historyStartYear}-01-01`;
   const historyEnd = `${currentYear - 1}-12-31`;
@@ -467,7 +522,11 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
   if (!historyLoaded) {
     syncWindows.push({ since: historyStart, until: historyEnd, tag: 'history' });
   }
-  syncWindows.push({ since: currentYearStart, until: today, tag: 'current' });
+  syncWindows.push({
+    since: historyLoaded ? incrementalWindow.since : currentYearStart,
+    until: historyLoaded ? incrementalWindow.until : today,
+    tag: 'current',
+  });
 
   logger.info(
     `[Meta] Sync windows for ${brandId}: ${syncWindows
@@ -696,7 +755,10 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
         try {
           const fallbackParams = new URLSearchParams({
             fields: insightsFields,
-            time_range: JSON.stringify({ since: currentYearStart, until: today }),
+            time_range: JSON.stringify({
+              since: historyLoaded ? incrementalWindow.since : currentYearStart,
+              until: historyLoaded ? incrementalWindow.until : today,
+            }),
             level: 'campaign',
             limit: '500',
             action_attribution_windows: attribWindowsParam,
@@ -908,16 +970,34 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
       const allCampaigns = Array.from(campaignMap.values());
 
       // IMPORTANT:
-      // Avoid full getAll() readback of all campaign docs before write.
-      // On large Meta accounts these reads can exceed Firestore RPC deadline (60s)
-      // and cause sync to end with 0 imported despite successful API fetch.
-      //
-      // We write the freshly aggregated window directly with merge=true.
-      // For first sync, payload already includes history+current window.
-      // For subsequent syncs, payload includes current year refresh.
+      // Historical load writes a complete window. Incremental load reads only the existing campaign docs,
+      // merges yesterday/today dailyMetrics, then recomputes totals from the merged map.
+      if (historyLoaded && allCampaigns.length > 0) {
+        const refs = allCampaigns.map((c) => getDb().collection('campaigns').doc(c.id));
+        const existingDocs = await getDb().getAll(...refs);
+        const existingById = new Map<string, any>();
+        for (const d of existingDocs) {
+          if (d.exists) existingById.set(d.id, d.data());
+        }
+
+        for (const c of allCampaigns) {
+          const existing = existingById.get(c.id);
+          if (!existing) continue;
+          c.dailyMetrics = {
+            ...(existing.dailyMetrics || {}),
+            ...(c.dailyMetrics || {}),
+          };
+          c.start_date = existing.start_date || c.start_date;
+          c.period = `${c.start_date} – ${today}`;
+          c.conversionActions = mergeMetricMap(existing.conversionActions, c.conversionActions);
+          c.metaWindows = mergeMetricMap(existing.metaWindows, c.metaWindows);
+          if (existing.geo) c.geo = existing.geo;
+        }
+      }
 
       // Attach geo breakdown per-campaign (μόνο για όσες έχουν δεδομένα)
       for (const c of allCampaigns) {
+        if (historyLoaded) continue;
         const short = String(c.id).startsWith('meta_') ? String(c.id).split('_').pop() : String(c.id);
         const g = geoByCampaign.get(short || '');
         const gc = geoCityByCampaign.get(short || '');
@@ -971,6 +1051,7 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
             row.purchase_conversion_value = Math.round(pd.value * 100) / 100;
           }
         }
+        if (historyLoaded) recomputeMetaCampaignFromDaily(c);
       }
 
       // Shrink payloads: full daily + per-day conversionActions can exceed 1MB/doc or stall batch.commit.
