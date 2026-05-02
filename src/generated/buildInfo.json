@@ -1,10 +1,14 @@
 {
-  "version": "0.694.0",
-  "previousVersion": "0.693.0",
-  "commitHash": "10ad2a1",
+  "version": "0.695.0",
+  "previousVersion": "0.694.0",
+  "commitHash": "5e9d33d",
   "branch": "main",
-  "buildDate": "2026-05-02T04:31:34.579Z",
+  "buildDate": "2026-05-02T04:36:28.274Z",
   "commits": [
+    {
+      "hash": "5e9d33d",
+      "message": "fix(ecommerce): ex-VAT revenue across dashboard, aggregator and raw orders"
+    },
     {
       "hash": "10ad2a1",
       "message": "fix(rfm): non-blocking orders fetch with inline progress + error UI"
@@ -60,13 +64,10 @@
     {
       "hash": "d614c8b",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "0149fb5",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [
+    "[Διόρθωση] Ex-VAT revenue across dashboard, aggregator and raw orders",
     "[Διόρθωση] Non-blocking orders fetch with inline progress + error UI",
     "[Διόρθωση] Hash path normalization, empty brand state, loading and setup CTAs",
     "[Νέο χαρακτηριστικό] Shopify order line productId/variantId; OpenCart lineItems via api/order/info",
