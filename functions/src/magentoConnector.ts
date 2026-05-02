@@ -687,7 +687,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
         'searchCriteria[sortOrders][0][direction]': orderSortDirection,
         'searchCriteria[pageSize]': '100',
         'searchCriteria[currentPage]': String(currentPage),
-        'fields': 'items[entity_id,increment_id,customer_id,customer_email,billing_address[email],created_at,updated_at,status,grand_total,subtotal,tax_amount,discount_amount,total_item_count,order_currency_code,shipping_description,payment[method,additional_information],items[sku,name,qty_ordered,price,product_id,product_type,parent_item_id,row_total,base_row_total]],total_count',
+        'fields': 'items[entity_id,increment_id,customer_id,customer_email,billing_address[email],created_at,updated_at,status,grand_total,subtotal,tax_amount,discount_amount,base_grand_total,base_subtotal,base_tax_amount,base_discount_amount,base_currency_code,total_item_count,order_currency_code,shipping_description,payment[method,additional_information],items[sku,name,qty_ordered,price,product_id,product_type,parent_item_id,row_total,base_row_total]],total_count',
       });
       if (Number.isFinite(storeId) && storeId > 0) {
         searchParams.set('searchCriteria[filter_groups][1][filters][0][field]', 'store_id');
@@ -739,6 +739,14 @@ export async function fetchMagentoData(brandId: string): Promise<{
             subtotal: parseFloat(o.subtotal || '0'),
             taxAmount: parseFloat(o.tax_amount || '0'),
             discountAmount: parseFloat(o.discount_amount || '0'),
+            // Base currency totals — απαραίτητα για multi-store/multi-website Magento (e.g. e-tennis GR/BG/RO/CY).
+            // Όταν το store currency διαφέρει από το base (BGN/RON), χωρίς αυτά αθροίζαμε τα local νούμερα
+            // σαν να ήταν EUR → υπερεκτίμηση τζίρου. Όλα τα aggregations χρησιμοποιούν τα base_* όταν υπάρχουν.
+            baseGrandTotal: parseFloat(o.base_grand_total || '0'),
+            baseSubtotal: parseFloat(o.base_subtotal || '0'),
+            baseTaxAmount: parseFloat(o.base_tax_amount || '0'),
+            baseDiscountAmount: parseFloat(o.base_discount_amount || '0'),
+            baseCurrencyCode: o.base_currency_code || 'EUR',
             totalItemCount: parseInt(o.total_item_count || '0', 10),
             currency: o.order_currency_code || 'EUR',
             paymentMethod: paymentAdditionalInfo || o.payment?.method || '',

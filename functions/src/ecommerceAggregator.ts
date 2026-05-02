@@ -177,23 +177,38 @@ function parseNumeric(value: unknown): number {
 /**
  * Net products revenue ex-VAT (όπως καταγράφεται στα λογιστικά «Total Income χωρίς ΦΠΑ»).
  *
- * Για Magento: `subtotal − |discount_amount|`. Το `subtotal` του Magento είναι items ex-tax,
- * άρα δεν περιλαμβάνει μεταφορικά (αυτά πάνε σε ξεχωριστό income account και δεν θα έπρεπε να
- * μπερδεύουν τον τζίρο εμπορεύματος). Αν τα στοιχεία λείπουν, fallback σε `grandTotal − taxAmount`
- * για να μη γυρίσουμε 0 σε ιστορικά documents πριν το backfill.
+ * **Magento (multi-store aware):** Προτιμά τα `base_*` fields που το Magento επιστρέφει σε **base
+ * store currency** (συνήθως EUR για ελληνικά brands), ώστε ένα order σε BGN/RON multi-website
+ * Magento installation να αθροίζεται σωστά στον συνολικό τζίρο. Formula:
+ * `baseSubtotal − |baseDiscountAmount|` (items ex-tax μετά εκπτώσεων, χωρίς μεταφορικά).
  *
- * Για Shopify/WooCommerce: `totalPrice − totalTax` (περιλαμβάνει shipping ex-VAT, αλλά αυτές οι
- * πλατφόρμες δεν εκθέτουν αξιόπιστο "subtotal-only" στο order list endpoint· κρατάμε consistency
- * με το προηγούμενο aggregation και το βασικό use-case είναι το Magento e-tennis).
+ * Fallbacks:
+ *  - Αν λείπουν τα `base_*` ΚΑΙ το currency είναι EUR (ή ίδιο με base): παλιά formula.
+ *  - Αν λείπουν τα `base_*` ΚΑΙ το currency δεν είναι EUR: επιστρέφω 0 για να ΜΗΝ μολυνθεί
+ *    το aggregation από local-currency νούμερα. Αναμένεται re-sync ώστε να γραφτούν τα base_*.
+ *
+ * Για Shopify/WooCommerce: `totalPrice − totalTax` (consistency με προηγούμενο aggregation).
  */
 function computeOrderExVatRevenue(platform: string, d: Record<string, unknown>): number {
   if (platform === 'magento') {
+    const baseSubtotal = parseNumeric(d.baseSubtotal);
+    const baseDiscount = Math.abs(parseNumeric(d.baseDiscountAmount));
+    if (baseSubtotal > 0) {
+      return Math.max(0, baseSubtotal - baseDiscount);
+    }
+    // Δεν υπάρχει base — έλεγξε αν το order είναι ήδη σε EUR.
+    const currency = String(d.currency || '').toUpperCase();
+    const baseCurrency = String(d.baseCurrencyCode || '').toUpperCase();
+    const isEur = !currency || currency === 'EUR' || (baseCurrency && currency === baseCurrency);
+    if (!isEur) {
+      // Skip non-EUR orders χωρίς base totals — αλλιώς διπλά υπερεκτιμηθεί ο τζίρος.
+      return 0;
+    }
     const subtotal = parseNumeric(d.subtotal);
     const discount = Math.abs(parseNumeric(d.discountAmount));
     if (subtotal > 0) {
       return Math.max(0, subtotal - discount);
     }
-    // Fallback (παλιά documents χωρίς subtotal/discountAmount).
     return Math.max(0, parseNumeric(d.grandTotal) - parseNumeric(d.taxAmount));
   }
   const revenueField = REVENUE_FIELD[platform] || 'totalPrice';

@@ -149,11 +149,11 @@ function normalizeLineItemFromFirestore(raw: unknown): EcommerceRawLineItem {
 /**
  * Net products revenue ex-VAT — ίδια λογική με το server aggregator (computeOrderExVatRevenue).
  *
- * Magento: `subtotal − |discountAmount|` (items ex-tax μετά εκπτώσεων, ΧΩΡΙΣ μεταφορικά).
- * Αυτό ταυτίζεται με το λογιστικό «Total Income χωρίς ΦΠΑ» που τηρούν τα brands στα books τους.
- * Fallback σε `grandTotal − taxAmount` για παλιά documents.
+ * Magento (multi-store): προτιμά τα `base_*` fields (base store currency, συνήθως EUR).
+ *   `baseSubtotal − |baseDiscountAmount|`. Όταν λείπουν τα base_* και το order δεν είναι
+ *   σε EUR, επιστρέφει 0 για να μη φουσκώσει το aggregate (re-sync απαιτείται).
  *
- * Shopify/WooCommerce: `total − totalTax`. OpenCart: gross fallback (δεν υπάρχει tax field).
+ * Shopify/WooCommerce: `total − totalTax`. OpenCart: gross fallback.
  */
 function computeExVatTotal(platform: string, row: Record<string, unknown>): number {
   const num = (v: unknown) => {
@@ -162,6 +162,15 @@ function computeExVatTotal(platform: string, row: Record<string, unknown>): numb
     return Number.isFinite(n) ? n : 0;
   };
   if (platform === 'magento') {
+    const baseSubtotal = num(row.baseSubtotal);
+    const baseDiscount = Math.abs(num(row.baseDiscountAmount));
+    if (baseSubtotal > 0) return Math.max(0, baseSubtotal - baseDiscount);
+
+    const currency = String(row.currency || '').toUpperCase();
+    const baseCurrency = String(row.baseCurrencyCode || '').toUpperCase();
+    const isEur = !currency || currency === 'EUR' || (baseCurrency && currency === baseCurrency);
+    if (!isEur) return 0;
+
     const subtotal = num(row.subtotal);
     const discount = Math.abs(num(row.discountAmount));
     if (subtotal > 0) return Math.max(0, subtotal - discount);

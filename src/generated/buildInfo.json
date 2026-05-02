@@ -1,10 +1,14 @@
 {
-  "version": "0.702.0",
-  "previousVersion": "0.701.0",
-  "commitHash": "c5835d9",
+  "version": "0.704.0",
+  "previousVersion": "0.703.0",
+  "commitHash": "4b78848",
   "branch": "main",
-  "buildDate": "2026-05-02T05:26:06.734Z",
+  "buildDate": "2026-05-02T05:32:48.498Z",
   "commits": [
+    {
+      "hash": "4b78848",
+      "message": "dashboard: subtle refreshing dot στα ecom KPIs όταν φορτώνουν raw orders (UX clarity)"
+    },
     {
       "hash": "c5835d9",
       "message": "scheduledSync: ERP connectors run in Phase 2 (after critical path) for resilience"
@@ -60,13 +64,10 @@
     {
       "hash": "38f4e88",
       "message": "feat(connectors): Shopify order line productId/variantId; OpenCart lineItems via api/order/info"
-    },
-    {
-      "hash": "d0c395a",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [
+    "Dashboard: subtle refreshing dot στα ecom KPIs όταν φορτώνουν raw orders (UX clarity)",
     "ScheduledSync: ERP connectors run in Phase 2 (after critical path) for resilience",
     "Dashboard: Marketing Expenses KPI + Magento subtotal-based ex-VAT for accounting parity",
     "[Διόρθωση] Parallel per-brand connectors, raise timeout to 1800s",
@@ -75,7 +76,6 @@
     "[Διόρθωση] Ex-VAT revenue across dashboard, aggregator and raw orders",
     "[Διόρθωση] Non-blocking orders fetch with inline progress + error UI",
     "[Διόρθωση] Hash path normalization, empty brand state, loading and setup CTAs",
-    "[Νέο χαρακτηριστικό] Shopify order line productId/variantId; OpenCart lineItems via api/order/info",
-    "[Συντήρηση] Full deploy"
+    "[Νέο χαρακτηριστικό] Shopify order line productId/variantId; OpenCart lineItems via api/order/info"
   ]
 }
