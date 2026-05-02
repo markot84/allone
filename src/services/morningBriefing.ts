@@ -377,7 +377,8 @@ ACTIONS (ακριβώς 3):
 
 // ── Data Hash ────────────────────────────────────────────────────────────────
 
-function computeDataHash(data: BriefingData): string {
+/** Για να κρίνουμε αν το cached briefing αντιστοιχεί ακόμα στα KPI μετά από φόρτωση raw orders. */
+export function computeBriefingDataHash(data: BriefingData): string {
   const key = [
     data.revenue.totalOrganic,
     data.revenue.totalCampaignRevenue,
@@ -465,7 +466,7 @@ export async function generateMorningBriefing(
 ): Promise<BriefingResult> {
   const period = options.period ?? 'current_month';
   const periodLabel = options.periodLabel ?? 'Τρέχων Μήνας';
-  const dataHash = computeDataHash(data);
+  const dataHash = computeBriefingDataHash(data);
   const snapshot = extractSnapshot(data);
   const existing = await getCachedBriefing(brandId, period);
 

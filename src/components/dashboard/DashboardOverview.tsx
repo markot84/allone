@@ -153,6 +153,14 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
    */
   const ecomKpisRefreshing = ecommerceRawBusy && ecommHist.source === 'summary';
 
+  /** Το AI Briefing περιμένει αυτό· αποφεύγει κείμενα που μιλάνε για κενό τζίρο ενώ τα KPI ακόμα «γεμίζουν». */
+  const briefingMetricsReady = useMemo(() => {
+    if (!currentBrand) return true;
+    if (!enabledModules.ecommerce) return !ecomm.isLoading;
+    if (ecomm.connectedPlatforms.length === 0) return !ecomm.isLoading;
+    return !ecomm.isLoading && !ecommHist.rawLoading;
+  }, [currentBrand, enabledModules.ecommerce, ecomm.isLoading, ecomm.connectedPlatforms.length, ecommHist.rawLoading]);
+
   const dashboardOverviewLoading =
     Boolean(currentBrand) &&
     !hasAnyData &&
@@ -250,6 +258,33 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   const eshopAovInPeriod = useMemo(
     () => (ordersInPeriod > 0 ? storeRevenueInPeriod / ordersInPeriod : 0),
     [storeRevenueInPeriod, ordersInPeriod]
+  );
+
+  /** Fingerprint για επαναλαμβανόμενο έλεγχο AI briefing vs KPI όταν το summary δίνει σε raw. */
+  const briefingFinanceKey = useMemo(
+    () =>
+      [
+        enabledModules.ecommerce && ecomm.connectedPlatforms.length > 0 ? ecommHist.source : 'no_ecomm',
+        Math.round(storeRevenueInPeriod),
+        ordersInPeriod,
+        Math.round(organicRevenueInPeriod),
+        Math.round((campaignMetrics.totalSpend + Number.EPSILON) * 100) / 100,
+        periodCampaigns.length,
+        periodDates.fromDate,
+        periodDates.toDate,
+      ].join('|'),
+    [
+      enabledModules.ecommerce,
+      ecomm.connectedPlatforms.length,
+      ecommHist.source,
+      storeRevenueInPeriod,
+      ordersInPeriod,
+      organicRevenueInPeriod,
+      campaignMetrics.totalSpend,
+      periodCampaigns.length,
+      periodDates.fromDate,
+      periodDates.toDate,
+    ]
   );
 
   const ecommTopPlatformDisplay = useMemo(() => {
@@ -583,11 +618,10 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           }}
           alerts={automationAlerts}
           supplierTodMap={supplierTodMap}
+          metricsReady={briefingMetricsReady}
+          financeKey={briefingFinanceKey}
           ecommerce={{
-            hasData:
-              enabledModules.ecommerce &&
-              ecomm.hasData &&
-              (storeRevenueInPeriod > 0 || ordersInPeriod > 0),
+            hasData: enabledModules.ecommerce && !!ecomm.hasData,
             totalRevenue: storeRevenueInPeriod,
             orderCount: ordersInPeriod,
             aov: ordersInPeriod > 0 ? storeRevenueInPeriod / ordersInPeriod : ecomm.aov,

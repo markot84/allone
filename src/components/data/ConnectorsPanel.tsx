@@ -169,8 +169,13 @@ function getConnectorIdentityLines(id: ConnectorId, state: ConnectorState): stri
     case 'woocommerce':
     case 'opencart':
       return s.shopName ? [s.shopName] : [];
-    case 'magento':
-      return s.shopName ? [`${s.shopName}${s.storeCode ? ` (${s.storeCode})` : ''}`] : [];
+    case 'magento': {
+      if (!s.shopName) return [];
+      const head = `${s.shopName}${s.storeCode ? ` (${s.storeCode})` : ''}`;
+      if (s.syncAllStores)
+        return [head, 'Παραγγελίες: όλα τα Magento stores (συγκεντρωτικός τζίρος πολλαπλών fronts)'];
+      return [head];
+    }
     case 'megaventory':
       return s.accountName || s.currency ? [`${s.accountName || 'Megaventory'}${s.currency ? ` · ${s.currency}` : ''}`] : [];
     case 'softone':
@@ -722,6 +727,71 @@ function WooCredentialsModal({
   );
 }
 
+// ─── Magento: consolidated revenue (all store views) ─────────────
+
+function MagentoConsolidatedRevenueToggle({
+  brandId,
+  syncAllStores,
+  canManage,
+  onSaved,
+}: {
+  brandId: string;
+  syncAllStores: boolean;
+  canManage: boolean;
+  onSaved: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const toast = useToast();
+
+  const persist = async (next: boolean) => {
+    if (!canManage || busy || next === syncAllStores) return;
+    setBusy(true);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error('Not authenticated');
+      const res = await fetch(`${FUNCTIONS_BASE}/connectorSaveCredentials`, {
+        method: 'POST',
+        headers: await connectorRequestHeaders(token),
+        body: JSON.stringify({
+          brandId,
+          provider: 'magento',
+          magentoSettingsOnly: true,
+          syncAllStores: next,
+        }),
+      });
+      const j = (await res.json()) as { success?: boolean; error?: string };
+      if (!res.ok || !j.success) throw new Error(j.error || 'Αποτυχία αποθήκευσης');
+      toast.success(
+        next
+          ? 'Όλα τα Magento stores για παραγγελίες/τζίρο. Τρέξτε Sync για πλήρη ενημέρωση.'
+          : 'Το φίλτρο store επανήλθε. Τρέξτε Sync αν χρειάζεται.'
+      );
+      onSaved();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Σφάλμα');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-emerald-200 bg-white p-3 text-xs leading-relaxed text-[#374151]">
+      <input
+        type="checkbox"
+        checked={syncAllStores}
+        disabled={!canManage || busy}
+        onChange={(e) => void persist(e.target.checked)}
+        className="mt-0.5"
+      />
+      <span>
+        <span className="font-semibold text-[#1A1A1A] block mb-1">Συγκεντρωτικός τζίρος (όλα τα Magento stores)</span>
+        Για brands με χωριστά storefronts στο ίδιο Magento (π.χ. GR+BG+RO+CY)· ευθυγραμμίζεται με την οικονομική συνολική στήλη «Total Income χωρίς ΦΠΑ» όπως στο έλεγχό σας στο Excel.
+        <span className="block mt-1 text-[#6B7280]">Αν μείνει off, τα στατιστικά βασίζονται μόνο στο store που αντιστοιχεί στο διακριτικό που επιλέξατε κατά τη σύνδεση.</span>
+      </span>
+    </label>
+  );
+}
+
 // ─── Magento Credentials Modal ─────────────────────────────────────
 
 function MagentoCredentialsModal({
@@ -739,6 +809,7 @@ function MagentoCredentialsModal({
   const [showToken, setShowToken] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [syncAllStores, setSyncAllStores] = useState(false);
   const [storeCandidates, setStoreCandidates] = useState<{ code: string; storeName: string; baseUrl: string }[]>([]);
   const toast = useToast();
 
@@ -761,6 +832,7 @@ function MagentoCredentialsModal({
           storeUrl: storeUrl.trim(),
           accessToken: accessToken.trim(),
           storeCode: storeCode.trim() || undefined,
+          syncAllStores,
         }),
       });
 
@@ -825,6 +897,20 @@ function MagentoCredentialsModal({
               </button>
             </div>
           </div>
+          <label className="flex items-start gap-2 rounded-lg border border-[#E5E7EB] bg-[#FAFAFA] p-3 text-xs leading-relaxed text-[#374151]">
+            <input
+              type="checkbox"
+              checked={syncAllStores}
+              onChange={(e) => setSyncAllStores(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span>
+              <span className="font-semibold text-[#111827]">Να συμπεριληφθούν όλα τα Magento stores στον τζίρο</span>
+              <span className="block text-[#6B7280] mt-1">
+                Για τον ίδιο Magento backend με Πολλαπλές χώρες / brands σε ξεχωριστά store views — επιτρέπει σύνοψη τύπου Excel «TOTAL» ανά Μήνα.
+              </span>
+            </span>
+          </label>
           <div>
             <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>Store Code (προαιρετικό)</label>
             <input
@@ -2583,6 +2669,19 @@ export function ConnectorsPanel() {
                             {lastSyncAt && <p className="text-[#9CA3AF]">Τελευταίο sync: {formatConnectorDate(lastSyncAt)}</p>}
                           </div>
                         )}
+                      </div>
+                    )}
+
+                    {isConnected && conn.id === 'magento' && brandId && detailsExpanded && (
+                      <div className="mb-3 w-full text-sm space-y-2">
+                        <MagentoConsolidatedRevenueToggle
+                          brandId={brandId}
+                          syncAllStores={Boolean((state as { syncAllStores?: boolean }).syncAllStores)}
+                          canManage={canManageConnectors}
+                          onSaved={() => {
+                            void fetchStates();
+                          }}
+                        />
                       </div>
                     )}
 

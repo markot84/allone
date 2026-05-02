@@ -66,6 +66,7 @@ import {
 import {
   saveMagentoCredentials,
   fetchMagentoData,
+  updateMagentoSyncScope,
   setDb as setMagentoDb,
 } from './magentoConnector';
 import {
@@ -1340,12 +1341,37 @@ export const connectorSaveCredentials = onRequest(
         const result = await saveOpenCartCredentials(brandId, storeUrl, apiUsername, ocApiKey);
         res.status(200).json(result);
       } else if (provider === 'magento') {
-        const { accessToken: magToken, storeCode } = req.body as { accessToken?: string; storeCode?: string };
+        const {
+          accessToken: magToken,
+          storeCode,
+          syncAllStores,
+          magentoSettingsOnly,
+        } = req.body as {
+          accessToken?: string;
+          storeCode?: string;
+          syncAllStores?: boolean;
+          magentoSettingsOnly?: boolean;
+        };
+        if (magentoSettingsOnly) {
+          if (syncAllStores === undefined) {
+            res.status(400).json({ error: 'Missing syncAllStores for magentoSettingsOnly' });
+            return;
+          }
+          const scope = await updateMagentoSyncScope(brandId, Boolean(syncAllStores));
+          if (!scope.ok) {
+            res.status(400).json({ success: false, error: scope.error });
+            return;
+          }
+          res.status(200).json({ success: true });
+          return;
+        }
         if (!storeUrl || !magToken) {
           res.status(400).json({ error: 'Missing storeUrl or accessToken' });
           return;
         }
-        const result = await saveMagentoCredentials(brandId, storeUrl, magToken, storeCode);
+        const result = await saveMagentoCredentials(brandId, storeUrl, magToken, storeCode, {
+          syncAllStores: Boolean(syncAllStores),
+        });
         res.status(200).json(result);
       } else if (provider === 'megaventory') {
         const { apiKey: mvKey, megaventorySettingsOnly, customReportId, customReportEnabled } = req.body as {

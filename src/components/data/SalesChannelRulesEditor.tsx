@@ -1,8 +1,10 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, Button, Spinner, useToast, Tooltip } from '../common';
 import { useBrand } from '../../hooks/useBrand';
 import { FirestoreService } from '../../services/firestore';
+import { doc, deleteField, updateDoc, Timestamp } from 'firebase/firestore';
+import { db } from '../../config/firebase';
 import { Plus, Trash2, Save, X } from 'lucide-react';
 import {
   SALES_CHANNEL_LABELS,
@@ -72,6 +74,22 @@ async function fetchRulesFromConnector(brandId: string): Promise<EcommerceSalesC
   return [...a, ...b, ...c];
 }
 
+/** Stable σύγκριση για sync από server χωρίς να σβήνουμε drafts που γράφει ο χρήστης. */
+function persistedSignature(rules: EcommerceSalesChannelRule[]): string {
+  try {
+    return JSON.stringify(
+      rules.map((r) => ({
+        e: r.enabled !== false,
+        ch: r.channel || 'intercompany',
+        p: (r.patterns || []).slice().sort(),
+        m: [...(r.matchFields || []).slice()].sort(),
+      }))
+    );
+  } catch {
+    return String(rules.length);
+  }
+}
+
 export function SalesChannelRulesEditor() {
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
@@ -87,10 +105,7 @@ export function SalesChannelRulesEditor() {
 
   const [drafts, setDrafts] = useState<EditableRule[]>([]);
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    setDrafts(persisted.map(ruleToEditable));
-  }, [persisted]);
+  const lastServerSigApplied = useRef<string>('');
 
   const dirty = useMemo(() => {
     if (drafts.length !== persisted.length) return true;
@@ -105,6 +120,26 @@ export function SalesChannelRulesEditor() {
       );
     });
   }, [drafts, persisted]);
+
+  /** Αλλαγή brand: μη δείξουμε κανόνες προηγούμενου brand μέχρι να φτάσουν τα δεδομένα. */
+  useEffect(() => {
+    lastServerSigApplied.current = '';
+    setDrafts([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [brandId]);
+
+  /**
+   * Όταν αλλάζει το περιεχόμενο του Firestore από React Query χωρίς ο χρήστης να επεξεργάζεται (dirty=false),
+   * κρατάμε τα drafts ευθυγραμμισμένα. Αν dirty=true (ανοιχτές αλλαγές), τα refetch με το ίδιο signature
+   * δεν πειράζουν τις πρόχειρες γραμμές.
+   */
+  useEffect(() => {
+    const sig = persistedSignature(persisted);
+    if (dirty) return;
+    if (sig === lastServerSigApplied.current) return;
+    lastServerSigApplied.current = sig;
+    setDrafts(persisted.map(ruleToEditable));
+  }, [persisted, dirty]);
 
   const addRule = () => {
     setDrafts((prev) => [
@@ -128,13 +163,25 @@ export function SalesChannelRulesEditor() {
 
   const handleSave = async () => {
     if (!brandId) return;
+    const cleaned = drafts.map(editableToRule).filter((r) => (r.patterns?.length || 0) > 0);
+    if (drafts.length > 0 && cleaned.length === 0) {
+      toast.error(
+        'Καμία γραμμή δεν έχει Patterns (κείμενο στο πεδίο patterns). Συμπλήρωσέ τα και ξανά Αποθήκευση — αλλιώς δεν αποθηκεύεται κανείς κανόνας.'
+      );
+      return;
+    }
     setSaving(true);
     try {
-      const cleaned = drafts.map(editableToRule).filter((r) => (r.patterns?.length || 0) > 0);
-      await FirestoreService.updateDocument('connectors', brandId, {
+      const ref = doc(db, 'connectors', brandId);
+      await updateDoc(ref, {
         ecommerceSalesChannelRules: cleaned,
+        salesChannelRules: deleteField(),
+        'magento.salesChannelRules': deleteField(),
+        updatedAt: Timestamp.now(),
       });
+      lastServerSigApplied.current = persistedSignature(cleaned);
       queryClient.invalidateQueries({ queryKey: ['salesChannelRules', brandId] });
+      queryClient.invalidateQueries({ queryKey: ['connectorsPanel', brandId], exact: false });
       queryClient.invalidateQueries({ queryKey: ['ecommerceOrdersRaw', brandId] });
       queryClient.invalidateQueries({ queryKey: ['ecommerce_summary', brandId] });
       toast.success(

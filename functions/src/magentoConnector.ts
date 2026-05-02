@@ -496,12 +496,14 @@ export async function saveMagentoCredentials(
   brandId: string,
   storeUrl: string,
   accessToken: string,
-  preferredStoreCode?: string
+  preferredStoreCode?: string,
+  opts?: { syncAllStores?: boolean }
 ): Promise<{
   success: boolean;
   shopName?: string;
   storeCode?: string;
   storeName?: string;
+  syncAllStores?: boolean;
   error?: string;
   availableStoreCodes?: string[];
   storeCandidates?: { code: string; storeName: string; baseUrl: string }[];
@@ -537,6 +539,7 @@ export async function saveMagentoCredentials(
         mediaBaseUrl: testResult.mediaBaseUrl || '',
         accessToken: encryptToken(tokenPlain),
         connectedAt: FieldValue.serverTimestamp(),
+        syncAllStores: Boolean(opts?.syncAllStores),
       },
     },
     { merge: true }
@@ -548,7 +551,33 @@ export async function saveMagentoCredentials(
     shopName: testResult.shopName,
     storeCode: testResult.storeCode,
     storeName: testResult.storeName,
+    syncAllStores: Boolean(opts?.syncAllStores),
   };
+}
+
+/**
+ * Ενημέρωση ρυθμίσεων συγχρονισμού χωρίς να ξανά-υποχρεώσει access token στο UI.
+ */
+export async function updateMagentoSyncScope(
+  brandId: string,
+  syncAllStores: boolean
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const snap = await getDb().doc(`connectors/${brandId}`).get();
+    const mag = snap.data()?.magento;
+    if (!mag?.connected) {
+      return { ok: false, error: 'Το Magento δεν είναι συνδεδεμένο για αυτό το brand.' };
+    }
+    await getDb().doc(`connectors/${brandId}`).set(
+      { 'magento.syncAllStores': syncAllStores },
+      { merge: true }
+    );
+    logger.info(`[Magento] Updated syncAllStores=${syncAllStores} for brand ${brandId}`);
+    return { ok: true };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, error: msg };
+  }
 }
 
 /**
@@ -691,6 +720,8 @@ export async function fetchMagentoData(brandId: string): Promise<{
   const restApiBase = String((connector as { restApiBase?: string }).restApiBase || storeUrl).replace(/\/+$/, '');
   const storeCode = String((connector as { storeCode?: string }).storeCode || '').trim();
   const storeId = Number((connector as { storeId?: number | string }).storeId);
+  /** Όταν true δεν ωθούμε φίλτρο store_id στο REST API — για εγκαταστάσεις πολλαπλών fronts (π.χ. GR+BG+RO+CY σε ένα οικονομικό consolidated total). */
+  const syncAllStores = Boolean((connector as { syncAllStores?: boolean }).syncAllStores);
   const accessToken = decryptToken(connector.accessToken);
   if (!accessToken) {
     return { success: false, imported: 0, error: 'Magento token unavailable — reconnect required' };
@@ -720,7 +751,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
   const productsWindowEnd = new Date();
 
   logger.info(
-    `[Magento] Sync windows for ${brandId}: orders=${orderWindow.mode}:${toMagentoDateTime(orderWindow.windowStart)}->${toMagentoDateTime(orderWindow.windowEnd)} products=${productsMode}:${productsWindowStart ? toMagentoDateTime(productsWindowStart) : 'full'}->${toMagentoDateTime(productsWindowEnd)}`
+    `[Magento] Sync windows for ${brandId}: orders=${orderWindow.mode}:${toMagentoDateTime(orderWindow.windowStart)}->${toMagentoDateTime(orderWindow.windowEnd)} products=${productsMode}:${productsWindowStart ? toMagentoDateTime(productsWindowStart) : 'full'}->${toMagentoDateTime(productsWindowEnd)} · ordersScope=${syncAllStores ? 'all_stores' : `store_id=${Number.isFinite(storeId) && storeId > 0 ? storeId : 'none'}`}`
   );
 
   try {
@@ -748,7 +779,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
         'searchCriteria[currentPage]': String(currentPage),
         'fields': 'items[entity_id,increment_id,customer_id,customer_email,billing_address[email],created_at,updated_at,status,grand_total,subtotal,tax_amount,discount_amount,base_grand_total,base_subtotal,base_tax_amount,base_discount_amount,base_currency_code,total_item_count,order_currency_code,shipping_description,payment[method,additional_information],items[sku,name,qty_ordered,price,product_id,product_type,parent_item_id,row_total,base_row_total]],total_count',
       });
-      if (Number.isFinite(storeId) && storeId > 0) {
+      if (!syncAllStores && Number.isFinite(storeId) && storeId > 0) {
         searchParams.set('searchCriteria[filter_groups][1][filters][0][field]', 'store_id');
         searchParams.set('searchCriteria[filter_groups][1][filters][0][value]', String(storeId));
         searchParams.set('searchCriteria[filter_groups][1][filters][0][condition_type]', 'eq');
