@@ -2411,6 +2411,13 @@ export function ConnectorsPanel() {
             }
           />
 
+          {canManageConnectors && !loading && (
+            <div className="mb-6 space-y-6">
+              <RevenueSourceSettings />
+              <SalesChannelRulesEditor />
+            </div>
+          )}
+
           {loading ? (
             <div className="py-8 flex justify-center">
               <Spinner size="md" label="Φόρτωση connectors..." />
@@ -2732,12 +2739,6 @@ export function ConnectorsPanel() {
         </div>
       </Card>
 
-      {canManageConnectors && (
-        <div className="mt-6 space-y-6">
-          <RevenueSourceSettings />
-          <SalesChannelRulesEditor />
-        </div>
-      )}
     </>
   );
 }

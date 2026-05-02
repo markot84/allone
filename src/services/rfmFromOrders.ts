@@ -49,7 +49,15 @@ type CustomerAgg = {
   orders: EcommerceRawOrder[];
 };
 
-type CatalogLineAgg = { revenue: number; quantity: number; orders: Set<string> };
+type CatalogLineAgg = {
+  revenue: number;
+  quantity: number;
+  orders: Set<string>;
+  skus: Set<string>;
+  stockOnHand: number;
+  qtySold: number;
+  categoryPath?: string[];
+};
 
 type SegmentAgg = {
   id: string;
@@ -239,14 +247,32 @@ function bumpCatalogLine(
   key: string,
   revenue: number,
   quantity: number,
-  orderId: string
+  orderId: string,
+  sku: string,
+  stockOnHand?: number,
+  qtySold?: number,
+  categoryPath?: string[]
 ): void {
   const k = key.trim();
   if (!k) return;
-  const cur = map.get(k) ?? { revenue: 0, quantity: 0, orders: new Set<string>() };
+  const cur = map.get(k) ?? {
+    revenue: 0,
+    quantity: 0,
+    orders: new Set<string>(),
+    skus: new Set<string>(),
+    stockOnHand: 0,
+    qtySold: 0,
+  };
   cur.revenue += revenue;
   cur.quantity += quantity;
   cur.orders.add(orderId);
+  const skuKey = sku.trim();
+  if (skuKey && !cur.skus.has(skuKey)) {
+    cur.skus.add(skuKey);
+    if (stockOnHand != null) cur.stockOnHand += stockOnHand;
+    if (qtySold != null) cur.qtySold += qtySold;
+    if (!cur.categoryPath?.length && categoryPath?.length) cur.categoryPath = categoryPath;
+  }
   map.set(k, cur);
 }
 
@@ -265,6 +291,9 @@ function catalogMapToAffinity(
     avg_order: row.quantity > 0 ? Math.round(row.revenue / row.quantity) : Math.round(row.revenue),
     revenue_eur: Math.round(row.revenue * 100) / 100,
     revenue_share_pct: Math.round((row.revenue / seg) * 1000) / 10,
+    ...(row.stockOnHand > 0 ? { stock_on_hand: Math.round(row.stockOnHand * 100) / 100 } : {}),
+    ...(row.qtySold > 0 ? { qty_sold: Math.round(row.qtySold * 100) / 100 } : {}),
+    ...(row.categoryPath?.length ? { category_path: row.categoryPath } : {}),
   }));
 }
 
@@ -694,15 +723,55 @@ export function computeRfmSegmentsFromEcommerceOrders(
             g.catalogMatchedRev += lineRev;
             g.catalogMatchedLineCount += 1;
           }
-          bumpCatalogLine(g.catalogBrand, resolved.brandLabel, lineRev, lineQty, order.orderId);
-          bumpCatalogLine(g.catalogCategory, resolved.categoryLabel, lineRev, lineQty, order.orderId);
+          bumpCatalogLine(
+            g.catalogBrand,
+            resolved.brandLabel,
+            lineRev,
+            lineQty,
+            order.orderId,
+            resolved.skuLabel,
+            resolved.stockOnHand,
+            resolved.qtySold,
+            resolved.categoryPath
+          );
+          bumpCatalogLine(
+            g.catalogCategory,
+            resolved.categoryLabel,
+            lineRev,
+            lineQty,
+            order.orderId,
+            resolved.skuLabel,
+            resolved.stockOnHand,
+            resolved.qtySold,
+            resolved.categoryPath
+          );
           if (
             resolved.subcategoryLabel.trim() &&
             resolved.subcategoryLabel.trim().toLowerCase() !== resolved.categoryLabel.trim().toLowerCase()
           ) {
-            bumpCatalogLine(g.catalogSubcategory, resolved.subcategoryLabel, lineRev, lineQty, order.orderId);
+            bumpCatalogLine(
+              g.catalogSubcategory,
+              resolved.subcategoryLabel,
+              lineRev,
+              lineQty,
+              order.orderId,
+              resolved.skuLabel,
+              resolved.stockOnHand,
+              resolved.qtySold,
+              resolved.categoryPath
+            );
           }
-          bumpCatalogLine(g.catalogSku, resolved.skuLabel, lineRev, lineQty, order.orderId);
+          bumpCatalogLine(
+            g.catalogSku,
+            resolved.skuLabel,
+            lineRev,
+            lineQty,
+            order.orderId,
+            resolved.skuLabel,
+            resolved.stockOnHand,
+            resolved.qtySold,
+            resolved.categoryPath
+          );
         }
       }
     }

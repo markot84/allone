@@ -297,6 +297,12 @@ export interface CategoryAffinity {
   revenue_eur?: number;
   /** Μερίδιο επί του συνολικού τζίρου του segment (%). */
   revenue_share_pct?: number;
+  /** Operational stock snapshot from ERP/catalog, summed by unique SKU when available. */
+  stock_on_hand?: number;
+  /** Units sold from ERP/catalog period fields, summed by unique SKU when available. */
+  qty_sold?: number;
+  /** Merchandising path for SKU/category context (e.g. Category > Subcategory > SKU). */
+  category_path?: string[];
 }
 
 export interface SegmentCategoryData {

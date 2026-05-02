@@ -9,6 +9,9 @@ export type ErpSkuDims = {
   brand?: string;
   category?: string;
   subcategory?: string;
+  stockOnHand?: number;
+  qtySold?: number;
+  categoryPath?: string[];
 };
 
 /** Lookup keys: `${platform}:${productId}` or `${platform}:${normalizedSku}` */
@@ -24,6 +27,9 @@ function coerceErpSkuDims(v: unknown): ErpSkuDims {
     ...(typeof o.brand === 'string' && o.brand.trim() ? { brand: String(o.brand).trim() } : {}),
     ...(typeof o.category === 'string' && o.category.trim() ? { category: String(o.category).trim() } : {}),
     ...(typeof o.subcategory === 'string' && o.subcategory.trim() ? { subcategory: String(o.subcategory).trim() } : {}),
+    ...(typeof o.stockOnHand === 'number' && Number.isFinite(o.stockOnHand) ? { stockOnHand: o.stockOnHand } : {}),
+    ...(typeof o.qtySold === 'number' && Number.isFinite(o.qtySold) ? { qtySold: o.qtySold } : {}),
+    ...(Array.isArray(o.categoryPath) ? { categoryPath: o.categoryPath.map(String).filter(Boolean) } : {}),
   };
 }
 
@@ -73,6 +79,9 @@ export type ResolvedCatalogLine = {
   categoryLabel: string;
   subcategoryLabel: string;
   skuLabel: string;
+  stockOnHand?: number;
+  qtySold?: number;
+  categoryPath?: string[];
 };
 
 const PRODUCT_COLLECTIONS: Record<string, string> = {
@@ -154,6 +163,34 @@ function pickCategoryDims(row: Record<string, unknown>, fallbackCategory = ''): 
   };
 }
 
+function parseOptionalNumber(value: unknown): number | undefined {
+  if (value == null || value === '') return undefined;
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  const parsed = Number(String(value).replace(',', '.'));
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function pickOperationalDims(row: Record<string, unknown>): Pick<ErpSkuDims, 'stockOnHand' | 'qtySold' | 'categoryPath'> {
+  const stockOnHand =
+    parseOptionalNumber(row.stock_on_hand) ??
+    parseOptionalNumber(row.available_stock) ??
+    parseOptionalNumber(row.stock_level) ??
+    parseOptionalNumber(row.stockQuantity) ??
+    parseOptionalNumber(row.qty);
+  const qtySold =
+    parseOptionalNumber(row.qty_sold_period) ??
+    parseOptionalNumber(row.qty_sold_last_30d) ??
+    parseOptionalNumber(row.qty_sold_last_90d) ??
+    parseOptionalNumber(row.qty_sold_lifetime) ??
+    parseOptionalNumber(row.qtySold);
+  const categoryPath = splitCategoryPath(row.categoryPath);
+  return {
+    ...(stockOnHand != null ? { stockOnHand } : {}),
+    ...(qtySold != null ? { qtySold } : {}),
+    ...(categoryPath.length > 0 ? { categoryPath } : {}),
+  };
+}
+
 function setDims(
   map: Map<string, ErpSkuDims>,
   key: string,
@@ -169,6 +206,9 @@ function setDims(
     brand: dims.brand ?? prev.brand,
     category: dims.category ?? prev.category,
     subcategory: dims.subcategory ?? prev.subcategory,
+    stockOnHand: dims.stockOnHand ?? prev.stockOnHand,
+    qtySold: dims.qtySold ?? prev.qtySold,
+    categoryPath: dims.categoryPath ?? prev.categoryPath,
   });
 }
 
@@ -181,6 +221,7 @@ function ingestShopifyRows(rows: Record<string, unknown>[], indexes: CatalogInde
     const base: ErpSkuDims = {
       ...(vendor ? { brand: vendor } : {}),
       ...(productType ? { category: productType } : {}),
+      ...pickOperationalDims(d),
     };
     if (pid) setDims(indexes.byProductId, pk(platform, pid), base);
     const variants = Array.isArray(d.variants) ? d.variants : [];
@@ -201,6 +242,7 @@ function ingestWooRows(rows: Record<string, unknown>[], indexes: CatalogIndexes)
     const base: ErpSkuDims = {
       ...(tags[0] ? { brand: tags[0] } : {}),
       ...pickCategoryDims(d, cats[0]),
+      ...pickOperationalDims(d),
     };
     if (pid) setDims(indexes.byProductId, pk(platform, pid), base);
     const ns = normalizeSku(trimLabel(d.sku));
@@ -217,6 +259,7 @@ function ingestMagentoRows(rows: Record<string, unknown>[], indexes: CatalogInde
     const base: ErpSkuDims = {
       ...(brand ? { brand } : {}),
       ...pickCategoryDims(d),
+      ...pickOperationalDims(d),
     };
     if (pid) setDims(indexes.byProductId, pk(platform, pid), base);
     const ns = normalizeSku(skuRaw);
@@ -232,6 +275,7 @@ function ingestOpenCartRows(rows: Record<string, unknown>[], indexes: CatalogInd
     const base: ErpSkuDims = {
       ...(mfg ? { brand: mfg } : {}),
       ...pickCategoryDims(d),
+      ...pickOperationalDims(d),
     };
     if (pid) setDims(indexes.byProductId, pk(platform, pid), base);
     const ns = normalizeSku(trimLabel(d.sku)) || normalizeSku(trimLabel(d.model));
@@ -270,6 +314,7 @@ export function buildErpSkuMap(products: Product[]): Map<string, ErpSkuDims> {
       ...(brand ? { brand } : {}),
       ...pickCategoryDims(p as unknown as Record<string, unknown>, category),
       ...(subcategory ? { subcategory } : {}),
+      ...pickOperationalDims(p as unknown as Record<string, unknown>),
     });
   }
   return out;
@@ -330,6 +375,9 @@ export function resolveCatalogLineForOrderLine(
       categoryLabel: cat,
       subcategoryLabel: trimLabel(e.subcategory) || '',
       skuLabel,
+      ...(e.stockOnHand != null ? { stockOnHand: e.stockOnHand } : {}),
+      ...(e.qtySold != null ? { qtySold: e.qtySold } : {}),
+      ...(e.categoryPath?.length ? { categoryPath: e.categoryPath } : {}),
     };
   }
 
@@ -350,6 +398,9 @@ export function resolveCatalogLineForOrderLine(
       categoryLabel: trimLabel(dims.category) || fallbackCategory,
       subcategoryLabel: trimLabel(dims.subcategory) || '',
       skuLabel,
+      ...(dims.stockOnHand != null ? { stockOnHand: dims.stockOnHand } : {}),
+      ...(dims.qtySold != null ? { qtySold: dims.qtySold } : {}),
+      ...(dims.categoryPath?.length ? { categoryPath: dims.categoryPath } : {}),
     };
   }
 

@@ -272,7 +272,12 @@ async function fetchBrandRevenueSourceMode(brandId: string): Promise<'eshop_clas
 export async function fetchAllEcommerceOrders(
   brandId: string,
   platforms: string[],
-  options: { sinceDate?: string; cacheFirst?: boolean } = {}
+  options: {
+    sinceDate?: string;
+    untilDate?: string;
+    cacheFirst?: boolean;
+    revenueMode?: 'brand' | 'classified' | 'all';
+  } = {}
 ): Promise<EcommerceRawOrder[]> {
   const [mode, allRules, results] = await Promise.all([
     fetchBrandRevenueSourceMode(brandId),
@@ -281,28 +286,41 @@ export async function fetchAllEcommerceOrders(
       platforms.map(async (platform) => {
         const collectionName = ECOMMERCE_ORDER_COLLECTIONS[platform];
         if (!collectionName) return [] as EcommerceRawOrder[];
-        const constraints: QueryConstraint[] = options.sinceDate
-          ? [where('createdAt', '>=', options.sinceDate), orderBy('createdAt', 'desc')]
-          : [];
+        const constraints: QueryConstraint[] = [];
+        if (options.sinceDate) constraints.push(where('createdAt', '>=', options.sinceDate));
+        if (options.untilDate) constraints.push(where('createdAt', '<=', `${options.untilDate}T23:59:59.999Z`));
+        if (options.sinceDate || options.untilDate) constraints.push(orderBy('createdAt', 'desc'));
         let rows: Record<string, unknown>[];
         try {
           rows = await FirestoreService.getDocuments<Record<string, unknown>>(collectionName, constraints, brandId, {
             cacheFirst: options.cacheFirst,
           });
         } catch (error) {
-          if (!options.sinceDate) throw error;
+          if (!options.sinceDate && !options.untilDate) throw error;
           // If a composite index is still building/missing, keep the page functional and filter client-side.
           const fallbackRows = await FirestoreService.getDocuments<Record<string, unknown>>(collectionName, [], brandId, {
             cacheFirst: options.cacheFirst,
           });
-          rows = fallbackRows.filter((row) => String(row.createdAt || '') >= options.sinceDate!);
+          rows = fallbackRows.filter((row) => {
+            const createdAt = String(row.createdAt || '');
+            if (!createdAt) return false;
+            if (options.sinceDate && createdAt < options.sinceDate) return false;
+            if (options.untilDate && createdAt.slice(0, 10) > options.untilDate) return false;
+            return true;
+          });
         }
         return rows.map((row) => normalizeRawOrder(platform, row));
       })
     ),
   ]);
-  // Όταν revenueSourceMode = eshop_all, αγνοούμε τα rules ώστε όλα τα non-cancelled orders να μπουν.
-  const rules = mode === 'eshop_all' ? [] : allRules;
+  const requestedMode = options.revenueMode || 'brand';
+  // brand/default: όταν revenueSourceMode = eshop_all, αγνοούμε τα rules.
+  // classified: forced core e-shop revenue for views whose copy promises exclusions.
+  // all: explicit all e-shop orders.
+  const rules =
+    requestedMode === 'all' || (requestedMode === 'brand' && mode === 'eshop_all')
+      ? []
+      : allRules;
   return results.flat().map((order) => ({
     ...order,
     ...classifyEcommerceOrder(order, rules),

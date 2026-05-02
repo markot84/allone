@@ -43,6 +43,7 @@ const fmtPct = (n: number) => formatNumber(n, 2);
 const SELECTED_SEGMENT_STROKE = '#FDBA74';
 
 type AnalysisTab = 'rfm' | 'behavioral' | 'predictive';
+type SegmentMovement = { countDelta: number; percentageDelta: number };
 
 // Get default RFM score from segment name (fallback when rfm_score is missing)
 function getDefaultRFMScoreFromName(segmentName: string): string | null {
@@ -142,6 +143,21 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
     () => rfmSegments.find((segment) => segment.id === selectedSegmentId) ?? null,
     [rfmSegments, selectedSegmentId]
   );
+  const segmentMovementById = useMemo(() => {
+    const map = new Map<string, SegmentMovement>();
+    for (const flow of segmentMigration?.flows ?? []) {
+      const from = map.get(flow.from) ?? { countDelta: 0, percentageDelta: 0 };
+      from.countDelta -= flow.count;
+      from.percentageDelta -= flow.percentage;
+      map.set(flow.from, from);
+
+      const to = map.get(flow.to) ?? { countDelta: 0, percentageDelta: 0 };
+      to.countDelta += flow.count;
+      to.percentageDelta += flow.percentage;
+      map.set(flow.to, to);
+    }
+    return map;
+  }, [segmentMigration?.flows]);
 
   useEffect(() => {
     setSelectedSegmentId((currentId) => {
@@ -683,6 +699,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
           >
             <SegmentDetail
               segment={selectedSegment}
+              movement={segmentMovementById.get(selectedSegment.id)}
               hasImportedSegments={hasImportedSegments}
               catalogEnriching={isCatalogEnriching}
               segmentsDataSource={rfmDataSource}
@@ -1005,6 +1022,7 @@ function SegmentCard({ segment, index, isSelected, onSelect, onExport }: Segment
 
 interface SegmentDetailProps {
   segment: RFMSegment;
+  movement?: SegmentMovement;
   hasImportedSegments: boolean;
   /** Κατάλογος ακόμα φορτώνει — tabs heuristic μέχρι να έρθουν τα *_products. */
   catalogEnriching?: boolean;
@@ -1023,6 +1041,9 @@ type SegmentConsumptionTooltipPayload = {
   fullLabel?: string;
   pct?: number;
   revenue?: number;
+  stockOnHand?: number;
+  qtySold?: number;
+  categoryPath?: string[];
 };
 
 function SegmentConsumptionTooltip({
@@ -1042,15 +1063,25 @@ function SegmentConsumptionTooltip({
         {row.fullLabel || 'Γραμμή προϊόντος'}
       </p>
       <div className="mt-2 space-y-1 border-t border-[#F3F4F6] pt-2">
-        <div className="flex items-center justify-between gap-4 text-[11px]">
-          <span className="text-[#6B7280]">Μερίδιο segment</span>
-          <span className="font-mono font-semibold text-[#111827]">{formatNumber(row.pct ?? 0, 1)}%</span>
-        </div>
-        {row.revenue != null && row.revenue > 0 ? (
+        {row.categoryPath?.length ? (
+          <p className="text-[10.5px] leading-snug text-[#6B7280]">
+            {row.categoryPath.join(' / ')}
+          </p>
+        ) : null}
+        {row.stockOnHand != null ? (
           <div className="flex items-center justify-between gap-4 text-[11px]">
-            <span className="text-[#6B7280]">Τζίρος</span>
-            <span className="font-mono font-semibold text-[#111827]">{formatCurrencyCompact(row.revenue)}</span>
+            <span className="text-[#6B7280]">Stock</span>
+            <span className="font-mono font-semibold text-[#111827]">{formatNumber(row.stockOnHand, 0)}</span>
           </div>
+        ) : null}
+        {row.qtySold != null ? (
+          <div className="flex items-center justify-between gap-4 text-[11px]">
+            <span className="text-[#6B7280]">Sold</span>
+            <span className="font-mono font-semibold text-[#111827]">{formatNumber(row.qtySold, 0)}</span>
+          </div>
+        ) : null}
+        {row.stockOnHand == null && row.qtySold == null ? (
+          <p className="text-[11px] text-[#6B7280]">No ERP stock/sales data for this item yet.</p>
         ) : null}
       </div>
     </div>
@@ -1063,6 +1094,7 @@ function isGenericCatalogLabel(name: string): boolean {
 
 function SegmentDetail({
   segment,
+  movement,
   hasImportedSegments,
   catalogEnriching,
   segmentsDataSource,
@@ -1111,6 +1143,9 @@ function SegmentDetail({
       fullLabel: c.name,
       pct,
       revenue: c.revenue_eur ?? 0,
+      stockOnHand: c.stock_on_hand,
+      qtySold: c.qty_sold,
+      categoryPath: c.category_path,
     };
   });
 
@@ -1141,6 +1176,19 @@ function SegmentDetail({
   const leftChartTitle = hasCatalogRollups
     ? `Mix κατανάλωσης · ${dimLabel[catalogDim]}`
     : 'Consumption mix · Categories';
+  const movementTone =
+    movement && movement.countDelta !== 0
+      ? movement.countDelta > 0
+        ? 'positive'
+        : 'negative'
+      : null;
+  const movementColor = movementTone === 'positive' ? '#16A34A' : movementTone === 'negative' ? '#DC2626' : '#6B7280';
+  const movementIcon =
+    movementTone === 'positive' ? (
+      <TrendingUp size={12} aria-hidden />
+    ) : movementTone === 'negative' ? (
+      <TrendingDown size={12} aria-hidden />
+    ) : null;
 
   return (
     <Card padding="lg">
@@ -1158,9 +1206,23 @@ function SegmentDetail({
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <span className="rounded-full border border-[#E5E7EB] bg-white px-2.5 py-1 text-xs font-medium text-[#374151]">
                 Πελάτες: <span className="font-mono font-bold text-[#111827]">{formatNumber(segment.count ?? 0)}</span>
+                {movementTone && movement ? (
+                  <span className="ml-1 inline-flex items-center gap-0.5 font-mono font-bold" style={{ color: movementColor }}>
+                    {movementIcon}
+                    {movement.countDelta > 0 ? '+' : ''}
+                    {formatNumber(movement.countDelta, 0)}
+                  </span>
+                ) : null}
               </span>
               <span className="rounded-full border border-[#E5E7EB] bg-white px-2.5 py-1 text-xs font-medium text-[#374151]">
                 % πελατών: <span className="font-mono font-bold" style={{ color: segment.color }}>{fmtPct(segment.percentage ?? 0)}%</span>
+                {movementTone && movement ? (
+                  <span className="ml-1 inline-flex items-center gap-0.5 font-mono font-bold" style={{ color: movementColor }}>
+                    {movementIcon}
+                    {movement.percentageDelta > 0 ? '+' : ''}
+                    {formatNumber(movement.percentageDelta, 1)}%
+                  </span>
+                ) : null}
               </span>
             </div>
           </div>

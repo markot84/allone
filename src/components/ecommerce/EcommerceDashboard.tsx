@@ -341,10 +341,25 @@ export function EcommerceDashboard() {
   );
 
   const { data: rawOrders = [], isPending: rawOrdersLoading, isSuccess: rawOrdersLoaded } = useQuery({
-    queryKey: ['ecommerceOrdersRaw', brandId, [...ecomm.connectedPlatforms].sort().join('|')],
-    queryFn: () => (brandId ? fetchAllEcommerceOrders(brandId, ecomm.connectedPlatforms) : Promise.resolve([])),
+    queryKey: [
+      'ecommerceOrdersRaw',
+      'classified',
+      brandId,
+      [...ecomm.connectedPlatforms].sort().join('|'),
+      effectiveFrom,
+      effectiveTo,
+    ],
+    queryFn: () =>
+      brandId
+        ? fetchAllEcommerceOrders(brandId, ecomm.connectedPlatforms, {
+            sinceDate: effectiveFrom,
+            untilDate: effectiveTo,
+            cacheFirst: true,
+            revenueMode: 'classified',
+          })
+        : Promise.resolve([]),
     enabled: !!brandId && ecomm.connectedPlatforms.length > 0,
-    staleTime: 60 * 1000,
+    staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
     refetchOnWindowFocus: false,
   });
@@ -1415,7 +1430,11 @@ export function EcommerceDashboard() {
                 </table>
               </div>
             ) : (
-              <p className="text-sm text-[#9CA3AF] py-4 text-center">Δεν βρέθηκαν παραγγελίες με τα τρέχοντα φίλτρα</p>
+              <p className="text-sm text-[#9CA3AF] py-4 text-center">
+                {rawOrdersLoading
+                  ? 'Φόρτωση παραγγελιών για το επιλεγμένο διάστημα…'
+                  : 'Δεν βρέθηκαν παραγγελίες με τα τρέχοντα φίλτρα'}
+              </p>
             )}
             <div className="mt-3 flex items-center justify-between text-[11px] text-[#6B7280]">
               <span>Σύνολο: {filteredOrders.length} παραγγελίες</span>
