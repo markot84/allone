@@ -103,6 +103,126 @@ function calculateAvgRFMScore(rfmScore: string | undefined | null, segmentName?:
   return sum / numbers.length;
 }
 
+interface SegmentTopProductsTableProps {
+  segments: RFMSegment[];
+  selectedId: string | null;
+  onSelect: (segment: RFMSegment) => void;
+  ecommerceMode: boolean;
+  isCatalogEnriching: boolean;
+}
+
+/**
+ * Συγκεντρωτικός πίνακας top προϊόντων ανά segment — ορατός χωρίς να επιλέξει ο χρήστης segment.
+ * Προτεραιότητα: sku_affinity (catalog match) → subcategory → category_affinity_catalog → category heuristic.
+ */
+function SegmentTopProductsTable({
+  segments,
+  selectedId,
+  onSelect,
+  ecommerceMode,
+  isCatalogEnriching,
+}: SegmentTopProductsTableProps) {
+  if (segments.length === 0) return null;
+
+  const pickTop = (segment: RFMSegment): { rows: CategoryAffinity[]; sourceLabel: string } => {
+    const b = segment.behavioral;
+    const sku = b?.sku_affinity ?? [];
+    if (sku.length > 0) return { rows: sku.slice(0, 3), sourceLabel: 'SKU' };
+    const sub = b?.subcategory_affinity ?? [];
+    if (sub.length > 0) return { rows: sub.slice(0, 3), sourceLabel: 'Υποκατ.' };
+    const catCat = b?.category_affinity_catalog ?? [];
+    if (catCat.length > 0) return { rows: catCat.slice(0, 3), sourceLabel: 'Κατηγορία' };
+    const cat = b?.category_affinity ?? [];
+    return { rows: cat.slice(0, 3), sourceLabel: cat.length > 0 ? 'Κατηγορία' : '—' };
+  };
+
+  return (
+    <Card padding="lg" className="border border-[#E8EAED] shadow-[0_4px_24px_rgba(15,23,42,0.06)]">
+      <CardHeader
+        title="Top προϊόντα ανά segment"
+        subtitle="Τα 3 προϊόντα/κατηγορίες με τη μεγαλύτερη συμμετοχή στον τζίρο κάθε segment. Πάτησε γραμμή για πλήρες drill-down."
+      />
+      {ecommerceMode && isCatalogEnriching && (
+        <p className="-mt-2 mb-3 text-xs text-[#92400E] bg-[#FFFBEB] border border-[#FDE68A] rounded-lg px-3 py-2">
+          Φόρτωση catalog… τα SKU εμφανίζονται όταν ολοκληρωθεί το alignment (μέχρι τότε δείχνουμε κατηγορίες).
+        </p>
+      )}
+      <div className="overflow-x-auto rounded-lg border border-[#E5E7EB]">
+        <table className="w-full min-w-[820px] text-left text-[13px]">
+          <thead>
+            <tr className="border-b border-[#E5E7EB] bg-[#F9FAFB] text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">
+              <th className="px-3 py-2.5">Segment</th>
+              <th className="px-3 py-2.5 text-right whitespace-nowrap">Πελάτες</th>
+              <th className="px-3 py-2.5 text-right whitespace-nowrap">% τζίρου</th>
+              <th className="px-3 py-2.5">#1 (πηγή)</th>
+              <th className="px-3 py-2.5">#2</th>
+              <th className="px-3 py-2.5">#3</th>
+            </tr>
+          </thead>
+          <tbody>
+            {segments.map((segment) => {
+              const { rows, sourceLabel } = pickTop(segment);
+              const sel = selectedId === segment.id;
+              const cell = (row: CategoryAffinity | undefined) => {
+                if (!row) return <span className="text-[#9CA3AF]">—</span>;
+                const rev = row.revenue_eur;
+                const pct = row.revenue_share_pct;
+                const tooltip = [
+                  row.name,
+                  rev != null && rev > 0 ? formatCurrencyCompact(rev) : null,
+                  pct != null && pct > 0 ? `${formatNumber(pct, 1)}%` : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ');
+                return (
+                  <span title={tooltip} className="block min-w-0 truncate">
+                    <span className="text-[#374151]">{row.name}</span>
+                    {pct != null && pct > 0 && (
+                      <span className="ml-1 font-mono text-[11px] text-[#9CA3AF]">{formatNumber(pct, 1)}%</span>
+                    )}
+                  </span>
+                );
+              };
+              return (
+                <tr
+                  key={segment.id}
+                  className={`cursor-pointer border-b border-[#F3F4F6] transition-colors last:border-b-0 ${
+                    sel ? 'bg-[#EFF6FF]' : 'hover:bg-[#FAFAFA]'
+                  }`}
+                  onClick={() => onSelect(segment)}
+                >
+                  <td className="px-3 py-2.5">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: segment.color }} />
+                      <span className="min-w-0 font-medium text-[#111827] truncate">{segment.name}</span>
+                    </span>
+                  </td>
+                  <td className="px-3 py-2.5 text-right font-mono tabular-nums text-[#374151]">
+                    {formatNumber(segment.count ?? 0)}
+                  </td>
+                  <td className="px-3 py-2.5 text-right font-mono tabular-nums font-semibold text-[#374151]">
+                    {fmtPct(segment.revenue_share ?? 0)}%
+                  </td>
+                  <td className="max-w-[14rem] px-3 py-2.5 text-[#374151]">
+                    <span className="flex items-center gap-1.5 min-w-0">
+                      <span className="shrink-0 rounded bg-[#F3F4F6] px-1.5 py-0.5 text-[10px] font-medium text-[#6B7280]">
+                        {sourceLabel}
+                      </span>
+                      {cell(rows[0])}
+                    </span>
+                  </td>
+                  <td className="max-w-[14rem] px-3 py-2.5 text-[#374151]">{cell(rows[1])}</td>
+                  <td className="max-w-[14rem] px-3 py-2.5 text-[#374151]">{cell(rows[2])}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
+
 interface RFMAnalysisProps {
   onSectionChange?: (section: string) => void;
 }
@@ -653,14 +773,33 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
         </Card>
       </div>
 
-      <details className="rounded-xl border border-[#E8EAED] bg-[#FAFBFC] shadow-[0_2px_8px_rgba(15,23,42,0.04)]">
+      <SegmentTopProductsTable
+        segments={rfmSegments}
+        selectedId={selectedSegment?.id ?? null}
+        onSelect={(segment) =>
+          setSelectedSegment(selectedSegment?.id === segment.id ? null : segment)
+        }
+        ecommerceMode={rfmDataSource === 'ecommerce'}
+        isCatalogEnriching={isCatalogEnriching}
+      />
+
+      <details className="group rounded-xl border border-[#E8EAED] bg-[#FAFBFC] shadow-[0_2px_8px_rgba(15,23,42,0.04)]">
         <summary className="cursor-pointer list-none px-4 py-3 [&::-webkit-details-marker]:hidden">
-          <span className="text-[13px] font-semibold text-[var(--nts-accent)] hover:underline">
-            Κάρτες ανά segment (προαιρετικά)
-          </span>
-          <span className="mt-1 block text-[11px] font-normal leading-snug text-[#6B7280]">
-            Ο πίνακας από πάνω είναι η κύρια λίστα· οι κάρτες επαναλαμβάνουν τα ίδια segments για γρήγορο export χωρίς να ανοίξει το πάνελ λεπτομερειών.
-          </span>
+          <div className="flex items-start gap-2">
+            <ChevronRight
+              size={16}
+              className="mt-0.5 shrink-0 text-[var(--nts-accent)] transition-transform duration-200 group-open:rotate-90"
+              aria-hidden
+            />
+            <div className="min-w-0 flex-1">
+              <span className="text-[13px] font-semibold text-[var(--nts-accent)] hover:underline">
+                Κάρτες ανά segment (προαιρετικά)
+              </span>
+              <span className="mt-1 block text-[11px] font-normal leading-snug text-[#6B7280]">
+                Πάτησε για άνοιγμα — οι κάρτες επαναλαμβάνουν τα ίδια segments για γρήγορο export χωρίς να ανοίξει το πάνελ λεπτομερειών.
+              </span>
+            </div>
+          </div>
         </summary>
         <div className="border-t border-[#E5E7EB] px-4 pb-4 pt-3">
           <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">

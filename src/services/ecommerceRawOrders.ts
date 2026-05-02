@@ -190,17 +190,31 @@ function normalizeRawOrder(platform: string, row: Record<string, unknown>): Ecom
     : [];
 
   const emailHash = String(row.customerEmailHash ?? row.customer_email_hash ?? '').trim().toLowerCase();
-  let customerKey = '';
-  const rawCustomer =
-    row.customerKey ??
-    row.customer_key ??
-    row.customerId ??
-    row.customer_id;
-  const s = rawCustomer != null ? String(rawCustomer).trim() : '';
-  if (s !== '' && s !== '0' && s !== 'null' && s !== 'undefined') {
-    customerKey = `${platform}:${s}`;
-  }
   const customerEmail = String(row.customerEmail ?? row.customer_email ?? '').trim().toLowerCase();
+
+  /**
+   * Dedup priority:
+   * 1. emailHash → cross-platform/cross-store stable (Magento multi-store δίνει διαφορετικό
+   *    customer_id ανά website για τον ίδιο email → χωρίς αυτό μετριέται 2-4× φορές).
+   * 2. customerEmail (fallback αν λείπει το hash).
+   * 3. ${platform}:${customerId} (registered χωρίς email — σπάνιο).
+   */
+  let customerKey = '';
+  if (emailHash) {
+    customerKey = `email:${emailHash}`;
+  } else if (customerEmail && customerEmail.includes('@')) {
+    customerKey = `email:${customerEmail}`;
+  } else {
+    const rawCustomer =
+      row.customerKey ??
+      row.customer_key ??
+      row.customerId ??
+      row.customer_id;
+    const s = rawCustomer != null ? String(rawCustomer).trim() : '';
+    if (s !== '' && s !== '0' && s !== 'null' && s !== 'undefined') {
+      customerKey = `${platform}:${s}`;
+    }
+  }
 
   return {
     orderId: String(row.orderId || row.incrementId || row.id || ''),
