@@ -498,19 +498,19 @@ export function EcommerceDashboard() {
       {
         label: 'Καθαρός τζίρος e-shop',
         value: formatCurrencyCompact(filteredTotalRevenue),
-        tooltip: 'Included έσοδα e-commerce για το επιλεγμένο διάστημα, εκτός statuses/κανάλια που εξαιρούνται',
+        tooltip: 'Καθαρά έσοδα e-commerce (χωρίς ΦΠΑ) για το επιλεγμένο διάστημα. Εξαιρούνται cancelled/refunded statuses, demo line items και κανάλια που έχουν οριστεί ως μη-core (π.χ. ενδοομιλικά).',
         sparklineData: padSparklineForChart(last30.map((d) => d.revenue)),
       },
       {
         label: 'Παραγγελίες',
         value: formatNumber(filteredOrderCount),
-        tooltip: 'Σύνολο παραγγελιών για το επιλεγμένο διάστημα',
+        tooltip: 'Σύνολο παραγγελιών για το επιλεγμένο διάστημα (εξαιρούνται cancelled/refunded και κανάλια εκτός core).',
         sparklineData: padSparklineForChart(ordersPerDay),
       },
       {
         label: 'AOV',
         value: formatCurrencyCompact(filteredAov),
-        tooltip: 'Μέσο ποσό ανά παραγγελία για το επιλεγμένο διάστημα',
+        tooltip: 'Average Order Value (χωρίς ΦΠΑ): καθαρός τζίρος / αριθμός παραγγελιών για το επιλεγμένο διάστημα.',
         sparklineData: padSparklineForChart(aovPerDay),
       },
       {

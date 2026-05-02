@@ -425,11 +425,11 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
         icon: <ShoppingBag size={22} strokeWidth={2} />,
         label: 'e-shop ROI',
         value: formatMultiplierValue(performanceSummary.storeEfficiency),
-        subtitle: ecomm.hasData ? 'Τζίρος e-shop / συνολικό κόστος marketing' : 'Χωρίς συνδεδεμένο e-shop',
+        subtitle: ecomm.hasData ? 'Τζίρος e-shop (χωρίς ΦΠΑ) / συνολικό κόστος marketing' : 'Χωρίς συνδεδεμένο e-shop',
         color: getEfficiencyColor(performanceSummary.storeEfficiency),
         iconWrapClass: 'bg-emerald-50 text-emerald-600',
         tooltip:
-          'Βασικό KPI για owner view: τζίρος e-shop προς συνολικό κόστος marketing για την επιλεγμένη περίοδο.',
+          'Βασικό KPI για owner view: καθαρός τζίρος e-shop (χωρίς ΦΠΑ) προς συνολικό κόστος marketing για την επιλεγμένη περίοδο.',
       },
     } satisfies Record<
       KpiTabId,
@@ -607,7 +607,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
               value={formatCurrencyCompact(ecommRevenueInPeriod)}
               subtitle="Άθροισμα ημερήσιων παραγγελιών στην περίοδο"
               color="#10B981"
-              tooltip="Καθαρά έσοδα από τα συνδεδεμένα e-shop για τις ημερομηνίες που καλύπτει η επιλογή πάνω."
+              tooltip="Καθαρά έσοδα (χωρίς ΦΠΑ) από τα συνδεδεμένα e-shop για τις ημερομηνίες που καλύπτει η επιλογή πάνω."
             />
           )}
           <MetricCard
@@ -647,7 +647,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                     ? `+${formatCurrencyCompact(performanceSummary.revenueGap)}`
                     : formatCurrencyCompact(performanceSummary.revenueGap)
               }
-              subtitle="Τζίρος e-shop − έσοδα καμπανιών"
+              subtitle="Τζίρος e-shop (χωρίς ΦΠΑ) − έσοδα καμπανιών"
               color={
                 performanceSummary.revenueGap == null
                   ? '#111827'
@@ -655,7 +655,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                     ? '#22C55E'
                     : '#EF4444'
               }
-              tooltip="Διαφορά e-shop revenue μείον attributed campaign revenue για την ίδια περίοδο."
+              tooltip="Διαφορά καθαρού e-shop revenue (χωρίς ΦΠΑ) μείον attributed campaign revenue για την ίδια περίοδο."
             />
           )}
         </div>
@@ -763,7 +763,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                 k: 'e-shop ROI',
                 v: formatMultiplierValue(performanceSummary.storeEfficiency),
                 note: ecomm.hasData
-                  ? 'Συγχρονισμένος τζίρος e-shop ÷ συνολικό κόστος marketing. Δείχνει τη συνολική απόδοση του store για την περίοδο.'
+                  ? 'Καθαρός τζίρος e-shop (χωρίς ΦΠΑ) ÷ συνολικό κόστος marketing. Δείχνει τη συνολική απόδοση του store για την περίοδο.'
                   : 'Απαιτεί συνδεδεμένο e-shop για την επιλεγμένη περίοδο.',
               },
               {
@@ -775,7 +775,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                       ? `+${formatCurrencyCompact(performanceSummary.revenueGap)}`
                       : formatCurrencyCompact(performanceSummary.revenueGap),
                 note: ecomm.hasData
-                  ? 'Διαφορά τζίρου e-shop μείον attributed έσοδα καμπανιών για την ίδια περίοδο. Χρήσιμο για να δεις τι μέρος του συνολικού τζίρου δεν εξηγείται από το platform attribution.'
+                  ? 'Διαφορά καθαρού τζίρου e-shop (χωρίς ΦΠΑ) μείον attributed έσοδα καμπανιών για την ίδια περίοδο. Χρήσιμο για να δεις τι μέρος του συνολικού τζίρου δεν εξηγείται από το platform attribution.'
                   : 'Χωρίς συνδεδεμένο e-shop δεν μπορεί να υπολογιστεί.',
               },
             ];
@@ -791,7 +791,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
                 k: 'Store ROAS',
                 v: formatMultiplierValue(performanceSummary.storeRoas),
                 note: ecomm.hasData
-                  ? 'Τζίρος e-shop ÷ ad spend. Δείχνει πόσα ευρώ συνολικού τζίρου αντιστοιχούν σε κάθε €1 media spend.'
+                  ? 'Καθαρός τζίρος e-shop (χωρίς ΦΠΑ) ÷ ad spend. Δείχνει πόσα ευρώ συνολικού τζίρου αντιστοιχούν σε κάθε €1 media spend.'
                   : 'Απαιτεί συνδεδεμένο e-shop για την επιλεγμένη περίοδο.',
               },
               {

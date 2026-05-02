@@ -833,8 +833,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                     isB2B
                       ? 'Βασική εικόνα εσόδων από οργανική ζήτηση και demand generation. Για πλήρη αποτύπωση εσόδων ανά account απαιτείται invoicing ή ERP import.'
                       : hasEcommerceRevenue
-                        ? 'Πραγματικός τζίρος παραγγελιών e-shop στην επιλεγμένη περίοδο. Δεν αθροίζονται organic ή ad conversion value για να αποφεύγεται double-counting — αναλυτικό channel breakdown στο ROI & Απόδοση.'
-                        : 'Εκτίμηση εσόδων από organic δεδομένα και conversion value διαφημιστικών πλατφορμών (όχι ταμειακός τζίρος). Συνδέστε e-shop για πραγματικό revenue.',
+                        ? 'Πραγματικός τζίρος παραγγελιών e-shop (χωρίς ΦΠΑ) στην επιλεγμένη περίοδο. Δεν αθροίζονται organic ή ad conversion value — αυτά είναι channel attribution και θα προκαλούσαν double-counting. Αναλυτικό breakdown ανά κανάλι στη σελίδα ROI & Απόδοση.'
+                        : 'Εκτίμηση εσόδων από organic και ad conversion value (όχι ταμειακός τζίρος). Συνδέστε e-shop για πραγματικό revenue χωρίς ΦΠΑ.',
                 }}
                 index={0}
                 onClick={() => onSectionChange?.(isB2B ? 'finances' : 'roi')}
@@ -863,7 +863,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   tooltip: isB2B
                     ? 'Μετατροπές ή ενέργειες υψηλής πρόθεσης από τα demand channels, έως ότου ενεργοποιηθεί πλήρης παρακολούθηση pipeline.'
                     : hasEshop
-                      ? 'Average Order Value από πραγματικές παραγγελίες e-shop στην επιλεγμένη περίοδο: e-shop revenue / αριθμός παραγγελιών.'
+                      ? 'Average Order Value (χωρίς ΦΠΑ) από πραγματικές παραγγελίες e-shop: καθαρός τζίρος / αριθμός παραγγελιών για την επιλεγμένη περίοδο.'
                       : 'Average Order Value από διαφημιστικές καμπάνιες (conversion value / conversions). Συνδέστε e-shop για ακριβές AOV χωρίς double-counting μεταξύ Google Ads & Meta.',
                 }}
                 index={2}
@@ -909,7 +909,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               <div>
                 <div className="flex items-center gap-1 mb-0.5">
                   <p className="text-[11px] text-[#6B7280]">e-shop Revenue</p>
-                  <Tooltip content="Πραγματικά έσοδα e-shop από τις συνδεδεμένες πλατφόρμες για την επιλεγμένη περίοδο." size={12} />
+                  <Tooltip content="Πραγματικά καθαρά έσοδα e-shop (χωρίς ΦΠΑ) από τις συνδεδεμένες πλατφόρμες για την επιλεγμένη περίοδο." size={12} />
                 </div>
                 <p className="text-lg font-bold text-[#1A1A1A]">{formatCurrencyCompact(storeRevenueInPeriod)}</p>
               </div>
@@ -923,7 +923,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               <div>
                 <div className="flex items-center gap-1 mb-0.5">
                   <p className="text-[11px] text-[#6B7280]">AOV</p>
-                  <Tooltip content="Average Order Value: e-shop Revenue / Παραγγελίες της επιλεγμένης περιόδου." size={12} />
+                  <Tooltip content="Average Order Value (χωρίς ΦΠΑ): καθαρός τζίρος e-shop / Παραγγελίες της επιλεγμένης περιόδου." size={12} />
                 </div>
                 <p className="text-lg font-bold text-[#1A1A1A]">{formatCurrencyCompact(eshopAovInPeriod)}</p>
               </div>
@@ -1032,7 +1032,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             subtitle={
               enabledModules.ecommerce && ecomm.hasData ? (
                 <p>
-                  Ημερήσια ή μηνιαία εικόνα <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">τζίρου από παραγγελίες</strong>, με βάση τον συγχρονισμό του e-shop και το server-side aggregate. Κάτω εμφανίζεται η{' '}
+                  Ημερήσια ή μηνιαία εικόνα <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">καθαρού τζίρου παραγγελιών (χωρίς ΦΠΑ)</strong>, με βάση τον συγχρονισμό του e-shop και το server-side aggregate. Κάτω εμφανίζεται η{' '}
                   <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">διαφημιστική απόδοση</strong> σε ξεχωριστή κλίμακα, χωρίς να αθροίζεται στον τζίρο.
                 </p>
               ) : (

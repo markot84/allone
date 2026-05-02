@@ -1,10 +1,14 @@
 {
-  "version": "0.695.0",
-  "previousVersion": "0.694.0",
-  "commitHash": "5e9d33d",
+  "version": "0.696.0",
+  "previousVersion": "0.695.0",
+  "commitHash": "faa10e6",
   "branch": "main",
-  "buildDate": "2026-05-02T04:36:28.274Z",
+  "buildDate": "2026-05-02T04:44:42.010Z",
   "commits": [
+    {
+      "hash": "faa10e6",
+      "message": "chore: deploy ex-VAT revenue fix"
+    },
     {
       "hash": "5e9d33d",
       "message": "fix(ecommerce): ex-VAT revenue across dashboard, aggregator and raw orders"
@@ -60,13 +64,10 @@
     {
       "hash": "7e3c945",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "d614c8b",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [
+    "[Συντήρηση] Deploy ex-VAT revenue fix",
     "[Διόρθωση] Ex-VAT revenue across dashboard, aggregator and raw orders",
     "[Διόρθωση] Non-blocking orders fetch with inline progress + error UI",
     "[Διόρθωση] Hash path normalization, empty brand state, loading and setup CTAs",
