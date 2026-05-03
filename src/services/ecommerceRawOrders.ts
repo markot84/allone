@@ -227,17 +227,21 @@ function normalizeRawOrder(platform: string, row: Record<string, unknown>): Ecom
     row.customer_id;
   const s = rawCustomer != null ? String(rawCustomer).trim() : '';
   const hasCustomerId = s !== '' && s !== '0' && s !== 'null' && s !== 'undefined';
+  const hasRealEmail = customerEmail.includes('@');
 
   /**
-   * Dedup priority for RFM:
-   * 1. emailHash/customerEmail only when there is a real platform customer id.
-   *    This dedups Magento multi-store registered customers but still excludes guests.
-   * 2. ${platform}:${customerId} when email is unavailable.
+   * Dedup priority για RFM (πελάτης = ταυτότητα, όχι αποκλειστικά «registered»):
+   * 1. emailHash όταν υπάρχει — κρυπτογραφημένο, σταθερό cross-store, καλύπτει guest+registered ίδιου email.
+   * 2. raw email (lower-cased) ως δευτερευόντως όταν δεν υπάρχει hash αλλά υπάρχει @.
+   * 3. ${platform}:${customerId} όταν δεν υπάρχει καθόλου email αλλά το store δίνει σταθερό id.
+   *
+   * Παλαιότερη συνθήκη απαιτούσε hasCustomerId για όλα — αυτό απέκλειε guest checkouts
+   * με έγκυρο email (συνηθισμένο σε Magento/B2C), μειώνοντας τεχνητά τους ταυτοποιημένους πελάτες.
    */
   let customerKey = '';
-  if (hasCustomerId && emailHash) {
+  if (emailHash) {
     customerKey = `email:${emailHash}`;
-  } else if (hasCustomerId && customerEmail && customerEmail.includes('@')) {
+  } else if (hasRealEmail) {
     customerKey = `email:${customerEmail}`;
   } else if (hasCustomerId) {
     customerKey = `${platform}:${s}`;

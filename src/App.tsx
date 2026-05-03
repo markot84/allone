@@ -16,7 +16,6 @@ import { usePlan } from './hooks/usePlan';
 import { PrivacyPolicy } from './components/legal/PrivacyPolicy';
 import { TermsOfService } from './components/legal/TermsOfService';
 import { captureOAuthParamsFromLocation } from './utils/oauthSession';
-import { GlobalDateProvider } from './contexts/GlobalDateContext';
 import { AttributionProvider } from './contexts/AttributionContext';
 import { APP_SECTIONS } from './config/modules';
 
@@ -418,15 +417,13 @@ function App() {
 
   return (
     <QueryProvider>
-      <GlobalDateProvider>
-        <AttributionProvider>
-          <ToastProvider>
-            <AuthGuard>
-              <AppMain />
-            </AuthGuard>
-          </ToastProvider>
-        </AttributionProvider>
-      </GlobalDateProvider>
+      <AttributionProvider>
+        <ToastProvider>
+          <AuthGuard>
+            <AppMain />
+          </AuthGuard>
+        </ToastProvider>
+      </AttributionProvider>
     </QueryProvider>
   );
 }

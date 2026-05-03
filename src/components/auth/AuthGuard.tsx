@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { useAuth } from '../../hooks';
 import { getPublicSignupMode, isInviteReturnUrl } from '../../config/authAccess';
 import { BrandProvider } from '../../contexts/BrandContext';
+import { GlobalDateProvider } from '../../contexts/GlobalDateContext';
 import { BrandOnboarding } from './BrandOnboarding';
 import { LoginPage } from './LoginPage';
 import { MarketingIndexPage } from './MarketingIndexPage';
@@ -105,7 +106,9 @@ export function AuthGuard({ children }: AuthGuardProps) {
 
   return (
     <BrandProvider>
-      <BrandOnboarding>{children}</BrandOnboarding>
+      <GlobalDateProvider>
+        <BrandOnboarding>{children}</BrandOnboarding>
+      </GlobalDateProvider>
     </BrandProvider>
   );
 }

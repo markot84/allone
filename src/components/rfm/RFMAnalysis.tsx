@@ -31,7 +31,6 @@ import { useSegments, type SegmentDataCoverage, type SegmentsDataSource } from '
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import { useBrand } from '../../hooks/useBrand';
 import { FirestoreService } from '../../services/firestore';
-import { segmentCategoryMatrix } from '../../data';
 import { BehavioralTab } from './BehavioralTab';
 import { PredictiveTab } from './PredictiveTab';
 import { exportSegmentActionPack, exportAllSegmentActionPacks, exportSegmentCustomerList, exportAllSegmentCustomerLists } from '../../services/segmentActionPack';
@@ -394,9 +393,23 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
           <span className="text-[#6B7280]">Εισαγωγή / ERP εκτός e-shop</span>
         )}
         {rfmDataSource === 'ecommerce' && orderRfmMeta && orderRfmMeta.guestOrdersSkipped > 0 ? (
-          <span className="text-[11px] font-medium text-[#B45309]" title="Δεν συμπεριλαμβάνονται στο RFM">
-            · guest χωρίς id: {formatNumber(orderRfmMeta.guestOrdersSkipped)}
-          </span>
+          (() => {
+            const totalCustomerScoped =
+              (orderRfmMeta.ordersAttributed ?? 0) + orderRfmMeta.guestOrdersSkipped;
+            const guestPct = totalCustomerScoped > 0
+              ? Math.round((orderRfmMeta.guestOrdersSkipped / totalCustomerScoped) * 100)
+              : 0;
+            const tone = guestPct >= 50 ? 'text-[#B45309]' : 'text-[#6B7280]';
+            return (
+              <span
+                className={`text-[11px] font-medium ${tone}`}
+                title="Παραγγελίες χωρίς customer id ή email — δεν εντάσσονται στο RFM (απαιτείται σταθερή ταυτότητα πελάτη)."
+              >
+                · guest χωρίς ταυτοποίηση: {formatNumber(orderRfmMeta.guestOrdersSkipped)}
+                {totalCustomerScoped > 0 ? ` (${guestPct}%)` : ''}
+              </span>
+            );
+          })()
         ) : null}
         {ordersLoading ? (
           <LoadingStatusPill label="Loading order history…" />
@@ -701,7 +714,6 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
             <SegmentDetail
               segment={selectedSegment}
               movement={segmentMovementById.get(selectedSegment.id)}
-              hasImportedSegments={hasImportedSegments}
               catalogEnriching={isCatalogEnriching}
               segmentsDataSource={rfmDataSource}
               onExportCustomers={(fmt) => handleExportCustomerList(selectedSegment, fmt)}
@@ -1024,10 +1036,9 @@ function SegmentCard({ segment, index, isSelected, onSelect, onExport }: Segment
 interface SegmentDetailProps {
   segment: RFMSegment;
   movement?: SegmentMovement;
-  hasImportedSegments: boolean;
   /** Κατάλογος ακόμα φορτώνει — tabs heuristic μέχρι να έρθουν τα *_products. */
   catalogEnriching?: boolean;
-  /** Από πού προέρχονται τα segments — για e-shop δεν χρησιμοποιούμε demo matrix κατανάλωσης. */
+  /** Από πού προέρχονται τα segments — μόνο για empty-state copy (δεν αλλάζει τη λογική των δεδομένων). */
   segmentsDataSource: SegmentsDataSource;
   onExportCustomers?: (fmt: 'xlsx' | 'csv') => void;
   onExportActionPack?: (fmt: 'xlsx' | 'csv') => void;
@@ -1096,7 +1107,6 @@ function isGenericCatalogLabel(name: string): boolean {
 function SegmentDetail({
   segment,
   movement,
-  hasImportedSegments,
   catalogEnriching,
   segmentsDataSource,
   onExportCustomers,
@@ -1105,19 +1115,14 @@ function SegmentDetail({
   type CatalogDim = 'brand' | 'category' | 'subcategory' | 'sku';
   const [catalogDim, setCatalogDim] = useState<CatalogDim>('category');
 
-  const allowConsumptionDemo = segmentsDataSource !== 'ecommerce';
-
   const behavioral = segment.behavioral;
   const hasCatalogRollups = behavioral?.catalog_match != null;
   const heuristicCats = behavioral?.category_affinity ?? [];
   const catalogCats = behavioral?.category_affinity_catalog ?? [];
   const fromComputedOrders = heuristicCats.length > 0 || hasCatalogRollups;
 
-  const mockRow = allowConsumptionDemo && hasImportedSegments ? segmentCategoryMatrix[segment.id] : undefined;
-  const mockCategories = mockRow?.categories?.length ? mockRow.categories : [];
-
   const affinityForChart = (): CategoryAffinity[] => {
-    if (!fromComputedOrders) return allowConsumptionDemo ? mockCategories : [];
+    if (!fromComputedOrders) return [];
     if (!hasCatalogRollups) return heuristicCats;
     switch (catalogDim) {
       case 'brand':
@@ -1153,19 +1158,10 @@ function SegmentDetail({
   const chartHeight = Math.min(420, Math.max(220, 48 + chartRows.length * 36));
   const cm = behavioral?.catalog_match;
 
-  const mockBrands = allowConsumptionDemo && !fromComputedOrders && mockRow?.brands?.length ? mockRow.brands : [];
   const brandAff = (behavioral?.brand_affinity ?? []).filter((row) => !isGenericCatalogLabel(row.name));
   const subAff = (behavioral?.subcategory_affinity ?? []).filter((row) => !isGenericCatalogLabel(row.name));
-  const priceSens =
-    behavioral?.price_sensitivity ??
-    (allowConsumptionDemo ? mockRow?.price_sensitivity : undefined) ??
-    'medium';
-  const channelPills =
-    behavioral?.preferred_channels?.length
-      ? behavioral.preferred_channels
-      : allowConsumptionDemo && mockRow?.preferred_channels?.length
-        ? mockRow.preferred_channels
-        : [];
+  const priceSens = behavioral?.price_sensitivity ?? null;
+  const channelPills = behavioral?.preferred_channels?.length ? behavioral.preferred_channels : [];
 
   const dimLabel: Record<CatalogDim, string> = {
     brand: 'Brands',
@@ -1331,12 +1327,6 @@ function SegmentDetail({
               <p className="text-xs text-[#6B7280] leading-relaxed">
                 Δεν εντοπίστηκε brand στο catalog για τις γραμμές του segment (ή όλα ως «Λοιπά»).
               </p>
-            ) : mockBrands.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
-                {mockBrands.map((brand) => (
-                  <Badge key={brand} variant="default">{brand}</Badge>
-                ))}
-              </div>
             ) : (
               <p className="text-xs text-[#4A4A4A]">Δεν υπάρχουν δεδομένα</p>
             )}
@@ -1361,15 +1351,19 @@ function SegmentDetail({
 
           <div className="p-4 bg-[#F5F5F5] rounded-lg">
             <h5 className="text-sm font-medium text-[#1A1A1A] mb-2">Ευαισθησία τιμής</h5>
-            <Badge
-              variant={
-                priceSens === 'low' ? 'success' :
-                priceSens === 'medium' ? 'warning' : 'danger'
-              }
-              size="md"
-            >
-              {priceSens.toUpperCase()}
-            </Badge>
+            {priceSens ? (
+              <Badge
+                variant={
+                  priceSens === 'low' ? 'success' :
+                  priceSens === 'medium' ? 'warning' : 'danger'
+                }
+                size="md"
+              >
+                {priceSens.toUpperCase()}
+              </Badge>
+            ) : (
+              <p className="text-xs text-[#4A4A4A]">Δεν υπάρχουν δεδομένα</p>
+            )}
           </div>
 
           <div className="p-4 bg-[#F5F5F5] rounded-lg">

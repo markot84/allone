@@ -1,10 +1,14 @@
 {
-  "version": "0.726.39",
-  "previousVersion": "0.726.38",
-  "commitHash": "a340aac",
+  "version": "0.726.42",
+  "previousVersion": "0.726.41",
+  "commitHash": "98ce650",
   "branch": "main",
-  "buildDate": "2026-05-03T19:56:41.676Z",
+  "buildDate": "2026-05-03T20:14:33.526Z",
   "commits": [
+    {
+      "hash": "98ce650",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "a340aac",
       "message": "chore: full deploy"
@@ -59,10 +63,6 @@
     },
     {
       "hash": "bbe3499",
-      "message": "rfm: cache order history and separate category insights"
-    },
-    {
-      "hash": "ff0cb17",
       "message": "rfm: cache order history and separate category insights"
     }
   ],
