@@ -224,7 +224,7 @@ export function SalesChannelRulesEditor() {
           <div className="flex items-center gap-1.5">
             <h3 className="text-base font-semibold text-[var(--nts-charcoal)]">Sales Channel Rules</h3>
             <Tooltip
-              content="Κανόνες για να εξαιρεθούν παραγγελίες από τον τζίρο (π.χ. ενδοομιλικές B2B, Skroutz marketplace). Όταν ένα order ταιριάζει με κάποιο pattern, classified-εται στο αντίστοιχο κανάλι. Τα non-direct_eshop κανάλια εξαιρούνται από το «Σύνολο Εσόδων»."
+              content="Κανόνες εξαίρεσης από τον τζίρο (ενδοομιλικά, Skroutz κ.λπ.). Στο e-shop ταιριάζουν στα πεδία παραγγελίας. Με Πηγή Εσόδων = ERP (Megaventory): Order Name → αριθμός εγγράφου, Customer Email → όνομα πελάτη Megaventory, Payment Method → τύπος εγγράφου. Με SoftOne SALDOC χρησιμοποιούνται τα αντίστοιχα διαθέσιμα πεδία παραστατικού."
               size={13}
             />
           </div>

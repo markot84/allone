@@ -1,8 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Card, Button, useToast, Tooltip } from '../common';
 import { useBrand } from '../../hooks/useBrand';
 import { FirestoreService } from '../../services/firestore';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Brand } from '../../types';
 
 type Mode = NonNullable<Brand['revenueSourceMode']>;
@@ -11,44 +11,70 @@ interface ModeOption {
   id: Mode;
   label: string;
   description: string;
-  available: boolean;
+  /** Μήνυμα όταν η επιλογή είναι ανενεργή (π.χ. λείπει σύνδεση ERP). */
+  disabledReason?: string | null;
 }
 
-const OPTIONS: ModeOption[] = [
-  {
-    id: 'eshop_classified',
-    label: 'E-shop με ταξινόμηση καναλιών',
-    description:
-      'Default. Μετράει μόνο παραγγελίες classified ως «Direct e-shop» μέσω Sales Channel Rules. ' +
-      'Εξαιρεί αυτόματα Skroutz, ενδοομιλικές, B2B wholesale κ.λπ. (αρκεί να έχουν δηλωθεί rules).',
-    available: true,
-  },
-  {
-    id: 'eshop_all',
-    label: 'E-shop χωρίς φιλτράρισμα',
-    description:
-      'Μετράει όλες τις non-cancelled παραγγελίες από τους e-shop connectors, χωρίς να σέβεται sales ' +
-      'channel rules. Κατάλληλο για brands χωρίς marketplaces ή intercompany πωλήσεις.',
-    available: true,
-  },
-  {
-    id: 'erp',
-    label: 'ERP (Phase 2)',
-    description:
-      'Τραβάει τον συνολικό τζίρο από το ERP (Megaventory / SoftOne / Epsilon Net / Entersoft). ' +
-      'Περιλαμβάνει φυσικά καταστήματα, B2B και offline κανάλια. Διαθέσιμο σε επόμενο iteration.',
-    available: false,
-  },
-];
+function resolveConnectorErpAvailable(conn: Record<string, unknown> | null): boolean {
+  if (!conn) return false;
+  const mv = conn.megaventory as Record<string, unknown> | undefined;
+  if (mv?.connected) return true;
+  const s1 = conn.softone as Record<string, unknown> | undefined;
+  return Boolean(s1?.connected === true && s1?.syncSalesDocs === true);
+}
 
 export function RevenueSourceSettings() {
   const { currentBrand, refreshBrands } = useBrand();
   const queryClient = useQueryClient();
   const toast = useToast();
 
+  const brandId = currentBrand?.id ?? null;
+
+  const { data: connectorsDoc } = useQuery({
+    queryKey: ['connectorsForRevenueSource', brandId],
+    queryFn: () =>
+      brandId ? FirestoreService.getDocument<Record<string, unknown>>('connectors', brandId) : Promise.resolve(null),
+    enabled: Boolean(brandId),
+    staleTime: 60_000,
+  });
+
+  const erpAvailable = resolveConnectorErpAvailable(connectorsDoc ?? null);
+
   const initialMode = (currentBrand?.revenueSourceMode || 'eshop_classified') as Mode;
   const [selected, setSelected] = useState<Mode>(initialMode);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setSelected((currentBrand?.revenueSourceMode || 'eshop_classified') as Mode);
+  }, [currentBrand?.id, currentBrand?.revenueSourceMode]);
+
+  const options = useMemo((): ModeOption[] => {
+    return [
+      {
+        id: 'eshop_classified',
+        label: 'E-shop με ταξινόμηση καναλιών',
+        description:
+          'Default. Μετράει μόνο παραγγελίες classified ως «Direct e-shop» μέσω Sales Channel Rules. ' +
+          'Εξαιρεί Skroutz, ενδοομιλικές, B2B wholesale κ.λπ. (με τους κανόνες που έχεις ορίσει).',
+      },
+      {
+        id: 'eshop_all',
+        label: 'E-shop χωρίς φιλτράρισμα',
+        description:
+          'Μετράει όλες τις non-cancelled παραγγελίες από τους e-shop connectors, χωρίς sales channel rules. ' +
+          'Για brands χωρίς marketplace/intercompany στο ηλεκτρονικό κατάστημα.',
+      },
+      {
+        id: 'erp',
+        label: 'ERP (Megaventory τιμολόγια / SoftOne SALDOC)',
+        description:
+          'Ο τζίρος KPI προέρχεται από τα επίσημα παραστατικά: προτεραιότητα Megaventory Sales Invoices ' +
+          '(megaventory_invoices), αλλιώς SoftOne πωλήσεις αν είναι ενεργό το sync SALDOC. ' +
+          'Καλύπτει και καταστήματα/B2B/offline που δεν φαίνονται στο eshop. Μετά το sync ERP γίνεται ενημέρωση του summary.',
+        disabledReason: erpAvailable ? null : 'Σύνδεσε Megaventory ή SoftOne με ενεργό συγχρονισμό SALDOC.',
+      },
+    ];
+  }, [erpAvailable]);
 
   const dirty = useMemo(() => selected !== initialMode, [selected, initialMode]);
 
@@ -58,10 +84,13 @@ export function RevenueSourceSettings() {
     try {
       await FirestoreService.updateDocument('brands', currentBrand.id, { revenueSourceMode: selected });
       await refreshBrands();
-      // Force re-aggregation of ecom data on the client (raw orders re-classified).
       queryClient.invalidateQueries({ queryKey: ['ecommerceOrdersRaw', currentBrand.id] });
       queryClient.invalidateQueries({ queryKey: ['ecommerce_summary', currentBrand.id] });
-      toast.success('Αποθηκεύτηκε. Τα νούμερα θα ανανεωθούν στις επόμενες σελίδες.');
+      toast.success(
+        selected === 'erp'
+          ? 'Αποθηκεύτηκε πηγή ERP. Τρέξε Sync στο Megaventory ή στο SoftOne (ή περίμενε το νυχτερινό ERP κύμα) για να γραφτεί το ecommerce_summary.'
+          : 'Αποθηκεύτηκε. Τα νούμερα θα ανανεωθούν μετά το επόμενο aggregation ή χειροκίνητο e-shop sync.'
+      );
     } catch (err) {
       console.error('[RevenueSourceSettings] save failed:', err);
       toast.error('Αποτυχία αποθήκευσης. Δοκιμάστε ξανά.');
@@ -79,7 +108,7 @@ export function RevenueSourceSettings() {
           <div className="flex items-center gap-1.5">
             <h3 className="text-base font-semibold text-[var(--nts-charcoal)]">Πηγή Εσόδων (Revenue Source)</h3>
             <Tooltip
-              content="Ορίζει από πού αντλεί το «Σύνολο Εσόδων» στο Dashboard και στα ROI KPIs. Διαφορετικά brands έχουν διαφορετικές απαιτήσεις (online μόνο vs. ERP-based)."
+              content="Ορίζει από πού αντλεί το «Σύνολο Εσόδων» στο Dashboard και τα ecommerce KPIs που στηρίζονται στο ecommerce_summary. Το ERP mode χρησιμοποιεί τιμολόγια Megaventory ή SALDOC SoftOne εφόσον είναι συνδεδεμένα."
               size={13}
             />
           </div>
@@ -90,9 +119,9 @@ export function RevenueSourceSettings() {
       </div>
 
       <div className="space-y-2">
-        {OPTIONS.map((opt) => {
+        {options.map((opt) => {
           const isSelected = selected === opt.id;
-          const disabled = !opt.available;
+          const disabled = Boolean(opt.disabledReason);
           return (
             <button
               key={opt.id}
@@ -123,13 +152,19 @@ export function RevenueSourceSettings() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-[13px] font-semibold text-[var(--nts-charcoal)]">{opt.label}</span>
-                    {!opt.available && (
-                      <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-[var(--nts-light-gray)] text-[var(--nts-medium-gray)] border border-[var(--nts-border-gray)]">
-                        Coming soon
+                    {disabled && opt.disabledReason && (
+                      <span
+                        className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-[var(--nts-light-gray)] text-[var(--nts-medium-gray)] border border-[var(--nts-border-gray)]"
+                        title={opt.disabledReason}
+                      >
+                        Απαιτείται σύνδεση ERP
                       </span>
                     )}
                   </div>
                   <p className="text-[12px] text-[var(--nts-medium-gray)] leading-relaxed mt-0.5">{opt.description}</p>
+                  {disabled && opt.disabledReason && (
+                    <p className="text-[11px] text-[var(--nts-accent)] mt-1">{opt.disabledReason}</p>
+                  )}
                 </div>
               </div>
             </button>

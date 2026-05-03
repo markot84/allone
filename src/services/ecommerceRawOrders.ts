@@ -296,6 +296,98 @@ async function fetchBrandRevenueSourceMode(brandId: string): Promise<'eshop_clas
   }
 }
 
+/** ERP τιμολόγια: το «Closed» κ.λπ. δεν πρέπει να περνάει ως excluded status του e-shop. */
+function sanitizeErpStatusForClassification(raw: string): string {
+  const st = String(raw || '').toLowerCase();
+  if (st.includes('cancel') || st.includes('void') || st.includes('ακυρ') || st.includes('reject')) {
+    return 'cancelled';
+  }
+  return 'completed';
+}
+
+function softOneCustomerTextFromRow(row: Record<string, unknown>): string {
+  const keys = ['CUSTOMER.NAME', 'TRDR.NAME', 'SALDOC.TRDRNAME', 'TRDRNAME', 'CUSTOMER.CODE', 'TRDR.CODE'];
+  for (const k of keys) {
+    const v = row[k];
+    if (v != null && String(v).trim()) return String(v).trim();
+  }
+  return '';
+}
+
+function softOneDocDay(row: Record<string, unknown>): string {
+  const raw = String(row.documentDate ?? row['SALDOC.TRNDATE'] ?? '').trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
+  if (/^\d{8}$/.test(raw)) return `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`;
+  return '';
+}
+
+function softOneRowNet(row: Record<string, unknown>): number {
+  const n = (v: unknown) => {
+    if (typeof v === 'number' && Number.isFinite(v)) return v;
+    const x = parseFloat(String(v ?? '0'));
+    return Number.isFinite(x) ? x : 0;
+  };
+  const keys = [
+    'SALDOC.NETAMOUNT',
+    'SALDOC.NETVALUE',
+    'SALDOC.NETVAL',
+    'NETVALUE',
+    'TOTALNETVALUE',
+    'SUMNETVALUE',
+    'SALDOC.TOTALNET',
+    'TOTALNET',
+  ];
+  for (const k of keys) {
+    const v = n(row[k]);
+    if (v !== 0) return Math.abs(v);
+  }
+  const gross = n(row['SALDOC.TOTALAMOUNT'] ?? row['TOTALAMOUNT'] ?? row['SALDOC.TOTAL'] ?? row['TOTAL']);
+  const vat = n(row['SALDOC.VATAMOUNT'] ?? row['VATAMOUNT']);
+  if (gross > 0 && vat >= 0) return Math.max(0, gross - vat);
+  return Math.abs(n(row['SALDOC.TOTALNET']));
+}
+
+function normalizeMegaventoryInvoiceRawOrder(row: Record<string, unknown>): EcommerceRawOrder {
+  const net =
+    typeof row.netAmount === 'number' && Number.isFinite(row.netAmount)
+      ? row.netAmount
+      : parseFloat(String(row.netAmount ?? '0')) || 0;
+  const day = String(row.date ?? '').slice(0, 10);
+  return {
+    orderId: String(row.documentId ?? ''),
+    orderName: String(row.documentNo ?? row.documentId ?? ''),
+    platform: 'megaventory_invoices',
+    status: String(row.status ?? ''),
+    total: Math.max(0, net),
+    currency: String(row.currency ?? 'EUR'),
+    createdAt: day ? `${day}T12:00:00.000Z` : '',
+    lineItems: [],
+    paymentMethod: String(row.documentType ?? row.documentTypeDescription ?? ''),
+    shippingMethod: '',
+    customerEmail: String(row.clientName ?? ''),
+  };
+}
+
+function normalizeSoftOneSalesRawOrder(row: Record<string, unknown>): EcommerceRawOrder {
+  const net = softOneRowNet(row);
+  const day = softOneDocDay(row);
+  return {
+    orderId: String(row['SALDOC.FINDOC'] ?? ''),
+    orderName: String(row['SALDOC.SERIAL'] ?? row['SALDOC.FINCODE'] ?? row['SALDOC.FINDOC'] ?? ''),
+    platform: 'softone_sales_documents',
+    status: String(row['SALDOC.STATUS'] ?? row.STATUS ?? ''),
+    total: Math.max(0, net),
+    currency: String(row['SALDOC.CURRENCY'] ?? 'EUR'),
+    createdAt: day ? `${day}T12:00:00.000Z` : '',
+    lineItems: [],
+    paymentMethod: String(
+      row['SALDOC.SOSOURCE'] ?? row['SALDOC.PAYMENT'] ?? row['SALDOC.FPRMS'] ?? row['SALDOC.COMMENTS'] ?? ''
+    ),
+    shippingMethod: '',
+    customerEmail: softOneCustomerTextFromRow(row),
+  };
+}
+
 export async function fetchAllEcommerceOrders(
   brandId: string,
   platforms: string[],
@@ -306,8 +398,69 @@ export async function fetchAllEcommerceOrders(
     revenueMode?: 'brand' | 'classified' | 'all';
   } = {}
 ): Promise<EcommerceRawOrder[]> {
-  const [mode, allRules, results] = await Promise.all([
-    fetchBrandRevenueSourceMode(brandId),
+  const mode = await fetchBrandRevenueSourceMode(brandId);
+
+  if (mode === 'erp') {
+    const conn = await FirestoreService.getDocument<Record<string, unknown>>('connectors', brandId);
+    const mv = conn?.megaventory as Record<string, unknown> | undefined;
+    const s1 = conn?.softone as Record<string, unknown> | undefined;
+    const backend = mv?.connected
+      ? ('megaventory_invoices' as const)
+      : s1?.connected === true && s1?.syncSalesDocs === true
+        ? ('softone_sales_documents' as const)
+        : null;
+
+    if (backend) {
+      const rangedLoadOpts =
+        options.cacheFirst === true
+          ? ({ cacheFirst: true } as const)
+          : ({ cacheFirst: false, forceServer: true } as const);
+      const coll =
+        backend === 'megaventory_invoices' ? 'megaventory_invoices' : 'softone_sales_documents';
+      const [rows, allRules] = await Promise.all([
+        FirestoreService.getDocuments<Record<string, unknown>>(coll, [], brandId, rangedLoadOpts),
+        fetchSalesChannelRules(brandId),
+      ]);
+
+      const filtered = rows.filter((row) => {
+        const day =
+          backend === 'megaventory_invoices'
+            ? String(row.date ?? '').slice(0, 10)
+            : softOneDocDay(row);
+        if (!day && (options.sinceDate || options.untilDate)) return false;
+        if (!day) return true;
+        if (options.sinceDate && day < options.sinceDate) return false;
+        if (options.untilDate && day > options.untilDate) return false;
+        return true;
+      });
+
+      const orders =
+        backend === 'megaventory_invoices'
+          ? filtered.map(normalizeMegaventoryInvoiceRawOrder).filter((o) => o.total > 0)
+          : filtered.map(normalizeSoftOneSalesRawOrder).filter((o) => o.total > 0);
+
+      const requestedMode = options.revenueMode || 'brand';
+      const rules = requestedMode === 'all' ? [] : allRules;
+
+      return orders.map((order) => ({
+        ...order,
+        ...classifyEcommerceOrder(
+          {
+            orderId: order.orderId,
+            orderName: order.orderName,
+            platform: order.platform,
+            status: sanitizeErpStatusForClassification(order.status),
+            paymentMethod: order.paymentMethod,
+            shippingMethod: order.shippingMethod,
+            customerEmail: order.customerEmail,
+          },
+          rules
+        ),
+      }));
+    }
+  }
+
+  const [allRules, results] = await Promise.all([
     fetchSalesChannelRules(brandId),
     Promise.all(
       platforms.map(async (platform) => {

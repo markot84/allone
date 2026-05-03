@@ -1269,13 +1269,16 @@ export const connectorSync = onRequest(
         return;
       }
 
-      // Refresh e-commerce summary after any e-commerce platform sync
-      if (['shopify', 'woocommerce', 'opencart', 'magento'].includes(provider)) {
+      // ecommerce_summary: μετά από e-shop connectors ή ERP παραστατικά (για revenueSourceMode = erp).
+      if (['shopify', 'woocommerce', 'opencart', 'magento', 'megaventory', 'softone'].includes(provider)) {
         try {
           await computeEcommerceSummary(brandId);
         } catch (e) {
           logger.warn(`[connectorSync] ecommerce summary refresh failed for ${brandId}:`, e);
         }
+      }
+
+      if (['shopify', 'woocommerce', 'opencart', 'magento'].includes(provider)) {
         // Stock movement tracking (universal — δουλεύει και για non-connector brands)
         try {
           await refreshStockMovement(brandId);
@@ -1708,6 +1711,14 @@ async function executeBrandNightlyWave(
   }
 
   await Promise.all(phase.tasks);
+
+  if (wave === 'erp') {
+    try {
+      await computeEcommerceSummary(brandId);
+    } catch (err) {
+      logger.error(`[ScheduledSync/erp] ecommerce_summary refresh failed for ${brandId}:`, err);
+    }
+  }
 
   if (wave === 'ecommerce') {
     const hasEcommerce =

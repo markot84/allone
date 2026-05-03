@@ -260,6 +260,117 @@ async function readPlatformOrders(
   return rows;
 }
 
+type ErpRevenueBackendId = 'megaventory_invoices' | 'softone_sales_documents';
+
+function resolveErpRevenueBackend(connData: Record<string, unknown>): ErpRevenueBackendId | null {
+  const mv = connData.megaventory as Record<string, unknown> | undefined;
+  if (mv?.connected) return 'megaventory_invoices';
+  const s1 = connData.softone as Record<string, unknown> | undefined;
+  if (s1?.connected === true && s1?.syncSalesDocs === true) return 'softone_sales_documents';
+  return null;
+}
+
+/**
+ * Τα ERP τιμολόγια έχουν status π.χ. «Closed» που στο e-shop θα εξαιρούνταν· για τους κανόνες
+ * καναλιών χρησιμοποιούμε ουδέτερο status και αφήνουμε τα patterns να αποφασίζουν.
+ */
+function sanitizeStatusForErpClassification(raw: string): string {
+  const st = String(raw || '').toLowerCase();
+  if (st.includes('cancel') || st.includes('void') || st.includes('ακυρ') || st.includes('reject')) {
+    return 'cancelled';
+  }
+  return 'completed';
+}
+
+function softOneCustomerText(d: Record<string, unknown>): string {
+  const keys = ['CUSTOMER.NAME', 'TRDR.NAME', 'SALDOC.TRDRNAME', 'TRDRNAME', 'CUSTOMER.CODE', 'TRDR.CODE'];
+  for (const k of keys) {
+    const v = d[k];
+    if (v != null && String(v).trim()) return String(v).trim();
+  }
+  return '';
+}
+
+function softOneSalesDocNetAmount(d: Record<string, unknown>): number {
+  const keys = [
+    'SALDOC.NETAMOUNT',
+    'SALDOC.NETVALUE',
+    'SALDOC.NETVAL',
+    'NETVALUE',
+    'TOTALNETVALUE',
+    'SUMNETVALUE',
+    'SALDOC.TOTALNET',
+    'TOTALNET',
+  ];
+  for (const k of keys) {
+    const v = parseNumeric(d[k]);
+    if (v !== 0) return Math.abs(v);
+  }
+  const gross = parseNumeric(d['SALDOC.TOTALAMOUNT'] ?? d['TOTALAMOUNT'] ?? d['SALDOC.TOTAL'] ?? d['TOTAL']);
+  const vat = parseNumeric(d['SALDOC.VATAMOUNT'] ?? d['VATAMOUNT']);
+  if (gross > 0 && vat >= 0) return Math.max(0, gross - vat);
+  return Math.abs(parseNumeric(d['SALDOC.TOTALNET']));
+}
+
+async function readMegaventoryInvoiceOrderRows(db: Firestore, brandId: string): Promise<OrderRow[]> {
+  const snap = await db.collection('megaventory_invoices').where('brandId', '==', brandId).get();
+  const rows: OrderRow[] = [];
+  for (const doc of snap.docs) {
+    const d = doc.data();
+    const net = parseNumeric(d.netAmount);
+    if (!(net > 0)) continue;
+    const st = String(d.status || '');
+    if (/(cancel|void|ακυρ|reject)/i.test(st)) continue;
+    const day = typeof d.date === 'string' ? d.date.slice(0, 10) : '';
+    rows.push({
+      totalPrice: net,
+      createdAt: day ? `${day}T12:00:00.000Z` : '',
+      platform: 'megaventory_invoices',
+      status: st,
+      orderId: String(d.documentId ?? doc.id),
+      orderName: String(d.documentNo ?? d.documentId ?? ''),
+      currency: String(d.currency || 'EUR'),
+      paymentMethod: String(d.documentType ?? d.documentTypeDescription ?? ''),
+      shippingMethod: '',
+      customerEmail: String(d.clientName ?? ''),
+      lineItems: [],
+    });
+  }
+  return rows;
+}
+
+async function readSoftOneSalesOrderRows(db: Firestore, brandId: string): Promise<OrderRow[]> {
+  const snap = await db.collection('softone_sales_documents').where('brandId', '==', brandId).get();
+  const rows: OrderRow[] = [];
+  for (const doc of snap.docs) {
+    const d = doc.data();
+    const net = softOneSalesDocNetAmount(d);
+    if (!(net > 0)) continue;
+    const createdRaw = String(d.documentDate ?? d['SALDOC.TRNDATE'] ?? '').trim();
+    let day = '';
+    if (/^\d{4}-\d{2}-\d{2}/.test(createdRaw)) day = createdRaw.slice(0, 10);
+    else if (/^\d{8}$/.test(createdRaw)) {
+      day = `${createdRaw.slice(0, 4)}-${createdRaw.slice(4, 6)}-${createdRaw.slice(6, 8)}`;
+    }
+    rows.push({
+      totalPrice: net,
+      createdAt: day ? `${day}T12:00:00.000Z` : '',
+      platform: 'softone_sales_documents',
+      status: String(d['SALDOC.STATUS'] ?? d.STATUS ?? ''),
+      orderId: String(d['SALDOC.FINDOC'] ?? d.FINDOC ?? doc.id),
+      orderName: String(d['SALDOC.SERIAL'] ?? d['SALDOC.FINCODE'] ?? d.FINDOC ?? ''),
+      currency: String(d['SALDOC.CURRENCY'] ?? 'EUR'),
+      paymentMethod: String(
+        d['SALDOC.SOSOURCE'] ?? d['SALDOC.PAYMENT'] ?? d['SALDOC.FPRMS'] ?? d['SALDOC.COMMENTS'] ?? ''
+      ),
+      shippingMethod: '',
+      customerEmail: softOneCustomerText(d),
+      lineItems: [],
+    });
+  }
+  return rows;
+}
+
 /**
  * Compute and write the e-commerce summary for a brand.
  * Call after any e-commerce connector sync.
@@ -274,10 +385,6 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
   const connData = connDoc.data() || {};
   const brandData = brandDoc.data() || {};
 
-  /**
-   * `revenueSourceMode` καθορίζει αν το aggregator σέβεται τα sales channel rules ή μετράει
-   * όλες τις παραγγελίες ωμά. ERP mode pending — fallback στο classified.
-   */
   const revenueSourceMode: 'eshop_classified' | 'eshop_all' | 'erp' =
     brandData.revenueSourceMode === 'eshop_all' ||
     brandData.revenueSourceMode === 'erp' ||
@@ -285,38 +392,59 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
       ? brandData.revenueSourceMode
       : 'eshop_classified';
 
-  const connectedPlatforms = ECOMMERCE_PROVIDERS.filter(
-    (p) => connData[p]?.connected
+  const connPlain = connData as Record<string, unknown>;
+  const stockPlatforms = ECOMMERCE_PROVIDERS.filter((p) =>
+    Boolean((connPlain[p] as Record<string, unknown> | undefined)?.connected)
   );
+  const erpBackend =
+    revenueSourceMode === 'erp' ? resolveErpRevenueBackend(connPlain) : null;
+
+  let rawOrders: OrderRow[] = [];
+  let revenueSummaryPlatforms: string[] = [];
+
+  if (revenueSourceMode === 'erp' && erpBackend) {
+    rawOrders =
+      erpBackend === 'megaventory_invoices'
+        ? await readMegaventoryInvoiceOrderRows(db, brandId)
+        : await readSoftOneSalesOrderRows(db, brandId);
+    revenueSummaryPlatforms = [erpBackend];
+    logger.info(`[EcommerceAgg] ERP revenue for ${brandId}: backend=${erpBackend} rows=${rawOrders.length}`);
+  } else {
+    if (revenueSourceMode === 'erp' && !erpBackend) {
+      logger.warn(
+        `[EcommerceAgg] revenueSourceMode=erp χωρίς Megaventory ή SoftOne SALDOC — fallback σε e-shop aggregation για ${brandId}`
+      );
+    }
+    if (stockPlatforms.length === 0) {
+      logger.info(`[EcommerceAgg] No connected e-commerce platforms for brand ${brandId}`);
+      return;
+    }
+    rawOrders = (
+      await Promise.all(stockPlatforms.map((p) => readPlatformOrders(db, brandId, p)))
+    ).flat();
+    revenueSummaryPlatforms = [...stockPlatforms];
+  }
+
   const salesChannelRules =
     revenueSourceMode === 'eshop_all'
       ? []
       : normalizeSalesChannelRules([
-          ...arrayOrEmpty(connData.ecommerceSalesChannelRules),
-          ...arrayOrEmpty(connData.salesChannelRules),
-          ...arrayOrEmpty(connData.magento?.salesChannelRules),
+          ...arrayOrEmpty(connPlain.ecommerceSalesChannelRules),
+          ...arrayOrEmpty(connPlain.salesChannelRules),
+          ...arrayOrEmpty((connPlain.magento as Record<string, unknown> | undefined)?.salesChannelRules),
         ]);
 
-  if (connectedPlatforms.length === 0) {
-    logger.info(`[EcommerceAgg] No connected e-commerce platforms for brand ${brandId}`);
-    return;
-  }
-
-  // Read orders from all connected platforms in parallel
-  const allOrderArrays = await Promise.all(
-    connectedPlatforms.map((p) => readPlatformOrders(db, brandId, p))
-  );
-  const rawOrders = allOrderArrays.flat();
-
-  // Demo cleanup: αφαίρεσε παραγγελίες που είναι 100% demo items
-  // και σκέπασε το totalPrice με καθαρό (non-demo) revenue.
-  // Τα cancelled μένουν ορατά στα recent orders, αλλά δεν μπαίνουν στα revenue KPIs.
+  // Demo cleanup + classification (ERP: ίδιοι κανόνες όπως eshop, με mapping πεδίων + safe status)
   const visibleOrders: OrderRow[] = [];
   const revenueOrders: OrderRow[] = [];
   for (const o of rawOrders) {
     const { revenue, isAllDemo } = nonDemoRevenue(o);
     if (isAllDemo) continue;
-    const classification = classifyEcommerceOrder(o, salesChannelRules);
+    const orderForClassify: OrderRow =
+      erpBackend === 'megaventory_invoices' || erpBackend === 'softone_sales_documents'
+        ? { ...o, status: sanitizeStatusForErpClassification(o.status) }
+        : o;
+    const classification = classifyEcommerceOrder(orderForClassify, salesChannelRules);
     const normalizedOrder = { ...o, totalPrice: revenue, ...classification };
     visibleOrders.push(normalizedOrder);
     if (classification.revenueIncluded) {
@@ -398,7 +526,7 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
   // Stock: από τα product docs κάθε platform.
   // Sold:  sum qty από όλα τα line items (ίδιο 90-day window με τα orders).
   const stockArrays = await Promise.all(
-    connectedPlatforms.map((p) => readPlatformStockBySku(db, brandId, p))
+    stockPlatforms.map((p) => readPlatformStockBySku(db, brandId, p))
   );
   const stockBySku = new Map<string, number>();
   for (const m of stockArrays) {
@@ -515,7 +643,7 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
     topProducts,
     ordersByDay,
     recentOrders,
-    connectedPlatforms,
+    connectedPlatforms: revenueSummaryPlatforms,
     // skuStats serialized — αποφυγή Firestore index limits για μεγάλα catalogs.
     skuStatsJson,
     skuStatsCount: allSkus.size,
@@ -531,6 +659,6 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
     // ignore
   }
   logger.info(
-    `[EcommerceAgg] Summary for ${brandId}: ${orderCount} orders, €${totalRevenue.toFixed(2)} revenue, ${connectedPlatforms.length} platforms`
+    `[EcommerceAgg] Summary for ${brandId}: ${orderCount} orders, €${totalRevenue.toFixed(2)} revenue, sources=${revenueSummaryPlatforms.join(',')}`
   );
 }

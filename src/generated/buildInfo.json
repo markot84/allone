@@ -1,10 +1,14 @@
 {
-  "version": "0.726.22",
-  "previousVersion": "0.726.21",
-  "commitHash": "acb11f9",
+  "version": "0.726.26",
+  "previousVersion": "0.726.25",
+  "commitHash": "b4960fb",
   "branch": "main",
-  "buildDate": "2026-05-03T06:28:57.249Z",
+  "buildDate": "2026-05-03T06:50:22.684Z",
   "commits": [
+    {
+      "hash": "b4960fb",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "acb11f9",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "c4fb945",
       "message": "rfm: make segment detail the primary consumption view"
-    },
-    {
-      "hash": "b503426",
-      "message": "rfm: keep guests out of customer counts and use rolling 12-month RFM"
     }
   ],
   "changes": [
