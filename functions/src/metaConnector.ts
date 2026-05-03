@@ -541,7 +541,6 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
       // One API call per calendar month (keeps responses bounded; avoids long sync timeouts).
       // time_increment=1 returns one row per campaign per day; use API date_start (do not override).
       const allRows: any[] = [];
-      let usedFallback = false;
       const monthRanges: Array<{ since: string; until: string }> = [];
       for (const w of syncWindows) {
         monthRanges.push(...generateMonthRanges(w.since, w.until));
@@ -777,7 +776,6 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
             fallbackUrl = fallbackData.paging?.next || null;
             pageCount++;
           }
-          usedFallback = allRows.length > 0;
           logger.info(`[Meta] Fallback fetched ${allRows.length} rows for ${actAccountId}`);
         } catch (e) {
           logger.warn(`[Meta] Fallback call failed for ${actAccountId}: ${e}`);
@@ -917,8 +915,8 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
           existing.metaWindows[win].value += vals.value;
         }
 
-        // One entry per calendar day per campaign (time_increment=1).
-        if (!usedFallback) {
+        // One entry per calendar day per campaign. Fallback insights (χωρίς time_increment) εξακολουθούν να έχουν date_start — χωρίς daily ο χάρτης ROAS καταλήγει σε τζίρο μόνο σε μία μέρα + μηδενικά αλλού.
+        if (rowDate && /^\d{4}-\d{2}-\d{2}$/.test(rowDate)) {
           existing.dailyMetrics[rowDate] = {
             impressions: rowImpressions,
             clicks: rowClicks,

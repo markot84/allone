@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import type { Campaign } from '../types';
 import {
   bucketOverlapFraction,
+  getCampaignDailyAttributedValueInPeriod,
   getEffectiveConversionValue,
   getEffectiveConversions,
   getMetaPrimaryPurchaseFromActions,
@@ -137,5 +138,24 @@ describe('metaUsesLegacyMonthBuckets', () => {
       },
     };
     expect(metaUsesLegacyMonthBuckets(c)).toBe(false);
+  });
+});
+
+describe('getCampaignDailyAttributedValueInPeriod (ημερήσιο ROAS chart)', () => {
+  it('Meta ημέρα με purchase_* = 0 αλλά conversion_value > 0 → χρησιμοποιεί conversion_value', () => {
+    const c = {
+      channel: 'Meta',
+      dailyMetrics: {
+        '2026-03-07': {
+          amount_spent: 50,
+          conversions: 2,
+          conversion_value: 200,
+          purchase_conversions: 0,
+          purchase_conversion_value: 0,
+        },
+      },
+    } as unknown as Campaign;
+    const m = getCampaignDailyAttributedValueInPeriod(c, '2026-03-01', '2026-03-31');
+    expect(m.get('2026-03-07')).toBe(200);
   });
 });

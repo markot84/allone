@@ -1,10 +1,14 @@
 {
-  "version": "0.726.33",
-  "previousVersion": "0.726.32",
-  "commitHash": "42af962",
+  "version": "0.726.35",
+  "previousVersion": "0.726.34",
+  "commitHash": "b921fe2",
   "branch": "main",
-  "buildDate": "2026-05-03T15:21:40.220Z",
+  "buildDate": "2026-05-03T15:36:35.917Z",
   "commits": [
+    {
+      "hash": "b921fe2",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "42af962",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "4f01cea",
       "message": "rfm: clean segment consumption tooltip and chart ui"
-    },
-    {
-      "hash": "ed807fc",
-      "message": "fix(rfm): prevent selected segment update loop crash"
     }
   ],
   "changes": [
