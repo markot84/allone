@@ -429,16 +429,9 @@ export function MorningBriefing(props: MorningBriefingProps) {
               key="await-ecomm"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="rounded-xl border border-slate-100 bg-slate-50/80 px-4 py-5 text-[13px] leading-relaxed text-[var(--nts-medium-gray)]"
+              className="rounded-xl border border-slate-100 bg-slate-50/80 px-4 py-4 text-[13px] leading-relaxed text-[var(--nts-medium-gray)]"
             >
-              <p className="font-medium text-[var(--nts-charcoal)] mb-2">Τα KPI ενημερώνονται.</p>
-              <p>
-                Το sync στο cloud ενημερώνει συνήθως μόνο πρόσφατες μέρες· εδώ όμως η εφαρμογή φορτώνει από τη βάση{' '}
-                <strong className="text-[var(--nts-charcoal)]">ολόκληρο το ιστορικό παραγγελιών του brand</strong> για
-                δεύτερο υπολογισμό (πέρα από το σύντομο summary), ώστε τα γραφήματα και το briefing να ταιριάζουν με το
-                «Σύνολο Εσόδων». Αυτό δεν είναι το ίδιο με «μόνο χθες» — γι’ αυτό η αναμονή μεγαλώνει σε μεγάλα brands.
-                Όταν υπάρχει παλμός στη κάρτα εσόδων, το νούμερο ενδέχεται ακόμη να σταθεροποιείται.
-              </p>
+              <p className="text-[var(--nts-charcoal)]">Αναμονή για ενημέρωση των δεδομένων…</p>
             </motion.div>
           )}
           {!collapsed && !awaitingEcommMetrics && (

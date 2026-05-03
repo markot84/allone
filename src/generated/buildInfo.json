@@ -1,10 +1,14 @@
 {
-  "version": "0.726.31",
-  "previousVersion": "0.726.30",
-  "commitHash": "79ec876",
+  "version": "0.726.33",
+  "previousVersion": "0.726.32",
+  "commitHash": "42af962",
   "branch": "main",
-  "buildDate": "2026-05-03T12:09:47.156Z",
+  "buildDate": "2026-05-03T15:21:40.220Z",
   "commits": [
+    {
+      "hash": "42af962",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "79ec876",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "ed807fc",
       "message": "fix(rfm): prevent selected segment update loop crash"
-    },
-    {
-      "hash": "c7bb0ac",
-      "message": "rfm: soften selected segment highlight in donut charts"
     }
   ],
   "changes": [

@@ -12,11 +12,19 @@ import {
 import { monthlyRevenueFromDailyRecord } from '../utils/roiUtils';
 import { filterByBrandHistory, getBrandHistoryStartISO, passesBrandHistory } from '../utils/brandHistoryStart';
 
+export type EcommerceFullHistoryMode =
+  /** Φόρτωση όλων των παραγγελιών από Firestore — αργό, για σελίδες που χρειάζονται parity/detail. */
+  | 'full'
+  /** Μόνο server aggregate (`ecommerce_summary`) — γρήγορο Dashboard. */
+  | 'summary_only';
+
 /**
- * E-shop metrics από Firestore: μετά τη φόρτωση raw orders, τα ημερήσια/μηνιαία στοιχεία
- * καλύπτουν όλο το ιστορικό (όχι μόνο το server summary ~90 ημ.). Μέχρι να φορτώσουν, fallback στο summary.
+ * E-shop metrics από Firestore:
+ * - `full`: μετά τη φόρτωση raw orders, τα ημερήσια/μηνιαία συμπληρώνουν όλο το ιστορικό· μέχρι τότε fallback στο summary.
+ * - `summary_only`: χωρίς raw fetch — εμπιστεύεται το `ecommerce_summary` (υπολογισμός από τον aggregator στο sync).
  */
-export function useEcommerceFullHistoryMetrics() {
+export function useEcommerceFullHistoryMetrics(options?: { mode?: EcommerceFullHistoryMode }) {
+  const mode = options?.mode ?? 'full';
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
   const ecomm = useEcommerceSummary();
@@ -35,7 +43,7 @@ export function useEcommerceFullHistoryMetrics() {
             ...(historyCutoff ? { sinceDate: historyCutoff } : {}),
           })
         : Promise.resolve([]),
-    enabled: !!brandId && ecomm.connectedPlatforms.length > 0,
+    enabled: mode === 'full' && !!brandId && ecomm.connectedPlatforms.length > 0,
     /** Όχι «η χθεσινή μέρα μόνο»: το query κατεβάζει όλο το ιστορικό για επανυπολογισμό KPI — μεγάλο staleTime + cache πρώτα μειώνει επαναλαμβανόμενη αναμονή. */
     staleTime: 10 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
@@ -79,7 +87,7 @@ export function useEcommerceFullHistoryMetrics() {
         ordersByDay: ordersByDayClamped,
         monthlyRevenue: monthlyRevenueClamped,
         rawLoaded: false,
-        rawLoading: rawLoading || isFetching,
+        rawLoading: mode === 'full' && (rawLoading || isFetching),
         source: 'summary' as const,
         getTopPlatformInRange,
       };
@@ -108,5 +116,6 @@ export function useEcommerceFullHistoryMetrics() {
     getTopPlatformInRange,
     historyCutoff,
     currentBrand,
+    mode,
   ]);
 }
