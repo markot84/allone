@@ -128,7 +128,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   useAutomationRunner();
   const ga4 = useGA4Data();
   const ecomm = useEcommerceSummary();
-  const ecommHist = useEcommerceFullHistoryMetrics({ mode: 'summary_only' });
+  const ecommHist = useEcommerceFullHistoryMetrics({ mode: 'full' });
   const { alerts: automationAlerts } = useAutomationAlerts();
 
   const supplierTodMap = useMemo(() => {
@@ -245,7 +245,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     [ecommRevenueByDayRecord, periodDates.fromDate, periodDates.toDate]
   );
 
-  // Πραγματικός αριθμός παραγγελιών στην περίοδο — από `ecommerce_summary.ordersByDay` (aggregator στο sync).
+  // Παραγγελίες περιόδου: πρώτα από summary, μετά από raw aggregates όταν φορτώσουν (hybrid · ίδιο με τζίρο/AOV).
   const ordersInPeriod = useMemo(
     () =>
       ecommHist.ordersByDay
@@ -357,7 +357,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
 
   /**
    * Κύριο chart — μία σειρά τζίρου:
-   * - Με e-shop: ημερήσια έσοδα από `ecommerce_summary` (ίδια λογική classification με τον aggregator).
+   * - Με e-shop: hybrid — αρχικά `ecommerce_summary`, μετά αντικατάσταση από ημερήσια που υπολογίζονται από raw orders (parity με κανόνες καναλιών).
    * - Χωρίς e-shop: εκτίμηση organic + conversion value καμπανιών (ίδια λογική efficiency / attributed revenue).
    * Η απόδοση διαφημίσεων (δαπάνη vs conversion value) είναι στο ξεχωριστό block από κάτω.
    */

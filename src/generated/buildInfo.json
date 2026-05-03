@@ -1,10 +1,14 @@
 {
-  "version": "0.726.37",
-  "previousVersion": "0.726.36",
-  "commitHash": "36cca08",
+  "version": "0.726.39",
+  "previousVersion": "0.726.38",
+  "commitHash": "a340aac",
   "branch": "main",
-  "buildDate": "2026-05-03T19:29:33.048Z",
+  "buildDate": "2026-05-03T19:56:41.676Z",
   "commits": [
+    {
+      "hash": "a340aac",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "36cca08",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "ff0cb17",
       "message": "rfm: cache order history and separate category insights"
-    },
-    {
-      "hash": "8393eee",
-      "message": "rfm: enrich catalog category alignment for segment consumption"
     }
   ],
   "changes": [
