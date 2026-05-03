@@ -69,7 +69,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   { id: 'calendar', label: 'Content Strategy', b2bLabel: 'Thought Leadership', b2bStatus: 'optional', b2cStatus: 'core' },
   { id: 'reports', label: 'Reports', b2bLabel: 'Owner Reports', b2bStatus: 'core', b2cStatus: 'core' },
   { id: 'insights', label: 'AI Insights', b2bLabel: 'AI Decision Support', b2bStatus: 'core', b2cStatus: 'core' },
-  { id: 'data', label: 'Data Hub', b2bLabel: 'Data Hub', b2bStatus: 'core', b2cStatus: 'core' },
+  { id: 'data', label: 'Data Import', b2bLabel: 'Data Import', b2bStatus: 'core', b2cStatus: 'core' },
   { id: 'coordination', label: 'Department Coordination', b2bLabel: 'Commercial Coordination', b2bStatus: 'core', b2cStatus: 'core' },
   { id: 'automation', label: 'Automations', b2bLabel: 'Automations', b2bStatus: 'optional', b2cStatus: 'optional' },
   { id: 'sales', label: 'Sales Pipeline', b2bLabel: 'Sales Pipeline', b2bStatus: 'core', b2cStatus: 'hidden' },

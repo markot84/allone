@@ -25,7 +25,7 @@ const dataSources = [
   { name: 'Google Ads', description: 'Campaigns, κόστος, conversions, κοινά', icon: <BarChart3 size={18} /> },
   { name: 'Meta Ads', description: 'Campaigns, audiences, μέτρηση αποτελεσμάτων', icon: <Target size={18} /> },
   { name: 'CSV / Excel', description: 'Segments, οικονομικά, analytics, custom data', icon: <FileSpreadsheet size={18} /> },
-  { name: 'Συνδέσεις & εισαγωγή', description: 'Σύνδεση πλατφορμών και εισαγωγή αρχείων', icon: <Upload size={18} /> },
+  { name: 'Data Import', description: 'Σύνδεση πλατφορμών και εισαγωγή αρχείων', icon: <Upload size={18} /> },
 ];
 
 const inputOutputChain = {

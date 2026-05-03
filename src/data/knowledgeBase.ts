@@ -258,7 +258,7 @@ AI Insights: Προτάσεις για βελτίωση απόδοσης
 - Connectors: Αυτόματο sync μέσω API — Google Ads, Meta, GA4, Shopify, WooCommerce, OpenCart, Magento, Merchant Center
 
 Βήματα:
-1. Μεταβείτε στο τμήμα Συνδέσεις & εισαγωγή
+1. Μεταβείτε στο τμήμα Data Import
 2. Επιλέξτε τον τύπο δεδομένων
 3. Κάντε κλικ "Download Template" για να δείτε το format
 4. Συμπληρώστε το template με τα δεδομένα σας

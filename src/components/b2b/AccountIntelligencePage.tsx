@@ -145,7 +145,7 @@ export function AccountIntelligencePage({ onSectionChange }: AccountIntelligence
               <p className="text-sm font-semibold text-[#1A1A1A]">2. Connect finance truth</p>
               <p className="mt-1 text-sm text-[#6B7280]">ERP / invoicing imports για να συνδεθεί account score με πραγματικό revenue quality.</p>
               <Button variant="secondary" size="sm" className="mt-4" onClick={() => onSectionChange?.('data')}>
-                Open Data Hub
+                Open Data Import
               </Button>
             </div>
             <div className="rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] p-4">

@@ -652,7 +652,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           <Card padding="lg" className="border border-dashed border-[#D1D5DB] bg-[#FAFAFA]">
             <h3 className="text-base font-semibold text-[var(--nts-charcoal)]">Γεμίστε το Dashboard</h3>
             <p className="mt-1 text-sm leading-relaxed text-[var(--nts-medium-gray)]">
-              Δεν εμφανίζονται ακόμα τα στοιχεία που τροφοδοτούν τα κύρια charts (καμπάνιες, RFM από παραγγελίες ή προϊόντα). Συνδέστε πηγές ή κάντε εισαγωγή από το Data Hub.
+              Δεν εμφανίζονται ακόμα τα στοιχεία που τροφοδοτούν τα κύρια charts (καμπάνιες, RFM από παραγγελίες ή προϊόντα). Συνδέστε πηγές ή κάντε εισαγωγή από το Data Import.
             </p>
             <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {enabledModules.data && (
@@ -662,7 +662,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   icon={<Plug size={16} />}
                   onClick={() => onSectionChange?.('data')}
                 >
-                  Connectors & εισαγωγή
+                  Data Import
                 </Button>
               )}
               {enabledModules.ecommerce && (

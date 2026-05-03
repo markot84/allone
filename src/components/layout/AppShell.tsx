@@ -479,7 +479,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
         { id: 'coordination', label: moduleConfig.coordination.label, icon: GitPullRequestArrow, group: 'coordination' },
         { id: 'automation', label: moduleConfig.automation.label, icon: Zap, group: 'coordination' },
         { id: 'reports', label: moduleConfig.reports.label, icon: ReportIcon, group: 'coordination' },
-        { id: 'data', label: isB2B ? moduleConfig.data.label : 'Συνδέσεις', icon: Upload, group: 'utility' },
+        { id: 'data', label: moduleConfig.data.label, icon: Upload, group: 'utility' },
         { id: 'invite', label: 'Invite users', icon: UserPlus, group: 'utility' },
         { id: 'help', label: 'Help', icon: GearIcon, group: 'utility' },
       ];

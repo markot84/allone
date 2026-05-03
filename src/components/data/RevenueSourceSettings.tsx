@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Card, Button, useToast, Tooltip } from '../common';
 import { useBrand } from '../../hooks/useBrand';
+import { useRefreshAggregates } from '../../hooks/useAggregates';
 import { FirestoreService } from '../../services/firestore';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Brand } from '../../types';
@@ -27,6 +28,7 @@ export function RevenueSourceSettings() {
   const { currentBrand, refreshBrands } = useBrand();
   const queryClient = useQueryClient();
   const toast = useToast();
+  const { refresh: refreshServerAggregates } = useRefreshAggregates();
 
   const brandId = currentBrand?.id ?? null;
 
@@ -85,12 +87,19 @@ export function RevenueSourceSettings() {
       await FirestoreService.updateDocument('brands', currentBrand.id, { revenueSourceMode: selected });
       await refreshBrands();
       queryClient.invalidateQueries({ queryKey: ['ecommerceOrdersRaw', currentBrand.id] });
-      queryClient.invalidateQueries({ queryKey: ['ecommerce_summary', currentBrand.id] });
-      toast.success(
-        selected === 'erp'
-          ? 'Αποθηκεύτηκε πηγή ERP. Τρέξε Sync στο Megaventory ή στο SoftOne (ή περίμενε το νυχτερινό ERP κύμα) για να γραφτεί το ecommerce_summary.'
-          : 'Αποθηκεύτηκε. Τα νούμερα θα ανανεωθούν μετά το επόμενο aggregation ή χειροκίνητο e-shop sync.'
-      );
+      const agg = await refreshServerAggregates();
+      if (agg.ok) {
+        toast.success(
+          selected === 'erp'
+            ? 'Αποθηκεύτηκε πηγή ERP και ενημερώθηκε το σύνοψη στο server. Για πλήρη στοιχεία τιμολογίων/SALDOC τρέξε ERP Sync αν χρειάζεται.'
+            : 'Αποθηκεύτηκε και ενημερώθηκε το σύνοψη τζίρου στο server.'
+        );
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['ecommerce_summary', currentBrand.id] });
+        toast.info(
+          `Αποθηκεύτηκε η επιλογή, αλλά η ανανέωση summary απέτυχε (${agg.error ?? 'άγνωστο'}). Τρέξε χειροκίνητο sync ή δοκίμασε ξανά.`
+        );
+      }
     } catch (err) {
       console.error('[RevenueSourceSettings] save failed:', err);
       toast.error('Αποτυχία αποθήκευσης. Δοκιμάστε ξανά.');

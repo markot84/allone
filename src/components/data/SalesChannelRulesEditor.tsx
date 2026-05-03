@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, Button, Spinner, useToast, Tooltip } from '../common';
 import { useBrand } from '../../hooks/useBrand';
+import { useRefreshAggregates } from '../../hooks/useAggregates';
 import { FirestoreService } from '../../services/firestore';
 import { doc, deleteField, updateDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../../config/firebase';
@@ -115,6 +116,7 @@ export function SalesChannelRulesEditor() {
   const brandId = currentBrand?.id ?? null;
   const queryClient = useQueryClient();
   const toast = useToast();
+  const { refresh: refreshServerAggregates } = useRefreshAggregates();
 
   const { data: persisted = [], isPending } = useQuery({
     queryKey: ['salesChannelRules', brandId],
@@ -203,10 +205,18 @@ export function SalesChannelRulesEditor() {
       queryClient.invalidateQueries({ queryKey: ['salesChannelRules', brandId] });
       queryClient.invalidateQueries({ queryKey: ['connectorsPanel', brandId], exact: false });
       queryClient.invalidateQueries({ queryKey: ['ecommerceOrdersRaw', brandId] });
-      queryClient.invalidateQueries({ queryKey: ['ecommerce_summary', brandId] });
-      toast.success(
-        `Αποθηκεύτηκαν ${cleaned.length} κανόνες. Τρέξε «Sync» στο Magento ή περίμενε το nightly για re-aggregation στο server summary.`
-      );
+
+      const agg = await refreshServerAggregates();
+      if (agg.ok) {
+        toast.success(
+          `Αποθηκεύτηκαν ${cleaned.length} κανόνες. Το σύνοψη τζίρου e-shop ενημερώθηκε στο server (ενημερώνεται το Dashboard).`
+        );
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['ecommerce_summary', brandId] });
+        toast.info(
+          `Αποθηκεύτηκαν ${cleaned.length} κανόνες, αλλά η ανανέωση του summary στο server απέτυχε (${agg.error ?? 'άγνωστο'}). Τρέξε «Sync» στο Magento ή δοκίμασε ξανά Αποθήκευση.`
+        );
+      }
     } catch (err) {
       console.error('[SalesChannelRulesEditor] save failed:', err);
       toast.error('Αποτυχία αποθήκευσης κανόνων.');
