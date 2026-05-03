@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Text } from '@primer/react';
 import {
   ShieldIcon,
@@ -103,6 +104,7 @@ export function SuperAdminDashboard() {
 /* ─── Brands Tab ─── */
 
 function BrandsTab() {
+  const queryClient = useQueryClient();
   const [brands, setBrands] = useState<Brand[]>([]);
   const [userCounts, setUserCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
@@ -176,6 +178,7 @@ function BrandsTab() {
         : { historyStartDate: '' };
       await FirestoreService.updateDocument('brands', brandId, payload);
       setBrands((prev) => prev.map((b) => (b.id === brandId ? { ...b, historyStartDate: trimmed || undefined } : b)));
+      queryClient.invalidateQueries({ queryKey: ['ecommerceOrdersRaw', brandId] });
     } catch (err) {
       console.error('Failed to update historyStartDate:', err);
     } finally {

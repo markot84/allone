@@ -1,10 +1,14 @@
 {
-  "version": "0.726.27",
-  "previousVersion": "0.726.26",
-  "commitHash": "5a85cb3",
+  "version": "0.726.31",
+  "previousVersion": "0.726.30",
+  "commitHash": "79ec876",
   "branch": "main",
-  "buildDate": "2026-05-03T08:08:47.145Z",
+  "buildDate": "2026-05-03T12:09:47.156Z",
   "commits": [
+    {
+      "hash": "79ec876",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "5a85cb3",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "c7bb0ac",
       "message": "rfm: soften selected segment highlight in donut charts"
-    },
-    {
-      "hash": "c416980",
-      "message": "rfm: auto-open segment consumption detail and show loading states"
     }
   ],
   "changes": [

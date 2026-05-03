@@ -22,23 +22,31 @@ export function useEcommerceFullHistoryMetrics() {
   const ecomm = useEcommerceSummary();
   const platformsKey = [...ecomm.connectedPlatforms].sort().join('|');
 
+  /** Cutoff στο Firestore query — ίδια σημασιά με το client clamp· λιγότερα docs για e-shop όταν έχει οριστεί historyStartDate. */
+  const historyCutoff = getBrandHistoryStartISO(currentBrand);
+  const revenueModeKey = currentBrand?.revenueSourceMode ?? 'eshop_classified';
+
   const { data, isSuccess: rawLoaded, isPending: rawLoading, isFetching } = useQuery({
-    queryKey: ['ecommerceOrdersRaw', brandId, platformsKey],
-    queryFn: () => (brandId ? fetchAllEcommerceOrders(brandId, ecomm.connectedPlatforms) : Promise.resolve([])),
+    queryKey: ['ecommerceOrdersRaw', brandId, platformsKey, historyCutoff ?? '', revenueModeKey],
+    queryFn: () =>
+      brandId
+        ? fetchAllEcommerceOrders(brandId, ecomm.connectedPlatforms, {
+            cacheFirst: true,
+            ...(historyCutoff ? { sinceDate: historyCutoff } : {}),
+          })
+        : Promise.resolve([]),
     enabled: !!brandId && ecomm.connectedPlatforms.length > 0,
-    staleTime: 60 * 1000,
-    gcTime: 10 * 60 * 1000,
+    /** Όχι «η χθεσινή μέρα μόνο»: το query κατεβάζει όλο το ιστορικό για επανυπολογισμό KPI — μεγάλο staleTime + cache πρώτα μειώνει επαναλαμβανόμενη αναμονή. */
+    staleTime: 10 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
     refetchOnWindowFocus: false,
   });
 
-  // Per-brand history cutoff (π.χ. Safeblock 2025-09-01)
-  const cutoffISO = getBrandHistoryStartISO(currentBrand);
-
   const clampedRawOrders = useMemo(() => {
     if (!data) return data;
-    if (!cutoffISO) return data;
+    if (!historyCutoff) return data;
     return filterByBrandHistory(data, (o) => o.createdAt, currentBrand);
-  }, [data, cutoffISO, currentBrand]);
+  }, [data, historyCutoff, currentBrand]);
 
   const getTopPlatformInRange = useCallback(
     (fromDate: string, toDate: string) => {
@@ -51,16 +59,16 @@ export function useEcommerceFullHistoryMetrics() {
   return useMemo(() => {
     const fromSummary: Record<string, number> = {};
     for (const r of ecomm.dailyRevenue) {
-      if (cutoffISO && !passesBrandHistory(r.date, currentBrand)) continue;
+      if (historyCutoff && !passesBrandHistory(r.date, currentBrand)) continue;
       fromSummary[r.date] = r.revenue;
     }
-    const dailyRevenueClamped = cutoffISO
+    const dailyRevenueClamped = historyCutoff
       ? ecomm.dailyRevenue.filter((r) => passesBrandHistory(r.date, currentBrand))
       : ecomm.dailyRevenue;
-    const ordersByDayClamped = cutoffISO
+    const ordersByDayClamped = historyCutoff
       ? ecomm.ordersByDay.filter((r) => passesBrandHistory(r.date, currentBrand))
       : ecomm.ordersByDay;
-    const monthlyRevenueClamped = cutoffISO
+    const monthlyRevenueClamped = historyCutoff
       ? ecomm.monthlyRevenue.filter((r) => passesBrandHistory(`${r.month}-01`, currentBrand))
       : ecomm.monthlyRevenue;
 
@@ -98,7 +106,7 @@ export function useEcommerceFullHistoryMetrics() {
     isFetching,
     clampedRawOrders,
     getTopPlatformInRange,
-    cutoffISO,
+    historyCutoff,
     currentBrand,
   ]);
 }
