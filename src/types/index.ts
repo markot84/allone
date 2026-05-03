@@ -88,8 +88,9 @@ export interface Brand {
    * - `eshop_classified` (default): παραγγελίες e-shop που classified ως `direct_eshop` βάσει
    *   sales channel rules (εξαιρούνται intercompany, Skroutz κ.λπ.).
    * - `eshop_all`: όλες οι παραγγελίες e-shop χωρίς classification filter (ωμό sum).
-   * - `erp`: pending (Φάση 2) — τραβιέται από ERP `total_revenue` field.
+   * - `erp`: τζίρος από Megaventory τιμολόγια ή SoftOne SALDOC (βλ. ecommerceAggregator).
    *
+   * Δεν επηρεάζει αποθέματα/κατάλογο — μόνο aggregation εσόδων και raw orders για KPIs.
    * Όταν κενό, θεωρείται `eshop_classified` (default).
    */
   revenueSourceMode?: 'eshop_classified' | 'eshop_all' | 'erp';

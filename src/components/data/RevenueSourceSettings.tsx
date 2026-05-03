@@ -108,12 +108,15 @@ export function RevenueSourceSettings() {
           <div className="flex items-center gap-1.5">
             <h3 className="text-base font-semibold text-[var(--nts-charcoal)]">Πηγή Εσόδων (Revenue Source)</h3>
             <Tooltip
-              content="Ορίζει από πού αντλεί το «Σύνολο Εσόδων» στο Dashboard και τα ecommerce KPIs που στηρίζονται στο ecommerce_summary. Το ERP mode χρησιμοποιεί τιμολόγια Megaventory ή SALDOC SoftOne εφόσον είναι συνδεδεμένα."
+              content="Ορίζει μόνο τον υπολογισμό τζίρου (Dashboard / ecommerce_summary · raw παραγγελίες για KPI). Δεν αλλάζει κατάλογο ή αποθέματα — αυτά προέρχονται από το ERP sync / import προϊόντων και τους commerce connectors όπως τους έχεις συνδέσει."
               size={13}
             />
           </div>
           <p className="text-[12px] text-[var(--nts-medium-gray)] mt-1">
             Brand: <strong className="text-[var(--nts-charcoal)]">{currentBrand.name}</strong>
+          </p>
+          <p className="text-[11px] text-[var(--nts-medium-gray)] mt-2 leading-relaxed">
+            Τα <strong className="font-medium text-[var(--nts-charcoal)]">αποθέματα</strong> δεν εξαρτώνται από αυτή την επιλογή· για πραγματικό απόθεμα ERP κράτα ενεργό συγχρονισμό Megaventory/SoftOne (ή το κεντρικό import προϊόντων), ανεξάρτητα αν ο τζίρος μετράει από eshop ή από τιμολόγια.
           </p>
         </div>
       </div>

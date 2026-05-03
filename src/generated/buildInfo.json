@@ -1,10 +1,14 @@
 {
-  "version": "0.726.26",
-  "previousVersion": "0.726.25",
-  "commitHash": "b4960fb",
+  "version": "0.726.27",
+  "previousVersion": "0.726.26",
+  "commitHash": "5a85cb3",
   "branch": "main",
-  "buildDate": "2026-05-03T06:50:22.684Z",
+  "buildDate": "2026-05-03T08:08:47.145Z",
   "commits": [
+    {
+      "hash": "5a85cb3",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "b4960fb",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "c416980",
       "message": "rfm: auto-open segment consumption detail and show loading states"
-    },
-    {
-      "hash": "c4fb945",
-      "message": "rfm: make segment detail the primary consumption view"
     }
   ],
   "changes": [
