@@ -3,7 +3,7 @@
  *
  * Reads order collections from all connected e-commerce platforms,
  * computes summary metrics, and writes to ecommerce_summary/{brandId}.
- * Called after each e-commerce connector sync and in scheduledSync.
+ * Called after each e-commerce connector sync and in scheduledSyncEcommerce (nightly).
  */
 
 import * as admin from 'firebase-admin';

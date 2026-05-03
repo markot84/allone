@@ -61,6 +61,26 @@ function editableToRule(r: EditableRule): EcommerceSalesChannelRule {
   };
 }
 
+/** Ταξινόμηση ώστε η σύγκριση dirty να μην εξαρτάται από τη σειρά στο UI/Firestore. */
+function normalizedPatternList(patterns: string[] | undefined): string[] {
+  return [...(patterns || [])]
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+}
+
+function draftMatchesPersistedRule(d: EditableRule, orig: EcommerceSalesChannelRule): boolean {
+  const c = editableToRule(d);
+  const op = normalizedPatternList(c.patterns);
+  const oo = normalizedPatternList(orig.patterns);
+  if (op.length !== oo.length || !op.every((v, i) => v === oo[i])) return false;
+  return (
+    c.enabled === (orig.enabled !== false) &&
+    c.channel === (orig.channel || 'intercompany') &&
+    normalizedPatternList(c.matchFields).join('|') === normalizedPatternList(orig.matchFields).join('|')
+  );
+}
+
 async function fetchRulesFromConnector(brandId: string): Promise<EcommerceSalesChannelRule[]> {
   const conn = await FirestoreService.getDocument<{
     ecommerceSalesChannelRules?: EcommerceSalesChannelRule[];
@@ -106,42 +126,37 @@ export function SalesChannelRulesEditor() {
   const [drafts, setDrafts] = useState<EditableRule[]>([]);
   const [saving, setSaving] = useState(false);
   const lastServerSigApplied = useRef<string>('');
+  /** Μόνο μετά από επεξεργασία χρήστη μπλοκάρουμε overwrite από refetch — όχι στην πρώτη φόρτωση από Firestore. */
+  const userEditedDraftsRef = useRef(false);
 
   const dirty = useMemo(() => {
     if (drafts.length !== persisted.length) return true;
-    return drafts.some((d, i) => {
-      const orig = persisted[i];
-      const c = editableToRule(d);
-      return (
-        c.enabled !== (orig.enabled !== false) ||
-        c.channel !== (orig.channel || 'intercompany') ||
-        c.patterns?.join(',') !== (orig.patterns || []).join(',') ||
-        (c.matchFields || []).join(',') !== (orig.matchFields || []).join(',')
-      );
-    });
+    return drafts.some((d, i) => !draftMatchesPersistedRule(d, persisted[i]));
   }, [drafts, persisted]);
 
   /** Αλλαγή brand: μη δείξουμε κανόνες προηγούμενου brand μέχρι να φτάσουν τα δεδομένα. */
   useEffect(() => {
     lastServerSigApplied.current = '';
+    userEditedDraftsRef.current = false;
     setDrafts([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [brandId]);
 
   /**
-   * Όταν αλλάζει το περιεχόμενο του Firestore από React Query χωρίς ο χρήστης να επεξεργάζεται (dirty=false),
-   * κρατάμε τα drafts ευθυγραμμισμένα. Αν dirty=true (ανοιχτές αλλαγές), τα refetch με το ίδιο signature
-   * δεν πειράζουν τις πρόχειρες γραμμές.
+   * Συγχρονισμός από Firestore. Παλιό bug: όταν τα persisted έφταναν μετά το κενό query, dirty=true
+   * (μήκος drafts≠persisted) και κάναμε skip — τα drafts δεν γέμιζαν ποτέ, οπότε το Save έμενε ανενεργό.
+   * Αν έχει επεξεργαστεί ο χρήστης και υπάρχει dirty, δεν αντικαθιστούμε από refetch.
    */
   useEffect(() => {
     const sig = persistedSignature(persisted);
-    if (dirty) return;
     if (sig === lastServerSigApplied.current) return;
+    if (dirty && userEditedDraftsRef.current) return;
     lastServerSigApplied.current = sig;
     setDrafts(persisted.map(ruleToEditable));
   }, [persisted, dirty]);
 
   const addRule = () => {
+    userEditedDraftsRef.current = true;
     setDrafts((prev) => [
       ...prev,
       {
@@ -156,10 +171,14 @@ export function SalesChannelRulesEditor() {
   };
 
   const updateRule = useCallback(<K extends keyof EditableRule>(idx: number, key: K, value: EditableRule[K]) => {
+    userEditedDraftsRef.current = true;
     setDrafts((prev) => prev.map((r, i) => (i === idx ? { ...r, [key]: value } : r)));
   }, []);
 
-  const removeRule = (idx: number) => setDrafts((prev) => prev.filter((_, i) => i !== idx));
+  const removeRule = (idx: number) => {
+    userEditedDraftsRef.current = true;
+    setDrafts((prev) => prev.filter((_, i) => i !== idx));
+  };
 
   const handleSave = async () => {
     if (!brandId) return;
@@ -180,6 +199,7 @@ export function SalesChannelRulesEditor() {
         updatedAt: Timestamp.now(),
       });
       lastServerSigApplied.current = persistedSignature(cleaned);
+      userEditedDraftsRef.current = false;
       queryClient.invalidateQueries({ queryKey: ['salesChannelRules', brandId] });
       queryClient.invalidateQueries({ queryKey: ['connectorsPanel', brandId], exact: false });
       queryClient.invalidateQueries({ queryKey: ['ecommerceOrdersRaw', brandId] });
@@ -323,9 +343,9 @@ export function SalesChannelRulesEditor() {
 
       <div className="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-[var(--nts-border-gray)]">
         {dirty && <span className="text-[11px] text-[var(--nts-medium-gray)]">Μη αποθηκευμένες αλλαγές</span>}
-        <Button variant="primary" size="sm" disabled={!dirty || saving} onClick={handleSave}>
-          <Save size={14} className="mr-1" />
-          {saving ? 'Αποθήκευση…' : 'Αποθήκευση'}
+        <Button variant="primary" size="sm" disabled={!dirty || saving} loading={saving} onClick={handleSave}>
+          {!saving && <Save size={14} className="mr-1" />}
+          Αποθήκευση
         </Button>
       </div>
     </Card>

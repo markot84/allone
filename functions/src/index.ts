@@ -1577,7 +1577,11 @@ export const importMagentoSearchTerms = onRequest(
 // ─── Nightly Jobs Health Monitor ────────────────────────────────
 
 type NightlyJobKey =
-  | 'scheduledSync'
+  | 'scheduledSyncMarketing'
+  | 'scheduledSyncEcommerce'
+  | 'scheduledSyncWebAnalytics'
+  | 'scheduledSyncErp'
+  | 'scheduledSyncFollowups'
   | 'scheduledAggregates'
   | 'scheduledAlerts'
   | 'scheduledDigest';
@@ -1630,168 +1634,222 @@ async function runPool<T>(items: T[], concurrency: number, fn: (item: T) => Prom
 }
 
 /**
- * Cloud Functions Gen 2 onSchedule supports up to 3600s. 1800s (30 min) δίνει περιθώριο για
- * brands με βαριά Magento/Shopify ιστορικά + GA4/Search Console + competitor monitoring.
- * Αν δεν δηλωθεί ρητά εδώ, το deployment μένει στον παλιό κωδικοποιημένο default των 540s.
+ * Cloud Functions Gen 2 onSchedule supports up to 3600s. Κάθε «κύμα» connectors έχει δικό του
+ * invocation ώστε Magento/ERP να μην κόβουν GA4/GSC μέσα στο ίδιο timeout με τα Ads.
  */
 const SCHEDULED_SYNC_TIMEOUT_SECONDS = 1800;
-/** Παράλληλη επεξεργασία brands (κάθε brand εκτελεί ταυτόχρονα ολους τους connectors του). */
+/** Παράλληλη επεξεργασία brands μέσα σε ένα κύμα. */
 const NIGHTLY_CONNECTOR_SYNC_CONCURRENCY = 3;
-const NIGHTLY_FOLLOWUP_CUTOFF_MS = SCHEDULED_SYNC_TIMEOUT_SECONDS * 1000 - 90_000;
 
-// ─── Scheduled: Daily Sync (23:00 Europe/Athens) ───────────────
+const CONNECTOR_NIGHTLY_SECRETS = [
+  'META_APP_ID',
+  'META_APP_SECRET',
+  'GOOGLE_ADS_CLIENT_ID',
+  'GOOGLE_ADS_CLIENT_SECRET',
+  'GOOGLE_ADS_DEVELOPER_TOKEN',
+  'GOOGLE_ADS_LOGIN_CUSTOMER_ID',
+  'SHOPIFY_API_KEY',
+  'SHOPIFY_API_SECRET',
+  'TIKTOK_APP_ID',
+  'TIKTOK_APP_SECRET',
+  'CONNECTOR_TOKEN_KEY',
+];
 
-export const scheduledSync = onSchedule(
-  {
-    schedule: 'every day 23:00',
-    timeZone: 'Europe/Athens',
-    region: 'europe-west1',
-    memory: '1GiB',
-    timeoutSeconds: SCHEDULED_SYNC_TIMEOUT_SECONDS,
-    secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID', 'SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET', 'TIKTOK_APP_ID', 'TIKTOK_APP_SECRET', 'CONNECTOR_TOKEN_KEY'],
-  },
-  async () => {
-    const startedAt = Date.now();
-    await markNightlyJob('scheduledSync', 'running', { message: 'Nightly connector sync started' });
-    logger.info('[ScheduledSync] Starting daily connector sync');
+type NightlyConnectorWave = 'marketing' | 'ecommerce' | 'analytics' | 'erp';
 
-    try {
-      const connectorsSnap = await db.collection('connectors').get();
+async function executeBrandNightlyWave(
+  brandId: string,
+  data: FirebaseFirestore.DocumentData,
+  wave: NightlyConnectorWave
+): Promise<void> {
+  const buildTasks = () => {
+    const tasks: Array<Promise<unknown>> = [];
+    const wrap = (label: string, p: Promise<unknown>) =>
+      tasks.push(
+        p
+          .then((r) => {
+            const imported = (r as { imported?: number })?.imported;
+            logger.info(`[ScheduledSync/${wave}] ${label} for ${brandId}: imported ${imported ?? '—'}`);
+          })
+          .catch((err) => logger.error(`[ScheduledSync/${wave}] ${label} failed for ${brandId}:`, err))
+      );
+    return { tasks, wrap };
+  };
 
-      let failedConnectorBrands = 0;
-      await runPool(connectorsSnap.docs, NIGHTLY_CONNECTOR_SYNC_CONCURRENCY, async (doc) => {
-        const brandId = doc.id;
-        const data = doc.data();
+  const phase = buildTasks();
 
-        try {
-          /**
-           * Two-phase parallel execution per brand:
-           *
-           * **Phase 1 (priority):** Ads, Merchant, E-shop orders, Web Analytics — parallel.
-           *   Αυτά τρέχουν πρώτα ώστε ακόμα κι αν αργήσει κάποιο ERP, το Dashboard έχει
-           *   φρέσκα marketing/ecom KPIs. `computeEcommerceSummary` τρέχει αμέσως μετά
-           *   (depends μόνο σε ecom orders).
-           *
-           * **Phase 2 (background):** ERPs (Megaventory, SoftOne, Epsilon Net, Entersoft).
-           *   Είναι τα πιο αργά / fragile APIs (SOAP, tight rate limits). Τα τρέχουμε
-           *   τελευταία ώστε αν χτυπήσει timeout/error, να μην επηρεάσει τα critical KPIs.
-           *
-           * Ιστορικό: Πριν, GA4 + Search Console περίμεναν να τελειώσουν ΟΛΟΙ οι ecom
-           * connectors (sequential blocks) → όταν το Magento αργούσε, ο 540s timeout τα
-           * έκοβε. Τώρα κάθε API τρέχει στον δικό του χρόνο μέσα στο 30min παράθυρο.
-           */
-          const buildTasks = () => {
-            const tasks: Array<Promise<unknown>> = [];
-            const wrap = (label: string, p: Promise<unknown>) =>
-              tasks.push(
-                p
-                  .then((r) => {
-                    const imported = (r as { imported?: number })?.imported;
-                    logger.info(`[ScheduledSync] ${label} for ${brandId}: imported ${imported ?? '—'}`);
-                  })
-                  .catch((err) => logger.error(`[ScheduledSync] ${label} failed for ${brandId}:`, err))
-              );
-            return { tasks, wrap };
-          };
+  switch (wave) {
+    case 'marketing':
+      if (data.google_ads?.connected) phase.wrap('Google Ads', fetchGoogleAdsCampaigns(brandId));
+      if (data.meta?.connected) phase.wrap('Meta', fetchMetaCampaigns(brandId));
+      if (data.tiktok?.connected) phase.wrap('TikTok', fetchTikTokCampaigns(brandId));
+      if (data.merchant?.connected) phase.wrap('Merchant', fetchPriceBenchmarks(brandId));
+      break;
+    case 'ecommerce':
+      if (data.shopify?.connected) phase.wrap('Shopify', fetchShopifyData(brandId));
+      if (data.woocommerce?.connected) phase.wrap('WooCommerce', fetchWooCommerceData(brandId));
+      if (data.opencart?.connected) phase.wrap('OpenCart', fetchOpenCartData(brandId));
+      if (data.magento?.connected) phase.wrap('Magento', fetchMagentoData(brandId));
+      break;
+    case 'analytics':
+      if (data.ga4?.connected && data.ga4?.propertyId) phase.wrap('GA4', fetchGA4Data(brandId));
+      if (data.search_console?.connected && data.search_console?.siteUrl)
+        phase.wrap('Search Console', fetchSearchConsoleData(brandId));
+      break;
+    case 'erp':
+      if (data.megaventory?.connected)
+        phase.wrap('Megaventory', fetchMegaventoryData(brandId, { mode: 'scheduled' }));
+      if (data.softone?.connected) phase.wrap('SoftOne', fetchSoftOneData(brandId));
+      if (data.epsilon_net?.connected) phase.wrap('Epsilon Net', fetchEpsilonNetData(brandId));
+      if (data.entersoft?.connected) phase.wrap('Entersoft', fetchEntersoftData(brandId));
+      break;
+    default:
+      break;
+  }
 
-          // ---------- Phase 1: critical path (ads, ecom, web analytics) ----------
-          const phase1 = buildTasks();
-          if (data.google_ads?.connected) phase1.wrap('Google Ads', fetchGoogleAdsCampaigns(brandId));
-          if (data.meta?.connected) phase1.wrap('Meta', fetchMetaCampaigns(brandId));
-          if (data.tiktok?.connected) phase1.wrap('TikTok', fetchTikTokCampaigns(brandId));
-          if (data.merchant?.connected) phase1.wrap('Merchant', fetchPriceBenchmarks(brandId));
+  await Promise.all(phase.tasks);
 
-          if (data.shopify?.connected) phase1.wrap('Shopify', fetchShopifyData(brandId));
-          if (data.woocommerce?.connected) phase1.wrap('WooCommerce', fetchWooCommerceData(brandId));
-          if (data.opencart?.connected) phase1.wrap('OpenCart', fetchOpenCartData(brandId));
-          if (data.magento?.connected) phase1.wrap('Magento', fetchMagentoData(brandId));
-
-          if (data.ga4?.connected && data.ga4?.propertyId) phase1.wrap('GA4', fetchGA4Data(brandId));
-          if (data.search_console?.connected && data.search_console?.siteUrl)
-            phase1.wrap('Search Console', fetchSearchConsoleData(brandId));
-
-          await Promise.all(phase1.tasks);
-
-          // E-commerce summary recompute — εξαρτάται μόνο από ecom orders, οπότε τρέχει
-          // ΕΔΩ (πριν τα ERP) ώστε το `ecommerce_summary` να είναι φρέσκο ακόμα κι αν
-          // αργότερα κάποιο ERP κρεμάσει.
-          const hasEcommerce = data.shopify?.connected || data.woocommerce?.connected || data.opencart?.connected || data.magento?.connected;
-          if (hasEcommerce) {
-            try {
-              await computeEcommerceSummary(brandId);
-              logger.info(`[ScheduledSync] E-commerce summary updated for ${brandId}`);
-            } catch (err) {
-              logger.error(`[ScheduledSync] E-commerce summary failed for ${brandId}:`, err);
-            }
-          }
-
-          // ---------- Phase 2: ERP & operations (slow / fragile APIs) ----------
-          const phase2 = buildTasks();
-          if (data.megaventory?.connected) phase2.wrap('Megaventory', fetchMegaventoryData(brandId, { mode: 'scheduled' }));
-          if (data.softone?.connected) phase2.wrap('SoftOne', fetchSoftOneData(brandId));
-          if (data.epsilon_net?.connected) phase2.wrap('Epsilon Net', fetchEpsilonNetData(brandId));
-          if (data.entersoft?.connected) phase2.wrap('Entersoft', fetchEntersoftData(brandId));
-
-          if (phase2.tasks.length > 0) {
-            await Promise.all(phase2.tasks);
-          }
-        } catch (err) {
-          failedConnectorBrands += 1;
-          logger.error(`[ScheduledSync] Connector task failed unexpectedly for ${brandId}:`, err);
-        }
-      });
-      if (failedConnectorBrands > 0) {
-        logger.error(`[ScheduledSync] ${failedConnectorBrands} connector brand tasks failed unexpectedly`);
+  if (wave === 'ecommerce') {
+    const hasEcommerce =
+      data.shopify?.connected ||
+      data.woocommerce?.connected ||
+      data.opencart?.connected ||
+      data.magento?.connected;
+    if (hasEcommerce) {
+      try {
+        await computeEcommerceSummary(brandId);
+        logger.info(`[ScheduledSync/ecommerce] E-commerce summary updated for ${brandId}`);
+      } catch (err) {
+        logger.error(`[ScheduledSync/ecommerce] E-commerce summary failed for ${brandId}:`, err);
       }
-
-      let skippedFollowups = false;
-      let competitorSnapSize = 0;
-      if (Date.now() - startedAt < NIGHTLY_FOLLOWUP_CUTOFF_MS) {
-        // Stock movement tracking για ΟΛΑ τα brands (συμπεριλαμβανομένων non-connector)
-        const allBrandsSnap = await db.collection('brands').get();
-        for (const bdoc of allBrandsSnap.docs) {
-          const brandId = bdoc.id;
-          try {
-            await refreshStockMovement(brandId);
-          } catch (err) {
-            logger.warn(`[ScheduledSync] Stock movement failed for ${brandId}:`, err);
-          }
-        }
-
-        // Competitor monitoring — runs for all brands with competitor settings
-        const competitorSnap = await db.collection('competitor_settings').get();
-        competitorSnapSize = competitorSnap.size;
-        for (const doc of competitorSnap.docs) {
-          const brandId = doc.id;
-          const data = doc.data();
-          if (data.competitors?.length > 0) {
-            try {
-              const result = await fetchCompetitorAds(brandId);
-              logger.info(`[ScheduledSync] Competitors for ${brandId}: ${result.totalAds} ads (${result.newAds} new)`);
-            } catch (err) {
-              logger.error(`[ScheduledSync] Competitors failed for ${brandId}:`, err);
-            }
-          }
-        }
-      } else {
-        skippedFollowups = true;
-        logger.warn('[ScheduledSync] Skipped stock movement / competitor follow-ups to avoid timeout');
-      }
-
-      const durationMs = Date.now() - startedAt;
-      await markNightlyJob('scheduledSync', 'success', {
-        durationMs,
-        message: `Completed. connectors=${connectorsSnap.size} failedConnectorBrands=${failedConnectorBrands} competitorBrands=${competitorSnapSize}${skippedFollowups ? ' followups=skipped_timeout_guard' : ''}`,
-      });
-      logger.info('[ScheduledSync] Daily sync completed');
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      const durationMs = Date.now() - startedAt;
-      await markNightlyJob('scheduledSync', 'failed', { durationMs, message: msg });
-      logger.error('[ScheduledSync] Fatal error:', msg);
-      throw error;
     }
   }
+}
+
+async function runNightlyConnectorWaveJob(wave: NightlyConnectorWave, jobKey: NightlyJobKey): Promise<void> {
+  const startedAt = Date.now();
+  await markNightlyJob(jobKey, 'running', { message: `Nightly wave "${wave}" started` });
+  logger.info(`[ScheduledSync] Starting "${wave}" wave`);
+
+  try {
+    const connectorsSnap = await db.collection('connectors').get();
+    let failedConnectorBrands = 0;
+
+    await runPool(connectorsSnap.docs, NIGHTLY_CONNECTOR_SYNC_CONCURRENCY, async (docSnap) => {
+      const brandId = docSnap.id;
+      const data = docSnap.data();
+      try {
+        await executeBrandNightlyWave(brandId, data, wave);
+      } catch (err) {
+        failedConnectorBrands += 1;
+        logger.error(`[ScheduledSync/${wave}] Unexpected failure for ${brandId}:`, err);
+      }
+    });
+
+    const durationMs = Date.now() - startedAt;
+    await markNightlyJob(jobKey, 'success', {
+      durationMs,
+      message: `Wave "${wave}" ok. connectors=${connectorsSnap.size} failedBrands=${failedConnectorBrands}`,
+    });
+    logger.info(`[ScheduledSync] "${wave}" wave completed`);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    const durationMs = Date.now() - startedAt;
+    await markNightlyJob(jobKey, 'failed', { durationMs, message: msg });
+    logger.error(`[ScheduledSync/${wave}] Fatal error:`, msg);
+    throw error;
+  }
+}
+
+async function runNightlyFollowupsJob(): Promise<void> {
+  const startedAt = Date.now();
+  await markNightlyJob('scheduledSyncFollowups', 'running', {
+    message: 'Stock movement + competitor monitoring',
+  });
+  logger.info('[ScheduledSync] Starting follow-ups job');
+
+  try {
+    const allBrandsSnap = await db.collection('brands').get();
+    for (const bdoc of allBrandsSnap.docs) {
+      const brandId = bdoc.id;
+      try {
+        await refreshStockMovement(brandId);
+      } catch (err) {
+        logger.warn(`[ScheduledSync/followups] Stock movement failed for ${brandId}:`, err);
+      }
+    }
+
+    const competitorSnap = await db.collection('competitor_settings').get();
+    let competitorRuns = 0;
+    for (const cdoc of competitorSnap.docs) {
+      const brandId = cdoc.id;
+      const cdata = cdoc.data();
+      if (cdata.competitors?.length > 0) {
+        competitorRuns += 1;
+        try {
+          const result = await fetchCompetitorAds(brandId);
+          logger.info(
+            `[ScheduledSync/followups] Competitors for ${brandId}: ${result.totalAds} ads (${result.newAds} new)`
+          );
+        } catch (err) {
+          logger.error(`[ScheduledSync/followups] Competitors failed for ${brandId}:`, err);
+        }
+      }
+    }
+
+    const durationMs = Date.now() - startedAt;
+    await markNightlyJob('scheduledSyncFollowups', 'success', {
+      durationMs,
+      message: `Follow-ups ok. brands=${allBrandsSnap.size} competitorConfigs=${competitorRuns}`,
+    });
+    logger.info('[ScheduledSync] Follow-ups completed');
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    const durationMs = Date.now() - startedAt;
+    await markNightlyJob('scheduledSyncFollowups', 'failed', { durationMs, message: msg });
+    logger.error('[ScheduledSync/followups] Fatal error:', msg);
+    throw error;
+  }
+}
+
+const nightlyConnectorScheduleBase = {
+  timeZone: 'Europe/Athens',
+  region: 'europe-west1' as const,
+  memory: '1GiB' as const,
+  timeoutSeconds: SCHEDULED_SYNC_TIMEOUT_SECONDS,
+  secrets: CONNECTOR_NIGHTLY_SECRETS,
+};
+
+// ─── Scheduled: Connector waves (διαδοχικές ώρες → ξεχωριστό timeout ανά οικογένεια APIs) ──
+
+/** Διαφήμιση & Merchant — 23:00 */
+export const scheduledSyncMarketing = onSchedule(
+  { ...nightlyConnectorScheduleBase, schedule: 'every day 23:00' },
+  async () => runNightlyConnectorWaveJob('marketing', 'scheduledSyncMarketing')
+);
+
+/** E-shop imports + ecommerce_summary — 23:14 */
+export const scheduledSyncEcommerce = onSchedule(
+  { ...nightlyConnectorScheduleBase, schedule: 'every day 23:14' },
+  async () => runNightlyConnectorWaveJob('ecommerce', 'scheduledSyncEcommerce')
+);
+
+/** GA4 + Search Console — 23:28 */
+export const scheduledSyncWebAnalytics = onSchedule(
+  { ...nightlyConnectorScheduleBase, schedule: 'every day 23:28' },
+  async () => runNightlyConnectorWaveJob('analytics', 'scheduledSyncWebAnalytics')
+);
+
+/** ERP connectors — 23:42 */
+export const scheduledSyncErp = onSchedule(
+  { ...nightlyConnectorScheduleBase, schedule: 'every day 23:42' },
+  async () => runNightlyConnectorWaveJob('erp', 'scheduledSyncErp')
+);
+
+/** Απόθεμα / ανταγωνισμός — 00:18 (μετά το ERP κύμα 23:42 + έως 30′ timeout) */
+export const scheduledSyncFollowups = onSchedule(
+  { ...nightlyConnectorScheduleBase, schedule: 'every day 00:18' },
+  async () => runNightlyFollowupsJob()
 );
 
 /**
@@ -2146,11 +2204,11 @@ export const refreshSignals = onRequest(
   }
 );
 
-// ── Aggregate Stats: Daily Schedule (runs after connector sync) ─────────────
+// ── Aggregate Stats (μετά τα νυχτερινά κύματα connectors και follow-ups ~00:18) ────────
 
 export const scheduledAggregates = onSchedule(
   {
-    schedule: 'every day 23:20',
+    schedule: 'every day 00:30',
     timeZone: 'Europe/Athens',
     region: 'europe-west1',
     memory: '512MiB',
@@ -2182,7 +2240,7 @@ export const scheduledAggregates = onSchedule(
 
 export const scheduledAlerts = onSchedule(
   {
-    schedule: 'every day 23:35',
+    schedule: 'every day 00:45',
     timeZone: 'Europe/Athens',
     region: 'europe-west1',
     memory: '512MiB',
@@ -2214,7 +2272,7 @@ export const scheduledAlerts = onSchedule(
 
 export const scheduledDigest = onSchedule(
   {
-    schedule: 'every day 23:50',
+    schedule: 'every day 00:58',
     timeZone: 'Europe/Athens',
     region: 'europe-west1',
     memory: '512MiB',

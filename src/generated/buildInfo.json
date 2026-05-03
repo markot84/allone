@@ -1,10 +1,14 @@
 {
-  "version": "0.726.18",
-  "previousVersion": "0.726.17",
-  "commitHash": "8a2775b",
+  "version": "0.726.22",
+  "previousVersion": "0.726.21",
+  "commitHash": "acb11f9",
   "branch": "main",
-  "buildDate": "2026-05-02T19:43:56.758Z",
+  "buildDate": "2026-05-03T06:28:57.249Z",
   "commits": [
+    {
+      "hash": "acb11f9",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "8a2775b",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "b503426",
       "message": "rfm: keep guests out of customer counts and use rolling 12-month RFM"
-    },
-    {
-      "hash": "d4d5b44",
-      "message": "rfm: email-first customer dedup (cross-store) + top products table per segment + chevron on cards toggle"
     }
   ],
   "changes": [
