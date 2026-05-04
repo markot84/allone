@@ -47,6 +47,8 @@ const CHANNEL_COLORS: Record<string, string> = {
   'Email': '#FB923C',
   'Referral': '#FBBF24',
   'Display': '#06B6D4',
+  'Affiliates': '#A855F7',
+  'Unassigned': '#9CA3AF',
   'Social': '#F472B6',
   '(Other)': '#9CA3AF',
   'Λοιπά κανάλια': '#78716C',
@@ -752,7 +754,10 @@ export function GA4Analytics() {
           />
           <div className="p-4 pt-0">
             <p className="mb-3 text-[11px] leading-snug text-[#6B7280]">
-              Ομαδοποίηση GA4 ανά <strong>Default Channel Group</strong> (π.χ. Direct, Paid Search, Organic Search). Δεν είναι source/medium.
+              Ομαδοποίηση GA4 ανά <strong>Default Channel Group</strong> (όχι source/medium). Στον διακομιστή τα
+              κανάλια χαρτογραφούνται σε ενιαίες αγγλικές ετικέτες ώστε να μη διπλομετρούνται εκδοχές EN/EL και να
+              φαίνονται όλα τα default groups· μετά από <strong>νέο GA4 sync</strong> ενημερώνονται τα αποθηκευμένα
+              ημερήσια.
             </p>
             <div className="flex flex-col items-center">
               <div className="relative w-full h-[200px] max-w-[280px] mx-auto">

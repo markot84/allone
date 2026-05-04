@@ -43,8 +43,10 @@ export function bucketOverlapFraction(
 }
 
 // Purchase labels trusted for Meta — in priority order.
+// Prefer standard `purchase` first: aligns with Meta Ads Manager «Purchases» (Pixel+CAPI deduped).
+// Pixel-only row can under-count when CAPI attributes conversions the UI shows as purchase.
 // omni_purchase is excluded: it's a Meta-modeled superset that inflates counts.
-export const META_PURCHASE_LABEL_ORDER = ['Purchase (Pixel)', 'Purchase'] as const;
+export const META_PURCHASE_LABEL_ORDER = ['Purchase', 'Purchase (Pixel)'] as const;
 const EXCLUDED_ACTION_LABELS = new Set(['omni_purchase']);
 
 export function isMetaChannel(channel: string | undefined): boolean {
@@ -72,7 +74,7 @@ export function getMetaPrimaryPurchaseFromActions(
 /**
  * Returns the reliable conversion value for a campaign.
  *
- * For Meta: reads only from trusted conversionActions labels ("Purchase (Pixel)" > "Purchase")
+ * For Meta: reads only from trusted conversionActions labels ("Purchase" ≈ Ads Manager, then "Purchase (Pixel)")
  * to avoid stale Firestore documents that stored omni_purchase as the primary metric.
  * For all other channels: uses c.conversion_value directly, falling back to conversionActions sum.
  */

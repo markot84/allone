@@ -1,10 +1,14 @@
 {
-  "version": "0.726.59",
-  "previousVersion": "0.726.58",
-  "commitHash": "a78ea56",
+  "version": "0.726.61",
+  "previousVersion": "0.726.60",
+  "commitHash": "30fe140",
   "branch": "main",
-  "buildDate": "2026-05-04T13:40:38.920Z",
+  "buildDate": "2026-05-04T13:56:14.992Z",
   "commits": [
+    {
+      "hash": "30fe140",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "a78ea56",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "5a85cb3",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "b4960fb",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [
@@ -71,7 +71,6 @@
     "[Διόρθωση] Bump timeout to 120s + 5s fail-open cap on rate-limit txn",
     "[Διόρθωση] Split skuStats from summary doc to bypass 1MB Firestore limit",
     "[Διόρθωση] Robust raw orders fetch when date query returns empty (timestamp/coerce server)",
-    "[Build] Hosting build info after full deploy (v0.726.10)",
-    "E‑commerce connectors: incremental orders/products sync like Magento syncPolicy window"
+    "[Build] Hosting build info after full deploy (v0.726.10)"
   ]
 }

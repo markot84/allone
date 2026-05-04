@@ -36,16 +36,16 @@ describe('isMetaChannel', () => {
 });
 
 describe('getMetaPrimaryPurchaseFromActions', () => {
-  it('προτιμά Purchase (Pixel) πριν το Purchase όταν και τα δύο έχουν δεδομένα', () => {
+  it('προτιμά Purchase (Ads Manager / deduped) πριν το Pixel όταν και τα δύο έχουν δεδομένα', () => {
     const ca = {
       Purchase: { conversions: 10, value: 200 },
       'Purchase (Pixel)': { conversions: 3, value: 150 },
     };
     const row = getMetaPrimaryPurchaseFromActions(ca);
-    expect(row).toEqual({ conversions: 3, value: 150 });
+    expect(row).toEqual({ conversions: 10, value: 200 });
   });
 
-  it('χρησιμοποιεί Purchase αν λείπει το Pixel', () => {
+  it('χρησιμοποιεί Purchase (Pixel) αν λείπει το standard Purchase', () => {
     const ca = {
       Purchase: { conversions: 7, value: 99 },
     };
@@ -79,6 +79,8 @@ describe('Meta effective metrics vs αφελές άθροισμα όλων τω�
     const c = { channel: 'Meta', conversionActions } as unknown as Campaign;
     const primary = getMetaPrimaryPurchaseFromActions(conversionActions);
     expect(primary).not.toBeNull();
+    expect(primary!.conversions).toBe(99);
+    expect(primary!.value).toBe(1);
     expect(getEffectiveConversions(c)).toBe(primary!.conversions);
     expect(getEffectiveConversionValue(c)).toBe(primary!.value);
   });

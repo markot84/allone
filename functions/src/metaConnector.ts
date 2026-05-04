@@ -131,12 +131,12 @@ function fin(n: unknown): number {
   return Number.isFinite(x) ? x : 0;
 }
 
-/** Aligns with frontend roiUtils Meta purchase primary (Pixel > Purchase). */
+/** Aligns with frontend roiUtils Meta purchase primary (`Purchase` ≈ Ads Manager, then Pixel). */
 function metaPrimaryPurchaseFromCa(
   ca: Record<string, { conversions?: number; value?: number }> | undefined
 ): { conv: number; value: number } {
   if (!ca || typeof ca !== 'object') return { conv: 0, value: 0 };
-  for (const label of ['Purchase (Pixel)', 'Purchase'] as const) {
+  for (const label of ['Purchase', 'Purchase (Pixel)'] as const) {
     const a = ca[label];
     if (!a) continue;
     const conv = Number(a.conversions ?? 0);
@@ -622,12 +622,12 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
               const imp = parseInt(row.impressions || '0', 10);
               const clk = parseInt(row.clicks || '0', 10);
               const spd = parseFloat(row.spend || '0');
-              // Purchase conversions/value (ίδια λογική με αρχικό: pixel → standard)
+              // Purchase conversions/value (ίδια προτεραιότητα με insights: purchase πριν pixel)
               let convs = 0;
               let convVal = 0;
               const actions = row.actions || [];
               const av = row.action_values || [];
-              for (const t of ['offsite_conversion.fb_pixel_purchase', 'purchase']) {
+              for (const t of ['purchase', 'offsite_conversion.fb_pixel_purchase']) {
                 const a = actions.find((x: any) => x.action_type === t);
                 if (!a) continue;
                 const cv = parseFloat(a.value || '0');
@@ -696,7 +696,7 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
               let convVal = 0;
               const actions = row.actions || [];
               const av = row.action_values || [];
-              for (const t of ['offsite_conversion.fb_pixel_purchase', 'purchase']) {
+              for (const t of ['purchase', 'offsite_conversion.fb_pixel_purchase']) {
                 const a = actions.find((x: any) => x.action_type === t);
                 if (!a) continue;
                 const cv = parseFloat(a.value || '0');
@@ -798,10 +798,8 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
         // that massively inflate counts — e.g. 1600% click-to-conversion on Advantage+ campaigns.
         const actions = row.actions || [];
         const actionValues = row.action_values || [];
-        const purchaseTypes = [
-          'offsite_conversion.fb_pixel_purchase',
-          'purchase',
-        ];
+        /** Standard `purchase` first — same priority as metaPrimaryPurchaseFromCa / Ads Manager totals. */
+        const purchaseTypes = ['purchase', 'offsite_conversion.fb_pixel_purchase'];
         let rowConversions = 0;
         let rowConvValue = 0;
         // Purchase counts/value ανά attribution window (default + 6 επιλογές)

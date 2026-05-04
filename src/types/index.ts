@@ -576,7 +576,7 @@ export interface Campaign {
   cpm?: number; // Cost per 1,000 impressions
   conversions?: number;
   conversion_value?: number;
-  /** Google Ads: metrics με conversion_action_category PURCHASE (+ STORE_SALES). Meta: primary Purchase (Pixel)/Purchase. */
+  /** Google Ads: metrics με conversion_action_category PURCHASE (+ STORE_SALES). Meta: primary Purchase / Purchase (Pixel). */
   purchase_conversions?: number;
   purchase_conversion_value?: number;
   roas?: number; // Return on ad spend

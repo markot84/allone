@@ -75,6 +75,40 @@ function canonicalChannelComparable(name: string): string {
   return CHANNEL_LABEL_CANONICAL[n] ?? n;
 }
 
+/**
+ * English display keys for channel mix (merge EL/EN variants + match Performance+ CHANNEL_COLORS).
+ */
+const SESSION_DEFAULT_CHANNEL_DISPLAY: Record<string, string> = {
+  'organic search': 'Organic Search',
+  'organic shopping': 'Organic Shopping',
+  'organic social': 'Organic Social',
+  'organic video': 'Organic Video',
+  'paid search': 'Paid Search',
+  'paid shopping': 'Paid Shopping',
+  'paid social': 'Paid Social',
+  'paid other': 'Paid Other',
+  'paid video': 'Paid Video',
+  'cross-network': 'Cross-network',
+  direct: 'Direct',
+  referral: 'Referral',
+  display: 'Display',
+  email: 'Email',
+  social: 'Social',
+  affiliates: 'Affiliates',
+  audio: 'Audio',
+  sms: 'SMS',
+  video: 'Video',
+  other: '(Other)',
+  unassigned: 'Unassigned',
+};
+
+function displaySessionDefaultChannelGroup(raw: string): string {
+  const t = String(raw || '').trim();
+  if (!t) return 'Unassigned';
+  const cmp = canonicalChannelComparable(t);
+  return SESSION_DEFAULT_CHANNEL_DISPLAY[cmp] ?? t;
+}
+
 /** True if GA4 default channel group row counts as organic (Search, Social, Shopping, Video, …). */
 function isOrganicDefaultChannelGroup(raw: string): boolean {
   return canonicalChannelComparable(raw).includes('organic');
@@ -550,7 +584,7 @@ export async function fetchGA4Data(
         const dims = row.dimensionValues || [];
         const vals = row.metricValues || [];
         const channel = useChannelDimension
-          ? (dims[0]?.value || 'Unknown')
+          ? displaySessionDefaultChannelGroup(dims[0]?.value || '')
           : channelFromSourceMedium(dims[0]?.value || '', dims[1]?.value || '');
 
         const sessions = parseInt(vals[valIdxSessions]?.value || '0', 10);
@@ -1080,7 +1114,7 @@ export async function fetchGA4Data(
           };
           const ymd = normalizeGa4DateDimension(r.dimensionValues?.[0]?.value);
           if (!ymd) continue;
-          const ch = r.dimensionValues?.[1]?.value || 'Unknown';
+          const ch = displaySessionDefaultChannelGroup(r.dimensionValues?.[1]?.value || '');
           const vals = r.metricValues || [];
           const sessions = parseInt(vals[0]?.value || '0', 10);
           const users = parseInt(vals[1]?.value || '0', 10);
@@ -1237,7 +1271,7 @@ export async function fetchGA4Data(
             };
             const ymd = normalizeGa4DateDimension(r.dimensionValues?.[0]?.value);
             if (!ymd) continue;
-            const ch = r.dimensionValues?.[1]?.value || 'Unknown';
+            const ch = displaySessionDefaultChannelGroup(r.dimensionValues?.[1]?.value || '');
             const sessions = parseInt(r.metricValues?.[0]?.value || '0', 10);
             if (!sink[ymd]) sink[ymd] = {};
             if (!sink[ymd][ch]) {

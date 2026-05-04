@@ -750,7 +750,7 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
                       convFilterActive
                         ? 'Μόνο οι επιλεγμένες conversion actions.'
                         : showPurchaseSalesHeadlines
-                          ? 'Google Ads: conversion_action_category PURCHASE + STORE_SALES (όπως Purchases στο UI). Meta: Purchase (Pixel) / Purchase. Με φίλτρο ενέργειας το νόημα αλλάζει.'
+                          ? 'Google Ads: conversion_action_category PURCHASE + STORE_SALES (όπως Purchases στο UI). Meta: πρώτα standard Purchase (συγκλίνει με Ads Manager όταν υπάρχουν Pixel+CAPI), έπειτα Purchase (Pixel). Με φίλτρο ενέργειας το νόημα αλλάζει.'
                           : 'Conversion counts από το sync.'
                     }
                     size={13}
