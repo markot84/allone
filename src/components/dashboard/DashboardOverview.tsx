@@ -128,7 +128,13 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   useAutomationRunner();
   const ga4 = useGA4Data();
   const ecomm = useEcommerceSummary();
-  const ecommHist = useEcommerceFullHistoryMetrics({ mode: 'full' });
+  /**
+   * Dashboard: μόνο server summary (`ecommerce_summary`) — γρήγορο, ένα Firestore read.
+   * Το `full` mode κατέβαζε όλο το ιστορικό orders παράλληλα με το `useSegments` 400ήμερο fetch
+   * → πάγωμα του main thread σε brands με 10K+ orders. Η ακρίβεια του summary εξασφαλίζεται
+   * μέσω `refreshAggregates` μετά από αλλαγή Sales Channel Rules / Revenue Source.
+   */
+  const ecommHist = useEcommerceFullHistoryMetrics({ mode: 'summary_only' });
   const { alerts: automationAlerts } = useAutomationAlerts();
 
   const supplierTodMap = useMemo(() => {

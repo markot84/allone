@@ -13,6 +13,7 @@ import { Card, Spinner, Button, useToast, PageHeader } from '../common';
 import { useProcurement } from '../../hooks/useProcurement';
 import { useRefreshProcurementSignals } from '../../hooks/useProcurementSignals';
 import { useBrand } from '../../hooks/useBrand';
+import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import { ProcurementService } from '../../services/firestore';
 import { seedProcurementDemoData } from '../../services/procurementDemoData';
 import {
@@ -99,6 +100,42 @@ const BADGE_STYLES: Record<string, string> = {
 
 const STAT_LINE_COLORS = ['#F97316', '#3B82F6', '#22C55E', '#8B5CF6', '#F59E0B', '#EF4444', '#78716C'];
 
+/** Canonical column order per sheet (matches PROCUREMENT_TEMPLATE.xlsx). Unknown cols go to the end. */
+const CANONICAL_COLUMN_ORDER: Record<ProcurementSheetType, string[]> = {
+  inventory: [
+    'ΚΩΔΙΚΟΣ', 'ΠΕΡΙΓΡΑΦΗ', 'ΚΑΤΗΓΟΡΙΑ', 'ΠΡΟΜΗΘΕΥΤΗΣ', 'ΟΜΑΔΑ ΡΟΗΣ',
+    'ΑΞΙΟΛΟΓΗΣΗ ΕΙΔΟΥΣ', 'STATUS ΚΩΔΙΚΟΥ', 'ΠΡΩΤΟΓΕΝΕΣ ΚΟΣΤΟΣ Μ.Μ.',
+    'ΔΙΑΘΕΣΙΜΟ ΥΠΟΛΟΙΠΟ', 'ΔΥΝΑΜΙΚΟ ΥΠΟΛΟΙΠΟ', 'ΣΥΝΟΛΙΚΕΣ ΠΩΛΗΣΕΙΣ',
+    'ΗΜΕΡΕΣ ΕΠΑΡΚΕΙΑΣ ΔΙΑΘΕΣΙΜΟΥ ΑΠΟΘΕΜΑΤΟΣ', 'ΚΙΒΩΤΟΛΟΓΙΟ',
+    'ΠΟΣΟΤΗΤΑ ΑΝΑΤΡΟΦΟΔΟΣΙΑΣ', 'ΑΞΙΑ ΑΝΑΤΡΟΦΟΔΟΣΙΑΣ',
+    'ΠΟΣΟΤΗΤΑ ΑΜΕΣΗΣ ΑΝΑΤΡΟΦΟΔΟΣΙΑΣ', 'ΠΟΣΟΤΗΤΑ ΠΡΟΣ ΠΡΟΩΘΗΣΗ',
+  ],
+  costing: [
+    'ΚΩΔΙΚΟΣ', 'ΠΕΡΙΓΡΑΦΗ', 'ΚΑΤΗΓΟΡΙΑ', 'ΠΡΩΤΟΓΕΝΕΣ ΚΟΣΤΟΣ',
+    'ΔΕΥΤΕΡΟΓΕΝΕΣ ΚΟΣΤΟΣ', 'ΑΝΑΛΥΣΗ ΚΟΣΤΟΥΣ ΑΝΑ ΔΡΑΣΤΗΡΙΟΤΗΤΑ',
+    'ΜΕΣΟ ΚΟΣΤΟΣ ΚΑΤΗΓΟΡΙΑΣ',
+  ],
+  item_evaluation: [
+    'ΚΩΔΙΚΟΣ', 'ΠΕΡΙΓΡΑΦΗ', 'ΚΑΤΗΓΟΡΙΑ', 'ΑΞΙΟΛΟΓΗΣΗ', 'ΒΑΘΜΟΛΟΓΙΑ',
+    'ΑΞΙΟΛΟΓΗΣΗ ΑΝΑ ΔΕΙΚΤΗ',
+  ],
+  customer_evaluation: [
+    'ΚΩΔΙΚΟΣ', 'ΕΠΩΝΥΜΙΑ', 'ΑΞΙΟΛΟΓΗΣΗ', 'ΒΑΘΜΟΛΟΓΙΑ', 'ΑΞΙΟΛΟΓΗΣΗ ΑΝΑ ΔΕΙΚΤΗ',
+  ],
+  pricing_policy: [
+    'ΚΩΔΙΚΟΣ', 'ΠΕΡΙΓΡΑΦΗ', 'ΚΑΤΗΓΟΡΙΑ', 'ΚΟΣΤΟΣ ΑΓΟΡΑΣ', 'ΠΡΩΤΟΓΕΝΕΣ ΚΟΣΤΟΣ',
+    'ΣΥΝΟΛΙΚΟ ΚΟΣΤΟΣ', 'MARKETING BASED COSTING', 'ACTIVITY BASED COSTING',
+    'ΑΞΙΟΛΟΓΗΣΗ ΕΙΔΟΥΣ', 'ΜΕΣΗ ΤΙΜΗ ΠΩΛΗΣΗΣ', 'ΤΙΜΟΚΑΤΑΛΟΓΟΣ ΒΑΣΗΣ',
+    'ΕΤΑΙΡΙΚΟΣ ΚΑΤΑΛΟΓΟΣ', 'ΕΚΠΤΩΤΙΚΟΣ Α', 'ΕΚΠΤΩΤΙΚΟΣ Β', 'ΕΚΠΤΩΤΙΚΟΣ C',
+  ],
+  fiscal_year: [
+    'ΚΩΔΙΚΟΣ', 'ΠΕΡΙΓΡΑΦΗ', 'ΜΕΣΗ ΤΙΜΗ ΠΩΛΗΣΗΣ',
+    'ΠΡΟΤΑΣΗ ΤΙΜΟΛΟΓΙΑΚΗΣ ΠΟΛΙΤΙΚΗΣ', 'ΑΠΟΛΟΓΙΣΤΙΚΟΣ ΤΖΙΡΟΣ',
+    'ΑΠΟΛΟΓΙΣΤΙΚΟ ΚΕΡΔΟΣ',
+  ],
+  statistics: [],
+};
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function parseNum(v: unknown): number {
@@ -135,25 +172,9 @@ function isNumericColName(k: string): boolean {
   return k.trim() !== '' && !isNaN(Number(k.trim()));
 }
 
-/**
- * In the ΑΠΟΛΟΓΙΣΤΙΚΟ ΕΤΟΣ sheet, Excel stores the year totals (turnover, profit, margin%)
- * as numeric values in the header row. XLSX reads them as column names.
- * This function extracts those totals from the column keys of the data rows.
- */
+/** Totals for the ΑΠΟΛΟΓΙΣΤΙΚΟ ΕΤΟΣ sheet: sum per-SKU rows (semantically correct & robust). */
 function getFiscalYearTotals(rows: Record<string, unknown>[]): { turnover: number; profit: number; marginPct: number } {
   if (rows.length === 0) return { turnover: 0, profit: 0, marginPct: 0 };
-  const nums = Object.keys(rows[0])
-    .filter(isNumericColName)
-    .map(Number)
-    .filter(n => n > 0)
-    .sort((a, b) => b - a);
-  if (nums.length >= 2) {
-    const turnover = nums[0];
-    const profit = nums.find(n => n > 1 && n < turnover) ?? nums[1];
-    const marginPct = nums.find(n => n > 0 && n < 1) ?? (turnover > 0 ? profit / turnover : 0);
-    return { turnover, profit, marginPct };
-  }
-  // Fallback: sum rows
   const turnoverCol = findCol(rows, 'ΤΖΙΡΟΣ');
   const profitCol   = findCol(rows, 'ΚΕΡΔΟΣ');
   const turnover = rows.reduce((s, r) => s + parseNum(r[turnoverCol]), 0);
@@ -168,10 +189,15 @@ const COL_ALIASES: Record<string, string[]> = {
   'ΑΝΑΤΡΟΦΟΔΟΣΙΑ':       ['ΑΝΑΤΡΟΦΟΔΟΣΙΑ', 'ΑΝΑΤΡΟΦΟΔΟΤΗΣΗ', 'REORDER', 'REFILL'],
   'ΒΑΘΜΟΛΟΓΙΑ':          ['ΒΑΘΜΟΛΟΓΙΑ', 'ΒΑΘΜΟΣ', 'SCORE', 'RATING'],
   'ΑΞΙΟΛΟΓΗΣΗ':          ['ΑΞΙΟΛΟΓΗΣΗ', 'EVALUATION', 'RATING'],
+  'ΜΕΣΗ ΤΙΜΗ ΠΩΛΗΣΗΣ':   ['ΜΕΣΗ ΤΙΜΗ ΠΩΛΗΣΗΣ', 'ΜΕΣΗ ΤΙΜΗ ΠΩΛΗΣΕΩΣ', 'ΜΕΣΗ ΤΙΜΗ', 'ΤΙΜΗ ΠΩΛΗΣΗΣ', 'ΠΩΛΗΣΗΣ', 'PRICE'],
   'ΤΙΜΗ ΠΩΛΗΣΗΣ':        ['ΤΙΜΗ ΠΩΛΗΣΗΣ', 'ΠΩΛΗΣΗΣ', 'ΤΙΜΗ', 'PRICE', 'ΠΩΛΗΣΗ'],
+  'ΣΥΝΟΛΙΚΟ ΚΟΣΤΟΣ':     ['ΣΥΝΟΛΙΚΟ ΚΟΣΤΟΣ', 'ΣΥΝΟΛΙΚΟ', 'TOTAL COST'],
   'ΔΕΥΤΕΡΟΓΕΝΕΣ':        ['ΔΕΥΤΕΡΟΓΕΝΕΣ', 'ΔΕΥΤΕΡ'],
-  'ΤΖΙΡΟΣ':              ['ΤΖΙΡΟΣ', 'TURNOVER', 'ΕΣΟΔΑ', 'REVENUE'],
-  'ΚΕΡΔΟΣ':              ['ΚΕΡΔΟΣ', 'PROFIT', 'ΚΕΡΔΗ'],
+  'ΑΠΟΛΟΓΙΣΤΙΚΟΣ ΤΖΙΡΟΣ':['ΑΠΟΛΟΓΙΣΤΙΚΟΣ ΤΖΙΡΟΣ', 'ΤΖΙΡΟΣ'],
+  'ΑΠΟΛΟΓΙΣΤΙΚΟ ΚΕΡΔΟΣ': ['ΑΠΟΛΟΓΙΣΤΙΚΟ ΚΕΡΔΟΣ', 'ΚΕΡΔΟΣ'],
+  'ΤΖΙΡΟΣ':              ['ΑΠΟΛΟΓΙΣΤΙΚΟΣ ΤΖΙΡΟΣ', 'ΤΖΙΡΟΣ', 'TURNOVER', 'ΕΣΟΔΑ', 'REVENUE'],
+  'ΚΕΡΔΟΣ':              ['ΑΠΟΛΟΓΙΣΤΙΚΟ ΚΕΡΔΟΣ', 'ΚΕΡΔΟΣ', 'PROFIT', 'ΚΕΡΔΗ'],
+  'ΑΞΙΑ ΑΝΑΤΡΟΦΟΔΟΣΙΑΣ': ['ΑΞΙΑ ΑΝΑΤΡΟΦΟΔΟΣΙΑΣ', 'ΑΞΙΑ ΑΝΑΤΡΟΦ'],
   'ΠΕΡΙΓΡΑΦΗ':           ['ΠΕΡΙΓΡΑΦΗ', 'ΟΝΟΜΑ', 'DESCRIPTION', 'NAME'],
   'ΚΩΔΙΚΟΣ':             ['ΚΩΔΙΚΟΣ', 'SKU', 'CODE', 'BARCODE'],
 };
@@ -207,34 +233,79 @@ function formatNumCell(raw: string): string {
   return n.toLocaleString('el-GR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
+/** Normalizes a header key for canonical ordering lookup (case/whitespace/underscore/dot-insensitive). */
+function normalizeHeader(s: string): string {
+  return s.toUpperCase().replace(/[._\s]+/g, ' ').trim();
+}
+
+/** Returns the position of `key` in the canonical list for `sheet`. Unknown keys go after known ones. */
+function canonicalOrderIndex(sheet: ProcurementSheetType, key: string): number {
+  const order = CANONICAL_COLUMN_ORDER[sheet];
+  if (!order || order.length === 0) return Number.MAX_SAFE_INTEGER;
+  const nk = normalizeHeader(key);
+  const idx = order.findIndex(c => normalizeHeader(c) === nk);
+  return idx >= 0 ? idx : Number.MAX_SAFE_INTEGER;
+}
+
+/** A column counts as "empty" when all its values are null/undefined/empty/'-'. */
+function isColumnEmpty(rows: Record<string, unknown>[], col: string): boolean {
+  return !rows.some(r => {
+    const v = r[col];
+    if (v == null) return false;
+    const s = String(v).trim();
+    return s !== '' && s !== '-';
+  });
+}
+
 function getSummary(key: ProcurementSheetType, rows: Record<string, unknown>[]) {
   const count = rows.length;
-  if (count === 0) return { count, primary: '—', secondary: '' };
+  if (count === 0) {
+    if (key === 'customer_evaluation') return { count, primary: '—', secondary: 'Δεν υπάρχει το υποσύστημα' };
+    return { count, primary: '—', secondary: '' };
+  }
   const fmt0 = (n: number) => n.toLocaleString('el-GR', { maximumFractionDigits: 0 });
+  const fmt2 = (n: number) => n.toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   switch (key) {
     case 'inventory': {
       const stockCol  = findCol(rows, 'ΔΙΑΘΕΣΙΜΟ ΥΠΟΛΟΙΠΟ');
-      const costCol   = findCol(rows, 'ΠΡΩΤΟΓΕΝΕΣ ΚΟΣΤΟΣ');
-      const refillCol = findCol(rows, 'ΑΝΑΤΡΟΦΟΔΟΣΙΑ');
-      const sumStock  = rows.reduce((s, r) => s + parseNum(r[stockCol]), 0);
-      const sumValue  = rows.reduce((s, r) => s + parseNum(r[costCol]) * parseNum(r[stockCol]), 0);
-      const toRefill  = rows.filter(r => parseNum(r[refillCol]) > 0).length;
-      const secParts  = [];
-      if (toRefill > 0) secParts.push(`${toRefill} SKU σε ανατροφοδότηση`);
-      if (sumValue > 0) secParts.push(`Αξία: €${fmt0(sumValue)}`);
-      return { count, primary: fmt0(sumStock), secondary: secParts.join(' · ') || 'Φυσιολογικά επίπεδα' };
+      const refillQtyCol = findCol(rows, 'ΑΝΑΤΡΟΦΟΔΟΣΙΑ');
+      const refillValCol = findCol(rows, 'ΑΞΙΑ ΑΝΑΤΡΟΦΟΔΟΣΙΑΣ');
+      const sumStock = rows.reduce((s, r) => s + parseNum(r[stockCol]), 0);
+      const refillRows = rows.filter(r => parseNum(r[refillQtyCol]) > 0);
+      const toRefill = refillRows.length;
+      const refillValue = refillRows.reduce((s, r) => s + parseNum(r[refillValCol]), 0);
+      const secParts: string[] = [];
+      if (toRefill > 0) secParts.push(`${fmt0(toRefill)} SKU για ανατροφοδοσία`);
+      if (refillValue > 0) secParts.push(`Αξία ανατροφ.: €${fmt0(refillValue)}`);
+      return {
+        count,
+        primary: fmt0(sumStock),
+        secondary: secParts.join(' · ') || 'Σύνολο τεμαχίων διαθέσιμου αποθέματος',
+      };
     }
     case 'costing': {
-      const costCol = findCol(rows, 'ΠΡΩΤΟΓΕΝΕΣ');
-      const costs = rows.map(r => parseNum(r[costCol])).filter(Boolean);
-      const avg = costs.length ? costs.reduce((a, b) => a + b, 0) / costs.length : 0;
-      return { count, primary: `€${avg.toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, secondary: 'Μέσο πρωτογενές κόστος' };
+      const primCol = findCol(rows, 'ΠΡΩΤΟΓΕΝΕΣ');
+      const secCol  = findCol(rows, 'ΔΕΥΤΕΡΟΓΕΝΕΣ');
+      const totals = rows
+        .map(r => parseNum(r[primCol]) + parseNum(r[secCol]))
+        .filter(n => n > 0);
+      const avg = totals.length ? totals.reduce((a, b) => a + b, 0) / totals.length : 0;
+      return { count, primary: `€${fmt2(avg)}`, secondary: 'Μέσο συνολικό κόστος (πρωτογενές + δευτερογενές)' };
     }
     case 'item_evaluation': {
-      const scoreCol = findCol(rows, 'ΒΑΘΜΟΛΟΓΙΑ');
-      const scores = rows.map(r => parseNum(r[scoreCol])).filter(Boolean);
-      const avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
-      return { count, primary: avg.toFixed(1), secondary: 'Μέση βαθμολογία ειδών' };
+      const evalCol = findCol(rows, 'ΑΞΙΟΛΟΓΗΣΗ');
+      const dist: Record<string, number> = {};
+      rows.forEach(r => {
+        const cat = String(r[evalCol] ?? '').trim();
+        if (cat) dist[cat] = (dist[cat] ?? 0) + 1;
+      });
+      const entries = Object.entries(dist).sort((a, b) => b[1] - a[1]);
+      const top = entries[0];
+      return {
+        count,
+        primary: top ? `${fmt0(top[1])} · ${top[0]}` : fmt0(count),
+        secondary: entries.slice(0, 3).map(([k, v]) => `${k}: ${fmt0(v)}`).join(' · ') || 'Κατανομή αξιολογήσεων',
+      };
     }
     case 'customer_evaluation': {
       const scoreCol = findCol(rows, 'ΒΑΘΜΟΛΟΓΙΑ');
@@ -245,17 +316,29 @@ function getSummary(key: ProcurementSheetType, rows: Record<string, unknown>[]) 
       return { count, primary: avg.toFixed(1), secondary: vip > 0 ? `${vip} VIP πελάτες` : 'Μέση βαθμολογία' };
     }
     case 'pricing_policy': {
-      const priceCol = findCol(rows, 'ΤΙΜΗ ΠΩΛΗΣΗΣ');
-      const prices = rows.map(r => parseNum(r[priceCol])).filter(Boolean);
-      const avg = prices.length ? prices.reduce((a, b) => a + b, 0) / prices.length : 0;
-      return { count, primary: `€${avg.toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, secondary: 'Μέση τιμή πώλησης' };
+      const priceCol = findCol(rows, 'ΜΕΣΗ ΤΙΜΗ ΠΩΛΗΣΗΣ');
+      const costCol  = findCol(rows, 'ΣΥΝΟΛΙΚΟ ΚΟΣΤΟΣ');
+      const pairs = rows
+        .map(r => ({ p: parseNum(r[priceCol]), c: parseNum(r[costCol]) }))
+        .filter(x => x.p > 0);
+      const avgPrice = pairs.length ? pairs.reduce((s, x) => s + x.p, 0) / pairs.length : 0;
+      const withCost = pairs.filter(x => x.c > 0);
+      const avgMargin = withCost.length
+        ? withCost.reduce((s, x) => s + (x.p - x.c) / x.p, 0) / withCost.length
+        : 0;
+      const marginPart = withCost.length ? ` · Περιθώριο: ${(avgMargin * 100).toFixed(1)}%` : '';
+      return {
+        count,
+        primary: `€${fmt2(avgPrice)}`,
+        secondary: `Μέση τιμή πώλησης ανά SKU${marginPart}`,
+      };
     }
     case 'fiscal_year': {
       const { turnover, profit, marginPct } = getFiscalYearTotals(rows);
       return { count, primary: `€${fmt0(turnover)}`, secondary: `Κέρδος: €${fmt0(profit)} (${(marginPct * 100).toFixed(1)}%)` };
     }
     case 'statistics':
-      return { count, primary: String(count), secondary: 'μετρικές' };
+      return { count, primary: fmt0(count), secondary: 'μετρικές' };
     default:
       return { count, primary: String(count), secondary: '' };
   }
@@ -625,6 +708,7 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
   const { currentBrand } = useBrand();
   const { data, isLoading, isRefreshing, hasData, invalidate } = useProcurement();
   const { refresh: refreshProcurementSignals } = useRefreshProcurementSignals();
+  const { monthlyRevenue, totalRevenue, hasData: hasEcommerce } = useEcommerceSummary();
   const [viewMode, setViewMode] = useState<'overview' | 'detail'>('overview');
   const [activeTab, setActiveTab] = useState<ProcurementSheetType>('inventory');
   const [isSeeding, setIsSeeding] = useState(false);
@@ -651,28 +735,35 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
   const globalKPIs = useMemo(() => {
     const invRows = (data.inventory ?? []) as Record<string, unknown>[];
     const itemRows = (data.item_evaluation ?? []) as Record<string, unknown>[];
-    const fiscalRows = (data.fiscal_year ?? []) as Record<string, unknown>[];
     const fmt0 = (n: number) => n.toLocaleString('el-GR', { maximumFractionDigits: 0 });
 
+    const codeCol  = findCol(invRows, 'ΚΩΔΙΚΟΣ');
     const stockCol = findCol(invRows, 'ΔΙΑΘΕΣΙΜΟ ΥΠΟΛΟΙΠΟ');
     const costCol  = findCol(invRows, 'ΠΡΩΤΟΓΕΝΕΣ ΚΟΣΤΟΣ');
     const scoreCol = findCol(itemRows, 'ΒΑΘΜΟΛΟΓΙΑ');
 
-    const totalStock = invRows.reduce((s, r) => s + parseNum(r[stockCol]), 0);
+    const uniqueSkus = new Set(
+      invRows.map(r => String(r[codeCol] ?? '').trim()).filter(Boolean)
+    ).size;
     const totalValue = invRows.reduce((s, r) => s + parseNum(r[costCol]) * parseNum(r[stockCol]), 0);
 
-    const { turnover: totalTurnover } = getFiscalYearTotals(fiscalRows);
+    // Πραγματικός τζίρος 12μήνου από ecommerce_summary (αντί για what-if Απολογιστικό)
+    const last12Revenue = (() => {
+      if (!hasEcommerce) return 0;
+      if (monthlyRevenue.length === 0) return totalRevenue;
+      return monthlyRevenue.slice(-12).reduce((s, m) => s + (m.revenue ?? 0), 0);
+    })();
 
     const scores = itemRows.map(r => parseNum(r[scoreCol])).filter(Boolean);
     const avgScore = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
 
     return [
-      { label: 'Συνολικά SKUs', value: invRows.length > 0 ? String(invRows.length) : '—', Icon: Tag },
-      { label: 'Αξία αποθέματος', value: totalValue > 0 ? `€${fmt0(totalValue)}` : invRows.length > 0 ? fmt0(totalStock) : '—', Icon: Package },
-      { label: 'Απολογιστικός τζίρος', value: fiscalRows.length > 0 ? `€${fmt0(totalTurnover)}` : '—', Icon: DollarSign },
-      { label: 'Μέση βαθμολογία ειδών', value: scores.length > 0 ? avgScore.toFixed(1) : '—', Icon: Star },
+      { label: 'Συνολικά SKUs', value: uniqueSkus > 0 ? uniqueSkus.toLocaleString('el-GR') : '—', Icon: Tag },
+      { label: 'Αξία Αποθέματος', value: totalValue > 0 ? `€${fmt0(totalValue)}` : '—', Icon: Package },
+      { label: 'Πραγματικός Τζίρος 12μήνου', value: last12Revenue > 0 ? `€${fmt0(last12Revenue)}` : '—', Icon: DollarSign },
+      { label: 'Μέση Βαθμολογία Ειδών', value: scores.length > 0 ? avgScore.toFixed(1) : '—', Icon: Star },
     ];
-  }, [data]);
+  }, [data, monthlyRevenue, totalRevenue, hasEcommerce]);
 
   const tabs = SHEET_KEYS.map(key => ({
     id: key,
@@ -688,15 +779,53 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
 
   const PAGE_SIZE = 20;
 
-  const activeData = (data[activeTab] ?? []) as Record<string, unknown>[];
+  const rawActiveData = (data[activeTab] ?? []) as Record<string, unknown>[];
+
+  /**
+   * For statistics: filter out metric rows that have no values across all period columns.
+   * (If a stat couldn't be produced, we hide it — we don't want the client asking for it.)
+   */
+  const activeData = useMemo(() => {
+    if (activeTab !== 'statistics' || rawActiveData.length === 0) return rawActiveData;
+    const metricCol = findStatMetricColumn(rawActiveData, EXCLUDED_KEYS);
+    const periodCols = Object.keys(rawActiveData[0]).filter(
+      k => !EXCLUDED_KEYS.has(k) && !isNumericColName(k) && k !== metricCol,
+    );
+    return rawActiveData.filter(row =>
+      periodCols.some(k => {
+        const v = row[k];
+        if (v == null) return false;
+        const s = String(v).trim();
+        return s !== '' && s !== '-' && parseNum(s) !== 0;
+      }),
+    );
+  }, [rawActiveData, activeTab]);
+
+  /**
+   * Headers: union of ALL row keys (Firestore may omit empty fields per-row) →
+   * filter out empty columns → apply canonical template order → pin metric col for stats.
+   */
   const headers = useMemo(() => {
     if (activeData.length === 0) return [];
-    const allKeys = Object.keys(activeData[0]).filter(k => !EXCLUDED_KEYS.has(k) && !isNumericColName(k));
+    const keySet = new Set<string>();
+    activeData.forEach(r => {
+      Object.keys(r).forEach(k => {
+        if (!EXCLUDED_KEYS.has(k) && !isNumericColName(k)) keySet.add(k);
+      });
+    });
+    const allKeys = [...keySet].filter(k => !isColumnEmpty(activeData, k));
+
     if (activeTab === 'statistics') {
-      const metricCol = findStatMetricColumn(activeData as Record<string, unknown>[], EXCLUDED_KEYS);
+      const metricCol = findStatMetricColumn(activeData, EXCLUDED_KEYS);
       return [metricCol, ...allKeys.filter(k => k !== metricCol)];
     }
-    return allKeys;
+
+    return allKeys.slice().sort((a, b) => {
+      const ia = canonicalOrderIndex(activeTab, a);
+      const ib = canonicalOrderIndex(activeTab, b);
+      if (ia !== ib) return ia - ib;
+      return a.localeCompare(b, 'el');
+    });
   }, [activeData, activeTab]);
 
   // Reset on tab change
