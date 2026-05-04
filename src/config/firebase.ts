@@ -4,12 +4,15 @@ import { getAuth } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
 import { initializeAppCheck, ReCaptchaV3Provider, getToken as getAppCheckToken, type AppCheck } from 'firebase/app-check';
 
+/** Ίδιο με `.firebaserc` — ώστε Firestore/SDK και HTTP functions URL να μην αποκλίνουν αν λείπει `VITE_FIREBASE_PROJECT_ID` στο build. */
+const DEFAULT_FIREBASE_PROJECT_ID = 'performance-plus-4a5b2';
+
 // Firebase configuration
 // TODO: Replace with your Firebase project configuration
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "your-api-key",
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "your-project.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "performance-plus",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || DEFAULT_FIREBASE_PROJECT_ID,
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "your-project.appspot.com",
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "123456789",
   appId: import.meta.env.VITE_FIREBASE_APP_ID || "your-app-id"
@@ -75,17 +78,28 @@ export const APP_URL =
   import.meta.env.VITE_APP_URL || 'https://performance-plus-4a5b2.web.app';
 
 const FUNCTIONS_REGION = import.meta.env.VITE_FIREBASE_FUNCTIONS_REGION || 'europe-west1';
-/** Ίδιο fallback με coordination — όχι το placeholder projectId του firebaseConfig */
-const FUNCTIONS_PROJECT =
-  import.meta.env.VITE_FIREBASE_PROJECT_ID || 'performance-plus-4a5b2';
+const FUNCTIONS_PROJECT = import.meta.env.VITE_FIREBASE_PROJECT_ID || firebaseConfig.projectId || DEFAULT_FIREBASE_PROJECT_ID;
 
 const DEFAULT_CF_BASE = `https://${FUNCTIONS_REGION}-${FUNCTIONS_PROJECT}.cloudfunctions.net`;
 
-/** Ρητό override από .env (staging / άλλο project). */
+/** Ρητό override από .env (staging / άλλο project). Άκυρα ή ύποπτα URLs αγνοούνται → default `*.cloudfunctions.net`. */
 function resolvedExplicitFunctionsBase(): string | null {
   const raw = (import.meta.env.VITE_FUNCTIONS_BASE_URL || import.meta.env.VITE_FUNCTIONS_URL || '').trim();
   if (!raw) return null;
-  return (raw.startsWith('http') ? raw : `https://${raw}`).replace(/\/$/, '');
+  const normalized = (raw.startsWith('http') ? raw : `https://${raw}`).replace(/\/$/, '');
+  let u: URL;
+  try {
+    u = new URL(normalized);
+  } catch {
+    console.warn('[config] Ignoring invalid VITE_FUNCTIONS_BASE_URL / VITE_FUNCTIONS_URL');
+    return null;
+  }
+  const host = u.hostname.toLowerCase();
+  if (host.includes('github') || host.includes('gist.github')) {
+    console.warn('[config] Ignoring VITE_FUNCTIONS_* pointing at GitHub — use europe-west1-<project>.cloudfunctions.net');
+    return null;
+  }
+  return normalized;
 }
 
 /**

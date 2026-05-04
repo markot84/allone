@@ -2307,7 +2307,7 @@ export function ConnectorsPanel() {
           'Το sync ξεπέρασε το χρονικό όριο (~21 λεπτά). Για Megaventory με πολύ μεγάλο όγκο, δοκιμάστε ξανά ή ελέγξτε τα logs της function.';
       } else if (msg === 'Failed to fetch') {
         msg =
-          'Αποτυχία δικτύου (Failed to fetch). Έλεγχος: σύνδεση, firewall/adblock, και ότι το URL functions ταιριάζει με το deploy (VITE_FUNCTIONS_BASE_URL / VITE_FUNCTIONS_URL).';
+          `Αποτυχία δικτύου (Failed to fetch). Βάση κλήσης: ${FUNCTIONS_BASE}. Έλεγχος σύνδεσης/adblock και CI: αν το VITE_FUNCTIONS_BASE_URL ή VITE_FUNCTIONS_URL είναι λάθος ή κενό URL, αφαίρεσέ το ώστε να χρησιμοποιηθεί το default *.cloudfunctions.net του project.`;
       }
       toast.error(msg);
       console.error('[ConnectorsPanel] connectorSync failed:', err);
