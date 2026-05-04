@@ -323,6 +323,16 @@ service cloud.firestore {
       allow read: if isBrandMember(brandId);
       allow write: if false;
     }
+    // SKU stats — chunked layout. Splitting was forced by big-catalog brands (e-tennis, safeblock)
+    // whose 12K+ SKUs crashed the parent ecommerce_summary write past Firestore's 1 MiB doc limit.
+    match /sku_stats/{brandId} {
+      allow read: if isBrandMember(brandId);
+      allow write: if false;
+      match /chunks/{chunkId} {
+        allow read: if isBrandMember(brandId);
+        allow write: if false;
+      }
+    }
     // Procurement signals — server-aggregated per-SKU map (keyed by brandId)
     match /procurement_signals/{brandId} {
       allow read: if isBrandMember(brandId);

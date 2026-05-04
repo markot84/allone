@@ -872,8 +872,15 @@ export async function fetchMagentoData(brandId: string): Promise<{
 
       hasMore = currentPage * 100 < totalCount;
       currentPage++;
-      // Backfill cap: συνεχίζουμε σε επόμενο sync με cursor αντί να ξανατραβάμε τα ίδια.
-      if (currentPage > 100) {
+      /**
+       * Backfill cap.
+       * - Historical: 300 σελίδες (30K orders) ώστε brands με μεγάλο ιστορικό (e-tennis ~3 χρόνια
+       *   × χιλιάδες/μήνα) να ολοκληρώνουν το backfill σε λίγες νύχτες αντί για >2 εβδομάδες.
+       *   Το function timeout είναι 1800s — 30K orders × ~120ms/page χωράνε άνετα.
+       * - Incremental: 100 σελίδες αρκούν (24h orders ~ <100 σελίδες).
+       */
+      const cap = orderWindow.mode === 'historical' ? 300 : 100;
+      if (currentPage > cap) {
         if (hasMore && orderWindow.mode === 'historical') {
           ordersBackfillIncomplete = true;
         } else if (hasMore) {

@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, getDocs, collection } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useBrand } from './useBrand';
 import type { EcommerceExclusionReason, EcommerceSalesChannel } from '../services/ecommerceSalesChannel';
@@ -96,6 +96,32 @@ function parseSkuStats(raw: EcommerceSummaryRaw | null | undefined): SkuStatsMap
   return raw.skuStats ?? {};
 }
 
+/**
+ * Διαβάζει το `sku_stats/{brandId}` collection (chunked layout) και επιστρέφει merged map.
+ * Συμβατό με legacy: αν το main summary έχει `skuStatsJson` (παλιά docs), επιστρέφεται κενό
+ * εδώ — το `parseSkuStats` του summary κάνει fallback.
+ */
+async function fetchSkuStatsFromChunks(brandId: string): Promise<SkuStatsMap> {
+  try {
+    const chunksSnap = await getDocs(collection(db, 'sku_stats', brandId, 'chunks'));
+    if (chunksSnap.empty) return {};
+    const merged: SkuStatsMap = {};
+    chunksSnap.forEach((snap) => {
+      const data = snap.data() as { skuStatsJson?: string };
+      if (!data.skuStatsJson) return;
+      try {
+        const partial = JSON.parse(data.skuStatsJson) as SkuStatsMap;
+        Object.assign(merged, partial);
+      } catch {
+        // ignore corrupt chunk
+      }
+    });
+    return merged;
+  } catch {
+    return {};
+  }
+}
+
 function parseSkuMovement(raw: EcommerceSummaryRaw | null | undefined): SkuMovementMap {
   if (!raw?.skuMovementJson) return {};
   try {
@@ -106,21 +132,34 @@ function parseSkuMovement(raw: EcommerceSummaryRaw | null | undefined): SkuMovem
 }
 
 async function fetchEcommerceSummary(brandId: string): Promise<EcommerceSummaryRaw | null> {
-  const [summarySnap, movementSnap] = await Promise.all([
+  const [summarySnap, movementSnap, chunkedSkuStats] = await Promise.all([
     getDoc(doc(db, 'ecommerce_summary', brandId)),
     getDoc(doc(db, 'stock_movement', brandId)),
+    fetchSkuStatsFromChunks(brandId),
   ]);
   if (!summarySnap.exists()) return null;
   const summary = summarySnap.data() as EcommerceSummaryRaw;
-  if (!movementSnap.exists()) return summary;
 
+  /**
+   * Νέο layout: `sku_stats/{brandId}/chunks/*` — απαραίτητο γιατί το παλιό inline `skuStatsJson`
+   * πρόσθετε το serialized map στο main summary doc και ξεπερνούσε το Firestore όριο 1 MiB
+   * για brands με μεγάλα catalogs (e-tennis/safeglock) → όλο το set απέτυχε → στάλε δεδομένα.
+   */
+  const merged: EcommerceSummaryRaw = {
+    ...summary,
+    ...(Object.keys(chunkedSkuStats).length > 0
+      ? { skuStats: chunkedSkuStats, skuStatsJson: undefined }
+      : {}),
+  };
+
+  if (!movementSnap.exists()) return merged;
   const movement = movementSnap.data() as StockMovementRaw;
   return {
-    ...summary,
-    skuMovementJson: movement.skuMovementJson ?? summary.skuMovementJson,
-    skuMovementCount: movement.skuMovementCount ?? summary.skuMovementCount,
-    stockMovementBaselineDate: movement.stockMovementBaselineDate ?? summary.stockMovementBaselineDate,
-    stockMovementUpdatedAt: movement.stockMovementUpdatedAt ?? summary.stockMovementUpdatedAt,
+    ...merged,
+    skuMovementJson: movement.skuMovementJson ?? merged.skuMovementJson,
+    skuMovementCount: movement.skuMovementCount ?? merged.skuMovementCount,
+    stockMovementBaselineDate: movement.stockMovementBaselineDate ?? merged.stockMovementBaselineDate,
+    stockMovementUpdatedAt: movement.stockMovementUpdatedAt ?? merged.stockMovementUpdatedAt,
   };
 }
 

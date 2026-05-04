@@ -35,6 +35,98 @@ function arrayOrEmpty(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
+/**
+ * SKU stats writer με αυτόματο chunking για να μην ξεπερνά το Firestore 1 MiB όριο/document.
+ *
+ * - Αν το serialized JSON < ~900KB → 1 chunk doc + parent metadata.
+ * - Αλλιώς σπάει το map σε ομάδες SKUs ώστε κάθε chunk doc να μένει < 900KB.
+ * - Παλιότερα chunks που πλέον δεν χρειάζονται διαγράφονται για να μη μένει stale data.
+ *
+ * Storage layout:
+ *   sku_stats/{brandId}                       → { chunkCount, skuStatsCount, updatedAt }
+ *   sku_stats/{brandId}/chunks/{idx}          → { skuStatsJson, skuCount }
+ */
+const SKU_STATS_CHUNK_BYTES = 900_000;
+
+type SkuStatsRow = {
+  stock: number;
+  sold: number;
+  sold7d: number;
+  sold30d: number;
+  sold90d: number;
+  lastSaleAt: string | null;
+};
+
+async function writeSkuStatsChunked(
+  db: Firestore,
+  brandId: string,
+  skuStats: Record<string, SkuStatsRow>,
+  skuCount: number
+): Promise<void> {
+  const fullJson = JSON.stringify(skuStats);
+  const chunkPayloads: { json: string; count: number }[] = [];
+
+  if (fullJson.length <= SKU_STATS_CHUNK_BYTES) {
+    chunkPayloads.push({ json: fullJson, count: skuCount });
+  } else {
+    /** Split αλφαβητικά για να είναι deterministic ανά run. Κάθε chunk όσο πιο κοντά γίνεται στο όριο. */
+    const skus = Object.keys(skuStats).sort();
+    let bucket: Record<string, SkuStatsRow> = {};
+    let bucketBytes = 2;
+
+    for (const sku of skus) {
+      const entryJson = JSON.stringify({ [sku]: skuStats[sku] });
+      const entryBytes = entryJson.length - 2;
+      if (bucketBytes + entryBytes > SKU_STATS_CHUNK_BYTES && Object.keys(bucket).length > 0) {
+        chunkPayloads.push({ json: JSON.stringify(bucket), count: Object.keys(bucket).length });
+        bucket = {};
+        bucketBytes = 2;
+      }
+      bucket[sku] = skuStats[sku];
+      bucketBytes += entryBytes + (Object.keys(bucket).length > 1 ? 1 : 0);
+    }
+    if (Object.keys(bucket).length > 0) {
+      chunkPayloads.push({ json: JSON.stringify(bucket), count: Object.keys(bucket).length });
+    }
+  }
+
+  const parentRef = db.doc(`sku_stats/${brandId}`);
+  const chunksColl = parentRef.collection('chunks');
+
+  const writes = chunkPayloads.map((payload, idx) =>
+    chunksColl.doc(String(idx)).set({
+      skuStatsJson: payload.json,
+      skuCount: payload.count,
+      updatedAt: FieldValue.serverTimestamp(),
+    })
+  );
+  await Promise.all(writes);
+
+  /** Σβήσε παλιά chunks (αν προηγούμενο run είχε περισσότερα chunks). */
+  const existing = await chunksColl.listDocuments();
+  const stale = existing.filter((d) => {
+    const idx = Number.parseInt(d.id, 10);
+    return Number.isFinite(idx) && idx >= chunkPayloads.length;
+  });
+  if (stale.length) {
+    await Promise.all(stale.map((d) => d.delete()));
+  }
+
+  await parentRef.set(
+    {
+      chunkCount: chunkPayloads.length,
+      skuStatsCount: skuCount,
+      bytes: fullJson.length,
+      updatedAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+
+  logger.info(
+    `[EcommerceAgg] skuStats persisted for ${brandId}: ${skuCount} SKUs across ${chunkPayloads.length} chunk(s) (~${(fullJson.length / 1024).toFixed(1)}KB)`
+  );
+}
+
 interface OrderRow {
   totalPrice: number;
   createdAt: string;
@@ -601,6 +693,16 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
     `[EcommerceAgg] skuStats populated: ${allSkus.size} SKUs for brand ${brandId} (windowed, ${(skuStatsJson.length / 1024).toFixed(1)}KB)`
   );
 
+  /**
+   * Το skuStatsJson για brands με >10K SKUs (e-tennis, safeblock) ξεπερνά το Firestore όριο
+   * των 1 MiB ανά document. Αν παραμείνει στο `ecommerce_summary` doc → ολόκληρο το set fails
+   * → χάνεται κάθε ενημέρωση revenueByDay/orderCount → Dashboard δείχνει €0.
+   *
+   * Λύση: γράφεται σε ξεχωριστό `sku_stats/{brandId}` (όπως ήδη το `stock_movement`). Αν είναι
+   * > 900KB, σπάει σε chunks σε subcollection `sku_stats/{brandId}/chunks/{i}`.
+   */
+  await writeSkuStatsChunked(db, brandId, skuStats, allSkus.size);
+
   // Orders by day (count)
   const ordersByDay: Record<string, number> = {};
   for (const o of revenueOrders) {
@@ -644,17 +746,19 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
     ordersByDay,
     recentOrders,
     connectedPlatforms: revenueSummaryPlatforms,
-    // skuStats serialized — αποφυγή Firestore index limits για μεγάλα catalogs.
-    skuStatsJson,
+    // Μόνο metadata — το βαρύ skuStatsJson γράφεται σε `sku_stats/{brandId}` (βλ. writeSkuStatsChunked).
     skuStatsCount: allSkus.size,
     syncedAt: FieldValue.serverTimestamp(),
   };
 
   const ref = db.doc(`ecommerce_summary/${brandId}`);
   await ref.set(summary);
-  // Καθάρισμα παλιού indexed map field (μη fatal αν δεν υπάρχει).
+  // Καθάρισμα παλιού indexed map field & legacy inline JSON (μη fatal αν δεν υπάρχουν).
   try {
-    await ref.update({ skuStats: FieldValue.delete() });
+    await ref.update({
+      skuStats: FieldValue.delete(),
+      skuStatsJson: FieldValue.delete(),
+    });
   } catch {
     // ignore
   }
