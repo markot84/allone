@@ -1,10 +1,14 @@
 {
-  "version": "0.726.49",
-  "previousVersion": "0.726.48",
-  "commitHash": "00b18af",
+  "version": "0.726.51",
+  "previousVersion": "0.726.50",
+  "commitHash": "730e970",
   "branch": "main",
-  "buildDate": "2026-05-04T07:43:45.143Z",
+  "buildDate": "2026-05-04T09:14:36.279Z",
   "commits": [
+    {
+      "hash": "730e970",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "00b18af",
       "message": "fix(geminiProxy): bump timeout to 120s + 5s fail-open cap on rate-limit txn"
@@ -60,16 +64,12 @@
     {
       "hash": "8a2775b",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "208588d",
-      "message": "fix(ecommerce): robust raw orders fetch when date query returns empty (timestamp/coerce server)"
     }
   ],
   "changes": [
+    "[Συντήρηση] Full deploy",
     "[Διόρθωση] Bump timeout to 120s + 5s fail-open cap on rate-limit txn",
     "[Διόρθωση] Split skuStats from summary doc to bypass 1MB Firestore limit",
-    "[Συντήρηση] Full deploy",
     "[Διόρθωση] Robust raw orders fetch when date query returns empty (timestamp/coerce server)",
     "[Build] Hosting build info after full deploy (v0.726.10)",
     "E‑commerce connectors: incremental orders/products sync like Magento syncPolicy window",

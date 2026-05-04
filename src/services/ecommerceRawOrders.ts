@@ -499,17 +499,23 @@ export async function fetchAllEcommerceOrders(
               brandId,
               rangedLoadOpts
             );
-            // Αν το query επέστρεψε κενό (π.χ. createdAt σε Timestamp έναντι strings, ή index/cache),
-            // κάνουμε ανάγνωση όλων των παραγγελιών brand και φιλτάρουμε client-side —
-            // ακριβές για μεγάλα catalogs, αλλά σωστό για τις dashboards.
+            /**
+             * Παλιά λογική: `rows.length === 0` → διάβασμα **όλης** της συλλογής + client-side φίλτρο.
+             * Αυτό έκανε το UI να «κολλάει» 4–5 λεπτά και με «Τελευταίες 30 ημέρες», επειδή ο χρόνος
+             * ήταν ευθύγραμος με τις συνολικές παραγγελίες του brand, όχι με το επιλεγμένο εύρος.
+             * Αν υπήρχαν πραγματικά μηδενικά αποτελέσματα, το φόρεμα ήταν ανηθικώς δαπανηρό.
+             *
+             * Retry μία φορά με `forceServer`: αν το cache επέστρεψε ψευδο-κενό ή χρειάζεται επικύρωση
+             * από server για τα ίδια constraints — χωρίς φόρτωση ολόκληρης συλλογής.
+             * Αν υπάρχει πραγματικό σφάλμα τύπος/index, πέφτουμε στο catch (ολόκληρη συλλογή) — σπάνιο.
+             */
             if (rows.length === 0) {
-              const allRows = await FirestoreService.getDocuments<Record<string, unknown>>(
+              rows = await FirestoreService.getDocuments<Record<string, unknown>>(
                 collectionName,
-                [],
+                constraints,
                 brandId,
-                rangedLoadOpts
+                { forceServer: true }
               );
-              rows = filterRowsByDateWindow(allRows);
             }
           } else {
             rows = await FirestoreService.getDocuments<Record<string, unknown>>(collectionName, [], brandId, {
