@@ -13,6 +13,8 @@ export interface BriefingData {
     totalOrganic: number;
     totalCampaignRevenue: number;
     storeRevenue: number;
+    /** Όταν true, το «Σύνολο Εσόδων» του dashboard = τζίρος παραγγελιών (storeRevenue), ακόμη κι αν είναι 0 — όχι blend organic+ads. */
+    ecommerceSourceActive: boolean;
     trueRoas: number;
     revenueGap: number;
     orderCount: number;
@@ -123,7 +125,8 @@ export function collectBriefingData(params: {
     .map(p => p.name);
 
   const metrics = calculateCampaignMetrics(campaigns);
-  const storeRevenue = ecommerce?.hasData ? (ecommerce.totalRevenue || 0) : 0;
+  const ecommerceSourceActive = Boolean(ecommerce?.hasData);
+  const storeRevenue = ecommerceSourceActive ? (ecommerce!.totalRevenue || 0) : 0;
   const trueRoas = metrics.totalSpend > 0 ? storeRevenue / metrics.totalSpend : 0;
   const revenueGap = storeRevenue - (totalOrganicRevenue + metrics.totalRevenue);
 
@@ -148,6 +151,7 @@ export function collectBriefingData(params: {
       totalOrganic: totalOrganicRevenue,
       totalCampaignRevenue: metrics.totalRevenue,
       storeRevenue,
+      ecommerceSourceActive,
       trueRoas,
       revenueGap,
       orderCount: ecommerce?.orderCount || 0,
@@ -192,10 +196,13 @@ export function collectBriefingData(params: {
 // ── Metrics Snapshot ─────────────────────────────────────────────────────────
 
 function extractSnapshot(data: BriefingData): MetricsSnapshot {
-  return {
-    totalRevenue: data.revenue.storeRevenue > 0
+  const headlineRevenue = data.revenue.ecommerceSourceActive
+    ? data.revenue.storeRevenue
+    : data.revenue.storeRevenue > 0
       ? data.revenue.storeRevenue
-      : data.revenue.totalOrganic + data.revenue.totalCampaignRevenue,
+      : data.revenue.totalOrganic + data.revenue.totalCampaignRevenue;
+  return {
+    totalRevenue: headlineRevenue,
     totalSpend: data.revenue.totalSpend,
     roas: data.revenue.roas,
     deadStock: data.inventory.deadStock,
@@ -272,7 +279,12 @@ export function detectSignificantChange(
 function buildBriefingPrompt(data: BriefingData, periodLabel: string, updateContext?: string): string {
   const sections: string[] = [];
   const fallbackBlendedRevenue = data.revenue.totalOrganic + data.revenue.totalCampaignRevenue;
-  const effectiveRevenue = data.revenue.storeRevenue > 0 ? data.revenue.storeRevenue : fallbackBlendedRevenue;
+  const ecActive = data.revenue.ecommerceSourceActive;
+  const headlineRevenue = ecActive
+    ? data.revenue.storeRevenue
+    : data.revenue.storeRevenue > 0
+      ? data.revenue.storeRevenue
+      : fallbackBlendedRevenue;
 
   sections.push(`[BRAND] ${data.brandName}`);
   sections.push(`[ΠΕΡΙΟΔΟΣ ΑΝΑΛΥΣΗΣ] ${periodLabel} — όλα τα νούμερα αφορούν ΜΟΝΟ αυτήν την περίοδο.`);
@@ -281,15 +293,34 @@ function buildBriefingPrompt(data: BriefingData, periodLabel: string, updateCont
     data.revenue.totalSpend > 0 && data.revenue.roas > 0
       ? `Από τα συστήματα διαφημίσεων: περίπου ${formatNumber(data.revenue.roas, 1)}€ έσοδα για κάθε 1€ διαφημιστικής δαπάνης.`
       : 'Δεν υπάρχει αξιόπιστος λόγος έσοδα προς δαπάνη για την περίοδο.';
-  sections.push(
-    `[ΕΣΟΔΑ — για το κείμενο, μίλα με απλά λόγια]` +
-      ` Συνολικά έσοδα (όπως τα βλέπουμε): ${formatCurrency(effectiveRevenue)}.` +
-      ` Από «οργανική» καταγραφή: ${formatCurrency(data.revenue.totalOrganic)}, από διαφημίσεις (platforms): ${formatCurrency(data.revenue.totalCampaignRevenue)}.` +
-      ` Δαπάνη διαφημίσεων: ${formatCurrency(data.revenue.totalSpend)}.` +
-      ` ${evPerAdEuro}` +
-      ` Ενεργές καμπάνιες (για πλάτος): ${data.revenue.campaignCount}.`
-  );
-  if (data.revenue.storeRevenue > 0) {
+
+  if (ecActive) {
+    sections.push(
+      `[ΕΣΟΔΑ — για το κείμενο, μίλα με απλά λόγια]` +
+        ` Ο τζίρος από παραγγελίες e-shop (το ίδιο μέτρο που εμφανίζεται ως κύριο σύνολο στο dashboard): ${formatCurrency(headlineRevenue)}.` +
+        ` Για διαφορετικό πλαίσιο: τι καταγράφουν ως απόδοση οι διαφημίσεις — οργανικά/σε άλλα κανάλια: ${formatCurrency(data.revenue.totalOrganic)}, τιμές attribution από τις πλατφόρμες ads: ${formatCurrency(data.revenue.totalCampaignRevenue)} (δεν αντικαθιστούν τον τζίρο του καταστήματος).` +
+        ` Δαπάνη διαφημίσεων: ${formatCurrency(data.revenue.totalSpend)}.` +
+        ` ${evPerAdEuro}` +
+        ` Ενεργές καμπάνιες (για πλάτος): ${data.revenue.campaignCount}.` +
+        ` Στο briefing, αν αναφέρεις «σύνολο εσόδων» για την επιχείρηση στην περίοδο χωρίς άλλο προσδιορισμό, εννοείς μόνο τον τζίρο e-shop παραπάνω όχι το άθροισμα ή τις τιμές ads.`
+    );
+  } else {
+    sections.push(
+      `[ΕΣΟΔΑ — για το κείμενο, μίλα με απλά λόγια]` +
+        ` Συνολικά έσοδα (όπως τα βλέπουμε): ${formatCurrency(headlineRevenue)}.` +
+        ` Από «οργανική» καταγραφή: ${formatCurrency(data.revenue.totalOrganic)}, από διαφημίσεις (platforms): ${formatCurrency(data.revenue.totalCampaignRevenue)}.` +
+        ` Δαπάνη διαφημίσεων: ${formatCurrency(data.revenue.totalSpend)}.` +
+        ` ${evPerAdEuro}` +
+        ` Ενεργές καμπάνιες (για πλάτος): ${data.revenue.campaignCount}.`
+    );
+  }
+
+  if (ecActive && data.revenue.storeRevenue === 0) {
+    sections.push(
+      `[ΗΛΕΚΤΡΟΝΙΚΟ ΚΑΤΑΣΤΗΜΑ]` +
+        ` Υπάρχουν δεδομένα e-shop στο Performance+ για την επωνυμία, αλλά ο τζίρος στην επιλεγμένη περίοδο είναι 0 (${formatNumber(data.revenue.orderCount)} παραγγελίες). Αυτό μπορεί να σημαίνει κενό διάστημα ή ότι πρέπει να ελεγχθεί sync/imports — μη συγχέεις τα ads figures με τα έσοδα καταστήματος.`
+    );
+  } else if (data.revenue.storeRevenue > 0) {
     const storePerAd =
       data.revenue.totalSpend > 0 && data.revenue.trueRoas > 0
         ? `Από πραγματικές παραγγελίες e-shop: περίπου ${formatNumber(data.revenue.trueRoas, 1)}€ τζίρος ανά 1€ διαφήμισης.`
