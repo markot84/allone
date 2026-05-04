@@ -8,6 +8,7 @@ export type ProductLineItemLike = {
   quantity?: number;
   price?: number;
   productType?: string;
+  itemId?: string | number | null;
   parentItemId?: string | number | null;
   rowTotal?: number;
 };
@@ -28,6 +29,26 @@ export function shouldSkipMagentoLineForTopProducts(line: ProductLineItemLike): 
   if (!t) return false;
   if (lineHasParentItemId(line)) return false;
   return MAGENTO_PARENT_LINE_TYPES.has(t);
+}
+
+export function filterMagentoLineItemsForTopProducts(
+  platform: string,
+  lines: ProductLineItemLike[] | undefined | null
+): ProductLineItemLike[] {
+  const arr = lines || [];
+  if (platform !== 'magento' || arr.length === 0) return arr;
+  const referencedParentIds = new Set<string>();
+  for (const li of arr) {
+    const pid = li.parentItemId;
+    if (pid !== undefined && pid !== null) {
+      referencedParentIds.add(String(pid));
+    }
+  }
+  return arr.filter((li) => {
+    const iid = li.itemId;
+    if (iid === undefined || iid === null) return true;
+    return !referencedParentIds.has(String(iid));
+  });
 }
 
 export function lineRevenueAndQtyForTopProducts(

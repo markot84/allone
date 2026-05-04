@@ -49,6 +49,8 @@ const EXCLUDED_STATUS_SET = new Set([
   'closed',
   'refunded',
   'voided',
+  /** Viva / Klarna handshake σε εξέλιξη — δεν θεωρούμε ολοκληρωμένη παραγγελία (Safeblock κ.λπ.). */
+  'viva_klarna_undefined',
 ]);
 
 const DEFAULT_MATCH_FIELDS = ['paymentMethod', 'shippingMethod', 'orderName', 'orderId'];

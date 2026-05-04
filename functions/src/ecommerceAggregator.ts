@@ -12,6 +12,7 @@ import { logger } from 'firebase-functions/v2';
 import {
   lineRevenueAndQtyForTopProducts,
   shouldSkipMagentoLineForTopProducts,
+  filterMagentoLineItemsForTopProducts,
 } from './productLineStats';
 import {
   classifyEcommerceOrder,
@@ -146,6 +147,7 @@ interface OrderRow {
     quantity?: number;
     price?: number;
     productType?: string;
+    itemId?: string | number | null;
     parentItemId?: string | number | null;
     rowTotal?: number;
   }>;
@@ -155,6 +157,12 @@ export const ECOMMERCE_PROVIDERS = ['shopify', 'woocommerce', 'opencart', 'magen
 
 function isCancelledOrderStatus(status: string | null | undefined): boolean {
   return isExcludedEcommerceStatus(status);
+}
+
+const OMIT_FROM_RECENT_ORDER_LIST = new Set(['viva_klarna_undefined']);
+
+function isOmittedFromRecentOrderList(status: string | null | undefined): boolean {
+  return OMIT_FROM_RECENT_ORDER_LIST.has(String(status || '').trim().toLowerCase());
 }
 
 /** Demo products (όνομα/SKU περιέχει "demo") εξαιρούνται από κάθε aggregate. */
@@ -606,7 +614,8 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
   // Top products: αγνοεί εντελώς τα demo line items
   const productMap = new Map<string, { name: string; revenue: number; quantity: number }>();
   for (const o of revenueOrders) {
-    for (const li of o.lineItems || []) {
+    const lines = filterMagentoLineItemsForTopProducts(o.platform, o.lineItems);
+    for (const li of lines) {
       if (isDemoLineItem(li)) continue;
       const contrib = lineRevenueAndQtyForTopProducts(o.platform, li);
       if (!contrib) continue;
@@ -655,7 +664,7 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
     const inWindow30 = Number.isFinite(ts) && ts >= cut30;
     const inWindow90 = Number.isFinite(ts) && ts >= cut90;
 
-    for (const li of o.lineItems || []) {
+    for (const li of filterMagentoLineItemsForTopProducts(o.platform, o.lineItems)) {
       if (isDemoLineItem(li)) continue;
       if (o.platform === 'magento' && shouldSkipMagentoLineForTopProducts(li)) continue;
       const sku = (li.sku || '').trim();
@@ -722,6 +731,7 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
 
   // Recent orders (last 50, for quick display)
   const recentOrders = visibleOrders
+    .filter((o) => !isOmittedFromRecentOrderList(o.status))
     .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
     .slice(0, 50)
     .map((o) => ({

@@ -849,7 +849,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
         'searchCriteria[sortOrders][0][direction]': orderSortDirection,
         'searchCriteria[pageSize]': '100',
         'searchCriteria[currentPage]': String(currentPage),
-        'fields': 'items[entity_id,increment_id,store_id,customer_id,customer_email,billing_address[email],created_at,updated_at,status,grand_total,subtotal,tax_amount,discount_amount,base_grand_total,base_subtotal,base_tax_amount,base_discount_amount,base_currency_code,total_item_count,order_currency_code,shipping_description,payment[method,additional_information],items[sku,name,qty_ordered,price,product_id,product_type,parent_item_id,row_total,base_row_total]],total_count',
+        'fields': 'items[entity_id,increment_id,store_id,customer_id,customer_email,billing_address[email],created_at,updated_at,status,grand_total,subtotal,tax_amount,discount_amount,base_grand_total,base_subtotal,base_tax_amount,base_discount_amount,base_currency_code,total_item_count,order_currency_code,shipping_description,payment[method,additional_information],items[item_id,sku,name,qty_ordered,price,product_id,product_type,parent_item_id,row_total,base_row_total]],total_count',
       });
       if (!syncAllStores && Number.isFinite(storeId) && storeId > 0) {
         searchParams.set('searchCriteria[filter_groups][1][filters][0][field]', 'store_id');
@@ -876,6 +876,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
           : typeof o.payment?.additional_information === 'string'
             ? o.payment.additional_information
             : '';
+        const paymentMethodCode = String(o.payment?.method || '').trim();
         const magCid =
           o.customer_id != null && String(o.customer_id) !== '0' && String(o.customer_id) !== ''
             ? String(o.customer_id)
@@ -911,7 +912,8 @@ export async function fetchMagentoData(brandId: string): Promise<{
             baseCurrencyCode: o.base_currency_code || 'EUR',
             totalItemCount: parseInt(o.total_item_count || '0', 10),
             currency: o.order_currency_code || 'EUR',
-            paymentMethod: paymentAdditionalInfo || o.payment?.method || '',
+            paymentMethod: paymentAdditionalInfo || paymentMethodCode || '',
+            ...(paymentMethodCode ? { paymentMethodCode } : {}),
             shippingMethod: normalizeMagentoShippingDescription(o.shipping_description || ''),
             magentoStoreId: Number.isFinite(Number(o.store_id)) ? Number(o.store_id) : null,
             orderStoreDomain: (() => {
@@ -937,6 +939,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
               const rowTot = pickRowTotal();
               const pid = li.parent_item_id;
               return {
+                itemId: li.item_id != null && li.item_id !== '' ? li.item_id : null,
                 sku: li.sku || '',
                 name: li.name || '',
                 quantity: parseFloat(li.qty_ordered || '0'),

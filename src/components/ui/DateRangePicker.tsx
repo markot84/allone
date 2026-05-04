@@ -9,8 +9,12 @@ const daysAgo = (n: number) => {
 };
 const firstOfMonth = (y: number, m: number) =>
   `${y}-${String(m + 1).padStart(2, '0')}-01`;
-const lastOfMonth = (y: number, m: number) =>
-  new Date(y, m + 1, 0).toISOString().slice(0, 10);
+/** Τελευταία ημέρα μήνα (τοπική, όχι UTC — αποφεύγει Apr 29 αντί Apr 30). */
+const lastOfMonth = (y: number, m: number) => formatLocalYMD(new Date(y, m + 1, 0));
+
+function formatLocalYMD(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 const PRESETS = [
   { label: 'Σήμερα', from: () => todayStr(), to: () => todayStr() },

@@ -25,6 +25,8 @@ export type EcommerceRawLineItem = {
   price?: number;
   /** Magento REST `product_type` */
   productType?: string;
+  /** Magento `item_id` — για απόρριψη γονικής γραμμής όταν υπάρχουν child lines */
+  itemId?: string | number | null;
   parentItemId?: string | number | null;
   /** Magento γραμμή μετά εκπτώσεις (store currency) */
   rowTotal?: number;
@@ -40,6 +42,8 @@ export type EcommerceRawOrder = {
   createdAt: string;
   lineItems: EcommerceRawLineItem[];
   paymentMethod?: string;
+  /** Magento `payment.method` (κωδικός) — χρήσιμο για chart τρόπου πληρωμής με Viva */
+  paymentMethodCode?: string;
   shippingMethod?: string;
   salesChannel?: EcommerceSalesChannel;
   revenueIncluded?: boolean;
@@ -66,6 +70,13 @@ export const ECOMMERCE_ORDER_COLLECTIONS: Record<string, string> = {
 
 export function isEcommerceOrderCancelled(status: string | null | undefined): boolean {
   return isExcludedEcommerceStatus(status);
+}
+
+/** Status που αποκρύπτονται από πίνακες παραγγελιών (ενώ τα cancelled παραμένουν ορατά για έλεγχο). */
+const ORDER_STATUS_OMITTED_FROM_LISTS = new Set(['viva_klarna_undefined']);
+
+export function isOmittedFromEcommerceOrderLists(status: string | null | undefined): boolean {
+  return ORDER_STATUS_OMITTED_FROM_LISTS.has(String(status || '').trim().toLowerCase());
 }
 
 export function isEcommerceOrderRevenueIncluded(order: Pick<EcommerceRawOrder, 'status' | 'revenueIncluded'>): boolean {
@@ -174,6 +185,14 @@ function normalizeLineItemFromFirestore(raw: unknown): EcommerceRawLineItem {
           ? String(o.product_type)
           : undefined,
     parentItemId,
+    itemId: (() => {
+      const v = o.itemId ?? o.item_id;
+      if (v == null || v === false) return undefined;
+      if (typeof v === 'number' && Number.isFinite(v)) return v;
+      if (typeof v === 'string' && v.trim()) return v;
+      const n = Number(v);
+      return Number.isFinite(n) ? n : undefined;
+    })(),
     rowTotal: rowTot,
   };
 }
@@ -285,6 +304,9 @@ function normalizeRawOrder(platform: string, row: Record<string, unknown>): Ecom
     createdAt: coerceFirestoreCreatedAtString(row.createdAt ?? row.created_at),
     lineItems,
     paymentMethod: String(row.paymentMethod || row.payment_method || ''),
+    ...(row.paymentMethodCode != null || row.payment_method_code != null
+      ? { paymentMethodCode: String(row.paymentMethodCode ?? row.payment_method_code) }
+      : {}),
     shippingMethod: String(row.shippingMethod || row.shipping_method || row.shippingDescription || ''),
     salesChannel: row.salesChannel as EcommerceSalesChannel | undefined,
     revenueIncluded: typeof row.revenueIncluded === 'boolean' ? row.revenueIncluded : undefined,

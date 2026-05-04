@@ -17,6 +17,7 @@ import {
   getEcommerceOrderNetRevenue,
   isEcommerceDemoLineItem,
   isEcommerceOrderRevenueIncluded,
+  isOmittedFromEcommerceOrderLists,
   type EcommerceRawOrder,
 } from '../../services/ecommerceRawOrders';
 import {
@@ -41,7 +42,8 @@ import { Card, CardHeader, KPICard, Tooltip, PageHeader } from '../common';
 import { useEcommerceSummary, type EcommerceTopProduct } from '../../hooks/useEcommerceSummary';
 import { useMagentoPopularSearches } from '../../hooks/useMagentoPopularSearches';
 import { formatCurrencyCompact, formatNumber } from '../../utils/format';
-import { lineRevenueAndQtyForTopProducts } from '../../utils/productLineStats';
+import { lineRevenueAndQtyForTopProducts, filterMagentoLineItemsForTopProducts } from '../../utils/productLineStats';
+import { paymentChartLabelForEcommerceOrder } from '../../utils/magentoPaymentChart';
 import { getBrandHistoryStartISO } from '../../utils/brandHistoryStart';
 import type { KPICardData } from '../common/KPICard';
 import { useGlobalDate, GLOBAL_PERIOD_OPTIONS } from '../../contexts/GlobalDateContext';
@@ -122,16 +124,6 @@ function normalizeMethodLabel(value: string | null | undefined): string {
   return firstPara.replace(/\s+/g, ' ').trim();
 }
 
-/** Κείμενα τύπου «Προκειμένου να ταυτοποιηθεί…» / IBAN στο τέλος ετικετών πληρωμής Magento. */
-function stripPaymentInstructionTail(s: string): string {
-  let t = s.trim();
-  const boiler = t.search(/Προκειμένου\s+να/i);
-  if (boiler >= 0) t = t.slice(0, boiler).trim();
-  t = t.replace(/\s+GR\d{2}[0-9A-Z]+\s*$/i, '').trim();
-  t = t.replace(/\s*\.\s*$/, '').trim();
-  return t;
-}
-
 /** «Παραλαβή από το κατάστημα - διεύθυνση…» → μόνο ο τίτλος για το pie. */
 function stripStorePickupAddressSuffix(s: string): string {
   const t = s.trim();
@@ -163,36 +155,31 @@ function canonicalShippingMethodLabel(raw: string | null | undefined): string {
   return s || normalizeMethodLabel(raw);
 }
 
-/** Για τραπεζική κατάθεση: το Magento βάζει πολλά μηνύματα με « • » — κρατάμε το πρώτο για ευανάγνωστο pie. */
-function canonicalPaymentMethodLabel(raw: string | null | undefined): string {
-  let s = stripPaymentInstructionTail(normalizeMethodLabel(raw));
-  if (!s) return '';
-  const lower = s.toLowerCase();
-  if (
-    lower.includes('bank') ||
-    lower.includes('τραπεζ') ||
-    lower.includes('κατάθεση') ||
-    lower.includes('deposit') ||
-    lower.includes('wire') ||
-    lower.includes('iban')
-  ) {
-    const parts = s.split(/\s*•\s+/).map((p) => p.trim()).filter(Boolean);
-    if (parts.length > 1) return stripPaymentInstructionTail(parts[0]);
-  }
-  return s;
-}
-
-function buildMethodPieData(
-  orders: EcommerceRawOrder[],
-  field: 'paymentMethod' | 'shippingMethod'
+function buildPaymentMethodPieData(
+  orders: EcommerceRawOrder[]
 ): Array<{ name: string; value: number; color: string }> {
   const counts = new Map<string, number>();
   for (const order of orders) {
-    const raw = order[field];
-    const label =
-      field === 'shippingMethod'
-        ? canonicalShippingMethodLabel(raw)
-        : canonicalPaymentMethodLabel(raw);
+    const label = paymentChartLabelForEcommerceOrder(order);
+    if (!label || label === '—') continue;
+    counts.set(label, (counts.get(label) || 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([name, value], index) => ({
+      name,
+      value,
+      color: METHOD_CHART_COLORS[index % METHOD_CHART_COLORS.length],
+    }));
+}
+
+function buildShippingMethodPieData(
+  orders: EcommerceRawOrder[]
+): Array<{ name: string; value: number; color: string }> {
+  const counts = new Map<string, number>();
+  for (const order of orders) {
+    const label = canonicalShippingMethodLabel(order.shippingMethod);
     if (!label) continue;
     counts.set(label, (counts.get(label) || 0) + 1);
   }
@@ -249,6 +236,8 @@ function OrderStatusBadge({ status }: { status: string }) {
     bg = '#FEF3C7'; fg = '#D97706';
   } else if (['refunded', 'cancelled', 'canceled', 'voided', 'failed'].includes(s)) {
     bg = '#FEE2E2'; fg = '#DC2626';
+  } else if (['viva_klarna_undefined'].includes(s)) {
+    bg = '#F3E8FF'; fg = '#7C3AED';
   } else if (['partially_refunded', 'partial'].includes(s)) {
     bg = '#FFF7ED'; fg = '#EA580C';
   }
@@ -330,6 +319,7 @@ export function EcommerceDashboard() {
   // Recent orders (capped 50) για fallback rendering.
   const filteredRecentOrdersVisible = useMemo(() => {
     return ecomm.recentOrders.filter(o => {
+      if (isOmittedFromEcommerceOrderLists(o.status)) return false;
       const d = (o.createdAt || '').slice(0, 10);
       return d >= effectiveFrom && d <= effectiveTo;
     });
@@ -388,6 +378,7 @@ export function EcommerceDashboard() {
     }
     return rawOrders
       .filter((order) => {
+        if (isOmittedFromEcommerceOrderLists(order.status)) return false;
         const day = (order.createdAt || '').slice(0, 10);
         if (brandHistoryStartISO && day < brandHistoryStartISO) return false;
         return day >= effectiveFrom && day <= effectiveTo;
@@ -546,7 +537,8 @@ export function EcommerceDashboard() {
     }
     const productMap = new Map<string, { name: string; revenue: number; quantity: number }>();
     for (const order of revenueOrdersForTables) {
-      for (const lineItem of order.lineItems || []) {
+      const lines = filterMagentoLineItemsForTopProducts(order.platform, order.lineItems);
+      for (const lineItem of lines) {
         if (isEcommerceDemoLineItem(lineItem)) continue;
         const contrib = lineRevenueAndQtyForTopProducts(order.platform, lineItem);
         if (!contrib) continue;
@@ -653,12 +645,12 @@ export function EcommerceDashboard() {
   }, [sortedProducts, prodSearch]);
 
   const paymentMethodPieData = useMemo(
-    () => buildMethodPieData(revenueOrdersForTables, 'paymentMethod'),
+    () => buildPaymentMethodPieData(revenueOrdersForTables),
     [revenueOrdersForTables]
   );
 
   const shippingMethodPieData = useMemo(
-    () => buildMethodPieData(revenueOrdersForTables, 'shippingMethod'),
+    () => buildShippingMethodPieData(revenueOrdersForTables),
     [revenueOrdersForTables]
   );
 

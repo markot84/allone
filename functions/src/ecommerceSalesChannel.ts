@@ -49,6 +49,7 @@ const EXCLUDED_STATUS_SET = new Set([
   'closed',
   'refunded',
   'voided',
+  'viva_klarna_undefined',
 ]);
 
 const DEFAULT_MATCH_FIELDS = ['paymentMethod', 'shippingMethod', 'orderName', 'orderId'];
