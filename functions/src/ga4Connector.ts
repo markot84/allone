@@ -1051,16 +1051,28 @@ export async function fetchGA4Data(
       >
     > = {};
     try {
-      const dr = { startDate: formatDate(startDate), endDate: formatDate(endDate) };
       const authH = {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${accessToken}`,
       };
       const dcUrl = `${GA4_DATA_API}/properties/${propertyId}:runReport`;
       const PAGE = 50000;
+      const drFull = { startDate: formatDate(startDate), endDate: formatDate(endDate) };
 
-      /** Συγχώνευση rows στο dailyTrafficByChannel (ημερομηνία + normalize + revenue index). */
-      const flushRows = (rows: unknown[], revenueIdx: number | null) => {
+      const clearDailyChannelSink = (
+        sink: typeof dailyTrafficByChannel
+      ) => {
+        for (const k of Object.keys(sink)) {
+          delete sink[k];
+        }
+      };
+
+      /** Συγχώνευση rows (ημερομηνία + normalize + revenue index). */
+      const flushRows = (
+        rows: unknown[],
+        revenueIdx: number | null,
+        sink: typeof dailyTrafficByChannel
+      ) => {
         for (const row of rows) {
           const r = row as {
             dimensionValues?: Array<{ value?: string }>;
@@ -1076,9 +1088,9 @@ export async function fetchGA4Data(
           const conversions = parseInt(vals[3]?.value || '0', 10);
           const totalRevenue =
             revenueIdx != null ? parseFloat(vals[revenueIdx]?.value || '0') || 0 : 0;
-          if (!dailyTrafficByChannel[ymd]) dailyTrafficByChannel[ymd] = {};
-          if (!dailyTrafficByChannel[ymd][ch]) {
-            dailyTrafficByChannel[ymd][ch] = {
+          if (!sink[ymd]) sink[ymd] = {};
+          if (!sink[ymd][ch]) {
+            sink[ymd][ch] = {
               sessions: 0,
               users: 0,
               newUsers: 0,
@@ -1086,7 +1098,7 @@ export async function fetchGA4Data(
               totalRevenue: 0,
             };
           }
-          const cell = dailyTrafficByChannel[ymd][ch];
+          const cell = sink[ymd][ch];
           cell.sessions += sessions;
           cell.users += users;
           cell.newUsers += newUsers;
@@ -1096,51 +1108,6 @@ export async function fetchGA4Data(
       };
 
       type MetricList = Array<{ name: string }>;
-
-      const ingestAllPages = async (metrics: MetricList): Promise<boolean> => {
-        const revenueIdx = metrics.some((m) => m.name === 'totalRevenue') ? 4 : null;
-        let offset = 0;
-        let merged = 0;
-        let pages = 0;
-        for (let guard = 0; guard < 400; guard++) {
-          const body: Record<string, unknown> = {
-            languageCode: 'en',
-            dateRanges: [dr],
-            dimensions: [{ name: 'date' }, { name: 'sessionDefaultChannelGroup' }],
-            metrics,
-            limit: String(PAGE),
-            offset: String(offset),
-          };
-          const res = await fetch(dcUrl, {
-            method: 'POST',
-            headers: authH,
-            body: JSON.stringify(body),
-          });
-          if (!res.ok) {
-            const txt = await res.text();
-            if (offset === 0) {
-              logger.warn(`[GA4] dailyTrafficByChannel ingest failed (${res.status}, offset=${offset}): ${txt.slice(0, 500)}`);
-              return false;
-            }
-            logger.warn(`[GA4] dailyTrafficByChannel pagination error at offset ${offset}: ${res.status} ${txt.slice(0, 200)}`);
-            break;
-          }
-          const dj = (await res.json()) as { rows?: unknown[]; rowCount?: string | number };
-          const rows = dj.rows || [];
-          const rowCount = dj.rowCount != null ? Number(dj.rowCount) : 0;
-          flushRows(rows, revenueIdx);
-          merged += rows.length;
-          pages++;
-          offset += rows.length;
-          if (rows.length === 0) break;
-          if (!Number.isNaN(rowCount) && rowCount > 0 && offset >= rowCount) break;
-          if (rows.length < PAGE) break;
-        }
-        logger.info(
-          `[GA4] dailyTrafficByChannel: ${Object.keys(dailyTrafficByChannel).length} day keys, ${merged} GA row(s), ${pages} page(s)`
-        );
-        return true;
-      };
 
       const metricsWithRevenue: MetricList = [
         { name: 'sessions' },
@@ -1156,18 +1123,180 @@ export async function fetchGA4Data(
         { name: 'conversions' },
       ];
 
-      let ingestOk = await ingestAllPages(metricsWithRevenue);
-      if (!ingestOk) {
-        for (const k of Object.keys(dailyTrafficByChannel)) {
-          delete dailyTrafficByChannel[k];
+      const ingestMetricPagesForRange = async (
+        range: { startDate: string; endDate: string },
+        metrics: MetricList,
+        sink: typeof dailyTrafficByChannel
+      ): Promise<boolean> => {
+        const revenueIdx = metrics.some((m) => m.name === 'totalRevenue') ? 4 : null;
+        let offset = 0;
+        let merged = 0;
+        let pages = 0;
+        for (let guard = 0; guard < 400; guard++) {
+          const body: Record<string, unknown> = {
+            languageCode: 'en',
+            dateRanges: [range],
+            dimensions: [{ name: 'date' }, { name: 'sessionDefaultChannelGroup' }],
+            metrics,
+            limit: String(PAGE),
+            offset: String(offset),
+          };
+          const res = await fetch(dcUrl, {
+            method: 'POST',
+            headers: authH,
+            body: JSON.stringify(body),
+          });
+          if (!res.ok) {
+            const txt = await res.text();
+            if (offset === 0) {
+              logger.warn(
+                `[GA4] dailyTrafficByChannel ingest failed (${res.status}, ${range.startDate}→${range.endDate}, offset=${offset}): ${txt.slice(0, 500)}`
+              );
+              return false;
+            }
+            logger.warn(
+              `[GA4] dailyTrafficByChannel pagination error at offset ${offset}: ${res.status} ${txt.slice(0, 200)}`
+            );
+            break;
+          }
+          const dj = (await res.json()) as { rows?: unknown[]; rowCount?: string | number };
+          const rows = dj.rows || [];
+          const rowCount = dj.rowCount != null ? Number(dj.rowCount) : 0;
+          flushRows(rows, revenueIdx, sink);
+          merged += rows.length;
+          pages++;
+          offset += rows.length;
+          if (rows.length === 0) break;
+          if (!Number.isNaN(rowCount) && rowCount > 0 && offset >= rowCount) break;
+          if (rows.length < PAGE) break;
         }
-        logger.warn('[GA4] dailyTrafficByChannel: retrying without totalRevenue');
-        ingestOk = await ingestAllPages(metricsNoRevenue);
+        logger.info(
+          `[GA4] dailyTrafficByChannel ${range.startDate}..${range.endDate}: ${Object.keys(sink).length} day keys, ${merged} GA row(s), ${pages} page(s)`
+        );
+        return true;
+      };
+
+      const ingestStandardForRange = async (
+        range: { startDate: string; endDate: string },
+        sink: typeof dailyTrafficByChannel
+      ): Promise<void> => {
+        let ingestOk = await ingestMetricPagesForRange(range, metricsWithRevenue, sink);
+        if (!ingestOk) {
+          clearDailyChannelSink(sink);
+          logger.warn('[GA4] dailyTrafficByChannel: retrying without totalRevenue (same window)');
+          ingestOk = await ingestMetricPagesForRange(range, metricsNoRevenue, sink);
+        }
+        if (!ingestOk) {
+          clearDailyChannelSink(sink);
+        }
+      };
+
+      /** Όταν metrics τύπου totalUsers/fail στην 3ετία → GA4 συχνά απαντά 400· sessions-only σχεδόν πάντα OK. */
+      const ingestSessionsOnlyForRange = async (
+        range: { startDate: string; endDate: string },
+        sink: typeof dailyTrafficByChannel
+      ): Promise<boolean> => {
+        const metricsSessions: MetricList = [{ name: 'sessions' }];
+        let offset = 0;
+        let merged = 0;
+        let pages = 0;
+        for (let guard = 0; guard < 400; guard++) {
+          const body: Record<string, unknown> = {
+            languageCode: 'en',
+            dateRanges: [range],
+            dimensions: [{ name: 'date' }, { name: 'sessionDefaultChannelGroup' }],
+            metrics: metricsSessions,
+            limit: String(PAGE),
+            offset: String(offset),
+          };
+          const res = await fetch(dcUrl, {
+            method: 'POST',
+            headers: authH,
+            body: JSON.stringify(body),
+          });
+          if (!res.ok) {
+            const txt = await res.text();
+            if (offset === 0) {
+              logger.warn(
+                `[GA4] dailyTrafficByChannel sessions-only failed (${res.status}, ${range.startDate}→${range.endDate}): ${txt.slice(0, 500)}`
+              );
+              return false;
+            }
+            logger.warn(
+              `[GA4] dailyTrafficByChannel sessions-only pagination ${offset}: ${res.status} ${txt.slice(0, 200)}`
+            );
+            break;
+          }
+          const dj = (await res.json()) as { rows?: unknown[]; rowCount?: string | number };
+          const rows = dj.rows || [];
+          const rowCount = dj.rowCount != null ? Number(dj.rowCount) : 0;
+          for (const row of rows) {
+            const r = row as {
+              dimensionValues?: Array<{ value?: string }>;
+              metricValues?: Array<{ value?: string }>;
+            };
+            const ymd = normalizeGa4DateDimension(r.dimensionValues?.[0]?.value);
+            if (!ymd) continue;
+            const ch = r.dimensionValues?.[1]?.value || 'Unknown';
+            const sessions = parseInt(r.metricValues?.[0]?.value || '0', 10);
+            if (!sink[ymd]) sink[ymd] = {};
+            if (!sink[ymd][ch]) {
+              sink[ymd][ch] = {
+                sessions: 0,
+                users: 0,
+                newUsers: 0,
+                conversions: 0,
+                totalRevenue: 0,
+              };
+            }
+            sink[ymd][ch].sessions += sessions;
+          }
+          merged += rows.length;
+          pages++;
+          offset += rows.length;
+          if (rows.length === 0) break;
+          if (!Number.isNaN(rowCount) && rowCount > 0 && offset >= rowCount) break;
+          if (rows.length < PAGE) break;
+        }
+        logger.info(
+          `[GA4] dailyTrafficByChannel (sessions-only) ${range.startDate}..${range.endDate}: ${Object.keys(sink).length} day keys, ${merged} row(s), ${pages} page(s)`
+        );
+        return true;
+      };
+
+      await ingestStandardForRange(drFull, dailyTrafficByChannel);
+
+      if (Object.keys(dailyTrafficByChannel).length === 0) {
+        const endAnchor = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+        const narrowStart = new Date(endAnchor);
+        narrowStart.setDate(narrowStart.getDate() - 400);
+        const drNarrow = { startDate: formatDate(narrowStart), endDate: formatDate(endAnchor) };
+        logger.warn(
+          `[GA4] dailyTrafficByChannel: 0 day keys on full window; retrying ~13mo ${drNarrow.startDate} → ${drNarrow.endDate}`
+        );
+        await ingestStandardForRange(drNarrow, dailyTrafficByChannel);
       }
-      if (!ingestOk) {
-        for (const k of Object.keys(dailyTrafficByChannel)) {
-          delete dailyTrafficByChannel[k];
-        }
+
+      if (Object.keys(dailyTrafficByChannel).length === 0) {
+        const endAnchor = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+        const narrowStart = new Date(endAnchor);
+        narrowStart.setDate(narrowStart.getDate() - 400);
+        const drNarrow = { startDate: formatDate(narrowStart), endDate: formatDate(endAnchor) };
+        logger.warn('[GA4] dailyTrafficByChannel: sessions-only fallback (narrow window)');
+        clearDailyChannelSink(dailyTrafficByChannel);
+        await ingestSessionsOnlyForRange(drNarrow, dailyTrafficByChannel);
+      }
+
+      if (Object.keys(dailyTrafficByChannel).length === 0) {
+        logger.warn('[GA4] dailyTrafficByChannel: sessions-only fallback (full sync window)');
+        clearDailyChannelSink(dailyTrafficByChannel);
+        await ingestSessionsOnlyForRange(drFull, dailyTrafficByChannel);
+      }
+
+      if (Object.keys(dailyTrafficByChannel).length === 0) {
+        logger.warn(
+          '[GA4] dailyTrafficByChannel: still empty after all fallbacks — channel pie will use full-period totals only'
+        );
       }
     } catch (e) {
       logger.warn('[GA4] dailyTrafficByChannel exception:', e);
