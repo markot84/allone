@@ -2309,7 +2309,8 @@ export async function getLastImportDates(brandId: string | null | undefined): Pr
   const jobs = await FirestoreService.getDocuments<ImportJob>(
     'import_jobs',
     [orderBy('createdAt', 'desc'), limit(IMPORT_JOBS_LOOKBACK_FOR_LAST_DATES)],
-    brandId
+    brandId,
+    { forceServer: true }
   );
   const normalized = jobs.map((job) => ({
     ...job,

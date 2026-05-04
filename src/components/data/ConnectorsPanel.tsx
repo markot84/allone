@@ -62,6 +62,9 @@ interface ConnectorState {
   // Megaventory
   accountName?: string;
   currency?: string;
+  lastSyncAt?: any;
+  lastOrdersSyncAt?: any;
+  lastProductsSyncAt?: any;
 }
 
 type ConnectorId = 'google_ads' | 'meta' | 'tiktok' | 'merchant' | 'ga4' | 'search_console' | 'shopify' | 'woocommerce' | 'opencart' | 'magento' | 'megaventory' | 'softone' | 'epsilon_net' | 'entersoft';
@@ -70,6 +73,15 @@ const CONNECTOR_GROUP_ORDER = ['marketing', 'analytics', 'commerce', 'operations
 type ConnectorGroupId = (typeof CONNECTOR_GROUP_ORDER)[number];
 
 type GroupIcon = ComponentType<LucideProps>;
+
+function newestDate(...values: unknown[]): Date | null {
+  let newest: Date | null = null;
+  for (const value of values) {
+    const d = coerceToDate(value);
+    if (d && (!newest || d > newest)) newest = d;
+  }
+  return newest;
+}
 
 /** Όλες οι ομάδες: ίδια διακριτική πράσινη παλέτα (χωρίς μπλε/πορτοκαλί ανά section). */
 const CONNECTOR_GROUP_VISUAL = {
@@ -2586,7 +2598,12 @@ export function ConnectorsPanel() {
                   (pickerOwnerUid === undefined || pickerOwnerUid !== uid);
                 const isSyncing = syncingProviders.has(conn.id);
                 const isConnecting = connecting === conn.id;
-                const lastSyncAt = coerceToDate(lastSyncDates[conn.id] as unknown);
+                const lastSyncAt = newestDate(
+                  lastSyncDates[conn.id] as unknown,
+                  state.lastSyncAt,
+                  state.lastOrdersSyncAt,
+                  state.lastProductsSyncAt
+                );
                 const connectedAt = coerceToDate(state.connectedAt as unknown);
                 const identityLines = getConnectorIdentityLines(conn.id, state);
                 const usesCompactDetails = conn.id === 'magento' || conn.group === 'operations';
