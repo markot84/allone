@@ -1873,7 +1873,12 @@ export const scheduledSyncFollowups = onSchedule(
  * The API key never leaves the server — stored as Firebase Secret.
  */
 export const geminiProxy = onRequest(
-  { region: 'europe-west1', secrets: [GEMINI_SECRET] },
+  /**
+   * 120s timeout (διπλάσιο του default 60s): το Gemini API σπάνια κρατά τόσο, αλλά cold-start
+   * + αργή Firestore initialization (όπως το «metadata filters: 8.5s» που είδαμε σε production
+   * trace) μπορούσαν να μηδενίσουν τον διαθέσιμο χρόνο για το LLM call → DEADLINE_EXCEEDED.
+   */
+  { region: 'europe-west1', timeoutSeconds: 120, memory: '512MiB', secrets: [GEMINI_SECRET] },
   async (req, res) => {
     if (applyStrictCors(req, res)) return;
     if (req.method !== 'POST') {

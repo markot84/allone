@@ -74,6 +74,15 @@ export function getClientIp(req: Request): string {
  * Sliding-window rate limiter (Firestore doc per key).
  * Doc schema: rate_limits/{safeKey} → { hits: number[] (ms), updatedAt }
  */
+/**
+ * Hard ceiling για το Firestore transaction που υλοποιεί το rate limit.
+ * Σε production trace είδαμε «metadata filters: 8.5s» κατά cold-start του grpc client
+ * — αν το full transaction κρεμάσει >5s, καλύτερα να αφήσουμε το request να περάσει
+ * (fail-open) παρά να τρώει όλο το function deadline (60-120s) και να εκτεθεί ο user
+ * σε `DEADLINE_EXCEEDED`. Το ίδιο ίσχυε ήδη για exceptions· τώρα κουμπώνει και στα hangs.
+ */
+const RATE_LIMIT_HARD_TIMEOUT_MS = 5000;
+
 export async function enforceRateLimit(opts: {
   key: string;
   limit: number;
@@ -84,34 +93,53 @@ export async function enforceRateLimit(opts: {
   const ref = db.doc(`rate_limits/${safeKey}`);
   const now = Date.now();
   const windowStart = now - opts.windowSeconds * 1000;
-  try {
-    return await db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      const data = snap.data() as { hits?: number[] } | undefined;
-      const hits = (data?.hits || []).filter((t) => t > windowStart);
-      if (hits.length >= opts.limit) {
-        const oldest = hits[0];
-        return {
-          allowed: false,
-          remaining: 0,
-          resetInSeconds: Math.max(1, Math.ceil((oldest + opts.windowSeconds * 1000 - now) / 1000)),
-        };
-      }
-      hits.push(now);
-      tx.set(
-        ref,
-        { hits, updatedAt: FieldValue.serverTimestamp(), ttl: new Date(now + 2 * opts.windowSeconds * 1000) },
-        { merge: true }
-      );
+
+  const failOpen = {
+    allowed: true,
+    remaining: opts.limit,
+    resetInSeconds: opts.windowSeconds,
+  };
+
+  const txPromise = db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const data = snap.data() as { hits?: number[] } | undefined;
+    const hits = (data?.hits || []).filter((t) => t > windowStart);
+    if (hits.length >= opts.limit) {
+      const oldest = hits[0];
       return {
-        allowed: true,
-        remaining: Math.max(0, opts.limit - hits.length),
-        resetInSeconds: opts.windowSeconds,
+        allowed: false,
+        remaining: 0,
+        resetInSeconds: Math.max(1, Math.ceil((oldest + opts.windowSeconds * 1000 - now) / 1000)),
       };
-    });
+    }
+    hits.push(now);
+    tx.set(
+      ref,
+      { hits, updatedAt: FieldValue.serverTimestamp(), ttl: new Date(now + 2 * opts.windowSeconds * 1000) },
+      { merge: true }
+    );
+    return {
+      allowed: true,
+      remaining: Math.max(0, opts.limit - hits.length),
+      resetInSeconds: opts.windowSeconds,
+    };
+  });
+
+  let timer: NodeJS.Timeout | undefined;
+  const timeoutPromise = new Promise<typeof failOpen>((resolve) => {
+    timer = setTimeout(() => {
+      logger.warn(`[RateLimit] ${safeKey} hard-timeout ${RATE_LIMIT_HARD_TIMEOUT_MS}ms (fail-open)`);
+      resolve(failOpen);
+    }, RATE_LIMIT_HARD_TIMEOUT_MS);
+  });
+
+  try {
+    return await Promise.race([txPromise, timeoutPromise]);
   } catch (e) {
     logger.warn(`[RateLimit] ${safeKey} transaction failed (fail-open):`, e);
-    return { allowed: true, remaining: opts.limit, resetInSeconds: opts.windowSeconds };
+    return failOpen;
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 
