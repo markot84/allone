@@ -217,7 +217,14 @@ export function applyCampaignDateRangeToMetrics(
     const conversionActions = dateConvActions;
 
     const ctr = impressions > 0 ? Math.round((clicks / impressions) * 10000) / 100 : 0;
-    const roasBase = purchaseSlicePresent ? purchase_conversion_value : conversion_value;
+    const roasBase =
+      purchase_conversion_value > 0
+        ? purchase_conversion_value
+        : conversion_value > 0
+          ? conversion_value
+          : purchaseSlicePresent
+            ? purchase_conversion_value
+            : conversion_value;
     const roas = amount_spent > 0 ? Math.round((roasBase / amount_spent) * 100) / 100 : 0;
     amount_spent = Math.round(amount_spent * 100) / 100;
     /**

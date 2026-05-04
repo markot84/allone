@@ -145,21 +145,33 @@ export function isGoogleAdsLikeChannel(channel: string | undefined): boolean {
 
 /**
  * Ίδια λογική με το summary της σελίδας Campaigns (Purchase/Sales όταν δεν υπάρχει φίλτρο conversion action).
+ * Αν τα `purchase_*` στο slice είναι 0 λόγω κενών ημερών/ετικετών αλλά υπάρχουν `conversions` από τα insights → μην επιστρέφεις 0 («χάνεις» την κονσόλα και το ROAS chart πέφτει σε 0 μέρα).
  */
 export function getDisplayConversions(c: Campaign, convFilterActive: boolean): number {
   const raw = c.conversions;
   const n = raw != null ? (typeof raw === 'number' ? raw : parseFloat(String(raw))) : NaN;
+  const nAgg = Number.isNaN(n) ? 0 : n;
   if (convFilterActive) {
     return Number.isNaN(n) ? 0 : n;
   }
   const pConv = c.purchase_conversions;
+  const pOk = typeof pConv === 'number' && !Number.isNaN(pConv);
+  const pAgg = pOk ? pConv : NaN;
+
+  const pickPurchasedAgg = (): number => {
+    if (!Number.isNaN(pAgg) && pAgg > 0) return pAgg;
+    if (nAgg > 0) return nAgg;
+    if (!Number.isNaN(pAgg)) return pAgg;
+    return NaN;
+  };
+
   if (isGoogleAdsLikeChannel(c.channel)) {
-    if (typeof pConv === 'number' && !Number.isNaN(pConv)) return pConv;
-    if (!Number.isNaN(n)) return n;
-    return 0;
+    const v = pickPurchasedAgg();
+    return Number.isNaN(v) ? 0 : v;
   }
   if (isMetaChannel(c.channel)) {
-    if (typeof pConv === 'number' && !Number.isNaN(pConv)) return pConv;
+    const v = pickPurchasedAgg();
+    if (!Number.isNaN(v)) return v;
     return getEffectiveConversions(c);
   }
   const fromActions = sumConversionActions(c.conversionActions).conv;
@@ -172,17 +184,29 @@ export function getDisplayConversionValue(c: Campaign, convFilterActive: boolean
   const any = c as Campaign & { conversionValue?: number };
   const raw = c.conversion_value ?? any.conversionValue;
   const n = raw != null ? (typeof raw === 'number' ? raw : parseFloat(String(raw))) : NaN;
+  const valAgg = Number.isNaN(n) ? 0 : n;
+
+  const pickPurchasedAgg = (): number => {
+    const pVal = c.purchase_conversion_value;
+    const pvOk = typeof pVal === 'number' && !Number.isNaN(pVal);
+    const pAggNum = pvOk ? pVal : NaN;
+
+    if (!Number.isNaN(pAggNum) && pAggNum > 0) return pAggNum;
+    if (valAgg > 0) return valAgg;
+    if (!Number.isNaN(pAggNum)) return pAggNum;
+    return NaN;
+  };
+
   if (convFilterActive) {
     return Number.isNaN(n) ? 0 : n;
   }
-  const pVal = c.purchase_conversion_value;
   if (isGoogleAdsLikeChannel(c.channel)) {
-    if (typeof pVal === 'number' && !Number.isNaN(pVal)) return pVal;
-    if (!Number.isNaN(n)) return n;
-    return 0;
+    const v = pickPurchasedAgg();
+    return Number.isNaN(v) ? 0 : v;
   }
   if (isMetaChannel(c.channel)) {
-    if (typeof pVal === 'number' && !Number.isNaN(pVal)) return pVal;
+    const v = pickPurchasedAgg();
+    if (!Number.isNaN(v)) return v;
     return getEffectiveConversionValue(c);
   }
   const fromActions = sumConversionActions(c.conversionActions).value;

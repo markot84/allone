@@ -1,10 +1,14 @@
 {
-  "version": "0.726.62",
-  "previousVersion": "0.726.61",
-  "commitHash": "1c8840c",
+  "version": "0.726.64",
+  "previousVersion": "0.726.63",
+  "commitHash": "0decb48",
   "branch": "main",
-  "buildDate": "2026-05-04T14:32:46.057Z",
+  "buildDate": "2026-05-04T14:53:11.560Z",
   "commits": [
+    {
+      "hash": "0decb48",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "1c8840c",
       "message": "chore: full deploy"
@@ -60,16 +64,11 @@
     {
       "hash": "42af962",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "79ec876",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [
     "[Συντήρηση] Full deploy",
     "[Διόρθωση] Bump timeout to 120s + 5s fail-open cap on rate-limit txn",
-    "[Διόρθωση] Split skuStats from summary doc to bypass 1MB Firestore limit",
-    "[Διόρθωση] Robust raw orders fetch when date query returns empty (timestamp/coerce server)"
+    "[Διόρθωση] Split skuStats from summary doc to bypass 1MB Firestore limit"
   ]
 }
