@@ -297,20 +297,23 @@ export function EcommerceDashboard() {
     }
   }, [magentoSearches.termsProvenance]);
 
-  // Date range: local override (session-only) falls back to global
-  const { fromDate: globalFrom, toDate: globalTo, period: globalPeriod, setPeriod: setGlobalPeriod } = useGlobalDate();
-  const [localDateFrom, setLocalDateFrom] = useState('');
-  const [localDateTo,   setLocalDateTo]   = useState('');
+  // Ίδιο global date range με Dashboard/ROI — όχι session-local override (είχε προκαλέσει «άλλο Μάρτιο στο E-commerce, άλλο στο Dashboard»).
+  const {
+    fromDate: globalFrom,
+    toDate: globalTo,
+    period: globalPeriod,
+    setPeriod: setGlobalPeriod,
+    setCustomRange,
+  } = useGlobalDate();
+
   /** Πίνακας «Δημοφιλείς αναζητήσεις»: 10 γραμμές, υπόλοιπο με ανάπτυξη */
   const [magentoPopularExpanded, setMagentoPopularExpanded] = useState(false);
-  // Per-brand history cutoff (brands.{historyStartDate}) — clamp στο read-side
   const brandHistoryStartISO = getBrandHistoryStartISO(currentBrand);
-  const rawFrom = localDateFrom || globalFrom;
-  const rawTo   = localDateTo   || globalTo;
+  const rawFrom = globalFrom;
+  const rawTo = globalTo;
   let effectiveFrom = brandHistoryStartISO && rawFrom < brandHistoryStartISO ? brandHistoryStartISO : rawFrom;
   const effectiveTo = rawTo;
   if (effectiveFrom > effectiveTo) effectiveFrom = effectiveTo;
-  const hasLocalOverride = !!(localDateFrom || localDateTo);
 
   useEffect(() => {
     setMagentoPopularExpanded(false);
@@ -778,9 +781,10 @@ export function EcommerceDashboard() {
               {GLOBAL_PERIOD_OPTIONS.map(opt => (
                 <button
                   key={opt.key}
-                  onClick={() => { setGlobalPeriod(opt.key); setLocalDateFrom(''); setLocalDateTo(''); }}
+                  type="button"
+                  onClick={() => setGlobalPeriod(opt.key)}
                   className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-all ${
-                    !hasLocalOverride && globalPeriod === opt.key
+                    globalPeriod === opt.key
                       ? 'bg-white text-[var(--nts-orange)] shadow-sm font-semibold'
                       : 'text-gray-500 hover:text-gray-700'
                   }`}
@@ -792,17 +796,9 @@ export function EcommerceDashboard() {
             <DateRangePicker
               from={effectiveFrom}
               to={effectiveTo}
-              onChange={(f, t) => { setLocalDateFrom(f); setLocalDateTo(t); }}
-              onClear={() => { setLocalDateFrom(''); setLocalDateTo(''); }}
+              onChange={(f, t) => setCustomRange(f, t)}
+              onClear={() => setGlobalPeriod('current_month')}
             />
-            {hasLocalOverride && (
-              <button
-                onClick={() => { setLocalDateFrom(''); setLocalDateTo(''); }}
-                className="text-xs text-[var(--nts-orange)] hover:underline whitespace-nowrap"
-              >
-                ↩ Global
-              </button>
-            )}
           </div>
         }
       />
