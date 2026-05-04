@@ -1210,7 +1210,7 @@ export const connectorSelectAccount = onRequest(
  * Body: { brandId, provider }
  */
 export const connectorSync = onRequest(
-  { region: 'europe-west1', cors: true, timeoutSeconds: 1200, memory: '1GiB', secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID', 'SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET', 'TIKTOK_APP_ID', 'TIKTOK_APP_SECRET', 'CONNECTOR_TOKEN_KEY'] },
+  { region: 'europe-west1', cors: true, timeoutSeconds: 1200, memory: '2GiB', secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID', 'SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET', 'TIKTOK_APP_ID', 'TIKTOK_APP_SECRET', 'CONNECTOR_TOKEN_KEY'] },
   async (req, res) => {
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 

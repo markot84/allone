@@ -63,6 +63,25 @@ function getCandidateStoreBases(normalizedStoreUrl: string): string[] {
 
 const MAGENTO_UA = 'PerformancePlus-MagentoConnector/1.0';
 
+/** Default per-request timeout για Magento REST. Σπασμένα/υποφορτωμένα stores κρεμούν fetch χωρίς αυτό. */
+const MAGENTO_FETCH_TIMEOUT_MS = 30_000;
+
+/** fetch wrapper με AbortController — μετατρέπει κρεμάσματα σε καθαρά errors. */
+async function magentoFetch(url: string, init: RequestInit = {}, timeoutMs = MAGENTO_FETCH_TIMEOUT_MS): Promise<Response> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: ctrl.signal });
+  } catch (e) {
+    if (e instanceof Error && e.name === 'AbortError') {
+      throw new Error(`Magento request timeout (${Math.round(timeoutMs / 1000)}s): ${url}`);
+    }
+    throw e;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 type ProbeFail = { lastStatus: number; lastBody: string; lastUrl: string };
 type MagentoStoreConfig = {
   id?: number | string;
@@ -229,7 +248,7 @@ async function fetchAndSaveMagentoPopularSearchTerms(
     for (const path of paths) {
       try {
         const url = buildMagentoRestUrl(restApiBase, path, code);
-        const res = await fetch(url, { headers });
+        const res = await magentoFetch(url, { headers });
         if (!res.ok) {
           logger.warn(`[Magento] searchTerms [store=${code || 'default'}] ${path}: HTTP ${res.status}`);
           continue;
@@ -441,7 +460,7 @@ async function fetchMagentoCategoryMap(
   headers: Record<string, string>
 ): Promise<Map<string, MagentoCategoryInfo>> {
   try {
-    const res = await fetch(buildMagentoRestUrl(restApiBase, 'categories', storeCode), { headers });
+    const res = await magentoFetch(buildMagentoRestUrl(restApiBase, 'categories', storeCode), { headers });
     if (!res.ok) return new Map();
     const root = (await res.json()) as MagentoCategoryNode;
     const out = new Map<string, MagentoCategoryInfo>();
@@ -478,7 +497,7 @@ async function probeMagentoStoreConfigs(
     for (const url of paths) {
       lastFail = { ...lastFail, lastUrl: url };
       try {
-        const res = await fetch(url, { headers, redirect: 'follow' });
+        const res = await magentoFetch(url, { headers, redirect: 'follow' });
         const text = await res.text();
         lastFail = { lastStatus: res.status, lastBody: text, lastUrl: url };
 
@@ -705,7 +724,7 @@ export async function testMagentoConnection(
 
     let version = '';
     try {
-      const modRes = await fetch(`${restApiBase}/rest/V1/modules`, { headers });
+      const modRes = await magentoFetch(`${restApiBase}/rest/V1/modules`, { headers });
       if (modRes.ok) {
         const modules = await modRes.json();
         if (Array.isArray(modules) && modules.includes('Magento_Store')) {
@@ -857,7 +876,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
         searchParams.set('searchCriteria[filter_groups][1][filters][0][condition_type]', 'eq');
       }
 
-      const res = await fetch(buildMagentoRestUrl(restApiBase, `orders?${searchParams.toString()}`, storeCode), { headers });
+      const res = await magentoFetch(buildMagentoRestUrl(restApiBase, `orders?${searchParams.toString()}`, storeCode), { headers });
       if (!res.ok) {
         const error = `Orders fetch failed (${res.status})`;
         logger.error(`[Magento] ${error}`);
@@ -1023,7 +1042,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
         searchParams.set('searchCriteria[filter_groups][0][filters][0][condition_type]', 'gteq');
       }
 
-      const res = await fetch(buildMagentoRestUrl(restApiBase, `products?${searchParams.toString()}`, storeCode), { headers });
+      const res = await magentoFetch(buildMagentoRestUrl(restApiBase, `products?${searchParams.toString()}`, storeCode), { headers });
       if (!res.ok) {
         const error = `Products fetch failed (${res.status}) page=${prodPage}`;
         logger.warn(`[Magento] ${error}`);
