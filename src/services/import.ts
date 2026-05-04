@@ -2319,7 +2319,13 @@ export async function getLastImportDates(brandId: string | null | undefined): Pr
   }));
   const result: Record<string, Date> = {};
   for (const job of normalized) {
-    if (job.status !== 'completed' && job.status !== undefined) continue;
+    const status = (job as { status?: string }).status;
+    const imported =
+      Number((job as { imported?: number }).imported ?? job.result?.imported ?? 0) || 0;
+    // Connector jobs can be `partial` when some secondary step fails after data was imported.
+    // For "last sync" UI, imported partial jobs should still advance the displayed date.
+    const countsAsImported = status === undefined || status === 'completed' || (status === 'partial' && imported > 0);
+    if (!countsAsImported) continue;
     const key = (job as { source?: string }).source || job.type;
     const existing = result[key];
     if (!existing || job.createdAt > existing) result[key] = job.createdAt;
