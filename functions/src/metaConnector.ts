@@ -16,7 +16,10 @@ import * as admin from 'firebase-admin';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { decryptToken } from './tokenCrypto';
-import { buildYesterdayToTodayWindow } from './syncPolicy';
+import {
+  buildRollingUtcDayWindow,
+  DEFAULT_INCREMENTAL_ROLLING_LOOKBACK_DAYS,
+} from './syncPolicy';
 
 let _db: Firestore | null = null;
 
@@ -506,7 +509,8 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
   }
   const now = new Date();
   const currentYear = now.getUTCFullYear();
-  const incrementalWindow = buildYesterdayToTodayWindow(now);
+  /** Μετά το history import: rolling ~πέντε εβδομάδες (όχι μόνο χθες/σήμερα). */
+  const incrementalWindow = buildRollingUtcDayWindow(DEFAULT_INCREMENTAL_ROLLING_LOOKBACK_DAYS, now);
   const today = toYmd(now);
   const currentYearStart = `${currentYear}-01-01`;
   const historyStartYear = currentYear - META_HISTORY_YEARS;

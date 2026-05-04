@@ -18,7 +18,10 @@ import * as admin from 'firebase-admin';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { encryptToken, decryptToken } from './tokenCrypto';
-import { buildYesterdayToTodayWindow } from './syncPolicy';
+import {
+  buildRollingUtcDayWindow,
+  DEFAULT_INCREMENTAL_ROLLING_LOOKBACK_DAYS,
+} from './syncPolicy';
 
 let _db: Firestore | null = null;
 
@@ -491,7 +494,7 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
 
   // Date window policy:
   // - First historical load: 3-year history -> today
-  // - Subsequent syncs: yesterday -> today (small overlap for late conversions)
+  // - Subsequent syncs: rolling trailing window (GMT) για να επαληθεύονται μέρες που λείψαν σε μερικά sync
   const now = new Date();
   const currentYear = now.getUTCFullYear();
   const historyStartYear = currentYear - GOOGLE_ADS_HISTORY_YEARS;
@@ -501,7 +504,7 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
   const historyLoaded =
     Boolean(connector.historyLoadedUntilYear) &&
     Number(connector.historyLoadedUntilYear) <= historyStartYear;
-  const incrementalWindow = buildYesterdayToTodayWindow(now);
+  const incrementalWindow = buildRollingUtcDayWindow(DEFAULT_INCREMENTAL_ROLLING_LOOKBACK_DAYS, now);
   const sinceStr = historyLoaded ? incrementalWindow.since : `${historyStartYear}-01-01`;
   const untilStr = historyLoaded ? incrementalWindow.until : now.toISOString().slice(0, 10);
   logger.info(

@@ -2,7 +2,10 @@ import * as admin from 'firebase-admin';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { encryptToken, decryptToken } from './tokenCrypto';
-import { buildYesterdayToTodayWindow } from './syncPolicy';
+import {
+  buildRollingUtcDayWindow,
+  DEFAULT_INCREMENTAL_ROLLING_LOOKBACK_DAYS,
+} from './syncPolicy';
 
 let _db: Firestore | null = null;
 
@@ -454,7 +457,7 @@ export async function fetchTikTokCampaigns(brandId: string): Promise<{
   const historyLoaded =
     Boolean(connector.historyLoadedUntilYear) &&
     Number(connector.historyLoadedUntilYear) <= historyStartYear;
-  const incrementalWindow = buildYesterdayToTodayWindow(now);
+  const incrementalWindow = buildRollingUtcDayWindow(DEFAULT_INCREMENTAL_ROLLING_LOOKBACK_DAYS, now);
   const sinceStr = historyLoaded ? incrementalWindow.since : `${historyStartYear}-01-01`;
   const untilStr = historyLoaded ? incrementalWindow.until : toYmd(now);
 

@@ -49,6 +49,27 @@ export function buildYesterdayToTodayWindow(now: Date = new Date()): { since: st
   };
 }
 
+/** Αριθμός διαδοχικών UTC ημερομηνιών (today inclusive) επανάληψης μετά την αρχική ιστορική φόρτωση. */
+export const DEFAULT_INCREMENTAL_ROLLING_LOOKBACK_DAYS = 35;
+
+/**
+ * Rolling συμβολοσειρά [since … until] συμπεριλαμβανομένης της σημερινής μέρας (UTC κατά `toYmd`).
+ * Χρησιμοποιείται μετά το πρώτο history import ώστε να «κλείνουν» μέρες που έλειψαν από τη Firestore
+ * όταν κάποιο sync επέστρεψε μερικό payload (χθες/σήμερα μόνο δεν τις ξανά‑τράβαγε ποτέ).
+ */
+export function buildRollingUtcDayWindow(
+  inclusiveDayCount: number,
+  now: Date = new Date()
+): { since: string; until: string } {
+  const k =
+    Number.isFinite(inclusiveDayCount) && inclusiveDayCount >= 2
+      ? Math.floor(inclusiveDayCount)
+      : DEFAULT_INCREMENTAL_ROLLING_LOOKBACK_DAYS;
+  const since = new Date(now.getTime());
+  since.setUTCDate(since.getUTCDate() - (k - 1));
+  return { since: toYmd(since), until: toYmd(now) };
+}
+
 export function toMagentoDateTime(date: Date): string {
   return date.toISOString().slice(0, 19).replace('T', ' ');
 }
