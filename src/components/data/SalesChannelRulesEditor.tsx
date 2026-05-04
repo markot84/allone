@@ -23,9 +23,14 @@ const CHANNEL_OPTIONS: Array<{ id: EcommerceSalesChannel; label: string; include
 const MATCH_FIELD_OPTIONS: Array<{ id: string; label: string; hint: string }> = [
   { id: 'orderName', label: 'Order Name / Increment ID', hint: 'π.χ. INTERCO-, B2B-, prefix στο order number' },
   { id: 'orderId', label: 'Order ID', hint: 'εσωτερικό numeric ID της παραγγελίας' },
-  { id: 'customerEmail', label: 'Customer Email', hint: 'π.χ. @etennis-wholesale.gr' },
+  { id: 'customerEmail', label: 'Customer Email', hint: 'π.χ. domain B2B του καταστήματος' },
   { id: 'paymentMethod', label: 'Payment Method', hint: 'π.χ. skroutz, intercompany_credit' },
   { id: 'shippingMethod', label: 'Shipping Method', hint: 'π.χ. courier_b2b, internal_transfer' },
+  {
+    id: 'orderStoreDomain',
+    label: 'Domain eshop (hostname)',
+    hint: 'hostname του public storefront, π.χ. b2b.example.gr — γεμίζει από Magento sync (base URL store view). Ταίριασμα substring, case-insensitive.',
+  },
 ];
 
 type EditableRule = EcommerceSalesChannelRule & {
@@ -234,7 +239,7 @@ export function SalesChannelRulesEditor() {
           <div className="flex items-center gap-1.5">
             <h3 className="text-base font-semibold text-[var(--nts-charcoal)]">Sales Channel Rules</h3>
             <Tooltip
-              content="Κανόνες εξαίρεσης από τον τζίρο (ενδοομιλικά, Skroutz κ.λπ.). Στο e-shop ταιριάζουν στα πεδία παραγγελίας. Με Πηγή Εσόδων = ERP (Megaventory): Order Name → αριθμός εγγράφου, Customer Email → όνομα πελάτη Megaventory, Payment Method → τύπος εγγράφου. Με SoftOne SALDOC χρησιμοποιούνται τα αντίστοιχα διαθέσιμα πεδία παραστατικού."
+              content="Κανόνες εξαίρεσης ή κατηγορίας παραγγελιών για τον τζίρο e-shop. Για πολλαπλά Magento storefronts, χρησιμοποιήστε το πεδίο «Domain eshop (hostname)» μετά από sync ώστε κάθε order να φέρει hostname storefront. Ταίριασμα substring, case-insensitive. Με Πηγή εσόδων «όλο το e-shop χωρίς φίλτρο καναλιών» (brand setting) οι κανόνες εδώ δεν εφαρμόζονται στο summary. Με ERP (Megaventory/SoftOne): Order Name → αριθμός εγγράφου, Customer Email → πελάτης, Payment Method → τύπος εγγράφου."
               size={13}
             />
           </div>
@@ -321,7 +326,7 @@ export function SalesChannelRulesEditor() {
                     type="text"
                     value={rule.patternsRaw}
                     onChange={(e) => updateRule(idx, 'patternsRaw', e.target.value)}
-                    placeholder="INTERCO-, B2B-, @wholesale.gr"
+                    placeholder="INTERCO-, b2b.example.gr, @partner.gr"
                     className="w-full text-[13px] px-2 py-1.5 border border-[var(--nts-border-gray)] rounded-md bg-white"
                   />
                 </div>

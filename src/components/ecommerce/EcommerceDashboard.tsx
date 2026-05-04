@@ -314,7 +314,7 @@ export function EcommerceDashboard() {
   const [localDateTo,   setLocalDateTo]   = useState('');
   /** Πίνακας «Δημοφιλείς αναζητήσεις»: 10 γραμμές, υπόλοιπο με ανάπτυξη */
   const [magentoPopularExpanded, setMagentoPopularExpanded] = useState(false);
-  // Per-brand history cutoff (π.χ. Safeblock 2025-09-01) — clamp στο read-side
+  // Per-brand history cutoff (brands.{historyStartDate}) — clamp στο read-side
   const brandHistoryStartISO = getBrandHistoryStartISO(currentBrand);
   const rawFrom = localDateFrom || globalFrom;
   const rawTo   = localDateTo   || globalTo;

@@ -763,8 +763,8 @@ function MagentoConsolidatedRevenueToggle({
       if (!res.ok || !j.success) throw new Error(j.error || 'Αποτυχία αποθήκευσης');
       toast.success(
         next
-          ? 'Όλα τα Magento stores για παραγγελίες/τζίρο. Τρέξτε Sync για πλήρη ενημέρωση.'
-          : 'Το φίλτρο store επανήλθε. Τρέξτε Sync αν χρειάζεται.'
+          ? 'Ενεργοποιήθηκε συγκεντρωτική μέτρηση για όλα τα Magento store views · ενημερώθηκε η σύνοψη e-shop.'
+          : 'Επανήλθε η μέτρηση μόνο για το store view της σύνδεσης · ενημερώθηκε η σύνοψη e-shop. Τρέξτε Sync αν χρειάζονται νέες παραγγελίες.'
       );
       onSaved();
     } catch (e) {
@@ -784,9 +784,11 @@ function MagentoConsolidatedRevenueToggle({
         className="mt-0.5"
       />
       <span>
-        <span className="font-semibold text-[#1A1A1A] block mb-1">Συγκεντρωτικός τζίρος (όλα τα Magento stores)</span>
-        Για brands με χωριστά storefronts στο ίδιο Magento (π.χ. GR+BG+RO+CY)· ευθυγραμμίζεται με την οικονομική συνολική στήλη «Total Income χωρίς ΦΠΑ» όπως στο έλεγχό σας στο Excel.
-        <span className="block mt-1 text-[#6B7280]">Αν μείνει off, τα στατιστικά βασίζονται μόνο στο store που αντιστοιχεί στο διακριτικό που επιλέξατε κατά τη σύνδεση.</span>
+        <span className="font-semibold text-[#1A1A1A] block mb-1">Όλα τα Magento store views (συγκεντρωτικά KPIs)</span>
+        Όταν ένα Magento installation έχει πολλαπλά storefronts / store views, η ενεργοποίηση ενοποιεί τις παραγγελίες όλων των views στα αθροίσματα εσόδων — χρήσιμο για πολλές αγορές ή ξεχωριστά e-shops που μοιράζονται το ίδιο backend.
+        <span className="block mt-1 text-[#6B7280]">
+          Αν είναι off, τα KPIs βασίζονται μόνο στο store view που αντιστοιχεί στο store code της σύνδεσης. Για εξαίρεση συγκεκριμένου eshop (hostname) ενώ το συγκεντρωτικό είναι on, ορίστε κανόνα στο μπλοκ <strong>Sales Channel Rules</strong> → πεδίο <strong>Domain eshop (hostname)</strong> μετά από Magento sync.
+        </span>
       </span>
     </label>
   );
@@ -810,7 +812,9 @@ function MagentoCredentialsModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [syncAllStores, setSyncAllStores] = useState(false);
-  const [storeCandidates, setStoreCandidates] = useState<{ code: string; storeName: string; baseUrl: string }[]>([]);
+  const [storeCandidates, setStoreCandidates] = useState<
+    { id?: number; code: string; storeName: string; baseUrl: string }[]
+  >([]);
   const toast = useToast();
 
   const handleConnect = async () => {
@@ -905,9 +909,9 @@ function MagentoCredentialsModal({
               className="mt-0.5"
             />
             <span>
-              <span className="font-semibold text-[#111827]">Να συμπεριληφθούν όλα τα Magento stores στον τζίρο</span>
+              <span className="font-semibold text-[#111827]">Να συμπεριληφθούν όλα τα Magento store views στον τζίρο</span>
               <span className="block text-[#6B7280] mt-1">
-                Για τον ίδιο Magento backend με Πολλαπλές χώρες / brands σε ξεχωριστά store views — επιτρέπει σύνοψη τύπου Excel «TOTAL» ανά Μήνα.
+                Για πολλαπλά storefronts στο ίδιο installation (διαφορετικές αγορές, γλώσσες ή ξεχωριστά e-shops): ενοποιεί τις παραγγελίες σε ένα κοινό σύνολο KPIs αντί να μετρά μόνο το store view της σύνδεσης.
               </span>
             </span>
           </label>
@@ -917,7 +921,7 @@ function MagentoCredentialsModal({
               type="text"
               value={storeCode}
               onChange={(e) => setStoreCode(e.target.value)}
-              placeholder="π.χ. base, webgreek, padel_com"
+              placeholder="π.χ. base, default, b2b"
               style={inputStyle}
               onKeyDown={(e) => e.key === 'Enter' && handleConnect()}
             />
@@ -949,7 +953,7 @@ function MagentoCredentialsModal({
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                     {storeCandidates.map((c) => (
                       <button
-                        key={c.code}
+                        key={`${c.id ?? ''}-${c.code}`}
                         type="button"
                         onClick={() => { setStoreCode(c.code); setError(''); }}
                         title={c.baseUrl}
@@ -964,7 +968,9 @@ function MagentoCredentialsModal({
                           cursor: 'pointer',
                         }}
                       >
-                        {c.code}{c.storeName ? ` · ${c.storeName}` : ''}
+                        {c.code}
+                        {typeof c.id === 'number' && Number.isFinite(c.id) ? ` (#${c.id})` : ''}
+                        {c.storeName ? ` · ${c.storeName}` : ''}
                       </button>
                     ))}
                   </div>
@@ -1927,6 +1933,19 @@ export function ConnectorsPanel() {
     queryClient.removeQueries({ queryKey: ['lastSyncDates', brandId] });
   }, [brandId, refetchConnectors, queryClient]);
 
+  const refreshMagentoEcommerceCaches = useCallback(() => {
+    if (!brandId) return;
+    queryClient.removeQueries({ queryKey: ['ecommerce_summary', brandId] });
+    queryClient.removeQueries({ queryKey: ['ecommerceOrdersRaw', brandId] });
+    queryClient.invalidateQueries({ queryKey: ['ecommerce_summary', brandId] });
+    queryClient.invalidateQueries({ queryKey: ['ecommerceOrdersRaw', brandId] });
+  }, [brandId, queryClient]);
+
+  const onMagentoConnectorSettingsSaved = useCallback(() => {
+    refreshMagentoEcommerceCaches();
+    void fetchStates();
+  }, [refreshMagentoEcommerceCaches, fetchStates]);
+
   const runOAuthSuccessFlow = useCallback(
     async (connectorKey: string) => {
       await fetchStates();
@@ -2678,9 +2697,7 @@ export function ConnectorsPanel() {
                           brandId={brandId}
                           syncAllStores={Boolean((state as { syncAllStores?: boolean }).syncAllStores)}
                           canManage={canManageConnectors}
-                          onSaved={() => {
-                            void fetchStates();
-                          }}
+                          onSaved={onMagentoConnectorSettingsSaved}
                         />
                       </div>
                     )}

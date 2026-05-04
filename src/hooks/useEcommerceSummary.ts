@@ -143,7 +143,7 @@ async function fetchEcommerceSummary(brandId: string): Promise<EcommerceSummaryR
   /**
    * Νέο layout: `sku_stats/{brandId}/chunks/*` — απαραίτητο γιατί το παλιό inline `skuStatsJson`
    * πρόσθετε το serialized map στο main summary doc και ξεπερνούσε το Firestore όριο 1 MiB
-   * για brands με μεγάλα catalogs (e-tennis/safeglock) → όλο το set απέτυχε → στάλε δεδομένα.
+   * σε brands με μεγάλους καταλόγους SKU → απέτυχε το doc read → κενά δεδομένα στο UI.
    */
   const merged: EcommerceSummaryRaw = {
     ...summary,

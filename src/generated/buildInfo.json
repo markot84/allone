@@ -1,10 +1,14 @@
 {
-  "version": "0.726.51",
-  "previousVersion": "0.726.50",
-  "commitHash": "730e970",
+  "version": "0.726.56",
+  "previousVersion": "0.726.55",
+  "commitHash": "1fdd34e",
   "branch": "main",
-  "buildDate": "2026-05-04T09:14:36.279Z",
+  "buildDate": "2026-05-04T13:02:26.689Z",
   "commits": [
+    {
+      "hash": "1fdd34e",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "730e970",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "acb11f9",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "8a2775b",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [
@@ -73,7 +73,6 @@
     "[Διόρθωση] Robust raw orders fetch when date query returns empty (timestamp/coerce server)",
     "[Build] Hosting build info after full deploy (v0.726.10)",
     "E‑commerce connectors: incremental orders/products sync like Magento syncPolicy window",
-    "Incremental marketing sync (yesterday-today): preserve merged dailyMetrics; TikTok merge-recompute",
-    "Rfm: cache order history and separate category insights"
+    "Incremental marketing sync (yesterday-today): preserve merged dailyMetrics; TikTok merge-recompute"
   ]
 }

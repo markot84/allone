@@ -79,6 +79,45 @@ type MagentoStoreConfig = {
   secure_base_static_url?: string;
 };
 
+/** Εγγραφές απο τις ρυθμίσεις store (για UX επιλογών εξαίρεσης & analytics). */
+export type MagentoStoreDirectoryEntry = {
+  id: number;
+  code: string;
+  storeName: string;
+  baseUrl: string;
+};
+
+export function directoryFromMagentoStoreConfigs(configs: unknown[]): MagentoStoreDirectoryEntry[] {
+  const typed = configs.filter((cfg): cfg is MagentoStoreConfig => typeof cfg === 'object' && cfg !== null);
+  const out: MagentoStoreDirectoryEntry[] = [];
+  for (const cfg of typed) {
+    if (String(cfg.code || '').trim().toLowerCase() === 'admin') continue;
+    const id = Number(cfg.id);
+    if (!Number.isFinite(id) || id <= 0) continue;
+    out.push({
+      id,
+      code: String(cfg.code || '').trim(),
+      storeName: String(cfg.store_name || cfg.website_name || '').trim(),
+      baseUrl: getStoreConfigUrls(cfg)[0] || '',
+    });
+  }
+  return out;
+}
+
+/** Κανονικοποιημένο hostname (χωρίς www) από store base URL — για KPI rules (orderStoreDomain). */
+function storefrontHostFromBaseUrl(raw: string): string {
+  const s = String(raw || '').trim();
+  if (!s) return '';
+  try {
+    const u = new URL(s.startsWith('http') ? s : `https://${s}`);
+    let h = u.hostname.toLowerCase();
+    if (h.startsWith('www.')) h = h.slice(4);
+    return h;
+  } catch {
+    return '';
+  }
+}
+
 function normalizeComparableHost(input: string): string {
   try {
     const host = new URL(input).hostname.trim().toLowerCase();
@@ -263,16 +302,12 @@ function pickMagentoStoreConfig(
   availableCodes: string[];
   ambiguous: boolean;
   matchedByUrl: boolean;
-  candidates: { code: string; storeName: string; baseUrl: string }[];
+  candidates: MagentoStoreDirectoryEntry[];
 } {
   const typed = configs.filter((cfg): cfg is MagentoStoreConfig => typeof cfg === 'object' && cfg !== null);
   const nonAdmin = typed.filter((cfg) => String(cfg.code || '').trim().toLowerCase() !== 'admin');
   const availableCodes = nonAdmin.map((cfg) => String(cfg.code || '').trim()).filter(Boolean);
-  const candidates = nonAdmin.map((cfg) => ({
-    code: String(cfg.code || '').trim(),
-    storeName: String(cfg.store_name || cfg.website_name || '').trim(),
-    baseUrl: getStoreConfigUrls(cfg)[0] || '',
-  }));
+  const candidates = directoryFromMagentoStoreConfigs(configs);
 
   const requestedCode = String(preferredStoreCode || '').trim().toLowerCase();
   if (requestedCode) {
@@ -506,7 +541,7 @@ export async function saveMagentoCredentials(
   syncAllStores?: boolean;
   error?: string;
   availableStoreCodes?: string[];
-  storeCandidates?: { code: string; storeName: string; baseUrl: string }[];
+  storeCandidates?: MagentoStoreDirectoryEntry[];
 }> {
   const normalizedUrl = normalizeStoreUrl(storeUrl);
   const tokenPlain = normalizeMagentoToken(accessToken);
@@ -521,7 +556,10 @@ export async function saveMagentoCredentials(
     };
   }
 
-  await getDb().doc(`connectors/${brandId}`).set(
+  const connectorRef = getDb().doc(`connectors/${brandId}`);
+  const storeDirectory = testResult.storeDirectory ?? [];
+
+  await connectorRef.set(
     {
       magento: {
         connected: true,
@@ -540,6 +578,7 @@ export async function saveMagentoCredentials(
         accessToken: encryptToken(tokenPlain),
         connectedAt: FieldValue.serverTimestamp(),
         syncAllStores: Boolean(opts?.syncAllStores),
+        storeDirectory,
       },
     },
     { merge: true }
@@ -603,7 +642,9 @@ export async function testMagentoConnection(
   error?: string;
   /** Όταν ambiguous ή λάθος storeCode, στέλνουμε τα διαθέσιμα στο frontend. */
   availableStoreCodes?: string[];
-  storeCandidates?: { code: string; storeName: string; baseUrl: string }[];
+  storeCandidates?: MagentoStoreDirectoryEntry[];
+  /** Πλήρης λίστα store views (με numeric id) — debugging / σύζευξη. */
+  storeDirectory?: MagentoStoreDirectoryEntry[];
 }> {
   try {
     const probe = await probeMagentoStoreConfigs(storeUrl, accessToken);
@@ -612,6 +653,7 @@ export async function testMagentoConnection(
     }
 
     const { configs, restApiBase } = probe;
+    const storeDirectoryFull = directoryFromMagentoStoreConfigs(configs);
     const pick = pickMagentoStoreConfig(configs, storeUrl, preferredStoreCode);
     const { selected, availableCodes, ambiguous, candidates } = pick;
 
@@ -629,6 +671,7 @@ export async function testMagentoConnection(
           : `Το store code "${preferredStoreCode}" δεν βρέθηκε στο Magento storeConfigs.`,
         availableStoreCodes: availableCodes,
         storeCandidates: candidates,
+        storeDirectory: storeDirectoryFull,
       };
     }
 
@@ -644,6 +687,7 @@ export async function testMagentoConnection(
           (listed ? `Λεπτομέρειες: ${listed}` : ''),
         availableStoreCodes: availableCodes,
         storeCandidates: candidates,
+        storeDirectory: storeDirectoryFull,
       };
     }
 
@@ -685,6 +729,8 @@ export async function testMagentoConnection(
       version,
       storeWebUrl: storeWebUrl || undefined,
       mediaBaseUrl: mediaBaseUrl || undefined,
+      storeDirectory: storeDirectoryFull,
+      storeCandidates: storeDirectoryFull,
     };
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
@@ -717,10 +763,11 @@ export async function fetchMagentoData(brandId: string): Promise<{
   }
 
   const storeUrl = String(connector.storeUrl || '').replace(/\/+$/, '');
+  const storeWebUrl = String((connector as { storeWebUrl?: string }).storeWebUrl || '').trim();
   const restApiBase = String((connector as { restApiBase?: string }).restApiBase || storeUrl).replace(/\/+$/, '');
   const storeCode = String((connector as { storeCode?: string }).storeCode || '').trim();
   const storeId = Number((connector as { storeId?: number | string }).storeId);
-  /** Όταν true δεν ωθούμε φίλτρο store_id στο REST API — για εγκαταστάσεις πολλαπλών fronts (π.χ. GR+BG+RO+CY σε ένα οικονομικό consolidated total). */
+  /** Όταν true δεν ωθούμε φίλτρο store_id στο REST API — εγκαταστάσεις πολλαπλών fronts στο ίδιο Magento. */
   const syncAllStores = Boolean((connector as { syncAllStores?: boolean }).syncAllStores);
   const accessToken = decryptToken(connector.accessToken);
   if (!accessToken) {
@@ -732,6 +779,31 @@ export async function fetchMagentoData(brandId: string): Promise<{
     Accept: 'application/json',
     'User-Agent': MAGENTO_UA,
   };
+
+  const storeIdToHost = new Map<number, string>();
+  const fallbackOrderStoreHost = storefrontHostFromBaseUrl(storeWebUrl || storeUrl);
+
+  try {
+    const dirProbe = await probeMagentoStoreConfigs(storeUrl, accessToken);
+    if (dirProbe.ok) {
+      const dir = directoryFromMagentoStoreConfigs(dirProbe.configs);
+      for (const e of dir) {
+        const host = storefrontHostFromBaseUrl(e.baseUrl);
+        if (host && Number.isFinite(e.id)) storeIdToHost.set(e.id, host);
+      }
+      if (dir.length > 0) {
+        const cref = db.doc(`connectors/${brandId}`);
+        await cref.set(
+          {
+            'magento.storeDirectory': dir,
+          },
+          { merge: true }
+        );
+      }
+    }
+  } catch (e) {
+    logger.warn(`[Magento] storeDirectory refresh skipped for ${brandId}:`, e);
+  }
 
   let totalImported = 0;
   const errors: string[] = [];
@@ -777,7 +849,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
         'searchCriteria[sortOrders][0][direction]': orderSortDirection,
         'searchCriteria[pageSize]': '100',
         'searchCriteria[currentPage]': String(currentPage),
-        'fields': 'items[entity_id,increment_id,customer_id,customer_email,billing_address[email],created_at,updated_at,status,grand_total,subtotal,tax_amount,discount_amount,base_grand_total,base_subtotal,base_tax_amount,base_discount_amount,base_currency_code,total_item_count,order_currency_code,shipping_description,payment[method,additional_information],items[sku,name,qty_ordered,price,product_id,product_type,parent_item_id,row_total,base_row_total]],total_count',
+        'fields': 'items[entity_id,increment_id,store_id,customer_id,customer_email,billing_address[email],created_at,updated_at,status,grand_total,subtotal,tax_amount,discount_amount,base_grand_total,base_subtotal,base_tax_amount,base_discount_amount,base_currency_code,total_item_count,order_currency_code,shipping_description,payment[method,additional_information],items[sku,name,qty_ordered,price,product_id,product_type,parent_item_id,row_total,base_row_total]],total_count',
       });
       if (!syncAllStores && Number.isFinite(storeId) && storeId > 0) {
         searchParams.set('searchCriteria[filter_groups][1][filters][0][field]', 'store_id');
@@ -841,6 +913,17 @@ export async function fetchMagentoData(brandId: string): Promise<{
             currency: o.order_currency_code || 'EUR',
             paymentMethod: paymentAdditionalInfo || o.payment?.method || '',
             shippingMethod: normalizeMagentoShippingDescription(o.shipping_description || ''),
+            magentoStoreId: Number.isFinite(Number(o.store_id)) ? Number(o.store_id) : null,
+            orderStoreDomain: (() => {
+              const sidN = Number(o.store_id);
+              if (!Number.isFinite(sidN) || sidN <= 0) {
+                return storeIdToHost.size === 0 && fallbackOrderStoreHost ? fallbackOrderStoreHost : null;
+              }
+              const mapped = storeIdToHost.get(sidN);
+              if (mapped) return mapped;
+              if (storeIdToHost.size === 0 && fallbackOrderStoreHost) return fallbackOrderStoreHost;
+              return null;
+            })(),
             lineItems: (o.items || []).slice(0, 250).map((li: any) => {
               function pickRowTotal(): number {
                 for (const k of ['row_total', 'base_row_total'] as const) {

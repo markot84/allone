@@ -8,7 +8,7 @@ import { FirestoreService } from './firestore';
 import {
   classifyEcommerceOrder,
   isExcludedEcommerceStatus,
-  normalizeSalesChannelRules,
+  mergeSalesChannelRulesForBrand,
   type EcommerceExclusionReason,
   type EcommerceSalesChannel,
   type EcommerceSalesChannelRule,
@@ -51,6 +51,10 @@ export type EcommerceRawOrder = {
   customerKey?: string;
   customerEmailHash?: string;
   customerEmail?: string;
+  /** Numeric Magento `store_id` (όταν sync όλων των store views) για εξαιρέσεις analytics. */
+  magentoStoreId?: number;
+  /** Hostname του public storefront (Magento)· για κανόνες «domain / eshop». */
+  orderStoreDomain?: string;
 };
 
 export const ECOMMERCE_ORDER_COLLECTIONS: Record<string, string> = {
@@ -247,6 +251,30 @@ function normalizeRawOrder(platform: string, row: Record<string, unknown>): Ecom
     customerKey = `${platform}:${s}`;
   }
 
+  let magentoStoreId: number | undefined;
+  if (platform === 'magento') {
+    const rawSid = row.magentoStoreId ?? row.store_id;
+    const n = Number(rawSid);
+    if (Number.isFinite(n) && n > 0) magentoStoreId = n;
+  }
+
+  let orderStoreDomain: string | undefined;
+  if (platform === 'magento') {
+    const od = row.orderStoreDomain ?? row.order_store_domain;
+    if (typeof od === 'string' && od.trim()) {
+      let h = od.trim().toLowerCase();
+      if (/^https?:\/\//i.test(h)) {
+        try {
+          h = new URL(h).hostname.toLowerCase();
+        } catch {
+          h = h.replace(/^https?:\/\//i, '').split(/[/?#]/)[0] || h;
+        }
+      }
+      if (h.startsWith('www.')) h = h.slice(4);
+      orderStoreDomain = h || undefined;
+    }
+  }
+
   return {
     orderId: String(row.orderId || row.incrementId || row.id || ''),
     orderName: String(row.orderName || row.orderNumber || row.incrementId || row.orderId || ''),
@@ -264,28 +292,30 @@ function normalizeRawOrder(platform: string, row: Record<string, unknown>): Ecom
     ...(customerKey ? { customerKey } : {}),
     ...(emailHash ? { customerEmailHash: emailHash } : {}),
     ...(customerEmail ? { customerEmail } : {}),
+    ...(magentoStoreId != null ? { magentoStoreId } : {}),
+    ...(orderStoreDomain ? { orderStoreDomain } : {}),
   };
 }
 
-function arrayOrEmpty(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
-}
-
-async function fetchSalesChannelRules(brandId: string): Promise<EcommerceSalesChannelRule[]> {
+async function fetchSalesChannelRulesForOrders(
+  brandId: string,
+  revenueSourceMode: 'eshop_classified' | 'eshop_all' | 'erp'
+): Promise<EcommerceSalesChannelRule[]> {
   try {
-    const connector = await FirestoreService.getDocument<{
-      ecommerceSalesChannelRules?: unknown;
-      salesChannelRules?: unknown;
-      magento?: { salesChannelRules?: unknown };
-    }>('connectors', brandId);
-    if (!connector) return [];
-    return normalizeSalesChannelRules([
-      ...arrayOrEmpty(connector.ecommerceSalesChannelRules),
-      ...arrayOrEmpty(connector.salesChannelRules),
-      ...arrayOrEmpty(connector.magento?.salesChannelRules),
-    ]);
+    const connector = await FirestoreService.getDocument<Record<string, unknown>>('connectors', brandId);
+    if (!connector) {
+      return mergeSalesChannelRulesForBrand([], revenueSourceMode);
+    }
+    return mergeSalesChannelRulesForBrand(
+      [
+        connector.ecommerceSalesChannelRules,
+        connector.salesChannelRules,
+        (connector.magento as { salesChannelRules?: unknown } | undefined)?.salesChannelRules,
+      ],
+      revenueSourceMode
+    );
   } catch {
-    return [];
+    return mergeSalesChannelRulesForBrand([], revenueSourceMode);
   }
 }
 
@@ -423,7 +453,7 @@ export async function fetchAllEcommerceOrders(
         backend === 'megaventory_invoices' ? 'megaventory_invoices' : 'softone_sales_documents';
       const [rows, allRules] = await Promise.all([
         FirestoreService.getDocuments<Record<string, unknown>>(coll, [], brandId, rangedLoadOpts),
-        fetchSalesChannelRules(brandId),
+        fetchSalesChannelRulesForOrders(brandId, mode),
       ]);
 
       const filtered = rows.filter((row) => {
@@ -465,7 +495,7 @@ export async function fetchAllEcommerceOrders(
   }
 
   const [allRules, results] = await Promise.all([
-    fetchSalesChannelRules(brandId),
+    fetchSalesChannelRulesForOrders(brandId, mode),
     Promise.all(
       platforms.map(async (platform) => {
         const collectionName = ECOMMERCE_ORDER_COLLECTIONS[platform];
@@ -537,13 +567,8 @@ export async function fetchAllEcommerceOrders(
     ),
   ]);
   const requestedMode = options.revenueMode || 'brand';
-  // brand/default: όταν revenueSourceMode = eshop_all, αγνοούμε τα rules.
-  // classified: forced core e-shop revenue for views whose copy promises exclusions.
-  // all: explicit all e-shop orders.
-  const rules =
-    requestedMode === 'all' || (requestedMode === 'brand' && mode === 'eshop_all')
-      ? []
-      : allRules;
+  // `all` = χωρίς κανόνες (όλες οι παραγγελίες ως included). Αλλιώς: merge legacy Magento store + κανάλια.
+  const rules = requestedMode === 'all' ? [] : allRules;
   return results.flat().map((order) => ({
     ...order,
     ...classifyEcommerceOrder(order, rules),

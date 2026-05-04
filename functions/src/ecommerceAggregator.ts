@@ -16,7 +16,7 @@ import {
 import {
   classifyEcommerceOrder,
   isExcludedEcommerceStatus,
-  normalizeSalesChannelRules,
+  mergeSalesChannelRulesForBrand,
   type EcommerceExclusionReason,
   type EcommerceSalesChannel,
 } from './ecommerceSalesChannel';
@@ -29,10 +29,6 @@ export function setDb(db: Firestore) {
 
 function getDb(): Firestore {
   return _db ?? (admin.firestore() as unknown as Firestore);
-}
-
-function arrayOrEmpty(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
 }
 
 /**
@@ -138,6 +134,8 @@ interface OrderRow {
   paymentMethod?: string;
   shippingMethod?: string;
   customerEmail?: string;
+  magentoStoreId?: number;
+  orderStoreDomain?: string;
   salesChannel?: EcommerceSalesChannel;
   revenueIncluded?: boolean;
   exclusionReason?: EcommerceExclusionReason;
@@ -313,11 +311,7 @@ function computeOrderExVatRevenue(platform: string, d: Record<string, unknown>):
 /**
  * Read orders from a single platform collection for the given brand (full history in Firestore).
  */
-async function readPlatformOrders(
-  db: Firestore,
-  brandId: string,
-  platform: string
-): Promise<OrderRow[]> {
+async function readPlatformOrders(db: Firestore, brandId: string, platform: string): Promise<OrderRow[]> {
   const collection = COLLECTION_MAP[platform];
   if (!collection) return [];
 
@@ -334,6 +328,18 @@ async function readPlatformOrders(
 
     const price = computeOrderExVatRevenue(platform, d);
 
+    const sid =
+      platform === 'magento'
+        ? Number(d.magentoStoreId ?? (d as { store_id?: unknown }).store_id)
+        : NaN;
+    const magentoStoreId =
+      platform === 'magento' && Number.isFinite(sid) && sid > 0 ? sid : undefined;
+    const osdRaw = d.orderStoreDomain ?? (d as { order_store_domain?: unknown }).order_store_domain;
+    const orderStoreDomain =
+      platform === 'magento' && typeof osdRaw === 'string' && osdRaw.trim()
+        ? String(osdRaw).trim().toLowerCase().replace(/^www\./, '')
+        : undefined;
+
     rows.push({
       totalPrice: price,
       createdAt,
@@ -346,6 +352,8 @@ async function readPlatformOrders(
       shippingMethod: d.shippingMethod || d.shipping_method || d.shippingDescription || '',
       customerEmail: d.customerEmail || d.customer_email || '',
       lineItems: d.lineItems || [],
+      ...(magentoStoreId != null ? { magentoStoreId } : {}),
+      ...(orderStoreDomain ? { orderStoreDomain } : {}),
     });
   }
 
@@ -512,19 +520,21 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
       return;
     }
     rawOrders = (
-      await Promise.all(stockPlatforms.map((p) => readPlatformOrders(db, brandId, p)))
+      await Promise.all(
+        stockPlatforms.map((p) => readPlatformOrders(db, brandId, p))
+      )
     ).flat();
     revenueSummaryPlatforms = [...stockPlatforms];
   }
 
-  const salesChannelRules =
-    revenueSourceMode === 'eshop_all'
-      ? []
-      : normalizeSalesChannelRules([
-          ...arrayOrEmpty(connPlain.ecommerceSalesChannelRules),
-          ...arrayOrEmpty(connPlain.salesChannelRules),
-          ...arrayOrEmpty((connPlain.magento as Record<string, unknown> | undefined)?.salesChannelRules),
-        ]);
+  const salesChannelRules = mergeSalesChannelRulesForBrand(
+    [
+      connPlain.ecommerceSalesChannelRules,
+      connPlain.salesChannelRules,
+      (connPlain.magento as Record<string, unknown> | undefined)?.salesChannelRules,
+    ],
+    revenueSourceMode
+  );
 
   // Demo cleanup + classification (ERP: ίδιοι κανόνες όπως eshop, με mapping πεδίων + safe status)
   const visibleOrders: OrderRow[] = [];

@@ -19,6 +19,10 @@ export type EcommerceOrderForClassification = {
   paymentMethod?: string;
   shippingMethod?: string;
   customerEmail?: string;
+  /** Magento store_id από sync — όχι πεδίο κανόνων· χρησιμοποιείται `orderStoreDomain`. */
+  magentoStoreId?: number;
+  /** Normalized storefront hostname for domain-based rules (Magento multi-store). */
+  orderStoreDomain?: string;
 };
 
 export type EcommerceOrderClassification = {
@@ -49,6 +53,8 @@ const EXCLUDED_STATUS_SET = new Set([
 
 const DEFAULT_MATCH_FIELDS = ['paymentMethod', 'shippingMethod', 'orderName', 'orderId'];
 
+const EXACT_MATCH_FIELDS = new Set<string>();
+
 export function isExcludedEcommerceStatus(status: string | null | undefined): boolean {
   return EXCLUDED_STATUS_SET.has(String(status || '').trim().toLowerCase());
 }
@@ -71,9 +77,12 @@ function ruleMatches(order: EcommerceOrderForClassification, rule: EcommerceSale
   if (patterns.length === 0) return null;
 
   for (const field of fields) {
+    if (field === 'magentoStoreId') continue;
     const value = fieldText(order, field);
     if (!value) continue;
-    const matched = patterns.find((pattern) => value.includes(pattern));
+    const matched = EXACT_MATCH_FIELDS.has(field)
+      ? patterns.find((pattern) => value === pattern)
+      : patterns.find((pattern) => value.includes(pattern));
     if (matched) return `${field}:${matched}`;
   }
   return null;
@@ -84,6 +93,17 @@ export function normalizeSalesChannelRules(raw: unknown): EcommerceSalesChannelR
   return raw
     .filter((rule): rule is EcommerceSalesChannelRule => typeof rule === 'object' && rule !== null)
     .filter((rule) => rule.enabled !== false && Array.isArray(rule.patterns) && rule.patterns.length > 0);
+}
+
+export function mergeSalesChannelRulesForBrand(
+  persistedPieces: unknown[],
+  revenueSourceMode: 'eshop_classified' | 'eshop_all' | 'erp'
+): EcommerceSalesChannelRule[] {
+  if (revenueSourceMode === 'eshop_all') {
+    return [];
+  }
+  const flat = persistedPieces.flatMap((x) => (Array.isArray(x) ? x : []));
+  return normalizeSalesChannelRules(flat);
 }
 
 export function classifyEcommerceOrder(

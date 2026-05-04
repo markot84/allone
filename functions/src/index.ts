@@ -1357,13 +1357,19 @@ export const connectorSaveCredentials = onRequest(
         };
         if (magentoSettingsOnly) {
           if (syncAllStores === undefined) {
-            res.status(400).json({ error: 'Missing syncAllStores for magentoSettingsOnly' });
+            res.status(400).json({ error: 'Για ρυθμίσεις Magento λείπει το syncAllStores' });
             return;
           }
           const scope = await updateMagentoSyncScope(brandId, Boolean(syncAllStores));
           if (!scope.ok) {
             res.status(400).json({ success: false, error: scope.error });
             return;
+          }
+          try {
+            await computeEcommerceSummary(brandId);
+          } catch (aggErr) {
+            const msg = aggErr instanceof Error ? aggErr.message : String(aggErr);
+            logger.warn(`[connectorSaveCredentials] computeEcommerceSummary after Magento settings: ${msg}`);
           }
           res.status(200).json({ success: true });
           return;
