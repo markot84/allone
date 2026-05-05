@@ -348,7 +348,6 @@ export function EcommerceDashboard() {
         ? fetchAllEcommerceOrders(brandId, ecomm.connectedPlatforms, {
             sinceDate: effectiveFrom,
             untilDate: effectiveTo,
-            cacheFirst: true,
             revenueMode: 'classified',
           })
         : Promise.resolve([]),

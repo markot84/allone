@@ -143,7 +143,7 @@ export function useSegments() {
     queryKey: ['ecommerceOrdersRaw', brandId, platformsKey, ordersSinceDate],
     queryFn: () =>
       brandId
-        ? fetchAllEcommerceOrders(brandId, ecomm.connectedPlatforms, { sinceDate: ordersSinceDate, cacheFirst: true })
+        ? fetchAllEcommerceOrders(brandId, ecomm.connectedPlatforms, { sinceDate: ordersSinceDate })
         : Promise.resolve([]),
     enabled: ordersQueryEnabled,
     staleTime: 12 * 60 * 60 * 1000,

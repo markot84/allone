@@ -24,7 +24,7 @@ export type EcommerceFullHistoryMode =
  * - `summary_only`: χωρίς raw fetch — εμπιστεύεται το `ecommerce_summary` (υπολογισμός από τον aggregator στο sync).
  */
 export function useEcommerceFullHistoryMetrics(options?: { mode?: EcommerceFullHistoryMode }) {
-  const mode = options?.mode ?? 'full';
+  const mode = options?.mode ?? 'summary_only';
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
   const ecomm = useEcommerceSummary();
@@ -39,7 +39,6 @@ export function useEcommerceFullHistoryMetrics(options?: { mode?: EcommerceFullH
     queryFn: () =>
       brandId
         ? fetchAllEcommerceOrders(brandId, ecomm.connectedPlatforms, {
-            cacheFirst: true,
             ...(historyCutoff ? { sinceDate: historyCutoff } : {}),
           })
         : Promise.resolve([]),
