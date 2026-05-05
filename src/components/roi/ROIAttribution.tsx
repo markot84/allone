@@ -514,7 +514,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
             title={<h2 className="text-xl font-bold text-[var(--nts-charcoal)] sm:text-2xl">ROI & Απόδοση</h2>}
             description={
               <p className="text-sm text-[var(--nts-medium-gray)] sm:text-base">
-                e-shop ROI, Campaign ROI και κατανομή εσόδων / εξόδων
+                Απόδοση e-shop & καμπανιών
               </p>
             }
           />
@@ -548,7 +548,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
           title={<h2 className="text-xl font-bold text-[var(--nts-charcoal)] sm:text-2xl">ROI & Απόδοση</h2>}
           description={
             <p className="text-sm text-[var(--nts-medium-gray)] sm:text-base">
-              e-shop ROI, Campaign ROI και κατανομή εσόδων / εξόδων
+              Απόδοση e-shop & καμπανιών
             </p>
           }
           actions={
