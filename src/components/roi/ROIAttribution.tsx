@@ -169,7 +169,7 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
   const campaignsAll = campaigns as Campaign[];
   const { activeStrategy } = useActiveStrategy();
   const ecomm = useEcommerceSummary();
-  const ecommHist = useEcommerceFullHistoryMetrics();
+  const ecommHist = useEcommerceFullHistoryMetrics({ mode: 'summary_only' });
   const {
     organicRevenueByDay: ga4OrganicByDay,
     totalOrganicRevenueFromChannels,

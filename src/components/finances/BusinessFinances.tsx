@@ -50,7 +50,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
     dateRange: ga4DateRange,
   } = useGA4Data();
   const ecomm = useEcommerceSummary();
-  const ecommHist = useEcommerceFullHistoryMetrics();
+  const ecommHist = useEcommerceFullHistoryMetrics({ mode: 'summary_only' });
   const {
     activeStrategy,
     updateMarketingCostLines,
