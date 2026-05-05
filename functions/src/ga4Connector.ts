@@ -25,7 +25,7 @@ function getDb(): Firestore {
 
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
-const GA4_DATA_API = 'https://analyticsdata.googleapis.com/v1beta';
+const GA4_DATA_API = 'https://analyticsdata.googleapis.com/v1';
 const GA4_ADMIN_API = 'https://analyticsadmin.googleapis.com/v1beta';
 
 /**
@@ -1370,6 +1370,12 @@ export async function fetchGA4Data(
       errors: [],
       createdAt: FieldValue.serverTimestamp(),
     });
+
+    // Update connector doc so the UI shows the last sync date
+    await db.doc(`connectors/${brandId}`).set(
+      { ga4: { lastSyncAt: FieldValue.serverTimestamp() } },
+      { merge: true }
+    );
 
     logger.info(`[GA4] Saved ${dayCount} days of data for brand ${brandId}`);
     return { success: true, imported: dayCount };

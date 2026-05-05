@@ -361,7 +361,19 @@ export async function fetchSearchConsoleData(
 
     const startDate = formatDate(startDateObj);
     const endDate = formatDate(endDateObj);
-    const queryRows = await fetchSearchConsoleRows(accessToken, conn.siteUrl, startDate, endDate);
+    let queryRows = await fetchSearchConsoleRows(accessToken, conn.siteUrl, startDate, endDate);
+
+    // Firestore doc limit: 1 MiB. Each queryRow serialises to ~100-140 bytes.
+    // Cap to 8 000 highest-click rows to stay safely under 1MB.
+    const MAX_SC_ROWS = 8_000;
+    if (queryRows.length > MAX_SC_ROWS) {
+      const originalCount = queryRows.length;
+      queryRows.sort((a, b) => b.clicks - a.clicks);
+      queryRows = queryRows.slice(0, MAX_SC_ROWS);
+      logger.info(
+        `[SearchConsole] Capped queryRows to ${MAX_SC_ROWS} (original ${originalCount}) for brand ${brandId}`
+      );
+    }
 
     const payload: SearchConsolePayload = {
       siteUrl: conn.siteUrl,
@@ -385,6 +397,12 @@ export async function fetchSearchConsoleData(
       errors: [],
       createdAt: FieldValue.serverTimestamp(),
     });
+
+    // Update connector doc so the UI shows the last sync date
+    await db.doc(`connectors/${brandId}`).set(
+      { search_console: { lastSyncAt: FieldValue.serverTimestamp() } },
+      { merge: true }
+    );
 
     return { success: true, imported: queryRows.length };
   } catch (err) {

@@ -1677,8 +1677,15 @@ async function executeBrandNightlyWave(
       tasks.push(
         p
           .then((r) => {
-            const imported = (r as { imported?: number })?.imported;
-            logger.info(`[ScheduledSync/${wave}] ${label} for ${brandId}: imported ${imported ?? '—'}`);
+            const result = r as { imported?: number; success?: boolean; error?: string } | undefined;
+            const imported = result?.imported;
+            if (result?.success === false || result?.error) {
+              logger.warn(
+                `[ScheduledSync/${wave}] ${label} for ${brandId}: imported ${imported ?? 0}, error: ${result.error || 'unknown'}`
+              );
+            } else {
+              logger.info(`[ScheduledSync/${wave}] ${label} for ${brandId}: imported ${imported ?? '—'}`);
+            }
           })
           .catch((err) => logger.error(`[ScheduledSync/${wave}] ${label} failed for ${brandId}:`, err))
       );
