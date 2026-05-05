@@ -270,24 +270,21 @@ function parseNumeric(value: unknown): number {
 }
 
 /**
- * Net revenue ex-VAT (αντίστοιχο λογιστικού «Καθαρά Έσοδα χωρίς ΦΠΑ»).
+ * Net products revenue ex-VAT (όπως καταγράφεται στα λογιστικά «Total Income χωρίς ΦΠΑ»).
  *
- * **Magento:** `baseGrandTotal − baseTaxAmount` = net total σε base currency (EUR) χωρίς ΦΠΑ.
- * Αυτό ταιριάζει με τα λογιστικά «Total Income χωρίς ΦΠΑ» (περιλαμβάνει μεταφορικά).
- * Προηγούμενος τύπος `baseSubtotal - baseDiscount` δεν αφαιρούσε ΦΠΑ σε Magento installations
- * με "Catalog Prices Include Tax" → υπερεκτίμηση ~24%.
- *
- * Multi-store: Χρήση `base_*` fields (EUR) ώστε orders σε BGN/RON να αθροίζονται σωστά.
- * Fallback: `grandTotal − taxAmount` αν λείπουν τα base fields (μόνο για EUR orders).
+ * **Magento (multi-store aware):** `baseSubtotal − |baseDiscountAmount|` = items ex-tax σε base
+ * currency (EUR), χωρίς μεταφορικά. Magento REST API subtotal = items ex-tax always.
+ * Fallback αν λείπουν base_*: `subtotal − |discountAmount|` (EUR orders only).
+ * Non-EUR orders χωρίς base_* → 0 (αναμένεται re-sync).
  *
  * **Shopify/WooCommerce:** `totalPrice − totalTax`.
  */
 function computeOrderExVatRevenue(platform: string, d: Record<string, unknown>): number {
   if (platform === 'magento') {
-    const baseGrandTotal = parseNumeric(d.baseGrandTotal);
-    const baseTax = parseNumeric(d.baseTaxAmount);
-    if (baseGrandTotal > 0) {
-      return Math.max(0, baseGrandTotal - baseTax);
+    const baseSubtotal = parseNumeric(d.baseSubtotal);
+    const baseDiscount = Math.abs(parseNumeric(d.baseDiscountAmount));
+    if (baseSubtotal > 0) {
+      return Math.max(0, baseSubtotal - baseDiscount);
     }
     const currency = String(d.currency || '').toUpperCase();
     const baseCurrency = String(d.baseCurrencyCode || '').toUpperCase();
@@ -295,12 +292,12 @@ function computeOrderExVatRevenue(platform: string, d: Record<string, unknown>):
     if (!isEur) {
       return 0;
     }
-    const grandTotal = parseNumeric(d.grandTotal);
-    const tax = parseNumeric(d.taxAmount);
-    if (grandTotal > 0) {
-      return Math.max(0, grandTotal - tax);
+    const subtotal = parseNumeric(d.subtotal);
+    const discount = Math.abs(parseNumeric(d.discountAmount));
+    if (subtotal > 0) {
+      return Math.max(0, subtotal - discount);
     }
-    return 0;
+    return Math.max(0, parseNumeric(d.grandTotal) - parseNumeric(d.taxAmount));
   }
   const revenueField = REVENUE_FIELD[platform] || 'totalPrice';
   const taxField = TAX_FIELD[platform];
@@ -322,21 +319,12 @@ async function readPlatformOrders(db: Firestore, brandId: string, platform: stri
     .get();
 
   const rows: OrderRow[] = [];
-  let diagSampled = 0;
 
   for (const doc of snap.docs) {
     const d = doc.data();
     const createdAt = d.createdAt || '';
 
     const price = computeOrderExVatRevenue(platform, d);
-
-    if (platform === 'magento' && diagSampled < 3 && createdAt.startsWith('2026-03')) {
-      logger.info(`[EcommerceAgg/diag] ${brandId} order ${d.orderId || d.incrementId}: ` +
-        `grandTotal=${d.grandTotal} subtotal=${d.subtotal} taxAmount=${d.taxAmount} discountAmount=${d.discountAmount} ` +
-        `baseGrandTotal=${d.baseGrandTotal} baseTaxAmount=${d.baseTaxAmount} baseCurrencyCode=${d.baseCurrencyCode} ` +
-        `currency=${d.currency} → computedExVat=${price}`);
-      diagSampled++;
-    }
 
     const sid =
       platform === 'magento'

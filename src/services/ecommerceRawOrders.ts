@@ -198,12 +198,12 @@ function normalizeLineItemFromFirestore(raw: unknown): EcommerceRawLineItem {
 }
 
 /**
- * Net revenue ex-VAT — ίδια λογική με server aggregator (computeOrderExVatRevenue).
+ * Net products revenue ex-VAT — ίδια λογική με server aggregator (computeOrderExVatRevenue).
  *
- * Magento: `baseGrandTotal − baseTaxAmount` = net total σε base currency χωρίς ΦΠΑ.
- * Fallback σε `grandTotal − taxAmount` μόνο για EUR orders χωρίς base fields.
+ * Magento: `baseSubtotal − |baseDiscountAmount|` = items ex-tax σε base currency (EUR), χωρίς μεταφορικά.
+ * Fallback: `subtotal − |discountAmount|` μόνο για EUR orders χωρίς base fields.
  *
- * Shopify/WooCommerce: `total − totalTax`. OpenCart: gross fallback.
+ * Shopify/WooCommerce: `total − totalTax`. OpenCart: `total − totalTax`.
  */
 function computeExVatTotal(platform: string, row: Record<string, unknown>): number {
   const num = (v: unknown) => {
@@ -212,19 +212,19 @@ function computeExVatTotal(platform: string, row: Record<string, unknown>): numb
     return Number.isFinite(n) ? n : 0;
   };
   if (platform === 'magento') {
-    const baseGrandTotal = num(row.baseGrandTotal);
-    const baseTax = num(row.baseTaxAmount);
-    if (baseGrandTotal > 0) return Math.max(0, baseGrandTotal - baseTax);
+    const baseSubtotal = num(row.baseSubtotal);
+    const baseDiscount = Math.abs(num(row.baseDiscountAmount));
+    if (baseSubtotal > 0) return Math.max(0, baseSubtotal - baseDiscount);
 
     const currency = String(row.currency || '').toUpperCase();
     const baseCurrency = String(row.baseCurrencyCode || '').toUpperCase();
     const isEur = !currency || currency === 'EUR' || (baseCurrency && currency === baseCurrency);
     if (!isEur) return 0;
 
-    const grandTotal = num(row.grandTotal);
-    const tax = num(row.taxAmount);
-    if (grandTotal > 0) return Math.max(0, grandTotal - tax);
-    return 0;
+    const subtotal = num(row.subtotal);
+    const discount = Math.abs(num(row.discountAmount));
+    if (subtotal > 0) return Math.max(0, subtotal - discount);
+    return Math.max(0, num(row.grandTotal) - num(row.taxAmount));
   }
   if (platform === 'shopify') return Math.max(0, num(row.totalPrice) - num(row.totalTax));
   if (platform === 'woocommerce') return Math.max(0, num(row.total) - num(row.totalTax));
