@@ -311,10 +311,12 @@ function dailyMetricsHasPurchaseSlice(dm: Record<string, unknown>): boolean {
 function attributedRevenueFromDailyRow(raw: unknown, usePurchaseSlice: boolean): number {
   const m = raw as { conversion_value?: number; purchase_conversion_value?: number };
   const cv = Number(m.conversion_value) || 0;
-  if (usePurchaseSlice && m.purchase_conversion_value !== undefined && m.purchase_conversion_value !== null) {
-    const pv = Number(m.purchase_conversion_value);
-    /** Meta sync συχνά γράφει purchase_* από conversionActions labels· αν λείπουν οι ετικέτες το ημέρα έχει cv>0 αλλά pv=0 — αλλιώς το ROAS chart μένει επίπεδο μηδενός. */
-    if (Number.isFinite(pv) && pv > 0) return pv;
+  if (usePurchaseSlice) {
+    if (m.purchase_conversion_value !== undefined && m.purchase_conversion_value !== null) {
+      const pv = Number(m.purchase_conversion_value);
+      return Number.isFinite(pv) ? pv : 0;
+    }
+    return 0;
   }
   return cv;
 }
@@ -322,9 +324,12 @@ function attributedRevenueFromDailyRow(raw: unknown, usePurchaseSlice: boolean):
 function attributedConversionsFromDailyRow(raw: unknown, usePurchaseSlice: boolean): number {
   const m = raw as { conversions?: number; purchase_conversions?: number };
   const conv = Number(m.conversions) || 0;
-  if (usePurchaseSlice && m.purchase_conversions !== undefined && m.purchase_conversions !== null) {
-    const pc = Number(m.purchase_conversions);
-    if (Number.isFinite(pc) && pc > 0) return pc;
+  if (usePurchaseSlice) {
+    if (m.purchase_conversions !== undefined && m.purchase_conversions !== null) {
+      const pc = Number(m.purchase_conversions);
+      return Number.isFinite(pc) ? pc : 0;
+    }
+    return 0;
   }
   return conv;
 }

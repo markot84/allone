@@ -16,6 +16,7 @@ import { DateRangePicker } from '../ui/DateRangePicker';
 import { MarketingCostLinesEditor } from '../channels/MarketingCostLinesEditor';
 import {
   buildRoiTrendSeriesDaily,
+  calculateCampaignMetrics,
   mergeGa4OrganicDailyWithChannelFallback,
   mergeOrganicByMonthWithGa4,
 } from '../../utils/roiUtils';
@@ -112,6 +113,11 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
     ecommHist.source,
   ]);
 
+  const campaignMetrics = useMemo(
+    () => calculateCampaignMetrics(periodCampaigns),
+    [periodCampaigns]
+  );
+
   const eshopTotals = useMemo(() => {
     if (!periodFinanceSeries || periodFinanceSeries.length === 0) {
       return {
@@ -122,13 +128,12 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
       };
     }
     let eshopTotal = 0,
-      camp = 0,
       org = 0;
     for (const r of periodFinanceSeries) {
       eshopTotal += r.storeRevenue;
-      camp += r.campaigns;
       org += r.organic;
     }
+    const camp = campaignMetrics.totalRevenue;
     const other = eshopTotal - camp - org;
     return {
       eshopTotal: Math.round(eshopTotal),
@@ -136,7 +141,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
       organic: Math.round(org),
       other: Math.round(other),
     };
-  }, [periodFinanceSeries]);
+  }, [periodFinanceSeries, campaignMetrics.totalRevenue]);
 
   const queryClient = useQueryClient();
   const toast = useToast();
