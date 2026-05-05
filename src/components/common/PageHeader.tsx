@@ -27,9 +27,9 @@ export function PageHeader({
 }: PageHeaderProps) {
   return (
     <div
-      className={`flex flex-col gap-3 min-w-0 lg:flex-row lg:items-start lg:justify-between lg:gap-6 ${className}`.trim()}
+      className={`flex flex-col gap-3 min-w-0 lg:flex-row lg:flex-wrap lg:items-start lg:justify-between lg:gap-x-6 lg:gap-y-3 ${className}`.trim()}
     >
-      <div className="min-w-0 flex-1 space-y-1">
+      <div className="min-w-0 flex-1 space-y-1 lg:min-w-[240px]">
         {title}
         {description}
         {meta}

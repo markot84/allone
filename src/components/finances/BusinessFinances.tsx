@@ -212,13 +212,12 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
         title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Οικονομικά Επιχείρησης</h2>}
         description={
           <p className="text-sm text-[#4A4A4A] sm:text-base">
-            Πλήρης εικόνα τζίρου για την επιλεγμένη περίοδο — ευθυγραμμισμένη με το Dashboard (αλλάζει εδώ αν το
-            επιθυμείτε).
+            Πλήρης εικόνα τζίρου για την επιλεγμένη περίοδο
           </p>
         }
         actions={
-          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
-            <div className="flex w-full flex-wrap gap-1 rounded-lg bg-gray-100 p-1 sm:w-auto">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <div className="flex w-full flex-wrap gap-1 rounded-lg bg-gray-100 p-1 lg:w-auto">
               {GLOBAL_PERIOD_OPTIONS.map((opt) => (
                 <button
                   key={opt.key}
@@ -248,7 +247,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
               icon={<Trash2 size={14} />}
               onClick={handleDelete}
               disabled={isDeleting || !hasImported}
-              className="min-h-[36px] w-full text-[#DC2626] hover:bg-[#FEE2E2] sm:w-auto"
+              className="min-h-[36px] text-[#DC2626] hover:bg-[#FEE2E2]"
             >
               {isDeleting ? 'Διαγραφή…' : 'Διαγραφή οργανικών import'}
             </Button>
