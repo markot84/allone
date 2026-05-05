@@ -322,12 +322,21 @@ async function readPlatformOrders(db: Firestore, brandId: string, platform: stri
     .get();
 
   const rows: OrderRow[] = [];
+  let diagSampled = 0;
 
   for (const doc of snap.docs) {
     const d = doc.data();
     const createdAt = d.createdAt || '';
 
     const price = computeOrderExVatRevenue(platform, d);
+
+    if (platform === 'magento' && diagSampled < 3 && createdAt.startsWith('2026-03')) {
+      logger.info(`[EcommerceAgg/diag] ${brandId} order ${d.orderId || d.incrementId}: ` +
+        `grandTotal=${d.grandTotal} subtotal=${d.subtotal} taxAmount=${d.taxAmount} discountAmount=${d.discountAmount} ` +
+        `baseGrandTotal=${d.baseGrandTotal} baseTaxAmount=${d.baseTaxAmount} baseCurrencyCode=${d.baseCurrencyCode} ` +
+        `currency=${d.currency} → computedExVat=${price}`);
+      diagSampled++;
+    }
 
     const sid =
       platform === 'magento'

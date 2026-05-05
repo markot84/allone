@@ -2174,7 +2174,7 @@ export function ConnectorsPanel() {
     }
   };
 
-  const handleSync = async (provider: ConnectorConfig['id']) => {
+  const handleSync = async (provider: ConnectorConfig['id'], opts?: { forceFullSync?: boolean }) => {
     if (!brandId || !user) return;
     if (!canManageConnectors) {
       toast.error('Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να κάνει sync.');
@@ -2193,10 +2193,13 @@ export function ConnectorsPanel() {
       const token = await auth.currentUser?.getIdToken();
       if (!token) throw new Error('Not authenticated');
 
+      const payload: Record<string, unknown> = { brandId, provider };
+      if (opts?.forceFullSync) payload.forceFullSync = true;
+
       const res = await fetch(`${FUNCTIONS_BASE}/connectorSync`, {
         method: 'POST',
         headers: await connectorRequestHeaders(token),
-        body: JSON.stringify({ brandId, provider }),
+        body: JSON.stringify(payload),
         signal: syncAbort.signal,
       });
 
@@ -2792,6 +2795,22 @@ export function ConnectorsPanel() {
                             )}
                             {isSyncing ? 'Syncing...' : 'Sync τώρα'}
                           </Button>
+                          {conn.id === 'magento' && (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => {
+                                if (window.confirm('Full Re-sync: θα ξανακατεβάσει ΟΛΟ το ιστορικό παραγγελιών. Μπορεί να πάρει αρκετά λεπτά. Συνέχεια;')) {
+                                  handleSync(conn.id, { forceFullSync: true });
+                                }
+                              }}
+                              disabled={isSyncing || !canManageConnectors}
+                              title="Ξανακατεβάζει όλες τις παραγγελίες από την αρχή (χρειάζεται μετά από αλλαγή τύπου υπολογισμού)"
+                            >
+                              <RefreshCw size={14} className="mr-1" />
+                              Full Re-sync
+                            </Button>
+                          )}
                           <Button
                             variant="secondary"
                             size="sm"

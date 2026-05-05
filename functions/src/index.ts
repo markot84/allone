@@ -1223,9 +1223,10 @@ export const connectorSync = onRequest(
       const idToken = authHeader.slice(7).trim();
       const decoded = await admin.auth().verifyIdToken(idToken);
 
-      const body = req.body as { brandId?: string; provider?: string };
+      const body = req.body as { brandId?: string; provider?: string; forceFullSync?: boolean };
       brandId = body.brandId || '';
       provider = body.provider || '';
+      const forceFullSync = body.forceFullSync === true;
       if (!brandId || !provider) { res.status(400).json({ error: 'Missing params' }); return; }
 
       if (!(await verifyBrandConnectorManagement(decoded.uid, brandId))) {
@@ -1251,6 +1252,14 @@ export const connectorSync = onRequest(
       } else if (provider === 'opencart') {
         result = await fetchOpenCartData(brandId);
       } else if (provider === 'magento') {
+        if (forceFullSync) {
+          const db = admin.firestore();
+          await db.doc(`connectors/${brandId}`).update({
+            'magento.lastOrdersSyncAt': FieldValue.delete(),
+            'magento.ordersHistoryCursor': FieldValue.delete(),
+          });
+          logger.info(`[connectorSync] Force full re-sync: cleared order sync state for ${brandId}`);
+        }
         result = await fetchMagentoData(brandId);
       } else if (provider === 'megaventory') {
         result = await fetchMegaventoryData(brandId);
