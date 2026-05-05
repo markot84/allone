@@ -1344,9 +1344,10 @@ export async function fetchGA4Data(
       },
     });
 
-    // Cap dailyTrafficByChannel to last 550 days to stay under 1 MiB per chunk doc
+    // Cap dailyTrafficByChannel to last 400 days to stay under 1 MiB per chunk doc.
+    // Worst case: 20 GA4 channels × 400 days × ~108 bytes/channel ≈ 864 KB (safe).
     const dtcKeys = Object.keys(dailyTrafficByChannel).sort();
-    const MAX_DTC_DAYS = 550;
+    const MAX_DTC_DAYS = 400;
     if (dtcKeys.length > MAX_DTC_DAYS) {
       const keepFrom = dtcKeys[dtcKeys.length - MAX_DTC_DAYS];
       for (const k of dtcKeys) {
@@ -1363,9 +1364,11 @@ export async function fetchGA4Data(
       logger.info(`[GA4] Capped organicSearchFallbackRows to ${MAX_ORGANIC_ROWS} for brand ${brandId}`);
     }
 
+    // Store chunks as serialized JSON strings — deeply nested maps exceed Firestore's
+    // 40,000 index entries/doc limit (550 days × 16 channels × 5 metrics ≈ 44K entries).
     const chunksCol = db.collection(`ga4_data/${brandId}/chunks`);
-    await chunksCol.doc('dailyTraffic').set({ dailyTrafficByChannel });
-    await chunksCol.doc('organicFallback').set({ organicSearchFallbackRows });
+    await chunksCol.doc('dailyTraffic').set({ json: JSON.stringify(dailyTrafficByChannel) });
+    await chunksCol.doc('organicFallback').set({ json: JSON.stringify(organicSearchFallbackRows) });
 
     const dayCount = Object.keys(dailyMetrics).length;
 

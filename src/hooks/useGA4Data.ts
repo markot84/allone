@@ -126,10 +126,18 @@ async function fetchGA4Data(brandId: string): Promise<GA4PageRawData> {
 
   if (ga4) {
     if (dailyTrafficSnap.exists() && !ga4.dailyTrafficByChannel) {
-      ga4 = { ...ga4, dailyTrafficByChannel: dailyTrafficSnap.data()?.dailyTrafficByChannel };
+      const raw = dailyTrafficSnap.data();
+      const dtc = typeof raw?.json === 'string'
+        ? JSON.parse(raw.json)
+        : raw?.dailyTrafficByChannel;
+      if (dtc) ga4 = { ...ga4, dailyTrafficByChannel: dtc };
     }
     if (organicFallbackSnap.exists() && !ga4.organicSearchFallbackRows) {
-      ga4 = { ...ga4, organicSearchFallbackRows: organicFallbackSnap.data()?.organicSearchFallbackRows };
+      const raw = organicFallbackSnap.data();
+      const ofr = typeof raw?.json === 'string'
+        ? JSON.parse(raw.json)
+        : raw?.organicSearchFallbackRows;
+      if (ofr) ga4 = { ...ga4, organicSearchFallbackRows: ofr };
     }
   }
 
