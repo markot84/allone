@@ -2,6 +2,13 @@ export type ConnectorSyncMode = 'historical' | 'incremental' | 'snapshot';
 
 export const DEFAULT_HISTORY_YEARS = 3;
 export const DEFAULT_INCREMENTAL_OVERLAP_HOURS = 48;
+/**
+ * E-commerce connectors χρειάζονται μεγαλύτερο lookback γιατί ακυρώσεις / refunds
+ * μπορεί να γίνουν μέρες μετά (EU δικαίωμα υπαναχώρησης = 14 ημέρες + buffer).
+ * 20 ημέρες × 24h = 480h overlap: κάθε incremental sync ξαναδιαβάζει orders
+ * με updated_at >= (lastSync − 20d), πιάνοντας ακυρώσεις, refunds, chargebacks.
+ */
+export const ECOMMERCE_INCREMENTAL_OVERLAP_HOURS = 480;
 
 export interface SyncWindow {
   mode: ConnectorSyncMode;

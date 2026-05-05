@@ -17,6 +17,7 @@ import { encryptToken, decryptToken } from './tokenCrypto';
 import { getCustomerEmailIdentity } from './customerIdentity';
 import {
   buildHistoricalOrIncrementalWindow,
+  ECOMMERCE_INCREMENTAL_OVERLAP_HOURS,
   coerceSyncDate,
   subtractHours,
   toMagentoDateTime,
@@ -827,7 +828,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
   let totalImported = 0;
   const errors: string[] = [];
 
-  const orderWindow = buildHistoricalOrIncrementalWindow(connector, 'lastOrdersSyncAt');
+  const orderWindow = buildHistoricalOrIncrementalWindow(connector, 'lastOrdersSyncAt', 'historyLoadedUntilYear', 3, ECOMMERCE_INCREMENTAL_OVERLAP_HOURS);
   const orderCursor = coerceSyncDate((connector as Record<string, unknown>).ordersHistoryCursor);
   if (orderWindow.mode === 'historical' && orderCursor && orderCursor > orderWindow.windowStart) {
     orderWindow.windowStart = orderCursor;

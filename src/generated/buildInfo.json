@@ -1,10 +1,14 @@
 {
-  "version": "0.726.89",
-  "previousVersion": "0.726.88",
-  "commitHash": "2cce3b5",
+  "version": "0.726.90",
+  "previousVersion": "0.726.89",
+  "commitHash": "a8871a2",
   "branch": "main",
-  "buildDate": "2026-05-05T12:30:11.954Z",
+  "buildDate": "2026-05-05T12:47:39.537Z",
   "commits": [
+    {
+      "hash": "a8871a2",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "2cce3b5",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "cdaff1b",
       "message": "fix(magento): fetch timeouts (30s) + bump connectorSync memory to 2GiB to prevent 503 hangs"
-    },
-    {
-      "hash": "0ac5d1b",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [

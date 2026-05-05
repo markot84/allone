@@ -17,7 +17,7 @@ import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { encryptToken, decryptToken } from './tokenCrypto';
 import { getCustomerEmailIdentity } from './customerIdentity';
-import { buildHistoricalOrIncrementalWindow, coerceSyncDate, subtractHours } from './syncPolicy';
+import { buildHistoricalOrIncrementalWindow, ECOMMERCE_INCREMENTAL_OVERLAP_HOURS, coerceSyncDate, subtractHours } from './syncPolicy';
 
 let _db: Firestore | null = null;
 
@@ -168,7 +168,7 @@ export async function fetchShopifyData(brandId: string): Promise<{
     return { success: false, imported: 0, error: 'Shopify not connected' };
   }
 
-  const orderWindow = buildHistoricalOrIncrementalWindow(connector || {}, 'lastOrdersSyncAt');
+  const orderWindow = buildHistoricalOrIncrementalWindow(connector || {}, 'lastOrdersSyncAt', 'historyLoadedUntilYear', 3, ECOMMERCE_INCREMENTAL_OVERLAP_HOURS);
   const ordersSinceIso = orderWindow.windowStart.toISOString();
   const lastProdSync = coerceSyncDate(connector?.lastProductsSyncAt);
   const productsUpdatedSinceIso = lastProdSync

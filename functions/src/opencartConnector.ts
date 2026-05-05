@@ -16,7 +16,7 @@ import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { encryptToken, decryptToken } from './tokenCrypto';
 import { getCustomerEmailIdentity } from './customerIdentity';
-import { buildHistoricalOrIncrementalWindow } from './syncPolicy';
+import { buildHistoricalOrIncrementalWindow, ECOMMERCE_INCREMENTAL_OVERLAP_HOURS } from './syncPolicy';
 
 let _db: Firestore | null = null;
 
@@ -251,7 +251,7 @@ export async function fetchOpenCartData(brandId: string): Promise<{
     return { success: false, imported: 0, error: 'OpenCart not connected' };
   }
 
-  const orderWindow = buildHistoricalOrIncrementalWindow(connector || {}, 'lastOrdersSyncAt');
+  const orderWindow = buildHistoricalOrIncrementalWindow(connector || {}, 'lastOrdersSyncAt', 'historyLoadedUntilYear', 3, ECOMMERCE_INCREMENTAL_OVERLAP_HOURS);
 
   logger.info(
     `[OpenCart] ${brandId} orders=${orderWindow.mode} (${orderWindow.windowStart.toISOString()}→${orderWindow.windowEnd.toISOString()})`
