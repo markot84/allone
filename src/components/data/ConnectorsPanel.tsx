@@ -2737,7 +2737,7 @@ export function ConnectorsPanel() {
                       </div>
                     )}
 
-                    <div className="flex items-center gap-2 mt-3">
+                    <div className="flex flex-wrap items-center gap-2 mt-3">
                       {conn.comingSoon ? (
                         <Button
                           variant="secondary"
@@ -2785,7 +2785,6 @@ export function ConnectorsPanel() {
                             size="sm"
                             onClick={() => handleSync(conn.id)}
                             disabled={isSyncing || !canManageConnectors}
-                            className="flex-1"
                             title={!canManageConnectors ? 'Μόνο ιδιοκτήτης ή διαχειριστής' : undefined}
                           >
                             {isSyncing ? (
@@ -2793,7 +2792,7 @@ export function ConnectorsPanel() {
                             ) : (
                               <RefreshCw size={14} className="mr-1" />
                             )}
-                            {isSyncing ? 'Syncing...' : 'Sync τώρα'}
+                            {isSyncing ? 'Syncing...' : 'Sync'}
                           </Button>
                           {conn.id === 'magento' && (
                             <Button
@@ -2805,7 +2804,7 @@ export function ConnectorsPanel() {
                                 }
                               }}
                               disabled={isSyncing || !canManageConnectors}
-                              title="Ξανακατεβάζει όλες τις παραγγελίες από την αρχή (χρειάζεται μετά από αλλαγή τύπου υπολογισμού)"
+                              title="Ξανακατεβάζει όλες τις παραγγελίες από την αρχή"
                             >
                               <RefreshCw size={14} className="mr-1" />
                               Full Re-sync
