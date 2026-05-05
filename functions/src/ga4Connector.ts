@@ -25,7 +25,7 @@ function getDb(): Firestore {
 
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
-const GA4_DATA_API = 'https://analyticsdata.googleapis.com/v1';
+const GA4_DATA_API = 'https://analyticsdata.googleapis.com/v1beta';
 const GA4_ADMIN_API = 'https://analyticsadmin.googleapis.com/v1beta';
 
 /**
@@ -620,7 +620,6 @@ export async function fetchGA4Data(
         method: 'POST',
         headers: authHeaders,
         body: JSON.stringify({
-          languageCode: 'en',
           dateRanges: [dateRange],
           dimensions: [{ name: 'sessionDefaultChannelGroup' }],
           metrics: [
@@ -643,7 +642,6 @@ export async function fetchGA4Data(
           method: 'POST',
           headers: authHeaders,
           body: JSON.stringify({
-            languageCode: 'en',
             dateRanges: [dateRange],
             dimensions: [{ name: 'sessionDefaultChannelGroup' }],
             metrics: [{ name: 'sessions' }, { name: 'totalUsers' }, { name: 'newUsers' }, { name: 'conversions' }],
@@ -736,7 +734,6 @@ export async function fetchGA4Data(
      */
     try {
       const purchaseByChannelBody = {
-        languageCode: 'en',
         dateRanges: [{ startDate: formatDate(startDate), endDate: formatDate(endDate) }],
         dimensions: [{ name: 'sessionDefaultChannelGroup' }],
         metrics: [{ name: 'eventValue' }, { name: 'purchaseRevenue' }],
@@ -822,10 +819,9 @@ export async function fetchGA4Data(
       logger.warn('[GA4] Purchase-by-channel merge failed:', e);
     }
 
-    // New users per acquisition channel — merge onto session-channel rows (same labels via languageCode + fuzzy match)
+    // New users per acquisition channel — merge onto session-channel rows (same labels via fuzzy match)
     try {
       const nuBody = {
-        languageCode: 'en',
         dateRanges: [{ startDate: formatDate(startDate), endDate: formatDate(endDate) }],
         dimensions: [{ name: 'firstUserDefaultChannelGroup' }],
         metrics: [{ name: 'newUsers' }],
@@ -889,7 +885,6 @@ export async function fetchGA4Data(
     try {
       const dateRangeOr = { startDate: formatDate(startDate), endDate: formatDate(endDate) };
       const orgDailyBody = {
-        languageCode: 'en',
         dateRanges: [dateRangeOr],
         dimensions: [{ name: 'date' }, { name: 'sessionDefaultChannelGroup' }],
         metrics: [{ name: 'totalRevenue' }],
@@ -970,7 +965,6 @@ export async function fetchGA4Data(
             Authorization: `Bearer ${accessToken}`,
           },
           body: JSON.stringify({
-            languageCode: 'en',
             dateRanges: [{ startDate: formatDate(startDate), endDate: formatDate(endDate) }],
             metrics: fallbackMetrics,
             dimensions: [{ name: 'date' }, { name: labelDim }],
@@ -1168,7 +1162,6 @@ export async function fetchGA4Data(
         let pages = 0;
         for (let guard = 0; guard < 400; guard++) {
           const body: Record<string, unknown> = {
-            languageCode: 'en',
             dateRanges: [range],
             dimensions: [{ name: 'date' }, { name: 'sessionDefaultChannelGroup' }],
             metrics,
@@ -1236,7 +1229,6 @@ export async function fetchGA4Data(
         let pages = 0;
         for (let guard = 0; guard < 400; guard++) {
           const body: Record<string, unknown> = {
-            languageCode: 'en',
             dateRanges: [range],
             dimensions: [{ name: 'date' }, { name: 'sessionDefaultChannelGroup' }],
             metrics: metricsSessions,
@@ -1336,16 +1328,14 @@ export async function fetchGA4Data(
       logger.warn('[GA4] dailyTrafficByChannel exception:', e);
     }
 
-    // Save to Firestore
+    // Save to Firestore — split large fields into subcollection to stay under 1 MiB doc limit
     const docRef = db.doc(`ga4_data/${brandId}`);
     await docRef.set({
       propertyId,
       propertyName: conn.propertyName || '',
       dailyMetrics,
       trafficSources,
-      dailyTrafficByChannel,
       organicRevenueByDay,
-      organicSearchFallbackRows,
       topPages,
       syncedAt: FieldValue.serverTimestamp(),
       dateRange: {
@@ -1353,6 +1343,29 @@ export async function fetchGA4Data(
         end: formatDate(endDate),
       },
     });
+
+    // Cap dailyTrafficByChannel to last 550 days to stay under 1 MiB per chunk doc
+    const dtcKeys = Object.keys(dailyTrafficByChannel).sort();
+    const MAX_DTC_DAYS = 550;
+    if (dtcKeys.length > MAX_DTC_DAYS) {
+      const keepFrom = dtcKeys[dtcKeys.length - MAX_DTC_DAYS];
+      for (const k of dtcKeys) {
+        if (k < keepFrom) delete dailyTrafficByChannel[k];
+      }
+      logger.info(`[GA4] Capped dailyTrafficByChannel to ${MAX_DTC_DAYS} days for brand ${brandId}`);
+    }
+
+    // Cap organicSearchFallbackRows to 5000 sorted by sessions
+    const MAX_ORGANIC_ROWS = 5000;
+    if (organicSearchFallbackRows.length > MAX_ORGANIC_ROWS) {
+      organicSearchFallbackRows.sort((a: any, b: any) => (b.sessions || 0) - (a.sessions || 0));
+      organicSearchFallbackRows.length = MAX_ORGANIC_ROWS;
+      logger.info(`[GA4] Capped organicSearchFallbackRows to ${MAX_ORGANIC_ROWS} for brand ${brandId}`);
+    }
+
+    const chunksCol = db.collection(`ga4_data/${brandId}/chunks`);
+    await chunksCol.doc('dailyTraffic').set({ dailyTrafficByChannel });
+    await chunksCol.doc('organicFallback').set({ organicSearchFallbackRows });
 
     const dayCount = Object.keys(dailyMetrics).length;
 

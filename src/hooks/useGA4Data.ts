@@ -102,12 +102,12 @@ const missingSnap = (): DocumentSnapshot =>
   ({ exists: () => false } as DocumentSnapshot);
 
 async function fetchGA4Data(brandId: string): Promise<GA4PageRawData> {
-  // GA4 doc must succeed for charts; Search Console / connectors are optional reads — missing rules or
-  // transient errors must not hide ga4_data (see Promise.all permission-denial on one collection).
   const settled = await Promise.allSettled([
     getDoc(doc(db, 'ga4_data', brandId)),
     getDoc(doc(db, 'search_console_data', brandId)),
     getDoc(doc(db, 'connectors', brandId)),
+    getDoc(doc(db, 'ga4_data', brandId, 'chunks', 'dailyTraffic')),
+    getDoc(doc(db, 'ga4_data', brandId, 'chunks', 'organicFallback')),
   ]);
 
   if (settled[0].status === 'rejected') throw settled[0].reason;
@@ -117,9 +117,24 @@ async function fetchGA4Data(brandId: string): Promise<GA4PageRawData> {
     settled[1].status === 'fulfilled' ? settled[1].value : missingSnap();
   const connectorsSnap =
     settled[2].status === 'fulfilled' ? settled[2].value : missingSnap();
+  const dailyTrafficSnap =
+    settled[3].status === 'fulfilled' ? settled[3].value : missingSnap();
+  const organicFallbackSnap =
+    settled[4].status === 'fulfilled' ? settled[4].value : missingSnap();
+
+  let ga4: GA4RawData | null = ga4Snap.exists() ? (ga4Snap.data() as GA4RawData) : null;
+
+  if (ga4) {
+    if (dailyTrafficSnap.exists() && !ga4.dailyTrafficByChannel) {
+      ga4 = { ...ga4, dailyTrafficByChannel: dailyTrafficSnap.data()?.dailyTrafficByChannel };
+    }
+    if (organicFallbackSnap.exists() && !ga4.organicSearchFallbackRows) {
+      ga4 = { ...ga4, organicSearchFallbackRows: organicFallbackSnap.data()?.organicSearchFallbackRows };
+    }
+  }
 
   return {
-    ga4: ga4Snap.exists() ? (ga4Snap.data() as GA4RawData) : null,
+    ga4,
     searchConsole: searchConsoleSnap.exists() ? (searchConsoleSnap.data() as SearchConsoleRawData) : null,
     connectors: connectorsSnap.exists() ? (connectorsSnap.data() as { search_console?: { connected?: boolean } }) : null,
   };

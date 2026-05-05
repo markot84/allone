@@ -307,6 +307,9 @@ service cloud.firestore {
     // GA4 analytics data (keyed by brandId)
     match /ga4_data/{brandId} {
       allow read, write: if isBrandMember(brandId);
+      match /chunks/{chunkId} {
+        allow read, write: if isBrandMember(brandId);
+      }
     }
     // Search Console query rows (keyed by brandId; Cloud Functions write via Admin SDK)
     match /search_console_data/{brandId} {

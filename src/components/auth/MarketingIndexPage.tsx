@@ -488,13 +488,29 @@ export function MarketingIndexPage({
           </div>
           <div className="flex flex-col items-start gap-1 text-xs sm:items-end">
             <p className="text-[var(--nts-medium-gray)]">AI-powered πλατφόρμα εμπορικής και επιχειρησιακής νοημοσύνης</p>
-            <a
-              href={`mailto:${MARKETING_CONTACT_MAILTO}?subject=${encodeURIComponent('Performance+ Επικοινωνία')}`}
-              className="inline-flex items-center gap-1.5 font-medium text-[var(--nts-charcoal)] hover:text-[var(--nts-accent)] hover:underline"
-            >
-              <Mail size={13} aria-hidden />
-              Επικοινωνία
-            </a>
+            <div className="flex items-center gap-3">
+              <a
+                href="/privacy"
+                className="font-medium text-[var(--nts-medium-gray)] hover:text-[var(--nts-accent)] hover:underline"
+              >
+                Απόρρητο
+              </a>
+              <span className="text-[var(--nts-medium-gray)]/40">·</span>
+              <a
+                href="/terms"
+                className="font-medium text-[var(--nts-medium-gray)] hover:text-[var(--nts-accent)] hover:underline"
+              >
+                Όροι
+              </a>
+              <span className="text-[var(--nts-medium-gray)]/40">·</span>
+              <a
+                href={`mailto:${MARKETING_CONTACT_MAILTO}?subject=${encodeURIComponent('Performance+ Επικοινωνία')}`}
+                className="inline-flex items-center gap-1.5 font-medium text-[var(--nts-charcoal)] hover:text-[var(--nts-accent)] hover:underline"
+              >
+                <Mail size={13} aria-hidden />
+                Επικοινωνία
+              </a>
+            </div>
           </div>
         </div>
       </footer>
