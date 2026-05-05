@@ -431,19 +431,15 @@ export function EcommerceDashboard() {
     return { dailyRevenue, ordersByDay, platformBreakdown, salesChannelBreakdown };
   }, [rawOrdersLoaded, revenueOrdersForTables, ordersForTables]);
 
-  const filteredDailyRevenue = useMemo(() => {
-    if (rawOrdersLoaded && periodMetricsFromRawOrders) {
-      return periodMetricsFromRawOrders.dailyRevenue;
-    }
-    return ecomm.dailyRevenue.filter((d) => d.date >= effectiveFrom && d.date <= effectiveTo);
-  }, [rawOrdersLoaded, periodMetricsFromRawOrders, ecomm.dailyRevenue, effectiveFrom, effectiveTo]);
+  const filteredDailyRevenue = useMemo(
+    () => ecomm.dailyRevenue.filter((d) => d.date >= effectiveFrom && d.date <= effectiveTo),
+    [ecomm.dailyRevenue, effectiveFrom, effectiveTo],
+  );
 
-  const filteredOrdersByDay = useMemo(() => {
-    if (rawOrdersLoaded && periodMetricsFromRawOrders) {
-      return periodMetricsFromRawOrders.ordersByDay;
-    }
-    return ecomm.ordersByDay.filter((d) => d.date >= effectiveFrom && d.date <= effectiveTo);
-  }, [rawOrdersLoaded, periodMetricsFromRawOrders, ecomm.ordersByDay, effectiveFrom, effectiveTo]);
+  const filteredOrdersByDay = useMemo(
+    () => ecomm.ordersByDay.filter((d) => d.date >= effectiveFrom && d.date <= effectiveTo),
+    [ecomm.ordersByDay, effectiveFrom, effectiveTo],
+  );
 
   const filteredTotalRevenue = useMemo(
     () => filteredDailyRevenue.reduce((s, d) => s + d.revenue, 0),
@@ -457,12 +453,10 @@ export function EcommerceDashboard() {
   }, [filteredOrdersByDay, filteredOrdersForKpi]);
   const filteredAov = filteredOrderCount > 0 ? filteredTotalRevenue / filteredOrderCount : 0;
 
-  const displayPlatformBreakdown = useMemo(() => {
-    if (rawOrdersLoaded && periodMetricsFromRawOrders) {
-      return periodMetricsFromRawOrders.platformBreakdown;
-    }
-    return ecomm.platformBreakdown;
-  }, [rawOrdersLoaded, periodMetricsFromRawOrders, ecomm.platformBreakdown]);
+  const displayPlatformBreakdown = useMemo(
+    () => ecomm.platformBreakdown,
+    [ecomm.platformBreakdown],
+  );
 
   const displaySalesChannelBreakdown = useMemo<SalesChannelBreakdownRow[]>(() => {
     if (rawOrdersLoaded && periodMetricsFromRawOrders) {
@@ -488,12 +482,9 @@ export function EcommerceDashboard() {
       .filter((row) => row.orders > 0)
       .sort((a, b) => b.revenue - a.revenue);
   }, [
-    rawOrdersLoaded,
-    periodMetricsFromRawOrders,
-    ecomm.revenueBySalesChannel,
-    ecomm.ordersBySalesChannel,
-    ecomm.includedRevenueBySalesChannel,
-    ecomm.includedOrdersBySalesChannel,
+    rawOrdersLoaded, periodMetricsFromRawOrders,
+    ecomm.revenueBySalesChannel, ecomm.ordersBySalesChannel,
+    ecomm.includedRevenueBySalesChannel, ecomm.includedOrdersBySalesChannel,
   ]);
 
   const kpis: KPICardData[] = useMemo(() => {
