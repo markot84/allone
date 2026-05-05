@@ -256,13 +256,10 @@ const REVENUE_FIELD: Record<string, string> = {
   magento: 'grandTotal',
 };
 
-/**
- * Tax field per platform — αφαιρείται από το gross για ex-VAT revenue στα KPIs.
- * OpenCart δεν εκθέτει total tax στο order list endpoint· χωρίς αυτό μένει incl. VAT (consistency note).
- */
 const TAX_FIELD: Record<string, string> = {
   shopify: 'totalTax',
   woocommerce: 'totalTax',
+  opencart: 'totalTax',
   magento: 'taxAmount',
 };
 

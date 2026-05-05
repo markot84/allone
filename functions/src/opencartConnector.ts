@@ -158,6 +158,39 @@ function ocParseQty(v: unknown): number {
 }
 
 /**
+ * Extract tax amount from OpenCart order payload.
+ * Looks in `totals` / `order_totals` array (code or title containing "tax"/"vat"/"φπα")
+ * and falls back to direct fields like `tax`, `total_tax`.
+ */
+function extractOcTaxAmount(source: unknown): number {
+  if (!source || typeof source !== 'object') return 0;
+  const o = source as Record<string, unknown>;
+
+  const totalsArr = o.totals ?? o.order_totals ?? o.order_total;
+  if (Array.isArray(totalsArr)) {
+    let tax = 0;
+    for (const t of totalsArr) {
+      if (!t || typeof t !== 'object') continue;
+      const entry = t as Record<string, unknown>;
+      const code = String(entry.code ?? entry.title ?? '').toLowerCase();
+      if (code.includes('tax') || code.includes('vat') || code.includes('φπα') || code.includes('fpa')) {
+        tax += ocParseMoney(entry.value);
+      }
+    }
+    if (tax > 0) return tax;
+  }
+
+  for (const k of ['tax', 'total_tax', 'totalTax', 'tax_amount'] as const) {
+    const v = (o as Record<string, unknown>)[k];
+    if (v !== undefined && v !== null && v !== '' && v !== '0' && v !== 0) {
+      const n = ocParseMoney(v);
+      if (n > 0) return n;
+    }
+  }
+  return 0;
+}
+
+/**
  * Maps OpenCart order / order-info payloads → normalized lineItems (aligned with client normalizer).
  */
 function parseOpenCartOrderProductsToLineItems(source: unknown): Record<string, unknown>[] {
@@ -247,22 +280,18 @@ export async function fetchOpenCartData(brandId: string): Promise<{
     return `${storeUrl}/index.php?${params}`;
   };
 
-  /** Extra API calls per order only when list payload has no product lines (native OC). */
-  const fetchOcOrderLineItemsDetail = async (orderId: string): Promise<Record<string, unknown>[]> => {
-    const tryBodies = (json: unknown): Record<string, unknown>[] => {
-      if (!json || typeof json !== 'object') return [];
+  /** Extra API calls per order — returns line items AND tax extracted from detail payload. */
+  const fetchOcOrderDetail = async (orderId: string): Promise<{ lineItems: Record<string, unknown>[]; tax: number }> => {
+    const tryBodies = (json: unknown): { lineItems: Record<string, unknown>[]; tax: number } => {
+      if (!json || typeof json !== 'object') return { lineItems: [], tax: 0 };
       const j = json as Record<string, unknown>;
-      let lines = parseOpenCartOrderProductsToLineItems(json);
-      if (lines.length > 0) return lines;
-      if (j.order && typeof j.order === 'object') {
-        lines = parseOpenCartOrderProductsToLineItems(j.order);
-        if (lines.length > 0) return lines;
+      const sources = [json, j.order, j.data].filter(Boolean);
+      for (const src of sources) {
+        const lines = parseOpenCartOrderProductsToLineItems(src);
+        const tax = extractOcTaxAmount(src);
+        if (lines.length > 0 || tax > 0) return { lineItems: lines, tax };
       }
-      if (j.data && typeof j.data === 'object') {
-        lines = parseOpenCartOrderProductsToLineItems(j.data);
-        if (lines.length > 0) return lines;
-      }
-      return [];
+      return { lineItems: [], tax: 0 };
     };
 
     if (useRestExtension) {
@@ -271,11 +300,11 @@ export async function fetchOpenCartData(brandId: string): Promise<{
         const res = await fetch(url, { headers: buildHeaders() });
         if (res.ok) {
           const json = await res.json();
-          const lines = tryBodies(json);
-          if (lines.length > 0) return lines;
+          const result = tryBodies(json);
+          if (result.lineItems.length > 0 || result.tax > 0) return result;
         }
       }
-      return [];
+      return { lineItems: [], tax: 0 };
     }
 
     const fetchInfo = async (): Promise<Response> =>
@@ -289,7 +318,7 @@ export async function fetchOpenCartData(brandId: string): Promise<{
         res = await fetchInfo();
       }
     }
-    if (!res.ok) return [];
+    if (!res.ok) return { lineItems: [], tax: 0 };
     const json = await res.json();
     return tryBodies(json);
   };
@@ -331,14 +360,19 @@ export async function fetchOpenCartData(brandId: string): Promise<{
 
       const enriched = await mapPool(pageCandidates, 6, async (o: Record<string, unknown>) => {
         let lineItems = parseOpenCartOrderProductsToLineItems(o);
-        if (lineItems.length === 0) {
+        let tax = extractOcTaxAmount(o);
+        if (lineItems.length === 0 || tax === 0) {
           const oid = String(o.order_id || o.orderId || '');
-          if (oid) lineItems = await fetchOcOrderLineItemsDetail(oid);
+          if (oid) {
+            const detail = await fetchOcOrderDetail(oid);
+            if (lineItems.length === 0) lineItems = detail.lineItems;
+            if (tax === 0) tax = detail.tax;
+          }
         }
-        return { o, lineItems };
+        return { o, lineItems, tax };
       });
 
-      for (const { o, lineItems } of enriched) {
+      for (const { o, lineItems, tax } of enriched) {
         const dateAdded = String(o.date_added || o.dateAdded || '');
         const ocCid =
           o.customer_id != null && String(o.customer_id) !== '0' && String(o.customer_id) !== ''
@@ -360,6 +394,7 @@ export async function fetchOpenCartData(brandId: string): Promise<{
             createdAt: dateAdded,
             status: o.order_status || o.status || '',
             total: parseFloat(String(o.total || '0')),
+            totalTax: tax,
             currency: o.currency_code || o.currency || 'EUR',
             paymentMethod: o.payment_method || '',
             shippingMethod: o.shipping_method || '',

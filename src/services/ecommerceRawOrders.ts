@@ -228,6 +228,7 @@ function computeExVatTotal(platform: string, row: Record<string, unknown>): numb
   }
   if (platform === 'shopify') return Math.max(0, num(row.totalPrice) - num(row.totalTax));
   if (platform === 'woocommerce') return Math.max(0, num(row.total) - num(row.totalTax));
+  if (platform === 'opencart') return Math.max(0, num(row.total) - num(row.totalTax));
   return num(row.total);
 }
 
