@@ -2624,7 +2624,6 @@ export function ConnectorsPanel() {
                   >
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-3">
-                        <span className="text-2xl">{conn.icon}</span>
                         <div>
                           <div className="flex items-center gap-2">
                             <h4 className="font-semibold text-[#1A1A1A]">{conn.name}</h4>

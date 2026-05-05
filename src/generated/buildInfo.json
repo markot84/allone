@@ -1,10 +1,14 @@
 {
-  "version": "0.726.87",
-  "previousVersion": "0.726.86",
-  "commitHash": "21e4088",
+  "version": "0.726.88",
+  "previousVersion": "0.726.87",
+  "commitHash": "d9a2596",
   "branch": "main",
-  "buildDate": "2026-05-05T11:28:03.004Z",
+  "buildDate": "2026-05-05T11:32:32.432Z",
   "commits": [
+    {
+      "hash": "d9a2596",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "21e4088",
       "message": "chore: full deploy"
@@ -59,10 +63,6 @@
     },
     {
       "hash": "a4c7d2a",
-      "message": "chore: full deploy"
-    },
-    {
-      "hash": "14aac9c",
       "message": "chore: full deploy"
     }
   ],
