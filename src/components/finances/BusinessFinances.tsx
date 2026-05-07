@@ -337,7 +337,11 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
               <TrendingUp size={24} className="text-[var(--nts-accent)]" />
             </div>
             <div className="min-w-0 flex-1 space-y-2">
-              <p className="text-sm font-semibold text-[#374151]">Σύνολο Εσόδων (ίδιο KPI με το Dashboard)</p>
+              <p className="text-sm font-semibold text-[#374151]">
+                {hasErpBusinessRevenue
+                  ? 'Τζίρος Επιχείρησης · Φυσικά καταστήματα, B2B, τιμολόγια'
+                  : 'Σύνολο Εσόδων (ίδιο KPI με το Dashboard)'}
+              </p>
               <p className="text-3xl font-bold font-mono tabular-nums text-[#111827]">
                 {formatCurrencyCompact(dashboardTotalRevenueFinance)}
               </p>
@@ -380,8 +384,8 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
         />
       )}
 
-      {/* Τζίρος επιχείρησης (ευρύτερη εικόνα) */}
-      <section className="space-y-3">
+      {/* Τζίρος επιχείρησης (ευρύτερη εικόνα) — εμφανίζεται μόνο όταν ΔΕΝ υπάρχει ERP connector */}
+      {!hasErpBusinessRevenue && <section className="space-y-3">
         <h3 className="text-sm font-semibold text-[#111827]">Τζίρος επιχείρησης</h3>
         <Card
           padding="md"
@@ -406,7 +410,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
             </div>
           </div>
         </Card>
-      </section>
+      </section>}
 
       {/* Τζίρος e-shop — ανάλυση */}
       <section className="space-y-3">
