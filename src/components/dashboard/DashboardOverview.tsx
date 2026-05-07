@@ -340,11 +340,16 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   const hasProcurementTurnoverEstimate = procurementRevenueInPeriod > 0;
 
   /**
-   * «Σύνολα Εσόδων» (Dashboard): ERP παραστατικά → (μόνο Enterprise) εκτίμηση από Κοστολόγηση 12μ.
+   * «Σύνολο Εσόδων» (Dashboard):
+   * ERP + e-shop (όταν υπάρχουν και τα δύο) → ERP μόνο → Κοστολόγηση 12μ.
    * → τζίρος e-shop → εκτίμηση organic + conversion value καμπανιών.
+   *
+   * ERP (Megaventory/SoftOne) καταγράφει φυσικά/B2B τιμολόγια.
+   * E-shop (Magento κ.λπ.) καταγράφει online παραγγελίες ξεχωριστά.
+   * Άρα αθροισμός δίνει τον πλήρη τζίρο επιχείρησης χωρίς double-counting.
    */
   const dashboardTotalRevenue = useMemo(() => {
-    if (hasErpBusinessRevenue) return erpRevenueInPeriod;
+    if (hasErpBusinessRevenue) return erpRevenueInPeriod + (hasEcommerceRevenue ? storeRevenueInPeriod : 0);
     if (hasProcurementTurnoverEstimate) return procurementRevenueInPeriod;
     if (hasEcommerceRevenue) return storeRevenueInPeriod;
     return organicRevenueInPeriod + campaignMetrics.totalRevenue;
@@ -360,7 +365,9 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   ]);
 
   const dashboardRevenueSourceLabel = hasErpBusinessRevenue
-    ? 'ERP (Megaventory / SoftOne)'
+    ? hasEcommerceRevenue
+      ? 'ERP + E-shop (Megaventory / SoftOne + connectors)'
+      : 'ERP (Megaventory / SoftOne)'
     : hasProcurementTurnoverEstimate
       ? 'Κοστολόγηση · Πραγματικός τζίρος 12μ. (εκτίμηση περιόδου)'
       : hasEcommerceRevenue
@@ -371,22 +378,26 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     if (isB2B) {
       return 'Βασική εικόνα εσόδων από οργανική ζήτηση και demand generation. Για πλήρη αποτύπωση εσόδων ανά account απαιτείται invoicing ή ERP import.';
     }
-    const tail =
-      ' Λεπτομέρειες e-shop / ROAS στη σελίδα ROI · οικονομική εικόνα στα Οικονομικά.';
+    const tail = ' Λεπτομέρειες e-shop / ROAS στη σελίδα ROI · οικονομική εικόνα στα Οικονομικά.';
+    if (hasErpBusinessRevenue) {
+      return hasEcommerceRevenue
+        ? `Πηγή: ${dashboardRevenueSourceLabel}. Άθροισμα ERP παραστατικών (φυσικά καταστήματα, B2B, offline) + τζίρος e-shop connectors.` + tail
+        : `Πηγή: ${dashboardRevenueSourceLabel}. Παραστατικά ERP — φυσικά καταστήματα, B2B, τιμολόγια.` + tail;
+    }
     if (enabledModules.procurement) {
       return (
-        `Πηγή ${dashboardRevenueSourceLabel}. Προτεραιότητα: παραστατικά ERP · με ενεργό Enterprise και συμπληρωμένο φύλλο Κοστολόγηση, εναλλακτικά εκτίμηση από το άθροισμα «Πραγματικός τζίρος 12μ.» (÷365 ανά ημέρα περιόδου) · αλλιώς τζίρος e-shop · αλλιώς organic και καμπάνιες.` +
+        `Πηγή ${dashboardRevenueSourceLabel}. Προτεραιότητα: παραστατικά ERP + e-shop · με ενεργό Enterprise και συμπληρωμένο φύλλο Κοστολόγηση, εναλλακτικά εκτίμηση από το άθροισμα «Πραγματικός τζίρος 12μ.» · αλλιώς e-shop · αλλιώς organic και καμπάνιες.` +
         tail
       );
     }
     return (
-      `Πηγή ${dashboardRevenueSourceLabel}. Προτεραιότητα: παραστατικά ERP · αλλιώς τζίρος e-shop · αλλιώς εκτίμηση από organic και καμπάνιες.` +
+      `Πηγή ${dashboardRevenueSourceLabel}. Προτεραιότητα: ERP + e-shop · αλλιώς e-shop μόνο · αλλιώς εκτίμηση organic και καμπάνιες.` +
       tail
     );
-  }, [isB2B, enabledModules.procurement, dashboardRevenueSourceLabel]);
+  }, [isB2B, hasErpBusinessRevenue, hasEcommerceRevenue, enabledModules.procurement, dashboardRevenueSourceLabel]);
 
   const revenuePerformanceChartLabel = hasErpBusinessRevenue
-    ? 'Τζίρος επιχείρησης (ERP)'
+    ? hasEcommerceRevenue ? 'Τζίρος επιχείρησης (ERP + e-shop)' : 'Τζίρος επιχείρησης (ERP)'
     : hasProcurementTurnoverEstimate
       ? 'Τζίρος επιχείρησης (εκτίμηση 12μ.)'
       : enabledModules.ecommerce && ecomm.hasData
