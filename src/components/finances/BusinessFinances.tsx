@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Euro, Trash2, TrendingUp, Building2, Megaphone, Leaf } from 'lucide-react';
+import { Euro, Trash2, TrendingUp, Megaphone, Leaf } from 'lucide-react';
 import { Card, Button, Spinner, useToast, PageHeader } from '../common';
 import { PLCostEditor } from './PLCostEditor';
 import { useOrganic } from '../../hooks/useOrganic';
@@ -294,7 +294,6 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
     );
   }
 
-  const enterpriseExtra = currentBrand?.enterpriseTurnoverEUR;
   const monthlyBudget = activeStrategy?.monthlyBudget || 0;
 
   return (
@@ -357,43 +356,109 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
         {organicRevenueSource === 'ga4' ? ' · GA4 organic' : ''}
       </p>
 
-      <Card padding="lg" className="border-l-4 border-l-[var(--nts-accent)]">
-          <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[var(--nts-accent)]/10">
-              <TrendingUp size={24} className="text-[var(--nts-accent)]" />
-            </div>
-            <div className="min-w-0 flex-1 space-y-2">
-              <p className="text-sm font-semibold text-[#374151]">
-                {hasErpBusinessRevenue
-                  ? 'Συνολικός Τζίρος Επιχείρησης'
-                  : 'Σύνολο Εσόδων (ίδιο KPI με το Dashboard)'}
-              </p>
-              <p className="text-3xl font-bold font-mono tabular-nums text-[#111827]">
-                {formatCurrencyCompact(dashboardTotalRevenueFinance)}
-              </p>
-              {hasErpBusinessRevenue && (
-                <p className="text-xs text-[#6B7280]">Φυσικά καταστήματα · B2B · online · όλα τα τιμολόγια ERP</p>
-              )}
-              <p className="text-sm text-[#6B7280]">
-                Πηγή: <span className="font-medium text-[#374151]">{dashboardRevenueSourceLabel}</span>
-              </p>
-              {(hasErpBusinessRevenue && businessRevenue.isLoading) && (
-                <p className="text-xs text-[#9CA3AF]">Φόρτωση δεδομένων ERP…</p>
-              )}
-              <p className="text-xs text-[#9CA3AF] leading-relaxed pt-1">
-                {hasErpBusinessRevenue
-                  ? 'Συνολικά παραστατικά ERP — περιλαμβάνει φυσικά καταστήματα, B2B και online πωλήσεις. Για ROAS και ανάλυση e-shop ανοίξτε το ROI & Απόδοση.'
-                  : enabledModules.procurement
-                    ? 'Προτεραιότητα: παραστατικά ERP · αλλιώς εκτίμηση Κοστολόγηση 12μ. (Enterprise) · αλλιώς e-shop · αλλιώς organic και καμπάνιες. Για ROAS ανοίξτε το ROI & Απόδοση.'
-                    : 'Προτεραιότητα: παραστατικά ERP · αλλιώς τζίρος e-shop · αλλιώς εκτίμηση organic και καμπάνιες. Για ROAS ανοίξτε το ROI & Απόδοση.'
-                }
-              </p>
-              <Button variant="secondary" size="sm" onClick={() => onSectionChange?.('dashboard')}>
-                Άνοιγμα Dashboard
-              </Button>
-            </div>
+      {/* ── Revenue unified block ──────────────────────────────────────── */}
+      <Card padding="none" className="overflow-hidden border border-slate-200 shadow-sm">
+        {/* Main KPI row */}
+        <div className="flex flex-col gap-4 bg-gradient-to-br from-[var(--nts-accent)]/5 to-white p-5 sm:flex-row sm:items-center sm:gap-6">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[var(--nts-accent)]/10">
+            <TrendingUp size={26} className="text-[var(--nts-accent)]" />
           </div>
-        </Card>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-medium uppercase tracking-wide text-[#9CA3AF]">
+              {hasErpBusinessRevenue
+                ? 'Συνολικός Τζίρος Επιχείρησης'
+                : 'Σύνολο Εσόδων'}
+            </p>
+            <div className="mt-0.5 flex flex-wrap items-baseline gap-3">
+              <span className="text-4xl font-bold font-mono tabular-nums text-[#111827]">
+                {formatCurrencyCompact(dashboardTotalRevenueFinance)}
+              </span>
+              {hasErpBusinessRevenue && businessRevenue.isLoading && (
+                <span className="text-xs text-[#9CA3AF]">ανανέωση…</span>
+              )}
+            </div>
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-[#374151]">
+                Πηγή: {dashboardRevenueSourceLabel}
+              </span>
+              {hasErpBusinessRevenue && (
+                <span className="text-xs text-[#6B7280]">Φυσικά καταστήματα · B2B · online</span>
+              )}
+            </div>
+            <p className="mt-2 text-xs text-[#9CA3AF] leading-relaxed">
+              {hasErpBusinessRevenue
+                ? 'Συνολικά παραστατικά ERP — περιλαμβάνει όλα τα κανάλια. Για ROAS και ανάλυση e-shop → ROI & Απόδοση.'
+                : enabledModules.procurement
+                  ? 'Προτεραιότητα: ERP · Κοστολόγηση 12μ. · e-shop · organic/καμπάνιες. Για ROAS → ROI & Απόδοση.'
+                  : 'Προτεραιότητα: ERP · e-shop · organic/καμπάνιες. Για ROAS → ROI & Απόδοση.'
+              }
+            </p>
+          </div>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="shrink-0 self-start"
+            onClick={() => onSectionChange?.('dashboard')}
+          >
+            Dashboard ↗
+          </Button>
+        </div>
+
+        {/* E-shop breakdown — only when data exists */}
+        {(ecomm.hasData || eshopTotals.campaigns > 0 || eshopTotals.organic > 0) && (
+          <>
+            <div className="flex items-center gap-3 border-t border-slate-100 bg-slate-50/60 px-5 py-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
+                Ανάλυση e-shop περιόδου
+              </span>
+              {hasErpBusinessRevenue && (
+                <span className="text-[11px] text-[#9CA3AF]">· περιλαμβάνεται στον ERP τζίρο</span>
+              )}
+            </div>
+            <div className="grid grid-cols-1 divide-y divide-slate-100 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+              {/* E-shop total */}
+              <div className="flex items-center gap-3 px-5 py-4">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-50 ring-1 ring-orange-100">
+                  <Euro size={18} className="text-[var(--nts-accent)]" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs text-[#6B7280]">Σύνολο e-shop</p>
+                  <p className="text-lg font-bold font-mono tabular-nums text-[#111827]">
+                    {ecomm.hasData ? formatCurrencyCompact(eshopTotals.eshopTotal) : '—'}
+                  </p>
+                  <p className="text-[11px] text-[#9CA3AF]">Παραγγελίες περιόδου</p>
+                </div>
+              </div>
+              {/* Campaigns */}
+              <div className="flex items-center gap-3 px-5 py-4">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-50 ring-1 ring-amber-100">
+                  <Megaphone size={18} className="text-amber-600" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs text-[#6B7280]">Έσοδα καμπανιών</p>
+                  <p className="text-lg font-bold font-mono tabular-nums text-[#111827]">
+                    {formatCurrencyCompact(eshopTotals.campaigns)}
+                  </p>
+                  <p className="text-[11px] text-[#9CA3AF]">Google Ads / Meta conversion value</p>
+                </div>
+              </div>
+              {/* Organic */}
+              <div className="flex items-center gap-3 px-5 py-4">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-50 ring-1 ring-emerald-100">
+                  <Leaf size={18} className="text-emerald-600" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs text-[#6B7280]">Organic revenue</p>
+                  <p className="text-lg font-bold font-mono tabular-nums text-[#111827]">
+                    {formatCurrencyCompact(eshopTotals.organic)}
+                  </p>
+                  <p className="text-[11px] text-[#9CA3AF]">Import ή GA4</p>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+      </Card>
 
       {activeStrategy && (
         <MarketingCostLinesEditor
@@ -407,87 +472,6 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
             toast.success('Αποθηκεύτηκαν τα επιπλέον κόστη marketing');
           }}
         />
-      )}
-
-      {/* Τζίρος επιχείρησης (ευρύτερη εικόνα) — εμφανίζεται μόνο όταν ΔΕΝ υπάρχει ERP connector */}
-      {!hasErpBusinessRevenue && <section className="space-y-3">
-        <h3 className="text-sm font-semibold text-[#111827]">Τζίρος επιχείρησης</h3>
-        <Card
-          padding="md"
-          className="border border-dashed border-slate-200 bg-gradient-to-br from-slate-50/90 to-white"
-        >
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white shadow-sm ring-1 ring-slate-200/80">
-              <Building2 size={22} className="text-slate-600" />
-            </div>
-            <div className="min-w-0 flex-1 space-y-2">
-              <p className="text-sm font-medium text-[#1A1A1A]">Φυσικά καταστήματα · B2B · τιμολόγια εκτός e-shop</p>
-              {typeof enterpriseExtra === 'number' && enterpriseExtra > 0 ? (
-                <p className="text-2xl font-bold font-mono tabular-nums text-[#111827]">
-                  {formatCurrencyCompact(enterpriseExtra)}
-                </p>
-              ) : (
-                <p className="text-sm leading-relaxed text-[#6B7280]">
-                  Δεν έχει καταχωρηθεί συμπληρωματικός τζίρος εκτός των συνδέσεων του Performance+. Όταν η πληροφορία
-                  διατίθεται (π.χ. ERP), μπορεί να αποθηκευτεί στο brand και εμφανίζεται εδώ.
-                </p>
-              )}
-            </div>
-          </div>
-        </Card>
-      </section>}
-
-      {/* Τζίρος e-shop — ανάλυση */}
-      {(ecomm.hasData || eshopTotals.campaigns > 0 || eshopTotals.organic > 0) && (
-        <section className="space-y-3">
-          <h3 className="text-sm font-semibold text-[#111827]">Τζίρος e-shop (ανάλυση περιόδου)</h3>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <Card padding="md" className="border-l-4 border-l-[var(--nts-accent)] bg-gradient-to-br from-orange-50/60 to-white">
-              <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white shadow-sm ring-1 ring-orange-100">
-                  <Euro size={20} className="text-[var(--nts-accent)]" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm text-[#4A4A4A]">Σύνολο e-shop</p>
-                  <p className="text-xl font-bold font-mono text-[#1A1A1A] tabular-nums">
-                    {ecomm.hasData ? formatCurrencyCompact(eshopTotals.eshopTotal) : '—'}
-                  </p>
-                  <p className="mt-1 text-[11px] text-[#9CA3AF]">Παραγγελίες στην επιλεγμένη περίοδο</p>
-                </div>
-              </div>
-            </Card>
-
-            <Card padding="md" className="border-l-4 border-l-[#EA580C] bg-gradient-to-br from-amber-50/50 to-white">
-              <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white shadow-sm ring-1 ring-amber-100">
-                  <Megaphone size={20} className="text-amber-700" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm text-[#4A4A4A]">Έσοδα καμπανιών</p>
-                  <p className="text-xl font-bold font-mono text-[#1A1A1A] tabular-nums">
-                    {formatCurrencyCompact(eshopTotals.campaigns)}
-                  </p>
-                  <p className="mt-1 text-[11px] text-[#9CA3AF]">Conversion value Google Ads / Meta</p>
-                </div>
-              </div>
-            </Card>
-
-            <Card padding="md" className="border-l-4 border-l-[#22C55E] bg-gradient-to-br from-emerald-50/50 to-white">
-              <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white shadow-sm ring-1 ring-emerald-100">
-                  <Leaf size={20} className="text-emerald-700" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm text-[#4A4A4A]">Organic revenue</p>
-                  <p className="text-xl font-bold font-mono text-[#1A1A1A] tabular-nums">
-                    {formatCurrencyCompact(eshopTotals.organic)}
-                  </p>
-                  <p className="mt-1 text-[11px] text-[#9CA3AF]">Import ή GA4 — ίδια λογική με ROI</p>
-                </div>
-              </div>
-            </Card>
-          </div>
-        </section>
       )}
 
       {/* ── Κόστη & P&L ───────────────────────────────────────────────── */}
