@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { Plus, Trash2, ChevronDown, ChevronRight, ReceiptText, FolderPlus } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronRight, ReceiptText, FolderPlus, Check } from 'lucide-react';
 import type { PLCostCategory, PLCostLine } from '../../types';
 import { formatCurrencyCompact } from '../../utils/format';
 
@@ -48,6 +48,12 @@ export interface PLCostEditorProps {
   disabled?: boolean;
 }
 
+function isCatSynced(cat: PLCostCategory, baseline: PLCostCategory[]): boolean {
+  const b = baseline.find((c) => c.id === cat.id);
+  if (!b) return false;
+  return JSON.stringify(norm([cat])[0]) === JSON.stringify(norm([b])[0]);
+}
+
 export function PLCostEditor({
   initialCategories,
   monthlyRevenue,
@@ -57,6 +63,7 @@ export function PLCostEditor({
   disabled = false,
 }: PLCostEditorProps) {
   const [cats, setCats] = useState<PLCostCategory[]>(() => norm(initialCategories));
+  const [baseline, setBaseline] = useState<PLCostCategory[]>(() => norm(initialCategories));
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const baselineRef = useRef(JSON.stringify(norm(initialCategories)));
   const isDirty = JSON.stringify(norm(cats)) !== baselineRef.current;
@@ -64,6 +71,7 @@ export function PLCostEditor({
   useEffect(() => {
     const n = norm(initialCategories);
     setCats(n);
+    setBaseline(n);
     baselineRef.current = JSON.stringify(n);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(initialCategories)]);
@@ -119,6 +127,7 @@ export function PLCostEditor({
   const handleSave = async () => {
     const clean = norm(cats);
     await onSave(clean);
+    setBaseline(clean);
     baselineRef.current = JSON.stringify(clean);
   };
 
@@ -149,10 +158,14 @@ export function PLCostEditor({
               const total = catTotal(cat);
               const pct = monthlyRevenue > 0 ? (total / monthlyRevenue) * 100 : 0;
               const isOpen = !collapsed[cat.id];
+              const synced = isCatSynced(cat, baseline);
               return (
-                <div key={cat.id} className="overflow-hidden rounded-lg border border-[#E5E7EB] bg-white">
+                <div
+                  key={cat.id}
+                  className={`overflow-hidden rounded-lg border ${synced ? 'border-emerald-200 shadow-[inset_3px_0_0_0_#10b981]' : 'border-[#E5E7EB]'} bg-white`}
+                >
                   {/* Category row */}
-                  <div className="flex items-center gap-2 bg-slate-50/70 px-3 py-2.5">
+                  <div className={`flex items-center gap-2 px-3 py-2.5 ${synced ? 'bg-emerald-50/50' : 'bg-slate-50/70'}`}>
                     <button
                       type="button"
                       onClick={() => toggle(cat.id)}
@@ -176,6 +189,11 @@ export function PLCostEditor({
                       {pct > 0 && (
                         <span className="hidden text-[11px] text-[#9CA3AF] sm:inline">
                           {pct.toFixed(1)}%
+                        </span>
+                      )}
+                      {synced && (
+                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                          <Check size={12} strokeWidth={2.5} />
                         </span>
                       )}
                       <button
