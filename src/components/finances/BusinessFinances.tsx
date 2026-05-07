@@ -277,52 +277,55 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
   return (
     <div className="space-y-6">
       <PageHeader
-        toolbarAriaLabel="Περίοδος και δεδομένα"
         title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Οικονομικά Επιχείρησης</h2>}
         description={
-          <p className="text-sm text-[#4A4A4A] sm:text-base">
+          <p className="text-sm text-[#4A4A4A]">
             Πλήρης εικόνα τζίρου για την επιλεγμένη περίοδο
           </p>
         }
         actions={
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <div className="flex w-full flex-wrap gap-1 rounded-lg bg-gray-100 p-1 lg:w-auto">
-              {GLOBAL_PERIOD_OPTIONS.map((opt) => (
-                <button
-                  key={opt.key}
-                  type="button"
-                  onClick={() => setDashPeriod(opt.key)}
-                  className={`min-h-[32px] flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-all sm:flex-initial sm:px-3 ${
-                    dashPeriod === opt.key
-                      ? 'bg-white font-semibold text-[var(--nts-accent)] shadow-sm'
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-            {dashPeriod === 'custom' && (
-              <DateRangePicker
-                from={customFrom}
-                to={customTo}
-                onChange={(f, t) => setCustomRange(f, t)}
-                onClear={() => setDashPeriod('current_month')}
-              />
-            )}
+          hasImported ? (
             <Button
               variant="secondary"
               size="sm"
               icon={<Trash2 size={14} />}
               onClick={handleDelete}
-              disabled={isDeleting || !hasImported}
+              disabled={isDeleting}
               className="min-h-[36px] text-[#DC2626] hover:bg-[#FEE2E2]"
             >
-              {isDeleting ? 'Διαγραφή…' : 'Διαγραφή οργανικών import'}
+              {isDeleting ? 'Διαγραφή…' : 'Διαγραφή organic import'}
             </Button>
-          </div>
+          ) : undefined
         }
       />
+
+      {/* Period controls — ξεχωριστό bar για σωστό responsive */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-1 flex-wrap gap-1 rounded-lg bg-gray-100 p-1 sm:flex-none">
+          {GLOBAL_PERIOD_OPTIONS.map((opt) => (
+            <button
+              key={opt.key}
+              type="button"
+              onClick={() => setDashPeriod(opt.key)}
+              className={`min-h-[32px] flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-all sm:flex-none sm:px-3 ${
+                dashPeriod === opt.key
+                  ? 'bg-white font-semibold text-[var(--nts-accent)] shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+        {dashPeriod === 'custom' && (
+          <DateRangePicker
+            from={customFrom}
+            to={customTo}
+            onChange={(f, t) => setCustomRange(f, t)}
+            onClear={() => setDashPeriod('current_month')}
+          />
+        )}
+      </div>
 
       <p className="text-xs text-[#6B7280] sm:text-sm">
         <span className="font-medium text-[#374151]">Ενεργή περίοδος:</span>{' '}
