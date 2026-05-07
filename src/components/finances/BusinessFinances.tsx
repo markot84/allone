@@ -8,6 +8,9 @@ import { useCampaigns } from '../../hooks/useCampaigns';
 import { usePeriodScopedCampaigns } from '../../hooks/usePeriodScopedCampaigns';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import { useEcommerceFullHistoryMetrics } from '../../hooks/useEcommerceFullHistoryMetrics';
+import { useBusinessRevenueSummary } from '../../hooks/useBusinessRevenueSummary';
+import { useProcurement } from '../../hooks/useProcurement';
+import { useModules } from '../../hooks/useModules';
 import { useGA4Data } from '../../hooks/useGA4Data';
 import { useDashPeriod } from '../../hooks/useDashPeriod';
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
@@ -19,7 +22,10 @@ import {
   calculateCampaignMetrics,
   mergeGa4OrganicDailyWithChannelFallback,
   mergeOrganicByMonthWithGa4,
+  sumDailyRevenueInPeriod,
 } from '../../utils/roiUtils';
+import { eachDateInclusive } from '../../utils/marketingCostPeriod';
+import { getCostingReal12mTurnover } from '../../utils/procurement12mTurnover';
 import { FirestoreService } from '../../services/firestore';
 import { formatCurrency, formatCurrencyCompact, formatNumber } from '../../utils/format';
 import type { OrganicRevenue, MarketingCostLine } from '../../types';
@@ -52,6 +58,9 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
   } = useGA4Data();
   const ecomm = useEcommerceSummary();
   const ecommHist = useEcommerceFullHistoryMetrics({ mode: 'summary_only' });
+  const businessRevenue = useBusinessRevenueSummary();
+  const procurementSheets = useProcurement();
+  const { enabledModules } = useModules();
   const {
     activeStrategy,
     updateMarketingCostLines,
@@ -118,6 +127,59 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
     [periodCampaigns]
   );
 
+  const organicRevenueInPeriod = useMemo(() => {
+    if (!periodFinanceSeries) return 0;
+    return periodFinanceSeries.reduce((s, r) => s + r.organic, 0);
+  }, [periodFinanceSeries]);
+
+  const storeRevenueInPeriod = useMemo(
+    () => sumDailyRevenueInPeriod(ecommRevenueByDayRecord, periodDates.fromDate, periodDates.toDate),
+    [ecommRevenueByDayRecord, periodDates.fromDate, periodDates.toDate]
+  );
+
+  const hasEcommerceRevenue = enabledModules.ecommerce && ecomm.hasData;
+  const costing12mFinance = useMemo(
+    () => getCostingReal12mTurnover((procurementSheets.data.costing ?? []) as Record<string, unknown>[]),
+    [procurementSheets.data.costing]
+  );
+  const erpRevenueByDayRecord = businessRevenue.revenueByDayRecord;
+  const hasErpBusinessRevenue = businessRevenue.hasErpRevenueData;
+  const procurementPeriodDays = useMemo(
+    () => eachDateInclusive(periodDates.fromDate, periodDates.toDate).length,
+    [periodDates.fromDate, periodDates.toDate]
+  );
+  const procurementRevenueInPeriod = useMemo(() => {
+    if (!enabledModules.procurement || !costing12mFinance.hasColumn || costing12mFinance.sum <= 0) return 0;
+    return (costing12mFinance.sum / 365) * procurementPeriodDays;
+  }, [enabledModules.procurement, costing12mFinance.hasColumn, costing12mFinance.sum, procurementPeriodDays]);
+  const erpRevenueInPeriod = useMemo(
+    () => sumDailyRevenueInPeriod(erpRevenueByDayRecord, periodDates.fromDate, periodDates.toDate),
+    [erpRevenueByDayRecord, periodDates.fromDate, periodDates.toDate]
+  );
+  const hasProcurementTurnoverEstimate = procurementRevenueInPeriod > 0;
+  const dashboardTotalRevenueFinance = useMemo(() => {
+    if (hasErpBusinessRevenue) return erpRevenueInPeriod;
+    if (hasProcurementTurnoverEstimate) return procurementRevenueInPeriod;
+    if (hasEcommerceRevenue) return storeRevenueInPeriod;
+    return organicRevenueInPeriod + campaignMetrics.totalRevenue;
+  }, [
+    hasErpBusinessRevenue,
+    erpRevenueInPeriod,
+    hasProcurementTurnoverEstimate,
+    procurementRevenueInPeriod,
+    hasEcommerceRevenue,
+    storeRevenueInPeriod,
+    organicRevenueInPeriod,
+    campaignMetrics.totalRevenue,
+  ]);
+  const dashboardRevenueSourceLabel = hasErpBusinessRevenue
+    ? 'ERP (Megaventory / SoftOne)'
+    : hasProcurementTurnoverEstimate
+      ? 'Procurement · Πραγματικός τζίρος 12μ. (εκτίμηση περιόδου)'
+      : hasEcommerceRevenue
+        ? 'E-shop connectors'
+        : 'Organic + καμπάνιες (εκτίμηση)';
+
   const eshopTotals = useMemo(() => {
     if (!periodFinanceSeries || periodFinanceSeries.length === 0) {
       return {
@@ -146,13 +208,16 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
   const queryClient = useQueryClient();
   const toast = useToast();
   const [isDeleting, setIsDeleting] = useState(false);
+  const [financeTab, setFinanceTab] = useState<'summary' | 'breakdown'>('summary');
 
   const hasAnySignal =
     hasImported ||
     ecomm.hasData ||
     (campaigns?.length ?? 0) > 0 ||
     totalOrganicRevenue > 0 ||
-    (ga4OrganicByDay && Object.keys(ga4OrganicByDay).length > 0);
+    (ga4OrganicByDay && Object.keys(ga4OrganicByDay).length > 0) ||
+    businessRevenue.hasErpRevenueData ||
+    (enabledModules.procurement && costing12mFinance.hasColumn && costing12mFinance.sum > 0);
 
   const handleDelete = async () => {
     if (!currentBrand?.id) return;
@@ -267,6 +332,63 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
         {organicRevenueSource === 'ga4' ? ' · GA4 organic' : ''}
       </p>
 
+      <div className="flex w-full max-w-md flex-wrap gap-1 rounded-lg bg-gray-100 p-1">
+        <button
+          type="button"
+          onClick={() => setFinanceTab('summary')}
+          className={`min-h-[36px] flex-1 rounded-md px-3 py-2 text-xs font-medium transition-all sm:flex-initial ${
+            financeTab === 'summary'
+              ? 'bg-white font-semibold text-[var(--nts-accent)] shadow-sm'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Σύνολο Εσόδων
+        </button>
+        <button
+          type="button"
+          onClick={() => setFinanceTab('breakdown')}
+          className={`min-h-[36px] flex-1 rounded-md px-3 py-2 text-xs font-medium transition-all sm:flex-initial ${
+            financeTab === 'breakdown'
+              ? 'bg-white font-semibold text-[var(--nts-accent)] shadow-sm'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Ανάλυση & λεπτομέρειες
+        </button>
+      </div>
+
+      {financeTab === 'summary' && (
+        <Card padding="lg" className="border-l-4 border-l-[var(--nts-accent)]">
+          <div className="flex items-start gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[var(--nts-accent)]/10">
+              <TrendingUp size={24} className="text-[var(--nts-accent)]" />
+            </div>
+            <div className="min-w-0 flex-1 space-y-2">
+              <p className="text-sm font-semibold text-[#374151]">Σύνολο Εσόδων (ίδιο KPI με το Dashboard)</p>
+              <p className="text-3xl font-bold font-mono tabular-nums text-[#111827]">
+                {formatCurrencyCompact(dashboardTotalRevenueFinance)}
+              </p>
+              <p className="text-sm text-[#6B7280]">
+                Πηγή: <span className="font-medium text-[#374151]">{dashboardRevenueSourceLabel}</span>
+              </p>
+              {(hasErpBusinessRevenue && businessRevenue.isLoading) && (
+                <p className="text-xs text-[#9CA3AF]">Φόρτωση δεδομένων ERP…</p>
+              )}
+              <p className="text-xs text-[#9CA3AF] leading-relaxed pt-1">
+                Προτεραιότητα: συγχρονισμένα παραστατικά ERP · αλλιώς εκτίμηση από το άθροισμα «Πραγματικός τζίρος 12μ.»
+                (Κοστολόγηση Procurement, κατανομή ÷365 ανά ημέρα της περιόδου) · αλλιώς e-shop · αλλιώς organic και καμπάνιες.
+                Για ROAS και τζίρο αποκλειστικά από e-shop ανοίξτε το ROI &amp; Απόδοση.
+              </p>
+              <Button variant="secondary" size="sm" onClick={() => onSectionChange?.('dashboard')}>
+                Άνοιγμα Dashboard
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {financeTab === 'breakdown' && (
+        <>
       {activeStrategy && (
         <MarketingCostLinesEditor
           key={activeStrategy.id}
@@ -480,6 +602,9 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
           </div>
         </Card>
       )}
+        </>
+      )}
+
     </div>
   );
 }

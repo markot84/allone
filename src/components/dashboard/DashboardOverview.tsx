@@ -47,6 +47,8 @@ import { DateRangePicker } from '../ui/DateRangePicker';
 import { useGA4Data } from '../../hooks/useGA4Data';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import { useEcommerceFullHistoryMetrics } from '../../hooks/useEcommerceFullHistoryMetrics';
+import { useBusinessRevenueSummary } from '../../hooks/useBusinessRevenueSummary';
+import { useProcurement } from '../../hooks/useProcurement';
 import { useModules } from '../../hooks/useModules';
 import {
   calculateCampaignMetrics,
@@ -62,6 +64,7 @@ import {
   mergeGa4OrganicDailyWithChannelFallback,
   sumDailyRevenueInPeriod,
   eachCalendarMonthInclusive,
+  daysInMonthIntersectingRange,
   formatMonthKeyShort,
   formatTrendDayLabel,
 } from '../../utils/roiUtils';
@@ -73,6 +76,7 @@ import { useAutomationAlerts } from '../../hooks/useAutomation';
 import { MorningBriefing } from './MorningBriefing';
 import { StrategyBriefingQuickStrip } from '../coordination/StrategyBriefingQuickStrip';
 import { eachDateInclusive, computeMarketingOverheadForPeriod } from '../../utils/marketingCostPeriod';
+import { getCostingReal12mTurnover } from '../../utils/procurement12mTurnover';
 
 /** Ημερήσια σημεία στο chart· πάνω από αυτό → μηνιαία σύνοψη (αναγνώσιμο άξονα). */
 const REVENUE_CHART_MAX_DAILY_POINTS = 90;
@@ -135,6 +139,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
    * μέσω `refreshAggregates` μετά από αλλαγή Sales Channel Rules / Revenue Source.
    */
   const ecommHist = useEcommerceFullHistoryMetrics({ mode: 'summary_only' });
+  const businessRevenue = useBusinessRevenueSummary();
+  const procurementSheets = useProcurement();
   const { alerts: automationAlerts } = useAutomationAlerts();
 
   const supplierTodMap = useMemo(() => {
@@ -266,33 +272,6 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     [storeRevenueInPeriod, ordersInPeriod]
   );
 
-  /** Fingerprint για επαναλαμβανόμενο έλεγχο AI briefing vs KPI όταν το summary δίνει σε raw. */
-  const briefingFinanceKey = useMemo(
-    () =>
-      [
-        enabledModules.ecommerce && ecomm.connectedPlatforms.length > 0 ? ecommHist.source : 'no_ecomm',
-        Math.round(storeRevenueInPeriod),
-        ordersInPeriod,
-        Math.round(organicRevenueInPeriod),
-        Math.round((campaignMetrics.totalSpend + Number.EPSILON) * 100) / 100,
-        periodCampaigns.length,
-        periodDates.fromDate,
-        periodDates.toDate,
-      ].join('|'),
-    [
-      enabledModules.ecommerce,
-      ecomm.connectedPlatforms.length,
-      ecommHist.source,
-      storeRevenueInPeriod,
-      ordersInPeriod,
-      organicRevenueInPeriod,
-      campaignMetrics.totalSpend,
-      periodCampaigns.length,
-      periodDates.fromDate,
-      periodDates.toDate,
-    ]
-  );
-
   const ecommTopPlatformDisplay = useMemo(() => {
     const t = ecommHist.getTopPlatformInRange(periodDates.fromDate, periodDates.toDate);
     if (t) return ECOMM_TOP_PLATFORM_LABELS[t.platform] || t.platform;
@@ -334,15 +313,97 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   }, [ga4.dailyEntries, periodDates.fromDate, periodDates.toDate]);
 
   const hasEcommerceRevenue = enabledModules.ecommerce && ecomm.hasData;
+
+  const erpRevenueByDayRecord = businessRevenue.revenueByDayRecord;
+  const hasErpBusinessRevenue = businessRevenue.hasErpRevenueData;
+
+  const costing12m = useMemo(
+    () => getCostingReal12mTurnover((procurementSheets.data.costing ?? []) as Record<string, unknown>[]),
+    [procurementSheets.data.costing]
+  );
+
+  const procurementPeriodDays = useMemo(
+    () => eachDateInclusive(periodDates.fromDate, periodDates.toDate).length,
+    [periodDates.fromDate, periodDates.toDate]
+  );
+
+  const procurementRevenueInPeriod = useMemo(() => {
+    if (!enabledModules.procurement || !costing12m.hasColumn || costing12m.sum <= 0) return 0;
+    return (costing12m.sum / 365) * procurementPeriodDays;
+  }, [enabledModules.procurement, costing12m.hasColumn, costing12m.sum, procurementPeriodDays]);
+
+  const erpRevenueInPeriod = useMemo(
+    () => sumDailyRevenueInPeriod(erpRevenueByDayRecord, periodDates.fromDate, periodDates.toDate),
+    [erpRevenueByDayRecord, periodDates.fromDate, periodDates.toDate]
+  );
+
+  const hasProcurementTurnoverEstimate = procurementRevenueInPeriod > 0;
+
   /**
-   * «Σύνολο Εσόδων» = πραγματικά έσοδα παραγγελιών (e-shop + μελλοντικά ERP/others). Δεν αθροίζουμε organic
-   * revenue ή ad conversion value — αυτά είναι channel attribution και θα φουσκώσουν τον τζίρο με double-counting
-   * (μία πώληση μπορεί να πιστωθεί σε Organic + Google Ads + Meta ταυτόχρονα). Channel breakdown εμφανίζεται στο ROI.
-   * Όταν δεν υπάρχει e-shop σύνδεση, fallback σε εκτίμηση organic + ad conversion value.
+   * «Σύνολα Εσόδων» (Dashboard): ERP παραστατικά → εκτίμηση από Procurement (12μ. κοστολόγηση, καθολικό άθροισμα/365 ανά ημέρα περιόδου)
+   * → τζίρος e-shop → εκτίμηση organic + conversion value καμπανιών. Το ROI & Απόδοση παραμένουν στον τζίρο e-shop.
    */
-  const dashboardTotalRevenue = useMemo(
-    () => (hasEcommerceRevenue ? storeRevenueInPeriod : organicRevenueInPeriod + campaignMetrics.totalRevenue),
-    [hasEcommerceRevenue, storeRevenueInPeriod, organicRevenueInPeriod, campaignMetrics.totalRevenue]
+  const dashboardTotalRevenue = useMemo(() => {
+    if (hasErpBusinessRevenue) return erpRevenueInPeriod;
+    if (hasProcurementTurnoverEstimate) return procurementRevenueInPeriod;
+    if (hasEcommerceRevenue) return storeRevenueInPeriod;
+    return organicRevenueInPeriod + campaignMetrics.totalRevenue;
+  }, [
+    hasErpBusinessRevenue,
+    erpRevenueInPeriod,
+    hasProcurementTurnoverEstimate,
+    procurementRevenueInPeriod,
+    hasEcommerceRevenue,
+    storeRevenueInPeriod,
+    organicRevenueInPeriod,
+    campaignMetrics.totalRevenue,
+  ]);
+
+  const dashboardRevenueSourceLabel = hasErpBusinessRevenue
+    ? 'ERP (Megaventory / SoftOne)'
+    : hasProcurementTurnoverEstimate
+      ? 'Procurement · Πραγματικός τζίρος 12μ. (εκτίμηση περιόδου)'
+      : hasEcommerceRevenue
+        ? 'E-shop connectors'
+        : 'Organic + καμπάνιες (εκτίμηση)';
+
+  const revenuePerformanceChartLabel = hasErpBusinessRevenue
+    ? 'Τζίρος επιχείρησης (ERP)'
+    : hasProcurementTurnoverEstimate
+      ? 'Τζίρος επιχείρησης (εκτίμηση 12μ.)'
+      : enabledModules.ecommerce && ecomm.hasData
+        ? REV_PERF_LABEL_ESHOP
+        : REV_PERF_LABEL_ESHOP_BLEND;
+
+  /** Fingerprint για επαναλαμβανόμενο έλεγχο AI briefing vs KPI. */
+  const briefingFinanceKey = useMemo(
+    () =>
+      [
+        enabledModules.ecommerce && ecomm.connectedPlatforms.length > 0 ? ecommHist.source : 'no_ecomm',
+        businessRevenue.source,
+        Math.round(dashboardTotalRevenue),
+        Math.round(storeRevenueInPeriod),
+        ordersInPeriod,
+        Math.round(organicRevenueInPeriod),
+        Math.round((campaignMetrics.totalSpend + Number.EPSILON) * 100) / 100,
+        periodCampaigns.length,
+        periodDates.fromDate,
+        periodDates.toDate,
+      ].join('|'),
+    [
+      enabledModules.ecommerce,
+      ecomm.connectedPlatforms.length,
+      ecommHist.source,
+      businessRevenue.source,
+      dashboardTotalRevenue,
+      storeRevenueInPeriod,
+      ordersInPeriod,
+      organicRevenueInPeriod,
+      campaignMetrics.totalSpend,
+      periodCampaigns.length,
+      periodDates.fromDate,
+      periodDates.toDate,
+    ]
   );
   const inventoryValueEstimate = productStats?.totalInventoryValue ?? 0;
   const openCommercialTasks = useMemo(
@@ -362,15 +423,55 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   }, [campaignsCount, currentBrand?.enterpriseTurnoverEUR, ga4.hasData, openCommercialTasks, productsCount, suppliers.length, totalOrganicRevenue]);
 
   /**
-   * Κύριο chart — μία σειρά τζίρου:
-   * - Με e-shop: hybrid — αρχικά `ecommerce_summary`, μετά αντικατάσταση από ημερήσια που υπολογίζονται από raw orders (parity με κανόνες καναλιών).
-   * - Χωρίς e-shop: εκτίμηση organic + conversion value καμπανιών (ίδια λογική efficiency / attributed revenue).
-   * Η απόδοση διαφημίσεων (δαπάνη vs conversion value) είναι στο ξεχωριστό block από κάτω.
+   * Κύριο chart — μία σειρά τζίρου (ίδια προτεραιότητα με το KPI «Σύνολο Εσόδων»):
+   * ERP → Procurement εκτίμηση → e-shop → organic + καμπάνιες.
    */
   const revenueChartData = useMemo(() => {
     const { fromDate, toDate } = periodDates;
     const dayCount = eachDateInclusive(fromDate, toDate).length;
     if (dayCount === 0) return [];
+
+    if (hasErpBusinessRevenue) {
+      if (dayCount <= REVENUE_CHART_MAX_DAILY_POINTS) {
+        return eachDateInclusive(fromDate, toDate).map((d) => ({
+          month: formatTrendDayLabel(d),
+          total: erpRevenueByDayRecord[d] || 0,
+        }));
+      }
+      const fromYm = fromDate.slice(0, 7);
+      const toYm = toDate.slice(0, 7);
+      return eachCalendarMonthInclusive(fromYm, toYm).map((ym) => {
+        const y = Number(ym.split('-')[0]);
+        const m = Number(ym.split('-')[1]);
+        const monthEndDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+        const monthEnd = `${ym}-${String(monthEndDay).padStart(2, '0')}`;
+        const start = `${ym}-01` > fromDate ? `${ym}-01` : fromDate;
+        const end = monthEnd < toDate ? monthEnd : toDate;
+        let total = 0;
+        if (start <= end) {
+          for (const d of eachDateInclusive(start, end)) {
+            total += erpRevenueByDayRecord[d] || 0;
+          }
+        }
+        return { month: formatMonthKeyShort(ym), total };
+      });
+    }
+
+    if (hasProcurementTurnoverEstimate && costing12m.sum > 0) {
+      const dailyRate = costing12m.sum / 365;
+      if (dayCount <= REVENUE_CHART_MAX_DAILY_POINTS) {
+        return eachDateInclusive(fromDate, toDate).map((d) => ({
+          month: formatTrendDayLabel(d),
+          total: dailyRate,
+        }));
+      }
+      const fromYm = fromDate.slice(0, 7);
+      const toYm = toDate.slice(0, 7);
+      return eachCalendarMonthInclusive(fromYm, toYm).map((ym) => ({
+        month: formatMonthKeyShort(ym),
+        total: dailyRate * daysInMonthIntersectingRange(ym, fromDate, toDate),
+      }));
+    }
 
     const useEshopTotals = enabledModules.ecommerce && ecomm.hasData;
 
@@ -422,6 +523,10 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     ecomm.hasData,
     ecommHist.monthlyRevenue,
     ecommRevenueByDayRecord,
+    hasErpBusinessRevenue,
+    erpRevenueByDayRecord,
+    hasProcurementTurnoverEstimate,
+    costing12m.sum,
   ]);
 
   /** Ημερήσια ή μηνιαία σειρά για mini chart διαφήμισης (δαπάνη + conversion value από synced campaigns). */
@@ -773,7 +878,12 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       )}
 
       {/* KPI Cards — Financial Overview */}
-      {(hasOrganic || hasCampaigns || hasEcommerceRevenue) && (() => {
+      {(hasOrganic ||
+        hasCampaigns ||
+        hasEcommerceRevenue ||
+        hasErpBusinessRevenue ||
+        (enabledModules.procurement && costing12m.hasColumn && costing12m.sum > 0)) &&
+        (() => {
         const sortMonthKeys = (entries: [string, any][]) =>
           entries
             .filter(([k]) => k !== 'Other' && /^\d{4}-\d{2}$/.test(k))
@@ -787,14 +897,26 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
 
         const kFromYm = periodDates.fromDate.slice(0, 7);
         const kToYm = periodDates.toDate.slice(0, 7);
-        if (hasEcommerceRevenue) {
-          // Με e-shop: revenueByMonth = real e-shop monthly revenue (όχι organic + ad value).
+        const dashboardUsesAttributionFallback =
+          !hasErpBusinessRevenue && !hasProcurementTurnoverEstimate && !hasEcommerceRevenue;
+
+        if (hasErpBusinessRevenue) {
+          Object.entries(businessRevenue.revenueByMonthRecord).forEach(([ym, val]) => {
+            if (ym < kFromYm || ym > kToYm) return;
+            revenueByMonth[ym] = (revenueByMonth[ym] || 0) + (typeof val === 'number' ? val : 0);
+          });
+        } else if (hasProcurementTurnoverEstimate && costing12m.sum > 0) {
+          const dailyRate = costing12m.sum / 365;
+          eachCalendarMonthInclusive(kFromYm, kToYm).forEach((ym) => {
+            const days = daysInMonthIntersectingRange(ym, periodDates.fromDate, periodDates.toDate);
+            if (days > 0) revenueByMonth[ym] = dailyRate * days;
+          });
+        } else if (hasEcommerceRevenue) {
           ecommHist.monthlyRevenue.forEach((r) => {
             if (r.month < kFromYm || r.month > kToYm) return;
             revenueByMonth[r.month] = (revenueByMonth[r.month] || 0) + r.revenue;
           });
         } else {
-          // Χωρίς e-shop: εκτίμηση organic + ad conversion value (channel attribution).
           organicByMonth.forEach((v, ym) => {
             if (ym < kFromYm || ym > kToYm) return;
             revenueByMonth[ym] = (revenueByMonth[ym] || 0) + v;
@@ -802,7 +924,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         }
         periodCampaigns.forEach((c) => {
           for (const [ym, val] of getCampaignMonthlyAttributedValueInPeriod(c, periodDates.fromDate, periodDates.toDate)) {
-            if (!hasEcommerceRevenue) {
+            if (dashboardUsesAttributionFallback) {
               revenueByMonth[ym] = (revenueByMonth[ym] || 0) + val;
             }
             convsValueByMonth[ym] = (convsValueByMonth[ym] || 0) + val;
@@ -882,7 +1004,13 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           ga4OrganicEffective
         );
         const revenueSpark = padSparklineForChart(
-          dailyTrendKpi.map((r) => (hasEcommerceRevenue ? r.storeRevenue : r.organic + r.campaigns) / 1000)
+          hasErpBusinessRevenue
+            ? dayList.map((d) => (erpRevenueByDayRecord[d] || 0) / 1000)
+            : hasProcurementTurnoverEstimate && procurementPeriodDays > 0
+              ? dayList.map(() => procurementRevenueInPeriod / procurementPeriodDays / 1000)
+              : hasEcommerceRevenue
+                ? dailyTrendKpi.map((r) => r.storeRevenue / 1000)
+                : dailyTrendKpi.map((r) => (r.organic + r.campaigns) / 1000)
         );
 
         const spendByDay: Record<string, number> = {};
@@ -922,16 +1050,15 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   changeLabel: revenueMoM !== null ? 'vs προηγ. μήνα' : undefined,
                   trend: revenueMoM !== null ? (revenueMoM >= 0 ? 'up' : 'down') : 'up',
                   sparklineData: revenueSpark,
-                  refreshing: hasEcommerceRevenue && ecomKpisRefreshing,
+                  refreshing:
+                    (hasEcommerceRevenue && ecomKpisRefreshing) || (hasErpBusinessRevenue && businessRevenue.isLoading),
                   tooltip:
                     isB2B
                       ? 'Βασική εικόνα εσόδων από οργανική ζήτηση και demand generation. Για πλήρη αποτύπωση εσόδων ανά account απαιτείται invoicing ή ERP import.'
-                      : hasEcommerceRevenue
-                        ? 'Πραγματικός τζίρος παραγγελιών e-shop (χωρίς ΦΠΑ) στην επιλεγμένη περίοδο. Δεν αθροίζονται organic ή ad conversion value — αυτά είναι channel attribution και θα προκαλούσαν double-counting. Αναλυτικό breakdown ανά κανάλι στη σελίδα ROI & Απόδοση.'
-                        : 'Εκτίμηση εσόδων από organic και ad conversion value (όχι ταμειακός τζίρος). Συνδέστε e-shop για πραγματικό revenue χωρίς ΦΠΑ.',
+                      : `Πηγή ${dashboardRevenueSourceLabel}. Όταν υπάρχει ERP, μετράμε παραστατικά· αλλιώς εκτίμηση από 12μ. κοστολόγησης (Procurement) ή τζίρο e-shop. Λεπτομέρειες e-shop / ROAS στη σελίδα ROI · οικονομική εικόνα στα Οικονομικά.`,
                 }}
                 index={0}
-                onClick={() => onSectionChange?.(isB2B ? 'finances' : 'roi')}
+                onClick={() => onSectionChange?.('finances')}
               />
               <KPICard
                 kpi={{
@@ -1150,12 +1277,21 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           className="min-w-0 xl:col-span-2" 
           padding="lg"
           hover={!!onSectionChange}
-          onClick={() => onSectionChange?.(isB2B ? 'finances' : 'roi')}
+          onClick={() => onSectionChange?.('finances')}
         >
           <CardHeader
             title="Revenue Performance"
             subtitle={
-              enabledModules.ecommerce && ecomm.hasData ? (
+              hasErpBusinessRevenue ? (
+                <p>
+                  <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">Τζίρος επιχείρησης</strong> από συγχρονισμένα παραστατικά ERP (καθαρές αξίες όπως στο aggregate). Για ανάλυση e-shop και ROAS ανοίξτε{' '}
+                  <strong className="font-semibold">ROI &amp; Απόδοση</strong>.
+                </p>
+              ) : hasProcurementTurnoverEstimate ? (
+                <p>
+                  <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">Εκτίμηση</strong> με βάση το άθροισμα «Πραγματικός τζίρος 12μ.» στο φύλλο Κοστολόγηση (Procurement), κατανεμημένο ανά ημέρα περιόδου (÷365). Με σύνδεση ERP το γράφημα στρέφεται στα παραστατικά.
+                </p>
+              ) : enabledModules.ecommerce && ecomm.hasData ? (
                 <p>
                   Ημερήσια ή μηνιαία εικόνα <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">καθαρού τζίρου παραγγελιών (χωρίς ΦΠΑ)</strong>, με βάση τον συγχρονισμό του e-shop και το server-side aggregate. Κάτω εμφανίζεται η{' '}
                   <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">διαφημιστική απόδοση</strong> σε ξεχωριστή κλίμακα, χωρίς να αθροίζεται στον τζίρο.
@@ -1224,7 +1360,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   }}
                   formatter={(value: any) => [
                     formatCurrencyCompact((value as number) || 0),
-                    enabledModules.ecommerce && ecomm.hasData ? REV_PERF_LABEL_ESHOP : REV_PERF_LABEL_ESHOP_BLEND,
+                    revenuePerformanceChartLabel,
                   ]}
                   labelStyle={{ color: '#24292f', fontWeight: 600, marginBottom: 4 }}
                 />
@@ -1246,9 +1382,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   className="h-3 w-3 shrink-0 rounded-full ring-2 ring-white shadow-sm"
                   style={{ backgroundColor: REV_CHART_ESHOP }}
                 />
-                <span className="text-sm text-[var(--nts-medium-gray)]">
-                  {enabledModules.ecommerce && ecomm.hasData ? REV_PERF_LABEL_ESHOP : REV_PERF_LABEL_ESHOP_BLEND}
-                </span>
+                <span className="text-sm text-[var(--nts-medium-gray)]">{revenuePerformanceChartLabel}</span>
               </div>
             </div>
 

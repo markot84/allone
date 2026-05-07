@@ -115,6 +115,7 @@ export function useRefreshAggregates() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['aggregates'] }),
         queryClient.invalidateQueries({ queryKey: ['ecommerce_summary', brandId] }),
+        queryClient.invalidateQueries({ queryKey: ['business_revenue_summary', brandId] }),
       ]);
       return { ok: true };
     } catch (e) {

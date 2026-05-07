@@ -1278,7 +1278,7 @@ export const connectorSync = onRequest(
         return;
       }
 
-      // ecommerce_summary: μετά από e-shop connectors ή ERP παραστατικά (για revenueSourceMode = erp).
+      // ecommerce_summary (μόνο e-shop) + business_revenue_summary (ERP) μετά από sync connectors.
       if (['shopify', 'woocommerce', 'opencart', 'magento', 'megaventory', 'softone'].includes(provider)) {
         try {
           await computeEcommerceSummary(brandId);

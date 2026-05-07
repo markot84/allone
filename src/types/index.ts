@@ -84,13 +84,12 @@ export interface Brand {
    */
   historyStartDate?: string;
   /**
-   * Από πού αντλεί το brand το «Σύνολο Εσόδων» στο Dashboard:
-   * - `eshop_classified` (default): παραγγελίες e-shop που classified ως `direct_eshop` βάσει
-   *   sales channel rules (εξαιρούνται intercompany, Skroutz κ.λπ.).
-   * - `eshop_all`: όλες οι παραγγελίες e-shop χωρίς classification filter (ωμό sum).
-   * - `erp`: τζίρος από Megaventory τιμολόγια ή SoftOne SALDOC (βλ. ecommerceAggregator).
+   * Πώς φιλτράρονται οι παραγγελίες e-shop στο `ecommerce_summary` / σελίδα E-commerce:
+   * - `eshop_classified` (default): μόνο παραγγελίες classified ως `direct_eshop` (Sales Channel Rules).
+   * - `eshop_all`: όλες οι μη ακυρωμένες παραγγελίες από connectors.
+   * Τιμή `erp` (legacy): διαβάζεται ως `eshop_classified`. Ο τζίρος ERP γράφεται στο `business_revenue_summary` για το Dashboard.
    *
-   * Δεν επηρεάζει αποθέματα/κατάλογο — μόνο aggregation εσόδων και raw orders για KPIs.
+   * Δεν επηρεάζει αποθέματα/κατάλογο — μόνο aggregation εσόδων e-shop και raw orders για KPIs e-shop.
    * Όταν κενό, θεωρείται `eshop_classified` (default).
    */
   revenueSourceMode?: 'eshop_classified' | 'eshop_all' | 'erp';

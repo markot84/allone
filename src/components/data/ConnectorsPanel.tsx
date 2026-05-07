@@ -1948,8 +1948,10 @@ export function ConnectorsPanel() {
   const refreshMagentoEcommerceCaches = useCallback(() => {
     if (!brandId) return;
     queryClient.removeQueries({ queryKey: ['ecommerce_summary', brandId] });
+    queryClient.removeQueries({ queryKey: ['business_revenue_summary', brandId] });
     queryClient.removeQueries({ queryKey: ['ecommerceOrdersRaw', brandId] });
     queryClient.invalidateQueries({ queryKey: ['ecommerce_summary', brandId] });
+    queryClient.invalidateQueries({ queryKey: ['business_revenue_summary', brandId] });
     queryClient.invalidateQueries({ queryKey: ['ecommerceOrdersRaw', brandId] });
   }, [brandId, queryClient]);
 
@@ -2287,8 +2289,10 @@ export function ConnectorsPanel() {
         if (provider === 'merchant') queryClient.invalidateQueries({ queryKey: ['priceBenchmarks', brandId] });
         if (['shopify', 'woocommerce', 'opencart', 'magento'].includes(provider)) {
           queryClient.removeQueries({ queryKey: ['ecommerce_summary', brandId] });
+          queryClient.removeQueries({ queryKey: ['business_revenue_summary', brandId] });
           queryClient.removeQueries({ queryKey: ['ecommerceOrdersRaw', brandId] });
           queryClient.invalidateQueries({ queryKey: ['ecommerce_summary', brandId] });
+          queryClient.invalidateQueries({ queryKey: ['business_revenue_summary', brandId] });
           queryClient.invalidateQueries({ queryKey: ['ecommerceOrdersRaw', brandId] });
         }
         if (['megaventory', 'softone', 'epsilon_net', 'entersoft'].includes(provider)) {
@@ -2297,6 +2301,7 @@ export function ConnectorsPanel() {
           queryClient.removeQueries({ queryKey: ['procurement', brandId] });
           queryClient.removeQueries({ queryKey: ['procurement_signals', brandId] });
           queryClient.removeQueries({ queryKey: ['ecommerce_summary', brandId] });
+          queryClient.removeQueries({ queryKey: ['business_revenue_summary', brandId] });
           queryClient.removeQueries({ queryKey: ['segments', brandId] });
           queryClient.removeQueries({ queryKey: ['segmentCustomerSummaries', brandId] });
           queryClient.invalidateQueries({ queryKey: ['products', brandId] });
@@ -2304,6 +2309,7 @@ export function ConnectorsPanel() {
           queryClient.invalidateQueries({ queryKey: ['procurement', brandId] });
           queryClient.invalidateQueries({ queryKey: ['procurement_signals', brandId] });
           queryClient.invalidateQueries({ queryKey: ['ecommerce_summary', brandId] });
+          queryClient.invalidateQueries({ queryKey: ['business_revenue_summary', brandId] });
           queryClient.invalidateQueries({ queryKey: ['segments', brandId] });
           queryClient.invalidateQueries({ queryKey: ['segmentCustomerSummaries', brandId] });
           queryClient.invalidateQueries({ queryKey: ['aggregates'] });

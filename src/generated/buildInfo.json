@@ -1,10 +1,14 @@
 {
-  "version": "0.726.93",
-  "previousVersion": "0.726.92",
-  "commitHash": "b428c11",
+  "version": "0.726.96",
+  "previousVersion": "0.726.95",
+  "commitHash": "4f9efec",
   "branch": "main",
-  "buildDate": "2026-05-07T08:08:44.407Z",
+  "buildDate": "2026-05-07T12:40:45.944Z",
   "commits": [
+    {
+      "hash": "4f9efec",
+      "message": "fix(procurement): 12μηνος τζίρος από φύλλο Κοστολόγηση (στήλη Η)"
+    },
     {
       "hash": "b428c11",
       "message": "chore: full deploy"
@@ -60,13 +64,10 @@
     {
       "hash": "24eae52",
       "message": "fix: GA4 connector revert to v1beta, split large doc into subcollections, add privacy links and site verification"
-    },
-    {
-      "hash": "ef22090",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [
+    "[Διόρθωση] 12μηνος τζίρος από φύλλο Κοστολόγηση (στήλη Η)",
     "[Συντήρηση] Full deploy",
     "[Διόρθωση] GA4 connector revert to v1beta, split large doc into subcollections, add privacy links and site verification",
     "[Διόρθωση] Show connector last sync from connector doc fallback",

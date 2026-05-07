@@ -3,7 +3,7 @@ import { Card, Button, useToast, Tooltip } from '../common';
 import { useBrand } from '../../hooks/useBrand';
 import { useRefreshAggregates } from '../../hooks/useAggregates';
 import { FirestoreService } from '../../services/firestore';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import type { Brand } from '../../types';
 
 type Mode = NonNullable<Brand['revenueSourceMode']>;
@@ -12,16 +12,6 @@ interface ModeOption {
   id: Mode;
   label: string;
   description: string;
-  /** Μήνυμα όταν η επιλογή είναι ανενεργή (π.χ. λείπει σύνδεση ERP). */
-  disabledReason?: string | null;
-}
-
-function resolveConnectorErpAvailable(conn: Record<string, unknown> | null): boolean {
-  if (!conn) return false;
-  const mv = conn.megaventory as Record<string, unknown> | undefined;
-  if (mv?.connected) return true;
-  const s1 = conn.softone as Record<string, unknown> | undefined;
-  return Boolean(s1?.connected === true && s1?.syncSalesDocs === true);
 }
 
 export function RevenueSourceSettings() {
@@ -30,24 +20,24 @@ export function RevenueSourceSettings() {
   const toast = useToast();
   const { refresh: refreshServerAggregates } = useRefreshAggregates();
 
-  const brandId = currentBrand?.id ?? null;
+  const initialMode = ((m: string | undefined): Mode => {
+    if (m === 'eshop_all' || m === 'eshop_classified') return m;
+    /** Legacy `erp` στο brand: πλέον ισοδυναμεί με ταξινόμηση καναλιών (το ERP τροφοδοτεί μόνο το Dashboard «Σύνολο Εσόδων»). */
+    if (m === 'erp') return 'eshop_classified';
+    return 'eshop_classified';
+  })(currentBrand?.revenueSourceMode);
 
-  const { data: connectorsDoc } = useQuery({
-    queryKey: ['connectorsForRevenueSource', brandId],
-    queryFn: () =>
-      brandId ? FirestoreService.getDocument<Record<string, unknown>>('connectors', brandId) : Promise.resolve(null),
-    enabled: Boolean(brandId),
-    staleTime: 60_000,
-  });
-
-  const erpAvailable = resolveConnectorErpAvailable(connectorsDoc ?? null);
-
-  const initialMode = (currentBrand?.revenueSourceMode || 'eshop_classified') as Mode;
   const [selected, setSelected] = useState<Mode>(initialMode);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    setSelected((currentBrand?.revenueSourceMode || 'eshop_classified') as Mode);
+    setSelected(
+      ((m: string | undefined): Mode => {
+        if (m === 'eshop_all' || m === 'eshop_classified') return m;
+        if (m === 'erp') return 'eshop_classified';
+        return 'eshop_classified';
+      })(currentBrand?.revenueSourceMode)
+    );
   }, [currentBrand?.id, currentBrand?.revenueSourceMode]);
 
   const options = useMemo((): ModeOption[] => {
@@ -57,26 +47,18 @@ export function RevenueSourceSettings() {
         label: 'E-shop με ταξινόμηση καναλιών',
         description:
           'Default. Μετράει μόνο παραγγελίες classified ως «Direct e-shop» μέσω Sales Channel Rules. ' +
-          'Εξαιρεί Skroutz, ενδοομιλικές, B2B wholesale κ.λπ. (με τους κανόνες που έχεις ορίσει).',
+          'Εξαιρεί Skroutz, ενδοομιλικές, B2B wholesale κ.λπ. (με τους κανόνες που έχεις ορίσει). ' +
+          'Ισχύει για τη σελίδα E-commerce και το `ecommerce_summary`.',
       },
       {
         id: 'eshop_all',
         label: 'E-shop χωρίς φιλτράρισμα',
         description:
           'Μετράει όλες τις non-cancelled παραγγελίες από τους e-shop connectors, χωρίς sales channel rules. ' +
-          'Για brands χωρίς marketplace/intercompany στο ηλεκτρονικό κατάστημα.',
-      },
-      {
-        id: 'erp',
-        label: 'ERP (Megaventory τιμολόγια / SoftOne SALDOC)',
-        description:
-          'Ο τζίρος KPI προέρχεται από τα επίσημα παραστατικά: προτεραιότητα Megaventory Sales Invoices ' +
-          '(megaventory_invoices), αλλιώς SoftOne πωλήσεις αν είναι ενεργό το sync SALDOC. ' +
-          'Καλύπτει και καταστήματα/B2B/offline που δεν φαίνονται στο eshop. Μετά το sync ERP γίνεται ενημέρωση του summary.',
-        disabledReason: erpAvailable ? null : 'Σύνδεσε Megaventory ή SoftOne με ενεργό συγχρονισμό SALDOC.',
+          'Ο συνολικός τζίρος επιχείρησης στο Dashboard προέρχεται από ERP (αν συνδέεται) ή Procurement, όχι από εδώ.',
       },
     ];
-  }, [erpAvailable]);
+  }, []);
 
   const dirty = useMemo(() => selected !== initialMode, [selected, initialMode]);
 
@@ -89,13 +71,10 @@ export function RevenueSourceSettings() {
       queryClient.invalidateQueries({ queryKey: ['ecommerceOrdersRaw', currentBrand.id] });
       const agg = await refreshServerAggregates();
       if (agg.ok) {
-        toast.success(
-          selected === 'erp'
-            ? 'Αποθηκεύτηκε πηγή ERP και ενημερώθηκε το σύνοψη στο server. Για πλήρη στοιχεία τιμολογίων/SALDOC τρέξε ERP Sync αν χρειάζεται.'
-            : 'Αποθηκεύτηκε και ενημερώθηκε το σύνοψη τζίρου στο server.'
-        );
+        toast.success('Αποθηκεύτηκε και ενημερώθηκε το σύνοψη e-shop στο server.');
       } else {
         queryClient.invalidateQueries({ queryKey: ['ecommerce_summary', currentBrand.id] });
+        queryClient.invalidateQueries({ queryKey: ['business_revenue_summary', currentBrand.id] });
         toast.info(
           `Αποθηκεύτηκε η επιλογή, αλλά η ανανέωση summary απέτυχε (${agg.error ?? 'άγνωστο'}). Τρέξε χειροκίνητο sync ή δοκίμασε ξανά.`
         );
@@ -115,9 +94,9 @@ export function RevenueSourceSettings() {
       <div className="flex items-start justify-between gap-3 mb-4">
         <div>
           <div className="flex items-center gap-1.5">
-            <h3 className="text-base font-semibold text-[var(--nts-charcoal)]">Πηγή Εσόδων (Revenue Source)</h3>
+            <h3 className="text-base font-semibold text-[var(--nts-charcoal)]">Ταξινόμηση τζίρου e-shop</h3>
             <Tooltip
-              content="Ορίζει μόνο τον υπολογισμό τζίρου (Dashboard / ecommerce_summary · raw παραγγελίες για KPI). Δεν αλλάζει κατάλογο ή αποθέματα — αυτά προέρχονται από το ERP sync / import προϊόντων και τους commerce connectors όπως τους έχεις συνδέσει."
+              content="Ορίζει μόνο πώς φιλτράρονται οι παραγγελίες e-shop στο E-commerce summary και τα KPI e-shop. Ο συνολικός τζίρος επιχείρησης στο Dashboard προέρχεται από ERP ή Procurement (βλ. Οικονομικά)."
               size={13}
             />
           </div>
@@ -125,7 +104,7 @@ export function RevenueSourceSettings() {
             Brand: <strong className="text-[var(--nts-charcoal)]">{currentBrand.name}</strong>
           </p>
           <p className="text-[11px] text-[var(--nts-medium-gray)] mt-2 leading-relaxed">
-            Τα <strong className="font-medium text-[var(--nts-charcoal)]">αποθέματα</strong> δεν εξαρτώνται από αυτή την επιλογή· για πραγματικό απόθεμα ERP κράτα ενεργό συγχρονισμό Megaventory/SoftOne (ή το κεντρικό import προϊόντων), ανεξάρτητα αν ο τζίρος μετράει από eshop ή από τιμολόγια.
+            Τα <strong className="font-medium text-[var(--nts-charcoal)]">αποθέματα</strong> δεν εξαρτώνται από αυτή την επιλογή· για πραγματικό απόθεμα ERP κράτα ενεργό συγχρονισμό Megaventory/SoftOne (ή το κεντρικό import προϊόντων), ανεξάρτητα από τους κανόνες καναλιών.
           </p>
         </div>
       </div>
@@ -133,20 +112,18 @@ export function RevenueSourceSettings() {
       <div className="space-y-2">
         {options.map((opt) => {
           const isSelected = selected === opt.id;
-          const disabled = Boolean(opt.disabledReason);
           return (
             <button
               key={opt.id}
               type="button"
-              disabled={disabled}
-              onClick={() => !disabled && setSelected(opt.id)}
+              onClick={() => setSelected(opt.id)}
               className={[
                 'w-full text-left p-3 rounded-lg border transition-all',
                 'focus:outline-none focus:ring-2 focus:ring-[var(--nts-accent)] focus:ring-offset-1',
                 isSelected
                   ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/5'
                   : 'border-[var(--nts-border-gray)] hover:border-[var(--nts-medium-gray)] bg-white',
-                disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
+                'cursor-pointer',
               ].join(' ')}
             >
               <div className="flex items-start gap-3">
@@ -162,21 +139,8 @@ export function RevenueSourceSettings() {
                   {isSelected && <span className="block w-1.5 h-1.5 m-[3px] rounded-full bg-white" />}
                 </span>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[13px] font-semibold text-[var(--nts-charcoal)]">{opt.label}</span>
-                    {disabled && opt.disabledReason && (
-                      <span
-                        className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-[var(--nts-light-gray)] text-[var(--nts-medium-gray)] border border-[var(--nts-border-gray)]"
-                        title={opt.disabledReason}
-                      >
-                        Απαιτείται σύνδεση ERP
-                      </span>
-                    )}
-                  </div>
+                  <span className="text-[13px] font-semibold text-[var(--nts-charcoal)]">{opt.label}</span>
                   <p className="text-[12px] text-[var(--nts-medium-gray)] leading-relaxed mt-0.5">{opt.description}</p>
-                  {disabled && opt.disabledReason && (
-                    <p className="text-[11px] text-[var(--nts-accent)] mt-1">{opt.disabledReason}</p>
-                  )}
                 </div>
               </div>
             </button>

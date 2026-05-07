@@ -115,6 +115,7 @@ function QueryProvider({ children }: { children: React.ReactNode }) {
               // Server aggregates & heavy raw order pulls — persist hides post-sync reality and can bloat localStorage.
               if (
                 key === 'ecommerce_summary' ||
+                key === 'business_revenue_summary' ||
                 key === 'ecommerceOrdersRaw' ||
                 key === 'segments' ||
                 key === 'segmentCustomerSummaries' ||

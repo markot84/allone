@@ -321,6 +321,11 @@ service cloud.firestore {
       allow read: if isBrandMember(brandId);
       allow write: if false;
     }
+    // Business-wide revenue from ERP invoices / SALDOC (server-write only)
+    match /business_revenue_summary/{brandId} {
+      allow read: if isBrandMember(brandId);
+      allow write: if false;
+    }
     // Stock movement is split from ecommerce_summary to keep large SKU maps under Firestore's 1MB doc limit.
     match /stock_movement/{brandId} {
       allow read: if isBrandMember(brandId);

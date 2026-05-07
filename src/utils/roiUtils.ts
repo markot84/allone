@@ -720,6 +720,21 @@ export function eachCalendarMonthInclusive(fromYm: string, toYm: string): string
   return out;
 }
 
+/** Ημέρες του ημερολογιακού μήνα YYYY-MM που intersect-άρουν [fromYmd, toYmd] (ISO). */
+export function daysInMonthIntersectingRange(ym: string, fromYmd: string, toYmd: string): number {
+  const parts = ym.split('-').map(Number);
+  const y = parts[0];
+  const m = parts[1];
+  if (!y || !m) return 0;
+  const monthStart = `${ym}-01`;
+  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const monthEnd = `${ym}-${String(lastDay).padStart(2, '0')}`;
+  const start = monthStart > fromYmd ? monthStart : fromYmd;
+  const end = monthEnd < toYmd ? monthEnd : toYmd;
+  if (start > end) return 0;
+  return eachDateInclusive(start, end).length;
+}
+
 /** Μηνιαία σειρά e-shop από ημερήσιο map (π.χ. από full-history raw orders). */
 export function monthlyRevenueFromDailyRecord(revenueByDay: Record<string, number>): { month: string; revenue: number }[] {
   const byMonth: Record<string, number> = {};
