@@ -42,6 +42,8 @@ export interface ProcurementCosting {
   ΔΕΥΤΕΡΟΓΕΝΕΣ_ΚΟΣΤΟΣ?: string;
   ΑΝΑΛΥΣΗ_ΚΟΣΤΟΥΣ_ΑΝΑ_ΔΡΑΣΤΗΡΙΟΤΗΤΑ?: string;
   ΜΕΣΟ_ΚΟΣΤΟΣ_ΚΑΤΗΓΟΡΙΑΣ?: string;
+  /** Στήλη Η στο PROCUREMENT_TEMPLATE · κύκλος εργασιών 12 μηνών ανά κωδικό (άθροισμα = συνολικός πραγματικός τζίρος στο overview) */
+  ΠΡΑΓΜΑΤΙΚΟΣ_ΤΖΙΡΟΣ_12ΜΗΝΟΥ?: string;
   [key: string]: string | undefined;
 }
 

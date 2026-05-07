@@ -1,10 +1,14 @@
 {
-  "version": "0.726.92",
-  "previousVersion": "0.726.91",
-  "commitHash": "58b03b8",
+  "version": "0.726.93",
+  "previousVersion": "0.726.92",
+  "commitHash": "b428c11",
   "branch": "main",
-  "buildDate": "2026-05-05T14:02:25.688Z",
+  "buildDate": "2026-05-07T08:08:44.407Z",
   "commits": [
+    {
+      "hash": "b428c11",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "58b03b8",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "ef22090",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "7774fbb",
-      "message": "fix: show connector last sync from connector doc fallback"
     }
   ],
   "changes": [

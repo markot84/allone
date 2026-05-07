@@ -113,7 +113,7 @@ const CANONICAL_COLUMN_ORDER: Record<ProcurementSheetType, string[]> = {
   costing: [
     'ΚΩΔΙΚΟΣ', 'ΠΕΡΙΓΡΑΦΗ', 'ΚΑΤΗΓΟΡΙΑ', 'ΠΡΩΤΟΓΕΝΕΣ ΚΟΣΤΟΣ',
     'ΔΕΥΤΕΡΟΓΕΝΕΣ ΚΟΣΤΟΣ', 'ΑΝΑΛΥΣΗ ΚΟΣΤΟΥΣ ΑΝΑ ΔΡΑΣΤΗΡΙΟΤΗΤΑ',
-    'ΜΕΣΟ ΚΟΣΤΟΣ ΚΑΤΗΓΟΡΙΑΣ',
+    'ΜΕΣΟ ΚΟΣΤΟΣ ΚΑΤΗΓΟΡΙΑΣ', 'ΠΡΑΓΜΑΤΙΚΟΣ ΤΖΙΡΟΣ 12ΜΗΝΟΥ',
   ],
   item_evaluation: [
     'ΚΩΔΙΚΟΣ', 'ΠΕΡΙΓΡΑΦΗ', 'ΚΑΤΗΓΟΡΙΑ', 'ΑΞΙΟΛΟΓΗΣΗ', 'ΒΑΘΜΟΛΟΓΙΑ',
@@ -195,6 +195,11 @@ const COL_ALIASES: Record<string, string[]> = {
   'ΔΕΥΤΕΡΟΓΕΝΕΣ':        ['ΔΕΥΤΕΡΟΓΕΝΕΣ', 'ΔΕΥΤΕΡ'],
   'ΑΠΟΛΟΓΙΣΤΙΚΟΣ ΤΖΙΡΟΣ':['ΑΠΟΛΟΓΙΣΤΙΚΟΣ ΤΖΙΡΟΣ', 'ΤΖΙΡΟΣ'],
   'ΑΠΟΛΟΓΙΣΤΙΚΟ ΚΕΡΔΟΣ': ['ΑΠΟΛΟΓΙΣΤΙΚΟ ΚΕΡΔΟΣ', 'ΚΕΡΔΟΣ'],
+  // Κοστολόγηση · στήλη Η — όχι απολογιστικό έτος (what-if)
+  'ΠΡΑΓΜΑΤΙΚΟΣ ΤΖΙΡΟΣ 12ΜΗΝΟΥ': [
+    'ΠΡΑΓΜΑΤΙΚΟΣ ΤΖΙΡΟΣ 12ΜΗΝΟΥ', 'ΠΡΑΓΜΑΤΙΚΟΣ ΤΖΙΡΟΣ 12 ΜΗΝΩΝ', 'ΠΡΑΓΜΑΤΙΚΟΣ ΤΖΙΡΟΣ (12ΜΗΝΟ)',
+    'ΠΡΑΓΜ. ΤΖΙΡΟΣ 12ΜΗΝΟΥ', 'ΤΖΙΡΟΣ 12ΜΗΝΟΥ', 'ΤΖΙΡΟΣ 12 ΜΗΝΩΝ', '12ΜΗΝΟ ΤΖΙΡΟΣ', '12Μ ΤΖΙΡΟΣ',
+  ],
   'ΤΖΙΡΟΣ':              ['ΑΠΟΛΟΓΙΣΤΙΚΟΣ ΤΖΙΡΟΣ', 'ΤΖΙΡΟΣ', 'TURNOVER', 'ΕΣΟΔΑ', 'REVENUE'],
   'ΚΕΡΔΟΣ':              ['ΑΠΟΛΟΓΙΣΤΙΚΟ ΚΕΡΔΟΣ', 'ΚΕΡΔΟΣ', 'PROFIT', 'ΚΕΡΔΗ'],
   'ΑΞΙΑ ΑΝΑΤΡΟΦΟΔΟΣΙΑΣ': ['ΑΞΙΑ ΑΝΑΤΡΟΦΟΔΟΣΙΑΣ', 'ΑΞΙΑ ΑΝΑΤΡΟΦ'],
@@ -217,6 +222,16 @@ function findCol(rows: Record<string, unknown>[], keyword: string): string {
     console.warn(`[Procurement] Column "${keyword}" not found. Available:`, keys);
   }
   return keyword;
+}
+
+/** Άθροισμα στήλης «Πραγματικός τζίρος 12μήνου» στο φύλλο Κοστολόγηση (στήλη Η στο PROCUREMENT_TEMPLATE). */
+function getCostingReal12mTurnover(rows: Record<string, unknown>[]): { sum: number; hasColumn: boolean } {
+  if (rows.length === 0) return { sum: 0, hasColumn: false };
+  const col = findCol(rows, 'ΠΡΑΓΜΑΤΙΚΟΣ ΤΖΙΡΟΣ 12ΜΗΝΟΥ');
+  const first = rows[0];
+  const hasColumn = col in first && first[col] !== undefined;
+  const sum = rows.reduce((s, r) => s + parseNum(r[col]), 0);
+  return { sum, hasColumn };
 }
 
 function isNumericLike(v: string): boolean {
@@ -747,8 +762,12 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
     ).size;
     const totalValue = invRows.reduce((s, r) => s + parseNum(r[costCol]) * parseNum(r[stockCol]), 0);
 
-    // Πραγματικός τζίρος 12μήνου από ecommerce_summary (αντί για what-if Απολογιστικό)
+    const costRows = (data.costing ?? []) as Record<string, unknown>[];
+    const { sum: costing12mSum, hasColumn: hasCosting12mCol } = getCostingReal12mTurnover(costRows);
+
+    // Πραγματικός τζίρος 12μήνου: κύρια πηγή = άθροισμα Κοστολόγηση (στήλη Η)· εναλλακτικά e-shop όταν δεν υπάρχει η στήλη στο αρχείο
     const last12Revenue = (() => {
+      if (hasCosting12mCol) return costing12mSum;
       if (!hasEcommerce) return 0;
       if (monthlyRevenue.length === 0) return totalRevenue;
       return monthlyRevenue.slice(-12).reduce((s, m) => s + (m.revenue ?? 0), 0);
