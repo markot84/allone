@@ -208,7 +208,6 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
   const queryClient = useQueryClient();
   const toast = useToast();
   const [isDeleting, setIsDeleting] = useState(false);
-  const [financeTab, setFinanceTab] = useState<'summary' | 'breakdown'>('summary');
 
   const hasAnySignal =
     hasImported ||
@@ -332,33 +331,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
         {organicRevenueSource === 'ga4' ? ' · GA4 organic' : ''}
       </p>
 
-      <div className="flex w-full max-w-md flex-wrap gap-1 rounded-lg bg-gray-100 p-1">
-        <button
-          type="button"
-          onClick={() => setFinanceTab('summary')}
-          className={`min-h-[36px] flex-1 rounded-md px-3 py-2 text-xs font-medium transition-all sm:flex-initial ${
-            financeTab === 'summary'
-              ? 'bg-white font-semibold text-[var(--nts-accent)] shadow-sm'
-              : 'text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          Σύνολο Εσόδων
-        </button>
-        <button
-          type="button"
-          onClick={() => setFinanceTab('breakdown')}
-          className={`min-h-[36px] flex-1 rounded-md px-3 py-2 text-xs font-medium transition-all sm:flex-initial ${
-            financeTab === 'breakdown'
-              ? 'bg-white font-semibold text-[var(--nts-accent)] shadow-sm'
-              : 'text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          Ανάλυση & λεπτομέρειες
-        </button>
-      </div>
-
-      {financeTab === 'summary' && (
-        <Card padding="lg" className="border-l-4 border-l-[var(--nts-accent)]">
+      <Card padding="lg" className="border-l-4 border-l-[var(--nts-accent)]">
           <div className="flex items-start gap-4">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[var(--nts-accent)]/10">
               <TrendingUp size={24} className="text-[var(--nts-accent)]" />
@@ -385,10 +358,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
             </div>
           </div>
         </Card>
-      )}
 
-      {financeTab === 'breakdown' && (
-        <>
       {activeStrategy && (
         <MarketingCostLinesEditor
           key={activeStrategy.id}
@@ -601,8 +571,6 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
             </table>
           </div>
         </Card>
-      )}
-        </>
       )}
 
     </div>
