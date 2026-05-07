@@ -7,6 +7,7 @@ import { useMemo } from 'react';
 import type {
   ChannelRecommendation,
   MarketingCostLine,
+  PLCostCategory,
   PriceBenchmarkStrategyScope,
   SalesBaseScope,
 } from '../types';
@@ -45,6 +46,8 @@ export interface ActiveStrategy {
   monthlyBudget?: number;
   /** Επιπλέον κόστη marketing για πληρέστερο ROI (εκτός ad spend). */
   marketingCostLines?: MarketingCostLine[];
+  /** Κατηγορίες κόστους P&L επιχείρησης (Fixed Costs, Transportation κλπ.). */
+  costCategories?: PLCostCategory[];
   channelRecommendation?: ChannelRecommendation;
   activationRecommendation?: ChannelRecommendation;
   contentSuggestions?: ContentSuggestionsResult;
@@ -264,6 +267,24 @@ export function useActiveStrategy() {
     },
   });
 
+  const updateCostCategories = useMutation({
+    mutationFn: async (costCategories: PLCostCategory[]) => {
+      if (!activeStrategy?.id || !brandId) throw new Error('No active strategy');
+      if (activeStrategy.id.startsWith('default_')) throw new Error('Cannot save to default strategy');
+      const now = new Date().toISOString();
+      const clean = JSON.parse(JSON.stringify(costCategories)) as PLCostCategory[];
+      await FirestoreService.setDocument('active_strategies', activeStrategy.id, {
+        ...activeStrategy,
+        costCategories: clean,
+        updatedAt: now,
+      } as Record<string, unknown>);
+      return { ...activeStrategy, costCategories: clean, updatedAt: now } as ActiveStrategy;
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(['activeStrategy', brandId], updated);
+    },
+  });
+
   // Channel ↔ Activation sync: όταν γράφεται οποιοδήποτε από τα δύο, mirror-άρει και τα δύο πεδία.
   // Αποτρέπει divergence ανάμεσα σε Channel Activation page και RFM exports.
   const saveRecommendation = useMutation({
@@ -366,6 +387,8 @@ export function useActiveStrategy() {
     isSavingBudget: updateBudget.isPending,
     updateMarketingCostLines: updateMarketingCostLines.mutateAsync,
     isSavingMarketingCostLines: updateMarketingCostLines.isPending,
+    updateCostCategories: updateCostCategories.mutateAsync,
+    isSavingCostCategories: updateCostCategories.isPending,
     saveRecommendation: saveRecommendation.mutateAsync,
     saveActivationRecommendation: saveActivationRecommendation.mutateAsync,
     saveContentSuggestions: saveContentSuggestions.mutateAsync,

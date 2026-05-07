@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Euro, Trash2, TrendingUp, Building2, Megaphone, Leaf } from 'lucide-react';
 import { Card, Button, Spinner, useToast, PageHeader } from '../common';
+import { PLCostEditor } from './PLCostEditor';
 import { useOrganic } from '../../hooks/useOrganic';
 import { useBrand } from '../../hooks/useBrand';
 import { useCampaigns } from '../../hooks/useCampaigns';
@@ -65,6 +66,8 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
     activeStrategy,
     updateMarketingCostLines,
     isSavingMarketingCostLines,
+    updateCostCategories,
+    isSavingCostCategories,
   } = useActiveStrategy();
 
   const { period: dashPeriod, setPeriod: setDashPeriod, periodDates } = useDashPeriod();
@@ -204,6 +207,26 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
       other: Math.round(other),
     };
   }, [periodFinanceSeries, campaignMetrics.totalRevenue]);
+
+  // Period length in months (for P&L prorations)
+  const periodMonths = useMemo(() => {
+    if (!periodDates.fromDate || !periodDates.toDate) return 1;
+    const from = new Date(periodDates.fromDate);
+    const to = new Date(periodDates.toDate);
+    const days = (to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24);
+    return Math.max(1 / 31, days / 30.44);
+  }, [periodDates.fromDate, periodDates.toDate]);
+
+  const plTotalMonthly = useMemo(
+    () =>
+      (activeStrategy?.costCategories ?? []).reduce(
+        (sum, cat) => sum + cat.lines.reduce((s, l) => s + (l.amountEUR || 0), 0),
+        0
+      ),
+    [activeStrategy?.costCategories]
+  );
+
+  const ebitda = dashboardTotalRevenueFinance - plTotalMonthly * periodMonths;
 
   const queryClient = useQueryClient();
   const toast = useToast();
@@ -464,6 +487,61 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
               </div>
             </Card>
           </div>
+        </section>
+      )}
+
+      {/* ── Κόστη & P&L ───────────────────────────────────────────────── */}
+      {activeStrategy && !activeStrategy.id.startsWith('default_') && (
+        <section className="space-y-4">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-semibold text-[#111827]">Κόστη Επιχείρησης (P&L)</h3>
+              <p className="text-xs text-[#6B7280]">
+                Κατηγορίες και γραμμές κόστους · μηνιαία ποσά · % τζίρου περιόδου
+              </p>
+            </div>
+          </div>
+          <PLCostEditor
+            initialCategories={activeStrategy.costCategories}
+            monthlyRevenue={periodMonths > 0 ? dashboardTotalRevenueFinance / periodMonths : 0}
+            periodMonths={periodMonths}
+            onSave={async (cats) => {
+              await updateCostCategories(cats);
+              toast.success('Αποθηκεύτηκαν τα κόστη P&L');
+            }}
+            isSaving={isSavingCostCategories}
+          />
+
+          {/* EBITDA card */}
+          {plTotalMonthly > 0 && (
+            <Card
+              padding="md"
+              className={`border-l-4 ${ebitda >= 0 ? 'border-l-emerald-500 bg-emerald-50/40' : 'border-l-red-400 bg-red-50/30'}`}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-semibold text-[#374151]">EBITDA (εκτίμηση περιόδου)</p>
+                  <p className="text-xs text-[#9CA3AF]">
+                    Τζίρος − σύνολο κόστων P&L περιόδου
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className={`text-2xl font-bold font-mono tabular-nums ${ebitda >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                    {ebitda >= 0 ? '+' : ''}{formatCurrencyCompact(ebitda)}
+                  </p>
+                  {dashboardTotalRevenueFinance > 0 && (
+                    <p className="text-xs text-[#9CA3AF]">
+                      {((ebitda / dashboardTotalRevenueFinance) * 100).toFixed(1)}% margin
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-[#6B7280]">
+                <span>Τζίρος: <span className="font-semibold text-[#374151] font-mono">{formatCurrencyCompact(dashboardTotalRevenueFinance)}</span></span>
+                <span>Κόστη: <span className="font-semibold text-[#374151] font-mono">−{formatCurrencyCompact(plTotalMonthly * periodMonths)}</span></span>
+              </div>
+            </Card>
+          )}
         </section>
       )}
 

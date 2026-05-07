@@ -486,6 +486,21 @@ export type MarketingCostLine =
       month: string;
     };
 
+/** Γραμμή κόστους P&L — μηνιαίο ποσό. */
+export type PLCostLine = {
+  id: string;
+  label: string;
+  /** Μηνιαίο κόστος σε €. */
+  amountEUR: number;
+};
+
+/** Κατηγορία κόστους P&L (π.χ. "Fixed Costs", "Transportation"). */
+export type PLCostCategory = {
+  id: string;
+  name: string;
+  lines: PLCostLine[];
+};
+
 // Content Calendar Types
 export interface ContentItem {
   week: number;
