@@ -8,12 +8,7 @@ function newId(): string {
 }
 
 function defaultLine(): MarketingCostLine {
-  return {
-    id: newId(),
-    label: '',
-    kind: 'fixed_monthly',
-    amountEUR: 0,
-  };
+  return { id: newId(), label: '', kind: 'fixed_monthly', amountEUR: 0 };
 }
 
 function normalizeLines(raw: MarketingCostLine[] | undefined): MarketingCostLine[] {
@@ -27,23 +22,30 @@ function normalizeLines(raw: MarketingCostLine[] | undefined): MarketingCostLine
         return { id, label, kind: 'percent_of_budget' as const, percent: Math.max(0, Number(l.percent) || 0) };
       }
       if (l.kind === 'one_off_month') {
-        const month = typeof l.month === 'string' && /^\d{4}-\d{2}$/.test(l.month) ? l.month : `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+        const now = new Date();
+        const month =
+          typeof l.month === 'string' && /^\d{4}-\d{2}$/.test(l.month)
+            ? l.month
+            : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
         return { id, label, kind: 'one_off_month' as const, amountEUR: Math.max(0, Number(l.amountEUR) || 0), month };
       }
-      return { id, label, kind: 'fixed_monthly' as const, amountEUR: Math.max(0, Number((l as MarketingCostLine & { amountEUR?: number }).amountEUR) || 0) };
+      return {
+        id,
+        label,
+        kind: 'fixed_monthly' as const,
+        amountEUR: Math.max(0, Number((l as MarketingCostLine & { amountEUR?: number }).amountEUR) || 0),
+      };
     });
 }
 
-function serializeLinesForCompare(rows: MarketingCostLine[]): string {
+function serial(rows: MarketingCostLine[]): string {
   return JSON.stringify(normalizeLines(rows));
 }
 
-function isLineSyncedWithBaseline(line: MarketingCostLine, baseline: MarketingCostLine[]): boolean {
+function isSynced(line: MarketingCostLine, baseline: MarketingCostLine[]): boolean {
   const b = baseline.find((x) => x.id === line.id);
   if (!b) return false;
-  const aNorm = normalizeLines([line])[0];
-  const bNorm = normalizeLines([b])[0];
-  return JSON.stringify(aNorm) === JSON.stringify(bNorm);
+  return JSON.stringify(normalizeLines([line])[0]) === JSON.stringify(normalizeLines([b])[0]);
 }
 
 export interface MarketingCostLinesEditorProps {
@@ -62,65 +64,45 @@ export function MarketingCostLinesEditor({
   isSaving,
 }: MarketingCostLinesEditorProps) {
   const initialNorm = useMemo(() => normalizeLines(initialLines), [initialLines]);
-  const initialSerialized = useMemo(() => serializeLinesForCompare(initialNorm), [initialNorm]);
-
-  /** Χρήση normalizeLines(initialLines) στο initializer — όχι closure από useMemo (ασφαλές async load). */
+  const initialSerial = useMemo(() => serial(initialNorm), [initialNorm]);
   const [lines, setLines] = useState<MarketingCostLine[]>(() => normalizeLines(initialLines));
-  /** Τελευταία αποθηκευμένη κατάσταση (server ή επιτυχές Save) — για dirty check & πράσινο ανά γραμμή. */
-  const [baselineLines, setBaselineLines] = useState<MarketingCostLine[]>(() => normalizeLines(initialLines));
+  const [baseline, setBaseline] = useState<MarketingCostLine[]>(() => normalizeLines(initialLines));
+  const parentRef = useRef<string | null>(null);
 
-  const parentSerializedRef = useRef<string | null>(null);
   useEffect(() => {
     const incoming = normalizeLines(initialLines);
-    const snap = serializeLinesForCompare(incoming);
-    if (parentSerializedRef.current === null) {
-      parentSerializedRef.current = snap;
-      if (incoming.length > 0) {
-        setLines(incoming);
-        setBaselineLines(incoming);
-      }
+    const snap = serial(incoming);
+    if (parentRef.current === null) {
+      parentRef.current = snap;
+      if (incoming.length > 0) { setLines(incoming); setBaseline(incoming); }
       return;
     }
-    if (snap !== parentSerializedRef.current) {
-      parentSerializedRef.current = snap;
+    if (snap !== parentRef.current) {
+      parentRef.current = snap;
       setLines(incoming);
-      setBaselineLines(incoming);
+      setBaseline(incoming);
     }
-  }, [initialLines, initialSerialized]);
+  }, [initialLines, initialSerial]);
 
-  const isDirty = useMemo(
-    () => serializeLinesForCompare(lines) !== serializeLinesForCompare(baselineLines),
-    [lines, baselineLines]
-  );
-
+  const isDirty = useMemo(() => serial(lines) !== serial(baseline), [lines, baseline]);
   const budgetHint = monthlyBudget != null && monthlyBudget > 0;
 
-  const setLineKind = (id: string, kind: MarketingCostLine['kind']) => {
+  const setKind = (id: string, kind: MarketingCostLine['kind']) =>
     setLines((prev) =>
-      prev.map((line) => {
-        if (line.id !== id) return line;
-        if (kind === line.kind) return line;
-        const base = { id: line.id, label: line.label };
+      prev.map((l) => {
+        if (l.id !== id || l.kind === kind) return l;
+        const base = { id: l.id, label: l.label };
         if (kind === 'fixed_monthly') return { ...base, kind: 'fixed_monthly', amountEUR: 0 };
         if (kind === 'percent_of_budget') return { ...base, kind: 'percent_of_budget', percent: 0 };
         const now = new Date();
-        const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-        return { ...base, kind: 'one_off_month', amountEUR: 0, month };
+        return { ...base, kind: 'one_off_month', amountEUR: 0, month: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}` };
       })
     );
-  };
 
-  const updateLine = (id: string, patch: Partial<MarketingCostLine>) => {
-    setLines((prev) =>
-      prev.map((line) => {
-        if (line.id !== id) return line;
-        return { ...line, ...patch } as MarketingCostLine;
-      })
-    );
-  };
+  const patchLine = (id: string, patch: Partial<MarketingCostLine>) =>
+    setLines((prev) => prev.map((l) => (l.id === id ? ({ ...l, ...patch } as MarketingCostLine) : l)));
 
   const removeLine = (id: string) => setLines((prev) => prev.filter((l) => l.id !== id));
-
   const addLine = () => setLines((prev) => [...prev, defaultLine()]);
 
   const handleSave = async () => {
@@ -133,120 +115,76 @@ export function MarketingCostLinesEditor({
     await onSave(trimmed);
     const norm = normalizeLines(trimmed);
     setLines(norm);
-    setBaselineLines(norm);
-    parentSerializedRef.current = serializeLinesForCompare(norm);
+    setBaseline(norm);
+    parentRef.current = serial(norm);
   };
 
   return (
-    <div className="rounded-xl border border-[#E5E7EB] bg-[#FAFAFA] p-4">
-      <div className="flex items-start gap-3 mb-4">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white border border-[#E5E7EB]">
-          <PiggyBank size={18} className="text-[var(--nts-accent)]" />
+    <div className="overflow-hidden rounded-xl border border-[#E5E7EB] bg-white">
+      {/* Header */}
+      <div className="flex items-start gap-3 border-b border-[#E5E7EB] bg-slate-50/60 px-4 py-3.5">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#E5E7EB] bg-white">
+          <PiggyBank size={17} className="text-[var(--nts-accent)]" />
         </div>
-        <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-semibold text-[#111827]">Επιπλέον κόστη marketing (ROI)</h3>
-          <p className="text-[11px] text-[#6B7280] mt-0.5 leading-snug">
-            Στο ROI: τα <strong>σταθερά μηνιαία</strong> (π.χ. agency) μετρούν <strong>πλήρες €/μήνα</strong> για κάθε ημερολογιακό μήνα που καλύπτει η περίοδο· ποσοστά επί budget και εφάπαξ γραμμές κατανέμονται ανά ημέρα. Δεν αντικαθιστούν το μηνιαίο budget καναλιών.
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-[#111827]">Επιπλέον κόστη marketing (ROI)</p>
+          <p className="mt-0.5 text-[11px] leading-snug text-[#6B7280]">
+            Τα <strong>σταθερά μηνιαία</strong> μετρούν <strong>πλήρες €/μήνα</strong> ανά ημερολογιακό μήνα της περιόδου·
+            ποσοστά &amp; εφάπαξ κατανέμονται ανά ημέρα. Δεν αντικαθιστούν το budget καναλιών.
           </p>
         </div>
       </div>
 
-      {lines.length === 0 && (
-        <p className="text-xs text-[#9CA3AF] mb-3">Δεν έχουν οριστεί γραμμές. Προσθέστε σταθερά μηνιαία, ποσοστό επί του budget ή εφάπαξ ανά μήνα.</p>
-      )}
-
-      <div className="space-y-3">
+      {/* Lines */}
+      <div className="space-y-2 p-4">
+        {lines.length === 0 && (
+          <p className="text-xs text-[#9CA3AF]">
+            Δεν έχουν οριστεί γραμμές. Προσθέστε σταθερά μηνιαία, ποσοστό επί budget ή εφάπαξ.
+          </p>
+        )}
         {lines.map((line) => {
-          const synced = isLineSyncedWithBaseline(line, baselineLines);
+          const synced = isSynced(line, baseline);
           return (
-          <div
-            key={line.id}
-            className={`relative flex flex-col gap-2 rounded-lg border p-3 transition-colors sm:flex-row sm:flex-wrap sm:items-end ${
-              synced
-                ? 'border-emerald-300 bg-[#ecfdf5] shadow-[inset_3px_0_0_0_#10b981]'
-                : 'border-[#E5E7EB] bg-white'
-            }`}
-          >
-            {synced && (
-              <span
-                className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200/80"
-                title="Αποθηκευμένο"
-              >
-                <Check size={14} strokeWidth={2.5} aria-hidden />
-              </span>
-            )}
-            <label className="flex-1 min-w-[140px]">
-              <span className="text-[10px] font-medium uppercase tracking-wide text-[#9CA3AF]">Περιγραφή</span>
-              <input
-                type="text"
-                value={line.label}
-                onChange={(e) => updateLine(line.id, { label: e.target.value })}
-                disabled={disabled}
-                placeholder="π.χ. Agency retainer"
-                className="mt-1 w-full rounded-md border border-[#E5E7EB] px-2 py-1.5 text-sm focus:border-[var(--nts-accent)] focus:outline-none disabled:opacity-50"
-              />
-            </label>
-            <label className="w-full sm:w-40">
-              <span className="text-[10px] font-medium uppercase tracking-wide text-[#9CA3AF]">Τύπος</span>
-              <select
-                value={line.kind}
-                onChange={(e) => setLineKind(line.id, e.target.value as MarketingCostLine['kind'])}
-                disabled={disabled}
-                className="mt-1 w-full rounded-md border border-[#E5E7EB] px-2 py-1.5 text-sm focus:border-[var(--nts-accent)] focus:outline-none disabled:opacity-50"
-              >
-                <option value="fixed_monthly">Σταθερό / μήνα (€)</option>
-                <option value="percent_of_budget">% του μην. budget</option>
-                <option value="one_off_month">Εφάπαξ (μήνας)</option>
-              </select>
-            </label>
-            {line.kind === 'fixed_monthly' && (
-              <label className="w-full sm:w-28">
-                <span className="text-[10px] font-medium uppercase tracking-wide text-[#9CA3AF]">€ / μήνα</span>
+            <div
+              key={line.id}
+              className={`relative flex flex-col gap-2 rounded-lg border p-3 transition-colors sm:flex-row sm:flex-wrap sm:items-end ${
+                synced
+                  ? 'border-emerald-200 bg-emerald-50/50 shadow-[inset_3px_0_0_0_#10b981]'
+                  : 'border-[#E5E7EB] bg-white'
+              }`}
+            >
+              {synced && (
+                <span className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                  <Check size={12} strokeWidth={2.5} />
+                </span>
+              )}
+              <label className="min-w-[140px] flex-1">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">Περιγραφή</span>
                 <input
                   type="text"
-                  inputMode="decimal"
-                  value={line.amountEUR === 0 ? '' : String(line.amountEUR)}
-                  onChange={(e) => {
-                    const v = e.target.value.replace(/[^\d.,]/g, '').replace(',', '.');
-                    const n = parseFloat(v);
-                    updateLine(line.id, { amountEUR: v === '' || isNaN(n) ? 0 : n });
-                  }}
+                  value={line.label}
+                  onChange={(e) => patchLine(line.id, { label: e.target.value })}
                   disabled={disabled}
-                  className="mt-1 w-full rounded-md border border-[#E5E7EB] px-2 py-1.5 font-mono text-sm focus:border-[var(--nts-accent)] focus:outline-none disabled:opacity-50"
+                  placeholder="π.χ. Agency retainer"
+                  className="mt-1 w-full rounded-md border border-[#E5E7EB] px-2.5 py-1.5 text-sm text-[#111827] focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/20 disabled:opacity-50"
                 />
               </label>
-            )}
-            {line.kind === 'percent_of_budget' && (
-              <label className="w-full sm:w-28">
-                <span className="text-[10px] font-medium uppercase tracking-wide text-[#9CA3AF]">%</span>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={line.percent === 0 ? '' : String(line.percent)}
-                  onChange={(e) => {
-                    const v = e.target.value.replace(/[^\d.,]/g, '').replace(',', '.');
-                    const n = parseFloat(v);
-                    updateLine(line.id, { percent: v === '' || isNaN(n) ? 0 : n });
-                  }}
+              <label className="w-full sm:w-40">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">Τύπος</span>
+                <select
+                  value={line.kind}
+                  onChange={(e) => setKind(line.id, e.target.value as MarketingCostLine['kind'])}
                   disabled={disabled}
-                  className="mt-1 w-full rounded-md border border-[#E5E7EB] px-2 py-1.5 font-mono text-sm focus:border-[var(--nts-accent)] focus:outline-none disabled:opacity-50"
-                />
+                  className="mt-1 w-full rounded-md border border-[#E5E7EB] px-2.5 py-1.5 text-sm text-[#111827] focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/20 disabled:opacity-50"
+                >
+                  <option value="fixed_monthly">Σταθερό / μήνα (€)</option>
+                  <option value="percent_of_budget">% του μην. budget</option>
+                  <option value="one_off_month">Εφάπαξ (μήνας)</option>
+                </select>
               </label>
-            )}
-            {line.kind === 'one_off_month' && (
-              <>
-                <label className="w-full sm:w-36">
-                  <span className="text-[10px] font-medium uppercase tracking-wide text-[#9CA3AF]">Μήνας</span>
-                  <input
-                    type="month"
-                    value={line.month}
-                    onChange={(e) => updateLine(line.id, { month: e.target.value })}
-                    disabled={disabled}
-                    className="mt-1 w-full rounded-md border border-[#E5E7EB] px-2 py-1.5 text-sm focus:border-[var(--nts-accent)] focus:outline-none disabled:opacity-50"
-                  />
-                </label>
+              {line.kind === 'fixed_monthly' && (
                 <label className="w-full sm:w-28">
-                  <span className="text-[10px] font-medium uppercase tracking-wide text-[#9CA3AF]">€ (σύνολο)</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">€ / μήνα</span>
                   <input
                     type="text"
                     inputMode="decimal"
@@ -254,58 +192,101 @@ export function MarketingCostLinesEditor({
                     onChange={(e) => {
                       const v = e.target.value.replace(/[^\d.,]/g, '').replace(',', '.');
                       const n = parseFloat(v);
-                      updateLine(line.id, { amountEUR: v === '' || isNaN(n) ? 0 : n });
+                      patchLine(line.id, { amountEUR: v === '' || isNaN(n) ? 0 : n });
                     }}
                     disabled={disabled}
-                    className="mt-1 w-full rounded-md border border-[#E5E7EB] px-2 py-1.5 font-mono text-sm focus:border-[var(--nts-accent)] focus:outline-none disabled:opacity-50"
+                    className="mt-1 w-full rounded-md border border-[#E5E7EB] px-2.5 py-1.5 font-mono text-sm text-[#111827] focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/20 disabled:opacity-50"
                   />
                 </label>
-              </>
-            )}
-            <button
-              type="button"
-              onClick={() => removeLine(line.id)}
-              disabled={disabled}
-              className="flex h-9 w-9 shrink-0 items-center justify-center self-end rounded-md border border-transparent text-[#9CA3AF] hover:bg-[#FEF2F2] hover:text-[#EF4444] disabled:opacity-40"
-              title="Διαγραφή"
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
+              )}
+              {line.kind === 'percent_of_budget' && (
+                <label className="w-full sm:w-28">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">%</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={line.percent === 0 ? '' : String(line.percent)}
+                    onChange={(e) => {
+                      const v = e.target.value.replace(/[^\d.,]/g, '').replace(',', '.');
+                      const n = parseFloat(v);
+                      patchLine(line.id, { percent: v === '' || isNaN(n) ? 0 : n });
+                    }}
+                    disabled={disabled}
+                    className="mt-1 w-full rounded-md border border-[#E5E7EB] px-2.5 py-1.5 font-mono text-sm text-[#111827] focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/20 disabled:opacity-50"
+                  />
+                </label>
+              )}
+              {line.kind === 'one_off_month' && (
+                <>
+                  <label className="w-full sm:w-36">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">Μήνας</span>
+                    <input
+                      type="month"
+                      value={line.month}
+                      onChange={(e) => patchLine(line.id, { month: e.target.value })}
+                      disabled={disabled}
+                      className="mt-1 w-full rounded-md border border-[#E5E7EB] px-2.5 py-1.5 text-sm text-[#111827] focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/20 disabled:opacity-50"
+                    />
+                  </label>
+                  <label className="w-full sm:w-28">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">€ (σύνολο)</span>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={line.amountEUR === 0 ? '' : String(line.amountEUR)}
+                      onChange={(e) => {
+                        const v = e.target.value.replace(/[^\d.,]/g, '').replace(',', '.');
+                        const n = parseFloat(v);
+                        patchLine(line.id, { amountEUR: v === '' || isNaN(n) ? 0 : n });
+                      }}
+                      disabled={disabled}
+                      className="mt-1 w-full rounded-md border border-[#E5E7EB] px-2.5 py-1.5 font-mono text-sm text-[#111827] focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/20 disabled:opacity-50"
+                    />
+                  </label>
+                </>
+              )}
+              <button
+                type="button"
+                onClick={() => removeLine(line.id)}
+                disabled={disabled}
+                className="flex h-[34px] w-[34px] shrink-0 items-center justify-center self-end rounded-md border border-transparent text-[#9CA3AF] hover:bg-red-50 hover:text-red-500 disabled:opacity-40"
+                title="Διαγραφή"
+              >
+                <Trash2 size={15} />
+              </button>
+            </div>
           );
         })}
+
+        {!budgetHint && lines.some((l) => l.kind === 'percent_of_budget') && (
+          <p className="rounded-md border border-amber-100 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-700">
+            Ορίστε μηνιαίο budget παραπάνω ώστε τα ποσοστά να υπολογίζονται.
+          </p>
+        )}
       </div>
 
-      {!budgetHint && lines.some((l) => l.kind === 'percent_of_budget') && (
-        <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded-md px-2 py-1.5 mt-3">
-          Ορίστε μηνιαίο budget παραπάνω ώστε τα ποσοστά να υπολογίζονται.
-        </p>
-      )}
-
-      <div className="flex flex-wrap items-center gap-2 mt-4">
+      {/* Footer */}
+      <div className="flex flex-wrap items-center gap-2 border-t border-[#E5E7EB] bg-slate-50/60 px-4 py-2.5">
         <button
           type="button"
           onClick={addLine}
           disabled={disabled}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-[#D1D5DB] px-3 py-1.5 text-xs font-medium text-[#4B5563] hover:border-[var(--nts-accent)] hover:text-[#111827] disabled:opacity-40"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-[#D1D5DB] bg-white px-3 py-1.5 text-xs font-medium text-[#4B5563] hover:border-[var(--nts-accent)] hover:text-[var(--nts-accent)] disabled:opacity-40"
         >
-          <Plus size={14} />
+          <Plus size={13} />
           Γραμμή
         </button>
         <button
           type="button"
           onClick={() => void handleSave()}
           disabled={disabled || isSaving || !isDirty}
-          className={`inline-flex items-center rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-            disabled || isSaving
-              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              : !isDirty
-                ? 'bg-gray-200 text-gray-500 cursor-not-allowed ring-1 ring-gray-300/80'
-                : 'bg-[#111827] text-white hover:bg-[#1f2937] shadow-sm'
+          className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+            !isDirty || disabled || isSaving
+              ? 'cursor-not-allowed bg-slate-100 text-slate-400'
+              : 'bg-[#111827] text-white shadow-sm hover:bg-[#1f2937]'
           }`}
-          title={!isDirty && !disabled && !isSaving ? 'Δεν υπάρχουν αλλαγές προς αποθήκευση' : undefined}
         >
-          {isSaving ? 'Αποθήκευση...' : 'Αποθήκευση'}
+          {isSaving ? 'Αποθήκευση…' : 'Αποθήκευση'}
         </button>
         {!isDirty && !disabled && !isSaving && (
           <span className="text-[11px] text-[#9CA3AF]">Καμία αλλαγή προς αποθήκευση</span>

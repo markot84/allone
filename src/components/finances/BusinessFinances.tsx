@@ -477,14 +477,6 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
       {/* ── Κόστη & P&L ───────────────────────────────────────────────── */}
       {activeStrategy && !activeStrategy.id.startsWith('default_') && (
         <section className="space-y-4">
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <h3 className="text-sm font-semibold text-[#111827]">Κόστη Επιχείρησης (P&L)</h3>
-              <p className="text-xs text-[#6B7280]">
-                Κατηγορίες και γραμμές κόστους · μηνιαία ποσά · % τζίρου περιόδου
-              </p>
-            </div>
-          </div>
           <PLCostEditor
             initialCategories={activeStrategy.costCategories}
             monthlyRevenue={periodMonths > 0 ? dashboardTotalRevenueFinance / periodMonths : 0}
