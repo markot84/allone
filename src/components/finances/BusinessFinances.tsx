@@ -158,7 +158,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
   );
   const hasProcurementTurnoverEstimate = procurementRevenueInPeriod > 0;
   const dashboardTotalRevenueFinance = useMemo(() => {
-    if (hasErpBusinessRevenue) return erpRevenueInPeriod + (hasEcommerceRevenue ? storeRevenueInPeriod : 0);
+    if (hasErpBusinessRevenue) return erpRevenueInPeriod;
     if (hasProcurementTurnoverEstimate) return procurementRevenueInPeriod;
     if (hasEcommerceRevenue) return storeRevenueInPeriod;
     return organicRevenueInPeriod + campaignMetrics.totalRevenue;
@@ -173,9 +173,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
     campaignMetrics.totalRevenue,
   ]);
   const dashboardRevenueSourceLabel = hasErpBusinessRevenue
-    ? hasEcommerceRevenue
-      ? 'ERP + E-shop (Megaventory / SoftOne + connectors)'
-      : 'ERP (Megaventory / SoftOne)'
+    ? 'ERP (Megaventory / SoftOne)'
     : hasProcurementTurnoverEstimate
       ? 'Κοστολόγηση · Πραγματικός τζίρος 12μ. (εκτίμηση περιόδου)'
       : hasEcommerceRevenue
@@ -347,21 +345,8 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
               <p className="text-3xl font-bold font-mono tabular-nums text-[#111827]">
                 {formatCurrencyCompact(dashboardTotalRevenueFinance)}
               </p>
-              {/* Breakdown ERP + e-shop όταν υπάρχουν και τα δύο */}
-              {hasErpBusinessRevenue && hasEcommerceRevenue && (
-                <div className="flex flex-wrap gap-x-4 gap-y-1 pt-0.5">
-                  <span className="text-xs text-[#6B7280]">
-                    ERP (φυσικά, B2B):{' '}
-                    <span className="font-semibold text-[#374151]">{formatCurrencyCompact(erpRevenueInPeriod)}</span>
-                  </span>
-                  <span className="text-xs text-[#6B7280]">
-                    E-shop:{' '}
-                    <span className="font-semibold text-[#374151]">{formatCurrencyCompact(storeRevenueInPeriod)}</span>
-                  </span>
-                </div>
-              )}
-              {hasErpBusinessRevenue && !hasEcommerceRevenue && (
-                <p className="text-xs text-[#6B7280]">Φυσικά καταστήματα · B2B · τιμολόγια εκτός e-shop</p>
+              {hasErpBusinessRevenue && (
+                <p className="text-xs text-[#6B7280]">Φυσικά καταστήματα · B2B · online · όλα τα τιμολόγια ERP</p>
               )}
               <p className="text-sm text-[#6B7280]">
                 Πηγή: <span className="font-medium text-[#374151]">{dashboardRevenueSourceLabel}</span>
@@ -371,7 +356,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
               )}
               <p className="text-xs text-[#9CA3AF] leading-relaxed pt-1">
                 {hasErpBusinessRevenue
-                  ? 'ERP (παραστατικά Megaventory / SoftOne) + τζίρος e-shop. Για ROAS και ανάλυση αποδοτικότητας e-shop ανοίξτε το ROI & Απόδοση.'
+                  ? 'Συνολικά παραστατικά ERP — περιλαμβάνει φυσικά καταστήματα, B2B και online πωλήσεις όπως καταγράφονται στο ERP. Για ROAS και ανάλυση e-shop ανοίξτε το ROI & Απόδοση.'
                   : enabledModules.procurement
                     ? 'Προτεραιότητα: παραστατικά ERP · αλλιώς εκτίμηση Κοστολόγηση 12μ. (Enterprise) · αλλιώς e-shop · αλλιώς organic και καμπάνιες. Για ROAS ανοίξτε το ROI & Απόδοση.'
                     : 'Προτεραιότητα: παραστατικά ERP · αλλιώς τζίρος e-shop · αλλιώς εκτίμηση organic και καμπάνιες. Για ROAS ανοίξτε το ROI & Απόδοση.'

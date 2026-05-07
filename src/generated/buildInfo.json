@@ -1,10 +1,14 @@
 {
-  "version": "0.726.102",
-  "previousVersion": "0.726.101",
-  "commitHash": "ed2124d",
+  "version": "0.726.103",
+  "previousVersion": "0.726.102",
+  "commitHash": "d347c69",
   "branch": "main",
-  "buildDate": "2026-05-07T14:50:16.979Z",
+  "buildDate": "2026-05-07T14:57:30.850Z",
   "commits": [
+    {
+      "hash": "d347c69",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "ed2124d",
       "message": "chore: full deploy"
@@ -60,15 +64,10 @@
     {
       "hash": "b66410d",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "d7a6b58",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [
     "[Συντήρηση] Full deploy",
-    "[Διόρθωση] 12μηνος τζίρος από φύλλο Κοστολόγηση (στήλη Η)",
-    "[Διόρθωση] GA4 connector revert to v1beta, split large doc into subcollections, add privacy links and site verification"
+    "[Διόρθωση] 12μηνος τζίρος από φύλλο Κοστολόγηση (στήλη Η)"
   ]
 }
