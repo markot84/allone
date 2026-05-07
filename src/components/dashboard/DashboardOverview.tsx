@@ -360,7 +360,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   ]);
 
   const dashboardRevenueSourceLabel = hasErpBusinessRevenue
-    ? 'ERP (Megaventory / SoftOne)'
+    ? 'ERP'
     : hasProcurementTurnoverEstimate
       ? 'Κοστολόγηση · Πραγματικός τζίρος 12μ. (εκτίμηση περιόδου)'
       : hasEcommerceRevenue

@@ -173,7 +173,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
     campaignMetrics.totalRevenue,
   ]);
   const dashboardRevenueSourceLabel = hasErpBusinessRevenue
-    ? 'ERP (Megaventory / SoftOne)'
+    ? 'ERP'
     : hasProcurementTurnoverEstimate
       ? 'Κοστολόγηση · Πραγματικός τζίρος 12μ. (εκτίμηση περιόδου)'
       : hasEcommerceRevenue
@@ -356,7 +356,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
               )}
               <p className="text-xs text-[#9CA3AF] leading-relaxed pt-1">
                 {hasErpBusinessRevenue
-                  ? 'Συνολικά παραστατικά ERP — περιλαμβάνει φυσικά καταστήματα, B2B και online πωλήσεις όπως καταγράφονται στο ERP. Για ROAS και ανάλυση e-shop ανοίξτε το ROI & Απόδοση.'
+                  ? 'Συνολικά παραστατικά ERP — περιλαμβάνει φυσικά καταστήματα, B2B και online πωλήσεις. Για ROAS και ανάλυση e-shop ανοίξτε το ROI & Απόδοση.'
                   : enabledModules.procurement
                     ? 'Προτεραιότητα: παραστατικά ERP · αλλιώς εκτίμηση Κοστολόγηση 12μ. (Enterprise) · αλλιώς e-shop · αλλιώς organic και καμπάνιες. Για ROAS ανοίξτε το ROI & Απόδοση.'
                     : 'Προτεραιότητα: παραστατικά ERP · αλλιώς τζίρος e-shop · αλλιώς εκτίμηση organic και καμπάνιες. Για ROAS ανοίξτε το ROI & Απόδοση.'

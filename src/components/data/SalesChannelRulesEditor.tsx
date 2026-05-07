@@ -241,7 +241,7 @@ export function SalesChannelRulesEditor() {
           <div className="flex items-center gap-1.5">
             <h3 className="text-base font-semibold text-[var(--nts-charcoal)]">Sales Channel Rules</h3>
             <Tooltip
-              content="Κανόνες εξαίρεσης ή κατηγορίας παραγγελιών για τον τζίρο e-shop. Για πολλαπλά Magento storefronts, χρησιμοποιήστε το πεδίο «Domain eshop (hostname)» μετά από sync ώστε κάθε order να φέρει hostname storefront. Ταίριασμα substring, case-insensitive. Με Πηγή εσόδων «όλο το e-shop χωρίς φίλτρο καναλιών» (brand setting) οι κανόνες εδώ δεν εφαρμόζονται στο summary. Με ERP (Megaventory/SoftOne): Order Name → αριθμός εγγράφου, Customer Email → πελάτης, Payment Method → τύπος εγγράφου."
+              content="Κανόνες εξαίρεσης ή κατηγορίας παραγγελιών για τον τζίρο e-shop. Για πολλαπλά Magento storefronts, χρησιμοποιήστε το πεδίο «Domain eshop (hostname)» μετά από sync ώστε κάθε order να φέρει hostname storefront. Ταίριασμα substring, case-insensitive. Με Πηγή εσόδων «όλο το e-shop χωρίς φίλτρο καναλιών» (brand setting) οι κανόνες εδώ δεν εφαρμόζονται στο summary. Με ERP connector: Order Name → αριθμός εγγράφου, Customer Email → πελάτης, Payment Method → τύπος εγγράφου."
               size={13}
             />
           </div>

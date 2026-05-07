@@ -106,7 +106,7 @@ export function RevenueSourceSettings() {
             Brand: <strong className="text-[var(--nts-charcoal)]">{currentBrand.name}</strong>
           </p>
           <p className="text-[11px] text-[var(--nts-medium-gray)] mt-2 leading-relaxed">
-            Τα <strong className="font-medium text-[var(--nts-charcoal)]">αποθέματα</strong> δεν εξαρτώνται από αυτή την επιλογή· για πραγματικό απόθεμα ERP κράτα ενεργό συγχρονισμό Megaventory/SoftOne (ή το κεντρικό import προϊόντων), ανεξάρτητα από τους κανόνες καναλιών.
+            Τα <strong className="font-medium text-[var(--nts-charcoal)]">αποθέματα</strong> δεν εξαρτώνται από αυτή την επιλογή· για πραγματικό απόθεμα ERP κράτα ενεργό συγχρονισμό ERP connector (ή το κεντρικό import προϊόντων), ανεξάρτητα από τους κανόνες καναλιών.
           </p>
         </div>
       </div>
