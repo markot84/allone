@@ -175,7 +175,7 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
   const dashboardRevenueSourceLabel = hasErpBusinessRevenue
     ? 'ERP (Megaventory / SoftOne)'
     : hasProcurementTurnoverEstimate
-      ? 'Procurement · Πραγματικός τζίρος 12μ. (εκτίμηση περιόδου)'
+      ? 'Κοστολόγηση · Πραγματικός τζίρος 12μ. (εκτίμηση περιόδου)'
       : hasEcommerceRevenue
         ? 'E-shop connectors'
         : 'Organic + καμπάνιες (εκτίμηση)';
@@ -348,8 +348,15 @@ export function BusinessFinances({ onSectionChange }: BusinessFinancesProps = {}
                 <p className="text-xs text-[#9CA3AF]">Φόρτωση δεδομένων ERP…</p>
               )}
               <p className="text-xs text-[#9CA3AF] leading-relaxed pt-1">
-                Προτεραιότητα: συγχρονισμένα παραστατικά ERP · αλλιώς εκτίμηση από το άθροισμα «Πραγματικός τζίρος 12μ.»
-                (Κοστολόγηση Procurement, κατανομή ÷365 ανά ημέρα της περιόδου) · αλλιώς e-shop · αλλιώς organic και καμπάνιες.
+                {enabledModules.procurement ? (
+                  <>
+                    Προτεραιότητα: συγχρονισμένα παραστατικά ERP · αλλιώς, όταν το πακέτο περιλαμβάνει Enterprise και υπάρχουν δεδομένα στο φύλλο Κοστολόγηση, εκτίμηση από το άθροισμα «Πραγματικός τζίρος 12μ.» (κατανομή ÷365 ανά ημέρα της περιόδου) · αλλιώς e-shop · αλλιώς organic και καμπάνιες.
+                  </>
+                ) : (
+                  <>
+                    Προτεραιότητα: συγχρονισμένα παραστατικά ERP · αλλιώς τζίρος e-shop · αλλιώς εκτίμηση από organic και καμπάνιες.
+                  </>
+                )}{' '}
                 Για ROAS και τζίρο αποκλειστικά από e-shop ανοίξτε το ROI &amp; Απόδοση.
               </p>
               <Button variant="secondary" size="sm" onClick={() => onSectionChange?.('dashboard')}>

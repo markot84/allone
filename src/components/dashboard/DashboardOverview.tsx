@@ -340,8 +340,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   const hasProcurementTurnoverEstimate = procurementRevenueInPeriod > 0;
 
   /**
-   * «Σύνολα Εσόδων» (Dashboard): ERP παραστατικά → εκτίμηση από Procurement (12μ. κοστολόγηση, καθολικό άθροισμα/365 ανά ημέρα περιόδου)
-   * → τζίρος e-shop → εκτίμηση organic + conversion value καμπανιών. Το ROI & Απόδοση παραμένουν στον τζίρο e-shop.
+   * «Σύνολα Εσόδων» (Dashboard): ERP παραστατικά → (μόνο Enterprise) εκτίμηση από Κοστολόγηση 12μ.
+   * → τζίρος e-shop → εκτίμηση organic + conversion value καμπανιών.
    */
   const dashboardTotalRevenue = useMemo(() => {
     if (hasErpBusinessRevenue) return erpRevenueInPeriod;
@@ -362,10 +362,28 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   const dashboardRevenueSourceLabel = hasErpBusinessRevenue
     ? 'ERP (Megaventory / SoftOne)'
     : hasProcurementTurnoverEstimate
-      ? 'Procurement · Πραγματικός τζίρος 12μ. (εκτίμηση περιόδου)'
+      ? 'Κοστολόγηση · Πραγματικός τζίρος 12μ. (εκτίμηση περιόδου)'
       : hasEcommerceRevenue
         ? 'E-shop connectors'
         : 'Organic + καμπάνιες (εκτίμηση)';
+
+  const revenueTotalKpiTooltip = useMemo(() => {
+    if (isB2B) {
+      return 'Βασική εικόνα εσόδων από οργανική ζήτηση και demand generation. Για πλήρη αποτύπωση εσόδων ανά account απαιτείται invoicing ή ERP import.';
+    }
+    const tail =
+      ' Λεπτομέρειες e-shop / ROAS στη σελίδα ROI · οικονομική εικόνα στα Οικονομικά.';
+    if (enabledModules.procurement) {
+      return (
+        `Πηγή ${dashboardRevenueSourceLabel}. Προτεραιότητα: παραστατικά ERP · με ενεργό Enterprise και συμπληρωμένο φύλλο Κοστολόγηση, εναλλακτικά εκτίμηση από το άθροισμα «Πραγματικός τζίρος 12μ.» (÷365 ανά ημέρα περιόδου) · αλλιώς τζίρος e-shop · αλλιώς organic και καμπάνιες.` +
+        tail
+      );
+    }
+    return (
+      `Πηγή ${dashboardRevenueSourceLabel}. Προτεραιότητα: παραστατικά ERP · αλλιώς τζίρος e-shop · αλλιώς εκτίμηση από organic και καμπάνιες.` +
+      tail
+    );
+  }, [isB2B, enabledModules.procurement, dashboardRevenueSourceLabel]);
 
   const revenuePerformanceChartLabel = hasErpBusinessRevenue
     ? 'Τζίρος επιχείρησης (ERP)'
@@ -424,7 +442,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
 
   /**
    * Κύριο chart — μία σειρά τζίρου (ίδια προτεραιότητα με το KPI «Σύνολο Εσόδων»):
-   * ERP → Procurement εκτίμηση → e-shop → organic + καμπάνιες.
+   * ERP → (Enterprise) εκτίμηση Κοστολόγησης → e-shop → organic + καμπάνιες.
    */
   const revenueChartData = useMemo(() => {
     const { fromDate, toDate } = periodDates;
@@ -1055,7 +1073,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   tooltip:
                     isB2B
                       ? 'Βασική εικόνα εσόδων από οργανική ζήτηση και demand generation. Για πλήρη αποτύπωση εσόδων ανά account απαιτείται invoicing ή ERP import.'
-                      : `Πηγή ${dashboardRevenueSourceLabel}. Όταν υπάρχει ERP, μετράμε παραστατικά· αλλιώς εκτίμηση από 12μ. κοστολόγησης (Procurement) ή τζίρο e-shop. Λεπτομέρειες e-shop / ROAS στη σελίδα ROI · οικονομική εικόνα στα Οικονομικά.`,
+                      : revenueTotalKpiTooltip,
                 }}
                 index={0}
                 onClick={() => onSectionChange?.('finances')}
@@ -1289,7 +1307,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 </p>
               ) : hasProcurementTurnoverEstimate ? (
                 <p>
-                  <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">Εκτίμηση</strong> με βάση το άθροισμα «Πραγματικός τζίρος 12μ.» στο φύλλο Κοστολόγηση (Procurement), κατανεμημένο ανά ημέρα περιόδου (÷365). Με σύνδεση ERP το γράφημα στρέφεται στα παραστατικά.
+                  <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">Εκτίμηση</strong> με βάση το άθροισμα «Πραγματικός τζίρος 12μ.» στο φύλλο Κοστολόγηση (Enterprise), κατανεμημένο ανά ημέρα περιόδου (÷365). Με σύνδεση ERP το γράφημα στρέφεται στα παραστατικά.
                 </p>
               ) : enabledModules.ecommerce && ecomm.hasData ? (
                 <p>
