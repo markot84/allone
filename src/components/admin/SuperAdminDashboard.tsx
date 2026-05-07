@@ -179,6 +179,8 @@ function BrandsTab() {
       await FirestoreService.updateDocument('brands', brandId, payload);
       setBrands((prev) => prev.map((b) => (b.id === brandId ? { ...b, historyStartDate: trimmed || undefined } : b)));
       queryClient.invalidateQueries({ queryKey: ['ecommerceOrdersRaw', brandId] });
+      queryClient.invalidateQueries({ queryKey: ['dataAnalysisOrdersRaw', brandId] });
+      queryClient.invalidateQueries({ queryKey: ['catalogAlignmentDataAnalysis', brandId] });
     } catch (err) {
       console.error('Failed to update historyStartDate:', err);
     } finally {

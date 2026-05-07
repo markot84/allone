@@ -117,10 +117,12 @@ function QueryProvider({ children }: { children: React.ReactNode }) {
                 key === 'ecommerce_summary' ||
                 key === 'business_revenue_summary' ||
                 key === 'ecommerceOrdersRaw' ||
+                key === 'dataAnalysisOrdersRaw' ||
                 key === 'segments' ||
                 key === 'segmentCustomerSummaries' ||
                 /** Maps → broken `{}` after JSON; `.has()` crashes RFM. Heavy anyway — refetch like raw orders. */
-                key === 'catalogAlignment'
+                key === 'catalogAlignment' ||
+                key === 'catalogAlignmentDataAnalysis'
               ) {
                 return false;
               }

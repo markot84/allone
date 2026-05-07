@@ -320,6 +320,23 @@ export function buildErpSkuMap(products: Product[]): Map<string, ErpSkuDims> {
   return out;
 }
 
+function buildErpSkuMapFromMegaventoryProducts(rows: Record<string, unknown>[]): Map<string, ErpSkuDims> {
+  const out = new Map<string, ErpSkuDims>();
+  for (const d of rows) {
+    const ns = normalizeSku(trimLabel(d.sku));
+    if (!ns) continue;
+    const brand = pickFirstLabel(d, ['brand', 'manufacturerLabel', 'manufacturer', 'vendor']);
+    const categoryHint = trimLabel(d.category);
+    const base: ErpSkuDims = {
+      ...(brand ? { brand } : {}),
+      ...pickCategoryDims(d, categoryHint),
+      ...pickOperationalDims(d),
+    };
+    setDims(out, ns, base);
+  }
+  return out;
+}
+
 /**
  * Loads connector product collections + unified `products` for the brand.
  */
@@ -346,6 +363,36 @@ export async function fetchCatalogAlignmentData(
   }
 
   const erpBySku = buildErpSkuMap(erpProducts);
+  return { indexes, erpBySku };
+}
+
+/**
+ * Data Analysis (RFM catalog tabs): e-shop *_products + Megaventory `megaventory_products` μόνο·
+ * χωρίς unified `products` (Enterprise / Procurement import).
+ */
+export async function fetchCatalogAlignmentDataForDataAnalysis(
+  brandId: string,
+  platforms: string[]
+): Promise<{ indexes: CatalogIndexes; erpBySku: Map<string, ErpSkuDims> }> {
+  const indexes: CatalogIndexes = { byProductId: new Map(), bySku: new Map() };
+  const connected = [...new Set(platforms)].filter((p) => PRODUCT_COLLECTIONS[p]);
+
+  const [productRows, mvRows] = await Promise.all([
+    Promise.all(
+      connected.map(async (platform) => {
+        const coll = PRODUCT_COLLECTIONS[platform];
+        const rows = await FirestoreService.getDocuments<Record<string, unknown>>(coll, [], brandId);
+        return { platform, rows };
+      })
+    ),
+    FirestoreService.getDocuments<Record<string, unknown>>('megaventory_products', [], brandId),
+  ]);
+
+  for (const { platform, rows } of productRows) {
+    mergePlatformProductDocs(platform, rows, indexes);
+  }
+
+  const erpBySku = buildErpSkuMapFromMegaventoryProducts(mvRows);
   return { indexes, erpBySku };
 }
 

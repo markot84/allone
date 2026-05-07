@@ -210,6 +210,8 @@ export function SalesChannelRulesEditor() {
       queryClient.invalidateQueries({ queryKey: ['salesChannelRules', brandId] });
       queryClient.invalidateQueries({ queryKey: ['connectorsPanel', brandId], exact: false });
       queryClient.invalidateQueries({ queryKey: ['ecommerceOrdersRaw', brandId] });
+      queryClient.invalidateQueries({ queryKey: ['dataAnalysisOrdersRaw', brandId] });
+      queryClient.invalidateQueries({ queryKey: ['catalogAlignmentDataAnalysis', brandId] });
 
       const agg = await refreshServerAggregates();
       if (agg.ok) {

@@ -5,8 +5,8 @@ import { mergeDuplicateSegmentRowsByName } from '../utils/mergeDuplicateSegments
 import { getSegmentColor } from '../utils/segmentColors';
 import { useBrand } from './useBrand';
 import { useEcommerceSummary } from './useEcommerceSummary';
-import { fetchAllEcommerceOrders } from '../services/ecommerceRawOrders';
-import { fetchCatalogAlignmentData, normalizeCatalogAlignmentPayload } from '../services/catalogAlignment';
+import { fetchAllEcommerceOrders, fetchDataAnalysisOrders } from '../services/ecommerceRawOrders';
+import { fetchCatalogAlignmentData, fetchCatalogAlignmentDataForDataAnalysis, normalizeCatalogAlignmentPayload } from '../services/catalogAlignment';
 import { computeRfmSegmentsFromEcommerceOrders, computeSegmentMigrationFromEcommerceOrders, type RfmCatalogContext } from '../services/rfmFromOrders';
 import type { RFMSegment } from '../types';
 
@@ -92,7 +92,16 @@ function rebuildSegmentsFromCustomerSummaries(summariesBySegment: Map<string, Se
   });
 }
 
-export function useSegments() {
+export type UseSegmentsOptions = {
+  /**
+   * `data_analysis`: Data Analysis σελίδα — παραγγελίες πρώτα από ERP connectors, μετά e-shop·
+   * κατάλογος χωρίς Procurement (`products` import).
+   */
+  variant?: 'default' | 'data_analysis';
+};
+
+export function useSegments(options: UseSegmentsOptions = {}) {
+  const variant = options.variant ?? 'default';
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
   const ecomm = useEcommerceSummary();
@@ -132,18 +141,24 @@ export function useSegments() {
     [rawSegmentCustomerSummaries]
   );
 
-  const ordersQueryEnabled = !!brandId && ecomm.connectedPlatforms.length > 0;
+  const ordersQueryEnabled =
+    !!brandId && (ecomm.connectedPlatforms.length > 0 || variant === 'data_analysis');
   const ordersSinceDate = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() - RFM_ORDER_FETCH_WINDOW_DAYS);
     d.setHours(0, 0, 0, 0);
     return d.toISOString().slice(0, 10);
   }, []);
+  const ordersQueryKeyPrefix = variant === 'data_analysis' ? 'dataAnalysisOrdersRaw' : 'ecommerceOrdersRaw';
+  const catalogQueryKeyPrefix = variant === 'data_analysis' ? 'catalogAlignmentDataAnalysis' : 'catalogAlignment';
+
   const { data: rawOrders = [], isPending: ordersPending, error: ordersError } = useQuery({
-    queryKey: ['ecommerceOrdersRaw', brandId, platformsKey, ordersSinceDate],
+    queryKey: [ordersQueryKeyPrefix, brandId, platformsKey, ordersSinceDate],
     queryFn: () =>
       brandId
-        ? fetchAllEcommerceOrders(brandId, ecomm.connectedPlatforms, { sinceDate: ordersSinceDate })
+        ? (variant === 'data_analysis'
+            ? fetchDataAnalysisOrders(brandId, ecomm.connectedPlatforms, { sinceDate: ordersSinceDate })
+            : fetchAllEcommerceOrders(brandId, ecomm.connectedPlatforms, { sinceDate: ordersSinceDate }))
         : Promise.resolve([]),
     enabled: ordersQueryEnabled,
     staleTime: 12 * 60 * 60 * 1000,
@@ -154,8 +169,13 @@ export function useSegments() {
 
   /** Μετά τις παραγγελίες ώστε να μην «δένει» το UI σε διπλό βαρύ parallel fetch· τα segments εμφανίζονται χωρίς catalog enrichment. */
   const { data: catalogAlignment, isPending: catalogPending } = useQuery({
-    queryKey: ['catalogAlignment', brandId, platformsKey],
-    queryFn: () => (brandId ? fetchCatalogAlignmentData(brandId, ecomm.connectedPlatforms) : Promise.resolve(null)),
+    queryKey: [catalogQueryKeyPrefix, brandId, platformsKey],
+    queryFn: () =>
+      brandId
+        ? (variant === 'data_analysis'
+            ? fetchCatalogAlignmentDataForDataAnalysis(brandId, ecomm.connectedPlatforms)
+            : fetchCatalogAlignmentData(brandId, ecomm.connectedPlatforms))
+        : Promise.resolve(null),
     enabled: ordersQueryEnabled && !ordersPending,
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,

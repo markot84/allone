@@ -370,6 +370,27 @@ function softOneCustomerTextFromRow(row: Record<string, unknown>): string {
   return '';
 }
 
+/** Σταθερό κλειδί πελάτη για RFM από Megaventory τιμολόγια (ίδια λογική με server megaventoryRfm). */
+function megaventoryInvoiceCustomerKey(row: Record<string, unknown>): string {
+  const id = String(row.clientId ?? '').trim();
+  if (id) return `mv_customer_${id}`;
+  const name = String(row.clientName ?? '').trim();
+  if (name) return `mv_customer_${name.toLocaleUpperCase('el-GR')}`;
+  return '';
+}
+
+function softOneCustomerKeyFromRow(row: Record<string, unknown>): string {
+  const trdr = row['SALDOC.TRDR'] ?? row.TRDR ?? row['TRDR.TRDR'];
+  const trdrStr = trdr != null ? String(trdr).trim() : '';
+  if (trdrStr && trdrStr !== '0') return `s1_customer_trdr:${trdrStr}`;
+  const code = row['TRDR.CODE'] ?? row['CUSTOMER.CODE'];
+  const codeStr = code != null ? String(code).trim() : '';
+  if (codeStr) return `s1_customer_code:${codeStr}`;
+  const name = softOneCustomerTextFromRow(row);
+  if (name) return `s1_customer_${name.toLocaleUpperCase('el-GR')}`;
+  return '';
+}
+
 function softOneDocDay(row: Record<string, unknown>): string {
   const raw = String(row.documentDate ?? row['SALDOC.TRNDATE'] ?? '').trim();
   if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
@@ -409,6 +430,7 @@ function normalizeMegaventoryInvoiceRawOrder(row: Record<string, unknown>): Ecom
       ? row.netAmount
       : parseFloat(String(row.netAmount ?? '0')) || 0;
   const day = String(row.date ?? '').slice(0, 10);
+  const ck = megaventoryInvoiceCustomerKey(row);
   return {
     orderId: String(row.documentId ?? ''),
     orderName: String(row.documentNo ?? row.documentId ?? ''),
@@ -421,12 +443,14 @@ function normalizeMegaventoryInvoiceRawOrder(row: Record<string, unknown>): Ecom
     paymentMethod: String(row.documentType ?? row.documentTypeDescription ?? ''),
     shippingMethod: '',
     customerEmail: String(row.clientName ?? ''),
+    ...(ck ? { customerKey: ck } : {}),
   };
 }
 
 function normalizeSoftOneSalesRawOrder(row: Record<string, unknown>): EcommerceRawOrder {
   const net = softOneRowNet(row);
   const day = softOneDocDay(row);
+  const ck = softOneCustomerKeyFromRow(row);
   return {
     orderId: String(row['SALDOC.FINDOC'] ?? ''),
     orderName: String(row['SALDOC.SERIAL'] ?? row['SALDOC.FINCODE'] ?? row['SALDOC.FINDOC'] ?? ''),
@@ -441,12 +465,16 @@ function normalizeSoftOneSalesRawOrder(row: Record<string, unknown>): EcommerceR
     ),
     shippingMethod: '',
     customerEmail: softOneCustomerTextFromRow(row),
+    ...(ck ? { customerKey: ck } : {}),
   };
 }
 
-export async function fetchAllEcommerceOrders(
+/**
+ * Παραγγελίες από ERP connectors (Megaventory τιμολόγια / SoftOne SALDOC), φιλτραρισμένες κατά ημερομηνία.
+ */
+async function loadAndClassifyErpConnectorOrders(
   brandId: string,
-  platforms: string[],
+  mode: 'eshop_classified' | 'eshop_all' | 'erp',
   options: {
     sinceDate?: string;
     untilDate?: string;
@@ -454,68 +482,75 @@ export async function fetchAllEcommerceOrders(
     revenueMode?: 'brand' | 'classified' | 'all';
   } = {}
 ): Promise<EcommerceRawOrder[]> {
-  const mode = await fetchBrandRevenueSourceMode(brandId);
+  const conn = await FirestoreService.getDocument<Record<string, unknown>>('connectors', brandId);
+  const mv = conn?.megaventory as Record<string, unknown> | undefined;
+  const s1 = conn?.softone as Record<string, unknown> | undefined;
+  const backend = mv?.connected
+    ? ('megaventory_invoices' as const)
+    : s1?.connected === true && s1?.syncSalesDocs === true
+      ? ('softone_sales_documents' as const)
+      : null;
 
-  if (mode === 'erp') {
-    const conn = await FirestoreService.getDocument<Record<string, unknown>>('connectors', brandId);
-    const mv = conn?.megaventory as Record<string, unknown> | undefined;
-    const s1 = conn?.softone as Record<string, unknown> | undefined;
-    const backend = mv?.connected
-      ? ('megaventory_invoices' as const)
-      : s1?.connected === true && s1?.syncSalesDocs === true
-        ? ('softone_sales_documents' as const)
-        : null;
+  if (!backend) return [];
 
-    if (backend) {
-      const rangedLoadOpts =
-        options.cacheFirst === true
-          ? ({ cacheFirst: true } as const)
-          : ({ cacheFirst: false, forceServer: true } as const);
-      const coll =
-        backend === 'megaventory_invoices' ? 'megaventory_invoices' : 'softone_sales_documents';
-      const [rows, allRules] = await Promise.all([
-        FirestoreService.getDocuments<Record<string, unknown>>(coll, [], brandId, rangedLoadOpts),
-        fetchSalesChannelRulesForOrders(brandId, mode),
-      ]);
+  const rangedLoadOpts =
+    options.cacheFirst === true
+      ? ({ cacheFirst: true } as const)
+      : ({ cacheFirst: false, forceServer: true } as const);
+  const coll = backend === 'megaventory_invoices' ? 'megaventory_invoices' : 'softone_sales_documents';
+  const [rows, allRules] = await Promise.all([
+    FirestoreService.getDocuments<Record<string, unknown>>(coll, [], brandId, rangedLoadOpts),
+    fetchSalesChannelRulesForOrders(brandId, mode),
+  ]);
 
-      const filtered = rows.filter((row) => {
-        const day =
-          backend === 'megaventory_invoices'
-            ? String(row.date ?? '').slice(0, 10)
-            : softOneDocDay(row);
-        if (!day && (options.sinceDate || options.untilDate)) return false;
-        if (!day) return true;
-        if (options.sinceDate && day < options.sinceDate) return false;
-        if (options.untilDate && day > options.untilDate) return false;
-        return true;
-      });
+  const filtered = rows.filter((row) => {
+    const day =
+      backend === 'megaventory_invoices'
+        ? String(row.date ?? '').slice(0, 10)
+        : softOneDocDay(row);
+    if (!day && (options.sinceDate || options.untilDate)) return false;
+    if (!day) return true;
+    if (options.sinceDate && day < options.sinceDate) return false;
+    if (options.untilDate && day > options.untilDate) return false;
+    return true;
+  });
 
-      const orders =
-        backend === 'megaventory_invoices'
-          ? filtered.map(normalizeMegaventoryInvoiceRawOrder).filter((o) => o.total > 0)
-          : filtered.map(normalizeSoftOneSalesRawOrder).filter((o) => o.total > 0);
+  const orders =
+    backend === 'megaventory_invoices'
+      ? filtered.map(normalizeMegaventoryInvoiceRawOrder).filter((o) => o.total > 0)
+      : filtered.map(normalizeSoftOneSalesRawOrder).filter((o) => o.total > 0);
 
-      const requestedMode = options.revenueMode || 'brand';
-      const rules = requestedMode === 'all' ? [] : allRules;
+  const requestedMode = options.revenueMode || 'brand';
+  const rules = requestedMode === 'all' ? [] : allRules;
 
-      return orders.map((order) => ({
-        ...order,
-        ...classifyEcommerceOrder(
-          {
-            orderId: order.orderId,
-            orderName: order.orderName,
-            platform: order.platform,
-            status: sanitizeErpStatusForClassification(order.status),
-            paymentMethod: order.paymentMethod,
-            shippingMethod: order.shippingMethod,
-            customerEmail: order.customerEmail,
-          },
-          rules
-        ),
-      }));
-    }
-  }
+  return orders.map((order) => ({
+    ...order,
+    ...classifyEcommerceOrder(
+      {
+        orderId: order.orderId,
+        orderName: order.orderName,
+        platform: order.platform,
+        status: sanitizeErpStatusForClassification(order.status),
+        paymentMethod: order.paymentMethod,
+        shippingMethod: order.shippingMethod,
+        customerEmail: order.customerEmail,
+      },
+      rules
+    ),
+  }));
+}
 
+async function fetchEcommercePlatformOrdersOnly(
+  brandId: string,
+  platforms: string[],
+  mode: 'eshop_classified' | 'eshop_all' | 'erp',
+  options: {
+    sinceDate?: string;
+    untilDate?: string;
+    cacheFirst?: boolean;
+    revenueMode?: 'brand' | 'classified' | 'all';
+  } = {}
+): Promise<EcommerceRawOrder[]> {
   const [allRules, results] = await Promise.all([
     fetchSalesChannelRulesForOrders(brandId, mode),
     Promise.all(
@@ -595,6 +630,44 @@ export async function fetchAllEcommerceOrders(
     ...order,
     ...classifyEcommerceOrder(order, rules),
   }));
+}
+
+export async function fetchAllEcommerceOrders(
+  brandId: string,
+  platforms: string[],
+  options: {
+    sinceDate?: string;
+    untilDate?: string;
+    cacheFirst?: boolean;
+    revenueMode?: 'brand' | 'classified' | 'all';
+  } = {}
+): Promise<EcommerceRawOrder[]> {
+  const mode = await fetchBrandRevenueSourceMode(brandId);
+  if (mode === 'erp') {
+    const erp = await loadAndClassifyErpConnectorOrders(brandId, mode, options);
+    if (erp.length > 0) return erp;
+  }
+  return fetchEcommercePlatformOrdersOnly(brandId, platforms, mode, options);
+}
+
+/**
+ * Data Analysis (RFM / behavioral / predictive): παραγγελίες από ERP connectors πρώτα·
+ * αν δεν υπάρχουν τιμολόγια / SALDOC στο εύρος, fallback στα e-shop connectors.
+ */
+export async function fetchDataAnalysisOrders(
+  brandId: string,
+  platforms: string[],
+  options: {
+    sinceDate?: string;
+    untilDate?: string;
+    cacheFirst?: boolean;
+    revenueMode?: 'brand' | 'classified' | 'all';
+  } = {}
+): Promise<EcommerceRawOrder[]> {
+  const mode = await fetchBrandRevenueSourceMode(brandId);
+  const erp = await loadAndClassifyErpConnectorOrders(brandId, mode, options);
+  if (erp.length > 0) return erp;
+  return fetchEcommercePlatformOrdersOnly(brandId, platforms, mode, options);
 }
 
 export type EcommerceRevenueDayAggregate = {

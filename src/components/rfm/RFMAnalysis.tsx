@@ -127,7 +127,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
     segmentMigration,
     importSegmentsAvailable,
     isCatalogEnriching,
-  } = useSegments();
+  } = useSegments({ variant: 'data_analysis' });
   const ecomm = useEcommerceSummary();
   const { currentBrand } = useBrand();
   const queryClient = useQueryClient();

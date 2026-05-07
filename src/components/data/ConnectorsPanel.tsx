@@ -1950,9 +1950,13 @@ export function ConnectorsPanel() {
     queryClient.removeQueries({ queryKey: ['ecommerce_summary', brandId] });
     queryClient.removeQueries({ queryKey: ['business_revenue_summary', brandId] });
     queryClient.removeQueries({ queryKey: ['ecommerceOrdersRaw', brandId] });
+    queryClient.removeQueries({ queryKey: ['dataAnalysisOrdersRaw', brandId] });
+    queryClient.removeQueries({ queryKey: ['catalogAlignmentDataAnalysis', brandId] });
     queryClient.invalidateQueries({ queryKey: ['ecommerce_summary', brandId] });
     queryClient.invalidateQueries({ queryKey: ['business_revenue_summary', brandId] });
     queryClient.invalidateQueries({ queryKey: ['ecommerceOrdersRaw', brandId] });
+    queryClient.invalidateQueries({ queryKey: ['dataAnalysisOrdersRaw', brandId] });
+    queryClient.invalidateQueries({ queryKey: ['catalogAlignmentDataAnalysis', brandId] });
   }, [brandId, queryClient]);
 
   const onMagentoConnectorSettingsSaved = useCallback(() => {
@@ -2291,9 +2295,13 @@ export function ConnectorsPanel() {
           queryClient.removeQueries({ queryKey: ['ecommerce_summary', brandId] });
           queryClient.removeQueries({ queryKey: ['business_revenue_summary', brandId] });
           queryClient.removeQueries({ queryKey: ['ecommerceOrdersRaw', brandId] });
+          queryClient.removeQueries({ queryKey: ['dataAnalysisOrdersRaw', brandId] });
+          queryClient.removeQueries({ queryKey: ['catalogAlignmentDataAnalysis', brandId] });
           queryClient.invalidateQueries({ queryKey: ['ecommerce_summary', brandId] });
           queryClient.invalidateQueries({ queryKey: ['business_revenue_summary', brandId] });
           queryClient.invalidateQueries({ queryKey: ['ecommerceOrdersRaw', brandId] });
+          queryClient.invalidateQueries({ queryKey: ['dataAnalysisOrdersRaw', brandId] });
+          queryClient.invalidateQueries({ queryKey: ['catalogAlignmentDataAnalysis', brandId] });
         }
         if (['megaventory', 'softone', 'epsilon_net', 'entersoft'].includes(provider)) {
           queryClient.removeQueries({ queryKey: ['products', brandId] });
@@ -2304,6 +2312,8 @@ export function ConnectorsPanel() {
           queryClient.removeQueries({ queryKey: ['business_revenue_summary', brandId] });
           queryClient.removeQueries({ queryKey: ['segments', brandId] });
           queryClient.removeQueries({ queryKey: ['segmentCustomerSummaries', brandId] });
+          queryClient.removeQueries({ queryKey: ['dataAnalysisOrdersRaw', brandId] });
+          queryClient.removeQueries({ queryKey: ['catalogAlignmentDataAnalysis', brandId] });
           queryClient.invalidateQueries({ queryKey: ['products', brandId] });
           queryClient.invalidateQueries({ queryKey: ['products_paginated', brandId] });
           queryClient.invalidateQueries({ queryKey: ['procurement', brandId] });
@@ -2312,6 +2322,8 @@ export function ConnectorsPanel() {
           queryClient.invalidateQueries({ queryKey: ['business_revenue_summary', brandId] });
           queryClient.invalidateQueries({ queryKey: ['segments', brandId] });
           queryClient.invalidateQueries({ queryKey: ['segmentCustomerSummaries', brandId] });
+          queryClient.invalidateQueries({ queryKey: ['dataAnalysisOrdersRaw', brandId] });
+          queryClient.invalidateQueries({ queryKey: ['catalogAlignmentDataAnalysis', brandId] });
           queryClient.invalidateQueries({ queryKey: ['aggregates'] });
         }
         if (provider === 'magento') {
