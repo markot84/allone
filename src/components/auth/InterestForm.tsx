@@ -76,7 +76,7 @@ export function InterestForm() {
         <p className="text-[11px] font-semibold tracking-[0.08em] text-[var(--nts-accent)]">Εκδήλωση ενδιαφέροντος</p>
         <h3 className="mt-2 text-xl font-semibold text-[var(--nts-charcoal)]">Ενδιαφέρεστε για το Performance+;</h3>
         <p className="mt-1 text-sm text-[var(--nts-medium-gray)]">
-          Συμπληρώστε τη φόρμα και η ομάδα μας θα επικοινωνήσει μαζί σας.
+          Συμπληρώστε τη φόρμα και η ομάδα μας θα επικοινωνήσει μαζί σας για μια στρατηγική παρουσίαση της πλατφόρμας.
         </p>
 
         <form onSubmit={handleSubmit} className="relative mt-6 space-y-4">
@@ -142,7 +142,7 @@ export function InterestForm() {
             </div>
             <div>
               <label htmlFor="interest-company" className="mb-1 block text-xs font-medium text-[var(--nts-charcoal)]">
-                Επωνυμία / εταιρεία
+                Επωνυμία / Εταιρεία
               </label>
               <input
                 id="interest-company"
@@ -157,7 +157,7 @@ export function InterestForm() {
 
           <div>
             <label htmlFor="interest-message" className="mb-1 block text-xs font-medium text-[var(--nts-charcoal)]">
-              Μήνυμα
+              Μήνυμα (προαιρετικό)
             </label>
             <textarea
               id="interest-message"
