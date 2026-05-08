@@ -34,6 +34,13 @@ const PRESETS = [
     to: () => { const n = new Date(); const pm = n.getMonth() === 0 ? 11 : n.getMonth() - 1; const y = n.getMonth() === 0 ? n.getFullYear() - 1 : n.getFullYear(); return lastOfMonth(y, pm); },
   },
   {
+    label: 'Προηγ. 12 μήνες',
+    // from: first day of month 12 months before current month (e.g. May 2026 → 1 May 2025)
+    from: () => { const n = new Date(); const d = new Date(n.getFullYear(), n.getMonth() - 12, 1); return formatLocalYMD(d); },
+    // to: last day of previous month (e.g. May 2026 → 30 Apr 2026)
+    to: () => { const n = new Date(); const pm = n.getMonth() === 0 ? 11 : n.getMonth() - 1; const y = n.getMonth() === 0 ? n.getFullYear() - 1 : n.getFullYear(); return lastOfMonth(y, pm); },
+  },
+  {
     label: 'Τρέχων έτος',
     from: () => `${new Date().getFullYear()}-01-01`,
     to: () => todayStr(),

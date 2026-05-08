@@ -340,29 +340,29 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   const hasProcurementTurnoverEstimate = procurementRevenueInPeriod > 0;
 
   /**
-   * «Σύνολο Εσόδων» (Dashboard): ERP παραστατικά (περιλαμβάνει και e-shop αν το ERP τα καταχωρεί)
-   * → εκτίμηση Κοστολόγηση 12μ. (μόνο Enterprise) → τζίρος e-shop → organic + καμπάνιες.
+   * «Σύνολο Εσόδων» (Dashboard): Procurement (Enterprise) → ERP → e-shop → organic + καμπάνιες.
+   * Procurement έχει ΠΑΝΤΑ προτεραιότητα όταν υπάρχουν δεδομένα κοστολόγησης 12μ.
    */
   const dashboardTotalRevenue = useMemo(() => {
-    if (hasErpBusinessRevenue) return erpRevenueInPeriod;
     if (hasProcurementTurnoverEstimate) return procurementRevenueInPeriod;
+    if (hasErpBusinessRevenue) return erpRevenueInPeriod;
     if (hasEcommerceRevenue) return storeRevenueInPeriod;
     return organicRevenueInPeriod + campaignMetrics.totalRevenue;
   }, [
-    hasErpBusinessRevenue,
-    erpRevenueInPeriod,
     hasProcurementTurnoverEstimate,
     procurementRevenueInPeriod,
+    hasErpBusinessRevenue,
+    erpRevenueInPeriod,
     hasEcommerceRevenue,
     storeRevenueInPeriod,
     organicRevenueInPeriod,
     campaignMetrics.totalRevenue,
   ]);
 
-  const dashboardRevenueSourceLabel = hasErpBusinessRevenue
-    ? 'ERP'
-    : hasProcurementTurnoverEstimate
-      ? 'Κοστολόγηση · Πραγματικός τζίρος 12μ. (εκτίμηση περιόδου)'
+  const dashboardRevenueSourceLabel = hasProcurementTurnoverEstimate
+    ? 'Κοστολόγηση · Πραγματικός τζίρος 12μ. (εκτίμηση περιόδου)'
+    : hasErpBusinessRevenue
+      ? 'ERP'
       : hasEcommerceRevenue
         ? 'E-shop connectors'
         : 'Organic + καμπάνιες (εκτίμηση)';
@@ -372,12 +372,18 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       return 'Βασική εικόνα εσόδων από οργανική ζήτηση και demand generation. Για πλήρη αποτύπωση εσόδων ανά account απαιτείται invoicing ή ERP import.';
     }
     const tail = ' Λεπτομέρειες e-shop / ROAS στη σελίδα ROI · οικονομική εικόνα στα Οικονομικά.';
+    if (hasProcurementTurnoverEstimate) {
+      return (
+        `Πηγή: ${dashboardRevenueSourceLabel}. Procurement έχει προτεραιότητα (Enterprise): άθροισμα «Πραγματικός τζίρος 12μ.» κατανεμημένο ανά ημέρα περιόδου (÷365). Ακόμα κι αν υπάρχει ERP, εμφανίζεται ο τζίρος procurement.` +
+        tail
+      );
+    }
     if (hasErpBusinessRevenue) {
       return `Πηγή: ${dashboardRevenueSourceLabel}. Συνολικά παραστατικά ERP — περιλαμβάνει φυσικά καταστήματα, B2B και online πωλήσεις όπως καταγράφονται στο ERP.` + tail;
     }
     if (enabledModules.procurement) {
       return (
-        `Πηγή ${dashboardRevenueSourceLabel}. Προτεραιότητα: παραστατικά ERP · με ενεργό Enterprise και συμπληρωμένο φύλλο Κοστολόγηση, εναλλακτικά εκτίμηση από το άθροισμα «Πραγματικός τζίρος 12μ.» · αλλιώς e-shop · αλλιώς organic και καμπάνιες.` +
+        `Πηγή ${dashboardRevenueSourceLabel}. Προτεραιότητα: Κοστολόγηση 12μ. (Enterprise) · αλλιώς παραστατικά ERP · αλλιώς τζίρος e-shop · αλλιώς organic και καμπάνιες.` +
         tail
       );
     }
@@ -385,12 +391,12 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       `Πηγή ${dashboardRevenueSourceLabel}. Προτεραιότητα: παραστατικά ERP · αλλιώς τζίρος e-shop · αλλιώς εκτίμηση organic και καμπάνιες.` +
       tail
     );
-  }, [isB2B, hasErpBusinessRevenue, enabledModules.procurement, dashboardRevenueSourceLabel]);
+  }, [isB2B, hasProcurementTurnoverEstimate, hasErpBusinessRevenue, enabledModules.procurement, dashboardRevenueSourceLabel]);
 
-  const revenuePerformanceChartLabel = hasErpBusinessRevenue
-    ? 'Τζίρος επιχείρησης (ERP)'
-    : hasProcurementTurnoverEstimate
-      ? 'Τζίρος επιχείρησης (εκτίμηση 12μ.)'
+  const revenuePerformanceChartLabel = hasProcurementTurnoverEstimate
+    ? 'Τζίρος επιχείρησης (Procurement · εκτίμηση 12μ.)'
+    : hasErpBusinessRevenue
+      ? 'Τζίρος επιχείρησης (ERP)'
       : enabledModules.ecommerce && ecomm.hasData
         ? REV_PERF_LABEL_ESHOP
         : REV_PERF_LABEL_ESHOP_BLEND;
@@ -451,6 +457,22 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     const dayCount = eachDateInclusive(fromDate, toDate).length;
     if (dayCount === 0) return [];
 
+    if (hasProcurementTurnoverEstimate && costing12m.sum > 0) {
+      const dailyRate = costing12m.sum / 365;
+      if (dayCount <= REVENUE_CHART_MAX_DAILY_POINTS) {
+        return eachDateInclusive(fromDate, toDate).map((d) => ({
+          month: formatTrendDayLabel(d),
+          total: dailyRate,
+        }));
+      }
+      const fromYm = fromDate.slice(0, 7);
+      const toYm = toDate.slice(0, 7);
+      return eachCalendarMonthInclusive(fromYm, toYm).map((ym) => ({
+        month: formatMonthKeyShort(ym),
+        total: dailyRate * daysInMonthIntersectingRange(ym, fromDate, toDate),
+      }));
+    }
+
     if (hasErpBusinessRevenue) {
       if (dayCount <= REVENUE_CHART_MAX_DAILY_POINTS) {
         return eachDateInclusive(fromDate, toDate).map((d) => ({
@@ -475,22 +497,6 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         }
         return { month: formatMonthKeyShort(ym), total };
       });
-    }
-
-    if (hasProcurementTurnoverEstimate && costing12m.sum > 0) {
-      const dailyRate = costing12m.sum / 365;
-      if (dayCount <= REVENUE_CHART_MAX_DAILY_POINTS) {
-        return eachDateInclusive(fromDate, toDate).map((d) => ({
-          month: formatTrendDayLabel(d),
-          total: dailyRate,
-        }));
-      }
-      const fromYm = fromDate.slice(0, 7);
-      const toYm = toDate.slice(0, 7);
-      return eachCalendarMonthInclusive(fromYm, toYm).map((ym) => ({
-        month: formatMonthKeyShort(ym),
-        total: dailyRate * daysInMonthIntersectingRange(ym, fromDate, toDate),
-      }));
     }
 
     const useEshopTotals = enabledModules.ecommerce && ecomm.hasData;
@@ -543,10 +549,10 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     ecomm.hasData,
     ecommHist.monthlyRevenue,
     ecommRevenueByDayRecord,
-    hasErpBusinessRevenue,
-    erpRevenueByDayRecord,
     hasProcurementTurnoverEstimate,
     costing12m.sum,
+    hasErpBusinessRevenue,
+    erpRevenueByDayRecord,
   ]);
 
   /** Ημερήσια ή μηνιαία σειρά για mini chart διαφήμισης (δαπάνη + conversion value από synced campaigns). */
@@ -918,18 +924,18 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         const kFromYm = periodDates.fromDate.slice(0, 7);
         const kToYm = periodDates.toDate.slice(0, 7);
         const dashboardUsesAttributionFallback =
-          !hasErpBusinessRevenue && !hasProcurementTurnoverEstimate && !hasEcommerceRevenue;
+          !hasProcurementTurnoverEstimate && !hasErpBusinessRevenue && !hasEcommerceRevenue;
 
-        if (hasErpBusinessRevenue) {
-          Object.entries(businessRevenue.revenueByMonthRecord).forEach(([ym, val]) => {
-            if (ym < kFromYm || ym > kToYm) return;
-            revenueByMonth[ym] = (revenueByMonth[ym] || 0) + (typeof val === 'number' ? val : 0);
-          });
-        } else if (hasProcurementTurnoverEstimate && costing12m.sum > 0) {
+        if (hasProcurementTurnoverEstimate && costing12m.sum > 0) {
           const dailyRate = costing12m.sum / 365;
           eachCalendarMonthInclusive(kFromYm, kToYm).forEach((ym) => {
             const days = daysInMonthIntersectingRange(ym, periodDates.fromDate, periodDates.toDate);
             if (days > 0) revenueByMonth[ym] = dailyRate * days;
+          });
+        } else if (hasErpBusinessRevenue) {
+          Object.entries(businessRevenue.revenueByMonthRecord).forEach(([ym, val]) => {
+            if (ym < kFromYm || ym > kToYm) return;
+            revenueByMonth[ym] = (revenueByMonth[ym] || 0) + (typeof val === 'number' ? val : 0);
           });
         } else if (hasEcommerceRevenue) {
           ecommHist.monthlyRevenue.forEach((r) => {
@@ -1024,10 +1030,10 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           ga4OrganicEffective
         );
         const revenueSpark = padSparklineForChart(
-          hasErpBusinessRevenue
-            ? dayList.map((d) => (erpRevenueByDayRecord[d] || 0) / 1000)
-            : hasProcurementTurnoverEstimate && procurementPeriodDays > 0
-              ? dayList.map(() => procurementRevenueInPeriod / procurementPeriodDays / 1000)
+          hasProcurementTurnoverEstimate && procurementPeriodDays > 0
+            ? dayList.map(() => procurementRevenueInPeriod / procurementPeriodDays / 1000)
+            : hasErpBusinessRevenue
+              ? dayList.map((d) => (erpRevenueByDayRecord[d] || 0) / 1000)
               : hasEcommerceRevenue
                 ? dailyTrendKpi.map((r) => r.storeRevenue / 1000)
                 : dailyTrendKpi.map((r) => (r.organic + r.campaigns) / 1000)
@@ -1302,14 +1308,14 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           <CardHeader
             title="Revenue Performance"
             subtitle={
-              hasErpBusinessRevenue ? (
+              hasProcurementTurnoverEstimate ? (
+                <p>
+                  <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">Πηγή: Procurement</strong> — εκτίμηση βάσει αθροίσματος «Πραγματικός τζίρος 12μ.» στο φύλλο Κοστολόγηση (Enterprise), κατανεμημένο ανά ημέρα περιόδου (÷365). Έχει προτεραιότητα ακόμα κι αν υπάρχει ERP.
+                </p>
+              ) : hasErpBusinessRevenue ? (
                 <p>
                   <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">Τζίρος επιχείρησης</strong> από συγχρονισμένα παραστατικά ERP (καθαρές αξίες όπως στο aggregate). Για ανάλυση e-shop και ROAS ανοίξτε{' '}
                   <strong className="font-semibold">ROI &amp; Απόδοση</strong>.
-                </p>
-              ) : hasProcurementTurnoverEstimate ? (
-                <p>
-                  <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">Εκτίμηση</strong> με βάση το άθροισμα «Πραγματικός τζίρος 12μ.» στο φύλλο Κοστολόγηση (Enterprise), κατανεμημένο ανά ημέρα περιόδου (÷365). Με σύνδεση ERP το γράφημα στρέφεται στα παραστατικά.
                 </p>
               ) : enabledModules.ecommerce && ecomm.hasData ? (
                 <p>
