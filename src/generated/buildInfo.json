@@ -1,10 +1,14 @@
 {
-  "version": "0.726.117",
-  "previousVersion": "0.726.116",
-  "commitHash": "b3d2a91",
+  "version": "0.726.119",
+  "previousVersion": "0.726.118",
+  "commitHash": "ad5a766",
   "branch": "main",
-  "buildDate": "2026-05-08T12:12:35.515Z",
+  "buildDate": "2026-05-08T12:41:03.449Z",
   "commits": [
+    {
+      "hash": "ad5a766",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "b3d2a91",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "fe47866",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "4f9efec",
-      "message": "fix(procurement): 12μηνος τζίρος από φύλλο Κοστολόγηση (στήλη Η)"
     }
   ],
   "changes": [

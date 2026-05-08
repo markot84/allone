@@ -197,8 +197,16 @@ const COL_ALIASES: Record<string, string[]> = {
   'ΑΠΟΛΟΓΙΣΤΙΚΟ ΚΕΡΔΟΣ': ['ΑΠΟΛΟΓΙΣΤΙΚΟ ΚΕΡΔΟΣ', 'ΚΕΡΔΟΣ'],
   // Κοστολόγηση · στήλη Η — όχι απολογιστικό έτος (what-if)
   'ΠΡΑΓΜΑΤΙΚΟΣ ΤΖΙΡΟΣ 12ΜΗΝΟΥ': [
-    'ΠΡΑΓΜΑΤΙΚΟΣ ΤΖΙΡΟΣ 12ΜΗΝΟΥ', 'ΠΡΑΓΜΑΤΙΚΟΣ ΤΖΙΡΟΣ 12 ΜΗΝΩΝ', 'ΠΡΑΓΜΑΤΙΚΟΣ ΤΖΙΡΟΣ (12ΜΗΝΟ)',
-    'ΠΡΑΓΜ. ΤΖΙΡΟΣ 12ΜΗΝΟΥ', 'ΤΖΙΡΟΣ 12ΜΗΝΟΥ', 'ΤΖΙΡΟΣ 12 ΜΗΝΩΝ', '12ΜΗΝΟ ΤΖΙΡΟΣ', '12Μ ΤΖΙΡΟΣ',
+    'ΠΡΑΓΜΑΤΙΚΟΣ ΤΖΙΡΟΣ 12ΜΗΝΟΥ',
+    'ΠΡΑΓΜΑΤΙΚΟΣ ΤΖΙΡΟΣ 12 ΜΗΝΟΥ',
+    'ΠΡΑΓΜΑΤΙΚΟΣ ΤΖΙΡΟΣ 12 ΜΗΝΩΝ',
+    'ΠΡΑΓΜΑΤΙΚΟΣ ΤΖΙΡΟΣ (12ΜΗΝΟ)',
+    'ΠΡΑΓΜΑΤΙΚΟΣ_ΤΖΙΡΟΣ_12ΜΗΝΟΥ',
+    'ΠΡΑΓΜ. ΤΖΙΡΟΣ 12ΜΗΝΟΥ',
+    'ΤΖΙΡΟΣ 12ΜΗΝΟΥ',
+    'ΤΖΙΡΟΣ 12 ΜΗΝΩΝ',
+    '12ΜΗΝΟ ΤΖΙΡΟΣ',
+    '12Μ ΤΖΙΡΟΣ',
   ],
   'ΤΖΙΡΟΣ':              ['ΑΠΟΛΟΓΙΣΤΙΚΟΣ ΤΖΙΡΟΣ', 'ΤΖΙΡΟΣ', 'TURNOVER', 'ΕΣΟΔΑ', 'REVENUE'],
   'ΚΕΡΔΟΣ':              ['ΑΠΟΛΟΓΙΣΤΙΚΟ ΚΕΡΔΟΣ', 'ΚΕΡΔΟΣ', 'PROFIT', 'ΚΕΡΔΗ'],
@@ -210,12 +218,25 @@ const COL_ALIASES: Record<string, string[]> = {
 /** Returns the first non-numeric column key whose name contains the keyword (case-insensitive).
  *  Tries multiple aliases when the primary keyword doesn't match.
  *  Normalises whitespace, newlines and underscores before comparing — handles Excel headers
- *  that contain line-breaks, extra spaces, or underscore-separated Firestore keys. */
+ *  that contain line-breaks, extra spaces, or underscore-separated Firestore keys.
+ *
+ *  Two-pass strategy:
+ *   1. Exact normalised match (===) — avoids false positives like "ΤΖΙΡΟΣ 12ΜΗΝΟΥ ΑΛΥΣΙΔΑ"
+ *      matching before "ΤΖΙΡΟΣ 12ΜΗΝΟΥ".
+ *   2. Substring/includes match — fallback for short/partial aliases (e.g. "ΠΡΩΤΟΓΕΝΕΣ"
+ *      finding "ΠΡΩΤΟΓΕΝΕΣ ΚΟΣΤΟΣ"). */
 function findCol(rows: Record<string, unknown>[], keyword: string): string {
   if (rows.length === 0) return keyword;
   const keys = Object.keys(rows[0]).filter(k => !isNumericColName(k));
   const normStr = (s: string) => s.toUpperCase().replace(/[\s\n\r_]+/g, ' ').trim();
   const aliases = COL_ALIASES[keyword.toUpperCase()] ?? [keyword];
+  // Pass 1: exact normalised match
+  for (const alias of aliases) {
+    const aUp = normStr(alias);
+    const found = keys.find(k => normStr(k) === aUp);
+    if (found) return found;
+  }
+  // Pass 2: substring/includes fallback
   for (const alias of aliases) {
     const aUp = normStr(alias);
     const found = keys.find(k => normStr(k).includes(aUp));
