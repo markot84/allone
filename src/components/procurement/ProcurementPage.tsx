@@ -279,7 +279,12 @@ function getCostingReal12mTurnover(rows: Record<string, unknown>[]): { sum: numb
     }
   }
 
-  const sum = rows.reduce((s, r) => s + parseNum(r[col]), 0);
+  const kodikosKey = Object.keys(rows[0]).find(k => k.toUpperCase().replace(/[\s_]+/g, '') === 'ΚΩΔΙΚΟΣ') ?? 'ΚΩΔΙΚΟΣ';
+  const productRows = rows.filter(r => {
+    const v = r[kodikosKey];
+    return v != null && String(v).trim() !== '';
+  });
+  const sum = productRows.reduce((s, r) => s + parseNum(r[col]), 0);
   return { sum, hasColumn };
 }
 
