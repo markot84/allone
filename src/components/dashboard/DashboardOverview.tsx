@@ -337,6 +337,14 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     [erpRevenueByDayRecord, periodDates.fromDate, periodDates.toDate]
   );
 
+  /**
+   * True only when ERP is connected AND has actual revenue in the selected period.
+   * `hasErpBusinessRevenue` alone is not enough — the ERP doc may exist but have no data
+   * for the current period (e.g. Megaventory invoices only go to last month), which would
+   * cause the dashboard to display €0 instead of falling through to the e-shop connector.
+   */
+  const hasErpRevenueForPeriod = hasErpBusinessRevenue && erpRevenueInPeriod > 0;
+
   const hasProcurementTurnoverEstimate = procurementRevenueInPeriod > 0;
 
   /**
@@ -345,13 +353,13 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
    */
   const dashboardTotalRevenue = useMemo(() => {
     if (hasProcurementTurnoverEstimate) return procurementRevenueInPeriod;
-    if (hasErpBusinessRevenue) return erpRevenueInPeriod;
+    if (hasErpRevenueForPeriod) return erpRevenueInPeriod;
     if (hasEcommerceRevenue) return storeRevenueInPeriod;
     return organicRevenueInPeriod + campaignMetrics.totalRevenue;
   }, [
     hasProcurementTurnoverEstimate,
     procurementRevenueInPeriod,
-    hasErpBusinessRevenue,
+    hasErpRevenueForPeriod,
     erpRevenueInPeriod,
     hasEcommerceRevenue,
     storeRevenueInPeriod,
@@ -361,7 +369,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
 
   const dashboardRevenueSourceLabel = hasProcurementTurnoverEstimate
     ? 'Κοστολόγηση · Πραγματικός τζίρος 12μ. (εκτίμηση περιόδου)'
-    : hasErpBusinessRevenue
+    : hasErpRevenueForPeriod
       ? 'ERP'
       : hasEcommerceRevenue
         ? 'E-shop connectors'
@@ -378,7 +386,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         tail
       );
     }
-    if (hasErpBusinessRevenue) {
+    if (hasErpRevenueForPeriod) {
       return `Πηγή: ${dashboardRevenueSourceLabel}. Συνολικά παραστατικά ERP — περιλαμβάνει φυσικά καταστήματα, B2B και online πωλήσεις όπως καταγράφονται στο ERP.` + tail;
     }
     if (enabledModules.procurement) {
@@ -391,11 +399,11 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       `Πηγή ${dashboardRevenueSourceLabel}. Προτεραιότητα: παραστατικά ERP · αλλιώς τζίρος e-shop · αλλιώς εκτίμηση organic και καμπάνιες.` +
       tail
     );
-  }, [isB2B, hasProcurementTurnoverEstimate, hasErpBusinessRevenue, enabledModules.procurement, dashboardRevenueSourceLabel]);
+  }, [isB2B, hasProcurementTurnoverEstimate, hasErpRevenueForPeriod, enabledModules.procurement, dashboardRevenueSourceLabel]);
 
   const revenuePerformanceChartLabel = hasProcurementTurnoverEstimate
     ? 'Τζίρος επιχείρησης (Procurement · εκτίμηση 12μ.)'
-    : hasErpBusinessRevenue
+    : hasErpRevenueForPeriod
       ? 'Τζίρος επιχείρησης (ERP)'
       : enabledModules.ecommerce && ecomm.hasData
         ? REV_PERF_LABEL_ESHOP
@@ -473,7 +481,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       }));
     }
 
-    if (hasErpBusinessRevenue) {
+    if (hasErpRevenueForPeriod) {
       if (dayCount <= REVENUE_CHART_MAX_DAILY_POINTS) {
         return eachDateInclusive(fromDate, toDate).map((d) => ({
           month: formatTrendDayLabel(d),
@@ -551,7 +559,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     ecommRevenueByDayRecord,
     hasProcurementTurnoverEstimate,
     costing12m.sum,
-    hasErpBusinessRevenue,
+    hasErpRevenueForPeriod,
     erpRevenueByDayRecord,
   ]);
 
@@ -924,7 +932,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         const kFromYm = periodDates.fromDate.slice(0, 7);
         const kToYm = periodDates.toDate.slice(0, 7);
         const dashboardUsesAttributionFallback =
-          !hasProcurementTurnoverEstimate && !hasErpBusinessRevenue && !hasEcommerceRevenue;
+          !hasProcurementTurnoverEstimate && !hasErpRevenueForPeriod && !hasEcommerceRevenue;
 
         if (hasProcurementTurnoverEstimate && costing12m.sum > 0) {
           const dailyRate = costing12m.sum / 365;
@@ -932,7 +940,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             const days = daysInMonthIntersectingRange(ym, periodDates.fromDate, periodDates.toDate);
             if (days > 0) revenueByMonth[ym] = dailyRate * days;
           });
-        } else if (hasErpBusinessRevenue) {
+        } else if (hasErpRevenueForPeriod) {
           Object.entries(businessRevenue.revenueByMonthRecord).forEach(([ym, val]) => {
             if (ym < kFromYm || ym > kToYm) return;
             revenueByMonth[ym] = (revenueByMonth[ym] || 0) + (typeof val === 'number' ? val : 0);
@@ -1032,7 +1040,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         const revenueSpark = padSparklineForChart(
           hasProcurementTurnoverEstimate && procurementPeriodDays > 0
             ? dayList.map(() => procurementRevenueInPeriod / procurementPeriodDays / 1000)
-            : hasErpBusinessRevenue
+            : hasErpRevenueForPeriod
               ? dayList.map((d) => (erpRevenueByDayRecord[d] || 0) / 1000)
               : hasEcommerceRevenue
                 ? dailyTrendKpi.map((r) => r.storeRevenue / 1000)
@@ -1312,7 +1320,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 <p>
                   <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">Πηγή: Procurement</strong> — εκτίμηση βάσει αθροίσματος «Πραγματικός τζίρος 12μ.» στο φύλλο Κοστολόγηση (Enterprise), κατανεμημένο ανά ημέρα περιόδου (÷365). Έχει προτεραιότητα ακόμα κι αν υπάρχει ERP.
                 </p>
-              ) : hasErpBusinessRevenue ? (
+              ) : hasErpRevenueForPeriod ? (
                 <p>
                   <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">Τζίρος επιχείρησης</strong> από συγχρονισμένα παραστατικά ERP (καθαρές αξίες όπως στο aggregate). Για ανάλυση e-shop και ROAS ανοίξτε{' '}
                   <strong className="font-semibold">ROI &amp; Απόδοση</strong>.
