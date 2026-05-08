@@ -35,6 +35,7 @@ function isNumericColName(k: string): boolean {
 /** Metadata keys added by Firestore / the import pipeline — excluded from positional lookup. */
 const METADATA_KEYS = new Set(['id', 'brandId', 'rowIndex', 'sheetType', 'createdAt', 'updatedAt']);
 
+// Στη Firestore το header αποθηκεύεται ως 'ΤΖΙΡΟΣ' (το ακριβές Excel column header)
 const COL_ALIASES: Record<string, string[]> = {
   'ΠΡΑΓΜΑΤΙΚΟΣ ΤΖΙΡΟΣ 12ΜΗΝΟΥ': [
     'ΠΡΑΓΜΑΤΙΚΟΣ ΤΖΙΡΟΣ 12ΜΗΝΟΥ',
@@ -47,6 +48,7 @@ const COL_ALIASES: Record<string, string[]> = {
     'ΤΖΙΡΟΣ 12 ΜΗΝΩΝ',
     '12ΜΗΝΟ ΤΖΙΡΟΣ',
     '12Μ ΤΖΙΡΟΣ',
+    'ΤΖΙΡΟΣ',
   ],
 };
 
