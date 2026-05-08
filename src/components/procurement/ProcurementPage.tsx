@@ -172,13 +172,31 @@ function isNumericColName(k: string): boolean {
   return k.trim() !== '' && !isNaN(Number(k.trim()));
 }
 
-/** Totals for the ΑΠΟΛΟΓΙΣΤΙΚΟ ΕΤΟΣ sheet: sum per-SKU rows (semantically correct & robust). */
+/** Excludes summary/total rows that have an empty ΚΩΔΙΚΟΣ field.
+ *  The procurement Excel template places a grand-total row at index 0 with no ΚΩΔΙΚΟΣ;
+ *  including it in sums or averages doubles (or otherwise skews) every KPI. */
+function getProductRows(rows: Record<string, unknown>[]): Record<string, unknown>[] {
+  if (rows.length === 0) return rows;
+  const kodikosKey =
+    Object.keys(rows[0]).find(k => k.toUpperCase().replace(/[\s_]+/g, '') === 'ΚΩΔΙΚΟΣ') ??
+    'ΚΩΔΙΚΟΣ';
+  return rows.filter(r => {
+    const v = r[kodikosKey];
+    return v != null && String(v).trim() !== '';
+  });
+}
+
+/** Totals for the ΑΠΟΛΟΓΙΣΤΙΚΟ ΕΤΟΣ sheet: sum per-SKU rows (semantically correct & robust).
+ *  Uses getProductRows to exclude the grand-total row at index 0 (empty ΚΩΔΙΚΟΣ),
+ *  which would otherwise double every figure. */
 function getFiscalYearTotals(rows: Record<string, unknown>[]): { turnover: number; profit: number; marginPct: number } {
   if (rows.length === 0) return { turnover: 0, profit: 0, marginPct: 0 };
-  const turnoverCol = findCol(rows, 'ΤΖΙΡΟΣ');
-  const profitCol   = findCol(rows, 'ΚΕΡΔΟΣ');
-  const turnover = rows.reduce((s, r) => s + parseNum(r[turnoverCol]), 0);
-  const profit   = rows.reduce((s, r) => s + parseNum(r[profitCol]), 0);
+  const productRows = getProductRows(rows);
+  const src = productRows.length > 0 ? productRows : rows;
+  const turnoverCol = findCol(src, 'ΤΖΙΡΟΣ');
+  const profitCol   = findCol(src, 'ΚΕΡΔΟΣ');
+  const turnover = src.reduce((s, r) => s + parseNum(r[turnoverCol]), 0);
+  const profit   = src.reduce((s, r) => s + parseNum(r[profitCol]), 0);
   return { turnover, profit, marginPct: turnover > 0 ? profit / turnover : 0 };
 }
 
@@ -385,16 +403,18 @@ function getSummary(key: ProcurementSheetType, rows: Record<string, unknown>[]) 
       return { count, primary: avg.toFixed(1), secondary: vip > 0 ? `${vip} VIP πελάτες` : 'Μέση βαθμολογία' };
     }
     case 'pricing_policy': {
+      const productRows = getProductRows(rows);
+      const src = productRows.length > 0 ? productRows : rows;
       const priceCol = findCol(rows, 'ΜΕΣΗ ΤΙΜΗ ΠΩΛΗΣΗΣ');
       const costCol  = findCol(rows, 'ΣΥΝΟΛΙΚΟ ΚΟΣΤΟΣ');
-      const pairs = rows
+      const pairs = src
         .map(r => ({ p: parseNum(r[priceCol]), c: parseNum(r[costCol]) }))
         .filter(x => x.p > 0);
       const avgPrice = pairs.length ? pairs.reduce((s, x) => s + x.p, 0) / pairs.length : 0;
       const withCost = pairs.filter(x => x.c > 0);
-      const avgMargin = withCost.length
-        ? withCost.reduce((s, x) => s + (x.p - x.c) / x.p, 0) / withCost.length
-        : 0;
+      // Aggregate margin: (avgPrice - avgCost) / avgPrice (matches Excel calculation)
+      const avgCost  = withCost.length ? withCost.reduce((s, x) => s + x.c, 0) / withCost.length : 0;
+      const avgMargin = avgPrice > 0 ? (avgPrice - avgCost) / avgPrice : 0;
       const marginPart = withCost.length ? ` · Περιθώριο: ${(avgMargin * 100).toFixed(1)}%` : '';
       return {
         count,
@@ -471,22 +491,26 @@ function getChartData(key: ProcurementSheetType, rows: Record<string, unknown>[]
       return Object.entries(dist).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
     }
     case 'pricing_policy': {
-      const costCol  = findCol(rows, 'ΣΥΝΟΛΙΚΟ ΚΟΣΤΟΣ');
-      const priceCol = findCol(rows, 'ΤΙΜΗ ΠΩΛΗΣΗΣ');
-      const codeCol  = findCol(rows, 'ΚΩΔΙΚΟΣ');
-      return [...rows]
+      const productRows = getProductRows(rows);
+      const src = productRows.length > 0 ? productRows : rows;
+      const costCol  = findCol(src, 'ΣΥΝΟΛΙΚΟ ΚΟΣΤΟΣ');
+      const priceCol = findCol(src, 'ΜΕΣΗ ΤΙΜΗ ΠΩΛΗΣΗΣ');
+      const codeCol  = findCol(src, 'ΚΩΔΙΚΟΣ');
+      return [...src]
         .map(r => ({ name: String(r[codeCol] ?? ''), cost: parseNum(r[costCol]), price: parseNum(r[priceCol]) }))
-        .filter(r => r.price > 0)
+        .filter(r => r.price > 0 && r.name !== '')
         .sort((a, b) => b.price - a.price)
         .slice(0, TOP_N);
     }
     case 'fiscal_year': {
-      const turnoverCol = findCol(rows, 'ΤΖΙΡΟΣ');
-      const profitCol   = findCol(rows, 'ΚΕΡΔΟΣ');
-      const codeCol     = findCol(rows, 'ΚΩΔΙΚΟΣ');
-      return [...rows]
+      const productRows = getProductRows(rows);
+      const src = productRows.length > 0 ? productRows : rows;
+      const turnoverCol = findCol(src, 'ΤΖΙΡΟΣ');
+      const profitCol   = findCol(src, 'ΚΕΡΔΟΣ');
+      const codeCol     = findCol(src, 'ΚΩΔΙΚΟΣ');
+      return [...src]
         .map(r => ({ name: String(r[codeCol] ?? ''), turnover: parseNum(r[turnoverCol]), profit: parseNum(r[profitCol]) }))
-        .filter(r => r.turnover !== 0)
+        .filter(r => r.turnover !== 0 && r.name !== '')
         .sort((a, b) => b.turnover - a.turnover)
         .slice(0, TOP_N);
     }
@@ -827,7 +851,9 @@ export function ProcurementPage({ onSectionChange }: ProcurementPageProps = {}) 
       return monthlyRevenue.slice(-12).reduce((s, m) => s + (m.revenue ?? 0), 0);
     })();
 
-    const scores = itemRows.map(r => parseNum(r[scoreCol])).filter(Boolean);
+    const productItemRows = getProductRows(itemRows);
+    const scoreBase = productItemRows.length > 0 ? productItemRows : itemRows;
+    const scores = scoreBase.map(r => parseNum(r[scoreCol])).filter(Boolean);
     const avgScore = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
 
     return [
