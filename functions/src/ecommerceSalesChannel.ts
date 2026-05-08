@@ -19,6 +19,8 @@ export type EcommerceOrderForClassification = {
   paymentMethod?: string;
   shippingMethod?: string;
   customerEmail?: string;
+  /** Combined customer full name (e.g. "Μαμάσης Γεώργιος") — used for intercompany matching. */
+  customerName?: string;
   /** Magento store_id από sync — όχι πεδίο κανόνων· χρησιμοποιείται `orderStoreDomain`. */
   magentoStoreId?: number;
   /** Normalized storefront hostname for domain-based rules (Magento multi-store). */

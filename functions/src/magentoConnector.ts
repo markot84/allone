@@ -869,7 +869,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
         'searchCriteria[sortOrders][0][direction]': orderSortDirection,
         'searchCriteria[pageSize]': '100',
         'searchCriteria[currentPage]': String(currentPage),
-        'fields': 'items[entity_id,increment_id,store_id,customer_id,customer_email,billing_address[email],created_at,updated_at,status,grand_total,subtotal,tax_amount,discount_amount,base_grand_total,base_subtotal,base_tax_amount,base_discount_amount,base_currency_code,total_item_count,order_currency_code,shipping_description,payment[method,additional_information],items[item_id,sku,name,qty_ordered,price,product_id,product_type,parent_item_id,row_total,base_row_total]],total_count',
+        'fields': 'items[entity_id,increment_id,store_id,customer_id,customer_email,customer_firstname,customer_lastname,billing_address[email,firstname,lastname],created_at,updated_at,status,grand_total,subtotal,tax_amount,discount_amount,base_grand_total,base_subtotal,base_tax_amount,base_discount_amount,base_currency_code,total_item_count,order_currency_code,shipping_description,payment[method,additional_information],items[item_id,sku,name,qty_ordered,price,product_id,product_type,parent_item_id,row_total,base_row_total]],total_count',
       });
       if (!syncAllStores && Number.isFinite(storeId) && storeId > 0) {
         searchParams.set('searchCriteria[filter_groups][1][filters][0][field]', 'store_id');
@@ -904,6 +904,9 @@ export async function fetchMagentoData(brandId: string): Promise<{
         const emailIdentity = getCustomerEmailIdentity(
           o.customer_email || o.billing_address?.email || o.extension_attributes?.customer_email
         );
+        const customerFirstname = String(o.customer_firstname || o.billing_address?.firstname || '').trim();
+        const customerLastname = String(o.customer_lastname || o.billing_address?.lastname || '').trim();
+        const customerName = [customerFirstname, customerLastname].filter(Boolean).join(' ');
         const created = o.created_at ? new Date(o.created_at) : null;
         if (created && !Number.isNaN(created.getTime()) && (!lastOrderCreatedAt || created > lastOrderCreatedAt)) {
           lastOrderCreatedAt = created;
@@ -913,8 +916,10 @@ export async function fetchMagentoData(brandId: string): Promise<{
           data: {
             orderId: String(o.entity_id || ''),
             incrementId: o.increment_id || '',
+            orderName: o.increment_id || String(o.entity_id || ''),
             ...(magCid ? { customerId: magCid } : {}),
             ...emailIdentity,
+            ...(customerName ? { customerName } : {}),
             createdAt: o.created_at || '',
             updatedAt: o.updated_at || '',
             status: o.status || '',

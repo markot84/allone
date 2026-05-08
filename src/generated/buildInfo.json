@@ -1,10 +1,14 @@
 {
-  "version": "0.726.126",
-  "previousVersion": "0.726.125",
-  "commitHash": "87c1745",
+  "version": "0.726.128",
+  "previousVersion": "0.726.127",
+  "commitHash": "8d549ea",
   "branch": "main",
-  "buildDate": "2026-05-08T13:53:17.276Z",
+  "buildDate": "2026-05-08T14:31:19.424Z",
   "commits": [
+    {
+      "hash": "8d549ea",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "87c1745",
       "message": "chore: full deploy"
@@ -60,14 +64,9 @@
     {
       "hash": "d347c69",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "ed2124d",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [
-    "[Συντήρηση] Full deploy",
-    "[Διόρθωση] 12μηνος τζίρος από φύλλο Κοστολόγηση (στήλη Η)"
+    "[Συντήρηση] Full deploy"
   ]
 }

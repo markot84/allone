@@ -135,6 +135,7 @@ interface OrderRow {
   paymentMethod?: string;
   shippingMethod?: string;
   customerEmail?: string;
+  customerName?: string;
   magentoStoreId?: number;
   orderStoreDomain?: string;
   salesChannel?: EcommerceSalesChannel;
@@ -349,6 +350,7 @@ async function readPlatformOrders(db: Firestore, brandId: string, platform: stri
       paymentMethod: d.paymentMethod || d.payment_method || '',
       shippingMethod: d.shippingMethod || d.shipping_method || d.shippingDescription || '',
       customerEmail: d.customerEmail || d.customer_email || '',
+      ...(d.customerName ? { customerName: String(d.customerName) } : {}),
       lineItems: d.lineItems || [],
       ...(magentoStoreId != null ? { magentoStoreId } : {}),
       ...(orderStoreDomain ? { orderStoreDomain } : {}),
