@@ -14,6 +14,7 @@ const SMTP_EMAIL_SECRET = defineSecret('SMTP_EMAIL');
 /** SMTP: κωδικός ή App Password */
 const SMTP_PASSWORD_SECRET = defineSecret('SMTP_PASSWORD');
 import { sanitizeOAuthReturnOrigin } from './oauthRedirect';
+import { validateImportUrl } from './urlValidator';
 import { parseCSV, parseXLSXBuffer, parseXLSXAllSheets, csvToObjects } from './parseFile';
 import { validateProduct, type ProductData } from './validateProduct';
 import { validateCampaign, type CampaignData } from './validateCampaign';
@@ -536,6 +537,12 @@ export const importData = onRequest(
 
         if (!fileUrl || !type) {
           res.status(400).json({ error: 'Missing fileUrl or type in JSON body' });
+          return;
+        }
+
+        const urlCheck = validateImportUrl(fileUrl);
+        if (!urlCheck.ok) {
+          res.status(400).json({ error: `Invalid fileUrl: ${urlCheck.reason}` });
           return;
         }
 

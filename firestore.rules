@@ -154,7 +154,9 @@ service cloud.firestore {
       allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
     }
     match /custom/{docId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
     }
     match /active_strategies/{strategyId} {
       allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
@@ -216,7 +218,10 @@ service cloud.firestore {
       allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
       allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
       match /chunks/{chunkId} {
-        allow read, write: if request.auth != null;
+        allow read: if request.auth != null
+          && isBrandMember(get(/databases/$(database)/documents/procurement_snapshots/$(docId)).data.brandId);
+        allow write: if request.auth != null
+          && isBrandMember(get(/databases/$(database)/documents/procurement_snapshots/$(docId)).data.brandId);
       }
     }
     match /segment_customers/{docId} {
@@ -234,15 +239,16 @@ service cloud.firestore {
       allow read: if isBrandMember(brandId);
       allow write: if canManageBrandConnectors(brandId);
     }
-    // Changelog: any authenticated user can read
+    // Changelog: readable by all authenticated users, writable only by super admins
     match /changelog/{entryId} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow write: if isSuperAdmin();
     }
-    // App config (support email, version, etc.)
+    // App config: readable by authenticated users, writable only by super admins.
+    // SECURITY: appConfig/superAdmins controls privilege escalation — never allow public writes.
     match /appConfig/{docId} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow write: if isSuperAdmin();
     }
     // Automation settings & alerts
     match /automation_settings/{brandId} {
@@ -444,10 +450,11 @@ service cloud.firestore {
       allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
       allow write: if false;
     }
-    // Shared strategy packages: public read (shareable links), auth write
+    // Shared strategy packages: public read (shareable links), create by auth users, update/delete by creator only
     match /shared_packages/{packageId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && resource.data.createdBy == request.auth.uid;
     }
 
     // Marketing interest leads — εγγραφή μόνο μέσω Cloud Functions · ανάγνωση super admin
