@@ -30,8 +30,6 @@ export type SegmentMigrationFlow = {
   toName: string;
   count: number;
   percentage: number;
-  /** Net revenue of the destination cohort for this flow (only set when migration is server-pre-computed). */
-  revenue?: number;
 };
 
 export type SegmentMigrationResult = {
@@ -39,11 +37,6 @@ export type SegmentMigrationResult = {
   comparedCustomers: number;
   flows: SegmentMigrationFlow[];
   canCompute: boolean;
-  /**
-   * Set only when migration was produced by comparing two server snapshots (pre-computed pathway).
-   * Null on the client-only pathway, which compares cohorts within a single order history.
-   */
-  comparedAt?: Date | null;
 };
 
 type CustomerAgg = {

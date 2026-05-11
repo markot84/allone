@@ -261,8 +261,6 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     hasImported,
     usingProcurement,
     isLoading: sourceLoading,
-    extendedWithConnectorCatalog,
-    connectedButEmptyPlatforms,
   } = useProductSource();
   const { suppliers } = useSuppliers();
   const { isEnterprise } = usePlan();
@@ -310,28 +308,28 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   const inventorySummary = useMemo(() => {
     if (usingProcurement) return computeInventorySummary(sourceProducts, supplierTodMap, true);
     if (productDateFrom && productDateTo) {
-      const base = sourceProducts.filter((p) => {
+      const base = rawProducts.filter((p) => {
         const ymd = getProductYmdForFilter(p, productDateMode);
         if (!ymd) return false;
         return ymd >= productDateFrom && ymd <= productDateTo;
       });
       return computeInventorySummary(base, supplierTodMap, false);
     }
-    return computeInventorySummary(sourceProducts, supplierTodMap, false);
-  }, [sourceProducts, usingProcurement, supplierTodMap, productDateFrom, productDateTo, productDateMode]);
+    return computeInventorySummary(rawProducts, supplierTodMap, false);
+  }, [rawProducts, sourceProducts, usingProcurement, supplierTodMap, productDateFrom, productDateTo, productDateMode]);
 
   const inventoryAlerts = useMemo(() => {
     if (usingProcurement) return computeInventoryAlerts(sourceProducts, supplierTodMap, true);
     if (productDateFrom && productDateTo) {
-      const base = sourceProducts.filter((p) => {
+      const base = rawProducts.filter((p) => {
         const ymd = getProductYmdForFilter(p, productDateMode);
         if (!ymd) return false;
         return ymd >= productDateFrom && ymd <= productDateTo;
       });
       return computeInventoryAlerts(base, supplierTodMap, false);
     }
-    return computeInventoryAlerts(sourceProducts, supplierTodMap, false);
-  }, [sourceProducts, usingProcurement, supplierTodMap, productDateFrom, productDateTo, productDateMode]);
+    return computeInventoryAlerts(rawProducts, supplierTodMap, false);
+  }, [rawProducts, sourceProducts, usingProcurement, supplierTodMap, productDateFrom, productDateTo, productDateMode]);
 
   // Procurement-based inventory summary (replaces product-based when available)
   const procInventorySummary = useMemo((): InventorySummary | null => {
@@ -560,13 +558,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
             </p>
           ) : sourceProducts.length > 0 ? (
             <p className="text-xs font-medium text-[#22C55E] sm:text-sm">
-              Showing {sourceProducts.length}{' '}
-              {usingProcurement
-                ? 'procurement'
-                : extendedWithConnectorCatalog
-                  ? 'catalog'
-                  : 'imported'}{' '}
-              product(s)
+              Showing {sourceProducts.length} {usingProcurement ? 'procurement' : 'imported'} product(s)
             </p>
           ) : null
         }
@@ -702,19 +694,6 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
               </div>
             )}
           </div>
-        </div>
-      )}
-
-      {/* Connector catalog sync warning */}
-      {connectedButEmptyPlatforms.length > 0 && !usingProcurement && (
-        <div className="flex items-start gap-3 rounded-lg border border-[#F59E0B] bg-[#FFFBEB] px-4 py-3 text-sm text-[#92400E]">
-          <AlertTriangle size={16} className="mt-0.5 flex-shrink-0 text-[#F59E0B]" />
-          <span>
-            <strong>Ελλιπής κατάλογος:</strong> Τα προϊόντα από{' '}
-            {connectedButEmptyPlatforms.map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join(', ')} δεν μπορούν να συγχρονιστούν (σφάλμα API credentials).
-            Ο αριθμός SKU αφορά μόνο το εισαγόμενο catalog.{' '}
-            <a href="#data" className="underline font-medium">Ελέγξτε τα Connectors →</a>
-          </span>
         </div>
       )}
 

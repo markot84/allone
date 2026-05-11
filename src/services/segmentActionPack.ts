@@ -3,7 +3,6 @@
  * that bridge analysis → marketing execution.
  */
 import type { RFMSegment, ChannelRecommendation } from '../types';
-import type { RFMPrecomputedVariant } from '../hooks/useRFMPreComputed';
 import { deriveBehavioralProfile, derivePredictiveMetrics } from './behavioralEngine';
 import { safeBrandName } from './reportExport';
 import { formatNumber } from '../utils/format';
@@ -419,17 +418,9 @@ export async function exportSegmentCustomerList(
   segment: RFMSegment,
   brandName?: string,
   format: ExportFormat = 'csv',
-  rfmPreComputedVariant: RFMPrecomputedVariant = 'orders',
 ): Promise<{ count: number }> {
   const importedCustomers = await SegmentCustomersService.getForSegment(brandId, segment.id);
-  let customers = importedCustomers.length > 0 ? importedCustomers : segment.customers ?? [];
-  // Fallback to chunked pre-computed customer list when neither imported nor in-memory orders exist.
-  // Happens on the server-pre-computed path where we skip the lazy raw-orders fetch.
-  if (customers.length === 0) {
-    const { loadPreComputedCustomersBySegment } = await import('../hooks/useRFMPreComputed');
-    const byId = await loadPreComputedCustomersBySegment(brandId, rfmPreComputedVariant);
-    customers = byId.get(segment.id) ?? [];
-  }
+  const customers = importedCustomers.length > 0 ? importedCustomers : segment.customers ?? [];
   if (customers.length === 0) throw new Error('Δεν υπάρχουν customer-level δεδομένα με email/customer id για αυτό το segment.');
 
   const date = new Date().toISOString().split('T')[0];
@@ -474,19 +465,11 @@ export async function exportAllSegmentCustomerLists(
   segments: RFMSegment[],
   brandName?: string,
   format: ExportFormat = 'csv',
-  rfmPreComputedVariant: RFMPrecomputedVariant = 'orders',
 ): Promise<{ count: number }> {
   const allCustomers = await SegmentCustomersService.getAllBySegment(brandId);
   const hasDerivedCustomers = segments.some((seg) => (seg.customers?.length ?? 0) > 0);
-  // Fallback to chunked pre-computed customer list (server path, when client raw-orders fetch is skipped).
-  let preComputedBySegment: Map<string, RFMSegment['customers']> | null = null;
   if (allCustomers.size === 0 && !hasDerivedCustomers) {
-    const { loadPreComputedCustomersBySegment } = await import('../hooks/useRFMPreComputed');
-    preComputedBySegment = await loadPreComputedCustomersBySegment(brandId, rfmPreComputedVariant);
-    const hasAny = preComputedBySegment.size > 0;
-    if (!hasAny) {
-      throw new Error('Δεν υπάρχουν customer-level δεδομένα με email/customer id για export.');
-    }
+    throw new Error('Δεν υπάρχουν customer-level δεδομένα με email/customer id για export.');
   }
 
   const date = new Date().toISOString().split('T')[0];
@@ -495,17 +478,11 @@ export async function exportAllSegmentCustomerLists(
 
   const headers = ['Customer ID', 'Email', 'Segment', 'Recency', 'Frequency', 'Monetary', 'RFM Score'];
 
-  const customersFor = (segId: string, seg: RFMSegment) => {
-    const imported = allCustomers.get(segId) || [];
-    if (imported.length > 0) return imported;
-    if (seg.customers && seg.customers.length > 0) return seg.customers;
-    return preComputedBySegment?.get(segId) ?? [];
-  };
-
   if (format === 'csv') {
     const allRows: (string | number)[][] = [headers];
     for (const seg of segments) {
-      const customers = customersFor(seg.id, seg);
+      const importedCustomers = allCustomers.get(seg.id) || [];
+      const customers = importedCustomers.length > 0 ? importedCustomers : seg.customers ?? [];
       totalCount += customers.length;
       for (const c of customers) {
         allRows.push([c.customerId, c.email || '', seg.name, c.recency ?? '', c.frequency ?? '', c.monetary ?? '', c.rfmScore || '']);
@@ -516,7 +493,8 @@ export async function exportAllSegmentCustomerLists(
     const XLSX = await import('xlsx');
     const wb = XLSX.utils.book_new();
     for (const seg of segments) {
-      const customers = customersFor(seg.id, seg);
+      const importedCustomers = allCustomers.get(seg.id) || [];
+      const customers = importedCustomers.length > 0 ? importedCustomers : seg.customers ?? [];
       if (customers.length === 0) continue;
       totalCount += customers.length;
       const rows = customers.map(c => [c.customerId, c.email || '', seg.name, c.recency ?? '', c.frequency ?? '', c.monetary ?? '', c.rfmScore || '']);

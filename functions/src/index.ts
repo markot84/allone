@@ -96,10 +96,6 @@ import {
   setDb as setEcommerceAggDb,
 } from './ecommerceAggregator';
 import {
-  computeRFMSegmentsForBrand,
-  setDb as setRfmDb,
-} from './rfmComputer';
-import {
   captureStockSnapshot,
   computeStockMovement,
   refreshStockMovement,
@@ -148,7 +144,6 @@ setSoftOneDb(db);
 setEpsilonNetDb(db);
 setEntersoftDb(db);
 setEcommerceAggDb(db);
-setRfmDb(db);
 setStockMovementDb(db);
 setProcurementSignalsDb(db);
 setGA4Db(db);
@@ -1297,11 +1292,6 @@ export const connectorSync = onRequest(
         } catch (e) {
           logger.warn(`[connectorSync] ecommerce summary refresh failed for ${brandId}:`, e);
         }
-        try {
-          await computeRFMSegmentsForBrand(brandId);
-        } catch (e) {
-          logger.warn(`[connectorSync] RFM computation failed for ${brandId}:`, e);
-        }
       }
 
       if (['shopify', 'woocommerce', 'opencart', 'magento'].includes(provider)) {
@@ -1317,54 +1307,6 @@ export const connectorSync = onRequest(
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       logger.error(`[connectorSync] failed for brand=${brandId || 'unknown'} provider=${provider || 'unknown'}: ${msg}`);
-      res.status(500).json({ error: msg });
-    }
-  }
-);
-
-// ─── RFM: Manual Pre-computation Trigger ──────────────────────
-
-/**
- * POST /computeRFMSegments
- * Body: { brandId: string }
- * Auth: Firebase ID token (brand member)
- *
- * Triggers server-side RFM computation for a brand.
- * Results are stored in rfm_computed/{brandId}.
- */
-export const computeRFMSegments = onRequest(
-  {
-    region: 'europe-west1',
-    cors: true,
-    timeoutSeconds: 300,
-    memory: '1GiB',
-  },
-  async (req, res) => {
-    applyStrictCors(req, res);
-    if (req.method === 'OPTIONS') { res.status(204).send(''); return; }
-    if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
-
-    const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
-
-    try {
-      const idToken = authHeader.slice(7).trim();
-      const decoded = await admin.auth().verifyIdToken(idToken);
-
-      const { brandId } = req.body as { brandId?: string };
-      if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
-
-      if (!(await verifyBrandMembership(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Access denied' });
-        return;
-      }
-
-      const started = Date.now();
-      await computeRFMSegmentsForBrand(brandId);
-      res.status(200).json({ success: true, durationMs: Date.now() - started });
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      logger.error('[computeRFMSegments] failed:', msg);
       res.status(500).json({ error: msg });
     }
   }
@@ -1805,12 +1747,6 @@ async function executeBrandNightlyWave(
     } catch (err) {
       logger.error(`[ScheduledSync/erp] ecommerce_summary refresh failed for ${brandId}:`, err);
     }
-    try {
-      await computeRFMSegmentsForBrand(brandId);
-      logger.info(`[ScheduledSync/erp] RFM segments updated for ${brandId}`);
-    } catch (err) {
-      logger.error(`[ScheduledSync/erp] RFM computation failed for ${brandId}:`, err);
-    }
   }
 
   if (wave === 'ecommerce') {
@@ -1825,12 +1761,6 @@ async function executeBrandNightlyWave(
         logger.info(`[ScheduledSync/ecommerce] E-commerce summary updated for ${brandId}`);
       } catch (err) {
         logger.error(`[ScheduledSync/ecommerce] E-commerce summary failed for ${brandId}:`, err);
-      }
-      try {
-        await computeRFMSegmentsForBrand(brandId);
-        logger.info(`[ScheduledSync/ecommerce] RFM segments updated for ${brandId}`);
-      } catch (err) {
-        logger.error(`[ScheduledSync/ecommerce] RFM computation failed for ${brandId}:`, err);
       }
     }
   }

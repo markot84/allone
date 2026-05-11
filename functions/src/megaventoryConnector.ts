@@ -49,13 +49,6 @@ const MV_INVOICE_BACKFILL_PAGE_SIZE = 100;
 /** Manual connectorSync έχει 20' timeout· κρατάμε buffer για Firestore writes / response. */
 const MV_INVOICE_BACKFILL_RUNTIME_MS = 18 * 60 * 1000;
 const MV_INVOICE_BACKFILL_MAX_PAGES_PER_SYNC = 500;
-/**
- * Head fetch: πάντα τραβάμε τα πρόσφατα documents (τελευταίες N ημέρες) ανεξάρτητα
- * από backfill progress, ώστε ο τρέχων μήνας να είναι πάντα ενημερωμένος.
- */
-const MV_HEAD_FETCH_DAYS = 35;
-const MV_HEAD_FETCH_PAGE_SIZE = 500;
-const MV_HEAD_FETCH_MAX_PAGES = 200;
 
 type MvFilter = {
   FieldName: string;
@@ -797,60 +790,6 @@ export async function fetchMegaventoryData(
     // ── Invoices (Documents type=Sales Invoice) → revenue ────────────
     const documentTypesResult = await fetchDocumentTypes(apiKey);
     const documentTypesById = new Map(documentTypesResult.types.map((type) => [type.id, type]));
-
-    // ── Head fetch: πάντα τραβάμε τα πρόσφατα documents (τρέχων μήνας + buffer) ──
-    // Αυτό εξασφαλίζει ότι ακόμα και κατά τη διάρκεια backfill, τα νέα τιμολόγια
-    // εισάγονται στο Firestore αμέσως (backward cursor δεν τα πιάνει ποτέ).
-    let headFetchCount = 0;
-    if (shouldStageInvoiceBackfill) {
-      const headSince = new Date();
-      headSince.setUTCDate(headSince.getUTCDate() - MV_HEAD_FETCH_DAYS);
-      const headSinceFilter = toMvFilterDateTime(headSince);
-      const { rows: headRows, error: headErr } = await fetchAllMvPages(
-        'DocumentGet',
-        apiKey,
-        [{ FieldName: 'DocumentDate', SearchOperator: 'GreaterEqualTo', SearchValue: headSinceFilter }],
-        {
-          responseArrayKey: 'mvDocuments',
-          cursorField: 'DocumentId',
-          idKeys: ['DocumentId', 'DocumentID'],
-          label: 'DocumentGet (head fetch recent)',
-          pageSize: MV_HEAD_FETCH_PAGE_SIZE,
-          maxPages: MV_HEAD_FETCH_MAX_PAGES,
-        }
-      );
-      if (headErr) {
-        logger.warn(`[Megaventory] Head fetch failed for ${brandId}: ${headErr}`);
-      } else {
-        const headDocs = (headRows as Record<string, unknown>[]).filter(
-          (d) => isLikelySalesInvoice(d, documentTypeInfo(d, documentTypesById))
-        );
-        const headItems = headDocs.map((d) => ({
-          id: `mv_inv_${mvText(d, 'DocumentId', 'DocumentID') || mvText(d, 'DocumentNo', 'DocumentSerialNo') || Math.random().toString(36).slice(2)}`,
-          data: {
-            documentId: mvText(d, 'DocumentId', 'DocumentID'),
-            documentNo: mvText(d, 'DocumentNo', 'DocumentSerialNo'),
-            documentType: documentTypeInfo(d, documentTypesById).abbreviation || documentTypeInfo(d, documentTypesById).description || 'sales_document',
-            documentTypeId: documentTypeInfo(d, documentTypesById).id,
-            documentTypeDescription: documentTypeInfo(d, documentTypesById).description,
-            date: isoDate(mvField(d, 'DocumentDate')),
-            status: mvText(d, 'DocumentStatus'),
-            totalAmount: mvNum(d, 'DocumentAmountGrandTotal', 'DocumentTotalAmount', 'DocumentAmountTotal', 'DocumentTotal'),
-            taxAmount: mvNum(d, 'DocumentAmountTotalTax', 'DocumentTotalTaxAmount'),
-            netAmount: Math.max(0, mvNum(d, 'DocumentAmountGrandTotal', 'DocumentTotalAmount', 'DocumentAmountTotal', 'DocumentTotal') - mvNum(d, 'DocumentAmountTotalTax', 'DocumentTotalTaxAmount')),
-            currency: mvText(d, 'DocumentCurrencyCode') || conn.currency || 'EUR',
-            clientName: mvText(d, 'DocumentSupplierClientName', 'SupplierClientName', 'ClientName'),
-            clientId: mvText(d, 'DocumentSupplierClientId', 'DocumentSupplierClientID', 'SupplierClientId', 'SupplierClientID'),
-            source: 'megaventory_api',
-          },
-        }));
-        if (headItems.length) await writeBatch(db, 'megaventory_invoices', brandId, headItems);
-        headFetchCount = headItems.length;
-        logger.info(`[Megaventory] Head fetch: ${headItems.length}/${headRows.length} recent invoices for ${brandId} (last ${MV_HEAD_FETCH_DAYS}d)`);
-      }
-    }
-
-    // ── Main invoice fetch (backfill backward OR incremental with date filter) ──
     const documentFilters = shouldStageInvoiceBackfill
       ? []
       : [{ FieldName: 'DocumentDate', SearchOperator: 'GreaterEqualTo', SearchValue: sinceFilterDate }];
@@ -919,8 +858,8 @@ export async function fetchMegaventoryData(
         },
       }));
       if (items.length) await writeBatch(db, 'megaventory_invoices', brandId, items);
-      counts.invoices = items.length + headFetchCount;
-      totalImported += items.length + headFetchCount;
+      counts.invoices = items.length;
+      totalImported += items.length;
       if (shouldStageInvoiceBackfill) {
         invoiceBackfillProgress = {
           cursor: invoiceBackfillCursor ?? null,
@@ -929,13 +868,12 @@ export async function fetchMegaventoryData(
           rawRows: rawDocs.length,
           matchedRows: docs.length,
           imported: items.length,
-          headFetchCount,
           pageSize: MV_INVOICE_BACKFILL_PAGE_SIZE,
           maxPages: MV_INVOICE_BACKFILL_MAX_PAGES_PER_SYNC,
           maxRuntimeMs: MV_INVOICE_BACKFILL_RUNTIME_MS,
         };
       }
-      logger.info(`[Megaventory] Invoices: ${items.length}/${rawDocs.length} backfill + ${headFetchCount} head-fetch for brand ${brandId}`);
+      logger.info(`[Megaventory] Invoices: ${items.length}/${rawDocs.length} imported for brand ${brandId}`);
     }
 
     if (docsOk && shouldStageInvoiceBackfill && invoiceBackfillProgress && invoiceBackfillProgress.exhausted !== true) {

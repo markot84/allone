@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { auth } from '../../config/firebase';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Users,
@@ -14,7 +13,6 @@ import {
   LineChart,
   Download,
   FileSpreadsheet,
-  RefreshCw,
 } from 'lucide-react';
 import {
   PieChart,
@@ -32,7 +30,6 @@ import { Card, CardHeader, Badge, Button, Spinner, Tooltip as InfoTooltip, useTo
 import { useSegments, type SegmentDataCoverage, type SegmentsDataSource } from '../../hooks/useSegments';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import { useBrand } from '../../hooks/useBrand';
-import { useRFMSegmentBehavioral } from '../../hooks/useRFMPreComputed';
 import { FirestoreService } from '../../services/firestore';
 import { BehavioralTab } from './BehavioralTab';
 import { PredictiveTab } from './PredictiveTab';
@@ -43,47 +40,6 @@ import type { CategoryAffinity, RFMSegment } from '../../types';
 import { formatNumber, formatPercent, formatCurrencyCompact } from '../../utils/format';
 const fmtPct = (n: number) => formatNumber(n, 2);
 const SELECTED_SEGMENT_STROKE = '#FDBA74';
-
-/** Full-page placeholder while `rfm_computed` (orders + merged) hydrates — avoids import-only counts flashing as RFM. */
-function DataAnalysisRfmLoadingSkeleton() {
-  return (
-    <div className="space-y-3">
-      <PageHeader
-        title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl leading-tight">Data Analysis</h2>}
-        description={
-          <p className="text-sm text-[#4A4A4A] sm:text-base leading-snug">
-            Φόρτωση εξουσιοδοτημένων RFM δεδομένων από τον server…
-          </p>
-        }
-      />
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-[#E8EAED] bg-[#FAFBFC] px-3 py-2">
-        <div className="h-5 w-40 rounded bg-[#E5E7EB] animate-pulse" />
-        <div className="h-5 w-56 rounded bg-[#E5E7EB] animate-pulse" />
-      </div>
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-        {[0, 1, 2, 3].map((i) => (
-          <Card key={i} padding="sm">
-            <div className="flex items-center gap-2">
-              <div className="h-9 w-9 shrink-0 rounded-lg bg-[#F3F4F6] animate-pulse" />
-              <div className="min-w-0 space-y-2 flex-1">
-                <div className="h-2.5 w-14 rounded bg-[#F3F4F6] animate-pulse" />
-                <div className="h-6 w-10 rounded bg-[#E5E7EB] animate-pulse" />
-              </div>
-            </div>
-          </Card>
-        ))}
-      </div>
-      <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2">
-        {[0, 1].map((i) => (
-          <Card key={i} padding="lg" className="flex min-w-0 flex-col border border-[#E8EAED]">
-            <div className="h-5 w-40 rounded bg-[#F3F4F6] animate-pulse mb-4" />
-            <div className="h-[280px] w-full rounded-xl bg-[#F3F4F6] animate-pulse" />
-          </Card>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 type AnalysisTab = 'rfm' | 'behavioral' | 'predictive';
 type SegmentMovement = { countDelta: number; percentageDelta: number };
@@ -171,55 +127,21 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
     segmentMigration,
     importSegmentsAvailable,
     isCatalogEnriching,
-    isPreComputed,
-    lastComputedAt,
-    serverBehavioralAvailable,
-    mergedFallbackToOrders,
-    preComputedVariant,
-    preComputedLoading,
-    rfmPresentationReady,
   } = useSegments({ variant: 'data_analysis' });
   const ecomm = useEcommerceSummary();
   const { currentBrand } = useBrand();
-  /**
-   * Lazy per-segment behavioral fetch from `rfm_computed/{brandId}/segments/{segmentId}`.
-   * Only enabled when server-side rollups are available — otherwise SegmentDetail falls back
-   * to whatever `useSegments` produced from raw orders.
-   */
-  const { behavioral: serverBehavioral, isLoading: serverBehavioralLoading } = useRFMSegmentBehavioral(
-    serverBehavioralAvailable ? currentBrand?.id ?? null : null,
-    serverBehavioralAvailable ? selectedSegmentId : null,
-    preComputedVariant
-  );
   const queryClient = useQueryClient();
   const toast = useToast();
   const [isDeleting, setIsDeleting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const { activeStrategy } = useActiveStrategy();
   const channelRecommendation = activeStrategy?.channelRecommendation ?? null;
   const totalCustomersDisplay = Math.max(totalCustomers, dataCoverage.totalCustomers);
   const segmentColorById = new Map(rfmSegments.map((segment) => [segment.id, segment.color]));
-  const baseSelectedSegment = useMemo(
+  const selectedSegment = useMemo(
     () => rfmSegments.find((segment) => segment.id === selectedSegmentId) ?? null,
     [rfmSegments, selectedSegmentId]
   );
-  /**
-   * When server-side per-segment behavioral docs are available, merge them into the selected
-   * segment so brand/subcategory/SKU panels render instantly (no client raw-orders fetch).
-   * Falls back to whatever client-side `useSegments` produced when server data is missing.
-   */
-  const selectedSegment = useMemo(() => {
-    if (!baseSelectedSegment) return null;
-    if (!serverBehavioralAvailable || !serverBehavioral) return baseSelectedSegment;
-    return {
-      ...baseSelectedSegment,
-      behavioral: {
-        ...(baseSelectedSegment.behavioral ?? {}),
-        ...serverBehavioral,
-      } as typeof baseSelectedSegment.behavioral,
-    };
-  }, [baseSelectedSegment, serverBehavioral, serverBehavioralAvailable]);
   const segmentMovementById = useMemo(() => {
     const map = new Map<string, SegmentMovement>();
     for (const flow of segmentMigration?.flows ?? []) {
@@ -270,45 +192,16 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
     if (!currentBrand?.id) return;
     try {
       if (segment) {
-        const { count } = await exportSegmentCustomerList(currentBrand.id, segment, currentBrand.name, fmt, preComputedVariant);
+        const { count } = await exportSegmentCustomerList(currentBrand.id, segment, currentBrand.name, fmt);
         toast.success(`${count} customers exported (.${fmt})`);
       } else {
-        const { count } = await exportAllSegmentCustomerLists(currentBrand.id, rfmSegments, currentBrand.name, fmt, preComputedVariant);
+        const { count } = await exportAllSegmentCustomerLists(currentBrand.id, rfmSegments, currentBrand.name, fmt);
         toast.success(`${count} customers exported (.${fmt})`);
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Export error');
     }
   };
-
-  const handleRefreshRFM = useCallback(async () => {
-    if (!currentBrand?.id) return;
-    setIsRefreshing(true);
-    try {
-      const user = auth.currentUser;
-      if (!user) throw new Error('Δεν είστε συνδεδεμένος');
-      const token = await user.getIdToken();
-      const fnUrl = import.meta.env.VITE_FUNCTIONS_BASE_URL
-        ? `${import.meta.env.VITE_FUNCTIONS_BASE_URL}/computeRFMSegments`
-        : `https://europe-west1-performance-plus-4a5b2.cloudfunctions.net/computeRFMSegments`;
-      const res = await fetch(fnUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ brandId: currentBrand.id }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error((err as { error?: string }).error || `HTTP ${res.status}`);
-      }
-      // Remove cache so useRFMPreComputed re-fetches with isPending=true (skeletons while loading).
-      queryClient.removeQueries({ queryKey: ['rfm_computed', currentBrand.id] });
-      toast.success('RFM segments επανυπολογίστηκαν επιτυχώς.');
-    } catch (e) {
-      toast.error(`Σφάλμα: ${e instanceof Error ? e.message : 'Άγνωστο'}`);
-    } finally {
-      setIsRefreshing(false);
-    }
-  }, [currentBrand?.id, queryClient, toast]);
 
   const handleDeleteSegments = async () => {
     if (rfmDataSource === 'ecommerce') return;
@@ -333,10 +226,6 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
         <Spinner size="lg" label="Φόρτωση data analysis segments…" />
       </div>
     );
-  }
-
-  if (preComputedLoading) {
-    return <DataAnalysisRfmLoadingSkeleton />;
   }
 
   if (!hasImportedSegments) {
@@ -374,37 +263,17 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
             </div>
           ) : (
             <div className="text-center py-12">
-              {rfmSourcePref === 'external' ? (
-                <p className="text-[#4A4A4A] mb-4 max-w-lg mx-auto leading-relaxed">
-                  Το ενοποιημένο RFM για «e-shop &amp; others» δεν είναι έτοιμο στον server (ή χρειάζεται επανυπολογισμός μετά από εισαγωγή segments).
-                  Πατήστε <strong>Επανυπολογισμός</strong> παραπάνω — μετά την ολοκλήρωση θα εμφανιστούν τα πραγματικά μεγέθη, όχι προσωρινά νούμερα από εισαγωγή.
-                </p>
-              ) : (
               <p className="text-[#4A4A4A] mb-4">
                 {hasEcomm && !canComputeFromOrders
                   ? 'Συνδέσατε e-shop, αλλά δεν βρέθηκαν αρκετές παραγγελίες με αναγνωρισμένο πελάτη (συνήθως guest checkout).'
                   : 'Δεν υπάρχουν ακόμα δεδομένα προς ανάλυση.'}
               </p>
-              )}
-              {hasEcomm && !canComputeFromOrders && rfmSourcePref !== 'external' && (
+              {hasEcomm && !canComputeFromOrders && (
                 <p className="text-sm text-[#4A4A4A] mb-4 text-left">
                   Μετά το deploy, κάντε ξανά <strong>sync</strong> το connector ώστε να αποθηκεύεται το εσωτερικό <code className="text-xs bg-[#F3F4F6] px-1 rounded">customerId</code> ανά
                   παραγγελία (όχι email). Guest-only καλάθια εξακολουθούν να μην μετράνε σε RFM.
                 </p>
               )}
-              {rfmSourcePref === 'external' ? (
-                <div className="flex flex-col items-center gap-3 mt-2">
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    icon={<RefreshCw size={14} className={`shrink-0 ${isRefreshing ? 'animate-spin' : ''}`} />}
-                    onClick={handleRefreshRFM}
-                    disabled={isRefreshing || !currentBrand?.id}
-                  >
-                    {isRefreshing ? 'Υπολογισμός…' : 'Επανυπολογισμός RFM (server)'}
-                  </Button>
-                </div>
-              ) : null}
               <p className="text-sm text-[#4A4A4A]">
                 Εναλλακτικά, ανεβάστε aggregate segments από την{' '}
                 <button
@@ -429,11 +298,6 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
     rfmSourcePref === 'orders' &&
     dataCoverage.otherCustomers <= 0 &&
     dataCoverage.eShopPenetration >= 99;
-
-  const showPlaceholderNumbers = hasImportedSegments && !rfmPresentationReady;
-  /** Κρύβει KPI/charts όσο τρέχει order/catalog fetch ή μέχρι το RFM είναι presentation-ready. */
-  const analysisBodyLoading =
-    ordersLoading || isCatalogEnriching || showPlaceholderNumbers;
 
   return (
     <div className="space-y-3">
@@ -480,17 +344,6 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
           <Button
             variant="secondary"
             size="sm"
-            icon={<RefreshCw size={14} className={`shrink-0 ${isRefreshing ? 'animate-spin' : ''}`} />}
-            onClick={handleRefreshRFM}
-            disabled={isRefreshing || !currentBrand?.id}
-            className="min-h-[36px] w-full sm:w-auto"
-            title="Επανυπολογισμός RFM από server"
-          >
-            {isRefreshing ? 'Υπολογισμός…' : 'Επανυπολογισμός'}
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
             icon={<Trash2 size={14} className="shrink-0" />}
             onClick={handleDeleteSegments}
             disabled={isDeleting || !hasImportedSegments || rfmDataSource === 'ecommerce'}
@@ -512,18 +365,6 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
 
       {/* Μία συμπαγής γραμμή: πηγή + μεγέθη — χωρίς επανάληψη με κάλυψη όταν είναι καθαρό e-shop */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-[#E8EAED] bg-[#FAFBFC] px-3 py-2 text-[12px] text-[#374151]">
-        {isPreComputed && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-[#D1FAE5] px-2 py-0.5 text-[11px] font-semibold text-[#065F46]">
-            <Zap size={10} className="shrink-0" />
-            Pre-computed
-          </span>
-        )}
-        {isPreComputed && lastComputedAt && (
-          <span className="text-[#6B7280] whitespace-nowrap">
-            Υπολογίστηκε: {lastComputedAt.toLocaleDateString('el-GR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-          </span>
-        )}
-        {isPreComputed && <span className="hidden sm:inline h-4 w-px shrink-0 bg-[#E5E7EB]" aria-hidden />}
         {importSegmentsAvailable && canComputeFromOrders ? (
           <label className="flex items-center gap-2 shrink-0">
             <span className="text-[#6B7280] whitespace-nowrap">Πηγή</span>
@@ -542,13 +383,9 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
           <span className="hidden sm:inline h-4 w-px shrink-0 bg-[#E5E7EB]" aria-hidden />
         ) : null}
         {hasImportedSegments ? (
-          showPlaceholderNumbers ? (
-            <span className="inline-block h-4 min-w-[10rem] rounded bg-[#E5E7EB] animate-pulse align-middle" aria-hidden />
-          ) : (
           <span className="font-semibold tabular-nums text-[#111827]">
             {rfmSegments.length} segments · {formatNumber(totalCustomersDisplay)} πελάτες
           </span>
-          )
         ) : null}
         {rfmDataSource === 'ecommerce' ? (
           <span className="text-[#6B7280]">12-month order history · quintiles</span>
@@ -575,23 +412,12 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
           })()
         ) : null}
         {ordersLoading ? (
-          <LoadingStatusPill label="Φόρτωση ιστορικού παραγγελιών…" />
-        ) : null}
-        {rfmSourcePref === 'external' && mergedFallbackToOrders ? (
-          <span
-            className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-900"
-            title="Δεν βρέθηκαν εισαγόμενα δεδομένα για συγχώνευση — εμφανίζεται το ίδιο cohort με «e-shop orders»."
-          >
-            Συγχώνευση: μόνο παραγγελίες
-          </span>
+          <LoadingStatusPill label="Loading order history…" />
         ) : null}
         {isCatalogEnriching ? (
-          <LoadingStatusPill label="Φόρτωση καταλόγου προϊόντων…" />
+          <LoadingStatusPill label="Loading product catalog…" />
         ) : null}
-        {serverBehavioralAvailable && serverBehavioralLoading && selectedSegmentId ? (
-          <LoadingStatusPill label="Φόρτωση δεδομένων segment…" />
-        ) : null}
-        <details className="sm:ml-auto shrink-0 max-w-full sm:max-w-[22rem] text-[11px]">
+        <details className="sm:ml-auto min-w-0 max-w-full sm:max-w-[22rem] text-[11px]">
           <summary className="cursor-pointer font-semibold text-[var(--nts-accent)] hover:underline">
             Σημειώσεις υπολογισμού
           </summary>
@@ -617,21 +443,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
       </div>
 
       {!compactCoverageOk ? (
-        showPlaceholderNumbers ? (
-          <div className="rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] px-3 py-4">
-            <div className="h-3 w-28 rounded bg-[#E5E7EB] animate-pulse mb-3" />
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {[0, 1, 2, 3].map((i) => (
-                <div key={i} className="h-14 rounded-lg border border-[#E5E5E5] bg-white">
-                  <div className="mx-2.5 mt-2 h-2 w-12 rounded bg-[#F3F4F6] animate-pulse" />
-                  <div className="mx-2.5 mt-2 h-5 w-16 rounded bg-[#E5E7EB] animate-pulse" />
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : (
         <DataCoverageBlock dataCoverage={dataCoverage} totalDisplayed={totalCustomersDisplay} />
-        )
       ) : null}
 
       {/* Analysis Tabs */}
@@ -679,41 +491,11 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
       </div>
       </div>
 
-      {activeTab === 'behavioral' &&
-        (analysisBodyLoading ? (
-          <div className="rounded-xl border border-[#E8EAED] bg-[#FAFBFC] p-8">
-            <Spinner size="md" label="Φόρτωση behavioral δεδομένων…" />
-          </div>
-        ) : (
-          <BehavioralTab segments={rfmSegments} />
-        ))}
-      {activeTab === 'predictive' &&
-        (analysisBodyLoading ? (
-          <div className="rounded-xl border border-[#E8EAED] bg-[#FAFBFC] p-8">
-            <Spinner size="md" label="Φόρτωση predictive δεδομένων…" />
-          </div>
-        ) : (
-          <PredictiveTab segments={rfmSegments} />
-        ))}
+      {activeTab === 'behavioral' && <BehavioralTab segments={rfmSegments} />}
+      {activeTab === 'predictive' && <PredictiveTab segments={rfmSegments} />}
 
       {activeTab === 'rfm' && <>
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-        {analysisBodyLoading ? (
-          <>
-            {[0, 1, 2, 3].map((i) => (
-              <Card key={i} padding="sm">
-                <div className="flex items-center gap-2">
-                  <div className="h-9 w-9 shrink-0 rounded-lg bg-[#F3F4F6] animate-pulse" />
-                  <div className="min-w-0 space-y-2 flex-1">
-                    <div className="h-2.5 w-14 rounded bg-[#F3F4F6] animate-pulse" />
-                    <div className="h-6 w-10 rounded bg-[#E5E7EB] animate-pulse" />
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </>
-        ) : (
-          <>
         <Card padding="sm" hover>
           <div className="flex items-center gap-2">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--nts-light-gray)]">
@@ -777,25 +559,8 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
             </div>
           </div>
         </Card>
-          </>
-        )}
       </div>
 
-      {analysisBodyLoading ? (
-        <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2">
-          {[0, 1].map((i) => (
-            <Card key={i} padding="lg" className="flex min-w-0 flex-col border border-[#E8EAED]">
-              <div className="h-5 w-40 rounded bg-[#F3F4F6] animate-pulse mb-4" />
-              <div className="h-[280px] w-full rounded-xl bg-[#F3F4F6] animate-pulse" />
-              <div className="mt-3 grid grid-cols-3 gap-1">
-                {[0,1,2,3,4,5].map((j) => (
-                  <div key={j} className="h-7 rounded bg-[#F3F4F6] animate-pulse" />
-                ))}
-              </div>
-            </Card>
-          ))}
-        </div>
-      ) : (
       <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2">
         <Card padding="lg" className="flex min-w-0 flex-col border border-[#E8EAED] shadow-[0_4px_24px_rgba(15,23,42,0.06)]">
           <CardHeader
@@ -806,7 +571,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
             <ResponsiveContainer width="100%" height={280} minHeight={260}>
               <PieChart margin={{ top: 12, right: 12, bottom: 12, left: 12 }}>
                 <Pie
-                  data={rfmSegments as any[]}
+                  data={rfmSegments}
                   cx="50%"
                   cy="50%"
                   innerRadius={68}
@@ -876,7 +641,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
             <ResponsiveContainer width="100%" height={280} minHeight={260}>
               <PieChart margin={{ top: 12, right: 12, bottom: 12, left: 12 }}>
                 <Pie
-                  data={rfmSegments as any[]}
+                  data={rfmSegments}
                   cx="50%"
                   cy="50%"
                   innerRadius={68}
@@ -937,7 +702,6 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
           </div>
         </Card>
       </div>
-      )}
 
       {/* Segment Detail Panel */}
       <AnimatePresence>
@@ -994,31 +758,15 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
       </details>
 
       {/* Migration Flow */}
-      {(() => {
-        const migPeriod = segmentMigration?.periodDays ?? 0;
-        const migCompared = segmentMigration?.comparedAt ?? null;
-        const migFlowsLen = segmentMigration?.flows.length ?? 0;
-        // Subtitle: ≥1d window → show it; pre-computed run with ≥2 snapshots but identical data → "ίδια δεδομένα"; first ever run → "Αναμονή 2ης μέτρησης"; else fallback.
-        const migSubtitle =
-          !hasImportedSegments
-            ? ''
-            : migPeriod > 0
-            ? `Τελευταίες ${migPeriod} ημέρες`
-            : isPreComputed
-            ? migCompared
-              ? 'Ίδια δεδομένα με την προηγούμενη μέτρηση'
-              : 'Αναμονή 2ης μέτρησης'
-            : 'Τελευταίες 30 ημέρες';
-        return (
       <Card padding="lg">
         <CardHeader
           title="Segment Migration"
-          subtitle={migSubtitle}
+          subtitle={hasImportedSegments ? `Τελευταίες ${segmentMigration?.periodDays ?? 30} ημέρες` : ''}
           icon={<ArrowRight size={20} className="text-[var(--nts-accent)]" />}
         />
         <div className="space-y-3">
           {hasImportedSegments && rfmSegments.length > 0 ? (
-            segmentMigration?.canCompute && migFlowsLen > 0 ? (
+            segmentMigration?.canCompute && segmentMigration.flows.length > 0 ? (
               <>
                 <p className="text-xs text-[#6B7280]">
                   Σύγκριση {formatNumber(segmentMigration.comparedCustomers)} αναγνωρίσιμων πελατών με e-shop ιστορικό πριν και μετά την περίοδο.
@@ -1047,13 +795,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
               </>
             ) : (
               <p className="text-sm text-[#4A4A4A] py-4 text-center">
-                {isPreComputed
-                  ? migCompared
-                    ? migPeriod > 0
-                      ? `Δεν εντοπίστηκαν μετακινήσεις πελατών μεταξύ των τελευταίων ${migPeriod} ${migPeriod === 1 ? 'ημέρας' : 'ημερών'} μετρήσεων.`
-                      : 'Δεν εντοπίστηκαν μετακινήσεις πελατών μεταξύ των δύο τελευταίων μετρήσεων — τα δεδομένα είναι ίδια. Νέες μετακινήσεις θα φανούν μετά το επόμενο sync.'
-                    : 'Η πρώτη μέτρηση καταγράφηκε. Οι μετακινήσεις θα εμφανιστούν μετά την επόμενη εκτέλεση (αμέσως μετά το επόμενο sync ή χειροκίνητο επανυπολογισμό).'
-                  : `Δεν υπάρχουν αρκετές μετακινήσεις μεταξύ segments τις τελευταίες ${migPeriod || 30} ημέρες. Το σύστημα χρειάζεται αναγνωρίσιμους πελάτες με ιστορικό και πριν την περίοδο.`}
+                Δεν υπάρχουν αρκετές μετακινήσεις μεταξύ segments τις τελευταίες {segmentMigration?.periodDays ?? 30} ημέρες. Το σύστημα χρειάζεται αναγνωρίσιμους πελάτες με ιστορικό και πριν την περίοδο.
               </p>
             )
           ) : (
@@ -1063,8 +805,6 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
           )}
         </div>
       </Card>
-        );
-      })()}
       </>}
     </div>
   );

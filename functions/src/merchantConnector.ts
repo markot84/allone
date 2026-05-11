@@ -26,8 +26,6 @@ function getDb(): Firestore {
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const MERCHANT_API_BASE = 'https://shoppingcontent.googleapis.com/content/v2.1';
-/** Νέο Merchant Reports API — η Google μεταφέρει εδώ τα reports· μερικοί λογαριασμοί επιστρέφουν κενό ProductView στο Content API v2.1. */
-const MERCHANT_REPORTS_V1_BASE = 'https://merchantapi.googleapis.com/reports/v1';
 
 const SCOPES = [
   'https://www.googleapis.com/auth/content',
@@ -478,182 +476,6 @@ async function searchMerchantReports(
   return allRows;
 }
 
-/**
- * Paginated reports:search στο Merchant API v1 (διαφορετικό URL/MCQL από Content API).
- * MCQL: snake_case πίνακες (`product_view`), responses σε CamelCase όπως το Content.
- */
-async function searchMerchantReportsV1(
-  merchantId: string,
-  accessToken: string,
-  query: string,
-  label: string
-): Promise<any[]> {
-  const mid = String(merchantId).trim();
-  const url = `${MERCHANT_REPORTS_V1_BASE}/accounts/${mid}/reports:search`;
-  const allRows: any[] = [];
-  let pageToken: string | undefined;
-  let page = 0;
-
-  do {
-    page += 1;
-    const body: Record<string, unknown> = {
-      query,
-      pageSize: REPORT_PAGE_SIZE,
-    };
-    if (pageToken) body.pageToken = pageToken;
-
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
-
-    if (!res.ok) {
-      const errText = await res.text();
-      logger.error(
-        `[Merchant] reports:search (v1) failed [${label}] (${res.status}): ${errText.slice(0, 500)}`
-      );
-      throw new Error(`Merchant Reports v1 ${res.status}: ${errText.slice(0, 200)}`);
-    }
-
-    const data: Record<string, unknown> = await res.json();
-    const results = (data.results as any[]) || [];
-    allRows.push(...results);
-    pageToken = (data.nextPageToken || data.next_page_token) as string | undefined;
-
-    if (allRows.length >= MAX_REPORT_ROWS) {
-      logger.warn(`[Merchant] [v1 ${label}] stopping at ${allRows.length} rows (cap ${MAX_REPORT_ROWS})`);
-      break;
-    }
-    logger.info(`[Merchant] [v1 ${label}] page ${page}: +${results.length} rows (total ${allRows.length})`);
-  } while (pageToken);
-
-  return allRows;
-}
-
-/** Εξαγωγή price micros / νόμισμα — Content API ξεχωριστά πεδία, Merchant API συχνά `price.{amountMicros,currencyCode}`. */
-function extractPriceMicrosCurrency(pv: Record<string, unknown>): { micros: number; currency: string } {
-  let priceMicros = microsFrom(pv, 'priceMicros', 'price_micros');
-  let currencyCode = strField(pv, 'currencyCode', 'currency_code', 'EUR');
-  const price = pv.price as Record<string, unknown> | undefined;
-  if (price && typeof price === 'object') {
-    const am = price.amountMicros ?? price.amount_micros;
-    priceMicros =
-      typeof am === 'string'
-        ? parseInt(am, 10) || 0
-        : typeof am === 'number' && !Number.isNaN(am)
-          ? Math.round(am)
-          : priceMicros;
-    currencyCode = strField(price, 'currencyCode', 'currency_code', currencyCode);
-  }
-  return { micros: priceMicros, currency: currencyCode };
-}
-
-/** Μετατροπή γραμμής Merchant Reports v1 σε μορφή compatible με το υπάρχον merge (nested productView). */
-function normalizeMerchantV1ProductCatalogRow(row: any): any {
-  if (!row || typeof row !== 'object') return row;
-  if (row.productView || row.product_view) {
-    const pv = (row.productView ?? row.product_view) as Record<string, unknown>;
-    const { micros, currency } = extractPriceMicrosCurrency(pv);
-    const gtinRaw = pv.gtin ?? pv.gtins;
-    return {
-      productView: {
-        ...pv,
-        priceMicros: micros || microsFrom(pv, 'priceMicros', 'price_micros'),
-        currencyCode: currency,
-        gtin: gtinRaw,
-      },
-    };
-  }
-  const pv = row as Record<string, unknown>;
-  const { micros, currency } = extractPriceMicrosCurrency(pv);
-  const gtinRaw = pv.gtin ?? pv.gtins;
-  return {
-    productView: {
-      id: pv.id,
-      title: pv.title,
-      brand: pv.brand,
-      priceMicros: micros,
-      currencyCode: currency,
-      gtin: gtinRaw,
-    },
-  };
-}
-
-function normalizeMerchantV1PriceCompRow(row: any): any {
-  if (!row || typeof row !== 'object') return row;
-  if (row.priceCompetitiveness || row.price_competitiveness) return row;
-
-  const pv = (row.productView ?? row.product_view ?? row) as Record<string, unknown>;
-  const { micros: pm, currency: cc } = extractPriceMicrosCurrency(pv);
-
-  const bench = row.benchmarkPrice ?? row.benchmark_price;
-  let benchmarkMicros = microsFrom(row as Record<string, unknown>, 'benchmarkPriceMicros', 'benchmark_price_micros');
-  let benchmarkCurrency = strField(
-    row as Record<string, unknown>,
-    'benchmarkPriceCurrencyCode',
-    'benchmark_price_currency_code',
-    ''
-  );
-  if (bench && typeof bench === 'object') {
-    const am = (bench as Record<string, unknown>).amountMicros ?? (bench as Record<string, unknown>).amount_micros;
-    benchmarkMicros =
-      typeof am === 'string'
-        ? parseInt(am, 10) || 0
-        : typeof am === 'number' && !Number.isNaN(am)
-          ? Math.round(am)
-          : benchmarkMicros;
-    benchmarkCurrency = strField(bench as Record<string, unknown>, 'currencyCode', 'currency_code', benchmarkCurrency);
-  }
-
-  const country = strField(
-    row as Record<string, unknown>,
-    'reportCountryCode',
-    'report_country_code',
-    strField(row as Record<string, unknown>, 'countryCode', 'country_code', 'GR')
-  );
-
-  const gtinRaw = pv.gtin ?? pv.gtins;
-  return {
-    productView: {
-      id: pv.id,
-      title: pv.title,
-      brand: pv.brand,
-      priceMicros: pm,
-      currencyCode: cc,
-      gtin: gtinRaw,
-    },
-    priceCompetitiveness: {
-      countryCode: country,
-      benchmarkPriceMicros: benchmarkMicros,
-      benchmarkPriceCurrencyCode: benchmarkCurrency,
-    },
-  };
-}
-
-const MERCHANT_MCQL_PRODUCT_VIEW = `
-SELECT
-  id,
-  title,
-  brand,
-  price
-FROM product_view
-`.trim();
-
-const MERCHANT_MCQL_PRICE_COMP = `
-SELECT
-  id,
-  title,
-  brand,
-  price,
-  report_country_code,
-  benchmark_price
-FROM price_competitiveness_product_view
-`.trim();
-
 function firstGtin(gtin: unknown): string {
   if (Array.isArray(gtin) && gtin.length > 0) return String(gtin[0]);
   if (typeof gtin === 'string' && gtin) return gtin;
@@ -683,17 +505,6 @@ function getPriceInsightsBlock(row: any): Record<string, unknown> | null {
  */
 function productMergeKey(fullId: string): string {
   const s = String(fullId).trim();
-  /** Merchant Reports v1: `channel~language~feedLabel~offerId` */
-  if (s.includes('~')) {
-    const parts = s.split('~');
-    if (parts.length >= 4) {
-      const channel = parts[0];
-      const feedOrCountry = parts[2];
-      const offerRest = parts.slice(3).join('~');
-      return `${channel}:${feedOrCountry}:${offerRest}`;
-    }
-    return s;
-  }
   const parts = s.split(':');
   if (parts.length < 4) return s;
   const channel = parts[0];
@@ -856,59 +667,6 @@ export async function fetchPriceBenchmarks(brandId: string): Promise<{
       logger.warn('[Merchant] ProductView catalog query failed:', e);
     }
 
-    let merchantReportsV1Fallback = false;
-    if (catalogRows.length === 0) {
-      try {
-        const v1Catalog = await searchMerchantReportsV1(
-          merchantId,
-          accessToken,
-          MERCHANT_MCQL_PRODUCT_VIEW,
-          'product_view (v1 fallback)'
-        );
-        if (v1Catalog.length > 0) {
-          catalogRows = v1Catalog.map(normalizeMerchantV1ProductCatalogRow);
-          merchantReportsV1Fallback = true;
-          logger.info(
-            `[Merchant] Content API ProductView was empty; Merchant Reports v1 returned ${catalogRows.length} catalog rows (${merchantId})`
-          );
-        }
-      } catch (e) {
-        logger.warn('[Merchant] Merchant Reports v1 ProductView fallback failed:', e);
-      }
-    }
-
-    if (merchantReportsV1Fallback) {
-      try {
-        const v1Comp = await searchMerchantReportsV1(
-          merchantId,
-          accessToken,
-          MERCHANT_MCQL_PRICE_COMP,
-          'price_competitiveness (v1)'
-        );
-        compRows = v1Comp.map(normalizeMerchantV1PriceCompRow);
-        logger.info(
-          `[Merchant] Using Merchant Reports v1 price competitiveness (${compRows.length} rows) after catalog v1 fallback (${merchantId})`
-        );
-      } catch (e) {
-        logger.warn('[Merchant] Merchant Reports v1 price competitiveness failed (continuing with prior comp rows):', e);
-      }
-    } else if (compRows.length === 0) {
-      try {
-        const v1Comp = await searchMerchantReportsV1(
-          merchantId,
-          accessToken,
-          MERCHANT_MCQL_PRICE_COMP,
-          'price_competitiveness (v1 empty comp)'
-        );
-        if (v1Comp.length > 0) {
-          compRows = v1Comp.map(normalizeMerchantV1PriceCompRow);
-          logger.info(`[Merchant] Content API competitiveness empty; v1 returned ${compRows.length} rows (${merchantId})`);
-        }
-      } catch (e) {
-        logger.warn('[Merchant] Merchant Reports v1 price competitiveness (optional) failed:', e);
-      }
-    }
-
     logger.info(
       `[Merchant] Benchmarks: ${compRows.length} competitiveness rows, ${catalogRows.length} catalog rows (${merchantId})`
     );
@@ -1032,7 +790,7 @@ export async function fetchPriceBenchmarks(brandId: string): Promise<{
         failed: 0,
         errors: [],
         warnings: [
-          'Δεν επιστράφηκαν γραμμές από ProductView (Content API). Έγινε δοκιμή Merchant Reports v1· αν παραμένει κενό: έλεγξε GMC › προϊόντα με προορισμούς (destinations), Merchant API ενεργό στο GCP project, και επανασύνδεση OAuth.',
+          'Δεν επιστράφηκαν γραμμές από ProductView (έλεγξε Merchant ID, OAuth, ότι ο λογαριασμός GMC έχει ενεργά προϊόντα στο feed).',
         ],
         createdAt: FieldValue.serverTimestamp(),
       });

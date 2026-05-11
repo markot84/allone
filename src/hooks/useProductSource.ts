@@ -194,9 +194,5 @@ export function useProductSource() {
     isLoading,
     hasImported: productHook.hasImported || usingProcurement,
     usingProcurement,
-    extendedWithConnectorCatalog:
-      !usingProcurement && Boolean(productHook.extendedWithConnectorCatalog),
-    connectedButEmptyPlatforms:
-      !usingProcurement ? (productHook.connectedButEmptyPlatforms ?? []) : [],
   };
 }

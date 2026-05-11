@@ -1,10 +1,14 @@
 {
-  "version": "0.753.0",
-  "previousVersion": "0.752.0",
-  "commitHash": "906137e",
+  "version": "0.729.0",
+  "previousVersion": "0.728.0",
+  "commitHash": "89ea822",
   "branch": "main",
-  "buildDate": "2026-05-11T13:40:55.323Z",
+  "buildDate": "2026-05-11T13:56:57.703Z",
   "commits": [
+    {
+      "hash": "89ea822",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "906137e",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "3896a65",
       "message": "feat(rfm): server-side segment migration tracking"
-    },
-    {
-      "hash": "5e70510",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [

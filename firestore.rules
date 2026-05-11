@@ -474,43 +474,5 @@ service cloud.firestore {
     match /rate_limits/{docId} {
       allow read, write: if false;
     }
-
-    // RFM pre-computed segments — write μόνο από Cloud Functions (Admin SDK), read από brand members
-    match /rfm_computed/{brandId} {
-      allow read: if isBrandMember(brandId);
-      allow write: if false;
-      // schema v2: orders-only vs merged (e-shop & others) — separate chunk + behavioral trees
-      match /variants/{variantId} {
-        allow read: if isBrandMember(brandId);
-        allow write: if false;
-        match /chunks/{chunkId} {
-          allow read: if isBrandMember(brandId);
-          allow write: if false;
-        }
-        match /segments/{segmentId} {
-          allow read: if isBrandMember(brandId);
-          allow write: if false;
-        }
-      }
-      // Legacy v1 layout (root chunks + segments) — still readable until next full recompute
-      match /chunks/{chunkId} {
-        allow read: if isBrandMember(brandId);
-        allow write: if false;
-      }
-      match /segments/{segmentId} {
-        allow read: if isBrandMember(brandId);
-        allow write: if false;
-      }
-    }
-
-    // RFM monthly snapshots — server-write only, read από brand members
-    match /rfm_snapshots/{brandId} {
-      allow read: if isBrandMember(brandId);
-      allow write: if false;
-      match /history/{month} {
-        allow read: if isBrandMember(brandId);
-        allow write: if false;
-      }
-    }
   }
 }
