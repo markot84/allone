@@ -158,7 +158,9 @@ function variantDocToSlice(data: RFMComputedVariantDoc | null | undefined): RFMP
   const isStale = ageMs > MAX_PRECOMPUTED_AGE_MS;
   const hasSegments = (data.segments?.length ?? 0) > 0;
   const hasChunks = (data.chunkCount ?? 0) > 0;
-  const isPreComputed = !isStale && (hasSegments || hasChunks);
+  const segmentDocCount = data.segmentDocCount ?? 0;
+  /** Treat as server-ready when summaries, chunks, or per-segment behavioral docs exist (covers behavioral-only edge writes). */
+  const isPreComputed = !isStale && (hasSegments || hasChunks || segmentDocCount > 0);
 
   const totalRevenue = (data.segments ?? []).reduce((sum, s) => sum + s.revenue, 0);
   const segments = isPreComputed && hasSegments
@@ -187,7 +189,7 @@ function variantDocToSlice(data: RFMComputedVariantDoc | null | undefined): RFMP
     totalOrders: data.totalOrders ?? 0,
     isStale,
     migration,
-    segmentDocCount: data.segmentDocCount ?? 0,
+    segmentDocCount,
     ...(data.mergedFallbackToOrders ? { mergedFallbackToOrders: true } : {}),
   };
 }

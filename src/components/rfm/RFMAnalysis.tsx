@@ -500,7 +500,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
           })()
         ) : null}
         {ordersLoading ? (
-          <LoadingStatusPill label="Loading order history…" />
+          <LoadingStatusPill label="Φόρτωση ιστορικού παραγγελιών…" />
         ) : null}
         {rfmSourcePref === 'external' && mergedFallbackToOrders ? (
           <span
@@ -519,7 +519,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
           </span>
         ) : null}
         {isCatalogEnriching ? (
-          <LoadingStatusPill label="Loading product catalog…" />
+          <LoadingStatusPill label="Φόρτωση καταλόγου προϊόντων…" />
         ) : null}
         {serverBehavioralAvailable && serverBehavioralLoading && selectedSegmentId ? (
           <LoadingStatusPill label="Φόρτωση δεδομένων segment…" />

@@ -192,9 +192,12 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   /** True when per-segment behavioral subdocs exist for the active variant. */
   const hasServerBehavioralDocs = usePreComputedActive && preActive.segmentDocCount > 0;
 
+  /** Wait for `rfm_computed` before starting orders/catalog — avoids a pointless parallel fetch when merged server slice will satisfy external toggle. */
   const ordersQueryEnabled =
+    !preRf.isLoading &&
     !serverVariantReady &&
-    !!brandId && (ecomm.connectedPlatforms.length > 0 || variant === 'data_analysis');
+    !!brandId &&
+    (ecomm.connectedPlatforms.length > 0 || variant === 'data_analysis');
   const ordersSinceDate = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() - RFM_ORDER_FETCH_WINDOW_DAYS);
@@ -325,8 +328,8 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   }, [sourcePref, resolvedSource, orderRfm.totalCustomers, externalTotalCustomers, externalSegments]);
 
   /**
-   * Μην μπλοκάρεις RFM όσο περιμένεις «άδεια» segments αν το brand έχει e-shop:
-   * το `ordersLoading` δείχνει την κατάσταση φόρτωσης παραγγελιών.
+   * Μην μπλοκάρεις RFM όσο περιμένεις «άδεια» segments αν το brand έχει e-shop.
+   * Το `ordersLoading` αντιστοιχεί μόνο στο ενεργό pipeline παραγγελιών (`ordersQueryEnabled`).
    * Μπλοκ μόνο για import-only (όχι connectors) ή external preference (segment_customers).
    */
   const ecommReady = !ecomm.isLoading;
@@ -342,15 +345,9 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   // When pre-computed data is available for the selected source, use that variant's Firestore slice.
   // (Removed duplicate usePreComputedActive — unified with serverVariantReady above.)
 
-  // Show loading while: pre-computed check is in progress (only relevant for 'orders' pref),
-  // OR orders are being fetched (no pre-computed). When pre-computed is the active source,
-  // orders + catalog fetch silently in the background — surface progress via `isCatalogEnriching` only.
-  const ordersLoading =
-    preRf.isLoading ||
-    (ordersQueryEnabled && ordersPending && !usePreComputedActive);
-  const isCatalogEnriching = usePreComputedActive
-    ? ordersQueryEnabled && (ordersPending || catalogPending)
-    : ordersQueryEnabled && catalogPending;
+  /** Orders/catalog pipelines run only when `ordersQueryEnabled` — mutually exclusive with server-ready path after `preRf` resolves. */
+  const ordersLoading = ordersQueryEnabled && ordersPending;
+  const isCatalogEnriching = ordersQueryEnabled && catalogPending;
   /** True when the orders fetch hit the per-platform limit — RFM is computed from a sample, not full history. */
   const ordersSampled = !ordersPending && ordersQueryEnabled && rawOrders.length >= MAX_ORDERS_PER_PLATFORM_RFM;
 
