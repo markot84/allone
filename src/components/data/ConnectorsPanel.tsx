@@ -62,6 +62,8 @@ interface ConnectorState {
   // Megaventory
   accountName?: string;
   currency?: string;
+  /** Cloud Functions (marketing APIs) — το UI το χρησιμοποιούσε μόνο μέσω import_jobs· να συμπεριλαμβάνεται στο «Τελευταίο sync». */
+  lastDataSyncAt?: unknown;
   lastSyncAt?: any;
   lastOrdersSyncAt?: any;
   lastProductsSyncAt?: any;
@@ -2622,6 +2624,7 @@ export function ConnectorsPanel() {
                 const lastSyncAt = newestDate(
                   lastSyncDates[conn.id] as unknown,
                   state.lastSyncAt,
+                  state.lastDataSyncAt,
                   state.lastOrdersSyncAt,
                   state.lastProductsSyncAt
                 );

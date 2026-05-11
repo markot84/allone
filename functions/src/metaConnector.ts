@@ -1090,27 +1090,30 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
     }
   }
 
-  const importStatus = totalImported > 0 ? 'completed' : 'failed';
+  /** Ίδιο pattern με Google Ads: πάντα `completed` στο import_jobs ώστε το UI (getLastImportDates) να ενημερώνει «Τελευταίο sync». Το `failed`/μηνύματα δείχνουν αν δεν γράφτηκαν καμπάνιες. */
   await getDb().collection('import_jobs').add({
     brandId,
     type: 'campaigns',
     source: 'meta_api',
-    status: importStatus,
+    status: 'completed',
     imported: totalImported,
     failed: totalImported > 0 ? 0 : 1,
-    errors: totalImported > 0 ? [] : ['Meta sync produced no campaign writes (check logs / Firestore limits)'],
+    errors:
+      totalImported > 0 ? [] : ['Meta sync produced no campaign writes (check logs / Firestore limits)'],
     createdAt: FieldValue.serverTimestamp(),
   });
 
+  const nowMs = Date.now();
   if (totalImported > 0) {
     await getDb().doc(`connectors/${brandId}`).set(
       {
         meta: {
-          lastDataSyncAt: Date.now(),
+          lastDataSyncAt: nowMs,
           historyLoadedUntilYear: historyLoaded
             ? Number(connector.historyLoadedUntilYear) || historyStartYear
             : historyStartYear,
           lastImportError: FieldValue.delete(),
+          lastImportErrorAt: FieldValue.delete(),
         },
       },
       { merge: true }
@@ -1121,8 +1124,9 @@ export async function fetchMetaCampaigns(brandId: string): Promise<{
   await getDb().doc(`connectors/${brandId}`).set(
     {
       meta: {
+        lastDataSyncAt: nowMs,
         lastImportError: 'Meta: 0 campaigns written — see import_jobs and Cloud Logs',
-        lastImportErrorAt: Date.now(),
+        lastImportErrorAt: nowMs,
       },
     },
     { merge: true }
