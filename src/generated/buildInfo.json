@@ -1,10 +1,22 @@
 {
-  "version": "0.726.95",
-  "previousVersion": "0.726.94",
-  "commitHash": "e3e7fe3",
+  "version": "0.726.96",
+  "previousVersion": "0.726.95",
+  "commitHash": "17ffc27",
   "branch": "main",
-  "buildDate": "2026-05-11T05:03:22.213Z",
+  "buildDate": "2026-05-11T05:44:44.849Z",
   "commits": [
+    {
+      "hash": "17ffc27",
+      "message": "fix(connectors): TikTok sync job completed + partial counts for last-sync UI"
+    },
+    {
+      "hash": "dc67d91",
+      "message": "fix(connectors): sync date UI uses lastDataSyncAt + Meta import_jobs completed"
+    },
+    {
+      "hash": "15467b6",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "e3e7fe3",
       "message": "security: lock down Firestore rules and add SSRF protection"
@@ -52,22 +64,12 @@
     {
       "hash": "55235f4",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "a130ef8",
-      "message": "chore: full deploy"
-    },
-    {
-      "hash": "a5b6b28",
-      "message": "chore: full deploy"
-    },
-    {
-      "hash": "f0a3408",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [
-    "Security: lock down Firestore rules and add SSRF protection",
-    "[Συντήρηση] Full deploy"
+    "[Διόρθωση] TikTok sync job completed + partial counts for last-sync UI",
+    "[Διόρθωση] Sync date UI uses lastDataSyncAt + Meta import_jobs completed",
+    "[Συντήρηση] Full deploy",
+    "Security: lock down Firestore rules and add SSRF protection"
   ]
 }
