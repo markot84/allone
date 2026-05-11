@@ -1,12 +1,14 @@
 /**
- * Hook: reads pre-computed RFM data from rfm_computed/{brandId}.
+ * Hook: reads pre-computed RFM from Firestore (Cloud Function `computeRFMSegments`).
  *
- * Pre-computed data is written by the `computeRFMSegments` Cloud Function
- * after each ERP / e-shop connector sync.
+ * Schema v2 stores two variants:
+ *   `rfm_computed/{brandId}/variants/orders` — order-identified cohort (no import merge)
+ *   `rfm_computed/{brandId}/variants/merged` — e-shop & others (orders ∪ imported segment_customers)
  *
- * Returns converted RFMSegment[] ready for the UI. Per-segment behavioral
- * data lives in `rfm_computed/{brandId}/segments/{segmentId}` and is fetched
- * on-demand via {@link useRFMSegmentBehavioral}.
+ * Legacy v1: flat `rfm_computed/{brandId}` + `chunks` + `segments` — treated as **orders** variant
+ * until the next server recompute migrates layout.
+ *
+ * Per-segment behavioral docs: `variants/{variant}/segments/{segmentId}` (legacy: root `segments/`).
  */
 import { useQuery } from '@tanstack/react-query';
 import { collection, doc, getDoc, getDocs } from 'firebase/firestore';
@@ -58,19 +60,21 @@ interface RFMMigrationDoc {
   segmentDeltas: PreComputedSegmentDelta[];
 }
 
-interface RFMComputedDoc {
-  brandId: string;
+interface RFMComputedVariantDoc {
+  brandId?: string;
+  variant?: string;
   computedAt: FirestoreTimestampLike;
-  dataSource: 'erp' | 'eshop';
-  dataSourcePlatforms: string[];
-  totalCustomers: number;
-  totalOrders: number;
-  ordersAttributed: number;
-  guestOrdersSkipped: number;
-  segments: RFMSegmentSummary[];
-  chunkCount: number;
+  dataSource?: 'erp' | 'eshop';
+  dataSourcePlatforms?: string[];
+  totalCustomers?: number;
+  totalOrders?: number;
+  ordersAttributed?: number;
+  guestOrdersSkipped?: number;
+  segments?: RFMSegmentSummary[];
+  chunkCount?: number;
   migration?: RFMMigrationDoc | null;
   segmentDocCount?: number;
+  mergedFallbackToOrders?: boolean;
 }
 
 function toDate(v: FirestoreTimestampLike): Date | null {
@@ -108,7 +112,10 @@ export interface RFMPreComputedMigration {
   segmentDeltas: PreComputedSegmentDelta[];
 }
 
-export interface RFMPreComputedResult {
+export type RFMPrecomputedVariant = 'orders' | 'merged';
+
+/** One variant slice (orders or merged) — use {@link useRFMPreComputed} and pick by source preference. */
+export interface RFMPreComputedSlice {
   segments: RFMSegment[];
   isPreComputed: boolean;
   lastComputedAt: Date | null;
@@ -116,52 +123,45 @@ export interface RFMPreComputedResult {
   dataSourcePlatforms: string[];
   totalCustomers: number;
   totalOrders: number;
-  isLoading: boolean;
   isStale: boolean;
   migration: RFMPreComputedMigration | null;
-  /** Number of per-segment behavioral docs written by the server (0 = no per-segment data yet). */
   segmentDocCount: number;
+  /** Merged variant only: server had no import rows to union — same customer list as orders. */
+  mergedFallbackToOrders?: boolean;
 }
 
-export function useRFMPreComputed(brandId: string | null): RFMPreComputedResult {
-  const { data, isPending } = useQuery({
-    queryKey: ['rfm_computed', brandId],
-    queryFn: async () => {
-      if (!brandId) return null;
-      const ref = doc(db, 'rfm_computed', brandId);
-      const snap = await getDoc(ref);
-      if (!snap.exists()) return null;
-      return snap.data() as RFMComputedDoc;
-    },
-    enabled: !!brandId,
-    staleTime: 10 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
-    refetchOnWindowFocus: false,
-  });
+export interface RFMPreComputedBundle {
+  orders: RFMPreComputedSlice;
+  merged: RFMPreComputedSlice;
+  isLoading: boolean;
+  /** Parent doc `computedAt` (v2 index), when present. */
+  rootLastComputedAt: Date | null;
+}
 
-  if (!data) {
-    return {
-      segments: [],
-      isPreComputed: false,
-      lastComputedAt: null,
-      dataSource: null,
-      dataSourcePlatforms: [],
-      totalCustomers: 0,
-      totalOrders: 0,
-      isLoading: isPending,
-      isStale: false,
-      migration: null,
-      segmentDocCount: 0,
-    };
-  }
+const EMPTY_SLICE: RFMPreComputedSlice = {
+  segments: [],
+  isPreComputed: false,
+  lastComputedAt: null,
+  dataSource: null,
+  dataSourcePlatforms: [],
+  totalCustomers: 0,
+  totalOrders: 0,
+  isStale: false,
+  migration: null,
+  segmentDocCount: 0,
+};
 
+function variantDocToSlice(data: RFMComputedVariantDoc | null | undefined): RFMPreComputedSlice {
+  if (!data) return { ...EMPTY_SLICE };
   const computedAt = toDate(data.computedAt);
   const ageMs = computedAt ? Date.now() - computedAt.getTime() : Infinity;
   const isStale = ageMs > MAX_PRECOMPUTED_AGE_MS;
-  const isPreComputed = !isStale && (data.segments?.length ?? 0) > 0;
+  const hasSegments = (data.segments?.length ?? 0) > 0;
+  const hasChunks = (data.chunkCount ?? 0) > 0;
+  const isPreComputed = !isStale && (hasSegments || hasChunks);
 
   const totalRevenue = (data.segments ?? []).reduce((sum, s) => sum + s.revenue, 0);
-  const segments = isPreComputed
+  const segments = isPreComputed && hasSegments
     ? (data.segments ?? []).map((s) => summaryToRFMSegment(s, totalRevenue))
     : [];
 
@@ -185,10 +185,81 @@ export function useRFMPreComputed(brandId: string | null): RFMPreComputedResult 
     dataSourcePlatforms: data.dataSourcePlatforms ?? [],
     totalCustomers: data.totalCustomers ?? 0,
     totalOrders: data.totalOrders ?? 0,
-    isLoading: isPending,
     isStale,
     migration,
     segmentDocCount: data.segmentDocCount ?? 0,
+    ...(data.mergedFallbackToOrders ? { mergedFallbackToOrders: true } : {}),
+  };
+}
+
+/**
+ * Loads both RFM variants in one query (orders + merged). Select the active slice in `useSegments`
+ * from the user's source preference.
+ */
+export function useRFMPreComputed(brandId: string | null): RFMPreComputedBundle {
+  const { data, isPending } = useQuery({
+    queryKey: ['rfm_computed', brandId],
+    queryFn: async () => {
+      if (!brandId) return null;
+      const rootRef = doc(db, 'rfm_computed', brandId);
+      const ordersRef = doc(db, 'rfm_computed', brandId, 'variants', 'orders');
+      const mergedRef = doc(db, 'rfm_computed', brandId, 'variants', 'merged');
+      const [rootSnap, ordersSnap, mergedSnap] = await Promise.all([
+        getDoc(rootRef),
+        getDoc(ordersRef),
+        getDoc(mergedRef),
+      ]);
+      const root = rootSnap.exists() ? (rootSnap.data() as Record<string, unknown>) : null;
+      const schemaV2 = root != null && Number(root.schemaVersion) >= 2;
+
+      let ordersRaw: RFMComputedVariantDoc | null = ordersSnap.exists()
+        ? (ordersSnap.data() as RFMComputedVariantDoc)
+        : null;
+      let mergedRaw: RFMComputedVariantDoc | null = mergedSnap.exists()
+        ? (mergedSnap.data() as RFMComputedVariantDoc)
+        : null;
+
+      // Legacy v1 flat doc → orders variant until recompute migrates.
+      if (
+        !ordersRaw &&
+        root &&
+        !schemaV2 &&
+        Array.isArray(root.segments as unknown[]) &&
+        (root.segments as unknown[]).length > 0
+      ) {
+        ordersRaw = root as unknown as RFMComputedVariantDoc;
+      }
+
+      return {
+        root,
+        ordersRaw,
+        mergedRaw,
+      };
+    },
+    enabled: !!brandId,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+
+  if (!data) {
+    return {
+      orders: { ...EMPTY_SLICE },
+      merged: { ...EMPTY_SLICE },
+      isLoading: isPending,
+      rootLastComputedAt: null,
+    };
+  }
+
+  const rootAt = data.root?.computedAt
+    ? toDate(data.root.computedAt as FirestoreTimestampLike)
+    : null;
+
+  return {
+    orders: variantDocToSlice(data.ordersRaw),
+    merged: variantDocToSlice(data.mergedRaw),
+    isLoading: isPending,
+    rootLastComputedAt: rootAt,
   };
 }
 
@@ -303,10 +374,18 @@ interface ServerRFMCustomer {
  * Returns an empty map when no chunks are present (e.g. brand without pre-computed RFM yet).
  */
 export async function loadPreComputedCustomersBySegment(
-  brandId: string
+  brandId: string,
+  variant: RFMPrecomputedVariant = 'orders'
 ): Promise<Map<string, SegmentCustomer[]>> {
-  const chunksColl = collection(db, 'rfm_computed', brandId, 'chunks');
-  const snap = await getDocs(chunksColl);
+  const chunksColl =
+    variant === 'orders' || variant === 'merged'
+      ? collection(db, 'rfm_computed', brandId, 'variants', variant, 'chunks')
+      : collection(db, 'rfm_computed', brandId, 'chunks');
+  let snap = await getDocs(chunksColl);
+  // Legacy fallback for orders path when variants layout not deployed yet.
+  if (snap.docs.length === 0 && variant === 'orders') {
+    snap = await getDocs(collection(db, 'rfm_computed', brandId, 'chunks'));
+  }
   const out = new Map<string, SegmentCustomer[]>();
   for (const docSnap of snap.docs) {
     const json = docSnap.get('customersJson');
@@ -336,22 +415,27 @@ export async function loadPreComputedCustomersBySegment(
 }
 
 /**
- * Reads per-segment behavioral data from `rfm_computed/{brandId}/segments/{segmentId}`.
- * Returns `null` behavioral when the segment doc doesn't exist (e.g. ERP-only brand
- * without line items, or older snapshots written before server-side rollups).
+ * Reads per-segment behavioral data from `rfm_computed/.../variants/{variant}/segments/{segmentId}`
+ * (legacy: root `segments/{segmentId}` for orders-only deploys).
  */
 export function useRFMSegmentBehavioral(
   brandId: string | null,
-  segmentId: string | null
+  segmentId: string | null,
+  variant: RFMPrecomputedVariant = 'orders'
 ): RFMSegmentBehavioralResult {
   const { data, isPending } = useQuery({
-    queryKey: ['rfm_segment_behavioral', brandId, segmentId],
+    queryKey: ['rfm_segment_behavioral', brandId, segmentId, variant],
     queryFn: async () => {
       if (!brandId || !segmentId) return null;
-      const ref = doc(db, 'rfm_computed', brandId, 'segments', segmentId);
-      const snap = await getDoc(ref);
-      if (!snap.exists()) return null;
-      return snap.data() as RFMSegmentBehavioralDoc;
+      const vRef = doc(db, 'rfm_computed', brandId, 'variants', variant, 'segments', segmentId);
+      const vSnap = await getDoc(vRef);
+      if (vSnap.exists()) return vSnap.data() as RFMSegmentBehavioralDoc;
+      if (variant === 'orders') {
+        const leg = doc(db, 'rfm_computed', brandId, 'segments', segmentId);
+        const legSnap = await getDoc(leg);
+        if (legSnap.exists()) return legSnap.data() as RFMSegmentBehavioralDoc;
+      }
+      return null;
     },
     enabled: !!brandId && !!segmentId,
     staleTime: 5 * 60 * 1000,

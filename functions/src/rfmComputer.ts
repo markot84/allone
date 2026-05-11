@@ -3,8 +3,10 @@
  *
  * Reads all orders for a brand (ERP first, fallback to e-shop),
  * computes RFM quintile scores, assigns segments, and persists to:
- *   rfm_computed/{brandId}          — metadata + segment summaries + chunked customer JSON
- *   rfm_computed/{brandId}/chunks/{i} — customer list JSON chunks (<900KB each)
+ *   rfm_computed/{brandId} — schema v2 index (computedAt, orders/merged meta)
+ *   rfm_computed/{brandId}/variants/orders — order-identified cohort (no import merge)
+ *   rfm_computed/{brandId}/variants/merged — union order-RFM + imported segment_customers (pragmatic v1)
+ *   chunks + per-segment behavioral docs under each variant path
  *   rfm_snapshots/{brandId}/history/{yyyyMM} — monthly snapshot (overwritten per run)
  *
  * Scoring logic mirrors src/services/rfmFromOrders.ts exactly.
@@ -835,6 +837,359 @@ function resolveCatalogLine(platform: string, item: OrderLineItem, indexes: Cata
 const RFM_LOOKBACK_DAYS = 365;
 const CUSTOMER_CHUNK_BYTES = 900_000;
 
+/** Firestore `rfm_computed/{brandId}/variants/{orders|merged}` (v2); legacy flat doc = v1 orders-only. */
+type RfmVariantId = 'orders' | 'merged';
+
+// ─── Import / merge (server mirror of client external base for "e-shop & others") ─
+
+interface SegmentSummaryRow {
+  segmentName?: string;
+  source?: string;
+  count: number;
+  monetary: number;
+  fallbackCount: number;
+}
+
+interface ImportedCustomerRow {
+  customerId: string;
+  email?: string;
+  segmentId: string;
+  segmentName?: string;
+  recency?: number;
+  frequency?: number;
+  monetary?: number;
+  rfmScore?: string;
+}
+
+interface FirestoreSegmentRow {
+  id: string;
+  name: string;
+  count: number;
+  revenue_share: number;
+  percentage: number;
+  source?: string;
+  rfm_score?: string;
+}
+
+function titleFromSegmentId(segmentId: string): string {
+  return segmentId
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/**
+ * Pragmatic merged cohort (v1): union of order-RFM customers + imported customers not in the order key set.
+ * Limitations: import-only rows keep Firestore segment assignment and monetary/recency fields as stored —
+ * they do not receive RFM quintiles from order history; segment-level behavioral rollups still reflect
+ * orders only (offline cohorts have empty line-item enrichment).
+ */
+function mergeDuplicateSegmentRowsByName(rows: FirestoreSegmentRow[]): FirestoreSegmentRow[] {
+  if (rows.length < 25) return rows;
+  const byName = new Map<string, FirestoreSegmentRow[]>();
+  for (const s of rows) {
+    const key = (s.name || '').trim().toLowerCase();
+    if (!key) continue;
+    const arr = byName.get(key) || [];
+    arr.push(s);
+    byName.set(key, arr);
+  }
+  if (byName.size >= rows.length) return rows;
+  const merged: FirestoreSegmentRow[] = [];
+  for (const [, group] of byName) {
+    if (group.length === 1) {
+      merged.push(group[0]);
+      continue;
+    }
+    const totalCount = group.reduce((a, s) => a + s.count, 0);
+    const weightedRev = group.reduce((a, s) => a + (s.revenue_share ?? 0) * s.count, 0);
+    const avgRev = totalCount > 0 ? weightedRev / totalCount : 0;
+    const base = group[0];
+    merged.push({
+      ...base,
+      id: base.id,
+      name: base.name,
+      count: totalCount,
+      percentage: 0,
+      revenue_share: Math.round(avgRev * 100) / 100,
+      rfm_score: base.rfm_score || group.find((g) => g.rfm_score)?.rfm_score || '',
+    });
+  }
+  const totalCustomers = merged.reduce((a, s) => a + s.count, 0);
+  for (const s of merged) {
+    s.percentage = totalCustomers > 0 ? Math.round((s.count / totalCustomers) * 10000) / 100 : 0;
+  }
+  merged.sort((a, b) => b.count - a.count);
+  return merged;
+}
+
+async function loadSegmentSummariesAdmin(db: Firestore, brandId: string): Promise<Map<string, SegmentSummaryRow>> {
+  const snap = await db.collection('segment_customers').where('brandId', '==', brandId).get();
+  const map = new Map<string, SegmentSummaryRow>();
+  for (const doc of snap.docs) {
+    const d = doc.data();
+    const segmentId = String(d.segmentId || '').trim();
+    if (!segmentId) continue;
+    const customers = Array.isArray(d.customers) ? (d.customers as Record<string, unknown>[]) : [];
+    const existing = map.get(segmentId) || {
+      segmentName: typeof d.segmentName === 'string' ? d.segmentName : undefined,
+      source: typeof d.source === 'string' ? d.source : undefined,
+      count: 0,
+      monetary: 0,
+      fallbackCount: 0,
+    };
+    existing.segmentName = existing.segmentName || (typeof d.segmentName === 'string' ? d.segmentName : undefined);
+    existing.source = existing.source || (typeof d.source === 'string' ? d.source : undefined);
+    const totalInSegment = typeof d.totalInSegment === 'number' ? d.totalInSegment : 0;
+    existing.count = Math.max(existing.count, totalInSegment);
+    existing.fallbackCount += customers.length;
+    existing.monetary += customers.reduce((sum, c) => sum + parseNumeric(c.monetary), 0);
+    map.set(segmentId, existing);
+  }
+  const out = new Map<string, SegmentSummaryRow>();
+  for (const [segmentId, value] of map) {
+    out.set(segmentId, {
+      segmentName: value.segmentName,
+      source: value.source,
+      count: value.count || value.fallbackCount,
+      monetary: value.monetary,
+      fallbackCount: value.fallbackCount,
+    });
+  }
+  return out;
+}
+
+async function loadSegmentCustomerRowsAdmin(db: Firestore, brandId: string): Promise<ImportedCustomerRow[]> {
+  const snap = await db.collection('segment_customers').where('brandId', '==', brandId).get();
+  const out: ImportedCustomerRow[] = [];
+  for (const doc of snap.docs) {
+    const d = doc.data();
+    const segmentId = String(d.segmentId || '').trim();
+    if (!segmentId) continue;
+    const segmentName = typeof d.segmentName === 'string' ? d.segmentName : undefined;
+    const customers = Array.isArray(d.customers) ? (d.customers as Record<string, unknown>[]) : [];
+    for (const c of customers) {
+      const customerId = String(c.customerId ?? '').trim();
+      const email = String(c.email ?? '').trim().toLowerCase();
+      out.push({
+        customerId,
+        ...(email ? { email } : {}),
+        segmentId,
+        ...(segmentName ? { segmentName } : {}),
+        ...(typeof c.recency === 'number' ? { recency: c.recency } : {}),
+        ...(typeof c.frequency === 'number' ? { frequency: c.frequency } : {}),
+        ...(typeof c.monetary === 'number' ? { monetary: c.monetary } : {}),
+        ...(typeof c.rfmScore === 'string' ? { rfmScore: c.rfmScore } : {}),
+      });
+    }
+  }
+  return out;
+}
+
+async function loadFirestoreSegmentsAdmin(db: Firestore, brandId: string): Promise<FirestoreSegmentRow[]> {
+  const snap = await db.collection('segments').where('brandId', '==', brandId).get();
+  const out: FirestoreSegmentRow[] = [];
+  for (const doc of snap.docs) {
+    const d = doc.data();
+    const id = doc.id;
+    const name = String(d.name ?? d.segmentName ?? titleFromSegmentId(id)).trim() || titleFromSegmentId(id);
+    const count = parseNumeric(d.count ?? d.customerCount);
+    const revenueShare = parseNumeric(d.revenue_share ?? d.revenueShare);
+    out.push({
+      id,
+      name,
+      count: Math.round(count),
+      revenue_share: revenueShare,
+      percentage: parseNumeric(d.percentage),
+      ...(typeof d.source === 'string' ? { source: d.source } : {}),
+      ...(typeof d.rfm_score === 'string' ? { rfm_score: d.rfm_score } : {}),
+    });
+  }
+  return out.filter((s) => s.count > 0);
+}
+
+function rebuildSegmentsFromSummariesAdmin(summaries: Map<string, SegmentSummaryRow>): FirestoreSegmentRow[] {
+  const entries = [...summaries.entries()].filter(([, s]) => (s.count || 0) > 0);
+  const totalCount = entries.reduce((sum, [, s]) => sum + s.count, 0);
+  const totalMonetary = entries.reduce((sum, [, s]) => sum + s.monetary, 0);
+  return entries.map(([segmentId, summary]) => {
+    const name = summary.segmentName || titleFromSegmentId(segmentId);
+    return {
+      id: segmentId,
+      name,
+      count: summary.count,
+      revenue_share: totalMonetary > 0 ? Math.round((summary.monetary / totalMonetary) * 10000) / 100 : 0,
+      percentage: totalCount > 0 ? Math.round((summary.count / totalCount) * 10000) / 100 : 0,
+      ...(summary.source ? { source: summary.source } : {}),
+    };
+  });
+}
+
+function chooseExternalBaseForMerge(
+  importedRows: FirestoreSegmentRow[],
+  rebuiltFromSummaries: FirestoreSegmentRow[]
+): FirestoreSegmentRow[] {
+  const mergedImported = mergeDuplicateSegmentRowsByName(importedRows);
+  const importedTotal = mergedImported.reduce((sum, s) => sum + s.count, 0) || 0;
+  const rebuiltTotal = rebuiltFromSummaries.reduce((sum, s) => sum + s.count, 0) || 0;
+  return rebuiltTotal > importedTotal ? rebuiltFromSummaries : mergedImported;
+}
+
+function segmentNameByIdFromExternal(base: FirestoreSegmentRow[]): Map<string, string> {
+  const m = new Map<string, string>();
+  for (const s of base) m.set(s.id, s.name);
+  return m;
+}
+
+function orderCustomerKeySet(orderCustomers: RFMCustomer[]): Set<string> {
+  const set = new Set<string>();
+  for (const c of orderCustomers) {
+    if (c.customerId) set.add(c.customerId);
+    if (c.email?.includes('@')) set.add(`email:${c.email.toLowerCase()}`);
+  }
+  return set;
+}
+
+function importRowKeys(row: ImportedCustomerRow): string[] {
+  const keys: string[] = [];
+  if (row.customerId) keys.push(row.customerId);
+  if (row.email?.includes('@')) keys.push(`email:${row.email}`);
+  return keys;
+}
+
+function importedRowOccupiesOrderCohort(row: ImportedCustomerRow, occupied: Set<string>): boolean {
+  for (const k of importRowKeys(row)) {
+    if (occupied.has(k)) return true;
+  }
+  return false;
+}
+
+function parseRfmTriple(score: string | undefined): { r: number; f: number; m: number } {
+  if (!score?.trim()) return { r: 0, f: 0, m: 0 };
+  const parts = score.split(/[-\s]+/).map((x) => parseInt(x.trim(), 10)).filter((n) => n >= 1 && n <= 5);
+  if (parts.length >= 3) return { r: parts[0], f: parts[1], m: parts[2] };
+  const digits = score.match(/\d/g)?.map((d) => parseInt(d, 10)).filter((n) => n >= 1 && n <= 5) ?? [];
+  if (digits.length >= 3) return { r: digits[0], f: digits[1], m: digits[2] };
+  return { r: 0, f: 0, m: 0 };
+}
+
+function syntheticMergedCustomer(
+  row: ImportedCustomerRow,
+  segmentName: string
+): RFMCustomer {
+  const { r, f, m } = parseRfmTriple(row.rfmScore);
+  const cid =
+    row.customerId ||
+    (row.email?.includes('@') ? `email:${row.email}` : `import:${row.segmentId}:${row.email ?? 'anon'}`);
+  const monetary = row.monetary ?? 0;
+  const freq = row.frequency ?? 0;
+  return {
+    customerId: cid,
+    customerName: row.customerId || row.email || cid,
+    ...(row.email?.includes('@') ? { email: row.email } : {}),
+    segment: segmentName,
+    segmentId: row.segmentId,
+    rfmScore: row.rfmScore || '',
+    recencyScore: r,
+    frequencyScore: f,
+    monetaryScore: m,
+    lastOrderDate: '',
+    orderCount: Math.max(1, freq || (monetary > 0 ? 1 : 0)),
+    totalRevenue: Math.round(monetary * 100) / 100,
+    avgOrderValue: freq > 0 && monetary > 0 ? Math.round((monetary / freq) * 100) / 100 : Math.round(monetary * 100) / 100,
+    daysSinceLastOrder: typeof row.recency === 'number' ? row.recency : 0,
+  };
+}
+
+interface MergeBuildResult {
+  customers: RFMCustomer[];
+  mergedFallbackToOrders: boolean;
+  importRowsAdded: number;
+}
+
+function buildMergedCustomerList(
+  orderCustomers: RFMCustomer[],
+  importRows: ImportedCustomerRow[],
+  externalNameById: Map<string, string>
+): MergeBuildResult {
+  const hasImportSignal =
+    importRows.length > 0 ||
+    externalNameById.size > 0;
+  if (!hasImportSignal) {
+    return {
+      customers: orderCustomers.map((c) => ({ ...c })),
+      mergedFallbackToOrders: true,
+      importRowsAdded: 0,
+    };
+  }
+  const occupied = orderCustomerKeySet(orderCustomers);
+  const merged: RFMCustomer[] = orderCustomers.map((c) => ({ ...c }));
+  let added = 0;
+  const seenImport = new Set<string>();
+  for (const row of importRows) {
+    if (importedRowOccupiesOrderCohort(row, occupied)) continue;
+    const dedupeKey = importRowKeys(row).join('|') || `${row.segmentId}:${row.customerId}:${row.email}`;
+    if (seenImport.has(dedupeKey)) continue;
+    seenImport.add(dedupeKey);
+    const segName = row.segmentName || externalNameById.get(row.segmentId) || titleFromSegmentId(row.segmentId);
+    merged.push(syntheticMergedCustomer(row, segName));
+    added += 1;
+  }
+  const mergedFallbackToOrders = false;
+  return { customers: merged, mergedFallbackToOrders, importRowsAdded: added };
+}
+
+function segmentSummariesFromCustomerRecords(customerRecords: RFMCustomer[]): RFMSegmentSummary[] {
+  const segmentMap = new Map<string, { name: string; count: number; revenue: number; orders: number }>();
+  for (const c of customerRecords) {
+    const id = c.segmentId;
+    const name = c.segment;
+    const seg = segmentMap.get(id) ?? { name, count: 0, revenue: 0, orders: 0 };
+    seg.count += 1;
+    seg.revenue += c.totalRevenue || 0;
+    seg.orders += c.orderCount || 0;
+    if (!seg.name && name) seg.name = name;
+    segmentMap.set(id, seg);
+  }
+  const totalCustomers = customerRecords.length;
+  return [...segmentMap.entries()]
+    .sort((a, b) => b[1].revenue - a[1].revenue)
+    .map(([segId, seg]) => ({
+      segment: seg.name,
+      segmentId: segId,
+      count: seg.count,
+      revenue: Math.round(seg.revenue * 100) / 100,
+      avgOrderValue: seg.orders > 0 ? Math.round((seg.revenue / seg.orders) * 100) / 100 : 0,
+      pct: totalCustomers > 0 ? Math.round((seg.count / totalCustomers) * 1000) / 10 : 0,
+    }));
+}
+
+function mapsForBehavioralFromCustomers(customerRecords: RFMCustomer[]): {
+  customerSegmentById: Map<string, string>;
+  customerEmailToSegmentId: Map<string, string>;
+  segmentRevenueById: Map<string, { name: string; count: number; revenue: number; orders: number }>;
+} {
+  const customerSegmentById = new Map<string, string>();
+  const customerEmailToSegmentId = new Map<string, string>();
+  const segmentRevenueById = new Map<string, { name: string; count: number; revenue: number; orders: number }>();
+  for (const c of customerRecords) {
+    customerSegmentById.set(c.customerId, c.segmentId);
+    if (c.email) customerEmailToSegmentId.set(c.email.toLowerCase(), c.segmentId);
+    const seg = segmentRevenueById.get(c.segmentId) ?? {
+      name: c.segment,
+      count: 0,
+      revenue: 0,
+      orders: 0,
+    };
+    seg.count += 1;
+    seg.revenue += c.totalRevenue || 0;
+    seg.orders += c.orderCount || 0;
+    segmentRevenueById.set(c.segmentId, seg);
+  }
+  return { customerSegmentById, customerEmailToSegmentId, segmentRevenueById };
+}
+
 function aggregateCustomers(orders: OrderRecord[]): CustomerAgg[] {
   const byKey = new Map<string, CustomerAgg>();
   for (const o of orders) {
@@ -863,6 +1218,7 @@ function aggregateCustomers(orders: OrderRecord[]): CustomerAgg[] {
 
 export async function computeRFMSegmentsForBrand(brandId: string): Promise<void> {
   const db = getDb();
+  const tRun = Date.now();
 
   const {
     orders: rawOrders,
@@ -877,7 +1233,6 @@ export async function computeRFMSegmentsForBrand(brandId: string): Promise<void>
     return;
   }
 
-  // Apply RFM lookback window (last 365 days from most recent order)
   const latestDate = rawOrders.reduce((best, o) => (o.date > best ? o.date : best), '');
   const cutoffDate = (() => {
     const d = new Date(latestDate);
@@ -907,11 +1262,10 @@ export async function computeRFMSegmentsForBrand(brandId: string): Promise<void>
   const fScores = assignQuintileScores(frequencies, false);
   const mScores = assignQuintileScores(monetaries, false);
 
-  // Build per-customer data + segment aggregates + customerId→segmentId map (for behavioral pass)
   const segmentMap = new Map<string, { name: string; count: number; revenue: number; orders: number }>();
-  const customerRecords: RFMCustomer[] = [];
-  const customerSegmentById = new Map<string, string>();
-  const customerEmailToSegmentId = new Map<string, string>();
+  const customerRecordsOrders: RFMCustomer[] = [];
+  const customerSegmentByIdOrders = new Map<string, string>();
+  const customerEmailToSegmentIdOrders = new Map<string, string>();
 
   customers.forEach((c, i) => {
     const r = rScores[i] ?? 3;
@@ -919,7 +1273,7 @@ export async function computeRFMSegmentsForBrand(brandId: string): Promise<void>
     const m = mScores[i] ?? 3;
     const { id, name } = segmentFromRfmScores(r, f, m);
 
-    customerRecords.push({
+    customerRecordsOrders.push({
       customerId: c.customerId,
       customerName: c.customerName || c.customerId,
       ...(c.email ? { email: c.email } : {}),
@@ -936,8 +1290,8 @@ export async function computeRFMSegmentsForBrand(brandId: string): Promise<void>
       daysSinceLastOrder: recencyDays[i] ?? 0,
     });
 
-    customerSegmentById.set(c.customerId, id);
-    if (c.email) customerEmailToSegmentId.set(c.email.toLowerCase(), id);
+    customerSegmentByIdOrders.set(c.customerId, id);
+    if (c.email) customerEmailToSegmentIdOrders.set(c.email.toLowerCase(), id);
 
     const seg = segmentMap.get(id) ?? { name, count: 0, revenue: 0, orders: 0 };
     seg.count += 1;
@@ -946,8 +1300,8 @@ export async function computeRFMSegmentsForBrand(brandId: string): Promise<void>
     segmentMap.set(id, seg);
   });
 
-  const totalCustomers = customers.length;
-  const segments: RFMSegmentSummary[] = [...segmentMap.entries()]
+  const totalCustomersOrders = customers.length;
+  const segmentsOrders: RFMSegmentSummary[] = [...segmentMap.entries()]
     .sort((a, b) => b[1].revenue - a[1].revenue)
     .map(([segId, seg]) => ({
       segment: seg.name,
@@ -955,60 +1309,123 @@ export async function computeRFMSegmentsForBrand(brandId: string): Promise<void>
       count: seg.count,
       revenue: Math.round(seg.revenue * 100) / 100,
       avgOrderValue: seg.orders > 0 ? Math.round((seg.revenue / seg.orders) * 100) / 100 : 0,
-      pct: totalCustomers > 0 ? Math.round((seg.count / totalCustomers) * 1000) / 10 : 0,
+      pct: totalCustomersOrders > 0 ? Math.round((seg.count / totalCustomersOrders) * 1000) / 10 : 0,
     }));
 
-  // ─── Per-segment behavioral computation (single pass over orders) ─────────
-  let segmentBehavioral: Map<string, PerSegmentBehavioral>;
+  // ─── Variant: orders (order-identified cohort only — no import merge) ──────
+  let segmentBehavioralOrders: Map<string, PerSegmentBehavioral>;
   try {
-    segmentBehavioral = await computeSegmentBehavioral({
+    segmentBehavioralOrders = await computeSegmentBehavioral({
       db,
       brandId,
       catalogPlatforms,
       primaryOrders: windowedOrders,
       hybridEshopOrders: eshopHybridOrders.filter((o) => o.date >= cutoffDate),
-      customerSegmentById,
-      customerEmailToSegmentId,
+      customerSegmentById: customerSegmentByIdOrders,
+      customerEmailToSegmentId: customerEmailToSegmentIdOrders,
       segmentRevenueById: new Map(segmentMap.entries()),
       dataSource,
     });
   } catch (e) {
-    logger.warn(`[RFM] ${brandId}: behavioral computation failed, continuing without it:`, e);
-    segmentBehavioral = new Map();
+    logger.warn(`[RFM] ${brandId}: orders variant behavioral failed:`, e);
+    segmentBehavioralOrders = new Map();
   }
 
-  // ─── Migration vs previous snapshot ──────────────────────────────────────
-  const migration = await computeMigrationVsPrevious(db, brandId, customerRecords, segments);
+  const migrationOrders = await computeMigrationVsPrevious(db, brandId, 'orders', customerRecordsOrders, segmentsOrders);
 
-  // ─── Write to Firestore ──────────────────────────────────────────────────
-  await writeRfmComputedDoc(db, brandId, {
+  const tBeforeOrdersWrite = Date.now();
+  const ordersMeta = await writeRfmVariant(db, brandId, 'orders', {
     dataSource,
     platforms,
-    totalCustomers,
+    totalCustomers: totalCustomersOrders,
     totalOrders: windowedOrders.length,
     ordersAttributed: windowedOrders.length,
     guestOrdersSkipped,
-    segments,
-    customers: customerRecords,
-    migration,
-    segmentBehavioral,
+    segments: segmentsOrders,
+    customers: customerRecordsOrders,
+    migration: migrationOrders,
+    segmentBehavioral: segmentBehavioralOrders,
+  });
+  const tAfterOrdersWrite = Date.now();
+
+  // ─── Variant: merged (e-shop & others — union import cohort) ──────────────
+  const tBeforeMergeLoad = Date.now();
+  const [summariesMap, importedRows, firestoreSegRows] = await Promise.all([
+    loadSegmentSummariesAdmin(db, brandId),
+    loadSegmentCustomerRowsAdmin(db, brandId),
+    loadFirestoreSegmentsAdmin(db, brandId),
+  ]);
+  const rebuiltFromSummaries = rebuildSegmentsFromSummariesAdmin(summariesMap);
+  const externalBase = chooseExternalBaseForMerge(firestoreSegRows, rebuiltFromSummaries);
+  const externalNameById = segmentNameByIdFromExternal(externalBase);
+
+  const mergeResult = buildMergedCustomerList(customerRecordsOrders, importedRows, externalNameById);
+  const customerRecordsMerged = mergeResult.customers;
+  const segmentsMerged = segmentSummariesFromCustomerRecords(customerRecordsMerged);
+  const behavioralMapsMerged = mapsForBehavioralFromCustomers(customerRecordsMerged);
+
+  let segmentBehavioralMerged: Map<string, PerSegmentBehavioral>;
+  try {
+    segmentBehavioralMerged = await computeSegmentBehavioral({
+      db,
+      brandId,
+      catalogPlatforms,
+      primaryOrders: windowedOrders,
+      hybridEshopOrders: eshopHybridOrders.filter((o) => o.date >= cutoffDate),
+      customerSegmentById: behavioralMapsMerged.customerSegmentById,
+      customerEmailToSegmentId: behavioralMapsMerged.customerEmailToSegmentId,
+      segmentRevenueById: behavioralMapsMerged.segmentRevenueById,
+      dataSource,
+    });
+  } catch (e) {
+    logger.warn(`[RFM] ${brandId}: merged variant behavioral failed:`, e);
+    segmentBehavioralMerged = new Map();
+  }
+
+  const migrationMerged = await computeMigrationVsPrevious(db, brandId, 'merged', customerRecordsMerged, segmentsMerged);
+
+  const tBeforeMergedWrite = Date.now();
+  const mergedMeta = await writeRfmVariant(db, brandId, 'merged', {
+    dataSource,
+    platforms,
+    totalCustomers: customerRecordsMerged.length,
+    totalOrders: windowedOrders.length,
+    ordersAttributed: windowedOrders.length,
+    guestOrdersSkipped,
+    segments: segmentsMerged,
+    customers: customerRecordsMerged,
+    migration: migrationMerged,
+    segmentBehavioral: segmentBehavioralMerged,
+    mergedFallbackToOrders: mergeResult.mergedFallbackToOrders,
+  });
+  const tAfterMergedWrite = Date.now();
+
+  await updateRfmComputedParentV2(db, brandId, {
+    ordersMeta,
+    mergedMeta,
+    mergedFallbackToOrders: mergeResult.mergedFallbackToOrders,
   });
 
-  // Monthly snapshot
+  await cleanupLegacyRfmComputedLayout(db, brandId);
+
   const yyyyMM = latestDate.slice(0, 7).replace('-', '');
   await db.doc(`rfm_snapshots/${brandId}/history/${yyyyMM}`).set({
     brandId,
     computedAt: FieldValue.serverTimestamp(),
     dataSource,
     dataSourcePlatforms: platforms,
-    totalCustomers,
+    totalCustomers: totalCustomersOrders,
     totalOrders: windowedOrders.length,
-    segments,
+    segments: segmentsOrders,
     month: yyyyMM,
   });
 
   logger.info(
-    `[RFM] ${brandId}: computed segments=${segments.length} customers=${totalCustomers} source=${dataSource}:${platforms.join(',')} behavioralSegments=${segmentBehavioral.size}`
+    `[RFM] ${brandId}: variants written — orders customers=${totalCustomersOrders} merged=${customerRecordsMerged.length} ` +
+      `importRowsAdded=${mergeResult.importRowsAdded} fallbackToOrders=${mergeResult.mergedFallbackToOrders} ` +
+      `behavioral orders=${segmentBehavioralOrders.size} merged=${segmentBehavioralMerged.size} ` +
+      `timings ms: mergeLoad=${tBeforeMergedWrite - tBeforeMergeLoad} ordersWrite=${tAfterOrdersWrite - tBeforeOrdersWrite} ` +
+      `mergedWrite=${tAfterMergedWrite - tBeforeMergedWrite} total=${Date.now() - tRun}`
   );
 }
 
@@ -1281,12 +1698,29 @@ interface WriteRfmInput {
   customers: RFMCustomer[];
   migration: MigrationResult;
   segmentBehavioral: Map<string, PerSegmentBehavioral>;
+  /** Merged variant only — UI notice when import data was absent. */
+  mergedFallbackToOrders?: boolean;
 }
 
-async function writeRfmComputedDoc(db: Firestore, brandId: string, input: WriteRfmInput): Promise<void> {
+interface WriteRfmVariantMeta {
+  chunkCount: number;
+  segmentDocCount: number;
+  customersBytes: number;
+}
+
+/**
+ * Persists one RFM variant under `rfm_computed/{brandId}/variants/{variantId}`.
+ */
+async function writeRfmVariant(
+  db: Firestore,
+  brandId: string,
+  variantId: RfmVariantId,
+  input: WriteRfmInput
+): Promise<WriteRfmVariantMeta> {
   const {
     dataSource, platforms, totalCustomers, totalOrders,
     ordersAttributed, guestOrdersSkipped, segments, customers, migration, segmentBehavioral,
+    mergedFallbackToOrders,
   } = input;
 
   const fullJson = JSON.stringify(customers);
@@ -1296,7 +1730,7 @@ async function writeRfmComputedDoc(db: Firestore, brandId: string, input: WriteR
     chunkPayloads.push(fullJson);
   } else {
     let chunk: RFMCustomer[] = [];
-    let chunkBytes = 2; // [] wrapper
+    let chunkBytes = 2;
     for (const c of customers) {
       const entry = JSON.stringify(c) + ',';
       if (chunkBytes + entry.length > CUSTOMER_CHUNK_BYTES && chunk.length > 0) {
@@ -1310,7 +1744,7 @@ async function writeRfmComputedDoc(db: Firestore, brandId: string, input: WriteR
     if (chunk.length > 0) chunkPayloads.push(JSON.stringify(chunk));
   }
 
-  const parentRef = db.doc(`rfm_computed/${brandId}`);
+  const parentRef = db.doc(`rfm_computed/${brandId}/variants/${variantId}`);
   const chunksColl = parentRef.collection('chunks');
 
   await Promise.all(
@@ -1322,7 +1756,6 @@ async function writeRfmComputedDoc(db: Firestore, brandId: string, input: WriteR
     )
   );
 
-  // Delete stale chunks
   const existing = await chunksColl.listDocuments();
   const stale = existing.filter((d) => {
     const idx = Number.parseInt(d.id, 10);
@@ -1330,7 +1763,6 @@ async function writeRfmComputedDoc(db: Firestore, brandId: string, input: WriteR
   });
   if (stale.length) await Promise.all(stale.map((d) => d.delete()));
 
-  // Per-segment behavioral subcollection
   const segmentsColl = parentRef.collection('segments');
   const segmentDocsWritten: string[] = [];
   await Promise.all(
@@ -1338,6 +1770,7 @@ async function writeRfmComputedDoc(db: Firestore, brandId: string, input: WriteR
       const segMeta = segments.find((s) => s.segmentId === segId);
       await segmentsColl.doc(segId).set({
         brandId,
+        variant: variantId,
         segmentId: segId,
         segmentName: segMeta?.segment || segId,
         count: segMeta?.count ?? 0,
@@ -1351,13 +1784,13 @@ async function writeRfmComputedDoc(db: Firestore, brandId: string, input: WriteR
     })
   );
 
-  // Delete stale segment docs (e.g. segments that disappeared between runs)
   const existingSegments = await segmentsColl.listDocuments();
   const staleSegments = existingSegments.filter((d) => !segmentBehavioral.has(d.id));
   if (staleSegments.length) await Promise.all(staleSegments.map((d) => d.delete()));
 
-  await parentRef.set({
+  const variantPayload: Record<string, unknown> = {
     brandId,
+    variant: variantId,
     computedAt: FieldValue.serverTimestamp(),
     dataSource,
     dataSourcePlatforms: platforms,
@@ -1370,10 +1803,80 @@ async function writeRfmComputedDoc(db: Firestore, brandId: string, input: WriteR
     customersBytes: fullJson.length,
     migration,
     segmentDocCount: segmentDocsWritten.length,
-  });
+  };
+  if (variantId === 'merged' && mergedFallbackToOrders === true) {
+    variantPayload.mergedFallbackToOrders = true;
+  }
+
+  await parentRef.set(variantPayload);
 
   logger.info(
-    `[RFM] ${brandId}: customers persisted — ${totalCustomers} customers across ${chunkPayloads.length} chunk(s) (~${(fullJson.length / 1024).toFixed(1)}KB) · segmentDocs=${segmentDocsWritten.length}`
+    `[RFM] ${brandId}/${variantId}: persisted — ${totalCustomers} customers · ${chunkPayloads.length} chunk(s) ` +
+      `(~${(fullJson.length / 1024).toFixed(1)}KB) · segmentDocs=${segmentDocsWritten.length}`
+  );
+
+  return {
+    chunkCount: chunkPayloads.length,
+    segmentDocCount: segmentDocsWritten.length,
+    customersBytes: fullJson.length,
+  };
+}
+
+async function updateRfmComputedParentV2(
+  db: Firestore,
+  brandId: string,
+  meta: {
+    ordersMeta: WriteRfmVariantMeta;
+    mergedMeta: WriteRfmVariantMeta;
+    mergedFallbackToOrders: boolean;
+  }
+): Promise<void> {
+  await db.doc(`rfm_computed/${brandId}`).set(
+    {
+      brandId,
+      schemaVersion: 2,
+      computedAt: FieldValue.serverTimestamp(),
+      orders: {
+        updatedAt: FieldValue.serverTimestamp(),
+        chunkCount: meta.ordersMeta.chunkCount,
+        segmentDocCount: meta.ordersMeta.segmentDocCount,
+        customersBytes: meta.ordersMeta.customersBytes,
+      },
+      merged: {
+        updatedAt: FieldValue.serverTimestamp(),
+        chunkCount: meta.mergedMeta.chunkCount,
+        segmentDocCount: meta.mergedMeta.segmentDocCount,
+        customersBytes: meta.mergedMeta.customersBytes,
+        mergedFallbackToOrders: meta.mergedFallbackToOrders,
+      },
+    },
+    { merge: true }
+  );
+}
+
+/** Remove legacy v1 `chunks` + `segments` under brand root after v2 variants succeed. */
+async function cleanupLegacyRfmComputedLayout(db: Firestore, brandId: string): Promise<void> {
+  const root = db.doc(`rfm_computed/${brandId}`);
+  for (const sub of ['chunks', 'segments'] as const) {
+    const coll = root.collection(sub);
+    const docs = await coll.listDocuments();
+    if (docs.length) await Promise.all(docs.map((d) => d.delete()));
+  }
+  await root.set(
+    {
+      chunkCount: FieldValue.delete(),
+      segments: FieldValue.delete(),
+      customersBytes: FieldValue.delete(),
+      migration: FieldValue.delete(),
+      dataSource: FieldValue.delete(),
+      dataSourcePlatforms: FieldValue.delete(),
+      totalCustomers: FieldValue.delete(),
+      totalOrders: FieldValue.delete(),
+      ordersAttributed: FieldValue.delete(),
+      guestOrdersSkipped: FieldValue.delete(),
+      segmentDocCount: FieldValue.delete(),
+    },
+    { merge: true }
   );
 }
 
@@ -1386,28 +1889,59 @@ interface PrevSnapshot {
 }
 
 /**
- * Reads previous snapshot (parent doc + chunked customers).
- * Returns null if no prior data exists.
- * Reads at most MIGRATION_MAX_CHUNKS chunks to bound memory; older brands with
- * massive customer bases will diff only against the prefix.
+ * Previous snapshot for migration diff (per variant). Tries `variants/{id}` first;
+ * for `orders` only, falls back to legacy flat `rfm_computed/{brandId}` + `chunks`.
  */
-async function readPreviousSnapshot(db: Firestore, brandId: string): Promise<PrevSnapshot | null> {
+async function readPreviousVariantSnapshot(
+  db: Firestore,
+  brandId: string,
+  variant: RfmVariantId
+): Promise<PrevSnapshot | null> {
+  const variantRef = db.doc(`rfm_computed/${brandId}/variants/${variant}`);
+  const variantSnap = await variantRef.get();
+  if (variantSnap.exists) {
+    const data = variantSnap.data() ?? {};
+    const computedAt = (data.computedAt as FirebaseFirestore.Timestamp | undefined) ?? null;
+    const segments = Array.isArray(data.segments) ? (data.segments as RFMSegmentSummary[]) : [];
+    const declaredChunkCount = typeof data.chunkCount === 'number' ? data.chunkCount : 0;
+    if (declaredChunkCount === 0) {
+      return { computedAt, segments, customers: [] };
+    }
+    const chunksColl = variantRef.collection('chunks');
+    const limit = Math.min(declaredChunkCount, MIGRATION_MAX_CHUNKS);
+    const chunkSnap = await chunksColl.limit(limit).get();
+    const customers: RFMCustomer[] = [];
+    for (const doc of chunkSnap.docs) {
+      const json = doc.get('customersJson');
+      if (typeof json !== 'string' || !json) continue;
+      try {
+        const parsed = JSON.parse(json);
+        if (Array.isArray(parsed)) customers.push(...(parsed as RFMCustomer[]));
+      } catch (e) {
+        logger.warn(`[RFM] ${brandId}/${variant}: failed to parse chunk ${doc.id} for migration`, e);
+      }
+    }
+    return { computedAt, segments, customers };
+  }
+
+  if (variant !== 'orders') return null;
+
   const parentRef = db.doc(`rfm_computed/${brandId}`);
   const parentSnap = await parentRef.get();
   if (!parentSnap.exists) return null;
-
   const data = parentSnap.data() ?? {};
+  const schemaV2 = data.schemaVersion === 2;
+  if (schemaV2) return null;
+
   const computedAt = (data.computedAt as FirebaseFirestore.Timestamp | undefined) ?? null;
   const segments = Array.isArray(data.segments) ? (data.segments as RFMSegmentSummary[]) : [];
   const declaredChunkCount = typeof data.chunkCount === 'number' ? data.chunkCount : 0;
   if (declaredChunkCount === 0) {
     return { computedAt, segments, customers: [] };
   }
-
   const chunksColl = parentRef.collection('chunks');
   const limit = Math.min(declaredChunkCount, MIGRATION_MAX_CHUNKS);
   const chunkSnap = await chunksColl.limit(limit).get();
-
   const customers: RFMCustomer[] = [];
   for (const doc of chunkSnap.docs) {
     const json = doc.get('customersJson');
@@ -1416,10 +1950,9 @@ async function readPreviousSnapshot(db: Firestore, brandId: string): Promise<Pre
       const parsed = JSON.parse(json);
       if (Array.isArray(parsed)) customers.push(...(parsed as RFMCustomer[]));
     } catch (e) {
-      logger.warn(`[RFM] ${brandId}: failed to parse chunk ${doc.id} for migration`, e);
+      logger.warn(`[RFM] ${brandId}: failed to parse legacy chunk ${doc.id} for migration`, e);
     }
   }
-
   return { computedAt, segments, customers };
 }
 
@@ -1431,10 +1964,11 @@ function daysBetween(a: Date, b: Date): number {
 async function computeMigrationVsPrevious(
   db: Firestore,
   brandId: string,
+  variant: RfmVariantId,
   newCustomers: RFMCustomer[],
   newSegments: RFMSegmentSummary[]
 ): Promise<MigrationResult> {
-  const prev = await readPreviousSnapshot(db, brandId);
+  const prev = await readPreviousVariantSnapshot(db, brandId, variant);
   if (!prev || prev.customers.length === 0) {
     return EMPTY_MIGRATION;
   }
@@ -1445,7 +1979,6 @@ async function computeMigrationVsPrevious(
   const newById = new Map<string, RFMCustomer>();
   for (const c of newCustomers) newById.set(c.customerId, c);
 
-  // Resolve segment names from both snapshots (new takes precedence).
   const segmentNameById = new Map<string, string>();
   for (const s of prev.segments) segmentNameById.set(s.segmentId, s.segment);
   for (const s of newSegments) segmentNameById.set(s.segmentId, s.segment);
@@ -1499,7 +2032,6 @@ async function computeMigrationVsPrevious(
     }))
     .sort((a, b) => b.count - a.count);
 
-  // Segment-level deltas (union of all segment ids across both snapshots).
   const prevSegMap = new Map<string, RFMSegmentSummary>();
   for (const s of prev.segments) prevSegMap.set(s.segmentId, s);
   const newSegMap = new Map<string, RFMSegmentSummary>();
@@ -1531,7 +2063,7 @@ async function computeMigrationVsPrevious(
   const totalFlowsCount = flows.reduce((sum, f) => sum + f.count, 0);
 
   logger.info(
-    `[RFM] ${brandId}: migration computed — comparedCustomers=${comparedCustomers} flows=${flows.length} totalMoved=${totalFlowsCount} periodDays=${periodDays}`
+    `[RFM] ${brandId}/${variant}: migration — comparedCustomers=${comparedCustomers} flows=${flows.length} totalMoved=${totalFlowsCount} periodDays=${periodDays}`
   );
 
   return {

@@ -134,6 +134,8 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
     isPreComputed,
     lastComputedAt,
     serverBehavioralAvailable,
+    mergedFallbackToOrders,
+    preComputedVariant,
   } = useSegments({ variant: 'data_analysis' });
   const ecomm = useEcommerceSummary();
   const { currentBrand } = useBrand();
@@ -144,7 +146,8 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
    */
   const { behavioral: serverBehavioral, isLoading: serverBehavioralLoading } = useRFMSegmentBehavioral(
     serverBehavioralAvailable ? currentBrand?.id ?? null : null,
-    serverBehavioralAvailable ? selectedSegmentId : null
+    serverBehavioralAvailable ? selectedSegmentId : null,
+    preComputedVariant
   );
   const queryClient = useQueryClient();
   const toast = useToast();
@@ -225,10 +228,10 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
     if (!currentBrand?.id) return;
     try {
       if (segment) {
-        const { count } = await exportSegmentCustomerList(currentBrand.id, segment, currentBrand.name, fmt);
+        const { count } = await exportSegmentCustomerList(currentBrand.id, segment, currentBrand.name, fmt, preComputedVariant);
         toast.success(`${count} customers exported (.${fmt})`);
       } else {
-        const { count } = await exportAllSegmentCustomerLists(currentBrand.id, rfmSegments, currentBrand.name, fmt);
+        const { count } = await exportAllSegmentCustomerLists(currentBrand.id, rfmSegments, currentBrand.name, fmt, preComputedVariant);
         toast.success(`${count} customers exported (.${fmt})`);
       }
     } catch (e) {
@@ -498,6 +501,14 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
         ) : null}
         {ordersLoading ? (
           <LoadingStatusPill label="Loading order history…" />
+        ) : null}
+        {rfmSourcePref === 'external' && mergedFallbackToOrders ? (
+          <span
+            className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-900"
+            title="Δεν βρέθηκαν εισαγόμενα δεδομένα για συγχώνευση — εμφανίζεται το ίδιο cohort με «e-shop orders»."
+          >
+            Συγχώνευση: μόνο παραγγελίες
+          </span>
         ) : null}
         {ordersSampled ? (
           <span

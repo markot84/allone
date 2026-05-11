@@ -3,6 +3,7 @@
  * that bridge analysis → marketing execution.
  */
 import type { RFMSegment, ChannelRecommendation } from '../types';
+import type { RFMPrecomputedVariant } from '../hooks/useRFMPreComputed';
 import { deriveBehavioralProfile, derivePredictiveMetrics } from './behavioralEngine';
 import { safeBrandName } from './reportExport';
 import { formatNumber } from '../utils/format';
@@ -418,6 +419,7 @@ export async function exportSegmentCustomerList(
   segment: RFMSegment,
   brandName?: string,
   format: ExportFormat = 'csv',
+  rfmPreComputedVariant: RFMPrecomputedVariant = 'orders',
 ): Promise<{ count: number }> {
   const importedCustomers = await SegmentCustomersService.getForSegment(brandId, segment.id);
   let customers = importedCustomers.length > 0 ? importedCustomers : segment.customers ?? [];
@@ -425,7 +427,7 @@ export async function exportSegmentCustomerList(
   // Happens on the server-pre-computed path where we skip the lazy raw-orders fetch.
   if (customers.length === 0) {
     const { loadPreComputedCustomersBySegment } = await import('../hooks/useRFMPreComputed');
-    const byId = await loadPreComputedCustomersBySegment(brandId);
+    const byId = await loadPreComputedCustomersBySegment(brandId, rfmPreComputedVariant);
     customers = byId.get(segment.id) ?? [];
   }
   if (customers.length === 0) throw new Error('Δεν υπάρχουν customer-level δεδομένα με email/customer id για αυτό το segment.');
@@ -472,6 +474,7 @@ export async function exportAllSegmentCustomerLists(
   segments: RFMSegment[],
   brandName?: string,
   format: ExportFormat = 'csv',
+  rfmPreComputedVariant: RFMPrecomputedVariant = 'orders',
 ): Promise<{ count: number }> {
   const allCustomers = await SegmentCustomersService.getAllBySegment(brandId);
   const hasDerivedCustomers = segments.some((seg) => (seg.customers?.length ?? 0) > 0);
@@ -479,7 +482,7 @@ export async function exportAllSegmentCustomerLists(
   let preComputedBySegment: Map<string, RFMSegment['customers']> | null = null;
   if (allCustomers.size === 0 && !hasDerivedCustomers) {
     const { loadPreComputedCustomersBySegment } = await import('../hooks/useRFMPreComputed');
-    preComputedBySegment = await loadPreComputedCustomersBySegment(brandId);
+    preComputedBySegment = await loadPreComputedCustomersBySegment(brandId, rfmPreComputedVariant);
     const hasAny = preComputedBySegment.size > 0;
     if (!hasAny) {
       throw new Error('Δεν υπάρχουν customer-level δεδομένα με email/customer id για export.');

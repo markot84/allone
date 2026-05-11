@@ -8,7 +8,7 @@ import { useEcommerceSummary } from './useEcommerceSummary';
 import { fetchAllEcommerceOrders, fetchDataAnalysisOrders, MAX_ORDERS_PER_PLATFORM_RFM } from '../services/ecommerceRawOrders';
 import { fetchCatalogAlignmentData, fetchCatalogAlignmentDataForDataAnalysis, normalizeCatalogAlignmentPayload } from '../services/catalogAlignment';
 import { computeRfmSegmentsFromEcommerceOrders, computeSegmentMigrationFromEcommerceOrders, type RfmCatalogContext, type SegmentMigrationResult } from '../services/rfmFromOrders';
-import { useRFMPreComputed, type RFMPreComputedMigration } from './useRFMPreComputed';
+import { useRFMPreComputed, type RFMPreComputedMigration, type RFMPrecomputedVariant } from './useRFMPreComputed';
 import type { RFMSegment } from '../types';
 
 const STORAGE_KEY = (brandId: string) => `pp-rfm-data-source-${brandId}`;
@@ -137,9 +137,6 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   const brandId = currentBrand?.id ?? null;
   const ecomm = useEcommerceSummary();
 
-  // Pre-computed RFM from Cloud Function (server-side, no client limit)
-  // Works for both variants — Cloud Function uses same ERP-first priority.
-  const preComputed = useRFMPreComputed(brandId);
   const platformsKey = useMemo(() => [...ecomm.connectedPlatforms].sort().join('|'), [ecomm.connectedPlatforms]);
 
   const [sourcePref, setSourcePrefState] = useState<RfmDataSourcePreference>('orders');
@@ -155,6 +152,11 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     },
     [brandId]
   );
+
+  /** Dual-variant server RFM — pick slice from user source preference. */
+  const preRf = useRFMPreComputed(brandId);
+  const preActive = sourcePref === 'external' ? preRf.merged : preRf.orders;
+  const preOrders = preRf.orders;
 
   const { data: firestoreSegments = [], isPending: fsPending } = useQuery({
     queryKey: ['segments', brandId],
@@ -176,16 +178,22 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     [rawSegmentCustomerSummaries]
   );
 
-  // Defer order fetch until pre-computed check settles. When pre-computed IS active AND server
-  // has per-segment behavioral docs (`segmentDocCount > 0`), the segment-detail panel reads
-  // brand/subcategory/SKU/catalog affinities directly from `rfm_computed/{brandId}/segments/{id}`
-  // — no client-side raw orders fetch needed. Fallback to client computation only when:
-  //   1. Pre-computed RFM is unavailable (old/missing data), OR
-  //   2. Server has no per-segment behavioral docs yet (first deploy / failed enrichment).
-  const serverBehavioralAvailable = preComputed.isPreComputed && preComputed.segmentDocCount > 0;
+  /**
+   * Server variant for the active source has fresh pre-computed RFM + customer chunks.
+   * When true, skip client order fetch (no 5K cap) for this toggle.
+   */
+  const serverVariantReady =
+    !preRf.isLoading &&
+    preActive.isPreComputed &&
+    (preActive.segmentDocCount > 0 || preActive.segments.length > 0);
+
+  const usePreComputedActive = serverVariantReady;
+
+  /** True when per-segment behavioral subdocs exist for the active variant. */
+  const hasServerBehavioralDocs = usePreComputedActive && preActive.segmentDocCount > 0;
+
   const ordersQueryEnabled =
-    !preComputed.isLoading &&
-    !serverBehavioralAvailable &&
+    !serverVariantReady &&
     !!brandId && (ecomm.connectedPlatforms.length > 0 || variant === 'data_analysis');
   const ordersSinceDate = useMemo(() => {
     const d = new Date();
@@ -255,9 +263,10 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   }, [brandId, firestoreSegments, rebuiltCustomerSegments]);
 
   const resolvedSource: SegmentsDataSource = useMemo(() => {
+    if (usePreComputedActive && sourcePref === 'external') return 'import';
     if (sourcePref === 'external') return importSegmentsAvailable ? 'import' : canComputeFromOrders ? 'ecommerce' : 'none';
     return canComputeFromOrders ? 'ecommerce' : importSegmentsAvailable ? 'import' : 'none';
-  }, [sourcePref, canComputeFromOrders, importSegmentsAvailable]);
+  }, [usePreComputedActive, sourcePref, canComputeFromOrders, importSegmentsAvailable]);
 
   const segments = useMemo(() => {
     let base: RFMSegment[];
@@ -327,17 +336,17 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     ecomm.connectedPlatforms.length === 0 &&
     !ecomm.hasData;
   const isLoading =
-    blocksOnImportedSegmentsOnly || (sourcePref === 'external' && segmentCustomersPending);
+    blocksOnImportedSegmentsOnly ||
+    (sourcePref === 'external' && segmentCustomersPending && !usePreComputedActive);
 
-  // When pre-computed data is available AND user prefers 'orders', use server data.
-  // For 'external' (imported segments) we keep the existing client-side flow.
-  const usePreComputedActive = preComputed.isPreComputed && sourcePref === 'orders';
+  // When pre-computed data is available for the selected source, use that variant's Firestore slice.
+  // (Removed duplicate usePreComputedActive — unified with serverVariantReady above.)
 
   // Show loading while: pre-computed check is in progress (only relevant for 'orders' pref),
   // OR orders are being fetched (no pre-computed). When pre-computed is the active source,
   // orders + catalog fetch silently in the background — surface progress via `isCatalogEnriching` only.
   const ordersLoading =
-    (sourcePref === 'orders' && preComputed.isLoading) ||
+    preRf.isLoading ||
     (ordersQueryEnabled && ordersPending && !usePreComputedActive);
   const isCatalogEnriching = usePreComputedActive
     ? ordersQueryEnabled && (ordersPending || catalogPending)
@@ -347,7 +356,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
 
   const hasImported =
     usePreComputedActive
-      ? preComputed.totalCustomers > 0
+      ? preActive.totalCustomers > 0
       : resolvedSource === 'ecommerce' ? orderRfm.totalCustomers > 0 : importSegmentsAvailable;
 
   /**
@@ -364,8 +373,8 @@ export function useSegments(options: UseSegmentsOptions = {}) {
 
   const activeSegments = useMemo<RFMSegment[]>(() => {
     if (!usePreComputedActive) return segments;
-    if (orderRfmBySegmentId.size === 0) return preComputed.segments;
-    return preComputed.segments.map((s) => {
+    if (orderRfmBySegmentId.size === 0) return preActive.segments;
+    return preActive.segments.map((s) => {
       const enriched = orderRfmBySegmentId.get(s.id);
       if (!enriched) return s;
       return {
@@ -375,17 +384,44 @@ export function useSegments(options: UseSegmentsOptions = {}) {
         customers: enriched.customers,
       };
     });
-  }, [usePreComputedActive, segments, preComputed.segments, orderRfmBySegmentId]);
-  const activeTotalCustomers = usePreComputedActive ? preComputed.totalCustomers : totalCustomers;
+  }, [usePreComputedActive, segments, preActive.segments, orderRfmBySegmentId]);
+  const activeTotalCustomers = usePreComputedActive ? preActive.totalCustomers : totalCustomers;
 
   // Override dataCoverage when pre-computed data is the active source — old client-side coverage
   // only sees imported segments + (skipped) orderRfm and reports incorrect counts.
   const activeDataCoverage = useMemo<SegmentDataCoverage>(() => {
     if (!usePreComputedActive) return dataCoverage;
-    const isErp = preComputed.dataSource === 'erp';
-    const eShopCustomers = isErp ? 0 : preComputed.totalCustomers;
-    const otherCustomers = isErp ? preComputed.totalCustomers : externalTotalCustomers;
-    const total = preComputed.totalCustomers + (isErp ? 0 : externalTotalCustomers);
+    if (sourcePref === 'external') {
+      const usesConnectorRfm = externalSegments.some((s) =>
+        String((s as RFMSegment & { source?: string }).source || '').endsWith('_rfm')
+      );
+      const eShopCustomers = preOrders.totalCustomers;
+      const fullBase = usesConnectorRfm
+        ? eShopCustomers + externalTotalCustomers
+        : Math.max(externalTotalCustomers, preActive.totalCustomers);
+      const otherCustomers =
+        usesConnectorRfm
+          ? externalTotalCustomers
+          : Math.max(0, fullBase - eShopCustomers);
+      const eShopPenetration = fullBase > 0 ? Math.round((eShopCustomers / fullBase) * 1000) / 10 : 0;
+      return {
+        sourcePreference: sourcePref,
+        activeSource: 'import',
+        eShopCustomers,
+        totalCustomers: fullBase,
+        otherCustomers,
+        eShopPenetration,
+        hasEshopOrders: eShopCustomers > 0,
+        hasExternalData: externalTotalCustomers > 0 || preActive.totalCustomers > eShopCustomers,
+        policyLabel: 'e-shop & others',
+        marketingPolicy:
+          'Χρησιμοποιεί ευρύτερο πελατολόγιο από e-shop και ERP/other πηγές. Οι προτάσεις πρέπει να λαμβάνουν υπόψη ότι μέρος του κοινού επηρεάζεται ψηφιακά αλλά μπορεί να αγοράζει offline.',
+      };
+    }
+    const isErp = preOrders.dataSource === 'erp';
+    const eShopCustomers = isErp ? 0 : preOrders.totalCustomers;
+    const otherCustomers = isErp ? preOrders.totalCustomers : externalTotalCustomers;
+    const total = preOrders.totalCustomers + (isErp ? 0 : externalTotalCustomers);
     const eShopPenetration = total > 0 ? Math.round((eShopCustomers / total) * 1000) / 10 : 0;
     return {
       sourcePreference: sourcePref,
@@ -394,7 +430,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
       totalCustomers: total,
       otherCustomers,
       eShopPenetration,
-      hasEshopOrders: !isErp && preComputed.totalCustomers > 0,
+      hasEshopOrders: !isErp && preOrders.totalCustomers > 0,
       hasExternalData: isErp || externalTotalCustomers > 0,
       policyLabel: isErp || externalTotalCustomers > 0 ? 'e-shop & others' : 'e-shop orders',
       marketingPolicy:
@@ -404,12 +440,21 @@ export function useSegments(options: UseSegmentsOptions = {}) {
           ? 'Χρησιμοποιεί ευρύτερο πελατολόγιο από e-shop και ERP/other πηγές. Οι προτάσεις πρέπει να λαμβάνουν υπόψη ότι μέρος του κοινού επηρεάζεται ψηφιακά αλλά μπορεί να αγοράζει offline.'
           : 'Χρησιμοποιεί μόνο αναγνωρίσιμους e-shop αγοραστές. Οι προτάσεις μπορούν να δίνουν μεγαλύτερη έμφαση σε performance, retargeting, CRM και online conversion.',
     };
-  }, [usePreComputedActive, preComputed.dataSource, preComputed.totalCustomers, dataCoverage, externalTotalCustomers, sourcePref]);
+  }, [
+    usePreComputedActive,
+    sourcePref,
+    preOrders.dataSource,
+    preOrders.totalCustomers,
+    preActive.totalCustomers,
+    dataCoverage,
+    externalTotalCustomers,
+    externalSegments,
+  ]);
 
   // With pre-computed data, the toggle (orders vs external) should still be available
   // when both pre-computed orders AND imported segments exist.
-  const activeCanComputeFromOrders = preComputed.isPreComputed
-    ? preComputed.totalCustomers > 0
+  const activeCanComputeFromOrders = preOrders.isPreComputed
+    ? preOrders.totalCustomers > 0
     : canComputeFromOrders;
 
   return {
@@ -442,23 +487,27 @@ export function useSegments(options: UseSegmentsOptions = {}) {
             guestOrdersSkipped: orderRfm.guestOrdersSkipped,
           }
         : undefined,
-    segmentMigration: usePreComputedActive && preComputed.migration
-      ? preComputedMigrationToResult(preComputed.migration)
+    segmentMigration: usePreComputedActive && preActive.migration
+      ? preComputedMigrationToResult(preActive.migration)
       : resolvedSource === 'ecommerce' ? orderSegmentMigration : undefined,
     importSegmentsAvailable,
     /** True when reading from server pre-computed RFM (Cloud Function). */
     isPreComputed: usePreComputedActive,
     /** Timestamp of the last server-side RFM computation. */
-    lastComputedAt: preComputed.lastComputedAt,
-    /** Data source used for pre-computed RFM. */
-    preComputedDataSource: preComputed.dataSource,
-    /** Platforms used for pre-computed RFM. */
-    preComputedPlatforms: preComputed.dataSourcePlatforms,
+    lastComputedAt: preActive.lastComputedAt,
+    /** Data source used for pre-computed RFM (active variant). */
+    preComputedDataSource: preActive.dataSource,
+    /** Platforms used for pre-computed RFM (active variant). */
+    preComputedPlatforms: preActive.dataSourcePlatforms,
     /**
      * True when the server has pre-computed per-segment behavioral docs available.
      * The UI should then load segment detail from `rfm_computed/{brandId}/segments/{segmentId}`
      * (via {@link useRFMSegmentBehavioral}) rather than computing client-side from raw orders.
      */
-    serverBehavioralAvailable: usePreComputedActive && serverBehavioralAvailable,
+    serverBehavioralAvailable: hasServerBehavioralDocs,
+    /** Firestore path variant for the active source (`orders` vs `merged`). */
+    preComputedVariant: (sourcePref === 'external' ? 'merged' : 'orders') as RFMPrecomputedVariant,
+    /** Merged variant only: no import cohort was available server-side — same as orders. */
+    mergedFallbackToOrders: sourcePref === 'external' ? preRf.merged.mergedFallbackToOrders : undefined,
   };
 }
