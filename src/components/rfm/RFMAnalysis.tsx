@@ -32,6 +32,7 @@ import { Card, CardHeader, Badge, Button, Spinner, Tooltip as InfoTooltip, useTo
 import { useSegments, type SegmentDataCoverage, type SegmentsDataSource } from '../../hooks/useSegments';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import { useBrand } from '../../hooks/useBrand';
+import { useRFMSegmentBehavioral } from '../../hooks/useRFMPreComputed';
 import { FirestoreService } from '../../services/firestore';
 import { BehavioralTab } from './BehavioralTab';
 import { PredictiveTab } from './PredictiveTab';
@@ -132,9 +133,19 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
     ordersSampled,
     isPreComputed,
     lastComputedAt,
+    serverBehavioralAvailable,
   } = useSegments({ variant: 'data_analysis' });
   const ecomm = useEcommerceSummary();
   const { currentBrand } = useBrand();
+  /**
+   * Lazy per-segment behavioral fetch from `rfm_computed/{brandId}/segments/{segmentId}`.
+   * Only enabled when server-side rollups are available — otherwise SegmentDetail falls back
+   * to whatever `useSegments` produced from raw orders.
+   */
+  const { behavioral: serverBehavioral, isLoading: serverBehavioralLoading } = useRFMSegmentBehavioral(
+    serverBehavioralAvailable ? currentBrand?.id ?? null : null,
+    serverBehavioralAvailable ? selectedSegmentId : null
+  );
   const queryClient = useQueryClient();
   const toast = useToast();
   const [isDeleting, setIsDeleting] = useState(false);
@@ -144,10 +155,26 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
   const channelRecommendation = activeStrategy?.channelRecommendation ?? null;
   const totalCustomersDisplay = Math.max(totalCustomers, dataCoverage.totalCustomers);
   const segmentColorById = new Map(rfmSegments.map((segment) => [segment.id, segment.color]));
-  const selectedSegment = useMemo(
+  const baseSelectedSegment = useMemo(
     () => rfmSegments.find((segment) => segment.id === selectedSegmentId) ?? null,
     [rfmSegments, selectedSegmentId]
   );
+  /**
+   * When server-side per-segment behavioral docs are available, merge them into the selected
+   * segment so brand/subcategory/SKU panels render instantly (no client raw-orders fetch).
+   * Falls back to whatever client-side `useSegments` produced when server data is missing.
+   */
+  const selectedSegment = useMemo(() => {
+    if (!baseSelectedSegment) return null;
+    if (!serverBehavioralAvailable || !serverBehavioral) return baseSelectedSegment;
+    return {
+      ...baseSelectedSegment,
+      behavioral: {
+        ...(baseSelectedSegment.behavioral ?? {}),
+        ...serverBehavioral,
+      } as typeof baseSelectedSegment.behavioral,
+    };
+  }, [baseSelectedSegment, serverBehavioral, serverBehavioralAvailable]);
   const segmentMovementById = useMemo(() => {
     const map = new Map<string, SegmentMovement>();
     for (const flow of segmentMigration?.flows ?? []) {
@@ -482,6 +509,9 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
         ) : null}
         {isCatalogEnriching ? (
           <LoadingStatusPill label="Loading product catalog…" />
+        ) : null}
+        {serverBehavioralAvailable && serverBehavioralLoading && selectedSegmentId ? (
+          <LoadingStatusPill label="Φόρτωση δεδομένων segment…" />
         ) : null}
         <details className="sm:ml-auto shrink-0 max-w-full sm:max-w-[22rem] text-[11px]">
           <summary className="cursor-pointer font-semibold text-[var(--nts-accent)] hover:underline">

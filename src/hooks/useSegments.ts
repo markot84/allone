@@ -176,11 +176,16 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     [rawSegmentCustomerSummaries]
   );
 
-  // Defer order fetch until pre-computed check settles. When pre-computed IS active we still
-  // fetch orders lazily in the background so the segment-detail panel can populate brand /
-  // subcategory / SKU / catalog affinities — without blocking the main grid.
+  // Defer order fetch until pre-computed check settles. When pre-computed IS active AND server
+  // has per-segment behavioral docs (`segmentDocCount > 0`), the segment-detail panel reads
+  // brand/subcategory/SKU/catalog affinities directly from `rfm_computed/{brandId}/segments/{id}`
+  // — no client-side raw orders fetch needed. Fallback to client computation only when:
+  //   1. Pre-computed RFM is unavailable (old/missing data), OR
+  //   2. Server has no per-segment behavioral docs yet (first deploy / failed enrichment).
+  const serverBehavioralAvailable = preComputed.isPreComputed && preComputed.segmentDocCount > 0;
   const ordersQueryEnabled =
     !preComputed.isLoading &&
+    !serverBehavioralAvailable &&
     !!brandId && (ecomm.connectedPlatforms.length > 0 || variant === 'data_analysis');
   const ordersSinceDate = useMemo(() => {
     const d = new Date();
@@ -449,5 +454,11 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     preComputedDataSource: preComputed.dataSource,
     /** Platforms used for pre-computed RFM. */
     preComputedPlatforms: preComputed.dataSourcePlatforms,
+    /**
+     * True when the server has pre-computed per-segment behavioral docs available.
+     * The UI should then load segment detail from `rfm_computed/{brandId}/segments/{segmentId}`
+     * (via {@link useRFMSegmentBehavioral}) rather than computing client-side from raw orders.
+     */
+    serverBehavioralAvailable: usePreComputedActive && serverBehavioralAvailable,
   };
 }

@@ -483,6 +483,13 @@ service cloud.firestore {
         allow read: if isBrandMember(brandId);
         allow write: if false;
       }
+      // Per-segment behavioral rollups (brand/category/subcategory/SKU affinity, catalog match,
+      // price sensitivity, channel mix) — written by `computeRFMSegmentsForBrand`, read on-demand
+      // by the segment detail panel.
+      match /segments/{segmentId} {
+        allow read: if isBrandMember(brandId);
+        allow write: if false;
+      }
     }
 
     // RFM monthly snapshots — server-write only, read από brand members

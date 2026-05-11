@@ -1,10 +1,14 @@
 {
-  "version": "0.728.0",
-  "previousVersion": "0.727.0",
-  "commitHash": "91d7916",
+  "version": "0.731.0",
+  "previousVersion": "0.730.0",
+  "commitHash": "8f7dcdf",
   "branch": "main",
-  "buildDate": "2026-05-11T10:43:11.837Z",
+  "buildDate": "2026-05-11T11:03:33.115Z",
   "commits": [
+    {
+      "hash": "8f7dcdf",
+      "message": "fix(rfm): background-enrich segment detail in pre-computed mode; differentiate migration empty states"
+    },
     {
       "hash": "91d7916",
       "message": "chore: full deploy"
@@ -60,13 +64,10 @@
     {
       "hash": "dc67d91",
       "message": "fix(connectors): sync date UI uses lastDataSyncAt + Meta import_jobs completed"
-    },
-    {
-      "hash": "15467b6",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [
+    "[Διόρθωση] Background-enrich segment detail in pre-computed mode; differentiate migration empty states",
     "[Συντήρηση] Full deploy",
     "[Νέο χαρακτηριστικό] Server-side segment migration tracking",
     "[Διόρθωση] Fallback to Merchant Reports v1 when Content API ProductView empty",

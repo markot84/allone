@@ -100,6 +100,15 @@ const MIGRATION_MAX_CHUNKS = 50;
 
 // ─── Internal types ─────────────────────────────────────────────────────────
 
+interface OrderLineItem {
+  sku?: string;
+  productId?: string;
+  productName?: string;
+  productType?: string;
+  revenue: number;
+  qty: number;
+}
+
 interface OrderRecord {
   customerId: string;
   customerName: string;
@@ -107,6 +116,62 @@ interface OrderRecord {
   revenue: number;
   date: string; // YYYY-MM-DD
   platform: string;
+  /** Optional line items — present on e-shop orders, absent on Megaventory/SoftOne invoices. */
+  lineItems?: OrderLineItem[];
+}
+
+// ─── Catalog index types (mirror src/services/catalogAlignment.ts) ──────────
+
+interface CatalogDims {
+  brand?: string;
+  category?: string;
+  subcategory?: string;
+  categoryPath?: string[];
+  stockOnHand?: number;
+  qtySold?: number;
+}
+
+interface CatalogIndexes {
+  /** key = `${platform}:${productId}` */
+  byProductId: Map<string, CatalogDims>;
+  /** key = `${platform}:${normalizedSku}` */
+  bySku: Map<string, CatalogDims>;
+  /** ERP/unified products by normalized SKU. */
+  erpBySku: Map<string, CatalogDims>;
+}
+
+interface PerSegmentBehavioral {
+  catalog_match: {
+    revenue_matched_pct: number;
+    lines_matched_pct: number;
+    lines_total: number;
+    lines_matched: number;
+  } | null;
+  brand_affinity: AffinityRow[];
+  category_affinity: AffinityRow[];
+  category_affinity_catalog: AffinityRow[];
+  subcategory_affinity: AffinityRow[];
+  sku_affinity: AffinityRow[];
+  price_sensitivity: 'low' | 'medium' | 'high' | null;
+  preferred_channels: PreferredChannel[];
+}
+
+interface AffinityRow {
+  name: string;
+  affinity: number;
+  avg_order: number;
+  revenue_eur: number;
+  revenue_share_pct: number;
+  stock_on_hand?: number;
+  qty_sold?: number;
+  category_path?: string[];
+}
+
+interface PreferredChannel {
+  channel: string;
+  orders: number;
+  revenue: number;
+  share_pct: number;
 }
 
 interface CustomerAgg {
@@ -186,6 +251,15 @@ function megaventoryCustomerName(d: Record<string, unknown>): string {
   return String(d.clientName ?? d.clientCode ?? '').trim();
 }
 
+const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
+
+/** Megaventory `clientName` συχνά περιέχει email — εξάγουμε για χρήση σε hybrid ERP+e-shop catalog match. */
+function megaventoryCustomerEmail(d: Record<string, unknown>): string {
+  const name = String(d.clientName ?? '').trim();
+  const m = name.match(EMAIL_RE);
+  return m ? m[0].toLowerCase() : '';
+}
+
 async function readMegaventoryOrders(db: Firestore, brandId: string): Promise<OrderRecord[]> {
   const snap = await db.collection('megaventory_invoices').where('brandId', '==', brandId).get();
   const out: OrderRecord[] = [];
@@ -199,9 +273,11 @@ async function readMegaventoryOrders(db: Firestore, brandId: string): Promise<Or
     if (!ck) continue;
     const day = typeof d.date === 'string' ? d.date.slice(0, 10) : '';
     if (!day) continue;
+    const email = megaventoryCustomerEmail(d);
     out.push({
       customerId: ck,
       customerName: megaventoryCustomerName(d),
+      ...(email ? { email } : {}),
       revenue: net,
       date: day,
       platform: 'megaventory',
@@ -362,6 +438,46 @@ function isAllDemoOrder(d: Record<string, unknown>): boolean {
   return nonDemoCount === 0;
 }
 
+function lineItemRevenue(li: Record<string, unknown>): number {
+  const row = parseNumeric(li.rowTotal ?? li.row_total ?? li.base_row_total);
+  if (row > 0) return row;
+  const price = parseNumeric(li.price);
+  const qty = parseNumeric(li.quantity ?? li.qty_ordered);
+  return Math.max(0, price * Math.max(1, qty || 1));
+}
+
+function normalizeLineItems(raw: unknown): OrderLineItem[] {
+  if (!Array.isArray(raw)) return [];
+  const out: OrderLineItem[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const li = item as Record<string, unknown>;
+    if (isDemoLine(li)) continue;
+    const sku = li.sku != null ? String(li.sku).trim() : '';
+    const productId =
+      li.productId != null ? String(li.productId).trim() :
+      li.product_id != null ? String(li.product_id).trim() : '';
+    const productName =
+      (li.name != null && String(li.name).trim()) ||
+      (li.title != null && String(li.title).trim()) || '';
+    const productType =
+      li.productType != null ? String(li.productType).trim() :
+      li.product_type != null ? String(li.product_type).trim() : '';
+    const revenue = lineItemRevenue(li);
+    const qty = parseNumeric(li.quantity ?? li.qty_ordered);
+    if (!sku && !productId && !productName) continue;
+    out.push({
+      ...(sku ? { sku } : {}),
+      ...(productId ? { productId } : {}),
+      ...(productName ? { productName } : {}),
+      ...(productType ? { productType } : {}),
+      revenue,
+      qty: Math.max(1, qty || 1),
+    });
+  }
+  return out;
+}
+
 async function readEshopPlatformOrders(db: Firestore, brandId: string, platform: string): Promise<OrderRecord[]> {
   const coll = ESHOP_COLLECTION_MAP[platform];
   if (!coll) return [];
@@ -380,6 +496,7 @@ async function readEshopPlatformOrders(db: Firestore, brandId: string, platform:
     const day = rawCreated.slice(0, 10);
     if (!day || !/^\d{4}-\d{2}-\d{2}$/.test(day)) continue;
     const email = String(d.customerEmail ?? d.customer_email ?? '').trim().toLowerCase();
+    const lineItems = normalizeLineItems(d.lineItems);
     out.push({
       customerId: ck,
       customerName: String(d.customerName ?? d.customer_name ?? email).trim(),
@@ -387,6 +504,7 @@ async function readEshopPlatformOrders(db: Firestore, brandId: string, platform:
       revenue,
       date: day,
       platform,
+      ...(lineItems.length > 0 ? { lineItems } : {}),
     });
   }
   return out;
@@ -399,6 +517,10 @@ interface DataSourceResult {
   dataSource: 'erp' | 'eshop';
   platforms: string[];
   guestOrdersSkipped: number;
+  /** Additional e-shop orders used ONLY for catalog enrichment when ERP is primary (hybrid). */
+  eshopHybridOrders: OrderRecord[];
+  /** All e-shop platforms with `connected: true`; used for catalog index even on ERP path. */
+  catalogPlatforms: string[];
 }
 
 async function resolveOrdersForBrand(db: Firestore, brandId: string): Promise<DataSourceResult> {
@@ -408,35 +530,304 @@ async function resolveOrdersForBrand(db: Firestore, brandId: string): Promise<Da
   const mv = conn.megaventory as Record<string, unknown> | undefined;
   const s1 = conn.softone as Record<string, unknown> | undefined;
 
+  const connectedEshop = ['shopify', 'woocommerce', 'opencart', 'magento'].filter(
+    (p) => Boolean((conn[p] as Record<string, unknown> | undefined)?.connected)
+  );
+
   // ERP first
   if (mv?.connected) {
     const orders = await readMegaventoryOrders(db, brandId);
     if (orders.length > 0) {
       logger.info(`[RFM] ${brandId}: ERP source = megaventory_invoices, ${orders.length} invoices`);
-      return { orders, dataSource: 'erp', platforms: ['megaventory'], guestOrdersSkipped: 0 };
+      // Hybrid: also fetch e-shop orders for catalog enrichment (Megaventory invoices have no line items).
+      let eshopHybridOrders: OrderRecord[] = [];
+      if (connectedEshop.length > 0) {
+        const eshopRes = await Promise.all(connectedEshop.map((p) => readEshopPlatformOrders(db, brandId, p)));
+        eshopHybridOrders = eshopRes.flat();
+        logger.info(`[RFM] ${brandId}: hybrid catalog enrichment from ${connectedEshop.join(',')} = ${eshopHybridOrders.length} orders`);
+      }
+      return {
+        orders,
+        dataSource: 'erp',
+        platforms: ['megaventory'],
+        guestOrdersSkipped: 0,
+        eshopHybridOrders,
+        catalogPlatforms: connectedEshop,
+      };
     }
   }
   if (s1?.connected === true && s1?.syncSalesDocs === true) {
     const orders = await readSoftOneOrders(db, brandId);
     if (orders.length > 0) {
       logger.info(`[RFM] ${brandId}: ERP source = softone_sales_documents, ${orders.length} docs`);
-      return { orders, dataSource: 'erp', platforms: ['softone'], guestOrdersSkipped: 0 };
+      let eshopHybridOrders: OrderRecord[] = [];
+      if (connectedEshop.length > 0) {
+        const eshopRes = await Promise.all(connectedEshop.map((p) => readEshopPlatformOrders(db, brandId, p)));
+        eshopHybridOrders = eshopRes.flat();
+      }
+      return {
+        orders,
+        dataSource: 'erp',
+        platforms: ['softone'],
+        guestOrdersSkipped: 0,
+        eshopHybridOrders,
+        catalogPlatforms: connectedEshop,
+      };
     }
   }
 
   // E-shop fallback
-  const eshopPlatforms = ['shopify', 'woocommerce', 'opencart', 'magento'].filter(
-    (p) => Boolean((conn[p] as Record<string, unknown> | undefined)?.connected)
-  );
-
-  if (eshopPlatforms.length === 0) {
-    return { orders: [], dataSource: 'eshop', platforms: [], guestOrdersSkipped: 0 };
+  if (connectedEshop.length === 0) {
+    return { orders: [], dataSource: 'eshop', platforms: [], guestOrdersSkipped: 0, eshopHybridOrders: [], catalogPlatforms: [] };
   }
 
-  const results = await Promise.all(eshopPlatforms.map((p) => readEshopPlatformOrders(db, brandId, p)));
+  const results = await Promise.all(connectedEshop.map((p) => readEshopPlatformOrders(db, brandId, p)));
   const orders = results.flat();
-  logger.info(`[RFM] ${brandId}: E-shop source = ${eshopPlatforms.join(',')}, ${orders.length} orders`);
-  return { orders, dataSource: 'eshop', platforms: eshopPlatforms, guestOrdersSkipped: 0 };
+  logger.info(`[RFM] ${brandId}: E-shop source = ${connectedEshop.join(',')}, ${orders.length} orders`);
+  return {
+    orders,
+    dataSource: 'eshop',
+    platforms: connectedEshop,
+    guestOrdersSkipped: 0,
+    eshopHybridOrders: [],
+    catalogPlatforms: connectedEshop,
+  };
+}
+
+// ─── Catalog index (mirror src/services/catalogAlignment.ts logic) ─────────
+
+function normalizeSkuKey(raw: unknown): string {
+  return String(raw ?? '').trim().replace(/\s+/g, '').toUpperCase();
+}
+
+function trimLabel(s: unknown): string {
+  return String(s ?? '').trim();
+}
+
+function meaningfulLabel(value: unknown): string {
+  const t = trimLabel(value);
+  if (!t || t === '—') return '';
+  if (/^\d+$/.test(t)) return '';
+  return t;
+}
+
+function arrayLabels(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      if (typeof item === 'string' || typeof item === 'number') return meaningfulLabel(item);
+      if (item && typeof item === 'object') {
+        const o = item as Record<string, unknown>;
+        return meaningfulLabel(o.name) || meaningfulLabel(o.label) || meaningfulLabel(o.title) || meaningfulLabel(o.value);
+      }
+      return '';
+    })
+    .filter(Boolean);
+}
+
+function splitCategoryPath(value: unknown): string[] {
+  if (Array.isArray(value)) return arrayLabels(value);
+  const raw = trimLabel(value);
+  if (!raw) return [];
+  return raw
+    .split(/\s*(?:>|\/|»|\||→)\s*/g)
+    .map(meaningfulLabel)
+    .filter(Boolean)
+    .filter((label) => !/^(root catalog|default category|root|catalog)$/i.test(label));
+}
+
+function pickFirst(row: Record<string, unknown>, keys: string[]): string {
+  for (const k of keys) {
+    const v = meaningfulLabel(row[k]);
+    if (v) return v;
+  }
+  return '';
+}
+
+function parseOpt(value: unknown): number | undefined {
+  if (value == null || value === '') return undefined;
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  const parsed = Number(String(value).replace(',', '.'));
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function buildCatalogDims(row: Record<string, unknown>, opts: { brandKeys?: string[]; categoryFallback?: string } = {}): CatalogDims {
+  const brandKeys = opts.brandKeys || ['brand', 'manufacturerLabel', 'manufacturer', 'vendor'];
+  const brand = pickFirst(row, brandKeys);
+  const path =
+    splitCategoryPath(row.categoryPath).length > 0
+      ? splitCategoryPath(row.categoryPath)
+      : arrayLabels(row.categoryNames).length > 0
+        ? arrayLabels(row.categoryNames)
+        : arrayLabels(row.categories);
+  const explicitCategory = pickFirst(row, ['category', 'categoryName', 'productCategory']);
+  const explicitSub = pickFirst(row, ['subcategory', 'subCategory', 'subcategoryName', 'productSubcategory']);
+  const category = explicitCategory || path[0] || meaningfulLabel(opts.categoryFallback);
+  const subcategory = explicitSub || (path.length > 1 ? path[path.length - 1] : '');
+  const stockOnHand =
+    parseOpt(row.stock_on_hand) ?? parseOpt(row.stockOnHand) ?? parseOpt(row.available_stock) ?? parseOpt(row.stock_level) ?? parseOpt(row.stockQuantity) ?? parseOpt(row.qty);
+  const qtySold =
+    parseOpt(row.qty_sold_period) ?? parseOpt(row.qty_sold_last_30d) ?? parseOpt(row.qty_sold_last_90d) ?? parseOpt(row.qty_sold_lifetime) ?? parseOpt(row.qtySold);
+  return {
+    ...(brand ? { brand } : {}),
+    ...(category ? { category } : {}),
+    ...(subcategory && subcategory !== category ? { subcategory } : {}),
+    ...(path.length ? { categoryPath: path } : {}),
+    ...(stockOnHand != null ? { stockOnHand } : {}),
+    ...(qtySold != null ? { qtySold } : {}),
+  };
+}
+
+function setCatalogDims(map: Map<string, CatalogDims>, key: string, dims: CatalogDims): void {
+  if (!key) return;
+  const prev = map.get(key);
+  if (!prev) {
+    map.set(key, { ...dims });
+    return;
+  }
+  map.set(key, {
+    brand: dims.brand ?? prev.brand,
+    category: dims.category ?? prev.category,
+    subcategory: dims.subcategory ?? prev.subcategory,
+    categoryPath: dims.categoryPath ?? prev.categoryPath,
+    stockOnHand: dims.stockOnHand ?? prev.stockOnHand,
+    qtySold: dims.qtySold ?? prev.qtySold,
+  });
+}
+
+const PRODUCT_COLLECTIONS: Record<string, string> = {
+  shopify: 'shopify_products',
+  woocommerce: 'woo_products',
+  magento: 'magento_products',
+  opencart: 'opencart_products',
+};
+
+async function buildCatalogIndexes(db: Firestore, brandId: string, platforms: string[]): Promise<CatalogIndexes> {
+  const idx: CatalogIndexes = { byProductId: new Map(), bySku: new Map(), erpBySku: new Map() };
+
+  const eshop = platforms.filter((p) => PRODUCT_COLLECTIONS[p]);
+  const tasks: Array<Promise<void>> = [];
+
+  for (const platform of eshop) {
+    const coll = PRODUCT_COLLECTIONS[platform];
+    tasks.push(
+      db.collection(coll).where('brandId', '==', brandId).get().then((snap) => {
+        for (const doc of snap.docs) {
+          const d = doc.data();
+          const pid = trimLabel(d.productId) || trimLabel(d.id);
+          if (platform === 'shopify') {
+            const dims = buildCatalogDims(d, { brandKeys: ['vendor'], categoryFallback: trimLabel(d.productType) });
+            if (pid) setCatalogDims(idx.byProductId, `${platform}:${pid}`, dims);
+            const variants = Array.isArray(d.variants) ? d.variants : [];
+            for (const v of variants as Array<{ sku?: string }>) {
+              const ns = normalizeSkuKey(v?.sku);
+              if (ns) setCatalogDims(idx.bySku, `${platform}:${ns}`, dims);
+            }
+          } else if (platform === 'woocommerce') {
+            const tags = Array.isArray(d.tags) ? d.tags.map((t: unknown) => trimLabel(t)) : [];
+            const dims = buildCatalogDims({ ...d, brand: tags[0] }, { brandKeys: ['brand', 'tags'] });
+            if (pid) setCatalogDims(idx.byProductId, `${platform}:${pid}`, dims);
+            const ns = normalizeSkuKey(d.sku);
+            if (ns) setCatalogDims(idx.bySku, `${platform}:${ns}`, dims);
+          } else if (platform === 'magento') {
+            const dims = buildCatalogDims(d);
+            if (pid) setCatalogDims(idx.byProductId, `${platform}:${pid}`, dims);
+            const ns = normalizeSkuKey(d.sku);
+            if (ns) setCatalogDims(idx.bySku, `${platform}:${ns}`, dims);
+          } else if (platform === 'opencart') {
+            const dims = buildCatalogDims(d);
+            if (pid) setCatalogDims(idx.byProductId, `${platform}:${pid}`, dims);
+            const ns = normalizeSkuKey(d.sku) || normalizeSkuKey(d.model);
+            if (ns) setCatalogDims(idx.bySku, `${platform}:${ns}`, dims);
+          }
+        }
+      })
+    );
+  }
+
+  // Unified products (ERP / Procurement import)
+  tasks.push(
+    db.collection('products').where('brandId', '==', brandId).get().then((snap) => {
+      for (const doc of snap.docs) {
+        const d = doc.data();
+        const ns = normalizeSkuKey(d.sku);
+        if (!ns) continue;
+        setCatalogDims(idx.erpBySku, ns, buildCatalogDims(d, { categoryFallback: trimLabel(d.category) }));
+      }
+    })
+  );
+
+  // Megaventory products (ERP without unified products import)
+  tasks.push(
+    db.collection('megaventory_products').where('brandId', '==', brandId).get().then((snap) => {
+      for (const doc of snap.docs) {
+        const d = doc.data();
+        const ns = normalizeSkuKey(d.sku);
+        if (!ns) continue;
+        setCatalogDims(idx.erpBySku, ns, buildCatalogDims(d, { categoryFallback: trimLabel(d.category) }));
+      }
+    })
+  );
+
+  await Promise.all(tasks);
+  return idx;
+}
+
+type ResolvedLine = {
+  match: 'erp_product' | 'platform_catalog' | 'line_fallback';
+  brand: string;
+  category: string;
+  subcategory: string;
+  skuLabel: string;
+  stockOnHand?: number;
+  qtySold?: number;
+  categoryPath?: string[];
+};
+
+function fallbackBucket(item: OrderLineItem): string {
+  const t = item.productType?.trim().toLowerCase() || '';
+  const ignore = new Set(['simple', 'configurable', 'grouped', 'bundle', 'virtual', 'downloadable']);
+  if (item.productType && !ignore.has(t)) return item.productType.trim();
+  return item.productName?.trim() || item.sku?.trim() || item.productId?.trim() || 'Άλλο';
+}
+
+function resolveCatalogLine(platform: string, item: OrderLineItem, indexes: CatalogIndexes): ResolvedLine {
+  const skuNorm = normalizeSkuKey(item.sku);
+  const pid = item.productId?.trim() || '';
+  const fallback = fallbackBucket(item);
+  const skuLabel = skuNorm || item.sku?.trim() || item.productName?.trim() || pid || 'Άλλο';
+
+  if (skuNorm && indexes.erpBySku.has(skuNorm)) {
+    const e = indexes.erpBySku.get(skuNorm)!;
+    return {
+      match: 'erp_product',
+      brand: e.brand || 'Λοιπά',
+      category: e.category || fallback,
+      subcategory: e.subcategory || '',
+      skuLabel,
+      ...(e.stockOnHand != null ? { stockOnHand: e.stockOnHand } : {}),
+      ...(e.qtySold != null ? { qtySold: e.qtySold } : {}),
+      ...(e.categoryPath?.length ? { categoryPath: e.categoryPath } : {}),
+    };
+  }
+
+  let dims: CatalogDims | undefined;
+  if (pid) dims = indexes.byProductId.get(`${platform}:${pid}`);
+  if (!dims && skuNorm) dims = indexes.bySku.get(`${platform}:${skuNorm}`);
+  if (dims) {
+    return {
+      match: 'platform_catalog',
+      brand: dims.brand || 'Λοιπά',
+      category: dims.category || fallback,
+      subcategory: dims.subcategory || '',
+      skuLabel,
+      ...(dims.stockOnHand != null ? { stockOnHand: dims.stockOnHand } : {}),
+      ...(dims.qtySold != null ? { qtySold: dims.qtySold } : {}),
+      ...(dims.categoryPath?.length ? { categoryPath: dims.categoryPath } : {}),
+    };
+  }
+
+  return { match: 'line_fallback', brand: 'Λοιπά', category: fallback, subcategory: '', skuLabel };
 }
 
 // ─── RFM computation ──────────────────────────────────────────────────────────
@@ -473,7 +864,14 @@ function aggregateCustomers(orders: OrderRecord[]): CustomerAgg[] {
 export async function computeRFMSegmentsForBrand(brandId: string): Promise<void> {
   const db = getDb();
 
-  const { orders: rawOrders, dataSource, platforms, guestOrdersSkipped } = await resolveOrdersForBrand(db, brandId);
+  const {
+    orders: rawOrders,
+    dataSource,
+    platforms,
+    guestOrdersSkipped,
+    eshopHybridOrders,
+    catalogPlatforms,
+  } = await resolveOrdersForBrand(db, brandId);
   if (rawOrders.length === 0) {
     logger.info(`[RFM] ${brandId}: no orders found, skipping computation`);
     return;
@@ -509,9 +907,11 @@ export async function computeRFMSegmentsForBrand(brandId: string): Promise<void>
   const fScores = assignQuintileScores(frequencies, false);
   const mScores = assignQuintileScores(monetaries, false);
 
-  // Build per-customer data + segment aggregates
+  // Build per-customer data + segment aggregates + customerId→segmentId map (for behavioral pass)
   const segmentMap = new Map<string, { name: string; count: number; revenue: number; orders: number }>();
   const customerRecords: RFMCustomer[] = [];
+  const customerSegmentById = new Map<string, string>();
+  const customerEmailToSegmentId = new Map<string, string>();
 
   customers.forEach((c, i) => {
     const r = rScores[i] ?? 3;
@@ -536,6 +936,9 @@ export async function computeRFMSegmentsForBrand(brandId: string): Promise<void>
       daysSinceLastOrder: recencyDays[i] ?? 0,
     });
 
+    customerSegmentById.set(c.customerId, id);
+    if (c.email) customerEmailToSegmentId.set(c.email.toLowerCase(), id);
+
     const seg = segmentMap.get(id) ?? { name, count: 0, revenue: 0, orders: 0 };
     seg.count += 1;
     seg.revenue += c.revenue;
@@ -555,6 +958,25 @@ export async function computeRFMSegmentsForBrand(brandId: string): Promise<void>
       pct: totalCustomers > 0 ? Math.round((seg.count / totalCustomers) * 1000) / 10 : 0,
     }));
 
+  // ─── Per-segment behavioral computation (single pass over orders) ─────────
+  let segmentBehavioral: Map<string, PerSegmentBehavioral>;
+  try {
+    segmentBehavioral = await computeSegmentBehavioral({
+      db,
+      brandId,
+      catalogPlatforms,
+      primaryOrders: windowedOrders,
+      hybridEshopOrders: eshopHybridOrders.filter((o) => o.date >= cutoffDate),
+      customerSegmentById,
+      customerEmailToSegmentId,
+      segmentRevenueById: new Map(segmentMap.entries()),
+      dataSource,
+    });
+  } catch (e) {
+    logger.warn(`[RFM] ${brandId}: behavioral computation failed, continuing without it:`, e);
+    segmentBehavioral = new Map();
+  }
+
   // ─── Migration vs previous snapshot ──────────────────────────────────────
   const migration = await computeMigrationVsPrevious(db, brandId, customerRecords, segments);
 
@@ -569,6 +991,7 @@ export async function computeRFMSegmentsForBrand(brandId: string): Promise<void>
     segments,
     customers: customerRecords,
     migration,
+    segmentBehavioral,
   });
 
   // Monthly snapshot
@@ -585,8 +1008,264 @@ export async function computeRFMSegmentsForBrand(brandId: string): Promise<void>
   });
 
   logger.info(
-    `[RFM] ${brandId}: computed segments=${segments.length} customers=${totalCustomers} source=${dataSource}:${platforms.join(',')}`
+    `[RFM] ${brandId}: computed segments=${segments.length} customers=${totalCustomers} source=${dataSource}:${platforms.join(',')} behavioralSegments=${segmentBehavioral.size}`
   );
+}
+
+// ─── Per-segment behavioral aggregation ─────────────────────────────────────
+
+interface BehavioralBucket {
+  segmentRevenue: number;
+  segmentOrders: number;
+  byBrand: Map<string, AffinityAgg>;
+  byCategory: Map<string, AffinityAgg>;
+  bySubcategory: Map<string, AffinityAgg>;
+  bySku: Map<string, AffinityAgg>;
+  byChannel: Map<string, { orders: Set<string>; revenue: number }>;
+  lineCount: number;
+  matchedLineCount: number;
+  lineRevenue: number;
+  matchedLineRevenue: number;
+  /** All order line revenue (incl. ERP without items) + ERP customer revenue → for price_sensitivity heuristic. */
+  basketSizes: number[];
+}
+
+interface AffinityAgg {
+  revenue: number;
+  qty: number;
+  orderIds: Set<string>;
+  skuKeys: Set<string>;
+  stockOnHand?: number;
+  qtySold?: number;
+  categoryPath?: string[];
+}
+
+function emptyBehavioralBucket(): BehavioralBucket {
+  return {
+    segmentRevenue: 0,
+    segmentOrders: 0,
+    byBrand: new Map(),
+    byCategory: new Map(),
+    bySubcategory: new Map(),
+    bySku: new Map(),
+    byChannel: new Map(),
+    lineCount: 0,
+    matchedLineCount: 0,
+    lineRevenue: 0,
+    matchedLineRevenue: 0,
+    basketSizes: [],
+  };
+}
+
+function bumpAffinity(
+  map: Map<string, AffinityAgg>,
+  key: string,
+  revenue: number,
+  qty: number,
+  orderId: string,
+  skuKey: string,
+  stockOnHand?: number,
+  qtySold?: number,
+  categoryPath?: string[]
+): void {
+  const k = key.trim();
+  if (!k) return;
+  const cur = map.get(k) ?? {
+    revenue: 0,
+    qty: 0,
+    orderIds: new Set<string>(),
+    skuKeys: new Set<string>(),
+  };
+  cur.revenue += revenue;
+  cur.qty += qty;
+  cur.orderIds.add(orderId);
+  const sk = skuKey.trim();
+  if (sk && !cur.skuKeys.has(sk)) {
+    cur.skuKeys.add(sk);
+    if (stockOnHand != null) cur.stockOnHand = (cur.stockOnHand ?? 0) + stockOnHand;
+    if (qtySold != null) cur.qtySold = (cur.qtySold ?? 0) + qtySold;
+    if (!cur.categoryPath?.length && categoryPath?.length) cur.categoryPath = categoryPath;
+  }
+  map.set(k, cur);
+}
+
+function affinityRows(map: Map<string, AffinityAgg>, segmentRevenue: number, topN: number): AffinityRow[] {
+  const rows = [...map.entries()].sort((a, b) => b[1].revenue - a[1].revenue).slice(0, topN);
+  if (rows.length === 0) return [];
+  const maxRev = rows[0][1].revenue || 1;
+  const seg = Math.max(segmentRevenue, 1e-6);
+  return rows.map(([name, row]) => ({
+    name,
+    affinity: Math.round((row.revenue / maxRev) * 100) / 100,
+    avg_order: row.qty > 0 ? Math.round(row.revenue / row.qty) : Math.round(row.revenue),
+    revenue_eur: Math.round(row.revenue * 100) / 100,
+    revenue_share_pct: Math.round((row.revenue / seg) * 1000) / 10,
+    ...(row.stockOnHand != null && row.stockOnHand > 0 ? { stock_on_hand: Math.round(row.stockOnHand * 100) / 100 } : {}),
+    ...(row.qtySold != null && row.qtySold > 0 ? { qty_sold: Math.round(row.qtySold * 100) / 100 } : {}),
+    ...(row.categoryPath?.length ? { category_path: row.categoryPath } : {}),
+  }));
+}
+
+interface BehavioralInput {
+  db: Firestore;
+  brandId: string;
+  catalogPlatforms: string[];
+  primaryOrders: OrderRecord[];
+  hybridEshopOrders: OrderRecord[];
+  customerSegmentById: Map<string, string>;
+  customerEmailToSegmentId: Map<string, string>;
+  segmentRevenueById: Map<string, { name: string; count: number; revenue: number; orders: number }>;
+  dataSource: 'erp' | 'eshop';
+}
+
+async function computeSegmentBehavioral(input: BehavioralInput): Promise<Map<string, PerSegmentBehavioral>> {
+  const { db, brandId, catalogPlatforms, primaryOrders, hybridEshopOrders, customerSegmentById, customerEmailToSegmentId, segmentRevenueById, dataSource } = input;
+
+  const catalogIndexes = await buildCatalogIndexes(db, brandId, catalogPlatforms);
+  logger.info(
+    `[RFM] ${brandId}: catalog index — byProductId=${catalogIndexes.byProductId.size} bySku=${catalogIndexes.bySku.size} erpBySku=${catalogIndexes.erpBySku.size}`
+  );
+
+  const buckets = new Map<string, BehavioralBucket>();
+  for (const segId of segmentRevenueById.keys()) buckets.set(segId, emptyBehavioralBucket());
+
+  // Pass 1: primary orders → channel distribution, basket sizes, line items if any
+  let totalLineItemsSeen = 0;
+  for (const order of primaryOrders) {
+    const segId = customerSegmentById.get(order.customerId);
+    if (!segId) continue;
+    const bucket = buckets.get(segId);
+    if (!bucket) continue;
+    bucket.segmentRevenue += order.revenue;
+    bucket.segmentOrders += 1;
+    bucket.basketSizes.push(order.revenue);
+
+    const ch = bucket.byChannel.get(order.platform) ?? { orders: new Set<string>(), revenue: 0 };
+    ch.orders.add(`${order.customerId}|${order.date}|${order.revenue}`);
+    ch.revenue += order.revenue;
+    bucket.byChannel.set(order.platform, ch);
+
+    if (order.lineItems?.length) {
+      totalLineItemsSeen += order.lineItems.length;
+      for (const li of order.lineItems) {
+        const resolved = resolveCatalogLine(order.platform, li, catalogIndexes);
+        const orderId = `${order.customerId}|${order.date}|${order.platform}`;
+        bucket.lineCount += 1;
+        bucket.lineRevenue += li.revenue;
+        if (resolved.match !== 'line_fallback') {
+          bucket.matchedLineCount += 1;
+          bucket.matchedLineRevenue += li.revenue;
+        }
+        bumpAffinity(bucket.byBrand, resolved.brand, li.revenue, li.qty, orderId, resolved.skuLabel, resolved.stockOnHand, resolved.qtySold, resolved.categoryPath);
+        bumpAffinity(bucket.byCategory, resolved.category, li.revenue, li.qty, orderId, resolved.skuLabel, resolved.stockOnHand, resolved.qtySold, resolved.categoryPath);
+        if (resolved.subcategory && resolved.subcategory.toLowerCase() !== resolved.category.toLowerCase()) {
+          bumpAffinity(bucket.bySubcategory, resolved.subcategory, li.revenue, li.qty, orderId, resolved.skuLabel, resolved.stockOnHand, resolved.qtySold, resolved.categoryPath);
+        }
+        bumpAffinity(bucket.bySku, resolved.skuLabel, li.revenue, li.qty, orderId, resolved.skuLabel, resolved.stockOnHand, resolved.qtySold, resolved.categoryPath);
+      }
+    }
+  }
+
+  // Pass 2: ERP-primary brands with e-shop also connected → enrich catalog via email match.
+  // We DO NOT touch segment revenue (RFM customer list stays ERP); we only attribute line items.
+  let hybridMatched = 0;
+  let hybridSkipped = 0;
+  if (dataSource === 'erp' && hybridEshopOrders.length > 0) {
+    for (const eOrder of hybridEshopOrders) {
+      const email = (eOrder.email || '').toLowerCase();
+      const segId = email ? customerEmailToSegmentId.get(email) : undefined;
+      if (!segId) {
+        hybridSkipped += 1;
+        continue;
+      }
+      const bucket = buckets.get(segId);
+      if (!bucket) {
+        hybridSkipped += 1;
+        continue;
+      }
+      hybridMatched += 1;
+      if (eOrder.lineItems?.length) {
+        for (const li of eOrder.lineItems) {
+          const resolved = resolveCatalogLine(eOrder.platform, li, catalogIndexes);
+          const orderId = `${eOrder.customerId}|${eOrder.date}|${eOrder.platform}`;
+          bucket.lineCount += 1;
+          bucket.lineRevenue += li.revenue;
+          if (resolved.match !== 'line_fallback') {
+            bucket.matchedLineCount += 1;
+            bucket.matchedLineRevenue += li.revenue;
+          }
+          bumpAffinity(bucket.byBrand, resolved.brand, li.revenue, li.qty, orderId, resolved.skuLabel, resolved.stockOnHand, resolved.qtySold, resolved.categoryPath);
+          bumpAffinity(bucket.byCategory, resolved.category, li.revenue, li.qty, orderId, resolved.skuLabel, resolved.stockOnHand, resolved.qtySold, resolved.categoryPath);
+          if (resolved.subcategory && resolved.subcategory.toLowerCase() !== resolved.category.toLowerCase()) {
+            bumpAffinity(bucket.bySubcategory, resolved.subcategory, li.revenue, li.qty, orderId, resolved.skuLabel, resolved.stockOnHand, resolved.qtySold, resolved.categoryPath);
+          }
+          bumpAffinity(bucket.bySku, resolved.skuLabel, li.revenue, li.qty, orderId, resolved.skuLabel, resolved.stockOnHand, resolved.qtySold, resolved.categoryPath);
+        }
+      }
+    }
+    logger.info(`[RFM] ${brandId}: hybrid catalog match — matched=${hybridMatched} skipped(no-email-match)=${hybridSkipped}`);
+  }
+
+  logger.info(
+    `[RFM] ${brandId}: behavioral pass — primaryLineItems=${totalLineItemsSeen} hybridOrdersMatched=${hybridMatched}`
+  );
+
+  // Compute global AOV to anchor price_sensitivity
+  const globalAovValues: number[] = [];
+  for (const order of primaryOrders) globalAovValues.push(order.revenue);
+  const globalAov = globalAovValues.length > 0
+    ? globalAovValues.reduce((a, b) => a + b, 0) / globalAovValues.length
+    : 0;
+
+  const out = new Map<string, PerSegmentBehavioral>();
+  for (const [segId, bucket] of buckets) {
+    const segRevenue = bucket.segmentRevenue;
+    const hasLines = bucket.lineCount > 0;
+
+    const catalog_match = hasLines
+      ? {
+          revenue_matched_pct: bucket.lineRevenue > 0 ? Math.round((bucket.matchedLineRevenue / bucket.lineRevenue) * 1000) / 10 : 0,
+          lines_matched_pct: bucket.lineCount > 0 ? Math.round((bucket.matchedLineCount / bucket.lineCount) * 1000) / 10 : 0,
+          lines_total: bucket.lineCount,
+          lines_matched: bucket.matchedLineCount,
+        }
+      : null;
+
+    // Price sensitivity heuristic — mirrors client logic.
+    const avgBasket = bucket.segmentOrders > 0 ? segRevenue / bucket.segmentOrders : 0;
+    let priceSensitivity: 'low' | 'medium' | 'high' | null = null;
+    if (avgBasket > 0 && globalAov > 0) {
+      if (avgBasket >= globalAov * 1.25) priceSensitivity = 'low';
+      else if (avgBasket < globalAov * 0.75) priceSensitivity = 'high';
+      else priceSensitivity = 'medium';
+    }
+
+    // Preferred channels: by orders.
+    const totalChannelOrders = [...bucket.byChannel.values()].reduce((sum, v) => sum + v.orders.size, 0);
+    const channelRows: PreferredChannel[] = [...bucket.byChannel.entries()]
+      .map(([channel, v]) => ({
+        channel,
+        orders: v.orders.size,
+        revenue: Math.round(v.revenue * 100) / 100,
+        share_pct: totalChannelOrders > 0 ? Math.round((v.orders.size / totalChannelOrders) * 1000) / 10 : 0,
+      }))
+      .sort((a, b) => b.orders - a.orders);
+
+    out.set(segId, {
+      catalog_match,
+      brand_affinity: affinityRows(bucket.byBrand, segRevenue, 12),
+      category_affinity: hasLines
+        ? affinityRows(bucket.byCategory, segRevenue, 12)
+        : [],
+      category_affinity_catalog: hasLines ? affinityRows(bucket.byCategory, segRevenue, 12) : [],
+      subcategory_affinity: affinityRows(bucket.bySubcategory, segRevenue, 12),
+      sku_affinity: affinityRows(bucket.bySku, segRevenue, 20),
+      price_sensitivity: priceSensitivity,
+      preferred_channels: channelRows,
+    });
+  }
+
+  return out;
 }
 
 // ─── Chunked customer storage (mirrors writeSkuStatsChunked pattern) ─────────
@@ -601,12 +1280,13 @@ interface WriteRfmInput {
   segments: RFMSegmentSummary[];
   customers: RFMCustomer[];
   migration: MigrationResult;
+  segmentBehavioral: Map<string, PerSegmentBehavioral>;
 }
 
 async function writeRfmComputedDoc(db: Firestore, brandId: string, input: WriteRfmInput): Promise<void> {
   const {
     dataSource, platforms, totalCustomers, totalOrders,
-    ordersAttributed, guestOrdersSkipped, segments, customers, migration,
+    ordersAttributed, guestOrdersSkipped, segments, customers, migration, segmentBehavioral,
   } = input;
 
   const fullJson = JSON.stringify(customers);
@@ -650,6 +1330,32 @@ async function writeRfmComputedDoc(db: Firestore, brandId: string, input: WriteR
   });
   if (stale.length) await Promise.all(stale.map((d) => d.delete()));
 
+  // Per-segment behavioral subcollection
+  const segmentsColl = parentRef.collection('segments');
+  const segmentDocsWritten: string[] = [];
+  await Promise.all(
+    [...segmentBehavioral.entries()].map(async ([segId, behavioral]) => {
+      const segMeta = segments.find((s) => s.segmentId === segId);
+      await segmentsColl.doc(segId).set({
+        brandId,
+        segmentId: segId,
+        segmentName: segMeta?.segment || segId,
+        count: segMeta?.count ?? 0,
+        revenue: segMeta?.revenue ?? 0,
+        avgOrderValue: segMeta?.avgOrderValue ?? 0,
+        pct: segMeta?.pct ?? 0,
+        behavioral,
+        computedAt: FieldValue.serverTimestamp(),
+      });
+      segmentDocsWritten.push(segId);
+    })
+  );
+
+  // Delete stale segment docs (e.g. segments that disappeared between runs)
+  const existingSegments = await segmentsColl.listDocuments();
+  const staleSegments = existingSegments.filter((d) => !segmentBehavioral.has(d.id));
+  if (staleSegments.length) await Promise.all(staleSegments.map((d) => d.delete()));
+
   await parentRef.set({
     brandId,
     computedAt: FieldValue.serverTimestamp(),
@@ -663,10 +1369,11 @@ async function writeRfmComputedDoc(db: Firestore, brandId: string, input: WriteR
     chunkCount: chunkPayloads.length,
     customersBytes: fullJson.length,
     migration,
+    segmentDocCount: segmentDocsWritten.length,
   });
 
   logger.info(
-    `[RFM] ${brandId}: customers persisted — ${totalCustomers} customers across ${chunkPayloads.length} chunk(s) (~${(fullJson.length / 1024).toFixed(1)}KB)`
+    `[RFM] ${brandId}: customers persisted — ${totalCustomers} customers across ${chunkPayloads.length} chunk(s) (~${(fullJson.length / 1024).toFixed(1)}KB) · segmentDocs=${segmentDocsWritten.length}`
   );
 }
 
