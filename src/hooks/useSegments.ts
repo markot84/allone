@@ -8,6 +8,7 @@ import { useEcommerceSummary } from './useEcommerceSummary';
 import { fetchAllEcommerceOrders, fetchDataAnalysisOrders, MAX_ORDERS_PER_PLATFORM_RFM } from '../services/ecommerceRawOrders';
 import { fetchCatalogAlignmentData, fetchCatalogAlignmentDataForDataAnalysis, normalizeCatalogAlignmentPayload } from '../services/catalogAlignment';
 import { computeRfmSegmentsFromEcommerceOrders, computeSegmentMigrationFromEcommerceOrders, type RfmCatalogContext } from '../services/rfmFromOrders';
+import { useRFMPreComputed } from './useRFMPreComputed';
 import type { RFMSegment } from '../types';
 
 const STORAGE_KEY = (brandId: string) => `pp-rfm-data-source-${brandId}`;
@@ -105,6 +106,10 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
   const ecomm = useEcommerceSummary();
+
+  // Pre-computed RFM from Cloud Function (server-side, no client limit)
+  // Works for both variants — Cloud Function uses same ERP-first priority.
+  const preComputed = useRFMPreComputed(brandId);
   const platformsKey = useMemo(() => [...ecomm.connectedPlatforms].sort().join('|'), [ecomm.connectedPlatforms]);
 
   const [sourcePref, setSourcePrefState] = useState<RfmDataSourcePreference>('orders');
@@ -293,15 +298,20 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   const hasImported =
     resolvedSource === 'ecommerce' ? orderRfm.totalCustomers > 0 : importSegmentsAvailable;
 
+  // When pre-computed data is available (server-computed, fresh), use it as the primary source.
+  // Fall back to client-side computation with 5K limit if no pre-computed data.
+  const activeSegments = preComputed.isPreComputed ? preComputed.segments : segments;
+  const activeTotalCustomers = preComputed.isPreComputed ? preComputed.totalCustomers : totalCustomers;
+
   return {
-    segments,
-    totalCustomers,
+    segments: activeSegments,
+    totalCustomers: activeTotalCustomers,
     isLoading,
     /** True όσο τραβάμε πρόσφατο order history για ecommerce RFM — UI δεν πρέπει να μπλοκάρει. */
     ordersLoading,
     ordersError: (ordersError as Error | null) ?? null,
     /** True when orders were capped at MAX_ORDERS_PER_PLATFORM_RFM — data is a sample. */
-    ordersSampled,
+    ordersSampled: preComputed.isPreComputed ? false : ordersSampled,
     /** Φόρτωση *_products + unified products για catalog tabs — δεν μπλοκάρει το κύριο RFM grid. */
     isCatalogEnriching,
     hasImported,
@@ -320,5 +330,13 @@ export function useSegments(options: UseSegmentsOptions = {}) {
         : undefined,
     segmentMigration: resolvedSource === 'ecommerce' ? orderSegmentMigration : undefined,
     importSegmentsAvailable,
+    /** True when reading from server pre-computed RFM (Cloud Function). */
+    isPreComputed: preComputed.isPreComputed,
+    /** Timestamp of the last server-side RFM computation. */
+    lastComputedAt: preComputed.lastComputedAt,
+    /** Data source used for pre-computed RFM. */
+    preComputedDataSource: preComputed.dataSource,
+    /** Platforms used for pre-computed RFM. */
+    preComputedPlatforms: preComputed.dataSourcePlatforms,
   };
 }

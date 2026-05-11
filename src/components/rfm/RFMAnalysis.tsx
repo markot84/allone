@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { auth } from '../../config/firebase';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Users,
@@ -13,6 +14,7 @@ import {
   LineChart,
   Download,
   FileSpreadsheet,
+  RefreshCw,
 } from 'lucide-react';
 import {
   PieChart,
@@ -128,6 +130,8 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
     importSegmentsAvailable,
     isCatalogEnriching,
     ordersSampled,
+    isPreComputed,
+    lastComputedAt,
   } = useSegments({ variant: 'data_analysis' });
   const ecomm = useEcommerceSummary();
   const { currentBrand } = useBrand();
@@ -135,6 +139,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
   const toast = useToast();
   const [isDeleting, setIsDeleting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const { activeStrategy } = useActiveStrategy();
   const channelRecommendation = activeStrategy?.channelRecommendation ?? null;
   const totalCustomersDisplay = Math.max(totalCustomers, dataCoverage.totalCustomers);
@@ -203,6 +208,34 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
       toast.error(e instanceof Error ? e.message : 'Export error');
     }
   };
+
+  const handleRefreshRFM = useCallback(async () => {
+    if (!currentBrand?.id) return;
+    setIsRefreshing(true);
+    try {
+      const user = auth.currentUser;
+      if (!user) throw new Error('Δεν είστε συνδεδεμένος');
+      const token = await user.getIdToken();
+      const fnUrl = import.meta.env.VITE_FUNCTIONS_BASE_URL
+        ? `${import.meta.env.VITE_FUNCTIONS_BASE_URL}/computeRFMSegments`
+        : `https://europe-west1-performance-plus-4a5b2.cloudfunctions.net/computeRFMSegments`;
+      const res = await fetch(fnUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ brandId: currentBrand.id }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as { error?: string }).error || `HTTP ${res.status}`);
+      }
+      queryClient.invalidateQueries({ queryKey: ['rfm_computed', currentBrand.id] });
+      toast.success('RFM segments επανυπολογίστηκαν επιτυχώς.');
+    } catch (e) {
+      toast.error(`Σφάλμα: ${e instanceof Error ? e.message : 'Άγνωστο'}`);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [currentBrand?.id, queryClient, toast]);
 
   const handleDeleteSegments = async () => {
     if (rfmDataSource === 'ecommerce') return;
@@ -345,6 +378,17 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
           <Button
             variant="secondary"
             size="sm"
+            icon={<RefreshCw size={14} className={`shrink-0 ${isRefreshing ? 'animate-spin' : ''}`} />}
+            onClick={handleRefreshRFM}
+            disabled={isRefreshing || !currentBrand?.id}
+            className="min-h-[36px] w-full sm:w-auto"
+            title="Επανυπολογισμός RFM από server"
+          >
+            {isRefreshing ? 'Υπολογισμός…' : 'Επανυπολογισμός'}
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
             icon={<Trash2 size={14} className="shrink-0" />}
             onClick={handleDeleteSegments}
             disabled={isDeleting || !hasImportedSegments || rfmDataSource === 'ecommerce'}
@@ -366,6 +410,18 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
 
       {/* Μία συμπαγής γραμμή: πηγή + μεγέθη — χωρίς επανάληψη με κάλυψη όταν είναι καθαρό e-shop */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-[#E8EAED] bg-[#FAFBFC] px-3 py-2 text-[12px] text-[#374151]">
+        {isPreComputed && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-[#D1FAE5] px-2 py-0.5 text-[11px] font-semibold text-[#065F46]">
+            <Zap size={10} className="shrink-0" />
+            Pre-computed
+          </span>
+        )}
+        {isPreComputed && lastComputedAt && (
+          <span className="text-[#6B7280] whitespace-nowrap">
+            Υπολογίστηκε: {lastComputedAt.toLocaleDateString('el-GR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+          </span>
+        )}
+        {isPreComputed && <span className="hidden sm:inline h-4 w-px shrink-0 bg-[#E5E7EB]" aria-hidden />}
         {importSegmentsAvailable && canComputeFromOrders ? (
           <label className="flex items-center gap-2 shrink-0">
             <span className="text-[#6B7280] whitespace-nowrap">Πηγή</span>
@@ -613,7 +669,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
             <ResponsiveContainer width="100%" height={280} minHeight={260}>
               <PieChart margin={{ top: 12, right: 12, bottom: 12, left: 12 }}>
                 <Pie
-                  data={rfmSegments}
+                  data={rfmSegments as any[]}
                   cx="50%"
                   cy="50%"
                   innerRadius={68}
@@ -683,7 +739,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
             <ResponsiveContainer width="100%" height={280} minHeight={260}>
               <PieChart margin={{ top: 12, right: 12, bottom: 12, left: 12 }}>
                 <Pie
-                  data={rfmSegments}
+                  data={rfmSegments as any[]}
                   cx="50%"
                   cy="50%"
                   innerRadius={68}

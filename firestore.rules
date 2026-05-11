@@ -474,5 +474,25 @@ service cloud.firestore {
     match /rate_limits/{docId} {
       allow read, write: if false;
     }
+
+    // RFM pre-computed segments — write μόνο από Cloud Functions (Admin SDK), read από brand members
+    match /rfm_computed/{brandId} {
+      allow read: if isBrandMember(brandId);
+      allow write: if false;
+      match /chunks/{chunkId} {
+        allow read: if isBrandMember(brandId);
+        allow write: if false;
+      }
+    }
+
+    // RFM monthly snapshots — server-write only, read από brand members
+    match /rfm_snapshots/{brandId} {
+      allow read: if isBrandMember(brandId);
+      allow write: if false;
+      match /history/{month} {
+        allow read: if isBrandMember(brandId);
+        allow write: if false;
+      }
+    }
   }
 }
