@@ -1,10 +1,14 @@
 {
-  "version": "0.750.0",
-  "previousVersion": "0.749.0",
-  "commitHash": "b522206",
+  "version": "0.751.0",
+  "previousVersion": "0.750.0",
+  "commitHash": "aabc8c2",
   "branch": "main",
-  "buildDate": "2026-05-11T13:05:42.937Z",
+  "buildDate": "2026-05-11T13:15:24.355Z",
   "commits": [
+    {
+      "hash": "aabc8c2",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "b522206",
       "message": "chore: full deploy"
@@ -60,17 +64,12 @@
     {
       "hash": "3becdd0",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "cb497ef",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [
     "[Συντήρηση] Full deploy",
     "[Νέο χαρακτηριστικό] Server-side per-segment behavioral rollups (brand/category/SKU/channel mix)",
     "[Διόρθωση] Background-enrich segment detail in pre-computed mode; differentiate migration empty states",
-    "[Νέο χαρακτηριστικό] Server-side segment migration tracking",
-    "[Διόρθωση] Fallback to Merchant Reports v1 when Content API ProductView empty"
+    "[Νέο χαρακτηριστικό] Server-side segment migration tracking"
   ]
 }

@@ -86,8 +86,8 @@ const queryClient = new QueryClient({
 const persister = typeof window !== 'undefined'
   ? createSyncStoragePersister({
       storage: window.localStorage,
-      /** Bump when persisted queries omit connector-critical keys or strand stale dashboards (see shouldDehydrateQuery). v7: drop caches that persisted catalogAlignment (Maps broke → `.has` crash). */
-      key: 'PERF_PLUS_QUERY_CACHE_v12',
+      /** Bump when persisted queries omit connector-critical keys or strand stale dashboards (see shouldDehydrateQuery). v7: drop caches that persisted catalogAlignment (Maps broke → `.has` crash). v13: drop products cache (megaventory integration). */
+      key: 'PERF_PLUS_QUERY_CACHE_v13',
       throttleTime: 1000
     })
   : undefined;
@@ -109,6 +109,9 @@ function QueryProvider({ children }: { children: React.ReactNode }) {
               // keeping them out of localStorage prevents quota-exceeded errors that
               // silently wipe the entire persisted cache.
               if (key === 'campaigns' || key === 'search_intelligence' || key === 'priceBenchmarks' || key === 'priceInsights') return false;
+              // Product catalog: merged from multiple connector collections — never persist,
+              // stale placeholder blocks correct count from showing after sync or code changes.
+              if (key === 'products') return false;
               // Connector-backed summaries: object shape `{ ga4: null }` is truthy — persisting it
               // hides fresh data after sync until staleTime expires. Always refetch from Firestore.
               if (key === 'ga4_data') return false;
