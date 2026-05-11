@@ -1,10 +1,18 @@
 {
-  "version": "0.726.96",
-  "previousVersion": "0.726.95",
-  "commitHash": "17ffc27",
+  "version": "0.726.97",
+  "previousVersion": "0.726.96",
+  "commitHash": "5ce3e19",
   "branch": "main",
-  "buildDate": "2026-05-11T05:44:44.849Z",
+  "buildDate": "2026-05-11T06:30:56.248Z",
   "commits": [
+    {
+      "hash": "5ce3e19",
+      "message": "fix(merchant): fallback to Merchant Reports v1 when Content API ProductView empty"
+    },
+    {
+      "hash": "20e4f7e",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "17ffc27",
       "message": "fix(connectors): TikTok sync job completed + partial counts for last-sync UI"
@@ -56,20 +64,13 @@
     {
       "hash": "b3d2a91",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "877c067",
-      "message": "chore: full deploy"
-    },
-    {
-      "hash": "55235f4",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [
+    "[Διόρθωση] Fallback to Merchant Reports v1 when Content API ProductView empty",
+    "[Συντήρηση] Full deploy",
     "[Διόρθωση] TikTok sync job completed + partial counts for last-sync UI",
     "[Διόρθωση] Sync date UI uses lastDataSyncAt + Meta import_jobs completed",
-    "[Συντήρηση] Full deploy",
     "Security: lock down Firestore rules and add SSRF protection"
   ]
 }
