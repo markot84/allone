@@ -17,7 +17,8 @@ export function useProducts() {
   });
 
   /** Αγνόησε demo products από όλες τις λίστες (όνομα/SKU περιέχει "demo"). */
-  const products = excludeDemoProducts((brandId ? (firestoreProducts ?? []) : []) as Product[]);
+  const productRows = Array.isArray(firestoreProducts) ? firestoreProducts : [];
+  const products = excludeDemoProducts((brandId ? productRows : []) as Product[]);
 
   return {
     products,

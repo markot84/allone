@@ -1,10 +1,14 @@
 {
-  "version": "0.729.0",
-  "previousVersion": "0.728.0",
-  "commitHash": "89ea822",
+  "version": "0.731.0",
+  "previousVersion": "0.730.0",
+  "commitHash": "3ba775f",
   "branch": "main",
-  "buildDate": "2026-05-11T13:56:57.703Z",
+  "buildDate": "2026-05-11T14:28:16.453Z",
   "commits": [
+    {
+      "hash": "3ba775f",
+      "message": "restore: revert app to pre-2026-05-11 state"
+    },
     {
       "hash": "89ea822",
       "message": "chore: full deploy"
@@ -60,13 +64,10 @@
     {
       "hash": "91d7916",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "3896a65",
-      "message": "feat(rfm): server-side segment migration tracking"
     }
   ],
   "changes": [
+    "Restore: revert app to pre-2026-05-11 state",
     "[Συντήρηση] Full deploy",
     "[Νέο χαρακτηριστικό] Server-side per-segment behavioral rollups (brand/category/SKU/channel mix)",
     "[Διόρθωση] Background-enrich segment detail in pre-computed mode; differentiate migration empty states",
