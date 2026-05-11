@@ -4,6 +4,8 @@ import { logger } from 'firebase-functions/v2';
 const BATCH_SIZE = 400;
 const PRESERVED_MEGAVENTORY_SOURCE = 'megaventory_custom_report';
 const PRESERVED_MEGAVENTORY_RFM_SOURCE = 'megaventory_rfm';
+/** SKU από πλήρες ProductGet όταν το custom report καλύπτει μόνο υποσύνολο (π.χ. φίλτρο SQL). */
+export const PRESERVED_MEGAVENTORY_API_CATALOG_SOURCE = 'megaventory_api_catalog';
 
 const BRAND_SCOPED_MANUAL_COLLECTIONS = [
   'products',
@@ -49,7 +51,11 @@ async function deleteBrandCollection(db: Firestore, collectionName: string, bran
   const snap = await db.collection(collectionName).where('brandId', '==', brandId).get();
   const matching = snap.docs.filter((doc) => {
     const source = doc.data().source;
-    return source !== PRESERVED_MEGAVENTORY_SOURCE && source !== PRESERVED_MEGAVENTORY_RFM_SOURCE;
+    return (
+      source !== PRESERVED_MEGAVENTORY_SOURCE &&
+      source !== PRESERVED_MEGAVENTORY_RFM_SOURCE &&
+      source !== PRESERVED_MEGAVENTORY_API_CATALOG_SOURCE
+    );
   });
   for (let i = 0; i < matching.length; i += BATCH_SIZE) {
     const batch = db.batch();

@@ -3,7 +3,7 @@ import { logger } from 'firebase-functions/v2';
 
 const WRITE_BATCH_SIZE = 500;
 const DELETE_BATCH_SIZE = 400;
-const MEGAVENTORY_NORMALIZED_SOURCE = 'megaventory_custom_report';
+export const MEGAVENTORY_NORMALIZED_SOURCE = 'megaventory_custom_report';
 
 export interface MegaventoryNormalizationCounts {
   products: number;

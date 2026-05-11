@@ -18,10 +18,12 @@ import { encryptToken, decryptToken } from './tokenCrypto';
 import { buildHistoricalOrIncrementalWindow, toYmd } from './syncPolicy';
 import {
   cleanupManualImportsForMegaventoryMaster,
+  PRESERVED_MEGAVENTORY_API_CATALOG_SOURCE,
   type ManualImportCleanupCounts,
 } from './manualDataCleanup';
 import {
   normalizeMegaventoryCustomReportRows,
+  MEGAVENTORY_NORMALIZED_SOURCE,
   type MegaventoryNormalizationCounts,
 } from './megaventoryNormalizer';
 import { refreshMegaventoryRfmSegments, type MegaventoryRfmCounts } from './megaventoryRfm';
@@ -683,6 +685,66 @@ async function writeBatch(
   }
 }
 
+/** Καθαρίζει προηγούμενα gap-fill docs πριν ξαναγραφτεί ο κατάλογος από ProductGet. */
+async function mergeMegaventoryApiCatalogProducts(
+  db: Firestore,
+  brandId: string,
+  apiRows: Record<string, unknown>[],
+  customReportSnapshotRows: Record<string, unknown>[],
+): Promise<number> {
+  const snap = await db.collection('products').where('brandId', '==', brandId).get();
+  const apiCatalogDocs = snap.docs.filter((d) => d.data().source === PRESERVED_MEGAVENTORY_API_CATALOG_SOURCE);
+  for (let i = 0; i < apiCatalogDocs.length; i += 500) {
+    const batch = db.batch();
+    for (const doc of apiCatalogDocs.slice(i, i + 500)) {
+      batch.delete(doc.ref);
+    }
+    await batch.commit();
+  }
+
+  const reportSkus = new Set<string>();
+  for (const row of customReportSnapshotRows) {
+    const sku = String(row.SKU_ID ?? '').trim();
+    if (sku && sku !== '-') reportSkus.add(sku);
+  }
+  for (const doc of snap.docs) {
+    if (doc.data().source !== MEGAVENTORY_NORMALIZED_SOURCE) continue;
+    const sku = String(doc.data().sku ?? '').trim();
+    if (sku) reportSkus.add(sku);
+  }
+
+  const items: { id: string; data: Record<string, unknown> }[] = [];
+  const seenSku = new Set<string>();
+  for (const p of apiRows) {
+    const sku = String(p.ProductSKU ?? '').trim();
+    if (!sku || seenSku.has(sku)) continue;
+    seenSku.add(sku);
+    if (reportSkus.has(sku)) continue;
+    const stock = num(p.ProductStockOnHandTotal);
+    const sell = num(p.ProductSellingPrice);
+    const purchase = num(p.ProductPurchasePrice);
+    const name = String(p.ProductDescription ?? '').trim() || sku;
+    const cat = String(p.ProductCategoryDescription ?? '').trim();
+    items.push({
+      id: `mv_api_cat_${brandId}_${sku}`,
+      data: {
+        id: sku,
+        sku,
+        name,
+        ...(cat ? { category: cat } : {}),
+        price: sell,
+        cost_price: purchase,
+        stock_level: stock,
+        stock_capacity: Math.max(stock * 2, stock),
+        source: PRESERVED_MEGAVENTORY_API_CATALOG_SOURCE,
+      },
+    });
+  }
+  if (!items.length) return 0;
+  await writeBatch(db, 'products', brandId, items);
+  return items.length;
+}
+
 async function inferInvoiceBackfillCursor(db: Firestore, brandId: string): Promise<number | null> {
   const snap = await db.collection('megaventory_invoices').where('brandId', '==', brandId).get();
   let minId = Number.POSITIVE_INFINITY;
@@ -707,6 +769,8 @@ export interface MegaventorySyncResult {
   /** Γραμμές custom saved report (π.χ. stock / κινητικότητα) — συλλογή megaventory_custom_report_rows */
   customReportRows?: number;
   normalized?: MegaventoryNormalizationCounts;
+  /** SKU που προστέθηκαν στη συλλογή `products` από πλήρες ProductGet (έλλειψη από custom report). */
+  apiCatalogGapFill?: number;
   rfm?: MegaventoryRfmCounts;
   error?: string;
 }
@@ -785,6 +849,9 @@ export async function fetchMegaventoryData(
   let documentDiagnostics: Record<string, unknown> | null = null;
   let invoiceBackfillProgress: Record<string, unknown> | null = null;
   let rfmSkippedReason = '';
+  let megaventoryApiProductRows: Record<string, unknown>[] = [];
+  let customReportRowsSnapshot: Record<string, unknown>[] = [];
+  let apiCatalogGapFillCount = 0;
 
   try {
     // ── Invoices (Documents type=Sales Invoice) → revenue ────────────
@@ -1024,6 +1091,7 @@ export async function fetchMegaventoryData(
       errors.push(prFetchErr);
     } else {
       const products: any[] = prRows;
+      megaventoryApiProductRows = products as Record<string, unknown>[];
       const items = products.map((p) => ({
         id: `mv_p_${p.ProductID || p.ProductId || p.ProductSKU || Math.random().toString(36).slice(2)}`,
         data: {
@@ -1130,6 +1198,7 @@ export async function fetchMegaventoryData(
         const removed = await deleteMegaventoryCustomReportRows(db, brandId);
         logger.info(`[Megaventory] Custom report purge: removed ${removed} rows for brand ${brandId}`);
         const crRows = await fetchAllCustomReportPages(apiKey, reportId, sinceStr, todayStr);
+        customReportRowsSnapshot = crRows;
         const rid = sanitizeFirestoreDocId(reportId);
         const bid = sanitizeFirestoreDocId(brandId);
         const crItems = crRows.map((row, idx) => ({
@@ -1155,6 +1224,41 @@ export async function fetchMegaventoryData(
         const msg = crErr instanceof Error ? crErr.message : String(crErr);
         errors.push(`CustomReport (${reportId}): ${msg}`);
         logger.warn(`[Megaventory] Custom report sync failed brand ${brandId}: ${msg}`);
+      }
+    }
+
+    if (megaventoryApiProductRows.length > 0) {
+      try {
+        apiCatalogGapFillCount = await mergeMegaventoryApiCatalogProducts(
+          db,
+          brandId,
+          megaventoryApiProductRows,
+          customReportRowsSnapshot,
+        );
+        if (apiCatalogGapFillCount > 0) {
+          logger.info(
+            `[Megaventory] Product Intelligence gap-fill (ProductGet): +${apiCatalogGapFillCount} SKUs not in custom report for ${brandId}`
+          );
+        }
+      } catch (gapErr) {
+        const msg = gapErr instanceof Error ? gapErr.message : String(gapErr);
+        errors.push(`ApiCatalogGapFill: ${msg}`);
+        logger.warn(`[Megaventory] API catalog gap-fill failed for ${brandId}: ${msg}`);
+      }
+    }
+
+    if (apiCatalogGapFillCount > 0 && !(normalizedCounts && normalizedCounts.products > 0)) {
+      try {
+        await refreshStockMovement(brandId);
+        postNormalizeRefresh = {
+          ...(postNormalizeRefresh ?? {}),
+          stockMovement: 'refreshed_after_api_catalog_gap_fill',
+          apiCatalogGapFill: apiCatalogGapFillCount,
+        };
+      } catch (mvErr) {
+        const msg = mvErr instanceof Error ? mvErr.message : String(mvErr);
+        errors.push(`StockMovement(api_catalog): ${msg}`);
+        logger.warn(`[Megaventory] Stock movement refresh after gap-fill failed for ${brandId}: ${msg}`);
       }
     }
 
@@ -1229,6 +1333,7 @@ export async function fetchMegaventoryData(
         postNormalizeRefresh = {
           procurementSignals: procurement,
           stockMovement: 'refreshed',
+          ...(apiCatalogGapFillCount > 0 ? { apiCatalogGapFill: apiCatalogGapFillCount } : {}),
         };
       } catch (refreshErr) {
         const msg = refreshErr instanceof Error ? refreshErr.message : String(refreshErr);
@@ -1263,6 +1368,7 @@ export async function fetchMegaventoryData(
       ...(documentDiagnostics ? { documentDiagnostics } : {}),
       ...(invoiceBackfillProgress ? { invoiceBackfillProgress } : {}),
       ...(postNormalizeRefresh ? { postNormalizeRefresh } : {}),
+      ...(apiCatalogGapFillCount > 0 ? { apiCatalogGapFill: apiCatalogGapFillCount } : {}),
       imported: totalImported,
       ...counts,
       failed: errors.length,
@@ -1276,6 +1382,7 @@ export async function fetchMegaventoryData(
       imported: totalImported,
       ...counts,
       ...(normalizedCounts ? { normalized: normalizedCounts } : {}),
+      ...(apiCatalogGapFillCount > 0 ? { apiCatalogGapFill: apiCatalogGapFillCount } : {}),
       ...(rfmCounts ? { rfm: rfmCounts } : {}),
       ...(errors.length ? { error: errors[0] } : {}),
     };
