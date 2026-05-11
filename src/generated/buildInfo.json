@@ -1,10 +1,14 @@
 {
-  "version": "0.748.0",
-  "previousVersion": "0.747.0",
-  "commitHash": "05d11aa",
+  "version": "0.749.0",
+  "previousVersion": "0.748.0",
+  "commitHash": "d9cbc3c",
   "branch": "main",
-  "buildDate": "2026-05-11T12:45:42.933Z",
+  "buildDate": "2026-05-11T13:02:01.348Z",
   "commits": [
+    {
+      "hash": "d9cbc3c",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "05d11aa",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "e70f789",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "344d15c",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [
@@ -71,7 +71,6 @@
     "[Νέο χαρακτηριστικό] Server-side per-segment behavioral rollups (brand/category/SKU/channel mix)",
     "[Διόρθωση] Background-enrich segment detail in pre-computed mode; differentiate migration empty states",
     "[Νέο χαρακτηριστικό] Server-side segment migration tracking",
-    "[Διόρθωση] Fallback to Merchant Reports v1 when Content API ProductView empty",
-    "[Διόρθωση] TikTok sync job completed + partial counts for last-sync UI"
+    "[Διόρθωση] Fallback to Merchant Reports v1 when Content API ProductView empty"
   ]
 }

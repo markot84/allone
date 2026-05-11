@@ -13,8 +13,12 @@ const PLATFORM_COLLECTIONS: Record<string, string> = {
 };
 
 export type UnifiedCatalogFetchMeta = {
-  /** True όταν διαβάσαμε συνδεδεμένες πλατφόρμες από `ecommerce_summary` και κάναμε merge SKU */
+  /** True όταν βρέθηκαν επιπλέον SKU από connector collections (δηλ. merge πρόσθεσε νέα SKU) */
   extendedWithConnectorCatalog: boolean;
+  /** Platforms που ήταν configured (connected) αλλά δεν επέστρεψαν products (π.χ. 401 error) */
+  connectedButEmptyPlatforms: string[];
+  /** Πόσα connector SKU προστέθηκαν */
+  connectorSkusAdded: number;
 };
 
 export type UnifiedCatalogFetchResult = {
@@ -254,11 +258,11 @@ export async function fetchMergedCatalogForBrand(brandId: string): Promise<Unifi
   if (connected.length === 0) {
     return {
       products: imported,
-      meta: { extendedWithConnectorCatalog: false },
+      meta: { extendedWithConnectorCatalog: false, connectedButEmptyPlatforms: [], connectorSkusAdded: 0 },
     };
   }
 
-  const fromConnectorsArrays = await Promise.all(
+  const fromConnectorsResults = await Promise.all(
     connected.map(async (pf) => {
       const coll = PLATFORM_COLLECTIONS[pf];
       const rows = await FirestoreService.getDocuments<Record<string, unknown>>(
@@ -275,14 +279,25 @@ export async function fetchMergedCatalogForBrand(brandId: string): Promise<Unifi
             : `${pf}_${i}`;
         skuProducts.push(...platformDocToProducts(pf, rowId, row));
       }
-      return skuProducts;
+      return { platform: pf, products: skuProducts };
     })
   );
-  const merged = mergeImportedWithConnectorSkus(imported, fromConnectorsArrays.flat());
+
+  const connectedButEmptyPlatforms = fromConnectorsResults
+    .filter((r) => r.products.length === 0)
+    .map((r) => r.platform);
+
+  const allConnectorProducts = fromConnectorsResults.flatMap((r) => r.products);
+  const merged = mergeImportedWithConnectorSkus(imported, allConnectorProducts);
+  const connectorSkusAdded = merged.length - imported.length;
 
   return {
     products: merged,
-    meta: { extendedWithConnectorCatalog: true },
+    meta: {
+      extendedWithConnectorCatalog: connectorSkusAdded > 0,
+      connectedButEmptyPlatforms,
+      connectorSkusAdded,
+    },
   };
 }
 

@@ -262,6 +262,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     usingProcurement,
     isLoading: sourceLoading,
     extendedWithConnectorCatalog,
+    connectedButEmptyPlatforms,
   } = useProductSource();
   const { suppliers } = useSuppliers();
   const { isEnterprise } = usePlan();
@@ -701,6 +702,19 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Connector catalog sync warning */}
+      {connectedButEmptyPlatforms.length > 0 && !usingProcurement && (
+        <div className="flex items-start gap-3 rounded-lg border border-[#F59E0B] bg-[#FFFBEB] px-4 py-3 text-sm text-[#92400E]">
+          <AlertTriangle size={16} className="mt-0.5 flex-shrink-0 text-[#F59E0B]" />
+          <span>
+            <strong>Ελλιπής κατάλογος:</strong> Τα προϊόντα από{' '}
+            {connectedButEmptyPlatforms.map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join(', ')} δεν μπορούν να συγχρονιστούν (σφάλμα API credentials).
+            Ο αριθμός SKU αφορά μόνο το εισαγόμενο catalog.{' '}
+            <a href="#data" className="underline font-medium">Ελέγξτε τα Connectors →</a>
+          </span>
         </div>
       )}
 

@@ -12,12 +12,14 @@ export function useProducts() {
     queryKey: ['products', brandId],
     queryFn: async () => {
       if (!brandId) {
-        return { products: [] as Product[], extendedWithConnectorCatalog: false };
+        return { products: [] as Product[], extendedWithConnectorCatalog: false, connectedButEmptyPlatforms: [] as string[], connectorSkusAdded: 0 };
       }
       const result = await fetchMergedCatalogForBrand(brandId);
       return {
         products: result.products,
         extendedWithConnectorCatalog: result.meta.extendedWithConnectorCatalog,
+        connectedButEmptyPlatforms: result.meta.connectedButEmptyPlatforms,
+        connectorSkusAdded: result.meta.connectorSkusAdded,
       };
     },
     staleTime: 0,
@@ -35,5 +37,7 @@ export function useProducts() {
     isLoading: isPending,
     hasImported: products.length > 0,
     extendedWithConnectorCatalog: Boolean(data?.extendedWithConnectorCatalog),
+    connectedButEmptyPlatforms: (data?.connectedButEmptyPlatforms ?? []) as string[],
+    connectorSkusAdded: data?.connectorSkusAdded ?? 0,
   };
 }
