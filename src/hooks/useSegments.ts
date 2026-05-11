@@ -169,6 +169,10 @@ export function useSegments(options: UseSegmentsOptions = {}) {
 
   const usePreComputedActive = serverVariantReady;
 
+  /** Must match `enabled` on the segment-customers query — v5 reports `isPending` for disabled queries too. */
+  const segmentCustomerSummariesEnabled =
+    !!brandId && sourcePref === 'external' && serverVariantReady;
+
   const { data: firestoreSegments = [], isPending: fsPending } = useQuery({
     queryKey: ['segments', brandId],
     queryFn: () => (brandId ? SegmentsService.getAll(brandId) : Promise.resolve([])) as Promise<RFMSegment[]>,
@@ -179,7 +183,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   const { data: rawSegmentCustomerSummaries, isPending: segmentCustomersPending } = useQuery({
     queryKey: ['segmentCustomerSummaries', brandId],
     queryFn: () => (brandId ? SegmentCustomersService.getSummariesBySegment(brandId) : Promise.resolve(new Map())),
-    enabled: !!brandId && sourcePref === 'external' && serverVariantReady,
+    enabled: segmentCustomerSummariesEnabled,
     staleTime: 60 * 1000,
     gcTime: 10 * 60 * 1000,
   });
@@ -369,7 +373,10 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     !ecomm.hasData;
   const isLoading =
     blocksOnImportedSegmentsOnly ||
-    (sourcePref === 'external' && segmentCustomersPending && !usePreComputedActive);
+    (sourcePref === 'external' &&
+      segmentCustomerSummariesEnabled &&
+      segmentCustomersPending &&
+      !usePreComputedActive);
 
   // When pre-computed data is available for the selected source, use that variant's Firestore slice.
   // (Removed duplicate usePreComputedActive — unified with serverVariantReady above.)

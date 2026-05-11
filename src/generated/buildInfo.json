@@ -1,10 +1,14 @@
 {
-  "version": "0.742.0",
-  "previousVersion": "0.741.0",
-  "commitHash": "7adea08",
+  "version": "0.745.0",
+  "previousVersion": "0.744.0",
+  "commitHash": "640c170",
   "branch": "main",
-  "buildDate": "2026-05-11T12:07:20.766Z",
+  "buildDate": "2026-05-11T12:30:31.779Z",
   "commits": [
+    {
+      "hash": "640c170",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "7adea08",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "d441d11",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "5ce3e19",
-      "message": "fix(merchant): fallback to Merchant Reports v1 when Content API ProductView empty"
     }
   ],
   "changes": [
@@ -73,7 +73,6 @@
     "[Νέο χαρακτηριστικό] Server-side segment migration tracking",
     "[Διόρθωση] Fallback to Merchant Reports v1 when Content API ProductView empty",
     "[Διόρθωση] TikTok sync job completed + partial counts for last-sync UI",
-    "[Διόρθωση] Sync date UI uses lastDataSyncAt + Meta import_jobs completed",
-    "Security: lock down Firestore rules and add SSRF protection"
+    "[Διόρθωση] Sync date UI uses lastDataSyncAt + Meta import_jobs completed"
   ]
 }

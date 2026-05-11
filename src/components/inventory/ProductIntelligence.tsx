@@ -261,6 +261,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     hasImported,
     usingProcurement,
     isLoading: sourceLoading,
+    extendedWithConnectorCatalog,
   } = useProductSource();
   const { suppliers } = useSuppliers();
   const { isEnterprise } = usePlan();
@@ -558,7 +559,13 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
             </p>
           ) : sourceProducts.length > 0 ? (
             <p className="text-xs font-medium text-[#22C55E] sm:text-sm">
-              Showing {sourceProducts.length} {usingProcurement ? 'procurement' : 'imported'} product(s)
+              Showing {sourceProducts.length}{' '}
+              {usingProcurement
+                ? 'procurement'
+                : extendedWithConnectorCatalog
+                  ? 'catalog'
+                  : 'imported'}{' '}
+              product(s)
             </p>
           ) : null
         }
