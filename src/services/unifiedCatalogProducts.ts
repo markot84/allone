@@ -4,13 +4,15 @@ import type { Product } from '../types';
 import { FirestoreService } from './firestore';
 import { normalizeSku } from './ecommerceAffinityKey';
 
-/** Mirror of catalogAlignment / rfm COMPUTER mappings — unified `products` vs connector collections */
+/** Mirror of catalogAlignment / rfm COMPUTER mappings — unified `products` vs connector collections.
+ * NOTE: ERP systems (Megaventory etc.) write a curated subset to the `products` collection via
+ * their Normalizer (e.g. MegaventoryNormalizer → 1000 top SKUs). Do NOT include ERP raw collections
+ * here — they can contain 50K-100K docs which is impossible to load client-side. */
 const PLATFORM_COLLECTIONS: Record<string, string> = {
   shopify: 'shopify_products',
   woocommerce: 'woo_products',
   magento: 'magento_products',
   opencart: 'opencart_products',
-  megaventory: 'megaventory_products',
 };
 
 export type UnifiedCatalogFetchMeta = {
@@ -267,7 +269,7 @@ async function resolveConnectorCatalogPlatforms(brandId: string): Promise<string
       pick('woocommerce', 'woocommerce');
       pick('magento', 'magento');
       pick('opencart', 'opencart');
-      pick('megaventory', 'megaventory');
+      // megaventory intentionally excluded: raw collection has 50K-100K docs, uses `products` via Normalizer
     }
   } catch { /* ignore */ }
 
