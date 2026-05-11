@@ -1,10 +1,14 @@
 {
-  "version": "0.747.0",
-  "previousVersion": "0.746.0",
-  "commitHash": "152698e",
+  "version": "0.748.0",
+  "previousVersion": "0.747.0",
+  "commitHash": "05d11aa",
   "branch": "main",
-  "buildDate": "2026-05-11T12:40:55.420Z",
+  "buildDate": "2026-05-11T12:45:42.933Z",
   "commits": [
+    {
+      "hash": "05d11aa",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "152698e",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "344d15c",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "8d3f496",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [
@@ -72,7 +72,6 @@
     "[Διόρθωση] Background-enrich segment detail in pre-computed mode; differentiate migration empty states",
     "[Νέο χαρακτηριστικό] Server-side segment migration tracking",
     "[Διόρθωση] Fallback to Merchant Reports v1 when Content API ProductView empty",
-    "[Διόρθωση] TikTok sync job completed + partial counts for last-sync UI",
-    "[Διόρθωση] Sync date UI uses lastDataSyncAt + Meta import_jobs completed"
+    "[Διόρθωση] TikTok sync job completed + partial counts for last-sync UI"
   ]
 }

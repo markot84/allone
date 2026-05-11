@@ -1,4 +1,4 @@
-import { doc, getDoc, documentId, orderBy } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import type { Product } from '../types';
 import { FirestoreService } from './firestore';
@@ -261,9 +261,9 @@ export async function fetchMergedCatalogForBrand(brandId: string): Promise<Unifi
   const fromConnectorsArrays = await Promise.all(
     connected.map(async (pf) => {
       const coll = PLATFORM_COLLECTIONS[pf];
-      const rows = await FirestoreService.getDocumentsAllPages<Record<string, unknown>>(
+      const rows = await FirestoreService.getDocuments<Record<string, unknown>>(
         coll,
-        [orderBy(documentId())],
+        [],
         brandId
       );
       const skuProducts: Product[] = [];
@@ -289,9 +289,5 @@ export async function fetchMergedCatalogForBrand(brandId: string): Promise<Unifi
 /** Avoid circular static ref — thin wrapper για tests / clarity */
 export const ProductsServiceHelpers = {
   getImportedProducts: (brandId: string) =>
-    FirestoreService.getDocumentsAllPages<Product>(
-      'products',
-      [orderBy(documentId())],
-      brandId
-    ),
+    FirestoreService.getDocuments<Product>('products', [], brandId),
 };
