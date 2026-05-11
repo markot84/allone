@@ -2242,7 +2242,9 @@ export function ConnectorsPanel() {
           ['lastSyncDates', brandId],
           (prev) => ({ ...(prev || {}), [provider]: new Date() })
         );
-        if (provider === 'merchant') {
+        if (provider === 'megaventory' && result.queued) {
+          toast.success('Megaventory sync ξεκίνησε στο background. Μπορείς να συνεχίσεις κανονικά και να ελέγξεις τα SKUs σε λίγα λεπτά.');
+        } else if (provider === 'merchant') {
           const imp = result.imported ?? 0;
           const wm = typeof result.withMarketBenchmark === 'number' ? result.withMarketBenchmark : undefined;
           if (imp === 0) {

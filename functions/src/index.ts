@@ -1241,7 +1241,7 @@ export const connectorSync = onRequest(
         return;
       }
 
-      let result;
+      let result: any;
       if (provider === 'google_ads') {
         result = await fetchGoogleAdsCampaigns(brandId);
       } else if (provider === 'meta') {
@@ -1269,7 +1269,23 @@ export const connectorSync = onRequest(
         }
         result = await fetchMagentoData(brandId);
       } else if (provider === 'megaventory') {
-        result = await fetchMegaventoryData(brandId, { mode: 'manual', skipDocuments: true });
+        const jobId = `megaventory_${brandId.replace(/[^A-Za-z0-9_-]/g, '_')}`;
+        await admin.firestore().collection('connector_sync_jobs').doc(jobId).set({
+          brandId,
+          provider,
+          status: 'pending',
+          requestedBy: decoded.uid,
+          requestedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+          mode: 'manual_catalog_refresh',
+        }, { merge: true });
+        result = {
+          success: true,
+          queued: true,
+          jobId,
+          imported: 0,
+          message: 'Megaventory sync ξεκίνησε στο background.',
+        };
       } else if (provider === 'softone') {
         result = await fetchSoftOneData(brandId);
       } else if (provider === 'epsilon_net') {
@@ -1286,7 +1302,10 @@ export const connectorSync = onRequest(
       }
 
       // ecommerce_summary (μόνο e-shop) + business_revenue_summary (ERP) μετά από sync connectors.
-      if (['shopify', 'woocommerce', 'opencart', 'magento', 'megaventory', 'softone'].includes(provider)) {
+      if (
+        ['shopify', 'woocommerce', 'opencart', 'magento', 'megaventory', 'softone'].includes(provider) &&
+        result.queued !== true
+      ) {
         try {
           await computeEcommerceSummary(brandId);
         } catch (e) {
@@ -1308,6 +1327,69 @@ export const connectorSync = onRequest(
       const msg = error instanceof Error ? error.message : String(error);
       logger.error(`[connectorSync] failed for brand=${brandId || 'unknown'} provider=${provider || 'unknown'}: ${msg}`);
       res.status(500).json({ error: msg });
+    }
+  }
+);
+
+export const processMegaventorySyncJobs = onSchedule(
+  {
+    schedule: 'every 1 minutes',
+    region: 'europe-west1',
+    timeoutSeconds: 1800,
+    memory: '2GiB',
+    secrets: ['CONNECTOR_TOKEN_KEY'],
+  },
+  async () => {
+    const db = admin.firestore();
+    const snap = await db
+      .collection('connector_sync_jobs')
+      .where('provider', '==', 'megaventory')
+      .where('status', '==', 'pending')
+      .limit(1)
+      .get();
+
+    if (snap.empty) return;
+
+    const jobRef = snap.docs[0].ref;
+    const job = await db.runTransaction(async (tx) => {
+      const latest = await tx.get(jobRef);
+      const data = latest.data() as { brandId?: string; status?: string } | undefined;
+      if (!latest.exists || data?.status !== 'pending' || !data.brandId) return null;
+      tx.update(jobRef, {
+        status: 'running',
+        startedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      return { brandId: data.brandId };
+    });
+
+    if (!job) return;
+
+    try {
+      logger.info(`[MegaventoryJob] Starting catalog refresh for ${job.brandId}`);
+      const result = await fetchMegaventoryData(job.brandId, { mode: 'manual', skipDocuments: true });
+      try {
+        await computeEcommerceSummary(job.brandId);
+      } catch (e) {
+        logger.warn(`[MegaventoryJob] ecommerce summary refresh failed for ${job.brandId}:`, e);
+      }
+      await jobRef.update({
+        status: result.success ? 'completed' : 'failed',
+        result,
+        completedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+        ...(result.error ? { error: result.error } : { error: FieldValue.delete() }),
+      });
+      logger.info(`[MegaventoryJob] Completed catalog refresh for ${job.brandId}: ${JSON.stringify(result)}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error(`[MegaventoryJob] failed for ${job.brandId}: ${msg}`);
+      await jobRef.update({
+        status: 'failed',
+        error: msg,
+        completedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
     }
   }
 );
