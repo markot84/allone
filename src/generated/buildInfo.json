@@ -1,77 +1,73 @@
 {
-  "version": "0.726.94",
-  "previousVersion": "0.726.93",
-  "commitHash": "4f9efec",
+  "version": "0.726.95",
+  "previousVersion": "0.726.94",
+  "commitHash": "e3e7fe3",
   "branch": "main",
-  "buildDate": "2026-05-10T08:18:56.758Z",
+  "buildDate": "2026-05-11T05:03:22.213Z",
   "commits": [
     {
-      "hash": "4f9efec",
-      "message": "fix(procurement): 12μηνος τζίρος από φύλλο Κοστολόγηση (στήλη Η)"
+      "hash": "e3e7fe3",
+      "message": "security: lock down Firestore rules and add SSRF protection"
     },
     {
-      "hash": "b428c11",
+      "hash": "085ea9a",
       "message": "chore: full deploy"
     },
     {
-      "hash": "58b03b8",
+      "hash": "511f535",
       "message": "chore: full deploy"
     },
     {
-      "hash": "395737f",
+      "hash": "8d549ea",
       "message": "chore: full deploy"
     },
     {
-      "hash": "a8871a2",
+      "hash": "87c1745",
       "message": "chore: full deploy"
     },
     {
-      "hash": "2cce3b5",
+      "hash": "4565142",
       "message": "chore: full deploy"
     },
     {
-      "hash": "d9a2596",
+      "hash": "0662e62",
       "message": "chore: full deploy"
     },
     {
-      "hash": "21e4088",
+      "hash": "d262d16",
       "message": "chore: full deploy"
     },
     {
-      "hash": "b66410d",
+      "hash": "ad5a766",
       "message": "chore: full deploy"
     },
     {
-      "hash": "d7a6b58",
+      "hash": "b3d2a91",
       "message": "chore: full deploy"
     },
     {
-      "hash": "cf440b7",
+      "hash": "877c067",
       "message": "chore: full deploy"
     },
     {
-      "hash": "496b12f",
+      "hash": "55235f4",
       "message": "chore: full deploy"
     },
     {
-      "hash": "7159099",
+      "hash": "a130ef8",
       "message": "chore: full deploy"
     },
     {
-      "hash": "371e421",
+      "hash": "a5b6b28",
       "message": "chore: full deploy"
     },
     {
-      "hash": "24eae52",
-      "message": "fix: GA4 connector revert to v1beta, split large doc into subcollections, add privacy links and site verification"
+      "hash": "f0a3408",
+      "message": "chore: full deploy"
     }
   ],
   "changes": [
-    "[Διόρθωση] 12μηνος τζίρος από φύλλο Κοστολόγηση (στήλη Η)",
-    "[Συντήρηση] Full deploy",
-    "[Διόρθωση] GA4 connector revert to v1beta, split large doc into subcollections, add privacy links and site verification",
-    "[Διόρθωση] Show connector last sync from connector doc fallback",
-    "[Διόρθωση] Update last sync date for partial imports with data",
-    "[Διόρθωση] Fetch timeouts (30s) + bump connectorSync memory to 2GiB to prevent 503 hangs"
+    "Security: lock down Firestore rules and add SSRF protection",
+    "[Συντήρηση] Full deploy"
   ]
 }
