@@ -322,26 +322,30 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   const isLoading =
     blocksOnImportedSegmentsOnly || (sourcePref === 'external' && segmentCustomersPending);
 
-  // Show loading while: pre-computed check is in progress, OR orders are being fetched (no pre-computed).
-  const ordersLoading = preComputed.isLoading || (ordersQueryEnabled && ordersPending);
+  // Show loading while: pre-computed check is in progress (only relevant for 'orders' pref),
+  // OR orders are being fetched (no pre-computed).
+  const ordersLoading =
+    (sourcePref === 'orders' && preComputed.isLoading) || (ordersQueryEnabled && ordersPending);
   const isCatalogEnriching = ordersQueryEnabled && catalogPending;
   /** True when the orders fetch hit the per-platform limit — RFM is computed from a sample, not full history. */
   const ordersSampled = !ordersPending && ordersQueryEnabled && rawOrders.length >= MAX_ORDERS_PER_PLATFORM_RFM;
 
+  // When pre-computed data is available AND user prefers 'orders', use server data.
+  // For 'external' (imported segments) we keep the existing client-side flow.
+  const usePreComputedActive = preComputed.isPreComputed && sourcePref === 'orders';
+
   const hasImported =
-    preComputed.isPreComputed
+    usePreComputedActive
       ? preComputed.totalCustomers > 0
       : resolvedSource === 'ecommerce' ? orderRfm.totalCustomers > 0 : importSegmentsAvailable;
 
-  // When pre-computed data is available (server-computed, fresh), use it as the primary source.
-  // Fall back to client-side computation with 5K limit if no pre-computed data.
-  const activeSegments = preComputed.isPreComputed ? preComputed.segments : segments;
-  const activeTotalCustomers = preComputed.isPreComputed ? preComputed.totalCustomers : totalCustomers;
+  const activeSegments = usePreComputedActive ? preComputed.segments : segments;
+  const activeTotalCustomers = usePreComputedActive ? preComputed.totalCustomers : totalCustomers;
 
-  // Override dataCoverage when pre-computed data exists — old client-side coverage only sees
-  // imported segments + (skipped) orderRfm and reports incorrect counts (e.g. 27 instead of 4045).
+  // Override dataCoverage when pre-computed data is the active source — old client-side coverage
+  // only sees imported segments + (skipped) orderRfm and reports incorrect counts.
   const activeDataCoverage = useMemo<SegmentDataCoverage>(() => {
-    if (!preComputed.isPreComputed) return dataCoverage;
+    if (!usePreComputedActive) return dataCoverage;
     const isErp = preComputed.dataSource === 'erp';
     const eShopCustomers = isErp ? 0 : preComputed.totalCustomers;
     const otherCustomers = isErp ? preComputed.totalCustomers : externalTotalCustomers;
@@ -364,7 +368,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
           ? 'Χρησιμοποιεί ευρύτερο πελατολόγιο από e-shop και ERP/other πηγές. Οι προτάσεις πρέπει να λαμβάνουν υπόψη ότι μέρος του κοινού επηρεάζεται ψηφιακά αλλά μπορεί να αγοράζει offline.'
           : 'Χρησιμοποιεί μόνο αναγνωρίσιμους e-shop αγοραστές. Οι προτάσεις μπορούν να δίνουν μεγαλύτερη έμφαση σε performance, retargeting, CRM και online conversion.',
     };
-  }, [preComputed.isPreComputed, preComputed.dataSource, preComputed.totalCustomers, dataCoverage, externalTotalCustomers, sourcePref]);
+  }, [usePreComputedActive, preComputed.dataSource, preComputed.totalCustomers, dataCoverage, externalTotalCustomers, sourcePref]);
 
   // With pre-computed data, the toggle (orders vs external) should still be available
   // when both pre-computed orders AND imported segments exist.
@@ -380,7 +384,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     ordersLoading,
     ordersError: (ordersError as Error | null) ?? null,
     /** True when orders were capped at MAX_ORDERS_PER_PLATFORM_RFM — data is a sample. */
-    ordersSampled: preComputed.isPreComputed ? false : ordersSampled,
+    ordersSampled: usePreComputedActive ? false : ordersSampled,
     /** Φόρτωση *_products + unified products για catalog tabs — δεν μπλοκάρει το κύριο RFM grid. */
     isCatalogEnriching,
     hasImported,
@@ -391,7 +395,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     canComputeFromOrders: activeCanComputeFromOrders,
     dataCoverage: activeDataCoverage,
     orderRfmMeta:
-      preComputed.isPreComputed
+      usePreComputedActive
         ? {
             ordersAttributed: 0,
             guestOrdersSkipped: 0,
@@ -402,12 +406,12 @@ export function useSegments(options: UseSegmentsOptions = {}) {
             guestOrdersSkipped: orderRfm.guestOrdersSkipped,
           }
         : undefined,
-    segmentMigration: preComputed.isPreComputed && preComputed.migration
+    segmentMigration: usePreComputedActive && preComputed.migration
       ? preComputedMigrationToResult(preComputed.migration)
       : resolvedSource === 'ecommerce' ? orderSegmentMigration : undefined,
     importSegmentsAvailable,
     /** True when reading from server pre-computed RFM (Cloud Function). */
-    isPreComputed: preComputed.isPreComputed,
+    isPreComputed: usePreComputedActive,
     /** Timestamp of the last server-side RFM computation. */
     lastComputedAt: preComputed.lastComputedAt,
     /** Data source used for pre-computed RFM. */
