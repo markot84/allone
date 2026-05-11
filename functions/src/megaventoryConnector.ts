@@ -803,7 +803,10 @@ export async function fetchMegaventoryData(
   const mode = options.mode || 'manual';
   let docsWindow = buildHistoricalOrIncrementalWindow(conn, 'lastDocsSyncAt');
   const invoiceBackfillPending = conn.invoiceDocumentBackfillComplete !== true;
-  const shouldStageInvoiceBackfill = invoiceBackfillPending && mode !== 'scheduled';
+  // Manual sync must refresh the current window and reference data (products/stock/report) quickly.
+  // The staged historical invoice backfill can take ~20 minutes and prevents the UI sync from
+  // reaching catalog refresh, which is the main action users expect from the Sync button.
+  const shouldStageInvoiceBackfill = false;
   let invoiceBackfillCursor = positiveNumber(conn.invoiceDocumentBackfillCursor);
   if (shouldStageInvoiceBackfill && invoiceBackfillCursor === null && conn.invoiceDocumentBackfillAt) {
     invoiceBackfillCursor = await inferInvoiceBackfillCursor(db, brandId);
