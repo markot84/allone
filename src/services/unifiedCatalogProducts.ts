@@ -10,6 +10,7 @@ const PLATFORM_COLLECTIONS: Record<string, string> = {
   woocommerce: 'woo_products',
   magento: 'magento_products',
   opencart: 'opencart_products',
+  megaventory: 'megaventory_products',
 };
 
 export type UnifiedCatalogFetchMeta = {
@@ -168,6 +169,32 @@ function opencartRowToProduct(docId: string, row: Record<string, unknown>): Prod
   };
 }
 
+function megaventoryRowToProduct(docId: string, row: Record<string, unknown>): Product | null {
+  const sku = String(row.sku ?? '').trim();
+  if (!sku) return null;
+  const price = parseMoney(row.sellingPrice);
+  const cost = parseMoney(row.purchasePrice);
+  const stockRaw = row.stockOnHand;
+  const stockNum = stockRaw != null && stockRaw !== '' ? Number(stockRaw) : 0;
+  const stock_level = Number.isFinite(stockNum) ? stockNum : 0;
+  const name = String(row.name ?? sku).trim() || sku;
+  const cat = String(row.category ?? '').trim();
+  const marginFields = pickMargin(price, cost);
+  return {
+    id: docId,
+    name,
+    sku,
+    category: cat || 'ERP',
+    ...marginFields,
+    stock_level,
+    stock_capacity: stock_level > 0 ? stock_level * 2 : 0,
+    price,
+    cost_price: cost > 0 ? cost : undefined,
+    status: 'active',
+  };
+}
+
+
 function platformDocToProducts(platform: string, docId: string, row: Record<string, unknown>): Product[] {
   switch (platform) {
     case 'shopify':
@@ -182,6 +209,10 @@ function platformDocToProducts(platform: string, docId: string, row: Record<stri
     }
     case 'opencart': {
       const one = opencartRowToProduct(docId, row);
+      return one ? [one] : [];
+    }
+    case 'megaventory': {
+      const one = megaventoryRowToProduct(docId, row);
       return one ? [one] : [];
     }
     default:
@@ -208,41 +239,39 @@ export function mergeImportedWithConnectorSkus(imported: Product[], fromConnecto
 }
 
 /**
- * Φορτώνει `products` + επιπλέον SKU από τις συλλογές των connectors (Magento/Shopify/κλπ.).
- * Οι τιμές/απόθεμα από τα connectors είναι για Product Intelligence οπτική σύνοψη·
- * δεν αντικαθιστούν πλούσια ERP πεδία όπου υπάρχει ήδη import στο `products`.
+ * Φορτώνει `products` + επιπλέον SKU από τις συλλογές των connectors (e-commerce + ERP).
+ * Ελέγχει ΚΑΙ ecommerce_summary ΚΑΙ connectors doc — δεν κάνει early return.
  */
 async function resolveConnectorCatalogPlatforms(brandId: string): Promise<string[]> {
+  const found = new Set<string>();
+
   try {
     const summarySnap = await getDoc(doc(db, 'ecommerce_summary', brandId));
-    const raw =
-      summarySnap.exists() &&
-      Array.isArray((summarySnap.data() as { connectedPlatforms?: string[] }).connectedPlatforms)
-        ? (summarySnap.data() as { connectedPlatforms: string[] }).connectedPlatforms
-        : [];
-    const fromSummary = [...new Set(raw)].filter((p) => PLATFORM_COLLECTIONS[p]);
-    if (fromSummary.length > 0) return fromSummary;
-  } catch {
-    /* fall through to connectors doc */
-  }
+    if (summarySnap.exists()) {
+      const raw = (summarySnap.data() as { connectedPlatforms?: string[] }).connectedPlatforms;
+      if (Array.isArray(raw)) {
+        raw.forEach((p) => { if (PLATFORM_COLLECTIONS[p]) found.add(p); });
+      }
+    }
+  } catch { /* ignore */ }
 
   try {
     const connSnap = await getDoc(doc(db, 'connectors', brandId));
-    if (!connSnap.exists()) return [];
-    const data = connSnap.data() as Record<string, unknown>;
-    const out: string[] = [];
-    const pick = (key: string, platform: string) => {
-      const block = data[key] as Record<string, unknown> | undefined;
-      if (block && block.connected) out.push(platform);
-    };
-    pick('shopify', 'shopify');
-    pick('woocommerce', 'woocommerce');
-    pick('magento', 'magento');
-    pick('opencart', 'opencart');
-    return [...new Set(out)].filter((p) => PLATFORM_COLLECTIONS[p]);
-  } catch {
-    return [];
-  }
+    if (connSnap.exists()) {
+      const data = connSnap.data() as Record<string, unknown>;
+      const pick = (key: string, platform: string) => {
+        const block = data[key] as Record<string, unknown> | undefined;
+        if (block?.connected && PLATFORM_COLLECTIONS[platform]) found.add(platform);
+      };
+      pick('shopify', 'shopify');
+      pick('woocommerce', 'woocommerce');
+      pick('magento', 'magento');
+      pick('opencart', 'opencart');
+      pick('megaventory', 'megaventory');
+    }
+  } catch { /* ignore */ }
+
+  return [...found];
 }
 
 export async function fetchMergedCatalogForBrand(brandId: string): Promise<UnifiedCatalogFetchResult> {
