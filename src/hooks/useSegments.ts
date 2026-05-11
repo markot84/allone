@@ -309,6 +309,40 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   const activeSegments = preComputed.isPreComputed ? preComputed.segments : segments;
   const activeTotalCustomers = preComputed.isPreComputed ? preComputed.totalCustomers : totalCustomers;
 
+  // Override dataCoverage when pre-computed data exists — old client-side coverage only sees
+  // imported segments + (skipped) orderRfm and reports incorrect counts (e.g. 27 instead of 4045).
+  const activeDataCoverage = useMemo<SegmentDataCoverage>(() => {
+    if (!preComputed.isPreComputed) return dataCoverage;
+    const isErp = preComputed.dataSource === 'erp';
+    const eShopCustomers = isErp ? 0 : preComputed.totalCustomers;
+    const otherCustomers = isErp ? preComputed.totalCustomers : externalTotalCustomers;
+    const total = preComputed.totalCustomers + (isErp ? 0 : externalTotalCustomers);
+    const eShopPenetration = total > 0 ? Math.round((eShopCustomers / total) * 1000) / 10 : 0;
+    return {
+      sourcePreference: sourcePref,
+      activeSource: 'ecommerce',
+      eShopCustomers,
+      totalCustomers: total,
+      otherCustomers,
+      eShopPenetration,
+      hasEshopOrders: !isErp && preComputed.totalCustomers > 0,
+      hasExternalData: isErp || externalTotalCustomers > 0,
+      policyLabel: isErp || externalTotalCustomers > 0 ? 'e-shop & others' : 'e-shop orders',
+      marketingPolicy:
+        isErp
+          ? 'Χρησιμοποιεί δεδομένα από ERP (Megaventory/SoftOne). Καλύπτει όλο το πελατολόγιο της επιχείρησης, συμπεριλαμβανομένων και offline αγορών.'
+          : externalTotalCustomers > 0
+          ? 'Χρησιμοποιεί ευρύτερο πελατολόγιο από e-shop και ERP/other πηγές. Οι προτάσεις πρέπει να λαμβάνουν υπόψη ότι μέρος του κοινού επηρεάζεται ψηφιακά αλλά μπορεί να αγοράζει offline.'
+          : 'Χρησιμοποιεί μόνο αναγνωρίσιμους e-shop αγοραστές. Οι προτάσεις μπορούν να δίνουν μεγαλύτερη έμφαση σε performance, retargeting, CRM και online conversion.',
+    };
+  }, [preComputed.isPreComputed, preComputed.dataSource, preComputed.totalCustomers, dataCoverage, externalTotalCustomers, sourcePref]);
+
+  // With pre-computed data, the toggle (orders vs external) should still be available
+  // when both pre-computed orders AND imported segments exist.
+  const activeCanComputeFromOrders = preComputed.isPreComputed
+    ? preComputed.totalCustomers > 0
+    : canComputeFromOrders;
+
   return {
     segments: activeSegments,
     totalCustomers: activeTotalCustomers,
@@ -325,10 +359,15 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     dataSource: resolvedSource,
     setDataSourcePreference,
     sourcePreference: sourcePref,
-    canComputeFromOrders,
-    dataCoverage,
+    canComputeFromOrders: activeCanComputeFromOrders,
+    dataCoverage: activeDataCoverage,
     orderRfmMeta:
-      resolvedSource === 'ecommerce'
+      preComputed.isPreComputed
+        ? {
+            ordersAttributed: 0,
+            guestOrdersSkipped: 0,
+          }
+        : resolvedSource === 'ecommerce'
         ? {
             ordersAttributed: orderRfm.ordersAttributed,
             guestOrdersSkipped: orderRfm.guestOrdersSkipped,
