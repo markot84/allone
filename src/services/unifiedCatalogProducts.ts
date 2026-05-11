@@ -294,10 +294,12 @@ export async function fetchMergedCatalogForBrand(brandId: string): Promise<Unifi
   const fromConnectorsResults = await Promise.all(
     connected.map(async (pf) => {
       const coll = PLATFORM_COLLECTIONS[pf];
-      const rows = await FirestoreService.getDocuments<Record<string, unknown>>(
+      // Large ERP/connector collections: use paginated fetch to avoid single huge request.
+      const rows = await FirestoreService.getDocumentsAllPages<Record<string, unknown>>(
         coll,
         [],
-        brandId
+        brandId,
+        { pageSize: 500 }
       );
       const skuProducts: Product[] = [];
       for (let i = 0; i < rows.length; i++) {

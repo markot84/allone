@@ -22,7 +22,7 @@ export function useProducts() {
         connectorSkusAdded: result.meta.connectorSkusAdded,
       };
     },
-    staleTime: 0,
+    staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
     placeholderData: (previousData) => previousData,
     enabled: !!brandId,
