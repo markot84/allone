@@ -165,6 +165,73 @@ export class FirestoreService {
     }
   }
 
+  /**
+   * Φέρνει όλα τα αποτελέσματα μιας ερωτήματος σε σελίδες (Firestore limit ανά request).
+   * Πρέπει να περιλαμβάνεις `orderBy` στα `constraints` για σταθερό cursor (`startAfter`).
+   */
+  static async getDocumentsAllPages<T>(
+    collectionName: string,
+    constraints: QueryConstraint[] = [],
+    brandId?: string | null,
+    options?: { forceServer?: boolean; cacheFirst?: boolean; pageSize?: number }
+  ): Promise<T[]> {
+    const pageSize = options?.pageSize ?? 800;
+
+    const base: QueryConstraint[] = [];
+    if (brandId) {
+      base.push(where('brandId', '==', brandId));
+    }
+    base.push(...constraints);
+
+    const fetchPage = async (
+      cursor: QueryDocumentSnapshot<DocumentData> | null
+    ): Promise<QueryDocumentSnapshot<DocumentData>[]> => {
+      const paging: QueryConstraint[] =
+        cursor === null ? [limit(pageSize)] : [startAfter(cursor), limit(pageSize)];
+      const qRef = query(collection(db, collectionName), ...base, ...paging);
+      if (options?.forceServer) {
+        const snap = await getDocsFromServer(qRef);
+        return snap.docs;
+      }
+      // Follow-up pages: cursor queries are not safely served from whole-query cache.
+      if (cursor !== null) {
+        const snap = await getDocs(qRef);
+        return snap.docs;
+      }
+      if (options?.cacheFirst) {
+        try {
+          const snap = await getDocsFromCache(qRef);
+          if (!snap.empty) return snap.docs;
+        } catch {
+          /* fallback to network */
+        }
+      }
+      const snap = await getDocs(qRef);
+      return snap.docs;
+    };
+
+    const items: T[] = [];
+    let lastDoc: QueryDocumentSnapshot<DocumentData> | null = null;
+
+    while (true) {
+      const docs = await fetchPage(lastDoc);
+      if (docs.length === 0) break;
+      items.push(
+        ...docs.map(
+          (d) =>
+            ({
+              id: d.id,
+              ...d.data(),
+            }) as T
+        )
+      );
+      lastDoc = docs[docs.length - 1] ?? null;
+      if (docs.length < pageSize) break;
+    }
+
+    return items;
+  }
+
   static async getDocumentsPaginated<T>(
     collectionName: string,
     options: {

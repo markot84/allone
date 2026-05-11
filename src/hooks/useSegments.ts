@@ -5,7 +5,7 @@ import { mergeDuplicateSegmentRowsByName } from '../utils/mergeDuplicateSegments
 import { getSegmentColor } from '../utils/segmentColors';
 import { useBrand } from './useBrand';
 import { useEcommerceSummary } from './useEcommerceSummary';
-import { fetchAllEcommerceOrders, fetchDataAnalysisOrders, MAX_ORDERS_PER_PLATFORM_RFM } from '../services/ecommerceRawOrders';
+import { fetchAllEcommerceOrders, fetchDataAnalysisOrders } from '../services/ecommerceRawOrders';
 import { fetchCatalogAlignmentData, fetchCatalogAlignmentDataForDataAnalysis, normalizeCatalogAlignmentPayload } from '../services/catalogAlignment';
 import { computeRfmSegmentsFromEcommerceOrders, computeSegmentMigrationFromEcommerceOrders, type RfmCatalogContext, type SegmentMigrationResult } from '../services/rfmFromOrders';
 import { useRFMPreComputed, type RFMPreComputedMigration, type RFMPrecomputedVariant } from './useRFMPreComputed';
@@ -158,6 +158,17 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   const preActive = sourcePref === 'external' ? preRf.merged : preRf.orders;
   const preOrders = preRf.orders;
 
+  /**
+   * Server variant for the active source has fresh pre-computed RFM + customer chunks.
+   * When true, skip client-side order/catalog fetch for RFM (authoritative server slices).
+   */
+  const serverVariantReady =
+    !preRf.isLoading &&
+    preActive.isPreComputed &&
+    (preActive.segmentDocCount > 0 || preActive.segments.length > 0);
+
+  const usePreComputedActive = serverVariantReady;
+
   const { data: firestoreSegments = [], isPending: fsPending } = useQuery({
     queryKey: ['segments', brandId],
     queryFn: () => (brandId ? SegmentsService.getAll(brandId) : Promise.resolve([])) as Promise<RFMSegment[]>,
@@ -168,7 +179,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   const { data: rawSegmentCustomerSummaries, isPending: segmentCustomersPending } = useQuery({
     queryKey: ['segmentCustomerSummaries', brandId],
     queryFn: () => (brandId ? SegmentCustomersService.getSummariesBySegment(brandId) : Promise.resolve(new Map())),
-    enabled: !!brandId && sourcePref === 'external',
+    enabled: !!brandId && sourcePref === 'external' && serverVariantReady,
     staleTime: 60 * 1000,
     gcTime: 10 * 60 * 1000,
   });
@@ -178,26 +189,28 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     [rawSegmentCustomerSummaries]
   );
 
-  /**
-   * Server variant for the active source has fresh pre-computed RFM + customer chunks.
-   * When true, skip client order fetch (no 5K cap) for this toggle.
-   */
-  const serverVariantReady =
-    !preRf.isLoading &&
-    preActive.isPreComputed &&
-    (preActive.segmentDocCount > 0 || preActive.segments.length > 0);
-
-  const usePreComputedActive = serverVariantReady;
-
   /** True when per-segment behavioral subdocs exist for the active variant. */
   const hasServerBehavioralDocs = usePreComputedActive && preActive.segmentDocCount > 0;
 
-  /** Wait for `rfm_computed` before starting orders/catalog — avoids a pointless parallel fetch when merged server slice will satisfy external toggle. */
+  /**
+   * Client-side order + catalog fetch (όλο το εύρος ημερομηνιών μέσω σελιδοποίησης Firestore) —
+   * fallback όταν δεν υπάρχει έγκυρο server `rfm_computed` για την ενεργή πηγή.
+   * Η σελίδα Data Analysis (`variant: 'data_analysis'`) δεν χρησιμοποιεί αυτό το fallback· εκεί το RFM
+   * είναι αποκλειστικά server-side.
+   */
+  const allowClientOrdersRfmFallback = variant !== 'data_analysis';
+
+  /**
+   * «e-shop & others» must never show raw imported Firestore counts as the RFM grid — only merged
+   * `rfm_computed/.../variants/merged`. Until then, skip orders/catalog fetch (no misleading pills).
+   */
   const ordersQueryEnabled =
+    allowClientOrdersRfmFallback &&
     !preRf.isLoading &&
     !serverVariantReady &&
+    sourcePref !== 'external' &&
     !!brandId &&
-    (ecomm.connectedPlatforms.length > 0 || variant === 'data_analysis');
+    ecomm.connectedPlatforms.length > 0;
   const ordersSinceDate = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() - RFM_ORDER_FETCH_WINDOW_DAYS);
@@ -207,7 +220,12 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   const ordersQueryKeyPrefix = variant === 'data_analysis' ? 'dataAnalysisOrdersRaw' : 'ecommerceOrdersRaw';
   const catalogQueryKeyPrefix = variant === 'data_analysis' ? 'catalogAlignmentDataAnalysis' : 'catalogAlignment';
 
-  const { data: rawOrders = [], isPending: ordersPending, error: ordersError } = useQuery({
+  const {
+    data: rawOrders = [],
+    isPending: ordersPending,
+    isFetching: ordersFetching,
+    error: ordersError,
+  } = useQuery({
     queryKey: [ordersQueryKeyPrefix, brandId, platformsKey, ordersSinceDate],
     queryFn: () =>
       brandId
@@ -223,7 +241,10 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   });
 
   /** Μετά τις παραγγελίες ώστε να μην «δένει» το UI σε διπλό βαρύ parallel fetch· τα segments εμφανίζονται χωρίς catalog enrichment. */
-  const { data: catalogAlignment, isPending: catalogPending } = useQuery({
+  const {
+    data: catalogAlignment,
+    isFetching: catalogFetching,
+  } = useQuery({
     queryKey: [catalogQueryKeyPrefix, brandId, platformsKey],
     queryFn: () =>
       brandId
@@ -231,7 +252,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
             ? fetchCatalogAlignmentDataForDataAnalysis(brandId, ecomm.connectedPlatforms)
             : fetchCatalogAlignmentData(brandId, ecomm.connectedPlatforms))
         : Promise.resolve(null),
-    enabled: ordersQueryEnabled && !ordersPending,
+    enabled: ordersQueryEnabled && !ordersFetching,
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -267,9 +288,17 @@ export function useSegments(options: UseSegmentsOptions = {}) {
 
   const resolvedSource: SegmentsDataSource = useMemo(() => {
     if (usePreComputedActive && sourcePref === 'external') return 'import';
-    if (sourcePref === 'external') return importSegmentsAvailable ? 'import' : canComputeFromOrders ? 'ecommerce' : 'none';
+    if (sourcePref === 'external') return 'none';
+    if (sourcePref === 'orders' && ordersQueryEnabled && ordersPending && !canComputeFromOrders) return 'none';
     return canComputeFromOrders ? 'ecommerce' : importSegmentsAvailable ? 'import' : 'none';
-  }, [usePreComputedActive, sourcePref, canComputeFromOrders, importSegmentsAvailable]);
+  }, [
+    usePreComputedActive,
+    sourcePref,
+    canComputeFromOrders,
+    importSegmentsAvailable,
+    ordersQueryEnabled,
+    ordersPending,
+  ]);
 
   const segments = useMemo(() => {
     let base: RFMSegment[];
@@ -346,15 +375,38 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   // (Removed duplicate usePreComputedActive — unified with serverVariantReady above.)
 
   /** Orders/catalog pipelines run only when `ordersQueryEnabled` — mutually exclusive with server-ready path after `preRf` resolves. */
-  const ordersLoading = ordersQueryEnabled && ordersPending;
-  const isCatalogEnriching = ordersQueryEnabled && catalogPending;
-  /** True when the orders fetch hit the per-platform limit — RFM is computed from a sample, not full history. */
-  const ordersSampled = !ordersPending && ordersQueryEnabled && rawOrders.length >= MAX_ORDERS_PER_PLATFORM_RFM;
+  const ordersLoading = ordersQueryEnabled && ordersFetching;
+  const isCatalogEnriching = ordersQueryEnabled && catalogFetching;
 
-  const hasImported =
-    usePreComputedActive
-      ? preActive.totalCustomers > 0
-      : resolvedSource === 'ecommerce' ? orderRfm.totalCustomers > 0 : importSegmentsAvailable;
+  const hasImported = useMemo(() => {
+    if (usePreComputedActive) {
+      return preActive.totalCustomers > 0 || preActive.segments.length > 0;
+    }
+    if (sourcePref === 'external') {
+      return false;
+    }
+    if (resolvedSource === 'none') return false;
+    if (resolvedSource === 'ecommerce') return orderRfm.totalCustomers > 0;
+    return importSegmentsAvailable;
+  }, [
+    usePreComputedActive,
+    sourcePref,
+    resolvedSource,
+    preActive.totalCustomers,
+    preActive.segments.length,
+    orderRfm.totalCustomers,
+    importSegmentsAvailable,
+  ]);
+
+  const preComputedLoading = preRf.isLoading;
+
+  /**
+   * When false, RFM headline KPIs / segment grid should show placeholders.
+   * Waits for both order history and catalog alignment while the client pipeline runs (incl. refetch & persisted cache).
+   */
+  const clientRfmPipelineBusy =
+    sourcePref === 'orders' && ordersQueryEnabled && (ordersFetching || catalogFetching);
+  const rfmPresentationReady = !preRf.isLoading && (usePreComputedActive || !clientRfmPipelineBusy);
 
   /**
    * When pre-computed RFM is the active source we still want the segment detail panel to show
@@ -461,8 +513,6 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     /** True όσο τραβάμε πρόσφατο order history για ecommerce RFM — UI δεν πρέπει να μπλοκάρει. */
     ordersLoading,
     ordersError: (ordersError as Error | null) ?? null,
-    /** True when orders were capped at MAX_ORDERS_PER_PLATFORM_RFM — data is a sample. */
-    ordersSampled: usePreComputedActive ? false : ordersSampled,
     /** Φόρτωση *_products + unified products για catalog tabs — δεν μπλοκάρει το κύριο RFM grid. */
     isCatalogEnriching,
     hasImported,
@@ -506,5 +556,9 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     preComputedVariant: (sourcePref === 'external' ? 'merged' : 'orders') as RFMPrecomputedVariant,
     /** Merged variant only: no import cohort was available server-side — same as orders. */
     mergedFallbackToOrders: sourcePref === 'external' ? preRf.merged.mergedFallbackToOrders : undefined,
+    /** True while Firestore `rfm_computed` bundle (orders + merged variants) is loading. */
+    preComputedLoading,
+    /** False → show skeleton placeholders for authoritative RFM numbers / grid. */
+    rfmPresentationReady,
   };
 }

@@ -44,6 +44,47 @@ import { formatNumber, formatPercent, formatCurrencyCompact } from '../../utils/
 const fmtPct = (n: number) => formatNumber(n, 2);
 const SELECTED_SEGMENT_STROKE = '#FDBA74';
 
+/** Full-page placeholder while `rfm_computed` (orders + merged) hydrates — avoids import-only counts flashing as RFM. */
+function DataAnalysisRfmLoadingSkeleton() {
+  return (
+    <div className="space-y-3">
+      <PageHeader
+        title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl leading-tight">Data Analysis</h2>}
+        description={
+          <p className="text-sm text-[#4A4A4A] sm:text-base leading-snug">
+            Φόρτωση εξουσιοδοτημένων RFM δεδομένων από τον server…
+          </p>
+        }
+      />
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-[#E8EAED] bg-[#FAFBFC] px-3 py-2">
+        <div className="h-5 w-40 rounded bg-[#E5E7EB] animate-pulse" />
+        <div className="h-5 w-56 rounded bg-[#E5E7EB] animate-pulse" />
+      </div>
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+        {[0, 1, 2, 3].map((i) => (
+          <Card key={i} padding="sm">
+            <div className="flex items-center gap-2">
+              <div className="h-9 w-9 shrink-0 rounded-lg bg-[#F3F4F6] animate-pulse" />
+              <div className="min-w-0 space-y-2 flex-1">
+                <div className="h-2.5 w-14 rounded bg-[#F3F4F6] animate-pulse" />
+                <div className="h-6 w-10 rounded bg-[#E5E7EB] animate-pulse" />
+              </div>
+            </div>
+          </Card>
+        ))}
+      </div>
+      <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2">
+        {[0, 1].map((i) => (
+          <Card key={i} padding="lg" className="flex min-w-0 flex-col border border-[#E8EAED]">
+            <div className="h-5 w-40 rounded bg-[#F3F4F6] animate-pulse mb-4" />
+            <div className="h-[280px] w-full rounded-xl bg-[#F3F4F6] animate-pulse" />
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 type AnalysisTab = 'rfm' | 'behavioral' | 'predictive';
 type SegmentMovement = { countDelta: number; percentageDelta: number };
 
@@ -130,12 +171,13 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
     segmentMigration,
     importSegmentsAvailable,
     isCatalogEnriching,
-    ordersSampled,
     isPreComputed,
     lastComputedAt,
     serverBehavioralAvailable,
     mergedFallbackToOrders,
     preComputedVariant,
+    preComputedLoading,
+    rfmPresentationReady,
   } = useSegments({ variant: 'data_analysis' });
   const ecomm = useEcommerceSummary();
   const { currentBrand } = useBrand();
@@ -293,6 +335,10 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
     );
   }
 
+  if (preComputedLoading) {
+    return <DataAnalysisRfmLoadingSkeleton />;
+  }
+
   if (!hasImportedSegments) {
     const hasEcomm = ecomm.connectedPlatforms.length > 0;
     const stillLoadingOrders =
@@ -328,17 +374,37 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
             </div>
           ) : (
             <div className="text-center py-12">
+              {rfmSourcePref === 'external' ? (
+                <p className="text-[#4A4A4A] mb-4 max-w-lg mx-auto leading-relaxed">
+                  Το ενοποιημένο RFM για «e-shop &amp; others» δεν είναι έτοιμο στον server (ή χρειάζεται επανυπολογισμός μετά από εισαγωγή segments).
+                  Πατήστε <strong>Επανυπολογισμός</strong> παραπάνω — μετά την ολοκλήρωση θα εμφανιστούν τα πραγματικά μεγέθη, όχι προσωρινά νούμερα από εισαγωγή.
+                </p>
+              ) : (
               <p className="text-[#4A4A4A] mb-4">
                 {hasEcomm && !canComputeFromOrders
                   ? 'Συνδέσατε e-shop, αλλά δεν βρέθηκαν αρκετές παραγγελίες με αναγνωρισμένο πελάτη (συνήθως guest checkout).'
                   : 'Δεν υπάρχουν ακόμα δεδομένα προς ανάλυση.'}
               </p>
-              {hasEcomm && !canComputeFromOrders && (
+              )}
+              {hasEcomm && !canComputeFromOrders && rfmSourcePref !== 'external' && (
                 <p className="text-sm text-[#4A4A4A] mb-4 text-left">
                   Μετά το deploy, κάντε ξανά <strong>sync</strong> το connector ώστε να αποθηκεύεται το εσωτερικό <code className="text-xs bg-[#F3F4F6] px-1 rounded">customerId</code> ανά
                   παραγγελία (όχι email). Guest-only καλάθια εξακολουθούν να μην μετράνε σε RFM.
                 </p>
               )}
+              {rfmSourcePref === 'external' ? (
+                <div className="flex flex-col items-center gap-3 mt-2">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    icon={<RefreshCw size={14} className={`shrink-0 ${isRefreshing ? 'animate-spin' : ''}`} />}
+                    onClick={handleRefreshRFM}
+                    disabled={isRefreshing || !currentBrand?.id}
+                  >
+                    {isRefreshing ? 'Υπολογισμός…' : 'Επανυπολογισμός RFM (server)'}
+                  </Button>
+                </div>
+              ) : null}
               <p className="text-sm text-[#4A4A4A]">
                 Εναλλακτικά, ανεβάστε aggregate segments από την{' '}
                 <button
@@ -363,6 +429,11 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
     rfmSourcePref === 'orders' &&
     dataCoverage.otherCustomers <= 0 &&
     dataCoverage.eShopPenetration >= 99;
+
+  const showPlaceholderNumbers = hasImportedSegments && !rfmPresentationReady;
+  /** Κρύβει KPI/charts όσο τρέχει order/catalog fetch ή μέχρι το RFM είναι presentation-ready. */
+  const analysisBodyLoading =
+    ordersLoading || isCatalogEnriching || showPlaceholderNumbers;
 
   return (
     <div className="space-y-3">
@@ -471,9 +542,13 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
           <span className="hidden sm:inline h-4 w-px shrink-0 bg-[#E5E7EB]" aria-hidden />
         ) : null}
         {hasImportedSegments ? (
+          showPlaceholderNumbers ? (
+            <span className="inline-block h-4 min-w-[10rem] rounded bg-[#E5E7EB] animate-pulse align-middle" aria-hidden />
+          ) : (
           <span className="font-semibold tabular-nums text-[#111827]">
             {rfmSegments.length} segments · {formatNumber(totalCustomersDisplay)} πελάτες
           </span>
+          )
         ) : null}
         {rfmDataSource === 'ecommerce' ? (
           <span className="text-[#6B7280]">12-month order history · quintiles</span>
@@ -510,14 +585,6 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
             Συγχώνευση: μόνο παραγγελίες
           </span>
         ) : null}
-        {ordersSampled ? (
-          <span
-            className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-800"
-            title="Το RFM υπολογίστηκε από τις 5.000 πιο πρόσφατες παραγγελίες ανά πλατφόρμα (sample). Για πλήρη ανάλυση απαιτείται server-side προ-υπολογισμός."
-          >
-            ⚡ Δείγμα 5K παραγγελιών/πλατφόρμα
-          </span>
-        ) : null}
         {isCatalogEnriching ? (
           <LoadingStatusPill label="Φόρτωση καταλόγου προϊόντων…" />
         ) : null}
@@ -550,7 +617,21 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
       </div>
 
       {!compactCoverageOk ? (
+        showPlaceholderNumbers ? (
+          <div className="rounded-xl border border-[#E5E5E5] bg-[#FAFAFA] px-3 py-4">
+            <div className="h-3 w-28 rounded bg-[#E5E7EB] animate-pulse mb-3" />
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {[0, 1, 2, 3].map((i) => (
+                <div key={i} className="h-14 rounded-lg border border-[#E5E5E5] bg-white">
+                  <div className="mx-2.5 mt-2 h-2 w-12 rounded bg-[#F3F4F6] animate-pulse" />
+                  <div className="mx-2.5 mt-2 h-5 w-16 rounded bg-[#E5E7EB] animate-pulse" />
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
         <DataCoverageBlock dataCoverage={dataCoverage} totalDisplayed={totalCustomersDisplay} />
+        )
       ) : null}
 
       {/* Analysis Tabs */}
@@ -598,12 +679,26 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
       </div>
       </div>
 
-      {activeTab === 'behavioral' && <BehavioralTab segments={rfmSegments} />}
-      {activeTab === 'predictive' && <PredictiveTab segments={rfmSegments} />}
+      {activeTab === 'behavioral' &&
+        (analysisBodyLoading ? (
+          <div className="rounded-xl border border-[#E8EAED] bg-[#FAFBFC] p-8">
+            <Spinner size="md" label="Φόρτωση behavioral δεδομένων…" />
+          </div>
+        ) : (
+          <BehavioralTab segments={rfmSegments} />
+        ))}
+      {activeTab === 'predictive' &&
+        (analysisBodyLoading ? (
+          <div className="rounded-xl border border-[#E8EAED] bg-[#FAFBFC] p-8">
+            <Spinner size="md" label="Φόρτωση predictive δεδομένων…" />
+          </div>
+        ) : (
+          <PredictiveTab segments={rfmSegments} />
+        ))}
 
       {activeTab === 'rfm' && <>
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-        {ordersLoading ? (
+        {analysisBodyLoading ? (
           <>
             {[0, 1, 2, 3].map((i) => (
               <Card key={i} padding="sm">
@@ -686,7 +781,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
         )}
       </div>
 
-      {ordersLoading ? (
+      {analysisBodyLoading ? (
         <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2">
           {[0, 1].map((i) => (
             <Card key={i} padding="lg" className="flex min-w-0 flex-col border border-[#E8EAED]">

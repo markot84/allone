@@ -3,10 +3,8 @@
  * αθροίσεις ίδιες με το ecommerceAggregator (demo + cancelled) ώστε οι περίοδοι >90d
  * να εμφανίζονται σωστά στο UI (το server summary κρατά rolling ~90 ημέρες).
  */
-import { orderBy, where, limit, Timestamp, type QueryConstraint } from 'firebase/firestore';
+import { orderBy, where, Timestamp, type QueryConstraint } from 'firebase/firestore';
 
-/** Max orders fetched per platform for RFM computation — prevents client-side overload on large catalogs. */
-export const MAX_ORDERS_PER_PLATFORM_RFM = 5000;
 import { FirestoreService } from './firestore';
 import {
   classifyEcommerceOrder,
@@ -552,7 +550,6 @@ async function fetchEcommercePlatformOrdersOnly(
     untilDate?: string;
     cacheFirst?: boolean;
     revenueMode?: 'brand' | 'classified' | 'all';
-    maxOrdersPerPlatform?: number;
   } = {}
 ): Promise<EcommerceRawOrder[]> {
   const [allRules, results] = await Promise.all([
@@ -566,7 +563,6 @@ async function fetchEcommercePlatformOrdersOnly(
         if (options.untilDate) constraints.push(where('createdAt', '<=', `${options.untilDate}T23:59:59.999Z`));
         if (options.sinceDate || options.untilDate) {
           constraints.push(orderBy('createdAt', 'desc'));
-          constraints.push(limit(options.maxOrdersPerPlatform ?? MAX_ORDERS_PER_PLATFORM_RFM));
         }
         const hasRange = Boolean(options.sinceDate || options.untilDate);
         /** `cacheFirst: true` (RFM / dashboard) → γρήγορη επανεπίσκεψη· αλλιώς server για «φρέσκα» δεδομένα μετά sync. */
@@ -587,24 +583,15 @@ async function fetchEcommercePlatformOrdersOnly(
         let rows: Record<string, unknown>[] = [];
         try {
           if (hasRange) {
-            rows = await FirestoreService.getDocuments<Record<string, unknown>>(
+            rows = await FirestoreService.getDocumentsAllPages<Record<string, unknown>>(
               collectionName,
               constraints,
               brandId,
               rangedLoadOpts
             );
-            /**
-             * Παλιά λογική: `rows.length === 0` → διάβασμα **όλης** της συλλογής + client-side φίλτρο.
-             * Αυτό έκανε το UI να «κολλάει» 4–5 λεπτά και με «Τελευταίες 30 ημέρες», επειδή ο χρόνος
-             * ήταν ευθύγραμος με τις συνολικές παραγγελίες του brand, όχι με το επιλεγμένο εύρος.
-             * Αν υπήρχαν πραγματικά μηδενικά αποτελέσματα, το φόρεμα ήταν ανηθικώς δαπανηρό.
-             *
-             * Retry μία φορά με `forceServer`: αν το cache επέστρεψε ψευδο-κενό ή χρειάζεται επικύρωση
-             * από server για τα ίδια constraints — χωρίς φόρτωση ολόκληρης συλλογής.
-             * Αν υπάρχει πραγματικό σφάλμα τύπος/index, πέφτουμε στο catch (ολόκληρη συλλογή) — σπάνιο.
-             */
+            /** Retry με `forceServer` αν το cache επέστρεψε κενό χωρίς πραγματική απουσία εγγραφών. */
             if (rows.length === 0) {
-              rows = await FirestoreService.getDocuments<Record<string, unknown>>(
+              rows = await FirestoreService.getDocumentsAllPages<Record<string, unknown>>(
                 collectionName,
                 constraints,
                 brandId,
@@ -647,7 +634,6 @@ export async function fetchAllEcommerceOrders(
     untilDate?: string;
     cacheFirst?: boolean;
     revenueMode?: 'brand' | 'classified' | 'all';
-    maxOrdersPerPlatform?: number;
   } = {}
 ): Promise<EcommerceRawOrder[]> {
   const mode = await fetchBrandRevenueSourceMode(brandId);
@@ -670,7 +656,6 @@ export async function fetchDataAnalysisOrders(
     untilDate?: string;
     cacheFirst?: boolean;
     revenueMode?: 'brand' | 'classified' | 'all';
-    maxOrdersPerPlatform?: number;
   } = {}
 ): Promise<EcommerceRawOrder[]> {
   const mode = await fetchBrandRevenueSourceMode(brandId);

@@ -1,10 +1,14 @@
 {
-  "version": "0.736.0",
-  "previousVersion": "0.735.0",
-  "commitHash": "01050b7",
+  "version": "0.742.0",
+  "previousVersion": "0.741.0",
+  "commitHash": "7adea08",
   "branch": "main",
-  "buildDate": "2026-05-11T11:44:16.327Z",
+  "buildDate": "2026-05-11T12:07:20.766Z",
   "commits": [
+    {
+      "hash": "7adea08",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "01050b7",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "5ce3e19",
       "message": "fix(merchant): fallback to Merchant Reports v1 when Content API ProductView empty"
-    },
-    {
-      "hash": "20e4f7e",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [
