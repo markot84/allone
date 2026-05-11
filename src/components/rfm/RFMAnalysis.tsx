@@ -127,6 +127,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
     segmentMigration,
     importSegmentsAvailable,
     isCatalogEnriching,
+    ordersSampled,
   } = useSegments({ variant: 'data_analysis' });
   const ecomm = useEcommerceSummary();
   const { currentBrand } = useBrand();
@@ -414,10 +415,18 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
         {ordersLoading ? (
           <LoadingStatusPill label="Loading order history…" />
         ) : null}
+        {ordersSampled ? (
+          <span
+            className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-800"
+            title="Το RFM υπολογίστηκε από τις 5.000 πιο πρόσφατες παραγγελίες ανά πλατφόρμα (sample). Για πλήρη ανάλυση απαιτείται server-side προ-υπολογισμός."
+          >
+            ⚡ Δείγμα 5K παραγγελιών/πλατφόρμα
+          </span>
+        ) : null}
         {isCatalogEnriching ? (
           <LoadingStatusPill label="Loading product catalog…" />
         ) : null}
-        <details className="sm:ml-auto min-w-0 max-w-full sm:max-w-[22rem] text-[11px]">
+        <details className="sm:ml-auto shrink-0 max-w-full sm:max-w-[22rem] text-[11px]">
           <summary className="cursor-pointer font-semibold text-[var(--nts-accent)] hover:underline">
             Σημειώσεις υπολογισμού
           </summary>
@@ -496,6 +505,22 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
 
       {activeTab === 'rfm' && <>
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+        {ordersLoading ? (
+          <>
+            {[0, 1, 2, 3].map((i) => (
+              <Card key={i} padding="sm">
+                <div className="flex items-center gap-2">
+                  <div className="h-9 w-9 shrink-0 rounded-lg bg-[#F3F4F6] animate-pulse" />
+                  <div className="min-w-0 space-y-2 flex-1">
+                    <div className="h-2.5 w-14 rounded bg-[#F3F4F6] animate-pulse" />
+                    <div className="h-6 w-10 rounded bg-[#E5E7EB] animate-pulse" />
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </>
+        ) : (
+          <>
         <Card padding="sm" hover>
           <div className="flex items-center gap-2">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--nts-light-gray)]">
@@ -559,8 +584,25 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
             </div>
           </div>
         </Card>
+          </>
+        )}
       </div>
 
+      {ordersLoading ? (
+        <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2">
+          {[0, 1].map((i) => (
+            <Card key={i} padding="lg" className="flex min-w-0 flex-col border border-[#E8EAED]">
+              <div className="h-5 w-40 rounded bg-[#F3F4F6] animate-pulse mb-4" />
+              <div className="h-[280px] w-full rounded-xl bg-[#F3F4F6] animate-pulse" />
+              <div className="mt-3 grid grid-cols-3 gap-1">
+                {[0,1,2,3,4,5].map((j) => (
+                  <div key={j} className="h-7 rounded bg-[#F3F4F6] animate-pulse" />
+                ))}
+              </div>
+            </Card>
+          ))}
+        </div>
+      ) : (
       <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2">
         <Card padding="lg" className="flex min-w-0 flex-col border border-[#E8EAED] shadow-[0_4px_24px_rgba(15,23,42,0.06)]">
           <CardHeader
@@ -702,6 +744,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
           </div>
         </Card>
       </div>
+      )}
 
       {/* Segment Detail Panel */}
       <AnimatePresence>

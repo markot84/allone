@@ -36,7 +36,7 @@ export function PageHeader({
       </div>
       {actions != null && (
         <div
-          className="flex w-full min-w-0 flex-wrap items-stretch gap-1.5 sm:gap-2 lg:w-auto lg:justify-end"
+          className="flex w-full min-w-0 flex-wrap items-stretch gap-1.5 sm:gap-2 lg:w-auto lg:shrink-0 lg:justify-end"
           role="toolbar"
           aria-label={toolbarAriaLabel}
         >

@@ -5,7 +5,7 @@ import { mergeDuplicateSegmentRowsByName } from '../utils/mergeDuplicateSegments
 import { getSegmentColor } from '../utils/segmentColors';
 import { useBrand } from './useBrand';
 import { useEcommerceSummary } from './useEcommerceSummary';
-import { fetchAllEcommerceOrders, fetchDataAnalysisOrders } from '../services/ecommerceRawOrders';
+import { fetchAllEcommerceOrders, fetchDataAnalysisOrders, MAX_ORDERS_PER_PLATFORM_RFM } from '../services/ecommerceRawOrders';
 import { fetchCatalogAlignmentData, fetchCatalogAlignmentDataForDataAnalysis, normalizeCatalogAlignmentPayload } from '../services/catalogAlignment';
 import { computeRfmSegmentsFromEcommerceOrders, computeSegmentMigrationFromEcommerceOrders, type RfmCatalogContext } from '../services/rfmFromOrders';
 import type { RFMSegment } from '../types';
@@ -287,6 +287,8 @@ export function useSegments(options: UseSegmentsOptions = {}) {
 
   const ordersLoading = ordersQueryEnabled && ordersPending;
   const isCatalogEnriching = ordersQueryEnabled && catalogPending;
+  /** True when the orders fetch hit the per-platform limit — RFM is computed from a sample, not full history. */
+  const ordersSampled = !ordersPending && ordersQueryEnabled && rawOrders.length >= MAX_ORDERS_PER_PLATFORM_RFM;
 
   const hasImported =
     resolvedSource === 'ecommerce' ? orderRfm.totalCustomers > 0 : importSegmentsAvailable;
@@ -298,6 +300,8 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     /** True όσο τραβάμε πρόσφατο order history για ecommerce RFM — UI δεν πρέπει να μπλοκάρει. */
     ordersLoading,
     ordersError: (ordersError as Error | null) ?? null,
+    /** True when orders were capped at MAX_ORDERS_PER_PLATFORM_RFM — data is a sample. */
+    ordersSampled,
     /** Φόρτωση *_products + unified products για catalog tabs — δεν μπλοκάρει το κύριο RFM grid. */
     isCatalogEnriching,
     hasImported,

@@ -3,7 +3,10 @@
  * αθροίσεις ίδιες με το ecommerceAggregator (demo + cancelled) ώστε οι περίοδοι >90d
  * να εμφανίζονται σωστά στο UI (το server summary κρατά rolling ~90 ημέρες).
  */
-import { orderBy, where, Timestamp, type QueryConstraint } from 'firebase/firestore';
+import { orderBy, where, limit, Timestamp, type QueryConstraint } from 'firebase/firestore';
+
+/** Max orders fetched per platform for RFM computation — prevents client-side overload on large catalogs. */
+export const MAX_ORDERS_PER_PLATFORM_RFM = 5000;
 import { FirestoreService } from './firestore';
 import {
   classifyEcommerceOrder,
@@ -549,6 +552,7 @@ async function fetchEcommercePlatformOrdersOnly(
     untilDate?: string;
     cacheFirst?: boolean;
     revenueMode?: 'brand' | 'classified' | 'all';
+    maxOrdersPerPlatform?: number;
   } = {}
 ): Promise<EcommerceRawOrder[]> {
   const [allRules, results] = await Promise.all([
@@ -560,7 +564,10 @@ async function fetchEcommercePlatformOrdersOnly(
         const constraints: QueryConstraint[] = [];
         if (options.sinceDate) constraints.push(where('createdAt', '>=', options.sinceDate));
         if (options.untilDate) constraints.push(where('createdAt', '<=', `${options.untilDate}T23:59:59.999Z`));
-        if (options.sinceDate || options.untilDate) constraints.push(orderBy('createdAt', 'desc'));
+        if (options.sinceDate || options.untilDate) {
+          constraints.push(orderBy('createdAt', 'desc'));
+          constraints.push(limit(options.maxOrdersPerPlatform ?? MAX_ORDERS_PER_PLATFORM_RFM));
+        }
         const hasRange = Boolean(options.sinceDate || options.untilDate);
         /** `cacheFirst: true` (RFM / dashboard) → γρήγορη επανεπίσκεψη· αλλιώς server για «φρέσκα» δεδομένα μετά sync. */
         const rangedLoadOpts =
@@ -640,6 +647,7 @@ export async function fetchAllEcommerceOrders(
     untilDate?: string;
     cacheFirst?: boolean;
     revenueMode?: 'brand' | 'classified' | 'all';
+    maxOrdersPerPlatform?: number;
   } = {}
 ): Promise<EcommerceRawOrder[]> {
   const mode = await fetchBrandRevenueSourceMode(brandId);
@@ -662,6 +670,7 @@ export async function fetchDataAnalysisOrders(
     untilDate?: string;
     cacheFirst?: boolean;
     revenueMode?: 'brand' | 'classified' | 'all';
+    maxOrdersPerPlatform?: number;
   } = {}
 ): Promise<EcommerceRawOrder[]> {
   const mode = await fetchBrandRevenueSourceMode(brandId);
