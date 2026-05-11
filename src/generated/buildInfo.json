@@ -1,10 +1,14 @@
 {
-  "version": "0.736.0",
-  "previousVersion": "0.735.0",
-  "commitHash": "cb83844",
+  "version": "0.737.0",
+  "previousVersion": "0.736.0",
+  "commitHash": "02a4ca5",
   "branch": "main",
-  "buildDate": "2026-05-11T20:17:15.440Z",
+  "buildDate": "2026-05-11T20:47:52.239Z",
   "commits": [
+    {
+      "hash": "02a4ca5",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "cb83844",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "640c170",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "7adea08",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [
@@ -72,7 +72,6 @@
     "[Διόρθωση] Clear stale query cache after restore",
     "Restore: revert app to pre-2026-05-11 state",
     "[Νέο χαρακτηριστικό] Server-side per-segment behavioral rollups (brand/category/SKU/channel mix)",
-    "[Διόρθωση] Background-enrich segment detail in pre-computed mode; differentiate migration empty states",
-    "[Νέο χαρακτηριστικό] Server-side segment migration tracking"
+    "[Διόρθωση] Background-enrich segment detail in pre-computed mode; differentiate migration empty states"
   ]
 }

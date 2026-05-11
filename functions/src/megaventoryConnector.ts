@@ -777,6 +777,7 @@ export interface MegaventorySyncResult {
 
 interface MegaventorySyncOptions {
   mode?: 'manual' | 'scheduled';
+  skipDocuments?: boolean;
 }
 
 /**
@@ -801,6 +802,7 @@ export async function fetchMegaventoryData(
   }
 
   const mode = options.mode || 'manual';
+  const shouldRefreshDocuments = options.skipDocuments !== true;
   let docsWindow = buildHistoricalOrIncrementalWindow(conn, 'lastDocsSyncAt');
   const invoiceBackfillPending = conn.invoiceDocumentBackfillComplete !== true;
   // Manual sync must refresh the current window and reference data (products/stock/report) quickly.
@@ -857,6 +859,10 @@ export async function fetchMegaventoryData(
   let apiCatalogGapFillCount = 0;
 
   try {
+    if (!shouldRefreshDocuments) {
+      documentDiagnostics = { skipped: true, reason: 'manual_catalog_refresh' };
+      logger.info(`[Megaventory] Documents skipped for ${brandId}: manual catalog refresh`);
+    } else {
     // ── Invoices (Documents type=Sales Invoice) → revenue ────────────
     const documentTypesResult = await fetchDocumentTypes(apiKey);
     const documentTypesById = new Map(documentTypesResult.types.map((type) => [type.id, type]));
@@ -1081,6 +1087,7 @@ export async function fetchMegaventoryData(
       totalImported += items.length;
       logger.info(`[Megaventory] Purchase orders: ${items.length} imported for brand ${brandId}`);
     }
+    }
 
     // ── Products ─────────────────────────────────────────────────────
     const { rows: prRows, error: prFetchErr } = await fetchAllMvPages('ProductGet', apiKey, [], {
@@ -1270,7 +1277,7 @@ export async function fetchMegaventoryData(
     if (referenceOk) {
       patch['megaventory.lastReferenceSyncAt'] = FieldValue.serverTimestamp();
     }
-    if (docsOk) {
+    if (shouldRefreshDocuments && docsOk) {
       patch['megaventory.lastDocsSyncAt'] = FieldValue.serverTimestamp();
       if (docsWindow.mode === 'historical') {
         patch['megaventory.historyLoadedUntilYear'] = docsWindow.historyStartYear;
@@ -1316,7 +1323,7 @@ export async function fetchMegaventoryData(
 
     const invoiceBackfillStillInProgress =
       invoiceBackfillPending && (!shouldStageInvoiceBackfill || invoiceBackfillProgress?.exhausted !== true);
-    if (docsOk && !invoiceBackfillStillInProgress) {
+    if (shouldRefreshDocuments && docsOk && !invoiceBackfillStillInProgress) {
       try {
         rfmCounts = await refreshMegaventoryRfmSegments(db, brandId);
       } catch (rfmErr) {
@@ -1324,6 +1331,9 @@ export async function fetchMegaventoryData(
         errors.push(`MegaventoryRFM: ${msg}`);
         logger.warn(`[Megaventory] RFM refresh failed for ${brandId}: ${msg}`);
       }
+    } else if (!shouldRefreshDocuments) {
+      rfmSkippedReason = 'manual_catalog_refresh';
+      logger.info(`[Megaventory] RFM refresh skipped for ${brandId}: manual catalog refresh`);
     } else if (docsOk && invoiceBackfillStillInProgress) {
       rfmSkippedReason = 'invoice_backfill_in_progress';
       logger.info(`[Megaventory] RFM refresh skipped for ${brandId}: invoice backfill still in progress`);

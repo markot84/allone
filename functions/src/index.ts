@@ -1269,7 +1269,7 @@ export const connectorSync = onRequest(
         }
         result = await fetchMagentoData(brandId);
       } else if (provider === 'megaventory') {
-        result = await fetchMegaventoryData(brandId);
+        result = await fetchMegaventoryData(brandId, { mode: 'manual', skipDocuments: true });
       } else if (provider === 'softone') {
         result = await fetchSoftOneData(brandId);
       } else if (provider === 'epsilon_net') {
