@@ -601,18 +601,20 @@ export async function fetchTikTokCampaigns(brandId: string): Promise<{
     }
   }
 
-  const importStatus = totalImported > 0 ? 'completed' : 'failed';
+  /** Ίδιο pattern με Google Ads / Meta: πάντα `completed` στο import_jobs ώστε το UI να ενημερώνει «Τελευταίο sync». */
   await getDb().collection('import_jobs').add({
     brandId,
     type: 'campaigns',
     source: 'tiktok_api',
-    status: importStatus,
+    status: 'completed',
     imported: totalImported,
     failed: totalImported > 0 ? 0 : 1,
-    errors: totalImported > 0 ? [] : ['TikTok sync produced no campaign writes (check logs / permissions / advertiser access)'],
+    errors:
+      totalImported > 0 ? [] : ['TikTok sync produced no campaign writes (check logs / permissions / advertiser access)'],
     createdAt: FieldValue.serverTimestamp(),
   });
 
+  const nowMs = Date.now();
   if (totalImported > 0) {
     await getDb().doc(`connectors/${brandId}`).set(
       {
@@ -621,7 +623,7 @@ export async function fetchTikTokCampaigns(brandId: string): Promise<{
           refreshToken: encryptToken(refreshed.refreshToken),
           expiresAt: Date.now() + refreshed.expiresIn * 1000,
           refreshExpiresAt: Date.now() + refreshed.refreshExpiresIn * 1000,
-          lastDataSyncAt: Date.now(),
+          lastDataSyncAt: nowMs,
           historyLoadedUntilYear: historyLoaded
             ? Number(connector.historyLoadedUntilYear) || historyStartYear
             : historyStartYear,
@@ -637,8 +639,9 @@ export async function fetchTikTokCampaigns(brandId: string): Promise<{
   await getDb().doc(`connectors/${brandId}`).set(
     {
       tiktok: {
+        lastDataSyncAt: nowMs,
         lastImportError: 'TikTok: 0 campaigns written — see import_jobs and Cloud Logs',
-        lastImportErrorAt: Date.now(),
+        lastImportErrorAt: nowMs,
       },
     },
     { merge: true }

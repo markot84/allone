@@ -2322,15 +2322,13 @@ export async function getLastImportDates(brandId: string | null | undefined): Pr
   const result: Record<string, Date> = {};
   for (const job of normalized) {
     const status = (job as { status?: string }).status;
-    const imported =
-      Number((job as { imported?: number }).imported ?? job.result?.imported ?? 0) || 0;
     // Connector jobs can be `partial` when some secondary step fails after data was imported.
-    // For "last sync" UI, imported partial jobs should still advance the displayed date.
-    // `failed` επίσης (π.χ. παλιότερο Meta): ο χρήστης πρέπει να βλέπει ότι έτρεξε προσπάθεια sync, όχι «πάγωμα» ημερομηνίας.
+    // Οτιδήποτε `partial` μετρά για «Τελευταίο sync»: Shopify/Woo κλπ. γράφουν partial αν διακοπεί ένα limb με imported=0.
+    // `failed` επίσης (Entersoft HTTP κλπ.): να φαίνεται ότι έτρεξε προσπάθεια.
     const countsAsImported =
       status === undefined ||
       status === 'completed' ||
-      (status === 'partial' && imported > 0) ||
+      status === 'partial' ||
       status === 'failed';
     if (!countsAsImported) continue;
     const key = (job as { source?: string }).source || job.type;
