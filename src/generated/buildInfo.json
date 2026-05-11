@@ -1,10 +1,14 @@
 {
-  "version": "0.733.0",
-  "previousVersion": "0.732.0",
-  "commitHash": "43fb595",
+  "version": "0.735.0",
+  "previousVersion": "0.734.0",
+  "commitHash": "e55b310",
   "branch": "main",
-  "buildDate": "2026-05-11T19:13:10.109Z",
+  "buildDate": "2026-05-11T19:47:49.586Z",
   "commits": [
+    {
+      "hash": "e55b310",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "43fb595",
       "message": "procuremente restore"
@@ -60,17 +64,13 @@
     {
       "hash": "01050b7",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "649063d",
-      "message": "feat(rfm): server-side per-segment behavioral rollups (brand/category/SKU/channel mix)"
     }
   ],
   "changes": [
+    "[Συντήρηση] Full deploy",
     "Procuremente restore",
     "[Διόρθωση] Clear stale query cache after restore",
     "Restore: revert app to pre-2026-05-11 state",
-    "[Συντήρηση] Full deploy",
     "[Νέο χαρακτηριστικό] Server-side per-segment behavioral rollups (brand/category/SKU/channel mix)",
     "[Διόρθωση] Background-enrich segment detail in pre-computed mode; differentiate migration empty states",
     "[Νέο χαρακτηριστικό] Server-side segment migration tracking"

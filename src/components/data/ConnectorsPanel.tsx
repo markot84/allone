@@ -371,6 +371,10 @@ const CONNECTORS: ConnectorConfig[] = [
 
 /** Απευθείας cloudfunctions.net ώστε μεγάλα sync (Megaventory) να μην κόβονται από όριο Hosting ~60s. */
 const FUNCTIONS_BASE = FUNCTIONS_BASE_URL.replace(/\/$/, '');
+const CONNECTOR_SYNC_URLS = [
+  `${FUNCTIONS_BASE}/connectorSync`,
+  'https://connectorsync-edvzr6unva-ew.a.run.app',
+];
 
 async function connectorRequestHeaders(idToken: string): Promise<Record<string, string>> {
   return {
@@ -378,6 +382,29 @@ async function connectorRequestHeaders(idToken: string): Promise<Record<string, 
     Authorization: `Bearer ${idToken}`,
     ...(await getAppCheckHeader()),
   };
+}
+
+async function postConnectorSync(
+  payload: Record<string, unknown>,
+  headers: Record<string, string>,
+  signal: AbortSignal,
+): Promise<Response> {
+  let lastNetworkError: unknown = null;
+  for (const url of CONNECTOR_SYNC_URLS) {
+    try {
+      return await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+        signal,
+      });
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') throw err;
+      lastNetworkError = err;
+      console.warn(`[ConnectorsPanel] connectorSync network failed via ${url}; trying fallback if available`, err);
+    }
+  }
+  throw lastNetworkError instanceof Error ? lastNetworkError : new Error('Failed to fetch');
 }
 
 // ─── Account Picker Modal ────────────────────────────────────────
@@ -2202,12 +2229,7 @@ export function ConnectorsPanel() {
       const payload: Record<string, unknown> = { brandId, provider };
       if (opts?.forceFullSync) payload.forceFullSync = true;
 
-      const res = await fetch(`${FUNCTIONS_BASE}/connectorSync`, {
-        method: 'POST',
-        headers: await connectorRequestHeaders(token),
-        body: JSON.stringify(payload),
-        signal: syncAbort.signal,
-      });
+      const res = await postConnectorSync(payload, await connectorRequestHeaders(token), syncAbort.signal);
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
@@ -2340,7 +2362,7 @@ export function ConnectorsPanel() {
           'Το sync ξεπέρασε το χρονικό όριο (~21 λεπτά). Για Megaventory με πολύ μεγάλο όγκο, δοκιμάστε ξανά ή ελέγξτε τα logs της function.';
       } else if (msg === 'Failed to fetch') {
         msg =
-          `Αποτυχία δικτύου (Failed to fetch). Βάση κλήσης: ${FUNCTIONS_BASE}. Έλεγχος σύνδεσης/adblock και CI: αν το VITE_FUNCTIONS_BASE_URL ή VITE_FUNCTIONS_URL είναι λάθος ή κενό URL, αφαίρεσέ το ώστε να χρησιμοποιηθεί το default *.cloudfunctions.net του project.`;
+          'Αποτυχία δικτύου. Δοκίμασε ξανά σε 1 λεπτό ή από άλλο δίκτυο. Το σύστημα δοκίμασε αυτόματα και την εναλλακτική σύνδεση server.';
       }
       toast.error(msg);
       console.error('[ConnectorsPanel] connectorSync failed:', err);
