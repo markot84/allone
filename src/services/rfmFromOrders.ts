@@ -30,6 +30,8 @@ export type SegmentMigrationFlow = {
   toName: string;
   count: number;
   percentage: number;
+  /** Net revenue of the destination cohort for this flow (only set when migration is server-pre-computed). */
+  revenue?: number;
 };
 
 export type SegmentMigrationResult = {

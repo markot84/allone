@@ -25,9 +25,41 @@ interface RFMSegmentSummary {
   pct: number;
 }
 
+type FirestoreTimestampLike = { toDate?: () => Date; seconds?: number } | null;
+
+export interface PreComputedFlow {
+  from: string;
+  fromName: string;
+  to: string;
+  toName: string;
+  count: number;
+  revenue: number;
+  sampleCustomerIds: string[];
+}
+
+export interface PreComputedSegmentDelta {
+  segmentId: string;
+  segmentName: string;
+  prevCount: number;
+  newCount: number;
+  countDelta: number;
+  prevRevenue: number;
+  newRevenue: number;
+  revenueDelta: number;
+}
+
+interface RFMMigrationDoc {
+  comparedAt: FirestoreTimestampLike;
+  periodDays: number;
+  comparedCustomers: number;
+  totalFlowsCount: number;
+  flows: PreComputedFlow[];
+  segmentDeltas: PreComputedSegmentDelta[];
+}
+
 interface RFMComputedDoc {
   brandId: string;
-  computedAt: { toDate?: () => Date; seconds?: number } | null;
+  computedAt: FirestoreTimestampLike;
   dataSource: 'erp' | 'eshop';
   dataSourcePlatforms: string[];
   totalCustomers: number;
@@ -36,9 +68,10 @@ interface RFMComputedDoc {
   guestOrdersSkipped: number;
   segments: RFMSegmentSummary[];
   chunkCount: number;
+  migration?: RFMMigrationDoc | null;
 }
 
-function toDate(v: RFMComputedDoc['computedAt']): Date | null {
+function toDate(v: FirestoreTimestampLike): Date | null {
   if (!v) return null;
   if (typeof v.toDate === 'function') {
     try { return v.toDate(); } catch { return null; }
@@ -64,6 +97,15 @@ function summaryToRFMSegment(s: RFMSegmentSummary, totalRevenue: number): RFMSeg
   return seg;
 }
 
+export interface RFMPreComputedMigration {
+  comparedAt: Date | null;
+  periodDays: number;
+  comparedCustomers: number;
+  totalFlowsCount: number;
+  flows: PreComputedFlow[];
+  segmentDeltas: PreComputedSegmentDelta[];
+}
+
 export interface RFMPreComputedResult {
   segments: RFMSegment[];
   isPreComputed: boolean;
@@ -74,6 +116,7 @@ export interface RFMPreComputedResult {
   totalOrders: number;
   isLoading: boolean;
   isStale: boolean;
+  migration: RFMPreComputedMigration | null;
 }
 
 export function useRFMPreComputed(brandId: string | null): RFMPreComputedResult {
@@ -103,6 +146,7 @@ export function useRFMPreComputed(brandId: string | null): RFMPreComputedResult 
       totalOrders: 0,
       isLoading: isPending,
       isStale: false,
+      migration: null,
     };
   }
 
@@ -116,6 +160,18 @@ export function useRFMPreComputed(brandId: string | null): RFMPreComputedResult 
     ? (data.segments ?? []).map((s) => summaryToRFMSegment(s, totalRevenue))
     : [];
 
+  const rawMigration = data.migration ?? null;
+  const migration: RFMPreComputedMigration | null = rawMigration
+    ? {
+        comparedAt: toDate(rawMigration.comparedAt),
+        periodDays: rawMigration.periodDays ?? 0,
+        comparedCustomers: rawMigration.comparedCustomers ?? 0,
+        totalFlowsCount: rawMigration.totalFlowsCount ?? 0,
+        flows: Array.isArray(rawMigration.flows) ? rawMigration.flows : [],
+        segmentDeltas: Array.isArray(rawMigration.segmentDeltas) ? rawMigration.segmentDeltas : [],
+      }
+    : null;
+
   return {
     segments,
     isPreComputed,
@@ -126,5 +182,6 @@ export function useRFMPreComputed(brandId: string | null): RFMPreComputedResult 
     totalOrders: data.totalOrders ?? 0,
     isLoading: isPending,
     isStale,
+    migration,
   };
 }

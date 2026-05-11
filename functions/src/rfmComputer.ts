@@ -53,7 +53,50 @@ export interface RFMComputedResult {
   guestOrdersSkipped: number;
   segments: RFMSegmentSummary[];
   chunkCount: number;
+  migration?: MigrationResult;
 }
+
+export interface MigrationFlow {
+  from: string;
+  fromName: string;
+  to: string;
+  toName: string;
+  count: number;
+  revenue: number;
+  sampleCustomerIds: string[];
+}
+
+export interface SegmentDelta {
+  segmentId: string;
+  segmentName: string;
+  prevCount: number;
+  newCount: number;
+  countDelta: number;
+  prevRevenue: number;
+  newRevenue: number;
+  revenueDelta: number;
+}
+
+export interface MigrationResult {
+  comparedAt: FirebaseFirestore.Timestamp | null;
+  periodDays: number;
+  comparedCustomers: number;
+  totalFlowsCount: number;
+  flows: MigrationFlow[];
+  segmentDeltas: SegmentDelta[];
+}
+
+const EMPTY_MIGRATION: MigrationResult = {
+  comparedAt: null,
+  periodDays: 0,
+  comparedCustomers: 0,
+  totalFlowsCount: 0,
+  flows: [],
+  segmentDeltas: [],
+};
+
+/** Hard cap on chunks read for migration diff. Each chunk ~900KB, so 50 chunks ~45MB. */
+const MIGRATION_MAX_CHUNKS = 50;
 
 // ─── Internal types ─────────────────────────────────────────────────────────
 
@@ -512,6 +555,9 @@ export async function computeRFMSegmentsForBrand(brandId: string): Promise<void>
       pct: totalCustomers > 0 ? Math.round((seg.count / totalCustomers) * 1000) / 10 : 0,
     }));
 
+  // ─── Migration vs previous snapshot ──────────────────────────────────────
+  const migration = await computeMigrationVsPrevious(db, brandId, customerRecords, segments);
+
   // ─── Write to Firestore ──────────────────────────────────────────────────
   await writeRfmComputedDoc(db, brandId, {
     dataSource,
@@ -522,6 +568,7 @@ export async function computeRFMSegmentsForBrand(brandId: string): Promise<void>
     guestOrdersSkipped,
     segments,
     customers: customerRecords,
+    migration,
   });
 
   // Monthly snapshot
@@ -553,12 +600,13 @@ interface WriteRfmInput {
   guestOrdersSkipped: number;
   segments: RFMSegmentSummary[];
   customers: RFMCustomer[];
+  migration: MigrationResult;
 }
 
 async function writeRfmComputedDoc(db: Firestore, brandId: string, input: WriteRfmInput): Promise<void> {
   const {
     dataSource, platforms, totalCustomers, totalOrders,
-    ordersAttributed, guestOrdersSkipped, segments, customers,
+    ordersAttributed, guestOrdersSkipped, segments, customers, migration,
   } = input;
 
   const fullJson = JSON.stringify(customers);
@@ -614,9 +662,177 @@ async function writeRfmComputedDoc(db: Firestore, brandId: string, input: WriteR
     segments,
     chunkCount: chunkPayloads.length,
     customersBytes: fullJson.length,
+    migration,
   });
 
   logger.info(
     `[RFM] ${brandId}: customers persisted — ${totalCustomers} customers across ${chunkPayloads.length} chunk(s) (~${(fullJson.length / 1024).toFixed(1)}KB)`
   );
+}
+
+// ─── Migration computation ───────────────────────────────────────────────────
+
+interface PrevSnapshot {
+  computedAt: FirebaseFirestore.Timestamp | null;
+  segments: RFMSegmentSummary[];
+  customers: RFMCustomer[];
+}
+
+/**
+ * Reads previous snapshot (parent doc + chunked customers).
+ * Returns null if no prior data exists.
+ * Reads at most MIGRATION_MAX_CHUNKS chunks to bound memory; older brands with
+ * massive customer bases will diff only against the prefix.
+ */
+async function readPreviousSnapshot(db: Firestore, brandId: string): Promise<PrevSnapshot | null> {
+  const parentRef = db.doc(`rfm_computed/${brandId}`);
+  const parentSnap = await parentRef.get();
+  if (!parentSnap.exists) return null;
+
+  const data = parentSnap.data() ?? {};
+  const computedAt = (data.computedAt as FirebaseFirestore.Timestamp | undefined) ?? null;
+  const segments = Array.isArray(data.segments) ? (data.segments as RFMSegmentSummary[]) : [];
+  const declaredChunkCount = typeof data.chunkCount === 'number' ? data.chunkCount : 0;
+  if (declaredChunkCount === 0) {
+    return { computedAt, segments, customers: [] };
+  }
+
+  const chunksColl = parentRef.collection('chunks');
+  const limit = Math.min(declaredChunkCount, MIGRATION_MAX_CHUNKS);
+  const chunkSnap = await chunksColl.limit(limit).get();
+
+  const customers: RFMCustomer[] = [];
+  for (const doc of chunkSnap.docs) {
+    const json = doc.get('customersJson');
+    if (typeof json !== 'string' || !json) continue;
+    try {
+      const parsed = JSON.parse(json);
+      if (Array.isArray(parsed)) customers.push(...(parsed as RFMCustomer[]));
+    } catch (e) {
+      logger.warn(`[RFM] ${brandId}: failed to parse chunk ${doc.id} for migration`, e);
+    }
+  }
+
+  return { computedAt, segments, customers };
+}
+
+function daysBetween(a: Date, b: Date): number {
+  const ms = Math.abs(a.getTime() - b.getTime());
+  return Math.max(0, Math.round(ms / (24 * 60 * 60 * 1000)));
+}
+
+async function computeMigrationVsPrevious(
+  db: Firestore,
+  brandId: string,
+  newCustomers: RFMCustomer[],
+  newSegments: RFMSegmentSummary[]
+): Promise<MigrationResult> {
+  const prev = await readPreviousSnapshot(db, brandId);
+  if (!prev || prev.customers.length === 0) {
+    return EMPTY_MIGRATION;
+  }
+
+  const prevById = new Map<string, RFMCustomer>();
+  for (const c of prev.customers) prevById.set(c.customerId, c);
+
+  const newById = new Map<string, RFMCustomer>();
+  for (const c of newCustomers) newById.set(c.customerId, c);
+
+  // Resolve segment names from both snapshots (new takes precedence).
+  const segmentNameById = new Map<string, string>();
+  for (const s of prev.segments) segmentNameById.set(s.segmentId, s.segment);
+  for (const s of newSegments) segmentNameById.set(s.segmentId, s.segment);
+
+  type FlowAgg = MigrationFlow & { _ranking: Array<{ id: string; revenue: number }> };
+  const flowMap = new Map<string, FlowAgg>();
+  let comparedCustomers = 0;
+
+  for (const [customerId, prevCust] of prevById) {
+    const next = newById.get(customerId);
+    if (!next) continue;
+    comparedCustomers += 1;
+    if (prevCust.segmentId === next.segmentId) continue;
+
+    const key = `${prevCust.segmentId}->${next.segmentId}`;
+    const fromName = segmentNameById.get(prevCust.segmentId) || prevCust.segment || prevCust.segmentId;
+    const toName = segmentNameById.get(next.segmentId) || next.segment || next.segmentId;
+    const revenue = next.totalRevenue || 0;
+
+    let flow = flowMap.get(key);
+    if (!flow) {
+      flow = {
+        from: prevCust.segmentId,
+        fromName,
+        to: next.segmentId,
+        toName,
+        count: 0,
+        revenue: 0,
+        sampleCustomerIds: [],
+        _ranking: [],
+      };
+      flowMap.set(key, flow);
+    }
+    flow.count += 1;
+    flow.revenue += revenue;
+    flow._ranking.push({ id: customerId, revenue });
+  }
+
+  const flows: MigrationFlow[] = [...flowMap.values()]
+    .map((f) => ({
+      from: f.from,
+      fromName: f.fromName,
+      to: f.to,
+      toName: f.toName,
+      count: f.count,
+      revenue: Math.round(f.revenue * 100) / 100,
+      sampleCustomerIds: f._ranking
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, 5)
+        .map((x) => x.id),
+    }))
+    .sort((a, b) => b.count - a.count);
+
+  // Segment-level deltas (union of all segment ids across both snapshots).
+  const prevSegMap = new Map<string, RFMSegmentSummary>();
+  for (const s of prev.segments) prevSegMap.set(s.segmentId, s);
+  const newSegMap = new Map<string, RFMSegmentSummary>();
+  for (const s of newSegments) newSegMap.set(s.segmentId, s);
+
+  const allSegIds = new Set<string>([...prevSegMap.keys(), ...newSegMap.keys()]);
+  const segmentDeltas: SegmentDelta[] = [];
+  for (const segId of allSegIds) {
+    const prevS = prevSegMap.get(segId);
+    const newS = newSegMap.get(segId);
+    const prevCount = prevS?.count ?? 0;
+    const newCount = newS?.count ?? 0;
+    const prevRevenue = prevS?.revenue ?? 0;
+    const newRevenue = newS?.revenue ?? 0;
+    segmentDeltas.push({
+      segmentId: segId,
+      segmentName: segmentNameById.get(segId) || newS?.segment || prevS?.segment || segId,
+      prevCount,
+      newCount,
+      countDelta: newCount - prevCount,
+      prevRevenue: Math.round(prevRevenue * 100) / 100,
+      newRevenue: Math.round(newRevenue * 100) / 100,
+      revenueDelta: Math.round((newRevenue - prevRevenue) * 100) / 100,
+    });
+  }
+  segmentDeltas.sort((a, b) => Math.abs(b.countDelta) - Math.abs(a.countDelta));
+
+  const periodDays = prev.computedAt ? daysBetween(prev.computedAt.toDate(), new Date()) : 30;
+  const totalFlowsCount = flows.reduce((sum, f) => sum + f.count, 0);
+
+  logger.info(
+    `[RFM] ${brandId}: migration computed — comparedCustomers=${comparedCustomers} flows=${flows.length} totalMoved=${totalFlowsCount} periodDays=${periodDays}`
+  );
+
+  return {
+    comparedAt: prev.computedAt,
+    periodDays,
+    comparedCustomers,
+    totalFlowsCount,
+    flows,
+    segmentDeltas,
+  };
 }

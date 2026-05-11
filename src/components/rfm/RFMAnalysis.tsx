@@ -861,7 +861,15 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
       <Card padding="lg">
         <CardHeader
           title="Segment Migration"
-          subtitle={hasImportedSegments ? `Τελευταίες ${segmentMigration?.periodDays ?? 30} ημέρες` : ''}
+          subtitle={
+            hasImportedSegments
+              ? (segmentMigration?.periodDays ?? 0) > 0
+                ? `Τελευταίες ${segmentMigration?.periodDays} ημέρες`
+                : isPreComputed
+                ? 'Αναμονή 2ης μέτρησης'
+                : 'Τελευταίες 30 ημέρες'
+              : ''
+          }
           icon={<ArrowRight size={20} className="text-[var(--nts-accent)]" />}
         />
         <div className="space-y-3">
@@ -895,7 +903,9 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
               </>
             ) : (
               <p className="text-sm text-[#4A4A4A] py-4 text-center">
-                Δεν υπάρχουν αρκετές μετακινήσεις μεταξύ segments τις τελευταίες {segmentMigration?.periodDays ?? 30} ημέρες. Το σύστημα χρειάζεται αναγνωρίσιμους πελάτες με ιστορικό και πριν την περίοδο.
+                {isPreComputed
+                  ? 'Η πρώτη μέτρηση καταγράφηκε. Οι μετακινήσεις θα εμφανιστούν μετά την επόμενη εκτέλεση (αμέσως μετά το επόμενο sync ή χειροκίνητο επανυπολογισμό).'
+                  : `Δεν υπάρχουν αρκετές μετακινήσεις μεταξύ segments τις τελευταίες ${segmentMigration?.periodDays ?? 30} ημέρες. Το σύστημα χρειάζεται αναγνωρίσιμους πελάτες με ιστορικό και πριν την περίοδο.`}
               </p>
             )
           ) : (

@@ -7,8 +7,8 @@ import { useBrand } from './useBrand';
 import { useEcommerceSummary } from './useEcommerceSummary';
 import { fetchAllEcommerceOrders, fetchDataAnalysisOrders, MAX_ORDERS_PER_PLATFORM_RFM } from '../services/ecommerceRawOrders';
 import { fetchCatalogAlignmentData, fetchCatalogAlignmentDataForDataAnalysis, normalizeCatalogAlignmentPayload } from '../services/catalogAlignment';
-import { computeRfmSegmentsFromEcommerceOrders, computeSegmentMigrationFromEcommerceOrders, type RfmCatalogContext } from '../services/rfmFromOrders';
-import { useRFMPreComputed } from './useRFMPreComputed';
+import { computeRfmSegmentsFromEcommerceOrders, computeSegmentMigrationFromEcommerceOrders, type RfmCatalogContext, type SegmentMigrationResult } from '../services/rfmFromOrders';
+import { useRFMPreComputed, type RFMPreComputedMigration } from './useRFMPreComputed';
 import type { RFMSegment } from '../types';
 
 const STORAGE_KEY = (brandId: string) => `pp-rfm-data-source-${brandId}`;
@@ -69,6 +69,35 @@ function titleFromSegmentId(segmentId: string): string {
     .replace(/\s+/g, ' ')
     .trim()
     .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/**
+ * Convert server pre-computed migration to the SegmentMigrationResult shape that
+ * the RFM UI components already consume. We derive `percentage` from
+ * `comparedCustomers` so the value matches the existing client-side semantics
+ * (% of compared cohort that moved through this flow).
+ */
+function preComputedMigrationToResult(m: RFMPreComputedMigration): SegmentMigrationResult {
+  const compared = m.comparedCustomers || 0;
+  const flows = m.flows
+    .slice()
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 8)
+    .map((flow) => ({
+      from: flow.from,
+      fromName: flow.fromName,
+      to: flow.to,
+      toName: flow.toName,
+      count: flow.count,
+      revenue: flow.revenue,
+      percentage: compared > 0 ? Math.round((flow.count / compared) * 1000) / 10 : 0,
+    }));
+  return {
+    periodDays: m.periodDays || 0,
+    comparedCustomers: compared,
+    flows,
+    canCompute: (m.totalFlowsCount ?? 0) > 0 && flows.length > 0,
+  };
 }
 
 function rebuildSegmentsFromCustomerSummaries(summariesBySegment: Map<string, SegmentCustomerSummary>): RFMSegment[] {
@@ -373,7 +402,9 @@ export function useSegments(options: UseSegmentsOptions = {}) {
             guestOrdersSkipped: orderRfm.guestOrdersSkipped,
           }
         : undefined,
-    segmentMigration: resolvedSource === 'ecommerce' ? orderSegmentMigration : undefined,
+    segmentMigration: preComputed.isPreComputed && preComputed.migration
+      ? preComputedMigrationToResult(preComputed.migration)
+      : resolvedSource === 'ecommerce' ? orderSegmentMigration : undefined,
     importSegmentsAvailable,
     /** True when reading from server pre-computed RFM (Cloud Function). */
     isPreComputed: preComputed.isPreComputed,
