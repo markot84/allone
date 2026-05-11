@@ -511,9 +511,9 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
       <div className="space-y-6">
         {!embedded && (
           <PageHeader
-            title={<h2 className="text-xl font-bold text-[var(--nts-charcoal)] sm:text-2xl">ROI & Απόδοση</h2>}
+            title={<h2 className="text-xl font-bold text-[var(--nts-charcoal)] whitespace-nowrap">ROI & Απόδοση</h2>}
             description={
-              <p className="text-sm text-[var(--nts-medium-gray)] sm:text-base">
+              <p className="text-sm text-[var(--nts-medium-gray)]">
                 Απόδοση e-shop & καμπανιών
               </p>
             }
@@ -545,15 +545,15 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
       {!embedded && (
         <PageHeader
           toolbarAriaLabel="Επιλογή περιόδου"
-          title={<h2 className="text-xl font-bold text-[var(--nts-charcoal)] sm:text-2xl">ROI & Απόδοση</h2>}
-          description={
-            <p className="text-sm text-[var(--nts-medium-gray)] sm:text-base">
-              Απόδοση e-shop & καμπανιών
-            </p>
-          }
+          title={<h2 className="text-xl font-bold text-[var(--nts-charcoal)] whitespace-nowrap">ROI & Απόδοση</h2>}
+            description={
+              <p className="text-sm text-[var(--nts-medium-gray)]">
+                Απόδοση e-shop & καμπανιών
+              </p>
+            }
           actions={
             <div className="flex flex-wrap items-center justify-end gap-2">
-              <div className="flex w-full flex-wrap gap-1 rounded-lg bg-gray-100 p-1 lg:w-auto">
+              <div className="grid grid-cols-2 w-full gap-1 rounded-lg bg-gray-100 p-1 sm:flex sm:w-auto">
                 {GLOBAL_PERIOD_OPTIONS.map(opt => (
                   <button
                     key={opt.key}

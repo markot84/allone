@@ -767,7 +767,8 @@ export function EcommerceDashboard() {
         }
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+            <div className="-mx-1 max-w-full overflow-x-auto pb-1 sm:mx-0 sm:overflow-visible sm:pb-0">
+            <div className="flex w-max items-center gap-1 bg-gray-100 rounded-lg p-1 sm:w-auto">
               {GLOBAL_PERIOD_OPTIONS.map(opt => (
                 <button
                   key={opt.key}
@@ -782,6 +783,7 @@ export function EcommerceDashboard() {
                   {opt.label}
                 </button>
               ))}
+            </div>
             </div>
             <DateRangePicker
               from={effectiveFrom}
