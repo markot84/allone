@@ -146,7 +146,10 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     [rawSegmentCustomerSummaries]
   );
 
+  // Defer order fetch until pre-computed check settles; skip entirely if pre-computed is fresh.
   const ordersQueryEnabled =
+    !preComputed.isLoading &&
+    !preComputed.isPreComputed &&
     !!brandId && (ecomm.connectedPlatforms.length > 0 || variant === 'data_analysis');
   const ordersSinceDate = useMemo(() => {
     const d = new Date();
@@ -290,13 +293,16 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   const isLoading =
     blocksOnImportedSegmentsOnly || (sourcePref === 'external' && segmentCustomersPending);
 
-  const ordersLoading = ordersQueryEnabled && ordersPending;
+  // Show loading while: pre-computed check is in progress, OR orders are being fetched (no pre-computed).
+  const ordersLoading = preComputed.isLoading || (ordersQueryEnabled && ordersPending);
   const isCatalogEnriching = ordersQueryEnabled && catalogPending;
   /** True when the orders fetch hit the per-platform limit — RFM is computed from a sample, not full history. */
   const ordersSampled = !ordersPending && ordersQueryEnabled && rawOrders.length >= MAX_ORDERS_PER_PLATFORM_RFM;
 
   const hasImported =
-    resolvedSource === 'ecommerce' ? orderRfm.totalCustomers > 0 : importSegmentsAvailable;
+    preComputed.isPreComputed
+      ? preComputed.totalCustomers > 0
+      : resolvedSource === 'ecommerce' ? orderRfm.totalCustomers > 0 : importSegmentsAvailable;
 
   // When pre-computed data is available (server-computed, fresh), use it as the primary source.
   // Fall back to client-side computation with 5K limit if no pre-computed data.

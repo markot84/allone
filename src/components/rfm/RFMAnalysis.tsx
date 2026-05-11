@@ -228,7 +228,8 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
         const err = await res.json().catch(() => ({}));
         throw new Error((err as { error?: string }).error || `HTTP ${res.status}`);
       }
-      queryClient.invalidateQueries({ queryKey: ['rfm_computed', currentBrand.id] });
+      // Remove cache so useRFMPreComputed re-fetches with isPending=true (skeletons while loading).
+      queryClient.removeQueries({ queryKey: ['rfm_computed', currentBrand.id] });
       toast.success('RFM segments επανυπολογίστηκαν επιτυχώς.');
     } catch (e) {
       toast.error(`Σφάλμα: ${e instanceof Error ? e.message : 'Άγνωστο'}`);
