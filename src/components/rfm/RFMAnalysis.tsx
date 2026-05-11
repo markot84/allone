@@ -858,23 +858,31 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
       </details>
 
       {/* Migration Flow */}
+      {(() => {
+        const migPeriod = segmentMigration?.periodDays ?? 0;
+        const migCompared = segmentMigration?.comparedAt ?? null;
+        const migFlowsLen = segmentMigration?.flows.length ?? 0;
+        // Subtitle: ≥1d window → show it; pre-computed run with ≥2 snapshots but identical data → "ίδια δεδομένα"; first ever run → "Αναμονή 2ης μέτρησης"; else fallback.
+        const migSubtitle =
+          !hasImportedSegments
+            ? ''
+            : migPeriod > 0
+            ? `Τελευταίες ${migPeriod} ημέρες`
+            : isPreComputed
+            ? migCompared
+              ? 'Ίδια δεδομένα με την προηγούμενη μέτρηση'
+              : 'Αναμονή 2ης μέτρησης'
+            : 'Τελευταίες 30 ημέρες';
+        return (
       <Card padding="lg">
         <CardHeader
           title="Segment Migration"
-          subtitle={
-            hasImportedSegments
-              ? (segmentMigration?.periodDays ?? 0) > 0
-                ? `Τελευταίες ${segmentMigration?.periodDays} ημέρες`
-                : isPreComputed
-                ? 'Αναμονή 2ης μέτρησης'
-                : 'Τελευταίες 30 ημέρες'
-              : ''
-          }
+          subtitle={migSubtitle}
           icon={<ArrowRight size={20} className="text-[var(--nts-accent)]" />}
         />
         <div className="space-y-3">
           {hasImportedSegments && rfmSegments.length > 0 ? (
-            segmentMigration?.canCompute && segmentMigration.flows.length > 0 ? (
+            segmentMigration?.canCompute && migFlowsLen > 0 ? (
               <>
                 <p className="text-xs text-[#6B7280]">
                   Σύγκριση {formatNumber(segmentMigration.comparedCustomers)} αναγνωρίσιμων πελατών με e-shop ιστορικό πριν και μετά την περίοδο.
@@ -904,8 +912,12 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
             ) : (
               <p className="text-sm text-[#4A4A4A] py-4 text-center">
                 {isPreComputed
-                  ? 'Η πρώτη μέτρηση καταγράφηκε. Οι μετακινήσεις θα εμφανιστούν μετά την επόμενη εκτέλεση (αμέσως μετά το επόμενο sync ή χειροκίνητο επανυπολογισμό).'
-                  : `Δεν υπάρχουν αρκετές μετακινήσεις μεταξύ segments τις τελευταίες ${segmentMigration?.periodDays ?? 30} ημέρες. Το σύστημα χρειάζεται αναγνωρίσιμους πελάτες με ιστορικό και πριν την περίοδο.`}
+                  ? migCompared
+                    ? migPeriod > 0
+                      ? `Δεν εντοπίστηκαν μετακινήσεις πελατών μεταξύ των τελευταίων ${migPeriod} ${migPeriod === 1 ? 'ημέρας' : 'ημερών'} μετρήσεων.`
+                      : 'Δεν εντοπίστηκαν μετακινήσεις πελατών μεταξύ των δύο τελευταίων μετρήσεων — τα δεδομένα είναι ίδια. Νέες μετακινήσεις θα φανούν μετά το επόμενο sync.'
+                    : 'Η πρώτη μέτρηση καταγράφηκε. Οι μετακινήσεις θα εμφανιστούν μετά την επόμενη εκτέλεση (αμέσως μετά το επόμενο sync ή χειροκίνητο επανυπολογισμό).'
+                  : `Δεν υπάρχουν αρκετές μετακινήσεις μεταξύ segments τις τελευταίες ${migPeriod || 30} ημέρες. Το σύστημα χρειάζεται αναγνωρίσιμους πελάτες με ιστορικό και πριν την περίοδο.`}
               </p>
             )
           ) : (
@@ -915,6 +927,8 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
           )}
         </div>
       </Card>
+        );
+      })()}
       </>}
     </div>
   );

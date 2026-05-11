@@ -97,6 +97,7 @@ function preComputedMigrationToResult(m: RFMPreComputedMigration): SegmentMigrat
     comparedCustomers: compared,
     flows,
     canCompute: (m.totalFlowsCount ?? 0) > 0 && flows.length > 0,
+    comparedAt: m.comparedAt,
   };
 }
 
@@ -175,10 +176,11 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     [rawSegmentCustomerSummaries]
   );
 
-  // Defer order fetch until pre-computed check settles; skip entirely if pre-computed is fresh.
+  // Defer order fetch until pre-computed check settles. When pre-computed IS active we still
+  // fetch orders lazily in the background so the segment-detail panel can populate brand /
+  // subcategory / SKU / catalog affinities — without blocking the main grid.
   const ordersQueryEnabled =
     !preComputed.isLoading &&
-    !preComputed.isPreComputed &&
     !!brandId && (ecomm.connectedPlatforms.length > 0 || variant === 'data_analysis');
   const ordersSinceDate = useMemo(() => {
     const d = new Date();
@@ -322,24 +324,53 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   const isLoading =
     blocksOnImportedSegmentsOnly || (sourcePref === 'external' && segmentCustomersPending);
 
-  // Show loading while: pre-computed check is in progress (only relevant for 'orders' pref),
-  // OR orders are being fetched (no pre-computed).
-  const ordersLoading =
-    (sourcePref === 'orders' && preComputed.isLoading) || (ordersQueryEnabled && ordersPending);
-  const isCatalogEnriching = ordersQueryEnabled && catalogPending;
-  /** True when the orders fetch hit the per-platform limit — RFM is computed from a sample, not full history. */
-  const ordersSampled = !ordersPending && ordersQueryEnabled && rawOrders.length >= MAX_ORDERS_PER_PLATFORM_RFM;
-
   // When pre-computed data is available AND user prefers 'orders', use server data.
   // For 'external' (imported segments) we keep the existing client-side flow.
   const usePreComputedActive = preComputed.isPreComputed && sourcePref === 'orders';
+
+  // Show loading while: pre-computed check is in progress (only relevant for 'orders' pref),
+  // OR orders are being fetched (no pre-computed). When pre-computed is the active source,
+  // orders + catalog fetch silently in the background — surface progress via `isCatalogEnriching` only.
+  const ordersLoading =
+    (sourcePref === 'orders' && preComputed.isLoading) ||
+    (ordersQueryEnabled && ordersPending && !usePreComputedActive);
+  const isCatalogEnriching = usePreComputedActive
+    ? ordersQueryEnabled && (ordersPending || catalogPending)
+    : ordersQueryEnabled && catalogPending;
+  /** True when the orders fetch hit the per-platform limit — RFM is computed from a sample, not full history. */
+  const ordersSampled = !ordersPending && ordersQueryEnabled && rawOrders.length >= MAX_ORDERS_PER_PLATFORM_RFM;
 
   const hasImported =
     usePreComputedActive
       ? preComputed.totalCustomers > 0
       : resolvedSource === 'ecommerce' ? orderRfm.totalCustomers > 0 : importSegmentsAvailable;
 
-  const activeSegments = usePreComputedActive ? preComputed.segments : segments;
+  /**
+   * When pre-computed RFM is the active source we still want the segment detail panel to show
+   * brand / subcategory / SKU affinities — those come from client-side `orderRfm` (computed once
+   * raw orders + catalog arrive in the background). Merge by `segmentId` so counts/colors stay
+   * authoritative from pre-computed while behavioral/predictive/customers are enriched lazily.
+   */
+  const orderRfmBySegmentId = useMemo(() => {
+    const m = new Map<string, RFMSegment>();
+    for (const s of orderRfm.segments) m.set(s.id, s);
+    return m;
+  }, [orderRfm.segments]);
+
+  const activeSegments = useMemo<RFMSegment[]>(() => {
+    if (!usePreComputedActive) return segments;
+    if (orderRfmBySegmentId.size === 0) return preComputed.segments;
+    return preComputed.segments.map((s) => {
+      const enriched = orderRfmBySegmentId.get(s.id);
+      if (!enriched) return s;
+      return {
+        ...s,
+        behavioral: enriched.behavioral,
+        predictive: enriched.predictive,
+        customers: enriched.customers,
+      };
+    });
+  }, [usePreComputedActive, segments, preComputed.segments, orderRfmBySegmentId]);
   const activeTotalCustomers = usePreComputedActive ? preComputed.totalCustomers : totalCustomers;
 
   // Override dataCoverage when pre-computed data is the active source — old client-side coverage

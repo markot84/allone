@@ -39,6 +39,11 @@ export type SegmentMigrationResult = {
   comparedCustomers: number;
   flows: SegmentMigrationFlow[];
   canCompute: boolean;
+  /**
+   * Set only when migration was produced by comparing two server snapshots (pre-computed pathway).
+   * Null on the client-only pathway, which compares cohorts within a single order history.
+   */
+  comparedAt?: Date | null;
 };
 
 type CustomerAgg = {
