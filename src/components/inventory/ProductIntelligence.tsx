@@ -309,28 +309,28 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   const inventorySummary = useMemo(() => {
     if (usingProcurement) return computeInventorySummary(sourceProducts, supplierTodMap, true);
     if (productDateFrom && productDateTo) {
-      const base = rawProducts.filter((p) => {
+      const base = sourceProducts.filter((p) => {
         const ymd = getProductYmdForFilter(p, productDateMode);
         if (!ymd) return false;
         return ymd >= productDateFrom && ymd <= productDateTo;
       });
       return computeInventorySummary(base, supplierTodMap, false);
     }
-    return computeInventorySummary(rawProducts, supplierTodMap, false);
-  }, [rawProducts, sourceProducts, usingProcurement, supplierTodMap, productDateFrom, productDateTo, productDateMode]);
+    return computeInventorySummary(sourceProducts, supplierTodMap, false);
+  }, [sourceProducts, usingProcurement, supplierTodMap, productDateFrom, productDateTo, productDateMode]);
 
   const inventoryAlerts = useMemo(() => {
     if (usingProcurement) return computeInventoryAlerts(sourceProducts, supplierTodMap, true);
     if (productDateFrom && productDateTo) {
-      const base = rawProducts.filter((p) => {
+      const base = sourceProducts.filter((p) => {
         const ymd = getProductYmdForFilter(p, productDateMode);
         if (!ymd) return false;
         return ymd >= productDateFrom && ymd <= productDateTo;
       });
       return computeInventoryAlerts(base, supplierTodMap, false);
     }
-    return computeInventoryAlerts(rawProducts, supplierTodMap, false);
-  }, [rawProducts, sourceProducts, usingProcurement, supplierTodMap, productDateFrom, productDateTo, productDateMode]);
+    return computeInventoryAlerts(sourceProducts, supplierTodMap, false);
+  }, [sourceProducts, usingProcurement, supplierTodMap, productDateFrom, productDateTo, productDateMode]);
 
   // Procurement-based inventory summary (replaces product-based when available)
   const procInventorySummary = useMemo((): InventorySummary | null => {
