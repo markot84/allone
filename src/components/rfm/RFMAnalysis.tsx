@@ -27,7 +27,7 @@ import {
   CartesianGrid
 } from 'recharts';
 import { Card, CardHeader, Badge, Button, Spinner, Tooltip as InfoTooltip, useToast, PageHeader, DataSourcePill } from '../common';
-import { useSegments, type SegmentDataCoverage, type SegmentsDataSource } from '../../hooks/useSegments';
+import { useSegments, type SegmentsDataSource } from '../../hooks/useSegments';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import { useBrand } from '../../hooks/useBrand';
 import { FirestoreService } from '../../services/firestore';
@@ -285,12 +285,6 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
     );
   }
 
-  /** Μόνο e-shop RFM, χωρίς «άλλους» πελάτες — το μεγάλο μπλοκ κάλυψης διπλασιάζει τα ίδια νούμερα. */
-  const compactCoverageOk =
-    rfmDataSource === 'ecommerce' &&
-    rfmSourcePref === 'orders' &&
-    dataCoverage.otherCustomers <= 0 &&
-    dataCoverage.eShopPenetration >= 99;
   const showDataSourceSelector =
     canComputeFromOrders || ordersLoading || ecomm.hasData || ecomm.connectedPlatforms.length > 0;
   const ordersOptionUnavailable = !canComputeIdentifiedOrders && !ordersLoading;
@@ -439,10 +433,6 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
           <LoadingStatusPill label="Loading product catalog…" />
         ) : null}
       </div>
-
-      {!compactCoverageOk ? (
-        <DataCoverageBlock dataCoverage={dataCoverage} totalDisplayed={totalCustomersDisplay} />
-      ) : null}
 
       {/* Analysis Tabs */}
       <div className="-mx-1 max-w-full overflow-x-auto pb-1 sm:mx-0 sm:overflow-visible sm:pb-0">
@@ -816,65 +806,6 @@ interface TabButtonProps {
   tooltipTitle?: string;
   tooltipBody?: string;
   tooltipBullets?: string[];
-}
-
-function DataCoverageBlock({
-  dataCoverage,
-  totalDisplayed,
-}: {
-  dataCoverage: SegmentDataCoverage;
-  totalDisplayed: number;
-}) {
-  const compact =
-    dataCoverage.otherCustomers <= 0 && dataCoverage.eShopPenetration >= 99.5;
-
-  if (compact) {
-    return (
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-[#E5E5E5] bg-gradient-to-r from-[#FAFAFA] via-white to-[#FAFAFA] px-3 py-2.5">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-[#9CA3AF]">Κάλυψη δεδομένων</span>
-        <span className="text-sm font-bold text-[#1A1A1A]">{formatNumber(totalDisplayed)} πελάτες</span>
-        <span className="hidden text-[#D1D5DB] sm:inline">|</span>
-        <span className="text-xs font-medium text-[#4A4A4A]">{dataCoverage.policyLabel}</span>
-        <details className="w-full sm:ml-auto sm:w-auto">
-          <summary className="cursor-pointer text-xs font-semibold text-[var(--nts-accent)] hover:underline">
-            Λεπτομέρειες κάλυψης
-          </summary>
-          <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-4">
-            <CoverageMetric label="Σύνολο" value={formatNumber(dataCoverage.totalCustomers)} />
-            <CoverageMetric label="E-shop" value={formatNumber(dataCoverage.eShopCustomers)} />
-            <CoverageMetric label="Others" value={formatNumber(dataCoverage.otherCustomers)} />
-            <CoverageMetric label="E-shop %" value={`${formatNumber(dataCoverage.eShopPenetration, 1)}%`} />
-          </div>
-        </details>
-      </div>
-    );
-  }
-
-  return (
-    <Card padding="sm" className="overflow-hidden border border-[#E5E5E5] bg-[#FAFAFA]">
-      <div className="flex min-w-0 flex-col gap-3">
-        <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">Data Coverage</p>
-          <h3 className="mt-0.5 text-sm font-bold text-[#1A1A1A]">Πολιτική: {dataCoverage.policyLabel}</h3>
-        </div>
-        <div className="grid min-w-0 grid-cols-2 gap-2 md:grid-cols-4">
-          <CoverageMetric label="Σύνολο" value={formatNumber(dataCoverage.totalCustomers)} />
-          <CoverageMetric label="E-shop" value={formatNumber(dataCoverage.eShopCustomers)} />
-          <CoverageMetric label="Others" value={formatNumber(dataCoverage.otherCustomers)} />
-          <CoverageMetric label="E-shop %" value={`${formatNumber(dataCoverage.eShopPenetration, 1)}%`} />
-        </div>
-      </div>
-    </Card>
-  );
-}
-
-function CoverageMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0 rounded-lg border border-[#E5E5E5] bg-white px-3 py-2.5">
-      <p className="truncate text-[11px] font-medium text-[#9CA3AF]" title={label}>{label}</p>
-      <p className="mt-1 truncate font-mono text-lg font-bold leading-tight text-[#1A1A1A]" title={value}>{value}</p>
-    </div>
-  );
 }
 
 function LoadingStatusPill({ label }: { label: string }) {

@@ -508,30 +508,28 @@ async function loadAndClassifyErpConnectorOrders(
   constraints.push(limit(DATA_ANALYSIS_ORDER_LIMIT));
   const allRulesPromise = fetchSalesChannelRulesForOrders(brandId, mode);
   let rows: Record<string, unknown>[];
+  const loadRecentWithoutBrandComposite = () =>
+    FirestoreService.getDocuments<Record<string, unknown>>(
+      coll,
+      [orderBy(dateField, 'desc'), limit(DATA_ANALYSIS_ORDER_LIMIT)],
+      null,
+      { forceServer: true }
+    );
   try {
     rows = await FirestoreService.getDocuments<Record<string, unknown>>(coll, constraints, brandId, rangedLoadOpts);
     if (options.cacheFirst === true && rows.length === 0) {
       rows = await FirestoreService.getDocuments<Record<string, unknown>>(coll, constraints, brandId, { forceServer: true });
     }
     if (rows.length === 0 && (options.sinceDate || options.untilDate)) {
-      rows = await FirestoreService.getDocuments<Record<string, unknown>>(
-        coll,
-        [limit(DATA_ANALYSIS_ORDER_LIMIT)],
-        brandId,
-        { forceServer: true }
-      );
+      rows = await loadRecentWithoutBrandComposite();
     }
   } catch {
-    rows = await FirestoreService.getDocuments<Record<string, unknown>>(
-      coll,
-      [limit(DATA_ANALYSIS_ORDER_LIMIT)],
-      brandId,
-      rangedLoadOpts
-    );
+    rows = await loadRecentWithoutBrandComposite();
   }
   const allRules = await allRulesPromise;
 
   const filtered = rows.filter((row) => {
+    if (String(row.brandId ?? '') !== brandId) return false;
     const day =
       backend === 'megaventory_invoices'
         ? String(row.date ?? '').slice(0, 10)
