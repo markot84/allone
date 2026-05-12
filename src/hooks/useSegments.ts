@@ -168,6 +168,8 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   const usableSnapshot =
     variant === 'data_analysis' &&
     analysisSnapshot &&
+    analysisSnapshot.dataSource === 'ecommerce' &&
+    analysisSnapshot.dataOrigin !== 'none' &&
     (!syncVersion || analysisSnapshot.syncVersion === syncVersion)
       ? analysisSnapshot
       : null;
@@ -256,9 +258,10 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   const resolvedSource: SegmentsDataSource = useMemo(() => {
     if (orderRfm.canCompute) return 'ecommerce';
     if (ordersQueryEnabled && ordersPending) return 'none';
+    if (variant === 'data_analysis' && ordersQueryEnabled) return 'none';
     if (sourcePref === 'external' && importSegmentsAvailable) return 'import';
     return importSegmentsAvailable ? 'import' : 'none';
-  }, [sourcePref, orderRfm.canCompute, ordersQueryEnabled, ordersPending, importSegmentsAvailable]);
+  }, [variant, sourcePref, orderRfm.canCompute, ordersQueryEnabled, ordersPending, importSegmentsAvailable]);
 
   const segments = useMemo(() => {
     let base: RFMSegment[];
@@ -363,6 +366,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
 
   const liveSnapshotPayload = useMemo<AnalysisSnapshotPayload | null>(() => {
     if (!snapshotScope || variant !== 'data_analysis' || !syncVersion || !hasImported) return null;
+    if (resolvedSource !== 'ecommerce' || orderOrigin === 'none') return null;
     return {
       ...snapshotScope,
       syncVersion,
@@ -410,7 +414,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     writeAnalysisSnapshot(liveSnapshotPayload);
   }, [liveSnapshotPayload, isLoading, ordersPending]);
 
-  const shouldUseSnapshot = !!usableSnapshot && (isLoading || ordersPending || catalogPending || segments.length === 0);
+  const shouldUseSnapshot = !!usableSnapshot && (isLoading || ordersPending || segments.length === 0);
   const displayedSegments = shouldUseSnapshot ? usableSnapshot.segments : segments;
   const displayedTotalCustomers = shouldUseSnapshot ? usableSnapshot.totalCustomers : totalCustomers;
   const displayedDataCoverage = shouldUseSnapshot ? usableSnapshot.dataCoverage : dataCoverage;

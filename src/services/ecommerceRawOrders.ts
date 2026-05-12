@@ -388,15 +388,27 @@ function isGenericRetailCustomerName(value: unknown): boolean {
     label === 'πελατης λιανικης' ||
     label === 'πελατης λιανικη' ||
     label === 'λιανικη' ||
+    label === 'magento guest' ||
+    label === 'guest' ||
+    label === 'skroutz' ||
+    label === 'shopflix' ||
+    label === 'running' ||
     label === 'retail customer' ||
     label === 'cash customer' ||
     label === 'walk in customer'
   );
 }
 
+function emailFromText(value: unknown): string {
+  const match = String(value ?? '').match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  return match?.[0]?.trim().toLowerCase() ?? '';
+}
+
 /** Σταθερό κλειδί πελάτη για RFM από Megaventory τιμολόγια (ίδια λογική με server megaventoryRfm). */
 function megaventoryInvoiceCustomerKey(row: Record<string, unknown>): string {
   const name = String(row.clientName ?? '').trim();
+  const email = emailFromText(name);
+  if (email) return `email:${email}`;
   if (isGenericRetailCustomerName(name)) return '';
   const id = String(row.clientId ?? '').trim();
   if (id) return `mv_customer_${id}`;
@@ -457,6 +469,7 @@ function normalizeMegaventoryInvoiceRawOrder(row: Record<string, unknown>): Ecom
       : parseFloat(String(row.netAmount ?? '0')) || 0;
   const day = String(row.date ?? '').slice(0, 10);
   const ck = megaventoryInvoiceCustomerKey(row);
+  const customerEmail = emailFromText(row.clientName);
   return {
     orderId: String(row.documentId ?? ''),
     orderName: String(row.documentNo ?? row.documentId ?? ''),
@@ -470,7 +483,7 @@ function normalizeMegaventoryInvoiceRawOrder(row: Record<string, unknown>): Ecom
       : [],
     paymentMethod: String(row.documentType ?? row.documentTypeDescription ?? ''),
     shippingMethod: '',
-    customerEmail: String(row.clientName ?? ''),
+    customerEmail: customerEmail || String(row.clientName ?? ''),
     ...(ck ? { customerKey: ck } : {}),
   };
 }
@@ -535,11 +548,11 @@ async function loadAndClassifyErpConnectorOrders(
   constraints.push(limit(queryLimit));
   const allRulesPromise = fetchSalesChannelRulesForOrders(brandId, mode);
   let rows: Record<string, unknown>[];
-  const loadRecentWithoutBrandComposite = () =>
+  const loadCappedBrandRowsWithoutDateComposite = () =>
     FirestoreService.getDocuments<Record<string, unknown>>(
       coll,
-      [orderBy(dateField, 'desc'), limit(queryLimit)],
-      null,
+      [limit(queryLimit)],
+      brandId,
       { forceServer: true }
     );
   try {
@@ -548,10 +561,10 @@ async function loadAndClassifyErpConnectorOrders(
       rows = await FirestoreService.getDocuments<Record<string, unknown>>(coll, constraints, brandId, { forceServer: true });
     }
     if (rows.length === 0 && (options.sinceDate || options.untilDate)) {
-      rows = await loadRecentWithoutBrandComposite();
+      rows = await loadCappedBrandRowsWithoutDateComposite();
     }
   } catch {
-    rows = await loadRecentWithoutBrandComposite();
+    rows = await loadCappedBrandRowsWithoutDateComposite();
   }
   const allRules = await allRulesPromise;
 

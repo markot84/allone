@@ -520,6 +520,17 @@ function mvField(row: Record<string, unknown>, ...names: string[]): unknown {
   return undefined;
 }
 
+function mvArrayField(row: Record<string, unknown>, ...names: string[]): unknown[] {
+  const raw = mvField(row, ...names);
+  if (Array.isArray(raw)) return raw;
+  if (raw && typeof raw === 'object') {
+    const boxed = raw as Record<string, unknown>;
+    if (Array.isArray(boxed.values)) return boxed.values;
+    if (Array.isArray(boxed.$values)) return boxed.$values;
+  }
+  return [];
+}
+
 function mvText(row: Record<string, unknown>, ...names: string[]): string {
   return String(mvField(row, ...names) ?? '').trim();
 }
@@ -529,8 +540,7 @@ function mvNum(row: Record<string, unknown>, ...names: string[]): number {
 }
 
 function mvDocumentLineItems(row: Record<string, unknown>): Record<string, unknown>[] {
-  const raw = mvField(row, 'DocumentDetails', 'DocumentRows', 'DocumentLineItems', 'mvDocumentDetails', 'documentDetails');
-  if (!Array.isArray(raw)) return [];
+  const raw = mvArrayField(row, 'DocumentDetails', 'DocumentRows', 'DocumentLineItems', 'mvDocumentDetails', 'documentDetails');
 
   return raw
     .slice(0, 250)
@@ -878,10 +888,9 @@ export async function fetchMegaventoryData(
   const shouldRefreshDocuments = options.skipDocuments !== true;
   let docsWindow = buildHistoricalOrIncrementalWindow(conn, 'lastDocsSyncAt');
   const invoiceBackfillPending = conn.invoiceDocumentBackfillComplete !== true;
-  // Manual sync must refresh the current window and reference data (products/stock/report) quickly.
-  // The staged historical invoice backfill can take ~20 minutes and prevents the UI sync from
-  // reaching catalog refresh, which is the main action users expect from the Sync button.
-  const shouldStageInvoiceBackfill = false;
+  // Manual sync must refresh reference data quickly. Scheduled ERP runs can continue the historical
+  // invoice detail backfill so existing documents gain product line items for Data Analysis.
+  const shouldStageInvoiceBackfill = mode === 'scheduled' && invoiceBackfillPending;
   let invoiceBackfillCursor = positiveNumber(conn.invoiceDocumentBackfillCursor);
   if (shouldStageInvoiceBackfill && invoiceBackfillCursor === null && conn.invoiceDocumentBackfillAt) {
     invoiceBackfillCursor = await inferInvoiceBackfillCursor(db, brandId);
@@ -1008,6 +1017,9 @@ export async function fetchMegaventoryData(
         data: {
           documentId: mvText(d, 'DocumentId', 'DocumentID'),
           documentNo: mvText(d, 'DocumentNo', 'DocumentSerialNo'),
+          documentReferenceNo: mvText(d, 'DocumentReferenceNo'),
+          documentReferenceNo2: mvText(d, 'DocumentReferenceNo2'),
+          documentReferenceNo3: mvText(d, 'DocumentReferenceNo3'),
           documentType: documentTypeInfo(d, documentTypesById).abbreviation || documentTypeInfo(d, documentTypesById).description || 'sales_document',
           documentTypeId: documentTypeInfo(d, documentTypesById).id,
           documentTypeDescription: documentTypeInfo(d, documentTypesById).description,
