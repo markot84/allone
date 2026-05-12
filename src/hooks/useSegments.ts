@@ -10,6 +10,7 @@ import { fetchAllEcommerceOrders, fetchDataAnalysisOrders } from '../services/ec
 import { fetchCatalogAlignmentData, fetchCatalogAlignmentDataForDataAnalysis, normalizeCatalogAlignmentPayload } from '../services/catalogAlignment';
 import { computeRfmOrderScopeStats, computeRfmSegmentsFromEcommerceOrders, computeSegmentMigrationFromEcommerceOrders, type RfmCatalogContext } from '../services/rfmFromOrders';
 import { readLatestAnalysisSnapshot, writeAnalysisSnapshot, type AnalysisSnapshotPayload, type AnalysisSnapshotScope } from '../services/analysisSnapshotCache';
+import { fetchDataAnalysisRfmAggregate } from '../services/dataAnalysisRfm';
 import type { RFMSegment } from '../types';
 
 const STORAGE_KEY = (brandId: string) => `pp-rfm-data-source-${brandId}`;
@@ -157,6 +158,22 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   const catalogQueryKeyPrefix = variant === 'data_analysis' ? 'catalogAlignmentDataAnalysis' : 'catalogAlignment';
   const brandSyncVersionQuery = useBrandSyncVersion(brandId);
   const syncVersion = brandSyncVersionQuery.data?.version ?? null;
+  const { data: dataAnalysisAggregate = null, isPending: dataAnalysisAggregatePending } = useQuery({
+    queryKey: ['dataAnalysisRfmAggregate', brandId, syncVersion],
+    queryFn: () => (brandId ? fetchDataAnalysisRfmAggregate(brandId, syncVersion) : Promise.resolve(null)),
+    enabled: variant === 'data_analysis' && !!brandId && !!syncVersion,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    retry: 1,
+  });
+  const aggregateScopeKey = sourcePref === 'external' ? 'all' : 'identified';
+  const aggregateScope = dataAnalysisAggregate?.status === 'ready'
+    ? dataAnalysisAggregate.scopes?.[aggregateScopeKey] ?? null
+    : null;
+  const aggregateIsBuilding = variant === 'data_analysis' && dataAnalysisAggregate?.status === 'running';
+  const isDataAnalysisAggregatePending = variant === 'data_analysis' && dataAnalysisAggregatePending && !dataAnalysisAggregate;
+  const shouldUseAggregate = !!aggregateScope?.canCompute;
   const snapshotScope = useMemo<AnalysisSnapshotScope | null>(
     () => brandId ? { brandId, variant, sourcePref, ordersSinceDate } : null,
     [brandId, variant, sourcePref, ordersSinceDate]
@@ -184,7 +201,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
             ? fetchDataAnalysisOrders(brandId, ecomm.connectedPlatforms, { sinceDate: ordersSinceDate, cacheFirst: true })
             : fetchAllEcommerceOrders(brandId, ecomm.connectedPlatforms, { sinceDate: ordersSinceDate }))
         : Promise.resolve([]),
-    enabled: ordersQueryEnabled && (variant !== 'data_analysis' || !!syncVersion),
+    enabled: ordersQueryEnabled && !shouldUseAggregate && !aggregateIsBuilding && (variant !== 'data_analysis' || !!syncVersion),
     staleTime: 12 * 60 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -206,7 +223,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
             ? fetchCatalogAlignmentDataForDataAnalysis(brandId, ecomm.connectedPlatforms, rawOrders)
             : fetchCatalogAlignmentData(brandId, ecomm.connectedPlatforms))
         : Promise.resolve(null),
-    enabled: ordersQueryEnabled && !ordersPending && rawOrders.length > 0,
+    enabled: ordersQueryEnabled && !shouldUseAggregate && !aggregateIsBuilding && !ordersPending && rawOrders.length > 0,
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -262,16 +279,19 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   }, [brandId, firestoreSegments, rebuiltCustomerSegments]);
 
   const resolvedSource: SegmentsDataSource = useMemo(() => {
+    if (shouldUseAggregate) return 'ecommerce';
     if (orderRfm.canCompute) return 'ecommerce';
-    if (ordersQueryEnabled && ordersPending) return 'none';
+    if (ordersQueryEnabled && (ordersPending || aggregateIsBuilding || isDataAnalysisAggregatePending)) return 'none';
     if (variant === 'data_analysis' && ordersQueryEnabled) return 'none';
     if (sourcePref === 'external' && importSegmentsAvailable) return 'import';
     return importSegmentsAvailable ? 'import' : 'none';
-  }, [variant, sourcePref, orderRfm.canCompute, ordersQueryEnabled, ordersPending, importSegmentsAvailable]);
+  }, [shouldUseAggregate, orderRfm.canCompute, ordersQueryEnabled, ordersPending, aggregateIsBuilding, isDataAnalysisAggregatePending, variant, sourcePref, importSegmentsAvailable]);
 
   const segments = useMemo(() => {
     let base: RFMSegment[];
-    if (resolvedSource === 'ecommerce') {
+    if (shouldUseAggregate && aggregateScope) {
+      base = aggregateScope.segments;
+    } else if (resolvedSource === 'ecommerce') {
       base = orderRfm.segments;
     } else if (resolvedSource === 'import') {
       base = externalSegments;
@@ -279,12 +299,13 @@ export function useSegments(options: UseSegmentsOptions = {}) {
       base = [];
     }
     return base.map((s) => ({ ...s, color: getSegmentColor(s) }));
-  }, [resolvedSource, orderRfm.segments, externalSegments]);
+  }, [shouldUseAggregate, aggregateScope, resolvedSource, orderRfm.segments, externalSegments]);
 
   const totalCustomers = useMemo(() => {
+    if (shouldUseAggregate && aggregateScope) return aggregateScope.totalCustomers;
     if (resolvedSource === 'ecommerce') return orderRfm.totalCustomers;
     return segments.reduce((sum, s) => sum + (s.count ?? 0), 0) || 0;
-  }, [resolvedSource, orderRfm.totalCustomers, segments]);
+  }, [shouldUseAggregate, aggregateScope, resolvedSource, orderRfm.totalCustomers, segments]);
 
   const externalTotalCustomers = useMemo(
     () => {
@@ -294,6 +315,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   );
 
   const dataCoverage = useMemo<SegmentDataCoverage>(() => {
+    if (shouldUseAggregate && aggregateScope) return aggregateScope.dataCoverage;
     const eShopCustomers = orderScopeStats.identifiedCustomers;
     const allOrderCustomers = orderScopeStats.allBuyers;
     const usesExternalPolicy = effectiveSourcePref === 'external';
@@ -328,7 +350,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
       policyLabel,
       marketingPolicy,
     };
-  }, [effectiveSourcePref, resolvedSource, orderScopeStats, externalTotalCustomers, externalSegments]);
+  }, [shouldUseAggregate, aggregateScope, effectiveSourcePref, resolvedSource, orderScopeStats, externalTotalCustomers, externalSegments]);
 
   const orderSegmentMigration = useMemo(
     () => (resolvedSource === 'ecommerce' && analysisOrders.length <= 2000 ? computeSegmentMigrationFromEcommerceOrders(analysisOrders, 30) : undefined),
@@ -347,20 +369,26 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     ecomm.connectedPlatforms.length === 0 &&
     !ecomm.hasData;
   const isLoading =
+    aggregateIsBuilding ||
+    isDataAnalysisAggregatePending ||
     (blocksOnImportedSegmentsOnly ||
       (ordersQueryEnabled && ordersPending && !orderRfm.canCompute));
 
-  const ordersLoading = ordersQueryEnabled && ordersPending;
-  const isCatalogEnriching = ordersQueryEnabled && catalogPending;
+  const ordersLoading = !shouldUseAggregate && ordersQueryEnabled && ordersPending;
+  const isCatalogEnriching = !shouldUseAggregate && ordersQueryEnabled && catalogPending;
 
   const hasImported =
-    resolvedSource === 'ecommerce'
+    shouldUseAggregate && aggregateScope
+      ? aggregateScope.totalCustomers > 0
+      : resolvedSource === 'ecommerce'
       ? orderRfm.totalCustomers > 0
       : resolvedSource === 'import'
         ? importSegmentsAvailable
         : false;
   const sourceLabel =
-    resolvedSource === 'ecommerce'
+    shouldUseAggregate && dataAnalysisAggregate
+      ? dataAnalysisAggregate.sourceLabel || 'ERP'
+      : resolvedSource === 'ecommerce'
       ? orderOrigin === 'erp_orders'
         ? 'ERP'
         : effectiveSourcePref === 'external'
@@ -372,7 +400,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
 
   const liveSnapshotPayload = useMemo<AnalysisSnapshotPayload | null>(() => {
     if (!snapshotScope || variant !== 'data_analysis' || !syncVersion || !hasImported) return null;
-    if (resolvedSource !== 'ecommerce' || orderOrigin === 'none') return null;
+    if (shouldUseAggregate || resolvedSource !== 'ecommerce' || orderOrigin === 'none') return null;
     return {
       ...snapshotScope,
       syncVersion,
@@ -413,6 +441,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     orderRfm.ordersAttributed,
     orderRfm.guestOrdersSkipped,
     orderSegmentMigration,
+    shouldUseAggregate,
   ]);
 
   useEffect(() => {
@@ -420,21 +449,34 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     writeAnalysisSnapshot(liveSnapshotPayload);
   }, [liveSnapshotPayload, isLoading, ordersPending]);
 
-  const shouldUseSnapshot = !!usableSnapshot && (isLoading || ordersPending || segments.length === 0);
+  const shouldUseSnapshot =
+    !isDataAnalysisAggregatePending &&
+    !aggregateIsBuilding &&
+    !!usableSnapshot &&
+    (isLoading || ordersPending || segments.length === 0);
   const displayedSegments = shouldUseSnapshot ? usableSnapshot.segments : segments;
   const displayedTotalCustomers = shouldUseSnapshot ? usableSnapshot.totalCustomers : totalCustomers;
   const displayedDataCoverage = shouldUseSnapshot ? usableSnapshot.dataCoverage : dataCoverage;
   const displayedDataSource = shouldUseSnapshot ? usableSnapshot.dataSource : resolvedSource;
-  const displayedDataOrigin = shouldUseSnapshot ? usableSnapshot.dataOrigin : orderOrigin;
+  const displayedDataOrigin = shouldUseSnapshot
+    ? usableSnapshot.dataOrigin
+    : shouldUseAggregate && dataAnalysisAggregate
+      ? dataAnalysisAggregate.dataOrigin
+      : orderOrigin;
   const displayedSourceLabel = shouldUseSnapshot ? usableSnapshot.sourceLabel : sourceLabel;
-  const displayedSourcePreference = shouldUseSnapshot ? usableSnapshot.sourcePreference : effectiveSourcePref;
-  const displayedCanComputeFromOrders = shouldUseSnapshot ? usableSnapshot.canComputeFromOrders : canComputeFromOrders;
-  const displayedCanComputeIdentifiedOrders = shouldUseSnapshot ? usableSnapshot.canComputeIdentifiedOrders : canComputeIdentifiedOrders;
+  const displayedSourcePreference = shouldUseSnapshot ? usableSnapshot.sourcePreference : shouldUseAggregate && aggregateScope ? aggregateScope.sourcePreference : effectiveSourcePref;
+  const displayedCanComputeFromOrders = shouldUseSnapshot ? usableSnapshot.canComputeFromOrders : shouldUseAggregate ? true : canComputeFromOrders;
+  const displayedCanComputeIdentifiedOrders = shouldUseSnapshot ? usableSnapshot.canComputeIdentifiedOrders : shouldUseAggregate ? true : canComputeIdentifiedOrders;
   const displayedHasImported = shouldUseSnapshot ? usableSnapshot.hasImported : hasImported;
   const displayedOrderRfmMeta =
     shouldUseSnapshot
       ? usableSnapshot.orderRfmMeta
-      : resolvedSource === 'ecommerce'
+        : shouldUseAggregate && aggregateScope
+          ? {
+              ordersAttributed: aggregateScope.ordersAttributed,
+              guestOrdersSkipped: aggregateScope.guestOrdersSkipped,
+            }
+        : resolvedSource === 'ecommerce'
         ? {
             ordersAttributed: orderRfm.ordersAttributed,
             guestOrdersSkipped: orderRfm.guestOrdersSkipped,

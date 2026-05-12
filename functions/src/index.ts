@@ -96,6 +96,11 @@ import {
   setDb as setEcommerceAggDb,
 } from './ecommerceAggregator';
 import {
+  computeDataAnalysisRfmDiagnostic,
+  refreshDataAnalysisRfmAggregate,
+  setDb as setDataAnalysisRfmDb,
+} from './dataAnalysisRfmAggregator';
+import {
   captureStockSnapshot,
   computeStockMovement,
   refreshStockMovement,
@@ -144,6 +149,7 @@ setSoftOneDb(db);
 setEpsilonNetDb(db);
 setEntersoftDb(db);
 setEcommerceAggDb(db);
+setDataAnalysisRfmDb(db);
 setStockMovementDb(db);
 setProcurementSignalsDb(db);
 setGA4Db(db);
@@ -1974,6 +1980,21 @@ export const scheduledSyncFollowups = onSchedule(
   async () => runNightlyFollowupsJob()
 );
 
+/** Data Analysis RFM aggregate — runs after connector waves and writes only compact summaries. */
+export const scheduledDataAnalysisRfm = onSchedule(
+  { timeZone: 'Europe/Athens', region: 'europe-west1', memory: '2GiB', timeoutSeconds: 1200, schedule: 'every day 00:52' },
+  async () => {
+    const snap = await db.collection('connectors').where('magento.connected', '==', true).limit(5).get();
+    for (const doc of snap.docs) {
+      try {
+        await refreshDataAnalysisRfmAggregate(doc.id);
+      } catch (error) {
+        logger.warn(`[scheduledDataAnalysisRfm] failed for ${doc.id}:`, error);
+      }
+    }
+  }
+);
+
 /**
  * Gemini Proxy
  * POST /geminiProxy
@@ -2249,6 +2270,46 @@ export const refreshAggregates = onRequest(
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       logger.error('[refreshAggregates]', msg);
+      res.status(500).json({ error: msg });
+    }
+  }
+);
+
+// ── Data Analysis RFM: Diagnostic + On-Demand Aggregate ─────────────────────
+
+export const refreshDataAnalysisRfm = onRequest(
+  { region: 'europe-west1', cors: true, timeoutSeconds: 1200, memory: '2GiB' },
+  async (req, res) => {
+    if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+
+    try {
+      const idToken = authHeader.slice(7).trim();
+      const decoded = await admin.auth().verifyIdToken(idToken);
+      const { brandId, action } = req.body as { brandId?: string; action?: 'diagnostic' | 'run' };
+      if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
+
+      if (action === 'diagnostic') {
+        if (!(await verifyBrandMembership(decoded.uid, brandId))) {
+          res.status(403).json({ error: 'Not a member of this brand' });
+          return;
+        }
+        const result = await computeDataAnalysisRfmDiagnostic(brandId);
+        res.status(200).json({ success: true, brandId, action: 'diagnostic', result });
+        return;
+      }
+
+      if (!(await verifyBrandConnectorManagement(decoded.uid, brandId))) {
+        res.status(403).json({ error: 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να ανανεώσει το Data Analysis aggregate' });
+        return;
+      }
+      const result = await refreshDataAnalysisRfmAggregate(brandId);
+      res.status(200).json({ success: true, brandId, action: 'run', result });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      logger.error('[refreshDataAnalysisRfm]', msg);
       res.status(500).json({ error: msg });
     }
   }
