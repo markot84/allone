@@ -3,6 +3,7 @@ import { logger } from 'firebase-functions/v2';
 import { createTransporter, SENDER, type SmtpCredentialInput } from './smtpConfig';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const INTEREST_EMAIL_TIMEOUT_MS = 8_000;
 
 /** Παραλήπτες ειδοποίησης (ίδιο με marketing mailto). Override: env INTEREST_LEAD_NOTIFY_EMAILS (comma-separated). */
 const DEFAULT_TEAM_NOTIFY = 'makis@notthesame.gr,dimitris@notthesame.gr,eleana@notthesame.gr';
@@ -21,7 +22,11 @@ async function sendInterestLeadEmails(
   },
   smtp?: SmtpCredentialInput
 ): Promise<void> {
-  const transporter = createTransporter(smtp);
+  const transporter = createTransporter(smtp, {
+    connectionTimeout: 6_000,
+    greetingTimeout: 5_000,
+    socketTimeout: 8_000,
+  });
   if (!transporter) {
     logger.warn('[interestLead] SMTP not configured — lead saved in Firestore only');
     return;
@@ -75,6 +80,32 @@ async function sendInterestLeadEmails(
   }
 }
 
+async function sendInterestLeadEmailsBestEffort(
+  data: {
+    fullName: string;
+    email: string;
+    phone: string | null;
+    company: string | null;
+    message: string | null;
+  },
+  smtp?: SmtpCredentialInput
+): Promise<void> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    await Promise.race([
+      sendInterestLeadEmails(data, smtp),
+      new Promise<void>((resolve) => {
+        timer = setTimeout(() => {
+          logger.warn('[interestLead] Email notification timed out; lead was saved');
+          resolve();
+        }, INTEREST_EMAIL_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 function clamp(s: unknown, max: number): string {
   if (typeof s !== 'string') return '';
   return s.trim().slice(0, max);
@@ -125,7 +156,7 @@ export async function persistInterestLead(
 
   logger.info(`[interestLead] Saved lead from ${email}`);
 
-  await sendInterestLeadEmails(
+  await sendInterestLeadEmailsBestEffort(
     {
       fullName,
       email,

@@ -1,6 +1,5 @@
 import { useRef } from 'react';
 import { ArrowLeft, ArrowRight, BarChart3, Boxes, Brain, CheckCircle2, ClipboardCheck, Database, ExternalLink, Gauge, HelpCircle, Layers3, Mail, Megaphone, PackageCheck, ShieldCheck, ShoppingBag, Store, TrendingUp, Upload } from 'lucide-react';
-import { MARKETING_CONTACT_MAILTO } from '../../config/superAdmins';
 import { InterestForm } from './InterestForm';
 import { PerformancePlusLogo } from '../common';
 
@@ -378,8 +377,6 @@ export function MarketingIndexPage({
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const mailDemoHref = `mailto:${MARKETING_CONTACT_MAILTO}?subject=${encodeURIComponent('Performance+ Demo Request')}`;
-
   return (
     <div ref={scrollRef} className="h-screen overflow-y-auto overflow-x-hidden bg-[radial-gradient(circle_at_top_left,rgba(249,115,22,0.12),transparent_34%),linear-gradient(180deg,#ffffff_0%,#f7f7f7_42%,#ffffff_100%)] text-[var(--nts-charcoal)]">
 
@@ -441,7 +438,8 @@ export function MarketingIndexPage({
                 </div>
                 <div className="flex flex-wrap gap-3">
                   <a
-                    href={mailDemoHref}
+                    href="#interest"
+                    onClick={() => trackMarketingEvent('cta_click', { placement: 'hero' })}
                     className="inline-flex items-center gap-2 rounded-2xl border border-[var(--nts-accent-hover)] bg-[var(--nts-accent)] px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(249,115,22,0.32)] transition hover:-translate-y-0.5 hover:bg-[var(--nts-accent-hover)] hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nts-accent)]"
                   >
                     <HelpCircle size={16} />
@@ -626,9 +624,9 @@ export function MarketingIndexPage({
             <a
               href="#interest"
               onClick={() => trackMarketingEvent('cta_click', { placement: 'use_cases' })}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[#1f2328]/10 bg-[#111827] px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(17,24,39,0.18)] transition hover:-translate-y-0.5 hover:bg-[#0f172a] hover:no-underline"
+              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[#1f2328]/10 bg-[#111827] px-5 py-3 text-sm font-semibold !text-white shadow-[0_12px_28px_rgba(17,24,39,0.18)] transition hover:-translate-y-0.5 hover:bg-[#0f172a] hover:!text-white hover:no-underline"
             >
-              Συζητήστε το use case σας
+              Επικοινωνήστε μαζί μας 2310.321625
               <ArrowRight size={15} aria-hidden />
             </a>
           </div>
@@ -834,7 +832,8 @@ export function MarketingIndexPage({
                 ))}
               </div>
               <a
-                href={mailDemoHref}
+                href="#interest"
+                onClick={() => trackMarketingEvent('cta_click', { placement: 'final_cta' })}
                 className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-[var(--nts-accent-hover)] bg-[var(--nts-accent)] px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(249,115,22,0.32)] transition hover:bg-[var(--nts-accent-hover)] hover:no-underline"
               >
                 <HelpCircle size={16} />
@@ -847,10 +846,11 @@ export function MarketingIndexPage({
           <p className="relative mt-5 text-xs text-white/58">
             Εναλλακτικά,{' '}
             <a
-              href={`mailto:${MARKETING_CONTACT_MAILTO}?subject=${encodeURIComponent('Performance+ — Επικοινωνία')}`}
+              href="#interest"
+              onClick={() => trackMarketingEvent('cta_click', { placement: 'final_text_link' })}
               className="font-semibold text-white underline underline-offset-2 hover:text-[var(--nts-accent)]"
             >
-              επικοινώνησε μέσω email
+              επικοινωνήστε μαζί μας 2310.321625
             </a>
             {' '}
             για εταιρική ένταξη, εμπορική πολιτική ή εξειδικευμένη προσαρμογή του AI-powered περιβάλλοντος αποφάσεων.
@@ -888,6 +888,10 @@ export function MarketingIndexPage({
               notthesame.ai
               <ExternalLink size={12} className="opacity-70" aria-hidden />
             </a>
+            <span className="text-[var(--nts-medium-gray)]/40">·</span>
+            <span className="shrink-0">2310.321625</span>
+            <span className="text-[var(--nts-medium-gray)]/40">·</span>
+            <span className="shrink-0">support@notthesame.gr</span>
           </div>
           <div className="flex flex-col items-start gap-1 text-xs sm:items-end">
             <p className="text-[var(--nts-medium-gray)]">AI-powered πλατφόρμα εμπορικής και επιχειρησιακής νοημοσύνης</p>
@@ -907,11 +911,12 @@ export function MarketingIndexPage({
               </a>
               <span className="text-[var(--nts-medium-gray)]/40">·</span>
               <a
-                href={`mailto:${MARKETING_CONTACT_MAILTO}?subject=${encodeURIComponent('Performance+ Επικοινωνία')}`}
+                href="#interest"
+                onClick={() => trackMarketingEvent('cta_click', { placement: 'footer_contact' })}
                 className="inline-flex items-center gap-1.5 font-medium text-[var(--nts-charcoal)] hover:text-[var(--nts-accent)] hover:underline"
               >
                 <Mail size={13} aria-hidden />
-                Επικοινωνία
+                Επικοινωνήστε μαζί μας 2310.321625
               </a>
             </div>
           </div>

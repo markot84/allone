@@ -2,7 +2,8 @@ import { PerformancePlusLogo } from '../common';
 
 export function TermsOfService() {
   return (
-    <div style={{ maxWidth: 820, margin: '0 auto', padding: '48px 24px', fontFamily: 'system-ui, sans-serif', color: '#1A1A1A', lineHeight: 1.7 }}>
+    <div style={{ height: '100vh', overflowY: 'auto', background: '#fff' }}>
+      <main style={{ maxWidth: 820, margin: '0 auto', padding: '48px 24px', fontFamily: 'system-ui, sans-serif', color: '#1A1A1A', lineHeight: 1.7 }}>
       <header style={{ marginBottom: 40, borderBottom: '2px solid #111', paddingBottom: 24 }}>
         <div style={{ marginBottom: 16 }}>
           <PerformancePlusLogo height={40} />
@@ -219,6 +220,7 @@ export function TermsOfService() {
           <a href="/" style={{ color: '#6B7280' }}>Αρχική</a>
         </p>
       </footer>
+      </main>
     </div>
   );
 }

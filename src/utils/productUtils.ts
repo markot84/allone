@@ -110,13 +110,17 @@ export const DEFAULT_TOD = 60;
 /** Assumed period length (days) for qty_sold_period */
 const SALES_PERIOD_DAYS = 30;
 
+export function getEffectiveStockLevel(product: Product): number {
+  return product.available_stock ?? product.stock_on_hand ?? product.stock_level ?? 0;
+}
+
 /**
  * Calculate how many days the current stock will last based on sell-through rate.
  * Returns Infinity when qty_sold is 0 (no sales = stock lasts forever).
  * Returns 0 when stock_level is 0.
  */
 export function getDaysOfStock(product: Product): number {
-  const level = product.stock_level ?? 0;
+  const level = getEffectiveStockLevel(product);
   if (level <= 0) return 0;
   const qtySold = product.qty_sold_period ?? 0;
   if (qtySold <= 0) return Infinity;
@@ -144,7 +148,7 @@ export function getProductTod(product: Product, supplierTodMap?: Map<string, num
 }
 
 export function classifyStockHealth(product: Product, tod: number = DEFAULT_TOD): StockHealth {
-  const level = product.stock_level ?? 0;
+  const level = getEffectiveStockLevel(product);
   if (level <= 0) return 'low';
 
   const dos = getDaysOfStock(product);

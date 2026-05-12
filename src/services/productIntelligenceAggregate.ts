@@ -37,13 +37,12 @@ function isAggregateReady(value: unknown): value is ProductIntelligenceAggregate
 
 export async function fetchProductIntelligenceAggregate(
   brandId: string,
-  syncVersion: string | null
+  _syncVersion: string | null
 ): Promise<ProductIntelligenceAggregate | null> {
   const snap = await getDoc(doc(db, 'product_intelligence', brandId));
   if (!snap.exists()) return null;
   const data = snap.data();
   if (!isAggregateReady(data)) return data as ProductIntelligenceAggregate;
-  if (syncVersion && data.syncVersion && data.syncVersion !== syncVersion) return null;
   return data;
 }
 

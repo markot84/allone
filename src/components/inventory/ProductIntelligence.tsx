@@ -31,6 +31,7 @@ import { formatCurrency, formatCurrencyCompact, formatNumber, formatPercent } fr
 import { FirestoreService } from '../../services/firestore';
 import {
   getDaysOfStock,
+  getEffectiveStockLevel,
   getProductYmdForFilter,
   resolveStockHealth,
 } from '../../utils/productUtils';
@@ -74,7 +75,7 @@ function computeInventorySummary(
   let lowCount = 0;
 
   for (const p of products) {
-    const level = p.stock_level ?? 0;
+    const level = getEffectiveStockLevel(p);
     const price = p.price ?? 0;
     totalValue += level * price;
 
@@ -323,11 +324,12 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     serverFiltersSupported &&
     !!serverIntelligence.aggregate &&
     !!serverIntelligence.page;
+  const hasServerAggregate = serverFiltersSupported && !!serverIntelligence.aggregate;
   const totalCatalogCount = usingProcurement
     ? sourceProducts.length
     : (serverIntelligence.aggregate?.totalCount ?? sourceTotalCount ?? rawTotalCount ?? productStats?.totalSkus ?? rawProducts.length);
-  const isCatalogTruncated = !usingProcurement && !useServerIntelligence && totalCatalogCount > sourceProducts.length;
-  const effectiveSourceLoading = useServerIntelligence ? false : sourceLoading;
+  const isCatalogTruncated = !usingProcurement && !hasServerAggregate && totalCatalogCount > sourceProducts.length;
+  const effectiveSourceLoading = hasServerAggregate ? serverIntelligence.isLoading && !serverIntelligence.page : sourceLoading;
 
   useEffect(() => {
     if (useServerIntelligence && serverIntelligence.safePage !== currentPage) {
@@ -336,7 +338,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   }, [useServerIntelligence, serverIntelligence.safePage, currentPage]);
 
   const productsScopedByDate = useMemo(() => {
-    if (useServerIntelligence) return serverIntelligence.page?.products ?? [];
+    if (hasServerAggregate) return serverIntelligence.page?.products ?? [];
     if (usingProcurement) return sourceProducts;
     if (!hasDateFilter) return sourceProducts;
     return sourceProducts.filter((p) => {
@@ -344,7 +346,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
       if (!ymd) return false;
       return ymd >= productDateFrom && ymd <= productDateTo;
     });
-  }, [useServerIntelligence, serverIntelligence.page, sourceProducts, usingProcurement, hasDateFilter, productDateFrom, productDateTo, productDateMode]);
+  }, [hasServerAggregate, serverIntelligence.page, sourceProducts, usingProcurement, hasDateFilter, productDateFrom, productDateTo, productDateMode]);
 
   const inventorySummary = useMemo(() => {
     if (usingProcurement) return computeInventorySummary(sourceProducts, supplierTodMap, true);
@@ -495,7 +497,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   }, [usingProcurement, hasDateFilter, productStats, totalCatalogCount]);
 
   // Use procurement data when available, then precomputed aggregates for large imports.
-  const displaySummary = procInventorySummary ?? (useServerIntelligence ? serverIntelligence.aggregate?.summary ?? null : null) ?? aggregateInventorySummary ?? inventorySummary;
+  const displaySummary = procInventorySummary ?? (hasServerAggregate ? serverIntelligence.aggregate?.summary ?? null : null) ?? aggregateInventorySummary ?? inventorySummary;
 
   const categories = useMemo(() => {
     if (!usingProcurement && serverIntelligence.aggregate?.categories?.length) {
@@ -507,7 +509,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
 
   // Filter and sort products
   const filteredProducts = useMemo(() => {
-    if (useServerIntelligence) return productsScopedByDate;
+    if (hasServerAggregate) return productsScopedByDate;
     return productsScopedByDate
       .filter((p) => {
         const matchesSearch = (p.name ?? '').toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -549,13 +551,13 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           ? (aVal as number) - (bVal as number) 
           : (bVal as number) - (aVal as number);
       });
-  }, [useServerIntelligence, productsScopedByDate, searchQuery, selectedCategory, marginFilter, stockAgeFilter, stockCardFilter, sortField, sortDirection, supplierTodMap, usingProcurement]);
+  }, [hasServerAggregate, productsScopedByDate, searchQuery, selectedCategory, marginFilter, stockAgeFilter, stockCardFilter, sortField, sortDirection, supplierTodMap, usingProcurement]);
 
-  const serverFilteredTotal = useServerIntelligence ? (serverIntelligence.page?.totalRows ?? filteredProducts.length) : filteredProducts.length;
-  const totalPages = useServerIntelligence
+  const serverFilteredTotal = hasServerAggregate ? (serverIntelligence.page?.totalRows ?? filteredProducts.length) : filteredProducts.length;
+  const totalPages = hasServerAggregate
     ? Math.max(1, serverIntelligence.aggregate?.pagesByBucket?.[serverBucket] ?? 1)
     : Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE));
-  const paginatedProducts = useServerIntelligence
+  const paginatedProducts = hasServerAggregate
     ? filteredProducts
     : filteredProducts.slice(
         (currentPage - 1) * PAGE_SIZE,
@@ -636,17 +638,17 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
               <Loader2 className="h-3.5 w-3.5 animate-spin flex-shrink-0" aria-hidden />
               Φόρτωση inventory…
             </p>
-          ) : sourceProducts.length > 0 || useServerIntelligence ? (
+          ) : sourceProducts.length > 0 || hasServerAggregate ? (
             <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-[#22C55E] sm:text-sm">
               <span>
-                {useServerIntelligence
+                {hasServerAggregate
                   ? `Showing ${formatNumber(totalCatalogCount)} ${serverIntelligence.aggregate?.sourceLabel === 'ERP' ? 'ERP' : 'catalog'} product(s)`
                   : `Showing ${isCatalogTruncated ? `${sourceProducts.length} of ${totalCatalogCount}` : sourceProducts.length} ${usingProcurement ? 'procurement' : productSourceKind === 'erp' ? 'ERP' : 'imported'} product(s)`}
               </span>
               <DataSourcePill
                 label="Source"
-                value={useServerIntelligence ? serverIntelligence.aggregate?.sourceLabel ?? productDataSourceLabel : productDataSourceLabel}
-                tone={(useServerIntelligence ? serverIntelligence.aggregate?.sourceLabel === 'ERP' : productSourceKind === 'erp') ? 'warning' : 'success'}
+                value={hasServerAggregate ? serverIntelligence.aggregate?.sourceLabel ?? productDataSourceLabel : productDataSourceLabel}
+                tone={(hasServerAggregate ? serverIntelligence.aggregate?.sourceLabel === 'ERP' : productSourceKind === 'erp') ? 'warning' : 'success'}
               />
             </div>
           ) : null
@@ -708,7 +710,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
         </div>
       )}
 
-      {(isCatalogTruncated || useServerIntelligence) && (
+      {(isCatalogTruncated || hasServerAggregate) && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900 shadow-sm">
           <div className="font-semibold flex items-center gap-2 mb-1">
             <Info size={16} className="shrink-0" aria-hidden />
@@ -716,7 +718,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           </div>
           <p className="leading-relaxed">
             Τα KPI χρησιμοποιούν τα precomputed aggregates για όλο τον κατάλογο ({formatNumber(totalCatalogCount)} SKUs).
-            Ο πίνακας εμφανίζει {formatNumber(useServerIntelligence ? (serverIntelligence.page?.products.length ?? 0) : sourceProducts.length)} προϊόντα στην τρέχουσα προβολή.
+            Ο πίνακας εμφανίζει {formatNumber(hasServerAggregate ? (serverIntelligence.page?.products.length ?? 0) : sourceProducts.length)} προϊόντα στην τρέχουσα προβολή.
           </p>
         </div>
       )}
@@ -979,7 +981,9 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                     onClick={() => handleSort('stock_level')}
                     className="flex items-center gap-1 hover:text-[#1A1A1A]"
                   >
-                    Stock
+                    <Tooltip content="Διαθέσιμο απόθεμα ανά SKU. Όπου υπάρχει ERP ανάλυση, εμφανίζεται και το stock on hand." size={12}>
+                      Stock
+                    </Tooltip>
                     <SortIcon field="stock_level" current={sortField} direction={sortDirection} />
                   </button>
                 </th>
@@ -1027,7 +1031,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                     index={index}
                     supplierTodMap={supplierTodMap}
                     benchmarkMap={benchmarkCount > 0 ? benchmarkMap : undefined}
-                    useProcurementRowModel={usingProcurement}
+                    useProcurementRowModel={usingProcurement || hasServerAggregate}
                   />
                 ))}
               </AnimatePresence>
@@ -1144,6 +1148,9 @@ interface ProductRowProps {
 
 function ProductRow({ product, index, supplierTodMap, benchmarkMap, useProcurementRowModel }: ProductRowProps) {
   const health = resolveStockHealth(product, supplierTodMap, useProcurementRowModel);
+  const effectiveStock = getEffectiveStockLevel(product);
+  const onHandStock = product.stock_on_hand;
+  const availableStock = product.available_stock;
   const healthColor =
     health === 'dead' ? '#EF4444' :
     health === 'excess' ? '#F59E0B' :
@@ -1184,17 +1191,29 @@ function ProductRow({ product, index, supplierTodMap, benchmarkMap, useProcureme
         </Badge>
       </td>
       <td className="px-3 py-2 hidden sm:table-cell">
-        <div className="flex items-center gap-1.5">
-          <ProgressBar
-            value={product.stock_level ?? 0}
-            max={Math.max(product.stock_capacity ?? 0, 1)}
-            color={stockColor}
-            size="sm"
-            className="w-12"
-          />
-          <span className="text-[10px] text-[#4A4A4A] font-mono">
-            {product.stock_level}
-          </span>
+        <div className="min-w-[92px] space-y-1">
+          <div className="flex items-center gap-2">
+            <ProgressBar
+              value={effectiveStock}
+              max={Math.max(product.stock_capacity ?? effectiveStock, effectiveStock, 1)}
+              color={stockColor}
+              size="sm"
+              className="w-10"
+            />
+            <span className="text-xs font-semibold tabular-nums text-[#1A1A1A]">
+              {formatNumber(effectiveStock)}
+            </span>
+          </div>
+          {typeof onHandStock === 'number' && onHandStock !== effectiveStock ? (
+            <div className="text-[10px] text-[#9CA3AF]">
+              On hand {formatNumber(onHandStock)}
+            </div>
+          ) : null}
+          {typeof availableStock === 'number' && typeof onHandStock === 'number' && availableStock !== onHandStock ? (
+            <div className="text-[10px] text-[#9CA3AF]">
+              Available {formatNumber(availableStock)}
+            </div>
+          ) : null}
         </div>
       </td>
       <td className="px-3 py-2 hidden md:table-cell">

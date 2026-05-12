@@ -165,6 +165,21 @@ function parseInventoryField(v: unknown): number | null {
 
 type SkuInventoryRow = { stock: number | null; sold: number | null };
 
+async function fetchProductIntelligenceInventory(brandId: string): Promise<Record<string, SkuInventoryRow>> {
+  const chunks = await getDocs(collection(db, 'product_intelligence_inventory', brandId, 'chunks'));
+  const merged: Record<string, SkuInventoryRow> = {};
+  chunks.forEach((snap) => {
+    const raw = snap.data().inventoryJson;
+    if (!raw || typeof raw !== 'string') return;
+    try {
+      Object.assign(merged, JSON.parse(raw) as Record<string, SkuInventoryRow>);
+    } catch {
+      // Ignore a corrupt chunk; the remaining chunks still provide a useful lookup.
+    }
+  });
+  return merged;
+}
+
 /**
  * Ταξινόμηση Στοκ/Πωλήσεις κατά τη σχέση (κόκκινο / πράσινο).
  * 2 = στοκ > πωλήσεις, 0 = πωλήσεις > στοκ, 1 = ίσα ή ασύγκριτα (λείπει τιμή).
@@ -309,6 +324,7 @@ export function CompetitorInsights() {
   const [dismissedAdWarnings, setDismissedAdWarnings] = useState(false);
   const [reachCountriesInput, setReachCountriesInput] = useState('');
   const [savingCountries, setSavingCountries] = useState(false);
+  const [competitiveInventoryRefreshStarted, setCompetitiveInventoryRefreshStarted] = useState(false);
 
   // Price benchmarks
   const {
@@ -327,6 +343,14 @@ export function CompetitorInsights() {
   //   2) ecommerce_summary.skuStats για πωλήσεις και stock μόνο όταν το ERP δεν έχει τιμή
   const { products, isLoading: productsLoading } = useProducts({ maxDocs: COMPETITIVE_STOCK_PRODUCT_LIMIT, inStockOnly: true });
   const { skuStats } = useEcommerceSummary();
+  const { data: competitiveInventory = {}, isLoading: competitiveInventoryLoading } = useQuery<Record<string, SkuInventoryRow>>({
+    queryKey: ['productIntelligenceInventory', brandId],
+    queryFn: () => (brandId ? fetchProductIntelligenceInventory(brandId) : Promise.resolve({})),
+    enabled: !!brandId,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
   const skuInventoryMap = useMemo(() => {
     const map = new Map<string, SkuInventoryRow>();
     const mergeInventory = (key: string, next: SkuInventoryRow, preferExistingStock = false) => {
@@ -339,7 +363,16 @@ export function CompetitorInsights() {
       });
     };
 
+    // Πλήρες server-side lookup από Product Intelligence: Megaventory stock + sku_stats sales.
+    for (const [key, row] of Object.entries(competitiveInventory)) {
+      mergeInventory(key, {
+        stock: parseInventoryField(row.stock),
+        sold: parseInventoryField(row.sold),
+      });
+    }
+
     // ERP/Megaventory πρώτα: αυτό είναι το επιχειρησιακό stock.
+    // Fallback για παλαιότερα brands χωρίς server lookup, χωρίς να αντικαθιστά το πλήρες lookup.
     for (const p of products) {
       const inventory = {
         stock: parseInventoryField(p.available_stock ?? p.stock_on_hand ?? p.stock_level),
@@ -350,7 +383,7 @@ export function CompetitorInsights() {
         .map((value) => String(value || '').trim().toLowerCase())
         .filter(Boolean);
       for (const key of keys) {
-        mergeInventory(key, inventory);
+        mergeInventory(key, inventory, true);
       }
     }
     // E-shop stats εμπλουτίζουν τις πωλήσεις, αλλά δεν μηδενίζουν ERP stock.
@@ -363,7 +396,7 @@ export function CompetitorInsights() {
       }, true);
     }
     return map;
-  }, [products, skuStats]);
+  }, [competitiveInventory, products, skuStats]);
 
   /** GMC productId συνήθως είναι `online:el:GR:SKU123` — δοκιμάζουμε όλα τα τμήματα. */
   const benchmarkKeyCandidates = (productId: string, gtin: string): string[] => {
@@ -416,6 +449,38 @@ export function CompetitorInsights() {
     setInsightSortCol(col as InsightCol);
     setInsightSortDir(dir);
   }, []);
+
+  useEffect(() => {
+    if (!brandId || competitiveInventoryLoading || competitiveInventoryRefreshStarted) return;
+    if (Object.keys(competitiveInventory).length > 0) return;
+    if (benchmarks.length === 0 && priceInsights.length === 0) return;
+
+    setCompetitiveInventoryRefreshStarted(true);
+    void (async () => {
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        if (!token) return;
+        const res = await fetch(`${FUNCTIONS_BASE}/refreshCompetitiveInventory`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ brandId }),
+        });
+        if (res.ok) {
+          queryClient.invalidateQueries({ queryKey: ['productIntelligenceInventory', brandId] });
+        }
+      } catch (error) {
+        console.warn('[CompetitiveInventory] refresh failed', error);
+      }
+    })();
+  }, [
+    brandId,
+    competitiveInventory,
+    competitiveInventoryLoading,
+    competitiveInventoryRefreshStarted,
+    benchmarks.length,
+    priceInsights.length,
+    queryClient,
+  ]);
 
   // Competitor ads
   const { data: settings } = useQuery({
@@ -1056,7 +1121,7 @@ export function CompetitorInsights() {
                       Καθαρισμός φίλτρων
                     </button>
                   )}
-                  {!benchmarksLoading && !productsLoading && !benchmarksQueryError && stockedBenchmarkCount > 0 && (
+                  {!benchmarksLoading && !productsLoading && !competitiveInventoryLoading && !benchmarksQueryError && stockedBenchmarkCount > 0 && (
                     <>
                       <button
                         type="button"
@@ -1112,7 +1177,7 @@ export function CompetitorInsights() {
                 </p>
               )}
 
-              {benchmarksLoading || productsLoading ? (
+              {benchmarksLoading || productsLoading || competitiveInventoryLoading ? (
                 <div className="py-8 flex justify-center">
                   <Spinner size="md" label="Φόρτωση benchmarks..." />
                 </div>

@@ -161,9 +161,10 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   const { data: dataAnalysisAggregate = null, isPending: dataAnalysisAggregatePending } = useQuery({
     queryKey: ['dataAnalysisRfmAggregate', brandId, syncVersion],
     queryFn: () => (brandId ? fetchDataAnalysisRfmAggregate(brandId, syncVersion) : Promise.resolve(null)),
-    enabled: variant === 'data_analysis' && !!brandId && !!syncVersion,
-    staleTime: 5 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
+    enabled: variant === 'data_analysis' && !!brandId,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
+    placeholderData: (previousData) => previousData,
     refetchOnWindowFocus: false,
     retry: 1,
   });

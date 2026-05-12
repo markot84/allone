@@ -37,7 +37,7 @@ function isReadyAggregate(value: unknown): value is DataAnalysisRfmAggregate {
 
 export async function fetchDataAnalysisRfmAggregate(
   brandId: string,
-  syncVersion: string | null
+  _syncVersion: string | null
 ): Promise<DataAnalysisRfmAggregate | null> {
   const snap = await getDoc(doc(db, 'data_analysis_rfm', brandId));
   if (!snap.exists()) return null;
@@ -45,7 +45,9 @@ export async function fetchDataAnalysisRfmAggregate(
   if (!isReadyAggregate(data)) return data.status === 'running' || data.status === 'failed'
     ? (data as DataAnalysisRfmAggregate)
     : null;
-  if (syncVersion && data.syncVersion !== syncVersion) return null;
+  // Keep the last good server snapshot visible until the next RFM refresh replaces it.
+  // `syncVersion` can change after unrelated connector/product syncs; using it as a hard
+  // gate forced the UI back to client-side order reads for large brands.
   return data;
 }
 

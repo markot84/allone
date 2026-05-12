@@ -3,6 +3,32 @@ import { Send } from 'lucide-react';
 import { Card, Button, Spinner, useToast } from '../common';
 import { buildFunctionUrl } from '../../config/firebase';
 
+const improvementOptions = [
+  'ROAS & budget allocation',
+  'Stock clearance / slow movers',
+  'Profitability & margin',
+  'Product launches',
+  'Connectors & data unification',
+];
+
+function trackMarketingFormEvent(action: string, params?: Record<string, string>) {
+  if (typeof window === 'undefined') return;
+  const analyticsWindow = window as Window & {
+    dataLayer?: Array<Record<string, unknown>>;
+    gtag?: (command: 'event', eventName: string, eventParams?: Record<string, unknown>) => void;
+  };
+
+  analyticsWindow.dataLayer?.push({
+    event: 'performance_plus_marketing',
+    action,
+    ...(params || {}),
+  });
+  analyticsWindow.gtag?.('event', action, {
+    event_category: 'marketing_page',
+    ...(params || {}),
+  });
+}
+
 /**
  * Dev: Vite proxy. Prod: απευθείας HTTP function (όχι μέσω Hosting — όριο ~60s στο proxy).
  */
@@ -19,6 +45,7 @@ export function InterestForm() {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [company, setCompany] = useState('');
+  const [improvementFocus, setImprovementFocus] = useState('');
   const [message, setMessage] = useState('');
   const [consent, setConsent] = useState(false);
   const [hp, setHp] = useState('');
@@ -31,20 +58,34 @@ export function InterestForm() {
       return;
     }
     setSending(true);
+    trackMarketingFormEvent('interest_form_submit', {
+      improvement_focus: improvementFocus || 'not_selected',
+    });
     try {
-      const res = await fetch(getSubmitInterestLeadUrl(), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fullName,
-          email,
-          phone,
-          company,
-          message,
-          consent: true,
-          hp,
-        }),
-      });
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 25_000);
+      const messageWithIntent = [
+        improvementFocus ? `Τι θέλει να βελτιώσει: ${improvementFocus}` : '',
+        message,
+      ].filter(Boolean).join('\n\n');
+      const res = await fetch(
+        getSubmitInterestLeadUrl(),
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({
+            fullName,
+            email,
+            phone,
+            company,
+            message: messageWithIntent,
+            consent: true,
+            hp,
+          }),
+        }
+      );
+      window.clearTimeout(timeout);
       const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (!res.ok) {
         throw new Error(data.error || `HTTP ${res.status}`);
@@ -56,11 +97,14 @@ export function InterestForm() {
       setEmail('');
       setPhone('');
       setCompany('');
+      setImprovementFocus('');
       setMessage('');
       setConsent(false);
       setHp('');
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = err instanceof DOMException && err.name === 'AbortError'
+        ? 'Η αποστολή καθυστέρησε. Δοκιμάστε ξανά ή επικοινωνήστε με support@notthesame.gr.'
+        : err instanceof Error ? err.message : String(err);
       toast.error(msg || 'Αποτυχία αποστολής. Δοκιμάστε ξανά.');
     } finally {
       setSending(false);
@@ -71,15 +115,28 @@ export function InterestForm() {
     'w-full rounded-xl border border-[#1f2328]/15 bg-[var(--nts-bg-pure)] px-4 py-2.5 text-sm text-[var(--nts-charcoal)] placeholder:text-[var(--nts-medium-gray)] focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/30';
 
   return (
-    <Card>
-      <div className="p-6 md:p-8">
-        <p className="text-[11px] font-semibold tracking-[0.08em] text-[var(--nts-accent)]">Εκδήλωση ενδιαφέροντος</p>
-        <h3 className="mt-2 text-xl font-semibold text-[var(--nts-charcoal)]">Ενδιαφέρεστε για το Performance+;</h3>
-        <p className="mt-1 text-sm text-[var(--nts-medium-gray)]">
-          Συμπληρώστε τη φόρμα και η ομάδα μας θα επικοινωνήσει μαζί σας για μια στρατηγική παρουσίαση της πλατφόρμας.
-        </p>
+    <Card padding="none" className="overflow-hidden border-[#1f2328]/10 shadow-[0_24px_60px_rgba(16,24,40,0.12)]">
+      <div className="grid lg:grid-cols-[0.8fr_1.2fr]">
+        <div className="relative overflow-hidden bg-[#111827] p-6 text-white md:p-8">
+          <div className="pointer-events-none absolute right-[-100px] top-[-100px] h-64 w-64 rounded-full bg-[var(--nts-accent)]/25 blur-3xl" />
+          <div className="relative">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--nts-accent)]">Demo request</p>
+            <h3 className="mt-3 text-2xl font-semibold tracking-[-0.02em] text-white">Δείτε πώς μπορεί να δουλέψει στο δικό σας e-shop</h3>
+            <p className="mt-4 text-sm leading-7 text-white/70">
+              Συμπληρώστε τη φόρμα και η ομάδα μας θα επικοινωνήσει μαζί σας για μια στρατηγική παρουσίαση της πλατφόρμας.
+            </p>
+            <div className="mt-6 grid gap-3 text-sm text-white/78">
+              {['Εμπορική χαρτογράφηση αναγκών', 'Σύνδεση με τα υπάρχοντα κανάλια σας', 'Προτεινόμενα πρώτα use cases'].map((item) => (
+                <div key={item} className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-[var(--nts-accent)]" />
+                  <span>{item}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
 
-        <form onSubmit={handleSubmit} className="relative mt-6 space-y-4">
+        <form onSubmit={handleSubmit} className="relative space-y-4 p-6 md:p-8">
           <div className="absolute -left-[9999px] h-0 w-0 overflow-hidden" aria-hidden>
             <label htmlFor="interest-hp">Website</label>
             <input
@@ -91,6 +148,38 @@ export function InterestForm() {
               value={hp}
               onChange={(e) => setHp(e.target.value)}
             />
+          </div>
+
+          <div>
+            <p className="mb-2 block text-xs font-medium text-[var(--nts-charcoal)]">
+              Τι θέλετε να βελτιώσετε;
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {improvementOptions.map((option) => {
+                const selected = improvementFocus === option;
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => {
+                      const next = selected ? '' : option;
+                      setImprovementFocus(next);
+                      trackMarketingFormEvent('interest_focus_select', {
+                        improvement_focus: next || 'cleared',
+                      });
+                    }}
+                    className={[
+                      'rounded-full border px-3 py-2 text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nts-accent)]',
+                      selected
+                        ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)] text-white shadow-[0_8px_18px_rgba(249,115,22,0.22)]'
+                        : 'border-[#1f2328]/10 bg-[var(--nts-bg-subtle)] text-[var(--nts-charcoal)] hover:border-[var(--nts-accent)]/40',
+                    ].join(' ')}
+                  >
+                    {option}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">

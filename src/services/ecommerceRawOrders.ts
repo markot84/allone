@@ -71,7 +71,7 @@ export const ECOMMERCE_ORDER_COLLECTIONS: Record<string, string> = {
 };
 
 const DATA_ANALYSIS_ORDER_LIMIT = 5000;
-const ERP_DATA_ANALYSIS_ORDER_LIMIT = 50000;
+const ERP_DATA_ANALYSIS_ORDER_LIMIT = 10000;
 
 export function isEcommerceOrderCancelled(status: string | null | undefined): boolean {
   return isExcludedEcommerceStatus(status);

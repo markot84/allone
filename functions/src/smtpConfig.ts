@@ -26,11 +26,19 @@ const smtpPortParam = defineString('SMTP_PORT', { default: '465' });
  * Απαιτεί secrets: SMTP_EMAIL, SMTP_PASSWORD (πλήρες email + κωδικός mailbox).
  */
 export type SmtpCredentialInput = { email: string; password: string };
+type SmtpTimeoutOptions = {
+  connectionTimeout?: number;
+  greetingTimeout?: number;
+  socketTimeout?: number;
+};
 
 /**
  * @param credentials — Προαιρετικά από `defineSecret().value()` (Gen2)· αλλιώς `process.env` (τοπικά / CI).
  */
-export function createTransporter(credentials?: Partial<SmtpCredentialInput>): nodemailer.Transporter | null {
+export function createTransporter(
+  credentials?: Partial<SmtpCredentialInput>,
+  timeouts: SmtpTimeoutOptions = {}
+): nodemailer.Transporter | null {
   // Trim: secrets που κόβουν με newline/space στο τέλος → 535 παρά «σωστό» password στο webmail
   const user = (credentials?.email ?? process.env.SMTP_EMAIL ?? '').trim();
   const pass = (credentials?.password ?? process.env.SMTP_PASSWORD ?? '').trim();
@@ -54,10 +62,10 @@ export function createTransporter(credentials?: Partial<SmtpCredentialInput>): n
     secure,
     ...(secure ? {} : { requireTLS: true }),
     auth: { user, pass },
-    /** Αργά δίκτυα / SMTP που κάνουν greylisting — default nodemailer 60s μερικές φορές δεν φτάνει. */
-    connectionTimeout: 120_000,
-    greetingTimeout: 45_000,
-    socketTimeout: 120_000,
+    /** Αργά δίκτυα / SMTP που κάνουν greylisting — defaults για scheduled emails, override για public forms. */
+    connectionTimeout: timeouts.connectionTimeout ?? 120_000,
+    greetingTimeout: timeouts.greetingTimeout ?? 45_000,
+    socketTimeout: timeouts.socketTimeout ?? 120_000,
     // SNI ώστε το cert να ταιριάζει με το domain (Plesk warning για certificate)
     tls: { minVersion: 'TLSv1.2', servername: host },
   });
