@@ -602,7 +602,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           ) : sourceProducts.length > 0 ? (
             <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-[#22C55E] sm:text-sm">
               <span>
-                Showing {isCatalogTruncated ? `${sourceProducts.length} of ${totalCatalogCount}` : sourceProducts.length} {usingProcurement ? 'procurement' : 'imported'} product(s)
+                Showing {isCatalogTruncated ? `${sourceProducts.length} of ${totalCatalogCount}` : sourceProducts.length} {usingProcurement ? 'procurement' : productSourceKind === 'erp' ? 'ERP' : 'imported'} product(s)
               </span>
               <DataSourcePill
                 label="Source"

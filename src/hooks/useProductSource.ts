@@ -74,6 +74,22 @@ const PROCUREMENT_FIRST_AVAILABLE_KEYWORDS = [
   'DATE_FIRST_RECEIPT',
 ] as const;
 
+const ERP_PRODUCT_SOURCE_MARKERS = [
+  'erp',
+  'megaventory',
+  'softone',
+  'entersoft',
+  'epsilon',
+] as const;
+
+function hasErpProductSource(product: Product): boolean {
+  const raw = (product as Product & { source?: unknown; feedSourceType?: unknown }).source
+    ?? (product as Product & { source?: unknown; feedSourceType?: unknown }).feedSourceType
+    ?? '';
+  const source = String(raw).trim().toLowerCase();
+  return ERP_PRODUCT_SOURCE_MARKERS.some((marker) => source.includes(marker));
+}
+
 function findColByOrderedKeywords(rows: Record<string, unknown>[], keywords: readonly string[]): string | null {
   if (!rows.length) return null;
   const headers = Object.keys(rows[0]);
@@ -185,8 +201,12 @@ export function useProductSource(options: UseProductSourceOptions = {}) {
   }, [isEnterprise, procData?.inventory, procData?.pricing_policy]);
 
   const usingProcurement = procProducts.length > 0;
+  const importedProductsAreErp = useMemo(
+    () => productHook.products.some(hasErpProductSource),
+    [productHook.products]
+  );
   const sourceKind: 'erp' | 'products_import' | 'pending' =
-    usingProcurement || isEnterprise
+    usingProcurement || importedProductsAreErp || isEnterprise
       ? 'erp'
       : productHook.hasImported
         ? 'products_import'
