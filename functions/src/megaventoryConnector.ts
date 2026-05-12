@@ -51,6 +51,7 @@ const MV_INVOICE_BACKFILL_PAGE_SIZE = 100;
 /** Manual connectorSync έχει 20' timeout· κρατάμε buffer για Firestore writes / response. */
 const MV_INVOICE_BACKFILL_RUNTIME_MS = 18 * 60 * 1000;
 const MV_INVOICE_BACKFILL_MAX_PAGES_PER_SYNC = 500;
+const MV_INCREMENTAL_DOCUMENT_FALLBACK_MAX_PAGES = 25;
 
 type MvFilter = {
   FieldName: string;
@@ -432,6 +433,48 @@ async function fetchAllMvPages(
   }
 
   return { rows, error: null, nextCursor, exhausted };
+}
+
+/**
+ * Megaventory occasionally returns an empty result for `DocumentDate >= ...` even while
+ * unfiltered `DocumentGet` returns current documents. For incremental syncs, recover by
+ * reading recent pages ordered by id and applying the date window locally.
+ */
+async function fetchRecentMvDocumentsByLocalDate(
+  apiKey: string,
+  sinceYmd: string
+): Promise<{ rows: any[]; error: string | null }> {
+  const rows: any[] = [];
+  let cursor: number | null = null;
+
+  for (let page = 0; page < MV_INCREMENTAL_DOCUMENT_FALLBACK_MAX_PAGES; page++) {
+    const filters = buildMvFiltersWithCursor([], 'DocumentId', cursor);
+    const body: Record<string, unknown> = { ReturnTopNRecords: MV_PAGE_SIZE };
+    if (filters.length > 0) body.Filters = filters;
+
+    const call = await mvCall('DocumentGet', apiKey, body);
+    const err = asMvError(call, 'DocumentGet (recent fallback)');
+    if (err) return { rows, error: err };
+
+    const batch = (call.body?.mvDocuments as any[]) || [];
+    if (!batch.length) break;
+
+    let recentInBatch = 0;
+    for (const row of batch) {
+      const day = isoDate(mvField(row as Record<string, unknown>, 'DocumentDate'));
+      if (day && day >= sinceYmd) {
+        rows.push(row);
+        recentInBatch++;
+      }
+    }
+
+    const minId = minNumericId(batch, 'DocumentId', 'DocumentID');
+    if (minId <= 0 || batch.length < MV_PAGE_SIZE) break;
+    cursor = minId;
+    if (recentInBatch === 0) break;
+  }
+
+  return { rows, error: null };
 }
 
 /** Το API επιστρέφει mvProductStockList με nested mvStock· ενοποιούμε σε flat rows όπως περιμένει το writeBatch. */
@@ -869,7 +912,7 @@ export async function fetchMegaventoryData(
     const documentFilters = shouldStageInvoiceBackfill
       ? []
       : [{ FieldName: 'DocumentDate', SearchOperator: 'GreaterEqualTo', SearchValue: sinceFilterDate }];
-    const {
+    let {
       rows: invRows,
       error: invFetchErr,
       nextCursor: invoiceBackfillNextCursor,
@@ -889,6 +932,21 @@ export async function fetchMegaventoryData(
         maxRuntimeMs: shouldStageInvoiceBackfill ? MV_INVOICE_BACKFILL_RUNTIME_MS : undefined,
       }
     );
+    let documentFallbackUsed = false;
+    if (!shouldStageInvoiceBackfill && !invFetchErr && invRows.length === 0) {
+      const fallback = await fetchRecentMvDocumentsByLocalDate(apiKey, sinceStr);
+      if (fallback.error) {
+        invFetchErr = fallback.error;
+      } else if (fallback.rows.length > 0) {
+        invRows = fallback.rows;
+        invoiceBackfillNextCursor = null;
+        invoiceBackfillExhausted = true;
+        documentFallbackUsed = true;
+        logger.info(
+          `[Megaventory] DocumentGet date filter returned 0 rows for ${brandId}; fallback recovered ${fallback.rows.length} recent documents`
+        );
+      }
+    }
     if (invFetchErr) {
       docsOk = false;
       errors.push(invFetchErr);
@@ -904,6 +962,7 @@ export async function fetchMegaventoryData(
         documentTypes: documentTypesResult.types.slice(0, 50),
         rawDocumentRows: rawDocs.length,
         matchedInvoiceRows: docs.length,
+        documentFallbackUsed,
         documentTypeBreakdown: documentTypeBreakdown(rawDocs, documentTypesById),
       };
       if (rawDocs.length === 0 || docs.length === 0) {

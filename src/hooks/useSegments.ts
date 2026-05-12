@@ -409,7 +409,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     (!syncVersion || analysisSnapshot.syncVersion === syncVersion)
       ? analysisSnapshot
       : null;
-  const shouldUseSnapshot = !!usableSnapshot && (isLoading || ordersPending || catalogPending || segments.length === 0);
+  const shouldUseSnapshot = !!usableSnapshot && (isLoading || ordersPending || segments.length === 0);
   const displayedSegments = shouldUseSnapshot ? usableSnapshot.segments : segments;
   const displayedTotalCustomers = shouldUseSnapshot ? usableSnapshot.totalCustomers : totalCustomers;
   const displayedDataCoverage = shouldUseSnapshot ? usableSnapshot.dataCoverage : dataCoverage;

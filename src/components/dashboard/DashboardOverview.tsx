@@ -500,10 +500,13 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
 
     if (hasErpRevenueForPeriod) {
       if (dayCount <= REVENUE_CHART_MAX_DAILY_POINTS) {
-        return eachDateInclusive(fromDate, toDate).map((d) => ({
-          month: formatTrendDayLabel(d),
-          total: erpRevenueByDayRecord[d] || 0,
-        }));
+        return Object.entries(erpRevenueByDayRecord)
+          .filter(([d, revenue]) => d >= fromDate && d <= toDate && Number.isFinite(revenue) && revenue > 0)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([d, revenue]) => ({
+            month: formatTrendDayLabel(d),
+            total: revenue,
+          }));
       }
       const fromYm = fromDate.slice(0, 7);
       const toYm = toDate.slice(0, 7);
