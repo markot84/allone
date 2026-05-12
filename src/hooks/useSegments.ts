@@ -171,7 +171,6 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     (!syncVersion || analysisSnapshot.syncVersion === syncVersion)
       ? analysisSnapshot
       : null;
-  const shouldServeCachedAnalysis = !!usableSnapshot;
 
   const ordersSourceFingerprint = variant === 'data_analysis' ? (syncVersion ?? 'sync-pending') : platformsKey;
 
@@ -183,19 +182,18 @@ export function useSegments(options: UseSegmentsOptions = {}) {
             ? fetchDataAnalysisOrders(brandId, ecomm.connectedPlatforms, { sinceDate: ordersSinceDate, cacheFirst: true })
             : fetchAllEcommerceOrders(brandId, ecomm.connectedPlatforms, { sinceDate: ordersSinceDate }))
         : Promise.resolve([]),
-    enabled: ordersQueryEnabled && !shouldServeCachedAnalysis && (variant !== 'data_analysis' || !!syncVersion),
+    enabled: ordersQueryEnabled && (variant !== 'data_analysis' || !!syncVersion),
     staleTime: 12 * 60 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
     refetchOnWindowFocus: false,
     retry: 1,
   });
   const rawOrdersCatalogKey = useMemo(() => {
-    if (shouldServeCachedAnalysis) return 'cached';
     if (rawOrders.length === 0) return 'empty';
     const first = rawOrders[0]?.orderId || rawOrders[0]?.createdAt || '';
     const last = rawOrders[rawOrders.length - 1]?.orderId || rawOrders[rawOrders.length - 1]?.createdAt || '';
     return `${rawOrders.length}:${first}:${last}`;
-  }, [rawOrders, shouldServeCachedAnalysis]);
+  }, [rawOrders]);
 
   /** Μετά τις παραγγελίες ώστε να μην «δένει» το UI σε διπλό βαρύ parallel fetch· τα segments εμφανίζονται χωρίς catalog enrichment. */
   const { data: catalogAlignment, isPending: catalogPending } = useQuery({
@@ -206,7 +204,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
             ? fetchCatalogAlignmentDataForDataAnalysis(brandId, ecomm.connectedPlatforms, rawOrders)
             : fetchCatalogAlignmentData(brandId, ecomm.connectedPlatforms))
         : Promise.resolve(null),
-    enabled: ordersQueryEnabled && !ordersPending && !shouldServeCachedAnalysis,
+    enabled: ordersQueryEnabled && !ordersPending && rawOrders.length > 0,
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -218,7 +216,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     return { indexes: normalized.indexes, erpBySku: normalized.erpBySku };
   }, [catalogAlignment]);
 
-  const analysisOrders = shouldServeCachedAnalysis ? [] : rawOrders;
+  const analysisOrders = rawOrders;
   const orderScopeStats = useMemo(() => computeRfmOrderScopeStats(analysisOrders), [analysisOrders]);
   const orderOrigin = useMemo(() => {
     if (analysisOrders.some((order) => order.platform === 'megaventory_invoices' || order.platform === 'softone_sales_documents')) {
@@ -340,12 +338,11 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     ecomm.connectedPlatforms.length === 0 &&
     !ecomm.hasData;
   const isLoading =
-    !shouldServeCachedAnalysis &&
     (blocksOnImportedSegmentsOnly ||
       (ordersQueryEnabled && ordersPending && !orderRfm.canCompute));
 
-  const ordersLoading = !shouldServeCachedAnalysis && ordersQueryEnabled && ordersPending;
-  const isCatalogEnriching = !shouldServeCachedAnalysis && ordersQueryEnabled && catalogPending;
+  const ordersLoading = ordersQueryEnabled && ordersPending;
+  const isCatalogEnriching = ordersQueryEnabled && catalogPending;
 
   const hasImported =
     resolvedSource === 'ecommerce'
@@ -413,7 +410,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     writeAnalysisSnapshot(liveSnapshotPayload);
   }, [liveSnapshotPayload, isLoading, ordersPending]);
 
-  const shouldUseSnapshot = shouldServeCachedAnalysis || (!!usableSnapshot && (isLoading || ordersPending || segments.length === 0));
+  const shouldUseSnapshot = !!usableSnapshot && (isLoading || ordersPending || catalogPending || segments.length === 0);
   const displayedSegments = shouldUseSnapshot ? usableSnapshot.segments : segments;
   const displayedTotalCustomers = shouldUseSnapshot ? usableSnapshot.totalCustomers : totalCustomers;
   const displayedDataCoverage = shouldUseSnapshot ? usableSnapshot.dataCoverage : dataCoverage;
