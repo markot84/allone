@@ -128,7 +128,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     gcTime: 15 * 60 * 1000,
   });
 
-  const { data: rawSegmentCustomerSummaries, isPending: segmentCustomersPending } = useQuery({
+  const { data: rawSegmentCustomerSummaries } = useQuery({
     queryKey: ['segmentCustomerSummaries', brandId],
     queryFn: () => (brandId ? SegmentCustomersService.getSummariesBySegment(brandId) : Promise.resolve(new Map())),
     enabled: !!brandId && sourcePref === 'external',
@@ -188,13 +188,19 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     return { indexes: normalized.indexes, erpBySku: normalized.erpBySku };
   }, [catalogAlignment]);
 
-  const orderRfm = useMemo(
-    () => computeRfmSegmentsFromEcommerceOrders(rawOrders, catalogContext),
+  const identifiedOrderRfm = useMemo(
+    () => computeRfmSegmentsFromEcommerceOrders(rawOrders, catalogContext, { includeAnonymousGuests: false }),
     [rawOrders, catalogContext]
   );
+  const allOrderRfm = useMemo(
+    () => computeRfmSegmentsFromEcommerceOrders(rawOrders, catalogContext, { includeAnonymousGuests: true }),
+    [rawOrders, catalogContext]
+  );
+  const orderRfm = sourcePref === 'external' ? allOrderRfm : identifiedOrderRfm;
   const orderSegmentMigration = useMemo(() => computeSegmentMigrationFromEcommerceOrders(rawOrders, 30), [rawOrders]);
 
-  const canComputeFromOrders = orderRfm.canCompute;
+  const canComputeFromOrders = identifiedOrderRfm.canCompute || allOrderRfm.canCompute;
+  const canComputeIdentifiedOrders = identifiedOrderRfm.canCompute;
   const rebuiltCustomerSegments = useMemo(
     () => rebuildSegmentsFromCustomerSummaries(segmentCustomerSummaries),
     [segmentCustomerSummaries]
@@ -211,9 +217,9 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   }, [brandId, firestoreSegments, rebuiltCustomerSegments]);
 
   const resolvedSource: SegmentsDataSource = useMemo(() => {
-    if (sourcePref === 'external') return importSegmentsAvailable ? 'import' : canComputeFromOrders ? 'ecommerce' : 'none';
-    return canComputeFromOrders ? 'ecommerce' : importSegmentsAvailable ? 'import' : 'none';
-  }, [sourcePref, canComputeFromOrders, importSegmentsAvailable]);
+    if (sourcePref === 'external') return allOrderRfm.canCompute ? 'ecommerce' : importSegmentsAvailable ? 'import' : 'none';
+    return identifiedOrderRfm.canCompute ? 'ecommerce' : importSegmentsAvailable ? 'import' : allOrderRfm.canCompute ? 'ecommerce' : 'none';
+  }, [sourcePref, identifiedOrderRfm.canCompute, allOrderRfm.canCompute, importSegmentsAvailable]);
 
   const segments = useMemo(() => {
     let base: RFMSegment[];
@@ -240,23 +246,28 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   );
 
   const dataCoverage = useMemo<SegmentDataCoverage>(() => {
-    const eShopCustomers = orderRfm.totalCustomers;
-    const usesExternalPolicy = sourcePref === 'external' && externalTotalCustomers > 0;
+    const eShopCustomers = identifiedOrderRfm.totalCustomers;
+    const allOrderCustomers = allOrderRfm.totalCustomers;
+    const usesExternalPolicy = sourcePref === 'external';
     const usesConnectorRfm = usesExternalPolicy && externalSegments.some((s) => String((s as RFMSegment & { source?: string }).source || '').endsWith('_rfm'));
-    const fullBase = usesExternalPolicy
-      ? usesConnectorRfm
-        ? eShopCustomers + externalTotalCustomers
-        : Math.max(externalTotalCustomers, eShopCustomers)
-      : eShopCustomers;
-    const otherCustomers = usesExternalPolicy && usesConnectorRfm
-      ? externalTotalCustomers
-      : Math.max(0, fullBase - eShopCustomers);
+    const fullBase = resolvedSource === 'ecommerce'
+      ? (usesExternalPolicy ? allOrderCustomers : eShopCustomers)
+      : usesExternalPolicy
+        ? usesConnectorRfm
+          ? eShopCustomers + externalTotalCustomers
+          : Math.max(externalTotalCustomers, eShopCustomers)
+        : eShopCustomers;
+    const otherCustomers = resolvedSource === 'ecommerce'
+      ? Math.max(0, allOrderCustomers - eShopCustomers)
+      : usesExternalPolicy && usesConnectorRfm
+        ? externalTotalCustomers
+        : Math.max(0, fullBase - eShopCustomers);
     const eShopPenetration = fullBase > 0 ? Math.round((eShopCustomers / fullBase) * 1000) / 10 : 0;
     const policyLabel = usesExternalPolicy ? 'e-shop & others' : 'e-shop orders';
     const marketingPolicy =
       usesExternalPolicy
-        ? 'Χρησιμοποιεί ευρύτερο πελατολόγιο από e-shop και ERP/other πηγές. Οι προτάσεις πρέπει να λαμβάνουν υπόψη ότι μέρος του κοινού επηρεάζεται ψηφιακά αλλά μπορεί να αγοράζει offline.'
-        : 'Χρησιμοποιεί μόνο αναγνωρίσιμους e-shop αγοραστές. Οι προτάσεις μπορούν να δίνουν μεγαλύτερη έμφαση σε performance, retargeting, CRM και online conversion.';
+        ? 'Χρησιμοποιεί όλες τις έγκυρες παραγγελίες, μαζί με guest checkouts.'
+        : 'Χρησιμοποιεί αγοραστές με σταθερό id ή email.';
     return {
       sourcePreference: sourcePref,
       activeSource: resolvedSource,
@@ -269,7 +280,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
       policyLabel,
       marketingPolicy,
     };
-  }, [sourcePref, resolvedSource, orderRfm.totalCustomers, externalTotalCustomers, externalSegments]);
+  }, [sourcePref, resolvedSource, identifiedOrderRfm.totalCustomers, allOrderRfm.totalCustomers, externalTotalCustomers, externalSegments]);
 
   /**
    * Μην μπλοκάρεις RFM όσο περιμένεις «άδεια» segments αν το brand έχει e-shop:
@@ -283,7 +294,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     ecomm.connectedPlatforms.length === 0 &&
     !ecomm.hasData;
   const isLoading =
-    blocksOnImportedSegmentsOnly || (sourcePref === 'external' && segmentCustomersPending);
+    blocksOnImportedSegmentsOnly;
 
   const ordersLoading = ordersQueryEnabled && ordersPending;
   const isCatalogEnriching = ordersQueryEnabled && catalogPending;
@@ -306,6 +317,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     setDataSourcePreference,
     sourcePreference: sourcePref,
     canComputeFromOrders,
+    canComputeIdentifiedOrders,
     dataCoverage,
     orderRfmMeta:
       resolvedSource === 'ecommerce'

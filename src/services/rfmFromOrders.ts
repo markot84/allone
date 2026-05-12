@@ -1,5 +1,5 @@
 import type { BehavioralProfile, CategoryAffinity, PredictiveMetrics, RFMSegment } from '../types';
-import { getEcommerceOrderNetRevenue, isEcommerceOrderCancelled, type EcommerceRawOrder } from './ecommerceRawOrders';
+import { getEcommerceOrderNetRevenue, isEcommerceOrderRevenueIncluded, type EcommerceRawOrder } from './ecommerceRawOrders';
 import { ecommerceLineAffinityKey } from './ecommerceAffinityKey';
 import type { CatalogIndexes, ErpSkuDims } from './catalogAlignment';
 import { resolveCatalogLineForOrderLine } from './catalogAlignment';
@@ -428,7 +428,7 @@ function validOrderRevenue(o: EcommerceRawOrder): { revenue: number; valid: bool
   const { revenue, isAllDemo } = getEcommerceOrderNetRevenue(o);
   return {
     revenue,
-    valid: !isAllDemo && !isEcommerceOrderCancelled(o.status) && revenue > 0,
+    valid: !isAllDemo && isEcommerceOrderRevenueIncluded(o) && revenue > 0,
   };
 }
 
@@ -566,12 +566,13 @@ export function computeSegmentMigrationFromEcommerceOrders(
 
 /**
  * RFM + συγκέντρωση segments από raw e-commerce παραγγελίες.
- * Αγνοεί guest/email-only orders, cancelled & 100% demo, όπως το υπόλοιπο e-commerce.
+ * Αγνοεί cancelled/excluded revenue & 100% demo, όπως το υπόλοιπο e-commerce.
  * Χρησιμοποιεί rolling 12μηνο ώστε historical backfills να μη φουσκώνουν κάθε φορά το ενεργό πελατολόγιο.
  */
 export function computeRfmSegmentsFromEcommerceOrders(
   orders: EcommerceRawOrder[],
-  catalog: RfmCatalogContext | null | undefined = undefined
+  catalog: RfmCatalogContext | null | undefined = undefined,
+  options: { includeAnonymousGuests?: boolean } = {}
 ): RfmFromOrdersResult {
   const byKey = new Map<string, CustomerAgg>();
   let guestOrdersSkipped = 0;
@@ -592,22 +593,22 @@ export function computeRfmSegmentsFromEcommerceOrders(
     if (!Number.isFinite(createdAtMs) || createdAtMs < cutoffMs || createdAtMs > asOf.getTime()) {
       continue;
     }
-    if (!o.customerKey?.trim()) {
-      if (!isEcommerceOrderCancelled(o.status) && getEcommerceOrderNetRevenue(o).revenue > 0) {
-        guestOrdersSkipped += 1;
-      }
-      continue;
-    }
     const { revenue, isAllDemo } = getEcommerceOrderNetRevenue(o);
     if (isAllDemo) continue;
-    if (isEcommerceOrderCancelled(o.status)) continue;
+    if (!isEcommerceOrderRevenueIncluded(o)) continue;
     if (revenue <= 0) continue;
+
+    const identifiedKey = o.customerKey?.trim();
+    if (!identifiedKey && !options.includeAnonymousGuests) {
+      guestOrdersSkipped += 1;
+      continue;
+    }
 
     const day = (o.createdAt || '').slice(0, 10);
     if (!day) continue;
 
     ordersAttributed += 1;
-    const k = o.customerKey.trim();
+    const k = identifiedKey || `guest:${o.platform}:${o.orderId || o.orderName || `${day}:${ordersAttributed}`}`;
     const cur = byKey.get(k);
     if (!cur) {
       byKey.set(k, {

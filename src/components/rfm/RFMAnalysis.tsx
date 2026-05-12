@@ -122,10 +122,10 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
     setDataSourcePreference,
     sourcePreference: rfmSourcePref,
     canComputeFromOrders,
+    canComputeIdentifiedOrders,
     dataCoverage,
     orderRfmMeta,
     segmentMigration,
-    importSegmentsAvailable,
     isCatalogEnriching,
   } = useSegments({ variant: 'data_analysis' });
   const ecomm = useEcommerceSummary();
@@ -262,15 +262,9 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
             <div className="text-center py-12">
               <p className="text-[#4A4A4A] mb-4">
                 {hasEcomm && !canComputeFromOrders
-                  ? 'Συνδέσατε e-shop, αλλά δεν βρέθηκαν αρκετές παραγγελίες με αναγνωρισμένο πελάτη (συνήθως guest checkout).'
+                  ? 'Συνδέσατε e-shop, αλλά δεν βρέθηκαν αρκετές έγκυρες παραγγελίες για RFM.'
                   : 'Δεν υπάρχουν ακόμα δεδομένα προς ανάλυση.'}
               </p>
-              {hasEcomm && !canComputeFromOrders && (
-                <p className="text-sm text-[#4A4A4A] mb-4 text-left">
-                  Μετά το deploy, κάντε ξανά <strong>sync</strong> το connector ώστε να αποθηκεύεται το εσωτερικό <code className="text-xs bg-[#F3F4F6] px-1 rounded">customerId</code> ανά
-                  παραγγελία (όχι email). Guest-only καλάθια εξακολουθούν να μην μετράνε σε RFM.
-                </p>
-              )}
               <p className="text-sm text-[#4A4A4A]">
                 Εναλλακτικά, ανεβάστε aggregate segments από την{' '}
                 <button
@@ -295,6 +289,11 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
     rfmSourcePref === 'orders' &&
     dataCoverage.otherCustomers <= 0 &&
     dataCoverage.eShopPenetration >= 99;
+  const showDataSourceSelector =
+    canComputeFromOrders || ordersLoading || ecomm.hasData || ecomm.connectedPlatforms.length > 0;
+  const ordersOptionUnavailable = !canComputeIdentifiedOrders && !ordersLoading;
+  const effectiveSourceChoice =
+    rfmSourcePref === 'orders' && !ordersOptionUnavailable ? 'orders' : 'external';
 
   return (
     <div className="space-y-3">
@@ -362,21 +361,38 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
 
       {/* Μία συμπαγής γραμμή: πηγή + μεγέθη — χωρίς επανάληψη με κάλυψη όταν είναι καθαρό e-shop */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-[#E8EAED] bg-[#FAFBFC] px-3 py-2 text-[12px] text-[#374151]">
-        {importSegmentsAvailable && canComputeFromOrders ? (
-          <label className="flex items-center gap-2 shrink-0">
+        {showDataSourceSelector ? (
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
             <span className="text-[#6B7280] whitespace-nowrap">Πηγή</span>
-            <select
-              className="rounded-md border border-[#E5E7EB] bg-white px-2 py-1 text-[12px] text-[#1A1A1A] max-w-[11rem]"
-              value={rfmSourcePref}
-              onChange={(e) => setDataSourcePreference(e.target.value as 'orders' | 'external')}
-              aria-label="Πηγή RFM segments"
-            >
-              <option value="orders">e-shop orders</option>
-              <option value="external">e-shop &amp; others</option>
-            </select>
-          </label>
+            <div className="inline-flex rounded-lg border border-[#E5E7EB] bg-white p-0.5 shadow-sm">
+              <button
+                type="button"
+                className={`rounded-md px-2.5 py-1 text-[12px] font-semibold transition-colors ${
+                  effectiveSourceChoice === 'orders'
+                    ? 'bg-[var(--nts-accent)] text-white'
+                    : 'text-[#6B7280] hover:bg-[#F9FAFB] disabled:cursor-not-allowed disabled:opacity-45'
+                }`}
+                disabled={ordersOptionUnavailable}
+                title={ordersOptionUnavailable ? 'Δεν υπάρχουν ακόμη αναγνωρίσιμοι e-shop πελάτες για RFM.' : undefined}
+                onClick={() => setDataSourcePreference('orders')}
+              >
+                E-shop orders
+              </button>
+              <button
+                type="button"
+                className={`rounded-md px-2.5 py-1 text-[12px] font-semibold transition-colors ${
+                  effectiveSourceChoice === 'external'
+                    ? 'bg-[var(--nts-accent)] text-white'
+                    : 'text-[#6B7280] hover:bg-[#F9FAFB]'
+                }`}
+                onClick={() => setDataSourcePreference('external')}
+              >
+                E-shop orders + guests
+              </button>
+            </div>
+          </div>
         ) : null}
-        {importSegmentsAvailable && canComputeFromOrders ? (
+        {showDataSourceSelector ? (
           <span className="hidden sm:inline h-4 w-px shrink-0 bg-[#E5E7EB]" aria-hidden />
         ) : null}
         {hasImportedSegments ? (
@@ -385,7 +401,9 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
           </span>
         ) : null}
         {rfmDataSource === 'ecommerce' ? (
-          <span className="text-[#6B7280]">12-month order history · quintiles</span>
+          <span className="text-[#6B7280]">
+            {rfmSourcePref === 'external' ? 'Όλοι οι αγοραστές · 12-month order history' : 'Αναγνωρίσιμοι πελάτες · 12-month order history'}
+          </span>
         ) : (
           <span className="text-[#6B7280]">Εισαγωγή / ERP εκτός e-shop</span>
         )}
@@ -408,10 +426,10 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
             );
           })()
         ) : null}
-        {ordersLoading ? (
+        {ordersLoading && rfmSourcePref === 'orders' ? (
           <LoadingStatusPill label="Loading order history…" />
         ) : null}
-        {isCatalogEnriching ? (
+        {isCatalogEnriching && rfmDataSource === 'ecommerce' ? (
           <LoadingStatusPill label="Loading product catalog…" />
         ) : null}
         <details className="sm:ml-auto min-w-0 max-w-full sm:max-w-[22rem] text-[11px]">
@@ -431,9 +449,6 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
               <p className="text-[11px] text-amber-900 bg-amber-50 px-2 py-1 rounded border border-amber-100">
                 Φόρτωση catalog για brands/SKU· τα charts στο segment detail ενημερώνονται όταν ολοκληρωθεί.
               </p>
-            )}
-            {compactCoverageOk && (
-              <p className="text-[11px] text-[#6B7280]">{dataCoverage.marketingPolicy}</p>
             )}
           </div>
         </details>
@@ -838,13 +853,12 @@ function DataCoverageBlock({
           <summary className="cursor-pointer text-xs font-semibold text-[var(--nts-accent)] hover:underline">
             Λεπτομέρειες κάλυψης
           </summary>
-          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-4">
             <CoverageMetric label="Σύνολο" value={formatNumber(dataCoverage.totalCustomers)} />
             <CoverageMetric label="E-shop" value={formatNumber(dataCoverage.eShopCustomers)} />
             <CoverageMetric label="Others" value={formatNumber(dataCoverage.otherCustomers)} />
             <CoverageMetric label="E-shop %" value={`${formatNumber(dataCoverage.eShopPenetration, 1)}%`} />
           </div>
-          <p className="mt-2 text-[11px] leading-relaxed text-[#6B7280]">{dataCoverage.marketingPolicy}</p>
         </details>
       </div>
     );
@@ -852,16 +866,15 @@ function DataCoverageBlock({
 
   return (
     <Card padding="sm" className="overflow-hidden border border-[#E5E5E5] bg-[#FAFAFA]">
-      <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex min-w-0 flex-col gap-3">
         <div className="min-w-0">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">Data Coverage</p>
           <h3 className="mt-0.5 text-sm font-bold text-[#1A1A1A]">Πολιτική: {dataCoverage.policyLabel}</h3>
-          <p className="mt-1 max-w-3xl text-[11px] leading-relaxed text-[#4A4A4A]">{dataCoverage.marketingPolicy}</p>
         </div>
-        <div className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-2">
+        <div className="grid min-w-0 grid-cols-2 gap-2 md:grid-cols-4">
           <CoverageMetric label="Σύνολο" value={formatNumber(dataCoverage.totalCustomers)} />
           <CoverageMetric label="E-shop" value={formatNumber(dataCoverage.eShopCustomers)} />
-          <CoverageMetric label="Others / ERP" value={formatNumber(dataCoverage.otherCustomers)} />
+          <CoverageMetric label="Others" value={formatNumber(dataCoverage.otherCustomers)} />
           <CoverageMetric label="E-shop %" value={`${formatNumber(dataCoverage.eShopPenetration, 1)}%`} />
         </div>
       </div>
@@ -871,9 +884,9 @@ function DataCoverageBlock({
 
 function CoverageMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="min-w-0 rounded-lg border border-[#E5E5E5] bg-white px-2.5 py-2 sm:px-3">
-      <p className="truncate text-[10px] font-medium text-[#9CA3AF] sm:text-[11px]" title={label}>{label}</p>
-      <p className="mt-0.5 truncate font-mono text-sm font-bold text-[#1A1A1A] sm:text-base" title={value}>{value}</p>
+    <div className="min-w-0 rounded-lg border border-[#E5E5E5] bg-white px-3 py-2.5">
+      <p className="truncate text-[11px] font-medium text-[#9CA3AF]" title={label}>{label}</p>
+      <p className="mt-1 truncate font-mono text-lg font-bold leading-tight text-[#1A1A1A]" title={value}>{value}</p>
     </div>
   );
 }
