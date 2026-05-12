@@ -31,6 +31,7 @@ import { useSegments, type SegmentDataCoverage, type SegmentsDataSource } from '
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import { useBrand } from '../../hooks/useBrand';
 import { FirestoreService } from '../../services/firestore';
+import { clearAnalysisSnapshots } from '../../services/analysisSnapshotCache';
 import { BehavioralTab } from './BehavioralTab';
 import { PredictiveTab } from './PredictiveTab';
 import { exportSegmentActionPack, exportAllSegmentActionPacks, exportSegmentCustomerList, exportAllSegmentCustomerLists } from '../../services/segmentActionPack';
@@ -138,6 +139,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
   const { activeStrategy } = useActiveStrategy();
   const channelRecommendation = activeStrategy?.channelRecommendation ?? null;
   const totalCustomersDisplay = Math.max(totalCustomers, dataCoverage.totalCustomers);
+  const rfmChartSegments = rfmSegments as unknown as Record<string, unknown>[];
   const segmentColorById = new Map(rfmSegments.map((segment) => [segment.id, segment.color]));
   const selectedSegment = useMemo(
     () => rfmSegments.find((segment) => segment.id === selectedSegmentId) ?? null,
@@ -211,6 +213,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
     setIsDeleting(true);
     try {
       await FirestoreService.deleteCollection('segments', currentBrand.id);
+      clearAnalysisSnapshots(currentBrand.id);
       queryClient.invalidateQueries({ queryKey: ['segments', currentBrand.id] });
       queryClient.invalidateQueries({ queryKey: ['segments'] });
       toast.success('Τα segments διαγράφηκαν επιτυχώς.');
@@ -566,7 +569,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
             <ResponsiveContainer width="100%" height={280} minHeight={260}>
               <PieChart margin={{ top: 12, right: 12, bottom: 12, left: 12 }}>
                 <Pie
-                  data={rfmSegments}
+                  data={rfmChartSegments}
                   cx="50%"
                   cy="50%"
                   innerRadius={68}
@@ -636,7 +639,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
             <ResponsiveContainer width="100%" height={280} minHeight={260}>
               <PieChart margin={{ top: 12, right: 12, bottom: 12, left: 12 }}>
                 <Pie
-                  data={rfmSegments}
+                  data={rfmChartSegments}
                   cx="50%"
                   cy="50%"
                   innerRadius={68}

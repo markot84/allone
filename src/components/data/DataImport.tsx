@@ -6,6 +6,7 @@ import { useRefreshProcurementSignals } from '../../hooks/useProcurementSignals'
 import { FileText, CheckCircle2, XCircle, AlertCircle, Clock, Trash2, FileUp, Link as LinkIcon, HelpCircle, ExternalLink, Package, Users, BarChart3, Euro, ClipboardList } from 'lucide-react';
 import { Card, Button, Spinner, ProgressBar, useToast, Badge, PageHeader } from '../common';
 import { importFile, saveImportJob, getImportJobs, getLastImportDates, isSupportedFile, PRODUCT_COLUMN_MAPPING, type ImportType, type ImportResult, type ImportJob, type ImportProgress, type CampaignChannelOverride } from '../../services/import';
+import { clearAnalysisSnapshots } from '../../services/analysisSnapshotCache';
 import { buildFunctionUrl } from '../../config/firebase';
 import { FEED_SOURCE_OPTIONS, downloadGoogleAdsCsvTemplate, type FeedSourceType } from '../../data/feedSourceConfig';
 import { FeedPreviewModal } from './FeedPreviewModal';
@@ -367,6 +368,9 @@ export function DataImport({ initialType }: DataImportProps = {}) {
         );
         const typesImported = new Set(isFeedImport ? ['products'] : selectedFiles.map((f) => f.type));
         const brandId = currentBrand?.id ?? null;
+        clearAnalysisSnapshots(brandId);
+        queryClient.removeQueries({ queryKey: ['brandSyncVersion', brandId] });
+        queryClient.invalidateQueries({ queryKey: ['brandSyncVersion', brandId] });
         
         if (import.meta.env.MODE === 'development') {
           console.debug('[DataImport] Import successful, invalidating queries for:', Array.from(typesImported), 'brandId:', brandId);

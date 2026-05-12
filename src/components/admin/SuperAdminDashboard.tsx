@@ -22,6 +22,7 @@ import { SUPER_ADMIN_EMAILS, SUPPORT_EMAIL, APP_NAME } from '../../config/superA
 import { getDefaultModuleEnabled, getEditionStatus, getModuleLabel } from '../../config/modules';
 import type { Brand, ChangelogEntry, ModuleId } from '../../types';
 import { useAuth } from '../../hooks';
+import { clearAnalysisSnapshots } from '../../services/analysisSnapshotCache';
 import buildInfo from '../../generated/buildInfo.json';
 
 type AdminTab = 'brands' | 'api' | 'changelog' | 'system';
@@ -178,6 +179,8 @@ function BrandsTab() {
         : { historyStartDate: '' };
       await FirestoreService.updateDocument('brands', brandId, payload);
       setBrands((prev) => prev.map((b) => (b.id === brandId ? { ...b, historyStartDate: trimmed || undefined } : b)));
+      clearAnalysisSnapshots(brandId);
+      queryClient.removeQueries({ queryKey: ['brandSyncVersion', brandId] });
       queryClient.invalidateQueries({ queryKey: ['ecommerceOrdersRaw', brandId] });
       queryClient.invalidateQueries({ queryKey: ['dataAnalysisOrdersRaw', brandId] });
       queryClient.invalidateQueries({ queryKey: ['catalogAlignmentDataAnalysis', brandId] });

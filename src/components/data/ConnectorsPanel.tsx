@@ -9,6 +9,7 @@ import { getLastImportDates } from '../../services/import';
 import { coerceToDate } from '../../utils/coerceDate';
 import { clearOAuthSession, readOAuthSessionPayload } from '../../utils/oauthSession';
 import { FirestoreService } from '../../services/firestore';
+import { clearAnalysisSnapshots } from '../../services/analysisSnapshotCache';
 import { Card, Button, Spinner, useToast, PageHeader } from '../common';
 import type { ModuleId } from '../../types';
 import {
@@ -2022,6 +2023,8 @@ export function ConnectorsPanel() {
 
   const refreshMagentoEcommerceCaches = useCallback(() => {
     if (!brandId) return;
+    clearAnalysisSnapshots(brandId);
+    queryClient.removeQueries({ queryKey: ['brandSyncVersion', brandId] });
     queryClient.removeQueries({ queryKey: ['ecommerce_summary', brandId] });
     queryClient.removeQueries({ queryKey: ['business_revenue_summary', brandId] });
     queryClient.removeQueries({ queryKey: ['ecommerceOrdersRaw', brandId] });
@@ -2352,6 +2355,9 @@ export function ConnectorsPanel() {
         queryClient.invalidateQueries({ queryKey: ['campaigns', brandId] });
         queryClient.invalidateQueries({ queryKey: ['connectorsSummary', brandId] });
         queryClient.invalidateQueries({ queryKey: ['lastSyncDates', brandId] });
+        clearAnalysisSnapshots(brandId);
+        queryClient.removeQueries({ queryKey: ['brandSyncVersion', brandId] });
+        queryClient.invalidateQueries({ queryKey: ['brandSyncVersion', brandId] });
         if (provider === 'google_ads') {
           queryClient.invalidateQueries({ queryKey: ['search_intelligence', brandId] });
         }

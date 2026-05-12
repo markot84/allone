@@ -16,7 +16,7 @@ interface BusinessRevenueSummaryRaw {
   syncedAt?: unknown;
 }
 
-async function fetchBusinessRevenueSummary(brandId: string): Promise<BusinessRevenueSummaryRaw | null> {
+export async function fetchBusinessRevenueSummary(brandId: string): Promise<BusinessRevenueSummaryRaw | null> {
   const snap = await getDoc(doc(db, 'business_revenue_summary', brandId));
   if (!snap.exists()) return null;
   return snap.data() as BusinessRevenueSummaryRaw;

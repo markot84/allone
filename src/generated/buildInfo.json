@@ -1,10 +1,14 @@
 {
-  "version": "0.749.27",
-  "previousVersion": "0.749.26",
-  "commitHash": "52f89b6",
+  "version": "0.749.32",
+  "previousVersion": "0.749.31",
+  "commitHash": "47476cb",
   "branch": "main",
-  "buildDate": "2026-05-12T09:06:02.349Z",
+  "buildDate": "2026-05-12T09:39:37.556Z",
   "commits": [
+    {
+      "hash": "47476cb",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "52f89b6",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "1def49f",
       "message": "fix: clear stale query cache after restore"
-    },
-    {
-      "hash": "3ba775f",
-      "message": "restore: revert app to pre-2026-05-11 state"
     }
   ],
   "changes": [

@@ -13,6 +13,7 @@ import { SharedPackageViewer } from './components/strategy/SharedPackageViewer';
 import { EnterpriseBadge } from './components/common';
 import { useModules } from './hooks/useModules';
 import { usePlan } from './hooks/usePlan';
+import { useAppWarmup } from './hooks/useAppWarmup';
 import { PrivacyPolicy } from './components/legal/PrivacyPolicy';
 import { TermsOfService } from './components/legal/TermsOfService';
 import { captureOAuthParamsFromLocation } from './utils/oauthSession';
@@ -164,6 +165,7 @@ function normalizeHashPath(segmentPart: string): string {
 /** Hash routing + AppShell — must render under AuthGuard → BrandProvider (useModules → useBrand). */
 function AppMain() {
   const { isSectionEnabled, getFallbackSection } = useModules();
+  useAppWarmup();
   const VALID_SECTIONS = APP_SECTIONS;
 
   // Initialize from URL hash or default to dashboard (υποστηρίζει #products?stock=low)

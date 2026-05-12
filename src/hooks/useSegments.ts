@@ -5,9 +5,11 @@ import { mergeDuplicateSegmentRowsByName } from '../utils/mergeDuplicateSegments
 import { getSegmentColor } from '../utils/segmentColors';
 import { useBrand } from './useBrand';
 import { useEcommerceSummary } from './useEcommerceSummary';
+import { useBrandSyncVersion } from './useBrandSyncVersion';
 import { fetchAllEcommerceOrders, fetchDataAnalysisOrders } from '../services/ecommerceRawOrders';
 import { fetchCatalogAlignmentData, fetchCatalogAlignmentDataForDataAnalysis, normalizeCatalogAlignmentPayload } from '../services/catalogAlignment';
 import { computeRfmOrderScopeStats, computeRfmSegmentsFromEcommerceOrders, computeSegmentMigrationFromEcommerceOrders, type RfmCatalogContext } from '../services/rfmFromOrders';
+import { readLatestAnalysisSnapshot, writeAnalysisSnapshot, type AnalysisSnapshotPayload, type AnalysisSnapshotScope } from '../services/analysisSnapshotCache';
 import type { RFMSegment } from '../types';
 
 const STORAGE_KEY = (brandId: string) => `pp-rfm-data-source-${brandId}`;
@@ -110,7 +112,9 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   const [sourcePref, setSourcePrefState] = useState<RfmDataSourcePreference>('orders');
 
   useEffect(() => {
-    if (brandId) setSourcePrefState(getStoredRfmSource(brandId));
+    if (!brandId || typeof window === 'undefined') return;
+    const t = window.setTimeout(() => setSourcePrefState(getStoredRfmSource(brandId)), 0);
+    return () => window.clearTimeout(t);
   }, [brandId]);
 
   const setDataSourcePreference = useCallback(
@@ -151,16 +155,33 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   }, []);
   const ordersQueryKeyPrefix = variant === 'data_analysis' ? 'dataAnalysisOrdersRaw' : 'ecommerceOrdersRaw';
   const catalogQueryKeyPrefix = variant === 'data_analysis' ? 'catalogAlignmentDataAnalysis' : 'catalogAlignment';
+  const brandSyncVersionQuery = useBrandSyncVersion(brandId);
+  const syncVersion = brandSyncVersionQuery.data?.version ?? null;
+  const snapshotScope = useMemo<AnalysisSnapshotScope | null>(
+    () => brandId ? { brandId, variant, sourcePref, ordersSinceDate } : null,
+    [brandId, variant, sourcePref, ordersSinceDate]
+  );
+  const [analysisSnapshot, setAnalysisSnapshot] = useState<AnalysisSnapshotPayload | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const t = window.setTimeout(() => {
+      setAnalysisSnapshot(snapshotScope ? readLatestAnalysisSnapshot(snapshotScope) : null);
+    }, 0);
+    return () => window.clearTimeout(t);
+  }, [snapshotScope]);
+
+  const ordersSourceFingerprint = variant === 'data_analysis' ? (syncVersion ?? 'sync-pending') : platformsKey;
 
   const { data: rawOrders = [], isPending: ordersPending, error: ordersError } = useQuery({
-    queryKey: [ordersQueryKeyPrefix, brandId, platformsKey, ordersSinceDate],
+    queryKey: [ordersQueryKeyPrefix, brandId, platformsKey, ordersSinceDate, ordersSourceFingerprint],
     queryFn: () =>
       brandId
         ? (variant === 'data_analysis'
             ? fetchDataAnalysisOrders(brandId, ecomm.connectedPlatforms, { sinceDate: ordersSinceDate })
             : fetchAllEcommerceOrders(brandId, ecomm.connectedPlatforms, { sinceDate: ordersSinceDate }))
         : Promise.resolve([]),
-    enabled: ordersQueryEnabled,
+    enabled: ordersQueryEnabled && (variant !== 'data_analysis' || !!syncVersion),
     staleTime: 12 * 60 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -330,7 +351,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   const sourceLabel =
     resolvedSource === 'ecommerce'
       ? orderOrigin === 'erp_orders'
-        ? 'ERP orders'
+        ? 'ERP'
         : effectiveSourcePref === 'external'
           ? 'E-shop + guests'
           : 'E-shop orders'
@@ -338,32 +359,110 @@ export function useSegments(options: UseSegmentsOptions = {}) {
         ? 'ERP / import'
         : 'Pending';
 
-  return {
+  const liveSnapshotPayload = useMemo<AnalysisSnapshotPayload | null>(() => {
+    if (!snapshotScope || variant !== 'data_analysis' || !syncVersion || !hasImported) return null;
+    return {
+      ...snapshotScope,
+      syncVersion,
+      savedAt: new Date().toISOString(),
+      segments,
+      totalCustomers,
+      hasImported,
+      dataSource: resolvedSource,
+      dataOrigin: orderOrigin,
+      sourceLabel,
+      sourcePreference: effectiveSourcePref,
+      canComputeFromOrders,
+      canComputeIdentifiedOrders,
+      dataCoverage,
+      orderRfmMeta:
+        resolvedSource === 'ecommerce'
+          ? {
+              ordersAttributed: orderRfm.ordersAttributed,
+              guestOrdersSkipped: orderRfm.guestOrdersSkipped,
+            }
+          : undefined,
+      segmentMigration: resolvedSource === 'ecommerce' ? orderSegmentMigration : undefined,
+    };
+  }, [
+    snapshotScope,
+    variant,
+    syncVersion,
+    hasImported,
     segments,
     totalCustomers,
-    isLoading,
+    resolvedSource,
+    sourceLabel,
+    orderOrigin,
+    effectiveSourcePref,
+    canComputeFromOrders,
+    canComputeIdentifiedOrders,
+    dataCoverage,
+    orderRfm.ordersAttributed,
+    orderRfm.guestOrdersSkipped,
+    orderSegmentMigration,
+  ]);
+
+  useEffect(() => {
+    if (!liveSnapshotPayload || isLoading || ordersPending || catalogPending) return;
+    writeAnalysisSnapshot(liveSnapshotPayload);
+  }, [liveSnapshotPayload, isLoading, ordersPending, catalogPending]);
+
+  const usableSnapshot =
+    variant === 'data_analysis' &&
+    analysisSnapshot &&
+    syncVersion &&
+    analysisSnapshot.syncVersion === syncVersion
+      ? analysisSnapshot
+      : null;
+  const shouldUseSnapshot = !!usableSnapshot && (isLoading || ordersPending || catalogPending || segments.length === 0);
+  const displayedSegments = shouldUseSnapshot ? usableSnapshot.segments : segments;
+  const displayedTotalCustomers = shouldUseSnapshot ? usableSnapshot.totalCustomers : totalCustomers;
+  const displayedDataCoverage = shouldUseSnapshot ? usableSnapshot.dataCoverage : dataCoverage;
+  const displayedDataSource = shouldUseSnapshot ? usableSnapshot.dataSource : resolvedSource;
+  const displayedDataOrigin = shouldUseSnapshot ? usableSnapshot.dataOrigin : orderOrigin;
+  const displayedSourceLabel = shouldUseSnapshot ? usableSnapshot.sourceLabel : sourceLabel;
+  const displayedSourcePreference = shouldUseSnapshot ? usableSnapshot.sourcePreference : effectiveSourcePref;
+  const displayedCanComputeFromOrders = shouldUseSnapshot ? usableSnapshot.canComputeFromOrders : canComputeFromOrders;
+  const displayedCanComputeIdentifiedOrders = shouldUseSnapshot ? usableSnapshot.canComputeIdentifiedOrders : canComputeIdentifiedOrders;
+  const displayedHasImported = shouldUseSnapshot ? usableSnapshot.hasImported : hasImported;
+  const displayedOrderRfmMeta =
+    shouldUseSnapshot
+      ? usableSnapshot.orderRfmMeta
+      : resolvedSource === 'ecommerce'
+        ? {
+            ordersAttributed: orderRfm.ordersAttributed,
+            guestOrdersSkipped: orderRfm.guestOrdersSkipped,
+          }
+        : undefined;
+  const displayedSegmentMigration =
+    shouldUseSnapshot
+      ? usableSnapshot.segmentMigration
+      : resolvedSource === 'ecommerce'
+        ? orderSegmentMigration
+        : undefined;
+
+  return {
+    segments: displayedSegments,
+    totalCustomers: displayedTotalCustomers,
+    isLoading: shouldUseSnapshot ? false : isLoading,
     /** True όσο τραβάμε πρόσφατο order history για ecommerce RFM — UI δεν πρέπει να μπλοκάρει. */
     ordersLoading,
     ordersError: (ordersError as Error | null) ?? null,
     /** Φόρτωση *_products + unified products για catalog tabs — δεν μπλοκάρει το κύριο RFM grid. */
     isCatalogEnriching,
-    hasImported,
+    hasImported: displayedHasImported,
     /** Πραγματική πηγή μετά την επιλογή του χρήστη. */
-    dataSource: resolvedSource,
-    sourceLabel,
+    dataSource: displayedDataSource,
+    dataOrigin: displayedDataOrigin,
+    sourceLabel: displayedSourceLabel,
     setDataSourcePreference,
-    sourcePreference: effectiveSourcePref,
-    canComputeFromOrders,
-    canComputeIdentifiedOrders,
-    dataCoverage,
-    orderRfmMeta:
-      resolvedSource === 'ecommerce'
-        ? {
-            ordersAttributed: orderRfm.ordersAttributed,
-            guestOrdersSkipped: orderRfm.guestOrdersSkipped,
-          }
-        : undefined,
-    segmentMigration: resolvedSource === 'ecommerce' ? orderSegmentMigration : undefined,
+    sourcePreference: displayedSourcePreference,
+    canComputeFromOrders: displayedCanComputeFromOrders,
+    canComputeIdentifiedOrders: displayedCanComputeIdentifiedOrders,
+    dataCoverage: displayedDataCoverage,
+    orderRfmMeta: displayedOrderRfmMeta,
+    segmentMigration: displayedSegmentMigration,
     importSegmentsAvailable,
   };
 }

@@ -131,7 +131,7 @@ function parseSkuMovement(raw: EcommerceSummaryRaw | null | undefined): SkuMovem
   }
 }
 
-async function fetchEcommerceSummary(brandId: string): Promise<EcommerceSummaryRaw | null> {
+export async function fetchEcommerceSummary(brandId: string): Promise<EcommerceSummaryRaw | null> {
   const [summarySnap, movementSnap, chunkedSkuStats] = await Promise.all([
     getDoc(doc(db, 'ecommerce_summary', brandId)),
     getDoc(doc(db, 'stock_movement', brandId)),
