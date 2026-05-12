@@ -173,7 +173,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     queryFn: () =>
       brandId
         ? (variant === 'data_analysis'
-            ? fetchDataAnalysisOrders(brandId, ecomm.connectedPlatforms, { sinceDate: ordersSinceDate })
+            ? fetchDataAnalysisOrders(brandId, ecomm.connectedPlatforms, { sinceDate: ordersSinceDate, cacheFirst: true })
             : fetchAllEcommerceOrders(brandId, ecomm.connectedPlatforms, { sinceDate: ordersSinceDate }))
         : Promise.resolve([]),
     enabled: ordersQueryEnabled && (variant !== 'data_analysis' || !!syncVersion),
