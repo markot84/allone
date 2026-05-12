@@ -266,6 +266,8 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     totalCount: sourceTotalCount,
     hasImported,
     usingProcurement,
+    sourceLabel: productDataSourceLabel,
+    sourceKind: productSourceKind,
     isLoading: sourceLoading,
   } = useProductSource({ maxProducts: PRODUCT_INTELLIGENCE_ROW_LIMIT });
   const { suppliers } = useSuppliers();
@@ -305,7 +307,6 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   const hasDateFilter = Boolean(productDateFrom && productDateTo);
   const totalCatalogCount = usingProcurement ? sourceProducts.length : (sourceTotalCount ?? rawTotalCount ?? productStats?.totalSkus ?? rawProducts.length);
   const isCatalogTruncated = !usingProcurement && totalCatalogCount > sourceProducts.length;
-  const productDataSourceLabel = usingProcurement ? 'Procurement / ERP' : 'Products import';
 
   const productsScopedByDate = useMemo(() => {
     if (usingProcurement) return sourceProducts;
@@ -606,7 +607,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
               <DataSourcePill
                 label="Source"
                 value={productDataSourceLabel}
-                tone={usingProcurement ? 'warning' : 'success'}
+                tone={productSourceKind === 'erp' ? 'warning' : 'success'}
               />
             </div>
           ) : null

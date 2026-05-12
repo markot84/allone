@@ -18,7 +18,7 @@ const KEYS = Object.keys(SHEET_TO_COLLECTION) as SheetKey[];
 
 async function fetchAllSheets(brandId: string) {
   const results = await Promise.all(
-    KEYS.map((key) => ProcurementService.getAll(SHEET_TO_COLLECTION[key], brandId))
+    KEYS.map((key) => ProcurementService.getAll(SHEET_TO_COLLECTION[key], brandId, { cacheFirst: true }))
   );
   return Object.fromEntries(KEYS.map((key, i) => [key, results[i]])) as Record<SheetKey, unknown[]>;
 }
@@ -31,10 +31,12 @@ export function useProcurement() {
   const { data, isPending, isFetching } = useQuery({
     queryKey: ['procurement', brandId],
     queryFn: () => (brandId ? fetchAllSheets(brandId) : Promise.resolve(null)),
-    staleTime: 0,
-    refetchOnMount: 'always',
-    refetchOnWindowFocus: true,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
     enabled: !!brandId,
+    placeholderData: (previousData) => previousData,
   });
 
   const empty: Record<SheetKey, unknown[]> = {

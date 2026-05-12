@@ -185,12 +185,24 @@ export function useProductSource(options: UseProductSourceOptions = {}) {
   }, [isEnterprise, procData?.inventory, procData?.pricing_policy]);
 
   const usingProcurement = procProducts.length > 0;
+  const sourceKind: 'erp' | 'products_import' | 'pending' =
+    usingProcurement || isEnterprise
+      ? 'erp'
+      : productHook.hasImported
+        ? 'products_import'
+        : 'pending';
+  const sourceLabel =
+    sourceKind === 'erp'
+      ? 'ERP'
+      : sourceKind === 'products_import'
+        ? 'Products import'
+        : 'Pending';
   // Demo products φιλτράρονται και εδώ για να ισχύει σε όλους τους aggregates.
   const products = excludeDemoProducts(usingProcurement ? procProducts : productHook.products);
 
   /** Μέχρι να ολοκληρωθεί και το procurement (Enterprise), μην εμφανίζεις κενή σελίδα «χωρίς προϊόντα». */
   const isLoading =
-    productHook.isLoading || (isEnterprise && procurementLoading);
+    usingProcurement ? false : productHook.isLoading || (isEnterprise && procurementLoading);
 
   return {
     products,
@@ -199,5 +211,7 @@ export function useProductSource(options: UseProductSourceOptions = {}) {
     isLoading,
     hasImported: productHook.hasImported || usingProcurement,
     usingProcurement,
+    sourceKind,
+    sourceLabel,
   };
 }

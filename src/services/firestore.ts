@@ -567,8 +567,11 @@ export const PROCUREMENT_COLLECTIONS = [
 const PROCUREMENT_MAX_SNAPSHOTS = 5;
 
 export const ProcurementService = {
-  getAll: (collectionKey: (typeof PROCUREMENT_COLLECTIONS)[number], brandId?: string | null) =>
-    FirestoreService.getDocuments(collectionKey, [], brandId),
+  getAll: (
+    collectionKey: (typeof PROCUREMENT_COLLECTIONS)[number],
+    brandId?: string | null,
+    opts?: { cacheFirst?: boolean; forceServer?: boolean }
+  ) => FirestoreService.getDocuments(collectionKey, [], brandId, opts),
   batchSet: (collectionKey: (typeof PROCUREMENT_COLLECTIONS)[number], items: { id: string; data: Record<string, unknown> }[], brandId?: string | null) =>
     FirestoreService.batchSet(collectionKey, items, brandId),
   deleteAll: (collectionKey: (typeof PROCUREMENT_COLLECTIONS)[number], brandId?: string | null) =>

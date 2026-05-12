@@ -510,6 +510,17 @@ async function loadAndClassifyErpConnectorOrders(
   let rows: Record<string, unknown>[];
   try {
     rows = await FirestoreService.getDocuments<Record<string, unknown>>(coll, constraints, brandId, rangedLoadOpts);
+    if (options.cacheFirst === true && rows.length === 0) {
+      rows = await FirestoreService.getDocuments<Record<string, unknown>>(coll, constraints, brandId, { forceServer: true });
+    }
+    if (rows.length === 0 && (options.sinceDate || options.untilDate)) {
+      rows = await FirestoreService.getDocuments<Record<string, unknown>>(
+        coll,
+        [limit(DATA_ANALYSIS_ORDER_LIMIT)],
+        brandId,
+        { forceServer: true }
+      );
+    }
   } catch {
     rows = await FirestoreService.getDocuments<Record<string, unknown>>(
       coll,

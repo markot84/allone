@@ -265,8 +265,7 @@ function getScenarioPendingActionText(scenarioId: string | null): string {
 
 export function WeightConfigurator() {
   const { currentBrand } = useBrand();
-  const { products, hasImported, usingProcurement } = useProductSource();
-  const productDataSourceLabel = usingProcurement ? 'Procurement / ERP' : hasImported ? 'Products import' : 'Pending';
+  const { products, hasImported, usingProcurement, sourceLabel: productDataSourceLabel, sourceKind: productSourceKind } = useProductSource();
 
   const scenarioErpHints = useMemo(() => {
     if (!usingProcurement || products.length === 0) return undefined;
@@ -1381,7 +1380,7 @@ export function WeightConfigurator() {
                 <DataSourcePill
                   label="Products"
                   value={productDataSourceLabel}
-                  tone={usingProcurement ? 'warning' : hasImported ? 'success' : 'neutral'}
+                  tone={productSourceKind === 'erp' ? 'warning' : hasImported ? 'success' : 'neutral'}
                 />
                 <DataSourcePill
                   label="Segments"
