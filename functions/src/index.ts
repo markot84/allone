@@ -101,6 +101,10 @@ import {
   setDb as setDataAnalysisRfmDb,
 } from './dataAnalysisRfmAggregator';
 import {
+  refreshProductIntelligenceAggregate,
+  setDb as setProductIntelligenceDb,
+} from './productIntelligenceAggregator';
+import {
   captureStockSnapshot,
   computeStockMovement,
   refreshStockMovement,
@@ -150,6 +154,7 @@ setEpsilonNetDb(db);
 setEntersoftDb(db);
 setEcommerceAggDb(db);
 setDataAnalysisRfmDb(db);
+setProductIntelligenceDb(db);
 setStockMovementDb(db);
 setProcurementSignalsDb(db);
 setGA4Db(db);
@@ -1995,6 +2000,21 @@ export const scheduledDataAnalysisRfm = onSchedule(
   }
 );
 
+/** Product Intelligence aggregate — connector-backed catalogs only; procurement/import brands keep the UI path. */
+export const scheduledProductIntelligence = onSchedule(
+  { timeZone: 'Europe/Athens', region: 'europe-west1', memory: '2GiB', timeoutSeconds: 1200, schedule: 'every day 01:08' },
+  async () => {
+    const snap = await db.collection('connectors').limit(20).get();
+    for (const doc of snap.docs) {
+      try {
+        await refreshProductIntelligenceAggregate(doc.id);
+      } catch (error) {
+        logger.warn(`[scheduledProductIntelligence] failed for ${doc.id}:`, error);
+      }
+    }
+  }
+);
+
 /**
  * Gemini Proxy
  * POST /geminiProxy
@@ -2310,6 +2330,35 @@ export const refreshDataAnalysisRfm = onRequest(
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       logger.error('[refreshDataAnalysisRfm]', msg);
+      res.status(500).json({ error: msg });
+    }
+  }
+);
+
+export const refreshProductIntelligence = onRequest(
+  { region: 'europe-west1', cors: true, timeoutSeconds: 1200, memory: '2GiB' },
+  async (req, res) => {
+    if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+
+    try {
+      const idToken = authHeader.slice(7).trim();
+      const decoded = await admin.auth().verifyIdToken(idToken);
+      const { brandId } = req.body as { brandId?: string };
+      if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
+
+      if (!(await verifyBrandConnectorManagement(decoded.uid, brandId))) {
+        res.status(403).json({ error: 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να ανανεώσει το Product Intelligence aggregate' });
+        return;
+      }
+
+      const result = await refreshProductIntelligenceAggregate(brandId);
+      res.status(200).json({ success: true, brandId, result });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      logger.error('[refreshProductIntelligence]', msg);
       res.status(500).json({ error: msg });
     }
   }

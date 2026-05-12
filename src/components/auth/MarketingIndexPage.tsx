@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { ArrowLeft, BarChart3, Brain, Database, ExternalLink, FileSpreadsheet, HelpCircle, Mail, ShieldCheck, Target, Upload } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BarChart3, Boxes, Brain, CheckCircle2, ClipboardCheck, Database, ExternalLink, Gauge, HelpCircle, Layers3, Mail, Megaphone, PackageCheck, ShieldCheck, ShoppingBag, Store, TrendingUp, Upload } from 'lucide-react';
 import { MARKETING_CONTACT_MAILTO } from '../../config/superAdmins';
 import { InterestForm } from './InterestForm';
 import { PerformancePlusLogo } from '../common';
@@ -19,34 +19,113 @@ interface MarketingIndexPageProps {
 
 const MARKETING_TAGLINE_HEADER = 'Η εμπορική νοημοσύνη του e-shop σας';
 
-const heroParagraphs = [
+const heroLeadParagraph =
+  'Το Performance+ συνδέει τα δεδομένα σας - καταναλωτικά κοινά, προϊόντα, αποθέματα, ERP και διαφημιστικά κανάλια - σε ένα ενιαίο σύστημα ανάλυσης και λήψης αποφάσεων με τεχνητή νοημοσύνη. Δημιουργήθηκε από ανθρώπους του marketing και αναλυτές δεδομένων, και λειτουργεί ήδη εδώ και 4 χρόνια ως μεθοδολογία ανάπτυξης στοχευμένων προωθητικών ενεργειών με ισχυρά μετρήσιμα αποτελέσματα.';
+
+const heroSupportingParagraphs = [
   'Τα περισσότερα e-shops επενδύουν καθημερινά σε διαφήμιση χωρίς να γνωρίζουν ποια προϊόντα αξίζει πραγματικά να προωθήσουν.',
   'Άλλα προϊόντα εμφανίζονται σε καμπάνιες ενώ έχουν περιορισμένο απόθεμα. Άλλα μένουν για μήνες στην αποθήκη χωρίς εμπορική αξιοποίηση. Και συχνά το marketing λειτουργεί αποκομμένα από το stock, την κερδοφορία και τη συνολική εμπορική στρατηγική της επιχείρησης.',
   'Το Performance+ δημιουργήθηκε για να ενώσει όλα αυτά τα δεδομένα σε ένα ενιαίο σύστημα αποφάσεων.',
-  'Συνδέει ERP, αποθέματα, πωλήσεις και διαφημιστικά κανάλια, μετατρέποντας την πληροφορία σε ξεκάθαρες εμπορικές προτάσεις για το τι πρέπει να προωθηθεί, πότε και με ποιο budget.',
   'Η ομάδα σας διατηρεί πάντα τον τελικό έλεγχο και τη στρατηγική κατεύθυνση. Το Performance+ λειτουργεί ως ένα intelligence layer που οργανώνει την πληροφορία, αναδεικνύει ευκαιρίες και βοηθά στη λήψη πιο αποδοτικών αποφάσεων.',
+];
+
+const heroProofPoints = [
+  { label: 'Stock-aware campaigns', value: 'Προώθηση με βάση διαθεσιμότητα' },
+  { label: 'Profit signals', value: 'Προτεραιότητες με εμπορικό περιθώριο' },
+  { label: 'AI guidance', value: 'Καθαρή απόφαση για κανάλι και budget' },
+];
+
+const methodologySteps = [
+  {
+    title: 'Σύνδεση εμπορικών δεδομένων',
+    description: 'Ενοποίηση ERP, e-shop, αποθέματος, προϊόντων, analytics και διαφημιστικών καναλιών σε κοινή εικόνα.',
+    icon: <Layers3 size={18} />,
+  },
+  {
+    title: 'Commercial scoring',
+    description: 'Αξιολόγηση προϊόντων, κοινών και καναλιών με βάση ζήτηση, stock, περιθώριο, συμπεριφορά και ιστορική απόδοση.',
+    icon: <Gauge size={18} />,
+  },
+  {
+    title: 'Action plan με έλεγχο ομάδας',
+    description: 'Μετατροπή των σημάτων σε προτάσεις budget, content, channel mix και προτεραιοποίησης, με την ομάδα να κρατά την τελική απόφαση.',
+    icon: <ClipboardCheck size={18} />,
+  },
+];
+
+const trustPosturePoints = [
+  'Read-only πρόσβαση όπου απαιτείται',
+  'Google Cloud / Firebase με EU region',
+  'GDPR-conscious lead και connector flows',
+  'AI decision-support, όχι αυτόνομη εκτέλεση',
+];
+
+const commerceUseCases = [
+  {
+    title: 'Stock clearance χωρίς τυφλό discounting',
+    before: 'Dead stock και slow movers μένουν αόρατα ή προωθούνται μόνο με οριζόντιες εκπτώσεις.',
+    action: 'Το Performance+ αναδεικνύει ποια προϊόντα χρειάζονται εμπορική ώθηση και σε ποια κοινά έχουν μεγαλύτερη πιθανότητα κίνησης.',
+    outcome: 'Καλύτερη κυκλοφορία αποθέματος με πιο στοχευμένη προβολή και λιγότερη πίεση στο margin.',
+  },
+  {
+    title: 'Budget allocation με stock και margin',
+    before: 'Το budget πηγαίνει σε campaigns χωρίς σαφή εικόνα διαθεσιμότητας, κερδοφορίας ή εμπορικής προτεραιότητας.',
+    action: 'Συνδυάζει spend, ROAS, προϊόντα, περιθώριο και αποθέματα για να δείξει πού αξίζει να κατευθυνθεί η επένδυση.',
+    outcome: 'Πιο καθαρές αποφάσεις για κανάλι, κοινό και προϊόν πριν δεσμευτεί διαφημιστικό κόστος.',
+  },
+  {
+    title: 'Product launch με audience targeting',
+    before: 'Νέα προϊόντα λανσάρονται με γενική επικοινωνία, χωρίς σύνδεση με υπάρχοντα κοινά και εμπορικά σήματα.',
+    action: 'Χαρτογραφεί segment ευκαιρίας, προτεινόμενα κανάλια και content direction με βάση το brand και τη ζήτηση.',
+    outcome: 'Πιο γρήγορη εμπορική εκκίνηση με καλύτερη στόχευση και μετρήσιμη κατεύθυνση.',
+  },
+  {
+    title: 'Profitability-first growth',
+    before: 'Η αύξηση τζίρου συχνά μετριέται χωρίς επαρκή σύνδεση με profitability και πραγματική επιχειρησιακή δυνατότητα.',
+    action: 'Μετατρέπει τα δεδομένα σε growth priorities που λαμβάνουν υπόψη margin, stock, ζήτηση και κανάλια.',
+    outcome: 'Ανάπτυξη με καθαρότερη εμπορική λογική και λιγότερο χαμένο spend.',
+  },
+];
+
+const authorityProofPoints = [
+  {
+    title: 'Μεθοδολογία τεσσάρων ετών',
+    description: 'Η λογική του Performance+ έχει χτιστεί μέσα από πρακτική εφαρμογή σε στοχευμένες προωθητικές ενέργειες και εμπορική ανάλυση.',
+  },
+  {
+    title: 'Marketing και data analysis μαζί',
+    description: 'Το προϊόν δεν βλέπει μόνο dashboards. Συνδέει εμπορική κρίση, analytics, προϊόντα και κανάλια σε κοινό decision framework.',
+  },
+  {
+    title: 'Ασφαλής ρόλος AI',
+    description: 'Το AI λειτουργεί ως decision-support layer που εξηγεί, προτεραιοποιεί και προτείνει. Δεν αφαιρεί τον τελικό έλεγχο από την ομάδα.',
+  },
 ];
 
 const dataIntroSources = [
   {
-    name: 'ERP / Πωλήσεις',
-    description: 'Συγχρονισμός προϊόντων, αποθέματος, τιμών και ιστορικού πελατών.',
-    icon: <Database size={18} />,
+    name: 'Διαφημιστικά κανάλια',
+    description: 'Google Ads, Meta, TikTok και Merchant Center για spend, ROAS, conversions και price benchmarks.',
+    examples: 'Google Ads · Meta · TikTok · Merchant',
+    icon: <Megaphone size={18} />,
   },
   {
-    name: 'Google Ads',
-    description: 'Δεδομένα καμπανιών, conversions, κόστος και απόδοση κοινού.',
+    name: 'Analytics & organic',
+    description: 'Συμπεριφορά επισκεπτών, traffic sources, top pages, organic queries, CTR και visibility.',
+    examples: 'GA4 · Search Console',
     icon: <BarChart3 size={18} />,
   },
   {
-    name: 'Meta Ads',
-    description: 'Μετρήσεις αποτελεσμάτων, engagement και audience insights σε πραγματικό χρόνο.',
-    icon: <Target size={18} />,
+    name: 'E-commerce κανάλια',
+    description: 'Παραγγελίες, προϊόντα, πελάτες, inventory και revenue από τα βασικά e-shop συστήματα.',
+    examples: 'Shopify · WooCommerce · OpenCart · Magento',
+    icon: <ShoppingBag size={18} />,
   },
   {
-    name: 'CSV / Excel / Manual Import',
-    description: 'Εισαγωγή custom δεδομένων, οικονομικών analytics και audience segments.',
-    icon: <FileSpreadsheet size={18} />,
+    name: 'ERP & λειτουργίες',
+    description: 'Αποθέματα, τιμές, προϊόντα, πωλήσεις και λειτουργικά δεδομένα από ERP/operations συστήματα.',
+    examples: 'Megaventory · SoftOne · Epsilon Net · Entersoft',
+    icon: <Boxes size={18} />,
   },
 ];
 
@@ -82,13 +161,13 @@ const practiceOutcomes = [
 ];
 
 const commerceScenarios = [
-  { title: 'Profit Maximization', description: 'Έμφαση σε προϊόντα με υψηλό περιθώριο κέρδους.' },
-  { title: 'Stock Clearance', description: 'Διαχείριση dead stock και excess inventory.' },
-  { title: 'Brand Launch', description: 'Υποστήριξη νέων προϊόντων και νέων εμπορικών εισόδων.' },
-  { title: 'Revenue Push', description: 'Ενίσχυση πωλήσεων σε προϊόντα με υψηλή ζήτηση.' },
-  { title: 'Mixed Strategy', description: 'Συνδυασμός πολλαπλών στρατηγικών με προσαρμοσμένα βάρη.' },
-  { title: 'Seasonal / Promotional', description: 'Υποστήριξη εκπτώσεων και εποχιακών ενεργειών με έλεγχο αποθέματος.' },
-  { title: 'Custom Strategy', description: 'Πλήρως προσαρμοσμένη στρατηγική στις ανάγκες του brand.' },
+  { title: 'Profit Maximization', description: 'Έμφαση σε προϊόντα με υψηλό περιθώριο κέρδους.', signal: 'Margin-first' },
+  { title: 'Stock Clearance', description: 'Διαχείριση dead stock και excess inventory.', signal: 'Inventory release' },
+  { title: 'Brand Launch', description: 'Υποστήριξη νέων προϊόντων και νέων εμπορικών εισόδων.', signal: 'Launch growth' },
+  { title: 'Revenue Push', description: 'Ενίσχυση πωλήσεων σε προϊόντα με υψηλή ζήτηση.', signal: 'Demand capture' },
+  { title: 'Mixed Strategy', description: 'Συνδυασμός πολλαπλών στρατηγικών με προσαρμοσμένα βάρη.', signal: 'Balanced plan' },
+  { title: 'Seasonal / Promotional', description: 'Υποστήριξη εκπτώσεων και εποχιακών ενεργειών με έλεγχο αποθέματος.', signal: 'Seasonal lift' },
+  { title: 'Custom Strategy', description: 'Πλήρως προσαρμοσμένη στρατηγική στις ανάγκες του brand.', signal: 'Brand-specific' },
 ];
 
 const problemsHowWeHelp = [
@@ -190,6 +269,27 @@ const variantCopy: Record<LandingVariant, { finalTitle: string; finalDescription
 const LANDING_MAX =
   'mx-auto w-full max-w-[min(90rem,94vw)] px-4 sm:px-6 lg:px-10 xl:px-14';
 
+const PREMIUM_SECTION_CARD =
+  'relative overflow-hidden rounded-[32px] border border-[#1f2328]/10 bg-[var(--nts-bg-pure)] p-6 shadow-[0_24px_60px_rgba(16,24,40,0.12)] md:p-8';
+
+function trackMarketingEvent(action: string, params?: Record<string, string>) {
+  if (typeof window === 'undefined') return;
+  const analyticsWindow = window as Window & {
+    dataLayer?: Array<Record<string, unknown>>;
+    gtag?: (command: 'event', eventName: string, eventParams?: Record<string, unknown>) => void;
+  };
+
+  analyticsWindow.dataLayer?.push({
+    event: 'performance_plus_marketing',
+    action,
+    ...(params || {}),
+  });
+  analyticsWindow.gtag?.('event', action, {
+    event_category: 'marketing_page',
+    ...(params || {}),
+  });
+}
+
 // ─── Sub-components ─────────────────────────────────────────────────────────────
 
 function isPreviewDarkHighlight(index: number) {
@@ -241,19 +341,20 @@ function PreviewBlock(props: {
     <article
       key={point.title}
       className={[
-        'relative overflow-hidden rounded-[24px] border p-5 shadow-[0_10px_24px_rgba(16,24,40,0.1)]',
-        dark ? 'border-white/10 bg-[#101319] text-white' : 'border-[#1f2328]/15 bg-[var(--nts-bg-pure)] text-[var(--nts-charcoal)]'
+        'relative overflow-hidden rounded-[28px] border p-5 shadow-[0_18px_44px_rgba(16,24,40,0.11)] md:p-6',
+        dark ? 'border-white/10 bg-[#101319] text-white' : 'border-[#1f2328]/10 bg-[linear-gradient(145deg,#ffffff_0%,#fafafa_100%)] text-[var(--nts-charcoal)]'
       ].join(' ')}
     >
-      <div className="pointer-events-none absolute left-0 top-0 h-1 w-full bg-[var(--nts-accent)]" />
+      <div className="pointer-events-none absolute left-0 top-0 h-1.5 w-full bg-[var(--nts-accent)]" />
+      <div className="pointer-events-none absolute right-[-80px] top-[-80px] h-48 w-48 rounded-full bg-[var(--nts-accent)]/10 blur-3xl" />
       {hasImage ? (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1.15fr)] lg:items-center xl:gap-10">
           <div className="space-y-4">{body}</div>
-          <div className="relative flex min-h-[200px] items-center justify-center overflow-hidden rounded-[20px] border border-[#1f2328]/15 bg-[var(--nts-light-gray)]">
+          <div className="relative flex min-h-[220px] items-center justify-center overflow-hidden rounded-[24px] border border-[#1f2328]/10 bg-[#f3f4f6] p-3 shadow-inner">
             <img
               src={point.imageSrc}
               alt={`${point.title} screenshot`}
-              className="h-auto max-h-[min(480px,50vh)] w-full object-contain"
+              className="h-auto max-h-[min(500px,54vh)] w-full rounded-[18px] object-contain shadow-[0_18px_44px_rgba(16,24,40,0.14)]"
             />
           </div>
         </div>
@@ -280,12 +381,12 @@ export function MarketingIndexPage({
   const mailDemoHref = `mailto:${MARKETING_CONTACT_MAILTO}?subject=${encodeURIComponent('Performance+ Demo Request')}`;
 
   return (
-    <div ref={scrollRef} className="h-screen overflow-y-auto overflow-x-hidden bg-[var(--nts-bg-subtle)] text-[var(--nts-charcoal)]">
+    <div ref={scrollRef} className="h-screen overflow-y-auto overflow-x-hidden bg-[radial-gradient(circle_at_top_left,rgba(249,115,22,0.12),transparent_34%),linear-gradient(180deg,#ffffff_0%,#f7f7f7_42%,#ffffff_100%)] text-[var(--nts-charcoal)]">
 
       {/* ── Sticky header ────────────────────────────────────────────────── */}
       <header className="relative z-20">
         <div className={`${LANDING_MAX} pt-5`}>
-          <div className="rounded-[22px] border border-[#1f2328]/10 bg-[var(--nts-bg-pure)] px-4 py-3 shadow-[0_10px_24px_rgba(16,24,40,0.08)] md:px-5">
+          <div className="rounded-[24px] border border-[#1f2328]/10 bg-white/88 px-4 py-3 shadow-[0_14px_34px_rgba(16,24,40,0.1)] backdrop-blur md:px-5">
             <div className={`flex items-center gap-3 sm:gap-4 ${onReturnToApp || onOpenAuth ? 'justify-between' : ''}`}>
               <div className="flex min-w-0 flex-row items-center gap-3 sm:gap-4">
                 <PerformancePlusLogo height={52} className="shrink-0 max-w-[min(100%,85vw)] sm:h-auto" />
@@ -318,42 +419,120 @@ export function MarketingIndexPage({
       </header>
 
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
-      <section className={`${LANDING_MAX} pb-6 pt-4 md:pt-5`}>
-        <div className="relative overflow-hidden rounded-[36px] border border-[#1f2328]/10 bg-[var(--nts-bg-pure)] px-5 py-6 shadow-[0_24px_56px_rgba(16,24,40,0.12)] sm:px-7 md:px-10 md:py-8 lg:px-12">
-          <div className="pointer-events-none absolute right-[-80px] top-[-20px] h-64 w-64 rounded-full bg-[var(--nts-accent)]/12 blur-3xl" />
-          <div className="pointer-events-none absolute bottom-[-100px] left-[-20px] h-72 w-72 rounded-full bg-[#1f2328]/4 blur-3xl" />
+      <section className={`${LANDING_MAX} pb-7 pt-4 md:pt-5`}>
+        <div className="relative overflow-hidden rounded-[40px] border border-[#1f2328]/10 bg-[linear-gradient(145deg,#ffffff_0%,#fff7ed_52%,#ffffff_100%)] px-5 py-6 shadow-[0_30px_80px_rgba(16,24,40,0.16)] sm:px-7 md:px-10 md:py-9 lg:px-12">
+          <div className="pointer-events-none absolute right-[-120px] top-[-80px] h-80 w-80 rounded-full bg-[var(--nts-accent)]/18 blur-3xl" />
+          <div className="pointer-events-none absolute bottom-[-140px] left-[-40px] h-96 w-96 rounded-full bg-[#111827]/8 blur-3xl" />
+          <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-[var(--nts-accent)]/40 to-transparent" />
 
           <div className="relative">
-            <div className="grid gap-6 lg:grid-cols-[1.02fr_0.98fr] lg:items-center lg:gap-8 xl:gap-12">
-              <div className="space-y-4">
-                <h1 className="max-w-none leading-[1.08] text-[var(--nts-charcoal)]">
-                  <span className="block text-3xl font-bold md:text-5xl lg:text-6xl">Performance+:</span>
-                  <span className="mt-2 block text-2xl font-semibold text-[var(--nts-accent)] md:text-3xl lg:text-[2.75rem]">{MARKETING_TAGLINE_HEADER}</span>
-                </h1>
-                <div className="max-w-none space-y-3 text-[15px] leading-7 text-[var(--nts-medium-gray)] md:text-base lg:pr-2">
-                  {heroParagraphs.map((p) => (
-                    <p key={p}>{p}</p>
-                  ))}
+            <div className="grid gap-7 lg:grid-cols-[1.02fr_0.98fr] lg:items-center lg:gap-9 xl:gap-12">
+              <div className="space-y-5">
+                <div className="inline-flex items-center gap-2 rounded-full border border-[var(--nts-accent)]/25 bg-white/80 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--nts-accent)] shadow-[0_8px_20px_rgba(249,115,22,0.08)]">
+                  <TrendingUp size={13} aria-hidden />
+                  Commerce intelligence για e-shops
                 </div>
-
+                <h1 className="max-w-none leading-[1.08] text-[var(--nts-charcoal)]">
+                  <span className="block text-4xl font-bold tracking-[-0.04em] md:text-5xl lg:text-6xl">Performance+:</span>
+                  <span className="mt-3 block text-2xl font-semibold tracking-[-0.02em] text-[var(--nts-accent)] md:text-3xl lg:text-[2.85rem]">{MARKETING_TAGLINE_HEADER}</span>
+                </h1>
+                <div className="max-w-none text-[15px] leading-7 text-[var(--nts-medium-gray)] md:text-[17px] md:leading-8 lg:pr-2">
+                  <p>{heroLeadParagraph}</p>
+                </div>
                 <div className="flex flex-wrap gap-3">
                   <a
                     href={mailDemoHref}
-                    className="inline-flex items-center gap-2 rounded-xl border border-[#1f2328]/10 bg-[var(--nts-bg-subtle)] px-5 py-3 text-sm font-semibold text-[var(--nts-charcoal)] transition hover:bg-[var(--nts-light-gray)]"
+                    className="inline-flex items-center gap-2 rounded-2xl border border-[var(--nts-accent-hover)] bg-[var(--nts-accent)] px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(249,115,22,0.32)] transition hover:-translate-y-0.5 hover:bg-[var(--nts-accent-hover)] hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nts-accent)]"
                   >
                     <HelpCircle size={16} />
                     Ζητήστε demo
+                    <ArrowRight size={15} aria-hidden />
                   </a>
+                  <span className="inline-flex items-center gap-2 rounded-2xl border border-[#1f2328]/10 bg-white/70 px-4 py-3 text-sm font-semibold text-[var(--nts-charcoal)] shadow-[0_8px_20px_rgba(16,24,40,0.06)]">
+                    <ShieldCheck size={16} className="text-[var(--nts-accent)]" aria-hidden />
+                    Read-only connectors
+                  </span>
                 </div>
               </div>
 
-              <div className="relative overflow-hidden rounded-[22px] border border-[#1f2328]/15 bg-[var(--nts-light-gray)] shadow-[0_10px_24px_rgba(16,24,40,0.1)]">
+              <div className="relative overflow-hidden rounded-[28px] border border-[#1f2328]/10 bg-[#111827] p-2 shadow-[0_24px_60px_rgba(16,24,40,0.22)]">
+                <div className="absolute left-5 top-5 z-10 rounded-full border border-white/12 bg-white/90 px-3 py-1 text-[11px] font-semibold text-[#111827] shadow-[0_8px_18px_rgba(0,0,0,0.16)]">
+                  Strategy dashboard
+                </div>
                 <img
                   src="/landing-screens/commercial-strategy-hero.png"
                   alt="Performance+ Commercial Strategy dashboard"
-                  className="h-auto w-full object-contain"
+                  className="h-auto w-full rounded-[22px] object-contain"
                 />
               </div>
+            </div>
+
+            <div className="mt-7 grid gap-3 md:grid-cols-3">
+              {heroProofPoints.map((point) => (
+                <div key={point.label} className="rounded-2xl border border-[#1f2328]/10 bg-white/78 p-4 shadow-[0_10px_24px_rgba(16,24,40,0.08)] backdrop-blur">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--nts-accent)]">{point.label}</p>
+                  <p className="mt-2 text-sm font-semibold leading-6 text-[var(--nts-charcoal)]">{point.value}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              {heroSupportingParagraphs.map((p, index) => (
+                <div
+                  key={p}
+                  className="relative overflow-hidden rounded-2xl border border-[#1f2328]/10 bg-white/72 p-4 shadow-[0_8px_20px_rgba(16,24,40,0.07)] backdrop-blur"
+                >
+                  <div className="pointer-events-none absolute left-0 top-0 h-full w-1 bg-[var(--nts-accent)]/70" />
+                  <p className="mb-2 text-[11px] font-semibold tracking-[0.08em] text-[var(--nts-accent)]">
+                    {String(index + 1).padStart(2, '0')}
+                  </p>
+                  <p className="text-sm leading-7 text-[var(--nts-medium-gray)] md:text-[15px]">
+                    {p}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Credibility / methodology ─────────────────────────────────────── */}
+      <section className={`${LANDING_MAX} pb-8`}>
+        <div className={PREMIUM_SECTION_CARD}>
+          <div className="pointer-events-none absolute left-[-120px] top-[-120px] h-72 w-72 rounded-full bg-[var(--nts-accent)]/10 blur-3xl" />
+          <div className="relative grid gap-7 lg:grid-cols-[0.95fr_1.25fr] lg:items-start">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--nts-accent)]">Credibility layer</p>
+              <h2 className="mt-3 text-2xl font-semibold tracking-[-0.02em] text-[var(--nts-charcoal)] md:text-3xl">4 χρόνια μεθοδολογίας Performance+</h2>
+              <p className="mt-4 text-sm leading-7 text-[var(--nts-medium-gray)] md:text-base">
+                Το Performance+ δεν ξεκινά από ένα γενικό AI prompt. Πατάει σε μεθοδολογία marketing και data analysis που έχει χρησιμοποιηθεί για να οργανώνει προωθητικές ενέργειες, προτεραιότητες προϊόντων και εμπορική λήψη αποφάσεων.
+              </p>
+              <div className="mt-6 grid gap-2">
+                {trustPosturePoints.map((point) => (
+                  <div key={point} className="flex items-center gap-2 rounded-2xl border border-[#1f2328]/10 bg-[var(--nts-bg-subtle)] px-4 py-3 text-sm font-semibold text-[var(--nts-charcoal)]">
+                    <ShieldCheck size={16} className="shrink-0 text-[var(--nts-accent)]" aria-hidden />
+                    <span>{point}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid gap-4">
+              {methodologySteps.map((step, index) => (
+                <div key={step.title} className="relative overflow-hidden rounded-3xl border border-[#1f2328]/10 bg-[linear-gradient(145deg,#ffffff_0%,#fafafa_100%)] p-5 shadow-[0_12px_30px_rgba(16,24,40,0.08)]">
+                  <div className="pointer-events-none absolute right-[-48px] top-[-48px] h-28 w-28 rounded-full bg-[var(--nts-accent)]/10 blur-2xl" />
+                  <div className="relative flex gap-4">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#111827] text-white shadow-[0_10px_22px_rgba(17,24,39,0.18)]">
+                      {step.icon}
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--nts-accent)]">Step {index + 1}</p>
+                      <h3 className="mt-1 text-base font-semibold text-[var(--nts-charcoal)]">{step.title}</h3>
+                      <p className="mt-2 text-sm leading-6 text-[var(--nts-medium-gray)]">{step.description}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -361,33 +540,57 @@ export function MarketingIndexPage({
 
       {/* ── Από τα δεδομένα στη στρατηγική εικόνα ─────────────────────────── */}
       <section className={`${LANDING_MAX} pb-8`}>
-        <div className="rounded-2xl border border-[#1f2328] bg-[var(--nts-bg-pure)] p-6 shadow-[0_20px_44px_rgba(16,24,40,0.14)] md:p-8">
-          <p className="text-[11px] tracking-[0.08em] text-[var(--nts-accent)]">Δεδομένα → Εποπτεία</p>
-          <h3 className="mt-2 text-lg font-semibold text-[var(--nts-charcoal)] md:text-xl">Από τα δεδομένα στη στρατηγική εικόνα</h3>
-          <p className="mt-3 max-w-none text-sm leading-7 text-[var(--nts-medium-gray)] md:text-base">
-            Το Performance+ συγκεντρώνει πληροφορίες από όλα τα κρίσιμα σημεία του e-commerce σε ένα ενιαίο περιβάλλον εμπορικής εποπτείας.
-          </p>
-
-          <p className="mt-6 text-[11px] font-semibold tracking-[0.08em] text-[var(--nts-medium-gray)]">Εισαγωγή δεδομένων</p>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {dataIntroSources.map((source) => (
-              <div key={source.name} className="rounded-xl border border-[#1f2328]/12 bg-[var(--nts-bg-subtle)] p-4 text-center">
-                <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl border border-[#1f2328]/10 bg-[var(--nts-bg-pure)] text-[var(--nts-charcoal)]">
-                  {source.icon}
-                </div>
-                <p className="mt-3 text-sm font-semibold text-[var(--nts-charcoal)]">{source.name}</p>
-                <p className="mt-1 text-xs text-[var(--nts-medium-gray)]">{source.description}</p>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-6 flex items-start gap-3 rounded-xl border border-[var(--nts-accent)]/25 bg-[var(--nts-accent)]/6 px-4 py-3 md:items-center md:gap-4">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#1f2328]/10 bg-[var(--nts-bg-pure)] text-[var(--nts-charcoal)]">
-              <Upload size={18} />
-            </div>
+        <div className={PREMIUM_SECTION_CARD}>
+          <div className="pointer-events-none absolute right-[-120px] top-[-120px] h-72 w-72 rounded-full bg-[var(--nts-accent)]/10 blur-3xl" />
+          <div className="relative grid gap-7 lg:grid-cols-[0.9fr_1.3fr] lg:items-start">
             <div>
-              <p className="text-sm font-semibold text-[var(--nts-charcoal)]">Γρήγορη διασύνδεση πλατφορμών</p>
-              <p className="mt-1 text-xs text-[var(--nts-medium-gray)] md:text-sm">Άμεση ενεργοποίηση χωρίς πολύπλοκες διαδικασίες εγκατάστασης.</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--nts-accent)]">Data ecosystem</p>
+              <h3 className="mt-3 text-2xl font-semibold tracking-[-0.02em] text-[var(--nts-charcoal)] md:text-3xl">Από connectors σε εμπορικές αποφάσεις</h3>
+              <p className="mt-4 text-sm leading-7 text-[var(--nts-medium-gray)] md:text-base">
+                Το Performance+ συγκεντρώνει πληροφορίες από τα κρίσιμα σημεία του e-commerce και τις μετατρέπει σε κοινή εικόνα για προϊόντα, stock, κανάλια, ROAS και profitability.
+              </p>
+              <div className="mt-6 rounded-2xl border border-[var(--nts-accent)]/25 bg-[var(--nts-accent)]/8 p-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--nts-accent)] text-white shadow-[0_10px_22px_rgba(249,115,22,0.25)]">
+                    <Upload size={18} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-[var(--nts-charcoal)]">Γρήγορη ενεργοποίηση connectors</p>
+                    <p className="mt-1 text-xs leading-5 text-[var(--nts-medium-gray)] md:text-sm">Read-only όπου απαιτείται, με ασφαλή σύνδεση λογαριασμών και συγχρονισμό δεδομένων στο Performance+.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {dataIntroSources.map((source) => (
+                  <div key={source.name} className="group relative overflow-hidden rounded-3xl border border-[#1f2328]/10 bg-[linear-gradient(145deg,#ffffff_0%,#fafafa_100%)] p-5 shadow-[0_14px_34px_rgba(16,24,40,0.08)] transition hover:-translate-y-1 hover:border-[var(--nts-accent)]/35 hover:shadow-[0_22px_46px_rgba(16,24,40,0.13)]">
+                    <div className="pointer-events-none absolute right-[-36px] top-[-36px] h-24 w-24 rounded-full bg-[var(--nts-accent)]/10 blur-2xl transition group-hover:bg-[var(--nts-accent)]/18" />
+                    <div className="relative flex items-start gap-4">
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#111827] text-white shadow-[0_10px_22px_rgba(17,24,39,0.18)]">
+                        {source.icon}
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-[var(--nts-charcoal)]">{source.name}</p>
+                        <p className="mt-2 text-xs leading-5 text-[var(--nts-medium-gray)]">{source.description}</p>
+                      </div>
+                    </div>
+                    <p className="relative mt-4 rounded-full border border-[#1f2328]/10 bg-white px-3 py-1.5 text-[11px] font-semibold text-[var(--nts-charcoal)]">
+                      {source.examples}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-4 grid gap-2 rounded-3xl border border-[#1f2328]/10 bg-[#111827] p-3 text-white shadow-[0_18px_44px_rgba(17,24,39,0.18)] sm:grid-cols-3">
+                {['Σύνδεση δεδομένων', 'AI ανάλυση', 'Εμπορική απόφαση'].map((step, index) => (
+                  <div key={step} className="flex items-center gap-2 rounded-2xl bg-white/7 px-3 py-3 text-xs font-semibold">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--nts-accent)] text-[11px] text-white">{index + 1}</span>
+                    <span>{step}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -398,7 +601,7 @@ export function MarketingIndexPage({
             </p>
             <div className="mt-5 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
               {aiIntelligenceAxes.map((axis) => (
-                <div key={axis.title} className="rounded-xl border border-[#1f2328]/12 bg-[#12151b] px-4 py-4 text-left shadow-[0_6px_16px_rgba(15,17,21,0.12)]">
+                <div key={axis.title} className="rounded-2xl border border-white/10 bg-[#12151b] px-4 py-4 text-left shadow-[0_12px_28px_rgba(15,17,21,0.16)]">
                   <p className="text-sm font-semibold text-white">{axis.title}</p>
                   <p className="mt-2 text-xs leading-relaxed text-white/70 md:text-sm">{axis.description}</p>
                 </div>
@@ -408,10 +611,60 @@ export function MarketingIndexPage({
         </div>
       </section>
 
+      {/* ── Commerce use cases ────────────────────────────────────────────── */}
+      <section className={`${LANDING_MAX} pb-8`}>
+        <div className={PREMIUM_SECTION_CARD}>
+          <div className="pointer-events-none absolute right-[-120px] top-[-120px] h-72 w-72 rounded-full bg-[var(--nts-accent)]/10 blur-3xl" />
+          <div className="relative flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--nts-accent)]">E-shop owner use cases</p>
+              <h2 className="mt-3 text-2xl font-semibold tracking-[-0.02em] text-[var(--nts-charcoal)] md:text-3xl">Πού δημιουργεί εμπορική αξία</h2>
+              <p className="mt-3 max-w-3xl text-sm leading-7 text-[var(--nts-medium-gray)] md:text-base">
+                Τα πιο συχνά σημεία όπου ένα e-shop χάνει απόδοση δεν είναι μόνο τα ads. Είναι η αποσύνδεση ανάμεσα σε προϊόντα, stock, margin, κοινά και κανάλια.
+              </p>
+            </div>
+            <a
+              href="#interest"
+              onClick={() => trackMarketingEvent('cta_click', { placement: 'use_cases' })}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[#1f2328]/10 bg-[#111827] px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(17,24,39,0.18)] transition hover:-translate-y-0.5 hover:bg-[#0f172a] hover:no-underline"
+            >
+              Συζητήστε το use case σας
+              <ArrowRight size={15} aria-hidden />
+            </a>
+          </div>
+
+          <div className="relative mt-7 grid gap-4 md:grid-cols-2">
+            {commerceUseCases.map((useCase) => (
+              <article key={useCase.title} className="overflow-hidden rounded-3xl border border-[#1f2328]/10 bg-[linear-gradient(145deg,#ffffff_0%,#fafafa_100%)] shadow-[0_14px_34px_rgba(16,24,40,0.08)]">
+                <div className="border-b border-[#1f2328]/10 bg-[#111827] px-5 py-4 text-white">
+                  <div className="flex items-center gap-3">
+                    <Store size={18} className="text-[var(--nts-accent)]" aria-hidden />
+                    <h3 className="text-base font-semibold">{useCase.title}</h3>
+                  </div>
+                </div>
+                <div className="grid gap-3 p-5">
+                  {[
+                    ['Πριν', useCase.before],
+                    ['Τι κάνει το Performance+', useCase.action],
+                    ['Business outcome', useCase.outcome],
+                  ].map(([label, text]) => (
+                    <div key={label} className="rounded-2xl border border-[#1f2328]/10 bg-white p-4">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--nts-accent)]">{label}</p>
+                      <p className="mt-2 text-sm leading-6 text-[var(--nts-medium-gray)]">{text}</p>
+                    </div>
+                  ))}
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ── Γιατί ξεχωρίζει ──────────────────────────────────────────────── */}
       <section className={`${LANDING_MAX} pb-8`}>
         <div className="grid items-stretch gap-5 lg:grid-cols-[1fr_1fr] lg:gap-8">
-          <div className="rounded-[28px] border border-[#1f2328]/10 bg-[var(--nts-bg-pure)] p-6 shadow-[0_18px_40px_rgba(16,24,40,0.12)] md:p-8">
+          <div className="relative overflow-hidden rounded-[32px] border border-[#1f2328]/10 bg-[var(--nts-bg-pure)] p-6 shadow-[0_24px_56px_rgba(16,24,40,0.12)] md:p-8">
+            <div className="pointer-events-none absolute right-[-90px] top-[-90px] h-56 w-56 rounded-full bg-[var(--nts-accent)]/10 blur-3xl" />
             <p className="text-[11px] tracking-[0.08em] text-[var(--nts-accent)]">Διαφορά</p>
             <h2 className="mt-4 text-xl font-semibold leading-snug text-[var(--nts-charcoal)] md:text-2xl">Γιατί ξεχωρίζει το Performance+</h2>
             <div className="mt-5 space-y-4 text-sm leading-7 text-[var(--nts-medium-gray)] md:text-[15px]">
@@ -423,13 +676,14 @@ export function MarketingIndexPage({
             </div>
           </div>
 
-          <div className="rounded-[26px] border border-[#1f2328]/10 bg-[#12151b] p-6 shadow-[0_18px_40px_rgba(15,17,21,0.18)] md:p-8">
+          <div className="relative overflow-hidden rounded-[32px] border border-white/10 bg-[#12151b] p-6 shadow-[0_24px_56px_rgba(15,17,21,0.22)] md:p-8">
+            <div className="pointer-events-none absolute bottom-[-120px] right-[-80px] h-72 w-72 rounded-full bg-[var(--nts-accent)]/14 blur-3xl" />
             <p className="text-[11px] tracking-[0.08em] text-[var(--nts-accent)]">Στην πράξη</p>
             <h2 className="mt-4 text-xl font-semibold text-white md:text-2xl">Τι σημαίνει αυτό στην πράξη</h2>
             <ul className="mt-6 space-y-3">
               {practiceOutcomes.map((line) => (
                 <li key={line} className="flex items-start gap-3 text-sm leading-6 text-white/76 md:text-[15px]">
-                  <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-[var(--nts-accent)]" />
+                  <CheckCircle2 size={16} className="mt-1 shrink-0 text-[var(--nts-accent)]" aria-hidden />
                   <span>{line}</span>
                 </li>
               ))}
@@ -440,16 +694,26 @@ export function MarketingIndexPage({
 
       {/* ── 7 σενάρια ───────────────────────────────────────────────────── */}
       <section className={`${LANDING_MAX} pb-8`}>
-        <div className="rounded-2xl border border-[#1f2328] bg-[var(--nts-bg-pure)] p-6 shadow-[0_20px_44px_rgba(16,24,40,0.14)] md:p-8">
-          <h3 className="text-lg font-semibold text-[var(--nts-charcoal)] md:text-xl">Τα 7 εμπορικά σενάρια</h3>
-          <p className="mt-3 max-w-none text-sm leading-7 text-[var(--nts-medium-gray)] md:text-base">
-            Το Performance+ επιτρέπει στην επιχείρηση να συγκρίνει διαφορετικές στρατηγικές πριν δεσμεύσει budget. Οι προτάσεις προσαρμόζονται στο brand, στη ζήτηση και στα επίπεδα αποθέματος ανά SKU.
-          </p>
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className={PREMIUM_SECTION_CARD}>
+          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--nts-accent)]">Strategy engine</p>
+              <h3 className="mt-3 text-2xl font-semibold tracking-[-0.02em] text-[var(--nts-charcoal)] md:text-3xl">Τα 7 εμπορικά σενάρια</h3>
+              <p className="mt-3 max-w-3xl text-sm leading-7 text-[var(--nts-medium-gray)] md:text-base">
+                Το Performance+ επιτρέπει στην επιχείρηση να συγκρίνει διαφορετικές στρατηγικές πριν δεσμεύσει budget. Οι προτάσεις προσαρμόζονται στο brand, στη ζήτηση και στα επίπεδα αποθέματος ανά SKU.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-[var(--nts-accent)]/20 bg-[var(--nts-accent)]/8 px-4 py-3 text-sm font-semibold text-[var(--nts-charcoal)]">
+              Απόφαση πριν το spend
+            </div>
+          </div>
+          <div className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {commerceScenarios.map((s) => (
-              <div key={s.title} className="rounded-xl border border-[#1f2328]/12 bg-[var(--nts-bg-subtle)] p-4">
-                <p className="text-sm font-semibold text-[var(--nts-charcoal)]">{s.title}</p>
-                <p className="mt-2 text-xs leading-relaxed text-[var(--nts-medium-gray)] md:text-sm">{s.description}</p>
+              <div key={s.title} className="group relative overflow-hidden rounded-3xl border border-[#1f2328]/10 bg-[linear-gradient(145deg,#ffffff_0%,#fafafa_100%)] p-5 shadow-[0_12px_30px_rgba(16,24,40,0.08)] transition hover:-translate-y-1 hover:shadow-[0_20px_44px_rgba(16,24,40,0.13)]">
+                <div className="pointer-events-none absolute right-[-40px] top-[-40px] h-28 w-28 rounded-full bg-[var(--nts-accent)]/10 blur-2xl" />
+                <p className="relative inline-flex rounded-full border border-[var(--nts-accent)]/20 bg-[var(--nts-accent)]/8 px-3 py-1 text-[11px] font-semibold text-[var(--nts-accent)]">{s.signal}</p>
+                <p className="relative mt-4 text-sm font-semibold text-[var(--nts-charcoal)]">{s.title}</p>
+                <p className="relative mt-2 text-xs leading-relaxed text-[var(--nts-medium-gray)] md:text-sm">{s.description}</p>
               </div>
             ))}
           </div>
@@ -458,24 +722,22 @@ export function MarketingIndexPage({
 
       {/* ── Ποια προβλήματα επιλύει ─────────────────────────────────────── */}
       <section className={`${LANDING_MAX} pb-8`}>
-        <div className="rounded-2xl border border-[#1f2328] bg-[var(--nts-bg-pure)] p-6 shadow-[0_20px_44px_rgba(16,24,40,0.14)] md:p-8">
-          <h3 className="text-lg font-semibold text-[var(--nts-charcoal)] md:text-xl">Ποια προβλήματα επιλύει</h3>
-
-          <div className="mt-2 hidden rounded-t-xl bg-[#1f2328] px-5 py-3 text-[11px] font-semibold uppercase tracking-[0.06em] text-white/85 md:grid md:grid-cols-2 md:gap-4">
-            <span>Πρόβλημα</span>
-            <span>Πώς βοηθά το Performance+</span>
-          </div>
-
-          <div className="mt-0 divide-y divide-[#1f2328]/12 overflow-hidden rounded-b-xl rounded-t-xl border border-[#1f2328]/12 md:mt-0 md:rounded-t-none md:border-t-0">
+        <div className={PREMIUM_SECTION_CARD}>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--nts-accent)]">Commerce pain points</p>
+          <h3 className="mt-3 text-2xl font-semibold tracking-[-0.02em] text-[var(--nts-charcoal)] md:text-3xl">Ποια προβλήματα επιλύει</h3>
+          <div className="mt-6 grid gap-4 lg:grid-cols-2">
             {problemsHowWeHelp.map((row, i) => (
-              <div key={i} className="grid grid-cols-1 gap-0 md:grid-cols-2">
-                <div className="border-b border-[#1f2328]/8 bg-[#fafafa] px-5 py-4 md:border-b-0 md:border-r md:border-[#1f2328]/8">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--nts-medium-gray)] md:hidden">Πρόβλημα</p>
-                  <p className="mt-1 text-sm font-medium leading-relaxed text-[var(--nts-charcoal)] md:mt-0">{row.problem}</p>
-                </div>
-                <div className="bg-[var(--nts-bg-pure)] px-5 py-4">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--nts-accent)] md:hidden">Πώς βοηθά το Performance+</p>
-                  <p className="mt-1 text-sm leading-relaxed text-[var(--nts-charcoal)] md:mt-0">{row.helps}</p>
+              <div key={i} className="rounded-3xl border border-[#1f2328]/10 bg-[var(--nts-bg-subtle)] p-5 shadow-[0_10px_26px_rgba(16,24,40,0.07)]">
+                <div className="flex gap-4">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-[#111827] text-xs font-semibold text-white">{String(i + 1).padStart(2, '0')}</span>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--nts-medium-gray)]">Πρόβλημα</p>
+                    <p className="mt-2 text-sm font-semibold leading-relaxed text-[var(--nts-charcoal)]">{row.problem}</p>
+                    <div className="mt-4 rounded-2xl border border-[var(--nts-accent)]/18 bg-white p-4">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--nts-accent)]">Πώς βοηθά το Performance+</p>
+                      <p className="mt-2 text-sm leading-6 text-[var(--nts-charcoal)]">{row.helps}</p>
+                    </div>
+                  </div>
                 </div>
               </div>
             ))}
@@ -483,13 +745,59 @@ export function MarketingIndexPage({
         </div>
       </section>
 
+      {/* ── Proof & authority ─────────────────────────────────────────────── */}
+      <section className={`${LANDING_MAX} pb-8`}>
+        <div className="relative overflow-hidden rounded-[34px] border border-white/10 bg-[#111827] p-6 text-white shadow-[0_28px_70px_rgba(17,24,39,0.26)] md:p-8">
+          <div className="pointer-events-none absolute right-[-120px] top-[-120px] h-80 w-80 rounded-full bg-[var(--nts-accent)]/20 blur-3xl" />
+          <div className="pointer-events-none absolute bottom-[-120px] left-[-80px] h-72 w-72 rounded-full bg-white/8 blur-3xl" />
+          <div className="relative grid gap-7 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--nts-accent)]">Proof & authority</p>
+              <h2 className="mt-3 text-2xl font-semibold tracking-[-0.02em] text-white md:text-3xl">Από marketing εμπειρία σε decision system</h2>
+              <p className="mt-4 text-sm leading-7 text-white/72 md:text-base">
+                Το Performance+ έχει σχεδιαστεί από ανθρώπους του marketing και αναλυτές δεδομένων, με στόχο να κάνει την εμπορική λογική πιο ορατή, επαναλήψιμη και μετρήσιμη για την ομάδα του e-shop.
+              </p>
+              <div className="mt-6 rounded-3xl border border-white/10 bg-white/8 p-5">
+                <p className="text-sm font-semibold text-white">Measurable outcomes χωρίς υπερβολές</p>
+                <p className="mt-2 text-sm leading-6 text-white/68">
+                  Τα αποτελέσματα αξιολογούνται ανά brand με βάση διαθέσιμα δεδομένα, όπως αξιοποίηση αποθέματος, ποιότητα στόχευσης, καλύτερη προτεραιοποίηση προϊόντων και καθαρότερη κατανομή budget.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-4">
+              {authorityProofPoints.map((point) => (
+                <div key={point.title} className="rounded-3xl border border-white/10 bg-white/8 p-5 shadow-[0_14px_34px_rgba(0,0,0,0.12)]">
+                  <div className="flex items-start gap-3">
+                    <CheckCircle2 size={18} className="mt-1 shrink-0 text-[var(--nts-accent)]" aria-hidden />
+                    <div>
+                      <h3 className="text-base font-semibold text-white">{point.title}</h3>
+                      <p className="mt-2 text-sm leading-6 text-white/68">{point.description}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ── 5 περιβάλλοντα ──────────────────────────────────────────────── */}
       <section className={`${LANDING_MAX} pb-8`}>
-        <div className="rounded-2xl border border-[#1f2328] bg-[var(--nts-bg-pure)] p-6 shadow-[0_20px_44px_rgba(16,24,40,0.14)] md:p-8">
-          <h3 className="text-lg font-semibold text-[var(--nts-charcoal)] md:text-xl">Τα 5 βασικά περιβάλλοντα του Performance+</h3>
-          <p className="mt-2 text-sm text-[var(--nts-medium-gray)]">
-            Πώς το Performance+ μετατρέπει δεδομένα και νοημοσύνη σε στοχευμένη εμπορική δράση.
-          </p>
+        <div className={PREMIUM_SECTION_CARD}>
+          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--nts-accent)]">Product experience</p>
+              <h3 className="mt-3 text-2xl font-semibold tracking-[-0.02em] text-[var(--nts-charcoal)] md:text-3xl">Τα 5 βασικά περιβάλλοντα του Performance+</h3>
+              <p className="mt-3 max-w-3xl text-sm leading-7 text-[var(--nts-medium-gray)] md:text-base">
+                Πώς το Performance+ μετατρέπει δεδομένα και νοημοσύνη σε στοχευμένη εμπορική δράση για e-shop owners και ομάδες marketing.
+              </p>
+            </div>
+            <div className="inline-flex items-center gap-2 rounded-2xl border border-[#1f2328]/10 bg-[var(--nts-bg-subtle)] px-4 py-3 text-sm font-semibold text-[var(--nts-charcoal)]">
+              <PackageCheck size={16} className="text-[var(--nts-accent)]" aria-hidden />
+              Από insight σε action
+            </div>
+          </div>
 
           <div className="mt-6 grid gap-5">
             {appPreviewPoints.map((point, index) => (
@@ -506,25 +814,41 @@ export function MarketingIndexPage({
 
       {/* ── Final CTA ─────────────────────────────────────────────────────── */}
       <section className={`${LANDING_MAX} pb-8`}>
-        <div className="rounded-2xl border border-[#1f2328] bg-[var(--nts-bg-pure)] p-6 shadow-[0_20px_44px_rgba(16,24,40,0.14)] md:p-8">
-          <h3 className="text-lg font-semibold text-[var(--nts-charcoal)]">{copy.finalTitle}</h3>
-          <p className="mt-2 max-w-none text-sm text-[var(--nts-medium-gray)] md:text-base">{copy.finalDescription}</p>
+        <div className="relative overflow-hidden rounded-[34px] border border-white/10 bg-[#111827] p-6 text-white shadow-[0_28px_70px_rgba(17,24,39,0.28)] md:p-8">
+          <div className="pointer-events-none absolute right-[-110px] top-[-120px] h-80 w-80 rounded-full bg-[var(--nts-accent)]/20 blur-3xl" />
+          <div className="pointer-events-none absolute bottom-[-120px] left-[-80px] h-72 w-72 rounded-full bg-white/8 blur-3xl" />
+          <div className="relative grid gap-6 lg:grid-cols-[1.15fr_0.85fr] lg:items-center">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--nts-accent)]">Ready for commerce growth</p>
+              <h3 className="mt-3 text-2xl font-semibold tracking-[-0.02em] text-white md:text-3xl">{copy.finalTitle}</h3>
+              <p className="mt-3 max-w-4xl text-sm leading-7 text-white/72 md:text-base">{copy.finalDescription}</p>
+            </div>
 
-          <div className="mt-5 flex flex-wrap gap-3">
-            <a
-              href={mailDemoHref}
-              className="inline-flex items-center gap-2 rounded-xl border border-[#1f2328] bg-[var(--nts-bg-pure)] px-5 py-3 text-sm font-semibold text-[#1f2328] transition hover:bg-[var(--nts-light-gray)]"
-            >
-              <HelpCircle size={16} />
-              Ζητήστε demo
-            </a>
+            <div className="rounded-3xl border border-white/10 bg-white/8 p-4">
+              <div className="grid gap-3 text-sm text-white/78">
+                {['Σύνδεση δεδομένων', 'Εμπορική προτεραιοποίηση', 'Πιο καθαρή απόφαση budget'].map((line) => (
+                  <div key={line} className="flex items-center gap-2">
+                    <CheckCircle2 size={16} className="text-[var(--nts-accent)]" aria-hidden />
+                    <span>{line}</span>
+                  </div>
+                ))}
+              </div>
+              <a
+                href={mailDemoHref}
+                className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-[var(--nts-accent-hover)] bg-[var(--nts-accent)] px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(249,115,22,0.32)] transition hover:bg-[var(--nts-accent-hover)] hover:no-underline"
+              >
+                <HelpCircle size={16} />
+                Ζητήστε demo
+                <ArrowRight size={15} aria-hidden />
+              </a>
+            </div>
           </div>
 
-          <p className="mt-4 text-xs text-[var(--nts-medium-gray)]">
+          <p className="relative mt-5 text-xs text-white/58">
             Εναλλακτικά,{' '}
             <a
               href={`mailto:${MARKETING_CONTACT_MAILTO}?subject=${encodeURIComponent('Performance+ — Επικοινωνία')}`}
-              className="font-semibold text-[var(--nts-charcoal)] underline underline-offset-2 hover:text-[var(--nts-accent)]"
+              className="font-semibold text-white underline underline-offset-2 hover:text-[var(--nts-accent)]"
             >
               επικοινώνησε μέσω email
             </a>
@@ -536,7 +860,7 @@ export function MarketingIndexPage({
 
       {/* ── Compliance trust bar ─────────────────────────────────────────── */}
       <section className={`${LANDING_MAX} pb-8`}>
-        <div className="flex flex-wrap items-center justify-center gap-6 rounded-2xl border border-[#1f2328]/10 bg-[var(--nts-bg-subtle)] px-6 py-4 md:px-10">
+        <div className="flex flex-wrap items-center justify-center gap-6 rounded-3xl border border-[#1f2328]/10 bg-white/78 px-6 py-4 shadow-[0_12px_30px_rgba(16,24,40,0.06)] backdrop-blur md:px-10">
           {[
             { icon: <ShieldCheck size={15} />, text: 'GDPR-compliant' },
             { icon: <Brain size={15} />, text: 'EU AI Act — limited risk, transparent AI' },

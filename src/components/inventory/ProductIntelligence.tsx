@@ -26,6 +26,7 @@ import { usePlan } from '../../hooks/usePlan';
 import { useProcurement } from '../../hooks/useProcurement';
 import { useProductAggregates } from '../../hooks/useAggregates';
 import { usePriceBenchmarks } from '../../hooks/usePriceBenchmarks';
+import { useProductIntelligenceAggregate } from '../../hooks/useProductIntelligenceAggregate';
 import { formatCurrency, formatCurrencyCompact, formatNumber, formatPercent } from '../../utils/format';
 import { FirestoreService } from '../../services/firestore';
 import {
@@ -38,6 +39,7 @@ import { DateRangePicker } from '../ui/DateRangePicker';
 import { ExportModal } from './ExportModal';
 import { ProductCharts } from './ProductCharts';
 import type { Product, InventorySummary, InventoryAlert } from '../../types';
+import type { ProductIntelligenceBucket } from '../../services/productIntelligenceAggregate';
 
 type SortField = 'name' | 'margin_percentage' | 'stock_level' | 'stock_age_days' | 'price';
 type SortDirection = 'asc' | 'desc';
@@ -275,6 +277,11 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   const { data: procData } = useProcurement();
   const { productStats } = useProductAggregates();
   const { benchmarks, count: benchmarkCount } = usePriceBenchmarks({ maxDocs: PRODUCT_INTELLIGENCE_BENCHMARK_LIMIT });
+  const serverBucket: ProductIntelligenceBucket =
+    stockCardFilter === 'healthy' || stockCardFilter === 'excess' || stockCardFilter === 'dead' || stockCardFilter === 'low'
+      ? stockCardFilter
+      : 'all';
+  const serverIntelligence = useProductIntelligenceAggregate(serverBucket, currentPage);
   const queryClient = useQueryClient();
   const toast = useToast();
 
@@ -305,10 +312,31 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   }, [suppliers]);
 
   const hasDateFilter = Boolean(productDateFrom && productDateTo);
-  const totalCatalogCount = usingProcurement ? sourceProducts.length : (sourceTotalCount ?? rawTotalCount ?? productStats?.totalSkus ?? rawProducts.length);
-  const isCatalogTruncated = !usingProcurement && totalCatalogCount > sourceProducts.length;
+  const serverFiltersSupported =
+    !usingProcurement &&
+    !hasDateFilter &&
+    !searchQuery.trim() &&
+    selectedCategory === 'all' &&
+    marginFilter === 'all' &&
+    stockAgeFilter === 'all';
+  const useServerIntelligence =
+    serverFiltersSupported &&
+    !!serverIntelligence.aggregate &&
+    !!serverIntelligence.page;
+  const totalCatalogCount = usingProcurement
+    ? sourceProducts.length
+    : (serverIntelligence.aggregate?.totalCount ?? sourceTotalCount ?? rawTotalCount ?? productStats?.totalSkus ?? rawProducts.length);
+  const isCatalogTruncated = !usingProcurement && !useServerIntelligence && totalCatalogCount > sourceProducts.length;
+  const effectiveSourceLoading = useServerIntelligence ? false : sourceLoading;
+
+  useEffect(() => {
+    if (useServerIntelligence && serverIntelligence.safePage !== currentPage) {
+      setCurrentPage(serverIntelligence.safePage);
+    }
+  }, [useServerIntelligence, serverIntelligence.safePage, currentPage]);
 
   const productsScopedByDate = useMemo(() => {
+    if (useServerIntelligence) return serverIntelligence.page?.products ?? [];
     if (usingProcurement) return sourceProducts;
     if (!hasDateFilter) return sourceProducts;
     return sourceProducts.filter((p) => {
@@ -316,7 +344,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
       if (!ymd) return false;
       return ymd >= productDateFrom && ymd <= productDateTo;
     });
-  }, [sourceProducts, usingProcurement, hasDateFilter, productDateFrom, productDateTo, productDateMode]);
+  }, [useServerIntelligence, serverIntelligence.page, sourceProducts, usingProcurement, hasDateFilter, productDateFrom, productDateTo, productDateMode]);
 
   const inventorySummary = useMemo(() => {
     if (usingProcurement) return computeInventorySummary(sourceProducts, supplierTodMap, true);
@@ -467,15 +495,19 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   }, [usingProcurement, hasDateFilter, productStats, totalCatalogCount]);
 
   // Use procurement data when available, then precomputed aggregates for large imports.
-  const displaySummary = procInventorySummary ?? aggregateInventorySummary ?? inventorySummary;
+  const displaySummary = procInventorySummary ?? (useServerIntelligence ? serverIntelligence.aggregate?.summary ?? null : null) ?? aggregateInventorySummary ?? inventorySummary;
 
   const categories = useMemo(() => {
+    if (!usingProcurement && serverIntelligence.aggregate?.categories?.length) {
+      return serverIntelligence.aggregate.categories.map((c) => c.name).filter(Boolean).sort();
+    }
     const fromProducts = [...new Set(productsScopedByDate.map(p => p.category))].filter(Boolean).sort();
     return fromProducts;
-  }, [productsScopedByDate]);
+  }, [usingProcurement, serverIntelligence.aggregate, productsScopedByDate]);
 
   // Filter and sort products
   const filteredProducts = useMemo(() => {
+    if (useServerIntelligence) return productsScopedByDate;
     return productsScopedByDate
       .filter((p) => {
         const matchesSearch = (p.name ?? '').toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -517,13 +549,18 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           ? (aVal as number) - (bVal as number) 
           : (bVal as number) - (aVal as number);
       });
-  }, [productsScopedByDate, searchQuery, selectedCategory, marginFilter, stockAgeFilter, stockCardFilter, sortField, sortDirection, supplierTodMap, usingProcurement]);
+  }, [useServerIntelligence, productsScopedByDate, searchQuery, selectedCategory, marginFilter, stockAgeFilter, stockCardFilter, sortField, sortDirection, supplierTodMap, usingProcurement]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE));
-  const paginatedProducts = filteredProducts.slice(
-    (currentPage - 1) * PAGE_SIZE,
-    currentPage * PAGE_SIZE
-  );
+  const serverFilteredTotal = useServerIntelligence ? (serverIntelligence.page?.totalRows ?? filteredProducts.length) : filteredProducts.length;
+  const totalPages = useServerIntelligence
+    ? Math.max(1, serverIntelligence.aggregate?.pagesByBucket?.[serverBucket] ?? 1)
+    : Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE));
+  const paginatedProducts = useServerIntelligence
+    ? filteredProducts
+    : filteredProducts.slice(
+        (currentPage - 1) * PAGE_SIZE,
+        currentPage * PAGE_SIZE
+      );
 
   useEffect(() => {
     setCurrentPage(1);
@@ -554,7 +591,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     }
   };
 
-  if (!sourceLoading && !hasImported && !usingProcurement) {
+  if (!effectiveSourceLoading && !hasImported && !usingProcurement && !serverIntelligence.aggregate && !serverIntelligence.isBuilding) {
     return (
       <div className="space-y-6">
         <PageHeader
@@ -594,20 +631,22 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           </p>
         }
         meta={
-          sourceLoading ? (
+          effectiveSourceLoading ? (
             <p className="text-xs font-medium text-[var(--nts-accent)] sm:text-sm flex items-center gap-2">
               <Loader2 className="h-3.5 w-3.5 animate-spin flex-shrink-0" aria-hidden />
               Φόρτωση inventory…
             </p>
-          ) : sourceProducts.length > 0 ? (
+          ) : sourceProducts.length > 0 || useServerIntelligence ? (
             <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-[#22C55E] sm:text-sm">
               <span>
-                Showing {isCatalogTruncated ? `${sourceProducts.length} of ${totalCatalogCount}` : sourceProducts.length} {usingProcurement ? 'procurement' : productSourceKind === 'erp' ? 'ERP' : 'imported'} product(s)
+                {useServerIntelligence
+                  ? `Showing ${formatNumber(totalCatalogCount)} ${serverIntelligence.aggregate?.sourceLabel === 'ERP' ? 'ERP' : 'catalog'} product(s)`
+                  : `Showing ${isCatalogTruncated ? `${sourceProducts.length} of ${totalCatalogCount}` : sourceProducts.length} ${usingProcurement ? 'procurement' : productSourceKind === 'erp' ? 'ERP' : 'imported'} product(s)`}
               </span>
               <DataSourcePill
                 label="Source"
-                value={productDataSourceLabel}
-                tone={productSourceKind === 'erp' ? 'warning' : 'success'}
+                value={useServerIntelligence ? serverIntelligence.aggregate?.sourceLabel ?? productDataSourceLabel : productDataSourceLabel}
+                tone={(useServerIntelligence ? serverIntelligence.aggregate?.sourceLabel === 'ERP' : productSourceKind === 'erp') ? 'warning' : 'success'}
               />
             </div>
           ) : null
@@ -619,7 +658,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
               size="sm"
               icon={<Trash2 size={14} />}
               onClick={handleDeleteProducts}
-              disabled={sourceLoading || isDeleting || !rawHasImported}
+              disabled={effectiveSourceLoading || isDeleting || !rawHasImported}
               className="min-h-[36px] flex-1 basis-[calc(50%-0.1875rem)] text-[#DC2626] hover:bg-[#FEE2E2] sm:flex-initial sm:basis-auto"
             >
               {isDeleting ? (
@@ -636,7 +675,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
               size="sm"
               icon={<Download size={14} />}
               onClick={() => setShowExportModal(true)}
-              disabled={sourceLoading}
+              disabled={effectiveSourceLoading}
               className="min-h-[36px] flex-1 basis-[calc(50%-0.1875rem)] sm:flex-initial sm:basis-auto"
             >
               <span className="hidden min-[380px]:inline">Εξαγωγή αναφοράς</span>
@@ -646,7 +685,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
         }
       />
 
-      {sourceLoading ? (
+      {effectiveSourceLoading ? (
         <ProductIntelligenceSkeleton />
       ) : (
         <>
@@ -669,7 +708,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
         </div>
       )}
 
-      {isCatalogTruncated && (
+      {(isCatalogTruncated || useServerIntelligence) && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900 shadow-sm">
           <div className="font-semibold flex items-center gap-2 mb-1">
             <Info size={16} className="shrink-0" aria-hidden />
@@ -677,7 +716,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           </div>
           <p className="leading-relaxed">
             Τα KPI χρησιμοποιούν τα precomputed aggregates για όλο τον κατάλογο ({formatNumber(totalCatalogCount)} SKUs).
-            Ο πίνακας εμφανίζει {formatNumber(sourceProducts.length)} προϊόντα στην τρέχουσα προβολή.
+            Ο πίνακας εμφανίζει {formatNumber(useServerIntelligence ? (serverIntelligence.page?.products.length ?? 0) : sourceProducts.length)} προϊόντα στην τρέχουσα προβολή.
           </p>
         </div>
       )}
@@ -902,7 +941,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           />
 
           <div className="text-sm text-[#4A4A4A]">
-            {filteredProducts.length} products{isCatalogTruncated ? ` από loaded set ${formatNumber(sourceProducts.length)}` : ''}
+            {formatNumber(serverFilteredTotal)} products{isCatalogTruncated ? ` από loaded set ${formatNumber(sourceProducts.length)}` : ''}
           </div>
         </div>
 
@@ -999,9 +1038,9 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
         {/* Pagination */}
         <div className="p-4 border-t border-[#E5E5E5] flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-[#4A4A4A]">
-            {filteredProducts.length === 0
+            {serverFilteredTotal === 0
               ? 'Δεν βρέθηκαν προϊόντα'
-              : `Εμφανίζονται ${(currentPage - 1) * PAGE_SIZE + 1}–${Math.min(currentPage * PAGE_SIZE, filteredProducts.length)} από ${filteredProducts.length} προϊόντα${isCatalogTruncated ? ` (loaded set: ${formatNumber(sourceProducts.length)} / ${formatNumber(totalCatalogCount)})` : ''}`}
+              : `Εμφανίζονται ${(currentPage - 1) * PAGE_SIZE + 1}–${Math.min(currentPage * PAGE_SIZE, serverFilteredTotal)} από ${formatNumber(serverFilteredTotal)} προϊόντα${isCatalogTruncated ? ` (loaded set: ${formatNumber(sourceProducts.length)} / ${formatNumber(totalCatalogCount)})` : ''}`}
           </p>
           <div className="flex items-center gap-2">
             <Button

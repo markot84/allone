@@ -190,6 +190,42 @@ function normalizeSku(value: unknown): string {
   return asString(value).toLowerCase();
 }
 
+function arrayLabels(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      if (typeof item === 'string' || typeof item === 'number') return asString(item);
+      if (item && typeof item === 'object') {
+        const row = item as Record<string, unknown>;
+        return asString(row.name ?? row.label ?? row.title ?? row.value);
+      }
+      return '';
+    })
+    .filter(Boolean);
+}
+
+function splitCategoryPath(value: unknown): string[] {
+  if (Array.isArray(value)) return arrayLabels(value);
+  const raw = asString(value);
+  if (!raw) return [];
+  return raw
+    .split(/>|\/|\||,/g)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function categoryPathFromProduct(row: Record<string, unknown>): string[] {
+  const explicitPath = splitCategoryPath(row.categoryPath);
+  if (explicitPath.length > 0) return explicitPath;
+  const categoryNames = arrayLabels(row.categoryNames);
+  if (categoryNames.length > 0) return categoryNames;
+  const categories = arrayLabels(row.categories);
+  if (categories.length > 0) return categories;
+  const category = asString(row.category || row.category_name);
+  const subcategory = asString(row.subcategory || row.sub_category);
+  return [category, subcategory].filter(Boolean);
+}
+
 function normalizeEmail(value: unknown): string {
   return asString(value).toLowerCase();
 }
@@ -582,6 +618,7 @@ function computeScope(orders: NormalizedOrder[], catalog: Map<string, CatalogDim
       const category = dims?.category || fallbackCategory(line);
       const brand = dims?.brand || '';
       const subcategory = dims?.subcategory || '';
+      const subcategoryFallback = subcategory || category;
       group.lineCount += 1;
       group.lineRevenue += revenue;
       if (dims) {
@@ -590,8 +627,8 @@ function computeScope(orders: NormalizedOrder[], catalog: Map<string, CatalogDim
       }
       bumpAffinity(group.category, category, revenue, quantity, order.orderId, sku, dims);
       if (brand) bumpAffinity(group.brand, brand, revenue, quantity, order.orderId, sku, dims);
-      if (subcategory && subcategory.toLowerCase() !== category.toLowerCase()) {
-        bumpAffinity(group.subcategory, subcategory, revenue, quantity, order.orderId, sku, dims);
+      if (subcategoryFallback) {
+        bumpAffinity(group.subcategory, subcategoryFallback, revenue, quantity, order.orderId, sku, dims);
       }
       bumpAffinity(group.sku, sku || fallbackCategory(line), revenue, quantity, order.orderId, sku, dims);
     }
@@ -729,9 +766,10 @@ async function loadCatalog(brandId: string): Promise<Map<string, CatalogDims>> {
         const row = doc.data();
         const sku = normalizeSku(row.sku || row.productSku);
         if (!sku || catalog.has(sku)) return;
-        const rawPath = Array.isArray(row.categoryPath) ? row.categoryPath.map(asString).filter(Boolean) : [];
+        const rawPath = categoryPathFromProduct(row);
         const category = asString(row.category || row.category_name || rawPath[0]);
-        const subcategory = asString(row.subcategory || row.sub_category || rawPath[1] || rawPath[rawPath.length - 1]);
+        const pathSubcategory = rawPath.length > 1 ? rawPath[rawPath.length - 1] : '';
+        const subcategory = asString(row.subcategory || row.sub_category || pathSubcategory);
         const brand = asString(row.brand || row.manufacturer || row.vendor);
         catalog.set(sku, {
           sku,
