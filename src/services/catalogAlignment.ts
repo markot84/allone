@@ -472,9 +472,14 @@ export async function fetchCatalogAlignmentDataForDataAnalysis(
         return { platform, rows };
       })
     ),
-    getTargetedCatalogRows('megaventory_products', brandId, {
-      skus: catalogHintsFromOrders(orders).normalizedSkus,
-    }),
+    Promise.all([
+      getTargetedCatalogRows('megaventory_products', brandId, {
+        skus: catalogHintsFromOrders(orders).normalizedSkus,
+      }),
+      getTargetedCatalogRows('products', brandId, {
+        skus: catalogHintsFromOrders(orders).normalizedSkus,
+      }),
+    ]).then((rows) => mergeRowsById(rows.flat())),
   ]);
 
   for (const { platform, rows } of productRows) {

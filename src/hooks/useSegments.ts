@@ -232,8 +232,8 @@ export function useSegments(options: UseSegmentsOptions = {}) {
 
   const resolvedSource: SegmentsDataSource = useMemo(() => {
     if (orderRfm.canCompute) return 'ecommerce';
-    if (sourcePref === 'external' && importSegmentsAvailable) return 'import';
     if (ordersQueryEnabled && ordersPending) return 'none';
+    if (sourcePref === 'external' && importSegmentsAvailable) return 'import';
     return importSegmentsAvailable ? 'import' : 'none';
   }, [sourcePref, orderRfm.canCompute, ordersQueryEnabled, ordersPending, importSegmentsAvailable]);
 
@@ -316,7 +316,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     !ecomm.hasData;
   const isLoading =
     blocksOnImportedSegmentsOnly ||
-    (ordersQueryEnabled && ordersPending && !orderRfm.canCompute && !importSegmentsAvailable);
+    (ordersQueryEnabled && ordersPending && !orderRfm.canCompute);
 
   const ordersLoading = ordersQueryEnabled && ordersPending;
   const isCatalogEnriching = ordersQueryEnabled && catalogPending;

@@ -223,9 +223,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
 
   if (segmentsLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <Spinner size="lg" label="Φόρτωση data analysis segments…" />
-      </div>
+      <DataAnalysisSkeleton />
     );
   }
 
@@ -882,6 +880,66 @@ function LoadingStatusPill({ label }: { label: string }) {
       <span className="h-2.5 w-2.5 rounded-full border-2 border-amber-200 border-t-[var(--nts-accent)] animate-spin" aria-hidden />
       {label}
     </span>
+  );
+}
+
+function DataAnalysisSkeleton() {
+  return (
+    <div className="space-y-3" aria-busy="true" aria-label="Φόρτωση Data Analysis">
+      <PageHeader
+        className="gap-2 lg:gap-4 [&_.space-y-1]:space-y-0"
+        title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl leading-tight">Data Analysis</h2>}
+        actions={
+          <>
+            <div className="h-9 w-28 animate-pulse rounded-lg bg-[#F3F4F6]" />
+            <div className="h-9 w-28 animate-pulse rounded-lg bg-[#F3F4F6]" />
+            <div className="h-9 w-32 animate-pulse rounded-lg bg-[#F3F4F6]" />
+          </>
+        }
+      />
+
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[#E8EAED] bg-[#FAFBFC] px-3 py-2">
+        <div className="h-6 w-48 animate-pulse rounded-lg bg-[#E5E7EB]" />
+        <div className="h-4 w-24 animate-pulse rounded bg-[#E5E7EB]" />
+        <div className="h-6 w-28 animate-pulse rounded-full bg-[#E5E7EB]" />
+      </div>
+
+      <div className="rounded-2xl border border-[#E5E7EB] bg-white p-3 shadow-sm">
+        <div className="mb-3 h-4 w-40 animate-pulse rounded bg-[#E5E7EB]" />
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="rounded-xl border border-[#E5E7EB] bg-white p-4">
+              <div className="mb-3 h-3 w-20 animate-pulse rounded bg-[#E5E7EB]" />
+              <div className="h-5 w-14 animate-pulse rounded bg-[#E5E7EB]" />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex w-fit items-center gap-1 rounded-xl bg-[var(--nts-light-gray)] p-1">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="h-8 w-24 animate-pulse rounded-lg bg-white" />
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {[0, 1, 2, 3].map((i) => (
+          <Card key={i} padding="md">
+            <div className="h-4 w-24 animate-pulse rounded bg-[#E5E7EB]" />
+            <div className="mt-4 h-7 w-16 animate-pulse rounded bg-[#E5E7EB]" />
+          </Card>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {[0, 1].map((i) => (
+          <Card key={i} padding="lg">
+            <div className="mb-6 h-5 w-44 animate-pulse rounded bg-[#E5E7EB]" />
+            <div className="mx-auto h-64 max-w-sm animate-pulse rounded-full bg-[#F3F4F6]" />
+          </Card>
+        ))}
+      </div>
+    </div>
   );
 }
 
