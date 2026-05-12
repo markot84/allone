@@ -153,6 +153,10 @@ service cloud.firestore {
       allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
       allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
     }
+    match /connector_sync_jobs/{jobId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow write: if false;
+    }
     match /custom/{docId} {
       allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
       allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);

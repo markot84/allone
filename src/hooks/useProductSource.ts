@@ -98,8 +98,12 @@ function parseNum(v: unknown): number {
  * Unified product source: uses procurement inventory for Enterprise plans,
  * falls back to regular product import otherwise.
  */
-export function useProductSource() {
-  const productHook = useProducts();
+type UseProductSourceOptions = {
+  maxProducts?: number;
+};
+
+export function useProductSource(options: UseProductSourceOptions = {}) {
+  const productHook = useProducts({ maxDocs: options.maxProducts });
   const { isEnterprise } = usePlan();
   const { data: procData, isLoading: procurementLoading } = useProcurement();
 
@@ -191,6 +195,7 @@ export function useProductSource() {
   return {
     products,
     count: products.length,
+    totalCount: usingProcurement ? products.length : productHook.totalCount,
     isLoading,
     hasImported: productHook.hasImported || usingProcurement,
     usingProcurement,

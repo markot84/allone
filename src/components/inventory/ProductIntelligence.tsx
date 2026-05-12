@@ -24,6 +24,7 @@ import { useBrand } from '../../hooks/useBrand';
 import { useSuppliers } from '../../hooks/useSuppliers';
 import { usePlan } from '../../hooks/usePlan';
 import { useProcurement } from '../../hooks/useProcurement';
+import { useProductAggregates } from '../../hooks/useAggregates';
 import { usePriceBenchmarks } from '../../hooks/usePriceBenchmarks';
 import { formatCurrency, formatCurrencyCompact, formatNumber, formatPercent } from '../../utils/format';
 import { FirestoreService } from '../../services/firestore';
@@ -40,6 +41,10 @@ import type { Product, InventorySummary, InventoryAlert } from '../../types';
 
 type SortField = 'name' | 'margin_percentage' | 'stock_level' | 'stock_age_days' | 'price';
 type SortDirection = 'asc' | 'desc';
+
+const PRODUCT_INTELLIGENCE_ROW_LIMIT = 5000;
+const PRODUCT_INTELLIGENCE_BENCHMARK_LIMIT = 5000;
+const LARGE_CATALOG_ALERT_THRESHOLD = 10000;
 
 function computeInventorySummary(
   products: Product[],
@@ -255,17 +260,19 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   }, []);
 
   const { currentBrand } = useBrand();
-  const { products: rawProducts, hasImported: rawHasImported } = useProducts();
+  const { products: rawProducts, hasImported: rawHasImported, totalCount: rawTotalCount } = useProducts({ maxDocs: PRODUCT_INTELLIGENCE_ROW_LIMIT });
   const {
     products: sourceProducts,
+    totalCount: sourceTotalCount,
     hasImported,
     usingProcurement,
     isLoading: sourceLoading,
-  } = useProductSource();
+  } = useProductSource({ maxProducts: PRODUCT_INTELLIGENCE_ROW_LIMIT });
   const { suppliers } = useSuppliers();
   const { isEnterprise } = usePlan();
   const { data: procData } = useProcurement();
-  const { benchmarks, count: benchmarkCount } = usePriceBenchmarks();
+  const { productStats } = useProductAggregates();
+  const { benchmarks, count: benchmarkCount } = usePriceBenchmarks({ maxDocs: PRODUCT_INTELLIGENCE_BENCHMARK_LIMIT });
   const queryClient = useQueryClient();
   const toast = useToast();
 
@@ -295,19 +302,23 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     return m;
   }, [suppliers]);
 
+  const hasDateFilter = Boolean(productDateFrom && productDateTo);
+  const totalCatalogCount = usingProcurement ? sourceProducts.length : (sourceTotalCount ?? rawTotalCount ?? productStats?.totalSkus ?? rawProducts.length);
+  const isCatalogTruncated = !usingProcurement && totalCatalogCount > sourceProducts.length;
+
   const productsScopedByDate = useMemo(() => {
     if (usingProcurement) return sourceProducts;
-    if (!productDateFrom || !productDateTo) return sourceProducts;
+    if (!hasDateFilter) return sourceProducts;
     return sourceProducts.filter((p) => {
       const ymd = getProductYmdForFilter(p, productDateMode);
       if (!ymd) return false;
       return ymd >= productDateFrom && ymd <= productDateTo;
     });
-  }, [sourceProducts, usingProcurement, productDateFrom, productDateTo, productDateMode]);
+  }, [sourceProducts, usingProcurement, hasDateFilter, productDateFrom, productDateTo, productDateMode]);
 
   const inventorySummary = useMemo(() => {
     if (usingProcurement) return computeInventorySummary(sourceProducts, supplierTodMap, true);
-    if (productDateFrom && productDateTo) {
+    if (hasDateFilter) {
       const base = rawProducts.filter((p) => {
         const ymd = getProductYmdForFilter(p, productDateMode);
         if (!ymd) return false;
@@ -316,11 +327,12 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
       return computeInventorySummary(base, supplierTodMap, false);
     }
     return computeInventorySummary(rawProducts, supplierTodMap, false);
-  }, [rawProducts, sourceProducts, usingProcurement, supplierTodMap, productDateFrom, productDateTo, productDateMode]);
+  }, [rawProducts, sourceProducts, usingProcurement, supplierTodMap, hasDateFilter, productDateFrom, productDateTo, productDateMode]);
 
   const inventoryAlerts = useMemo(() => {
     if (usingProcurement) return computeInventoryAlerts(sourceProducts, supplierTodMap, true);
-    if (productDateFrom && productDateTo) {
+    if (!hasDateFilter && totalCatalogCount > LARGE_CATALOG_ALERT_THRESHOLD) return [];
+    if (hasDateFilter) {
       const base = rawProducts.filter((p) => {
         const ymd = getProductYmdForFilter(p, productDateMode);
         if (!ymd) return false;
@@ -329,7 +341,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
       return computeInventoryAlerts(base, supplierTodMap, false);
     }
     return computeInventoryAlerts(rawProducts, supplierTodMap, false);
-  }, [rawProducts, sourceProducts, usingProcurement, supplierTodMap, productDateFrom, productDateTo, productDateMode]);
+  }, [rawProducts, sourceProducts, usingProcurement, supplierTodMap, hasDateFilter, productDateFrom, productDateTo, productDateMode, totalCatalogCount]);
 
   // Procurement-based inventory summary (replaces product-based when available)
   const procInventorySummary = useMemo((): InventorySummary | null => {
@@ -423,8 +435,37 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     return Math.round(fiscalRows.reduce((s, r) => s + parseNum(r[turnoverCol]), 0));
   }, [isEnterprise, procData.fiscal_year]);
 
-  // Use procurement data when available, fallback to product import
-  const displaySummary = procInventorySummary ?? inventorySummary;
+  const aggregateInventorySummary = useMemo((): InventorySummary | null => {
+    if (usingProcurement || hasDateFilter || !productStats || productStats.totalSkus !== totalCatalogCount) return null;
+    const total = productStats.totalSkus || 0;
+    const percentage = (count: number) => total ? Math.round((count / total) * 1000) / 10 : 0;
+
+    return {
+      total_skus: total,
+      total_value: Math.round(productStats.totalInventoryValue || 0),
+      healthy_stock: {
+        count: productStats.healthyStock?.count ?? 0,
+        percentage: percentage(productStats.healthyStock?.count ?? 0),
+      },
+      excess_stock: {
+        count: productStats.excessStock?.count ?? 0,
+        percentage: percentage(productStats.excessStock?.count ?? 0),
+        value: Math.round(productStats.excessStock?.value ?? 0),
+      },
+      dead_stock: {
+        count: productStats.deadStock?.count ?? 0,
+        percentage: percentage(productStats.deadStock?.count ?? 0),
+        value: Math.round(productStats.deadStock?.value ?? 0),
+      },
+      low_stock: {
+        count: productStats.lowStock?.count ?? 0,
+        percentage: percentage(productStats.lowStock?.count ?? 0),
+      },
+    };
+  }, [usingProcurement, hasDateFilter, productStats, totalCatalogCount]);
+
+  // Use procurement data when available, then precomputed aggregates for large imports.
+  const displaySummary = procInventorySummary ?? aggregateInventorySummary ?? inventorySummary;
 
   const categories = useMemo(() => {
     const fromProducts = [...new Set(productsScopedByDate.map(p => p.category))].filter(Boolean).sort();
@@ -497,7 +538,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
 
   const handleDeleteProducts = async () => {
     if (!currentBrand?.id) return;
-    if (!window.confirm(`Διαγραφή όλων των προϊόντων (${rawProducts.length}) για το brand "${currentBrand.name}"; Αυτή η ενέργεια δεν αναιρείται.`)) return;
+    if (!window.confirm(`Διαγραφή όλων των προϊόντων (${formatNumber(totalCatalogCount)}) για το brand "${currentBrand.name}"; Αυτή η ενέργεια δεν αναιρείται.`)) return;
     setIsDeleting(true);
     try {
       await FirestoreService.deleteCollection('products', currentBrand.id);
@@ -558,7 +599,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
             </p>
           ) : sourceProducts.length > 0 ? (
             <p className="text-xs font-medium text-[#22C55E] sm:text-sm">
-              Showing {sourceProducts.length} {usingProcurement ? 'procurement' : 'imported'} product(s)
+              Showing {isCatalogTruncated ? `${sourceProducts.length} of ${totalCatalogCount}` : sourceProducts.length} {usingProcurement ? 'procurement' : 'imported'} product(s)
             </p>
           ) : null
         }
@@ -615,6 +656,19 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
             <strong>πλήθη ανά εμπορική ομάδα/bucket</strong> (κατάλογος + πωλήσεις/ζήτηση/κίνηση όπου υπάρχουν). Αυτά τα
             νούμερα <strong>δεν</strong> είναι τα ίδια με τα πλήθη των καρτών dead / excess / low <strong>εδώ</strong>· δεν
             στοχεύουν σε ταύτιση 1-1.
+          </p>
+        </div>
+      )}
+
+      {isCatalogTruncated && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900 shadow-sm">
+          <div className="font-semibold flex items-center gap-2 mb-1">
+            <Info size={16} className="shrink-0" aria-hidden />
+            Performance mode ενεργό
+          </div>
+          <p className="leading-relaxed">
+            Τα KPI χρησιμοποιούν τα precomputed aggregates για όλο τον κατάλογο ({formatNumber(totalCatalogCount)} SKUs).
+            Ο πίνακας φορτώνει τα πρώτα {formatNumber(sourceProducts.length)} προϊόντα για να μη μπλοκάρει ο browser.
           </p>
         </div>
       )}
@@ -839,7 +893,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           />
 
           <div className="text-sm text-[#4A4A4A]">
-            {filteredProducts.length} products
+            {filteredProducts.length} products{isCatalogTruncated ? ` από loaded set ${formatNumber(sourceProducts.length)}` : ''}
           </div>
         </div>
 
@@ -938,7 +992,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           <p className="text-sm text-[#4A4A4A]">
             {filteredProducts.length === 0
               ? 'Δεν βρέθηκαν προϊόντα'
-              : `Εμφανίζονται ${(currentPage - 1) * PAGE_SIZE + 1}–${Math.min(currentPage * PAGE_SIZE, filteredProducts.length)} από ${filteredProducts.length} προϊόντα`}
+              : `Εμφανίζονται ${(currentPage - 1) * PAGE_SIZE + 1}–${Math.min(currentPage * PAGE_SIZE, filteredProducts.length)} από ${filteredProducts.length} προϊόντα${isCatalogTruncated ? ` (loaded set: ${formatNumber(sourceProducts.length)} / ${formatNumber(totalCatalogCount)})` : ''}`}
           </p>
           <div className="flex items-center gap-2">
             <Button

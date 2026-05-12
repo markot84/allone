@@ -407,6 +407,39 @@ async function postConnectorSync(
   throw lastNetworkError instanceof Error ? lastNetworkError : new Error('Failed to fetch');
 }
 
+type ConnectorSyncJobStatus = 'pending' | 'running' | 'completed' | 'failed';
+
+type ConnectorSyncJobDoc = {
+  id?: string;
+  brandId?: string;
+  provider?: string;
+  status?: ConnectorSyncJobStatus;
+  mode?: string;
+  error?: string;
+  requestedAt?: unknown;
+  startedAt?: unknown;
+  completedAt?: unknown;
+  updatedAt?: unknown;
+};
+
+function connectorSyncJobId(provider: string, brandId: string): string {
+  return `${provider}_${brandId.replace(/[^A-Za-z0-9_-]/g, '_')}`;
+}
+
+function syncJobLabel(job?: ConnectorSyncJobDoc | null): { label: string; className: string } | null {
+  if (!job?.status) return null;
+  if (job.status === 'pending') {
+    return { label: 'Sync queued', className: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200' };
+  }
+  if (job.status === 'running') {
+    return { label: 'Sync running', className: 'bg-blue-50 text-blue-700 ring-1 ring-blue-200' };
+  }
+  if (job.status === 'failed') {
+    return { label: 'Sync failed', className: 'bg-red-50 text-red-700 ring-1 ring-red-200' };
+  }
+  return { label: 'Sync completed', className: 'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200' };
+}
+
 // ─── Account Picker Modal ────────────────────────────────────────
 
 function AccountPickerModal({
@@ -1966,6 +1999,21 @@ export function ConnectorsPanel() {
     retry: 0,
   });
 
+  const { data: megaventorySyncJob } = useQuery({
+    queryKey: ['connectorSyncJob', brandId, 'megaventory'],
+    queryFn: async () => {
+      if (!brandId) return null;
+      return FirestoreService.getDocument<ConnectorSyncJobDoc>(
+        'connector_sync_jobs',
+        connectorSyncJobId('megaventory', brandId),
+      );
+    },
+    enabled: !!brandId && !!user?.uid,
+    staleTime: 5_000,
+    refetchInterval: 10_000,
+    retry: 1,
+  });
+
   // Keep fetchStates for OAuth callback compatibility (force refetch after OAuth redirect)
   const fetchStates = useCallback(async () => {
     await refetchConnectors();
@@ -2244,6 +2292,7 @@ export function ConnectorsPanel() {
         );
         if (provider === 'megaventory' && result.queued) {
           toast.success('Megaventory sync ξεκίνησε στο background. Μπορείς να συνεχίσεις κανονικά και να ελέγξεις τα SKUs σε λίγα λεπτά.');
+          queryClient.invalidateQueries({ queryKey: ['connectorSyncJob', brandId, 'megaventory'] });
         } else if (provider === 'merchant') {
           const imp = result.imported ?? 0;
           const wm = typeof result.withMarketBenchmark === 'number' ? result.withMarketBenchmark : undefined;
@@ -2653,6 +2702,8 @@ export function ConnectorsPanel() {
                 const identityLines = getConnectorIdentityLines(conn.id, state);
                 const usesCompactDetails = conn.id === 'magento' || conn.group === 'operations';
                 const detailsExpanded = !usesCompactDetails || expandedConnectorDetails[conn.id] === true;
+                const syncJob = conn.id === 'megaventory' ? megaventorySyncJob : null;
+                const syncJobBadge = syncJobLabel(syncJob);
 
                 return (
                   <div
@@ -2721,6 +2772,14 @@ export function ConnectorsPanel() {
                           >
                             {lastSyncAt ? `Sync: ${formatConnectorDate(lastSyncAt)}` : 'Δεν έχει γίνει sync'}
                           </span>
+                          {syncJobBadge && (
+                            <span
+                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${syncJobBadge.className}`}
+                              title={syncJob?.error || undefined}
+                            >
+                              {syncJobBadge.label}
+                            </span>
+                          )}
                           {usesCompactDetails && (
                             <button
                               type="button"
@@ -2747,6 +2806,13 @@ export function ConnectorsPanel() {
                             ))}
                             {connectedAt && <p className="text-[#9CA3AF]">Συνδέθηκε: {formatConnectorDate(connectedAt)}</p>}
                             {lastSyncAt && <p className="text-[#9CA3AF]">Τελευταίο sync: {formatConnectorDate(lastSyncAt)}</p>}
+                            {syncJob?.status && (
+                              <p className="text-[#9CA3AF]">
+                                Background job: {syncJob.status}
+                                {coerceToDate(syncJob.updatedAt) ? ` · ${formatConnectorDate(coerceToDate(syncJob.updatedAt)!)} ` : ''}
+                                {syncJob.error ? ` · ${syncJob.error}` : ''}
+                              </p>
+                            )}
                           </div>
                         )}
                       </div>

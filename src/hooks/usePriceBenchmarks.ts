@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, limit, query } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useBrand } from './useBrand';
 
@@ -17,16 +17,20 @@ export interface PriceBenchmark {
   updatedAt: string;
 }
 
-async function fetchBenchmarks(brandId: string): Promise<PriceBenchmark[]> {
+async function fetchBenchmarks(brandId: string, maxDocs?: number): Promise<PriceBenchmark[]> {
   const colRef = collection(db, 'price_benchmarks', brandId, 'skus');
-  const q = query(colRef, where('benchmarkPrice', '>', 0));
-  const snap = await getDocs(q);
+  const snap = await getDocs(maxDocs ? query(colRef, limit(maxDocs)) : colRef);
   return snap.docs.map((d) => ({ ...d.data() } as PriceBenchmark));
 }
 
-export function usePriceBenchmarks() {
+type UsePriceBenchmarksOptions = {
+  maxDocs?: number;
+};
+
+export function usePriceBenchmarks(options: UsePriceBenchmarksOptions = {}) {
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
+  const maxDocs = options.maxDocs;
 
   const {
     data: benchmarks = [],
@@ -36,8 +40,8 @@ export function usePriceBenchmarks() {
     refetch,
     isFetching,
   } = useQuery({
-    queryKey: ['priceBenchmarks', brandId],
-    queryFn: () => (brandId ? fetchBenchmarks(brandId) : Promise.resolve([])),
+    queryKey: ['priceBenchmarks', brandId, maxDocs ?? 'all'],
+    queryFn: () => (brandId ? fetchBenchmarks(brandId, maxDocs) : Promise.resolve([])),
     staleTime: 2 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
     enabled: !!brandId,

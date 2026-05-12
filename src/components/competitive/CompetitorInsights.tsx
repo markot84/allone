@@ -37,6 +37,8 @@ import {
 import { safeBrandName } from '../../services/reportExport';
 
 const FUNCTIONS_BASE = FUNCTIONS_BASE_URL.replace(/\/$/, '');
+const COMPETITIVE_BENCHMARK_LIMIT = 5000;
+const COMPETITIVE_STOCK_PRODUCT_LIMIT = 10000;
 
 // ── Types ────────────────────────────────────────────────
 
@@ -316,41 +318,49 @@ export function CompetitorInsights() {
     error: benchmarksError,
     refetch: refetchBenchmarks,
     count: benchmarkCount,
-    aboveMarket,
-    belowMarket,
-    avgDiff,
     lastBenchmarkSyncedAt,
-  } = usePriceBenchmarks();
+  } = usePriceBenchmarks({ maxDocs: COMPETITIVE_BENCHMARK_LIMIT });
 
   // Inventory/sales enrichment για τον πίνακα benchmarks.
   // Πηγές (με προτεραιότητα):
-  //   1) ecommerce_summary.skuStats (Shopify/Woo/OpenCart/Magento — live stock + sold)
-  //   2) products collection (manual import) — stock_level / qty_sold_period
-  const { products } = useProducts();
+  //   1) products collection / ERP (Megaventory) για stock — είναι η αξιόπιστη αποθήκη
+  //   2) ecommerce_summary.skuStats για πωλήσεις και stock μόνο όταν το ERP δεν έχει τιμή
+  const { products, isLoading: productsLoading } = useProducts({ maxDocs: COMPETITIVE_STOCK_PRODUCT_LIMIT, inStockOnly: true });
   const { skuStats } = useEcommerceSummary();
   const skuInventoryMap = useMemo(() => {
     const map = new Map<string, SkuInventoryRow>();
-    // Τοποθέτησε πρώτα τα manual imports…
+    const mergeInventory = (key: string, next: SkuInventoryRow, preferExistingStock = false) => {
+      const normalized = key.trim().toLowerCase();
+      if (!normalized) return;
+      const prev = map.get(normalized);
+      map.set(normalized, {
+        stock: preferExistingStock ? (prev?.stock ?? next.stock) : (next.stock ?? prev?.stock ?? null),
+        sold: next.sold ?? prev?.sold ?? null,
+      });
+    };
+
+    // ERP/Megaventory πρώτα: αυτό είναι το επιχειρησιακό stock.
     for (const p of products) {
       const inventory = {
-        stock: parseInventoryField(p.available_stock ?? p.stock_level),
-        sold: parseInventoryField(p.qty_sold_period),
+        stock: parseInventoryField(p.available_stock ?? p.stock_on_hand ?? p.stock_level),
+        sold: parseInventoryField(p.qty_sold_period ?? p.qty_sold_lifetime),
       };
+      if ((inventory.stock ?? 0) <= 0) continue;
       const keys = [p.sku, p.barcode, p.gtin]
         .map((value) => String(value || '').trim().toLowerCase())
         .filter(Boolean);
       for (const key of keys) {
-        map.set(key, inventory);
+        mergeInventory(key, inventory);
       }
     }
-    // …και μετά άφησε τα live e-shop stats να υπερισχύσουν.
+    // E-shop stats εμπλουτίζουν τις πωλήσεις, αλλά δεν μηδενίζουν ERP stock.
     for (const [sku, s] of Object.entries(skuStats || {})) {
       const key = (sku || '').trim().toLowerCase();
       if (!key) continue;
-      map.set(key, {
+      mergeInventory(key, {
         stock: parseInventoryField(s.stock),
         sold: parseInventoryField(s.sold),
-      });
+      }, true);
     }
     return map;
   }, [products, skuStats]);
@@ -372,6 +382,22 @@ export function CompetitorInsights() {
     },
     [skuInventoryMap]
   );
+
+  const stockedBenchmarks = useMemo(
+    () => benchmarks.filter((b) => (lookupInventory(b.productId, b.gtin)?.stock ?? 0) > 0),
+    [benchmarks, lookupInventory]
+  );
+  const stockedWithMarket = useMemo(
+    () => stockedBenchmarks.filter((b) => b.benchmarkPrice > 0),
+    [stockedBenchmarks]
+  );
+  const stockedBenchmarkCount = stockedBenchmarks.length;
+  const stockedAboveMarket = stockedWithMarket.filter((b) => b.priceDiff > 0).length;
+  const stockedBelowMarket = stockedWithMarket.filter((b) => b.priceDiff < 0).length;
+  const stockedAvgDiff =
+    stockedWithMarket.length > 0
+      ? Math.round((stockedWithMarket.reduce((s, b) => s + b.priceDiff, 0) / stockedWithMarket.length) * 10) / 10
+      : 0;
   // Price insights
   const {
     insights: priceInsights,
@@ -563,9 +589,9 @@ export function CompetitorInsights() {
   /** Μοναδικά brands για το categorical φίλτρο «Brand». */
   const brandOptions = useMemo(() => {
     const set = new Set<string>();
-    for (const b of benchmarks) set.add(((b.brand || '').trim()) || '—');
+    for (const b of stockedBenchmarks) set.add(((b.brand || '').trim()) || '—');
     return [...set].sort((a, b) => a.localeCompare(b, 'el'));
-  }, [benchmarks]);
+  }, [stockedBenchmarks]);
 
   const hasActiveColumnFilters = useMemo(() => {
     const f = colFilters;
@@ -590,7 +616,7 @@ export function CompetitorInsights() {
   }, [brandOptions]);
 
   const filteredBenchmarks = useMemo(() => {
-    let list = [...benchmarks];
+    let list = [...stockedBenchmarks];
 
     if (benchmarkQuickFilter === 'aboveMarket') {
       list = list.filter((b) => (b.priceDiff || 0) > 0);
@@ -677,7 +703,7 @@ export function CompetitorInsights() {
     }
 
     return list;
-  }, [benchmarks, benchmarkQuickFilter, benchmarkSearch, colFilters, sortCol, sortDir, brandOptions.length, lookupInventory]);
+  }, [stockedBenchmarks, benchmarkQuickFilter, benchmarkSearch, colFilters, sortCol, sortDir, brandOptions.length, lookupInventory]);
 
   const insightsSellerLabel = useMemo(() => {
     const raw = (priceInsightsSellerName || '').trim();
@@ -887,7 +913,7 @@ export function CompetitorInsights() {
   if (!brandId) return null;
 
   const tabs: { id: Tab; label: string; count?: number; icon: React.ReactNode }[] = [
-    { id: 'pricing', label: 'Price Benchmarks', count: benchmarkCount, icon: <ShoppingCart size={15} /> },
+    { id: 'pricing', label: 'Price Benchmarks', count: stockedBenchmarkCount, icon: <ShoppingCart size={15} /> },
     { id: 'insights', label: 'Price Insights', count: insightsCount, icon: <TrendingUp size={15} /> },
     { id: 'ads', label: 'Ad Monitoring', count: ads.length, icon: <Eye size={15} /> },
   ];
@@ -956,14 +982,14 @@ export function CompetitorInsights() {
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
             <KpiBox
               label="Σύνολο SKUs (GMC)"
-              value={benchmarkCount > 0 ? String(benchmarkCount) : '—'}
+              value={stockedBenchmarkCount > 0 ? String(stockedBenchmarkCount) : '—'}
               tooltip="Προϊόντα από την αναφορά ProductView του Merchant Center μετά το sync. Περιλαμβάνει όλο τον κατάλογο που επιστρέφει η Google — όχι μόνο όσα έχουν benchmark."
               icon={<ShoppingCart size={18} />}
               color="#6366F1"
             />
             <KpiBox
               label="Πάνω από αγορά"
-              value={String(aboveMarket)}
+              value={String(stockedAboveMarket)}
               tooltip="SKUs με τιμή ακριβότερη από τη μέση αγοράς."
               icon={<ArrowUp size={18} />}
               color="#EF4444"
@@ -975,7 +1001,7 @@ export function CompetitorInsights() {
             />
             <KpiBox
               label="Κάτω από αγορά"
-              value={String(belowMarket)}
+              value={String(stockedBelowMarket)}
               tooltip="SKUs με τιμή φθηνότερη από τη μέση αγοράς."
               icon={<ArrowDown size={18} />}
               color="#22C55E"
@@ -987,10 +1013,10 @@ export function CompetitorInsights() {
             />
             <KpiBox
               label="Μέση απόκλιση"
-              value={`${avgDiff > 0 ? '+' : ''}${avgDiff}%`}
+              value={`${stockedAvgDiff > 0 ? '+' : ''}${stockedAvgDiff}%`}
               tooltip="Μέσος όρος τιμολογιακής απόκλισης σε σχέση με benchmark. Θετικό = ακριβότεροι."
               icon={<BarChart3 size={18} />}
-              color={avgDiff > 0 ? '#EF4444' : '#22C55E'}
+              color={stockedAvgDiff > 0 ? '#EF4444' : '#22C55E'}
             />
             <KpiBox
               label="Τελ. ενημέρωση"
@@ -1030,7 +1056,7 @@ export function CompetitorInsights() {
                       Καθαρισμός φίλτρων
                     </button>
                   )}
-                  {!benchmarksLoading && !benchmarksQueryError && benchmarkCount > 0 && (
+                  {!benchmarksLoading && !productsLoading && !benchmarksQueryError && stockedBenchmarkCount > 0 && (
                     <>
                       <button
                         type="button"
@@ -1086,7 +1112,7 @@ export function CompetitorInsights() {
                 </p>
               )}
 
-              {benchmarksLoading ? (
+              {benchmarksLoading || productsLoading ? (
                 <div className="py-8 flex justify-center">
                   <Spinner size="md" label="Φόρτωση benchmarks..." />
                 </div>
@@ -1099,6 +1125,12 @@ export function CompetitorInsights() {
                   <ShoppingCart size={40} className="mx-auto text-[#D1D5DB] mb-3" />
                   <p className="text-sm text-[#9CA3AF] mb-1">Δεν υπάρχουν δεδομένα benchmarking.</p>
                   <p className="text-xs text-[#D1D5DB]">Συνδέστε Google Merchant Center από τις <strong className="text-[#9CA3AF]">Συνδέσεις</strong> (sidebar) και πατήστε «Sync GMC».</p>
+                </div>
+              ) : stockedBenchmarkCount === 0 ? (
+                <div className="text-center py-10">
+                  <ShoppingCart size={40} className="mx-auto text-[#D1D5DB] mb-3" />
+                  <p className="text-sm text-[#9CA3AF] mb-1">Δεν υπάρχουν benchmarks για προϊόντα με διαθέσιμο stock.</p>
+                  <p className="text-xs text-[#D1D5DB]">Η προβολή φιλτράρει προϊόντα χωρίς stock για να παραμένει χρήσιμη και γρήγορη.</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto max-h-[55vh] overflow-y-auto">

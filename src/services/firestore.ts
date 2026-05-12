@@ -327,8 +327,8 @@ export class FirestoreService {
 
 // Specific collections helpers - pass brandId for scoped queries
 export const ProductsService = {
-  getAll: async (brandId?: string | null) => {
-    const products = await FirestoreService.getDocuments('products', [], brandId);
+  getAll: async (brandId?: string | null, constraints: QueryConstraint[] = []) => {
+    const products = await FirestoreService.getDocuments('products', constraints, brandId);
     
     // Debug: Log sample products to help diagnose data issues
     if (import.meta.env.MODE === 'development' && products.length > 0) {
@@ -372,6 +372,13 @@ export const ProductsService = {
   },
   getPaginated: (brandId: string, pageSize: number, cursor?: QueryDocumentSnapshot<DocumentData> | null) =>
     FirestoreService.getDocumentsPaginated<Product>('products', { brandId, pageSize, cursor }),
+  getCount: async (brandId?: string | null) => {
+    const constraints: QueryConstraint[] = [];
+    if (brandId) constraints.push(where('brandId', '==', brandId));
+    const countQ = query(collection(db, 'products'), ...constraints);
+    const countSnap = await getCountFromServer(countQ);
+    return countSnap.data().count;
+  },
   getById: (id: string) => FirestoreService.getDocument('products', id),
   create: (id: string, data: Record<string, unknown>, brandId?: string | null) =>
     FirestoreService.setDocument('products', id, { ...data, ...(brandId ? { brandId } : {}) }),
