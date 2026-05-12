@@ -69,6 +69,7 @@ export const ECOMMERCE_ORDER_COLLECTIONS: Record<string, string> = {
 };
 
 const DATA_ANALYSIS_ORDER_LIMIT = 5000;
+const ERP_DATA_ANALYSIS_ORDER_LIMIT = 50000;
 
 export function isEcommerceOrderCancelled(status: string | null | undefined): boolean {
   return isExcludedEcommerceStatus(status);
@@ -464,7 +465,9 @@ function normalizeMegaventoryInvoiceRawOrder(row: Record<string, unknown>): Ecom
     total: Math.max(0, net),
     currency: String(row.currency ?? 'EUR'),
     createdAt: day ? `${day}T12:00:00.000Z` : '',
-    lineItems: [],
+    lineItems: Array.isArray(row.lineItems)
+      ? row.lineItems.map(normalizeLineItemFromFirestore).filter((item) => item.sku || item.title || item.name)
+      : [],
     paymentMethod: String(row.documentType ?? row.documentTypeDescription ?? ''),
     shippingMethod: '',
     customerEmail: String(row.clientName ?? ''),
@@ -524,17 +527,18 @@ async function loadAndClassifyErpConnectorOrders(
       : ({ cacheFirst: false, forceServer: true } as const);
   const coll = backend === 'megaventory_invoices' ? 'megaventory_invoices' : 'softone_sales_documents';
   const dateField = backend === 'megaventory_invoices' ? 'date' : 'documentDate';
+  const queryLimit = backend === 'megaventory_invoices' ? ERP_DATA_ANALYSIS_ORDER_LIMIT : DATA_ANALYSIS_ORDER_LIMIT;
   const constraints: QueryConstraint[] = [];
   if (options.sinceDate) constraints.push(where(dateField, '>=', options.sinceDate));
   if (options.untilDate) constraints.push(where(dateField, '<=', options.untilDate));
   if (options.sinceDate || options.untilDate) constraints.push(orderBy(dateField, 'desc'));
-  constraints.push(limit(DATA_ANALYSIS_ORDER_LIMIT));
+  constraints.push(limit(queryLimit));
   const allRulesPromise = fetchSalesChannelRulesForOrders(brandId, mode);
   let rows: Record<string, unknown>[];
   const loadRecentWithoutBrandComposite = () =>
     FirestoreService.getDocuments<Record<string, unknown>>(
       coll,
-      [orderBy(dateField, 'desc'), limit(DATA_ANALYSIS_ORDER_LIMIT)],
+      [orderBy(dateField, 'desc'), limit(queryLimit)],
       null,
       { forceServer: true }
     );

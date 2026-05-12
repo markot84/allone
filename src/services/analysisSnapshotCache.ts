@@ -2,7 +2,7 @@ import type { RFMSegment } from '../types';
 import type { SegmentDataCoverage, RfmDataSourcePreference, SegmentsDataSource } from '../hooks/useSegments';
 import type { SegmentMigrationResult } from './rfmFromOrders';
 
-const SNAPSHOT_PREFIX = 'pp-analysis-snapshot-v6';
+const SNAPSHOT_PREFIX = 'pp-analysis-snapshot-v7';
 
 export type AnalysisSnapshotScope = {
   brandId: string;

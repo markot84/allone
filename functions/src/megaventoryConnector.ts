@@ -528,6 +528,36 @@ function mvNum(row: Record<string, unknown>, ...names: string[]): number {
   return num(mvField(row, ...names));
 }
 
+function mvDocumentLineItems(row: Record<string, unknown>): Record<string, unknown>[] {
+  const raw = mvField(row, 'DocumentDetails', 'DocumentRows', 'DocumentLineItems', 'mvDocumentDetails', 'documentDetails');
+  if (!Array.isArray(raw)) return [];
+
+  return raw
+    .slice(0, 250)
+    .map((line) => {
+      const li = (line || {}) as Record<string, unknown>;
+      const quantity = mvNum(li, 'DocumentRowQuantity', 'Quantity');
+      const rowTotal = mvNum(li, 'DocumentRowTotalAmount', 'DocumentRowNetAmount', 'DocumentRowTotalNetAmount');
+      const unitPrice = mvNum(
+        li,
+        'DocumentRowUnitPriceWithoutTaxOrDiscount',
+        'DocumentRowUnitPriceWithoutTax',
+        'DocumentRowUnitPrice',
+        'UnitPrice'
+      );
+      const price = unitPrice > 0 ? unitPrice : quantity > 0 ? rowTotal / quantity : rowTotal;
+      return {
+        sku: mvText(li, 'DocumentRowProductSKU', 'ProductSKU', 'SKU'),
+        productId: mvText(li, 'DocumentRowProductID', 'DocumentRowProductId', 'ProductID', 'ProductId'),
+        title: mvText(li, 'DocumentRowProductDescription', 'ProductDescription', 'Description'),
+        quantity: quantity || 1,
+        price: Math.max(0, price),
+        rowTotal: Math.max(0, rowTotal),
+      };
+    })
+    .filter((line) => String(line.sku || line.title || line.productId || '').trim());
+}
+
 async function fetchDocumentTypes(apiKey: string): Promise<{ types: MvDocumentTypeInfo[]; error: string | null }> {
   const { rows, error } = await fetchAllMvPages('DocumentTypeGet', apiKey, [], {
     responseArrayKey: 'mvDocumentTypes',
@@ -989,6 +1019,7 @@ export async function fetchMegaventoryData(
           currency: mvText(d, 'DocumentCurrencyCode') || conn.currency || 'EUR',
           clientName: mvText(d, 'DocumentSupplierClientName', 'SupplierClientName', 'ClientName'),
           clientId: mvText(d, 'DocumentSupplierClientId', 'DocumentSupplierClientID', 'SupplierClientId', 'SupplierClientID'),
+          lineItems: mvDocumentLineItems(d),
           source: 'megaventory_api',
         },
       }));
