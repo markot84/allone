@@ -26,7 +26,7 @@ import {
   Tooltip,
   CartesianGrid
 } from 'recharts';
-import { Card, CardHeader, Badge, Button, Spinner, Tooltip as InfoTooltip, useToast, PageHeader } from '../common';
+import { Card, CardHeader, Badge, Button, Spinner, Tooltip as InfoTooltip, useToast, PageHeader, DataSourcePill } from '../common';
 import { useSegments, type SegmentDataCoverage, type SegmentsDataSource } from '../../hooks/useSegments';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import { useBrand } from '../../hooks/useBrand';
@@ -294,6 +294,14 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
   const ordersOptionUnavailable = !canComputeIdentifiedOrders && !ordersLoading;
   const effectiveSourceChoice =
     rfmSourcePref === 'orders' && !ordersOptionUnavailable ? 'orders' : 'external';
+  const dataSourceLabel =
+    rfmDataSource === 'ecommerce'
+      ? rfmSourcePref === 'external'
+        ? 'E-shop + guests'
+        : 'E-shop orders'
+      : rfmDataSource === 'import'
+        ? 'ERP / import'
+        : 'Pending';
 
   return (
     <div className="space-y-3">
@@ -407,6 +415,11 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
         ) : (
           <span className="text-[#6B7280]">Εισαγωγή / ERP εκτός e-shop</span>
         )}
+        <DataSourcePill
+          label="Source"
+          value={dataSourceLabel}
+          tone={rfmDataSource === 'import' ? 'warning' : rfmDataSource === 'ecommerce' ? 'success' : 'neutral'}
+        />
         {rfmDataSource === 'ecommerce' && orderRfmMeta && orderRfmMeta.guestOrdersSkipped > 0 ? (
           (() => {
             const totalCustomerScoped =
@@ -432,26 +445,6 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
         {isCatalogEnriching && rfmDataSource === 'ecommerce' ? (
           <LoadingStatusPill label="Loading product catalog…" />
         ) : null}
-        <details className="sm:ml-auto min-w-0 max-w-full sm:max-w-[22rem] text-[11px]">
-          <summary className="cursor-pointer font-semibold text-[var(--nts-accent)] hover:underline">
-            Σημειώσεις υπολογισμού
-          </summary>
-          <div className="mt-2 space-y-2 rounded-md border border-[#E5E7EB] bg-white p-2.5 text-[#4A4A4A] leading-snug">
-            <p>
-              Οι καρτέλες <strong>RFM</strong>, <strong>Behavioral</strong>, <strong>Predictive</strong> μοιράζονται τα ίδια segments· αλλάζει μόνο η οπτικοποίηση (κατανομή / προφίλ / LTV).
-            </p>
-            {rfmDataSource === 'ecommerce' && (
-              <p className="text-[11px]">
-                Από αναγνωρίσιμο e-shop customer στο τελευταίο 12μηνο — email-only guest orders μένουν εκτός RFM.
-              </p>
-            )}
-            {isCatalogEnriching && (
-              <p className="text-[11px] text-amber-900 bg-amber-50 px-2 py-1 rounded border border-amber-100">
-                Φόρτωση catalog για brands/SKU· τα charts στο segment detail ενημερώνονται όταν ολοκληρωθεί.
-              </p>
-            )}
-          </div>
-        </details>
       </div>
 
       {!compactCoverageOk ? (

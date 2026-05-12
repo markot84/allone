@@ -17,7 +17,7 @@ import {
   Trash2,
   Loader2
 } from 'lucide-react';
-import { Card, Badge, Button, ProgressBar, Tooltip, useToast, AlertsBanner, PageHeader } from '../common';
+import { Card, Badge, Button, ProgressBar, Tooltip, useToast, AlertsBanner, PageHeader, DataSourcePill } from '../common';
 import { useProducts } from '../../hooks/useProducts';
 import { useProductSource } from '../../hooks/useProductSource';
 import { useBrand } from '../../hooks/useBrand';
@@ -305,6 +305,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   const hasDateFilter = Boolean(productDateFrom && productDateTo);
   const totalCatalogCount = usingProcurement ? sourceProducts.length : (sourceTotalCount ?? rawTotalCount ?? productStats?.totalSkus ?? rawProducts.length);
   const isCatalogTruncated = !usingProcurement && totalCatalogCount > sourceProducts.length;
+  const productDataSourceLabel = usingProcurement ? 'Procurement / ERP' : 'Products import';
 
   const productsScopedByDate = useMemo(() => {
     if (usingProcurement) return sourceProducts;
@@ -598,9 +599,16 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
               Φόρτωση inventory…
             </p>
           ) : sourceProducts.length > 0 ? (
-            <p className="text-xs font-medium text-[#22C55E] sm:text-sm">
-              Showing {isCatalogTruncated ? `${sourceProducts.length} of ${totalCatalogCount}` : sourceProducts.length} {usingProcurement ? 'procurement' : 'imported'} product(s)
-            </p>
+            <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-[#22C55E] sm:text-sm">
+              <span>
+                Showing {isCatalogTruncated ? `${sourceProducts.length} of ${totalCatalogCount}` : sourceProducts.length} {usingProcurement ? 'procurement' : 'imported'} product(s)
+              </span>
+              <DataSourcePill
+                label="Source"
+                value={productDataSourceLabel}
+                tone={usingProcurement ? 'warning' : 'success'}
+              />
+            </div>
           ) : null
         }
         actions={

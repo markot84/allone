@@ -18,7 +18,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
-import { Card, CardHeader, Button, Slider, Badge, PageHeader, ModalHeader } from '../common';
+import { Card, CardHeader, Button, Slider, Badge, PageHeader, ModalHeader, DataSourcePill } from '../common';
 import { ScenarioSelector } from './ScenarioSelector';
 import { TriageCard } from './TriageCard';
 import { ProcurementStrategyBridge } from './ProcurementStrategyBridge';
@@ -266,6 +266,7 @@ function getScenarioPendingActionText(scenarioId: string | null): string {
 export function WeightConfigurator() {
   const { currentBrand } = useBrand();
   const { products, hasImported, usingProcurement } = useProductSource();
+  const productDataSourceLabel = usingProcurement ? 'Procurement / ERP' : hasImported ? 'Products import' : 'Pending';
 
   const scenarioErpHints = useMemo(() => {
     if (!usingProcurement || products.length === 0) return undefined;
@@ -290,6 +291,14 @@ export function WeightConfigurator() {
   const { data: procurementData } = useProcurement();
   const { refresh: refreshAggregates } = useRefreshAggregates();
   const { segments: rfmSegments, dataCoverage } = useSegments();
+  const segmentDataSourceLabel =
+    dataCoverage.activeSource === 'ecommerce'
+      ? dataCoverage.sourcePreference === 'external'
+        ? 'E-shop + guests'
+        : 'E-shop orders'
+      : dataCoverage.activeSource === 'import'
+        ? 'ERP / import'
+        : 'Pending';
   const { user } = useAuth();
   const { activeStrategy, saveActiveStrategy, isLoading: strategyLoading } = useActiveStrategy();
   const { benchmarks } = usePriceBenchmarks();
@@ -1374,6 +1383,20 @@ export function WeightConfigurator() {
               <p className="text-[14px] text-[var(--nts-medium-gray)]">
                 Καθορισμός εμπορικών προτεραιοτήτων, κατανομή πόρων και συντονισμός εκτέλεσης
               </p>
+            }
+            meta={
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <DataSourcePill
+                  label="Products"
+                  value={productDataSourceLabel}
+                  tone={usingProcurement ? 'warning' : hasImported ? 'success' : 'neutral'}
+                />
+                <DataSourcePill
+                  label="Segments"
+                  value={segmentDataSourceLabel}
+                  tone={dataCoverage.activeSource === 'import' ? 'warning' : dataCoverage.activeSource === 'ecommerce' ? 'success' : 'neutral'}
+                />
+              </div>
             }
           />
 

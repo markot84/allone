@@ -19,3 +19,4 @@ export type { PageHeaderProps } from './PageHeader';
 export { ModalHeader } from './ModalHeader';
 export type { ModalHeaderProps } from './ModalHeader';
 export { MetaAttributionSelector } from './MetaAttributionSelector';
+export { DataSourcePill } from './DataSourcePill';
