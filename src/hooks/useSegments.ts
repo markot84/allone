@@ -166,14 +166,20 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     refetchOnWindowFocus: false,
     retry: 1,
   });
+  const rawOrdersCatalogKey = useMemo(() => {
+    if (rawOrders.length === 0) return 'empty';
+    const first = rawOrders[0]?.orderId || rawOrders[0]?.createdAt || '';
+    const last = rawOrders[rawOrders.length - 1]?.orderId || rawOrders[rawOrders.length - 1]?.createdAt || '';
+    return `${rawOrders.length}:${first}:${last}`;
+  }, [rawOrders]);
 
   /** Μετά τις παραγγελίες ώστε να μην «δένει» το UI σε διπλό βαρύ parallel fetch· τα segments εμφανίζονται χωρίς catalog enrichment. */
   const { data: catalogAlignment, isPending: catalogPending } = useQuery({
-    queryKey: [catalogQueryKeyPrefix, brandId, platformsKey],
+    queryKey: [catalogQueryKeyPrefix, brandId, platformsKey, rawOrdersCatalogKey],
     queryFn: () =>
       brandId
         ? (variant === 'data_analysis'
-            ? fetchCatalogAlignmentDataForDataAnalysis(brandId, ecomm.connectedPlatforms)
+            ? fetchCatalogAlignmentDataForDataAnalysis(brandId, ecomm.connectedPlatforms, rawOrders)
             : fetchCatalogAlignmentData(brandId, ecomm.connectedPlatforms))
         : Promise.resolve(null),
     enabled: ordersQueryEnabled && !ordersPending,
@@ -189,6 +195,12 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   }, [catalogAlignment]);
 
   const orderScopeStats = useMemo(() => computeRfmOrderScopeStats(rawOrders), [rawOrders]);
+  const orderOrigin = useMemo(() => {
+    if (rawOrders.some((order) => order.platform === 'megaventory_invoices' || order.platform === 'softone_sales_documents')) {
+      return 'erp_orders' as const;
+    }
+    return rawOrders.length > 0 ? ('ecommerce_orders' as const) : ('none' as const);
+  }, [rawOrders]);
   const effectiveSourcePref =
     sourcePref === 'orders' &&
     !ordersPending &&
@@ -220,9 +232,10 @@ export function useSegments(options: UseSegmentsOptions = {}) {
 
   const resolvedSource: SegmentsDataSource = useMemo(() => {
     if (orderRfm.canCompute) return 'ecommerce';
-    if (ordersQueryEnabled) return 'none';
+    if (sourcePref === 'external' && importSegmentsAvailable) return 'import';
+    if (ordersQueryEnabled && ordersPending) return 'none';
     return importSegmentsAvailable ? 'import' : 'none';
-  }, [orderRfm.canCompute, ordersQueryEnabled, importSegmentsAvailable]);
+  }, [sourcePref, orderRfm.canCompute, ordersQueryEnabled, ordersPending, importSegmentsAvailable]);
 
   const segments = useMemo(() => {
     let base: RFMSegment[];
@@ -303,7 +316,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     !ecomm.hasData;
   const isLoading =
     blocksOnImportedSegmentsOnly ||
-    (ordersQueryEnabled && ordersPending && !orderRfm.canCompute);
+    (ordersQueryEnabled && ordersPending && !orderRfm.canCompute && !importSegmentsAvailable);
 
   const ordersLoading = ordersQueryEnabled && ordersPending;
   const isCatalogEnriching = ordersQueryEnabled && catalogPending;
@@ -314,6 +327,16 @@ export function useSegments(options: UseSegmentsOptions = {}) {
       : resolvedSource === 'import'
         ? importSegmentsAvailable
         : false;
+  const sourceLabel =
+    resolvedSource === 'ecommerce'
+      ? orderOrigin === 'erp_orders'
+        ? 'ERP orders'
+        : effectiveSourcePref === 'external'
+          ? 'E-shop + guests'
+          : 'E-shop orders'
+      : resolvedSource === 'import'
+        ? 'ERP / import'
+        : 'Pending';
 
   return {
     segments,
@@ -327,6 +350,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     hasImported,
     /** Πραγματική πηγή μετά την επιλογή του χρήστη. */
     dataSource: resolvedSource,
+    sourceLabel,
     setDataSourcePreference,
     sourcePreference: effectiveSourcePref,
     canComputeFromOrders,

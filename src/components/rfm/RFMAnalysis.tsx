@@ -119,6 +119,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
     ordersError,
     hasImported: hasImportedSegments,
     dataSource: rfmDataSource,
+    sourceLabel: rfmSourceLabel,
     setDataSourcePreference,
     sourcePreference: rfmSourcePref,
     canComputeFromOrders,
@@ -294,15 +295,6 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
   const ordersOptionUnavailable = !canComputeIdentifiedOrders && !ordersLoading;
   const effectiveSourceChoice =
     rfmSourcePref === 'orders' && !ordersOptionUnavailable ? 'orders' : 'external';
-  const dataSourceLabel =
-    rfmDataSource === 'ecommerce'
-      ? rfmSourcePref === 'external'
-        ? 'E-shop + guests'
-        : 'E-shop orders'
-      : rfmDataSource === 'import'
-        ? 'ERP / import'
-        : 'Pending';
-
   return (
     <div className="space-y-3">
       <PageHeader
@@ -417,7 +409,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
         )}
         <DataSourcePill
           label="Source"
-          value={dataSourceLabel}
+          value={rfmSourceLabel}
           tone={rfmDataSource === 'import' ? 'warning' : rfmDataSource === 'ecommerce' ? 'success' : 'neutral'}
         />
         {rfmDataSource === 'ecommerce' && orderRfmMeta && orderRfmMeta.guestOrdersSkipped > 0 ? (

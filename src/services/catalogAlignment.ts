@@ -1,8 +1,9 @@
 import type { EcommerceRawLineItem } from './ecommerceRawOrders';
+import type { EcommerceRawOrder } from './ecommerceRawOrders';
 import type { Product } from '../types';
 import { FirestoreService } from './firestore';
 import { ecommerceLineAffinityKey, normalizeSku } from './ecommerceAffinityKey';
-import { limit } from 'firebase/firestore';
+import { limit, where, type QueryConstraint } from 'firebase/firestore';
 
 export type CatalogMatchSource = 'erp_product' | 'platform_catalog' | 'line_fallback';
 
@@ -93,6 +94,8 @@ const PRODUCT_COLLECTIONS: Record<string, string> = {
 };
 
 const DATA_ANALYSIS_CATALOG_LIMIT = 5000;
+const DATA_ANALYSIS_TARGETED_VALUE_LIMIT = 1200;
+const FIRESTORE_IN_LIMIT = 30;
 
 function pk(platform: string, id: string): string {
   return `${platform}:${id}`;
@@ -270,6 +273,82 @@ function ingestMagentoRows(rows: Record<string, unknown>[], indexes: CatalogInde
   }
 }
 
+function uniqueNonEmpty(values: Iterable<unknown>, max = DATA_ANALYSIS_TARGETED_VALUE_LIMIT): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const value of values) {
+    const text = trimLabel(value);
+    if (!text || seen.has(text)) continue;
+    seen.add(text);
+    out.push(text);
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
+function chunkValues(values: string[]): string[][] {
+  const chunks: string[][] = [];
+  for (let i = 0; i < values.length; i += FIRESTORE_IN_LIMIT) {
+    chunks.push(values.slice(i, i + FIRESTORE_IN_LIMIT));
+  }
+  return chunks;
+}
+
+function mergeRowsById(rows: Record<string, unknown>[]): Record<string, unknown>[] {
+  const map = new Map<string, Record<string, unknown>>();
+  for (const row of rows) {
+    const id = trimLabel(row.id) || trimLabel(row.productId) || trimLabel(row.sku);
+    if (!id) continue;
+    map.set(id, row);
+  }
+  return [...map.values()];
+}
+
+function catalogHintsFromOrders(orders: EcommerceRawOrder[] | undefined, platform?: string) {
+  const source = platform ? orders?.filter((order) => order.platform === platform) : orders;
+  const lineItems = source?.flatMap((order) => order.lineItems) ?? [];
+  return {
+    skus: uniqueNonEmpty(lineItems.map((item) => item.sku)),
+    normalizedSkus: uniqueNonEmpty(lineItems.map((item) => normalizeSku(item.sku))).filter(Boolean),
+    productIds: uniqueNonEmpty(lineItems.map((item) => item.productId)),
+  };
+}
+
+async function getRowsByInField(
+  collectionName: string,
+  brandId: string,
+  field: string,
+  values: string[]
+): Promise<Record<string, unknown>[]> {
+  const chunks = chunkValues(values);
+  const rows = await Promise.all(
+    chunks.map((chunk) =>
+      FirestoreService.getDocuments<Record<string, unknown>>(collectionName, [where(field, 'in', chunk)], brandId, {
+        cacheFirst: true,
+      })
+    )
+  );
+  return rows.flat();
+}
+
+async function getTargetedCatalogRows(
+  collectionName: string,
+  brandId: string,
+  hints: { skus: string[]; productIds?: string[] },
+  fallbackConstraints: QueryConstraint[] = [limit(DATA_ANALYSIS_CATALOG_LIMIT)]
+): Promise<Record<string, unknown>[]> {
+  const reads: Promise<Record<string, unknown>[]>[] = [];
+  if (hints.skus.length > 0) reads.push(getRowsByInField(collectionName, brandId, 'sku', hints.skus));
+  if (hints.productIds?.length) reads.push(getRowsByInField(collectionName, brandId, 'productId', hints.productIds));
+  if (reads.length > 0) {
+    const targeted = mergeRowsById((await Promise.all(reads)).flat());
+    if (targeted.length > 0) return targeted;
+  }
+  return FirestoreService.getDocuments<Record<string, unknown>>(collectionName, fallbackConstraints, brandId, {
+    cacheFirst: true,
+  });
+}
+
 function ingestOpenCartRows(rows: Record<string, unknown>[], indexes: CatalogIndexes): void {
   const platform = 'opencart';
   for (const d of rows) {
@@ -375,7 +454,8 @@ export async function fetchCatalogAlignmentData(
  */
 export async function fetchCatalogAlignmentDataForDataAnalysis(
   brandId: string,
-  platforms: string[]
+  platforms: string[],
+  orders: EcommerceRawOrder[] = []
 ): Promise<{ indexes: CatalogIndexes; erpBySku: Map<string, ErpSkuDims> }> {
   const indexes: CatalogIndexes = { byProductId: new Map(), bySku: new Map() };
   const connected = [...new Set(platforms)].filter((p) => PRODUCT_COLLECTIONS[p]);
@@ -384,11 +464,17 @@ export async function fetchCatalogAlignmentDataForDataAnalysis(
     Promise.all(
       connected.map(async (platform) => {
         const coll = PRODUCT_COLLECTIONS[platform];
-        const rows = await FirestoreService.getDocuments<Record<string, unknown>>(coll, [limit(DATA_ANALYSIS_CATALOG_LIMIT)], brandId);
+        const hints = catalogHintsFromOrders(orders, platform);
+        const rows = await getTargetedCatalogRows(coll, brandId, {
+          skus: hints.skus,
+          productIds: hints.productIds,
+        });
         return { platform, rows };
       })
     ),
-    FirestoreService.getDocuments<Record<string, unknown>>('megaventory_products', [limit(DATA_ANALYSIS_CATALOG_LIMIT)], brandId),
+    getTargetedCatalogRows('megaventory_products', brandId, {
+      skus: catalogHintsFromOrders(orders).normalizedSkus,
+    }),
   ]);
 
   for (const { platform, rows } of productRows) {

@@ -290,15 +290,7 @@ export function WeightConfigurator() {
   } = useEcommerceSummary();
   const { data: procurementData } = useProcurement();
   const { refresh: refreshAggregates } = useRefreshAggregates();
-  const { segments: rfmSegments, dataCoverage } = useSegments();
-  const segmentDataSourceLabel =
-    dataCoverage.activeSource === 'ecommerce'
-      ? dataCoverage.sourcePreference === 'external'
-        ? 'E-shop + guests'
-        : 'E-shop orders'
-      : dataCoverage.activeSource === 'import'
-        ? 'ERP / import'
-        : 'Pending';
+  const { segments: rfmSegments, dataCoverage, sourceLabel: segmentDataSourceLabel } = useSegments();
   const { user } = useAuth();
   const { activeStrategy, saveActiveStrategy, isLoading: strategyLoading } = useActiveStrategy();
   const { benchmarks } = usePriceBenchmarks();
