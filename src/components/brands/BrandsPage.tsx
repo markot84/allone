@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Building2, Plus, ChevronRight } from 'lucide-react';
-import { Card, Button, PageHeader } from '../common';
+import { Card, Button, PageHeader, Spinner } from '../common';
 import { useBrand } from '../../hooks/useBrand';
 import { BrandCreateForm } from '../auth/BrandCreateForm';
 import { getAssetUrl } from '../../services/storage';
@@ -14,7 +14,7 @@ interface BrandsPageProps {
 }
 
 export function BrandsPage({ onNavigateToDashboard }: BrandsPageProps) {
-  const { brands, currentBrand, setCurrentBrand, refreshBrands } = useBrand();
+  const { brands, currentBrand, loading, setCurrentBrand, refreshBrands } = useBrand();
   const [showAddForm, setShowAddForm] = useState(false);
 
   const handleBrandSelect = (brand: Brand) => {
@@ -64,8 +64,15 @@ export function BrandsPage({ onNavigateToDashboard }: BrandsPageProps) {
         </motion.div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {brands.map((brand, index) => (
+      {loading ? (
+        <Card padding="lg" className="py-12">
+          <div className="flex justify-center">
+            <Spinner size="md" label="Φόρτωση brands..." />
+          </div>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {brands.map((brand, index) => (
           <motion.div
             key={brand.id}
             initial={{ opacity: 0, y: 10 }}
@@ -127,10 +134,11 @@ export function BrandsPage({ onNavigateToDashboard }: BrandsPageProps) {
               )}
             </Card>
           </motion.div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
-      {brands.length === 0 && !showAddForm && (
+      {!loading && brands.length === 0 && !showAddForm && (
         <Card padding="lg" className="text-center py-12">
           <Building2 size={48} className="mx-auto text-[#9CA3AF] mb-4" />
           <p className="text-[#4A4A4A] font-medium">Δεν έχετε brands ακόμη</p>

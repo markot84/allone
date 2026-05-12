@@ -29,7 +29,7 @@ function sameStringSet(a: string[], b: string[]): boolean {
 }
 
 export function BrandProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, isSuperAdmin } = useAuth();
   const [brands, setBrands] = useState<Brand[]>([]);
   const [currentBrand, setCurrentBrandState] = useState<Brand | null>(null);
   const [loading, setLoading] = useState(true);
@@ -43,6 +43,22 @@ export function BrandProvider({ children }: { children: ReactNode }) {
     }
     setLoading(true);
     try {
+      if (isSuperAdmin) {
+        const allBrands = await FirestoreService.getDocuments<Brand>('brands');
+        const brandList = allBrands.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'el'));
+        setBrands(brandList);
+
+        const storageKey = `${STORAGE_KEY_PREFIX}-${user.uid}`;
+        const lastBrandId = typeof localStorage !== 'undefined' ? localStorage.getItem(storageKey) : null;
+        const lastBrand = lastBrandId
+          ? brandList.find((b) => b.id === lastBrandId) ?? null
+          : null;
+        const nextBrand = lastBrand ?? brandList[0] ?? null;
+        setCurrentBrandState((prev) => prev ? brandList.find((b) => b.id === prev.id) ?? nextBrand : nextBrand);
+        setLoading(false);
+        return;
+      }
+
       let profile: { brandIds?: string[]; defaultBrandId?: string } | null = null;
       try {
         profile = await FirestoreService.getDocumentWithTimeout<{ brandIds?: string[]; defaultBrandId?: string }>(
@@ -92,7 +108,7 @@ export function BrandProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [user?.uid]);
+  }, [user?.uid, isSuperAdmin]);
 
   const setCurrentBrand = useCallback((brand: Brand | null) => {
     setCurrentBrandState(brand);
