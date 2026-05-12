@@ -1,10 +1,14 @@
 {
-  "version": "0.749.32",
-  "previousVersion": "0.749.31",
-  "commitHash": "47476cb",
+  "version": "0.749.34",
+  "previousVersion": "0.749.33",
+  "commitHash": "4346116",
   "branch": "main",
-  "buildDate": "2026-05-12T09:39:37.556Z",
+  "buildDate": "2026-05-12T09:54:44.178Z",
   "commits": [
+    {
+      "hash": "4346116",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "47476cb",
       "message": "chore: full deploy"
@@ -60,10 +64,6 @@
     {
       "hash": "43fb595",
       "message": "procuremente restore"
-    },
-    {
-      "hash": "1def49f",
-      "message": "fix: clear stale query cache after restore"
     }
   ],
   "changes": [

@@ -161,15 +161,10 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     () => brandId ? { brandId, variant, sourcePref, ordersSinceDate } : null,
     [brandId, variant, sourcePref, ordersSinceDate]
   );
-  const [analysisSnapshot, setAnalysisSnapshot] = useState<AnalysisSnapshotPayload | null>(null);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const t = window.setTimeout(() => {
-      setAnalysisSnapshot(snapshotScope ? readLatestAnalysisSnapshot(snapshotScope) : null);
-    }, 0);
-    return () => window.clearTimeout(t);
-  }, [snapshotScope]);
+  const analysisSnapshot = useMemo(
+    () => (snapshotScope ? readLatestAnalysisSnapshot(snapshotScope) : null),
+    [snapshotScope]
+  );
 
   const ordersSourceFingerprint = variant === 'data_analysis' ? (syncVersion ?? 'sync-pending') : platformsKey;
 
@@ -404,15 +399,14 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   ]);
 
   useEffect(() => {
-    if (!liveSnapshotPayload || isLoading || ordersPending || catalogPending) return;
+    if (!liveSnapshotPayload || isLoading || ordersPending) return;
     writeAnalysisSnapshot(liveSnapshotPayload);
-  }, [liveSnapshotPayload, isLoading, ordersPending, catalogPending]);
+  }, [liveSnapshotPayload, isLoading, ordersPending]);
 
   const usableSnapshot =
     variant === 'data_analysis' &&
     analysisSnapshot &&
-    syncVersion &&
-    analysisSnapshot.syncVersion === syncVersion
+    (!syncVersion || analysisSnapshot.syncVersion === syncVersion)
       ? analysisSnapshot
       : null;
   const shouldUseSnapshot = !!usableSnapshot && (isLoading || ordersPending || catalogPending || segments.length === 0);
