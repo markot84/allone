@@ -120,6 +120,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
     ordersError,
     hasImported: hasImportedSegments,
     dataSource: rfmDataSource,
+    dataOrigin: rfmDataOrigin,
     sourceLabel: rfmSourceLabel,
     setDataSourcePreference,
     sourcePreference: rfmSourcePref,
@@ -288,6 +289,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
   const showDataSourceSelector =
     canComputeFromOrders || ordersLoading || ecomm.hasData || ecomm.connectedPlatforms.length > 0;
   const ordersOptionUnavailable = !canComputeIdentifiedOrders && !ordersLoading;
+  const isErpRfmOrders = rfmDataOrigin === 'erp_orders';
   const effectiveSourceChoice =
     rfmSourcePref === 'orders' && !ordersOptionUnavailable ? 'orders' : 'external';
   return (
@@ -368,10 +370,16 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
                     : 'text-[#6B7280] hover:bg-[#F9FAFB] disabled:cursor-not-allowed disabled:opacity-45'
                 }`}
                 disabled={ordersOptionUnavailable}
-                title={ordersOptionUnavailable ? 'Δεν υπάρχουν ακόμη αναγνωρίσιμοι e-shop πελάτες για RFM.' : undefined}
+                title={
+                  ordersOptionUnavailable
+                    ? 'Δεν υπάρχουν ακόμη αναγνωρίσιμοι πελάτες για RFM.'
+                    : isErpRfmOrders
+                      ? 'Εξαιρεί generic λιανική όπως "Πελάτης Λιανικής".'
+                      : undefined
+                }
                 onClick={() => setDataSourcePreference('orders')}
               >
-                E-shop orders
+                {isErpRfmOrders ? 'ERP orders' : 'E-shop orders'}
               </button>
               <button
                 type="button"
@@ -382,7 +390,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
                 }`}
                 onClick={() => setDataSourcePreference('external')}
               >
-                E-shop orders + guests
+                {isErpRfmOrders ? 'ERP orders + retail' : 'E-shop orders + guests'}
               </button>
             </div>
           </div>

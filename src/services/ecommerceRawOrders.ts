@@ -372,23 +372,46 @@ function softOneCustomerTextFromRow(row: Record<string, unknown>): string {
   return '';
 }
 
+function normalizeCustomerLabel(value: unknown): string {
+  return String(value ?? '')
+    .trim()
+    .toLocaleLowerCase('el-GR')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ');
+}
+
+function isGenericRetailCustomerName(value: unknown): boolean {
+  const label = normalizeCustomerLabel(value);
+  return (
+    label === 'πελατης λιανικης' ||
+    label === 'πελατης λιανικη' ||
+    label === 'λιανικη' ||
+    label === 'retail customer' ||
+    label === 'cash customer' ||
+    label === 'walk in customer'
+  );
+}
+
 /** Σταθερό κλειδί πελάτη για RFM από Megaventory τιμολόγια (ίδια λογική με server megaventoryRfm). */
 function megaventoryInvoiceCustomerKey(row: Record<string, unknown>): string {
+  const name = String(row.clientName ?? '').trim();
+  if (isGenericRetailCustomerName(name)) return '';
   const id = String(row.clientId ?? '').trim();
   if (id) return `mv_customer_${id}`;
-  const name = String(row.clientName ?? '').trim();
   if (name) return `mv_customer_${name.toLocaleUpperCase('el-GR')}`;
   return '';
 }
 
 function softOneCustomerKeyFromRow(row: Record<string, unknown>): string {
+  const name = softOneCustomerTextFromRow(row);
+  if (isGenericRetailCustomerName(name)) return '';
   const trdr = row['SALDOC.TRDR'] ?? row.TRDR ?? row['TRDR.TRDR'];
   const trdrStr = trdr != null ? String(trdr).trim() : '';
   if (trdrStr && trdrStr !== '0') return `s1_customer_trdr:${trdrStr}`;
   const code = row['TRDR.CODE'] ?? row['CUSTOMER.CODE'];
   const codeStr = code != null ? String(code).trim() : '';
   if (codeStr) return `s1_customer_code:${codeStr}`;
-  const name = softOneCustomerTextFromRow(row);
   if (name) return `s1_customer_${name.toLocaleUpperCase('el-GR')}`;
   return '';
 }

@@ -1,10 +1,14 @@
 {
-  "version": "0.749.42",
-  "previousVersion": "0.749.41",
-  "commitHash": "f61f2ce",
+  "version": "0.749.43",
+  "previousVersion": "0.749.42",
+  "commitHash": "de71bf1",
   "branch": "main",
-  "buildDate": "2026-05-12T12:08:22.494Z",
+  "buildDate": "2026-05-12T12:23:04.501Z",
   "commits": [
+    {
+      "hash": "de71bf1",
+      "message": "chore: full deploy"
+    },
     {
       "hash": "f61f2ce",
       "message": "chore: full deploy"
@@ -60,14 +64,9 @@
     {
       "hash": "6b43198",
       "message": "chore: full deploy"
-    },
-    {
-      "hash": "6c4c365",
-      "message": "chore: full deploy"
     }
   ],
   "changes": [
-    "[Συντήρηση] Full deploy",
-    "Procuremente restore"
+    "[Συντήρηση] Full deploy"
   ]
 }
