@@ -3,7 +3,7 @@
  * αθροίσεις ίδιες με το ecommerceAggregator (demo + cancelled) ώστε οι περίοδοι >90d
  * να εμφανίζονται σωστά στο UI (το server summary κρατά rolling ~90 ημέρες).
  */
-import { orderBy, where, Timestamp, type QueryConstraint } from 'firebase/firestore';
+import { limit, orderBy, where, Timestamp, type QueryConstraint } from 'firebase/firestore';
 import { FirestoreService } from './firestore';
 import {
   classifyEcommerceOrder,
@@ -67,6 +67,8 @@ export const ECOMMERCE_ORDER_COLLECTIONS: Record<string, string> = {
   opencart: 'opencart_orders',
   magento: 'magento_orders',
 };
+
+const DATA_ANALYSIS_ORDER_LIMIT = 5000;
 
 export function isEcommerceOrderCancelled(status: string | null | undefined): boolean {
   return isExcludedEcommerceStatus(status);
@@ -498,10 +500,25 @@ async function loadAndClassifyErpConnectorOrders(
       ? ({ cacheFirst: true } as const)
       : ({ cacheFirst: false, forceServer: true } as const);
   const coll = backend === 'megaventory_invoices' ? 'megaventory_invoices' : 'softone_sales_documents';
-  const [rows, allRules] = await Promise.all([
-    FirestoreService.getDocuments<Record<string, unknown>>(coll, [], brandId, rangedLoadOpts),
-    fetchSalesChannelRulesForOrders(brandId, mode),
-  ]);
+  const dateField = backend === 'megaventory_invoices' ? 'date' : 'documentDate';
+  const constraints: QueryConstraint[] = [];
+  if (options.sinceDate) constraints.push(where(dateField, '>=', options.sinceDate));
+  if (options.untilDate) constraints.push(where(dateField, '<=', options.untilDate));
+  if (options.sinceDate || options.untilDate) constraints.push(orderBy(dateField, 'desc'));
+  constraints.push(limit(DATA_ANALYSIS_ORDER_LIMIT));
+  const allRulesPromise = fetchSalesChannelRulesForOrders(brandId, mode);
+  let rows: Record<string, unknown>[];
+  try {
+    rows = await FirestoreService.getDocuments<Record<string, unknown>>(coll, constraints, brandId, rangedLoadOpts);
+  } catch {
+    rows = await FirestoreService.getDocuments<Record<string, unknown>>(
+      coll,
+      [limit(DATA_ANALYSIS_ORDER_LIMIT)],
+      brandId,
+      rangedLoadOpts
+    );
+  }
+  const allRules = await allRulesPromise;
 
   const filtered = rows.filter((row) => {
     const day =
@@ -561,6 +578,7 @@ async function fetchEcommercePlatformOrdersOnly(
         if (options.sinceDate) constraints.push(where('createdAt', '>=', options.sinceDate));
         if (options.untilDate) constraints.push(where('createdAt', '<=', `${options.untilDate}T23:59:59.999Z`));
         if (options.sinceDate || options.untilDate) constraints.push(orderBy('createdAt', 'desc'));
+        constraints.push(limit(DATA_ANALYSIS_ORDER_LIMIT));
         const hasRange = Boolean(options.sinceDate || options.untilDate);
         /** `cacheFirst: true` (RFM / dashboard) → γρήγορη επανεπίσκεψη· αλλιώς server για «φρέσκα» δεδομένα μετά sync. */
         const rangedLoadOpts =
@@ -613,7 +631,7 @@ async function fetchEcommercePlatformOrdersOnly(
           if (!hasRange) throw error;
           const fallbackRows = await FirestoreService.getDocuments<Record<string, unknown>>(
             collectionName,
-            [],
+            [limit(DATA_ANALYSIS_ORDER_LIMIT)],
             brandId,
             rangedLoadOpts
           );

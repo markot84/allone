@@ -23,6 +23,14 @@ export type RfmFromOrdersResult = {
   canCompute: boolean;
 };
 
+export type RfmOrderScopeStats = {
+  identifiedCustomers: number;
+  allBuyers: number;
+  guestOrders: number;
+  canComputeIdentified: boolean;
+  canComputeAll: boolean;
+};
+
 export type SegmentMigrationFlow = {
   from: string;
   fromName: string;
@@ -577,10 +585,10 @@ export function computeRfmSegmentsFromEcommerceOrders(
   const byKey = new Map<string, CustomerAgg>();
   let guestOrdersSkipped = 0;
   let ordersAttributed = 0;
-  const latestOrderTime = orders
-    .map((o) => new Date(o.createdAt || '').getTime())
-    .filter(Number.isFinite)
-    .sort((a, b) => b - a)[0];
+  const latestOrderTime = orders.reduce((latest, o) => {
+    const t = new Date(o.createdAt || '').getTime();
+    return Number.isFinite(t) && t > latest ? t : latest;
+  }, 0);
   const asOf = latestOrderTime ? new Date(latestOrderTime) : new Date();
   asOf.setHours(23, 59, 59, 999);
   const cutoff = new Date(asOf);
@@ -811,5 +819,47 @@ export function computeRfmSegmentsFromEcommerceOrders(
     ordersAttributed,
     guestOrdersSkipped,
     canCompute: true,
+  };
+}
+
+export function computeRfmOrderScopeStats(orders: EcommerceRawOrder[]): RfmOrderScopeStats {
+  const identified = new Set<string>();
+  const all = new Set<string>();
+  let guestOrders = 0;
+  const latestOrderTime = orders.reduce((latest, o) => {
+    const t = new Date(o.createdAt || '').getTime();
+    return Number.isFinite(t) && t > latest ? t : latest;
+  }, 0);
+  const asOf = latestOrderTime ? new Date(latestOrderTime) : new Date();
+  asOf.setHours(23, 59, 59, 999);
+  const cutoff = new Date(asOf);
+  cutoff.setDate(cutoff.getDate() - RFM_LOOKBACK_DAYS);
+  cutoff.setHours(0, 0, 0, 0);
+  const cutoffMs = cutoff.getTime();
+
+  for (const o of orders) {
+    const createdAtMs = new Date(o.createdAt || '').getTime();
+    if (!Number.isFinite(createdAtMs) || createdAtMs < cutoffMs || createdAtMs > asOf.getTime()) continue;
+    const { revenue, isAllDemo } = getEcommerceOrderNetRevenue(o);
+    if (isAllDemo || revenue <= 0 || !isEcommerceOrderRevenueIncluded(o)) continue;
+
+    const key = o.customerKey?.trim();
+    if (key) {
+      identified.add(key);
+      all.add(key);
+      continue;
+    }
+
+    guestOrders += 1;
+    const day = (o.createdAt || '').slice(0, 10);
+    all.add(`guest:${o.platform}:${o.orderId || o.orderName || `${day}:${guestOrders}`}`);
+  }
+
+  return {
+    identifiedCustomers: identified.size,
+    allBuyers: all.size,
+    guestOrders,
+    canComputeIdentified: identified.size > 0,
+    canComputeAll: all.size > 0,
   };
 }

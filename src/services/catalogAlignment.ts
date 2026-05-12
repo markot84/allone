@@ -2,6 +2,7 @@ import type { EcommerceRawLineItem } from './ecommerceRawOrders';
 import type { Product } from '../types';
 import { FirestoreService } from './firestore';
 import { ecommerceLineAffinityKey, normalizeSku } from './ecommerceAffinityKey';
+import { limit } from 'firebase/firestore';
 
 export type CatalogMatchSource = 'erp_product' | 'platform_catalog' | 'line_fallback';
 
@@ -90,6 +91,8 @@ const PRODUCT_COLLECTIONS: Record<string, string> = {
   magento: 'magento_products',
   opencart: 'opencart_products',
 };
+
+const DATA_ANALYSIS_CATALOG_LIMIT = 5000;
 
 function pk(platform: string, id: string): string {
   return `${platform}:${id}`;
@@ -381,11 +384,11 @@ export async function fetchCatalogAlignmentDataForDataAnalysis(
     Promise.all(
       connected.map(async (platform) => {
         const coll = PRODUCT_COLLECTIONS[platform];
-        const rows = await FirestoreService.getDocuments<Record<string, unknown>>(coll, [], brandId);
+        const rows = await FirestoreService.getDocuments<Record<string, unknown>>(coll, [limit(DATA_ANALYSIS_CATALOG_LIMIT)], brandId);
         return { platform, rows };
       })
     ),
-    FirestoreService.getDocuments<Record<string, unknown>>('megaventory_products', [], brandId),
+    FirestoreService.getDocuments<Record<string, unknown>>('megaventory_products', [limit(DATA_ANALYSIS_CATALOG_LIMIT)], brandId),
   ]);
 
   for (const { platform, rows } of productRows) {
