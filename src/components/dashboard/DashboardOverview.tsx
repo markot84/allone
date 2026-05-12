@@ -86,6 +86,8 @@ const REV_CHART_ESHOP = '#F97316';
 
 const REV_PERF_LABEL_ESHOP = 'Τζίρος e-shop (παραγγελίες)';
 const REV_PERF_LABEL_ESHOP_BLEND = 'Organic + καμπάνιες (εκτίμηση)';
+const DASHBOARD_PRODUCT_LIMIT = 5000;
+const DASHBOARD_LOADING_TIMEOUT_MS = 8000;
 /** Διαφήμιση — ξεχωριστό mini chart (όχι σύγκριση με τζίρο). */
 const ADS_SPEND_COLOR = '#94A3B8';
 const ADS_CONV_COLOR = '#2563EB';
@@ -122,7 +124,12 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   const { currentBrand } = useBrand();
   const { isB2B, enabledModules } = useModules();
   const { segments: rfmSegments, hasImported: hasSegments, isLoading: segmentsLoading } = useSegments();
-  const { count: productsCount, products, isLoading: productsLoading } = useProductSource();
+  const {
+    count: loadedProductsCount,
+    totalCount: productTotalCount,
+    products,
+    isLoading: productsLoading,
+  } = useProductSource({ maxProducts: DASHBOARD_PRODUCT_LIMIT });
   const { productStats } = useProductAggregates();
   const { suppliers } = useSuppliers();
   const { tasks } = useTasks();
@@ -148,6 +155,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     suppliers.forEach(s => m.set(s.name, s.tod));
     return m;
   }, [suppliers]);
+  const productsCount = productTotalCount ?? productStats?.totalSkus ?? loadedProductsCount;
   const hasAnyData = hasOrganic || hasSegments || productsCount > 0 || hasCampaigns;
 
   const ga4AnalyticsLoading = enabledModules.analytics && ga4.isLoading && !ga4.hasData;
@@ -173,7 +181,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     return !ecomm.isLoading && !ecommHist.rawLoading;
   }, [currentBrand, enabledModules.ecommerce, ecomm.isLoading, ecomm.connectedPlatforms.length, ecommHist.rawLoading]);
 
-  const dashboardOverviewLoading =
+  const [dashboardLoadingTimedOut, setDashboardLoadingTimedOut] = useState(false);
+  const dashboardOverviewBusy =
     Boolean(currentBrand) &&
     !hasAnyData &&
     (segmentsLoading ||
@@ -182,6 +191,14 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       productsLoading ||
       ecommerceRawBusy ||
       ga4AnalyticsLoading);
+  const dashboardOverviewLoading = dashboardOverviewBusy && !dashboardLoadingTimedOut;
+
+  useEffect(() => {
+    setDashboardLoadingTimedOut(false);
+    if (!dashboardOverviewBusy) return;
+    const t = window.setTimeout(() => setDashboardLoadingTimedOut(true), DASHBOARD_LOADING_TIMEOUT_MS);
+    return () => window.clearTimeout(t);
+  }, [currentBrand?.id, dashboardOverviewBusy]);
 
   const campaignsTyped = (campaigns ?? []) as Campaign[];
 
@@ -787,9 +804,6 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               <Spinner size="md" className="shrink-0" />
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-[var(--nts-charcoal)]">Φόρτωση δεδομένων πίνακα ελέγχου…</p>
-                <p className="mt-1 text-xs leading-relaxed text-[var(--nts-medium-gray)]">
-                  Συλλογή παραγγελιών, καμπανιών και λοιπών πηγών — σε μεγάλα brands μπορεί να διαρκέσει λίγα λεπτά.
-                </p>
               </div>
             </div>
           </Card>

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { useBrand } from '../../hooks/useBrand';
@@ -10,7 +10,6 @@ import {
   ChevronDown,
   ChevronUp,
   ArrowRight,
-  Search,
 } from 'lucide-react';
 import {
   fetchAllEcommerceOrders,
@@ -40,7 +39,6 @@ import {
 } from 'recharts';
 import { Card, CardHeader, KPICard, Tooltip, PageHeader } from '../common';
 import { useEcommerceSummary, type EcommerceTopProduct } from '../../hooks/useEcommerceSummary';
-import { useMagentoPopularSearches } from '../../hooks/useMagentoPopularSearches';
 import { formatCurrencyCompact, formatNumber } from '../../utils/format';
 import { lineRevenueAndQtyForTopProducts, filterMagentoLineItemsForTopProducts } from '../../utils/productLineStats';
 import { paymentChartLabelForEcommerceOrder } from '../../utils/magentoPaymentChart';
@@ -256,46 +254,6 @@ export function EcommerceDashboard() {
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
   const ecomm = useEcommerceSummary();
-  const magentoSearches = useMagentoPopularSearches();
-
-  const magentoPopularMeta = useMemo(() => {
-    switch (magentoSearches.termsProvenance) {
-      case 'magento_performance_plus_module':
-        return {
-          subtitle: 'Πραγματικά search queries από το Performance+ Magento module (search_query table).',
-          hitsLabel: 'Uses',
-          showResults: true,
-          badge: 'Auto Magento',
-          badgeTone: 'success' as const,
-        };
-      case 'magento_admin_csv':
-        return {
-          subtitle: 'Πραγματικά search queries από εξαγωγή του Magento Admin (Marketing → Search Terms).',
-          hitsLabel: 'Uses',
-          showResults: true,
-          badge: 'CSV από Admin',
-          badgeTone: 'success' as const,
-        };
-      case 'magento_searchTerms_rest':
-        return {
-          subtitle: 'Πραγματικά search queries από REST /V1/searchTerms (Commerce ή custom extension).',
-          hitsLabel: 'Uses',
-          showResults: true,
-          badge: 'Magento REST',
-          badgeTone: 'success' as const,
-        };
-      case 'magento_orders_line_items':
-      default:
-        return {
-          subtitle:
-            'Δεν υπάρχουν ακόμη πραγματικά search queries. Για αυτόματο sync εγκατάστησε το Performance+ Magento module.',
-          hitsLabel: 'Uses',
-          showResults: true,
-          badge: 'Χωρίς δεδομένα',
-          badgeTone: 'neutral' as const,
-        };
-    }
-  }, [magentoSearches.termsProvenance]);
 
   // Ίδιο global date range με Dashboard/ROI — όχι session-local override (είχε προκαλέσει «άλλο Μάρτιο στο E-commerce, άλλο στο Dashboard»).
   const {
@@ -306,18 +264,12 @@ export function EcommerceDashboard() {
     setCustomRange,
   } = useGlobalDate();
 
-  /** Πίνακας «Δημοφιλείς αναζητήσεις»: 10 γραμμές, υπόλοιπο με ανάπτυξη */
-  const [magentoPopularExpanded, setMagentoPopularExpanded] = useState(false);
   const brandHistoryStartISO = getBrandHistoryStartISO(currentBrand);
   const rawFrom = globalFrom;
   const rawTo = globalTo;
   let effectiveFrom = brandHistoryStartISO && rawFrom < brandHistoryStartISO ? brandHistoryStartISO : rawFrom;
   const effectiveTo = rawTo;
   if (effectiveFrom > effectiveTo) effectiveFrom = effectiveTo;
-
-  useEffect(() => {
-    setMagentoPopularExpanded(false);
-  }, [brandId]);
 
   // Recent orders (capped 50) για fallback rendering.
   const filteredRecentOrdersVisible = useMemo(() => {
@@ -523,10 +475,11 @@ export function EcommerceDashboard() {
 
   const topProductsForTables = useMemo<TopProductRow[]>(() => {
     if (!rawOrdersLoaded) {
-      // Όταν φορτώνουν raw orders ή δεν υπάρχουν συνδεδεμένες πλατφόρμες → καμία fallback σε
-      // all-time `ecomm.topProducts` (παρερμηνεία για το επιλεγμένο range). Εμφανίζουμε empty
-      // και μήνυμα loading στον πίνακα.
-      return [];
+      return ecomm.topProducts.map((product) => ({
+        ...product,
+        parentSku: deriveParentSku(product.sku),
+        hasDerivedParent: hasDerivedParentSku(product.sku),
+      }));
     }
     const productMap = new Map<string, { name: string; revenue: number; quantity: number }>();
     for (const order of revenueOrdersForTables) {
@@ -554,7 +507,7 @@ export function EcommerceDashboard() {
         hasDerivedParent: hasDerivedParentSku(sku),
       }))
       .sort((a, b) => b.revenue - a.revenue);
-  }, [rawOrdersLoaded, revenueOrdersForTables]);
+  }, [rawOrdersLoaded, revenueOrdersForTables, ecomm.topProducts]);
 
   /** Μόνο Parent SKU: ομαδοποίηση με deriveParentSku (και απλά SKUs χωρίς suffix παραλλαγής = δικό τους parent). */
   const parentProductsForTables = useMemo<TopProductRow[]>(() => {
@@ -1033,119 +986,16 @@ export function EcommerceDashboard() {
         </Card>
       </div>
 
-      {ecomm.connectedPlatforms.includes('magento') && (
-        <Card>
-          <CardHeader
-            title="Δημοφιλείς αναζητήσεις (Magento)"
-            subtitle={magentoPopularMeta.subtitle}
-            icon={<Search className="text-[#F46F25]" size={16} />}
-            action={
-              <span
-                className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                  magentoPopularMeta.badgeTone === 'success'
-                    ? 'bg-[#ECFDF5] text-[#047857]'
-                    : 'bg-[#F3F4F6] text-[#6B7280]'
-                }`}
-              >
-                {magentoPopularMeta.badge}
-              </span>
-            }
-          />
-          <div className="px-5 pb-5 space-y-3">
-            {magentoSearches.isLoading ? (
-              <p className="text-sm text-[#9CA3AF] py-4 text-center">Φόρτωση…</p>
-            ) : magentoSearches.hasData &&
-              magentoSearches.termsProvenance !== 'magento_orders_line_items' ? (
-              <div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs" style={{ minWidth: 320 }}>
-                    <thead>
-                      <tr className="border-b border-[#E5E7EB] text-[#6B7280]">
-                        <th className="pb-2 font-medium">#</th>
-                        <th className="pb-2 font-medium">Search Query</th>
-                        {magentoPopularMeta.showResults && (
-                          <th className="pb-2 font-medium text-right">Results</th>
-                        )}
-                        <th className="pb-2 font-medium text-right">{magentoPopularMeta.hitsLabel}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(magentoPopularExpanded
-                        ? magentoSearches.terms
-                        : magentoSearches.terms.slice(0, 10)
-                      ).map((row, i) => (
-                        <tr key={`${row.term}-${i}`} className="border-b border-[#F9FAFB] last:border-0">
-                          <td className="py-2 text-[#9CA3AF] tabular-nums w-8">{i + 1}</td>
-                          <td className="py-2 text-[#111827] font-medium">{row.term}</td>
-                          {magentoPopularMeta.showResults && (
-                            <td className="py-2 text-right tabular-nums text-[#6B7280]">
-                              {typeof row.results === 'number' ? row.results.toLocaleString() : '—'}
-                            </td>
-                          )}
-                          <td className="py-2 text-right tabular-nums font-semibold text-[#111827]">
-                            {row.hits.toLocaleString()}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                {magentoSearches.terms.length > 10 && (
-                  <button
-                    type="button"
-                    aria-expanded={magentoPopularExpanded}
-                    onClick={() => setMagentoPopularExpanded((v) => !v)}
-                    className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold text-[#EA580C] transition-colors hover:bg-[#FFF7ED]"
-                  >
-                    {magentoPopularExpanded ? (
-                      <>
-                        Σύμπτυξη
-                        <ChevronUp size={16} strokeWidth={2} aria-hidden />
-                      </>
-                    ) : (
-                      <>
-                        Δείτε όλες ({magentoSearches.terms.length - 10} ακόμη)
-                        <ChevronDown size={16} strokeWidth={2} aria-hidden />
-                      </>
-                    )}
-                  </button>
-                )}
-                {magentoSearches.syncedAt && (
-                  <p className="mt-2 text-[10px] text-[#9CA3AF] text-right">
-                    Τελευταία ενημέρωση: {magentoSearches.syncedAt.toLocaleString('el-GR')}
-                  </p>
-                )}
-              </div>
-            ) : (
-              <div className="rounded-lg border border-dashed border-[#E5E7EB] bg-[#FAFAFA] p-6 text-center">
-                <Search className="mx-auto mb-2 text-[#D1D5DB]" size={28} />
-                <p className="text-sm font-medium text-[#374151] mb-1">Δεν υπάρχουν ακόμη search queries</p>
-                <p className="text-xs text-[#6B7280] mb-4 max-w-md mx-auto">
-                  Το Magento Open Source δεν εκθέτει το search_query table μέσω REST. Εγκατάστησε το
-                  Performance+ Magento module για πλήρως αυτόματο sync από το search_query table.
-                </p>
-              </div>
-            )}
-          </div>
-        </Card>
-      )}
-
       {/* Top Products + Recent Orders */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         {/* Top Products */}
         <Card>
           <CardHeader
             title="Top Products"
-            subtitle={rawOrdersLoading ? 'Φόρτωση για το επιλεγμένο διάστημα…' : `Κατά έσοδα (${effectiveFrom} — ${effectiveTo})`}
+            subtitle={`Κατά έσοδα (${effectiveFrom} — ${effectiveTo})`}
             icon={<Package size={16} />}
           />
           <div className="px-5 pb-5">
-            {ecomm.connectedPlatforms.includes('magento') && (
-              <p className="text-[10px] text-[#6B7280] leading-snug mb-3 max-w-prose">
-                Αθροίσματα από γραμμές παραγγελίας (έσοδο γραμμής, χωρίς διπλό μέτρημα configurable/bundle/γκρουπ). Μετά από{' '}
-                <strong>Sync</strong> στις Συνδέσεις τα νούμερα ευθυγραμμίζονται με Magento/Soft1.
-              </p>
-            )}
             <div className="flex flex-wrap items-center gap-2 mb-3">
               <input
                 value={prodSearch}
@@ -1241,7 +1091,7 @@ export function EcommerceDashboard() {
             ) : (
               <p className="text-sm text-[#9CA3AF] py-4 text-center">
                 {rawOrdersLoading
-                  ? 'Φόρτωση παραγγελιών για το επιλεγμένο διάστημα…'
+                  ? 'Προετοιμασία προϊόντων…'
                   : 'Δεν βρέθηκαν προϊόντα με τα τρέχοντα φίλτρα'}
               </p>
             )}

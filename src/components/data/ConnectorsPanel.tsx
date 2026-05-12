@@ -2291,7 +2291,7 @@ export function ConnectorsPanel() {
           (prev) => ({ ...(prev || {}), [provider]: new Date() })
         );
         if (provider === 'megaventory' && result.queued) {
-          toast.success('Megaventory sync ξεκίνησε στο background. Μπορείς να συνεχίσεις κανονικά και να ελέγξεις τα SKUs σε λίγα λεπτά.');
+          toast.success('Megaventory sync ξεκίνησε στο background. Μπορείς να συνεχίσεις κανονικά.');
           queryClient.invalidateQueries({ queryKey: ['connectorSyncJob', brandId, 'megaventory'] });
         } else if (provider === 'merchant') {
           const imp = result.imported ?? 0;
@@ -2409,8 +2409,7 @@ export function ConnectorsPanel() {
     } catch (err) {
       let msg = err instanceof Error ? err.message : 'Σφάλμα sync';
       if (err instanceof Error && err.name === 'AbortError') {
-        msg =
-          'Το sync ξεπέρασε το χρονικό όριο (~21 λεπτά). Για Megaventory με πολύ μεγάλο όγκο, δοκιμάστε ξανά ή ελέγξτε τα logs της function.';
+        msg = 'Το sync δεν ολοκληρώθηκε εντός του διαθέσιμου χρόνου. Δοκιμάστε ξανά ή ελέγξτε τα logs της function.';
       } else if (msg === 'Failed to fetch') {
         msg =
           'Αποτυχία δικτύου. Δοκίμασε ξανά σε 1 λεπτό ή από άλλο δίκτυο. Το σύστημα δοκίμασε αυτόματα και την εναλλακτική σύνδεση server.';
@@ -2907,7 +2906,7 @@ export function ConnectorsPanel() {
                               variant="secondary"
                               size="sm"
                               onClick={() => {
-                                if (window.confirm('Full Re-sync: θα ξανακατεβάσει ΟΛΟ το ιστορικό παραγγελιών. Μπορεί να πάρει αρκετά λεπτά. Συνέχεια;')) {
+                                if (window.confirm('Full Re-sync: θα ξανακατεβάσει ΟΛΟ το ιστορικό παραγγελιών. Συνέχεια;')) {
                                   handleSync(conn.id, { forceFullSync: true });
                                 }
                               }}

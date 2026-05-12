@@ -247,9 +247,6 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
             <div className="flex flex-col items-center gap-3 py-8 text-center">
               <Spinner size="lg" />
               <p className="text-sm font-semibold text-[#1A1A1A]">Φόρτωση παραγγελιών e-shop…</p>
-              <p className="text-xs leading-relaxed text-[#4A4A4A] max-w-md">
-                Σε μεγάλα brands ο αρχικός υπολογισμός RFM μπορεί να διαρκέσει 1–3 λεπτά. Μην κλείνετε τη σελίδα.
-              </p>
             </div>
           ) : ordersError ? (
             <div className="text-center py-8">

@@ -203,7 +203,7 @@ export function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
           const errMsg = geminiErr instanceof Error ? geminiErr.message : '';
           if (errMsg.includes('Rate limit') || errMsg.includes('429')) {
             response +=
-              '\n\n_Προσωρινό όριο αιτημάτων AI — δοκίμασε σε λίγα λεπτά._';
+              '\n\n_Προσωρινό όριο αιτημάτων AI — δοκίμασε ξανά αργότερα._';
           }
           if (needsWebSearch && webSources.length > 0) {
             response +=

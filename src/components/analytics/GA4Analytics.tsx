@@ -685,7 +685,7 @@ export function GA4Analytics() {
         <Card className="lg:col-span-2">
           <CardHeader
             title="Επισκεψιμότητα"
-            subtitle="Τάση συνεδριών και χρηστών· σε μεγάλο εύρος ημέρων το chart ομαδοποιεί ανά ~7 ημέρες"
+            subtitle="Τάση συνεδριών και χρηστών"
           />
           <div className="p-4 pt-0">
             <ResponsiveContainer width="100%" height={280}>

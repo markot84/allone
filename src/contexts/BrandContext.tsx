@@ -21,11 +21,24 @@ interface BrandContextValue {
 const BrandContext = createContext<BrandContextValue | null>(null);
 
 const STORAGE_KEY_PREFIX = 'perf-plus-last-brand';
+const STORAGE_BRAND_SNAPSHOT_PREFIX = 'perf-plus-last-brand-snapshot';
 
 function sameStringSet(a: string[], b: string[]): boolean {
   if (a.length !== b.length) return false;
   const s = new Set(b);
   return a.every((x) => s.has(x));
+}
+
+function getStoredBrandSnapshot(userId: string): Brand | null {
+  if (typeof localStorage === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(`${STORAGE_BRAND_SNAPSHOT_PREFIX}-${userId}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Brand;
+    return parsed?.id && parsed?.name ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 export function BrandProvider({ children }: { children: ReactNode }) {
@@ -42,9 +55,15 @@ export function BrandProvider({ children }: { children: ReactNode }) {
       return;
     }
     setLoading(true);
+    const cachedBrand = getStoredBrandSnapshot(user.uid);
+    if (cachedBrand) {
+      setBrands((prev) => (prev.some((b) => b.id === cachedBrand.id) ? prev : [cachedBrand, ...prev]));
+      setCurrentBrandState((prev) => prev ?? cachedBrand);
+      setLoading(false);
+    }
     try {
       if (isSuperAdmin) {
-        const allBrands = await FirestoreService.getDocuments<Brand>('brands');
+        const allBrands = await FirestoreService.getDocuments<Brand>('brands', [], null, { cacheFirst: true });
         const brandList = allBrands.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'el'));
         setBrands(brandList);
 
@@ -103,8 +122,10 @@ export function BrandProvider({ children }: { children: ReactNode }) {
       setCurrentBrandState((prev) => prev ? brandList.find((b) => b.id === prev.id) ?? lastBrand : lastBrand);
     } catch (err) {
       console.error('refreshBrands:', err);
-      setBrands([]);
-      setCurrentBrandState(null);
+      if (!cachedBrand) {
+        setBrands([]);
+        setCurrentBrandState(null);
+      }
     } finally {
       setLoading(false);
     }
@@ -114,10 +135,22 @@ export function BrandProvider({ children }: { children: ReactNode }) {
     setCurrentBrandState(brand);
     if (typeof localStorage !== 'undefined' && user?.uid) {
       const storageKey = `${STORAGE_KEY_PREFIX}-${user.uid}`;
-      if (brand) localStorage.setItem(storageKey, brand.id);
-      else localStorage.removeItem(storageKey);
+      const snapshotKey = `${STORAGE_BRAND_SNAPSHOT_PREFIX}-${user.uid}`;
+      if (brand) {
+        localStorage.setItem(storageKey, brand.id);
+        localStorage.setItem(snapshotKey, JSON.stringify(brand));
+      } else {
+        localStorage.removeItem(storageKey);
+        localStorage.removeItem(snapshotKey);
+      }
     }
   }, [user?.uid]);
+
+  useEffect(() => {
+    if (!user?.uid || !currentBrand || typeof localStorage === 'undefined') return;
+    localStorage.setItem(`${STORAGE_KEY_PREFIX}-${user.uid}`, currentBrand.id);
+    localStorage.setItem(`${STORAGE_BRAND_SNAPSHOT_PREFIX}-${user.uid}`, JSON.stringify(currentBrand));
+  }, [user?.uid, currentBrand]);
 
   useEffect(() => {
     refreshBrands();

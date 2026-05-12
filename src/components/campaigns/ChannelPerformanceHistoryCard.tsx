@@ -135,7 +135,7 @@ export function ChannelPerformanceHistoryCard({
   const subtitle = useMemo(() => {
     const r = formatRangeSubtitle(dateFrom, dateTo);
     if (!r) return 'ROAS ανά κανάλι στο επιλεγμένο εύρος';
-    const span = rangeDayCount > MAX_DAILY_POINTS ? 'μηνιαία σημεία (μεγάλο εύρος)' : 'ημερήσια σειρά';
+    const span = rangeDayCount > MAX_DAILY_POINTS ? 'μηνιαία σειρά' : 'ημερήσια σειρά';
     return `ROAS trend (${span}) · ${r}`;
   }, [dateFrom, dateTo, rangeDayCount]);
 

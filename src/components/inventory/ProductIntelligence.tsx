@@ -664,11 +664,11 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900 shadow-sm">
           <div className="font-semibold flex items-center gap-2 mb-1">
             <Info size={16} className="shrink-0" aria-hidden />
-            Performance mode ενεργό
+            Συνοπτική προβολή καταλόγου
           </div>
           <p className="leading-relaxed">
             Τα KPI χρησιμοποιούν τα precomputed aggregates για όλο τον κατάλογο ({formatNumber(totalCatalogCount)} SKUs).
-            Ο πίνακας φορτώνει τα πρώτα {formatNumber(sourceProducts.length)} προϊόντα για να μη μπλοκάρει ο browser.
+            Ο πίνακας εμφανίζει {formatNumber(sourceProducts.length)} προϊόντα στην τρέχουσα προβολή.
           </p>
         </div>
       )}

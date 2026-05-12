@@ -83,11 +83,23 @@ const queryClient = new QueryClient({
   }
 });
 
+const QUERY_CACHE_KEY = 'PERF_PLUS_QUERY_CACHE_v15';
+
+if (typeof window !== 'undefined') {
+  try {
+    Object.keys(window.localStorage)
+      .filter((key) => key.startsWith('PERF_PLUS_QUERY_CACHE_') && key !== QUERY_CACHE_KEY)
+      .forEach((key) => window.localStorage.removeItem(key));
+  } catch {
+    /* Storage can be unavailable in private mode; ignore. */
+  }
+}
+
 const persister = typeof window !== 'undefined'
   ? createSyncStoragePersister({
       storage: window.localStorage,
-      /** Bump when persisted query shapes change or strand stale dashboards. v14: clear post-rollback caches from 2026-05-11. */
-      key: 'PERF_PLUS_QUERY_CACHE_v14',
+      /** Bump when persisted query shapes change or old cache starts blocking first paint. */
+      key: QUERY_CACHE_KEY,
       throttleTime: 1000
     })
   : undefined;
