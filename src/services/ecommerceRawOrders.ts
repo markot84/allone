@@ -59,6 +59,8 @@ export type EcommerceRawOrder = {
   magentoStoreId?: number;
   /** Hostname του public storefront (Magento)· για κανόνες «domain / eshop». */
   orderStoreDomain?: string;
+  /** Data Analysis: e-shop order rows used as the customer/product detail layer for an ERP-backed brand. */
+  erpBacked?: boolean;
 };
 
 export const ECOMMERCE_ORDER_COLLECTIONS: Record<string, string> = {
@@ -699,6 +701,20 @@ async function fetchEcommercePlatformOrdersOnly(
   }));
 }
 
+function orderIdentityAndLineQuality(orders: EcommerceRawOrder[]): {
+  total: number;
+  identified: number;
+  withLineItems: number;
+} {
+  let identified = 0;
+  let withLineItems = 0;
+  for (const order of orders) {
+    if (order.customerKey?.trim()) identified += 1;
+    if (order.lineItems.length > 0) withLineItems += 1;
+  }
+  return { total: orders.length, identified, withLineItems };
+}
+
 export async function fetchAllEcommerceOrders(
   brandId: string,
   platforms: string[],
@@ -733,8 +749,22 @@ export async function fetchDataAnalysisOrders(
 ): Promise<EcommerceRawOrder[]> {
   const mode = await fetchBrandRevenueSourceMode(brandId);
   const erp = await loadAndClassifyErpConnectorOrders(brandId, mode, options);
-  if (erp.length > 0) return erp;
-  return fetchEcommercePlatformOrdersOnly(brandId, platforms, mode, options);
+  if (erp.length === 0) return fetchEcommercePlatformOrdersOnly(brandId, platforms, mode, options);
+
+  const erpQuality = orderIdentityAndLineQuality(erp);
+  const erpHasWeakCustomerOrProductDetail =
+    erpQuality.withLineItems === 0 ||
+    (erpQuality.total >= 1000 && erpQuality.identified / Math.max(erpQuality.total, 1) < 0.25);
+
+  if (!erpHasWeakCustomerOrProductDetail || platforms.length === 0) return erp;
+
+  const platformOrders = await fetchEcommercePlatformOrdersOnly(brandId, platforms, mode, options);
+  const platformQuality = orderIdentityAndLineQuality(platformOrders);
+  if (platformQuality.identified > erpQuality.identified || platformQuality.withLineItems > erpQuality.withLineItems) {
+    return platformOrders.map((order) => ({ ...order, erpBacked: true }));
+  }
+
+  return erp;
 }
 
 export type EcommerceRevenueDayAggregate = {

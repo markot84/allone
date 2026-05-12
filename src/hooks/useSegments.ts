@@ -221,7 +221,13 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   const analysisOrders = rawOrders;
   const orderScopeStats = useMemo(() => computeRfmOrderScopeStats(analysisOrders), [analysisOrders]);
   const orderOrigin = useMemo(() => {
-    if (analysisOrders.some((order) => order.platform === 'megaventory_invoices' || order.platform === 'softone_sales_documents')) {
+    if (
+      analysisOrders.some((order) =>
+        order.erpBacked === true ||
+        order.platform === 'megaventory_invoices' ||
+        order.platform === 'softone_sales_documents'
+      )
+    ) {
       return 'erp_orders' as const;
     }
     return analysisOrders.length > 0 ? ('ecommerce_orders' as const) : ('none' as const);
