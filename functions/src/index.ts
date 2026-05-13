@@ -2614,7 +2614,7 @@ export const submitInterestLead = onRequest(
         res.status(400).json({ error: result.error || 'Invalid request' });
         return;
       }
-      res.status(200).json({ ok: true });
+      res.status(200).json({ ok: true, emailResult: result.emailResult ?? null });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       logger.error('[submitInterestLead]', msg);

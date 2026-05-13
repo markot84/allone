@@ -13,11 +13,11 @@ export const APP_NAME = 'Performance+';
 export const SENDER = `"${APP_NAME}" <${NOREPLY_EMAIL}>`;
 
 /**
- * Papaki / Plesk: το Manual setup δίνει συχνά ως Outgoing server το **domain** (π.χ. performanceplus.gr),
- * όχι το linux###.papaki.gr (αυτό είναι συχνά το URL του panel). SMTP port 465 SSL.
+ * Papaki mail server for performanceplus.gr. The root domain points to Firebase
+ * Hosting and the MX host's TLS cert is issued for the Papaki server hostname.
  * https://support.papaki.com/help/which-settings-should-i-use-in-a-mail-client/
  */
-const DEFAULT_SMTP_HOST = 'performanceplus.gr';
+const DEFAULT_SMTP_HOST = 'linux230.papaki.gr';
 const smtpHostParam = defineString('SMTP_HOST', { default: DEFAULT_SMTP_HOST });
 const smtpPortParam = defineString('SMTP_PORT', { default: '465' });
 

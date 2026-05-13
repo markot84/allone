@@ -63,7 +63,7 @@ export function BrandProvider({ children }: { children: ReactNode }) {
     }
     try {
       if (isSuperAdmin) {
-        const allBrands = await FirestoreService.getDocuments<Brand>('brands', [], null, { cacheFirst: true });
+        const allBrands = await FirestoreService.getDocuments<Brand>('brands', [], null, { forceServer: true });
         const brandList = allBrands.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'el'));
         setBrands(brandList);
 

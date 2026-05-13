@@ -55,6 +55,7 @@ async function sendInterestLeadEmails(
       text: textBody,
       html: `<pre style="font-family:system-ui,sans-serif;font-size:14px;white-space:pre-wrap;">${escapeHtml(textBody)}</pre>`,
     });
+    logger.info(`[interestLead] Team notify email sent to ${teamTo.join(', ')}`);
   } catch (e) {
     logger.error('[interestLead] Team notify email failed', e);
     throw e instanceof Error ? e : new Error(String(e));
@@ -69,15 +70,18 @@ async function sendInterestLeadEmails(
       text: [
         `Γεια σας ${data.fullName},`,
         '',
-        'Ευχαριστούμε για το ενδιαφέρον σας. Η ομάδα μας θα επικοινωνήσει μαζί σας σύντομα.',
+        'Σας ευχαριστούμε για την επικοινωνία.',
+        'Λάβαμε το μήνυμά σας και σύντομα ένας εκπρόσωπός μας θα επικοινωνήσει μαζί σας.',
         '',
         'Ομάδα Performance+',
       ].join('\n'),
       html: `<p>Γεια σας ${escapeHtml(data.fullName)},</p>
-<p>Ευχαριστούμε για το ενδιαφέρον σας. Η ομάδα μας θα επικοινωνήσει μαζί σας σύντομα.</p>
+<p>Σας ευχαριστούμε για την επικοινωνία.</p>
+<p>Λάβαμε το μήνυμά σας και σύντομα ένας εκπρόσωπός μας θα επικοινωνήσει μαζί σας.</p>
 <p style="color:#666;font-size:13px;">Ομάδα Performance+</p>`,
     });
     userConfirmed = true;
+    logger.info(`[interestLead] User confirmation email sent to ${data.email}`);
   } catch (e) {
     logger.error('[interestLead] User confirmation email failed', e);
   }

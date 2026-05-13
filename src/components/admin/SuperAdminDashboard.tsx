@@ -17,7 +17,7 @@ import {
 } from '@primer/octicons-react';
 import { FirestoreService } from '../../services/firestore';
 import { db, auth, storage } from '../../config/firebase';
-import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, limit, orderBy, query } from 'firebase/firestore';
 import { SUPER_ADMIN_EMAILS, SUPPORT_EMAIL, APP_NAME } from '../../config/superAdmins';
 import { getDefaultModuleEnabled, getEditionStatus, getModuleLabel } from '../../config/modules';
 import type { Brand, ChangelogEntry, ModuleId } from '../../types';
@@ -25,7 +25,7 @@ import { useAuth } from '../../hooks';
 import { clearAnalysisSnapshots } from '../../services/analysisSnapshotCache';
 import buildInfo from '../../generated/buildInfo.json';
 
-type AdminTab = 'brands' | 'api' | 'changelog' | 'system';
+type AdminTab = 'brands' | 'leads' | 'api' | 'changelog' | 'system';
 
 interface ServiceStatus {
   name: string;
@@ -40,6 +40,7 @@ export function SuperAdminDashboard() {
 
   const tabs: { id: AdminTab; label: string; icon: typeof ShieldIcon }[] = [
     { id: 'brands', label: 'Brands', icon: OrganizationIcon },
+    { id: 'leads', label: 'Leads', icon: InfoIcon },
     { id: 'api', label: 'API & Services', icon: PulseIcon },
     { id: 'changelog', label: 'Versions & Changelog', icon: TagIcon },
     { id: 'system', label: 'System Info', icon: InfoIcon },
@@ -95,6 +96,7 @@ export function SuperAdminDashboard() {
 
       {/* Tab Content */}
       {activeTab === 'brands' && <BrandsTab />}
+      {activeTab === 'leads' && <LeadsTab />}
       {activeTab === 'api' && <ApiStatusTab />}
       {activeTab === 'changelog' && <ChangelogTab userEmail={user?.email ?? ''} />}
       {activeTab === 'system' && <SystemInfoTab />}
@@ -119,8 +121,9 @@ function BrandsTab() {
   useEffect(() => {
     async function load() {
       try {
-        const allBrands = await FirestoreService.getDocuments<Brand>('brands');
+        const allBrands = await FirestoreService.getDocuments<Brand>('brands', [], null, { forceServer: true });
         setBrands(allBrands.sort((a, b) => a.name.localeCompare(b.name)));
+        setLoading(false);
 
         const counts: Record<string, number> = {};
         const BATCH = 5;
@@ -441,6 +444,192 @@ function BrandsTab() {
         {brands.length === 0 && (
           <Text as="p" style={{ color: 'var(--fgColor-muted)', textAlign: 'center', padding: 32 }}>
             Δεν υπάρχουν brands ακόμα.
+          </Text>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Leads Tab ─── */
+
+interface InterestLeadRow {
+  id: string;
+  fullName?: string;
+  email?: string;
+  phone?: string | null;
+  company?: string | null;
+  message?: string | null;
+  source?: string;
+  createdAt?: unknown;
+  teamNotificationStatus?: 'sent' | 'failed';
+  userConfirmationStatus?: 'sent' | 'failed';
+}
+
+function formatLeadDate(value: unknown): string {
+  const maybeTimestamp = value as { toDate?: () => Date } | null;
+  const date = maybeTimestamp?.toDate?.();
+  if (!date) return '—';
+  return date.toLocaleString('el-GR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function LeadsTab() {
+  const [leads, setLeads] = useState<InterestLeadRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadLeads = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const leadsQuery = query(
+        collection(db, 'interest_leads'),
+        orderBy('createdAt', 'desc'),
+        limit(50)
+      );
+      const snap = await getDocs(leadsQuery);
+      setLeads(snap.docs.map((leadDoc) => ({
+        id: leadDoc.id,
+        ...leadDoc.data(),
+      })) as InterestLeadRow[]);
+    } catch (err) {
+      console.error('Failed to load interest leads:', err);
+      setError(err instanceof Error ? err.message : 'Could not load leads');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadLeads();
+  }, [loadLeads]);
+
+  if (loading) {
+    return <div style={{ padding: 24, textAlign: 'center', color: 'var(--fgColor-muted)' }}>Φόρτωση leads...</div>;
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+        <div>
+          <Text as="p" style={{ color: 'var(--fgColor-muted)', fontSize: 14, margin: 0 }}>
+            Τελευταία {leads.length} contact form submissions.
+          </Text>
+          <Text as="p" style={{ color: 'var(--fgColor-muted)', fontSize: 12, margin: '4px 0 0' }}>
+            Team notification: support@notthesame.gr
+          </Text>
+        </div>
+        <button
+          type="button"
+          onClick={loadLeads}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '6px 12px',
+            borderRadius: 6,
+            border: '1px solid var(--borderColor-default)',
+            background: 'var(--bgColor-default)',
+            cursor: 'pointer',
+            fontSize: 13,
+            color: 'var(--fgColor-default)',
+          }}
+        >
+          <SyncIcon size={14} />
+          Refresh
+        </button>
+      </div>
+
+      {error && (
+        <div style={{
+          padding: 12,
+          borderRadius: 8,
+          background: 'rgba(239,68,68,0.08)',
+          border: '1px solid rgba(239,68,68,0.2)',
+          color: '#b91c1c',
+          marginBottom: 16,
+          fontSize: 13,
+        }}>
+          Δεν ήταν δυνατή η φόρτωση των leads: {error}
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gap: 12 }}>
+        {leads.map((lead) => {
+          const teamSent = lead.teamNotificationStatus === 'sent';
+          return (
+            <div
+              key={lead.id}
+              style={{
+                padding: 16,
+                borderRadius: 10,
+                border: '1px solid var(--borderColor-default, #d0d7de)',
+                background: 'var(--bgColor-default, #fff)',
+                display: 'grid',
+                gap: 10,
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                <div>
+                  <Text as="div" weight="semibold" style={{ fontSize: 15 }}>
+                    {lead.fullName || 'Χωρίς όνομα'}
+                  </Text>
+                  <Text as="div" size="small" style={{ color: 'var(--fgColor-muted)' }}>
+                    {lead.email || '—'} · {lead.phone || 'χωρίς τηλέφωνο'}
+                  </Text>
+                  {lead.company && (
+                    <Text as="div" size="small" style={{ color: 'var(--fgColor-muted)' }}>
+                      {lead.company}
+                    </Text>
+                  )}
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <Text as="div" size="small" style={{ color: 'var(--fgColor-muted)' }}>
+                    {formatLeadDate(lead.createdAt)}
+                  </Text>
+                  <span style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 5,
+                    marginTop: 6,
+                    padding: '3px 8px',
+                    borderRadius: 999,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: teamSent ? '#15803d' : '#b45309',
+                    background: teamSent ? 'rgba(34,197,94,0.10)' : 'rgba(245,158,11,0.12)',
+                    border: teamSent ? '1px solid rgba(34,197,94,0.22)' : '1px solid rgba(245,158,11,0.24)',
+                  }}>
+                    {teamSent ? 'Email sent' : 'Email pending'}
+                  </span>
+                </div>
+              </div>
+              {lead.message && (
+                <Text as="p" style={{
+                  margin: 0,
+                  padding: 12,
+                  borderRadius: 8,
+                  background: 'var(--bgColor-muted, #f6f8fa)',
+                  whiteSpace: 'pre-wrap',
+                  fontSize: 13,
+                  color: 'var(--fgColor-default)',
+                }}>
+                  {lead.message}
+                </Text>
+              )}
+            </div>
+          );
+        })}
+
+        {leads.length === 0 && !error && (
+          <Text as="p" style={{ color: 'var(--fgColor-muted)', textAlign: 'center', padding: 32 }}>
+            Δεν υπάρχουν leads ακόμα.
           </Text>
         )}
       </div>

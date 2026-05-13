@@ -165,7 +165,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   const brandSyncVersionQuery = useBrandSyncVersion(brandId);
   const syncVersion = brandSyncVersionQuery.data?.version ?? null;
   const { data: dataAnalysisAggregate = null, isPending: dataAnalysisAggregatePending } = useQuery({
-    queryKey: ['dataAnalysisRfmAggregate', brandId, syncVersion],
+    queryKey: ['dataAnalysisRfmAggregate', brandId],
     queryFn: () => (brandId ? fetchDataAnalysisRfmAggregate(brandId, syncVersion) : Promise.resolve(null)),
     enabled: variant === 'data_analysis' && !!brandId,
     staleTime: 10 * 60 * 1000,
@@ -192,13 +192,12 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   const usableSnapshot =
     variant === 'data_analysis' &&
     analysisSnapshot &&
-    analysisSnapshot.dataSource === 'ecommerce' &&
     analysisSnapshot.dataOrigin !== 'none' &&
-    (!syncVersion || analysisSnapshot.syncVersion === syncVersion)
+    analysisSnapshot.segments.length > 0
       ? analysisSnapshot
       : null;
 
-  const ordersSourceFingerprint = variant === 'data_analysis' ? (syncVersion ?? 'sync-pending') : platformsKey;
+  const ordersSourceFingerprint = variant === 'data_analysis' ? (syncVersion ?? 'latest') : platformsKey;
 
   const { data: rawOrders = [], isPending: ordersPending, error: ordersError } = useQuery({
     queryKey: [ordersQueryKeyPrefix, brandId, platformsKey, ordersSinceDate, ordersSourceFingerprint],
@@ -208,7 +207,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
             ? fetchDataAnalysisOrders(brandId, ecomm.connectedPlatforms, { sinceDate: ordersSinceDate, cacheFirst: true })
             : fetchAllEcommerceOrders(brandId, ecomm.connectedPlatforms, { sinceDate: ordersSinceDate }))
         : Promise.resolve([]),
-    enabled: ordersQueryEnabled && !shouldUseAggregate && !aggregateIsBuilding && (variant !== 'data_analysis' || !!syncVersion),
+    enabled: ordersQueryEnabled && !shouldUseAggregate && (variant !== 'data_analysis' || !usableSnapshot),
     staleTime: 12 * 60 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -230,7 +229,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
             ? fetchCatalogAlignmentDataForDataAnalysis(brandId, ecomm.connectedPlatforms, rawOrders)
             : fetchCatalogAlignmentData(brandId, ecomm.connectedPlatforms))
         : Promise.resolve(null),
-    enabled: ordersQueryEnabled && !shouldUseAggregate && !aggregateIsBuilding && !ordersPending && rawOrders.length > 0,
+    enabled: ordersQueryEnabled && !shouldUseAggregate && !usableSnapshot && !ordersPending && rawOrders.length > 0,
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -376,7 +375,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     ecomm.connectedPlatforms.length === 0 &&
     !ecomm.hasData;
   const isLoading =
-    aggregateIsBuilding ||
+    (aggregateIsBuilding && !usableSnapshot && !orderRfm.canCompute) ||
     isDataAnalysisAggregatePending ||
     (blocksOnImportedSegmentsOnly ||
       (ordersQueryEnabled && ordersPending && !orderRfm.canCompute));
@@ -406,11 +405,34 @@ export function useSegments(options: UseSegmentsOptions = {}) {
         : 'Pending';
 
   const liveSnapshotPayload = useMemo<AnalysisSnapshotPayload | null>(() => {
-    if (!snapshotScope || variant !== 'data_analysis' || !syncVersion || !hasImported) return null;
-    if (shouldUseAggregate || resolvedSource !== 'ecommerce' || orderOrigin === 'none') return null;
+    if (!snapshotScope || variant !== 'data_analysis' || !hasImported || segments.length === 0) return null;
+    const snapshotSyncVersion = syncVersion ?? dataAnalysisAggregate?.syncVersion ?? 'local';
+    if (shouldUseAggregate && aggregateScope && dataAnalysisAggregate) {
+      return {
+        ...snapshotScope,
+        syncVersion: snapshotSyncVersion,
+        savedAt: new Date().toISOString(),
+        segments,
+        totalCustomers,
+        hasImported,
+        dataSource: dataAnalysisAggregate.dataSource,
+        dataOrigin: dataAnalysisAggregate.dataOrigin,
+        sourceLabel,
+        sourcePreference: aggregateScope.sourcePreference,
+        canComputeFromOrders: true,
+        canComputeIdentifiedOrders: true,
+        dataCoverage,
+        orderRfmMeta: {
+          ordersAttributed: aggregateScope.ordersAttributed,
+          guestOrdersSkipped: aggregateScope.guestOrdersSkipped,
+        },
+        segmentMigration: undefined,
+      };
+    }
+    if (resolvedSource !== 'ecommerce' || orderOrigin === 'none') return null;
     return {
       ...snapshotScope,
-      syncVersion,
+      syncVersion: snapshotSyncVersion,
       savedAt: new Date().toISOString(),
       segments,
       totalCustomers,
@@ -435,6 +457,8 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     snapshotScope,
     variant,
     syncVersion,
+    dataAnalysisAggregate,
+    aggregateScope,
     hasImported,
     segments,
     totalCustomers,
@@ -457,7 +481,6 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   }, [liveSnapshotPayload, isLoading, ordersPending]);
 
   const shouldUseSnapshot =
-    !aggregateIsBuilding &&
     !!usableSnapshot &&
     (isLoading || ordersPending || segments.length === 0);
   const displayedSegments = shouldUseSnapshot ? usableSnapshot.segments : segments;
