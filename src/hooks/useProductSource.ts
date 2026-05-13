@@ -125,8 +125,9 @@ export function useProductSource(options: UseProductSourceOptions = {}) {
 
   const procProducts = useMemo((): Product[] => {
     if (!isEnterprise) return [];
-    const invRows = ((procData?.inventory ?? []) as unknown[]) as Record<string, unknown>[];
-    if (!invRows.length) return [];
+    const allInvRows = ((procData?.inventory ?? []) as unknown[]) as Record<string, unknown>[];
+    if (!allInvRows.length) return [];
+    const invRows = options.maxProducts ? allInvRows.slice(0, options.maxProducts) : allInvRows;
 
     const pricingRows = ((procData?.pricing_policy ?? []) as unknown[]) as Record<string, unknown>[];
     const pricingBySku = buildPricingBySku(pricingRows);
@@ -198,7 +199,7 @@ export function useProductSource(options: UseProductSourceOptions = {}) {
         ...(first_available_date ? { first_available_date } : {}),
       } as Product;
     });
-  }, [isEnterprise, procData?.inventory, procData?.pricing_policy]);
+  }, [isEnterprise, procData?.inventory, procData?.pricing_policy, options.maxProducts]);
 
   const usingProcurement = procProducts.length > 0;
   const importedProductsAreErp = useMemo(

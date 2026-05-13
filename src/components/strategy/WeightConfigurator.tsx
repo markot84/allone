@@ -277,7 +277,7 @@ export function WeightConfigurator() {
     sourceKind: sourceProductSourceKind,
   } = useProductSource({ maxProducts: STRATEGY_PRODUCT_LIMIT });
   const serverProductIntelligence = useProductIntelligenceAggregate('all', 1);
-  const serverProducts = !usingProcurement ? (serverProductIntelligence.page?.products ?? []) : [];
+  const serverProducts = serverProductIntelligence.page?.products ?? [];
   const products = serverProducts.length > 0 ? serverProducts : sourceProducts;
   const hasImported = sourceHasImported || !!serverProductIntelligence.aggregate;
   const productDataSourceLabel = serverProducts.length > 0
