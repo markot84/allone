@@ -18,6 +18,12 @@ interface MarketingIndexPageProps {
 
 const MARKETING_TAGLINE_HEADER = 'Η εμπορική νοημοσύνη του e-shop σας';
 
+const primaryCtaClass =
+  'inline-flex items-center justify-center gap-2 rounded-2xl border border-[var(--nts-accent-hover)] bg-[var(--nts-accent)] px-5 py-3 text-sm font-semibold !text-white shadow-[0_12px_28px_rgba(249,115,22,0.32)] transition duration-200 ease-out hover:-translate-y-0.5 hover:bg-[var(--nts-accent-hover)] hover:!text-white hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nts-accent)] active:translate-y-0';
+
+const darkCtaClass =
+  'inline-flex items-center justify-center gap-2 rounded-2xl border border-[#1f2328]/10 bg-[#111827] px-5 py-3 text-sm font-semibold !text-white shadow-[0_12px_28px_rgba(17,24,39,0.18)] transition duration-200 ease-out hover:-translate-y-0.5 hover:bg-[#0f172a] hover:!text-white hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#111827] active:translate-y-0';
+
 const heroLeadParagraph =
   'Το Performance+ συνδέει τα δεδομένα σας - καταναλωτικά κοινά, προϊόντα, αποθέματα, ERP και διαφημιστικά κανάλια - σε ένα ενιαίο σύστημα ανάλυσης και λήψης αποφάσεων με τεχνητή νοημοσύνη. Δημιουργήθηκε από ανθρώπους του marketing και αναλυτές δεδομένων, και λειτουργεί ήδη εδώ και 4 χρόνια ως μεθοδολογία ανάπτυξης στοχευμένων προωθητικών ενεργειών με ισχυρά μετρήσιμα αποτελέσματα.';
 
@@ -54,7 +60,7 @@ const methodologySteps = [
 
 const trustPosturePoints = [
   'Read-only πρόσβαση όπου απαιτείται',
-  'Google Cloud / Firebase με EU region',
+  'Ασφαλής διαχείριση δεδομένων',
   'GDPR-conscious lead και connector flows',
   'AI decision-support, όχι αυτόνομη εκτέλεση',
 ];
@@ -394,7 +400,7 @@ export function MarketingIndexPage({
                   <button
                     type="button"
                     onClick={onOpenAuth}
-                    className="rounded-xl border border-[var(--nts-accent-hover)] bg-[var(--nts-accent)] px-3 py-2 text-sm font-semibold text-white shadow-[0_6px_14px_rgba(249,115,22,0.35)] transition hover:bg-[var(--nts-accent-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nts-accent)] sm:px-4"
+                    className="rounded-xl border border-[var(--nts-accent-hover)] bg-[var(--nts-accent)] px-3 py-2 text-sm font-semibold text-white shadow-[0_6px_14px_rgba(249,115,22,0.35)] transition duration-200 ease-out hover:-translate-y-0.5 hover:bg-[var(--nts-accent-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nts-accent)] active:translate-y-0 sm:px-4"
                   >
                     Σύνδεση
                   </button>
@@ -440,7 +446,7 @@ export function MarketingIndexPage({
                   <a
                     href="#interest"
                     onClick={() => trackMarketingEvent('cta_click', { placement: 'hero' })}
-                    className="inline-flex items-center gap-2 rounded-2xl border border-[var(--nts-accent-hover)] bg-[var(--nts-accent)] px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(249,115,22,0.32)] transition hover:-translate-y-0.5 hover:bg-[var(--nts-accent-hover)] hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nts-accent)]"
+                    className={primaryCtaClass}
                   >
                     <HelpCircle size={16} />
                     Ζητήστε demo
@@ -503,7 +509,7 @@ export function MarketingIndexPage({
               <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--nts-accent)]">Credibility layer</p>
               <h2 className="mt-3 text-2xl font-semibold tracking-[-0.02em] text-[var(--nts-charcoal)] md:text-3xl">4 χρόνια μεθοδολογίας Performance+</h2>
               <p className="mt-4 text-sm leading-7 text-[var(--nts-medium-gray)] md:text-base">
-                Το Performance+ δεν ξεκινά από ένα γενικό AI prompt. Πατάει σε μεθοδολογία marketing και data analysis που έχει χρησιμοποιηθεί για να οργανώνει προωθητικές ενέργειες, προτεραιότητες προϊόντων και εμπορική λήψη αποφάσεων.
+                Το Performance+ στηρίζεται σε συγκεκριμένες μεθοδολογίες data analysis με ακαδημαϊκή τεκμηρίωση ως προς την ανάγνωση των δεδομένων. Η μεθοδολογία σχεδιασμού και εκπόνησης των προτεινόμενων προωθητικών ενεργειών στηρίζεται στην ανάδειξη προτεραιοτήτων με βάση τα αποθέματα και τις καταναλωτικές συνήθειες. Η λήψη εμπορικών αποφάσεων ακολουθεί ως μια φυσική συνέχεια και εξέλιξη.
               </p>
               <div className="mt-6 grid gap-2">
                 {trustPosturePoints.map((point) => (
@@ -543,7 +549,7 @@ export function MarketingIndexPage({
           <div className="relative grid gap-7 lg:grid-cols-[0.9fr_1.3fr] lg:items-start">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--nts-accent)]">Data ecosystem</p>
-              <h3 className="mt-3 text-2xl font-semibold tracking-[-0.02em] text-[var(--nts-charcoal)] md:text-3xl">Από connectors σε εμπορικές αποφάσεις</h3>
+              <h3 className="mt-3 text-2xl font-semibold tracking-[-0.02em] text-[var(--nts-charcoal)] md:text-3xl">Διάφορες ροές δεδομένων, συγκεκριμένες εμπορικές αποφάσεις</h3>
               <p className="mt-4 text-sm leading-7 text-[var(--nts-medium-gray)] md:text-base">
                 Το Performance+ συγκεντρώνει πληροφορίες από τα κρίσιμα σημεία του e-commerce και τις μετατρέπει σε κοινή εικόνα για προϊόντα, stock, κανάλια, ROAS και profitability.
               </p>
@@ -624,7 +630,7 @@ export function MarketingIndexPage({
             <a
               href="#interest"
               onClick={() => trackMarketingEvent('cta_click', { placement: 'use_cases' })}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[#1f2328]/10 bg-[#111827] px-5 py-3 text-sm font-semibold !text-white shadow-[0_12px_28px_rgba(17,24,39,0.18)] transition hover:-translate-y-0.5 hover:bg-[#0f172a] hover:!text-white hover:no-underline"
+              className={darkCtaClass}
             >
               Επικοινωνήστε μαζί μας 2310.321625
               <ArrowRight size={15} aria-hidden />
@@ -834,7 +840,7 @@ export function MarketingIndexPage({
               <a
                 href="#interest"
                 onClick={() => trackMarketingEvent('cta_click', { placement: 'final_cta' })}
-                className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-[var(--nts-accent-hover)] bg-[var(--nts-accent)] px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(249,115,22,0.32)] transition hover:bg-[var(--nts-accent-hover)] hover:no-underline"
+                className={`${primaryCtaClass} mt-5 w-full`}
               >
                 <HelpCircle size={16} />
                 Ζητήστε demo
@@ -864,7 +870,7 @@ export function MarketingIndexPage({
           {[
             { icon: <ShieldCheck size={15} />, text: 'GDPR-compliant' },
             { icon: <Brain size={15} />, text: 'EU AI Act — limited risk, transparent AI' },
-            { icon: <Database size={15} />, text: 'Google Cloud / Firebase (EU region)' },
+            { icon: <Database size={15} />, text: 'Secure data handling' },
           ].map((item) => (
             <div key={item.text} className="flex items-center gap-2 text-xs text-[var(--nts-medium-gray)]">
               <span className="text-[var(--nts-charcoal)]">{item.icon}</span>

@@ -12,6 +12,66 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+function buildUserConfirmationText(fullName: string): string {
+  return [
+    `Γεια σας ${fullName},`,
+    '',
+    'Λάβαμε το αίτημά σας για το Performance+ και σας ευχαριστούμε για την επικοινωνία.',
+    '',
+    'Η ομάδα μας θα εξετάσει τα στοιχεία που στείλατε και θα επανέλθει με το επόμενο βήμα για μια σύντομη, ουσιαστική συζήτηση γύρω από τις ανάγκες του e-shop σας.',
+    '',
+    'Αν θέλετε να προσθέσετε κάτι στο αίτημά σας, μπορείτε να απαντήσετε απευθείας σε αυτό το email.',
+    '',
+    'Με εκτίμηση,',
+    'Η ομάδα Performance+',
+  ].join('\n');
+}
+
+function buildUserConfirmationHtml(fullName: string): string {
+  const safeName = escapeHtml(fullName);
+  return `<!doctype html>
+<html lang="el">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Performance+ — Λάβαμε το αίτημά σας</title>
+  </head>
+  <body style="margin:0;padding:0;background:#f6f8fa;color:#24292f;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;background:#f6f8fa;padding:28px 12px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;max-width:560px;background:#ffffff;border:1px solid #e5e7eb;border-radius:20px;overflow:hidden;box-shadow:0 18px 42px rgba(16,24,40,0.10);">
+            <tr>
+              <td style="background:#111827;padding:24px 28px;">
+                <div style="font-size:20px;line-height:1.2;font-weight:700;color:#ffffff;">Performance<span style="color:#f97316;">+</span></div>
+                <div style="margin-top:6px;font-size:13px;line-height:1.5;color:rgba(255,255,255,0.72);">Εμπορική νοημοσύνη για e-shops</div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:28px;">
+                <div style="display:inline-block;margin-bottom:16px;padding:6px 10px;border-radius:999px;background:#fff7ed;color:#c2410c;font-size:12px;font-weight:700;letter-spacing:0.02em;">Το αίτημά σας καταγράφηκε</div>
+                <h1 style="margin:0 0 14px;font-size:22px;line-height:1.3;color:#111827;font-weight:700;">Γεια σας ${safeName},</h1>
+                <p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:#374151;">Λάβαμε το αίτημά σας για το <strong>Performance+</strong> και σας ευχαριστούμε για την επικοινωνία.</p>
+                <p style="margin:0 0 20px;font-size:15px;line-height:1.7;color:#374151;">Η ομάδα μας θα εξετάσει τα στοιχεία που στείλατε και θα επανέλθει με το επόμενο βήμα για μια σύντομη, ουσιαστική συζήτηση γύρω από τις ανάγκες του e-shop σας.</p>
+                <div style="margin:22px 0;padding:16px 18px;border-radius:16px;background:#fafafa;border:1px solid #eceff3;">
+                  <p style="margin:0;font-size:14px;line-height:1.6;color:#4b5563;"><strong style="color:#111827;">Σημείωση:</strong> Αν θέλετε να προσθέσετε κάτι στο αίτημά σας, μπορείτε να απαντήσετε απευθείας σε αυτό το email.</p>
+                </div>
+                <p style="margin:0;font-size:15px;line-height:1.7;color:#374151;">Με εκτίμηση,<br /><strong style="color:#111827;">Η ομάδα Performance+</strong></p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:18px 28px;background:#fbfbfc;border-top:1px solid #eef0f3;">
+                <p style="margin:0;font-size:12px;line-height:1.6;color:#6b7280;">Αυτό είναι αυτοματοποιημένο μήνυμα επιβεβαίωσης μετά την υποβολή της φόρμας ενδιαφέροντος.</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+}
+
 async function sendInterestLeadEmails(
   data: {
     fullName: string;
@@ -70,23 +130,14 @@ async function sendInterestLeadEmails(
   }
 
   try {
+    const confirmationText = buildUserConfirmationText(data.fullName);
     await transporter.sendMail({
       from,
       to: data.email,
       replyTo: supportReplyTo,
       subject: 'Performance+ — Λάβαμε το αίτημά σας',
-      text: [
-        `Γεια σας ${data.fullName},`,
-        '',
-        'Σας ευχαριστούμε για την επικοινωνία.',
-        'Λάβαμε το μήνυμά σας και σύντομα ένας εκπρόσωπός μας θα επικοινωνήσει μαζί σας.',
-        '',
-        'Ομάδα Performance+',
-      ].join('\n'),
-      html: `<p>Γεια σας ${escapeHtml(data.fullName)},</p>
-<p>Σας ευχαριστούμε για την επικοινωνία.</p>
-<p>Λάβαμε το μήνυμά σας και σύντομα ένας εκπρόσωπός μας θα επικοινωνήσει μαζί σας.</p>
-<p style="color:#666;font-size:13px;">Ομάδα Performance+</p>`,
+      text: confirmationText,
+      html: buildUserConfirmationHtml(data.fullName),
       headers: {
         'X-Auto-Response-Suppress': 'All',
       },
