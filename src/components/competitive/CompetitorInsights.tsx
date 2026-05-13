@@ -39,6 +39,7 @@ import { safeBrandName } from '../../services/reportExport';
 const FUNCTIONS_BASE = FUNCTIONS_BASE_URL.replace(/\/$/, '');
 const COMPETITIVE_BENCHMARK_LIMIT = 15000;
 const COMPETITIVE_STOCK_PRODUCT_LIMIT = 10000;
+const COMPETITIVE_CACHE_TTL = 24 * 60 * 60 * 1000;
 
 // ── Types ────────────────────────────────────────────────
 
@@ -393,9 +394,11 @@ export function CompetitorInsights() {
     queryKey: ['productIntelligenceInventory', brandId],
     queryFn: () => (brandId ? fetchProductIntelligenceInventory(brandId) : Promise.resolve({})),
     enabled: !!brandId,
-    staleTime: 10 * 60 * 1000,
-    gcTime: 60 * 60 * 1000,
+    staleTime: Infinity,
+    gcTime: COMPETITIVE_CACHE_TTL,
     refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    placeholderData: (previousData) => previousData,
   });
   const skuInventoryMap = useMemo(() => {
     const map = new Map<string, SkuInventoryRow>();
@@ -470,6 +473,9 @@ export function CompetitorInsights() {
     [stockedBenchmarks]
   );
   const stockedBenchmarkCount = stockedBenchmarks.length;
+  const hasBenchmarkRows = benchmarks.length > 0;
+  const isBenchmarkInitialLoading =
+    !hasBenchmarkRows && (benchmarksLoading || productsLoading || competitiveInventoryLoading);
   const stockedAboveMarket = stockedWithMarket.filter((b) => b.priceDiff > 0).length;
   const stockedBelowMarket = stockedWithMarket.filter((b) => b.priceDiff < 0).length;
   const stockedAvgDiff =
@@ -655,7 +661,13 @@ export function CompetitorInsights() {
             toast.success(`GMC: ${imp} SKUs (${wm} με benchmark αγοράς)`);
           }
           queryClient.invalidateQueries({ queryKey: ['priceBenchmarks', brandId] });
-          await queryClient.refetchQueries({ queryKey: ['priceBenchmarks', brandId] });
+          queryClient.invalidateQueries({ queryKey: ['priceInsights', brandId] });
+          queryClient.invalidateQueries({ queryKey: ['productIntelligenceInventory', brandId] });
+          await Promise.all([
+            queryClient.refetchQueries({ queryKey: ['priceBenchmarks', brandId] }),
+            queryClient.refetchQueries({ queryKey: ['priceInsights', brandId] }),
+            queryClient.refetchQueries({ queryKey: ['productIntelligenceInventory', brandId] }),
+          ]);
         } else {
           setCompetitorSyncWarnings(result.warnings?.length ? result.warnings : null);
           toast.success(`Βρέθηκαν ${result.totalAds} ads (${result.newAds} νέες)`);
@@ -1166,7 +1178,7 @@ export function CompetitorInsights() {
                       Καθαρισμός φίλτρων
                     </button>
                   )}
-                  {!benchmarksLoading && !productsLoading && !competitiveInventoryLoading && !benchmarksQueryError && stockedBenchmarkCount > 0 && (
+                  {!isBenchmarkInitialLoading && !benchmarksQueryError && stockedBenchmarkCount > 0 && (
                     <>
                       <button
                         type="button"
@@ -1222,7 +1234,7 @@ export function CompetitorInsights() {
                 </p>
               )}
 
-              {benchmarksLoading || productsLoading || competitiveInventoryLoading ? (
+              {isBenchmarkInitialLoading ? (
                 <div className="py-8 flex justify-center">
                   <Spinner size="md" label="Φόρτωση benchmarks..." />
                 </div>

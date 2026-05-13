@@ -37,8 +37,12 @@ export function usePriceInsights() {
   const { data, isPending } = useQuery({
     queryKey: ['priceInsights', brandId],
     queryFn: () => (brandId ? fetchInsights(brandId) : Promise.resolve(null)),
-    staleTime: 10 * 60 * 1000,
+    staleTime: Infinity,
+    gcTime: 24 * 60 * 60 * 1000,
     enabled: !!brandId,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    placeholderData: (previousData) => previousData,
   });
 
   const items = data?.items ?? [];

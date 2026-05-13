@@ -1,6 +1,15 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { collection, getDocs, limit, query } from 'firebase/firestore';
+import {
+  collection,
+  documentId,
+  getDocs,
+  limit,
+  orderBy,
+  query,
+  startAfter,
+  type QueryConstraint,
+} from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useBrand } from './useBrand';
 
@@ -17,10 +26,31 @@ export interface PriceBenchmark {
   updatedAt: string;
 }
 
+const FIRESTORE_MAX_LIMIT = 10000;
+const BENCHMARK_PAGE_SIZE = 5000;
+
 async function fetchBenchmarks(brandId: string, maxDocs?: number): Promise<PriceBenchmark[]> {
   const colRef = collection(db, 'price_benchmarks', brandId, 'skus');
-  const snap = await getDocs(maxDocs ? query(colRef, limit(maxDocs)) : colRef);
-  return snap.docs.map((d) => ({ ...d.data() } as PriceBenchmark));
+  const target = maxDocs && maxDocs > 0 ? maxDocs : FIRESTORE_MAX_LIMIT;
+  const pageSize = Math.min(BENCHMARK_PAGE_SIZE, FIRESTORE_MAX_LIMIT, target);
+  const rows: PriceBenchmark[] = [];
+  let lastDocId: string | null = null;
+
+  while (rows.length < target) {
+    const remaining = target - rows.length;
+    const constraints: QueryConstraint[] = [
+      orderBy(documentId()),
+      limit(Math.min(pageSize, remaining, FIRESTORE_MAX_LIMIT)),
+      ...(lastDocId ? [startAfter(lastDocId)] : []),
+    ];
+    const snap = await getDocs(query(colRef, ...constraints));
+    if (snap.empty) break;
+    rows.push(...snap.docs.map((d) => ({ ...d.data() } as PriceBenchmark)));
+    lastDocId = snap.docs[snap.docs.length - 1].id;
+    if (snap.size < Math.min(pageSize, remaining)) break;
+  }
+
+  return rows;
 }
 
 type UsePriceBenchmarksOptions = {
@@ -42,10 +72,13 @@ export function usePriceBenchmarks(options: UsePriceBenchmarksOptions = {}) {
   } = useQuery({
     queryKey: ['priceBenchmarks', brandId, maxDocs ?? 'all'],
     queryFn: () => (brandId ? fetchBenchmarks(brandId, maxDocs) : Promise.resolve([])),
-    staleTime: 2 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
+    staleTime: Infinity,
+    gcTime: 24 * 60 * 60 * 1000,
     enabled: !!brandId,
     retry: 1,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    placeholderData: (previousData) => previousData,
     meta: { persist: false },
   });
 
