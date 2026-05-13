@@ -1725,6 +1725,7 @@ async function importProcurementFile(
 
       if (!sheet) {
         result.warnings.push(`Φύλλο "${sheetName}" δεν βρέθηκε· παράλειψη.`);
+        parsedSheets.push({ sheetType, coll, headers: [], objects: [] });
         continue;
       }
 
@@ -1733,6 +1734,7 @@ async function importProcurementFile(
 
       if (cleaned.length < 2) {
         result.warnings.push(`Φύλλο "${sheetName}": χρειάζεται header + τουλάχιστον 1 γραμμή.`);
+        parsedSheets.push({ sheetType, coll, headers: [], objects: [] });
         continue;
       }
 

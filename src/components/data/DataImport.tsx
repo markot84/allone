@@ -402,6 +402,11 @@ export function DataImport({ initialType }: DataImportProps = {}) {
         }
         if (typesImported.has('procurement')) {
           queryClient.removeQueries({ queryKey: ['procurement'] });
+          queryClient.removeQueries({ queryKey: ['procurement_signals', brandId] });
+          queryClient.removeQueries({ queryKey: ['productIntelligenceAggregate', brandId] });
+          queryClient.removeQueries({ queryKey: ['productIntelligencePage', brandId] });
+          queryClient.removeQueries({ queryKey: ['productIntelligenceInventory', brandId] });
+          queryClient.invalidateQueries({ queryKey: ['procurement'] });
           // Re-aggregate procurement_signals server-side ώστε να ενημερωθούν
           // οι εμπορικές πολιτικές (Sales Opt, Profit Max, Stock Clearance κλπ).
           refreshProcurementSignals().then((r) => {
