@@ -1,6 +1,6 @@
 import { FieldValue, type Firestore } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
-import { createTransporter, SENDER, type SmtpCredentialInput } from './smtpConfig';
+import { createSender, createTransporter, type SmtpCredentialInput } from './smtpConfig';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const INTEREST_EMAIL_TIMEOUT_MS = 20_000;
@@ -35,6 +35,8 @@ async function sendInterestLeadEmails(
   const teamRaw = (process.env.INTEREST_LEAD_NOTIFY_EMAILS || '').trim() || DEFAULT_TEAM_NOTIFY;
   const teamTo = teamRaw.split(',').map((x) => x.trim()).filter(Boolean);
   if (teamTo.length === 0) throw new Error('No interest lead notification recipients configured');
+  const from = createSender(smtp);
+  const supportReplyTo = teamTo[0] || DEFAULT_TEAM_NOTIFY;
 
   const textBody = [
     'Νέα εκδήλωση ενδιαφέροντος (marketing landing)',
@@ -46,26 +48,32 @@ async function sendInterestLeadEmails(
     `Μήνυμα: ${data.message || '—'}`,
   ].join('\n');
 
+  let teamNotified = false;
+  let userConfirmed = false;
+
   try {
     await transporter.sendMail({
-      from: SENDER,
+      from,
       to: teamTo.join(', '),
       replyTo: data.email,
       subject: `Performance+ — Νέο lead: ${data.fullName}`,
       text: textBody,
       html: `<pre style="font-family:system-ui,sans-serif;font-size:14px;white-space:pre-wrap;">${escapeHtml(textBody)}</pre>`,
+      headers: {
+        'X-Auto-Response-Suppress': 'All',
+      },
     });
+    teamNotified = true;
     logger.info(`[interestLead] Team notify email sent to ${teamTo.join(', ')}`);
   } catch (e) {
     logger.error('[interestLead] Team notify email failed', e);
-    throw e instanceof Error ? e : new Error(String(e));
   }
 
-  let userConfirmed = false;
   try {
     await transporter.sendMail({
-      from: SENDER,
+      from,
       to: data.email,
+      replyTo: supportReplyTo,
       subject: 'Performance+ — Λάβαμε το αίτημά σας',
       text: [
         `Γεια σας ${data.fullName},`,
@@ -79,6 +87,9 @@ async function sendInterestLeadEmails(
 <p>Σας ευχαριστούμε για την επικοινωνία.</p>
 <p>Λάβαμε το μήνυμά σας και σύντομα ένας εκπρόσωπός μας θα επικοινωνήσει μαζί σας.</p>
 <p style="color:#666;font-size:13px;">Ομάδα Performance+</p>`,
+      headers: {
+        'X-Auto-Response-Suppress': 'All',
+      },
     });
     userConfirmed = true;
     logger.info(`[interestLead] User confirmation email sent to ${data.email}`);
@@ -86,7 +97,7 @@ async function sendInterestLeadEmails(
     logger.error('[interestLead] User confirmation email failed', e);
   }
 
-  return { teamNotified: true, userConfirmed };
+  return { teamNotified, userConfirmed };
 }
 
 async function sendInterestLeadEmailsBestEffort(

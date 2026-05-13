@@ -32,6 +32,21 @@ type SmtpTimeoutOptions = {
   socketTimeout?: number;
 };
 
+function sanitizeDisplayName(name: string): string {
+  return name.replace(/["\r\n]/g, '').trim() || APP_NAME;
+}
+
+/**
+ * Για transactional mail προτιμάμε From ίδιο με το authenticated mailbox.
+ * Αυτό μειώνει SPF/DMARC mismatches όταν το SMTP login είναι π.χ. support@notthesame.gr.
+ */
+export function createSender(credentials?: Partial<SmtpCredentialInput>, displayName = APP_NAME): string {
+  const configuredFrom = (process.env.SMTP_FROM_EMAIL ?? '').trim();
+  const authenticatedUser = (credentials?.email ?? process.env.SMTP_EMAIL ?? '').trim();
+  const email = configuredFrom || authenticatedUser || NOREPLY_EMAIL;
+  return `"${sanitizeDisplayName(displayName)}" <${email}>`;
+}
+
 /**
  * @param credentials — Προαιρετικά από `defineSecret().value()` (Gen2)· αλλιώς `process.env` (τοπικά / CI).
  */
