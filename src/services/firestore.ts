@@ -327,8 +327,8 @@ export class FirestoreService {
 
 // Specific collections helpers - pass brandId for scoped queries
 export const ProductsService = {
-  getAll: async (brandId?: string | null, constraints: QueryConstraint[] = []) => {
-    const products = await FirestoreService.getDocuments('products', constraints, brandId);
+  getAll: async (brandId?: string | null, constraints: QueryConstraint[] = [], opts?: { cacheFirst?: boolean; forceServer?: boolean }) => {
+    const products = await FirestoreService.getDocuments('products', constraints, brandId, opts);
     
     // Debug: Log sample products to help diagnose data issues
     if (import.meta.env.MODE === 'development' && products.length > 0) {
@@ -509,11 +509,12 @@ export const SuppliersService = {
 };
 
 export const CampaignsService = {
-  getAll: (brandId?: string | null, opts?: { forceServer?: boolean }) => {
+  getAll: (brandId?: string | null, opts?: { forceServer?: boolean; cacheFirst?: boolean }) => {
     const force = opts?.forceServer === true;
-    return FirestoreService.getDocuments('campaigns', [orderBy('createdAt', 'desc')], brandId, { forceServer: force })
+    const cacheFirst = opts?.cacheFirst === true;
+    return FirestoreService.getDocuments('campaigns', [orderBy('createdAt', 'desc')], brandId, { forceServer: force, cacheFirst })
       .catch(() => {
-        return FirestoreService.getDocuments('campaigns', [], brandId, { forceServer: force })
+        return FirestoreService.getDocuments('campaigns', [], brandId, { forceServer: force, cacheFirst })
           .then(campaigns => campaigns.sort((a: any, b: any) => {
             const aDate = a.createdAt?.toDate?.() || a.importedAt?.toDate?.() || new Date(0);
             const bDate = b.createdAt?.toDate?.() || b.importedAt?.toDate?.() || new Date(0);

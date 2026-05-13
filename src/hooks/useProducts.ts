@@ -25,15 +25,17 @@ export function useProducts(options: UseProductsOptions = {}) {
         ...(maxDocs ? [limit(maxDocs)] : []),
       ];
       try {
-        return await ProductsService.getAll(brandId, constraints) as Product[];
+        return await ProductsService.getAll(brandId, constraints, { cacheFirst: true }) as Product[];
       } catch (error) {
         if (!inStockOnly) throw error;
         console.warn('[useProducts] stock-only query failed; falling back to capped product query', error);
-        return await ProductsService.getAll(brandId, maxDocs ? [limit(maxDocs)] : []) as Product[];
+        return await ProductsService.getAll(brandId, maxDocs ? [limit(maxDocs)] : [], { cacheFirst: true }) as Product[];
       }
     },
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
     placeholderData: (previousData) => previousData,
   });
 

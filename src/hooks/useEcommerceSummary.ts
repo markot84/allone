@@ -170,10 +170,12 @@ export function useEcommerceSummary() {
   const { data, isPending } = useQuery({
     queryKey: ['ecommerce_summary', brandId],
     queryFn: () => (brandId ? fetchEcommerceSummary(brandId) : Promise.resolve(null)),
-    /** Μετά sync το invalidateQueries ανανεώνει· εδώ αποφεύγουμε refetch σε κάθε mount/focus (αργή «σταθεροποίηση»). */
-    staleTime: 2 * 60 * 1000,
-    refetchOnMount: true,
+    /** Μετά sync το invalidateQueries ανανεώνει· εδώ αποφεύγουμε refetch σε κάθε mount/focus. */
+    staleTime: 10 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
+    refetchOnMount: false,
     refetchOnWindowFocus: false,
+    placeholderData: (previousData) => previousData,
     enabled: !!brandId,
   });
 

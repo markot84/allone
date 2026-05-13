@@ -68,16 +68,16 @@ export function useCampaigns() {
     queryKey,
     queryFn: async () => {
       if (!brandId) return [] as Campaign[];
-      // Server read: local Firestore cache can omit docs right after sync.
-      return CampaignsService.getAll(brandId, { forceServer: true }) as Promise<Campaign[]>;
+      return CampaignsService.getAll(brandId, { cacheFirst: true }) as Promise<Campaign[]>;
     },
     enabled: !!brandId,
     /** Bounded staleness: Infinity με πρώτο fetch `[]` κλείδωνε το ROI σε κενά δεδομένα χωρίς refetch. */
     staleTime: 5 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
-    refetchOnMount: true,
-    refetchOnWindowFocus: true,
-    refetchOnReconnect: true,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    placeholderData: (previousData) => previousData,
   });
 
   // Εφαρμόζει on-the-fly το επιλεγμένο Meta attribution window σε όλα τα downstream reads.

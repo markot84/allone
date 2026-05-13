@@ -124,13 +124,8 @@ function QueryProvider({ children }: { children: React.ReactNode }) {
               if (key === 'campaigns' || key === 'search_intelligence' || key === 'priceBenchmarks' || key === 'priceInsights') return false;
               // Product query shape changed during the rollback window; always refetch it from Firestore.
               if (key === 'products') return false;
-              // Connector-backed summaries: object shape `{ ga4: null }` is truthy — persisting it
-              // hides fresh data after sync until staleTime expires. Always refetch from Firestore.
-              if (key === 'ga4_data') return false;
-              // Server aggregates & heavy raw order pulls — persist hides post-sync reality and can bloat localStorage.
+              // Heavy raw order pulls stay out of localStorage; compact server summaries are persisted for fast first paint.
               if (
-                key === 'ecommerce_summary' ||
-                key === 'business_revenue_summary' ||
                 key === 'ecommerceOrdersRaw' ||
                 key === 'dataAnalysisOrdersRaw' ||
                 key === 'segments' ||

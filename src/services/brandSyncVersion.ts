@@ -1,6 +1,6 @@
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import { getLastImportDates } from './import';
+import { getLatestImportDate } from './import';
 import { coerceToDate } from '../utils/coerceDate';
 
 export type BrandSyncVersion = {
@@ -33,7 +33,7 @@ export async function fetchBrandSyncVersion(brandId: string): Promise<BrandSyncV
     getDoc(doc(db, 'connectors', brandId)).catch(() => null),
     getDoc(doc(db, 'ecommerce_summary', brandId)).catch(() => null),
     getDoc(doc(db, 'business_revenue_summary', brandId)).catch(() => null),
-    getLastImportDates(brandId).catch(() => ({} as Record<string, Date>)),
+    getLatestImportDate(brandId).catch(() => null),
   ]);
 
   if (connectorsSnap?.exists()) {
@@ -45,7 +45,7 @@ export async function fetchBrandSyncVersion(brandId: string): Promise<BrandSyncV
   if (businessSnap?.exists()) {
     pushDate(syncTimes, (businessSnap.data() as { syncedAt?: unknown }).syncedAt);
   }
-  Object.values(lastImportDates).forEach((d) => pushDate(syncTimes, d));
+  pushDate(syncTimes, lastImportDates);
 
   const latest = syncTimes.length > 0 ? Math.max(...syncTimes) : 0;
   return {

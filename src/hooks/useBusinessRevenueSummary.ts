@@ -32,9 +32,11 @@ export function useBusinessRevenueSummary() {
   const { data, isPending } = useQuery({
     queryKey: ['business_revenue_summary', brandId],
     queryFn: () => (brandId ? fetchBusinessRevenueSummary(brandId) : Promise.resolve(null)),
-    staleTime: 2 * 60 * 1000,
-    refetchOnMount: true,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
+    refetchOnMount: false,
     refetchOnWindowFocus: false,
+    placeholderData: (previousData) => previousData,
     enabled: !!brandId,
   });
 

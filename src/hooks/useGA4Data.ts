@@ -98,6 +98,11 @@ interface GA4PageRawData {
   connectors: { search_console?: { connected?: boolean } } | null;
 }
 
+interface GA4ChunkData {
+  dailyTrafficByChannel?: GA4DailyTrafficByChannel;
+  organicSearchFallbackRows?: GA4OrganicFallbackRow[];
+}
+
 const missingSnap = (): DocumentSnapshot =>
   ({ exists: () => false } as DocumentSnapshot);
 
@@ -106,8 +111,6 @@ async function fetchGA4Data(brandId: string): Promise<GA4PageRawData> {
     getDoc(doc(db, 'ga4_data', brandId)),
     getDoc(doc(db, 'search_console_data', brandId)),
     getDoc(doc(db, 'connectors', brandId)),
-    getDoc(doc(db, 'ga4_data', brandId, 'chunks', 'dailyTraffic')),
-    getDoc(doc(db, 'ga4_data', brandId, 'chunks', 'organicFallback')),
   ]);
 
   if (settled[0].status === 'rejected') throw settled[0].reason;
@@ -117,35 +120,37 @@ async function fetchGA4Data(brandId: string): Promise<GA4PageRawData> {
     settled[1].status === 'fulfilled' ? settled[1].value : missingSnap();
   const connectorsSnap =
     settled[2].status === 'fulfilled' ? settled[2].value : missingSnap();
-  const dailyTrafficSnap =
-    settled[3].status === 'fulfilled' ? settled[3].value : missingSnap();
-  const organicFallbackSnap =
-    settled[4].status === 'fulfilled' ? settled[4].value : missingSnap();
-
-  let ga4: GA4RawData | null = ga4Snap.exists() ? (ga4Snap.data() as GA4RawData) : null;
-
-  if (ga4) {
-    if (dailyTrafficSnap.exists() && !ga4.dailyTrafficByChannel) {
-      const raw = dailyTrafficSnap.data();
-      const dtc = typeof raw?.json === 'string'
-        ? JSON.parse(raw.json)
-        : raw?.dailyTrafficByChannel;
-      if (dtc) ga4 = { ...ga4, dailyTrafficByChannel: dtc };
-    }
-    if (organicFallbackSnap.exists() && !ga4.organicSearchFallbackRows) {
-      const raw = organicFallbackSnap.data();
-      const ofr = typeof raw?.json === 'string'
-        ? JSON.parse(raw.json)
-        : raw?.organicSearchFallbackRows;
-      if (ofr) ga4 = { ...ga4, organicSearchFallbackRows: ofr };
-    }
-  }
 
   return {
-    ga4,
+    ga4: ga4Snap.exists() ? (ga4Snap.data() as GA4RawData) : null,
     searchConsole: searchConsoleSnap.exists() ? (searchConsoleSnap.data() as SearchConsoleRawData) : null,
     connectors: connectorsSnap.exists() ? (connectorsSnap.data() as { search_console?: { connected?: boolean } }) : null,
   };
+}
+
+async function fetchGA4Chunks(brandId: string): Promise<GA4ChunkData> {
+  const settled = await Promise.allSettled([
+    getDoc(doc(db, 'ga4_data', brandId, 'chunks', 'dailyTraffic')),
+    getDoc(doc(db, 'ga4_data', brandId, 'chunks', 'organicFallback')),
+  ]);
+  const dailyTrafficSnap = settled[0].status === 'fulfilled' ? settled[0].value : missingSnap();
+  const organicFallbackSnap = settled[1].status === 'fulfilled' ? settled[1].value : missingSnap();
+  const out: GA4ChunkData = {};
+  if (dailyTrafficSnap.exists()) {
+    const raw = dailyTrafficSnap.data();
+    const dtc = typeof raw?.json === 'string'
+      ? JSON.parse(raw.json)
+      : raw?.dailyTrafficByChannel;
+    if (dtc) out.dailyTrafficByChannel = dtc;
+  }
+  if (organicFallbackSnap.exists()) {
+    const raw = organicFallbackSnap.data();
+    const ofr = typeof raw?.json === 'string'
+      ? JSON.parse(raw.json)
+      : raw?.organicSearchFallbackRows;
+    if (ofr) out.organicSearchFallbackRows = ofr;
+  }
+  return out;
 }
 
 export function useGA4Data() {
@@ -155,18 +160,45 @@ export function useGA4Data() {
   const { data, isPending } = useQuery({
     queryKey: ['ga4_data', brandId],
     queryFn: () => (brandId ? fetchGA4Data(brandId) : Promise.resolve(null)),
-    /** Short stale window: connector syncs must show on GA4 page without waiting on persisted RQ cache. */
-    staleTime: 60 * 1000,
-    refetchOnMount: 'always',
+    staleTime: 10 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    placeholderData: (previousData) => previousData,
     enabled: !!brandId,
   });
+  const { data: chunkData } = useQuery<GA4ChunkData>({
+    queryKey: ['ga4_data_chunks', brandId],
+    queryFn: () => (brandId ? fetchGA4Chunks(brandId) : Promise.resolve({})),
+    enabled: !!brandId && Boolean(data?.ga4),
+    staleTime: 10 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    placeholderData: (previousData) => previousData,
+  });
+  const mergedData = useMemo<GA4PageRawData | null>(() => {
+    if (!data?.ga4) return data ?? null;
+    return {
+      ...data,
+      ga4: {
+        ...data.ga4,
+        ...(chunkData?.dailyTrafficByChannel && !data.ga4.dailyTrafficByChannel
+          ? { dailyTrafficByChannel: chunkData.dailyTrafficByChannel }
+          : {}),
+        ...(chunkData?.organicSearchFallbackRows && !data.ga4.organicSearchFallbackRows
+          ? { organicSearchFallbackRows: chunkData.organicSearchFallbackRows }
+          : {}),
+      },
+    };
+  }, [data, chunkData]);
 
   const dailyEntries = useMemo(() => {
-    if (!data?.ga4?.dailyMetrics) return [];
-    return Object.entries(data.ga4.dailyMetrics)
+    if (!mergedData?.ga4?.dailyMetrics) return [];
+    return Object.entries(mergedData.ga4.dailyMetrics)
       .map(([date, m]) => ({ date, ...m }))
       .sort((a, b) => a.date.localeCompare(b.date));
-  }, [data]);
+  }, [mergedData]);
 
   const totals = useMemo(() => {
     if (dailyEntries.length === 0)
@@ -215,18 +247,18 @@ export function useGA4Data() {
   }, [dailyEntries]);
 
   const trafficSources = useMemo(() => {
-    if (!data?.ga4?.trafficSources) return [];
-    return Object.entries(data.ga4.trafficSources)
+    if (!mergedData?.ga4?.trafficSources) return [];
+    return Object.entries(mergedData.ga4.trafficSources)
       .map(([channel, d]) => ({
         channel,
         ...d,
         totalRevenue: typeof d.totalRevenue === 'number' ? d.totalRevenue : 0,
       }))
       .sort((a, b) => b.sessions - a.sessions);
-  }, [data]);
+  }, [mergedData]);
 
   const dailyTrafficByChannel = useMemo((): GA4DailyTrafficByChannel | null => {
-    const raw = data?.ga4?.dailyTrafficByChannel;
+    const raw = mergedData?.ga4?.dailyTrafficByChannel;
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
 
     const normalizeDateKey = (k: string): string | null => {
@@ -258,7 +290,7 @@ export function useGA4Data() {
       if (Object.keys(out[date]).length === 0) delete out[date];
     }
     return Object.keys(out).length > 0 ? out : null;
-  }, [data?.ga4?.dailyTrafficByChannel]);
+  }, [mergedData?.ga4?.dailyTrafficByChannel]);
 
   /** Sum of `totalRevenue` for channels whose name includes "organic" (matches GA4 default channel labels). */
   const totalOrganicRevenueFromChannels = useMemo(() => {
@@ -268,28 +300,28 @@ export function useGA4Data() {
   }, [trafficSources]);
 
   const organicRevenueByDay = useMemo((): Record<string, number> => {
-    const raw = data?.ga4?.organicRevenueByDay;
+    const raw = mergedData?.ga4?.organicRevenueByDay;
     if (!raw || typeof raw !== 'object') return {};
     const out: Record<string, number> = {};
     for (const [k, v] of Object.entries(raw)) {
       if (/^\d{4}-\d{2}-\d{2}$/.test(k) && typeof v === 'number' && v > 0) out[k] = v;
     }
     return out;
-  }, [data?.ga4?.organicRevenueByDay]);
+  }, [mergedData?.ga4?.organicRevenueByDay]);
 
   const organicSearchFallbackRows = useMemo(() => {
-    const rows = data?.ga4?.organicSearchFallbackRows;
+    const rows = mergedData?.ga4?.organicSearchFallbackRows;
     if (!Array.isArray(rows)) return [] as GA4OrganicFallbackRow[];
     return rows.filter((row) => Boolean(row?.date && row?.path));
-  }, [data?.ga4?.organicSearchFallbackRows]);
+  }, [mergedData?.ga4?.organicSearchFallbackRows]);
 
   const searchConsoleRows = useMemo(() => {
-    const rows = data?.searchConsole?.queryRows;
+    const rows = mergedData?.searchConsole?.queryRows;
     if (!Array.isArray(rows)) return [] as SearchConsoleQueryRow[];
     return rows.filter((row) => Boolean(row?.date && row?.query));
-  }, [data?.searchConsole?.queryRows]);
+  }, [mergedData?.searchConsole?.queryRows]);
 
-  const isSearchConsoleConnected = Boolean(data?.connectors?.search_console?.connected);
+  const isSearchConsoleConnected = Boolean(mergedData?.connectors?.search_console?.connected);
   const organicSearchSource: OrganicSearchSource =
     isSearchConsoleConnected
       ? searchConsoleRows.length > 0
@@ -300,7 +332,7 @@ export function useGA4Data() {
         : 'none';
 
   return {
-    propertyName: data?.ga4?.propertyName ?? '',
+    propertyName: mergedData?.ga4?.propertyName ?? '',
     dailyEntries,
     totals,
     weeklyChange,
@@ -312,14 +344,14 @@ export function useGA4Data() {
     searchConsoleRows,
     organicSearchSource,
     isSearchConsoleConnected,
-    searchConsoleSiteName: data?.searchConsole?.siteName ?? '',
-    searchConsoleSiteUrl: data?.searchConsole?.siteUrl ?? '',
-    searchConsoleSyncedAt: data?.searchConsole?.syncedAt,
-    searchConsoleDateRange: data?.searchConsole?.dateRange,
-    topPages: data?.ga4?.topPages ?? [],
-    syncedAt: data?.ga4?.syncedAt,
-    dateRange: data?.ga4?.dateRange,
+    searchConsoleSiteName: mergedData?.searchConsole?.siteName ?? '',
+    searchConsoleSiteUrl: mergedData?.searchConsole?.siteUrl ?? '',
+    searchConsoleSyncedAt: mergedData?.searchConsole?.syncedAt,
+    searchConsoleDateRange: mergedData?.searchConsole?.dateRange,
+    topPages: mergedData?.ga4?.topPages ?? [],
+    syncedAt: mergedData?.ga4?.syncedAt,
+    dateRange: mergedData?.ga4?.dateRange,
     isLoading: isPending,
-    hasData: Boolean(data?.ga4),
+    hasData: Boolean(mergedData?.ga4),
   };
 }

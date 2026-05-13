@@ -451,7 +451,6 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   }, [liveSnapshotPayload, isLoading, ordersPending]);
 
   const shouldUseSnapshot =
-    !isDataAnalysisAggregatePending &&
     !aggregateIsBuilding &&
     !!usableSnapshot &&
     (isLoading || ordersPending || segments.length === 0);

@@ -2304,7 +2304,8 @@ export async function getImportJobs(brandId?: string | null): Promise<ImportJob[
 }
 
 /** Πρόσφατα jobs για υπολογισμό «τελευταίας εισαγωγής» — όχι πλήρες ιστορικό (αποφυγή αργής φόρτωσης). */
-const IMPORT_JOBS_LOOKBACK_FOR_LAST_DATES = 3000;
+const IMPORT_JOBS_LOOKBACK_FOR_LAST_DATES = 300;
+const IMPORT_JOBS_LOOKBACK_FOR_SYNC_VERSION = 50;
 
 // Get last successful import date per type (for UI display)
 export async function getLastImportDates(brandId: string | null | undefined): Promise<Record<string, Date>> {
@@ -2337,4 +2338,22 @@ export async function getLastImportDates(brandId: string | null | undefined): Pr
     if (!existing2 || job.createdAt > existing2) result[job.type] = job.createdAt;
   }
   return result;
+}
+
+export async function getLatestImportDate(brandId: string | null | undefined): Promise<Date | null> {
+  if (!brandId) return null;
+  const jobs = await FirestoreService.getDocuments<ImportJob>(
+    'import_jobs',
+    [orderBy('createdAt', 'desc'), limit(IMPORT_JOBS_LOOKBACK_FOR_SYNC_VERSION)],
+    brandId,
+    { forceServer: true }
+  );
+  for (const job of jobs) {
+    const status = (job as { status?: string }).status;
+    const imported = Number((job as { imported?: number }).imported ?? job.result?.imported ?? 0) || 0;
+    const countsAsImported = status === undefined || status === 'completed' || (status === 'partial' && imported > 0);
+    if (!countsAsImported) continue;
+    return coerceToDate(job.completedAt as unknown) ?? coerceToDate(job.createdAt as unknown);
+  }
+  return null;
 }
