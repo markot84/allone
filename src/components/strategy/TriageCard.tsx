@@ -581,7 +581,7 @@ export function TriageCard({ products: scopedProducts, onSelectPolicy }: TriageC
             <section
               id={`triage-section-${group.id}`}
               key={group.id}
-              className={`scroll-mt-3 ${bridge.shell} p-3 flex flex-col gap-2 h-full`}
+              className={`scroll-mt-3 ${group.id === 'investigate' ? 'md:col-span-2' : ''} ${bridge.shell} p-3 flex flex-col gap-2 h-full`}
             >
               <div className="flex items-start gap-2">
                 <GroupIcon size={18} className={`${bridge.iconClass} shrink-0 mt-0.5`} aria-hidden />
