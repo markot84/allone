@@ -37,7 +37,7 @@ import {
 import { safeBrandName } from '../../services/reportExport';
 
 const FUNCTIONS_BASE = FUNCTIONS_BASE_URL.replace(/\/$/, '');
-const COMPETITIVE_BENCHMARK_LIMIT = 5000;
+const COMPETITIVE_BENCHMARK_LIMIT = 15000;
 const COMPETITIVE_STOCK_PRODUCT_LIMIT = 10000;
 
 // ── Types ────────────────────────────────────────────────
@@ -164,6 +164,52 @@ function parseInventoryField(v: unknown): number | null {
 }
 
 type SkuInventoryRow = { stock: number | null; sold: number | null };
+
+function compactInventoryKey(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9α-ωάέήίόύώϊϋΐΰ]+/gi, '');
+}
+
+function addProgressiveSkuParts(set: Set<string>, value: string): void {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return;
+  const parts = normalized.split(/[-_\s]+/).filter(Boolean);
+  for (let i = parts.length; i >= 2; i -= 1) {
+    const partial = parts.slice(0, i).join('-');
+    set.add(partial);
+    const compact = compactInventoryKey(partial);
+    if (compact) set.add(compact);
+  }
+}
+
+function inventoryKeyVariants(value: unknown): string[] {
+  const raw = String(value || '').trim();
+  if (!raw) return [];
+  const set = new Set<string>();
+  const lower = raw.toLowerCase();
+  set.add(lower);
+  const compact = compactInventoryKey(lower);
+  if (compact) set.add(compact);
+
+  const parts = raw.split(':').map((part) => part.trim()).filter(Boolean);
+  if (parts.length >= 4) {
+    const offerId = parts.slice(3).join(':');
+    set.add(offerId.toLowerCase());
+    const offerCompact = compactInventoryKey(offerId);
+    if (offerCompact) set.add(offerCompact);
+    addProgressiveSkuParts(set, offerId);
+  } else {
+    addProgressiveSkuParts(set, raw);
+  }
+
+  for (const part of parts) {
+    const partLower = part.toLowerCase();
+    set.add(partLower);
+    const partCompact = compactInventoryKey(part);
+    if (partCompact) set.add(partCompact);
+  }
+
+  return [...set].filter(Boolean);
+}
 
 async function fetchProductIntelligenceInventory(brandId: string): Promise<Record<string, SkuInventoryRow>> {
   const chunks = await getDocs(collection(db, 'product_intelligence_inventory', brandId, 'chunks'));
@@ -354,13 +400,13 @@ export function CompetitorInsights() {
   const skuInventoryMap = useMemo(() => {
     const map = new Map<string, SkuInventoryRow>();
     const mergeInventory = (key: string, next: SkuInventoryRow, preferExistingStock = false) => {
-      const normalized = key.trim().toLowerCase();
-      if (!normalized) return;
-      const prev = map.get(normalized);
-      map.set(normalized, {
-        stock: preferExistingStock ? (prev?.stock ?? next.stock) : (next.stock ?? prev?.stock ?? null),
-        sold: next.sold ?? prev?.sold ?? null,
-      });
+      for (const normalized of inventoryKeyVariants(key)) {
+        const prev = map.get(normalized);
+        map.set(normalized, {
+          stock: preferExistingStock ? (prev?.stock ?? next.stock) : (next.stock ?? prev?.stock ?? null),
+          sold: next.sold ?? prev?.sold ?? null,
+        });
+      }
     };
 
     // Πλήρες server-side lookup από Product Intelligence: Megaventory stock + sku_stats sales.
@@ -388,9 +434,7 @@ export function CompetitorInsights() {
     }
     // E-shop stats εμπλουτίζουν τις πωλήσεις, αλλά δεν μηδενίζουν ERP stock.
     for (const [sku, s] of Object.entries(skuStats || {})) {
-      const key = (sku || '').trim().toLowerCase();
-      if (!key) continue;
-      mergeInventory(key, {
+      mergeInventory(sku, {
         stock: parseInventoryField(s.stock),
         sold: parseInventoryField(s.sold),
       }, true);
@@ -398,12 +442,13 @@ export function CompetitorInsights() {
     return map;
   }, [competitiveInventory, products, skuStats]);
 
-  /** GMC productId συνήθως είναι `online:el:GR:SKU123` — δοκιμάζουμε όλα τα τμήματα. */
+  /** GMC productId συνήθως είναι `online:el:GR:SKU123` — δοκιμάζουμε offerId, base SKU, GTIN και compact variants. */
   const benchmarkKeyCandidates = (productId: string, gtin: string): string[] => {
-    const raw = (productId || '').trim();
-    const parts = raw ? raw.split(':').map((s) => s.trim()).filter(Boolean) : [];
-    const candidates = [raw, ...parts, gtin || ''];
-    return candidates.map((k) => k.toLowerCase()).filter(Boolean);
+    const candidates = new Set<string>();
+    for (const value of [productId, gtin]) {
+      for (const key of inventoryKeyVariants(value)) candidates.add(key);
+    }
+    return [...candidates];
   };
   const lookupInventory = useCallback(
     (productId: string, gtin: string) => {

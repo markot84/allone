@@ -32,6 +32,7 @@ import { MixedStrategyPanel, type MixConfig, computeBlendedWeights } from './Mix
 import { SeasonalBanner } from './SeasonalBanner';
 import { SeasonalPeriodsModal } from './SeasonalPeriodsModal';
 import { useProductSource } from '../../hooks/useProductSource';
+import { useProductIntelligenceAggregate } from '../../hooks/useProductIntelligenceAggregate';
 import { useProductSignals } from '../../hooks/useProductSignals';
 import { buildTriagePromptContext, buildProvenancePromptContext } from '../../utils/aiPromptContext';
 import { useSegments } from '../../hooks/useSegments';
@@ -64,7 +65,7 @@ import { usePriceBenchmarks } from '../../hooks/usePriceBenchmarks';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import { useRefreshAggregates } from '../../hooks/useAggregates';
 import { useProcurement } from '../../hooks/useProcurement';
-import { getStockAgeDays } from '../../utils/productUtils';
+import { getEffectiveStockLevel, getStockAgeDays } from '../../utils/productUtils';
 import { rankSegments, type ScoredSegment } from '../../utils/segmentRelevance';
 import { safeBrandName } from '../../services/reportExport';
 import { exportStrategyPlan } from '../../services/segmentActionPack';
@@ -73,6 +74,8 @@ import { Tooltip } from '../common';
 import type { SeasonalPeriod } from '../../data/seasonalPeriods';
 import type { Product, PriceBenchmarkStrategyScope, SalesBaseScope } from '../../types';
 
+
+const STRATEGY_PRODUCT_LIMIT = 5000;
 
 const PreviewCell = memo(function PreviewCell({
   columnId,
@@ -83,8 +86,9 @@ const PreviewCell = memo(function PreviewCell({
   product: Product & { composite_score?: number };
   rank: number;
 }) {
-  const cap = product.stock_capacity || 1;
-  const ratio = (product.stock_level || 0) / cap;
+  const effectiveStock = getEffectiveStockLevel(product);
+  const stockCapacity = Math.max(product.stock_capacity || 0, 1);
+  const ratio = effectiveStock / Math.max(stockCapacity, effectiveStock, 1);
   const isScore = columnId === 'score';
   const alignRight = isScore ? 'text-right' : '';
 
@@ -148,7 +152,7 @@ const PreviewCell = memo(function PreviewCell({
                 }}
               />
             </div>
-            <span className="text-[10px] text-[#4A4A4A] font-mono">{product.stock_level ?? 0}</span>
+            <span className="text-[10px] text-[#4A4A4A] font-mono">{effectiveStock}</span>
           </div>
         </td>
       );
@@ -161,8 +165,8 @@ const PreviewCell = memo(function PreviewCell({
       );
     }
     case 'excess_pct': {
-      const excess = Math.max(0, (product.stock_level ?? 0) - cap);
-      const pct = cap > 0 ? ((excess / cap) * 100).toFixed(0) : '0';
+      const excess = Math.max(0, effectiveStock - stockCapacity);
+      const pct = stockCapacity > 0 ? ((excess / stockCapacity) * 100).toFixed(0) : '0';
       return (
         <td className="py-2 pr-2 w-14 hidden md:table-cell">
           <span className="text-xs font-medium text-[#4A4A4A]">{pct}%</span>
@@ -178,7 +182,7 @@ const PreviewCell = memo(function PreviewCell({
         </td>
       );
     case 'revenue_potential': {
-      const val = (product.price ?? 0) * (product.stock_level ?? 0);
+      const val = (product.price ?? 0) * effectiveStock;
       const fmt = val >= 1000 ? `€${(val / 1000).toFixed(1)}K` : `€${val.toFixed(0)}`;
       return (
         <td className="py-2 pr-2 w-16 hidden sm:table-cell">
@@ -265,7 +269,22 @@ function getScenarioPendingActionText(scenarioId: string | null): string {
 
 export function WeightConfigurator() {
   const { currentBrand } = useBrand();
-  const { products, hasImported, usingProcurement, sourceLabel: productDataSourceLabel, sourceKind: productSourceKind } = useProductSource();
+  const {
+    products: sourceProducts,
+    hasImported: sourceHasImported,
+    usingProcurement,
+    sourceLabel: sourceProductDataSourceLabel,
+    sourceKind: sourceProductSourceKind,
+  } = useProductSource({ maxProducts: STRATEGY_PRODUCT_LIMIT });
+  const serverProductIntelligence = useProductIntelligenceAggregate('all', 1);
+  const serverProducts = !usingProcurement ? (serverProductIntelligence.page?.products ?? []) : [];
+  const products = serverProducts.length > 0 ? serverProducts : sourceProducts;
+  const hasImported = sourceHasImported || !!serverProductIntelligence.aggregate;
+  const productDataSourceLabel = serverProducts.length > 0
+    ? serverProductIntelligence.aggregate?.sourceLabel ?? sourceProductDataSourceLabel
+    : sourceProductDataSourceLabel;
+  const productSourceKind = serverProducts.length > 0 ? 'erp' : sourceProductSourceKind;
+  const productSourceCount = serverProductIntelligence.aggregate?.totalCount ?? products.length;
 
   const scenarioErpHints = useMemo(() => {
     if (!usingProcurement || products.length === 0) return undefined;
@@ -609,8 +628,8 @@ export function WeightConfigurator() {
     [triageOrigin]
   );
   const provenancePromptCtx = useMemo(
-    () => buildProvenancePromptContext(signalCoverage, products.length),
-    [signalCoverage, products.length]
+    () => buildProvenancePromptContext(signalCoverage, productSourceCount),
+    [signalCoverage, productSourceCount]
   );
   const [customSeasons, setCustomSeasons] = useState<SeasonalPeriod[]>(() => {
     try {
@@ -1717,7 +1736,7 @@ export function WeightConfigurator() {
               triageScopeCount > 0
                 ? `Εστίαση από διάγνωση: ${triageScopeCount} προϊόντα · προβολή top 100 (10 ανά σελίδα)`
                 : hasImported
-                  ? `Top 100 από ${products.length} εισαγόμενα προϊόντα (10 ανά σελίδα)`
+                  ? `Top 100 από ${productSourceCount.toLocaleString('el-GR')} προϊόντα (10 ανά σελίδα)`
                   : 'Top 100 προτεραιοποιημένα προϊόντα (10 ανά σελίδα)'
             }
             icon={<Sparkles size={18} className="text-[var(--nts-medium-gray)]" />}
@@ -1846,7 +1865,7 @@ export function WeightConfigurator() {
               <p className="text-lg font-bold text-[#22C55E]">
                 {selectedScenario === 'stock_clearance'
                   ? prioritizedProducts.filter(
-                      (p) => ((p.stock_level ?? 0) / (p.stock_capacity || 1)) > 1
+                      (p) => getEffectiveStockLevel(p) / Math.max(p.stock_capacity || 0, 1) > 1
                     ).length
                   : selectedScenario === 'brand_launch'
                   ? prioritizedProducts.filter((p) => !!p.priority_tag).length
