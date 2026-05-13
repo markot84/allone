@@ -106,6 +106,9 @@ async function sendInterestLeadEmailsBestEffort(
         }, INTEREST_EMAIL_TIMEOUT_MS);
       }),
     ]);
+  } catch (e) {
+    logger.error('[interestLead] Email notification failed; lead remains saved', e);
+    return { teamNotified: false, userConfirmed: false };
   } finally {
     if (timer) clearTimeout(timer);
   }
@@ -152,7 +155,7 @@ export async function persistInterestLead(
     return { ok: false, error: 'Απαιτείται αποδοχή της επεξεργασίας στοιχείων.' };
   }
 
-  await db.collection('interest_leads').add({
+  const leadRef = await db.collection('interest_leads').add({
     fullName,
     email,
     phone: phone || null,
@@ -176,6 +179,13 @@ export async function persistInterestLead(
     },
     meta.smtp
   );
+
+  await leadRef.update({
+    emailResult,
+    teamNotificationStatus: emailResult.teamNotified ? 'sent' : 'failed',
+    userConfirmationStatus: emailResult.userConfirmed ? 'sent' : 'failed',
+    notificationCheckedAt: FieldValue.serverTimestamp(),
+  });
 
   return { ok: true, emailResult };
 }
