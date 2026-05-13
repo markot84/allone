@@ -91,7 +91,7 @@ export function InterestForm() {
         throw new Error(data.error || `HTTP ${res.status}`);
       }
       toast.success(
-        'Η υποβολή ολοκληρώθηκε. Θα λάβετε επιβεβαίωση στο email σας και η ομάδα μας θα επικοινωνήσει σύντομα.'
+        'Η υποβολή ολοκληρώθηκε. Η ομάδα μας ενημερώθηκε και θα επικοινωνήσει σύντομα.'
       );
       setFullName('');
       setEmail('');

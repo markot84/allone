@@ -2618,6 +2618,12 @@ export const submitInterestLead = onRequest(
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       logger.error('[submitInterestLead]', msg);
+      if (/smtp|email notification|notify email/i.test(msg)) {
+        res.status(502).json({
+          error: 'Η υποβολή καταγράφηκε, αλλά δεν στάλθηκε email στο support. Δοκιμάστε ξανά ή επικοινωνήστε με support@notthesame.gr.',
+        });
+        return;
+      }
       res.status(500).json({ error: 'Server error' });
     }
   }
