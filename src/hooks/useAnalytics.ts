@@ -33,6 +33,12 @@ export function useAnalytics() {
       }
       return records as unknown as AnalyticsRecord[];
     },
+    enabled: !!brandId,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    placeholderData: (previousData) => previousData,
   });
 
   const revenueData = useMemo(() => {

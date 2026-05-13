@@ -17,7 +17,11 @@ export function useChannelActivations(strategyId: string | null) {
     queryKey: ['channelActivations', brandId],
     queryFn: () => getChannelActivations(brandId!),
     enabled: !!brandId,
-    staleTime: 60_000,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    placeholderData: (previousData) => previousData,
   });
 
   const currentActivations = activations.filter(a => a.strategyId === strategyId);

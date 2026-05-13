@@ -100,24 +100,24 @@ export function useAppWarmup() {
         queryClient.prefetchQuery({
           queryKey: ['activeStrategy', brandId],
           queryFn: () => fetchActiveStrategy(brandId),
-          staleTime: 2 * 60 * 1000,
+          staleTime: 10 * 60 * 1000,
         })
       );
       prefetch(() =>
         queryClient.prefetchQuery({
           queryKey: ['business_revenue_summary', brandId],
           queryFn: () => fetchBusinessRevenueSummary(brandId),
-          staleTime: 2 * 60 * 1000,
+          staleTime: 10 * 60 * 1000,
         })
       );
-    }, 800);
+    }, 0);
 
     const phaseTwo = scheduleIdle(() => {
       prefetch(() =>
         queryClient.prefetchQuery({
           queryKey: ['ecommerce_summary', brandId],
           queryFn: () => fetchEcommerceSummary(brandId),
-          staleTime: 2 * 60 * 1000,
+          staleTime: 10 * 60 * 1000,
         })
       );
       prefetch(() =>

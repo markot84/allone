@@ -129,16 +129,22 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   const { data: firestoreSegments = [], isPending: fsPending } = useQuery({
     queryKey: ['segments', brandId],
     queryFn: () => (brandId ? SegmentsService.getAll(brandId) : Promise.resolve([])) as Promise<RFMSegment[]>,
-    staleTime: 2 * 60 * 1000,
-    gcTime: 15 * 60 * 1000,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    placeholderData: (previousData) => previousData,
   });
 
   const { data: rawSegmentCustomerSummaries } = useQuery({
     queryKey: ['segmentCustomerSummaries', brandId],
     queryFn: () => (brandId ? SegmentCustomersService.getSummariesBySegment(brandId) : Promise.resolve(new Map())),
     enabled: !!brandId && sourcePref === 'external',
-    staleTime: 60 * 1000,
-    gcTime: 10 * 60 * 1000,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    placeholderData: (previousData) => previousData,
   });
 
   const segmentCustomerSummaries = useMemo(

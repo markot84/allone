@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { orderBy } from 'firebase/firestore';
+import { limit, orderBy } from 'firebase/firestore';
 import { FirestoreService } from '../services/firestore';
 import { useBrand } from './useBrand';
 import { scenarios } from '../data';
@@ -94,7 +94,7 @@ export function useActiveStrategy() {
       try {
         const strategies = await FirestoreService.getDocuments<ActiveStrategy>(
           'active_strategies',
-          [orderBy('updatedAt', 'desc')],
+          [orderBy('updatedAt', 'desc'), limit(1)],
           brandId
         );
         
@@ -124,8 +124,11 @@ export function useActiveStrategy() {
       }
     },
     enabled: !!brandId,
-    staleTime: 2 * 60 * 1000, // 2 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes
+    staleTime: 10 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    placeholderData: (previousData) => previousData,
     retry: (failureCount, error: any) => {
       // Don't retry if index is building
       if (error?.code === 'failed-precondition' || error?.message?.includes('index')) {

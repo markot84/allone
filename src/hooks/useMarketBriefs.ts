@@ -34,7 +34,11 @@ export function useMarketBriefs() {
       return sorted as MarketBriefListItem[];
     },
     enabled: !!brandId,
-    staleTime: 30 * 1000,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    placeholderData: (previousData) => previousData,
   });
 
   const saveMutation = useMutation({

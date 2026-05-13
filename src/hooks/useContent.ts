@@ -28,6 +28,12 @@ export function useContent() {
   const { data: firestoreContent = [], isPending } = useQuery({
     queryKey: ['content', brandId],
     queryFn: () => (brandId ? ContentService.getAll(brandId) : Promise.resolve([])) as Promise<ContentItem[]>,
+    enabled: !!brandId,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    placeholderData: (previousData) => previousData,
   });
 
   // When brandId is set: show real data only. When no brand: empty (no mock).

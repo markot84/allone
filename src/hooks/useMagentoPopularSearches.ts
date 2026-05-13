@@ -64,8 +64,11 @@ export function useMagentoPopularSearches() {
       brandId
         ? fetchMagentoPopularSearches(brandId)
         : Promise.resolve({ terms: [], termsProvenance: null, syncedAt: null }),
-    staleTime: 60 * 1000,
-    refetchOnMount: 'always',
+    staleTime: 10 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    placeholderData: (previousData) => previousData,
     enabled: !!brandId,
   });
 

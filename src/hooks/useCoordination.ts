@@ -35,6 +35,11 @@ export function useBrandMembers() {
       return list;
     },
     enabled: !!brandId,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    placeholderData: (previousData) => previousData,
   });
 
   return { members, isLoading: isPending };
@@ -49,6 +54,11 @@ export function useDecisions() {
     queryKey: ['decisions', brandId],
     queryFn: () => (brandId ? DecisionsService.getAll(brandId) : Promise.resolve([])),
     enabled: !!brandId,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    placeholderData: (previousData) => previousData,
   });
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['decisions', brandId] });
@@ -65,6 +75,11 @@ export function useTasks() {
     queryKey: ['tasks', brandId],
     queryFn: () => (brandId ? TasksService.getAll(brandId) : Promise.resolve([])),
     enabled: !!brandId,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    placeholderData: (previousData) => previousData,
   });
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['tasks', brandId] });
@@ -81,6 +96,11 @@ export function useComments(entityType: string, entityId: string) {
     queryKey: ['comments', brandId, entityType, entityId],
     queryFn: () => (brandId ? CommentsService.getForEntity(brandId, entityType, entityId) : Promise.resolve([])),
     enabled: !!brandId && !!entityId,
+    staleTime: 2 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    placeholderData: (previousData) => previousData,
   });
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['comments', brandId, entityType, entityId] });
@@ -96,6 +116,11 @@ export function useActivity() {
     queryKey: ['activity', brandId],
     queryFn: () => (brandId ? ActivityService.getAll(brandId) : Promise.resolve([])),
     enabled: !!brandId,
+    staleTime: 2 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    placeholderData: (previousData) => previousData,
   });
 
   return { activity, isLoading: isPending };
