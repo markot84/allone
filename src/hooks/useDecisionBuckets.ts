@@ -109,10 +109,18 @@ export interface UseDecisionBucketsResult extends ClassifyResult {
   defs: typeof BUCKET_DEFS;
 }
 
+type UseDecisionBucketsOptions = {
+  products?: Product[];
+  maxProducts?: number;
+};
+
 export function useDecisionBuckets(
-  thresholds: BucketThresholds = DEFAULT_THRESHOLDS
+  thresholds: BucketThresholds = DEFAULT_THRESHOLDS,
+  options: UseDecisionBucketsOptions = {}
 ): UseDecisionBucketsResult {
-  const { products, isLoading: productsLoading } = useProductSource();
+  const productSource = useProductSource({ maxProducts: options.maxProducts });
+  const products = options.products ?? productSource.products;
+  const productsLoading = options.products ? false : productSource.isLoading;
   const { getSignal, isLoading: signalsLoading } = useProductSignals(products);
 
   const result = useMemo(() => {

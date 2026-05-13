@@ -1464,6 +1464,7 @@ export function WeightConfigurator() {
 
           {/* Διάγνωση προτεραιοτήτων (Decision Buckets) πάνω από τις πολιτικές */}
           <TriageCard
+            products={products}
             onSelectPolicy={(policy, bucket, payload) => {
               setTriageOrigin({
                 bucket,

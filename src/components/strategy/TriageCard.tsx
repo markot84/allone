@@ -23,6 +23,7 @@ import {
   type RecommendedPolicy,
   type BucketAssignment,
 } from '../../utils/decisionBuckets';
+import type { Product } from '../../types';
 
 const ICONS: Record<BucketId, React.ComponentType<{ size?: number; className?: string }>> = {
   dead_capital: XCircle,
@@ -242,6 +243,7 @@ function TriageDataReliabilityCallout({
 }
 
 interface TriageCardProps {
+  products?: Product[];
   onSelectPolicy?: (
     policy: NonNullable<RecommendedPolicy>,
     fromBucket: BucketId,
@@ -249,16 +251,18 @@ interface TriageCardProps {
   ) => void;
 }
 
-export function TriageCard({ onSelectPolicy }: TriageCardProps) {
+export function TriageCard({ products: scopedProducts, onSelectPolicy }: TriageCardProps) {
   const {
     counts, tiedByBucket, totalProducts, isLoading, defs,
     totalTiedCapital, assignments, dataQuality,
-  } = useDecisionBuckets();
+  } = useDecisionBuckets(undefined, { products: scopedProducts, maxProducts: 5000 });
   const [expanded, setExpanded] = useState<BucketId | null>(null);
   const [showDocumentation, setShowDocumentation] = useState(false);
   const [viewAllBucket, setViewAllBucket] = useState<BucketId | null>(null);
+  const [insufficientSignalsExpanded, setInsufficientSignalsExpanded] = useState(false);
   /** false = συμπαγής γραμμή (~1/4 ύψους), true = πλήρης κεφαλίδα + στατιστικά. */
   const [headerSummaryExpanded, setHeaderSummaryExpanded] = useState(false);
+  const productScopeLabel = scopedProducts ? 'στο snapshot αξιολόγησης' : 'στον κατάλογο';
 
   // Data availability — για empty state checklist
   const { connectedPlatforms, skuMovement, stockMovementBaselineDate } = useEcommerceSummary();
@@ -354,7 +358,7 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
           </div>
           <div>
             <div className="text-sm font-semibold text-gray-900">
-              {totalProducts.toLocaleString('el-GR')} SKUs — χωρίς εμπορικές κατηγορίες διάγνωσης
+              {totalProducts.toLocaleString('el-GR')} SKUs {productScopeLabel} — χωρίς εμπορικές κατηγορίες διάγνωσης
             </div>
             <div className="text-[12px] text-gray-600 mt-1">
               Τα προϊόντα έχουν εισαχθεί αλλά χρειαζόμαστε δεδομένα κίνησης για να εντοπίσουμε
@@ -368,7 +372,12 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
   }
 
   const scrollToGroup = (groupId: BucketGroupId) => {
-    document.getElementById(`triage-section-${groupId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (groupId === 'investigate') {
+      setInsufficientSignalsExpanded(true);
+    }
+    window.requestAnimationFrame(() => {
+      document.getElementById(`triage-section-${groupId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
   };
 
   return (
@@ -459,7 +468,7 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
                   </button>
                 </div>
                 <div className="mt-0.5 text-[10px] text-gray-500 sm:text-[11px]">
-                  {totalProducts.toLocaleString('el-GR')} SKUs στον κατάλογο
+                  {totalProducts.toLocaleString('el-GR')} SKUs {productScopeLabel}
                   {' · '}
                   {skusWithAnyBucket.toLocaleString('el-GR')} με κατηγορία παρακάτω
                   {' · '}
@@ -541,6 +550,33 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
           const GroupIcon = style.icon;
           const groupTied = group.activeBuckets.reduce((s, b) => s + tiedByBucket[b], 0);
           const groupCount = group.activeBuckets.reduce((s, b) => s + counts[b], 0);
+          if (group.id === 'investigate' && !insufficientSignalsExpanded) {
+            return (
+              <button
+                id={`triage-section-${group.id}`}
+                key={group.id}
+                type="button"
+                onClick={() => setInsufficientSignalsExpanded(true)}
+                className="md:col-span-2 flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-left shadow-sm transition-colors hover:bg-slate-50"
+              >
+                <div className="flex min-w-0 items-center gap-2">
+                  <HelpCircle size={15} className="shrink-0 text-slate-500" aria-hidden />
+                  <div className="min-w-0">
+                    <p className="truncate text-[12px] font-semibold text-slate-800">
+                      Ανεπαρκή σήματα αξιολόγησης
+                    </p>
+                    <p className="truncate text-[11px] text-slate-500">
+                      {groupCount.toLocaleString('el-GR')} SKU · χωρίς σήματα {unknownBreakdown.no_signals.toLocaleString('el-GR')} · virtual {unknownBreakdown.virtual_sku.toLocaleString('el-GR')}
+                    </p>
+                  </div>
+                </div>
+                <span className="shrink-0 inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-700">
+                  Προβολή
+                  <ChevronDown size={12} />
+                </span>
+              </button>
+            );
+          }
           return (
             <section
               id={`triage-section-${group.id}`}
@@ -549,7 +585,7 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
             >
               <div className="flex items-start gap-2">
                 <GroupIcon size={18} className={`${bridge.iconClass} shrink-0 mt-0.5`} aria-hidden />
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <p className={`text-xs font-semibold ${bridge.titleClass}`}>{group.label}</p>
                   <p className={`text-[11px] mt-0.5 leading-snug ${bridge.metricsClass}`}>
                     <span className="font-medium tabular-nums">{groupCount.toLocaleString('el-GR')}</span>
@@ -563,6 +599,15 @@ export function TriageCard({ onSelectPolicy }: TriageCardProps) {
                   </p>
                   <p className={`text-[11px] leading-snug mt-0.5 ${bridge.subtitleClass}`}>{group.subtitle}</p>
                 </div>
+                {group.id === 'investigate' && (
+                  <button
+                    type="button"
+                    onClick={() => setInsufficientSignalsExpanded(false)}
+                    className="shrink-0 rounded-md border border-slate-200 bg-white/70 px-2 py-1 text-[10px] font-medium text-slate-600 hover:bg-white"
+                  >
+                    Σύμπτυξη
+                  </button>
+                )}
               </div>
 
               {group.id === 'investigate' && counts.new_or_unknown > 0 && (
