@@ -47,6 +47,7 @@ export type EcommerceRawOrder = {
   shippingMethod?: string;
   salesChannel?: EcommerceSalesChannel;
   revenueIncluded?: boolean;
+  dataAnalysisIncluded?: boolean;
   exclusionReason?: EcommerceExclusionReason;
   /**
    * Stable key για RFM από raw παραγγελίες.
@@ -87,6 +88,14 @@ export function isOmittedFromEcommerceOrderLists(status: string | null | undefin
 export function isEcommerceOrderRevenueIncluded(order: Pick<EcommerceRawOrder, 'status' | 'revenueIncluded'>): boolean {
   if (order.revenueIncluded === false) return false;
   if (order.revenueIncluded === true) return true;
+  return !isEcommerceOrderCancelled(order.status);
+}
+
+export function isEcommerceOrderDataAnalysisIncluded(
+  order: Pick<EcommerceRawOrder, 'status' | 'dataAnalysisIncluded'>
+): boolean {
+  if (order.dataAnalysisIncluded === false) return false;
+  if (order.dataAnalysisIncluded === true) return true;
   return !isEcommerceOrderCancelled(order.status);
 }
 
@@ -315,6 +324,7 @@ function normalizeRawOrder(platform: string, row: Record<string, unknown>): Ecom
     shippingMethod: String(row.shippingMethod || row.shipping_method || row.shippingDescription || ''),
     salesChannel: row.salesChannel as EcommerceSalesChannel | undefined,
     revenueIncluded: typeof row.revenueIncluded === 'boolean' ? row.revenueIncluded : undefined,
+    dataAnalysisIncluded: typeof row.dataAnalysisIncluded === 'boolean' ? row.dataAnalysisIncluded : undefined,
     exclusionReason: row.exclusionReason as EcommerceExclusionReason | undefined,
     ...(customerKey ? { customerKey } : {}),
     ...(emailHash ? { customerEmailHash: emailHash } : {}),

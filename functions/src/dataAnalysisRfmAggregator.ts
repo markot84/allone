@@ -38,6 +38,7 @@ type NormalizedOrder = {
   shippingMethod: string;
   salesChannel: string;
   revenueIncluded: boolean;
+  dataAnalysisIncluded: boolean;
   exclusionReason: string;
   lineItems: RawLineItem[];
 };
@@ -484,7 +485,7 @@ function computeScope(orders: NormalizedOrder[], catalog: Map<string, CatalogDim
 
   orders.forEach((order, index) => {
     const revenue = orderRevenue(order);
-    if (!order.revenueIncluded || revenue <= 0) return;
+    if (!order.dataAnalysisIncluded || revenue <= 0) return;
     const key = scopeCustomerKey(order, includeGuests, index);
     if (!order.customerKey) guestOrdersSkipped += 1;
     if (!key) return;
@@ -598,7 +599,7 @@ function computeScope(orders: NormalizedOrder[], catalog: Map<string, CatalogDim
   });
 
   orders.forEach((order, index) => {
-    if (!order.revenueIncluded || orderRevenue(order) <= 0) return;
+    if (!order.dataAnalysisIncluded || orderRevenue(order) <= 0) return;
     const key = scopeCustomerKey(order, includeGuests, index);
     const assignment = segmentByCustomer.get(key);
     if (!assignment) return;
@@ -820,6 +821,7 @@ function normalizeOrderDoc(doc: QueryDocumentSnapshot, rules: ReturnType<typeof 
     shippingMethod: asString(row.shippingMethod || row.shipping_description),
     salesChannel: classification.salesChannel,
     revenueIncluded: classification.revenueIncluded,
+    dataAnalysisIncluded: classification.dataAnalysisIncluded,
     exclusionReason: classification.exclusionReason,
     lineItems,
   };
@@ -867,6 +869,7 @@ export async function computeDataAnalysisRfmDiagnostic(brandId: string): Promise
   let rowsWithLineItems = 0;
   let excludedIntercompanyRows = 0;
   let excludedOtherRows = 0;
+  let dataAnalysisExcludedRows = 0;
   for (const order of orders) {
     if (order.lineItems.length > 0) rowsWithLineItems += 1;
     if (order.customerKey) uniqueIdentified.add(order.customerKey);
@@ -874,6 +877,7 @@ export async function computeDataAnalysisRfmDiagnostic(brandId: string): Promise
     if (order.revenueIncluded) revenueIncludedRows += 1;
     else if (order.exclusionReason === 'intercompany') excludedIntercompanyRows += 1;
     else excludedOtherRows += 1;
+    if (!order.dataAnalysisIncluded) dataAnalysisExcludedRows += 1;
   }
   const payload = {
     brandId,
@@ -889,6 +893,7 @@ export async function computeDataAnalysisRfmDiagnostic(brandId: string): Promise
     rowsWithLineItems,
     excludedIntercompanyRows,
     excludedOtherRows,
+    dataAnalysisExcludedRows,
     computedAt: FieldValue.serverTimestamp(),
   };
   await firestore.doc(`data_analysis_diagnostics/${brandId}`).set(payload, { merge: true });

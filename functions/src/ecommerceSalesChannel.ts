@@ -6,6 +6,7 @@ export type EcommerceSalesChannelRule = {
   enabled?: boolean;
   channel?: EcommerceSalesChannel;
   includeInCoreRevenue?: boolean;
+  excludeFromDataAnalysis?: boolean;
   matchFields?: string[];
   patterns?: string[];
   reason?: EcommerceExclusionReason;
@@ -30,6 +31,7 @@ export type EcommerceOrderForClassification = {
 export type EcommerceOrderClassification = {
   salesChannel: EcommerceSalesChannel;
   revenueIncluded: boolean;
+  dataAnalysisIncluded: boolean;
   exclusionReason: EcommerceExclusionReason;
   matchedRule?: string;
 };
@@ -114,7 +116,7 @@ export function classifyEcommerceOrder(
   rules: EcommerceSalesChannelRule[] = []
 ): EcommerceOrderClassification {
   if (isExcludedEcommerceStatus(order.status)) {
-    return { salesChannel: 'direct_eshop', revenueIncluded: false, exclusionReason: 'status' };
+    return { salesChannel: 'direct_eshop', revenueIncluded: false, dataAnalysisIncluded: false, exclusionReason: 'status' };
   }
 
   for (const rule of rules) {
@@ -129,11 +131,12 @@ export function classifyEcommerceOrder(
     return {
       salesChannel: channel,
       revenueIncluded: includeInCoreRevenue,
+      dataAnalysisIncluded: rule.excludeFromDataAnalysis !== true,
       exclusionReason,
       matchedRule: match,
     };
   }
 
-  return { salesChannel: 'direct_eshop', revenueIncluded: true, exclusionReason: 'none' };
+  return { salesChannel: 'direct_eshop', revenueIncluded: true, dataAnalysisIncluded: true, exclusionReason: 'none' };
 }
 

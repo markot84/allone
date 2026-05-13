@@ -1,5 +1,5 @@
 import type { BehavioralProfile, CategoryAffinity, PredictiveMetrics, RFMSegment } from '../types';
-import { getEcommerceOrderNetRevenue, isEcommerceOrderRevenueIncluded, type EcommerceRawOrder } from './ecommerceRawOrders';
+import { getEcommerceOrderNetRevenue, isEcommerceOrderDataAnalysisIncluded, type EcommerceRawOrder } from './ecommerceRawOrders';
 import { ecommerceLineAffinityKey } from './ecommerceAffinityKey';
 import type { CatalogIndexes, ErpSkuDims } from './catalogAlignment';
 import { resolveCatalogLineForOrderLine } from './catalogAlignment';
@@ -436,7 +436,7 @@ function validOrderRevenue(o: EcommerceRawOrder): { revenue: number; valid: bool
   const { revenue, isAllDemo } = getEcommerceOrderNetRevenue(o);
   return {
     revenue,
-    valid: !isAllDemo && isEcommerceOrderRevenueIncluded(o) && revenue > 0,
+    valid: !isAllDemo && isEcommerceOrderDataAnalysisIncluded(o) && revenue > 0,
   };
 }
 
@@ -574,7 +574,7 @@ export function computeSegmentMigrationFromEcommerceOrders(
 
 /**
  * RFM + συγκέντρωση segments από raw e-commerce παραγγελίες.
- * Αγνοεί cancelled/excluded revenue & 100% demo, όπως το υπόλοιπο e-commerce.
+ * Αγνοεί cancelled / Data Analysis exclusions & 100% demo.
  * Χρησιμοποιεί rolling 12μηνο ώστε historical backfills να μη φουσκώνουν κάθε φορά το ενεργό πελατολόγιο.
  */
 export function computeRfmSegmentsFromEcommerceOrders(
@@ -603,7 +603,7 @@ export function computeRfmSegmentsFromEcommerceOrders(
     }
     const { revenue, isAllDemo } = getEcommerceOrderNetRevenue(o);
     if (isAllDemo) continue;
-    if (!isEcommerceOrderRevenueIncluded(o)) continue;
+    if (!isEcommerceOrderDataAnalysisIncluded(o)) continue;
     if (revenue <= 0) continue;
 
     const identifiedKey = o.customerKey?.trim();
@@ -841,7 +841,7 @@ export function computeRfmOrderScopeStats(orders: EcommerceRawOrder[]): RfmOrder
     const createdAtMs = new Date(o.createdAt || '').getTime();
     if (!Number.isFinite(createdAtMs) || createdAtMs < cutoffMs || createdAtMs > asOf.getTime()) continue;
     const { revenue, isAllDemo } = getEcommerceOrderNetRevenue(o);
-    if (isAllDemo || revenue <= 0 || !isEcommerceOrderRevenueIncluded(o)) continue;
+    if (isAllDemo || revenue <= 0 || !isEcommerceOrderDataAnalysisIncluded(o)) continue;
 
     const key = o.customerKey?.trim();
     if (key) {

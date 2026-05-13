@@ -5,7 +5,7 @@ import { useBrand } from '../../hooks/useBrand';
 import { useRefreshAggregates } from '../../hooks/useAggregates';
 import { FirestoreService } from '../../services/firestore';
 import { doc, deleteField, updateDoc, Timestamp } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { auth, db, FUNCTIONS_BASE_URL } from '../../config/firebase';
 import { Plus, Trash2, Save, X } from 'lucide-react';
 import {
   SALES_CHANNEL_LABELS,
@@ -33,6 +33,8 @@ const MATCH_FIELD_OPTIONS: Array<{ id: string; label: string; hint: string }> = 
   },
 ];
 
+const REFRESH_DATA_ANALYSIS_RFM_URL = `${FUNCTIONS_BASE_URL.replace(/\/$/, '')}/refreshDataAnalysisRfm`;
+
 type EditableRule = EcommerceSalesChannelRule & {
   _draftId: string;
   patternsRaw: string;
@@ -48,6 +50,7 @@ function ruleToEditable(rule: EcommerceSalesChannelRule): EditableRule {
     _draftId: genId(),
     patternsRaw: (rule.patterns || []).join(', '),
     enabled: rule.enabled !== false,
+    excludeFromDataAnalysis: rule.excludeFromDataAnalysis === true,
     matchFields: rule.matchFields?.length ? rule.matchFields : ['orderName'],
     channel: rule.channel || 'intercompany',
   };
@@ -62,6 +65,7 @@ function editableToRule(r: EditableRule): EcommerceSalesChannelRule {
     enabled: r.enabled !== false,
     channel: r.channel,
     includeInCoreRevenue: r.channel === 'direct_eshop',
+    excludeFromDataAnalysis: r.excludeFromDataAnalysis === true,
     matchFields: r.matchFields?.length ? r.matchFields : ['orderName'],
     patterns,
   };
@@ -83,6 +87,7 @@ function draftMatchesPersistedRule(d: EditableRule, orig: EcommerceSalesChannelR
   return (
     c.enabled === (orig.enabled !== false) &&
     c.channel === (orig.channel || 'intercompany') &&
+    c.excludeFromDataAnalysis === (orig.excludeFromDataAnalysis === true) &&
     normalizedPatternList(c.matchFields).join('|') === normalizedPatternList(orig.matchFields).join('|')
   );
 }
@@ -107,6 +112,7 @@ function persistedSignature(rules: EcommerceSalesChannelRule[]): string {
       rules.map((r) => ({
         e: r.enabled !== false,
         ch: r.channel || 'intercompany',
+        da: r.excludeFromDataAnalysis === true,
         p: (r.patterns || []).slice().sort(),
         m: [...(r.matchFields || []).slice()].sort(),
       }))
@@ -172,6 +178,7 @@ export function SalesChannelRulesEditor() {
         enabled: true,
         channel: 'intercompany',
         includeInCoreRevenue: false,
+        excludeFromDataAnalysis: false,
         matchFields: ['orderName'],
       },
     ]);
@@ -212,11 +219,32 @@ export function SalesChannelRulesEditor() {
       queryClient.invalidateQueries({ queryKey: ['ecommerceOrdersRaw', brandId] });
       queryClient.invalidateQueries({ queryKey: ['dataAnalysisOrdersRaw', brandId] });
       queryClient.invalidateQueries({ queryKey: ['catalogAlignmentDataAnalysis', brandId] });
+      queryClient.invalidateQueries({ queryKey: ['dataAnalysisRfmAggregate', brandId] });
 
       const agg = await refreshServerAggregates();
+      let dataAnalysisRefreshOk = false;
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        if (token) {
+          const res = await fetch(REFRESH_DATA_ANALYSIS_RFM_URL, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ brandId, action: 'run' }),
+          });
+          dataAnalysisRefreshOk = res.ok;
+          if (res.ok) {
+            queryClient.invalidateQueries({ queryKey: ['dataAnalysisRfmAggregate', brandId] });
+          }
+        }
+      } catch (err) {
+        console.warn('[SalesChannelRulesEditor] data analysis refresh failed:', err);
+      }
       if (agg.ok) {
         toast.success(
-          `Αποθηκεύτηκαν ${cleaned.length} κανόνες. Το σύνοψη τζίρου e-shop ενημερώθηκε στο server (ενημερώνεται το Dashboard).`
+          `Αποθηκεύτηκαν ${cleaned.length} κανόνες. Το Dashboard ενημερώθηκε${dataAnalysisRefreshOk ? ' και ανανεώθηκε το Data Analysis.' : '.'}`
         );
       } else {
         queryClient.invalidateQueries({ queryKey: ['ecommerce_summary', brandId] });
@@ -353,6 +381,20 @@ export function SalesChannelRulesEditor() {
                   </button>
                 </div>
               </div>
+              <label className="mt-3 flex cursor-pointer items-start gap-2 rounded-lg border border-orange-100 bg-orange-50/50 px-3 py-2 text-[12px] leading-relaxed text-[#374151]">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 shrink-0 rounded border-orange-200 text-[var(--nts-accent)] focus:ring-[var(--nts-accent)]"
+                  checked={rule.excludeFromDataAnalysis === true}
+                  onChange={(e) => updateRule(idx, 'excludeFromDataAnalysis', e.target.checked)}
+                />
+                <span>
+                  <span className="font-semibold text-[#111827]">Exclude from Data Analysis</span>
+                  <span className="block text-[11px] text-[#6B7280]">
+                    Ενεργοποίησέ το για υπαλλήλους, ενδοομιλικές κινήσεις ή άλλες αγορές που δεν πρέπει να επηρεάζουν RFM/segments.
+                  </span>
+                </span>
+              </label>
             </div>
           ))}
         </div>
