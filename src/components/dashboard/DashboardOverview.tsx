@@ -90,7 +90,7 @@ const DASHBOARD_LOADING_TIMEOUT_MS = 8000;
 /** Διαφήμιση — standalone efficiency chart (όχι σύγκριση με τζίρο). */
 const ADS_SPEND_COLOR = '#F59E0B';
 const ADS_CONV_COLOR = REV_CHART_ESHOP;
-const ADS_ROAS_COLOR = '#2563EB';
+const ADS_ROAS_COLOR = '#64748B';
 
 /** Chart series values are full EUR; axis shows K when ≥ €1.000 (tooltip uses formatCurrencyCompact on same basis). */
 function formatRevenueChartYAxisTick(value: number): string {
@@ -203,7 +203,14 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     return m;
   }, [suppliers]);
   const productsCount = productTotalCount ?? productStats?.totalSkus ?? loadedProductsCount;
-  const hasAnyData = hasOrganic || hasSegments || productsCount > 0 || hasCampaigns;
+  const hasAnyData =
+    hasOrganic ||
+    hasSegments ||
+    productsCount > 0 ||
+    hasCampaigns ||
+    ecomm.hasData ||
+    businessRevenue.hasErpRevenueData ||
+    (enabledModules.procurement && procurementSheets.hasData);
 
   const ga4AnalyticsLoading = enabledModules.analytics && ga4.isLoading && !ga4.hasData;
   const ecommerceRawBusy =
@@ -221,17 +228,33 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   const ecomKpisRefreshing = ecommerceRawBusy && ecommHist.source === 'summary';
 
   /**
-   * Financial gate: μην κάνουμε render KPI/charts με προσωρινή πηγή.
-   * Το Dashboard έχει προτεραιότητα Procurement → ERP → e-shop → organic+campaigns· αν renderάρει πριν
-   * φορτώσουν ERP/e-shop, ο χρήστης βλέπει 2-3 διαφορετικές «αλήθειες» στην ίδια σελίδα.
+   * Financial gate: μόνο στο πρώτο load χωρίς usable data.
+   * Background refetches δεν πρέπει να κρύβουν όλο το Dashboard, γιατί δημιουργούν εκνευριστικό flicker.
    */
-  const financialSourcesLoading =
+  const rawFinancialSourcesLoading =
     Boolean(currentBrand) &&
     (businessRevenue.isLoading ||
       ecomm.isLoading ||
       campaignsLoading ||
       organicLoading ||
       (enabledModules.procurement && procurementSheets.isLoading));
+  const hasUsableFinancialData =
+    businessRevenue.hasErpRevenueData ||
+    ecomm.hasData ||
+    hasCampaigns ||
+    hasOrganic ||
+    (enabledModules.procurement && procurementSheets.hasData);
+  const releasedFinancialGateBrandsRef = useRef(new Set<string>());
+  const financialGateReleased = currentBrand ? releasedFinancialGateBrandsRef.current.has(currentBrand.id) : false;
+  const financialSourcesLoading =
+    rawFinancialSourcesLoading && !financialGateReleased && !hasUsableFinancialData;
+
+  useEffect(() => {
+    if (!currentBrand) return;
+    if (!rawFinancialSourcesLoading || hasUsableFinancialData) {
+      releasedFinancialGateBrandsRef.current.add(currentBrand.id);
+    }
+  }, [currentBrand, rawFinancialSourcesLoading, hasUsableFinancialData]);
 
   /** Το AI Briefing περιμένει τα ίδια σταθερά financial δεδομένα με τα KPI. */
   const briefingMetricsReady = !financialSourcesLoading && !ecommHist.rawLoading;
@@ -1689,24 +1712,33 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           />
 
           <div className="mb-5 grid grid-cols-1 gap-3 md:grid-cols-3">
-            <div className="rounded-xl border border-[#FED7AA] bg-[#FFF7ED] p-4">
-              <p className="text-[11px] font-medium uppercase tracking-wide text-[#C2410C]">Δαπάνη</p>
-              <p className="mt-1 text-2xl font-bold text-[#7C2D12]">{formatCurrencyCompact(campaignMetrics.totalSpend)}</p>
+            <div className="rounded-lg border border-[#E5E7EB] bg-white p-4">
+              <p className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wide text-[#6B7280]">
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: ADS_SPEND_COLOR }} />
+                Δαπάνη
+              </p>
+              <p className="mt-1 text-2xl font-bold text-[#1A1A1A]">{formatCurrencyCompact(campaignMetrics.totalSpend)}</p>
             </div>
-            <div className="rounded-xl border border-[#FDBA74] bg-[#FFEDD5] p-4">
-              <p className="text-[11px] font-medium uppercase tracking-wide text-[#EA580C]">Conversion value</p>
-              <p className="mt-1 text-2xl font-bold text-[#9A3412]">{formatCurrencyCompact(campaignMetrics.totalRevenue)}</p>
+            <div className="rounded-lg border border-[#E5E7EB] bg-white p-4">
+              <p className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wide text-[#6B7280]">
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: ADS_CONV_COLOR }} />
+                Conversion value
+              </p>
+              <p className="mt-1 text-2xl font-bold text-[#1A1A1A]">{formatCurrencyCompact(campaignMetrics.totalRevenue)}</p>
             </div>
-            <div className="rounded-xl border border-[#BFDBFE] bg-[#EFF6FF] p-4">
-              <p className="text-[11px] font-medium uppercase tracking-wide text-[#2563EB]">ROAS πλατφόρμας</p>
-              <p className="mt-1 text-2xl font-bold text-[#1E3A8A]">
+            <div className="rounded-lg border border-[#E5E7EB] bg-white p-4">
+              <p className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wide text-[#6B7280]">
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: ADS_ROAS_COLOR }} />
+                ROAS πλατφόρμας
+              </p>
+              <p className="mt-1 text-2xl font-bold text-[#1A1A1A]">
                 {campaignMetrics.totalSpend > 0 ? `${formatNumber(campaignMetrics.roas, 2)}×` : '—'}
               </p>
             </div>
           </div>
 
-          <div className="w-full min-w-0" style={{ height: 300, minHeight: 300 }}>
-            <ResponsiveContainer width="100%" height="100%" minHeight={300}>
+          <div className="w-full min-w-0" style={{ height: 280, minHeight: 280 }}>
+            <ResponsiveContainer width="100%" height="100%" minHeight={280}>
               <ComposedChart data={adsPerformanceSeries} margin={{ top: 8, right: 18, left: 4, bottom: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F0" vertical={false} />
                 <XAxis
@@ -1781,7 +1813,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   dataKey="roas"
                   name="roas"
                   stroke={ADS_ROAS_COLOR}
-                  strokeWidth={2}
+                  strokeWidth={1.75}
+                  strokeDasharray="4 4"
                   dot={false}
                   connectNulls={false}
                   isAnimationActive={false}
