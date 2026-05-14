@@ -107,49 +107,13 @@ function formatDashChartDateKeyTick(dateKey: string): string {
   return dateKey;
 }
 
-/**
- * Sparse `revenueByDay` από ERP: γραμμική παρεμβολή μεταξύ ημερών με πραγματικό κλειδί·
- * στην αρχή/τέλος χρησιμοποιείται το πρώτο/τελευταίο γνωστό (όχι μηδενισμός ολόκληρης ημέρας λόγω κενού sync).
- */
-function interpolateSparseDailyRevenueSeries(dayList: string[], record: Record<string, number>): number[] {
-  const n = dayList.length;
-  if (n === 0) return [];
-  const vals = dayList.map((d) =>
-    Object.prototype.hasOwnProperty.call(record, d) && Number.isFinite(Number(record[d]))
-      ? Number(record[d])
-      : NaN,
-  );
-  let first = -1;
-  let last = -1;
-  for (let i = 0; i < n; i++) {
-    if (!Number.isNaN(vals[i])) {
-      if (first < 0) first = i;
-      last = i;
-    }
-  }
-  if (first < 0) return dayList.map(() => 0);
-  const out = [...vals];
-  for (let i = 0; i < first; i++) out[i] = out[first] as number;
-  for (let i = last + 1; i < n; i++) out[i] = out[last] as number;
-  let i = first;
-  while (i <= last) {
-    if (!Number.isNaN(out[i])) {
-      i++;
-      continue;
-    }
-    const s = i - 1;
-    let e = i;
-    while (e <= last && Number.isNaN(out[e])) e++;
-    const v0 = out[s] as number;
-    const v1 = out[e] as number;
-    const span = e - s;
-    for (let k = s + 1; k < e; k++) {
-      const t = (k - s) / span;
-      out[k] = v0 + (v1 - v0) * t;
-    }
-    i = e;
-  }
-  return out.map((v) => (Number.isFinite(v) ? v : 0));
+/** ERP chart: μόνο πραγματικά ημερήσια κλειδιά από `revenueByDay`, χωρίς τεχνητό fill/interpolation. */
+function actualDailyRevenueSeries(dayList: string[], record: Record<string, number>): Array<number | null> {
+  return dayList.map((d) => {
+    if (!Object.prototype.hasOwnProperty.call(record, d)) return null;
+    const value = Number(record[d]);
+    return Number.isFinite(value) ? value : null;
+  });
 }
 
 /** Το Recharts Area χρειάζεται ≥2 σημεία· αν υπάρχει 1 μήνας μόνο, διπλασιάζουμε για ορατή γραμμή. */
@@ -568,10 +532,10 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     if (hasErpRevenueForPeriod) {
       if (dayCount <= REVENUE_CHART_MAX_DAILY_POINTS) {
         const days = eachDateInclusiveLocal(fromDate, toDate);
-        const filled = interpolateSparseDailyRevenueSeries(days, erpRevenueByDayRecord);
+        const actual = actualDailyRevenueSeries(days, erpRevenueByDayRecord);
         return days.map((d, i) => ({
           dateKey: d,
-          total: Number.isFinite(filled[i]) ? filled[i]! : 0,
+          total: actual[i],
         }));
       }
       const fromYm = fromDate.slice(0, 7);
@@ -1138,7 +1102,9 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           hasProcurementTurnoverEstimate && procurementPeriodDays > 0
             ? dayList.map(() => procurementRevenueInPeriod / procurementPeriodDays / 1000)
             : hasErpRevenueForPeriod
-              ? interpolateSparseDailyRevenueSeries(dayList, erpRevenueByDayRecord).map((v) => v / 1000)
+              ? actualDailyRevenueSeries(dayList, erpRevenueByDayRecord)
+                .filter((v): v is number => v != null)
+                .map((v) => v / 1000)
               : hasEcommerceRevenue
                 ? dailyTrendKpi.map((r) => r.storeRevenue / 1000)
                 : dailyTrendKpi.map((r) => (r.organic + r.campaigns) / 1000)
@@ -1492,7 +1458,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   }}
                   labelFormatter={(label) => formatDashChartDateKeyTick(String(label))}
                   formatter={(value: unknown) => [
-                    formatCurrencyCompact(Number(value) || 0),
+                    value == null ? '—' : formatCurrencyCompact(Number(value) || 0),
                     revenuePerformanceChartLabel,
                   ]}
                   labelStyle={{ color: '#24292f', fontWeight: 600, marginBottom: 4 }}
@@ -1505,6 +1471,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   fillOpacity={1}
                   fill="url(#totalGradient)"
                   name="total"
+                  connectNulls={false}
                   isAnimationActive={false}
                 />
               </AreaChart>

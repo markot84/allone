@@ -16,6 +16,7 @@ import {
 const CHANNEL_OPTIONS: Array<{ id: EcommerceSalesChannel; label: string; included: boolean }> = [
   { id: 'direct_eshop', label: 'Direct e-shop (περιλαμβάνεται)', included: true },
   { id: 'intercompany', label: 'Ενδοομιλικά (εξαιρείται)', included: false },
+  { id: 'personal', label: 'Προσωπικό (εξαιρείται)', included: false },
   { id: 'marketplace_skroutz', label: 'Skroutz / Marketplace (εξαιρείται)', included: false },
   { id: 'needs_review', label: 'Needs review (εξαιρείται μέχρι έλεγχο)', included: false },
 ];

@@ -1,6 +1,6 @@
-export type EcommerceSalesChannel = 'direct_eshop' | 'marketplace_skroutz' | 'intercompany' | 'needs_review';
+export type EcommerceSalesChannel = 'direct_eshop' | 'marketplace_skroutz' | 'intercompany' | 'personal' | 'needs_review';
 
-export type EcommerceExclusionReason = 'none' | 'status' | 'marketplace' | 'intercompany' | 'review' | 'demo';
+export type EcommerceExclusionReason = 'none' | 'status' | 'marketplace' | 'intercompany' | 'personal' | 'review' | 'demo';
 
 export type EcommerceSalesChannelRule = {
   enabled?: boolean;
@@ -40,6 +40,7 @@ export const SALES_CHANNEL_LABELS: Record<EcommerceSalesChannel, string> = {
   direct_eshop: 'Direct e-shop',
   marketplace_skroutz: 'Skroutz',
   intercompany: 'Ενδοομιλικά',
+  personal: 'Προσωπικό',
   needs_review: 'Needs review',
 };
 
@@ -130,7 +131,7 @@ export function classifyEcommerceOrder(
     const exclusionReason: EcommerceExclusionReason =
       includeInCoreRevenue
         ? 'none'
-        : rule.reason || (channel === 'marketplace_skroutz' ? 'marketplace' : channel === 'intercompany' ? 'intercompany' : 'review');
+        : rule.reason || (channel === 'marketplace_skroutz' ? 'marketplace' : channel === 'intercompany' ? 'intercompany' : channel === 'personal' ? 'personal' : 'review');
     return {
       salesChannel: channel,
       revenueIncluded: includeInCoreRevenue,

@@ -65,6 +65,7 @@ const SALES_CHANNEL_COLORS: Record<EcommerceSalesChannel, string> = {
   direct_eshop: '#16A34A',
   marketplace_skroutz: '#2563EB',
   intercompany: '#7C3AED',
+  personal: '#DB2777',
   needs_review: '#F59E0B',
 };
 
