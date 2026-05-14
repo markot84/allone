@@ -80,7 +80,12 @@ function ColumnExcelFilter({ label, options, value, onChange }: ColumnExcelFilte
   const [q, setQ] = useState('');
   const ref = React.useRef<HTMLDivElement>(null);
   const allIds = useMemo(() => options.map((o) => o.id), [options]);
-  const selected = useMemo(() => (value === null ? new Set(allIds) : new Set(value)), [value, allIds]);
+  const selected = useMemo(() => {
+    if (value == null) return new Set(allIds);
+    if (value.length === 0) return new Set<string>();
+    const allow = new Set(allIds);
+    return new Set(value.filter((id) => allow.has(id)));
+  }, [value, allIds]);
 
   useEffect(() => {
     if (!open) {
@@ -105,22 +110,24 @@ function ColumnExcelFilter({ label, options, value, onChange }: ColumnExcelFilte
   );
 
   const toggle = (id: string) => {
-    if (value === null) {
-      const next = new Set(allIds);
-      next.delete(id);
-      onChange(next.size === 0 ? [] : [...next]);
-      return;
-    }
-    const next = new Set(value);
+    const startSelected =
+      value == null || value.length === 0
+        ? new Set(allIds)
+        : new Set(value.filter((x) => allIds.includes(x)));
+    const next = new Set(startSelected);
     if (next.has(id)) next.delete(id);
     else next.add(id);
-    if (next.size === 0) onChange([]);
-    else if (next.size === allIds.length) onChange(null);
+    if (next.size === 0) {
+      onChange([]);
+      return;
+    }
+    if (next.size === allIds.length) onChange(null);
     else onChange([...next]);
   };
 
+  const selectedCount = value == null || value.length === 0 ? allIds.length : selected.size;
   const summary =
-    value === null ? 'Όλα' : value.length === 0 ? 'Καμία' : `${value.length}/${allIds.length}`;
+    value === null ? 'Όλα' : value.length === 0 ? 'Καμία' : `${selectedCount}/${allIds.length}`;
 
   if (options.length === 0) {
     return (
@@ -148,7 +155,7 @@ function ColumnExcelFilter({ label, options, value, onChange }: ColumnExcelFilte
         <ChevronDown size={14} className="text-[#9CA3AF] shrink-0" />
       </button>
       {open && (
-        <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-[#E5E5E5] rounded-lg shadow-lg max-h-72 flex flex-col min-w-[240px]">
+        <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-[#E5E5E5] rounded-lg shadow-lg max-h-72 flex flex-col min-w-[260px] w-max max-w-[min(100vw-2rem,320px)]">
           <div className="p-2 border-b border-[#E5E5E5]">
             <input
               type="search"
@@ -174,12 +181,16 @@ function ColumnExcelFilter({ label, options, value, onChange }: ColumnExcelFilte
               </label>
             ))}
           </div>
-          <div className="flex gap-2 p-2 border-t border-[#E5E5E5] justify-between">
-            <button type="button" className="text-xs font-medium text-[var(--nts-accent)] hover:underline" onClick={() => onChange(null)}>
-              Επιλογή όλων
-            </button>
-            <button type="button" className="text-xs font-medium text-[#6B7280] hover:underline" onClick={() => onChange([])}>
-              Καθαρισμός
+          <div className="flex items-center justify-center p-2.5 border-t border-[#E5E5E5] bg-[#FAFAFA]/90">
+            <button
+              type="button"
+              className="text-xs font-medium text-[var(--nts-accent)] hover:underline whitespace-nowrap px-2 py-1 rounded-md hover:bg-[#FFF7ED]"
+              onClick={() => {
+                onChange(null);
+                setQ('');
+              }}
+            >
+              Επαναφορά φίλτρου (όλα)
             </button>
           </div>
         </div>
@@ -486,6 +497,17 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     });
   }, [hasServerAggregate, serverIntelligence.page, sourceProducts, usingProcurement, hasDateFilter, productDateFrom, productDateTo, productDateMode]);
 
+  /** Σταθερό σύνολο για λίστες φίλτρου (όχι σελιδοποιημένη server σελίδα) — αποφεύγει κατάρρευση Tag/Κατηγορίας όταν αλλάζει το server. */
+  const filterOptionsProductScope = useMemo(() => {
+    if (usingProcurement) return sourceProducts;
+    if (!hasDateFilter) return sourceProducts;
+    return sourceProducts.filter((p) => {
+      const ymd = getProductYmdForFilter(p, productDateMode);
+      if (!ymd) return false;
+      return ymd >= productDateFrom && ymd <= productDateTo;
+    });
+  }, [usingProcurement, sourceProducts, hasDateFilter, productDateFrom, productDateTo, productDateMode]);
+
   const inventorySummary = useMemo(() => {
     if (usingProcurement) return computeInventorySummary(sourceProducts, supplierTodMap, true);
     if (hasDateFilter) {
@@ -639,7 +661,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
 
   const categoryOptions = useMemo((): ExcelFilterOption[] => {
     const map = new Map<string, string>();
-    for (const p of productsScopedByDate) {
+    for (const p of filterOptionsProductScope) {
       const id = categoryIdForProduct(p);
       const label =
         id === EMPTY_CATEGORY_ID ? '(Κενή κατηγορία)' : (p.category ?? '').trim() || '(Κενή κατηγορία)';
@@ -648,11 +670,11 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     return [...map.entries()]
       .map(([id, label]) => ({ id, label }))
       .sort((a, b) => a.label.localeCompare(b.label, 'el'));
-  }, [productsScopedByDate]);
+  }, [filterOptionsProductScope]);
 
   const tagOptions = useMemo((): ExcelFilterOption[] => {
     const map = new Map<string, string>();
-    for (const p of productsScopedByDate) {
+    for (const p of filterOptionsProductScope) {
       const id = tagIdForProduct(p);
       const label = id === EMPTY_TAG_ID ? '(Χωρίς tag)' : (p.priority_tag ?? '').trim() || '(Χωρίς tag)';
       if (!map.has(id)) map.set(id, label);
@@ -660,17 +682,17 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     return [...map.entries()]
       .map(([id, label]) => ({ id, label }))
       .sort((a, b) => a.label.localeCompare(b.label, 'el'));
-  }, [productsScopedByDate]);
+  }, [filterOptionsProductScope]);
 
   // Filter and sort products
   const filteredProducts = useMemo(() => {
     const matchesCategory = (p: Product) => {
-      if (categoryInclude === null) return true;
+      if (categoryInclude == null) return true;
       if (categoryInclude.length === 0) return false;
       return categoryInclude.includes(categoryIdForProduct(p));
     };
     const matchesTag = (p: Product) => {
-      if (tagInclude === null) return true;
+      if (tagInclude == null) return true;
       if (tagInclude.length === 0) return false;
       return tagInclude.includes(tagIdForProduct(p));
     };
@@ -1177,9 +1199,6 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
               </Button>
             </div>
           </div>
-          <p className="text-[11px] text-[#9CA3AF] mt-3">
-            Φίλτρα όπως στο Excel: επιλέξτε μία ή περισσότερες τιμές ανά στήλη. Η εξαγωγή CSV/Excel περιλαμβάνει τις τρέχουσες φιλτραρισμένες γραμμές (έως το όριο φόρτωσης).
-          </p>
         </div>
 
         {/* Table */}
