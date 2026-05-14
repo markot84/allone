@@ -2002,7 +2002,7 @@ function KpiBox({
             <Tooltip content={tooltip} size={11} />
           </p>
           <p
-            className="text-base sm:text-lg font-bold text-[#1A1A1A] font-mono leading-tight whitespace-nowrap truncate"
+            className="text-base sm:text-lg font-bold text-[#1A1A1A] font-mono leading-tight whitespace-normal break-words [overflow-wrap:anywhere]"
             title={value}
           >
             {value}

@@ -28,7 +28,6 @@ import {
   Pie,
   Cell,
   ResponsiveContainer,
-  Legend,
 } from 'recharts';
 import { Card, CardHeader, KPICard, Tooltip, AlertsBanner, PageHeader, Spinner, Button } from '../common';
 import { useSegments } from '../../hooks/useSegments';
@@ -89,9 +88,9 @@ const REV_PERF_LABEL_ESHOP_BLEND = 'Organic + καμπάνιες (εκτίμησ
 const DASHBOARD_PRODUCT_LIMIT = 5000;
 const DASHBOARD_LOADING_TIMEOUT_MS = 8000;
 /** Διαφήμιση — standalone efficiency chart (όχι σύγκριση με τζίρο). */
-const ADS_SPEND_COLOR = '#475569';
-const ADS_CONV_COLOR = '#2563EB';
-const ADS_ROAS_COLOR = '#7C3AED';
+const ADS_SPEND_COLOR = '#F59E0B';
+const ADS_CONV_COLOR = REV_CHART_ESHOP;
+const ADS_ROAS_COLOR = '#2563EB';
 
 /** Chart series values are full EUR; axis shows K when ≥ €1.000 (tooltip uses formatCurrencyCompact on same basis). */
 function formatRevenueChartYAxisTick(value: number): string {
@@ -1674,7 +1673,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           <CardHeader
             title="Διαφήμιση / Efficiency"
             subtitle="Spend, conversion value και ROAS πλατφόρμας για την ίδια επιλεγμένη περίοδο."
-            icon={<Megaphone size={18} className="text-[var(--nts-medium-gray)]" />}
+            icon={<Megaphone size={18} className="text-[var(--nts-accent)]" />}
             action={
               <button
                 type="button"
@@ -1690,17 +1689,17 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           />
 
           <div className="mb-5 grid grid-cols-1 gap-3 md:grid-cols-3">
-            <div className="rounded-xl border border-[#E5E7EB] bg-[#F8FAFC] p-4">
-              <p className="text-[11px] font-medium uppercase tracking-wide text-[#64748B]">Δαπάνη</p>
-              <p className="mt-1 text-2xl font-bold text-[#111827]">{formatCurrencyCompact(campaignMetrics.totalSpend)}</p>
+            <div className="rounded-xl border border-[#FED7AA] bg-[#FFF7ED] p-4">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-[#C2410C]">Δαπάνη</p>
+              <p className="mt-1 text-2xl font-bold text-[#7C2D12]">{formatCurrencyCompact(campaignMetrics.totalSpend)}</p>
             </div>
-            <div className="rounded-xl border border-[#DBEAFE] bg-[#EFF6FF] p-4">
-              <p className="text-[11px] font-medium uppercase tracking-wide text-[#2563EB]">Conversion value</p>
-              <p className="mt-1 text-2xl font-bold text-[#1E3A8A]">{formatCurrencyCompact(campaignMetrics.totalRevenue)}</p>
+            <div className="rounded-xl border border-[#FDBA74] bg-[#FFEDD5] p-4">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-[#EA580C]">Conversion value</p>
+              <p className="mt-1 text-2xl font-bold text-[#9A3412]">{formatCurrencyCompact(campaignMetrics.totalRevenue)}</p>
             </div>
-            <div className="rounded-xl border border-[#EDE9FE] bg-[#F5F3FF] p-4">
-              <p className="text-[11px] font-medium uppercase tracking-wide text-[#7C3AED]">ROAS πλατφόρμας</p>
-              <p className="mt-1 text-2xl font-bold text-[#4C1D95]">
+            <div className="rounded-xl border border-[#BFDBFE] bg-[#EFF6FF] p-4">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-[#2563EB]">ROAS πλατφόρμας</p>
+              <p className="mt-1 text-2xl font-bold text-[#1E3A8A]">
                 {campaignMetrics.totalSpend > 0 ? `${formatNumber(campaignMetrics.roas, 2)}×` : '—'}
               </p>
             </div>
@@ -1730,7 +1729,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   yAxisId="roas"
                   orientation="right"
                   width={42}
-                  tick={{ fill: '#7C3AED', fontSize: 11 }}
+                  tick={{ fill: ADS_ROAS_COLOR, fontSize: 11 }}
                   axisLine={{ stroke: '#d0d7de' }}
                   tickLine={{ stroke: '#d0d7de' }}
                   tickFormatter={(value) => `${formatNumber(Number(value) || 0, 1)}×`}
@@ -1756,12 +1755,6 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                       name === 'adSpend' ? 'Δαπάνη' : 'Conversion value',
                     ];
                   }}
-                />
-                <Legend
-                  wrapperStyle={{ fontSize: 12, paddingTop: 10 }}
-                  formatter={(value) =>
-                    value === 'adSpend' ? 'Δαπάνη' : value === 'adConvValue' ? 'Conversion value' : 'ROAS'
-                  }
                 />
                 <Bar
                   yAxisId="currency"
@@ -1795,6 +1788,20 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 />
               </ComposedChart>
             </ResponsiveContainer>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-[#6B7280]">
+            <span className="inline-flex items-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: ADS_SPEND_COLOR }} />
+              Δαπάνη
+            </span>
+            <span className="inline-flex items-center gap-2">
+              <span className="h-0.5 w-5 rounded-full" style={{ backgroundColor: ADS_CONV_COLOR }} />
+              Conversion value
+            </span>
+            <span className="inline-flex items-center gap-2">
+              <span className="h-0.5 w-5 rounded-full" style={{ backgroundColor: ADS_ROAS_COLOR }} />
+              ROAS
+            </span>
           </div>
         </Card>
       )}
