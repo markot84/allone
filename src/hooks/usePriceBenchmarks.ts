@@ -8,6 +8,7 @@ import {
   orderBy,
   query,
   startAfter,
+  where,
   type QueryConstraint,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -33,11 +34,33 @@ async function fetchBenchmarks(brandId: string, maxDocs?: number): Promise<Price
   const colRef = collection(db, 'price_benchmarks', brandId, 'skus');
   const target = maxDocs && maxDocs > 0 ? maxDocs : FIRESTORE_MAX_LIMIT;
   const pageSize = Math.min(BENCHMARK_PAGE_SIZE, FIRESTORE_MAX_LIMIT, target);
-  const rows: PriceBenchmark[] = [];
+  const rowsById = new Map<string, PriceBenchmark>();
   let lastDocId: string | null = null;
 
-  while (rows.length < target) {
-    const remaining = target - rows.length;
+  const pushDocs = (docs: { id: string; data: () => unknown }[]) => {
+    for (const d of docs) {
+      if (rowsById.size >= target) break;
+      const data = d.data() as Record<string, unknown>;
+      rowsById.set(d.id, { ...data } as unknown as PriceBenchmark);
+    }
+  };
+
+  // Prioritize actual market benchmarks. A document-id slice can easily miss all benchmarked SKUs
+  // in large GMC catalogs, making the UI look empty even when import_jobs has withMarketBenchmark > 0.
+  try {
+    const withMarketSnap = await getDocs(query(
+      colRef,
+      where('benchmarkPrice', '>', 0),
+      orderBy('benchmarkPrice', 'desc'),
+      limit(Math.min(target, FIRESTORE_MAX_LIMIT))
+    ));
+    pushDocs(withMarketSnap.docs);
+  } catch (error) {
+    console.warn('[usePriceBenchmarks] benchmark-first query failed; falling back to catalog slice', error);
+  }
+
+  while (rowsById.size < target) {
+    const remaining = target - rowsById.size;
     const constraints: QueryConstraint[] = [
       orderBy(documentId()),
       limit(Math.min(pageSize, remaining, FIRESTORE_MAX_LIMIT)),
@@ -45,12 +68,12 @@ async function fetchBenchmarks(brandId: string, maxDocs?: number): Promise<Price
     ];
     const snap = await getDocs(query(colRef, ...constraints));
     if (snap.empty) break;
-    rows.push(...snap.docs.map((d) => ({ ...d.data() } as PriceBenchmark)));
+    pushDocs(snap.docs);
     lastDocId = snap.docs[snap.docs.length - 1].id;
     if (snap.size < Math.min(pageSize, remaining)) break;
   }
 
-  return rows;
+  return [...rowsById.values()];
 }
 
 type UsePriceBenchmarksOptions = {
