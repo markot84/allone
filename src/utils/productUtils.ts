@@ -179,6 +179,21 @@ export function resolveStockHealth(
   return classifyStockHealth(product, getProductTod(product, supplierTodMap));
 }
 
+/**
+ * Ίδια λογική με `stockBucket` στο `productIntelligenceAggregator` (Firebase).
+ * Για φίλτρα πίνακα / tag όταν το import δεν φέρει `priority_tag`, ώστε να συμφωνούν με aggregate & server pages.
+ */
+export function getProductIntelligenceStockBucket(product: Product): StockHealth {
+  const stockLevel = getEffectiveStockLevel(product);
+  const qtySoldPeriod = product.qty_sold_period ?? 0;
+  if (stockLevel <= 0) return 'low';
+  if (qtySoldPeriod <= 0) return 'dead';
+  const daysOfStock = stockLevel / (qtySoldPeriod / SALES_PERIOD_DAYS);
+  if (daysOfStock <= 30) return 'low';
+  if (daysOfStock > 120) return 'excess';
+  return 'healthy';
+}
+
 function ymdLocal(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');

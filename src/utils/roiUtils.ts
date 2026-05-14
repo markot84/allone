@@ -1,5 +1,5 @@
 import type { Campaign } from '../types';
-import { eachDateInclusive } from './marketingCostPeriod';
+import { eachDateInclusive, eachDateInclusiveLocal } from './marketingCostPeriod';
 
 export type BucketOverlapOptions = {
   /**
@@ -558,7 +558,7 @@ export function sumDailyRevenueInPeriod(
 ): number {
   if (!revenueByDay) return 0;
   let s = 0;
-  for (const day of eachDateInclusive(fromDate, toDate)) {
+  for (const day of eachDateInclusiveLocal(fromDate, toDate)) {
     s += Number(revenueByDay[day]) || 0;
   }
   return Math.round(s);
@@ -673,7 +673,7 @@ export function buildRoiTrendSeriesDaily(
   includeStore: boolean,
   ga4OrganicByDay?: Record<string, number>
 ): RoiTrendDailyRow[] {
-  const days = eachDateInclusive(fromDate, toDate);
+  const days = eachDateInclusiveLocal(fromDate, toDate);
   const organicByDay = new Map<string, number>();
   for (const day of days) {
     organicByDay.set(day, organicRevenueForSingleDay(day, organicByMonth, ga4OrganicByDay));

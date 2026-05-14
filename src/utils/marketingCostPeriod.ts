@@ -18,6 +18,27 @@ export function eachDateInclusive(fromDate: string, toDate: string): string[] {
   return out;
 }
 
+/**
+ * Ημερομηνίες YYYY-MM-DD στο **τοπικό** ημερολόγιο (ίδιο με GlobalDateContext / `<input type="date">`).
+ * Χρησιμοποιήστε το όταν η περίοδος πρέπει να ταιριάζει ακριβώς με την επιλογή του χρήστη.
+ */
+export function eachDateInclusiveLocal(fromDate: string, toDate: string): string[] {
+  const [fy, fm, fd] = fromDate.split('-').map(Number);
+  const [ty, tm, td] = toDate.split('-').map(Number);
+  if (!fy || !fm || !fd || !ty || !tm || !td) return [];
+  const out: string[] = [];
+  let cur = new Date(fy, fm - 1, fd, 12, 0, 0);
+  const endT = new Date(ty, tm - 1, td, 12, 0, 0).getTime();
+  while (cur.getTime() <= endT) {
+    const ys = cur.getFullYear();
+    const ms = String(cur.getMonth() + 1).padStart(2, '0');
+    const ds = String(cur.getDate()).padStart(2, '0');
+    out.push(`${ys}-${ms}-${ds}`);
+    cur = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() + 1, 12, 0, 0);
+  }
+  return out;
+}
+
 function dailyRateForLine(
   line: MarketingCostLine,
   day: string,

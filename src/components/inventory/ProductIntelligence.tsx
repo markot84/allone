@@ -35,6 +35,7 @@ import { FirestoreService } from '../../services/firestore';
 import {
   getDaysOfStock,
   getEffectiveStockLevel,
+  getProductIntelligenceStockBucket,
   getProductYmdForFilter,
   resolveStockHealth,
 } from '../../utils/productUtils';
@@ -70,10 +71,31 @@ function effectiveTagFilterId(
   usingProcurement: boolean,
 ): string {
   const raw = (p.priority_tag ?? '').trim();
-  if (!raw) return resolveStockHealth(p, supplierTodMap, usingProcurement);
+  if (!raw) {
+    return usingProcurement
+      ? resolveStockHealth(p, supplierTodMap, true)
+      : getProductIntelligenceStockBucket(p);
+  }
   const lower = raw.toLowerCase();
   if ((STOCK_INTELLIGENCE_TAG_IDS as readonly string[]).includes(lower)) return lower;
   return raw;
+}
+
+/**
+ * Ίδια λογική με φίλτρο Tag / aggregate intelligence (όχι `resolveStockHealth`/TOD για ERP catalog).
+ * Έτσι οι κάρτες KPI και ο πίνακας συμφωνούν όταν λείπει ή είναι non-standard το `priority_tag`.
+ */
+function stockHealthForIntelligenceSummary(
+  p: Product,
+  supplierTodMap: Map<string, number>,
+  useProcurementRowModel: boolean,
+): 'healthy' | 'excess' | 'low' | 'dead' {
+  if (useProcurementRowModel) {
+    return resolveStockHealth(p, supplierTodMap, true);
+  }
+  const eff = effectiveTagFilterId(p, supplierTodMap, false);
+  if (eff === 'dead' || eff === 'low' || eff === 'healthy' || eff === 'excess') return eff;
+  return getProductIntelligenceStockBucket(p);
 }
 
 type ExcelFilterOption = { id: string; label: string };
@@ -270,7 +292,7 @@ function computeInventorySummary(
     const price = p.price ?? 0;
     totalValue += level * price;
 
-    const health = resolveStockHealth(p, supplierTodMap, useProcurementRowModel);
+    const health = stockHealthForIntelligenceSummary(p, supplierTodMap ?? new Map(), !!useProcurementRowModel);
     switch (health) {
       case 'dead':
         deadCount++;
@@ -304,7 +326,7 @@ function computeInventoryAlerts(
   useProcurementRowModel?: boolean
 ): InventoryAlert[] {
   const alerts: InventoryAlert[] = [];
-  const classify = (p: Product) => resolveStockHealth(p, supplierTodMap, useProcurementRowModel);
+  const classify = (p: Product) => stockHealthForIntelligenceSummary(p, supplierTodMap ?? new Map(), !!useProcurementRowModel);
   const deadStock = products.filter((p) => classify(p) === 'dead');
   const excessStock = products.filter((p) => classify(p) === 'excess');
   const highMarginLowStock = products.filter(
@@ -467,10 +489,15 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   const { data: procData } = useProcurement();
   const { productStats } = useProductAggregates();
   const { benchmarks, count: benchmarkCount } = usePriceBenchmarks({ maxDocs: PRODUCT_INTELLIGENCE_BENCHMARK_LIMIT });
+  const tagStockBucket = useMemo((): ProductIntelligenceBucket | null => {
+    if (tagInclude?.length !== 1) return null;
+    const id = tagInclude[0];
+    return id === 'healthy' || id === 'excess' || id === 'dead' || id === 'low' ? id : null;
+  }, [tagInclude]);
   const serverBucket: ProductIntelligenceBucket =
     stockCardFilter === 'healthy' || stockCardFilter === 'excess' || stockCardFilter === 'dead' || stockCardFilter === 'low'
       ? stockCardFilter
-      : 'all';
+      : tagStockBucket ?? 'all';
   const serverIntelligence = useProductIntelligenceAggregate(serverBucket, currentPage);
   const queryClient = useQueryClient();
   const toast = useToast();
@@ -502,6 +529,10 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   }, [suppliers]);
 
   const hasDateFilter = Boolean(productDateFrom && productDateTo);
+  const tagFilterCanUseServerBucket =
+    tagInclude == null ||
+    tagInclude.length === 0 ||
+    (tagStockBucket != null && (stockCardFilter === 'all' || stockCardFilter === tagStockBucket));
   const serverFiltersSupported =
     !usingProcurement &&
     !hasDateFilter &&
@@ -509,7 +540,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     marginFilter === 'all' &&
     stockAgeFilter === 'all' &&
     categoryInclude === null &&
-    (tagInclude == null || tagInclude.length === 0);
+    tagFilterCanUseServerBucket;
   const useServerIntelligence =
     serverFiltersSupported &&
     !!serverIntelligence.aggregate &&
@@ -528,7 +559,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   }, [useServerIntelligence, serverIntelligence.safePage, currentPage]);
 
   const productsScopedByDate = useMemo(() => {
-    if (hasServerAggregate) return serverIntelligence.page?.products ?? [];
+    if (useServerIntelligence) return serverIntelligence.page?.products ?? [];
     if (usingProcurement) return sourceProducts;
     if (!hasDateFilter) return sourceProducts;
     return sourceProducts.filter((p) => {
@@ -536,7 +567,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
       if (!ymd) return false;
       return ymd >= productDateFrom && ymd <= productDateTo;
     });
-  }, [hasServerAggregate, serverIntelligence.page, sourceProducts, usingProcurement, hasDateFilter, productDateFrom, productDateTo, productDateMode]);
+  }, [useServerIntelligence, serverIntelligence.page, sourceProducts, usingProcurement, hasDateFilter, productDateFrom, productDateTo, productDateMode]);
 
   /** Σταθερό σύνολο για λίστες φίλτρου (όχι σελιδοποιημένη server σελίδα) — αποφεύγει κατάρρευση Tag/Κατηγορίας όταν αλλάζει το server. */
   const filterOptionsProductScope = useMemo(() => {
@@ -784,7 +815,9 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
 
         let matchesStockCard = true;
         if (stockCardFilter !== 'all') {
-          matchesStockCard = health === stockCardFilter;
+          matchesStockCard = usingProcurement
+            ? resolveStockHealth(p, supplierTodMap, true) === stockCardFilter
+            : getProductIntelligenceStockBucket(p) === stockCardFilter;
         }
 
         return matchesSearch && matchesMargin && matchesStockAge && matchesStockCard;
@@ -802,6 +835,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           : (bVal as number) - (aVal as number);
       });
   }, [
+    useServerIntelligence,
     hasServerAggregate,
     productsScopedByDate,
     searchQuery,

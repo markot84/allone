@@ -75,7 +75,7 @@ import { useAutomationRunner } from '../../hooks/useAutomationRunner';
 import { useAutomationAlerts } from '../../hooks/useAutomation';
 import { MorningBriefing } from './MorningBriefing';
 import { StrategyBriefingQuickStrip } from '../coordination/StrategyBriefingQuickStrip';
-import { eachDateInclusive, computeMarketingOverheadForPeriod } from '../../utils/marketingCostPeriod';
+import { eachDateInclusiveLocal, computeMarketingOverheadForPeriod } from '../../utils/marketingCostPeriod';
 import { getCostingReal12mTurnover } from '../../utils/procurement12mTurnover';
 
 /** Ημερήσια σημεία στο chart· πάνω από αυτό → μηνιαία σύνοψη (αναγνώσιμο άξονα). */
@@ -100,29 +100,56 @@ function formatRevenueChartYAxisTick(value: number): string {
   return `€${formatNumber(v, 0)}`;
 }
 
-/** ERP: το `revenueByDay` έχει μόνο ημέρες με παραστατικό — χωρίς κλειδί ≠ μηδενικός τζίρος. */
-function erpRevenueForChartDay(record: Record<string, number>, day: string): number | null {
-  if (!Object.prototype.hasOwnProperty.call(record, day)) return null;
-  const n = Number(record[day]);
-  return Number.isFinite(n) ? n : null;
+/** Άξονας X: μοναδικό κλειδί ανά ημέρα/μήνα (αποφυγή collisions από `toLocaleDateString` στο Recharts). */
+function formatDashChartDateKeyTick(dateKey: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return formatTrendDayLabel(dateKey);
+  if (/^\d{4}-\d{2}$/.test(dateKey)) return formatMonthKeyShort(dateKey);
+  return dateKey;
 }
 
-/** Sparkline (αριθμοί μόνο): forward-fill sparse ERP ώστε να μην εμφανίζονται ψευδο-μηδενικά. */
-function erpSparklineThousandsFromSparseDayRecord(
-  dayList: string[],
-  record: Record<string, number>,
-): number[] {
-  const euros = dayList.map((d) => {
-    if (!Object.prototype.hasOwnProperty.call(record, d)) return NaN;
-    const n = Number(record[d]);
-    return Number.isFinite(n) ? n : NaN;
-  });
-  let prev = 0;
-  for (let i = 0; i < euros.length; i++) {
-    if (!Number.isNaN(euros[i])) prev = euros[i] as number;
-    else euros[i] = prev;
+/**
+ * Sparse `revenueByDay` από ERP: γραμμική παρεμβολή μεταξύ ημερών με πραγματικό κλειδί·
+ * στην αρχή/τέλος χρησιμοποιείται το πρώτο/τελευταίο γνωστό (όχι μηδενισμός ολόκληρης ημέρας λόγω κενού sync).
+ */
+function interpolateSparseDailyRevenueSeries(dayList: string[], record: Record<string, number>): number[] {
+  const n = dayList.length;
+  if (n === 0) return [];
+  const vals = dayList.map((d) =>
+    Object.prototype.hasOwnProperty.call(record, d) && Number.isFinite(Number(record[d]))
+      ? Number(record[d])
+      : NaN,
+  );
+  let first = -1;
+  let last = -1;
+  for (let i = 0; i < n; i++) {
+    if (!Number.isNaN(vals[i])) {
+      if (first < 0) first = i;
+      last = i;
+    }
   }
-  return euros.map((v) => (Number.isFinite(v) ? v : 0) / 1000);
+  if (first < 0) return dayList.map(() => 0);
+  const out = [...vals];
+  for (let i = 0; i < first; i++) out[i] = out[first] as number;
+  for (let i = last + 1; i < n; i++) out[i] = out[last] as number;
+  let i = first;
+  while (i <= last) {
+    if (!Number.isNaN(out[i])) {
+      i++;
+      continue;
+    }
+    const s = i - 1;
+    let e = i;
+    while (e <= last && Number.isNaN(out[e])) e++;
+    const v0 = out[s] as number;
+    const v1 = out[e] as number;
+    const span = e - s;
+    for (let k = s + 1; k < e; k++) {
+      const t = (k - s) / span;
+      out[k] = v0 + (v1 - v0) * t;
+    }
+    i = e;
+  }
+  return out.map((v) => (Number.isFinite(v) ? v : 0));
 }
 
 /** Το Recharts Area χρειάζεται ≥2 σημεία· αν υπάρχει 1 μήνας μόνο, διπλασιάζουμε για ορατή γραμμή. */
@@ -138,7 +165,7 @@ function sumDailyRecordByMonthInPeriod(
   toDate: string
 ): Record<string, number> {
   const out: Record<string, number> = {};
-  for (const day of eachDateInclusive(fromDate, toDate)) {
+  for (const day of eachDateInclusiveLocal(fromDate, toDate)) {
     const value = daily[day] || 0;
     if (!value) continue;
     const ym = day.slice(0, 7);
@@ -380,7 +407,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   );
 
   const procurementPeriodDays = useMemo(
-    () => eachDateInclusive(periodDates.fromDate, periodDates.toDate).length,
+    () => eachDateInclusiveLocal(periodDates.fromDate, periodDates.toDate).length,
     [periodDates.fromDate, periodDates.toDate]
   );
 
@@ -519,30 +546,32 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
    */
   const revenueChartData = useMemo(() => {
     const { fromDate, toDate } = periodDates;
-    const dayCount = eachDateInclusive(fromDate, toDate).length;
+    const dayCount = eachDateInclusiveLocal(fromDate, toDate).length;
     if (dayCount === 0) return [];
 
     if (hasProcurementTurnoverEstimate && costing12m.sum > 0) {
       const dailyRate = costing12m.sum / 365;
       if (dayCount <= REVENUE_CHART_MAX_DAILY_POINTS) {
-        return eachDateInclusive(fromDate, toDate).map((d) => ({
-          month: formatTrendDayLabel(d),
+        return eachDateInclusiveLocal(fromDate, toDate).map((d) => ({
+          dateKey: d,
           total: dailyRate,
         }));
       }
       const fromYm = fromDate.slice(0, 7);
       const toYm = toDate.slice(0, 7);
       return eachCalendarMonthInclusive(fromYm, toYm).map((ym) => ({
-        month: formatMonthKeyShort(ym),
+        dateKey: ym,
         total: dailyRate * daysInMonthIntersectingRange(ym, fromDate, toDate),
       }));
     }
 
     if (hasErpRevenueForPeriod) {
       if (dayCount <= REVENUE_CHART_MAX_DAILY_POINTS) {
-        return eachDateInclusive(fromDate, toDate).map((d) => ({
-          month: formatTrendDayLabel(d),
-          total: erpRevenueForChartDay(erpRevenueByDayRecord, d),
+        const days = eachDateInclusiveLocal(fromDate, toDate);
+        const filled = interpolateSparseDailyRevenueSeries(days, erpRevenueByDayRecord);
+        return days.map((d, i) => ({
+          dateKey: d,
+          total: Number.isFinite(filled[i]) ? filled[i]! : 0,
         }));
       }
       const fromYm = fromDate.slice(0, 7);
@@ -556,11 +585,11 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         const end = monthEnd < toDate ? monthEnd : toDate;
         let total = 0;
         if (start <= end) {
-          for (const d of eachDateInclusive(start, end)) {
+          for (const d of eachDateInclusiveLocal(start, end)) {
             total += erpRevenueByDayRecord[d] || 0;
           }
         }
-        return { month: formatMonthKeyShort(ym), total };
+        return { dateKey: ym, total };
       });
     }
 
@@ -579,7 +608,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       return dailyRows.map((r) => {
         const total = useEshopTotals ? r.storeRevenue : r.organic + r.campaigns;
         return {
-          month: r.label,
+          dateKey: r.date,
           total,
         };
       });
@@ -601,7 +630,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     return rows.map((r) => {
       const total = useEshopTotals ? r.storeRevenue : r.organic + r.campaigns;
       return {
-        month: r.month,
+        dateKey: r.monthSort,
         total,
       };
     });
@@ -624,7 +653,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   const adsPerformanceSeries = useMemo(() => {
     if (!hasCampaigns || periodCampaigns.length === 0) return [];
     const { fromDate, toDate } = periodDates;
-    const dayList = eachDateInclusive(fromDate, toDate);
+    const dayList = eachDateInclusiveLocal(fromDate, toDate);
     if (dayList.length === 0) return [];
 
     const spendByDay: Record<string, number> = {};
@@ -640,7 +669,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
 
     if (dayList.length <= REVENUE_CHART_MAX_DAILY_POINTS) {
       return dayList.map((day) => ({
-        label: formatTrendDayLabel(day),
+        dateKey: day,
         adSpend: Math.round((spendByDay[day] || 0) * 100) / 100,
         adConvValue: Math.round((valByDay[day] || 0) * 100) / 100,
       }));
@@ -660,7 +689,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     return [...byMonth.entries()]
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([ym, v]) => ({
-        label: formatMonthKeyShort(ym),
+        dateKey: ym,
         adSpend: Math.round(v.adSpend * 100) / 100,
         adConvValue: Math.round(v.adConvValue * 100) / 100,
       }));
@@ -703,37 +732,49 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   const [chartDimensions, setChartDimensions] = useState({ revenue: { width: 800, height: 288 }, segment: { width: 400, height: 224 } });
 
   useEffect(() => {
-    const updateDimensions = () => {
-      if (revenueContainerRef.current) {
-        const w = revenueContainerRef.current.getBoundingClientRect().width;
-        if (w > 0) {
-          setChartDimensions((prev) => ({
-            ...prev,
-            revenue: { width: Math.max(1, Math.round(w)), height: 288 },
-          }));
+    let ro: ResizeObserver | null = null;
+    let rafId = 0;
+    let cancelled = false;
+
+    const measure = () => {
+      rafId = 0;
+      if (cancelled) return;
+      setChartDimensions((prev) => {
+        let revenueW = prev.revenue.width;
+        let segmentW = prev.segment.width;
+        if (revenueContainerRef.current) {
+          const w = Math.round(revenueContainerRef.current.getBoundingClientRect().width);
+          if (w > 0) revenueW = Math.max(1, w);
         }
-      }
-      if (segmentContainerRef.current) {
-        const w = segmentContainerRef.current.getBoundingClientRect().width;
-        if (w > 0) {
-          setChartDimensions((prev) => ({
-            ...prev,
-            segment: { width: Math.max(1, Math.round(w)), height: 224 },
-          }));
+        if (segmentContainerRef.current) {
+          const w = Math.round(segmentContainerRef.current.getBoundingClientRect().width);
+          if (w > 0) segmentW = Math.max(1, w);
         }
-      }
+        // Κρίσιμο: χωρίς early return το Recharts + ResizeObserver δημιουργούν feedback loop (freeze).
+        if (revenueW === prev.revenue.width && segmentW === prev.segment.width) return prev;
+        return {
+          revenue: { width: revenueW, height: 288 },
+          segment: { width: segmentW, height: 224 },
+        };
+      });
     };
 
-    const ro = new ResizeObserver(updateDimensions);
+    const scheduleMeasure = () => {
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(measure);
+    };
+
+    ro = new ResizeObserver(scheduleMeasure);
     if (revenueContainerRef.current) ro.observe(revenueContainerRef.current);
     if (segmentContainerRef.current) ro.observe(segmentContainerRef.current);
-    const t = window.setTimeout(updateDimensions, 0);
-    const raf = requestAnimationFrame(updateDimensions);
+    const t = window.setTimeout(scheduleMeasure, 0);
+    scheduleMeasure();
 
     return () => {
+      cancelled = true;
       window.clearTimeout(t);
-      cancelAnimationFrame(raf);
-      ro.disconnect();
+      if (rafId) cancelAnimationFrame(rafId);
+      ro?.disconnect();
     };
   }, [hasAnyData, revenueChartData.length, isB2B, hasSegments]);
 
@@ -1082,7 +1123,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         const aovMoM = prevAov > 0 ? ((currAov - prevAov) / prevAov) * 100 : null;
 
         const { fromDate: kFrom, toDate: kTo } = periodDates;
-        const dayList = eachDateInclusive(kFrom, kTo);
+        const dayList = eachDateInclusiveLocal(kFrom, kTo);
 
         const dailyTrendKpi = buildRoiTrendSeriesDaily(
           mergedOrganicByMonth,
@@ -1097,7 +1138,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           hasProcurementTurnoverEstimate && procurementPeriodDays > 0
             ? dayList.map(() => procurementRevenueInPeriod / procurementPeriodDays / 1000)
             : hasErpRevenueForPeriod
-              ? erpSparklineThousandsFromSparseDayRecord(dayList, erpRevenueByDayRecord)
+              ? interpolateSparseDailyRevenueSeries(dayList, erpRevenueByDayRecord).map((v) => v / 1000)
               : hasEcommerceRevenue
                 ? dailyTrendKpi.map((r) => r.storeRevenue / 1000)
                 : dailyTrendKpi.map((r) => (r.organic + r.campaigns) / 1000)
@@ -1378,7 +1419,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 </p>
               ) : hasErpRevenueForPeriod ? (
                 <p>
-                  <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">Τζίρος επιχείρησης</strong> από συγχρονισμένα παραστατικά ERP (καθαρές αξίες όπως στο aggregate). Ημέρες χωρίς εγγεγραμμένο παραστατικό στο sync δεν σχεδιάζονται ως μηδενικό τζίρο στη γραμμή. Για ανάλυση e-shop και ROAS ανοίξτε{' '}
+                  <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">Τζίρος επιχείρησης</strong> από συγχρονισμένα παραστατικά ERP (καθαρές αξίες όπως στο aggregate). Η γραμμή ακολουθεί την επιλεγμένη περίοδο (τοπικό ημερολόγιο). Για ανάλυση e-shop και ROAS ανοίξτε{' '}
                   <strong className="font-semibold">ROI &amp; Απόδοση</strong>.
                 </p>
               ) : enabledModules.ecommerce && ecomm.hasData ? (
@@ -1426,8 +1467,9 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F0" vertical={false} />
                 <XAxis
-                  dataKey="month"
+                  dataKey="dateKey"
                   tick={{ fill: '#57606a', fontSize: 12 }}
+                  tickFormatter={(v) => formatDashChartDateKeyTick(String(v))}
                   axisLine={{ stroke: '#d0d7de' }}
                   tickLine={{ stroke: '#d0d7de' }}
                 />
@@ -1448,16 +1490,15 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                     padding: '10px 14px',
                     boxShadow: '0 8px 24px rgba(15, 23, 42, 0.08)',
                   }}
-                  formatter={(value: unknown) => {
-                    if (value == null || (typeof value === 'number' && Number.isNaN(value))) {
-                      return ['Χωρίς παραστατικό αυτή την ημέρα στο sync (όχι μηδενικός τζίρος)', revenuePerformanceChartLabel];
-                    }
-                    return [formatCurrencyCompact(Number(value) || 0), revenuePerformanceChartLabel];
-                  }}
+                  labelFormatter={(label) => formatDashChartDateKeyTick(String(label))}
+                  formatter={(value: unknown) => [
+                    formatCurrencyCompact(Number(value) || 0),
+                    revenuePerformanceChartLabel,
+                  ]}
                   labelStyle={{ color: '#24292f', fontWeight: 600, marginBottom: 4 }}
                 />
                 <Area
-                  type="monotone"
+                  type="linear"
                   dataKey="total"
                   stroke={REV_CHART_ESHOP}
                   strokeWidth={2.5}
@@ -1465,7 +1506,6 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   fill="url(#totalGradient)"
                   name="total"
                   isAnimationActive={false}
-                  connectNulls={revenueChartData.some((r) => r.total == null)}
                 />
               </AreaChart>
             </div>
@@ -1507,7 +1547,13 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   <ResponsiveContainer width="100%" height="100%" minHeight={200}>
                     <ComposedChart data={adsPerformanceSeries} margin={{ top: 8, right: 8, left: 4, bottom: 4 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F0" vertical={false} />
-                      <XAxis dataKey="label" tick={{ fill: '#57606a', fontSize: 11 }} axisLine={{ stroke: '#d0d7de' }} tickLine={{ stroke: '#d0d7de' }} />
+                      <XAxis
+                        dataKey="dateKey"
+                        tickFormatter={(v) => formatDashChartDateKeyTick(String(v))}
+                        tick={{ fill: '#57606a', fontSize: 11 }}
+                        axisLine={{ stroke: '#d0d7de' }}
+                        tickLine={{ stroke: '#d0d7de' }}
+                      />
                       <YAxis
                         width={48}
                         tick={{ fill: '#57606a', fontSize: 11 }}
@@ -1524,6 +1570,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                           fontSize: '12px',
                           padding: '8px 12px',
                         }}
+                        labelFormatter={(label) => formatDashChartDateKeyTick(String(label))}
                         formatter={(value: unknown, name?: string) => [
                           formatCurrencyCompact(Number(value) || 0),
                           name === 'adSpend' ? 'Δαπάνη διαφήμισης' : 'Conversion value (πλατφόρμα)',
@@ -1537,7 +1584,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                       />
                       <Bar dataKey="adSpend" name="adSpend" fill={ADS_SPEND_COLOR} radius={[2, 2, 0, 0]} maxBarSize={28} />
                       <Line
-                        type="monotone"
+                        type="linear"
                         dataKey="adConvValue"
                         name="adConvValue"
                         stroke={ADS_CONV_COLOR}
