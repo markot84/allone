@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, FileSpreadsheet, FileText, FileCode, BarChart3, ExternalLink } from 'lucide-react';
 import { Button, ModalHeader } from '../common';
-import { getStockAgeDays } from '../../utils/productUtils';
+import { downloadProductIntelligenceCsv, downloadProductIntelligenceXlsx } from '../../utils/productIntelligenceExport';
 import { safeBrandName } from '../../services/reportExport';
 import type { Product } from '../../types';
 
@@ -23,62 +23,13 @@ export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts, b
   const date = new Date().toISOString().split('T')[0];
 
   const exportToCSV = () => {
-    const headers = ['SKU', 'Name', 'Category', 'Price', 'Margin %', 'Stock Level', 'Stock Capacity', 'Stock Age Days', 'Priority Tag'];
-    const rows = filteredProducts.map(p => [
-      p.sku || '',
-      p.name || '',
-      p.category || '',
-      (p.price || 0).toFixed(2),
-      (p.margin_percentage || 0).toFixed(1),
-      p.stock_level || 0,
-      p.stock_capacity || 0,
-      getStockAgeDays(p),
-      p.priority_tag || ''
-    ]);
-
-    const csvContent = [
-      ['Brand', brandName || '—'].join(','),
-      ['Generated', date].join(','),
-      '',
-      headers.join(','),
-      ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-    ].join('\n');
-
-    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `${brand}_products_export_${date}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    downloadProductIntelligenceCsv(filteredProducts, brandName);
     onClose();
   };
 
   const exportToExcel = async () => {
     try {
-      const XLSX = await import('xlsx');
-      
-      const headers = ['SKU', 'Name', 'Category', 'Price', 'Margin %', 'Stock Level', 'Stock Capacity', 'Stock Age Days', 'Priority Tag'];
-      const metaRows = [['Brand', brandName || '—'], ['Generated', date], [''], headers];
-      const rows = filteredProducts.map(p => [
-        p.sku || '',
-        p.name || '',
-        p.category || '',
-        p.price || 0,
-        p.margin_percentage || 0,
-        p.stock_level || 0,
-        p.stock_capacity || 0,
-        getStockAgeDays(p),
-        p.priority_tag || ''
-      ]);
-
-      const ws = XLSX.utils.aoa_to_sheet([...metaRows, ...rows]);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Products');
-      
-      XLSX.writeFile(wb, `${brand}_products_export_${date}.xlsx`);
+      await downloadProductIntelligenceXlsx(filteredProducts, brandName);
       onClose();
     } catch (error) {
       console.error('Excel export error:', error);
@@ -138,37 +89,7 @@ export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts, b
   };
 
   const exportToGoogleSheets = () => {
-    const headers = ['SKU', 'Name', 'Category', 'Price', 'Margin %', 'Stock Level', 'Stock Capacity', 'Stock Age Days', 'Priority Tag'];
-    const rows = filteredProducts.map(p => [
-      p.sku || '',
-      p.name || '',
-      p.category || '',
-      (p.price || 0).toFixed(2),
-      (p.margin_percentage || 0).toFixed(1),
-      p.stock_level || 0,
-      p.stock_capacity || 0,
-      getStockAgeDays(p),
-      p.priority_tag || ''
-    ]);
-
-    const csvContent = [
-      ['Brand', brandName || '—'].join(','),
-      ['Generated', date].join(','),
-      '',
-      headers.join(','),
-      ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-    ].join('\n');
-
-    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `${brand}_products_export_${date}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    downloadProductIntelligenceCsv(filteredProducts, brandName);
     
     // Show modal to ask if user wants to open Google Sheets
     setTimeout(() => {
@@ -215,7 +136,7 @@ export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts, b
             {/* Content */}
             <div className="p-6 space-y-3">
               <p className="text-sm text-[#4A4A4A] mb-4">
-                Επιλέξτε τον τρόπο εξαγωγής για <strong>{filteredProducts.length}</strong> προϊόντα
+                Εξαγωγή <strong>τρέχουσας φιλτραρισμένης</strong> προβολής: <strong>{filteredProducts.length}</strong> προϊόντα
               </p>
 
               <button

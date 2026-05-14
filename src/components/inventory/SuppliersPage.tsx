@@ -11,7 +11,6 @@ import {
   Plus,
   FileSpreadsheet,
   Clock,
-  Package,
   ArrowUp,
   ArrowDown,
   ArrowUpDown,
@@ -19,7 +18,6 @@ import {
 import { Card, Button, Spinner, useToast } from '../common';
 import { useSuppliers } from '../../hooks/useSuppliers';
 import { useBrand } from '../../hooks/useBrand';
-import { useProducts } from '../../hooks/useProducts';
 import { SuppliersService } from '../../services/firestore';
 import { DEFAULT_TOD } from '../../utils/productUtils';
 // format utility — currently unused but available for future formatting needs
@@ -37,7 +35,6 @@ export function SuppliersPage() {
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
   const { suppliers, isLoading, invalidate } = useSuppliers();
-  const { products } = useProducts();
   // queryClient available for manual cache ops if needed
   const toast = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -47,9 +44,8 @@ export function SuppliersPage() {
   const [filterName, setFilterName] = useState('');
   const [filterTod, setFilterTod] = useState('');
   const [filterLead, setFilterLead] = useState('');
-  const [filterProducts, setFilterProducts] = useState('');
   const [filterContact, setFilterContact] = useState('');
-  type SortKey = 'name' | 'tod' | 'lead' | 'products' | 'contact';
+  type SortKey = 'name' | 'tod' | 'lead' | 'contact';
   const [sortBy, setSortBy] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -61,15 +57,6 @@ export function SuppliersPage() {
   const [newTod, setNewTod] = useState(DEFAULT_TOD);
   const [newLeadTime, setNewLeadTime] = useState(0);
   const [newContact, setNewContact] = useState('');
-
-  const productCountBySupplier = useMemo(() => {
-    const map = new Map<string, number>();
-    products.forEach(p => {
-      const s = (p.supplier || '').trim();
-      if (s) map.set(s, (map.get(s) || 0) + 1);
-    });
-    return map;
-  }, [products]);
 
   /** Numeric filter: υποστηρίζει "10", ">=10", "<=20", "10-20". Κενό = όλα. */
   const matchNumeric = (val: number, expr: string): boolean => {
@@ -108,7 +95,6 @@ export function SuppliersPage() {
       if (fc && !(s.contact || '').toLowerCase().includes(fc)) return false;
       if (!matchNumeric(s.tod || 0, filterTod)) return false;
       if (!matchNumeric(s.lead_time || 0, filterLead)) return false;
-      if (!matchNumeric(productCountBySupplier.get(s.name) || 0, filterProducts)) return false;
       return true;
     });
 
@@ -121,19 +107,15 @@ export function SuppliersPage() {
         case 'name': av = a.name.toLowerCase(); bv = b.name.toLowerCase(); break;
         case 'tod': av = a.tod || 0; bv = b.tod || 0; break;
         case 'lead': av = a.lead_time || 0; bv = b.lead_time || 0; break;
-        case 'products':
-          av = productCountBySupplier.get(a.name) || 0;
-          bv = productCountBySupplier.get(b.name) || 0;
-          break;
         case 'contact': av = (a.contact || '').toLowerCase(); bv = (b.contact || '').toLowerCase(); break;
       }
       if (av < bv) return -1 * dir;
       if (av > bv) return 1 * dir;
       return 0;
     });
-  }, [suppliers, searchQuery, filterName, filterTod, filterLead, filterProducts, filterContact, productCountBySupplier, sortBy, sortDir]);
+  }, [suppliers, searchQuery, filterName, filterTod, filterLead, filterContact, sortBy, sortDir]);
 
-  const toggleSort = useCallback((key: 'name' | 'tod' | 'lead' | 'products' | 'contact') => {
+  const toggleSort = useCallback((key: 'name' | 'tod' | 'lead' | 'contact') => {
     setSortBy(prev => {
       if (prev !== key) { setSortDir('asc'); return key; }
       setSortDir(d => d === 'asc' ? 'desc' : 'asc');
@@ -141,7 +123,7 @@ export function SuppliersPage() {
     });
   }, []);
 
-  const SortIcon = ({ col }: { col: 'name' | 'tod' | 'lead' | 'products' | 'contact' }) => {
+  const SortIcon = ({ col }: { col: 'name' | 'tod' | 'lead' | 'contact' }) => {
     if (sortBy !== col) return <ArrowUpDown size={11} className="inline opacity-40" />;
     return sortDir === 'asc' ? <ArrowUp size={11} className="inline" /> : <ArrowDown size={11} className="inline" />;
   };
@@ -150,10 +132,9 @@ export function SuppliersPage() {
     setFilterName('');
     setFilterTod('');
     setFilterLead('');
-    setFilterProducts('');
     setFilterContact('');
   };
-  const hasColumnFilters = !!(filterName || filterTod || filterLead || filterProducts || filterContact);
+  const hasColumnFilters = !!(filterName || filterTod || filterLead || filterContact);
 
   const handleImportFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -394,12 +375,11 @@ export function SuppliersPage() {
       </AnimatePresence>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {[
           { icon: <Truck size={16} />, color: 'text-[var(--nts-accent)]', bg: 'bg-[var(--nts-accent)]/10', value: suppliers.length, label: 'Προμηθευτές' },
           { icon: <Clock size={16} />, color: 'text-blue-500', bg: 'bg-blue-50', value: suppliers.length > 0 ? Math.round(suppliers.reduce((s, x) => s + x.tod, 0) / suppliers.length) : DEFAULT_TOD, label: 'Μέσο TOD' },
           { icon: <Clock size={16} />, color: 'text-amber-500', bg: 'bg-amber-50', value: suppliers.length > 0 ? Math.round(suppliers.filter(s => (s.lead_time || 0) > 0).reduce((s, x) => s + (x.lead_time || 0), 0) / Math.max(suppliers.filter(s => (s.lead_time || 0) > 0).length, 1)) : 0, label: 'Μέσο Lead Time' },
-          { icon: <Package size={16} />, color: 'text-green-500', bg: 'bg-green-50', value: Array.from(productCountBySupplier.values()).reduce((a, b) => a + b, 0), label: 'Συνδ. Προϊόντα' },
         ].map((stat, i) => (
           <Card key={i} className="px-3 py-3 sm:px-4">
             <div className="flex items-center gap-2 mb-1">
@@ -457,16 +437,6 @@ export function SuppliersPage() {
               className="w-full px-2 py-1.5 text-sm text-center border border-[#E5E5E5] rounded-md focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/40"
             />
           </div>
-          <div className="min-w-0 lg:w-[100px]">
-            <label className="text-[10px] uppercase tracking-wider text-[var(--nts-medium-gray)] mb-1 block" title="Αριθμός συνδεδεμένων προϊόντων">Προϊόντα</label>
-            <input
-              type="text"
-              value={filterProducts}
-              onChange={e => setFilterProducts(e.target.value)}
-              placeholder=">0"
-              className="w-full px-2 py-1.5 text-sm text-center border border-[#E5E5E5] rounded-md focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/40"
-            />
-          </div>
           <div className="min-w-0 lg:min-w-[140px]">
             <label className="text-[10px] uppercase tracking-wider text-[var(--nts-medium-gray)] mb-1 block">Επικοινωνία</label>
             <input
@@ -510,9 +480,6 @@ export function SuppliersPage() {
                   </th>
                   <th className="text-center px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider whitespace-nowrap w-28 hidden sm:table-cell cursor-pointer select-none hover:text-[var(--nts-charcoal)]" onClick={() => toggleSort('lead')}>
                     Lead Time <SortIcon col="lead" />
-                  </th>
-                  <th className="text-center px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider whitespace-nowrap w-24 cursor-pointer select-none hover:text-[var(--nts-charcoal)]" onClick={() => toggleSort('products')}>
-                    Προϊόντα <SortIcon col="products" />
                   </th>
                   <th className="text-left px-3 py-2 text-[11px] font-semibold text-[var(--nts-medium-gray)] uppercase tracking-wider whitespace-nowrap hidden md:table-cell cursor-pointer select-none hover:text-[var(--nts-charcoal)]" onClick={() => toggleSort('contact')}>
                     Επικοινωνία <SortIcon col="contact" />
@@ -564,11 +531,6 @@ export function SuppliersPage() {
                             {s.lead_time ? `${s.lead_time}d` : '—'}
                           </span>
                         )}
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        <span className="text-xs font-mono text-[var(--nts-charcoal)]">
-                          {productCountBySupplier.get(s.name) || 0}
-                        </span>
                       </td>
                       <td className="px-3 py-2 text-xs text-[var(--nts-medium-gray)] truncate hidden md:table-cell">{s.contact || '—'}</td>
                       <td className="px-3 py-2 text-right">

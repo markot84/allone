@@ -12,6 +12,8 @@ import {
   ChevronDown,
   ChevronUp,
   Download,
+  FileText,
+  FileSpreadsheet,
   TrendingUp,
   TrendingDown,
   Trash2,
@@ -39,6 +41,7 @@ import { classifyProcurementInventoryRow } from '../../utils/procurementInventor
 import { DateRangePicker } from '../ui/DateRangePicker';
 import { ExportModal } from './ExportModal';
 import { ProductCharts } from './ProductCharts';
+import { downloadProductIntelligenceCsv, downloadProductIntelligenceXlsx } from '../../utils/productIntelligenceExport';
 import type { Product, InventorySummary, InventoryAlert } from '../../types';
 import type { ProductIntelligenceBucket } from '../../services/productIntelligenceAggregate';
 
@@ -48,6 +51,44 @@ type SortDirection = 'asc' | 'desc';
 const PRODUCT_INTELLIGENCE_ROW_LIMIT = 5000;
 const PRODUCT_INTELLIGENCE_BENCHMARK_LIMIT = 5000;
 const LARGE_CATALOG_ALERT_THRESHOLD = 10000;
+
+/** Υποστηρίζει "10", ">=10", "<=20", "10-20". Κενό = όλα. */
+function matchNumericFilter(val: number, expr: string): boolean {
+  const e = expr.trim();
+  if (!e) return true;
+  if (Number.isNaN(val)) return false;
+  const v = val === Number.POSITIVE_INFINITY ? 1e15 : val === Number.NEGATIVE_INFINITY ? -1e15 : val;
+  const range = e.match(/^([\d.]+)\s*-\s*([\d.]+)$/);
+  if (range) {
+    const a = parseFloat(range[1]);
+    const b = parseFloat(range[2]);
+    if (Number.isNaN(a) || Number.isNaN(b)) return true;
+    return v >= Math.min(a, b) && v <= Math.max(a, b);
+  }
+  const op = e.match(/^(>=|<=|>|<|=)\s*([\d.]+)$/);
+  if (op) {
+    const n = parseFloat(op[2]);
+    if (Number.isNaN(n)) return true;
+    switch (op[1]) {
+      case '>=': return v >= n;
+      case '<=': return v <= n;
+      case '>': return v > n;
+      case '<': return v < n;
+      default: return v === n;
+    }
+  }
+  const n = parseFloat(e);
+  if (!Number.isNaN(n)) return v === n;
+  return true;
+}
+
+function getProductBenchmarkDiffPct(
+  product: Product,
+  benchmarkMap: Map<string, { priceDiff: number; benchmarkPrice: number }>,
+): number | undefined {
+  const candidates = [product.sku, product.id, product.name].filter(Boolean).map((k) => k!.toLowerCase());
+  return candidates.reduce<number | undefined>((found, k) => found ?? benchmarkMap.get(k)?.priceDiff, undefined);
+}
 
 function computeInventorySummary(
   products: Product[],
@@ -174,10 +215,10 @@ function ProductIntelligenceSkeleton() {
           <table className="w-full">
             <thead>
               <tr className="bg-[#F5F5F5]">
-                {['Προϊόν', 'Margin', 'Stock', 'DOS', 'Τιμή', ''].map((label, i) => (
+                {['Προϊόν', 'Margin', 'Stock', 'DOS', 'Τιμή'].map((label, i) => (
                   <th key={label + i} className="px-3 py-2.5 text-left">
                     <span className="text-[10px] font-semibold uppercase tracking-wider text-[#9CA3AF]">
-                      {label || '\u00A0'}
+                      {label}
                     </span>
                   </th>
                 ))}
@@ -200,9 +241,6 @@ function ProductIntelligenceSkeleton() {
                   </td>
                   <td className="px-3 py-3 hidden sm:table-cell">
                     <div className="h-4 w-16 bg-[#E5E7EB] rounded animate-pulse" />
-                  </td>
-                  <td className="px-3 py-3 w-12">
-                    <div className="h-8 w-8 bg-[#F3F4F6] rounded-md animate-pulse ml-auto" />
                   </td>
                 </tr>
               ))}
@@ -238,6 +276,12 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   const [productDateFrom, setProductDateFrom] = useState('');
   const [productDateTo, setProductDateTo] = useState('');
   const [productDateMode, setProductDateMode] = useState<'imported' | 'first_available'>('imported');
+  /** Φίλτρα στήλης πίνακα (αριθμητικά: >10, 5-20, =3 · Tag: περιέχει κείμενο) */
+  const [filterStockExpr, setFilterStockExpr] = useState('');
+  const [filterDosExpr, setFilterDosExpr] = useState('');
+  const [filterTagContains, setFilterTagContains] = useState('');
+  const [filterPriceExpr, setFilterPriceExpr] = useState('');
+  const [filterVsMarketExpr, setFilterVsMarketExpr] = useState('');
 
   /** Deep link: `#products?stock=low|dead|excess|healthy` ή `#products?filter=high-margin-low-stock` */
   useEffect(() => {
@@ -278,6 +322,12 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   const { data: procData } = useProcurement();
   const { productStats } = useProductAggregates();
   const { benchmarks, count: benchmarkCount } = usePriceBenchmarks({ maxDocs: PRODUCT_INTELLIGENCE_BENCHMARK_LIMIT });
+  const hasAdvancedColumnFilters =
+    !!filterStockExpr.trim() ||
+    !!filterDosExpr.trim() ||
+    !!filterTagContains.trim() ||
+    !!filterPriceExpr.trim() ||
+    (benchmarkCount > 0 && !!filterVsMarketExpr.trim());
   const serverBucket: ProductIntelligenceBucket =
     stockCardFilter === 'healthy' || stockCardFilter === 'excess' || stockCardFilter === 'dead' || stockCardFilter === 'low'
       ? stockCardFilter
@@ -319,7 +369,8 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     !searchQuery.trim() &&
     selectedCategory === 'all' &&
     marginFilter === 'all' &&
-    stockAgeFilter === 'all';
+    stockAgeFilter === 'all' &&
+    !hasAdvancedColumnFilters;
   const useServerIntelligence =
     serverFiltersSupported &&
     !!serverIntelligence.aggregate &&
@@ -509,15 +560,36 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
 
   // Filter and sort products
   const filteredProducts = useMemo(() => {
-    if (hasServerAggregate) return productsScopedByDate;
-    return productsScopedByDate
-      .filter((p) => {
+    const useRowModel = usingProcurement || hasServerAggregate;
+
+    const applyColumnFilters = (list: Product[]) =>
+      list.filter((p) => {
+        if (!matchNumericFilter(getEffectiveStockLevel(p), filterStockExpr)) return false;
+        const rawDos = getDaysOfStock(p);
+        const dosVal = rawDos === Infinity && useRowModel ? NaN : rawDos;
+        if (!matchNumericFilter(dosVal, filterDosExpr)) return false;
+        const tq = filterTagContains.trim().toLowerCase();
+        if (tq && !(p.priority_tag || '').toLowerCase().includes(tq)) return false;
+        if (!matchNumericFilter(p.price ?? 0, filterPriceExpr)) return false;
+        const vmExpr = filterVsMarketExpr.trim();
+        if (benchmarkCount > 0 && vmExpr) {
+          const d = getProductBenchmarkDiffPct(p, benchmarkMap);
+          if (d === undefined || !matchNumericFilter(d, vmExpr)) return false;
+        }
+        return true;
+      });
+
+    if (hasServerAggregate) {
+      return applyColumnFilters(productsScopedByDate);
+    }
+
+    return applyColumnFilters(
+      productsScopedByDate.filter((p) => {
         const matchesSearch = (p.name ?? '').toLowerCase().includes(searchQuery.toLowerCase()) ||
                              (p.sku ?? '').toLowerCase().includes(searchQuery.toLowerCase());
         const matchesCategory = selectedCategory === 'all' || (p.category ?? '') === selectedCategory;
         const matchesMargin = marginFilter === 'all' || p.margin_tier === marginFilter;
-        
-        // Stock age filter
+
         const health = resolveStockHealth(p, supplierTodMap, usingProcurement);
         let matchesStockAge = true;
         if (stockAgeFilter === 'dead') {
@@ -531,27 +603,45 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           matchesStockAge = isHighMargin && health === 'low';
         }
 
-        // Stock card filter
         let matchesStockCard = true;
         if (stockCardFilter !== 'all') {
           matchesStockCard = health === stockCardFilter;
         }
-        
+
         return matchesSearch && matchesCategory && matchesMargin && matchesStockAge && matchesStockCard;
-      })
-      .sort((a, b) => {
+      }),
+    ).sort((a, b) => {
         const aVal = sortField === 'stock_age_days' ? getDaysOfStock(a) : a[sortField];
         const bVal = sortField === 'stock_age_days' ? getDaysOfStock(b) : b[sortField];
         if (typeof aVal === 'string' && typeof bVal === 'string') {
-          return sortDirection === 'asc' 
-            ? aVal.localeCompare(bVal) 
+          return sortDirection === 'asc'
+            ? aVal.localeCompare(bVal)
             : bVal.localeCompare(aVal);
         }
-        return sortDirection === 'asc' 
-          ? (aVal as number) - (bVal as number) 
+        return sortDirection === 'asc'
+          ? (aVal as number) - (bVal as number)
           : (bVal as number) - (aVal as number);
       });
-  }, [hasServerAggregate, productsScopedByDate, searchQuery, selectedCategory, marginFilter, stockAgeFilter, stockCardFilter, sortField, sortDirection, supplierTodMap, usingProcurement]);
+  }, [
+    hasServerAggregate,
+    productsScopedByDate,
+    searchQuery,
+    selectedCategory,
+    marginFilter,
+    stockAgeFilter,
+    stockCardFilter,
+    sortField,
+    sortDirection,
+    supplierTodMap,
+    usingProcurement,
+    filterStockExpr,
+    filterDosExpr,
+    filterTagContains,
+    filterPriceExpr,
+    filterVsMarketExpr,
+    benchmarkMap,
+    benchmarkCount,
+  ]);
 
   const serverFilteredTotal = hasServerAggregate ? (serverIntelligence.page?.totalRows ?? filteredProducts.length) : filteredProducts.length;
   const totalPages = hasServerAggregate
@@ -566,7 +656,30 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, selectedCategory, marginFilter, stockAgeFilter, stockCardFilter, sortField, sortDirection, productDateFrom, productDateTo, productDateMode]);
+  }, [searchQuery, selectedCategory, marginFilter, stockAgeFilter, stockCardFilter, sortField, sortDirection, productDateFrom, productDateTo, productDateMode, filterStockExpr, filterDosExpr, filterTagContains, filterPriceExpr, filterVsMarketExpr]);
+
+  const handleQuickExportCsv = () => {
+    if (filteredProducts.length === 0) {
+      toast.error('Δεν υπάρχουν γραμμές για εξαγωγή.');
+      return;
+    }
+    downloadProductIntelligenceCsv(filteredProducts, currentBrand?.name);
+    toast.success(`Έγινε λήψη CSV (${formatNumber(filteredProducts.length)} γραμμές).`);
+  };
+
+  const handleQuickExportXlsx = async () => {
+    if (filteredProducts.length === 0) {
+      toast.error('Δεν υπάρχουν γραμμές για εξαγωγή.');
+      return;
+    }
+    try {
+      await downloadProductIntelligenceXlsx(filteredProducts, currentBrand?.name);
+      toast.success(`Έγινε λήψη Excel (${formatNumber(filteredProducts.length)} γραμμές).`);
+    } catch (e) {
+      console.error(e);
+      toast.error('Σφάλμα εξαγωγής Excel. Δοκιμάστε CSV.');
+    }
+  };
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -910,41 +1023,155 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           </div>
         )}
         {/* Filters */}
-        <div className="p-4 border-b border-[#E5E5E5] flex flex-wrap gap-4 items-center">
-          {/* Search */}
-          <div className="relative flex-1 min-w-[200px]">
-            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
-            <input
-              type="text"
-              placeholder="Αναζήτηση προϊόντων..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all"
-            />
+        <div className="p-4 border-b border-[#E5E5E5] space-y-3">
+          <div className="flex flex-wrap gap-3 items-end">
+            <div className="relative flex-1 min-w-[200px]">
+              <label className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF] mb-1 block">Προϊόν / SKU</label>
+              <Search size={18} className="absolute left-3 top-[26px] text-[#9CA3AF]" />
+              <input
+                type="text"
+                placeholder="Όνομα ή SKU…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">Κατηγορία</span>
+              <DropdownFilter
+                value={selectedCategory}
+                onChange={setSelectedCategory}
+                options={[{ value: 'all', label: 'Όλες οι κατηγορίες' }, ...categories.map(c => ({ value: c, label: c }))]}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">Margin tier</span>
+              <DropdownFilter
+                value={marginFilter}
+                onChange={setMarginFilter}
+                options={[
+                  { value: 'all', label: 'Όλα τα margins' },
+                  { value: 'high', label: 'Υψηλό margin' },
+                  { value: 'medium', label: 'Μέτριο margin' },
+                  { value: 'low', label: 'Χαμηλό margin' },
+                ]}
+              />
+            </div>
+            <div className="flex flex-wrap items-end gap-2 sm:ml-auto">
+              <div className="text-sm text-[#4A4A4A] min-w-[120px]">
+                {formatNumber(serverFilteredTotal)} γραμμές
+                {isCatalogTruncated ? ` (loaded ${formatNumber(sourceProducts.length)})` : ''}
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<FileText size={14} />}
+                onClick={handleQuickExportCsv}
+                disabled={effectiveSourceLoading || filteredProducts.length === 0}
+                className="shrink-0"
+                title="Εξαγωγή φιλτραρισμένων σε CSV"
+              >
+                CSV
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<FileSpreadsheet size={14} />}
+                onClick={() => void handleQuickExportXlsx()}
+                disabled={effectiveSourceLoading || filteredProducts.length === 0}
+                className="shrink-0"
+                title="Εξαγωγή φιλτραρισμένων σε Excel"
+              >
+                Excel
+              </Button>
+            </div>
           </div>
-
-          {/* Category Filter */}
-          <DropdownFilter
-            value={selectedCategory}
-            onChange={setSelectedCategory}
-            options={[{ value: 'all', label: 'Όλες οι κατηγορίες' }, ...categories.map(c => ({ value: c, label: c }))]}
-          />
-
-          {/* Margin Filter */}
-          <DropdownFilter
-            value={marginFilter}
-            onChange={setMarginFilter}
-            options={[
-              { value: 'all', label: 'Όλα τα margins' },
-              { value: 'high', label: 'Υψηλό margin' },
-              { value: 'medium', label: 'Μέτριο margin' },
-              { value: 'low', label: 'Χαμηλό margin' }
-            ]}
-          />
-
-          <div className="text-sm text-[#4A4A4A]">
-            {formatNumber(serverFilteredTotal)} products{isCatalogTruncated ? ` από loaded set ${formatNumber(sourceProducts.length)}` : ''}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 pt-2 border-t border-dashed border-[#E5E5E5]">
+            <div>
+              <label className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF] mb-1 block" title="Π.χ. &gt;10, 5-20, =0">
+                Stock (απόθεμα)
+              </label>
+              <input
+                type="text"
+                value={filterStockExpr}
+                onChange={(e) => setFilterStockExpr(e.target.value)}
+                placeholder=">0"
+                className="w-full px-2 py-1.5 text-sm rounded-lg border border-[#E5E7EB] bg-white focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/30"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF] mb-1 block" title="Ημέρες · ERP χωρίς DOS = κενό φίλτρο">
+                DOS (ημέρες)
+              </label>
+              <input
+                type="text"
+                value={filterDosExpr}
+                onChange={(e) => setFilterDosExpr(e.target.value)}
+                placeholder=">=30"
+                className="w-full px-2 py-1.5 text-sm rounded-lg border border-[#E5E7EB] bg-white focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/30"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF] mb-1 block">
+                Tag
+              </label>
+              <input
+                type="text"
+                value={filterTagContains}
+                onChange={(e) => setFilterTagContains(e.target.value)}
+                placeholder="περιέχει…"
+                className="w-full px-2 py-1.5 text-sm rounded-lg border border-[#E5E7EB] bg-white focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/30"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF] mb-1 block" title="Τιμή πώλησης (€)">
+                Τιμή (€)
+              </label>
+              <input
+                type="text"
+                value={filterPriceExpr}
+                onChange={(e) => setFilterPriceExpr(e.target.value)}
+                placeholder="10-50"
+                className="w-full px-2 py-1.5 text-sm rounded-lg border border-[#E5E7EB] bg-white focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/30"
+              />
+            </div>
+            {benchmarkCount > 0 && (
+              <div>
+                <label className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF] mb-1 block" title="% απόκλιση vs market">
+                  vs Market (%)
+                </label>
+                <input
+                  type="text"
+                  value={filterVsMarketExpr}
+                  onChange={(e) => setFilterVsMarketExpr(e.target.value)}
+                  placeholder="<0"
+                  className="w-full px-2 py-1.5 text-sm rounded-lg border border-[#E5E7EB] bg-white focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/30"
+                />
+              </div>
+            )}
+            {hasAdvancedColumnFilters && (
+              <div className="flex items-end col-span-2 sm:col-span-1 lg:col-span-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilterStockExpr('');
+                    setFilterDosExpr('');
+                    setFilterTagContains('');
+                    setFilterPriceExpr('');
+                    setFilterVsMarketExpr('');
+                  }}
+                  className="text-xs font-medium text-[var(--nts-accent)] hover:underline py-1.5"
+                >
+                  Καθαρισμός στήλων
+                </button>
+              </div>
+            )}
           </div>
+          <p className="text-[11px] text-[#9CA3AF]">
+            Αριθμητικά φίλτρα: <code className="text-[10px] bg-[#F3F4F6] px-1 rounded">10</code>,{' '}
+            <code className="text-[10px] bg-[#F3F4F6] px-1 rounded">&gt;=30</code>,{' '}
+            <code className="text-[10px] bg-[#F3F4F6] px-1 rounded">5-20</code>. Η εξαγωγή CSV/Excel περιλαμβάνει όλες τις <strong className="font-medium text-[#6B7280]">τρέχουσες φιλτραρισμένες</strong> γραμμές (έως το όριο φόρτωσης).
+          </p>
         </div>
 
         {/* Table */}
@@ -1017,9 +1244,6 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                     </Tooltip>
                   </th>
                 )}
-                <th className="px-3 py-2 text-right text-[11px] font-medium text-[#4A4A4A]">
-                  Actions
-                </th>
               </tr>
             </thead>
             <tbody>
@@ -1271,11 +1495,6 @@ function ProductRow({ product, index, supplierTodMap, benchmarkMap, useProcureme
           })()}
         </td>
       )}
-      <td className="px-3 py-2 text-right">
-        <button className="text-[10px] font-medium text-[var(--nts-accent)] hover:underline">
-          Feed
-        </button>
-      </td>
     </motion.tr>
   );
 }
