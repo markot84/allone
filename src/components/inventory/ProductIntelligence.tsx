@@ -55,6 +55,8 @@ const LARGE_CATALOG_ALERT_THRESHOLD = 10000;
 
 const EMPTY_CATEGORY_ID = '__EMPTY_CAT__';
 const EMPTY_TAG_ID = '__EMPTY_TAG__';
+/** Σταθερές τιμές priority_tag (inventory intelligence) — εμφανίζονται πάντα στο φίλτρο ακόμη κι αν το client catalog δεν φέρει το πεδίο. */
+const STOCK_INTELLIGENCE_TAG_IDS = ['healthy', 'low', 'excess', 'dead'] as const;
 
 function categoryIdForProduct(p: Product): string {
   const c = (p.category ?? '').trim();
@@ -73,19 +75,32 @@ interface ColumnExcelFilterProps {
   options: ExcelFilterOption[];
   value: string[] | null;
   onChange: (next: string[] | null) => void;
+  /** excel: null = όλα τσεκαρισμένα. additive: null/[] = κανένα τσέκ = χωρίς φίλτρο (όλες οι γραμμές). */
+  selectionMode?: 'excel' | 'additive';
 }
 
-function ColumnExcelFilter({ label, options, value, onChange }: ColumnExcelFilterProps) {
+function ColumnExcelFilter({
+  label,
+  options,
+  value,
+  onChange,
+  selectionMode = 'excel',
+}: ColumnExcelFilterProps) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
   const ref = React.useRef<HTMLDivElement>(null);
   const allIds = useMemo(() => options.map((o) => o.id), [options]);
   const selected = useMemo(() => {
+    if (selectionMode === 'additive') {
+      if (value == null || value.length === 0) return new Set<string>();
+      const allow = new Set(allIds);
+      return new Set(value.filter((id) => allow.has(id)));
+    }
     if (value == null) return new Set(allIds);
     if (value.length === 0) return new Set<string>();
     const allow = new Set(allIds);
     return new Set(value.filter((id) => allow.has(id)));
-  }, [value, allIds]);
+  }, [value, allIds, selectionMode]);
 
   useEffect(() => {
     if (!open) {
@@ -110,6 +125,16 @@ function ColumnExcelFilter({ label, options, value, onChange }: ColumnExcelFilte
   );
 
   const toggle = (id: string) => {
+    if (selectionMode === 'additive') {
+      const startSelected =
+        value != null && value.length > 0 ? new Set(value.filter((x) => allIds.includes(x))) : new Set<string>();
+      const next = new Set(startSelected);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      if (next.size === 0 || next.size === allIds.length) onChange(null);
+      else onChange([...next]);
+      return;
+    }
     const startSelected =
       value == null || value.length === 0
         ? new Set(allIds)
@@ -127,7 +152,15 @@ function ColumnExcelFilter({ label, options, value, onChange }: ColumnExcelFilte
 
   const selectedCount = value == null || value.length === 0 ? allIds.length : selected.size;
   const summary =
-    value === null ? 'Όλα' : value.length === 0 ? 'Καμία' : `${selectedCount}/${allIds.length}`;
+    selectionMode === 'additive'
+      ? value == null || value.length === 0
+        ? 'Όλα'
+        : `${selected.size}/${allIds.length}`
+      : value === null
+        ? 'Όλα'
+        : value.length === 0
+          ? 'Καμία'
+          : `${selectedCount}/${allIds.length}`;
 
   if (options.length === 0) {
     return (
@@ -468,7 +501,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     marginFilter === 'all' &&
     stockAgeFilter === 'all' &&
     categoryInclude === null &&
-    tagInclude === null;
+    (tagInclude == null || tagInclude.length === 0);
   const useServerIntelligence =
     serverFiltersSupported &&
     !!serverIntelligence.aggregate &&
@@ -674,14 +707,29 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
 
   const tagOptions = useMemo((): ExcelFilterOption[] => {
     const map = new Map<string, string>();
+    for (const id of STOCK_INTELLIGENCE_TAG_IDS) {
+      map.set(id, id);
+    }
+    let hasEmpty = false;
     for (const p of filterOptionsProductScope) {
       const id = tagIdForProduct(p);
-      const label = id === EMPTY_TAG_ID ? '(Χωρίς tag)' : (p.priority_tag ?? '').trim() || '(Χωρίς tag)';
-      if (!map.has(id)) map.set(id, label);
+      if (id === EMPTY_TAG_ID) {
+        hasEmpty = true;
+        continue;
+      }
+      if (!map.has(id)) {
+        const raw = (p.priority_tag ?? '').trim();
+        map.set(id, raw || id);
+      }
     }
-    return [...map.entries()]
+    const core: ExcelFilterOption[] = STOCK_INTELLIGENCE_TAG_IDS.map((id) => ({ id, label: map.get(id)! }));
+    const known = new Set<string>([...STOCK_INTELLIGENCE_TAG_IDS]);
+    const extras = [...map.entries()]
+      .filter(([id]) => !known.has(id))
       .map(([id, label]) => ({ id, label }))
       .sort((a, b) => a.label.localeCompare(b.label, 'el'));
+    const emptyOpt: ExcelFilterOption[] = hasEmpty ? [{ id: EMPTY_TAG_ID, label: '(Χωρίς tag)' }] : [];
+    return [...core, ...extras, ...emptyOpt];
   }, [filterOptionsProductScope]);
 
   // Filter and sort products
@@ -692,8 +740,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
       return categoryInclude.includes(categoryIdForProduct(p));
     };
     const matchesTag = (p: Product) => {
-      if (tagInclude == null) return true;
-      if (tagInclude.length === 0) return false;
+      if (tagInclude == null || tagInclude.length === 0) return true;
       return tagInclude.includes(tagIdForProduct(p));
     };
 
@@ -1156,7 +1203,13 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
               value={categoryInclude}
               onChange={setCategoryInclude}
             />
-            <ColumnExcelFilter label="Tag" options={tagOptions} value={tagInclude} onChange={setTagInclude} />
+            <ColumnExcelFilter
+              label="Tag"
+              options={tagOptions}
+              value={tagInclude}
+              onChange={setTagInclude}
+              selectionMode="additive"
+            />
             <div className="flex flex-col gap-1">
               <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">Margin tier</span>
               <DropdownFilter
