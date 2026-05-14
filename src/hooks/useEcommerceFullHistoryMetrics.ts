@@ -84,6 +84,9 @@ export function useEcommerceFullHistoryMetrics(options?: { mode?: EcommerceFullH
         revenueByDayRecord: fromSummary,
         dailyRevenueRows: dailyRevenueClamped,
         ordersByDay: ordersByDayClamped,
+        allOrdersByDay: historyCutoff
+          ? ecomm.allOrdersByDay.filter((r) => passesBrandHistory(r.date, currentBrand))
+          : ecomm.allOrdersByDay,
         monthlyRevenue: monthlyRevenueClamped,
         rawLoaded: false,
         rawLoading: mode === 'full' && (rawLoading || isFetching),
@@ -98,6 +101,9 @@ export function useEcommerceFullHistoryMetrics(options?: { mode?: EcommerceFullH
       revenueByDayRecord: revenueByDay,
       dailyRevenueRows,
       ordersByDay: sortOrdersByDayRows(ordByDay),
+      allOrdersByDay: historyCutoff
+        ? ecomm.allOrdersByDay.filter((r) => passesBrandHistory(r.date, currentBrand))
+        : ecomm.allOrdersByDay,
       monthlyRevenue: monthlyRevenueFromDailyRecord(revenueByDay),
       rawLoaded: true,
       rawLoading: false,
@@ -106,6 +112,7 @@ export function useEcommerceFullHistoryMetrics(options?: { mode?: EcommerceFullH
     };
   }, [
     ecomm.dailyRevenue,
+    ecomm.allOrdersByDay,
     ecomm.monthlyRevenue,
     ecomm.ordersByDay,
     rawLoaded,

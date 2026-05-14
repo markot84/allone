@@ -46,6 +46,8 @@ interface EcommerceSummaryRaw {
   excludedRevenueByReason?: Record<string, number>;
   excludedOrdersByReason?: Record<string, number>;
   topProducts: EcommerceTopProduct[];
+  /** Marketplace-inclusive valid orders per day (e.g. direct e-shop + Skroutz). */
+  allOrdersByDay?: Record<string, number>;
   ordersByDay: Record<string, number>;
   recentOrders: EcommerceRecentOrder[];
   connectedPlatforms: string[];
@@ -223,6 +225,15 @@ export function useEcommerceSummary(options?: { includeSkuDetails?: boolean; inc
       .sort((a, b) => a.date.localeCompare(b.date));
   }, [data]);
 
+  const allOrdersByDay = useMemo(() => {
+    const raw = data?.allOrdersByDay || data?.ordersByDay;
+    if (!raw) return [];
+    return Object.entries(raw)
+      .filter(([d]) => d !== 'unknown')
+      .map(([date, orders]) => ({ date, orders: Number(orders) || 0 }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }, [data]);
+
   return {
     totalRevenue: data?.totalRevenue ?? 0,
     orderCount: data?.orderCount ?? 0,
@@ -239,6 +250,7 @@ export function useEcommerceSummary(options?: { includeSkuDetails?: boolean; inc
     topProducts: data?.topProducts ?? [],
     recentOrders: data?.recentOrders ?? [],
     ordersByDay,
+    allOrdersByDay,
     connectedPlatforms: data?.connectedPlatforms ?? [],
     skuStats,
     skuMovement,

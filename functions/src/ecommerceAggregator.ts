@@ -728,11 +728,18 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
    */
   await writeSkuStatsChunked(db, brandId, skuStats, allSkus.size);
 
-  // Orders by day (count)
+  // Orders by day (count) for core revenue only.
   const ordersByDay: Record<string, number> = {};
   for (const o of revenueOrders) {
     const day = o.createdAt?.slice(0, 10) || 'unknown';
     ordersByDay[day] = (ordersByDay[day] || 0) + 1;
+  }
+
+  // Marketplace-inclusive order count for commercial CVR / buyer volume KPIs.
+  const allOrdersByDay: Record<string, number> = {};
+  for (const o of visibleOrders) {
+    const day = o.createdAt?.slice(0, 10) || 'unknown';
+    allOrdersByDay[day] = (allOrdersByDay[day] || 0) + 1;
   }
 
   // Recent orders (last 50, for quick display)
@@ -770,6 +777,7 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
     excludedOrdersByReason,
     topProducts,
     ordersByDay,
+    allOrdersByDay,
     recentOrders,
     connectedPlatforms: revenueSummaryPlatforms,
     // Μόνο metadata — το βαρύ skuStatsJson γράφεται σε `sku_stats/{brandId}` (βλ. writeSkuStatsChunked).

@@ -283,13 +283,13 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
     [ecommRevenueByDay, periodDates.fromDate, periodDates.toDate]
   );
 
-  /** Παραγγελίες e-shop (όλες οι συνδεδεμένες πλατφόρμες) στην επιλεγμένη περίοδο — για CVR καταστήματος. */
-  const ordersCountInPeriod = useMemo(() => {
-    return ecommHist.ordersByDay.reduce((sum, row) => {
+  /** Online παραγγελίες (direct e-shop + marketplaces όπως Skroutz) στην επιλεγμένη περίοδο — για εμπορικό CVR. */
+  const onlineOrdersCountInPeriod = useMemo(() => {
+    return ecommHist.allOrdersByDay.reduce((sum, row) => {
       if (row.date >= periodDates.fromDate && row.date <= periodDates.toDate) return sum + row.orders;
       return sum;
     }, 0);
-  }, [ecommHist.ordersByDay, periodDates.fromDate, periodDates.toDate]);
+  }, [ecommHist.allOrdersByDay, periodDates.fromDate, periodDates.toDate]);
 
   /** GA4 sessions στην επιλεγμένη περίοδο (ημερήσια σύνολα). */
   const ga4SessionsInPeriod = useMemo(() => {
@@ -303,13 +303,13 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
   }, [hasGa4Data, ga4DailyEntries, periodDates.fromDate, periodDates.toDate]);
 
   /**
-   * E-shop CVR: συνολικές παραγγελίες από συγχρονισμένα καταστήματα (Shopify, WooCommerce, Magento κ.λπ.)
+   * Online CVR: όλες οι εμπορικές online παραγγελίες από synced stores/marketplaces
    * στην περίοδο ÷ συνολικές συνεδρίες GA4 τις ίδιες ημέρες. Το GA4 property πρέπει να αντιστοιχεί στο site.
    */
   const eShopCvrPercent = useMemo(() => {
-    if (!ecomm.hasData || !hasGa4Data || ga4SessionsInPeriod <= 0 || ordersCountInPeriod <= 0) return null;
-    return (ordersCountInPeriod / ga4SessionsInPeriod) * 100;
-  }, [ecomm.hasData, hasGa4Data, ga4SessionsInPeriod, ordersCountInPeriod]);
+    if (!ecomm.hasData || !hasGa4Data || ga4SessionsInPeriod <= 0 || onlineOrdersCountInPeriod <= 0) return null;
+    return (onlineOrdersCountInPeriod / ga4SessionsInPeriod) * 100;
+  }, [ecomm.hasData, hasGa4Data, ga4SessionsInPeriod, onlineOrdersCountInPeriod]);
 
   /**
    * Organic CVR από GA4 traffic channels (όσα default channel groups περιέχουν «organic»).
@@ -687,23 +687,23 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
       <Card padding="lg">
         <CardHeader
           title="Ρυθμός μετατροπής (CVR)"
-          subtitle="Σύνοψη conversion rate για e-shop, διαφημιστικές καμπάνιες και οργανικά κανάλια (GA4)."
+          subtitle="Σύνοψη conversion rate για online αγορές, διαφημιστικές καμπάνιες και οργανικά κανάλια (GA4)."
           icon={<Percent size={20} className="text-[var(--nts-accent)]" />}
         />
         <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
           <MetricCard
             icon={<ShoppingBag size={20} />}
-            label="E-shop (κατάστημα)"
+            label="Online αγορές"
             value={eShopCvrPercent != null ? formatPercent(eShopCvrPercent, 2) : '—'}
             subtitle={
               ecomm.hasData
                 ? hasGa4Data
-                  ? 'Παραγγελίες e-shop ÷ sessions GA4 (ίδια περίοδος)'
+                  ? 'E-shop + Skroutz orders ÷ sessions GA4 (ίδια περίοδος)'
                   : 'Συνδέστε/συγχρονίστε GA4 για sessions'
                 : 'Χωρίς συνδεδεμένο e-shop'
             }
             color="#7C3AED"
-            tooltip="Ρυθμός μετατροπής καταστήματος: άθροισμα παραγγελιών από τα συγχρονισμένα e-shop (όλες οι πλατφόρμες) για την επιλεγμένη περίοδο, διαιρεμένο με τις συνολικές συνεδρίες του GA4 τις ίδιες ημέρες. Το GA4 property πρέπει να αντιστοιχεί στο ίδιο site. Αν λείπουν παραγγελίες ή sessions, εμφανίζεται —."
+            tooltip="Εμπορικός ρυθμός μετατροπής online αγορών: άθροισμα παραγγελιών από direct e-shop και marketplaces όπως Skroutz για την επιλεγμένη περίοδο, διαιρεμένο με τις συνολικές συνεδρίες του GA4 τις ίδιες ημέρες. Αν το summary δεν έχει ακόμη marketplace-inclusive ημερήσια counts, γίνεται προσωρινό fallback στις core e-shop παραγγελίες μέχρι νέο sync/refresh."
           />
           <MetricCard
             icon={<Euro size={20} />}

@@ -97,9 +97,7 @@ const METHOD_CHART_COLORS = ['#F97316', '#FB923C', '#FDBA74', '#F59E0B', '#FACC1
 
 function deriveParentSku(sku: string | null | undefined): string {
   const normalized = String(sku || '').trim();
-  if (!normalized) return '';
-  const match = normalized.match(/^(.+)-([A-Za-z0-9]{1,5})$/);
-  return match ? match[1] : normalized;
+  return normalized;
 }
 
 function hasDerivedParentSku(sku: string | null | undefined): boolean {
@@ -510,7 +508,7 @@ export function EcommerceDashboard() {
       .sort((a, b) => b.revenue - a.revenue);
   }, [rawOrdersLoaded, revenueOrdersForTables, ecomm.topProducts]);
 
-  /** Μόνο Parent SKU: ομαδοποίηση με deriveParentSku (και απλά SKUs χωρίς suffix παραλλαγής = δικό τους parent). */
+  /** Μόνο Parent SKU: δεν συμπεραίνουμε parent από παύλες, γιατί πολλά πραγματικά SKUs έχουν suffix μετά από `-`. */
   const parentProductsForTables = useMemo<TopProductRow[]>(() => {
     const parentMap = new Map<string, { revenue: number; quantity: number; name: string }>();
     for (const product of topProductsForTables) {
@@ -1033,7 +1031,7 @@ export function EcommerceDashboard() {
                 <option value="100">100 / σελίδα</option>
                 <option value="all">Προβολή όλων</option>
               </select>
-              <Tooltip content="Όλα τα SKUs: κάθε γραμμή όπως στο κατάστημα. Μόνο Parent SKU: ομαδοποίηση ανά parent (π.χ. HAT-RED, HAT-BLUE → HAT) και απλά προϊόντα χωρίς παύλα-παραλλαγή μένουν ως δικό τους parent. Εμφανίζεται όνομα προϊόντος όταν υπάρχει από τις παραγγελίες.">
+              <Tooltip content="Όλα τα SKUs: κάθε γραμμή όπως στο κατάστημα. Μόνο Parent SKU: ομαδοποίηση μόνο όταν υπάρχει αξιόπιστο parent SKU από τα δεδομένα. Παύλες μέσα στο SKU δεν θεωρούνται παραλλαγές, γιατί στο e-tennis αποτελούν κανονικό μέρος του SKU.">
                 <span className="text-[11px] text-[#9CA3AF]">Filters</span>
               </Tooltip>
             </div>

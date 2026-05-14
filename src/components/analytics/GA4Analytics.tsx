@@ -746,18 +746,16 @@ export function GA4Analytics() {
             }
             subtitle={
               channelMixSource === 'daily'
-                ? `Sessions ανά Default Channel Group για ${formatDateTooltipEl(effectiveFrom)} — ${formatDateTooltipEl(effectiveTo)}. Φιλτράρεται δυναμικά από τα ημερήσια data του τελευταίου GA4 sync.`
+                ? `Sessions ανά GA4 Default Channel Group για ${formatDateTooltipEl(effectiveFrom)} — ${formatDateTooltipEl(effectiveTo)}. Είναι traffic attribution, όχι πραγματική απόδοση Google Ads / Meta.`
                 : channelMixSource === 'full_sync'
-                  ? `⚠️ Δεν υπάρχουν ημερήσια ανά κανάλι στο τελευταίο sync — δείχνουμε το ΣΥΝΟΛΙΚΟ διαθέσιμο ιστορικό (αγνοεί το επιλεγμένο εύρος). Κάντε νέο GA4 Sync από τις Συνδέσεις για δυναμικό φιλτράρισμα.`
+                  ? `⚠️ Δεν υπάρχουν ημερήσια ανά κανάλι στο τελευταίο sync — δείχνουμε το ΣΥΝΟΛΙΚΟ διαθέσιμο ιστορικό. Τα labels είναι GA4 attribution groups, όχι διαφημιστική πραγματικότητα.`
                   : `Δεν υπάρχουν δεδομένα GA4 ακόμη. Κάντε σύνδεση/sync από τις Συνδέσεις.`
             }
           />
           <div className="p-4 pt-0">
             <p className="mb-3 text-[11px] leading-snug text-[#6B7280]">
-              Ομαδοποίηση GA4 ανά <strong>Default Channel Group</strong> (όχι source/medium). Στον διακομιστή τα
-              κανάλια χαρτογραφούνται σε ενιαίες αγγλικές ετικέτες ώστε να μη διπλομετρούνται εκδοχές EN/EL και να
-              φαίνονται όλα τα default groups· μετά από <strong>νέο GA4 sync</strong> ενημερώνονται τα αποθηκευμένα
-              ημερήσια.
+              Ομαδοποίηση GA4 ανά <strong>Default Channel Group</strong>. Τα paid groups εδώ περιγράφουν πώς το GA4
+              αποδίδει την επισκεψιμότητα και μπορεί να διαφέρουν από Google Ads / Meta imports, spend και ROAS.
             </p>
             <div className="flex flex-col items-center">
               <div className="relative w-full h-[200px] max-w-[280px] mx-auto">
@@ -830,7 +828,7 @@ export function GA4Analytics() {
         <CardHeader
           title={
             <span className="inline-flex items-center gap-2">
-              Ανάλυση Καναλιών Επισκεψιμότητας
+              Ανάλυση Απόδοσης Επισκεψιμότητας (GA4 attribution)
               {channelMixSource === 'full_sync' && (
                 <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
                   Πλήρης περίοδος συγχρονισμού
@@ -840,11 +838,15 @@ export function GA4Analytics() {
           }
           subtitle={
             channelMixSource === 'full_sync'
-              ? `⚠️ Σύνολο διαθέσιμου ιστορικού: το τελευταίο sync δεν είχε ημερήσια breakdown ανά κανάλι, άρα αγνοείται το επιλεγμένο εύρος. Τα κανάλια είναι GA4 Default Channel Groups.`
-              : `Ίδιο εύρος με το ημερολόγιο (${formatDateTooltipEl(effectiveFrom)} — ${formatDateTooltipEl(effectiveTo)}). Τα κανάλια είναι GA4 Default Channel Groups. Users/New users: άθροιση ημερών (το GA4 UI κάνει deduplication χρηστών — αναμένονται μικρές διαφορές).`
+              ? `⚠️ Σύνολο διαθέσιμου ιστορικού: το τελευταίο sync δεν είχε ημερήσια breakdown ανά κανάλι, άρα αγνοείται το επιλεγμένο εύρος. Τα κανάλια είναι GA4 Default Channel Groups, όχι πραγματική απόδοση διαφημιστικών πλατφορμών.`
+              : `Ίδιο εύρος με το ημερολόγιο (${formatDateTooltipEl(effectiveFrom)} — ${formatDateTooltipEl(effectiveTo)}). Τα κανάλια είναι GA4 Default Channel Groups / attribution labels, όχι Google Ads ή Meta performance. Users/New users: άθροιση ημερών (το GA4 UI κάνει deduplication χρηστών — αναμένονται μικρές διαφορές).`
           }
         />
         <div className="p-4 pt-0 overflow-x-auto">
+          <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800">
+            Τα paid rows εδώ είναι ταξινόμηση επισκεψιμότητας από το GA4. Δεν αντικαθιστούν τα πραγματικά Google Ads / Meta δεδομένα
+            spend, campaigns και ROAS που έρχονται από τους διαφημιστικούς connectors.
+          </div>
           {displayTrafficSources.length === 0 ? (
             <div className="py-6 text-center text-sm text-[#6B7280]">
               <BarChart3 size={32} className="mx-auto mb-2 text-[#D1D5DB]" />
@@ -856,7 +858,7 @@ export function GA4Analytics() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-[#6B7280] border-b border-[#F3F4F6]">
-                <th className="pb-2 font-medium">Κανάλι</th>
+                <th className="pb-2 font-medium">GA4 attribution group</th>
                 <th className="pb-2 font-medium text-right">Sessions</th>
                 <th className="pb-2 font-medium text-right">Χρήστες</th>
                 <th className="pb-2 font-medium text-right">Νέοι χρήστες</th>
