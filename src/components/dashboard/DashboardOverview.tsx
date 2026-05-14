@@ -88,7 +88,7 @@ const REV_PERF_LABEL_ESHOP_BLEND = 'Organic + καμπάνιες (εκτίμησ
 const DASHBOARD_PRODUCT_LIMIT = 5000;
 const DASHBOARD_LOADING_TIMEOUT_MS = 8000;
 /** Διαφήμιση — standalone efficiency chart (όχι σύγκριση με τζίρο). */
-const ADS_SPEND_COLOR = '#F59E0B';
+const ADS_SPEND_COLOR = '#FDBA74';
 const ADS_CONV_COLOR = REV_CHART_ESHOP;
 const ADS_ROAS_COLOR = '#64748B';
 
@@ -1694,8 +1694,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           onClick={() => onSectionChange?.('campaigns')}
         >
           <CardHeader
-            title="Διαφήμιση / Efficiency"
-            subtitle="Spend, conversion value και ROAS πλατφόρμας για την ίδια επιλεγμένη περίοδο."
+            title="Διαφήμιση"
+            subtitle="Τάση conversion value, δαπάνης και ROAS πλατφόρμας για την επιλεγμένη περίοδο."
             icon={<Megaphone size={18} className="text-[var(--nts-accent)]" />}
             action={
               <button
@@ -1711,35 +1711,32 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             }
           />
 
-          <div className="mb-5 grid grid-cols-1 gap-3 md:grid-cols-3">
-            <div className="rounded-lg border border-[#E5E7EB] bg-white p-4">
-              <p className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wide text-[#6B7280]">
-                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: ADS_SPEND_COLOR }} />
-                Δαπάνη
-              </p>
-              <p className="mt-1 text-2xl font-bold text-[#1A1A1A]">{formatCurrencyCompact(campaignMetrics.totalSpend)}</p>
-            </div>
-            <div className="rounded-lg border border-[#E5E7EB] bg-white p-4">
-              <p className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wide text-[#6B7280]">
-                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: ADS_CONV_COLOR }} />
-                Conversion value
-              </p>
-              <p className="mt-1 text-2xl font-bold text-[#1A1A1A]">{formatCurrencyCompact(campaignMetrics.totalRevenue)}</p>
-            </div>
-            <div className="rounded-lg border border-[#E5E7EB] bg-white p-4">
-              <p className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wide text-[#6B7280]">
-                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: ADS_ROAS_COLOR }} />
-                ROAS πλατφόρμας
-              </p>
-              <p className="mt-1 text-2xl font-bold text-[#1A1A1A]">
+          <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-[#6B7280]">
+            <span>
+              Δαπάνη{' '}
+              <strong className="font-mono text-[#1A1A1A]">{formatCurrencyCompact(campaignMetrics.totalSpend)}</strong>
+            </span>
+            <span>
+              Conversion value{' '}
+              <strong className="font-mono text-[#1A1A1A]">{formatCurrencyCompact(campaignMetrics.totalRevenue)}</strong>
+            </span>
+            <span>
+              ROAS{' '}
+              <strong className="font-mono text-[#1A1A1A]">
                 {campaignMetrics.totalSpend > 0 ? `${formatNumber(campaignMetrics.roas, 2)}×` : '—'}
-              </p>
-            </div>
+              </strong>
+            </span>
           </div>
 
           <div className="w-full min-w-0" style={{ height: 280, minHeight: 280 }}>
             <ResponsiveContainer width="100%" height="100%" minHeight={280}>
               <ComposedChart data={adsPerformanceSeries} margin={{ top: 8, right: 18, left: 4, bottom: 4 }}>
+                <defs>
+                  <linearGradient id="adsConvGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="8%" stopColor={ADS_CONV_COLOR} stopOpacity={0.18} />
+                    <stop offset="100%" stopColor={ADS_CONV_COLOR} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F0" vertical={false} />
                 <XAxis
                   dataKey="dateKey"
@@ -1793,17 +1790,20 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   dataKey="adSpend"
                   name="adSpend"
                   fill={ADS_SPEND_COLOR}
+                  opacity={0.65}
                   radius={[4, 4, 0, 0]}
-                  maxBarSize={34}
+                  maxBarSize={18}
                   isAnimationActive={false}
                 />
-                <Line
+                <Area
                   yAxisId="currency"
                   type="linear"
                   dataKey="adConvValue"
                   name="adConvValue"
                   stroke={ADS_CONV_COLOR}
                   strokeWidth={2.5}
+                  fill="url(#adsConvGradient)"
+                  fillOpacity={1}
                   dot={false}
                   isAnimationActive={false}
                 />

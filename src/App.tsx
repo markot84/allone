@@ -118,6 +118,8 @@ function QueryProvider({ children }: { children: React.ReactNode }) {
               const key = query.queryKey[0];
               // AI queries: always fresh
               if (key === 'aiChannelRecommendations' || key === 'aiContentSuggestions') return false;
+              // Sensitive credentials/tokens should not be serialized into localStorage.
+              if (key === 'apiKeys') return false;
               // Large Firestore collections: served by Firestore's own IndexedDB cache —
               // keeping them out of localStorage prevents quota-exceeded errors that
               // silently wipe the entire persisted cache.

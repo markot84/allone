@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { Plus, Trash2, PiggyBank, Check } from 'lucide-react';
 import type { MarketingCostLine } from '../../types';
+import { formatCurrencyCompact } from '../../utils/format';
 
 function newId(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
@@ -86,6 +87,22 @@ export function MarketingCostLinesEditor({
 
   const isDirty = useMemo(() => serial(lines) !== serial(baseline), [lines, baseline]);
   const budgetHint = monthlyBudget != null && monthlyBudget > 0;
+  const monthlyTotal = useMemo(
+    () =>
+      lines.reduce((sum, line) => {
+        if (line.kind === 'fixed_monthly') return sum + (line.amountEUR || 0);
+        if (line.kind === 'percent_of_budget' && budgetHint) {
+          return sum + ((monthlyBudget || 0) * (line.percent || 0)) / 100;
+        }
+        return sum;
+      }, 0),
+    [budgetHint, lines, monthlyBudget]
+  );
+  const oneOffTotal = useMemo(
+    () => lines.reduce((sum, line) => (line.kind === 'one_off_month' ? sum + (line.amountEUR || 0) : sum), 0),
+    [lines]
+  );
+  const hasPercentWithoutBudget = !budgetHint && lines.some((l) => l.kind === 'percent_of_budget');
 
   const setKind = (id: string, kind: MarketingCostLine['kind']) =>
     setLines((prev) =>
@@ -258,7 +275,7 @@ export function MarketingCostLinesEditor({
           );
         })}
 
-        {!budgetHint && lines.some((l) => l.kind === 'percent_of_budget') && (
+        {hasPercentWithoutBudget && (
           <p className="rounded-md border border-amber-100 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-700">
             Ορίστε μηνιαίο budget παραπάνω ώστε τα ποσοστά να υπολογίζονται.
           </p>
@@ -266,31 +283,49 @@ export function MarketingCostLinesEditor({
       </div>
 
       {/* Footer */}
-      <div className="flex flex-wrap items-center gap-2 border-t border-rose-100 bg-rose-50/30 px-4 py-2.5">
-        <button
-          type="button"
-          onClick={addLine}
-          disabled={disabled}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-rose-200 bg-white px-3 py-1.5 text-xs font-medium text-[#4B5563] hover:border-rose-400 hover:text-rose-600 disabled:opacity-40"
-        >
-          <Plus size={13} />
-          Γραμμή
-        </button>
-        <button
-          type="button"
-          onClick={() => void handleSave()}
-          disabled={disabled || isSaving || !isDirty}
-          className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-            !isDirty || disabled || isSaving
-              ? 'cursor-not-allowed bg-slate-100 text-slate-400'
-              : 'bg-[#111827] text-white shadow-sm hover:bg-[#1f2937]'
-          }`}
-        >
-          {isSaving ? 'Αποθήκευση…' : 'Αποθήκευση'}
-        </button>
-        {!isDirty && !disabled && !isSaving && (
-          <span className="text-[11px] text-[#9CA3AF]">Καμία αλλαγή προς αποθήκευση</span>
-        )}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-rose-100 bg-rose-50/30 px-4 py-2.5">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          <span className="text-xs text-[#6B7280]">
+            Σύνολο:{' '}
+            <span className="font-mono font-semibold text-[#111827]">{formatCurrencyCompact(monthlyTotal)}</span>
+            <span className="ml-0.5 text-[11px] text-[#9CA3AF]">/μήνα</span>
+          </span>
+          {oneOffTotal > 0 && (
+            <span className="text-xs text-[#6B7280]">
+              Εφάπαξ:{' '}
+              <span className="font-mono font-semibold text-[#111827]">{formatCurrencyCompact(oneOffTotal)}</span>
+            </span>
+          )}
+          {hasPercentWithoutBudget && (
+            <span className="text-[11px] text-amber-700">% budget χωρίς μηνιαίο budget</span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={addLine}
+            disabled={disabled}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-rose-200 bg-white px-3 py-1.5 text-xs font-medium text-[#4B5563] hover:border-rose-400 hover:text-rose-600 disabled:opacity-40"
+          >
+            <Plus size={13} />
+            Γραμμή
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleSave()}
+            disabled={disabled || isSaving || !isDirty}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+              !isDirty || disabled || isSaving
+                ? 'cursor-not-allowed bg-slate-100 text-slate-400'
+                : 'bg-[#111827] text-white shadow-sm hover:bg-[#1f2937]'
+            }`}
+          >
+            {isSaving ? 'Αποθήκευση…' : 'Αποθήκευση'}
+          </button>
+          {!isDirty && !disabled && !isSaving && (
+            <span className="text-[11px] text-[#9CA3AF]">Καμία αλλαγή</span>
+          )}
+        </div>
       </div>
     </div>
   );

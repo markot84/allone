@@ -2635,8 +2635,12 @@ export function ConnectorsPanel() {
           )}
 
           {loading ? (
-            <div className="py-8 flex justify-center">
-              <Spinner size="md" label="Φόρτωση connectors..." />
+            <div className="rounded-xl border border-dashed border-[#D1D5DB] bg-[#FAFAFA] px-4 py-8 text-center">
+              <Spinner size="sm" className="mx-auto mb-3" />
+              <p className="text-sm font-semibold text-[#4B5563]">Ανάκτηση αποθηκευμένων συνδέσεων…</p>
+              <p className="mt-1 text-xs text-[#9CA3AF]">
+                Οι ρυθμίσεις παραμένουν ασφαλώς στη Firebase. Δεν γίνεται reset σε refresh.
+              </p>
             </div>
           ) : (
             <div className="space-y-8">

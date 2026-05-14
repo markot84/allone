@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Key, Copy, Trash2, Plus, Check, Eye, EyeOff, Code, ExternalLink } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card, Button, Badge, Spinner, useToast, PageHeader } from '../common';
@@ -23,33 +24,27 @@ export function ApiKeyManager() {
   const { user } = useAuth();
   const toast = useToast();
   const brandId = currentBrand?.id;
+  const queryClient = useQueryClient();
 
-  const [keys, setKeys] = useState<ApiKeyDoc[]>([]);
-  const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [revealedKeys, setRevealedKeys] = useState<Set<string>>(new Set());
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showDocs, setShowDocs] = useState(false);
 
-  const fetchKeys = useCallback(async () => {
-    if (!brandId) {
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    try {
-      const docs = await FirestoreService.getDocuments<ApiKeyDoc>('api_keys', [], brandId);
-      setKeys(docs);
-    } catch (err) {
-      console.error('[ApiKeyManager] Fetch error:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [brandId]);
-
-  useEffect(() => {
-    fetchKeys();
-  }, [fetchKeys]);
+  const { data: keys = [], isPending: loading, isFetching } = useQuery({
+    queryKey: ['apiKeys', brandId],
+    queryFn: async () => {
+      if (!brandId) return [] as ApiKeyDoc[];
+      return FirestoreService.getDocuments<ApiKeyDoc>('api_keys', [], brandId);
+    },
+    enabled: !!brandId,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    retry: 1,
+  });
 
   const generateUniqueKey = () => {
     const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
@@ -76,7 +71,7 @@ export function ApiKeyManager() {
 
       toast.success('API Key δημιουργήθηκε');
       setRevealedKeys((prev) => new Set(prev).add(key));
-      await fetchKeys();
+      await queryClient.invalidateQueries({ queryKey: ['apiKeys', brandId] });
     } catch (err) {
       console.error('[ApiKeyManager] Generate error:', err);
       toast.error('Σφάλμα κατά τη δημιουργία API key');
@@ -89,7 +84,7 @@ export function ApiKeyManager() {
     try {
       await FirestoreService.updateDocument('api_keys', doc.id, { active: false });
       toast.success('API Key απενεργοποιήθηκε');
-      await fetchKeys();
+      await queryClient.invalidateQueries({ queryKey: ['apiKeys', brandId] });
     } catch (err) {
       console.error('[ApiKeyManager] Revoke error:', err);
       toast.error('Σφάλμα');
@@ -219,8 +214,10 @@ export function ApiKeyManager() {
 
         {/* Keys list */}
         {loading ? (
-          <div className="py-8 text-center">
-            <Spinner size="md" />
+          <div className="rounded-lg border border-dashed border-[#D1D5DB] bg-[#FAFAFA] px-4 py-5 text-center text-[var(--nts-medium-gray)]">
+            <Spinner size="sm" className="mx-auto mb-2" />
+            <p className="text-sm font-medium text-[#4B5563]">Ανάκτηση αποθηκευμένων API keys…</p>
+            <p className="mt-1 text-xs">Οι ρυθμίσεις παραμένουν στη Firebase. Δεν γίνεται reset.</p>
           </div>
         ) : activeKeys.length === 0 ? (
           <div className="py-8 text-center text-[var(--nts-medium-gray)]">
@@ -272,6 +269,9 @@ export function ApiKeyManager() {
               </div>
             ))}
           </div>
+        )}
+        {!loading && isFetching && keys.length > 0 && (
+          <p className="mt-3 text-[11px] text-[#9CA3AF]">Ενημέρωση API keys στο παρασκήνιο…</p>
         )}
 
         {/* Revoked keys */}
