@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { Plus, Trash2, ChevronDown, ChevronRight, ReceiptText, FolderPlus, Check } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronRight, ReceiptText, Check } from 'lucide-react';
 import type { PLCostCategory, PLCostLine } from '../../types';
 import { formatCurrencyCompact } from '../../utils/format';
 
@@ -12,7 +12,7 @@ function defaultLine(): PLCostLine {
   return { id: newId(), label: '', amountEUR: 0 };
 }
 
-function defaultCategory(name = 'Νέα κατηγορία'): PLCostCategory {
+function defaultCategory(name = 'Κόστη επιχείρησης'): PLCostCategory {
   return { id: newId(), name, lines: [defaultLine()] };
 }
 
@@ -78,10 +78,12 @@ export function PLCostEditor({
 
   const totalMonthly = useMemo(() => cats.reduce((s, c) => s + catTotal(c), 0), [cats]);
 
-  const addCategory = () => {
-    const cat = defaultCategory();
-    setCats((p) => [...p, cat]);
-    setCollapsed((p) => ({ ...p, [cat.id]: false }));
+  const addPrimaryLine = () => {
+    setCats((prev) => {
+      if (prev.length === 0) return [defaultCategory()];
+      const [first, ...rest] = prev;
+      return [{ ...first, lines: [...first.lines, defaultLine()] }, ...rest];
+    });
   };
 
   const deleteCategory = (id: string) => setCats((p) => p.filter((c) => c.id !== id));
@@ -134,9 +136,9 @@ export function PLCostEditor({
   return (
     <div className="overflow-hidden rounded-xl border border-[#E5E7EB] bg-white">
       {/* Header */}
-      <div className="flex items-start gap-3 border-b border-[#E5E7EB] bg-slate-50/60 px-4 py-3.5">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#E5E7EB] bg-white">
-          <ReceiptText size={17} className="text-[var(--nts-accent)]" />
+      <div className="flex items-start gap-3 border-b border-rose-100 bg-rose-50/40 px-4 py-3.5">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-rose-100 bg-white">
+          <ReceiptText size={17} className="text-rose-500" />
         </div>
         <div className="min-w-0">
           <p className="text-sm font-semibold text-[#111827]">Κόστη Επιχείρησης (P&L)</p>
@@ -147,10 +149,10 @@ export function PLCostEditor({
       </div>
 
       {/* Categories */}
-      <div className="space-y-0 divide-y divide-[#E5E7EB] p-4 pb-3">
+      <div className="p-4 pb-3">
         {cats.length === 0 ? (
           <p className="py-2 text-xs text-[#9CA3AF]">
-            Δεν υπάρχουν κατηγορίες. Προσθέστε την πρώτη κατηγορία κόστους.
+            Δεν υπάρχουν γραμμές κόστους. Προσθέστε την πρώτη γραμμή.
           </p>
         ) : (
           <div className="space-y-2">
@@ -159,13 +161,21 @@ export function PLCostEditor({
               const pct = monthlyRevenue > 0 ? (total / monthlyRevenue) * 100 : 0;
               const isOpen = !collapsed[cat.id];
               const synced = isCatSynced(cat, baseline);
+              const singleCategoryMode = cats.length === 1;
               return (
                 <div
                   key={cat.id}
-                  className={`overflow-hidden rounded-lg border ${synced ? 'border-emerald-200 shadow-[inset_3px_0_0_0_#10b981]' : 'border-[#E5E7EB]'} bg-white`}
+                  className={
+                    singleCategoryMode
+                      ? 'space-y-2'
+                      : `overflow-hidden rounded-lg border ${
+                          synced ? 'border-rose-200 shadow-[inset_3px_0_0_0_#fb7185]' : 'border-[#E5E7EB]'
+                        } bg-white`
+                  }
                 >
                   {/* Category row */}
-                  <div className={`flex items-center gap-2 px-3 py-2.5 ${synced ? 'bg-emerald-50/50' : 'bg-slate-50/70'}`}>
+                  {!singleCategoryMode && (
+                  <div className={`flex items-center gap-2 px-3 py-2.5 ${synced ? 'bg-rose-50/40' : 'bg-slate-50/70'}`}>
                     <button
                       type="button"
                       onClick={() => toggle(cat.id)}
@@ -192,7 +202,7 @@ export function PLCostEditor({
                         </span>
                       )}
                       {synced && (
-                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-rose-100 text-rose-600">
                           <Check size={12} strokeWidth={2.5} />
                         </span>
                       )}
@@ -206,20 +216,50 @@ export function PLCostEditor({
                       </button>
                     </div>
                   </div>
+                  )}
 
                   {/* Lines */}
-                  {isOpen && (
-                    <div className="divide-y divide-slate-100 px-3">
+                  {(isOpen || singleCategoryMode) && (
+                    <div className={singleCategoryMode ? 'space-y-2' : 'divide-y divide-slate-100 px-3'}>
                       {cat.lines.map((line) => (
-                        <div key={line.id} className="flex items-center gap-2 py-2">
+                        <div
+                          key={line.id}
+                          className={
+                            singleCategoryMode
+                              ? `relative flex flex-col gap-2 rounded-lg border p-3 transition-colors sm:flex-row sm:items-end ${
+                                  synced
+                                    ? 'border-rose-200 bg-rose-50/40 shadow-[inset_3px_0_0_0_#fb7185]'
+                                    : 'border-[#E5E7EB] bg-white'
+                                }`
+                              : 'flex items-center gap-2 py-2'
+                          }
+                        >
+                          {singleCategoryMode && synced && (
+                            <span className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-rose-100 text-rose-600">
+                              <Check size={12} strokeWidth={2.5} />
+                            </span>
+                          )}
+                          <label className={singleCategoryMode ? 'min-w-[140px] flex-1' : 'min-w-0 flex-1'}>
+                            {singleCategoryMode && (
+                              <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
+                                Περιγραφή
+                              </span>
+                            )}
                           <input
                             type="text"
                             value={line.label}
                             onChange={(e) => updateLine(cat.id, line.id, 'label', e.target.value)}
                             placeholder="Περιγραφή κόστους"
                             disabled={disabled}
-                            className="min-w-0 flex-1 rounded-md border border-[#E5E7EB] px-2.5 py-1.5 text-sm text-[#111827] focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/20 disabled:opacity-60"
+                            className={`rounded-md border border-[#E5E7EB] px-2.5 py-1.5 text-sm text-[#111827] focus:border-rose-400 focus:outline-none focus:ring-1 focus:ring-rose-100 disabled:opacity-60 ${
+                              singleCategoryMode ? 'mt-1 w-full' : 'min-w-0 w-full'
+                            }`}
                           />
+                          </label>
+                          <label className={singleCategoryMode ? 'w-full sm:w-28' : 'relative flex shrink-0 items-center'}>
+                            {singleCategoryMode && (
+                              <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">€ / μήνα</span>
+                            )}
                           <div className="relative flex shrink-0 items-center">
                             <span className="pointer-events-none absolute left-2.5 text-xs text-slate-400">€</span>
                             <input
@@ -230,10 +270,13 @@ export function PLCostEditor({
                               onChange={(e) => updateLine(cat.id, line.id, 'amountEUR', e.target.value)}
                               placeholder="0"
                               disabled={disabled}
-                              className="w-24 rounded-md border border-[#E5E7EB] py-1.5 pl-6 pr-2 text-right font-mono text-sm text-[#111827] focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/20 disabled:opacity-60"
+                              className={`rounded-md border border-[#E5E7EB] py-1.5 pl-6 pr-2 text-right font-mono text-sm text-[#111827] focus:border-rose-400 focus:outline-none focus:ring-1 focus:ring-rose-100 disabled:opacity-60 ${
+                                singleCategoryMode ? 'mt-1 w-full' : 'w-24'
+                              }`}
                             />
                           </div>
-                          <span className="hidden text-[11px] text-slate-400 sm:inline">/μήνα</span>
+                          </label>
+                          {!singleCategoryMode && <span className="hidden text-[11px] text-slate-400 sm:inline">/μήνα</span>}
                           <button
                             type="button"
                             onClick={() => deleteLine(cat.id, line.id)}
@@ -244,17 +287,17 @@ export function PLCostEditor({
                           </button>
                         </div>
                       ))}
-                      <div className="py-2">
+                      {!singleCategoryMode && <div className="py-2">
                         <button
                           type="button"
                           onClick={() => addLine(cat.id)}
                           disabled={disabled}
-                          className="flex items-center gap-1 text-xs text-[var(--nts-accent)] hover:underline disabled:opacity-40"
+                          className="flex items-center gap-1 text-xs text-rose-600 hover:underline disabled:opacity-40"
                         >
                           <Plus size={12} />
                           Προσθήκη γραμμής
                         </button>
-                      </div>
+                      </div>}
                     </div>
                   )}
                 </div>
@@ -265,7 +308,7 @@ export function PLCostEditor({
       </div>
 
       {/* Footer */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#E5E7EB] bg-slate-50/60 px-4 py-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-rose-100 bg-rose-50/30 px-4 py-2.5">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
           <span className="text-xs text-[#6B7280]">
             Σύνολο:{' '}
@@ -292,12 +335,12 @@ export function PLCostEditor({
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={addCategory}
+            onClick={addPrimaryLine}
             disabled={disabled}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-[#D1D5DB] bg-white px-3 py-1.5 text-xs font-medium text-[#4B5563] hover:border-[var(--nts-accent)] hover:text-[var(--nts-accent)] disabled:opacity-40"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-rose-200 bg-white px-3 py-1.5 text-xs font-medium text-[#4B5563] hover:border-rose-400 hover:text-rose-600 disabled:opacity-40"
           >
-            <FolderPlus size={13} />
-            Κατηγορία
+            <Plus size={13} />
+            Γραμμή
           </button>
           <button
             type="button"

@@ -122,9 +122,9 @@ export function MarketingCostLinesEditor({
   return (
     <div className="overflow-hidden rounded-xl border border-[#E5E7EB] bg-white">
       {/* Header */}
-      <div className="flex items-start gap-3 border-b border-[#E5E7EB] bg-slate-50/60 px-4 py-3.5">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#E5E7EB] bg-white">
-          <PiggyBank size={17} className="text-[var(--nts-accent)]" />
+      <div className="flex items-start gap-3 border-b border-rose-100 bg-rose-50/40 px-4 py-3.5">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-rose-100 bg-white">
+          <PiggyBank size={17} className="text-rose-500" />
         </div>
         <div className="min-w-0">
           <p className="text-sm font-semibold text-[#111827]">Επιπλέον κόστη marketing (ROI)</p>
@@ -149,12 +149,12 @@ export function MarketingCostLinesEditor({
               key={line.id}
               className={`relative flex flex-col gap-2 rounded-lg border p-3 transition-colors sm:flex-row sm:flex-wrap sm:items-end ${
                 synced
-                  ? 'border-emerald-200 bg-emerald-50/50 shadow-[inset_3px_0_0_0_#10b981]'
+                  ? 'border-rose-200 bg-rose-50/40 shadow-[inset_3px_0_0_0_#fb7185]'
                   : 'border-[#E5E7EB] bg-white'
               }`}
             >
               {synced && (
-                <span className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                <span className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-rose-100 text-rose-600">
                   <Check size={12} strokeWidth={2.5} />
                 </span>
               )}
@@ -166,7 +166,7 @@ export function MarketingCostLinesEditor({
                   onChange={(e) => patchLine(line.id, { label: e.target.value })}
                   disabled={disabled}
                   placeholder="π.χ. Agency retainer"
-                  className="mt-1 w-full rounded-md border border-[#E5E7EB] px-2.5 py-1.5 text-sm text-[#111827] focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/20 disabled:opacity-50"
+                  className="mt-1 w-full rounded-md border border-[#E5E7EB] px-2.5 py-1.5 text-sm text-[#111827] focus:border-rose-400 focus:outline-none focus:ring-1 focus:ring-rose-100 disabled:opacity-50"
                 />
               </label>
               <label className="w-full sm:w-40">
@@ -175,7 +175,7 @@ export function MarketingCostLinesEditor({
                   value={line.kind}
                   onChange={(e) => setKind(line.id, e.target.value as MarketingCostLine['kind'])}
                   disabled={disabled}
-                  className="mt-1 w-full rounded-md border border-[#E5E7EB] px-2.5 py-1.5 text-sm text-[#111827] focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/20 disabled:opacity-50"
+                  className="mt-1 w-full rounded-md border border-[#E5E7EB] px-2.5 py-1.5 text-sm text-[#111827] focus:border-rose-400 focus:outline-none focus:ring-1 focus:ring-rose-100 disabled:opacity-50"
                 >
                   <option value="fixed_monthly">Σταθερό / μήνα (€)</option>
                   <option value="percent_of_budget">% του μην. budget</option>
@@ -195,7 +195,7 @@ export function MarketingCostLinesEditor({
                       patchLine(line.id, { amountEUR: v === '' || isNaN(n) ? 0 : n });
                     }}
                     disabled={disabled}
-                    className="mt-1 w-full rounded-md border border-[#E5E7EB] px-2.5 py-1.5 font-mono text-sm text-[#111827] focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/20 disabled:opacity-50"
+                    className="mt-1 w-full rounded-md border border-[#E5E7EB] px-2.5 py-1.5 font-mono text-sm text-[#111827] focus:border-rose-400 focus:outline-none focus:ring-1 focus:ring-rose-100 disabled:opacity-50"
                   />
                 </label>
               )}
@@ -212,7 +212,7 @@ export function MarketingCostLinesEditor({
                       patchLine(line.id, { percent: v === '' || isNaN(n) ? 0 : n });
                     }}
                     disabled={disabled}
-                    className="mt-1 w-full rounded-md border border-[#E5E7EB] px-2.5 py-1.5 font-mono text-sm text-[#111827] focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/20 disabled:opacity-50"
+                    className="mt-1 w-full rounded-md border border-[#E5E7EB] px-2.5 py-1.5 font-mono text-sm text-[#111827] focus:border-rose-400 focus:outline-none focus:ring-1 focus:ring-rose-100 disabled:opacity-50"
                   />
                 </label>
               )}
@@ -225,7 +225,7 @@ export function MarketingCostLinesEditor({
                       value={line.month}
                       onChange={(e) => patchLine(line.id, { month: e.target.value })}
                       disabled={disabled}
-                      className="mt-1 w-full rounded-md border border-[#E5E7EB] px-2.5 py-1.5 text-sm text-[#111827] focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/20 disabled:opacity-50"
+                      className="mt-1 w-full rounded-md border border-[#E5E7EB] px-2.5 py-1.5 text-sm text-[#111827] focus:border-rose-400 focus:outline-none focus:ring-1 focus:ring-rose-100 disabled:opacity-50"
                     />
                   </label>
                   <label className="w-full sm:w-28">
@@ -240,7 +240,7 @@ export function MarketingCostLinesEditor({
                         patchLine(line.id, { amountEUR: v === '' || isNaN(n) ? 0 : n });
                       }}
                       disabled={disabled}
-                      className="mt-1 w-full rounded-md border border-[#E5E7EB] px-2.5 py-1.5 font-mono text-sm text-[#111827] focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/20 disabled:opacity-50"
+                      className="mt-1 w-full rounded-md border border-[#E5E7EB] px-2.5 py-1.5 font-mono text-sm text-[#111827] focus:border-rose-400 focus:outline-none focus:ring-1 focus:ring-rose-100 disabled:opacity-50"
                     />
                   </label>
                 </>
@@ -266,12 +266,12 @@ export function MarketingCostLinesEditor({
       </div>
 
       {/* Footer */}
-      <div className="flex flex-wrap items-center gap-2 border-t border-[#E5E7EB] bg-slate-50/60 px-4 py-2.5">
+      <div className="flex flex-wrap items-center gap-2 border-t border-rose-100 bg-rose-50/30 px-4 py-2.5">
         <button
           type="button"
           onClick={addLine}
           disabled={disabled}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-[#D1D5DB] bg-white px-3 py-1.5 text-xs font-medium text-[#4B5563] hover:border-[var(--nts-accent)] hover:text-[var(--nts-accent)] disabled:opacity-40"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-rose-200 bg-white px-3 py-1.5 text-xs font-medium text-[#4B5563] hover:border-rose-400 hover:text-rose-600 disabled:opacity-40"
         >
           <Plus size={13} />
           Γραμμή
