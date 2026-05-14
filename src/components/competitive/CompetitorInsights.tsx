@@ -153,6 +153,11 @@ function matchNumericExpr(value: number | null | undefined, expr: string): boole
       default: return value === n;
     }
   }
+  const notEq = e.match(/^(<>|!=)\s*(-?\d+(?:[.,]\d+)?)$/);
+  if (notEq) {
+    const n = parseFloat(notEq[2].replace(',', '.'));
+    return value !== n;
+  }
   const n = parseFloat(e.replace(',', '.'));
   if (!Number.isNaN(n)) return value === n;
   return true;
@@ -250,6 +255,53 @@ function salesStockRatio(inv: SkuInventoryRow | null | undefined): number | null
   if (typeof st !== 'number' || typeof sd !== 'number') return null;
   if (!Number.isFinite(st) || !Number.isFinite(sd) || st <= 0) return null;
   return Math.round((sd / st) * 100) / 100;
+}
+
+function numericFilterPresets(col: string): { label: string; value: string }[] {
+  if (col === 'priceDiff' || col === 'priceDiffPercent') {
+    return [
+      { label: 'Πάνω από αγορά (>0)', value: '>0' },
+      { label: 'Κάτω από αγορά (<0)', value: '<0' },
+      { label: 'Ίση τιμή (=0)', value: '=0' },
+      { label: 'Ακριβότερα >10%', value: '>10' },
+      { label: 'Φθηνότερα >10%', value: '<-10' },
+    ];
+  }
+  if (col === 'salesStockRatio') {
+    return [
+      { label: 'Υψηλή ζήτηση (>1)', value: '>1' },
+      { label: 'Μεσαία κίνηση (0.25-1)', value: '0.25-1' },
+      { label: 'Χαμηλή κίνηση (<0.25)', value: '<0.25' },
+      { label: 'Χωρίς πωλήσεις (=0)', value: '=0' },
+    ];
+  }
+  if (col === 'stock') {
+    return [
+      { label: 'Με stock (>0)', value: '>0' },
+      { label: 'Χωρίς stock (=0)', value: '=0' },
+      { label: 'Υψηλό stock (>10)', value: '>10' },
+    ];
+  }
+  if (col === 'sold') {
+    return [
+      { label: 'Με πωλήσεις (>0)', value: '>0' },
+      { label: 'Χωρίς πωλήσεις (=0)', value: '=0' },
+      { label: 'Υψηλές πωλήσεις (>10)', value: '>10' },
+    ];
+  }
+  return [
+    { label: 'Με τιμή (>0)', value: '>0' },
+    { label: 'Μηδέν (=0)', value: '=0' },
+  ];
+}
+
+function buildCustomNumericExpression(operator: string, first: string, second: string): string {
+  const a = first.trim().replace(',', '.');
+  const b = second.trim().replace(',', '.');
+  if (!a) return '';
+  if (operator === 'between') return b ? `${a}-${b}` : '';
+  if (operator === '=') return `=${a}`;
+  return `${operator}${a}`;
 }
 
 /** Δευτερεύων αριθμητικός συγκριτής: πραγματικοί αριθμοί (συμπ. 0) πριν από null/undefined. */
@@ -2188,6 +2240,10 @@ function HeaderFilter(props: HeaderFilterProps) {
   const btnRef = useRef<HTMLButtonElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
   const [catSearch, setCatSearch] = useState('');
+  const [customOperator, setCustomOperator] = useState('>');
+  const [customValue, setCustomValue] = useState('');
+  const [customValueTo, setCustomValueTo] = useState('');
+  const numericPresets = useMemo(() => (kind === 'number' ? numericFilterPresets(col) : []), [kind, col]);
 
   useEffect(() => {
     if (!open) return;
@@ -2307,12 +2363,88 @@ function HeaderFilter(props: HeaderFilterProps) {
             </div>
           ) : (
             <div>
+              {kind === 'number' && (
+                <div className="mb-3 space-y-2">
+                  <div>
+                    <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                      Προεπιλογές
+                    </label>
+                    <select
+                      value=""
+                      onChange={(e) => {
+                        if (!e.target.value) return;
+                        onTextChange?.(e.target.value);
+                        setOpen(false);
+                      }}
+                      className="w-full rounded border border-[#E5E7EB] bg-white px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]"
+                    >
+                      <option value="">Επιλέξτε preset…</option>
+                      {numericPresets.map((preset) => (
+                        <option key={preset.value} value={preset.value}>
+                          {preset.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="rounded-md border border-[#F3F4F6] bg-[#FAFAFA] p-2">
+                    <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-[#6B7280]">
+                      Custom filter
+                    </p>
+                    <div className="grid grid-cols-[88px_1fr] gap-1.5">
+                      <select
+                        value={customOperator}
+                        onChange={(e) => setCustomOperator(e.target.value)}
+                        className="rounded border border-[#E5E7EB] bg-white px-1.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]"
+                      >
+                        <option value="=">Equals</option>
+                        <option value="!=">Does not equal</option>
+                        <option value=">">Greater than</option>
+                        <option value=">=">Greater/equal</option>
+                        <option value="<">Less than</option>
+                        <option value="<=">Less/equal</option>
+                        <option value="between">Between</option>
+                      </select>
+                      <input
+                        type="number"
+                        step="any"
+                        value={customValue}
+                        onChange={(e) => setCustomValue(e.target.value)}
+                        placeholder="τιμή"
+                        className="rounded border border-[#E5E7EB] bg-white px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]"
+                      />
+                    </div>
+                    {customOperator === 'between' && (
+                      <input
+                        type="number"
+                        step="any"
+                        value={customValueTo}
+                        onChange={(e) => setCustomValueTo(e.target.value)}
+                        placeholder="έως"
+                        className="mt-1.5 w-full rounded border border-[#E5E7EB] bg-white px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]"
+                      />
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const expr = buildCustomNumericExpression(customOperator, customValue, customValueTo);
+                        if (!expr) return;
+                        onTextChange?.(expr);
+                        setOpen(false);
+                      }}
+                      className="mt-2 w-full rounded bg-[var(--nts-accent)] px-2 py-1.5 text-xs font-semibold text-white hover:opacity-90"
+                    >
+                      Εφαρμογή custom filter
+                    </button>
+                  </div>
+                </div>
+              )}
               <input
                 type="text"
                 autoFocus
                 value={textValue ?? ''}
                 onChange={(e) => onTextChange?.(e.target.value)}
-                placeholder={kind === 'number' ? 'π.χ. >10, <5, 5-20, =8' : 'περιέχει…'}
+                placeholder={kind === 'number' ? 'Γρήγορο φίλτρο: >10, <5, 5-20, =8' : 'περιέχει…'}
                 className="w-full px-2 py-1.5 text-xs border border-[#E5E7EB] rounded focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]"
               />
               <p className="text-[10px] text-[#9CA3AF] mt-1 leading-tight">

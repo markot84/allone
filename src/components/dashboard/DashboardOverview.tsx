@@ -107,6 +107,21 @@ function padSparklineForChart(values: number[]): number[] {
   return values;
 }
 
+function sumDailyRecordByMonthInPeriod(
+  daily: Record<string, number>,
+  fromDate: string,
+  toDate: string
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const day of eachDateInclusive(fromDate, toDate)) {
+    const value = daily[day] || 0;
+    if (!value) continue;
+    const ym = day.slice(0, 7);
+    out[ym] = (out[ym] || 0) + value;
+  }
+  return out;
+}
+
 const ECOMM_TOP_PLATFORM_LABELS: Record<string, string> = {
   shopify: 'Shopify',
   woocommerce: 'WooCommerce',
@@ -500,13 +515,10 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
 
     if (hasErpRevenueForPeriod) {
       if (dayCount <= REVENUE_CHART_MAX_DAILY_POINTS) {
-        return Object.entries(erpRevenueByDayRecord)
-          .filter(([d, revenue]) => d >= fromDate && d <= toDate && Number.isFinite(revenue) && revenue > 0)
-          .sort(([a], [b]) => a.localeCompare(b))
-          .map(([d, revenue]) => ({
-            month: formatTrendDayLabel(d),
-            total: revenue,
-          }));
+        return eachDateInclusive(fromDate, toDate).map((d) => ({
+          month: formatTrendDayLabel(d),
+          total: erpRevenueByDayRecord[d] || 0,
+        }));
       }
       const fromYm = fromDate.slice(0, 7);
       const toYm = toDate.slice(0, 7);
@@ -852,8 +864,12 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         )
       )}
 
-      {/* Global period selector — applies to all pages as default */}
-      {(hasOrganic || hasCampaigns) && (
+      {/* Global period selector — applies to all period-aware dashboard cards/charts */}
+      {(hasOrganic ||
+        hasCampaigns ||
+        hasEcommerceRevenue ||
+        hasErpBusinessRevenue ||
+        (enabledModules.procurement && costing12m.hasColumn && costing12m.sum > 0)) && (
         <div className="flex flex-wrap items-center gap-2">
           <div className="-mx-1 max-w-full overflow-x-auto pb-1 sm:mx-0 sm:overflow-visible sm:pb-0">
           <div className="flex w-max min-w-0 items-center gap-1 rounded-lg bg-gray-100 p-1 sm:w-auto">
@@ -958,19 +974,17 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             if (days > 0) revenueByMonth[ym] = dailyRate * days;
           });
         } else if (hasErpRevenueForPeriod) {
-          Object.entries(businessRevenue.revenueByMonthRecord).forEach(([ym, val]) => {
-            if (ym < kFromYm || ym > kToYm) return;
-            revenueByMonth[ym] = (revenueByMonth[ym] || 0) + (typeof val === 'number' ? val : 0);
+          Object.entries(sumDailyRecordByMonthInPeriod(erpRevenueByDayRecord, periodDates.fromDate, periodDates.toDate)).forEach(([ym, val]) => {
+            revenueByMonth[ym] = (revenueByMonth[ym] || 0) + val;
           });
         } else if (hasEcommerceRevenue) {
-          ecommHist.monthlyRevenue.forEach((r) => {
-            if (r.month < kFromYm || r.month > kToYm) return;
-            revenueByMonth[r.month] = (revenueByMonth[r.month] || 0) + r.revenue;
+          Object.entries(sumDailyRecordByMonthInPeriod(ecommRevenueByDayRecord, periodDates.fromDate, periodDates.toDate)).forEach(([ym, val]) => {
+            revenueByMonth[ym] = (revenueByMonth[ym] || 0) + val;
           });
         } else {
-          organicByMonth.forEach((v, ym) => {
-            if (ym < kFromYm || ym > kToYm) return;
-            revenueByMonth[ym] = (revenueByMonth[ym] || 0) + v;
+          const organicMonthly = sumDailyRecordByMonthInPeriod(ga4OrganicEffective, periodDates.fromDate, periodDates.toDate);
+          Object.entries(organicMonthly).forEach(([ym, val]) => {
+            revenueByMonth[ym] = (revenueByMonth[ym] || 0) + val;
           });
         }
         periodCampaigns.forEach((c) => {
