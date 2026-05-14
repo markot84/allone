@@ -14,6 +14,7 @@ import {
   Download,
   FileText,
   FileSpreadsheet,
+  Filter,
   TrendingUp,
   TrendingDown,
   Trash2,
@@ -52,42 +53,139 @@ const PRODUCT_INTELLIGENCE_ROW_LIMIT = 5000;
 const PRODUCT_INTELLIGENCE_BENCHMARK_LIMIT = 5000;
 const LARGE_CATALOG_ALERT_THRESHOLD = 10000;
 
-/** Υποστηρίζει "10", ">=10", "<=20", "10-20". Κενό = όλα. */
-function matchNumericFilter(val: number, expr: string): boolean {
-  const e = expr.trim();
-  if (!e) return true;
-  if (Number.isNaN(val)) return false;
-  const v = val === Number.POSITIVE_INFINITY ? 1e15 : val === Number.NEGATIVE_INFINITY ? -1e15 : val;
-  const range = e.match(/^([\d.]+)\s*-\s*([\d.]+)$/);
-  if (range) {
-    const a = parseFloat(range[1]);
-    const b = parseFloat(range[2]);
-    if (Number.isNaN(a) || Number.isNaN(b)) return true;
-    return v >= Math.min(a, b) && v <= Math.max(a, b);
-  }
-  const op = e.match(/^(>=|<=|>|<|=)\s*([\d.]+)$/);
-  if (op) {
-    const n = parseFloat(op[2]);
-    if (Number.isNaN(n)) return true;
-    switch (op[1]) {
-      case '>=': return v >= n;
-      case '<=': return v <= n;
-      case '>': return v > n;
-      case '<': return v < n;
-      default: return v === n;
-    }
-  }
-  const n = parseFloat(e);
-  if (!Number.isNaN(n)) return v === n;
-  return true;
+const EMPTY_CATEGORY_ID = '__EMPTY_CAT__';
+const EMPTY_TAG_ID = '__EMPTY_TAG__';
+
+function categoryIdForProduct(p: Product): string {
+  const c = (p.category ?? '').trim();
+  return c || EMPTY_CATEGORY_ID;
 }
 
-function getProductBenchmarkDiffPct(
-  product: Product,
-  benchmarkMap: Map<string, { priceDiff: number; benchmarkPrice: number }>,
-): number | undefined {
-  const candidates = [product.sku, product.id, product.name].filter(Boolean).map((k) => k!.toLowerCase());
-  return candidates.reduce<number | undefined>((found, k) => found ?? benchmarkMap.get(k)?.priceDiff, undefined);
+function tagIdForProduct(p: Product): string {
+  const t = (p.priority_tag ?? '').trim();
+  return t || EMPTY_TAG_ID;
+}
+
+type ExcelFilterOption = { id: string; label: string };
+
+interface ColumnExcelFilterProps {
+  label: string;
+  options: ExcelFilterOption[];
+  value: string[] | null;
+  onChange: (next: string[] | null) => void;
+}
+
+function ColumnExcelFilter({ label, options, value, onChange }: ColumnExcelFilterProps) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const ref = React.useRef<HTMLDivElement>(null);
+  const allIds = useMemo(() => options.map((o) => o.id), [options]);
+  const selected = useMemo(() => (value === null ? new Set(allIds) : new Set(value)), [value, allIds]);
+
+  useEffect(() => {
+    if (!open) {
+      setQ('');
+      return;
+    }
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const filteredOpts = useMemo(
+    () =>
+      options.filter(
+        (o) =>
+          o.label.toLowerCase().includes(q.toLowerCase()) ||
+          o.id.toLowerCase().includes(q.toLowerCase()),
+      ),
+    [options, q],
+  );
+
+  const toggle = (id: string) => {
+    if (value === null) {
+      const next = new Set(allIds);
+      next.delete(id);
+      onChange(next.size === 0 ? [] : [...next]);
+      return;
+    }
+    const next = new Set(value);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    if (next.size === 0) onChange([]);
+    else if (next.size === allIds.length) onChange(null);
+    else onChange([...next]);
+  };
+
+  const summary =
+    value === null ? 'Όλα' : value.length === 0 ? 'Καμία' : `${value.length}/${allIds.length}`;
+
+  if (options.length === 0) {
+    return (
+      <div className="flex flex-col gap-1 min-w-[140px] opacity-60">
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">{label}</span>
+        <span className="text-xs text-[#9CA3AF] py-2">—</span>
+      </div>
+    );
+  }
+
+  return (
+    <div ref={ref} className="relative flex flex-col gap-1 min-w-[160px]">
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">{label}</span>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center justify-between gap-2 px-3 py-2 bg-[#F5F5F5] border border-transparent rounded-lg text-sm hover:border-[var(--nts-accent)] transition-all text-left w-full"
+        aria-expanded={open}
+        aria-haspopup="listbox"
+      >
+        <span className="truncate flex items-center gap-1.5 min-w-0">
+          <Filter size={14} className="text-[#9CA3AF] shrink-0" aria-hidden />
+          <span className="text-[#374151]">{summary}</span>
+        </span>
+        <ChevronDown size={14} className="text-[#9CA3AF] shrink-0" />
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-[#E5E5E5] rounded-lg shadow-lg max-h-72 flex flex-col min-w-[240px]">
+          <div className="p-2 border-b border-[#E5E5E5]">
+            <input
+              type="search"
+              placeholder="Αναζήτηση στη λίστα…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              className="w-full px-2 py-1.5 text-xs border border-[#E5E7EB] rounded-md focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/30"
+            />
+          </div>
+          <div className="overflow-y-auto max-h-52 p-1">
+            {filteredOpts.map((o) => (
+              <label
+                key={o.id}
+                className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-[#F9FAFB] cursor-pointer text-sm text-[#374151]"
+              >
+                <input
+                  type="checkbox"
+                  checked={selected.has(o.id)}
+                  onChange={() => toggle(o.id)}
+                  className="rounded border-[#D1D5DB] text-[var(--nts-accent)] focus:ring-[var(--nts-accent)]/30"
+                />
+                <span className="truncate">{o.label}</span>
+              </label>
+            ))}
+          </div>
+          <div className="flex gap-2 p-2 border-t border-[#E5E5E5] justify-between">
+            <button type="button" className="text-xs font-medium text-[var(--nts-accent)] hover:underline" onClick={() => onChange(null)}>
+              Επιλογή όλων
+            </button>
+            <button type="button" className="text-xs font-medium text-[#6B7280] hover:underline" onClick={() => onChange([])}>
+              Καθαρισμός
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function computeInventorySummary(
@@ -262,7 +360,8 @@ interface ProductIntelligenceProps {
 
 export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProps = {}) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [categoryInclude, setCategoryInclude] = useState<string[] | null>(null);
+  const [tagInclude, setTagInclude] = useState<string[] | null>(null);
   const [marginFilter, setMarginFilter] = useState<string>('all');
   const [stockAgeFilter, setStockAgeFilter] = useState<'all' | 'dead' | 'near-dead' | 'high-margin-low-stock'>('all');
   const [stockCardFilter, setStockCardFilter] = useState<'all' | 'healthy' | 'excess' | 'dead' | 'low'>('all');
@@ -276,12 +375,6 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   const [productDateFrom, setProductDateFrom] = useState('');
   const [productDateTo, setProductDateTo] = useState('');
   const [productDateMode, setProductDateMode] = useState<'imported' | 'first_available'>('imported');
-  /** Φίλτρα στήλης πίνακα (αριθμητικά: >10, 5-20, =3 · Tag: περιέχει κείμενο) */
-  const [filterStockExpr, setFilterStockExpr] = useState('');
-  const [filterDosExpr, setFilterDosExpr] = useState('');
-  const [filterTagContains, setFilterTagContains] = useState('');
-  const [filterPriceExpr, setFilterPriceExpr] = useState('');
-  const [filterVsMarketExpr, setFilterVsMarketExpr] = useState('');
 
   /** Deep link: `#products?stock=low|dead|excess|healthy` ή `#products?filter=high-margin-low-stock` */
   useEffect(() => {
@@ -322,12 +415,6 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   const { data: procData } = useProcurement();
   const { productStats } = useProductAggregates();
   const { benchmarks, count: benchmarkCount } = usePriceBenchmarks({ maxDocs: PRODUCT_INTELLIGENCE_BENCHMARK_LIMIT });
-  const hasAdvancedColumnFilters =
-    !!filterStockExpr.trim() ||
-    !!filterDosExpr.trim() ||
-    !!filterTagContains.trim() ||
-    !!filterPriceExpr.trim() ||
-    (benchmarkCount > 0 && !!filterVsMarketExpr.trim());
   const serverBucket: ProductIntelligenceBucket =
     stockCardFilter === 'healthy' || stockCardFilter === 'excess' || stockCardFilter === 'dead' || stockCardFilter === 'low'
       ? stockCardFilter
@@ -367,10 +454,10 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     !usingProcurement &&
     !hasDateFilter &&
     !searchQuery.trim() &&
-    selectedCategory === 'all' &&
     marginFilter === 'all' &&
     stockAgeFilter === 'all' &&
-    !hasAdvancedColumnFilters;
+    categoryInclude === null &&
+    tagInclude === null;
   const useServerIntelligence =
     serverFiltersSupported &&
     !!serverIntelligence.aggregate &&
@@ -550,44 +637,56 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   // Use procurement data when available, then precomputed aggregates for large imports.
   const displaySummary = procInventorySummary ?? (hasServerAggregate ? serverIntelligence.aggregate?.summary ?? null : null) ?? aggregateInventorySummary ?? inventorySummary;
 
-  const categories = useMemo(() => {
-    if (!usingProcurement && serverIntelligence.aggregate?.categories?.length) {
-      return serverIntelligence.aggregate.categories.map((c) => c.name).filter(Boolean).sort();
+  const categoryOptions = useMemo((): ExcelFilterOption[] => {
+    const map = new Map<string, string>();
+    for (const p of productsScopedByDate) {
+      const id = categoryIdForProduct(p);
+      const label =
+        id === EMPTY_CATEGORY_ID ? '(Κενή κατηγορία)' : (p.category ?? '').trim() || '(Κενή κατηγορία)';
+      if (!map.has(id)) map.set(id, label);
     }
-    const fromProducts = [...new Set(productsScopedByDate.map(p => p.category))].filter(Boolean).sort();
-    return fromProducts;
-  }, [usingProcurement, serverIntelligence.aggregate, productsScopedByDate]);
+    return [...map.entries()]
+      .map(([id, label]) => ({ id, label }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'el'));
+  }, [productsScopedByDate]);
+
+  const tagOptions = useMemo((): ExcelFilterOption[] => {
+    const map = new Map<string, string>();
+    for (const p of productsScopedByDate) {
+      const id = tagIdForProduct(p);
+      const label = id === EMPTY_TAG_ID ? '(Χωρίς tag)' : (p.priority_tag ?? '').trim() || '(Χωρίς tag)';
+      if (!map.has(id)) map.set(id, label);
+    }
+    return [...map.entries()]
+      .map(([id, label]) => ({ id, label }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'el'));
+  }, [productsScopedByDate]);
 
   // Filter and sort products
   const filteredProducts = useMemo(() => {
-    const useRowModel = usingProcurement || hasServerAggregate;
+    const matchesCategory = (p: Product) => {
+      if (categoryInclude === null) return true;
+      if (categoryInclude.length === 0) return false;
+      return categoryInclude.includes(categoryIdForProduct(p));
+    };
+    const matchesTag = (p: Product) => {
+      if (tagInclude === null) return true;
+      if (tagInclude.length === 0) return false;
+      return tagInclude.includes(tagIdForProduct(p));
+    };
 
-    const applyColumnFilters = (list: Product[]) =>
-      list.filter((p) => {
-        if (!matchNumericFilter(getEffectiveStockLevel(p), filterStockExpr)) return false;
-        const rawDos = getDaysOfStock(p);
-        const dosVal = rawDos === Infinity && useRowModel ? NaN : rawDos;
-        if (!matchNumericFilter(dosVal, filterDosExpr)) return false;
-        const tq = filterTagContains.trim().toLowerCase();
-        if (tq && !(p.priority_tag || '').toLowerCase().includes(tq)) return false;
-        if (!matchNumericFilter(p.price ?? 0, filterPriceExpr)) return false;
-        const vmExpr = filterVsMarketExpr.trim();
-        if (benchmarkCount > 0 && vmExpr) {
-          const d = getProductBenchmarkDiffPct(p, benchmarkMap);
-          if (d === undefined || !matchNumericFilter(d, vmExpr)) return false;
-        }
-        return true;
-      });
+    const applyExcel = (list: Product[]) =>
+      list.filter((p) => matchesCategory(p) && matchesTag(p));
 
     if (hasServerAggregate) {
-      return applyColumnFilters(productsScopedByDate);
+      return applyExcel(productsScopedByDate);
     }
 
-    return applyColumnFilters(
+    return applyExcel(
       productsScopedByDate.filter((p) => {
-        const matchesSearch = (p.name ?? '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-                             (p.sku ?? '').toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesCategory = selectedCategory === 'all' || (p.category ?? '') === selectedCategory;
+        const matchesSearch =
+          (p.name ?? '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (p.sku ?? '').toLowerCase().includes(searchQuery.toLowerCase());
         const matchesMargin = marginFilter === 'all' || p.margin_tier === marginFilter;
 
         const health = resolveStockHealth(p, supplierTodMap, usingProcurement);
@@ -596,8 +695,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           matchesStockAge = health === 'dead';
         } else if (stockAgeFilter === 'near-dead') {
           const dos = getDaysOfStock(p);
-          matchesStockAge =
-            health === 'excess' && (usingProcurement ? true : dos !== Infinity);
+          matchesStockAge = health === 'excess' && (usingProcurement ? true : dos !== Infinity);
         } else if (stockAgeFilter === 'high-margin-low-stock') {
           const isHighMargin = p.margin_tier === 'high' || (p.margin_percentage ?? 0) > 25;
           matchesStockAge = isHighMargin && health === 'low';
@@ -608,7 +706,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           matchesStockCard = health === stockCardFilter;
         }
 
-        return matchesSearch && matchesCategory && matchesMargin && matchesStockAge && matchesStockCard;
+        return matchesSearch && matchesMargin && matchesStockAge && matchesStockCard;
       }),
     ).sort((a, b) => {
         const aVal = sortField === 'stock_age_days' ? getDaysOfStock(a) : a[sortField];
@@ -626,7 +724,8 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     hasServerAggregate,
     productsScopedByDate,
     searchQuery,
-    selectedCategory,
+    categoryInclude,
+    tagInclude,
     marginFilter,
     stockAgeFilter,
     stockCardFilter,
@@ -634,13 +733,6 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     sortDirection,
     supplierTodMap,
     usingProcurement,
-    filterStockExpr,
-    filterDosExpr,
-    filterTagContains,
-    filterPriceExpr,
-    filterVsMarketExpr,
-    benchmarkMap,
-    benchmarkCount,
   ]);
 
   const serverFilteredTotal = hasServerAggregate ? (serverIntelligence.page?.totalRows ?? filteredProducts.length) : filteredProducts.length;
@@ -656,7 +748,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, selectedCategory, marginFilter, stockAgeFilter, stockCardFilter, sortField, sortDirection, productDateFrom, productDateTo, productDateMode, filterStockExpr, filterDosExpr, filterTagContains, filterPriceExpr, filterVsMarketExpr]);
+  }, [searchQuery, categoryInclude, tagInclude, marginFilter, stockAgeFilter, stockCardFilter, sortField, sortDirection, productDateFrom, productDateTo, productDateMode]);
 
   const handleQuickExportCsv = () => {
     if (filteredProducts.length === 0) {
@@ -1022,8 +1114,8 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
             </span>
           </div>
         )}
-        {/* Filters */}
-        <div className="p-4 border-b border-[#E5E5E5] space-y-3">
+        {/* Filters — φίλτρα τύπου Excel (λίστα τιμών) + εξαγωγή */}
+        <div className="p-4 border-b border-[#E5E5E5]">
           <div className="flex flex-wrap gap-3 items-end">
             <div className="relative flex-1 min-w-[200px]">
               <label className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF] mb-1 block">Προϊόν / SKU</label>
@@ -1036,14 +1128,13 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                 className="w-full pl-10 pr-4 py-2 bg-[#F5F5F5] border border-transparent rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)] focus:bg-white transition-all"
               />
             </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">Κατηγορία</span>
-              <DropdownFilter
-                value={selectedCategory}
-                onChange={setSelectedCategory}
-                options={[{ value: 'all', label: 'Όλες οι κατηγορίες' }, ...categories.map(c => ({ value: c, label: c }))]}
-              />
-            </div>
+            <ColumnExcelFilter
+              label="Κατηγορία"
+              options={categoryOptions}
+              value={categoryInclude}
+              onChange={setCategoryInclude}
+            />
+            <ColumnExcelFilter label="Tag" options={tagOptions} value={tagInclude} onChange={setTagInclude} />
             <div className="flex flex-col gap-1">
               <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">Margin tier</span>
               <DropdownFilter
@@ -1086,91 +1177,8 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
               </Button>
             </div>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 pt-2 border-t border-dashed border-[#E5E5E5]">
-            <div>
-              <label className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF] mb-1 block" title="Π.χ. &gt;10, 5-20, =0">
-                Stock (απόθεμα)
-              </label>
-              <input
-                type="text"
-                value={filterStockExpr}
-                onChange={(e) => setFilterStockExpr(e.target.value)}
-                placeholder=">0"
-                className="w-full px-2 py-1.5 text-sm rounded-lg border border-[#E5E7EB] bg-white focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/30"
-              />
-            </div>
-            <div>
-              <label className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF] mb-1 block" title="Ημέρες · ERP χωρίς DOS = κενό φίλτρο">
-                DOS (ημέρες)
-              </label>
-              <input
-                type="text"
-                value={filterDosExpr}
-                onChange={(e) => setFilterDosExpr(e.target.value)}
-                placeholder=">=30"
-                className="w-full px-2 py-1.5 text-sm rounded-lg border border-[#E5E7EB] bg-white focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/30"
-              />
-            </div>
-            <div>
-              <label className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF] mb-1 block">
-                Tag
-              </label>
-              <input
-                type="text"
-                value={filterTagContains}
-                onChange={(e) => setFilterTagContains(e.target.value)}
-                placeholder="περιέχει…"
-                className="w-full px-2 py-1.5 text-sm rounded-lg border border-[#E5E7EB] bg-white focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/30"
-              />
-            </div>
-            <div>
-              <label className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF] mb-1 block" title="Τιμή πώλησης (€)">
-                Τιμή (€)
-              </label>
-              <input
-                type="text"
-                value={filterPriceExpr}
-                onChange={(e) => setFilterPriceExpr(e.target.value)}
-                placeholder="10-50"
-                className="w-full px-2 py-1.5 text-sm rounded-lg border border-[#E5E7EB] bg-white focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/30"
-              />
-            </div>
-            {benchmarkCount > 0 && (
-              <div>
-                <label className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF] mb-1 block" title="% απόκλιση vs market">
-                  vs Market (%)
-                </label>
-                <input
-                  type="text"
-                  value={filterVsMarketExpr}
-                  onChange={(e) => setFilterVsMarketExpr(e.target.value)}
-                  placeholder="<0"
-                  className="w-full px-2 py-1.5 text-sm rounded-lg border border-[#E5E7EB] bg-white focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]/30"
-                />
-              </div>
-            )}
-            {hasAdvancedColumnFilters && (
-              <div className="flex items-end col-span-2 sm:col-span-1 lg:col-span-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFilterStockExpr('');
-                    setFilterDosExpr('');
-                    setFilterTagContains('');
-                    setFilterPriceExpr('');
-                    setFilterVsMarketExpr('');
-                  }}
-                  className="text-xs font-medium text-[var(--nts-accent)] hover:underline py-1.5"
-                >
-                  Καθαρισμός στήλων
-                </button>
-              </div>
-            )}
-          </div>
-          <p className="text-[11px] text-[#9CA3AF]">
-            Αριθμητικά φίλτρα: <code className="text-[10px] bg-[#F3F4F6] px-1 rounded">10</code>,{' '}
-            <code className="text-[10px] bg-[#F3F4F6] px-1 rounded">&gt;=30</code>,{' '}
-            <code className="text-[10px] bg-[#F3F4F6] px-1 rounded">5-20</code>. Η εξαγωγή CSV/Excel περιλαμβάνει όλες τις <strong className="font-medium text-[#6B7280]">τρέχουσες φιλτραρισμένες</strong> γραμμές (έως το όριο φόρτωσης).
+          <p className="text-[11px] text-[#9CA3AF] mt-3">
+            Φίλτρα όπως στο Excel: επιλέξτε μία ή περισσότερες τιμές ανά στήλη. Η εξαγωγή CSV/Excel περιλαμβάνει τις τρέχουσες φιλτραρισμένες γραμμές (έως το όριο φόρτωσης).
           </p>
         </div>
 
