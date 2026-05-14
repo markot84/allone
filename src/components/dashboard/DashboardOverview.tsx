@@ -107,12 +107,12 @@ function formatDashChartDateKeyTick(dateKey: string): string {
   return dateKey;
 }
 
-/** ERP chart: μόνο πραγματικά ημερήσια κλειδιά από `revenueByDay`, χωρίς τεχνητό fill/interpolation. */
-function actualDailyRevenueSeries(dayList: string[], record: Record<string, number>): Array<number | null> {
+/** ERP chart: πλήρης ημερήσια σειρά περιόδου, χωρίς interpolation/forward-fill. Missing day = €0. */
+function completeDailyRevenueSeries(dayList: string[], record: Record<string, number>): number[] {
   return dayList.map((d) => {
-    if (!Object.prototype.hasOwnProperty.call(record, d)) return null;
+    if (!Object.prototype.hasOwnProperty.call(record, d)) return 0;
     const value = Number(record[d]);
-    return Number.isFinite(value) ? value : null;
+    return Number.isFinite(value) ? value : 0;
   });
 }
 
@@ -532,10 +532,10 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     if (hasErpRevenueForPeriod) {
       if (dayCount <= REVENUE_CHART_MAX_DAILY_POINTS) {
         const days = eachDateInclusiveLocal(fromDate, toDate);
-        const actual = actualDailyRevenueSeries(days, erpRevenueByDayRecord);
+        const daily = completeDailyRevenueSeries(days, erpRevenueByDayRecord);
         return days.map((d, i) => ({
           dateKey: d,
-          total: actual[i],
+          total: daily[i] ?? 0,
         }));
       }
       const fromYm = fromDate.slice(0, 7);
@@ -1102,9 +1102,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           hasProcurementTurnoverEstimate && procurementPeriodDays > 0
             ? dayList.map(() => procurementRevenueInPeriod / procurementPeriodDays / 1000)
             : hasErpRevenueForPeriod
-              ? actualDailyRevenueSeries(dayList, erpRevenueByDayRecord)
-                .filter((v): v is number => v != null)
-                .map((v) => v / 1000)
+              ? completeDailyRevenueSeries(dayList, erpRevenueByDayRecord).map((v) => v / 1000)
               : hasEcommerceRevenue
                 ? dailyTrendKpi.map((r) => r.storeRevenue / 1000)
                 : dailyTrendKpi.map((r) => (r.organic + r.campaigns) / 1000)
@@ -1458,7 +1456,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   }}
                   labelFormatter={(label) => formatDashChartDateKeyTick(String(label))}
                   formatter={(value: unknown) => [
-                    value == null ? '—' : formatCurrencyCompact(Number(value) || 0),
+                    formatCurrencyCompact(Number(value) || 0),
                     revenuePerformanceChartLabel,
                   ]}
                   labelStyle={{ color: '#24292f', fontWeight: 600, marginBottom: 4 }}
@@ -1471,7 +1469,6 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   fillOpacity={1}
                   fill="url(#totalGradient)"
                   name="total"
-                  connectNulls={false}
                   isAnimationActive={false}
                 />
               </AreaChart>
