@@ -2249,7 +2249,7 @@ export const sendInviteEmail = onRequest(
 // ── Aggregate Stats: On-Demand (callable) ───────────────────────────────────
 
 export const refreshAggregates = onRequest(
-  { region: 'europe-west1', cors: true, timeoutSeconds: 120, memory: '512MiB', secrets: ['CONNECTOR_TOKEN_KEY'] },
+  { region: 'europe-west1', cors: true, timeoutSeconds: 540, memory: '2GiB', secrets: ['CONNECTOR_TOKEN_KEY'] },
   async (req, res) => {
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
