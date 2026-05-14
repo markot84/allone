@@ -37,8 +37,9 @@ import {
 import { safeBrandName } from '../../services/reportExport';
 
 const FUNCTIONS_BASE = FUNCTIONS_BASE_URL.replace(/\/$/, '');
-const COMPETITIVE_BENCHMARK_LIMIT = 15000;
+const COMPETITIVE_BENCHMARK_LIMIT = 5000;
 const COMPETITIVE_STOCK_PRODUCT_LIMIT = 10000;
+const COMPETITIVE_BENCHMARK_RENDER_LIMIT = 300;
 const COMPETITIVE_CACHE_TTL = 24 * 60 * 60 * 1000;
 
 // ── Types ────────────────────────────────────────────────
@@ -83,6 +84,7 @@ type BenchmarkCol =
   | 'priceDiff'
   | 'stock'
   | 'sold'
+  | 'salesStockRatio'
   | 'gtin';
 
 /** Στήλες πίνακα Price Insights — φίλτρα / ταξινόμηση όπως στα benchmarks. */
@@ -110,6 +112,7 @@ interface BenchmarkColumnFilters {
   priceDiff?: string;
   stock?: string;
   sold?: string;
+  salesStockRatio?: string;
   gtin?: string;
 }
 
@@ -238,6 +241,15 @@ function stockSoldRelationTier(inv: SkuInventoryRow | null | undefined): number 
   if (st > sd) return 2;
   if (sd > st) return 0;
   return 1;
+}
+
+/** Λόγος πωλήσεων προς τρέχον στοκ. Null όταν λείπει δεδομένο ή stock <= 0 για να μην παράγεται τεχνητό Infinity. */
+function salesStockRatio(inv: SkuInventoryRow | null | undefined): number | null {
+  const st = inv?.stock;
+  const sd = inv?.sold;
+  if (typeof st !== 'number' || typeof sd !== 'number') return null;
+  if (!Number.isFinite(st) || !Number.isFinite(sd) || st <= 0) return null;
+  return Math.round((sd / st) * 100) / 100;
 }
 
 /** Δευτερεύων αριθμητικός συγκριτής: πραγματικοί αριθμοί (συμπ. 0) πριν από null/undefined. */
@@ -719,7 +731,7 @@ export function CompetitorInsights() {
     const f = colFilters;
     const brandActive = Boolean(f.brand && f.brand.size < brandOptions.length);
     return Boolean(
-      f.title || f.gtin || f.yourPrice || f.benchmarkPrice || f.priceDiff || f.stock || f.sold || brandActive
+      f.title || f.gtin || f.yourPrice || f.benchmarkPrice || f.priceDiff || f.stock || f.sold || f.salesStockRatio || brandActive
     );
   }, [colFilters, brandOptions.length]);
 
@@ -780,11 +792,23 @@ export function CompetitorInsights() {
         return matchNumericExpr(inv?.sold, f.sold!);
       });
     }
+    if (f.salesStockRatio) {
+      list = list.filter((b) => {
+        const inv = lookupInventory(b.productId, b.gtin);
+        return matchNumericExpr(salesStockRatio(inv), f.salesStockRatio!);
+      });
+    }
 
     // Sort: αν υπάρχει column sort, υπερισχύει. Αλλιώς default (benchmark> priceDiff desc).
     if (sortCol) {
       const dir = sortDir === 'asc' ? 1 : -1;
-      if (sortCol === 'stock' || sortCol === 'sold') {
+      if (sortCol === 'salesStockRatio') {
+        list.sort((a, b) => {
+          const invA = lookupInventory(a.productId, a.gtin);
+          const invB = lookupInventory(b.productId, b.gtin);
+          return compareInventoryNumber(salesStockRatio(invA), salesStockRatio(invB), dir);
+        });
+      } else if (sortCol === 'stock' || sortCol === 'sold') {
         list.sort((a, b) => {
           const invA = lookupInventory(a.productId, a.gtin);
           const invB = lookupInventory(b.productId, b.gtin);
@@ -826,6 +850,11 @@ export function CompetitorInsights() {
 
     return list;
   }, [stockedBenchmarks, benchmarkQuickFilter, benchmarkSearch, colFilters, sortCol, sortDir, brandOptions.length, lookupInventory]);
+  const visibleBenchmarks = useMemo(
+    () => filteredBenchmarks.slice(0, COMPETITIVE_BENCHMARK_RENDER_LIMIT),
+    [filteredBenchmarks]
+  );
+  const hiddenBenchmarkRows = Math.max(0, filteredBenchmarks.length - visibleBenchmarks.length);
 
   const insightsSellerLabel = useMemo(() => {
     const raw = (priceInsightsSellerName || '').trim();
@@ -1290,6 +1319,13 @@ export function CompetitorInsights() {
                             isActive={Boolean(colFilters.sold)} />
                         </th>
                         <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">
+                          <HeaderFilter label="Πωλ./Στοκ" col="salesStockRatio" kind="number" align="right"
+                            textValue={colFilters.salesStockRatio ?? ''} onTextChange={(v) => updateColFilter('salesStockRatio', v || undefined)}
+                            hint="Λόγος πωλήσεων προς τρέχον στοκ. Π.χ. >1 σημαίνει ότι πούλησε περισσότερα από όσα έχει τώρα σε stock, 0.2-1 εύρος."
+                            sortCol={sortCol} sortDir={sortDir} setSort={setBenchmarkSort}
+                            isActive={Boolean(colFilters.salesStockRatio)} />
+                        </th>
+                        <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">
                           <HeaderFilter label="Η τιμή σας" col="yourPrice" kind="number" align="right"
                             textValue={colFilters.yourPrice ?? ''} onTextChange={(v) => updateColFilter('yourPrice', v || undefined)}
                             sortCol={sortCol} sortDir={sortDir} setSort={setBenchmarkSort}
@@ -1317,7 +1353,7 @@ export function CompetitorInsights() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#F3F4F6]">
-                      {filteredBenchmarks.map((b) => (
+                      {visibleBenchmarks.map((b) => (
                         <BenchmarkRow
                           key={b.productId}
                           item={b}
@@ -1328,6 +1364,12 @@ export function CompetitorInsights() {
                   </table>
                   {filteredBenchmarks.length === 0 && benchmarkSearch && (
                     <p className="text-sm text-[#9CA3AF] text-center py-6">Δεν βρέθηκαν αποτελέσματα.</p>
+                  )}
+                  {hiddenBenchmarkRows > 0 && (
+                    <p className="px-3 py-3 text-center text-xs text-[#6B7280]">
+                      Εμφανίζονται οι πρώτες {visibleBenchmarks.length.toLocaleString('el-GR')} γραμμές από{' '}
+                      {filteredBenchmarks.length.toLocaleString('el-GR')} αποτελέσματα για ταχύτητα. Χρησιμοποιήστε αναζήτηση/φίλτρα ή export για πλήρη λίστα.
+                    </p>
                   )}
                 </div>
               )}
@@ -1937,6 +1979,7 @@ function BenchmarkRow({
     typeof stock === 'number' && typeof sold === 'number' && Number.isFinite(stock) && Number.isFinite(sold);
   const stockOverSold = canCompareStockSold && stock > sold;
   const soldOverStock = canCompareStockSold && sold > stock;
+  const ratio = salesStockRatio(inventory);
 
   return (
     <tr className="hover:bg-[#FAFAFA] transition-colors">
@@ -1966,6 +2009,18 @@ function BenchmarkRow({
             title={soldOverStock ? 'Πωλήσεις μεγαλύτερες από τρέχον στοκ' : undefined}
           >
             {sold}
+          </span>
+        ) : (
+          <span className="text-[10px] text-[#D1D5DB]">—</span>
+        )}
+      </td>
+      <td className="px-3 py-2.5 text-right">
+        {typeof ratio === 'number' ? (
+          <span
+            className={`text-sm font-mono ${ratio > 1 ? 'text-[#22C55E] font-semibold' : ratio < 0.25 ? 'text-[#EF4444] font-semibold' : 'text-[#111827]'}`}
+            title="Πωλήσεις / τρέχον στοκ"
+          >
+            {ratio.toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}x
           </span>
         ) : (
           <span className="text-[10px] text-[#D1D5DB]">—</span>

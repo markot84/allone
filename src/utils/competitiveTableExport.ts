@@ -3,6 +3,13 @@ import type { PriceInsight } from '../hooks/usePriceInsights';
 
 export type InventoryCell = { stock: number | null; sold: number | null } | null;
 
+function salesStockRatio(inv: InventoryCell): number | '' {
+  const stock = inv?.stock;
+  const sold = inv?.sold;
+  if (typeof stock !== 'number' || typeof sold !== 'number' || stock <= 0) return '';
+  return Math.round((sold / stock) * 100) / 100;
+}
+
 function escapeCsvCell(v: string): string {
   const s = String(v);
   if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
@@ -44,6 +51,7 @@ export function exportBenchmarksCsv(
     'Brand',
     'Στοκ',
     'Πωλήσεις',
+    'Πωλήσεις / Στοκ',
     'Η τιμή σας',
     'Benchmark',
     'Διαφορά τιμής %',
@@ -61,6 +69,7 @@ export function exportBenchmarksCsv(
         b.brand || '',
         typeof stock === 'number' ? String(stock) : '',
         typeof sold === 'number' ? String(sold) : '',
+        String(salesStockRatio(inv)),
         formatEur(b.yourPrice),
         b.benchmarkPrice > 0 ? formatEur(b.benchmarkPrice) : '',
         String(b.priceDiff),
@@ -80,7 +89,7 @@ export async function exportBenchmarksXlsx(
 ): Promise<void> {
   const XLSX = await import('xlsx');
   const data: (string | number)[][] = [
-    ['Προϊόν', 'Product ID', 'Brand', 'Στοκ', 'Πωλήσεις', 'Η τιμή σας', 'Benchmark', 'Διαφορά τιμής %', 'GTIN'],
+    ['Προϊόν', 'Product ID', 'Brand', 'Στοκ', 'Πωλήσεις', 'Πωλήσεις / Στοκ', 'Η τιμή σας', 'Benchmark', 'Διαφορά τιμής %', 'GTIN'],
     ...rows.map((b) => {
       const inv = lookup(b.productId, b.gtin);
       const stock = inv?.stock;
@@ -91,6 +100,7 @@ export async function exportBenchmarksXlsx(
         b.brand || '',
         typeof stock === 'number' ? stock : '',
         typeof sold === 'number' ? sold : '',
+        salesStockRatio(inv),
         b.yourPrice,
         b.benchmarkPrice > 0 ? b.benchmarkPrice : '',
         b.priceDiff,
