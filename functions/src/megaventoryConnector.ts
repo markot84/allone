@@ -15,7 +15,7 @@ import * as admin from 'firebase-admin';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { encryptToken, decryptToken } from './tokenCrypto';
-import { buildHistoricalOrIncrementalWindow, toYmd } from './syncPolicy';
+import { buildHistoricalOrIncrementalWindow, buildRollingUtcDayWindow, toYmd } from './syncPolicy';
 import {
   cleanupManualImportsForMegaventoryMaster,
   PRESERVED_MEGAVENTORY_API_CATALOG_SOURCE,
@@ -51,7 +51,8 @@ const MV_INVOICE_BACKFILL_PAGE_SIZE = 100;
 /** Manual connectorSync έχει 20' timeout· κρατάμε buffer για Firestore writes / response. */
 const MV_INVOICE_BACKFILL_RUNTIME_MS = 18 * 60 * 1000;
 const MV_INVOICE_BACKFILL_MAX_PAGES_PER_SYNC = 500;
-const MV_INCREMENTAL_DOCUMENT_FALLBACK_MAX_PAGES = 25;
+const MV_INCREMENTAL_DOCUMENT_FALLBACK_MAX_PAGES = 100;
+const MV_RECENT_DOCUMENT_LOOKBACK_DAYS = 45;
 
 type MvFilter = {
   FieldName: string;
@@ -535,6 +536,36 @@ function mvText(row: Record<string, unknown>, ...names: string[]): string {
   return String(mvField(row, ...names) ?? '').trim();
 }
 
+function mvDocumentIdentity(row: Record<string, unknown>, index: number, prefix: string): string {
+  const id = mvText(row, 'DocumentId', 'DocumentID');
+  if (id) return `id:${id}`;
+  const no = mvText(row, 'DocumentNo', 'DocumentSerialNo');
+  const day = isoDate(mvField(row, 'DocumentDate'));
+  if (no || day) return `doc:${no}:${day}`;
+  return `${prefix}:${index}`;
+}
+
+function mergeMvDocumentRows(
+  primaryRows: Record<string, unknown>[],
+  recentRows: Record<string, unknown>[]
+): Record<string, unknown>[] {
+  const seen = new Set<string>();
+  const merged: Record<string, unknown>[] = [];
+
+  const append = (rows: Record<string, unknown>[], prefix: string) => {
+    rows.forEach((row, index) => {
+      const key = mvDocumentIdentity(row, index, prefix);
+      if (seen.has(key)) return;
+      seen.add(key);
+      merged.push(row);
+    });
+  };
+
+  append(primaryRows, 'primary');
+  append(recentRows, 'recent');
+  return merged;
+}
+
 function mvNum(row: Record<string, unknown>, ...names: string[]): number {
   return num(mvField(row, ...names));
 }
@@ -972,6 +1003,7 @@ export async function fetchMegaventoryData(
       }
     );
     let documentFallbackUsed = false;
+    let recentDocumentRowsMerged = 0;
     if (!shouldStageInvoiceBackfill && !invFetchErr && invRows.length === 0) {
       const fallback = await fetchRecentMvDocumentsByLocalDate(apiKey, sinceStr);
       if (fallback.error) {
@@ -984,6 +1016,27 @@ export async function fetchMegaventoryData(
         logger.info(
           `[Megaventory] DocumentGet date filter returned 0 rows for ${brandId}; fallback recovered ${fallback.rows.length} recent documents`
         );
+      }
+    }
+    if (!invFetchErr) {
+      const rollingRecentWindow = buildRollingUtcDayWindow(MV_RECENT_DOCUMENT_LOOKBACK_DAYS);
+      const recent = await fetchRecentMvDocumentsByLocalDate(apiKey, rollingRecentWindow.since);
+      if (recent.error) {
+        logger.warn(
+          `[Megaventory] Recent invoice merge failed for ${brandId}: ${recent.error}`
+        );
+      } else if (recent.rows.length > 0) {
+        const before = invRows.length;
+        invRows = mergeMvDocumentRows(
+          invRows as Record<string, unknown>[],
+          recent.rows as Record<string, unknown>[]
+        );
+        recentDocumentRowsMerged = Math.max(0, invRows.length - before);
+        if (recentDocumentRowsMerged > 0) {
+          logger.info(
+            `[Megaventory] Recent invoice merge for ${brandId}: +${recentDocumentRowsMerged} documents from ${rollingRecentWindow.since}->${rollingRecentWindow.until}`
+          );
+        }
       }
     }
     if (invFetchErr) {
@@ -1002,6 +1055,8 @@ export async function fetchMegaventoryData(
         rawDocumentRows: rawDocs.length,
         matchedInvoiceRows: docs.length,
         documentFallbackUsed,
+        recentDocumentRowsMerged,
+        recentDocumentLookbackDays: MV_RECENT_DOCUMENT_LOOKBACK_DAYS,
         documentTypeBreakdown: documentTypeBreakdown(rawDocs, documentTypesById),
       };
       if (rawDocs.length === 0 || docs.length === 0) {

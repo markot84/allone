@@ -116,6 +116,22 @@ function completeDailyRevenueSeries(dayList: string[], record: Record<string, nu
   });
 }
 
+function latestPositiveRevenueDayInPeriod(
+  revenueByDay: Record<string, number> | undefined,
+  fromDate: string,
+  toDate: string
+): string | null {
+  if (!revenueByDay) return null;
+  let latest: string | null = null;
+  for (const [day, value] of Object.entries(revenueByDay)) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) continue;
+    if (day < fromDate || day > toDate) continue;
+    if ((Number(value) || 0) <= 0) continue;
+    if (!latest || day > latest) latest = day;
+  }
+  return latest;
+}
+
 /** Το Recharts Area χρειάζεται ≥2 σημεία· αν υπάρχει 1 μήνας μόνο, διπλασιάζουμε για ορατή γραμμή. */
 function padSparklineForChart(values: number[]): number[] {
   if (values.length === 0) return [];
@@ -204,13 +220,21 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
    */
   const ecomKpisRefreshing = ecommerceRawBusy && ecommHist.source === 'summary';
 
-  /** Το AI Briefing περιμένει αυτό· αποφεύγει κείμενα που μιλάνε για κενό τζίρο ενώ τα KPI ακόμα «γεμίζουν». */
-  const briefingMetricsReady = useMemo(() => {
-    if (!currentBrand) return true;
-    if (!enabledModules.ecommerce) return !ecomm.isLoading;
-    if (ecomm.connectedPlatforms.length === 0) return !ecomm.isLoading;
-    return !ecomm.isLoading && !ecommHist.rawLoading;
-  }, [currentBrand, enabledModules.ecommerce, ecomm.isLoading, ecomm.connectedPlatforms.length, ecommHist.rawLoading]);
+  /**
+   * Financial gate: μην κάνουμε render KPI/charts με προσωρινή πηγή.
+   * Το Dashboard έχει προτεραιότητα Procurement → ERP → e-shop → organic+campaigns· αν renderάρει πριν
+   * φορτώσουν ERP/e-shop, ο χρήστης βλέπει 2-3 διαφορετικές «αλήθειες» στην ίδια σελίδα.
+   */
+  const financialSourcesLoading =
+    Boolean(currentBrand) &&
+    (businessRevenue.isLoading ||
+      ecomm.isLoading ||
+      campaignsLoading ||
+      organicLoading ||
+      (enabledModules.procurement && procurementSheets.isLoading));
+
+  /** Το AI Briefing περιμένει τα ίδια σταθερά financial δεδομένα με τα KPI. */
+  const briefingMetricsReady = !financialSourcesLoading && !ecommHist.rawLoading;
 
   const [dashboardLoadingTimedOut, setDashboardLoadingTimedOut] = useState(false);
   const dashboardOverviewBusy =
@@ -222,14 +246,14 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       productsLoading ||
       ecommerceRawBusy ||
       ga4AnalyticsLoading);
-  const dashboardOverviewLoading = dashboardOverviewBusy && !dashboardLoadingTimedOut;
+  const dashboardOverviewLoading = financialSourcesLoading || (dashboardOverviewBusy && !dashboardLoadingTimedOut);
 
   useEffect(() => {
     setDashboardLoadingTimedOut(false);
-    if (!dashboardOverviewBusy) return;
+    if (financialSourcesLoading || !dashboardOverviewBusy) return;
     const t = window.setTimeout(() => setDashboardLoadingTimedOut(true), DASHBOARD_LOADING_TIMEOUT_MS);
     return () => window.clearTimeout(t);
-  }, [currentBrand?.id, dashboardOverviewBusy]);
+  }, [currentBrand?.id, financialSourcesLoading, dashboardOverviewBusy]);
 
   const campaignsTyped = (campaigns ?? []) as Campaign[];
 
@@ -385,13 +409,24 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     [erpRevenueByDayRecord, periodDates.fromDate, periodDates.toDate]
   );
 
+  const erpLatestRevenueDayInPeriod = useMemo(
+    () => latestPositiveRevenueDayInPeriod(erpRevenueByDayRecord, periodDates.fromDate, periodDates.toDate),
+    [erpRevenueByDayRecord, periodDates.fromDate, periodDates.toDate]
+  );
+  const ecommLatestRevenueDayInPeriod = useMemo(
+    () => latestPositiveRevenueDayInPeriod(ecommRevenueByDayRecord, periodDates.fromDate, periodDates.toDate),
+    [ecommRevenueByDayRecord, periodDates.fromDate, periodDates.toDate]
+  );
+  const erpDailyCoverageIsCurrentForPeriod =
+    !hasEcommerceRevenue ||
+    !ecommLatestRevenueDayInPeriod ||
+    (!!erpLatestRevenueDayInPeriod && erpLatestRevenueDayInPeriod >= ecommLatestRevenueDayInPeriod);
+
   /**
-   * True only when ERP is connected AND has actual revenue in the selected period.
-   * `hasErpBusinessRevenue` alone is not enough — the ERP doc may exist but have no data
-   * for the current period (e.g. Megaventory invoices only go to last month), which would
-   * cause the dashboard to display €0 instead of falling through to the e-shop connector.
+   * ERP wins only when its daily coverage is current for the selected period.
+   * If e-shop has revenue after the latest ERP day, ERP summary is stale/incomplete for this view.
    */
-  const hasErpRevenueForPeriod = hasErpBusinessRevenue && erpRevenueInPeriod > 0;
+  const hasErpRevenueForPeriod = hasErpBusinessRevenue && erpRevenueInPeriod > 0 && erpDailyCoverageIsCurrentForPeriod;
 
   const hasProcurementTurnoverEstimate = procurementRevenueInPeriod > 0;
 
@@ -809,8 +844,22 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         />
       )}
 
+      {currentBrand && dashboardOverviewLoading && (
+        <Card padding="lg" className="border border-[#E8EAED] bg-white">
+          <div className="flex gap-4 items-start">
+            <Spinner size="md" className="shrink-0" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-[var(--nts-charcoal)]">Σταθεροποίηση οικονομικών δεδομένων…</p>
+              <p className="mt-1 text-xs leading-relaxed text-[var(--nts-medium-gray)]">
+                Φορτώνουμε ERP, e-shop και καμπάνιες πριν εμφανιστούν KPI και charts, ώστε το Dashboard να μη δείχνει προσωρινά νούμερα.
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* Morning Briefing */}
-      {currentBrand && (
+      {currentBrand && !dashboardOverviewLoading && (
         <MorningBriefing
           brandId={currentBrand.id}
           brandName={currentBrand.name}
@@ -842,7 +891,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         />
       )}
 
-      {currentBrand && !hasAnyData && (
+      {currentBrand && !dashboardOverviewLoading && !hasAnyData && (
         dashboardOverviewLoading ? (
           <Card padding="lg" className="border border-[#E8EAED] bg-white">
             <div className="flex gap-4 items-start">
@@ -895,7 +944,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       )}
 
       {/* Global period selector — applies to all period-aware dashboard cards/charts */}
-      {(hasOrganic ||
+      {!dashboardOverviewLoading && (hasOrganic ||
         hasCampaigns ||
         hasEcommerceRevenue ||
         hasErpBusinessRevenue ||
@@ -929,7 +978,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         </div>
       )}
 
-      {isB2B && (
+      {isB2B && !dashboardOverviewLoading && (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
           <KPICard
             index={0}
@@ -975,7 +1024,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       )}
 
       {/* KPI Cards — Financial Overview */}
-      {(hasOrganic ||
+      {!dashboardOverviewLoading && (hasOrganic ||
         hasCampaigns ||
         hasEcommerceRevenue ||
         hasErpBusinessRevenue ||
@@ -1225,7 +1274,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       })()}
 
       {/* E-commerce Summary */}
-      {enabledModules.ecommerce && ecomm.hasData && (
+      {!dashboardOverviewLoading && enabledModules.ecommerce && ecomm.hasData && (
         <Card hover onClick={() => onSectionChange?.('ecommerce')}>
           <div className="p-5">
             <div className="flex items-center justify-between mb-4">
@@ -1306,7 +1355,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       )}
 
       {/* GA4 Web Analytics Summary */}
-      {enabledModules.analytics && ga4.hasData && (
+      {!dashboardOverviewLoading && enabledModules.analytics && ga4.hasData && (
         <Card hover onClick={() => onSectionChange?.('analytics')}>
           <div className="p-5">
             <div className="flex items-center justify-between mb-4">
@@ -1364,7 +1413,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       )}
 
       {/* Main Charts Row */}
-      {hasAnyData && (
+      {!dashboardOverviewLoading && hasAnyData && (
         <>
       <div className="grid min-w-0 grid-cols-1 gap-6 lg:gap-8 xl:grid-cols-3">
         {/* Revenue Trend */}

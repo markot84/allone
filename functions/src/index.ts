@@ -1289,14 +1289,14 @@ export const connectorSync = onRequest(
           requestedBy: decoded.uid,
           requestedAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
-          mode: 'manual_catalog_refresh',
+          mode: 'manual_full_refresh',
         }, { merge: true });
         result = {
           success: true,
           queued: true,
           jobId,
           imported: 0,
-          message: 'Megaventory sync ξεκίνησε στο background.',
+          message: 'Megaventory sync ξεκίνησε στο background με ανανέωση παραστατικών.',
         };
       } else if (provider === 'softone') {
         result = await fetchSoftOneData(brandId);
@@ -1378,8 +1378,8 @@ export const processMegaventorySyncJobs = onSchedule(
     if (!job) return;
 
     try {
-      logger.info(`[MegaventoryJob] Starting catalog refresh for ${job.brandId}`);
-      const result = await fetchMegaventoryData(job.brandId, { mode: 'manual', skipDocuments: true });
+      logger.info(`[MegaventoryJob] Starting Megaventory refresh for ${job.brandId}`);
+      const result = await fetchMegaventoryData(job.brandId, { mode: 'manual' });
       try {
         await computeEcommerceSummary(job.brandId);
       } catch (e) {
