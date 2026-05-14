@@ -30,6 +30,7 @@ export function NotificationSettings() {
   const [channels, setChannels] = useState<Record<ActivityType, NotificationChannel[]>>(
     { ...DEFAULT_NOTIFICATION_CHANNELS }
   );
+  const [dailyDigestEmail, setDailyDigestEmail] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -40,6 +41,7 @@ export function NotificationSettings() {
     try {
       const prefs = await NotificationPrefsService.get(currentBrand.id, user.uid);
       if (prefs?.channels) setChannels(prefs.channels);
+      setDailyDigestEmail(prefs?.dailyDigestEmail === true);
     } catch { /* use defaults */ }
     setLoading(false);
   }, [currentBrand, user?.uid]);
@@ -60,7 +62,7 @@ export function NotificationSettings() {
     if (!currentBrand || !user?.uid) return;
     setSaving(true);
     try {
-      await NotificationPrefsService.save(currentBrand.id, user.uid, { channels } as Partial<NotificationPreferences>);
+      await NotificationPrefsService.save(currentBrand.id, user.uid, { channels, dailyDigestEmail } as Partial<NotificationPreferences>);
       void qc.invalidateQueries({ queryKey: ['memberNotificationPrefs', currentBrand.id] });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
@@ -131,6 +133,28 @@ export function NotificationSettings() {
                 </div>
               </div>
             ))}
+          </div>
+
+          <div className="mt-4 rounded-xl border border-orange-100 bg-white px-3 py-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-[var(--nts-charcoal)]">Daily Digest email</p>
+                <p className="mt-1 text-xs leading-relaxed text-[var(--nts-medium-gray)]">
+                  Πρωινή σύνοψη για τη χθεσινή ημέρα με paid media και revenue KPIs. Αποστέλλεται μόνο με ενεργό opt-in.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setDailyDigestEmail((prev) => !prev);
+                  setSaved(false);
+                }}
+                className={`mt-0.5 h-5 w-8 shrink-0 rounded-full transition-colors ${dailyDigestEmail ? 'bg-[var(--nts-accent)]' : 'bg-gray-200'}`}
+                aria-pressed={dailyDigestEmail}
+              >
+                <span className={`block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform ${dailyDigestEmail ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+              </button>
+            </div>
           </div>
 
           <div className="mt-4 flex items-center gap-3">

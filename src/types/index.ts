@@ -801,6 +801,8 @@ export interface NotificationPreferences {
   userId: string;
   brandId: string;
   channels: Record<ActivityType, NotificationChannel[]>;
+  /** Explicit opt-in για το πρωινό email σύνοψης του brand. Default: false. */
+  dailyDigestEmail?: boolean;
   quietHoursEnabled?: boolean;
   quietHoursStart?: string; // HH:mm
   quietHoursEnd?: string;   // HH:mm

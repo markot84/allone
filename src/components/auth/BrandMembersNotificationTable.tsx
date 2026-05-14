@@ -3,8 +3,8 @@ import { Loader2, Mail, Monitor, Users } from 'lucide-react';
 import { useState, type ChangeEvent } from 'react';
 import { useAuth, useBrand } from '../../hooks';
 import { MembersService, NotificationPrefsService } from '../../services/coordination';
-import type { ActivityType, BrandMember, BrandMemberRole, NotificationPreferences } from '../../types';
-import { DEPARTMENT_LABELS, normalizeBrandMemberRole, ROLE_LABELS } from '../../types';
+import type { ActivityType, BrandMember, BrandMemberRole, NotificationChannel, NotificationPreferences } from '../../types';
+import { DEFAULT_NOTIFICATION_CHANNELS, DEPARTMENT_LABELS, normalizeBrandMemberRole, ROLE_LABELS } from '../../types';
 import { useToast } from '../common';
 import { ACTIVITY_GROUPS } from './NotificationSettings';
 
@@ -25,6 +25,33 @@ function groupChannels(
     if (ch.includes('email')) email = true;
   }
   return { inApp, email };
+}
+
+function channelsWithDefaults(prefs: NotificationPreferences | null): Record<ActivityType, NotificationChannel[]> {
+  return {
+    ...DEFAULT_NOTIFICATION_CHANNELS,
+    ...(prefs?.channels ?? {}),
+  };
+}
+
+function nextChannelsForGroup(
+  prefs: NotificationPreferences | null,
+  types: ActivityType[],
+  channel: NotificationChannel,
+  enabled: boolean
+): Record<ActivityType, NotificationChannel[]> {
+  const next = channelsWithDefaults(prefs);
+  for (const type of types) {
+    const current = next[type] ?? [];
+    const set = new Set(current);
+    if (enabled) {
+      set.add(channel);
+    } else {
+      set.delete(channel);
+    }
+    next[type] = Array.from(set);
+  }
+  return next;
 }
 
 /** Υπογραφή μελών ώστε αλλαγή τμήματος/label/ρόλου να αλλάζει query key (όχι μόνο uid). */
@@ -59,7 +86,7 @@ function roleOptionsForRow(
   return ['admin', 'member'];
 }
 
-type ToastApi = { error: (msg: string) => void };
+type ToastApi = { success: (msg: string) => void; error: (msg: string) => void };
 
 function MemberRoleCell({
   member,
@@ -135,6 +162,7 @@ export function BrandMembersNotificationTable({ members, loadingMembers }: Props
   const toast = useToast();
   const queryClient = useQueryClient();
   const [savingUid, setSavingUid] = useState<string | null>(null);
+  const [savingPrefKey, setSavingPrefKey] = useState<string | null>(null);
   const brandId = currentBrand?.id ?? null;
   const me = user?.uid ? members.find((m) => m.userId === user.uid) : undefined;
 
@@ -151,6 +179,34 @@ export function BrandMembersNotificationTable({ members, loadingMembers }: Props
   const sorted = [...rows].sort((a, b) =>
     (a.member.email || '').localeCompare(b.member.email || '', 'el')
   );
+  const canEditMemberNotifications = canEditRoles(me, isSuperAdmin);
+
+  const refreshPrefs = () => queryClient.invalidateQueries({ queryKey: ['memberNotificationPrefs', brandId] });
+
+  const handleToggleGroupChannel = async (
+    member: BrandMember,
+    prefs: NotificationPreferences | null,
+    group: (typeof ACTIVITY_GROUPS)[number],
+    channel: NotificationChannel,
+    current: boolean
+  ) => {
+    if (!brandId || !canEditMemberNotifications) return;
+    const key = `${member.userId}:${group.label}:${channel}`;
+    setSavingPrefKey(key);
+    try {
+      await NotificationPrefsService.save(brandId, member.userId, {
+        channels: nextChannelsForGroup(prefs, group.types, channel, !current),
+        dailyDigestEmail: prefs?.dailyDigestEmail === true,
+      });
+      await refreshPrefs();
+      toast.success('Οι ρυθμίσεις ειδοποιήσεων ενημερώθηκαν.');
+    } catch (err) {
+      console.error(err);
+      toast.error('Αποτυχία αποθήκευσης ρυθμίσεων ειδοποιήσεων.');
+    } finally {
+      setSavingPrefKey(null);
+    }
+  };
 
   return (
     <div className="p-4 border border-[var(--nts-border-gray)] rounded-xl bg-white">
@@ -159,8 +215,8 @@ export function BrandMembersNotificationTable({ members, loadingMembers }: Props
         Χρήστες & ειδοποιήσεις
       </h4>
       <p className="text-sm text-[var(--nts-medium-gray)] mb-4">
-        Προβολή ρόλου, email, τμήματος και ενεργών καναλιών (εφαρμογή / email) ανά κατηγορία. Οι ιδιοκτήτες και οι
-        διαχειριστές μπορούν να αλλάζουν δικαιώματα (όχι τον ρόλο «Ιδιοκτήτης» από admin — μόνο owner).
+        Προβολή και διαχείριση ρόλου, τμήματος και καναλιών ειδοποίησης (εφαρμογή / email) ανά κατηγορία. Οι ιδιοκτήτες
+        και οι διαχειριστές μπορούν να αλλάζουν δικαιώματα και κανάλια ειδοποιήσεων.
       </p>
 
       {loading ? (
@@ -210,22 +266,32 @@ export function BrandMembersNotificationTable({ members, loadingMembers }: Props
                     return (
                       <td key={g.label} className="py-2.5 px-1">
                         <div className="flex items-center justify-center gap-2">
-                          <span
-                            title={inApp ? 'Ενεργό in-app' : 'Ανενεργό in-app'}
-                            className={`inline-flex items-center justify-center w-7 h-7 rounded-md ${
-                              inApp ? 'bg-[var(--nts-accent)]/15 text-[var(--nts-accent)]' : 'bg-gray-100 text-gray-400'
+                          <button
+                            type="button"
+                            title={inApp ? 'Απενεργοποίηση ειδοποιήσεων εντός εφαρμογής' : 'Ενεργοποίηση ειδοποιήσεων εντός εφαρμογής'}
+                            disabled={!canEditMemberNotifications || savingPrefKey === `${member.userId}:${g.label}:inApp`}
+                            onClick={() => handleToggleGroupChannel(member, prefs, g, 'inApp', inApp)}
+                            className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                              inApp ? 'bg-[var(--nts-accent)]/15 text-[var(--nts-accent)] hover:bg-[var(--nts-accent)]/25' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
                             }`}
+                            aria-pressed={inApp}
+                            aria-label={`${inApp ? 'Απενεργοποίηση' : 'Ενεργοποίηση'} ειδοποιήσεων εφαρμογής για ${member.email || member.userId} στην κατηγορία ${g.label}`}
                           >
-                            <Monitor size={14} />
-                          </span>
-                          <span
-                            title={email ? 'Ενεργό email' : 'Ανενεργό email'}
-                            className={`inline-flex items-center justify-center w-7 h-7 rounded-md ${
-                              email ? 'bg-[var(--nts-accent)]/15 text-[var(--nts-accent)]' : 'bg-gray-100 text-gray-400'
+                            {savingPrefKey === `${member.userId}:${g.label}:inApp` ? <Loader2 size={14} className="animate-spin" /> : <Monitor size={14} />}
+                          </button>
+                          <button
+                            type="button"
+                            title={email ? 'Απενεργοποίηση email ειδοποιήσεων' : 'Ενεργοποίηση email ειδοποιήσεων'}
+                            disabled={!canEditMemberNotifications || savingPrefKey === `${member.userId}:${g.label}:email`}
+                            onClick={() => handleToggleGroupChannel(member, prefs, g, 'email', email)}
+                            className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                              email ? 'bg-[var(--nts-accent)]/15 text-[var(--nts-accent)] hover:bg-[var(--nts-accent)]/25' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
                             }`}
+                            aria-pressed={email}
+                            aria-label={`${email ? 'Απενεργοποίηση' : 'Ενεργοποίηση'} email ειδοποιήσεων για ${member.email || member.userId} στην κατηγορία ${g.label}`}
                           >
-                            <Mail size={14} />
-                          </span>
+                            {savingPrefKey === `${member.userId}:${g.label}:email` ? <Loader2 size={14} className="animate-spin" /> : <Mail size={14} />}
+                          </button>
                         </div>
                       </td>
                     );
@@ -242,6 +308,7 @@ export function BrandMembersNotificationTable({ members, loadingMembers }: Props
               <Mail size={12} /> Email
             </span>
             <span className="opacity-80">Αν δεν έχει αποθηκευτεί προσαρμογή, εμφανίζονται οι προεπιλογές.</span>
+            {!canEditMemberNotifications && <span className="opacity-80">Μόνο owner/admin μπορούν να αλλάζουν κανάλια μελών.</span>}
           </p>
         </div>
       )}

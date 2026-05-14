@@ -38,6 +38,16 @@ interface CampaignAgg {
   avgRoas: number;
 }
 
+interface PeriodMetrics {
+  dateKey: string;
+  label: string;
+  paidSpend: number;
+  paidRevenue: number;
+  paidRoas: number;
+  storeRevenue: number;
+  storeOrders: number;
+}
+
 const SEVERITY_ORDER: Record<string, number> = { critical: 0, warning: 1, info: 2 };
 const SEVERITY_COLORS: Record<string, string> = {
   critical: '#DC2626',
@@ -56,6 +66,75 @@ function formatCurrency(n: number): string {
   return `€${n.toFixed(0)}`;
 }
 
+function athensDateKey(date: Date): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Athens',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value || '';
+  return `${get('year')}-${get('month')}-${get('day')}`;
+}
+
+function digestPeriod(): { dateKey: string; label: string } {
+  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const dateKey = athensDateKey(yesterday);
+  const label = yesterday.toLocaleDateString('el-GR', {
+    timeZone: 'Europe/Athens',
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+  return { dateKey, label };
+}
+
+function asNumber(value: unknown): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function dailyMap(value: unknown): Record<string, Record<string, unknown>> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return value as Record<string, Record<string, unknown>>;
+}
+
+async function loadPeriodMetrics(brandId: string, period: { dateKey: string; label: string }): Promise<PeriodMetrics> {
+  const [campaignsSnap, businessSnap, ecommerceSnap] = await Promise.all([
+    db().collection('campaigns').where('brandId', '==', brandId).get(),
+    db().doc(`business_revenue_summary/${brandId}`).get(),
+    db().doc(`ecommerce_summary/${brandId}`).get(),
+  ]);
+
+  let paidSpend = 0;
+  let paidRevenue = 0;
+  campaignsSnap.docs.forEach((doc) => {
+    const day = dailyMap(doc.data().dailyMetrics)[period.dateKey];
+    if (!day) return;
+    paidSpend += asNumber(day.amount_spent);
+    paidRevenue += asNumber(day.purchase_conversion_value || day.conversion_value);
+  });
+
+  const business = businessSnap.exists ? businessSnap.data() || {} : {};
+  const ecommerce = ecommerceSnap.exists ? ecommerceSnap.data() || {} : {};
+  const businessRevenueByDay = (business.revenueByDay || {}) as Record<string, unknown>;
+  const ecommerceRevenueByDay = (ecommerce.revenueByDay || {}) as Record<string, unknown>;
+  const businessOrdersByDay = (business.ordersByDay || {}) as Record<string, unknown>;
+  const ecommerceOrdersByDay = (ecommerce.ordersByDay || {}) as Record<string, unknown>;
+  const storeRevenue = asNumber(businessRevenueByDay[period.dateKey] ?? ecommerceRevenueByDay[period.dateKey]);
+  const storeOrders = asNumber(businessOrdersByDay[period.dateKey] ?? ecommerceOrdersByDay[period.dateKey]);
+
+  return {
+    ...period,
+    paidSpend: Math.round(paidSpend * 100) / 100,
+    paidRevenue: Math.round(paidRevenue * 100) / 100,
+    paidRoas: paidSpend > 0 ? paidRevenue / paidSpend : 0,
+    storeRevenue,
+    storeOrders,
+  };
+}
+
 function buildAlertRow(alert: AlertDoc): string {
   const color = SEVERITY_COLORS[alert.severity] || '#6B7280';
   const label = SEVERITY_LABELS[alert.severity] || 'INFO';
@@ -72,9 +151,7 @@ function buildAlertRow(alert: AlertDoc): string {
 function buildDigestHtml(
   brandName: string,
   alerts: AlertDoc[],
-  products: ProductAgg | null,
-  segments: SegmentAgg | null,
-  campaigns: CampaignAgg | null,
+  metrics: PeriodMetrics,
 ): string {
   const date = new Date().toLocaleDateString('el-GR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
@@ -92,26 +169,20 @@ function buildDigestHtml(
     </div>` : '';
 
   const kpiItems: string[] = [];
-  if (products && products.totalSkus > 0) {
-    const deadPct = ((products.deadStock.count / products.totalSkus) * 100).toFixed(1);
-    kpiItems.push(kpiCell('Προϊόντα', products.totalSkus.toLocaleString('el-GR')));
-    kpiItems.push(kpiCell('Dead Stock', `${deadPct}%`));
-    kpiItems.push(kpiCell('Αξία Αποθέματος', formatCurrency(products.totalInventoryValue)));
+  if (metrics.paidSpend > 0 || metrics.paidRevenue > 0) {
+    kpiItems.push(kpiCell('Paid ROAS', `${metrics.paidRoas.toFixed(2)}x`));
+    kpiItems.push(kpiCell('Ad Spend', formatCurrency(metrics.paidSpend)));
+    kpiItems.push(kpiCell('Paid Revenue', formatCurrency(metrics.paidRevenue)));
   }
-  if (campaigns && campaigns.totalCampaigns > 0) {
-    kpiItems.push(kpiCell('ROAS', `${campaigns.avgRoas.toFixed(2)}x`));
-    kpiItems.push(kpiCell('Ad Spend', formatCurrency(campaigns.totalSpend)));
-    kpiItems.push(kpiCell('Revenue (Paid)', formatCurrency(campaigns.totalRevenue)));
-  }
-  if (segments && segments.totalCustomers > 0) {
-    kpiItems.push(kpiCell('Πελάτες', segments.totalCustomers.toLocaleString('el-GR')));
-    kpiItems.push(kpiCell('At Risk', `${segments.atRiskPercentage.toFixed(1)}%`));
-    kpiItems.push(kpiCell('Champions', `${segments.championsPercentage.toFixed(1)}%`));
+  if (metrics.storeRevenue > 0 || metrics.storeOrders > 0) {
+    kpiItems.push(kpiCell('Store Revenue', formatCurrency(metrics.storeRevenue)));
+    kpiItems.push(kpiCell('Orders', metrics.storeOrders.toLocaleString('el-GR')));
   }
 
   const kpiSection = kpiItems.length > 0 ? `
     <div style="margin: 24px 0;">
-      <h3 style="margin: 0 0 12px; font-size: 13px; color: #6B7280; text-transform: uppercase; letter-spacing: 1px;">KPI Snapshot</h3>
+      <h3 style="margin: 0 0 4px; font-size: 13px; color: #6B7280; text-transform: uppercase; letter-spacing: 1px;">KPI ημέρας</h3>
+      <p style="margin: 0 0 12px; font-size: 12px; color: #9CA3AF;">Περίοδος αναφοράς: ${metrics.label}</p>
       <table style="width: 100%; border-collapse: collapse;">
         <tr>${kpiItems.join('')}</tr>
       </table>
@@ -125,7 +196,8 @@ function buildDigestHtml(
       </div>
       <div style="background: #fff; border: 1px solid #E5E7EB; border-top: none; border-radius: 0 0 12px 12px; padding: 24px;">
         <p style="margin: 0 0 4px; font-size: 16px; font-weight: 700; color: #111827;">Καλημέρα!</p>
-        <p style="margin: 0 0 16px; font-size: 13px; color: #6B7280;">${date}</p>
+        <p style="margin: 0 0 4px; font-size: 13px; color: #6B7280;">${date}</p>
+        <p style="margin: 0 0 16px; font-size: 12px; color: #9CA3AF;">Σύνοψη απόδοσης για: ${metrics.label}</p>
         ${alertsSection}
         ${kpiSection}
         <div style="text-align: center; margin-top: 24px;">
@@ -151,6 +223,7 @@ function kpiCell(label: string, value: string): string {
 
 async function sendDigestForBrand(brandId: string, brandName: string, transporter: Transporter): Promise<number> {
   const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const period = digestPeriod();
 
   const alertsSnap = await db().collection('automation_alerts')
     .where('brandId', '==', brandId)
@@ -161,21 +234,11 @@ async function sendDigestForBrand(brandId: string, brandName: string, transporte
     .map(d => d.data() as AlertDoc)
     .filter(a => a.createdAt >= oneDayAgo);
 
-  const aggRef = db().collection('brands').doc(brandId).collection('aggregates');
-  const [pSnap, sSnap, cSnap] = await Promise.all([
-    aggRef.doc('products').get(),
-    aggRef.doc('segments').get(),
-    aggRef.doc('campaigns').get(),
-  ]);
-
-  const products = pSnap.exists ? (pSnap.data() as ProductAgg) : null;
-  const segments = sSnap.exists ? (sSnap.data() as SegmentAgg) : null;
-  const campaigns = cSnap.exists ? (cSnap.data() as CampaignAgg) : null;
-
-  const hasData = products || segments || campaigns;
+  const metrics = await loadPeriodMetrics(brandId, period);
+  const hasData = metrics.paidSpend > 0 || metrics.paidRevenue > 0 || metrics.storeRevenue > 0 || metrics.storeOrders > 0;
   if (recentAlerts.length === 0 && !hasData) return 0;
 
-  const html = buildDigestHtml(brandName, recentAlerts, products, segments, campaigns);
+  const html = buildDigestHtml(brandName, recentAlerts, metrics);
 
   const membersSnap = await db().collection('brands').doc(brandId).collection('members').get();
   if (membersSnap.empty) return 0;
@@ -184,26 +247,27 @@ async function sendDigestForBrand(brandId: string, brandName: string, transporte
   for (const memberDoc of membersSnap.docs) {
     const userId = memberDoc.id;
     try {
+      const prefsSnap = await db().doc(`brands/${brandId}/members/${userId}/settings/notifications`).get();
+      if (prefsSnap.data()?.dailyDigestEmail !== true) continue;
+
       const userDoc = await db().collection('users').doc(userId).get();
       const userData = userDoc.data();
-      if (!userData?.email) continue;
-
-      const prefs = userData.notificationPreferences;
-      if (prefs && prefs.email === false) continue;
+      const email = userData?.email || memberDoc.data()?.email;
+      if (!email) continue;
 
       const subject = recentAlerts.length > 0
         ? `[Performance+] ${brandName} — ${recentAlerts.length} νέες ειδοποιήσεις`
-        : `[Performance+] ${brandName} — Daily Digest`;
+        : `[Performance+] ${brandName} — Daily Digest (${period.dateKey})`;
 
       await transporter.sendMail({
         from: SENDER,
-        to: userData.email,
+        to: email,
         subject,
         html,
       });
 
       sent++;
-      logger.info(`[Digest] Sent to ${userData.email} for brand ${brandName}`);
+      logger.info(`[Digest] Sent to ${email} for brand ${brandName}`);
     } catch (err) {
       logger.warn(`[Digest] Failed for user ${userId}:`, err);
     }
