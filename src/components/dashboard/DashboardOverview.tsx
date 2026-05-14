@@ -100,6 +100,31 @@ function formatRevenueChartYAxisTick(value: number): string {
   return `€${formatNumber(v, 0)}`;
 }
 
+/** ERP: το `revenueByDay` έχει μόνο ημέρες με παραστατικό — χωρίς κλειδί ≠ μηδενικός τζίρος. */
+function erpRevenueForChartDay(record: Record<string, number>, day: string): number | null {
+  if (!Object.prototype.hasOwnProperty.call(record, day)) return null;
+  const n = Number(record[day]);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Sparkline (αριθμοί μόνο): forward-fill sparse ERP ώστε να μην εμφανίζονται ψευδο-μηδενικά. */
+function erpSparklineThousandsFromSparseDayRecord(
+  dayList: string[],
+  record: Record<string, number>,
+): number[] {
+  const euros = dayList.map((d) => {
+    if (!Object.prototype.hasOwnProperty.call(record, d)) return NaN;
+    const n = Number(record[d]);
+    return Number.isFinite(n) ? n : NaN;
+  });
+  let prev = 0;
+  for (let i = 0; i < euros.length; i++) {
+    if (!Number.isNaN(euros[i])) prev = euros[i] as number;
+    else euros[i] = prev;
+  }
+  return euros.map((v) => (Number.isFinite(v) ? v : 0) / 1000);
+}
+
 /** Το Recharts Area χρειάζεται ≥2 σημεία· αν υπάρχει 1 μήνας μόνο, διπλασιάζουμε για ορατή γραμμή. */
 function padSparklineForChart(values: number[]): number[] {
   if (values.length === 0) return [];
@@ -517,7 +542,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       if (dayCount <= REVENUE_CHART_MAX_DAILY_POINTS) {
         return eachDateInclusive(fromDate, toDate).map((d) => ({
           month: formatTrendDayLabel(d),
-          total: erpRevenueByDayRecord[d] || 0,
+          total: erpRevenueForChartDay(erpRevenueByDayRecord, d),
         }));
       }
       const fromYm = fromDate.slice(0, 7);
@@ -1072,7 +1097,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           hasProcurementTurnoverEstimate && procurementPeriodDays > 0
             ? dayList.map(() => procurementRevenueInPeriod / procurementPeriodDays / 1000)
             : hasErpRevenueForPeriod
-              ? dayList.map((d) => (erpRevenueByDayRecord[d] || 0) / 1000)
+              ? erpSparklineThousandsFromSparseDayRecord(dayList, erpRevenueByDayRecord)
               : hasEcommerceRevenue
                 ? dailyTrendKpi.map((r) => r.storeRevenue / 1000)
                 : dailyTrendKpi.map((r) => (r.organic + r.campaigns) / 1000)
@@ -1353,7 +1378,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 </p>
               ) : hasErpRevenueForPeriod ? (
                 <p>
-                  <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">Τζίρος επιχείρησης</strong> από συγχρονισμένα παραστατικά ERP (καθαρές αξίες όπως στο aggregate). Για ανάλυση e-shop και ROAS ανοίξτε{' '}
+                  <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">Τζίρος επιχείρησης</strong> από συγχρονισμένα παραστατικά ERP (καθαρές αξίες όπως στο aggregate). Ημέρες χωρίς εγγεγραμμένο παραστατικό στο sync δεν σχεδιάζονται ως μηδενικό τζίρο στη γραμμή. Για ανάλυση e-shop και ROAS ανοίξτε{' '}
                   <strong className="font-semibold">ROI &amp; Απόδοση</strong>.
                 </p>
               ) : enabledModules.ecommerce && ecomm.hasData ? (
@@ -1423,10 +1448,12 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                     padding: '10px 14px',
                     boxShadow: '0 8px 24px rgba(15, 23, 42, 0.08)',
                   }}
-                  formatter={(value: any) => [
-                    formatCurrencyCompact((value as number) || 0),
-                    revenuePerformanceChartLabel,
-                  ]}
+                  formatter={(value: unknown) => {
+                    if (value == null || (typeof value === 'number' && Number.isNaN(value))) {
+                      return ['Χωρίς παραστατικό αυτή την ημέρα στο sync (όχι μηδενικός τζίρος)', revenuePerformanceChartLabel];
+                    }
+                    return [formatCurrencyCompact(Number(value) || 0), revenuePerformanceChartLabel];
+                  }}
                   labelStyle={{ color: '#24292f', fontWeight: 600, marginBottom: 4 }}
                 />
                 <Area
@@ -1438,6 +1465,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   fill="url(#totalGradient)"
                   name="total"
                   isAnimationActive={false}
+                  connectNulls={revenueChartData.some((r) => r.total == null)}
                 />
               </AreaChart>
             </div>

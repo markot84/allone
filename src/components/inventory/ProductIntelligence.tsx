@@ -63,9 +63,17 @@ function categoryIdForProduct(p: Product): string {
   return c || EMPTY_CATEGORY_ID;
 }
 
-function tagIdForProduct(p: Product): string {
-  const t = (p.priority_tag ?? '').trim();
-  return t || EMPTY_TAG_ID;
+/** Id για φίλτρο Tag: συμφωνεί με aggregate/DOS όταν λείπει το priority_tag στο client catalog. */
+function effectiveTagFilterId(
+  p: Product,
+  supplierTodMap: Map<string, number>,
+  usingProcurement: boolean,
+): string {
+  const raw = (p.priority_tag ?? '').trim();
+  if (!raw) return resolveStockHealth(p, supplierTodMap, usingProcurement);
+  const lower = raw.toLowerCase();
+  if ((STOCK_INTELLIGENCE_TAG_IDS as readonly string[]).includes(lower)) return lower;
+  return raw;
 }
 
 type ExcelFilterOption = { id: string; label: string };
@@ -712,15 +720,14 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     }
     let hasEmpty = false;
     for (const p of filterOptionsProductScope) {
-      const id = tagIdForProduct(p);
-      if (id === EMPTY_TAG_ID) {
+      const raw = (p.priority_tag ?? '').trim();
+      if (!raw) {
         hasEmpty = true;
         continue;
       }
-      if (!map.has(id)) {
-        const raw = (p.priority_tag ?? '').trim();
-        map.set(id, raw || id);
-      }
+      const lower = raw.toLowerCase();
+      if ((STOCK_INTELLIGENCE_TAG_IDS as readonly string[]).includes(lower)) continue;
+      if (!map.has(raw)) map.set(raw, raw);
     }
     const core: ExcelFilterOption[] = STOCK_INTELLIGENCE_TAG_IDS.map((id) => ({ id, label: map.get(id)! }));
     const known = new Set<string>([...STOCK_INTELLIGENCE_TAG_IDS]);
@@ -741,7 +748,12 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     };
     const matchesTag = (p: Product) => {
       if (tagInclude == null || tagInclude.length === 0) return true;
-      return tagInclude.includes(tagIdForProduct(p));
+      const noImportTag = !(p.priority_tag ?? '').trim();
+      const eff = effectiveTagFilterId(p, supplierTodMap, usingProcurement);
+      return tagInclude.some((id) => {
+        if (id === EMPTY_TAG_ID) return noImportTag;
+        return id === eff;
+      });
     };
 
     const applyExcel = (list: Product[]) =>
