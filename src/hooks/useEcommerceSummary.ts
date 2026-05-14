@@ -131,11 +131,16 @@ function parseSkuMovement(raw: EcommerceSummaryRaw | null | undefined): SkuMovem
   }
 }
 
-export async function fetchEcommerceSummary(brandId: string): Promise<EcommerceSummaryRaw | null> {
+export async function fetchEcommerceSummary(
+  brandId: string,
+  options?: { includeSkuDetails?: boolean; includeStockMovement?: boolean }
+): Promise<EcommerceSummaryRaw | null> {
+  const includeSkuDetails = options?.includeSkuDetails !== false;
+  const includeStockMovement = options?.includeStockMovement !== false;
   const [summarySnap, movementSnap, chunkedSkuStats] = await Promise.all([
     getDoc(doc(db, 'ecommerce_summary', brandId)),
-    getDoc(doc(db, 'stock_movement', brandId)),
-    fetchSkuStatsFromChunks(brandId),
+    includeStockMovement ? getDoc(doc(db, 'stock_movement', brandId)) : Promise.resolve(null),
+    includeSkuDetails ? fetchSkuStatsFromChunks(brandId) : Promise.resolve({} as SkuStatsMap),
   ]);
   if (!summarySnap.exists()) return null;
   const summary = summarySnap.data() as EcommerceSummaryRaw;
@@ -152,7 +157,7 @@ export async function fetchEcommerceSummary(brandId: string): Promise<EcommerceS
       : {}),
   };
 
-  if (!movementSnap.exists()) return merged;
+  if (!movementSnap?.exists()) return merged;
   const movement = movementSnap.data() as StockMovementRaw;
   return {
     ...merged,
@@ -163,13 +168,15 @@ export async function fetchEcommerceSummary(brandId: string): Promise<EcommerceS
   };
 }
 
-export function useEcommerceSummary() {
+export function useEcommerceSummary(options?: { includeSkuDetails?: boolean; includeStockMovement?: boolean }) {
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
+  const includeSkuDetails = options?.includeSkuDetails !== false;
+  const includeStockMovement = options?.includeStockMovement !== false;
 
   const { data, isPending } = useQuery({
-    queryKey: ['ecommerce_summary', brandId],
-    queryFn: () => (brandId ? fetchEcommerceSummary(brandId) : Promise.resolve(null)),
+    queryKey: ['ecommerce_summary', brandId, includeSkuDetails ? 'sku' : 'summary', includeStockMovement ? 'movement' : 'no_movement'],
+    queryFn: () => (brandId ? fetchEcommerceSummary(brandId, { includeSkuDetails, includeStockMovement }) : Promise.resolve(null)),
     /** Μετά sync το invalidateQueries ανανεώνει· εδώ αποφεύγουμε refetch σε κάθε mount/focus. */
     staleTime: 10 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,

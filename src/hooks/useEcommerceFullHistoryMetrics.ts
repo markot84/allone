@@ -27,7 +27,7 @@ export function useEcommerceFullHistoryMetrics(options?: { mode?: EcommerceFullH
   const mode = options?.mode ?? 'summary_only';
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
-  const ecomm = useEcommerceSummary();
+  const ecomm = useEcommerceSummary({ includeSkuDetails: false, includeStockMovement: false });
   const platformsKey = [...ecomm.connectedPlatforms].sort().join('|');
 
   /** Cutoff στο Firestore query — ίδια σημασιά με το client clamp· λιγότερα docs για e-shop όταν έχει οριστεί historyStartDate. */

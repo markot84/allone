@@ -88,9 +88,10 @@ const REV_PERF_LABEL_ESHOP = 'Τζίρος e-shop (παραγγελίες)';
 const REV_PERF_LABEL_ESHOP_BLEND = 'Organic + καμπάνιες (εκτίμηση)';
 const DASHBOARD_PRODUCT_LIMIT = 5000;
 const DASHBOARD_LOADING_TIMEOUT_MS = 8000;
-/** Διαφήμιση — ξεχωριστό mini chart (όχι σύγκριση με τζίρο). */
-const ADS_SPEND_COLOR = '#94A3B8';
+/** Διαφήμιση — standalone efficiency chart (όχι σύγκριση με τζίρο). */
+const ADS_SPEND_COLOR = '#475569';
 const ADS_CONV_COLOR = '#2563EB';
+const ADS_ROAS_COLOR = '#7C3AED';
 
 /** Chart series values are full EUR; axis shows K when ≥ €1.000 (tooltip uses formatCurrencyCompact on same basis). */
 function formatRevenueChartYAxisTick(value: number): string {
@@ -185,7 +186,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   const { activeStrategy, getStrategyName } = useActiveStrategy();
   useAutomationRunner();
   const ga4 = useGA4Data();
-  const ecomm = useEcommerceSummary();
+  const ecomm = useEcommerceSummary({ includeSkuDetails: false, includeStockMovement: false });
   /**
    * Dashboard: μόνο server summary (`ecommerce_summary`) — γρήγορο, ένα Firestore read.
    * Το `full` mode κατέβαζε όλο το ιστορικό orders παράλληλα με το `useSegments` 400ήμερο fetch
@@ -194,7 +195,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
    */
   const ecommHist = useEcommerceFullHistoryMetrics({ mode: 'summary_only' });
   const businessRevenue = useBusinessRevenueSummary();
-  const procurementSheets = useProcurement();
+  const procurementSheets = useProcurement({ sheets: ['costing'] });
   const { alerts: automationAlerts } = useAutomationAlerts();
 
   const supplierTodMap = useMemo(() => {
@@ -648,7 +649,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     erpRevenueByDayRecord,
   ]);
 
-  /** Ημερήσια ή μηνιαία σειρά για mini chart διαφήμισης (δαπάνη + conversion value από synced campaigns). */
+  /** Ημερήσια ή μηνιαία σειρά για chart διαφήμισης (δαπάνη + conversion value + ROAS από synced campaigns). */
   const adsPerformanceSeries = useMemo(() => {
     if (!hasCampaigns || periodCampaigns.length === 0) return [];
     const { fromDate, toDate } = periodDates;
@@ -667,11 +668,16 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     });
 
     if (dayList.length <= REVENUE_CHART_MAX_DAILY_POINTS) {
-      return dayList.map((day) => ({
-        dateKey: day,
-        adSpend: Math.round((spendByDay[day] || 0) * 100) / 100,
-        adConvValue: Math.round((valByDay[day] || 0) * 100) / 100,
-      }));
+      return dayList.map((day) => {
+        const adSpend = Math.round((spendByDay[day] || 0) * 100) / 100;
+        const adConvValue = Math.round((valByDay[day] || 0) * 100) / 100;
+        return {
+          dateKey: day,
+          adSpend,
+          adConvValue,
+          roas: adSpend > 0 ? Math.round((adConvValue / adSpend) * 100) / 100 : null,
+        };
+      });
     }
 
     const byMonth = new Map<string, { adSpend: number; adConvValue: number }>();
@@ -691,6 +697,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         dateKey: ym,
         adSpend: Math.round(v.adSpend * 100) / 100,
         adConvValue: Math.round(v.adConvValue * 100) / 100,
+        roas: v.adSpend > 0 ? Math.round((v.adConvValue / v.adSpend) * 100) / 100 : null,
       }));
   }, [hasCampaigns, periodCampaigns, periodDates]);
 
@@ -1273,9 +1280,11 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         );
       })()}
 
-      {/* E-commerce Summary */}
-      {!dashboardOverviewLoading && enabledModules.ecommerce && ecomm.hasData && (
-        <Card hover onClick={() => onSectionChange?.('ecommerce')}>
+      {/* E-commerce + Web Analytics summary tabs */}
+      {!dashboardOverviewLoading && ((enabledModules.ecommerce && ecomm.hasData) || (enabledModules.analytics && ga4.hasData)) && (
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+          {enabledModules.ecommerce && ecomm.hasData && (
+        <Card className="h-full" hover onClick={() => onSectionChange?.('ecommerce')}>
           <div className="p-5">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
@@ -1301,7 +1310,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               <ArrowRight size={16} className="text-[#D1D5DB] group-hover:text-[var(--nts-accent)] transition-colors" />
             </div>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-5 md:items-end">
+            <div className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 2xl:grid-cols-4 2xl:items-end">
               <div>
                 <div className="flex items-center gap-1 mb-0.5">
                   <p className="text-[11px] text-[#6B7280]">e-shop Revenue</p>
@@ -1334,8 +1343,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 );
                 if (periodDaily.length <= 1) return null;
                 return (
-                <div className="hidden md:block">
-                  <ResponsiveContainer width="100%" height={40}>
+                <div className="col-span-full hidden pt-2 sm:block">
+                  <ResponsiveContainer width="100%" height={52}>
                     <AreaChart data={periodDaily}>
                       <defs>
                         <linearGradient id="ecommDashSparkGrad" x1="0" y1="0" x2="0" y2="1">
@@ -1352,11 +1361,10 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             </div>
           </div>
         </Card>
-      )}
+          )}
 
-      {/* GA4 Web Analytics Summary */}
-      {!dashboardOverviewLoading && enabledModules.analytics && ga4.hasData && (
-        <Card hover onClick={() => onSectionChange?.('analytics')}>
+          {enabledModules.analytics && ga4.hasData && (
+        <Card className="h-full" hover onClick={() => onSectionChange?.('analytics')}>
           <div className="p-5">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
@@ -1372,7 +1380,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               const t = ga4TotalsInPeriod.hasData ? ga4TotalsInPeriod : { ...ga4.totals, hasData: false };
               const fmt = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}K` : n.toLocaleString());
               return (
-            <div className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 md:grid-cols-4">
+            <div className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 2xl:grid-cols-4">
               <div>
                 <p className="text-[11px] text-[#6B7280] mb-0.5">Sessions</p>
                 <p className="text-lg font-bold text-[#1A1A1A]">{fmt(t.sessions)}</p>
@@ -1410,6 +1418,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             })()}
           </div>
         </Card>
+          )}
+        </div>
       )}
 
       {/* Main Charts Row */}
@@ -1428,27 +1438,25 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             subtitle={
               hasProcurementTurnoverEstimate ? (
                 <p>
-                  <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">Πηγή: Procurement</strong> — εκτίμηση βάσει αθροίσματος «Πραγματικός τζίρος 12μ.» στο φύλλο Κοστολόγηση (Enterprise), κατανεμημένο ανά ημέρα περιόδου (÷365). Έχει προτεραιότητα ακόμα κι αν υπάρχει ERP.
+                  <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">Πηγή: Procurement</strong> — εκτίμηση πραγματικού τζίρου για την επιλεγμένη περίοδο.
                 </p>
               ) : hasErpRevenueForPeriod ? (
                 <p>
-                  <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">Τζίρος επιχείρησης</strong> από συγχρονισμένα παραστατικά ERP (καθαρές αξίες όπως στο aggregate). Η γραμμή ακολουθεί την επιλεγμένη περίοδο (τοπικό ημερολόγιο). Για ανάλυση e-shop και ROAS ανοίξτε{' '}
-                  <strong className="font-semibold">ROI &amp; Απόδοση</strong>.
+                  <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">Τζίρος επιχείρησης</strong> από συγχρονισμένα ERP παραστατικά για την επιλεγμένη περίοδο.
                 </p>
               ) : enabledModules.ecommerce && ecomm.hasData ? (
                 <p>
-                  Ημερήσια ή μηνιαία εικόνα <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">καθαρού τζίρου παραγγελιών (χωρίς ΦΠΑ)</strong>, με βάση τον συγχρονισμό του e-shop και το server-side aggregate. Κάτω εμφανίζεται η{' '}
-                  <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">διαφημιστική απόδοση</strong> σε ξεχωριστή κλίμακα, χωρίς να αθροίζεται στον τζίρο.
+                  <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">Καθαρός τζίρος παραγγελιών</strong> από το e-shop aggregate, συγχρονισμένος με την επιλεγμένη περίοδο.
                 </p>
               ) : (
                 <p>
                   {isB2B ? (
                     <>
-                      Βασική εικόνα <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">organic + demand generation</strong> έως ότου προστεθεί invoicing ή ERP feed για αποτύπωση εσόδων ανά account.
+                      Βασική εικόνα <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">organic + demand generation</strong> μέχρι να προστεθεί ERP ή invoicing feed.
                     </>
                   ) : (
                     <>
-                      Εκτίμηση <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">organic + καμπανιών</strong> όταν δεν υπάρχει σύνδεση e-shop. Για πραγματικό τζίρο παραγγελιών απαιτείται σύνδεση του καταστήματος.
+                      Εκτίμηση <strong className="font-semibold text-[var(--fgColor-default,#24292f)]">organic + καμπανιών</strong> όταν δεν υπάρχει σύνδεση e-shop.
                     </>
                   )}
                 </p>
@@ -1531,100 +1539,6 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 <span className="text-sm text-[var(--nts-medium-gray)]">{revenuePerformanceChartLabel}</span>
               </div>
             </div>
-
-            {hasCampaigns && adsPerformanceSeries.length > 0 && (
-              <div
-                className="mt-6 border-t border-[var(--nts-border-gray)] pt-5"
-                onClick={(e) => e.stopPropagation()}
-                role="presentation"
-              >
-                <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
-                  <div className="flex items-start gap-2 min-w-0">
-                    <Megaphone size={16} className="mt-0.5 shrink-0 text-[#64748B]" />
-                    <div>
-                      <p className="text-[13px] font-semibold text-[#1A1A1A]">Διαφήμιση (Google Ads / Meta)</p>
-                      <p className="text-[11px] text-[#6B7280] leading-relaxed mt-0.5">
-                        Δαπάνη (στήλες) και conversion value που αναφέρουν οι πλατφόρμες (γραμμή), για την ίδια περίοδο με το chart τζίρου. Η απεικόνιση είναι συγκριτική και όχι άμεση αντιστοίχιση με τον τζίρο του καταστήματος.
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => onSectionChange?.('campaigns')}
-                    className="shrink-0 text-xs font-semibold text-[var(--nts-accent)] hover:underline"
-                  >
-                    Campaigns →
-                  </button>
-                </div>
-                <div className="w-full min-w-0" style={{ height: 200, minHeight: 200 }}>
-                  <ResponsiveContainer width="100%" height="100%" minHeight={200}>
-                    <ComposedChart data={adsPerformanceSeries} margin={{ top: 8, right: 8, left: 4, bottom: 4 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F0" vertical={false} />
-                      <XAxis
-                        dataKey="dateKey"
-                        tickFormatter={(v) => formatDashChartDateKeyTick(String(v))}
-                        tick={{ fill: '#57606a', fontSize: 11 }}
-                        axisLine={{ stroke: '#d0d7de' }}
-                        tickLine={{ stroke: '#d0d7de' }}
-                      />
-                      <YAxis
-                        width={48}
-                        tick={{ fill: '#57606a', fontSize: 11 }}
-                        axisLine={{ stroke: '#d0d7de' }}
-                        tickLine={{ stroke: '#d0d7de' }}
-                        tickFormatter={formatRevenueChartYAxisTick}
-                        tickCount={5}
-                      />
-                      <RechartsTooltip
-                        contentStyle={{
-                          backgroundColor: '#fff',
-                          border: '1px solid #E8EAED',
-                          borderRadius: '8px',
-                          fontSize: '12px',
-                          padding: '8px 12px',
-                        }}
-                        labelFormatter={(label) => formatDashChartDateKeyTick(String(label))}
-                        formatter={(value: unknown, name?: string) => [
-                          formatCurrencyCompact(Number(value) || 0),
-                          name === 'adSpend' ? 'Δαπάνη διαφήμισης' : 'Conversion value (πλατφόρμα)',
-                        ]}
-                      />
-                      <Legend
-                        wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
-                        formatter={(value) =>
-                          value === 'adSpend' ? 'Δαπάνη' : value === 'adConvValue' ? 'Conversion value' : value
-                        }
-                      />
-                      <Bar dataKey="adSpend" name="adSpend" fill={ADS_SPEND_COLOR} radius={[2, 2, 0, 0]} maxBarSize={28} />
-                      <Line
-                        type="linear"
-                        dataKey="adConvValue"
-                        name="adConvValue"
-                        stroke={ADS_CONV_COLOR}
-                        strokeWidth={2}
-                        dot={false}
-                        isAnimationActive={false}
-                      />
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-[11px] text-[#6B7280]">
-                  <span>
-                    Σύνολο περιόδου: δαπάνη{' '}
-                    <strong className="text-[#374151]">{formatCurrencyCompact(campaignMetrics.totalSpend)}</strong>
-                    {' · '}
-                    conv. value{' '}
-                    <strong className="text-[#374151]">{formatCurrencyCompact(campaignMetrics.totalRevenue)}</strong>
-                  </span>
-                  {campaignMetrics.totalSpend > 0 && (
-                    <span>
-                      ROAS (πλατφόρμα):{' '}
-                      <strong className="text-[#374151]">{formatNumber(campaignMetrics.roas, 2)}×</strong>
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
             </>
           ) : (
             <div className="w-full h-[288px] flex items-center justify-center bg-[#F5F5F5] rounded-lg">
@@ -1750,6 +1664,140 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           </Card>
         )}
       </div>
+
+      {hasCampaigns && adsPerformanceSeries.length > 0 && (
+        <Card
+          padding="lg"
+          hover={!!onSectionChange}
+          onClick={() => onSectionChange?.('campaigns')}
+        >
+          <CardHeader
+            title="Διαφήμιση / Efficiency"
+            subtitle="Spend, conversion value και ROAS πλατφόρμας για την ίδια επιλεγμένη περίοδο."
+            icon={<Megaphone size={18} className="text-[var(--nts-medium-gray)]" />}
+            action={
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSectionChange?.('campaigns');
+                }}
+                className="shrink-0 rounded-full border border-[#D0D7DE] bg-white px-3 py-1.5 text-xs font-semibold text-[var(--nts-accent)] transition-colors hover:border-[var(--nts-accent)] hover:bg-[var(--nts-accent)]/5"
+              >
+                Campaigns →
+              </button>
+            }
+          />
+
+          <div className="mb-5 grid grid-cols-1 gap-3 md:grid-cols-3">
+            <div className="rounded-xl border border-[#E5E7EB] bg-[#F8FAFC] p-4">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-[#64748B]">Δαπάνη</p>
+              <p className="mt-1 text-2xl font-bold text-[#111827]">{formatCurrencyCompact(campaignMetrics.totalSpend)}</p>
+            </div>
+            <div className="rounded-xl border border-[#DBEAFE] bg-[#EFF6FF] p-4">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-[#2563EB]">Conversion value</p>
+              <p className="mt-1 text-2xl font-bold text-[#1E3A8A]">{formatCurrencyCompact(campaignMetrics.totalRevenue)}</p>
+            </div>
+            <div className="rounded-xl border border-[#EDE9FE] bg-[#F5F3FF] p-4">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-[#7C3AED]">ROAS πλατφόρμας</p>
+              <p className="mt-1 text-2xl font-bold text-[#4C1D95]">
+                {campaignMetrics.totalSpend > 0 ? `${formatNumber(campaignMetrics.roas, 2)}×` : '—'}
+              </p>
+            </div>
+          </div>
+
+          <div className="w-full min-w-0" style={{ height: 300, minHeight: 300 }}>
+            <ResponsiveContainer width="100%" height="100%" minHeight={300}>
+              <ComposedChart data={adsPerformanceSeries} margin={{ top: 8, right: 18, left: 4, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F0" vertical={false} />
+                <XAxis
+                  dataKey="dateKey"
+                  tickFormatter={(v) => formatDashChartDateKeyTick(String(v))}
+                  tick={{ fill: '#57606a', fontSize: 11 }}
+                  axisLine={{ stroke: '#d0d7de' }}
+                  tickLine={{ stroke: '#d0d7de' }}
+                />
+                <YAxis
+                  yAxisId="currency"
+                  width={52}
+                  tick={{ fill: '#57606a', fontSize: 11 }}
+                  axisLine={{ stroke: '#d0d7de' }}
+                  tickLine={{ stroke: '#d0d7de' }}
+                  tickFormatter={formatRevenueChartYAxisTick}
+                  tickCount={5}
+                />
+                <YAxis
+                  yAxisId="roas"
+                  orientation="right"
+                  width={42}
+                  tick={{ fill: '#7C3AED', fontSize: 11 }}
+                  axisLine={{ stroke: '#d0d7de' }}
+                  tickLine={{ stroke: '#d0d7de' }}
+                  tickFormatter={(value) => `${formatNumber(Number(value) || 0, 1)}×`}
+                  tickCount={5}
+                />
+                <RechartsTooltip
+                  contentStyle={{
+                    backgroundColor: '#fff',
+                    border: '1px solid #E8EAED',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                    padding: '10px 14px',
+                    boxShadow: '0 8px 24px rgba(15, 23, 42, 0.08)',
+                  }}
+                  labelFormatter={(label) => formatDashChartDateKeyTick(String(label))}
+                  formatter={(value: unknown, name?: string) => {
+                    const numericValue = Number(value);
+                    if (name === 'roas') {
+                      return [Number.isFinite(numericValue) ? `${formatNumber(numericValue, 2)}×` : '—', 'ROAS πλατφόρμας'];
+                    }
+                    return [
+                      formatCurrencyCompact(Number.isFinite(numericValue) ? numericValue : 0),
+                      name === 'adSpend' ? 'Δαπάνη' : 'Conversion value',
+                    ];
+                  }}
+                />
+                <Legend
+                  wrapperStyle={{ fontSize: 12, paddingTop: 10 }}
+                  formatter={(value) =>
+                    value === 'adSpend' ? 'Δαπάνη' : value === 'adConvValue' ? 'Conversion value' : 'ROAS'
+                  }
+                />
+                <Bar
+                  yAxisId="currency"
+                  dataKey="adSpend"
+                  name="adSpend"
+                  fill={ADS_SPEND_COLOR}
+                  radius={[4, 4, 0, 0]}
+                  maxBarSize={34}
+                  isAnimationActive={false}
+                />
+                <Line
+                  yAxisId="currency"
+                  type="linear"
+                  dataKey="adConvValue"
+                  name="adConvValue"
+                  stroke={ADS_CONV_COLOR}
+                  strokeWidth={2.5}
+                  dot={false}
+                  isAnimationActive={false}
+                />
+                <Line
+                  yAxisId="roas"
+                  type="linear"
+                  dataKey="roas"
+                  name="roas"
+                  stroke={ADS_ROAS_COLOR}
+                  strokeWidth={2}
+                  dot={false}
+                  connectNulls={false}
+                  isAnimationActive={false}
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+      )}
 
       {/* AI Insights & Strategy */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-stretch">

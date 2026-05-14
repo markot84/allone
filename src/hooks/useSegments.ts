@@ -107,7 +107,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   const variant = options.variant ?? 'default';
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
-  const ecomm = useEcommerceSummary();
+  const ecomm = useEcommerceSummary({ includeSkuDetails: false, includeStockMovement: false });
   const platformsKey = useMemo(() => [...ecomm.connectedPlatforms].sort().join('|'), [ecomm.connectedPlatforms]);
 
   const [sourcePref, setSourcePrefState] = useState<RfmDataSourcePreference>('orders');

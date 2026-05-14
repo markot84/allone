@@ -16,21 +16,23 @@ const SHEET_TO_COLLECTION: Record<SheetKey, (typeof PROCUREMENT_COLLECTIONS)[num
 
 const KEYS = Object.keys(SHEET_TO_COLLECTION) as SheetKey[];
 
-async function fetchAllSheets(brandId: string) {
+async function fetchSheets(brandId: string, keys: readonly SheetKey[]) {
   const results = await Promise.all(
-    KEYS.map((key) => ProcurementService.getAll(SHEET_TO_COLLECTION[key], brandId))
+    keys.map((key) => ProcurementService.getAll(SHEET_TO_COLLECTION[key], brandId))
   );
-  return Object.fromEntries(KEYS.map((key, i) => [key, results[i]])) as Record<SheetKey, unknown[]>;
+  return Object.fromEntries(keys.map((key, i) => [key, results[i]])) as Partial<Record<SheetKey, unknown[]>>;
 }
 
-export function useProcurement() {
+export function useProcurement(options?: { sheets?: readonly SheetKey[] }) {
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
   const queryClient = useQueryClient();
+  const requestedSheets = options?.sheets?.length ? options.sheets : KEYS;
+  const sheetsKey = requestedSheets.join('|');
 
   const { data, isPending, isFetching } = useQuery({
-    queryKey: ['procurement', brandId],
-    queryFn: () => (brandId ? fetchAllSheets(brandId) : Promise.resolve(null)),
+    queryKey: ['procurement', brandId, sheetsKey],
+    queryFn: () => (brandId ? fetchSheets(brandId, requestedSheets) : Promise.resolve(null)),
     staleTime: 10 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
     refetchOnMount: false,
@@ -44,7 +46,7 @@ export function useProcurement() {
     pricing_policy: [], fiscal_year: [], statistics: [],
   };
 
-  const allData = data ?? empty;
+  const allData = { ...empty, ...(data ?? {}) };
 
   return {
     data: allData,
