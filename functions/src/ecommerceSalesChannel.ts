@@ -41,7 +41,7 @@ export const SALES_CHANNEL_LABELS: Record<EcommerceSalesChannel, string> = {
   marketplace_skroutz: 'Skroutz',
   intercompany: 'Ενδοομιλικά',
   personal: 'Προσωπικό',
-  needs_review: 'Needs review',
+  needs_review: 'Τηλ. Παραγγελίες',
 };
 
 const EXCLUDED_STATUS_SET = new Set([

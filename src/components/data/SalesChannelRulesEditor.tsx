@@ -18,7 +18,7 @@ const CHANNEL_OPTIONS: Array<{ id: EcommerceSalesChannel; label: string; include
   { id: 'intercompany', label: 'Ενδοομιλικά (εξαιρείται)', included: false },
   { id: 'personal', label: 'Προσωπικό (εξαιρείται)', included: false },
   { id: 'marketplace_skroutz', label: 'Skroutz / Marketplace (εξαιρείται)', included: false },
-  { id: 'needs_review', label: 'Needs review (εξαιρείται μέχρι έλεγχο)', included: false },
+  { id: 'needs_review', label: 'Τηλ. Παραγγελίες (εξαιρείται)', included: false },
 ];
 
 const MATCH_FIELD_OPTIONS: Array<{ id: string; label: string; hint: string }> = [
