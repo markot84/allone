@@ -2,14 +2,11 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   collection,
-  documentId,
   getDocs,
   limit,
   orderBy,
   query,
-  startAfter,
   where,
-  type QueryConstraint,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useBrand } from './useBrand';
@@ -28,52 +25,18 @@ export interface PriceBenchmark {
 }
 
 const FIRESTORE_MAX_LIMIT = 10000;
-const BENCHMARK_PAGE_SIZE = 5000;
 
 async function fetchBenchmarks(brandId: string, maxDocs?: number): Promise<PriceBenchmark[]> {
   const colRef = collection(db, 'price_benchmarks', brandId, 'skus');
   const target = maxDocs && maxDocs > 0 ? maxDocs : FIRESTORE_MAX_LIMIT;
-  const pageSize = Math.min(BENCHMARK_PAGE_SIZE, FIRESTORE_MAX_LIMIT, target);
-  const rowsById = new Map<string, PriceBenchmark>();
-  let lastDocId: string | null = null;
 
-  const pushDocs = (docs: { id: string; data: () => unknown }[]) => {
-    for (const d of docs) {
-      if (rowsById.size >= target) break;
-      const data = d.data() as Record<string, unknown>;
-      rowsById.set(d.id, { ...data } as unknown as PriceBenchmark);
-    }
-  };
-
-  // Prioritize actual market benchmarks. A document-id slice can easily miss all benchmarked SKUs
-  // in large GMC catalogs, making the UI look empty even when import_jobs has withMarketBenchmark > 0.
-  try {
-    const withMarketSnap = await getDocs(query(
-      colRef,
-      where('benchmarkPrice', '>', 0),
-      orderBy('benchmarkPrice', 'desc'),
-      limit(Math.min(target, FIRESTORE_MAX_LIMIT))
-    ));
-    pushDocs(withMarketSnap.docs);
-  } catch (error) {
-    console.warn('[usePriceBenchmarks] benchmark-first query failed; falling back to catalog slice', error);
-  }
-
-  while (rowsById.size < target) {
-    const remaining = target - rowsById.size;
-    const constraints: QueryConstraint[] = [
-      orderBy(documentId()),
-      limit(Math.min(pageSize, remaining, FIRESTORE_MAX_LIMIT)),
-      ...(lastDocId ? [startAfter(lastDocId)] : []),
-    ];
-    const snap = await getDocs(query(colRef, ...constraints));
-    if (snap.empty) break;
-    pushDocs(snap.docs);
-    lastDocId = snap.docs[snap.docs.length - 1].id;
-    if (snap.size < Math.min(pageSize, remaining)) break;
-  }
-
-  return [...rowsById.values()];
+  const snap = await getDocs(query(
+    colRef,
+    where('benchmarkPrice', '>', 0),
+    orderBy('benchmarkPrice', 'desc'),
+    limit(Math.min(target, FIRESTORE_MAX_LIMIT))
+  ));
+  return snap.docs.map((d) => ({ ...(d.data() as Record<string, unknown>) } as unknown as PriceBenchmark));
 }
 
 type UsePriceBenchmarksOptions = {
@@ -93,7 +56,7 @@ export function usePriceBenchmarks(options: UsePriceBenchmarksOptions = {}) {
     refetch,
     isFetching,
   } = useQuery({
-    queryKey: ['priceBenchmarks', brandId, maxDocs ?? 'all'],
+    queryKey: ['priceBenchmarks', brandId, 'with-market-only', maxDocs ?? 'all'],
     queryFn: () => (brandId ? fetchBenchmarks(brandId, maxDocs) : Promise.resolve([])),
     staleTime: Infinity,
     gcTime: 24 * 60 * 60 * 1000,

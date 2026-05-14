@@ -1184,9 +1184,9 @@ export function CompetitorInsights() {
           {/* KPI Strip */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
             <KpiBox
-              label="Σύνολο SKUs (GMC)"
+              label="SKUs με benchmark"
               value={stockedBenchmarkCount > 0 ? String(stockedBenchmarkCount) : '—'}
-              tooltip="Προϊόντα από την αναφορά ProductView του Merchant Center μετά το sync. Περιλαμβάνει όλο τον κατάλογο που επιστρέφει η Google — όχι μόνο όσα έχουν benchmark."
+              tooltip="Προϊόντα για τα οποία το Google Merchant Center επέστρεψε πραγματική τιμή αγοράς (benchmarkPrice > 0). Τα SKUs χωρίς benchmark δεν φορτώνονται σε αυτή την προβολή."
               icon={<ShoppingCart size={18} />}
               color="#6366F1"
             />
@@ -1326,14 +1326,14 @@ export function CompetitorInsights() {
               ) : benchmarkCount === 0 ? (
                 <div className="text-center py-10">
                   <ShoppingCart size={40} className="mx-auto text-[#D1D5DB] mb-3" />
-                  <p className="text-sm text-[#9CA3AF] mb-1">Δεν υπάρχουν δεδομένα benchmarking.</p>
-                  <p className="text-xs text-[#D1D5DB]">Συνδέστε Google Merchant Center από τις <strong className="text-[#9CA3AF]">Συνδέσεις</strong> (sidebar) και πατήστε «Sync GMC».</p>
+                  <p className="text-sm text-[#9CA3AF] mb-1">Δεν υπάρχουν προϊόντα με διαθέσιμο benchmark τιμής.</p>
+                  <p className="text-xs text-[#D1D5DB]">Πατήστε «Sync GMC» ή ελέγξτε στο Merchant Center αν υπάρχουν δεδομένα στο Growth › Price competitiveness.</p>
                 </div>
               ) : stockedBenchmarkCount === 0 ? (
                 <div className="text-center py-10">
                   <ShoppingCart size={40} className="mx-auto text-[#D1D5DB] mb-3" />
-                  <p className="text-sm text-[#9CA3AF] mb-1">Δεν υπάρχουν benchmarks για προϊόντα με διαθέσιμο stock.</p>
-                  <p className="text-xs text-[#D1D5DB]">Η προβολή φιλτράρει προϊόντα χωρίς stock για να παραμένει χρήσιμη και γρήγορη.</p>
+                  <p className="text-sm text-[#9CA3AF] mb-1">Υπάρχουν benchmarks, αλλά όχι για προϊόντα με διαθέσιμο stock.</p>
+                  <p className="text-xs text-[#D1D5DB]">Η προβολή κρατά μόνο benchmarked προϊόντα που αντιστοιχούν σε διαθέσιμο απόθεμα.</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto max-h-[55vh] overflow-y-auto">
