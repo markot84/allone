@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Sparkles,
@@ -21,6 +21,9 @@ import { Card, Badge, Spinner, FormattedProse, toPlainProseText, PageHeader } fr
 // Data is now read from activeStrategy.contentSuggestions (persisted on strategy save)
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import { useBrand } from '../../hooks/useBrand';
+import { useProductSource } from '../../hooks/useProductSource';
+import { useSegments } from '../../hooks/useSegments';
+import { generateContentSuggestions } from '../../services/aiContentSuggestions';
 
 const channelIcons: Record<string, React.ReactNode> = {
   Email: <Mail size={16} className="text-amber-700" />,
@@ -40,17 +43,22 @@ function getChannelIcon(channel: string) {
 
 export function ContentStrategy() {
   const { currentBrand } = useBrand();
-  const { activeStrategy, getStrategyName, isLoading: strategyLoading } = useActiveStrategy();
+  const { activeStrategy, getStrategyName, isLoading: strategyLoading, saveContentSuggestions } = useActiveStrategy();
+  const { products } = useProductSource();
+  const { segments: rfmSegments, dataCoverage } = useSegments();
   const [showExamples, setShowExamples] = useState(true);
   const [briefCopied, setBriefCopied] = useState(false);
   const [allCopied, setAllCopied] = useState(false);
+  const [contentGenerating, setContentGenerating] = useState(false);
+  const autoGenerateKeyRef = useRef<string | null>(null);
 
   // Read persisted content suggestions from strategy (AI runs only on strategy save)
   const saved = activeStrategy?.contentSuggestions;
   const suggestions = saved?.actions ?? [];
   const directions = saved?.directions ?? [];
   const brief = saved?.brief ?? '';
-  const suggestionsLoading = strategyLoading;
+  const hasSavedContent = suggestions.length > 0 || directions.length > 0 || Boolean(brief);
+  const suggestionsLoading = strategyLoading || contentGenerating;
   const hasStrategy = !!activeStrategy && !activeStrategy.id.startsWith('default_');
 
   const handleCopyBrief = () => {
@@ -62,6 +70,51 @@ export function ContentStrategy() {
   };
 
   const strategyName = activeStrategy ? getStrategyName(activeStrategy.scenarioId) : '';
+
+  useEffect(() => {
+    if (!hasStrategy || !activeStrategy || hasSavedContent || contentGenerating) return;
+    const generationKey = `${activeStrategy.id}:${activeStrategy.updatedAt}`;
+    if (autoGenerateKeyRef.current === generationKey) return;
+    autoGenerateKeyRef.current = generationKey;
+
+    const scenarioId = activeStrategy.scenarioId;
+    const scenarioName = getStrategyName(scenarioId);
+    const topCategories = [...new Set(products.map((p) => p.category).filter(Boolean))].slice(0, 5) as string[];
+    const segmentNames = rfmSegments.length > 0
+      ? rfmSegments.map((segment) => segment.name || segment.id).slice(0, 6)
+      : ['All Customers'];
+
+    setContentGenerating(true);
+    generateContentSuggestions({
+      scenarioId,
+      scenarioName,
+      weights: activeStrategy.weights,
+      brandName: currentBrand?.name,
+      topCategories,
+      segmentNames,
+      audience: dataCoverage,
+    })
+      .then(async (result) => {
+        if (result && (result.actions.length > 0 || result.directions.length > 0 || result.brief)) {
+          await saveContentSuggestions(result);
+        }
+      })
+      .catch((error) => {
+        console.error('[ContentStrategy] content generation failed:', error);
+      })
+      .finally(() => setContentGenerating(false));
+  }, [
+    activeStrategy,
+    contentGenerating,
+    currentBrand?.name,
+    dataCoverage,
+    getStrategyName,
+    hasStrategy,
+    products,
+    rfmSegments,
+    saveContentSuggestions,
+    hasSavedContent,
+  ]);
 
   const buildFullExportText = useMemo(() => {
     if (!directions.length && !suggestions.length && !brief) return '';
@@ -216,7 +269,7 @@ export function ContentStrategy() {
       )}
 
       {/* Empty state when strategy exists but no content suggestions saved */}
-      {hasStrategy && !suggestionsLoading && !saved && (
+      {hasStrategy && !suggestionsLoading && !hasSavedContent && (
         <Card padding="lg" className="border border-dashed border-orange-200 bg-gradient-to-br from-amber-50/50 to-orange-50/30">
           <div className="flex flex-col items-center justify-center py-14 text-center">
             <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-white shadow-md shadow-orange-500/10 ring-2 ring-orange-100">

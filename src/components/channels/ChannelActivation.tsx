@@ -63,6 +63,17 @@ import { useMagentoProductEnrichment } from '../../hooks/useMagentoProductEnrich
 import type { ChannelRecommendation, BudgetAction } from '../../types';
 
 const COLORS = ['var(--nts-accent)', '#78716C', '#22C55E', '#8B5CF6', '#F59E0B', '#3B82F6', '#EC4899'];
+const FALLBACK_SEGMENT = {
+  id: 'all_customers',
+  name: 'All Customers',
+  rfm_score: '—',
+  count: 0,
+  percentage: 100,
+  revenue_share: 100,
+  color: 'var(--nts-accent)',
+  description: 'Σύνολο διαθέσιμου κοινού μέχρι να ολοκληρωθεί η RFM ανάλυση.',
+  icon: '',
+};
 
 // Funnel stage palette — επιλεγμένα για μέγιστη οπτική διαφοροποίηση μεταξύ τους
 // (διαφορετικό hue ανά στάδιο, ισορροπημένο contrast σε λευκό background).
@@ -260,8 +271,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   const generateRecommendation = useCallback(async (silent = false) => {
     if (!strategyId || !scenarioId || !currentBrand) return;
     const scenario = scenarios.find(s => s.id === scenarioId) ?? scenarios[0];
-    const segment = rfmSegments[0];
-    if (!segment) return;
+    const segment = rfmSegments[0] ?? FALLBACK_SEGMENT;
 
     if (silent) setIsSilentUpgrading(true);
     else setAiGenerating(true);
@@ -276,18 +286,29 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         (activeStrategy as { weights?: Record<string, number> } | null)?.weights ?? scenario.weights;
       const ranked = rankSegments(rfmSegments, strategyWeights);
       const fittingSegments = ranked.filter((rs) => rs.fit === 'ideal' || rs.fit === 'good');
+      const segmentFitList = fittingSegments.length > 0
+        ? fittingSegments.map((rs) => ({
+            name: rs.segment.name,
+            fit: rs.fit,
+            description: rs.segment.description,
+            count: rs.segment.count,
+            revenueShare: rs.segment.revenue_share,
+          }))
+        : [
+            {
+              name: FALLBACK_SEGMENT.name,
+              fit: 'good' as const,
+              description: FALLBACK_SEGMENT.description,
+              count: 0,
+              revenueShare: 100,
+            },
+          ];
       const rec = await generateChannelRecommendations({
         scenario,
         segment,
         fitLevel: 'good',
         brandContext: { brandName: currentBrand.name, brandType: currentBrand.type, topCategories: topCats },
-        segmentFitList: fittingSegments.map((rs) => ({
-          name: rs.segment.name,
-          fit: rs.fit,
-          description: rs.segment.description,
-          count: rs.segment.count,
-          revenueShare: rs.segment.revenue_share,
-        })),
+        segmentFitList,
         context: 'activation',
         triage: triagePromptCtx,
         provenance: provenancePromptCtx,
@@ -319,7 +340,6 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   useEffect(() => {
     if (autoGenTriggered.current) return;
     if (!hasRealStrategyId || aiRecommendation || aiGenerating) return;
-    if (rfmSegments.length === 0) return;
     autoGenTriggered.current = true;
     generateRecommendation();
   }, [hasRealStrategyId, aiRecommendation, aiGenerating, rfmSegments, generateRecommendation]);
@@ -333,7 +353,6 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   useEffect(() => {
     if (silentUpgradeAttempts.current >= MAX_SILENT_UPGRADES) return;
     if (!hasRealStrategyId || !aiRecommendation || aiGenerating) return;
-    if (rfmSegments.length === 0) return;
     const playbook = aiRecommendation.channelPlaybook ?? [];
     const hasPerSegmentSignal = playbook.some(
       (e) => e.priority === 'primary' || e.priority === 'secondary' || (typeof e.budgetSharePct === 'number' && e.budgetSharePct > 0)

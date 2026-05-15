@@ -2,8 +2,8 @@
  * Συνδέει τις ειδοποιήσεις Product Intelligence (dead / excess από ERP)
  * με τις εμπορικές πολιτικές στη Στρατηγική — ίδια λογική priority_tag με useProductSource.
  */
-import { useMemo } from 'react';
-import { AlertCircle, AlertTriangle, ArrowRight, ExternalLink, Package } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { AlertCircle, AlertTriangle, ArrowRight, ChevronDown, ChevronRight, ExternalLink, Package } from 'lucide-react';
 import { scenarios } from '../../data';
 import type { Product } from '../../types';
 import { normalizeSkuKeyForSignals, type ProductSignal } from '../../hooks/useProductSignals';
@@ -67,6 +67,7 @@ export function ProcurementStrategyBridge({
   onExcessToStockClearance,
   onOpenProductIntelligence,
 }: ProcurementStrategyBridgeProps) {
+  const [expanded, setExpanded] = useState(true);
   const { dead, excess } = useMemo(() => {
     const dead = products.filter((p) => p.priority_tag === 'dead');
     const excess = products.filter((p) => p.priority_tag === 'excess');
@@ -93,27 +94,44 @@ export function ProcurementStrategyBridge({
 
   return (
     <div className="rounded-xl border border-[#E5E7EB] bg-gradient-to-br from-[#FAFAFA] to-white overflow-hidden shadow-sm">
-      <div className="px-4 py-3 border-b border-[#E8E8E8] flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="shrink-0 p-1.5 rounded-lg bg-[#7C3AED]/10">
-            <Package size={16} className="text-[#7C3AED]" aria-hidden />
-          </div>
-          <h3 className="min-w-0 text-sm font-bold text-[#111827]">
-            Ειδοποιήσεις από Product Intelligence (Απόθεμα)
-          </h3>
-        </div>
-        {onOpenProductIntelligence && (
+      <div className="border-b border-[#E8E8E8] bg-white">
+        <div className="px-4 py-3 flex flex-wrap items-center justify-between gap-2">
           <button
             type="button"
-            onClick={onOpenProductIntelligence}
-            className="inline-flex items-center gap-1 text-[11px] font-medium text-[var(--nts-accent)] hover:underline shrink-0"
+            aria-expanded={expanded}
+            onClick={() => setExpanded((value) => !value)}
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left hover:text-[#111827]"
           >
-            <ExternalLink size={12} aria-hidden />
-            Λεπτομέρειες στο Product Intelligence
+            {expanded ? (
+              <ChevronDown size={16} className="shrink-0 text-gray-500" strokeWidth={2.25} />
+            ) : (
+              <ChevronRight size={16} className="shrink-0 text-gray-500" strokeWidth={2.25} />
+            )}
+            <div className="shrink-0 p-1.5 rounded-lg bg-[#7C3AED]/10">
+              <Package size={16} className="text-[#7C3AED]" aria-hidden />
+            </div>
+            <div className="min-w-0">
+              <h3 className="truncate text-sm font-bold text-[#111827] sm:text-base">
+                Ειδοποιήσεις από Product Intelligence
+              </h3>
+              <p className="text-[10px] text-gray-500 sm:text-[11px]">
+                Απόθεμα · {deadMeta.count.toLocaleString('el-GR')} dead · {excessMeta.count.toLocaleString('el-GR')} excess
+              </p>
+            </div>
           </button>
-        )}
+          {onOpenProductIntelligence && (
+            <button
+              type="button"
+              onClick={onOpenProductIntelligence}
+              className="inline-flex items-center gap-1 text-[11px] font-medium text-[var(--nts-accent)] hover:underline shrink-0"
+            >
+              <ExternalLink size={12} aria-hidden />
+              Λεπτομέρειες στο Product Intelligence
+            </button>
+          )}
+        </div>
       </div>
-      <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+      {expanded && <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
         {deadMeta.count > 0 && (
           <div className="rounded-lg border border-[#FECACA] bg-[#FEF2F2] p-3 flex flex-col gap-2">
             <div className="flex items-start gap-2">
@@ -178,7 +196,7 @@ export function ProcurementStrategyBridge({
             </button>
           </div>
         )}
-      </div>
+      </div>}
     </div>
   );
 }

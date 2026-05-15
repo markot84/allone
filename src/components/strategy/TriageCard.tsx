@@ -398,8 +398,8 @@ export function TriageCard({ products: scopedProducts, onSelectPolicy }: TriageC
             <div className="shrink-0 p-1 rounded-lg bg-[#7C3AED]/10">
               <Target size={14} className="text-[#7C3AED]" aria-hidden />
             </div>
-            <span className="shrink-0 text-[11px] font-bold tracking-tight text-[#111827] sm:text-xs">
-              Εμπορικές προτεραιότητες
+            <span className="shrink-0 text-sm font-bold tracking-tight text-[#111827] sm:text-base">
+              Εμπορικές Προτεραιότητες
             </span>
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1 sm:justify-center">
               {visibleGroups.map((g) => {
