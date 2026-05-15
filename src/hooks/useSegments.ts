@@ -8,7 +8,13 @@ import { useEcommerceSummary } from './useEcommerceSummary';
 import { useBrandSyncVersion } from './useBrandSyncVersion';
 import { fetchAllEcommerceOrders, fetchDataAnalysisOrders } from '../services/ecommerceRawOrders';
 import { fetchCatalogAlignmentData, fetchCatalogAlignmentDataForDataAnalysis, normalizeCatalogAlignmentPayload } from '../services/catalogAlignment';
-import { computeRfmOrderScopeStats, computeRfmSegmentsFromEcommerceOrders, computeSegmentMigrationFromEcommerceOrders, type RfmCatalogContext } from '../services/rfmFromOrders';
+import {
+  computeRfmOrderScopeStats,
+  computeRfmSegmentsFromEcommerceOrders,
+  computeSegmentMigrationFromEcommerceOrders,
+  computeSegmentPeriodComparisonFromEcommerceOrders,
+  type RfmCatalogContext,
+} from '../services/rfmFromOrders';
 import {
   isAnalysisSnapshotFresh,
   readLatestAnalysisSnapshot,
@@ -389,6 +395,15 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     [resolvedSource, analysisOrders]
   );
 
+  const orderSegmentPeriodComparison = useMemo(
+    () => {
+      if (resolvedSource !== 'ecommerce' || analysisOrders.length === 0) return undefined;
+      const monthly = computeSegmentPeriodComparisonFromEcommerceOrders(analysisOrders, 30);
+      return monthly.canCompute ? monthly : computeSegmentPeriodComparisonFromEcommerceOrders(analysisOrders, 90);
+    },
+    [resolvedSource, analysisOrders]
+  );
+
   /**
    * Μην μπλοκάρεις RFM όσο περιμένεις «άδεια» segments αν το brand έχει e-shop:
    * το `ordersLoading` δείχνει την κατάσταση φόρτωσης παραγγελιών.
@@ -453,6 +468,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
           guestOrdersSkipped: aggregateScope.guestOrdersSkipped,
         },
         segmentMigration: dataAnalysisAggregate.segmentMigration,
+        segmentPeriodComparison: dataAnalysisAggregate.segmentPeriodComparison,
       };
     }
     if (resolvedSource !== 'ecommerce' || orderOrigin === 'none') return null;
@@ -478,6 +494,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
             }
           : undefined,
       segmentMigration: resolvedSource === 'ecommerce' ? orderSegmentMigration : undefined,
+      segmentPeriodComparison: resolvedSource === 'ecommerce' ? orderSegmentPeriodComparison : undefined,
     };
   }, [
     snapshotScope,
@@ -498,6 +515,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     orderRfm.ordersAttributed,
     orderRfm.guestOrdersSkipped,
     orderSegmentMigration,
+    orderSegmentPeriodComparison,
     shouldUseAggregate,
   ]);
 
@@ -552,6 +570,14 @@ export function useSegments(options: UseSegmentsOptions = {}) {
       : resolvedSource === 'ecommerce'
         ? orderSegmentMigration
         : undefined;
+  const displayedSegmentPeriodComparison =
+    displayedSnapshot
+      ? displayedSnapshot.segmentPeriodComparison
+      : shouldUseAggregate && dataAnalysisAggregate
+        ? dataAnalysisAggregate.segmentPeriodComparison
+      : resolvedSource === 'ecommerce'
+        ? orderSegmentPeriodComparison
+        : undefined;
 
   return {
     segments: displayedSegments,
@@ -574,6 +600,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     dataCoverage: displayedDataCoverage,
     orderRfmMeta: displayedOrderRfmMeta,
     segmentMigration: displayedSegmentMigration,
+    segmentPeriodComparison: displayedSegmentPeriodComparison,
     importSegmentsAvailable,
     analysisSnapshotSavedAt: displayedSnapshot?.savedAt ?? null,
     analysisSnapshotIsStale: shouldUseStaleSnapshot,

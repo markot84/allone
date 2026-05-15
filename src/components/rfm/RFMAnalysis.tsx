@@ -132,6 +132,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
     dataCoverage,
     orderRfmMeta,
     segmentMigration,
+    segmentPeriodComparison,
     isCatalogEnriching,
     analysisSnapshotIsStale,
     analysisLastAnalyzedAt,
@@ -154,6 +155,11 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
   );
   const segmentMovementById = useMemo(() => {
     const map = new Map<string, SegmentMovement>();
+    for (const row of segmentPeriodComparison?.rows ?? []) {
+      map.set(row.id, { countDelta: row.countDelta, percentageDelta: row.shareDelta });
+    }
+    if (map.size > 0) return map;
+
     for (const flow of segmentMigration?.flows ?? []) {
       const from = map.get(flow.from) ?? { countDelta: 0, percentageDelta: 0 };
       from.countDelta -= flow.count;
@@ -166,7 +172,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
       map.set(flow.to, to);
     }
     return map;
-  }, [segmentMigration?.flows]);
+  }, [segmentMigration?.flows, segmentPeriodComparison?.rows]);
 
   const lastAnalysisLabel = useMemo(() => {
     if (!analysisLastAnalyzedAt) return 'Δεν έχει αποθηκευμένη ανάλυση';
@@ -821,16 +827,59 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
       <Card padding="lg">
         <CardHeader
           title="Segment Migration"
-          subtitle={hasImportedSegments ? `Παράθυρο ${segmentMigration?.periodDays ?? 30} ημερών` : ''}
+          subtitle={hasImportedSegments ? `Σύγκριση περιόδων ${segmentPeriodComparison?.periodDays ?? segmentMigration?.periodDays ?? 30} ημερών` : ''}
           icon={<ArrowRight size={20} className="text-[var(--nts-accent)]" />}
         />
         <div className="space-y-3">
           {hasImportedSegments && rfmSegments.length > 0 ? (
-            segmentMigration?.canCompute && segmentMigration.flows.length > 0 ? (
+            segmentPeriodComparison?.canCompute && segmentPeriodComparison.rows.length > 0 ? (
               <>
                 <p className="text-xs text-[#6B7280]">
-                  Σύγκριση {formatNumber(segmentMigration.comparedCustomers)} αναγνωρίσιμων πελατών με ιστορικό πριν και μετά την περίοδο
-                  {segmentMigration.periodDays === 90 ? ' (3μηνο fallback επειδή ο τελευταίος μήνας δεν είχε αρκετές μετακινήσεις).' : '.'}
+                  Τρέχουσα περίοδος {new Date(segmentPeriodComparison.currentFrom).toLocaleDateString('el-GR')} – {new Date(segmentPeriodComparison.currentTo).toLocaleDateString('el-GR')}
+                  {' '}vs προηγούμενη {new Date(segmentPeriodComparison.previousFrom).toLocaleDateString('el-GR')} – {new Date(segmentPeriodComparison.previousTo).toLocaleDateString('el-GR')}.
+                  {' '}Σύγκριση {formatNumber(segmentPeriodComparison.currentCustomers)} vs {formatNumber(segmentPeriodComparison.previousCustomers)} αναγνωρίσιμων πελατών
+                  {segmentPeriodComparison.periodDays === 90 ? ' (3μηνο fallback επειδή το μηνιαίο παράθυρο δεν είχε αρκετό ιστορικό).' : '.'}
+                </p>
+                <div className="space-y-2">
+                  {segmentPeriodComparison.rows.map((row) => {
+                    const color = segmentColorById.get(row.id) || '#1A1A1A';
+                    const deltaTone = row.countDelta > 0 ? 'up' : row.countDelta < 0 ? 'down' : 'flat';
+                    const deltaColor = deltaTone === 'up' ? '#16A34A' : deltaTone === 'down' ? '#DC2626' : '#6B7280';
+                    return (
+                      <div key={row.id} className="rounded-xl border border-[#E5E5E5] bg-white p-3">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="flex min-w-0 items-center gap-2 text-sm">
+                            <span className="min-w-0 truncate font-semibold" style={{ color }}>{row.name}</span>
+                            <span className="rounded-full bg-[#F5F5F5] px-2 py-0.5 font-mono text-xs text-[#4A4A4A]">
+                              {formatNumber(row.previousCount)} → {formatNumber(row.currentCount)} πελάτες
+                            </span>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-3 font-mono text-xs">
+                            <span className="font-bold" style={{ color: deltaColor }}>
+                              {row.countDelta > 0 ? '+' : ''}{formatNumber(row.countDelta, 0)} πελάτες
+                            </span>
+                            <span className="rounded-full bg-[#F5F5F5] px-2 py-0.5 text-[#4A4A4A]">
+                              {row.shareDelta > 0 ? '+' : ''}{formatNumber(row.shareDelta, 1)}pp
+                            </span>
+                            <span className="text-[#6B7280]">
+                              {formatCurrencyCompact(row.previousRevenue)} → {formatCurrencyCompact(row.currentRevenue)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {segmentMigration?.canCompute && segmentMigration.flows.length > 0 && (
+                  <p className="text-xs text-[#6B7280]">
+                    Επιπλέον, εντοπίστηκαν {formatNumber(segmentMigration.flows.length)} τύποι πραγματικής μετακίνησης πελατών μεταξύ segments στο ίδιο παράθυρο.
+                  </p>
+                )}
+              </>
+            ) : segmentMigration?.canCompute && segmentMigration.flows.length > 0 ? (
+              <>
+                <p className="text-xs text-[#6B7280]">
+                  Δεν υπάρχει αρκετό συνεχόμενο period history για σύγκριση περιόδων. Εμφανίζονται οι πραγματικές μετακινήσεις {formatNumber(segmentMigration.comparedCustomers)} πελατών.
                 </p>
                 <div className="space-y-2">
                   {segmentMigration.flows.map((flow) => {
@@ -856,7 +905,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
               </>
             ) : (
               <p className="text-sm text-[#4A4A4A] py-4 text-center">
-                Δεν εντοπίστηκαν αρκετές μετακινήσεις μεταξύ segments στο διαθέσιμο παράθυρο {segmentMigration?.periodDays ?? 90} ημερών.
+                Δεν υπάρχει ακόμα αρκετό συγκρίσιμο ιστορικό για τρέχουσα vs προηγούμενη περίοδο {segmentPeriodComparison?.periodDays ?? segmentMigration?.periodDays ?? 90} ημερών.
                 Η ένδειξη ανανεώνεται με τη μηνιαία Data Analysis ή χειροκίνητα από την ανανέωση ανάλυσης.
               </p>
             )

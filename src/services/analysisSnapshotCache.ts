@@ -1,6 +1,6 @@
 import type { RFMSegment } from '../types';
 import type { SegmentDataCoverage, RfmDataSourcePreference, SegmentsDataSource } from '../hooks/useSegments';
-import type { SegmentMigrationResult } from './rfmFromOrders';
+import type { SegmentMigrationResult, SegmentPeriodComparisonResult } from './rfmFromOrders';
 
 const SNAPSHOT_PREFIX = 'pp-analysis-snapshot-v8';
 export const ANALYSIS_SNAPSHOT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -30,6 +30,7 @@ export type AnalysisSnapshotPayload = AnalysisSnapshotScope & {
     guestOrdersSkipped: number;
   };
   segmentMigration?: SegmentMigrationResult;
+  segmentPeriodComparison?: SegmentPeriodComparisonResult;
 };
 
 function storage(): Storage | null {

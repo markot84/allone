@@ -150,6 +150,32 @@ type SegmentMigrationResult = {
   canCompute: boolean;
 };
 
+type SegmentPeriodComparisonRow = {
+  id: string;
+  name: string;
+  currentCount: number;
+  previousCount: number;
+  countDelta: number;
+  currentRevenue: number;
+  previousRevenue: number;
+  revenueDelta: number;
+  currentShare: number;
+  previousShare: number;
+  shareDelta: number;
+};
+
+type SegmentPeriodComparisonResult = {
+  periodDays: number;
+  currentFrom: string;
+  currentTo: string;
+  previousFrom: string;
+  previousTo: string;
+  currentCustomers: number;
+  previousCustomers: number;
+  rows: SegmentPeriodComparisonRow[];
+  canCompute: boolean;
+};
+
 const PAGE_SIZE = 1000;
 const LOOKBACK_DAYS = 365;
 const DAY_LABELS = ['Κυριακή', 'Δευτέρα', 'Τρίτη', 'Τετάρτη', 'Πέμπτη', 'Παρασκευή', 'Σάββατο'];
@@ -539,6 +565,137 @@ function segmentAssignments(customers: CustomerAgg[], asOf: Date): Map<string, {
   return out;
 }
 
+function dateKey(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function aggregateIdentifiedCustomersInWindow(orders: NormalizedOrder[], from: Date, to: Date): CustomerAgg[] {
+  const byCustomer = new Map<string, CustomerAgg>();
+  const fromMs = from.getTime();
+  const toMs = to.getTime();
+  for (const order of orders) {
+    const key = order.customerKey?.trim();
+    if (!key || !order.dataAnalysisIncluded) continue;
+    const createdAtMs = new Date(order.createdAt || '').getTime();
+    if (!Number.isFinite(createdAtMs) || createdAtMs < fromMs || createdAtMs > toMs) continue;
+    const revenue = orderRevenue(order);
+    if (revenue <= 0) continue;
+    const current = byCustomer.get(key);
+    if (!current) {
+      byCustomer.set(key, {
+        key,
+        lastOrder: order.createdAt,
+        firstOrder: order.createdAt,
+        orderCount: 1,
+        revenue,
+      });
+      continue;
+    }
+    current.orderCount += 1;
+    current.revenue += revenue;
+    if (order.createdAt < current.firstOrder) current.firstOrder = order.createdAt;
+    if (order.createdAt > current.lastOrder) current.lastOrder = order.createdAt;
+  }
+  return [...byCustomer.values()];
+}
+
+function segmentPeriodStats(customers: CustomerAgg[], asOf: Date) {
+  const assignments = segmentAssignments(customers, asOf);
+  const stats = new Map<string, { id: string; name: string; count: number; revenue: number }>();
+  for (const customer of customers) {
+    const assignment = assignments.get(customer.key);
+    if (!assignment) continue;
+    const current = stats.get(assignment.id) ?? {
+      id: assignment.id,
+      name: assignment.name,
+      count: 0,
+      revenue: 0,
+    };
+    current.count += 1;
+    current.revenue += customer.revenue;
+    stats.set(assignment.id, current);
+  }
+  return stats;
+}
+
+function computeSegmentPeriodComparison(orders: NormalizedOrder[], periodDays: number): SegmentPeriodComparisonResult {
+  const validOrderDates = orders
+    .filter((order) => order.customerKey && order.dataAnalysisIncluded && orderRevenue(order) > 0)
+    .map((order) => new Date(order.createdAt || ''))
+    .filter((date) => Number.isFinite(date.getTime()))
+    .sort((a, b) => b.getTime() - a.getTime());
+  const currentTo = validOrderDates[0];
+  if (!currentTo) {
+    const empty = dateKey(new Date());
+    return {
+      periodDays,
+      currentFrom: empty,
+      currentTo: empty,
+      previousFrom: empty,
+      previousTo: empty,
+      currentCustomers: 0,
+      previousCustomers: 0,
+      rows: [],
+      canCompute: false,
+    };
+  }
+
+  currentTo.setHours(23, 59, 59, 999);
+  const currentFrom = new Date(currentTo);
+  currentFrom.setDate(currentFrom.getDate() - periodDays + 1);
+  currentFrom.setHours(0, 0, 0, 0);
+  const previousTo = new Date(currentFrom);
+  previousTo.setDate(previousTo.getDate() - 1);
+  previousTo.setHours(23, 59, 59, 999);
+  const previousFrom = new Date(previousTo);
+  previousFrom.setDate(previousFrom.getDate() - periodDays + 1);
+  previousFrom.setHours(0, 0, 0, 0);
+
+  const currentCustomers = aggregateIdentifiedCustomersInWindow(orders, currentFrom, currentTo);
+  const previousCustomers = aggregateIdentifiedCustomersInWindow(orders, previousFrom, previousTo);
+  const currentStats = segmentPeriodStats(currentCustomers, currentTo);
+  const previousStats = segmentPeriodStats(previousCustomers, previousTo);
+  const currentTotal = currentCustomers.length;
+  const previousTotal = previousCustomers.length;
+  const ids = new Set([...currentStats.keys(), ...previousStats.keys()]);
+  const rows = [...ids]
+    .map((id) => {
+      const current = currentStats.get(id);
+      const previous = previousStats.get(id);
+      const currentCount = current?.count ?? 0;
+      const previousCount = previous?.count ?? 0;
+      const currentShare = currentTotal > 0 ? Math.round((currentCount / currentTotal) * 1000) / 10 : 0;
+      const previousShare = previousTotal > 0 ? Math.round((previousCount / previousTotal) * 1000) / 10 : 0;
+      return {
+        id,
+        name: current?.name ?? previous?.name ?? id,
+        currentCount,
+        previousCount,
+        countDelta: currentCount - previousCount,
+        currentRevenue: current?.revenue ?? 0,
+        previousRevenue: previous?.revenue ?? 0,
+        revenueDelta: (current?.revenue ?? 0) - (previous?.revenue ?? 0),
+        currentShare,
+        previousShare,
+        shareDelta: Math.round((currentShare - previousShare) * 10) / 10,
+      };
+    })
+    .sort((a, b) => Math.abs(b.countDelta) - Math.abs(a.countDelta) || b.currentCount - a.currentCount)
+    .slice(0, 8);
+
+  return {
+    periodDays,
+    currentFrom: dateKey(currentFrom),
+    currentTo: dateKey(currentTo),
+    previousFrom: dateKey(previousFrom),
+    previousTo: dateKey(previousTo),
+    currentCustomers: currentTotal,
+    previousCustomers: previousTotal,
+    rows,
+    canCompute: currentTotal > 0 && previousTotal > 0 && rows.length > 0,
+  };
+}
+
 function computeSegmentMigration(orders: NormalizedOrder[], periodDays: number): SegmentMigrationResult {
   const validOrderDates = orders
     .filter((order) => order.customerKey && order.dataAnalysisIncluded && orderRevenue(order) > 0)
@@ -601,6 +758,11 @@ function computeSegmentMigration(orders: NormalizedOrder[], periodDays: number):
 function computeAdaptiveSegmentMigration(orders: NormalizedOrder[]): SegmentMigrationResult {
   const monthly = computeSegmentMigration(orders, 30);
   return monthly.canCompute ? monthly : computeSegmentMigration(orders, 90);
+}
+
+function computeAdaptiveSegmentPeriodComparison(orders: NormalizedOrder[]): SegmentPeriodComparisonResult {
+  const monthly = computeSegmentPeriodComparison(orders, 30);
+  return monthly.canCompute ? monthly : computeSegmentPeriodComparison(orders, 90);
 }
 
 function computeScope(orders: NormalizedOrder[], catalog: Map<string, CatalogDims>, includeGuests: boolean): ScopeResult {
@@ -1051,6 +1213,7 @@ export async function refreshDataAnalysisRfmAggregate(brandId: string): Promise<
     const identified = computeScope(orders, catalog, false);
     const all = computeScope(orders, catalog, true);
     const segmentMigration = computeAdaptiveSegmentMigration(orders);
+    const segmentPeriodComparison = computeAdaptiveSegmentPeriodComparison(orders);
     const isErpBacked = mode === 'erp' || hasErpConnector;
     const sourceLabel = isErpBacked ? 'ERP' : 'E-shop orders';
     const payload = {
@@ -1067,6 +1230,7 @@ export async function refreshDataAnalysisRfmAggregate(brandId: string): Promise<
       processedOrders: orders.length,
       catalogSkus: catalog.size,
       segmentMigration,
+      segmentPeriodComparison,
       scopes: { identified, all },
       computedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),

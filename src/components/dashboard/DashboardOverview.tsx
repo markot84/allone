@@ -1759,21 +1759,9 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           onClick={() => onSectionChange?.('campaigns')}
         >
           <CardHeader
-            title="Διαφήμιση"
+            title="Campaigns"
             subtitle="Τάση conversion value, δαπάνης και ROAS πλατφόρμας για την επιλεγμένη περίοδο."
             icon={<Megaphone size={18} className="text-[var(--nts-accent)]" />}
-            action={
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSectionChange?.('campaigns');
-                }}
-                className="shrink-0 rounded-full border border-[#D0D7DE] bg-white px-3 py-1.5 text-xs font-semibold text-[var(--nts-accent)] transition-colors hover:border-[var(--nts-accent)] hover:bg-[var(--nts-accent)]/5"
-              >
-                Campaigns →
-              </button>
-            }
           />
 
           <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-[#6B7280]">

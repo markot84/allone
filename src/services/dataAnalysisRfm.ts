@@ -1,7 +1,7 @@
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import type { SegmentDataCoverage, RfmDataSourcePreference, SegmentsDataSource } from '../hooks/useSegments';
-import type { SegmentMigrationResult } from './rfmFromOrders';
+import type { SegmentMigrationResult, SegmentPeriodComparisonResult } from './rfmFromOrders';
 import type { RFMSegment } from '../types';
 
 export type DataAnalysisRfmScope = {
@@ -25,6 +25,7 @@ export type DataAnalysisRfmAggregate = {
   processedOrders: number;
   catalogSkus: number;
   segmentMigration?: SegmentMigrationResult;
+  segmentPeriodComparison?: SegmentPeriodComparisonResult;
   scopes: {
     identified?: DataAnalysisRfmScope;
     all?: DataAnalysisRfmScope;
