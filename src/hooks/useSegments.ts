@@ -9,7 +9,13 @@ import { useBrandSyncVersion } from './useBrandSyncVersion';
 import { fetchAllEcommerceOrders, fetchDataAnalysisOrders } from '../services/ecommerceRawOrders';
 import { fetchCatalogAlignmentData, fetchCatalogAlignmentDataForDataAnalysis, normalizeCatalogAlignmentPayload } from '../services/catalogAlignment';
 import { computeRfmOrderScopeStats, computeRfmSegmentsFromEcommerceOrders, computeSegmentMigrationFromEcommerceOrders, type RfmCatalogContext } from '../services/rfmFromOrders';
-import { readLatestAnalysisSnapshot, writeAnalysisSnapshot, type AnalysisSnapshotPayload, type AnalysisSnapshotScope } from '../services/analysisSnapshotCache';
+import {
+  isAnalysisSnapshotFresh,
+  readLatestAnalysisSnapshot,
+  writeAnalysisSnapshot,
+  type AnalysisSnapshotPayload,
+  type AnalysisSnapshotScope,
+} from '../services/analysisSnapshotCache';
 import { fetchDataAnalysisRfmAggregate } from '../services/dataAnalysisRfm';
 import type { RFMSegment } from '../types';
 
@@ -189,13 +195,26 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     () => (snapshotScope ? readLatestAnalysisSnapshot(snapshotScope) : null),
     [snapshotScope]
   );
+  const freshAnalysisSnapshot = useMemo(
+    () => (isAnalysisSnapshotFresh(analysisSnapshot) ? analysisSnapshot : null),
+    [analysisSnapshot]
+  );
   const usableSnapshot =
     variant === 'data_analysis' &&
+    freshAnalysisSnapshot &&
+    freshAnalysisSnapshot.dataOrigin !== 'none' &&
+    freshAnalysisSnapshot.segments.length > 0
+      ? freshAnalysisSnapshot
+      : null;
+  const staleAnalysisSnapshot =
+    variant === 'data_analysis' &&
     analysisSnapshot &&
+    !freshAnalysisSnapshot &&
     analysisSnapshot.dataOrigin !== 'none' &&
     analysisSnapshot.segments.length > 0
       ? analysisSnapshot
       : null;
+  const hasCachedAnalysisSnapshot = !!usableSnapshot || !!staleAnalysisSnapshot;
 
   const ordersSourceFingerprint = variant === 'data_analysis' ? (syncVersion ?? 'latest') : platformsKey;
 
@@ -207,7 +226,10 @@ export function useSegments(options: UseSegmentsOptions = {}) {
             ? fetchDataAnalysisOrders(brandId, ecomm.connectedPlatforms, { sinceDate: ordersSinceDate, cacheFirst: true })
             : fetchAllEcommerceOrders(brandId, ecomm.connectedPlatforms, { sinceDate: ordersSinceDate }))
         : Promise.resolve([]),
-    enabled: ordersQueryEnabled && !shouldUseAggregate && (variant !== 'data_analysis' || !usableSnapshot),
+    enabled:
+      ordersQueryEnabled &&
+      !shouldUseAggregate &&
+      (variant !== 'data_analysis' || !hasCachedAnalysisSnapshot),
     staleTime: 12 * 60 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -483,23 +505,30 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   const shouldUseSnapshot =
     !!usableSnapshot &&
     (isLoading || ordersPending || segments.length === 0);
-  const displayedSegments = shouldUseSnapshot ? usableSnapshot.segments : segments;
-  const displayedTotalCustomers = shouldUseSnapshot ? usableSnapshot.totalCustomers : totalCustomers;
-  const displayedDataCoverage = shouldUseSnapshot ? usableSnapshot.dataCoverage : dataCoverage;
-  const displayedDataSource = shouldUseSnapshot ? usableSnapshot.dataSource : resolvedSource;
+  const shouldUseStaleSnapshot =
+    !!staleAnalysisSnapshot &&
+    !shouldUseAggregate &&
+    (isLoading || ordersPending || segments.length === 0);
+  const displayedSnapshot = shouldUseSnapshot ? usableSnapshot : shouldUseStaleSnapshot ? staleAnalysisSnapshot : null;
+  const displayedSegments = displayedSnapshot ? displayedSnapshot.segments : segments;
+  const displayedTotalCustomers = displayedSnapshot ? displayedSnapshot.totalCustomers : totalCustomers;
+  const displayedDataCoverage = displayedSnapshot ? displayedSnapshot.dataCoverage : dataCoverage;
+  const displayedDataSource = displayedSnapshot ? displayedSnapshot.dataSource : resolvedSource;
   const displayedDataOrigin = shouldUseSnapshot
     ? usableSnapshot.dataOrigin
+    : shouldUseStaleSnapshot && staleAnalysisSnapshot
+      ? staleAnalysisSnapshot.dataOrigin
     : shouldUseAggregate && dataAnalysisAggregate
       ? dataAnalysisAggregate.dataOrigin
       : orderOrigin;
-  const displayedSourceLabel = shouldUseSnapshot ? usableSnapshot.sourceLabel : sourceLabel;
-  const displayedSourcePreference = shouldUseSnapshot ? usableSnapshot.sourcePreference : shouldUseAggregate && aggregateScope ? aggregateScope.sourcePreference : effectiveSourcePref;
-  const displayedCanComputeFromOrders = shouldUseSnapshot ? usableSnapshot.canComputeFromOrders : shouldUseAggregate ? true : canComputeFromOrders;
-  const displayedCanComputeIdentifiedOrders = shouldUseSnapshot ? usableSnapshot.canComputeIdentifiedOrders : shouldUseAggregate ? true : canComputeIdentifiedOrders;
-  const displayedHasImported = shouldUseSnapshot ? usableSnapshot.hasImported : hasImported;
+  const displayedSourceLabel = displayedSnapshot ? displayedSnapshot.sourceLabel : sourceLabel;
+  const displayedSourcePreference = displayedSnapshot ? displayedSnapshot.sourcePreference : shouldUseAggregate && aggregateScope ? aggregateScope.sourcePreference : effectiveSourcePref;
+  const displayedCanComputeFromOrders = displayedSnapshot ? displayedSnapshot.canComputeFromOrders : shouldUseAggregate ? true : canComputeFromOrders;
+  const displayedCanComputeIdentifiedOrders = displayedSnapshot ? displayedSnapshot.canComputeIdentifiedOrders : shouldUseAggregate ? true : canComputeIdentifiedOrders;
+  const displayedHasImported = displayedSnapshot ? displayedSnapshot.hasImported : hasImported;
   const displayedOrderRfmMeta =
-    shouldUseSnapshot
-      ? usableSnapshot.orderRfmMeta
+    displayedSnapshot
+      ? displayedSnapshot.orderRfmMeta
         : shouldUseAggregate && aggregateScope
           ? {
               ordersAttributed: aggregateScope.ordersAttributed,
@@ -512,8 +541,8 @@ export function useSegments(options: UseSegmentsOptions = {}) {
           }
         : undefined;
   const displayedSegmentMigration =
-    shouldUseSnapshot
-      ? usableSnapshot.segmentMigration
+    displayedSnapshot
+      ? displayedSnapshot.segmentMigration
       : resolvedSource === 'ecommerce'
         ? orderSegmentMigration
         : undefined;
@@ -521,7 +550,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   return {
     segments: displayedSegments,
     totalCustomers: displayedTotalCustomers,
-    isLoading: shouldUseSnapshot ? false : isLoading,
+    isLoading: displayedSnapshot ? false : isLoading,
     /** True όσο τραβάμε πρόσφατο order history για ecommerce RFM — UI δεν πρέπει να μπλοκάρει. */
     ordersLoading,
     ordersError: (ordersError as Error | null) ?? null,
@@ -540,5 +569,10 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     orderRfmMeta: displayedOrderRfmMeta,
     segmentMigration: displayedSegmentMigration,
     importSegmentsAvailable,
+    analysisSnapshotSavedAt: displayedSnapshot?.savedAt ?? null,
+    analysisSnapshotIsStale: shouldUseStaleSnapshot,
+    analysisLastAnalyzedAt:
+      displayedSnapshot?.savedAt ??
+      (shouldUseAggregate && dataAnalysisAggregate ? dataAnalysisAggregate.latestSyncAt : null),
   };
 }

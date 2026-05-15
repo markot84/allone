@@ -69,8 +69,6 @@ export function RevenueSourceSettings() {
       await FirestoreService.updateDocument('brands', currentBrand.id, { revenueSourceMode: selected });
       await refreshBrands();
       queryClient.invalidateQueries({ queryKey: ['ecommerceOrdersRaw', currentBrand.id] });
-      queryClient.invalidateQueries({ queryKey: ['dataAnalysisOrdersRaw', currentBrand.id] });
-      queryClient.invalidateQueries({ queryKey: ['catalogAlignmentDataAnalysis', currentBrand.id] });
       const agg = await refreshServerAggregates();
       if (agg.ok) {
         toast.success('Αποθηκεύτηκε και ενημερώθηκε το σύνοψη e-shop στο server.');

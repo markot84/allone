@@ -1987,9 +1987,9 @@ export const scheduledSyncFollowups = onSchedule(
   async () => runNightlyFollowupsJob()
 );
 
-/** Data Analysis RFM aggregate — runs after connector waves and writes only compact summaries. */
+/** Data Analysis RFM aggregate — monthly compact summary refresh; manual refresh remains available on demand. */
 export const scheduledDataAnalysisRfm = onSchedule(
-  { timeZone: 'Europe/Athens', region: 'europe-west1', memory: '2GiB', timeoutSeconds: 1200, schedule: 'every day 07:20' },
+  { timeZone: 'Europe/Athens', region: 'europe-west1', memory: '2GiB', timeoutSeconds: 1200, schedule: '20 7 1 * *' },
   async () => {
     const snap = await db.collection('connectors').where('magento.connected', '==', true).limit(5).get();
     for (const doc of snap.docs) {

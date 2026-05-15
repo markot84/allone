@@ -170,6 +170,10 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   const { currentBrand } = useBrand();
   const { isB2B, enabledModules } = useModules();
   const { segments: rfmSegments, hasImported: hasSegments, isLoading: segmentsLoading } = useSegments();
+  const lastGoodRfmSegmentsRef = useRef<{ brandId: string | null; segments: typeof rfmSegments }>({
+    brandId: null,
+    segments: [],
+  });
   const productIntelligence = useProductIntelligenceAggregate('all', 1, { pageSize: 150 });
   const products = productIntelligence.page?.products ?? [];
   const productsLoading = productIntelligence.isLoading;
@@ -193,6 +197,19 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   const procurementSheets = useProcurement({ sheets: ['costing'] });
   const { alerts: automationAlerts } = useAutomationAlerts();
 
+  useEffect(() => {
+    if (!currentBrand?.id || rfmSegments.length === 0) return;
+    lastGoodRfmSegmentsRef.current = { brandId: currentBrand.id, segments: rfmSegments };
+  }, [currentBrand?.id, rfmSegments]);
+
+  const dashboardRfmSegments = useMemo(() => {
+    if (rfmSegments.length > 0) return rfmSegments;
+    if (!segmentsLoading || lastGoodRfmSegmentsRef.current.brandId !== currentBrand?.id) return rfmSegments;
+    return lastGoodRfmSegmentsRef.current.segments;
+  }, [currentBrand?.id, rfmSegments, segmentsLoading]);
+
+  const dashboardHasSegments = hasSegments || dashboardRfmSegments.length > 0;
+
   const supplierTodMap = useMemo(() => {
     const m = new Map<string, number>();
     suppliers.forEach(s => m.set(s.name, s.tod));
@@ -201,7 +218,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   const productsCount = productIntelligence.aggregate?.totalCount ?? productStats?.totalSkus ?? 0;
   const hasAnyData =
     hasOrganic ||
-    hasSegments ||
+    dashboardHasSegments ||
     productsCount > 0 ||
     hasCampaigns ||
     ecomm.hasData ||
@@ -401,6 +418,19 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       bounceRate: sum.bounceRate / days.length,
       hasData: true,
     };
+  }, [ga4.dailyEntries, periodDates.fromDate, periodDates.toDate]);
+
+  const ga4SessionsTrend = useMemo(() => {
+    const periodDays = ga4.dailyEntries.filter(
+      (d) => d.date >= periodDates.fromDate && d.date <= periodDates.toDate
+    );
+    const sourceDays = periodDays.length > 1 ? periodDays : ga4.dailyEntries;
+    return sourceDays
+      .map((d) => ({
+        dateKey: d.date,
+        sessions: Number(d.sessions) || 0,
+      }))
+      .filter((d) => d.sessions > 0);
   }, [ga4.dailyEntries, periodDates.fromDate, periodDates.toDate]);
 
   const hasEcommerceRevenue = enabledModules.ecommerce && ecomm.hasData;
@@ -726,14 +756,14 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     }
   }, [totalOrganicRevenue, hasOrganic]);
   const aiInsights = useMemo(() => {
-    return generateInsightsFromData(products, rfmSegments, supplierTodMap, {
+    return generateInsightsFromData(products, dashboardRfmSegments, supplierTodMap, {
       hasData: enabledModules.ecommerce && ecomm.hasData,
       totalRevenue: ecomm.totalRevenue,
       orderCount: ecomm.orderCount,
       aov: ecomm.aov,
       platformBreakdown: ecomm.platformBreakdown,
     });
-  }, [products, rfmSegments, supplierTodMap, enabledModules.ecommerce, ecomm.hasData, ecomm.totalRevenue, ecomm.orderCount, ecomm.aov, ecomm.platformBreakdown]);
+  }, [products, dashboardRfmSegments, supplierTodMap, enabledModules.ecommerce, ecomm.hasData, ecomm.totalRevenue, ecomm.orderCount, ecomm.aov, ecomm.platformBreakdown]);
 
   // Handle insight action clicks
   const handleInsightAction = (insight: { action: string; title: string }) => {
@@ -800,7 +830,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       if (rafId) cancelAnimationFrame(rafId);
       ro?.disconnect();
     };
-  }, [hasAnyData, revenueChartData.length, isB2B, hasSegments]);
+  }, [hasAnyData, revenueChartData.length, isB2B, dashboardHasSegments]);
 
   return (
     <div className="space-y-8">
@@ -890,7 +920,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           brandName={currentBrand.name}
           products={products}
           campaigns={periodCampaigns}
-          segments={rfmSegments}
+          segments={dashboardRfmSegments}
           totalOrganicRevenue={organicRevenueInPeriod}
           ga4={{
             totals: ga4.totals,
@@ -1398,6 +1428,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               const t = ga4TotalsInPeriod.hasData ? ga4TotalsInPeriod : { ...ga4.totals, hasData: false };
               const fmt = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}K` : n.toLocaleString());
               return (
+            <>
             <div className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 2xl:grid-cols-4">
               <div>
                 <p className="text-[11px] text-[#6B7280] mb-0.5">Sessions</p>
@@ -1432,6 +1463,44 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 )}
               </div>
             </div>
+            {ga4SessionsTrend.length > 1 && (
+              <div className="mt-4 hidden pt-2 sm:block">
+                <ResponsiveContainer width="100%" height={52}>
+                  <AreaChart data={ga4SessionsTrend}>
+                    <defs>
+                      <linearGradient id="ga4SessionsDashSparkGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#F97316" stopOpacity={0.18} />
+                        <stop offset="95%" stopColor="#F97316" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <RechartsTooltip
+                      cursor={{ stroke: '#FDBA74', strokeWidth: 1 }}
+                      contentStyle={{
+                        backgroundColor: '#fff',
+                        border: '1px solid #E8EAED',
+                        borderRadius: '8px',
+                        fontSize: '12px',
+                        padding: '8px 10px',
+                        boxShadow: '0 8px 24px rgba(15, 23, 42, 0.08)',
+                      }}
+                      labelFormatter={(label) => formatDashChartDateKeyTick(String(label))}
+                      formatter={(value: unknown) => [formatNumber(Number(value) || 0), 'Sessions']}
+                      labelStyle={{ color: '#24292f', fontWeight: 600, marginBottom: 4 }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="sessions"
+                      stroke="#F97316"
+                      strokeWidth={1.5}
+                      fill="url(#ga4SessionsDashSparkGrad)"
+                      dot={false}
+                      isAnimationActive={false}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+            </>
               );
             })()}
           </div>
@@ -1634,7 +1703,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             >
               <PieChart width={chartDimensions.segment.width} height={chartDimensions.segment.height}>
                   <Pie
-                    data={rfmSegments as any}
+                    data={dashboardRfmSegments as any}
                     cx="50%"
                     cy="50%"
                     innerRadius={50}
@@ -1644,7 +1713,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                     nameKey="name"
                     labelLine={false}
                   >
-                    {rfmSegments.map((segment) => (
+                    {dashboardRfmSegments.map((segment) => (
                       <Cell key={segment.id} fill={segment.color ?? '#6B7280'} stroke="#fff" strokeWidth={2} />
                     ))}
                   </Pie>
@@ -1664,7 +1733,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 </PieChart>
             </div>
             <div className="space-y-2 mt-4">
-              {rfmSegments.map((segment) => (
+              {dashboardRfmSegments.map((segment) => (
                 <div key={segment.id} className="flex items-center justify-between text-sm">
                   <div className="flex items-center gap-2">
                     <div
@@ -1938,7 +2007,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                 className="text-center p-3 rounded-lg bg-white border border-[var(--nts-border-gray)] cursor-pointer hover:border-[var(--nts-accent)] transition-colors"
                 onClick={(e) => { e.stopPropagation(); onSectionChange?.(isB2B ? 'accounts' : 'rfm'); }}
               >
-                <p className="text-lg font-bold text-[var(--nts-charcoal)] font-mono">{isB2B ? formatNumber(openCommercialTasks) : rfmSegments.length}</p>
+                <p className="text-lg font-bold text-[var(--nts-charcoal)] font-mono">{isB2B ? formatNumber(openCommercialTasks) : dashboardRfmSegments.length}</p>
                 <p className="text-[11px] text-[var(--nts-medium-gray)]">{isB2B ? 'Open sales tasks' : 'Segments'}</p>
               </div>
             </div>

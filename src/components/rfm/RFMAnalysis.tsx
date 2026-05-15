@@ -13,6 +13,7 @@ import {
   LineChart,
   Download,
   FileSpreadsheet,
+  RefreshCw,
 } from 'lucide-react';
 import {
   PieChart,
@@ -30,6 +31,7 @@ import { Card, CardHeader, Badge, Button, Spinner, Tooltip as InfoTooltip, useTo
 import { useSegments, type SegmentsDataSource } from '../../hooks/useSegments';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import { useBrand } from '../../hooks/useBrand';
+import { auth, buildFunctionUrl } from '../../config/firebase';
 import { FirestoreService } from '../../services/firestore';
 import { clearAnalysisSnapshots } from '../../services/analysisSnapshotCache';
 import { BehavioralTab } from './BehavioralTab';
@@ -41,6 +43,7 @@ import type { CategoryAffinity, RFMSegment } from '../../types';
 import { formatNumber, formatPercent, formatCurrencyCompact } from '../../utils/format';
 const fmtPct = (n: number) => formatNumber(n, 2);
 const SELECTED_SEGMENT_STROKE = '#FDBA74';
+const REFRESH_DATA_ANALYSIS_RFM_URL = buildFunctionUrl('refreshDataAnalysisRfm');
 
 type AnalysisTab = 'rfm' | 'behavioral' | 'predictive';
 type SegmentMovement = { countDelta: number; percentageDelta: number };
@@ -130,6 +133,8 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
     orderRfmMeta,
     segmentMigration,
     isCatalogEnriching,
+    analysisSnapshotIsStale,
+    analysisLastAnalyzedAt,
   } = useSegments({ variant: 'data_analysis' });
   const ecomm = useEcommerceSummary();
   const { currentBrand } = useBrand();
@@ -137,6 +142,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
   const toast = useToast();
   const [isDeleting, setIsDeleting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isRefreshingAnalysis, setIsRefreshingAnalysis] = useState(false);
   const { activeStrategy } = useActiveStrategy();
   const channelRecommendation = activeStrategy?.channelRecommendation ?? null;
   const totalCustomersDisplay = Math.max(totalCustomers, dataCoverage.totalCustomers);
@@ -161,6 +167,17 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
     }
     return map;
   }, [segmentMigration?.flows]);
+
+  const lastAnalysisLabel = useMemo(() => {
+    if (!analysisLastAnalyzedAt) return 'Δεν έχει αποθηκευμένη ανάλυση';
+    const date = new Date(analysisLastAnalyzedAt);
+    if (Number.isNaN(date.getTime())) return 'Τελευταία ανάλυση: άγνωστη ημερομηνία';
+    return `Τελευταία ανάλυση: ${date.toLocaleDateString('el-GR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    })}`;
+  }, [analysisLastAnalyzedAt]);
 
   useEffect(() => {
     setSelectedSegmentId((currentId) => {
@@ -204,6 +221,38 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Export error');
+    }
+  };
+
+  const handleRefreshAnalysis = async () => {
+    if (!currentBrand?.id || isRefreshingAnalysis) return;
+    setIsRefreshingAnalysis(true);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error('Not authenticated');
+      clearAnalysisSnapshots(currentBrand.id);
+      queryClient.removeQueries({ queryKey: ['dataAnalysisOrdersRaw', currentBrand.id] });
+      queryClient.removeQueries({ queryKey: ['catalogAlignmentDataAnalysis', currentBrand.id] });
+      queryClient.removeQueries({ queryKey: ['dataAnalysisRfmAggregate', currentBrand.id] });
+      const res = await fetch(REFRESH_DATA_ANALYSIS_RFM_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ brandId: currentBrand.id, action: 'run' }),
+      });
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        throw new Error(body || `HTTP ${res.status}`);
+      }
+      await queryClient.invalidateQueries({ queryKey: ['brandSyncVersion', currentBrand.id] });
+      await queryClient.invalidateQueries({ queryKey: ['dataAnalysisRfmAggregate', currentBrand.id] });
+      toast.success('Η Data Analysis ανανεώθηκε και αποθηκεύτηκε.');
+    } catch (e) {
+      toast.error(`Αποτυχία ανανέωσης Data Analysis: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    } finally {
+      setIsRefreshingAnalysis(false);
     }
   };
 
@@ -300,6 +349,17 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
         title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl leading-tight">Data Analysis</h2>}
         actions={
           <>
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<RefreshCw size={14} className={`shrink-0 ${isRefreshingAnalysis ? 'animate-spin' : ''}`} />}
+            onClick={handleRefreshAnalysis}
+            disabled={isRefreshingAnalysis || !currentBrand?.id}
+            className="min-h-[36px] w-full sm:w-auto"
+            title="Τρέχει τη βαριά Data Analysis χειροκίνητα και αποθηκεύει νέο monthly snapshot."
+          >
+            {isRefreshingAnalysis ? 'Ανανέωση…' : 'Ανανέωση ανάλυσης'}
+          </Button>
           {activeTab === 'rfm' && (
             <>
               <Button
@@ -415,6 +475,10 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
           value={rfmSourceLabel}
           tone={rfmDataSource === 'import' ? 'warning' : rfmDataSource === 'ecommerce' ? 'success' : 'neutral'}
         />
+        <span className={analysisSnapshotIsStale ? 'font-medium text-[#B45309]' : 'text-[#6B7280]'}>
+          {lastAnalysisLabel}
+          {analysisSnapshotIsStale ? ' · χρειάζεται χειροκίνητη ανανέωση' : ''}
+        </span>
         {rfmDataSource === 'ecommerce' && orderRfmMeta && orderRfmMeta.guestOrdersSkipped > 0 ? (
           (() => {
             const totalCustomerScoped =

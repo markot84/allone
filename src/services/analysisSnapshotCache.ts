@@ -3,6 +3,7 @@ import type { SegmentDataCoverage, RfmDataSourcePreference, SegmentsDataSource }
 import type { SegmentMigrationResult } from './rfmFromOrders';
 
 const SNAPSHOT_PREFIX = 'pp-analysis-snapshot-v8';
+export const ANALYSIS_SNAPSHOT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 export type AnalysisSnapshotScope = {
   brandId: string;
@@ -67,6 +68,21 @@ export function readLatestAnalysisSnapshot(scope: AnalysisSnapshotScope): Analys
   if (!s) return null;
   const pointer = s.getItem(latestKey(scope));
   return parseSnapshot(s.getItem(pointer || '')) ?? null;
+}
+
+export function isAnalysisSnapshotFresh(
+  payload: AnalysisSnapshotPayload | null | undefined,
+  now = Date.now()
+): payload is AnalysisSnapshotPayload {
+  if (!payload?.savedAt) return false;
+  const savedAt = Date.parse(payload.savedAt);
+  if (!Number.isFinite(savedAt)) return false;
+  return now - savedAt < ANALYSIS_SNAPSHOT_TTL_MS;
+}
+
+export function readFreshAnalysisSnapshot(scope: AnalysisSnapshotScope): AnalysisSnapshotPayload | null {
+  const snapshot = readLatestAnalysisSnapshot(scope);
+  return isAnalysisSnapshotFresh(snapshot) ? snapshot : null;
 }
 
 export function writeAnalysisSnapshot(payload: AnalysisSnapshotPayload): void {

@@ -382,13 +382,19 @@ export function EcommerceDashboard() {
   }, [rawOrdersLoaded, revenueOrdersForTables, ordersForTables]);
 
   const filteredDailyRevenue = useMemo(
-    () => ecomm.dailyRevenue.filter((d) => d.date >= effectiveFrom && d.date <= effectiveTo),
-    [ecomm.dailyRevenue, effectiveFrom, effectiveTo],
+    () =>
+      rawOrdersLoaded && periodMetricsFromRawOrders
+        ? periodMetricsFromRawOrders.dailyRevenue
+        : ecomm.dailyRevenue.filter((d) => d.date >= effectiveFrom && d.date <= effectiveTo),
+    [rawOrdersLoaded, periodMetricsFromRawOrders, ecomm.dailyRevenue, effectiveFrom, effectiveTo],
   );
 
   const filteredOrdersByDay = useMemo(
-    () => ecomm.ordersByDay.filter((d) => d.date >= effectiveFrom && d.date <= effectiveTo),
-    [ecomm.ordersByDay, effectiveFrom, effectiveTo],
+    () =>
+      rawOrdersLoaded && periodMetricsFromRawOrders
+        ? periodMetricsFromRawOrders.ordersByDay
+        : ecomm.ordersByDay.filter((d) => d.date >= effectiveFrom && d.date <= effectiveTo),
+    [rawOrdersLoaded, periodMetricsFromRawOrders, ecomm.ordersByDay, effectiveFrom, effectiveTo],
   );
 
   const filteredTotalRevenue = useMemo(
@@ -404,8 +410,11 @@ export function EcommerceDashboard() {
   const filteredAov = filteredOrderCount > 0 ? filteredTotalRevenue / filteredOrderCount : 0;
 
   const displayPlatformBreakdown = useMemo(
-    () => ecomm.platformBreakdown,
-    [ecomm.platformBreakdown],
+    () =>
+      rawOrdersLoaded && periodMetricsFromRawOrders
+        ? periodMetricsFromRawOrders.platformBreakdown
+        : ecomm.platformBreakdown,
+    [rawOrdersLoaded, periodMetricsFromRawOrders, ecomm.platformBreakdown],
   );
 
   const displaySalesChannelBreakdown = useMemo<SalesChannelBreakdownRow[]>(() => {
@@ -867,6 +876,10 @@ export function EcommerceDashboard() {
             subtitle={`${effectiveFrom} — ${effectiveTo}`}
           />
           <div className="px-5 pb-5">
+            <p className="mb-3 max-w-3xl text-[11px] leading-relaxed text-[#6B7280]">
+              Core revenue = τζίρος που μετρά στα e-shop KPI/ROI. Τα εξαιρούμενα ποσά είναι πραγματικές
+              παραγγελίες του καναλιού, αλλά δεν μπαίνουν στον καθαρό τζίρο e-shop.
+            </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
               {displaySalesChannelBreakdown.map((row) => {
                 const color = SALES_CHANNEL_COLORS[row.channel] || '#6B7280';
@@ -878,17 +891,21 @@ export function EcommerceDashboard() {
                         <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
                         <span className="text-xs font-semibold text-[#111827] truncate">{row.label}</span>
                       </div>
-                      <span className="text-[10px] text-[#6B7280] whitespace-nowrap">{row.orders} orders</span>
+                      <span className="text-[10px] text-[#6B7280] whitespace-nowrap">{formatNumber(row.orders)} total orders</span>
                     </div>
+                    <p className="mb-0.5 text-[10px] text-[#6B7280]">Μετράει στα e-shop KPI</p>
                     <div className="text-sm font-bold text-[#111827] tabular-nums">
                       {formatCurrencyCompact(row.includedRevenue)}
                     </div>
+                    <p className="mt-0.5 text-[10px] text-[#9CA3AF]">
+                      {formatNumber(row.includedOrders)} core orders
+                    </p>
                     <div className="mt-2 h-1.5 bg-[#F3F4F6] rounded-full overflow-hidden">
                       <div className="h-full rounded-full" style={{ width: `${includedPct}%`, backgroundColor: color }} />
                     </div>
                     {row.excludedOrders > 0 && (
                       <p className="mt-1.5 text-[10px] text-[#9CA3AF]">
-                        Εκτός core: {formatCurrencyCompact(row.excludedRevenue)} / {row.excludedOrders} orders
+                        Εξαιρείται από KPI: {formatCurrencyCompact(row.excludedRevenue)} / {formatNumber(row.excludedOrders)} orders
                       </p>
                     )}
                   </div>

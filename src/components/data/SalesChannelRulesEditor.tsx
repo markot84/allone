@@ -5,7 +5,7 @@ import { useBrand } from '../../hooks/useBrand';
 import { useRefreshAggregates } from '../../hooks/useAggregates';
 import { FirestoreService } from '../../services/firestore';
 import { doc, deleteField, updateDoc, Timestamp } from 'firebase/firestore';
-import { auth, db, FUNCTIONS_BASE_URL } from '../../config/firebase';
+import { db } from '../../config/firebase';
 import { Plus, Trash2, Save, X } from 'lucide-react';
 import {
   SALES_CHANNEL_LABELS,
@@ -33,8 +33,6 @@ const MATCH_FIELD_OPTIONS: Array<{ id: string; label: string; hint: string }> = 
     hint: 'hostname του public storefront, π.χ. b2b.example.gr — γεμίζει από Magento sync (base URL store view). Ταίριασμα substring, case-insensitive.',
   },
 ];
-
-const REFRESH_DATA_ANALYSIS_RFM_URL = `${FUNCTIONS_BASE_URL.replace(/\/$/, '')}/refreshDataAnalysisRfm`;
 
 type EditableRule = EcommerceSalesChannelRule & {
   _draftId: string;
@@ -218,34 +216,11 @@ export function SalesChannelRulesEditor() {
       queryClient.invalidateQueries({ queryKey: ['salesChannelRules', brandId] });
       queryClient.invalidateQueries({ queryKey: ['connectorsPanel', brandId], exact: false });
       queryClient.invalidateQueries({ queryKey: ['ecommerceOrdersRaw', brandId] });
-      queryClient.invalidateQueries({ queryKey: ['dataAnalysisOrdersRaw', brandId] });
-      queryClient.invalidateQueries({ queryKey: ['catalogAlignmentDataAnalysis', brandId] });
-      queryClient.invalidateQueries({ queryKey: ['dataAnalysisRfmAggregate', brandId] });
 
       const agg = await refreshServerAggregates();
-      let dataAnalysisRefreshOk = false;
-      try {
-        const token = await auth.currentUser?.getIdToken();
-        if (token) {
-          const res = await fetch(REFRESH_DATA_ANALYSIS_RFM_URL, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({ brandId, action: 'run' }),
-          });
-          dataAnalysisRefreshOk = res.ok;
-          if (res.ok) {
-            queryClient.invalidateQueries({ queryKey: ['dataAnalysisRfmAggregate', brandId] });
-          }
-        }
-      } catch (err) {
-        console.warn('[SalesChannelRulesEditor] data analysis refresh failed:', err);
-      }
       if (agg.ok) {
         toast.success(
-          `Αποθηκεύτηκαν ${cleaned.length} κανόνες. Το Dashboard ενημερώθηκε${dataAnalysisRefreshOk ? ' και ανανεώθηκε το Data Analysis.' : '.'}`
+          `Αποθηκεύτηκαν ${cleaned.length} κανόνες. Το Dashboard ενημερώθηκε. Το Data Analysis θα ανανεωθεί χειροκίνητα ή στον μηνιαίο κύκλο.`
         );
       } else {
         queryClient.invalidateQueries({ queryKey: ['ecommerce_summary', brandId] });

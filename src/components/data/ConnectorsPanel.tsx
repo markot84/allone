@@ -9,7 +9,6 @@ import { getLastImportDates } from '../../services/import';
 import { coerceToDate } from '../../utils/coerceDate';
 import { clearOAuthSession, readOAuthSessionPayload } from '../../utils/oauthSession';
 import { FirestoreService } from '../../services/firestore';
-import { clearAnalysisSnapshots } from '../../services/analysisSnapshotCache';
 import { Card, Button, Spinner, useToast, PageHeader } from '../common';
 import type { ModuleId } from '../../types';
 import {
@@ -2023,18 +2022,13 @@ export function ConnectorsPanel() {
 
   const refreshMagentoEcommerceCaches = useCallback(() => {
     if (!brandId) return;
-    clearAnalysisSnapshots(brandId);
     queryClient.removeQueries({ queryKey: ['brandSyncVersion', brandId] });
     queryClient.removeQueries({ queryKey: ['ecommerce_summary', brandId] });
     queryClient.removeQueries({ queryKey: ['business_revenue_summary', brandId] });
     queryClient.removeQueries({ queryKey: ['ecommerceOrdersRaw', brandId] });
-    queryClient.removeQueries({ queryKey: ['dataAnalysisOrdersRaw', brandId] });
-    queryClient.removeQueries({ queryKey: ['catalogAlignmentDataAnalysis', brandId] });
     queryClient.invalidateQueries({ queryKey: ['ecommerce_summary', brandId] });
     queryClient.invalidateQueries({ queryKey: ['business_revenue_summary', brandId] });
     queryClient.invalidateQueries({ queryKey: ['ecommerceOrdersRaw', brandId] });
-    queryClient.invalidateQueries({ queryKey: ['dataAnalysisOrdersRaw', brandId] });
-    queryClient.invalidateQueries({ queryKey: ['catalogAlignmentDataAnalysis', brandId] });
   }, [brandId, queryClient]);
 
   const onMagentoConnectorSettingsSaved = useCallback(() => {
@@ -2355,7 +2349,6 @@ export function ConnectorsPanel() {
         queryClient.invalidateQueries({ queryKey: ['campaigns', brandId] });
         queryClient.invalidateQueries({ queryKey: ['connectorsSummary', brandId] });
         queryClient.invalidateQueries({ queryKey: ['lastSyncDates', brandId] });
-        clearAnalysisSnapshots(brandId);
         queryClient.removeQueries({ queryKey: ['brandSyncVersion', brandId] });
         queryClient.invalidateQueries({ queryKey: ['brandSyncVersion', brandId] });
         if (provider === 'google_ads') {
@@ -2374,13 +2367,9 @@ export function ConnectorsPanel() {
           queryClient.removeQueries({ queryKey: ['ecommerce_summary', brandId] });
           queryClient.removeQueries({ queryKey: ['business_revenue_summary', brandId] });
           queryClient.removeQueries({ queryKey: ['ecommerceOrdersRaw', brandId] });
-          queryClient.removeQueries({ queryKey: ['dataAnalysisOrdersRaw', brandId] });
-          queryClient.removeQueries({ queryKey: ['catalogAlignmentDataAnalysis', brandId] });
           queryClient.invalidateQueries({ queryKey: ['ecommerce_summary', brandId] });
           queryClient.invalidateQueries({ queryKey: ['business_revenue_summary', brandId] });
           queryClient.invalidateQueries({ queryKey: ['ecommerceOrdersRaw', brandId] });
-          queryClient.invalidateQueries({ queryKey: ['dataAnalysisOrdersRaw', brandId] });
-          queryClient.invalidateQueries({ queryKey: ['catalogAlignmentDataAnalysis', brandId] });
         }
         if (['megaventory', 'softone', 'epsilon_net', 'entersoft'].includes(provider)) {
           queryClient.removeQueries({ queryKey: ['products', brandId] });
@@ -2391,8 +2380,6 @@ export function ConnectorsPanel() {
           queryClient.removeQueries({ queryKey: ['business_revenue_summary', brandId] });
           queryClient.removeQueries({ queryKey: ['segments', brandId] });
           queryClient.removeQueries({ queryKey: ['segmentCustomerSummaries', brandId] });
-          queryClient.removeQueries({ queryKey: ['dataAnalysisOrdersRaw', brandId] });
-          queryClient.removeQueries({ queryKey: ['catalogAlignmentDataAnalysis', brandId] });
           queryClient.invalidateQueries({ queryKey: ['products', brandId] });
           queryClient.invalidateQueries({ queryKey: ['products_paginated', brandId] });
           queryClient.invalidateQueries({ queryKey: ['procurement', brandId] });
@@ -2401,8 +2388,6 @@ export function ConnectorsPanel() {
           queryClient.invalidateQueries({ queryKey: ['business_revenue_summary', brandId] });
           queryClient.invalidateQueries({ queryKey: ['segments', brandId] });
           queryClient.invalidateQueries({ queryKey: ['segmentCustomerSummaries', brandId] });
-          queryClient.invalidateQueries({ queryKey: ['dataAnalysisOrdersRaw', brandId] });
-          queryClient.invalidateQueries({ queryKey: ['catalogAlignmentDataAnalysis', brandId] });
           queryClient.invalidateQueries({ queryKey: ['aggregates'] });
         }
         if (provider === 'magento') {
