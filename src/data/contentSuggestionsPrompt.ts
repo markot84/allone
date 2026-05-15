@@ -3,6 +3,8 @@
  * Προτείνει θεματικές κατευθύνσεις ανά κανάλι + παραδείγματα ενεργειών βάσει στρατηγικής.
  */
 
+import { buildAdvisorySystemPrompt } from './aiAdvisoryFramework';
+
 export interface TriageContentContext {
   bucketLabel: string;
   bucketDescription?: string;
@@ -49,11 +51,17 @@ export interface StrategyContext {
   audience?: AudienceContentContext;
 }
 
-export const CONTENT_SUGGESTIONS_SYSTEM_PROMPT = `Είσαι ανώτερο στέλεχος content strategy για e-commerce. Απαντάς ΑΠΟΚΛΕΙΣΤΙΚΑ στα Ελληνικά.
+const CONTENT_SUGGESTIONS_TASK_PROMPT = `Είσαι ανώτερο στέλεχος content strategy για e-commerce. Απαντάς ΑΠΟΚΛΕΙΣΤΙΚΑ στα Ελληνικά.
 
 Δημιουργείς 2 πράγματα:
 1. ΘΕΜΑΤΙΚΕΣ ΚΑΤΕΥΘΥΝΣΕΙΣ: Ανά κανάλι επικοινωνίας (Email, Blog, Social Media, Newsletter κλπ), ποιες θεματικές πρέπει να αναπτύξει η ομάδα marketing, βάσει στρατηγικής, segments πελατών και κατηγοριών προϊόντων.
 2. ΠΑΡΑΔΕΙΓΜΑΤΑ ΕΝΕΡΓΕΙΩΝ: Συγκεκριμένες ιδέες περιεχομένου ως εφαρμογή των κατευθύνσεων.
+
+MARKETING ΧΑΡΑΚΤΗΡΑΣ:
+- Μην περιορίζεσαι σε στεγνή εμπορική ανάλυση. Μετάφρασε τη στρατηγική σε positioning, audience insight, creative angle, offer framing, content pillar και CTA.
+- Κάθε direction πρέπει να απαντά: ποιο κοινό κινητοποιεί, ποια ανάγκη/επιθυμία αγγίζει, ποιο μήνυμα κρατάμε και γιατί το κανάλι είναι κατάλληλο.
+- Τα headlines να είναι marketing-ready: καθαρά, πειστικά, εφαρμόσιμα, χωρίς hype ή clickbait.
+- Το brief πρέπει να μπορεί να δοθεί σε marketing team ή agency ως δημιουργική και εμπορική κατεύθυνση μαζί.
 
 ΠΡΟΣΩΠΟΠΟΙΗΣΗ: Αν σου δοθεί το όνομα της επιχείρησης και οι κατηγορίες προϊόντων, ΠΡΕΠΕΙ να τα χρησιμοποιήσεις παντού. ΜΗΝ χρησιμοποιείς placeholders όπως [Brand] ή [Κατηγορία].
 
@@ -93,6 +101,11 @@ export const CONTENT_SUGGESTIONS_SYSTEM_PROMPT = `Είσαι ανώτερο στ
 - Ο τόνος πρέπει να είναι τεχνοκρατικός, ώριμος και φυσικός. Απόφυγε εντυπωσιασμούς, ευκολίες, υπερβολές, συνθηματολογία και διαφημιστικό ύφος
 - Μην χρησιμοποιείς emojis, θαυμαστικά, γλώσσα υπερβολής ή γενικόλογες υποσχέσεις
 - Το brief πρέπει να διαβάζεται σαν σαφής εμπορική κατεύθυνση προς έμπειρη ομάδα marketing ή agency, όχι σαν διαφημιστικό concept note`;
+
+export const CONTENT_SUGGESTIONS_SYSTEM_PROMPT = buildAdvisorySystemPrompt(
+  CONTENT_SUGGESTIONS_TASK_PROMPT,
+  { json: true }
+);
 
 export function buildContentSuggestionsUserPrompt(ctx: StrategyContext): string {
   const w = ctx.weights || {};

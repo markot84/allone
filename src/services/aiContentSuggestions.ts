@@ -9,6 +9,7 @@ import {
 } from '../data/contentSuggestionsPrompt';
 import { strategyContentMap } from '../data/mockContent';
 import { scenarios } from '../data/mockScenarios';
+import { parseJsonObject } from '../utils/aiJson';
 
 const MODEL_NAME = 'gemini-2.5-pro';
 
@@ -74,11 +75,8 @@ export interface ContentSuggestionsResult {
 
 function parseAIResponse(text: string): ContentSuggestionsResult | null {
   try {
-    const cleaned = text
-      .replace(/```json\s*/g, '')
-      .replace(/```\s*/g, '')
-      .trim();
-    const parsed = JSON.parse(cleaned) as Record<string, unknown>;
+    const parsed = parseJsonObject(text);
+    if (!parsed) return null;
 
     const actionsRaw = Array.isArray(parsed.actions) ? parsed.actions : [];
     const actions: OrganicAction[] = actionsRaw

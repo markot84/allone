@@ -9,6 +9,7 @@ import {
   type ProvenancePromptContext,
   type AudiencePromptContext,
 } from '../data/channelRecommendationsPrompt';
+import { parseJsonObject } from '../utils/aiJson';
 import type {
   ChannelRecommendation,
   BudgetAction,
@@ -21,36 +22,10 @@ import { deriveBehavioralProfile, derivePredictiveMetrics } from './behavioralEn
 
 const MODEL_NAME = 'gemini-2.5-pro';
 
-function extractJSON(text: string): string | null {
-  let cleaned = text
-    .replace(/```json\s*/g, '')
-    .replace(/```\s*/g, '')
-    .trim();
-
-  // Try direct parse first
-  try { JSON.parse(cleaned); return cleaned; } catch { /* fall through */ }
-
-  // Extract first {...} block (handles text before/after JSON)
-  const start = cleaned.indexOf('{');
-  const end = cleaned.lastIndexOf('}');
-  if (start !== -1 && end > start) {
-    let candidate = cleaned.slice(start, end + 1);
-    try { JSON.parse(candidate); return candidate; } catch { /* try fixing */ }
-
-    // Fix unescaped newlines inside JSON strings
-    candidate = candidate.replace(/(?<=:\s*"[^"]*)\n/g, '\\n');
-    try { JSON.parse(candidate); return candidate; } catch { /* fall through */ }
-  }
-
-  return null;
-}
-
 function parseAIResponse(text: string): ChannelRecommendation | null {
-  const jsonStr = extractJSON(text);
-  if (!jsonStr) return null;
-
   try {
-    const parsed = JSON.parse(jsonStr) as Record<string, unknown>;
+    const parsed = parseJsonObject(text);
+    if (!parsed) return null;
 
     const primary = Array.isArray(parsed.primary)
       ? (parsed.primary as string[]).filter((s) => typeof s === 'string')

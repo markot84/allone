@@ -2,7 +2,9 @@
  * AI Market Brief — structured JSON για Market Exploration (εκτίμηση, όχι live market data).
  */
 
-export const MARKET_BRIEF_SYSTEM_PROMPT = `Είσαι senior B2B/B2C market strategist και pricing analyst. Παράγεις AI Market Brief για είσοδο σε νέα γεωγραφική αγορά.
+import { buildAdvisorySystemPrompt } from './aiAdvisoryFramework';
+
+const MARKET_BRIEF_TASK_PROMPT = `Είσαι senior B2B/B2C market strategist και pricing analyst. Παράγεις AI Market Brief για είσοδο σε νέα γεωγραφική αγορά.
 
 ΚΑΝΟΝΕΣ:
 - Απάντα ΜΟΝΟ με valid JSON, χωρίς markdown ή εξήγηση εκτός JSON.
@@ -41,6 +43,11 @@ JSON schema (υποχρεωτικά keys):
   "next_validation_steps": ["string"],
   "disclaimer": "string"
 }`;
+
+export const MARKET_BRIEF_SYSTEM_PROMPT = buildAdvisorySystemPrompt(
+  MARKET_BRIEF_TASK_PROMPT,
+  { json: true }
+);
 
 export interface MarketBriefPromptContext {
   brandName: string;

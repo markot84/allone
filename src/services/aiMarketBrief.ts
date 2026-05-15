@@ -1,5 +1,6 @@
 import { callGemini } from './geminiProxy';
 import { MARKET_BRIEF_SYSTEM_PROMPT, buildMarketBriefUserPrompt, type MarketBriefPromptContext } from '../data/marketBriefPrompt';
+import { parseJsonObject } from '../utils/aiJson';
 
 const MODEL_NAME = 'gemini-2.5-pro';
 
@@ -53,39 +54,6 @@ export interface MarketBrief {
   disclaimer: string;
 }
 
-function extractJSON(text: string): string | null {
-  let cleaned = text
-    .replace(/```json\s*/g, '')
-    .replace(/```\s*/g, '')
-    .trim();
-
-  try {
-    JSON.parse(cleaned);
-    return cleaned;
-  } catch {
-    /* fall through */
-  }
-
-  const start = cleaned.indexOf('{');
-  const end = cleaned.lastIndexOf('}');
-  if (start !== -1 && end > start) {
-    let candidate = cleaned.slice(start, end + 1);
-    try {
-      JSON.parse(candidate);
-      return candidate;
-    } catch {
-      candidate = candidate.replace(/(?<=:\s*"[^"]*)\n/g, '\\n');
-      try {
-        JSON.parse(candidate);
-        return candidate;
-      } catch {
-        /* fall through */
-      }
-    }
-  }
-  return null;
-}
-
 function parseFit(v: unknown): ProductFitLevel {
   const s = String(v ?? '').toLowerCase();
   if (s === 'strong' || s === 'moderate' || s === 'weak') return s;
@@ -93,10 +61,9 @@ function parseFit(v: unknown): ProductFitLevel {
 }
 
 export function parseMarketBriefFromText(text: string): MarketBrief | null {
-  const jsonStr = extractJSON(text);
-  if (!jsonStr) return null;
   try {
-    const p = JSON.parse(jsonStr) as Record<string, unknown>;
+    const p = parseJsonObject(text);
+    if (!p) return null;
     const ms = (p.market_snapshot ?? {}) as Record<string, unknown>;
     const rtm = (p.route_to_market ?? {}) as Record<string, unknown>;
 

@@ -1,9 +1,11 @@
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { buildAdvisorySystemPrompt } from '../data/aiAdvisoryFramework';
 import { callGemini } from './geminiProxy';
 import { classifyStockHealth, getProductTod } from '../utils/productUtils';
 import { calculateCampaignMetrics } from '../utils/roiUtils';
 import { formatCurrency, formatNumber } from '../utils/format';
+import { parseJsonObject } from '../utils/aiJson';
 import type { Product, Campaign, RFMSegment, AutomationAlert } from '../types';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -376,7 +378,7 @@ function buildBriefingPrompt(data: BriefingData, periodLabel: string, updateCont
   return sections.join('\n');
 }
 
-const SYSTEM_PROMPT = `Είσαι σύμβουλος ανάπτυξης για μικρομεσαίο e-commerce. Γράφεις το «πρωινό briefing» στο Performance+, όχι ως τεχνικό manual αλλά ως σύντομο ενημερωτικό σημείωμα για ιδιοκτήτη ή διοικητικό υπεύθυνο.
+const SYSTEM_PROMPT = buildAdvisorySystemPrompt(`Είσαι σύμβουλος ανάπτυξης για μικρομεσαίο e-commerce. Γράφεις το «πρωινό briefing» στο Performance+, όχι ως τεχνικό manual αλλά ως σύντομο ενημερωτικό σημείωμα για ιδιοκτήτη ή διοικητικό υπεύθυνο.
 
 ΜΟΡΦΗ (ΑΥΣΤΗΡΑ):
 Μόνο valid JSON:
@@ -404,7 +406,7 @@ ACTIONS (ακριβώς 3):
 - Ξεκίνα με ρήμα (Ελέγξτε, Δείτε, Σταματήστε, Ενεργοποιήστε, Ανοίξτε, Αυξήστε…).
 - Max ~15 λέξεις ανά ενέργεια.
 
-ΜΗΝ βάλεις markdown ή emojis. ΜΗΝ γράψεις τίποτα εκτός JSON.`;
+ΜΗΝ βάλεις markdown ή emojis. ΜΗΝ γράψεις τίποτα εκτός JSON.`, { json: true });
 
 // ── Data Hash ────────────────────────────────────────────────────────────────
 
@@ -511,21 +513,15 @@ export async function generateMorningBriefing(
     temperature: 0.4,
   });
 
-  let parsed: { narrative: string; actions: string[] };
-  try {
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    parsed = JSON.parse(jsonMatch ? jsonMatch[0] : raw);
-  } catch {
-    parsed = {
-      narrative: raw.replace(/```json|```/g, '').trim(),
-      actions: [],
-    };
-  }
+  const parsed = parseJsonObject<{ narrative?: unknown; actions?: unknown }>(raw) ?? {
+    narrative: raw.replace(/```json|```/g, '').trim(),
+    actions: [],
+  };
 
   const urgency: BriefingUrgency = options.updateReason ? 'updated' : 'normal';
 
   const result: BriefingResult = {
-    narrative: parsed.narrative || raw,
+    narrative: typeof parsed.narrative === 'string' && parsed.narrative.trim() ? parsed.narrative : raw,
     actions: Array.isArray(parsed.actions) ? parsed.actions.slice(0, 3) : [],
     generatedAt: new Date().toISOString(),
     dataHash,

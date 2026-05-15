@@ -25,6 +25,8 @@ import { useSegments } from '../../hooks/useSegments';
 import { useCampaigns } from '../../hooks/useCampaigns';
 import { useGA4Data } from '../../hooks/useGA4Data';
 import { useProductSource } from '../../hooks/useProductSource';
+import { useProductIntelligenceAggregate } from '../../hooks/useProductIntelligenceAggregate';
+import { calculateCampaignMetrics } from '../../utils/roiUtils';
 
 interface Message {
   id: string;
@@ -52,6 +54,26 @@ export function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
   const campaignsHook = useCampaigns();
   const ga4 = useGA4Data();
   const productSrc = useProductSource();
+  const productIntelligence = useProductIntelligenceAggregate('all', 1, { pageSize: 150 });
+  const campaignMetrics = useMemo(
+    () => calculateCampaignMetrics(campaignsHook.campaigns),
+    [campaignsHook.campaigns]
+  );
+  const campaignSignals = useMemo(() => {
+    const active = campaignsHook.campaigns.filter((c) => (c.amount_spent || 0) > 0);
+    if (active.length === 0) return { topCampaign: null, weakCampaign: null };
+    const ranked = [...active].sort((a, b) => (b.roas || 0) - (a.roas || 0));
+    const top = ranked[0];
+    const weak = ranked.length > 1 ? ranked[ranked.length - 1] : null;
+    return {
+      topCampaign: top
+        ? { name: top.name, roas: top.roas || 0 }
+        : null,
+      weakCampaign: weak
+        ? { name: weak.name, roas: weak.roas || 0, spend: weak.amount_spent || 0 }
+        : null,
+    };
+  }, [campaignsHook.campaigns]);
 
   const tenantPack = useMemo((): AssistantTenantPack => {
     const rows = [...rfmSegments]
@@ -74,6 +96,32 @@ export function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
         aov: ecomm.aov,
         connectedPlatforms: ecomm.connectedPlatforms,
       },
+      commercial: {
+        adSpend: campaignMetrics.totalSpend,
+        attributedRevenue: campaignMetrics.totalRevenue,
+        platformRoas: campaignMetrics.roas,
+        trueRoas: campaignMetrics.totalSpend > 0 && ecomm.hasData
+          ? ecomm.totalRevenue / campaignMetrics.totalSpend
+          : undefined,
+        revenueGap: ecomm.hasData
+          ? ecomm.totalRevenue - campaignMetrics.totalRevenue
+          : undefined,
+        topCampaign: campaignSignals.topCampaign,
+        weakCampaign: campaignSignals.weakCampaign,
+      },
+      inventory: productIntelligence.aggregate?.summary
+        ? {
+            sourceLabel: productIntelligence.aggregate.sourceLabel,
+            totalProducts: productIntelligence.aggregate.summary.total_skus,
+            totalValue: productIntelligence.aggregate.summary.total_value,
+            healthyStock: productIntelligence.aggregate.summary.healthy_stock.count,
+            deadStock: productIntelligence.aggregate.summary.dead_stock.count,
+            deadStockValue: productIntelligence.aggregate.summary.dead_stock.value,
+            lowStock: productIntelligence.aggregate.summary.low_stock.count,
+            excessStock: productIntelligence.aggregate.summary.excess_stock.count,
+            excessStockValue: productIntelligence.aggregate.summary.excess_stock.value,
+          }
+        : undefined,
       segments: {
         dataSource: segmentsDataSource,
         totalCustomers,
@@ -105,6 +153,12 @@ export function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
     ecomm.orderCount,
     ecomm.aov,
     ecomm.connectedPlatforms,
+    campaignMetrics.totalSpend,
+    campaignMetrics.totalRevenue,
+    campaignMetrics.roas,
+    campaignSignals.topCampaign,
+    campaignSignals.weakCampaign,
+    productIntelligence.aggregate,
     segmentsDataSource,
     totalCustomers,
     orderRfmMeta?.guestOrdersSkipped,
