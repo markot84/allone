@@ -139,16 +139,26 @@ function ColumnExcelFilter({
   };
 
   const selectedCount = value == null || value.length === 0 ? allIds.length : selected.size;
+  const selectedLabels = useMemo(
+    () => options.filter((o) => selected.has(o.id)).map((o) => o.label),
+    [options, selected],
+  );
   const summary =
     selectionMode === 'additive'
       ? value == null || value.length === 0
         ? 'Όλα'
-        : `${selected.size}/${allIds.length}`
+        : selectedLabels.length === 1
+          ? selectedLabels[0]
+          : selectedLabels.length <= 2
+            ? selectedLabels.join(', ')
+            : `${selectedLabels.length} επιλογές`
       : value === null
         ? 'Όλα'
         : value.length === 0
           ? 'Καμία'
-          : `${selectedCount}/${allIds.length}`;
+          : selectedLabels.length === 1
+            ? selectedLabels[0]
+            : `${selectedCount}/${allIds.length}`;
 
   if (options.length === 0) {
     return (
@@ -474,6 +484,27 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     }
   };
 
+  const handleTagIncludeChange = (next: string[] | null) => {
+    setTagInclude(next);
+    if (!next || next.length === 0) {
+      setStockCardFilter('all');
+      return;
+    }
+    if (next.length === 1) {
+      const [tag] = next;
+      if (tag === 'healthy' || tag === 'excess' || tag === 'dead' || tag === 'low') {
+        setStockCardFilter(tag);
+      }
+      return;
+    }
+    setStockCardFilter('all');
+  };
+
+  const selectStockCardFilter = (next: 'all' | 'healthy' | 'excess' | 'dead' | 'low') => {
+    setStockCardFilter(next);
+    setTagInclude(null);
+  };
+
   const handleDeleteProducts = async () => {
     if (!currentBrand?.id) return;
     if (!window.confirm(`Διαγραφή όλων των προϊόντων (${formatNumber(totalCatalogCount)}) για το brand "${currentBrand.name}"; Αυτή η ενέργεια δεν αναιρείται.`)) return;
@@ -591,19 +622,6 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
       {/* Inventory Alerts */}
       <AlertsBanner filterGroup="inventory" maxAlerts={2} compact onNavigate={onSectionChange} />
 
-      {hasServerAggregate && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900 shadow-sm">
-          <div className="font-semibold flex items-center gap-2 mb-1">
-            <Info size={16} className="shrink-0" aria-hidden />
-            Πλήρες inventory, ελαφριά προβολή
-          </div>
-          <p className="leading-relaxed">
-            Τα KPI και τα φίλτρα υπολογίζονται server-side πάνω σε όλο τον κατάλογο ({formatNumber(totalCatalogCount)} SKUs).
-            Ο browser λαμβάνει μόνο τη σελίδα που βλέπεις τώρα ({formatNumber(paginatedProducts.length)} προϊόντα).
-          </p>
-        </div>
-      )}
-
       {/* Summary Cards — uses procurement data when available */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <SummaryCard
@@ -613,7 +631,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           color="#78716C"
           tooltip="Συνολικός αριθμός προϊόντων (SKU) στο inventory, από server aggregate."
           active={stockCardFilter === 'all'}
-          onClick={() => setStockCardFilter('all')}
+          onClick={() => selectStockCardFilter('all')}
         />
         <SummaryCard
           label="Healthy Stock"
@@ -623,7 +641,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           color="#22C55E"
           tooltip="Προϊόντα με υγιή διάρκεια αποθέματος."
           active={stockCardFilter === 'healthy'}
-          onClick={() => setStockCardFilter(stockCardFilter === 'healthy' ? 'all' : 'healthy')}
+          onClick={() => selectStockCardFilter(stockCardFilter === 'healthy' ? 'all' : 'healthy')}
         />
         <SummaryCard
           label="Excess Stock"
@@ -635,7 +653,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           color="#F59E0B"
           tooltip="Προϊόντα με πλεόνασμα αποθέματος."
           active={stockCardFilter === 'excess'}
-          onClick={() => setStockCardFilter(stockCardFilter === 'excess' ? 'all' : 'excess')}
+          onClick={() => selectStockCardFilter(stockCardFilter === 'excess' ? 'all' : 'excess')}
         />
         <SummaryCard
           label="Dead Stock"
@@ -647,7 +665,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           color="#EF4444"
           tooltip="Προϊόντα χωρίς πωλήσεις — δεσμεύουν κεφάλαιο."
           active={stockCardFilter === 'dead'}
-          onClick={() => setStockCardFilter(stockCardFilter === 'dead' ? 'all' : 'dead')}
+          onClick={() => selectStockCardFilter(stockCardFilter === 'dead' ? 'all' : 'dead')}
         />
         <SummaryCard
           label="Low Stock"
@@ -657,7 +675,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           color="#8B5CF6"
           tooltip="Προϊόντα με χαμηλό απόθεμα — κίνδυνος εξάντλησης."
           active={stockCardFilter === 'low'}
-          onClick={() => setStockCardFilter(stockCardFilter === 'low' ? 'all' : 'low')}
+          onClick={() => selectStockCardFilter(stockCardFilter === 'low' ? 'all' : 'low')}
         />
       </div>
 
@@ -782,7 +800,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
               label="Tag"
               options={tagOptions}
               value={tagInclude}
-              onChange={setTagInclude}
+              onChange={handleTagIncludeChange}
               selectionMode="additive"
             />
             <div className="flex flex-col gap-1">
