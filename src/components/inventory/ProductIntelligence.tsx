@@ -76,6 +76,7 @@ function ColumnExcelFilter({
 }: ColumnExcelFilterProps) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
+  const [draftValue, setDraftValue] = useState<string[] | null>(value);
   const ref = React.useRef<HTMLDivElement>(null);
   const allIds = useMemo(() => options.map((o) => o.id), [options]);
   const selected = useMemo(() => {
@@ -89,18 +90,30 @@ function ColumnExcelFilter({
     const allow = new Set(allIds);
     return new Set(value.filter((id) => allow.has(id)));
   }, [value, allIds, selectionMode]);
+  const draftSelected = useMemo(() => {
+    if (selectionMode === 'additive') {
+      if (draftValue == null || draftValue.length === 0) return new Set<string>();
+      const allow = new Set(allIds);
+      return new Set(draftValue.filter((id) => allow.has(id)));
+    }
+    if (draftValue == null) return new Set(allIds);
+    if (draftValue.length === 0) return new Set<string>();
+    const allow = new Set(allIds);
+    return new Set(draftValue.filter((id) => allow.has(id)));
+  }, [draftValue, allIds, selectionMode]);
 
   useEffect(() => {
     if (!open) {
       setQ('');
       return;
     }
+    setDraftValue(value);
     const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
+  }, [open, value]);
 
   const filteredOpts = useMemo(
     () =>
@@ -115,27 +128,40 @@ function ColumnExcelFilter({
   const toggle = (id: string) => {
     if (selectionMode === 'additive') {
       const startSelected =
-        value != null && value.length > 0 ? new Set(value.filter((x) => allIds.includes(x))) : new Set<string>();
+        draftValue != null && draftValue.length > 0 ? new Set(draftValue.filter((x) => allIds.includes(x))) : new Set<string>();
       const next = new Set(startSelected);
       if (next.has(id)) next.delete(id);
       else next.add(id);
-      if (next.size === 0 || next.size === allIds.length) onChange(null);
-      else onChange([...next]);
+      if (next.size === 0 || next.size === allIds.length) setDraftValue(null);
+      else setDraftValue([...next]);
       return;
     }
     const startSelected =
-      value == null || value.length === 0
+      draftValue == null || draftValue.length === 0
         ? new Set(allIds)
-        : new Set(value.filter((x) => allIds.includes(x)));
+        : new Set(draftValue.filter((x) => allIds.includes(x)));
     const next = new Set(startSelected);
     if (next.has(id)) next.delete(id);
     else next.add(id);
     if (next.size === 0) {
-      onChange([]);
+      setDraftValue([]);
       return;
     }
-    if (next.size === allIds.length) onChange(null);
-    else onChange([...next]);
+    if (next.size === allIds.length) setDraftValue(null);
+    else setDraftValue([...next]);
+  };
+
+  const applyDraft = () => {
+    if (selectionMode === 'additive') {
+      if (draftSelected.size === 0 || draftSelected.size === allIds.length) onChange(null);
+      else onChange([...draftSelected]);
+      setOpen(false);
+      return;
+    }
+    if (draftSelected.size === allIds.length) onChange(null);
+    else if (draftSelected.size === 0) onChange([]);
+    else onChange([...draftSelected]);
+    setOpen(false);
   };
 
   const selectedCount = value == null || value.length === 0 ? allIds.length : selected.size;
@@ -204,7 +230,7 @@ function ColumnExcelFilter({
               >
                 <input
                   type="checkbox"
-                  checked={selected.has(o.id)}
+                  checked={draftSelected.has(o.id)}
                   onChange={() => toggle(o.id)}
                   className="rounded border-[#D1D5DB] text-[var(--nts-accent)] focus:ring-[var(--nts-accent)]/30"
                 />
@@ -212,16 +238,23 @@ function ColumnExcelFilter({
               </label>
             ))}
           </div>
-          <div className="flex items-center justify-center p-2.5 border-t border-[#E5E5E5] bg-[#FAFAFA]/90">
+          <div className="flex items-center justify-between gap-2 p-2.5 border-t border-[#E5E5E5] bg-[#FAFAFA]/90">
             <button
               type="button"
-              className="text-xs font-medium text-[var(--nts-accent)] hover:underline whitespace-nowrap px-2 py-1 rounded-md hover:bg-[#FFF7ED]"
+              className="text-xs font-medium text-[#6B7280] hover:underline whitespace-nowrap px-2 py-1 rounded-md hover:bg-white"
               onClick={() => {
-                onChange(null);
+                setDraftValue(null);
                 setQ('');
               }}
             >
-              Επαναφορά φίλτρου (όλα)
+              Επαναφορά
+            </button>
+            <button
+              type="button"
+              className="text-xs font-semibold text-white bg-[var(--nts-accent)] hover:bg-[var(--nts-accent)]/90 whitespace-nowrap px-3 py-1.5 rounded-md"
+              onClick={applyDraft}
+            >
+              Εφαρμογή
             </button>
           </div>
         </div>
