@@ -108,8 +108,14 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
     let low = 0;
     let excess = 0;
     let dead = 0;
+    let noStock = 0;
 
     products.forEach(p => {
+      const stock = p.available_stock ?? p.stock_on_hand ?? p.stock_level ?? 0;
+      if (stock <= 0) {
+        noStock++;
+        return;
+      }
       const health = resolveStockHealth(p, supplierTodMap, useProcurementRowModel);
       switch (health) {
         case 'dead': dead++; break;
@@ -123,7 +129,8 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
       { name: 'Φυσιολογικό απόθεμα', value: healthy, color: '#22C55E' },
       { name: 'Χαμηλό απόθεμα', value: low, color: '#8B5CF6' },
       { name: 'Υπερβολικό απόθεμα', value: excess, color: '#F59E0B' },
-      { name: 'Νεκρό απόθεμα', value: dead, color: '#EF4444' }
+      { name: 'Νεκρό απόθεμα', value: dead, color: '#EF4444' },
+      { name: 'No stock', value: noStock, color: '#94A3B8' }
     ];
     console.log('[ProductCharts] Stock status:', result);
     return aggregateCharts?.stockStatus ?? result;

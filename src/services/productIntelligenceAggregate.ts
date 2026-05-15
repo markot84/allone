@@ -3,7 +3,7 @@ import { auth, db, FUNCTIONS_BASE_URL, getAppCheckHeader } from '../config/fireb
 import type { InventorySummary, Product } from '../types';
 
 export type ProductIntelligenceStatus = 'running' | 'ready' | 'failed' | 'skipped';
-export type ProductIntelligenceBucket = 'all' | 'healthy' | 'excess' | 'dead' | 'low';
+export type ProductIntelligenceBucket = 'all' | 'healthy' | 'excess' | 'dead' | 'low' | 'no_stock';
 
 export type ProductIntelligenceAggregate = {
   brandId: string;

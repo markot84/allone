@@ -134,6 +134,22 @@ type ScopeResult = {
   canCompute: boolean;
 };
 
+type SegmentMigrationFlow = {
+  from: string;
+  fromName: string;
+  to: string;
+  toName: string;
+  count: number;
+  percentage: number;
+};
+
+type SegmentMigrationResult = {
+  periodDays: number;
+  comparedCustomers: number;
+  flows: SegmentMigrationFlow[];
+  canCompute: boolean;
+};
+
 const PAGE_SIZE = 1000;
 const LOOKBACK_DAYS = 365;
 const DAY_LABELS = ['Κυριακή', 'Δευτέρα', 'Τρίτη', 'Τετάρτη', 'Πέμπτη', 'Παρασκευή', 'Σάββατο'];
@@ -475,6 +491,116 @@ function fallbackCategory(line: RawLineItem): string {
 function scopeCustomerKey(order: NormalizedOrder, includeGuests: boolean, index: number): string {
   if (order.customerKey) return order.customerKey;
   return includeGuests ? `guest:magento:${order.orderId || order.orderName || `${order.createdAt.slice(0, 10)}:${index}`}` : '';
+}
+
+function aggregateIdentifiedCustomersUntil(orders: NormalizedOrder[], asOf: Date): CustomerAgg[] {
+  const byCustomer = new Map<string, CustomerAgg>();
+  const asOfMs = asOf.getTime();
+  for (const order of orders) {
+    const createdAtMs = new Date(order.createdAt || '').getTime();
+    if (!Number.isFinite(createdAtMs) || createdAtMs > asOfMs) continue;
+    if (!order.customerKey || !order.dataAnalysisIncluded) continue;
+    const revenue = orderRevenue(order);
+    if (revenue <= 0) continue;
+    const current = byCustomer.get(order.customerKey);
+    if (!current) {
+      byCustomer.set(order.customerKey, {
+        key: order.customerKey,
+        ...(order.customerEmail ? { email: order.customerEmail } : {}),
+        firstOrder: order.createdAt,
+        lastOrder: order.createdAt,
+        orderCount: 1,
+        revenue,
+      });
+      continue;
+    }
+    current.orderCount += 1;
+    current.revenue += revenue;
+    if (!current.email && order.customerEmail) current.email = order.customerEmail;
+    if (order.createdAt < current.firstOrder) current.firstOrder = order.createdAt;
+    if (order.createdAt > current.lastOrder) current.lastOrder = order.createdAt;
+  }
+  return [...byCustomer.values()];
+}
+
+function segmentAssignments(customers: CustomerAgg[], asOf: Date): Map<string, { id: string; name: string }> {
+  const out = new Map<string, { id: string; name: string }>();
+  if (customers.length === 0) return out;
+  const recencyDays = customers.map((customer) => Math.max(0, Math.floor((asOf.getTime() - new Date(customer.lastOrder).getTime()) / 86400000)));
+  const frequency = customers.map((customer) => customer.orderCount);
+  const monetary = customers.map((customer) => customer.revenue);
+  const rScores = assignQuintileScores(recencyDays, true);
+  const fScores = assignQuintileScores(frequency, false);
+  const mScores = assignQuintileScores(monetary, false);
+  customers.forEach((customer, index) => {
+    const segment = segmentFromRfmScores(rScores[index] ?? 3, fScores[index] ?? 3, mScores[index] ?? 3);
+    out.set(customer.key, { id: segment.id, name: segment.name });
+  });
+  return out;
+}
+
+function computeSegmentMigration(orders: NormalizedOrder[], periodDays: number): SegmentMigrationResult {
+  const validOrderDates = orders
+    .filter((order) => order.customerKey && order.dataAnalysisIncluded && orderRevenue(order) > 0)
+    .map((order) => new Date(order.createdAt || ''))
+    .filter((date) => Number.isFinite(date.getTime()))
+    .sort((a, b) => b.getTime() - a.getTime());
+  const currentAsOf = validOrderDates[0];
+  if (!currentAsOf) return { periodDays, comparedCustomers: 0, flows: [], canCompute: false };
+
+  currentAsOf.setHours(23, 59, 59, 999);
+  const previousAsOf = new Date(currentAsOf);
+  previousAsOf.setDate(previousAsOf.getDate() - periodDays);
+  previousAsOf.setHours(23, 59, 59, 999);
+
+  const previousAssignments = segmentAssignments(aggregateIdentifiedCustomersUntil(orders, previousAsOf), previousAsOf);
+  const currentAssignments = segmentAssignments(aggregateIdentifiedCustomersUntil(orders, currentAsOf), currentAsOf);
+  if (previousAssignments.size === 0 || currentAssignments.size === 0) {
+    return { periodDays, comparedCustomers: 0, flows: [], canCompute: false };
+  }
+
+  const flows = new Map<string, SegmentMigrationFlow>();
+  let comparedCustomers = 0;
+  for (const [customerKey, previous] of previousAssignments.entries()) {
+    const current = currentAssignments.get(customerKey);
+    if (!current) continue;
+    comparedCustomers += 1;
+    if (previous.id === current.id) continue;
+    const key = `${previous.id}->${current.id}`;
+    const existing = flows.get(key);
+    if (existing) {
+      existing.count += 1;
+    } else {
+      flows.set(key, {
+        from: previous.id,
+        fromName: previous.name,
+        to: current.id,
+        toName: current.name,
+        count: 1,
+        percentage: 0,
+      });
+    }
+  }
+
+  const out = [...flows.values()]
+    .map((flow) => ({
+      ...flow,
+      percentage: comparedCustomers > 0 ? Math.round((flow.count / comparedCustomers) * 1000) / 10 : 0,
+    }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 8);
+
+  return {
+    periodDays,
+    comparedCustomers,
+    flows: out,
+    canCompute: comparedCustomers > 0 && out.length > 0,
+  };
+}
+
+function computeAdaptiveSegmentMigration(orders: NormalizedOrder[]): SegmentMigrationResult {
+  const monthly = computeSegmentMigration(orders, 30);
+  return monthly.canCompute ? monthly : computeSegmentMigration(orders, 90);
 }
 
 function computeScope(orders: NormalizedOrder[], catalog: Map<string, CatalogDims>, includeGuests: boolean): ScopeResult {
@@ -924,6 +1050,7 @@ export async function refreshDataAnalysisRfmAggregate(brandId: string): Promise<
     const { orders, pages } = await loadMagentoOrders(brandId, since.toISOString().slice(0, 10), rules);
     const identified = computeScope(orders, catalog, false);
     const all = computeScope(orders, catalog, true);
+    const segmentMigration = computeAdaptiveSegmentMigration(orders);
     const isErpBacked = mode === 'erp' || hasErpConnector;
     const sourceLabel = isErpBacked ? 'ERP' : 'E-shop orders';
     const payload = {
@@ -939,6 +1066,7 @@ export async function refreshDataAnalysisRfmAggregate(brandId: string): Promise<
       pages,
       processedOrders: orders.length,
       catalogSkus: catalog.size,
+      segmentMigration,
       scopes: { identified, all },
       computedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),

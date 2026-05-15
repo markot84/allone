@@ -356,7 +356,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
             onClick={handleRefreshAnalysis}
             disabled={isRefreshingAnalysis || !currentBrand?.id}
             className="min-h-[36px] w-full sm:w-auto"
-            title="Τρέχει τη βαριά Data Analysis χειροκίνητα και αποθηκεύει νέο monthly snapshot."
+            title="Η ανάλυση τρέχει αυτόματα σε μηνιαία βάση, αν το επιθυμείτε ανανεώστε τη χειροκίνητα."
           >
             {isRefreshingAnalysis ? 'Ανανέωση…' : 'Ανανέωση ανάλυσης'}
           </Button>
@@ -821,7 +821,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
       <Card padding="lg">
         <CardHeader
           title="Segment Migration"
-          subtitle={hasImportedSegments ? `Τελευταίες ${segmentMigration?.periodDays ?? 30} ημέρες` : ''}
+          subtitle={hasImportedSegments ? `Παράθυρο ${segmentMigration?.periodDays ?? 30} ημερών` : ''}
           icon={<ArrowRight size={20} className="text-[var(--nts-accent)]" />}
         />
         <div className="space-y-3">
@@ -829,7 +829,8 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
             segmentMigration?.canCompute && segmentMigration.flows.length > 0 ? (
               <>
                 <p className="text-xs text-[#6B7280]">
-                  Σύγκριση {formatNumber(segmentMigration.comparedCustomers)} αναγνωρίσιμων πελατών με e-shop ιστορικό πριν και μετά την περίοδο.
+                  Σύγκριση {formatNumber(segmentMigration.comparedCustomers)} αναγνωρίσιμων πελατών με ιστορικό πριν και μετά την περίοδο
+                  {segmentMigration.periodDays === 90 ? ' (3μηνο fallback επειδή ο τελευταίος μήνας δεν είχε αρκετές μετακινήσεις).' : '.'}
                 </p>
                 <div className="space-y-2">
                   {segmentMigration.flows.map((flow) => {
@@ -855,7 +856,8 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
               </>
             ) : (
               <p className="text-sm text-[#4A4A4A] py-4 text-center">
-                Δεν υπάρχουν αρκετές μετακινήσεις μεταξύ segments τις τελευταίες {segmentMigration?.periodDays ?? 30} ημέρες. Το σύστημα χρειάζεται αναγνωρίσιμους πελάτες με ιστορικό και πριν την περίοδο.
+                Δεν εντοπίστηκαν αρκετές μετακινήσεις μεταξύ segments στο διαθέσιμο παράθυρο {segmentMigration?.periodDays ?? 90} ημερών.
+                Η ένδειξη ανανεώνεται με τη μηνιαία Data Analysis ή χειροκίνητα από την ανανέωση ανάλυσης.
               </p>
             )
           ) : (

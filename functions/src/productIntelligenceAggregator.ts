@@ -9,7 +9,7 @@ export function setDb(firestore: Firestore): void {
 }
 
 type ProductSourceKind = 'erp' | 'connector_catalog';
-type StockBucket = 'healthy' | 'excess' | 'dead' | 'low';
+type StockBucket = 'healthy' | 'excess' | 'dead' | 'low' | 'no_stock';
 
 type CompactProduct = {
   id: string;
@@ -121,7 +121,7 @@ const READ_PAGE_SIZE = 1000;
 const TABLE_PAGE_SIZE = 150;
 const PAGE_WRITE_BATCH_SIZE = 1;
 const INVENTORY_LOOKUP_CHUNK_BYTES = 850_000;
-const BUCKETS: PageBucket[] = ['all', 'healthy', 'excess', 'dead', 'low'];
+const BUCKETS: PageBucket[] = ['all', 'healthy', 'excess', 'dead', 'low', 'no_stock'];
 const SALES_PERIOD_DAYS = 30;
 const MEGAVENTORY_NORMALIZED_SOURCE = 'megaventory_custom_report';
 
@@ -231,7 +231,7 @@ function asIsoDate(value: unknown): string | undefined {
 }
 
 function stockBucket(stockLevel: number, qtySoldPeriod: number): StockBucket {
-  if (stockLevel <= 0) return 'low';
+  if (stockLevel <= 0) return 'no_stock';
   if (qtySoldPeriod <= 0) return 'dead';
   const daysOfStock = stockLevel / (qtySoldPeriod / SALES_PERIOD_DAYS);
   if (daysOfStock <= 30) return 'low';
@@ -816,7 +816,7 @@ function chartDataForProducts(products: CompactProduct[]) {
     { name: '120-180d', min: 120, max: 180, count: 0 },
     { name: '180d+', min: 180, max: Number.POSITIVE_INFINITY, count: 0 },
   ];
-  const stockStatus = { healthy: 0, low: 0, excess: 0, dead: 0 };
+  const stockStatus: Record<StockBucket, number> = { healthy: 0, low: 0, excess: 0, dead: 0, no_stock: 0 };
   for (const product of products) {
     const margin = product.margin_percentage ?? 0;
     const m = marginDistribution.find((range) => margin >= range.min && margin < range.max);
@@ -834,6 +834,7 @@ function chartDataForProducts(products: CompactProduct[]) {
       { name: 'Χαμηλό απόθεμα', value: stockStatus.low, color: '#8B5CF6' },
       { name: 'Υπερβολικό απόθεμα', value: stockStatus.excess, color: '#F59E0B' },
       { name: 'Νεκρό απόθεμα', value: stockStatus.dead, color: '#EF4444' },
+      { name: 'No stock', value: stockStatus.no_stock, color: '#94A3B8' },
     ],
     categoryBreakdown: categoryCounts(products).slice(0, 10),
     topProductsByMargin: [...products]

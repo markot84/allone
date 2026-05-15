@@ -381,7 +381,11 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   }, [shouldUseAggregate, aggregateScope, effectiveSourcePref, resolvedSource, orderScopeStats, externalTotalCustomers, externalSegments]);
 
   const orderSegmentMigration = useMemo(
-    () => (resolvedSource === 'ecommerce' && analysisOrders.length <= 2000 ? computeSegmentMigrationFromEcommerceOrders(analysisOrders, 30) : undefined),
+    () => {
+      if (resolvedSource !== 'ecommerce' || analysisOrders.length === 0) return undefined;
+      const monthly = computeSegmentMigrationFromEcommerceOrders(analysisOrders, 30);
+      return monthly.canCompute ? monthly : computeSegmentMigrationFromEcommerceOrders(analysisOrders, 90);
+    },
     [resolvedSource, analysisOrders]
   );
 
@@ -448,7 +452,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
           ordersAttributed: aggregateScope.ordersAttributed,
           guestOrdersSkipped: aggregateScope.guestOrdersSkipped,
         },
-        segmentMigration: undefined,
+        segmentMigration: dataAnalysisAggregate.segmentMigration,
       };
     }
     if (resolvedSource !== 'ecommerce' || orderOrigin === 'none') return null;
@@ -543,6 +547,8 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   const displayedSegmentMigration =
     displayedSnapshot
       ? displayedSnapshot.segmentMigration
+      : shouldUseAggregate && dataAnalysisAggregate
+        ? dataAnalysisAggregate.segmentMigration
       : resolvedSource === 'ecommerce'
         ? orderSegmentMigration
         : undefined;

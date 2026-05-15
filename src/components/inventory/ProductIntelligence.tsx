@@ -46,7 +46,8 @@ const PRODUCT_INTELLIGENCE_BENCHMARK_LIMIT = 5000;
 
 const EMPTY_CATEGORY_ID = '__EMPTY_CAT__';
 /** Σταθερές τιμές priority_tag (inventory intelligence) — εμφανίζονται πάντα στο φίλτρο ακόμη κι αν το client catalog δεν φέρει το πεδίο. */
-const STOCK_INTELLIGENCE_TAG_IDS = ['healthy', 'low', 'excess', 'dead'] as const;
+const STOCK_INTELLIGENCE_TAG_IDS = ['healthy', 'low', 'excess', 'dead', 'no_stock'] as const;
+const DEFAULT_VISIBLE_STOCK_TAG_IDS = ['healthy', 'low', 'excess', 'dead'];
 const EMPTY_INVENTORY_SUMMARY: InventorySummary = {
   total_skus: 0,
   total_value: 0,
@@ -356,6 +357,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryInclude, setCategoryInclude] = useState<string[] | null>(null);
   const [tagInclude, setTagInclude] = useState<string[] | null>(null);
+  const [includeNoStock, setIncludeNoStock] = useState(false);
   const [marginFilter, setMarginFilter] = useState<string>('all');
   const [stockAgeFilter, setStockAgeFilter] = useState<'all' | 'dead' | 'near-dead' | 'high-margin-low-stock'>('all');
   const [stockCardFilter, setStockCardFilter] = useState<'all' | 'healthy' | 'excess' | 'dead' | 'low'>('all');
@@ -399,17 +401,21 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   const tagStockBucket = useMemo((): ProductIntelligenceBucket | null => {
     if (tagInclude?.length !== 1) return null;
     const id = tagInclude[0];
-    return id === 'healthy' || id === 'excess' || id === 'dead' || id === 'low' ? id : null;
+    return id === 'healthy' || id === 'excess' || id === 'dead' || id === 'low' || id === 'no_stock' ? id : null;
   }, [tagInclude]);
   const serverBucket: ProductIntelligenceBucket =
     stockCardFilter === 'healthy' || stockCardFilter === 'excess' || stockCardFilter === 'dead' || stockCardFilter === 'low'
       ? stockCardFilter
       : tagStockBucket ?? 'all';
+  const effectiveTagFilter = useMemo(() => {
+    if (tagInclude) return includeNoStock ? tagInclude : tagInclude.filter((tag) => tag !== 'no_stock');
+    return includeNoStock ? undefined : DEFAULT_VISIBLE_STOCK_TAG_IDS;
+  }, [includeNoStock, tagInclude]);
   const serverQuery = useMemo<Omit<ProductIntelligenceQuery, 'bucket' | 'page'>>(() => ({
     pageSize: PAGE_SIZE,
     search: searchQuery.trim() || undefined,
     categories: categoryInclude == null ? undefined : categoryInclude.length > 0 ? categoryInclude : ['__NO_MATCH__'],
-    tags: tagInclude == null ? undefined : tagInclude.length > 0 ? tagInclude : ['__NO_MATCH__'],
+    tags: effectiveTagFilter == null ? undefined : effectiveTagFilter.length > 0 ? effectiveTagFilter : ['__NO_MATCH__'],
     margin: marginFilter === 'all' ? undefined : marginFilter as ProductIntelligenceQuery['margin'],
     stockAge: stockAgeFilter === 'all' ? undefined : stockAgeFilter,
     sortField,
@@ -417,7 +423,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     dateFrom: productDateFrom || undefined,
     dateTo: productDateTo || undefined,
     dateMode: productDateMode,
-  }), [PAGE_SIZE, searchQuery, categoryInclude, tagInclude, marginFilter, stockAgeFilter, sortField, sortDirection, productDateFrom, productDateTo, productDateMode]);
+  }), [PAGE_SIZE, searchQuery, categoryInclude, effectiveTagFilter, marginFilter, stockAgeFilter, sortField, sortDirection, productDateFrom, productDateTo, productDateMode]);
   const serverIntelligence = useProductIntelligenceAggregate(serverBucket, currentPage, serverQuery);
   const queryClient = useQueryClient();
   const toast = useToast();
@@ -518,6 +524,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   };
 
   const handleTagIncludeChange = (next: string[] | null) => {
+    if (next?.includes('no_stock')) setIncludeNoStock(true);
     setTagInclude(next);
     if (!next || next.length === 0) {
       setStockCardFilter('all');
@@ -527,6 +534,8 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
       const [tag] = next;
       if (tag === 'healthy' || tag === 'excess' || tag === 'dead' || tag === 'low') {
         setStockCardFilter(tag);
+      } else {
+        setStockCardFilter('all');
       }
       return;
     }
@@ -536,6 +545,15 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   const selectStockCardFilter = (next: 'all' | 'healthy' | 'excess' | 'dead' | 'low') => {
     setStockCardFilter(next);
     setTagInclude(null);
+  };
+
+  const handleIncludeNoStockChange = (checked: boolean) => {
+    setIncludeNoStock(checked);
+    setCurrentPage(1);
+    if (!checked && tagInclude?.includes('no_stock')) {
+      const next = tagInclude.filter((tag) => tag !== 'no_stock');
+      setTagInclude(next.length > 0 ? next : null);
+    }
   };
 
   const handleDeleteProducts = async () => {
@@ -836,6 +854,15 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
               onChange={handleTagIncludeChange}
               selectionMode="additive"
             />
+            <label className="flex min-h-[38px] items-center gap-2 rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-sm text-[#374151]">
+              <input
+                type="checkbox"
+                checked={includeNoStock}
+                onChange={(e) => handleIncludeNoStockChange(e.target.checked)}
+                className="rounded border-[#D1D5DB] text-[var(--nts-accent)] focus:ring-[var(--nts-accent)]/30"
+              />
+              <span className="whitespace-nowrap">Include no stock</span>
+            </label>
             <div className="flex flex-col gap-1">
               <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">Margin tier</span>
               <DropdownFilter
@@ -1168,6 +1195,7 @@ function ProductRow({ product, index, supplierTodMap, benchmarkMap, useProcureme
             variant={
               product.priority_tag === 'dead' ? 'danger' :
               product.priority_tag === 'low' ? 'warning' :
+              product.priority_tag === 'no_stock' ? 'default' :
               product.priority_tag === 'healthy' ? 'success' :
               product.priority_tag === 'excess' ? 'orange' :
               product.priority_tag === 'Brand Push' ? 'info' :
