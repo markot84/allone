@@ -255,7 +255,7 @@ export function TriageCard({ products: scopedProducts, onSelectPolicy }: TriageC
   const {
     counts, tiedByBucket, totalProducts, isLoading, defs,
     totalTiedCapital, assignments, dataQuality,
-  } = useDecisionBuckets(undefined, { products: scopedProducts, maxProducts: 5000 });
+  } = useDecisionBuckets(undefined, { products: scopedProducts });
   const [expanded, setExpanded] = useState<BucketId | null>(null);
   const [showDocumentation, setShowDocumentation] = useState(false);
   const [viewAllBucket, setViewAllBucket] = useState<BucketId | null>(null);

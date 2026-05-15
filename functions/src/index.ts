@@ -103,6 +103,7 @@ import {
 import {
   refreshProductIntelligenceAggregate,
   refreshCompetitiveInventoryLookup,
+  queryProductIntelligenceRows,
   setDb as setProductIntelligenceDb,
 } from './productIntelligenceAggregator';
 import {
@@ -2360,6 +2361,35 @@ export const refreshProductIntelligence = onRequest(
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       logger.error('[refreshProductIntelligence]', msg);
+      res.status(500).json({ error: msg });
+    }
+  }
+);
+
+export const queryProductIntelligence = onRequest(
+  { region: 'europe-west1', cors: true, timeoutSeconds: 120, memory: '1GiB' },
+  async (req, res) => {
+    if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+
+    try {
+      const idToken = authHeader.slice(7).trim();
+      const decoded = await admin.auth().verifyIdToken(idToken);
+      const { brandId } = req.body as { brandId?: string };
+      if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
+
+      if (!(await verifyBrandMembership(decoded.uid, brandId))) {
+        res.status(403).json({ error: 'Δεν υπάρχει πρόσβαση στο brand' });
+        return;
+      }
+
+      const result = await queryProductIntelligenceRows(req.body);
+      res.status(200).json({ success: true, brandId, result });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      logger.error('[queryProductIntelligence]', msg);
       res.status(500).json({ error: msg });
     }
   }

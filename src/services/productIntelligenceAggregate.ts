@@ -1,5 +1,5 @@
 import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { auth, db, FUNCTIONS_BASE_URL, getAppCheckHeader } from '../config/firebase';
 import type { InventorySummary, Product } from '../types';
 
 export type ProductIntelligenceStatus = 'running' | 'ready' | 'failed' | 'skipped';
@@ -17,6 +17,7 @@ export type ProductIntelligenceAggregate = {
   pagesByBucket: Record<ProductIntelligenceBucket, number>;
   categories: Array<{ name: string; count: number }>;
   summary: InventorySummary;
+  charts?: ProductIntelligenceCharts;
   error?: string;
 };
 
@@ -26,6 +27,45 @@ export type ProductIntelligencePage = {
   page: number;
   pageSize: number;
   totalRows: number;
+  products: Product[];
+};
+
+export type ProductIntelligenceCharts = {
+  marginDistribution: Array<{ name: string; count: number }>;
+  stockAgeDistribution: Array<{ name: string; count: number }>;
+  stockStatus: Array<{ name: string; value: number; color: string }>;
+  categoryBreakdown?: Array<{ name: string; count: number }>;
+  topProductsByMargin: Array<{ name: string; margin: number; price: number }>;
+  stockAgeVsLevel: Array<{ age: number; level: number; margin: number }>;
+};
+
+export type ProductIntelligenceQuery = {
+  page: number;
+  pageSize?: number;
+  bucket?: ProductIntelligenceBucket;
+  search?: string;
+  categories?: string[];
+  tags?: string[];
+  margin?: 'all' | 'high' | 'medium' | 'low';
+  stockAge?: 'all' | 'dead' | 'near-dead' | 'high-margin-low-stock';
+  sortField?: 'name' | 'margin_percentage' | 'stock_level' | 'stock_age_days' | 'price';
+  sortDirection?: 'asc' | 'desc';
+  dateFrom?: string;
+  dateTo?: string;
+  dateMode?: 'imported' | 'first_available';
+};
+
+export type ProductIntelligenceQueryResult = {
+  brandId: string;
+  status: 'ready';
+  sourceLabel: string;
+  sourceKind: 'erp' | 'connector_catalog';
+  totalCount: number;
+  totalRows: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  bucket: ProductIntelligenceBucket;
   products: Product[];
 };
 
@@ -53,5 +93,25 @@ export async function fetchProductIntelligencePage(
 ): Promise<ProductIntelligencePage | null> {
   const snap = await getDoc(doc(db, 'product_intelligence_pages', `${brandId}_${bucket}_${page}`));
   return snap.exists() ? (snap.data() as ProductIntelligencePage) : null;
+}
+
+export async function queryProductIntelligencePage(
+  brandId: string,
+  query: ProductIntelligenceQuery
+): Promise<ProductIntelligenceQueryResult | null> {
+  const token = await auth.currentUser?.getIdToken();
+  if (!token) throw new Error('Not authenticated');
+  const res = await fetch(`${FUNCTIONS_BASE_URL.replace(/\/$/, '')}/queryProductIntelligence`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      ...(await getAppCheckHeader()),
+    },
+    body: JSON.stringify({ brandId, ...query }),
+  });
+  const json = await res.json().catch(() => null) as { result?: ProductIntelligenceQueryResult; error?: string } | null;
+  if (!res.ok) throw new Error(json?.error || `Product Intelligence query failed (${res.status})`);
+  return json?.result ?? null;
 }
 

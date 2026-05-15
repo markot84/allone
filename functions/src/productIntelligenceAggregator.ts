@@ -42,6 +42,7 @@ type CompactProduct = {
   reorder_point?: number;
   reorder_qty?: number;
   source?: string;
+  createdAt?: string;
 };
 
 type StockOverlay = {
@@ -82,6 +83,39 @@ type InventorySummaryPayload = {
 };
 
 type PageBucket = 'all' | StockBucket;
+type SortField = 'name' | 'margin_percentage' | 'stock_level' | 'stock_age_days' | 'price';
+type SortDirection = 'asc' | 'desc';
+
+export type ProductIntelligenceQueryParams = {
+  brandId: string;
+  page?: number;
+  pageSize?: number;
+  bucket?: PageBucket;
+  search?: string;
+  categories?: string[];
+  tags?: string[];
+  margin?: 'all' | 'high' | 'medium' | 'low';
+  stockAge?: 'all' | 'dead' | 'near-dead' | 'high-margin-low-stock';
+  sortField?: SortField;
+  sortDirection?: SortDirection;
+  dateFrom?: string;
+  dateTo?: string;
+  dateMode?: 'imported' | 'first_available';
+};
+
+type ProductIntelligenceQueryResult = {
+  brandId: string;
+  status: 'ready';
+  sourceLabel: string;
+  sourceKind: ProductSourceKind;
+  totalCount: number;
+  totalRows: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  bucket: PageBucket;
+  products: CompactProduct[];
+};
 
 const READ_PAGE_SIZE = 1000;
 const TABLE_PAGE_SIZE = 150;
@@ -255,6 +289,7 @@ function productFromRow(docId: string, row: Record<string, unknown>, sourceKind:
     ...(text(row.seasonality_tag) ? { seasonality_tag: text(row.seasonality_tag) } : {}),
     ...(optionalNumber(row.reorder_point) != null ? { reorder_point: optionalNumber(row.reorder_point) } : {}),
     ...(optionalNumber(row.reorder_qty) != null ? { reorder_qty: optionalNumber(row.reorder_qty) } : {}),
+    ...(asIsoDate(row.createdAt ?? row.updatedAt) ? { createdAt: asIsoDate(row.createdAt ?? row.updatedAt) } : {}),
     source: sourceKind,
   };
   return isDemoProduct(product) || isNonMerchandiseProduct(product) ? null : product;
@@ -665,6 +700,162 @@ function categoryCounts(products: CompactProduct[]): Array<{ name: string; count
     .map(([name, count]) => ({ name, count }));
 }
 
+function daysOfStock(product: CompactProduct): number {
+  const stock = product.available_stock ?? product.stock_on_hand ?? product.stock_level ?? 0;
+  if (stock <= 0) return 0;
+  const sold = product.qty_sold_period ?? 0;
+  if (sold <= 0) return Number.POSITIVE_INFINITY;
+  return stock / (sold / SALES_PERIOD_DAYS);
+}
+
+function daysFromIso(value: string | undefined): number {
+  if (!value) return -1;
+  const time = new Date(value).getTime();
+  if (!Number.isFinite(time)) return -1;
+  return Math.max(0, Math.floor((Date.now() - time) / 86400000));
+}
+
+function ymd(value: string | undefined): string | null {
+  if (!value) return null;
+  const raw = text(value);
+  if (!raw) return null;
+  const numeric = parseFloat(raw);
+  const d = !Number.isNaN(numeric) && numeric > 0
+    ? new Date((numeric - 25569) * 86400 * 1000)
+    : new Date(raw);
+  if (!Number.isFinite(d.getTime())) return null;
+  return d.toISOString().slice(0, 10);
+}
+
+function categoryId(product: CompactProduct): string {
+  return text(product.category) || '__EMPTY_CAT__';
+}
+
+function searchText(product: CompactProduct): string {
+  return [
+    product.sku,
+    product.name,
+    product.category,
+    product.subcategory,
+    product.supplier,
+    product.brand,
+    product.barcode,
+    product.procurement_status,
+    product.abc_class,
+    product.flow_group,
+  ].filter(Boolean).join(' ').toLowerCase();
+}
+
+function matchesQuery(product: CompactProduct, params: ProductIntelligenceQueryParams): boolean {
+  const search = text(params.search).toLowerCase();
+  if (search && !searchText(product).includes(search)) return false;
+
+  if (params.categories?.length) {
+    const allowed = new Set(params.categories);
+    if (!allowed.has(categoryId(product))) return false;
+  }
+
+  if (params.tags?.length) {
+    const allowed = new Set(params.tags.map((tag) => tag.toLowerCase()));
+    if (!allowed.has(text(product.priority_tag).toLowerCase())) return false;
+  }
+
+  if (params.margin && params.margin !== 'all' && product.margin_tier !== params.margin) return false;
+
+  const stockAge = params.stockAge ?? 'all';
+  if (stockAge === 'dead' && product.priority_tag !== 'dead') return false;
+  if (stockAge === 'near-dead' && (product.priority_tag !== 'excess' || daysOfStock(product) === Number.POSITIVE_INFINITY)) return false;
+  if (stockAge === 'high-margin-low-stock') {
+    const highMargin = product.margin_tier === 'high' || (product.margin_percentage ?? 0) > 25;
+    if (!highMargin || product.priority_tag !== 'low') return false;
+  }
+
+  if (params.dateFrom && params.dateTo) {
+    const dateValue = params.dateMode === 'first_available'
+      ? ymd(product.first_available_date)
+      : ymd(product.createdAt);
+    if (!dateValue || dateValue < params.dateFrom || dateValue > params.dateTo) return false;
+  }
+
+  return true;
+}
+
+function sortProducts(products: CompactProduct[], sortField: SortField, sortDirection: SortDirection): CompactProduct[] {
+  const dir = sortDirection === 'asc' ? 1 : -1;
+  const value = (product: CompactProduct): string | number => {
+    if (sortField === 'stock_age_days') {
+      const dos = daysOfStock(product);
+      return dos === Number.POSITIVE_INFINITY ? Number.MAX_SAFE_INTEGER : dos;
+    }
+    return product[sortField] ?? (sortField === 'name' ? '' : 0);
+  };
+  return [...products].sort((a, b) => {
+    const av = value(a);
+    const bv = value(b);
+    if (typeof av === 'string' || typeof bv === 'string') {
+      return String(av).localeCompare(String(bv), 'el') * dir || a.sku.localeCompare(b.sku, 'el');
+    }
+    return ((av as number) - (bv as number)) * dir || a.sku.localeCompare(b.sku, 'el');
+  });
+}
+
+function chartDataForProducts(products: CompactProduct[]) {
+  const marginDistribution = [
+    { name: '0-10%', min: 0, max: 10, count: 0 },
+    { name: '10-20%', min: 10, max: 20, count: 0 },
+    { name: '20-30%', min: 20, max: 30, count: 0 },
+    { name: '30-40%', min: 30, max: 40, count: 0 },
+    { name: '40-50%', min: 40, max: 50, count: 0 },
+    { name: '50%+', min: 50, max: Number.POSITIVE_INFINITY, count: 0 },
+  ];
+  const stockAgeDistribution = [
+    { name: '0-30d', min: 0, max: 30, count: 0 },
+    { name: '30-60d', min: 30, max: 60, count: 0 },
+    { name: '60-90d', min: 60, max: 90, count: 0 },
+    { name: '90-120d', min: 90, max: 120, count: 0 },
+    { name: '120-180d', min: 120, max: 180, count: 0 },
+    { name: '180d+', min: 180, max: Number.POSITIVE_INFINITY, count: 0 },
+  ];
+  const stockStatus = { healthy: 0, low: 0, excess: 0, dead: 0 };
+  for (const product of products) {
+    const margin = product.margin_percentage ?? 0;
+    const m = marginDistribution.find((range) => margin >= range.min && margin < range.max);
+    if (m) m.count += 1;
+    const age = daysFromIso(product.first_available_date ?? product.createdAt);
+    const a = stockAgeDistribution.find((range) => age >= range.min && age < range.max);
+    if (a) a.count += 1;
+    stockStatus[product.priority_tag] += 1;
+  }
+  return {
+    marginDistribution: marginDistribution.map(({ name, count }) => ({ name, count })),
+    stockAgeDistribution: stockAgeDistribution.map(({ name, count }) => ({ name, count })),
+    stockStatus: [
+      { name: 'Φυσιολογικό απόθεμα', value: stockStatus.healthy, color: '#22C55E' },
+      { name: 'Χαμηλό απόθεμα', value: stockStatus.low, color: '#8B5CF6' },
+      { name: 'Υπερβολικό απόθεμα', value: stockStatus.excess, color: '#F59E0B' },
+      { name: 'Νεκρό απόθεμα', value: stockStatus.dead, color: '#EF4444' },
+    ],
+    categoryBreakdown: categoryCounts(products).slice(0, 10),
+    topProductsByMargin: [...products]
+      .sort((a, b) => (b.margin_percentage ?? 0) - (a.margin_percentage ?? 0))
+      .slice(0, 10)
+      .map((product) => ({
+        name: (product.name || product.sku || 'Unknown').substring(0, 20),
+        margin: product.margin_percentage || 0,
+        price: product.price || 0,
+      })),
+    stockAgeVsLevel: [...products]
+      .filter((product) => (product.stock_level || 0) > 0 && daysFromIso(product.first_available_date ?? product.createdAt) >= 0)
+      .sort((a, b) => daysFromIso(a.first_available_date ?? a.createdAt) - daysFromIso(b.first_available_date ?? b.createdAt))
+      .slice(0, 100)
+      .map((product) => ({
+        age: daysFromIso(product.first_available_date ?? product.createdAt),
+        level: product.stock_level || 0,
+        margin: product.margin_percentage || 0,
+      })),
+  };
+}
+
 function bucketRows(products: CompactProduct[], bucket: PageBucket): CompactProduct[] {
   const rows = bucket === 'all' ? products : products.filter((product) => product.priority_tag === bucket);
   return [...rows].sort((a, b) => {
@@ -718,6 +909,66 @@ async function writePageDocs(brandId: string, products: CompactProduct[]): Promi
     await batch.commit();
   }
   return pagesByBucket;
+}
+
+async function loadBucketProductsFromPages(brandId: string, bucket: PageBucket, pageCount: number): Promise<CompactProduct[]> {
+  const firestore = assertDb();
+  const products: CompactProduct[] = [];
+  const refs = Array.from({ length: pageCount }, (_, i) => firestore.doc(`product_intelligence_pages/${brandId}_${bucket}_${i + 1}`));
+  const chunkSize = 250;
+  for (let i = 0; i < refs.length; i += chunkSize) {
+    const snaps = await firestore.getAll(...refs.slice(i, i + chunkSize));
+    for (const snap of snaps) {
+      const rows = snap.exists ? (snap.data()?.products as CompactProduct[] | undefined) : undefined;
+      if (Array.isArray(rows)) products.push(...rows);
+    }
+  }
+  return products;
+}
+
+export async function queryProductIntelligenceRows(params: ProductIntelligenceQueryParams): Promise<ProductIntelligenceQueryResult> {
+  const firestore = assertDb();
+  const aggregateSnap = await firestore.doc(`product_intelligence/${params.brandId}`).get();
+  const aggregate = aggregateSnap.data() as {
+    status?: string;
+    sourceLabel?: string;
+    sourceKind?: ProductSourceKind;
+    totalCount?: number;
+    pagesByBucket?: Record<PageBucket, number>;
+  } | undefined;
+  if (!aggregateSnap.exists || aggregate?.status !== 'ready') {
+    throw new Error('Product Intelligence aggregate is not ready');
+  }
+
+  const bucket = params.bucket ?? 'all';
+  const pageSize = Math.max(1, Math.min(params.pageSize ?? TABLE_PAGE_SIZE, TABLE_PAGE_SIZE));
+  const requestedPage = Math.max(1, Math.floor(params.page ?? 1));
+  const pageCount = Math.max(1, aggregate.pagesByBucket?.[bucket] ?? 1);
+  const rows = await loadBucketProductsFromPages(params.brandId, bucket, pageCount);
+  const filtered = rows.filter((product) => matchesQuery(product, params));
+  const sorted = sortProducts(
+    filtered,
+    params.sortField ?? 'margin_percentage',
+    params.sortDirection ?? 'desc',
+  );
+  const totalRows = sorted.length;
+  const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
+  const page = Math.min(requestedPage, totalPages);
+  const start = (page - 1) * pageSize;
+
+  return {
+    brandId: params.brandId,
+    status: 'ready',
+    sourceLabel: aggregate.sourceLabel ?? 'ERP',
+    sourceKind: aggregate.sourceKind ?? 'erp',
+    totalCount: aggregate.totalCount ?? rows.length,
+    totalRows,
+    page,
+    pageSize,
+    totalPages,
+    bucket,
+    products: sorted.slice(start, start + pageSize),
+  };
 }
 
 function competitiveInventoryForProducts(products: CompactProduct[]): Record<string, CompetitiveInventoryRow> {
@@ -825,6 +1076,7 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
     const summary = summaryForProducts(products);
     const pagesByBucket = await writePageDocs(brandId, products);
     const competitiveInventory = await writeCompetitiveInventoryLookup(brandId, products);
+    const charts = chartDataForProducts(products);
     const payload = {
       brandId,
       status: 'ready',
@@ -849,6 +1101,7 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
       pageSize: TABLE_PAGE_SIZE,
       pagesByBucket,
       categories: categoryCounts(products),
+      charts,
       summary,
       computedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),

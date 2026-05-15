@@ -6,7 +6,6 @@ import { db, auth, FUNCTIONS_BASE_URL } from '../../config/firebase';
 import { useBrand } from '../../hooks/useBrand';
 import { usePriceBenchmarks } from '../../hooks/usePriceBenchmarks';
 import { usePriceInsights, type PriceInsight } from '../../hooks/usePriceInsights';
-import { useProducts } from '../../hooks/useProducts';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import { Card, Button, Spinner, Badge, Tooltip, useToast, PageHeader } from '../common';
 import {
@@ -38,7 +37,6 @@ import { safeBrandName } from '../../services/reportExport';
 
 const FUNCTIONS_BASE = FUNCTIONS_BASE_URL.replace(/\/$/, '');
 const COMPETITIVE_BENCHMARK_LIMIT = 5000;
-const COMPETITIVE_STOCK_PRODUCT_LIMIT = 10000;
 const COMPETITIVE_BENCHMARK_RENDER_LIMIT = 300;
 const COMPETITIVE_CACHE_TTL = 24 * 60 * 60 * 1000;
 
@@ -452,7 +450,6 @@ export function CompetitorInsights() {
   // Πηγές (με προτεραιότητα):
   //   1) products collection / ERP (Megaventory) για stock — είναι η αξιόπιστη αποθήκη
   //   2) ecommerce_summary.skuStats για πωλήσεις και stock μόνο όταν το ERP δεν έχει τιμή
-  const { products, isLoading: productsLoading } = useProducts({ maxDocs: COMPETITIVE_STOCK_PRODUCT_LIMIT, inStockOnly: true });
   const { skuStats } = useEcommerceSummary();
   const { data: competitiveInventory = {}, isLoading: competitiveInventoryLoading } = useQuery<Record<string, SkuInventoryRow>>({
     queryKey: ['productIntelligenceInventory', brandId],
@@ -484,21 +481,6 @@ export function CompetitorInsights() {
       });
     }
 
-    // ERP/Megaventory πρώτα: αυτό είναι το επιχειρησιακό stock.
-    // Fallback για παλαιότερα brands χωρίς server lookup, χωρίς να αντικαθιστά το πλήρες lookup.
-    for (const p of products) {
-      const inventory = {
-        stock: parseInventoryField(p.available_stock ?? p.stock_on_hand ?? p.stock_level),
-        sold: parseInventoryField(p.qty_sold_period ?? p.qty_sold_lifetime),
-      };
-      if ((inventory.stock ?? 0) <= 0) continue;
-      const keys = [p.sku, p.barcode, p.gtin]
-        .map((value) => String(value || '').trim().toLowerCase())
-        .filter(Boolean);
-      for (const key of keys) {
-        mergeInventory(key, inventory, true);
-      }
-    }
     // E-shop stats εμπλουτίζουν τις πωλήσεις, αλλά δεν μηδενίζουν ERP stock.
     for (const [sku, s] of Object.entries(skuStats || {})) {
       mergeInventory(sku, {
@@ -507,7 +489,7 @@ export function CompetitorInsights() {
       }, true);
     }
     return map;
-  }, [competitiveInventory, products, skuStats]);
+  }, [competitiveInventory, skuStats]);
 
   /** GMC productId συνήθως είναι `online:el:GR:SKU123` — δοκιμάζουμε offerId, base SKU, GTIN και compact variants. */
   const benchmarkKeyCandidates = (productId: string, gtin: string): string[] => {
@@ -539,7 +521,7 @@ export function CompetitorInsights() {
   const stockedBenchmarkCount = stockedBenchmarks.length;
   const hasBenchmarkRows = benchmarks.length > 0;
   const isBenchmarkInitialLoading =
-    !hasBenchmarkRows && (benchmarksLoading || productsLoading || competitiveInventoryLoading);
+    !hasBenchmarkRows && (benchmarksLoading || competitiveInventoryLoading);
   const stockedAboveMarket = stockedWithMarket.filter((b) => b.priceDiff > 0).length;
   const stockedBelowMarket = stockedWithMarket.filter((b) => b.priceDiff < 0).length;
   const stockedAvgDiff =

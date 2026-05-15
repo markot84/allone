@@ -21,13 +21,8 @@ import {
   Loader2
 } from 'lucide-react';
 import { Card, Badge, Button, ProgressBar, Tooltip, useToast, AlertsBanner, PageHeader, DataSourcePill } from '../common';
-import { useProducts } from '../../hooks/useProducts';
-import { useProductSource } from '../../hooks/useProductSource';
 import { useBrand } from '../../hooks/useBrand';
 import { useSuppliers } from '../../hooks/useSuppliers';
-import { usePlan } from '../../hooks/usePlan';
-import { useProcurement } from '../../hooks/useProcurement';
-import { useProductAggregates } from '../../hooks/useAggregates';
 import { usePriceBenchmarks } from '../../hooks/usePriceBenchmarks';
 import { useProductIntelligenceAggregate } from '../../hooks/useProductIntelligenceAggregate';
 import { formatCurrency, formatCurrencyCompact, formatNumber, formatPercent } from '../../utils/format';
@@ -35,68 +30,31 @@ import { FirestoreService } from '../../services/firestore';
 import {
   getDaysOfStock,
   getEffectiveStockLevel,
-  getProductIntelligenceStockBucket,
-  getProductYmdForFilter,
   resolveStockHealth,
 } from '../../utils/productUtils';
-import { classifyProcurementInventoryRow } from '../../utils/procurementInventoryClassify';
 import { DateRangePicker } from '../ui/DateRangePicker';
 import { ExportModal } from './ExportModal';
 import { ProductCharts } from './ProductCharts';
 import { downloadProductIntelligenceCsv, downloadProductIntelligenceXlsx } from '../../utils/productIntelligenceExport';
 import type { Product, InventorySummary, InventoryAlert } from '../../types';
-import type { ProductIntelligenceBucket } from '../../services/productIntelligenceAggregate';
+import type { ProductIntelligenceBucket, ProductIntelligenceQuery } from '../../services/productIntelligenceAggregate';
 
 type SortField = 'name' | 'margin_percentage' | 'stock_level' | 'stock_age_days' | 'price';
 type SortDirection = 'asc' | 'desc';
 
-const PRODUCT_INTELLIGENCE_ROW_LIMIT = 5000;
 const PRODUCT_INTELLIGENCE_BENCHMARK_LIMIT = 5000;
-const LARGE_CATALOG_ALERT_THRESHOLD = 10000;
 
 const EMPTY_CATEGORY_ID = '__EMPTY_CAT__';
-const EMPTY_TAG_ID = '__EMPTY_TAG__';
 /** Σταθερές τιμές priority_tag (inventory intelligence) — εμφανίζονται πάντα στο φίλτρο ακόμη κι αν το client catalog δεν φέρει το πεδίο. */
 const STOCK_INTELLIGENCE_TAG_IDS = ['healthy', 'low', 'excess', 'dead'] as const;
-
-function categoryIdForProduct(p: Product): string {
-  const c = (p.category ?? '').trim();
-  return c || EMPTY_CATEGORY_ID;
-}
-
-/** Id για φίλτρο Tag: συμφωνεί με aggregate/DOS όταν λείπει το priority_tag στο client catalog. */
-function effectiveTagFilterId(
-  p: Product,
-  supplierTodMap: Map<string, number>,
-  usingProcurement: boolean,
-): string {
-  const raw = (p.priority_tag ?? '').trim();
-  if (!raw) {
-    return usingProcurement
-      ? resolveStockHealth(p, supplierTodMap, true)
-      : getProductIntelligenceStockBucket(p);
-  }
-  const lower = raw.toLowerCase();
-  if ((STOCK_INTELLIGENCE_TAG_IDS as readonly string[]).includes(lower)) return lower;
-  return raw;
-}
-
-/**
- * Ίδια λογική με φίλτρο Tag / aggregate intelligence (όχι `resolveStockHealth`/TOD για ERP catalog).
- * Έτσι οι κάρτες KPI και ο πίνακας συμφωνούν όταν λείπει ή είναι non-standard το `priority_tag`.
- */
-function stockHealthForIntelligenceSummary(
-  p: Product,
-  supplierTodMap: Map<string, number>,
-  useProcurementRowModel: boolean,
-): 'healthy' | 'excess' | 'low' | 'dead' {
-  if (useProcurementRowModel) {
-    return resolveStockHealth(p, supplierTodMap, true);
-  }
-  const eff = effectiveTagFilterId(p, supplierTodMap, false);
-  if (eff === 'dead' || eff === 'low' || eff === 'healthy' || eff === 'excess') return eff;
-  return getProductIntelligenceStockBucket(p);
-}
+const EMPTY_INVENTORY_SUMMARY: InventorySummary = {
+  total_skus: 0,
+  total_value: 0,
+  healthy_stock: { count: 0, percentage: 0 },
+  excess_stock: { count: 0, percentage: 0, value: 0 },
+  dead_stock: { count: 0, percentage: 0, value: 0 },
+  low_stock: { count: 0, percentage: 0 },
+};
 
 type ExcelFilterOption = { id: string; label: string };
 
@@ -262,87 +220,6 @@ function ColumnExcelFilter({
   );
 }
 
-function computeInventorySummary(
-  products: Product[],
-  supplierTodMap?: Map<string, number>,
-  useProcurementRowModel?: boolean
-): InventorySummary {
-  const total = products.length;
-  if (total === 0) {
-    return {
-      total_skus: 0,
-      total_value: 0,
-      healthy_stock: { count: 0, percentage: 0 },
-      excess_stock: { count: 0, percentage: 0, value: 0 },
-      dead_stock: { count: 0, percentage: 0, value: 0 },
-      low_stock: { count: 0, percentage: 0 },
-    };
-  }
-
-  let totalValue = 0;
-  let healthyCount = 0;
-  let excessCount = 0;
-  let excessValue = 0;
-  let deadCount = 0;
-  let deadValue = 0;
-  let lowCount = 0;
-
-  for (const p of products) {
-    const level = getEffectiveStockLevel(p);
-    const price = p.price ?? 0;
-    totalValue += level * price;
-
-    const health = stockHealthForIntelligenceSummary(p, supplierTodMap ?? new Map(), !!useProcurementRowModel);
-    switch (health) {
-      case 'dead':
-        deadCount++;
-        deadValue += level * price;
-        break;
-      case 'excess':
-        excessCount++;
-        excessValue += level * price;
-        break;
-      case 'low':
-        lowCount++;
-        break;
-      default:
-        healthyCount++;
-    }
-  }
-
-  return {
-    total_skus: total,
-    total_value: Math.round(totalValue),
-    healthy_stock: { count: healthyCount, percentage: total ? Math.round((healthyCount / total) * 1000) / 10 : 0 },
-    excess_stock: { count: excessCount, percentage: total ? Math.round((excessCount / total) * 1000) / 10 : 0, value: Math.round(excessValue) },
-    dead_stock: { count: deadCount, percentage: total ? Math.round((deadCount / total) * 1000) / 10 : 0, value: Math.round(deadValue) },
-    low_stock: { count: lowCount, percentage: total ? Math.round((lowCount / total) * 1000) / 10 : 0 },
-  };
-}
-
-function computeInventoryAlerts(
-  products: Product[],
-  supplierTodMap?: Map<string, number>,
-  useProcurementRowModel?: boolean
-): InventoryAlert[] {
-  const alerts: InventoryAlert[] = [];
-  const classify = (p: Product) => stockHealthForIntelligenceSummary(p, supplierTodMap ?? new Map(), !!useProcurementRowModel);
-  const deadStock = products.filter((p) => classify(p) === 'dead');
-  const excessStock = products.filter((p) => classify(p) === 'excess');
-  const highMarginLowStock = products.filter(
-    (p) => (p.margin_tier === 'high' || (p.margin_percentage ?? 0) > 25) && classify(p) === 'low'
-  );
-  if (deadStock.length > 0) {
-    const deadMsg = useProcurementRowModel
-      ? `${deadStock.length} SKU(s) dead stock (ανενεργό status / αξιολόγηση C / μηδενικό απόθεμα).`
-      : `${deadStock.length} SKU(s) χωρίς πωλήσεις (dead stock)`;
-    alerts.push({ type: 'critical', message: deadMsg, action: 'Ελέγξτε για clearance' });
-  }
-  if (excessStock.length > 0) alerts.push({ type: 'warning', message: `${excessStock.length} SKU(s) με πλεόνασμα αποθέματος`, action: 'Δημιουργήστε προσφορές' });
-  if (highMarginLowStock.length > 0) alerts.push({ type: 'info', message: `${highMarginLowStock.length} high-margin items με low stock`, action: 'Πρόταση αναπλήρωσης' });
-  return alerts.length > 0 ? alerts : [];
-}
-
 /** Skeleton: ίδια δομή με τη σελίδα (κάρτες + πίνακας) — όχι κενή οθόνη κατά τη φόρτωση. */
 function ProductIntelligenceSkeleton() {
   return (
@@ -474,20 +351,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   }, []);
 
   const { currentBrand } = useBrand();
-  const { products: rawProducts, hasImported: rawHasImported, totalCount: rawTotalCount } = useProducts({ maxDocs: PRODUCT_INTELLIGENCE_ROW_LIMIT });
-  const {
-    products: sourceProducts,
-    totalCount: sourceTotalCount,
-    hasImported,
-    usingProcurement,
-    sourceLabel: productDataSourceLabel,
-    sourceKind: productSourceKind,
-    isLoading: sourceLoading,
-  } = useProductSource({ maxProducts: PRODUCT_INTELLIGENCE_ROW_LIMIT });
   const { suppliers } = useSuppliers();
-  const { isEnterprise } = usePlan();
-  const { data: procData } = useProcurement();
-  const { productStats } = useProductAggregates();
   const { benchmarks, count: benchmarkCount } = usePriceBenchmarks({ maxDocs: PRODUCT_INTELLIGENCE_BENCHMARK_LIMIT });
   const tagStockBucket = useMemo((): ProductIntelligenceBucket | null => {
     if (tagInclude?.length !== 1) return null;
@@ -498,7 +362,20 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     stockCardFilter === 'healthy' || stockCardFilter === 'excess' || stockCardFilter === 'dead' || stockCardFilter === 'low'
       ? stockCardFilter
       : tagStockBucket ?? 'all';
-  const serverIntelligence = useProductIntelligenceAggregate(serverBucket, currentPage);
+  const serverQuery = useMemo<Omit<ProductIntelligenceQuery, 'bucket' | 'page'>>(() => ({
+    pageSize: PAGE_SIZE,
+    search: searchQuery.trim() || undefined,
+    categories: categoryInclude == null ? undefined : categoryInclude.length > 0 ? categoryInclude : ['__NO_MATCH__'],
+    tags: tagInclude == null ? undefined : tagInclude.length > 0 ? tagInclude : ['__NO_MATCH__'],
+    margin: marginFilter === 'all' ? undefined : marginFilter as ProductIntelligenceQuery['margin'],
+    stockAge: stockAgeFilter === 'all' ? undefined : stockAgeFilter,
+    sortField,
+    sortDirection,
+    dateFrom: productDateFrom || undefined,
+    dateTo: productDateTo || undefined,
+    dateMode: productDateMode,
+  }), [PAGE_SIZE, searchQuery, categoryInclude, tagInclude, marginFilter, stockAgeFilter, sortField, sortDirection, productDateFrom, productDateTo, productDateMode]);
+  const serverIntelligence = useProductIntelligenceAggregate(serverBucket, currentPage, serverQuery);
   const queryClient = useQueryClient();
   const toast = useToast();
 
@@ -528,360 +405,60 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     return m;
   }, [suppliers]);
 
-  const hasDateFilter = Boolean(productDateFrom && productDateTo);
-  const tagFilterCanUseServerBucket =
-    tagInclude == null ||
-    tagInclude.length === 0 ||
-    (tagStockBucket != null && (stockCardFilter === 'all' || stockCardFilter === tagStockBucket));
-  const serverFiltersSupported =
-    !usingProcurement &&
-    !hasDateFilter &&
-    !searchQuery.trim() &&
-    marginFilter === 'all' &&
-    stockAgeFilter === 'all' &&
-    categoryInclude === null &&
-    tagFilterCanUseServerBucket;
-  const useServerIntelligence =
-    serverFiltersSupported &&
-    !!serverIntelligence.aggregate &&
-    !!serverIntelligence.page;
-  const hasServerAggregate = serverFiltersSupported && !!serverIntelligence.aggregate;
-  const totalCatalogCount = usingProcurement
-    ? sourceProducts.length
-    : (serverIntelligence.aggregate?.totalCount ?? sourceTotalCount ?? rawTotalCount ?? productStats?.totalSkus ?? rawProducts.length);
-  const isCatalogTruncated = !usingProcurement && !hasServerAggregate && totalCatalogCount > sourceProducts.length;
-  const effectiveSourceLoading = hasServerAggregate ? serverIntelligence.isLoading && !serverIntelligence.page : sourceLoading;
+  const hasServerAggregate = !!serverIntelligence.aggregate;
+  const hasImported = hasServerAggregate;
+  const productDataSourceLabel = serverIntelligence.aggregate?.sourceLabel ?? 'ERP';
+  const totalCatalogCount = serverIntelligence.aggregate?.totalCount ?? 0;
+  const effectiveSourceLoading = serverIntelligence.isLoading && !serverIntelligence.page;
 
   useEffect(() => {
-    if (useServerIntelligence && serverIntelligence.safePage !== currentPage) {
+    if (serverIntelligence.safePage !== currentPage) {
       setCurrentPage(serverIntelligence.safePage);
     }
-  }, [useServerIntelligence, serverIntelligence.safePage, currentPage]);
+  }, [serverIntelligence.safePage, currentPage]);
 
-  const productsScopedByDate = useMemo(() => {
-    if (useServerIntelligence) return serverIntelligence.page?.products ?? [];
-    if (usingProcurement) return sourceProducts;
-    if (!hasDateFilter) return sourceProducts;
-    return sourceProducts.filter((p) => {
-      const ymd = getProductYmdForFilter(p, productDateMode);
-      if (!ymd) return false;
-      return ymd >= productDateFrom && ymd <= productDateTo;
-    });
-  }, [useServerIntelligence, serverIntelligence.page, sourceProducts, usingProcurement, hasDateFilter, productDateFrom, productDateTo, productDateMode]);
-
-  /** Σταθερό σύνολο για λίστες φίλτρου (όχι σελιδοποιημένη server σελίδα) — αποφεύγει κατάρρευση Tag/Κατηγορίας όταν αλλάζει το server. */
-  const filterOptionsProductScope = useMemo(() => {
-    if (usingProcurement) return sourceProducts;
-    if (!hasDateFilter) return sourceProducts;
-    return sourceProducts.filter((p) => {
-      const ymd = getProductYmdForFilter(p, productDateMode);
-      if (!ymd) return false;
-      return ymd >= productDateFrom && ymd <= productDateTo;
-    });
-  }, [usingProcurement, sourceProducts, hasDateFilter, productDateFrom, productDateTo, productDateMode]);
-
-  const inventorySummary = useMemo(() => {
-    if (usingProcurement) return computeInventorySummary(sourceProducts, supplierTodMap, true);
-    if (hasDateFilter) {
-      const base = rawProducts.filter((p) => {
-        const ymd = getProductYmdForFilter(p, productDateMode);
-        if (!ymd) return false;
-        return ymd >= productDateFrom && ymd <= productDateTo;
-      });
-      return computeInventorySummary(base, supplierTodMap, false);
-    }
-    return computeInventorySummary(rawProducts, supplierTodMap, false);
-  }, [rawProducts, sourceProducts, usingProcurement, supplierTodMap, hasDateFilter, productDateFrom, productDateTo, productDateMode]);
-
-  const inventoryAlerts = useMemo(() => {
-    if (usingProcurement) return computeInventoryAlerts(sourceProducts, supplierTodMap, true);
-    if (!hasDateFilter && totalCatalogCount > LARGE_CATALOG_ALERT_THRESHOLD) return [];
-    if (hasDateFilter) {
-      const base = rawProducts.filter((p) => {
-        const ymd = getProductYmdForFilter(p, productDateMode);
-        if (!ymd) return false;
-        return ymd >= productDateFrom && ymd <= productDateTo;
-      });
-      return computeInventoryAlerts(base, supplierTodMap, false);
-    }
-    return computeInventoryAlerts(rawProducts, supplierTodMap, false);
-  }, [rawProducts, sourceProducts, usingProcurement, supplierTodMap, hasDateFilter, productDateFrom, productDateTo, productDateMode, totalCatalogCount]);
-
-  // Procurement-based inventory summary (replaces product-based when available)
-  const procInventorySummary = useMemo((): InventorySummary | null => {
-    if (!isEnterprise) return null;
-    const invRows = (procData.inventory ?? []) as Record<string, unknown>[];
-    if (!invRows.length) return null;
-
-    const findCol = (rows: Record<string, unknown>[], keyword: string) => {
-      if (!rows.length) return keyword;
-      const kUp = keyword.toUpperCase();
-      return Object.keys(rows[0]).find(k => k.toUpperCase().includes(kUp)) ?? keyword;
-    };
-    const parseNum = (v: unknown) => {
-      if (v == null || v === '') return 0;
-      if (typeof v === 'number') return isNaN(v) ? 0 : v;
-      const s = String(v).trim().replace(/\s/g, '');
-      if (!s) return 0;
-      if (s.includes(',')) return parseFloat(s.replace(/\./g, '').replace(',', '.')) || 0;
-      return parseFloat(s) || 0;
-    };
-
-    const total = invRows.length;
-    const stockCol = findCol(invRows, 'ΔΙΑΘΕΣΙΜΟ ΥΠΟΛΟΙΠΟ');
-    const costCol = findCol(invRows, 'ΠΡΩΤΟΓΕΝΕΣ ΚΟΣΤΟΣ');
-    const evalCol = findCol(invRows, 'ΑΞΙΟΛΟΓΗΣΗ ΕΙΔΟΥΣ');
-    const refillCol = findCol(invRows, 'ΑΝΑΤΡΟΦΟΔΟΣΙΑ');
-    const statusCol = findCol(invRows, 'STATUS ΚΩΔΙΚΟΥ');
-
-    let totalValue = 0;
-    let healthyCount = 0;
-    let excessCount = 0;
-    let excessValue = 0;
-    let deadCount = 0;
-    let deadValue = 0;
-    let lowCount = 0;
-
-    for (const row of invRows) {
-      const stock = parseNum(row[stockCol]);
-      const cost = parseNum(row[costCol]);
-      const evalGrade = String(row[evalCol] ?? '').trim().toUpperCase();
-      const needsRefill = parseNum(row[refillCol]) > 0;
-      const status = String(row[statusCol] ?? '').trim().toUpperCase();
-      const itemValue = stock * cost;
-      totalValue += itemValue;
-
-      const bucket = classifyProcurementInventoryRow({
-        stock,
-        evalGrade,
-        needsRefill,
-        statusUpper: status,
-      });
-      if (bucket === 'dead') {
-        deadCount++;
-        deadValue += itemValue;
-      } else if (bucket === 'low') {
-        lowCount++;
-      } else if (bucket === 'healthy') {
-        healthyCount++;
-      } else {
-        excessCount++;
-        excessValue += itemValue;
-      }
-    }
-
-    return {
-      total_skus: total,
-      total_value: Math.round(totalValue),
-      healthy_stock: { count: healthyCount, percentage: total ? Math.round((healthyCount / total) * 1000) / 10 : 0 },
-      excess_stock: { count: excessCount, percentage: total ? Math.round((excessCount / total) * 1000) / 10 : 0, value: Math.round(excessValue) },
-      dead_stock: { count: deadCount, percentage: total ? Math.round((deadCount / total) * 1000) / 10 : 0, value: Math.round(deadValue) },
-      low_stock: { count: lowCount, percentage: total ? Math.round((lowCount / total) * 1000) / 10 : 0 },
-    };
-  }, [isEnterprise, procData.inventory]);
-
-  const procFiscalTurnover = useMemo(() => {
-    if (!isEnterprise) return 0;
-    const fiscalRows = (procData.fiscal_year ?? []) as Record<string, unknown>[];
-    if (!fiscalRows.length) return 0;
-    const findCol = (rows: Record<string, unknown>[], keyword: string) => {
-      if (!rows.length) return keyword;
-      return Object.keys(rows[0]).find(k => k.toUpperCase().includes(keyword.toUpperCase())) ?? keyword;
-    };
-    const parseNum = (v: unknown) => {
-      if (v == null || v === '') return 0;
-      if (typeof v === 'number') return isNaN(v) ? 0 : v;
-      const s = String(v).trim().replace(/\s/g, '');
-      if (s.includes(',')) return parseFloat(s.replace(/\./g, '').replace(',', '.')) || 0;
-      return parseFloat(s) || 0;
-    };
-    const turnoverCol = findCol(fiscalRows, 'ΤΖΙΡΟΣ');
-    return Math.round(fiscalRows.reduce((s, r) => s + parseNum(r[turnoverCol]), 0));
-  }, [isEnterprise, procData.fiscal_year]);
-
-  const aggregateInventorySummary = useMemo((): InventorySummary | null => {
-    if (usingProcurement || hasDateFilter || !productStats || productStats.totalSkus !== totalCatalogCount) return null;
-    const total = productStats.totalSkus || 0;
-    const percentage = (count: number) => total ? Math.round((count / total) * 1000) / 10 : 0;
-
-    return {
-      total_skus: total,
-      total_value: Math.round(productStats.totalInventoryValue || 0),
-      healthy_stock: {
-        count: productStats.healthyStock?.count ?? 0,
-        percentage: percentage(productStats.healthyStock?.count ?? 0),
-      },
-      excess_stock: {
-        count: productStats.excessStock?.count ?? 0,
-        percentage: percentage(productStats.excessStock?.count ?? 0),
-        value: Math.round(productStats.excessStock?.value ?? 0),
-      },
-      dead_stock: {
-        count: productStats.deadStock?.count ?? 0,
-        percentage: percentage(productStats.deadStock?.count ?? 0),
-        value: Math.round(productStats.deadStock?.value ?? 0),
-      },
-      low_stock: {
-        count: productStats.lowStock?.count ?? 0,
-        percentage: percentage(productStats.lowStock?.count ?? 0),
-      },
-    };
-  }, [usingProcurement, hasDateFilter, productStats, totalCatalogCount]);
-
-  // Use procurement data when available, then precomputed aggregates for large imports.
-  const displaySummary = procInventorySummary ?? (hasServerAggregate ? serverIntelligence.aggregate?.summary ?? null : null) ?? aggregateInventorySummary ?? inventorySummary;
+  const inventoryAlerts: InventoryAlert[] = [];
+  const displaySummary = serverIntelligence.aggregate?.summary ?? EMPTY_INVENTORY_SUMMARY;
 
   const categoryOptions = useMemo((): ExcelFilterOption[] => {
-    const map = new Map<string, string>();
-    for (const p of filterOptionsProductScope) {
-      const id = categoryIdForProduct(p);
-      const label =
-        id === EMPTY_CATEGORY_ID ? '(Κενή κατηγορία)' : (p.category ?? '').trim() || '(Κενή κατηγορία)';
-      if (!map.has(id)) map.set(id, label);
-    }
-    return [...map.entries()]
-      .map(([id, label]) => ({ id, label }))
+    return (serverIntelligence.aggregate?.categories ?? [])
+      .map((row) => ({
+        id: row.name?.trim() ? row.name : EMPTY_CATEGORY_ID,
+        label: row.name?.trim() ? row.name : '(Κενή κατηγορία)',
+      }))
       .sort((a, b) => a.label.localeCompare(b.label, 'el'));
-  }, [filterOptionsProductScope]);
+  }, [serverIntelligence.aggregate?.categories]);
 
   const tagOptions = useMemo((): ExcelFilterOption[] => {
-    const map = new Map<string, string>();
-    for (const id of STOCK_INTELLIGENCE_TAG_IDS) {
-      map.set(id, id);
-    }
-    let hasEmpty = false;
-    for (const p of filterOptionsProductScope) {
-      const raw = (p.priority_tag ?? '').trim();
-      if (!raw) {
-        hasEmpty = true;
-        continue;
-      }
-      const lower = raw.toLowerCase();
-      if ((STOCK_INTELLIGENCE_TAG_IDS as readonly string[]).includes(lower)) continue;
-      if (!map.has(raw)) map.set(raw, raw);
-    }
-    const core: ExcelFilterOption[] = STOCK_INTELLIGENCE_TAG_IDS.map((id) => ({ id, label: map.get(id)! }));
-    const known = new Set<string>([...STOCK_INTELLIGENCE_TAG_IDS]);
-    const extras = [...map.entries()]
-      .filter(([id]) => !known.has(id))
-      .map(([id, label]) => ({ id, label }))
-      .sort((a, b) => a.label.localeCompare(b.label, 'el'));
-    const emptyOpt: ExcelFilterOption[] = hasEmpty ? [{ id: EMPTY_TAG_ID, label: '(Χωρίς tag)' }] : [];
-    return [...core, ...extras, ...emptyOpt];
-  }, [filterOptionsProductScope]);
+    return STOCK_INTELLIGENCE_TAG_IDS.map((id) => ({ id, label: id }));
+  }, []);
 
-  // Filter and sort products
-  const filteredProducts = useMemo(() => {
-    const matchesCategory = (p: Product) => {
-      if (categoryInclude == null) return true;
-      if (categoryInclude.length === 0) return false;
-      return categoryInclude.includes(categoryIdForProduct(p));
-    };
-    const matchesTag = (p: Product) => {
-      if (tagInclude == null || tagInclude.length === 0) return true;
-      const noImportTag = !(p.priority_tag ?? '').trim();
-      const eff = effectiveTagFilterId(p, supplierTodMap, usingProcurement);
-      return tagInclude.some((id) => {
-        if (id === EMPTY_TAG_ID) return noImportTag;
-        return id === eff;
-      });
-    };
-
-    const applyExcel = (list: Product[]) =>
-      list.filter((p) => matchesCategory(p) && matchesTag(p));
-
-    if (hasServerAggregate) {
-      return applyExcel(productsScopedByDate);
-    }
-
-    return applyExcel(
-      productsScopedByDate.filter((p) => {
-        const matchesSearch =
-          (p.name ?? '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-          (p.sku ?? '').toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesMargin = marginFilter === 'all' || p.margin_tier === marginFilter;
-
-        const health = resolveStockHealth(p, supplierTodMap, usingProcurement);
-        let matchesStockAge = true;
-        if (stockAgeFilter === 'dead') {
-          matchesStockAge = health === 'dead';
-        } else if (stockAgeFilter === 'near-dead') {
-          const dos = getDaysOfStock(p);
-          matchesStockAge = health === 'excess' && (usingProcurement ? true : dos !== Infinity);
-        } else if (stockAgeFilter === 'high-margin-low-stock') {
-          const isHighMargin = p.margin_tier === 'high' || (p.margin_percentage ?? 0) > 25;
-          matchesStockAge = isHighMargin && health === 'low';
-        }
-
-        let matchesStockCard = true;
-        if (stockCardFilter !== 'all') {
-          matchesStockCard = usingProcurement
-            ? resolveStockHealth(p, supplierTodMap, true) === stockCardFilter
-            : getProductIntelligenceStockBucket(p) === stockCardFilter;
-        }
-
-        return matchesSearch && matchesMargin && matchesStockAge && matchesStockCard;
-      }),
-    ).sort((a, b) => {
-        const aVal = sortField === 'stock_age_days' ? getDaysOfStock(a) : a[sortField];
-        const bVal = sortField === 'stock_age_days' ? getDaysOfStock(b) : b[sortField];
-        if (typeof aVal === 'string' && typeof bVal === 'string') {
-          return sortDirection === 'asc'
-            ? aVal.localeCompare(bVal)
-            : bVal.localeCompare(aVal);
-        }
-        return sortDirection === 'asc'
-          ? (aVal as number) - (bVal as number)
-          : (bVal as number) - (aVal as number);
-      });
-  }, [
-    useServerIntelligence,
-    hasServerAggregate,
-    productsScopedByDate,
-    searchQuery,
-    categoryInclude,
-    tagInclude,
-    marginFilter,
-    stockAgeFilter,
-    stockCardFilter,
-    sortField,
-    sortDirection,
-    supplierTodMap,
-    usingProcurement,
-  ]);
-
-  const serverFilteredTotal = hasServerAggregate ? (serverIntelligence.page?.totalRows ?? filteredProducts.length) : filteredProducts.length;
-  const totalPages = hasServerAggregate
-    ? Math.max(1, serverIntelligence.aggregate?.pagesByBucket?.[serverBucket] ?? 1)
-    : Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE));
-  const paginatedProducts = hasServerAggregate
-    ? filteredProducts
-    : filteredProducts.slice(
-        (currentPage - 1) * PAGE_SIZE,
-        currentPage * PAGE_SIZE
-      );
+  const filteredProducts = serverIntelligence.page?.products ?? [];
+  const serverFilteredTotal = serverIntelligence.page?.totalRows ?? 0;
+  const totalPages = serverIntelligence.page?.totalPages ?? 1;
+  const paginatedProducts = filteredProducts;
 
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery, categoryInclude, tagInclude, marginFilter, stockAgeFilter, stockCardFilter, sortField, sortDirection, productDateFrom, productDateTo, productDateMode]);
 
   const handleQuickExportCsv = () => {
-    if (filteredProducts.length === 0) {
+    if (paginatedProducts.length === 0) {
       toast.error('Δεν υπάρχουν γραμμές για εξαγωγή.');
       return;
     }
-    downloadProductIntelligenceCsv(filteredProducts, currentBrand?.name);
-    toast.success(`Έγινε λήψη CSV (${formatNumber(filteredProducts.length)} γραμμές).`);
+    downloadProductIntelligenceCsv(paginatedProducts, currentBrand?.name);
+    toast.success(`Έγινε λήψη CSV τρέχουσας σελίδας (${formatNumber(paginatedProducts.length)} γραμμές).`);
   };
 
   const handleQuickExportXlsx = async () => {
-    if (filteredProducts.length === 0) {
+    if (paginatedProducts.length === 0) {
       toast.error('Δεν υπάρχουν γραμμές για εξαγωγή.');
       return;
     }
     try {
-      await downloadProductIntelligenceXlsx(filteredProducts, currentBrand?.name);
-      toast.success(`Έγινε λήψη Excel (${formatNumber(filteredProducts.length)} γραμμές).`);
+      await downloadProductIntelligenceXlsx(paginatedProducts, currentBrand?.name);
+      toast.success(`Έγινε λήψη Excel τρέχουσας σελίδας (${formatNumber(paginatedProducts.length)} γραμμές).`);
     } catch (e) {
       console.error(e);
       toast.error('Σφάλμα εξαγωγής Excel. Δοκιμάστε CSV.');
@@ -905,6 +482,8 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
       await FirestoreService.deleteCollection('products', currentBrand.id);
       queryClient.invalidateQueries({ queryKey: ['products', currentBrand.id] });
       queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['productIntelligenceAggregate', currentBrand.id] });
+      queryClient.invalidateQueries({ queryKey: ['productIntelligencePage', currentBrand.id] });
       toast.success('Τα προϊόντα διαγράφηκαν επιτυχώς.');
     } catch (e) {
       toast.error(`Σφάλμα διαγραφής: ${e instanceof Error ? e.message : 'Unknown error'}`);
@@ -913,7 +492,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     }
   };
 
-  if (!effectiveSourceLoading && !hasImported && !usingProcurement && !serverIntelligence.aggregate && !serverIntelligence.isBuilding) {
+  if (!effectiveSourceLoading && !hasImported && !serverIntelligence.isBuilding) {
     return (
       <div className="space-y-6">
         <PageHeader
@@ -958,17 +537,15 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
               <Loader2 className="h-3.5 w-3.5 animate-spin flex-shrink-0" aria-hidden />
               Φόρτωση inventory…
             </p>
-          ) : sourceProducts.length > 0 || hasServerAggregate ? (
+          ) : hasServerAggregate ? (
             <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-[#22C55E] sm:text-sm">
               <span>
-                {hasServerAggregate
-                  ? `Showing ${formatNumber(totalCatalogCount)} ${serverIntelligence.aggregate?.sourceLabel === 'ERP' ? 'ERP' : 'catalog'} product(s)`
-                  : `Showing ${isCatalogTruncated ? `${sourceProducts.length} of ${totalCatalogCount}` : sourceProducts.length} ${usingProcurement ? 'procurement' : productSourceKind === 'erp' ? 'ERP' : 'imported'} product(s)`}
+                Showing {formatNumber(paginatedProducts.length)} of {formatNumber(serverFilteredTotal || totalCatalogCount)} {serverIntelligence.aggregate?.sourceLabel === 'ERP' ? 'ERP' : 'catalog'} product(s)
               </span>
               <DataSourcePill
                 label="Source"
-                value={hasServerAggregate ? serverIntelligence.aggregate?.sourceLabel ?? productDataSourceLabel : productDataSourceLabel}
-                tone={(hasServerAggregate ? serverIntelligence.aggregate?.sourceLabel === 'ERP' : productSourceKind === 'erp') ? 'warning' : 'success'}
+                value={productDataSourceLabel}
+                tone={serverIntelligence.aggregate?.sourceLabel === 'ERP' ? 'warning' : 'success'}
               />
             </div>
           ) : null
@@ -980,7 +557,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
               size="sm"
               icon={<Trash2 size={14} />}
               onClick={handleDeleteProducts}
-              disabled={effectiveSourceLoading || isDeleting || !rawHasImported}
+              disabled={effectiveSourceLoading || isDeleting || !currentBrand?.id}
               className="min-h-[36px] flex-1 basis-[calc(50%-0.1875rem)] text-[#DC2626] hover:bg-[#FEE2E2] sm:flex-initial sm:basis-auto"
             >
               {isDeleting ? (
@@ -1014,31 +591,15 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
       {/* Inventory Alerts */}
       <AlertsBanner filterGroup="inventory" maxAlerts={2} compact onNavigate={onSectionChange} />
 
-      {usingProcurement && procInventorySummary && (
-        <div className="rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-3 text-[13px] text-[#374151] shadow-sm">
-          <div className="font-semibold text-[#111827] flex items-center gap-2 mb-1.5">
-            <Info size={16} className="text-[#6B7280] shrink-0" aria-hidden />
-            Κατάσταση αποθέματος από Procurement (ERP)
-          </div>
-          <p className="leading-relaxed text-[#4B5563]">
-            Οι παρακάτω κάρτες και ειδοποιήσεις βασίζονται <strong>απευθείας</strong> στο φύλλο διαχείρισης αποθέματος
-            (αξιολόγηση είδους, status κωδικού, ανατροφοδότηση, απόθεμα × κόστος).             Στην <strong>Στρατηγική</strong>, η <strong>«Διάγνωση προτεραιοτήτων»</strong> δείχνει{' '}
-            <strong>πλήθη ανά εμπορική ομάδα/bucket</strong> (κατάλογος + πωλήσεις/ζήτηση/κίνηση όπου υπάρχουν). Αυτά τα
-            νούμερα <strong>δεν</strong> είναι τα ίδια με τα πλήθη των καρτών dead / excess / low <strong>εδώ</strong>· δεν
-            στοχεύουν σε ταύτιση 1-1.
-          </p>
-        </div>
-      )}
-
-      {(isCatalogTruncated || hasServerAggregate) && (
+      {hasServerAggregate && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900 shadow-sm">
           <div className="font-semibold flex items-center gap-2 mb-1">
             <Info size={16} className="shrink-0" aria-hidden />
-            Συνοπτική προβολή καταλόγου
+            Πλήρες inventory, ελαφριά προβολή
           </div>
           <p className="leading-relaxed">
-            Τα KPI χρησιμοποιούν τα precomputed aggregates για όλο τον κατάλογο ({formatNumber(totalCatalogCount)} SKUs).
-            Ο πίνακας εμφανίζει {formatNumber(hasServerAggregate ? (serverIntelligence.page?.products.length ?? 0) : sourceProducts.length)} προϊόντα στην τρέχουσα προβολή.
+            Τα KPI και τα φίλτρα υπολογίζονται server-side πάνω σε όλο τον κατάλογο ({formatNumber(totalCatalogCount)} SKUs).
+            Ο browser λαμβάνει μόνο τη σελίδα που βλέπεις τώρα ({formatNumber(paginatedProducts.length)} προϊόντα).
           </p>
         </div>
       )}
@@ -1050,7 +611,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           value={formatNumber(displaySummary.total_skus)}
           icon={<Package size={20} />}
           color="#78716C"
-          tooltip={procInventorySummary ? 'Σύνολο SKU από Procurement inventory.' : 'Συνολικός αριθμός προϊόντων (SKU) στο inventory.'}
+          tooltip="Συνολικός αριθμός προϊόντων (SKU) στο inventory, από server aggregate."
           active={stockCardFilter === 'all'}
           onClick={() => setStockCardFilter('all')}
         />
@@ -1060,7 +621,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           subValue={formatNumber(displaySummary.healthy_stock.count)}
           icon={<TrendingUp size={20} />}
           color="#22C55E"
-          tooltip={procInventorySummary ? 'SKUs αξιολόγησης A — υγιές απόθεμα.' : 'Προϊόντα με διάρκεια αποθέματος μεταξύ TOD/2 και TOD×2.'}
+          tooltip="Προϊόντα με υγιή διάρκεια αποθέματος."
           active={stockCardFilter === 'healthy'}
           onClick={() => setStockCardFilter(stockCardFilter === 'healthy' ? 'all' : 'healthy')}
         />
@@ -1072,7 +633,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           subValue={`${displaySummary.excess_stock.count} SKUs`}
           icon={<AlertTriangle size={20} />}
           color="#F59E0B"
-          tooltip={procInventorySummary ? 'SKUs αξιολόγησης B χωρίς ανάγκη ανατροφοδότησης — πιθανό πλεόνασμα.' : 'Προϊόντα με διάρκεια αποθέματος > TOD×2 (πλεόνασμα).'}
+          tooltip="Προϊόντα με πλεόνασμα αποθέματος."
           active={stockCardFilter === 'excess'}
           onClick={() => setStockCardFilter(stockCardFilter === 'excess' ? 'all' : 'excess')}
         />
@@ -1084,7 +645,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           subValue={`${displaySummary.dead_stock.count} SKUs`}
           icon={<AlertCircle size={20} />}
           color="#EF4444"
-          tooltip={procInventorySummary ? 'SKUs ανενεργά ή αξιολόγησης C — δεσμεύουν κεφάλαιο.' : 'Προϊόντα χωρίς πωλήσεις — δεσμεύουν κεφάλαιο.'}
+          tooltip="Προϊόντα χωρίς πωλήσεις — δεσμεύουν κεφάλαιο."
           active={stockCardFilter === 'dead'}
           onClick={() => setStockCardFilter(stockCardFilter === 'dead' ? 'all' : 'dead')}
         />
@@ -1094,32 +655,11 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           subValue={`${displaySummary.low_stock.count} SKUs`}
           icon={<TrendingDown size={20} />}
           color="#8B5CF6"
-          tooltip={procInventorySummary ? 'SKUs σε ανατροφοδότηση — χρειάζονται παραγγελία.' : 'Προϊόντα με διάρκεια αποθέματος ≤ TOD/2 — κίνδυνος εξάντλησης.'}
+          tooltip="Προϊόντα με χαμηλό απόθεμα — κίνδυνος εξάντλησης."
           active={stockCardFilter === 'low'}
           onClick={() => setStockCardFilter(stockCardFilter === 'low' ? 'all' : 'low')}
         />
       </div>
-
-      {/* Enterprise Procurement Fiscal KPIs */}
-      {isEnterprise && procInventorySummary && (
-        <div className="flex items-center gap-4 px-4 py-3 bg-gradient-to-r from-[#7C3AED]/5 to-[#2563EB]/5 border border-[#7C3AED]/15 rounded-xl">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-[#7C3AED]/10 text-[#7C3AED] border border-[#7C3AED]/20">
-            <Package size={12} /> Procurement
-          </span>
-          <div className="flex items-center gap-6 text-sm">
-            <div>
-              <span className="text-[#6B7280] flex items-center gap-1">Αξία αποθέματος: <Tooltip content="Σύνολο αξίας (stock × κόστος) από Procurement." size={12} /></span>
-              <strong className="text-[#111827]">{formatCurrencyCompact(displaySummary.total_value)}</strong>
-            </div>
-            {procFiscalTurnover > 0 && (
-              <div>
-                <span className="text-[#6B7280] flex items-center gap-1">Απολογιστικός τζίρος: <Tooltip content="Σύνολο τζίρου από Procurement fiscal year." size={12} /></span>
-                <strong className="text-[#111827]">{formatCurrencyCompact(procFiscalTurnover)}</strong>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Alerts */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1184,51 +724,40 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
 
       {/* Product Table */}
       <Card padding="none" data-product-table>
-        {/* Περίοδος ημερομηνίας (εισαγόμενα προϊόντα) */}
-        {!usingProcurement && (
-          <div className="px-4 pt-4 pb-3 border-b border-[#E5E5E5] flex flex-wrap items-end gap-3 bg-[#FAFAFA]/60">
-            <div className="flex flex-col gap-1">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">Βάση ημερομηνίας</span>
-              <select
-                value={productDateMode}
-                onChange={(e) => setProductDateMode(e.target.value as 'imported' | 'first_available')}
-                className="min-w-[200px] rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-sm text-[#374151] focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]"
-                aria-label="Βάση ημερομηνίας για φίλτρο"
-              >
-                <option value="imported">Ημερομηνία εισαγωγής</option>
-                <option value="first_available">Πρώτη διαθεσιμότητα (SKU)</option>
-              </select>
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">Περίοδος</span>
-              <DateRangePicker
-                from={productDateFrom}
-                to={productDateTo}
-                onChange={(f, t) => {
-                  setProductDateFrom(f);
-                  setProductDateTo(t);
-                }}
-                onClear={() => {
-                  setProductDateFrom('');
-                  setProductDateTo('');
-                }}
-              />
-            </div>
-            {productDateFrom && productDateTo && (
-              <p className="text-xs text-[#78716C] max-w-md pb-1">
-                Εμφανίζονται SKU με {productDateMode === 'imported' ? 'ημερομηνία εισαγωγής' : 'πρώτη διαθεσιμότητα'} εντός της περιόδου. Προϊόντα χωρίς ημερομηνία αποκλείονται.
-              </p>
-            )}
+        <div className="px-4 pt-4 pb-3 border-b border-[#E5E5E5] flex flex-wrap items-end gap-3 bg-[#FAFAFA]/60">
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">Βάση ημερομηνίας</span>
+            <select
+              value={productDateMode}
+              onChange={(e) => setProductDateMode(e.target.value as 'imported' | 'first_available')}
+              className="min-w-[200px] rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-sm text-[#374151] focus:border-[var(--nts-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--nts-accent)]"
+              aria-label="Βάση ημερομηνίας για φίλτρο"
+            >
+              <option value="imported">Ημερομηνία εισαγωγής</option>
+              <option value="first_available">Πρώτη διαθεσιμότητα (SKU)</option>
+            </select>
           </div>
-        )}
-        {usingProcurement && (
-          <div className="px-4 pt-3 pb-2 border-b border-[#E5E5E5] flex items-start gap-2 text-xs text-[#78716C] bg-amber-50/40">
-            <Info size={14} className="mt-0.5 shrink-0 text-amber-700" aria-hidden />
-            <span>
-              Προβολή ERP: η επιλογή περιόδου ημερομηνίας ισχύει για <strong className="font-medium text-[#57534E]">εισαγόμενα</strong> προϊόντα. Στο Enterprise εμφανίζονται τα δεδομένα procurement χωρίς φίλτρο ημερομηνίας.
-            </span>
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">Περίοδος</span>
+            <DateRangePicker
+              from={productDateFrom}
+              to={productDateTo}
+              onChange={(f, t) => {
+                setProductDateFrom(f);
+                setProductDateTo(t);
+              }}
+              onClear={() => {
+                setProductDateFrom('');
+                setProductDateTo('');
+              }}
+            />
           </div>
-        )}
+          {productDateFrom && productDateTo && (
+            <p className="text-xs text-[#78716C] max-w-md pb-1">
+              Εμφανίζονται SKU με {productDateMode === 'imported' ? 'ημερομηνία εισαγωγής' : 'πρώτη διαθεσιμότητα'} εντός της περιόδου. Το φίλτρο εφαρμόζεται server-side στο πλήρες inventory.
+            </p>
+          )}
+        </div>
         {/* Filters — φίλτρα τύπου Excel (λίστα τιμών) + εξαγωγή */}
         <div className="p-4 border-b border-[#E5E5E5]">
           <div className="flex flex-wrap gap-3 items-end">
@@ -1272,14 +801,13 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
             <div className="flex flex-wrap items-end gap-2 sm:ml-auto">
               <div className="text-sm text-[#4A4A4A] min-w-[120px]">
                 {formatNumber(serverFilteredTotal)} γραμμές
-                {isCatalogTruncated ? ` (loaded ${formatNumber(sourceProducts.length)})` : ''}
               </div>
               <Button
                 variant="secondary"
                 size="sm"
                 icon={<FileText size={14} />}
                 onClick={handleQuickExportCsv}
-                disabled={effectiveSourceLoading || filteredProducts.length === 0}
+                disabled={effectiveSourceLoading || paginatedProducts.length === 0}
                 className="shrink-0"
                 title="Εξαγωγή φιλτραρισμένων σε CSV"
               >
@@ -1290,7 +818,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                 size="sm"
                 icon={<FileSpreadsheet size={14} />}
                 onClick={() => void handleQuickExportXlsx()}
-                disabled={effectiveSourceLoading || filteredProducts.length === 0}
+                disabled={effectiveSourceLoading || paginatedProducts.length === 0}
                 className="shrink-0"
                 title="Εξαγωγή φιλτραρισμένων σε Excel"
               >
@@ -1381,7 +909,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                     index={index}
                     supplierTodMap={supplierTodMap}
                     benchmarkMap={benchmarkCount > 0 ? benchmarkMap : undefined}
-                    useProcurementRowModel={usingProcurement || hasServerAggregate}
+                    useProcurementRowModel={hasServerAggregate}
                   />
                 ))}
               </AnimatePresence>
@@ -1394,7 +922,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           <p className="text-sm text-[#4A4A4A]">
             {serverFilteredTotal === 0
               ? 'Δεν βρέθηκαν προϊόντα'
-              : `Εμφανίζονται ${(currentPage - 1) * PAGE_SIZE + 1}–${Math.min(currentPage * PAGE_SIZE, serverFilteredTotal)} από ${formatNumber(serverFilteredTotal)} προϊόντα${isCatalogTruncated ? ` (loaded set: ${formatNumber(sourceProducts.length)} / ${formatNumber(totalCatalogCount)})` : ''}`}
+              : `Εμφανίζονται ${(currentPage - 1) * PAGE_SIZE + 1}–${Math.min(currentPage * PAGE_SIZE, serverFilteredTotal)} από ${formatNumber(serverFilteredTotal)} προϊόντα`}
           </p>
           <div className="flex items-center gap-2">
             <Button
@@ -1427,18 +955,21 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
       <ExportModal
         isOpen={showExportModal}
         onClose={() => setShowExportModal(false)}
-        filteredProducts={filteredProducts}
+        filteredProducts={paginatedProducts}
         onShowCharts={() => setShowCharts(true)}
         brandName={currentBrand?.name}
+        scopeLabel={`τρέχουσας σελίδας (${formatNumber(paginatedProducts.length)} από ${formatNumber(serverFilteredTotal)})`}
       />
 
       {/* Charts Modal */}
       <ProductCharts
         isOpen={showCharts}
         onClose={() => setShowCharts(false)}
-        products={filteredProducts}
+        products={paginatedProducts}
         supplierTodMap={supplierTodMap}
-        useProcurementRowModel={usingProcurement}
+        useProcurementRowModel={hasServerAggregate}
+        aggregateCharts={serverIntelligence.aggregate?.charts}
+        totalProducts={totalCatalogCount}
       />
         </>
       )}

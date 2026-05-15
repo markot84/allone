@@ -5,6 +5,7 @@ import { Card, Button, ModalHeader } from '../common';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { getStockAgeDays, resolveStockHealth } from '../../utils/productUtils';
 import type { Product } from '../../types';
+import type { ProductIntelligenceCharts } from '../../services/productIntelligenceAggregate';
 
 interface ProductChartsProps {
   isOpen: boolean;
@@ -12,9 +13,11 @@ interface ProductChartsProps {
   products: Product[];
   supplierTodMap?: Map<string, number>;
   useProcurementRowModel?: boolean;
+  aggregateCharts?: ProductIntelligenceCharts;
+  totalProducts?: number;
 }
 
-export function ProductCharts({ isOpen, onClose, products, supplierTodMap, useProcurementRowModel }: ProductChartsProps) {
+export function ProductCharts({ isOpen, onClose, products, supplierTodMap, useProcurementRowModel, aggregateCharts, totalProducts }: ProductChartsProps) {
   // Debug: Log products count and sample data
   useEffect(() => {
     if (isOpen) {
@@ -55,8 +58,8 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
 
     const hasData = ranges.some(r => r.count > 0);
     console.log('[ProductCharts] Margin distribution:', ranges, 'hasData:', hasData, 'totalProducts:', products.length);
-    return ranges;
-  }, [products]);
+    return aggregateCharts?.marginDistribution ?? ranges;
+  }, [products, aggregateCharts?.marginDistribution]);
 
   // Stock Age Distribution
   const stockAgeDistribution = useMemo(() => {
@@ -80,8 +83,8 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
 
     const hasData = ranges.some(r => r.count > 0);
     console.log('[ProductCharts] Stock age distribution:', ranges, 'hasData:', hasData);
-    return ranges;
-  }, [products]);
+    return aggregateCharts?.stockAgeDistribution ?? ranges;
+  }, [products, aggregateCharts?.stockAgeDistribution]);
 
   // Category Breakdown
   const categoryBreakdown = useMemo(() => {
@@ -96,8 +99,8 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
       .sort((a, b) => b.count - a.count)
       .slice(0, 10);
     console.log('[ProductCharts] Category breakdown:', result);
-    return result;
-  }, [products]);
+    return aggregateCharts?.categoryBreakdown ?? result;
+  }, [products, aggregateCharts?.categoryBreakdown]);
 
   // Stock Level Status (TOD-based)
   const stockStatus = useMemo(() => {
@@ -123,8 +126,8 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
       { name: 'Νεκρό απόθεμα', value: dead, color: '#EF4444' }
     ];
     console.log('[ProductCharts] Stock status:', result);
-    return result;
-  }, [products, supplierTodMap, useProcurementRowModel]);
+    return aggregateCharts?.stockStatus ?? result;
+  }, [products, supplierTodMap, useProcurementRowModel, aggregateCharts?.stockStatus]);
 
   // Top Products by Margin
   const topProductsByMargin = useMemo(() => {
@@ -137,8 +140,8 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
         price: p.price || 0
       }));
     console.log('[ProductCharts] Top products by margin:', result);
-    return result;
-  }, [products]);
+    return aggregateCharts?.topProductsByMargin ?? result;
+  }, [products, aggregateCharts?.topProductsByMargin]);
 
   // Stock Age vs Stock Level (scatter-like)
   const stockAgeVsLevel = useMemo(() => {
@@ -152,8 +155,8 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
       }))
       .sort((a, b) => a.age - b.age);
     console.log('[ProductCharts] Stock age vs level:', result.length, 'items');
-    return result;
-  }, [products]);
+    return aggregateCharts?.stockAgeVsLevel ?? result;
+  }, [products, aggregateCharts?.stockAgeVsLevel]);
 
   // Early return after all hooks
   if (!isOpen) return null;
@@ -183,7 +186,7 @@ export function ProductCharts({ isOpen, onClose, products, supplierTodMap, usePr
               <BarChart3 size={24} className="shrink-0 text-[var(--nts-accent)]" />
               <div className="min-w-0">
                 <h2 className="text-xl font-bold text-[#1A1A1A]">Οπτικοποίηση δεδομένων προϊόντων</h2>
-                <p className="text-sm text-[#4A4A4A]">{products.length} προϊόντα σε ανάλυση</p>
+                <p className="text-sm text-[#4A4A4A]">{aggregateCharts ? `${totalProducts ?? products.length} προϊόντα σε full-inventory ανάλυση` : `${products.length} προϊόντα σε ανάλυση`}</p>
               </div>
             </div>
           }

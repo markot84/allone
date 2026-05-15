@@ -75,8 +75,6 @@ import type { SeasonalPeriod } from '../../data/seasonalPeriods';
 import type { Product, PriceBenchmarkStrategyScope, SalesBaseScope } from '../../types';
 
 
-const STRATEGY_PRODUCT_LIMIT = 5000;
-
 const PreviewCell = memo(function PreviewCell({
   columnId,
   product,
@@ -275,15 +273,12 @@ export function WeightConfigurator() {
     usingProcurement,
     sourceLabel: sourceProductDataSourceLabel,
     sourceKind: sourceProductSourceKind,
-  } = useProductSource({ maxProducts: STRATEGY_PRODUCT_LIMIT });
+  } = useProductSource();
   const serverProductIntelligence = useProductIntelligenceAggregate('all', 1);
-  const serverProducts = serverProductIntelligence.page?.products ?? [];
-  const products = serverProducts.length > 0 ? serverProducts : sourceProducts;
+  const products = sourceProducts;
   const hasImported = sourceHasImported || !!serverProductIntelligence.aggregate;
-  const productDataSourceLabel = serverProducts.length > 0
-    ? serverProductIntelligence.aggregate?.sourceLabel ?? sourceProductDataSourceLabel
-    : sourceProductDataSourceLabel;
-  const productSourceKind = serverProducts.length > 0 ? 'erp' : sourceProductSourceKind;
+  const productDataSourceLabel = serverProductIntelligence.aggregate?.sourceLabel ?? sourceProductDataSourceLabel;
+  const productSourceKind = serverProductIntelligence.aggregate ? 'erp' : sourceProductSourceKind;
   const productSourceCount = serverProductIntelligence.aggregate?.totalCount ?? products.length;
 
   const scenarioErpHints = useMemo(() => {

@@ -35,9 +35,9 @@ import { useOrganic } from '../../hooks/useOrganic';
 import { useCampaigns } from '../../hooks/useCampaigns';
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import { useSuppliers } from '../../hooks/useSuppliers';
-import { useProductSource } from '../../hooks/useProductSource';
 import { useBrand } from '../../hooks/useBrand';
 import { useProductAggregates } from '../../hooks/useAggregates';
+import { useProductIntelligenceAggregate } from '../../hooks/useProductIntelligenceAggregate';
 import { usePeriodScopedCampaigns } from '../../hooks/usePeriodScopedCampaigns';
 import { useTasks } from '../../hooks/useCoordination';
 import { useDashPeriod } from '../../hooks/useDashPeriod';
@@ -85,7 +85,6 @@ const REV_CHART_ESHOP = '#F97316';
 
 const REV_PERF_LABEL_ESHOP = 'Τζίρος e-shop (παραγγελίες)';
 const REV_PERF_LABEL_ESHOP_BLEND = 'Organic + καμπάνιες (εκτίμηση)';
-const DASHBOARD_PRODUCT_LIMIT = 5000;
 const DASHBOARD_LOADING_TIMEOUT_MS = 8000;
 /** Διαφήμιση — standalone efficiency chart (όχι σύγκριση με τζίρο). */
 const ADS_SPEND_COLOR = '#FDBA74';
@@ -171,12 +170,9 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   const { currentBrand } = useBrand();
   const { isB2B, enabledModules } = useModules();
   const { segments: rfmSegments, hasImported: hasSegments, isLoading: segmentsLoading } = useSegments();
-  const {
-    count: loadedProductsCount,
-    totalCount: productTotalCount,
-    products,
-    isLoading: productsLoading,
-  } = useProductSource({ maxProducts: DASHBOARD_PRODUCT_LIMIT });
+  const productIntelligence = useProductIntelligenceAggregate('all', 1, { pageSize: 150 });
+  const products = productIntelligence.page?.products ?? [];
+  const productsLoading = productIntelligence.isLoading;
   const { productStats } = useProductAggregates();
   const { suppliers } = useSuppliers();
   const { tasks } = useTasks();
@@ -202,7 +198,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     suppliers.forEach(s => m.set(s.name, s.tod));
     return m;
   }, [suppliers]);
-  const productsCount = productTotalCount ?? productStats?.totalSkus ?? loadedProductsCount;
+  const productsCount = productIntelligence.aggregate?.totalCount ?? productStats?.totalSkus ?? 0;
   const hasAnyData =
     hasOrganic ||
     hasSegments ||

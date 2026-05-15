@@ -12,9 +12,10 @@ interface ExportModalProps {
   filteredProducts: Product[];
   onShowCharts?: () => void;
   brandName?: string;
+  scopeLabel?: string;
 }
 
-export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts, brandName }: ExportModalProps) {
+export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts, brandName, scopeLabel }: ExportModalProps) {
   const [showGoogleSheetsModal, setShowGoogleSheetsModal] = useState(false);
   
   if (!isOpen) return null;
@@ -136,7 +137,7 @@ export function ExportModal({ isOpen, onClose, filteredProducts, onShowCharts, b
             {/* Content */}
             <div className="p-6 space-y-3">
               <p className="text-sm text-[#4A4A4A] mb-4">
-                Εξαγωγή <strong>τρέχουσας φιλτραρισμένης</strong> προβολής: <strong>{filteredProducts.length}</strong> προϊόντα
+                Εξαγωγή <strong>{scopeLabel ?? 'τρέχουσας φιλτραρισμένης προβολής'}</strong>: <strong>{filteredProducts.length}</strong> προϊόντα
               </p>
 
               <button

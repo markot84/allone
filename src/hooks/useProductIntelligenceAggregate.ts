@@ -4,15 +4,17 @@ import { useBrand } from './useBrand';
 import { useBrandSyncVersion } from './useBrandSyncVersion';
 import {
   fetchProductIntelligenceAggregate,
-  fetchProductIntelligencePage,
+  queryProductIntelligencePage,
   type ProductIntelligenceBucket,
+  type ProductIntelligenceQuery,
 } from '../services/productIntelligenceAggregate';
 
-export function useProductIntelligenceAggregate(bucket: ProductIntelligenceBucket, page: number) {
+export function useProductIntelligenceAggregate(bucket: ProductIntelligenceBucket, page: number, query: Omit<ProductIntelligenceQuery, 'bucket' | 'page'> = {}) {
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
   const syncVersionQuery = useBrandSyncVersion(brandId);
   const syncVersion = syncVersionQuery.data?.version ?? null;
+  const queryKey = JSON.stringify(query);
 
   const aggregateQuery = useQuery({
     queryKey: ['productIntelligenceAggregate', brandId, syncVersion],
@@ -24,14 +26,11 @@ export function useProductIntelligenceAggregate(bucket: ProductIntelligenceBucke
   });
 
   const aggregate = aggregateQuery.data?.status === 'ready' ? aggregateQuery.data : null;
-  const safePage = useMemo(() => {
-    const max = aggregate?.pagesByBucket?.[bucket] ?? 1;
-    return Math.max(1, Math.min(page, max));
-  }, [aggregate, bucket, page]);
+  const safePage = useMemo(() => Math.max(1, page), [page]);
 
   const pageQuery = useQuery({
-    queryKey: ['productIntelligencePage', brandId, bucket, safePage, aggregate?.syncVersion ?? syncVersion],
-    queryFn: () => (brandId ? fetchProductIntelligencePage(brandId, bucket, safePage) : Promise.resolve(null)),
+    queryKey: ['productIntelligencePage', brandId, bucket, safePage, queryKey, aggregate?.syncVersion ?? syncVersion],
+    queryFn: () => (brandId ? queryProductIntelligencePage(brandId, { ...query, bucket, page: safePage }) : Promise.resolve(null)),
     enabled: !!brandId && !!aggregate,
     staleTime: 10 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
@@ -41,7 +40,7 @@ export function useProductIntelligenceAggregate(bucket: ProductIntelligenceBucke
   return {
     aggregate,
     page: pageQuery.data,
-    safePage,
+    safePage: pageQuery.data?.page ?? safePage,
     isLoading: aggregateQuery.isPending || (!!aggregate && pageQuery.isPending),
     isBuilding: aggregateQuery.data?.status === 'running',
     error: aggregateQuery.error ?? pageQuery.error,
