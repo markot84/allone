@@ -19,7 +19,7 @@ import type { Scenario } from '../types';
 import type { RFMSegment } from '../types';
 import { deriveBehavioralProfile, derivePredictiveMetrics } from './behavioralEngine';
 
-const MODEL_NAME = 'gemini-2.5-flash';
+const MODEL_NAME = 'gemini-2.5-pro';
 
 function extractJSON(text: string): string | null {
   let cleaned = text

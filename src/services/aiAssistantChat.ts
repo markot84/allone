@@ -1,7 +1,7 @@
 import { searchArticles, type KnowledgeArticle } from '../data/knowledgeBase';
 import { callGemini } from './geminiProxy';
 
-const MODEL_NAME = 'gemini-2.5-flash';
+const MODEL_NAME = 'gemini-2.5-pro';
 
 /** Μέγιστο μήκος αποσπάσματος ανά άρθρο στο prompt (tokens). */
 const KB_EXCERPT_CHARS = 900;

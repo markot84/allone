@@ -10,7 +10,7 @@ import {
 import { strategyContentMap } from '../data/mockContent';
 import { scenarios } from '../data/mockScenarios';
 
-const MODEL_NAME = 'gemini-2.5-flash';
+const MODEL_NAME = 'gemini-2.5-pro';
 
 export interface OrganicAction {
   type: string;

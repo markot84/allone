@@ -1,7 +1,7 @@
 import { callGemini } from './geminiProxy';
 import { MARKET_BRIEF_SYSTEM_PROMPT, buildMarketBriefUserPrompt, type MarketBriefPromptContext } from '../data/marketBriefPrompt';
 
-const MODEL_NAME = 'gemini-2.5-flash';
+const MODEL_NAME = 'gemini-2.5-pro';
 
 export type ProductFitLevel = 'strong' | 'moderate' | 'weak';
 

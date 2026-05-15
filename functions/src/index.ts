@@ -2067,7 +2067,7 @@ export const geminiProxy = onRequest(
       return;
     }
 
-    const { systemPrompt, userPrompt, model = 'gemini-2.5-flash', temperature = 0 } = req.body as {
+    const { systemPrompt, userPrompt, model = 'gemini-2.5-pro', temperature = 0 } = req.body as {
       systemPrompt?: string;
       userPrompt?: string;
       model?: string;
