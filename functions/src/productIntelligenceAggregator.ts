@@ -101,6 +101,7 @@ export type ProductIntelligenceQueryParams = {
   dateFrom?: string;
   dateTo?: string;
   dateMode?: 'imported' | 'first_available';
+  includeNoStock?: boolean;
 };
 
 type ProductIntelligenceQueryResult = {
@@ -750,6 +751,10 @@ function matchesQuery(product: CompactProduct, params: ProductIntelligenceQueryP
   const search = text(params.search).toLowerCase();
   if (search && !searchText(product).includes(search)) return false;
 
+  const effectiveStock = product.available_stock ?? product.stock_on_hand ?? product.stock_level ?? 0;
+  const effectiveTag = effectiveStock <= 0 ? 'no_stock' : text(product.priority_tag).toLowerCase();
+  if (params.includeNoStock !== true && effectiveStock <= 0) return false;
+
   if (params.categories?.length) {
     const allowed = new Set(params.categories);
     if (!allowed.has(categoryId(product))) return false;
@@ -757,7 +762,7 @@ function matchesQuery(product: CompactProduct, params: ProductIntelligenceQueryP
 
   if (params.tags?.length) {
     const allowed = new Set(params.tags.map((tag) => tag.toLowerCase()));
-    if (!allowed.has(text(product.priority_tag).toLowerCase())) return false;
+    if (!allowed.has(effectiveTag)) return false;
   }
 
   if (params.margin && params.margin !== 'all' && product.margin_tier !== params.margin) return false;

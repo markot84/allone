@@ -53,6 +53,7 @@ export type ProductIntelligenceQuery = {
   dateFrom?: string;
   dateTo?: string;
   dateMode?: 'imported' | 'first_available';
+  includeNoStock?: boolean;
 };
 
 export type ProductIntelligenceQueryResult = {

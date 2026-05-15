@@ -48,6 +48,10 @@ const EMPTY_CATEGORY_ID = '__EMPTY_CAT__';
 /** Σταθερές τιμές priority_tag (inventory intelligence) — εμφανίζονται πάντα στο φίλτρο ακόμη κι αν το client catalog δεν φέρει το πεδίο. */
 const STOCK_INTELLIGENCE_TAG_IDS = ['healthy', 'low', 'excess', 'dead', 'no_stock'] as const;
 const DEFAULT_VISIBLE_STOCK_TAG_IDS = ['healthy', 'low', 'excess', 'dead'];
+const productStockLevel = (product: Product): number =>
+  Number(product.available_stock ?? product.stock_on_hand ?? product.stock_level ?? 0) || 0;
+const productDisplayTag = (product: Product): string =>
+  productStockLevel(product) <= 0 ? 'no_stock' : String(product.priority_tag || '');
 const EMPTY_INVENTORY_SUMMARY: InventorySummary = {
   total_skus: 0,
   total_value: 0,
@@ -401,7 +405,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   const tagStockBucket = useMemo((): ProductIntelligenceBucket | null => {
     if (tagInclude?.length !== 1) return null;
     const id = tagInclude[0];
-    return id === 'healthy' || id === 'excess' || id === 'dead' || id === 'low' || id === 'no_stock' ? id : null;
+    return id === 'healthy' || id === 'excess' || id === 'dead' || id === 'low' ? id : null;
   }, [tagInclude]);
   const serverBucket: ProductIntelligenceBucket =
     stockCardFilter === 'healthy' || stockCardFilter === 'excess' || stockCardFilter === 'dead' || stockCardFilter === 'low'
@@ -423,7 +427,8 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     dateFrom: productDateFrom || undefined,
     dateTo: productDateTo || undefined,
     dateMode: productDateMode,
-  }), [PAGE_SIZE, searchQuery, categoryInclude, effectiveTagFilter, marginFilter, stockAgeFilter, sortField, sortDirection, productDateFrom, productDateTo, productDateMode]);
+    includeNoStock,
+  }), [PAGE_SIZE, searchQuery, categoryInclude, effectiveTagFilter, marginFilter, stockAgeFilter, sortField, sortDirection, productDateFrom, productDateTo, productDateMode, includeNoStock]);
   const serverIntelligence = useProductIntelligenceAggregate(serverBucket, currentPage, serverQuery);
   const queryClient = useQueryClient();
   const toast = useToast();
@@ -482,7 +487,10 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     return STOCK_INTELLIGENCE_TAG_IDS.map((id) => ({ id, label: id }));
   }, []);
 
-  const filteredProducts = serverIntelligence.page?.products ?? [];
+  const filteredProducts = useMemo(() => {
+    const rows = serverIntelligence.page?.products ?? [];
+    return includeNoStock ? rows : rows.filter((product) => productStockLevel(product) > 0);
+  }, [includeNoStock, serverIntelligence.page?.products]);
   const serverFilteredTotal = serverIntelligence.page?.totalRows ?? 0;
   const totalPages = serverIntelligence.page?.totalPages ?? 1;
   const paginatedProducts = filteredProducts;
@@ -861,7 +869,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                 onChange={(e) => handleIncludeNoStockChange(e.target.checked)}
                 className="rounded border-[#D1D5DB] text-[var(--nts-accent)] focus:ring-[var(--nts-accent)]/30"
               />
-              <span className="whitespace-nowrap">Include no stock</span>
+              <span className="whitespace-nowrap">Εμφάνιση no stock</span>
             </label>
             <div className="flex flex-col gap-1">
               <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9CA3AF]">Margin tier</span>
@@ -1190,22 +1198,22 @@ function ProductRow({ product, index, supplierTodMap, benchmarkMap, useProcureme
         </span>
       </td>
       <td className="px-3 py-2 hidden lg:table-cell">
-        {product.priority_tag ? (
+        {productDisplayTag(product) ? (
           <Badge
             variant={
-              product.priority_tag === 'dead' ? 'danger' :
-              product.priority_tag === 'low' ? 'warning' :
-              product.priority_tag === 'no_stock' ? 'default' :
-              product.priority_tag === 'healthy' ? 'success' :
-              product.priority_tag === 'excess' ? 'orange' :
-              product.priority_tag === 'Brand Push' ? 'info' :
-              product.priority_tag === 'New Launch' ? 'success' :
-              product.priority_tag === 'Best Seller' ? 'orange' :
-              product.priority_tag === 'Clearance' ? 'warning' : 'default'
+              productDisplayTag(product) === 'dead' ? 'danger' :
+              productDisplayTag(product) === 'low' ? 'warning' :
+              productDisplayTag(product) === 'no_stock' ? 'default' :
+              productDisplayTag(product) === 'healthy' ? 'success' :
+              productDisplayTag(product) === 'excess' ? 'orange' :
+              productDisplayTag(product) === 'Brand Push' ? 'info' :
+              productDisplayTag(product) === 'New Launch' ? 'success' :
+              productDisplayTag(product) === 'Best Seller' ? 'orange' :
+              productDisplayTag(product) === 'Clearance' ? 'warning' : 'default'
             }
             size="sm"
           >
-            {product.priority_tag}
+            {productDisplayTag(product)}
           </Badge>
         ) : (
           <span className="text-[10px] text-[#9CA3AF]">—</span>
