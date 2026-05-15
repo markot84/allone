@@ -1365,7 +1365,7 @@ Side drawer που δείχνει χρονολογικά όλες τις ενέ�
 3. Κλικ "Σύνδεση" — γίνεται test σε πραγματικό χρόνο
 
 ## Sync
-- **Αυτόματο**: Καθημερινό sync (06:00)
+- **Αυτόματο**: Καθημερινό πρωινό sync μετά τις 05:00, ώστε να έχει κλείσει πλήρως η προηγούμενη ημέρα
 - **Χειροκίνητο**: Κλικ "Sync τώρα" ανά connector
 - **Τελευταίο sync**: Εμφανίζεται κάτω από κάθε connector`,
     tags: ['connectors', 'oauth', 'api', 'shopify', 'woocommerce', 'opencart', 'magento', 'ga4', 'google ads', 'meta', 'sync'],
@@ -1448,7 +1448,7 @@ Side drawer που δείχνει χρονολογικά όλες τις ενέ�
 ## Κοινά χαρακτηριστικά
 - Παραγγελίες τελευταίων 90 ημερών
 - Κατάλογος προϊόντων
-- Καθημερινό αυτόματο sync
+- Καθημερινό πρωινό αυτόματο sync, μετά το κλείσιμο της προηγούμενης ημέρας
 - Δεδομένα εμφανίζονται στο E-commerce Explorer, Dashboard και ROI`,
     tags: ['woocommerce', 'opencart', 'magento', 'ecommerce', 'connector', 'api key'],
     related: ['connectors-overview', 'ecommerce-explorer'],
@@ -1640,7 +1640,7 @@ Horizontal bar chart + progress bars που δείχνουν πόσα έσοδα
       },
       {
         question: 'Πόσο συχνά ανανεώνονται οι τιμές;',
-        answer: 'Αυτόματα κάθε μέρα στις 06:00 μέσω scheduled sync. Μπορείτε επίσης να πατήσετε "Sync τώρα" χειροκίνητα.'
+        answer: 'Αυτόματα κάθε πρωί μέσω scheduled sync. Μπορείτε επίσης να πατήσετε "Sync τώρα" χειροκίνητα.'
       }
     ]
   },

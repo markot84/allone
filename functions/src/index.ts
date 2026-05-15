@@ -1955,41 +1955,41 @@ const nightlyConnectorScheduleBase = {
   secrets: CONNECTOR_NIGHTLY_SECRETS,
 };
 
-// ─── Scheduled: Connector waves (διαδοχικές ώρες → ξεχωριστό timeout ανά οικογένεια APIs) ──
+// ─── Scheduled: Connector waves (πρωινό παράθυρο → το "χθες" έχει κλείσει πλήρως) ──
 
-/** Διαφήμιση & Merchant — 23:00 */
+/** Διαφήμιση & Merchant — 05:00 */
 export const scheduledSyncMarketing = onSchedule(
-  { ...nightlyConnectorScheduleBase, schedule: 'every day 23:00' },
+  { ...nightlyConnectorScheduleBase, schedule: 'every day 05:00' },
   async () => runNightlyConnectorWaveJob('marketing', 'scheduledSyncMarketing')
 );
 
-/** E-shop imports + ecommerce_summary — 23:14 */
+/** E-shop imports + ecommerce_summary — 05:20 */
 export const scheduledSyncEcommerce = onSchedule(
-  { ...nightlyConnectorScheduleBase, schedule: 'every day 23:14' },
+  { ...nightlyConnectorScheduleBase, schedule: 'every day 05:20' },
   async () => runNightlyConnectorWaveJob('ecommerce', 'scheduledSyncEcommerce')
 );
 
-/** GA4 + Search Console — 23:28 */
+/** GA4 + Search Console — 05:40 */
 export const scheduledSyncWebAnalytics = onSchedule(
-  { ...nightlyConnectorScheduleBase, schedule: 'every day 23:28' },
+  { ...nightlyConnectorScheduleBase, schedule: 'every day 05:40' },
   async () => runNightlyConnectorWaveJob('analytics', 'scheduledSyncWebAnalytics')
 );
 
-/** ERP connectors — 23:42 */
+/** ERP connectors — 06:00 */
 export const scheduledSyncErp = onSchedule(
-  { ...nightlyConnectorScheduleBase, schedule: 'every day 23:42' },
+  { ...nightlyConnectorScheduleBase, schedule: 'every day 06:00' },
   async () => runNightlyConnectorWaveJob('erp', 'scheduledSyncErp')
 );
 
-/** Απόθεμα / ανταγωνισμός — 00:18 (μετά το ERP κύμα 23:42 + έως 30′ timeout) */
+/** Απόθεμα / ανταγωνισμός — 06:40 (μετά το ERP κύμα 06:00 + έως 30′ timeout) */
 export const scheduledSyncFollowups = onSchedule(
-  { ...nightlyConnectorScheduleBase, schedule: 'every day 00:18' },
+  { ...nightlyConnectorScheduleBase, schedule: 'every day 06:40' },
   async () => runNightlyFollowupsJob()
 );
 
 /** Data Analysis RFM aggregate — runs after connector waves and writes only compact summaries. */
 export const scheduledDataAnalysisRfm = onSchedule(
-  { timeZone: 'Europe/Athens', region: 'europe-west1', memory: '2GiB', timeoutSeconds: 1200, schedule: 'every day 00:52' },
+  { timeZone: 'Europe/Athens', region: 'europe-west1', memory: '2GiB', timeoutSeconds: 1200, schedule: 'every day 07:20' },
   async () => {
     const snap = await db.collection('connectors').where('magento.connected', '==', true).limit(5).get();
     for (const doc of snap.docs) {
@@ -2004,7 +2004,7 @@ export const scheduledDataAnalysisRfm = onSchedule(
 
 /** Product Intelligence aggregate — connector-backed catalogs only; procurement/import brands keep the UI path. */
 export const scheduledProductIntelligence = onSchedule(
-  { timeZone: 'Europe/Athens', region: 'europe-west1', memory: '2GiB', timeoutSeconds: 1200, schedule: 'every day 01:08' },
+  { timeZone: 'Europe/Athens', region: 'europe-west1', memory: '2GiB', timeoutSeconds: 1200, schedule: 'every day 07:40' },
   async () => {
     const snap = await db.collection('connectors').limit(20).get();
     for (const doc of snap.docs) {
@@ -2501,11 +2501,11 @@ export const refreshSignals = onRequest(
   }
 );
 
-// ── Aggregate Stats (μετά τα νυχτερινά κύματα connectors και follow-ups ~00:18) ────────
+// ── Aggregate Stats (μετά τα πρωινά connector waves και follow-ups ~06:40) ────────
 
 export const scheduledAggregates = onSchedule(
   {
-    schedule: 'every day 00:30',
+    schedule: 'every day 07:00',
     timeZone: 'Europe/Athens',
     region: 'europe-west1',
     memory: '512MiB',
@@ -2537,7 +2537,7 @@ export const scheduledAggregates = onSchedule(
 
 export const scheduledAlerts = onSchedule(
   {
-    schedule: 'every day 00:45',
+    schedule: 'every day 07:15',
     timeZone: 'Europe/Athens',
     region: 'europe-west1',
     memory: '512MiB',
@@ -2569,7 +2569,7 @@ export const scheduledAlerts = onSchedule(
 
 export const scheduledDigest = onSchedule(
   {
-    schedule: 'every day 00:58',
+    schedule: 'every day 07:35',
     timeZone: 'Europe/Athens',
     region: 'europe-west1',
     memory: '512MiB',
