@@ -14,7 +14,15 @@ export function generateInsightsFromData(
     orderCount: number;
     aov: number;
     platformBreakdown: { platform: string; revenue: number; orders: number }[];
-  }
+  },
+  /**
+   * Αν υπάρχει ενεργή στρατηγική με AI-επιλεγμένα segments, τα περνάμε εδώ
+   * ώστε τα segment insights να ευθυγραμμιστούν με τη στρατηγική.
+   */
+  activeStrategy?: {
+    name?: string;
+    targetSegmentNames?: string[]; // π.χ. ['Potential Loyalists', 'At Risk', 'Promising']
+  } | null
 ): AIInsight[] {
   const insights: AIInsight[] = [];
 
@@ -91,45 +99,66 @@ export function generateInsightsFromData(
   }
 
   // Segments-based insights
-  const atRisk = segments.find((s) => s.id === 'at_risk' || s.name?.toLowerCase().includes('at risk'));
-  const champions = segments.find((s) => s.id === 'champions' || s.name?.toLowerCase().includes('champion'));
   const totalCustomers = segments.reduce((sum, s) => sum + (s.count ?? 0), 0);
+  const strategySegments = activeStrategy?.targetSegmentNames ?? [];
+  const hasActiveStrategy = strategySegments.length > 0;
 
-  if (atRisk && (atRisk.percentage ?? 0) > 15) {
+  if (hasActiveStrategy) {
+    // Ενεργή στρατηγική: ένα ενοποιημένο insight που ευθυγραμμίζεται με το Channel Activation.
+    // Αντικαθιστά τα ανεξάρτητα champions/at_risk/top_segment insights ώστε ο χρήστης
+    // να βλέπει παντού τα ίδια segments με προτεραιότητα.
+    const segmentList = strategySegments.join(', ');
+    const strategyName = activeStrategy?.name ? `«${activeStrategy.name}»` : 'την ενεργή στρατηγική';
     insights.push({
-      insightKey: 'at_risk_segment',
-      type: 'warning',
-      icon: '',
-      title: 'At Risk segment σε αύξηση',
-      insight: `Το segment "${atRisk.name}" αντιστοιχεί στο ${atRisk.percentage}% της πελατειακής βάσης. Απαιτείται στοχευμένη ενέργεια επανενεργοποίησης.`,
-      action: 'Launch Win-back',
-      impact: 'high',
-    });
-  }
-
-  if (champions && (champions.revenue_share ?? 0) > 30) {
-    insights.push({
-      insightKey: 'champions_segment',
-      type: 'opportunity',
-      icon: '',
-      title: 'Champions segment opportunity',
-      insight: `Τα Champions συνεισφέρουν ${champions.revenue_share}% των εσόδων. Αξίζει ελεγχόμενη αξιοποίηση για διατήρηση και επιλεκτικό upsell.`,
-      action: 'Δημιουργία Campaign',
-      impact: 'high',
-    });
-  }
-
-  if (segments.length > 0 && totalCustomers > 0) {
-    const topSegment = segments.reduce((a, b) => ((a.revenue_share ?? 0) > (b.revenue_share ?? 0) ? a : b));
-    insights.push({
-      insightKey: 'top_segment',
+      insightKey: 'strategy_segments',
       type: 'recommendation',
       icon: '',
-      title: 'Κορυφαίο segment',
-      insight: `Το "${topSegment.name}" εμφανίζει τη μεγαλύτερη συμμετοχή στα έσοδα (${topSegment.revenue_share}%). Αποτελεί βασική προτεραιότητα στόχευσης.`,
-      action: 'Στόχευση Campaign',
-      impact: 'medium',
+      title: `AI Στόχευση — ${strategyName}`,
+      insight: `Το AI επέλεξε ${strategySegments.length} segments για ${strategyName}: ${segmentList}. Αυτά αποτελούν την κύρια προτεραιότητα ενεργοποίησης.`,
+      action: 'Channel Activation',
+      impact: 'high',
     });
+  } else {
+    // Χωρίς ενεργή στρατηγική: data-driven segment insights
+    const atRisk = segments.find((s) => s.id === 'at_risk' || s.name?.toLowerCase().includes('at risk'));
+    const champions = segments.find((s) => s.id === 'champions' || s.name?.toLowerCase().includes('champion'));
+
+    if (atRisk && (atRisk.percentage ?? 0) > 15) {
+      insights.push({
+        insightKey: 'at_risk_segment',
+        type: 'warning',
+        icon: '',
+        title: 'At Risk segment σε αύξηση',
+        insight: `Το segment "${atRisk.name}" αντιστοιχεί στο ${atRisk.percentage}% της πελατειακής βάσης. Απαιτείται στοχευμένη ενέργεια επανενεργοποίησης.`,
+        action: 'Launch Win-back',
+        impact: 'high',
+      });
+    }
+
+    if (champions && (champions.revenue_share ?? 0) > 30) {
+      insights.push({
+        insightKey: 'champions_segment',
+        type: 'opportunity',
+        icon: '',
+        title: 'Champions segment opportunity',
+        insight: `Τα Champions συνεισφέρουν ${champions.revenue_share}% των εσόδων. Αξίζει ελεγχόμενη αξιοποίηση για διατήρηση και επιλεκτικό upsell.`,
+        action: 'Δημιουργία Campaign',
+        impact: 'high',
+      });
+    }
+
+    if (segments.length > 0 && totalCustomers > 0) {
+      const topSegment = segments.reduce((a, b) => ((a.revenue_share ?? 0) > (b.revenue_share ?? 0) ? a : b));
+      insights.push({
+        insightKey: 'top_segment',
+        type: 'recommendation',
+        icon: '',
+        title: 'Κορυφαίο segment',
+        insight: `Το "${topSegment.name}" εμφανίζει τη μεγαλύτερη συμμετοχή στα έσοδα (${topSegment.revenue_share}%). Αποτελεί βασική προτεραιότητα στόχευσης.`,
+        action: 'Στόχευση Campaign',
+        impact: 'medium',
+      });
+    }
   }
 
   // Cross-sell when we have both

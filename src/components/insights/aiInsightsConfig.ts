@@ -10,6 +10,8 @@ export const INSIGHT_NAV: Record<string, { section: string; hashQuery?: string }
   cross_sell: { section: 'channels' },
   ecomm_low_aov: { section: 'ecommerce' },
   ecomm_platform_risk: { section: 'ecommerce' },
+  // Ενοποιημένο strategy insight (αντικαθιστά champions/at_risk/top_segment όταν υπάρχει ενεργή στρατηγική)
+  strategy_segments: { section: 'channels' },
 };
 
 export const APPLY_ALL_PRIORITY = [
@@ -17,6 +19,7 @@ export const APPLY_ALL_PRIORITY = [
   'excess_stock',
   'high_margin_low_stock',
   'low_stock',
+  'strategy_segments',
   'at_risk_segment',
   'champions_segment',
   'top_segment',
