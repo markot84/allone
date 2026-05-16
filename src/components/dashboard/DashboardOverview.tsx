@@ -70,7 +70,7 @@ import {
 } from '../../utils/roiUtils';
 import { formatCurrencyCompact, formatNumber, formatPercent } from '../../utils/format';
 import type { Campaign } from '../../types';
-import { generateInsightsFromData } from '../../services/insights';
+import { useAiInsightsData } from '../insights/useAiInsightsData';
 import { useAutomationRunner } from '../../hooks/useAutomationRunner';
 import { useAutomationAlerts } from '../../hooks/useAutomation';
 import { MorningBriefing } from './MorningBriefing';
@@ -757,15 +757,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       console.debug('[Dashboard] Organic revenue:', totalOrganicRevenue, 'hasOrganic:', hasOrganic);
     }
   }, [totalOrganicRevenue, hasOrganic]);
-  const aiInsights = useMemo(() => {
-    return generateInsightsFromData(products, dashboardRfmSegments, supplierTodMap, {
-      hasData: enabledModules.ecommerce && ecomm.hasData,
-      totalRevenue: ecomm.totalRevenue,
-      orderCount: ecomm.orderCount,
-      aov: ecomm.aov,
-      platformBreakdown: ecomm.platformBreakdown,
-    });
-  }, [products, dashboardRfmSegments, supplierTodMap, enabledModules.ecommerce, ecomm.hasData, ecomm.totalRevenue, ecomm.orderCount, ecomm.aov, ecomm.platformBreakdown]);
+  const { aiInsights } = useAiInsightsData();
 
   // Handle insight action clicks
   const handleInsightAction = (insight: { action: string; title: string }) => {
@@ -1772,7 +1764,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         >
           <CardHeader
             title="Campaigns"
-            subtitle="Τάση conversion value, δαπάνης και ROAS πλατφόρμας για την επιλεγμένη περίοδο."
+            subtitle="Συνολική διαφημιστική απόδοση Google Ads + Meta Ads — conversion value, δαπάνη και ROAS για την επιλεγμένη περίοδο."
             icon={<Megaphone size={18} className="text-[var(--nts-accent)]" />}
           />
 
