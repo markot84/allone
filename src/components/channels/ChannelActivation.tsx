@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { GrowthPlayPanel, usePlayContext } from './GrowthPlayPanel';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   PieChart as PieChartIcon,
@@ -234,6 +235,10 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   // movement vs procurement vs import) ώστε να calibrate το rationale.
   const { coverage: signalCoverage } = useProductSignals(products);
 
+  const playContext = usePlayContext();
+  const [playDismissed, setPlayDismissed] = useState(false);
+  // Reset dismiss when playContext changes (new navigation from AI insights)
+  useEffect(() => { if (playContext) setPlayDismissed(false); }, [playContext]);
   const [showExportModal, setShowExportModal] = useState(false);
   const [selectedFeed, setSelectedFeed] = useState<string | null>(null);
   const [previewFeed, setPreviewFeed] = useState<string | null>(null);
@@ -852,6 +857,19 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
             <span className="inline-flex items-center gap-1 whitespace-nowrap"><span className="h-2 w-2 shrink-0 rounded-full bg-[#9CA3AF]" />{progressSummary.pending} εκκρεμούν</span>
           </div>
         </div>
+      )}
+
+      {/* Growth Play Panel — εμφανίζεται όταν ο χρήστης έρθει από AI insight με play context */}
+      {playContext && !playDismissed && recommendedSegments.length > 0 && (
+        <GrowthPlayPanel
+          play={playContext}
+          onDismiss={() => setPlayDismissed(true)}
+          recommendedSegments={recommendedSegments}
+          rfmSegments={rfmSegments}
+          channelRecommendation={aiRecommendation}
+          strategyName={strategyName}
+          brandName={currentBrand?.name}
+        />
       )}
 
       {/* Recommended Segments — μόνο τα segments που ταιριάζουν στη συγκεκριμένη πολιτική */}
