@@ -27,7 +27,7 @@ import {
   ThreeBarsIcon,
   XIcon
 } from '@primer/octicons-react';
-import { Upload, UserPlus, Building2, Target, Euro, Truck, FileSpreadsheet, GitPullRequestArrow, Zap, BarChart3, ShoppingBag, Handshake, Users, Globe2 } from 'lucide-react';
+import { Upload, UserPlus, Building2, Target, Euro, Truck, FileSpreadsheet, GitPullRequestArrow, Zap, BarChart3, ShoppingBag, Handshake, Users, Globe2, HeartHandshake, MapPin, ClipboardList } from 'lucide-react';
 import { NotificationBell } from '../coordination/NotificationBell';
 
 const SIDEBAR_PIN_KEY = 'perf-plus-sidebar-pinned';
@@ -476,6 +476,9 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
         { id: 'finances', label: moduleConfig.finances.label, icon: Euro, group: 'execution' },
         { id: 'suppliers', label: moduleConfig.suppliers.label, icon: Truck, group: 'execution' },
         { id: 'procurement', label: moduleConfig.procurement.label, icon: FileSpreadsheet, group: 'execution' },
+        { id: 'hr', label: moduleConfig.hr.label, icon: HeartHandshake, group: 'coordination' },
+        { id: 'offers', label: moduleConfig.offers.label, icon: ClipboardList, group: 'coordination' },
+        { id: 'territories', label: moduleConfig.territories.label, icon: MapPin, group: 'coordination' },
         { id: 'coordination', label: moduleConfig.coordination.label, icon: GitPullRequestArrow, group: 'coordination' },
         { id: 'automation', label: moduleConfig.automation.label, icon: Zap, group: 'coordination' },
         { id: 'reports', label: moduleConfig.reports.label, icon: ReportIcon, group: 'coordination' },
@@ -486,8 +489,8 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
 
       const ordered = isB2B
         ? [
-            'brands', 'dashboard', 'accounts', 'products', 'suppliers', 'procurement', 'strategy', 'markets', 'channels', 'sales', 'campaigns',
-            'competitive', 'analytics', 'roi', 'finances', 'calendar', 'insights', 'coordination', 'automation', 'reports', 'data', 'invite', 'help',
+            'brands', 'dashboard', 'accounts', 'products', 'suppliers', 'procurement', 'strategy', 'markets', 'channels', 'sales', 'offers', 'campaigns',
+            'competitive', 'analytics', 'roi', 'finances', 'calendar', 'insights', 'hr', 'territories', 'coordination', 'automation', 'reports', 'data', 'invite', 'help',
           ]
         : [
             'brands', 'dashboard', 'roi', 'ecommerce', 'rfm', 'products', 'competitive', 'analytics', 'insights', 'strategy', 'channels',

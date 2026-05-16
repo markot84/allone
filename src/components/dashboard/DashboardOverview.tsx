@@ -48,6 +48,7 @@ import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import { useEcommerceFullHistoryMetrics } from '../../hooks/useEcommerceFullHistoryMetrics';
 import { useBusinessRevenueSummary } from '../../hooks/useBusinessRevenueSummary';
 import { useProcurement } from '../../hooks/useProcurement';
+import { useHREmployees } from '../../hooks/useHRData';
 import { useModules } from '../../hooks/useModules';
 import {
   calculateCampaignMetrics,
@@ -180,6 +181,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   const { productStats } = useProductAggregates();
   const { suppliers } = useSuppliers();
   const { tasks } = useTasks();
+  const { activeEmployees, totalMonthlyCost } = useHREmployees();
   const { totalOrganicRevenue, byMonth: organicByMonth, hasOrganicRevenue: hasOrganic, isLoading: organicLoading } = useOrganic();
   const { count: campaignsCount, campaigns, hasImported: hasCampaigns, isLoading: campaignsLoading } = useCampaigns();
   const { activeStrategy, getStrategyName } = useActiveStrategy();
@@ -1034,7 +1036,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       )}
 
       {isB2B && !dashboardOverviewLoading && (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
           <KPICard
             index={0}
             kpi={{
@@ -1074,6 +1076,16 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               tooltip: 'Συνδυαστική ένδειξη που αποτυπώνει assortment, προμηθευτές, οικονομική βάση, καμπάνιες και οργανωτική ετοιμότητα.',
             }}
             onClick={() => onSectionChange?.('markets')}
+          />
+          <KPICard
+            index={4}
+            kpi={{
+              label: 'Ομάδα (HR)',
+              value: activeEmployees.length > 0 ? `${activeEmployees.length}` : '—',
+              changeLabel: activeEmployees.length > 0 ? `€${totalMonthlyCost.toLocaleString('el-GR')}/μήνα` : 'προσθήκη εργαζομένων',
+              tooltip: 'Ενεργοί εργαζόμενοι και συνολικό μηνιαίο κόστος μισθοδοσίας. Λεπτομέρειες στη σελίδα HR & People.',
+            }}
+            onClick={() => onSectionChange?.('hr')}
           />
         </div>
       )}

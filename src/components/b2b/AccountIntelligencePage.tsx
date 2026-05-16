@@ -1,15 +1,20 @@
-import { BarChart3, Building2, FileSpreadsheet, Wallet } from 'lucide-react';
+import { useState } from 'react';
+import { BarChart3, Building2, FileSpreadsheet, Wallet, ShieldCheck, LayoutGrid } from 'lucide-react';
 import { Button, Card, KPICard, PageHeader } from '../common';
 import { useBrand } from '../../hooks/useBrand';
 import { useCampaigns } from '../../hooks/useCampaigns';
 import { useOrganic } from '../../hooks/useOrganic';
 import { useProductSource } from '../../hooks/useProductSource';
+import { AccountHealthTab } from './AccountHealthTab';
+
+type AccountTab = 'framework' | 'health';
 
 interface AccountIntelligencePageProps {
   onSectionChange?: (section: string, opts?: { hashQuery?: string }) => void;
 }
 
 export function AccountIntelligencePage({ onSectionChange }: AccountIntelligencePageProps = {}) {
+  const [activeTab, setActiveTab] = useState<AccountTab>('framework');
   const { currentBrand } = useBrand();
   const { count: productsCount } = useProductSource();
   const { count: campaignsCount } = useCampaigns();
@@ -35,6 +40,29 @@ export function AccountIntelligencePage({ onSectionChange }: AccountIntelligence
           </p>
         }
       />
+
+      {/* Tab switcher */}
+      <div className="flex gap-1 rounded-xl border border-[#eef0f3] bg-[#f9fafb] p-1 w-fit">
+        {([
+          { id: 'framework' as AccountTab, label: 'Framework', icon: LayoutGrid },
+          { id: 'health' as AccountTab, label: 'Account Health Score', icon: ShieldCheck },
+        ]).map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            onClick={() => setActiveTab(id)}
+            className={[
+              'flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all',
+              activeTab === id ? 'bg-white text-[var(--nts-charcoal)] shadow-sm' : 'text-[var(--nts-medium-gray)] hover:text-[var(--nts-charcoal)]',
+            ].join(' ')}
+          >
+            <Icon size={14} />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'health' && <AccountHealthTab onSectionChange={onSectionChange} />}
+      {activeTab === 'framework' && (<>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         <KPICard
@@ -172,6 +200,7 @@ export function AccountIntelligencePage({ onSectionChange }: AccountIntelligence
           </p>
         </div>
       </Card>
+      </>)}
     </div>
   );
 }

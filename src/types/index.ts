@@ -21,7 +21,10 @@ export type ModuleId =
   | 'automation'
   | 'sales'
   | 'accounts'
-  | 'markets';
+  | 'markets'
+  | 'hr'
+  | 'offers'
+  | 'territories';
 export type BrandModuleOverrides = Partial<Record<ModuleId, boolean>>;
 export type AppSectionId =
   | 'brands'
@@ -46,6 +49,9 @@ export type AppSectionId =
   | 'sales'
   | 'accounts'
   | 'markets'
+  | 'hr'
+  | 'offers'
+  | 'territories'
   | 'data'
   | 'data-products'
   | 'data-segments'
@@ -919,6 +925,90 @@ export interface EcomCustomer {
   tags?: string[];
   platform: 'shopify' | 'woocommerce';
   brandId: string;
+}
+
+// ── HR Module Types ──────────────────────────────────────────────────────────
+
+export type EmployeeStatus = 'active' | 'inactive' | 'on_leave';
+export type LeaveType = 'annual' | 'sick' | 'other';
+export type LeaveStatus = 'pending' | 'approved' | 'rejected';
+
+export interface HREmployee {
+  id: string;
+  brandId: string;
+  name: string;
+  role: string;
+  department: string;
+  monthlyCost: number;
+  startDate: string;
+  status: EmployeeStatus;
+  email?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface HRLeave {
+  id: string;
+  brandId: string;
+  employeeId: string;
+  employeeName: string;
+  type: LeaveType;
+  startDate: string;
+  endDate: string;
+  status: LeaveStatus;
+  notes?: string;
+  createdAt: string;
+}
+
+// ── Offer Builder Types ──────────────────────────────────────────────────────
+
+export type OfferStatus = 'draft' | 'sent' | 'accepted' | 'rejected';
+
+export interface OfferLineItem {
+  productId?: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  discount: number;
+  costPrice?: number;
+}
+
+export interface Offer {
+  id: string;
+  brandId: string;
+  accountName: string;
+  accountId?: string;
+  date: string;
+  validUntil?: string;
+  status: OfferStatus;
+  lines: OfferLineItem[];
+  notes?: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ── Territory / Rep Types ────────────────────────────────────────────────────
+
+export interface TerritoryRep {
+  id: string;
+  brandId: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  region: string;
+  targetAccounts: number;
+  createdAt: string;
+}
+
+export interface TerritoryAssignment {
+  accountId: string;
+  accountName: string;
+  repId: string;
+  repName: string;
+  region: string;
+  assignedAt: string;
 }
 
 export * from './budgetSuggestions';

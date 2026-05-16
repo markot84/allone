@@ -77,6 +77,9 @@ const SuppliersPage = lazyNamedWithRetry(() => import('./components/inventory/Su
 const CoordinationPage = lazyNamedWithRetry(() => import('./components/coordination'), 'CoordinationPage');
 const AutomationSettingsPage = lazyNamedWithRetry(() => import('./components/settings'), 'AutomationSettingsPage');
 const GA4Analytics = lazyNamedWithRetry(() => import('./components/analytics/GA4Analytics'), 'GA4Analytics');
+const HRPage = lazyNamedWithRetry(() => import('./components/hr/HRPage'), 'HRPage');
+const OfferBuilderPage = lazyNamedWithRetry(() => import('./components/offers/OfferBuilderPage'), 'OfferBuilderPage');
+const TerritoryPage = lazyNamedWithRetry(() => import('./components/territories/TerritoryPage'), 'TerritoryPage');
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -274,6 +277,12 @@ function AppMain() {
         return <ChannelActivation onSectionChange={handleSectionChange} />;
       case 'campaigns':
         return <CampaignsPage onSectionChange={handleSectionChange} />;
+      case 'hr':
+        return <HRPage />;
+      case 'offers':
+        return <OfferBuilderPage onSectionChange={handleSectionChange} />;
+      case 'territories':
+        return <TerritoryPage onSectionChange={handleSectionChange} />;
       case 'coordination':
         return <CoordinationPage />;
       case 'automation':

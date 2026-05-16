@@ -494,6 +494,48 @@ service cloud.firestore {
       allow update, delete: if request.auth != null && resource.data.createdBy == request.auth.uid;
     }
 
+    // B2B Accounts — brand-scoped subcollection (Account Health Score)
+    match /b2b_accounts/{brandId}/accounts/{accountId} {
+      allow read: if isBrandMember(brandId);
+      allow create, update: if isBrandMember(brandId);
+      allow delete: if isBrandMember(brandId);
+    }
+
+    // HR Employees — brand-scoped subcollection
+    match /hr_employees/{brandId}/employees/{employeeId} {
+      allow read: if isBrandMember(brandId);
+      allow create, update: if isBrandMember(brandId);
+      allow delete: if isBrandOwnerOrAdmin(brandId);
+    }
+
+    // HR Leaves — brand-scoped subcollection
+    match /hr_leaves/{brandId}/leaves/{leaveId} {
+      allow read: if isBrandMember(brandId);
+      allow create, update: if isBrandMember(brandId);
+      allow delete: if isBrandOwnerOrAdmin(brandId);
+    }
+
+    // Offers — brand-scoped
+    match /offers/{offerId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+
+    // Territory reps — brand-scoped subcollection
+    match /territories/{brandId}/reps/{repId} {
+      allow read: if isBrandMember(brandId);
+      allow create, update: if isBrandMember(brandId);
+      allow delete: if isBrandOwnerOrAdmin(brandId);
+    }
+
+    // Territory assignments — brand-scoped subcollection
+    match /territories/{brandId}/assignments/{assignmentId} {
+      allow read: if isBrandMember(brandId);
+      allow create, update: if isBrandMember(brandId);
+      allow delete: if isBrandOwnerOrAdmin(brandId);
+    }
+
     // Marketing interest leads — εγγραφή μόνο μέσω Cloud Functions · ανάγνωση super admin
     match /interest_leads/{leadId} {
       allow read: if isSuperAdmin();

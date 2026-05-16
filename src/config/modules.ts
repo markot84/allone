@@ -50,6 +50,9 @@ export const APP_SECTIONS: AppSectionId[] = [
   'sales',
   'accounts',
   'markets',
+  'hr',
+  'offers',
+  'territories',
 ];
 
 export const MODULE_DEFINITIONS: ModuleDefinition[] = [
@@ -75,6 +78,9 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   { id: 'sales', label: 'Sales Pipeline', b2bLabel: 'Sales Pipeline', b2bStatus: 'core', b2cStatus: 'hidden' },
   { id: 'accounts', label: 'Account Intelligence', b2bLabel: 'Account Intelligence', b2bStatus: 'core', b2cStatus: 'hidden' },
   { id: 'markets', label: 'Market Exploration', b2bLabel: 'Market Exploration', b2bStatus: 'core', b2cStatus: 'hidden' },
+  { id: 'hr', label: 'HR & People', b2bLabel: 'HR & People', b2bStatus: 'core', b2cStatus: 'hidden' },
+  { id: 'offers', label: 'Offer Builder', b2bLabel: 'Offer Builder', b2bStatus: 'core', b2cStatus: 'hidden' },
+  { id: 'territories', label: 'Territory & Reps', b2bLabel: 'Territory & Reps', b2bStatus: 'core', b2cStatus: 'hidden' },
 ];
 
 export const MODULE_DEFINITION_MAP = Object.fromEntries(
@@ -108,6 +114,9 @@ const SECTION_TO_MODULE: Partial<Record<AppSectionId, ModuleId>> = {
   sales: 'sales',
   accounts: 'accounts',
   markets: 'markets',
+  hr: 'hr',
+  offers: 'offers',
+  territories: 'territories',
 };
 
 export function getModuleIdForSection(section: string): ModuleId | null {
