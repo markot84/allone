@@ -288,7 +288,7 @@ function buildBriefingPrompt(data: BriefingData, periodLabel: string, updateCont
       ? data.revenue.storeRevenue
       : fallbackBlendedRevenue;
 
-  sections.push(`[BRAND] ${data.brandName}`);
+  sections.push(`[BRAND] "${data.brandName}" — ΚΑΝΟΝΑΣ: Όταν αναφέρεσαι στο brand στο κείμενο, γράψε "το brand ${data.brandName}" ή "για το brand ${data.brandName}". ΠΟΤΕ μην χρησιμοποιείς άρθρο γένους (ο/η/ο) πριν από το brand name.`);
   sections.push(`[ΠΕΡΙΟΔΟΣ ΑΝΑΛΥΣΗΣ] ${periodLabel} — όλα τα νούμερα αφορούν ΜΟΝΟ αυτήν την περίοδο.`);
 
   const evPerAdEuro =

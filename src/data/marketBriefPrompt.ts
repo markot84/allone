@@ -67,7 +67,7 @@ export function buildMarketBriefUserPrompt(ctx: MarketBriefPromptContext): strin
   const skus = ctx.sampleSkus.length ? ctx.sampleSkus.join(', ') : 'δεν δόθηκαν SKU';
   const strat = ctx.activeStrategyName ? `Ενεργή εμπορική στρατηγική (context): ${ctx.activeStrategyName}.` : 'Δεν υπάρχει ενεργή στρατηγική στο σύστημα.';
 
-  return `Brand: ${ctx.brandName} (${ctx.brandType === 'B2C' ? 'B2C' : 'B2B'})
+  return `Brand: "${ctx.brandName}" (${ctx.brandType === 'B2C' ? 'B2C' : 'B2B'}) — ΚΑΝΟΝΑΣ: Αναφέρου ως "το brand ${ctx.brandName}" — ποτέ με άρθρο γένους (ο/η) πριν από το brand name.
 Στοχευμένη χώρα: ${ctx.countryName} (${ctx.countryCode})
 ${ctx.verticalFocus ? `Εστίαση κλάδου/vertical (από χρήστη): ${ctx.verticalFocus}` : 'Χωρίς επιπλέον vertical override από χρήστη.'}
 

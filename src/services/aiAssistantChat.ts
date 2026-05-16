@@ -80,7 +80,7 @@ export function formatTenantPackForPrompt(pack: AssistantTenantPack): string {
     return lines.join('\n');
   }
 
-  lines.push(`Brand: ${pack.brandName ?? '(χωρίς όνομα)'} (id: ${pack.brandId})`);
+  lines.push(`Brand: "${pack.brandName ?? '(χωρίς όνομα)'}" (id: ${pack.brandId}) — ΚΑΝΟΝΑΣ: Αναφέρου στο brand ως "το brand ${pack.brandName}" — ποτέ με άρθρο γένους (ο/η) πριν από το brand name.`);
 
   lines.push(
     `E-commerce σύνοψη: hasData=${pack.ecommerce.hasData}, τζίρος≈€${Math.round(pack.ecommerce.totalRevenue)}, παραγγελίες=${pack.ecommerce.orderCount}, AOV≈€${pack.ecommerce.aov.toFixed(2)}, πλατφόρμες: ${pack.ecommerce.connectedPlatforms.join(', ') || '—'}`

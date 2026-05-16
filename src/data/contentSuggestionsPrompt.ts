@@ -112,11 +112,12 @@ export function buildContentSuggestionsUserPrompt(ctx: StrategyContext): string 
   const weightsStr = `Κερδοφορία: ${w.profit ?? 0}%, Απόθεμα: ${w.stock ?? 0}%, Στρατηγική προτεραιότητα: ${w.strategic ?? 0}%, Έσοδα: ${w.revenue ?? 0}%, Συνάφεια πελάτη: ${w.fit ?? 0}%`;
 
   const brandSection = ctx.brandName
-    ? `Επιχείρηση: ${ctx.brandName}${ctx.topCategories?.length ? `\nΚατηγορίες προϊόντων: ${ctx.topCategories.join(', ')}` : ''}${ctx.segmentNames?.length ? `\nΤμήματα πελατών: ${ctx.segmentNames.join(', ')}` : ''}\n\n`
+    ? `Brand (επωνυμία): "${ctx.brandName}"
+ΚΑΝΟΝΑΣ: Αναφέρου στο brand ΠΑΝΤΑ ως "το brand ${ctx.brandName}" ή "για το brand ${ctx.brandName}" — ΠΟΤΕ με άρθρο γένους (ο/η) πριν από το brand name.${ctx.topCategories?.length ? `\nΚατηγορίες προϊόντων: ${ctx.topCategories.join(', ')}` : ''}${ctx.segmentNames?.length ? `\nΤμήματα πελατών: ${ctx.segmentNames.join(', ')}` : ''}\n\n`
     : '';
 
   const personalizationNote = ctx.brandName
-    ? `\nΧρησιμοποίησε το brand name «${ctx.brandName}» στα titles, headlines και brief.${ctx.topCategories?.length ? ` Ανέφερε πραγματικές κατηγορίες (${ctx.topCategories.slice(0, 3).join(', ')}).` : ''}${ctx.segmentNames?.length ? ` Ανέφερε πραγματικά segments (${ctx.segmentNames.slice(0, 4).join(', ')}) στις κατευθύνσεις.` : ''}`
+    ? `\nΧρησιμοποίησε το brand name «${ctx.brandName}» στα titles, headlines και brief — ΠΑΝΤΑ ως "το brand ${ctx.brandName}" (ουδέτερο), ποτέ με άρθρο γένους.${ctx.topCategories?.length ? ` Ανέφερε πραγματικές κατηγορίες (${ctx.topCategories.slice(0, 3).join(', ')}).` : ''}${ctx.segmentNames?.length ? ` Ανέφερε πραγματικά segments (${ctx.segmentNames.slice(0, 4).join(', ')}) στις κατευθύνσεις.` : ''}`
     : '';
 
   return `${brandSection}Ενεργή στρατηγική: ${ctx.scenarioName}
