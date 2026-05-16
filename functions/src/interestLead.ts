@@ -20,7 +20,7 @@ function buildUserConfirmationText(fullName: string): string {
     '',
     'Η ομάδα μας θα εξετάσει τα στοιχεία που στείλατε και θα επανέλθει με το επόμενο βήμα για μια σύντομη, ουσιαστική συζήτηση γύρω από τις ανάγκες του e-shop σας.',
     '',
-    'Αν θέλετε να προσθέσετε κάτι στο αίτημά σας, μπορείτε να απαντήσετε απευθείας σε αυτό το email.',
+    'Αν θέλετε να μιλήσουμε άμεσα, μπορείτε να μας καλέσετε στο 2310.321625.',
     '',
     'Με εκτίμηση,',
     'Η ομάδα Performance+',
@@ -54,7 +54,7 @@ function buildUserConfirmationHtml(fullName: string): string {
                 <p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:#374151;">Λάβαμε το αίτημά σας για το <strong>Performance+</strong> και σας ευχαριστούμε για την επικοινωνία.</p>
                 <p style="margin:0 0 20px;font-size:15px;line-height:1.7;color:#374151;">Η ομάδα μας θα εξετάσει τα στοιχεία που στείλατε και θα επανέλθει με το επόμενο βήμα για μια σύντομη, ουσιαστική συζήτηση γύρω από τις ανάγκες του e-shop σας.</p>
                 <div style="margin:22px 0;padding:16px 18px;border-radius:16px;background:#fafafa;border:1px solid #eceff3;">
-                  <p style="margin:0;font-size:14px;line-height:1.6;color:#4b5563;"><strong style="color:#111827;">Σημείωση:</strong> Αν θέλετε να προσθέσετε κάτι στο αίτημά σας, μπορείτε να απαντήσετε απευθείας σε αυτό το email.</p>
+                  <p style="margin:0;font-size:14px;line-height:1.6;color:#4b5563;"><strong style="color:#111827;">Σημείωση:</strong> Αν θέλετε να μιλήσουμε άμεσα, μπορείτε να μας καλέσετε στο <a href="tel:+302310321625" style="color:#f97316;font-weight:600;text-decoration:none;">2310.321625</a>.</p>
                 </div>
                 <p style="margin:0;font-size:15px;line-height:1.7;color:#374151;">Με εκτίμηση,<br /><strong style="color:#111827;">Η ομάδα Performance+</strong></p>
               </td>

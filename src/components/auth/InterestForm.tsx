@@ -47,16 +47,11 @@ export function InterestForm() {
   const [company, setCompany] = useState('');
   const [improvementFocus, setImprovementFocus] = useState('');
   const [message, setMessage] = useState('');
-  const [consent, setConsent] = useState(false);
   const [hp, setHp] = useState('');
   const [sending, setSending] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!consent) {
-      toast.error('Για να συνεχίσετε, αποδεχτείτε την επεξεργασία των στοιχείων σας.');
-      return;
-    }
     setSending(true);
     trackMarketingFormEvent('interest_form_submit', {
       improvement_focus: improvementFocus || 'not_selected',
@@ -99,7 +94,6 @@ export function InterestForm() {
       setCompany('');
       setImprovementFocus('');
       setMessage('');
-      setConsent(false);
       setHp('');
     } catch (err) {
       const msg = err instanceof DOMException && err.name === 'AbortError'
@@ -258,22 +252,6 @@ export function InterestForm() {
               placeholder="Περιγράψτε τις ανάγκες σας (προαιρετικό)"
             />
           </div>
-
-          <label className="flex cursor-pointer items-start gap-3 text-sm text-[var(--nts-medium-gray)]">
-            <input
-              type="checkbox"
-              className="mt-1 h-4 w-4 shrink-0 rounded border-[#1f2328]/25 text-[var(--nts-accent)] focus:ring-[var(--nts-accent)]"
-              checked={consent}
-              onChange={(e) => setConsent(e.target.checked)}
-            />
-            <span>
-              Έχω ενημερωθεί ότι τα στοιχεία μου θα χρησιμοποιηθούν αποκλειστικά για επικοινωνία σχετικά με το Performance+, σύμφωνα με την{' '}
-              <a href="/privacy" className="text-[var(--nts-accent)] underline underline-offset-2">
-                Πολιτική Απορρήτου
-              </a>
-              . <span className="text-red-600">*</span>
-            </span>
-          </label>
 
           <Button type="submit" variant="primary" disabled={sending} className="w-full sm:w-auto">
             {sending ? (
