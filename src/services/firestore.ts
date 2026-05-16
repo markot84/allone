@@ -397,17 +397,17 @@ export const SegmentsService = {
 };
 
 export const SegmentCustomersService = {
-  async getForSegment(brandId: string, segmentId: string): Promise<{ customerId: string; email?: string; segmentName?: string; recency?: number; frequency?: number; monetary?: number; rfmScore?: string }[]> {
+  async getForSegment(brandId: string, segmentId: string): Promise<{ customerId: string; email?: string; name?: string; segmentName?: string; recency?: number; frequency?: number; monetary?: number; rfmScore?: string }[]> {
     const docs = await FirestoreService.getDocuments<{
       segmentId: string;
-      customers: { customerId: string; email?: string; segmentName?: string; recency?: number; frequency?: number; monetary?: number; rfmScore?: string }[];
+      customers: { customerId: string; email?: string; name?: string; segmentName?: string; recency?: number; frequency?: number; monetary?: number; rfmScore?: string }[];
     }>('segment_customers', [where('segmentId', '==', segmentId)], brandId, { forceServer: true });
     return docs.flatMap(d => d.customers || []);
   },
-  async getAllBySegment(brandId: string): Promise<Map<string, { customerId: string; email?: string; segmentName?: string; recency?: number; frequency?: number; monetary?: number; rfmScore?: string }[]>> {
+  async getAllBySegment(brandId: string): Promise<Map<string, { customerId: string; email?: string; name?: string; segmentName?: string; recency?: number; frequency?: number; monetary?: number; rfmScore?: string }[]>> {
     const docs = await FirestoreService.getDocuments<{
       segmentId: string;
-      customers: { customerId: string; email?: string; segmentName?: string; recency?: number; frequency?: number; monetary?: number; rfmScore?: string }[];
+      customers: { customerId: string; email?: string; name?: string; segmentName?: string; recency?: number; frequency?: number; monetary?: number; rfmScore?: string }[];
     }>('segment_customers', [], brandId, { forceServer: true });
     const map = new Map<string, typeof docs[0]['customers']>();
     for (const d of docs) {

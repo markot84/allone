@@ -31,6 +31,7 @@ type NormalizedOrder = {
   orderName: string;
   customerKey: string;
   customerEmail?: string;
+  customerName?: string;
   createdAt: string;
   total: number;
   status: string;
@@ -67,6 +68,7 @@ type AffinityAgg = {
 type CustomerAgg = {
   key: string;
   email?: string;
+  name?: string;
   firstOrder: string;
   lastOrder: string;
   orderCount: number;
@@ -533,6 +535,7 @@ function aggregateIdentifiedCustomersUntil(orders: NormalizedOrder[], asOf: Date
       byCustomer.set(order.customerKey, {
         key: order.customerKey,
         ...(order.customerEmail ? { email: order.customerEmail } : {}),
+        ...(order.customerName ? { name: order.customerName } : {}),
         firstOrder: order.createdAt,
         lastOrder: order.createdAt,
         orderCount: 1,
@@ -543,6 +546,7 @@ function aggregateIdentifiedCustomersUntil(orders: NormalizedOrder[], asOf: Date
     current.orderCount += 1;
     current.revenue += revenue;
     if (!current.email && order.customerEmail) current.email = order.customerEmail;
+    if (!current.name && order.customerName) current.name = order.customerName;
     if (order.createdAt < current.firstOrder) current.firstOrder = order.createdAt;
     if (order.createdAt > current.lastOrder) current.lastOrder = order.createdAt;
   }
@@ -783,6 +787,7 @@ function computeScope(orders: NormalizedOrder[], catalog: Map<string, CatalogDim
       byCustomer.set(key, {
         key,
         ...(order.customerEmail ? { email: order.customerEmail } : {}),
+        ...(order.customerName ? { name: order.customerName } : {}),
         firstOrder: order.createdAt,
         lastOrder: order.createdAt,
         orderCount: 1,
@@ -793,6 +798,7 @@ function computeScope(orders: NormalizedOrder[], catalog: Map<string, CatalogDim
       current.orderCount += 1;
       current.revenue += revenue;
       if (!current.email && order.customerEmail) current.email = order.customerEmail;
+      if (!current.name && order.customerName) current.name = order.customerName;
       if (order.createdAt < current.firstOrder) current.firstOrder = order.createdAt;
       if (order.createdAt > current.lastOrder) current.lastOrder = order.createdAt;
     }
@@ -877,6 +883,7 @@ function computeScope(orders: NormalizedOrder[], catalog: Map<string, CatalogDim
       group.customers.push({
         customerId: customer.key,
         ...(customer.email ? { email: customer.email } : {}),
+        ...(customer.name ? { name: customer.name } : {}),
         recency: recencyDays[index] ?? 0,
         frequency: customer.orderCount,
         monetary: Math.round(customer.revenue * 100) / 100,
@@ -1102,6 +1109,7 @@ function normalizeOrderDoc(doc: QueryDocumentSnapshot, rules: ReturnType<typeof 
     orderName: asString(row.orderName || row.incrementId || doc.id),
     customerKey: customerKey(row),
     ...(asString(row.customerEmail) ? { customerEmail: asString(row.customerEmail) } : {}),
+    ...(asString(row.customerName) ? { customerName: asString(row.customerName) } : {}),
     createdAt: asIsoDate(row.createdAt || row.created_at),
     total,
     status: asString(row.status),

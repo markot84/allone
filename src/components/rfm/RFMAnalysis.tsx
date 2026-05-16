@@ -1491,7 +1491,7 @@ function SegmentDetail({
 
           <div className="space-y-2">
             <Button variant="primary" className="w-full" icon={<Users size={16} />} onClick={() => onExportCustomers?.('csv')}>
-              Εξαγωγή ID πελατών (.csv)
+              Λίστα πελατών + email (.csv)
             </Button>
             <div className="flex gap-2">
               <Button variant="secondary" className="flex-1" icon={<FileSpreadsheet size={14} />} onClick={() => onExportActionPack?.('xlsx')}>

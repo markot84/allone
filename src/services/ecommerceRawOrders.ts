@@ -56,6 +56,8 @@ export type EcommerceRawOrder = {
   customerKey?: string;
   customerEmailHash?: string;
   customerEmail?: string;
+  /** Πλήρες όνομα πελάτη — για εξαγωγή λιστών audience. */
+  customerName?: string;
   /** Numeric Magento `store_id` (όταν sync όλων των store views) για εξαιρέσεις analytics. */
   magentoStoreId?: number;
   /** Hostname του public storefront (Magento)· για κανόνες «domain / eshop». */
@@ -329,6 +331,7 @@ function normalizeRawOrder(platform: string, row: Record<string, unknown>): Ecom
     ...(customerKey ? { customerKey } : {}),
     ...(emailHash ? { customerEmailHash: emailHash } : {}),
     ...(customerEmail ? { customerEmail } : {}),
+    ...(row.customerName ? { customerName: String(row.customerName) } : {}),
     ...(magentoStoreId != null ? { magentoStoreId } : {}),
     ...(orderStoreDomain ? { orderStoreDomain } : {}),
   };

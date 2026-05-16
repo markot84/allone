@@ -383,6 +383,10 @@ export async function fetchOpenCartData(brandId: string): Promise<{
         const emailIdentity = getCustomerEmailIdentity(
           o.email || o.customer_email || o.customerEmail || o.payment_email || o.billing_email
         );
+        const ocName = [
+          o.firstname || o.first_name || o.payment_firstname,
+          o.lastname || o.last_name || o.payment_lastname,
+        ].filter(Boolean).join(' ').trim();
         const productCount =
           lineItems.length > 0 ? lineItems.length : parseInt(String(o.products || '0'), 10) || 0;
         orderItems.push({
@@ -391,6 +395,7 @@ export async function fetchOpenCartData(brandId: string): Promise<{
             orderId: String(o.order_id || o.orderId || ''),
             ...(ocCid ? { customerId: ocCid } : {}),
             ...emailIdentity,
+            ...(ocName ? { customerName: ocName } : {}),
             createdAt: dateAdded,
             status: o.order_status || o.status || '',
             total: parseFloat(String(o.total || '0')),
