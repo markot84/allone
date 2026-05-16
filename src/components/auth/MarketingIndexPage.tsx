@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { ArrowLeft, ArrowRight, BarChart3, Boxes, Brain, CheckCircle2, ClipboardCheck, Database, ExternalLink, Gauge, HelpCircle, Layers3, Mail, Megaphone, PackageCheck, ShieldCheck, ShoppingBag, Store, TrendingUp, Upload } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BarChart3, Boxes, Brain, CheckCircle2, ClipboardCheck, Database, ExternalLink, Gauge, HelpCircle, Layers3, Mail, Megaphone, PackageCheck, Phone, ShieldCheck, ShoppingBag, Store, TrendingUp, Upload } from 'lucide-react';
 import { InterestForm } from './InterestForm';
 import { PerformancePlusLogo } from '../common';
 
@@ -449,13 +449,17 @@ export function MarketingIndexPage({
                     className={primaryCtaClass}
                   >
                     <HelpCircle size={16} />
-                    Ζητήστε demo
+                    Κλείστε παρουσίαση
                     <ArrowRight size={15} aria-hidden />
                   </a>
-                  <span className="inline-flex items-center gap-2 rounded-2xl border border-[#1f2328]/10 bg-white/70 px-4 py-3 text-sm font-semibold text-[var(--nts-charcoal)] shadow-[0_8px_20px_rgba(16,24,40,0.06)]">
-                    <ShieldCheck size={16} className="text-[var(--nts-accent)]" aria-hidden />
-                    Read-only connectors
-                  </span>
+                  <a
+                    href="tel:+302310321625"
+                    onClick={() => trackMarketingEvent('cta_click', { placement: 'hero_phone' })}
+                    className="inline-flex items-center gap-2 rounded-2xl border border-[#1f2328]/10 bg-white/70 px-4 py-3 text-sm font-semibold text-[var(--nts-charcoal)] shadow-[0_8px_20px_rgba(16,24,40,0.06)] transition hover:border-[var(--nts-accent)]/30 hover:shadow-[0_8px_20px_rgba(249,115,22,0.10)]"
+                  >
+                    <Phone size={16} className="text-[var(--nts-accent)]" aria-hidden />
+                    2310.321625
+                  </a>
                 </div>
               </div>
 
@@ -843,7 +847,7 @@ export function MarketingIndexPage({
                 className={`${primaryCtaClass} mt-5 w-full`}
               >
                 <HelpCircle size={16} />
-                Ζητήστε demo
+                Κλείστε παρουσίαση
                 <ArrowRight size={15} aria-hidden />
               </a>
             </div>
