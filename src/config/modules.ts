@@ -78,9 +78,9 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   { id: 'sales', label: 'Sales Pipeline', b2bLabel: 'Sales Pipeline', b2bStatus: 'core', b2cStatus: 'hidden' },
   { id: 'accounts', label: 'Account Intelligence', b2bLabel: 'Account Intelligence', b2bStatus: 'core', b2cStatus: 'hidden' },
   { id: 'markets', label: 'Market Exploration', b2bLabel: 'Market Exploration', b2bStatus: 'core', b2cStatus: 'hidden' },
-  { id: 'hr', label: 'HR & People', b2bLabel: 'HR & People', b2bStatus: 'core', b2cStatus: 'hidden' },
-  { id: 'offers', label: 'Offer Builder', b2bLabel: 'Offer Builder', b2bStatus: 'core', b2cStatus: 'hidden' },
-  { id: 'territories', label: 'Territory & Reps', b2bLabel: 'Territory & Reps', b2bStatus: 'core', b2cStatus: 'hidden' },
+  { id: 'hr', label: 'People & HR', b2bLabel: 'People & HR', b2bStatus: 'core', b2cStatus: 'hidden' },
+  { id: 'offers', label: 'Commercial Offers', b2bLabel: 'Commercial Offers', b2bStatus: 'core', b2cStatus: 'hidden' },
+  { id: 'territories', label: 'Sales Territory', b2bLabel: 'Sales Territory', b2bStatus: 'core', b2cStatus: 'hidden' },
 ];
 
 export const MODULE_DEFINITION_MAP = Object.fromEntries(

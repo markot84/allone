@@ -1080,7 +1080,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           <KPICard
             index={4}
             kpi={{
-              label: 'Ομάδα (HR)',
+              label: 'People & HR',
               value: activeEmployees.length > 0 ? `${activeEmployees.length}` : '—',
               changeLabel: activeEmployees.length > 0 ? `€${totalMonthlyCost.toLocaleString('el-GR')}/μήνα` : 'προσθήκη εργαζομένων',
               tooltip: 'Ενεργοί εργαζόμενοι και συνολικό μηνιαίο κόστος μισθοδοσίας. Λεπτομέρειες στη σελίδα HR & People.',

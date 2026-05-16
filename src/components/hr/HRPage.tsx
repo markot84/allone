@@ -42,7 +42,7 @@ export function HRPage({ totalRevenue }: HRPageProps = {}) {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">HR & People</h2>}
+        title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">People & HR</h2>}
         description={
           <p className="text-sm text-[#4A4A4A] sm:text-base">
             Διαχείριση ομάδας, μισθοδοσία, αδειοδότηση και παρακολούθηση απόδοσης.
