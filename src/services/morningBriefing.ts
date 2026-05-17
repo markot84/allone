@@ -28,6 +28,7 @@ export interface BriefingData {
   dataQuality: {
     ecommerceLatestPositiveRevenueDay: string | null;
     ecommerceDaysSinceLatestRevenue: number | null;
+    ecommerceAggregateSyncedHoursAgo: number | null;
     suspectedEcommerceSyncGap: boolean;
   };
   ga4: {
@@ -120,6 +121,7 @@ export function collectBriefingData(params: {
     dataFreshness?: {
       latestPositiveRevenueDay: string | null;
       daysSinceLatestRevenue: number | null;
+      aggregateSyncedHoursAgo?: number | null;
       suspectedSyncGap: boolean;
     };
   };
@@ -176,6 +178,7 @@ export function collectBriefingData(params: {
     dataQuality: {
       ecommerceLatestPositiveRevenueDay: ecommerce?.dataFreshness?.latestPositiveRevenueDay ?? null,
       ecommerceDaysSinceLatestRevenue: ecommerce?.dataFreshness?.daysSinceLatestRevenue ?? null,
+      ecommerceAggregateSyncedHoursAgo: ecommerce?.dataFreshness?.aggregateSyncedHoursAgo ?? null,
       suspectedEcommerceSyncGap: Boolean(ecommerce?.dataFreshness?.suspectedSyncGap),
     },
     ga4: ga4.hasData ? {
@@ -452,7 +455,7 @@ export function computeBriefingDataHash(data: BriefingData): string {
 
 const MAX_DAILY_GENERATIONS = 4;
 const MIN_REGEN_INTERVAL_MS = 60 * 60 * 1000; // 1 hour cooldown between auto-updates
-const BRIEFING_CACHE_VERSION = 2;
+const BRIEFING_CACHE_VERSION = 3;
 
 /** Calendar day in local timezone (YYYY-MM-DD) — consistent with «σήμερα» για τον χρήστη */
 export function getLocalDateKey(d = new Date()): string {

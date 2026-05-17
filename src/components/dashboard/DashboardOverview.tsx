@@ -77,6 +77,7 @@ import { MorningBriefing } from './MorningBriefing';
 import { StrategyBriefingQuickStrip } from '../coordination/StrategyBriefingQuickStrip';
 import { eachDateInclusiveLocal, computeMarketingOverheadForPeriod } from '../../utils/marketingCostPeriod';
 import { getCostingReal12mTurnover } from '../../utils/procurement12mTurnover';
+import { coerceToDate } from '../../utils/coerceDate';
 
 /** Ημερήσια σημεία στο chart· πάνω από αυτό → μηνιαία σύνοψη (αναγνώσιμο άξονα). */
 const REVENUE_CHART_MAX_DAILY_POINTS = 90;
@@ -140,6 +141,14 @@ function daysBetweenDateKeys(fromDate: string | null, toDate: string): number | 
   const to = new Date(`${toDate}T00:00:00Z`).getTime();
   if (!Number.isFinite(from) || !Number.isFinite(to)) return null;
   return Math.max(0, Math.round((to - from) / 86_400_000));
+}
+
+function hoursSince(value: unknown): number | null {
+  const d = coerceToDate(value);
+  if (!d) return null;
+  const diff = Date.now() - d.getTime();
+  if (!Number.isFinite(diff)) return null;
+  return Math.max(0, diff / 3_600_000);
 }
 
 /** Το Recharts Area χρειάζεται ≥2 σημεία· αν υπάρχει 1 μήνας μόνο, διπλασιάζουμε για ορατή γραμμή. */
@@ -594,10 +603,14 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     [ecommLatestPositiveRevenueDay, periodDates.toDate]
   );
 
+  const ecommAggregateSyncedHoursAgo = useMemo(() => hoursSince(ecomm.syncedAt), [ecomm.syncedAt]);
+  const ecommAggregateFresh = ecommAggregateSyncedHoursAgo !== null && ecommAggregateSyncedHoursAgo <= 36;
+
   const hasSuspectedEcommSyncGap =
     enabledModules.ecommerce &&
     ecomm.connectedPlatforms.length > 0 &&
     storeRevenueInPeriod > 0 &&
+    !ecommAggregateFresh &&
     (ecommDaysSinceLatestRevenue ?? 0) >= 2;
   const inventoryValueEstimate = productStats?.totalInventoryValue ?? 0;
   const openCommercialTasks = useMemo(
@@ -961,6 +974,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             dataFreshness: {
               latestPositiveRevenueDay: ecommLatestPositiveRevenueDay,
               daysSinceLatestRevenue: ecommDaysSinceLatestRevenue,
+              aggregateSyncedHoursAgo: ecommAggregateSyncedHoursAgo,
               suspectedSyncGap: hasSuspectedEcommSyncGap,
             },
           }}

@@ -37,6 +37,7 @@ interface MorningBriefingProps {
     dataFreshness?: {
       latestPositiveRevenueDay: string | null;
       daysSinceLatestRevenue: number | null;
+      aggregateSyncedHoursAgo?: number | null;
       suspectedSyncGap: boolean;
     };
   };
@@ -99,7 +100,7 @@ const SIGNIFICANCE_CHECK_INTERVAL = 15 * 60 * 1000; // 15 minutes
 const INIT_DELAY_MS = 800;
 
 function briefingStorageKey(brandId: string, period = 'current_month') {
-  return `perf-plus-ai-briefing-v2:${brandId}:${getLocalDateKey()}:${period}`;
+  return `perf-plus-ai-briefing-v3:${brandId}:${getLocalDateKey()}:${period}`;
 }
 
 function loadBriefingFromStorage(brandId: string, period = 'current_month'): BriefingResult | null {
