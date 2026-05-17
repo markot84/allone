@@ -420,7 +420,12 @@ export async function exportSegmentCustomerList(
   format: ExportFormat = 'csv',
 ): Promise<{ count: number }> {
   const importedCustomers = await SegmentCustomersService.getForSegment(brandId, segment.id);
-  const customers = importedCustomers.length > 0 ? importedCustomers : segment.customers ?? [];
+  const inMemoryCustomers = segment.customers ?? [];
+  // Prefer the larger dataset: in-memory order-computed customers (with emails) take priority
+  // over a smaller/stale set from Firestore (e.g. Cloud Function that caps at 200/segment).
+  const customers = importedCustomers.length > inMemoryCustomers.length
+    ? importedCustomers
+    : (inMemoryCustomers.length > 0 ? inMemoryCustomers : importedCustomers);
   if (customers.length === 0) throw new Error('Δεν υπάρχουν customer-level δεδομένα με email/customer id για αυτό το segment.');
 
   const date = new Date().toISOString().split('T')[0];
@@ -483,7 +488,10 @@ export async function exportAllSegmentCustomerLists(
     const allRows: (string | number)[][] = [headers];
     for (const seg of segments) {
       const importedCustomers = allCustomers.get(seg.id) || [];
-      const customers = importedCustomers.length > 0 ? importedCustomers : seg.customers ?? [];
+      const inMemoryCustomers = seg.customers ?? [];
+      const customers = importedCustomers.length > inMemoryCustomers.length
+        ? importedCustomers
+        : (inMemoryCustomers.length > 0 ? inMemoryCustomers : importedCustomers);
       totalCount += customers.length;
       for (const c of customers) {
         allRows.push([c.customerId, c.email || '', (c as { name?: string }).name || '', seg.name, c.recency ?? '', c.frequency ?? '', c.monetary ?? '', c.rfmScore || '']);
@@ -495,7 +503,10 @@ export async function exportAllSegmentCustomerLists(
     const wb = XLSX.utils.book_new();
     for (const seg of segments) {
       const importedCustomers = allCustomers.get(seg.id) || [];
-      const customers = importedCustomers.length > 0 ? importedCustomers : seg.customers ?? [];
+      const inMemoryCustomers = seg.customers ?? [];
+      const customers = importedCustomers.length > inMemoryCustomers.length
+        ? importedCustomers
+        : (inMemoryCustomers.length > 0 ? inMemoryCustomers : importedCustomers);
       if (customers.length === 0) continue;
       totalCount += customers.length;
       const rows = customers.map(c => [c.customerId, c.email || '', (c as { name?: string }).name || '', seg.name, c.recency ?? '', c.frequency ?? '', c.monetary ?? '', c.rfmScore || '']);
