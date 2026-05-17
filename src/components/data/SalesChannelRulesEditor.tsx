@@ -4,7 +4,7 @@ import { Card, Button, Spinner, useToast, Tooltip } from '../common';
 import { useBrand } from '../../hooks/useBrand';
 import { useRefreshAggregates } from '../../hooks/useAggregates';
 import { FirestoreService } from '../../services/firestore';
-import { doc, deleteField, updateDoc, Timestamp } from 'firebase/firestore';
+import { doc, deleteField, updateDoc, setDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { Plus, Trash2, Save, X } from 'lucide-react';
 import {
@@ -92,6 +92,13 @@ function draftMatchesPersistedRule(d: EditableRule, orig: EcommerceSalesChannelR
 }
 
 async function fetchRulesFromConnector(brandId: string): Promise<EcommerceSalesChannelRule[]> {
+  // Primary: read from dedicated connector_rules doc (smaller, faster)
+  const rulesDoc = await FirestoreService.getDocument<{ rules?: EcommerceSalesChannelRule[] }>('connector_rules', brandId);
+  if (rulesDoc?.rules && Array.isArray(rulesDoc.rules)) {
+    return rulesDoc.rules;
+  }
+
+  // Fallback: read from legacy connectors doc field + auto-migrate
   const conn = await FirestoreService.getDocument<{
     ecommerceSalesChannelRules?: EcommerceSalesChannelRule[];
     salesChannelRules?: EcommerceSalesChannelRule[];
@@ -101,7 +108,20 @@ async function fetchRulesFromConnector(brandId: string): Promise<EcommerceSalesC
   const a = Array.isArray(conn.ecommerceSalesChannelRules) ? conn.ecommerceSalesChannelRules : [];
   const b = Array.isArray(conn.salesChannelRules) ? conn.salesChannelRules : [];
   const c = Array.isArray(conn.magento?.salesChannelRules) ? conn.magento!.salesChannelRules! : [];
-  return [...a, ...b, ...c];
+  const merged = [...a, ...b, ...c];
+
+  // Auto-migrate: move rules to connector_rules and remove from connectors doc to reduce its size
+  if (merged.length > 0) {
+    try {
+      await setDoc(doc(db, 'connector_rules', brandId), { rules: merged, migratedAt: Timestamp.now() }, { merge: true });
+      await updateDoc(doc(db, 'connectors', brandId), {
+        ecommerceSalesChannelRules: deleteField(),
+        salesChannelRules: deleteField(),
+      });
+    } catch { /* ignore migration errors silently */ }
+  }
+
+  return merged;
 }
 
 /** Stable σύγκριση για sync από server χωρίς να σβήνουμε drafts που γράφει ο χρήστης. */
@@ -204,13 +224,16 @@ export function SalesChannelRulesEditor() {
     }
     setSaving(true);
     try {
-      const ref = doc(db, 'connectors', brandId);
-      await updateDoc(ref, {
-        ecommerceSalesChannelRules: cleaned,
-        salesChannelRules: deleteField(),
-        'magento.salesChannelRules': deleteField(),
-        updatedAt: Timestamp.now(),
-      });
+      // Write to dedicated connector_rules doc (keeps connectors doc lean)
+      await setDoc(doc(db, 'connector_rules', brandId), { rules: cleaned, updatedAt: Timestamp.now() }, { merge: true });
+      // Remove legacy fields from connectors doc (if they still exist)
+      try {
+        await updateDoc(doc(db, 'connectors', brandId), {
+          ecommerceSalesChannelRules: deleteField(),
+          salesChannelRules: deleteField(),
+          'magento.salesChannelRules': deleteField(),
+        });
+      } catch { /* connectors doc might not have these fields */ }
       lastServerSigApplied.current = persistedSignature(cleaned);
       userEditedDraftsRef.current = false;
       queryClient.invalidateQueries({ queryKey: ['salesChannelRules', brandId] });

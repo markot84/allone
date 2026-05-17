@@ -250,6 +250,11 @@ service cloud.firestore {
       allow read: if isBrandMember(brandId);
       allow write: if canManageBrandConnectors(brandId);
     }
+    // Connector rules: split from connectors doc to keep it lean
+    match /connector_rules/{brandId} {
+      allow read: if isBrandMember(brandId);
+      allow write: if canManageBrandConnectors(brandId);
+    }
     // Changelog: readable by all authenticated users, writable only by super admins
     match /changelog/{entryId} {
       allow read: if request.auth != null;

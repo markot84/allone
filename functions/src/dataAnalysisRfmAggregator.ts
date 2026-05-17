@@ -984,9 +984,10 @@ async function revenueModeAndRules(brandId: string): Promise<{
   rules: ReturnType<typeof mergeSalesChannelRulesForBrand>;
 }> {
   const firestore = assertDb();
-  const [brandSnap, connectorsSnap] = await Promise.all([
+  const [brandSnap, connectorsSnap, rulesSnap] = await Promise.all([
     firestore.doc(`brands/${brandId}`).get(),
     firestore.doc(`connectors/${brandId}`).get(),
+    firestore.doc(`connector_rules/${brandId}`).get(),
   ]);
   const brandMode = asString(brandSnap.data()?.revenueSourceMode);
   const mode: RevenueSourceMode = brandMode === 'eshop_all' || brandMode === 'erp' ? brandMode : 'eshop_classified';
@@ -1003,15 +1004,18 @@ async function revenueModeAndRules(brandId: string): Promise<{
     hasConnector('epsilon_net') ||
     hasConnector('epsilonNet') ||
     hasConnector('entersoft');
-  const rules = mergeSalesChannelRulesForBrand(
-    [
-      connectors.salesChannelRules,
-      (connectors.magento as Record<string, unknown> | undefined)?.salesChannelRules,
-      (connectors.shopify as Record<string, unknown> | undefined)?.salesChannelRules,
-      (connectors.woocommerce as Record<string, unknown> | undefined)?.salesChannelRules,
-    ],
-    mode
-  );
+  // Rules: prefer connector_rules doc (post-migration), fallback to legacy connectors fields
+  const rulesData = rulesSnap.data() || {};
+  const rulesSource = Array.isArray(rulesData.rules) && rulesData.rules.length > 0
+    ? [rulesData.rules]
+    : [
+        connectors.ecommerceSalesChannelRules,
+        connectors.salesChannelRules,
+        (connectors.magento as Record<string, unknown> | undefined)?.salesChannelRules,
+        (connectors.shopify as Record<string, unknown> | undefined)?.salesChannelRules,
+        (connectors.woocommerce as Record<string, unknown> | undefined)?.salesChannelRules,
+      ];
+  const rules = mergeSalesChannelRulesForBrand(rulesSource, mode);
   return { mode, hasErpConnector, rules };
 }
 

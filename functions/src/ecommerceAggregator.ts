@@ -515,12 +515,14 @@ export async function computeBusinessRevenueSummary(brandId: string): Promise<vo
 export async function computeEcommerceSummary(brandId: string): Promise<void> {
   const db = getDb();
 
-  const [connDoc, brandDoc] = await Promise.all([
+  const [connDoc, brandDoc, rulesDoc] = await Promise.all([
     db.doc(`connectors/${brandId}`).get(),
     db.doc(`brands/${brandId}`).get(),
+    db.doc(`connector_rules/${brandId}`).get(),
   ]);
   const connData = connDoc.data() || {};
   const brandData = brandDoc.data() || {};
+  const rulesData = rulesDoc.data() || {};
 
   const revenueSourceMode: 'eshop_classified' | 'eshop_all' | 'erp' =
     brandData.revenueSourceMode === 'eshop_all' ||
@@ -545,14 +547,11 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
   ).flat();
   const revenueSummaryPlatforms = [...stockPlatforms];
 
-  const salesChannelRules = mergeSalesChannelRulesForBrand(
-    [
-      connPlain.ecommerceSalesChannelRules,
-      connPlain.salesChannelRules,
-      (connPlain.magento as Record<string, unknown> | undefined)?.salesChannelRules,
-    ],
-    revenueSourceMode
-  );
+  // Rules: prefer connector_rules doc (post-migration), fallback to legacy connectors doc fields
+  const rulesSource = Array.isArray(rulesData.rules) && rulesData.rules.length > 0
+    ? [rulesData.rules]
+    : [connPlain.ecommerceSalesChannelRules, connPlain.salesChannelRules, (connPlain.magento as Record<string, unknown> | undefined)?.salesChannelRules];
+  const salesChannelRules = mergeSalesChannelRulesForBrand(rulesSource, revenueSourceMode);
 
   // Demo cleanup + classification (μόνο e-shop παραγγελίες)
   const visibleOrders: OrderRow[] = [];

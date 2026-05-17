@@ -1931,12 +1931,12 @@ export function ConnectorsPanel() {
   };
 
   // Connectors doc — cached, refetch only after sync/connect/disconnect
-  const { data: connectorsData, isPending: loading, refetch: refetchConnectors } = useQuery({
+  const { data: connectorsData, isPending: loading, isError: connectorsLoadError, refetch: refetchConnectors } = useQuery({
     // Include Firebase uid so switching app users never shows another user's cached connector doc (same brand).
     queryKey: ['connectorsPanel', brandId, user?.uid ?? ''],
     queryFn: async () => {
       if (!brandId) return null;
-      const doc = await FirestoreService.getDocumentWithTimeout<Record<string, any>>('connectors', brandId, 10000);
+      const doc = await FirestoreService.getDocumentWithTimeout<Record<string, any>>('connectors', brandId, 25000);
       return doc;
     },
     enabled: !!brandId && !!user?.uid,
@@ -1945,7 +1945,8 @@ export function ConnectorsPanel() {
     refetchOnMount: false,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
-    retry: 1,
+    retry: 2,
+    retryDelay: 3000,
   });
 
   const states: Record<string, ConnectorState> = connectorsData
@@ -2611,6 +2612,18 @@ export function ConnectorsPanel() {
               ) : undefined
             }
           />
+
+          {connectorsLoadError && (
+            <div className="mb-5 flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+              <span>Δεν ήταν δυνατή η φόρτωση των connector. Έλεγξε τη σύνδεσή σου και δοκίμασε ξανά.</span>
+              <button
+                onClick={() => refetchConnectors()}
+                className="shrink-0 rounded-lg bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-800 hover:bg-red-200 transition-colors"
+              >
+                Ανανέωση
+              </button>
+            </div>
+          )}
 
           {canManageConnectors && !loading && (
             <div className="mb-6 space-y-6">

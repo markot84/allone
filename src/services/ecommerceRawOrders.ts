@@ -342,6 +342,12 @@ async function fetchSalesChannelRulesForOrders(
   revenueSourceMode: 'eshop_classified' | 'eshop_all' | 'erp'
 ): Promise<EcommerceSalesChannelRule[]> {
   try {
+    // Try dedicated connector_rules doc first (post-migration)
+    const rulesDoc = await FirestoreService.getDocument<{ rules?: unknown }>('connector_rules', brandId);
+    if (rulesDoc?.rules && Array.isArray(rulesDoc.rules)) {
+      return mergeSalesChannelRulesForBrand([rulesDoc.rules], revenueSourceMode);
+    }
+    // Fallback: read legacy fields from connectors doc
     const connector = await FirestoreService.getDocument<Record<string, unknown>>('connectors', brandId);
     if (!connector) {
       return mergeSalesChannelRulesForBrand([], revenueSourceMode);

@@ -1021,16 +1021,17 @@ export async function fetchMagentoData(brandId: string): Promise<{
     await fetchAndSaveMagentoPopularSearchTerms(db, brandId, restApiBase, storeCode, headers, storeId);
 
     // ── Products ───────────────────────────────────────────────────────
+    // Streaming write: γράφουμε κάθε σελίδα στο Firestore αμέσως (αποφεύγουμε OOM για μεγάλα catalogs).
     // Δεν περιορίζουμε με `fields` ώστε να πάρουμε media_gallery_entries, custom_attributes,
     // extension_attributes (configurable links), category_links — απαιτούνται για Ads Feed.
-    const prodItems: { id: string; data: Record<string, unknown> }[] = [];
     let prodPage = 1;
     let prodMore = true;
     let productsOk = true;
     let productsBackfillIncomplete = false;
     let lastProductUpdatedAt: Date | null = null;
+    let prodImportedCount = 0;
 
-    // SKU lookup map (id → sku) ώστε για configurable parents να γράψουμε `parentSkus` στα variants.
+    // SKU lookup map (id → sku) — lightweight, only IDs+SKUs kept in memory for variant resolution.
     const idToSku = new Map<string, string>();
     const parentLinks: { childId: string; parentId: string }[] = [];
     const categoryMap = await fetchMagentoCategoryMap(restApiBase, storeCode, headers);
@@ -1060,6 +1061,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
       const body = await res.json();
       const products: any[] = body.items || [];
       const totalCount: number = body.total_count || 0;
+      const pageItems: { id: string; data: Record<string, unknown> }[] = [];
 
       for (const p of products) {
         const customAttrs = p.custom_attributes || [];
@@ -1114,7 +1116,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
           lastProductUpdatedAt = productUpdated;
         }
 
-        prodItems.push({
+        pageItems.push({
           id: `mag_${p.id}`,
           data: {
             productId: String(p.id || ''),
@@ -1155,6 +1157,19 @@ export async function fetchMagentoData(brandId: string): Promise<{
         });
       }
 
+      // Streaming write: commit this page immediately to avoid memory accumulation.
+      if (pageItems.length > 0) {
+        for (let i = 0; i < pageItems.length; i += 500) {
+          const batch = db.batch();
+          const chunk = pageItems.slice(i, i + 500);
+          for (const item of chunk) {
+            batch.set(db.collection('magento_products').doc(item.id), { ...item.data, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+          }
+          await batch.commit();
+        }
+        prodImportedCount += pageItems.length;
+      }
+
       prodMore = prodPage * 100 < totalCount;
       prodPage++;
       // Backfill cap: αν το catalog είναι μεγαλύτερο, συνεχίζει στο επόμενο sync.
@@ -1170,35 +1185,31 @@ export async function fetchMagentoData(brandId: string): Promise<{
     }
 
     // Συμπλήρωση parentSku στα child variants (ώστε στο Ads Feed → item_group_id = parent SKU).
+    // Γίνεται με targeted updates αφού έχουν γραφεί όλα τα products (streaming mode).
     if (parentLinks.length > 0) {
       const childToParents = new Map<string, Set<string>>();
       for (const { childId, parentId } of parentLinks) {
         if (!childToParents.has(childId)) childToParents.set(childId, new Set());
         childToParents.get(childId)!.add(parentId);
       }
-      for (const item of prodItems) {
-        const childId = String((item.data as any).productId || '');
-        const parents = childToParents.get(childId);
-        if (!parents || parents.size === 0) continue;
-        const parentSkus = [...parents].map((pid) => idToSku.get(pid)).filter((v): v is string => Boolean(v));
-        if (parentSkus.length > 0) {
-          (item.data as Record<string, unknown>).parentSkus = parentSkus;
-          (item.data as Record<string, unknown>).itemGroupId = parentSkus[0];
-        }
-      }
-    }
-
-    if (prodItems.length > 0) {
-      for (let i = 0; i < prodItems.length; i += 500) {
+      const childEntries = [...childToParents.entries()];
+      for (let i = 0; i < childEntries.length; i += 500) {
         const batch = db.batch();
-        const chunk = prodItems.slice(i, i + 500);
-        for (const item of chunk) {
-          batch.set(db.collection('magento_products').doc(item.id), { ...item.data, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        for (const [childId, parentIds] of childEntries.slice(i, i + 500)) {
+          const parentSkus = [...parentIds].map((pid) => idToSku.get(pid)).filter((v): v is string => Boolean(v));
+          if (parentSkus.length === 0) continue;
+          batch.update(db.collection('magento_products').doc(`mag_${childId}`), {
+            parentSkus,
+            itemGroupId: parentSkus[0],
+          });
         }
         await batch.commit();
       }
-      totalImported += prodItems.length;
-      logger.info(`[Magento] Products: ${prodItems.length} imported for brand ${brandId}`);
+    }
+
+    if (prodImportedCount > 0) {
+      totalImported += prodImportedCount;
+      logger.info(`[Magento] Products: ${prodImportedCount} imported for brand ${brandId}`);
     }
 
     const connectorPatch: Record<string, unknown> = {};
@@ -1243,7 +1254,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
       productsBackfillIncomplete,
       imported: totalImported,
       orders: orderItems.length,
-      products: prodItems.length,
+      products: prodImportedCount,
       failed: errors.length,
       errors: errors.slice(0, 20),
       createdAt: FieldValue.serverTimestamp(),

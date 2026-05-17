@@ -1965,7 +1965,7 @@ export const scheduledSyncMarketing = onSchedule(
 
 /** E-shop imports + ecommerce_summary — 05:20 */
 export const scheduledSyncEcommerce = onSchedule(
-  { ...nightlyConnectorScheduleBase, schedule: 'every day 05:20' },
+  { ...nightlyConnectorScheduleBase, schedule: 'every day 05:20', memory: '2GiB' as const },
   async () => runNightlyConnectorWaveJob('ecommerce', 'scheduledSyncEcommerce')
 );
 
