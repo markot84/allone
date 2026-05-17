@@ -1870,7 +1870,8 @@ async function runNightlyConnectorWaveJob(wave: NightlyConnectorWave, jobKey: Ni
     const connectorsSnap = await db.collection('connectors').get();
     let failedConnectorBrands = 0;
 
-    await runPool(connectorsSnap.docs, NIGHTLY_CONNECTOR_SYNC_CONCURRENCY, async (docSnap) => {
+    const concurrency = wave === 'ecommerce' ? 1 : NIGHTLY_CONNECTOR_SYNC_CONCURRENCY;
+    await runPool(connectorsSnap.docs, concurrency, async (docSnap) => {
       const brandId = docSnap.id;
       const data = docSnap.data();
       try {

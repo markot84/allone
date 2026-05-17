@@ -25,6 +25,11 @@ export interface BriefingData {
     roas: number;
     campaignCount: number;
   };
+  dataQuality: {
+    ecommerceLatestPositiveRevenueDay: string | null;
+    ecommerceDaysSinceLatestRevenue: number | null;
+    suspectedEcommerceSyncGap: boolean;
+  };
   ga4: {
     sessions: number;
     users: number;
@@ -86,6 +91,7 @@ export interface CachedBriefing extends BriefingResult {
   _cachedAt: number;
   _genCount: number;
   _snapshot: MetricsSnapshot;
+  _schemaVersion?: number;
 }
 
 // ── Data Collector ───────────────────────────────────────────────────────────
@@ -111,6 +117,11 @@ export function collectBriefingData(params: {
     aov: number;
     connectedPlatforms: string[];
     topPlatform?: string;
+    dataFreshness?: {
+      latestPositiveRevenueDay: string | null;
+      daysSinceLatestRevenue: number | null;
+      suspectedSyncGap: boolean;
+    };
   };
 }): BriefingData {
   const { products, campaigns, segments, totalOrganicRevenue, ga4, alerts, brandName, supplierTodMap, ecommerce } = params;
@@ -161,6 +172,11 @@ export function collectBriefingData(params: {
       totalSpend: metrics.totalSpend,
       roas: metrics.roas,
       campaignCount: campaigns.length,
+    },
+    dataQuality: {
+      ecommerceLatestPositiveRevenueDay: ecommerce?.dataFreshness?.latestPositiveRevenueDay ?? null,
+      ecommerceDaysSinceLatestRevenue: ecommerce?.dataFreshness?.daysSinceLatestRevenue ?? null,
+      suspectedEcommerceSyncGap: Boolean(ecommerce?.dataFreshness?.suspectedSyncGap),
     },
     ga4: ga4.hasData ? {
       sessions: ga4.totals.sessions,
@@ -436,6 +452,7 @@ export function computeBriefingDataHash(data: BriefingData): string {
 
 const MAX_DAILY_GENERATIONS = 4;
 const MIN_REGEN_INTERVAL_MS = 60 * 60 * 1000; // 1 hour cooldown between auto-updates
+const BRIEFING_CACHE_VERSION = 2;
 
 /** Calendar day in local timezone (YYYY-MM-DD) — consistent with «σήμερα» για τον χρήστη */
 export function getLocalDateKey(d = new Date()): string {
@@ -462,7 +479,11 @@ export async function getCachedBriefing(brandId: string, period = 'current_month
     const docId = `${localKey}:${period}`;
     const refLocal = doc(db, 'brands', brandId, 'briefings', docId);
     const snap = await getDoc(refLocal);
-    if (snap.exists()) return snap.data() as CachedBriefing;
+    if (snap.exists()) {
+      const cached = snap.data() as CachedBriefing;
+      if (cached._schemaVersion !== BRIEFING_CACHE_VERSION) return null;
+      return cached;
+    }
     return null;
   } catch {
     return null;
@@ -485,9 +506,38 @@ async function saveBriefingCache(
       _cachedAt: Date.now(),
       _genCount: prevGenCount + 1,
       _snapshot: snapshot,
+      _schemaVersion: BRIEFING_CACHE_VERSION,
     };
     await setDoc(ref, cached);
   } catch { /* non-critical */ }
+}
+
+function buildDataFlowAlertBriefing(
+  data: BriefingData,
+  dataHash: string,
+  updateReason?: string,
+): BriefingResult {
+  const latest = data.dataQuality.ecommerceLatestPositiveRevenueDay;
+  const days = data.dataQuality.ecommerceDaysSinceLatestRevenue;
+  const staleText = latest && days !== null
+    ? `τελευταία ημέρα με τζίρο ${latest}, δηλαδή ${days} ημέρες πριν το τέλος της περιόδου`
+    : 'δεν υπάρχει πρόσφατη ημέρα με θετικό τζίρο στην επιλεγμένη περίοδο';
+
+  return {
+    narrative:
+      `Ο πίνακας δείχνει τζίρο e-shop ${formatCurrency(data.revenue.storeRevenue)} και ${formatNumber(data.revenue.orderCount)} παραγγελίες για την περίοδο, αλλά η ημερήσια ροή δεδομένων φαίνεται κομμένη: ${staleText}. ` +
+      `Δεν το αντιμετωπίζουμε ως μηδενική εμπορική δραστηριότητα για το brand ${data.brandName}, αλλά ως θέμα αξιοπιστίας sync/import που πρέπει να ελεγχθεί πριν βγουν εμπορικά συμπεράσματα. ` +
+      `Προτεραιότητα είναι η αποκατάσταση του connector και η επιβεβαίωση ότι οι τελευταίες παραγγελίες περνούν στο Performance+.`,
+    actions: [
+      'Ελέγξτε άμεσα το τελευταίο sync του e-shop connector.',
+      'Επιβεβαιώστε ότι τα credentials/API token παραμένουν ενεργά.',
+      'Μετά την αποκατάσταση, επανελέγξτε Revenue Performance και AOV.',
+    ],
+    generatedAt: new Date().toISOString(),
+    dataHash,
+    urgency: updateReason ? 'updated' : 'normal',
+    updateReason: updateReason ?? 'Έλεγχος ροής δεδομένων',
+  };
 }
 
 // ── Main: Generate Briefing ──────────────────────────────────────────────────
@@ -504,6 +554,12 @@ export async function generateMorningBriefing(
   const existing = await getCachedBriefing(brandId, period);
 
   const prevGenCount = existing?._genCount ?? 0;
+
+  if (data.dataQuality.suspectedEcommerceSyncGap) {
+    const result = buildDataFlowAlertBriefing(data, dataHash, options.updateReason);
+    await saveBriefingCache(brandId, result, snapshot, prevGenCount, period);
+    return result;
+  }
 
   const userPrompt = buildBriefingPrompt(data, periodLabel, options.updateReason);
 

@@ -34,6 +34,11 @@ interface MorningBriefingProps {
     aov: number;
     connectedPlatforms: string[];
     platformBreakdown: { platform: string; revenue: number; orders: number }[];
+    dataFreshness?: {
+      latestPositiveRevenueDay: string | null;
+      daysSinceLatestRevenue: number | null;
+      suspectedSyncGap: boolean;
+    };
   };
   onSectionChange?: (section: string, opts?: { hashQuery?: string }) => void;
   hasAnyData: boolean;
@@ -94,7 +99,7 @@ const SIGNIFICANCE_CHECK_INTERVAL = 15 * 60 * 1000; // 15 minutes
 const INIT_DELAY_MS = 800;
 
 function briefingStorageKey(brandId: string, period = 'current_month') {
-  return `perf-plus-ai-briefing-v1:${brandId}:${getLocalDateKey()}:${period}`;
+  return `perf-plus-ai-briefing-v2:${brandId}:${getLocalDateKey()}:${period}`;
 }
 
 function loadBriefingFromStorage(brandId: string, period = 'current_month'): BriefingResult | null {
@@ -164,6 +169,7 @@ export function MorningBriefing(props: MorningBriefingProps) {
           aov: props.ecommerce.aov,
           connectedPlatforms: props.ecommerce.connectedPlatforms,
           topPlatform: props.ecommerce.platformBreakdown?.[0]?.platform,
+          dataFreshness: props.ecommerce.dataFreshness,
         }
       : undefined,
   }), [props.products, props.campaigns, props.segments, props.totalOrganicRevenue, props.ga4, props.alerts, brandName, props.supplierTodMap, props.ecommerce]);

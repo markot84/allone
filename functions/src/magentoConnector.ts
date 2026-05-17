@@ -848,7 +848,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
 
   try {
     // ── Orders ─────────────────────────────────────────────────────────
-    const orderItems: { id: string; data: Record<string, unknown> }[] = [];
+    let orderImportedCount = 0;
     let currentPage = 1;
     let hasMore = true;
     let ordersOk = true;
@@ -889,6 +889,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
       const body = await res.json();
       const orders: any[] = body.items || [];
       const totalCount: number = body.total_count || 0;
+      const pageOrderItems: { id: string; data: Record<string, unknown> }[] = [];
 
       for (const o of orders) {
         const paymentAdditionalInfo = Array.isArray(o.payment?.additional_information)
@@ -911,7 +912,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
         if (created && !Number.isNaN(created.getTime()) && (!lastOrderCreatedAt || created > lastOrderCreatedAt)) {
           lastOrderCreatedAt = created;
         }
-        orderItems.push({
+        pageOrderItems.push({
           id: `mag_${o.entity_id}`,
           data: {
             orderId: String(o.entity_id || ''),
@@ -981,6 +982,19 @@ export async function fetchMagentoData(brandId: string): Promise<{
         });
       }
 
+      // Streaming write: commit each order page immediately to avoid OOM on large Magento histories.
+      if (pageOrderItems.length > 0) {
+        for (let i = 0; i < pageOrderItems.length; i += 500) {
+          const batch = db.batch();
+          const chunk = pageOrderItems.slice(i, i + 500);
+          for (const item of chunk) {
+            batch.set(db.collection('magento_orders').doc(item.id), { ...item.data, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+          }
+          await batch.commit();
+        }
+        orderImportedCount += pageOrderItems.length;
+      }
+
       hasMore = currentPage * 100 < totalCount;
       currentPage++;
       /**
@@ -1002,17 +1016,9 @@ export async function fetchMagentoData(brandId: string): Promise<{
       }
     }
 
-    if (orderItems.length > 0) {
-      for (let i = 0; i < orderItems.length; i += 500) {
-        const batch = db.batch();
-        const chunk = orderItems.slice(i, i + 500);
-        for (const item of chunk) {
-          batch.set(db.collection('magento_orders').doc(item.id), { ...item.data, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-        }
-        await batch.commit();
-      }
-      totalImported += orderItems.length;
-      logger.info(`[Magento] Orders: ${orderItems.length} imported for brand ${brandId}`);
+    if (orderImportedCount > 0) {
+      totalImported += orderImportedCount;
+      logger.info(`[Magento] Orders: ${orderImportedCount} imported for brand ${brandId}`);
     }
 
     // Real Magento search queries (popularity from /V1/searchTerms — Commerce/extension only).
@@ -1253,7 +1259,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
       ordersBackfillIncomplete,
       productsBackfillIncomplete,
       imported: totalImported,
-      orders: orderItems.length,
+      orders: orderImportedCount,
       products: prodImportedCount,
       failed: errors.length,
       errors: errors.slice(0, 20),

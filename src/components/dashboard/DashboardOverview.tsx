@@ -132,6 +132,16 @@ function latestPositiveRevenueDayInPeriod(
   return latest;
 }
 
+function daysBetweenDateKeys(fromDate: string | null, toDate: string): number | null {
+  if (!fromDate || !/^\d{4}-\d{2}-\d{2}$/.test(fromDate) || !/^\d{4}-\d{2}-\d{2}$/.test(toDate)) {
+    return null;
+  }
+  const from = new Date(`${fromDate}T00:00:00Z`).getTime();
+  const to = new Date(`${toDate}T00:00:00Z`).getTime();
+  if (!Number.isFinite(from) || !Number.isFinite(to)) return null;
+  return Math.max(0, Math.round((to - from) / 86_400_000));
+}
+
 /** Το Recharts Area χρειάζεται ≥2 σημεία· αν υπάρχει 1 μήνας μόνο, διπλασιάζουμε για ορατή γραμμή. */
 function padSparklineForChart(values: number[]): number[] {
   if (values.length === 0) return [];
@@ -573,6 +583,22 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       periodDates.toDate,
     ]
   );
+
+  const ecommLatestPositiveRevenueDay = useMemo(
+    () => latestPositiveRevenueDayInPeriod(ecommRevenueByDayRecord, periodDates.fromDate, periodDates.toDate),
+    [ecommRevenueByDayRecord, periodDates.fromDate, periodDates.toDate]
+  );
+
+  const ecommDaysSinceLatestRevenue = useMemo(
+    () => daysBetweenDateKeys(ecommLatestPositiveRevenueDay, periodDates.toDate),
+    [ecommLatestPositiveRevenueDay, periodDates.toDate]
+  );
+
+  const hasSuspectedEcommSyncGap =
+    enabledModules.ecommerce &&
+    ecomm.connectedPlatforms.length > 0 &&
+    storeRevenueInPeriod > 0 &&
+    (ecommDaysSinceLatestRevenue ?? 0) >= 2;
   const inventoryValueEstimate = productStats?.totalInventoryValue ?? 0;
   const openCommercialTasks = useMemo(
     () => tasks.filter((task) => task.status === 'pending' || task.status === 'in_progress').length,
@@ -932,6 +958,11 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             aov: ordersInPeriod > 0 ? storeRevenueInPeriod / ordersInPeriod : ecomm.aov,
             connectedPlatforms: ecomm.connectedPlatforms,
             platformBreakdown: ecomm.platformBreakdown,
+            dataFreshness: {
+              latestPositiveRevenueDay: ecommLatestPositiveRevenueDay,
+              daysSinceLatestRevenue: ecommDaysSinceLatestRevenue,
+              suspectedSyncGap: hasSuspectedEcommSyncGap,
+            },
           }}
           onSectionChange={onSectionChange}
           hasAnyData={hasAnyData}
