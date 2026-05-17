@@ -585,7 +585,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
           <PrimerHeader.Link
             as="button"
             type="button"
-            onClick={(e) => e.preventDefault()}
+            onClick={(e) => { e.preventDefault(); onSectionChange('dashboard'); }}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -594,7 +594,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
               background: 'transparent',
               padding: 0,
               font: 'inherit',
-              cursor: 'default',
+              cursor: 'pointer',
             }}
           >
             <PerformancePlusLogo height={30} className="max-w-[6.5rem] min-[420px]:max-w-[9rem] sm:max-w-none" variant="onDark" />
@@ -752,9 +752,14 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
               justifyContent: 'space-between',
               flexShrink: 0
             }}>
-              <div style={{ display: 'flex', alignItems: 'center' }}>
+              <button
+                type="button"
+                onClick={() => onSectionChange('dashboard')}
+                style={{ display: 'flex', alignItems: 'center', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                title="Dashboard"
+              >
                 <PerformancePlusLogo height={40} variant="onDark" />
-              </div>
+              </button>
               <div style={{ display: 'flex', gap: 4 }}>
                 <button
                   onClick={togglePin}

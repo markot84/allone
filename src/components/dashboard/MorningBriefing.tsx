@@ -139,8 +139,8 @@ export function MorningBriefing(props: MorningBriefingProps) {
   const [collapsed, setCollapsed] = useState(() => (brandId ? loadCollapsedPref(brandId) : false));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  /** True όταν τα δεδομένα άλλαξαν αλλά το briefing δεν έχει ανανεωθεί — ο χρήστης αποφασίζει πότε. */
-  const [dataStale, setDataStale] = useState(false);
+  /** Ref: παρακολουθεί αν έγινε ήδη auto-regen για τη συγκεκριμένη metricsReady→true μετάβαση. */
+  const metricsReadyRegenRef = useRef(false);
   const initRef = useRef<string | null>(null);
   const checkInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const briefingLatestRef = useRef<BriefingResult | null>(null);
@@ -181,6 +181,7 @@ export function MorningBriefing(props: MorningBriefingProps) {
     setBriefing(loadBriefingFromStorage(brandId, periodRef.current));
     setError(null);
     initRef.current = null;
+    metricsReadyRegenRef.current = false;
   }, [brandId]);
 
   // Reset + trigger new briefing when period changes.
