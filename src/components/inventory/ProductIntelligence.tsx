@@ -47,7 +47,6 @@ const PRODUCT_INTELLIGENCE_BENCHMARK_LIMIT = 5000;
 const EMPTY_CATEGORY_ID = '__EMPTY_CAT__';
 /** Σταθερές τιμές priority_tag (inventory intelligence) — εμφανίζονται πάντα στο φίλτρο ακόμη κι αν το client catalog δεν φέρει το πεδίο. */
 const STOCK_INTELLIGENCE_TAG_IDS = ['healthy', 'low', 'excess', 'dead', 'no_stock'] as const;
-const DEFAULT_VISIBLE_STOCK_TAG_IDS = ['healthy', 'low', 'excess', 'dead'];
 const productStockLevel = (product: Product): number =>
   Number(product.available_stock ?? product.stock_on_hand ?? product.stock_level ?? 0) || 0;
 const productDisplayTag = (product: Product): string =>
@@ -413,7 +412,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
       : tagStockBucket ?? 'all';
   const effectiveTagFilter = useMemo(() => {
     if (tagInclude) return includeNoStock ? tagInclude : tagInclude.filter((tag) => tag !== 'no_stock');
-    return includeNoStock ? undefined : DEFAULT_VISIBLE_STOCK_TAG_IDS;
+    return undefined;
   }, [includeNoStock, tagInclude]);
   const serverQuery = useMemo<Omit<ProductIntelligenceQuery, 'bucket' | 'page'>>(() => ({
     pageSize: PAGE_SIZE,
@@ -492,11 +491,14 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     return includeNoStock ? rows : rows.filter((product) => productStockLevel(product) > 0);
   }, [includeNoStock, serverIntelligence.page?.products]);
   const serverFilteredTotal = serverIntelligence.page?.totalRows ?? 0;
-  const hiddenNoStockCount = !includeNoStock && totalCatalogCount > serverFilteredTotal
-    ? totalCatalogCount - serverFilteredTotal
-    : 0;
   const totalPages = serverIntelligence.page?.totalPages ?? 1;
   const paginatedProducts = filteredProducts;
+  const activeInventoryTotal = useMemo(() => {
+    const s = serverIntelligence.aggregate?.summary;
+    if (!s) return serverFilteredTotal || totalCatalogCount;
+    return s.healthy_stock.count + s.low_stock.count + s.excess_stock.count + s.dead_stock.count;
+  }, [serverIntelligence.aggregate?.summary, serverFilteredTotal, totalCatalogCount]);
+  const displayTotalSkus = includeNoStock ? totalCatalogCount : activeInventoryTotal;
 
   useEffect(() => {
     setCurrentPage(1);
@@ -633,13 +635,8 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           ) : hasServerAggregate ? (
             <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-[#22C55E] sm:text-sm">
               <span>
-                Showing {formatNumber(paginatedProducts.length)} of {formatNumber(serverFilteredTotal || totalCatalogCount)} visible {serverIntelligence.aggregate?.sourceLabel === 'ERP' ? 'ERP' : 'catalog'} product(s)
+                Showing {formatNumber(paginatedProducts.length)} of {formatNumber(serverFilteredTotal || displayTotalSkus)} active {serverIntelligence.aggregate?.sourceLabel === 'ERP' ? 'ERP' : 'catalog'} product(s)
               </span>
-              {hiddenNoStockCount > 0 && (
-                <span className="text-[#78716C]">
-                  {formatNumber(totalCatalogCount)} total · {formatNumber(hiddenNoStockCount)} no-stock hidden
-                </span>
-              )}
               <DataSourcePill
                 label="Source"
                 value={productDataSourceLabel}
@@ -686,24 +683,17 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
         <ProductIntelligenceSkeleton />
       ) : (
         <>
-      {hiddenNoStockCount > 0 && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm text-amber-900">
-          Εμφανίζονται προεπιλεγμένα τα προϊόντα με ενεργό stock signal ({formatNumber(serverFilteredTotal)}).
-          Το σύνολο ERP catalog είναι {formatNumber(totalCatalogCount)} SKUs, με {formatNumber(hiddenNoStockCount)} no-stock / μη διαθέσιμα SKUs κρυμμένα για να μένει η ανάλυση actionable.
-        </div>
-      )}
-
       {/* Inventory Alerts */}
       <AlertsBanner filterGroup="inventory" maxAlerts={2} compact onNavigate={onSectionChange} />
 
       {/* Summary Cards — uses procurement data when available */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <SummaryCard
-          label="Total SKUs"
-          value={formatNumber(displaySummary.total_skus)}
+          label={includeNoStock ? 'Total SKUs' : 'Active SKUs'}
+          value={formatNumber(displayTotalSkus)}
           icon={<Package size={20} />}
           color="#78716C"
-          tooltip="Συνολικός αριθμός προϊόντων (SKU) στο inventory, από server aggregate."
+          tooltip={includeNoStock ? 'Συνολικός αριθμός SKU στο ERP catalog.' : 'Ενεργά SKU με διαθέσιμο απόθεμα/stock signal, η βάση για συμπεράσματα και προτάσεις.'}
           active={stockCardFilter === 'all'}
           onClick={() => selectStockCardFilter('all')}
         />
