@@ -324,15 +324,14 @@ function isCloudflareChallenge(body: string): boolean {
 
 async function resolveOAuthToken(storeUrl: string, credentials: OpenCartCredentialInput): Promise<string | null> {
   const suppliedToken = normalizeBearerToken(credentials.token);
-  if (suppliedToken) return suppliedToken;
 
-  if (!credentials.clientId || !credentials.clientSecret) return null;
+  if (!credentials.clientId || !credentials.clientSecret) return suppliedToken;
 
   const basicAuth = Buffer.from(`${credentials.clientId}:${credentials.clientSecret}`).toString('base64');
   const tokenUrls = [
-    `${storeUrl}/index.php?route=rest/admin_security/gettoken&grant_type=client_credentials`
-    /*`${storeUrl}/api/rest/oauth2/token/client_credentials`,
-    `${storeUrl}/api/rest/oauth2/token`,*/
+    `${storeUrl}/api/rest/oauth2/token/client_credentials`,
+    `${storeUrl}/index.php?route=rest/admin_security/gettoken&grant_type=client_credentials`,
+    `${storeUrl}/api/rest/oauth2/token`,
   ];
 
   for (const tokenUrl of tokenUrls) {
@@ -340,7 +339,7 @@ async function resolveOAuthToken(storeUrl: string, credentials: OpenCartCredenti
     if (token) return token;
   }
 
-  return null;
+  return suppliedToken;
 }
 
 async function requestOAuthToken(
@@ -348,29 +347,39 @@ async function requestOAuthToken(
   basicAuth: string,
   credentials: OpenCartCredentialInput
 ): Promise<string | null> {
-  const payload =
-    credentials.username && credentials.password
-      ? {
-          grant_type: 'password',
-          username: credentials.username,
-          password: credentials.password,
-          client_id: credentials.clientId,
-          client_secret: credentials.clientSecret,
-        }
-      : undefined;
-
   try {
-    const res = await fetch(tokenUrl, {
+    const clientCredentialsRes = await fetch(tokenUrl, {
       method: 'POST',
       headers: {
         Authorization: `Basic ${basicAuth}`,
         'Content-Type': 'application/json',
         'User-Agent': OPENCART_USER_AGENT,
       },
-      body: payload ? JSON.stringify(payload) : undefined,
     });
-    if (!res.ok) return null;
-    const data = (await res.json()) as Record<string, unknown>;
+    if (clientCredentialsRes.ok) {
+      const data = (await clientCredentialsRes.json()) as Record<string, unknown>;
+      const token = extractOAuthToken(data);
+      if (token) return token;
+    }
+
+    if (!credentials.username || !credentials.password) return null;
+
+    const passwordPayload = new URLSearchParams({
+      grant_type: 'password',
+      username: credentials.username,
+      password: credentials.password,
+    });
+    const passwordRes = await fetch(tokenUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${basicAuth}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': OPENCART_USER_AGENT,
+      },
+      body: passwordPayload,
+    });
+    if (!passwordRes.ok) return null;
+    const data = (await passwordRes.json()) as Record<string, unknown>;
     return extractOAuthToken(data);
   } catch (error) {
     logger.warn('[OpenCart] OAuth token request failed:', {
