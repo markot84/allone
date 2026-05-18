@@ -234,20 +234,33 @@ async function testOpenCartOAuthConnection(
   credentials: OpenCartCredentialInput,
   outboundIp: string | null
 ): Promise<OpenCartConnectionTest> {
-  const token = await resolveOAuthToken(storeUrl, credentials);
+  let token = await resolveOAuthToken(storeUrl, credentials);
   if (!token) {
     return { success: false, error: 'Could not get OpenCart OAuth token. Verify client_id, client_secret, token, username, and password.' };
   }
 
   try {
     const testUrl = `${storeUrl}/index.php?route=rest/product_admin/products&limit=1`;
-    const res = await fetch(testUrl, {
+    let res = await fetch(testUrl, {
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
         'User-Agent': OPENCART_USER_AGENT,
       },
     });
+    if (res.status === 401) {
+      const refreshedToken = await resolveOAuthToken(storeUrl, { ...credentials, token: undefined });
+      if (refreshedToken && refreshedToken !== token) {
+        token = refreshedToken;
+        res = await fetch(testUrl, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'User-Agent': OPENCART_USER_AGENT,
+          },
+        });
+      }
+    }
     logger.info('[OpenCart] OAuth REST extension response', {
       storeUrl,
       status: res.status,
@@ -270,6 +283,18 @@ async function testOpenCartOAuthConnection(
     } catch {
       details = '';
     }
+    if (isCloudflareChallenge(details)) {
+      logger.warn('[OpenCart] OAuth request blocked by Cloudflare/WAF', {
+        storeUrl,
+        status: res.status,
+        outboundIp,
+      });
+      return {
+        success: false,
+        error:
+          'Cloudflare/WAF blocks the OpenCart REST API endpoint. Add a bypass/allow rule for /index.php?route=rest/* and /api/rest/*, or allow the Firebase outbound IP shown in connector diagnostics.',
+      };
+    }
     return { success: false, error: `OpenCart OAuth authentication failed (${res.status}). ${details.slice(0, 160)}`.trim() };
   } catch (error) {
     logger.warn('[OpenCart] OAuth REST extension failed:', {
@@ -279,6 +304,16 @@ async function testOpenCartOAuthConnection(
     });
     return { success: false, error: 'OpenCart OAuth endpoint not reachable. Check the e-shop URL and REST API extension.' };
   }
+}
+
+function isCloudflareChallenge(body: string): boolean {
+  const text = body.toLowerCase();
+  return (
+    text.includes('just a moment') ||
+    text.includes('cf-browser-verification') ||
+    text.includes('challenge-platform') ||
+    text.includes('cloudflare')
+  );
 }
 
 async function resolveOAuthToken(storeUrl: string, credentials: OpenCartCredentialInput): Promise<string | null> {
@@ -330,9 +365,7 @@ async function requestOAuthToken(
     });
     if (!res.ok) return null;
     const data = (await res.json()) as Record<string, unknown>;
-    return normalizeBearerToken(
-      data.access_token || data.token || data.api_token || data.accessToken || data.bearerToken
-    );
+    return extractOAuthToken(data);
   } catch (error) {
     logger.warn('[OpenCart] OAuth token request failed:', {
       tokenUrl,
@@ -340,6 +373,25 @@ async function requestOAuthToken(
     });
     return null;
   }
+}
+
+function extractOAuthToken(data: unknown): string | null {
+  if (!data || typeof data !== 'object') return normalizeBearerToken(data);
+  const record = data as Record<string, unknown>;
+  const direct = normalizeBearerToken(
+    record.access_token || record.token || record.api_token || record.accessToken || record.bearerToken
+  );
+  if (direct) return direct;
+  if (record.data && typeof record.data === 'object') {
+    if (Array.isArray(record.data)) {
+      for (const item of record.data) {
+        const token = extractOAuthToken(item);
+        if (token) return token;
+      }
+    }
+    return extractOAuthToken(record.data);
+  }
+  return null;
 }
 
 function normalizeBearerToken(value: unknown): string | null {
