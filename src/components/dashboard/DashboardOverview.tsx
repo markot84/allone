@@ -1362,7 +1362,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               />
             </div>
             <p className="text-[12px] text-[#6B7280] leading-relaxed">
-              {isB2B ? 'Για αναλυτικότερη οικονομική εικόνα, baseline revenue και πρόσθετα B2B data feeds, άνοιξε ' : <>Για <strong className="text-[#4B5563] font-medium">Campaign ROI</strong>,{' '}
+              {isB2B ? 'Για αναλυτικότερη οικονομική εικόνα, baseline revenue και πρόσθετα B2B data feeds, άνοιξε ' : <>Για <strong className="text-[#4B5563] font-medium">Campaign ROI incl. costs</strong>,{' '}
               <strong className="text-[#4B5563] font-medium">e-shop ROI</strong>, Platform ROAS και σύγκριση εσόδων με το e-shop, ανοίξτε </>}
               <button
                 type="button"
@@ -1809,7 +1809,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
         >
           <CardHeader
             title="Campaigns"
-            subtitle="Συνολική διαφημιστική απόδοση Google Ads + Meta Ads — conversion value, δαπάνη και ROAS για την επιλεγμένη περίοδο."
+            subtitle="Συνολική διαφημιστική απόδοση Google Ads + Meta Ads — conversion value, δαπάνη και Platform ROAS για την επιλεγμένη περίοδο."
             icon={<Megaphone size={18} className="text-[var(--nts-accent)]" />}
           />
 
@@ -1823,7 +1823,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
               <strong className="font-mono text-[#1A1A1A]">{formatCurrencyCompact(campaignMetrics.totalRevenue)}</strong>
             </span>
             <span>
-              ROAS{' '}
+              Platform ROAS{' '}
               <strong className="font-mono text-[#1A1A1A]">
                 {campaignMetrics.totalSpend > 0 ? `${formatNumber(campaignMetrics.roas, 2)}×` : '—'}
               </strong>
@@ -1879,7 +1879,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   formatter={(value: unknown, name?: string) => {
                     const numericValue = Number(value);
                     if (name === 'roas') {
-                      return [Number.isFinite(numericValue) ? `${formatNumber(numericValue, 2)}×` : '—', 'ROAS πλατφόρμας'];
+                      return [Number.isFinite(numericValue) ? `${formatNumber(numericValue, 2)}×` : '—', 'Platform ROAS'];
                     }
                     return [
                       formatCurrencyCompact(Number.isFinite(numericValue) ? numericValue : 0),
@@ -1935,7 +1935,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
             </span>
             <span className="inline-flex items-center gap-2">
               <span className="h-0.5 w-5 rounded-full" style={{ backgroundColor: ADS_ROAS_COLOR }} />
-              ROAS
+              Platform ROAS
             </span>
           </div>
         </Card>

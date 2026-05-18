@@ -796,12 +796,12 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-xs text-[#4A4A4A] flex items-center gap-1">
-                  Μέσος ROAS{' '}
+                  Platform ROAS{' '}
                   <Tooltip
                     content={
                       showPurchaseSalesHeadlines && !convFilterActive
-                        ? 'Τζίρος πωλήσεων / δαπάνη (ίδιο παρονομαστής με Google/Meta για πωλήσεις).'
-                        : 'Μέσος όρος ROAS για τα εμφανιζόμενα campaigns.'
+                        ? 'Τζίρος πωλήσεων / ad spend για τα τρέχοντα φίλτρα. Δεν περιλαμβάνει λοιπά marketing costs.'
+                        : 'Conversion value / ad spend για τα εμφανιζόμενα campaigns. Δεν περιλαμβάνει λοιπά marketing costs.'
                     }
                     size={13}
                   />
