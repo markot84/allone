@@ -177,7 +177,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   const brandSyncVersionQuery = useBrandSyncVersion(brandId);
   const syncVersion = brandSyncVersionQuery.data?.version ?? null;
   const { data: dataAnalysisAggregate = null, isPending: dataAnalysisAggregatePending } = useQuery({
-    queryKey: ['dataAnalysisRfmAggregate', brandId],
+    queryKey: ['dataAnalysisRfmAggregate', brandId, syncVersion ?? 'pending'],
     queryFn: () => (brandId ? fetchDataAnalysisRfmAggregate(brandId, syncVersion) : Promise.resolve(null)),
     enabled: variant === 'data_analysis' && !!brandId,
     staleTime: 10 * 60 * 1000,
@@ -205,22 +205,31 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     () => (isAnalysisSnapshotFresh(analysisSnapshot) ? analysisSnapshot : null),
     [analysisSnapshot]
   );
+  const freshSnapshotForCurrentSync = useMemo(
+    () =>
+      freshAnalysisSnapshot && syncVersion && freshAnalysisSnapshot.syncVersion === syncVersion
+        ? freshAnalysisSnapshot
+        : null,
+    [freshAnalysisSnapshot, syncVersion]
+  );
   const usableSnapshot =
     variant === 'data_analysis' &&
-    freshAnalysisSnapshot &&
-    freshAnalysisSnapshot.dataOrigin !== 'none' &&
-    freshAnalysisSnapshot.segments.length > 0
-      ? freshAnalysisSnapshot
+    freshSnapshotForCurrentSync &&
+    freshSnapshotForCurrentSync.dataOrigin !== 'none' &&
+    freshSnapshotForCurrentSync.segments.length > 0
+      ? freshSnapshotForCurrentSync
       : null;
   const staleAnalysisSnapshot =
     variant === 'data_analysis' &&
     analysisSnapshot &&
     !freshAnalysisSnapshot &&
+    !!syncVersion &&
+    analysisSnapshot.syncVersion === syncVersion &&
     analysisSnapshot.dataOrigin !== 'none' &&
     analysisSnapshot.segments.length > 0
       ? analysisSnapshot
       : null;
-  const hasCachedAnalysisSnapshot = !!usableSnapshot || !!staleAnalysisSnapshot;
+  const hasCachedAnalysisSnapshot = !!usableSnapshot;
 
   const ordersSourceFingerprint = variant === 'data_analysis' ? (syncVersion ?? 'latest') : platformsKey;
 
@@ -229,7 +238,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     queryFn: () =>
       brandId
         ? (variant === 'data_analysis'
-            ? fetchDataAnalysisOrders(brandId, ecomm.connectedPlatforms, { sinceDate: ordersSinceDate, cacheFirst: true })
+            ? fetchDataAnalysisOrders(brandId, ecomm.connectedPlatforms, { sinceDate: ordersSinceDate })
             : fetchAllEcommerceOrders(brandId, ecomm.connectedPlatforms, { sinceDate: ordersSinceDate }))
         : Promise.resolve([]),
     enabled:

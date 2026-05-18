@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { limit, where } from 'firebase/firestore';
 import { ProductsService } from '../services/firestore';
 import { useBrand } from './useBrand';
+import { useBrandSyncVersion } from './useBrandSyncVersion';
 import type { Product } from '../types';
 import { excludeDemoProducts } from '../utils/productUtils';
 
@@ -15,9 +16,11 @@ export function useProducts(options: UseProductsOptions = {}) {
   const brandId = currentBrand?.id ?? null;
   const maxDocs = options.maxDocs;
   const inStockOnly = options.inStockOnly ?? false;
+  const syncVersionQuery = useBrandSyncVersion(brandId);
+  const syncVersion = syncVersionQuery.data?.version ?? 'pending';
 
   const { data: firestoreProducts = [], isPending } = useQuery({
-    queryKey: ['products', brandId, maxDocs ?? 'all', inStockOnly ? 'in-stock' : 'all-stock'],
+    queryKey: ['products', brandId, syncVersion, maxDocs ?? 'all', inStockOnly ? 'in-stock' : 'all-stock'],
     queryFn: async () => {
       if (!brandId) return [] as Product[];
       const constraints = [
@@ -25,11 +28,11 @@ export function useProducts(options: UseProductsOptions = {}) {
         ...(maxDocs ? [limit(maxDocs)] : []),
       ];
       try {
-        return await ProductsService.getAll(brandId, constraints, { cacheFirst: true }) as Product[];
+        return await ProductsService.getAll(brandId, constraints, { forceServer: true }) as Product[];
       } catch (error) {
         if (!inStockOnly) throw error;
         console.warn('[useProducts] stock-only query failed; falling back to capped product query', error);
-        return await ProductsService.getAll(brandId, maxDocs ? [limit(maxDocs)] : [], { cacheFirst: true }) as Product[];
+        return await ProductsService.getAll(brandId, maxDocs ? [limit(maxDocs)] : [], { forceServer: true }) as Product[];
       }
     },
     staleTime: 5 * 60 * 1000,
@@ -40,7 +43,7 @@ export function useProducts(options: UseProductsOptions = {}) {
   });
 
   const { data: serverCount } = useQuery({
-    queryKey: ['products', brandId, 'count'],
+    queryKey: ['products', brandId, syncVersion, 'count'],
     queryFn: () => (brandId ? ProductsService.getCount(brandId) : Promise.resolve(0)),
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,

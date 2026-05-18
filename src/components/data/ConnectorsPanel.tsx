@@ -9,6 +9,7 @@ import { getLastImportDates } from '../../services/import';
 import { coerceToDate } from '../../utils/coerceDate';
 import { clearOAuthSession, readOAuthSessionPayload } from '../../utils/oauthSession';
 import { FirestoreService } from '../../services/firestore';
+import { clearAnalysisSnapshots } from '../../services/analysisSnapshotCache';
 import { Card, Button, Spinner, useToast, PageHeader } from '../common';
 import type { ModuleId } from '../../types';
 import {
@@ -1912,6 +1913,8 @@ export function ConnectorsPanel() {
   const [epsilonNetModal, setEpsilonNetModal] = useState(false);
   const [entersoftModal, setEntersoftModal] = useState(false);
   const [expandedConnectorDetails, setExpandedConnectorDetails] = useState<Partial<Record<ConnectorId, boolean>>>({});
+  const handledMegaventoryJobRef = useRef<string | null>(null);
+  const previousMegaventoryJobStatusRef = useRef<ConnectorSyncJobStatus | null>(null);
 
   const emptyStates: Record<string, ConnectorState> = {
     google_ads: { connected: false },
@@ -1975,9 +1978,9 @@ export function ConnectorsPanel() {
       if (!brandId) return {} as Record<string, Date>;
       const dates = await getLastImportDates(brandId);
       return {
-        google_ads: dates['google_ads_api'] || dates['campaigns'],
-        meta: dates['meta_api'] || dates['campaigns'],
-        tiktok: dates['tiktok_api'] || dates['campaigns'],
+        google_ads: dates['google_ads_api'],
+        meta: dates['meta_api'],
+        tiktok: dates['tiktok_api'],
         merchant: dates['merchant_center_api'] || dates['price_benchmarks'],
         ga4: dates['ga4_api'] || dates['ga4'],
         search_console: dates['search_console_api'],
@@ -2015,11 +2018,59 @@ export function ConnectorsPanel() {
     retry: 1,
   });
 
+  useEffect(() => {
+    handledMegaventoryJobRef.current = null;
+    previousMegaventoryJobStatusRef.current = null;
+  }, [brandId]);
+
+  const refreshCommerceRfmProductCaches = useCallback(() => {
+    if (!brandId) return;
+    clearAnalysisSnapshots(brandId);
+    queryClient.removeQueries({ queryKey: ['brandSyncVersion', brandId] });
+    queryClient.removeQueries({ queryKey: ['ecommerce_summary', brandId] });
+    queryClient.removeQueries({ queryKey: ['business_revenue_summary', brandId] });
+    queryClient.removeQueries({ queryKey: ['ecommerceOrdersRaw', brandId] });
+    queryClient.removeQueries({ queryKey: ['dataAnalysisOrdersRaw', brandId] });
+    queryClient.removeQueries({ queryKey: ['dataAnalysisRfmAggregate', brandId] });
+    queryClient.removeQueries({ queryKey: ['catalogAlignmentDataAnalysis', brandId] });
+    queryClient.removeQueries({ queryKey: ['products', brandId] });
+    queryClient.removeQueries({ queryKey: ['products_paginated', brandId] });
+    queryClient.removeQueries({ queryKey: ['productIntelligenceAggregate', brandId] });
+    queryClient.removeQueries({ queryKey: ['productIntelligencePage', brandId] });
+    queryClient.invalidateQueries({ queryKey: ['brandSyncVersion', brandId] });
+    queryClient.invalidateQueries({ queryKey: ['ecommerce_summary', brandId] });
+    queryClient.invalidateQueries({ queryKey: ['business_revenue_summary', brandId] });
+    queryClient.invalidateQueries({ queryKey: ['ecommerceOrdersRaw', brandId] });
+    queryClient.invalidateQueries({ queryKey: ['dataAnalysisOrdersRaw', brandId] });
+    queryClient.invalidateQueries({ queryKey: ['dataAnalysisRfmAggregate', brandId] });
+    queryClient.invalidateQueries({ queryKey: ['catalogAlignmentDataAnalysis', brandId] });
+    queryClient.invalidateQueries({ queryKey: ['products', brandId] });
+    queryClient.invalidateQueries({ queryKey: ['products_paginated', brandId] });
+    queryClient.invalidateQueries({ queryKey: ['productIntelligenceAggregate', brandId] });
+    queryClient.invalidateQueries({ queryKey: ['productIntelligencePage', brandId] });
+    queryClient.invalidateQueries({ queryKey: ['lastSyncDates', brandId] });
+  }, [brandId, queryClient]);
+
   // Keep fetchStates for OAuth callback compatibility (force refetch after OAuth redirect)
   const fetchStates = useCallback(async () => {
     await refetchConnectors();
     queryClient.removeQueries({ queryKey: ['lastSyncDates', brandId] });
   }, [brandId, refetchConnectors, queryClient]);
+
+  useEffect(() => {
+    if (!brandId || !megaventorySyncJob || megaventorySyncJob.provider !== 'megaventory') return;
+    const status = megaventorySyncJob.status ?? null;
+    const previousStatus = previousMegaventoryJobStatusRef.current;
+    previousMegaventoryJobStatusRef.current = status;
+    if (status !== 'completed' && status !== 'failed') return;
+    if (previousStatus !== 'pending' && previousStatus !== 'running') return;
+    const completedAt = coerceToDate(megaventorySyncJob.completedAt)?.toISOString() || '';
+    const handledKey = `${brandId}:${status}:${completedAt}`;
+    if (handledMegaventoryJobRef.current === handledKey) return;
+    handledMegaventoryJobRef.current = handledKey;
+    refreshCommerceRfmProductCaches();
+    void fetchStates();
+  }, [brandId, fetchStates, megaventorySyncJob, refreshCommerceRfmProductCaches]);
 
   const refreshMagentoEcommerceCaches = useCallback(() => {
     if (!brandId) return;
@@ -2390,6 +2441,12 @@ export function ConnectorsPanel() {
           queryClient.invalidateQueries({ queryKey: ['segments', brandId] });
           queryClient.invalidateQueries({ queryKey: ['segmentCustomerSummaries', brandId] });
           queryClient.invalidateQueries({ queryKey: ['aggregates'] });
+        }
+        if (
+          ['shopify', 'woocommerce', 'opencart', 'magento', 'megaventory', 'softone', 'epsilon_net', 'entersoft'].includes(provider) &&
+          result.queued !== true
+        ) {
+          refreshCommerceRfmProductCaches();
         }
         if (provider === 'magento') {
           queryClient.invalidateQueries({ queryKey: ['magento_popular_searches', brandId] });
