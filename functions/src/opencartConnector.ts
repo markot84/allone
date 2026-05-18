@@ -240,26 +240,38 @@ async function testOpenCartOAuthConnection(
   }
 
   try {
-    const testUrl = `${storeUrl}/index.php?route=rest/product_admin/products&limit=1`;
-    let res = await fetch(testUrl, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        'User-Agent': OPENCART_USER_AGENT,
-      },
-    });
+    const buildTestUrl = (accessToken: string): string => {
+      const params = new URLSearchParams({
+        route: 'rest/product_admin/products',
+        limit: '1',
+        access_token: accessToken,
+      });
+      return `${storeUrl}/index.php?${params}`;
+    };
+    const fetchProductsTest = (accessToken: string): Promise<Response> =>
+      fetch(buildTestUrl(accessToken), {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'User-Agent': OPENCART_USER_AGENT,
+        },
+      });
+
+    let res = await fetchProductsTest(token);
     if (res.status === 401) {
       const refreshedToken = await resolveOAuthToken(storeUrl, { ...credentials, token: undefined });
-      if (refreshedToken && refreshedToken !== token) {
+      if (refreshedToken) {
         token = refreshedToken;
-        res = await fetch(testUrl, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-            'User-Agent': OPENCART_USER_AGENT,
-          },
-        });
+        res = await fetchProductsTest(token);
       }
+    }
+    if (res.status === 401) {
+      res = await fetch(buildTestUrl(token), {
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': OPENCART_USER_AGENT,
+        },
+      });
     }
     logger.info('[OpenCart] OAuth REST extension response', {
       storeUrl,
@@ -571,6 +583,7 @@ export async function fetchOpenCartData(brandId: string): Promise<{
 
   const buildUrl = (route: string, extra: Record<string, string> = {}): string => {
     const params = new URLSearchParams(extra);
+    if (useOAuth && token) params.set('access_token', token);
     if (token && !useRestExtension) params.set('api_token', token);
     params.set('route', route);
     return `${storeUrl}/index.php?${params}`;
