@@ -28,6 +28,40 @@ function getDb(): Firestore {
   return _db ?? (admin.firestore() as unknown as Firestore);
 }
 
+const OPENCART_USER_AGENT = 'PerformancePlus/1.0 (+https://performanceplus.gr)';
+
+function describeFetchError(error: unknown): Record<string, unknown> {
+  if (!(error instanceof Error)) return { message: String(error) };
+  const cause = (error as Error & { cause?: unknown }).cause as
+    | (Error & { code?: string; errno?: string; syscall?: string; address?: string; port?: number })
+    | undefined;
+  return {
+    name: error.name,
+    message: error.message,
+    causeName: cause?.name,
+    causeMessage: cause?.message,
+    code: cause?.code,
+    errno: cause?.errno,
+    syscall: cause?.syscall,
+    address: cause?.address,
+    port: cause?.port,
+  };
+}
+
+async function getObservedOutboundIp(): Promise<string | null> {
+  try {
+    const res = await fetch('https://api.ipify.org?format=json', {
+      headers: { 'User-Agent': OPENCART_USER_AGENT },
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { ip?: string };
+    return data.ip || null;
+  } catch (error) {
+    logger.warn('[OpenCart] Outbound IP diagnostic failed:', describeFetchError(error));
+    return null;
+  }
+}
+
 /**
  * Validate OpenCart credentials via the native API login endpoint
  * and save them on success.
@@ -73,6 +107,14 @@ export async function testOpenCartConnection(
   apiUsername: string,
   apiKey: string
 ): Promise<{ success: boolean; shopName?: string; apiToken?: string; error?: string }> {
+  const outboundIp = await getObservedOutboundIp();
+  logger.info('[OpenCart] Connection diagnostic', {
+    storeUrl,
+    apiUsername,
+    outboundIp,
+    userAgent: OPENCART_USER_AGENT,
+  });
+
   // ── Try native OpenCart 3.x/4.x API login ────────────────────────
   try {
     const loginUrl = `${storeUrl}/index.php?route=api/login`;
@@ -80,8 +122,17 @@ export async function testOpenCartConnection(
 
     const res = await fetch(loginUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': OPENCART_USER_AGENT,
+      },
       body: form,
+    });
+    logger.info('[OpenCart] Native login response', {
+      storeUrl,
+      status: res.status,
+      statusText: res.statusText,
+      outboundIp,
     });
 
     if (res.ok) {
@@ -101,7 +152,11 @@ export async function testOpenCartConnection(
     if (msg.includes('ENOTFOUND') || msg.includes('getaddrinfo')) {
       return { success: false, error: 'e-shop URL not reachable. Check the domain.' };
     }
-    logger.warn('[OpenCart] Native login failed, trying REST extension:', msg);
+    logger.warn('[OpenCart] Native login failed, trying REST extension:', {
+      storeUrl,
+      outboundIp,
+      error: describeFetchError(e),
+    });
   }
 
   // ── Fallback: REST extension with X-Oc-Restadmin-Id header ───────
@@ -111,15 +166,26 @@ export async function testOpenCartConnection(
       headers: {
         'X-Oc-Restadmin-Id': apiKey,
         'Content-Type': 'application/json',
+        'User-Agent': OPENCART_USER_AGENT,
       },
+    });
+    logger.info('[OpenCart] REST extension response', {
+      storeUrl,
+      status: res.status,
+      statusText: res.statusText,
+      outboundIp,
     });
 
     if (res.ok) {
       logger.info(`[OpenCart] REST extension auth OK for ${storeUrl}`);
       return { success: true, shopName: storeUrl.replace(/^https?:\/\//, ''), apiToken: apiKey };
     }
-  } catch {
-    // ignore
+  } catch (error) {
+    logger.warn('[OpenCart] REST extension failed:', {
+      storeUrl,
+      outboundIp,
+      error: describeFetchError(error),
+    });
   }
 
   return { success: false, error: 'Could not authenticate. Verify the e-shop URL, API username, and API key. Ensure the API user is enabled in System → Users → API.' };
