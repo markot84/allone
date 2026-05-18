@@ -13,6 +13,10 @@ const GEMINI_SECRET = defineSecret('GEMINI_API_KEY');
 const SMTP_EMAIL_SECRET = defineSecret('SMTP_EMAIL');
 /** SMTP: κωδικός ή App Password */
 const SMTP_PASSWORD_SECRET = defineSecret('SMTP_PASSWORD');
+const OPENCART_EGRESS_OPTIONS = {
+  vpcConnector: 'pp-opencart-connector',
+  vpcConnectorEgressSettings: 'ALL_TRAFFIC' as const,
+};
 import { sanitizeOAuthReturnOrigin } from './oauthRedirect';
 import { validateImportUrl } from './urlValidator';
 import { parseCSV, parseXLSXBuffer, parseXLSXAllSheets, csvToObjects } from './parseFile';
@@ -1050,6 +1054,11 @@ export const connectorDisconnect = onRequest(
         clearPayload.apiKey = '';
         clearPayload.apiUsername = '';
         clearPayload.apiToken = '';
+        clearPayload.authType = '';
+        clearPayload.clientId = '';
+        clearPayload.clientSecret = '';
+        clearPayload.username = '';
+        clearPayload.password = '';
       }
       if (provider === 'magento') {
         // Full wipe: αλλιώς μένουν stale shopName/storeUrl/storeWebUrl και μπορεί να εμφανιστεί
@@ -1230,7 +1239,7 @@ export const connectorSelectAccount = onRequest(
  * Body: { brandId, provider }
  */
 export const connectorSync = onRequest(
-  { region: 'europe-west1', cors: true, timeoutSeconds: 1200, memory: '2GiB', secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID', 'SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET', 'TIKTOK_APP_ID', 'TIKTOK_APP_SECRET', 'CONNECTOR_TOKEN_KEY'] },
+  { region: 'europe-west1', cors: true, timeoutSeconds: 1200, memory: '2GiB', secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID', 'SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET', 'TIKTOK_APP_ID', 'TIKTOK_APP_SECRET', 'CONNECTOR_TOKEN_KEY'], ...OPENCART_EGRESS_OPTIONS },
   async (req, res) => {
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
@@ -1414,7 +1423,7 @@ export const processMegaventorySyncJobs = onSchedule(
  * Body: { brandId, provider: "woocommerce", storeUrl, consumerKey, consumerSecret }
  */
 export const connectorSaveCredentials = onRequest(
-  { region: 'europe-west1', cors: true, secrets: ['CONNECTOR_TOKEN_KEY'] },
+  { region: 'europe-west1', cors: true, secrets: ['CONNECTOR_TOKEN_KEY'], ...OPENCART_EGRESS_OPTIONS },
   async (req, res) => {
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
@@ -1447,12 +1456,38 @@ export const connectorSaveCredentials = onRequest(
         const result = await saveWooCredentials(brandId, storeUrl, consumerKey, consumerSecret);
         res.status(200).json(result);
       } else if (provider === 'opencart') {
-        const { apiUsername, apiKey: ocApiKey } = req.body as { apiUsername?: string; apiKey?: string };
-        if (!storeUrl || !apiUsername || !ocApiKey) {
-          res.status(400).json({ error: 'Missing storeUrl, apiUsername, or apiKey' });
+        const {
+          apiUsername,
+          apiKey: ocApiKey,
+          clientId,
+          clientSecret,
+          token,
+          username,
+          password,
+        } = req.body as {
+          apiUsername?: string;
+          apiKey?: string;
+          clientId?: string;
+          clientSecret?: string;
+          token?: string;
+          username?: string;
+          password?: string;
+        };
+        const hasNativeCredentials = Boolean(apiUsername && ocApiKey);
+        const hasOAuthCredentials = Boolean(clientId && clientSecret && token && username && password);
+        if (!storeUrl || (!hasNativeCredentials && !hasOAuthCredentials)) {
+          res.status(400).json({ error: 'Missing OpenCart credentials' });
           return;
         }
-        const result = await saveOpenCartCredentials(brandId, storeUrl, apiUsername, ocApiKey);
+        const result = await saveOpenCartCredentials(brandId, storeUrl, {
+          apiUsername,
+          apiKey: ocApiKey,
+          clientId,
+          clientSecret,
+          token,
+          username,
+          password,
+        });
         res.status(200).json(result);
       } else if (provider === 'magento') {
         const {
@@ -1966,7 +2001,7 @@ export const scheduledSyncMarketing = onSchedule(
 
 /** E-shop imports + ecommerce_summary — 05:20 */
 export const scheduledSyncEcommerce = onSchedule(
-  { ...nightlyConnectorScheduleBase, schedule: 'every day 05:20', memory: '2GiB' as const },
+  { ...nightlyConnectorScheduleBase, ...OPENCART_EGRESS_OPTIONS, schedule: 'every day 05:20', memory: '2GiB' as const },
   async () => runNightlyConnectorWaveJob('ecommerce', 'scheduledSyncEcommerce')
 );
 

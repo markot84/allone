@@ -689,12 +689,12 @@ function WooCredentialsModal({
     setError('');
 
     try {
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) throw new Error('Not authenticated');
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) throw new Error('Not authenticated');
 
       const res = await fetch(`${FUNCTIONS_BASE}/connectorSaveCredentials`, {
         method: 'POST',
-        headers: await connectorRequestHeaders(token),
+        headers: await connectorRequestHeaders(idToken),
         body: JSON.stringify({
           brandId,
           provider: 'woocommerce',
@@ -1745,15 +1745,18 @@ function OpenCartCredentialsModal({
   onCancel: () => void;
 }) {
   const [storeUrl, setStoreUrl] = useState('');
-  const [apiUsername, setApiUsername] = useState('');
-  const [apiKey, setApiKey] = useState('');
-  const [showKey, setShowKey] = useState(false);
+  const [clientId, setClientId] = useState('');
+  const [clientSecret, setClientSecret] = useState('');
+  const [token, setToken] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [showSecrets, setShowSecrets] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const toast = useToast();
 
   const handleConnect = async () => {
-    if (!storeUrl.trim() || !apiUsername.trim() || !apiKey.trim()) return;
+    if (!storeUrl.trim() || !clientId.trim() || !clientSecret.trim() || !token.trim() || !username.trim() || !password.trim()) return;
     setLoading(true);
     setError('');
 
@@ -1768,8 +1771,11 @@ function OpenCartCredentialsModal({
           brandId,
           provider: 'opencart',
           storeUrl: storeUrl.trim(),
-          apiUsername: apiUsername.trim(),
-          apiKey: apiKey.trim(),
+          clientId: clientId.trim(),
+          clientSecret: clientSecret.trim(),
+          token: token.trim(),
+          username: username.trim(),
+          password: password.trim(),
         }),
       });
 
@@ -1788,17 +1794,17 @@ function OpenCartCredentialsModal({
   };
 
   const inputStyle = { width: '100%', borderRadius: '8px', border: '1px solid #E5E7EB', padding: '10px 12px', fontSize: '14px', backgroundColor: '#F9FAFB', outline: 'none', boxSizing: 'border-box' as const };
-  const isValid = storeUrl.trim() && apiUsername.trim() && apiKey.trim();
+  const isValid = storeUrl.trim() && clientId.trim() && clientSecret.trim() && token.trim() && username.trim() && password.trim();
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)', padding: '16px' }}>
-      <div style={{ maxWidth: '460px', width: '100%', backgroundColor: '#fff', borderRadius: '16px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)', overflow: 'hidden' }}>
+      <div style={{ maxWidth: '520px', width: '100%', maxHeight: 'calc(100vh - 32px)', backgroundColor: '#fff', borderRadius: '16px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)', overflow: 'auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid #F3F4F6' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <span style={{ fontSize: '24px' }}>🛍️</span>
             <div>
               <p style={{ margin: 0, fontWeight: 600, fontSize: '14px', color: '#111827' }}>Σύνδεση OpenCart</p>
-              <p style={{ margin: 0, fontSize: '12px', color: '#6B7280' }}>API credentials από το OpenCart Admin</p>
+              <p style={{ margin: 0, fontSize: '12px', color: '#6B7280' }}>OAuth credentials από το OpenCart REST Admin API</p>
             </div>
           </div>
           <button onClick={onCancel} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: '4px' }}>
@@ -1812,32 +1818,59 @@ function OpenCartCredentialsModal({
             <input type="text" value={storeUrl} onChange={(e) => setStoreUrl(e.target.value)} placeholder="https://myopencartstore.com" style={inputStyle} />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>API Username</label>
-            <input type="text" value={apiUsername} onChange={(e) => setApiUsername(e.target.value)} placeholder="π.χ. Default" style={inputStyle} />
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>Client ID</label>
+            <input type="text" value={clientId} onChange={(e) => setClientId(e.target.value)} placeholder="OAuth client_id" style={inputStyle} />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>API Key</label>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>Client Secret</label>
             <div style={{ position: 'relative' }}>
               <input
-                type={showKey ? 'text' : 'password'}
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="Το API key από System → Users → API"
+                type={showSecrets ? 'text' : 'password'}
+                value={clientSecret}
+                onChange={(e) => setClientSecret(e.target.value)}
+                placeholder="OAuth client_secret"
                 style={{ ...inputStyle, paddingRight: '40px' }}
                 onKeyDown={(e) => e.key === 'Enter' && handleConnect()}
               />
               <button
                 type="button"
-                onClick={() => setShowKey(!showKey)}
+                onClick={() => setShowSecrets(!showSecrets)}
                 style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: '2px' }}
               >
-                {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                {showSecrets ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
+            </div>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>Token</label>
+            <input
+              type={showSecrets ? 'text' : 'password'}
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              placeholder="Bearer/access token από το REST API extension"
+              style={inputStyle}
+            />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>Username</label>
+              <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Admin/API username" style={inputStyle} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>Password</label>
+              <input
+                type={showSecrets ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Password"
+                style={inputStyle}
+                onKeyDown={(e) => e.key === 'Enter' && handleConnect()}
+              />
             </div>
           </div>
 
           <p style={{ margin: 0, fontSize: '11px', color: '#9CA3AF', lineHeight: '1.5' }}>
-            OpenCart Admin → System → Users → API → Add New ή χρησιμοποίησε υπάρχον API user. Βεβαιωθείτε ότι είναι ενεργοποιημένο (Status: Enabled).
+            Χρησιμοποίησε τα OAuth στοιχεία από το OpenCart REST Admin API extension. Το token αποθηκεύεται κρυπτογραφημένο και στέλνεται ως Bearer token στα REST endpoints.
           </p>
 
           {error && (
