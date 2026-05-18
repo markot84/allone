@@ -161,6 +161,38 @@ async function commitCampaignsOneByOne(campaigns: any[]): Promise<void> {
   }
 }
 
+async function deleteStaleGoogleAdsCampaignDocsForCustomer(
+  brandId: string,
+  customerId: string
+): Promise<number> {
+  const prefix = `gads_${String(customerId).replace(/-/g, '')}_`;
+  const snap = await getDb()
+    .collection('campaigns')
+    .where('brandId', '==', brandId)
+    .where('channel', '==', 'Google Ads')
+    .get();
+
+  let batch = getDb().batch();
+  let ops = 0;
+  let deleted = 0;
+  for (const doc of snap.docs) {
+    if (doc.id.startsWith(prefix)) continue;
+    batch.delete(doc.ref);
+    ops += 1;
+    deleted += 1;
+    if (ops >= 450) {
+      await batch.commit();
+      batch = getDb().batch();
+      ops = 0;
+    }
+  }
+  if (ops > 0) await batch.commit();
+  if (deleted > 0) {
+    logger.info(`[GoogleAds] Deleted ${deleted} stale campaign docs for ${brandId}`);
+  }
+  return deleted;
+}
+
 /**
  * REST JSON uses camelCase. Use **only** metrics.conversions / metrics.conversions_value
  * (same fields as the default “Conversions” / conv. value columns in Google Ads UI).
@@ -593,6 +625,8 @@ export async function fetchGoogleAdsCampaigns(brandId: string): Promise<{
   if (loginCustomerId && customerId === loginCustomerId) {
     return { success: false, imported: 0, error: 'Ο Customer ID ταυτίζεται με τον MCC — χρησιμοποιήστε το ID του sub-account.' };
   }
+
+  await deleteStaleGoogleAdsCampaignDocsForCustomer(brandId, customerId);
 
   // Date window policy:
   // - First historical load: 3-year history -> today

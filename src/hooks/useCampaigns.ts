@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { CampaignsService } from '../services/firestore';
 import { useBrand } from './useBrand';
+import { useBrandSyncVersion } from './useBrandSyncVersion';
 import { useAttribution } from '../contexts/AttributionContext';
 import type { Campaign, MetaAttributionWindow } from '../types';
 import { isMetaChannel } from '../utils/roiUtils';
@@ -110,19 +111,21 @@ export function useCampaigns() {
   const { currentBrand } = useBrand();
   const { metaWindow } = useAttribution();
   const brandId = currentBrand?.id ?? null;
-  const queryKey = ['campaigns', brandId] as const;
+  const syncVersionQuery = useBrandSyncVersion(brandId);
+  const syncVersion = syncVersionQuery.data?.version ?? 'pending';
+  const queryKey = ['campaigns', brandId, syncVersion] as const;
 
   const { data: rawCampaigns = [], isPending } = useQuery({
     queryKey,
     queryFn: async () => {
       if (!brandId) return [] as Campaign[];
-      return CampaignsService.getAll(brandId, { cacheFirst: true }) as Promise<Campaign[]>;
+      return CampaignsService.getAll(brandId, { forceServer: true }) as Promise<Campaign[]>;
     },
     enabled: !!brandId,
     /** Bounded staleness: Infinity με πρώτο fetch `[]` κλείδωνε το ROI σε κενά δεδομένα χωρίς refetch. */
     staleTime: 5 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
-    refetchOnMount: false,
+    refetchOnMount: true,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     placeholderData: (previousData) => previousData,
