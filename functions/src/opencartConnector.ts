@@ -289,7 +289,7 @@ async function resolveOAuthToken(storeUrl: string, credentials: OpenCartCredenti
 
   const basicAuth = Buffer.from(`${credentials.clientId}:${credentials.clientSecret}`).toString('base64');
   const tokenUrls = [
-    `${storeUrl}/admin_security/gettoken&grant_type=client_credentials`
+    `${storeUrl}/index.php?route=rest/admin_security/gettoken&grant_type=client_credentials`
     /*`${storeUrl}/api/rest/oauth2/token/client_credentials`,
     `${storeUrl}/api/rest/oauth2/token`,*/
   ];
