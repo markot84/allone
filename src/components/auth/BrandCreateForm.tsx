@@ -4,6 +4,7 @@ import { Building2 } from 'lucide-react';
 import { Button } from '../common';
 import { useAuth } from '../../hooks';
 import { FirestoreService } from '../../services/firestore';
+import { MembersService } from '../../services/coordination';
 import { BrandAssetUpload } from '../brands/BrandAssetUpload';
 import type { Brand } from '../../types';
 
@@ -48,6 +49,15 @@ export function BrandCreateForm({ onCreated }: BrandCreateFormProps) {
         ...(logoUrl ? { logoUrl } : {}),
       };
       await FirestoreService.setDocument('brands', brandId, brand);
+      await MembersService.set(brandId, {
+        userId: user.uid,
+        email: user.email ?? '',
+        displayName: user.displayName || user.email || 'Owner',
+        role: 'owner',
+        department: 'management',
+        departmentLabel: 'Διοίκηση',
+        joinedAt: new Date().toISOString(),
+      });
       const profile = await FirestoreService.getDocument<{ brandIds?: string[] }>('users', user.uid);
       const brandIds = profile?.brandIds ?? [];
       if (!brandIds.includes(brandId)) {

@@ -23,11 +23,15 @@ service cloud.firestore {
                 || get(/databases/$(database)/documents/brands/$(brandId)).data.createdBy == request.auth.uid));
     }
 
-    // Owner ή admin του brand (για αλλαγή ρόλων μελών)
+    // Owner ή admin του brand. Ο δημιουργός θεωρείται owner για legacy brands χωρίς members doc.
     function isBrandOwnerOrAdmin(brandId) {
-      return request.auth != null
-        && exists(/databases/$(database)/documents/brands/$(brandId)/members/$(request.auth.uid))
-        && get(/databases/$(database)/documents/brands/$(brandId)/members/$(request.auth.uid)).data.role in ['owner', 'admin'];
+      return isSuperAdmin()
+        || (request.auth != null
+            && exists(/databases/$(database)/documents/brands/$(brandId))
+            && get(/databases/$(database)/documents/brands/$(brandId)).data.createdBy == request.auth.uid)
+        || (request.auth != null
+            && exists(/databases/$(database)/documents/brands/$(brandId)/members/$(request.auth.uid))
+            && get(/databases/$(database)/documents/brands/$(brandId)/members/$(request.auth.uid)).data.role in ['owner', 'admin']);
     }
 
     // OAuth connectors: ιδιοκτήτης, admin, δημιουργός brand (ίδιο με Cloud Functions)
@@ -68,7 +72,7 @@ service cloud.firestore {
     match /brands/{brandId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null;
-      allow update, delete: if isBrandMember(brandId);
+      allow update, delete: if isBrandOwnerOrAdmin(brandId);
 
       // Brand members — προσοχή: collection group query `where userId == request.auth.uid` ΔΕΝ πρέπει
       // να βασίζεται μόνο σε isBrandMember(), γιατί το exists(.../members/$(uid)) είναι το ίδιο doc
