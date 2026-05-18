@@ -240,16 +240,10 @@ async function testOpenCartOAuthConnection(
   }
 
   try {
-    const buildTestUrl = (accessToken: string): string => {
-      const params = new URLSearchParams({
-        route: 'rest/product_admin/products',
-        limit: '1',
-        access_token: accessToken,
-      });
-      return `${storeUrl}/index.php?${params}`;
-    };
+    const buildTestUrl = (accessToken?: string): string =>
+      `${storeUrl}/index.php?route=rest/product_admin/products&limit=1${accessToken ? `&access_token=${encodeURIComponent(accessToken)}` : ''}`;
     const fetchProductsTest = (accessToken: string): Promise<Response> =>
-      fetch(buildTestUrl(accessToken), {
+      fetch(buildTestUrl(), {
         headers: {
           Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
@@ -585,8 +579,8 @@ export async function fetchOpenCartData(brandId: string): Promise<{
     const params = new URLSearchParams(extra);
     if (useOAuth && token) params.set('access_token', token);
     if (token && !useRestExtension) params.set('api_token', token);
-    params.set('route', route);
-    return `${storeUrl}/index.php?${params}`;
+    const query = params.toString();
+    return `${storeUrl}/index.php?route=${route}${query ? `&${query}` : ''}`;
   };
 
   /** Extra API calls per order — returns line items AND tax extracted from detail payload. */
