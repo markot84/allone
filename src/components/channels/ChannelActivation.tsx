@@ -30,6 +30,7 @@ import {
   Target as TargetIcon,
   Check,
   Star,
+  Package,
 } from 'lucide-react';
 import {
   PieChart,
@@ -46,10 +47,15 @@ import { useSegments } from '../../hooks/useSegments';
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import { useChannelActivations } from '../../hooks/useChannelActivations';
 import { exportAllSegmentActionPacks, exportStrategyPlan, exportAllSegmentCustomerLists } from '../../services/segmentActionPack';
-import { getStockAgeDays } from '../../utils/productUtils';
+import { classifyStockHealth } from '../../utils/productUtils';
 import { safeBrandName } from '../../services/reportExport';
 import { formatCurrency, formatNumber, formatPercent } from '../../utils/format';
 import { sanitizeCustomerMessage, containsForbiddenContent } from '../../utils/customerMessageSanitizer';
+import {
+  groupProductsForDecisionExport,
+  isActionableStockProduct,
+  type DecisionProductRow,
+} from '../../utils/actionableProducts';
 import { scenarios } from '../../data';
 import { generateChannelRecommendations } from '../../services/aiChannelRecommendations';
 import { useProductSignals } from '../../hooks/useProductSignals';
@@ -64,6 +70,32 @@ import { useMagentoProductEnrichment } from '../../hooks/useMagentoProductEnrich
 import type { ChannelRecommendation, BudgetAction } from '../../types';
 
 const COLORS = ['var(--nts-accent)', '#78716C', '#22C55E', '#8B5CF6', '#F59E0B', '#3B82F6', '#EC4899'];
+type InventoryPlayContext = 'dead_stock' | null;
+
+function useInventoryPlayContext(): InventoryPlayContext {
+  const getContext = (): InventoryPlayContext => {
+    try {
+      const hash = window.location.hash;
+      const qIndex = hash.indexOf('?');
+      if (qIndex === -1) return null;
+      const params = new URLSearchParams(hash.slice(qIndex + 1));
+      return params.get('play') === 'dead_stock' ? 'dead_stock' : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const [context, setContext] = useState<InventoryPlayContext>(getContext);
+
+  useEffect(() => {
+    const handler = () => setContext(getContext());
+    window.addEventListener('hashchange', handler);
+    return () => window.removeEventListener('hashchange', handler);
+  }, []);
+
+  return context;
+}
+
 const FALLBACK_SEGMENT = {
   id: 'all_customers',
   name: 'All Customers',
@@ -215,7 +247,7 @@ interface ChannelActivationProps {
 export function ChannelActivation({ onSectionChange }: ChannelActivationProps = {}) {
   const { currentBrand } = useBrand();
   const pageTitle = getModuleLabel('channels', effectiveBrandTypeForModules(currentBrand));
-  const { products, count: productsCount } = useProductSource();
+  const { products } = useProductSource();
   const { isLoading: campaignsLoading, hasImported: hasCampaigns } = useCampaigns();
   const { segments: rfmSegments, dataCoverage } = useSegments();
   const {
@@ -236,6 +268,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   const { coverage: signalCoverage } = useProductSignals(products);
 
   const playContext = usePlayContext();
+  const inventoryPlayContext = useInventoryPlayContext();
   const [playDismissed, setPlayDismissed] = useState(false);
   // Reset dismiss when playContext changes (new navigation from AI insights)
   useEffect(() => { if (playContext) setPlayDismissed(false); }, [playContext]);
@@ -258,6 +291,33 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
 
   const strategyId = activeStrategy?.id ?? null;
   const scenarioId = activeStrategy?.scenarioId ?? null;
+
+  const lookupMagentoEnrichment = useCallback((sku: string) => {
+    const trimmed = (sku || '').trim();
+    if (!trimmed) return null;
+    return magentoBySku.get(trimmed) || magentoBySkuLower.get(trimmed.toLowerCase()) || null;
+  }, [magentoBySku, magentoBySkuLower]);
+
+  const activeStockProducts = useMemo(
+    () => products.filter(isActionableStockProduct),
+    [products]
+  );
+
+  const deadStockActionProducts = useMemo(
+    () => activeStockProducts.filter((p) => {
+      const tag = String(p.priority_tag || '').toLowerCase();
+      if (tag === 'dead' || tag === 'low' || tag === 'healthy' || tag === 'excess') return tag === 'dead';
+      return classifyStockHealth(p) === 'dead';
+    }),
+    [activeStockProducts]
+  );
+
+  const feedProducts = inventoryPlayContext === 'dead_stock' ? deadStockActionProducts : activeStockProducts;
+  const decisionProductRows = useMemo(
+    () => groupProductsForDecisionExport(feedProducts, lookupMagentoEnrichment),
+    [feedProducts, lookupMagentoEnrichment]
+  );
+  const hasInventoryPlay = inventoryPlayContext === 'dead_stock';
 
   // Read detailed activation recommendation (generated on strategy save, context: 'activation')
   const aiRecommendation = activeStrategy?.activationRecommendation ?? activeStrategy?.channelRecommendation ?? null;
@@ -567,9 +627,9 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
 
   // Feed export
   const exportFeed = async (feedType: string, format: 'csv' | 'xlsx') => {
-    if (products.length === 0) { toast.error('Δεν υπάρχουν προϊόντα για export'); return; }
+    if (feedProducts.length === 0) { toast.error('Δεν υπάρχουν ενεργά προϊόντα με απόθεμα για export'); return; }
     let headers: string[] = [];
-    let rows: any[][] = [];
+    let rows: Array<Array<string | number>> = [];
     switch (feedType) {
       case 'Ads Feed':
       case 'Google Shopping': {
@@ -581,14 +641,9 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
           'color', 'size',
           'custom_label_0', 'custom_label_1', 'custom_label_2', 'custom_label_3', 'custom_label_4',
         ];
-        const lookupEnrichment = (sku: string) => {
-          const trimmed = (sku || '').trim();
-          if (!trimmed) return null;
-          return magentoBySku.get(trimmed) || magentoBySkuLower.get(trimmed.toLowerCase()) || null;
-        };
-        rows = products.map(p => {
+        rows = feedProducts.map(p => {
           const labels = getProductStrategyLabels(p, activeStrategy ?? null);
-          const enrichment = lookupEnrichment(p.sku || '');
+          const enrichment = lookupMagentoEnrichment(p.sku || '');
           const gtin = String(enrichment?.gtin || p.gtin || p.barcode || '').trim();
           const mpn = String(enrichment?.mpn || '').trim();
           const brandValue = String(p.brand || enrichment?.manufacturer || '').trim();
@@ -641,8 +696,21 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         break;
       }
       default:
-        headers = ['SKU', 'Name', 'Category', 'Price', 'Margin %', 'Stock Level', 'Stock Capacity', 'Stock Age Days', 'Priority Tag'];
-        rows = products.map(p => [p.sku || '', p.name || '', p.category || '', formatCurrency(p.price || 0, 2), formatPercent(p.margin_percentage || 0, 1).replace('%', ''), p.stock_level || 0, p.stock_capacity || 0, getStockAgeDays(p), p.priority_tag || '']);
+        headers = ['Parent / Model', 'Representative SKU', 'Name', 'Category', 'Price Range', 'Total Stock', 'Stock Value', 'Avg Margin %', 'Variants', 'Priority Tag'];
+        rows = decisionProductRows.map((row) => [
+          row.key,
+          row.representative.sku || '',
+          row.representative.name || '',
+          row.category || '',
+          row.minPrice === row.maxPrice
+            ? formatCurrency(row.minPrice, 2)
+            : `${formatCurrency(row.minPrice, 2)}-${formatCurrency(row.maxPrice, 2)}`,
+          row.totalStock,
+          row.totalValue,
+          formatPercent(row.marginPercentage || 0, 1).replace('%', ''),
+          row.variantCount,
+          row.priorityTag || '',
+        ]);
         break;
     }
     const brand = safeBrandName(currentBrand?.name);
@@ -671,13 +739,13 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
 
   const getFeedPreviewTable = useCallback(
     (feedType: string) => {
-      const slice = products.slice(0, 8);
       if (feedType === 'Ads Feed' || feedType === 'Google Shopping') {
+        const slice = feedProducts.slice(0, 8);
         const headers = ['id', 'title', 'price', 'availability', 'brand', 'image_link', 'gtin', 'item_group_id', 'custom_label_0'];
         const rows = slice.map((p) => {
           const labels = getProductStrategyLabels(p, activeStrategy ?? null);
           const sku = (p.sku || '').trim();
-          const enrichment = sku ? (magentoBySku.get(sku) || magentoBySkuLower.get(sku.toLowerCase()) || null) : null;
+          const enrichment = sku ? lookupMagentoEnrichment(sku) : null;
           return [
             p.sku || p.id,
             p.name || '',
@@ -692,20 +760,91 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         });
         return { headers, rows };
       }
-      const headers = ['SKU', 'Name', 'Category', 'Price', 'Margin %', 'Stock', 'Priority'];
-      const rows = slice.map((p) => [
-        p.sku || '',
-        p.name || '',
-        p.category || '',
-        formatCurrency(p.price || 0, 2),
-        formatPercent(p.margin_percentage || 0, 1).replace('%', ''),
-        p.stock_level || 0,
-        p.priority_tag || '',
+      const headers = ['Parent / Model', 'Representative SKU', 'Name', 'Category', 'Price Range', 'Total Stock', 'Stock Value', 'Variants'];
+      const rows = decisionProductRows.slice(0, 8).map((row) => [
+        row.key,
+        row.representative.sku || '',
+        row.representative.name || '',
+        row.category || '',
+        row.minPrice === row.maxPrice
+          ? formatCurrency(row.minPrice, 2)
+          : `${formatCurrency(row.minPrice, 2)}-${formatCurrency(row.maxPrice, 2)}`,
+        row.totalStock,
+        formatCurrency(row.totalValue, 0),
+        row.variantCount,
       ]);
       return { headers, rows };
     },
-    [products, activeStrategy, magentoBySku, magentoBySkuLower]
+    [activeStrategy, decisionProductRows, feedProducts, lookupMagentoEnrichment]
   );
+
+  const buildDecisionExportRows = (rows: DecisionProductRow[]) => {
+    const headers = ['Parent / Model', 'Representative SKU', 'Name', 'Category', 'Total Stock', 'Stock Value', 'Price Min', 'Price Max', 'Avg Margin %', 'Variants', 'Variant SKUs'];
+    const values = rows.map((row) => [
+      row.key,
+      row.representative.sku || '',
+      row.representative.name || '',
+      row.category || '',
+      row.totalStock,
+      row.totalValue,
+      row.minPrice,
+      row.maxPrice,
+      row.marginPercentage,
+      row.variantCount,
+      row.skus.join(', '),
+    ]);
+    return { headers, values };
+  };
+
+  const exportDecisionProducts = async (format: 'csv' | 'xlsx') => {
+    if (decisionProductRows.length === 0) {
+      toast.error('Δεν υπάρχουν ενεργά προϊόντα με απόθεμα για την ενέργεια');
+      return;
+    }
+    const brand = safeBrandName(currentBrand?.name);
+    const date = new Date().toISOString().split('T')[0];
+    const scope = hasInventoryPlay ? 'dead_stock_action' : 'action_products';
+    const { headers, values } = buildDecisionExportRows(decisionProductRows);
+
+    if (format === 'csv') {
+      const csvContent = [
+        ['Brand', currentBrand?.name || '—'].join(','),
+        ['Generated', date].join(','),
+        ['Scope', hasInventoryPlay ? 'Dead stock - active stock only' : 'Active stock only'].join(','),
+        '',
+        headers.join(','),
+        ...values.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')),
+      ].join('\n');
+      const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `${brand}_${scope}_${date}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      return;
+    }
+
+    try {
+      const XLSX = await import('xlsx');
+      const metaRows = [
+        ['Brand', currentBrand?.name || '—'],
+        ['Generated', date],
+        ['Scope', hasInventoryPlay ? 'Dead stock - active stock only' : 'Active stock only'],
+        [''],
+        headers,
+      ];
+      const ws = XLSX.utils.aoa_to_sheet([...metaRows, ...values]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Action Products');
+      XLSX.writeFile(wb, `${brand}_${scope}_${date}.xlsx`);
+    } catch {
+      toast.error('Σφάλμα κατά την εξαγωγή Excel. Δοκιμάστε CSV.');
+    }
+  };
 
   const hasRealStrategy = !!activeStrategy?.id && !activeStrategy.id.startsWith('default_') && !!scenarioId;
   const strategyName = scenarioId ? getStrategyName(scenarioId) : null;
@@ -870,6 +1009,61 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
           strategyName={strategyName}
           brandName={currentBrand?.name}
         />
+      )}
+
+      {hasInventoryPlay && (
+        <Card padding="lg" className="border-amber-200 bg-amber-50/50">
+          <CardHeader
+            title="Dead stock action products"
+            subtitle={`${formatNumber(decisionProductRows.length)} parent/model rows από ${formatNumber(feedProducts.length)} ενεργά variants με απόθεμα`}
+            icon={<Package size={18} className="text-amber-700" />}
+            action={
+              <div className="flex flex-wrap gap-2">
+                <Button variant="secondary" size="sm" icon={<FileSpreadsheet size={14} />} onClick={() => exportDecisionProducts('xlsx')}>
+                  Download action list
+                </Button>
+                <Button variant="ghost" size="sm" icon={<FileText size={14} />} onClick={() => exportDecisionProducts('csv')}>
+                  CSV
+                </Button>
+              </div>
+            }
+          />
+          <p className="mb-4 text-xs leading-relaxed text-[#6B7280]">
+            Η λίστα είναι decision-level: αποκλείει zero-stock / inactive ιστορικά SKUs και ομαδοποιεί sizes κάτω από parent/model ώστε η ομάδα να βλέπει τι πρέπει να ξεστοκάρει πραγματικά.
+          </p>
+          {decisionProductRows.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-amber-200 bg-white p-5 text-sm text-[#6B7280]">
+              Δεν βρέθηκαν ενεργά dead-stock προϊόντα με διαθέσιμο απόθεμα για αυτή την ενέργεια.
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-amber-100 bg-white">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-amber-100 bg-amber-50/60 text-[#4A4A4A]">
+                    <th className="px-3 py-2 font-semibold">Parent / Model</th>
+                    <th className="px-3 py-2 font-semibold">SKU</th>
+                    <th className="px-3 py-2 font-semibold">Name</th>
+                    <th className="px-3 py-2 font-semibold">Stock</th>
+                    <th className="px-3 py-2 font-semibold">Value</th>
+                    <th className="px-3 py-2 font-semibold">Variants</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {decisionProductRows.slice(0, 8).map((row) => (
+                    <tr key={row.key} className="border-b border-[#F3F4F6] last:border-0">
+                      <td className="px-3 py-2 font-mono text-[#1A1A1A]">{row.key}</td>
+                      <td className="px-3 py-2 font-mono text-[#4A4A4A]">{row.representative.sku || '—'}</td>
+                      <td className="max-w-[260px] truncate px-3 py-2 text-[#4A4A4A]" title={row.representative.name || ''}>{row.representative.name || '—'}</td>
+                      <td className="px-3 py-2 font-mono text-[#1A1A1A]">{formatNumber(row.totalStock)}</td>
+                      <td className="px-3 py-2 font-mono text-[#1A1A1A]">{formatCurrency(row.totalValue, 0)}</td>
+                      <td className="px-3 py-2 font-mono text-[#4A4A4A]">{row.variantCount}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
       )}
 
       {/* Recommended Segments — μόνο τα segments που ταιριάζουν στη συγκεκριμένη πολιτική */}
@@ -1460,7 +1654,11 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
 
       {/* Feed Generation */}
       <Card padding="lg">
-        <CardHeader title="Campaign Feeds" subtitle="Προεπισκόπηση και εξαγωγή product feeds" icon={<Settings size={20} className="text-[var(--nts-accent)]" />} />
+        <CardHeader
+          title="Campaign Feeds"
+          subtitle={hasInventoryPlay ? 'Scoped στο dead-stock action: active stock only, χωρίς zero-stock ιστορικά SKUs.' : 'Προεπισκόπηση και εξαγωγή product feeds με active-stock default.'}
+          icon={<Settings size={20} className="text-[var(--nts-accent)]" />}
+        />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {['Ads Feed', 'Email Feed'].map((feed, index) => (
             <motion.div key={feed} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.1 }} className="p-4 border border-[#E5E5E5] rounded-xl hover:border-[var(--nts-accent)] hover:shadow-md transition-all cursor-pointer">
@@ -1469,7 +1667,13 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                 <Badge variant="success" size="sm">Ενεργό</Badge>
               </div>
               <div className="space-y-2 text-sm text-[#4A4A4A]">
-                <div className="flex justify-between"><span>Products</span><span className="font-mono">{formatNumber(productsCount)}</span></div>
+                <div className="flex justify-between">
+                  <span>{feed === 'Ads Feed' ? 'Active variants' : 'Parent/model rows'}</span>
+                  <span className="font-mono">{formatNumber(feed === 'Ads Feed' ? feedProducts.length : decisionProductRows.length)}</span>
+                </div>
+                <div className="text-[11px] text-[#9CA3AF] leading-snug">
+                  Default export excludes zero-stock / inactive historical SKUs.
+                </div>
                 {feed === 'Ads Feed' && (
                   <>
                     <div className="flex justify-between">
@@ -1550,7 +1754,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                 title={<h2 className="text-xl font-bold text-[#1A1A1A]">Προεπισκόπηση feed</h2>}
                 description={
                   <p className="text-sm text-[#4A4A4A]">
-                    {previewFeed} · {formatNumber(productsCount)} προϊόντα · δείγμα {Math.min(8, productsCount)} γραμμών
+                    {previewFeed} · {formatNumber(previewFeed === 'Ads Feed' ? feedProducts.length : decisionProductRows.length)} ενεργές γραμμές · δείγμα {Math.min(8, previewFeed === 'Ads Feed' ? feedProducts.length : decisionProductRows.length)} γραμμών
                   </p>
                 }
                 actions={
@@ -1560,7 +1764,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                 }
               />
               <div className="p-6 overflow-auto flex-1 min-h-0">
-                {products.length === 0 ? (
+                {feedProducts.length === 0 ? (
                   <p className="text-sm text-[#4A4A4A] text-center py-8">Δεν υπάρχουν προϊόντα στο catalog για προεπισκόπηση.</p>
                 ) : (
                   (() => {

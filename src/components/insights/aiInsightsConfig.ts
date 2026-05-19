@@ -1,6 +1,6 @@
 /** Maps generated insights to app sections (see `generateInsightsFromData` insightKey). */
 export const INSIGHT_NAV: Record<string, { section: string; hashQuery?: string }> = {
-  dead_stock: { section: 'channels' },
+  dead_stock: { section: 'channels', hashQuery: 'play=dead_stock' },
   excess_stock: { section: 'products', hashQuery: 'stock=excess' },
   high_margin_low_stock: { section: 'products', hashQuery: 'filter=high-margin-low-stock' },
   low_stock: { section: 'products', hashQuery: 'stock=low' },

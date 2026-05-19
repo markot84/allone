@@ -1,5 +1,6 @@
 import type { Product, RFMSegment, AIInsight } from '../types';
 import { classifyStockHealth, getProductTod } from '../utils/productUtils';
+import { groupProductsForDecisionExport, isActionableStockProduct } from '../utils/actionableProducts';
 
 /** Generate dynamic AI insights from real products and segments data */
 export function generateInsightsFromData(
@@ -39,24 +40,30 @@ export function generateInsightsFromData(
     });
   }
 
-  const classify = (p: Product) => classifyStockHealth(p, getProductTod(p, supplierTodMap));
-  const deadStock = products.filter((p) => classify(p) === 'dead');
-  const lowStock = products.filter((p) => classify(p) === 'low');
-  const excessStock = products.filter((p) => classify(p) === 'excess');
-  const highMarginProducts = products.filter(
+  const actionableProducts = products.filter(isActionableStockProduct);
+  const classify = (p: Product) => {
+    const tag = String(p.priority_tag || '').toLowerCase();
+    if (tag === 'dead' || tag === 'low' || tag === 'healthy' || tag === 'excess') return tag;
+    return classifyStockHealth(p, getProductTod(p, supplierTodMap));
+  };
+  const deadStock = actionableProducts.filter((p) => classify(p) === 'dead');
+  const deadStockModels = groupProductsForDecisionExport(deadStock);
+  const lowStock = actionableProducts.filter((p) => classify(p) === 'low');
+  const excessStock = actionableProducts.filter((p) => classify(p) === 'excess');
+  const highMarginProducts = actionableProducts.filter(
     (p) => p.margin_tier === 'high' || (p.margin_percentage ?? 0) > 25
   );
   const highMarginLowStock = highMarginProducts.filter(
     (p) => classify(p) === 'low'
   );
 
-  if (deadStock.length > 0) {
+  if (deadStockModels.length > 0) {
     insights.push({
       insightKey: 'dead_stock',
       type: 'warning',
       icon: '',
       title: 'Dead stock — χωρίς πωλήσεις',
-      insight: `${deadStock.length} κωδικοί δεν εμφάνισαν πωλήσεις στην τελευταία περίοδο. Απαιτείται σχέδιο εκκαθάρισης ή επανατοποθέτησης.`,
+      insight: `${deadStockModels.length} ενεργά προϊόντα/model groups με απόθεμα δεν εμφάνισαν πωλήσεις στην τελευταία περίοδο. Απαιτείται σχέδιο εκκαθάρισης ή επανατοποθέτησης.`,
       action: 'Δημιουργία Campaign',
       impact: 'high',
     });
@@ -86,13 +93,13 @@ export function generateInsightsFromData(
     });
   }
 
-  if (lowStock.length > 5 && products.length > 0) {
+  if (lowStock.length > 5 && actionableProducts.length > 0) {
     insights.push({
       insightKey: 'low_stock',
       type: 'recommendation',
       icon: '',
       title: 'Χαμηλά αποθέματα',
-      insight: `${lowStock.length} προϊόντα (${Math.round((lowStock.length / products.length) * 100)}%) κινούνται προς εξάντληση εντός περίπου ${Math.round(60 / 2)} ημερών.`,
+      insight: `${lowStock.length} ενεργά προϊόντα (${Math.round((lowStock.length / actionableProducts.length) * 100)}%) κινούνται προς εξάντληση εντός περίπου ${Math.round(60 / 2)} ημερών.`,
       action: 'Ελέγξτε Inventory',
       impact: 'medium',
     });

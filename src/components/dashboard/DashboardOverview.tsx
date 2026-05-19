@@ -78,6 +78,8 @@ import { StrategyBriefingQuickStrip } from '../coordination/StrategyBriefingQuic
 import { eachDateInclusiveLocal, computeMarketingOverheadForPeriod } from '../../utils/marketingCostPeriod';
 import { getCostingReal12mTurnover } from '../../utils/procurement12mTurnover';
 import { coerceToDate } from '../../utils/coerceDate';
+import { INSIGHT_NAV } from '../insights/aiInsightsConfig';
+import type { AIInsight } from '../../types';
 
 /** Ημερήσια σημεία στο chart· πάνω από αυτό → μηνιαία σύνοψη (αναγνώσιμο άξονα). */
 const REVENUE_CHART_MAX_DAILY_POINTS = 90;
@@ -827,7 +829,13 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   const { aiInsights } = useAiInsightsData();
 
   // Handle insight action clicks
-  const handleInsightAction = (insight: { action: string; title: string }) => {
+  const handleInsightAction = (insight: AIInsight) => {
+    const nav = insight.insightKey ? INSIGHT_NAV[insight.insightKey] : null;
+    if (nav) {
+      onSectionChange?.(nav.section, nav.hashQuery ? { hashQuery: nav.hashQuery } : undefined);
+      return;
+    }
+
     const action = insight.action.toLowerCase();
     
     // Map actions to navigation
