@@ -36,7 +36,7 @@ import { useCampaigns } from '../../hooks/useCampaigns';
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import { useSuppliers } from '../../hooks/useSuppliers';
 import { useBrand } from '../../hooks/useBrand';
-import { useProductAggregates } from '../../hooks/useAggregates';
+import { useProductAggregates, useSegmentAggregates } from '../../hooks/useAggregates';
 import { useProductIntelligenceAggregate } from '../../hooks/useProductIntelligenceAggregate';
 import { usePeriodScopedCampaigns } from '../../hooks/usePeriodScopedCampaigns';
 import { useTasks } from '../../hooks/useCoordination';
@@ -193,14 +193,16 @@ interface DashboardOverviewProps {
 export function DashboardOverview({ onSectionChange, onOpenInsights }: DashboardOverviewProps = {}) {
   const { currentBrand } = useBrand();
   const { isB2B, enabledModules } = useModules();
-  const { segments: rfmSegments, hasImported: hasSegments, isLoading: segmentsLoading } = useSegments();
+  const { segments: rfmSegments, hasImported: hasSegments, isLoading: segmentsLoading } = useSegments({
+    skipOrderHydration: true,
+  });
+  const { segmentStats } = useSegmentAggregates();
   const lastGoodRfmSegmentsRef = useRef<{ brandId: string | null; segments: typeof rfmSegments }>({
     brandId: null,
     segments: [],
   });
   const productIntelligence = useProductIntelligenceAggregate('all', 1, { pageSize: 150 });
   const products = productIntelligence.page?.products ?? [];
-  const productsLoading = productIntelligence.isLoading;
   const { productStats } = useProductAggregates();
   const { suppliers } = useSuppliers();
   const { tasks } = useTasks();
@@ -233,7 +235,10 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     return lastGoodRfmSegmentsRef.current.segments;
   }, [currentBrand?.id, rfmSegments, segmentsLoading]);
 
-  const dashboardHasSegments = hasSegments || dashboardRfmSegments.length > 0;
+  const dashboardHasSegments =
+    hasSegments ||
+    dashboardRfmSegments.length > 0 ||
+    (segmentStats?.totalCustomers ?? 0) > 0;
 
   const supplierTodMap = useMemo(() => {
     const m = new Map<string, number>();
@@ -311,7 +316,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     !rawFinancialSourcesLoading &&
     !ecommHist.rawLoading;
   const [briefingContextTimedOut, setBriefingContextTimedOut] = useState(false);
-  const briefingSecondaryContextLoading = ga4AnalyticsLoading || segmentsLoading || productsLoading;
+  const briefingSecondaryContextLoading = ga4AnalyticsLoading || segmentsLoading;
   const briefingReady =
     briefingMetricsReady &&
     (!briefingSecondaryContextLoading || briefingContextTimedOut);
@@ -327,13 +332,20 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   const dashboardOverviewBusy =
     Boolean(currentBrand) &&
     !hasAnyData &&
+    !hasUsableFinancialData &&
     (segmentsLoading ||
       campaignsLoading ||
       organicLoading ||
-      productsLoading ||
+      (enabledModules.ecommerce && ecomm.isLoading) ||
       ecommerceRawBusy ||
       ga4AnalyticsLoading);
   const dashboardOverviewLoading = financialSourcesLoading || (dashboardOverviewBusy && !dashboardLoadingTimedOut);
+  /** Μην δείχνουμε «κάντε import» όσο ακόμα φορτώνουν e-shop / καμπάνιες / GA4. */
+  const dashboardStillHydrating =
+    Boolean(currentBrand) &&
+    !hasAnyData &&
+    !hasUsableFinancialData &&
+    (ecomm.isLoading || campaignsLoading || organicLoading || ga4AnalyticsLoading);
 
   useEffect(() => {
     setDashboardLoadingTimedOut(false);
@@ -1022,13 +1034,16 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       )}
 
       {currentBrand && !dashboardOverviewLoading && !hasAnyData && (
-        dashboardOverviewLoading ? (
+        dashboardStillHydrating ? (
           <Card padding="lg" className="border border-[#E8EAED] bg-white">
             <div className="flex gap-4 items-start">
               <Spinner size="md" className="shrink-0" />
-              <div className="min-w-0">
+              <motion.div className="min-w-0">
                 <p className="text-sm font-semibold text-[var(--nts-charcoal)]">Φόρτωση δεδομένων πίνακα ελέγχου…</p>
-              </div>
+                <p className="mt-1 text-xs leading-relaxed text-[var(--nts-medium-gray)]">
+                  Συγχρονισμένα δεδομένα — φορτώνουμε e-shop, καμπάνιες και analytics…
+                </p>
+              </motion.div>
             </div>
           </Card>
         ) : (

@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query';
 import { doc, getDoc, getDocs, collection } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useBrand } from './useBrand';
-import { useBrandSyncVersion } from './useBrandSyncVersion';
 import type { EcommerceExclusionReason, EcommerceSalesChannel } from '../services/ecommerceSalesChannel';
 
 export interface EcommerceTopProduct {
@@ -176,11 +175,8 @@ export function useEcommerceSummary(options?: { includeSkuDetails?: boolean; inc
   const brandId = currentBrand?.id ?? null;
   const includeSkuDetails = options?.includeSkuDetails !== false;
   const includeStockMovement = options?.includeStockMovement !== false;
-  const syncVersionQuery = useBrandSyncVersion(brandId);
-  const syncVersion = syncVersionQuery.data?.version ?? 'pending';
-
   const { data, isPending } = useQuery({
-    queryKey: ['ecommerce_summary', brandId, syncVersion, includeSkuDetails ? 'sku' : 'summary', includeStockMovement ? 'movement' : 'no_movement'],
+    queryKey: ['ecommerce_summary', brandId, includeSkuDetails ? 'sku' : 'summary', includeStockMovement ? 'movement' : 'no_movement'],
     queryFn: () => (brandId ? fetchEcommerceSummary(brandId, { includeSkuDetails, includeStockMovement }) : Promise.resolve(null)),
     /** Μετά sync το invalidateQueries ανανεώνει· εδώ αποφεύγουμε refetch σε κάθε mount/focus. */
     staleTime: 10 * 60 * 1000,

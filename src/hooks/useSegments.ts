@@ -113,10 +113,16 @@ export type UseSegmentsOptions = {
    * κατάλογος χωρίς Procurement (`products` import).
    */
   variant?: 'default' | 'data_analysis';
+  /**
+   * Dashboard: μόνο imported Firestore segments — χωρίς fetch 400ημέρων παραγγελιών
+   * (το βαρύ client-side RFM μένει στη σελίδα RFM).
+   */
+  skipOrderHydration?: boolean;
 };
 
 export function useSegments(options: UseSegmentsOptions = {}) {
   const variant = options.variant ?? 'default';
+  const skipOrderHydration = options.skipOrderHydration === true;
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
   const ecomm = useEcommerceSummary({ includeSkuDetails: false, includeStockMovement: false });
@@ -165,7 +171,9 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   );
 
   const ordersQueryEnabled =
-    !!brandId && (ecomm.connectedPlatforms.length > 0 || variant === 'data_analysis');
+    !skipOrderHydration &&
+    !!brandId &&
+    (ecomm.connectedPlatforms.length > 0 || variant === 'data_analysis');
   const ordersSinceDate = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() - RFM_ORDER_FETCH_WINDOW_DAYS);
@@ -424,13 +432,14 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     ecommReady &&
     ecomm.connectedPlatforms.length === 0 &&
     !ecomm.hasData;
-  const isLoading =
-    (aggregateIsBuilding && !usableSnapshot && !orderRfm.canCompute) ||
-    isDataAnalysisAggregatePending ||
-    (blocksOnImportedSegmentsOnly ||
-      (ordersQueryEnabled && ordersPending && !orderRfm.canCompute));
+  const isLoading = skipOrderHydration
+    ? blocksOnImportedSegmentsOnly
+    : (aggregateIsBuilding && !usableSnapshot && !orderRfm.canCompute) ||
+      isDataAnalysisAggregatePending ||
+      (blocksOnImportedSegmentsOnly ||
+        (ordersQueryEnabled && ordersPending && !orderRfm.canCompute));
 
-  const ordersLoading = !shouldUseAggregate && ordersQueryEnabled && ordersPending;
+  const ordersLoading = skipOrderHydration ? false : !shouldUseAggregate && ordersQueryEnabled && ordersPending;
   const isCatalogEnriching = !shouldUseAggregate && ordersQueryEnabled && catalogPending;
 
   const hasImported =
