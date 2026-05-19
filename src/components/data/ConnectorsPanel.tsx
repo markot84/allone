@@ -1761,12 +1761,12 @@ function OpenCartCredentialsModal({
     setError('');
 
     try {
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) throw new Error('Not authenticated');
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) throw new Error('Not authenticated');
 
       const res = await fetch(`${FUNCTIONS_BASE}/connectorSaveCredentials`, {
         method: 'POST',
-        headers: await connectorRequestHeaders(token),
+        headers: await connectorRequestHeaders(idToken),
         body: JSON.stringify({
           brandId,
           provider: 'opencart',
