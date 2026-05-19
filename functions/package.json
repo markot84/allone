@@ -21,7 +21,7 @@
     "google-auth-library": "^10.6.1",
     "nodemailer": "^8.0.3",
     "uuid": "^11.1.0",
-    "xlsx": "^0.18.5"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@types/busboy": "^1.5.4",
