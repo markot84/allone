@@ -2,13 +2,13 @@
  * OpenCart Connector
  *
  * Flow:
- * 1. User enters e-shop URL + native API key or OAuth credentials
- * 2. We login via POST /index.php?route=api/login or use OAuth Bearer auth
- * 3. Credentials stored in Firestore (connectors/{brandId}.opencart)
- * 4. Sync: πρώτο 3ετίας orders + full products catalog· incremental orders μετά
+ * 1. User enters e-shop URL + OpenCart REST Admin API OAuth credentials
+ * 2. Session authentication via /index.php?route=rest/admin_security/gettoken
+ * 3. User login via /index.php?route=rest/login_admin/login
+ * 4. Credentials stored in Firestore (connectors/{brandId}.opencart)
+ * 5. Sync: πρώτο 3ετίας orders + full products catalog· incremental orders μετά
  *
- * Compatible with OpenCart 3.x+ REST API.
- * For e-shops using third-party REST extensions, the token header approach is also supported.
+ * Compatible with the OpenCart REST Admin API OAuth extension.
  */
 
 import * as admin from 'firebase-admin';
@@ -30,11 +30,7 @@ function getDb(): Firestore {
 
 const OPENCART_USER_AGENT = 'PerformancePlus/1.0 (+https://performanceplus.gr)';
 
-type OpenCartAuthType = 'native' | 'oauth';
-
 type OpenCartCredentialInput = {
-  apiUsername?: string;
-  apiKey?: string;
   clientId?: string;
   clientSecret?: string;
   token?: string;
@@ -46,8 +42,13 @@ type OpenCartConnectionTest = {
   success: boolean;
   shopName?: string;
   apiToken?: string;
-  authType?: OpenCartAuthType;
   error?: string;
+};
+
+type OpenCartRestAdminAuth = {
+  accessToken: string;
+  cookieHeader?: string;
+  userToken?: string;
 };
 
 function describeFetchError(error: unknown): Record<string, unknown> {
@@ -83,8 +84,7 @@ async function getObservedOutboundIp(): Promise<string | null> {
 }
 
 /**
- * Validate OpenCart credentials via native API login or OAuth REST extension
- * and save them on success.
+ * Validate OpenCart REST Admin API OAuth credentials and save them on success.
  */
 export async function saveOpenCartCredentials(
   brandId: string,
@@ -102,12 +102,10 @@ export async function saveOpenCartCredentials(
     connected: true,
     storeUrl: normalizedUrl,
     shopName: testResult.shopName || normalizedUrl,
-    authType: testResult.authType || 'native',
+    authType: 'oauth',
     connectedAt: FieldValue.serverTimestamp(),
   };
 
-  if (credentials.apiUsername) connectorData.apiUsername = credentials.apiUsername;
-  if (credentials.apiKey) connectorData.apiKey = encryptToken(credentials.apiKey);
   if (credentials.clientId) connectorData.clientId = credentials.clientId;
   if (credentials.clientSecret) connectorData.clientSecret = encryptToken(credentials.clientSecret);
   if (credentials.username) connectorData.username = credentials.username;
@@ -128,145 +126,28 @@ export async function saveOpenCartCredentials(
 }
 
 /**
- * Test OpenCart connection. OAuth credentials use the REST extension Bearer flow;
- * native credentials try OC3+ api/login first, then simple REST extension auth.
+ * Test OpenCart REST Admin API OAuth connection.
+ * The extension requires two explicit steps:
+ * 1. session authentication (`rest/admin_security/gettoken`)
+ * 2. admin user login (`rest/login_admin/login`)
  */
 export async function testOpenCartConnection(
   storeUrl: string,
   credentials: OpenCartCredentialInput
 ): Promise<OpenCartConnectionTest> {
-  const apiUsername = credentials.apiUsername || credentials.username || '';
-  const apiKey = credentials.apiKey || '';
   const outboundIp = await getObservedOutboundIp();
   logger.info('[OpenCart] Connection diagnostic', {
     storeUrl,
-    apiUsername,
+    username: credentials.username,
     outboundIp,
     userAgent: OPENCART_USER_AGENT,
   });
 
-  if (credentials.clientId || credentials.clientSecret || credentials.token) {
-    return testOpenCartOAuthConnection(storeUrl, credentials, outboundIp);
-  }
-
-  if (!apiUsername || !apiKey) {
-    return { success: false, error: 'Missing OpenCart API username or API key' };
-  }
-
-  // ── Try native OpenCart 3.x/4.x API login ────────────────────────
   try {
-    const loginUrl = `${storeUrl}/index.php?route=api/login`;
-    const form = new URLSearchParams({ username: apiUsername, key: apiKey });
-
-    const res = await fetch(loginUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': OPENCART_USER_AGENT,
-      },
-      body: form,
+    const auth = await authenticateOpenCartRestAdmin(storeUrl, credentials);
+    const res = await fetch(buildOpenCartRestUrl(storeUrl, 'rest/product_admin/products', { limit: '1' }), {
+      headers: buildOpenCartRestHeaders(auth),
     });
-    logger.info('[OpenCart] Native login response', {
-      storeUrl,
-      status: res.status,
-      statusText: res.statusText,
-      outboundIp,
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      if (data.api_token || data.token) {
-        const token = data.api_token || data.token;
-        logger.info(`[OpenCart] Login OK for ${storeUrl}`);
-        return { success: true, shopName: storeUrl.replace(/^https?:\/\//, ''), apiToken: token, authType: 'native' };
-      }
-      if (data.error) {
-        const errMsg = typeof data.error === 'string' ? data.error : JSON.stringify(data.error);
-        return { success: false, error: errMsg };
-      }
-    }
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    if (msg.includes('ENOTFOUND') || msg.includes('getaddrinfo')) {
-      return { success: false, error: 'e-shop URL not reachable. Check the domain.' };
-    }
-    logger.warn('[OpenCart] Native login failed, trying REST extension:', {
-      storeUrl,
-      outboundIp,
-      error: describeFetchError(e),
-    });
-  }
-
-  // ── Fallback: REST extension with X-Oc-Restadmin-Id header ───────
-  try {
-    const testUrl = `${storeUrl}/index.php?route=rest/product_admin/products&limit=1`;
-    const res = await fetch(testUrl, {
-      headers: {
-        'X-Oc-Restadmin-Id': apiKey,
-        'Content-Type': 'application/json',
-        'User-Agent': OPENCART_USER_AGENT,
-      },
-    });
-    logger.info('[OpenCart] REST extension response', {
-      storeUrl,
-      status: res.status,
-      statusText: res.statusText,
-      outboundIp,
-    });
-
-    if (res.ok) {
-      logger.info(`[OpenCart] REST extension auth OK for ${storeUrl}`);
-      return { success: true, shopName: storeUrl.replace(/^https?:\/\//, ''), apiToken: apiKey, authType: 'native' };
-    }
-  } catch (error) {
-    logger.warn('[OpenCart] REST extension failed:', {
-      storeUrl,
-      outboundIp,
-      error: describeFetchError(error),
-    });
-  }
-
-  return { success: false, error: 'Could not authenticate. Verify the e-shop URL, API username, and API key. Ensure the API user is enabled in System → Users → API.' };
-}
-
-async function testOpenCartOAuthConnection(
-  storeUrl: string,
-  credentials: OpenCartCredentialInput,
-  outboundIp: string | null
-): Promise<OpenCartConnectionTest> {
-  let token = await resolveOAuthToken(storeUrl, credentials);
-  if (!token) {
-    return { success: false, error: 'Could not get OpenCart OAuth token. Verify client_id, client_secret, token, username, and password.' };
-  }
-
-  try {
-    const buildTestUrl = (accessToken?: string): string =>
-      `${storeUrl}/index.php?route=rest/product_admin/products&limit=1${accessToken ? `&access_token=${encodeURIComponent(accessToken)}` : ''}`;
-    const fetchProductsTest = (accessToken: string): Promise<Response> =>
-      fetch(buildTestUrl(), {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-          'User-Agent': OPENCART_USER_AGENT,
-        },
-      });
-
-    let res = await fetchProductsTest(token);
-    if (res.status === 401) {
-      const refreshedToken = await resolveOAuthToken(storeUrl, { ...credentials, token: undefined });
-      if (refreshedToken) {
-        token = refreshedToken;
-        res = await fetchProductsTest(token);
-      }
-    }
-    if (res.status === 401) {
-      res = await fetch(buildTestUrl(token), {
-        headers: {
-          'Content-Type': 'application/json',
-          'User-Agent': OPENCART_USER_AGENT,
-        },
-      });
-    }
     logger.info('[OpenCart] OAuth REST extension response', {
       storeUrl,
       status: res.status,
@@ -278,8 +159,7 @@ async function testOpenCartOAuthConnection(
       return {
         success: true,
         shopName: storeUrl.replace(/^https?:\/\//, ''),
-        apiToken: token,
-        authType: 'oauth',
+        apiToken: auth.accessToken,
       };
     }
 
@@ -303,12 +183,15 @@ async function testOpenCartOAuthConnection(
     }
     return { success: false, error: `OpenCart OAuth authentication failed (${res.status}). ${details.slice(0, 160)}`.trim() };
   } catch (error) {
-    logger.warn('[OpenCart] OAuth REST extension failed:', {
+    logger.warn('[OpenCart] OAuth REST Admin authentication failed:', {
       storeUrl,
       outboundIp,
       error: describeFetchError(error),
     });
-    return { success: false, error: 'OpenCart OAuth endpoint not reachable. Check the e-shop URL and REST API extension.' };
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'OpenCart OAuth endpoint not reachable. Check the e-shop URL and REST API extension.',
+    };
   }
 }
 
@@ -322,72 +205,146 @@ function isCloudflareChallenge(body: string): boolean {
   );
 }
 
-async function resolveOAuthToken(storeUrl: string, credentials: OpenCartCredentialInput): Promise<string | null> {
-  const suppliedToken = normalizeBearerToken(credentials.token);
+async function authenticateOpenCartRestAdmin(
+  storeUrl: string,
+  credentials: OpenCartCredentialInput
+): Promise<OpenCartRestAdminAuth> {
+  const clientId = credentials.clientId?.trim();
+  const clientSecret = credentials.clientSecret?.trim();
+  const username = credentials.username?.trim();
+  const password = credentials.password?.trim();
 
-  if (!credentials.clientId || !credentials.clientSecret) return suppliedToken;
-
-  const basicAuth = Buffer.from(`${credentials.clientId}:${credentials.clientSecret}`).toString('base64');
-  const tokenUrls = [
-    `${storeUrl}/api/rest/oauth2/token/client_credentials`,
-    `${storeUrl}/index.php?route=rest/admin_security/gettoken&grant_type=client_credentials`,
-    `${storeUrl}/api/rest/oauth2/token`,
-  ];
-
-  for (const tokenUrl of tokenUrls) {
-    const token = await requestOAuthToken(tokenUrl, basicAuth, credentials);
-    if (token) return token;
+  if (!clientId || !clientSecret || !username || !password) {
+    throw new Error('Missing OpenCart OAuth client_id, client_secret, username, or password.');
   }
 
-  return suppliedToken;
+  const session = await authenticateOpenCartSession(storeUrl, clientId, clientSecret);
+  return loginOpenCartAdminUser(storeUrl, session, username, password);
 }
 
-async function requestOAuthToken(
-  tokenUrl: string,
-  basicAuth: string,
-  credentials: OpenCartCredentialInput
-): Promise<string | null> {
+async function authenticateOpenCartSession(
+  storeUrl: string,
+  clientId: string,
+  clientSecret: string
+): Promise<OpenCartRestAdminAuth> {
+  const url = buildOpenCartRestUrl(storeUrl, 'rest/admin_security/gettoken', {
+    grant_type: 'client_credentials',
+  });
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`,
+      'Content-Type': 'application/json',
+      'User-Agent': OPENCART_USER_AGENT,
+    },
+  });
+  const bodyText = await res.text();
+  const json = parseJsonObject(bodyText);
+  const token = extractOAuthToken(json);
+  if (!res.ok || !token) {
+    throw new Error(`OpenCart session authentication failed (${res.status}). ${summarizeOpenCartApiError(bodyText)}`);
+  }
+  return {
+    accessToken: token,
+    cookieHeader: getCookieHeaderFromResponse(res),
+  };
+}
+
+async function loginOpenCartAdminUser(
+  storeUrl: string,
+  session: OpenCartRestAdminAuth,
+  username: string,
+  password: string
+): Promise<OpenCartRestAdminAuth> {
+  const res = await fetch(buildOpenCartRestUrl(storeUrl, 'rest/login_admin/login'), {
+    method: 'POST',
+    headers: buildOpenCartRestHeaders(session),
+    body: JSON.stringify({ username, password }),
+  });
+  const bodyText = await res.text();
+  const json = parseJsonObject(bodyText);
+  if (!res.ok || isOpenCartApiFailure(json)) {
+    throw new Error(`OpenCart user login failed (${res.status}). ${summarizeOpenCartApiError(bodyText)}`);
+  }
+
+  const loginToken = extractOAuthToken(json);
+  const cookieHeader = mergeCookieHeaders(session.cookieHeader, getCookieHeaderFromResponse(res));
+  return {
+    accessToken: loginToken || session.accessToken,
+    cookieHeader,
+    userToken: extractOpenCartUserToken(json) || undefined,
+  };
+}
+
+function buildOpenCartRestUrl(storeUrl: string, route: string, extra: Record<string, string> = {}): string {
+  const query = new URLSearchParams(extra).toString();
+  return `${storeUrl}/index.php?route=${route}${query ? `&${query}` : ''}`;
+}
+
+function buildOpenCartRestHeaders(auth: OpenCartRestAdminAuth): Record<string, string> {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${auth.accessToken}`,
+    'Content-Type': 'application/json',
+    'User-Agent': OPENCART_USER_AGENT,
+  };
+  if (auth.cookieHeader) headers.Cookie = auth.cookieHeader;
+  return headers;
+}
+
+function parseJsonObject(text: string): Record<string, unknown> | null {
   try {
-    const clientCredentialsRes = await fetch(tokenUrl, {
-      method: 'POST',
-      headers: {
-        Authorization: `Basic ${basicAuth}`,
-        'Content-Type': 'application/json',
-        'User-Agent': OPENCART_USER_AGENT,
-      },
-    });
-    if (clientCredentialsRes.ok) {
-      const data = (await clientCredentialsRes.json()) as Record<string, unknown>;
-      const token = extractOAuthToken(data);
-      if (token) return token;
-    }
-
-    if (!credentials.username || !credentials.password) return null;
-
-    const passwordPayload = new URLSearchParams({
-      grant_type: 'password',
-      username: credentials.username,
-      password: credentials.password,
-    });
-    const passwordRes = await fetch(tokenUrl, {
-      method: 'POST',
-      headers: {
-        Authorization: `Basic ${basicAuth}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': OPENCART_USER_AGENT,
-      },
-      body: passwordPayload,
-    });
-    if (!passwordRes.ok) return null;
-    const data = (await passwordRes.json()) as Record<string, unknown>;
-    return extractOAuthToken(data);
-  } catch (error) {
-    logger.warn('[OpenCart] OAuth token request failed:', {
-      tokenUrl,
-      error: describeFetchError(error),
-    });
+    const parsed = JSON.parse(text);
+    return parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : null;
+  } catch {
     return null;
   }
+}
+
+function isOpenCartApiFailure(data: Record<string, unknown> | null): boolean {
+  if (!data) return false;
+  return data.success === 0 || data.success === false;
+}
+
+function summarizeOpenCartApiError(bodyText: string): string {
+  const parsed = parseJsonObject(bodyText);
+  const rawError = parsed?.error ?? parsed?.message ?? parsed?.data;
+  const message = Array.isArray(rawError) ? rawError.join(', ') : rawError ? String(rawError) : bodyText;
+  return message.slice(0, 180).trim() || 'No response body';
+}
+
+function getCookieHeaderFromResponse(res: Response): string | undefined {
+  const headers = res.headers as Headers & { getSetCookie?: () => string[]; raw?: () => Record<string, string[]> };
+  const setCookies = headers.getSetCookie?.() ?? headers.raw?.()['set-cookie'] ?? [];
+  const cookieParts = setCookies
+    .map((cookie) => cookie.split(';')[0]?.trim())
+    .filter(Boolean);
+  if (cookieParts.length > 0) return cookieParts.join('; ');
+
+  const singleCookie = res.headers.get('set-cookie');
+  return singleCookie?.split(';')[0]?.trim() || undefined;
+}
+
+function mergeCookieHeaders(...headers: Array<string | undefined>): string | undefined {
+  const cookies = new Map<string, string>();
+  for (const header of headers) {
+    if (!header) continue;
+    for (const part of header.split(';')) {
+      const cookie = part.trim();
+      const eq = cookie.indexOf('=');
+      if (eq <= 0) continue;
+      cookies.set(cookie.slice(0, eq), cookie);
+    }
+  }
+  return cookies.size > 0 ? [...cookies.values()].join('; ') : undefined;
+}
+
+function extractOpenCartUserToken(data: unknown): string | null {
+  if (!data || typeof data !== 'object') return null;
+  const record = data as Record<string, unknown>;
+  const direct = normalizeBearerToken(record.user_token || record.userToken || record.session || record.session_id);
+  if (direct) return direct;
+  if (record.data && typeof record.data === 'object') return extractOpenCartUserToken(record.data);
+  return null;
 }
 
 function extractOAuthToken(data: unknown): string | null {
@@ -413,27 +370,6 @@ function normalizeBearerToken(value: unknown): string | null {
   const token = String(value || '').trim();
   if (!token) return null;
   return token.replace(/^Bearer\s+/i, '').trim() || null;
-}
-
-/**
- * Refresh the API token (native OC login tokens expire per session).
- */
-async function refreshApiToken(storeUrl: string, apiUsername: string, apiKey: string): Promise<string | null> {
-  try {
-    const form = new URLSearchParams({ username: apiUsername, key: apiKey });
-    const res = await fetch(`${storeUrl}/index.php?route=api/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: form,
-    });
-    if (res.ok) {
-      const data = await res.json();
-      return data.api_token || data.token || null;
-    }
-  } catch (e) {
-    logger.warn('[OpenCart] Token refresh failed:', e);
-  }
-  return null;
 }
 
 function ocParseMoney(v: unknown): number {
@@ -548,48 +484,34 @@ export async function fetchOpenCartData(brandId: string): Promise<{
   );
 
   const storeUrl = String((connector as { storeUrl?: string }).storeUrl || '');
-  const authType = String((connector as { authType?: string }).authType || '');
-  const apiUsername = String((connector as { apiUsername?: string }).apiUsername || '');
-  const apiKey = connector.apiKey ? decryptToken(String(connector.apiKey)) : '';
   const savedToken = connector.apiToken ? decryptToken(String(connector.apiToken)) : '';
   const clientId = String((connector as { clientId?: string }).clientId || '');
   const clientSecret = connector.clientSecret ? decryptToken(String(connector.clientSecret)) : '';
   const oauthUsername = String((connector as { username?: string }).username || '');
   const oauthPassword = connector.password ? decryptToken(String(connector.password)) : '';
-  const useOAuth = authType === 'oauth' || Boolean(clientId || clientSecret);
-  if (!useOAuth && !apiKey) {
-    return { success: false, imported: 0, error: 'OpenCart credentials unavailable — reconnect required' };
+  let auth: OpenCartRestAdminAuth;
+  try {
+    auth = await authenticateOpenCartRestAdmin(storeUrl, {
+      clientId,
+      clientSecret,
+      token: savedToken,
+      username: oauthUsername,
+      password: oauthPassword,
+    });
+  } catch (error) {
+    return {
+      success: false,
+      imported: 0,
+      error: error instanceof Error ? error.message : 'OpenCart OAuth credentials unavailable — reconnect required',
+    };
   }
-  let token = useOAuth
-    ? await resolveOAuthToken(storeUrl, {
-        clientId,
-        clientSecret,
-        token: savedToken,
-        username: oauthUsername,
-        password: oauthPassword,
-      })
-    : await refreshApiToken(storeUrl, apiUsername, apiKey);
-  if (useOAuth && !token) {
-    return { success: false, imported: 0, error: 'OpenCart OAuth token unavailable — reconnect required' };
-  }
-  const useRestExtension = useOAuth || !token;
 
   const buildHeaders = (): Record<string, string> => {
-    if (useOAuth && token) {
-      return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-    }
-    if (useRestExtension) {
-      return { 'X-Oc-Restadmin-Id': apiKey, 'Content-Type': 'application/json' };
-    }
-    return { 'Content-Type': 'application/json' };
+    return buildOpenCartRestHeaders(auth);
   };
 
   const buildUrl = (route: string, extra: Record<string, string> = {}): string => {
-    const params = new URLSearchParams(extra);
-    if (useOAuth && token) params.set('access_token', token);
-    if (token && !useRestExtension) params.set('api_token', token);
-    const query = params.toString();
-    return `${storeUrl}/index.php?route=${route}${query ? `&${query}` : ''}`;
+    return buildOpenCartRestUrl(storeUrl, route, extra);
   };
 
   /** Extra API calls per order — returns line items AND tax extracted from detail payload. */
@@ -606,40 +528,16 @@ export async function fetchOpenCartData(brandId: string): Promise<{
       return { lineItems: [], tax: 0 };
     };
 
-    if (useRestExtension) {
-      for (const key of ['id', 'order_id'] as const) {
-        const url = buildUrl('rest/order_admin/order', { [key]: orderId });
-        let res = await fetch(url, { headers: buildHeaders() });
-        if (useOAuth && res.status === 401) {
-          const t = await resolveOAuthToken(storeUrl, { clientId, clientSecret, username: oauthUsername, password: oauthPassword });
-          if (t) {
-            token = t;
-            res = await fetch(url, { headers: buildHeaders() });
-          }
-        }
-        if (res.ok) {
-          const json = await res.json();
-          const result = tryBodies(json);
-          if (result.lineItems.length > 0 || result.tax > 0) return result;
-        }
-      }
-      return { lineItems: [], tax: 0 };
-    }
-
-    const fetchInfo = async (): Promise<Response> =>
-      fetch(buildUrl('api/order/info', { order_id: orderId }), { headers: buildHeaders() });
-
-    let res = await fetchInfo();
-    if (res.status === 401) {
-      const t = await refreshApiToken(storeUrl, apiUsername, apiKey);
-      if (t) {
-        token = t;
-        res = await fetchInfo();
+    for (const key of ['id', 'order_id'] as const) {
+      const url = buildUrl('rest/order_admin/order', { [key]: orderId });
+      const res = await fetch(url, { headers: buildHeaders() });
+      if (res.ok) {
+        const json = await res.json();
+        const result = tryBodies(json);
+        if (result.lineItems.length > 0 || result.tax > 0) return result;
       }
     }
-    if (!res.ok) return { lineItems: [], tax: 0 };
-    const json = await res.json();
-    return tryBodies(json);
+    return { lineItems: [], tax: 0 };
   };
 
   let totalImported = 0;
@@ -655,16 +553,8 @@ export async function fetchOpenCartData(brandId: string): Promise<{
     const filterSinceMs = orderWindow.windowStart.getTime();
 
     while (hasMore) {
-      const route = useRestExtension ? 'rest/order_admin/orders' : 'api/order';
-      const url = buildUrl(route, { page: String(orderPage), limit: '100' });
-      let res = await fetch(url, { headers: buildHeaders() });
-      if (useOAuth && res.status === 401) {
-        const t = await resolveOAuthToken(storeUrl, { clientId, clientSecret, username: oauthUsername, password: oauthPassword });
-        if (t) {
-          token = t;
-          res = await fetch(url, { headers: buildHeaders() });
-        }
-      }
+      const url = buildUrl('rest/order_admin/orders', { page: String(orderPage), limit: '100' });
+      const res = await fetch(url, { headers: buildHeaders() });
 
       if (!res.ok) {
         logger.warn(`[OpenCart] Orders page ${orderPage} returned ${res.status}`);
@@ -767,16 +657,8 @@ export async function fetchOpenCartData(brandId: string): Promise<{
     let prodMore = true;
 
     while (prodMore) {
-      const route = useRestExtension ? 'rest/product_admin/products' : 'api/product';
-      const url = buildUrl(route, { page: String(prodPage), limit: '100' });
-      let res = await fetch(url, { headers: buildHeaders() });
-      if (useOAuth && res.status === 401) {
-        const t = await resolveOAuthToken(storeUrl, { clientId, clientSecret, username: oauthUsername, password: oauthPassword });
-        if (t) {
-          token = t;
-          res = await fetch(url, { headers: buildHeaders() });
-        }
-      }
+      const url = buildUrl('rest/product_admin/products', { page: String(prodPage), limit: '100' });
+      const res = await fetch(url, { headers: buildHeaders() });
 
       if (!res.ok) {
         productsAbort = true;

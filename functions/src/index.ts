@@ -1457,31 +1457,24 @@ export const connectorSaveCredentials = onRequest(
         res.status(200).json(result);
       } else if (provider === 'opencart') {
         const {
-          apiUsername,
-          apiKey: ocApiKey,
           clientId,
           clientSecret,
           token,
           username,
           password,
         } = req.body as {
-          apiUsername?: string;
-          apiKey?: string;
           clientId?: string;
           clientSecret?: string;
           token?: string;
           username?: string;
           password?: string;
         };
-        const hasNativeCredentials = Boolean(apiUsername && ocApiKey);
         const hasOAuthCredentials = Boolean(clientId && clientSecret && token && username && password);
-        if (!storeUrl || (!hasNativeCredentials && !hasOAuthCredentials)) {
+        if (!storeUrl || !hasOAuthCredentials) {
           res.status(400).json({ error: 'Missing OpenCart credentials' });
           return;
         }
         const result = await saveOpenCartCredentials(brandId, storeUrl, {
-          apiUsername,
-          apiKey: ocApiKey,
           clientId,
           clientSecret,
           token,

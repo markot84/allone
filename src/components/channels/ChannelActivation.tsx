@@ -255,6 +255,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     getStrategyName,
     updateBudget,
     isSavingBudget,
+    isLoading: strategyLoading,
   } = useActiveStrategy();
   const queryClient = useQueryClient();
   const toast = useToast();
@@ -861,6 +862,33 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     return { total, done, inProgress, pending: total - done - inProgress, excluded: allChannels.length - total };
   }, [allChannels, getStatus, isIncluded]);
 
+  if (strategyLoading) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">{pageTitle}</h2>}
+          description={
+            <p className="text-sm text-[#4A4A4A] sm:text-base">Μίξη καναλιών με AI βάσει εμπορικής στρατηγικής</p>
+          }
+        />
+        <Card padding="lg">
+          <div className="mx-auto max-w-xl py-16 text-center">
+            <Spinner size="lg" className="mx-auto mb-4" />
+            <h3 className="mb-2 text-lg font-semibold text-[var(--nts-charcoal)]">Φορτώνουμε τη στρατηγική σου</h3>
+            <p className="mx-auto mb-6 max-w-md text-sm text-[var(--nts-medium-gray)]">
+              Ετοιμάζουμε τα κανάλια και τις AI συστάσεις. Αυτό παίρνει λίγα δευτερόλεπτα μετά από refresh.
+            </p>
+            <div className="mx-auto space-y-2">
+              <Skeleton className="mx-auto h-3 w-72 max-w-full" />
+              <Skeleton className="mx-auto h-3 w-56 max-w-full" />
+              <Skeleton className="mx-auto h-3 w-64 max-w-full" />
+            </div>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
   if (!hasRealStrategy) {
     return (
       <div className="space-y-6">
@@ -1036,9 +1064,9 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
               Δεν βρέθηκαν ενεργά dead-stock προϊόντα με διαθέσιμο απόθεμα για αυτή την ενέργεια.
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-xl border border-amber-100 bg-white">
-              <table className="w-full text-left text-xs">
-                <thead>
+            <div className="max-h-[520px] overflow-auto rounded-xl border border-amber-100 bg-white">
+              <table className="min-w-[860px] w-full text-left text-xs">
+                <thead className="sticky top-0 z-10">
                   <tr className="border-b border-amber-100 bg-amber-50/60 text-[#4A4A4A]">
                     <th className="px-3 py-2 font-semibold">Parent / Model</th>
                     <th className="px-3 py-2 font-semibold">SKU</th>
@@ -1049,7 +1077,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                   </tr>
                 </thead>
                 <tbody>
-                  {decisionProductRows.slice(0, 8).map((row) => (
+                  {decisionProductRows.map((row) => (
                     <tr key={row.key} className="border-b border-[#F3F4F6] last:border-0">
                       <td className="px-3 py-2 font-mono text-[#1A1A1A]">{row.key}</td>
                       <td className="px-3 py-2 font-mono text-[#4A4A4A]">{row.representative.sku || '—'}</td>
