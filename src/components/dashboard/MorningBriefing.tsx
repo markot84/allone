@@ -370,11 +370,10 @@ export function MorningBriefing(props: MorningBriefingProps) {
     setLoading(false);
   }, [brandId, loading]);
 
-  if (!hasAnyData) return null;
-
   /** Φόρτωση πλήρους ιστορικού παραγγελιών — τα KPI ανεβαίνουν αλλά το κείμενο δεν πρέπει να προηγείται. */
   const awaitingEcommMetrics =
     !metricsReady && ((props.ecommerce?.connectedPlatforms?.length ?? 0) > 0);
+  const briefingPending = !briefing && !loading && !error;
 
   const timeLabel = briefing?.generatedAt
     ? new Date(briefing.generatedAt).toLocaleTimeString('el-GR', { hour: '2-digit', minute: '2-digit' })
@@ -443,6 +442,11 @@ export function MorningBriefing(props: MorningBriefingProps) {
                 {collapsed && awaitingEcommMetrics && (
                   <p className="text-[12px] text-[var(--nts-medium-gray)] mt-1 line-clamp-2">
                     Συγχρονίζουμε τον τζίρο και τις παραγγελίες από το ηλεκτρονικό κατάστημα με τον πίνακα ελέγχου…
+                  </p>
+                )}
+                {collapsed && briefingPending && !awaitingEcommMetrics && (
+                  <p className="text-[12px] text-[var(--nts-medium-gray)] mt-1 line-clamp-1">
+                    Το briefing θα εμφανιστεί αυτόματα μόλις είναι διαθέσιμα τα πρώτα αξιόπιστα δεδομένα.
                   </p>
                 )}
                 {collapsed && !awaitingEcommMetrics && briefing && (
@@ -514,6 +518,21 @@ export function MorningBriefing(props: MorningBriefingProps) {
                 >
                   Δοκίμασε ξανά
                 </button>
+              </motion.div>
+            )}
+
+            {briefingPending && (
+              <motion.div
+                key="pending"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="rounded-xl border border-slate-100 bg-slate-50/80 px-4 py-4 text-[13px] leading-relaxed text-[var(--nts-medium-gray)]"
+              >
+                <p className="font-medium text-[var(--nts-charcoal)]">Προετοιμασία briefing…</p>
+                <p className="mt-1">
+                  Το Dashboard εμφανίζεται άμεσα και το AI Briefing θα δημιουργηθεί αυτόματα μόλις φορτωθούν τα πρώτα αξιόπιστα στοιχεία του brand.
+                </p>
               </motion.div>
             )}
 

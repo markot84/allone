@@ -87,7 +87,8 @@ const REV_CHART_ESHOP = '#F97316';
 
 const REV_PERF_LABEL_ESHOP = 'Τζίρος e-shop (παραγγελίες)';
 const REV_PERF_LABEL_ESHOP_BLEND = 'Organic + καμπάνιες (εκτίμηση)';
-const DASHBOARD_LOADING_TIMEOUT_MS = 8000;
+const DASHBOARD_LOADING_TIMEOUT_MS = 1800;
+const FINANCIAL_GATE_TIMEOUT_MS = 1800;
 /** Διαφήμιση — standalone efficiency chart (όχι σύγκριση με τζίρο). */
 const ADS_SPEND_COLOR = '#FDBA74';
 const ADS_CONV_COLOR = REV_CHART_ESHOP;
@@ -279,9 +280,10 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     hasOrganic ||
     (enabledModules.procurement && procurementSheets.hasData);
   const releasedFinancialGateBrandsRef = useRef(new Set<string>());
+  const [financialGateTimedOut, setFinancialGateTimedOut] = useState(false);
   const financialGateReleased = currentBrand ? releasedFinancialGateBrandsRef.current.has(currentBrand.id) : false;
   const financialSourcesLoading =
-    rawFinancialSourcesLoading && !financialGateReleased && !hasUsableFinancialData;
+    rawFinancialSourcesLoading && !financialGateReleased && !hasUsableFinancialData && !financialGateTimedOut;
 
   useEffect(() => {
     if (!currentBrand) return;
@@ -289,6 +291,13 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       releasedFinancialGateBrandsRef.current.add(currentBrand.id);
     }
   }, [currentBrand, rawFinancialSourcesLoading, hasUsableFinancialData]);
+
+  useEffect(() => {
+    setFinancialGateTimedOut(false);
+    if (!currentBrand || !rawFinancialSourcesLoading || hasUsableFinancialData || financialGateReleased) return;
+    const t = window.setTimeout(() => setFinancialGateTimedOut(true), FINANCIAL_GATE_TIMEOUT_MS);
+    return () => window.clearTimeout(t);
+  }, [currentBrand?.id, rawFinancialSourcesLoading, hasUsableFinancialData, financialGateReleased]);
 
   /** Το AI Briefing περιμένει τα ίδια σταθερά financial δεδομένα με τα KPI. */
   const briefingMetricsReady = !financialSourcesLoading && !ecommHist.rawLoading;
