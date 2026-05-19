@@ -256,7 +256,7 @@ async function loginOpenCartAdminUser(
   username: string,
   password: string
 ): Promise<OpenCartRestAdminAuth> {
-  const res = await fetch(buildOpenCartRestUrl(storeUrl, 'rest/login_admin/login'), {
+  const res = await fetch(buildOpenCartRestUrl(storeUrl, 'rest/admin_security/login'), {
     method: 'POST',
     headers: buildOpenCartRestHeaders(session),
     body: JSON.stringify({ username, password }),
