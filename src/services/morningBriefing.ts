@@ -455,7 +455,7 @@ export function computeBriefingDataHash(data: BriefingData): string {
 
 const MAX_DAILY_GENERATIONS = 4;
 const MIN_REGEN_INTERVAL_MS = 60 * 60 * 1000; // 1 hour cooldown between auto-updates
-const BRIEFING_CACHE_VERSION = 3;
+const BRIEFING_CACHE_VERSION = 4;
 
 /** Calendar day in local timezone (YYYY-MM-DD) — consistent with «σήμερα» για τον χρήστη */
 export function getLocalDateKey(d = new Date()): string {

@@ -299,8 +299,17 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     return () => window.clearTimeout(t);
   }, [currentBrand?.id, rawFinancialSourcesLoading, hasUsableFinancialData, financialGateReleased]);
 
-  /** Το AI Briefing περιμένει τα ίδια σταθερά financial δεδομένα με τα KPI. */
-  const briefingMetricsReady = !financialSourcesLoading && !ecommHist.rawLoading;
+  /**
+   * Το Dashboard κάνει progressive render γρήγορα, αλλά το AI Briefing ΔΕΝ πρέπει να γράφεται
+   * πριν φορτώσουν τα κρίσιμα inputs. Αλλιώς μπορεί να δει προσωρινά campaigns=[] και να πει
+   * λάθος ότι δεν υπάρχει διαφημιστική δαπάνη.
+   */
+  const briefingMetricsReady =
+    !rawFinancialSourcesLoading &&
+    !ecommHist.rawLoading &&
+    !ga4AnalyticsLoading &&
+    !segmentsLoading &&
+    !productsLoading;
 
   const [dashboardLoadingTimedOut, setDashboardLoadingTimedOut] = useState(false);
   const dashboardOverviewBusy =
