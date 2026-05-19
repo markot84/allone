@@ -89,6 +89,7 @@ const REV_PERF_LABEL_ESHOP = 'Τζίρος e-shop (παραγγελίες)';
 const REV_PERF_LABEL_ESHOP_BLEND = 'Organic + καμπάνιες (εκτίμηση)';
 const DASHBOARD_LOADING_TIMEOUT_MS = 1800;
 const FINANCIAL_GATE_TIMEOUT_MS = 1800;
+const BRIEFING_CONTEXT_TIMEOUT_MS = 6000;
 /** Διαφήμιση — standalone efficiency chart (όχι σύγκριση με τζίρο). */
 const ADS_SPEND_COLOR = '#FDBA74';
 const ADS_CONV_COLOR = REV_CHART_ESHOP;
@@ -306,10 +307,19 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
    */
   const briefingMetricsReady =
     !rawFinancialSourcesLoading &&
-    !ecommHist.rawLoading &&
-    !ga4AnalyticsLoading &&
-    !segmentsLoading &&
-    !productsLoading;
+    !ecommHist.rawLoading;
+  const [briefingContextTimedOut, setBriefingContextTimedOut] = useState(false);
+  const briefingSecondaryContextLoading = ga4AnalyticsLoading || segmentsLoading || productsLoading;
+  const briefingReady =
+    briefingMetricsReady &&
+    (!briefingSecondaryContextLoading || briefingContextTimedOut);
+
+  useEffect(() => {
+    setBriefingContextTimedOut(false);
+    if (!currentBrand?.id || !briefingMetricsReady || !briefingSecondaryContextLoading) return;
+    const t = window.setTimeout(() => setBriefingContextTimedOut(true), BRIEFING_CONTEXT_TIMEOUT_MS);
+    return () => window.clearTimeout(t);
+  }, [currentBrand?.id, briefingMetricsReady, briefingSecondaryContextLoading]);
 
   const [dashboardLoadingTimedOut, setDashboardLoadingTimedOut] = useState(false);
   const dashboardOverviewBusy =
@@ -980,7 +990,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
           }}
           alerts={automationAlerts}
           supplierTodMap={supplierTodMap}
-          metricsReady={briefingMetricsReady}
+          metricsReady={briefingReady}
           financeKey={briefingFinanceKey}
           ecommerce={{
             hasData: enabledModules.ecommerce && !!ecomm.hasData,

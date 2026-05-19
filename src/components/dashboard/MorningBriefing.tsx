@@ -97,7 +97,7 @@ function guessRoute(action: string): GuessResult {
 
 const SIGNIFICANCE_CHECK_INTERVAL = 15 * 60 * 1000; // 15 minutes
 /** Μικρή καθυστέρηση μετά τα σταθερά KPI· το βαρύ work περιμένει `metricsReady`. */
-const INIT_DELAY_MS = 800;
+const INIT_DELAY_MS = 150;
 
 function briefingStorageKey(brandId: string, period = 'current_month') {
   return `perf-plus-ai-briefing-v4:${brandId}:${getLocalDateKey()}:${period}`;
@@ -309,7 +309,7 @@ export function MorningBriefing(props: MorningBriefingProps) {
           if (!cancelled) setLoading(false);
         }
       })();
-    }, 2000); // 2s αναμονή για σταθεροποίηση δεδομένων
+    }, 500); // σύντομο debounce: το readiness gate έχει ήδη κρατήσει τα κρίσιμα inputs
 
     return () => {
       cancelled = true;
