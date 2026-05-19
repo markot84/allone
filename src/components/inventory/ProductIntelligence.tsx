@@ -20,7 +20,8 @@ import {
   Trash2,
   Loader2
 } from 'lucide-react';
-import { Card, Badge, Button, ProgressBar, Tooltip, useToast, AlertsBanner, PageHeader, DataSourcePill } from '../common';
+import { Card, Badge, Button, ProgressBar, Tooltip, useToast, AlertsBanner, PageHeader, DataSourcePill, ProductThumbnail } from '../common';
+import { useProductThumbnails } from '../../hooks/useProductThumbnails';
 import { useBrand } from '../../hooks/useBrand';
 import { useSuppliers } from '../../hooks/useSuppliers';
 import { usePriceBenchmarks } from '../../hooks/usePriceBenchmarks';
@@ -399,6 +400,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   }, []);
 
   const { currentBrand } = useBrand();
+  const { getThumbnailUrl } = useProductThumbnails();
   const { suppliers } = useSuppliers();
   const { benchmarks, count: benchmarkCount } = usePriceBenchmarks({ maxDocs: PRODUCT_INTELLIGENCE_BENCHMARK_LIMIT });
   const tagStockBucket = useMemo((): ProductIntelligenceBucket | null => {
@@ -1001,6 +1003,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
                     supplierTodMap={supplierTodMap}
                     benchmarkMap={benchmarkCount > 0 ? benchmarkMap : undefined}
                     useProcurementRowModel={hasServerAggregate}
+                    getThumbnailUrl={getThumbnailUrl}
                   />
                 ))}
               </AnimatePresence>
@@ -1116,9 +1119,11 @@ interface ProductRowProps {
   benchmarkMap?: Map<string, { priceDiff: number; benchmarkPrice: number }>;
   index: number;
   useProcurementRowModel?: boolean;
+  getThumbnailUrl: (sku: string, product?: unknown) => { url: string };
 }
 
-function ProductRow({ product, index, supplierTodMap, benchmarkMap, useProcurementRowModel }: ProductRowProps) {
+function ProductRow({ product, index, supplierTodMap, benchmarkMap, useProcurementRowModel, getThumbnailUrl }: ProductRowProps) {
+  const thumbUrl = getThumbnailUrl(product.sku || '', product).url;
   const health = resolveStockHealth(product, supplierTodMap, useProcurementRowModel);
   const effectiveStock = getEffectiveStockLevel(product);
   const onHandStock = product.stock_on_hand;
@@ -1141,12 +1146,13 @@ function ProductRow({ product, index, supplierTodMap, benchmarkMap, useProcureme
       className="border-b border-[#E5E5E5] hover:bg-[#F5F5F5] transition-colors"
     >
       <td className="px-3 py-2">
-        <div className="min-w-0">
-          <p className="text-xs font-medium text-[#1A1A1A] truncate">
-            {product.name}
-          </p>
-          <p className="text-[10px] text-[#9CA3AF] truncate">{product.sku}</p>
-        </div>
+        <motion.div className="flex min-w-0 items-center gap-2.5">
+          <ProductThumbnail src={thumbUrl || undefined} alt={product.name} size="sm" />
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-[#1A1A1A] truncate">{product.name}</p>
+            <p className="text-[10px] text-[#9CA3AF] truncate">{product.sku}</p>
+          </div>
+        </motion.div>
       </td>
       <td className="px-3 py-2 hidden lg:table-cell">
         <span className="text-xs text-[#4A4A4A] truncate block max-w-[120px]">{product.category}</span>

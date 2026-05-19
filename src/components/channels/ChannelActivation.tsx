@@ -38,7 +38,8 @@ import {
   Cell,
   Tooltip,
 } from 'recharts';
-import { Card, CardHeader, Badge, Button, Spinner, PageHeader, ModalHeader } from '../common';
+import { Card, CardHeader, Badge, Button, Spinner, PageHeader, ModalHeader, ProductThumbnail } from '../common';
+import { useProductThumbnails } from '../../hooks/useProductThumbnails';
 import { useToast } from '../common/Toast';
 import { useProductSource } from '../../hooks/useProductSource';
 import { useCampaigns } from '../../hooks/useCampaigns';
@@ -263,6 +264,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
   // Magento product enrichment — γεμίζει image_link, link, description, gtin, mpn,
   // color, size, item_group_id στο Ads Feed από το ωμό `magento_products` collection.
   const { bySku: magentoBySku, bySkuLower: magentoBySkuLower, config: magentoConnector, count: magentoEnrichedCount } = useMagentoProductEnrichment();
+  const { getThumbnailUrl } = useProductThumbnails();
 
   // Provenance snapshot — δίνει στο AI το mix πηγών δεδομένων (connector vs
   // movement vs procurement vs import) ώστε να calibrate το rationale.
@@ -742,18 +744,20 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
     (feedType: string) => {
       if (feedType === 'Ads Feed' || feedType === 'Google Shopping') {
         const slice = feedProducts.slice(0, 8);
-        const headers = ['id', 'title', 'price', 'availability', 'brand', 'image_link', 'gtin', 'item_group_id', 'custom_label_0'];
+        const headers = ['thumb', 'id', 'title', 'price', 'availability', 'brand', 'image_link', 'gtin', 'item_group_id', 'custom_label_0'];
         const rows = slice.map((p) => {
           const labels = getProductStrategyLabels(p, activeStrategy ?? null);
           const sku = (p.sku || '').trim();
           const enrichment = sku ? lookupMagentoEnrichment(sku) : null;
+          const thumb = sku ? getThumbnailUrl(sku, p).url : '';
           return [
+            thumb || '',
             p.sku || p.id,
             p.name || '',
             `${formatCurrency(p.price || 0, 2)} EUR`,
             (p.stock_level || 0) > 0 ? 'in stock' : 'out of stock',
             p.brand || enrichment?.manufacturer || '',
-            enrichment?.imageLink ? '✓' : '—',
+            (enrichment?.imageLink || thumb) ? '✓' : '—',
             enrichment?.gtin || '—',
             enrichment?.itemGroupId || '—',
             labels.custom_label_0,
@@ -776,7 +780,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
       ]);
       return { headers, rows };
     },
-    [activeStrategy, decisionProductRows, feedProducts, lookupMagentoEnrichment]
+    [activeStrategy, decisionProductRows, feedProducts, getThumbnailUrl, lookupMagentoEnrichment]
   );
 
   const buildDecisionExportRows = (rows: DecisionProductRow[]) => {
@@ -1068,6 +1072,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
               <table className="min-w-[860px] w-full text-left text-xs">
                 <thead className="sticky top-0 z-10">
                   <tr className="border-b border-amber-100 bg-amber-50/60 text-[#4A4A4A]">
+                    <th className="px-3 py-2 font-semibold w-12" aria-label="Εικόνα" />
                     <th className="px-3 py-2 font-semibold">Parent / Model</th>
                     <th className="px-3 py-2 font-semibold">SKU</th>
                     <th className="px-3 py-2 font-semibold">Name</th>
@@ -1077,8 +1082,14 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                   </tr>
                 </thead>
                 <tbody>
-                  {decisionProductRows.map((row) => (
+                  {decisionProductRows.map((row) => {
+                    const sku = row.representative.sku || '';
+                    const thumb = getThumbnailUrl(sku, row.representative).url;
+                    return (
                     <tr key={row.key} className="border-b border-[#F3F4F6] last:border-0">
+                      <td className="px-2 py-2">
+                        <ProductThumbnail src={thumb || undefined} alt={row.representative.name || sku} size="sm" />
+                      </td>
                       <td className="px-3 py-2 font-mono text-[#1A1A1A]">{row.key}</td>
                       <td className="px-3 py-2 font-mono text-[#4A4A4A]">{row.representative.sku || '—'}</td>
                       <td className="max-w-[260px] truncate px-3 py-2 text-[#4A4A4A]" title={row.representative.name || ''}>{row.representative.name || '—'}</td>
@@ -1086,7 +1097,8 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                       <td className="px-3 py-2 font-mono text-[#1A1A1A]">{formatCurrency(row.totalValue, 0)}</td>
                       <td className="px-3 py-2 font-mono text-[#4A4A4A]">{row.variantCount}</td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1812,11 +1824,22 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
                           <tbody>
                             {rows.map((row, ri) => (
                               <tr key={ri} className="border-b border-[#F0F0F0] last:border-0">
-                                {row.map((cell, ci) => (
-                                  <td key={ci} className="px-3 py-2 text-[#4A4A4A] max-w-[200px] truncate" title={String(cell)}>
-                                    {String(cell)}
-                                  </td>
-                                ))}
+                                {row.map((cell, ci) => {
+                                  const header = headers[ci];
+                                  if (header === 'thumb') {
+                                    const url = String(cell || '');
+                                    return (
+                                      <td key={ci} className="px-2 py-2">
+                                        <ProductThumbnail src={url || undefined} alt="" size="sm" />
+                                      </td>
+                                    );
+                                  }
+                                  return (
+                                    <td key={ci} className="px-3 py-2 text-[#4A4A4A] max-w-[200px] truncate" title={String(cell)}>
+                                      {String(cell)}
+                                    </td>
+                                  );
+                                })}
                               </tr>
                             ))}
                           </tbody>

@@ -545,6 +545,18 @@ service cloud.firestore {
       allow delete: if isBrandOwnerOrAdmin(brandId);
     }
 
+    match /commercial_actions/{actionId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+
+    match /marketing_plans/{planId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+
     // Marketing interest leads — εγγραφή μόνο μέσω Cloud Functions · ανάγνωση super admin
     match /interest_leads/{leadId} {
       allow read: if isSuperAdmin();

@@ -56,6 +56,8 @@ const ROIAttribution = lazyNamedWithRetry(() => import('./components/roi'), 'ROI
 const CompetitorInsights = lazyNamedWithRetry(() => import('./components/competitive/CompetitorInsights'), 'CompetitorInsights');
 const SuperAdminDashboard = lazyNamedWithRetry(() => import('./components/admin'), 'SuperAdminDashboard');
 const WeightConfigurator = lazyNamedWithRetry(() => import('./components/strategy'), 'WeightConfigurator');
+const PolicyImpactPage = lazyNamedWithRetry(() => import('./components/strategy/PolicyImpactPage'), 'PolicyImpactPage');
+const MarketingPlanPage = lazyNamedWithRetry(() => import('./components/marketing/MarketingPlanPage'), 'MarketingPlanPage');
 const Reports = lazyNamedWithRetry(() => import('./components/reports'), 'Reports');
 const BusinessFinances = lazyNamedWithRetry(() => import('./components/finances'), 'BusinessFinances');
 const ProcurementPage = lazyNamedWithRetry(() => import('./components/procurement/ProcurementPage'), 'ProcurementPage');
@@ -264,7 +266,11 @@ function AppMain() {
       case 'markets':
         return <MarketExplorationPage onSectionChange={handleSectionChange} />;
       case 'strategy':
-        return <WeightConfigurator />;
+        return <WeightConfigurator onSectionChange={handleSectionChange} />;
+      case 'policy-impact':
+        return <PolicyImpactPage onSectionChange={handleSectionChange} />;
+      case 'marketing-plan':
+        return <MarketingPlanPage onSectionChange={handleSectionChange} />;
       case 'rfm':
         return <RFMAnalysis onSectionChange={handleSectionChange} />;
       case 'products':

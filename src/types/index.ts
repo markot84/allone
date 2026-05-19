@@ -30,6 +30,8 @@ export type AppSectionId =
   | 'brands'
   | 'dashboard'
   | 'strategy'
+  | 'policy-impact'
+  | 'marketing-plan'
   | 'calendar'
   | 'rfm'
   | 'products'

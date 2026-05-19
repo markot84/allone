@@ -21,6 +21,8 @@ export const APP_SECTIONS: AppSectionId[] = [
   'brands',
   'dashboard',
   'strategy',
+  'policy-impact',
+  'marketing-plan',
   'rfm',
   'products',
   'suppliers',

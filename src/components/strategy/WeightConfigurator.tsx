@@ -265,7 +265,9 @@ function getScenarioPendingActionText(scenarioId: string | null): string {
     : 'Επιλογή διάρκειας & ενεργοποίηση';
 }
 
-export function WeightConfigurator() {
+export function WeightConfigurator({
+  onSectionChange,
+}: { onSectionChange?: (section: string) => void } = {}) {
   const { currentBrand } = useBrand();
   const {
     products: sourceProducts,
@@ -1402,6 +1404,18 @@ export function WeightConfigurator() {
                   tone={dataCoverage.activeSource === 'import' ? 'warning' : dataCoverage.activeSource === 'ecommerce' ? 'success' : 'neutral'}
                 />
               </div>
+            }
+            actions={
+              onSectionChange ? (
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="secondary" size="sm" onClick={() => onSectionChange('policy-impact')}>
+                    Policy impact
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={() => onSectionChange('marketing-plan')}>
+                    Marketing plan
+                  </Button>
+                </div>
+              ) : undefined
             }
           />
 
