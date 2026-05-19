@@ -31,7 +31,7 @@
     "firebase": "^11.10.0",
     "framer-motion": "^12.27.1",
     "i18n-iso-countries": "^7.14.0",
-    "jspdf": "^4.1.0",
+    "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.7",
     "lucide-react": "^0.562.0",
     "prop-types": "^15.8.1",
@@ -59,7 +59,15 @@
     "globals": "^16.5.0",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
-    "vite": "^7.2.4",
+    "vite": "^7.3.3",
     "vitest": "^3.2.4"
+  },
+  "overrides": {
+    "protobufjs": "^7.5.8",
+    "flatted": "^3.4.2",
+    "d3-color": "^3.1.0",
+    "minimatch@^3.0.0": "^3.1.5",
+    "picomatch": "^4.0.4",
+    "rollup": "^4.60.4"
   }
 }

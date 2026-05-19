@@ -3,7 +3,7 @@
  * Run before build to embed version & commit info into the app.
  * Output: src/generated/buildInfo.json
  */
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -12,9 +12,13 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 const OUT = resolve(ROOT, 'src/generated/buildInfo.json');
 
-function git(cmd) {
+function git(args) {
   try {
-    return execSync(cmd, { cwd: ROOT, encoding: 'utf-8' }).trim();
+    return execFileSync('git', args, {
+      cwd: ROOT,
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
   } catch {
     return '';
   }
@@ -41,16 +45,17 @@ function bumpVersion(prev, commits) {
 
 // Get commits since last build info generation
 const lastVersion = getLastRecordedVersion();
-const lastTag = git('git describe --tags --abbrev=0 2>/dev/null') || '';
+const lastTag = git(['describe', '--tags', '--abbrev=0']) || '';
 
 // Get recent commits (since last tag, or last 20)
-let logCmd = 'git log --oneline -20 --no-decorate';
+const defaultLogArgs = ['log', '--oneline', '-20', '--no-decorate'];
+let logArgs = defaultLogArgs;
 if (lastTag) {
-  logCmd = `git log ${lastTag}..HEAD --oneline --no-decorate`;
-  if (!git(logCmd)) logCmd = 'git log --oneline -20 --no-decorate';
+  logArgs = ['log', `${lastTag}..HEAD`, '--oneline', '--no-decorate'];
+  if (!git(logArgs)) logArgs = defaultLogArgs;
 }
 
-const rawLog = git(logCmd);
+const rawLog = git(logArgs);
 const commits = rawLog
   .split('\n')
   .filter(Boolean)
@@ -64,8 +69,8 @@ const commits = rawLog
 
 const commitMessages = commits.map(c => c.message);
 const newVersion = bumpVersion(lastVersion, commitMessages);
-const commitHash = git('git rev-parse --short HEAD');
-const branch = git('git branch --show-current');
+const commitHash = git(['rev-parse', '--short', 'HEAD']);
+const branch = git(['branch', '--show-current']);
 const buildDate = new Date().toISOString();
 
 // Commit type → Greek label

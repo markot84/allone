@@ -69,7 +69,7 @@ export function encryptToken(plaintext: string | null | undefined): string {
   }
   try {
     const nonce = randomBytes(12);
-    const cipher = createCipheriv('aes-256-gcm', key, nonce) as CipherGCM;
+    const cipher = createCipheriv('aes-256-gcm', key, nonce, { authTagLength: 16 }) as CipherGCM;
     const enc = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
     const tag = cipher.getAuthTag();
     const payload = Buffer.concat([enc, tag]);
@@ -103,7 +103,7 @@ export function decryptToken(value: string | null | undefined): string {
     if (nonce.length !== 12 || payload.length < 17) return '';
     const tag = payload.slice(payload.length - 16);
     const ct = payload.slice(0, payload.length - 16);
-    const decipher = createDecipheriv('aes-256-gcm', key, nonce) as DecipherGCM;
+    const decipher = createDecipheriv('aes-256-gcm', key, nonce, { authTagLength: 16 }) as DecipherGCM;
     decipher.setAuthTag(tag);
     const dec = Buffer.concat([decipher.update(ct), decipher.final()]);
     return dec.toString('utf8');

@@ -1,72 +1,16 @@
 {
-  "version": "0.749.212",
-  "previousVersion": "0.749.211",
-  "commitHash": "21145e5",
+  "version": "0.749.213",
+  "previousVersion": "0.749.212",
+  "commitHash": "919a1cf",
   "branch": "main",
-  "buildDate": "2026-05-16T06:50:33.040Z",
+  "buildDate": "2026-05-19T12:08:44.112Z",
   "commits": [
     {
-      "hash": "21145e5",
-      "message": "chore: full deploy"
-    },
-    {
-      "hash": "d3afa9e",
-      "message": "chore: full deploy"
-    },
-    {
-      "hash": "437192d",
-      "message": "chore: full deploy"
-    },
-    {
-      "hash": "78f12a2",
-      "message": "chore: full deploy"
-    },
-    {
-      "hash": "0ef6a69",
-      "message": "chore: full deploy"
-    },
-    {
-      "hash": "87e09c1",
-      "message": "chore: full deploy"
-    },
-    {
-      "hash": "1fd745c",
-      "message": "chore: full deploy"
-    },
-    {
-      "hash": "3de2664",
-      "message": "chore: full deploy"
-    },
-    {
-      "hash": "9c5c7ea",
-      "message": "chore: full deploy"
-    },
-    {
-      "hash": "3581b0f",
-      "message": "chore: full deploy"
-    },
-    {
-      "hash": "b70227a",
-      "message": "chore: full deploy"
-    },
-    {
-      "hash": "9d0a4fb",
-      "message": "chore: full deploy"
-    },
-    {
-      "hash": "ac179eb",
-      "message": "chore: full deploy"
-    },
-    {
-      "hash": "089bb5b",
-      "message": "chore: full deploy"
-    },
-    {
-      "hash": "6bf51a1",
-      "message": "chore: full deploy"
+      "hash": "919a1cf",
+      "message": "first commit"
     }
   ],
   "changes": [
-    "[Συντήρηση] Full deploy"
+    "First commit"
   ]
 }
