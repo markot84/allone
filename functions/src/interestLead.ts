@@ -5,8 +5,36 @@ import { createSender, createTransporter, type SmtpCredentialInput } from './smt
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const INTEREST_EMAIL_TIMEOUT_MS = 20_000;
 
-/** Παραλήπτες ειδοποίησης (ίδιο με marketing mailto). Override: env INTEREST_LEAD_NOTIFY_EMAILS (comma-separated). */
+/** Fallback if Firestore lookup fails or returns empty. */
 const DEFAULT_TEAM_NOTIFY = 'support@notthesame.gr';
+
+/**
+ * Recipient list lives in Firestore at `appConfig/notifications.interestLeadNotifyEmails`
+ * (seeded by `.tmp/seed-app-config.mjs`). Cached per cold-start to avoid hitting
+ * Firestore on every submission.
+ */
+const INTEREST_LEAD_NOTIFY_TTL_MS = 5 * 60_000;
+let notifyCache: { emails: string[]; fetchedAt: number } | null = null;
+
+async function loadInterestLeadRecipients(db: Firestore): Promise<string[]> {
+  const now = Date.now();
+  if (notifyCache && now - notifyCache.fetchedAt < INTEREST_LEAD_NOTIFY_TTL_MS) {
+    return notifyCache.emails;
+  }
+  try {
+    const snap = await db.doc('appConfig/notifications').get();
+    const data = snap.data() ?? {};
+    const raw = data.interestLeadNotifyEmails;
+    const emails = Array.isArray(raw)
+      ? raw.filter((x: unknown): x is string => typeof x === 'string' && x.trim().length > 0)
+      : [];
+    notifyCache = { emails, fetchedAt: now };
+    return emails;
+  } catch (err) {
+    logger.warn('[interestLead] appConfig/notifications fetch failed; using default recipient', err);
+    return [];
+  }
+}
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -73,6 +101,7 @@ function buildUserConfirmationHtml(fullName: string): string {
 }
 
 async function sendInterestLeadEmails(
+  db: Firestore,
   data: {
     fullName: string;
     email: string;
@@ -92,9 +121,8 @@ async function sendInterestLeadEmails(
     throw new Error('SMTP not configured');
   }
 
-  const teamRaw = (process.env.INTEREST_LEAD_NOTIFY_EMAILS || '').trim() || DEFAULT_TEAM_NOTIFY;
-  const teamTo = teamRaw.split(',').map((x) => x.trim()).filter(Boolean);
-  if (teamTo.length === 0) throw new Error('No interest lead notification recipients configured');
+  const recipients = await loadInterestLeadRecipients(db);
+  const teamTo = recipients.length > 0 ? recipients : [DEFAULT_TEAM_NOTIFY];
   const from = createSender(smtp);
   const supportReplyTo = teamTo[0] || DEFAULT_TEAM_NOTIFY;
 
@@ -152,6 +180,7 @@ async function sendInterestLeadEmails(
 }
 
 async function sendInterestLeadEmailsBestEffort(
+  db: Firestore,
   data: {
     fullName: string;
     email: string;
@@ -164,7 +193,7 @@ async function sendInterestLeadEmailsBestEffort(
   let timer: NodeJS.Timeout | undefined;
   try {
     return await Promise.race([
-      sendInterestLeadEmails(data, smtp),
+      sendInterestLeadEmails(db, data, smtp),
       new Promise<{ teamNotified: boolean; userConfirmed: boolean }>((_resolve, reject) => {
         timer = setTimeout(() => {
           logger.warn('[interestLead] Email notification timed out; lead was saved');
@@ -236,6 +265,7 @@ export async function persistInterestLead(
   logger.info(`[interestLead] Saved lead from ${email}`);
 
   const emailResult = await sendInterestLeadEmailsBestEffort(
+    db,
     {
       fullName,
       email,

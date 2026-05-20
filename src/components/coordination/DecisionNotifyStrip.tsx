@@ -9,7 +9,6 @@ import { useBrandMembers } from '../../hooks/useCoordination';
 import type { Decision, BrandDepartment } from '../../types';
 import { BRIEFING_MESSAGE_TEMPLATES, getBriefingTemplate } from './briefingShared';
 import { DepartmentBriefingFields } from './DepartmentBriefingFields';
-import { isSuperAdminEmail } from '../../config/superAdmins';
 import type { BroadcastResult } from '../../services/coordination';
 
 interface DecisionNotifyStripProps {
@@ -20,7 +19,7 @@ interface DecisionNotifyStripProps {
 
 export function DecisionNotifyStrip({ decision: d, variant = 'default' }: DecisionNotifyStripProps) {
   const { currentBrand } = useBrand();
-  const { user } = useAuth();
+  const { user, isSuperAdmin } = useAuth();
   const { members } = useBrandMembers();
   const toast = useToast();
   const qc = useQueryClient();
@@ -39,7 +38,7 @@ export function DecisionNotifyStrip({ decision: d, variant = 'default' }: Decisi
     myRole === 'owner' ||
     myRole === 'admin' ||
     currentBrand?.createdBy === user?.uid ||
-    isSuperAdminEmail(user?.email);
+    isSuperAdmin;
 
   const handleSend = async () => {
     if (!brandId || !user?.uid || depts.length === 0) return;

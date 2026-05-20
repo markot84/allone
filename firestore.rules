@@ -251,8 +251,28 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow write: if isSuperAdmin();
     }
-    // App config: readable by authenticated users, writable only by super admins.
-    // SECURITY: appConfig/superAdmins controls privilege escalation — never allow public writes.
+    // App config docs (seeded by .tmp/seed-app-config.mjs and .tmp/seed-super-admins.mjs).
+    // SECURITY: writes are gated on super-admin status; reads are per-doc to balance
+    // privilege escalation risk against the need for unauthenticated pages to read URLs/signup mode.
+    //
+    // - publicConfig: SPA URLs / region / signup mode → public read (used by the
+    //   unauthenticated marketing landing and legal pages before sign-in completes).
+    // - notifications: backend recipient lists → client read locked off; Cloud Functions
+    //   reach this doc via Admin SDK which bypasses rules.
+    // - superAdmins: UID/email allowlist → authenticated read only (no anonymous enumeration).
+    // - other appConfig docs default to authenticated read.
+    match /appConfig/publicConfig {
+      allow read: if true;
+      allow write: if isSuperAdmin();
+    }
+    match /appConfig/notifications {
+      allow read: if false;
+      allow write: if isSuperAdmin();
+    }
+    match /appConfig/superAdmins {
+      allow read: if request.auth != null;
+      allow write: if isSuperAdmin();
+    }
     match /appConfig/{docId} {
       allow read: if request.auth != null;
       allow write: if isSuperAdmin();

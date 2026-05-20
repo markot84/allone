@@ -3,12 +3,15 @@ import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager
 import { getAuth } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
 import { initializeAppCheck, ReCaptchaV3Provider, getToken as getAppCheckToken, type AppCheck } from 'firebase/app-check';
+import { getAppConfigSync } from '../services/appConfig';
 
 /** Ίδιο με `.firebaserc` — ώστε Firestore/SDK και HTTP functions URL να μην αποκλίνουν αν λείπει `VITE_FIREBASE_PROJECT_ID` στο build. */
 const DEFAULT_FIREBASE_PROJECT_ID = 'performance-plus-4a5b2';
+const DEFAULT_FUNCTIONS_REGION = 'europe-west1';
 
-// Firebase configuration
-// TODO: Replace with your Firebase project configuration
+// Bootstrap: the six SDK keys and the App Check site key are the only env
+// values the SPA still reads. Everything else now lives in Firestore at
+// `appConfig/publicConfig` (loaded by services/appConfig.ts at app startup).
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "your-api-key",
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "your-project.firebaseapp.com",
@@ -17,6 +20,8 @@ const firebaseConfig = {
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "123456789",
   appId: import.meta.env.VITE_FIREBASE_APP_ID || "your-app-id"
 };
+
+const PROJECT_ID = firebaseConfig.projectId;
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
@@ -73,33 +78,21 @@ export const storage = getStorage(app);
 
 export default app;
 
-/** App base URL for invite links (production). Set VITE_APP_URL in .env */
-export const APP_URL =
-  import.meta.env.VITE_APP_URL || 'https://performance-plus-4a5b2.web.app';
+// ── Project-derived defaults ────────────────────────────────────────────────
+// Used until `loadAppConfig()` resolves and Firestore overrides (if any) take
+// effect. The default values match the production Firebase project, so the
+// app is fully functional even if the `appConfig/publicConfig` doc is missing.
 
-const FUNCTIONS_REGION = import.meta.env.VITE_FIREBASE_FUNCTIONS_REGION || 'europe-west1';
-const FUNCTIONS_PROJECT = import.meta.env.VITE_FIREBASE_PROJECT_ID || firebaseConfig.projectId || DEFAULT_FIREBASE_PROJECT_ID;
+const DEFAULT_APP_URL = `https://${PROJECT_ID}.web.app`;
+const DEFAULT_FUNCTIONS_BASE = `https://${DEFAULT_FUNCTIONS_REGION}-${PROJECT_ID}.cloudfunctions.net`;
 
-const DEFAULT_CF_BASE = `https://${FUNCTIONS_REGION}-${FUNCTIONS_PROJECT}.cloudfunctions.net`;
-
-/** Ρητό override από .env (staging / άλλο project). Άκυρα ή ύποπτα URLs αγνοούνται → default `*.cloudfunctions.net`. */
-function resolvedExplicitFunctionsBase(): string | null {
-  const raw = (import.meta.env.VITE_FUNCTIONS_BASE_URL || import.meta.env.VITE_FUNCTIONS_URL || '').trim();
-  if (!raw) return null;
-  const normalized = (raw.startsWith('http') ? raw : `https://${raw}`).replace(/\/$/, '');
-  let u: URL;
-  try {
-    u = new URL(normalized);
-  } catch {
-    console.warn('[config] Ignoring invalid VITE_FUNCTIONS_BASE_URL / VITE_FUNCTIONS_URL');
-    return null;
-  }
-  const host = u.hostname.toLowerCase();
-  if (host.includes('github') || host.includes('gist.github')) {
-    console.warn('[config] Ignoring VITE_FUNCTIONS_* pointing at GitHub — use europe-west1-<project>.cloudfunctions.net');
-    return null;
-  }
-  return normalized;
+/**
+ * Returns the runtime app URL: the Firestore override from `appConfig/publicConfig`
+ * if loaded, otherwise the project-derived default.
+ */
+export function getAppUrl(): string {
+  const cfg = getAppConfigSync();
+  return cfg.appUrl || DEFAULT_APP_URL;
 }
 
 /**
@@ -109,24 +102,46 @@ function resolvedExplicitFunctionsBase(): string | null {
  * Το `connectorSync` (Megaventory κ.λπ.) μπορεί να τρέχει πολλά λεπτά — πρέπει **απευθείας**
  * στο `*.cloudfunctions.net`, όχι μέσω Hosting rewrite (αλλιώς 502/504).
  */
-export const FUNCTIONS_BASE_URL = resolvedExplicitFunctionsBase() ?? DEFAULT_CF_BASE;
+export function getFunctionsBaseUrl(): string {
+  const cfg = getAppConfigSync();
+  if (cfg.functionsBaseUrl) {
+    try {
+      const u = new URL(cfg.functionsBaseUrl);
+      const host = u.hostname.toLowerCase();
+      if (!host.includes('github') && !host.includes('gist.github')) {
+        return cfg.functionsBaseUrl.replace(/\/$/, '');
+      }
+      console.warn('[config] Ignoring suspicious functionsBaseUrl from Firestore');
+    } catch {
+      console.warn('[config] Ignoring invalid functionsBaseUrl from Firestore');
+    }
+  }
+  if (cfg.functionsRegion && cfg.functionsRegion !== DEFAULT_FUNCTIONS_REGION) {
+    return `https://${cfg.functionsRegion}-${PROJECT_ID}.cloudfunctions.net`;
+  }
+  return DEFAULT_FUNCTIONS_BASE;
+}
+
+// Back-compat constants. New code should call the getters above; these read
+// the same cache but are kept so module-level expressions like
+// `const REFRESH_URL = ${FUNCTIONS_BASE_URL}/refreshAggregates` keep working
+// during the transition. They evaluate at first read; for code paths that
+// must reflect a live Firestore override mid-session, prefer the functions.
+export const APP_URL: string = DEFAULT_APP_URL;
+export const FUNCTIONS_BASE_URL: string = DEFAULT_FUNCTIONS_BASE;
 
 /**
- * Legacy / misc origin helper. Για OAuth `redirect_uri` χρησιμοποίησε `FUNCTIONS_BASE_URL` + `/connectorCallback`
+ * Legacy / misc origin helper. Για OAuth `redirect_uri` χρησιμοποίησε `getFunctionsBaseUrl()` + `/connectorCallback`
  * (ίδιο host με `connectorAuth`), όχι `window.location.origin` — αλλιώς `redirect_uri_mismatch` στο Google Console.
  */
 export function getFunctionsOrigin(): string {
-  const ex = resolvedExplicitFunctionsBase();
-  if (ex) return ex;
-  if (import.meta.env.DEV) return DEFAULT_CF_BASE;
+  if (import.meta.env.DEV) return getFunctionsBaseUrl();
   if (typeof window !== 'undefined' && window.location?.origin) return window.location.origin;
-  return DEFAULT_CF_BASE;
+  return getFunctionsBaseUrl();
 }
 
-/** Σταθερό public URL function (curl / API keys) — πάντα cloudfunctions.net εκτός αν έχεις ρητό .env. */
+/** Σταθερό public URL function — διαβάζει live από Firestore override αν υπάρχει. */
 export function buildFunctionUrl(path: string): string {
   const p = path.startsWith('/') ? path : `/${path}`;
-  const ex = resolvedExplicitFunctionsBase();
-  if (ex) return `${ex.replace(/\/$/, '')}${p}`;
-  return `${DEFAULT_CF_BASE}${p}`;
+  return `${getFunctionsBaseUrl()}${p}`;
 }

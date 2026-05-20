@@ -18,7 +18,8 @@ import {
 import { FirestoreService } from '../../services/firestore';
 import { db, auth, storage } from '../../config/firebase';
 import { collection, getDocs, doc, getDoc, limit, orderBy, query } from 'firebase/firestore';
-import { SUPER_ADMIN_EMAILS, SUPPORT_EMAIL, APP_NAME } from '../../config/superAdmins';
+import { SUPPORT_EMAIL, APP_NAME } from '../../config/superAdmins';
+import { loadSuperAdmins } from '../../services/appConfig';
 import { getDefaultModuleEnabled, getEditionStatus, getModuleLabel } from '../../config/modules';
 import type { Brand, ChangelogEntry, ModuleId } from '../../types';
 import { useAuth } from '../../hooks';
@@ -1218,15 +1219,18 @@ function ChangelogTab({ userEmail }: { userEmail: string }) {
 function SystemInfoTab() {
   const [stats, setStats] = useState({ users: 0, brands: 0 });
   const [loading, setLoading] = useState(true);
+  const [adminEmails, setAdminEmails] = useState<string[]>([]);
 
   useEffect(() => {
     async function load() {
       try {
-        const [usersSnap, brandsSnap] = await Promise.all([
+        const [usersSnap, brandsSnap, sa] = await Promise.all([
           getDocs(collection(db, 'users')),
           getDocs(collection(db, 'brands')),
+          loadSuperAdmins(),
         ]);
         setStats({ users: usersSnap.size, brands: brandsSnap.size });
+        setAdminEmails(sa.emails);
       } catch (err) {
         console.error('Failed to load stats:', err);
       } finally {
@@ -1259,7 +1263,9 @@ function SystemInfoTab() {
     },
     {
       title: 'Super Admins',
-      items: SUPER_ADMIN_EMAILS.map((email) => ({ label: 'Email', value: email }))
+      items: adminEmails.length
+        ? adminEmails.map((email) => ({ label: 'Email', value: email }))
+        : [{ label: 'Email', value: loading ? '...' : '—' }]
     },
     {
       title: 'Υποστήριξη',
