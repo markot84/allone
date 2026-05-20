@@ -2,17 +2,13 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Super admin: hardcoded UIDs + UIDs στο appConfig/superAdmins (μετά από login)
+    // Super admin: UIDs listed in appConfig/superAdmins.uids (seeded once via .tmp/seed-super-admins.mjs)
     function isSuperAdmin() {
-      return request.auth != null && (
-        request.auth.uid in ['yPIEMSB1jXXxGX2hHCOvLYoJY7L2', 'KApqDr7UlNa7TseQ25pakM8DRrd2', 'BAi5ZTMwFdWFCUR6k3IZq8cjPfp2']
-        || (
-          exists(/databases/$(database)/documents/appConfig/superAdmins)
-          && 'uids' in get(/databases/$(database)/documents/appConfig/superAdmins).data
-          && get(/databases/$(database)/documents/appConfig/superAdmins).data.uids is list
-          && get(/databases/$(database)/documents/appConfig/superAdmins).data.uids.hasAny([request.auth.uid])
-        )
-      );
+      return request.auth != null
+        && exists(/databases/$(database)/documents/appConfig/superAdmins)
+        && 'uids' in get(/databases/$(database)/documents/appConfig/superAdmins).data
+        && get(/databases/$(database)/documents/appConfig/superAdmins).data.uids is list
+        && get(/databases/$(database)/documents/appConfig/superAdmins).data.uids.hasAny([request.auth.uid]);
     }
 
     // Helper: check user is member, creator, or super admin

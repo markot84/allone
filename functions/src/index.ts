@@ -165,33 +165,44 @@ setTikTokDb(db);
 
 const BATCH_SIZE = 500;
 
-/** Σε συμφωνία με isBrandMember στα firestore.rules: μέλος, δημιουργός brand, ή super admin UID */
-const SUPER_ADMIN_UIDS = new Set([
-  'yPIEMSB1jXXxGX2hHCOvLYoJY7L2',
-  'KApqDr7UlNa7TseQ25pakM8DRrd2',
-  'BAi5ZTMwFdWFCUR6k3IZq8cjPfp2',
-]);
+/**
+ * Super-admin allowlist (UIDs + emails) lives in Firestore at appConfig/superAdmins.
+ * Doc shape: { uids: string[], emails: string[] }. Seeded once via .tmp/seed-super-admins.mjs.
+ * Cached per cold-start to avoid hitting Firestore on every auth check.
+ */
+let superAdminCache: { uids: Set<string>; emails: Set<string>; fetchedAt: number } | null = null;
+const SUPER_ADMIN_CACHE_TTL_MS = 5 * 60_000;
 
-/** Σε συμφωνία με src/config/superAdmins.ts */
-const SUPER_ADMIN_EMAILS = new Set([
-  'makis@notthesame.gr',
-  'eleana@notthesame.gr',
-  'notthesame.ads@gmail.com',
-]);
-
-async function isUidSuperAdmin(uid: string): Promise<boolean> {
-  if (SUPER_ADMIN_UIDS.has(uid)) return true;
+async function loadSuperAdmins(): Promise<{ uids: Set<string>; emails: Set<string> }> {
+  const now = Date.now();
+  if (superAdminCache && now - superAdminCache.fetchedAt < SUPER_ADMIN_CACHE_TTL_MS) {
+    return { uids: superAdminCache.uids, emails: superAdminCache.emails };
+  }
   try {
     const cfg = await db.doc('appConfig/superAdmins').get();
-    const uids = cfg.data()?.uids as unknown;
-    if (Array.isArray(uids) && uids.includes(uid)) return true;
-  } catch {
-    /* ignore */
+    const data = cfg.data() ?? {};
+    const uidArr = Array.isArray(data.uids) ? data.uids : [];
+    const emailArr = Array.isArray(data.emails) ? data.emails : [];
+    const uids = new Set(uidArr.filter((x): x is string => typeof x === 'string'));
+    const emails = new Set(
+      emailArr.filter((x): x is string => typeof x === 'string').map((e) => e.toLowerCase())
+    );
+    superAdminCache = { uids, emails, fetchedAt: now };
+    return { uids, emails };
+  } catch (err) {
+    logger.warn('[superAdmins] Firestore read failed; allowlist empty until next retry', err);
+    return { uids: new Set(), emails: new Set() };
   }
+}
+
+async function isUidSuperAdmin(uid: string): Promise<boolean> {
+  const { uids, emails } = await loadSuperAdmins();
+  if (uids.has(uid)) return true;
+  if (emails.size === 0) return false;
   try {
     const u = await admin.auth().getUser(uid);
     const em = u.email?.toLowerCase();
-    if (em && SUPER_ADMIN_EMAILS.has(em)) return true;
+    if (em && emails.has(em)) return true;
   } catch {
     /* ignore */
   }
@@ -199,13 +210,12 @@ async function isUidSuperAdmin(uid: string): Promise<boolean> {
 }
 
 async function verifyBrandMembership(uid: string, brandId: string): Promise<boolean> {
-  if (SUPER_ADMIN_UIDS.has(uid)) return true;
+  if (await isUidSuperAdmin(uid)) return true;
   const memberDoc = await db.doc(`brands/${brandId}/members/${uid}`).get();
   if (memberDoc.exists) return true;
   const brandDoc = await db.doc(`brands/${brandId}`).get();
   if (!brandDoc.exists) return false;
-  if (brandDoc.data()?.createdBy === uid) return true;
-  return isUidSuperAdmin(uid);
+  return brandDoc.data()?.createdBy === uid;
 }
 
 /** Σύνδεση/αποσύνδεση/sync connectors: ιδιοκτήτης, διαχειριστής, δημιουργός brand, super admin */
