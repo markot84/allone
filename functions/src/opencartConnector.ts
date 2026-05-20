@@ -29,6 +29,10 @@ function getDb(): Firestore {
 }
 
 const OPENCART_USER_AGENT = 'PerformancePlus/1.0 (+https://performanceplus.gr)';
+/** REST extension default page size; 100 is widely supported. */
+const OPENCART_PAGE_SIZE = 100;
+/** Safety cap: 200 pages × 100 = 20k orders/products per sync leg. */
+const OPENCART_MAX_PAGES = 200;
 
 type OpenCartCredentialInput = {
   clientId?: string;
@@ -514,6 +518,30 @@ export async function fetchOpenCartData(brandId: string): Promise<{
     return buildOpenCartRestUrl(storeUrl, route, extra);
   };
 
+  const refreshAuth = async (): Promise<void> => {
+    auth = await authenticateOpenCartRestAdmin(storeUrl, {
+      clientId,
+      clientSecret,
+      token: savedToken,
+      username: oauthUsername,
+      password: oauthPassword,
+    });
+  };
+
+  const fetchRest = async (route: string, extra: Record<string, string> = {}): Promise<Response> => {
+    const url = buildUrl(route, { limit: String(OPENCART_PAGE_SIZE), ...extra });
+    let res = await fetch(url, { headers: buildHeaders() });
+    if (res.status === 401) {
+      try {
+        await refreshAuth();
+        res = await fetch(url, { headers: buildHeaders() });
+      } catch (reauthErr) {
+        logger.warn('[OpenCart] Re-auth after 401 failed:', reauthErr);
+      }
+    }
+    return res;
+  };
+
   /** Extra API calls per order — returns line items AND tax extracted from detail payload. */
   const fetchOcOrderDetail = async (orderId: string): Promise<{ lineItems: Record<string, unknown>[]; tax: number }> => {
     const tryBodies = (json: unknown): { lineItems: Record<string, unknown>[]; tax: number } => {
@@ -543,6 +571,8 @@ export async function fetchOpenCartData(brandId: string): Promise<{
   let totalImported = 0;
   let ordersAbort = false;
   let productsAbort = false;
+  let ordersAbortReason = '';
+  let productsAbortReason = '';
 
   try {
     // ── Orders ──────────────────────────────────────
@@ -553,10 +583,10 @@ export async function fetchOpenCartData(brandId: string): Promise<{
     const filterSinceMs = orderWindow.windowStart.getTime();
 
     while (hasMore) {
-      const url = buildUrl('rest/order_admin/orders', { page: String(orderPage), limit: '100' });
-      const res = await fetch(url, { headers: buildHeaders() });
+      const res = await fetchRest('rest/order_admin/orders', { page: String(orderPage) });
 
       if (!res.ok) {
+        ordersAbortReason = `HTTP ${res.status} on page ${orderPage}`;
         logger.warn(`[OpenCart] Orders page ${orderPage} returned ${res.status}`);
         ordersAbort = true;
         break;
@@ -627,10 +657,11 @@ export async function fetchOpenCartData(brandId: string): Promise<{
         });
       }
 
-      hasMore = orders.length >= 100;
+      hasMore = orders.length >= OPENCART_PAGE_SIZE;
       orderPage++;
-      if (orderPage > 30) {
+      if (orderPage > OPENCART_MAX_PAGES) {
         ordersAbort = true;
+        ordersAbortReason = `page cap (${OPENCART_MAX_PAGES * OPENCART_PAGE_SIZE}+ orders)`;
         logger.warn(`[OpenCart] Orders page cap (${orderPage}) ${brandId}`);
         break;
       }
@@ -657,11 +688,11 @@ export async function fetchOpenCartData(brandId: string): Promise<{
     let prodMore = true;
 
     while (prodMore) {
-      const url = buildUrl('rest/product_admin/products', { page: String(prodPage), limit: '100' });
-      const res = await fetch(url, { headers: buildHeaders() });
+      const res = await fetchRest('rest/product_admin/products', { page: String(prodPage) });
 
       if (!res.ok) {
         productsAbort = true;
+        productsAbortReason = `HTTP ${res.status} on page ${prodPage}`;
         break;
       }
 
@@ -689,10 +720,11 @@ export async function fetchOpenCartData(brandId: string): Promise<{
         });
       }
 
-      prodMore = products.length >= 100;
+      prodMore = products.length >= OPENCART_PAGE_SIZE;
       prodPage++;
-      if (prodPage > 30) {
+      if (prodPage > OPENCART_MAX_PAGES) {
         productsAbort = true;
+        productsAbortReason = `page cap (${OPENCART_MAX_PAGES * OPENCART_PAGE_SIZE}+ products)`;
         logger.warn(`[OpenCart] Products page cap (${prodPage}) ${brandId}`);
         break;
       }
@@ -745,10 +777,12 @@ export async function fetchOpenCartData(brandId: string): Promise<{
     logger.info(`[OpenCart] Sync complete for brand ${brandId}: ${totalImported} total items`);
     const bothOk = ordersSyncComplete && productsSyncComplete;
     if (!bothOk) {
+      const orderNote = ordersSyncComplete ? 'OK' : `Aborted${ordersAbortReason ? ` (${ordersAbortReason})` : ''}`;
+      const prodNote = productsSyncComplete ? 'OK' : `Aborted${productsAbortReason ? ` (${productsAbortReason})` : ''}`;
       return {
         success: false,
         imported: totalImported,
-        error: `OpenCart incomplete — orders:${ordersSyncComplete ? 'OK' : 'Aborted'}, products:${productsSyncComplete ? 'OK' : 'Aborted'}`,
+        error: `OpenCart incomplete — orders:${orderNote}, products:${prodNote}`,
       };
     }
     return { success: true, imported: totalImported };
