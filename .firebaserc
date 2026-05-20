@@ -1,5 +1,7 @@
 {
   "projects": {
-    "default": "performance-plus-4a5b2"
+    "default": "performanceplus-staging",
+    "staging": "performanceplus-staging",
+    "production": "performance-plus-4a5b2"
   }
 }

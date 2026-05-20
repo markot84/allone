@@ -1,16 +1,35 @@
 {
-  "version": "0.749.213",
-  "previousVersion": "0.749.212",
-  "commitHash": "919a1cf",
-  "branch": "main",
-  "buildDate": "2026-05-19T12:08:44.112Z",
+  "version": "0.749.219",
+  "previousVersion": "0.749.218",
+  "commitHash": "5d1b70c",
+  "branch": "Security-Review-Fixes",
+  "buildDate": "2026-05-20T12:21:38.967Z",
   "commits": [
+    {
+      "hash": "5d1b70c",
+      "message": "fix: security findings"
+    },
+    {
+      "hash": "949c7c8",
+      "message": "fix: MEDIUM security findings"
+    },
+    {
+      "hash": "5fedaa2",
+      "message": "fix: NPM audit fix"
+    },
+    {
+      "hash": "5bec30d",
+      "message": "fix: security findings"
+    },
     {
       "hash": "919a1cf",
       "message": "first commit"
     }
   ],
   "changes": [
+    "[Διόρθωση] Security findings",
+    "[Διόρθωση] MEDIUM security findings",
+    "[Διόρθωση] NPM audit fix",
     "First commit"
   ]
 }
