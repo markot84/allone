@@ -95,7 +95,29 @@ function ecommerceSyncHealth(
   if (ordersAt && productsAt) return 'full';
   if (ordersAt || productsAt) return 'partial';
   if (importMeta?.status === 'partial') return 'partial';
+  if (importMeta?.date) return 'partial';
   return 'none';
+}
+
+/** Normalize React Query cache (v1 flat dates vs v2 { dates, meta }). */
+function normalizeLastSyncQuery(data: unknown): {
+  dates: Record<string, Date>;
+  meta: Record<string, LastImportMeta>;
+} {
+  if (!data || typeof data !== 'object') return { dates: {}, meta: {} };
+  const record = data as Record<string, unknown>;
+  if (record.dates && typeof record.dates === 'object') {
+    return {
+      dates: record.dates as Record<string, Date>,
+      meta: (record.meta as Record<string, LastImportMeta>) || {},
+    };
+  }
+  const dates: Record<string, Date> = {};
+  for (const [key, value] of Object.entries(record)) {
+    const d = coerceToDate(value);
+    if (d) dates[key] = d;
+  }
+  return { dates, meta: {} };
 }
 
 /** Όλες οι ομάδες: ίδια διακριτική πράσινη παλέτα (χωρίς μπλε/πορτοκαλί ανά section). */
@@ -2019,9 +2041,8 @@ export function ConnectorsPanel() {
     : emptyStates;
 
   // Last sync dates — secondary, loaded once, cached
-  const { data: lastSyncQuery = { dates: {} as Record<string, Date>, meta: {} as Record<string, LastImportMeta> } } =
-    useQuery({
-    queryKey: ['lastSyncDates', brandId],
+  const { data: lastSyncQueryRaw } = useQuery({
+    queryKey: ['lastSyncDates', brandId, 'v2'],
     queryFn: async () => {
       if (!brandId) return { dates: {} as Record<string, Date>, meta: {} as Record<string, LastImportMeta> };
       const metaBySource = await getLastImportMeta(brandId);
@@ -2072,8 +2093,7 @@ export function ConnectorsPanel() {
     refetchOnReconnect: false,
     retry: 0,
   });
-  const lastSyncDates = lastSyncQuery.dates;
-  const lastImportMeta = lastSyncQuery.meta;
+  const { dates: lastSyncDates, meta: lastImportMeta } = normalizeLastSyncQuery(lastSyncQueryRaw);
 
   const { data: megaventorySyncJob } = useQuery({
     queryKey: ['connectorSyncJob', brandId, 'megaventory'],
@@ -2120,13 +2140,13 @@ export function ConnectorsPanel() {
     queryClient.invalidateQueries({ queryKey: ['products_paginated', brandId] });
     queryClient.invalidateQueries({ queryKey: ['productIntelligenceAggregate', brandId] });
     queryClient.invalidateQueries({ queryKey: ['productIntelligencePage', brandId] });
-    queryClient.invalidateQueries({ queryKey: ['lastSyncDates', brandId] });
+    queryClient.invalidateQueries({ queryKey: ['lastSyncDates', brandId, 'v2'] });
   }, [brandId, queryClient]);
 
   // Keep fetchStates for OAuth callback compatibility (force refetch after OAuth redirect)
   const fetchStates = useCallback(async () => {
     await refetchConnectors();
-    queryClient.removeQueries({ queryKey: ['lastSyncDates', brandId] });
+    queryClient.removeQueries({ queryKey: ['lastSyncDates', brandId, 'v2'] });
   }, [brandId, refetchConnectors, queryClient]);
 
   useEffect(() => {
@@ -2408,7 +2428,7 @@ export function ConnectorsPanel() {
         const label = syncedConnector?.syncLabel || 'campaigns';
         // Optimistic last-sync UI update (prevents stale date display while background queries refresh)
         queryClient.setQueryData<{ dates: Record<string, Date>; meta: Record<string, LastImportMeta> }>(
-          ['lastSyncDates', brandId],
+          ['lastSyncDates', brandId, 'v2'],
           (prev) => ({
             dates: { ...(prev?.dates || {}), [provider]: new Date() },
             meta: {
@@ -2478,7 +2498,7 @@ export function ConnectorsPanel() {
         }
         queryClient.invalidateQueries({ queryKey: ['campaigns', brandId] });
         queryClient.invalidateQueries({ queryKey: ['connectorsSummary', brandId] });
-        queryClient.invalidateQueries({ queryKey: ['lastSyncDates', brandId] });
+        queryClient.invalidateQueries({ queryKey: ['lastSyncDates', brandId, 'v2'] });
         queryClient.removeQueries({ queryKey: ['brandSyncVersion', brandId] });
         queryClient.invalidateQueries({ queryKey: ['brandSyncVersion', brandId] });
         if (provider === 'google_ads') {
@@ -2844,13 +2864,17 @@ export function ConnectorsPanel() {
                   ecommerceHealth === 'full'
                     ? newestDate(ordersSyncAt, productsSyncAt)
                     : newestDate(
-                        ecommerceHealth === 'partial' ? null : lastSyncDates[conn.id],
+                        lastSyncDates[conn.id],
                         state.lastSyncAt,
                         state.lastOrdersSyncAt,
                         state.lastProductsSyncAt,
                         importMeta?.date
                       );
-                const syncChipPartial = ecommerceHealth === 'partial';
+                const syncChipPartial =
+                  ecommerceHealth === 'partial' ||
+                  (ECOMMERCE_CONNECTOR_IDS.has(conn.id) &&
+                    Boolean(lastSyncAt) &&
+                    (!ordersSyncAt || !productsSyncAt));
                 const connectedAt = coerceToDate(state.connectedAt as unknown);
                 const identityLines = getConnectorIdentityLines(conn.id, state);
                 const usesCompactDetails = conn.id === 'magento' || conn.group === 'operations';
