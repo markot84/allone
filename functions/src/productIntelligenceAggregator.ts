@@ -629,7 +629,14 @@ async function loadConnectorProducts(brandId: string, hasErp: boolean): Promise<
   const megaventoryApiRowsRead = hasErp
     ? await loadCatalogCollection(brandId, 'megaventory_products', 'erp', bySku, { filterByBrandInQuery: false })
     : 0;
-  const magentoRowsRead = hasErp ? 0 : await loadCatalogCollection(brandId, 'magento_products', 'connector_catalog', bySku);
+  const ecommerceCatalogRowsRead = hasErp
+    ? 0
+    : (await Promise.all([
+        loadCatalogCollection(brandId, 'magento_products', 'connector_catalog', bySku),
+        loadCatalogCollection(brandId, 'shopify_products', 'connector_catalog', bySku),
+        loadCatalogCollection(brandId, 'woo_products', 'connector_catalog', bySku),
+        loadCatalogCollection(brandId, 'opencart_products', 'connector_catalog', bySku),
+      ])).reduce((sum, rowsRead) => sum + rowsRead, 0);
   const magentoDetailRowsRead = hasErp ? await overlayMagentoCatalogDetails(brandId, bySku) : 0;
   const stockResult = hasErp
     ? await loadMegaventoryStockByProductId(brandId)
@@ -642,7 +649,7 @@ async function loadConnectorProducts(brandId: string, hasErp: boolean): Promise<
     : { rowsRead: 0, overlaysApplied: 0, erpOnlyProducts: 0 };
   return {
     products: [...bySku.values()].filter((product) => !isDemoProduct(product) && !isNonMerchandiseProduct(product)),
-    sourceRowsRead: megaventoryApiRowsRead + magentoRowsRead + magentoDetailRowsRead + stockResult.rowsRead + skuStats.rowsRead + overlay.rowsRead,
+    sourceRowsRead: megaventoryApiRowsRead + ecommerceCatalogRowsRead + magentoDetailRowsRead + stockResult.rowsRead + skuStats.rowsRead + overlay.rowsRead,
     megaventoryApiRowsRead,
     megaventoryStockRowsRead: stockResult.rowsRead,
     megaventoryRowsRead: overlay.rowsRead,

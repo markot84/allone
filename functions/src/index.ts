@@ -1344,6 +1344,17 @@ export const connectorSync = onRequest(
         }
       }
 
+      if (
+        ['shopify', 'woocommerce', 'opencart', 'magento', 'megaventory', 'softone'].includes(provider) &&
+        result.queued !== true
+      ) {
+        try {
+          await refreshProductIntelligenceAggregate(brandId);
+        } catch (e) {
+          logger.warn(`[connectorSync] product intelligence refresh failed for ${brandId}:`, e);
+        }
+      }
+
       res.status(200).json(result);
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
