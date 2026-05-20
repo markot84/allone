@@ -69,6 +69,8 @@ interface ConnectorState {
   lastSyncAttemptAt?: any;
   lastSyncStatus?: string;
   lastSyncError?: string;
+  productsSyncPageCursor?: string;
+  ordersSyncPageCursor?: string;
   lastSyncImported?: number;
   lastSyncOrders?: number;
   lastSyncProducts?: number;
@@ -93,13 +95,21 @@ function newestDate(...values: unknown[]): Date | null {
 const ECOMMERCE_CONNECTOR_IDS = new Set<ConnectorId>(['shopify', 'woocommerce', 'opencart', 'magento']);
 
 function ecommerceSyncHealth(
-  state: { lastOrdersSyncAt?: unknown; lastProductsSyncAt?: unknown },
+  state: {
+    lastOrdersSyncAt?: unknown;
+    lastProductsSyncAt?: unknown;
+    productsSyncPageCursor?: unknown;
+    ordersSyncPageCursor?: unknown;
+    lastSyncStatus?: unknown;
+  },
   importMeta?: LastImportMeta | null
 ): 'full' | 'partial' | 'none' {
+  if (state.productsSyncPageCursor || state.ordersSyncPageCursor) return 'partial';
   const ordersAt = coerceToDate(state.lastOrdersSyncAt);
   const productsAt = coerceToDate(state.lastProductsSyncAt);
   if (ordersAt && productsAt) return 'full';
   if (ordersAt || productsAt) return 'partial';
+  if (state.lastSyncStatus === 'partial') return 'partial';
   if (importMeta?.status === 'partial') return 'partial';
   if (importMeta?.date) return 'partial';
   return 'none';
@@ -2980,9 +2990,15 @@ export function ConnectorsPanel() {
                     Boolean(lastSyncAt) &&
                     (!ordersSyncAt || !productsSyncAt));
                 const lastAttempt = syncAttempts[conn.id];
+                const opencartBackfillContinuing =
+                  conn.id === 'opencart' &&
+                  Boolean(state.productsSyncPageCursor || state.ordersSyncPageCursor);
                 const recentFailedAttempt =
                   Boolean(lastAttempt) &&
                   !lastAttempt!.success &&
+                  !opencartBackfillContinuing &&
+                  opencartJobActive !== true &&
+                  megaventoryJobActive !== true &&
                   (!lastSyncAt || lastAttempt!.at.getTime() > lastSyncAt.getTime() - 2000);
                 const connectedAt = coerceToDate(state.connectedAt as unknown);
                 const identityLines = getConnectorIdentityLines(conn.id, state);
