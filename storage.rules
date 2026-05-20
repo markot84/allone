@@ -1,20 +1,26 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // Brand assets: authenticated users can upload/read their brand assets
+    // Brand assets: only members of the brand can read/write its assets.
     match /brands/{brandId}/assets/{assetType}/{fileName} {
-      // Allow read if user is authenticated
-      allow read: if request.auth != null;
-      
-      // Allow write (upload/delete) if user is authenticated
-      // In production, you might want to add additional checks:
-      // - User has access to this brand
-      // - File size/type validation
-      allow write: if request.auth != null
+      function isBrandMember(bid) {
+        return request.auth != null && (
+          firestore.exists(/databases/(default)/documents/brands/$(bid)/members/$(request.auth.uid))
+          || firestore.get(/databases/(default)/documents/brands/$(bid)).data.createdBy == request.auth.uid
+        );
+      }
+
+      allow read: if isBrandMember(brandId);
+
+      // Deletes carry no request.resource — gate on auth + membership only.
+      allow delete: if isBrandMember(brandId);
+
+      // Uploads/updates must additionally pass size & content-type checks.
+      allow write: if isBrandMember(brandId)
         && request.resource.size < 5 * 1024 * 1024 // Max 5MB
         && request.resource.contentType.matches('image/.*');
     }
-    
+
     // Deny all other paths
     match /{allPaths=**} {
       allow read, write: if false;

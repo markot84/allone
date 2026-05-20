@@ -2121,8 +2121,10 @@ export const sendEmailNotification = onRequest(
       res.status(401).json({ error: 'Unauthorized' });
       return;
     }
+    let callerUid: string;
     try {
-      await admin.auth().verifyIdToken(authHeader.split('Bearer ')[1]);
+      const decoded = await admin.auth().verifyIdToken(authHeader.split('Bearer ')[1]);
+      callerUid = decoded.uid;
     } catch {
       res.status(401).json({ error: 'Invalid token' });
       return;
@@ -2133,11 +2135,41 @@ export const sendEmailNotification = onRequest(
       res.status(400).json({ error: 'Missing userIds or title' });
       return;
     }
+    if (!brandId || typeof brandId !== 'string') {
+      res.status(400).json({ error: 'Missing brandId' });
+      return;
+    }
+
+    // Caller must be a member of the brand on whose behalf they are sending.
+    if (!(await verifyBrandMembership(callerUid, brandId))) {
+      logger.warn('[sendEmailNotification] caller not a member of brand', { callerUid, brandId });
+      res.status(403).json({ error: 'Forbidden' });
+      return;
+    }
+
+    // Every recipient must also be a member of the same brand — prevents an authenticated
+    // user from emailing arbitrary uids by submitting them in the payload.
+    const isSuper = await isUidSuperAdmin(callerUid);
+    const allowedUserIds: string[] = [];
+    for (const uid of userIds) {
+      if (typeof uid !== 'string' || !uid) continue;
+      if (isSuper) { allowedUserIds.push(uid); continue; }
+      const memberDoc = await db.doc(`brands/${brandId}/members/${uid}`).get();
+      if (memberDoc.exists) { allowedUserIds.push(uid); continue; }
+      const brandDoc = await db.doc(`brands/${brandId}`).get();
+      if (brandDoc.exists && brandDoc.data()?.createdBy === uid) { allowedUserIds.push(uid); continue; }
+      logger.warn('[sendEmailNotification] dropping non-member recipient', { uid, brandId });
+    }
+    if (allowedUserIds.length === 0) {
+      res.status(400).json({ error: 'No valid recipients for brand' });
+      return;
+    }
 
     logger.info('[sendEmailNotification] SMTP batch start', {
-      recipientCount: userIds.length,
+      recipientCount: allowedUserIds.length,
+      droppedCount: userIds.length - allowedUserIds.length,
       title: String(title).slice(0, 120),
-      brandId: brandId || '',
+      brandId,
       type: type || '',
     });
 
@@ -2152,11 +2184,11 @@ export const sendEmailNotification = onRequest(
     }
 
     const results: string[] = [];
-    for (const uid of userIds) {
+    for (const uid of allowedUserIds) {
       try {
         await sendNotificationEmail(
           uid,
-          { title, body: body || '', type: type || '', brandId: brandId || '', entityType, entityId },
+          { title, body: body || '', type: type || '', brandId, entityType, entityId },
           transporter
         );
         results.push(`${uid}: sent`);
@@ -2206,22 +2238,68 @@ export const sendInviteEmail = onRequest(
       res.status(401).json({ error: 'Unauthorized' });
       return;
     }
+    let callerUid: string;
     try {
-      await admin.auth().verifyIdToken(authHeader.split('Bearer ')[1]);
+      const decoded = await admin.auth().verifyIdToken(authHeader.split('Bearer ')[1]);
+      callerUid = decoded.uid;
     } catch {
       res.status(401).json({ error: 'Invalid token' });
       return;
     }
 
-    const { to, brandName, inviteLink, role, department } = req.body;
+    const { to, brandId, brandName, inviteLink, role, department } = req.body;
     if (!to || !inviteLink) {
       res.status(400).json({ error: 'Missing to or inviteLink' });
+      return;
+    }
+    if (!brandId || typeof brandId !== 'string') {
+      res.status(400).json({ error: 'Missing brandId' });
+      return;
+    }
+
+    // Caller must have invite-management rights on the brand (owner / admin / brand creator / super admin).
+    if (!(await verifyBrandConnectorManagement(callerUid, brandId))) {
+      logger.warn('[sendInviteEmail] caller lacks brand management rights', { callerUid, brandId });
+      res.status(403).json({ error: 'Forbidden' });
       return;
     }
 
     const safeInviteLink = safeHttpUrl(inviteLink);
     if (!safeInviteLink) {
       res.status(400).json({ error: 'Invalid inviteLink' });
+      return;
+    }
+
+    // Validate that the link points to an actual, unused, non-expired invite for this brand.
+    // This blocks the endpoint from being used to email arbitrary content under our SMTP identity.
+    const tokenSeg = safeInviteLink.split('/').filter(Boolean).pop() || '';
+    if (!tokenSeg) {
+      res.status(400).json({ error: 'Invalid inviteLink' });
+      return;
+    }
+    try {
+      const inviteSnap = await db.collection('invites').where('token', '==', tokenSeg).limit(1).get();
+      if (inviteSnap.empty) {
+        res.status(400).json({ error: 'Unknown invite token' });
+        return;
+      }
+      const inv = inviteSnap.docs[0].data() as { brandId?: string; usedAt?: string; expiresAt?: string };
+      if (inv.brandId !== brandId) {
+        logger.warn('[sendInviteEmail] invite/brand mismatch', { callerUid, brandId, inviteBrand: inv.brandId });
+        res.status(400).json({ error: 'Invite does not belong to brand' });
+        return;
+      }
+      if (inv.usedAt) {
+        res.status(400).json({ error: 'Invite already used' });
+        return;
+      }
+      if (inv.expiresAt && new Date(inv.expiresAt) < new Date()) {
+        res.status(400).json({ error: 'Invite expired' });
+        return;
+      }
+    } catch (err) {
+      logger.warn('[sendInviteEmail] invite lookup failed', err);
+      res.status(500).json({ error: 'Invite lookup failed' });
       return;
     }
 
