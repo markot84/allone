@@ -247,7 +247,7 @@ function marginTier(marginPercentage: number): CompactProduct['margin_tier'] {
 }
 
 function productFromRow(docId: string, row: Record<string, unknown>, sourceKind: ProductSourceKind): CompactProduct | null {
-  const sku = text(row.sku ?? row.SKU ?? row.productSku ?? row.ProductSKU);
+  const sku = text(row.sku ?? row.SKU ?? row.productSku ?? row.ProductSKU ?? row.model ?? row.Model);
   if (!sku) return null;
   const path = categoryPathFromRow(row);
   const category = text(row.category ?? row.category_name ?? path[0]) || 'Uncategorized';
