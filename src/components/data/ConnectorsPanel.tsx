@@ -5,7 +5,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useBrandMembers } from '../../hooks/useCoordination';
 import { useModules } from '../../hooks/useModules';
 import { auth, FUNCTIONS_BASE_URL, getAppCheckHeader } from '../../config/firebase';
-import { getLastImportDates } from '../../services/import';
+import { getLastImportMeta, type LastImportMeta } from '../../services/import';
 import { coerceToDate } from '../../utils/coerceDate';
 import { clearOAuthSession, readOAuthSessionPayload } from '../../utils/oauthSession';
 import { FirestoreService } from '../../services/firestore';
@@ -82,6 +82,20 @@ function newestDate(...values: unknown[]): Date | null {
     if (d && (!newest || d > newest)) newest = d;
   }
   return newest;
+}
+
+const ECOMMERCE_CONNECTOR_IDS = new Set<ConnectorId>(['shopify', 'woocommerce', 'opencart', 'magento']);
+
+function ecommerceSyncHealth(
+  state: { lastOrdersSyncAt?: unknown; lastProductsSyncAt?: unknown },
+  importMeta?: LastImportMeta | null
+): 'full' | 'partial' | 'none' {
+  const ordersAt = coerceToDate(state.lastOrdersSyncAt);
+  const productsAt = coerceToDate(state.lastProductsSyncAt);
+  if (ordersAt && productsAt) return 'full';
+  if (ordersAt || productsAt) return 'partial';
+  if (importMeta?.status === 'partial') return 'partial';
+  return 'none';
 }
 
 /** Όλες οι ομάδες: ίδια διακριτική πράσινη παλέτα (χωρίς μπλε/πορτοκαλί ανά section). */
@@ -2005,27 +2019,50 @@ export function ConnectorsPanel() {
     : emptyStates;
 
   // Last sync dates — secondary, loaded once, cached
-  const { data: lastSyncDates = {} as Record<string, Date> } = useQuery({
+  const { data: lastSyncQuery = { dates: {} as Record<string, Date>, meta: {} as Record<string, LastImportMeta> } } =
+    useQuery({
     queryKey: ['lastSyncDates', brandId],
     queryFn: async () => {
-      if (!brandId) return {} as Record<string, Date>;
-      const dates = await getLastImportDates(brandId);
-      return {
-        google_ads: dates['google_ads_api'],
-        meta: dates['meta_api'],
-        tiktok: dates['tiktok_api'],
-        merchant: dates['merchant_center_api'] || dates['price_benchmarks'],
-        ga4: dates['ga4_api'] || dates['ga4'],
-        search_console: dates['search_console_api'],
-        shopify: dates['shopify_api'],
-        woocommerce: dates['woocommerce_api'],
-        opencart: dates['opencart_api'],
-        magento: dates['magento_api'],
-        megaventory: dates['megaventory_api'],
-        softone: dates['softone_api'],
-        epsilon_net: dates['epsilon_net_eshop_api'],
-        entersoft: dates['entersoft_web_api'],
-      } as Record<string, Date>;
+      if (!brandId) return { dates: {} as Record<string, Date>, meta: {} as Record<string, LastImportMeta> };
+      const metaBySource = await getLastImportMeta(brandId);
+      const pick = (sourceKey: string, connectorKey: ConnectorId) => {
+        const m = metaBySource[sourceKey];
+        return {
+          date: m?.date,
+          meta: m,
+          connectorKey,
+        };
+      };
+      const rows = [
+        pick('google_ads_api', 'google_ads'),
+        pick('meta_api', 'meta'),
+        pick('tiktok_api', 'tiktok'),
+        pick('merchant_center_api', 'merchant'),
+        pick('price_benchmarks', 'merchant'),
+        pick('ga4_api', 'ga4'),
+        pick('ga4', 'ga4'),
+        pick('search_console_api', 'search_console'),
+        pick('shopify_api', 'shopify'),
+        pick('woocommerce_api', 'woocommerce'),
+        pick('opencart_api', 'opencart'),
+        pick('magento_api', 'magento'),
+        pick('megaventory_api', 'megaventory'),
+        pick('softone_api', 'softone'),
+        pick('epsilon_net_eshop_api', 'epsilon_net'),
+        pick('entersoft_web_api', 'entersoft'),
+      ];
+      const dates: Record<string, Date> = {};
+      const meta: Record<string, LastImportMeta> = {};
+      for (const row of rows) {
+        if (!row.date) continue;
+        const prev = dates[row.connectorKey];
+        if (!prev || row.date > prev) dates[row.connectorKey] = row.date;
+        const prevMeta = meta[row.connectorKey];
+        if (!prevMeta || row.date > prevMeta.date) {
+          if (row.meta) meta[row.connectorKey] = row.meta;
+        }
+      }
+      return { dates, meta };
     },
     enabled: !!brandId,
     staleTime: 5 * 60 * 1000,
@@ -2035,6 +2072,8 @@ export function ConnectorsPanel() {
     refetchOnReconnect: false,
     retry: 0,
   });
+  const lastSyncDates = lastSyncQuery.dates;
+  const lastImportMeta = lastSyncQuery.meta;
 
   const { data: megaventorySyncJob } = useQuery({
     queryKey: ['connectorSyncJob', brandId, 'megaventory'],
@@ -2368,9 +2407,15 @@ export function ConnectorsPanel() {
         const syncedConnector = CONNECTORS.find((c) => c.id === provider);
         const label = syncedConnector?.syncLabel || 'campaigns';
         // Optimistic last-sync UI update (prevents stale date display while background queries refresh)
-        queryClient.setQueryData<Record<string, Date> | undefined>(
+        queryClient.setQueryData<{ dates: Record<string, Date>; meta: Record<string, LastImportMeta> }>(
           ['lastSyncDates', brandId],
-          (prev) => ({ ...(prev || {}), [provider]: new Date() })
+          (prev) => ({
+            dates: { ...(prev?.dates || {}), [provider]: new Date() },
+            meta: {
+              ...(prev?.meta || {}),
+              [provider]: { date: new Date(), status: 'completed' },
+            },
+          })
         );
         if (provider === 'megaventory' && result.queued) {
           toast.success('Megaventory sync ξεκίνησε στο background. Μπορείς να συνεχίσεις κανονικά.');
@@ -2789,12 +2834,23 @@ export function ConnectorsPanel() {
                   (pickerOwnerUid === undefined || pickerOwnerUid !== uid);
                 const isSyncing = syncingProviders.has(conn.id);
                 const isConnecting = connecting === conn.id;
-                const lastSyncAt = newestDate(
-                  lastSyncDates[conn.id] as unknown,
-                  state.lastSyncAt,
-                  state.lastOrdersSyncAt,
-                  state.lastProductsSyncAt
-                );
+                const importMeta = lastImportMeta[conn.id];
+                const ordersSyncAt = coerceToDate(state.lastOrdersSyncAt);
+                const productsSyncAt = coerceToDate(state.lastProductsSyncAt);
+                const ecommerceHealth = ECOMMERCE_CONNECTOR_IDS.has(conn.id)
+                  ? ecommerceSyncHealth(state, importMeta)
+                  : null;
+                const lastSyncAt =
+                  ecommerceHealth === 'full'
+                    ? newestDate(ordersSyncAt, productsSyncAt)
+                    : newestDate(
+                        ecommerceHealth === 'partial' ? null : lastSyncDates[conn.id],
+                        state.lastSyncAt,
+                        state.lastOrdersSyncAt,
+                        state.lastProductsSyncAt,
+                        importMeta?.date
+                      );
+                const syncChipPartial = ecommerceHealth === 'partial';
                 const connectedAt = coerceToDate(state.connectedAt as unknown);
                 const identityLines = getConnectorIdentityLines(conn.id, state);
                 const usesCompactDetails = conn.id === 'magento' || conn.group === 'operations';
@@ -2862,12 +2918,23 @@ export function ConnectorsPanel() {
                           </span>
                           <span
                             className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                              lastSyncAt
-                                ? 'bg-white text-[#6B7280] ring-1 ring-emerald-200'
-                                : 'bg-amber-50 text-amber-700 ring-1 ring-amber-200'
+                              !lastSyncAt
+                                ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-200'
+                                : syncChipPartial
+                                  ? 'bg-amber-50 text-amber-800 ring-1 ring-amber-300'
+                                  : 'bg-white text-[#6B7280] ring-1 ring-emerald-200'
                             }`}
+                            title={
+                              syncChipPartial
+                                ? 'Μερική εισαγωγή — παραγγελίες ή προϊόντα δεν ολοκληρώθηκαν. Κάντε ξανά sync.'
+                                : undefined
+                            }
                           >
-                            {lastSyncAt ? `Sync: ${formatConnectorDate(lastSyncAt)}` : 'Δεν έχει γίνει sync'}
+                            {lastSyncAt
+                              ? syncChipPartial
+                                ? `Sync: ${formatConnectorDate(lastSyncAt)} (μερικό)`
+                                : `Sync: ${formatConnectorDate(lastSyncAt)}`
+                              : 'Δεν έχει γίνει sync'}
                           </span>
                           {syncJobBadge && (
                             <span
@@ -2902,7 +2969,17 @@ export function ConnectorsPanel() {
                               <p key={line}>{line}</p>
                             ))}
                             {connectedAt && <p className="text-[#9CA3AF]">Συνδέθηκε: {formatConnectorDate(connectedAt)}</p>}
-                            {lastSyncAt && <p className="text-[#9CA3AF]">Τελευταίο sync: {formatConnectorDate(lastSyncAt)}</p>}
+                            {lastSyncAt && (
+                              <p className="text-[#9CA3AF]">
+                                Τελευταίο sync{syncChipPartial ? ' (μερικό)' : ''}: {formatConnectorDate(lastSyncAt)}
+                              </p>
+                            )}
+                            {ECOMMERCE_CONNECTOR_IDS.has(conn.id) && isConnected && (
+                              <p className="text-[#9CA3AF]">
+                                Παραγγελίες: {ordersSyncAt ? formatConnectorDate(ordersSyncAt) : '—'} · Προϊόντα:{' '}
+                                {productsSyncAt ? formatConnectorDate(productsSyncAt) : '—'}
+                              </p>
+                            )}
                             {syncJob?.status && (
                               <p className="text-[#9CA3AF]">
                                 Background job: {syncJob.status}

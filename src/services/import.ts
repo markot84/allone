@@ -2307,8 +2307,14 @@ export async function getImportJobs(brandId?: string | null): Promise<ImportJob[
 const IMPORT_JOBS_LOOKBACK_FOR_LAST_DATES = 300;
 const IMPORT_JOBS_LOOKBACK_FOR_SYNC_VERSION = 50;
 
-// Get last successful import date per type (for UI display)
-export async function getLastImportDates(brandId: string | null | undefined): Promise<Record<string, Date>> {
+export type LastImportMeta = {
+  date: Date;
+  status?: string;
+  imported?: number;
+};
+
+/** Latest import job per source (date + status for connector UI). */
+export async function getLastImportMeta(brandId: string | null | undefined): Promise<Record<string, LastImportMeta>> {
   if (!brandId) return {};
   const jobs = await FirestoreService.getDocuments<ImportJob>(
     'import_jobs',
@@ -2318,26 +2324,30 @@ export async function getLastImportDates(brandId: string | null | undefined): Pr
   );
   const normalized = jobs.map((job) => ({
     ...job,
-    createdAt:
-      coerceToDate(job.createdAt as unknown) ??
-      new Date(0),
+    createdAt: coerceToDate(job.createdAt as unknown) ?? new Date(0),
   }));
-  const result: Record<string, Date> = {};
+  const result: Record<string, LastImportMeta> = {};
   for (const job of normalized) {
     const status = (job as { status?: string }).status;
     const imported =
       Number((job as { imported?: number }).imported ?? job.result?.imported ?? 0) || 0;
-    // Connector jobs can be `partial` when some secondary step fails after data was imported.
-    // For "last sync" UI, imported partial jobs should still advance the displayed date.
-    const countsAsImported = status === undefined || status === 'completed' || (status === 'partial' && imported > 0);
+    const countsAsImported =
+      status === undefined || status === 'completed' || (status === 'partial' && imported > 0);
     if (!countsAsImported) continue;
+    const meta: LastImportMeta = { date: job.createdAt, status, imported };
     const key = (job as { source?: string }).source || job.type;
     const existing = result[key];
-    if (!existing || job.createdAt > existing) result[key] = job.createdAt;
+    if (!existing || job.createdAt > existing.date) result[key] = meta;
     const existing2 = result[job.type];
-    if (!existing2 || job.createdAt > existing2) result[job.type] = job.createdAt;
+    if (!existing2 || job.createdAt > existing2.date) result[job.type] = meta;
   }
   return result;
+}
+
+// Get last import date per type (for UI display)
+export async function getLastImportDates(brandId: string | null | undefined): Promise<Record<string, Date>> {
+  const meta = await getLastImportMeta(brandId);
+  return Object.fromEntries(Object.entries(meta).map(([k, v]) => [k, v.date]));
 }
 
 export async function getLatestImportDate(brandId: string | null | undefined): Promise<Date | null> {
