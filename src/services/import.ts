@@ -2311,6 +2311,9 @@ export type LastImportMeta = {
   date: Date;
   status?: string;
   imported?: number;
+  orders?: number;
+  products?: number;
+  errors?: string[];
 };
 
 /** Latest import job per source (date + status for connector UI). */
@@ -2334,7 +2337,16 @@ export async function getLastImportMeta(brandId: string | null | undefined): Pro
     const countsAsImported =
       status === undefined || status === 'completed' || (status === 'partial' && imported > 0);
     if (!countsAsImported) continue;
-    const meta: LastImportMeta = { date: job.createdAt, status, imported };
+    const meta: LastImportMeta = {
+      date: job.createdAt,
+      status,
+      imported,
+      orders: Number((job as { orders?: number }).orders ?? 0) || undefined,
+      products: Number((job as { products?: number }).products ?? 0) || undefined,
+      errors: Array.isArray((job as { errors?: unknown }).errors)
+        ? (job as { errors?: string[] }).errors?.filter(Boolean)
+        : undefined,
+    };
     const key = (job as { source?: string }).source || job.type;
     const existing = result[key];
     if (!existing || job.createdAt > existing.date) result[key] = meta;

@@ -31,8 +31,16 @@ function getDb(): Firestore {
 const OPENCART_USER_AGENT = 'PerformancePlus/1.0 (+https://performanceplus.gr)';
 /** REST extension default page size; 100 is widely supported. */
 const OPENCART_PAGE_SIZE = 100;
-/** Safety cap: 200 pages × 100 = 20k orders/products per sync leg. */
-const OPENCART_MAX_PAGES = 200;
+/** Max pages per sync leg per run (100/page). Continues via Firestore page cursors on cap. */
+const OPENCART_MAX_PAGES = 500;
+/** Stop order scan after N full pages with zero rows in the date window (avoids 20k empty API walks). */
+const OPENCART_MAX_EMPTY_ORDER_PAGES = 25;
+const OPENCART_RETRYABLE_HTTP = new Set([429, 500, 502, 503, 504]);
+const OPENCART_PAGE_DELAY_MS = 200;
+
+function sleepMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 type OpenCartCredentialInput = {
   clientId?: string;
@@ -484,7 +492,7 @@ export async function fetchOpenCartData(brandId: string): Promise<{
   const orderWindow = buildHistoricalOrIncrementalWindow(connector || {}, 'lastOrdersSyncAt', 'historyLoadedUntilYear', 3, ECOMMERCE_INCREMENTAL_OVERLAP_HOURS);
 
   logger.info(
-    `[OpenCart] ${brandId} orders=${orderWindow.mode} (${orderWindow.windowStart.toISOString()}→${orderWindow.windowEnd.toISOString()})`
+    `[OpenCart] ${brandId} orders=${orderWindow.mode} (${orderWindow.windowStart.toISOString()}→${orderWindow.windowEnd.toISOString()}) productsPage=${connector.productsSyncPageCursor || 1} ordersPage=${connector.ordersSyncPageCursor || 1}`
   );
 
   const storeUrl = String((connector as { storeUrl?: string }).storeUrl || '');
@@ -530,14 +538,24 @@ export async function fetchOpenCartData(brandId: string): Promise<{
 
   const fetchRest = async (route: string, extra: Record<string, string> = {}): Promise<Response> => {
     const url = buildUrl(route, { limit: String(OPENCART_PAGE_SIZE), ...extra });
-    let res = await fetch(url, { headers: buildHeaders() });
-    if (res.status === 401) {
-      try {
-        await refreshAuth();
-        res = await fetch(url, { headers: buildHeaders() });
-      } catch (reauthErr) {
-        logger.warn('[OpenCart] Re-auth after 401 failed:', reauthErr);
+    const maxAttempts = 4;
+    let res!: Response;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      res = await fetch(url, { headers: buildHeaders() });
+      if (res.status === 401) {
+        try {
+          await refreshAuth();
+          res = await fetch(url, { headers: buildHeaders() });
+        } catch (reauthErr) {
+          logger.warn('[OpenCart] Re-auth after 401 failed:', reauthErr);
+        }
       }
+      if (res.ok || !OPENCART_RETRYABLE_HTTP.has(res.status) || attempt === maxAttempts) {
+        return res;
+      }
+      const waitMs = 2000 * attempt;
+      logger.warn(`[OpenCart] HTTP ${res.status} on ${route} — retry ${attempt}/${maxAttempts} in ${waitMs}ms`, extra);
+      await sleepMs(waitMs);
     }
     return res;
   };
@@ -557,8 +575,7 @@ export async function fetchOpenCartData(brandId: string): Promise<{
     };
 
     for (const key of ['id', 'order_id'] as const) {
-      const url = buildUrl('rest/order_admin/order', { [key]: orderId });
-      const res = await fetch(url, { headers: buildHeaders() });
+      const res = await fetchRest('rest/order_admin/order', { [key]: orderId });
       if (res.ok) {
         const json = await res.json();
         const result = tryBodies(json);
@@ -574,19 +591,97 @@ export async function fetchOpenCartData(brandId: string): Promise<{
   let ordersAbortReason = '';
   let productsAbortReason = '';
 
+  const productsStartPage = Math.max(1, parseInt(String(connector.productsSyncPageCursor || '1'), 10) || 1);
+  const ordersStartPage = Math.max(1, parseInt(String(connector.ordersSyncPageCursor || '1'), 10) || 1);
+  let productsCursorNext: number | null = null;
+  let ordersCursorNext: number | null = null;
+
   try {
+    // ── Products first (catalog for PI); orders after (slower, many API calls) ──
+    const prodItems: { id: string; data: Record<string, unknown> }[] = [];
+    let prodPage = productsStartPage;
+    let prodMore = true;
+    const productRunPageBudget = OPENCART_MAX_PAGES;
+
+    while (prodMore) {
+      if (prodPage > productsStartPage) await sleepMs(OPENCART_PAGE_DELAY_MS);
+      const res = await fetchRest('rest/product_admin/products', { page: String(prodPage) });
+
+      if (!res.ok) {
+        productsAbort = true;
+        productsCursorNext = prodPage;
+        productsAbortReason = `HTTP ${res.status} on page ${prodPage} (retry sync)`;
+        break;
+      }
+
+      const body = await res.json();
+      const products: any[] = body.products || body.data || (Array.isArray(body) ? body : []);
+      if (products.length === 0) { prodMore = false; break; }
+
+      for (const p of products) {
+        prodItems.push({
+          id: `oc_${p.product_id || p.productId}`,
+          data: {
+            productId: String(p.product_id || p.productId || ''),
+            name: p.name || '',
+            model: p.model || '',
+            sku: p.sku || p.model || '',
+            price: parseFloat(p.price || '0'),
+            quantity: parseInt(p.quantity || '0', 10),
+            status: p.status === '1' || p.status === true ? 'active' : 'inactive',
+            manufacturer: p.manufacturer || '',
+            createdAt: p.date_added || p.dateAdded || '',
+            updatedAt: p.date_modified || p.dateModified || '',
+            source: 'opencart_api',
+            brandId,
+          },
+        });
+      }
+
+      prodMore = products.length >= OPENCART_PAGE_SIZE;
+      prodPage++;
+      if (prodPage >= productsStartPage + productRunPageBudget) {
+        if (prodMore) {
+          productsAbort = true;
+          productsCursorNext = prodPage;
+          productsAbortReason = `continues at page ${prodPage} (run sync again)`;
+          logger.warn(`[OpenCart] Products page budget reached, resume page ${prodPage} ${brandId}`);
+        }
+        break;
+      }
+    }
+
+    const productsSyncComplete = !productsAbort;
+
+    if (prodItems.length > 0) {
+      for (let i = 0; i < prodItems.length; i += 500) {
+        const batch = db.batch();
+        const chunk = prodItems.slice(i, i + 500);
+        for (const item of chunk) {
+          batch.set(db.collection('opencart_products').doc(item.id), { ...item.data, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        }
+        await batch.commit();
+      }
+      totalImported += prodItems.length;
+      logger.info(`[OpenCart] Products: ${prodItems.length} imported for brand ${brandId}`);
+    }
+
     // ── Orders ──────────────────────────────────────
     const orderItems: { id: string; data: Record<string, unknown> }[] = [];
-    let orderPage = 1;
+    let orderPage = ordersStartPage;
     let hasMore = true;
+    let consecutiveEmptyFilteredPages = 0;
+    const orderRunPageBudget = OPENCART_MAX_PAGES;
 
     const filterSinceMs = orderWindow.windowStart.getTime();
 
     while (hasMore) {
+      if (orderPage > ordersStartPage) await sleepMs(OPENCART_PAGE_DELAY_MS);
       const res = await fetchRest('rest/order_admin/orders', { page: String(orderPage) });
 
       if (!res.ok) {
-        ordersAbortReason = `HTTP ${res.status} on page ${orderPage}`;
+        ordersAbortReason = `HTTP ${res.status} on page ${orderPage} (retry sync)`;
+        ordersCursorNext = orderPage;
         logger.warn(`[OpenCart] Orders page ${orderPage} returned ${res.status}`);
         ordersAbort = true;
         break;
@@ -604,14 +699,46 @@ export async function fetchOpenCartData(brandId: string): Promise<{
         return d.getTime() >= filterSinceMs;
       });
 
-      const enriched = await mapPool(pageCandidates, 6, async (o: Record<string, unknown>) => {
+      if (pageCandidates.length === 0) {
+        consecutiveEmptyFilteredPages++;
+        if (orders.length < OPENCART_PAGE_SIZE) {
+          hasMore = false;
+          break;
+        }
+        const pageTimes = orders
+          .map((o: Record<string, unknown>) => new Date(String(o.date_added || o.dateAdded || '')).getTime())
+          .filter((t) => Number.isFinite(t));
+        if (pageTimes.length > 0 && Math.max(...pageTimes) < filterSinceMs) {
+          hasMore = false;
+          logger.info(`[OpenCart] Orders: all rows on page ${orderPage} older than window — stop ${brandId}`);
+          break;
+        }
+        if (consecutiveEmptyFilteredPages >= OPENCART_MAX_EMPTY_ORDER_PAGES) {
+          hasMore = false;
+          logger.info(`[OpenCart] Orders: ${consecutiveEmptyFilteredPages} empty filtered pages — stop ${brandId}`);
+          break;
+        }
+        orderPage++;
+        if (orderPage >= ordersStartPage + orderRunPageBudget) {
+          if (hasMore) {
+            ordersAbort = true;
+            ordersCursorNext = orderPage;
+            ordersAbortReason = `continues at page ${orderPage} (run sync again)`;
+          }
+          break;
+        }
+        continue;
+      }
+      consecutiveEmptyFilteredPages = 0;
+
+      const enriched = await mapPool(pageCandidates, 4, async (o: Record<string, unknown>) => {
         let lineItems = parseOpenCartOrderProductsToLineItems(o);
         let tax = extractOcTaxAmount(o);
-        if (lineItems.length === 0 || tax === 0) {
+        if (lineItems.length === 0) {
           const oid = String(o.order_id || o.orderId || '');
           if (oid) {
             const detail = await fetchOcOrderDetail(oid);
-            if (lineItems.length === 0) lineItems = detail.lineItems;
+            lineItems = detail.lineItems;
             if (tax === 0) tax = detail.tax;
           }
         }
@@ -659,10 +786,13 @@ export async function fetchOpenCartData(brandId: string): Promise<{
 
       hasMore = orders.length >= OPENCART_PAGE_SIZE;
       orderPage++;
-      if (orderPage > OPENCART_MAX_PAGES) {
-        ordersAbort = true;
-        ordersAbortReason = `page cap (${OPENCART_MAX_PAGES * OPENCART_PAGE_SIZE}+ orders)`;
-        logger.warn(`[OpenCart] Orders page cap (${orderPage}) ${brandId}`);
+      if (orderPage >= ordersStartPage + orderRunPageBudget) {
+        if (hasMore) {
+          ordersAbort = true;
+          ordersCursorNext = orderPage;
+          ordersAbortReason = `continues at page ${orderPage} (run sync again)`;
+          logger.warn(`[OpenCart] Orders page budget reached, resume page ${orderPage} ${brandId}`);
+        }
         break;
       }
     }
@@ -682,113 +812,90 @@ export async function fetchOpenCartData(brandId: string): Promise<{
       logger.info(`[OpenCart] Orders: ${orderItems.length} imported for brand ${brandId}`);
     }
 
-    // ── Products ───────────────────────────────────────────────────
-    const prodItems: { id: string; data: Record<string, unknown> }[] = [];
-    let prodPage = 1;
-    let prodMore = true;
+    const syncErrors = [
+      ...(!ordersSyncComplete ? [`orders: ${ordersAbortReason || 'aborted'}`] : []),
+      ...(!productsSyncComplete ? [`products: ${productsAbortReason || 'aborted'}`] : []),
+    ];
+    const bothOk = ordersSyncComplete && productsSyncComplete;
 
-    while (prodMore) {
-      const res = await fetchRest('rest/product_admin/products', { page: String(prodPage) });
-
-      if (!res.ok) {
-        productsAbort = true;
-        productsAbortReason = `HTTP ${res.status} on page ${prodPage}`;
-        break;
-      }
-
-      const body = await res.json();
-      const products: any[] = body.products || body.data || (Array.isArray(body) ? body : []);
-      if (products.length === 0) { prodMore = false; break; }
-
-      for (const p of products) {
-        prodItems.push({
-          id: `oc_${p.product_id || p.productId}`,
-          data: {
-            productId: String(p.product_id || p.productId || ''),
-            name: p.name || '',
-            model: p.model || '',
-            sku: p.sku || p.model || '',
-            price: parseFloat(p.price || '0'),
-            quantity: parseInt(p.quantity || '0', 10),
-            status: p.status === '1' || p.status === true ? 'active' : 'inactive',
-            manufacturer: p.manufacturer || '',
-            createdAt: p.date_added || p.dateAdded || '',
-            updatedAt: p.date_modified || p.dateModified || '',
-            source: 'opencart_api',
-            brandId,
-          },
-        });
-      }
-
-      prodMore = products.length >= OPENCART_PAGE_SIZE;
-      prodPage++;
-      if (prodPage > OPENCART_MAX_PAGES) {
-        productsAbort = true;
-        productsAbortReason = `page cap (${OPENCART_MAX_PAGES * OPENCART_PAGE_SIZE}+ products)`;
-        logger.warn(`[OpenCart] Products page cap (${prodPage}) ${brandId}`);
-        break;
-      }
+    const connectorPatch: Record<string, unknown> = {
+      'opencart.lastSyncAttemptAt': FieldValue.serverTimestamp(),
+      'opencart.lastSyncStatus': bothOk ? 'completed' : 'partial',
+      'opencart.lastSyncImported': totalImported,
+      'opencart.lastSyncOrders': orderItems.length,
+      'opencart.lastSyncProducts': prodItems.length,
+    };
+    if (bothOk) {
+      connectorPatch['opencart.lastSyncError'] = FieldValue.delete();
+    } else {
+      connectorPatch['opencart.lastSyncError'] = syncErrors.join(' · ') || 'sync incomplete';
     }
-
-    const productsSyncComplete = !productsAbort;
-
-    if (prodItems.length > 0) {
-      for (let i = 0; i < prodItems.length; i += 500) {
-        const batch = db.batch();
-        const chunk = prodItems.slice(i, i + 500);
-        for (const item of chunk) {
-          batch.set(db.collection('opencart_products').doc(item.id), { ...item.data, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-        }
-        await batch.commit();
-      }
-      totalImported += prodItems.length;
-      logger.info(`[OpenCart] Products: ${prodItems.length} imported for brand ${brandId}`);
-    }
-
-    const connectorPatch: Record<string, unknown> = {};
     if (ordersSyncComplete) {
       connectorPatch['opencart.lastOrdersSyncAt'] = FieldValue.serverTimestamp();
+      connectorPatch['opencart.ordersSyncPageCursor'] = FieldValue.delete();
       if (orderWindow.mode === 'historical') {
         connectorPatch['opencart.historyLoadedUntilYear'] = orderWindow.historyStartYear;
       }
+    } else if (ordersCursorNext != null) {
+      connectorPatch['opencart.ordersSyncPageCursor'] = String(ordersCursorNext);
     }
     if (productsSyncComplete) {
       connectorPatch['opencart.lastProductsSyncAt'] = FieldValue.serverTimestamp();
+      connectorPatch['opencart.productsSyncPageCursor'] = FieldValue.delete();
+    } else if (productsCursorNext != null) {
+      connectorPatch['opencart.productsSyncPageCursor'] = String(productsCursorNext);
+      if (prodItems.length > 0) {
+        connectorPatch['opencart.lastProductsSyncAt'] = FieldValue.serverTimestamp();
+      }
     }
-    if (Object.keys(connectorPatch).length > 0) {
-      await db.doc(`connectors/${brandId}`).update(connectorPatch);
-    }
+    await db.doc(`connectors/${brandId}`).update(connectorPatch);
 
     // ── Log import_jobs ────────────────────────────────────────────
     await db.collection('import_jobs').add({
       brandId,
       type: 'ecommerce',
       source: 'opencart_api',
-      mode: `${orderWindow.mode}_orders_full_products_catalog`,
-      status: ordersSyncComplete && productsSyncComplete ? 'completed' : 'partial',
+      mode: `products_full_${orderWindow.mode}_orders`,
+      status: bothOk ? 'completed' : 'partial',
       imported: totalImported,
       orders: orderItems.length,
       products: prodItems.length,
       failed: 0,
-      errors: [],
+      errors: syncErrors,
       createdAt: FieldValue.serverTimestamp(),
     });
 
     logger.info(`[OpenCart] Sync complete for brand ${brandId}: ${totalImported} total items`);
-    const bothOk = ordersSyncComplete && productsSyncComplete;
     if (!bothOk) {
       const orderNote = ordersSyncComplete ? 'OK' : `Aborted${ordersAbortReason ? ` (${ordersAbortReason})` : ''}`;
       const prodNote = productsSyncComplete ? 'OK' : `Aborted${productsAbortReason ? ` (${productsAbortReason})` : ''}`;
+      const resumeHint =
+        productsCursorNext != null || ordersCursorNext != null
+          ? ' Πάτησε Sync ξανά (σε 2–5 λεπτά αν είδες HTTP 500) για να συνεχίσει από την ίδια σελίδα.'
+          : '';
       return {
         success: false,
         imported: totalImported,
-        error: `OpenCart incomplete — orders:${orderNote}, products:${prodNote}`,
+        error: `OpenCart incomplete — orders:${orderNote}, products:${prodNote}.${resumeHint}`,
       };
     }
     return { success: true, imported: totalImported };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     logger.error(`[OpenCart] fetchOpenCartData error for ${brandId}:`, msg);
+    try {
+      const failPatch: Record<string, unknown> = {
+        'opencart.lastSyncAttemptAt': FieldValue.serverTimestamp(),
+        'opencart.lastSyncStatus': 'partial',
+        'opencart.lastSyncError': msg.slice(0, 480),
+        'opencart.lastSyncImported': totalImported,
+      };
+      if (productsCursorNext != null) failPatch['opencart.productsSyncPageCursor'] = String(productsCursorNext);
+      if (ordersCursorNext != null) failPatch['opencart.ordersSyncPageCursor'] = String(ordersCursorNext);
+      await db.doc(`connectors/${brandId}`).update(failPatch);
+    } catch (patchErr) {
+      logger.warn(`[OpenCart] Failed to persist sync error for ${brandId}:`, patchErr);
+    }
     return { success: false, imported: totalImported, error: msg };
   }
 }

@@ -66,6 +66,12 @@ interface ConnectorState {
   lastSyncAt?: any;
   lastOrdersSyncAt?: any;
   lastProductsSyncAt?: any;
+  lastSyncAttemptAt?: any;
+  lastSyncStatus?: string;
+  lastSyncError?: string;
+  lastSyncImported?: number;
+  lastSyncOrders?: number;
+  lastSyncProducts?: number;
 }
 
 type ConnectorId = 'google_ads' | 'meta' | 'tiktok' | 'merchant' | 'ga4' | 'search_console' | 'shopify' | 'woocommerce' | 'opencart' | 'magento' | 'megaventory' | 'softone' | 'epsilon_net' | 'entersoft';
@@ -1968,6 +1974,10 @@ export function ConnectorsPanel() {
     myRole === 'admin';
 
   const [syncingProviders, setSyncingProviders] = useState<Set<ConnectorConfig['id']>>(new Set());
+  /** Τελευταία χειροκίνητη προσπάθεια sync ανά connector (ξεχωριστά από import_jobs). */
+  const [syncAttempts, setSyncAttempts] = useState<
+    Partial<Record<ConnectorId, { at: Date; success: boolean; error?: string }>>
+  >({});
   const [connecting, setConnecting] = useState<string | null>(null);
   const [accountPickerFor, setAccountPickerFor] = useState<string | null>(null);
   /** Prevents auto-reopen while Firestore still has pendingAccountSelection (user closed modal). */
@@ -2289,6 +2299,22 @@ export function ConnectorsPanel() {
     });
   }, []);
 
+  const recordSyncAttempt = useCallback(
+    (provider: ConnectorId, success: boolean, error?: string) => {
+      setSyncAttempts((prev) => ({
+        ...prev,
+        [provider]: { at: new Date(), success, error: error?.slice(0, 280) },
+      }));
+    },
+    []
+  );
+
+  const refreshAfterSyncAttempt = useCallback(async () => {
+    if (!brandId) return;
+    queryClient.invalidateQueries({ queryKey: ['lastSyncDates', brandId, 'v2'] });
+    await refetchConnectors();
+  }, [brandId, queryClient, refetchConnectors]);
+
   const handleConnect = async (provider: ConnectorConfig['id'], shopDomain?: string) => {
     if (!brandId || !user) return;
     if (!canManageConnectors) {
@@ -2549,9 +2575,13 @@ export function ConnectorsPanel() {
         if (provider === 'magento') {
           queryClient.invalidateQueries({ queryKey: ['magento_popular_searches', brandId] });
         }
+        recordSyncAttempt(provider, true);
         fetchStates();
       } else {
-        toast.error(result.error || 'Sync failed');
+        const errMsg = String(result.error || 'Sync failed');
+        recordSyncAttempt(provider, false, errMsg);
+        await refreshAfterSyncAttempt();
+        toast.error(errMsg);
       }
     } catch (err) {
       let msg = err instanceof Error ? err.message : 'Σφάλμα sync';
@@ -2561,6 +2591,8 @@ export function ConnectorsPanel() {
         msg =
           'Αποτυχία δικτύου. Δοκίμασε ξανά σε 1 λεπτό ή από άλλο δίκτυο. Το σύστημα δοκίμασε αυτόματα και την εναλλακτική σύνδεση server.';
       }
+      recordSyncAttempt(provider, false, msg);
+      void refreshAfterSyncAttempt();
       toast.error(msg);
       console.error('[ConnectorsPanel] connectorSync failed:', err);
     } finally {
@@ -2855,6 +2887,9 @@ export function ConnectorsPanel() {
                 const isSyncing = syncingProviders.has(conn.id);
                 const isConnecting = connecting === conn.id;
                 const importMeta = lastImportMeta[conn.id];
+                const connectorAttemptAt = coerceToDate(state.lastSyncAttemptAt);
+                const connectorSyncError =
+                  typeof state.lastSyncError === 'string' ? state.lastSyncError.trim() : '';
                 const ordersSyncAt = coerceToDate(state.lastOrdersSyncAt);
                 const productsSyncAt = coerceToDate(state.lastProductsSyncAt);
                 const ecommerceHealth = ECOMMERCE_CONNECTOR_IDS.has(conn.id)
@@ -2864,17 +2899,26 @@ export function ConnectorsPanel() {
                   ecommerceHealth === 'full'
                     ? newestDate(ordersSyncAt, productsSyncAt)
                     : newestDate(
+                        connectorAttemptAt,
                         lastSyncDates[conn.id],
                         state.lastSyncAt,
                         state.lastOrdersSyncAt,
                         state.lastProductsSyncAt,
                         importMeta?.date
                       );
+                const connectorStatusPartial =
+                  state.lastSyncStatus === 'partial' || (connectorSyncError.length > 0 && !ordersSyncAt && !productsSyncAt);
                 const syncChipPartial =
+                  connectorStatusPartial ||
                   ecommerceHealth === 'partial' ||
                   (ECOMMERCE_CONNECTOR_IDS.has(conn.id) &&
                     Boolean(lastSyncAt) &&
                     (!ordersSyncAt || !productsSyncAt));
+                const lastAttempt = syncAttempts[conn.id];
+                const recentFailedAttempt =
+                  Boolean(lastAttempt) &&
+                  !lastAttempt!.success &&
+                  (!lastSyncAt || lastAttempt!.at.getTime() > lastSyncAt.getTime() - 2000);
                 const connectedAt = coerceToDate(state.connectedAt as unknown);
                 const identityLines = getConnectorIdentityLines(conn.id, state);
                 const usesCompactDetails = conn.id === 'magento' || conn.group === 'operations';
@@ -2940,26 +2984,39 @@ export function ConnectorsPanel() {
                             <CheckCircle2 size={12} />
                             Συνδεδεμένο
                           </span>
-                          <span
-                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                              !lastSyncAt
-                                ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-200'
-                                : syncChipPartial
-                                  ? 'bg-amber-50 text-amber-800 ring-1 ring-amber-300'
-                                  : 'bg-white text-[#6B7280] ring-1 ring-emerald-200'
-                            }`}
-                            title={
-                              syncChipPartial
-                                ? 'Μερική εισαγωγή — παραγγελίες ή προϊόντα δεν ολοκληρώθηκαν. Κάντε ξανά sync.'
-                                : undefined
-                            }
-                          >
-                            {lastSyncAt
-                              ? syncChipPartial
-                                ? `Sync: ${formatConnectorDate(lastSyncAt)} (μερικό)`
-                                : `Sync: ${formatConnectorDate(lastSyncAt)}`
-                              : 'Δεν έχει γίνει sync'}
-                          </span>
+                          {isSyncing ? (
+                            <span className="inline-flex items-center rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-800 ring-1 ring-sky-200">
+                              Sync σε εξέλιξη…
+                            </span>
+                          ) : recentFailedAttempt ? (
+                            <span
+                              className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-800 ring-1 ring-red-200"
+                              title={lastAttempt?.error}
+                            >
+                              Αποτυχία: {formatConnectorDate(lastAttempt!.at)}
+                            </span>
+                          ) : (
+                            <span
+                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                                !lastSyncAt
+                                  ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-200'
+                                  : syncChipPartial
+                                    ? 'bg-amber-50 text-amber-800 ring-1 ring-amber-300'
+                                    : 'bg-white text-[#6B7280] ring-1 ring-emerald-200'
+                              }`}
+                              title={
+                                syncChipPartial
+                                  ? 'Τελευταία αποθηκευμένη εισαγωγή — όχι πλήρες sync. Κάντε ξανά sync.'
+                                  : undefined
+                              }
+                            >
+                              {lastSyncAt
+                                ? syncChipPartial
+                                  ? `Εισαγωγή: ${formatConnectorDate(lastSyncAt)} (μερικό)`
+                                  : `Sync: ${formatConnectorDate(lastSyncAt)}`
+                                : 'Δεν έχει γίνει sync'}
+                            </span>
+                          )}
                           {syncJobBadge && (
                             <span
                               className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${syncJobBadge.className}`}
@@ -2993,16 +3050,40 @@ export function ConnectorsPanel() {
                               <p key={line}>{line}</p>
                             ))}
                             {connectedAt && <p className="text-[#9CA3AF]">Συνδέθηκε: {formatConnectorDate(connectedAt)}</p>}
+                            {recentFailedAttempt && (
+                              <p className="text-red-700/90">
+                                Τελευταία προσπάθεια: {formatConnectorDate(lastAttempt!.at)} — αποτυχία
+                                {lastAttempt?.error ? ` (${lastAttempt.error})` : ''}
+                              </p>
+                            )}
                             {lastSyncAt && (
                               <p className="text-[#9CA3AF]">
-                                Τελευταίο sync{syncChipPartial ? ' (μερικό)' : ''}: {formatConnectorDate(lastSyncAt)}
+                                {syncChipPartial ? 'Τελευταία εισαγωγή (μερικό)' : 'Τελευταίο sync'}:{' '}
+                                {formatConnectorDate(lastSyncAt)}
+                                {recentFailedAttempt ? ' (παλαιότερη από την αποτυχημένη προσπάθεια)' : ''}
                               </p>
                             )}
                             {ECOMMERCE_CONNECTOR_IDS.has(conn.id) && isConnected && (
-                              <p className="text-[#9CA3AF]">
-                                Παραγγελίες: {ordersSyncAt ? formatConnectorDate(ordersSyncAt) : '—'} · Προϊόντα:{' '}
-                                {productsSyncAt ? formatConnectorDate(productsSyncAt) : '—'}
-                              </p>
+                              <>
+                                <p className="text-[#9CA3AF]">
+                                  Παραγγελίες: {ordersSyncAt ? formatConnectorDate(ordersSyncAt) : '—'} · Προϊόντα:{' '}
+                                  {productsSyncAt ? formatConnectorDate(productsSyncAt) : '—'}
+                                </p>
+                                {(connectorSyncError || importMeta?.errors?.length) && (
+                                  <p className="text-amber-800/90 break-words">
+                                    {connectorSyncError ||
+                                      importMeta?.errors?.join(' · ') ||
+                                      'Μερική εισαγωγή — δοκιμάστε ξανά sync.'}
+                                  </p>
+                                )}
+                                {typeof state.lastSyncImported === 'number' && state.lastSyncImported > 0 && (
+                                  <p className="text-[#9CA3AF]">
+                                    Τελευταία προσπάθεια: {state.lastSyncOrders ?? 0} παραγγελίες ·{' '}
+                                    {state.lastSyncProducts ?? 0} προϊόντα
+                                    {connectorAttemptAt ? ` (${formatConnectorDate(connectorAttemptAt)})` : ''}
+                                  </p>
+                                )}
+                              </>
                             )}
                             {syncJob?.status && (
                               <p className="text-[#9CA3AF]">
