@@ -66,6 +66,7 @@ import {
 import {
   saveOpenCartCredentials,
   fetchOpenCartData,
+  runOpenCartBackfillJob,
   setDb as setOpenCartDb,
 } from './opencartConnector';
 import {
@@ -1279,7 +1280,38 @@ export const connectorSync = onRequest(
       } else if (provider === 'woocommerce') {
         result = await fetchWooCommerceData(brandId);
       } else if (provider === 'opencart') {
-        result = await fetchOpenCartData(brandId);
+        const jobId = `opencart_${brandId.replace(/[^A-Za-z0-9_-]/g, '_')}`;
+        const jobRef = admin.firestore().collection('connector_sync_jobs').doc(jobId);
+        const existing = await jobRef.get();
+        const existingStatus = existing.data()?.status;
+        if (existingStatus === 'pending' || existingStatus === 'running') {
+          result = {
+            success: true,
+            queued: true,
+            jobId,
+            imported: 0,
+            message: 'OpenCart sync ήδη σε εξέλιξη στο background.',
+          };
+        } else {
+          await jobRef.set({
+            brandId,
+            provider,
+            status: 'pending',
+            requestedBy: decoded.uid,
+            requestedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+            mode: 'manual_backfill',
+            batchesRun: 0,
+            totalImported: 0,
+          }, { merge: true });
+          result = {
+            success: true,
+            queued: true,
+            jobId,
+            imported: 0,
+            message: 'OpenCart sync ξεκίνησε στο background. Θα ολοκληρωθεί αυτόματα — δεν χρειάζεται να περιμένεις.',
+          };
+        }
       } else if (provider === 'magento') {
         if (forceFullSync) {
           const db = admin.firestore();
@@ -1360,6 +1392,102 @@ export const connectorSync = onRequest(
       const msg = error instanceof Error ? error.message : String(error);
       logger.error(`[connectorSync] failed for brand=${brandId || 'unknown'} provider=${provider || 'unknown'}: ${msg}`);
       res.status(500).json({ error: msg });
+    }
+  }
+);
+
+export const processOpenCartSyncJobs = onSchedule(
+  {
+    schedule: 'every 1 minutes',
+    region: 'europe-west1',
+    timeoutSeconds: 1800,
+    memory: '2GiB',
+    secrets: ['CONNECTOR_TOKEN_KEY'],
+    ...OPENCART_EGRESS_OPTIONS,
+  },
+  async () => {
+    const db = admin.firestore();
+    const snap = await db
+      .collection('connector_sync_jobs')
+      .where('provider', '==', 'opencart')
+      .where('status', '==', 'pending')
+      .limit(1)
+      .get();
+
+    if (snap.empty) return;
+
+    const jobRef = snap.docs[0].ref;
+    const job = await db.runTransaction(async (tx) => {
+      const latest = await tx.get(jobRef);
+      const data = latest.data() as {
+        brandId?: string;
+        status?: string;
+        batchesRun?: number;
+        totalImported?: number;
+      } | undefined;
+      if (!latest.exists || data?.status !== 'pending' || !data.brandId) return null;
+      tx.update(jobRef, {
+        status: 'running',
+        startedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      return {
+        brandId: data.brandId,
+        batchesRun: typeof data.batchesRun === 'number' ? data.batchesRun : 0,
+        totalImported: typeof data.totalImported === 'number' ? data.totalImported : 0,
+      };
+    });
+
+    if (!job) return;
+
+    try {
+      logger.info(`[OpenCartJob] Starting backfill for ${job.brandId} (prior batches: ${job.batchesRun})`);
+      const result = await runOpenCartBackfillJob(job.brandId, {
+        initialBatchesRun: job.batchesRun,
+        initialTotalImported: job.totalImported,
+      });
+
+      if (result.complete) {
+        try {
+          await computeEcommerceSummary(job.brandId);
+        } catch (e) {
+          logger.warn(`[OpenCartJob] ecommerce summary refresh failed for ${job.brandId}:`, e);
+        }
+        try {
+          await refreshStockMovement(job.brandId);
+        } catch (e) {
+          logger.warn(`[OpenCartJob] stock movement refresh failed for ${job.brandId}:`, e);
+        }
+        try {
+          await refreshProductIntelligenceAggregate(job.brandId);
+        } catch (e) {
+          logger.warn(`[OpenCartJob] product intelligence refresh failed for ${job.brandId}:`, e);
+        }
+      }
+
+      await jobRef.update({
+        status: result.complete
+          ? (result.success ? 'completed' : 'failed')
+          : 'pending',
+        batchesRun: result.batchesRun,
+        totalImported: result.totalImported,
+        ...(result.message ? { lastBatchMessage: result.message } : { lastBatchMessage: FieldValue.delete() }),
+        result,
+        ...(result.complete
+          ? { completedAt: FieldValue.serverTimestamp() }
+          : { completedAt: FieldValue.delete() }),
+        updatedAt: FieldValue.serverTimestamp(),
+        ...(result.error ? { error: result.error } : { error: FieldValue.delete() }),
+      });
+      logger.info(`[OpenCartJob] Batch finished for ${job.brandId}: ${JSON.stringify(result)}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error(`[OpenCartJob] failed for ${job.brandId}: ${msg}`);
+      await jobRef.update({
+        status: 'pending',
+        error: msg,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
     }
   }
 );
@@ -1492,6 +1620,20 @@ export const connectorSaveCredentials = onRequest(
           username,
           password,
         });
+        if (result.success) {
+          const jobId = `opencart_${brandId.replace(/[^A-Za-z0-9_-]/g, '_')}`;
+          await admin.firestore().collection('connector_sync_jobs').doc(jobId).set({
+            brandId,
+            provider: 'opencart',
+            status: 'pending',
+            requestedBy: decoded.uid,
+            requestedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+            mode: 'initial_backfill',
+            batchesRun: 0,
+            totalImported: 0,
+          }, { merge: true });
+        }
         res.status(200).json(result);
       } else if (provider === 'magento') {
         const {

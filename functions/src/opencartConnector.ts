@@ -32,7 +32,8 @@ const OPENCART_USER_AGENT = 'PerformancePlus/1.0 (+https://performanceplus.gr)';
 /** REST extension default page size; 100 is widely supported. */
 const OPENCART_PAGE_SIZE = 100;
 /** Max pages per sync leg per run (100/page). Continues via Firestore page cursors on cap. */
-const OPENCART_MAX_PAGES = 500;
+const OPENCART_MAX_PAGES_BACKFILL = 200;
+const OPENCART_MAX_PAGES_INCREMENTAL = 80;
 /** Stop order scan after N full pages with zero rows in the date window (avoids 20k empty API walks). */
 const OPENCART_MAX_EMPTY_ORDER_PAGES = 25;
 const OPENCART_RETRYABLE_HTTP = new Set([429, 500, 502, 503, 504]);
@@ -480,6 +481,8 @@ export async function fetchOpenCartData(brandId: string): Promise<{
   imported: number;
   error?: string;
   message?: string;
+  partial?: boolean;
+  backfillContinuing?: boolean;
 }> {
   const db = getDb();
   const connectorDoc = await db.doc(`connectors/${brandId}`).get();
@@ -596,13 +599,32 @@ export async function fetchOpenCartData(brandId: string): Promise<{
   let productsCursorNext: number | null = null;
   let ordersCursorNext: number | null = null;
 
+  const hasProductsCursor = Boolean(connector.productsSyncPageCursor);
+  const hasOrdersCursor = Boolean(connector.ordersSyncPageCursor);
+  const productsCatalogComplete = Boolean(connector.lastProductsSyncAt) && !hasProductsCursor;
+  const ordersHistoryComplete = Boolean(connector.lastOrdersSyncAt) && !hasOrdersCursor;
+  /** Large stores (e.g. stepsport): one leg per run to stay under Cloud Function / browser timeout. */
+  const runProductsLeg = !productsCatalogComplete;
+  const runOrdersLeg = productsCatalogComplete && !ordersHistoryComplete;
+  const runIncrementalBoth = productsCatalogComplete && ordersHistoryComplete;
+  const pageBudget =
+    runIncrementalBoth ? OPENCART_MAX_PAGES_INCREMENTAL : OPENCART_MAX_PAGES_BACKFILL;
+  const enrichOrderDetails = orderWindow.mode !== 'historical';
+
+  logger.info(
+    `[OpenCart] ${brandId} legs products=${runProductsLeg} orders=${runOrdersLeg} incrementalBoth=${runIncrementalBoth} pageBudget=${pageBudget}`
+  );
+
+  let productImportedCount = 0;
+  let orderImportedCount = 0;
+
   try {
-    // ── Products first (catalog for PI); orders after (slower, many API calls) ──
+    // ── Products (catalog for PI) ──────────────────────────────────
     const prodItems: { id: string; data: Record<string, unknown> }[] = [];
     let prodPage = productsStartPage;
     let prodMore = true;
-    const productRunPageBudget = OPENCART_MAX_PAGES;
 
+    if (runProductsLeg || runIncrementalBoth) {
     while (prodMore) {
       if (prodPage > productsStartPage) await sleepMs(OPENCART_PAGE_DELAY_MS);
       const res = await fetchRest('rest/product_admin/products', { page: String(prodPage) });
@@ -618,8 +640,9 @@ export async function fetchOpenCartData(brandId: string): Promise<{
       const products: any[] = body.products || body.data || (Array.isArray(body) ? body : []);
       if (products.length === 0) { prodMore = false; break; }
 
+      const pageProdItems: { id: string; data: Record<string, unknown> }[] = [];
       for (const p of products) {
-        prodItems.push({
+        pageProdItems.push({
           id: `oc_${p.product_id || p.productId}`,
           data: {
             productId: String(p.product_id || p.productId || ''),
@@ -638,32 +661,38 @@ export async function fetchOpenCartData(brandId: string): Promise<{
         });
       }
 
+      if (pageProdItems.length > 0) {
+        for (let i = 0; i < pageProdItems.length; i += 500) {
+          const batch = db.batch();
+          const chunk = pageProdItems.slice(i, i + 500);
+          for (const item of chunk) {
+            batch.set(db.collection('opencart_products').doc(item.id), { ...item.data, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+          }
+          await batch.commit();
+        }
+        productImportedCount += pageProdItems.length;
+        totalImported += pageProdItems.length;
+        prodItems.push(...pageProdItems);
+      }
+
       prodMore = products.length >= OPENCART_PAGE_SIZE;
       prodPage++;
-      if (prodPage >= productsStartPage + productRunPageBudget) {
+      if (prodPage >= productsStartPage + pageBudget) {
         if (prodMore) {
           productsAbort = true;
           productsCursorNext = prodPage;
-          productsAbortReason = `continues at page ${prodPage} (run sync again)`;
+          productsAbortReason = `page cap (${productImportedCount}+ products) — run sync again`;
           logger.warn(`[OpenCart] Products page budget reached, resume page ${prodPage} ${brandId}`);
         }
         break;
       }
     }
+    }
 
-    const productsSyncComplete = !productsAbort;
+    const productsSyncComplete = !productsAbort && (runIncrementalBoth || !runProductsLeg || !prodMore);
 
-    if (prodItems.length > 0) {
-      for (let i = 0; i < prodItems.length; i += 500) {
-        const batch = db.batch();
-        const chunk = prodItems.slice(i, i + 500);
-        for (const item of chunk) {
-          batch.set(db.collection('opencart_products').doc(item.id), { ...item.data, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-        }
-        await batch.commit();
-      }
-      totalImported += prodItems.length;
-      logger.info(`[OpenCart] Products: ${prodItems.length} imported for brand ${brandId}`);
+    if (productImportedCount > 0) {
+      logger.info(`[OpenCart] Products: ${productImportedCount} imported for brand ${brandId}`);
     }
 
     // ── Orders ──────────────────────────────────────
@@ -671,8 +700,8 @@ export async function fetchOpenCartData(brandId: string): Promise<{
     let orderPage = ordersStartPage;
     let hasMore = true;
     let consecutiveEmptyFilteredPages = 0;
-    const orderRunPageBudget = OPENCART_MAX_PAGES;
 
+    if (runOrdersLeg || runIncrementalBoth) {
     const filterSinceMs = orderWindow.windowStart.getTime();
 
     while (hasMore) {
@@ -719,11 +748,11 @@ export async function fetchOpenCartData(brandId: string): Promise<{
           break;
         }
         orderPage++;
-        if (orderPage >= ordersStartPage + orderRunPageBudget) {
+        if (orderPage >= ordersStartPage + pageBudget) {
           if (hasMore) {
             ordersAbort = true;
             ordersCursorNext = orderPage;
-            ordersAbortReason = `continues at page ${orderPage} (run sync again)`;
+            ordersAbortReason = `page cap (${orderImportedCount}+ orders) — run sync again`;
           }
           break;
         }
@@ -731,10 +760,10 @@ export async function fetchOpenCartData(brandId: string): Promise<{
       }
       consecutiveEmptyFilteredPages = 0;
 
-      const enriched = await mapPool(pageCandidates, 4, async (o: Record<string, unknown>) => {
+      const enriched = await mapPool(pageCandidates, enrichOrderDetails ? 4 : 1, async (o: Record<string, unknown>) => {
         let lineItems = parseOpenCartOrderProductsToLineItems(o);
         let tax = extractOcTaxAmount(o);
-        if (lineItems.length === 0) {
+        if (enrichOrderDetails && lineItems.length === 0) {
           const oid = String(o.order_id || o.orderId || '');
           if (oid) {
             const detail = await fetchOcOrderDetail(oid);
@@ -745,6 +774,7 @@ export async function fetchOpenCartData(brandId: string): Promise<{
         return { o, lineItems, tax };
       });
 
+      const pageOrderItems: { id: string; data: Record<string, unknown> }[] = [];
       for (const { o, lineItems, tax } of enriched) {
         const dateAdded = String(o.date_added || o.dateAdded || '');
         const ocCid =
@@ -762,7 +792,7 @@ export async function fetchOpenCartData(brandId: string): Promise<{
         ].filter(Boolean).join(' ').trim();
         const productCount =
           lineItems.length > 0 ? lineItems.length : parseInt(String(o.products || '0'), 10) || 0;
-        orderItems.push({
+        pageOrderItems.push({
           id: `oc_${o.order_id || o.orderId}`,
           data: {
             orderId: String(o.order_id || o.orderId || ''),
@@ -784,53 +814,65 @@ export async function fetchOpenCartData(brandId: string): Promise<{
         });
       }
 
+      if (pageOrderItems.length > 0) {
+        for (let i = 0; i < pageOrderItems.length; i += 500) {
+          const batch = db.batch();
+          const chunk = pageOrderItems.slice(i, i + 500);
+          for (const item of chunk) {
+            batch.set(db.collection('opencart_orders').doc(item.id), { ...item.data, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+          }
+          await batch.commit();
+        }
+        orderImportedCount += pageOrderItems.length;
+        totalImported += pageOrderItems.length;
+        orderItems.push(...pageOrderItems);
+      }
+
       hasMore = orders.length >= OPENCART_PAGE_SIZE;
       orderPage++;
-      if (orderPage >= ordersStartPage + orderRunPageBudget) {
+      if (orderPage >= ordersStartPage + pageBudget) {
         if (hasMore) {
           ordersAbort = true;
           ordersCursorNext = orderPage;
-          ordersAbortReason = `continues at page ${orderPage} (run sync again)`;
+          ordersAbortReason = `page cap (${orderImportedCount}+ orders) — run sync again`;
           logger.warn(`[OpenCart] Orders page budget reached, resume page ${orderPage} ${brandId}`);
         }
         break;
       }
     }
-
-    const ordersSyncComplete = !ordersAbort;
-
-    if (orderItems.length > 0) {
-      for (let i = 0; i < orderItems.length; i += 500) {
-        const batch = db.batch();
-        const chunk = orderItems.slice(i, i + 500);
-        for (const item of chunk) {
-          batch.set(db.collection('opencart_orders').doc(item.id), { ...item.data, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-        }
-        await batch.commit();
-      }
-      totalImported += orderItems.length;
-      logger.info(`[OpenCart] Orders: ${orderItems.length} imported for brand ${brandId}`);
     }
 
+    const ordersSyncComplete =
+      !runOrdersLeg && !runIncrementalBoth ? true : !ordersAbort;
+
+    if (orderImportedCount > 0) {
+      logger.info(`[OpenCart] Orders: ${orderImportedCount} imported for brand ${brandId}`);
+    }
+
+    const productsSyncCompleteFinal =
+      !runProductsLeg && !runIncrementalBoth ? true : productsSyncComplete;
+    const ordersSyncCompleteFinal = ordersSyncComplete;
+
     const syncErrors = [
-      ...(!ordersSyncComplete ? [`orders: ${ordersAbortReason || 'aborted'}`] : []),
-      ...(!productsSyncComplete ? [`products: ${productsAbortReason || 'aborted'}`] : []),
+      ...(!productsSyncCompleteFinal ? [`products: ${productsAbortReason || 'aborted'}`] : []),
+      ...(!ordersSyncCompleteFinal ? [`orders: ${ordersAbortReason || 'aborted'}`] : []),
     ];
-    const bothOk = ordersSyncComplete && productsSyncComplete;
+    const bothOk = productsSyncCompleteFinal && ordersSyncCompleteFinal;
+    const backfillContinuing = !bothOk && (productsCursorNext != null || ordersCursorNext != null);
 
     const connectorPatch: Record<string, unknown> = {
       'opencart.lastSyncAttemptAt': FieldValue.serverTimestamp(),
       'opencart.lastSyncStatus': bothOk ? 'completed' : 'partial',
       'opencart.lastSyncImported': totalImported,
-      'opencart.lastSyncOrders': orderItems.length,
-      'opencart.lastSyncProducts': prodItems.length,
+      'opencart.lastSyncOrders': orderImportedCount,
+      'opencart.lastSyncProducts': productImportedCount,
     };
     if (bothOk) {
       connectorPatch['opencart.lastSyncError'] = FieldValue.delete();
     } else {
       connectorPatch['opencart.lastSyncError'] = syncErrors.join(' · ') || 'sync incomplete';
     }
-    if (ordersSyncComplete) {
+    if (ordersSyncCompleteFinal) {
       connectorPatch['opencart.lastOrdersSyncAt'] = FieldValue.serverTimestamp();
       connectorPatch['opencart.ordersSyncPageCursor'] = FieldValue.delete();
       if (orderWindow.mode === 'historical') {
@@ -839,12 +881,12 @@ export async function fetchOpenCartData(brandId: string): Promise<{
     } else if (ordersCursorNext != null) {
       connectorPatch['opencart.ordersSyncPageCursor'] = String(ordersCursorNext);
     }
-    if (productsSyncComplete) {
+    if (productsSyncCompleteFinal) {
       connectorPatch['opencart.lastProductsSyncAt'] = FieldValue.serverTimestamp();
       connectorPatch['opencart.productsSyncPageCursor'] = FieldValue.delete();
     } else if (productsCursorNext != null) {
       connectorPatch['opencart.productsSyncPageCursor'] = String(productsCursorNext);
-      if (prodItems.length > 0) {
+      if (productImportedCount > 0) {
         connectorPatch['opencart.lastProductsSyncAt'] = FieldValue.serverTimestamp();
       }
     }
@@ -855,28 +897,36 @@ export async function fetchOpenCartData(brandId: string): Promise<{
       brandId,
       type: 'ecommerce',
       source: 'opencart_api',
-      mode: `products_full_${orderWindow.mode}_orders`,
+      mode: `${runProductsLeg ? 'products_backfill' : runOrdersLeg ? 'orders_backfill' : 'incremental'}_${orderWindow.mode}`,
       status: bothOk ? 'completed' : 'partial',
       imported: totalImported,
-      orders: orderItems.length,
-      products: prodItems.length,
+      orders: orderImportedCount,
+      products: productImportedCount,
       failed: 0,
       errors: syncErrors,
       createdAt: FieldValue.serverTimestamp(),
     });
 
     logger.info(`[OpenCart] Sync complete for brand ${brandId}: ${totalImported} total items`);
+    if (backfillContinuing && totalImported > 0) {
+      const legHint = runProductsLeg
+        ? `Προϊόντα: ${productImportedCount} (συνεχίζει σελ. ${productsCursorNext ?? '?'})`
+        : `Παραγγελίες: ${orderImportedCount} (συνεχίζει σελ. ${ordersCursorNext ?? '?'})`;
+      return {
+        success: true,
+        partial: true,
+        backfillContinuing: true,
+        imported: totalImported,
+        message: `OpenCart backfill — ${legHint}. Συνεχίζει αυτόματα στο background.`,
+      };
+    }
     if (!bothOk) {
-      const orderNote = ordersSyncComplete ? 'OK' : `Aborted${ordersAbortReason ? ` (${ordersAbortReason})` : ''}`;
-      const prodNote = productsSyncComplete ? 'OK' : `Aborted${productsAbortReason ? ` (${productsAbortReason})` : ''}`;
-      const resumeHint =
-        productsCursorNext != null || ordersCursorNext != null
-          ? ' Πάτησε Sync ξανά (σε 2–5 λεπτά αν είδες HTTP 500) για να συνεχίσει από την ίδια σελίδα.'
-          : '';
+      const orderNote = ordersSyncCompleteFinal ? 'OK' : `Aborted${ordersAbortReason ? ` (${ordersAbortReason})` : ''}`;
+      const prodNote = productsSyncCompleteFinal ? 'OK' : `Aborted${productsAbortReason ? ` (${productsAbortReason})` : ''}`;
       return {
         success: false,
         imported: totalImported,
-        error: `OpenCart incomplete — orders:${orderNote}, products:${prodNote}.${resumeHint}`,
+        error: `OpenCart incomplete — orders:${orderNote}, products:${prodNote}.`,
       };
     }
     return { success: true, imported: totalImported };
@@ -898,6 +948,62 @@ export async function fetchOpenCartData(brandId: string): Promise<{
     }
     return { success: false, imported: totalImported, error: msg };
   }
+}
+
+export type OpenCartBackfillJobResult = {
+  success: boolean;
+  complete: boolean;
+  totalImported: number;
+  batchesRun: number;
+  error?: string;
+  message?: string;
+};
+
+/** Runs multiple fetchOpenCartData batches until backfill completes or runtime budget expires. */
+export async function runOpenCartBackfillJob(
+  brandId: string,
+  opts?: { maxRuntimeMs?: number; initialTotalImported?: number; initialBatchesRun?: number },
+): Promise<OpenCartBackfillJobResult> {
+  const maxRuntimeMs = opts?.maxRuntimeMs ?? 25 * 60 * 1000;
+  const deadline = Date.now() + maxRuntimeMs;
+  let totalImported = opts?.initialTotalImported ?? 0;
+  let batchesRun = opts?.initialBatchesRun ?? 0;
+  const baselineImported = totalImported;
+
+  while (Date.now() < deadline) {
+    batchesRun += 1;
+    const result = await fetchOpenCartData(brandId);
+    totalImported += result.imported ?? 0;
+
+    if (result.success && !result.backfillContinuing && !result.partial) {
+      return { success: true, complete: true, totalImported, batchesRun };
+    }
+
+    if (result.backfillContinuing || (result.success && result.partial)) {
+      continue;
+    }
+
+    if (!result.success) {
+      if ((result.imported ?? 0) === 0 && totalImported === baselineImported) {
+        return {
+          success: false,
+          complete: false,
+          totalImported,
+          batchesRun,
+          error: result.error || 'OpenCart sync failed',
+        };
+      }
+      continue;
+    }
+  }
+
+  return {
+    success: true,
+    complete: false,
+    totalImported,
+    batchesRun,
+    message: `OpenCart backfill σε εξέλιξη — ${totalImported} εγγραφές (${batchesRun} batches). Συνεχίζει αυτόματα.`,
+  };
 }
 
 function normalizeStoreUrl(input: string): string {

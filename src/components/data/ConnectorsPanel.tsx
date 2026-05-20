@@ -1994,6 +1994,8 @@ export function ConnectorsPanel() {
   const [expandedConnectorDetails, setExpandedConnectorDetails] = useState<Partial<Record<ConnectorId, boolean>>>({});
   const handledMegaventoryJobRef = useRef<string | null>(null);
   const previousMegaventoryJobStatusRef = useRef<ConnectorSyncJobStatus | null>(null);
+  const handledOpenCartJobRef = useRef<string | null>(null);
+  const previousOpenCartJobStatusRef = useRef<ConnectorSyncJobStatus | null>(null);
 
   const emptyStates: Record<string, ConnectorState> = {
     google_ads: { connected: false },
@@ -2120,9 +2122,26 @@ export function ConnectorsPanel() {
     retry: 1,
   });
 
+  const { data: opencartSyncJob } = useQuery({
+    queryKey: ['connectorSyncJob', brandId, 'opencart'],
+    queryFn: async () => {
+      if (!brandId) return null;
+      return FirestoreService.getDocument<ConnectorSyncJobDoc>(
+        'connector_sync_jobs',
+        connectorSyncJobId('opencart', brandId),
+      );
+    },
+    enabled: !!brandId && !!user?.uid,
+    staleTime: 5_000,
+    refetchInterval: 10_000,
+    retry: 1,
+  });
+
   useEffect(() => {
     handledMegaventoryJobRef.current = null;
     previousMegaventoryJobStatusRef.current = null;
+    handledOpenCartJobRef.current = null;
+    previousOpenCartJobStatusRef.current = null;
   }, [brandId]);
 
   const refreshCommerceRfmProductCaches = useCallback(() => {
@@ -2173,6 +2192,26 @@ export function ConnectorsPanel() {
     refreshCommerceRfmProductCaches();
     void fetchStates();
   }, [brandId, fetchStates, megaventorySyncJob, refreshCommerceRfmProductCaches]);
+
+  useEffect(() => {
+    if (!brandId || !opencartSyncJob || opencartSyncJob.provider !== 'opencart') return;
+    const status = opencartSyncJob.status ?? null;
+    const previousStatus = previousOpenCartJobStatusRef.current;
+    previousOpenCartJobStatusRef.current = status;
+    if (status !== 'completed' && status !== 'failed') return;
+    if (previousStatus !== 'pending' && previousStatus !== 'running') return;
+    const completedAt = coerceToDate(opencartSyncJob.completedAt)?.toISOString() || '';
+    const handledKey = `${brandId}:${status}:${completedAt}`;
+    if (handledOpenCartJobRef.current === handledKey) return;
+    handledOpenCartJobRef.current = handledKey;
+    if (status === 'completed') {
+      toast.success('OpenCart sync ολοκληρώθηκε.');
+    } else {
+      toast.error(opencartSyncJob.error || 'OpenCart sync απέτυχε.');
+    }
+    refreshCommerceRfmProductCaches();
+    void fetchStates();
+  }, [brandId, fetchStates, opencartSyncJob, refreshCommerceRfmProductCaches, toast]);
 
   const refreshMagentoEcommerceCaches = useCallback(() => {
     if (!brandId) return;
@@ -2466,6 +2505,12 @@ export function ConnectorsPanel() {
         if (provider === 'megaventory' && result.queued) {
           toast.success('Megaventory sync ξεκίνησε στο background. Μπορείς να συνεχίσεις κανονικά.');
           queryClient.invalidateQueries({ queryKey: ['connectorSyncJob', brandId, 'megaventory'] });
+        } else if (provider === 'opencart' && result.queued) {
+          toast.success(
+            result.message ||
+              'OpenCart sync ξεκίνησε στο background. Θα ολοκληρωθεί αυτόματα — δεν χρειάζεται να περιμένεις.'
+          );
+          queryClient.invalidateQueries({ queryKey: ['connectorSyncJob', brandId, 'opencart'] });
         } else if (provider === 'merchant') {
           const imp = result.imported ?? 0;
           const wm = typeof result.withMarketBenchmark === 'number' ? result.withMarketBenchmark : undefined;
@@ -2518,6 +2563,11 @@ export function ConnectorsPanel() {
             typeof result.publicQueryRows === 'number'
               ? `Entersoft: ${t} εγγραφές (PQ ${result.publicQueryRows})`
               : `Entersoft: ${t} εγγραφές`
+          );
+        } else if (provider === 'opencart' && (result.backfillContinuing || result.partial)) {
+          toast.info(
+            result.message ||
+              `OpenCart: εισήχθησαν ${result.imported ?? 0} εγγραφές — συνεχίζει στο background.`
           );
         } else {
           toast.success(`Εισήχθησαν ${result.imported} ${label}`);
@@ -2586,7 +2636,13 @@ export function ConnectorsPanel() {
     } catch (err) {
       let msg = err instanceof Error ? err.message : 'Σφάλμα sync';
       if (err instanceof Error && err.name === 'AbortError') {
-        msg = 'Το sync δεν ολοκληρώθηκε εντός του διαθέσιμου χρόνου. Δοκιμάστε ξανά ή ελέγξτε τα logs της function.';
+        msg =
+          provider === 'opencart'
+            ? 'Το sync OpenCart ξεπέρασε το χρονικό όριο του browser — μπορεί να συνεχίζει στο server. Ανανέωσε τη σελίδα σε 1–2 λεπτά και πάτα Sync ξανά αν χρειάζεται.'
+            : 'Το sync δεν ολοκληρώθηκε εντός του διαθέσιμου χρόνου. Δοκιμάστε ξανά ή ελέγξτε τα logs της function.';
+        if (provider === 'opencart') {
+          void refreshAfterSyncAttempt();
+        }
       } else if (msg === 'Failed to fetch') {
         msg =
           'Αποτυχία δικτύου. Δοκίμασε ξανά σε 1 λεπτό ή από άλλο δίκτυο. Το σύστημα δοκίμασε αυτόματα και την εναλλακτική σύνδεση server.';
@@ -2711,6 +2767,8 @@ export function ConnectorsPanel() {
           onSuccess={() => {
             setOpencartModal(false);
             fetchStates();
+            queryClient.invalidateQueries({ queryKey: ['connectorSyncJob', brandId, 'opencart'] });
+            toast.info('Το αρχικό sync ξεκίνησε στο background.');
           }}
           onCancel={() => setOpencartModal(false)}
         />
@@ -2884,7 +2942,14 @@ export function ConnectorsPanel() {
                   isPending &&
                   Boolean(uid) &&
                   (pickerOwnerUid === undefined || pickerOwnerUid !== uid);
-                const isSyncing = syncingProviders.has(conn.id);
+                const opencartJobActive =
+                  conn.id === 'opencart' &&
+                  (opencartSyncJob?.status === 'pending' || opencartSyncJob?.status === 'running');
+                const megaventoryJobActive =
+                  conn.id === 'megaventory' &&
+                  (megaventorySyncJob?.status === 'pending' || megaventorySyncJob?.status === 'running');
+                const isSyncing =
+                  syncingProviders.has(conn.id) || opencartJobActive || megaventoryJobActive;
                 const isConnecting = connecting === conn.id;
                 const importMeta = lastImportMeta[conn.id];
                 const connectorAttemptAt = coerceToDate(state.lastSyncAttemptAt);
@@ -2923,7 +2988,12 @@ export function ConnectorsPanel() {
                 const identityLines = getConnectorIdentityLines(conn.id, state);
                 const usesCompactDetails = conn.id === 'magento' || conn.group === 'operations';
                 const detailsExpanded = !usesCompactDetails || expandedConnectorDetails[conn.id] === true;
-                const syncJob = conn.id === 'megaventory' ? megaventorySyncJob : null;
+                const syncJob =
+                  conn.id === 'megaventory'
+                    ? megaventorySyncJob
+                    : conn.id === 'opencart'
+                      ? opencartSyncJob
+                      : null;
                 const syncJobBadge = syncJobLabel(syncJob);
 
                 return (
