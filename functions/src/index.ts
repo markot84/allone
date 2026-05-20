@@ -513,9 +513,9 @@ export const importData = onRequest(
     memory: '512MiB',
     timeoutSeconds: 300,
     maxInstances: 5,
-    cors: true,
   },
   async (req, res) => {
+    if (applyStrictCors(req, res)) return;
     if (req.method !== 'POST') {
       res.status(405).json({ error: 'Method not allowed. Use POST.' });
       return;
@@ -591,7 +591,7 @@ export const importData = onRequest(
       }
 
       // Multipart form data
-      const bb = Busboy({ headers: req.headers });
+      const bb = Busboy({ headers: req.headers, limits: { fileSize: 50 * 1024 * 1024, files: 1 } });
       let fileBuffer: Buffer | null = null;
       let fileName = 'import.csv';
       let importType: ImportType = 'products';
@@ -651,7 +651,7 @@ export const importData = onRequest(
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       logger.error('Import failed:', message);
-      res.status(500).json({ error: `Import failed: ${message}` });
+      res.status(500).json({ error: 'Import failed — check file format and try again' });
     }
   }
 );
@@ -663,8 +663,9 @@ export const importData = onRequest(
  * Body: { brandId: string }
  */
 export const generateApiKey = onRequest(
-  { region: 'europe-west1', cors: true },
+  { region: 'europe-west1' },
   async (req, res) => {
+    if (applyStrictCors(req, res)) return;
     if (req.method !== 'POST') {
       res.status(405).json({ error: 'Use POST' });
       return;
@@ -720,8 +721,9 @@ export const generateApiKey = onRequest(
  * Returns: { authUrl }
  */
 export const connectorAuth = onRequest(
-  { region: 'europe-west1', cors: true, secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID', 'SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET', 'TIKTOK_APP_ID', 'TIKTOK_APP_SECRET'] },
+  { region: 'europe-west1', secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID', 'SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET', 'TIKTOK_APP_ID', 'TIKTOK_APP_SECRET'] },
   async (req, res) => {
+    if (applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
@@ -862,7 +864,7 @@ export const connectorAuth = onRequest(
  * Handles OAuth redirect from Google/Meta
  */
 export const connectorCallback = onRequest(
-  { region: 'europe-west1', cors: true, secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID', 'SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET', 'TIKTOK_APP_ID', 'TIKTOK_APP_SECRET', 'CONNECTOR_TOKEN_KEY'] },
+  { region: 'europe-west1', secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID', 'SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET', 'TIKTOK_APP_ID', 'TIKTOK_APP_SECRET', 'CONNECTOR_TOKEN_KEY'] },
   async (req, res) => {
     const { code, state, error: oauthError } = req.query as { code?: string; state?: string; error?: string };
 
@@ -1015,8 +1017,9 @@ export const connectorCallback = onRequest(
  * Body: { brandId, provider }
  */
 export const connectorDisconnect = onRequest(
-  { region: 'europe-west1', cors: true },
+  { region: 'europe-west1' },
   async (req, res) => {
+    if (applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
@@ -1132,8 +1135,9 @@ export const connectorDisconnect = onRequest(
  * Body: { brandId, provider, accountId, accountName }
  */
 export const connectorSelectAccount = onRequest(
-  { region: 'europe-west1', cors: true },
+  { region: 'europe-west1' },
   async (req, res) => {
+    if (applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
@@ -1230,8 +1234,9 @@ export const connectorSelectAccount = onRequest(
  * Body: { brandId, provider }
  */
 export const connectorSync = onRequest(
-  { region: 'europe-west1', cors: true, timeoutSeconds: 1200, memory: '2GiB', secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID', 'SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET', 'TIKTOK_APP_ID', 'TIKTOK_APP_SECRET', 'CONNECTOR_TOKEN_KEY'] },
+  { region: 'europe-west1', timeoutSeconds: 1200, memory: '2GiB', secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID', 'SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET', 'TIKTOK_APP_ID', 'TIKTOK_APP_SECRET', 'CONNECTOR_TOKEN_KEY'] },
   async (req, res) => {
+    if (applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
@@ -1414,8 +1419,9 @@ export const processMegaventorySyncJobs = onSchedule(
  * Body: { brandId, provider: "woocommerce", storeUrl, consumerKey, consumerSecret }
  */
 export const connectorSaveCredentials = onRequest(
-  { region: 'europe-west1', cors: true, secrets: ['CONNECTOR_TOKEN_KEY'] },
+  { region: 'europe-west1', secrets: ['CONNECTOR_TOKEN_KEY'] },
   async (req, res) => {
+    if (applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
@@ -1625,8 +1631,9 @@ export const connectorSaveCredentials = onRequest(
  * Body: { brandId, terms: [{ term, hits, results? }], uploadedFileName? }
  */
 export const importMagentoSearchTerms = onRequest(
-  { region: 'europe-west1', cors: true },
+  { region: 'europe-west1' },
   async (req, res) => {
+    if (applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
@@ -2067,23 +2074,28 @@ export const geminiProxy = onRequest(
       return;
     }
 
-    const { systemPrompt, userPrompt, model = 'gemini-2.5-pro', temperature = 0 } = req.body as {
+    const ALLOWED_GEMINI_MODELS = new Set(['gemini-2.5-pro', 'gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash']);
+    const { systemPrompt: rawSystemPrompt, userPrompt: rawUserPrompt, model: rawModel = 'gemini-2.5-pro', temperature = 0 } = req.body as {
       systemPrompt?: string;
       userPrompt?: string;
       model?: string;
       temperature?: number;
     };
 
-    if (!userPrompt) {
+    if (!rawUserPrompt) {
       res.status(400).json({ error: 'Missing userPrompt' });
       return;
     }
+
+    const safeModel = ALLOWED_GEMINI_MODELS.has(rawModel) ? rawModel : 'gemini-2.5-pro';
+    const userPrompt = String(rawUserPrompt).slice(0, 32000);
+    const systemPrompt = rawSystemPrompt ? String(rawSystemPrompt).slice(0, 8000) : undefined;
 
     try {
       const apiKey = GEMINI_SECRET.value();
       const genAI = new GoogleGenerativeAI(apiKey);
       const geminiModel = genAI.getGenerativeModel({
-        model,
+        model: safeModel,
         ...(systemPrompt ? { systemInstruction: systemPrompt } : {}),
         generationConfig: { temperature },
       });
@@ -2094,7 +2106,7 @@ export const geminiProxy = onRequest(
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       logger.error('[geminiProxy] Gemini error:', message);
-      res.status(500).json({ error: `Gemini request failed: ${message}` });
+      res.status(500).json({ error: 'AI request failed — please try again' });
     }
   }
 );
@@ -2102,8 +2114,9 @@ export const geminiProxy = onRequest(
 // ── Email Notification Endpoint ─────────────────────────────────────────────
 
 export const sendEmailNotification = onRequest(
-  { region: 'europe-west1', cors: true, secrets: [SMTP_EMAIL_SECRET, SMTP_PASSWORD_SECRET] },
+  { region: 'europe-west1', secrets: [SMTP_EMAIL_SECRET, SMTP_PASSWORD_SECRET] },
   async (req, res) => {
+    if (applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).send('POST only'); return; }
 
     const authHeader = req.headers.authorization;
@@ -2111,8 +2124,9 @@ export const sendEmailNotification = onRequest(
       res.status(401).json({ error: 'Unauthorized' });
       return;
     }
+    let decodedEmail: admin.auth.DecodedIdToken;
     try {
-      await admin.auth().verifyIdToken(authHeader.split('Bearer ')[1]);
+      decodedEmail = await admin.auth().verifyIdToken(authHeader.split('Bearer ')[1]);
     } catch {
       res.status(401).json({ error: 'Invalid token' });
       return;
@@ -2121,6 +2135,14 @@ export const sendEmailNotification = onRequest(
     const { userIds, title, body, type, brandId, entityType, entityId } = req.body;
     if (!userIds || !Array.isArray(userIds) || !title) {
       res.status(400).json({ error: 'Missing userIds or title' });
+      return;
+    }
+    if (userIds.length > 100) {
+      res.status(400).json({ error: 'Max 100 recipients per request' });
+      return;
+    }
+    if (!brandId || !(await verifyBrandMembership(decodedEmail.uid, brandId))) {
+      res.status(403).json({ error: 'Not a member of this brand' });
       return;
     }
 
@@ -2187,8 +2209,9 @@ function safeHttpUrl(u: unknown): string {
 }
 
 export const sendInviteEmail = onRequest(
-  { region: 'europe-west1', cors: true, secrets: [SMTP_EMAIL_SECRET, SMTP_PASSWORD_SECRET] },
+  { region: 'europe-west1', secrets: [SMTP_EMAIL_SECRET, SMTP_PASSWORD_SECRET] },
   async (req, res) => {
+    if (applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).send('POST only'); return; }
 
     const authHeader = req.headers.authorization;
@@ -2196,16 +2219,22 @@ export const sendInviteEmail = onRequest(
       res.status(401).json({ error: 'Unauthorized' });
       return;
     }
+    let decodedInvite: admin.auth.DecodedIdToken;
     try {
-      await admin.auth().verifyIdToken(authHeader.split('Bearer ')[1]);
+      decodedInvite = await admin.auth().verifyIdToken(authHeader.split('Bearer ')[1]);
     } catch {
       res.status(401).json({ error: 'Invalid token' });
       return;
     }
 
-    const { to, brandName, inviteLink, role, department } = req.body;
+    const { to, brandId: inviteBrandId, brandName, inviteLink, role, department } = req.body;
     if (!to || !inviteLink) {
       res.status(400).json({ error: 'Missing to or inviteLink' });
+      return;
+    }
+
+    if (!inviteBrandId || !(await verifyBrandConnectorManagement(decodedInvite.uid, inviteBrandId))) {
+      res.status(403).json({ error: 'Not authorized to invite members for this brand' });
       return;
     }
 
@@ -2278,8 +2307,9 @@ export const sendInviteEmail = onRequest(
 // ── Aggregate Stats: On-Demand (callable) ───────────────────────────────────
 
 export const refreshAggregates = onRequest(
-  { region: 'europe-west1', cors: true, timeoutSeconds: 540, memory: '2GiB', secrets: ['CONNECTOR_TOKEN_KEY'] },
+  { region: 'europe-west1', timeoutSeconds: 540, memory: '2GiB', secrets: ['CONNECTOR_TOKEN_KEY'] },
   async (req, res) => {
+    if (applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
@@ -2328,8 +2358,9 @@ export const refreshAggregates = onRequest(
 // ── Data Analysis RFM: Diagnostic + On-Demand Aggregate ─────────────────────
 
 export const refreshDataAnalysisRfm = onRequest(
-  { region: 'europe-west1', cors: true, timeoutSeconds: 1200, memory: '2GiB' },
+  { region: 'europe-west1', timeoutSeconds: 1200, memory: '2GiB' },
   async (req, res) => {
+    if (applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
@@ -2366,8 +2397,9 @@ export const refreshDataAnalysisRfm = onRequest(
 );
 
 export const refreshProductIntelligence = onRequest(
-  { region: 'europe-west1', cors: true, timeoutSeconds: 1200, memory: '2GiB' },
+  { region: 'europe-west1', timeoutSeconds: 1200, memory: '2GiB' },
   async (req, res) => {
+    if (applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
@@ -2395,8 +2427,9 @@ export const refreshProductIntelligence = onRequest(
 );
 
 export const queryProductIntelligence = onRequest(
-  { region: 'europe-west1', cors: true, timeoutSeconds: 120, memory: '1GiB' },
+  { region: 'europe-west1', timeoutSeconds: 120, memory: '1GiB' },
   async (req, res) => {
+    if (applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
@@ -2424,8 +2457,9 @@ export const queryProductIntelligence = onRequest(
 );
 
 export const refreshCompetitiveInventory = onRequest(
-  { region: 'europe-west1', cors: true, timeoutSeconds: 1200, memory: '2GiB' },
+  { region: 'europe-west1', timeoutSeconds: 1200, memory: '2GiB' },
   async (req, res) => {
+    if (applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
@@ -2461,8 +2495,9 @@ export const refreshCompetitiveInventory = onRequest(
  * Δουλεύει για κάθε brand — connector ή import-only.
  */
 export const captureStock = onRequest(
-  { region: 'europe-west1', cors: true, timeoutSeconds: 120, memory: '512MiB' },
+  { region: 'europe-west1', timeoutSeconds: 120, memory: '512MiB' },
   async (req, res) => {
+    if (applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;
@@ -2500,8 +2535,9 @@ export const captureStock = onRequest(
  * σε procurement_signals/{brandId}.skuSignalsJson. Καλείται μετά από procurement upload.
  */
 export const refreshSignals = onRequest(
-  { region: 'europe-west1', cors: true, timeoutSeconds: 120, memory: '512MiB' },
+  { region: 'europe-west1', timeoutSeconds: 120, memory: '512MiB' },
   async (req, res) => {
+    if (applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
     const authHeader = req.headers.authorization;

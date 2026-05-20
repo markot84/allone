@@ -68,8 +68,11 @@ export function getClientIp(req: Request): string {
   const xff = req.headers['x-forwarded-for'];
   const raw = Array.isArray(xff) ? xff[0] : xff;
   if (raw) {
-    const first = String(raw).split(',')[0].trim();
-    if (first) return first;
+    // Use the rightmost IP — it is appended by GCP's load balancer and cannot be
+    // forged by the client. The leftmost IP is user-supplied and trivially spoofable.
+    const ips = String(raw).split(',').map((s) => s.trim()).filter(Boolean);
+    const rightmost = ips[ips.length - 1];
+    if (rightmost) return rightmost;
   }
   return (req as unknown as { ip?: string }).ip || 'unknown';
 }
