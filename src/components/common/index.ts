@@ -21,3 +21,5 @@ export type { ModalHeaderProps } from './ModalHeader';
 export { MetaAttributionSelector } from './MetaAttributionSelector';
 export { DataSourcePill } from './DataSourcePill';
 export { ProductThumbnail } from './ProductThumbnail';
+export { ColumnExcelFilter } from './ColumnExcelFilter';
+export type { ColumnExcelFilterProps, ExcelFilterOption } from './ColumnExcelFilter';

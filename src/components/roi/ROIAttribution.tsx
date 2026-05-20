@@ -48,7 +48,6 @@ import {
 import { computeMarketingOverheadForPeriod, eachDateInclusive } from '../../utils/marketingCostPeriod';
 import { formatCurrency, formatCurrencyCompact, formatNumber, formatPercent } from '../../utils/format';
 import type { Campaign } from '../../types';
-import { CampaignImpactPanel } from './CampaignImpactPanel';
 
 function formatPeriodDate(ymd: string): string {
   const [y, m, d] = ymd.split('-').map(Number);
@@ -593,16 +592,6 @@ export function ROIAttribution({ embedded }: ROIAttributionProps = {}) {
           />
         ))}
       </div>
-
-      {hasCampaigns && campaignsTyped.length > 0 && (
-        <CampaignImpactPanel
-          campaigns={campaignsTyped}
-          periodDates={periodDates}
-          ecommRevenueByDay={ecommRevenueByDay}
-          storeRevenueInPeriod={ecommRevenueInPeriod}
-          hasEcommerce={ecomm.hasData}
-        />
-      )}
 
       <Card padding="lg">
         <CardHeader

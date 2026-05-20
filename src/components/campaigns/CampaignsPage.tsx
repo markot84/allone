@@ -13,6 +13,10 @@ import { useSearchIntelligence } from '../../hooks/useSearchIntelligence';
 import { FirestoreService } from '../../services/firestore';
 import { formatCurrency, formatNumber, formatMultiplier, formatPercent } from '../../utils/format';
 import { BudgetOpportunitySection } from '../roi/BudgetOpportunitySection';
+import { CampaignImpactPanel } from '../roi/CampaignImpactPanel';
+import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
+import { useEcommerceFullHistoryMetrics } from '../../hooks/useEcommerceFullHistoryMetrics';
+import { sumDailyRevenueInPeriod } from '../../utils/roiUtils';
 import { CampaignsChannelInsights } from './CampaignsChannelInsights';
 import { ChannelPerformanceHistoryCard } from './ChannelPerformanceHistoryCard';
 import {
@@ -197,6 +201,8 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
   const [activeTab, setActiveTab] = useState<'campaigns' | 'search_terms' | 'keywords' | 'geo'>('campaigns');
   const COLLAPSED_LIMIT = 12;
   const [tableExpanded, setTableExpanded] = useState(false);
+  const ecomm = useEcommerceSummary();
+  const ecommHist = useEcommerceFullHistoryMetrics({ mode: 'summary_only' });
   const { searchTerms, keywords, hasData: hasSearchData } = useSearchIntelligence();
   const [stSearch, setStSearch] = useState('');
   const [kwSearch, setKwSearch] = useState('');
@@ -302,6 +308,26 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
 
     return applyCampaignDateRangeToMetrics(filteredCampaigns, fromDate, toDate) as typeof filteredCampaigns;
   }, [filteredCampaigns, dateFrom, dateTo]);
+
+  /** Hybrid panel: όλες οι καμπάνιες στην περίοδο (schedule overlap + daily metrics), όχι τα φίλτρα του κύριου πίνακα. */
+  const impactCampaigns = useMemo(() => {
+    const from = dateFrom || '0000-01-01';
+    const to = dateTo || '9999-12-31';
+    const scoped = filterCampaignsByScheduleDateOverlap(campaigns as Campaign[], from, to);
+    return applyCampaignDateRangeToMetrics(scoped, from, to) as Campaign[];
+  }, [campaigns, dateFrom, dateTo]);
+
+  const impactPeriodDates = useMemo(
+    () => ({ fromDate: dateFrom || '0000-01-01', toDate: dateTo || '9999-12-31' }),
+    [dateFrom, dateTo],
+  );
+
+  const ecommRevenueByDay = ecommHist.revenueByDayRecord;
+
+  const storeRevenueInPeriod = useMemo(
+    () => sumDailyRevenueInPeriod(ecommRevenueByDay, impactPeriodDates.fromDate, impactPeriodDates.toDate),
+    [ecommRevenueByDay, impactPeriodDates.fromDate, impactPeriodDates.toDate],
+  );
 
 
   const applyConvFilter = (c: Campaign): Campaign => {
@@ -1105,6 +1131,16 @@ export function CampaignsPage({ onSectionChange }: CampaignsPageProps = {}) {
       </Card>
 
       <BudgetOpportunitySection campaigns={(campaigns ?? []) as Campaign[]} />
+
+      {impactCampaigns.length > 0 && (
+        <CampaignImpactPanel
+          campaigns={impactCampaigns}
+          periodDates={impactPeriodDates}
+          ecommRevenueByDay={ecommRevenueByDay}
+          storeRevenueInPeriod={storeRevenueInPeriod}
+          hasEcommerce={ecomm.hasData}
+        />
+      )}
 
       </>}
     </div>
