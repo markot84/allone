@@ -2167,6 +2167,25 @@ export const sendEmailNotification = onRequest(
 
 // ── Send Invite Email ────────────────────────────────────────────────────────
 
+function escapeHtml(s: unknown): string {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function safeHttpUrl(u: unknown): string {
+  try {
+    const parsed = new URL(String(u));
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return '';
+    return parsed.toString();
+  } catch {
+    return '';
+  }
+}
+
 export const sendInviteEmail = onRequest(
   { region: 'europe-west1', cors: true, secrets: [SMTP_EMAIL_SECRET, SMTP_PASSWORD_SECRET] },
   async (req, res) => {
@@ -2190,6 +2209,12 @@ export const sendInviteEmail = onRequest(
       return;
     }
 
+    const safeInviteLink = safeHttpUrl(inviteLink);
+    if (!safeInviteLink) {
+      res.status(400).json({ error: 'Invalid inviteLink' });
+      return;
+    }
+
     const transporter = createTransporter({
       email: SMTP_EMAIL_SECRET.value(),
       password: SMTP_PASSWORD_SECRET.value(),
@@ -2201,7 +2226,10 @@ export const sendInviteEmail = onRequest(
     }
 
     const roleLabel = role === 'admin' ? 'Admin' : 'Member';
-    const deptLabel = department || '';
+    const brandNameSafe = escapeHtml(brandName || 'Performance+');
+    const brandNameRaw = escapeHtml(brandName || '');
+    const deptLabelSafe = department ? escapeHtml(department) : '';
+    const hrefSafe = escapeHtml(safeInviteLink);
 
     const html = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 520px; margin: 0 auto; padding: 24px;">
@@ -2209,20 +2237,20 @@ export const sendInviteEmail = onRequest(
           <span style="color: #fff; font-size: 18px; font-weight: 700;">Performance+</span>
         </div>
         <div style="border: 1px solid #E5E7EB; border-top: none; border-radius: 0 0 12px 12px; padding: 24px;">
-          <h2 style="margin: 0 0 8px; font-size: 16px; color: #111827;">Πρόσκληση στο ${brandName || 'Performance+'}</h2>
+          <h2 style="margin: 0 0 8px; font-size: 16px; color: #111827;">Πρόσκληση στο ${brandNameSafe}</h2>
           <p style="margin: 0 0 6px; font-size: 14px; color: #6B7280; line-height: 1.5;">
-            Έχετε προσκληθεί να συμμετάσχετε στο <strong style="color: #111827;">${brandName}</strong> ως <strong>${roleLabel}</strong>${deptLabel ? ` (${deptLabel})` : ''}.
+            Έχετε προσκληθεί να συμμετάσχετε στο <strong style="color: #111827;">${brandNameRaw}</strong> ως <strong>${roleLabel}</strong>${deptLabelSafe ? ` (${deptLabelSafe})` : ''}.
           </p>
           <p style="margin: 0 0 20px; font-size: 14px; color: #6B7280; line-height: 1.5;">
             Πατήστε τον παρακάτω σύνδεσμο για να αποδεχτείτε την πρόσκληση.
           </p>
-          <a href="${inviteLink}"
+          <a href="${hrefSafe}"
              style="display: inline-block; padding: 12px 28px; background: #F97316; color: #fff; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 600;">
             Αποδοχή πρόσκλησης
           </a>
           <p style="margin: 16px 0 0; font-size: 12px; color: #9CA3AF;">
             Ο σύνδεσμος λήγει σε 7 ημέρες. Αν δεν μπορείτε να κάνετε κλικ, αντιγράψτε αυτό το URL:<br/>
-            <span style="color: #6B7280; word-break: break-all;">${inviteLink}</span>
+            <span style="color: #6B7280; word-break: break-all;">${hrefSafe}</span>
           </p>
         </div>
         <p style="text-align: center; margin-top: 16px; font-size: 11px; color: #9CA3AF;">

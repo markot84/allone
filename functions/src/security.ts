@@ -28,8 +28,12 @@ const DEV_ORIGINS = [
 
 export function resolveAllowedOrigin(reqOrigin?: string): string | null {
   if (!reqOrigin) return null;
-  if (PROD_ORIGINS.includes(reqOrigin)) return reqOrigin;
-  if (process.env.FUNCTIONS_EMULATOR === 'true' && DEV_ORIGINS.includes(reqOrigin)) return reqOrigin;
+  const prodMatch = PROD_ORIGINS.find((o) => o === reqOrigin);
+  if (prodMatch) return prodMatch;
+  if (process.env.FUNCTIONS_EMULATOR === 'true') {
+    const devMatch = DEV_ORIGINS.find((o) => o === reqOrigin);
+    if (devMatch) return devMatch;
+  }
   return null;
 }
 

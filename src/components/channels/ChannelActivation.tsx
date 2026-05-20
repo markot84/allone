@@ -637,7 +637,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
       }
       default:
         headers = ['SKU', 'Name', 'Category', 'Price', 'Margin %', 'Stock Level', 'Stock Capacity', 'Stock Age Days', 'Priority Tag'];
-        rows = products.map(p => [p.sku || '', p.name || '', p.category || '', formatCurrency(p.price || 0, 2), formatPercent(p.margin_percentage || 0, 1).replace('%', ''), p.stock_level || 0, p.stock_capacity || 0, getStockAgeDays(p), p.priority_tag || '']);
+        rows = products.map(p => [p.sku || '', p.name || '', p.category || '', formatCurrency(p.price || 0, 2), formatPercent(p.margin_percentage || 0, 1).replace(/%/g, ''), p.stock_level || 0, p.stock_capacity || 0, getStockAgeDays(p), p.priority_tag || '']);
         break;
     }
     const brand = safeBrandName(currentBrand?.name);
@@ -693,7 +693,7 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
         p.name || '',
         p.category || '',
         formatCurrency(p.price || 0, 2),
-        formatPercent(p.margin_percentage || 0, 1).replace('%', ''),
+        formatPercent(p.margin_percentage || 0, 1).replace(/%/g, ''),
         p.stock_level || 0,
         p.priority_tag || '',
       ]);

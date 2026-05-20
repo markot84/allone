@@ -112,8 +112,12 @@ async function fetchSkuStatsFromChunks(brandId: string): Promise<SkuStatsMap> {
       const data = snap.data() as { skuStatsJson?: string };
       if (!data.skuStatsJson) return;
       try {
-        const partial = JSON.parse(data.skuStatsJson) as SkuStatsMap;
-        Object.assign(merged, partial);
+        const partial = JSON.parse(data.skuStatsJson);
+        if (!partial || typeof partial !== 'object') return;
+        for (const k of Object.keys(partial)) {
+          if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
+          merged[k] = (partial as SkuStatsMap)[k];
+        }
       } catch {
         // ignore corrupt chunk
       }

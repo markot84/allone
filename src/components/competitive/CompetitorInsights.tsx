@@ -225,7 +225,12 @@ async function fetchProductIntelligenceInventory(brandId: string): Promise<Recor
     const raw = snap.data().inventoryJson;
     if (!raw || typeof raw !== 'string') return;
     try {
-      Object.assign(merged, JSON.parse(raw) as Record<string, SkuInventoryRow>);
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') return;
+      for (const k of Object.keys(parsed)) {
+        if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
+        merged[k] = (parsed as Record<string, SkuInventoryRow>)[k];
+      }
     } catch {
       // Ignore a corrupt chunk; the remaining chunks still provide a useful lookup.
     }

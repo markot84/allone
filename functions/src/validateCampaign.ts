@@ -38,7 +38,7 @@ export function validateCampaign(
       .replace(/[^\d.,-]/g, '').replace(',', '.')
   ) || 0;
   const ctr = parseFloat(
-    (pick(row, 'ctr', 'ctr_(link_click-through_rate)', 'click-through_rate') || '0').replace('%', '').replace(',', '.')
+    (pick(row, 'ctr', 'ctr_(link_click-through_rate)', 'click-through_rate') || '0').replace(/%/g, '').replace(/,/g, '.')
   ) || (impressions > 0 ? (clicks / impressions) * 100 : 0);
   const roas = parseFloat(
     (pick(row, 'roas', 'purchase_roas', 'purchase roas', 'return_on_ad_spend') || '0').replace(',', '.')

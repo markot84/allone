@@ -30,7 +30,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
     if (!user || loading) return;
     const params = new URLSearchParams(window.location.search);
     const returnUrl = params.get('returnUrl');
-    if (returnUrl && returnUrl.startsWith('/')) {
+    if (returnUrl && /^\/[^/\\]/.test(returnUrl)) {
       window.location.href = returnUrl;
     }
   }, [user, loading]);
