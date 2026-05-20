@@ -1,9 +1,0 @@
-<?xml version="1.0"?>
-<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Webapi:etc/webapi.xsd">
-    <route url="/V1/performance-plus/search-terms" method="GET">
-        <service class="PerformancePlus\SearchTerms\Api\SearchTermsInterface" method="get"/>
-        <resources>
-            <resource ref="PerformancePlus_SearchTerms::read"/>
-        </resources>
-    </route>
-</routes>

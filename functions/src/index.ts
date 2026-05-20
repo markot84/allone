@@ -16,8 +16,8 @@ const SMTP_PASSWORD_SECRET = defineSecret('SMTP_PASSWORD');
 import { sanitizeOAuthReturnOrigin } from './oauthRedirect';
 import { validateImportUrl } from './urlValidator';
 import { parseCSV, parseXLSXBuffer, parseXLSXAllSheets, csvToObjects } from './parseFile';
-import { validateProduct, type ProductData } from './validateProduct';
-import { validateCampaign, type CampaignData } from './validateCampaign';
+import { validateProduct } from './validateProduct';
+import { validateCampaign } from './validateCampaign';
 import {
   getGoogleAdsAuthUrl,
   handleGoogleAdsCallback,

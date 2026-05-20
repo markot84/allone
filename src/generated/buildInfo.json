@@ -1,16 +1,41 @@
 {
-  "version": "0.749.213",
-  "previousVersion": "0.749.212",
-  "commitHash": "919a1cf",
-  "branch": "main",
-  "buildDate": "2026-05-19T12:08:44.112Z",
+  "version": "0.749.214",
+  "previousVersion": "0.749.213",
+  "commitHash": "a7da4b2",
+  "branch": "SDLC-findings",
+  "buildDate": "2026-05-20T13:05:49.975Z",
   "commits": [
+    {
+      "hash": "a7da4b2",
+      "message": "fix: moved most .env variables to firebase and updated .env.sample to only inlcude firebase connection"
+    },
+    {
+      "hash": "358ee1e",
+      "message": "fix: UUIDs and exposed verification token"
+    },
+    {
+      "hash": "949c7c8",
+      "message": "fix: MEDIUM security findings"
+    },
+    {
+      "hash": "5fedaa2",
+      "message": "fix: NPM audit fix"
+    },
+    {
+      "hash": "5bec30d",
+      "message": "fix: security findings"
+    },
     {
       "hash": "919a1cf",
       "message": "first commit"
     }
   ],
   "changes": [
+    "[Διόρθωση] Moved most .env variables to firebase and updated .env.sample to only inlcude firebase connection",
+    "[Διόρθωση] UUIDs and exposed verification token",
+    "[Διόρθωση] MEDIUM security findings",
+    "[Διόρθωση] NPM audit fix",
+    "[Διόρθωση] Security findings",
     "First commit"
   ]
 }
