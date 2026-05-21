@@ -483,15 +483,15 @@ function connectorSyncJobId(provider: string, brandId: string): string {
 function syncJobLabel(job?: ConnectorSyncJobDoc | null): { label: string; className: string } | null {
   if (!job?.status) return null;
   if (job.status === 'pending') {
-    return { label: 'Sync queued', className: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200' };
+    return { label: 'Sync σε αναμονή', className: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200' };
   }
   if (job.status === 'running') {
-    return { label: 'Sync running', className: 'bg-blue-50 text-blue-700 ring-1 ring-blue-200' };
+    return { label: 'Sync σε εξέλιξη', className: 'bg-blue-50 text-blue-700 ring-1 ring-blue-200' };
   }
   if (job.status === 'failed') {
-    return { label: 'Sync failed', className: 'bg-red-50 text-red-700 ring-1 ring-red-200' };
+    return { label: 'Αποτυχία sync', className: 'bg-red-50 text-red-700 ring-1 ring-red-200' };
   }
-  return { label: 'Sync completed', className: 'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200' };
+  return { label: 'Sync ολοκληρώθηκε', className: 'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200' };
 }
 
 // ─── Account Picker Modal ────────────────────────────────────────
@@ -2206,13 +2206,23 @@ export function ConnectorsPanel() {
     previousMegaventoryJobStatusRef.current = status;
     if (status !== 'completed' && status !== 'failed') return;
     if (previousStatus !== 'pending' && previousStatus !== 'running') return;
+    setSyncingProviders((prev) => {
+      const next = new Set(prev);
+      next.delete('megaventory');
+      return next;
+    });
     const completedAt = coerceToDate(megaventorySyncJob.completedAt)?.toISOString() || '';
     const handledKey = `${brandId}:${status}:${completedAt}`;
     if (handledMegaventoryJobRef.current === handledKey) return;
     handledMegaventoryJobRef.current = handledKey;
+    if (status === 'completed') {
+      toast.success('Megaventory sync ολοκληρώθηκε.');
+    } else {
+      toast.error(megaventorySyncJob.error || 'Megaventory sync απέτυχε.');
+    }
     refreshCommerceRfmProductCaches();
     void fetchStates();
-  }, [brandId, fetchStates, megaventorySyncJob, refreshCommerceRfmProductCaches]);
+  }, [brandId, fetchStates, megaventorySyncJob, refreshCommerceRfmProductCaches, toast]);
 
   useEffect(() => {
     if (!brandId || !opencartSyncJob || opencartSyncJob.provider !== 'opencart') return;
@@ -2221,6 +2231,11 @@ export function ConnectorsPanel() {
     previousOpenCartJobStatusRef.current = status;
     if (status !== 'completed' && status !== 'failed') return;
     if (previousStatus !== 'pending' && previousStatus !== 'running') return;
+    setSyncingProviders((prev) => {
+      const next = new Set(prev);
+      next.delete('opencart');
+      return next;
+    });
     const completedAt = coerceToDate(opencartSyncJob.completedAt)?.toISOString() || '';
     const handledKey = `${brandId}:${status}:${completedAt}`;
     if (handledOpenCartJobRef.current === handledKey) return;
@@ -2499,6 +2514,7 @@ export function ConnectorsPanel() {
 
     const syncAbort = new AbortController();
     const syncTimer = window.setTimeout(() => syncAbort.abort(), 1_260_000);
+    let keepSyncingUntilBackgroundJobFinishes = false;
 
     try {
       const token = await auth.currentUser?.getIdToken();
@@ -2527,9 +2543,11 @@ export function ConnectorsPanel() {
           })
         );
         if (provider === 'megaventory' && result.queued) {
+          keepSyncingUntilBackgroundJobFinishes = true;
           toast.success('Megaventory sync ξεκίνησε στο background. Μπορείς να συνεχίσεις κανονικά.');
           queryClient.invalidateQueries({ queryKey: ['connectorSyncJob', brandId, 'megaventory'] });
         } else if (provider === 'opencart' && result.queued) {
+          keepSyncingUntilBackgroundJobFinishes = true;
           toast.success(
             result.message ||
               'OpenCart sync ξεκίνησε στο background. Θα ολοκληρωθεί αυτόματα — δεν χρειάζεται να περιμένεις.'
@@ -2677,7 +2695,9 @@ export function ConnectorsPanel() {
       console.error('[ConnectorsPanel] connectorSync failed:', err);
     } finally {
       window.clearTimeout(syncTimer);
-      markSyncEnd(provider);
+      if (!keepSyncingUntilBackgroundJobFinishes) {
+        markSyncEnd(provider);
+      }
     }
   };
 
@@ -3078,7 +3098,16 @@ export function ConnectorsPanel() {
                         </div>
                       </div>
                       {isConnected && (
-                        <CheckCircle2 size={20} className="text-green-500 flex-shrink-0" />
+                        isSyncing ? (
+                          <span
+                            className="inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-sky-100 text-sky-700 ring-1 ring-sky-200"
+                            title="Sync σε εξέλιξη"
+                          >
+                            <RefreshCw size={15} className="animate-spin" />
+                          </span>
+                        ) : (
+                          <CheckCircle2 size={20} className="text-green-500 flex-shrink-0" />
+                        )
                       )}
                       {isPending && (
                         <AlertTriangle size={20} className="text-amber-500 flex-shrink-0" />
@@ -3105,7 +3134,8 @@ export function ConnectorsPanel() {
                             Συνδεδεμένο
                           </span>
                           {isSyncing ? (
-                            <span className="inline-flex items-center rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-800 ring-1 ring-sky-200">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-800 ring-1 ring-sky-200">
+                              <RefreshCw size={11} className="animate-spin" />
                               Sync σε εξέλιξη…
                             </span>
                           ) : recentFailedAttempt ? (
