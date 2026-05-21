@@ -67,6 +67,8 @@ import {
   saveOpenCartCredentials,
   fetchOpenCartData,
   runOpenCartBackfillJob,
+  ensureOpenCartBackfillJobQueued,
+  isOpenCartInitialBackfillIncomplete,
   setDb as setOpenCartDb,
 } from './opencartConnector';
 import {
@@ -1407,14 +1409,56 @@ export const processOpenCartSyncJobs = onSchedule(
   },
   async () => {
     const db = admin.firestore();
-    const snap = await db
+    const STALE_RUNNING_MS = 40 * 60 * 1000;
+
+    const staleRunning = await db
+      .collection('connector_sync_jobs')
+      .where('provider', '==', 'opencart')
+      .where('status', '==', 'running')
+      .limit(5)
+      .get();
+    for (const doc of staleRunning.docs) {
+      const updatedAt = doc.data().updatedAt?.toDate?.() as Date | undefined;
+      if (updatedAt && Date.now() - updatedAt.getTime() > STALE_RUNNING_MS) {
+        logger.warn(`[OpenCartJob] Recovering stale running job ${doc.id}`);
+        await doc.ref.update({
+          status: 'pending',
+          error: 'Recovered stale running job',
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
+    }
+
+    let snap = await db
       .collection('connector_sync_jobs')
       .where('provider', '==', 'opencart')
       .where('status', '==', 'pending')
       .limit(1)
       .get();
 
-    if (snap.empty) return;
+    if (snap.empty) {
+      const connectorsSnap = await db
+        .collection('connectors')
+        .where('opencart.connected', '==', true)
+        .limit(50)
+        .get();
+      for (const cdoc of connectorsSnap.docs) {
+        const oc = cdoc.data().opencart as Record<string, unknown> | undefined;
+        if (!isOpenCartInitialBackfillIncomplete(oc)) continue;
+        const queued = await ensureOpenCartBackfillJobQueued(cdoc.id, { mode: 'watchdog_resume' });
+        if (queued.queued) {
+          logger.info(`[OpenCartJob] Watchdog re-queued ${cdoc.id}: ${queued.reason}`);
+          break;
+        }
+      }
+      snap = await db
+        .collection('connector_sync_jobs')
+        .where('provider', '==', 'opencart')
+        .where('status', '==', 'pending')
+        .limit(1)
+        .get();
+      if (snap.empty) return;
+    }
 
     const jobRef = snap.docs[0].ref;
     const job = await db.runTransaction(async (tx) => {
@@ -1996,7 +2040,20 @@ async function executeBrandNightlyWave(
     case 'ecommerce':
       if (data.shopify?.connected) phase.wrap('Shopify', fetchShopifyData(brandId));
       if (data.woocommerce?.connected) phase.wrap('WooCommerce', fetchWooCommerceData(brandId));
-      if (data.opencart?.connected) phase.wrap('OpenCart', fetchOpenCartData(brandId));
+      if (data.opencart?.connected) {
+        const oc = data.opencart as Record<string, unknown>;
+        if (isOpenCartInitialBackfillIncomplete(oc)) {
+          ensureOpenCartBackfillJobQueued(brandId, { mode: 'nightly_backfill_resume' })
+            .then((r) => {
+              if (r.queued) {
+                logger.info(`[ScheduledSync/ecommerce] OpenCart backfill queued for ${brandId}: ${r.reason}`);
+              }
+            })
+            .catch((err) => logger.error(`[ScheduledSync/ecommerce] OpenCart queue failed for ${brandId}:`, err));
+        } else {
+          phase.wrap('OpenCart', fetchOpenCartData(brandId));
+        }
+      }
       if (data.magento?.connected) phase.wrap('Magento', fetchMagentoData(brandId));
       break;
     case 'analytics':
@@ -2037,6 +2094,19 @@ async function executeBrandNightlyWave(
         logger.info(`[ScheduledSync/ecommerce] E-commerce summary updated for ${brandId}`);
       } catch (err) {
         logger.error(`[ScheduledSync/ecommerce] E-commerce summary failed for ${brandId}:`, err);
+      }
+    }
+    const oc = data.opencart as Record<string, unknown> | undefined;
+    if (data.opencart?.connected && oc && !isOpenCartInitialBackfillIncomplete(oc)) {
+      try {
+        await refreshStockMovement(brandId);
+      } catch (err) {
+        logger.warn(`[ScheduledSync/ecommerce] stock movement refresh failed for ${brandId}:`, err);
+      }
+      try {
+        await refreshProductIntelligenceAggregate(brandId);
+      } catch (err) {
+        logger.warn(`[ScheduledSync/ecommerce] product intelligence refresh failed for ${brandId}:`, err);
       }
     }
   }
@@ -2188,7 +2258,7 @@ export const scheduledDataAnalysisRfm = onSchedule(
 export const scheduledProductIntelligence = onSchedule(
   { timeZone: 'Europe/Athens', region: 'europe-west1', memory: '2GiB', timeoutSeconds: 1200, schedule: 'every day 07:40' },
   async () => {
-    const snap = await db.collection('connectors').limit(20).get();
+    const snap = await db.collection('connectors').get();
     for (const doc of snap.docs) {
       try {
         await refreshProductIntelligenceAggregate(doc.id);

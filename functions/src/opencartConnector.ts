@@ -959,6 +959,71 @@ export type OpenCartBackfillJobResult = {
   message?: string;
 };
 
+export function openCartSyncJobDocId(brandId: string): string {
+  return `opencart_${brandId.replace(/[^A-Za-z0-9_-]/g, '_')}`;
+}
+
+/** True while the one-time catalog + orders history import has not finished (page cursors or missing legs). */
+export function isOpenCartInitialBackfillIncomplete(
+  connector: Record<string, unknown> | undefined
+): boolean {
+  if (!connector || connector.connected === false) return false;
+  const hasProductsCursor = Boolean(connector.productsSyncPageCursor);
+  const hasOrdersCursor = Boolean(connector.ordersSyncPageCursor);
+  const productsCatalogComplete = Boolean(connector.lastProductsSyncAt) && !hasProductsCursor;
+  const ordersHistoryComplete = Boolean(connector.lastOrdersSyncAt) && !hasOrdersCursor;
+  return !productsCatalogComplete || !ordersHistoryComplete;
+}
+
+/**
+ * Ensures the background backfill job is queued when the initial import is incomplete.
+ * Idempotent: no-op if a job is already pending/running or backfill is complete.
+ */
+export async function ensureOpenCartBackfillJobQueued(
+  brandId: string,
+  opts?: { mode?: string }
+): Promise<{ queued: boolean; jobId: string; reason: string }> {
+  const db = getDb();
+  const jobId = openCartSyncJobDocId(brandId);
+  const jobRef = db.collection('connector_sync_jobs').doc(jobId);
+  const [existing, connectorDoc] = await Promise.all([
+    jobRef.get(),
+    db.doc(`connectors/${brandId}`).get(),
+  ]);
+  const status = existing.data()?.status as string | undefined;
+  if (status === 'pending' || status === 'running') {
+    return { queued: false, jobId, reason: 'already_active' };
+  }
+
+  const oc = connectorDoc.data()?.opencart as Record<string, unknown> | undefined;
+  if (!isOpenCartInitialBackfillIncomplete(oc)) {
+    return { queued: false, jobId, reason: 'backfill_complete' };
+  }
+
+  const prev = existing.data();
+  await jobRef.set(
+    {
+      brandId,
+      provider: 'opencart',
+      status: 'pending',
+      requestedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+      mode: opts?.mode || 'backfill_resume',
+      batchesRun: typeof prev?.batchesRun === 'number' ? prev.batchesRun : 0,
+      totalImported: typeof prev?.totalImported === 'number' ? prev.totalImported : 0,
+      completedAt: FieldValue.delete(),
+      error: FieldValue.delete(),
+    },
+    { merge: true }
+  );
+
+  return {
+    queued: true,
+    jobId,
+    reason: status === 'completed' ? 'requeued_after_stale_complete' : 'requeued',
+  };
+}
+
 /** Runs multiple fetchOpenCartData batches until backfill completes or runtime budget expires. */
 export async function runOpenCartBackfillJob(
   brandId: string,

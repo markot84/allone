@@ -3173,7 +3173,10 @@ export function ConnectorsPanel() {
                             )}
                             {syncJob?.status && (
                               <p className="text-[#9CA3AF]">
-                                Background job: {syncJob.status}
+                                Background job:{' '}
+                                {opencartBackfillContinuing && syncJob.status === 'completed'
+                                  ? 'backfill continuing (auto-resume)'
+                                  : syncJob.status}
                                 {coerceToDate(syncJob.updatedAt) ? ` · ${formatConnectorDate(coerceToDate(syncJob.updatedAt)!)} ` : ''}
                                 {syncJob.error ? ` · ${syncJob.error}` : ''}
                               </p>
