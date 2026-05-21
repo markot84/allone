@@ -10,6 +10,7 @@ import { coerceToDate } from '../../utils/coerceDate';
 import { clearOAuthSession, readOAuthSessionPayload } from '../../utils/oauthSession';
 import { FirestoreService } from '../../services/firestore';
 import { clearAnalysisSnapshots } from '../../services/analysisSnapshotCache';
+import { refreshProductIntelligenceOnServer } from '../../services/productIntelligenceAggregate';
 import { Card, Button, Spinner, useToast, PageHeader } from '../common';
 import type { ModuleId } from '../../types';
 import {
@@ -2226,6 +2227,9 @@ export function ConnectorsPanel() {
     handledOpenCartJobRef.current = handledKey;
     if (status === 'completed') {
       toast.success('OpenCart sync ολοκληρώθηκε.');
+      void refreshProductIntelligenceOnServer(brandId)
+        .then(() => refreshCommerceRfmProductCaches())
+        .catch((err: unknown) => console.warn('[ConnectorsPanel] PI refresh after OpenCart job:', err));
     } else {
       toast.error(opencartSyncJob.error || 'OpenCart sync απέτυχε.');
     }

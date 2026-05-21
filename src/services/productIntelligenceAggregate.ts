@@ -116,3 +116,20 @@ export async function queryProductIntelligencePage(
   return json?.result ?? null;
 }
 
+export async function refreshProductIntelligenceOnServer(brandId: string): Promise<{ totalCount?: number }> {
+  const token = await auth.currentUser?.getIdToken();
+  if (!token) throw new Error('Not authenticated');
+  const res = await fetch(`${FUNCTIONS_BASE_URL.replace(/\/$/, '')}/refreshProductIntelligence`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      ...(await getAppCheckHeader()),
+    },
+    body: JSON.stringify({ brandId }),
+  });
+  const json = await res.json().catch(() => null) as { result?: { totalCount?: number }; error?: string } | null;
+  if (!res.ok) throw new Error(json?.error || `Product Intelligence refresh failed (${res.status})`);
+  return json?.result ?? {};
+}
+

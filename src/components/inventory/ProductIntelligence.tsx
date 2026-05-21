@@ -1,4 +1,4 @@
-﻿import React, { useState, useMemo, useEffect } from 'react';
+﻿import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -51,6 +51,7 @@ import { ProductCharts } from './ProductCharts';
 import { downloadProductIntelligenceCsv, downloadProductIntelligenceXlsx } from '../../utils/productIntelligenceExport';
 import type { Product, InventorySummary, InventoryAlert } from '../../types';
 import type { ProductIntelligenceBucket, ProductIntelligenceQuery } from '../../services/productIntelligenceAggregate';
+import { refreshProductIntelligenceOnServer } from '../../services/productIntelligenceAggregate';
 
 type SortField = 'name' | 'margin_percentage' | 'stock_level' | 'stock_age_days' | 'price';
 type SortDirection = 'asc' | 'desc';
@@ -205,6 +206,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   }, []);
 
   const { currentBrand } = useBrand();
+  const brandId = currentBrand?.id ?? null;
   const { getThumbnailUrl } = useProductThumbnails();
   const { suppliers } = useSuppliers();
   const { benchmarks, count: benchmarkCount } = usePriceBenchmarks({ maxDocs: PRODUCT_INTELLIGENCE_BENCHMARK_LIMIT });
@@ -270,6 +272,24 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   const productDataSourceLabel = serverIntelligence.aggregate?.sourceLabel ?? 'ERP';
   const totalCatalogCount = serverIntelligence.aggregate?.totalCount ?? 0;
   const effectiveSourceLoading = serverIntelligence.isLoading && !serverIntelligence.page;
+  const piRefreshAttemptRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!brandId || effectiveSourceLoading) return;
+    const aggregate = serverIntelligence.aggregate;
+    if (!aggregate || aggregate.totalCount > 0) return;
+    if (aggregate.sourceLabel !== 'E-shop catalog') return;
+    const key = `${brandId}:${aggregate.syncVersion ?? 'none'}`;
+    if (piRefreshAttemptRef.current === key) return;
+    piRefreshAttemptRef.current = key;
+    void refreshProductIntelligenceOnServer(brandId)
+      .then(() => {
+        queryClient.invalidateQueries({ queryKey: ['productIntelligenceAggregate', brandId] });
+        queryClient.invalidateQueries({ queryKey: ['productIntelligencePage', brandId] });
+        queryClient.invalidateQueries({ queryKey: ['brandSyncVersion', brandId] });
+      })
+      .catch((err) => console.warn('[ProductIntelligence] auto refresh failed:', err));
+  }, [brandId, effectiveSourceLoading, queryClient, serverIntelligence.aggregate]);
 
   useEffect(() => {
     if (serverIntelligence.safePage !== currentPage) {

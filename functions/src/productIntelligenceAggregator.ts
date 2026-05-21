@@ -413,22 +413,29 @@ async function loadCatalogCollection(
   collection: string,
   sourceKind: ProductSourceKind,
   bySku: Map<string, CompactProduct>,
-  options: { filterByBrandInQuery?: boolean } = { filterByBrandInQuery: true }
+  options: { filterByBrandInQuery?: boolean; allowMissingBrandId?: boolean } = { filterByBrandInQuery: true }
 ): Promise<number> {
   const firestore = assertDb();
   let cursor: QueryDocumentSnapshot | null = null;
   let read = 0;
   for (;;) {
-    let query = firestore.collection(collection).orderBy(FieldPath.documentId()).limit(READ_PAGE_SIZE);
-    if (options.filterByBrandInQuery !== false) {
-      query = query.where('brandId', '==', brandId);
-    }
+    let query = options.filterByBrandInQuery === false
+      ? firestore.collection(collection).orderBy(FieldPath.documentId()).limit(READ_PAGE_SIZE)
+      : firestore
+          .collection(collection)
+          .where('brandId', '==', brandId)
+          .orderBy(FieldPath.documentId())
+          .limit(READ_PAGE_SIZE);
     if (cursor) query = query.startAfter(cursor);
     const snap = await query.get();
     read += snap.size;
     for (const doc of snap.docs) {
       const row = doc.data();
-      if (options.filterByBrandInQuery === false && text(row.brandId) !== brandId) continue;
+      const rowBrandId = text(row.brandId);
+      if (options.filterByBrandInQuery === false) {
+        if (rowBrandId && rowBrandId !== brandId) continue;
+        if (!rowBrandId && !options.allowMissingBrandId) continue;
+      }
       const product = productFromRow(doc.id, row, sourceKind);
       if (!product) continue;
       const key = normalizeSku(product.sku);
@@ -440,6 +447,26 @@ async function loadCatalogCollection(
     if (!cursor) break;
   }
   return read;
+}
+
+async function loadEcommerceCatalogCollection(
+  brandId: string,
+  collection: string,
+  bySku: Map<string, CompactProduct>
+): Promise<number> {
+  let read = await loadCatalogCollection(brandId, collection, 'connector_catalog', bySku);
+  if (read > 0) return read;
+  const firestore = assertDb();
+  const connector = await firestore.doc(`connectors/${brandId}`).get();
+  const lastSyncProducts = Number(connector.data()?.opencart?.lastSyncProducts ?? 0);
+  if (collection !== 'opencart_products' || lastSyncProducts <= 0) return read;
+  logger.warn(
+    `[ProductIntelligence] opencart_products brandId query returned 0 rows but lastSyncProducts=${lastSyncProducts} for ${brandId} — fallback scan`
+  );
+  return loadCatalogCollection(brandId, collection, 'connector_catalog', bySku, {
+    filterByBrandInQuery: false,
+    allowMissingBrandId: true,
+  });
 }
 
 async function overlayMagentoCatalogDetails(brandId: string, bySku: Map<string, CompactProduct>): Promise<number> {
@@ -635,7 +662,7 @@ async function loadConnectorProducts(brandId: string, hasErp: boolean): Promise<
         loadCatalogCollection(brandId, 'magento_products', 'connector_catalog', bySku),
         loadCatalogCollection(brandId, 'shopify_products', 'connector_catalog', bySku),
         loadCatalogCollection(brandId, 'woo_products', 'connector_catalog', bySku),
-        loadCatalogCollection(brandId, 'opencart_products', 'connector_catalog', bySku),
+        loadEcommerceCatalogCollection(brandId, 'opencart_products', bySku),
       ])).reduce((sum, rowsRead) => sum + rowsRead, 0);
   const magentoDetailRowsRead = hasErp ? await overlayMagentoCatalogDetails(brandId, bySku) : 0;
   const stockResult = hasErp
@@ -1094,7 +1121,7 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
       brandId,
       status: 'ready',
       sourceLabel: connector.sourceLabel,
-      sourceKind: 'erp',
+      sourceKind: connector.hasErp ? 'erp' : 'connector_catalog',
       totalCount: products.length,
       syncVersion: syncVersion.version,
       latestSyncAt: syncVersion.latestSyncAt,

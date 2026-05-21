@@ -1494,7 +1494,10 @@ export const processOpenCartSyncJobs = onSchedule(
           logger.warn(`[OpenCartJob] stock movement refresh failed for ${job.brandId}:`, e);
         }
         try {
-          await refreshProductIntelligenceAggregate(job.brandId);
+          const piResult = await refreshProductIntelligenceAggregate(job.brandId);
+          logger.info(
+            `[OpenCartJob] Product intelligence refreshed for ${job.brandId}: totalCount=${piResult.totalCount ?? 0}`
+          );
         } catch (e) {
           logger.warn(`[OpenCartJob] product intelligence refresh failed for ${job.brandId}:`, e);
         }
