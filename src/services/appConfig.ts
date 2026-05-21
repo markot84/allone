@@ -13,7 +13,13 @@
  *      app still functions.
  */
 import { doc, getDoc } from 'firebase/firestore';
-import { db, PROJECT_ID } from '../config/firebase';
+import { db } from '../config/firebase';
+
+// Read PROJECT_ID directly, not from firebase.ts — that module imports back
+// from this one, and a top-level cross-import puts the const in TDZ in the
+// production bundle (white-page ReferenceError). `db` is only used in async
+// callsites below, so it's init-order-safe.
+const PROJECT_ID = (import.meta.env.VITE_FIREBASE_PROJECT_ID as string | undefined) ?? '';
 
 export type PublicSignupMode = 'invite_only' | 'open';
 

@@ -1,13 +1,45 @@
 {
-  "version": "0.749.219",
-  "previousVersion": "0.749.218",
-  "commitHash": "5d1b70c",
+  "version": "0.749.225",
+  "previousVersion": "0.749.224",
+  "commitHash": "325b51c",
   "branch": "Security-Review-Fixes",
-  "buildDate": "2026-05-20T12:21:38.967Z",
+  "buildDate": "2026-05-21T10:57:39.846Z",
   "commits": [
+    {
+      "hash": "325b51c",
+      "message": "Merge branch 'SDLC-findings' into Security-Review-Fixes"
+    },
+    {
+      "hash": "05fe6c2",
+      "message": "fix: removed explicit, hardcoded firebase ID from the code, all are controlled via .env included ID"
+    },
+    {
+      "hash": "340d10d",
+      "message": "fix: LOW security findings"
+    },
+    {
+      "hash": "90ceaca",
+      "message": "fix: correct auth endpoints"
+    },
+    {
+      "hash": "e9e225b",
+      "message": "fix: dead code cleanup and archived one-shot scripts"
+    },
+    {
+      "hash": "a7da4b2",
+      "message": "fix: moved most .env variables to firebase and updated .env.sample to only inlcude firebase connection"
+    },
+    {
+      "hash": "0b4c8cb",
+      "message": "staging fixes"
+    },
     {
       "hash": "5d1b70c",
       "message": "fix: security findings"
+    },
+    {
+      "hash": "358ee1e",
+      "message": "fix: UUIDs and exposed verification token"
     },
     {
       "hash": "949c7c8",
@@ -27,9 +59,15 @@
     }
   ],
   "changes": [
+    "[Διόρθωση] Removed explicit, hardcoded firebase ID from the code, all are controlled via .env included ID",
+    "[Διόρθωση] LOW security findings",
+    "[Διόρθωση] Correct auth endpoints",
+    "[Διόρθωση] Dead code cleanup and archived one-shot scripts",
+    "[Διόρθωση] Moved most .env variables to firebase and updated .env.sample to only inlcude firebase connection",
+    "Staging fixes",
     "[Διόρθωση] Security findings",
+    "[Διόρθωση] UUIDs and exposed verification token",
     "[Διόρθωση] MEDIUM security findings",
-    "[Διόρθωση] NPM audit fix",
-    "First commit"
+    "[Διόρθωση] NPM audit fix"
   ]
 }
