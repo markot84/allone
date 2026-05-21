@@ -936,6 +936,13 @@ export async function fetchMegaventoryData(
   }
   const sinceStr = toYmd(docsWindow.windowStart);
   const todayStr = toYmd(docsWindow.windowEnd);
+  /** Custom report (Performance κ.λπ.) χρειάζεται πλήρες ιστορικό· όχι το 48h overlap των documents. */
+  const customReportHistoryYear =
+    Number(conn.historyLoadedUntilYear) > 0
+      ? Number(conn.historyLoadedUntilYear)
+      : docsWindow.historyStartYear;
+  const customReportDate1 = toYmd(new Date(Date.UTC(customReportHistoryYear, 0, 1)));
+  const customReportDate2 = todayStr;
   const sinceFilterDate = toMvFilterDateTime(docsWindow.windowStart);
   let docsOk = true;
   let referenceOk = true;
@@ -945,7 +952,7 @@ export async function fetchMegaventoryData(
       ? 'pending/deferred_for_scheduled_sync'
       : 'complete/incremental';
   logger.info(
-    `[Megaventory] Sync window for ${brandId}: mode=${mode} docs=${docsWindow.mode}:${sinceStr}->${todayStr} reference=snapshot customReport=snapshot invoiceBackfill=${invoiceBackfillLabel}`
+    `[Megaventory] Sync window for ${brandId}: mode=${mode} docs=${docsWindow.mode}:${sinceStr}->${todayStr} customReport=${customReportDate1}->${customReportDate2} reference=snapshot invoiceBackfill=${invoiceBackfillLabel}`
   );
 
   let totalImported = 0;
@@ -970,6 +977,7 @@ export async function fetchMegaventoryData(
   let megaventoryApiProductRows: Record<string, unknown>[] = [];
   let customReportRowsSnapshot: Record<string, unknown>[] = [];
   let apiCatalogGapFillCount = 0;
+  let productGetExhausted = false;
 
   try {
     if (!shouldRefreshDocuments) {
@@ -1247,7 +1255,11 @@ export async function fetchMegaventoryData(
     }
 
     // ── Products ─────────────────────────────────────────────────────
-    const { rows: prRows, error: prFetchErr } = await fetchAllMvPages('ProductGet', apiKey, [], {
+    const {
+      rows: prRows,
+      error: prFetchErr,
+      exhausted: productGetExhausted,
+    } = await fetchAllMvPages('ProductGet', apiKey, [], {
       responseArrayKey: 'mvProducts',
       cursorField: 'ProductID',
       idKeys: ['ProductID', 'ProductId'],
@@ -1364,7 +1376,7 @@ export async function fetchMegaventoryData(
       try {
         const removed = await deleteMegaventoryCustomReportRows(db, brandId);
         logger.info(`[Megaventory] Custom report purge: removed ${removed} rows for brand ${brandId}`);
-        const crRows = await fetchAllCustomReportPages(apiKey, reportId, sinceStr, todayStr);
+        const crRows = await fetchAllCustomReportPages(apiKey, reportId, customReportDate1, customReportDate2);
         customReportRowsSnapshot = crRows;
         const rid = sanitizeFirestoreDocId(reportId);
         const bid = sanitizeFirestoreDocId(brandId);
@@ -1436,6 +1448,13 @@ export async function fetchMegaventoryData(
     }
     if (counts.products > 0) {
       patch['megaventory.lastSyncProducts'] = counts.products;
+    }
+    if (counts.customReportRows > 0) {
+      patch['megaventory.lastSyncCustomReportRows'] = counts.customReportRows;
+    }
+    patch['megaventory.lastProductGetExhausted'] = productGetExhausted !== false;
+    if (apiCatalogGapFillCount > 0) {
+      patch['megaventory.lastApiCatalogGapFill'] = apiCatalogGapFillCount;
     }
     if (shouldRefreshDocuments && docsOk) {
       patch['megaventory.lastDocsSyncAt'] = FieldValue.serverTimestamp();
@@ -1528,6 +1547,8 @@ export async function fetchMegaventoryData(
       docsMode: docsWindow.mode,
       referenceMode: 'snapshot',
       customReportMode: reportId && reportEnabled ? 'snapshot' : 'disabled',
+      ...(reportId && reportEnabled ? { customReportDate1, customReportDate2 } : {}),
+      productGetExhausted,
       windowStart: docsWindow.windowStart.toISOString(),
       windowEnd: docsWindow.windowEnd.toISOString(),
       manualImportCleanupRan: manualCleanupCounts != null,

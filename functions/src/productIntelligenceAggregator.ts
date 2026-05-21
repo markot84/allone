@@ -434,7 +434,11 @@ async function loadCatalogCollection(
     let query =
       options.filterByBrandInQuery === false
         ? firestore.collection(collection).orderBy(FieldPath.documentId()).limit(READ_PAGE_SIZE)
-        : firestore.collection(collection).where('brandId', '==', brandId).limit(READ_PAGE_SIZE);
+        : firestore
+            .collection(collection)
+            .where('brandId', '==', brandId)
+            .orderBy(FieldPath.documentId())
+            .limit(READ_PAGE_SIZE);
     if (cursor) query = query.startAfter(cursor);
     const snap = await query.get();
     read += snap.size;
