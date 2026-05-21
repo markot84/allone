@@ -579,7 +579,7 @@ function csvToObjects(csvRows: string[][], type?: ImportType): Record<string, st
     if (type === 'products' && objects.length < 3 && import.meta.env.MODE === 'development') {
       const relevantKeys = ['item_id', 'title', 'stock_on_hand', 'stock_level', 'stock', 'quantity', 'sell_price', 'price', 'cost_price', 'cost', 'gross_margin_%', 'margin_percentage', 'stock_age_days', 'age_days'];
       const relevantObj = Object.fromEntries(Object.entries(obj).filter(([k]) => relevantKeys.some(rk => k.includes(rk) || rk.includes(k))));
-      console.debug(`[csvToObjects] Row ${objects.length + 1} relevant fields:`, relevantObj);
+      console.debug('[csvToObjects] relevant fields:', { row: objects.length + 1, fields: relevantObj });
     }
     
     objects.push(obj);
@@ -709,14 +709,14 @@ function parseLooseNumber(value: string | number | null | undefined): number {
 function validateProduct(row: Record<string, string>, index: number): { valid: boolean; data?: Product; error?: string } {
   // Debug: Log available keys for first few rows
   if (index < 3) {
-    console.log(`[Product Row ${index}] Available keys (${Object.keys(row).length}):`, Object.keys(row));
-    const relevantKeys = Object.keys(row).filter(k => 
-      k.includes('stock') || k.includes('price') || k.includes('cost') || 
+    console.log('[Product Row] Available keys:', { row: index, count: Object.keys(row).length, keys: Object.keys(row) });
+    const relevantKeys = Object.keys(row).filter(k =>
+      k.includes('stock') || k.includes('price') || k.includes('cost') ||
       k.includes('margin') || k.includes('age') || k.includes('quantity') ||
       k.includes('item') || k.includes('title') || k.includes('sku')
     );
-    console.log(`[Product Row ${index}] Relevant keys:`, relevantKeys);
-    console.log(`[Product Row ${index}] Relevant values:`, Object.fromEntries(relevantKeys.map(k => [k, row[k]])));
+    console.log('[Product Row] Relevant keys:', { row: index, relevantKeys });
+    console.log('[Product Row] Relevant values:', { row: index, values: Object.fromEntries(relevantKeys.map(k => [k, row[k]])) });
   }
   
   // Headers are normalized: "Title" -> "title", "Item ID" -> "item_id"
@@ -765,7 +765,8 @@ function validateProduct(row: Record<string, string>, index: number): { valid: b
 
   // Debug: Log what was found
   if (index < 3) {
-    console.log(`[Product Row ${index}] Found values:`, {
+    console.log('[Product Row] Found values:', {
+      row: index,
       name: name || '(empty)',
       sku: sku || '(empty)',
       category: category || '(empty)',
@@ -786,9 +787,9 @@ function validateProduct(row: Record<string, string>, index: number): { valid: b
     const priceKeys = ['sell_price', 'price', 'unit_price', 'retail_price', 'conv._value', 'conv_value', 'conversion_value', 'τιμή', 'msrp', 'MSRP'];
     const costKeys = ['cost_price', 'Cost_Price', 'cost', 'Cost', 'κόστος', 'Κόστος'];
     const stockKeys = ['stock_on_hand', 'Stock_On_Hand', 'stock_level', 'Stock_Level', 'stock', 'Stock', 'quantity', 'Quantity'];
-    console.log(`[Product Row ${index}] Price keys found:`, priceKeys.filter(k => row[k] !== undefined && row[k] !== '').map(k => `${k}: ${row[k]}`));
-    console.log(`[Product Row ${index}] Cost keys found:`, costKeys.filter(k => row[k] !== undefined && row[k] !== '').map(k => `${k}: ${row[k]}`));
-    console.log(`[Product Row ${index}] Stock keys found:`, stockKeys.filter(k => row[k] !== undefined && row[k] !== '').map(k => `${k}: ${row[k]}`));
+    console.log('[Product Row] Price keys found:', { row: index, found: priceKeys.filter(k => row[k] !== undefined && row[k] !== '').map(k => `${k}: ${row[k]}`) });
+    console.log('[Product Row] Cost keys found:', { row: index, found: costKeys.filter(k => row[k] !== undefined && row[k] !== '').map(k => `${k}: ${row[k]}`) });
+    console.log('[Product Row] Stock keys found:', { row: index, found: stockKeys.filter(k => row[k] !== undefined && row[k] !== '').map(k => `${k}: ${row[k]}`) });
   }
 
   const errors: string[] = [];
@@ -851,7 +852,8 @@ function validateProduct(row: Record<string, string>, index: number): { valid: b
   
   // Debug: Log calculations for first few rows
   if (index < 3) {
-    console.log(`[Product Row ${index}] Calculations:`, {
+    console.log('[Product Row] Calculations:', {
+      row: index,
       sellPriceNum,
       listPriceNum,
       costPriceNum,
@@ -925,7 +927,7 @@ function validateProduct(row: Record<string, string>, index: number): { valid: b
 
   // Debug: Log final product for first few rows
   if (index < 3) {
-    console.log(`[Product Row ${index}] Final product:`, {
+    console.log('[Product Row] Final product:', { row: index, product: {
       id: product.id,
       name: product.name,
       margin_percentage: product.margin_percentage,
@@ -933,7 +935,7 @@ function validateProduct(row: Record<string, string>, index: number): { valid: b
       stock_age_days: product.stock_age_days,
       price: product.price,
       cost_price: product.cost_price
-    });
+    } });
   }
 
   return { valid: true, data: product };
@@ -1229,7 +1231,8 @@ function validateCampaignRow(
   
   // Debug logging in development
   if (import.meta.env.MODE === 'development' && index < 3) {
-    console.debug(`[Campaign Row ${index}] Channel Detection:`, {
+    console.debug('[Campaign Row] Channel Detection:', {
+      row: index,
       explicitChannel,
       hasGoogleAdsColumns,
       hasMetaColumns,
@@ -1239,7 +1242,8 @@ function validateCampaignRow(
   }
   
   if (import.meta.env.MODE === 'development' && index < 3) {
-    console.debug(`[Campaign Row ${index}] Channel detection:`, {
+    console.debug('[Campaign Row] Channel detection:', {
+      row: index,
       explicitChannel,
       hasGoogleAdsColumns,
       hasMetaColumns,
@@ -1398,7 +1402,8 @@ function validateCampaignRow(
     const amountSpentNum = amountSpent ? parseFloat(amountSpent) : 0;
     const conversionValueNum = conversionValue ? parseFloat(conversionValue) : 0;
     const roasNum = roasValue ? parseFloat(roasValue) : 0;
-    console.debug(`[Campaign Row ${index}] Final Channel & Values:`, {
+    console.debug('[Campaign Row] Final Channel & Values:', {
+      row: index,
       initialChannel: channel,
       finalChannel,
       hasMetaData: (amountSpent && parseFloat(amountSpent) > 0) || (roasValue && parseFloat(roasValue) > 0) || (resultTypeValue && resultTypeValue.trim() !== ''),

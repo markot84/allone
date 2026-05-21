@@ -401,7 +401,7 @@ async function postConnectorSync(
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') throw err;
       lastNetworkError = err;
-      console.warn(`[ConnectorsPanel] connectorSync network failed via ${url}; trying fallback if available`, err);
+      console.warn('[ConnectorsPanel] connectorSync network failed; trying fallback if available', { url, err });
     }
   }
   throw lastNetworkError instanceof Error ? lastNetworkError : new Error('Failed to fetch');
