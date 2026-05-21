@@ -1409,6 +1409,42 @@ async function resumeIncompleteOpenCartBackfills(db: FirebaseFirestore.Firestore
   return queued;
 }
 
+/** Rebuild PI when OpenCart catalog is synced but aggregate stayed at 0 (e.g. stale SKU parsing). */
+async function repairEmptyOpenCartProductIntelligence(db: FirebaseFirestore.Firestore): Promise<void> {
+  const connectorsSnap = await db
+    .collection('connectors')
+    .where('opencart.connected', '==', true)
+    .limit(20)
+    .get();
+
+  for (const cdoc of connectorsSnap.docs) {
+    const oc = cdoc.data().opencart as Record<string, unknown> | undefined;
+    const lastSyncProducts = Number(oc?.lastSyncProducts ?? 0);
+    if (lastSyncProducts <= 0) continue;
+    if (isOpenCartInitialBackfillIncomplete(oc)) continue;
+
+    const brandId = cdoc.id;
+    const piRef = db.doc(`product_intelligence/${brandId}`);
+    const pi = await piRef.get();
+    const piData = pi.data();
+    if (piData?.status === 'running') continue;
+    if (Number(piData?.totalCount ?? 0) > 0) continue;
+
+    const repairAt = piData?.repairAttemptAt?.toDate?.() as Date | undefined;
+    if (repairAt && Date.now() - repairAt.getTime() < 5 * 60 * 1000) continue;
+
+    await piRef.set({ repairAttemptAt: FieldValue.serverTimestamp() }, { merge: true });
+    logger.info(`[PIWatchdog] Rebuilding product intelligence for ${brandId} (lastSyncProducts=${lastSyncProducts})`);
+    try {
+      const result = await refreshProductIntelligenceAggregate(brandId);
+      logger.info(`[PIWatchdog] ${brandId}: totalCount=${result.totalCount ?? 0}`);
+    } catch (error) {
+      logger.warn(`[PIWatchdog] failed for ${brandId}:`, error);
+    }
+    return;
+  }
+}
+
 export const processOpenCartSyncJobs = onSchedule(
   {
     schedule: 'every 1 minutes',
@@ -1449,7 +1485,10 @@ export const processOpenCartSyncJobs = onSchedule(
       .limit(1)
       .get();
 
-    if (snap.empty) return;
+    if (snap.empty) {
+      await repairEmptyOpenCartProductIntelligence(db);
+      return;
+    }
 
     const jobRef = snap.docs[0].ref;
     const job = await db.runTransaction(async (tx) => {
@@ -2597,11 +2636,12 @@ export const refreshProductIntelligence = onRequest(
       const { brandId } = req.body as { brandId?: string };
       if (!brandId) { res.status(400).json({ error: 'Missing brandId' }); return; }
 
-      if (!(await verifyBrandConnectorManagement(decoded.uid, brandId))) {
-        res.status(403).json({ error: 'Μόνο ιδιοκτήτης ή διαχειριστής μπορεί να ανανεώσει το Product Intelligence aggregate' });
+      if (!(await verifyBrandMembership(decoded.uid, brandId))) {
+        res.status(403).json({ error: 'Δεν υπάρχει πρόσβαση στο brand' });
         return;
       }
 
+      logger.info(`[refreshProductIntelligence] brandId=${brandId} uid=${decoded.uid}`);
       const result = await refreshProductIntelligenceAggregate(brandId);
       res.status(200).json({ success: true, brandId, result });
     } catch (error) {

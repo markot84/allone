@@ -17,7 +17,8 @@ import {
   TrendingUp,
   TrendingDown,
   Trash2,
-  Loader2
+  Loader2,
+  RefreshCw,
 } from 'lucide-react';
 import {
   Card,
@@ -271,20 +272,12 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   const hasImported = hasServerAggregate;
   const productDataSourceLabel = serverIntelligence.aggregate?.sourceLabel ?? 'ERP';
   const totalCatalogCount = serverIntelligence.aggregate?.totalCount ?? 0;
-  const effectiveSourceLoading = serverIntelligence.isLoading && !serverIntelligence.page;
+  const effectiveSourceLoading = serverIntelligence.isPageLoading && !serverIntelligence.page;
   const piRefreshAttemptRef = useRef<string | null>(null);
   const [piRebuilding, setPiRebuilding] = useState(false);
 
-  useEffect(() => {
-    if (!brandId || effectiveSourceLoading || piRebuilding) return;
-    const aggregate = serverIntelligence.aggregate;
-    const needsRebuild =
-      !aggregate ||
-      (aggregate.status === 'ready' && aggregate.totalCount === 0 && aggregate.sourceLabel === 'E-shop catalog');
-    if (!needsRebuild) return;
-    const key = `${brandId}:${aggregate?.syncVersion ?? 'none'}:${aggregate?.totalCount ?? 'missing'}`;
-    if (piRefreshAttemptRef.current === key) return;
-    piRefreshAttemptRef.current = key;
+  const triggerProductIntelligenceRebuild = React.useCallback(() => {
+    if (!brandId || piRebuilding) return;
     setPiRebuilding(true);
     void refreshProductIntelligenceOnServer(brandId)
       .then((result) => {
@@ -293,16 +286,37 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
         queryClient.invalidateQueries({ queryKey: ['brandSyncVersion', brandId] });
         if ((result.totalCount ?? 0) === 0) {
           toast.info('Ο κατάλογος ανανεώθηκε αλλά δεν βρέθηκαν προϊόντα — ελέγξτε το OpenCart sync.');
+        } else {
+          toast.success(`Κατάλογος ανανεώθηκε · ${formatNumber(result.totalCount ?? 0)} SKUs`);
         }
       })
       .catch((err: unknown) => {
         piRefreshAttemptRef.current = null;
         const msg = err instanceof Error ? err.message : 'Product Intelligence refresh failed';
         toast.error(`Αποτυχία ανανέωσης καταλόγου: ${msg}`);
-        console.warn('[ProductIntelligence] auto refresh failed:', err);
+        console.warn('[ProductIntelligence] refresh failed:', err);
       })
       .finally(() => setPiRebuilding(false));
-  }, [brandId, effectiveSourceLoading, piRebuilding, queryClient, serverIntelligence.aggregate, toast]);
+  }, [brandId, piRebuilding, queryClient, toast]);
+
+  useEffect(() => {
+    if (!brandId || piRebuilding || serverIntelligence.isAggregateLoading) return;
+    const aggregate = serverIntelligence.aggregate;
+    const needsRebuild =
+      !aggregate ||
+      (aggregate.status === 'ready' && aggregate.totalCount === 0 && aggregate.sourceLabel === 'E-shop catalog');
+    if (!needsRebuild) return;
+    const key = `${brandId}:${aggregate?.syncVersion ?? 'none'}:${aggregate?.totalCount ?? 'missing'}`;
+    if (piRefreshAttemptRef.current === key) return;
+    piRefreshAttemptRef.current = key;
+    triggerProductIntelligenceRebuild();
+  }, [
+    brandId,
+    piRebuilding,
+    serverIntelligence.isAggregateLoading,
+    serverIntelligence.aggregate,
+    triggerProductIntelligenceRebuild,
+  ]);
 
   useEffect(() => {
     if (serverIntelligence.safePage !== currentPage) {
@@ -487,6 +501,21 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
         }
         actions={
           <>
+            {hasServerAggregate && totalCatalogCount === 0 && productDataSourceLabel === 'E-shop catalog' ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={piRebuilding ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                onClick={() => {
+                  piRefreshAttemptRef.current = null;
+                  triggerProductIntelligenceRebuild();
+                }}
+                disabled={piRebuilding || !brandId}
+                className="min-h-[36px] flex-1 basis-full sm:flex-initial sm:basis-auto"
+              >
+                {piRebuilding ? 'Ανανέωση…' : 'Ανανέωση καταλόγου'}
+              </Button>
+            ) : null}
             <Button
               variant="secondary"
               size="sm"

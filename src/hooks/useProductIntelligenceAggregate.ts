@@ -41,6 +41,8 @@ export function useProductIntelligenceAggregate(bucket: ProductIntelligenceBucke
     aggregate,
     page: pageQuery.data,
     safePage: pageQuery.data?.page ?? safePage,
+    isAggregateLoading: aggregateQuery.isPending,
+    isPageLoading: !!aggregate && pageQuery.isPending,
     isLoading: aggregateQuery.isPending || (!!aggregate && pageQuery.isPending),
     isBuilding: aggregateQuery.data?.status === 'running',
     error: aggregateQuery.error ?? pageQuery.error,

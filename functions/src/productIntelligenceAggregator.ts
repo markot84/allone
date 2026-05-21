@@ -421,13 +421,10 @@ async function loadCatalogCollection(
   let cursor: QueryDocumentSnapshot | null = null;
   let read = 0;
   for (;;) {
-    let query = options.filterByBrandInQuery === false
-      ? firestore.collection(collection).orderBy(FieldPath.documentId()).limit(READ_PAGE_SIZE)
-      : firestore
-          .collection(collection)
-          .where('brandId', '==', brandId)
-          .orderBy(FieldPath.documentId())
-          .limit(READ_PAGE_SIZE);
+    let query =
+      options.filterByBrandInQuery === false
+        ? firestore.collection(collection).orderBy(FieldPath.documentId()).limit(READ_PAGE_SIZE)
+        : firestore.collection(collection).where('brandId', '==', brandId).limit(READ_PAGE_SIZE);
     if (cursor) query = query.startAfter(cursor);
     const snap = await query.get();
     read += snap.size;
@@ -457,18 +454,27 @@ async function loadEcommerceCatalogCollection(
   bySku: Map<string, CompactProduct>
 ): Promise<number> {
   let read = await loadCatalogCollection(brandId, collection, 'connector_catalog', bySku);
-  if (read > 0) return read;
+  if (bySku.size > 0) return read;
+
   const firestore = assertDb();
   const connector = await firestore.doc(`connectors/${brandId}`).get();
   const lastSyncProducts = Number(connector.data()?.opencart?.lastSyncProducts ?? 0);
   if (collection !== 'opencart_products' || lastSyncProducts <= 0) return read;
-  logger.warn(
-    `[ProductIntelligence] opencart_products brandId query returned 0 rows but lastSyncProducts=${lastSyncProducts} for ${brandId} — fallback scan`
-  );
-  return loadCatalogCollection(brandId, collection, 'connector_catalog', bySku, {
+
+  if (read > 0) {
+    logger.warn(
+      `[ProductIntelligence] opencart_products read=${read} rows but parsed 0 SKUs for ${brandId} — fallback scan`
+    );
+  } else {
+    logger.warn(
+      `[ProductIntelligence] opencart_products brandId query returned 0 rows but lastSyncProducts=${lastSyncProducts} for ${brandId} — fallback scan`
+    );
+  }
+  read += await loadCatalogCollection(brandId, collection, 'connector_catalog', bySku, {
     filterByBrandInQuery: false,
     allowMissingBrandId: true,
   });
+  return read;
 }
 
 async function overlayMagentoCatalogDetails(brandId: string, bySku: Map<string, CompactProduct>): Promise<number> {
