@@ -1295,23 +1295,15 @@ export const connectorSync = onRequest(
             message: 'OpenCart sync ήδη σε εξέλιξη στο background.',
           };
         } else {
-          await jobRef.set({
-            brandId,
-            provider,
-            status: 'pending',
-            requestedBy: decoded.uid,
-            requestedAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
-            mode: 'manual_backfill',
-            batchesRun: 0,
-            totalImported: 0,
-          }, { merge: true });
+          const queued = await ensureOpenCartBackfillJobQueued(brandId, { mode: 'manual_backfill' });
           result = {
             success: true,
             queued: true,
             jobId,
             imported: 0,
-            message: 'OpenCart sync ξεκίνησε στο background. Θα ολοκληρωθεί αυτόματα — δεν χρειάζεται να περιμένεις.',
+            message: queued.queued
+              ? 'OpenCart sync ξεκίνησε στο background. Θα ολοκληρωθεί αυτόματα — δεν χρειάζεται να περιμένεις.'
+              : 'OpenCart backfill ήδη ολοκληρωμένο.',
           };
         }
       } else if (provider === 'magento') {
@@ -1398,6 +1390,25 @@ export const connectorSync = onRequest(
   }
 );
 
+async function resumeIncompleteOpenCartBackfills(db: FirebaseFirestore.Firestore): Promise<number> {
+  const connectorsSnap = await db
+    .collection('connectors')
+    .where('opencart.connected', '==', true)
+    .limit(50)
+    .get();
+  let queued = 0;
+  for (const cdoc of connectorsSnap.docs) {
+    const oc = cdoc.data().opencart as Record<string, unknown> | undefined;
+    if (!isOpenCartInitialBackfillIncomplete(oc)) continue;
+    const result = await ensureOpenCartBackfillJobQueued(cdoc.id, { mode: 'watchdog_resume' });
+    if (result.queued) {
+      logger.info(`[OpenCartJob] Watchdog re-queued ${cdoc.id}: ${result.reason}`);
+      queued += 1;
+    }
+  }
+  return queued;
+}
+
 export const processOpenCartSyncJobs = onSchedule(
   {
     schedule: 'every 1 minutes',
@@ -1429,36 +1440,16 @@ export const processOpenCartSyncJobs = onSchedule(
       }
     }
 
-    let snap = await db
+    await resumeIncompleteOpenCartBackfills(db);
+
+    const snap = await db
       .collection('connector_sync_jobs')
       .where('provider', '==', 'opencart')
       .where('status', '==', 'pending')
       .limit(1)
       .get();
 
-    if (snap.empty) {
-      const connectorsSnap = await db
-        .collection('connectors')
-        .where('opencart.connected', '==', true)
-        .limit(50)
-        .get();
-      for (const cdoc of connectorsSnap.docs) {
-        const oc = cdoc.data().opencart as Record<string, unknown> | undefined;
-        if (!isOpenCartInitialBackfillIncomplete(oc)) continue;
-        const queued = await ensureOpenCartBackfillJobQueued(cdoc.id, { mode: 'watchdog_resume' });
-        if (queued.queued) {
-          logger.info(`[OpenCartJob] Watchdog re-queued ${cdoc.id}: ${queued.reason}`);
-          break;
-        }
-      }
-      snap = await db
-        .collection('connector_sync_jobs')
-        .where('provider', '==', 'opencart')
-        .where('status', '==', 'pending')
-        .limit(1)
-        .get();
-      if (snap.empty) return;
-    }
+    if (snap.empty) return;
 
     const jobRef = snap.docs[0].ref;
     const job = await db.runTransaction(async (tx) => {

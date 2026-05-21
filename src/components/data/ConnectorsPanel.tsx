@@ -2006,6 +2006,7 @@ export function ConnectorsPanel() {
   const previousMegaventoryJobStatusRef = useRef<ConnectorSyncJobStatus | null>(null);
   const handledOpenCartJobRef = useRef<string | null>(null);
   const previousOpenCartJobStatusRef = useRef<ConnectorSyncJobStatus | null>(null);
+  const opencartAutoResumeRef = useRef<string | null>(null);
 
   const emptyStates: Record<string, ConnectorState> = {
     google_ads: { connected: false },
@@ -2061,6 +2062,15 @@ export function ConnectorsPanel() {
         entersoft: connectorsData.entersoft || { connected: false },
       }
     : emptyStates;
+
+  const opencartState = states.opencart || { connected: false };
+  const opencartBackfillNeedsResume =
+    opencartState.connected &&
+    (Boolean(opencartState.productsSyncPageCursor || opencartState.ordersSyncPageCursor) ||
+      opencartState.lastSyncStatus === 'partial' ||
+      (typeof opencartState.lastSyncError === 'string' &&
+        (opencartState.lastSyncError.includes('page cap') ||
+          opencartState.lastSyncError.includes('sync incomplete'))));
 
   // Last sync dates — secondary, loaded once, cached
   const { data: lastSyncQueryRaw } = useQuery({
@@ -2719,6 +2729,24 @@ export function ConnectorsPanel() {
   };
 
   useEffect(() => {
+    if (!brandId || !canManageConnectors || !opencartBackfillNeedsResume) return;
+    const jobStatus = opencartSyncJob?.status;
+    if (jobStatus === 'pending' || jobStatus === 'running') return;
+    const resumeKey = `${brandId}:${jobStatus ?? 'none'}:${String(opencartState.productsSyncPageCursor ?? '')}:${String(opencartState.ordersSyncPageCursor ?? '')}`;
+    if (opencartAutoResumeRef.current === resumeKey) return;
+    opencartAutoResumeRef.current = resumeKey;
+    void handleSync('opencart');
+  }, [
+    brandId,
+    canManageConnectors,
+    handleSync,
+    opencartBackfillNeedsResume,
+    opencartState.ordersSyncPageCursor,
+    opencartState.productsSyncPageCursor,
+    opencartSyncJob?.status,
+  ]);
+
+  useEffect(() => {
     if (!accountPickerFor || !user?.uid) return;
     const s = states[accountPickerFor];
     if (s?.pendingAccountSelection && s.oauthInitiatedByUid !== user.uid) {
@@ -2954,7 +2982,9 @@ export function ConnectorsPanel() {
                   (pickerOwnerUid === undefined || pickerOwnerUid !== uid);
                 const opencartJobActive =
                   conn.id === 'opencart' &&
-                  (opencartSyncJob?.status === 'pending' || opencartSyncJob?.status === 'running');
+                  (opencartSyncJob?.status === 'pending' ||
+                    opencartSyncJob?.status === 'running' ||
+                    (opencartBackfillNeedsResume && opencartSyncJob?.status === 'completed'));
                 const megaventoryJobActive =
                   conn.id === 'megaventory' &&
                   (megaventorySyncJob?.status === 'pending' || megaventorySyncJob?.status === 'running');

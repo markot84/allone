@@ -972,7 +972,10 @@ export function isOpenCartInitialBackfillIncomplete(
   const hasOrdersCursor = Boolean(connector.ordersSyncPageCursor);
   const productsCatalogComplete = Boolean(connector.lastProductsSyncAt) && !hasProductsCursor;
   const ordersHistoryComplete = Boolean(connector.lastOrdersSyncAt) && !hasOrdersCursor;
-  return !productsCatalogComplete || !ordersHistoryComplete;
+  if (!productsCatalogComplete || !ordersHistoryComplete) return true;
+  if (connector.lastSyncStatus === 'partial') return true;
+  const err = typeof connector.lastSyncError === 'string' ? connector.lastSyncError.toLowerCase() : '';
+  return err.includes('page cap') || err.includes('sync incomplete') || err.includes('aborted');
 }
 
 /**
