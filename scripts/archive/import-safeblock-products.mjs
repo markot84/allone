@@ -8,36 +8,36 @@ import { dirname, join } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Firebase config - load from .env.local or use defaults
-let firebaseConfig = {};
-if (existsSync(join(__dirname, '../.env.local'))) {
-  const envContent = readFileSync(join(__dirname, '../.env.local'), 'utf-8');
-  const envVars = {};
+// Firebase config — loaded from .env.local (project root) or process.env.
+// Every value is required; no hardcoded project fallbacks.
+const envVars = {};
+const envLocalPath = join(__dirname, '../.env.local');
+if (existsSync(envLocalPath)) {
+  const envContent = readFileSync(envLocalPath, 'utf-8');
   envContent.split('\n').forEach(line => {
     const match = line.match(/^VITE_FIREBASE_(\w+)=(.*)$/);
     if (match) {
       envVars[match[1]] = match[2].trim().replace(/^["']|["']$/g, '');
     }
   });
-  firebaseConfig = {
-    apiKey: envVars.API_KEY,
-    authDomain: envVars.AUTH_DOMAIN,
-    projectId: envVars.PROJECT_ID || 'performance-plus-4a5b2',
-    storageBucket: envVars.STORAGE_BUCKET,
-    messagingSenderId: envVars.MESSAGING_SENDER_ID,
-    appId: envVars.APP_ID,
-  };
-} else {
-  // Fallback to hardcoded values (update if needed)
-  firebaseConfig = {
-    apiKey: process.env.VITE_FIREBASE_API_KEY,
-    authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN || "performance-plus-4a5b2.firebaseapp.com",
-    projectId: process.env.VITE_FIREBASE_PROJECT_ID || "performance-plus-4a5b2",
-    storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET || "performance-plus-4a5b2.appspot.com",
-    messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-    appId: process.env.VITE_FIREBASE_APP_ID,
-  };
 }
+
+function reqEnv(key) {
+  const v = envVars[key] || process.env[`VITE_FIREBASE_${key}`];
+  if (!v) {
+    throw new Error(`[import-safeblock] Missing VITE_FIREBASE_${key} (set in .env.local or env)`);
+  }
+  return v;
+}
+
+const firebaseConfig = {
+  apiKey: reqEnv('API_KEY'),
+  authDomain: reqEnv('AUTH_DOMAIN'),
+  projectId: reqEnv('PROJECT_ID'),
+  storageBucket: reqEnv('STORAGE_BUCKET'),
+  messagingSenderId: reqEnv('MESSAGING_SENDER_ID'),
+  appId: reqEnv('APP_ID'),
+};
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);

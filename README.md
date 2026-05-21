@@ -43,10 +43,9 @@ The application is deployed to Firebase Hosting with Firestore database.
 **Setup:**
 1. Install Firebase CLI: `npm install -g firebase-tools`
 2. Login: `firebase login`
-3. Initialize: `firebase init` (select Hosting and Firestore)
-4. Configure `.env` file with your Firebase credentials (see `.env.example`)
-5. Deploy: `npm run firebase:deploy`
+3. Configure `.env` file with your Firebase credentials (see `.env.example`) — `VITE_FIREBASE_PROJECT_ID` is the single switch between prod and staging.
+4. Deploy: `npm run firebase:deploy` (reads the project id from `.env` via `scripts/firebase-deploy.mjs`; no `.firebaserc` needed)
 
 **See `FIREBASE_SETUP.md` for detailed instructions.**
 
-**Live URL:** https://performance-plus-4a5b2.web.app
+**Live URL:** `https://<VITE_FIREBASE_PROJECT_ID>.web.app` (resolves from `.env`)

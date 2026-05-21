@@ -16,7 +16,7 @@ import {
   PencilIcon
 } from '@primer/octicons-react';
 import { FirestoreService } from '../../services/firestore';
-import { db, auth, storage } from '../../config/firebase';
+import { db, auth, storage, PROJECT_ID } from '../../config/firebase';
 import { collection, getDocs, doc, getDoc, limit, orderBy, query } from 'firebase/firestore';
 import { SUPPORT_EMAIL, APP_NAME } from '../../config/superAdmins';
 import { loadSuperAdmins } from '../../services/appConfig';
@@ -691,7 +691,7 @@ function ApiStatusTab() {
     checkServices();
   }, [checkServices]);
 
-  const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'performance-plus-4a5b2';
+  const projectId = PROJECT_ID;
 
   return (
     <div>
@@ -1240,7 +1240,7 @@ function SystemInfoTab() {
     load();
   }, []);
 
-  const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'performance-plus-4a5b2';
+  const projectId = PROJECT_ID;
 
   const infoSections = [
     {

@@ -13,7 +13,7 @@
  *      app still functions.
  */
 import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { db, PROJECT_ID } from '../config/firebase';
 
 export type PublicSignupMode = 'invite_only' | 'open';
 
@@ -30,7 +30,6 @@ export interface SuperAdminsConfig {
   emails: string[];
 }
 
-const PROJECT_ID = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'performance-plus-4a5b2';
 const DEFAULT_REGION = 'europe-west1';
 
 const DEFAULTS: PublicAppConfig = {

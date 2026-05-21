@@ -5,23 +5,27 @@ import { getStorage } from 'firebase/storage';
 import { initializeAppCheck, ReCaptchaV3Provider, getToken as getAppCheckToken, type AppCheck } from 'firebase/app-check';
 import { getAppConfigSync } from '../services/appConfig';
 
-/** Ίδιο με `.firebaserc` — ώστε Firestore/SDK και HTTP functions URL να μην αποκλίνουν αν λείπει `VITE_FIREBASE_PROJECT_ID` στο build. */
-const DEFAULT_FIREBASE_PROJECT_ID = 'performance-plus-4a5b2';
 const DEFAULT_FUNCTIONS_REGION = 'europe-west1';
+
+function requireEnv(name: string): string {
+  const v = import.meta.env[name] as string | undefined;
+  if (!v) throw new Error(`[firebase] Missing required env var ${name} (see .env.example)`);
+  return v;
+}
 
 // Bootstrap: the six SDK keys and the App Check site key are the only env
 // values the SPA still reads. Everything else now lives in Firestore at
 // `appConfig/publicConfig` (loaded by services/appConfig.ts at app startup).
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "your-api-key",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "your-project.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || DEFAULT_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "your-project.appspot.com",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "123456789",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "your-app-id"
+  apiKey: requireEnv('VITE_FIREBASE_API_KEY'),
+  authDomain: requireEnv('VITE_FIREBASE_AUTH_DOMAIN'),
+  projectId: requireEnv('VITE_FIREBASE_PROJECT_ID'),
+  storageBucket: requireEnv('VITE_FIREBASE_STORAGE_BUCKET'),
+  messagingSenderId: requireEnv('VITE_FIREBASE_MESSAGING_SENDER_ID'),
+  appId: requireEnv('VITE_FIREBASE_APP_ID'),
 };
 
-const PROJECT_ID = firebaseConfig.projectId;
+export const PROJECT_ID = firebaseConfig.projectId;
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);

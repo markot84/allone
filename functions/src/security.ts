@@ -13,9 +13,17 @@ import type { Response } from 'express';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 
+// `GCLOUD_PROJECT` is set automatically by the Firebase Functions runtime
+// (and by the local emulator). Δεν δεχόμαστε fallback — αν λείπει, σπάμε
+// νωρίς ώστε να μην ξεκινήσει function χωρίς σαφές project context.
+const PROJECT_ID = process.env.GCLOUD_PROJECT;
+if (!PROJECT_ID) {
+  throw new Error('[security] GCLOUD_PROJECT is not set — refusing to start without a project id');
+}
+
 const PROD_ORIGINS = [
-  'https://performance-plus-4a5b2.web.app',
-  'https://performance-plus-4a5b2.firebaseapp.com',
+  `https://${PROJECT_ID}.web.app`,
+  `https://${PROJECT_ID}.firebaseapp.com`,
   'https://performanceplus.gr',
   'https://www.performanceplus.gr',
 ];
