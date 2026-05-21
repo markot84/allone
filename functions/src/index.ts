@@ -1577,6 +1577,28 @@ export const processMegaventorySyncJobs = onSchedule(
   },
   async () => {
     const db = admin.firestore();
+    const STALE_RUNNING_MS = 40 * 60 * 1000;
+
+    const staleRunning = await db
+      .collection('connector_sync_jobs')
+      .where('provider', '==', 'megaventory')
+      .where('status', '==', 'running')
+      .limit(5)
+      .get();
+    for (const doc of staleRunning.docs) {
+      const data = doc.data();
+      const updatedAt = data.updatedAt?.toDate?.() as Date | undefined;
+      if (!updatedAt || Date.now() - updatedAt.getTime() <= STALE_RUNNING_MS) continue;
+      const result = data.result as { success?: boolean; error?: string } | undefined;
+      logger.warn(`[MegaventoryJob] Recovering stale running job ${doc.id}`);
+      await doc.ref.update({
+        status: result?.success ? 'completed' : 'failed',
+        completedAt: data.completedAt || FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+        error: result?.error || 'Megaventory sync timed out before job finalization',
+      });
+    }
+
     const snap = await db
       .collection('connector_sync_jobs')
       .where('provider', '==', 'megaventory')
@@ -1604,6 +1626,15 @@ export const processMegaventorySyncJobs = onSchedule(
     try {
       logger.info(`[MegaventoryJob] Starting Megaventory refresh for ${job.brandId}`);
       const result = await fetchMegaventoryData(job.brandId, { mode: 'manual' });
+      await jobRef.update({
+        status: result.success ? 'completed' : 'failed',
+        result,
+        completedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+        ...(result.error ? { error: result.error } : { error: FieldValue.delete() }),
+      });
+      logger.info(`[MegaventoryJob] Completed catalog refresh for ${job.brandId}: ${JSON.stringify(result)}`);
+
       try {
         await computeEcommerceSummary(job.brandId);
       } catch (e) {
@@ -1620,13 +1651,9 @@ export const processMegaventorySyncJobs = onSchedule(
         }
       }
       await jobRef.update({
-        status: result.success ? 'completed' : 'failed',
-        result,
-        completedAt: FieldValue.serverTimestamp(),
+        postRefreshCompletedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
-        ...(result.error ? { error: result.error } : { error: FieldValue.delete() }),
       });
-      logger.info(`[MegaventoryJob] Completed catalog refresh for ${job.brandId}: ${JSON.stringify(result)}`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       logger.error(`[MegaventoryJob] failed for ${job.brandId}: ${msg}`);
