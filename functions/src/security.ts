@@ -13,9 +13,17 @@ import type { Response } from 'express';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 
+// `GCLOUD_PROJECT` is set automatically by the Firebase Functions runtime
+// (and by the local emulator). Δεν δεχόμαστε fallback — αν λείπει, σπάμε
+// νωρίς ώστε να μην ξεκινήσει function χωρίς σαφές project context.
+const PROJECT_ID = process.env.GCLOUD_PROJECT;
+if (!PROJECT_ID) {
+  throw new Error('[security] GCLOUD_PROJECT is not set — refusing to start without a project id');
+}
+
 const PROD_ORIGINS = [
-  'https://performance-plus-4a5b2.web.app',
-  'https://performance-plus-4a5b2.firebaseapp.com',
+  `https://${PROJECT_ID}.web.app`,
+  `https://${PROJECT_ID}.firebaseapp.com`,
   'https://performanceplus.gr',
   'https://www.performanceplus.gr',
 ];
@@ -28,12 +36,8 @@ const DEV_ORIGINS = [
 
 export function resolveAllowedOrigin(reqOrigin?: string): string | null {
   if (!reqOrigin) return null;
-  const prodMatch = PROD_ORIGINS.find((o) => o === reqOrigin);
-  if (prodMatch) return prodMatch;
-  if (process.env.FUNCTIONS_EMULATOR === 'true') {
-    const devMatch = DEV_ORIGINS.find((o) => o === reqOrigin);
-    if (devMatch) return devMatch;
-  }
+  if (PROD_ORIGINS.includes(reqOrigin)) return reqOrigin;
+  if (process.env.FUNCTIONS_EMULATOR === 'true' && DEV_ORIGINS.includes(reqOrigin)) return reqOrigin;
   return null;
 }
 

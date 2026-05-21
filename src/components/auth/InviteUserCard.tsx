@@ -56,6 +56,7 @@ export function InviteUserCard({ onInviteCreated }: InviteUserCardProps) {
               },
               body: JSON.stringify({
                 to: email.trim(),
+                brandId: currentBrand.id,
                 brandName: currentBrand.name,
                 inviteLink: link,
                 role,

@@ -22,10 +22,10 @@ import {
   type User
 } from 'firebase/auth';
 import { Timestamp } from 'firebase/firestore';
-import { auth } from '../config/firebase';
+import { auth, getAppUrl } from '../config/firebase';
 import { getPublicSignupMode, isInviteReturnUrl } from '../config/authAccess';
 import { FirestoreService } from '../services/firestore';
-import { isSuperAdminEmail, SUPER_ADMIN_EMAILS } from '../config/superAdmins';
+import { loadSuperAdmins } from '../services/appConfig';
 
 interface AuthContextValue {
   user: User | null;
@@ -48,6 +48,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
@@ -57,7 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => unsubscribe();
   }, []);
 
-  // Ensure user profile exists in Firestore on first sign-in
+  // Ensure user profile exists in Firestore on first sign-in.
   useEffect(() => {
     if (!user?.uid) return;
     const ensureProfile = async () => {
@@ -74,22 +75,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     };
     ensureProfile().catch(console.error);
+  }, [user?.uid]);
 
-    // Sync super admin UIDs to Firestore for security rules
-    if (isSuperAdminEmail(user.email)) {
-      (async () => {
-        try {
-          const doc = await FirestoreService.getDocument<{ uids: string[] }>('appConfig', 'superAdmins');
-          const existing = doc?.uids || [];
-          if (!existing.includes(user.uid)) {
-            await FirestoreService.setDocument('appConfig', 'superAdmins', {
-              uids: [...existing, user.uid],
-              emails: SUPER_ADMIN_EMAILS,
-            } as Record<string, unknown>);
-          }
-        } catch { /* non-critical */ }
-      })();
+  // Resolve super-admin flag from Firestore appConfig/superAdmins.uids
+  // (single source of truth; same doc the Firestore rules read).
+  useEffect(() => {
+    if (!user?.uid) {
+      setIsSuperAdmin(false);
+      return;
     }
+    let cancelled = false;
+    loadSuperAdmins()
+      .then((sa) => {
+        if (!cancelled) setIsSuperAdmin(sa.uids.includes(user.uid));
+      })
+      .catch(() => {
+        if (!cancelled) setIsSuperAdmin(false);
+      });
+    return () => { cancelled = true; };
   }, [user?.uid]);
 
   /** Πάντα επιτρέπεται για υπάρχοντες λογαριασμούς — η πολιτική signup δεν εφαρμόζεται εδώ. */
@@ -140,9 +143,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const resetPassword = useCallback(async (email: string) => {
-    const appUrl = import.meta.env.VITE_APP_URL || 'https://performance-plus-4a5b2.web.app';
     await sendPasswordResetEmail(auth, email, {
-      url: `${appUrl}/?auth=1`,
+      url: `${getAppUrl()}/?auth=1`,
       handleCodeInApp: false,
     });
   }, []);
@@ -159,14 +161,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await linkWithPopup(auth.currentUser, provider);
   }, []);
 
-  const superAdmin = useMemo(() => isSuperAdminEmail(user?.email), [user?.email]);
   const hasPasswordProvider = useMemo(() => user?.providerData.some((p) => p.providerId === 'password') ?? false, [user]);
   const hasGoogleProvider = useMemo(() => user?.providerData.some((p) => p.providerId === 'google.com') ?? false, [user]);
 
   const value: AuthContextValue = {
     user,
     loading,
-    isSuperAdmin: superAdmin,
+    isSuperAdmin,
     signIn,
     signUp,
     signInWithGoogle,

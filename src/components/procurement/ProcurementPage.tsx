@@ -263,7 +263,7 @@ function findCol(rows: Record<string, unknown>[], keyword: string): string {
     if (found) return found;
   }
   if (import.meta.env.DEV) {
-    console.warn(`[Procurement] Column "${keyword}" not found. Available:`, keys);
+    console.warn('[Procurement] Column not found:', { keyword, available: keys });
   }
   return keyword;
 }

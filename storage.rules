@@ -11,11 +11,16 @@ service firebase.storage {
       );
     }
 
-    // Brand assets: only brand members may read or write
+    // Brand assets: only members of the brand can read/write its assets.
     match /brands/{brandId}/assets/{assetType}/{fileName} {
       allow read: if isBrandMember(brandId);
+
+      // Deletes carry no request.resource — gate on auth + membership only.
+      allow delete: if isBrandMember(brandId);
+
+      // Uploads/updates must additionally pass size & content-type checks.
       allow write: if isBrandMember(brandId)
-        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.size < 5 * 1024 * 1024 // Max 5MB
         && request.resource.contentType.matches('image/.*');
     }
 

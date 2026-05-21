@@ -16,8 +16,8 @@ const SMTP_PASSWORD_SECRET = defineSecret('SMTP_PASSWORD');
 import { sanitizeOAuthReturnOrigin } from './oauthRedirect';
 import { validateImportUrl } from './urlValidator';
 import { parseCSV, parseXLSXBuffer, parseXLSXAllSheets, csvToObjects } from './parseFile';
-import { validateProduct, type ProductData } from './validateProduct';
-import { validateCampaign, type CampaignData } from './validateCampaign';
+import { validateProduct } from './validateProduct';
+import { validateCampaign } from './validateCampaign';
 import {
   getGoogleAdsAuthUrl,
   handleGoogleAdsCallback,
@@ -165,33 +165,44 @@ setTikTokDb(db);
 
 const BATCH_SIZE = 500;
 
-/** Σε συμφωνία με isBrandMember στα firestore.rules: μέλος, δημιουργός brand, ή super admin UID */
-const SUPER_ADMIN_UIDS = new Set([
-  'yPIEMSB1jXXxGX2hHCOvLYoJY7L2',
-  'KApqDr7UlNa7TseQ25pakM8DRrd2',
-  'BAi5ZTMwFdWFCUR6k3IZq8cjPfp2',
-]);
+/**
+ * Super-admin allowlist (UIDs + emails) lives in Firestore at appConfig/superAdmins.
+ * Doc shape: { uids: string[], emails: string[] }. Seeded once via .tmp/seed-super-admins.mjs.
+ * Cached per cold-start to avoid hitting Firestore on every auth check.
+ */
+let superAdminCache: { uids: Set<string>; emails: Set<string>; fetchedAt: number } | null = null;
+const SUPER_ADMIN_CACHE_TTL_MS = 5 * 60_000;
 
-/** Σε συμφωνία με src/config/superAdmins.ts */
-const SUPER_ADMIN_EMAILS = new Set([
-  'makis@notthesame.gr',
-  'eleana@notthesame.gr',
-  'notthesame.ads@gmail.com',
-]);
-
-async function isUidSuperAdmin(uid: string): Promise<boolean> {
-  if (SUPER_ADMIN_UIDS.has(uid)) return true;
+async function loadSuperAdmins(): Promise<{ uids: Set<string>; emails: Set<string> }> {
+  const now = Date.now();
+  if (superAdminCache && now - superAdminCache.fetchedAt < SUPER_ADMIN_CACHE_TTL_MS) {
+    return { uids: superAdminCache.uids, emails: superAdminCache.emails };
+  }
   try {
     const cfg = await db.doc('appConfig/superAdmins').get();
-    const uids = cfg.data()?.uids as unknown;
-    if (Array.isArray(uids) && uids.includes(uid)) return true;
-  } catch {
-    /* ignore */
+    const data = cfg.data() ?? {};
+    const uidArr = Array.isArray(data.uids) ? data.uids : [];
+    const emailArr = Array.isArray(data.emails) ? data.emails : [];
+    const uids = new Set(uidArr.filter((x): x is string => typeof x === 'string'));
+    const emails = new Set(
+      emailArr.filter((x): x is string => typeof x === 'string').map((e) => e.toLowerCase())
+    );
+    superAdminCache = { uids, emails, fetchedAt: now };
+    return { uids, emails };
+  } catch (err) {
+    logger.warn('[superAdmins] Firestore read failed; allowlist empty until next retry', err);
+    return { uids: new Set(), emails: new Set() };
   }
+}
+
+async function isUidSuperAdmin(uid: string): Promise<boolean> {
+  const { uids, emails } = await loadSuperAdmins();
+  if (uids.has(uid)) return true;
+  if (emails.size === 0) return false;
   try {
     const u = await admin.auth().getUser(uid);
     const em = u.email?.toLowerCase();
-    if (em && SUPER_ADMIN_EMAILS.has(em)) return true;
+    if (em && emails.has(em)) return true;
   } catch {
     /* ignore */
   }
@@ -199,13 +210,12 @@ async function isUidSuperAdmin(uid: string): Promise<boolean> {
 }
 
 async function verifyBrandMembership(uid: string, brandId: string): Promise<boolean> {
-  if (SUPER_ADMIN_UIDS.has(uid)) return true;
+  if (await isUidSuperAdmin(uid)) return true;
   const memberDoc = await db.doc(`brands/${brandId}/members/${uid}`).get();
   if (memberDoc.exists) return true;
   const brandDoc = await db.doc(`brands/${brandId}`).get();
   if (!brandDoc.exists) return false;
-  if (brandDoc.data()?.createdBy === uid) return true;
-  return isUidSuperAdmin(uid);
+  return brandDoc.data()?.createdBy === uid;
 }
 
 /** Σύνδεση/αποσύνδεση/sync connectors: ιδιοκτήτης, διαχειριστής, δημιουργός brand, super admin */
@@ -2124,9 +2134,10 @@ export const sendEmailNotification = onRequest(
       res.status(401).json({ error: 'Unauthorized' });
       return;
     }
-    let decodedEmail: admin.auth.DecodedIdToken;
+    let callerUid: string;
     try {
-      decodedEmail = await admin.auth().verifyIdToken(authHeader.split('Bearer ')[1]);
+      const decoded = await admin.auth().verifyIdToken(authHeader.split('Bearer ')[1]);
+      callerUid = decoded.uid;
     } catch {
       res.status(401).json({ error: 'Invalid token' });
       return;
@@ -2141,15 +2152,41 @@ export const sendEmailNotification = onRequest(
       res.status(400).json({ error: 'Max 100 recipients per request' });
       return;
     }
-    if (!brandId || !(await verifyBrandMembership(decodedEmail.uid, brandId))) {
-      res.status(403).json({ error: 'Not a member of this brand' });
+    if (!brandId || typeof brandId !== 'string') {
+      res.status(400).json({ error: 'Missing brandId' });
+      return;
+    }
+
+    // Caller must be a member of the brand on whose behalf they are sending.
+    if (!(await verifyBrandMembership(callerUid, brandId))) {
+      logger.warn('[sendEmailNotification] caller not a member of brand', { callerUid, brandId });
+      res.status(403).json({ error: 'Forbidden' });
+      return;
+    }
+
+    // Every recipient must also be a member of the same brand — prevents an authenticated
+    // user from emailing arbitrary uids by submitting them in the payload.
+    const isSuper = await isUidSuperAdmin(callerUid);
+    const allowedUserIds: string[] = [];
+    for (const uid of userIds) {
+      if (typeof uid !== 'string' || !uid) continue;
+      if (isSuper) { allowedUserIds.push(uid); continue; }
+      const memberDoc = await db.doc(`brands/${brandId}/members/${uid}`).get();
+      if (memberDoc.exists) { allowedUserIds.push(uid); continue; }
+      const brandDoc = await db.doc(`brands/${brandId}`).get();
+      if (brandDoc.exists && brandDoc.data()?.createdBy === uid) { allowedUserIds.push(uid); continue; }
+      logger.warn('[sendEmailNotification] dropping non-member recipient', { uid, brandId });
+    }
+    if (allowedUserIds.length === 0) {
+      res.status(400).json({ error: 'No valid recipients for brand' });
       return;
     }
 
     logger.info('[sendEmailNotification] SMTP batch start', {
-      recipientCount: userIds.length,
+      recipientCount: allowedUserIds.length,
+      droppedCount: userIds.length - allowedUserIds.length,
       title: String(title).slice(0, 120),
-      brandId: brandId || '',
+      brandId,
       type: type || '',
     });
 
@@ -2164,11 +2201,11 @@ export const sendEmailNotification = onRequest(
     }
 
     const results: string[] = [];
-    for (const uid of userIds) {
+    for (const uid of allowedUserIds) {
       try {
         await sendNotificationEmail(
           uid,
-          { title, body: body || '', type: type || '', brandId: brandId || '', entityType, entityId },
+          { title, body: body || '', type: type || '', brandId, entityType, entityId },
           transporter
         );
         results.push(`${uid}: sent`);
@@ -2219,28 +2256,68 @@ export const sendInviteEmail = onRequest(
       res.status(401).json({ error: 'Unauthorized' });
       return;
     }
-    let decodedInvite: admin.auth.DecodedIdToken;
+    let callerUid: string;
     try {
-      decodedInvite = await admin.auth().verifyIdToken(authHeader.split('Bearer ')[1]);
+      const decoded = await admin.auth().verifyIdToken(authHeader.split('Bearer ')[1]);
+      callerUid = decoded.uid;
     } catch {
       res.status(401).json({ error: 'Invalid token' });
       return;
     }
 
-    const { to, brandId: inviteBrandId, brandName, inviteLink, role, department } = req.body;
+    const { to, brandId, brandName, inviteLink, role, department } = req.body;
     if (!to || !inviteLink) {
       res.status(400).json({ error: 'Missing to or inviteLink' });
       return;
     }
+    if (!brandId || typeof brandId !== 'string') {
+      res.status(400).json({ error: 'Missing brandId' });
+      return;
+    }
 
-    if (!inviteBrandId || !(await verifyBrandConnectorManagement(decodedInvite.uid, inviteBrandId))) {
-      res.status(403).json({ error: 'Not authorized to invite members for this brand' });
+    // Caller must have invite-management rights on the brand (owner / admin / brand creator / super admin).
+    if (!(await verifyBrandConnectorManagement(callerUid, brandId))) {
+      logger.warn('[sendInviteEmail] caller lacks brand management rights', { callerUid, brandId });
+      res.status(403).json({ error: 'Forbidden' });
       return;
     }
 
     const safeInviteLink = safeHttpUrl(inviteLink);
     if (!safeInviteLink) {
       res.status(400).json({ error: 'Invalid inviteLink' });
+      return;
+    }
+
+    // Validate that the link points to an actual, unused, non-expired invite for this brand.
+    // This blocks the endpoint from being used to email arbitrary content under our SMTP identity.
+    const tokenSeg = safeInviteLink.split('/').filter(Boolean).pop() || '';
+    if (!tokenSeg) {
+      res.status(400).json({ error: 'Invalid inviteLink' });
+      return;
+    }
+    try {
+      const inviteSnap = await db.collection('invites').where('token', '==', tokenSeg).limit(1).get();
+      if (inviteSnap.empty) {
+        res.status(400).json({ error: 'Unknown invite token' });
+        return;
+      }
+      const inv = inviteSnap.docs[0].data() as { brandId?: string; usedAt?: string; expiresAt?: string };
+      if (inv.brandId !== brandId) {
+        logger.warn('[sendInviteEmail] invite/brand mismatch', { callerUid, brandId, inviteBrand: inv.brandId });
+        res.status(400).json({ error: 'Invite does not belong to brand' });
+        return;
+      }
+      if (inv.usedAt) {
+        res.status(400).json({ error: 'Invite already used' });
+        return;
+      }
+      if (inv.expiresAt && new Date(inv.expiresAt) < new Date()) {
+        res.status(400).json({ error: 'Invite expired' });
+        return;
+      }
+    } catch (err) {
+      logger.warn('[sendInviteEmail] invite lookup failed', err);
+      res.status(500).json({ error: 'Invite lookup failed' });
       return;
     }
 

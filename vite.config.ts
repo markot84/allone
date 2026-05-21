@@ -1,9 +1,18 @@
 import { defineConfig } from 'vitest/config'
+import { loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
+  const projectId = env.VITE_FIREBASE_PROJECT_ID
+  if (!projectId) {
+    throw new Error('[vite] Missing VITE_FIREBASE_PROJECT_ID — set it in .env (see .env.example)')
+  }
+  const region = env.VITE_FIREBASE_FUNCTIONS_REGION || 'europe-west1'
+
+  return {
   plugins: [react(), tailwindcss()],
   base: '/',
   test: {
@@ -18,7 +27,7 @@ export default defineConfig({
     // Ίδιο origin με production (Firebase Hosting rewrite) — αποφεύγει CORS στο dev
     proxy: {
       '/api/submitInterestLead': {
-        target: 'https://europe-west1-performance-plus-4a5b2.cloudfunctions.net',
+        target: `https://${region}-${projectId}.cloudfunctions.net`,
         changeOrigin: true,
         secure: true,
         rewrite: () => '/submitInterestLead',
@@ -46,4 +55,5 @@ export default defineConfig({
       },
     },
   },
+  }
 })

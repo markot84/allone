@@ -43,3 +43,6 @@ firestore-debug.log
 ui-debug.log
 functions/lib/
 functions/node_modules/
+
+# Local one-off scripts and secrets — never commit
+.tmp/

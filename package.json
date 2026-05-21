@@ -16,8 +16,8 @@
     "firebase:deploy:full": "npm run build && cd functions && npm run build && cd .. && npx cross-env FUNCTIONS_DISCOVERY_TIMEOUT=90 firebase deploy",
     "deploy:full": "node scripts/deploy-full.mjs",
     "firebase:serve": "npm run build && firebase serve",
-    "migrate:brandid": "node scripts/migrate-add-brandid.mjs",
-    "fix:user-brand": "node scripts/fix-user-brand.mjs"
+    "migrate:brandid": "node scripts/archive/migrate-add-brandid.mjs",
+    "fix:user-brand": "node scripts/archive/fix-user-brand.mjs"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

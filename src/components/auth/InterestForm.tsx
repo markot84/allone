@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Send } from 'lucide-react';
 import { Card, Button, Spinner, useToast } from '../common';
 import { buildFunctionUrl } from '../../config/firebase';
+import { getAppConfigSync } from '../../services/appConfig';
 
 const improvementOptions = [
   'ROAS & budget allocation',
@@ -33,8 +34,8 @@ function trackMarketingFormEvent(action: string, params?: Record<string, string>
  * Dev: Vite proxy. Prod: απευθείας HTTP function (όχι μέσω Hosting — όριο ~60s στο proxy).
  */
 function getSubmitInterestLeadUrl(): string {
-  const override = import.meta.env.VITE_INTEREST_LEAD_URL as string | undefined;
-  if (override?.trim()) return override.trim();
+  const override = getAppConfigSync().interestLeadUrl;
+  if (override) return override;
   if (import.meta.env.DEV) return '/api/submitInterestLead';
   return buildFunctionUrl('/submitInterestLead');
 }

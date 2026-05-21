@@ -71,7 +71,7 @@ export class FirestoreService {
       }
       return null;
     } catch (error) {
-      console.error(`Error getting document ${docId} from ${collectionName}:`, error);
+      console.error('Error getting document', docId, 'from', collectionName, error);
       throw error;
     }
   }
@@ -160,7 +160,7 @@ export class FirestoreService {
         ...d.data(),
       })) as T[];
     } catch (error) {
-      console.error(`Error getting documents from ${collectionName}:`, error);
+      console.error('Error getting documents from', collectionName, error);
       throw error;
     }
   }
@@ -194,7 +194,7 @@ export class FirestoreService {
 
       return { items, lastDoc, totalCount };
     } catch (error) {
-      console.error(`Error paginating ${collectionName}:`, error);
+      console.error('Error paginating', collectionName, error);
       throw error;
     }
   }
@@ -208,7 +208,7 @@ export class FirestoreService {
     if (items.length === 0) return;
     const MAX_BATCH = 500;
     if (import.meta.env.MODE === 'development') {
-      console.debug(`[FirestoreService] batchSet: ${collectionName}, ${items.length} items, brandId:`, brandId);
+      console.debug('[FirestoreService] batchSet:', { collectionName, count: items.length, brandId });
     }
     for (let i = 0; i < items.length; i += MAX_BATCH) {
       const chunk = items.slice(i, i + MAX_BATCH);
@@ -252,7 +252,7 @@ export class FirestoreService {
       // Use setDoc with merge to update existing fields, but clean object ensures no undefined values
       await setDoc(docRef, clean, { merge: true });
     } catch (error) {
-      console.error(`Error setting document ${docId} in ${collectionName}:`, error);
+      console.error('Error setting document', docId, 'in', collectionName, error);
       throw error;
     }
   }
@@ -271,7 +271,7 @@ export class FirestoreService {
       }) as DocumentData;
       await updateDoc(docRef, payload);
     } catch (error) {
-      console.error(`Error updating document ${docId} in ${collectionName}:`, error);
+      console.error('Error updating document', docId, 'in', collectionName, error);
       throw error;
     }
   }
@@ -282,7 +282,7 @@ export class FirestoreService {
       const docRef = doc(db, collectionName, docId);
       await deleteDoc(docRef);
     } catch (error) {
-      console.error(`Error deleting document ${docId} from ${collectionName}:`, error);
+      console.error('Error deleting document', docId, 'from', collectionName, error);
       throw error;
     }
   }

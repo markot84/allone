@@ -3,12 +3,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
 import { ToastProvider, ErrorBoundary, Spinner } from './components/common';
-import { auth } from './config/firebase';
 import { AuthGuard, InviteAcceptPage, InviteUserSection } from './components/auth';
 import { AppShell } from './components/layout';
 import { AIInsightsTriggerWrapper } from './components/insights/AIInsightsPanel';
 import { AuthActionPage } from './components/auth/AuthActionPage';
-import { isSuperAdminEmail } from './config/superAdmins';
+import { useAuth } from './hooks/useAuth';
+import { loadAppConfig } from './services/appConfig';
 import { SharedPackageViewer } from './components/strategy/SharedPackageViewer';
 import { EnterpriseBadge } from './components/common';
 import { useModules } from './hooks/useModules';
@@ -161,6 +161,7 @@ function normalizeHashPath(segmentPart: string): string {
 /** Hash routing + AppShell — must render under AuthGuard → BrandProvider (useModules → useBrand). */
 function AppMain() {
   const { isSectionEnabled, getFallbackSection } = useModules();
+  const { isSuperAdmin } = useAuth();
   useAppWarmup();
   const VALID_SECTIONS = APP_SECTIONS;
 
@@ -314,9 +315,11 @@ function AppMain() {
       case 'help':
         return <Help />;
       case 'admin': {
-        // Gate: only super admins can access this route
-        const u = auth.currentUser;
-        if (!isSuperAdminEmail(u?.email)) {
+        // Gate: only super admins can access this route.
+        // Source of truth: Firestore appConfig/superAdmins.uids (resolved by
+        // AuthContext via loadSuperAdmins). Same UID list the Firestore rules
+        // and Cloud Functions read, so client/server gates never diverge.
+        if (!isSuperAdmin) {
           handleSectionChange('dashboard');
           return <DashboardOverview onSectionChange={handleSectionChange} onOpenInsights={() => handleSectionChange('insights')} />;
         }
@@ -358,8 +361,29 @@ function AppMain() {
 /**
  * Static / public routes first (no hooks). Main SPA uses AppMain only under AuthGuard → BrandProvider
  * so useModules() → useBrand() does not throw for logged-out users.
+ *
+ * Boot: every render path waits for `loadAppConfig()` to resolve before any
+ * child component mounts. This populates the sync cache that `getAppUrl()`,
+ * `getFunctionsBaseUrl()`, `getPublicSignupMode()`, and the InterestForm
+ * read from. Defaults are used if the Firestore fetch fails.
  */
 function App() {
+  const [configReady, setConfigReady] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    loadAppConfig().finally(() => {
+      if (!cancelled) setConfigReady(true);
+    });
+    return () => { cancelled = true; };
+  }, []);
+  if (!configReady) {
+    return (
+      <div className="flex items-center justify-center" style={{ height: '100vh' }}>
+        <Spinner size="lg" />
+      </div>
+    );
+  }
+
   if (typeof window !== 'undefined') {
     const params = new URLSearchParams(window.location.search);
     const authMode = params.get('mode');

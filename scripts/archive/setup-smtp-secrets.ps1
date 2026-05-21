@@ -1,4 +1,4 @@
-# Εκτέλεση ΜΙΑ ΦΟΡΑ τοπικά (χρειάζεται: firebase login, δικαιώματα στο project performance-plus-4a5b2)
+# Εκτέλεση ΜΙΑ ΦΟΡΑ τοπικά (χρειάζεται: firebase login, δικαιώματα στο active Firebase project — βλ. .firebaserc)
 # Ορίζει τα secrets που ΔΕΝ μπορούν να μπουν στο git (mailbox + κωδικός).
 
 $ErrorActionPreference = "Stop"
