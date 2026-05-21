@@ -272,7 +272,8 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   const hasImported = hasServerAggregate;
   const productDataSourceLabel = serverIntelligence.aggregate?.sourceLabel ?? 'ERP';
   const totalCatalogCount = serverIntelligence.aggregate?.totalCount ?? 0;
-  const effectiveSourceLoading = serverIntelligence.isPageLoading && !serverIntelligence.page;
+  const effectiveSourceLoading =
+    serverIntelligence.isAggregateLoading || (serverIntelligence.isPageLoading && !serverIntelligence.page);
   const piRefreshAttemptRef = useRef<string | null>(null);
   const [piRebuilding, setPiRebuilding] = useState(false);
 
@@ -441,7 +442,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     }
   };
 
-  if (!effectiveSourceLoading && !hasImported && !serverIntelligence.isBuilding) {
+  if (!effectiveSourceLoading && !hasImported && !serverIntelligence.isBuilding && !serverIntelligence.isAggregateLoading) {
     return (
       <div className="space-y-6">
         <PageHeader

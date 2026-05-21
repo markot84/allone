@@ -125,6 +125,7 @@ const INVENTORY_LOOKUP_CHUNK_BYTES = 850_000;
 const BUCKETS: PageBucket[] = ['all', 'healthy', 'excess', 'dead', 'low', 'no_stock'];
 const SALES_PERIOD_DAYS = 30;
 const MEGAVENTORY_NORMALIZED_SOURCE = 'megaventory_custom_report';
+const MEGAVENTORY_API_CATALOG_SOURCE = 'megaventory_api_catalog';
 
 type SkuStatsRow = {
   stock?: number;
@@ -250,6 +251,7 @@ function productFromRow(docId: string, row: Record<string, unknown>, sourceKind:
   let sku = text(row.sku ?? row.SKU ?? row.productSku ?? row.ProductSKU ?? row.model ?? row.Model);
   if (!sku) sku = text(row.productId ?? row.ProductID ?? row.ProductId);
   if (!sku && docId.startsWith('oc_')) sku = docId.slice(3);
+  if (!sku && docId.startsWith('mv_p_')) sku = docId.slice(5);
   if (!sku) return null;
   const path = categoryPathFromRow(row);
   const category = text(row.category ?? row.category_name ?? path[0]) || 'Uncategorized';
@@ -257,7 +259,15 @@ function productFromRow(docId: string, row: Record<string, unknown>, sourceKind:
     firstPositive(row.price, row.sell_price, row.sellingPrice, row.specialPrice, row.list_price, row.compare_at_price, row.regularPrice);
   const cost = firstPositive(row.cost_price, row.costPrice, row.purchasePrice, row.cost);
   const stock =
-    firstPositive(row.stock_level, row.available_stock, row.stock_on_hand, row.stockOnHand, row.qty, row.quantity);
+    firstPositive(
+      row.stock_level,
+      row.available_stock,
+      row.stock_on_hand,
+      row.stockOnHand,
+      row.stock_on_hand_total,
+      row.qty,
+      row.quantity
+    );
   const qtySold =
     firstPositive(row.qty_sold_period, row.qtySoldPeriod, row.qty_sold_last_30d, row.qtySold, row.qty_sold_lifetime);
   const margin = num(row.margin_percentage) || (price > 0 && cost > 0 ? ((price - cost) / price) * 100 : 0);
@@ -266,7 +276,7 @@ function productFromRow(docId: string, row: Record<string, unknown>, sourceKind:
     id: docId,
     ...(text(row.productId ?? row.ProductID ?? row.ProductId) ? { productId: text(row.productId ?? row.ProductID ?? row.ProductId) } : {}),
     sku,
-    name: text(row.name ?? row.title ?? row.productName ?? row.ProductDescription) || sku,
+    name: text(row.name ?? row.title ?? row.productName ?? row.ProductDescription ?? row.longDescription) || sku,
     category,
     ...(path[1] ? { subcategory: path[1] } : {}),
     margin_tier: marginTier(margin),
@@ -448,6 +458,74 @@ async function loadCatalogCollection(
   return read;
 }
 
+async function appendProductsBySource(
+  brandId: string,
+  source: string,
+  bySku: Map<string, CompactProduct>
+): Promise<number> {
+  const firestore = assertDb();
+  let cursor: QueryDocumentSnapshot | null = null;
+  let read = 0;
+  for (;;) {
+    let query = firestore
+      .collection('products')
+      .where('brandId', '==', brandId)
+      .where('source', '==', source)
+      .limit(READ_PAGE_SIZE);
+    if (cursor) query = query.startAfter(cursor);
+    const snap = await query.get();
+    read += snap.size;
+    for (const doc of snap.docs) {
+      const product = productFromRow(doc.id, doc.data(), 'erp');
+      if (!product) continue;
+      const key = normalizeSku(product.sku);
+      if (!key || bySku.has(key)) continue;
+      bySku.set(key, product);
+    }
+    if (snap.size < READ_PAGE_SIZE) break;
+    cursor = snap.docs[snap.docs.length - 1] ?? null;
+    if (!cursor) break;
+  }
+  return read;
+}
+
+async function loadMegaventoryErpCatalog(
+  brandId: string,
+  bySku: Map<string, CompactProduct>
+): Promise<{ apiProductsRead: number; apiCatalogGapRead: number }> {
+  const firestore = assertDb();
+  let apiProductsRead = await loadCatalogCollection(brandId, 'megaventory_products', 'erp', bySku, {
+    filterByBrandInQuery: true,
+  });
+  let apiCatalogGapRead = await appendProductsBySource(brandId, MEGAVENTORY_API_CATALOG_SOURCE, bySku);
+
+  const connector = await firestore.doc(`connectors/${brandId}`).get();
+  const expectedProducts = Number(connector.data()?.megaventory?.lastSyncProducts ?? 0);
+  const needsFallback =
+    expectedProducts > 0
+      ? bySku.size + 100 < expectedProducts
+      : apiProductsRead > 0 && bySku.size === 0;
+
+  if (needsFallback) {
+    logger.warn(
+      `[ProductIntelligence] megaventory catalog parsed ${bySku.size} SKUs from ${apiProductsRead} rows (lastSyncProducts=${expectedProducts}) — fallback scan`
+    );
+    apiProductsRead += await loadCatalogCollection(brandId, 'megaventory_products', 'erp', bySku, {
+      filterByBrandInQuery: false,
+      allowMissingBrandId: true,
+    });
+    if (bySku.size === 0) {
+      apiCatalogGapRead += await appendProductsBySource(brandId, MEGAVENTORY_NORMALIZED_SOURCE, bySku);
+    }
+  }
+
+  logger.info(
+    `[ProductIntelligence] megaventory catalog for ${brandId}: ${bySku.size} SKUs (apiRows=${apiProductsRead}, gapFill=${apiCatalogGapRead}, lastSyncProducts=${expectedProducts})`
+  );
+
+  return { apiProductsRead, apiCatalogGapRead };
+}
+
 async function loadEcommerceCatalogCollection(
   brandId: string,
   collection: string,
@@ -618,7 +696,6 @@ async function loadMegaventoryProductOverlay(
       .collection('products')
       .where('brandId', '==', brandId)
       .where('source', '==', MEGAVENTORY_NORMALIZED_SOURCE)
-      .orderBy(FieldPath.documentId())
       .limit(READ_PAGE_SIZE);
     if (cursor) query = query.startAfter(cursor);
     const snap = await query.get();
@@ -661,9 +738,13 @@ async function loadConnectorProducts(brandId: string, hasErp: boolean): Promise<
   erpOnlyProducts: number;
 }> {
   const bySku = new Map<string, CompactProduct>();
-  const megaventoryApiRowsRead = hasErp
-    ? await loadCatalogCollection(brandId, 'megaventory_products', 'erp', bySku, { filterByBrandInQuery: false })
-    : 0;
+  let megaventoryApiRowsRead = 0;
+  let megaventoryApiCatalogGapRead = 0;
+  if (hasErp) {
+    const catalog = await loadMegaventoryErpCatalog(brandId, bySku);
+    megaventoryApiRowsRead = catalog.apiProductsRead;
+    megaventoryApiCatalogGapRead = catalog.apiCatalogGapRead;
+  }
   const ecommerceCatalogRowsRead = hasErp
     ? 0
     : (await Promise.all([
@@ -684,8 +765,15 @@ async function loadConnectorProducts(brandId: string, hasErp: boolean): Promise<
     : { rowsRead: 0, overlaysApplied: 0, erpOnlyProducts: 0 };
   return {
     products: [...bySku.values()].filter((product) => !isDemoProduct(product) && !isNonMerchandiseProduct(product)),
-    sourceRowsRead: megaventoryApiRowsRead + ecommerceCatalogRowsRead + magentoDetailRowsRead + stockResult.rowsRead + skuStats.rowsRead + overlay.rowsRead,
-    megaventoryApiRowsRead,
+    sourceRowsRead:
+      megaventoryApiRowsRead +
+      megaventoryApiCatalogGapRead +
+      ecommerceCatalogRowsRead +
+      magentoDetailRowsRead +
+      stockResult.rowsRead +
+      skuStats.rowsRead +
+      overlay.rowsRead,
+    megaventoryApiRowsRead: megaventoryApiRowsRead + megaventoryApiCatalogGapRead,
     megaventoryStockRowsRead: stockResult.rowsRead,
     megaventoryRowsRead: overlay.rowsRead,
     magentoDetailRowsRead,

@@ -1434,6 +1434,9 @@ export async function fetchMegaventoryData(
     if (referenceOk) {
       patch['megaventory.lastReferenceSyncAt'] = FieldValue.serverTimestamp();
     }
+    if (counts.products > 0) {
+      patch['megaventory.lastSyncProducts'] = counts.products;
+    }
     if (shouldRefreshDocuments && docsOk) {
       patch['megaventory.lastDocsSyncAt'] = FieldValue.serverTimestamp();
       if (docsWindow.mode === 'historical') {

@@ -1477,6 +1477,7 @@ export const processOpenCartSyncJobs = onSchedule(
     }
 
     await resumeIncompleteOpenCartBackfills(db);
+    await repairEmptyOpenCartProductIntelligence(db);
 
     const snap = await db
       .collection('connector_sync_jobs')
@@ -1485,10 +1486,7 @@ export const processOpenCartSyncJobs = onSchedule(
       .limit(1)
       .get();
 
-    if (snap.empty) {
-      await repairEmptyOpenCartProductIntelligence(db);
-      return;
-    }
+    if (snap.empty) return;
 
     const jobRef = snap.docs[0].ref;
     const job = await db.runTransaction(async (tx) => {
@@ -1610,6 +1608,16 @@ export const processMegaventorySyncJobs = onSchedule(
         await computeEcommerceSummary(job.brandId);
       } catch (e) {
         logger.warn(`[MegaventoryJob] ecommerce summary refresh failed for ${job.brandId}:`, e);
+      }
+      if (result.success) {
+        try {
+          const piResult = await refreshProductIntelligenceAggregate(job.brandId);
+          logger.info(
+            `[MegaventoryJob] Product intelligence refreshed for ${job.brandId}: totalCount=${piResult.totalCount ?? 0}`
+          );
+        } catch (e) {
+          logger.warn(`[MegaventoryJob] product intelligence refresh failed for ${job.brandId}:`, e);
+        }
       }
       await jobRef.update({
         status: result.success ? 'completed' : 'failed',
@@ -2112,6 +2120,13 @@ async function executeBrandNightlyWave(
       await computeEcommerceSummary(brandId);
     } catch (err) {
       logger.error(`[ScheduledSync/erp] ecommerce_summary refresh failed for ${brandId}:`, err);
+    }
+    if (data.megaventory?.connected) {
+      try {
+        await refreshProductIntelligenceAggregate(brandId);
+      } catch (err) {
+        logger.warn(`[ScheduledSync/erp] product intelligence refresh failed for ${brandId}:`, err);
+      }
     }
   }
 
