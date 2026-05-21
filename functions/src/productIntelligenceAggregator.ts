@@ -247,7 +247,9 @@ function marginTier(marginPercentage: number): CompactProduct['margin_tier'] {
 }
 
 function productFromRow(docId: string, row: Record<string, unknown>, sourceKind: ProductSourceKind): CompactProduct | null {
-  const sku = text(row.sku ?? row.SKU ?? row.productSku ?? row.ProductSKU ?? row.model ?? row.Model);
+  let sku = text(row.sku ?? row.SKU ?? row.productSku ?? row.ProductSKU ?? row.model ?? row.Model);
+  if (!sku) sku = text(row.productId ?? row.ProductID ?? row.ProductId);
+  if (!sku && docId.startsWith('oc_')) sku = docId.slice(3);
   if (!sku) return null;
   const path = categoryPathFromRow(row);
   const category = text(row.category ?? row.category_name ?? path[0]) || 'Uncategorized';
@@ -1148,6 +1150,9 @@ export async function refreshProductIntelligenceAggregate(brandId: string): Prom
       error: FieldValue.delete(),
     };
     await ref.set(payload, { merge: true });
+    logger.info(
+      `[ProductIntelligence] ${brandId}: totalCount=${products.length} sourceRowsRead=${sourceRowsRead} sourceLabel=${connector.sourceLabel}`
+    );
     return {
       success: true,
       brandId,

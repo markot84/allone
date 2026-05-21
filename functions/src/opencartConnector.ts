@@ -648,7 +648,7 @@ export async function fetchOpenCartData(brandId: string): Promise<{
             productId: String(p.product_id || p.productId || ''),
             name: p.name || '',
             model: p.model || '',
-            sku: p.sku || p.model || '',
+            sku: p.sku || p.model || String(p.product_id || p.productId || ''),
             price: parseFloat(p.price || '0'),
             quantity: parseInt(p.quantity || '0', 10),
             status: p.status === '1' || p.status === true ? 'active' : 'inactive',

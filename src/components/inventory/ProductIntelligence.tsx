@@ -273,23 +273,36 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
   const totalCatalogCount = serverIntelligence.aggregate?.totalCount ?? 0;
   const effectiveSourceLoading = serverIntelligence.isLoading && !serverIntelligence.page;
   const piRefreshAttemptRef = useRef<string | null>(null);
+  const [piRebuilding, setPiRebuilding] = useState(false);
 
   useEffect(() => {
-    if (!brandId || effectiveSourceLoading) return;
+    if (!brandId || effectiveSourceLoading || piRebuilding) return;
     const aggregate = serverIntelligence.aggregate;
-    if (!aggregate || aggregate.totalCount > 0) return;
-    if (aggregate.sourceLabel !== 'E-shop catalog') return;
-    const key = `${brandId}:${aggregate.syncVersion ?? 'none'}`;
+    const needsRebuild =
+      !aggregate ||
+      (aggregate.status === 'ready' && aggregate.totalCount === 0 && aggregate.sourceLabel === 'E-shop catalog');
+    if (!needsRebuild) return;
+    const key = `${brandId}:${aggregate?.syncVersion ?? 'none'}:${aggregate?.totalCount ?? 'missing'}`;
     if (piRefreshAttemptRef.current === key) return;
     piRefreshAttemptRef.current = key;
+    setPiRebuilding(true);
     void refreshProductIntelligenceOnServer(brandId)
-      .then(() => {
+      .then((result) => {
         queryClient.invalidateQueries({ queryKey: ['productIntelligenceAggregate', brandId] });
         queryClient.invalidateQueries({ queryKey: ['productIntelligencePage', brandId] });
         queryClient.invalidateQueries({ queryKey: ['brandSyncVersion', brandId] });
+        if ((result.totalCount ?? 0) === 0) {
+          toast.info('Ο κατάλογος ανανεώθηκε αλλά δεν βρέθηκαν προϊόντα — ελέγξτε το OpenCart sync.');
+        }
       })
-      .catch((err) => console.warn('[ProductIntelligence] auto refresh failed:', err));
-  }, [brandId, effectiveSourceLoading, queryClient, serverIntelligence.aggregate]);
+      .catch((err: unknown) => {
+        piRefreshAttemptRef.current = null;
+        const msg = err instanceof Error ? err.message : 'Product Intelligence refresh failed';
+        toast.error(`Αποτυχία ανανέωσης καταλόγου: ${msg}`);
+        console.warn('[ProductIntelligence] auto refresh failed:', err);
+      })
+      .finally(() => setPiRebuilding(false));
+  }, [brandId, effectiveSourceLoading, piRebuilding, queryClient, serverIntelligence.aggregate, toast]);
 
   useEffect(() => {
     if (serverIntelligence.safePage !== currentPage) {
@@ -454,10 +467,10 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
           </p>
         }
         meta={
-          effectiveSourceLoading ? (
+          effectiveSourceLoading || piRebuilding ? (
             <p className="text-xs font-medium text-[var(--nts-accent)] sm:text-sm flex items-center gap-2">
               <Loader2 className="h-3.5 w-3.5 animate-spin flex-shrink-0" aria-hidden />
-              Φόρτωση inventory…
+              {piRebuilding ? 'Ανανέωση καταλόγου από e-shop…' : 'Φόρτωση inventory…'}
             </p>
           ) : hasServerAggregate ? (
             <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-[#22C55E] sm:text-sm">
@@ -506,7 +519,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
         }
       />
 
-      {effectiveSourceLoading ? (
+      {effectiveSourceLoading || piRebuilding ? (
         <ProductIntelligenceSkeleton />
       ) : (
         <>
