@@ -103,6 +103,20 @@
       ]
     },
     {
+      "collectionGroup": "commercial_decision_events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "brandId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "decisionDate",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "decisions",
       "queryScope": "COLLECTION",
       "fields": [
