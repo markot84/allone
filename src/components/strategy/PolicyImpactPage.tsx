@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
   ArrowLeft,
@@ -13,9 +13,14 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { Card, CardHeader, Button, PageHeader, Spinner, Badge } from '../common';
+import { DateRangePicker } from '../ui/DateRangePicker';
 import { useCommercialDecisionMemory } from '../../hooks/useCommercialDecisionMemory';
 import type { CommercialDecisionEventType, CommercialDecisionVerdict } from '../../services/commercialDecisionMemory';
 import type { DecisionMemoryItem } from '../../hooks/useCommercialDecisionMemory';
+import { useDashPeriod } from '../../hooks/useDashPeriod';
+import { useGlobalDate, GLOBAL_PERIOD_OPTIONS } from '../../contexts/GlobalDateContext';
+import { getEventDateRange, intersectEventWithPeriod } from '../../services/policyImpactAnalysis';
+import { CommercialScenarioPanels } from './CommercialScenarioPanels';
 import { formatCurrency, formatNumber } from '../../utils/format';
 
 const TYPE_LABELS: Record<CommercialDecisionEventType | 'all', string> = {
@@ -45,12 +50,36 @@ const VERDICT_BADGE: Record<CommercialDecisionVerdict, 'success' | 'warning' | '
   learning: 'info',
 };
 
+type SummaryTab = 'all' | 'winning' | 'review' | 'avoid' | 'active';
+
+function matchesSummaryTab(item: DecisionMemoryItem, tab: SummaryTab): boolean {
+  if (tab === 'all') return true;
+  const { event, impact } = item;
+  if (tab === 'winning') return impact.verdict === 'winning';
+  if (tab === 'review') return impact.verdict === 'neutral' || impact.confidence === 'low';
+  if (tab === 'avoid') return impact.verdict === 'losing';
+  return event.status === 'active' || event.status === 'planned';
+}
+
+function formatPeriodLabel(from: string, to: string): string {
+  const fmt = (ymd: string) => {
+    const [y, m, d] = ymd.split('-');
+    return `${parseInt(d, 10)}/${parseInt(m, 10)}/${y}`;
+  };
+  return `${fmt(from)} – ${fmt(to)}`;
+}
+
 export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: string) => void } = {}) {
-  const { items, summary, saveDecisionEvent, isSaving, isLoading, dataCoverage } = useCommercialDecisionMemory();
+  const { period: dashPeriod, setPeriod: setDashPeriod, periodDates } = useDashPeriod();
+  const { customFrom, customTo, setCustomRange } = useGlobalDate();
+  const { items, summary, saveDecisionEvent, isSaving, isLoading, dataCoverage, period } = useCommercialDecisionMemory(
+    periodDates
+  );
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<CommercialDecisionEventType | 'all'>('all');
   const [verdictFilter, setVerdictFilter] = useState<CommercialDecisionVerdict | 'all'>('all');
+  const [summaryTab, setSummaryTab] = useState<SummaryTab>('all');
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
     title: '',
@@ -62,7 +91,9 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
 
   const filteredItems = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    return items.filter(({ event, impact }) => {
+    return items.filter((item) => {
+      const { event, impact } = item;
+      if (!matchesSummaryTab(item, summaryTab)) return false;
       if (typeFilter !== 'all' && event.eventType !== typeFilter) return false;
       if (verdictFilter !== 'all' && impact.verdict !== verdictFilter) return false;
       if (!needle) return true;
@@ -80,7 +111,17 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(needle));
     });
-  }, [items, query, typeFilter, verdictFilter]);
+  }, [items, query, typeFilter, verdictFilter, summaryTab]);
+
+  const handleSummaryTab = (tab: Exclude<SummaryTab, 'all'>) => {
+    setSummaryTab((current) => (current === tab ? 'all' : tab));
+    setSelectedId(null);
+  };
+
+  useEffect(() => {
+    setSelectedId(null);
+    setSummaryTab('all');
+  }, [periodDates.fromDate, periodDates.toDate]);
 
   const selected = useMemo(
     () => filteredItems.find((item) => item.event.id === selectedId) ?? filteredItems[0] ?? null,
@@ -88,9 +129,14 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
   );
 
   const playbooks = useMemo(
-    () => items.filter((item) => item.impact.verdict === 'winning' || item.impact.verdict === 'losing').slice(0, 4),
-    [items]
+    () =>
+      filteredItems
+        .filter((item) => item.impact.verdict === 'winning' || item.impact.verdict === 'losing')
+        .slice(0, 4),
+    [filteredItems]
   );
+
+  const periodLabel = period ? formatPeriodLabel(period.fromDate, period.toDate) : null;
 
   const handleCreate = async () => {
     if (!form.title.trim() || !form.startDate) return;
@@ -132,12 +178,81 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
         }
       />
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard icon={<CheckCircle2 size={18} />} label="Winning scenarios" value={summary.winning} tone="success" />
-        <SummaryCard icon={<CircleAlert size={18} />} label="Needs review" value={summary.review} tone="warning" />
-        <SummaryCard icon={<TrendingDown size={18} />} label="Avoid repeating" value={summary.avoid} tone="danger" />
-        <SummaryCard icon={<Lightbulb size={18} />} label="Active experiments" value={summary.active} tone="info" />
+      <Card padding="md">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase text-[#9CA3AF]">Περίοδος ανάλυσης</p>
+            <p className="mt-1 text-sm text-[#374151]">
+              {periodLabel
+                ? `Αποφάσεις και outcomes για ${periodLabel}. Τα KPIs υπολογίζονται στο τμήμα της απόφασης που πέφτει μέσα στην περίοδο.`
+                : 'Επιλέξτε περίοδο για ιστορική ανασκόπηση αποφάσεων.'}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-1 gap-0.5 rounded-lg bg-[#F3F4F6] p-0.5 sm:flex-initial">
+              {GLOBAL_PERIOD_OPTIONS.map((opt) => (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => setDashPeriod(opt.key)}
+                  className={`min-h-[32px] flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-all sm:flex-initial sm:px-3 ${
+                    dashPeriod === opt.key
+                      ? 'bg-white font-semibold text-[var(--nts-orange)] shadow-sm'
+                      : 'text-[#6B7280] hover:text-[#374151]'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            {dashPeriod === 'custom' && (
+              <DateRangePicker
+                from={customFrom}
+                to={customTo}
+                onChange={(f, t) => setCustomRange(f, t)}
+                onClear={() => setDashPeriod('current_month')}
+              />
+            )}
+          </div>
+        </div>
+      </Card>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" role="tablist" aria-label="Filter decisions by outcome">
+        <SummaryCard
+          icon={<CheckCircle2 size={18} />}
+          label="Winning scenarios"
+          value={summary.winning}
+          tone="success"
+          selected={summaryTab === 'winning'}
+          onClick={() => handleSummaryTab('winning')}
+        />
+        <SummaryCard
+          icon={<CircleAlert size={18} />}
+          label="Needs review"
+          value={summary.review}
+          tone="warning"
+          selected={summaryTab === 'review'}
+          onClick={() => handleSummaryTab('review')}
+        />
+        <SummaryCard
+          icon={<TrendingDown size={18} />}
+          label="Avoid repeating"
+          value={summary.avoid}
+          tone="danger"
+          selected={summaryTab === 'avoid'}
+          onClick={() => handleSummaryTab('avoid')}
+        />
+        <SummaryCard
+          icon={<Lightbulb size={18} />}
+          label="Active experiments"
+          value={summary.active}
+          tone="info"
+          selected={summaryTab === 'active'}
+          onClick={() => handleSummaryTab('active')}
+        />
       </div>
+
+      <CommercialScenarioPanels period={periodDates} periodLabel={periodLabel} />
 
       {showForm && (
         <Card padding="lg" className="border border-[var(--nts-accent)]/30">
@@ -210,8 +325,19 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
                 />
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <FilterSelect value={typeFilter} onChange={(value) => setTypeFilter(value as CommercialDecisionEventType | 'all')} options={TYPE_LABELS} />
-                <FilterSelect value={verdictFilter} onChange={(value) => setVerdictFilter(value as CommercialDecisionVerdict | 'all')} options={VERDICT_LABELS} />
+                <FilterSelect
+                  value={typeFilter}
+                  onChange={(value) => setTypeFilter(value as CommercialDecisionEventType | 'all')}
+                  options={TYPE_LABELS}
+                />
+                <FilterSelect
+                  value={verdictFilter}
+                  onChange={(value) => {
+                    setVerdictFilter(value as CommercialDecisionVerdict | 'all');
+                    setSummaryTab('all');
+                  }}
+                  options={VERDICT_LABELS}
+                />
               </div>
             </div>
           </Card>
@@ -222,7 +348,12 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
                 <Spinner />
               </div>
             ) : filteredItems.length === 0 ? (
-              <EmptyState coverage={dataCoverage} />
+              <EmptyState
+                coverage={dataCoverage}
+                periodLabel={periodLabel}
+                totalInPeriod={items.length}
+                hasActiveFilters={summaryTab !== 'all' || typeFilter !== 'all' || verdictFilter !== 'all' || query.trim().length > 0}
+              />
             ) : (
               <ul className="max-h-[720px] divide-y divide-[#E5E7EB] overflow-y-auto">
                 {filteredItems.map((item) => (
@@ -241,7 +372,7 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
         <div className="space-y-4">
           {selected ? (
             <>
-              <DecisionDetail item={selected} />
+              <DecisionDetail item={selected} analysisPeriod={period} />
               {playbooks.length > 0 && <PlaybookPanel items={playbooks} onSelect={(id) => setSelectedId(id)} />}
             </>
           ) : (
@@ -260,11 +391,15 @@ function SummaryCard({
   label,
   value,
   tone,
+  selected,
+  onClick,
 }: {
   icon: ReactNode;
   label: string;
   value: number;
   tone: 'success' | 'warning' | 'danger' | 'info';
+  selected?: boolean;
+  onClick?: () => void;
 }) {
   const toneClass = {
     success: 'text-emerald-600 bg-emerald-50',
@@ -272,16 +407,32 @@ function SummaryCard({
     danger: 'text-rose-600 bg-rose-50',
     info: 'text-sky-600 bg-sky-50',
   }[tone];
+  const ringClass = {
+    success: 'ring-emerald-500/40',
+    warning: 'ring-amber-500/40',
+    danger: 'ring-rose-500/40',
+    info: 'ring-sky-500/40',
+  }[tone];
   return (
-    <Card padding="md">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase text-[#9CA3AF]">{label}</p>
-          <p className="mt-1 font-mono text-2xl font-bold text-[#1A1A1A]">{formatNumber(value)}</p>
+    <button
+      type="button"
+      role="tab"
+      aria-selected={selected}
+      onClick={onClick}
+      className={`w-full rounded-xl text-left transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nts-accent)] ${
+        selected ? `ring-2 ${ringClass}` : 'hover:ring-1 hover:ring-[#E5E7EB]'
+      }`}
+    >
+      <Card padding="md" className={selected ? 'border-transparent' : undefined}>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase text-[#9CA3AF]">{label}</p>
+            <p className="mt-1 font-mono text-2xl font-bold text-[#1A1A1A]">{formatNumber(value)}</p>
+          </div>
+          <span className={`rounded-xl p-2 ${toneClass}`}>{icon}</span>
         </div>
-        <span className={`rounded-xl p-2 ${toneClass}`}>{icon}</span>
-      </div>
-    </Card>
+      </Card>
+    </button>
   );
 }
 
@@ -348,13 +499,25 @@ function DecisionListItem({
   );
 }
 
-function DecisionDetail({ item }: { item: DecisionMemoryItem }) {
+function DecisionDetail({
+  item,
+  analysisPeriod,
+}: {
+  item: DecisionMemoryItem;
+  analysisPeriod: { fromDate: string; toDate: string } | null;
+}) {
   const { event, impact } = item;
+  const eventRange = getEventDateRange(event);
+  const intersection =
+    analysisPeriod && intersectEventWithPeriod(event, analysisPeriod.fromDate, analysisPeriod.toDate);
+  const scoredRange = intersection
+    ? `${intersection.startDate}${intersection.endDate !== intersection.startDate ? ` έως ${intersection.endDate}` : ''}`
+    : `${eventRange.startDate}${eventRange.endDate !== eventRange.startDate ? ` έως ${eventRange.endDate}` : ''}`;
   return (
     <Card padding="lg">
       <CardHeader
         title={event.title}
-        subtitle={`${TYPE_LABELS[event.eventType]} · ${event.startDate || event.decisionDate}${event.endDate ? ` έως ${event.endDate}` : ''}`}
+        subtitle={`${TYPE_LABELS[event.eventType]} · Ανάλυση ${scoredRange}`}
         icon={<BarChart3 size={18} className="text-[var(--nts-accent)]" />}
         action={
           <div className="flex items-center gap-2">
@@ -519,14 +682,31 @@ function PlaybookPanel({ items, onSelect }: { items: DecisionMemoryItem[]; onSel
 
 function EmptyState({
   coverage,
+  periodLabel,
+  totalInPeriod,
+  hasActiveFilters,
 }: {
   coverage: { hasRevenue: boolean; campaigns: number; products: number; productSignals: number; connectedPlatforms: string[] };
+  periodLabel: string | null;
+  totalInPeriod: number;
+  hasActiveFilters: boolean;
 }) {
+  const noDecisionsInPeriod = periodLabel && totalInPeriod === 0;
   return (
     <div className="p-5">
-      <p className="text-sm font-semibold text-[#1A1A1A]">Δεν υπάρχουν ακόμη decision events.</p>
+      <p className="text-sm font-semibold text-[#1A1A1A]">
+        {hasActiveFilters && totalInPeriod > 0
+          ? 'Κανένα αποτέλεσμα με τα τρέχοντα φίλτρα.'
+          : noDecisionsInPeriod
+            ? `Καμία απόφαση στην περίοδο ${periodLabel}.`
+            : 'Δεν υπάρχουν ακόμη decision events.'}
+      </p>
       <p className="mt-1 text-sm text-[#6B7280]">
-        Για υψηλότερο confidence συνδέστε e-shop, campaign connectors και product/procurement data.
+        {hasActiveFilters && totalInPeriod > 0
+          ? 'Αλλάξτε tab, τύπο ή αναζήτηση για να δείτε άλλες αποφάσεις της περιόδου.'
+          : noDecisionsInPeriod
+            ? 'Δοκιμάστε ευρύτερο εύρος ημερολογίου ή προσθέστε manual decision για την περίοδο.'
+            : 'Για υψηλότερο confidence συνδέστε e-shop, campaign connectors και product/procurement data.'}
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
         <Badge variant={coverage.hasRevenue ? 'success' : 'warning'}>Revenue data</Badge>

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { evaluateCommercialDecisionImpact } from './policyImpactAnalysis';
+import {
+  evaluateCommercialDecisionImpact,
+  eventOverlapsPeriod,
+  intersectEventWithPeriod,
+} from './policyImpactAnalysis';
 import type { CommercialDecisionEvent } from './commercialDecisionMemory';
 import type { ProductSignal } from '../hooks/useProductSignals';
 
@@ -100,5 +104,17 @@ describe('evaluateCommercialDecisionImpact', () => {
     expect(impact.lowMarginCount).toBe(1);
     expect(impact.risks.join(' ')).toContain('stockout');
     expect(impact.risks.join(' ')).toContain('low margin');
+  });
+});
+
+describe('decision period helpers', () => {
+  it('detects overlap and intersects with selected period', () => {
+    const event = makeEvent({ startDate: '2026-03-01', endDate: '2026-03-31', decisionDate: '2026-03-01' });
+    expect(eventOverlapsPeriod(event, '2026-02-01', '2026-02-28')).toBe(false);
+    expect(eventOverlapsPeriod(event, '2026-03-15', '2026-04-01')).toBe(true);
+    expect(intersectEventWithPeriod(event, '2026-02-01', '2026-03-10')).toEqual({
+      startDate: '2026-03-01',
+      endDate: '2026-03-10',
+    });
   });
 });

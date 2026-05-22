@@ -1,5 +1,32 @@
 import { sumDailyRevenueInPeriod } from '../utils/roiUtils';
 import type { CommercialDecisionEvent, CommercialDecisionVerdict } from './commercialDecisionMemory';
+
+export function getEventDateRange(event: CommercialDecisionEvent): { startDate: string; endDate: string } {
+  const startDate = event.startDate || event.decisionDate;
+  const endDate = event.endDate || startDate;
+  return { startDate, endDate };
+}
+
+export function eventOverlapsPeriod(
+  event: CommercialDecisionEvent,
+  periodFrom: string,
+  periodTo: string
+): boolean {
+  const { startDate, endDate } = getEventDateRange(event);
+  return startDate <= periodTo && endDate >= periodFrom;
+}
+
+export function intersectEventWithPeriod(
+  event: CommercialDecisionEvent,
+  periodFrom: string,
+  periodTo: string
+): { startDate: string; endDate: string } | null {
+  const { startDate, endDate } = getEventDateRange(event);
+  const start = startDate > periodFrom ? startDate : periodFrom;
+  const end = endDate < periodTo ? endDate : periodTo;
+  if (start > end) return null;
+  return { startDate: start, endDate: end };
+}
 import type { ProductSignal } from '../hooks/useProductSignals';
 
 export type PolicyImpactResult = {
@@ -138,15 +165,16 @@ export function evaluateCommercialDecisionImpact(input: {
   ordersByDay: { date: string; orders: number }[];
   campaignSpendInPeriod: number;
   signalsBySku?: Map<string, ProductSignal>;
+  analysisPeriod?: { startDate: string; endDate: string };
   targets?: {
     revenueUpliftPct?: number;
     minRoas?: number;
   };
 }): CommercialDecisionImpactResult {
-  const { event, revenueByDay, ordersByDay, campaignSpendInPeriod, signalsBySku, targets } = input;
+  const { event, revenueByDay, ordersByDay, campaignSpendInPeriod, signalsBySku, targets, analysisPeriod } = input;
   const base = analyzePolicyImpact({
-    startDate: event.startDate || event.decisionDate,
-    endDate: event.endDate || event.startDate || event.decisionDate,
+    startDate: analysisPeriod?.startDate ?? event.startDate ?? event.decisionDate,
+    endDate: analysisPeriod?.endDate ?? event.endDate ?? event.startDate ?? event.decisionDate,
     revenueByDay,
     ordersByDay,
     campaignSpendInPeriod,

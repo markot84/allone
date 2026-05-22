@@ -21,6 +21,8 @@ import {
 } from '../services/commercialDecisionMemory';
 import {
   evaluateCommercialDecisionImpact,
+  eventOverlapsPeriod,
+  intersectEventWithPeriod,
   type CommercialDecisionImpactResult,
 } from '../services/policyImpactAnalysis';
 import { calculateCampaignMetrics } from '../utils/roiUtils';
@@ -35,7 +37,12 @@ export interface DecisionMemoryItem {
   impact: CommercialDecisionImpactResult;
 }
 
-export function useCommercialDecisionMemory() {
+export interface CommercialDecisionMemoryPeriod {
+  fromDate: string;
+  toDate: string;
+}
+
+export function useCommercialDecisionMemory(period?: CommercialDecisionMemoryPeriod) {
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
   const queryClient = useQueryClient();
@@ -85,28 +92,43 @@ export function useCommercialDecisionMemory() {
   );
 
   const items = useMemo<DecisionMemoryItem[]>(() => {
-    return events.map((event) => {
-      const start = event.startDate || event.decisionDate;
-      const end = event.endDate || start;
-      const periodCampaigns = applyCampaignDateRangeToMetrics(
-        filterCampaignsByScheduleDateOverlap(campaigns as Campaign[], start, end),
-        start,
-        end
-      );
-      const spend = calculateCampaignMetrics(periodCampaigns).totalSpend;
-      return {
-        event,
-        impact: evaluateCommercialDecisionImpact({
+    const periodFrom = period?.fromDate;
+    const periodTo = period?.toDate;
+
+    return events
+      .filter((event) => {
+        if (!periodFrom || !periodTo) return true;
+        return eventOverlapsPeriod(event, periodFrom, periodTo);
+      })
+      .map((event) => {
+        const defaultStart = event.startDate || event.decisionDate;
+        const defaultEnd = event.endDate || defaultStart;
+        const analysisPeriod =
+          periodFrom && periodTo
+            ? intersectEventWithPeriod(event, periodFrom, periodTo) ?? { startDate: defaultStart, endDate: defaultEnd }
+            : undefined;
+        const start = analysisPeriod?.startDate ?? defaultStart;
+        const end = analysisPeriod?.endDate ?? defaultEnd;
+        const periodCampaigns = applyCampaignDateRangeToMetrics(
+          filterCampaignsByScheduleDateOverlap(campaigns as Campaign[], start, end),
+          start,
+          end
+        );
+        const spend = calculateCampaignMetrics(periodCampaigns).totalSpend;
+        return {
           event,
-          revenueByDay,
-          ordersByDay: ecomm.ordersByDay,
-          campaignSpendInPeriod: spend,
-          signalsBySku: productSignals.signalsBySku,
-          targets: { revenueUpliftPct: 10, minRoas: 3 },
-        }),
-      };
-    });
-  }, [campaigns, ecomm.ordersByDay, events, productSignals.signalsBySku, revenueByDay]);
+          impact: evaluateCommercialDecisionImpact({
+            event,
+            revenueByDay,
+            ordersByDay: ecomm.ordersByDay,
+            campaignSpendInPeriod: spend,
+            signalsBySku: productSignals.signalsBySku,
+            analysisPeriod,
+            targets: { revenueUpliftPct: 10, minRoas: 3 },
+          }),
+        };
+      });
+  }, [campaigns, ecomm.ordersByDay, events, period?.fromDate, period?.toDate, productSignals.signalsBySku, revenueByDay]);
 
   const summary = useMemo(() => {
     return {
@@ -120,6 +142,7 @@ export function useCommercialDecisionMemory() {
   return {
     items,
     summary,
+    period: period ?? null,
     saveDecisionEvent: saveMutation.mutateAsync,
     isSaving: saveMutation.isPending,
     isLoading:
