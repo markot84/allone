@@ -103,6 +103,32 @@ function inferStatus(startDate?: string, endDate?: string, fallback: CommercialD
   return fallback;
 }
 
+function firstDailyMetricDate(campaign: Campaign): string | undefined {
+  const dates = Object.keys(campaign.dailyMetrics ?? {})
+    .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
+    .sort();
+  return dates[0];
+}
+
+function lastDailyMetricDate(campaign: Campaign): string | undefined {
+  const dates = Object.keys(campaign.dailyMetrics ?? {})
+    .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
+    .sort();
+  return dates[dates.length - 1];
+}
+
+function campaignDecisionStartDate(campaign: Campaign): string {
+  return (
+    campaign.start_date ||
+    firstDailyMetricDate(campaign) ||
+    toIsoDate(campaign.createdAt ?? campaign.importedAt)
+  );
+}
+
+function campaignDecisionEndDate(campaign: Campaign): string | undefined {
+  return campaign.end_date || lastDailyMetricDate(campaign);
+}
+
 export async function listCommercialDecisionEvents(brandId: string): Promise<CommercialDecisionEvent[]> {
   const rows = await FirestoreService.getDocuments<CommercialDecisionEvent>(
     'commercial_decision_events',
@@ -238,25 +264,27 @@ export function buildStrategyDecisionEvents(
 export function buildCampaignDecisionEvents(campaigns: Campaign[], brandId: string): CommercialDecisionEvent[] {
   return campaigns
     .filter((c) => c.brandId === undefined || c.brandId === brandId)
-    .filter((c) => c.name && (c.start_date || c.createdAt || c.importedAt))
+    .filter((c) => c.name)
     .slice(0, 120)
     .map((c) => {
       const spend = Number(c.amount_spent ?? 0);
       const value = Number(c.purchase_conversion_value ?? c.conversion_value ?? 0);
+      const startDate = campaignDecisionStartDate(c);
+      const endDate = campaignDecisionEndDate(c);
       return {
-        id: stableId('campaign', c.id || c.name, c.start_date ?? toIsoDate(c.createdAt ?? c.importedAt)),
+        id: stableId('campaign', c.id || c.name, startDate),
         brandId,
         eventType: 'campaign',
         title: `Campaign: ${c.name}`,
         description: `${c.channel}${c.status ? ` · ${c.status}` : ''}`,
         source: 'campaigns',
         entityRef: { collection: 'campaigns', id: c.id, type: c.channel },
-        decisionDate: c.start_date || toIsoDate(c.createdAt ?? c.importedAt),
-        startDate: c.start_date,
-        endDate: c.end_date,
+        decisionDate: startDate,
+        startDate,
+        endDate,
         status: c.status?.toLowerCase().includes('paused')
           ? 'paused'
-          : inferStatus(c.start_date, c.end_date, c.is_active === false ? 'completed' : 'active'),
+          : inferStatus(startDate, endDate, c.is_active === false ? 'completed' : 'active'),
         scope: { channels: [c.channel] },
         changes: [
           ...(c.budget ? [{ label: 'Budget', before: null, after: c.budget }] : []),
