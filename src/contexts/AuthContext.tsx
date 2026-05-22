@@ -113,6 +113,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const allowNew = options?.allowNewUsers === true;
     const extra = getAdditionalUserInfo(result);
     if (extra?.isNewUser && !allowNew) {
+      if (isSuperAdminEmail(result.user.email)) return;
+
       const uid = result.user.uid;
       let hasProfile = false;
       try {
