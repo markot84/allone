@@ -184,6 +184,8 @@ const SUPER_ADMIN_EMAILS = new Set([
   'makis@notthesame.gr',
   'eleana@notthesame.gr',
   'notthesame.ads@gmail.com',
+  'tzavlop@gmail.com',
+  'george.meras@gmail.com',
 ]);
 
 async function isUidSuperAdmin(uid: string): Promise<boolean> {

@@ -2,6 +2,8 @@ export const SUPER_ADMIN_EMAILS: readonly string[] = [
   'makis@notthesame.gr',
   'eleana@notthesame.gr',
   'notthesame.ads@gmail.com',
+  'tzavlop@gmail.com',
+  'george.meras@gmail.com',
 ];
 
 /** Υποστήριξη χρηστών / εφαρμογής (Auth, SuperAdmin, Help, νομικά) */
