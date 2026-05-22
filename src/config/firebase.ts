@@ -3,7 +3,6 @@ import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager
 import { getAuth } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
 import { initializeAppCheck, ReCaptchaV3Provider, getToken as getAppCheckToken, type AppCheck } from 'firebase/app-check';
-import { getAppConfigSync } from '../services/appConfig';
 
 const DEFAULT_FUNCTIONS_REGION = 'europe-west1';
 
@@ -83,20 +82,19 @@ export const storage = getStorage(app);
 export default app;
 
 // ── Project-derived defaults ────────────────────────────────────────────────
-// Used until `loadAppConfig()` resolves and Firestore overrides (if any) take
-// effect. The default values match the production Firebase project, so the
-// app is fully functional even if the `appConfig/publicConfig` doc is missing.
+// Values come from .env (VITE_*) with project-derived fallbacks. publicConfig
+// used to live in Firestore (`appConfig/publicConfig`) but moved back to env
+// vars to keep deploys deterministic.
+
+const ENV_REGION = (import.meta.env.VITE_FIREBASE_FUNCTIONS_REGION as string | undefined)?.trim();
+const FUNCTIONS_REGION = ENV_REGION || DEFAULT_FUNCTIONS_REGION;
 
 const DEFAULT_APP_URL = `https://${PROJECT_ID}.web.app`;
-const DEFAULT_FUNCTIONS_BASE = `https://${DEFAULT_FUNCTIONS_REGION}-${PROJECT_ID}.cloudfunctions.net`;
+const DEFAULT_FUNCTIONS_BASE = `https://${FUNCTIONS_REGION}-${PROJECT_ID}.cloudfunctions.net`;
 
-/**
- * Returns the runtime app URL: the Firestore override from `appConfig/publicConfig`
- * if loaded, otherwise the project-derived default.
- */
 export function getAppUrl(): string {
-  const cfg = getAppConfigSync();
-  return cfg.appUrl || DEFAULT_APP_URL;
+  const envUrl = (import.meta.env.VITE_APP_URL as string | undefined)?.trim();
+  return envUrl || DEFAULT_APP_URL;
 }
 
 /**
@@ -107,32 +105,28 @@ export function getAppUrl(): string {
  * στο `*.cloudfunctions.net`, όχι μέσω Hosting rewrite (αλλιώς 502/504).
  */
 export function getFunctionsBaseUrl(): string {
-  const cfg = getAppConfigSync();
-  if (cfg.functionsBaseUrl) {
+  const override = ((import.meta.env.VITE_FUNCTIONS_BASE_URL as string | undefined)
+    ?? (import.meta.env.VITE_FUNCTIONS_URL as string | undefined)
+    ?? '').trim();
+  if (override) {
     try {
-      const u = new URL(cfg.functionsBaseUrl);
+      const u = new URL(override);
       const host = u.hostname.toLowerCase();
       if (!host.includes('github') && !host.includes('gist.github')) {
-        return cfg.functionsBaseUrl.replace(/\/$/, '');
+        return override.replace(/\/$/, '');
       }
-      console.warn('[config] Ignoring suspicious functionsBaseUrl from Firestore');
+      console.warn('[config] Ignoring suspicious VITE_FUNCTIONS_BASE_URL');
     } catch {
-      console.warn('[config] Ignoring invalid functionsBaseUrl from Firestore');
+      console.warn('[config] Ignoring invalid VITE_FUNCTIONS_BASE_URL');
     }
-  }
-  if (cfg.functionsRegion && cfg.functionsRegion !== DEFAULT_FUNCTIONS_REGION) {
-    return `https://${cfg.functionsRegion}-${PROJECT_ID}.cloudfunctions.net`;
   }
   return DEFAULT_FUNCTIONS_BASE;
 }
 
-// Back-compat constants. New code should call the getters above; these read
-// the same cache but are kept so module-level expressions like
-// `const REFRESH_URL = ${FUNCTIONS_BASE_URL}/refreshAggregates` keep working
-// during the transition. They evaluate at first read; for code paths that
-// must reflect a live Firestore override mid-session, prefer the functions.
-export const APP_URL: string = DEFAULT_APP_URL;
-export const FUNCTIONS_BASE_URL: string = DEFAULT_FUNCTIONS_BASE;
+// Back-compat constants. Evaluated once at module load; for runtime-mutable
+// behavior call the getters above.
+export const APP_URL: string = getAppUrl();
+export const FUNCTIONS_BASE_URL: string = getFunctionsBaseUrl();
 
 /**
  * Legacy / misc origin helper. Για OAuth `redirect_uri` χρησιμοποίησε `getFunctionsBaseUrl()` + `/connectorCallback`

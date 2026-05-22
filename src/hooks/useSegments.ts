@@ -143,7 +143,6 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     queryFn: () => (brandId ? SegmentsService.getAll(brandId) : Promise.resolve([])) as Promise<RFMSegment[]>,
     staleTime: 10 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
-    refetchOnMount: false,
     refetchOnWindowFocus: false,
     placeholderData: (previousData) => previousData,
   });
@@ -154,7 +153,6 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     enabled: !!brandId && sourcePref === 'external',
     staleTime: 10 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
-    refetchOnMount: false,
     refetchOnWindowFocus: false,
     placeholderData: (previousData) => previousData,
   });

@@ -10,6 +10,11 @@ interface BrandAssetUploadProps {
   onUploadComplete: (url: string) => void;
   assetType?: 'logo' | 'image';
   label?: string;
+  // Defer the upload: don't write to Storage on file pick. Used by flows that
+  // must create the brand Firestore doc first (storage.rules' isBrandMember
+  // check would otherwise fail). When set, `onFileSelected` receives the
+  // validated File and the parent is responsible for uploading later.
+  onFileSelected?: (file: File | null) => void;
 }
 
 export function BrandAssetUpload({
@@ -17,8 +22,10 @@ export function BrandAssetUpload({
   currentLogoUrl,
   onUploadComplete,
   assetType = 'logo',
-  label
+  label,
+  onFileSelected
 }: BrandAssetUploadProps) {
+  const deferUpload = typeof onFileSelected === 'function';
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState<string | null>(currentLogoUrl || null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -49,6 +56,14 @@ export function BrandAssetUpload({
     };
     reader.readAsDataURL(file);
 
+    if (deferUpload) {
+      onFileSelected?.(file);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      return;
+    }
+
     // Upload to Firebase Storage
     setUploading(true);
     try {
@@ -70,6 +85,9 @@ export function BrandAssetUpload({
   const handleRemove = () => {
     setPreview(null);
     onUploadComplete('');
+    if (deferUpload) {
+      onFileSelected?.(null);
+    }
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }

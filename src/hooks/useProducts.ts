@@ -34,7 +34,6 @@ export function useProducts(options: UseProductsOptions = {}) {
     },
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
-    refetchOnMount: false,
     refetchOnWindowFocus: false,
     placeholderData: (previousData) => previousData,
   });
@@ -45,7 +44,6 @@ export function useProducts(options: UseProductsOptions = {}) {
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
     enabled: !!brandId && !!maxDocs,
-    refetchOnMount: false,
     refetchOnWindowFocus: false,
     placeholderData: (previousData) => previousData,
   });

@@ -16,12 +16,20 @@ export interface SharedPackageData {
   createdBy?: string;
 }
 
-export async function saveSharedPackage(data: SharedPackageData, userId?: string): Promise<string> {
-  const ref = await addDoc(collection(db, 'shared_packages'), {
-    ...data,
+export async function saveSharedPackage(data: SharedPackageData, uid: string | undefined): Promise<string> {
+  // Firestore rule requires createdBy === request.auth.uid on shared_packages create.
+  // Caller must pass the authenticated user's uid; anonymous shares are not allowed.
+  if (!uid) throw new Error('saveSharedPackage requires an authenticated user uid');
+  // Strip undefined fields — Firestore rejects them synchronously with an
+  // "Unsupported field value: undefined" error.
+  const payload: Record<string, unknown> = {
     createdAt: serverTimestamp(),
-    createdBy: userId || 'anonymous',
-  });
+    createdBy: uid,
+  };
+  for (const [k, v] of Object.entries(data)) {
+    if (v !== undefined) payload[k] = v;
+  }
+  const ref = await addDoc(collection(db, 'shared_packages'), payload);
   return ref.id;
 }
 

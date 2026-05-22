@@ -1223,19 +1223,20 @@ function SystemInfoTab() {
 
   useEffect(() => {
     async function load() {
-      try {
-        const [usersSnap, brandsSnap, sa] = await Promise.all([
-          getDocs(collection(db, 'users')),
-          getDocs(collection(db, 'brands')),
-          loadSuperAdmins(),
-        ]);
-        setStats({ users: usersSnap.size, brands: brandsSnap.size });
-        setAdminEmails(sa.emails);
-      } catch (err) {
-        console.error('Failed to load stats:', err);
-      } finally {
-        setLoading(false);
+      const [usersRes, brandsRes, saRes] = await Promise.allSettled([
+        getDocs(collection(db, 'users')),
+        getDocs(collection(db, 'brands')),
+        loadSuperAdmins(),
+      ]);
+      if (usersRes.status === 'fulfilled' && brandsRes.status === 'fulfilled') {
+        setStats({ users: usersRes.value.size, brands: brandsRes.value.size });
+      } else {
+        if (usersRes.status === 'rejected') console.error('Failed to load users count:', usersRes.reason);
+        if (brandsRes.status === 'rejected') console.error('Failed to load brands count:', brandsRes.reason);
       }
+      if (saRes.status === 'fulfilled') setAdminEmails(saRes.value.emails);
+      else console.error('Failed to load super admins:', saRes.reason);
+      setLoading(false);
     }
     load();
   }, []);

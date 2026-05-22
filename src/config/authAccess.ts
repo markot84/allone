@@ -5,15 +5,13 @@
  *   μόνο όταν η ροή ξεκινά από σύνδεσμο πρόσκλησης (`returnUrl` περιέχει `/invite/`).
  * - `open`: παλιά συμπεριφορά — οποιοσδήποτε μπορεί να κάνει εγγραφή (staging / bootstrap).
  *
- * Η τιμή έρχεται από Firestore `appConfig/publicConfig.publicSignupMode`,
- * που φορτώνεται από το `services/appConfig.ts` στο app startup.
+ * Source: `VITE_PUBLIC_SIGNUP_MODE` env var (build-time, baked into the bundle).
  */
-import { getAppConfigSync, type PublicSignupMode } from '../services/appConfig';
-
-export type { PublicSignupMode };
+export type PublicSignupMode = 'invite_only' | 'open';
 
 export function getPublicSignupMode(): PublicSignupMode {
-  return getAppConfigSync().publicSignupMode;
+  const v = (import.meta.env.VITE_PUBLIC_SIGNUP_MODE as string | undefined)?.trim();
+  return v === 'open' ? 'open' : 'invite_only';
 }
 
 /** Αν το returnUrl μετά το login οδηγεί σε σελίδα αποδοχής πρόσκλησης. */

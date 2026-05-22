@@ -74,7 +74,6 @@ export function useCampaigns() {
     /** Bounded staleness: Infinity με πρώτο fetch `[]` κλείδωνε το ROI σε κενά δεδομένα χωρίς refetch. */
     staleTime: 5 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
-    refetchOnMount: false,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     placeholderData: (previousData) => previousData,

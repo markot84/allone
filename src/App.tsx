@@ -8,7 +8,6 @@ import { AppShell } from './components/layout';
 import { AIInsightsTriggerWrapper } from './components/insights/AIInsightsPanel';
 import { AuthActionPage } from './components/auth/AuthActionPage';
 import { useAuth } from './hooks/useAuth';
-import { loadAppConfig } from './services/appConfig';
 import { SharedPackageViewer } from './components/strategy/SharedPackageViewer';
 import { EnterpriseBadge } from './components/common';
 import { useModules } from './hooks/useModules';
@@ -361,29 +360,8 @@ function AppMain() {
 /**
  * Static / public routes first (no hooks). Main SPA uses AppMain only under AuthGuard → BrandProvider
  * so useModules() → useBrand() does not throw for logged-out users.
- *
- * Boot: every render path waits for `loadAppConfig()` to resolve before any
- * child component mounts. This populates the sync cache that `getAppUrl()`,
- * `getFunctionsBaseUrl()`, `getPublicSignupMode()`, and the InterestForm
- * read from. Defaults are used if the Firestore fetch fails.
  */
 function App() {
-  const [configReady, setConfigReady] = useState(false);
-  useEffect(() => {
-    let cancelled = false;
-    loadAppConfig().finally(() => {
-      if (!cancelled) setConfigReady(true);
-    });
-    return () => { cancelled = true; };
-  }, []);
-  if (!configReady) {
-    return (
-      <div className="flex items-center justify-center" style={{ height: '100vh' }}>
-        <Spinner size="lg" />
-      </div>
-    );
-  }
-
   if (typeof window !== 'undefined') {
     const params = new URLSearchParams(window.location.search);
     const authMode = params.get('mode');

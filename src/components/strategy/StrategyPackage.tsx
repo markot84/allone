@@ -81,15 +81,17 @@ export function StrategyPackage(props: StrategyPackageProps) {
     setLinkLoading(true);
     try {
       const data = buildSharedData(props, strategyName);
-      const id = await saveSharedPackage(data, user?.email || undefined);
+      const id = await saveSharedPackage(data, user?.uid);
       const baseUrl = window.location.origin + window.location.pathname;
       const link = `${baseUrl}#shared/${id}`;
       await navigator.clipboard.writeText(link);
       setLinkCopied(true);
       toast.success('Link αντιγράφηκε');
       setTimeout(() => setLinkCopied(false), 3000);
-    } catch {
-      toast.error('Αποτυχία δημιουργίας link');
+    } catch (err) {
+      const msg = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+      console.error('[StrategyPackage] saveSharedPackage failed', err);
+      toast.error(`Αποτυχία δημιουργίας link — ${msg}`);
     } finally {
       setLinkLoading(false);
     }

@@ -1,10 +1,14 @@
 {
-  "version": "0.749.225",
-  "previousVersion": "0.749.224",
-  "commitHash": "325b51c",
+  "version": "0.749.231",
+  "previousVersion": "0.749.230",
+  "commitHash": "8932a00",
   "branch": "Security-Review-Fixes",
-  "buildDate": "2026-05-21T10:57:39.846Z",
+  "buildDate": "2026-05-22T14:02:11.744Z",
   "commits": [
+    {
+      "hash": "8932a00",
+      "message": "fix: changes on initial page, login and brand creation to allow deployment based on the new changes"
+    },
     {
       "hash": "325b51c",
       "message": "Merge branch 'SDLC-findings' into Security-Review-Fixes"
@@ -59,6 +63,7 @@
     }
   ],
   "changes": [
+    "[Διόρθωση] Changes on initial page, login and brand creation to allow deployment based on the new changes",
     "[Διόρθωση] Removed explicit, hardcoded firebase ID from the code, all are controlled via .env included ID",
     "[Διόρθωση] LOW security findings",
     "[Διόρθωση] Correct auth endpoints",
@@ -67,7 +72,6 @@
     "Staging fixes",
     "[Διόρθωση] Security findings",
     "[Διόρθωση] UUIDs and exposed verification token",
-    "[Διόρθωση] MEDIUM security findings",
-    "[Διόρθωση] NPM audit fix"
+    "[Διόρθωση] MEDIUM security findings"
   ]
 }

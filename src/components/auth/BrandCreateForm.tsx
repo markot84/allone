@@ -5,6 +5,7 @@ import { Button } from '../common';
 import { useAuth } from '../../hooks';
 import { FirestoreService } from '../../services/firestore';
 import { BrandAssetUpload } from '../brands/BrandAssetUpload';
+import { uploadBrandAsset } from '../../services/storage';
 import type { Brand } from '../../types';
 
 function sanitizeId(s: string): string {
@@ -22,7 +23,7 @@ interface BrandCreateFormProps {
 export function BrandCreateForm({ onCreated }: BrandCreateFormProps) {
   const { user } = useAuth();
   const [name, setName] = useState('');
-  const [logoUrl, setLogoUrl] = useState<string>('');
+  const [logoFile, setLogoFile] = useState<File | null>(null);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -38,16 +39,34 @@ export function BrandCreateForm({ onCreated }: BrandCreateFormProps) {
     setSubmitting(true);
     try {
       const brandId = sanitizeId(trimmed);
-      
+
+      // 1. Create the brand doc first. storage.rules' isBrandMember check
+      //    requires brands/{brandId}.createdBy == auth.uid, so the doc must
+      //    exist before any asset upload is attempted.
       const brand: Brand = {
         id: brandId,
         name: trimmed,
         type: 'B2C',
         createdAt: new Date().toISOString(),
         createdBy: user.uid,
-        ...(logoUrl ? { logoUrl } : {}),
       };
       await FirestoreService.setDocument('brands', brandId, brand);
+
+      // 2. Upload the logo (now that storage.rules can see the brand doc).
+      //    A failed logo upload doesn't roll back the brand — surface the
+      //    error and let the user retry from the brand-edit screen.
+      let logoUrl = '';
+      if (logoFile) {
+        try {
+          logoUrl = await uploadBrandAsset(logoFile, brandId, 'logo');
+          await FirestoreService.setDocument('brands', brandId, { logoUrl });
+        } catch (uploadErr) {
+          setError(uploadErr instanceof Error
+            ? `Brand created, αλλά το logo απέτυχε: ${uploadErr.message}`
+            : 'Brand created, αλλά το logo απέτυχε.');
+        }
+      }
+
       const profile = await FirestoreService.getDocument<{ brandIds?: string[] }>('users', user.uid);
       const brandIds = profile?.brandIds ?? [];
       if (!brandIds.includes(brandId)) {
@@ -91,13 +110,13 @@ export function BrandCreateForm({ onCreated }: BrandCreateFormProps) {
         </div>
       </div>
       
-      {/* Logo Upload - Show upload field */}
+      {/* Logo Upload — deferred. File is held in component state and uploaded
+          inside handleSubmit after the brand doc exists, so storage.rules'
+          isBrandMember(brandId) check can succeed via the createdBy clause. */}
       <BrandAssetUpload
         brandId={name.trim() ? sanitizeId(name.trim()) : 'temp'}
-        currentLogoUrl={logoUrl}
-        onUploadComplete={(url) => {
-          setLogoUrl(url);
-        }}
+        onUploadComplete={() => {}}
+        onFileSelected={setLogoFile}
         assetType="logo"
       />
       
