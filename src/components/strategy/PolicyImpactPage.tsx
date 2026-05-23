@@ -15,7 +15,11 @@ import {
 import { Card, CardHeader, Button, PageHeader, Spinner, Badge } from '../common';
 import { DateRangePicker } from '../ui/DateRangePicker';
 import { useCommercialDecisionMemory } from '../../hooks/useCommercialDecisionMemory';
-import type { CommercialDecisionEventType, CommercialDecisionVerdict } from '../../services/commercialDecisionMemory';
+import type {
+  CommercialDecisionEventType,
+  CommercialDecisionSource,
+  CommercialDecisionVerdict,
+} from '../../services/commercialDecisionMemory';
 import type { DecisionMemoryItem } from '../../hooks/useCommercialDecisionMemory';
 import { useDashPeriod } from '../../hooks/useDashPeriod';
 import { useGlobalDate, GLOBAL_PERIOD_OPTIONS } from '../../contexts/GlobalDateContext';
@@ -26,6 +30,7 @@ import { formatCurrency, formatNumber } from '../../utils/format';
 const TYPE_LABELS: Record<CommercialDecisionEventType | 'all', string> = {
   all: 'Όλοι οι τύποι',
   pricing: 'Τιμές',
+  margin: 'Margin / κόστος',
   discount: 'Εκπτώσεις',
   campaign: 'Καμπάνιες',
   channel: 'Κανάλια',
@@ -33,6 +38,16 @@ const TYPE_LABELS: Record<CommercialDecisionEventType | 'all', string> = {
   stock: 'Stock',
   strategy: 'Strategy',
   manual: 'Manual',
+};
+
+const SOURCE_LABELS: Record<CommercialDecisionSource, string> = {
+  manual: 'Manual',
+  legacy_action: 'Commercial action',
+  strategy: 'Strategy',
+  campaigns: 'Campaign',
+  channel_activation: 'Channel activation',
+  product_signals: 'Product signals',
+  erp_history: 'ERP detected',
 };
 
 const VERDICT_LABELS: Record<CommercialDecisionVerdict | 'all', string> = {
@@ -483,7 +498,7 @@ function DecisionListItem({
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-[#1A1A1A]">{event.title}</p>
             <p className="mt-1 text-xs text-[#6B7280]">
-              {TYPE_LABELS[event.eventType]} · {event.decisionDate} · {event.source}
+              {TYPE_LABELS[event.eventType]} · {event.decisionDate} · {SOURCE_LABELS[event.source] ?? event.source}
             </p>
           </div>
           <Badge variant={VERDICT_BADGE[impact.verdict]} size="sm">
@@ -522,6 +537,9 @@ function DecisionDetail({
         action={
           <div className="flex items-center gap-2">
             <Badge variant={VERDICT_BADGE[impact.verdict]}>{VERDICT_LABELS[impact.verdict]}</Badge>
+            <Badge variant={event.source === 'erp_history' ? 'info' : 'default'}>
+              {SOURCE_LABELS[event.source] ?? event.source}
+            </Badge>
             <Badge variant="default">Confidence {impact.confidence}</Badge>
           </div>
         }
@@ -686,7 +704,14 @@ function EmptyState({
   totalInPeriod,
   hasActiveFilters,
 }: {
-  coverage: { hasRevenue: boolean; campaigns: number; products: number; productSignals: number; connectedPlatforms: string[] };
+  coverage: {
+    hasRevenue: boolean;
+    campaigns: number;
+    products: number;
+    productSignals: number;
+    erpHistoricalEvents: number;
+    connectedPlatforms: string[];
+  };
   periodLabel: string | null;
   totalInPeriod: number;
   hasActiveFilters: boolean;
@@ -711,6 +736,9 @@ function EmptyState({
       <div className="mt-3 flex flex-wrap gap-2">
         <Badge variant={coverage.hasRevenue ? 'success' : 'warning'}>Revenue data</Badge>
         <Badge variant={coverage.campaigns > 0 ? 'success' : 'warning'}>Campaigns {coverage.campaigns}</Badge>
+        <Badge variant={coverage.erpHistoricalEvents > 0 ? 'success' : 'warning'}>
+          ERP history {coverage.erpHistoricalEvents}
+        </Badge>
         <Badge variant={coverage.products > 0 ? 'success' : 'warning'}>Products {coverage.products}</Badge>
         <Badge variant={coverage.productSignals > 0 ? 'success' : 'warning'}>Signals {coverage.productSignals}</Badge>
       </div>

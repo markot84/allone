@@ -8,6 +8,7 @@ import type { ProductSignal } from '../hooks/useProductSignals';
 
 export type CommercialDecisionEventType =
   | 'pricing'
+  | 'margin'
   | 'discount'
   | 'campaign'
   | 'channel'
@@ -22,7 +23,8 @@ export type CommercialDecisionSource =
   | 'strategy'
   | 'campaigns'
   | 'channel_activation'
-  | 'product_signals';
+  | 'product_signals'
+  | 'erp_history';
 
 export type CommercialDecisionStatus = 'planned' | 'active' | 'completed' | 'paused' | 'detected';
 

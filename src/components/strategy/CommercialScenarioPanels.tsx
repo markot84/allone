@@ -63,8 +63,8 @@ export function CommercialScenarioPanels({
         title="Εμπορικά σενάρια & επίδραση (ERP)"
         subtitle={
           periodLabel
-            ? `${periodLabel} — τζίρος και margin ξεχωριστά, σύγκριση με 30 ημέρες πριν την περίοδο.`
-            : 'Επιλέξτε περίοδο.'
+            ? `${periodLabel} — historical ERP/order-line signals με σύγκριση 30 ημερών πριν από κάθε window.`
+            : 'Επιλέξτε περίοδο για ERP historical signals.'
         }
         icon={<Tag size={18} className="text-[var(--nts-accent)]" />}
       />
@@ -478,10 +478,10 @@ function MarketingTable({ rows }: { rows: MarketingSpendImpactRow[] }) {
 function EmptyHint({ type, hasCost }: { type: 'orders' | 'cost' | 'stock'; hasCost: boolean }) {
   const msg =
     type === 'orders'
-      ? 'Χρειάζονται τιμολόγια/παραγγελίες με γραμμές SKU (Megaventory ή e-shop).'
+      ? 'Χρειάζονται ERP τιμολόγια ή παραγγελίες με γραμμές SKU και τιμές για historical detection.'
       : type === 'cost'
-        ? 'Συγχρονίστε Megaventory procurement pricing για υπολογισμό margin.'
-        : 'Συγχρονίστε procurement signals για days of cover / απόθεμα.';
+        ? 'Συγχρονίστε ERP/procurement pricing για υπολογισμό margin και κόστους ανά SKU.'
+        : 'Συγχρονίστε ERP/procurement signals για days of cover / διαθέσιμο απόθεμα.';
   return (
     <p className="text-sm text-[#6B7280]">
       {msg}
