@@ -94,6 +94,9 @@ export function CommercialScenarioPanels({
       {tab === 'marketing' && data.marketing && <MarketingKpis summary={data.marketing.summary} />}
 
       <FilterChips filter={filter} onChange={setFilter} />
+      {data.isRefreshing && !data.isLoading && (
+        <p className="mb-3 text-xs text-[#6B7280]">Refreshing ERP scenario signals in the background...</p>
+      )}
 
       {data.isLoading ? (
         <div className="py-8">

@@ -118,6 +118,8 @@ export function useMagentoProductEnrichment() {
 
   const bySku = new Map<string, MagentoProductEnrichment>();
   const bySkuLower = new Map<string, MagentoProductEnrichment>();
+  const byItemGroupId = new Map<string, MagentoProductEnrichment>();
+  const byItemGroupIdLower = new Map<string, MagentoProductEnrichment>();
 
   for (const p of rawProducts) {
     const sku = String(p.sku || '').trim();
@@ -141,12 +143,19 @@ export function useMagentoProductEnrichment() {
     };
     bySku.set(sku, enrichment);
     bySkuLower.set(sku.toLowerCase(), enrichment);
+    if (enrichment.itemGroupId && enrichment.imageLink) {
+      if (!byItemGroupId.has(enrichment.itemGroupId)) byItemGroupId.set(enrichment.itemGroupId, enrichment);
+      const lower = enrichment.itemGroupId.toLowerCase();
+      if (!byItemGroupIdLower.has(lower)) byItemGroupIdLower.set(lower, enrichment);
+    }
   }
 
   return {
     config,
     bySku,
     bySkuLower,
+    byItemGroupId,
+    byItemGroupIdLower,
     isLoading: connectorQuery.isPending || productsQuery.isPending,
     isConnected: config.connected,
     count: bySku.size,

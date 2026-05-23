@@ -172,14 +172,26 @@ export function evaluateCommercialDecisionImpact(input: {
   };
 }): CommercialDecisionImpactResult {
   const { event, revenueByDay, ordersByDay, campaignSpendInPeriod, signalsBySku, targets, analysisPeriod } = input;
-  const base = analyzePolicyImpact({
-    startDate: analysisPeriod?.startDate ?? event.startDate ?? event.decisionDate,
-    endDate: analysisPeriod?.endDate ?? event.endDate ?? event.startDate ?? event.decisionDate,
-    revenueByDay,
-    ordersByDay,
-    campaignSpendInPeriod,
-    targets,
-  });
+  const base = event.performance
+    ? {
+        periodRevenue: event.performance.periodRevenue,
+        yoyRevenue: event.performance.baselineRevenue,
+        revenueChangePct: event.performance.revenueChangePct,
+        periodOrders: event.performance.periodOrders,
+        yoyOrders: event.performance.baselineOrders,
+        ordersChangePct: event.performance.ordersChangePct,
+        campaignSpend: event.performance.campaignSpend ?? 0,
+        periodRoas: event.performance.periodRoas ?? null,
+        targetHits: [],
+      }
+    : analyzePolicyImpact({
+        startDate: analysisPeriod?.startDate ?? event.startDate ?? event.decisionDate,
+        endDate: analysisPeriod?.endDate ?? event.endDate ?? event.startDate ?? event.decisionDate,
+        revenueByDay,
+        ordersByDay,
+        campaignSpendInPeriod,
+        targets,
+      });
 
   const scopedSignals = selectScopedSignals(event, signalsBySku);
   const productVelocity30d = scopedSignals.reduce((sum, signal) => sum + (signal.resolved.qty30d ?? 0), 0);
@@ -208,8 +220,16 @@ export function evaluateCommercialDecisionImpact(input: {
 
   const highlights: string[] = [];
   const risks: string[] = [];
+  const isSkuPerformance = !!event.performance;
   if (base.revenueChangePct != null) {
-    (base.revenueChangePct >= 0 ? highlights : risks).push(`Revenue YoY ${base.revenueChangePct >= 0 ? '+' : ''}${base.revenueChangePct}%`);
+    (base.revenueChangePct >= 0 ? highlights : risks).push(
+      `${isSkuPerformance ? 'SKU revenue vs previous window' : 'Revenue YoY'} ${base.revenueChangePct >= 0 ? '+' : ''}${base.revenueChangePct}%`
+    );
+  }
+  if (isSkuPerformance && event.performance?.marginChangePct != null) {
+    (event.performance.marginChangePct >= 0 ? highlights : risks).push(
+      `SKU margin vs previous window ${event.performance.marginChangePct >= 0 ? '+' : ''}${event.performance.marginChangePct}%`
+    );
   }
   if (base.periodRoas != null) {
     (base.periodRoas >= (targets?.minRoas ?? 3) ? highlights : risks).push(`Store ROAS ${base.periodRoas.toFixed(2)}x`);

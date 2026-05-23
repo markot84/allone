@@ -7,6 +7,8 @@ export type ThumbnailSource = 'import' | 'magento' | 'none';
 export type ThumbnailLookupMaps = {
   magentoBySku?: Map<string, { imageLink: string }>;
   magentoBySkuLower?: Map<string, { imageLink: string }>;
+  magentoByItemGroupId?: Map<string, { imageLink: string }>;
+  magentoByItemGroupIdLower?: Map<string, { imageLink: string }>;
 };
 
 function normalizeImageUrl(raw: string | null | undefined): string {
@@ -44,5 +46,42 @@ export function resolveProductThumbnailUrl(
   const magentoUrl = normalizeImageUrl(magento?.imageLink);
   if (magentoUrl) return { url: magentoUrl, source: 'magento' };
 
+  const parentKey = fallbackProductKey(key);
+  const parentMagento =
+    maps?.magentoByItemGroupId?.get(parentKey) ??
+    maps?.magentoByItemGroupIdLower?.get(parentKey.toLowerCase());
+  const parentMagentoUrl = normalizeImageUrl(parentMagento?.imageLink);
+  if (parentMagentoUrl) return { url: parentMagentoUrl, source: 'magento' };
+
   return { url: '', source: 'none' };
+}
+
+const SIZE_SUFFIXES = new Set([
+  'xxs',
+  'xs',
+  's',
+  'm',
+  'l',
+  'xl',
+  'xxl',
+  'xxxl',
+  '2xs',
+  '2xl',
+  '3xl',
+  '4xl',
+  '5xl',
+  'one',
+  'onesize',
+  'os',
+  'uni',
+  'unique',
+]);
+
+function fallbackProductKey(sku: string): string {
+  const normalized = sku.trim().replace(/\s+/g, '').toUpperCase();
+  const parts = normalized.split(/[-_/]/).filter(Boolean);
+  if (parts.length <= 1) return normalized;
+  const last = parts[parts.length - 1].toLowerCase();
+  const looksSize = SIZE_SUFFIXES.has(last) || /^\d{1,3}([.,]\d)?$/.test(last) || /^(eu|us|uk)?\d{1,3}([.,]\d)?$/.test(last);
+  return looksSize ? parts.slice(0, -1).join('-') : parts[0];
 }

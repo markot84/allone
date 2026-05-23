@@ -12,9 +12,10 @@ import {
   TrendingDown,
   TrendingUp,
 } from 'lucide-react';
-import { Card, CardHeader, Button, PageHeader, Spinner, Badge } from '../common';
+import { Card, CardHeader, Button, PageHeader, Spinner, Badge, ProductThumbnail } from '../common';
 import { DateRangePicker } from '../ui/DateRangePicker';
 import { useCommercialDecisionMemory } from '../../hooks/useCommercialDecisionMemory';
+import { useProductThumbnails } from '../../hooks/useProductThumbnails';
 import type {
   CommercialDecisionEventType,
   CommercialDecisionSource,
@@ -87,7 +88,8 @@ function formatPeriodLabel(from: string, to: string): string {
 export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: string) => void } = {}) {
   const { period: dashPeriod, setPeriod: setDashPeriod, periodDates } = useDashPeriod();
   const { customFrom, customTo, setCustomRange } = useGlobalDate();
-  const { items, summary, saveDecisionEvent, isSaving, isLoading, dataCoverage, period } = useCommercialDecisionMemory(
+  const { getThumbnailUrl } = useProductThumbnails();
+  const { items, summary, saveDecisionEvent, isSaving, isLoading, isRefreshing, dataCoverage, period } = useCommercialDecisionMemory(
     periodDates
   );
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -358,6 +360,11 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
           </Card>
 
           <Card padding="none">
+            {isRefreshing && !isLoading && (
+              <div className="border-b border-[#E5E7EB] px-4 py-2 text-xs text-[#6B7280]">
+                Refreshing ERP history in the background...
+              </div>
+            )}
             {isLoading ? (
               <div className="p-5">
                 <Spinner />
@@ -376,6 +383,7 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
                     key={item.event.id}
                     item={item}
                     selected={selected?.event.id === item.event.id}
+                    getThumbnailUrl={getThumbnailUrl}
                     onSelect={() => setSelectedId(item.event.id)}
                   />
                 ))}
@@ -387,7 +395,7 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
         <div className="space-y-4">
           {selected ? (
             <>
-              <DecisionDetail item={selected} analysisPeriod={period} />
+              <DecisionDetail item={selected} analysisPeriod={period} getThumbnailUrl={getThumbnailUrl} />
               {playbooks.length > 0 && <PlaybookPanel items={playbooks} onSelect={(id) => setSelectedId(id)} />}
             </>
           ) : (
@@ -478,13 +486,17 @@ function FilterSelect({
 function DecisionListItem({
   item,
   selected,
+  getThumbnailUrl,
   onSelect,
 }: {
   item: DecisionMemoryItem;
   selected: boolean;
+  getThumbnailUrl: (sku: string, product?: unknown) => { url: string };
   onSelect: () => void;
 }) {
   const { event, impact } = item;
+  const sku = event.scope?.skus?.[0] ?? '';
+  const thumb = sku ? getThumbnailUrl(sku).url : '';
   return (
     <li>
       <button
@@ -495,11 +507,14 @@ function DecisionListItem({
         }`}
       >
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-[#1A1A1A]">{event.title}</p>
-            <p className="mt-1 text-xs text-[#6B7280]">
-              {TYPE_LABELS[event.eventType]} · {event.decisionDate} · {SOURCE_LABELS[event.source] ?? event.source}
-            </p>
+          <div className="flex min-w-0 items-start gap-2">
+            <ProductThumbnail src={thumb || undefined} alt={sku || event.title} size="sm" />
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-[#1A1A1A]">{event.title}</p>
+              <p className="mt-1 text-xs text-[#6B7280]">
+                {TYPE_LABELS[event.eventType]} · {event.decisionDate} · {SOURCE_LABELS[event.source] ?? event.source}
+              </p>
+            </div>
           </div>
           <Badge variant={VERDICT_BADGE[impact.verdict]} size="sm">
             {VERDICT_LABELS[impact.verdict]}
@@ -517,11 +532,16 @@ function DecisionListItem({
 function DecisionDetail({
   item,
   analysisPeriod,
+  getThumbnailUrl,
 }: {
   item: DecisionMemoryItem;
   analysisPeriod: { fromDate: string; toDate: string } | null;
+  getThumbnailUrl: (sku: string, product?: unknown) => { url: string };
 }) {
   const { event, impact } = item;
+  const skuPerformance = event.source === 'erp_history' ? event.performance : undefined;
+  const primarySku = event.scope?.skus?.[0] ?? '';
+  const thumb = primarySku ? getThumbnailUrl(primarySku).url : '';
   const eventRange = getEventDateRange(event);
   const intersection =
     analysisPeriod && intersectEventWithPeriod(event, analysisPeriod.fromDate, analysisPeriod.toDate);
@@ -531,7 +551,12 @@ function DecisionDetail({
   return (
     <Card padding="lg">
       <CardHeader
-        title={event.title}
+        title={
+          <div className="flex min-w-0 items-center gap-3">
+            <ProductThumbnail src={thumb || undefined} alt={primarySku || event.title} size="md" />
+            <span className="min-w-0 truncate">{event.title}</span>
+          </div>
+        }
         subtitle={`${TYPE_LABELS[event.eventType]} · Ανάλυση ${scoredRange}`}
         icon={<BarChart3 size={18} className="text-[var(--nts-accent)]" />}
         action={
@@ -560,23 +585,48 @@ function DecisionDetail({
           positive={impact.verdict === 'winning'}
         />
         <MetricTile
-          label="Τζίρος περιόδου"
+          label={skuPerformance ? 'Τζίρος SKU' : 'Τζίρος περιόδου'}
           value={formatCurrency(impact.periodRevenue, 0)}
-          sub={impact.revenueChangePct != null ? `YoY ${impact.revenueChangePct >= 0 ? '+' : ''}${impact.revenueChangePct}%` : 'No YoY'}
+          sub={
+            impact.revenueChangePct != null
+              ? `${skuPerformance ? 'vs προηγ. 30ημ.' : 'YoY'} ${impact.revenueChangePct >= 0 ? '+' : ''}${impact.revenueChangePct}%`
+              : skuPerformance
+                ? `πριν ${formatCurrency(skuPerformance.baselineRevenue, 0)}`
+                : 'No YoY'
+          }
           positive={impact.revenueChangePct != null && impact.revenueChangePct >= 0}
         />
         <MetricTile
-          label="Παραγγελίες"
+          label={skuPerformance ? 'Μονάδες SKU' : 'Παραγγελίες'}
           value={formatNumber(impact.periodOrders)}
-          sub={impact.ordersChangePct != null ? `YoY ${impact.ordersChangePct >= 0 ? '+' : ''}${impact.ordersChangePct}%` : 'No YoY'}
+          sub={
+            impact.ordersChangePct != null
+              ? `${skuPerformance ? 'vs προηγ. 30ημ.' : 'YoY'} ${impact.ordersChangePct >= 0 ? '+' : ''}${impact.ordersChangePct}%`
+              : skuPerformance
+                ? `πριν ${formatNumber(skuPerformance.baselineOrders)}`
+                : 'No YoY'
+          }
           positive={impact.ordersChangePct != null && impact.ordersChangePct >= 0}
         />
-        <MetricTile
-          label="Store ROAS"
-          value={impact.periodRoas != null ? `${impact.periodRoas.toFixed(2)}x` : '—'}
-          sub={`Spend ${formatCurrency(impact.campaignSpend, 0)}`}
-          positive={impact.periodRoas != null && impact.periodRoas >= 3}
-        />
+        {skuPerformance ? (
+          <MetricTile
+            label="SKU margin"
+            value={formatCurrency(skuPerformance.periodMargin ?? 0, 0)}
+            sub={
+              skuPerformance.marginChangePct != null
+                ? `vs προηγ. 30ημ. ${skuPerformance.marginChangePct >= 0 ? '+' : ''}${skuPerformance.marginChangePct}%`
+                : `πριν ${formatCurrency(skuPerformance.baselineMargin ?? 0, 0)}`
+            }
+            positive={skuPerformance.marginChangePct != null && skuPerformance.marginChangePct >= 0}
+          />
+        ) : (
+          <MetricTile
+            label="Store ROAS"
+            value={impact.periodRoas != null ? `${impact.periodRoas.toFixed(2)}x` : '—'}
+            sub={`Spend ${formatCurrency(impact.campaignSpend, 0)}`}
+            positive={impact.periodRoas != null && impact.periodRoas >= 3}
+          />
+        )}
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">

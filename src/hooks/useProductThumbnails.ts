@@ -13,8 +13,10 @@ export function useProductThumbnails() {
     () => ({
       magentoBySku: magento.bySku,
       magentoBySkuLower: magento.bySkuLower,
+      magentoByItemGroupId: magento.byItemGroupId,
+      magentoByItemGroupIdLower: magento.byItemGroupIdLower,
     }),
-    [magento.bySku, magento.bySkuLower]
+    [magento.byItemGroupId, magento.byItemGroupIdLower, magento.bySku, magento.bySkuLower]
   );
 
   const getThumbnailUrl = useCallback(

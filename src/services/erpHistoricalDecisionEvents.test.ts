@@ -47,6 +47,15 @@ describe('buildErpHistoricalDecisionEvents', () => {
       before: 10,
       after: 12,
     });
+    expect(priceEvent?.performance).toMatchObject({
+      periodRevenue: 72,
+      baselineRevenue: 60,
+      periodOrders: 6,
+      baselineOrders: 6,
+      avgPriceBefore: 10,
+      avgPriceAfter: 12,
+      unitLabel: 'μονάδες SKU',
+    });
   });
 
   it('ignores small price noise below the ERP detection threshold', () => {

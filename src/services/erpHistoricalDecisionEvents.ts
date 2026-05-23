@@ -73,6 +73,29 @@ function formatPct(value: number | null | undefined): string {
   return value == null ? 'n/a' : `${value >= 0 ? '+' : ''}${value}%`;
 }
 
+function performanceFromRow(row: Pick<PriceChangeImpactRow | MarginCostImpactRow | StockoutImpactRow, 'before' | 'after' | 'revenueChangePct' | 'marginChangePct'> & {
+  qtyChangePct?: number | null;
+  priceBefore?: number;
+  priceAfter?: number;
+}): CommercialDecisionEvent['performance'] {
+  return {
+    periodRevenue: row.after.revenue,
+    baselineRevenue: row.before.revenue,
+    revenueChangePct: row.revenueChangePct,
+    periodOrders: row.after.qty,
+    baselineOrders: row.before.qty,
+    ordersChangePct: row.qtyChangePct ?? null,
+    campaignSpend: 0,
+    periodRoas: null,
+    periodMargin: row.after.margin,
+    baselineMargin: row.before.margin,
+    marginChangePct: row.marginChangePct,
+    avgPriceBefore: row.priceBefore ?? row.before.avgPrice,
+    avgPriceAfter: row.priceAfter ?? row.after.avgPrice,
+    unitLabel: 'μονάδες SKU',
+  };
+}
+
 function statusForWindow(endDate: string): CommercialDecisionEvent['status'] {
   return endDate < new Date().toISOString().slice(0, 10) ? 'completed' : 'detected';
 }
@@ -104,6 +127,7 @@ function priceEvent(
       { label: 'Revenue change', before: null, after: formatPct(row.revenueChangePct) },
       { label: 'Margin change', before: null, after: formatPct(row.marginChangePct) },
     ],
+    performance: performanceFromRow(row),
     hypothesis: 'ERP/order history indicates a commercial price move with measurable revenue and margin impact.',
     tags: ['erp', 'history', 'pricing', row.direction, row.verdict, row.confidence],
     createdAt: now,
@@ -143,6 +167,7 @@ function marginEvent(
       { label: 'Unit cost', before: null, after: row.unitCost },
       { label: 'Revenue change', before: null, after: formatPct(row.revenueChangePct) },
     ],
+    performance: performanceFromRow(row),
     hypothesis: 'ERP/order history indicates a margin or cost movement that affected commercial performance.',
     tags: ['erp', 'history', 'margin', row.signal, row.verdict, row.confidence],
     createdAt: now,
@@ -176,6 +201,7 @@ function stockEvent(
       { label: 'Qty change', before: null, after: formatPct(row.qtyChangePct) },
       { label: 'Revenue change', before: null, after: formatPct(row.revenueChangePct) },
     ],
+    performance: performanceFromRow(row),
     hypothesis: 'ERP/procurement history indicates stock pressure that may have constrained commercial performance.',
     tags: ['erp', 'history', 'stock', row.verdict, row.confidence],
     createdAt: now,

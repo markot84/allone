@@ -80,12 +80,23 @@ export function useCommercialDecisionMemory(period?: CommercialDecisionMemoryPer
     () => buildStockContextFromProcurementSignals(procurementSignals.signalsBySku),
     [procurementSignals.signalsBySku]
   );
+  const canLoadErpHistory =
+    !!brandId &&
+    !!period?.fromDate &&
+    !!period?.toDate &&
+    !ecomm.isLoading &&
+    !procurement.isLoading &&
+    !procurementSignals.isLoading;
 
   const storedQuery = useQuery({
     queryKey: ['commercial_decision_events', brandId],
     queryFn: () => (brandId ? listCommercialDecisionEvents(brandId) : Promise.resolve([])),
     enabled: !!brandId,
     staleTime: 10 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    placeholderData: (previousData) => previousData,
   });
 
   const erpHistoryQuery = useQuery({
@@ -103,6 +114,7 @@ export function useCommercialDecisionMemory(period?: CommercialDecisionMemoryPer
       const orders = await fetchDataAnalysisOrders(brandId, ecomm.connectedPlatforms, {
         sinceDate: shiftIsoDate(period.fromDate, -30),
         untilDate: period.toDate,
+        cacheFirst: true,
         revenueMode: 'all',
       });
       return buildErpHistoricalDecisionEvents({
@@ -115,8 +127,12 @@ export function useCommercialDecisionMemory(period?: CommercialDecisionMemoryPer
         stockBySku,
       });
     },
-    enabled: !!brandId && !!period?.fromDate && !!period?.toDate,
+    enabled: canLoadErpHistory,
     staleTime: 10 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    placeholderData: (previousData) => previousData,
   });
 
   const saveMutation = useMutation({
@@ -197,14 +213,10 @@ export function useCommercialDecisionMemory(period?: CommercialDecisionMemoryPer
     };
   }, [items]);
 
-  return {
-    items,
-    summary,
-    period: period ?? null,
-    saveDecisionEvent: saveMutation.mutateAsync,
-    isSaving: saveMutation.isPending,
-    isLoading:
-      storedQuery.isPending ||
+  const hasVisibleDecisionData = items.length > 0 || storedQuery.data !== undefined || erpHistoryQuery.data !== undefined;
+  const isInitialLoading =
+    !hasVisibleDecisionData &&
+    (storedQuery.isPending ||
       isStrategyLoading ||
       isCampaignsLoading ||
       isActivationsLoading ||
@@ -212,8 +224,23 @@ export function useCommercialDecisionMemory(period?: CommercialDecisionMemoryPer
       ecomm.isLoading ||
       procurement.isLoading ||
       procurementSignals.isLoading ||
-      erpHistoryQuery.isPending ||
+      (canLoadErpHistory && erpHistoryQuery.isPending) ||
       isProductsLoading ||
+      productSignals.isLoading);
+
+  return {
+    items,
+    summary,
+    period: period ?? null,
+    saveDecisionEvent: saveMutation.mutateAsync,
+    isSaving: saveMutation.isPending,
+    isLoading: isInitialLoading,
+    isRefreshing:
+      storedQuery.isFetching ||
+      erpHistoryQuery.isFetching ||
+      ecomm.isLoading ||
+      procurement.isRefreshing ||
+      procurementSignals.isLoading ||
       productSignals.isLoading,
     dataCoverage: {
       hasRevenue: ecomm.hasData,

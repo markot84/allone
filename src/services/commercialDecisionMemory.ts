@@ -44,6 +44,23 @@ export interface CommercialDecisionChange {
   after?: string | number | null;
 }
 
+export interface CommercialDecisionPerformanceMetrics {
+  periodRevenue: number;
+  baselineRevenue: number;
+  revenueChangePct: number | null;
+  periodOrders: number;
+  baselineOrders: number;
+  ordersChangePct: number | null;
+  campaignSpend?: number;
+  periodRoas?: number | null;
+  periodMargin?: number;
+  baselineMargin?: number;
+  marginChangePct?: number | null;
+  avgPriceBefore?: number;
+  avgPriceAfter?: number;
+  unitLabel?: string;
+}
+
 export interface CommercialDecisionEvent {
   id: string;
   brandId: string;
@@ -62,6 +79,7 @@ export interface CommercialDecisionEvent {
   status: CommercialDecisionStatus;
   scope?: CommercialDecisionScope;
   changes?: CommercialDecisionChange[];
+  performance?: CommercialDecisionPerformanceMetrics;
   hypothesis?: string;
   tags?: string[];
   createdAt: string;

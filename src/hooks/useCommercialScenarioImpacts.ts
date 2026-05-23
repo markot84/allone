@@ -44,6 +44,13 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
     () => buildStockContextFromProcurementSignals(procurementSignals.signalsBySku),
     [procurementSignals.signalsBySku]
   );
+  const canLoadImpacts =
+    !!brandId &&
+    !!period?.fromDate &&
+    !!period?.toDate &&
+    !ecomm.isLoading &&
+    !procurement.isLoading &&
+    !procurementSignals.isLoading;
 
   const query = useQuery({
     queryKey: [
@@ -64,6 +71,7 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
       const orders = await fetchDataAnalysisOrders(brandId, ecomm.connectedPlatforms, {
         sinceDate: lookbackFrom,
         untilDate: period.toDate,
+        cacheFirst: true,
         revenueMode: 'all',
       });
 
@@ -90,12 +98,16 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
 
       return { price, margin, stockout, marketing, orderCount: orders.length, ordersWithLines };
     },
-    enabled: !!brandId && !!period?.fromDate && !!period?.toDate,
+    enabled: canLoadImpacts,
     staleTime: 10 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    placeholderData: (previousData) => previousData,
   });
 
   const isLoading =
-    query.isPending || procurement.isLoading || procurementSignals.isLoading || campaignsLoading;
+    !query.data && (query.isPending || procurement.isLoading || procurementSignals.isLoading || campaignsLoading);
 
   return {
     price: query.data?.price,
@@ -105,6 +117,7 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
     orderCount: query.data?.orderCount ?? 0,
     ordersWithLines: query.data?.ordersWithLines ?? 0,
     isLoading,
+    isRefreshing: !!query.data && (query.isFetching || procurement.isRefreshing || procurementSignals.isLoading || campaignsLoading),
     hasOrderLines: (query.data?.ordersWithLines ?? 0) > 0,
     hasCostData: costBySku.size > 0,
     hasStockSignals: stockBySku.size > 0,
