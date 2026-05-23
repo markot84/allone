@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { __test } from './useMagentoProductEnrichment';
 
-const { buildImageLink, buildProductLink } = __test;
+const { buildImageLink, buildProductLink, inferMagentoMediaBaseUrl } = __test;
 
 describe('useMagentoProductEnrichment helpers', () => {
   describe('buildImageLink', () => {
@@ -31,6 +31,16 @@ describe('useMagentoProductEnrichment helpers', () => {
     });
     it('επιστρέφει κενό αν λείπει storeWebUrl', () => {
       expect(buildProductLink('', 'foo', 'BAR-1')).toBe('');
+    });
+  });
+
+  describe('inferMagentoMediaBaseUrl', () => {
+    it('κρατάει configured mediaBaseUrl όταν υπάρχει', () => {
+      expect(inferMagentoMediaBaseUrl('https://shop.gr/pub/media', 'https://shop.gr')).toBe('https://shop.gr/pub/media');
+    });
+
+    it('κάνει fallback στο /media από storeUrl όταν λείπει mediaBaseUrl', () => {
+      expect(inferMagentoMediaBaseUrl('', 'https://www.e-tennis.gr/')).toBe('https://www.e-tennis.gr/media');
     });
   });
 });

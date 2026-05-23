@@ -78,6 +78,12 @@ function buildProductLink(storeWebUrl: string, urlKey: string, sku: string): str
   return base;
 }
 
+function inferMagentoMediaBaseUrl(configuredMediaBaseUrl: string, storeUrl: string): string {
+  if (configuredMediaBaseUrl) return configuredMediaBaseUrl;
+  if (!storeUrl) return '';
+  return `${storeUrl.replace(/\/+$/, '')}/media`;
+}
+
 export function useMagentoProductEnrichment() {
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
@@ -90,10 +96,12 @@ export function useMagentoProductEnrichment() {
       const data = snap.data() || {};
       const m = (data as Record<string, unknown>).magento as Record<string, unknown> | undefined;
       if (!m) return { storeWebUrl: '', mediaBaseUrl: '', storeUrl: '', connected: false };
+      const storeWebUrl = String(m.storeWebUrl || m.storeUrl || '');
+      const storeUrl = String(m.storeUrl || '');
       return {
-        storeWebUrl: String(m.storeWebUrl || m.storeUrl || ''),
-        mediaBaseUrl: String(m.mediaBaseUrl || ''),
-        storeUrl: String(m.storeUrl || ''),
+        storeWebUrl,
+        mediaBaseUrl: inferMagentoMediaBaseUrl(String(m.mediaBaseUrl || ''), storeWebUrl || storeUrl),
+        storeUrl,
         connected: Boolean(m.connected),
       };
     },
@@ -166,4 +174,5 @@ export function useMagentoProductEnrichment() {
 export const __test = {
   buildImageLink,
   buildProductLink,
+  inferMagentoMediaBaseUrl,
 };
