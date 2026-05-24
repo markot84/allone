@@ -2320,7 +2320,7 @@ export const scheduledSyncFollowups = onSchedule(
 export const scheduledDataAnalysisRfm = onSchedule(
   { timeZone: 'Europe/Athens', region: 'europe-west1', memory: '2GiB', timeoutSeconds: 1200, schedule: '20 7 1 * *' },
   async () => {
-    const snap = await db.collection('connectors').where('magento.connected', '==', true).limit(5).get();
+    const snap = await db.collection('connectors').get();
     for (const doc of snap.docs) {
       try {
         await refreshDataAnalysisRfmAggregate(doc.id);

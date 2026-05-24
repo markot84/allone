@@ -9,7 +9,6 @@ import { getLastImportMeta, type LastImportMeta } from '../../services/import';
 import { coerceToDate } from '../../utils/coerceDate';
 import { clearOAuthSession, readOAuthSessionPayload } from '../../utils/oauthSession';
 import { FirestoreService } from '../../services/firestore';
-import { clearAnalysisSnapshots } from '../../services/analysisSnapshotCache';
 import { refreshProductIntelligenceOnServer } from '../../services/productIntelligenceAggregate';
 import { Card, Button, Spinner, useToast, PageHeader } from '../common';
 import type { ModuleId } from '../../types';
@@ -2167,13 +2166,11 @@ export function ConnectorsPanel() {
 
   const refreshCommerceRfmProductCaches = useCallback(() => {
     if (!brandId) return;
-    clearAnalysisSnapshots(brandId);
     queryClient.removeQueries({ queryKey: ['brandSyncVersion', brandId] });
     queryClient.removeQueries({ queryKey: ['ecommerce_summary', brandId] });
     queryClient.removeQueries({ queryKey: ['business_revenue_summary', brandId] });
     queryClient.removeQueries({ queryKey: ['ecommerceOrdersRaw', brandId] });
     queryClient.removeQueries({ queryKey: ['dataAnalysisOrdersRaw', brandId] });
-    queryClient.removeQueries({ queryKey: ['dataAnalysisRfmAggregate', brandId] });
     queryClient.removeQueries({ queryKey: ['catalogAlignmentDataAnalysis', brandId] });
     queryClient.removeQueries({ queryKey: ['products', brandId] });
     queryClient.removeQueries({ queryKey: ['products_paginated', brandId] });
@@ -2184,7 +2181,6 @@ export function ConnectorsPanel() {
     queryClient.invalidateQueries({ queryKey: ['business_revenue_summary', brandId] });
     queryClient.invalidateQueries({ queryKey: ['ecommerceOrdersRaw', brandId] });
     queryClient.invalidateQueries({ queryKey: ['dataAnalysisOrdersRaw', brandId] });
-    queryClient.invalidateQueries({ queryKey: ['dataAnalysisRfmAggregate', brandId] });
     queryClient.invalidateQueries({ queryKey: ['catalogAlignmentDataAnalysis', brandId] });
     queryClient.invalidateQueries({ queryKey: ['products', brandId] });
     queryClient.invalidateQueries({ queryKey: ['products_paginated', brandId] });

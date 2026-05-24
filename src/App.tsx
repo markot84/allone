@@ -117,7 +117,7 @@ function QueryProvider({ children }: { children: React.ReactNode }) {
         client={queryClient}
         persistOptions={{
           persister,
-          maxAge: 24 * 60 * 60 * 1000,
+          maxAge: 31 * 24 * 60 * 60 * 1000,
           dehydrateOptions: {
             shouldDehydrateQuery: (query) => {
               const key = query.queryKey[0];
@@ -272,7 +272,7 @@ function AppMain() {
       case 'marketing-plan':
         return <MarketingPlanPage onSectionChange={handleSectionChange} />;
       case 'rfm':
-        return <RFMAnalysis onSectionChange={handleSectionChange} />;
+        return <RFMAnalysis />;
       case 'products':
         return <ProductIntelligence onSectionChange={handleSectionChange} />;
       case 'suppliers':

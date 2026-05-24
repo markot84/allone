@@ -6,7 +6,7 @@ import { getSegmentColor } from '../utils/segmentColors';
 import { useBrand } from './useBrand';
 import { useEcommerceSummary } from './useEcommerceSummary';
 import { useBrandSyncVersion } from './useBrandSyncVersion';
-import { fetchAllEcommerceOrders, fetchDataAnalysisOrders } from '../services/ecommerceRawOrders';
+import { fetchAllEcommerceOrders } from '../services/ecommerceRawOrders';
 import { fetchCatalogAlignmentData, fetchCatalogAlignmentDataForDataAnalysis, normalizeCatalogAlignmentPayload } from '../services/catalogAlignment';
 import {
   computeRfmOrderScopeStats,
@@ -122,6 +122,7 @@ export type UseSegmentsOptions = {
 
 export function useSegments(options: UseSegmentsOptions = {}) {
   const variant = options.variant ?? 'default';
+  const isDataAnalysis = variant === 'data_analysis';
   const skipOrderHydration = options.skipOrderHydration === true;
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
@@ -171,9 +172,10 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   );
 
   const ordersQueryEnabled =
+    !isDataAnalysis &&
     !skipOrderHydration &&
     !!brandId &&
-    (ecomm.connectedPlatforms.length > 0 || variant === 'data_analysis');
+    ecomm.connectedPlatforms.length > 0;
   const ordersSinceDate = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() - RFM_ORDER_FETCH_WINDOW_DAYS);
@@ -185,21 +187,24 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   const brandSyncVersionQuery = useBrandSyncVersion(brandId);
   const syncVersion = brandSyncVersionQuery.data?.version ?? null;
   const { data: dataAnalysisAggregate = null, isPending: dataAnalysisAggregatePending } = useQuery({
-    queryKey: ['dataAnalysisRfmAggregate', brandId, syncVersion ?? 'pending'],
+    queryKey: ['dataAnalysisRfmAggregate', brandId],
     queryFn: () => (brandId ? fetchDataAnalysisRfmAggregate(brandId, syncVersion) : Promise.resolve(null)),
-    enabled: variant === 'data_analysis' && !!brandId,
-    staleTime: 10 * 60 * 1000,
-    gcTime: 60 * 60 * 1000,
+    enabled: isDataAnalysis && !!brandId,
+    staleTime: 24 * 60 * 60 * 1000,
+    gcTime: 7 * 24 * 60 * 60 * 1000,
     placeholderData: (previousData) => previousData,
+    refetchOnMount: false,
     refetchOnWindowFocus: false,
     retry: 1,
   });
   const aggregateScopeKey = sourcePref === 'external' ? 'all' : 'identified';
-  const aggregateScope = dataAnalysisAggregate?.status === 'ready'
-    ? dataAnalysisAggregate.scopes?.[aggregateScopeKey] ?? null
-    : null;
-  const aggregateIsBuilding = variant === 'data_analysis' && dataAnalysisAggregate?.status === 'running';
-  const isDataAnalysisAggregatePending = variant === 'data_analysis' && dataAnalysisAggregatePending && !dataAnalysisAggregate;
+  const aggregateScope = isDataAnalysis
+    ? dataAnalysisAggregate?.scopes?.[aggregateScopeKey] ?? null
+    : dataAnalysisAggregate?.status === 'ready'
+      ? dataAnalysisAggregate.scopes?.[aggregateScopeKey] ?? null
+      : null;
+  const aggregateIsBuilding = isDataAnalysis && dataAnalysisAggregate?.status === 'running';
+  const isDataAnalysisAggregatePending = isDataAnalysis && dataAnalysisAggregatePending && !dataAnalysisAggregate;
   const shouldUseAggregate = !!aggregateScope?.canCompute;
   const snapshotScope = useMemo<AnalysisSnapshotScope | null>(
     () => brandId ? { brandId, variant, sourcePref, ordersSinceDate } : null,
@@ -210,15 +215,17 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     [snapshotScope]
   );
   const freshAnalysisSnapshot = useMemo(
-    () => (isAnalysisSnapshotFresh(analysisSnapshot) ? analysisSnapshot : null),
-    [analysisSnapshot]
+    () => (isDataAnalysis ? analysisSnapshot : isAnalysisSnapshotFresh(analysisSnapshot) ? analysisSnapshot : null),
+    [analysisSnapshot, isDataAnalysis]
   );
   const freshSnapshotForCurrentSync = useMemo(
     () =>
-      freshAnalysisSnapshot && syncVersion && freshAnalysisSnapshot.syncVersion === syncVersion
+      isDataAnalysis && freshAnalysisSnapshot
+        ? freshAnalysisSnapshot
+        : freshAnalysisSnapshot && syncVersion && freshAnalysisSnapshot.syncVersion === syncVersion
         ? freshAnalysisSnapshot
         : null,
-    [freshAnalysisSnapshot, syncVersion]
+    [freshAnalysisSnapshot, isDataAnalysis, syncVersion]
   );
   const usableSnapshot =
     variant === 'data_analysis' &&
@@ -237,22 +244,17 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     analysisSnapshot.segments.length > 0
       ? analysisSnapshot
       : null;
-  const hasCachedAnalysisSnapshot = !!usableSnapshot;
-
   const ordersSourceFingerprint = variant === 'data_analysis' ? (syncVersion ?? 'latest') : platformsKey;
 
   const { data: rawOrders = [], isPending: ordersPending, error: ordersError } = useQuery({
     queryKey: [ordersQueryKeyPrefix, brandId, platformsKey, ordersSinceDate, ordersSourceFingerprint],
     queryFn: () =>
       brandId
-        ? (variant === 'data_analysis'
-            ? fetchDataAnalysisOrders(brandId, ecomm.connectedPlatforms, { sinceDate: ordersSinceDate })
-            : fetchAllEcommerceOrders(brandId, ecomm.connectedPlatforms, { sinceDate: ordersSinceDate }))
+        ? fetchAllEcommerceOrders(brandId, ecomm.connectedPlatforms, { sinceDate: ordersSinceDate })
         : Promise.resolve([]),
     enabled:
       ordersQueryEnabled &&
-      !shouldUseAggregate &&
-      (variant !== 'data_analysis' || !hasCachedAnalysisSnapshot),
+      !shouldUseAggregate,
     staleTime: 12 * 60 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -331,12 +333,12 @@ export function useSegments(options: UseSegmentsOptions = {}) {
 
   const resolvedSource: SegmentsDataSource = useMemo(() => {
     if (shouldUseAggregate) return 'ecommerce';
+    if (isDataAnalysis) return 'none';
     if (orderRfm.canCompute) return 'ecommerce';
     if (ordersQueryEnabled && (ordersPending || aggregateIsBuilding || isDataAnalysisAggregatePending)) return 'none';
-    if (variant === 'data_analysis' && ordersQueryEnabled) return 'none';
     if (sourcePref === 'external' && importSegmentsAvailable) return 'import';
     return importSegmentsAvailable ? 'import' : 'none';
-  }, [shouldUseAggregate, orderRfm.canCompute, ordersQueryEnabled, ordersPending, aggregateIsBuilding, isDataAnalysisAggregatePending, variant, sourcePref, importSegmentsAvailable]);
+  }, [shouldUseAggregate, isDataAnalysis, orderRfm.canCompute, ordersQueryEnabled, ordersPending, aggregateIsBuilding, isDataAnalysisAggregatePending, sourcePref, importSegmentsAvailable]);
 
   const segments = useMemo(() => {
     let base: RFMSegment[];
@@ -434,13 +436,14 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     !ecomm.hasData;
   const isLoading = skipOrderHydration
     ? blocksOnImportedSegmentsOnly
-    : (aggregateIsBuilding && !usableSnapshot && !orderRfm.canCompute) ||
+    : (isDataAnalysis && !dataAnalysisAggregate && dataAnalysisAggregatePending) ||
+      (!isDataAnalysis && aggregateIsBuilding && !usableSnapshot && !orderRfm.canCompute) ||
       isDataAnalysisAggregatePending ||
       (blocksOnImportedSegmentsOnly ||
         (ordersQueryEnabled && ordersPending && !orderRfm.canCompute));
 
-  const ordersLoading = skipOrderHydration ? false : !shouldUseAggregate && ordersQueryEnabled && ordersPending;
-  const isCatalogEnriching = !shouldUseAggregate && ordersQueryEnabled && catalogPending;
+  const ordersLoading = isDataAnalysis || skipOrderHydration ? false : !shouldUseAggregate && ordersQueryEnabled && ordersPending;
+  const isCatalogEnriching = !isDataAnalysis && !shouldUseAggregate && ordersQueryEnabled && catalogPending;
 
   const hasImported =
     shouldUseAggregate && aggregateScope
