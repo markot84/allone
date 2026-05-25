@@ -131,7 +131,7 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
   }, [items, query, typeFilter, verdictFilter, summaryTab]);
 
   const handleSummaryTab = (tab: Exclude<SummaryTab, 'all'>) => {
-    setSummaryTab((current) => (current === tab ? 'all' : tab));
+    setSummaryTab(tab);
     setSelectedId(null);
   };
 
@@ -270,6 +270,18 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
       </div>
 
       <CommercialScenarioPanels period={periodDates} periodLabel={periodLabel} />
+
+      {isRefreshing && !isLoading && (
+        <Card padding="md" className="border border-[var(--nts-accent)]/25 bg-[var(--nts-accent)]/5">
+          <div className="flex items-center gap-3">
+            <Spinner />
+            <div>
+              <p className="text-sm font-semibold text-[#1A1A1A]">Ανανεώνονται τα αποτελέσματα για τη νέα περίοδο.</p>
+              <p className="text-xs text-[#6B7280]">Τα ERP/order-line σενάρια μπορεί να χρειαστούν λίγο χρόνο όταν αλλάζει μεγάλο date range.</p>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {showForm && (
         <Card padding="lg" className="border border-[var(--nts-accent)]/30">
@@ -431,10 +443,10 @@ function SummaryCard({
     info: 'text-sky-600 bg-sky-50',
   }[tone];
   const ringClass = {
-    success: 'ring-emerald-500/40',
-    warning: 'ring-amber-500/40',
-    danger: 'ring-rose-500/40',
-    info: 'ring-sky-500/40',
+    success: 'border-emerald-400 ring-2 ring-emerald-500/35 bg-emerald-50/40',
+    warning: 'border-amber-400 ring-2 ring-amber-500/35 bg-amber-50/40',
+    danger: 'border-rose-400 ring-2 ring-rose-500/35 bg-rose-50/40',
+    info: 'border-sky-400 ring-2 ring-sky-500/35 bg-sky-50/40',
   }[tone];
   return (
     <button
@@ -442,11 +454,11 @@ function SummaryCard({
       role="tab"
       aria-selected={selected}
       onClick={onClick}
-      className={`w-full rounded-xl text-left transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nts-accent)] ${
-        selected ? `ring-2 ${ringClass}` : 'hover:ring-1 hover:ring-[#E5E7EB]'
+      className={`w-full rounded-xl border text-left transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nts-accent)] ${
+        selected ? ringClass : 'border-transparent hover:border-[#D1D5DB] hover:ring-1 hover:ring-[#E5E7EB]'
       }`}
     >
-      <Card padding="md" className={selected ? 'border-transparent' : undefined}>
+      <Card padding="md" className={selected ? 'border-transparent bg-transparent shadow-sm' : undefined}>
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase text-[#9CA3AF]">{label}</p>

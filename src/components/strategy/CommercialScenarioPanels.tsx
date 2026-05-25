@@ -58,18 +58,30 @@ export function CommercialScenarioPanels({
   }, [active, filter]);
 
   return (
-    <Card padding="lg">
+    <Card padding="lg" className="relative overflow-hidden">
       <CardHeader
         title="Εμπορικά σενάρια & επίδραση (ERP)"
         subtitle={
           periodLabel
-            ? `${periodLabel} — historical ERP/order-line signals με σύγκριση 30 ημερών πριν από κάθε window.`
+            ? `${periodLabel} — detector για raw ERP/order-line μεταβολές ανά μήνα, με σύγκριση 30 ημερών πριν από κάθε window.`
             : 'Επιλέξτε περίοδο για ERP historical signals.'
         }
         icon={<Tag size={18} className="text-[var(--nts-accent)]" />}
       />
 
-      <div className="mb-4 flex flex-wrap gap-1 rounded-lg bg-[#F3F4F6] p-1">
+      {data.isRefreshing && !data.isLoading && (
+        <div className="absolute inset-0 z-10 flex items-start justify-center bg-white/75 px-4 pt-20 backdrop-blur-[1px]">
+          <div className="flex max-w-md items-center gap-3 rounded-xl border border-[var(--nts-accent)]/20 bg-white p-4 shadow-lg">
+            <Spinner />
+            <div>
+              <p className="text-sm font-semibold text-[#1A1A1A]">Υπολογίζονται ERP scenarios για τη νέα περίοδο.</p>
+              <p className="text-xs text-[#6B7280]">Κρατάμε προσωρινά τα προηγούμενα στοιχεία μέχρι να ολοκληρωθεί το νέο query.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="mb-4 flex flex-wrap gap-1 rounded-lg bg-[#F3F4F6] p-1" aria-busy={data.isLoading || data.isRefreshing}>
         {TABS.map((t) => (
           <button
             key={t.key}

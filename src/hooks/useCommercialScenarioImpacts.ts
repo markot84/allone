@@ -10,6 +10,7 @@ import {
   buildSkuNameMapFromPricingRows,
   buildUnitCostBySku,
   shiftIsoDate,
+  type SkuWindowMetrics,
 } from '../services/commercialScenarioMetrics';
 import { analyzePriceChangeImpact } from '../services/priceChangeImpact';
 import { analyzeMarginCostImpact } from '../services/marginCostImpact';
@@ -20,6 +21,52 @@ import type { Campaign } from '../types';
 export interface CommercialScenarioPeriod {
   fromDate: string;
   toDate: string;
+}
+
+type WindowedScenarioRow = {
+  verdict: 'positive' | 'negative' | 'neutral' | 'insufficient';
+  before: SkuWindowMetrics;
+  after: SkuWindowMetrics;
+};
+
+function monthWindows(periodFrom: string, periodTo: string): Array<{ startDate: string; endDate: string }> {
+  const [fy, fm] = periodFrom.split('-').map(Number);
+  const [ty, tm] = periodTo.split('-').map(Number);
+  if (!fy || !fm || !ty || !tm || periodFrom > periodTo) return [];
+
+  const windows: Array<{ startDate: string; endDate: string }> = [];
+  let cursor = new Date(fy, fm - 1, 1);
+  const last = new Date(ty, tm - 1, 1);
+
+  while (cursor <= last) {
+    const y = cursor.getFullYear();
+    const m = cursor.getMonth();
+    const monthStart = `${y}-${String(m + 1).padStart(2, '0')}-01`;
+    const monthEndDt = new Date(y, m + 1, 0);
+    const monthEnd = `${monthEndDt.getFullYear()}-${String(monthEndDt.getMonth() + 1).padStart(2, '0')}-${String(monthEndDt.getDate()).padStart(2, '0')}`;
+    windows.push({
+      startDate: monthStart > periodFrom ? monthStart : periodFrom,
+      endDate: monthEnd < periodTo ? monthEnd : periodTo,
+    });
+    cursor = new Date(y, m + 1, 1);
+  }
+
+  return windows.filter((w) => w.startDate <= w.endDate);
+}
+
+function summarizeRows<T extends WindowedScenarioRow>(rows: T[], lookbackDays = 30) {
+  return {
+    detected: rows.length,
+    positive: rows.filter((r) => r.verdict === 'positive').length,
+    negative: rows.filter((r) => r.verdict === 'negative').length,
+    neutral: rows.filter((r) => r.verdict === 'neutral').length,
+    insufficient: rows.filter((r) => r.verdict === 'insufficient').length,
+    totalRevenueBefore: rows.reduce((s, r) => s + r.before.revenue, 0),
+    totalRevenueAfter: rows.reduce((s, r) => s + r.after.revenue, 0),
+    totalMarginBefore: rows.reduce((s, r) => s + r.before.margin, 0),
+    totalMarginAfter: rows.reduce((s, r) => s + r.after.margin, 0),
+    lookbackDays,
+  };
 }
 
 export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) {
@@ -75,17 +122,30 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
         revenueMode: 'all',
       });
 
-      const base = {
-        orders,
-        periodFrom: period.fromDate,
-        periodTo: period.toDate,
-        costBySku,
-        skuNames,
-      };
+      const priceRows = [];
+      const marginRows = [];
+      const stockoutRows = [];
 
-      const price = analyzePriceChangeImpact(base);
-      const margin = analyzeMarginCostImpact(base);
-      const stockout = analyzeStockoutImpact({ ...base, stockBySku });
+      for (const window of monthWindows(period.fromDate, period.toDate)) {
+        const base = {
+          orders,
+          periodFrom: window.startDate,
+          periodTo: window.endDate,
+          costBySku,
+          skuNames,
+        };
+        priceRows.push(...analyzePriceChangeImpact(base).rows);
+        marginRows.push(...analyzeMarginCostImpact(base).rows);
+        stockoutRows.push(...analyzeStockoutImpact({ ...base, stockBySku }).rows);
+      }
+
+      priceRows.sort((a, b) => Math.abs(b.changePct) - Math.abs(a.changePct));
+      marginRows.sort((a, b) => Math.abs(b.marginPctChange ?? 0) - Math.abs(a.marginPctChange ?? 0));
+      stockoutRows.sort((a, b) => (a.revenueChangePct ?? 0) - (b.revenueChangePct ?? 0));
+
+      const price = { rows: priceRows, summary: summarizeRows(priceRows) };
+      const margin = { rows: marginRows, summary: summarizeRows(marginRows) };
+      const stockout = { rows: stockoutRows, summary: summarizeRows(stockoutRows) };
       const marketing = analyzeMarketingSpendImpact({
         campaigns: campaigns as Campaign[],
         orders,
