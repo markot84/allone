@@ -27,6 +27,7 @@ type WindowedScenarioRow = {
   verdict: 'positive' | 'negative' | 'neutral' | 'insufficient';
   before: SkuWindowMetrics;
   after: SkuWindowMetrics;
+  confidence?: 'low' | 'medium' | 'high';
 };
 
 function monthWindows(periodFrom: string, periodTo: string): Array<{ startDate: string; endDate: string }> {
@@ -55,18 +56,28 @@ function monthWindows(periodFrom: string, periodTo: string): Array<{ startDate: 
 }
 
 function summarizeRows<T extends WindowedScenarioRow>(rows: T[], lookbackDays = 30) {
+  const actionableRows = rows.filter((row) => isActionableScenarioRow(row));
+  const costedRows = actionableRows.filter((row) => row.after.unitCost > 0 || row.before.unitCost > 0);
+  const hasMarginCoverage = costedRows.length > 0;
   return {
-    detected: rows.length,
-    positive: rows.filter((r) => r.verdict === 'positive').length,
-    negative: rows.filter((r) => r.verdict === 'negative').length,
+    detected: actionableRows.length,
+    positive: actionableRows.filter((r) => r.verdict === 'positive').length,
+    negative: actionableRows.filter((r) => r.verdict === 'negative').length,
     neutral: rows.filter((r) => r.verdict === 'neutral').length,
     insufficient: rows.filter((r) => r.verdict === 'insufficient').length,
-    totalRevenueBefore: rows.reduce((s, r) => s + r.before.revenue, 0),
-    totalRevenueAfter: rows.reduce((s, r) => s + r.after.revenue, 0),
-    totalMarginBefore: rows.reduce((s, r) => s + r.before.margin, 0),
-    totalMarginAfter: rows.reduce((s, r) => s + r.after.margin, 0),
+    totalRevenueBefore: actionableRows.reduce((s, r) => s + r.before.revenue, 0),
+    totalRevenueAfter: actionableRows.reduce((s, r) => s + r.after.revenue, 0),
+    totalMarginBefore: hasMarginCoverage ? costedRows.reduce((s, r) => s + r.before.margin, 0) : null,
+    totalMarginAfter: hasMarginCoverage ? costedRows.reduce((s, r) => s + r.after.margin, 0) : null,
+    marginSkuCount: costedRows.length,
+    hasMarginCoverage,
     lookbackDays,
   };
+}
+
+function isActionableScenarioRow(row: WindowedScenarioRow): boolean {
+  if (row.verdict !== 'positive' && row.verdict !== 'negative') return false;
+  return row.confidence == null || row.confidence !== 'low';
 }
 
 export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) {

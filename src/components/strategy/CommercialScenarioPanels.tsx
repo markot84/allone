@@ -54,7 +54,10 @@ export function CommercialScenarioPanels({
 
   const filteredCount = useMemo(() => {
     if (!active) return 0;
-    if (filter === 'all') return active.rows.length;
+    if (filter === 'all') return active.rows.filter(isActionableRow).length;
+    if (filter === 'positive' || filter === 'negative') {
+      return active.rows.filter((r) => r.verdict === filter && isActionableRow(r)).length;
+    }
     return active.rows.filter((r) => r.verdict === filter).length;
   }, [active, filter]);
 
@@ -161,8 +164,18 @@ export function CommercialScenarioPanels({
 }
 
 function filterRows<T extends { verdict: ScenarioVerdict }>(rows: T[], filter: ImpactFilter): T[] {
-  const list = filter === 'all' ? rows : rows.filter((r) => r.verdict === filter);
+  const list =
+    filter === 'all'
+      ? rows.filter(isActionableRow)
+      : filter === 'positive' || filter === 'negative'
+        ? rows.filter((r) => r.verdict === filter && isActionableRow(r))
+        : rows.filter((r) => r.verdict === filter);
   return list.slice(0, 50);
+}
+
+function isActionableRow<T extends { verdict: ScenarioVerdict; confidence?: string }>(row: T): boolean {
+  if (row.verdict !== 'positive' && row.verdict !== 'negative') return false;
+  return row.confidence == null || row.confidence !== 'low';
 }
 
 function FilterChips({ filter, onChange }: { filter: ImpactFilter; onChange: (f: ImpactFilter) => void }) {
@@ -170,7 +183,7 @@ function FilterChips({ filter, onChange }: { filter: ImpactFilter; onChange: (f:
     <div className="mb-3 flex flex-wrap gap-2">
       {(
         [
-          ['all', 'Όλα'],
+          ['all', 'Actionable'],
           ['positive', 'Θετικά'],
           ['negative', 'Αρνητικά'],
           ['neutral', 'Ουδέτερα'],
@@ -222,13 +235,16 @@ function ScenarioKpis({
     negative: number;
     totalRevenueBefore: number;
     totalRevenueAfter: number;
-    totalMarginBefore: number;
-    totalMarginAfter: number;
+    totalMarginBefore: number | null;
+    totalMarginAfter: number | null;
+    marginSkuCount?: number;
+    hasMarginCoverage?: boolean;
   };
 }) {
+  const hasMarginCoverage = summary.hasMarginCoverage !== false && summary.totalMarginAfter != null && summary.totalMarginBefore != null;
   return (
     <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-      <MiniKpi label={tab === 'price' ? 'Μεταβολές τιμής' : tab === 'margin' ? 'Μεταβολές margin' : 'Stock risk'} value={summary.detected} />
+      <MiniKpi label={tab === 'price' ? 'Actionable τιμής' : tab === 'margin' ? 'Actionable margin' : 'Actionable stock risk'} value={summary.detected} />
       <MiniKpi label="Θετικά" value={summary.positive} tone="success" />
       <MiniKpi label="Αρνητικά" value={summary.negative} tone="danger" />
       <MiniKpi
@@ -238,8 +254,12 @@ function ScenarioKpis({
       />
       <MiniKpi
         label="Margin (μετά)"
-        value={formatCurrency(summary.totalMarginAfter, 0)}
-        sub={`πριν ${formatCurrency(summary.totalMarginBefore, 0)}`}
+        value={hasMarginCoverage ? formatCurrency(summary.totalMarginAfter ?? 0, 0) : '—'}
+        sub={
+          hasMarginCoverage
+            ? `πριν ${formatCurrency(summary.totalMarginBefore ?? 0, 0)}${summary.marginSkuCount ? ` · ${formatNumber(summary.marginSkuCount)} SKU με κόστος` : ''}`
+            : 'Δεν υπάρχει κόστος SKU για αξιόπιστο margin'
+        }
         tone="info"
       />
     </div>
