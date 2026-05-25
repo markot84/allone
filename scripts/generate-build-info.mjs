@@ -4,13 +4,16 @@
  * Output: src/generated/buildInfo.json
  */
 import { execSync } from 'child_process';
-import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'fs';
+import { writeFileSync, mkdirSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 const OUT = resolve(ROOT, 'src/generated/buildInfo.json');
+const VERSION_MAJOR = 0;
+const VERSION_MINOR = 749;
+const VERSION_PATCH_COMMIT_OFFSET = 235;
 
 function git(cmd) {
   try {
@@ -20,27 +23,16 @@ function git(cmd) {
   }
 }
 
-function getLastRecordedVersion() {
-  try {
-    if (existsSync(OUT)) {
-      const prev = JSON.parse(readFileSync(OUT, 'utf-8'));
-      return prev.version || '0.0.0';
-    }
-  } catch { /* ignore */ }
-  return '0.0.0';
+function getDeterministicVersion() {
+  const commitCount = Number(git('git rev-list --count HEAD')) || 0;
+  const hasPendingTrackedChanges = Boolean(git('git status --porcelain --untracked-files=no'));
+  const patch = Math.max(0, commitCount - VERSION_PATCH_COMMIT_OFFSET + (hasPendingTrackedChanges ? 1 : 0));
+  return {
+    version: `${VERSION_MAJOR}.${VERSION_MINOR}.${patch}`,
+    previousVersion: `${VERSION_MAJOR}.${VERSION_MINOR}.${Math.max(0, patch - 1)}`,
+  };
 }
 
-function bumpVersion(prev, commits) {
-  const [major, minor, patch] = prev.split('.').map(Number);
-  const hasFeat = commits.some(c => c.startsWith('feat'));
-  const hasFix = commits.some(c => c.startsWith('fix'));
-  if (hasFeat) return `${major}.${minor + 1}.0`;
-  if (hasFix) return `${major}.${minor}.${patch + 1}`;
-  return `${major}.${minor}.${patch + 1}`;
-}
-
-// Get commits since last build info generation
-const lastVersion = getLastRecordedVersion();
 const lastTag = git('git describe --tags --abbrev=0 2>/dev/null') || '';
 
 // Get recent commits (since last tag, or last 20)
@@ -63,7 +55,7 @@ const commits = rawLog
   });
 
 const commitMessages = commits.map(c => c.message);
-const newVersion = bumpVersion(lastVersion, commitMessages);
+const { version: newVersion, previousVersion } = getDeterministicVersion();
 const commitHash = git('git rev-parse --short HEAD');
 const branch = git('git branch --show-current');
 const buildDate = new Date().toISOString();
@@ -104,7 +96,7 @@ for (const msg of commitMessages) {
 
 const buildInfo = {
   version: newVersion,
-  previousVersion: lastVersion,
+  previousVersion,
   commitHash,
   branch,
   buildDate,

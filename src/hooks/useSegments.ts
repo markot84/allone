@@ -440,10 +440,10 @@ export function useSegments(options: UseSegmentsOptions = {}) {
       (!isDataAnalysis && aggregateIsBuilding && !usableSnapshot && !orderRfm.canCompute) ||
       isDataAnalysisAggregatePending ||
       (blocksOnImportedSegmentsOnly ||
-        (ordersQueryEnabled && ordersPending && !orderRfm.canCompute));
+        (variant !== 'data_analysis' && ordersQueryEnabled && ordersPending && !orderRfm.canCompute));
 
-  const ordersLoading = isDataAnalysis || skipOrderHydration ? false : !shouldUseAggregate && ordersQueryEnabled && ordersPending;
-  const isCatalogEnriching = !isDataAnalysis && !shouldUseAggregate && ordersQueryEnabled && catalogPending;
+  const ordersLoading = skipOrderHydration ? false : variant !== 'data_analysis' && !shouldUseAggregate && ordersQueryEnabled && ordersPending;
+  const isCatalogEnriching = variant !== 'data_analysis' && !shouldUseAggregate && ordersQueryEnabled && catalogPending;
 
   const hasImported =
     shouldUseAggregate && aggregateScope

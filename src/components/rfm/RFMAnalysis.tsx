@@ -133,7 +133,7 @@ export function RFMAnalysis() {
     analysisSnapshotIsStale,
     analysisLastAnalyzedAt,
   } = useSegments({ variant: 'data_analysis' });
-  const ecomm = useEcommerceSummary();
+  const ecomm = useEcommerceSummary({ includeSkuDetails: false, includeStockMovement: false });
   const { currentBrand } = useBrand();
   const queryClient = useQueryClient();
   const toast = useToast();

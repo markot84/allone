@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Generated at dev/build time. Keeping it out of Git prevents each deploy
+# from leaving the working tree dirty on the next build.
+src/generated/buildInfo.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
