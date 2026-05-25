@@ -1,7 +1,8 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { ArrowDownRight, ArrowUpRight, Megaphone, Package, Percent, Tag } from 'lucide-react';
-import { Card, CardHeader, Spinner, Badge } from '../common';
+import { Card, CardHeader, Spinner, Badge, ProductThumbnail } from '../common';
 import { useCommercialScenarioImpacts } from '../../hooks/useCommercialScenarioImpacts';
+import { useProductThumbnails } from '../../hooks/useProductThumbnails';
 import type { ScenarioVerdict, SkuWindowMetrics } from '../../services/commercialScenarioMetrics';
 import type { PriceChangeImpactRow } from '../../services/priceChangeImpact';
 import type { MarginCostImpactRow } from '../../services/marginCostImpact';
@@ -11,6 +12,7 @@ import { formatCurrency, formatNumber } from '../../utils/format';
 
 type ScenarioTab = 'price' | 'margin' | 'stock' | 'marketing';
 type ImpactFilter = 'all' | ScenarioVerdict;
+type GetThumbnailUrl = (sku: string, product?: unknown) => { url: string };
 
 const VERDICT_LABEL: Record<ScenarioVerdict, string> = {
   positive: 'Θετική',
@@ -44,6 +46,7 @@ export function CommercialScenarioPanels({
   const [filter, setFilter] = useState<ImpactFilter>('all');
   const [showDetails, setShowDetails] = useState(false);
   const data = useCommercialScenarioImpacts(period);
+  const { getThumbnailUrl } = useProductThumbnails();
 
   const active = useMemo(() => {
     if (tab === 'price') return data.price;
@@ -141,13 +144,13 @@ export function CommercialScenarioPanels({
           {showDetails && (
             <div className="overflow-x-auto rounded-xl border border-[#E5E7EB]">
               {tab === 'price' && data.price && (
-                <PriceTable rows={filterRows(data.price.rows, filter)} />
+                <PriceTable rows={filterRows(data.price.rows, filter)} getThumbnailUrl={getThumbnailUrl} />
               )}
               {tab === 'margin' && data.margin && (
-                <MarginTable rows={filterRows(data.margin.rows, filter)} />
+                <MarginTable rows={filterRows(data.margin.rows, filter)} getThumbnailUrl={getThumbnailUrl} />
               )}
               {tab === 'stock' && data.stockout && (
-                <StockTable rows={filterRows(data.stockout.rows, filter)} />
+                <StockTable rows={filterRows(data.stockout.rows, filter)} getThumbnailUrl={getThumbnailUrl} />
               )}
               {tab === 'marketing' && data.marketing && (
                 <MarketingTable rows={filterRows(data.marketing.rows, filter)} />
@@ -383,7 +386,31 @@ function VerdictCell({ verdict, confidence }: { verdict: ScenarioVerdict; confid
   );
 }
 
-function PriceTable({ rows }: { rows: PriceChangeImpactRow[] }) {
+function SkuCell({
+  sku,
+  productName,
+  getThumbnailUrl,
+  meta,
+}: {
+  sku: string;
+  productName: string;
+  getThumbnailUrl: GetThumbnailUrl;
+  meta?: ReactNode;
+}) {
+  const thumb = getThumbnailUrl(sku).url;
+  return (
+    <div className="flex min-w-[180px] items-start gap-2">
+      <ProductThumbnail src={thumb || undefined} alt={productName || sku} size="sm" />
+      <div className="min-w-0">
+        <p className="truncate font-semibold">{sku}</p>
+        <p className="line-clamp-1 text-xs text-[#6B7280]">{productName}</p>
+        {meta}
+      </div>
+    </div>
+  );
+}
+
+function PriceTable({ rows, getThumbnailUrl }: { rows: PriceChangeImpactRow[]; getThumbnailUrl: GetThumbnailUrl }) {
   const showMargin = rows.some((row) => hasCostCoverage(row.before, row.after));
   return (
     <table className="min-w-full text-left text-sm">
@@ -401,8 +428,7 @@ function PriceTable({ rows }: { rows: PriceChangeImpactRow[] }) {
         {rows.map((row) => (
           <tr key={row.sku} className="hover:bg-[#FAFAFA]">
             <td className="px-3 py-2">
-              <p className="font-semibold">{row.sku}</p>
-              <p className="line-clamp-1 text-xs text-[#6B7280]">{row.productName}</p>
+              <SkuCell sku={row.sku} productName={row.productName} getThumbnailUrl={getThumbnailUrl} />
             </td>
             <td className="px-3 py-2 font-mono text-xs">
               {row.direction === 'increase' ? (
@@ -426,7 +452,7 @@ function PriceTable({ rows }: { rows: PriceChangeImpactRow[] }) {
   );
 }
 
-function MarginTable({ rows }: { rows: MarginCostImpactRow[] }) {
+function MarginTable({ rows, getThumbnailUrl }: { rows: MarginCostImpactRow[]; getThumbnailUrl: GetThumbnailUrl }) {
   const showMargin = rows.some((row) => hasCostCoverage(row.before, row.after));
   return (
     <table className="min-w-full text-left text-sm">
@@ -443,9 +469,12 @@ function MarginTable({ rows }: { rows: MarginCostImpactRow[] }) {
         {rows.map((row) => (
           <tr key={row.sku} className="hover:bg-[#FAFAFA]">
             <td className="px-3 py-2">
-              <p className="font-semibold">{row.sku}</p>
-              <p className="text-xs text-[#6B7280]">{row.productName}</p>
-              {row.unitCost > 0 && <p className="text-[10px] text-[#9CA3AF]">κόστος {formatCurrency(row.unitCost, 2)}</p>}
+              <SkuCell
+                sku={row.sku}
+                productName={row.productName}
+                getThumbnailUrl={getThumbnailUrl}
+                meta={row.unitCost > 0 ? <p className="text-[10px] text-[#9CA3AF]">κόστος {formatCurrency(row.unitCost, 2)}</p> : undefined}
+              />
             </td>
             <td className="px-3 py-2 text-xs">
               {row.signal === 'cost_pressure' ? 'Πίεση κόστους' : row.signal === 'margin_gain' ? 'Κέρδος margin' : 'Πτώση margin'}
@@ -460,7 +489,7 @@ function MarginTable({ rows }: { rows: MarginCostImpactRow[] }) {
   );
 }
 
-function StockTable({ rows }: { rows: StockoutImpactRow[] }) {
+function StockTable({ rows, getThumbnailUrl }: { rows: StockoutImpactRow[]; getThumbnailUrl: GetThumbnailUrl }) {
   const showMargin = rows.some((row) => hasCostCoverage(row.before, row.after));
   return (
     <table className="min-w-full text-left text-sm">
@@ -477,8 +506,7 @@ function StockTable({ rows }: { rows: StockoutImpactRow[] }) {
         {rows.map((row) => (
           <tr key={row.sku} className="hover:bg-[#FAFAFA]">
             <td className="px-3 py-2">
-              <p className="font-semibold">{row.sku}</p>
-              <p className="text-xs text-[#6B7280]">{row.productName}</p>
+              <SkuCell sku={row.sku} productName={row.productName} getThumbnailUrl={getThumbnailUrl} />
             </td>
             <td className="px-3 py-2 text-xs">
               {row.daysOfCover != null && <p>Ημέρες κάλυψης: {row.daysOfCover}</p>}
