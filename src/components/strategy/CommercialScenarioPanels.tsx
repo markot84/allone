@@ -128,11 +128,8 @@ export function CommercialScenarioPanels({
         <p className="text-sm text-[#6B7280]">Δεν εντοπίστηκαν σενάρια με τα τρέχοντα κριτήρια.</p>
       ) : (
         <div className="space-y-3">
-          <DecisionLibraryBridge tab={tab} filteredCount={filteredCount} />
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-xs text-[#6B7280]">
-              Η αναλυτική επιλογή γίνεται ακριβώς από κάτω, στις Εμπορικές αποφάσεις / ERP findings.
-            </p>
+            <span />
             <button
               type="button"
               onClick={() => setShowDetails((v) => !v)}
@@ -204,26 +201,6 @@ function FilterChips({ filter, onChange }: { filter: ImpactFilter; onChange: (f:
   );
 }
 
-function DecisionLibraryBridge({ tab, filteredCount }: { tab: ScenarioTab; filteredCount: number }) {
-  return (
-    <div className="rounded-xl border border-[var(--nts-accent)]/20 bg-[var(--nts-accent)]/5 p-3">
-      <p className="text-sm font-semibold text-[#1A1A1A]">
-        {formatNumber(filteredCount)} {tabLabel(tab)} findings στην επιλεγμένη περίοδο
-      </p>
-      <p className="mt-1 text-xs text-[#4A4A4A]">
-        Το summary δείχνει την εμπορική εικόνα. Για συγκεκριμένο SKU, καμπάνια ή απόφαση, επιλέξτε το αντίστοιχο item στις Εμπορικές αποφάσεις / ERP findings από κάτω.
-      </p>
-    </div>
-  );
-}
-
-function tabLabel(tab: ScenarioTab): string {
-  if (tab === 'price') return 'τιμής';
-  if (tab === 'margin') return 'margin/κόστους';
-  if (tab === 'stock') return 'stock risk';
-  return 'marketing spend';
-}
-
 function ScenarioKpis({
   tab,
   summary,
@@ -233,6 +210,7 @@ function ScenarioKpis({
     detected: number;
     positive: number;
     negative: number;
+    neutral: number;
     totalRevenueBefore: number;
     totalRevenueAfter: number;
     totalMarginBefore: number | null;
@@ -241,26 +219,16 @@ function ScenarioKpis({
     hasMarginCoverage?: boolean;
   };
 }) {
-  const hasMarginCoverage = summary.hasMarginCoverage !== false && summary.totalMarginAfter != null && summary.totalMarginBefore != null;
   return (
     <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
       <MiniKpi label={tab === 'price' ? 'Actionable τιμής' : tab === 'margin' ? 'Actionable margin' : 'Actionable stock risk'} value={summary.detected} />
       <MiniKpi label="Θετικά" value={summary.positive} tone="success" />
       <MiniKpi label="Αρνητικά" value={summary.negative} tone="danger" />
+      <MiniKpi label="Ουδέτερα" value={summary.neutral} />
       <MiniKpi
         label="Τζίρος (μετά)"
         value={formatCurrency(summary.totalRevenueAfter, 0)}
         sub={`πριν ${formatCurrency(summary.totalRevenueBefore, 0)}`}
-      />
-      <MiniKpi
-        label="Margin (μετά)"
-        value={hasMarginCoverage ? formatCurrency(summary.totalMarginAfter ?? 0, 0) : '—'}
-        sub={
-          hasMarginCoverage
-            ? `πριν ${formatCurrency(summary.totalMarginBefore ?? 0, 0)}${summary.marginSkuCount ? ` · ${formatNumber(summary.marginSkuCount)} SKU με κόστος` : ''}`
-            : 'Δεν υπάρχει κόστος SKU για αξιόπιστο margin'
-        }
-        tone="info"
       />
     </div>
   );
@@ -316,7 +284,20 @@ function MiniKpi({
   );
 }
 
-function RevenueMarginCells({ before, after }: { before: SkuWindowMetrics; after: SkuWindowMetrics }) {
+function hasCostCoverage(before: SkuWindowMetrics, after: SkuWindowMetrics): boolean {
+  return before.unitCost > 0 || after.unitCost > 0;
+}
+
+function RevenueMarginCells({
+  before,
+  after,
+  showMargin,
+}: {
+  before: SkuWindowMetrics;
+  after: SkuWindowMetrics;
+  showMargin: boolean;
+}) {
+  const rowHasCost = hasCostCoverage(before, after);
   return (
     <>
       <td className="px-3 py-2">
@@ -327,16 +308,32 @@ function RevenueMarginCells({ before, after }: { before: SkuWindowMetrics; after
           changePct={pct(before.revenue, after.revenue)}
         />
       </td>
-      <td className="px-3 py-2">
-        <MetricPair
-          label="Margin"
-          before={formatCurrency(before.margin, 0)}
-          after={formatCurrency(after.margin, 0)}
-          changePct={pct(before.margin, after.margin)}
-          sub={`${before.marginPct ?? '—'}% → ${after.marginPct ?? '—'}%`}
-        />
-      </td>
+      {showMargin && (
+        <td className="px-3 py-2">
+          {rowHasCost ? (
+            <MetricPair
+              label="Margin"
+              before={formatCurrency(before.margin, 0)}
+              after={formatCurrency(after.margin, 0)}
+              changePct={pct(before.margin, after.margin)}
+              sub={`${before.marginPct ?? '—'}% → ${after.marginPct ?? '—'}%`}
+            />
+          ) : (
+            <MetricUnavailable label="Margin" reason="χωρίς κόστος SKU" />
+          )}
+        </td>
+      )}
     </>
+  );
+}
+
+function MetricUnavailable({ label, reason }: { label: string; reason: string }) {
+  return (
+    <div>
+      <p className="text-[10px] font-semibold uppercase text-[#9CA3AF]">{label}</p>
+      <p className="font-mono text-xs text-[#9CA3AF]">—</p>
+      <p className="text-[10px] text-[#9CA3AF]">{reason}</p>
+    </div>
   );
 }
 
@@ -387,6 +384,7 @@ function VerdictCell({ verdict, confidence }: { verdict: ScenarioVerdict; confid
 }
 
 function PriceTable({ rows }: { rows: PriceChangeImpactRow[] }) {
+  const showMargin = rows.some((row) => hasCostCoverage(row.before, row.after));
   return (
     <table className="min-w-full text-left text-sm">
       <thead className="bg-[#FAFAFA] text-xs uppercase text-[#9CA3AF]">
@@ -395,7 +393,7 @@ function PriceTable({ rows }: { rows: PriceChangeImpactRow[] }) {
           <th className="px-3 py-2">Τιμή</th>
           <th className="px-3 py-2">Πωλήσεις τεμ.</th>
           <th className="px-3 py-2">Τζίρος</th>
-          <th className="px-3 py-2">Margin</th>
+          {showMargin && <th className="px-3 py-2">Margin</th>}
           <th className="px-3 py-2">Επίδραση</th>
         </tr>
       </thead>
@@ -419,7 +417,7 @@ function PriceTable({ rows }: { rows: PriceChangeImpactRow[] }) {
               {formatNumber(row.before.qty)} → {formatNumber(row.after.qty)}
               <p className="font-sans text-[10px] text-[#9CA3AF]">πωληθείσες μονάδες, όχι απόθεμα</p>
             </td>
-            <RevenueMarginCells before={row.before} after={row.after} />
+            <RevenueMarginCells before={row.before} after={row.after} showMargin={showMargin} />
             <VerdictCell verdict={row.verdict} confidence={row.confidence} />
           </tr>
         ))}
@@ -429,6 +427,7 @@ function PriceTable({ rows }: { rows: PriceChangeImpactRow[] }) {
 }
 
 function MarginTable({ rows }: { rows: MarginCostImpactRow[] }) {
+  const showMargin = rows.some((row) => hasCostCoverage(row.before, row.after));
   return (
     <table className="min-w-full text-left text-sm">
       <thead className="bg-[#FAFAFA] text-xs uppercase text-[#9CA3AF]">
@@ -436,7 +435,7 @@ function MarginTable({ rows }: { rows: MarginCostImpactRow[] }) {
           <th className="px-3 py-2">SKU</th>
           <th className="px-3 py-2">Σήμα</th>
           <th className="px-3 py-2">Τζίρος</th>
-          <th className="px-3 py-2">Margin</th>
+          {showMargin && <th className="px-3 py-2">Margin</th>}
           <th className="px-3 py-2">Επίδραση</th>
         </tr>
       </thead>
@@ -452,7 +451,7 @@ function MarginTable({ rows }: { rows: MarginCostImpactRow[] }) {
               {row.signal === 'cost_pressure' ? 'Πίεση κόστους' : row.signal === 'margin_gain' ? 'Κέρδος margin' : 'Πτώση margin'}
               <p className="font-mono">{row.marginPctBefore}% → {row.marginPctAfter}%</p>
             </td>
-            <RevenueMarginCells before={row.before} after={row.after} />
+            <RevenueMarginCells before={row.before} after={row.after} showMargin={showMargin} />
             <VerdictCell verdict={row.verdict} confidence={row.confidence} />
           </tr>
         ))}
@@ -462,6 +461,7 @@ function MarginTable({ rows }: { rows: MarginCostImpactRow[] }) {
 }
 
 function StockTable({ rows }: { rows: StockoutImpactRow[] }) {
+  const showMargin = rows.some((row) => hasCostCoverage(row.before, row.after));
   return (
     <table className="min-w-full text-left text-sm">
       <thead className="bg-[#FAFAFA] text-xs uppercase text-[#9CA3AF]">
@@ -469,7 +469,7 @@ function StockTable({ rows }: { rows: StockoutImpactRow[] }) {
           <th className="px-3 py-2">SKU</th>
           <th className="px-3 py-2">Απόθεμα</th>
           <th className="px-3 py-2">Τζίρος</th>
-          <th className="px-3 py-2">Margin</th>
+          {showMargin && <th className="px-3 py-2">Margin</th>}
           <th className="px-3 py-2">Επίδραση</th>
         </tr>
       </thead>
@@ -484,7 +484,7 @@ function StockTable({ rows }: { rows: StockoutImpactRow[] }) {
               {row.daysOfCover != null && <p>Ημέρες κάλυψης: {row.daysOfCover}</p>}
               {row.availableStock != null && <p>Διαθέσιμο: {formatNumber(row.availableStock)}</p>}
             </td>
-            <RevenueMarginCells before={row.before} after={row.after} />
+            <RevenueMarginCells before={row.before} after={row.after} showMargin={showMargin} />
             <VerdictCell verdict={row.verdict} confidence={row.confidence} />
           </tr>
         ))}
