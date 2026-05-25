@@ -269,11 +269,10 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
         />
       </div>
 
-      <section className="space-y-4 rounded-2xl border border-[#E5E7EB] bg-[#FBFCFD] p-4 sm:p-5">
+      <section className="space-y-4 rounded-2xl border border-orange-100 bg-orange-50/35 p-4 sm:p-5">
         <SectionIntro
-          eyebrow="Εργαλείο 1"
           title="Εμπορικά σενάρια & επίδραση (ERP)"
-          description="Σύνοψη ERP σημάτων για τιμές, margin, απόθεμα και marketing. Χρησιμοποιείται ως γρήγορη εμπορική ανάγνωση της περιόδου."
+          description="Σύνοψη ERP σημάτων για τιμές, τζίρο, απόθεμα και marketing. Χρησιμοποιείται ως γρήγορη εμπορική ανάγνωση της περιόδου."
           icon={<BarChart3 size={18} />}
         />
         <CommercialScenarioPanels period={periodDates} periodLabel={periodLabel} />
@@ -347,11 +346,10 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
         </Card>
       )}
 
-      <section className="space-y-5 rounded-2xl border border-[#E5E7EB] bg-[#F8FAFC] p-4 sm:p-5">
+      <section className="space-y-5 rounded-2xl border border-sky-100 bg-sky-50/40 p-4 sm:p-5">
         <SectionIntro
-          eyebrow="Εργαλείο 2"
           title="Εμπορικές αποφάσεις / ERP findings"
-          description="Workspace για επιλογή finding και ανάλυση του outcome σε τζίρο, margin, stock και marketing."
+          description="Λίστα εμπορικών ευρημάτων από ERP δεδομένα. Επιλέξτε finding για να δείτε τι άλλαξε στον τζίρο, στις πωλήσεις, στο απόθεμα και στις σχετικές ενέργειες marketing."
           icon={<BookOpenCheck size={18} />}
         />
 
@@ -360,7 +358,7 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
             <Card padding="lg">
               <CardHeader
                 title="Λίστα findings"
-                subtitle="Φιλτράρετε και επιλέξτε finding για να ανοίξει η αναλυτική κάρτα δεξιά."
+                subtitle="Φιλτράρετε ανά τύπο ή outcome και ανοίξτε το finding που θέλετε να ελέγξετε αναλυτικά."
                 icon={<BookOpenCheck size={18} className="text-[var(--nts-accent)]" />}
               />
               <div className="space-y-3">
@@ -443,12 +441,10 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
 }
 
 function SectionIntro({
-  eyebrow,
   title,
   description,
   icon,
 }: {
-  eyebrow: string;
   title: string;
   description: string;
   icon: ReactNode;
@@ -458,8 +454,7 @@ function SectionIntro({
       <div className="flex min-w-0 items-start gap-3">
         <span className="mt-0.5 rounded-xl bg-[var(--nts-accent)]/10 p-2 text-[var(--nts-accent)]">{icon}</span>
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-wide text-[#9CA3AF]">{eyebrow}</p>
-          <h3 className="mt-1 text-lg font-bold text-[#1A1A1A]">{title}</h3>
+          <h3 className="text-lg font-bold text-[#1A1A1A]">{title}</h3>
           <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[#6B7280]">{description}</p>
         </div>
       </div>
