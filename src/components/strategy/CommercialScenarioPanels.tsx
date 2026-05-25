@@ -11,6 +11,7 @@ import { formatCurrency, formatNumber } from '../../utils/format';
 
 type ScenarioTab = 'price' | 'margin' | 'stock' | 'marketing';
 type ImpactFilter = 'all' | ScenarioVerdict;
+type ScenarioRow = PriceChangeImpactRow | MarginCostImpactRow | StockoutImpactRow | MarketingSpendImpactRow;
 
 const VERDICT_LABEL: Record<ScenarioVerdict, string> = {
   positive: 'Θετική',
@@ -29,7 +30,7 @@ const VERDICT_BADGE: Record<ScenarioVerdict, 'success' | 'danger' | 'warning' | 
 const TABS: { key: ScenarioTab; label: string; icon: ReactNode }[] = [
   { key: 'price', label: 'Τιμές', icon: <Tag size={14} /> },
   { key: 'margin', label: 'Margin / κόστος', icon: <Percent size={14} /> },
-  { key: 'stock', label: 'Stockout', icon: <Package size={14} /> },
+  { key: 'stock', label: 'Απόθεμα risk', icon: <Package size={14} /> },
   { key: 'marketing', label: 'Marketing spend', icon: <Megaphone size={14} /> },
 ];
 
@@ -42,6 +43,7 @@ export function CommercialScenarioPanels({
 }) {
   const [tab, setTab] = useState<ScenarioTab>('price');
   const [filter, setFilter] = useState<ImpactFilter>('all');
+  const [showDetails, setShowDetails] = useState(false);
   const data = useCommercialScenarioImpacts(period);
 
   const active = useMemo(() => {
@@ -57,14 +59,23 @@ export function CommercialScenarioPanels({
     return active.rows.filter((r) => r.verdict === filter).length;
   }, [active, filter]);
 
+  const filteredRows = useMemo<ScenarioRow[]>(() => {
+    if (!active) return [];
+    const rows = active.rows as ScenarioRow[];
+    const list = filter === 'all' ? rows : rows.filter((r) => r.verdict === filter);
+    return list.slice(0, 50);
+  }, [active, filter]);
+
+  const topFindings = filteredRows.slice(0, 5);
+
   return (
     <Card padding="lg" className="relative overflow-hidden">
       <CardHeader
         title="Εμπορικά σενάρια & επίδραση (ERP)"
         subtitle={
           periodLabel
-            ? `${periodLabel} — detector για raw ERP/order-line μεταβολές ανά μήνα, με σύγκριση 30 ημερών πριν από κάθε window.`
-            : 'Επιλέξτε περίοδο για ERP historical signals.'
+            ? `${periodLabel} — σύνοψη ERP σημάτων που επηρέασαν τζίρο, margin, απόθεμα και καμπάνιες.`
+            : 'Επιλέξτε περίοδο για εμπορική σύνοψη από ERP signals.'
         }
         icon={<Tag size={18} className="text-[var(--nts-accent)]" />}
       />
@@ -74,8 +85,8 @@ export function CommercialScenarioPanels({
           <div className="flex max-w-md items-center gap-3 rounded-xl border border-[var(--nts-accent)]/20 bg-white p-4 shadow-lg">
             <Spinner />
             <div>
-              <p className="text-sm font-semibold text-[#1A1A1A]">Υπολογίζονται ERP scenarios για τη νέα περίοδο.</p>
-              <p className="text-xs text-[#6B7280]">Κρατάμε προσωρινά τα προηγούμενα στοιχεία μέχρι να ολοκληρωθεί το νέο query.</p>
+              <p className="text-sm font-semibold text-[#1A1A1A]">Ανανεώνεται η εμπορική εικόνα ERP.</p>
+              <p className="text-xs text-[#6B7280]">Υπολογίζουμε ξανά τζίρο, margin, stock risk και campaign impact για τη νέα περίοδο.</p>
             </div>
           </div>
         </div>
@@ -89,6 +100,7 @@ export function CommercialScenarioPanels({
             onClick={() => {
               setTab(t.key);
               setFilter('all');
+              setShowDetails(false);
             }}
             className={`flex min-h-[36px] flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-2 text-xs font-medium sm:flex-initial sm:px-3 ${
               tab === t.key ? 'bg-white text-[var(--nts-orange)] shadow-sm' : 'text-[#6B7280] hover:text-[#374151]'
@@ -106,9 +118,6 @@ export function CommercialScenarioPanels({
       {tab === 'marketing' && data.marketing && <MarketingKpis summary={data.marketing.summary} />}
 
       <FilterChips filter={filter} onChange={setFilter} />
-      {data.isRefreshing && !data.isLoading && (
-        <p className="mb-3 text-xs text-[#6B7280]">Refreshing ERP scenario signals in the background...</p>
-      )}
 
       {data.isLoading ? (
         <div className="py-8">
@@ -125,18 +134,35 @@ export function CommercialScenarioPanels({
       ) : filteredCount === 0 ? (
         <p className="text-sm text-[#6B7280]">Δεν εντοπίστηκαν σενάρια με τα τρέχοντα κριτήρια.</p>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-[#E5E7EB]">
-          {tab === 'price' && data.price && (
-            <PriceTable rows={filterRows(data.price.rows, filter)} />
-          )}
-          {tab === 'margin' && data.margin && (
-            <MarginTable rows={filterRows(data.margin.rows, filter)} />
-          )}
-          {tab === 'stock' && data.stockout && (
-            <StockTable rows={filterRows(data.stockout.rows, filter)} />
-          )}
-          {tab === 'marketing' && data.marketing && (
-            <MarketingTable rows={filterRows(data.marketing.rows, filter)} />
+        <div className="space-y-3">
+          <TopFindings tab={tab} rows={topFindings} />
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-[#6B7280]">
+              Εμφανίζονται τα σημαντικότερα {Math.min(topFindings.length, filteredCount)} από {formatNumber(filteredCount)} findings.
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowDetails((v) => !v)}
+              className="rounded-lg border border-[#E5E7EB] px-3 py-1.5 text-xs font-semibold text-[#374151] transition-colors hover:border-[var(--nts-accent)]/40 hover:bg-[var(--nts-accent)]/5"
+            >
+              {showDetails ? 'Σύμπτυξη' : 'Προβολή όλων'}
+            </button>
+          </div>
+          {showDetails && (
+            <div className="overflow-x-auto rounded-xl border border-[#E5E7EB]">
+              {tab === 'price' && data.price && (
+                <PriceTable rows={filterRows(data.price.rows, filter)} />
+              )}
+              {tab === 'margin' && data.margin && (
+                <MarginTable rows={filterRows(data.margin.rows, filter)} />
+              )}
+              {tab === 'stock' && data.stockout && (
+                <StockTable rows={filterRows(data.stockout.rows, filter)} />
+              )}
+              {tab === 'marketing' && data.marketing && (
+                <MarketingTable rows={filterRows(data.marketing.rows, filter)} />
+              )}
+            </div>
           )}
         </div>
       )}
@@ -175,6 +201,71 @@ function FilterChips({ filter, onChange }: { filter: ImpactFilter; onChange: (f:
   );
 }
 
+function TopFindings({ tab, rows }: { tab: ScenarioTab; rows: ScenarioRow[] }) {
+  return (
+    <div className="grid gap-2 lg:grid-cols-2">
+      {rows.map((row) => (
+        <div key={findingKey(row)} className="rounded-xl border border-[#E5E7EB] bg-white p-3 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-[#1A1A1A]">{findingTitle(tab, row)}</p>
+              <p className="mt-1 text-xs text-[#6B7280]">{findingSubtitle(tab, row)}</p>
+            </div>
+            <Badge variant={VERDICT_BADGE[row.verdict]} size="sm">
+              {VERDICT_LABEL[row.verdict]}
+            </Badge>
+          </div>
+          <p className="mt-2 text-xs text-[#374151]">{findingImpact(tab, row)}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function findingKey(row: ScenarioRow): string {
+  if ('sku' in row) return row.sku;
+  return row.id;
+}
+
+function findingTitle(tab: ScenarioTab, row: ScenarioRow): string {
+  if (tab === 'marketing' && 'title' in row) return row.title;
+  if ('sku' in row) return `${row.sku} · ${row.productName}`;
+  return 'Commercial signal';
+}
+
+function findingSubtitle(tab: ScenarioTab, row: ScenarioRow): string {
+  if (tab === 'price' && 'changePct' in row) {
+    return `Τιμή ${row.direction === 'increase' ? 'αύξηση' : 'μείωση'} ${row.changePct >= 0 ? '+' : ''}${row.changePct}%`;
+  }
+  if (tab === 'margin' && 'signal' in row) {
+    return row.signal === 'cost_pressure' ? 'Πίεση κόστους' : row.signal === 'margin_gain' ? 'Βελτίωση margin' : 'Πτώση margin';
+  }
+  if (tab === 'stock' && 'daysOfCover' in row) {
+    const cover = row.daysOfCover != null ? `${row.daysOfCover} ημέρες κάλυψης` : 'Stock risk';
+    const stock = row.availableStock != null ? ` · διαθέσιμο ${formatNumber(row.availableStock)}` : '';
+    return `${cover}${stock}`;
+  }
+  if (tab === 'marketing' && 'channel' in row) return `${row.channel} · spend ${formatCurrency(row.spend, 0)}`;
+  return 'ERP signal';
+}
+
+function findingImpact(tab: ScenarioTab, row: ScenarioRow): string {
+  if (tab === 'marketing' && 'roas' in row) {
+    return `Τζίρος ${formatCurrency(row.revenue, 0)}, margin ${formatCurrency(row.margin, 0)}, ROAS ${row.roas != null ? `${row.roas}x` : '—'}.`;
+  }
+  if ('before' in row && 'after' in row) {
+    const revenuePct = pct(row.before.revenue, row.after.revenue);
+    const marginPct = pct(row.before.margin, row.after.margin);
+    return `Τζίρος ${formatCurrency(row.after.revenue, 0)} (${formatSignedPct(revenuePct)}), margin ${formatCurrency(row.after.margin, 0)} (${formatSignedPct(marginPct)}).`;
+  }
+  return 'Δείτε λεπτομέρειες για εμπορική επίδραση.';
+}
+
+function formatSignedPct(value: number | null): string {
+  if (value == null) return 'n/a';
+  return `${value >= 0 ? '+' : ''}${value}%`;
+}
+
 function ScenarioKpis({
   tab,
   summary,
@@ -192,7 +283,7 @@ function ScenarioKpis({
 }) {
   return (
     <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-      <MiniKpi label={tab === 'price' ? 'Μεταβολές τιμής' : tab === 'margin' ? 'Margin shifts' : 'SKU stock risk'} value={summary.detected} />
+      <MiniKpi label={tab === 'price' ? 'Μεταβολές τιμής' : tab === 'margin' ? 'Μεταβολές margin' : 'Stock risk'} value={summary.detected} />
       <MiniKpi label="Θετικά" value={summary.positive} tone="success" />
       <MiniKpi label="Αρνητικά" value={summary.negative} tone="danger" />
       <MiniKpi
@@ -337,7 +428,7 @@ function PriceTable({ rows }: { rows: PriceChangeImpactRow[] }) {
         <tr>
           <th className="px-3 py-2">SKU</th>
           <th className="px-3 py-2">Τιμή</th>
-          <th className="px-3 py-2">Ποσότητα</th>
+          <th className="px-3 py-2">Πωλήσεις τεμ.</th>
           <th className="px-3 py-2">Τζίρος</th>
           <th className="px-3 py-2">Margin</th>
           <th className="px-3 py-2">Επίδραση</th>
@@ -361,6 +452,7 @@ function PriceTable({ rows }: { rows: PriceChangeImpactRow[] }) {
             </td>
             <td className="px-3 py-2 font-mono text-xs">
               {formatNumber(row.before.qty)} → {formatNumber(row.after.qty)}
+              <p className="font-sans text-[10px] text-[#9CA3AF]">πωληθείσες μονάδες, όχι απόθεμα</p>
             </td>
             <RevenueMarginCells before={row.before} after={row.after} />
             <VerdictCell verdict={row.verdict} confidence={row.confidence} />
@@ -493,10 +585,10 @@ function MarketingTable({ rows }: { rows: MarketingSpendImpactRow[] }) {
 function EmptyHint({ type, hasCost }: { type: 'orders' | 'cost' | 'stock'; hasCost: boolean }) {
   const msg =
     type === 'orders'
-      ? 'Χρειάζονται ERP τιμολόγια ή παραγγελίες με γραμμές SKU και τιμές για historical detection.'
+      ? 'Χρειάζονται ERP τιμολόγια ή παραγγελίες με SKU, τιμές και τεμάχια για εμπορική αξιολόγηση.'
       : type === 'cost'
         ? 'Συγχρονίστε ERP/procurement pricing για υπολογισμό margin και κόστους ανά SKU.'
-        : 'Συγχρονίστε ERP/procurement signals για days of cover / διαθέσιμο απόθεμα.';
+        : 'Συγχρονίστε ERP/procurement στοιχεία για days of cover και διαθέσιμο απόθεμα.';
   return (
     <p className="text-sm text-[#6B7280]">
       {msg}
