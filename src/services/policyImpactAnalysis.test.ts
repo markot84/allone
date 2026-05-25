@@ -68,7 +68,7 @@ describe('evaluateCommercialDecisionImpact', () => {
     expect(impact.verdict).toBe('winning');
     expect(impact.score).toBeGreaterThanOrEqual(70);
     expect(impact.confidence).toBe('high');
-    expect(impact.highlights.some((h) => h.includes('Revenue YoY'))).toBe(true);
+    expect(impact.highlights.some((h) => h.includes('Τζίρος YoY'))).toBe(true);
   });
 
   it('keeps active decisions in learning even when early signals are positive', () => {
@@ -103,7 +103,7 @@ describe('evaluateCommercialDecisionImpact', () => {
     expect(impact.stockAtRiskCount).toBe(1);
     expect(impact.lowMarginCount).toBe(1);
     expect(impact.risks.join(' ')).toContain('stockout');
-    expect(impact.risks.join(' ')).toContain('low margin');
+    expect(impact.risks.join(' ')).toContain('χαμηλό margin');
   });
 });
 

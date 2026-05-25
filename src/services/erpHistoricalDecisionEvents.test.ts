@@ -43,7 +43,7 @@ describe('buildErpHistoricalDecisionEvents', () => {
       endDate: '2025-01-31',
       scope: { skus: ['SKU-A'], description: 'Product A' },
     });
-    expect(priceEvent?.changes?.find((change) => change.label === 'Avg price')).toMatchObject({
+    expect(priceEvent?.changes?.find((change) => change.label === 'Μέση τιμή')).toMatchObject({
       before: 10,
       after: 12,
     });

@@ -11,7 +11,6 @@ import { formatCurrency, formatNumber } from '../../utils/format';
 
 type ScenarioTab = 'price' | 'margin' | 'stock' | 'marketing';
 type ImpactFilter = 'all' | ScenarioVerdict;
-type ScenarioRow = PriceChangeImpactRow | MarginCostImpactRow | StockoutImpactRow | MarketingSpendImpactRow;
 
 const VERDICT_LABEL: Record<ScenarioVerdict, string> = {
   positive: 'Θετική',
@@ -58,15 +57,6 @@ export function CommercialScenarioPanels({
     if (filter === 'all') return active.rows.length;
     return active.rows.filter((r) => r.verdict === filter).length;
   }, [active, filter]);
-
-  const filteredRows = useMemo<ScenarioRow[]>(() => {
-    if (!active) return [];
-    const rows = active.rows as ScenarioRow[];
-    const list = filter === 'all' ? rows : rows.filter((r) => r.verdict === filter);
-    return list.slice(0, 50);
-  }, [active, filter]);
-
-  const topFindings = filteredRows.slice(0, 5);
 
   return (
     <Card padding="lg" className="relative overflow-hidden">
@@ -135,17 +125,17 @@ export function CommercialScenarioPanels({
         <p className="text-sm text-[#6B7280]">Δεν εντοπίστηκαν σενάρια με τα τρέχοντα κριτήρια.</p>
       ) : (
         <div className="space-y-3">
-          <TopFindings tab={tab} rows={topFindings} />
+          <DecisionLibraryBridge tab={tab} filteredCount={filteredCount} />
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs text-[#6B7280]">
-              Εμφανίζονται τα σημαντικότερα {Math.min(topFindings.length, filteredCount)} από {formatNumber(filteredCount)} findings.
+              Η αναλυτική επιλογή γίνεται ακριβώς από κάτω, στις Εμπορικές αποφάσεις / ERP findings.
             </p>
             <button
               type="button"
               onClick={() => setShowDetails((v) => !v)}
               className="rounded-lg border border-[#E5E7EB] px-3 py-1.5 text-xs font-semibold text-[#374151] transition-colors hover:border-[var(--nts-accent)]/40 hover:bg-[var(--nts-accent)]/5"
             >
-              {showDetails ? 'Σύμπτυξη' : 'Προβολή όλων'}
+              {showDetails ? 'Σύμπτυξη πίνακα' : 'Προβολή αναλυτικού πίνακα'}
             </button>
           </div>
           {showDetails && (
@@ -201,69 +191,24 @@ function FilterChips({ filter, onChange }: { filter: ImpactFilter; onChange: (f:
   );
 }
 
-function TopFindings({ tab, rows }: { tab: ScenarioTab; rows: ScenarioRow[] }) {
+function DecisionLibraryBridge({ tab, filteredCount }: { tab: ScenarioTab; filteredCount: number }) {
   return (
-    <div className="grid gap-2 lg:grid-cols-2">
-      {rows.map((row) => (
-        <div key={findingKey(row)} className="rounded-xl border border-[#E5E7EB] bg-white p-3 shadow-sm">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-[#1A1A1A]">{findingTitle(tab, row)}</p>
-              <p className="mt-1 text-xs text-[#6B7280]">{findingSubtitle(tab, row)}</p>
-            </div>
-            <Badge variant={VERDICT_BADGE[row.verdict]} size="sm">
-              {VERDICT_LABEL[row.verdict]}
-            </Badge>
-          </div>
-          <p className="mt-2 text-xs text-[#374151]">{findingImpact(tab, row)}</p>
-        </div>
-      ))}
+    <div className="rounded-xl border border-[var(--nts-accent)]/20 bg-[var(--nts-accent)]/5 p-3">
+      <p className="text-sm font-semibold text-[#1A1A1A]">
+        {formatNumber(filteredCount)} {tabLabel(tab)} findings στην επιλεγμένη περίοδο
+      </p>
+      <p className="mt-1 text-xs text-[#4A4A4A]">
+        Το summary δείχνει την εμπορική εικόνα. Για συγκεκριμένο SKU, καμπάνια ή απόφαση, επιλέξτε το αντίστοιχο item στις Εμπορικές αποφάσεις / ERP findings από κάτω.
+      </p>
     </div>
   );
 }
 
-function findingKey(row: ScenarioRow): string {
-  if ('sku' in row) return row.sku;
-  return row.id;
-}
-
-function findingTitle(tab: ScenarioTab, row: ScenarioRow): string {
-  if (tab === 'marketing' && 'title' in row) return row.title;
-  if ('sku' in row) return `${row.sku} · ${row.productName}`;
-  return 'Commercial signal';
-}
-
-function findingSubtitle(tab: ScenarioTab, row: ScenarioRow): string {
-  if (tab === 'price' && 'changePct' in row) {
-    return `Τιμή ${row.direction === 'increase' ? 'αύξηση' : 'μείωση'} ${row.changePct >= 0 ? '+' : ''}${row.changePct}%`;
-  }
-  if (tab === 'margin' && 'signal' in row) {
-    return row.signal === 'cost_pressure' ? 'Πίεση κόστους' : row.signal === 'margin_gain' ? 'Βελτίωση margin' : 'Πτώση margin';
-  }
-  if (tab === 'stock' && 'daysOfCover' in row) {
-    const cover = row.daysOfCover != null ? `${row.daysOfCover} ημέρες κάλυψης` : 'Stock risk';
-    const stock = row.availableStock != null ? ` · διαθέσιμο ${formatNumber(row.availableStock)}` : '';
-    return `${cover}${stock}`;
-  }
-  if (tab === 'marketing' && 'channel' in row) return `${row.channel} · spend ${formatCurrency(row.spend, 0)}`;
-  return 'ERP signal';
-}
-
-function findingImpact(tab: ScenarioTab, row: ScenarioRow): string {
-  if (tab === 'marketing' && 'roas' in row) {
-    return `Τζίρος ${formatCurrency(row.revenue, 0)}, margin ${formatCurrency(row.margin, 0)}, ROAS ${row.roas != null ? `${row.roas}x` : '—'}.`;
-  }
-  if ('before' in row && 'after' in row) {
-    const revenuePct = pct(row.before.revenue, row.after.revenue);
-    const marginPct = pct(row.before.margin, row.after.margin);
-    return `Τζίρος ${formatCurrency(row.after.revenue, 0)} (${formatSignedPct(revenuePct)}), margin ${formatCurrency(row.after.margin, 0)} (${formatSignedPct(marginPct)}).`;
-  }
-  return 'Δείτε λεπτομέρειες για εμπορική επίδραση.';
-}
-
-function formatSignedPct(value: number | null): string {
-  if (value == null) return 'n/a';
-  return `${value >= 0 ? '+' : ''}${value}%`;
+function tabLabel(tab: ScenarioTab): string {
+  if (tab === 'price') return 'τιμής';
+  if (tab === 'margin') return 'margin/κόστους';
+  if (tab === 'stock') return 'stock risk';
+  return 'marketing spend';
 }
 
 function ScenarioKpis({

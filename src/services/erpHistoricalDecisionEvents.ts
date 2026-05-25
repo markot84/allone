@@ -106,14 +106,14 @@ function priceEvent(
   startDate: string,
   endDate: string
 ): CommercialDecisionEvent {
-  const direction = row.direction === 'increase' ? 'αύξηση' : 'μείωση';
+  const directionLabel = row.direction === 'increase' ? 'αύξηση τιμής' : 'μείωση τιμής';
   const now = new Date().toISOString();
   return {
     id: stableErpId('erp_history', 'price', brandId, row.sku, startDate),
     brandId,
     eventType: 'pricing',
-    title: `ERP price ${direction}: ${row.sku}`,
-    description: `${row.productName} · ${formatPct(row.changePct)} average selling price shift.`,
+    title: `ERP ${directionLabel}: ${row.sku}`,
+    description: `${row.productName} · ${formatPct(row.changePct)} μεταβολή στη μέση τιμή πώλησης.`,
     source: 'erp_history',
     entityRef: { collection: 'erp_history', id: row.sku, type: 'price_change' },
     decisionDate: startDate,
@@ -122,13 +122,13 @@ function priceEvent(
     status: statusForWindow(endDate),
     scope: { skus: [row.sku], description: row.productName },
     changes: [
-      { label: 'Avg price', before: row.priceBefore, after: row.priceAfter },
-      { label: 'Price change', before: null, after: formatPct(row.changePct) },
-      { label: 'Revenue change', before: null, after: formatPct(row.revenueChangePct) },
-      { label: 'Margin change', before: null, after: formatPct(row.marginChangePct) },
+      { label: 'Μέση τιμή', before: row.priceBefore, after: row.priceAfter },
+      { label: 'Μεταβολή τιμής', before: null, after: formatPct(row.changePct) },
+      { label: 'Μεταβολή τζίρου', before: null, after: formatPct(row.revenueChangePct) },
+      { label: 'Μεταβολή margin', before: null, after: formatPct(row.marginChangePct) },
     ],
     performance: performanceFromRow(row),
-    hypothesis: 'ERP/order history indicates a commercial price move with measurable revenue and margin impact.',
+    hypothesis: 'Το ERP/order history δείχνει μεταβολή τιμής με μετρήσιμη επίδραση σε τζίρο και margin.',
     tags: ['erp', 'history', 'pricing', row.direction, row.verdict, row.confidence],
     createdAt: now,
     updatedAt: now,
@@ -144,10 +144,10 @@ function marginEvent(
   const now = new Date().toISOString();
   const label =
     row.signal === 'cost_pressure'
-      ? 'cost pressure'
+      ? 'πίεση κόστους'
       : row.signal === 'margin_gain'
-        ? 'margin gain'
-        : 'margin drop';
+        ? 'βελτίωση margin'
+        : 'πτώση margin';
   return {
     id: stableErpId('erp_history', 'margin', brandId, row.sku, startDate),
     brandId,
@@ -163,12 +163,12 @@ function marginEvent(
     scope: { skus: [row.sku], description: row.productName },
     changes: [
       { label: 'Margin %', before: row.marginPctBefore, after: row.marginPctAfter },
-      { label: 'Margin change', before: null, after: formatPct(row.marginPctChange) },
-      { label: 'Unit cost', before: null, after: row.unitCost },
-      { label: 'Revenue change', before: null, after: formatPct(row.revenueChangePct) },
+      { label: 'Μεταβολή margin', before: null, after: formatPct(row.marginPctChange) },
+      { label: 'Κόστος μονάδας', before: null, after: row.unitCost },
+      { label: 'Μεταβολή τζίρου', before: null, after: formatPct(row.revenueChangePct) },
     ],
     performance: performanceFromRow(row),
-    hypothesis: 'ERP/order history indicates a margin or cost movement that affected commercial performance.',
+    hypothesis: 'Το ERP/order history δείχνει μεταβολή κόστους ή margin που επηρέασε το εμπορικό αποτέλεσμα.',
     tags: ['erp', 'history', 'margin', row.signal, row.verdict, row.confidence],
     createdAt: now,
     updatedAt: now,
@@ -186,8 +186,8 @@ function stockEvent(
     id: stableErpId('erp_history', 'stock', brandId, row.sku, startDate),
     brandId,
     eventType: 'stock',
-    title: `ERP stock pressure: ${row.sku}`,
-    description: `${row.productName} · ${row.daysOfCover ?? '—'} days of cover, stock ${row.availableStock ?? '—'}.`,
+    title: `ERP πίεση αποθέματος: ${row.sku}`,
+    description: `${row.productName} · ${row.daysOfCover ?? '—'} ημέρες κάλυψης, διαθέσιμο απόθεμα ${row.availableStock ?? '—'}.`,
     source: 'erp_history',
     entityRef: { collection: 'erp_history', id: row.sku, type: 'stock_pressure' },
     decisionDate: startDate,
@@ -196,13 +196,13 @@ function stockEvent(
     status: statusForWindow(endDate),
     scope: { skus: [row.sku], description: row.productName },
     changes: [
-      { label: 'Days of cover', before: null, after: row.daysOfCover },
-      { label: 'Available stock', before: null, after: row.availableStock },
-      { label: 'Qty change', before: null, after: formatPct(row.qtyChangePct) },
-      { label: 'Revenue change', before: null, after: formatPct(row.revenueChangePct) },
+      { label: 'Ημέρες κάλυψης', before: null, after: row.daysOfCover },
+      { label: 'Διαθέσιμο απόθεμα', before: null, after: row.availableStock },
+      { label: 'Μεταβολή τεμαχίων πώλησης', before: null, after: formatPct(row.qtyChangePct) },
+      { label: 'Μεταβολή τζίρου', before: null, after: formatPct(row.revenueChangePct) },
     ],
     performance: performanceFromRow(row),
-    hypothesis: 'ERP/procurement history indicates stock pressure that may have constrained commercial performance.',
+    hypothesis: 'Το ERP/procurement history δείχνει πίεση αποθέματος που πιθανόν περιόρισε πωλήσεις και margin.',
     tags: ['erp', 'history', 'stock', row.verdict, row.confidence],
     createdAt: now,
     updatedAt: now,

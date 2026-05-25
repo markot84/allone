@@ -223,21 +223,21 @@ export function evaluateCommercialDecisionImpact(input: {
   const isSkuPerformance = !!event.performance;
   if (base.revenueChangePct != null) {
     (base.revenueChangePct >= 0 ? highlights : risks).push(
-      `${isSkuPerformance ? 'SKU revenue vs previous window' : 'Revenue YoY'} ${base.revenueChangePct >= 0 ? '+' : ''}${base.revenueChangePct}%`
+      `${isSkuPerformance ? 'Τζίρος SKU vs προηγ. περίοδος' : 'Τζίρος YoY'} ${base.revenueChangePct >= 0 ? '+' : ''}${base.revenueChangePct}%`
     );
   }
   if (isSkuPerformance && event.performance?.marginChangePct != null) {
     (event.performance.marginChangePct >= 0 ? highlights : risks).push(
-      `SKU margin vs previous window ${event.performance.marginChangePct >= 0 ? '+' : ''}${event.performance.marginChangePct}%`
+      `Margin SKU vs προηγ. περίοδος ${event.performance.marginChangePct >= 0 ? '+' : ''}${event.performance.marginChangePct}%`
     );
   }
   if (base.periodRoas != null) {
     (base.periodRoas >= (targets?.minRoas ?? 3) ? highlights : risks).push(`Store ROAS ${base.periodRoas.toFixed(2)}x`);
   }
-  if (productVelocity30d > 0) highlights.push(`${Math.round(productVelocity30d)} units sold in scoped SKUs (30d)`);
-  if (stockAtRiskCount > 0) risks.push(`${stockAtRiskCount} scoped SKU near stockout`);
-  if (lowMarginCount > 0) risks.push(`${lowMarginCount} scoped SKU with low margin`);
-  if (!hasRevenue) risks.push('No store revenue coverage for this period');
+  if (productVelocity30d > 0) highlights.push(`${Math.round(productVelocity30d)} τεμάχια πωλήθηκαν στα σχετικά SKUs (30ημ.)`);
+  if (stockAtRiskCount > 0) risks.push(`${stockAtRiskCount} σχετικά SKU κοντά σε stockout`);
+  if (lowMarginCount > 0) risks.push(`${lowMarginCount} σχετικά SKU με χαμηλό margin`);
+  if (!hasRevenue) risks.push('Δεν υπάρχει κάλυψη store revenue για αυτή την περίοδο');
 
   return {
     ...base,

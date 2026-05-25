@@ -43,12 +43,12 @@ const TYPE_LABELS: Record<CommercialDecisionEventType | 'all', string> = {
 
 const SOURCE_LABELS: Record<CommercialDecisionSource, string> = {
   manual: 'Manual',
-  legacy_action: 'Commercial action',
+  legacy_action: 'Εμπορική ενέργεια',
   strategy: 'Strategy',
-  campaigns: 'Campaign',
-  channel_activation: 'Channel activation',
+  campaigns: 'Καμπάνια',
+  channel_activation: 'Ενεργοποίηση καναλιού',
   product_signals: 'Product signals',
-  erp_history: 'ERP detected',
+  erp_history: 'ERP finding',
 };
 
 const VERDICT_LABELS: Record<CommercialDecisionVerdict | 'all', string> = {
@@ -324,7 +324,7 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
           </div>
           <textarea
             className="mt-3 min-h-20 w-full rounded-lg border border-[#E5E7EB] px-3 py-2 text-sm"
-            placeholder="Hypothesis / γιατί πήραμε αυτή την απόφαση;"
+            placeholder="Εμπορική υπόθεση / γιατί πήραμε αυτή την απόφαση;"
             value={form.hypothesis}
             onChange={(e) => setForm((prev) => ({ ...prev, hypothesis: e.target.value }))}
           />
@@ -342,13 +342,17 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
       <div className="grid gap-4 xl:grid-cols-[380px_1fr]">
         <div className="space-y-4">
           <Card padding="md">
-            <CardHeader title="Decision Library" icon={<BookOpenCheck size={18} className="text-[var(--nts-accent)]" />} />
+            <CardHeader
+              title="Εμπορικές αποφάσεις / ERP findings"
+              subtitle="Επιλέξτε finding για να δείτε την επίδραση σε τζίρο, margin, stock και marketing."
+              icon={<BookOpenCheck size={18} className="text-[var(--nts-accent)]" />}
+            />
             <div className="space-y-3">
               <div className="relative">
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
                 <input
                   className="w-full rounded-lg border border-[#E5E7EB] py-2 pl-9 pr-3 text-sm"
-                  placeholder="Search decision, SKU, channel..."
+                  placeholder="Αναζήτηση απόφασης, SKU, κανάλι..."
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                 />
@@ -374,7 +378,7 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
           <Card padding="none">
             {isRefreshing && !isLoading && (
               <div className="border-b border-[#E5E7EB] px-4 py-2 text-xs text-[#6B7280]">
-                Refreshing ERP history in the background...
+                Ανανεώνονται τα ERP findings για τη νέα περίοδο...
               </div>
             )}
             {isLoading ? (
@@ -534,7 +538,7 @@ function DecisionListItem({
         </div>
         <div className="mt-2 flex items-center gap-2 text-xs text-[#6B7280]">
           <span className="font-mono">{impact.score}/100</span>
-          <span>Confidence: {impact.confidence}</span>
+          <span>Βεβαιότητα: {impact.confidence}</span>
         </div>
       </button>
     </li>
@@ -577,14 +581,14 @@ function DecisionDetail({
             <Badge variant={event.source === 'erp_history' ? 'info' : 'default'}>
               {SOURCE_LABELS[event.source] ?? event.source}
             </Badge>
-            <Badge variant="default">Confidence {impact.confidence}</Badge>
+            <Badge variant="default">Βεβαιότητα {impact.confidence}</Badge>
           </div>
         }
       />
 
       {event.hypothesis && (
         <div className="mb-4 rounded-xl border border-[#E5E7EB] bg-[#FAFAFA] p-3">
-          <p className="text-xs font-semibold uppercase text-[#9CA3AF]">Hypothesis</p>
+          <p className="text-xs font-semibold uppercase text-[#9CA3AF]">Εμπορική υπόθεση</p>
           <p className="mt-1 text-sm text-[#374151]">{event.hypothesis}</p>
         </div>
       )}
@@ -604,7 +608,7 @@ function DecisionDetail({
               ? `${skuPerformance ? 'vs προηγ. 30ημ.' : 'YoY'} ${impact.revenueChangePct >= 0 ? '+' : ''}${impact.revenueChangePct}%`
               : skuPerformance
                 ? `πριν ${formatCurrency(skuPerformance.baselineRevenue, 0)}`
-                : 'No YoY'
+                : 'Χωρίς YoY'
           }
           positive={impact.revenueChangePct != null && impact.revenueChangePct >= 0}
         />
@@ -616,7 +620,7 @@ function DecisionDetail({
               ? `${skuPerformance ? 'vs προηγ. 30ημ.' : 'YoY'} ${impact.ordersChangePct >= 0 ? '+' : ''}${impact.ordersChangePct}%`
               : skuPerformance
                 ? `πριν ${formatNumber(skuPerformance.baselineOrders)}`
-                : 'No YoY'
+                : 'Χωρίς YoY'
           }
           positive={impact.ordersChangePct != null && impact.ordersChangePct >= 0}
         />
@@ -642,19 +646,19 @@ function DecisionDetail({
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <InsightList title="What worked" items={impact.highlights} empty="Δεν υπάρχει ακόμη θετικό signal." tone="success" />
-        <InsightList title="Risks / avoid" items={impact.risks} empty="Δεν εντοπίστηκαν σημαντικά risks." tone="danger" />
+        <InsightList title="Τι λειτούργησε" items={impact.highlights} empty="Δεν υπάρχει ακόμη θετικό signal." tone="success" />
+        <InsightList title="Ρίσκα / τι αποφεύγουμε" items={impact.risks} empty="Δεν εντοπίστηκαν σημαντικά risks." tone="danger" />
       </div>
 
       <div className="mt-4 grid gap-3 rounded-xl border border-[#E5E7EB] p-3 text-sm sm:grid-cols-3">
-        <ScopeLine label="Channels" values={event.scope?.channels} />
-        <ScopeLine label="Categories" values={event.scope?.categories} />
+        <ScopeLine label="Κανάλια" values={event.scope?.channels} />
+        <ScopeLine label="Κατηγορίες" values={event.scope?.categories} />
         <ScopeLine label="SKUs" values={event.scope?.skus} />
       </div>
 
       {event.changes && event.changes.length > 0 && (
         <div className="mt-4">
-          <p className="text-xs font-semibold uppercase text-[#9CA3AF]">Changes</p>
+          <p className="text-xs font-semibold uppercase text-[#9CA3AF]">Μεταβολές</p>
           <div className="mt-2 grid gap-2 sm:grid-cols-2">
             {event.changes.slice(0, 6).map((change) => (
               <div key={`${change.label}-${change.after}`} className="rounded-lg border border-[#E5E7EB] px-3 py-2 text-sm">
@@ -751,7 +755,7 @@ function PlaybookPanel({ items, onSelect }: { items: DecisionMemoryItem[]; onSel
             </div>
             <p className="mt-2 line-clamp-2 text-sm font-semibold text-[#1A1A1A]">{event.title}</p>
             <p className="mt-1 text-xs text-[#6B7280]">
-              {impact.verdict === 'winning' ? 'Use as playbook' : 'Avoid repeating without changes'}
+              {impact.verdict === 'winning' ? 'Χρήση ως playbook' : 'Αποφυγή επανάληψης χωρίς αλλαγές'}
             </p>
           </button>
         ))}
