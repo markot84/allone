@@ -269,6 +269,8 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
         />
       </div>
 
+      <CommercialScenarioPanels period={periodDates} periodLabel={periodLabel} />
+
       {isRefreshing && !isLoading && (
         <Card padding="md" className="border border-[var(--nts-accent)]/25 bg-[var(--nts-accent)]/5">
           <div className="flex items-center gap-3">
@@ -337,9 +339,7 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
         </Card>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <CommercialScenarioPanels period={periodDates} periodLabel={periodLabel} />
-
+      <div className="grid gap-4 xl:grid-cols-[380px_1fr]">
         <div className="space-y-4">
           <Card padding="md">
             <CardHeader
@@ -407,19 +407,19 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
             )}
           </Card>
         </div>
-      </div>
 
-      <div className="space-y-4">
-        {selected ? (
-          <>
-            <DecisionDetail item={selected} analysisPeriod={period} getThumbnailUrl={getThumbnailUrl} />
-            {playbooks.length > 0 && <PlaybookPanel items={playbooks} onSelect={(id) => setSelectedId(id)} />}
-          </>
-        ) : (
-          <Card padding="lg">
-            <p className="text-sm text-[#6B7280]">Επιλέξτε decision για ανάλυση.</p>
-          </Card>
-        )}
+        <div className="space-y-4">
+          {selected ? (
+            <>
+              <DecisionDetail item={selected} analysisPeriod={period} getThumbnailUrl={getThumbnailUrl} />
+              {playbooks.length > 0 && <PlaybookPanel items={playbooks} onSelect={(id) => setSelectedId(id)} />}
+            </>
+          ) : (
+            <Card padding="lg">
+              <p className="text-sm text-[#6B7280]">Επιλέξτε decision για ανάλυση.</p>
+            </Card>
+          )}
+        </div>
       </div>
     </div>
   );
