@@ -175,7 +175,7 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <PageHeader
         title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Commercial Decision Memory</h2>}
         description={
@@ -269,7 +269,15 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
         />
       </div>
 
-      <CommercialScenarioPanels period={periodDates} periodLabel={periodLabel} />
+      <section className="space-y-4 rounded-2xl border border-[#E5E7EB] bg-[#FBFCFD] p-4 sm:p-5">
+        <SectionIntro
+          eyebrow="Εργαλείο 1"
+          title="Εμπορικά σενάρια & επίδραση (ERP)"
+          description="Σύνοψη ERP σημάτων για τιμές, margin, απόθεμα και marketing. Χρησιμοποιείται ως γρήγορη εμπορική ανάγνωση της περιόδου."
+          icon={<BarChart3 size={18} />}
+        />
+        <CommercialScenarioPanels period={periodDates} periodLabel={periodLabel} />
+      </section>
 
       {isRefreshing && !isLoading && (
         <Card padding="md" className="border border-[var(--nts-accent)]/25 bg-[var(--nts-accent)]/5">
@@ -339,86 +347,120 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
         </Card>
       )}
 
-      <div className="grid gap-4 xl:grid-cols-[380px_1fr]">
-        <div className="space-y-4">
-          <Card padding="md">
-            <CardHeader
-              title="Εμπορικές αποφάσεις / ERP findings"
-              subtitle="Επιλέξτε finding για να δείτε την επίδραση σε τζίρο, margin, stock και marketing."
-              icon={<BookOpenCheck size={18} className="text-[var(--nts-accent)]" />}
-            />
-            <div className="space-y-3">
-              <div className="relative">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
-                <input
-                  className="w-full rounded-lg border border-[#E5E7EB] py-2 pl-9 pr-3 text-sm"
-                  placeholder="Αναζήτηση απόφασης, SKU, κανάλι..."
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <FilterSelect
-                  value={typeFilter}
-                  onChange={(value) => setTypeFilter(value as CommercialDecisionEventType | 'all')}
-                  options={TYPE_LABELS}
-                />
-                <FilterSelect
-                  value={verdictFilter}
-                  onChange={(value) => {
-                    setVerdictFilter(value as CommercialDecisionVerdict | 'all');
-                    setSummaryTab('all');
-                  }}
-                  options={VERDICT_LABELS}
-                />
-              </div>
-            </div>
-          </Card>
+      <section className="space-y-5 rounded-2xl border border-[#E5E7EB] bg-[#F8FAFC] p-4 sm:p-5">
+        <SectionIntro
+          eyebrow="Εργαλείο 2"
+          title="Εμπορικές αποφάσεις / ERP findings"
+          description="Workspace για επιλογή finding και ανάλυση του outcome σε τζίρο, margin, stock και marketing."
+          icon={<BookOpenCheck size={18} />}
+        />
 
-          <Card padding="none">
-            {isRefreshing && !isLoading && (
-              <div className="border-b border-[#E5E7EB] px-4 py-2 text-xs text-[#6B7280]">
-                Ανανεώνονται τα ERP findings για τη νέα περίοδο...
-              </div>
-            )}
-            {isLoading ? (
-              <div className="p-5">
-                <Spinner />
-              </div>
-            ) : filteredItems.length === 0 ? (
-              <EmptyState
-                coverage={dataCoverage}
-                periodLabel={periodLabel}
-                totalInPeriod={items.length}
-                hasActiveFilters={summaryTab !== 'all' || typeFilter !== 'all' || verdictFilter !== 'all' || query.trim().length > 0}
-              />
-            ) : (
-              <ul className="max-h-[720px] divide-y divide-[#E5E7EB] overflow-y-auto">
-                {filteredItems.map((item) => (
-                  <DecisionListItem
-                    key={item.event.id}
-                    item={item}
-                    selected={selected?.event.id === item.event.id}
-                    getThumbnailUrl={getThumbnailUrl}
-                    onSelect={() => setSelectedId(item.event.id)}
-                  />
-                ))}
-              </ul>
-            )}
-          </Card>
-        </div>
-
-        <div className="space-y-4">
-          {selected ? (
-            <>
-              <DecisionDetail item={selected} analysisPeriod={period} getThumbnailUrl={getThumbnailUrl} />
-              {playbooks.length > 0 && <PlaybookPanel items={playbooks} onSelect={(id) => setSelectedId(id)} />}
-            </>
-          ) : (
+        <div className="grid gap-6 xl:grid-cols-[400px_minmax(0,1fr)]">
+          <div className="space-y-5">
             <Card padding="lg">
-              <p className="text-sm text-[#6B7280]">Επιλέξτε decision για ανάλυση.</p>
+              <CardHeader
+                title="Λίστα findings"
+                subtitle="Φιλτράρετε και επιλέξτε finding για να ανοίξει η αναλυτική κάρτα δεξιά."
+                icon={<BookOpenCheck size={18} className="text-[var(--nts-accent)]" />}
+              />
+              <div className="space-y-3">
+                <div className="relative">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
+                  <input
+                    className="w-full rounded-lg border border-[#E5E7EB] py-2 pl-9 pr-3 text-sm"
+                    placeholder="Αναζήτηση απόφασης, SKU, κανάλι..."
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <FilterSelect
+                    value={typeFilter}
+                    onChange={(value) => setTypeFilter(value as CommercialDecisionEventType | 'all')}
+                    options={TYPE_LABELS}
+                  />
+                  <FilterSelect
+                    value={verdictFilter}
+                    onChange={(value) => {
+                      setVerdictFilter(value as CommercialDecisionVerdict | 'all');
+                      setSummaryTab('all');
+                    }}
+                    options={VERDICT_LABELS}
+                  />
+                </div>
+              </div>
             </Card>
-          )}
+
+            <Card padding="none">
+              {isRefreshing && !isLoading && (
+                <div className="border-b border-[#E5E7EB] px-4 py-3 text-xs text-[#6B7280]">
+                  Ανανεώνονται τα ERP findings για τη νέα περίοδο...
+                </div>
+              )}
+              {isLoading ? (
+                <div className="p-5">
+                  <Spinner />
+                </div>
+              ) : filteredItems.length === 0 ? (
+                <EmptyState
+                  coverage={dataCoverage}
+                  periodLabel={periodLabel}
+                  totalInPeriod={items.length}
+                  hasActiveFilters={summaryTab !== 'all' || typeFilter !== 'all' || verdictFilter !== 'all' || query.trim().length > 0}
+                />
+              ) : (
+                <ul className="max-h-[640px] divide-y divide-[#E5E7EB] overflow-y-auto">
+                  {filteredItems.map((item) => (
+                    <DecisionListItem
+                      key={item.event.id}
+                      item={item}
+                      selected={selected?.event.id === item.event.id}
+                      getThumbnailUrl={getThumbnailUrl}
+                      onSelect={() => setSelectedId(item.event.id)}
+                    />
+                  ))}
+                </ul>
+              )}
+            </Card>
+          </div>
+
+          <div className="space-y-5">
+            {selected ? (
+              <>
+                <DecisionDetail item={selected} analysisPeriod={period} getThumbnailUrl={getThumbnailUrl} />
+                {playbooks.length > 0 && <PlaybookPanel items={playbooks} onSelect={(id) => setSelectedId(id)} />}
+              </>
+            ) : (
+              <Card padding="lg">
+                <p className="text-sm text-[#6B7280]">Επιλέξτε decision για ανάλυση.</p>
+              </Card>
+            )}
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function SectionIntro({
+  eyebrow,
+  title,
+  description,
+  icon,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  icon: ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex min-w-0 items-start gap-3">
+        <span className="mt-0.5 rounded-xl bg-[var(--nts-accent)]/10 p-2 text-[var(--nts-accent)]">{icon}</span>
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#9CA3AF]">{eyebrow}</p>
+          <h3 className="mt-1 text-lg font-bold text-[#1A1A1A]">{title}</h3>
+          <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[#6B7280]">{description}</p>
         </div>
       </div>
     </div>
@@ -518,7 +560,7 @@ function DecisionListItem({
       <button
         type="button"
         onClick={onSelect}
-        className={`w-full px-4 py-3 text-left transition-colors ${
+        className={`w-full px-4 py-4 text-left transition-colors ${
           selected ? 'bg-[var(--nts-accent)]/10' : 'hover:bg-[#F9FAFB]'
         }`}
       >

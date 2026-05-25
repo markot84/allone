@@ -64,7 +64,7 @@ export function CommercialScenarioPanels({
   return (
     <Card padding="lg" className="relative overflow-hidden">
       <CardHeader
-        title="Εμπορικά σενάρια & επίδραση (ERP)"
+        title="Σύνοψη επίδρασης"
         subtitle={
           periodLabel
             ? `${periodLabel} — σύνοψη ERP σημάτων που επηρέασαν τζίρο, margin, απόθεμα και καμπάνιες.`
