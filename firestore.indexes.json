@@ -205,6 +205,20 @@
       ]
     },
     {
+      "collectionGroup": "products",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "brandId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "stock_level",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "shopify_orders",
       "queryScope": "COLLECTION",
       "fields": [

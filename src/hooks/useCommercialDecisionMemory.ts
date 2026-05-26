@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useBrand } from './useBrand';
-import { useActiveStrategy } from './useActiveStrategy';
 import { useCampaigns } from './useCampaigns';
 import { useCommercialActions } from './useCommercialActions';
 import { useEcommerceSummary } from './useEcommerceSummary';
@@ -12,8 +11,6 @@ import { useProductSignals } from './useProductSignals';
 import {
   buildCampaignDecisionEvents,
   buildLegacyActionDecisionEvents,
-  buildProductSignalDecisionEvents,
-  buildStrategyDecisionEvents,
   listCommercialDecisionEvents,
   mergeCommercialDecisionEvents,
   saveCommercialDecisionEvent,
@@ -54,7 +51,6 @@ export function useCommercialDecisionMemory(period?: CommercialDecisionMemoryPer
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
   const queryClient = useQueryClient();
-  const { activeStrategy, getStrategyName, isLoading: isStrategyLoading } = useActiveStrategy();
   const { campaigns, isLoading: isCampaignsLoading } = useCampaigns();
   const { actions, isLoading: isActionsLoading } = useCommercialActions();
   const ecomm = useEcommerceSummary({ includeSkuDetails: true, includeStockMovement: true });
@@ -143,12 +139,10 @@ export function useCommercialDecisionMemory(period?: CommercialDecisionMemoryPer
   const derivedEvents = useMemo(() => {
     if (!brandId) return [] as CommercialDecisionEvent[];
     return [
-      ...buildStrategyDecisionEvents(activeStrategy, getStrategyName),
       ...buildCampaignDecisionEvents(campaigns as Campaign[], brandId),
       ...buildLegacyActionDecisionEvents(actions, brandId),
-      ...buildProductSignalDecisionEvents(products, productSignals.signalsBySku, brandId),
     ];
-  }, [actions, activeStrategy, brandId, campaigns, getStrategyName, productSignals.signalsBySku, products]);
+  }, [actions, brandId, campaigns]);
 
   const revenueByDay = useMemo(() => {
     const byDay: Record<string, number> = {};
@@ -157,7 +151,9 @@ export function useCommercialDecisionMemory(period?: CommercialDecisionMemoryPer
   }, [ecomm.dailyRevenue]);
 
   const events = useMemo(() => {
-    const storedMeasuredEvents = (storedQuery.data ?? []).filter((event) => event.source !== 'channel_activation');
+    const storedMeasuredEvents = (storedQuery.data ?? []).filter(
+      (event) => event.source !== 'channel_activation' && event.source !== 'strategy' && event.source !== 'product_signals'
+    );
     return mergeCommercialDecisionEvents(storedMeasuredEvents, [...derivedEvents, ...(erpHistoryQuery.data ?? [])]);
   }, [derivedEvents, erpHistoryQuery.data, storedQuery.data]);
 
@@ -213,7 +209,6 @@ export function useCommercialDecisionMemory(period?: CommercialDecisionMemoryPer
   const isInitialLoading =
     !hasVisibleDecisionData &&
     (storedQuery.isPending ||
-      isStrategyLoading ||
       isCampaignsLoading ||
       isActionsLoading ||
       ecomm.isLoading ||

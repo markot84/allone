@@ -19,7 +19,6 @@ import {
   buildHistoricalOrIncrementalWindow,
   ECOMMERCE_INCREMENTAL_OVERLAP_HOURS,
   coerceSyncDate,
-  subtractHours,
   toMagentoDateTime,
   toYmd,
   type ConnectorSyncMode,
@@ -66,6 +65,7 @@ const MAGENTO_UA = 'PerformancePlus-MagentoConnector/1.0';
 
 /** Default per-request timeout για Magento REST. Σπασμένα/υποφορτωμένα stores κρεμούν fetch χωρίς αυτό. */
 const MAGENTO_FETCH_TIMEOUT_MS = 30_000;
+const MAGENTO_ACTIVE_STOCK_SKU_CHUNK_SIZE = 50;
 
 /** fetch wrapper με AbortController — μετατρέπει κρεμάσματα σε καθαρά errors. */
 async function magentoFetch(url: string, init: RequestInit = {}, timeoutMs = MAGENTO_FETCH_TIMEOUT_MS): Promise<Response> {
@@ -413,6 +413,56 @@ function buildMagentoRestUrl(restApiBase: string, endpoint: string, storeCode?: 
     : `${cleanBase}/rest/V1/${cleanEndpoint}`;
 }
 
+function normalizeSkuKey(value: unknown): string {
+  return String(value ?? '').trim().toUpperCase();
+}
+
+function chunkArray<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
+  return chunks;
+}
+
+async function loadActiveStockSkus(db: Firestore, brandId: string): Promise<string[]> {
+  const snap = await db.collection('products').where('brandId', '==', brandId).where('stock_level', '>', 0).get();
+  const skus = new Set<string>();
+  for (const doc of snap.docs) {
+    const row = doc.data();
+    const sku = normalizeSkuKey(row.sku ?? row.id);
+    if (sku) skus.add(sku);
+  }
+  return [...skus].sort();
+}
+
+function formatMagentoProductAccessError(status: number, url: string, body = ''): string {
+  if (status === 401 || status === 403) {
+    return (
+      `Magento product catalog access denied (HTTP ${status}). ` +
+      'Το token διαβάζει orders/store configs, αλλά όχι τον κατάλογο προϊόντων, άρα δεν μπορούμε να φέρουμε εικόνες. ' +
+      'Δημιουργήστε ή ανανεώστε Magento Admin Integration με Resource Access για Catalog / Products (ή All), κάντε Reconnect στο Magento connector και μετά Sync. ' +
+      `Endpoint: ${url}`
+    );
+  }
+  const snippet = body.replace(/\s+/g, ' ').slice(0, 180);
+  return `Magento products fetch failed (HTTP ${status})${snippet ? `: ${snippet}` : ''}`;
+}
+
+async function probeMagentoProductCatalogAccess(
+  restApiBase: string,
+  storeCode: string | undefined,
+  headers: Record<string, string>
+): Promise<{ ok: true } | { ok: false; status: number; url: string; body: string }> {
+  const params = new URLSearchParams({
+    'searchCriteria[pageSize]': '1',
+    'searchCriteria[currentPage]': '1',
+    fields: 'items[id,sku],total_count',
+  });
+  const url = buildMagentoRestUrl(restApiBase, `products?${params.toString()}`, storeCode);
+  const res = await magentoFetch(url, { headers });
+  if (res.ok) return { ok: true };
+  return { ok: false, status: res.status, url, body: await res.text().catch(() => '') };
+}
+
 type MagentoCategoryNode = {
   id?: number | string;
   name?: string;
@@ -595,6 +645,8 @@ export async function saveMagentoCredentials(
         storeWebUrl: testResult.storeWebUrl || '',
         /** Storefront media root για image_link στο Ads Feed */
         mediaBaseUrl: testResult.mediaBaseUrl || '',
+        productCatalogAccess: true,
+        productCatalogAccessCheckedAt: FieldValue.serverTimestamp(),
         accessToken: encryptToken(tokenPlain),
         connectedAt: FieldValue.serverTimestamp(),
         syncAllStores: Boolean(opts?.syncAllStores),
@@ -723,6 +775,17 @@ export async function testMagentoConnection(
       'User-Agent': MAGENTO_UA,
     };
 
+    const productAccess = await probeMagentoProductCatalogAccess(restApiBase, resolvedStoreCode || undefined, headers);
+    if (!productAccess.ok) {
+      return {
+        success: false,
+        error: formatMagentoProductAccessError(productAccess.status, productAccess.url, productAccess.body),
+        availableStoreCodes: availableCodes,
+        storeCandidates: candidates,
+        storeDirectory: storeDirectoryFull,
+      };
+    }
+
     let version = '';
     try {
       const modRes = await magentoFetch(`${restApiBase}/rest/V1/modules`, { headers });
@@ -834,16 +897,13 @@ export async function fetchMagentoData(brandId: string): Promise<{
     orderWindow.windowStart = orderCursor;
   }
 
-  const lastProductsSyncAt = coerceSyncDate((connector as Record<string, unknown>).lastProductsSyncAt);
-  const productsCursor = coerceSyncDate((connector as Record<string, unknown>).productsHistoryCursor);
-  const productsMode: ConnectorSyncMode = lastProductsSyncAt ? 'incremental' : 'historical';
-  const productsWindowStart = lastProductsSyncAt
-    ? subtractHours(lastProductsSyncAt, 48)
-    : productsCursor;
+  const productsMode = 'active_stock';
+  const productsWindowStart: Date | null = null;
   const productsWindowEnd = new Date();
+  const activeStockSkus = await loadActiveStockSkus(db, brandId);
 
   logger.info(
-    `[Magento] Sync windows for ${brandId}: orders=${orderWindow.mode}:${toMagentoDateTime(orderWindow.windowStart)}->${toMagentoDateTime(orderWindow.windowEnd)} products=${productsMode}:${productsWindowStart ? toMagentoDateTime(productsWindowStart) : 'full'}->${toMagentoDateTime(productsWindowEnd)} · ordersScope=${syncAllStores ? 'all_stores' : `store_id=${Number.isFinite(storeId) && storeId > 0 ? storeId : 'none'}`}`
+    `[Magento] Sync windows for ${brandId}: orders=${orderWindow.mode}:${toMagentoDateTime(orderWindow.windowStart)}->${toMagentoDateTime(orderWindow.windowEnd)} products=${productsMode}:activeStockSkus=${activeStockSkus.length} · ordersScope=${syncAllStores ? 'all_stores' : `store_id=${Number.isFinite(storeId) && storeId > 0 ? storeId : 'none'}`}`
   );
 
   try {
@@ -1034,7 +1094,6 @@ export async function fetchMagentoData(brandId: string): Promise<{
     let prodMore = true;
     let productsOk = true;
     let productsBackfillIncomplete = false;
-    let lastProductUpdatedAt: Date | null = null;
     let prodImportedCount = 0;
 
     // SKU lookup map (id → sku) — lightweight, only IDs+SKUs kept in memory for variant resolution.
@@ -1042,152 +1101,148 @@ export async function fetchMagentoData(brandId: string): Promise<{
     const parentLinks: { childId: string; parentId: string }[] = [];
     const categoryMap = await fetchMagentoCategoryMap(restApiBase, storeCode, headers);
 
-    while (prodMore) {
-      const searchParams = new URLSearchParams({
-        'searchCriteria[pageSize]': '100',
-        'searchCriteria[currentPage]': String(prodPage),
-        'searchCriteria[sortOrders][0][field]': 'updated_at',
-        'searchCriteria[sortOrders][0][direction]': productsMode === 'incremental' ? 'DESC' : 'ASC',
-      });
-      if (productsWindowStart) {
-        searchParams.set('searchCriteria[filter_groups][0][filters][0][field]', 'updated_at');
-        searchParams.set('searchCriteria[filter_groups][0][filters][0][value]', toMagentoDateTime(productsWindowStart));
-        searchParams.set('searchCriteria[filter_groups][0][filters][0][condition_type]', 'gteq');
-      }
+    const activeSkuChunks = chunkArray(activeStockSkus, MAGENTO_ACTIVE_STOCK_SKU_CHUNK_SIZE);
+    if (activeSkuChunks.length === 0) {
+      logger.info(`[Magento] Products skipped for ${brandId}: no ERP SKUs with stock_level > 0`);
+      prodMore = false;
+    }
 
-      const res = await magentoFetch(buildMagentoRestUrl(restApiBase, `products?${searchParams.toString()}`, storeCode), { headers });
-      if (!res.ok) {
-        const error = `Products fetch failed (${res.status}) page=${prodPage}`;
-        logger.warn(`[Magento] ${error}`);
-        errors.push(error);
-        productsOk = false;
-        break;
-      }
-
-      const body = await res.json();
-      const products: any[] = body.items || [];
-      const totalCount: number = body.total_count || 0;
-      const pageItems: { id: string; data: Record<string, unknown> }[] = [];
-
-      for (const p of products) {
-        const customAttrs = p.custom_attributes || [];
-        const getAttr = (code: string): string => {
-          const v = customAttrs.find((a: any) => a.attribute_code === code)?.value;
-          return v == null ? '' : String(v);
-        };
-        const stockItem = p.extension_attributes?.stock_item;
-
-        // Image: προτεραιότητα custom_attributes.image (σχετικό path) → /catalog/product
-        // εναλλακτικά πρώτο media_gallery_entries[].file
-        const imagePath = getAttr('image') || getAttr('small_image') || getAttr('thumbnail') || '';
-        const galleryFirst = (p.media_gallery_entries || []).find((e: any) => !e?.disabled)?.file || '';
-        const imageRelative = imagePath || galleryFirst || '';
-
-        const urlKey = getAttr('url_key');
-        const description = getAttr('description');
-        const shortDescription = getAttr('short_description');
-        const metaTitle = getAttr('meta_title');
-        const metaDescription = getAttr('meta_description');
-        const gtin = getAttr('gtin') || getAttr('ean') || getAttr('upc') || getAttr('barcode');
-        const mpn = getAttr('mpn') || getAttr('manufacturer_part_number');
-        const color = getAttr('color');
-        const size = getAttr('size');
-        const visibility = Number(p.visibility ?? 0);
-
-        const categoryIds: string[] = (p.extension_attributes?.category_links || [])
-          .map((c: any) => String(c?.category_id || ''))
-          .filter(Boolean);
-        const categoryPaths = categoryIds
-          .map((id) => categoryMap.get(id)?.pathNames || [])
-          .filter((path) => path.length > 0)
-          .sort((a, b) => b.length - a.length);
-        const primaryCategoryPath = categoryPaths[0] || [];
-        const categoryNames = [...new Set(categoryPaths.flat())];
-        const categoryName = primaryCategoryPath[0] || '';
-        const subcategoryName =
-          primaryCategoryPath.length > 1 ? primaryCategoryPath[primaryCategoryPath.length - 1] : '';
-
-        const configurableLinks: string[] = (p.extension_attributes?.configurable_product_links || [])
-          .map((id: any) => String(id))
-          .filter(Boolean);
-        if (p.type_id === 'configurable' && configurableLinks.length > 0) {
-          for (const childId of configurableLinks) {
-            parentLinks.push({ childId, parentId: String(p.id) });
-          }
-        }
-
-        idToSku.set(String(p.id), String(p.sku || ''));
-        const productUpdated = p.updated_at ? new Date(p.updated_at) : null;
-        if (productUpdated && !Number.isNaN(productUpdated.getTime()) && (!lastProductUpdatedAt || productUpdated > lastProductUpdatedAt)) {
-          lastProductUpdatedAt = productUpdated;
-        }
-
-        pageItems.push({
-          id: `mag_${p.id}`,
-          data: {
-            productId: String(p.id || ''),
-            sku: p.sku || '',
-            name: p.name || '',
-            type: p.type_id || '',
-            status: p.status === 1 ? 'active' : 'inactive',
-            visibility,
-            price: parseFloat(p.price || '0'),
-            weight: parseFloat(p.weight || '0'),
-            stockQuantity: stockItem?.qty ?? null,
-            inStock: stockItem?.is_in_stock ?? null,
-            specialPrice: getAttr('special_price') ? parseFloat(getAttr('special_price')) : null,
-            manufacturer: getAttr('manufacturer'),
-            category: categoryName,
-            subcategory: subcategoryName,
-            categoryNames,
-            categoryPath: primaryCategoryPath,
-            // Feed-ready fields
-            urlKey,
-            description,
-            shortDescription,
-            metaTitle,
-            metaDescription,
-            imageRelative,
-            gtin,
-            mpn,
-            color,
-            size,
-            categoryIds,
-            // Variant relationships (αν configurable)
-            configurableLinks,
-            createdAt: p.created_at || '',
-            updatedAt: p.updated_at || '',
-            source: 'magento_api',
-            brandId,
-          },
+    for (const skuChunk of activeSkuChunks) {
+      prodPage = 1;
+      prodMore = true;
+      while (prodMore) {
+        const searchParams = new URLSearchParams({
+          'searchCriteria[pageSize]': '100',
+          'searchCriteria[currentPage]': String(prodPage),
+          'searchCriteria[filter_groups][0][filters][0][field]': 'sku',
+          'searchCriteria[filter_groups][0][filters][0][value]': skuChunk.join(','),
+          'searchCriteria[filter_groups][0][filters][0][condition_type]': 'in',
+          'searchCriteria[sortOrders][0][field]': 'updated_at',
+          'searchCriteria[sortOrders][0][direction]': 'ASC',
         });
-      }
 
-      // Streaming write: commit this page immediately to avoid memory accumulation.
-      if (pageItems.length > 0) {
-        for (let i = 0; i < pageItems.length; i += 500) {
-          const batch = db.batch();
-          const chunk = pageItems.slice(i, i + 500);
-          for (const item of chunk) {
-            batch.set(db.collection('magento_products').doc(item.id), { ...item.data, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-          }
-          await batch.commit();
-        }
-        prodImportedCount += pageItems.length;
-      }
-
-      prodMore = prodPage * 100 < totalCount;
-      prodPage++;
-      // Backfill cap: αν το catalog είναι μεγαλύτερο, συνεχίζει στο επόμενο sync.
-      if (prodPage > 100) {
-        if (prodMore && productsMode === 'historical') {
-          productsBackfillIncomplete = true;
-        } else if (prodMore) {
+        const productUrl = buildMagentoRestUrl(restApiBase, `products?${searchParams.toString()}`, storeCode);
+        const res = await magentoFetch(productUrl, { headers });
+        if (!res.ok) {
+          const bodyText = await res.text().catch(() => '');
+          const error = `${formatMagentoProductAccessError(res.status, productUrl, bodyText)} page=${prodPage}`;
+          logger.warn(`[Magento] ${error}`);
+          errors.push(error);
           productsOk = false;
-          errors.push('Products incremental page cap reached');
+          break;
         }
-        break;
+
+        const body = await res.json();
+        const products: any[] = body.items || [];
+        const totalCount: number = body.total_count || 0;
+        const pageItems: { id: string; data: Record<string, unknown> }[] = [];
+
+        for (const p of products) {
+          const customAttrs = p.custom_attributes || [];
+          const getAttr = (code: string): string => {
+            const v = customAttrs.find((a: any) => a.attribute_code === code)?.value;
+            return v == null ? '' : String(v);
+          };
+          const stockItem = p.extension_attributes?.stock_item;
+
+          // Image: προτεραιότητα custom_attributes.image (σχετικό path) → /catalog/product
+          // εναλλακτικά πρώτο media_gallery_entries[].file
+          const imagePath = getAttr('image') || getAttr('small_image') || getAttr('thumbnail') || '';
+          const galleryFirst = (p.media_gallery_entries || []).find((e: any) => !e?.disabled)?.file || '';
+          const imageRelative = imagePath || galleryFirst || '';
+
+          const urlKey = getAttr('url_key');
+          const description = getAttr('description');
+          const shortDescription = getAttr('short_description');
+          const metaTitle = getAttr('meta_title');
+          const metaDescription = getAttr('meta_description');
+          const gtin = getAttr('gtin') || getAttr('ean') || getAttr('upc') || getAttr('barcode');
+          const mpn = getAttr('mpn') || getAttr('manufacturer_part_number');
+          const color = getAttr('color');
+          const size = getAttr('size');
+          const visibility = Number(p.visibility ?? 0);
+
+          const categoryIds: string[] = (p.extension_attributes?.category_links || [])
+            .map((c: any) => String(c?.category_id || ''))
+            .filter(Boolean);
+          const categoryPaths = categoryIds
+            .map((id) => categoryMap.get(id)?.pathNames || [])
+            .filter((path) => path.length > 0)
+            .sort((a, b) => b.length - a.length);
+          const primaryCategoryPath = categoryPaths[0] || [];
+          const categoryNames = [...new Set(categoryPaths.flat())];
+          const categoryName = primaryCategoryPath[0] || '';
+          const subcategoryName =
+            primaryCategoryPath.length > 1 ? primaryCategoryPath[primaryCategoryPath.length - 1] : '';
+
+          const configurableLinks: string[] = (p.extension_attributes?.configurable_product_links || [])
+            .map((id: any) => String(id))
+            .filter(Boolean);
+          if (p.type_id === 'configurable' && configurableLinks.length > 0) {
+            for (const childId of configurableLinks) {
+              parentLinks.push({ childId, parentId: String(p.id) });
+            }
+          }
+
+          idToSku.set(String(p.id), String(p.sku || ''));
+          pageItems.push({
+            id: `mag_${p.id}`,
+            data: {
+              productId: String(p.id || ''),
+              sku: p.sku || '',
+              name: p.name || '',
+              type: p.type_id || '',
+              status: p.status === 1 ? 'active' : 'inactive',
+              visibility,
+              price: parseFloat(p.price || '0'),
+              weight: parseFloat(p.weight || '0'),
+              stockQuantity: stockItem?.qty ?? null,
+              inStock: stockItem?.is_in_stock ?? null,
+              specialPrice: getAttr('special_price') ? parseFloat(getAttr('special_price')) : null,
+              manufacturer: getAttr('manufacturer'),
+              category: categoryName,
+              subcategory: subcategoryName,
+              categoryNames,
+              categoryPath: primaryCategoryPath,
+              // Feed-ready fields
+              urlKey,
+              description,
+              shortDescription,
+              metaTitle,
+              metaDescription,
+              imageRelative,
+              gtin,
+              mpn,
+              color,
+              size,
+              categoryIds,
+              // Variant relationships (αν configurable)
+              configurableLinks,
+              createdAt: p.created_at || '',
+              updatedAt: p.updated_at || '',
+              source: 'magento_api',
+              brandId,
+            },
+          });
+        }
+
+        // Streaming write: commit this page immediately to avoid memory accumulation.
+        if (pageItems.length > 0) {
+          for (let i = 0; i < pageItems.length; i += 500) {
+            const batch = db.batch();
+            const chunk = pageItems.slice(i, i + 500);
+            for (const item of chunk) {
+              batch.set(db.collection('magento_products').doc(item.id), { ...item.data, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+            }
+            await batch.commit();
+          }
+          prodImportedCount += pageItems.length;
+        }
+
+        prodMore = prodPage * 100 < totalCount;
+        prodPage++;
       }
+      if (!productsOk) break;
     }
 
     // Συμπλήρωση parentSku στα child variants (ώστε στο Ads Feed → item_group_id = parent SKU).
@@ -1231,12 +1286,17 @@ export async function fetchMagentoData(brandId: string): Promise<{
       }
     }
     if (productsOk) {
-      if (productsMode === 'historical' && productsBackfillIncomplete && lastProductUpdatedAt) {
-        connectorPatch['magento.productsHistoryCursor'] = new Date(lastProductUpdatedAt.getTime() + 1000);
-      } else {
-        connectorPatch['magento.productsHistoryCursor'] = FieldValue.delete();
-        connectorPatch['magento.lastProductsSyncAt'] = FieldValue.serverTimestamp();
-      }
+      connectorPatch['magento.productCatalogAccess'] = true;
+      connectorPatch['magento.productCatalogAccessError'] = FieldValue.delete();
+      connectorPatch['magento.productCatalogAccessCheckedAt'] = FieldValue.serverTimestamp();
+      connectorPatch['magento.productSyncScope'] = 'active_stock';
+      connectorPatch['magento.activeStockSkuCount'] = activeStockSkus.length;
+      connectorPatch['magento.productsHistoryCursor'] = FieldValue.delete();
+      connectorPatch['magento.lastProductsSyncAt'] = FieldValue.serverTimestamp();
+    } else {
+      connectorPatch['magento.productCatalogAccess'] = false;
+      connectorPatch['magento.productCatalogAccessError'] = errors.find((e) => e.includes('product catalog')) || errors[errors.length - 1] || 'Magento products sync failed';
+      connectorPatch['magento.productCatalogAccessCheckedAt'] = FieldValue.serverTimestamp();
     }
     if (Object.keys(connectorPatch).length) {
       connectorPatch['magento.lastSyncAt'] = FieldValue.serverTimestamp();
@@ -1252,6 +1312,8 @@ export async function fetchMagentoData(brandId: string): Promise<{
       mode: orderWindow.mode,
       ordersMode: orderWindow.mode,
       productsMode,
+      productSyncScope: 'active_stock',
+      activeStockSkuCount: activeStockSkus.length,
       windowStart: orderWindow.windowStart.toISOString(),
       windowEnd: orderWindow.windowEnd.toISOString(),
       productsWindowStart: productsWindowStart ? productsWindowStart.toISOString() : null,
@@ -1267,7 +1329,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
     });
 
     logger.info(`[Magento] Sync complete for brand ${brandId}: ${totalImported} total items (errors=${errors.length})`);
-    return { success: true, imported: totalImported, ...(errors.length ? { error: errors[0] } : {}) };
+    return { success: errors.length === 0, imported: totalImported, ...(errors.length ? { error: errors[0] } : {}) };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     logger.error(`[Magento] fetchMagentoData error for ${brandId}:`, msg);
