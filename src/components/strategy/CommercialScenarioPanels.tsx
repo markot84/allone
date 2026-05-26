@@ -108,9 +108,9 @@ export function CommercialScenarioPanels({
         ))}
       </div>
 
-      {tab === 'price' && data.price && <ScenarioKpis tab="price" summary={data.price.summary} />}
-      {tab === 'margin' && data.margin && <ScenarioKpis tab="margin" summary={data.margin.summary} />}
-      {tab === 'stock' && data.stockout && <ScenarioKpis tab="stock" summary={data.stockout.summary} />}
+      {tab === 'price' && data.price && <ScenarioKpis summary={data.price.summary} />}
+      {tab === 'margin' && data.margin && <ScenarioKpis summary={data.margin.summary} />}
+      {tab === 'stock' && data.stockout && <ScenarioKpis summary={data.stockout.summary} />}
       {tab === 'marketing' && data.marketing && <MarketingKpis summary={data.marketing.summary} />}
 
       <FilterChips filter={filter} onChange={setFilter} />
@@ -183,7 +183,7 @@ function FilterChips({ filter, onChange }: { filter: ImpactFilter; onChange: (f:
     <div className="mb-3 flex flex-wrap gap-2">
       {(
         [
-          ['all', 'Actionable'],
+          ['all', 'Με ουσιαστική μεταβολή'],
           ['positive', 'Θετικά'],
           ['negative', 'Αρνητικά'],
           ['neutral', 'Ουδέτερα'],
@@ -205,10 +205,8 @@ function FilterChips({ filter, onChange }: { filter: ImpactFilter; onChange: (f:
 }
 
 function ScenarioKpis({
-  tab,
   summary,
 }: {
-  tab: 'price' | 'margin' | 'stock';
   summary: {
     detected: number;
     positive: number;
@@ -224,7 +222,7 @@ function ScenarioKpis({
 }) {
   return (
     <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-      <MiniKpi label={tab === 'price' ? 'Actionable τιμής' : tab === 'margin' ? 'Actionable margin' : 'Actionable stock risk'} value={summary.detected} />
+      <MiniKpi label="Ουσιαστικές μεταβολές" value={summary.detected} />
       <MiniKpi label="Θετικά" value={summary.positive} tone="success" />
       <MiniKpi label="Αρνητικά" value={summary.negative} tone="danger" />
       <MiniKpi label="Ουδέτερα" value={summary.neutral} />
@@ -441,7 +439,7 @@ function PriceTable({ rows, getThumbnailUrl }: { rows: PriceChangeImpactRow[]; g
             </td>
             <td className="px-3 py-2 font-mono text-xs">
               {formatNumber(row.before.qty)} → {formatNumber(row.after.qty)}
-              <p className="font-sans text-[10px] text-[#9CA3AF]">πωληθείσες μονάδες, όχι απόθεμα</p>
+              <p className="font-sans text-[10px] text-[#9CA3AF]">πωληθείσες μονάδες περιόδου</p>
             </td>
             <RevenueMarginCells before={row.before} after={row.after} showMargin={showMargin} />
             <VerdictCell verdict={row.verdict} confidence={row.confidence} />
