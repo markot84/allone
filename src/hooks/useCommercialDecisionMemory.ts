@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useBrand } from './useBrand';
 import { useActiveStrategy } from './useActiveStrategy';
 import { useCampaigns } from './useCampaigns';
-import { useChannelActivations } from './useChannelActivations';
 import { useCommercialActions } from './useCommercialActions';
 import { useEcommerceSummary } from './useEcommerceSummary';
 import { useProcurement } from './useProcurement';
@@ -12,7 +11,6 @@ import { useProducts } from './useProducts';
 import { useProductSignals } from './useProductSignals';
 import {
   buildCampaignDecisionEvents,
-  buildChannelDecisionEvents,
   buildLegacyActionDecisionEvents,
   buildProductSignalDecisionEvents,
   buildStrategyDecisionEvents,
@@ -58,7 +56,6 @@ export function useCommercialDecisionMemory(period?: CommercialDecisionMemoryPer
   const queryClient = useQueryClient();
   const { activeStrategy, getStrategyName, isLoading: isStrategyLoading } = useActiveStrategy();
   const { campaigns, isLoading: isCampaignsLoading } = useCampaigns();
-  const { activations, isLoading: isActivationsLoading } = useChannelActivations(activeStrategy?.id ?? null);
   const { actions, isLoading: isActionsLoading } = useCommercialActions();
   const ecomm = useEcommerceSummary({ includeSkuDetails: true, includeStockMovement: true });
   const procurement = useProcurement({ sheets: ['pricing_policy'] });
@@ -148,11 +145,10 @@ export function useCommercialDecisionMemory(period?: CommercialDecisionMemoryPer
     return [
       ...buildStrategyDecisionEvents(activeStrategy, getStrategyName),
       ...buildCampaignDecisionEvents(campaigns as Campaign[], brandId),
-      ...buildChannelDecisionEvents(activations, brandId),
       ...buildLegacyActionDecisionEvents(actions, brandId),
       ...buildProductSignalDecisionEvents(products, productSignals.signalsBySku, brandId),
     ];
-  }, [actions, activeStrategy, activations, brandId, campaigns, getStrategyName, productSignals.signalsBySku, products]);
+  }, [actions, activeStrategy, brandId, campaigns, getStrategyName, productSignals.signalsBySku, products]);
 
   const revenueByDay = useMemo(() => {
     const byDay: Record<string, number> = {};
@@ -160,10 +156,10 @@ export function useCommercialDecisionMemory(period?: CommercialDecisionMemoryPer
     return byDay;
   }, [ecomm.dailyRevenue]);
 
-  const events = useMemo(
-    () => mergeCommercialDecisionEvents(storedQuery.data ?? [], [...derivedEvents, ...(erpHistoryQuery.data ?? [])]),
-    [derivedEvents, erpHistoryQuery.data, storedQuery.data]
-  );
+  const events = useMemo(() => {
+    const storedMeasuredEvents = (storedQuery.data ?? []).filter((event) => event.source !== 'channel_activation');
+    return mergeCommercialDecisionEvents(storedMeasuredEvents, [...derivedEvents, ...(erpHistoryQuery.data ?? [])]);
+  }, [derivedEvents, erpHistoryQuery.data, storedQuery.data]);
 
   const items = useMemo<DecisionMemoryItem[]>(() => {
     const periodFrom = period?.fromDate;
@@ -219,7 +215,6 @@ export function useCommercialDecisionMemory(period?: CommercialDecisionMemoryPer
     (storedQuery.isPending ||
       isStrategyLoading ||
       isCampaignsLoading ||
-      isActivationsLoading ||
       isActionsLoading ||
       ecomm.isLoading ||
       procurement.isLoading ||
