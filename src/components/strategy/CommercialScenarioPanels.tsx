@@ -214,25 +214,47 @@ function ScenarioKpis({
     neutral: number;
     totalRevenueBefore: number;
     totalRevenueAfter: number;
+    netRevenueDelta: number;
+    positiveRevenueDelta: number;
+    negativeRevenueDelta: number;
     totalMarginBefore: number | null;
     totalMarginAfter: number | null;
     marginSkuCount?: number;
     hasMarginCoverage?: boolean;
   };
 }) {
+  const netTone = summary.netRevenueDelta > 0 ? 'success' : summary.netRevenueDelta < 0 ? 'danger' : undefined;
   return (
-    <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-      <MiniKpi label="Ουσιαστικές μεταβολές" value={summary.detected} />
-      <MiniKpi label="Θετικά" value={summary.positive} tone="success" />
-      <MiniKpi label="Αρνητικά" value={summary.negative} tone="danger" />
-      <MiniKpi label="Ουδέτερα" value={summary.neutral} />
-      <MiniKpi
-        label="Τζίρος (μετά)"
-        value={formatCurrency(summary.totalRevenueAfter, 0)}
-        sub={`πριν ${formatCurrency(summary.totalRevenueBefore, 0)}`}
-      />
+    <div className="mb-4 space-y-3">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+        <MiniKpi label="Findings" value={summary.detected} sub="πλήθος μεταβολών" />
+        <MiniKpi label="Θετικά" value={summary.positive} tone="success" />
+        <MiniKpi label="Αρνητικά" value={summary.negative} tone="danger" />
+        <MiniKpi label="Ουδέτερα" value={summary.neutral} />
+        <MiniKpi
+          label="Καθαρή επίδραση τζίρου"
+          value={formatSignedCurrency(summary.netRevenueDelta)}
+          sub={`${formatCurrency(summary.totalRevenueBefore, 0)} → ${formatCurrency(summary.totalRevenueAfter, 0)}`}
+          tone={netTone}
+        />
+        <MiniKpi
+          label="Θετική / αρνητική αξία"
+          value={formatSignedCurrency(summary.positiveRevenueDelta)}
+          sub={`αρνητικά ${formatSignedCurrency(summary.negativeRevenueDelta)}`}
+        />
+      </div>
+      <p className="text-xs leading-relaxed text-[#6B7280]">
+        Τα θετικά/αρνητικά είναι πλήθος findings. Η καθαρή επίδραση δείχνει την αξία τζίρου μετά την αφαίρεση των αρνητικών μεταβολών.
+      </p>
     </div>
   );
+}
+
+function formatSignedCurrency(value: number): string {
+  const abs = formatCurrency(Math.abs(value), 0);
+  if (value > 0) return `+${abs}`;
+  if (value < 0) return `-${abs}`;
+  return abs;
 }
 
 function MarketingKpis({

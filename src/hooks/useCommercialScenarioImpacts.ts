@@ -59,6 +59,7 @@ function summarizeRows<T extends WindowedScenarioRow>(rows: T[], lookbackDays = 
   const actionableRows = rows.filter((row) => isActionableScenarioRow(row));
   const costedRows = actionableRows.filter((row) => row.after.unitCost > 0 || row.before.unitCost > 0);
   const hasMarginCoverage = costedRows.length > 0;
+  const revenueDeltas = actionableRows.map((row) => row.after.revenue - row.before.revenue);
   return {
     detected: actionableRows.length,
     positive: actionableRows.filter((r) => r.verdict === 'positive').length,
@@ -67,6 +68,9 @@ function summarizeRows<T extends WindowedScenarioRow>(rows: T[], lookbackDays = 
     insufficient: rows.filter((r) => r.verdict === 'insufficient').length,
     totalRevenueBefore: actionableRows.reduce((s, r) => s + r.before.revenue, 0),
     totalRevenueAfter: actionableRows.reduce((s, r) => s + r.after.revenue, 0),
+    netRevenueDelta: revenueDeltas.reduce((s, delta) => s + delta, 0),
+    positiveRevenueDelta: revenueDeltas.filter((delta) => delta > 0).reduce((s, delta) => s + delta, 0),
+    negativeRevenueDelta: revenueDeltas.filter((delta) => delta < 0).reduce((s, delta) => s + delta, 0),
     totalMarginBefore: hasMarginCoverage ? costedRows.reduce((s, r) => s + r.before.margin, 0) : null,
     totalMarginAfter: hasMarginCoverage ? costedRows.reduce((s, r) => s + r.after.margin, 0) : null,
     marginSkuCount: costedRows.length,
@@ -204,6 +208,9 @@ function emptyPayload() {
     insufficient: 0,
     totalRevenueBefore: 0,
     totalRevenueAfter: 0,
+    netRevenueDelta: 0,
+    positiveRevenueDelta: 0,
+    negativeRevenueDelta: 0,
     totalMarginBefore: 0,
     totalMarginAfter: 0,
     lookbackDays: 30,
