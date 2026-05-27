@@ -43,8 +43,8 @@ type NavItem = { id: AppSectionId; label: string; icon: any; badge?: string; bad
 
 const NAV_GROUP_LABELS: Record<NavGroup, string> = {
   business: 'Business',
-  commerce: 'Commerce',
-  commercial: 'Commercial',
+  commerce: 'Market & Data',
+  commercial: 'Commercial Strategy & Sales',
   marketing: 'Marketing',
   procurement: 'Procurement',
   finance: 'Finance',
@@ -476,18 +476,18 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
         { id: 'ecommerce', label: moduleConfig.ecommerce.label, icon: ShoppingBag, group: 'commerce' },
         { id: 'rfm', label: moduleConfig.rfm.label, icon: OrganizationIcon, group: 'commerce' },
         { id: 'accounts', label: moduleConfig.accounts.label, icon: Users, group: 'commerce' },
-        { id: 'products', label: moduleConfig.products.label, icon: PackageIcon, group: 'commerce' },
         { id: 'competitive', label: moduleConfig.competitive.label, icon: SearchIcon, group: 'commerce' },
         { id: 'strategy', label: 'Commercial Strategy', icon: GraphIcon, group: 'commercial', ...(strategyBadge ? { badge: strategyBadge.text, badgeColor: strategyBadge.color } : {}) },
         { id: 'policy-impact', label: 'Policy Impact', icon: BarChart3, group: 'commercial' },
         { id: 'markets', label: moduleConfig.markets.label, icon: Globe2, group: 'commercial' },
-        { id: 'channels', label: moduleConfig.channels.label, icon: MegaphoneIcon, group: 'commercial' },
         { id: 'sales', label: moduleConfig.sales.label, icon: Handshake, group: 'commercial' },
         { id: 'offers', label: moduleConfig.offers.label, icon: ClipboardList, group: 'commercial' },
         { id: 'marketing-plan', label: 'Marketing Plan', icon: ClipboardList, group: 'marketing' },
+        { id: 'channels', label: moduleConfig.channels.label, icon: MegaphoneIcon, group: 'marketing' },
         { id: 'campaigns', label: moduleConfig.campaigns.label, icon: Target, group: 'marketing' },
         { id: 'analytics', label: moduleConfig.analytics.label, icon: BarChart3, group: 'marketing' },
         { id: 'calendar', label: moduleConfig.calendar.label, icon: PencilIcon, group: 'marketing' },
+        { id: 'products', label: moduleConfig.products.label, icon: PackageIcon, group: 'procurement' },
         { id: 'suppliers', label: moduleConfig.suppliers.label, icon: Truck, group: 'procurement' },
         { id: 'procurement', label: moduleConfig.procurement.label, icon: FileSpreadsheet, group: 'procurement' },
         { id: 'finances', label: moduleConfig.finances.label, icon: Euro, group: 'finance' },
@@ -502,12 +502,12 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
 
       const ordered = isB2B
         ? [
-            'brands', 'dashboard', 'roi', 'insights', 'reports', 'accounts', 'products', 'competitive', 'strategy', 'policy-impact', 'markets', 'channels', 'sales', 'offers',
-            'marketing-plan', 'campaigns', 'analytics', 'calendar', 'suppliers', 'procurement', 'finances', 'hr', 'territories', 'coordination', 'automation', 'data', 'invite', 'help',
+            'brands', 'dashboard', 'roi', 'insights', 'reports', 'accounts', 'competitive', 'strategy', 'policy-impact', 'markets', 'sales', 'offers',
+            'marketing-plan', 'channels', 'campaigns', 'analytics', 'calendar', 'products', 'suppliers', 'procurement', 'finances', 'hr', 'territories', 'coordination', 'automation', 'data', 'invite', 'help',
           ]
         : [
-            'brands', 'dashboard', 'roi', 'insights', 'reports', 'ecommerce', 'rfm', 'products', 'competitive', 'strategy', 'policy-impact', 'channels',
-            'marketing-plan', 'campaigns', 'analytics', 'calendar', 'suppliers', 'procurement', 'finances', 'coordination', 'automation', 'data', 'invite', 'help',
+            'brands', 'dashboard', 'roi', 'insights', 'reports', 'ecommerce', 'rfm', 'competitive', 'strategy', 'policy-impact',
+            'marketing-plan', 'channels', 'campaigns', 'analytics', 'calendar', 'products', 'suppliers', 'procurement', 'finances', 'coordination', 'automation', 'data', 'invite', 'help',
           ];
 
       const itemMap = new Map(commonItems.map((item) => [item.id, item]));
