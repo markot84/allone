@@ -31,7 +31,7 @@ import { formatCurrency, formatNumber } from '../../utils/format';
 const TYPE_LABELS: Record<CommercialDecisionEventType | 'all', string> = {
   all: 'Όλοι οι τύποι',
   pricing: 'Τιμές',
-  margin: 'Margin / κόστος',
+  margin: 'Κόστος',
   discount: 'Εκπτώσεις',
   campaign: 'Καμπάνιες',
   channel: 'Κανάλια',
@@ -177,7 +177,7 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
   return (
     <div className="space-y-8">
       <PageHeader
-        title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Commercial Decision Memory</h2>}
+        title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Policy Impact</h2>}
         description={
           <p className="text-sm text-[#4A4A4A]">
             Αυτόματο ιστορικό εμπορικών αποφάσεων, outcome scoring και playbooks για επανάχρηση ή αποφυγή.
@@ -661,18 +661,7 @@ function DecisionDetail({
           }
           positive={impact.ordersChangePct != null && impact.ordersChangePct >= 0}
         />
-        {skuPerformance ? (
-          <MetricTile
-            label="SKU margin"
-            value={formatCurrency(skuPerformance.periodMargin ?? 0, 0)}
-            sub={
-              skuPerformance.marginChangePct != null
-                ? `vs προηγ. 30ημ. ${skuPerformance.marginChangePct >= 0 ? '+' : ''}${skuPerformance.marginChangePct}%`
-                : `πριν ${formatCurrency(skuPerformance.baselineMargin ?? 0, 0)}`
-            }
-            positive={skuPerformance.marginChangePct != null && skuPerformance.marginChangePct >= 0}
-          />
-        ) : (
+        {!skuPerformance && (
           <MetricTile
             label="Store ROAS"
             value={impact.periodRoas != null ? `${impact.periodRoas.toFixed(2)}x` : '—'}

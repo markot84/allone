@@ -1,7 +1,6 @@
 import type { CommercialDecisionEvent } from './commercialDecisionMemory';
 import type { EcommerceRawOrder } from './ecommerceRawOrders';
 import { analyzePriceChangeImpact, type PriceChangeImpactRow } from './priceChangeImpact';
-import { analyzeMarginCostImpact, type MarginCostImpactRow } from './marginCostImpact';
 import {
   analyzeStockoutImpact,
   type StockoutImpactRow,
@@ -73,7 +72,7 @@ function formatPct(value: number | null | undefined): string {
   return value == null ? 'n/a' : `${value >= 0 ? '+' : ''}${value}%`;
 }
 
-function performanceFromRow(row: Pick<PriceChangeImpactRow | MarginCostImpactRow | StockoutImpactRow, 'before' | 'after' | 'revenueChangePct' | 'marginChangePct'> & {
+function performanceFromRow(row: Pick<PriceChangeImpactRow | StockoutImpactRow, 'before' | 'after' | 'revenueChangePct' | 'marginChangePct'> & {
   qtyChangePct?: number | null;
   priceBefore?: number;
   priceAfter?: number;
@@ -125,51 +124,10 @@ function priceEvent(
       { label: 'Μέση τιμή', before: row.priceBefore, after: row.priceAfter },
       { label: 'Μεταβολή τιμής', before: null, after: formatPct(row.changePct) },
       { label: 'Μεταβολή τζίρου', before: null, after: formatPct(row.revenueChangePct) },
-      { label: 'Μεταβολή margin', before: null, after: formatPct(row.marginChangePct) },
     ],
     performance: performanceFromRow(row),
-    hypothesis: 'Το ERP/order history δείχνει μεταβολή τιμής με μετρήσιμη επίδραση σε τζίρο και margin.',
+    hypothesis: 'Το ERP/order history δείχνει μεταβολή τιμής με μετρήσιμη επίδραση σε τζίρο και πωλήσεις.',
     tags: ['erp', 'history', 'pricing', row.direction, row.verdict, row.confidence],
-    createdAt: now,
-    updatedAt: now,
-  };
-}
-
-function marginEvent(
-  brandId: string,
-  row: MarginCostImpactRow,
-  startDate: string,
-  endDate: string
-): CommercialDecisionEvent {
-  const now = new Date().toISOString();
-  const label =
-    row.signal === 'cost_pressure'
-      ? 'πίεση κόστους'
-      : row.signal === 'margin_gain'
-        ? 'βελτίωση margin'
-        : 'πτώση margin';
-  return {
-    id: stableErpId('erp_history', 'margin', brandId, row.sku, startDate),
-    brandId,
-    eventType: 'margin',
-    title: `ERP ${label}: ${row.sku}`,
-    description: `${row.productName} · margin ${row.marginPctBefore ?? '—'}% → ${row.marginPctAfter ?? '—'}%.`,
-    source: 'erp_history',
-    entityRef: { collection: 'erp_history', id: row.sku, type: row.signal },
-    decisionDate: startDate,
-    startDate,
-    endDate,
-    status: statusForWindow(endDate),
-    scope: { skus: [row.sku], description: row.productName },
-    changes: [
-      { label: 'Margin %', before: row.marginPctBefore, after: row.marginPctAfter },
-      { label: 'Μεταβολή margin', before: null, after: formatPct(row.marginPctChange) },
-      { label: 'Κόστος μονάδας', before: null, after: row.unitCost },
-      { label: 'Μεταβολή τζίρου', before: null, after: formatPct(row.revenueChangePct) },
-    ],
-    performance: performanceFromRow(row),
-    hypothesis: 'Το ERP/order history δείχνει μεταβολή κόστους ή margin που επηρέασε το εμπορικό αποτέλεσμα.',
-    tags: ['erp', 'history', 'margin', row.signal, row.verdict, row.confidence],
     createdAt: now,
     updatedAt: now,
   };
@@ -202,7 +160,7 @@ function stockEvent(
       { label: 'Μεταβολή τζίρου', before: null, after: formatPct(row.revenueChangePct) },
     ],
     performance: performanceFromRow(row),
-    hypothesis: 'Το ERP/procurement history δείχνει πίεση αποθέματος που πιθανόν περιόρισε πωλήσεις και margin.',
+    hypothesis: 'Το ERP/procurement history δείχνει πίεση αποθέματος που πιθανόν περιόρισε πωλήσεις και τζίρο.',
     tags: ['erp', 'history', 'stock', row.verdict, row.confidence],
     createdAt: now,
     updatedAt: now,
@@ -239,11 +197,6 @@ export function buildErpHistoricalDecisionEvents(input: ErpHistoricalDecisionEve
       .filter((row) => row.verdict !== 'insufficient')
       .slice(0, 8);
     for (const row of priceRows) events.push(priceEvent(brandId, row, window.startDate, window.endDate));
-
-    const marginRows = analyzeMarginCostImpact(base).rows
-      .filter((row) => row.verdict !== 'insufficient')
-      .slice(0, 8);
-    for (const row of marginRows) events.push(marginEvent(brandId, row, window.startDate, window.endDate));
 
     if (stockBySku && stockBySku.size > 0) {
       const stockRows = analyzeStockoutImpact({ ...base, stockBySku }).rows

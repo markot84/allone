@@ -226,17 +226,11 @@ export function evaluateCommercialDecisionImpact(input: {
       `${isSkuPerformance ? 'Τζίρος SKU vs προηγ. περίοδος' : 'Τζίρος YoY'} ${base.revenueChangePct >= 0 ? '+' : ''}${base.revenueChangePct}%`
     );
   }
-  if (isSkuPerformance && event.performance?.marginChangePct != null) {
-    (event.performance.marginChangePct >= 0 ? highlights : risks).push(
-      `Margin SKU vs προηγ. περίοδος ${event.performance.marginChangePct >= 0 ? '+' : ''}${event.performance.marginChangePct}%`
-    );
-  }
   if (base.periodRoas != null) {
     (base.periodRoas >= (targets?.minRoas ?? 3) ? highlights : risks).push(`Store ROAS ${base.periodRoas.toFixed(2)}x`);
   }
   if (productVelocity30d > 0) highlights.push(`${Math.round(productVelocity30d)} τεμάχια πωλήθηκαν στα σχετικά SKUs (30ημ.)`);
   if (stockAtRiskCount > 0) risks.push(`${stockAtRiskCount} σχετικά SKU κοντά σε stockout`);
-  if (lowMarginCount > 0) risks.push(`${lowMarginCount} σχετικά SKU με χαμηλό margin`);
   if (!hasRevenue) risks.push('Δεν υπάρχει κάλυψη store revenue για αυτή την περίοδο');
 
   return {

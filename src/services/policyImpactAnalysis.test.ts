@@ -103,7 +103,7 @@ describe('evaluateCommercialDecisionImpact', () => {
     expect(impact.stockAtRiskCount).toBe(1);
     expect(impact.lowMarginCount).toBe(1);
     expect(impact.risks.join(' ')).toContain('stockout');
-    expect(impact.risks.join(' ')).toContain('χαμηλό margin');
+    expect(impact.risks.join(' ')).not.toContain('χαμηλό margin');
   });
 });
 
