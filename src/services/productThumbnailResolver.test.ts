@@ -21,4 +21,15 @@ describe('resolveProductThumbnailUrl', () => {
 
     expect(result).toEqual({ url: 'https://cdn.example.com/parent.jpg', source: 'magento' });
   });
+
+  it('uses the exact Magento child item group when the child has no own image', () => {
+    const result = resolveProductThumbnailUrl('1624', {
+      maps: {
+        magentoBySku: new Map([['1624', { imageLink: '', itemGroupId: '1949' }]]),
+        magentoByItemGroupId: new Map([['1949', { imageLink: 'https://cdn.example.com/parent-1949.jpg' }]]),
+      },
+    });
+
+    expect(result).toEqual({ url: 'https://cdn.example.com/parent-1949.jpg', source: 'magento' });
+  });
 });

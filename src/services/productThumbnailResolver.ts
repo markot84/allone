@@ -3,12 +3,13 @@
  */
 
 export type ThumbnailSource = 'import' | 'magento' | 'none';
+type ThumbnailLookupValue = { imageLink: string; itemGroupId?: string };
 
 export type ThumbnailLookupMaps = {
-  magentoBySku?: Map<string, { imageLink: string }>;
-  magentoBySkuLower?: Map<string, { imageLink: string }>;
-  magentoByItemGroupId?: Map<string, { imageLink: string }>;
-  magentoByItemGroupIdLower?: Map<string, { imageLink: string }>;
+  magentoBySku?: Map<string, ThumbnailLookupValue>;
+  magentoBySkuLower?: Map<string, ThumbnailLookupValue>;
+  magentoByItemGroupId?: Map<string, ThumbnailLookupValue>;
+  magentoByItemGroupIdLower?: Map<string, ThumbnailLookupValue>;
 };
 
 function normalizeImageUrl(raw: string | null | undefined): string {
@@ -45,6 +46,15 @@ export function resolveProductThumbnailUrl(
     maps?.magentoBySku?.get(key) ?? maps?.magentoBySkuLower?.get(key.toLowerCase());
   const magentoUrl = normalizeImageUrl(magento?.imageLink);
   if (magentoUrl) return { url: magentoUrl, source: 'magento' };
+
+  const explicitParentKey = magento?.itemGroupId?.trim();
+  if (explicitParentKey) {
+    const explicitParentMagento =
+      maps?.magentoByItemGroupId?.get(explicitParentKey) ??
+      maps?.magentoByItemGroupIdLower?.get(explicitParentKey.toLowerCase());
+    const explicitParentMagentoUrl = normalizeImageUrl(explicitParentMagento?.imageLink);
+    if (explicitParentMagentoUrl) return { url: explicitParentMagentoUrl, source: 'magento' };
+  }
 
   const parentKey = fallbackProductKey(key);
   const parentMagento =

@@ -20,6 +20,9 @@ describe('useMagentoProductEnrichment helpers', () => {
       expect(buildImageLink('https://shop.gr/pub/media', '')).toBe('');
       expect(buildImageLink('', '/a/b.jpg')).toBe('');
     });
+    it('αγνοεί το Magento no_selection ώστε να γίνει fallback σε parent εικόνα', () => {
+      expect(buildImageLink('https://shop.gr/pub/media', 'no_selection')).toBe('');
+    });
   });
 
   describe('buildProductLink', () => {

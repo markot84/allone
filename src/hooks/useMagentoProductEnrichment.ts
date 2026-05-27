@@ -61,11 +61,12 @@ interface RawMagentoProductDoc {
 const CATALOG_PRODUCT_PATH = 'catalog/product';
 
 function buildImageLink(mediaBaseUrl: string, imageRelative: string): string {
-  if (!imageRelative) return '';
-  if (/^https?:\/\//i.test(imageRelative)) return imageRelative;
+  const cleanedImage = imageRelative.trim();
+  if (!cleanedImage || cleanedImage === 'no_selection') return '';
+  if (/^https?:\/\//i.test(cleanedImage)) return cleanedImage;
   if (!mediaBaseUrl) return '';
   const cleanedBase = mediaBaseUrl.replace(/\/+$/, '');
-  const cleanedRel = imageRelative.replace(/^\/+/, '');
+  const cleanedRel = cleanedImage.replace(/^\/+/, '');
   // Magento media gallery file paths are relative to /pub/media/catalog/product
   return `${cleanedBase}/${CATALOG_PRODUCT_PATH}/${cleanedRel}`.replace(/([^:]\/)\/+/g, '$1');
 }
