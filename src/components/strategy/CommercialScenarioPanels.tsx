@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ArrowDownRight, ArrowUpRight, Megaphone, Package, Percent, Tag } from 'lucide-react';
 import { Card, CardHeader, Spinner, Badge, ProductThumbnail } from '../common';
 import { useCommercialScenarioImpacts } from '../../hooks/useCommercialScenarioImpacts';
@@ -48,12 +48,24 @@ export function CommercialScenarioPanels({
   const data = useCommercialScenarioImpacts(period);
   const { getThumbnailUrl } = useProductThumbnails();
 
+  const visibleTabs = useMemo(
+    () =>
+      TABS.filter((t) => {
+        if (t.key === 'price') return (data.price?.rows.length ?? 0) > 0;
+        if (t.key === 'margin') return (data.margin?.rows.length ?? 0) > 0;
+        if (t.key === 'stock') return (data.stockout?.rows.length ?? 0) > 0;
+        return (data.marketing?.rows.length ?? 0) > 0;
+      }),
+    [data.margin?.rows.length, data.marketing?.rows.length, data.price?.rows.length, data.stockout?.rows.length]
+  );
+  const activeTab = visibleTabs.some((t) => t.key === tab) ? tab : (visibleTabs[0]?.key ?? tab);
+
   const active = useMemo(() => {
-    if (tab === 'price') return data.price;
-    if (tab === 'margin') return data.margin;
-    if (tab === 'stock') return data.stockout;
+    if (activeTab === 'price') return data.price;
+    if (activeTab === 'margin') return data.margin;
+    if (activeTab === 'stock') return data.stockout;
     return data.marketing;
-  }, [tab, data.price, data.margin, data.stockout, data.marketing]);
+  }, [activeTab, data.price, data.margin, data.stockout, data.marketing]);
 
   const filteredCount = useMemo(() => {
     if (!active) return 0;
@@ -63,6 +75,13 @@ export function CommercialScenarioPanels({
     }
     return active.rows.filter((r) => r.verdict === filter).length;
   }, [active, filter]);
+
+  useEffect(() => {
+    if (visibleTabs.length === 0 || visibleTabs.some((t) => t.key === tab)) return;
+    setTab(visibleTabs[0].key);
+    setFilter('all');
+    setShowDetails(false);
+  }, [tab, visibleTabs]);
 
   return (
     <Card padding="lg" className="relative overflow-hidden">
@@ -88,30 +107,32 @@ export function CommercialScenarioPanels({
         </div>
       )}
 
-      <div className="mb-4 flex flex-wrap gap-1 rounded-lg bg-[#F3F4F6] p-1" aria-busy={data.isLoading || data.isRefreshing}>
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            onClick={() => {
-              setTab(t.key);
-              setFilter('all');
-              setShowDetails(false);
-            }}
-            className={`flex min-h-[36px] flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-2 text-xs font-medium sm:flex-initial sm:px-3 ${
-              tab === t.key ? 'bg-white text-[var(--nts-orange)] shadow-sm' : 'text-[#6B7280] hover:text-[#374151]'
-            }`}
-          >
-            {t.icon}
-            {t.label}
-          </button>
-        ))}
-      </div>
+      {visibleTabs.length > 0 && (
+        <div className="mb-4 flex flex-wrap gap-1 rounded-lg bg-[#F3F4F6] p-1" aria-busy={data.isLoading || data.isRefreshing}>
+          {visibleTabs.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => {
+                setTab(t.key);
+                setFilter('all');
+                setShowDetails(false);
+              }}
+              className={`flex min-h-[36px] flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-2 text-xs font-medium sm:flex-initial sm:px-3 ${
+                activeTab === t.key ? 'bg-white text-[var(--nts-orange)] shadow-sm' : 'text-[#6B7280] hover:text-[#374151]'
+              }`}
+            >
+              {t.icon}
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
 
-      {tab === 'price' && data.price && <ScenarioKpis summary={data.price.summary} filter={filter} onFilterChange={setFilter} />}
-      {tab === 'margin' && data.margin && <ScenarioKpis summary={data.margin.summary} filter={filter} onFilterChange={setFilter} />}
-      {tab === 'stock' && data.stockout && <ScenarioKpis summary={data.stockout.summary} filter={filter} onFilterChange={setFilter} />}
-      {tab === 'marketing' && data.marketing && <MarketingKpis summary={data.marketing.summary} />}
+      {activeTab === 'price' && data.price && <ScenarioKpis summary={data.price.summary} filter={filter} onFilterChange={setFilter} />}
+      {activeTab === 'margin' && data.margin && <ScenarioKpis summary={data.margin.summary} filter={filter} onFilterChange={setFilter} />}
+      {activeTab === 'stock' && data.stockout && <ScenarioKpis summary={data.stockout.summary} filter={filter} onFilterChange={setFilter} />}
+      {activeTab === 'marketing' && data.marketing && <MarketingKpis summary={data.marketing.summary} />}
 
       <FilterChips filter={filter} onChange={setFilter} />
 
@@ -119,13 +140,17 @@ export function CommercialScenarioPanels({
         <div className="py-8">
           <Spinner />
         </div>
-      ) : tab !== 'marketing' && !data.hasOrderLines ? (
+      ) : visibleTabs.length === 0 ? (
+        <p className="text-sm text-[#6B7280]">
+          Δεν υπάρχουν διαθέσιμες αναλύσεις με αποτελέσματα για την επιλεγμένη περίοδο.
+        </p>
+      ) : activeTab !== 'marketing' && !data.hasOrderLines ? (
         <EmptyHint hasCost={data.hasCostData} type="orders" />
-      ) : tab === 'margin' && !data.hasCostData ? (
+      ) : activeTab === 'margin' && !data.hasCostData ? (
         <EmptyHint hasCost={false} type="cost" />
-      ) : tab === 'stock' && !data.hasStockSignals ? (
+      ) : activeTab === 'stock' && !data.hasStockSignals ? (
         <EmptyHint hasCost={data.hasCostData} type="stock" />
-      ) : tab === 'marketing' && (data.marketing?.rows.length ?? 0) === 0 ? (
+      ) : activeTab === 'marketing' && (data.marketing?.rows.length ?? 0) === 0 ? (
         <p className="text-sm text-[#6B7280]">Δεν βρέθηκαν καμπάνιες με σημαντικό spend στην περίοδο.</p>
       ) : filteredCount === 0 ? (
         <p className="text-sm text-[#6B7280]">Δεν εντοπίστηκαν σενάρια με τα τρέχοντα κριτήρια.</p>
@@ -146,16 +171,16 @@ export function CommercialScenarioPanels({
             </button>
           </div>
           <div className="overflow-x-auto rounded-xl border border-[#E5E7EB]">
-            {tab === 'price' && data.price && (
+            {activeTab === 'price' && data.price && (
               <PriceTable rows={filterRows(data.price.rows, filter, showDetails ? 50 : 5)} getThumbnailUrl={getThumbnailUrl} />
             )}
-            {tab === 'margin' && data.margin && (
+            {activeTab === 'margin' && data.margin && (
               <MarginTable rows={filterRows(data.margin.rows, filter, showDetails ? 50 : 5)} getThumbnailUrl={getThumbnailUrl} />
             )}
-            {tab === 'stock' && data.stockout && (
+            {activeTab === 'stock' && data.stockout && (
               <StockTable rows={filterRows(data.stockout.rows, filter, showDetails ? 50 : 5)} getThumbnailUrl={getThumbnailUrl} />
             )}
-            {tab === 'marketing' && data.marketing && (
+            {activeTab === 'marketing' && data.marketing && (
               <MarketingTable rows={filterRows(data.marketing.rows, filter, showDetails ? 50 : 5)} />
             )}
           </div>
