@@ -4,8 +4,6 @@ import { useBrand } from './useBrand';
 import { useCampaigns } from './useCampaigns';
 import { useCommercialActions } from './useCommercialActions';
 import { useEcommerceSummary } from './useEcommerceSummary';
-import { useProcurement } from './useProcurement';
-import { useProcurementSignals } from './useProcurementSignals';
 import { useProducts } from './useProducts';
 import { useProductSignals } from './useProductSignals';
 import {
@@ -16,8 +14,6 @@ import {
   saveCommercialDecisionEvent,
   type CommercialDecisionEvent,
 } from '../services/commercialDecisionMemory';
-import { buildErpHistoricalDecisionEvents } from '../services/erpHistoricalDecisionEvents';
-import { fetchDataAnalysisOrders } from '../services/ecommerceRawOrders';
 import {
   evaluateCommercialDecisionImpact,
   eventOverlapsPeriod,
@@ -29,12 +25,6 @@ import {
   applyCampaignDateRangeToMetrics,
   filterCampaignsByScheduleDateOverlap,
 } from '../utils/campaignDateRangeMetrics';
-import {
-  buildSkuNameMapFromPricingRows,
-  buildUnitCostBySku,
-  shiftIsoDate,
-} from '../services/commercialScenarioMetrics';
-import { buildStockContextFromProcurementSignals } from '../services/stockoutImpact';
 import type { Campaign } from '../types';
 
 export interface DecisionMemoryItem {
@@ -54,73 +44,13 @@ export function useCommercialDecisionMemory(period?: CommercialDecisionMemoryPer
   const { campaigns, isLoading: isCampaignsLoading } = useCampaigns();
   const { actions, isLoading: isActionsLoading } = useCommercialActions();
   const ecomm = useEcommerceSummary({ includeSkuDetails: true, includeStockMovement: true });
-  const procurement = useProcurement({ sheets: ['pricing_policy'] });
-  const procurementSignals = useProcurementSignals();
   const { products, isLoading: isProductsLoading } = useProducts({ maxDocs: 750 });
   const productSignals = useProductSignals(products);
-
-  const costBySku = useMemo(
-    () => buildUnitCostBySku(procurement.data.pricing_policy ?? []),
-    [procurement.data.pricing_policy]
-  );
-
-  const skuNames = useMemo(
-    () => buildSkuNameMapFromPricingRows(procurement.data.pricing_policy ?? []),
-    [procurement.data.pricing_policy]
-  );
-
-  const stockBySku = useMemo(
-    () => buildStockContextFromProcurementSignals(procurementSignals.signalsBySku),
-    [procurementSignals.signalsBySku]
-  );
-  const canLoadErpHistory =
-    !!brandId &&
-    !!period?.fromDate &&
-    !!period?.toDate &&
-    !ecomm.isLoading &&
-    !procurement.isLoading &&
-    !procurementSignals.isLoading;
 
   const storedQuery = useQuery({
     queryKey: ['commercial_decision_events', brandId],
     queryFn: () => (brandId ? listCommercialDecisionEvents(brandId) : Promise.resolve([])),
     enabled: !!brandId,
-    staleTime: 10 * 60 * 1000,
-    gcTime: 24 * 60 * 60 * 1000,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    placeholderData: (previousData) => previousData,
-  });
-
-  const erpHistoryQuery = useQuery({
-    queryKey: [
-      'erp_historical_decision_events',
-      brandId,
-      period?.fromDate,
-      period?.toDate,
-      [...ecomm.connectedPlatforms].sort().join('|'),
-      costBySku.size,
-      stockBySku.size,
-    ],
-    queryFn: async () => {
-      if (!brandId || !period?.fromDate || !period?.toDate) return [] as CommercialDecisionEvent[];
-      const orders = await fetchDataAnalysisOrders(brandId, ecomm.connectedPlatforms, {
-        sinceDate: shiftIsoDate(period.fromDate, -30),
-        untilDate: period.toDate,
-        cacheFirst: true,
-        revenueMode: 'all',
-      });
-      return buildErpHistoricalDecisionEvents({
-        brandId,
-        orders,
-        periodFrom: period.fromDate,
-        periodTo: period.toDate,
-        costBySku,
-        skuNames,
-        stockBySku,
-      });
-    },
-    enabled: canLoadErpHistory,
     staleTime: 10 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
     refetchOnMount: false,
@@ -152,10 +82,14 @@ export function useCommercialDecisionMemory(period?: CommercialDecisionMemoryPer
 
   const events = useMemo(() => {
     const storedMeasuredEvents = (storedQuery.data ?? []).filter(
-      (event) => event.source !== 'channel_activation' && event.source !== 'strategy' && event.source !== 'product_signals'
+      (event) =>
+        event.source !== 'channel_activation' &&
+        event.source !== 'strategy' &&
+        event.source !== 'product_signals' &&
+        event.source !== 'erp_history'
     );
-    return mergeCommercialDecisionEvents(storedMeasuredEvents, [...derivedEvents, ...(erpHistoryQuery.data ?? [])]);
-  }, [derivedEvents, erpHistoryQuery.data, storedQuery.data]);
+    return mergeCommercialDecisionEvents(storedMeasuredEvents, derivedEvents);
+  }, [derivedEvents, storedQuery.data]);
 
   const items = useMemo<DecisionMemoryItem[]>(() => {
     const periodFrom = period?.fromDate;
@@ -205,16 +139,13 @@ export function useCommercialDecisionMemory(period?: CommercialDecisionMemoryPer
     };
   }, [items]);
 
-  const hasVisibleDecisionData = items.length > 0 || storedQuery.data !== undefined || erpHistoryQuery.data !== undefined;
+  const hasVisibleDecisionData = items.length > 0 || storedQuery.data !== undefined;
   const isInitialLoading =
     !hasVisibleDecisionData &&
     (storedQuery.isPending ||
       isCampaignsLoading ||
       isActionsLoading ||
       ecomm.isLoading ||
-      procurement.isLoading ||
-      procurementSignals.isLoading ||
-      (canLoadErpHistory && erpHistoryQuery.isPending) ||
       isProductsLoading ||
       productSignals.isLoading);
 
@@ -227,17 +158,13 @@ export function useCommercialDecisionMemory(period?: CommercialDecisionMemoryPer
     isLoading: isInitialLoading,
     isRefreshing:
       storedQuery.isFetching ||
-      erpHistoryQuery.isFetching ||
       ecomm.isLoading ||
-      procurement.isRefreshing ||
-      procurementSignals.isLoading ||
       productSignals.isLoading,
     dataCoverage: {
       hasRevenue: ecomm.hasData,
       campaigns: campaigns.length,
       products: products.length,
       productSignals: productSignals.signalsBySku.size,
-      erpHistoricalEvents: erpHistoryQuery.data?.length ?? 0,
       connectedPlatforms: ecomm.connectedPlatforms,
     },
   };

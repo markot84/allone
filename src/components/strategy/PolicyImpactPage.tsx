@@ -48,7 +48,7 @@ const SOURCE_LABELS: Record<CommercialDecisionSource, string> = {
   campaigns: 'Καμπάνια',
   channel_activation: 'Ενεργοποίηση καναλιού',
   product_signals: 'Product signals',
-  erp_history: 'ERP finding',
+  erp_history: 'ERP history',
 };
 
 const VERDICT_LABELS: Record<CommercialDecisionVerdict | 'all', string> = {
@@ -180,7 +180,7 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
         title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Policy Impact</h2>}
         description={
           <p className="text-sm text-[#4A4A4A]">
-            Αυτόματο ιστορικό εμπορικών αποφάσεων, outcome scoring και playbooks για επανάχρηση ή αποφυγή.
+            Decision Memory για εμπορικές αποφάσεις, outcome scoring και playbooks για επανάχρηση ή αποφυγή.
           </p>
         }
         actions={
@@ -272,7 +272,7 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
       <section className="space-y-4 rounded-2xl border border-orange-100 bg-orange-50/35 p-4 sm:p-5">
         <SectionIntro
           title="Εμπορικά σενάρια & επίδραση (ERP)"
-          description="Σύνοψη ERP σημάτων για τιμές, τζίρο, απόθεμα και marketing. Χρησιμοποιείται ως γρήγορη εμπορική ανάγνωση της περιόδου."
+          description="Σύνοψη ERP σημάτων για τιμές, τζίρο, απόθεμα και marketing. Τα αποτελέσματα επαναχρησιμοποιούνται μέσα στην ημέρα και δεν υπολογίζονται ξανά σε κάθε refresh."
           icon={<BarChart3 size={18} />}
         />
         <CommercialScenarioPanels period={periodDates} periodLabel={periodLabel} />
@@ -283,8 +283,8 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
           <div className="flex items-center gap-3">
             <Spinner />
             <div>
-              <p className="text-sm font-semibold text-[#1A1A1A]">Ανανεώνονται τα αποτελέσματα για τη νέα περίοδο.</p>
-              <p className="text-xs text-[#6B7280]">Τα ERP/order-line σενάρια μπορεί να χρειαστούν λίγο χρόνο όταν αλλάζει μεγάλο date range.</p>
+              <p className="text-sm font-semibold text-[#1A1A1A]">Ανανεώνεται το Decision Memory για τη νέα περίοδο.</p>
+              <p className="text-xs text-[#6B7280]">Ελέγχουμε πραγματικές αποφάσεις, campaigns και εμπορικές ενέργειες χωρίς να διπλασιάζουμε τα ERP scenarios.</p>
             </div>
           </div>
         </Card>
@@ -348,8 +348,8 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
 
       <section className="space-y-5 rounded-2xl border border-sky-100 bg-sky-50/40 p-4 sm:p-5">
         <SectionIntro
-          title="Εμπορικές αποφάσεις / ERP findings"
-          description="Λίστα εμπορικών ευρημάτων από ERP δεδομένα. Επιλέξτε finding για να δείτε τι άλλαξε στον τζίρο, στις πωλήσεις, στο απόθεμα και στις σχετικές ενέργειες marketing."
+          title="Decision Memory"
+          description="Καταγραφή αποφάσεων, campaigns και εμπορικών ενεργειών με outcome scoring. Χρησιμοποιείται για να επαναλάβουμε ό,τι δούλεψε και να αποφύγουμε ό,τι δεν απέδωσε."
           icon={<BookOpenCheck size={18} />}
         />
 
@@ -357,8 +357,8 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
           <div className="space-y-5">
             <Card padding="lg">
               <CardHeader
-                title="Λίστα findings"
-                subtitle="Φιλτράρετε ανά τύπο ή outcome και ανοίξτε το finding που θέλετε να ελέγξετε αναλυτικά."
+                title="Λίστα αποφάσεων"
+                subtitle="Φιλτράρετε ανά τύπο ή outcome και ανοίξτε την απόφαση που θέλετε να ελέγξετε αναλυτικά."
                 icon={<BookOpenCheck size={18} className="text-[var(--nts-accent)]" />}
               />
               <div className="space-y-3">
@@ -366,7 +366,7 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
                   <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
                   <input
                     className="w-full rounded-lg border border-[#E5E7EB] py-2 pl-9 pr-3 text-sm"
-                    placeholder="Αναζήτηση απόφασης, SKU, κανάλι..."
+                    placeholder="Αναζήτηση απόφασης, campaign, κανάλι..."
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                   />
@@ -392,7 +392,7 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
             <Card padding="none">
               {isRefreshing && !isLoading && (
                 <div className="border-b border-[#E5E7EB] px-4 py-3 text-xs text-[#6B7280]">
-                  Ανανεώνονται τα ERP findings για τη νέα περίοδο...
+                  Ανανεώνονται οι αποφάσεις και τα outcomes για τη νέα περίοδο...
                 </div>
               )}
               {isLoading ? (
@@ -801,7 +801,6 @@ function EmptyState({
     campaigns: number;
     products: number;
     productSignals: number;
-    erpHistoricalEvents: number;
     connectedPlatforms: string[];
   };
   periodLabel: string | null;
@@ -828,9 +827,6 @@ function EmptyState({
       <div className="mt-3 flex flex-wrap gap-2">
         <Badge variant={coverage.hasRevenue ? 'success' : 'warning'}>Revenue data</Badge>
         <Badge variant={coverage.campaigns > 0 ? 'success' : 'warning'}>Campaigns {coverage.campaigns}</Badge>
-        <Badge variant={coverage.erpHistoricalEvents > 0 ? 'success' : 'warning'}>
-          ERP history {coverage.erpHistoricalEvents}
-        </Badge>
         <Badge variant={coverage.products > 0 ? 'success' : 'warning'}>Products {coverage.products}</Badge>
         <Badge variant={coverage.productSignals > 0 ? 'success' : 'warning'}>Signals {coverage.productSignals}</Badge>
       </div>

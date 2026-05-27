@@ -30,6 +30,8 @@ type WindowedScenarioRow = {
   confidence?: 'low' | 'medium' | 'high';
 };
 
+const ERP_SCENARIO_CACHE_MS = 24 * 60 * 60 * 1000;
+
 function monthWindows(periodFrom: string, periodTo: string): Array<{ startDate: string; endDate: string }> {
   const [fy, fm] = periodFrom.split('-').map(Number);
   const [ty, tm] = periodTo.split('-').map(Number);
@@ -174,10 +176,11 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
       return { price, margin, stockout, marketing, orderCount: orders.length, ordersWithLines };
     },
     enabled: canLoadImpacts,
-    staleTime: 10 * 60 * 1000,
-    gcTime: 24 * 60 * 60 * 1000,
+    staleTime: ERP_SCENARIO_CACHE_MS,
+    gcTime: ERP_SCENARIO_CACHE_MS * 2,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     placeholderData: (previousData) => previousData,
   });
 
