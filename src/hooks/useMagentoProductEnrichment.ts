@@ -37,6 +37,10 @@ export interface MagentoConnectorConfig {
   mediaBaseUrl: string;
   storeUrl: string;
   connected: boolean;
+  productCatalogAccess?: boolean;
+  lastSyncProducts?: number;
+  lastSyncError?: string;
+  lastSyncStatus?: string;
 }
 
 interface RawMagentoProductDoc {
@@ -104,6 +108,10 @@ export function useMagentoProductEnrichment() {
         mediaBaseUrl: inferMagentoMediaBaseUrl(String(m.mediaBaseUrl || ''), storeWebUrl || storeUrl),
         storeUrl,
         connected: Boolean(m.connected),
+        productCatalogAccess: typeof m.productCatalogAccess === 'boolean' ? m.productCatalogAccess : undefined,
+        lastSyncProducts: Number(m.lastSyncProducts ?? 0) || 0,
+        lastSyncError: String(m.lastSyncError || ''),
+        lastSyncStatus: String(m.lastSyncStatus || ''),
       };
     },
     enabled: !!brandId,
@@ -117,7 +125,7 @@ export function useMagentoProductEnrichment() {
       if (!brandId) return [];
       return FirestoreService.getDocuments<RawMagentoProductDoc>('magento_products', [], brandId);
     },
-    enabled: !!brandId && (connectorQuery.data?.connected ?? false),
+    enabled: !!brandId && (connectorQuery.data?.connected ?? false) && connectorQuery.data?.productCatalogAccess !== false,
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
   });
@@ -167,6 +175,10 @@ export function useMagentoProductEnrichment() {
     byItemGroupIdLower,
     isLoading: connectorQuery.isPending || productsQuery.isPending,
     isConnected: config.connected,
+    productCatalogAccess: config.productCatalogAccess,
+    lastSyncProducts: config.lastSyncProducts ?? 0,
+    lastSyncError: config.lastSyncError ?? '',
+    lastSyncStatus: config.lastSyncStatus ?? '',
     count: bySku.size,
   };
 }

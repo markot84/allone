@@ -34,5 +34,9 @@ export function useProductThumbnails() {
     getThumbnailUrl,
     isLoading: magento.isLoading,
     magentoConnected: magento.isConnected,
+    magentoProductCatalogAccess: magento.productCatalogAccess,
+    magentoProductCount: magento.count,
+    magentoLastSyncError: magento.lastSyncError,
+    magentoLastSyncProducts: magento.lastSyncProducts,
   };
 }

@@ -1,4 +1,11 @@
 import type { Campaign } from '../types';
+import type {
+  MarketingPlanDataQuality,
+  MarketingPlanEvidence,
+  MarketingPlanInsight,
+  MarketingPlanReorderGroup,
+  MarketingPlanSkuSuggestion,
+} from './marketingPlanInsights';
 
 export type MarketingPlanPresetId =
   | 'next_month'
@@ -22,10 +29,24 @@ export type MarketingPlanDraft = {
   fromDate: string;
   toDate: string;
   narrative: string;
+  coreMessage: MarketingPlanCoreMessage;
+  messageFallback: string;
+  evidence?: MarketingPlanEvidence;
+  reorderPlan: MarketingPlanReorderGroup[];
+  skuSuggestions: MarketingPlanSkuSuggestion[];
+  dataQuality?: MarketingPlanDataQuality;
   performance: MarketingPlanAction[];
   organic: MarketingPlanAction[];
   budgetSplit: { googleAds: number; meta: number; organic: number; other: number };
   risks: string[];
+};
+
+export type MarketingPlanCoreMessage = {
+  headline: string;
+  campaignAngle: string;
+  proofPoints: string[];
+  ctaIdeas: string[];
+  source: 'ai' | 'fallback';
 };
 
 function pad(n: number): string {
@@ -82,6 +103,27 @@ export function resolvePlanPeriod(presetId: MarketingPlanPresetId): {
   };
 }
 
+export function buildFallbackCoreMessage(insight?: MarketingPlanInsight): MarketingPlanCoreMessage {
+  const top = insight?.reorderPlan?.[0];
+  const label = insight?.period.periodLabel ?? 'την περίοδο';
+  const category = top?.subcategory || top?.category || 'τις κατηγορίες με ζήτηση';
+  const headline = `${label}: Εστιάζουμε σε ${category}`;
+  const proofPoints = top
+    ? [
+        `Πέρυσι: ${Math.round(top.lastYearUnits).toLocaleString('el-GR')} τεμάχια`,
+        `Τζίρος περσινής περιόδου: €${Math.round(top.lastYearRevenue).toLocaleString('el-GR')}`,
+        `Τρέχον stock: ${Math.round(top.currentStock).toLocaleString('el-GR')} τεμάχια`,
+      ]
+    : ['Το μήνυμα βασίζεται στα διαθέσιμα στοιχεία πωλήσεων και αποθέματος.'];
+  return {
+    headline,
+    campaignAngle: `Χτίζουμε το marketing plan γύρω από ${category}, με έμφαση στη διαθεσιμότητα, την εποχικότητα και τα προϊόντα που απέδειξαν ζήτηση πέρυσι.`,
+    proofPoints,
+    ctaIdeas: ['Δείτε τη συλλογή', 'Προλάβετε τη διαθεσιμότητα', 'Ανακαλύψτε τις επιλογές της περιόδου'],
+    source: 'fallback',
+  };
+}
+
 export function buildMarketingPlanDraft(input: {
   presetId: MarketingPlanPresetId;
   monthlyBudget?: number;
@@ -89,12 +131,17 @@ export function buildMarketingPlanDraft(input: {
   storeRevenue12m?: number;
   topCampaignRoas?: number;
   hasGa4?: boolean;
+  insight?: MarketingPlanInsight | null;
+  coreMessage?: MarketingPlanCoreMessage | null;
 }): MarketingPlanDraft {
   const period = resolvePlanPeriod(input.presetId);
+  const insight = input.insight ?? undefined;
   const budget = input.monthlyBudget || 0;
   const googleShare = 55;
   const metaShare = 35;
   const organicShare = 10;
+  const fallbackMessage = buildFallbackCoreMessage(insight);
+  const coreMessage = input.coreMessage ?? fallbackMessage;
 
   const performance: MarketingPlanAction[] = [
     {
@@ -108,8 +155,17 @@ export function buildMarketingPlanDraft(input: {
       id: 'perf-2',
       channel: 'performance',
       title: 'Shopping / catalog refresh',
-      detail: 'Συγχρονίστε feed και εικόνες SKU πριν την περίοδο — ιδίως νέα arrivals και εκπτώσεις.',
+      detail: insight?.reorderPlan?.[0]
+        ? `Προτεραιότητα feed σε ${insight.reorderPlan[0].subcategory || insight.reorderPlan[0].category}, γιατί είχε την ισχυρότερη περσινή ένδειξη.`
+        : 'Συγχρονίστε feed και εικόνες SKU πριν την περίοδο — ιδίως νέα arrivals και εκπτώσεις.',
       priority: 'medium',
+    },
+    {
+      id: 'perf-3',
+      channel: 'budget',
+      title: 'Budget guardrail βάσει αποθέματος',
+      detail: 'Μην αυξάνετε spend σε κατηγορίες που έχουν χαμηλό stock χωρίς παράλληλη απόφαση παραγγελίας.',
+      priority: 'high',
     },
   ];
 
@@ -119,7 +175,7 @@ export function buildMarketingPlanDraft(input: {
           id: 'org-1',
           channel: 'organic',
           title: 'Content pillars από top categories',
-          detail: '2–3 posts/εβδομάδα εστιασμένα σε κατηγορίες με υψηλό organic traffic στο GA4.',
+          detail: coreMessage.campaignAngle,
           priority: 'medium',
         },
       ]
@@ -140,13 +196,22 @@ export function buildMarketingPlanDraft(input: {
   if (budget <= 0) {
     risks.push('Δεν έχει οριστεί monthly budget στη Strategy — προτείνεται ορισμός για budget split.');
   }
+  if (insight?.dataQuality.notes.length) {
+    risks.push(...insight.dataQuality.notes);
+  }
 
   return {
     presetId: input.presetId,
     periodLabel: period.periodLabel,
     fromDate: period.fromDate,
     toDate: period.toDate,
-    narrative: `Σχέδιο για ${period.periodLabel} (${period.fromDate} — ${period.toDate}) με έμφαση σε performance marketing και organic support.`,
+    narrative: `${coreMessage.headline}. ${coreMessage.campaignAngle}`,
+    coreMessage,
+    messageFallback: fallbackMessage.headline,
+    evidence: insight?.evidence,
+    reorderPlan: insight?.reorderPlan ?? [],
+    skuSuggestions: insight?.skuSuggestions ?? [],
+    dataQuality: insight?.dataQuality,
     performance,
     organic,
     budgetSplit: {

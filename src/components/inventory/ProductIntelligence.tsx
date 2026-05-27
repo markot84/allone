@@ -208,7 +208,13 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
 
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
-  const { getThumbnailUrl } = useProductThumbnails();
+  const {
+    getThumbnailUrl,
+    magentoConnected,
+    magentoProductCatalogAccess,
+    magentoProductCount,
+    magentoLastSyncError,
+  } = useProductThumbnails();
   const { suppliers } = useSuppliers();
   const { benchmarks, count: benchmarkCount } = usePriceBenchmarks({ maxDocs: PRODUCT_INTELLIGENCE_BENCHMARK_LIMIT });
   const tagStockBucket = useMemo((): ProductIntelligenceBucket | null => {
@@ -354,6 +360,12 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     return s.healthy_stock.count + s.low_stock.count + s.excess_stock.count + s.dead_stock.count;
   }, [serverIntelligence.aggregate?.summary, serverFilteredTotal, totalCatalogCount]);
   const displayTotalSkus = includeNoStock ? totalCatalogCount : activeInventoryTotal;
+  const showMagentoImageAccessNotice =
+    hasServerAggregate &&
+    productDataSourceLabel === 'ERP' &&
+    magentoConnected &&
+    magentoProductCatalogAccess === false &&
+    magentoProductCount === 0;
 
   useEffect(() => {
     setCurrentPage(1);
@@ -555,6 +567,38 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
         <>
       {/* Inventory Alerts */}
       <AlertsBanner filterGroup="inventory" maxAlerts={2} compact onNavigate={onSectionChange} />
+
+      {showMagentoImageAccessNotice ? (
+        <Card padding="md" className="border border-amber-200 bg-amber-50/80">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex min-w-0 gap-3">
+              <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-600" aria-hidden />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-amber-950">
+                  Δεν υπάρχουν διαθέσιμες φωτογραφίες προϊόντων από Magento.
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-amber-900 sm:text-sm">
+                  Το απόθεμα έρχεται από ERP, αλλά το Magento Products API δεν δίνει πρόσβαση στον κατάλογο
+                  (401). Χρειάζεται Magento integration token με read δικαίωμα στο catalog/products και μετά νέο sync.
+                </p>
+                {magentoLastSyncError ? (
+                  <p className="mt-1 text-[11px] text-amber-800">
+                    Τελευταίο σφάλμα: {magentoLastSyncError}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => onSectionChange?.('data')}
+              className="shrink-0 border-amber-300 bg-white/80 text-amber-900 hover:bg-white"
+            >
+              Έλεγχος σύνδεσης
+            </Button>
+          </div>
+        </Card>
+      ) : null}
 
       {/* Summary Cards — uses procurement data when available */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
