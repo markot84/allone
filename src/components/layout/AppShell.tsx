@@ -38,8 +38,19 @@ export interface AppShellProps {
   children: React.ReactNode;
 }
 
-type NavGroup = 'overview' | 'intelligence' | 'strategy' | 'execution' | 'coordination' | 'utility';
+type NavGroup = 'business' | 'commerce' | 'commercial' | 'marketing' | 'procurement' | 'finance' | 'operations' | 'admin';
 type NavItem = { id: AppSectionId; label: string; icon: any; badge?: string; badgeColor?: string; group: NavGroup };
+
+const NAV_GROUP_LABELS: Record<NavGroup, string> = {
+  business: 'Business',
+  commerce: 'Commerce',
+  commercial: 'Commercial',
+  marketing: 'Marketing',
+  procurement: 'Procurement',
+  finance: 'Finance',
+  operations: 'Operations',
+  admin: 'Admin',
+};
 
 function BrandMenu({
   currentBrand,
@@ -457,44 +468,46 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
   const navItems = useMemo<NavItem[]>(
     () => {
       const commonItems: NavItem[] = [
-        { id: 'brands', label: 'My Brands', icon: Building2, group: 'overview' },
-        { id: 'dashboard', label: moduleConfig.dashboard.label, icon: HomeIcon, group: 'overview' },
-        { id: 'roi', label: moduleConfig.roi.label, icon: GraphIcon, group: 'overview' },
-        { id: 'ecommerce', label: moduleConfig.ecommerce.label, icon: ShoppingBag, group: 'intelligence' },
-        { id: 'rfm', label: moduleConfig.rfm.label, icon: OrganizationIcon, group: 'intelligence' },
-        { id: 'accounts', label: moduleConfig.accounts.label, icon: Users, group: 'intelligence' },
-        { id: 'products', label: moduleConfig.products.label, icon: PackageIcon, group: 'intelligence' },
-        { id: 'competitive', label: moduleConfig.competitive.label, icon: SearchIcon, group: 'intelligence' },
-        { id: 'analytics', label: moduleConfig.analytics.label, icon: BarChart3, group: 'intelligence' },
-        { id: 'insights', label: moduleConfig.insights.label, icon: LightBulbIcon, group: 'intelligence' },
-        { id: 'strategy', label: 'Commercial Strategy', icon: GraphIcon, group: 'strategy', ...(strategyBadge ? { badge: strategyBadge.text, badgeColor: strategyBadge.color } : {}) },
-        { id: 'markets', label: moduleConfig.markets.label, icon: Globe2, group: 'strategy' },
-        { id: 'channels', label: moduleConfig.channels.label, icon: MegaphoneIcon, group: 'strategy' },
-        { id: 'sales', label: moduleConfig.sales.label, icon: Handshake, group: 'strategy' },
-        { id: 'campaigns', label: moduleConfig.campaigns.label, icon: Target, group: 'strategy' },
-        { id: 'calendar', label: moduleConfig.calendar.label, icon: PencilIcon, group: 'strategy' },
-        { id: 'finances', label: moduleConfig.finances.label, icon: Euro, group: 'execution' },
-        { id: 'suppliers', label: moduleConfig.suppliers.label, icon: Truck, group: 'execution' },
-        { id: 'procurement', label: moduleConfig.procurement.label, icon: FileSpreadsheet, group: 'execution' },
-        { id: 'hr', label: moduleConfig.hr.label, icon: HeartHandshake, group: 'coordination' },
-        { id: 'offers', label: moduleConfig.offers.label, icon: ClipboardList, group: 'coordination' },
-        { id: 'territories', label: moduleConfig.territories.label, icon: MapPin, group: 'coordination' },
-        { id: 'coordination', label: moduleConfig.coordination.label, icon: GitPullRequestArrow, group: 'coordination' },
-        { id: 'automation', label: moduleConfig.automation.label, icon: Zap, group: 'coordination' },
-        { id: 'reports', label: moduleConfig.reports.label, icon: ReportIcon, group: 'coordination' },
-        { id: 'data', label: moduleConfig.data.label, icon: Upload, group: 'utility' },
-        { id: 'invite', label: 'Invite users', icon: UserPlus, group: 'utility' },
-        { id: 'help', label: 'Help', icon: GearIcon, group: 'utility' },
+        { id: 'brands', label: 'My Brands', icon: Building2, group: 'business' },
+        { id: 'dashboard', label: moduleConfig.dashboard.label, icon: HomeIcon, group: 'business' },
+        { id: 'roi', label: moduleConfig.roi.label, icon: GraphIcon, group: 'business' },
+        { id: 'insights', label: moduleConfig.insights.label, icon: LightBulbIcon, group: 'business' },
+        { id: 'reports', label: moduleConfig.reports.label, icon: ReportIcon, group: 'business' },
+        { id: 'ecommerce', label: moduleConfig.ecommerce.label, icon: ShoppingBag, group: 'commerce' },
+        { id: 'rfm', label: moduleConfig.rfm.label, icon: OrganizationIcon, group: 'commerce' },
+        { id: 'accounts', label: moduleConfig.accounts.label, icon: Users, group: 'commerce' },
+        { id: 'products', label: moduleConfig.products.label, icon: PackageIcon, group: 'commerce' },
+        { id: 'competitive', label: moduleConfig.competitive.label, icon: SearchIcon, group: 'commerce' },
+        { id: 'strategy', label: 'Commercial Strategy', icon: GraphIcon, group: 'commercial', ...(strategyBadge ? { badge: strategyBadge.text, badgeColor: strategyBadge.color } : {}) },
+        { id: 'policy-impact', label: 'Policy Impact', icon: BarChart3, group: 'commercial' },
+        { id: 'markets', label: moduleConfig.markets.label, icon: Globe2, group: 'commercial' },
+        { id: 'channels', label: moduleConfig.channels.label, icon: MegaphoneIcon, group: 'commercial' },
+        { id: 'sales', label: moduleConfig.sales.label, icon: Handshake, group: 'commercial' },
+        { id: 'offers', label: moduleConfig.offers.label, icon: ClipboardList, group: 'commercial' },
+        { id: 'marketing-plan', label: 'Marketing Plan', icon: ClipboardList, group: 'marketing' },
+        { id: 'campaigns', label: moduleConfig.campaigns.label, icon: Target, group: 'marketing' },
+        { id: 'analytics', label: moduleConfig.analytics.label, icon: BarChart3, group: 'marketing' },
+        { id: 'calendar', label: moduleConfig.calendar.label, icon: PencilIcon, group: 'marketing' },
+        { id: 'suppliers', label: moduleConfig.suppliers.label, icon: Truck, group: 'procurement' },
+        { id: 'procurement', label: moduleConfig.procurement.label, icon: FileSpreadsheet, group: 'procurement' },
+        { id: 'finances', label: moduleConfig.finances.label, icon: Euro, group: 'finance' },
+        { id: 'hr', label: moduleConfig.hr.label, icon: HeartHandshake, group: 'operations' },
+        { id: 'territories', label: moduleConfig.territories.label, icon: MapPin, group: 'operations' },
+        { id: 'coordination', label: moduleConfig.coordination.label, icon: GitPullRequestArrow, group: 'operations' },
+        { id: 'automation', label: moduleConfig.automation.label, icon: Zap, group: 'operations' },
+        { id: 'data', label: moduleConfig.data.label, icon: Upload, group: 'admin' },
+        { id: 'invite', label: 'Invite users', icon: UserPlus, group: 'admin' },
+        { id: 'help', label: 'Help', icon: GearIcon, group: 'admin' },
       ];
 
       const ordered = isB2B
         ? [
-            'brands', 'dashboard', 'accounts', 'products', 'suppliers', 'procurement', 'strategy', 'markets', 'channels', 'sales', 'offers', 'campaigns',
-            'competitive', 'analytics', 'roi', 'finances', 'calendar', 'insights', 'hr', 'territories', 'coordination', 'automation', 'reports', 'data', 'invite', 'help',
+            'brands', 'dashboard', 'roi', 'insights', 'reports', 'accounts', 'products', 'competitive', 'strategy', 'policy-impact', 'markets', 'channels', 'sales', 'offers',
+            'marketing-plan', 'campaigns', 'analytics', 'calendar', 'suppliers', 'procurement', 'finances', 'hr', 'territories', 'coordination', 'automation', 'data', 'invite', 'help',
           ]
         : [
-            'brands', 'dashboard', 'roi', 'ecommerce', 'rfm', 'products', 'competitive', 'analytics', 'insights', 'strategy', 'channels',
-            'campaigns', 'calendar', 'finances', 'suppliers', 'procurement', 'coordination', 'automation', 'reports', 'data', 'invite', 'help',
+            'brands', 'dashboard', 'roi', 'insights', 'reports', 'ecommerce', 'rfm', 'products', 'competitive', 'strategy', 'policy-impact', 'channels',
+            'marketing-plan', 'campaigns', 'analytics', 'calendar', 'suppliers', 'procurement', 'finances', 'coordination', 'automation', 'data', 'invite', 'help',
           ];
 
       const itemMap = new Map(commonItems.map((item) => [item.id, item]));
@@ -507,7 +520,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
         });
 
       if (isSuperAdmin) {
-        items.push({ id: 'admin', label: 'Super Admin', icon: ShieldIcon, group: 'utility' });
+        items.push({ id: 'admin', label: 'Super Admin', icon: ShieldIcon, group: 'admin' });
       }
       return items;
     },
@@ -519,12 +532,27 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
     return (
       <NavList aria-label="Primary">
         {navItems.map((item) => {
-          const showSeparator = lastGroup !== null && item.group !== lastGroup;
+          const isFirstGroup = lastGroup === null;
+          const showGroupLabel = item.group !== lastGroup;
           lastGroup = item.group;
           return (
             <React.Fragment key={item.id}>
-              {showSeparator && (
-                <li aria-hidden="true" style={{ listStyle: 'none', margin: '6px 12px', borderTop: '1px solid rgba(255,255,255,0.08)' }} />
+              {showGroupLabel && (
+                <li
+                  style={{
+                    listStyle: 'none',
+                    margin: isFirstGroup ? '2px 12px 4px' : '10px 12px 4px',
+                    paddingTop: isFirstGroup ? 0 : 8,
+                    borderTop: isFirstGroup ? 'none' : '1px solid rgba(255,255,255,0.08)'
+                  }}
+                >
+                  <span
+                    className="text-[10px] font-semibold uppercase tracking-[0.16em]"
+                    style={{ color: 'rgba(255,255,255,0.34)' }}
+                  >
+                    {NAV_GROUP_LABELS[item.group]}
+                  </span>
+                </li>
               )}
               <NavList.Item
                 as="button"
