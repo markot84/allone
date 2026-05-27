@@ -108,9 +108,9 @@ export function CommercialScenarioPanels({
         ))}
       </div>
 
-      {tab === 'price' && data.price && <ScenarioKpis summary={data.price.summary} />}
-      {tab === 'margin' && data.margin && <ScenarioKpis summary={data.margin.summary} />}
-      {tab === 'stock' && data.stockout && <ScenarioKpis summary={data.stockout.summary} />}
+      {tab === 'price' && data.price && <ScenarioKpis summary={data.price.summary} filter={filter} onFilterChange={setFilter} />}
+      {tab === 'margin' && data.margin && <ScenarioKpis summary={data.margin.summary} filter={filter} onFilterChange={setFilter} />}
+      {tab === 'stock' && data.stockout && <ScenarioKpis summary={data.stockout.summary} filter={filter} onFilterChange={setFilter} />}
       {tab === 'marketing' && data.marketing && <MarketingKpis summary={data.marketing.summary} />}
 
       <FilterChips filter={filter} onChange={setFilter} />
@@ -132,45 +132,47 @@ export function CommercialScenarioPanels({
       ) : (
         <div className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <span />
+            <p className="text-xs text-[#6B7280]">
+              {showDetails
+                ? `Προβάλλονται έως 50 γραμμές από ${formatNumber(filteredCount)} διαθέσιμες.`
+                : `Προεπισκόπηση των 5 πρώτων από ${formatNumber(filteredCount)} διαθέσιμες γραμμές.`}
+            </p>
             <button
               type="button"
               onClick={() => setShowDetails((v) => !v)}
               className="rounded-lg border border-[#E5E7EB] px-3 py-1.5 text-xs font-semibold text-[#374151] transition-colors hover:border-[var(--nts-accent)]/40 hover:bg-[var(--nts-accent)]/5"
             >
-              {showDetails ? 'Σύμπτυξη πίνακα' : 'Προβολή αναλυτικού πίνακα'}
+              {showDetails ? 'Εμφάνιση μόνο 5 πρώτων' : 'Άνοιγμα πλήρους πίνακα'}
             </button>
           </div>
-          {showDetails && (
-            <div className="overflow-x-auto rounded-xl border border-[#E5E7EB]">
-              {tab === 'price' && data.price && (
-                <PriceTable rows={filterRows(data.price.rows, filter)} getThumbnailUrl={getThumbnailUrl} />
-              )}
-              {tab === 'margin' && data.margin && (
-                <MarginTable rows={filterRows(data.margin.rows, filter)} getThumbnailUrl={getThumbnailUrl} />
-              )}
-              {tab === 'stock' && data.stockout && (
-                <StockTable rows={filterRows(data.stockout.rows, filter)} getThumbnailUrl={getThumbnailUrl} />
-              )}
-              {tab === 'marketing' && data.marketing && (
-                <MarketingTable rows={filterRows(data.marketing.rows, filter)} />
-              )}
-            </div>
-          )}
+          <div className="overflow-x-auto rounded-xl border border-[#E5E7EB]">
+            {tab === 'price' && data.price && (
+              <PriceTable rows={filterRows(data.price.rows, filter, showDetails ? 50 : 5)} getThumbnailUrl={getThumbnailUrl} />
+            )}
+            {tab === 'margin' && data.margin && (
+              <MarginTable rows={filterRows(data.margin.rows, filter, showDetails ? 50 : 5)} getThumbnailUrl={getThumbnailUrl} />
+            )}
+            {tab === 'stock' && data.stockout && (
+              <StockTable rows={filterRows(data.stockout.rows, filter, showDetails ? 50 : 5)} getThumbnailUrl={getThumbnailUrl} />
+            )}
+            {tab === 'marketing' && data.marketing && (
+              <MarketingTable rows={filterRows(data.marketing.rows, filter, showDetails ? 50 : 5)} />
+            )}
+          </div>
         </div>
       )}
     </Card>
   );
 }
 
-function filterRows<T extends { verdict: ScenarioVerdict }>(rows: T[], filter: ImpactFilter): T[] {
+function filterRows<T extends { verdict: ScenarioVerdict }>(rows: T[], filter: ImpactFilter, limit = 50): T[] {
   const list =
     filter === 'all'
       ? rows.filter(isActionableRow)
       : filter === 'positive' || filter === 'negative'
         ? rows.filter((r) => r.verdict === filter && isActionableRow(r))
         : rows.filter((r) => r.verdict === filter);
-  return list.slice(0, 50);
+  return list.slice(0, limit);
 }
 
 function isActionableRow<T extends { verdict: ScenarioVerdict; confidence?: string }>(row: T): boolean {
@@ -206,6 +208,8 @@ function FilterChips({ filter, onChange }: { filter: ImpactFilter; onChange: (f:
 
 function ScenarioKpis({
   summary,
+  filter,
+  onFilterChange,
 }: {
   summary: {
     detected: number;
@@ -222,15 +226,40 @@ function ScenarioKpis({
     marginSkuCount?: number;
     hasMarginCoverage?: boolean;
   };
+  filter: ImpactFilter;
+  onFilterChange: (filter: ImpactFilter) => void;
 }) {
   const netTone = summary.netRevenueDelta > 0 ? 'success' : summary.netRevenueDelta < 0 ? 'danger' : undefined;
   return (
     <div className="mb-4 space-y-3">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-        <MiniKpi label="Findings" value={summary.detected} sub="πλήθος μεταβολών" />
-        <MiniKpi label="Θετικά" value={summary.positive} tone="success" />
-        <MiniKpi label="Αρνητικά" value={summary.negative} tone="danger" />
-        <MiniKpi label="Ουδέτερα" value={summary.neutral} />
+        <MiniKpi
+          label="Findings"
+          value={summary.detected}
+          sub="πλήθος μεταβολών"
+          selected={filter === 'all'}
+          onClick={() => onFilterChange('all')}
+        />
+        <MiniKpi
+          label="Θετικά"
+          value={summary.positive}
+          tone="success"
+          selected={filter === 'positive'}
+          onClick={() => onFilterChange('positive')}
+        />
+        <MiniKpi
+          label="Αρνητικά"
+          value={summary.negative}
+          tone="danger"
+          selected={filter === 'negative'}
+          onClick={() => onFilterChange('negative')}
+        />
+        <MiniKpi
+          label="Ουδέτερα"
+          value={summary.neutral}
+          selected={filter === 'neutral'}
+          onClick={() => onFilterChange('neutral')}
+        />
         <MiniKpi
           label="Καθαρή επίδραση τζίρου"
           value={formatSignedCurrency(summary.netRevenueDelta)}
@@ -290,20 +319,36 @@ function MiniKpi({
   value,
   sub,
   tone,
+  selected,
+  onClick,
 }: {
   label: string;
   value: string | number;
   sub?: string;
   tone?: 'success' | 'danger' | 'info';
+  selected?: boolean;
+  onClick?: () => void;
 }) {
   const toneClass =
     tone === 'success' ? 'text-emerald-600' : tone === 'danger' ? 'text-rose-600' : tone === 'info' ? 'text-violet-600' : 'text-[#1A1A1A]';
-  return (
-    <div className="rounded-xl border border-[#E5E7EB] bg-[#FAFAFA] p-3">
+  const className = `rounded-xl border p-3 text-left transition-all ${
+    selected
+      ? 'border-[var(--nts-accent)]/40 bg-[var(--nts-accent)]/5 ring-2 ring-[var(--nts-accent)]/15'
+      : 'border-[#E5E7EB] bg-[#FAFAFA]'
+  } ${onClick ? 'cursor-pointer hover:border-[var(--nts-accent)]/40 hover:bg-white' : ''}`;
+  const content = (
+    <>
       <p className="text-[10px] font-semibold uppercase text-[#9CA3AF]">{label}</p>
       <p className={`mt-1 font-mono text-lg font-bold ${toneClass}`}>{typeof value === 'number' ? formatNumber(value) : value}</p>
       {sub && <p className="mt-0.5 text-xs text-[#6B7280]">{sub}</p>}
-    </div>
+    </>
+  );
+  return onClick ? (
+    <button type="button" className={className} onClick={onClick} aria-pressed={selected}>
+      {content}
+    </button>
+  ) : (
+    <div className={className}>{content}</div>
   );
 }
 
