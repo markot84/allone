@@ -67,6 +67,7 @@ const VERDICT_BADGE: Record<CommercialDecisionVerdict, 'success' | 'warning' | '
 };
 
 type SummaryTab = 'all' | 'winning' | 'review' | 'avoid' | 'active';
+const SHOW_DECISION_MEMORY = false;
 
 function matchesSummaryTab(item: DecisionMemoryItem, tab: SummaryTab): boolean {
   if (tab === 'all') return true;
@@ -180,7 +181,7 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
         title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Policy Impact</h2>}
         description={
           <p className="text-sm text-[#4A4A4A]">
-            Decision Memory για εμπορικές αποφάσεις, outcome scoring και playbooks για επανάχρηση ή αποφυγή.
+            Γρήγορη ανάγνωση ERP σεναρίων για τιμές, τζίρο, απόθεμα και marketing.
           </p>
         }
         actions={
@@ -188,9 +189,11 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
             <Button variant="ghost" size="sm" icon={<ArrowLeft size={14} />} onClick={() => onSectionChange?.('strategy')}>
               Strategy
             </Button>
-            <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => setShowForm(true)}>
-              Add missing decision
-            </Button>
+            {SHOW_DECISION_MEMORY && (
+              <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => setShowForm(true)}>
+                Add missing decision
+              </Button>
+            )}
           </div>
         }
       />
@@ -234,40 +237,42 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
         </div>
       </Card>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" role="tablist" aria-label="Filter decisions by outcome">
-        <SummaryCard
-          icon={<CheckCircle2 size={18} />}
-          label="Winning scenarios"
-          value={summary.winning}
-          tone="success"
-          selected={summaryTab === 'winning'}
-          onClick={() => handleSummaryTab('winning')}
-        />
-        <SummaryCard
-          icon={<CircleAlert size={18} />}
-          label="Needs review"
-          value={summary.review}
-          tone="warning"
-          selected={summaryTab === 'review'}
-          onClick={() => handleSummaryTab('review')}
-        />
-        <SummaryCard
-          icon={<TrendingDown size={18} />}
-          label="Avoid repeating"
-          value={summary.avoid}
-          tone="danger"
-          selected={summaryTab === 'avoid'}
-          onClick={() => handleSummaryTab('avoid')}
-        />
-        <SummaryCard
-          icon={<Lightbulb size={18} />}
-          label="Active experiments"
-          value={summary.active}
-          tone="info"
-          selected={summaryTab === 'active'}
-          onClick={() => handleSummaryTab('active')}
-        />
-      </div>
+      {SHOW_DECISION_MEMORY && (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" role="tablist" aria-label="Filter decisions by outcome">
+          <SummaryCard
+            icon={<CheckCircle2 size={18} />}
+            label="Winning scenarios"
+            value={summary.winning}
+            tone="success"
+            selected={summaryTab === 'winning'}
+            onClick={() => handleSummaryTab('winning')}
+          />
+          <SummaryCard
+            icon={<CircleAlert size={18} />}
+            label="Needs review"
+            value={summary.review}
+            tone="warning"
+            selected={summaryTab === 'review'}
+            onClick={() => handleSummaryTab('review')}
+          />
+          <SummaryCard
+            icon={<TrendingDown size={18} />}
+            label="Avoid repeating"
+            value={summary.avoid}
+            tone="danger"
+            selected={summaryTab === 'avoid'}
+            onClick={() => handleSummaryTab('avoid')}
+          />
+          <SummaryCard
+            icon={<Lightbulb size={18} />}
+            label="Active experiments"
+            value={summary.active}
+            tone="info"
+            selected={summaryTab === 'active'}
+            onClick={() => handleSummaryTab('active')}
+          />
+        </div>
+      )}
 
       <section className="space-y-4 rounded-2xl border border-orange-100 bg-orange-50/35 p-4 sm:p-5">
         <SectionIntro
@@ -278,7 +283,7 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
         <CommercialScenarioPanels period={periodDates} periodLabel={periodLabel} />
       </section>
 
-      {isRefreshing && !isLoading && (
+      {SHOW_DECISION_MEMORY && isRefreshing && !isLoading && (
         <Card padding="md" className="border border-[var(--nts-accent)]/25 bg-[var(--nts-accent)]/5">
           <div className="flex items-center gap-3">
             <Spinner />
@@ -290,7 +295,7 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
         </Card>
       )}
 
-      {showForm && (
+      {SHOW_DECISION_MEMORY && showForm && (
         <Card padding="lg" className="border border-[var(--nts-accent)]/30">
           <CardHeader
             title="Add missing decision"
@@ -346,6 +351,7 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
         </Card>
       )}
 
+      {SHOW_DECISION_MEMORY && (
       <section className="space-y-5 rounded-2xl border border-sky-100 bg-sky-50/40 p-4 sm:p-5">
         <SectionIntro
           title="Decision Memory"
@@ -436,6 +442,7 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
           </div>
         </div>
       </section>
+      )}
     </div>
   );
 }
