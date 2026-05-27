@@ -260,35 +260,38 @@ function ScenarioKpis({
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
         <MiniKpi
           label="Findings"
-          value={summary.detected}
-          sub="πλήθος μεταβολών"
+          value={formatSkuCount(summary.detected)}
+          sub="SKU με εμπορική επίδραση"
           selected={filter === 'all'}
           onClick={() => onFilterChange('all')}
         />
         <MiniKpi
           label="Θετικά"
-          value={summary.positive}
+          value={formatSkuCount(summary.positive)}
+          sub="SKU με θετική επίδραση"
           tone="success"
           selected={filter === 'positive'}
           onClick={() => onFilterChange('positive')}
         />
         <MiniKpi
           label="Αρνητικά"
-          value={summary.negative}
+          value={formatSkuCount(summary.negative)}
+          sub="SKU με αρνητική επίδραση"
           tone="danger"
           selected={filter === 'negative'}
           onClick={() => onFilterChange('negative')}
         />
         <MiniKpi
           label="Ουδέτερα"
-          value={summary.neutral}
+          value={formatSkuCount(summary.neutral)}
+          sub="SKU χωρίς καθαρή επίδραση"
           selected={filter === 'neutral'}
           onClick={() => onFilterChange('neutral')}
         />
         <MiniKpi
           label="Καθαρή επίδραση τζίρου"
           value={formatSignedCurrency(summary.netRevenueDelta)}
-          sub={`${formatCurrency(summary.totalRevenueBefore, 0)} → ${formatCurrency(summary.totalRevenueAfter, 0)}`}
+          sub={`${formatEuro(summary.totalRevenueBefore)} → ${formatEuro(summary.totalRevenueAfter)}`}
           tone={netTone}
         />
         <MiniKpi
@@ -298,14 +301,22 @@ function ScenarioKpis({
         />
       </div>
       <p className="text-xs leading-relaxed text-[#6B7280]">
-        Τα θετικά/αρνητικά είναι πλήθος findings. Η καθαρή επίδραση δείχνει την αξία τζίρου μετά την αφαίρεση των αρνητικών μεταβολών.
+        Τα θετικά/αρνητικά είναι πλήθος SKU findings. Η καθαρή επίδραση δείχνει την αξία τζίρου σε ευρώ μετά την αφαίρεση των αρνητικών μεταβολών.
       </p>
     </div>
   );
 }
 
+function formatSkuCount(value: number): string {
+  return `${formatNumber(value)} SKU`;
+}
+
+function formatEuro(value: number): string {
+  return `${formatCurrency(value, 0)} €`;
+}
+
 function formatSignedCurrency(value: number): string {
-  const abs = formatCurrency(Math.abs(value), 0);
+  const abs = formatEuro(Math.abs(value));
   if (value > 0) return `+${abs}`;
   if (value < 0) return `-${abs}`;
   return abs;
