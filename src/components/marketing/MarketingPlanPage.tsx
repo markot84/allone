@@ -1,19 +1,26 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { BarChart3, Calendar, CheckSquare, PackagePlus, Sparkles, TrendingUp } from 'lucide-react';
+import {
+  BarChart3, Calendar, ChevronDown, ChevronUp, Megaphone, PackagePlus,
+  Sparkles, Tag, TrendingUp, Users, ArrowUpRight, ArrowDownRight,
+} from 'lucide-react';
 import { Card, CardHeader, Button, PageHeader, Badge, Spinner } from '../common';
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import { useCampaigns } from '../../hooks/useCampaigns';
 import { useGA4Data } from '../../hooks/useGA4Data';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
-import { useProductIntelligenceAggregate } from '../../hooks/useProductIntelligenceAggregate';
+import { useProcurementSignals } from '../../hooks/useProcurementSignals';
+import { useSegments } from '../../hooks/useSegments';
+import { usePriceBenchmarks } from '../../hooks/usePriceBenchmarks';
 import {
   buildMarketingPlanDraft,
   resolvePlanPeriod,
-  type MarketingPlanAction,
   type MarketingPlanDraft,
   type MarketingPlanPresetId,
   type MarketingPlanCoreMessage,
+  type CampaignRecommendation,
+  type RfmTactic,
+  type PriceBenchmarkAlert,
 } from '../../services/marketingPlanEngine';
 import {
   buildMarketingPlanInsight,
@@ -36,6 +43,8 @@ const PRESETS: { id: MarketingPlanPresetId; label: string }[] = [
   { id: 'back_to_school', label: 'Back to School' },
 ];
 
+type SectionKey = 'analysis' | 'inventory' | 'paid' | 'organic' | 'audience' | 'pricing' | 'message';
+
 export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: string) => void } = {}) {
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
@@ -43,23 +52,24 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
   const { campaigns } = useCampaigns();
   const ga4 = useGA4Data();
   const ecomm = useEcommerceSummary({ includeSkuDetails: false, includeStockMovement: false });
-  const inventory = useProductIntelligenceAggregate('all', 1, {
-    pageSize: 150,
-    includeNoStock: true,
-    sortField: 'stock_level',
-    sortDirection: 'desc',
-  });
+  const procurementSignals = useProcurementSignals();
+  const segments = useSegments({ variant: 'data_analysis', skipOrderHydration: true });
+  const { benchmarks: priceBenchmarks } = usePriceBenchmarks({ maxDocs: 200 });
   const queryClient = useQueryClient();
 
   const [preset, setPreset] = useState<MarketingPlanPresetId>('next_month');
   const [draft, setDraft] = useState<MarketingPlanDraft | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [openSections, setOpenSections] = useState<Set<SectionKey>>(
+    new Set(['analysis', 'inventory', 'paid', 'organic', 'audience', 'pricing', 'message'])
+  );
+
   const period = useMemo(() => ({ presetId: preset, ...resolvePlanPeriod(preset) }), [preset]);
   const lastYearFrom = shiftIsoDateByYears(period.fromDate, -1);
   const lastYearTo = shiftIsoDateByYears(period.toDate, -1);
 
   const lastYearOrdersQuery = useQuery({
-    queryKey: ['marketingPlanLastYearOrders', brandId, lastYearFrom, lastYearTo, ecomm.connectedPlatforms.join('|')],
+    queryKey: ['marketingPlanLastYearOrders', brandId, lastYearFrom, lastYearTo, [...ecomm.connectedPlatforms].sort().join('|')],
     queryFn: () =>
       brandId
         ? fetchDataAnalysisOrders(brandId, ecomm.connectedPlatforms, {
@@ -80,9 +90,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
     queryFn: async () => {
       if (!brandId) return [];
       return FirestoreService.getDocuments<{ id: string; plan: MarketingPlanDraft; savedAt: string }>(
-        'marketing_plans',
-        [],
-        brandId
+        'marketing_plans', [], brandId
       );
     },
     enabled: !!brandId,
@@ -93,12 +101,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
     mutationFn: async (plan: MarketingPlanDraft) => {
       if (!brandId) throw new Error('No brand');
       const id = `mp_${Date.now()}`;
-      await FirestoreService.setDocument('marketing_plans', id, {
-        id,
-        brandId,
-        plan,
-        savedAt: new Date().toISOString(),
-      });
+      await FirestoreService.setDocument('marketing_plans', id, { id, brandId, plan, savedAt: new Date().toISOString() });
       return id;
     },
     onSuccess: () => {
@@ -106,12 +109,22 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
     },
   });
 
-  const topRoas = useMemo(
-    () => [...(campaigns ?? [])].map((c) => c.roas || 0).sort((a, b) => b - a)[0],
-    [campaigns]
-  );
+  const canGenerate = !!brandId && !lastYearOrdersQuery.isLoading;
+  const loadingContext = lastYearOrdersQuery.isLoading;
 
-  const canGenerate = !!brandId && !lastYearOrdersQuery.isLoading && !inventory.isLoading;
+  const skuCoverage = useMemo(() => {
+    const signalCount = Object.keys(procurementSignals.signalsBySku).length;
+    return signalCount > 0 ? signalCount : null;
+  }, [procurementSignals.signalsBySku]);
+
+  const toggleSection = (key: SectionKey) => {
+    setOpenSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
 
   const generate = async () => {
     if (!brandId) return;
@@ -120,7 +133,8 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
       const insight = buildMarketingPlanInsight({
         period,
         lastYearOrders: lastYearOrdersQuery.data ?? [],
-        inventoryProducts: inventory.page?.products ?? [],
+        inventoryProducts: [],
+        procurementSignals: procurementSignals.signalsBySku as Record<string, { available_stock?: number }>,
       });
       const coreMessage: MarketingPlanCoreMessage = await generateMarketingPlanMessage({
         insight,
@@ -132,23 +146,19 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
           monthlyBudget: activeStrategy?.monthlyBudget,
           campaigns: campaigns as never[],
           storeRevenue12m: ecomm.totalRevenue,
-          topCampaignRoas: topRoas,
           hasGa4: ga4.hasData,
           insight,
           coreMessage,
+          segments: segments.segments,
+          priceBenchmarks: priceBenchmarks.map((b) => ({ title: b.title, yourPrice: b.yourPrice, benchmarkPrice: b.benchmarkPrice, priceDiff: b.priceDiff })),
+          ga4TrafficSources: ga4.trafficSources.map((s) => ({ channel: s.channel, sessions: s.sessions, totalRevenue: s.totalRevenue })),
         })
       );
+      setOpenSections(new Set(['analysis', 'inventory', 'paid', 'organic', 'audience', 'pricing', 'message']));
     } finally {
       setGenerating(false);
     }
   };
-
-  const checklist = useMemo(() => {
-    if (!draft) return [];
-    return [...draft.performance, ...draft.organic];
-  }, [draft]);
-
-  const loadingContext = lastYearOrdersQuery.isLoading || inventory.isLoading;
 
   return (
     <div className="space-y-6">
@@ -156,24 +166,19 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
         title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Marketing Plan</h2>}
         description={
           <p className="text-sm text-[#4A4A4A]">
-            Seasonal plan από περσινές πωλήσεις, τρέχον απόθεμα, πρόταση παραγγελίας και core marketing message.
+            Εμπορικό πλάνο δράσης από περσινές πωλήσεις, τρέχον απόθεμα, καμπάνιες, κοινό και ανταγωνισμό.
           </p>
         }
         actions={
           <div className="flex flex-wrap gap-2">
-            <Button variant="ghost" size="sm" onClick={() => onSectionChange?.('strategy')}>
-              Strategy
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => onSectionChange?.('calendar')}>
-              Content calendar
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => onSectionChange?.('coordination')}>
-              Coordination
-            </Button>
+            <Button variant="ghost" size="sm" onClick={() => onSectionChange?.('strategy')}>Strategy</Button>
+            <Button variant="ghost" size="sm" onClick={() => onSectionChange?.('calendar')}>Content calendar</Button>
+            <Button variant="ghost" size="sm" onClick={() => onSectionChange?.('coordination')}>Coordination</Button>
           </div>
         }
       />
 
+      {/* Period selector */}
       <Card padding="lg">
         <CardHeader title="Περίοδος & δεδομένα βάσης" icon={<Calendar size={18} className="text-[var(--nts-accent)]" />} />
         <div className="mt-3 flex flex-wrap gap-2">
@@ -181,10 +186,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
             <button
               key={p.id}
               type="button"
-              onClick={() => {
-                setPreset(p.id);
-                setDraft(null);
-              }}
+              onClick={() => { setPreset(p.id); setDraft(null); }}
               className={`rounded-lg px-3 py-1.5 text-xs font-medium border transition-colors ${
                 preset === p.id
                   ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/10 text-[var(--nts-accent)]'
@@ -197,10 +199,13 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
         </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
           <ContextPill label="Νέα περίοδος" value={`${period.fromDate} → ${period.toDate}`} />
-          <ContextPill label="Στοιχεία βάσης" value={`${lastYearFrom} → ${lastYearTo}`} />
-          <ContextPill label="Inventory sample" value={`${formatNumber(inventory.page?.products.length ?? 0)} SKU`} />
+          <ContextPill label="Βάση σύγκρισης" value={`${lastYearFrom} → ${lastYearTo}`} />
+          <ContextPill
+            label="SKU coverage"
+            value={skuCoverage ? `${formatNumber(skuCoverage)} SKU` : 'Χωρίς procurement data'}
+          />
         </div>
-        <div className="mt-4 flex flex-wrap items-center gap-2">
+        <div className="mt-4 flex flex-wrap items-center gap-3">
           <Button
             variant="primary"
             icon={generating ? <Spinner size="sm" /> : <Sparkles size={16} />}
@@ -209,25 +214,235 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
           >
             {generating ? 'Δημιουργία…' : 'Δημιουργία enriched plan'}
           </Button>
-          {loadingContext ? <span className="text-xs text-[#6B7280]">Φόρτωση περσινών στοιχείων και inventory…</span> : null}
+          {loadingContext && <span className="text-xs text-[#6B7280]">Φόρτωση περσινών στοιχείων…</span>}
         </div>
       </Card>
 
+      {/* 7-section plan output */}
       {draft && (
         <>
-          <Card padding="lg">
-            <CardHeader
-              title={draft.coreMessage.headline}
-              subtitle={`${draft.periodLabel} · ${draft.fromDate} — ${draft.toDate}`}
-              icon={<Sparkles size={18} className="text-[var(--nts-accent)]" />}
-            />
-            <p className="mt-3 text-sm leading-relaxed text-[#4A4A4A]">{draft.coreMessage.campaignAngle}</p>
-            <div className="mt-4 grid gap-3 sm:grid-cols-4">
-              <BudgetPill label="Google Ads" pct={draft.budgetSplit.googleAds} />
-              <BudgetPill label="Meta" pct={draft.budgetSplit.meta} />
-              <BudgetPill label="Organic" pct={draft.budgetSplit.organic} />
-              <BudgetPill label="Other" pct={draft.budgetSplit.other} />
+          {/* Section 1: Ανάλυση βάσης */}
+          <PlanSection
+            id="analysis"
+            title="Ανάλυση βάσης"
+            icon={<BarChart3 size={18} className="text-[var(--nts-accent)]" />}
+            open={openSections.has('analysis')}
+            onToggle={() => toggleSection('analysis')}
+            badge={draft.evidence ? `${formatCurrency(draft.evidence.revenue, 0)} τζίρος περσινής περιόδου` : undefined}
+          >
+            {draft.evidence && (
+              <div className="grid gap-3 sm:grid-cols-5">
+                <Metric label="Τζίρος πέρυσι" value={formatCurrency(draft.evidence.revenue, 0)} />
+                <Metric label="Παραγγελίες" value={formatNumber(draft.evidence.orders)} />
+                <Metric label="Τεμάχια" value={formatNumber(draft.evidence.units)} />
+                <Metric label="AOV" value={formatCurrency(draft.evidence.aov, 0)} />
+                <Metric label="SKU match" value={`${draft.dataQuality?.lineItemCoveragePct ?? 0}%`} color={
+                  (draft.dataQuality?.lineItemCoveragePct ?? 0) >= 70 ? 'green' : (draft.dataQuality?.lineItemCoveragePct ?? 0) >= 30 ? 'amber' : 'red'
+                } />
+              </div>
+            )}
+            {draft.totalSkusCovered != null && (
+              <p className="mt-3 text-xs text-[#6B7280]">
+                Κάλυψη αποθέματος: <span className="font-semibold text-[#374151]">{formatNumber(draft.totalSkusCovered)} SKU</span> από procurement signals
+              </p>
+            )}
+            {draft.risks.length > 0 && (
+              <ul className="mt-3 space-y-1 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
+                {draft.risks.map((r) => <li key={r}>⚠ {r}</li>)}
+              </ul>
+            )}
+          </PlanSection>
+
+          {/* Section 2: Απόθεμα & Παραγγελίες */}
+          <PlanSection
+            id="inventory"
+            title="Απόθεμα & Παραγγελίες"
+            icon={<PackagePlus size={18} className="text-[var(--nts-accent)]" />}
+            open={openSections.has('inventory')}
+            onToggle={() => toggleSection('inventory')}
+            badge={draft.reorderPlan.length > 0 ? `${draft.reorderPlan.filter((r) => r.action === 'increase').length} κατηγορίες χρειάζονται παραγγελία` : undefined}
+          >
+            {draft.reorderPlan.length === 0 ? (
+              <p className="text-sm text-[#6B7280]">Δεν υπάρχουν αρκετά περσινά δεδομένα για πρόταση παραγγελίας.</p>
+            ) : (
+              <>
+                <div className="grid gap-3 lg:grid-cols-2">
+                  {draft.reorderPlan.slice(0, 8).map((row) => <ReorderCard key={row.key} row={row} />)}
+                </div>
+                {draft.skuSuggestions.length > 0 && (
+                  <div className="mt-5">
+                    <p className="mb-2 text-xs font-semibold uppercase text-[#9CA3AF]">SKU opportunities ({draft.skuSuggestions.length})</p>
+                    <div className="overflow-x-auto rounded-xl border border-[#E5E7EB]">
+                      <table className="w-full text-sm">
+                        <thead className="bg-[#F9FAFB] text-xs text-[#6B7280]">
+                          <tr>
+                            <th className="px-3 py-2 text-left">SKU</th>
+                            <th className="px-3 py-2 text-left">Προϊόν</th>
+                            <th className="px-3 py-2 text-right">Πέρυσι τεμ.</th>
+                            <th className="px-3 py-2 text-right">Stock</th>
+                            <th className="px-3 py-2 text-right">Πρόταση</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {draft.skuSuggestions.slice(0, 20).map((row) => <SkuRow key={row.sku} row={row} />)}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </PlanSection>
+
+          {/* Section 3: Paid Media */}
+          <PlanSection
+            id="paid"
+            title="Paid Media"
+            icon={<Megaphone size={18} className="text-[var(--nts-accent)]" />}
+            open={openSections.has('paid')}
+            onToggle={() => toggleSection('paid')}
+            badge={draft.budgetSplitSource === 'data' ? 'Budget split βάσει πραγματικών δεδομένων' : 'Budget split (default)'}
+          >
+            {/* Budget split */}
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase text-[#9CA3AF]">
+                Κατανομή budget
+                {draft.budgetSplitSource === 'data' && <span className="ml-2 text-emerald-600 normal-case font-normal">· από πραγματικές καμπάνιες</span>}
+              </p>
+              <div className="grid grid-cols-4 gap-3">
+                <BudgetPill label="Google Ads" pct={draft.budgetSplit.googleAds} />
+                <BudgetPill label="Meta" pct={draft.budgetSplit.meta} />
+                <BudgetPill label="Organic" pct={draft.budgetSplit.organic} />
+                {draft.budgetSplit.other > 0 && <BudgetPill label="Other" pct={draft.budgetSplit.other} />}
+              </div>
             </div>
+
+            {/* Campaign recommendations */}
+            {draft.campaignRecommendations.length > 0 && (
+              <div className="mt-5">
+                <p className="mb-2 text-xs font-semibold uppercase text-[#9CA3AF]">Campaign recommendations</p>
+                <div className="space-y-2">
+                  {draft.campaignRecommendations.map((c) => <CampaignRec key={c.id} rec={c} />)}
+                </div>
+              </div>
+            )}
+
+            {/* Performance actions */}
+            <div className="mt-5">
+              <p className="mb-2 text-xs font-semibold uppercase text-[#9CA3AF]">Ενέργειες</p>
+              <ul className="space-y-2">
+                {draft.performance.map((item) => <ActionItem key={item.id} item={item} />)}
+              </ul>
+            </div>
+          </PlanSection>
+
+          {/* Section 4: Organic */}
+          <PlanSection
+            id="organic"
+            title="Οργανικές Ενέργειες"
+            icon={<TrendingUp size={18} className="text-[var(--nts-accent)]" />}
+            open={openSections.has('organic')}
+            onToggle={() => toggleSection('organic')}
+            badge={ga4.hasData ? 'GA4 connected' : 'GA4 not connected'}
+          >
+            {draft.ga4ChannelSummary.length > 0 && (
+              <div className="mb-4">
+                <p className="mb-2 text-xs font-semibold uppercase text-[#9CA3AF]">Κανάλια επισκεψιμότητας</p>
+                <div className="overflow-x-auto rounded-xl border border-[#E5E7EB]">
+                  <table className="w-full text-sm">
+                    <thead className="bg-[#F9FAFB] text-xs text-[#6B7280]">
+                      <tr>
+                        <th className="px-3 py-2 text-left">Κανάλι</th>
+                        <th className="px-3 py-2 text-right">Sessions</th>
+                        {draft.ga4ChannelSummary.some((s) => s.revenue > 0) && <th className="px-3 py-2 text-right">Revenue</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {draft.ga4ChannelSummary.map((s) => (
+                        <tr key={s.channel} className="border-t border-[#E5E7EB]">
+                          <td className="px-3 py-2 font-medium">{s.channel}</td>
+                          <td className="px-3 py-2 text-right font-mono">{formatNumber(s.sessions)}</td>
+                          {draft.ga4ChannelSummary.some((x) => x.revenue > 0) && (
+                            <td className="px-3 py-2 text-right font-mono">{s.revenue > 0 ? formatCurrency(s.revenue, 0) : '—'}</td>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+            <ul className="space-y-2">
+              {draft.organic.map((item) => <ActionItem key={item.id} item={item} />)}
+            </ul>
+          </PlanSection>
+
+          {/* Section 5: Κοινό & CRM */}
+          <PlanSection
+            id="audience"
+            title="Κοινό & CRM"
+            icon={<Users size={18} className="text-[var(--nts-accent)]" />}
+            open={openSections.has('audience')}
+            onToggle={() => toggleSection('audience')}
+            badge={draft.rfmTactics.length > 0 ? `${draft.rfmTactics.reduce((s, t) => s + t.size, 0).toLocaleString('el-GR')} πελάτες στα segments` : 'RFM data'}
+          >
+            {draft.rfmTactics.length === 0 ? (
+              <p className="text-sm text-[#6B7280]">Δεν υπάρχουν RFM δεδομένα. Πήγαινε στο <span className="text-[var(--nts-accent)]">RFM Segmentation</span> για να δεις τα segments σου.</p>
+            ) : (
+              <div className="grid gap-3 lg:grid-cols-2">
+                {draft.rfmTactics.map((tactic) => <RfmTacticCard key={tactic.segmentName} tactic={tactic} />)}
+              </div>
+            )}
+          </PlanSection>
+
+          {/* Section 6: Τιμολόγηση */}
+          <PlanSection
+            id="pricing"
+            title="Τιμολόγηση & Ανταγωνισμός"
+            icon={<Tag size={18} className="text-[var(--nts-accent)]" />}
+            open={openSections.has('pricing')}
+            onToggle={() => toggleSection('pricing')}
+            badge={draft.priceBenchmarkAlerts.length > 0 ? `${draft.priceBenchmarkAlerts.length} SKU με σημαντική απόκλιση` : 'Price benchmarks'}
+          >
+            {draft.priceBenchmarkAlerts.length === 0 ? (
+              <p className="text-sm text-[#6B7280]">Δεν υπάρχουν δεδομένα σύγκρισης τιμών. Σύνδεσε Google Merchant Center για price benchmarks.</p>
+            ) : (
+              <>
+                {draft.priceBenchmarkAlerts.filter((a) => a.direction === 'above').length > 0 && (
+                  <div className="mb-4">
+                    <p className="mb-2 text-xs font-semibold uppercase text-rose-600">Πάνω από market ({draft.priceBenchmarkAlerts.filter((a) => a.direction === 'above').length} SKU)</p>
+                    <div className="space-y-2">
+                      {draft.priceBenchmarkAlerts.filter((a) => a.direction === 'above').map((alert) => (
+                        <PriceAlert key={alert.title} alert={alert} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {draft.priceBenchmarkAlerts.filter((a) => a.direction === 'below').length > 0 && (
+                  <div>
+                    <p className="mb-2 text-xs font-semibold uppercase text-emerald-600">Κάτω από market ({draft.priceBenchmarkAlerts.filter((a) => a.direction === 'below').length} SKU)</p>
+                    <div className="space-y-2">
+                      {draft.priceBenchmarkAlerts.filter((a) => a.direction === 'below').map((alert) => (
+                        <PriceAlert key={alert.title} alert={alert} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </PlanSection>
+
+          {/* Section 7: AI Core Message */}
+          <PlanSection
+            id="message"
+            title="AI Core Message"
+            icon={<Sparkles size={18} className="text-[var(--nts-accent)]" />}
+            open={openSections.has('message')}
+            onToggle={() => toggleSection('message')}
+            badge={draft.coreMessage.source === 'ai' ? 'Gemini AI' : 'Fallback'}
+          >
+            <p className="text-base font-semibold text-[#1A1A1A]">{draft.coreMessage.headline}</p>
+            <p className="mt-2 text-sm leading-relaxed text-[#4A4A4A]">{draft.coreMessage.campaignAngle}</p>
             <div className="mt-4 grid gap-3 lg:grid-cols-2">
               <div className="rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] p-3">
                 <p className="text-xs font-semibold uppercase text-[#9CA3AF]">Proof points</p>
@@ -242,11 +457,6 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
                 </div>
               </div>
             </div>
-            {draft.risks.length > 0 && (
-              <ul className="mt-4 space-y-1 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
-                {draft.risks.map((r) => <li key={r}>• {r}</li>)}
-              </ul>
-            )}
             <div className="mt-4 flex flex-wrap gap-2">
               <Button
                 variant="secondary"
@@ -254,79 +464,82 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
                 disabled={saveMutation.isPending}
                 onClick={() => void saveMutation.mutateAsync(draft)}
               >
-                Αποθήκευση στο Firestore
+                {saveMutation.isPending ? 'Αποθήκευση…' : 'Αποθήκευση plan'}
               </Button>
+              {saveMutation.isSuccess && <span className="text-xs text-emerald-600 self-center">✓ Αποθηκεύτηκε</span>}
             </div>
-          </Card>
-
-          {draft.evidence && (
-            <Card padding="lg">
-              <CardHeader title="Based on last year" icon={<BarChart3 size={18} className="text-[var(--nts-accent)]" />} />
-              <div className="mt-3 grid gap-3 sm:grid-cols-5">
-                <Metric label="Τζίρος" value={formatCurrency(draft.evidence.revenue, 0)} />
-                <Metric label="Παραγγελίες" value={formatNumber(draft.evidence.orders)} />
-                <Metric label="Τεμάχια" value={formatNumber(draft.evidence.units)} />
-                <Metric label="AOV" value={formatCurrency(draft.evidence.aov, 0)} />
-                <Metric label="SKU match" value={`${draft.dataQuality?.lineItemCoveragePct ?? 0}%`} />
-              </div>
-            </Card>
-          )}
-
-          <Card padding="lg">
-            <CardHeader title="Πρόταση παραγγελίας" icon={<PackagePlus size={18} className="text-[var(--nts-accent)]" />} />
-            {draft.reorderPlan.length === 0 ? (
-              <p className="mt-3 text-sm text-[#6B7280]">Δεν υπάρχει αρκετή περσινή ανάλυση γραμμών για πρόταση παραγγελίας.</p>
-            ) : (
-              <div className="mt-3 grid gap-3 lg:grid-cols-2">
-                {draft.reorderPlan.slice(0, 8).map((row) => <ReorderCard key={row.key} row={row} />)}
-              </div>
-            )}
-          </Card>
-
-          {draft.skuSuggestions.length > 0 && (
-            <Card padding="lg">
-              <CardHeader title="SKU opportunities" icon={<TrendingUp size={18} className="text-[var(--nts-accent)]" />} />
-              <div className="mt-3 overflow-x-auto rounded-xl border border-[#E5E7EB]">
-                <table className="w-full text-sm">
-                  <thead className="bg-[#F9FAFB] text-xs text-[#6B7280]">
-                    <tr>
-                      <th className="px-3 py-2 text-left">SKU</th>
-                      <th className="px-3 py-2 text-left">Προϊόν</th>
-                      <th className="px-3 py-2 text-right">Πέρυσι τεμ.</th>
-                      <th className="px-3 py-2 text-right">Stock</th>
-                      <th className="px-3 py-2 text-right">Πρόταση</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {draft.skuSuggestions.slice(0, 12).map((row) => <SkuRow key={row.sku} row={row} />)}
-                  </tbody>
-                </table>
-              </div>
-            </Card>
-          )}
-
-          <Card padding="lg">
-            <CardHeader title="Execution checklist" icon={<CheckSquare size={18} className="text-[var(--nts-accent)]" />} />
-            <ul className="mt-3 space-y-2">
-              {checklist.map((item) => <ChecklistItem key={item.id} item={item} />)}
-            </ul>
-          </Card>
+          </PlanSection>
         </>
       )}
 
+      {/* Saved plans */}
       {savedQuery.data && savedQuery.data.length > 0 && (
         <Card padding="md">
-          <p className="mb-2 text-xs font-semibold uppercase text-[#9CA3AF]">Αποθηκευμένα plans</p>
-          <ul className="space-y-1 text-sm text-[#4A4A4A]">
-            {savedQuery.data.slice(0, 5).map((row) => (
-              <li key={row.id}>
-                {row.plan?.periodLabel} · {row.savedAt?.slice(0, 10)}
+          <p className="mb-3 text-xs font-semibold uppercase text-[#9CA3AF]">Αποθηκευμένα plans</p>
+          <ul className="divide-y divide-[#E5E7EB]">
+            {savedQuery.data.slice(0, 8).map((row) => (
+              <li key={row.id} className="flex items-center justify-between py-2">
+                <div>
+                  <span className="text-sm font-medium text-[#1A1A1A]">{row.plan?.periodLabel}</span>
+                  <span className="ml-2 text-xs text-[#9CA3AF]">{row.savedAt?.slice(0, 10)}</span>
+                  {row.plan?.fromDate && (
+                    <span className="ml-2 text-xs text-[#9CA3AF]">{row.plan.fromDate} – {row.plan.toDate}</span>
+                  )}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    if (row.plan) {
+                      setDraft(row.plan);
+                      setOpenSections(new Set(['analysis', 'inventory', 'paid', 'organic', 'audience', 'pricing', 'message']));
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }
+                  }}
+                >
+                  Φόρτωση
+                </Button>
               </li>
             ))}
           </ul>
         </Card>
       )}
     </div>
+  );
+}
+
+// ─── Sub-components ─────────────────────────────────────────────────────────
+
+function PlanSection({
+  id, title, icon, open, onToggle, badge, children,
+}: {
+  id: SectionKey;
+  title: string;
+  icon: React.ReactNode;
+  open: boolean;
+  onToggle: () => void;
+  badge?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Card padding="lg" className="overflow-hidden">
+      <button
+        type="button"
+        id={`plan-section-${id}`}
+        onClick={onToggle}
+        className="flex w-full items-center justify-between gap-3 text-left"
+        aria-expanded={open}
+        aria-controls={`plan-content-${id}`}
+      >
+        <div className="flex items-center gap-2">
+          {icon}
+          <span className="font-semibold text-[#1A1A1A]">{title}</span>
+          {badge && <span className="rounded-full bg-[#F3F4F6] px-2 py-0.5 text-[10px] font-medium text-[#6B7280]">{badge}</span>}
+        </div>
+        {open ? <ChevronUp size={16} className="text-[#9CA3AF]" /> : <ChevronDown size={16} className="text-[#9CA3AF]" />}
+      </button>
+      {open && <div id={`plan-content-${id}`} className="mt-4">{children}</div>}
+    </Card>
   );
 }
 
@@ -339,11 +552,12 @@ function ContextPill({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function Metric({ label, value, color }: { label: string; value: string; color?: 'green' | 'amber' | 'red' }) {
+  const textColor = color === 'green' ? 'text-emerald-600' : color === 'amber' ? 'text-amber-600' : color === 'red' ? 'text-rose-600' : 'text-[#1A1A1A]';
   return (
     <div className="rounded-lg border border-[#E5E7EB] px-3 py-2">
       <p className="text-[10px] font-semibold uppercase text-[#9CA3AF]">{label}</p>
-      <p className="mt-1 font-mono text-lg font-bold text-[#1A1A1A]">{value}</p>
+      <p className={`mt-1 font-mono text-lg font-bold ${textColor}`}>{value}</p>
     </div>
   );
 }
@@ -352,13 +566,14 @@ function BudgetPill({ label, pct }: { label: string; pct: number }) {
   return (
     <div className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-center">
       <p className="text-[10px] font-semibold uppercase text-[#9CA3AF]">{label}</p>
-      <p className="font-mono text-lg font-bold text-[#1A1A1A]">{pct}%</p>
+      <p className="font-mono text-xl font-bold text-[#1A1A1A]">{pct}%</p>
     </div>
   );
 }
 
 function ReorderCard({ row }: { row: MarketingPlanReorderGroup }) {
   const tone = row.action === 'increase' ? 'success' : row.action === 'maintain' ? 'warning' : row.action === 'reduce' ? 'info' : 'default';
+  const actionLabel = row.action === 'increase' ? 'Παράγγειλε' : row.action === 'maintain' ? 'Διατήρησε' : row.action === 'reduce' ? 'Μείωσε' : 'Αποφύγει';
   return (
     <div className="rounded-xl border border-[#E5E7EB] bg-white p-4">
       <div className="flex items-start justify-between gap-3">
@@ -366,21 +581,30 @@ function ReorderCard({ row }: { row: MarketingPlanReorderGroup }) {
           <p className="font-semibold text-[#1A1A1A]">{row.subcategory || row.category}</p>
           <p className="text-xs text-[#6B7280]">{[row.category, row.brand].filter(Boolean).join(' · ') || '—'}</p>
         </div>
-        <Badge variant={tone} size="sm">{row.action}</Badge>
+        <Badge variant={tone} size="sm">{actionLabel}</Badge>
       </div>
-      <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
-        <Metric label="Πέρυσι" value={`${formatNumber(row.lastYearUnits)} τεμ.`} />
-        <Metric label="Stock" value={formatNumber(row.currentStock)} />
-        <Metric label="Πρόταση" value={formatNumber(row.estimatedReorderQty)} />
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        <div className="rounded-lg bg-[#F9FAFB] px-2 py-1.5 text-center">
+          <p className="text-[10px] text-[#9CA3AF]">Πέρυσι</p>
+          <p className="font-mono text-sm font-bold text-[#1A1A1A]">{formatNumber(row.lastYearUnits)} τεμ.</p>
+        </div>
+        <div className="rounded-lg bg-[#F9FAFB] px-2 py-1.5 text-center">
+          <p className="text-[10px] text-[#9CA3AF]">Stock</p>
+          <p className={`font-mono text-sm font-bold ${row.currentStock < row.lastYearUnits * 0.35 ? 'text-rose-600' : 'text-[#1A1A1A]'}`}>{formatNumber(row.currentStock)}</p>
+        </div>
+        <div className="rounded-lg bg-[#F9FAFB] px-2 py-1.5 text-center">
+          <p className="text-[10px] text-[#9CA3AF]">Πρόταση</p>
+          <p className="font-mono text-sm font-bold text-[var(--nts-accent)]">{formatNumber(row.estimatedReorderQty)}</p>
+        </div>
       </div>
-      <p className="mt-3 text-xs leading-relaxed text-[#6B7280]">{row.rationale}</p>
+      <p className="mt-2 text-xs leading-relaxed text-[#6B7280]">{row.rationale}</p>
     </div>
   );
 }
 
 function SkuRow({ row }: { row: MarketingPlanSkuSuggestion }) {
   return (
-    <tr className="border-t border-[#E5E7EB]">
+    <tr className="border-t border-[#E5E7EB] hover:bg-[#FAFAFA]">
       <td className="px-3 py-2 font-mono text-xs text-[#1A1A1A]">{row.sku}</td>
       <td className="px-3 py-2">
         <p className="font-medium text-[#1A1A1A]">{row.name}</p>
@@ -388,23 +612,79 @@ function SkuRow({ row }: { row: MarketingPlanSkuSuggestion }) {
       </td>
       <td className="px-3 py-2 text-right font-mono">{formatNumber(row.lastYearUnits)}</td>
       <td className="px-3 py-2 text-right font-mono">{formatNumber(row.currentStock)}</td>
-      <td className="px-3 py-2 text-right font-mono font-semibold">{formatNumber(row.estimatedReorderQty)}</td>
+      <td className="px-3 py-2 text-right font-mono font-semibold text-[var(--nts-accent)]">{formatNumber(row.estimatedReorderQty)}</td>
     </tr>
   );
 }
 
-function ChecklistItem({ item }: { item: MarketingPlanAction }) {
+function CampaignRec({ rec }: { rec: CampaignRecommendation }) {
+  const actionColor = rec.action === 'scale' ? 'text-emerald-700 bg-emerald-50' : rec.action === 'pause' ? 'text-rose-700 bg-rose-50' : 'text-amber-700 bg-amber-50';
+  const actionLabel = rec.action === 'scale' ? '↑ Scale' : rec.action === 'pause' ? '⏸ Pause' : '⦿ Monitor';
+  return (
+    <div className="flex items-start gap-3 rounded-lg border border-[#E5E7EB] px-3 py-2.5">
+      <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${actionColor}`}>{actionLabel}</span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium text-[#1A1A1A]">{rec.title}</p>
+        <p className="mt-0.5 text-xs text-[#6B7280]">{rec.rationale}</p>
+      </div>
+      <div className="shrink-0 text-right">
+        <p className="font-mono text-sm font-bold text-[#1A1A1A]">{rec.currentRoas}x</p>
+        <p className="text-[10px] text-[#9CA3AF]">ROAS</p>
+      </div>
+    </div>
+  );
+}
+
+function RfmTacticCard({ tactic }: { tactic: RfmTactic }) {
+  const segmentColor: Record<RfmTactic['segment'], string> = {
+    vip: 'border-l-emerald-500',
+    at_risk: 'border-l-amber-500',
+    lapsed: 'border-l-rose-500',
+    new: 'border-l-blue-500',
+    other: 'border-l-gray-400',
+  };
+  const channelLabel: Record<RfmTactic['channel'], string> = { email: 'Email', paid: 'Paid', organic: 'Organic' };
+  return (
+    <div className={`rounded-xl border border-[#E5E7EB] border-l-4 ${segmentColor[tactic.segment]} p-4`}>
+      <div className="flex items-center justify-between gap-2">
+        <p className="font-semibold text-[#1A1A1A]">{tactic.segmentName}</p>
+        <div className="flex items-center gap-1.5">
+          <span className="rounded-full bg-[#F3F4F6] px-2 py-0.5 text-[10px] font-medium text-[#6B7280]">{channelLabel[tactic.channel]}</span>
+          {tactic.revenueShare > 0 && (
+            <span className="text-[10px] text-[#9CA3AF]">{tactic.revenueShare.toFixed(1)}% revenue</span>
+          )}
+        </div>
+      </div>
+      <p className="mt-1.5 text-xs text-[#6B7280]">{formatNumber(tactic.size)} πελάτες</p>
+      <p className="mt-2 text-sm text-[#374151]">{tactic.action}</p>
+    </div>
+  );
+}
+
+function PriceAlert({ alert }: { alert: PriceBenchmarkAlert }) {
+  const isAbove = alert.direction === 'above';
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-[#E5E7EB] px-3 py-2.5">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium text-[#1A1A1A]">{alert.title}</p>
+        <p className="text-xs text-[#6B7280]">
+          Τιμή σου: {formatCurrency(alert.yourPrice, 2)} · Benchmark: {formatCurrency(alert.benchmarkPrice, 2)}
+        </p>
+      </div>
+      <div className={`flex items-center gap-1 text-sm font-bold ${isAbove ? 'text-rose-600' : 'text-emerald-600'}`}>
+        {isAbove ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
+        {Math.abs(alert.priceDiff).toFixed(1)}%
+      </div>
+    </div>
+  );
+}
+
+function ActionItem({ item }: { item: { id: string; channel: string; title: string; detail: string; priority: string } }) {
   return (
     <li className="flex gap-2 rounded-lg border border-[#E5E7EB] px-3 py-2 text-sm">
-      <span
-        className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
-          item.priority === 'high'
-            ? 'bg-rose-100 text-rose-700'
-            : item.priority === 'medium'
-              ? 'bg-amber-100 text-amber-800'
-              : 'bg-gray-100 text-gray-600'
-        }`}
-      >
+      <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
+        item.priority === 'high' ? 'bg-rose-100 text-rose-700' : item.priority === 'medium' ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-600'
+      }`}>
         {item.channel}
       </span>
       <div>

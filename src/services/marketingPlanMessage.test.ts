@@ -40,6 +40,7 @@ describe('marketingPlanMessage', () => {
       }],
       skuSuggestions: [],
       dataQuality: { level: 'strong', lineItemCoveragePct: 100, inventoryCoveragePct: 100, notes: [] },
+      totalSkusCovered: 1,
     } satisfies MarketingPlanInsight);
 
     expect(fallback.source).toBe('fallback');
