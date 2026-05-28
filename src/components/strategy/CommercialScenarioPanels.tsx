@@ -89,8 +89,8 @@ export function CommercialScenarioPanels({
         title="Σύνοψη επίδρασης"
         subtitle={
           periodLabel
-            ? `${periodLabel} — σύνοψη ERP σημάτων που επηρέασαν τζίρο, margin, απόθεμα και καμπάνιες.`
-            : 'Επιλέξτε περίοδο για εμπορική σύνοψη από ERP signals.'
+            ? `${periodLabel} — αποτελέσματα αλλαγών σε τιμές, κόστος, απόθεμα και marketing budget.`
+            : 'Επιλέξτε περίοδο για να δείτε πώς οι εμπορικές αποφάσεις επηρέασαν τον τζίρο.'
         }
         icon={<Tag size={18} className="text-[var(--nts-accent)]" />}
       />
@@ -100,8 +100,8 @@ export function CommercialScenarioPanels({
           <div className="flex max-w-md items-center gap-3 rounded-xl border border-[var(--nts-accent)]/20 bg-white p-4 shadow-lg">
             <Spinner />
             <div>
-              <p className="text-sm font-semibold text-[#1A1A1A]">Ανανεώνεται η εμπορική εικόνα ERP.</p>
-              <p className="text-xs text-[#6B7280]">Υπολογίζουμε ξανά τζίρο, margin, stock risk και campaign impact για τη νέα περίοδο.</p>
+              <p className="text-sm font-semibold text-[#1A1A1A]">Φορτώνουμε αποτελέσματα για τη νέα περίοδο...</p>
+              <p className="text-xs text-[#6B7280]">Ελέγχουμε πώς οι αλλαγές τιμών, κόστους, αποθέματος και καμπανιών επηρέασαν τον τζίρο.</p>
             </div>
           </div>
         </div>
@@ -142,7 +142,7 @@ export function CommercialScenarioPanels({
         </div>
       ) : visibleTabs.length === 0 ? (
         <p className="text-sm text-[#6B7280]">
-          Δεν υπάρχουν διαθέσιμες αναλύσεις με αποτελέσματα για την επιλεγμένη περίοδο.
+          Δεν υπάρχουν δεδομένα για αποφάσεις στην επιλεγμένη περίοδο.
         </p>
       ) : activeTab !== 'marketing' && !data.hasOrderLines ? (
         <EmptyHint hasCost={data.hasCostData} type="orders" />
@@ -159,7 +159,7 @@ export function CommercialScenarioPanels({
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs text-[#6B7280]">
               {showDetails
-                ? `Προβάλλονται έως 50 γραμμές από ${formatNumber(filteredCount)} διαθέσιμες.`
+                ? `Εμφανίζονται όλες οι ${formatNumber(filteredCount)} γραμμές.`
                 : `Προεπισκόπηση των 5 πρώτων από ${formatNumber(filteredCount)} διαθέσιμες γραμμές.`}
             </p>
             <button
@@ -172,16 +172,16 @@ export function CommercialScenarioPanels({
           </div>
           <div className="overflow-x-auto rounded-xl border border-[#E5E7EB]">
             {activeTab === 'price' && data.price && (
-              <PriceTable rows={filterRows(data.price.rows, filter, showDetails ? 50 : 5)} getThumbnailUrl={getThumbnailUrl} />
+              <PriceTable rows={filterRows(data.price.rows, filter, showDetails ? Infinity : 5)} getThumbnailUrl={getThumbnailUrl} />
             )}
             {activeTab === 'margin' && data.margin && (
-              <MarginTable rows={filterRows(data.margin.rows, filter, showDetails ? 50 : 5)} getThumbnailUrl={getThumbnailUrl} />
+              <MarginTable rows={filterRows(data.margin.rows, filter, showDetails ? Infinity : 5)} getThumbnailUrl={getThumbnailUrl} />
             )}
             {activeTab === 'stock' && data.stockout && (
-              <StockTable rows={filterRows(data.stockout.rows, filter, showDetails ? 50 : 5)} getThumbnailUrl={getThumbnailUrl} />
+              <StockTable rows={filterRows(data.stockout.rows, filter, showDetails ? Infinity : 5)} getThumbnailUrl={getThumbnailUrl} />
             )}
             {activeTab === 'marketing' && data.marketing && (
-              <MarketingTable rows={filterRows(data.marketing.rows, filter, showDetails ? 50 : 5)} />
+              <MarketingTable rows={filterRows(data.marketing.rows, filter, showDetails ? Infinity : 5)} />
             )}
           </div>
         </div>
@@ -295,13 +295,14 @@ function ScenarioKpis({
           tone={netTone}
         />
         <MiniKpi
-          label="Θετική / αρνητική αξία"
+          label="Κέρδη vs Ζημιές"
           value={formatSignedCurrency(summary.positiveRevenueDelta)}
-          sub={`αρνητικά ${formatSignedCurrency(summary.negativeRevenueDelta)}`}
+          sub={`ζημιές ${formatSignedCurrency(summary.negativeRevenueDelta)}`}
+          tone="success"
         />
       </div>
       <p className="text-xs leading-relaxed text-[#6B7280]">
-        Τα θετικά/αρνητικά είναι πλήθος SKU findings. Η καθαρή επίδραση δείχνει την αξία τζίρου σε ευρώ μετά την αφαίρεση των αρνητικών μεταβολών.
+        Τα θετικά/αρνητικά δείχνουν πόσα προϊόντα ωφελήθηκαν ή ζημιώθηκαν από την αλλαγή. Η «Καθαρή επίδραση» είναι ο τελικός αντίκτυπος στον τζίρο σε ευρώ.
       </p>
     </div>
   );

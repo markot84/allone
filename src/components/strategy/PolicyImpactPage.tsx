@@ -181,7 +181,7 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
         title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Policy Impact</h2>}
         description={
           <p className="text-sm text-[#4A4A4A]">
-            Γρήγορη ανάγνωση ERP σεναρίων για τιμές, τζίρο, απόθεμα και marketing.
+            Ανακάλεσε εμπορικές αποφάσεις που πήρες στο παρελθόν — αλλαγές τιμών, marketing spend, διαθεσιμότητα — και δες τι αποτέλεσμα είχαν στον τζίρο σου.
           </p>
         }
         actions={
@@ -204,8 +204,8 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
             <p className="text-xs font-semibold uppercase text-[#9CA3AF]">Περίοδος ανάλυσης</p>
             <p className="mt-1 text-sm text-[#374151]">
               {periodLabel
-                ? `Αποφάσεις και outcomes για ${periodLabel}. Τα KPIs υπολογίζονται στο τμήμα της απόφασης που πέφτει μέσα στην περίοδο.`
-                : 'Επιλέξτε περίοδο για ιστορική ανασκόπηση αποφάσεων.'}
+                ? `Εμπορικές αποφάσεις της περιόδου ${periodLabel} και η επίδρασή τους στον τζίρο.`
+                : 'Επιλέξτε περίοδο για να δείτε τις εμπορικές αποφάσεις και τα αποτελέσματά τους.'}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -276,8 +276,8 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
 
       <section className="space-y-4 rounded-2xl border border-orange-100 bg-orange-50/35 p-4 sm:p-5">
         <SectionIntro
-          title="Εμπορικά σενάρια & επίδραση (ERP)"
-          description="Σύνοψη ERP σημάτων για τιμές, τζίρο, απόθεμα και marketing. Τα αποτελέσματα επαναχρησιμοποιούνται μέσα στην ημέρα και δεν υπολογίζονται ξανά σε κάθε refresh."
+          title="Εμπορικές αποφάσεις & αποτελέσματα"
+          description="Για κάθε προϊόν που είδε αλλαγή τιμής, κόστους, διαθεσιμότητας ή marketing spend, δες αν αυτή η αλλαγή βελτίωσε ή χειροτέρεψε τον τζίρο της περιόδου."
           icon={<BarChart3 size={18} />}
         />
         <CommercialScenarioPanels period={periodDates} periodLabel={periodLabel} />
