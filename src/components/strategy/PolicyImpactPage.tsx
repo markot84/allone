@@ -12,7 +12,7 @@ import {
   TrendingDown,
   TrendingUp,
 } from 'lucide-react';
-import { Card, CardHeader, Button, PageHeader, Spinner, Badge, ProductThumbnail } from '../common';
+import { Card, CardHeader, Button, PageHeader, Spinner, Badge, ProductThumbnail, Tooltip } from '../common';
 import { DateRangePicker } from '../ui/DateRangePicker';
 import { useCommercialDecisionMemory } from '../../hooks/useCommercialDecisionMemory';
 import { useProductThumbnails } from '../../hooks/useProductThumbnails';
@@ -179,11 +179,7 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
     <div className="space-y-8">
       <PageHeader
         title={<h2 className="text-xl font-bold text-[#1A1A1A] sm:text-2xl">Policy Impact</h2>}
-        description={
-          <p className="text-sm text-[#4A4A4A]">
-            Ανακάλεσε εμπορικές αποφάσεις που πήρες στο παρελθόν — αλλαγές τιμών, marketing spend, διαθεσιμότητα — και δες τι αποτέλεσμα είχαν στον τζίρο σου.
-          </p>
-        }
+        description={null}
         actions={
           <div className="flex flex-wrap gap-2">
             <Button variant="ghost" size="sm" icon={<ArrowLeft size={14} />} onClick={() => onSectionChange?.('strategy')}>
@@ -201,12 +197,14 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
       <Card padding="md">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase text-[#9CA3AF]">Περίοδος ανάλυσης</p>
-            <p className="mt-1 text-sm text-[#374151]">
-              {periodLabel
-                ? `Εμπορικές αποφάσεις της περιόδου ${periodLabel} και η επίδρασή τους στον τζίρο.`
-                : 'Επιλέξτε περίοδο για να δείτε τις εμπορικές αποφάσεις και τα αποτελέσματά τους.'}
+            <p className="text-xs font-semibold uppercase text-[#9CA3AF]">
+              <Tooltip content="Εμπορικές αποφάσεις που αφορούν την επιλεγμένη περίοδο. Αν μια απόφαση ξεκινά πριν ή τελειώνει μετά, μετράει μόνο το τμήμα που πέφτει εντός.">
+                Περίοδος ανάλυσης
+              </Tooltip>
             </p>
+            {periodLabel && (
+              <p className="mt-1 text-sm font-medium text-[#374151]">{periodLabel}</p>
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex flex-1 gap-0.5 rounded-lg bg-[#F3F4F6] p-0.5 sm:flex-initial">
@@ -277,7 +275,7 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
       <section className="space-y-4 rounded-2xl border border-orange-100 bg-orange-50/35 p-4 sm:p-5">
         <SectionIntro
           title="Εμπορικές αποφάσεις & αποτελέσματα"
-          description="Για κάθε προϊόν που είδε αλλαγή τιμής, κόστους, διαθεσιμότητας ή marketing spend, δες αν αυτή η αλλαγή βελτίωσε ή χειροτέρεψε τον τζίρο της περιόδου."
+          tooltip="Για κάθε προϊόν που είδε αλλαγή τιμής, κόστους, διαθεσιμότητας ή marketing spend, δες αν αυτή η αλλαγή βελτίωσε ή χειροτέρεψε τον τζίρο της περιόδου."
           icon={<BarChart3 size={18} />}
         />
         <CommercialScenarioPanels period={periodDates} periodLabel={periodLabel} />
@@ -355,7 +353,7 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
       <section className="space-y-5 rounded-2xl border border-sky-100 bg-sky-50/40 p-4 sm:p-5">
         <SectionIntro
           title="Decision Memory"
-          description="Καταγραφή αποφάσεων, campaigns και εμπορικών ενεργειών με outcome scoring. Χρησιμοποιείται για να επαναλάβουμε ό,τι δούλεψε και να αποφύγουμε ό,τι δεν απέδωσε."
+          tooltip="Καταγραφή αποφάσεων, campaigns και εμπορικών ενεργειών με outcome scoring. Χρησιμοποιείται για να επαναλάβουμε ό,τι δούλεψε και να αποφύγουμε ό,τι δεν απέδωσε."
           icon={<BookOpenCheck size={18} />}
         />
 
@@ -449,22 +447,23 @@ export function PolicyImpactPage({ onSectionChange }: { onSectionChange?: (s: st
 
 function SectionIntro({
   title,
-  description,
+  tooltip,
   icon,
 }: {
   title: string;
-  description: string;
+  tooltip?: string;
   icon: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-      <div className="flex min-w-0 items-start gap-3">
-        <span className="mt-0.5 rounded-xl bg-[var(--nts-accent)]/10 p-2 text-[var(--nts-accent)]">{icon}</span>
-        <div className="min-w-0">
-          <h3 className="text-lg font-bold text-[#1A1A1A]">{title}</h3>
-          <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[#6B7280]">{description}</p>
-        </div>
-      </div>
+    <div className="flex items-center gap-3">
+      <span className="rounded-xl bg-[var(--nts-accent)]/10 p-2 text-[var(--nts-accent)]">{icon}</span>
+      <h3 className="text-lg font-bold text-[#1A1A1A]">
+        {tooltip ? (
+          <Tooltip content={tooltip}>{title}</Tooltip>
+        ) : (
+          title
+        )}
+      </h3>
     </div>
   );
 }

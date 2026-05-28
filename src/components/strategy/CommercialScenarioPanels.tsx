@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ArrowDownRight, ArrowUpRight, Megaphone, Package, Percent, Tag } from 'lucide-react';
-import { Card, CardHeader, Spinner, Badge, ProductThumbnail } from '../common';
+import { Card, CardHeader, Spinner, Badge, ProductThumbnail, Tooltip } from '../common';
 import { useCommercialScenarioImpacts } from '../../hooks/useCommercialScenarioImpacts';
 import { useProductThumbnails } from '../../hooks/useProductThumbnails';
 import type { ScenarioVerdict, SkuWindowMetrics } from '../../services/commercialScenarioMetrics';
@@ -87,11 +87,7 @@ export function CommercialScenarioPanels({
     <Card padding="lg" className="relative overflow-hidden">
       <CardHeader
         title="Σύνοψη επίδρασης"
-        subtitle={
-          periodLabel
-            ? `${periodLabel} — αποτελέσματα αλλαγών σε τιμές, κόστος, απόθεμα και marketing budget.`
-            : 'Επιλέξτε περίοδο για να δείτε πώς οι εμπορικές αποφάσεις επηρέασαν τον τζίρο.'
-        }
+        subtitle={periodLabel ?? undefined}
         icon={<Tag size={18} className="text-[var(--nts-accent)]" />}
       />
 
@@ -290,20 +286,19 @@ function ScenarioKpis({
         />
         <MiniKpi
           label="Καθαρή επίδραση τζίρου"
+          tooltip="Το τελικό αποτέλεσμα: πόσα € κερδίθηκαν ή χάθηκαν συνολικά από όλες τις αλλαγές. Υπολογίζεται ως: τζίρος μετά την αλλαγή μείον τζίρος πριν."
           value={formatSignedCurrency(summary.netRevenueDelta)}
           sub={`${formatEuro(summary.totalRevenueBefore)} → ${formatEuro(summary.totalRevenueAfter)}`}
           tone={netTone}
         />
         <MiniKpi
           label="Κέρδη vs Ζημιές"
+          tooltip="Ξεχωριστά: πόσα € κέρδισαν τα προϊόντα που βελτιώθηκαν (θετική επίδραση) και πόσα € έχασαν αυτά που χειροτέρεψαν (αρνητική επίδραση)."
           value={formatSignedCurrency(summary.positiveRevenueDelta)}
           sub={`ζημιές ${formatSignedCurrency(summary.negativeRevenueDelta)}`}
           tone="success"
         />
       </div>
-      <p className="text-xs leading-relaxed text-[#6B7280]">
-        Τα θετικά/αρνητικά δείχνουν πόσα προϊόντα ωφελήθηκαν ή ζημιώθηκαν από την αλλαγή. Η «Καθαρή επίδραση» είναι ο τελικός αντίκτυπος στον τζίρο σε ευρώ.
-      </p>
     </div>
   );
 }
@@ -353,6 +348,7 @@ function MarketingKpis({
 
 function MiniKpi({
   label,
+  tooltip,
   value,
   sub,
   tone,
@@ -360,6 +356,7 @@ function MiniKpi({
   onClick,
 }: {
   label: string;
+  tooltip?: string;
   value: string | number;
   sub?: string;
   tone?: 'success' | 'danger' | 'info';
@@ -375,7 +372,9 @@ function MiniKpi({
   } ${onClick ? 'cursor-pointer hover:border-[var(--nts-accent)]/40 hover:bg-white' : ''}`;
   const content = (
     <>
-      <p className="text-[10px] font-semibold uppercase text-[#9CA3AF]">{label}</p>
+      <p className="text-[10px] font-semibold uppercase text-[#9CA3AF]">
+        {tooltip ? <Tooltip content={tooltip}>{label}</Tooltip> : label}
+      </p>
       <p className={`mt-1 font-mono text-lg font-bold ${toneClass}`}>{typeof value === 'number' ? formatNumber(value) : value}</p>
       {sub && <p className="mt-0.5 text-xs text-[#6B7280]">{sub}</p>}
     </>
@@ -408,8 +407,8 @@ function RevenueMarginCells({
       <td className="px-3 py-2">
         <MetricPair
           label="Τζίρος"
-          before={formatCurrency(before.revenue, 0)}
-          after={formatCurrency(after.revenue, 0)}
+          before={formatEuro(before.revenue)}
+          after={formatEuro(after.revenue)}
           changePct={pct(before.revenue, after.revenue)}
         />
       </td>
@@ -418,8 +417,8 @@ function RevenueMarginCells({
           {rowHasCost ? (
             <MetricPair
               label="Margin"
-              before={formatCurrency(before.margin, 0)}
-              after={formatCurrency(after.margin, 0)}
+              before={formatEuro(before.margin)}
+              after={formatEuro(after.margin)}
               changePct={pct(before.margin, after.margin)}
               sub={`${before.marginPct ?? '—'}% → ${after.marginPct ?? '—'}%`}
             />
@@ -477,6 +476,14 @@ function pct(before: number, after: number): number | null {
   return Math.round(((after - before) / before) * 1000) / 10;
 }
 
+function TotDelta({ value, currency }: { value: number; currency?: boolean }) {
+  if (value === 0) return null;
+  const formatted = currency ? formatSignedCurrency(value) : `${value > 0 ? '+' : ''}${formatNumber(value)}`;
+  return (
+    <p className={`text-xs ${value > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{formatted}</p>
+  );
+}
+
 function VerdictCell({ verdict, confidence }: { verdict: ScenarioVerdict; confidence?: string }) {
   return (
     <td className="px-3 py-2">
@@ -514,6 +521,12 @@ function SkuCell({
 
 function PriceTable({ rows, getThumbnailUrl }: { rows: PriceChangeImpactRow[]; getThumbnailUrl: GetThumbnailUrl }) {
   const showMargin = rows.some((row) => hasCostCoverage(row.before, row.after));
+  const totRevB = rows.reduce((s, r) => s + r.before.revenue, 0);
+  const totRevA = rows.reduce((s, r) => s + r.after.revenue, 0);
+  const totQtyB = rows.reduce((s, r) => s + r.before.qty, 0);
+  const totQtyA = rows.reduce((s, r) => s + r.after.qty, 0);
+  const totMarB = rows.reduce((s, r) => s + r.before.margin, 0);
+  const totMarA = rows.reduce((s, r) => s + r.after.margin, 0);
   return (
     <table className="min-w-full text-left text-sm">
       <thead className="bg-[#FAFAFA] text-xs uppercase text-[#9CA3AF]">
@@ -550,12 +563,36 @@ function PriceTable({ rows, getThumbnailUrl }: { rows: PriceChangeImpactRow[]; g
           </tr>
         ))}
       </tbody>
+      <tfoot className="border-t-2 border-[#E5E7EB] bg-[#F9FAFB] text-xs font-semibold text-[#374151]">
+        <tr>
+          <td className="px-3 py-2" colSpan={2}>Σύνολο — {rows.length} SKU</td>
+          <td className="px-3 py-2 font-mono">
+            {formatNumber(totQtyB)} → {formatNumber(totQtyA)}
+            <TotDelta value={totQtyA - totQtyB} />
+          </td>
+          <td className="px-3 py-2 font-mono">
+            {formatEuro(totRevB)} → {formatEuro(totRevA)}
+            <TotDelta value={totRevA - totRevB} currency />
+          </td>
+          {showMargin && (
+            <td className="px-3 py-2 font-mono">
+              {formatEuro(totMarB)} → {formatEuro(totMarA)}
+              <TotDelta value={totMarA - totMarB} currency />
+            </td>
+          )}
+          <td />
+        </tr>
+      </tfoot>
     </table>
   );
 }
 
 function MarginTable({ rows, getThumbnailUrl }: { rows: MarginCostImpactRow[]; getThumbnailUrl: GetThumbnailUrl }) {
   const showMargin = rows.some((row) => hasCostCoverage(row.before, row.after));
+  const totRevB = rows.reduce((s, r) => s + r.before.revenue, 0);
+  const totRevA = rows.reduce((s, r) => s + r.after.revenue, 0);
+  const totMarB = rows.reduce((s, r) => s + r.before.margin, 0);
+  const totMarA = rows.reduce((s, r) => s + r.after.margin, 0);
   return (
     <table className="min-w-full text-left text-sm">
       <thead className="bg-[#FAFAFA] text-xs uppercase text-[#9CA3AF]">
@@ -587,12 +624,32 @@ function MarginTable({ rows, getThumbnailUrl }: { rows: MarginCostImpactRow[]; g
           </tr>
         ))}
       </tbody>
+      <tfoot className="border-t-2 border-[#E5E7EB] bg-[#F9FAFB] text-xs font-semibold text-[#374151]">
+        <tr>
+          <td className="px-3 py-2" colSpan={2}>Σύνολο — {rows.length} SKU</td>
+          <td className="px-3 py-2 font-mono">
+            {formatEuro(totRevB)} → {formatEuro(totRevA)}
+            <TotDelta value={totRevA - totRevB} currency />
+          </td>
+          {showMargin && (
+            <td className="px-3 py-2 font-mono">
+              {formatEuro(totMarB)} → {formatEuro(totMarA)}
+              <TotDelta value={totMarA - totMarB} currency />
+            </td>
+          )}
+          <td />
+        </tr>
+      </tfoot>
     </table>
   );
 }
 
 function StockTable({ rows, getThumbnailUrl }: { rows: StockoutImpactRow[]; getThumbnailUrl: GetThumbnailUrl }) {
   const showMargin = rows.some((row) => hasCostCoverage(row.before, row.after));
+  const totRevB = rows.reduce((s, r) => s + r.before.revenue, 0);
+  const totRevA = rows.reduce((s, r) => s + r.after.revenue, 0);
+  const totMarB = rows.reduce((s, r) => s + r.before.margin, 0);
+  const totMarA = rows.reduce((s, r) => s + r.after.margin, 0);
   return (
     <table className="min-w-full text-left text-sm">
       <thead className="bg-[#FAFAFA] text-xs uppercase text-[#9CA3AF]">
@@ -619,11 +676,31 @@ function StockTable({ rows, getThumbnailUrl }: { rows: StockoutImpactRow[]; getT
           </tr>
         ))}
       </tbody>
+      <tfoot className="border-t-2 border-[#E5E7EB] bg-[#F9FAFB] text-xs font-semibold text-[#374151]">
+        <tr>
+          <td className="px-3 py-2" colSpan={2}>Σύνολο — {rows.length} SKU</td>
+          <td className="px-3 py-2 font-mono">
+            {formatEuro(totRevB)} → {formatEuro(totRevA)}
+            <TotDelta value={totRevA - totRevB} currency />
+          </td>
+          {showMargin && (
+            <td className="px-3 py-2 font-mono">
+              {formatEuro(totMarB)} → {formatEuro(totMarA)}
+              <TotDelta value={totMarA - totMarB} currency />
+            </td>
+          )}
+          <td />
+        </tr>
+      </tfoot>
     </table>
   );
 }
 
 function MarketingTable({ rows }: { rows: MarketingSpendImpactRow[] }) {
+  const totSpend = rows.reduce((s, r) => s + r.spend, 0);
+  const totRevenue = rows.reduce((s, r) => s + r.revenue, 0);
+  const totMargin = rows.reduce((s, r) => s + r.margin, 0);
+  const totRoas = totSpend > 0 ? Math.round((totRevenue / totSpend) * 100) / 100 : null;
   return (
     <table className="min-w-full text-left text-sm">
       <thead className="bg-[#FAFAFA] text-xs uppercase text-[#9CA3AF]">
@@ -644,7 +721,7 @@ function MarketingTable({ rows }: { rows: MarketingSpendImpactRow[] }) {
               <p className="text-xs text-[#6B7280]">{row.channel}</p>
             </td>
             <td className="px-3 py-2 font-mono text-xs">
-              {formatCurrency(row.spend, 0)}
+              {formatEuro(row.spend)}
               {row.spendVsLookbackPct != null && (
                 <p className={row.spendVsLookbackPct >= 0 ? 'text-amber-600' : 'text-emerald-600'}>
                   vs lookback {row.spendVsLookbackPct >= 0 ? '+' : ''}
@@ -653,13 +730,13 @@ function MarketingTable({ rows }: { rows: MarketingSpendImpactRow[] }) {
               )}
             </td>
             <td className="px-3 py-2 font-mono text-xs">
-              {formatCurrency(row.revenue, 0)}
+              {formatEuro(row.revenue)}
               {row.revenueChangePct != null && (
                 <p className="text-[10px] text-[#9CA3AF]">περίοδος {row.revenueChangePct >= 0 ? '+' : ''}{row.revenueChangePct}%</p>
               )}
             </td>
             <td className="px-3 py-2 font-mono text-xs">
-              {formatCurrency(row.margin, 0)}
+              {formatEuro(row.margin)}
               <p className="text-[10px] text-[#9CA3AF]">{row.marginPct != null ? `${row.marginPct}%` : '—'}</p>
               {row.marginChangePct != null && (
                 <p className={row.marginChangePct >= 0 ? 'text-emerald-600' : 'text-rose-600'}>
@@ -673,6 +750,16 @@ function MarketingTable({ rows }: { rows: MarketingSpendImpactRow[] }) {
           </tr>
         ))}
       </tbody>
+      <tfoot className="border-t-2 border-[#E5E7EB] bg-[#F9FAFB] text-xs font-semibold text-[#374151]">
+        <tr>
+          <td className="px-3 py-2">Σύνολο — {rows.length} καμπάνιες</td>
+          <td className="px-3 py-2 font-mono">{formatEuro(totSpend)}</td>
+          <td className="px-3 py-2 font-mono">{formatEuro(totRevenue)}</td>
+          <td className="px-3 py-2 font-mono">{formatEuro(totMargin)}</td>
+          <td className="px-3 py-2 font-mono">{totRoas != null ? `${totRoas}x` : '—'}</td>
+          <td />
+        </tr>
+      </tfoot>
     </table>
   );
 }
