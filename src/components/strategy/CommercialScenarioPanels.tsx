@@ -174,7 +174,7 @@ export function CommercialScenarioPanels({
           </div>
           <div className="overflow-x-auto rounded-xl border border-[#E5E7EB]">
             {activeTab === 'price' && data.price && (
-              <PriceTable rows={filterRows(data.price.rows, filter, showDetails ? Infinity : 5)} getThumbnailUrl={getThumbnailUrl} />
+              <PriceTable rows={filterRows(data.price.rows, filter, showDetails ? Infinity : 5)} getThumbnailUrl={getThumbnailUrl} stockBySku={data.stockBySku} />
             )}
             {activeTab === 'marketing' && data.marketing && (
               <MarketingTable rows={filterRows(data.marketing.rows, filter, showDetails ? Infinity : 5)} />
@@ -506,7 +506,7 @@ function SkuCell({
   );
 }
 
-function PriceTable({ rows, getThumbnailUrl }: { rows: PriceChangeImpactRow[]; getThumbnailUrl: GetThumbnailUrl }) {
+function PriceTable({ rows, getThumbnailUrl, stockBySku }: { rows: PriceChangeImpactRow[]; getThumbnailUrl: GetThumbnailUrl; stockBySku?: Map<string, number> }) {
   const showMargin = rows.some((row) => hasCostCoverage(row.before, row.after));
   const totRevB = rows.reduce((s, r) => s + r.before.revenue, 0);
   const totRevA = rows.reduce((s, r) => s + r.after.revenue, 0);
@@ -553,6 +553,12 @@ function PriceTable({ rows, getThumbnailUrl }: { rows: PriceChangeImpactRow[]; g
             </td>
             <td className="px-3 py-2 font-mono text-xs text-right whitespace-nowrap">
               {formatNumber(row.before.qty)} → {formatNumber(row.after.qty)}
+              {stockBySku && (() => {
+                const stock = stockBySku.get(row.sku.toUpperCase());
+                if (stock == null) return null;
+                const color = stock === 0 ? 'text-rose-500' : stock < 5 ? 'text-amber-500' : 'text-[#9CA3AF]';
+                return <p className={`text-[10px] ${color}`}>απόθ. {formatNumber(stock)}</p>;
+              })()}
             </td>
             <RevenueMarginCells before={row.before} after={row.after} showMargin={showMargin} />
             <VerdictCell verdict={row.verdict} confidence={row.confidence} />

@@ -109,6 +109,15 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
     [procurement.data.pricing_policy]
   );
 
+  const stockBySku = useMemo<Map<string, number>>(() => {
+    const map = new Map<string, number>();
+    const signals = procurementSignals.signalsBySku;
+    for (const [sku, sig] of Object.entries(signals)) {
+      if (sig.available_stock != null) map.set(sku.toUpperCase(), sig.available_stock);
+    }
+    return map;
+  }, [procurementSignals.signalsBySku]);
+
   const hasLocalCache = useMemo(
     () =>
       !!brandId && !!period?.fromDate && !!period?.toDate
@@ -225,6 +234,7 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
     isRefreshing: !!query.data && query.isFetching,
     hasOrderLines: (query.data?.ordersWithLines ?? 0) > 0,
     hasCostData: costBySku.size > 0,
+    stockBySku,
     cachedAt,
     refresh,
   };
