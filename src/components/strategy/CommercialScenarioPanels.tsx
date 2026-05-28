@@ -625,7 +625,6 @@ function MarketingTable({ rows }: { rows: MarketingSpendImpactRow[] }) {
             </td>
             <td className="px-3 py-2 font-mono text-xs">
               {formatEuro(row.margin)}
-              <p className="text-[10px] text-[#9CA3AF]">{row.marginPct != null ? `${row.marginPct}%` : '—'}</p>
               {row.marginChangePct != null && (
                 <p className={row.marginChangePct >= 0 ? 'text-emerald-600' : 'text-rose-600'}>
                   {row.marginChangePct >= 0 ? '+' : ''}
