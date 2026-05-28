@@ -2294,7 +2294,7 @@ export const scheduledSyncMarketing = onSchedule(
 
 /** E-shop imports + ecommerce_summary — 05:20 */
 export const scheduledSyncEcommerce = onSchedule(
-  { ...nightlyConnectorScheduleBase, ...OPENCART_EGRESS_OPTIONS, schedule: 'every day 05:20', memory: '2GiB' as const },
+  { ...nightlyConnectorScheduleBase, ...OPENCART_EGRESS_OPTIONS, schedule: 'every day 05:20', memory: '4GiB' as const, cpu: 2 },
   async () => runNightlyConnectorWaveJob('ecommerce', 'scheduledSyncEcommerce')
 );
 
