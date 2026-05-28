@@ -5,6 +5,7 @@ import { useCampaigns } from './useCampaigns';
 import { useEcommerceSummary } from './useEcommerceSummary';
 import { useProcurement } from './useProcurement';
 import { useProcurementSignals } from './useProcurementSignals';
+import { useProducts } from './useProducts';
 import { fetchDataAnalysisOrders } from '../services/ecommerceRawOrders';
 import {
   buildSkuNameMapFromPricingRows,
@@ -97,6 +98,7 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
   const { campaigns, isLoading: campaignsLoading } = useCampaigns();
   const procurement = useProcurement({ sheets: ['pricing_policy'] });
   const procurementSignals = useProcurementSignals();
+  const { products } = useProducts();
   const [forceRefreshKey, setForceRefreshKey] = useState(0);
 
   const costBySku = useMemo(
@@ -111,12 +113,19 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
 
   const stockBySku = useMemo<Map<string, number>>(() => {
     const map = new Map<string, number>();
-    const signals = procurementSignals.signalsBySku;
-    for (const [sku, sig] of Object.entries(signals)) {
-      if (sig.available_stock != null) map.set(sku.toUpperCase(), sig.available_stock);
+    // Source 1: products collection (eshop connectors — Shopify, WooCommerce, etc.)
+    for (const p of products) {
+      const sku = String(p.sku || '').trim().toUpperCase();
+      if (!sku) continue;
+      const stock = (p as any).stock_level ?? (p as any).available_stock ?? (p as any).stock_on_hand;
+      if (stock != null) map.set(sku, Number(stock));
+    }
+    // Source 2: procurement signals (ERP / manual import) — overrides if present
+    for (const [sku, sig] of Object.entries(procurementSignals.signalsBySku)) {
+      if (sig.available_stock != null) map.set(sku.trim().toUpperCase(), sig.available_stock);
     }
     return map;
-  }, [procurementSignals.signalsBySku]);
+  }, [products, procurementSignals.signalsBySku]);
 
   const hasLocalCache = useMemo(
     () =>
