@@ -40,7 +40,8 @@ export interface PriceChangeImpactSummary {
   lookbackDays: number;
 }
 
-const MIN_CHANGE_PCT = 3;
+const MIN_CHANGE_PCT = 1;
+const MIN_SKU_REVENUE = 30;
 
 function scoreVerdict(
   changePct: number,
@@ -96,6 +97,9 @@ export function analyzePriceChangeImpact(input: {
     const changePct = pctChange(after.avgPrice, before.avgPrice);
     if (changePct == null || Math.abs(changePct) < MIN_CHANGE_PCT) continue;
 
+    // Skip micro-revenue SKUs (noise filter)
+    if (Math.max(before.revenue, after.revenue) < MIN_SKU_REVENUE) continue;
+
     rows.push({
       sku,
       productName: skuNames.get(sku) || sku,
@@ -114,7 +118,7 @@ export function analyzePriceChangeImpact(input: {
     });
   }
 
-  rows.sort((a, b) => Math.abs(b.changePct) - Math.abs(a.changePct));
+  rows.sort((a, b) => Math.abs(b.after.revenue - b.before.revenue) - Math.abs(a.after.revenue - a.before.revenue));
 
   return {
     rows,

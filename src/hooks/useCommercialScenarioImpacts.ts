@@ -12,10 +12,8 @@ import {
   shiftIsoDate,
   type SkuWindowMetrics,
 } from '../services/commercialScenarioMetrics';
-import { analyzePriceChangeImpact } from '../services/priceChangeImpact';
-import { analyzeMarginCostImpact } from '../services/marginCostImpact';
-import { analyzeStockoutImpact, buildStockContextFromProcurementSignals } from '../services/stockoutImpact';
 import { analyzeMarketingSpendImpact } from '../services/marketingSpendImpact';
+import { analyzePriceChangeImpact } from '../services/priceChangeImpact';
 import {
   readScenarioCache,
   writeScenarioCache,
@@ -111,10 +109,6 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
     [procurement.data.pricing_policy]
   );
 
-  const stockBySku = useMemo(
-    () => buildStockContextFromProcurementSignals(procurementSignals.signalsBySku),
-    [procurementSignals.signalsBySku]
-  );
   const hasLocalCache = useMemo(
     () =>
       !!brandId && !!period?.fromDate && !!period?.toDate
@@ -129,7 +123,7 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
     !!period?.fromDate &&
     !!period?.toDate &&
     (hasLocalCache ||
-      (!ecomm.isLoading && !procurement.isLoading && !procurementSignals.isLoading));
+      (!ecomm.isLoading && !procurement.isLoading && !procurementSignals.isLoading && !campaignsLoading));
 
   type ScenarioPayload = ReturnType<typeof emptyPayload>;
 
@@ -141,7 +135,6 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
       period?.toDate,
       [...ecomm.connectedPlatforms].sort().join('|'),
       costBySku.size,
-      stockBySku.size,
       forceRefreshKey,
     ],
     queryFn: async () => {
@@ -164,8 +157,6 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
       });
 
       const priceRows = [];
-      const marginRows = [];
-      const stockoutRows = [];
 
       for (const window of monthWindows(period.fromDate, period.toDate)) {
         const base = {
@@ -176,17 +167,11 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
           skuNames,
         };
         priceRows.push(...analyzePriceChangeImpact(base).rows);
-        marginRows.push(...analyzeMarginCostImpact(base).rows);
-        stockoutRows.push(...analyzeStockoutImpact({ ...base, stockBySku }).rows);
       }
 
-      priceRows.sort((a, b) => Math.abs(b.changePct) - Math.abs(a.changePct));
-      marginRows.sort((a, b) => Math.abs(b.marginPctChange ?? 0) - Math.abs(a.marginPctChange ?? 0));
-      stockoutRows.sort((a, b) => (a.revenueChangePct ?? 0) - (b.revenueChangePct ?? 0));
+      priceRows.sort((a, b) => Math.abs(b.after.revenue - b.before.revenue) - Math.abs(a.after.revenue - a.before.revenue));
 
       const price = { rows: priceRows, summary: summarizeRows(priceRows) };
-      const margin = { rows: marginRows, summary: summarizeRows(marginRows) };
-      const stockout = { rows: stockoutRows, summary: summarizeRows(stockoutRows) };
       const marketing = analyzeMarketingSpendImpact({
         campaigns: campaigns as Campaign[],
         orders,
@@ -196,7 +181,7 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
       });
 
       const ordersWithLines = orders.filter((o) => o.lineItems.length > 0).length;
-      const result = { price, margin, stockout, marketing, orderCount: orders.length, ordersWithLines };
+      const result = { price, marketing, orderCount: orders.length, ordersWithLines };
 
       writeScenarioCache(brandId, period.fromDate, period.toDate, result);
       return result;
@@ -233,8 +218,6 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
 
   return {
     price: query.data?.price,
-    margin: query.data?.margin,
-    stockout: query.data?.stockout,
     marketing: query.data?.marketing,
     orderCount: query.data?.orderCount ?? 0,
     ordersWithLines: query.data?.ordersWithLines ?? 0,
@@ -242,7 +225,6 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
     isRefreshing: !!query.data && query.isFetching,
     hasOrderLines: (query.data?.ordersWithLines ?? 0) > 0,
     hasCostData: costBySku.size > 0,
-    hasStockSignals: stockBySku.size > 0,
     cachedAt,
     refresh,
   };

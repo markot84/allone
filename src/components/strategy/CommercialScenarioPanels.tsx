@@ -5,11 +5,8 @@ import { useCommercialScenarioImpacts } from '../../hooks/useCommercialScenarioI
 import { useProductThumbnails } from '../../hooks/useProductThumbnails';
 import type { ScenarioVerdict, SkuWindowMetrics } from '../../services/commercialScenarioMetrics';
 import type { PriceChangeImpactRow } from '../../services/priceChangeImpact';
-import type { MarginCostImpactRow } from '../../services/marginCostImpact';
-import type { StockoutImpactRow } from '../../services/stockoutImpact';
 import type { MarketingSpendImpactRow } from '../../services/marketingSpendImpact';
 import { formatCurrency, formatNumber } from '../../utils/format';
-
 type ScenarioTab = 'price' | 'margin' | 'stock' | 'marketing';
 type ImpactFilter = 'all' | ScenarioVerdict;
 type GetThumbnailUrl = (sku: string, product?: unknown) => { url: string };
@@ -54,20 +51,16 @@ export function CommercialScenarioPanels({
     () =>
       TABS.filter((t) => {
         if (t.key === 'price') return (data.price?.rows.length ?? 0) > 0;
-        if (t.key === 'margin') return (data.margin?.rows.length ?? 0) > 0;
-        if (t.key === 'stock') return (data.stockout?.rows.length ?? 0) > 0;
         return (data.marketing?.rows.length ?? 0) > 0;
       }),
-    [data.margin?.rows.length, data.marketing?.rows.length, data.price?.rows.length, data.stockout?.rows.length]
+    [data.marketing?.rows.length, data.price?.rows.length]
   );
   const activeTab = visibleTabs.some((t) => t.key === tab) ? tab : (visibleTabs[0]?.key ?? tab);
 
   const active = useMemo(() => {
     if (activeTab === 'price') return data.price;
-    if (activeTab === 'margin') return data.margin;
-    if (activeTab === 'stock') return data.stockout;
     return data.marketing;
-  }, [activeTab, data.price, data.margin, data.stockout, data.marketing]);
+  }, [activeTab, data.price, data.marketing]);
 
   const filteredCount = useMemo(() => {
     if (!active) return 0;
@@ -145,8 +138,6 @@ export function CommercialScenarioPanels({
       )}
 
       {activeTab === 'price' && data.price && <ScenarioKpis summary={data.price.summary} filter={filter} onFilterChange={setFilter} />}
-      {activeTab === 'margin' && data.margin && <ScenarioKpis summary={data.margin.summary} filter={filter} onFilterChange={setFilter} />}
-      {activeTab === 'stock' && data.stockout && <ScenarioKpis summary={data.stockout.summary} filter={filter} onFilterChange={setFilter} />}
       {activeTab === 'marketing' && data.marketing && <MarketingKpis summary={data.marketing.summary} />}
 
       <FilterChips filter={filter} onChange={setFilter} />
@@ -161,10 +152,6 @@ export function CommercialScenarioPanels({
         </p>
       ) : activeTab !== 'marketing' && !data.hasOrderLines ? (
         <EmptyHint hasCost={data.hasCostData} type="orders" />
-      ) : activeTab === 'margin' && !data.hasCostData ? (
-        <EmptyHint hasCost={false} type="cost" />
-      ) : activeTab === 'stock' && !data.hasStockSignals ? (
-        <EmptyHint hasCost={data.hasCostData} type="stock" />
       ) : activeTab === 'marketing' && (data.marketing?.rows.length ?? 0) === 0 ? (
         <p className="text-sm text-[#6B7280]">Δεν βρέθηκαν καμπάνιες με σημαντικό spend στην περίοδο.</p>
       ) : filteredCount === 0 ? (
@@ -188,12 +175,6 @@ export function CommercialScenarioPanels({
           <div className="overflow-x-auto rounded-xl border border-[#E5E7EB]">
             {activeTab === 'price' && data.price && (
               <PriceTable rows={filterRows(data.price.rows, filter, showDetails ? Infinity : 5)} getThumbnailUrl={getThumbnailUrl} />
-            )}
-            {activeTab === 'margin' && data.margin && (
-              <MarginTable rows={filterRows(data.margin.rows, filter, showDetails ? Infinity : 5)} getThumbnailUrl={getThumbnailUrl} />
-            )}
-            {activeTab === 'stock' && data.stockout && (
-              <StockTable rows={filterRows(data.stockout.rows, filter, showDetails ? Infinity : 5)} getThumbnailUrl={getThumbnailUrl} />
             )}
             {activeTab === 'marketing' && data.marketing && (
               <MarketingTable rows={filterRows(data.marketing.rows, filter, showDetails ? Infinity : 5)} />
@@ -602,114 +583,6 @@ function PriceTable({ rows, getThumbnailUrl }: { rows: PriceChangeImpactRow[]; g
   );
 }
 
-function MarginTable({ rows, getThumbnailUrl }: { rows: MarginCostImpactRow[]; getThumbnailUrl: GetThumbnailUrl }) {
-  const showMargin = rows.some((row) => hasCostCoverage(row.before, row.after));
-  const totRevB = rows.reduce((s, r) => s + r.before.revenue, 0);
-  const totRevA = rows.reduce((s, r) => s + r.after.revenue, 0);
-  const totMarB = rows.reduce((s, r) => s + r.before.margin, 0);
-  const totMarA = rows.reduce((s, r) => s + r.after.margin, 0);
-  return (
-    <table className="min-w-full text-left text-sm">
-      <thead className="bg-[#FAFAFA] text-xs uppercase text-[#9CA3AF]">
-        <tr>
-          <th className="px-3 py-2">SKU</th>
-          <th className="px-3 py-2">Σήμα</th>
-          <th className="px-3 py-2">Τζίρος</th>
-          {showMargin && <th className="px-3 py-2">Margin</th>}
-          <th className="px-3 py-2">Επίδραση</th>
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-[#E5E7EB]">
-        {rows.map((row) => (
-          <tr key={row.sku} className="hover:bg-[#FAFAFA]">
-            <td className="px-3 py-2">
-              <SkuCell
-                sku={row.sku}
-                productName={row.productName}
-                getThumbnailUrl={getThumbnailUrl}
-                meta={row.unitCost > 0 ? <p className="text-[10px] text-[#9CA3AF]">κόστος {formatCurrency(row.unitCost, 2)}</p> : undefined}
-              />
-            </td>
-            <td className="px-3 py-2 text-xs">
-              {row.signal === 'cost_pressure' ? 'Πίεση κόστους' : row.signal === 'margin_gain' ? 'Κέρδος margin' : 'Πτώση margin'}
-              <p className="font-mono">{row.marginPctBefore}% → {row.marginPctAfter}%</p>
-            </td>
-            <RevenueMarginCells before={row.before} after={row.after} showMargin={showMargin} />
-            <VerdictCell verdict={row.verdict} confidence={row.confidence} />
-          </tr>
-        ))}
-      </tbody>
-      <tfoot className="border-t-2 border-[#E5E7EB] bg-[#F9FAFB] text-xs font-semibold text-[#374151]">
-        <tr>
-          <td className="px-3 py-2" colSpan={2}>Σύνολο — {rows.length} SKU</td>
-          <td className="px-3 py-2 font-mono">
-            {formatEuro(totRevB)} → {formatEuro(totRevA)}
-            <TotDelta value={totRevA - totRevB} currency />
-          </td>
-          {showMargin && (
-            <td className="px-3 py-2 font-mono">
-              {formatEuro(totMarB)} → {formatEuro(totMarA)}
-              <TotDelta value={totMarA - totMarB} currency />
-            </td>
-          )}
-          <td />
-        </tr>
-      </tfoot>
-    </table>
-  );
-}
-
-function StockTable({ rows, getThumbnailUrl }: { rows: StockoutImpactRow[]; getThumbnailUrl: GetThumbnailUrl }) {
-  const showMargin = rows.some((row) => hasCostCoverage(row.before, row.after));
-  const totRevB = rows.reduce((s, r) => s + r.before.revenue, 0);
-  const totRevA = rows.reduce((s, r) => s + r.after.revenue, 0);
-  const totMarB = rows.reduce((s, r) => s + r.before.margin, 0);
-  const totMarA = rows.reduce((s, r) => s + r.after.margin, 0);
-  return (
-    <table className="min-w-full text-left text-sm">
-      <thead className="bg-[#FAFAFA] text-xs uppercase text-[#9CA3AF]">
-        <tr>
-          <th className="px-3 py-2">SKU</th>
-          <th className="px-3 py-2">Απόθεμα</th>
-          <th className="px-3 py-2">Τζίρος</th>
-          {showMargin && <th className="px-3 py-2">Margin</th>}
-          <th className="px-3 py-2">Επίδραση</th>
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-[#E5E7EB]">
-        {rows.map((row) => (
-          <tr key={row.sku} className="hover:bg-[#FAFAFA]">
-            <td className="px-3 py-2">
-              <SkuCell sku={row.sku} productName={row.productName} getThumbnailUrl={getThumbnailUrl} />
-            </td>
-            <td className="px-3 py-2 text-xs">
-              {row.daysOfCover != null && <p>Ημέρες κάλυψης: {row.daysOfCover}</p>}
-              {row.availableStock != null && <p>Διαθέσιμο: {formatNumber(row.availableStock)}</p>}
-            </td>
-            <RevenueMarginCells before={row.before} after={row.after} showMargin={showMargin} />
-            <VerdictCell verdict={row.verdict} confidence={row.confidence} />
-          </tr>
-        ))}
-      </tbody>
-      <tfoot className="border-t-2 border-[#E5E7EB] bg-[#F9FAFB] text-xs font-semibold text-[#374151]">
-        <tr>
-          <td className="px-3 py-2" colSpan={2}>Σύνολο — {rows.length} SKU</td>
-          <td className="px-3 py-2 font-mono">
-            {formatEuro(totRevB)} → {formatEuro(totRevA)}
-            <TotDelta value={totRevA - totRevB} currency />
-          </td>
-          {showMargin && (
-            <td className="px-3 py-2 font-mono">
-              {formatEuro(totMarB)} → {formatEuro(totMarA)}
-              <TotDelta value={totMarA - totMarB} currency />
-            </td>
-          )}
-          <td />
-        </tr>
-      </tfoot>
-    </table>
-  );
-}
 
 function MarketingTable({ rows }: { rows: MarketingSpendImpactRow[] }) {
   const totSpend = rows.reduce((s, r) => s + r.spend, 0);
