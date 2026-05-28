@@ -528,7 +528,7 @@ function PriceTable({ rows, getThumbnailUrl, stockBySku }: { rows: PriceChangeIm
         <tr>
           <th className="px-3 py-2 text-left">SKU</th>
           <th className="px-3 py-2 text-left">Τιμή</th>
-          <th className="px-3 py-2 text-right">Τεμ.</th>
+          <th className="px-3 py-2 text-right">Πωληθέντα Τεμ.</th>
           <th className="px-3 py-2 text-right">Τζίρος</th>
           {showMargin && <th className="px-3 py-2 text-right">Margin</th>}
           <th className="px-3 py-2 text-center">Επίδραση</th>
