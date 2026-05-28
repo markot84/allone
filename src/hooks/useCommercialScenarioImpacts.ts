@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useBrand } from './useBrand';
 import { useCampaigns } from './useCampaigns';
@@ -16,6 +16,12 @@ import { analyzePriceChangeImpact } from '../services/priceChangeImpact';
 import { analyzeMarginCostImpact } from '../services/marginCostImpact';
 import { analyzeStockoutImpact, buildStockContextFromProcurementSignals } from '../services/stockoutImpact';
 import { analyzeMarketingSpendImpact } from '../services/marketingSpendImpact';
+import {
+  readScenarioCache,
+  writeScenarioCache,
+  clearScenarioCache,
+  SCENARIO_CACHE_TTL_MS,
+} from '../services/commercialScenarioCache';
 import type { Campaign } from '../types';
 
 export interface CommercialScenarioPeriod {
@@ -30,7 +36,7 @@ type WindowedScenarioRow = {
   confidence?: 'low' | 'medium' | 'high';
 };
 
-const ERP_SCENARIO_CACHE_MS = 24 * 60 * 60 * 1000;
+const ERP_SCENARIO_CACHE_MS = SCENARIO_CACHE_TTL_MS;
 
 function monthWindows(periodFrom: string, periodTo: string): Array<{ startDate: string; endDate: string }> {
   const [fy, fm] = periodFrom.split('-').map(Number);
@@ -93,6 +99,7 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
   const { campaigns, isLoading: campaignsLoading } = useCampaigns();
   const procurement = useProcurement({ sheets: ['pricing_policy'] });
   const procurementSignals = useProcurementSignals();
+  const [forceRefreshKey, setForceRefreshKey] = useState(0);
 
   const costBySku = useMemo(
     () => buildUnitCostBySku(procurement.data.pricing_policy ?? []),
@@ -116,6 +123,8 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
     !procurement.isLoading &&
     !procurementSignals.isLoading;
 
+  type ScenarioPayload = ReturnType<typeof emptyPayload>;
+
   const query = useQuery({
     queryKey: [
       'commercial_scenario_impacts',
@@ -125,10 +134,17 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
       [...ecomm.connectedPlatforms].sort().join('|'),
       costBySku.size,
       stockBySku.size,
+      forceRefreshKey,
     ],
     queryFn: async () => {
       if (!brandId || !period) {
         return emptyPayload();
+      }
+
+      // Use localStorage cache unless forced refresh
+      if (forceRefreshKey === 0) {
+        const cached = readScenarioCache<ScenarioPayload>(brandId, period.fromDate, period.toDate);
+        if (cached) return cached.data;
       }
 
       const lookbackFrom = shiftIsoDate(period.fromDate, -30);
@@ -172,8 +188,18 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
       });
 
       const ordersWithLines = orders.filter((o) => o.lineItems.length > 0).length;
+      const result = { price, margin, stockout, marketing, orderCount: orders.length, ordersWithLines };
 
-      return { price, margin, stockout, marketing, orderCount: orders.length, ordersWithLines };
+      writeScenarioCache(brandId, period.fromDate, period.toDate, result);
+      return result;
+    },
+    initialData: () => {
+      if (!brandId || !period?.fromDate || !period?.toDate) return undefined;
+      return readScenarioCache<ScenarioPayload>(brandId, period.fromDate, period.toDate)?.data ?? undefined;
+    },
+    initialDataUpdatedAt: () => {
+      if (!brandId || !period?.fromDate || !period?.toDate) return undefined;
+      return readScenarioCache<ScenarioPayload>(brandId, period.fromDate, period.toDate)?.savedAt ?? undefined;
     },
     enabled: canLoadImpacts,
     staleTime: ERP_SCENARIO_CACHE_MS,
@@ -187,6 +213,17 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
   const isLoading =
     !query.data && (query.isPending || procurement.isLoading || procurementSignals.isLoading || campaignsLoading);
 
+  const cachedAt = useMemo(() => {
+    if (!brandId || !period?.fromDate || !period?.toDate) return null;
+    return readScenarioCache(brandId, period.fromDate, period.toDate)?.savedAt ?? null;
+  }, [brandId, period?.fromDate, period?.toDate, forceRefreshKey]);
+
+  const refresh = () => {
+    if (!brandId || !period?.fromDate || !period?.toDate) return;
+    clearScenarioCache(brandId, period.fromDate, period.toDate);
+    setForceRefreshKey((k) => k + 1);
+  };
+
   return {
     price: query.data?.price,
     margin: query.data?.margin,
@@ -199,6 +236,8 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
     hasOrderLines: (query.data?.ordersWithLines ?? 0) > 0,
     hasCostData: costBySku.size > 0,
     hasStockSignals: stockBySku.size > 0,
+    cachedAt,
+    refresh,
   };
 }
 

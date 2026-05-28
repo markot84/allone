@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { ArrowDownRight, ArrowUpRight, Megaphone, Package, Percent, Tag } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, Megaphone, Package, Percent, RefreshCw, Tag } from 'lucide-react';
 import { Card, CardHeader, Spinner, Badge, ProductThumbnail, Tooltip } from '../common';
 import { useCommercialScenarioImpacts } from '../../hooks/useCommercialScenarioImpacts';
 import { useProductThumbnails } from '../../hooks/useProductThumbnails';
@@ -48,6 +48,10 @@ export function CommercialScenarioPanels({
   const data = useCommercialScenarioImpacts(period);
   const { getThumbnailUrl } = useProductThumbnails();
 
+  const cachedAtLabel = data.cachedAt
+    ? new Date(data.cachedAt).toLocaleString('el-GR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+    : null;
+
   const visibleTabs = useMemo(
     () =>
       TABS.filter((t) => {
@@ -89,6 +93,23 @@ export function CommercialScenarioPanels({
         title="Σύνοψη επίδρασης"
         subtitle={periodLabel ?? undefined}
         icon={<Tag size={18} className="text-[var(--nts-accent)]" />}
+        action={
+          <div className="flex items-center gap-2">
+            {cachedAtLabel && !data.isRefreshing && (
+              <span className="text-xs text-[#9CA3AF]">Τελ. ανανέωση: {cachedAtLabel}</span>
+            )}
+            <button
+              type="button"
+              onClick={() => data.refresh()}
+              disabled={data.isLoading || data.isRefreshing}
+              title="Ανανέωση δεδομένων"
+              className="flex items-center gap-1.5 rounded-lg border border-[#E5E7EB] px-2.5 py-1.5 text-xs font-medium text-[#374151] transition-colors hover:border-[var(--nts-accent)]/40 hover:bg-[var(--nts-accent)]/5 disabled:opacity-50"
+            >
+              <RefreshCw size={12} className={data.isRefreshing ? 'animate-spin' : ''} />
+              {data.isRefreshing ? 'Φορτώνει…' : 'Ανανέωση'}
+            </button>
+          </div>
+        }
       />
 
       {data.isRefreshing && !data.isLoading && (
@@ -253,7 +274,7 @@ function ScenarioKpis({
   const netTone = summary.netRevenueDelta > 0 ? 'success' : summary.netRevenueDelta < 0 ? 'danger' : undefined;
   return (
     <div className="mb-4 space-y-3">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <MiniKpi
           label="Findings"
           value={formatSkuCount(summary.detected)}
@@ -264,7 +285,7 @@ function ScenarioKpis({
         <MiniKpi
           label="Θετικά"
           value={formatSkuCount(summary.positive)}
-          sub="SKU με θετική επίδραση"
+          sub={formatSignedCurrency(summary.positiveRevenueDelta)}
           tone="success"
           selected={filter === 'positive'}
           onClick={() => onFilterChange('positive')}
@@ -272,7 +293,7 @@ function ScenarioKpis({
         <MiniKpi
           label="Αρνητικά"
           value={formatSkuCount(summary.negative)}
-          sub="SKU με αρνητική επίδραση"
+          sub={formatSignedCurrency(summary.negativeRevenueDelta)}
           tone="danger"
           selected={filter === 'negative'}
           onClick={() => onFilterChange('negative')}
@@ -290,13 +311,6 @@ function ScenarioKpis({
           value={formatSignedCurrency(summary.netRevenueDelta)}
           sub={`${formatEuro(summary.totalRevenueBefore)} → ${formatEuro(summary.totalRevenueAfter)}`}
           tone={netTone}
-        />
-        <MiniKpi
-          label="Κέρδη vs Ζημιές"
-          tooltip="Ξεχωριστά: πόσα € κέρδισαν τα προϊόντα που βελτιώθηκαν (θετική επίδραση) και πόσα € έχασαν αυτά που χειροτέρεψαν (αρνητική επίδραση)."
-          value={formatSignedCurrency(summary.positiveRevenueDelta)}
-          sub={`ζημιές ${formatSignedCurrency(summary.negativeRevenueDelta)}`}
-          tone="success"
         />
       </div>
     </div>
