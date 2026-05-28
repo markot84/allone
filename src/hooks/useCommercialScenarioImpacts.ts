@@ -201,7 +201,16 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
       const ordersWithLines = orders.filter((o) => o.lineItems.length > 0).length;
       const result = { price, marketing, orderCount: orders.length, ordersWithLines };
 
-      writeScenarioCache(brandId, period.fromDate, period.toDate, result);
+      // Cap rows before caching to stay within localStorage quota (~5MB).
+      // Sort is already by revenue impact so we keep the most significant rows.
+      const MAX_PRICE_CACHE = 500;
+      const MAX_MKT_CACHE = 150;
+      const cachePayload = {
+        ...result,
+        price: { ...result.price, rows: result.price.rows.slice(0, MAX_PRICE_CACHE) },
+        marketing: { ...result.marketing, rows: result.marketing.rows.slice(0, MAX_MKT_CACHE) },
+      };
+      writeScenarioCache(brandId, period.fromDate, period.toDate, cachePayload);
       return result;
     },
     initialData: () => {
