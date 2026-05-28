@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { ArrowDownRight, ArrowUpRight, Megaphone, Package, Percent, RefreshCw, Tag } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, Megaphone, RefreshCw, Tag } from 'lucide-react';
 import { Card, CardHeader, Spinner, Badge, ProductThumbnail, Tooltip } from '../common';
 import { useCommercialScenarioImpacts } from '../../hooks/useCommercialScenarioImpacts';
 import { useProductThumbnails } from '../../hooks/useProductThumbnails';
@@ -30,8 +30,6 @@ const VERDICT_BADGE: Record<ScenarioVerdict, 'success' | 'danger' | 'warning' | 
 
 const TABS: { key: ScenarioTab; label: string; icon: ReactNode }[] = [
   { key: 'price', label: 'Τιμές', icon: <Tag size={14} /> },
-  { key: 'margin', label: 'Margin / κόστος', icon: <Percent size={14} /> },
-  { key: 'stock', label: 'Απόθεμα risk', icon: <Package size={14} /> },
   { key: 'marketing', label: 'Marketing spend', icon: <Megaphone size={14} /> },
 ];
 

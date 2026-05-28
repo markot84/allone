@@ -115,13 +115,21 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
     () => buildStockContextFromProcurementSignals(procurementSignals.signalsBySku),
     [procurementSignals.signalsBySku]
   );
+  const hasLocalCache = useMemo(
+    () =>
+      !!brandId && !!period?.fromDate && !!period?.toDate
+        ? readScenarioCache(brandId, period.fromDate, period.toDate) !== null
+        : false,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [brandId, period?.fromDate, period?.toDate, forceRefreshKey]
+  );
+
   const canLoadImpacts =
     !!brandId &&
     !!period?.fromDate &&
     !!period?.toDate &&
-    !ecomm.isLoading &&
-    !procurement.isLoading &&
-    !procurementSignals.isLoading;
+    (hasLocalCache ||
+      (!ecomm.isLoading && !procurement.isLoading && !procurementSignals.isLoading));
 
   type ScenarioPayload = ReturnType<typeof emptyPayload>;
 
@@ -210,8 +218,7 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
     placeholderData: (previousData) => previousData,
   });
 
-  const isLoading =
-    !query.data && (query.isPending || procurement.isLoading || procurementSignals.isLoading || campaignsLoading);
+  const isLoading = !query.data && (query.isPending || (!hasLocalCache && (procurement.isLoading || procurementSignals.isLoading || campaignsLoading)));
 
   const cachedAt = useMemo(() => {
     if (!brandId || !period?.fromDate || !period?.toDate) return null;
@@ -232,7 +239,7 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
     orderCount: query.data?.orderCount ?? 0,
     ordersWithLines: query.data?.ordersWithLines ?? 0,
     isLoading,
-    isRefreshing: !!query.data && (query.isFetching || procurement.isRefreshing || procurementSignals.isLoading || campaignsLoading),
+    isRefreshing: !!query.data && query.isFetching,
     hasOrderLines: (query.data?.ordersWithLines ?? 0) > 0,
     hasCostData: costBySku.size > 0,
     hasStockSignals: stockBySku.size > 0,
