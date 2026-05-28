@@ -116,7 +116,7 @@ export function CommercialScenarioPanels({
             <Spinner />
             <div>
               <p className="text-sm font-semibold text-[#1A1A1A]">Φορτώνουμε αποτελέσματα για τη νέα περίοδο...</p>
-              <p className="text-xs text-[#6B7280]">Ελέγχουμε πώς οι αλλαγές τιμών, κόστους, αποθέματος και καμπανιών επηρέασαν τον τζίρο.</p>
+              <p className="text-xs text-[#6B7280]">Ελέγχουμε πώς οι αλλαγές τιμών και το budget των καμπανιών επηρέασαν τον τζίρο.</p>
             </div>
           </div>
         </div>
@@ -416,19 +416,17 @@ function RevenueMarginCells({
   const rowHasCost = hasCostCoverage(before, after);
   return (
     <>
-      <td className="px-3 py-2">
+      <td className="px-3 py-2 text-right">
         <MetricPair
-          label="Τζίρος"
           before={formatEuro(before.revenue)}
           after={formatEuro(after.revenue)}
           changePct={pct(before.revenue, after.revenue)}
         />
       </td>
       {showMargin && (
-        <td className="px-3 py-2">
+        <td className="px-3 py-2 text-right">
           {rowHasCost ? (
             <MetricPair
-              label="Margin"
               before={formatEuro(before.margin)}
               after={formatEuro(after.margin)}
               changePct={pct(before.margin, after.margin)}
@@ -454,21 +452,18 @@ function MetricUnavailable({ label, reason }: { label: string; reason: string })
 }
 
 function MetricPair({
-  label,
   before,
   after,
   changePct,
   sub,
 }: {
-  label: string;
   before: string;
   after: string;
   changePct: number | null;
   sub?: string;
 }) {
   return (
-    <div>
-      <p className="text-[10px] font-semibold uppercase text-[#9CA3AF]">{label}</p>
+    <div className="whitespace-nowrap">
       <p className="font-mono text-xs text-[#374151]">
         {before} → {after}
       </p>
@@ -496,13 +491,12 @@ function TotDelta({ value, currency }: { value: number; currency?: boolean }) {
   );
 }
 
-function VerdictCell({ verdict, confidence }: { verdict: ScenarioVerdict; confidence?: string }) {
+function VerdictCell({ verdict }: { verdict: ScenarioVerdict; confidence?: string }) {
   return (
-    <td className="px-3 py-2">
+    <td className="px-3 py-2 text-center">
       <Badge variant={VERDICT_BADGE[verdict]} size="sm">
         {VERDICT_LABEL[verdict]}
       </Badge>
-      {confidence && <p className="mt-0.5 text-[10px] text-[#9CA3AF]">{confidence}</p>}
     </td>
   );
 }
@@ -541,14 +535,22 @@ function PriceTable({ rows, getThumbnailUrl }: { rows: PriceChangeImpactRow[]; g
   const totMarA = rows.reduce((s, r) => s + r.after.margin, 0);
   return (
     <table className="min-w-full text-left text-sm">
+      <colgroup>
+        <col className="w-[35%]" />
+        <col className="w-[18%]" />
+        <col className="w-[12%]" />
+        <col className="w-[18%]" />
+        {showMargin && <col className="w-[12%]" />}
+        <col className="w-[10%]" />
+      </colgroup>
       <thead className="bg-[#FAFAFA] text-xs uppercase text-[#9CA3AF]">
         <tr>
-          <th className="px-3 py-2">SKU</th>
-          <th className="px-3 py-2">Τιμή</th>
-          <th className="px-3 py-2">Πωλήσεις τεμ.</th>
-          <th className="px-3 py-2">Τζίρος</th>
-          {showMargin && <th className="px-3 py-2">Margin</th>}
-          <th className="px-3 py-2">Επίδραση</th>
+          <th className="px-3 py-2 text-left">SKU</th>
+          <th className="px-3 py-2 text-left">Τιμή</th>
+          <th className="px-3 py-2 text-right">Τεμ.</th>
+          <th className="px-3 py-2 text-right">Τζίρος</th>
+          {showMargin && <th className="px-3 py-2 text-right">Margin</th>}
+          <th className="px-3 py-2 text-center">Επίδραση</th>
         </tr>
       </thead>
       <tbody className="divide-y divide-[#E5E7EB]">
@@ -557,18 +559,19 @@ function PriceTable({ rows, getThumbnailUrl }: { rows: PriceChangeImpactRow[]; g
             <td className="px-3 py-2">
               <SkuCell sku={row.sku} productName={row.productName} getThumbnailUrl={getThumbnailUrl} />
             </td>
-            <td className="px-3 py-2 font-mono text-xs">
+            <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">
               {row.direction === 'increase' ? (
                 <ArrowUpRight size={12} className="inline text-rose-600" />
               ) : (
                 <ArrowDownRight size={12} className="inline text-emerald-600" />
               )}{' '}
               {formatCurrency(row.priceBefore, 2)} → {formatCurrency(row.priceAfter, 2)}
-              <span className="ml-1 text-rose-600">{row.changePct >= 0 ? '+' : ''}{row.changePct}%</span>
+              <span className={`ml-1 ${row.direction === 'increase' ? 'text-rose-600' : 'text-emerald-600'}`}>
+                {row.changePct >= 0 ? '+' : ''}{row.changePct}%
+              </span>
             </td>
-            <td className="px-3 py-2 font-mono text-xs">
+            <td className="px-3 py-2 font-mono text-xs text-right whitespace-nowrap">
               {formatNumber(row.before.qty)} → {formatNumber(row.after.qty)}
-              <p className="font-sans text-[10px] text-[#9CA3AF]">πωληθείσες μονάδες περιόδου</p>
             </td>
             <RevenueMarginCells before={row.before} after={row.after} showMargin={showMargin} />
             <VerdictCell verdict={row.verdict} confidence={row.confidence} />
@@ -578,16 +581,16 @@ function PriceTable({ rows, getThumbnailUrl }: { rows: PriceChangeImpactRow[]; g
       <tfoot className="border-t-2 border-[#E5E7EB] bg-[#F9FAFB] text-xs font-semibold text-[#374151]">
         <tr>
           <td className="px-3 py-2" colSpan={2}>Σύνολο — {rows.length} SKU</td>
-          <td className="px-3 py-2 font-mono">
+          <td className="px-3 py-2 font-mono text-right whitespace-nowrap">
             {formatNumber(totQtyB)} → {formatNumber(totQtyA)}
             <TotDelta value={totQtyA - totQtyB} />
           </td>
-          <td className="px-3 py-2 font-mono">
+          <td className="px-3 py-2 font-mono text-right whitespace-nowrap">
             {formatEuro(totRevB)} → {formatEuro(totRevA)}
             <TotDelta value={totRevA - totRevB} currency />
           </td>
           {showMargin && (
-            <td className="px-3 py-2 font-mono">
+            <td className="px-3 py-2 font-mono text-right whitespace-nowrap">
               {formatEuro(totMarB)} → {formatEuro(totMarA)}
               <TotDelta value={totMarA - totMarB} currency />
             </td>
