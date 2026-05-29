@@ -29,6 +29,21 @@ describe('resolveParentSku', () => {
     expect(resolveParentSku('PROD-EDITION')).toBe('PROD-EDITION');
   });
 
+  it('e-tennis πραγματικά SKUs από screenshot', () => {
+    expect(resolveParentSku('101479-370-L3')).toBe('101479-370');
+    expect(resolveParentSku('101488-370-L2')).toBe('101488-370');
+    expect(resolveParentSku('WRT106200-case')).toBe('WRT106200-case');
+    expect(resolveParentSku('1041A522-967')).toBe('1041A522-967');
+  });
+
+  it('κόβει επαναληπτικά πολλαπλά variant tokens (configurable parent)', () => {
+    expect(resolveParentSku('101479-370-L3-UNSTRUNG')).toBe('101479-370');
+    expect(resolveParentSku('101488-370-L2-UNSTRUNG')).toBe('101488-370');
+    expect(resolveParentSku('023625-01-BalsamGreen-XXL')).toBe('023625-01-BalsamGreen');
+    expect(resolveParentSku('152002-113')).toBe('152002-113'); // color code, αμετάβλητο
+    expect(resolveParentSku('WRT116200')).toBe('WRT116200');
+  });
+
   it('επιστρέφει το ίδιο SKU όταν δεν υπάρχει parent', () => {
     expect(resolveParentSku('SIMPLE123')).toBe('SIMPLE123');
     expect(hasDerivedParentSku('SIMPLE123')).toBe(false);
