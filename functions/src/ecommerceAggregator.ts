@@ -10,7 +10,7 @@ import * as admin from 'firebase-admin';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import {
-  lineRevenueAndQtyForTopProducts,
+  aggregateOrderLinesForTopProducts,
   shouldSkipMagentoLineForTopProducts,
   filterMagentoLineItemsForTopProducts,
 } from './productLineStats';
@@ -616,20 +616,17 @@ export async function computeEcommerceSummary(brandId: string): Promise<void> {
     }
   }
 
-  // Top products: αγνοεί εντελώς τα demo line items
+  // Top products: αγνοεί εντελώς τα demo line items + ενοποίηση γονικής/παιδικής γραμμής Magento
   const productMap = new Map<string, { name: string; revenue: number; quantity: number }>();
   for (const o of revenueOrders) {
-    const lines = filterMagentoLineItemsForTopProducts(o.platform, o.lineItems);
-    for (const li of lines) {
-      if (isDemoLineItem(li)) continue;
-      const contrib = lineRevenueAndQtyForTopProducts(o.platform, li);
-      if (!contrib) continue;
-      const key = li.sku || li.title || li.name || 'unknown';
-      const name = li.title || li.name || key;
-      const existing = productMap.get(key) || { name, revenue: 0, quantity: 0 };
-      existing.revenue += contrib.revenue;
-      existing.quantity += contrib.quantity;
-      if (!existing.name || existing.name === 'unknown') existing.name = name;
+    const demoFiltered = (o.lineItems || []).filter((li) => !isDemoLineItem(li));
+    const aggregated = aggregateOrderLinesForTopProducts(o.platform, demoFiltered);
+    for (const row of aggregated) {
+      const key = row.sku || 'unknown';
+      const existing = productMap.get(key) || { name: row.name, revenue: 0, quantity: 0 };
+      existing.revenue += row.revenue;
+      existing.quantity += row.quantity;
+      if (!existing.name || existing.name === 'unknown') existing.name = row.name;
       productMap.set(key, existing);
     }
   }

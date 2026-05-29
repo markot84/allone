@@ -40,7 +40,7 @@ import {
 import { Card, CardHeader, KPICard, Tooltip, PageHeader } from '../common';
 import { useEcommerceSummary, type EcommerceTopProduct } from '../../hooks/useEcommerceSummary';
 import { formatCurrencyCompact, formatNumber } from '../../utils/format';
-import { lineRevenueAndQtyForTopProducts, filterMagentoLineItemsForTopProducts } from '../../utils/productLineStats';
+import { aggregateOrderLinesForTopProducts } from '../../utils/productLineStats';
 import { paymentChartLabelForEcommerceOrder } from '../../utils/magentoPaymentChart';
 import { getBrandHistoryStartISO } from '../../utils/brandHistoryStart';
 import type { KPICardData } from '../common/KPICard';
@@ -491,17 +491,15 @@ export function EcommerceDashboard() {
     }
     const productMap = new Map<string, { name: string; revenue: number; quantity: number }>();
     for (const order of revenueOrdersForTables) {
-      const lines = filterMagentoLineItemsForTopProducts(order.platform, order.lineItems);
-      for (const lineItem of lines) {
-        if (isEcommerceDemoLineItem(lineItem)) continue;
-        const contrib = lineRevenueAndQtyForTopProducts(order.platform, lineItem);
-        if (!contrib) continue;
-        const key = String(lineItem.sku || lineItem.title || lineItem.name || 'unknown').trim();
+      const demoFiltered = (order.lineItems || []).filter((li) => !isEcommerceDemoLineItem(li));
+      const aggregated = aggregateOrderLinesForTopProducts(order.platform, demoFiltered);
+      for (const row of aggregated) {
+        const key = row.sku.trim();
         if (!key) continue;
-        const name = String(lineItem.title || lineItem.name || key);
-        const existing = productMap.get(key) || { name, revenue: 0, quantity: 0 };
-        existing.revenue += contrib.revenue;
-        existing.quantity += contrib.quantity;
+        const existing = productMap.get(key) || { name: row.name, revenue: 0, quantity: 0 };
+        existing.revenue += row.revenue;
+        existing.quantity += row.quantity;
+        if (!existing.name) existing.name = row.name;
         productMap.set(key, existing);
       }
     }

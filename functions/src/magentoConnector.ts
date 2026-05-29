@@ -826,6 +826,48 @@ export async function testMagentoConnection(
 }
 
 /**
+ * Εξαγωγή payment info από Magento order. Καλύπτει additional_information ως
+ * array, keyed object («Viva Payment Method» / «Sub-Payment Method» από Stonewave/Viva),
+ * ή string. Κρατάει `paymentInfoRaw` (capped JSON) ώστε να εντοπίζουμε νέα keys χωρίς νέο deploy.
+ */
+function extractMagentoPaymentInfo(payment: unknown): {
+  paymentMethod: string;
+  paymentMethodCode: string;
+  paymentInfoRaw: string;
+} {
+  const p = (payment ?? {}) as Record<string, unknown>;
+  const code = String(p.method ?? '').trim();
+  const ai = p.additional_information;
+
+  const parts: string[] = [];
+  if (Array.isArray(ai)) {
+    for (const v of ai) {
+      if (v == null || v === '') continue;
+      parts.push(typeof v === 'object' ? JSON.stringify(v) : String(v).trim());
+    }
+  } else if (ai && typeof ai === 'object') {
+    for (const [k, v] of Object.entries(ai as Record<string, unknown>)) {
+      if (v == null || v === '' || typeof v === 'object') continue;
+      const val = String(v).trim();
+      if (!val) continue;
+      // Κρατάμε το label (π.χ. «Sub-Payment Method») ώστε το bucketing regex να το πιάνει.
+      parts.push(/payment[\s_-]*method|method[\s_-]*title|viva|sub/i.test(k) ? `${k}: ${val}` : val);
+    }
+  } else if (typeof ai === 'string' && ai.trim()) {
+    parts.push(ai.trim());
+  }
+
+  let paymentInfoRaw = '';
+  try {
+    paymentInfoRaw = JSON.stringify({ method: code, additional_information: ai }).slice(0, 1500);
+  } catch {
+    paymentInfoRaw = '';
+  }
+
+  return { paymentMethod: parts.join(' • '), paymentMethodCode: code, paymentInfoRaw };
+}
+
+/**
  * Fetch Magento orders/products and store in Firestore.
  * First runs backfill history; later runs use updated_at with overlap for status/stock changes.
  * Customer email is stored for audience exports, while `customerEmailHash` is used
@@ -929,7 +971,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
         'searchCriteria[sortOrders][0][direction]': orderSortDirection,
         'searchCriteria[pageSize]': '100',
         'searchCriteria[currentPage]': String(currentPage),
-        'fields': 'items[entity_id,increment_id,store_id,customer_id,customer_email,customer_firstname,customer_lastname,billing_address[email,firstname,lastname],created_at,updated_at,status,grand_total,subtotal,tax_amount,discount_amount,base_grand_total,base_subtotal,base_tax_amount,base_discount_amount,base_currency_code,total_item_count,order_currency_code,shipping_description,payment[method,additional_information],items[item_id,sku,name,qty_ordered,price,product_id,product_type,parent_item_id,row_total,base_row_total]],total_count',
+        'fields': 'items[entity_id,increment_id,store_id,customer_id,customer_email,customer_firstname,customer_lastname,billing_address[email,firstname,lastname],created_at,updated_at,status,grand_total,subtotal,tax_amount,discount_amount,base_grand_total,base_subtotal,base_tax_amount,base_discount_amount,base_currency_code,total_item_count,order_currency_code,shipping_description,payment,items[item_id,sku,name,qty_ordered,price,product_id,product_type,parent_item_id,row_total,base_row_total]],total_count',
       });
       if (!syncAllStores && Number.isFinite(storeId) && storeId > 0) {
         searchParams.set('searchCriteria[filter_groups][1][filters][0][field]', 'store_id');
@@ -952,12 +994,8 @@ export async function fetchMagentoData(brandId: string): Promise<{
       const pageOrderItems: { id: string; data: Record<string, unknown> }[] = [];
 
       for (const o of orders) {
-        const paymentAdditionalInfo = Array.isArray(o.payment?.additional_information)
-          ? o.payment.additional_information.filter(Boolean).join(' • ')
-          : typeof o.payment?.additional_information === 'string'
-            ? o.payment.additional_information
-            : '';
-        const paymentMethodCode = String(o.payment?.method || '').trim();
+        const { paymentMethod: paymentAdditionalInfo, paymentMethodCode, paymentInfoRaw } =
+          extractMagentoPaymentInfo(o.payment);
         const magCid =
           o.customer_id != null && String(o.customer_id) !== '0' && String(o.customer_id) !== ''
             ? String(o.customer_id)
@@ -1000,6 +1038,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
             currency: o.order_currency_code || 'EUR',
             paymentMethod: paymentAdditionalInfo || paymentMethodCode || '',
             ...(paymentMethodCode ? { paymentMethodCode } : {}),
+            ...(paymentInfoRaw ? { paymentInfoRaw } : {}),
             shippingMethod: normalizeMagentoShippingDescription(o.shipping_description || ''),
             magentoStoreId: Number.isFinite(Number(o.store_id)) ? Number(o.store_id) : null,
             orderStoreDomain: (() => {
