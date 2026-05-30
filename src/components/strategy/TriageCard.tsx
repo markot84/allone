@@ -47,7 +47,7 @@ const GROUP_TAB_LABEL: Record<BucketGroupId, string> = {
 const GROUP_TAB_PILL: Record<BucketGroupId, string> = {
   critical: 'bg-rose-100 text-rose-900 ring-1 ring-rose-200/70 hover:bg-rose-200/60',
   opportunity: 'bg-emerald-100 text-emerald-900 ring-1 ring-emerald-200/70 hover:bg-emerald-200/55',
-  watch: 'bg-amber-100 text-amber-950 ring-1 ring-amber-200/70 hover:bg-amber-200/50',
+  watch: 'bg-orange-100 text-orange-900 ring-1 ring-orange-200/70 hover:bg-orange-200/55',
   investigate: 'bg-slate-100 text-slate-800 ring-1 ring-slate-200/80 hover:bg-slate-200/55',
 };
 
@@ -110,12 +110,12 @@ const GROUP_BRIDGE: Record<
     btnClass: 'bg-[#059669] hover:bg-[#047857]',
   },
   watch: {
-    shell: 'rounded-lg border border-[#FCD34D] bg-[#FFFBEB]',
-    iconClass: 'text-[#D97706]',
-    titleClass: 'text-[#92400E]',
-    subtitleClass: 'text-[#78350F]/90',
-    metricsClass: 'text-[#78350F]/85',
-    btnClass: 'bg-[#D97706] hover:bg-[#B45309]',
+    shell: 'rounded-lg border border-[#FED7AA] bg-[#FFF7ED]',
+    iconClass: 'text-[#EA580C]',
+    titleClass: 'text-[#9A3412]',
+    subtitleClass: 'text-[#7C2D12]/90',
+    metricsClass: 'text-[#9A3412]/85',
+    btnClass: 'bg-[#F97316] hover:bg-[#EA580C]',
   },
   investigate: {
     shell: 'rounded-lg border border-[#CBD5E1] bg-[#F8FAFC]',
@@ -260,8 +260,6 @@ export function TriageCard({ products: scopedProducts, onSelectPolicy }: TriageC
   const [showDocumentation, setShowDocumentation] = useState(false);
   const [viewAllBucket, setViewAllBucket] = useState<BucketId | null>(null);
   const [insufficientSignalsExpanded, setInsufficientSignalsExpanded] = useState(false);
-  /** false = συμπαγής γραμμή (~1/4 ύψους), true = πλήρης κεφαλίδα + στατιστικά. */
-  const [headerSummaryExpanded, setHeaderSummaryExpanded] = useState(false);
   const productScopeLabel = scopedProducts ? 'στο snapshot αξιολόγησης' : 'στον κατάλογο';
 
   // Data availability — για empty state checklist
@@ -302,12 +300,6 @@ export function TriageCard({ products: scopedProducts, onSelectPolicy }: TriageC
     }
     return out;
   }, [assignments]);
-
-  /** Μοναδικά SKU με ≥1 bucket (το άθροισμα counts ανά bucket μπορεί να είναι μεγαλύτερο). */
-  const skusWithAnyBucket = useMemo(
-    () => assignments.filter((a) => a.buckets.length > 0).length,
-    [assignments]
-  );
 
   // ── LOADING STATE ─────────────────────────────────────────────────
   if (isLoading) {
@@ -384,116 +376,47 @@ export function TriageCard({ products: scopedProducts, onSelectPolicy }: TriageC
     <div className="rounded-xl border border-[#E5E7EB] bg-gradient-to-br from-[#FAFAFA] to-white overflow-hidden shadow-sm">
       {/* HEADER — ίδιο pattern με Product Intelligence bridge */}
       <div className="border-b border-[#E8E8E8] bg-white">
-        {!headerSummaryExpanded ? (
-          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 px-3 py-2 sm:px-4 sm:py-2.5">
-            <button
-              type="button"
-              aria-expanded={false}
-              aria-label="Ανάπτυξη κεφαλίδας διάγνωσης"
-              onClick={() => setHeaderSummaryExpanded(true)}
-              className="shrink-0 rounded-md p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-800"
-            >
-              <ChevronRight size={16} strokeWidth={2.25} />
-            </button>
-            <div className="shrink-0 p-1 rounded-lg bg-[#7C3AED]/10">
-              <Target size={14} className="text-[#7C3AED]" aria-hidden />
-            </div>
-            <span className="shrink-0 text-sm font-bold tracking-tight text-[#111827] sm:text-base">
-              Εμπορικές Προτεραιότητες
-            </span>
-            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1 sm:justify-center">
-              {visibleGroups.map((g) => {
-                const groupCount = g.activeBuckets.reduce((s, b) => s + counts[b], 0);
-                return (
-                  <button
-                    key={g.id}
-                    type="button"
-                    onClick={() => scrollToGroup(g.id)}
-                    className={`inline-flex max-w-full items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-semibold tabular-nums transition-colors ${GROUP_TAB_PILL[g.id]}`}
-                    title={`${g.label}: ${groupCount.toLocaleString('el-GR')} SKU`}
-                  >
-                    <span>{GROUP_TAB_LABEL[g.id]}</span>
-                    <span className="opacity-90">{groupCount.toLocaleString('el-GR')}</span>
-                  </button>
-                );
-              })}
-            </div>
-            <span className="hidden shrink-0 text-[10px] tabular-nums text-gray-500 md:inline">
-              {totalProducts.toLocaleString('el-GR')} SKU
-              <span className="mx-1 text-gray-300">·</span>
-              {fmtEur(totalTiedCapital)}
-            </span>
-            <button
-              type="button"
-              onClick={() => {
-                setHeaderSummaryExpanded(true);
-                setShowDocumentation(true);
-              }}
-              className="ml-auto shrink-0 inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 hover:bg-slate-100"
-              title="Τεκμηρίωση προτεραιοτήτων και σήματα αξιολόγησης"
-            >
-              <HelpCircle size={12} className="text-slate-500" />
-              <span className="hidden sm:inline">Τεκμ.</span>
-            </button>
+        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 px-3 py-2 sm:px-4 sm:py-2.5">
+          <div className="shrink-0 p-1 rounded-lg bg-[#7C3AED]/10">
+            <Target size={14} className="text-[#7C3AED]" aria-hidden />
           </div>
-        ) : (
-          <div className="px-4 py-3 sm:px-4 sm:py-3">
-            <div className="flex items-start gap-2">
-              <button
-                type="button"
-                aria-expanded
-                aria-label="Σύμπτυξη κεφαλίδας"
-                onClick={() => {
-                  setHeaderSummaryExpanded(false);
-                  setShowDocumentation(false);
-                }}
-                className="shrink-0 rounded-md p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-800 mt-0.5"
-              >
-                <ChevronUp size={16} strokeWidth={2.25} />
-              </button>
-              <div className="shrink-0 p-1.5 rounded-lg bg-[#7C3AED]/10 mt-0.5">
-                <Target size={16} className="text-[#7C3AED]" aria-hidden />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <h3 className="text-sm font-bold text-[#111827] sm:text-base">Εμπορικές Προτεραιότητες</h3>
-                  <button
-                    type="button"
-                    onClick={() => setShowDocumentation((s) => !s)}
-                    className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-700 hover:bg-slate-100 sm:text-[11px]"
-                    title="Προβολή τεκμηρίωσης και σημάτων αξιολόγησης"
-                  >
-                    Τεκμηρίωση &amp; σήματα
-                    {showDocumentation ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                  </button>
-                </div>
-                <div className="mt-0.5 text-[10px] text-gray-500 sm:text-[11px]">
-                  {totalProducts.toLocaleString('el-GR')} SKUs {productScopeLabel}
-                  {' · '}
-                  {skusWithAnyBucket.toLocaleString('el-GR')} με κατηγορία παρακάτω
-                  {' · '}
-                  δεσμευμένα (άθροισμα): <strong className="text-gray-700">{fmtEur(totalTiedCapital)}</strong>
-                </div>
-                <div className="mt-1.5 flex flex-wrap gap-1">
-                  {visibleGroups.map((g) => {
-                    const groupCount = g.activeBuckets.reduce((s, b) => s + counts[b], 0);
-                    return (
-                      <button
-                        key={g.id}
-                        type="button"
-                        onClick={() => scrollToGroup(g.id)}
-                        className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-semibold tabular-nums transition-colors ${GROUP_TAB_PILL[g.id]}`}
-                      >
-                        {GROUP_TAB_LABEL[g.id]}
-                        <span className="font-bold opacity-90">{groupCount.toLocaleString('el-GR')}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
+          <span className="shrink-0 text-sm font-bold tracking-tight text-[#111827] sm:text-base">
+            Εμπορικές Προτεραιότητες
+          </span>
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1 sm:justify-center">
+            {visibleGroups.map((g) => {
+              const groupCount = g.activeBuckets.reduce((s, b) => s + counts[b], 0);
+              return (
+                <button
+                  key={g.id}
+                  type="button"
+                  onClick={() => scrollToGroup(g.id)}
+                  className={`inline-flex max-w-full items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-semibold tabular-nums transition-colors ${GROUP_TAB_PILL[g.id]}`}
+                  title={`${g.label}: ${groupCount.toLocaleString('el-GR')} SKU`}
+                >
+                  <span>{GROUP_TAB_LABEL[g.id]}</span>
+                  <span className="opacity-90">{groupCount.toLocaleString('el-GR')}</span>
+                </button>
+              );
+            })}
           </div>
-        )}
+          <span className="hidden shrink-0 text-[10px] tabular-nums text-gray-500 md:inline">
+            {totalProducts.toLocaleString('el-GR')} SKU
+            <span className="mx-1 text-gray-300">·</span>
+            {fmtEur(totalTiedCapital)}
+          </span>
+          <button
+            type="button"
+            onClick={() => setShowDocumentation((s) => !s)}
+            aria-expanded={showDocumentation}
+            className="ml-auto shrink-0 inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 hover:bg-slate-100"
+            title="Τεκμηρίωση προτεραιοτήτων και σήματα αξιολόγησης"
+          >
+            <HelpCircle size={12} className="text-slate-500" />
+            <span className="hidden sm:inline">Τεκμ.</span>
+            {showDocumentation ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+          </button>
+        </div>
       </div>
 
       {showDocumentation && (
