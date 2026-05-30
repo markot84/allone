@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import { ArrowLeft, ArrowRight, BarChart3, Boxes, Brain, CheckCircle2, ClipboardCheck, Database, ExternalLink, Gauge, HelpCircle, Layers3, Mail, Megaphone, PackageCheck, Phone, ShieldCheck, ShoppingBag, Store, TrendingUp, Upload } from 'lucide-react';
 import { InterestForm } from './InterestForm';
 import { PerformancePlusLogo } from '../common';
+import { useGoogleTagManager } from '../../hooks/useGoogleTagManager';
 
 type LandingVariant = 'ceo' | 'ops';
 
@@ -380,6 +381,9 @@ export function MarketingIndexPage({
 }: MarketingIndexPageProps) {
   const copy = variantCopy[variant];
   void _onVariantChange;
+
+  // GTM φορτώνει ΜΟΝΟ στη marketing/landing σελίδα — όχι στις σελίδες της εφαρμογής.
+  useGoogleTagManager();
 
   const scrollRef = useRef<HTMLDivElement>(null);
 

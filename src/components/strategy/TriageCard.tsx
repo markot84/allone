@@ -550,6 +550,7 @@ export function TriageCard({ products: scopedProducts, onSelectPolicy }: TriageC
           const GroupIcon = style.icon;
           const groupTied = group.activeBuckets.reduce((s, b) => s + tiedByBucket[b], 0);
           const groupCount = group.activeBuckets.reduce((s, b) => s + counts[b], 0);
+          const soleBucket = group.activeBuckets.length === 1 ? group.activeBuckets[0] : null;
           if (group.id === 'investigate' && !insufficientSignalsExpanded) {
             return (
               <button
@@ -583,31 +584,34 @@ export function TriageCard({ products: scopedProducts, onSelectPolicy }: TriageC
               key={group.id}
               className={`scroll-mt-3 ${group.id === 'investigate' ? 'md:col-span-2' : ''} ${bridge.shell} p-3 flex flex-col gap-2 h-full`}
             >
-              <div className="flex items-start gap-2">
-                <GroupIcon size={18} className={`${bridge.iconClass} shrink-0 mt-0.5`} aria-hidden />
-                <div className="min-w-0 flex-1">
-                  <p className={`text-xs font-semibold ${bridge.titleClass}`}>{group.label}</p>
-                  <p className={`text-[11px] mt-0.5 leading-snug ${bridge.metricsClass}`}>
-                    <span className="font-medium tabular-nums">{groupCount.toLocaleString('el-GR')}</span>
-                    <span> SKU</span>
-                    {groupTied > 0 && (
-                      <>
-                        <span className="mx-1 opacity-60">·</span>
-                        <span className="tabular-nums">{fmtEur(groupTied)} δεσμ.</span>
-                      </>
-                    )}
-                  </p>
-                  <p className={`text-[11px] leading-snug mt-0.5 ${bridge.subtitleClass}`}>{group.subtitle}</p>
+              <div className="flex items-start gap-2.5">
+                <div className={`shrink-0 mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-lg bg-white/70 ${bridge.iconClass}`}>
+                  <GroupIcon size={16} aria-hidden />
                 </div>
-                {group.id === 'investigate' && (
-                  <button
-                    type="button"
-                    onClick={() => setInsufficientSignalsExpanded(false)}
-                    className="shrink-0 rounded-md border border-slate-200 bg-white/70 px-2 py-1 text-[10px] font-medium text-slate-600 hover:bg-white"
-                  >
-                    Σύμπτυξη
-                  </button>
-                )}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className={`min-w-0 flex-1 truncate text-[13px] font-semibold ${bridge.titleClass}`}>{group.label}</p>
+                    <span className={`shrink-0 inline-flex items-center gap-1 rounded-md bg-white/70 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${bridge.metricsClass}`}>
+                      <span>{groupCount.toLocaleString('el-GR')} SKU</span>
+                      {groupTied > 0 && (
+                        <>
+                          <span className="opacity-40">·</span>
+                          <span>{fmtEur(groupTied)}</span>
+                        </>
+                      )}
+                    </span>
+                    {group.id === 'investigate' && (
+                      <button
+                        type="button"
+                        onClick={() => setInsufficientSignalsExpanded(false)}
+                        className="shrink-0 rounded-md border border-slate-200 bg-white/70 px-2 py-0.5 text-[10px] font-medium text-slate-600 hover:bg-white"
+                      >
+                        Σύμπτυξη
+                      </button>
+                    )}
+                  </div>
+                  <p className={`text-[11px] leading-snug mt-1 ${bridge.subtitleClass}`}>{group.subtitle}</p>
+                </div>
               </div>
 
               {group.id === 'investigate' && counts.new_or_unknown > 0 && (
@@ -620,61 +624,76 @@ export function TriageCard({ products: scopedProducts, onSelectPolicy }: TriageC
                 />
               )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 min-[1100px]:grid-cols-3 gap-2 pt-1 border-t border-black/[0.06]">
-                {group.activeBuckets.map((b) => {
-                  const def = defs[b];
-                  const Icon = ICONS[b];
-                  const colors = BUCKET_COLOR[b];
-                  const count = counts[b];
-                  const tied = tiedByBucket[b];
-                  const isOpen = expanded === b;
-                  const tiedShare = totalTiedCapital > 0 ? Math.min(100, Math.round((tied / totalTiedCapital) * 100)) : 0;
-                  const soleInGroup = group.activeBuckets.length === 1;
-
+              {soleBucket ? (
+                /* Single-bucket ομάδα: ο τίτλος+subtitle ήδη περιγράφουν το bucket — απλό disclosure χωρίς επανάληψη ετικέτας. */
+                (() => {
+                  const isOpen = expanded === soleBucket;
+                  const tied = tiedByBucket[soleBucket];
                   return (
                     <button
-                      key={b}
-                      onClick={() => setExpanded(isOpen ? null : b)}
-                      className={`text-left rounded-lg border bg-white border-gray-200/90 px-2.5 py-2 min-h-[84px] transition-all hover:border-gray-300 hover:shadow-sm ${
-                        isOpen ? `ring-1 ${colors.ring} border-gray-300` : ''
-                      }`}
+                      type="button"
+                      onClick={() => setExpanded(isOpen ? null : soleBucket)}
+                      className="flex w-full items-center justify-between gap-2 rounded-lg border border-black/[0.07] bg-white/70 px-2.5 py-1.5 text-left transition-colors hover:bg-white"
                     >
-                      <div className={`flex items-start gap-1.5 mb-1 ${soleInGroup ? '' : 'justify-between'}`}>
-                        <div className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded ${colors.bg}`}>
-                          <Icon size={11} className={colors.text} />
-                          <span className={`text-[9px] font-semibold ${colors.text} uppercase tracking-wide`}>
-                            {def.shortLabel}
-                          </span>
-                        </div>
-                        {!soleInGroup && (
-                          <span className="text-sm font-bold text-gray-900 leading-none tabular-nums">{count}</span>
-                        )}
-                      </div>
-                      <div className="text-[11px] font-semibold text-gray-800 leading-snug line-clamp-2">{def.label}</div>
-                      {!soleInGroup && tied > 0 && (
-                        <>
-                          <div className="text-[10px] text-gray-500 mt-1.5">
-                            {fmtEur(tied)} στο scope · {tiedShare}% της συνολικής αξίας
-                          </div>
-                          <div className="mt-1 h-1 rounded-full bg-gray-100 overflow-hidden">
-                            <div
-                              className={`h-full ${colors.bg} rounded-full`}
-                              style={{ width: `${Math.max(2, tiedShare)}%`, opacity: 0.8 }}
-                            />
-                          </div>
-                        </>
-                      )}
-                      <div className="mt-2 inline-flex items-center gap-1 text-[10px] font-medium text-gray-500">
-                        <ChevronDown
-                          size={10}
-                          className={`transition-transform ${isOpen ? 'rotate-180' : ''}`}
-                        />
-                        {isOpen ? 'Κλείσιμο' : 'Ανάλυση'}
-                      </div>
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-gray-700">
+                        {isOpen ? 'Κλείσιμο ανάλυσης' : 'Ανάλυση ανά SKU'}
+                        {tied > 0 && <span className="text-gray-400">· {fmtEur(tied)} δεσμ.</span>}
+                      </span>
+                      <ChevronDown size={13} className={`shrink-0 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                     </button>
                   );
-                })}
-              </div>
+                })()
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 min-[1100px]:grid-cols-3 gap-2 pt-1 border-t border-black/[0.06]">
+                  {group.activeBuckets.map((b) => {
+                    const def = defs[b];
+                    const Icon = ICONS[b];
+                    const colors = BUCKET_COLOR[b];
+                    const count = counts[b];
+                    const tied = tiedByBucket[b];
+                    const isOpen = expanded === b;
+                    const tiedShare = totalTiedCapital > 0 ? Math.min(100, Math.round((tied / totalTiedCapital) * 100)) : 0;
+
+                    return (
+                      <button
+                        key={b}
+                        onClick={() => setExpanded(isOpen ? null : b)}
+                        className={`text-left rounded-lg border bg-white border-gray-200/90 px-2.5 py-2 transition-all hover:border-gray-300 hover:shadow-sm ${
+                          isOpen ? `ring-1 ${colors.ring} border-gray-300` : ''
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span className={`inline-flex h-5 w-5 items-center justify-center rounded ${colors.bg} ${colors.text} shrink-0`}>
+                            <Icon size={12} />
+                          </span>
+                          <span className="min-w-0 flex-1 text-[11px] font-semibold text-gray-800 leading-tight line-clamp-2">{def.label}</span>
+                          <span className="shrink-0 text-sm font-bold text-gray-900 leading-none tabular-nums">{count}</span>
+                        </div>
+                        {tied > 0 && (
+                          <>
+                            <div className="text-[10px] text-gray-500 mt-1.5">
+                              {fmtEur(tied)} · {tiedShare}% αξίας
+                            </div>
+                            <div className="mt-1 h-1 rounded-full bg-gray-100 overflow-hidden">
+                              <div
+                                className={`h-full ${colors.bg} rounded-full`}
+                                style={{ width: `${Math.max(2, tiedShare)}%`, opacity: 0.8 }}
+                              />
+                            </div>
+                          </>
+                        )}
+                        <div className="mt-2 inline-flex items-center gap-1 text-[10px] font-medium text-gray-500">
+                          <ChevronDown
+                            size={10}
+                            className={`transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                          />
+                          {isOpen ? 'Κλείσιμο' : 'Ανάλυση'}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
 
               {/* EXPANDED PANEL — πριν το κύριο CTA ώστε η λεπτομέρεια να πέφτει πάνω στο κουμπί */}
               {expanded && group.activeBuckets.includes(expanded) && (
