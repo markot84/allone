@@ -25,6 +25,17 @@ const VERDICT_BADGE: Record<ScenarioVerdict, 'success' | 'danger' | 'warning' | 
   insufficient: 'default',
 };
 
+// Marketing: το verdict είναι ΣΥΣΤΑΣΗ βάσει attributed ROAS (όχι «μεταβολή» όπως στις Τιμές).
+const VERDICT_LABEL_MARKETING: Record<ScenarioVerdict, string> = {
+  positive: 'Ενίσχυση',
+  negative: 'Περιορισμός',
+  neutral: 'Διατήρηση',
+  insufficient: 'Λίγα δεδομένα',
+};
+
+const MARKETING_VERDICT_HELP =
+  'Σύσταση βάσει αποδιδόμενου ROAS: Ενίσχυση ≥3x · Διατήρηση 1.5–3x · Περιορισμός <1.5x.';
+
 const TABS: { key: ScenarioTab; label: string; icon: ReactNode }[] = [
   { key: 'price', label: 'Τιμές', icon: <Tag size={14} /> },
   { key: 'marketing', label: 'Marketing spend', icon: <Megaphone size={14} /> },
@@ -135,7 +146,7 @@ export function CommercialScenarioPanels({
       {activeTab === 'price' && data.price && <ScenarioKpis summary={data.price.summary} filter={filter} onFilterChange={setFilter} />}
       {activeTab === 'marketing' && data.marketing && <MarketingKpis summary={data.marketing.summary} />}
 
-      <FilterChips filter={filter} onChange={setFilter} />
+      <FilterChips filter={filter} onChange={setFilter} tab={activeTab} />
 
       {data.isLoading ? (
         <div className="py-8">
@@ -198,17 +209,24 @@ function isActionableRow<T extends { verdict: ScenarioVerdict; confidence?: stri
   return row.confidence == null || row.confidence !== 'low';
 }
 
-function FilterChips({ filter, onChange }: { filter: ImpactFilter; onChange: (f: ImpactFilter) => void }) {
-  return (
-    <div className="mb-3 flex flex-wrap gap-2">
-      {(
-        [
+function FilterChips({ filter, onChange, tab }: { filter: ImpactFilter; onChange: (f: ImpactFilter) => void; tab: ScenarioTab }) {
+  const chips: ReadonlyArray<readonly [ImpactFilter, string]> =
+    tab === 'marketing'
+      ? [
+          ['all', 'Με σύσταση'],
+          ['positive', 'Ενίσχυση'],
+          ['negative', 'Περιορισμός'],
+          ['neutral', 'Διατήρηση'],
+        ]
+      : [
           ['all', 'Με ουσιαστική μεταβολή'],
           ['positive', 'Θετικά'],
           ['negative', 'Αρνητικά'],
           ['neutral', 'Ουδέτερα'],
-        ] as const
-      ).map(([key, label]) => (
+        ];
+  return (
+    <div className="mb-3 flex flex-wrap gap-2">
+      {chips.map(([key, label]) => (
         <button
           key={key}
           type="button"
@@ -479,11 +497,12 @@ function TotDelta({ value, currency }: { value: number; currency?: boolean }) {
   );
 }
 
-function VerdictCell({ verdict }: { verdict: ScenarioVerdict; confidence?: string }) {
+function VerdictCell({ verdict, tab }: { verdict: ScenarioVerdict; confidence?: string; tab?: ScenarioTab }) {
+  const label = tab === 'marketing' ? VERDICT_LABEL_MARKETING[verdict] : VERDICT_LABEL[verdict];
   return (
     <td className="px-3 py-2 text-center">
       <Badge variant={VERDICT_BADGE[verdict]} size="sm">
-        {VERDICT_LABEL[verdict]}
+        {label}
       </Badge>
     </td>
   );
@@ -620,7 +639,9 @@ function MarketingTable({ rows }: { rows: MarketingSpendImpactRow[] }) {
           <th className="px-3 py-2 text-right">
             <Tooltip content="Εκτίμηση καθαρού κέρδους: αποδιδόμενος τζίρος × μικτό περιθώριο store − ad spend.">Καθαρό κέρδος</Tooltip>
           </th>
-          <th className="px-3 py-2 text-center">Επίδραση</th>
+          <th className="px-3 py-2 text-center">
+            <Tooltip content={MARKETING_VERDICT_HELP}>Σύσταση</Tooltip>
+          </th>
         </tr>
       </thead>
       <tbody className="divide-y divide-[#E5E7EB]">
@@ -639,7 +660,7 @@ function MarketingTable({ rows }: { rows: MarketingSpendImpactRow[] }) {
             <td className={`px-3 py-2 font-mono text-xs text-right ${
               row.netProfit == null ? 'text-[#9CA3AF]' : row.netProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
             }`}>{row.netProfit != null ? formatEuro(row.netProfit) : '—'}</td>
-            <VerdictCell verdict={row.verdict} />
+            <VerdictCell verdict={row.verdict} tab="marketing" />
           </tr>
         ))}
       </tbody>
