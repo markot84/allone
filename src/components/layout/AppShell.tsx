@@ -724,7 +724,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
 
   return (
     <>
-      <PrimerHeader style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', backgroundColor: '#111111' }} className="min-w-0">
+      <PrimerHeader style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', backgroundColor: 'var(--app-chrome-bg, #111111)' }} className="min-w-0">
         <PrimerHeader.Item className="min-w-0 shrink-0">
           <Button
             variant="ghost"
@@ -817,7 +817,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
               borderRight: '1px solid rgba(255,255,255,0.08)',
               overflowY: 'auto',
               overflowX: 'hidden',
-              backgroundColor: '#111111',
+              backgroundColor: 'var(--app-chrome-bg, #111111)',
               display: 'flex',
               flexDirection: 'column'
             }}
@@ -896,7 +896,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
               bottom: 0,
               width: 280,
               maxWidth: '80vw',
-              backgroundColor: '#111111',
+              backgroundColor: 'var(--app-chrome-bg, #111111)',
               borderRight: '1px solid rgba(255,255,255,0.08)',
               zIndex: 1000,
               display: 'flex',

@@ -22,10 +22,13 @@
   --nts-accent-hover: #EA580C;
   --nts-accent-light: #FFEDD5;
 
-  /* Accent (legacy – links) */
-  --nts-orange: #0969da;
-  --nts-orange-hover: #0550ae;
-  --nts-orange-light: #ddf4ff;
+  /* Links / active-nav — δεμένο με το accent ώστε όλο το ύφος να ακολουθεί το theme */
+  --nts-orange: #F97316;
+  --nts-orange-hover: #EA580C;
+  --nts-orange-light: #FFEDD5;
+
+  /* App chrome (header + sidebar) — tinted dark ανά accent */
+  --app-chrome-bg: #14110d;
   
   /* Semantic Colors */
   --success: #22C55E;
@@ -56,26 +59,46 @@
   --nts-accent: #2563EB;
   --nts-accent-hover: #1D4ED8;
   --nts-accent-light: #DBEAFE;
+  --nts-orange: #2563EB;
+  --nts-orange-hover: #1D4ED8;
+  --nts-orange-light: #DBEAFE;
+  --app-chrome-bg: #0e1726;
 }
 :root[data-accent="violet"] {
   --nts-accent: #7C3AED;
   --nts-accent-hover: #6D28D9;
   --nts-accent-light: #EDE9FE;
+  --nts-orange: #7C3AED;
+  --nts-orange-hover: #6D28D9;
+  --nts-orange-light: #EDE9FE;
+  --app-chrome-bg: #150f24;
 }
 :root[data-accent="emerald"] {
   --nts-accent: #059669;
   --nts-accent-hover: #047857;
   --nts-accent-light: #D1FAE5;
+  --nts-orange: #059669;
+  --nts-orange-hover: #047857;
+  --nts-orange-light: #D1FAE5;
+  --app-chrome-bg: #0a1813;
 }
 :root[data-accent="teal"] {
   --nts-accent: #0D9488;
   --nts-accent-hover: #0F766E;
   --nts-accent-light: #CCFBF1;
+  --nts-orange: #0D9488;
+  --nts-orange-hover: #0F766E;
+  --nts-orange-light: #CCFBF1;
+  --app-chrome-bg: #0a1a19;
 }
 :root[data-accent="rose"] {
   --nts-accent: #E11D48;
   --nts-accent-hover: #BE123C;
   --nts-accent-light: #FFE4E6;
+  --nts-orange: #E11D48;
+  --nts-orange-hover: #BE123C;
+  --nts-orange-light: #FFE4E6;
+  --app-chrome-bg: #1d0d13;
 }
 
 /* IMPORTANT: Do NOT zero out margins/paddings globally when using Primer.
