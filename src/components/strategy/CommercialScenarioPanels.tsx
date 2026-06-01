@@ -602,7 +602,11 @@ function PriceTable({ rows, limit, getThumbnailUrl, stockBySku }: { rows: PriceC
         <tr>
           <th className="px-3 py-2 text-left">SKU</th>
           <th className="px-3 py-2 text-left">Τιμή</th>
-          <th className="px-3 py-2 text-right">Πωληθέντα Τεμ.</th>
+          <th className="px-3 py-2 text-right">
+            <Tooltip content="Τεμάχια πριν → μετά την αλλαγή. Η ένδειξη «απόθ.» δείχνει το διαθέσιμο απόθεμα όπου υπάρχει στοιχείο (e-shop products ή ERP/Megaventory). «απόθ. —» = δεν υπάρχει καταγραφή αποθέματος, ΔΕΝ σημαίνει ότι υπάρχει στοκ.">
+              Πωληθέντα Τεμ.
+            </Tooltip>
+          </th>
           <th className="px-3 py-2 text-right">Τζίρος</th>
           {showMargin && <th className="px-3 py-2 text-right">Margin</th>}
           <th className="px-3 py-2 text-center">Επίδραση</th>
@@ -631,7 +635,10 @@ function PriceTable({ rows, limit, getThumbnailUrl, stockBySku }: { rows: PriceC
               {formatNumber(row.before.qty)} → {formatNumber(row.after.qty)}
               {stockBySku && (() => {
                 const stock = stockBySku.get(row.sku.toUpperCase());
-                if (stock == null) return null;
+                // null = δεν υπάρχει καταγραφή αποθέματος → «—» (διφορούμενο το να μην εμφανίζεται τίποτα).
+                if (stock == null) {
+                  return <p className="text-[10px] text-[#D1D5DB]">απόθ. —</p>;
+                }
                 const color = stock === 0 ? 'text-rose-500' : stock < 5 ? 'text-amber-500' : 'text-[#9CA3AF]';
                 return <p className={`text-[10px] ${color}`}>απόθ. {formatNumber(stock)}</p>;
               })()}
