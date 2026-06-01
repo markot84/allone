@@ -49,6 +49,35 @@
   --lost: #EF4444;
 }
 
+/* ── Accent themes (per-user, μέσω data-accent στο <html>) ──────────────────────
+   Override μόνο του accent family. Τα semantic χρώματα (success/danger/warning)
+   παραμένουν αμετάβλητα ώστε να μη χαλάει η ανάγνωση δεδομένων/charts. */
+:root[data-accent="blue"] {
+  --nts-accent: #2563EB;
+  --nts-accent-hover: #1D4ED8;
+  --nts-accent-light: #DBEAFE;
+}
+:root[data-accent="violet"] {
+  --nts-accent: #7C3AED;
+  --nts-accent-hover: #6D28D9;
+  --nts-accent-light: #EDE9FE;
+}
+:root[data-accent="emerald"] {
+  --nts-accent: #059669;
+  --nts-accent-hover: #047857;
+  --nts-accent-light: #D1FAE5;
+}
+:root[data-accent="teal"] {
+  --nts-accent: #0D9488;
+  --nts-accent-hover: #0F766E;
+  --nts-accent-light: #CCFBF1;
+}
+:root[data-accent="rose"] {
+  --nts-accent: #E11D48;
+  --nts-accent-hover: #BE123C;
+  --nts-accent-light: #FFE4E6;
+}
+
 /* IMPORTANT: Do NOT zero out margins/paddings globally when using Primer.
    It breaks spacing + component layout. Keep only box-sizing. */
 *, *::before, *::after {

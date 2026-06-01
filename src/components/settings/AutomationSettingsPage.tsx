@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Zap, Lock, Bell, BellOff, Save, AlertTriangle, CheckCircle2, Info, X } from 'lucide-react';
+import { Zap, Lock, Bell, BellOff, Save, AlertTriangle, CheckCircle2, Info, X, Palette, Check } from 'lucide-react';
 import { Card, Button, Spinner, useToast, EnterpriseBadge, PageHeader } from '../common';
+import { ACCENT_PRESETS, readStoredAccent, setStoredAccent, type AccentId } from '../../theme/accentTheme';
 import { useAutomationSettings, useAutomationAlerts } from '../../hooks/useAutomation';
 import { usePlan } from '../../hooks/usePlan';
 import { useBrand } from '../../hooks/useBrand';
@@ -24,6 +25,12 @@ export function AutomationSettingsPage() {
   const [triggers, setTriggers] = useState<Record<string, TriggerConfig>>({});
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [accent, setAccent] = useState<AccentId>(() => readStoredAccent());
+
+  const handleAccentChange = (id: AccentId) => {
+    setStoredAccent(id);
+    setAccent(id);
+  };
 
   useEffect(() => {
     if (settings?.triggers) {
@@ -98,6 +105,47 @@ export function AutomationSettingsPage() {
           ) : null
         }
       />
+
+      {/* Appearance — per-user accent (localStorage) */}
+      <Card padding="none">
+        <div className="flex items-center gap-2 border-b border-[#F3F4F6] px-5 py-3.5">
+          <Palette size={16} className="shrink-0 text-[var(--nts-accent)]" />
+          <h2 className="text-sm font-semibold text-[#111827]">Εμφάνιση</h2>
+        </div>
+        <div className="px-5 py-4">
+          <p className="mb-3 text-xs text-[#6B7280]">
+            Χρώμα έμφασης της εφαρμογής. Αποθηκεύεται στον δικό σου browser.
+          </p>
+          <div className="flex flex-wrap gap-2.5">
+            {ACCENT_PRESETS.map((preset) => {
+              const selected = accent === preset.id;
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => handleAccentChange(preset.id)}
+                  aria-pressed={selected}
+                  title={preset.label}
+                  className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-medium transition-all ${
+                    selected
+                      ? 'border-[#111827]/30 bg-[#F9FAFB] ring-2 ring-offset-1'
+                      : 'border-[#E5E7EB] hover:border-[#D1D5DB]'
+                  }`}
+                  style={selected ? ({ '--tw-ring-color': preset.swatch } as React.CSSProperties) : undefined}
+                >
+                  <span
+                    className="flex h-5 w-5 items-center justify-center rounded-full shadow-sm"
+                    style={{ backgroundColor: preset.swatch }}
+                  >
+                    {selected && <Check size={12} className="text-white" />}
+                  </span>
+                  {preset.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </Card>
 
       {/* Active Alerts */}
       {newAlerts.length > 0 && (
