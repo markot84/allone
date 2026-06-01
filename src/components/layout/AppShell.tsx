@@ -11,6 +11,7 @@ import { useModules } from '../../hooks/useModules';
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import type { AppSectionId, Brand } from '../../types';
 import { getModuleIdForSection } from '../../config/modules';
+import { ACCENT_PRESETS, readStoredAccent, setStoredAccent, type AccentId } from '../../theme/accentTheme';
 import {
   GearIcon,
   GraphIcon,
@@ -193,6 +194,7 @@ function AccountMenu({
   const [showSetPassword, setShowSetPassword] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [linkMsg, setLinkMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [accent, setAccent] = useState<AccentId>(() => readStoredAccent());
 
   useEffect(() => {
     if (isOpen && btnRef.current) {
@@ -278,6 +280,45 @@ function AccountMenu({
                 {hasGoogleProvider && (
                   <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 10, background: 'rgba(66,133,244,0.1)', color: '#4285F4' }}>Google</span>
                 )}
+              </div>
+            </div>
+
+            {/* Accent color (per-user, localStorage) */}
+            <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--borderColor-default, #d0d7de)' }}>
+              <Text as="div" size="small" style={{ color: 'var(--fgColor-muted, #57606a)', marginBottom: 8 }}>
+                Χρώμα έμφασης
+              </Text>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {ACCENT_PRESETS.map((preset) => {
+                  const selected = accent === preset.id;
+                  return (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      title={preset.label}
+                      aria-label={preset.label}
+                      aria-pressed={selected}
+                      onClick={() => { setStoredAccent(preset.id); setAccent(preset.id); }}
+                      style={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: '50%',
+                        background: preset.swatch,
+                        border: selected ? '2px solid var(--fgColor-default, #24292f)' : '2px solid transparent',
+                        boxShadow: selected ? `0 0 0 2px ${preset.swatch}` : 'inset 0 0 0 1px rgba(0,0,0,0.08)',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: 0,
+                      }}
+                    >
+                      {selected && (
+                        <span style={{ color: '#fff', fontSize: 13, fontWeight: 700, lineHeight: 1 }}>✓</span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
