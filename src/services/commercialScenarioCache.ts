@@ -1,7 +1,9 @@
 import { FirestoreService } from './firestore';
 
 const CACHE_PREFIX = 'pp-erp-scenario-v6';
-export const SCENARIO_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+// 7 ημέρες: ο χρήστης μπαινοβγαίνει στη σελίδα όλη την εβδομάδα — τα δεδομένα παραμένουν αποθηκευμένα
+// (μνήμη + localStorage + Firestore) και ξαναϋπολογίζονται μόνο σε αλλαγή περιόδου ή «Ανανέωση».
+export const SCENARIO_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const REMOTE_COLLECTION = 'commercial_scenario_cache';
 
 interface CacheEntry<T> {
