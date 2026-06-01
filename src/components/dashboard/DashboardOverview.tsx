@@ -84,8 +84,9 @@ import type { AIInsight } from '../../types';
 /** Ημερήσια σημεία στο chart· πάνω από αυτό → μηνιαία σύνοψη (αναγνώσιμο άξονα). */
 const REVENUE_CHART_MAX_DAILY_POINTS = 90;
 
-/** Revenue Performance — κύριο chart τζίρου */
-const REV_CHART_ESHOP = '#F97316';
+/** Revenue Performance — κύριο chart τζίρου. Ακολουθεί το accent theme ώστε όλες οι τάσεις
+ *  (e-commerce spark, GA4 spark, revenue chart) να έχουν ΕΝΙΑΙΟ χρώμα με το επιλεγμένο theme. */
+const REV_CHART_ESHOP = 'var(--nts-accent)';
 
 const REV_PERF_LABEL_ESHOP = 'Τζίρος e-shop (παραγγελίες)';
 const REV_PERF_LABEL_ESHOP_BLEND = 'Organic + καμπάνιες (εκτίμηση)';
@@ -94,7 +95,9 @@ const FINANCIAL_GATE_TIMEOUT_MS = 1800;
 const BRIEFING_CONTEXT_TIMEOUT_MS = 6000;
 /** Διαφήμιση — standalone efficiency chart (όχι σύγκριση με τζίρο). */
 const ADS_SPEND_COLOR = '#FDBA74';
-const ADS_CONV_COLOR = REV_CHART_ESHOP;
+// Σταθερό (όχι accent): το ads efficiency chart είναι multi-series — αν ακολουθούσε το accent
+// θα συγκρουόταν με το ADS_SPEND_COLOR.
+const ADS_CONV_COLOR = '#F97316';
 const ADS_ROAS_COLOR = '#64748B';
 
 /** Chart series values are full EUR; axis shows K when ≥ €1.000 (tooltip uses formatCurrencyCompact on same basis). */
@@ -1569,8 +1572,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                   <AreaChart data={ga4SessionsTrend}>
                     <defs>
                       <linearGradient id="ga4SessionsDashSparkGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#F97316" stopOpacity={0.18} />
-                        <stop offset="95%" stopColor="#F97316" stopOpacity={0} />
+                        <stop offset="5%" stopColor="var(--nts-accent)" stopOpacity={0.18} />
+                        <stop offset="95%" stopColor="var(--nts-accent)" stopOpacity={0} />
                       </linearGradient>
                     </defs>
                     <RechartsTooltip
@@ -1590,7 +1593,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
                     <Area
                       type="monotone"
                       dataKey="sessions"
-                      stroke="#F97316"
+                      stroke="var(--nts-accent)"
                       strokeWidth={1.5}
                       fill="url(#ga4SessionsDashSparkGrad)"
                       dot={false}
