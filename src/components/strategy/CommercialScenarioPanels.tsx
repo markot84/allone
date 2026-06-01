@@ -178,10 +178,10 @@ export function CommercialScenarioPanels({
           </div>
           <div className="overflow-x-auto rounded-xl border border-[#E5E7EB]">
             {activeTab === 'price' && data.price && (
-              <PriceTable rows={filterRows(data.price.rows, filter, showDetails ? Infinity : 5)} getThumbnailUrl={getThumbnailUrl} stockBySku={data.stockBySku} />
+              <PriceTable rows={filterRows(data.price.rows, filter, Infinity)} limit={showDetails ? undefined : 5} getThumbnailUrl={getThumbnailUrl} stockBySku={data.stockBySku} />
             )}
             {activeTab === 'marketing' && data.marketing && (
-              <MarketingTable rows={filterRows(data.marketing.rows, filter, showDetails ? Infinity : 5)} />
+              <MarketingTable rows={filterRows(data.marketing.rows, filter, Infinity)} limit={showDetails ? undefined : 5} />
             )}
           </div>
         </div>
@@ -583,7 +583,9 @@ function SkuCell({
   );
 }
 
-function PriceTable({ rows, getThumbnailUrl, stockBySku }: { rows: PriceChangeImpactRow[]; getThumbnailUrl: GetThumbnailUrl; stockBySku?: Map<string, number> }) {
+function PriceTable({ rows, limit, getThumbnailUrl, stockBySku }: { rows: PriceChangeImpactRow[]; limit?: number; getThumbnailUrl: GetThumbnailUrl; stockBySku?: Map<string, number> }) {
+  // Τα σύνολα υπολογίζονται πάντα από ΟΛΕΣ τις γραμμές· το `limit` περιορίζει μόνο τις ορατές.
+  const visibleRows = limit != null ? rows.slice(0, limit) : rows;
   const showMargin = rows.some((row) => hasCostCoverage(row.before, row.after));
   const totRevB = rows.reduce((s, r) => s + r.before.revenue, 0);
   const totRevA = rows.reduce((s, r) => s + r.after.revenue, 0);
@@ -612,7 +614,7 @@ function PriceTable({ rows, getThumbnailUrl, stockBySku }: { rows: PriceChangeIm
         </tr>
       </thead>
       <tbody className="divide-y divide-[#E5E7EB]">
-        {rows.map((row, idx) => (
+        {visibleRows.map((row, idx) => (
           // Το ίδιο SKU μπορεί να εμφανίζεται σε πολλά month-windows → unique key (αλλιώς διπλά keys
           // κάνουν το React να επαναχρησιμοποιεί stale rows κατά την αλλαγή φίλτρου).
           <tr key={`${row.sku}__${row.changeDate}__${idx}`} className="hover:bg-[#FAFAFA]">
@@ -691,7 +693,9 @@ function roasTone(r: number | null): string {
   return 'text-[#374151]';
 }
 
-function MarketingTable({ rows }: { rows: MarketingSpendImpactRow[] }) {
+function MarketingTable({ rows, limit }: { rows: MarketingSpendImpactRow[]; limit?: number }) {
+  // Τα σύνολα υπολογίζονται πάντα από ΟΛΕΣ τις γραμμές· το `limit` περιορίζει μόνο τις ορατές.
+  const visibleRows = limit != null ? rows.slice(0, limit) : rows;
   const totSpend = rows.reduce((s, r) => s + r.spend, 0);
   const totRevenue = rows.reduce((s, r) => s + r.revenue, 0);
   const totConv = rows.reduce((s, r) => s + r.conversions, 0);
@@ -717,7 +721,7 @@ function MarketingTable({ rows }: { rows: MarketingSpendImpactRow[] }) {
         </tr>
       </thead>
       <tbody className="divide-y divide-[#E5E7EB]">
-        {rows.map((row, idx) => (
+        {visibleRows.map((row, idx) => (
           <tr key={`${row.id}__${idx}`} className="hover:bg-[#FAFAFA] align-top">
             <td className="px-3 py-2">
               <p className="font-semibold">{row.title}</p>
