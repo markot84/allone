@@ -13,7 +13,7 @@ import {
   shiftIsoDate,
   type SkuWindowMetrics,
 } from '../services/commercialScenarioMetrics';
-import { analyzeMarketingSpendImpact } from '../services/marketingSpendImpact';
+import { analyzeMarketingDecisions } from '../services/marketingSpendImpact';
 import { analyzePriceChangeImpact } from '../services/priceChangeImpact';
 import {
   readScenarioCache,
@@ -196,7 +196,8 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
       priceRows.sort((a, b) => Math.abs(b.after.revenue - b.before.revenue) - Math.abs(a.after.revenue - a.before.revenue));
 
       const price = { rows: priceRows, summary: summarizeRows(priceRows) };
-      const marketing = analyzeMarketingSpendImpact({
+      // Marketing: ανίχνευση αποφάσεων (before = προηγούμενο ισόποσο διάστημα, υπολογίζεται στο service).
+      const marketing = analyzeMarketingDecisions({
         campaigns: campaigns as Campaign[],
         orders,
         periodFrom: period.fromDate,

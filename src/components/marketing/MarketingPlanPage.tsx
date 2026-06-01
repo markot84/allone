@@ -29,7 +29,10 @@ import {
   type MarketingPlanSkuSuggestion,
 } from '../../services/marketingPlanInsights';
 import { generateMarketingPlanMessage } from '../../services/marketingPlanMessage';
-import { fetchDataAnalysisOrders } from '../../services/ecommerceRawOrders';
+import { fetchDataAnalysisOrders, fetchEcommercePlatformOrders } from '../../services/ecommerceRawOrders';
+import { buildCommercialLearnings, type CommercialLearning } from '../../services/commercialLearnings';
+import { shiftIsoDate } from '../../services/commercialScenarioMetrics';
+import type { Campaign } from '../../types';
 import { FirestoreService } from '../../services/firestore';
 import { useBrand } from '../../hooks/useBrand';
 import { formatCurrency, formatNumber } from '../../utils/format';
@@ -60,6 +63,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
   const [preset, setPreset] = useState<MarketingPlanPresetId>('next_month');
   const [draft, setDraft] = useState<MarketingPlanDraft | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [learningsOpen, setLearningsOpen] = useState(true);
   const [openSections, setOpenSections] = useState<Set<SectionKey>>(
     new Set(['analysis', 'inventory', 'paid', 'organic', 'audience', 'pricing', 'message'])
   );
@@ -79,6 +83,34 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
             revenueMode: 'all',
           })
         : Promise.resolve([]),
+    enabled: !!brandId,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+
+  // Μαθήματα από προηγούμενες αποφάσεις (trailing 90 ημέρες, ανεξάρτητα από τη μελλοντική περίοδο plan).
+  const learnTo = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const learnFrom = useMemo(() => shiftIsoDate(learnTo, -90), [learnTo]);
+  const learningsQuery = useQuery({
+    queryKey: ['marketingPlanLearnings', brandId, learnFrom, learnTo, [...ecomm.connectedPlatforms].sort().join('|'), campaigns.length],
+    queryFn: async () => {
+      if (!brandId) return null;
+      // Orders από windowFrom-30 (price baseline) έως σήμερα· platform-only paginated.
+      const orders = await fetchEcommercePlatformOrders(brandId, ecomm.connectedPlatforms, {
+        sinceDate: shiftIsoDate(learnFrom, -30),
+        untilDate: learnTo,
+        cacheFirst: true,
+        revenueMode: 'all',
+        fetchAll: true,
+      });
+      return buildCommercialLearnings({
+        campaigns: campaigns as Campaign[],
+        orders,
+        windowFrom: learnFrom,
+        windowTo: learnTo,
+      });
+    },
     enabled: !!brandId,
     staleTime: 10 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
@@ -217,6 +249,14 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
           {loadingContext && <span className="text-xs text-[#6B7280]">Φόρτωση περσινών στοιχείων…</span>}
         </div>
       </Card>
+
+      <LearningsCard
+        open={learningsOpen}
+        onToggle={() => setLearningsOpen((v) => !v)}
+        loading={learningsQuery.isLoading}
+        learnings={learningsQuery.data ?? null}
+        windowLabel={`${learnFrom} → ${learnTo}`}
+      />
 
       {/* 7-section plan output */}
       {draft && (
@@ -550,6 +590,86 @@ function ContextPill({ label, value }: { label: string; value: string }) {
       <p className="text-[10px] font-semibold uppercase text-[#9CA3AF]">{label}</p>
       <p className="mt-1 text-sm font-semibold text-[#1A1A1A]">{value}</p>
     </div>
+  );
+}
+
+function LearningItem({ item }: { item: CommercialLearning }) {
+  const Icon = item.verdict === 'positive' ? ArrowUpRight : ArrowDownRight;
+  const tone = item.verdict === 'positive' ? 'text-emerald-600' : 'text-rose-600';
+  return (
+    <li className="flex items-start gap-2 rounded-lg border border-[#E5E7EB] bg-white p-2.5">
+      <Icon size={14} className={`mt-0.5 shrink-0 ${tone}`} />
+      <div className="min-w-0">
+        <p className="truncate text-xs font-semibold text-[#1A1A1A]">{item.title}</p>
+        <p className="text-xs leading-relaxed text-[#6B7280]">{item.detail}</p>
+      </div>
+    </li>
+  );
+}
+
+function LearningsCard({
+  open,
+  onToggle,
+  loading,
+  learnings,
+  windowLabel,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  loading: boolean;
+  learnings: { wins: CommercialLearning[]; misses: CommercialLearning[]; priceWins: CommercialLearning[] } | null;
+  windowLabel: string;
+}) {
+  const total = learnings ? learnings.wins.length + learnings.misses.length + learnings.priceWins.length : 0;
+  return (
+    <Card padding="lg" className="overflow-hidden">
+      <button type="button" onClick={onToggle} className="flex w-full items-center justify-between gap-3 text-left" aria-expanded={open}>
+        <div className="flex items-center gap-2">
+          <TrendingUp size={18} className="text-[var(--nts-accent)]" />
+          <span className="font-semibold text-[#1A1A1A]">Μαθήματα από προηγούμενες αποφάσεις</span>
+          <span className="rounded-full bg-[#F3F4F6] px-2 py-0.5 text-[10px] font-medium text-[#6B7280]">{windowLabel}</span>
+        </div>
+        {open ? <ChevronUp size={16} className="text-[#9CA3AF]" /> : <ChevronDown size={16} className="text-[#9CA3AF]" />}
+      </button>
+      {open && (
+        <div className="mt-4">
+          {loading ? (
+            <div className="flex items-center gap-2 text-sm text-[#6B7280]"><Spinner size="sm" /> Ανάλυση αποφάσεων…</div>
+          ) : total === 0 ? (
+            <p className="text-sm text-[#6B7280]">
+              Δεν εντοπίστηκαν σαφείς αποφάσεις (αλλαγές budget/τιμών) στις τελευταίες 90 ημέρες. Μόλις γίνουν ουσιαστικές αλλαγές, θα εμφανιστούν εδώ ως ιδέες.
+            </p>
+          ) : (
+            <div className="grid gap-4 lg:grid-cols-3">
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase text-emerald-700">Τι λειτούργησε — επανέλαβε ({learnings!.wins.length})</p>
+                {learnings!.wins.length === 0 ? (
+                  <p className="text-xs text-[#9CA3AF]">—</p>
+                ) : (
+                  <ul className="space-y-2">{learnings!.wins.map((i) => <LearningItem key={i.id} item={i} />)}</ul>
+                )}
+              </div>
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase text-rose-700">Τι απέτυχε — απόφυγε/διόρθωσε ({learnings!.misses.length})</p>
+                {learnings!.misses.length === 0 ? (
+                  <p className="text-xs text-[#9CA3AF]">—</p>
+                ) : (
+                  <ul className="space-y-2">{learnings!.misses.map((i) => <LearningItem key={i.id} item={i} />)}</ul>
+                )}
+              </div>
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase text-[#9CA3AF]">Αλλαγές τιμών που απέδωσαν ({learnings!.priceWins.length})</p>
+                {learnings!.priceWins.length === 0 ? (
+                  <p className="text-xs text-[#9CA3AF]">—</p>
+                ) : (
+                  <ul className="space-y-2">{learnings!.priceWins.map((i) => <LearningItem key={i.id} item={i} />)}</ul>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
   );
 }
 

@@ -25,16 +25,16 @@ const VERDICT_BADGE: Record<ScenarioVerdict, 'success' | 'danger' | 'warning' | 
   insufficient: 'default',
 };
 
-// Marketing: το verdict είναι ΣΥΣΤΑΣΗ βάσει attributed ROAS (όχι «μεταβολή» όπως στις Τιμές).
+// Marketing: το verdict κρίνει την ΑΠΟΦΑΣΗ (αλλαγή budget/νέα/διακοπή) με before→after.
 const VERDICT_LABEL_MARKETING: Record<ScenarioVerdict, string> = {
-  positive: 'Ενίσχυση',
-  negative: 'Περιορισμός',
-  neutral: 'Διατήρηση',
+  positive: 'Επιτυχία',
+  negative: 'Αποτυχία',
+  neutral: 'Ουδέτερο',
   insufficient: 'Λίγα δεδομένα',
 };
 
 const MARKETING_VERDICT_HELP =
-  'Σύσταση βάσει αποδιδόμενου ROAS: Ενίσχυση ≥3x · Διατήρηση 1.5–3x · Περιορισμός <1.5x.';
+  'Αξιολόγηση της απόφασης συγκρίνοντας με το προηγούμενο ισόποσο διάστημα (before→after): π.χ. αύξηση budget που κράτησε το ROAS = Επιτυχία, που το γκρέμισε = Αποτυχία.';
 
 const TABS: { key: ScenarioTab; label: string; icon: ReactNode }[] = [
   { key: 'price', label: 'Τιμές', icon: <Tag size={14} /> },
@@ -142,7 +142,7 @@ export function CommercialScenarioPanels({
       )}
 
       {activeTab === 'price' && data.price && <ScenarioKpis summary={data.price.summary} filter={filter} onFilterChange={setFilter} />}
-      {activeTab === 'marketing' && data.marketing && <MarketingKpis summary={data.marketing.summary} />}
+      {activeTab === 'marketing' && data.marketing && <MarketingKpis summary={data.marketing.summary} filter={filter} onFilterChange={setFilter} />}
 
       <FilterChips filter={filter} onChange={setFilter} tab={activeTab} />
 
@@ -248,10 +248,10 @@ function FilterChips({ filter, onChange, tab }: { filter: ImpactFilter; onChange
   const chips: ReadonlyArray<readonly [ImpactFilter, string]> =
     tab === 'marketing'
       ? [
-          ['all', 'Με σύσταση'],
-          ['positive', 'Ενίσχυση'],
-          ['negative', 'Περιορισμός'],
-          ['neutral', 'Διατήρηση'],
+          ['all', 'Όλες αποφάσεις'],
+          ['positive', 'Επιτυχίες'],
+          ['negative', 'Αποτυχίες'],
+          ['neutral', 'Ουδέτερα'],
         ]
       : [
           ['all', 'Με ουσιαστική μεταβολή'],
@@ -363,6 +363,8 @@ function formatSignedCurrency(value: number): string {
 
 function MarketingKpis({
   summary,
+  filter,
+  onFilterChange,
 }: {
   summary: {
     detected: number;
@@ -373,15 +375,29 @@ function MarketingKpis({
     totalNetProfit: number | null;
     blendedRoas: number | null;
   };
+  filter: ImpactFilter;
+  onFilterChange: (filter: ImpactFilter) => void;
 }) {
   return (
     <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-      <MiniKpi label="Καμπάνιες" value={summary.detected} />
-      <MiniKpi label="Ad spend" value={formatCurrency(summary.totalSpend, 0)} />
       <MiniKpi
-        label="Αποδιδόμενος τζίρος"
-        tooltip="Τα έσοδα που αποδίδονται στις ίδιες τις καμπάνιες (conversion value από Google/Meta), όχι ο συνολικός τζίρος του store."
-        value={formatCurrency(summary.totalRevenue, 0)}
+        label="Αποφάσεις"
+        tooltip="Αλλαγές budget, νέες ή διακοπές καμπανιών που εντοπίστηκαν σε σχέση με το προηγούμενο ισόποσο διάστημα."
+        value={summary.detected}
+      />
+      <MiniKpi
+        label="Επιτυχίες"
+        value={summary.positive}
+        tone="success"
+        selected={filter === 'positive'}
+        onClick={() => onFilterChange('positive')}
+      />
+      <MiniKpi
+        label="Αποτυχίες"
+        value={summary.negative}
+        tone="danger"
+        selected={filter === 'negative'}
+        onClick={() => onFilterChange('negative')}
       />
       <MiniKpi
         label="Blended ROAS"
@@ -653,62 +669,86 @@ function PriceTable({ rows, getThumbnailUrl, stockBySku }: { rows: PriceChangeIm
 }
 
 
+function DecisionBadge({ row }: { row: MarketingSpendImpactRow }) {
+  const icon =
+    row.decisionType === 'scale_up' ? (
+      <ArrowUpRight size={11} className="inline" />
+    ) : row.decisionType === 'scale_down' ? (
+      <ArrowDownRight size={11} className="inline" />
+    ) : null;
+  return (
+    <span className="inline-flex items-center gap-0.5 rounded-md bg-[#F3F4F6] px-1.5 py-0.5 text-[11px] font-semibold text-[#374151]">
+      {icon}
+      {row.decisionLabel}
+    </span>
+  );
+}
+
+function roasTone(r: number | null): string {
+  if (r == null) return 'text-[#9CA3AF]';
+  if (r >= 3) return 'text-emerald-600';
+  if (r < 1.5) return 'text-rose-600';
+  return 'text-[#374151]';
+}
+
 function MarketingTable({ rows }: { rows: MarketingSpendImpactRow[] }) {
   const totSpend = rows.reduce((s, r) => s + r.spend, 0);
   const totRevenue = rows.reduce((s, r) => s + r.revenue, 0);
   const totConv = rows.reduce((s, r) => s + r.conversions, 0);
-  const hasNet = rows.some((r) => r.netProfit != null);
-  const totNet = rows.reduce((s, r) => s + (r.netProfit ?? 0), 0);
   const totRoas = totSpend > 0 ? Math.round((totRevenue / totSpend) * 100) / 100 : null;
   return (
     <table className="min-w-full text-left text-sm">
       <thead className="bg-[#FAFAFA] text-xs uppercase text-[#9CA3AF]">
         <tr>
           <th className="px-3 py-2">Καμπάνια</th>
-          <th className="px-3 py-2 text-right">Ad spend</th>
-          <th className="px-3 py-2 text-right">
-            <Tooltip content="Έσοδα που αποδίδονται στην καμπάνια (conversion value από Google/Meta).">Αποδιδόμενος τζίρος</Tooltip>
-          </th>
-          <th className="px-3 py-2 text-right">Conversions</th>
-          <th className="px-3 py-2 text-right">
-            <Tooltip content="Αποδιδόμενος τζίρος ÷ ad spend. ≥3x καλό, &lt;1.5x αδύναμο.">ROAS</Tooltip>
+          <th className="px-3 py-2">
+            <Tooltip content="Τι αλλάξαμε σε σχέση με το προηγούμενο ισόποσο διάστημα (ad spend πριν → μετά).">Απόφαση</Tooltip>
           </th>
           <th className="px-3 py-2 text-right">
-            <Tooltip content="Εκτίμηση καθαρού κέρδους: αποδιδόμενος τζίρος × μικτό περιθώριο store − ad spend.">Καθαρό κέρδος</Tooltip>
+            <Tooltip content="Αποδιδόμενο ROAS πριν → μετά. ≥3x καλό, &lt;1.5x αδύναμο.">ROAS πριν→μετά</Tooltip>
+          </th>
+          <th className="px-3 py-2 text-right">
+            <Tooltip content="Αποδιδόμενος τζίρος (conversion value Google/Meta) πριν → μετά.">Αποδ. τζίρος</Tooltip>
           </th>
           <th className="px-3 py-2 text-center">
-            <Tooltip content={MARKETING_VERDICT_HELP}>Σύσταση</Tooltip>
+            <Tooltip content={MARKETING_VERDICT_HELP}>Αξιολόγηση</Tooltip>
           </th>
+          <th className="px-3 py-2">Ιδέα / Σύσταση</th>
         </tr>
       </thead>
       <tbody className="divide-y divide-[#E5E7EB]">
         {rows.map((row, idx) => (
-          <tr key={`${row.id}__${idx}`} className="hover:bg-[#FAFAFA]">
+          <tr key={`${row.id}__${idx}`} className="hover:bg-[#FAFAFA] align-top">
             <td className="px-3 py-2">
               <p className="font-semibold">{row.title}</p>
               <p className="text-xs text-[#6B7280]">{row.channel}</p>
             </td>
-            <td className="px-3 py-2 font-mono text-xs text-right">{formatEuro(row.spend)}</td>
-            <td className="px-3 py-2 font-mono text-xs text-right">{formatEuro(row.revenue)}</td>
-            <td className="px-3 py-2 font-mono text-xs text-right">{formatNumber(row.conversions)}</td>
-            <td className={`px-3 py-2 font-mono text-xs text-right font-semibold ${
-              row.roas == null ? 'text-[#9CA3AF]' : row.roas >= 3 ? 'text-emerald-600' : row.roas < 1.5 ? 'text-rose-600' : 'text-[#374151]'
-            }`}>{row.roas != null ? `${row.roas}x` : '—'}</td>
-            <td className={`px-3 py-2 font-mono text-xs text-right ${
-              row.netProfit == null ? 'text-[#9CA3AF]' : row.netProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
-            }`}>{row.netProfit != null ? formatEuro(row.netProfit) : '—'}</td>
+            <td className="px-3 py-2 whitespace-nowrap">
+              <DecisionBadge row={row} />
+              <p className="mt-1 font-mono text-[11px] text-[#6B7280]">
+                {formatEuro(row.spendBefore)} → {formatEuro(row.spend)}
+              </p>
+            </td>
+            <td className="px-3 py-2 text-right font-mono text-xs whitespace-nowrap">
+              <span className="text-[#9CA3AF]">{row.roasBefore != null ? `${row.roasBefore}x` : '—'}</span>
+              <span className="text-[#9CA3AF]"> → </span>
+              <span className={`font-semibold ${roasTone(row.roas)}`}>{row.roas != null ? `${row.roas}x` : '—'}</span>
+            </td>
+            <td className="px-3 py-2 text-right font-mono text-xs whitespace-nowrap">
+              {formatEuro(row.revenueBefore)} → {formatEuro(row.revenue)}
+            </td>
             <VerdictCell verdict={row.verdict} tab="marketing" />
+            <td className="px-3 py-2 text-xs leading-relaxed text-[#374151] min-w-[220px] max-w-[340px]">{row.idea}</td>
           </tr>
         ))}
       </tbody>
       <tfoot className="border-t-2 border-[#E5E7EB] bg-[#F9FAFB] text-xs font-semibold text-[#374151]">
         <tr>
-          <td className="px-3 py-2">Σύνολο — {rows.length} καμπάνιες</td>
-          <td className="px-3 py-2 font-mono text-right">{formatEuro(totSpend)}</td>
-          <td className="px-3 py-2 font-mono text-right">{formatEuro(totRevenue)}</td>
-          <td className="px-3 py-2 font-mono text-right">{formatNumber(totConv)}</td>
+          <td className="px-3 py-2">Σύνολο — {rows.length} αποφάσεις</td>
+          <td className="px-3 py-2 font-mono">{formatEuro(totSpend)}</td>
           <td className="px-3 py-2 font-mono text-right">{totRoas != null ? `${totRoas}x` : '—'}</td>
-          <td className="px-3 py-2 font-mono text-right">{hasNet ? formatEuro(totNet) : '—'}</td>
+          <td className="px-3 py-2 font-mono text-right">{formatEuro(totRevenue)}</td>
+          <td className="px-3 py-2 text-right">{formatNumber(totConv)} conv.</td>
           <td />
         </tr>
       </tfoot>
