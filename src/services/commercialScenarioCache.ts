@@ -1,4 +1,4 @@
-const CACHE_PREFIX = 'pp-erp-scenario-v5';
+const CACHE_PREFIX = 'pp-erp-scenario-v6';
 export const SCENARIO_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 interface CacheEntry<T> {

@@ -3,7 +3,7 @@
  * αθροίσεις ίδιες με το ecommerceAggregator (demo + cancelled) ώστε οι περίοδοι >90d
  * να εμφανίζονται σωστά στο UI (το server summary κρατά rolling ~90 ημέρες).
  */
-import { limit, orderBy, where, Timestamp, type QueryConstraint } from 'firebase/firestore';
+import { limit, orderBy, where, Timestamp, type QueryConstraint, type QueryDocumentSnapshot, type DocumentData } from 'firebase/firestore';
 import { FirestoreService } from './firestore';
 import {
   classifyEcommerceOrder,
@@ -636,6 +636,9 @@ async function fetchEcommercePlatformOrdersOnly(
     untilDate?: string;
     cacheFirst?: boolean;
     revenueMode?: 'brand' | 'classified' | 'all';
+    /** Διάβασε ΟΛΟ το εύρος (paginated) αντί μόνο τα `DATA_ANALYSIS_ORDER_LIMIT` πιο πρόσφατα.
+     *  Απαραίτητο για Policy Impact: αλλιώς desc+limit κόβει σιωπηλά τους παλιότερους μήνες. */
+    fetchAll?: boolean;
   } = {}
 ): Promise<EcommerceRawOrder[]> {
   const [allRules, results] = await Promise.all([
@@ -664,6 +667,39 @@ async function fetchEcommercePlatformOrdersOnly(
             if (options.untilDate && day > options.untilDate) return false;
             return true;
           });
+
+        // Full-range pagination: για high-volume brands (π.χ. e-tennis ~3.5k/μήνα) ένα single
+        // limit(5000) desc επιστρέφει μόνο τους 1-2 τελευταίους μήνες → χάνονται οι παλιότεροι.
+        if (hasRange && options.fetchAll) {
+          const rangeConstraints: QueryConstraint[] = [];
+          if (options.sinceDate) rangeConstraints.push(where('createdAt', '>=', options.sinceDate));
+          if (options.untilDate) rangeConstraints.push(where('createdAt', '<=', `${options.untilDate}T23:59:59.999Z`));
+          rangeConstraints.push(orderBy('createdAt', 'desc'));
+
+          const PAGE = 5000;
+          const HARD_CAP = 40000;
+          const collected: Record<string, unknown>[] = [];
+          let cursor: QueryDocumentSnapshot<DocumentData> | null = null;
+          try {
+            do {
+              const page: {
+                items: Record<string, unknown>[];
+                lastDoc: QueryDocumentSnapshot<DocumentData> | null;
+                totalCount: number;
+              } = await FirestoreService.getDocumentsPaginated<Record<string, unknown>>(collectionName, {
+                brandId,
+                pageSize: PAGE,
+                cursor,
+                constraints: rangeConstraints,
+              });
+              collected.push(...page.items);
+              cursor = page.items.length === PAGE ? page.lastDoc : null;
+            } while (cursor && collected.length < HARD_CAP);
+            return collected.map((row) => normalizeRawOrder(platform, row));
+          } catch {
+            // Πέσε πίσω στο μη-paginated μονοπάτι παρακάτω (π.χ. λείπει index).
+          }
+        }
 
         let rows: Record<string, unknown>[] = [];
         try {
@@ -765,6 +801,7 @@ export async function fetchEcommercePlatformOrders(
     untilDate?: string;
     cacheFirst?: boolean;
     revenueMode?: 'brand' | 'classified' | 'all';
+    fetchAll?: boolean;
   } = {}
 ): Promise<EcommerceRawOrder[]> {
   if (platforms.length === 0) return [];

@@ -168,11 +168,13 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
 
       const lookbackFrom = shiftIsoDate(period.fromDate, -30);
       // Platform-only (e-shop) orders με line items — όχι το ακριβό ERP-invoice διπλό fetch.
+      // fetchAll: paginated ΟΛΟ το εύρος (αλλιώς desc+limit 5000 κόβει τους παλιότερους μήνες σε high-volume brands).
       const orders = await fetchEcommercePlatformOrders(brandId, ecomm.connectedPlatforms, {
         sinceDate: lookbackFrom,
         untilDate: period.toDate,
         cacheFirst: true,
         revenueMode: 'all',
+        fetchAll: true,
       });
 
       const priceRows = [];
