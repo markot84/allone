@@ -172,6 +172,9 @@ export class FirestoreService {
       pageSize: number;
       cursor?: QueryDocumentSnapshot<DocumentData> | null;
       constraints?: QueryConstraint[];
+      /** Παράλειψη του getCountFromServer (server round-trip). Χρήσιμο στις επόμενες σελίδες ενός
+       *  pagination loop όπου το total υπολογίστηκε ήδη στην πρώτη σελίδα. Επιστρέφει totalCount: -1. */
+      skipCount?: boolean;
     },
   ): Promise<{ items: T[]; lastDoc: QueryDocumentSnapshot<DocumentData> | null; totalCount: number }> {
     try {
@@ -179,9 +182,12 @@ export class FirestoreService {
       if (options.brandId) baseConstraints.push(where('brandId', '==', options.brandId));
       if (options.constraints) baseConstraints.push(...options.constraints);
 
-      const countQ = query(collection(db, collectionName), ...baseConstraints);
-      const countSnap = await getCountFromServer(countQ);
-      const totalCount = countSnap.data().count;
+      let totalCount = -1;
+      if (!options.skipCount) {
+        const countQ = query(collection(db, collectionName), ...baseConstraints);
+        const countSnap = await getCountFromServer(countQ);
+        totalCount = countSnap.data().count;
+      }
 
       const pageConstraints = [...baseConstraints, limit(options.pageSize)];
       if (options.cursor) pageConstraints.push(startAfter(options.cursor));

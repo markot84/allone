@@ -19,6 +19,9 @@ import {
   readScenarioCache,
   writeScenarioCache,
   clearScenarioCache,
+  readScenarioCacheRemote,
+  writeScenarioCacheRemote,
+  clearScenarioCacheRemote,
   SCENARIO_CACHE_TTL_MS,
 } from '../services/commercialScenarioCache';
 import type { Campaign } from '../types';
@@ -163,10 +166,16 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
         return emptyPayload();
       }
 
-      // Use localStorage cache unless forced refresh
+      // Use cache unless forced refresh: πρώτα localStorage (instant), μετά Firestore (durable
+      // cross-reload/συσκευή). Αν βρεθεί remote, ξαναγράφεται στο localStorage για επόμενη φορά.
       if (forceRefreshKey === 0) {
         const cached = readScenarioCache<ScenarioPayload>(brandId, period.fromDate, period.toDate);
         if (cached) return cached.data;
+        const remote = await readScenarioCacheRemote<ScenarioPayload>(brandId, period.fromDate, period.toDate);
+        if (remote) {
+          writeScenarioCache(brandId, period.fromDate, period.toDate, remote.data);
+          return remote.data;
+        }
       }
 
       const lookbackFrom = shiftIsoDate(period.fromDate, -30);
@@ -220,6 +229,8 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
         marketing: { ...result.marketing, rows: result.marketing.rows.slice(0, MAX_MKT_CACHE) },
       };
       writeScenarioCache(brandId, period.fromDate, period.toDate, cachePayload);
+      // Durable Firestore cache (fire-and-forget): ώστε ο βαρύς υπολογισμός να μη ξανατρέξει σε reload.
+      void writeScenarioCacheRemote(brandId, period.fromDate, period.toDate, cachePayload);
       setProgress(null);
       return result;
     },
@@ -250,6 +261,7 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
   const refresh = () => {
     if (!brandId || !period?.fromDate || !period?.toDate) return;
     clearScenarioCache(brandId, period.fromDate, period.toDate);
+    void clearScenarioCacheRemote(brandId, period.fromDate, period.toDate);
     setForceRefreshKey((k) => k + 1);
   };
 

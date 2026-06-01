@@ -563,6 +563,14 @@ service cloud.firestore {
       allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
     }
 
+    // Policy Impact precomputed result cache (client-written, brand-scoped). Μικρό doc με τα ήδη
+    // υπολογισμένα price/marketing decisions ώστε ο βαρύς υπολογισμός να γίνεται μία φορά ανά περίοδο.
+    match /commercial_scenario_cache/{docId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+
     // Marketing interest leads — εγγραφή μόνο μέσω Cloud Functions · ανάγνωση super admin
     match /interest_leads/{leadId} {
       allow read: if isSuperAdmin();

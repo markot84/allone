@@ -694,8 +694,11 @@ async function fetchEcommercePlatformOrdersOnly(
           const HARD_CAP = 40000;
           const collected: Record<string, unknown>[] = [];
           let cursor: QueryDocumentSnapshot<DocumentData> | null = null;
+          let knownTotal = 0;
           try {
             do {
+              // Count μόνο στην πρώτη σελίδα (cursor==null)· οι επόμενες παραλείπουν το server round-trip.
+              const isFirstPage = cursor === null;
               const page: {
                 items: Record<string, unknown>[];
                 lastDoc: QueryDocumentSnapshot<DocumentData> | null;
@@ -705,10 +708,12 @@ async function fetchEcommercePlatformOrdersOnly(
                 pageSize: PAGE,
                 cursor,
                 constraints: rangeConstraints,
+                skipCount: !isFirstPage,
               });
+              if (isFirstPage) knownTotal = Math.min(page.totalCount, HARD_CAP);
               collected.push(...page.items);
               cursor = page.items.length === PAGE ? page.lastDoc : null;
-              totalByPlatform.set(platform, Math.min(page.totalCount, HARD_CAP));
+              totalByPlatform.set(platform, knownTotal);
               loadedByPlatform.set(platform, collected.length);
               emitProgress();
             } while (cursor && collected.length < HARD_CAP);

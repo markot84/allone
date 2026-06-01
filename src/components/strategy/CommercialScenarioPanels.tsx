@@ -63,19 +63,12 @@ export function CommercialScenarioPanels({
   const visibleTabs = TABS;
   const activeTab = visibleTabs.some((t) => t.key === tab) ? tab : (visibleTabs[0]?.key ?? tab);
 
-  const active = useMemo(() => {
-    if (activeTab === 'price') return data.price;
-    return data.marketing;
-  }, [activeTab, data.price, data.marketing]);
-
-  const filteredCount = useMemo(() => {
-    if (!active) return 0;
-    if (filter === 'all') return active.rows.filter(isActionableRow).length;
-    if (filter === 'positive' || filter === 'negative') {
-      return active.rows.filter((r) => r.verdict === filter && isActionableRow(r)).length;
-    }
-    return active.rows.filter((r) => r.verdict === filter).length;
-  }, [active, filter]);
+  // ΕΝΑ φιλτραρισμένο σύνολο που τροφοδοτεί ΚΑΙ το count ΚΑΙ τον πίνακα — αποκλείει αναντιστοιχίες
+  // (π.χ. να εμφανίζονται «επιτυχίες» ενώ έχει επιλεγεί «αποτυχίες»).
+  const filteredPriceRows = useMemo(() => filterScenarioRows(data.price?.rows ?? [], filter), [data.price, filter]);
+  const filteredMarketingRows = useMemo(() => filterScenarioRows(data.marketing?.rows ?? [], filter), [data.marketing, filter]);
+  const filteredRows = activeTab === 'price' ? filteredPriceRows : filteredMarketingRows;
+  const filteredCount = filteredRows.length;
 
   useEffect(() => {
     if (visibleTabs.length === 0 || visibleTabs.some((t) => t.key === tab)) return;
@@ -178,10 +171,10 @@ export function CommercialScenarioPanels({
           </div>
           <div className="overflow-x-auto rounded-xl border border-[#E5E7EB]">
             {activeTab === 'price' && data.price && (
-              <PriceTable rows={filterRows(data.price.rows, filter, Infinity)} limit={showDetails ? undefined : 5} getThumbnailUrl={getThumbnailUrl} stockBySku={data.stockBySku} />
+              <PriceTable rows={filteredPriceRows} limit={showDetails ? undefined : 5} getThumbnailUrl={getThumbnailUrl} stockBySku={data.stockBySku} />
             )}
             {activeTab === 'marketing' && data.marketing && (
-              <MarketingTable rows={filterRows(data.marketing.rows, filter, Infinity)} limit={showDetails ? undefined : 5} />
+              <MarketingTable rows={filteredMarketingRows} limit={showDetails ? undefined : 5} />
             )}
           </div>
         </div>
@@ -229,14 +222,16 @@ function LoadingProgress({ progress }: { progress?: { loaded: number; total: num
   );
 }
 
-function filterRows<T extends { verdict: ScenarioVerdict }>(rows: T[], filter: ImpactFilter, limit = 50): T[] {
-  const list =
-    filter === 'all'
-      ? rows.filter(isActionableRow)
-      : filter === 'positive' || filter === 'negative'
-        ? rows.filter((r) => r.verdict === filter && isActionableRow(r))
-        : rows.filter((r) => r.verdict === filter);
-  return list.slice(0, limit);
+function filterScenarioRows<T extends { verdict: ScenarioVerdict; confidence?: string }>(
+  rows: T[],
+  filter: ImpactFilter
+): T[] {
+  if (filter === 'all') return rows.filter(isActionableRow);
+  if (filter === 'positive' || filter === 'negative') {
+    return rows.filter((r) => r.verdict === filter && isActionableRow(r));
+  }
+  // neutral / insufficient: ακριβές verdict (χωρίς actionable φίλτρο).
+  return rows.filter((r) => r.verdict === filter);
 }
 
 function isActionableRow<T extends { verdict: ScenarioVerdict; confidence?: string }>(row: T): boolean {
@@ -686,11 +681,18 @@ function DecisionBadge({ row }: { row: MarketingSpendImpactRow }) {
   );
 }
 
-function roasTone(r: number | null): string {
-  if (r == null) return 'text-[#9CA3AF]';
-  if (r >= 3) return 'text-emerald-600';
-  if (r < 1.5) return 'text-rose-600';
+// Χρωματισμός με βάση το ΑΠΟΤΕΛΕΣΜΑ ΤΗΣ ΑΠΟΦΑΣΗΣ (verdict), ώστε μια «Αποτυχία» να μη δείχνει
+// πράσινα νούμερα (π.χ. υψηλό ROAS σε καμπάνια που κόπηκε) και να μοιάζει με επιτυχία.
+function verdictTextTone(v: ScenarioVerdict): string {
+  if (v === 'positive') return 'text-emerald-600';
+  if (v === 'negative') return 'text-rose-600';
   return 'text-[#374151]';
+}
+
+function verdictAccent(v: ScenarioVerdict): string {
+  if (v === 'positive') return 'border-l-2 border-emerald-400';
+  if (v === 'negative') return 'border-l-2 border-rose-400';
+  return 'border-l-2 border-transparent';
 }
 
 function MarketingTable({ rows, limit }: { rows: MarketingSpendImpactRow[]; limit?: number }) {
@@ -723,7 +725,7 @@ function MarketingTable({ rows, limit }: { rows: MarketingSpendImpactRow[]; limi
       <tbody className="divide-y divide-[#E5E7EB]">
         {visibleRows.map((row, idx) => (
           <tr key={`${row.id}__${idx}`} className="hover:bg-[#FAFAFA] align-top">
-            <td className="px-3 py-2">
+            <td className={`px-3 py-2 ${verdictAccent(row.verdict)}`}>
               <p className="font-semibold">{row.title}</p>
               <p className="text-xs text-[#6B7280]">{row.channel}</p>
             </td>
@@ -736,10 +738,12 @@ function MarketingTable({ rows, limit }: { rows: MarketingSpendImpactRow[]; limi
             <td className="px-3 py-2 text-right font-mono text-xs whitespace-nowrap">
               <span className="text-[#9CA3AF]">{row.roasBefore != null ? `${row.roasBefore}x` : '—'}</span>
               <span className="text-[#9CA3AF]"> → </span>
-              <span className={`font-semibold ${roasTone(row.roas)}`}>{row.roas != null ? `${row.roas}x` : '—'}</span>
+              <span className={`font-semibold ${verdictTextTone(row.verdict)}`}>{row.roas != null ? `${row.roas}x` : '—'}</span>
             </td>
             <td className="px-3 py-2 text-right font-mono text-xs whitespace-nowrap">
-              {formatEuro(row.revenueBefore)} → {formatEuro(row.revenue)}
+              <span className="text-[#9CA3AF]">{formatEuro(row.revenueBefore)}</span>
+              <span className="text-[#9CA3AF]"> → </span>
+              <span className={`font-semibold ${verdictTextTone(row.verdict)}`}>{formatEuro(row.revenue)}</span>
             </td>
             <VerdictCell verdict={row.verdict} tab="marketing" />
             <td className="px-3 py-2 text-xs leading-relaxed text-[#374151] min-w-[220px] max-w-[340px]">{row.idea}</td>
