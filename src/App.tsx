@@ -131,6 +131,11 @@ function QueryProvider({ children }: { children: React.ReactNode }) {
               if (key === 'campaigns' || key === 'search_intelligence' || key === 'priceBenchmarks' || key === 'priceInsights') return false;
               // Product query shape changed during the rollback window; always refetch it from Firestore.
               if (key === 'products') return false;
+              // Policy Impact scenarios: ΜΕΓΑΛΟ payload (εκατοντάδες rows) με ΔΙΚΟ του durable cache
+              // (dedicated localStorage key `pp-erp-scenario` + Firestore `commercial_scenario_cache`).
+              // Αν έμπαινε κι εδώ, διπλασίαζε το localStorage και ξεπερνούσε το quota → σιωπηλό σβήσιμο
+              // ΟΛΟΥ του persisted cache → τα πάντα ξαναφόρτωναν στο reload (incl. το Policy Impact).
+              if (key === 'commercial_scenario_impacts') return false;
               // Heavy raw order pulls stay out of localStorage; compact server summaries are persisted for fast first paint.
               if (
                 key === 'ecommerceOrdersRaw' ||

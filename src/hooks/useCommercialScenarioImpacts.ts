@@ -219,10 +219,12 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
       const ordersWithLines = orders.filter((o) => o.lineItems.length > 0).length;
       const result = { price, marketing, orderCount: orders.length, ordersWithLines };
 
-      // Cap rows before caching to stay within localStorage quota (~5MB).
-      // Sort is already by revenue impact so we keep the most significant rows.
-      const MAX_PRICE_CACHE = 500;
-      const MAX_MKT_CACHE = 150;
+      // Cap rows before caching. Πλέον το scenario ΔΕΝ μπαίνει στο shared persist blob, οπότε το
+      // dedicated localStorage key χωράει άνετα όλες τις rows τυπικού brand (π.χ. e-tennis ~577) →
+      // σωστά totals στο footer. Cap αρκετά ψηλά αλλά κάτω από το Firestore 1MiB doc limit για πολύ
+      // μεγάλα catalogs (sort είναι ήδη κατά revenue impact, κρατάμε τις σημαντικότερες).
+      const MAX_PRICE_CACHE = 1200;
+      const MAX_MKT_CACHE = 400;
       const cachePayload = {
         ...result,
         price: { ...result.price, rows: result.price.rows.slice(0, MAX_PRICE_CACHE) },
