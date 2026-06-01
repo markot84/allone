@@ -596,8 +596,10 @@ function PriceTable({ rows, getThumbnailUrl, stockBySku }: { rows: PriceChangeIm
         </tr>
       </thead>
       <tbody className="divide-y divide-[#E5E7EB]">
-        {rows.map((row) => (
-          <tr key={row.sku} className="hover:bg-[#FAFAFA]">
+        {rows.map((row, idx) => (
+          // Το ίδιο SKU μπορεί να εμφανίζεται σε πολλά month-windows → unique key (αλλιώς διπλά keys
+          // κάνουν το React να επαναχρησιμοποιεί stale rows κατά την αλλαγή φίλτρου).
+          <tr key={`${row.sku}__${row.changeDate}__${idx}`} className="hover:bg-[#FAFAFA]">
             <td className="px-3 py-2">
               <SkuCell sku={row.sku} productName={row.productName} getThumbnailUrl={getThumbnailUrl} />
             </td>
@@ -680,8 +682,8 @@ function MarketingTable({ rows }: { rows: MarketingSpendImpactRow[] }) {
         </tr>
       </thead>
       <tbody className="divide-y divide-[#E5E7EB]">
-        {rows.map((row) => (
-          <tr key={row.id} className="hover:bg-[#FAFAFA]">
+        {rows.map((row, idx) => (
+          <tr key={`${row.id}__${idx}`} className="hover:bg-[#FAFAFA]">
             <td className="px-3 py-2">
               <p className="font-semibold">{row.title}</p>
               <p className="text-xs text-[#6B7280]">{row.channel}</p>
