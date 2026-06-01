@@ -3,7 +3,20 @@
  * στο <html> — τα semantic χρώματα (success/danger/warning) μένουν ώστε να μη χαλάει η ανάγνωση
  * των δεδομένων. Τα overrides ζουν στο index.css (`:root[data-accent="..."]`).
  */
-export type AccentId = 'classic' | 'orange' | 'blue' | 'violet' | 'emerald' | 'teal' | 'rose';
+export type AccentId =
+  | 'classic'
+  | 'orange'
+  | 'blue'
+  | 'violet'
+  | 'emerald'
+  | 'teal'
+  | 'rose'
+  // Combos: accent + ξεχωριστό/αντίθετο chrome (όπως το classic) με δική τους «προσωπικότητα».
+  | 'midnight'
+  | 'royal'
+  | 'forest'
+  | 'crimson'
+  | 'ocean';
 
 export interface AccentPreset {
   id: AccentId;
@@ -15,6 +28,7 @@ export interface AccentPreset {
 }
 
 export const ACCENT_PRESETS: AccentPreset[] = [
+  // Μονόχρωμα (accent + ομόχρωμο chrome)
   { id: 'classic', label: 'Κλασικό', swatch: '#F97316', swatch2: '#111111' },
   { id: 'orange', label: 'Πορτοκαλί', swatch: '#F97316' },
   { id: 'blue', label: 'Μπλε', swatch: '#2563EB' },
@@ -22,6 +36,12 @@ export const ACCENT_PRESETS: AccentPreset[] = [
   { id: 'emerald', label: 'Πράσινο', swatch: '#059669' },
   { id: 'teal', label: 'Teal', swatch: '#0D9488' },
   { id: 'rose', label: 'Ροζ', swatch: '#E11D48' },
+  // Combos (accent + αντίθετο chrome — duo-tone με προσωπικότητα)
+  { id: 'midnight', label: 'Μεσάνυχτα', swatch: '#38BDF8', swatch2: '#0B1220' },
+  { id: 'royal', label: 'Βασιλικό', swatch: '#F59E0B', swatch2: '#312E81' },
+  { id: 'forest', label: 'Δάσος', swatch: '#84CC16', swatch2: '#14271C' },
+  { id: 'crimson', label: 'Κρεμεζί', swatch: '#EC4899', swatch2: '#18181B' },
+  { id: 'ocean', label: 'Ωκεανός', swatch: '#14B8A6', swatch2: '#0C4A6E' },
 ];
 
 export const DEFAULT_ACCENT: AccentId = 'classic';

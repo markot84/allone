@@ -118,6 +118,58 @@
   --app-canvas-bg: #FFF4F6;
 }
 
+/* ── Combos: accent + ΑΝΤΙΘΕΤΟ chrome (duo-tone, σαν το classic με χαρακτήρα) ──── */
+:root[data-accent="midnight"] {
+  --nts-accent: #38BDF8;
+  --nts-accent-hover: #0EA5E9;
+  --nts-accent-light: #E0F2FE;
+  --nts-orange: #38BDF8;
+  --nts-orange-hover: #0EA5E9;
+  --nts-orange-light: #E0F2FE;
+  --app-chrome-bg: #0B1220;
+  --app-canvas-bg: #F5FAFF;
+}
+:root[data-accent="royal"] {
+  --nts-accent: #F59E0B;
+  --nts-accent-hover: #D97706;
+  --nts-accent-light: #FEF3C7;
+  --nts-orange: #F59E0B;
+  --nts-orange-hover: #D97706;
+  --nts-orange-light: #FEF3C7;
+  --app-chrome-bg: #312E81;
+  --app-canvas-bg: #FAF8FF;
+}
+:root[data-accent="forest"] {
+  --nts-accent: #84CC16;
+  --nts-accent-hover: #65A30D;
+  --nts-accent-light: #ECFCCB;
+  --nts-orange: #84CC16;
+  --nts-orange-hover: #65A30D;
+  --nts-orange-light: #ECFCCB;
+  --app-chrome-bg: #14271C;
+  --app-canvas-bg: #F6FCF0;
+}
+:root[data-accent="crimson"] {
+  --nts-accent: #EC4899;
+  --nts-accent-hover: #DB2777;
+  --nts-accent-light: #FCE7F3;
+  --nts-orange: #EC4899;
+  --nts-orange-hover: #DB2777;
+  --nts-orange-light: #FCE7F3;
+  --app-chrome-bg: #18181B;
+  --app-canvas-bg: #FFF6FB;
+}
+:root[data-accent="ocean"] {
+  --nts-accent: #14B8A6;
+  --nts-accent-hover: #0D9488;
+  --nts-accent-light: #CCFBF1;
+  --nts-orange: #14B8A6;
+  --nts-orange-hover: #0D9488;
+  --nts-orange-light: #CCFBF1;
+  --app-chrome-bg: #0C4A6E;
+  --app-canvas-bg: #F0FBFC;
+}
+
 /* IMPORTANT: Do NOT zero out margins/paddings globally when using Primer.
    It breaks spacing + component layout. Keep only box-sizing. */
 *, *::before, *::after {
