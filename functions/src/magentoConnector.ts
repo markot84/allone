@@ -612,6 +612,7 @@ export async function saveMagentoCredentials(
   storeName?: string;
   syncAllStores?: boolean;
   error?: string;
+  warning?: string;
   availableStoreCodes?: string[];
   storeCandidates?: MagentoStoreDirectoryEntry[];
 }> {
@@ -630,6 +631,7 @@ export async function saveMagentoCredentials(
 
   const connectorRef = getDb().doc(`connectors/${brandId}`);
   const storeDirectory = testResult.storeDirectory ?? [];
+  const catalogOk = testResult.productCatalogAccess !== false;
 
   await connectorRef.set(
     {
@@ -647,7 +649,8 @@ export async function saveMagentoCredentials(
         storeWebUrl: testResult.storeWebUrl || '',
         /** Storefront media root για image_link στο Ads Feed */
         mediaBaseUrl: testResult.mediaBaseUrl || '',
-        productCatalogAccess: true,
+        productCatalogAccess: catalogOk,
+        productCatalogAccessError: catalogOk ? FieldValue.delete() : (testResult.productCatalogAccessError || 'Magento product catalog access denied'),
         productCatalogAccessCheckedAt: FieldValue.serverTimestamp(),
         accessToken: encryptToken(tokenPlain),
         connectedAt: FieldValue.serverTimestamp(),
@@ -658,13 +661,19 @@ export async function saveMagentoCredentials(
     { merge: true }
   );
 
-  logger.info(`[Magento] Connected brand ${brandId} to store ${normalizedUrl}`);
+  logger.info(`[Magento] Connected brand ${brandId} to store ${normalizedUrl}${catalogOk ? '' : ' (product catalog degraded)'}`);
   return {
     success: true,
     shopName: testResult.shopName,
     storeCode: testResult.storeCode,
     storeName: testResult.storeName,
     syncAllStores: Boolean(opts?.syncAllStores),
+    ...(catalogOk
+      ? {}
+      : {
+          warning:
+            'Συνδέθηκε. Τα orders/E-commerce θα συγχρονίζονται κανονικά, αλλά το token δεν έχει πρόσβαση στον κατάλογο προϊόντων (Catalog) — δεν θα έρθουν εικόνες/meta προϊόντων μέχρι να δοθεί Catalog access (Resource Access = All + Reauthorize).',
+        }),
   };
 }
 
@@ -719,6 +728,9 @@ export async function testMagentoConnection(
   storeCandidates?: MagentoStoreDirectoryEntry[];
   /** Πλήρης λίστα store views (με numeric id) — debugging / σύζευξη. */
   storeDirectory?: MagentoStoreDirectoryEntry[];
+  /** Το token διαβάζει τον κατάλογο προϊόντων; false = orders OK αλλά όχι Catalog (degraded). */
+  productCatalogAccess?: boolean;
+  productCatalogAccessError?: string;
 }> {
   try {
     const probe = await probeMagentoStoreConfigs(storeUrl, accessToken);
@@ -777,15 +789,27 @@ export async function testMagentoConnection(
       'User-Agent': MAGENTO_UA,
     };
 
+    // Product catalog access είναι enrichment (εικόνες/meta), ΟΧΙ προϋπόθεση σύνδεσης.
+    // Αν το token διαβάζει orders/store configs αλλά όχι Catalog (401/403), επιτρέπουμε
+    // τη σύνδεση σε degraded mode αντί να μπλοκάρουμε — orders/E-commerce ρέουν κανονικά.
     const productAccess = await probeMagentoProductCatalogAccess(restApiBase, resolvedStoreCode || undefined, headers);
+    let productCatalogAccess = true;
+    let productCatalogAccessError: string | undefined;
     if (!productAccess.ok) {
-      return {
-        success: false,
-        error: formatMagentoProductAccessError(productAccess.status, productAccess.url, productAccess.body),
-        availableStoreCodes: availableCodes,
-        storeCandidates: candidates,
-        storeDirectory: storeDirectoryFull,
-      };
+      productCatalogAccessError = formatMagentoProductAccessError(productAccess.status, productAccess.url, productAccess.body);
+      if (productAccess.status === 401 || productAccess.status === 403) {
+        productCatalogAccess = false;
+        logger.warn(`[Magento] Connect: product catalog denied (degraded) — orders/store OK. ${productCatalogAccessError}`);
+      } else {
+        // Μη-auth αποτυχία (π.χ. 404/500) → πιθανό config issue, μπλοκάρουμε όπως πριν.
+        return {
+          success: false,
+          error: productCatalogAccessError,
+          availableStoreCodes: availableCodes,
+          storeCandidates: candidates,
+          storeDirectory: storeDirectoryFull,
+        };
+      }
     }
 
     let version = '';
@@ -816,6 +840,8 @@ export async function testMagentoConnection(
       mediaBaseUrl: mediaBaseUrl || undefined,
       storeDirectory: storeDirectoryFull,
       storeCandidates: storeDirectoryFull,
+      productCatalogAccess,
+      productCatalogAccessError,
     };
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);

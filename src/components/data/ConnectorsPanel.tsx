@@ -968,6 +968,7 @@ function MagentoCredentialsModal({
       const result = await res.json();
       if (result.success) {
         toast.success(`Magento συνδέθηκε: ${result.shopName || storeUrl}`);
+        if (result.warning) toast.info(result.warning);
         onSuccess();
       } else {
         setError(result.error || 'Connection failed');
