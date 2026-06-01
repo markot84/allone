@@ -3,16 +3,19 @@
  * στο <html> — τα semantic χρώματα (success/danger/warning) μένουν ώστε να μη χαλάει η ανάγνωση
  * των δεδομένων. Τα overrides ζουν στο index.css (`:root[data-accent="..."]`).
  */
-export type AccentId = 'orange' | 'blue' | 'violet' | 'emerald' | 'teal' | 'rose';
+export type AccentId = 'classic' | 'orange' | 'blue' | 'violet' | 'emerald' | 'teal' | 'rose';
 
 export interface AccentPreset {
   id: AccentId;
   label: string;
   /** Swatch για το UI επιλογής (το κύριο accent χρώμα). */
   swatch: string;
+  /** Δεύτερο χρώμα για διπλό swatch (π.χ. classic = πορτοκαλί accent + ουδέτερο σκούρο chrome). */
+  swatch2?: string;
 }
 
 export const ACCENT_PRESETS: AccentPreset[] = [
+  { id: 'classic', label: 'Κλασικό', swatch: '#F97316', swatch2: '#111111' },
   { id: 'orange', label: 'Πορτοκαλί', swatch: '#F97316' },
   { id: 'blue', label: 'Μπλε', swatch: '#2563EB' },
   { id: 'violet', label: 'Μωβ', swatch: '#7C3AED' },
@@ -21,7 +24,7 @@ export const ACCENT_PRESETS: AccentPreset[] = [
   { id: 'rose', label: 'Ροζ', swatch: '#E11D48' },
 ];
 
-export const DEFAULT_ACCENT: AccentId = 'orange';
+export const DEFAULT_ACCENT: AccentId = 'classic';
 const STORAGE_KEY = 'pp-accent-v1';
 
 export function isAccentId(value: unknown): value is AccentId {

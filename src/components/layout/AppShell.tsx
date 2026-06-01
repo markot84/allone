@@ -303,7 +303,9 @@ function AccountMenu({
                         width: 24,
                         height: 24,
                         borderRadius: '50%',
-                        background: preset.swatch,
+                        background: preset.swatch2
+                          ? `linear-gradient(135deg, ${preset.swatch} 0 50%, ${preset.swatch2} 50% 100%)`
+                          : preset.swatch,
                         border: selected ? '2px solid var(--fgColor-default, #24292f)' : '2px solid transparent',
                         boxShadow: selected ? `0 0 0 2px ${preset.swatch}` : 'inset 0 0 0 1px rgba(0,0,0,0.08)',
                         cursor: 'pointer',
@@ -509,7 +511,9 @@ function AccentMenu() {
                       width: 26,
                       height: 26,
                       borderRadius: '50%',
-                      background: preset.swatch,
+                      background: preset.swatch2
+                        ? `linear-gradient(135deg, ${preset.swatch} 0 50%, ${preset.swatch2} 50% 100%)`
+                        : preset.swatch,
                       border: selected ? '2px solid var(--fgColor-default, #24292f)' : '2px solid transparent',
                       boxShadow: selected ? `0 0 0 2px ${preset.swatch}` : 'inset 0 0 0 1px rgba(0,0,0,0.08)',
                       cursor: 'pointer',
@@ -865,7 +869,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
             overflowX: 'hidden',
             width: '100%',
             maxWidth: '100%',
-            backgroundColor: 'var(--nts-bg-pure)'
+            backgroundColor: 'var(--app-canvas-bg, var(--nts-bg-pure))'
           }}
         >
           <div className="mx-auto w-full max-w-[1400px] px-3 py-4 sm:px-4 sm:py-5 md:px-6 md:py-6">

@@ -22,13 +22,14 @@
   --nts-accent-hover: #EA580C;
   --nts-accent-light: #FFEDD5;
 
-  /* Links / active-nav — δεμένο με το accent ώστε όλο το ύφος να ακολουθεί το theme */
-  --nts-orange: #F97316;
-  --nts-orange-hover: #EA580C;
-  --nts-orange-light: #FFEDD5;
+  /* Accent (legacy – links) — ΚΛΑΣΙΚΟ default (μπλε links, όπως προϋπήρχε) */
+  --nts-orange: #0969da;
+  --nts-orange-hover: #0550ae;
+  --nts-orange-light: #ddf4ff;
 
-  /* App chrome (header + sidebar) — tinted dark ανά accent */
-  --app-chrome-bg: #14110d;
+  /* App chrome (header + sidebar) & canvas — classic: ουδέτερο σκούρο + λευκό canvas */
+  --app-chrome-bg: #111111;
+  --app-canvas-bg: #ffffff;
   
   /* Semantic Colors */
   --success: #22C55E;
@@ -53,8 +54,19 @@
 }
 
 /* ── Accent themes (per-user, μέσω data-accent στο <html>) ──────────────────────
-   Override μόνο του accent family. Τα semantic χρώματα (success/danger/warning)
-   παραμένουν αμετάβλητα ώστε να μη χαλάει η ανάγνωση δεδομένων/charts. */
+   ΤΟΛΜΗΡΟ theming: το accent οδηγεί links/active-nav, το chrome (header+sidebar)
+   παίρνει ΕΝΤΟΝΟ colored-dark, και το canvas ένα ελαφρύ accent wash (οι λευκές
+   κάρτες ξεχωρίζουν). Τα semantic χρώματα (success/danger/warning) μένουν σταθερά. */
+:root[data-accent="orange"] {
+  --nts-accent: #F97316;
+  --nts-accent-hover: #EA580C;
+  --nts-accent-light: #FFEDD5;
+  --nts-orange: #F97316;
+  --nts-orange-hover: #EA580C;
+  --nts-orange-light: #FFEDD5;
+  --app-chrome-bg: #7C2D12;
+  --app-canvas-bg: #FFF7F0;
+}
 :root[data-accent="blue"] {
   --nts-accent: #2563EB;
   --nts-accent-hover: #1D4ED8;
@@ -62,7 +74,8 @@
   --nts-orange: #2563EB;
   --nts-orange-hover: #1D4ED8;
   --nts-orange-light: #DBEAFE;
-  --app-chrome-bg: #0e1726;
+  --app-chrome-bg: #1E3A8A;
+  --app-canvas-bg: #F3F7FF;
 }
 :root[data-accent="violet"] {
   --nts-accent: #7C3AED;
@@ -71,7 +84,8 @@
   --nts-orange: #7C3AED;
   --nts-orange-hover: #6D28D9;
   --nts-orange-light: #EDE9FE;
-  --app-chrome-bg: #150f24;
+  --app-chrome-bg: #4C1D95;
+  --app-canvas-bg: #F8F5FF;
 }
 :root[data-accent="emerald"] {
   --nts-accent: #059669;
@@ -80,7 +94,8 @@
   --nts-orange: #059669;
   --nts-orange-hover: #047857;
   --nts-orange-light: #D1FAE5;
-  --app-chrome-bg: #0a1813;
+  --app-chrome-bg: #064E3B;
+  --app-canvas-bg: #F1FBF6;
 }
 :root[data-accent="teal"] {
   --nts-accent: #0D9488;
@@ -89,7 +104,8 @@
   --nts-orange: #0D9488;
   --nts-orange-hover: #0F766E;
   --nts-orange-light: #CCFBF1;
-  --app-chrome-bg: #0a1a19;
+  --app-chrome-bg: #134E4A;
+  --app-canvas-bg: #F0FAF9;
 }
 :root[data-accent="rose"] {
   --nts-accent: #E11D48;
@@ -98,7 +114,8 @@
   --nts-orange: #E11D48;
   --nts-orange-hover: #BE123C;
   --nts-orange-light: #FFE4E6;
-  --app-chrome-bg: #1d0d13;
+  --app-chrome-bg: #9F1239;
+  --app-canvas-bg: #FFF4F6;
 }
 
 /* IMPORTANT: Do NOT zero out margins/paddings globally when using Primer.
