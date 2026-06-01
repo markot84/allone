@@ -1003,6 +1003,9 @@ export async function fetchMagentoData(brandId: string): Promise<{
   imported: number;
   error?: string;
   message?: string;
+  /** Non-fatal degraded outcome (π.χ. orders OK αλλά product-catalog ACL denied). */
+  warning?: string;
+  degraded?: boolean;
 }> {
   const db = getDb();
   const connectorDoc = await db.doc(`connectors/${brandId}`).get();
@@ -1260,6 +1263,11 @@ export async function fetchMagentoData(brandId: string): Promise<{
     let productsOk = true;
     let productsBackfillIncomplete = false;
     let prodImportedCount = 0;
+    // Product-catalog access denial (HTTP 401/403) είναι ΜΗ-fatal: τα orders/E-commerce
+    // ρέουν κανονικά· λείπει μόνο ο εμπλουτισμός εικόνων/meta. Το κρατάμε ξεχωριστά από
+    // τα fatal errors ώστε το sync να ΜΗΝ βαφτίζεται «αποτυχία».
+    let productCatalogDenied = false;
+    let productCatalogDeniedReason = '';
 
     // SKU lookup map (id → sku) — lightweight, only IDs+SKUs kept in memory for variant resolution.
     const idToSku = new Map<string, string>();
@@ -1303,8 +1311,13 @@ export async function fetchMagentoData(brandId: string): Promise<{
           const bodyText = await res.text().catch(() => '');
           const error = `${formatMagentoProductAccessError(res.status, productUrl, bodyText)} page=${prodPage}`;
           logger.warn(`[Magento] ${error}`);
-          errors.push(error);
           productsOk = false;
+          if (res.status === 401 || res.status === 403) {
+            productCatalogDenied = true;
+            productCatalogDeniedReason = error;
+          } else {
+            errors.push(error);
+          }
           break;
         }
 
@@ -1357,8 +1370,13 @@ export async function fetchMagentoData(brandId: string): Promise<{
             const bodyText = await res.text().catch(() => '');
             const error = `${formatMagentoProductAccessError(res.status, productUrl, bodyText)} page=${prodPage}`;
             logger.warn(`[Magento] ${error}`);
-            errors.push(error);
             productsOk = false;
+            if (res.status === 401 || res.status === 403) {
+              productCatalogDenied = true;
+              productCatalogDeniedReason = error;
+            } else {
+              errors.push(error);
+            }
             break;
           }
 
@@ -1428,7 +1446,8 @@ export async function fetchMagentoData(brandId: string): Promise<{
       connectorPatch['magento.lastProductsSyncAt'] = FieldValue.serverTimestamp();
     } else {
       connectorPatch['magento.productCatalogAccess'] = false;
-      connectorPatch['magento.productCatalogAccessError'] = errors.find((e) => e.includes('product catalog')) || errors[errors.length - 1] || 'Magento products sync failed';
+      connectorPatch['magento.productCatalogAccessError'] =
+        productCatalogDeniedReason || errors.find((e) => e.includes('product catalog')) || errors[errors.length - 1] || 'Magento products sync failed';
       connectorPatch['magento.productCatalogAccessCheckedAt'] = FieldValue.serverTimestamp();
     }
     if (Object.keys(connectorPatch).length) {
@@ -1458,11 +1477,27 @@ export async function fetchMagentoData(brandId: string): Promise<{
       products: prodImportedCount,
       failed: errors.length,
       errors: errors.slice(0, 20),
+      // Degraded = μη-fatal (orders OK, λείπει μόνο ο εμπλουτισμός καταλόγου).
+      degraded: productCatalogDenied,
+      degradedReason: productCatalogDenied ? productCatalogDeniedReason.slice(0, 500) : null,
       createdAt: FieldValue.serverTimestamp(),
     });
 
-    logger.info(`[Magento] Sync complete for brand ${brandId}: ${totalImported} total items (errors=${errors.length})`);
-    return { success: errors.length === 0, imported: totalImported, ...(errors.length ? { error: errors[0] } : {}) };
+    logger.info(
+      `[Magento] Sync complete for brand ${brandId}: ${totalImported} total items (errors=${errors.length}${productCatalogDenied ? ', product-catalog degraded' : ''})`
+    );
+    return {
+      success: errors.length === 0,
+      imported: totalImported,
+      ...(errors.length ? { error: errors[0] } : {}),
+      ...(productCatalogDenied
+        ? {
+            degraded: true,
+            warning:
+              'Τα orders συγχρονίστηκαν κανονικά. Δεν φέραμε εικόνες/στοιχεία καταλόγου (το Magento token δεν έχει πρόσβαση Catalog/Products). Τα δεδομένα E-commerce δεν επηρεάζονται.',
+          }
+        : {}),
+    };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     logger.error(`[Magento] fetchMagentoData error for ${brandId}:`, msg);

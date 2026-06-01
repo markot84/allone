@@ -2607,6 +2607,9 @@ export function ConnectorsPanel() {
             result.message ||
               `OpenCart: εισήχθησαν ${result.imported ?? 0} εγγραφές — συνεχίζει στο background.`
           );
+        } else if (result.warning) {
+          // Degraded αλλά επιτυχές (π.χ. orders OK, product-catalog ACL denied) — info, όχι error.
+          toast.info(result.warning);
         } else {
           toast.success(`Εισήχθησαν ${result.imported} ${label}`);
         }
