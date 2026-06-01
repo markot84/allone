@@ -29,7 +29,7 @@ export interface AccentPreset {
 
 export const ACCENT_PRESETS: AccentPreset[] = [
   // Μονόχρωμα (accent + ομόχρωμο chrome)
-  { id: 'classic', label: 'Κλασικό', swatch: '#F97316', swatch2: '#111111' },
+  { id: 'classic', label: 'Κλασικό', swatch: '#111111' },
   { id: 'orange', label: 'Πορτοκαλί', swatch: '#F97316' },
   { id: 'blue', label: 'Μπλε', swatch: '#2563EB' },
   { id: 'violet', label: 'Μωβ', swatch: '#7C3AED' },
