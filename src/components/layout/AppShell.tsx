@@ -28,7 +28,7 @@ import {
   ThreeBarsIcon,
   XIcon
 } from '@primer/octicons-react';
-import { Upload, UserPlus, Building2, Target, Euro, Truck, FileSpreadsheet, GitPullRequestArrow, Zap, BarChart3, ShoppingBag, Handshake, Users, Globe2, HeartHandshake, MapPin, ClipboardList } from 'lucide-react';
+import { Upload, UserPlus, Building2, Target, Euro, Truck, FileSpreadsheet, GitPullRequestArrow, Zap, BarChart3, ShoppingBag, Handshake, Users, Globe2, HeartHandshake, MapPin, ClipboardList, Palette } from 'lucide-react';
 import { NotificationBell } from '../coordination/NotificationBell';
 
 const SIDEBAR_PIN_KEY = 'perf-plus-sidebar-pinned';
@@ -438,6 +438,100 @@ function AccountMenu({
   );
 }
 
+/** Πάντα ορατό κουμπί παλέτας στην πάνω μπάρα → popover με τα accent χρώματα (per-user). */
+function AccentMenu() {
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
+  const [accent, setAccent] = useState<AccentId>(() => readStoredAccent());
+
+  useEffect(() => {
+    if (open && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      const gutter = 8;
+      const width = Math.min(220, window.innerWidth - gutter * 2);
+      const left = Math.min(Math.max(gutter, rect.right - width), window.innerWidth - width - gutter);
+      setMenuStyle({ position: 'fixed', top: rect.bottom + 4, left, width, zIndex: 1000 });
+    }
+  }, [open]);
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-label="Χρώμα έμφασης"
+        title="Χρώμα έμφασης"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: 36,
+          height: 36,
+          border: '1px solid rgba(255,255,255,0.12)',
+          borderRadius: 6,
+          background: 'rgba(255,255,255,0.06)',
+          color: 'rgba(255,255,255,0.85)',
+          cursor: 'pointer',
+        }}
+      >
+        <Palette size={18} />
+      </button>
+      {open && createPortal(
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 999 }} aria-hidden />
+          <div
+            style={{
+              ...menuStyle,
+              background: 'var(--bgColor-default, #ffffff)',
+              border: '1px solid var(--borderColor-default, #d0d7de)',
+              borderRadius: 8,
+              boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+              padding: 12,
+            }}
+          >
+            <Text as="div" size="small" style={{ color: 'var(--fgColor-muted, #57606a)', marginBottom: 8 }}>
+              Χρώμα έμφασης
+            </Text>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {ACCENT_PRESETS.map((preset) => {
+                const selected = accent === preset.id;
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    title={preset.label}
+                    aria-label={preset.label}
+                    aria-pressed={selected}
+                    onClick={() => { setStoredAccent(preset.id); setAccent(preset.id); }}
+                    style={{
+                      width: 26,
+                      height: 26,
+                      borderRadius: '50%',
+                      background: preset.swatch,
+                      border: selected ? '2px solid var(--fgColor-default, #24292f)' : '2px solid transparent',
+                      boxShadow: selected ? `0 0 0 2px ${preset.swatch}` : 'inset 0 0 0 1px rgba(0,0,0,0.08)',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: 0,
+                    }}
+                  >
+                    {selected && <span style={{ color: '#fff', fontSize: 14, fontWeight: 700, lineHeight: 1 }}>✓</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </>,
+        document.body
+      )}
+    </>
+  );
+}
+
 const LAYOUT_WIDE_MQ = '(min-width: 1024px)';
 
 export function AppShell({ activeSection, onSectionChange, children }: AppShellProps) {
@@ -682,6 +776,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
                 onSelect={setCurrentBrand}
               />
             )}
+            <AccentMenu />
             <div style={{ position: 'relative', overflow: 'visible' }}>
               <NotificationBell onNavigate={(s) => onSectionChange(s)} />
             </div>
