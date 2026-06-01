@@ -66,6 +66,8 @@ const MAGENTO_UA = 'PerformancePlus-MagentoConnector/1.0';
 /** Default per-request timeout για Magento REST. Σπασμένα/υποφορτωμένα stores κρεμούν fetch χωρίς αυτό. */
 const MAGENTO_FETCH_TIMEOUT_MS = 30_000;
 const MAGENTO_ACTIVE_STOCK_SKU_CHUNK_SIZE = 50;
+/** Full-catalog fallback (ERP-less brands): max σελίδες/run (×100 προϊόντα), resume με cursor. */
+const MAGENTO_FULL_CATALOG_PAGE_BUDGET = 150;
 
 /** fetch wrapper με AbortController — μετατρέπει κρεμάσματα σε καθαρά errors. */
 async function magentoFetch(url: string, init: RequestInit = {}, timeoutMs = MAGENTO_FETCH_TIMEOUT_MS): Promise<Response> {
@@ -868,6 +870,129 @@ function extractMagentoPaymentInfo(payment: unknown): {
 }
 
 /**
+ * Map a page of Magento product items → feed-ready docs and stream-write them to
+ * `magento_products`. Shared between the active_stock path (SKU-filtered) and the
+ * full-catalog fallback (ERP-less brands). Returns the number of products written.
+ */
+async function ingestMagentoProductPage(
+  db: Firestore,
+  brandId: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  products: any[],
+  categoryMap: Map<string, MagentoCategoryInfo>,
+  idToSku: Map<string, string>,
+  parentLinks: { childId: string; parentId: string }[],
+): Promise<number> {
+  const pageItems: { id: string; data: Record<string, unknown> }[] = [];
+
+  for (const p of products) {
+    const customAttrs = p.custom_attributes || [];
+    const getAttr = (code: string): string => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const v = customAttrs.find((a: any) => a.attribute_code === code)?.value;
+      return v == null ? '' : String(v);
+    };
+    const stockItem = p.extension_attributes?.stock_item;
+
+    const imagePath = getAttr('image') || getAttr('small_image') || getAttr('thumbnail') || '';
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const galleryFirst = (p.media_gallery_entries || []).find((e: any) => !e?.disabled)?.file || '';
+    const imageRelative = imagePath || galleryFirst || '';
+
+    const urlKey = getAttr('url_key');
+    const description = getAttr('description');
+    const shortDescription = getAttr('short_description');
+    const metaTitle = getAttr('meta_title');
+    const metaDescription = getAttr('meta_description');
+    const gtin = getAttr('gtin') || getAttr('ean') || getAttr('upc') || getAttr('barcode');
+    const mpn = getAttr('mpn') || getAttr('manufacturer_part_number');
+    const color = getAttr('color');
+    const size = getAttr('size');
+    const visibility = Number(p.visibility ?? 0);
+
+    const categoryIds: string[] = (p.extension_attributes?.category_links || [])
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .map((c: any) => String(c?.category_id || ''))
+      .filter(Boolean);
+    const categoryPaths = categoryIds
+      .map((id) => categoryMap.get(id)?.pathNames || [])
+      .filter((path) => path.length > 0)
+      .sort((a, b) => b.length - a.length);
+    const primaryCategoryPath = categoryPaths[0] || [];
+    const categoryNames = [...new Set(categoryPaths.flat())];
+    const categoryName = primaryCategoryPath[0] || '';
+    const subcategoryName =
+      primaryCategoryPath.length > 1 ? primaryCategoryPath[primaryCategoryPath.length - 1] : '';
+
+    const configurableLinks: string[] = (p.extension_attributes?.configurable_product_links || [])
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .map((id: any) => String(id))
+      .filter(Boolean);
+    if (p.type_id === 'configurable' && configurableLinks.length > 0) {
+      for (const childId of configurableLinks) {
+        parentLinks.push({ childId, parentId: String(p.id) });
+      }
+    }
+
+    idToSku.set(String(p.id), String(p.sku || ''));
+    pageItems.push({
+      id: `mag_${p.id}`,
+      data: {
+        productId: String(p.id || ''),
+        sku: p.sku || '',
+        name: p.name || '',
+        type: p.type_id || '',
+        status: p.status === 1 ? 'active' : 'inactive',
+        visibility,
+        price: parseFloat(p.price || '0'),
+        weight: parseFloat(p.weight || '0'),
+        stockQuantity: stockItem?.qty ?? null,
+        inStock: stockItem?.is_in_stock ?? null,
+        specialPrice: getAttr('special_price') ? parseFloat(getAttr('special_price')) : null,
+        manufacturer: getAttr('manufacturer'),
+        category: categoryName,
+        subcategory: subcategoryName,
+        categoryNames,
+        categoryPath: primaryCategoryPath,
+        urlKey,
+        description,
+        shortDescription,
+        metaTitle,
+        metaDescription,
+        imageRelative,
+        gtin,
+        mpn,
+        color,
+        size,
+        categoryIds,
+        configurableLinks,
+        createdAt: p.created_at || '',
+        updatedAt: p.updated_at || '',
+        source: 'magento_api',
+        brandId,
+      },
+    });
+  }
+
+  if (pageItems.length > 0) {
+    for (let i = 0; i < pageItems.length; i += 500) {
+      const batch = db.batch();
+      const chunk = pageItems.slice(i, i + 500);
+      for (const item of chunk) {
+        batch.set(
+          db.collection('magento_products').doc(item.id),
+          { ...item.data, updatedAt: FieldValue.serverTimestamp() },
+          { merge: true }
+        );
+      }
+      await batch.commit();
+    }
+  }
+
+  return pageItems.length;
+}
+
+/**
  * Fetch Magento orders/products and store in Firestore.
  * First runs backfill history; later runs use updated_at with overlap for status/stock changes.
  * Customer email is stored for audience exports, while `customerEmailHash` is used
@@ -939,10 +1064,11 @@ export async function fetchMagentoData(brandId: string): Promise<{
     orderWindow.windowStart = orderCursor;
   }
 
-  const productsMode = 'active_stock';
   const productsWindowStart: Date | null = null;
   const productsWindowEnd = new Date();
   const activeStockSkus = await loadActiveStockSkus(db, brandId);
+  // ERP-less brands (άδειο `products`) → full_catalog fallback· αλλιώς active_stock enrichment.
+  const productsMode: 'active_stock' | 'full_catalog' = activeStockSkus.length === 0 ? 'full_catalog' : 'active_stock';
 
   logger.info(
     `[Magento] Sync windows for ${brandId}: orders=${orderWindow.mode}:${toMagentoDateTime(orderWindow.windowStart)}->${toMagentoDateTime(orderWindow.windowEnd)} products=${productsMode}:activeStockSkus=${activeStockSkus.length} · ordersScope=${syncAllStores ? 'all_stores' : `store_id=${Number.isFinite(storeId) && storeId > 0 ? storeId : 'none'}`}`
@@ -1140,25 +1266,36 @@ export async function fetchMagentoData(brandId: string): Promise<{
     const parentLinks: { childId: string; parentId: string }[] = [];
     const categoryMap = await fetchMagentoCategoryMap(restApiBase, storeCode, headers);
 
-    const activeSkuChunks = chunkArray(activeStockSkus, MAGENTO_ACTIVE_STOCK_SKU_CHUNK_SIZE);
-    if (activeSkuChunks.length === 0) {
-      logger.info(`[Magento] Products skipped for ${brandId}: no ERP SKUs with stock_level > 0`);
-      prodMore = false;
-    }
+    // Stock-source: ο ERP/import γεμίζει το `products` collection με stock_level>0.
+    // Brands ΧΩΡΙΣ ERP (Magento-only, π.χ. safeblock) έχουν άδειο `products` → 0 SKUs.
+    // Σε αυτή την περίπτωση κάνουμε fallback σε direct full-catalog sync (όπως πριν
+    // το active_stock scoping), αλλιώς ο κατάλογος δεν θα συγχρονιζόταν ποτέ.
+    const useFullCatalogFallback = productsMode === 'full_catalog';
+    let fullCatalogResumeCursor: Date | null = null;
 
-    for (const skuChunk of activeSkuChunks) {
+    if (useFullCatalogFallback) {
+      // ── Full catalog fallback (no ERP stock source) ──────────────────
+      const productCursor = coerceSyncDate((connector as Record<string, unknown>).productsHistoryCursor);
+      let lastProductUpdatedAt: Date | null = null;
+      let pagesFetched = 0;
       prodPage = 1;
       prodMore = true;
+      logger.info(
+        `[Magento] No active-stock SKUs for ${brandId} → full_catalog fallback (ERP-less)${productCursor ? ` resume updated_at>${toMagentoDateTime(productCursor)}` : ''}`
+      );
+
       while (prodMore) {
         const searchParams = new URLSearchParams({
           'searchCriteria[pageSize]': '100',
           'searchCriteria[currentPage]': String(prodPage),
-          'searchCriteria[filter_groups][0][filters][0][field]': 'sku',
-          'searchCriteria[filter_groups][0][filters][0][value]': skuChunk.join(','),
-          'searchCriteria[filter_groups][0][filters][0][condition_type]': 'in',
           'searchCriteria[sortOrders][0][field]': 'updated_at',
           'searchCriteria[sortOrders][0][direction]': 'ASC',
         });
+        if (productCursor) {
+          searchParams.set('searchCriteria[filter_groups][0][filters][0][field]', 'updated_at');
+          searchParams.set('searchCriteria[filter_groups][0][filters][0][value]', toMagentoDateTime(productCursor));
+          searchParams.set('searchCriteria[filter_groups][0][filters][0][condition_type]', 'gt');
+        }
 
         const productUrl = buildMagentoRestUrl(restApiBase, `products?${searchParams.toString()}`, storeCode);
         const res = await magentoFetch(productUrl, { headers });
@@ -1172,116 +1309,70 @@ export async function fetchMagentoData(brandId: string): Promise<{
         }
 
         const body = await res.json();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const products: any[] = body.items || [];
         const totalCount: number = body.total_count || 0;
-        const pageItems: { id: string; data: Record<string, unknown> }[] = [];
+        prodImportedCount += await ingestMagentoProductPage(db, brandId, products, categoryMap, idToSku, parentLinks);
 
         for (const p of products) {
-          const customAttrs = p.custom_attributes || [];
-          const getAttr = (code: string): string => {
-            const v = customAttrs.find((a: any) => a.attribute_code === code)?.value;
-            return v == null ? '' : String(v);
-          };
-          const stockItem = p.extension_attributes?.stock_item;
-
-          // Image: προτεραιότητα custom_attributes.image (σχετικό path) → /catalog/product
-          // εναλλακτικά πρώτο media_gallery_entries[].file
-          const imagePath = getAttr('image') || getAttr('small_image') || getAttr('thumbnail') || '';
-          const galleryFirst = (p.media_gallery_entries || []).find((e: any) => !e?.disabled)?.file || '';
-          const imageRelative = imagePath || galleryFirst || '';
-
-          const urlKey = getAttr('url_key');
-          const description = getAttr('description');
-          const shortDescription = getAttr('short_description');
-          const metaTitle = getAttr('meta_title');
-          const metaDescription = getAttr('meta_description');
-          const gtin = getAttr('gtin') || getAttr('ean') || getAttr('upc') || getAttr('barcode');
-          const mpn = getAttr('mpn') || getAttr('manufacturer_part_number');
-          const color = getAttr('color');
-          const size = getAttr('size');
-          const visibility = Number(p.visibility ?? 0);
-
-          const categoryIds: string[] = (p.extension_attributes?.category_links || [])
-            .map((c: any) => String(c?.category_id || ''))
-            .filter(Boolean);
-          const categoryPaths = categoryIds
-            .map((id) => categoryMap.get(id)?.pathNames || [])
-            .filter((path) => path.length > 0)
-            .sort((a, b) => b.length - a.length);
-          const primaryCategoryPath = categoryPaths[0] || [];
-          const categoryNames = [...new Set(categoryPaths.flat())];
-          const categoryName = primaryCategoryPath[0] || '';
-          const subcategoryName =
-            primaryCategoryPath.length > 1 ? primaryCategoryPath[primaryCategoryPath.length - 1] : '';
-
-          const configurableLinks: string[] = (p.extension_attributes?.configurable_product_links || [])
-            .map((id: any) => String(id))
-            .filter(Boolean);
-          if (p.type_id === 'configurable' && configurableLinks.length > 0) {
-            for (const childId of configurableLinks) {
-              parentLinks.push({ childId, parentId: String(p.id) });
-            }
-          }
-
-          idToSku.set(String(p.id), String(p.sku || ''));
-          pageItems.push({
-            id: `mag_${p.id}`,
-            data: {
-              productId: String(p.id || ''),
-              sku: p.sku || '',
-              name: p.name || '',
-              type: p.type_id || '',
-              status: p.status === 1 ? 'active' : 'inactive',
-              visibility,
-              price: parseFloat(p.price || '0'),
-              weight: parseFloat(p.weight || '0'),
-              stockQuantity: stockItem?.qty ?? null,
-              inStock: stockItem?.is_in_stock ?? null,
-              specialPrice: getAttr('special_price') ? parseFloat(getAttr('special_price')) : null,
-              manufacturer: getAttr('manufacturer'),
-              category: categoryName,
-              subcategory: subcategoryName,
-              categoryNames,
-              categoryPath: primaryCategoryPath,
-              // Feed-ready fields
-              urlKey,
-              description,
-              shortDescription,
-              metaTitle,
-              metaDescription,
-              imageRelative,
-              gtin,
-              mpn,
-              color,
-              size,
-              categoryIds,
-              // Variant relationships (αν configurable)
-              configurableLinks,
-              createdAt: p.created_at || '',
-              updatedAt: p.updated_at || '',
-              source: 'magento_api',
-              brandId,
-            },
-          });
+          const u = coerceSyncDate(p.updated_at);
+          if (u && (!lastProductUpdatedAt || u > lastProductUpdatedAt)) lastProductUpdatedAt = u;
         }
 
-        // Streaming write: commit this page immediately to avoid memory accumulation.
-        if (pageItems.length > 0) {
-          for (let i = 0; i < pageItems.length; i += 500) {
-            const batch = db.batch();
-            const chunk = pageItems.slice(i, i + 500);
-            for (const item of chunk) {
-              batch.set(db.collection('magento_products').doc(item.id), { ...item.data, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-            }
-            await batch.commit();
-          }
-          prodImportedCount += pageItems.length;
-        }
-
+        pagesFetched++;
         prodMore = prodPage * 100 < totalCount;
+        if (prodMore && pagesFetched >= MAGENTO_FULL_CATALOG_PAGE_BUDGET) {
+          productsBackfillIncomplete = true;
+          prodMore = false;
+          logger.warn(`[Magento] Full catalog page budget (${MAGENTO_FULL_CATALOG_PAGE_BUDGET}) reached for ${brandId}, resume next run`);
+        }
         prodPage++;
       }
-      if (!productsOk) break;
+
+      // Resume cursor: αν κόπηκε από budget, συνεχίζουμε από το τελευταίο updated_at.
+      if (productsOk && productsBackfillIncomplete && lastProductUpdatedAt) {
+        fullCatalogResumeCursor = lastProductUpdatedAt;
+      }
+    } else {
+      // ── Active-stock scope (ERP-backed): SKU-filtered enrichment ──────
+      const activeSkuChunks = chunkArray(activeStockSkus, MAGENTO_ACTIVE_STOCK_SKU_CHUNK_SIZE);
+
+      for (const skuChunk of activeSkuChunks) {
+        prodPage = 1;
+        prodMore = true;
+        while (prodMore) {
+          const searchParams = new URLSearchParams({
+            'searchCriteria[pageSize]': '100',
+            'searchCriteria[currentPage]': String(prodPage),
+            'searchCriteria[filter_groups][0][filters][0][field]': 'sku',
+            'searchCriteria[filter_groups][0][filters][0][value]': skuChunk.join(','),
+            'searchCriteria[filter_groups][0][filters][0][condition_type]': 'in',
+            'searchCriteria[sortOrders][0][field]': 'updated_at',
+            'searchCriteria[sortOrders][0][direction]': 'ASC',
+          });
+
+          const productUrl = buildMagentoRestUrl(restApiBase, `products?${searchParams.toString()}`, storeCode);
+          const res = await magentoFetch(productUrl, { headers });
+          if (!res.ok) {
+            const bodyText = await res.text().catch(() => '');
+            const error = `${formatMagentoProductAccessError(res.status, productUrl, bodyText)} page=${prodPage}`;
+            logger.warn(`[Magento] ${error}`);
+            errors.push(error);
+            productsOk = false;
+            break;
+          }
+
+          const body = await res.json();
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const products: any[] = body.items || [];
+          const totalCount: number = body.total_count || 0;
+          prodImportedCount += await ingestMagentoProductPage(db, brandId, products, categoryMap, idToSku, parentLinks);
+
+          prodMore = prodPage * 100 < totalCount;
+          prodPage++;
+        }
+        if (!productsOk) break;
+      }
     }
 
     // Συμπλήρωση parentSku στα child variants (ώστε στο Ads Feed → item_group_id = parent SKU).
@@ -1328,9 +1419,12 @@ export async function fetchMagentoData(brandId: string): Promise<{
       connectorPatch['magento.productCatalogAccess'] = true;
       connectorPatch['magento.productCatalogAccessError'] = FieldValue.delete();
       connectorPatch['magento.productCatalogAccessCheckedAt'] = FieldValue.serverTimestamp();
-      connectorPatch['magento.productSyncScope'] = 'active_stock';
+      connectorPatch['magento.productSyncScope'] = productsMode;
       connectorPatch['magento.activeStockSkuCount'] = activeStockSkus.length;
-      connectorPatch['magento.productsHistoryCursor'] = FieldValue.delete();
+      // Full-catalog fallback: κράτα cursor αν κόπηκε από budget, αλλιώς καθάρισέ τον.
+      connectorPatch['magento.productsHistoryCursor'] = fullCatalogResumeCursor
+        ? fullCatalogResumeCursor
+        : FieldValue.delete();
       connectorPatch['magento.lastProductsSyncAt'] = FieldValue.serverTimestamp();
     } else {
       connectorPatch['magento.productCatalogAccess'] = false;
@@ -1351,7 +1445,7 @@ export async function fetchMagentoData(brandId: string): Promise<{
       mode: orderWindow.mode,
       ordersMode: orderWindow.mode,
       productsMode,
-      productSyncScope: 'active_stock',
+      productSyncScope: productsMode,
       activeStockSkuCount: activeStockSkus.length,
       windowStart: orderWindow.windowStart.toISOString(),
       windowEnd: orderWindow.windowEnd.toISOString(),
