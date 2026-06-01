@@ -639,8 +639,22 @@ async function fetchEcommercePlatformOrdersOnly(
     /** Διάβασε ΟΛΟ το εύρος (paginated) αντί μόνο τα `DATA_ANALYSIS_ORDER_LIMIT` πιο πρόσφατα.
      *  Απαραίτητο για Policy Impact: αλλιώς desc+limit κόβει σιωπηλά τους παλιότερους μήνες. */
     fetchAll?: boolean;
+    /** Callback προόδου κατά το paginated fetch (loaded/total παραγγελίες όλων των platforms). */
+    onProgress?: (info: { loaded: number; total: number }) => void;
   } = {}
 ): Promise<EcommerceRawOrder[]> {
+  // Κοινός μετρητής προόδου ανά platform (τρέχουν concurrently στο Promise.all).
+  const loadedByPlatform = new Map<string, number>();
+  const totalByPlatform = new Map<string, number>();
+  const emitProgress = () => {
+    if (!options.onProgress) return;
+    let loaded = 0;
+    let total = 0;
+    for (const v of loadedByPlatform.values()) loaded += v;
+    for (const v of totalByPlatform.values()) total += v;
+    options.onProgress({ loaded, total });
+  };
+
   const [allRules, results] = await Promise.all([
     fetchSalesChannelRulesForOrders(brandId, mode),
     Promise.all(
@@ -694,6 +708,9 @@ async function fetchEcommercePlatformOrdersOnly(
               });
               collected.push(...page.items);
               cursor = page.items.length === PAGE ? page.lastDoc : null;
+              totalByPlatform.set(platform, Math.min(page.totalCount, HARD_CAP));
+              loadedByPlatform.set(platform, collected.length);
+              emitProgress();
             } while (cursor && collected.length < HARD_CAP);
             return collected.map((row) => normalizeRawOrder(platform, row));
           } catch {
@@ -802,6 +819,7 @@ export async function fetchEcommercePlatformOrders(
     cacheFirst?: boolean;
     revenueMode?: 'brand' | 'classified' | 'all';
     fetchAll?: boolean;
+    onProgress?: (info: { loaded: number; total: number }) => void;
   } = {}
 ): Promise<EcommerceRawOrder[]> {
   if (platforms.length === 0) return [];

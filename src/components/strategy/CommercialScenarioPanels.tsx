@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ArrowDownRight, ArrowUpRight, Megaphone, RefreshCw, Tag } from 'lucide-react';
-import { Card, CardHeader, Spinner, Badge, ProductThumbnail, Tooltip } from '../common';
+import { Card, CardHeader, Badge, ProductThumbnail, Tooltip } from '../common';
 import { useCommercialScenarioImpacts } from '../../hooks/useCommercialScenarioImpacts';
 import { useProductThumbnails } from '../../hooks/useProductThumbnails';
 import type { ScenarioVerdict, SkuWindowMetrics } from '../../services/commercialScenarioMetrics';
@@ -111,12 +111,10 @@ export function CommercialScenarioPanels({
 
       {data.isRefreshing && !data.isLoading && (
         <div className="absolute inset-0 z-10 flex items-start justify-center bg-white/75 px-4 pt-20 backdrop-blur-[1px]">
-          <div className="flex max-w-md items-center gap-3 rounded-xl border border-[var(--nts-accent)]/20 bg-white p-4 shadow-lg">
-            <Spinner />
-            <div>
-              <p className="text-sm font-semibold text-[#1A1A1A]">Φορτώνουμε αποτελέσματα για τη νέα περίοδο...</p>
-              <p className="text-xs text-[#6B7280]">Ελέγχουμε πώς οι αλλαγές τιμών και το budget των καμπανιών επηρέασαν τον τζίρο.</p>
-            </div>
+          <div className="w-full max-w-md rounded-xl border border-[var(--nts-accent)]/20 bg-white p-4 shadow-lg">
+            <p className="text-sm font-semibold text-[#1A1A1A]">Φορτώνουμε αποτελέσματα για τη νέα περίοδο…</p>
+            <p className="mb-3 text-xs text-[#6B7280]">Ελέγχουμε πώς οι αλλαγές τιμών και το budget των καμπανιών επηρέασαν τον τζίρο.</p>
+            <ProgressBar progress={data.progress} />
           </div>
         </div>
       )}
@@ -149,9 +147,7 @@ export function CommercialScenarioPanels({
       <FilterChips filter={filter} onChange={setFilter} tab={activeTab} />
 
       {data.isLoading ? (
-        <div className="py-8">
-          <Spinner />
-        </div>
+        <LoadingProgress progress={data.progress} />
       ) : visibleTabs.length === 0 ? (
         <p className="text-sm text-[#6B7280]">
           Δεν υπάρχουν δεδομένα για αποφάσεις στην επιλεγμένη περίοδο.
@@ -191,6 +187,45 @@ export function CommercialScenarioPanels({
         </div>
       )}
     </Card>
+  );
+}
+
+function progressPct(progress: { loaded: number; total: number } | null | undefined): number | null {
+  if (!progress || progress.total <= 0) return null;
+  // Κρατάμε λίγο «αέρα» (έως 98%) μέχρι να ολοκληρωθεί και η ανάλυση μετά το fetch.
+  return Math.min(98, Math.round((progress.loaded / progress.total) * 100));
+}
+
+function ProgressBar({ progress }: { progress?: { loaded: number; total: number } | null }) {
+  const pct = progressPct(progress);
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between text-xs text-[#6B7280]">
+        <span>{pct == null ? 'Προετοιμασία…' : 'Φόρτωση παραγγελιών…'}</span>
+        <span className="font-mono font-semibold text-[var(--nts-accent)]">{pct == null ? '' : `${pct}%`}</span>
+      </div>
+      <div className="h-2 w-full overflow-hidden rounded-full bg-[#F3F4F6]">
+        <div
+          className={`h-full rounded-full bg-[var(--nts-accent)] transition-all duration-300 ${pct == null ? 'animate-pulse' : ''}`}
+          style={{ width: pct == null ? '35%' : `${Math.max(pct, 4)}%` }}
+        />
+      </div>
+      {progress && progress.total > 0 && (
+        <p className="mt-1 text-[10px] text-[#9CA3AF]">
+          {formatNumber(progress.loaded)} / {formatNumber(progress.total)} παραγγελίες
+        </p>
+      )}
+    </div>
+  );
+}
+
+function LoadingProgress({ progress }: { progress?: { loaded: number; total: number } | null }) {
+  return (
+    <div className="flex justify-center py-10">
+      <div className="w-full max-w-sm">
+        <ProgressBar progress={progress} />
+      </div>
+    </div>
   );
 }
 

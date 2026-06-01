@@ -100,6 +100,7 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
   const procurementSignals = useProcurementSignals();
   const { products } = useProducts();
   const [forceRefreshKey, setForceRefreshKey] = useState(0);
+  const [progress, setProgress] = useState<{ loaded: number; total: number } | null>(null);
 
   const costBySku = useMemo(
     () => buildUnitCostBySku(procurement.data.pricing_policy ?? []),
@@ -167,6 +168,7 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
       }
 
       const lookbackFrom = shiftIsoDate(period.fromDate, -30);
+      setProgress({ loaded: 0, total: 0 });
       // Platform-only (e-shop) orders με line items — όχι το ακριβό ERP-invoice διπλό fetch.
       // fetchAll: paginated ΟΛΟ το εύρος (αλλιώς desc+limit 5000 κόβει τους παλιότερους μήνες σε high-volume brands).
       const orders = await fetchEcommercePlatformOrders(brandId, ecomm.connectedPlatforms, {
@@ -175,6 +177,7 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
         cacheFirst: true,
         revenueMode: 'all',
         fetchAll: true,
+        onProgress: (info) => setProgress(info),
       });
 
       const priceRows = [];
@@ -214,6 +217,7 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
         marketing: { ...result.marketing, rows: result.marketing.rows.slice(0, MAX_MKT_CACHE) },
       };
       writeScenarioCache(brandId, period.fromDate, period.toDate, cachePayload);
+      setProgress(null);
       return result;
     },
     initialData: () => {
@@ -253,6 +257,7 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
     ordersWithLines: query.data?.ordersWithLines ?? 0,
     isLoading,
     isRefreshing: !!query.data && query.isFetching,
+    progress,
     hasOrderLines: (query.data?.ordersWithLines ?? 0) > 0,
     hasCostData: costBySku.size > 0,
     stockBySku,
