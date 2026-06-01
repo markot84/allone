@@ -147,13 +147,15 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
   type ScenarioPayload = ReturnType<typeof emptyPayload>;
 
   const query = useQuery({
+    // ΣΤΑΘΕΡΟ key: μόνο brand + περίοδος + manual refresh. ΔΕΝ βάζουμε volatile derived τιμές
+    // (costBySku.size, connectedPlatforms) που ξεκινούν «άδειες» σε κάθε mount και αλλάζουν όταν
+    // φορτώνουν τα dependent hooks — αυτό προκαλούσε αλλαγή key → χάσιμο in-memory cache → επανα-loading.
+    // Η αναλυτική επανυπολογισμός γίνεται μόνο με αλλαγή περιόδου ή με το κουμπί «Ανανέωση» (sync).
     queryKey: [
       'commercial_scenario_impacts',
       brandId,
       period?.fromDate,
       period?.toDate,
-      [...ecomm.connectedPlatforms].sort().join('|'),
-      costBySku.size,
       forceRefreshKey,
     ],
     queryFn: async () => {

@@ -47,10 +47,21 @@ export function writeScenarioCache<T>(
   const s = storage();
   const savedAt = Date.now();
   if (!s) return savedAt;
+  const key = buildKey(brandId, fromDate, toDate);
+  const payload = JSON.stringify({ savedAt, data });
   try {
-    s.setItem(buildKey(brandId, fromDate, toDate), JSON.stringify({ savedAt, data }));
+    s.setItem(key, payload);
   } catch {
-    // Ignore quota/private-mode failures.
+    // Quota exceeded: καθάρισε ΟΛΑ τα παλιά scenario entries (κάθε brand/period) και ξαναδοκίμασε,
+    // ώστε να επιβιώνει το cache του τρέχοντος period μεταξύ reloads αντί να χάνεται σιωπηλά.
+    try {
+      Object.keys(s)
+        .filter((k) => k.startsWith(`${CACHE_PREFIX}:`) && k !== key)
+        .forEach((k) => s.removeItem(k));
+      s.setItem(key, payload);
+    } catch {
+      // Private-mode ή ακόμη πάνω από quota — αγνόησε.
+    }
   }
   return savedAt;
 }
