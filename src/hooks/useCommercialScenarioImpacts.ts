@@ -206,7 +206,16 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
 
       priceRows.sort((a, b) => Math.abs(b.after.revenue - b.before.revenue) - Math.abs(a.after.revenue - a.before.revenue));
 
-      const price = { rows: priceRows, summary: summarizeRows(priceRows) };
+      // Summary υπολογίζεται από ΟΛΕΣ τις rows (σωστά counts). Ο πίνακας όμως δείχνει μόνο τις
+      // ΕΜΦΑΝΙΣΙΜΕΣ: actionable (pos/neg, όχι low-confidence) + neutral. Οι `insufficient` και τα
+      // low-confidence pos/neg δεν εμφανίζονται σε κανένα φίλτρο/chip → τις πετάμε ώστε (α) το cap
+      // να μη «λιμοκτονεί» τα neutral (που λόγω μικρής μεταβολής πέφτουν στο τέλος του sort) και
+      // (β) το KPI count να ταιριάζει πάντα με τον αριθμό γραμμών του πίνακα.
+      const priceSummary = summarizeRows(priceRows);
+      const displayablePriceRows = priceRows.filter(
+        (r) => r.verdict === 'neutral' || ((r.verdict === 'positive' || r.verdict === 'negative') && r.confidence !== 'low')
+      );
+      const price = { rows: displayablePriceRows, summary: priceSummary };
       // Marketing: ανίχνευση αποφάσεων (before = προηγούμενο ισόποσο διάστημα, υπολογίζεται στο service).
       const marketing = analyzeMarketingDecisions({
         campaigns: campaigns as Campaign[],

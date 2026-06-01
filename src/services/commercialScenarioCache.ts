@@ -1,6 +1,6 @@
 import { FirestoreService } from './firestore';
 
-const CACHE_PREFIX = 'pp-erp-scenario-v6';
+const CACHE_PREFIX = 'pp-erp-scenario-v7';
 // 7 ημέρες: ο χρήστης μπαινοβγαίνει στη σελίδα όλη την εβδομάδα — τα δεδομένα παραμένουν αποθηκευμένα
 // (μνήμη + localStorage + Firestore) και ξαναϋπολογίζονται μόνο σε αλλαγή περιόδου ή «Ανανέωση».
 export const SCENARIO_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -11,9 +11,13 @@ interface CacheEntry<T> {
   data: T;
 }
 
+// Bump όταν αλλάζει το σχήμα/φιλτράρισμα των cached rows (π.χ. v7: μόνο displayable rows),
+// ώστε τα παλιά Firestore cache docs να μη σερβίρουν stale payload.
+const REMOTE_CACHE_VERSION = 'v7';
+
 function remoteDocId(brandId: string, fromDate: string, toDate: string): string {
   // Firestore doc id: χωρίς '/'· οι ISO ημερομηνίες είναι ασφαλείς.
-  return `${brandId}__${fromDate}__${toDate}`;
+  return `${brandId}__${fromDate}__${toDate}__${REMOTE_CACHE_VERSION}`;
 }
 
 function storage(): Storage | null {
