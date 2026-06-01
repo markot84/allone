@@ -34,6 +34,7 @@ describe('marketingPlanMessage', () => {
         currentStockValue: 50,
         estimatedReorderQty: 17,
         estimatedReorderValue: 170,
+        reorderQtySource: 'estimated',
         action: 'increase',
         confidence: 'high',
         rationale: 'test',

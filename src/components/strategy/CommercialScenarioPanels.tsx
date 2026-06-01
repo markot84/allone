@@ -47,14 +47,9 @@ export function CommercialScenarioPanels({
     ? new Date(data.cachedAt).toLocaleString('el-GR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
     : null;
 
-  const visibleTabs = useMemo(
-    () =>
-      TABS.filter((t) => {
-        if (t.key === 'price') return (data.price?.rows.length ?? 0) > 0;
-        return (data.marketing?.rows.length ?? 0) > 0;
-      }),
-    [data.marketing?.rows.length, data.price?.rows.length]
-  );
+  // Και τα δύο tabs εμφανίζονται πάντα· το κενό περιεχόμενο το χειρίζεται το empty-state ανά tab.
+  // (Παλιά κρύβαμε το tab όταν rows=0 — έκανε το «Τιμές» να «εξαφανίζεται» όταν δεν εντοπίζονταν αλλαγές τιμών.)
+  const visibleTabs = TABS;
   const activeTab = visibleTabs.some((t) => t.key === tab) ? tab : (visibleTabs[0]?.key ?? tab);
 
   const active = useMemo(() => {
@@ -154,6 +149,8 @@ export function CommercialScenarioPanels({
         <EmptyHint hasCost={data.hasCostData} type="orders" />
       ) : activeTab === 'marketing' && (data.marketing?.rows.length ?? 0) === 0 ? (
         <p className="text-sm text-[#6B7280]">Δεν βρέθηκαν καμπάνιες με σημαντικό spend στην περίοδο.</p>
+      ) : activeTab === 'price' && (data.price?.rows.length ?? 0) === 0 ? (
+        <p className="text-sm text-[#6B7280]">Δεν εντοπίστηκαν αλλαγές τιμών με μετρήσιμη επίδραση στην επιλεγμένη περίοδο. Δοκιμάστε ευρύτερο εύρος ημερομηνιών.</p>
       ) : filteredCount === 0 ? (
         <p className="text-sm text-[#6B7280]">Δεν εντοπίστηκαν σενάρια με τα τρέχοντα κριτήρια.</p>
       ) : (
@@ -320,20 +317,30 @@ function MarketingKpis({
     negative: number;
     totalSpend: number;
     totalRevenue: number;
-    totalMargin: number;
+    totalNetProfit: number | null;
     blendedRoas: number | null;
   };
 }) {
   return (
     <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
       <MiniKpi label="Καμπάνιες" value={summary.detected} />
-      <MiniKpi label="Θετικές" value={summary.positive} tone="success" />
-      <MiniKpi label="Αρνητικές" value={summary.negative} tone="danger" />
       <MiniKpi label="Ad spend" value={formatCurrency(summary.totalSpend, 0)} />
       <MiniKpi
-        label="Store τζίρος / margin"
+        label="Αποδιδόμενος τζίρος"
+        tooltip="Τα έσοδα που αποδίδονται στις ίδιες τις καμπάνιες (conversion value από Google/Meta), όχι ο συνολικός τζίρος του store."
         value={formatCurrency(summary.totalRevenue, 0)}
-        sub={`margin ${formatCurrency(summary.totalMargin, 0)} · ROAS ${summary.blendedRoas != null ? `${summary.blendedRoas}x` : '—'}`}
+      />
+      <MiniKpi
+        label="Blended ROAS"
+        tooltip="Συνολικός αποδιδόμενος τζίρος ÷ συνολικό ad spend. ≥3x θεωρείται καλό."
+        value={summary.blendedRoas != null ? `${summary.blendedRoas}x` : '—'}
+        tone={summary.blendedRoas != null && summary.blendedRoas >= 3 ? 'success' : summary.blendedRoas != null && summary.blendedRoas < 1.5 ? 'danger' : undefined}
+      />
+      <MiniKpi
+        label="Καθαρό κέρδος"
+        tooltip="Εκτίμηση: αποδιδόμενος τζίρος × μικτό περιθώριο store − ad spend. Χρειάζεται κόστος ανά SKU (ERP/procurement)."
+        value={summary.totalNetProfit != null ? formatCurrency(summary.totalNetProfit, 0) : '—'}
+        tone={summary.totalNetProfit != null ? (summary.totalNetProfit >= 0 ? 'success' : 'danger') : undefined}
       />
     </div>
   );
@@ -593,18 +600,27 @@ function PriceTable({ rows, getThumbnailUrl, stockBySku }: { rows: PriceChangeIm
 function MarketingTable({ rows }: { rows: MarketingSpendImpactRow[] }) {
   const totSpend = rows.reduce((s, r) => s + r.spend, 0);
   const totRevenue = rows.reduce((s, r) => s + r.revenue, 0);
-  const totMargin = rows.reduce((s, r) => s + r.margin, 0);
+  const totConv = rows.reduce((s, r) => s + r.conversions, 0);
+  const hasNet = rows.some((r) => r.netProfit != null);
+  const totNet = rows.reduce((s, r) => s + (r.netProfit ?? 0), 0);
   const totRoas = totSpend > 0 ? Math.round((totRevenue / totSpend) * 100) / 100 : null;
   return (
     <table className="min-w-full text-left text-sm">
       <thead className="bg-[#FAFAFA] text-xs uppercase text-[#9CA3AF]">
         <tr>
           <th className="px-3 py-2">Καμπάνια</th>
-          <th className="px-3 py-2">Spend</th>
-          <th className="px-3 py-2">Τζίρος store</th>
-          <th className="px-3 py-2">Margin store</th>
-          <th className="px-3 py-2">ROAS</th>
-          <th className="px-3 py-2">Επίδραση</th>
+          <th className="px-3 py-2 text-right">Ad spend</th>
+          <th className="px-3 py-2 text-right">
+            <Tooltip content="Έσοδα που αποδίδονται στην καμπάνια (conversion value από Google/Meta).">Αποδιδόμενος τζίρος</Tooltip>
+          </th>
+          <th className="px-3 py-2 text-right">Conversions</th>
+          <th className="px-3 py-2 text-right">
+            <Tooltip content="Αποδιδόμενος τζίρος ÷ ad spend. ≥3x καλό, &lt;1.5x αδύναμο.">ROAS</Tooltip>
+          </th>
+          <th className="px-3 py-2 text-right">
+            <Tooltip content="Εκτίμηση καθαρού κέρδους: αποδιδόμενος τζίρος × μικτό περιθώριο store − ad spend.">Καθαρό κέρδος</Tooltip>
+          </th>
+          <th className="px-3 py-2 text-center">Επίδραση</th>
         </tr>
       </thead>
       <tbody className="divide-y divide-[#E5E7EB]">
@@ -614,31 +630,15 @@ function MarketingTable({ rows }: { rows: MarketingSpendImpactRow[] }) {
               <p className="font-semibold">{row.title}</p>
               <p className="text-xs text-[#6B7280]">{row.channel}</p>
             </td>
-            <td className="px-3 py-2 font-mono text-xs">
-              {formatEuro(row.spend)}
-              {row.spendVsLookbackPct != null && (
-                <p className={row.spendVsLookbackPct >= 0 ? 'text-amber-600' : 'text-emerald-600'}>
-                  vs lookback {row.spendVsLookbackPct >= 0 ? '+' : ''}
-                  {row.spendVsLookbackPct}%
-                </p>
-              )}
-            </td>
-            <td className="px-3 py-2 font-mono text-xs">
-              {formatEuro(row.revenue)}
-              {row.revenueChangePct != null && (
-                <p className="text-[10px] text-[#9CA3AF]">περίοδος {row.revenueChangePct >= 0 ? '+' : ''}{row.revenueChangePct}%</p>
-              )}
-            </td>
-            <td className="px-3 py-2 font-mono text-xs">
-              {formatEuro(row.margin)}
-              {row.marginChangePct != null && (
-                <p className={row.marginChangePct >= 0 ? 'text-emerald-600' : 'text-rose-600'}>
-                  {row.marginChangePct >= 0 ? '+' : ''}
-                  {row.marginChangePct}%
-                </p>
-              )}
-            </td>
-            <td className="px-3 py-2 font-mono text-xs">{row.roas != null ? `${row.roas}x` : '—'}</td>
+            <td className="px-3 py-2 font-mono text-xs text-right">{formatEuro(row.spend)}</td>
+            <td className="px-3 py-2 font-mono text-xs text-right">{formatEuro(row.revenue)}</td>
+            <td className="px-3 py-2 font-mono text-xs text-right">{formatNumber(row.conversions)}</td>
+            <td className={`px-3 py-2 font-mono text-xs text-right font-semibold ${
+              row.roas == null ? 'text-[#9CA3AF]' : row.roas >= 3 ? 'text-emerald-600' : row.roas < 1.5 ? 'text-rose-600' : 'text-[#374151]'
+            }`}>{row.roas != null ? `${row.roas}x` : '—'}</td>
+            <td className={`px-3 py-2 font-mono text-xs text-right ${
+              row.netProfit == null ? 'text-[#9CA3AF]' : row.netProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
+            }`}>{row.netProfit != null ? formatEuro(row.netProfit) : '—'}</td>
             <VerdictCell verdict={row.verdict} />
           </tr>
         ))}
@@ -646,10 +646,11 @@ function MarketingTable({ rows }: { rows: MarketingSpendImpactRow[] }) {
       <tfoot className="border-t-2 border-[#E5E7EB] bg-[#F9FAFB] text-xs font-semibold text-[#374151]">
         <tr>
           <td className="px-3 py-2">Σύνολο — {rows.length} καμπάνιες</td>
-          <td className="px-3 py-2 font-mono">{formatEuro(totSpend)}</td>
-          <td className="px-3 py-2 font-mono">{formatEuro(totRevenue)}</td>
-          <td className="px-3 py-2 font-mono">{formatEuro(totMargin)}</td>
-          <td className="px-3 py-2 font-mono">{totRoas != null ? `${totRoas}x` : '—'}</td>
+          <td className="px-3 py-2 font-mono text-right">{formatEuro(totSpend)}</td>
+          <td className="px-3 py-2 font-mono text-right">{formatEuro(totRevenue)}</td>
+          <td className="px-3 py-2 font-mono text-right">{formatNumber(totConv)}</td>
+          <td className="px-3 py-2 font-mono text-right">{totRoas != null ? `${totRoas}x` : '—'}</td>
+          <td className="px-3 py-2 font-mono text-right">{hasNet ? formatEuro(totNet) : '—'}</td>
           <td />
         </tr>
       </tfoot>

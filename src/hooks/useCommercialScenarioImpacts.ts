@@ -6,7 +6,7 @@ import { useEcommerceSummary } from './useEcommerceSummary';
 import { useProcurement } from './useProcurement';
 import { useProcurementSignals } from './useProcurementSignals';
 import { useProducts } from './useProducts';
-import { fetchDataAnalysisOrders } from '../services/ecommerceRawOrders';
+import { fetchEcommercePlatformOrders } from '../services/ecommerceRawOrders';
 import {
   buildSkuNameMapFromPricingRows,
   buildUnitCostBySku,
@@ -167,7 +167,8 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
       }
 
       const lookbackFrom = shiftIsoDate(period.fromDate, -30);
-      const orders = await fetchDataAnalysisOrders(brandId, ecomm.connectedPlatforms, {
+      // Platform-only (e-shop) orders με line items — όχι το ακριβό ERP-invoice διπλό fetch.
+      const orders = await fetchEcommercePlatformOrders(brandId, ecomm.connectedPlatforms, {
         sinceDate: lookbackFrom,
         untilDate: period.toDate,
         cacheFirst: true,
@@ -288,8 +289,10 @@ function emptyPayload() {
         insufficient: 0,
         totalSpend: 0,
         totalRevenue: 0,
-        totalMargin: 0,
+        totalConversions: 0,
+        totalNetProfit: null,
         blendedRoas: null,
+        storeMarginRate: null,
         lookbackDays: 30,
       },
     },

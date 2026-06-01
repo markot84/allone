@@ -134,7 +134,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
         period,
         lastYearOrders: lastYearOrdersQuery.data ?? [],
         inventoryProducts: [],
-        procurementSignals: procurementSignals.signalsBySku as Record<string, { available_stock?: number }>,
+        procurementSignals: procurementSignals.signalsBySku,
       });
       const coreMessage: MarketingPlanCoreMessage = await generateMarketingPlanMessage({
         insight,
@@ -280,6 +280,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
                             <th className="px-3 py-2 text-left">Προϊόν</th>
                             <th className="px-3 py-2 text-right">Πέρυσι τεμ.</th>
                             <th className="px-3 py-2 text-right">Stock</th>
+                            <th className="px-3 py-2 text-right">Margin</th>
                             <th className="px-3 py-2 text-right">Πρόταση</th>
                           </tr>
                         </thead>
@@ -574,14 +575,26 @@ function BudgetPill({ label, pct }: { label: string; pct: number }) {
 function ReorderCard({ row }: { row: MarketingPlanReorderGroup }) {
   const tone = row.action === 'increase' ? 'success' : row.action === 'maintain' ? 'warning' : row.action === 'reduce' ? 'info' : 'default';
   const actionLabel = row.action === 'increase' ? 'Παράγγειλε' : row.action === 'maintain' ? 'Διατήρησε' : row.action === 'reduce' ? 'Μείωσε' : 'Αποφύγει';
+  const marginTone =
+    row.marginPct == null ? '' : row.marginPct >= 30 ? 'text-emerald-600' : row.marginPct >= 15 ? 'text-amber-600' : 'text-rose-600';
   return (
     <div className="rounded-xl border border-[#E5E7EB] bg-white p-4">
       <div className="flex items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <p className="font-semibold text-[#1A1A1A]">{row.subcategory || row.category}</p>
           <p className="text-xs text-[#6B7280]">{[row.category, row.brand].filter(Boolean).join(' · ') || '—'}</p>
         </div>
-        <Badge variant={tone} size="sm">{actionLabel}</Badge>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <Badge variant={tone} size="sm">{actionLabel}</Badge>
+          <div className="flex items-center gap-1.5">
+            {row.marginPct != null && (
+              <span className={`text-[10px] font-semibold ${marginTone}`}>Margin {row.marginPct}%</span>
+            )}
+            {row.daysOfCover != null && (
+              <span className="text-[10px] text-[#9CA3AF]">· {formatNumber(row.daysOfCover)}ημ.</span>
+            )}
+          </div>
+        </div>
       </div>
       <div className="mt-3 grid grid-cols-3 gap-2">
         <div className="rounded-lg bg-[#F9FAFB] px-2 py-1.5 text-center">
@@ -593,7 +606,7 @@ function ReorderCard({ row }: { row: MarketingPlanReorderGroup }) {
           <p className={`font-mono text-sm font-bold ${row.currentStock < row.lastYearUnits * 0.35 ? 'text-rose-600' : 'text-[#1A1A1A]'}`}>{formatNumber(row.currentStock)}</p>
         </div>
         <div className="rounded-lg bg-[#F9FAFB] px-2 py-1.5 text-center">
-          <p className="text-[10px] text-[#9CA3AF]">Πρόταση</p>
+          <p className="text-[10px] text-[#9CA3AF]">Πρόταση{row.reorderQtySource === 'erp' ? ' · ERP' : ''}</p>
           <p className="font-mono text-sm font-bold text-[var(--nts-accent)]">{formatNumber(row.estimatedReorderQty)}</p>
         </div>
       </div>
@@ -612,7 +625,13 @@ function SkuRow({ row }: { row: MarketingPlanSkuSuggestion }) {
       </td>
       <td className="px-3 py-2 text-right font-mono">{formatNumber(row.lastYearUnits)}</td>
       <td className="px-3 py-2 text-right font-mono">{formatNumber(row.currentStock)}</td>
-      <td className="px-3 py-2 text-right font-mono font-semibold text-[var(--nts-accent)]">{formatNumber(row.estimatedReorderQty)}</td>
+      <td className={`px-3 py-2 text-right font-mono ${
+        row.marginPct == null ? 'text-[#9CA3AF]' : row.marginPct >= 30 ? 'text-emerald-600' : row.marginPct >= 15 ? 'text-amber-600' : 'text-rose-600'
+      }`}>{row.marginPct == null ? '—' : `${row.marginPct}%`}</td>
+      <td className="px-3 py-2 text-right font-mono font-semibold text-[var(--nts-accent)]">
+        {formatNumber(row.estimatedReorderQty)}
+        {row.reorderQtySource === 'erp' && <span className="ml-1 text-[9px] font-normal text-[#9CA3AF]">ERP</span>}
+      </td>
     </tr>
   );
 }

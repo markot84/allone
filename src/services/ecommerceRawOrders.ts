@@ -753,6 +753,26 @@ export async function fetchAllEcommerceOrders(
 }
 
 /**
+ * E-shop platform orders ΜΟΝΟ (Magento/Shopify/Woo/OpenCart) με line items — χωρίς το ERP-invoice
+ * μονοπάτι. Για features που χρειάζονται αποκλειστικά γραμμές προϊόντων (SKU/τιμή/τεμάχια), π.χ.
+ * Policy Impact, ώστε να αποφεύγουμε το ακριβό διπλό fetch (MV invoices + platform) για ERP-backed brands.
+ */
+export async function fetchEcommercePlatformOrders(
+  brandId: string,
+  platforms: string[],
+  options: {
+    sinceDate?: string;
+    untilDate?: string;
+    cacheFirst?: boolean;
+    revenueMode?: 'brand' | 'classified' | 'all';
+  } = {}
+): Promise<EcommerceRawOrder[]> {
+  if (platforms.length === 0) return [];
+  const mode = await fetchBrandRevenueSourceMode(brandId);
+  return fetchEcommercePlatformOrdersOnly(brandId, platforms, mode, options);
+}
+
+/**
  * Data Analysis (RFM / behavioral / predictive): παραγγελίες από ERP connectors πρώτα·
  * αν δεν υπάρχουν τιμολόγια / SALDOC στο εύρος, fallback στα e-shop connectors.
  */
