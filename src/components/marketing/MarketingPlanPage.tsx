@@ -65,8 +65,10 @@ type PlanStage = {
 const PLAN_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 type PlanCacheEntry = { savedAt: number; plan: MarketingPlanDraft };
 
+// v2: το draft περιλαμβάνει πλέον per-group SKU (για τα expandable reorder cards) — bump
+// ώστε παλιά cached drafts χωρίς `skus` να ξαναϋπολογιστούν.
 function planCacheStorageKey(brandId: string, preset: string): string {
-  return `mp_draft_v1_${brandId}_${preset}`;
+  return `mp_draft_v2_${brandId}_${preset}`;
 }
 
 function readPlanCacheEntry(brandId: string | null, preset: string): PlanCacheEntry | null {
@@ -94,7 +96,7 @@ function writePlanCache(brandId: string, preset: string, plan: MarketingPlanDraf
     // Έτσι το dedicated cache δεν αποτυγχάνει σιωπηλά (που οδηγούσε σε ξανατρέξιμο της ανάλυσης).
     try {
       Object.keys(localStorage)
-        .filter((k) => k.startsWith('mp_draft_v1_') && k !== key)
+        .filter((k) => k.startsWith('mp_draft_') && k !== key)
         .forEach((k) => localStorage.removeItem(k));
       localStorage.setItem(key, payload);
     } catch {
@@ -211,7 +213,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
   // Το plan draft ζει στο React Query cache (επιβιώνει της πλοήγησης) + localStorage (επιβιώνει reload),
   // με daily staleTime. Έτσι ΔΕΝ ξανατρέχει η βαριά ανάλυση + AI σε κάθε είσοδο στη σελίδα.
   const planQuery = useQuery<MarketingPlanDraft>({
-    queryKey: ['marketingPlanDraft', brandId, preset],
+    queryKey: ['marketingPlanDraft', 'v2', brandId, preset],
     enabled: baseDataReady,
     staleTime: PLAN_CACHE_TTL_MS,
     gcTime: PLAN_CACHE_TTL_MS,
