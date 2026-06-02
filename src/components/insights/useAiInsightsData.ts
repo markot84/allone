@@ -7,8 +7,13 @@ import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import { scenarios } from '../../data';
 import { generateInsightsFromData } from '../../services/insights';
 
-export function useAiInsightsData() {
-  const { segments } = useSegments();
+/**
+ * @param options.skipOrderHydration — Dashboard context: ΜΗΝ τραβάς 400ήμερο raw order history
+ *   για client-side RFM (παγώνει το main thread σε brands με χιλιάδες orders). Χρησιμοποιεί
+ *   imported/aggregate segments — ίδια πηγή με το dashboard segment grid.
+ */
+export function useAiInsightsData(options: { skipOrderHydration?: boolean } = {}) {
+  const { segments } = useSegments({ skipOrderHydration: options.skipOrderHydration });
   const { products } = useProducts();
   const { suppliers } = useSuppliers();
   const ecomm = useEcommerceSummary();

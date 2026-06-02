@@ -841,7 +841,7 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
       console.debug('[Dashboard] Organic revenue:', totalOrganicRevenue, 'hasOrganic:', hasOrganic);
     }
   }, [totalOrganicRevenue, hasOrganic]);
-  const { aiInsights } = useAiInsightsData();
+  const { aiInsights } = useAiInsightsData({ skipOrderHydration: true });
 
   // Handle insight action clicks
   const handleInsightAction = (insight: AIInsight) => {
