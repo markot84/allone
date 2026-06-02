@@ -371,7 +371,11 @@ service cloud.firestore {
       allow write: if isSuperAdmin();
     }
     match /appConfig/{docId} {
-      allow read: if request.auth != null;
+      // Firestore OR's overlapping match blocks, so this wildcard must NOT re-grant
+      // read on docs with stricter specific rules above — otherwise `superAdmins`
+      // (isSuperAdmin only) and `notifications` (no client read) leak to any
+      // authenticated user. Exclude them explicitly.
+      allow read: if request.auth != null && !(docId in ['superAdmins', 'notifications']);
       allow write: if isSuperAdmin();
     }
     // Automation settings & alerts
