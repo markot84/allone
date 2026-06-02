@@ -1721,20 +1721,30 @@ async function importProcurementFile(
     // μικρές αποκλίσεις (π.χ. «ΔΙΑΧΕΙΡΙΣΗ ΑΠΟΘΕΜΑΤΟΣ » με κενό) να ΜΗΝ ρίχνουν σιωπηλά ένα φύλλο.
     const normalizeSheetName = (s: string) =>
       String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
-    // Aliases ανά sheet για νεότερα templates. Π.χ. το «ΔΙΑΧΕΙΡΙΣΗ ΑΠΟΘΕΜΑΤΟΣ» έχει σπάσει σε
-    // «… MASTER» (συγκεντρωτικό με στήλες ανατροφοδοσίας — αυτό περιμένει η εφαρμογή) + «… ΑΝΑΛΥΤΙΚΟ»
-    // (ανά variant). Προτιμάμε exact → MASTER.
-    const SHEET_ALIASES: Partial<Record<ProcurementSheetType, string[]>> = {
-      inventory: ['ΔΙΑΧΕΙΡΙΣΗ ΑΠΟΘΕΜΑΤΟΣ MASTER'],
+    // Κανόνες αντιστοίχισης ανά sheet για νεότερα templates. Π.χ. το «ΔΙΑΧΕΙΡΙΣΗ ΑΠΟΘΕΜΑΤΟΣ» έχει
+    // σπάσει σε «… MASTER» (συγκεντρωτικό με στήλες ανατροφοδοσίας — αυτό περιμένει η εφαρμογή) +
+    // «… ΑΝΑΛΥΤΙΚΟ» (ανά variant). Χρησιμοποιούμε prefix-match στο ΚΑΘΑΡΑ ελληνικό «ΔΙΑΧΕΙΡΙΣΗ
+    // ΑΠΟΘΕΜΑΤΟΣ» γιατί το suffix «MASTER» σε ελληνικά Excel γράφεται συχνά με μεικτούς λατινο-
+    // ελληνικούς χαρακτήρες (Μ/Α/Ε lookalikes) → exact string match αποτυγχάνει. Με `deprefer`
+    // αποκλείουμε το «ΑΝΑΛΥΤΙΚΟ» ώστε να επιλεγεί το MASTER.
+    const SHEET_MATCH: Partial<Record<ProcurementSheetType, { prefix?: string; deprefer?: string[] }>> = {
+      inventory: { prefix: 'ΔΙΑΧΕΙΡΙΣΗ ΑΠΟΘΕΜΑΤΟΣ', deprefer: ['ΑΝΑΛΥΤΙΚΟ'] },
     };
-    const resolveSheet = (expected: string, aliases: string[]) => {
-      const candidates = [expected, ...aliases];
-      for (const c of candidates) if (wb.Sheets[c]) return wb.Sheets[c]; // exact
+    const resolveSheet = (expected: string, rule: { prefix?: string; deprefer?: string[] }) => {
+      if (wb.Sheets[expected]) return wb.Sheets[expected]; // exact
       const normNames = wb.SheetNames.map((n) => [n, normalizeSheetName(n)] as const);
-      for (const c of candidates) {
-        const t = normalizeSheetName(c);
-        const hit = normNames.find(([, nn]) => nn === t);
-        if (hit) return wb.Sheets[hit[0]];
+      const target = normalizeSheetName(expected);
+      const exactNorm = normNames.find(([, nn]) => nn === target);
+      if (exactNorm) return wb.Sheets[exactNorm[0]];
+      // Prefix fallback: ανθεκτικό σε suffix («MASTER»/«ΑΝΑΛΥΤΙΚΟ») ακόμη και με μεικτούς χαρακτήρες.
+      if (rule.prefix) {
+        const p = normalizeSheetName(rule.prefix);
+        const matches = normNames.filter(([, nn]) => nn.startsWith(p));
+        if (matches.length) {
+          const deprefer = (rule.deprefer ?? []).map(normalizeSheetName);
+          const preferred = matches.find(([, nn]) => !deprefer.some((d) => nn.includes(d)));
+          return wb.Sheets[(preferred ?? matches[0])[0]];
+        }
       }
       return undefined;
     };
@@ -1743,7 +1753,7 @@ async function importProcurementFile(
       const sheetType = PROCUREMENT_SHEET_ORDER[i];
       const sheetName = PROCUREMENT_SHEET_NAMES[sheetType];
       const coll = PROCUREMENT_COLLECTIONS[i];
-      const sheet = resolveSheet(sheetName, SHEET_ALIASES[sheetType] ?? []);
+      const sheet = resolveSheet(sheetName, SHEET_MATCH[sheetType] ?? {});
 
       if (!sheet) {
         result.warnings.push(`Φύλλο "${sheetName}" δεν βρέθηκε· παράλειψη. Διαθέσιμα φύλλα: ${wb.SheetNames.join(', ')}`);
