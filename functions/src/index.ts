@@ -2043,6 +2043,144 @@ export const scheduledProductIntelligence = onSchedule(
  *
  * The API key never leaves the server — stored as Firebase Secret.
  */
+
+/**
+ * Accept a brand invite — SERVER-SIDE join.
+ *
+ * Previously the SPA read the invite by token and wrote the member doc itself,
+ * which forced firestore.rules to let any authenticated user self-create a
+ * `brands/{b}/members/{uid}` doc with any role (PP-02) and write `invites`
+ * (PP-03) — a full cross-tenant takeover. Membership is now provisioned here
+ * via the Admin SDK (which bypasses rules), so those rules are locked down.
+ *
+ * The invite's `role` is the single source of truth — the caller cannot pick
+ * their own role. If the invite was addressed to a specific email, the signed-in
+ * account must match it. The invite is consumed atomically (single-use).
+ *
+ * Headers: Authorization: Bearer {FIREBASE_ID_TOKEN}
+ * Body: { token: string }
+ * Returns: { ok: true, brandId, role }
+ */
+export const acceptInvite = onRequest(
+  { region: 'europe-west1' },
+  async (req, res) => {
+    if (applyStrictCors(req, res)) return;
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'Method not allowed' });
+      return;
+    }
+    const authHeader = req.headers.authorization || '';
+    if (!authHeader.startsWith('Bearer ')) {
+      res.status(401).json({ error: 'Missing Authorization header' });
+      return;
+    }
+    let uid = '';
+    let callerEmail = '';
+    try {
+      const decoded = await admin.auth().verifyIdToken(authHeader.slice(7));
+      uid = decoded.uid;
+      callerEmail = (decoded.email || '').trim().toLowerCase();
+    } catch {
+      res.status(401).json({ error: 'Invalid or expired token' });
+      return;
+    }
+
+    // Per-user rate limit to blunt invite-token brute forcing.
+    const rl = await enforceRateLimit({ key: `acceptInvite:${uid}`, limit: 20, windowSeconds: 300 });
+    if (!rl.allowed) {
+      sendRateLimitExceeded(res, rl.resetInSeconds, 'acceptInvite');
+      return;
+    }
+
+    const token = typeof req.body?.token === 'string' ? req.body.token.trim() : '';
+    if (!token) {
+      res.status(400).json({ error: 'Missing token' });
+      return;
+    }
+
+    try {
+      const snap = await db.collection('invites').where('token', '==', token).limit(1).get();
+      if (snap.empty) {
+        res.status(404).json({ error: 'Invite not found' });
+        return;
+      }
+      const inviteRef = snap.docs[0].ref;
+      const inviteData = snap.docs[0].data() as {
+        brandId?: string; email?: string; role?: string; department?: string;
+        usedAt?: string; expiresAt?: string;
+      };
+      const brandId = inviteData.brandId;
+      if (!brandId) {
+        res.status(400).json({ error: 'Invite missing brandId' });
+        return;
+      }
+      if (inviteData.usedAt) {
+        res.status(409).json({ error: 'Invite already used' });
+        return;
+      }
+      if (inviteData.expiresAt && new Date(inviteData.expiresAt) < new Date()) {
+        res.status(410).json({ error: 'Invite expired' });
+        return;
+      }
+      // If the invite was addressed to a specific email, the accepting account
+      // must match it — stops a leaked link being redeemed by a different user.
+      const inviteEmail = (inviteData.email || '').trim().toLowerCase();
+      if (inviteEmail && inviteEmail !== callerEmail) {
+        logger.warn('[acceptInvite] email mismatch', { uid, brandId });
+        res.status(403).json({ error: 'This invite was issued to a different email address' });
+        return;
+      }
+
+      const role = inviteData.role === 'admin' ? 'admin' : 'member';
+      const department = inviteData.department || 'other';
+      const userRef = db.doc(`users/${uid}`);
+
+      await db.runTransaction(async (tx) => {
+        const freshInvite = await tx.get(inviteRef);
+        if ((freshInvite.data() as { usedAt?: string } | undefined)?.usedAt) {
+          throw new Error('ALREADY_USED');
+        }
+        const userSnap = await tx.get(userRef);
+        const profile = (userSnap.data() as {
+          brandIds?: string[]; defaultBrandId?: string; email?: string; displayName?: string;
+        } | undefined) || {};
+        const brandIds = Array.isArray(profile.brandIds) ? profile.brandIds : [];
+
+        // 1. Member doc — role pinned to the invite, never caller-chosen.
+        tx.set(db.doc(`brands/${brandId}/members/${uid}`), {
+          userId: uid,
+          email: profile.email || callerEmail || inviteEmail || '',
+          displayName: profile.displayName || '',
+          role,
+          department,
+          joinedAt: new Date().toISOString(),
+        }, { merge: true });
+
+        // 2. User profile brand membership.
+        if (!brandIds.includes(brandId)) {
+          tx.set(userRef, {
+            id: uid,
+            brandIds: [...brandIds, brandId],
+            defaultBrandId: profile.defaultBrandId || brandId,
+          }, { merge: true });
+        }
+
+        // 3. Consume the invite (single-use).
+        tx.update(inviteRef, { usedAt: new Date().toISOString(), usedBy: uid });
+      });
+
+      res.status(200).json({ ok: true, brandId, role });
+    } catch (err) {
+      if (err instanceof Error && err.message === 'ALREADY_USED') {
+        res.status(409).json({ error: 'Invite already used' });
+        return;
+      }
+      logger.error('[acceptInvite] failed', err);
+      res.status(500).json({ error: 'Invite acceptance failed' });
+    }
+  }
+);
+
 export const geminiProxy = onRequest(
   /**
    * 120s timeout (διπλάσιο του default 60s): το Gemini API σπάνια κρατά τόσο, αλλά cold-start

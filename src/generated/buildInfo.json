@@ -1,10 +1,18 @@
 {
-  "version": "0.749.232",
-  "previousVersion": "0.749.231",
-  "commitHash": "fa55152",
-  "branch": "Security-Review-Fixes",
-  "buildDate": "2026-05-25T10:35:06.155Z",
+  "version": "0.749.233",
+  "previousVersion": "0.749.232",
+  "commitHash": "763bcb8",
+  "branch": "pentest-findings",
+  "buildDate": "2026-06-02T13:22:22.304Z",
   "commits": [
+    {
+      "hash": "763bcb8",
+      "message": "fix: added required script to migrate important fields to the firebase db"
+    },
+    {
+      "hash": "0f5c47c",
+      "message": "fix: additional SDLC findings that came up from the latest merge changes"
+    },
     {
       "hash": "fa55152",
       "message": "fix: changes based on complete pages stress-testing, platform bugs and security changes improvements"
@@ -56,17 +64,11 @@
     {
       "hash": "5fedaa2",
       "message": "fix: NPM audit fix"
-    },
-    {
-      "hash": "5bec30d",
-      "message": "fix: security findings"
-    },
-    {
-      "hash": "919a1cf",
-      "message": "first commit"
     }
   ],
   "changes": [
+    "[Διόρθωση] Added required script to migrate important fields to the firebase db",
+    "[Διόρθωση] Additional SDLC findings that came up from the latest merge changes",
     "[Διόρθωση] Changes based on complete pages stress-testing, platform bugs and security changes improvements",
     "[Διόρθωση] Changes on initial page, login and brand creation to allow deployment based on the new changes",
     "[Διόρθωση] Removed explicit, hardcoded firebase ID from the code, all are controlled via .env included ID",
@@ -74,8 +76,6 @@
     "[Διόρθωση] Correct auth endpoints",
     "[Διόρθωση] Dead code cleanup and archived one-shot scripts",
     "[Διόρθωση] Moved most .env variables to firebase and updated .env.sample to only inlcude firebase connection",
-    "Staging fixes",
-    "[Διόρθωση] Security findings",
-    "[Διόρθωση] UUIDs and exposed verification token"
+    "Staging fixes"
   ]
 }

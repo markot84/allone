@@ -1,7 +1,6 @@
-import { where } from 'firebase/firestore';
 import { FirestoreService } from './firestore';
-import { MembersService } from './coordination';
 import { logAndNotify } from './coordination';
+import { auth, FUNCTIONS_BASE_URL, getAppCheckHeader } from '../config/firebase';
 import type { Invite, BrandDepartment } from '../types';
 
 const INVITE_EXPIRY_DAYS = 7;
@@ -35,9 +34,15 @@ export async function createInvite(
   return { token, inviteId };
 }
 
+// The invite doc id is deterministically derived from the token (see createInvite).
+// We read by id rather than querying `where('token','==')` because firestore.rules
+// denies `list` on /invites (anti-enumeration) while allowing single-doc `get`.
+function inviteIdForToken(token: string): string {
+  return `inv_${token.replace(/-/g, '_')}`;
+}
+
 export async function getInviteByToken(token: string): Promise<(Invite & { brand?: { name: string } }) | null> {
-  const invites = await FirestoreService.getDocuments<Invite>('invites', [where('token', '==', token)], null);
-  const invite = invites[0];
+  const invite = await FirestoreService.getDocument<Invite>('invites', inviteIdForToken(token));
   if (!invite) return null;
   if (invite.usedAt) return null;
   const expiresAt = new Date(invite.expiresAt);
@@ -51,52 +56,51 @@ export async function getInviteByToken(token: string): Promise<(Invite & { brand
   return { ...invite, brand: brand ?? undefined };
 }
 
+/**
+ * Accept an invite. The actual join (member doc + user profile + consuming the
+ * invite) happens SERVER-SIDE in the `acceptInvite` Cloud Function via the Admin
+ * SDK — the client can no longer self-create a member doc with an arbitrary role
+ * (firestore.rules locks `members` create + `invites` write down). The invite's
+ * role is pinned server-side; the caller cannot choose it.
+ */
 export async function acceptInvite(token: string, userId: string): Promise<void> {
-  const invites = await FirestoreService.getDocuments<Invite>('invites', [where('token', '==', token)], null);
-  const invite = invites[0];
-  if (!invite) throw new Error('Invite not found');
-  if (invite.usedAt) throw new Error('Invite already used');
-  const expiresAt = new Date(invite.expiresAt);
-  if (expiresAt < new Date()) throw new Error('Invite expired');
+  const idToken = await auth.currentUser?.getIdToken();
+  if (!idToken) throw new Error('Not authenticated');
 
-  const profile = await FirestoreService.getDocument<{ brandIds?: string[]; defaultBrandId?: string }>('users', userId);
-  const brandIds = profile?.brandIds ?? [];
-  if (!brandIds.includes(invite.brandId)) {
-    // Use setDocument with merge - creates profile if new user, merges if exists
-    await FirestoreService.setDocument('users', userId, {
-      id: userId,
-      brandIds: [...brandIds, invite.brandId],
-      defaultBrandId: profile?.defaultBrandId || invite.brandId,
-    } as Record<string, unknown>);
+  const url = `${FUNCTIONS_BASE_URL.replace(/\/$/, '')}/acceptInvite`;
+  const appCheck = await getAppCheckHeader();
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${idToken}`,
+      ...appCheck,
+    },
+    body: JSON.stringify({ token }),
+  });
+  const json = (await res.json().catch(() => ({}))) as { ok?: boolean; brandId?: string; error?: string };
+  if (!res.ok || !json.ok || !json.brandId) {
+    throw new Error(json.error || 'Invite acceptance failed');
   }
+  const brandId = json.brandId;
 
-  const userProfile = await FirestoreService.getDocument<{ email?: string; displayName?: string }>('users', userId);
-  const displayName = userProfile?.displayName ?? '';
-  const department = invite.department ?? 'other';
-
-  await MembersService.set(invite.brandId, {
-    userId,
-    email: userProfile?.email ?? invite.email ?? '',
-    displayName,
-    role: (invite.role === 'admin' ? 'admin' : 'member') as 'admin' | 'member',
-    department,
-    joinedAt: new Date().toISOString(),
-  });
-
-  await FirestoreService.updateDocument('invites', invite.id, {
-    usedAt: new Date().toISOString(),
-  });
-
-  // Notify team about new member
-  logAndNotify(
-    invite.brandId,
-    userId,
-    displayName || 'Νέο μέλος',
-    'member_joined',
-    'member',
-    userId,
-    `${displayName || 'Νέος χρήστης'} εντάχθηκε στην ομάδα`,
-    'Νέο μέλος',
-    `${displayName || 'Νέος χρήστης'} εντάχθηκε στην ομάδα`
-  ).catch(() => {});
+  // Best-effort in-app "member joined" notification (the caller is now a member,
+  // so the writes pass the rules). Failure here must not fail the acceptance.
+  try {
+    const profile = await FirestoreService.getDocument<{ displayName?: string }>('users', userId);
+    const displayName = profile?.displayName ?? '';
+    await logAndNotify(
+      brandId,
+      userId,
+      displayName || 'Νέο μέλος',
+      'member_joined',
+      'member',
+      userId,
+      `${displayName || 'Νέος χρήστης'} εντάχθηκε στην ομάδα`,
+      'Νέο μέλος',
+      `${displayName || 'Νέος χρήστης'} εντάχθηκε στην ομάδα`
+    );
+  } catch {
+    /* notification is best-effort */
+  }
 }

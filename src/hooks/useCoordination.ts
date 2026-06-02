@@ -19,15 +19,19 @@ export function useBrandMembers() {
     queryFn: async () => {
       if (!brandId) return [];
       const list = await MembersService.getAll(brandId);
-      if (list.length === 0 && user?.uid && provisioned.current !== brandId) {
+      // Only the brand CREATOR self-provisions their owner member doc here — this
+      // is the one self-create firestore.rules still permits. Invitees get their
+      // member doc from the server-side `acceptInvite` Cloud Function, so a
+      // non-creator must never attempt a (now denied) self-join.
+      if (list.length === 0 && user?.uid && provisioned.current !== brandId
+          && currentBrand?.createdBy === user.uid) {
         provisioned.current = brandId;
-        const isCreator = currentBrand?.createdBy === user.uid;
         await MembersService.set(brandId, {
           userId: user.uid,
           email: user.email || '',
           displayName: user.displayName || user.email || '',
-          role: isCreator ? 'owner' : 'member',
-          department: isCreator ? 'management' : 'other',
+          role: 'owner',
+          department: 'management',
           joinedAt: new Date().toISOString(),
         });
         return MembersService.getAll(brandId);
