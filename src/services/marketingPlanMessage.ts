@@ -3,7 +3,9 @@ import { callGemini } from './geminiProxy';
 import { buildFallbackCoreMessage, type MarketingPlanCoreMessage } from './marketingPlanEngine';
 import type { MarketingPlanInsight } from './marketingPlanInsights';
 
-const MODEL_NAME = 'gemini-2.5-pro';
+// Flash: το core message είναι σύντομο (headline + παράγραφος)· το flash είναι αρκετό και
+// πολύ ταχύτερο/φθηνότερο από το pro. Είναι non-blocking με deterministic fallback.
+const MODEL_NAME = 'gemini-2.5-flash';
 
 const SYSTEM_PROMPT = `You are a senior retail marketing strategist.
 Return only valid JSON with:

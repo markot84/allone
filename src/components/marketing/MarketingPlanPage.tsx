@@ -16,6 +16,7 @@ import { useSegments } from '../../hooks/useSegments';
 import { usePriceBenchmarks } from '../../hooks/usePriceBenchmarks';
 import {
   buildMarketingPlanDraft,
+  buildFallbackCoreMessage,
   resolvePlanPeriod,
   type MarketingPlanDraft,
   type MarketingPlanPresetId,
@@ -230,23 +231,29 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
         inventoryProducts,
         procurementSignals: procurementSignals.signalsBySku,
       });
-      // Το generateMarketingPlanMessage χειρίζεται εσωτερικά τυχόν αποτυχία AI και επιστρέφει fallback.
-      const coreMessage: MarketingPlanCoreMessage = await generateMarketingPlanMessage({
-        insight,
-        brandName: currentBrand?.name,
-      });
-      const built = buildMarketingPlanDraft({
-        presetId: preset,
-        monthlyBudget: activeStrategy?.monthlyBudget,
-        campaigns: campaigns as never[],
-        storeRevenue12m: ecomm.totalRevenue,
-        hasGa4: ga4.hasData,
-        insight,
-        coreMessage,
-        segments: segments.segments,
-        priceBenchmarks: priceBenchmarks.map((b) => ({ title: b.title, yourPrice: b.yourPrice, benchmarkPrice: b.benchmarkPrice, priceDiff: b.priceDiff })),
-        ga4TrafficSources: ga4.trafficSources.map((s) => ({ channel: s.channel, sessions: s.sessions, totalRevenue: s.totalRevenue })),
-      });
+      const assemble = (coreMessage: MarketingPlanCoreMessage) =>
+        buildMarketingPlanDraft({
+          presetId: preset,
+          monthlyBudget: activeStrategy?.monthlyBudget,
+          campaigns: campaigns as never[],
+          storeRevenue12m: ecomm.totalRevenue,
+          hasGa4: ga4.hasData,
+          insight,
+          coreMessage,
+          segments: segments.segments,
+          priceBenchmarks: priceBenchmarks.map((b) => ({ title: b.title, yourPrice: b.yourPrice, benchmarkPrice: b.benchmarkPrice, priceDiff: b.priceDiff })),
+          ga4TrafficSources: ga4.trafficSources.map((s) => ({ channel: s.channel, sessions: s.sessions, totalRevenue: s.totalRevenue })),
+        });
+
+      // 1) Άμεσο draft με deterministic fallback μήνυμα: γράφεται στο cache + εμφανίζεται ΤΩΡΑ,
+      //    ώστε ΑΚΟΜΗ κι αν ο χρήστης κάνει reload όσο τρέχει το (αργό) AI, να μην ξαναρχίζει η ανάλυση.
+      const fastDraft = assemble(buildFallbackCoreMessage(insight));
+      if (brandId) writePlanCache(brandId, preset, fastDraft);
+      queryClient.setQueryData(['marketingPlanDraft', 'v2', brandId, preset], fastDraft);
+
+      // 2) Μη-μπλοκαριστικό AI enhancement: αναβαθμίζει μόνο το core message όταν επιστρέψει.
+      const coreMessage = await generateMarketingPlanMessage({ insight, brandName: currentBrand?.name });
+      const built = coreMessage.source === 'ai' ? assemble(coreMessage) : fastDraft;
       if (brandId) writePlanCache(brandId, preset, built);
       return built;
     },
@@ -695,7 +702,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
                   size="sm"
                   onClick={() => {
                     if (row.plan && brandId) {
-                      queryClient.setQueryData(['marketingPlanDraft', brandId, preset], row.plan);
+                      queryClient.setQueryData(['marketingPlanDraft', 'v2', brandId, preset], row.plan);
                       setOpenSections(new Set(['analysis', 'inventory', 'paid', 'organic', 'audience', 'pricing', 'message']));
                       window.scrollTo({ top: 0, behavior: 'smooth' });
                     }
