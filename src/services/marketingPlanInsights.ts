@@ -175,6 +175,133 @@ function nf(value: number): string {
   return Math.round(value).toLocaleString('el-GR');
 }
 
+/**
+ * Canonical SKU tokens: lowercase + split σε αλφαριθμητικά segments. Επιτρέπει join περσινών
+ * πωλήσεων (variant-level SKU, π.χ. "101567-100-L3-UNSTRUNG") με ERP signals (base SKU,
+ * π.χ. "101567-100") μέσω κοινού prefix.
+ */
+function canonTokens(value: unknown): string[] {
+  return String(value ?? '')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/i)
+    .filter((t) => t.length > 0);
+}
+
+/** Demand lookup για ένα ERP SKU: full canonical key και, ως fallback, μικρότερα prefixes (≥4 chars). */
+function lookupDemandForSku(
+  demandByKey: Map<string, { units: number; revenue: number }>,
+  tokens: string[]
+): { units: number; revenue: number } {
+  for (let i = tokens.length; i >= 1; i--) {
+    const key = tokens.slice(0, i).join('-');
+    // Το πλήρες SKU ταιριάζει πάντα· τα μικρότερα prefixes μόνο αν είναι αρκετά specific (≥4 chars).
+    if (i < tokens.length && key.length < 4) break;
+    const d = demandByKey.get(key);
+    if (d) return d;
+  }
+  return { units: 0, revenue: 0 };
+}
+
+// ── Name-bridge ──────────────────────────────────────────────────────────────
+// Όταν τα order SKU (π.χ. Magento) ΔΕΝ μοιράζονται κωδικοποίηση με τα ERP SKU (π.χ. Megaventory),
+// γεφυρώνουμε μέσω ονόματος προϊόντος: order line.name → inventory product.name → ERP sku → κατηγορία.
+
+/** Greek→Latin phonetic fold: τα ονόματα συχνά γράφονται με ελληνικούς χαρακτήρες-σωσίες. */
+const GREEK_FOLD: Record<string, string> = {
+  α: 'a', β: 'b', γ: 'g', δ: 'd', ε: 'e', ζ: 'z', η: 'i', θ: 'th', ι: 'i', κ: 'k', λ: 'l',
+  μ: 'm', ν: 'n', ξ: 'x', ο: 'o', π: 'p', ρ: 'r', σ: 's', ς: 's', τ: 't', υ: 'y', φ: 'f',
+  χ: 'x', ψ: 'ps', ω: 'o',
+};
+
+const NAME_STOPWORDS = new Set(['the', 'and', 'for', 'with', 'set', 'pack', 'new', 'σετ', 'τεμ', 'των', 'και', 'για']);
+
+function foldName(value: unknown): string {
+  const lowered = String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  let out = '';
+  for (const ch of lowered) out += GREEK_FOLD[ch] ?? ch;
+  return out;
+}
+
+function nameTokens(value: unknown): string[] {
+  return foldName(value).split(/[^a-z0-9]+/).filter(Boolean);
+}
+
+function significantNameTokens(toks: string[]): string[] {
+  return toks.filter((t) => t.length >= 3 && /[a-z]/.test(t) && !NAME_STOPWORDS.has(t));
+}
+
+interface NameBridgeEntry {
+  skuCanon: string;
+  sig: Set<string>;
+  collapsed: string;
+}
+
+interface NameBridgeIndex {
+  entries: NameBridgeEntry[];
+  postings: Map<string, number[]>;
+  byCollapsed: Map<string, number>;
+}
+
+/** Inverted token index πάνω στο inventory catalog (Megaventory) για fuzzy αντιστοίχιση ονομάτων. */
+function buildNameBridgeIndex(products: Product[]): NameBridgeIndex {
+  const entries: NameBridgeEntry[] = [];
+  const postings = new Map<string, number[]>();
+  const byCollapsed = new Map<string, number>();
+  for (const p of products) {
+    const skuTok = canonTokens((p as any).sku);
+    if (!skuTok.length) continue;
+    const toks = nameTokens((p as any).name);
+    const sig = new Set(significantNameTokens(toks));
+    if (sig.size === 0) continue;
+    const idx = entries.length;
+    const collapsed = toks.join('');
+    entries.push({ skuCanon: skuTok.join('-'), sig, collapsed });
+    if (collapsed.length >= 6 && !byCollapsed.has(collapsed)) byCollapsed.set(collapsed, idx);
+    for (const t of sig) {
+      const arr = postings.get(t);
+      if (arr) arr.push(idx);
+      else postings.set(t, [idx]);
+    }
+  }
+  return { entries, postings, byCollapsed };
+}
+
+/** Επιστρέφει το ERP sku (canonical) που αντιστοιχεί στο όνομα της γραμμής, ή null. */
+function resolveNameToSku(index: NameBridgeIndex, rawName: unknown): { skuCanon: string; exact: boolean } | null {
+  const toks = nameTokens(rawName);
+  const collapsed = toks.join('');
+  if (collapsed.length >= 6) {
+    const hit = index.byCollapsed.get(collapsed);
+    if (hit != null) return { skuCanon: index.entries[hit].skuCanon, exact: true };
+  }
+  const sig = significantNameTokens(toks);
+  if (sig.length === 0) return null;
+  const sigSet = new Set(sig);
+  const interCounts = new Map<number, number>();
+  for (const t of sigSet) {
+    const arr = index.postings.get(t);
+    if (arr) for (const i of arr) interCounts.set(i, (interCounts.get(i) ?? 0) + 1);
+  }
+  let best = -1;
+  let bestScore = 0;
+  let bestExact = false;
+  for (const [idx, inter] of interCounts) {
+    if (inter < 2) continue;
+    const e = index.entries[idx];
+    const union = sigSet.size + e.sig.size - inter;
+    const jaccard = union > 0 ? inter / union : 0;
+    const contained = e.collapsed.startsWith(collapsed) || collapsed.startsWith(e.collapsed);
+    const score = jaccard + (contained ? 0.25 : 0);
+    if (score > bestScore) {
+      bestScore = score;
+      best = idx;
+      bestExact = contained && Math.min(collapsed.length, e.collapsed.length) >= 8;
+    }
+  }
+  if (best >= 0 && bestScore >= 0.5) return { skuCanon: index.entries[best].skuCanon, exact: bestExact };
+  return null;
+}
+
 function productStock(product: Product | undefined): number {
   if (!product) return 0;
   return (
@@ -317,16 +444,30 @@ export function buildMarketingPlanInsight(input: {
   );
 
   const signals = input.procurementSignals ?? {};
-  const signalKeys = new Set(Object.keys(signals).map((k) => normalizeKey(k)));
-  const hasErp = signalKeys.size > 0;
+  // Canonical keys των ERP signals (για matchedLines + prefix join με variant-level order SKUs).
+  const signalCanonSet = new Set<string>();
+  for (const k of Object.keys(signals)) {
+    const t = canonTokens(k);
+    if (t.length) signalCanonSet.add(t.join('-'));
+  }
+  const hasErp = signalCanonSet.size > 0;
+
+  // Name-bridge index (μόνο όταν υπάρχει ERP + inventory catalog): γεφυρώνει order names → ERP sku
+  // για brands όπου τα order SKU δεν μοιράζονται κωδικοποίηση με το ERP (π.χ. Magento ↔ Megaventory).
+  const inventoryProducts = input.inventoryProducts ?? [];
+  const nameIndex = hasErp && inventoryProducts.length > 0 ? buildNameBridgeIndex(inventoryProducts) : null;
+  const bridgedSkus = new Map<string, 'exact' | 'fuzzy'>();
 
   // ── 1. Ζήτηση από τις περσινές παραγγελίες (πάντα) ──────────────────────────
-  const demandBySku = new Map<string, { units: number; revenue: number }>();
+  // Συσσωρεύουμε ζήτηση σε ΟΛΑ τα prefixes του SKU, ώστε ένα base ERP SKU να βρίσκει το άθροισμα
+  // των variants του (π.χ. όλα τα μεγέθη/χρώματα).
+  const demandByKey = new Map<string, { units: number; revenue: number }>();
   let revenue = 0;
   let orders = 0;
   let units = 0;
   let lines = 0;
   let matchedLines = 0;
+  let bridgedLines = 0;
 
   for (const order of input.lastYearOrders) {
     const orderDay = dayKey(order.createdAt);
@@ -336,19 +477,40 @@ export function buildMarketingPlanInsight(input: {
     revenue += Number(order.total) || 0;
     for (const line of order.lineItems) {
       if (isEcommerceDemoLineItem(line)) continue;
+      // Magento configurable: η child (simple) γραμμή διπλομετρά ποσότητα — κρατάμε μόνο τη γονική.
+      if ((line as any).parentItemId != null) continue;
       const quantity = Number(line.quantity ?? 0) || 0;
       if (quantity <= 0) continue;
       lines += 1;
       units += quantity;
-      const skuKey = normalizeKey((line as any).sku);
       const rev = lineRevenue(quantity, Number((line as any).price ?? 0), (line as any).rowTotal);
-      if (skuKey) {
-        const d = demandBySku.get(skuKey) ?? { units: 0, revenue: 0 };
-        d.units += quantity;
-        d.revenue += rev;
-        demandBySku.set(skuKey, d);
-        if (hasErp && signalKeys.has(skuKey)) matchedLines += 1;
+      const tokens = canonTokens((line as any).sku);
+      let matched = false;
+      if (tokens.length) {
+        for (let i = 1; i <= tokens.length; i++) {
+          const key = tokens.slice(0, i).join('-');
+          const d = demandByKey.get(key) ?? { units: 0, revenue: 0 };
+          d.units += quantity;
+          d.revenue += rev;
+          demandByKey.set(key, d);
+          if (!matched && (i === tokens.length || key.length >= 4) && signalCanonSet.has(key)) matched = true;
+        }
       }
+      // Fallback: αν το SKU δεν αντιστοιχεί σε ERP signal, δοκίμασε γέφυρα μέσω ονόματος.
+      if (hasErp && !matched && nameIndex) {
+        const bridged = resolveNameToSku(nameIndex, (line as any).name ?? (line as any).title);
+        if (bridged) {
+          const d = demandByKey.get(bridged.skuCanon) ?? { units: 0, revenue: 0 };
+          d.units += quantity;
+          d.revenue += rev;
+          demandByKey.set(bridged.skuCanon, d);
+          const prev = bridgedSkus.get(bridged.skuCanon);
+          bridgedSkus.set(bridged.skuCanon, bridged.exact || prev === 'exact' ? 'exact' : 'fuzzy');
+          matched = true;
+          bridgedLines += 1;
+        }
+      }
+      if (hasErp && matched) matchedLines += 1;
     }
   }
 
@@ -361,7 +523,7 @@ export function buildMarketingPlanInsight(input: {
   let inventoryCoveragePct: number;
 
   if (hasErp) {
-    const built = buildErpDrivenReorder(signals, demandBySku);
+    const built = buildErpDrivenReorder(signals, demandByKey, bridgedSkus);
     reorderPlan = built.reorderPlan;
     skuSuggestions = built.skuSuggestions;
     totalSkusCovered = built.totalSkus;
@@ -379,7 +541,12 @@ export function buildMarketingPlanInsight(input: {
   const notes: string[] = [];
   if (lines === 0) notes.push('Δεν βρέθηκαν γραμμές προϊόντων για την αντίστοιχη περσινή περίοδο.');
   if (hasErp) {
-    if (lines > 0 && lineItemCoveragePct < 40) {
+    const erpHasReplenishment = reorderPlan.some((r) => r.reorderQtySource === 'erp');
+    if (bridgedLines > 0) {
+      notes.push('Τα order SKU δεν ταυτίζονται με τα ERP SKU (διαφορετική κωδικοποίηση) — οι περσινές πωλήσεις αντιστοιχίστηκαν μέσω ονόματος προϊόντος. Η κατανομή ανά κατηγορία είναι αξιόπιστη· οι προτάσεις σε επίπεδο SKU είναι ενδεικτικές.');
+    } else if (lines > 0 && matchedLines === 0 && !erpHasReplenishment) {
+      notes.push('Δεν αντιστοιχίστηκε καμία περσινή πώληση με τα ERP SKU (διαφορετική κωδικοποίηση) και το ERP δεν δίνει ποσότητα ανατροφοδοσίας — οι ποσότητες παραγγελίας δεν μπορούν να υπολογιστούν με ασφάλεια. Δες την κατηγορία/περιθώριο ως ένδειξη και επιβεβαίωσε χειροκίνητα.');
+    } else if (lines > 0 && lineItemCoveragePct < 40) {
       notes.push('Μερική αντιστοίχιση περσινών πωλήσεων με ERP SKU — η πρόταση παραγγελίας βασίζεται κυρίως στα σήματα ERP (απόθεμα & ανατροφοδοσία).');
     }
   } else {
@@ -413,7 +580,8 @@ export function buildMarketingPlanInsight(input: {
 //    με τις περσινές πωλήσεις ως enrichment ζήτησης (join ανά SKU). ───────────────────────────
 function buildErpDrivenReorder(
   signals: Record<string, SkuSignal>,
-  demandBySku: Map<string, { units: number; revenue: number }>
+  demandByKey: Map<string, { units: number; revenue: number }>,
+  bridgedSkus?: Map<string, 'exact' | 'fuzzy'>
 ): { reorderPlan: MarketingPlanReorderGroup[]; skuSuggestions: MarketingPlanSkuSuggestion[]; totalSkus: number } {
   type ErpGroup = {
     category: string; subcategory: string; brand: string;
@@ -431,7 +599,6 @@ function buildErpDrivenReorder(
     if (sig.available_stock == null && (sig.replenishment_qty ?? 0) <= 0 && !sig.category) continue;
     totalSkus += 1;
 
-    const skuKey = normalizeKey(rawSku);
     const category = sig.category?.trim() || 'Λοιπά';
     const subcategory = sig.flow_group?.trim() || '';
     const brand = sig.supplier?.trim() || '';
@@ -442,9 +609,11 @@ function buildErpDrivenReorder(
     const margin = sig.margin_pct;
     const cover = sig.days_of_cover;
     const tied = Number(sig.tied_capital ?? 0) || 0;
-    const demand = demandBySku.get(skuKey);
-    const lyUnits = demand?.units ?? 0;
-    const lyRev = demand?.revenue ?? 0;
+    const skuCanon = canonTokens(rawSku).join('-');
+    const demand = lookupDemandForSku(demandByKey, canonTokens(rawSku));
+    const lyUnits = demand.units;
+    const lyRev = demand.revenue;
+    const bridgeKind = bridgedSkus?.get(skuCanon);
 
     const key = `${category}||${subcategory}||${brand}`;
     const g = groups.get(key) ?? {
@@ -484,7 +653,14 @@ function buildErpDrivenReorder(
             reorderQtySource: repl > 0 ? 'erp' : 'estimated',
             marginPct: margin != null ? +margin.toFixed(1) : undefined,
             daysOfCover: cover != null ? Math.round(cover) : undefined,
-            confidence: repl > 0 ? 'high' : lyUnits >= 4 ? 'medium' : 'low',
+            confidence:
+              repl > 0
+                ? 'high'
+                : bridgeKind === 'fuzzy'
+                  ? 'low'
+                  : lyUnits >= 4
+                    ? 'medium'
+                    : 'low',
           },
           sortValue: replValue || lyRev || qty * price,
         });

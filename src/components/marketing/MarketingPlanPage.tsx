@@ -391,7 +391,13 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
             icon={<PackagePlus size={18} className="text-[var(--nts-accent)]" />}
             open={openSections.has('inventory')}
             onToggle={() => toggleSection('inventory')}
-            badge={draft.reorderPlan.length > 0 ? `${draft.reorderPlan.filter((r) => r.action === 'increase').length} κατηγορίες χρειάζονται παραγγελία` : undefined}
+            badge={
+              draft.reorderPlan.length === 0
+                ? undefined
+                : draft.reorderPlan.filter((r) => r.action === 'increase').length > 0
+                  ? `${draft.reorderPlan.filter((r) => r.action === 'increase').length} κατηγορίες χρειάζονται παραγγελία`
+                  : 'Επαρκή αποθέματα — χωρίς άμεση παραγγελία'
+            }
           >
             {draft.reorderPlan.length === 0 ? (
               <p className="text-sm text-[#6B7280]">Δεν υπάρχουν αρκετά περσινά δεδομένα για πρόταση παραγγελίας.</p>

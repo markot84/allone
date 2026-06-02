@@ -105,6 +105,46 @@ describe('buildMarketingPlanInsight', () => {
     expect(insight.skuSuggestions[0]).toMatchObject({ sku: 'S1', estimatedReorderQty: 25, reorderQtySource: 'erp', marginPct: 42 });
   });
 
+  it('bridges last-year sales to ERP categories via product name when SKU codes differ (Magento ↔ Megaventory)', () => {
+    const insight = buildMarketingPlanInsight({
+      period: {
+        presetId: 'next_month',
+        periodLabel: 'Επόμενος μήνας',
+        fromDate: '2026-06-01',
+        toDate: '2026-06-30',
+      },
+      // Megaventory catalog: ERP sku + όνομα (διαφορετική κωδικοποίηση από Magento).
+      inventoryProducts: [
+        product({ sku: '0000278-320', name: 'Babolat Pro Hurricane Tour String 200m', category: 'Strings' }),
+      ],
+      procurementSignals: {
+        '0000278-320': {
+          available_stock: 1,
+          category: 'Cordage tennis',
+          supplier: 'Babolat',
+          margin_pct: 40,
+          avg_sale_price: 90,
+        },
+      },
+      lastYearOrders: [
+        order({
+          lineItems: [
+            // Magento configurable: parent (μετράει) + child (αγνοείται). SKU «243102» ≠ ERP «0000278».
+            { sku: '243102-1.30mm', name: 'Babolat Pro Hurricane Τοur String 200m', quantity: 3, price: 90, rowTotal: 270, itemId: 1, parentItemId: null, productType: 'configurable' },
+            { sku: '243102-1.30mm', name: 'Babolat Pro Hurricane Τοur String 200m-1.30mm', quantity: 3, price: 0, rowTotal: 0, itemId: 2, parentItemId: 1, productType: 'simple' },
+          ],
+        }),
+      ],
+    });
+
+    const group = insight.reorderPlan[0];
+    expect(group.category).toBe('Cordage tennis');
+    // Demand γεφυρώθηκε μέσω ονόματος (3 τεμ., όχι 6 — η child γραμμή αγνοήθηκε).
+    expect(group.lastYearUnits).toBe(3);
+    expect(group.action).toBe('increase');
+    expect(insight.evidence.matchedLines).toBe(1);
+  });
+
   it('does not double-count stock when a SKU appears across multiple orders', () => {
     const insight = buildMarketingPlanInsight({
       period: {
