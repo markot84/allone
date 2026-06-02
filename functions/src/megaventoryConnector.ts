@@ -1406,6 +1406,19 @@ export async function fetchMegaventoryData(
       }
     }
 
+    // ── Early completion marker ──────────────────────────────────────
+    // Τα core δεδομένα (invoices/orders/products/stock/suppliers/custom report) έχουν ήδη γραφτεί.
+    // Γράφουμε ΕΔΩ το ορατό `lastSyncAt` ώστε το UI να δείχνει φρέσκο sync ΑΚΟΜΗ κι αν τα επόμενα
+    // βαριά/ασταθή βήματα (gap-fill, RFM, procurement refresh) αργήσουν ή «φάνε» το function timeout
+    // σε μεγάλα e-shops. Το πλήρες import_jobs record παραμένει στο τέλος (best-effort).
+    try {
+      await db.doc(`connectors/${brandId}`).update({
+        'megaventory.lastSyncAt': FieldValue.serverTimestamp(),
+      });
+    } catch (markErr) {
+      logger.warn(`[Megaventory] early lastSyncAt mark failed for ${brandId}: ${markErr instanceof Error ? markErr.message : String(markErr)}`);
+    }
+
     if (megaventoryApiProductRows.length > 0) {
       try {
         apiCatalogGapFillCount = await mergeMegaventoryApiCatalogProducts(

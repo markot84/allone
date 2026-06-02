@@ -2049,7 +2049,7 @@ async function runPool<T>(items: T[], concurrency: number, fn: (item: T) => Prom
 }
 
 /**
- * Cloud Functions Gen 2 onSchedule supports up to 3600s. Κάθε «κύμα» connectors έχει δικό του
+ * Cloud Functions Gen 2 onSchedule (Pub/Sub-triggered) έχει σκληρό όριο 1800s. Κάθε «κύμα» connectors έχει δικό του
  * invocation ώστε Magento/ERP να μην κόβουν GA4/GSC μέσα στο ίδιο timeout με τα Ads.
  */
 const SCHEDULED_SYNC_TIMEOUT_SECONDS = 1800;
@@ -2304,9 +2304,16 @@ export const scheduledSyncWebAnalytics = onSchedule(
   async () => runNightlyConnectorWaveJob('analytics', 'scheduledSyncWebAnalytics')
 );
 
-/** ERP connectors — 06:00 */
+/**
+ * ERP connectors — 06:00.
+ * Μεγάλα e-shops (π.χ. e-tennis: 87k products + 15k invoices) είναι αργά. Το scheduled timeout
+ * έχει σκληρό όριο 1800s (30′) από την πλατφόρμα — δεν αυξάνεται. Αντ' αυτού δίνουμε περισσότερη
+ * RAM/CPU για ταχύτερο import ώστε να προλαβαίνει τα completion markers, και επιπλέον γράφουμε
+ * early `megaventory.lastSyncAt` (στον connector) αμέσως μετά το core import (βλ. megaventoryConnector)
+ * ώστε το UI να δείχνει φρέσκο sync ακόμη κι αν τα αργά post-processing βήματα (gap-fill/RFM) δεν προλάβουν.
+ */
 export const scheduledSyncErp = onSchedule(
-  { ...nightlyConnectorScheduleBase, schedule: 'every day 06:00' },
+  { ...nightlyConnectorScheduleBase, schedule: 'every day 06:00', memory: '2GiB' as const, cpu: 2 },
   async () => runNightlyConnectorWaveJob('erp', 'scheduledSyncErp')
 );
 

@@ -2121,7 +2121,9 @@ export function ConnectorsPanel() {
     enabled: !!brandId,
     staleTime: 5 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
-    refetchOnMount: false,
+    // Ανανέωση όταν ανοίγει η σελίδα: μετά από βραδινό auto-sync ο χρήστης πρέπει να βλέπει το
+    // φρέσκο timestamp, όχι το persisted cache της προηγούμενης μέρας.
+    refetchOnMount: true,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     retry: 0,
