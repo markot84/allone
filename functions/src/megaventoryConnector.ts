@@ -1117,7 +1117,12 @@ export async function fetchMegaventoryData(
       logger.info(`[Megaventory] Invoices: ${items.length}/${rawDocs.length} imported for brand ${brandId}`);
     }
 
-    if (docsOk && shouldStageInvoiceBackfill && invoiceBackfillProgress && invoiceBackfillProgress.exhausted !== true) {
+    if (docsOk && shouldStageInvoiceBackfill && invoiceBackfillProgress) {
+      // EARLY write (πριν τα αργά gap-fill/RFM που κάνουν το function timeout). Γράφουμε ΕΔΩ:
+      //  • αν ΔΕΝ έχει τελειώσει → το νέο cursor (συνεχίζει την επόμενη νύχτα)
+      //  • αν τελείωσε (exhausted) → το flag Complete ΩΣΤΕ να μην ξανατρέξει το 3ετές staged backfill.
+      // Πριν, το Complete μαρκαριζόταν μόνο στο τελικό patch → το function τερμάτιζε πρώτα και το
+      // backfill κολλούσε «μισοτελειωμένο» επ' άπειρον, ξανα-σκανάροντας 3 χρόνια κάθε νύχτα.
       const patch: Record<string, unknown> = {
         'megaventory.lastDocsSyncAt': FieldValue.serverTimestamp(),
         'megaventory.historyLoadedUntilYear': docsWindow.historyStartYear,
@@ -1127,7 +1132,10 @@ export async function fetchMegaventoryData(
         'megaventory.invoiceDocumentBackfillMatchedRowsLastRun': Number(invoiceBackfillProgress.matchedRows ?? 0),
         'megaventory.invoiceDocumentBackfillCount': FieldValue.increment(counts.invoices),
       };
-      if (invoiceBackfillProgress.nextCursor) {
+      if (invoiceBackfillProgress.exhausted === true) {
+        patch['megaventory.invoiceDocumentBackfillComplete'] = true;
+        patch['megaventory.invoiceDocumentBackfillCompletedAt'] = FieldValue.serverTimestamp();
+      } else if (invoiceBackfillProgress.nextCursor) {
         patch['megaventory.invoiceDocumentBackfillCursor'] = invoiceBackfillProgress.nextCursor;
       }
       await db.doc(`connectors/${brandId}`).update(patch);
