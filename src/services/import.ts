@@ -1717,14 +1717,25 @@ async function importProcurementFile(
     const parsedSheets: { sheetType: ProcurementSheetType; coll: string; headers: string[]; objects: Record<string, string>[] }[] = [];
     let grandTotalRows = 0;
 
+    // Ανεκτική αντιστοίχιση ονόματος φύλλου: αγνοεί τόνους, διπλά κενά και πεζά/κεφαλαία ώστε
+    // μικρές αποκλίσεις (π.χ. «ΔΙΑΧΕΙΡΙΣΗ ΑΠΟΘΕΜΑΤΟΣ » με κενό) να ΜΗΝ ρίχνουν σιωπηλά ένα φύλλο.
+    const normalizeSheetName = (s: string) =>
+      String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
+    const resolveSheet = (expected: string) => {
+      if (wb.Sheets[expected]) return wb.Sheets[expected];
+      const target = normalizeSheetName(expected);
+      const match = wb.SheetNames.find((n) => normalizeSheetName(n) === target);
+      return match ? wb.Sheets[match] : undefined;
+    };
+
     for (let i = 0; i < PROCUREMENT_SHEET_ORDER.length; i++) {
       const sheetType = PROCUREMENT_SHEET_ORDER[i];
       const sheetName = PROCUREMENT_SHEET_NAMES[sheetType];
       const coll = PROCUREMENT_COLLECTIONS[i];
-      const sheet = wb.Sheets[sheetName];
+      const sheet = resolveSheet(sheetName);
 
       if (!sheet) {
-        result.warnings.push(`Φύλλο "${sheetName}" δεν βρέθηκε· παράλειψη.`);
+        result.warnings.push(`Φύλλο "${sheetName}" δεν βρέθηκε· παράλειψη. Διαθέσιμα φύλλα: ${wb.SheetNames.join(', ')}`);
         parsedSheets.push({ sheetType, coll, headers: [], objects: [] });
         continue;
       }
