@@ -136,6 +136,10 @@ function QueryProvider({ children }: { children: React.ReactNode }) {
               // Αν έμπαινε κι εδώ, διπλασίαζε το localStorage και ξεπερνούσε το quota → σιωπηλό σβήσιμο
               // ΟΛΟΥ του persisted cache → τα πάντα ξαναφόρτωναν στο reload (incl. το Policy Impact).
               if (key === 'commercial_scenario_impacts') return false;
+              // Marketing Plan draft: έχει δικό του durable cache (localStorage `mp_draft_v1_*`).
+              // Διπλή αποθήκευση γέμιζε το quota → σιωπηλό σβήσιμο όλου του persisted cache →
+              // η ανάλυση ξανάτρεχε από την αρχή σε κάθε reload.
+              if (key === 'marketingPlanDraft') return false;
               // Heavy raw order pulls stay out of localStorage; compact server summaries are persisted for fast first paint.
               if (
                 key === 'ecommerceOrdersRaw' ||

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  BarChart3, Calendar, ChevronDown, ChevronUp, Megaphone, PackagePlus,
+  BarChart3, Calendar, ChevronDown, ChevronRight, ChevronUp, Megaphone, PackagePlus,
   Sparkles, Tag, TrendingUp, Users, ArrowUpRight, ArrowDownRight,
   CheckCircle2, Circle,
 } from 'lucide-react';
@@ -85,10 +85,21 @@ function readPlanCacheEntry(brandId: string | null, preset: string): PlanCacheEn
 
 function writePlanCache(brandId: string, preset: string, plan: MarketingPlanDraft): void {
   if (typeof localStorage === 'undefined') return;
+  const key = planCacheStorageKey(brandId, preset);
+  const payload = JSON.stringify({ savedAt: Date.now(), plan });
   try {
-    localStorage.setItem(planCacheStorageKey(brandId, preset), JSON.stringify({ savedAt: Date.now(), plan }));
+    localStorage.setItem(key, payload);
   } catch {
-    /* quota / serialization — μη μπλοκάρεις το UI */
+    // Quota exceeded → καθάρισε ΑΛΛΑ mp_draft entries (άλλων brand/preset) και ξαναδοκίμασε.
+    // Έτσι το dedicated cache δεν αποτυγχάνει σιωπηλά (που οδηγούσε σε ξανατρέξιμο της ανάλυσης).
+    try {
+      Object.keys(localStorage)
+        .filter((k) => k.startsWith('mp_draft_v1_') && k !== key)
+        .forEach((k) => localStorage.removeItem(k));
+      localStorage.setItem(key, payload);
+    } catch {
+      /* ακόμη γεμάτο — μη μπλοκάρεις το UI (το in-memory cache καλύπτει την πλοήγηση) */
+    }
   }
 }
 
@@ -896,15 +907,28 @@ function BudgetPill({ label, pct }: { label: string; pct: number }) {
 }
 
 function ReorderCard({ row }: { row: MarketingPlanReorderGroup }) {
+  const [expanded, setExpanded] = useState(false);
   const tone = row.action === 'increase' ? 'success' : row.action === 'maintain' ? 'warning' : row.action === 'reduce' ? 'info' : 'default';
   const actionLabel = row.action === 'increase' ? 'Παράγγειλε' : row.action === 'maintain' ? 'Διατήρησε' : row.action === 'reduce' ? 'Μείωσε' : 'Αποφύγει';
   const marginTone =
     row.marginPct == null ? '' : row.marginPct >= 30 ? 'text-emerald-600' : row.marginPct >= 15 ? 'text-amber-600' : 'text-rose-600';
+  const skus = row.skus ?? [];
+  const canExpand = skus.length > 0;
   return (
     <div className="rounded-xl border border-[#E5E7EB] bg-white p-4">
-      <div className="flex items-start justify-between gap-3">
+      <button
+        type="button"
+        onClick={() => canExpand && setExpanded((v) => !v)}
+        aria-expanded={expanded}
+        className={`flex w-full items-start justify-between gap-3 text-left ${canExpand ? 'cursor-pointer' : 'cursor-default'}`}
+      >
         <div className="min-w-0">
-          <p className="font-semibold text-[#1A1A1A]">{row.subcategory || row.category}</p>
+          <p className="flex items-center gap-1.5 font-semibold text-[#1A1A1A]">
+            {canExpand && (
+              <ChevronRight size={14} className={`shrink-0 text-[#9CA3AF] transition-transform ${expanded ? 'rotate-90' : ''}`} />
+            )}
+            <span className="truncate">{row.subcategory || row.category}</span>
+          </p>
           <p className="text-xs text-[#6B7280]">{[row.category, row.brand].filter(Boolean).join(' · ') || '—'}</p>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1">
@@ -918,7 +942,7 @@ function ReorderCard({ row }: { row: MarketingPlanReorderGroup }) {
             )}
           </div>
         </div>
-      </div>
+      </button>
       <div className="mt-3 grid grid-cols-3 gap-2">
         <div className="rounded-lg bg-[#F9FAFB] px-2 py-1.5 text-center">
           <p className="text-[10px] text-[#9CA3AF]">Πέρυσι</p>
@@ -934,6 +958,50 @@ function ReorderCard({ row }: { row: MarketingPlanReorderGroup }) {
         </div>
       </div>
       <p className="mt-2 text-xs leading-relaxed text-[#6B7280]">{row.rationale}</p>
+      {canExpand && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-2 text-[11px] font-medium text-[var(--nts-accent)] hover:underline"
+        >
+          {expanded ? 'Απόκρυψη SKU' : `Ανάλυση ${formatNumber(skus.length)} SKU →`}
+        </button>
+      )}
+      {expanded && canExpand && (
+        <div className="mt-2 overflow-hidden rounded-lg border border-[#E5E7EB]">
+          <table className="w-full text-left text-[11px]">
+            <thead className="bg-[#F9FAFB] text-[10px] uppercase tracking-wide text-[#9CA3AF]">
+              <tr>
+                <th className="px-2 py-1.5 font-medium">SKU</th>
+                <th className="px-2 py-1.5 font-medium">Προϊόν</th>
+                <th className="px-2 py-1.5 text-right font-medium">Πέρυσι</th>
+                <th className="px-2 py-1.5 text-right font-medium">Stock</th>
+                <th className="px-2 py-1.5 text-right font-medium">Margin</th>
+                <th className="px-2 py-1.5 text-right font-medium">Πρόταση</th>
+              </tr>
+            </thead>
+            <tbody>
+              {skus.map((s) => (
+                <tr key={s.sku} className="border-t border-[#F0F0F0] hover:bg-[#FAFAFA]">
+                  <td className="px-2 py-1.5 font-mono text-[#6B7280]">{s.sku}</td>
+                  <td className="px-2 py-1.5">
+                    <p className="truncate font-medium text-[#1A1A1A]" title={s.name}>{s.name}</p>
+                  </td>
+                  <td className="px-2 py-1.5 text-right font-mono">{formatNumber(s.lastYearUnits)}</td>
+                  <td className={`px-2 py-1.5 text-right font-mono ${s.currentStock < s.lastYearUnits * 0.35 ? 'text-rose-600' : 'text-[#1A1A1A]'}`}>{formatNumber(s.currentStock)}</td>
+                  <td className={`px-2 py-1.5 text-right font-mono ${
+                    s.marginPct == null ? 'text-[#9CA3AF]' : s.marginPct >= 30 ? 'text-emerald-600' : s.marginPct >= 15 ? 'text-amber-600' : 'text-rose-600'
+                  }`}>{s.marginPct == null ? '—' : `${s.marginPct}%`}</td>
+                  <td className="px-2 py-1.5 text-right font-mono font-semibold text-[var(--nts-accent)]">
+                    {formatNumber(s.estimatedReorderQty)}
+                    {s.reorderQtySource === 'erp' && <span className="ml-1 text-[9px] font-normal text-[#9CA3AF]">ERP</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

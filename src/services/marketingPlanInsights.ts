@@ -53,6 +53,8 @@ export type MarketingPlanReorderGroup = {
   action: ReorderAction;
   confidence: 'high' | 'medium' | 'low';
   rationale: string;
+  /** Αναλυτικά τα SKU της ομάδας που αναλύθηκαν (capped) — για expandable προβολή στην κάρτα. */
+  skus?: MarketingPlanSkuSuggestion[];
 };
 
 export type MarketingPlanSkuSuggestion = {
@@ -589,6 +591,7 @@ function buildErpDrivenReorder(
     replenishmentQty: number; replenishmentValue: number; tiedCapital: number;
     marginWeighted: number; marginBase: number;
     coverWeighted: number; coverBase: number;
+    skus: { row: MarketingPlanSkuSuggestion; sortValue: number }[];
   };
   const groups = new Map<string, ErpGroup>();
   const skuRows: { row: MarketingPlanSkuSuggestion; sortValue: number }[] = [];
@@ -621,6 +624,7 @@ function buildErpDrivenReorder(
       revenue: 0, units: 0, stock: 0, stockValue: 0,
       replenishmentQty: 0, replenishmentValue: 0, tiedCapital: 0,
       marginWeighted: 0, marginBase: 0, coverWeighted: 0, coverBase: 0,
+      skus: [],
     };
     g.revenue += lyRev;
     g.units += lyUnits;
@@ -637,34 +641,33 @@ function buildErpDrivenReorder(
 
     // SKU-level πρόταση: ERP ανατροφοδοσία ή ζήτηση που ξεπερνά το απόθεμα.
     const needsReorder = repl > 0 || (lyUnits > 0 && stock < lyUnits);
-    if (needsReorder) {
-      const qty = repl > 0 ? repl : reorderQty(lyUnits, stock);
-      if (qty > 0) {
-        skuRows.push({
-          row: {
-            sku: rawSku,
-            name: sig.description?.trim() || rawSku,
-            category,
-            brand,
-            lastYearUnits: Math.round(lyUnits),
-            lastYearRevenue: money(lyRev),
-            currentStock: Math.round(stock),
-            estimatedReorderQty: qty,
-            reorderQtySource: repl > 0 ? 'erp' : 'estimated',
-            marginPct: margin != null ? +margin.toFixed(1) : undefined,
-            daysOfCover: cover != null ? Math.round(cover) : undefined,
-            confidence:
-              repl > 0
-                ? 'high'
-                : bridgeKind === 'fuzzy'
-                  ? 'low'
-                  : lyUnits >= 4
-                    ? 'medium'
-                    : 'low',
-          },
-          sortValue: replValue || lyRev || qty * price,
-        });
-      }
+    const qty = repl > 0 ? repl : reorderQty(lyUnits, stock);
+    const skuRow: MarketingPlanSkuSuggestion = {
+      sku: rawSku,
+      name: sig.description?.trim() || rawSku,
+      category,
+      brand,
+      lastYearUnits: Math.round(lyUnits),
+      lastYearRevenue: money(lyRev),
+      currentStock: Math.round(stock),
+      estimatedReorderQty: qty,
+      reorderQtySource: repl > 0 ? 'erp' : 'estimated',
+      marginPct: margin != null ? +margin.toFixed(1) : undefined,
+      daysOfCover: cover != null ? Math.round(cover) : undefined,
+      confidence:
+        repl > 0
+          ? 'high'
+          : bridgeKind === 'fuzzy'
+            ? 'low'
+            : lyUnits >= 4
+              ? 'medium'
+              : 'low',
+    };
+    // Κάθε αναλυμένο SKU στην ομάδα (για expandable προβολή· ταξινόμηση κατά αξία/ζήτηση).
+    g.skus.push({ row: skuRow, sortValue: replValue || lyRev || stock * price || qty });
+    // Global top-SKU opportunities: μόνο όσα χρειάζονται πραγματικά παραγγελία.
+    if (needsReorder && qty > 0) {
+      skuRows.push({ row: skuRow, sortValue: replValue || lyRev || qty * price });
     }
   }
 
@@ -716,6 +719,10 @@ function buildErpDrivenReorder(
         action,
         confidence,
         rationale: `${baseRationale}${marginNote}${coverNote}`,
+        skus: g.skus
+          .sort((a, b) => b.sortValue - a.sortValue)
+          .slice(0, 40)
+          .map((s) => s.row),
       };
     })
     // Προτεραιότητα: ομάδες που χρειάζονται παραγγελία πρώτα, μετά κατά αξία ανατροφοδοσίας/ζήτησης.
