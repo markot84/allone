@@ -90,10 +90,14 @@ type SkuSignal = {
   margin_pct?: number;
   days_of_cover?: number;
   replenishment_qty?: number;
+  replenishment_value?: number;
   tied_capital?: number;
   avg_sale_price?: number;
   list_price?: number;
   cost_unit?: number;
+  lifetime_qty?: number;
+  annual_revenue?: number;
+  status?: string;
 };
 
 type InventoryEntry = {
@@ -165,6 +169,10 @@ function normalizeKey(value: unknown): string {
 
 function money(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+function nf(value: number): string {
+  return Math.round(value).toLocaleString('el-GR');
 }
 
 function productStock(product: Product | undefined): number {
@@ -308,8 +316,12 @@ export function buildMarketingPlanInsight(input: {
     input.procurementSignals ?? {}
   );
 
-  const groupMap = new Map<string, GroupAccumulator>();
-  const skuMap = new Map<string, SkuAccumulator>();
+  const signals = input.procurementSignals ?? {};
+  const signalKeys = new Set(Object.keys(signals).map((k) => normalizeKey(k)));
+  const hasErp = signalKeys.size > 0;
+
+  // ── 1. Ζήτηση από τις περσινές παραγγελίες (πάντα) ──────────────────────────
+  const demandBySku = new Map<string, { units: number; revenue: number }>();
   let revenue = 0;
   let orders = 0;
   let units = 0;
@@ -328,6 +340,246 @@ export function buildMarketingPlanInsight(input: {
       if (quantity <= 0) continue;
       lines += 1;
       units += quantity;
+      const skuKey = normalizeKey((line as any).sku);
+      const rev = lineRevenue(quantity, Number((line as any).price ?? 0), (line as any).rowTotal);
+      if (skuKey) {
+        const d = demandBySku.get(skuKey) ?? { units: 0, revenue: 0 };
+        d.units += quantity;
+        d.revenue += rev;
+        demandBySku.set(skuKey, d);
+        if (hasErp && signalKeys.has(skuKey)) matchedLines += 1;
+      }
+    }
+  }
+
+  // ── 2. Reorder plan ─────────────────────────────────────────────────────────
+  // ERP-driven όταν υπάρχουν procurement signals (αυθεντική πηγή αποθέματος + ανατροφοδοσίας),
+  // αλλιώς fallback στην order-driven λογική (catalog lookup) για brands χωρίς ERP.
+  let reorderPlan: MarketingPlanReorderGroup[];
+  let skuSuggestions: MarketingPlanSkuSuggestion[];
+  let totalSkusCovered: number;
+  let inventoryCoveragePct: number;
+
+  if (hasErp) {
+    const built = buildErpDrivenReorder(signals, demandBySku);
+    reorderPlan = built.reorderPlan;
+    skuSuggestions = built.skuSuggestions;
+    totalSkusCovered = built.totalSkus;
+    inventoryCoveragePct = 100;
+  } else {
+    const built = buildOrderDrivenReorder(input.lastYearOrders, lookup, lastYearFromDate, lastYearToDate);
+    reorderPlan = built.reorderPlan;
+    skuSuggestions = built.skuSuggestions;
+    matchedLines = built.matchedLines;
+    totalSkusCovered = lookup.bySku.size;
+    inventoryCoveragePct = lookup.bySku.size > 0 ? built.lineItemCoveragePct : 0;
+  }
+
+  const lineItemCoveragePct = lines > 0 ? Math.round((matchedLines / lines) * 100) : 0;
+  const notes: string[] = [];
+  if (lines === 0) notes.push('Δεν βρέθηκαν γραμμές προϊόντων για την αντίστοιχη περσινή περίοδο.');
+  if (hasErp) {
+    if (lines > 0 && lineItemCoveragePct < 40) {
+      notes.push('Μερική αντιστοίχιση περσινών πωλήσεων με ERP SKU — η πρόταση παραγγελίας βασίζεται κυρίως στα σήματα ERP (απόθεμα & ανατροφοδοσία).');
+    }
+  } else {
+    if (lines > 0 && lineItemCoveragePct < 50) notes.push('Χαμηλή αντιστοίχιση SKU με τρέχον inventory.');
+    if (lookup.bySku.size === 0) notes.push('Δεν φορτώθηκε inventory για υπολογισμό αποθέματος.');
+  }
+
+  const level: MarketingPlanDataQuality['level'] = hasErp
+    ? reorderPlan.length > 0
+      ? lineItemCoveragePct >= 50
+        ? 'strong'
+        : 'partial'
+      : 'weak'
+    : lines > 0 && lineItemCoveragePct >= 70
+      ? 'strong'
+      : lines > 0 && lineItemCoveragePct >= 30
+        ? 'partial'
+        : 'weak';
+
+  return {
+    period: input.period,
+    evidence: { lastYearFromDate, lastYearToDate, revenue: money(revenue), orders, units: Math.round(units), aov: orders > 0 ? money(revenue / orders) : 0, lines, matchedLines },
+    reorderPlan,
+    skuSuggestions,
+    dataQuality: { level, lineItemCoveragePct, inventoryCoveragePct, notes },
+    totalSkusCovered,
+  };
+}
+
+// ── ERP-driven reorder: τα procurement signals είναι το «σύμπαν» (κατηγορία/απόθεμα/ανατροφοδοσία),
+//    με τις περσινές πωλήσεις ως enrichment ζήτησης (join ανά SKU). ───────────────────────────
+function buildErpDrivenReorder(
+  signals: Record<string, SkuSignal>,
+  demandBySku: Map<string, { units: number; revenue: number }>
+): { reorderPlan: MarketingPlanReorderGroup[]; skuSuggestions: MarketingPlanSkuSuggestion[]; totalSkus: number } {
+  type ErpGroup = {
+    category: string; subcategory: string; brand: string;
+    revenue: number; units: number; stock: number; stockValue: number;
+    replenishmentQty: number; replenishmentValue: number; tiedCapital: number;
+    marginWeighted: number; marginBase: number;
+    coverWeighted: number; coverBase: number;
+  };
+  const groups = new Map<string, ErpGroup>();
+  const skuRows: { row: MarketingPlanSkuSuggestion; sortValue: number }[] = [];
+  let totalSkus = 0;
+
+  for (const [rawSku, sig] of Object.entries(signals)) {
+    // Αγνόησε ανενεργά SKU χωρίς απόθεμα/ανατροφοδοσία/κατηγορία.
+    if (sig.available_stock == null && (sig.replenishment_qty ?? 0) <= 0 && !sig.category) continue;
+    totalSkus += 1;
+
+    const skuKey = normalizeKey(rawSku);
+    const category = sig.category?.trim() || 'Λοιπά';
+    const subcategory = sig.flow_group?.trim() || '';
+    const brand = sig.supplier?.trim() || '';
+    const stock = Math.max(0, Number(sig.available_stock ?? 0) || 0);
+    const repl = Math.max(0, Math.round(Number(sig.replenishment_qty ?? 0) || 0));
+    const replValue = Math.max(0, Number(sig.replenishment_value ?? 0) || 0);
+    const price = Number(sig.avg_sale_price ?? sig.list_price ?? sig.cost_unit ?? 0) || 0;
+    const margin = sig.margin_pct;
+    const cover = sig.days_of_cover;
+    const tied = Number(sig.tied_capital ?? 0) || 0;
+    const demand = demandBySku.get(skuKey);
+    const lyUnits = demand?.units ?? 0;
+    const lyRev = demand?.revenue ?? 0;
+
+    const key = `${category}||${subcategory}||${brand}`;
+    const g = groups.get(key) ?? {
+      category, subcategory, brand,
+      revenue: 0, units: 0, stock: 0, stockValue: 0,
+      replenishmentQty: 0, replenishmentValue: 0, tiedCapital: 0,
+      marginWeighted: 0, marginBase: 0, coverWeighted: 0, coverBase: 0,
+    };
+    g.revenue += lyRev;
+    g.units += lyUnits;
+    g.stock += stock;
+    g.stockValue += stock * price;
+    g.replenishmentQty += repl;
+    g.replenishmentValue += replValue;
+    g.tiedCapital += tied;
+    // Margin σταθμισμένο με αξία (περσινή πώληση ή αξία αποθέματος), cover σταθμισμένο με απόθεμα.
+    const mw = lyRev > 0 ? lyRev : stock * price > 0 ? stock * price : 1;
+    if (margin != null) { g.marginWeighted += margin * mw; g.marginBase += mw; }
+    if (cover != null) { const cb = Math.max(1, stock); g.coverWeighted += cover * cb; g.coverBase += cb; }
+    groups.set(key, g);
+
+    // SKU-level πρόταση: ERP ανατροφοδοσία ή ζήτηση που ξεπερνά το απόθεμα.
+    const needsReorder = repl > 0 || (lyUnits > 0 && stock < lyUnits);
+    if (needsReorder) {
+      const qty = repl > 0 ? repl : reorderQty(lyUnits, stock);
+      if (qty > 0) {
+        skuRows.push({
+          row: {
+            sku: rawSku,
+            name: sig.description?.trim() || rawSku,
+            category,
+            brand,
+            lastYearUnits: Math.round(lyUnits),
+            lastYearRevenue: money(lyRev),
+            currentStock: Math.round(stock),
+            estimatedReorderQty: qty,
+            reorderQtySource: repl > 0 ? 'erp' : 'estimated',
+            marginPct: margin != null ? +margin.toFixed(1) : undefined,
+            daysOfCover: cover != null ? Math.round(cover) : undefined,
+            confidence: repl > 0 ? 'high' : lyUnits >= 4 ? 'medium' : 'low',
+          },
+          sortValue: replValue || lyRev || qty * price,
+        });
+      }
+    }
+  }
+
+  const reorderPlan = [...groups.values()]
+    .map((g) => {
+      const erpQty = Math.round(g.replenishmentQty);
+      const useErp = erpQty > 0;
+      const qty = useErp ? erpQty : reorderQty(g.units, g.stock);
+      const daysOfCover = g.coverBase > 0 ? Math.round(g.coverWeighted / g.coverBase) : undefined;
+      const marginPct = g.marginBase > 0 ? +(g.marginWeighted / g.marginBase).toFixed(1) : undefined;
+      const avgUnitCost = g.stock > 0 && g.stockValue > 0 ? g.stockValue / g.stock : 0;
+      const action: ReorderAction =
+        useErp || (g.units > 0 && g.stock < g.units)
+          ? 'increase'
+          : daysOfCover != null && daysOfCover > 120
+            ? 'reduce'
+            : g.units > 0 || g.stock > 0
+              ? 'maintain'
+              : 'avoid';
+      const marginNote = marginPct != null ? ` Περιθώριο ~${marginPct}%.` : '';
+      const coverNote = daysOfCover != null ? ` Επάρκεια ~${daysOfCover} ημ.` : '';
+      let baseRationale: string;
+      if (useErp) {
+        baseRationale = `Το ERP προτείνει ανατροφοδοσία ~${nf(erpQty)} τεμ.` + (g.units > 0 ? ` Πέρυσι πούλησε ${nf(g.units)} τεμ.` : '');
+      } else if (action === 'increase') {
+        baseRationale = `Πέρυσι ${nf(g.units)} τεμ. έναντι ${nf(g.stock)} σε απόθεμα — πρότεινε παραγγελία ~${nf(qty)} τεμ.`;
+      } else if (action === 'reduce') {
+        baseRationale = 'Επαρκές απόθεμα για την περσινή ζήτηση — εστίαση σε marketing/προώθηση, όχι παραγγελία.';
+      } else if (action === 'maintain') {
+        baseRationale = 'Το απόθεμα καλύπτει περίπου την περσινή ζήτηση — παρακολούθηση χωρίς άμεση παραγγελία.';
+      } else {
+        baseRationale = 'Χωρίς ζήτηση/απόθεμα — χαμηλή προτεραιότητα.';
+      }
+      const confidence: 'high' | 'medium' | 'low' = useErp || g.units >= 8 ? 'high' : g.units > 0 || g.stock > 0 ? 'medium' : 'low';
+      return {
+        key: `${g.category}-${g.subcategory}-${g.brand}`,
+        category: g.category,
+        subcategory: g.subcategory,
+        brand: g.brand,
+        lastYearRevenue: money(g.revenue),
+        lastYearUnits: Math.round(g.units),
+        currentStock: Math.round(g.stock),
+        currentStockValue: money(g.stockValue),
+        estimatedReorderQty: qty,
+        estimatedReorderValue: money(qty * avgUnitCost),
+        reorderQtySource: (useErp ? 'erp' : 'estimated') as 'erp' | 'estimated',
+        marginPct,
+        daysOfCover,
+        action,
+        confidence,
+        rationale: `${baseRationale}${marginNote}${coverNote}`,
+      };
+    })
+    // Προτεραιότητα: ομάδες που χρειάζονται παραγγελία πρώτα, μετά κατά αξία ανατροφοδοσίας/ζήτησης.
+    .sort((a, b) => {
+      const ai = a.action === 'increase' ? 1 : 0;
+      const bi = b.action === 'increase' ? 1 : 0;
+      if (ai !== bi) return bi - ai;
+      return (b.estimatedReorderValue || b.lastYearRevenue) - (a.estimatedReorderValue || a.lastYearRevenue);
+    })
+    .slice(0, 16);
+
+  const skuSuggestions = skuRows
+    .sort((a, b) => b.sortValue - a.sortValue)
+    .slice(0, 30)
+    .map((r) => r.row);
+
+  return { reorderPlan, skuSuggestions, totalSkus };
+}
+
+// ── Order-driven reorder (fallback χωρίς ERP): join περσινών line items με catalog lookup. ──
+function buildOrderDrivenReorder(
+  lastYearOrders: EcommerceRawOrder[],
+  lookup: ProductLookup,
+  fromDate: string,
+  toDate: string
+): { reorderPlan: MarketingPlanReorderGroup[]; skuSuggestions: MarketingPlanSkuSuggestion[]; matchedLines: number; lineItemCoveragePct: number } {
+  const groupMap = new Map<string, GroupAccumulator>();
+  const skuMap = new Map<string, SkuAccumulator>();
+  let lines = 0;
+  let matchedLines = 0;
+
+  for (const order of lastYearOrders) {
+    const orderDay = dayKey(order.createdAt);
+    if (orderDay < fromDate || orderDay > toDate) continue;
+    if (!isEcommerceOrderDataAnalysisIncluded(order)) continue;
+    for (const line of order.lineItems) {
+      if (isEcommerceDemoLineItem(line)) continue;
+      const quantity = Number(line.quantity ?? 0) || 0;
+      if (quantity <= 0) continue;
+      lines += 1;
       const resolved = resolveProduct(lookup, line.sku, line.productId);
       if (resolved) matchedLines += 1;
       const category = resolved?.category || 'Uncategorized';
@@ -340,8 +592,7 @@ export function buildMarketingPlanInsight(input: {
       const skuKey = normalizeKey(sku);
       const groupKey = `${category}||${subcategory}||${brand}`;
       const group =
-        groupMap.get(groupKey) ??
-        {
+        groupMap.get(groupKey) ?? {
           category, subcategory, brand,
           revenue: 0, units: 0, stock: 0, stockValue: 0,
           replenishmentQty: 0, tiedCapital: 0,
@@ -351,10 +602,8 @@ export function buildMarketingPlanInsight(input: {
         };
       group.revenue += rev;
       group.units += quantity;
-      // Margin σταθμισμένο με revenue, days-of-cover σταθμισμένο με τεμάχια (ανά γραμμή).
       if (resolved?.marginPct != null) { group.marginWeightedRev += resolved.marginPct * rev; group.marginRevBase += rev; }
       if (resolved?.daysOfCover != null) { group.coverWeightedUnits += resolved.daysOfCover * quantity; group.coverUnitsBase += quantity; }
-      // Stock-level πεδία (stock/value/ERP replenishment/tied capital) μετρώνται ΜΙΑ φορά ανά SKU.
       const stockDedupKey = skuKey || `__line_${lines}`;
       if (!group.seenSkus.has(stockDedupKey)) {
         group.seenSkus.add(stockDedupKey);
@@ -369,11 +618,8 @@ export function buildMarketingPlanInsight(input: {
         const row = skuMap.get(skuKey) ?? {
           sku,
           name: resolved?.name || (line as any).title || (line as any).name || sku,
-          category,
-          brand,
-          revenue: 0,
-          units: 0,
-          stock,
+          category, brand,
+          revenue: 0, units: 0, stock,
           marginPct: resolved?.marginPct,
           daysOfCover: resolved?.daysOfCover,
           replenishmentQty: resolved?.replenishmentQty,
@@ -389,7 +635,6 @@ export function buildMarketingPlanInsight(input: {
   const reorderPlan = [...groupMap.values()]
     .map((group) => {
       const action = actionForGap(group.units, group.stock);
-      // Προτεραιότητα στην επίσημη ERP πρόταση ανατροφοδοσίας· αλλιώς εκτίμηση από ζήτηση/stock.
       const erpQty = Math.round(group.replenishmentQty);
       const useErp = erpQty > 0;
       const qty = useErp ? erpQty : reorderQty(group.units, group.stock);
@@ -426,7 +671,6 @@ export function buildMarketingPlanInsight(input: {
         rationale: `${baseRationale}${marginNote}${coverNote}`,
       };
     })
-    // Ταξινόμηση κατά αξία ζήτησης· σε ισοβαθμία προηγείται το υψηλότερο περιθώριο.
     .sort((a, b) => b.lastYearRevenue - a.lastYearRevenue || (b.marginPct ?? 0) - (a.marginPct ?? 0))
     .slice(0, 16);
 
@@ -454,22 +698,5 @@ export function buildMarketingPlanInsight(input: {
     .slice(0, 30);
 
   const lineItemCoveragePct = lines > 0 ? Math.round((matchedLines / lines) * 100) : 0;
-  const inventoryCoveragePct = (lookup.bySku.size + lookup.byProductId.size) > 0 ? lineItemCoveragePct : 0;
-  const notes: string[] = [];
-  if (lines === 0) notes.push('Δεν βρέθηκαν γραμμές προϊόντων για την αντίστοιχη περσινή περίοδο.');
-  if (lineItemCoveragePct < 50 && lines > 0) notes.push('Χαμηλή αντιστοίχιση SKU με τρέχον inventory.');
-  if (lookup.bySku.size === 0 && Object.keys(input.procurementSignals ?? {}).length === 0) {
-    notes.push('Δεν φορτώθηκε inventory για υπολογισμό αποθέματος.');
-  }
-  const level: MarketingPlanDataQuality['level'] =
-    lines > 0 && lineItemCoveragePct >= 70 ? 'strong' : lines > 0 && lineItemCoveragePct >= 30 ? 'partial' : 'weak';
-
-  return {
-    period: input.period,
-    evidence: { lastYearFromDate, lastYearToDate, revenue: money(revenue), orders, units: Math.round(units), aov: orders > 0 ? money(revenue / orders) : 0, lines, matchedLines },
-    reorderPlan,
-    skuSuggestions,
-    dataQuality: { level, lineItemCoveragePct, inventoryCoveragePct, notes },
-    totalSkusCovered: lookup.bySku.size,
-  };
+  return { reorderPlan, skuSuggestions, matchedLines, lineItemCoveragePct };
 }

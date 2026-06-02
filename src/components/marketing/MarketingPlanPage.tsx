@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   BarChart3, Calendar, ChevronDown, ChevronUp, Megaphone, PackagePlus,
   Sparkles, Tag, TrendingUp, Users, ArrowUpRight, ArrowDownRight,
+  CheckCircle2, Circle,
 } from 'lucide-react';
 import { Card, CardHeader, Button, PageHeader, Badge, Spinner } from '../common';
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
@@ -48,6 +49,15 @@ const PRESETS: { id: MarketingPlanPresetId; label: string }[] = [
 ];
 
 type SectionKey = 'analysis' | 'inventory' | 'paid' | 'organic' | 'audience' | 'pricing' | 'message';
+
+type PlanStage = {
+  id: string;
+  label: string;
+  detail?: string;
+  meta?: string;
+  done: boolean;
+  active: boolean;
+};
 
 export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: string) => void } = {}) {
   const { currentBrand } = useBrand();
@@ -153,6 +163,65 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
     const signalCount = Object.keys(procurementSignals.signalsBySku).length;
     return signalCount > 0 ? signalCount : null;
   }, [procurementSignals.signalsBySku]);
+
+  // Στάδια φόρτωσης/ανάλυσης για τον progress loader (ώστε ο χρήστης να βλέπει πρόοδο, όχι αόριστο spinner).
+  const planStages = useMemo<PlanStage[]>(() => {
+    const salesDone = !lastYearOrdersQuery.isLoading;
+    const inventoryDone = !inventoryLoading;
+    const erpDone = !procurementSignals.isLoading;
+    const synthesisDone = !!draft;
+    const raw: Omit<PlanStage, 'active'>[] = [
+      {
+        id: 'sales',
+        label: 'Περσινές πωλήσεις βάσης',
+        detail: `${lastYearFrom} → ${lastYearTo}`,
+        meta: salesDone && lastYearOrdersQuery.data ? `${formatNumber(lastYearOrdersQuery.data.length)} παραγγελίες` : undefined,
+        done: salesDone,
+      },
+      {
+        id: 'inventory',
+        label: 'Τρέχον απόθεμα (product catalog)',
+        meta: inventoryDone ? `${formatNumber(inventoryProducts.length)} προϊόντα` : undefined,
+        done: inventoryDone,
+      },
+      {
+        id: 'erp',
+        label: 'Σήματα προμηθειών / ERP',
+        meta: erpDone && skuCoverage ? `${formatNumber(skuCoverage)} SKU` : undefined,
+        done: erpDone,
+      },
+      {
+        id: 'synthesis',
+        label: 'Σύνθεση πλάνου & AI core message',
+        done: synthesisDone,
+      },
+    ];
+    let activeAssigned = false;
+    return raw.map((s) => {
+      let active = false;
+      if (s.id === 'synthesis') {
+        active = generating && !synthesisDone;
+      } else if (!s.done && !activeAssigned) {
+        active = true;
+        activeAssigned = true;
+      }
+      return { ...s, active };
+    });
+  }, [
+    lastYearOrdersQuery.isLoading, lastYearOrdersQuery.data, inventoryLoading,
+    inventoryProducts.length, procurementSignals.isLoading, skuCoverage,
+    draft, generating, lastYearFrom, lastYearTo,
+  ]);
+
+  const planProgressPct = useMemo(() => {
+    const weights: Record<string, number> = { sales: 30, inventory: 25, erp: 20, synthesis: 25 };
+    let pct = 0;
+    for (const s of planStages) {
+      if (s.done) pct += weights[s.id] ?? 0;
+      else if (s.id === 'synthesis' && generating) pct += (weights.synthesis ?? 0) * 0.5;
+    }
+    return Math.min(100, Math.round(pct));
+  }, [planStages, generating]);
 
   const toggleSection = (key: SectionKey) => {
     setOpenSections((prev) => {
@@ -275,19 +344,9 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
         </div>
       </Card>
 
-      {/* Loading skeleton ενόσω φορτώνουν τα base data & δεν υπάρχει ακόμη draft */}
+      {/* Staged progress loader ενόσω φορτώνουν τα base data / συντίθεται το plan */}
       {!draft && (generating || (loadingContext && !generateError)) && (
-        <Card padding="lg">
-          <div className="flex items-center gap-3 text-sm text-[#4A4A4A]">
-            <Spinner size="sm" />
-            {generating ? 'Δημιουργία enriched plan…' : 'Φόρτωση δεδομένων βάσης…'}
-          </div>
-          <div className="mt-4 space-y-3">
-            {[0, 1, 2].map((i) => (
-              <div key={i} className="h-20 animate-pulse rounded-xl bg-[#F3F4F6]" />
-            ))}
-          </div>
-        </Card>
+        <PlanProgress stages={planStages} pct={planProgressPct} generating={generating} />
       )}
 
       {/* 7-section plan output */}
@@ -621,6 +680,59 @@ function PlanSection({
         {open ? <ChevronUp size={16} className="text-[#9CA3AF]" /> : <ChevronDown size={16} className="text-[#9CA3AF]" />}
       </button>
       {open && <div id={`plan-content-${id}`} className="mt-4">{children}</div>}
+    </Card>
+  );
+}
+
+function PlanProgress({ stages, pct, generating }: { stages: PlanStage[]; pct: number; generating: boolean }) {
+  const doneCount = stages.filter((s) => s.done).length;
+  return (
+    <Card padding="lg">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Sparkles size={18} className="text-[var(--nts-accent)]" />
+          <span className="font-semibold text-[#1A1A1A]">
+            {generating ? 'Σύνθεση enriched plan…' : 'Φόρτωση & ανάλυση δεδομένων…'}
+          </span>
+        </div>
+        <span className="font-mono text-sm font-bold text-[var(--nts-accent)]">{pct}%</span>
+      </div>
+
+      {/* Progress bar */}
+      <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-[#F3F4F6]">
+        <div
+          className="h-full rounded-full bg-[var(--nts-accent)] transition-all duration-500 ease-out"
+          style={{ width: `${Math.max(4, pct)}%` }}
+        />
+      </div>
+      <p className="mt-2 text-xs text-[#9CA3AF]">{doneCount}/{stages.length} βήματα ολοκληρώθηκαν</p>
+
+      {/* Stage checklist */}
+      <ul className="mt-4 space-y-2.5">
+        {stages.map((s) => {
+          const stateClass = s.done ? 'text-emerald-600' : s.active ? 'text-[var(--nts-accent)]' : 'text-[#9CA3AF]';
+          return (
+            <li key={s.id} className="flex items-start gap-3">
+              <span className="mt-0.5 shrink-0">
+                {s.done ? (
+                  <CheckCircle2 size={18} className="text-emerald-500" />
+                ) : s.active ? (
+                  <Spinner size="sm" />
+                ) : (
+                  <Circle size={18} className="text-[#D1D5DB]" />
+                )}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                  <span className={`text-sm font-medium ${s.done ? 'text-[#1A1A1A]' : stateClass}`}>{s.label}</span>
+                  {s.meta && <span className="text-xs text-[#6B7280]">· {s.meta}</span>}
+                </div>
+                {s.detail && <p className="text-xs text-[#9CA3AF]">{s.detail}</p>}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
     </Card>
   );
 }
