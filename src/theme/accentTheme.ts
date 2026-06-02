@@ -16,7 +16,12 @@ export type AccentId =
   | 'royal'
   | 'forest'
   | 'crimson'
-  | 'ocean';
+  | 'ocean'
+  // Τριχρωμίες: accent + secondary (chart) + chrome — τρι-τονικό swatch με πλήρη χαρακτήρα.
+  | 'sunset'
+  | 'tropic'
+  | 'aurora'
+  | 'berry';
 
 export interface AccentPreset {
   id: AccentId;
@@ -25,6 +30,8 @@ export interface AccentPreset {
   swatch: string;
   /** Δεύτερο χρώμα για διπλό swatch (π.χ. classic = πορτοκαλί accent + ουδέτερο σκούρο chrome). */
   swatch2?: string;
+  /** Τρίτο χρώμα για τρίχρωμο swatch (οδηγεί και το chart-secondary για ορατό αποτέλεσμα). */
+  swatch3?: string;
 }
 
 export const ACCENT_PRESETS: AccentPreset[] = [
@@ -42,6 +49,11 @@ export const ACCENT_PRESETS: AccentPreset[] = [
   { id: 'forest', label: 'Δάσος', swatch: '#84CC16', swatch2: '#14271C' },
   { id: 'crimson', label: 'Κρεμεζί', swatch: '#EC4899', swatch2: '#18181B' },
   { id: 'ocean', label: 'Ωκεανός', swatch: '#14B8A6', swatch2: '#0C4A6E' },
+  // Τριχρωμίες (accent + secondary + chrome) — το swatch3 οδηγεί το chart-secondary
+  { id: 'sunset', label: 'Ηλιοβασίλεμα', swatch: '#F97316', swatch2: '#4C1D95', swatch3: '#E11D48' },
+  { id: 'tropic', label: 'Τροπικό', swatch: '#14B8A6', swatch2: '#0C4A6E', swatch3: '#84CC16' },
+  { id: 'aurora', label: 'Σέλας', swatch: '#38BDF8', swatch2: '#0B1220', swatch3: '#A855F7' },
+  { id: 'berry', label: 'Μούρο', swatch: '#EC4899', swatch2: '#18181B', swatch3: '#8B5CF6' },
 ];
 
 export const DEFAULT_ACCENT: AccentId = 'classic';
@@ -60,6 +72,10 @@ export function readStoredAccent(): AccentId {
   }
 }
 
+/** Custom event που σκάει όταν αλλάζει το accent — επιτρέπει σε components (π.χ. charts/sparklines
+ *  με literal hex σε SVG) να ξαναδιαβάσουν το χρώμα του ενεργού profile. */
+export const ACCENT_CHANGE_EVENT = 'pp-accent-change';
+
 /** Εφαρμογή στο <html> (default → καθαρίζει το attribute ώστε να ισχύει το :root). */
 export function applyAccent(accent: AccentId): void {
   if (typeof document === 'undefined') return;
@@ -68,6 +84,9 @@ export function applyAccent(accent: AccentId): void {
     delete root.dataset.accent;
   } else {
     root.dataset.accent = accent;
+  }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(ACCENT_CHANGE_EVENT, { detail: accent }));
   }
 }
 

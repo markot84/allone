@@ -776,8 +776,8 @@ export function EcommerceDashboard() {
                 <AreaChart data={filteredDailyRevenue}>
                   <defs>
                     <linearGradient id="ecommRevGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#F97316" stopOpacity={0.25} />
-                      <stop offset="95%" stopColor="#F97316" stopOpacity={0} />
+                      <stop offset="5%" stopColor="var(--nts-accent)" stopOpacity={0.25} />
+                      <stop offset="95%" stopColor="var(--nts-accent)" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
@@ -799,7 +799,7 @@ export function EcommerceDashboard() {
                     labelStyle={{ color: '#24292f', fontWeight: 600, marginBottom: 4 }}
                     formatter={(v: unknown) => [`€${Number(v ?? 0).toFixed(2)}`, 'Έσοδα']}
                   />
-                  <Area type="monotone" dataKey="revenue" stroke="#F97316" fill="url(#ecommRevGrad)" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 2 }} />
+                  <Area type="monotone" dataKey="revenue" stroke="var(--nts-accent)" fill="url(#ecommRevGrad)" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 2 }} />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (

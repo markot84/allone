@@ -136,9 +136,11 @@ export function AutomationSettingsPage() {
                   <span
                     className="flex h-5 w-5 items-center justify-center rounded-full shadow-sm"
                     style={{
-                      background: preset.swatch2
-                        ? `linear-gradient(135deg, ${preset.swatch} 0 50%, ${preset.swatch2} 50% 100%)`
-                        : preset.swatch,
+                      background: preset.swatch3
+                        ? `conic-gradient(from 90deg, ${preset.swatch} 0 120deg, ${preset.swatch2} 120deg 240deg, ${preset.swatch3} 240deg 360deg)`
+                        : preset.swatch2
+                          ? `linear-gradient(135deg, ${preset.swatch} 0 50%, ${preset.swatch2} 50% 100%)`
+                          : preset.swatch,
                     }}
                   >
                     {selected && <Check size={12} className="text-white" />}

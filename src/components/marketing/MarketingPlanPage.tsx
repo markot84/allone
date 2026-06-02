@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   BarChart3, Calendar, ChevronDown, ChevronUp, Megaphone, PackagePlus,
@@ -10,6 +10,7 @@ import { useCampaigns } from '../../hooks/useCampaigns';
 import { useGA4Data } from '../../hooks/useGA4Data';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import { useProcurementSignals } from '../../hooks/useProcurementSignals';
+import { useProducts } from '../../hooks/useProducts';
 import { useSegments } from '../../hooks/useSegments';
 import { usePriceBenchmarks } from '../../hooks/usePriceBenchmarks';
 import {
@@ -56,6 +57,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
   const ga4 = useGA4Data();
   const ecomm = useEcommerceSummary({ includeSkuDetails: false, includeStockMovement: false });
   const procurementSignals = useProcurementSignals();
+  const { products: inventoryProducts, isLoading: inventoryLoading } = useProducts();
   const segments = useSegments({ variant: 'data_analysis', skipOrderHydration: true });
   const { benchmarks: priceBenchmarks } = usePriceBenchmarks({ maxDocs: 200 });
   const queryClient = useQueryClient();
@@ -63,7 +65,9 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
   const [preset, setPreset] = useState<MarketingPlanPresetId>('next_month');
   const [draft, setDraft] = useState<MarketingPlanDraft | null>(null);
   const [generating, setGenerating] = useState(false);
-  const [learningsOpen, setLearningsOpen] = useState(true);
+  const [generateError, setGenerateError] = useState<string | null>(null);
+  const [autoTriedFor, setAutoTriedFor] = useState<string | null>(null);
+  const [learningsOpen, setLearningsOpen] = useState(false);
   const [openSections, setOpenSections] = useState<Set<SectionKey>>(
     new Set(['analysis', 'inventory', 'paid', 'organic', 'audience', 'pricing', 'message'])
   );
@@ -141,8 +145,9 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
     },
   });
 
-  const canGenerate = !!brandId && !lastYearOrdersQuery.isLoading;
-  const loadingContext = lastYearOrdersQuery.isLoading;
+  // Base data έτοιμα → auto-generate μία φορά ανά preset. Το manual κουμπί δεν μπλοκάρει στο loading.
+  const baseDataReady = !!brandId && !lastYearOrdersQuery.isLoading && !inventoryLoading && !procurementSignals.isLoading;
+  const loadingContext = lastYearOrdersQuery.isLoading || inventoryLoading || procurementSignals.isLoading;
 
   const skuCoverage = useMemo(() => {
     const signalCount = Object.keys(procurementSignals.signalsBySku).length;
@@ -161,13 +166,15 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
   const generate = async () => {
     if (!brandId) return;
     setGenerating(true);
+    setGenerateError(null);
     try {
       const insight = buildMarketingPlanInsight({
         period,
         lastYearOrders: lastYearOrdersQuery.data ?? [],
-        inventoryProducts: [],
+        inventoryProducts,
         procurementSignals: procurementSignals.signalsBySku,
       });
+      // Το generateMarketingPlanMessage χειρίζεται εσωτερικά τυχόν αποτυχία AI και επιστρέφει fallback.
       const coreMessage: MarketingPlanCoreMessage = await generateMarketingPlanMessage({
         insight,
         brandName: currentBrand?.name,
@@ -187,10 +194,23 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
         })
       );
       setOpenSections(new Set(['analysis', 'inventory', 'paid', 'organic', 'audience', 'pricing', 'message']));
+    } catch (err) {
+      console.error('[MarketingPlan] generate failed', err);
+      setGenerateError(err instanceof Error ? err.message : 'Αποτυχία δημιουργίας plan. Δοκίμασε ξανά.');
     } finally {
       setGenerating(false);
     }
   };
+
+  // Auto-generate μόλις είναι έτοιμα τα base data (μία προσπάθεια ανά preset).
+  // Έτσι ο χρήστης βλέπει αμέσως το plan, χωρίς να χρειάζεται χειροκίνητο click.
+  useEffect(() => {
+    if (!baseDataReady || draft || generating || generateError) return;
+    if (autoTriedFor === preset) return;
+    setAutoTriedFor(preset);
+    void generate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [baseDataReady, draft, generating, generateError, preset, autoTriedFor]);
 
   return (
     <div className="space-y-6">
@@ -218,7 +238,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
             <button
               key={p.id}
               type="button"
-              onClick={() => { setPreset(p.id); setDraft(null); }}
+              onClick={() => { setPreset(p.id); setDraft(null); setGenerateError(null); setAutoTriedFor(null); }}
               className={`rounded-lg px-3 py-1.5 text-xs font-medium border transition-colors ${
                 preset === p.id
                   ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/10 text-[var(--nts-accent)]'
@@ -241,22 +261,34 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
           <Button
             variant="primary"
             icon={generating ? <Spinner size="sm" /> : <Sparkles size={16} />}
-            onClick={() => void generate()}
-            disabled={!canGenerate || generating}
+            onClick={() => { setAutoTriedFor(preset); void generate(); }}
+            disabled={!brandId || generating}
           >
-            {generating ? 'Δημιουργία…' : 'Δημιουργία enriched plan'}
+            {generating ? 'Δημιουργία…' : draft ? 'Επαναδημιουργία plan' : 'Δημιουργία enriched plan'}
           </Button>
-          {loadingContext && <span className="text-xs text-[#6B7280]">Φόρτωση περσινών στοιχείων…</span>}
+          {loadingContext && !draft && (
+            <span className="text-xs text-[#6B7280]">Φόρτωση δεδομένων βάσης (περσινές πωλήσεις & απόθεμα)…</span>
+          )}
+          {generateError && (
+            <span className="text-xs font-medium text-rose-600">⚠ {generateError} · πάτησε «Δημιουργία» ξανά.</span>
+          )}
         </div>
       </Card>
 
-      <LearningsCard
-        open={learningsOpen}
-        onToggle={() => setLearningsOpen((v) => !v)}
-        loading={learningsQuery.isLoading}
-        learnings={learningsQuery.data ?? null}
-        windowLabel={`${learnFrom} → ${learnTo}`}
-      />
+      {/* Loading skeleton ενόσω φορτώνουν τα base data & δεν υπάρχει ακόμη draft */}
+      {!draft && (generating || (loadingContext && !generateError)) && (
+        <Card padding="lg">
+          <div className="flex items-center gap-3 text-sm text-[#4A4A4A]">
+            <Spinner size="sm" />
+            {generating ? 'Δημιουργία enriched plan…' : 'Φόρτωση δεδομένων βάσης…'}
+          </div>
+          <div className="mt-4 space-y-3">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="h-20 animate-pulse rounded-xl bg-[#F3F4F6]" />
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* 7-section plan output */}
       {draft && (
@@ -512,6 +544,15 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
           </PlanSection>
         </>
       )}
+
+      {/* Βοηθητικό: μαθήματα από προηγούμενες αποφάσεις (κάτω από το plan, collapsed by default) */}
+      <LearningsCard
+        open={learningsOpen}
+        onToggle={() => setLearningsOpen((v) => !v)}
+        loading={learningsQuery.isLoading}
+        learnings={learningsQuery.data ?? null}
+        windowLabel={`${learnFrom} → ${learnTo}`}
+      />
 
       {/* Saved plans */}
       {savedQuery.data && savedQuery.data.length > 0 && (

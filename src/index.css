@@ -170,6 +170,56 @@
   --app-canvas-bg: #F0FBFC;
 }
 
+/* ── Τριχρωμίες: accent + chrome + secondary (chart) ─────────────────────────── */
+:root[data-accent="sunset"] {
+  --nts-accent: #F97316;
+  --nts-accent-hover: #EA580C;
+  --nts-accent-light: #FFEDD5;
+  --nts-orange: #F97316;
+  --nts-orange-hover: #EA580C;
+  --nts-orange-light: #FFEDD5;
+  --app-chrome-bg: #4C1D95;
+  --app-canvas-bg: #FFF7F2;
+  --nts-chart-secondary: #E11D48;
+  --nts-chart-secondary-light: #FFE4E6;
+}
+:root[data-accent="tropic"] {
+  --nts-accent: #14B8A6;
+  --nts-accent-hover: #0D9488;
+  --nts-accent-light: #CCFBF1;
+  --nts-orange: #14B8A6;
+  --nts-orange-hover: #0D9488;
+  --nts-orange-light: #CCFBF1;
+  --app-chrome-bg: #0C4A6E;
+  --app-canvas-bg: #F0FBFA;
+  --nts-chart-secondary: #84CC16;
+  --nts-chart-secondary-light: #ECFCCB;
+}
+:root[data-accent="aurora"] {
+  --nts-accent: #38BDF8;
+  --nts-accent-hover: #0EA5E9;
+  --nts-accent-light: #E0F2FE;
+  --nts-orange: #38BDF8;
+  --nts-orange-hover: #0EA5E9;
+  --nts-orange-light: #E0F2FE;
+  --app-chrome-bg: #0B1220;
+  --app-canvas-bg: #F5FAFF;
+  --nts-chart-secondary: #A855F7;
+  --nts-chart-secondary-light: #F3E8FF;
+}
+:root[data-accent="berry"] {
+  --nts-accent: #EC4899;
+  --nts-accent-hover: #DB2777;
+  --nts-accent-light: #FCE7F3;
+  --nts-orange: #EC4899;
+  --nts-orange-hover: #DB2777;
+  --nts-orange-light: #FCE7F3;
+  --app-chrome-bg: #18181B;
+  --app-canvas-bg: #FFF6FB;
+  --nts-chart-secondary: #8B5CF6;
+  --nts-chart-secondary-light: #EDE9FE;
+}
+
 /* IMPORTANT: Do NOT zero out margins/paddings globally when using Primer.
    It breaks spacing + component layout. Keep only box-sizing. */
 *, *::before, *::after {
