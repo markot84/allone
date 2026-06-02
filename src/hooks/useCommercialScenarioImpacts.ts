@@ -14,7 +14,7 @@ import {
   type SkuWindowMetrics,
 } from '../services/commercialScenarioMetrics';
 import { analyzeMarketingDecisions } from '../services/marketingSpendImpact';
-import { analyzePriceChangeImpact } from '../services/priceChangeImpact';
+import { analyzePriceChangeImpactAsync } from '../services/priceChangeImpact';
 import {
   readScenarioCache,
   writeScenarioCache,
@@ -39,6 +39,11 @@ type WindowedScenarioRow = {
 };
 
 const ERP_SCENARIO_CACHE_MS = SCENARIO_CACHE_TTL_MS;
+
+/** Παραχωρεί τον έλεγχο στο main thread (επόμενο macrotask) ώστε να γίνει paint και να μην «παγώνει» το UI. */
+function yieldToMain(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
 
 function monthWindows(periodFrom: string, periodTo: string): Array<{ startDate: string; endDate: string }> {
   const [fy, fm] = periodFrom.split('-').map(Number);
@@ -193,18 +198,19 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
 
       const priceRows = [];
 
+      // Chunked & non-blocking: η ανάλυση τρέχει σε batches με yield στο main thread ανάμεσα στα
+      // windows/chunks, ώστε σε high-volume brands να μη «παγώνει» η σελίδα (page not responding).
       for (const window of monthWindows(period.fromDate, period.toDate)) {
-        const base = {
-          orders,
-          periodFrom: window.startDate,
-          periodTo: window.endDate,
-          costBySku,
-          skuNames,
-        };
-        priceRows.push(...analyzePriceChangeImpact(base).rows);
+        const res = await analyzePriceChangeImpactAsync(
+          { orders, periodFrom: window.startDate, periodTo: window.endDate, costBySku, skuNames },
+          { chunkSize: 3000, yieldFn: yieldToMain }
+        );
+        priceRows.push(...res.rows);
+        await yieldToMain();
       }
 
       priceRows.sort((a, b) => Math.abs(b.after.revenue - b.before.revenue) - Math.abs(a.after.revenue - a.before.revenue));
+      await yieldToMain();
 
       // Summary υπολογίζεται από ΟΛΕΣ τις rows (σωστά counts). Ο πίνακας όμως δείχνει μόνο τις
       // ΕΜΦΑΝΙΣΙΜΕΣ: actionable (pos/neg, όχι low-confidence) + neutral. Οι `insufficient` και τα
@@ -216,6 +222,7 @@ export function useCommercialScenarioImpacts(period?: CommercialScenarioPeriod) 
         (r) => r.verdict === 'neutral' || ((r.verdict === 'positive' || r.verdict === 'negative') && r.confidence !== 'low')
       );
       const price = { rows: displayablePriceRows, summary: priceSummary };
+      await yieldToMain();
       // Marketing: ανίχνευση αποφάσεων (before = προηγούμενο ισόποσο διάστημα, υπολογίζεται στο service).
       const marketing = analyzeMarketingDecisions({
         campaigns: campaigns as Campaign[],

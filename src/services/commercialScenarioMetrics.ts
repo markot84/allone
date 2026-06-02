@@ -142,6 +142,56 @@ export function aggregateSkuWindows(input: {
   return { beforeBySku, afterBySku };
 }
 
+/**
+ * Async/chunked εκδοχή του aggregateSkuWindows: επεξεργάζεται τις παραγγελίες σε batches και
+ * παραχωρεί τον έλεγχο στο main thread (yieldFn) ανάμεσα στα chunks, ώστε σε high-volume brands
+ * ο υπολογισμός να μην «παγώνει» το UI («page not responding»).
+ */
+export async function aggregateSkuWindowsChunked(
+  input: {
+    orders: EcommerceRawOrder[];
+    periodFrom: string;
+    periodTo: string;
+    lookbackDays?: number;
+    costBySku: Map<string, number>;
+  },
+  opts?: { chunkSize?: number; yieldFn?: () => Promise<void> }
+): Promise<{ beforeBySku: Map<string, SkuWindowAgg>; afterBySku: Map<string, SkuWindowAgg> }> {
+  const lookbackDays = input.lookbackDays ?? DEFAULT_LOOKBACK_DAYS;
+  const baselineFrom = shiftIsoDate(input.periodFrom, -lookbackDays);
+  const baselineTo = shiftIsoDate(input.periodFrom, -1);
+  const beforeBySku = new Map<string, SkuWindowAgg>();
+  const afterBySku = new Map<string, SkuWindowAgg>();
+
+  const chunkSize = Math.max(500, opts?.chunkSize ?? 3000);
+  const yieldFn = opts?.yieldFn;
+  const orders = input.orders;
+
+  for (let i = 0; i < orders.length; i++) {
+    const order = orders[i];
+    const day = (order.createdAt || '').slice(0, 10);
+    if (day && day >= baselineFrom && day <= input.periodTo) {
+      const inBefore = day >= baselineFrom && day <= baselineTo;
+      const inAfter = day >= input.periodFrom && day <= input.periodTo;
+      if (inBefore || inAfter) {
+        for (const line of order.lineItems) {
+          const sku = String(line.sku || '').trim().toUpperCase();
+          if (!sku) continue;
+          const price = Number(line.price) || 0;
+          const qty = Number(line.quantity) || 0;
+          if (price <= 0 || qty <= 0) continue;
+          const unitCost = input.costBySku.get(sku) ?? 0;
+          if (inBefore) beforeBySku.set(sku, addLine(beforeBySku.get(sku) ?? emptyAgg(), price, qty, unitCost));
+          if (inAfter) afterBySku.set(sku, addLine(afterBySku.get(sku) ?? emptyAgg(), price, qty, unitCost));
+        }
+      }
+    }
+    if (yieldFn && (i + 1) % chunkSize === 0) await yieldFn();
+  }
+
+  return { beforeBySku, afterBySku };
+}
+
 export function confidenceLevel(qtyBefore: number, qtyAfter: number, revenueBefore: number, revenueAfter: number): 'low' | 'medium' | 'high' {
   const score =
     (qtyBefore >= 10 ? 2 : qtyBefore >= MIN_QTY_WINDOW ? 1 : 0) +

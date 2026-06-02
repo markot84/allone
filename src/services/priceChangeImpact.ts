@@ -1,10 +1,12 @@
 import {
   aggregateSkuWindows,
+  aggregateSkuWindowsChunked,
   confidenceLevel,
   metricsFromAgg,
   pctChange,
   type ScenarioVerdict,
   type SkuWindowMetrics,
+  type SkuWindowAgg,
 } from './commercialScenarioMetrics';
 import type { EcommerceRawOrder } from './ecommerceRawOrders';
 
@@ -81,8 +83,35 @@ export function analyzePriceChangeImpact(input: {
   costBySku: Map<string, number>;
   skuNames?: Map<string, string>;
 }): { rows: PriceChangeImpactRow[]; summary: PriceChangeImpactSummary } {
-  const skuNames = input.skuNames ?? new Map<string, string>();
   const { beforeBySku, afterBySku } = aggregateSkuWindows(input);
+  return finalizePriceChangeRows(input, beforeBySku, afterBySku);
+}
+
+/**
+ * Non-blocking εκδοχή: η βαριά αθροιστική επεξεργασία γίνεται chunked με yield στο main thread,
+ * ώστε να μη «παγώνει» η σελίδα σε high-volume brands.
+ */
+export async function analyzePriceChangeImpactAsync(
+  input: {
+    orders: EcommerceRawOrder[];
+    periodFrom: string;
+    periodTo: string;
+    lookbackDays?: number;
+    costBySku: Map<string, number>;
+    skuNames?: Map<string, string>;
+  },
+  opts?: { chunkSize?: number; yieldFn?: () => Promise<void> }
+): Promise<{ rows: PriceChangeImpactRow[]; summary: PriceChangeImpactSummary }> {
+  const { beforeBySku, afterBySku } = await aggregateSkuWindowsChunked(input, opts);
+  return finalizePriceChangeRows(input, beforeBySku, afterBySku);
+}
+
+function finalizePriceChangeRows(
+  input: { periodFrom: string; periodTo: string; lookbackDays?: number; costBySku: Map<string, number>; skuNames?: Map<string, string> },
+  beforeBySku: Map<string, SkuWindowAgg>,
+  afterBySku: Map<string, SkuWindowAgg>
+): { rows: PriceChangeImpactRow[]; summary: PriceChangeImpactSummary } {
+  const skuNames = input.skuNames ?? new Map<string, string>();
   const rows: PriceChangeImpactRow[] = [];
 
   for (const [sku, beforeAgg] of beforeBySku) {
