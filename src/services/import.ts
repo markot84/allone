@@ -1721,18 +1721,29 @@ async function importProcurementFile(
     // μικρές αποκλίσεις (π.χ. «ΔΙΑΧΕΙΡΙΣΗ ΑΠΟΘΕΜΑΤΟΣ » με κενό) να ΜΗΝ ρίχνουν σιωπηλά ένα φύλλο.
     const normalizeSheetName = (s: string) =>
       String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
-    const resolveSheet = (expected: string) => {
-      if (wb.Sheets[expected]) return wb.Sheets[expected];
-      const target = normalizeSheetName(expected);
-      const match = wb.SheetNames.find((n) => normalizeSheetName(n) === target);
-      return match ? wb.Sheets[match] : undefined;
+    // Aliases ανά sheet για νεότερα templates. Π.χ. το «ΔΙΑΧΕΙΡΙΣΗ ΑΠΟΘΕΜΑΤΟΣ» έχει σπάσει σε
+    // «… MASTER» (συγκεντρωτικό με στήλες ανατροφοδοσίας — αυτό περιμένει η εφαρμογή) + «… ΑΝΑΛΥΤΙΚΟ»
+    // (ανά variant). Προτιμάμε exact → MASTER.
+    const SHEET_ALIASES: Partial<Record<ProcurementSheetType, string[]>> = {
+      inventory: ['ΔΙΑΧΕΙΡΙΣΗ ΑΠΟΘΕΜΑΤΟΣ MASTER'],
+    };
+    const resolveSheet = (expected: string, aliases: string[]) => {
+      const candidates = [expected, ...aliases];
+      for (const c of candidates) if (wb.Sheets[c]) return wb.Sheets[c]; // exact
+      const normNames = wb.SheetNames.map((n) => [n, normalizeSheetName(n)] as const);
+      for (const c of candidates) {
+        const t = normalizeSheetName(c);
+        const hit = normNames.find(([, nn]) => nn === t);
+        if (hit) return wb.Sheets[hit[0]];
+      }
+      return undefined;
     };
 
     for (let i = 0; i < PROCUREMENT_SHEET_ORDER.length; i++) {
       const sheetType = PROCUREMENT_SHEET_ORDER[i];
       const sheetName = PROCUREMENT_SHEET_NAMES[sheetType];
       const coll = PROCUREMENT_COLLECTIONS[i];
-      const sheet = resolveSheet(sheetName);
+      const sheet = resolveSheet(sheetName, SHEET_ALIASES[sheetType] ?? []);
 
       if (!sheet) {
         result.warnings.push(`Φύλλο "${sheetName}" δεν βρέθηκε· παράλειψη. Διαθέσιμα φύλλα: ${wb.SheetNames.join(', ')}`);
