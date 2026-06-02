@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   BarChart3, Calendar, ChevronDown, ChevronUp, Megaphone, PackagePlus,
@@ -59,6 +59,48 @@ type PlanStage = {
   active: boolean;
 };
 
+// ── Daily plan cache (localStorage) ──────────────────────────────────────────
+// Το draft υπολογίζεται μία φορά την ημέρα ανά brand/preset και διατηρείται, ώστε η
+// πλοήγηση μέσα στην εφαρμογή να ΜΗΝ ξανατρέχει τη βαριά ανάλυση + AI κάθε φορά.
+const PLAN_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+type PlanCacheEntry = { savedAt: number; plan: MarketingPlanDraft };
+
+function planCacheStorageKey(brandId: string, preset: string): string {
+  return `mp_draft_v1_${brandId}_${preset}`;
+}
+
+function readPlanCacheEntry(brandId: string | null, preset: string): PlanCacheEntry | null {
+  if (!brandId || typeof localStorage === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(planCacheStorageKey(brandId, preset));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as PlanCacheEntry;
+    if (!parsed?.savedAt || !parsed.plan) return null;
+    if (Date.now() - parsed.savedAt > PLAN_CACHE_TTL_MS) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writePlanCache(brandId: string, preset: string, plan: MarketingPlanDraft): void {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(planCacheStorageKey(brandId, preset), JSON.stringify({ savedAt: Date.now(), plan }));
+  } catch {
+    /* quota / serialization — μη μπλοκάρεις το UI */
+  }
+}
+
+function clearPlanCache(brandId: string, preset: string): void {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.removeItem(planCacheStorageKey(brandId, preset));
+  } catch {
+    /* noop */
+  }
+}
+
 export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: string) => void } = {}) {
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
@@ -73,10 +115,6 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
   const queryClient = useQueryClient();
 
   const [preset, setPreset] = useState<MarketingPlanPresetId>('next_month');
-  const [draft, setDraft] = useState<MarketingPlanDraft | null>(null);
-  const [generating, setGenerating] = useState(false);
-  const [generateError, setGenerateError] = useState<string | null>(null);
-  const [autoTriedFor, setAutoTriedFor] = useState<string | null>(null);
   const [learningsOpen, setLearningsOpen] = useState(false);
   const [openSections, setOpenSections] = useState<Set<SectionKey>>(
     new Set(['analysis', 'inventory', 'paid', 'organic', 'audience', 'pricing', 'message'])
@@ -155,9 +193,64 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
     },
   });
 
-  // Base data έτοιμα → auto-generate μία φορά ανά preset. Το manual κουμπί δεν μπλοκάρει στο loading.
+  // Base data έτοιμα → το plan υπολογίζεται μία φορά (ανά brand/preset/ημέρα) και διατηρείται.
   const baseDataReady = !!brandId && !lastYearOrdersQuery.isLoading && !inventoryLoading && !procurementSignals.isLoading;
   const loadingContext = lastYearOrdersQuery.isLoading || inventoryLoading || procurementSignals.isLoading;
+
+  // Το plan draft ζει στο React Query cache (επιβιώνει της πλοήγησης) + localStorage (επιβιώνει reload),
+  // με daily staleTime. Έτσι ΔΕΝ ξανατρέχει η βαριά ανάλυση + AI σε κάθε είσοδο στη σελίδα.
+  const planQuery = useQuery<MarketingPlanDraft>({
+    queryKey: ['marketingPlanDraft', brandId, preset],
+    enabled: baseDataReady,
+    staleTime: PLAN_CACHE_TTL_MS,
+    gcTime: PLAN_CACHE_TTL_MS,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    retry: false,
+    initialData: () => readPlanCacheEntry(brandId, preset)?.plan,
+    initialDataUpdatedAt: () => readPlanCacheEntry(brandId, preset)?.savedAt,
+    queryFn: async () => {
+      const insight = buildMarketingPlanInsight({
+        period,
+        lastYearOrders: lastYearOrdersQuery.data ?? [],
+        inventoryProducts,
+        procurementSignals: procurementSignals.signalsBySku,
+      });
+      // Το generateMarketingPlanMessage χειρίζεται εσωτερικά τυχόν αποτυχία AI και επιστρέφει fallback.
+      const coreMessage: MarketingPlanCoreMessage = await generateMarketingPlanMessage({
+        insight,
+        brandName: currentBrand?.name,
+      });
+      const built = buildMarketingPlanDraft({
+        presetId: preset,
+        monthlyBudget: activeStrategy?.monthlyBudget,
+        campaigns: campaigns as never[],
+        storeRevenue12m: ecomm.totalRevenue,
+        hasGa4: ga4.hasData,
+        insight,
+        coreMessage,
+        segments: segments.segments,
+        priceBenchmarks: priceBenchmarks.map((b) => ({ title: b.title, yourPrice: b.yourPrice, benchmarkPrice: b.benchmarkPrice, priceDiff: b.priceDiff })),
+        ga4TrafficSources: ga4.trafficSources.map((s) => ({ channel: s.channel, sessions: s.sessions, totalRevenue: s.totalRevenue })),
+      });
+      if (brandId) writePlanCache(brandId, preset, built);
+      return built;
+    },
+  });
+
+  const draft = planQuery.data ?? null;
+  const generating = planQuery.isFetching;
+  const generateError = planQuery.isError
+    ? (planQuery.error instanceof Error ? planQuery.error.message : 'Αποτυχία δημιουργίας plan. Δοκίμασε ξανά.')
+    : null;
+
+  // Manual «Επαναδημιουργία»: καθάρισε το daily cache και ξανατρέξε τον υπολογισμό.
+  const regenerate = () => {
+    if (!brandId) return;
+    clearPlanCache(brandId, preset);
+    void planQuery.refetch();
+  };
 
   const skuCoverage = useMemo(() => {
     const signalCount = Object.keys(procurementSignals.signalsBySku).length;
@@ -232,55 +325,6 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
     });
   };
 
-  const generate = async () => {
-    if (!brandId) return;
-    setGenerating(true);
-    setGenerateError(null);
-    try {
-      const insight = buildMarketingPlanInsight({
-        period,
-        lastYearOrders: lastYearOrdersQuery.data ?? [],
-        inventoryProducts,
-        procurementSignals: procurementSignals.signalsBySku,
-      });
-      // Το generateMarketingPlanMessage χειρίζεται εσωτερικά τυχόν αποτυχία AI και επιστρέφει fallback.
-      const coreMessage: MarketingPlanCoreMessage = await generateMarketingPlanMessage({
-        insight,
-        brandName: currentBrand?.name,
-      });
-      setDraft(
-        buildMarketingPlanDraft({
-          presetId: preset,
-          monthlyBudget: activeStrategy?.monthlyBudget,
-          campaigns: campaigns as never[],
-          storeRevenue12m: ecomm.totalRevenue,
-          hasGa4: ga4.hasData,
-          insight,
-          coreMessage,
-          segments: segments.segments,
-          priceBenchmarks: priceBenchmarks.map((b) => ({ title: b.title, yourPrice: b.yourPrice, benchmarkPrice: b.benchmarkPrice, priceDiff: b.priceDiff })),
-          ga4TrafficSources: ga4.trafficSources.map((s) => ({ channel: s.channel, sessions: s.sessions, totalRevenue: s.totalRevenue })),
-        })
-      );
-      setOpenSections(new Set(['analysis', 'inventory', 'paid', 'organic', 'audience', 'pricing', 'message']));
-    } catch (err) {
-      console.error('[MarketingPlan] generate failed', err);
-      setGenerateError(err instanceof Error ? err.message : 'Αποτυχία δημιουργίας plan. Δοκίμασε ξανά.');
-    } finally {
-      setGenerating(false);
-    }
-  };
-
-  // Auto-generate μόλις είναι έτοιμα τα base data (μία προσπάθεια ανά preset).
-  // Έτσι ο χρήστης βλέπει αμέσως το plan, χωρίς να χρειάζεται χειροκίνητο click.
-  useEffect(() => {
-    if (!baseDataReady || draft || generating || generateError) return;
-    if (autoTriedFor === preset) return;
-    setAutoTriedFor(preset);
-    void generate();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [baseDataReady, draft, generating, generateError, preset, autoTriedFor]);
-
   return (
     <div className="space-y-6">
       <PageHeader
@@ -307,7 +351,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
             <button
               key={p.id}
               type="button"
-              onClick={() => { setPreset(p.id); setDraft(null); setGenerateError(null); setAutoTriedFor(null); }}
+              onClick={() => setPreset(p.id)}
               className={`rounded-lg px-3 py-1.5 text-xs font-medium border transition-colors ${
                 preset === p.id
                   ? 'border-[var(--nts-accent)] bg-[var(--nts-accent)]/10 text-[var(--nts-accent)]'
@@ -330,7 +374,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
           <Button
             variant="primary"
             icon={generating ? <Spinner size="sm" /> : <Sparkles size={16} />}
-            onClick={() => { setAutoTriedFor(preset); void generate(); }}
+            onClick={regenerate}
             disabled={!brandId || generating}
           >
             {generating ? 'Δημιουργία…' : draft ? 'Επαναδημιουργία plan' : 'Δημιουργία enriched plan'}
@@ -637,8 +681,8 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
                   variant="ghost"
                   size="sm"
                   onClick={() => {
-                    if (row.plan) {
-                      setDraft(row.plan);
+                    if (row.plan && brandId) {
+                      queryClient.setQueryData(['marketingPlanDraft', brandId, preset], row.plan);
                       setOpenSections(new Set(['analysis', 'inventory', 'paid', 'organic', 'audience', 'pricing', 'message']));
                       window.scrollTo({ top: 0, behavior: 'smooth' });
                     }
