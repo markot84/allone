@@ -195,13 +195,16 @@ export async function captureStockSnapshot(brandId: string): Promise<{
 
   await db
     .doc(`stock_snapshots/${brandId}/days/${dateKey}`)
-    .set({
-      skuStockJson: FieldValue.delete(),
-      stockSnapshotChunkCount,
-      skuCount: merged.size,
-      source,
-      capturedAt: FieldValue.serverTimestamp(),
-    });
+    .set(
+      {
+        skuStockJson: FieldValue.delete(),
+        stockSnapshotChunkCount,
+        skuCount: merged.size,
+        source,
+        capturedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
 
   logger.info(
     `[StockMovement] Snapshot captured for ${brandId} (${dateKey}): ${merged.size} SKUs, source=${source}, ${(skuStockJson.length / 1024).toFixed(1)}KB`
@@ -340,13 +343,16 @@ export async function computeStockMovement(brandId: string): Promise<{
   );
 
   const stockMovementUpdatedAt = FieldValue.serverTimestamp();
-  await db.doc(`stock_movement/${brandId}`).set({
-    skuMovementJson: FieldValue.delete(),
-    stockMovementChunkCount,
-    skuMovementCount: allSkus.size,
-    stockMovementBaselineDate: baselineDate,
-    stockMovementUpdatedAt,
-  });
+  await db.doc(`stock_movement/${brandId}`).set(
+    {
+      skuMovementJson: FieldValue.delete(),
+      stockMovementChunkCount,
+      skuMovementCount: allSkus.size,
+      stockMovementBaselineDate: baselineDate,
+      stockMovementUpdatedAt,
+    },
+    { merge: true }
+  );
 
   await db.doc(`ecommerce_summary/${brandId}`).set(
     {

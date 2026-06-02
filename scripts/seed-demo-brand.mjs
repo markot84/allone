@@ -43,6 +43,13 @@ const doRefresh = !flags['no-refresh'];
 const BRAND_ID = (flags.brand || 'sportflow-demo').toString();
 const BRAND_NAME = 'SportFlow';
 
+// Volume scaling so the demo reflects a viable €2M+/year B2C e-shop.
+// CUSTOMER_SCALE drives orders → e-commerce revenue (base ≈ €87k × 24 ≈ €2.1M).
+// Traffic + paid spend scale separately to stay credible (CVR/ROAS realistic).
+const CUSTOMER_SCALE = Number(flags.scale ?? 26) || 26;
+const GA4_TRAFFIC_SCALE = 3;
+const CAMPAIGN_SCALE = 6;
+
 if (!adminEmail) {
   console.error('Missing --email=<super-admin email>. Needed for brand ownership + refresh token.');
   process.exit(1);
@@ -248,13 +255,21 @@ const PROFILES = [
 ];
 
 const categories = [...new Set(products.map((p) => p.category))];
-const productsByCat = Object.fromEntries(categories.map((c) => [c, products.filter((p) => p.category === c)]));
+// Keep the dead / no-stock cohort genuinely unsold so Product Intelligence shows a
+// credible dead-stock story (otherwise the scaled order volume "sells" every SKU).
+const sellable = products.filter((p) => p.priority_tag !== 'dead' && p.priority_tag !== 'no_stock');
+const sellableByCat = Object.fromEntries(
+  categories.map((c) => {
+    const list = sellable.filter((p) => p.category === c);
+    return [c, list.length ? list : sellable];
+  })
+);
 
 let custId = 5000;
 let orderId = 900000;
 const orders = [];
 for (const prof of PROFILES) {
-  for (let i = 0; i < prof.n; i++) {
+  for (let i = 0; i < prof.n * CUSTOMER_SCALE; i++) {
     const first = pick(GREEK_FIRST);
     const last = pick(GREEK_LAST);
     const cid = String(custId++);
@@ -277,7 +292,7 @@ for (const prof of PROFILES) {
       const lineItems = [];
       let baseSubtotal = 0;
       for (let l = 0; l < basketSize; l++) {
-        const pool = chance(0.7) ? productsByCat[affinityCat] : products;
+        const pool = chance(0.7) ? sellableByCat[affinityCat] : sellable;
         const prod = pick(pool);
         const qty = chance(0.8) ? 1 : 2;
         // Magento REST item price = unit ex-tax; seasonal discount nudges value
@@ -381,7 +396,7 @@ function buildGA4() {
     const date = ymd(ts);
     const dow = new Date(ts).getDay();
     const weekend = dow === 0 || dow === 6 ? 0.82 : 1;
-    const base = 420 * seasonalFactor(ts) * weekend * (0.85 + rand() * 0.3);
+    const base = 420 * GA4_TRAFFIC_SCALE * seasonalFactor(ts) * weekend * (0.85 + rand() * 0.3);
     const sessions = Math.round(base);
     const totalUsers = Math.round(sessions * (0.82 + rand() * 0.08));
     const newUsers = Math.round(totalUsers * (0.55 + rand() * 0.12));
@@ -418,13 +433,14 @@ function buildGA4() {
       }
     }
   }
+  const sc = GA4_TRAFFIC_SCALE;
   const topPages = [
-    { path: '/', pageViews: 48200, sessions: 31200, newUsers: 14100, bounceRate: 0.36 },
-    { path: '/collections/running', pageViews: 21800, sessions: 14600, newUsers: 6200, bounceRate: 0.41 },
-    { path: '/collections/fitness', pageViews: 16400, sessions: 10900, newUsers: 4800, bounceRate: 0.44 },
-    { path: '/products/velocita-aero-running', pageViews: 12900, sessions: 9100, newUsers: 5200, bounceRate: 0.48 },
-    { path: '/collections/sale', pageViews: 11200, sessions: 8200, newUsers: 3100, bounceRate: 0.39 },
-    { path: '/pages/size-guide', pageViews: 6400, sessions: 4900, newUsers: 1900, bounceRate: 0.52 },
+    { path: '/', pageViews: 48200 * sc, sessions: 31200 * sc, newUsers: 14100 * sc, bounceRate: 0.36 },
+    { path: '/collections/running', pageViews: 21800 * sc, sessions: 14600 * sc, newUsers: 6200 * sc, bounceRate: 0.41 },
+    { path: '/collections/fitness', pageViews: 16400 * sc, sessions: 10900 * sc, newUsers: 4800 * sc, bounceRate: 0.44 },
+    { path: '/products/velocita-aero-running', pageViews: 12900 * sc, sessions: 9100 * sc, newUsers: 5200 * sc, bounceRate: 0.48 },
+    { path: '/collections/sale', pageViews: 11200 * sc, sessions: 8200 * sc, newUsers: 3100 * sc, bounceRate: 0.39 },
+    { path: '/pages/size-guide', pageViews: 6400 * sc, sessions: 4900 * sc, newUsers: 1900 * sc, bounceRate: 0.52 },
   ];
   return {
     propertyId: '480123456',
@@ -452,7 +468,7 @@ function buildCampaigns() {
     for (let d = days; d >= 0; d--) {
       const ts = NOW - d * DAY;
       const date = ymd(ts);
-      const daySpend = round2((def.budget / 30) * seasonalFactor(ts) * (0.7 + rand() * 0.6));
+      const daySpend = round2((def.budget * CAMPAIGN_SCALE / 30) * seasonalFactor(ts) * (0.7 + rand() * 0.6));
       const dClicks = Math.round(daySpend / def.cpc);
       const dImpr = Math.round(dClicks / (0.012 + rand() * 0.03));
       const dConv = Math.round(dClicks * (0.03 + rand() * 0.04));
@@ -483,7 +499,7 @@ function buildCampaigns() {
         end_date: ymd(NOW),
         status: 'active',
         is_active: true,
-        budget: def.budget,
+        budget: def.budget * CAMPAIGN_SCALE,
         amount_spent: spend,
         impressions, clicks,
         ctr: round2((clicks / impressions) * 100),
@@ -616,8 +632,9 @@ async function seed() {
 
   // Segments
   for (const s of SEGMENT_DEFS) {
+    const segCount = s.count * CUSTOMER_SCALE;
     queue(db.doc(`segments/${BRAND_ID}_${s.id}`), {
-      id: s.id, name: s.name, rfm_score: s.rfm_score, count: s.count, percentage: s.percentage,
+      id: s.id, name: s.name, rfm_score: s.rfm_score, count: segCount, percentage: s.percentage,
       revenue_share: s.revenue_share, color: s.color, icon: s.icon, description: s.description,
       behavioral: {
         preferred_channels: CHANNELS.slice(0, 3),
@@ -636,8 +653,8 @@ async function seed() {
         estimated_ltv: s.ltv, ltv_confidence: 0.78, churn_risk: s.churn / 100,
         churn_risk_label: s.churn > 70 ? 'high' : s.churn > 40 ? 'medium' : 'low',
         next_purchase_probability: round2((100 - s.churn) / 100), days_to_next_purchase: randInt(10, 90),
-        predicted_next_order_value: round2(s.ltv / 6), revenue_forecast_30d: round2(s.ltv * s.count * 0.08),
-        revenue_forecast_90d: round2(s.ltv * s.count * 0.2),
+        predicted_next_order_value: round2(s.ltv / 6), revenue_forecast_30d: round2(s.ltv * segCount * 0.08),
+        revenue_forecast_90d: round2(s.ltv * segCount * 0.2),
         demand_trend: s.name === 'Champions' || s.name === 'Potential Loyalist' ? 'growing' : s.name === 'Hibernating' || s.name === 'At Risk' ? 'declining' : 'stable',
         retention_score: 100 - s.churn,
       },
