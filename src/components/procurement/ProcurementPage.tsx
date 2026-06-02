@@ -232,7 +232,10 @@ const COL_ALIASES: Record<string, string[]> = {
   'ΚΕΡΔΟΣ':              ['ΑΠΟΛΟΓΙΣΤΙΚΟ ΚΕΡΔΟΣ', 'ΚΕΡΔΟΣ', 'PROFIT', 'ΚΕΡΔΗ'],
   'ΑΞΙΑ ΑΝΑΤΡΟΦΟΔΟΣΙΑΣ': ['ΑΞΙΑ ΑΝΑΤΡΟΦΟΔΟΣΙΑΣ', 'ΑΞΙΑ ΑΝΑΤΡΟΦ'],
   'ΠΕΡΙΓΡΑΦΗ':           ['ΠΕΡΙΓΡΑΦΗ', 'ΟΝΟΜΑ', 'DESCRIPTION', 'NAME'],
-  'ΚΩΔΙΚΟΣ':             ['ΚΩΔΙΚΟΣ', 'SKU', 'CODE', 'BARCODE'],
+  // «ΚΩΔΙΚΟΣ MASTER»/«MASTER»: στο συγκεντρωτικό φύλλο «ΔΙΑΧΕΙΡΙΣΗ ΑΠΟΘΕΜΑΤΟΣ MASTER» ο κωδικός
+  // είναι ο parent (master) κωδικός. Μπαίνουν ΜΕΤΑ το «ΚΩΔΙΚΟΣ» ώστε στα αναλυτικά φύλλα (που έχουν
+  // και τα δύο) να κερδίζει πάντα το exact «ΚΩΔΙΚΟΣ» (variant) — pass-1 exact προηγείται.
+  'ΚΩΔΙΚΟΣ':             ['ΚΩΔΙΚΟΣ', 'ΚΩΔΙΚΟΣ MASTER', 'MASTER', 'SKU', 'CODE', 'BARCODE'],
 };
 
 /** Returns the first non-numeric column key whose name contains the keyword (case-insensitive).
