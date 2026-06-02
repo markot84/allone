@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Zap, Lock, Bell, BellOff, Save, AlertTriangle, CheckCircle2, Info, X, Palette, Check } from 'lucide-react';
 import { Card, Button, Spinner, useToast, EnterpriseBadge, PageHeader } from '../common';
-import { ACCENT_PRESETS, readStoredAccent, setStoredAccent, type AccentId } from '../../theme/accentTheme';
+import { ACCENT_PRESETS, readStoredAccent, setStoredAccent, type AccentId, type AccentPreset } from '../../theme/accentTheme';
 import { useAutomationSettings, useAutomationAlerts } from '../../hooks/useAutomation';
 import { usePlan } from '../../hooks/usePlan';
 import { useBrand } from '../../hooks/useBrand';
@@ -14,6 +14,25 @@ const SEVERITY_STYLE: Record<string, { icon: typeof AlertTriangle; color: string
   warning: { icon: AlertTriangle, color: '#F59E0B', bg: '#FFFBEB' },
   info: { icon: Info, color: '#3B82F6', bg: '#EFF6FF' },
 };
+
+/** Παράγει το background του swatch: 3-wedge conic για τριχρωμίες, διαγώνιο για διχρωμίες, solid αλλιώς. */
+function swatchBackground(preset: AccentPreset): string {
+  const cols =
+    preset.swatchColors && preset.swatchColors.length > 0
+      ? preset.swatchColors
+      : preset.swatch3
+        ? [preset.swatch, preset.swatch2 ?? preset.swatch, preset.swatch3]
+        : preset.swatch2
+          ? [preset.swatch, preset.swatch2]
+          : [preset.swatch];
+  if (cols.length >= 3) {
+    return `conic-gradient(from 0deg, ${cols[0]} 0 120deg, ${cols[1]} 120deg 240deg, ${cols[2]} 240deg 360deg)`;
+  }
+  if (cols.length === 2) {
+    return `linear-gradient(135deg, ${cols[0]} 0 50%, ${cols[1]} 50% 100%)`;
+  }
+  return cols[0];
+}
 
 export function AutomationSettingsPage() {
   const { currentBrand } = useBrand();
@@ -134,16 +153,10 @@ export function AutomationSettingsPage() {
                   style={selected ? ({ '--tw-ring-color': preset.swatch } as React.CSSProperties) : undefined}
                 >
                   <span
-                    className="flex h-5 w-5 items-center justify-center rounded-full shadow-sm"
-                    style={{
-                      background: preset.swatch3
-                        ? `conic-gradient(from 90deg, ${preset.swatch} 0 120deg, ${preset.swatch2} 120deg 240deg, ${preset.swatch3} 240deg 360deg)`
-                        : preset.swatch2
-                          ? `linear-gradient(135deg, ${preset.swatch} 0 50%, ${preset.swatch2} 50% 100%)`
-                          : preset.swatch,
-                    }}
+                    className="flex h-5 w-5 items-center justify-center rounded-full shadow-sm ring-1 ring-black/10"
+                    style={{ background: swatchBackground(preset) }}
                   >
-                    {selected && <Check size={12} className="text-white" />}
+                    {selected && <Check size={12} className="text-white drop-shadow-[0_0_1px_rgba(0,0,0,0.7)]" />}
                   </span>
                   {preset.label}
                 </button>

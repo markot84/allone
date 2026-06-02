@@ -21,7 +21,8 @@ export type AccentId =
   | 'sunset'
   | 'tropic'
   | 'aurora'
-  | 'berry';
+  | 'berry'
+  | 'patriot';
 
 export interface AccentPreset {
   id: AccentId;
@@ -32,6 +33,12 @@ export interface AccentPreset {
   swatch2?: string;
   /** Τρίτο χρώμα για τρίχρωμο swatch (οδηγεί και το chart-secondary για ορατό αποτέλεσμα). */
   swatch3?: string;
+  /**
+   * Cosmetic override ΜΟΝΟ για το swatch του picker (2 ή 3 χρώματα). Επιτρέπει ευδιάκριτο
+   * τρίχρωμο preview ανεξάρτητα από το functional dark chrome (swatch2) που μπορεί να φαίνεται
+   * σαν φόντο. Αν λείπει, το preview παράγεται από swatch/swatch2/swatch3.
+   */
+  swatchColors?: string[];
 }
 
 export const ACCENT_PRESETS: AccentPreset[] = [
@@ -49,11 +56,13 @@ export const ACCENT_PRESETS: AccentPreset[] = [
   { id: 'forest', label: 'Δάσος', swatch: '#84CC16', swatch2: '#14271C' },
   { id: 'crimson', label: 'Κρεμεζί', swatch: '#EC4899', swatch2: '#18181B' },
   { id: 'ocean', label: 'Ωκεανός', swatch: '#14B8A6', swatch2: '#0C4A6E' },
-  // Τριχρωμίες (accent + secondary + chrome) — το swatch3 οδηγεί το chart-secondary
-  { id: 'sunset', label: 'Ηλιοβασίλεμα', swatch: '#F97316', swatch2: '#4C1D95', swatch3: '#E11D48' },
-  { id: 'tropic', label: 'Τροπικό', swatch: '#14B8A6', swatch2: '#0C4A6E', swatch3: '#84CC16' },
-  { id: 'aurora', label: 'Σέλας', swatch: '#38BDF8', swatch2: '#0B1220', swatch3: '#A855F7' },
-  { id: 'berry', label: 'Μούρο', swatch: '#EC4899', swatch2: '#18181B', swatch3: '#8B5CF6' },
+  // Τριχρωμίες (accent + secondary + chrome) — το swatch3 οδηγεί το chart-secondary.
+  // Το swatchColors δίνει ευδιάκριτο 3-χρωμο preview (το functional chrome είναι σκούρο).
+  { id: 'sunset', label: 'Ηλιοβασίλεμα', swatch: '#F97316', swatch2: '#4C1D95', swatch3: '#E11D48', swatchColors: ['#F97316', '#7C3AED', '#E11D48'] },
+  { id: 'tropic', label: 'Τροπικό', swatch: '#14B8A6', swatch2: '#0C4A6E', swatch3: '#84CC16', swatchColors: ['#14B8A6', '#2563EB', '#84CC16'] },
+  { id: 'aurora', label: 'Σέλας', swatch: '#38BDF8', swatch2: '#0B1220', swatch3: '#A855F7', swatchColors: ['#38BDF8', '#7C3AED', '#F472B6'] },
+  { id: 'berry', label: 'Μούρο', swatch: '#EC4899', swatch2: '#18181B', swatch3: '#8B5CF6', swatchColors: ['#EC4899', '#8B5CF6', '#F59E0B'] },
+  { id: 'patriot', label: 'Μπλε-Λευκό-Κόκκινο', swatch: '#2563EB', swatch2: '#1E3A8A', swatch3: '#DC2626', swatchColors: ['#2563EB', '#FFFFFF', '#DC2626'] },
 ];
 
 export const DEFAULT_ACCENT: AccentId = 'classic';
