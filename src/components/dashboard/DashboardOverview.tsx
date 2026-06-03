@@ -565,39 +565,31 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     campaignMetrics.totalRevenue,
   ]);
 
-  const dashboardRevenueSourceLabel = hasProcurementTurnoverEstimate
-    ? 'Κοστολόγηση · Πραγματικός τζίρος 12μ. (εκτίμηση περιόδου)'
-    : hasErpRevenueForPeriod
-      ? 'ERP'
-      : hasEcommerceRevenue
-        ? 'E-shop connectors'
-        : 'Organic + καμπάνιες (εκτίμηση)';
-
   const revenueTotalKpiTooltip = useMemo(() => {
     if (isB2B) {
       return 'Βασική εικόνα εσόδων από οργανική ζήτηση και demand generation. Για πλήρη αποτύπωση εσόδων ανά account απαιτείται invoicing ή ERP import.';
     }
-    const tail = ' Λεπτομέρειες e-shop / ROAS στη σελίδα ROI · οικονομική εικόνα στα Οικονομικά.';
+    const tail = ' Ανάλυση e-shop & ROAS: σελίδα «ROI & Απόδοση». Πλήρης οικονομική εικόνα: «Οικονομικά».';
     if (hasProcurementTurnoverEstimate) {
       return (
-        `Πηγή: ${dashboardRevenueSourceLabel}. Procurement έχει προτεραιότητα (Enterprise): άθροισμα «Πραγματικός τζίρος 12μ.» κατανεμημένο ανά ημέρα περιόδου (÷365). Ακόμα κι αν υπάρχει ERP, εμφανίζεται ο τζίρος procurement.` +
+        'Εκτιμώμενος συνολικός τζίρος της επιχείρησης για την επιλεγμένη περίοδο. Προκύπτει από τον πραγματικό ετήσιο τζίρο (τελευταίοι 12 μήνες, από την Κοστολόγηση) μοιρασμένο ομοιόμορφα στις ημέρες της περιόδου. Είναι εκτίμηση — όχι άθροισμα μεμονωμένων παραστατικών.' +
         tail
       );
     }
     if (hasErpRevenueForPeriod) {
-      return `Πηγή: ${dashboardRevenueSourceLabel}. Συνολικά παραστατικά ERP — περιλαμβάνει φυσικά καταστήματα, B2B και online πωλήσεις όπως καταγράφονται στο ERP.` + tail;
+      return 'Πραγματικός τζίρος από τα παραστατικά του ERP για την περίοδο. Περιλαμβάνει φυσικά καταστήματα, B2B και online πωλήσεις, όπως καταγράφονται στο ERP.' + tail;
     }
     if (enabledModules.procurement) {
       return (
-        `Πηγή ${dashboardRevenueSourceLabel}. Προτεραιότητα: Κοστολόγηση 12μ. (Enterprise) · αλλιώς παραστατικά ERP · αλλιώς τζίρος e-shop · αλλιώς organic και καμπάνιες.` +
+        'Συνολικά έσοδα της επιχείρησης για την περίοδο. Χρησιμοποιείται η καλύτερη διαθέσιμη πηγή με σειρά: ετήσιος τζίρος Κοστολόγησης → παραστατικά ERP → τζίρος e-shop → εκτίμηση από organic & καμπάνιες.' +
         tail
       );
     }
     return (
-      `Πηγή ${dashboardRevenueSourceLabel}. Προτεραιότητα: παραστατικά ERP · αλλιώς τζίρος e-shop · αλλιώς εκτίμηση organic και καμπάνιες.` +
+      'Συνολικά έσοδα της επιχείρησης για την περίοδο. Χρησιμοποιείται η καλύτερη διαθέσιμη πηγή με σειρά: παραστατικά ERP → τζίρος e-shop → εκτίμηση από organic & καμπάνιες.' +
       tail
     );
-  }, [isB2B, hasProcurementTurnoverEstimate, hasErpRevenueForPeriod, enabledModules.procurement, dashboardRevenueSourceLabel]);
+  }, [isB2B, hasProcurementTurnoverEstimate, hasErpRevenueForPeriod, enabledModules.procurement]);
 
   const revenuePerformanceChartLabel = hasProcurementTurnoverEstimate
     ? 'Τζίρος επιχείρησης (Procurement · εκτίμηση 12μ.)'
