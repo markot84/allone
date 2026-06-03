@@ -5,6 +5,7 @@ import { createInvite } from '../../services/invites';
 import { APP_URL, auth, FUNCTIONS_BASE_URL, getAppCheckHeader } from '../../config/firebase';
 import { useAuth } from '../../hooks';
 import { useBrand } from '../../hooks';
+import { useBrandMembers } from '../../hooks/useCoordination';
 import type { BrandDepartment } from '../../types';
 import { DEPARTMENT_LABELS } from '../../types';
 
@@ -13,8 +14,17 @@ interface InviteUserCardProps {
 }
 
 export function InviteUserCard({ onInviteCreated }: InviteUserCardProps) {
-  const { user } = useAuth();
+  const { user, isSuperAdmin } = useAuth();
   const { currentBrand } = useBrand();
+  const { members } = useBrandMembers();
+  // Any member can invite a teammate, but only owner/admin/creator may invite with
+  // an elevated role (the rule enforces this too — a member can only mint role:'member').
+  const myRole = members.find((m) => m.userId === user?.uid)?.role ?? 'member';
+  const canInviteElevated =
+    Boolean(isSuperAdmin) ||
+    Boolean(user?.uid && currentBrand?.createdBy === user.uid) ||
+    myRole === 'owner' ||
+    myRole === 'admin';
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('member');
   const [department, setDepartment] = useState<BrandDepartment>('other');
@@ -33,9 +43,12 @@ export function InviteUserCard({ onInviteCreated }: InviteUserCardProps) {
       setError('Επιλέξτε brand');
       return;
     }
+    // Defense in depth: a non-manager may only invite as 'member' (the rule enforces
+    // this too). Prevents an escalated role even if the UI is tampered with.
+    const effectiveRole = canInviteElevated ? role : 'member';
     setSubmitting(true);
     try {
-      const { token } = await createInvite(currentBrand.id, email.trim(), role, user.uid, department);
+      const { token } = await createInvite(currentBrand.id, email.trim(), effectiveRole, user.uid, department);
       const link = `${APP_URL.replace(/\/$/, '')}/invite/${token}`;
       setInviteLink(link);
       onInviteCreated?.(link);
@@ -59,7 +72,7 @@ export function InviteUserCard({ onInviteCreated }: InviteUserCardProps) {
                 brandId: currentBrand.id,
                 brandName: currentBrand.name,
                 inviteLink: link,
-                role,
+                role: effectiveRole,
                 department: deptLabel,
               }),
             });
@@ -156,12 +169,14 @@ export function InviteUserCard({ onInviteCreated }: InviteUserCardProps) {
           <label className="block">
             <span className="text-xs font-medium text-[var(--nts-charcoal)]">Δικαιώματα</span>
             <select
-              value={role}
+              value={canInviteElevated ? role : 'member'}
               onChange={(e) => setRole(e.target.value)}
-              className="mt-1 w-full px-3 py-2 text-sm bg-white border border-[var(--nts-border-gray)] rounded-lg"
+              disabled={!canInviteElevated}
+              title={canInviteElevated ? undefined : 'Μόνο ο ιδιοκτήτης ή διαχειριστής μπορεί να καλέσει με ρόλο Admin.'}
+              className="mt-1 w-full px-3 py-2 text-sm bg-white border border-[var(--nts-border-gray)] rounded-lg disabled:opacity-60"
             >
               <option value="member">Member</option>
-              <option value="admin">Admin</option>
+              {canInviteElevated && <option value="admin">Admin</option>}
             </select>
           </label>
 

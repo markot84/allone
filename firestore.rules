@@ -175,7 +175,14 @@ service cloud.firestore {
     match /invites/{inviteId} {
       allow get: if true;
       allow list: if false;
-      allow create: if canManageBrandConnectors(request.resource.data.brandId);
+      // Any brand MEMBER may invite a teammate, but only owner/admin/creator may mint
+      // elevated-role invites — a plain member can create only role:'member' invites
+      // (no escalation-by-invite, since acceptInvite pins the new member's role to the
+      // invite). Non-members still can't forge invites for a brand (PP-03).
+      allow create: if request.auth != null
+        && isBrandMember(request.resource.data.brandId)
+        && (canManageBrandConnectors(request.resource.data.brandId)
+            || request.resource.data.role == 'member');
       allow update, delete: if canManageBrandConnectors(resource.data.brandId);
     }
 
