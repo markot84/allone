@@ -58,9 +58,11 @@ export function useGA4PeriodTotals(from: string, to: string, enabled = true) {
     enabled: !!brandId && enabled && valid,
     staleTime: 30 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
-    refetchOnMount: false,
+    // true (όχι false): αν προηγούμενη session είχε cache-άρει null (π.χ. function δεν ήταν ακόμη
+    // deployed/έτοιμο), θέλουμε να ξαναπροσπαθήσει στο άνοιγμα — αλλιώς «κολλάει» στο daily-sum fallback.
+    refetchOnMount: true,
     refetchOnWindowFocus: false,
-    retry: 0,
+    retry: 1,
     placeholderData: (prev) => prev,
   });
 
