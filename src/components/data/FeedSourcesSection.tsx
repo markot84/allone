@@ -6,6 +6,7 @@ import { useBrand } from '../../hooks/useBrand';
 import { FEED_SOURCE_OPTIONS } from '../../data/feedSourceConfig';
 import { FeedSourcesService } from '../../services/feedSources';
 import { importFile } from '../../services/import';
+import { auth, buildFunctionUrl, getAppCheckHeader } from '../../config/firebase';
 import { useQueryClient } from '@tanstack/react-query';
 import type { FeedSource } from '../../types';
 
@@ -58,8 +59,22 @@ export function FeedSourcesSection() {
     if (!currentBrand?.id) return;
     setSyncingId(source.id);
     try {
-      const res = await fetch(source.url, { mode: 'cors' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      // Fetch server-side: most feed hosts don't allow cross-origin browser
+      // fetches (→ "Failed to fetch"). fetchImportUrl (SSRF-guarded) returns the
+      // bytes for us, same as the manual URL importer.
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) throw new Error('Συνδεθείτε ξανά και δοκιμάστε.');
+      const appCheck = await getAppCheckHeader();
+      const res = await fetch(buildFunctionUrl('fetchImportUrl'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}`, ...appCheck },
+        body: JSON.stringify({ url: source.url }),
+      });
+      if (!res.ok) {
+        let msg = `HTTP ${res.status}`;
+        try { const j = await res.json(); if (j?.error) msg = j.error; } catch { /* non-JSON error body */ }
+        throw new Error(msg);
+      }
       const blob = await res.blob();
       const contentType = res.headers.get('Content-Type') || '';
       const disposition = res.headers.get('Content-Disposition');
@@ -96,7 +111,9 @@ export function FeedSourcesSection() {
       const msg = err instanceof Error ? err.message : String(err);
       await FeedSourcesService.updateLastRun(source.id, 'failed', undefined, msg);
       queryClient.invalidateQueries({ queryKey: ['feed_sources', currentBrand.id] });
-      toast.error(msg.includes('CORS') ? 'CORS: Το URL πρέπει να επιτρέπει cross-origin. Χρησιμοποιήστε signed URL.' : msg);
+      // Fetch now goes through fetchImportUrl server-side — CORS is no longer a
+      // failure mode, so surface the proxy's actual error.
+      toast.error(msg);
     } finally {
       setSyncingId(null);
     }
