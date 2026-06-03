@@ -219,6 +219,18 @@ async function verifyBrandMembership(uid: string, brandId: string): Promise<bool
   return brandDoc.data()?.createdBy === uid;
 }
 
+/**
+ * "Belongs to ANY brand?" — authoritative check against the membership docs,
+ * mirroring the client's getBrandIdsFromMembershipDocuments. Used as a fallback
+ * when the cached `users/{uid}.brandIds` array is empty/stale (FN-B): a real
+ * member can have a valid `brands/{b}/members/{uid}` doc while the profile cache
+ * lags. Same query the client already runs, so the index is live.
+ */
+async function userHasAnyBrandMembership(uid: string): Promise<boolean> {
+  const snap = await db.collectionGroup('members').where('userId', '==', uid).limit(1).get();
+  return !snap.empty;
+}
+
 /** Σύνδεση/αποσύνδεση/sync connectors: ιδιοκτήτης, διαχειριστής, δημιουργός brand, super admin */
 async function verifyBrandConnectorManagement(uid: string, brandId: string): Promise<boolean> {
   if (await isUidSuperAdmin(uid)) return true;
@@ -2324,16 +2336,25 @@ export const geminiProxy = onRequest(
     // future client can start sending brandId to make scoping mandatory without a
     // breaking server change. Super admins are always allowed. Server-only.
     try {
-      const callerProfile = await db.doc(`users/${decodedUid}`).get();
-      const callerBrandIds = callerProfile.data()?.brandIds;
-      const brandList = Array.isArray(callerBrandIds) ? callerBrandIds : [];
       const requestedBrandId =
         typeof (req.body as { brandId?: unknown })?.brandId === 'string'
           ? (req.body as { brandId: string }).brandId
           : '';
-      const hasBrandAccess =
-        (await isUidSuperAdmin(decodedUid)) ||
-        (requestedBrandId ? brandList.includes(requestedBrandId) : brandList.length > 0);
+      // FN-B: the profile `brandIds` array is a lossy cache (the client unions it
+      // with the membership docs and writes back fire-and-forget). Trust the
+      // authoritative membership docs so a real member with a stale/empty profile
+      // is not wrongly rejected, while a brandless account is still blocked.
+      let hasBrandAccess = await isUidSuperAdmin(decodedUid);
+      if (!hasBrandAccess && requestedBrandId) {
+        // Per-call scope: verify membership of THAT brand (real member doc / creator).
+        hasBrandAccess = await verifyBrandMembership(decodedUid, requestedBrandId);
+      } else if (!hasBrandAccess) {
+        // Any-brand: cheap profile-cache check first, then authoritative membership docs.
+        const cachedBrandIds = (await db.doc(`users/${decodedUid}`).get()).data()?.brandIds;
+        hasBrandAccess =
+          (Array.isArray(cachedBrandIds) && cachedBrandIds.length > 0) ||
+          (await userHasAnyBrandMembership(decodedUid));
+      }
       if (!hasBrandAccess) {
         res.status(403).json({
           error: requestedBrandId
