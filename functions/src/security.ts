@@ -98,6 +98,14 @@ export async function enforceRateLimit(opts: {
   key: string;
   limit: number;
   windowSeconds: number;
+  /**
+   * Όταν true, αν το ίδιο το rate-limit transaction αποτύχει/κρεμάσει
+   * (Firestore timeout/error) επιστρέφουμε allowed:false (deny) αντί για το
+   * default fail-open. Χρήση σε κοστοβόρα paths (geminiProxy, PP-13a): ένα
+   * Firestore outage δεν πρέπει να ανοίγει παράθυρο απεριόριστης χρήσης του
+   * paid key. Default (undefined/false) = fail-open, όπως πριν.
+   */
+  failClosed?: boolean;
 }): Promise<{ allowed: boolean; remaining: number; resetInSeconds: number }> {
   const db = getFirestore();
   const safeKey = opts.key.replace(/[^A-Za-z0-9_\-:.]/g, '_').slice(0, 160);
@@ -105,9 +113,11 @@ export async function enforceRateLimit(opts: {
   const now = Date.now();
   const windowStart = now - opts.windowSeconds * 1000;
 
-  const failOpen = {
-    allowed: true,
-    remaining: opts.limit,
+  // Αποτέλεσμα όταν ο limiter δεν μπορεί να αποφασίσει (timeout/exception).
+  // Default: fail-open ώστε να μην γίνει single point of failure. failClosed: deny.
+  const degraded = {
+    allowed: !opts.failClosed,
+    remaining: opts.failClosed ? 0 : opts.limit,
     resetInSeconds: opts.windowSeconds,
   };
 
@@ -136,19 +146,20 @@ export async function enforceRateLimit(opts: {
     };
   });
 
+  const mode = opts.failClosed ? 'fail-closed/deny' : 'fail-open';
   let timer: NodeJS.Timeout | undefined;
-  const timeoutPromise = new Promise<typeof failOpen>((resolve) => {
+  const timeoutPromise = new Promise<typeof degraded>((resolve) => {
     timer = setTimeout(() => {
-      logger.warn(`[RateLimit] ${safeKey} hard-timeout ${RATE_LIMIT_HARD_TIMEOUT_MS}ms (fail-open)`);
-      resolve(failOpen);
+      logger.warn(`[RateLimit] ${safeKey} hard-timeout ${RATE_LIMIT_HARD_TIMEOUT_MS}ms (${mode})`);
+      resolve(degraded);
     }, RATE_LIMIT_HARD_TIMEOUT_MS);
   });
 
   try {
     return await Promise.race([txPromise, timeoutPromise]);
   } catch (e) {
-    logger.warn(`[RateLimit] ${safeKey} transaction failed (fail-open):`, e);
-    return failOpen;
+    logger.warn(`[RateLimit] ${safeKey} transaction failed (${mode}):`, e);
+    return degraded;
   } finally {
     if (timer) clearTimeout(timer);
   }

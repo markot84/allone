@@ -2317,17 +2317,29 @@ export const geminiProxy = onRequest(
     }
 
     // PP-08: the paid Gemini key must not be usable by arbitrary signed-up
-    // accounts. Require the caller to belong to at least one brand (or be a super
-    // admin). All AI features run inside a brand context, so legitimate users
-    // always have a non-empty brandIds profile; this only rejects accounts that
-    // belong to no brand. Server-only — no client change.
+    // accounts. Require brand membership. If the caller pins a specific brandId in
+    // the body, verify membership of THAT brand (tighter, per-call scope);
+    // otherwise require membership of at least one brand. Backward-compatible —
+    // clients that don't send brandId keep working via the any-brand check, so a
+    // future client can start sending brandId to make scoping mandatory without a
+    // breaking server change. Super admins are always allowed. Server-only.
     try {
       const callerProfile = await db.doc(`users/${decodedUid}`).get();
       const callerBrandIds = callerProfile.data()?.brandIds;
+      const brandList = Array.isArray(callerBrandIds) ? callerBrandIds : [];
+      const requestedBrandId =
+        typeof (req.body as { brandId?: unknown })?.brandId === 'string'
+          ? (req.body as { brandId: string }).brandId
+          : '';
       const hasBrandAccess =
-        (Array.isArray(callerBrandIds) && callerBrandIds.length > 0) || (await isUidSuperAdmin(decodedUid));
+        (await isUidSuperAdmin(decodedUid)) ||
+        (requestedBrandId ? brandList.includes(requestedBrandId) : brandList.length > 0);
       if (!hasBrandAccess) {
-        res.status(403).json({ error: 'Forbidden: account is not a member of any brand' });
+        res.status(403).json({
+          error: requestedBrandId
+            ? 'Forbidden: not a member of the requested brand'
+            : 'Forbidden: account is not a member of any brand',
+        });
         return;
       }
     } catch (err) {
@@ -2336,11 +2348,15 @@ export const geminiProxy = onRequest(
       return;
     }
 
-    // Rate limit: 30 Gemini calls / 5 λεπτά ανά χρήστη — αποτρέπει κατάχρηση/κόστος
+    // Rate limit: 30 Gemini calls / 5 λεπτά ανά χρήστη — αποτρέπει κατάχρηση/κόστος.
+    // PP-13a: fail CLOSED στο cost path — αν ο limiter δεν μπορεί να επιβεβαιώσει
+    // το όριο (Firestore outage/timeout), μπλοκάρουμε αντί να αφήσουμε ανοιχτό το
+    // paid Gemini key. (Τα non-cost endpoints παραμένουν fail-open by default.)
     const rl = await enforceRateLimit({
       key: `gemini:${decodedUid}`,
       limit: 30,
       windowSeconds: 300,
+      failClosed: true,
     });
     if (!rl.allowed) {
       sendRateLimitExceeded(res, rl.resetInSeconds, 'gemini');
