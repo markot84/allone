@@ -443,7 +443,7 @@ function parseSkroutzFeedXml(xmlText: string): Record<string, string>[] {
     const row: Record<string, string> = {
       unique_id: childText(p, 'unique_id', 'UniqueID', 'id', 'sku', 'mpn'),
       name: childText(p, 'name', 'title'),
-      price: childText(p, 'price', 'Price'),
+      price: childText(p, 'price', 'Price', 'price_with_vat', 'final_price', 'price_vat'),
       link: childText(p, 'link', 'url', 'permalink'),
       image: childText(p, 'image', 'imageurl', 'image_url', 'thumbnail', 'picture'),
       category: childText(p, 'category', 'category_name', 'product_type'),
