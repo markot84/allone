@@ -2015,7 +2015,14 @@ export function ConnectorsPanel() {
     },
     enabled: !!brandId && !!user?.uid,
     staleTime: 5_000,
-    refetchInterval: 10_000,
+    // Poll only while a Megaventory sync is actually in flight; stop once the job is
+    // terminal or absent (the doc usually doesn't exist). Previously this polled every
+    // 10s unconditionally → ~8.6k reads/day per open tab. The sync trigger invalidates
+    // this query (provider==='megaventory' && result.queued), so polling restarts on demand.
+    refetchInterval: (query) => {
+      const job = query.state.data as ConnectorSyncJobDoc | null | undefined;
+      return job && (job.status === 'pending' || job.status === 'running') ? 10_000 : false;
+    },
     retry: 1,
   });
 
