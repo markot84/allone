@@ -26,6 +26,12 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/brands/$(brandId)/members/$(request.auth.uid)).data.role in ['owner', 'admin'];
     }
 
+    // Ιεραρχία ρόλων (owner > admin > member). Χρησιμοποιείται για να μπλοκάρει
+    // ΜΟΝΟ self-escalation (PP-05) επιτρέποντας self-demotion (μεταβίβαση ιδιοκτησίας).
+    function roleRank(r) {
+      return r == 'owner' ? 3 : (r == 'admin' ? 2 : 1);
+    }
+
     // OAuth connectors: ιδιοκτήτης, admin, δημιουργός brand (ίδιο με Cloud Functions)
     function canManageBrandConnectors(brandId) {
       return isSuperAdmin()
@@ -119,13 +125,15 @@ service cloud.firestore {
               && request.resource.data.role == 'owner'
               && exists(/databases/$(database)/documents/brands/$(brandId))
               && get(/databases/$(database)/documents/brands/$(brandId)).data.createdBy == request.auth.uid);
-        // Role changes: only an owner/admin may change SOMEONE ELSE's role — never
-        // their own (blocks admin→owner self-escalation). A member may update their
+        // Role changes: an owner/admin may change roles, but may NOT raise their OWN
+        // role (blocks admin→owner self-escalation, PP-05). Self-DEMOTION is allowed
+        // so an owner can hand off ownership and step down. A member may update their
         // own non-role fields (settings/department/etc.).
         allow update: if isSuperAdmin()
           || (isBrandOwnerOrAdmin(brandId)
               && !(request.auth.uid == memberId
-                   && request.resource.data.diff(resource.data).affectedKeys().hasAny(['role'])))
+                   && request.resource.data.diff(resource.data).affectedKeys().hasAny(['role'])
+                   && roleRank(request.resource.data.role) > roleRank(resource.data.role)))
           || (request.auth.uid == memberId
               && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']));
         allow delete: if isSuperAdmin() || isBrandOwnerOrAdmin(brandId) || request.auth.uid == memberId;
