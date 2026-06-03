@@ -649,7 +649,13 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     storeRevenueInPeriod > 0 &&
     !ecommAggregateFresh &&
     (ecommDaysSinceLatestRevenue ?? 0) >= 2;
-  const inventoryValueEstimate = productStats?.totalInventoryValue ?? 0;
+  // Για Enterprise+Procurement brands η αξία αποθέματος προέρχεται από το PI aggregate (procurement),
+  // όχι από το products aggregate που δεν τροφοδοτείται από procurement uploads.
+  const piSummaryValue =
+    productIntelligence.aggregate?.sourceKind === 'procurement'
+      ? productIntelligence.aggregate?.summary?.total_value ?? 0
+      : 0;
+  const inventoryValueEstimate = piSummaryValue > 0 ? piSummaryValue : productStats?.totalInventoryValue ?? 0;
   const openCommercialTasks = useMemo(
     () => tasks.filter((task) => task.status === 'pending' || task.status === 'in_progress').length,
     [tasks]

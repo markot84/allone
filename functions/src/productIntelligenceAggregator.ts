@@ -391,6 +391,112 @@ async function hasConnectorCatalog(brandId: string): Promise<{ connected: boolea
   return { connected: erp || ecommerce, sourceLabel: erp ? 'ERP' : 'E-shop catalog', hasErp: erp };
 }
 
+/**
+ * Procurement-first gating: για brands στο Enterprise plan με ενεργό module Procurement, το
+ * απόθεμα είναι ΑΥΘΕΝΤΙΚΟ από το ανεβασμένο procurement αρχείο (όχι από connectors). Επιστρέφει
+ * true ώστε το Product Intelligence aggregate να χτιστεί από procurement_signals.
+ */
+async function shouldUseProcurementCatalog(brandId: string): Promise<boolean> {
+  const firestore = assertDb();
+  try {
+    const snap = await firestore.doc(`brands/${brandId}`).get();
+    if (!snap.exists) return false;
+    const data = snap.data() || {};
+    const isEnterprise = String(data.plan || '').toLowerCase() === 'enterprise';
+    if (!isEnterprise) return false;
+    const modules = (data.enabledModules || {}) as Record<string, unknown>;
+    // Default ON για enterprise — απενεργοποιείται μόνο με ρητό false.
+    return modules.procurement !== false;
+  } catch {
+    return false;
+  }
+}
+
+type ProcSignal = {
+  available_stock?: number;
+  dynamic_stock?: number;
+  cost_unit?: number;
+  avg_sale_price?: number;
+  list_price?: number;
+  margin_pct?: number;
+  days_of_cover?: number;
+  lifetime_qty?: number;
+  category?: string;
+  supplier?: string;
+  status?: string;
+  flow_group?: string;
+  description?: string;
+  replenishment_qty?: number;
+};
+
+function procurementStockBucket(avail: number, daysOfCover: number | null, lifetimeQty: number | null): StockBucket {
+  if (avail <= 0) return 'no_stock';
+  if (daysOfCover != null && Number.isFinite(daysOfCover)) {
+    if (daysOfCover <= 30) return 'low';
+    if (daysOfCover > 120) return 'excess';
+    return 'healthy';
+  }
+  // Χωρίς ημέρες επάρκειας: ό,τι δεν πούλησε ποτέ θεωρείται νεκρό απόθεμα.
+  if (lifetimeQty != null && lifetimeQty <= 0) return 'dead';
+  return 'healthy';
+}
+
+/**
+ * Χτίζει κατάλογο CompactProduct από το aggregated procurement_signals/{brandId}.
+ * Μία ανάγνωση doc (το βαρύ join έχει ήδη γίνει στο computeProcurementSignals).
+ */
+async function loadProcurementCatalog(brandId: string): Promise<CompactProduct[]> {
+  const firestore = assertDb();
+  const snap = await firestore.doc(`procurement_signals/${brandId}`).get();
+  if (!snap.exists) return [];
+  const raw = snap.data()?.skuSignalsJson;
+  if (typeof raw !== 'string' || !raw) return [];
+  let signals: Record<string, ProcSignal>;
+  try {
+    signals = JSON.parse(raw) as Record<string, ProcSignal>;
+  } catch {
+    return [];
+  }
+
+  const products: CompactProduct[] = [];
+  for (const [sku, sig] of Object.entries(signals)) {
+    if (!sku || !sig) continue;
+    const avail = num(sig.available_stock);
+    const cost = num(sig.cost_unit);
+    const price = firstPositive(sig.avg_sale_price, sig.list_price);
+    const margin =
+      num(sig.margin_pct) || (price > 0 && cost > 0 ? ((price - cost) / price) * 100 : 0);
+    const daysOfCover = sig.days_of_cover != null ? num(sig.days_of_cover) : null;
+    const lifetime = sig.lifetime_qty != null ? num(sig.lifetime_qty) : null;
+    const bucket = procurementStockBucket(avail, daysOfCover, lifetime);
+
+    const product: CompactProduct = {
+      id: `proc_${sku}`,
+      sku,
+      name: text(sig.description) || sku,
+      category: text(sig.category) || 'Uncategorized',
+      margin_tier: marginTier(margin),
+      margin_percentage: Math.round(margin * 10) / 10,
+      stock_level: Math.round(avail * 100) / 100,
+      stock_capacity: Math.max(Math.round(avail * 2 * 100) / 100, Math.round(avail * 100) / 100, 1),
+      available_stock: Math.round(avail * 100) / 100,
+      priority_tag: bucket,
+      price: Math.round(price * 100) / 100,
+      ...(cost > 0 ? { cost_price: Math.round(cost * 100) / 100 } : {}),
+      ...(num(sig.list_price) > 0 ? { list_price: Math.round(num(sig.list_price) * 100) / 100 } : {}),
+      ...(lifetime != null ? { qty_sold_lifetime: Math.round(lifetime * 100) / 100 } : {}),
+      ...(text(sig.supplier) ? { supplier: text(sig.supplier) } : {}),
+      ...(text(sig.status) ? { procurement_status: text(sig.status) } : {}),
+      ...(text(sig.flow_group) ? { flow_group: text(sig.flow_group) } : {}),
+      ...(num(sig.replenishment_qty) > 0 ? { reorder_qty: Math.round(num(sig.replenishment_qty) * 100) / 100 } : {}),
+      source: 'erp',
+    };
+    if (isDemoProduct(product) || isNonMerchandiseProduct(product)) continue;
+    products.push(product);
+  }
+  return products;
+}
+
 async function computeBrandSyncVersion(brandId: string): Promise<{ version: string; latestSyncAt: string | null }> {
   const firestore = assertDb();
   const dates: number[] = [];
@@ -1177,6 +1283,61 @@ async function writeCompetitiveInventoryLookup(brandId: string, products: Compac
 export async function refreshProductIntelligenceAggregate(brandId: string): Promise<Record<string, unknown>> {
   const firestore = assertDb();
   const ref = firestore.doc(`product_intelligence/${brandId}`);
+
+  // Procurement-first: για Enterprise+Procurement brands το απόθεμα είναι αυθεντικό από το
+  // ανεβασμένο procurement αρχείο και ΥΠΕΡΙΣΧΥΕΙ τυχόν connector καταλόγου.
+  if (await shouldUseProcurementCatalog(brandId)) {
+    const procProducts = await loadProcurementCatalog(brandId);
+    if (procProducts.length > 0) {
+      await ref.set(
+        { brandId, status: 'running', sourceLabel: 'Procurement', updatedAt: FieldValue.serverTimestamp() },
+        { merge: true }
+      );
+      try {
+        const syncVersion = await computeBrandSyncVersion(brandId);
+        const summary = summaryForProducts(procProducts);
+        const pagesByBucket = await writePageDocs(brandId, procProducts);
+        const competitiveInventory = await writeCompetitiveInventoryLookup(brandId, procProducts);
+        const charts = chartDataForProducts(procProducts);
+        await ref.set(
+          {
+            brandId,
+            status: 'ready',
+            sourceLabel: 'Procurement',
+            sourceKind: 'procurement',
+            stockSource: 'procurement',
+            totalCount: procProducts.length,
+            syncVersion: syncVersion.version,
+            latestSyncAt: syncVersion.latestSyncAt,
+            sourceRowsRead: procProducts.length,
+            competitiveInventoryKeys: competitiveInventory.keys,
+            competitiveInventoryChunks: competitiveInventory.chunks,
+            pageSize: TABLE_PAGE_SIZE,
+            pagesByBucket,
+            categories: categoryCounts(procProducts),
+            charts,
+            summary,
+            computedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+            error: FieldValue.delete(),
+          },
+          { merge: true }
+        );
+        logger.info(`[ProductIntelligence] ${brandId}: procurement catalog totalCount=${procProducts.length}`);
+        return { success: true, brandId, totalCount: procProducts.length, source: 'procurement', pagesByBucket };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.error(`[ProductIntelligence] procurement failed brand=${brandId}: ${message}`);
+        await ref.set(
+          { brandId, status: 'failed', error: message, updatedAt: FieldValue.serverTimestamp() },
+          { merge: true }
+        );
+        return { success: false, brandId, error: message };
+      }
+    }
+    // Enterprise+Procurement αλλά χωρίς δεδομένα procurement ακόμη → πέφτουμε σε connector (αν υπάρχει).
+  }
+
   const connector = await hasConnectorCatalog(brandId);
   if (!connector.connected) {
     await ref.set({

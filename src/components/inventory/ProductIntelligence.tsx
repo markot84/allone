@@ -36,6 +36,8 @@ import {
 import type { ExcelFilterOption } from '../common';
 import { useProductThumbnails } from '../../hooks/useProductThumbnails';
 import { useBrand } from '../../hooks/useBrand';
+import { usePlan } from '../../hooks/usePlan';
+import { useProcurementSignals } from '../../hooks/useProcurementSignals';
 import { useSuppliers } from '../../hooks/useSuppliers';
 import { usePriceBenchmarks } from '../../hooks/usePriceBenchmarks';
 import { useProductIntelligenceAggregate } from '../../hooks/useProductIntelligenceAggregate';
@@ -208,6 +210,13 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
 
   const { currentBrand } = useBrand();
   const brandId = currentBrand?.id ?? null;
+  const { isEnterprise } = usePlan();
+  const procurementModuleEnabled = currentBrand?.enabledModules?.procurement !== false;
+  const { signalsBySku: piProcurementSignals } = useProcurementSignals();
+  // Brand σε Enterprise+Procurement με ανεβασμένα procurement signals → το PI απόθεμα
+  // πρέπει να προέρχεται από procurement (procurement-first).
+  const expectsProcurementCatalog =
+    isEnterprise && procurementModuleEnabled && Object.keys(piProcurementSignals || {}).length > 0;
   const {
     getThumbnailUrl,
     magentoConnected,
@@ -311,9 +320,12 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     const aggregate = serverIntelligence.aggregate;
     const needsRebuild =
       !aggregate ||
-      (aggregate.status === 'ready' && aggregate.totalCount === 0 && aggregate.sourceLabel === 'E-shop catalog');
+      (aggregate.status === 'ready' && aggregate.totalCount === 0 && aggregate.sourceLabel === 'E-shop catalog') ||
+      // Enterprise+Procurement αλλά το aggregate δεν έχει χτιστεί ακόμη από procurement (π.χ. παλιό
+      // connector-based ή skipped) → κάνε ένα rebuild ώστε να περάσει στην procurement πηγή.
+      (expectsProcurementCatalog && aggregate.sourceKind !== 'procurement');
     if (!needsRebuild) return;
-    const key = `${brandId}:${aggregate?.syncVersion ?? 'none'}:${aggregate?.totalCount ?? 'missing'}`;
+    const key = `${brandId}:${aggregate?.syncVersion ?? 'none'}:${aggregate?.totalCount ?? 'missing'}:${aggregate?.sourceKind ?? 'none'}`;
     if (piRefreshAttemptRef.current === key) return;
     piRefreshAttemptRef.current = key;
     triggerProductIntelligenceRebuild();
@@ -323,6 +335,7 @@ export function ProductIntelligence({ onSectionChange }: ProductIntelligenceProp
     serverIntelligence.isAggregateLoading,
     serverIntelligence.aggregate,
     triggerProductIntelligenceRebuild,
+    expectsProcurementCatalog,
   ]);
 
   useEffect(() => {

@@ -9,7 +9,8 @@ export type ProductIntelligenceAggregate = {
   brandId: string;
   status: ProductIntelligenceStatus;
   sourceLabel: string;
-  sourceKind: 'erp' | 'connector_catalog';
+  sourceKind: 'erp' | 'connector_catalog' | 'procurement';
+  stockSource?: string;
   totalCount: number;
   syncVersion?: string;
   latestSyncAt?: string | null;
@@ -60,7 +61,7 @@ export type ProductIntelligenceQueryResult = {
   brandId: string;
   status: 'ready';
   sourceLabel: string;
-  sourceKind: 'erp' | 'connector_catalog';
+  sourceKind: 'erp' | 'connector_catalog' | 'procurement';
   totalCount: number;
   totalRows: number;
   page: number;

@@ -12,6 +12,7 @@ import { FeedPreviewModal } from './FeedPreviewModal';
 import { FeedSourcesSection } from './FeedSourcesSection';
 import { ApiKeyManager } from './ApiKeyManager';
 import { ConnectorsPanel } from './ConnectorsPanel';
+import { refreshProductIntelligenceOnServer } from '../../services/productIntelligenceAggregate';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export type FileWithType = { file: File; type: ImportType; campaignChannel?: CampaignChannelOverride };
@@ -399,19 +400,40 @@ export function DataImport({ initialType }: DataImportProps = {}) {
           }
         }
         if (typesImported.has('procurement')) {
+          // Τα per-sheet queries του useProcurement χρησιμοποιούν ['procurement-sheet', brandId, key]
+          // (όχι ['procurement']). Επειδή έχουν refetchOnMount:false + staleTime 10', ΠΡΕΠΕΙ να
+          // ακυρωθούν ρητά εδώ, αλλιώς οι σελίδες (Commercial Strategy, useProductSource) κρατούν
+          // παλιό απόθεμα μετά το ανέβασμα του αρχείου procurement.
+          queryClient.removeQueries({ queryKey: ['procurement-sheet'] });
           queryClient.removeQueries({ queryKey: ['procurement'] });
           queryClient.removeQueries({ queryKey: ['procurement_signals', brandId] });
           queryClient.removeQueries({ queryKey: ['productIntelligenceAggregate', brandId] });
           queryClient.removeQueries({ queryKey: ['productIntelligencePage', brandId] });
           queryClient.removeQueries({ queryKey: ['productIntelligenceInventory', brandId] });
+          queryClient.invalidateQueries({ queryKey: ['procurement-sheet'] });
           queryClient.invalidateQueries({ queryKey: ['procurement'] });
-          // Re-aggregate procurement_signals server-side ώστε να ενημερωθούν
-          // οι εμπορικές πολιτικές (Sales Opt, Profit Max, Stock Clearance κλπ).
-          refreshProcurementSignals().then((r) => {
-            if (!r.ok && import.meta.env.MODE === 'development') {
-              console.warn('[DataImport] refreshProcurementSignals failed:', r.error);
-            }
-          });
+          // Re-aggregate procurement_signals server-side ώστε να ενημερωθούν οι εμπορικές
+          // πολιτικές (Sales Opt, Profit Max, Stock Clearance κλπ). Στη συνέχεια ξαναχτίζουμε
+          // το Product Intelligence aggregate ΑΦΟΥ ολοκληρωθούν τα signals — για Enterprise+
+          // Procurement brands το PI/Dashboard απόθεμα προέρχεται πλέον από εδώ.
+          const piBrandId = brandId;
+          refreshProcurementSignals()
+            .then((r) => {
+              if (!r.ok && import.meta.env.MODE === 'development') {
+                console.warn('[DataImport] refreshProcurementSignals failed:', r.error);
+              }
+              if (!piBrandId) return;
+              return refreshProductIntelligenceOnServer(piBrandId).then(() => {
+                queryClient.invalidateQueries({ queryKey: ['productIntelligenceAggregate', piBrandId] });
+                queryClient.invalidateQueries({ queryKey: ['productIntelligencePage', piBrandId] });
+                queryClient.invalidateQueries({ queryKey: ['brandSyncVersion', piBrandId] });
+              });
+            })
+            .catch((err: unknown) => {
+              if (import.meta.env.MODE === 'development') {
+                console.warn('[DataImport] post-procurement refresh failed:', err);
+              }
+            });
         }
       } else {
         toast.error(

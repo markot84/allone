@@ -314,7 +314,9 @@ export function WeightConfigurator({
 
   // Source provenance — δίνεται στα Gemini prompts ώστε να calibrate το AI
   // confidence (π.χ. αν λείπει connector, δεν υπόσχεται real-time ROAS).
-  const { coverage: signalCoverage, signalsBySku } = useProductSignals(products);
+  const { coverage: signalCoverage, signalsBySku } = useProductSignals(products, {
+    preferProcurementStock: usingProcurement,
+  });
 
   const benchmarkLookupMap = useMemo(() => buildBenchmarkLookup(benchmarks), [benchmarks]);
   const normalizedSkuStats = useMemo(() => {
