@@ -29,7 +29,6 @@ const PREFIX = 'enc:v1:';
 const KEY_ENV = 'CONNECTOR_TOKEN_KEY';
 
 let cachedKey: Buffer | null | undefined;
-let warnedMissing = false;
 
 function loadKey(): Buffer | null {
   if (cachedKey !== undefined) return cachedKey;
@@ -61,11 +60,13 @@ export function encryptToken(plaintext: string | null | undefined): string {
   if (isEncrypted(plaintext)) return plaintext;
   const key = loadKey();
   if (!key) {
-    if (!warnedMissing) {
-      logger.warn(`[tokenCrypto] ${KEY_ENV} not configured — connector tokens will be stored in plaintext`);
-      warnedMissing = true;
-    }
-    return plaintext;
+    // PP-13: fail CLOSED. Refuse to persist a secret token unencrypted rather than
+    // silently downgrading to plaintext at rest. Every function that acquires a
+    // fresh connector token declares CONNECTOR_TOKEN_KEY, and already-encrypted
+    // values return early above — so in a correct deployment this never fires; if
+    // it does, it signals a missing secret instead of a silent security downgrade.
+    logger.error(`[tokenCrypto] ${KEY_ENV} not configured — refusing to store connector token in plaintext`);
+    throw new Error('Connector token encryption key (CONNECTOR_TOKEN_KEY) is not configured');
   }
   try {
     const nonce = randomBytes(12);

@@ -2230,6 +2230,26 @@ export const geminiProxy = onRequest(
       return;
     }
 
+    // PP-08: the paid Gemini key must not be usable by arbitrary signed-up
+    // accounts. Require the caller to belong to at least one brand (or be a super
+    // admin). All AI features run inside a brand context, so legitimate users
+    // always have a non-empty brandIds profile; this only rejects accounts that
+    // belong to no brand. Server-only — no client change.
+    try {
+      const callerProfile = await db.doc(`users/${decodedUid}`).get();
+      const callerBrandIds = callerProfile.data()?.brandIds;
+      const hasBrandAccess =
+        (Array.isArray(callerBrandIds) && callerBrandIds.length > 0) || (await isUidSuperAdmin(decodedUid));
+      if (!hasBrandAccess) {
+        res.status(403).json({ error: 'Forbidden: account is not a member of any brand' });
+        return;
+      }
+    } catch (err) {
+      logger.error('[geminiProxy] brand-membership check failed', err);
+      res.status(403).json({ error: 'Forbidden' });
+      return;
+    }
+
     // Rate limit: 30 Gemini calls / 5 λεπτά ανά χρήστη — αποτρέπει κατάχρηση/κόστος
     const rl = await enforceRateLimit({
       key: `gemini:${decodedUid}`,
