@@ -14,7 +14,7 @@ const SMTP_EMAIL_SECRET = defineSecret('SMTP_EMAIL');
 /** SMTP: κωδικός ή App Password */
 const SMTP_PASSWORD_SECRET = defineSecret('SMTP_PASSWORD');
 import { sanitizeOAuthReturnOrigin } from './oauthRedirect';
-import { validateImportUrl } from './urlValidator';
+import { validateImportUrl, safeFetch } from './urlValidator';
 import { parseCSV, parseXLSXBuffer, parseXLSXAllSheets, csvToObjects } from './parseFile';
 import { validateProduct } from './validateProduct';
 import { validateCampaign } from './validateCampaign';
@@ -569,14 +569,33 @@ export const importData = onRequest(
           return;
         }
 
-        const response = await fetch(fileUrl);
+        // safeFetch re-validates the host via DNS + blocks private ranges and
+        // re-checks every redirect hop (SSRF, PP-11).
+        let response: Response;
+        try {
+          response = await safeFetch(fileUrl);
+        } catch (e) {
+          res.status(400).json({ error: e instanceof Error ? e.message : 'Failed to fetch fileUrl' });
+          return;
+        }
         if (!response.ok) {
           res.status(400).json({ error: `Failed to download file from URL: ${response.status}` });
           return;
         }
 
+        // Cap the download size (PP-16) — refuse oversized bodies before buffering.
+        const MAX_IMPORT_BYTES = 50 * 1024 * 1024;
+        const declaredLen = Number(response.headers.get('content-length') || 0);
+        if (declaredLen && declaredLen > MAX_IMPORT_BYTES) {
+          res.status(413).json({ error: 'File too large (max 50MB)' });
+          return;
+        }
         const arrayBuf = await response.arrayBuffer();
         const buffer = Buffer.from(arrayBuf);
+        if (buffer.length > MAX_IMPORT_BYTES) {
+          res.status(413).json({ error: 'File too large (max 50MB)' });
+          return;
+        }
         const urlFilename = fileUrl.split('/').pop() || 'import.csv';
 
         if (type === 'procurement') {

@@ -9,6 +9,7 @@
  */
 
 import * as admin from 'firebase-admin';
+import { safeFetch } from './urlValidator';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { encryptToken, decryptToken } from './tokenCrypto';
@@ -44,7 +45,7 @@ async function softoneCall(serviceUrl: string, body: Record<string, unknown>): P
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), S1_TIMEOUT_MS);
   try {
-    const res = await fetch(serviceUrl, {
+    const res = await safeFetch(serviceUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'User-Agent': S1_UA },
       body: JSON.stringify(body),
@@ -83,7 +84,7 @@ async function softonePing(serviceUrl: string): Promise<{ ok: boolean; error?: s
   const base = serviceUrl.replace(/\/s1services$/i, '');
   const pingUrl = `${base}/s1services?ping`;
   try {
-    const res = await fetch(pingUrl, { method: 'GET', headers: { 'User-Agent': S1_UA } });
+    const res = await safeFetch(pingUrl, { method: 'GET', headers: { 'User-Agent': S1_UA } });
     const text = (await res.text()).slice(0, 300);
     if (/ISAPI is working/i.test(text) || /Ping from Softone/i.test(text)) return { ok: true };
     return { ok: res.ok, error: !res.ok ? `HTTP ${res.status}` : undefined };

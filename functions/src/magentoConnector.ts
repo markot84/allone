@@ -12,6 +12,7 @@
 
 import * as admin from 'firebase-admin';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
+import { safeFetch } from './urlValidator';
 import { logger } from 'firebase-functions/v2';
 import { encryptToken, decryptToken } from './tokenCrypto';
 import { getCustomerEmailIdentity } from './customerIdentity';
@@ -72,7 +73,7 @@ async function magentoFetch(url: string, init: RequestInit = {}, timeoutMs = MAG
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    return await fetch(url, { ...init, signal: ctrl.signal });
+    return await safeFetch(url, { ...init, signal: ctrl.signal });
   } catch (e) {
     if (e instanceof Error && e.name === 'AbortError') {
       throw new Error(`Magento request timeout (${Math.round(timeoutMs / 1000)}s): ${url}`);

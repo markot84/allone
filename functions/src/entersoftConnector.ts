@@ -10,6 +10,7 @@
  */
 
 import * as admin from 'firebase-admin';
+import { safeFetch } from './urlValidator';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { encryptToken, decryptToken } from './tokenCrypto';
@@ -47,7 +48,7 @@ async function esPostJson(url: string, body: unknown, authBearer?: string): Prom
     if (authBearer) {
       headers.Authorization = authBearer.startsWith('Bearer ') ? authBearer : `Bearer ${authBearer}`;
     }
-    const res = await fetch(url, {
+    const res = await safeFetch(url, {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
@@ -78,7 +79,7 @@ async function esGet(url: string, bearer: string, params?: Record<string, string
       const q = new URLSearchParams(params);
       u = `${url}${url.includes('?') ? '&' : '?'}${q.toString()}`;
     }
-    const res = await fetch(u, {
+    const res = await safeFetch(u, {
       method: 'GET',
       headers: {
         Accept: 'application/json',

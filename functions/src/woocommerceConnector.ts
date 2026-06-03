@@ -11,6 +11,7 @@
  */
 
 import * as admin from 'firebase-admin';
+import { safeFetch } from './urlValidator';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { encryptToken, decryptToken } from './tokenCrypto';
@@ -75,7 +76,7 @@ export async function testWooConnection(
   const endpoint = `${storeUrl}/wp-json/wc/v3/system_status`;
 
   try {
-    const res = await fetch(endpoint, {
+    const res = await safeFetch(endpoint, {
       method: 'GET',
       headers: {
         Authorization: authHeader,
@@ -174,7 +175,7 @@ export async function fetchWooCommerceData(brandId: string): Promise<{
         params.set('after', ordersSinceIso);
       }
 
-      const res = await fetch(`${storeUrl}/wp-json/wc/v3/orders?${params}`, { headers: baseHeaders });
+      const res = await safeFetch(`${storeUrl}/wp-json/wc/v3/orders?${params}`, { headers: baseHeaders });
       if (!res.ok) {
         logger.error(`[WooCommerce] Orders fetch failed (${res.status})`);
         ordersAbort = true;
@@ -257,7 +258,7 @@ export async function fetchWooCommerceData(brandId: string): Promise<{
         params.set('modified_after', productsModifiedSinceIso);
       }
 
-      const res = await fetch(`${storeUrl}/wp-json/wc/v3/products?${params}`, { headers: baseHeaders });
+      const res = await safeFetch(`${storeUrl}/wp-json/wc/v3/products?${params}`, { headers: baseHeaders });
       if (!res.ok) {
         productsAbort = true;
         logger.error(`[WooCommerce] Products fetch failed (${res.status})`);

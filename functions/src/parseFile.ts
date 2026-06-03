@@ -1,5 +1,21 @@
 import * as XLSX from 'xlsx';
 
+// PP-16: guard against XLSX "zip bombs" — a small compressed workbook can declare
+// a huge cell range that explodes memory when materialized. Reject before parsing.
+const MAX_XLSX_CELLS = 2_000_000;
+const MAX_XLSX_SHEETS = 100;
+
+function assertSheetWithinLimits(sheet: XLSX.WorkSheet | undefined): void {
+  const ref = sheet?.['!ref'];
+  if (!ref) return;
+  const range = XLSX.utils.decode_range(ref);
+  const rows = range.e.r - range.s.r + 1;
+  const cols = range.e.c - range.s.c + 1;
+  if (rows * cols > MAX_XLSX_CELLS) {
+    throw new Error(`Spreadsheet too large: ${rows}×${cols} cells exceeds the ${MAX_XLSX_CELLS}-cell limit`);
+  }
+}
+
 export function parseCSV(csvText: string): string[][] {
   const lines: string[][] = [];
   let currentLine: string[] = [];
@@ -54,6 +70,7 @@ export function parseXLSXBuffer(buffer: Buffer, type?: string): string[][] {
 
   if (!sheetName) return [];
   const sheet = wb.Sheets[sheetName];
+  assertSheetWithinLimits(sheet);
   const rows = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, defval: '' });
   const cleanedRows = rows.map((row) =>
     (Array.isArray(row) ? row : [row]).map((cell) => String(cell ?? '').trim())
@@ -163,8 +180,12 @@ export function csvToObjects(csvRows: string[][], type?: string): Record<string,
 export function parseXLSXAllSheets(buffer: Buffer): Map<string, string[][]> {
   const wb = XLSX.read(buffer, { type: 'buffer' });
   const result = new Map<string, string[][]>();
+  if (wb.SheetNames.length > MAX_XLSX_SHEETS) {
+    throw new Error(`Workbook has too many sheets (${wb.SheetNames.length} > ${MAX_XLSX_SHEETS})`);
+  }
   for (const sheetName of wb.SheetNames) {
     const sheet = wb.Sheets[sheetName];
+    assertSheetWithinLimits(sheet);
     const rows = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, defval: '' });
     result.set(
       sheetName,

@@ -12,6 +12,7 @@
  */
 
 import * as admin from 'firebase-admin';
+import { safeFetch } from './urlValidator';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { encryptToken, decryptToken } from './tokenCrypto';
@@ -78,7 +79,7 @@ export async function testOpenCartConnection(
     const loginUrl = `${storeUrl}/index.php?route=api/login`;
     const form = new URLSearchParams({ username: apiUsername, key: apiKey });
 
-    const res = await fetch(loginUrl, {
+    const res = await safeFetch(loginUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: form,
@@ -107,7 +108,7 @@ export async function testOpenCartConnection(
   // ── Fallback: REST extension with X-Oc-Restadmin-Id header ───────
   try {
     const testUrl = `${storeUrl}/index.php?route=rest/product_admin/products&limit=1`;
-    const res = await fetch(testUrl, {
+    const res = await safeFetch(testUrl, {
       headers: {
         'X-Oc-Restadmin-Id': apiKey,
         'Content-Type': 'application/json',
@@ -131,7 +132,7 @@ export async function testOpenCartConnection(
 async function refreshApiToken(storeUrl: string, apiUsername: string, apiKey: string): Promise<string | null> {
   try {
     const form = new URLSearchParams({ username: apiUsername, key: apiKey });
-    const res = await fetch(`${storeUrl}/index.php?route=api/login`, {
+    const res = await safeFetch(`${storeUrl}/index.php?route=api/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: form,
@@ -297,7 +298,7 @@ export async function fetchOpenCartData(brandId: string): Promise<{
     if (useRestExtension) {
       for (const key of ['id', 'order_id'] as const) {
         const url = buildUrl('rest/order_admin/order', { [key]: orderId });
-        const res = await fetch(url, { headers: buildHeaders() });
+        const res = await safeFetch(url, { headers: buildHeaders() });
         if (res.ok) {
           const json = await res.json();
           const result = tryBodies(json);
@@ -308,7 +309,7 @@ export async function fetchOpenCartData(brandId: string): Promise<{
     }
 
     const fetchInfo = async (): Promise<Response> =>
-      fetch(buildUrl('api/order/info', { order_id: orderId }), { headers: buildHeaders() });
+      safeFetch(buildUrl('api/order/info', { order_id: orderId }), { headers: buildHeaders() });
 
     let res = await fetchInfo();
     if (res.status === 401) {
@@ -338,7 +339,7 @@ export async function fetchOpenCartData(brandId: string): Promise<{
     while (hasMore) {
       const route = useRestExtension ? 'rest/order_admin/orders' : 'api/order';
       const url = buildUrl(route, { page: String(orderPage), limit: '100' });
-      const res = await fetch(url, { headers: buildHeaders() });
+      const res = await safeFetch(url, { headers: buildHeaders() });
 
       if (!res.ok) {
         logger.warn(`[OpenCart] Orders page ${orderPage} returned ${res.status}`);
@@ -438,7 +439,7 @@ export async function fetchOpenCartData(brandId: string): Promise<{
     while (prodMore) {
       const route = useRestExtension ? 'rest/product_admin/products' : 'api/product';
       const url = buildUrl(route, { page: String(prodPage), limit: '100' });
-      const res = await fetch(url, { headers: buildHeaders() });
+      const res = await safeFetch(url, { headers: buildHeaders() });
 
       if (!res.ok) {
         productsAbort = true;
