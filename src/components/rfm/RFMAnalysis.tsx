@@ -31,6 +31,8 @@ import { Card, CardHeader, Badge, Button, Spinner, Tooltip as InfoTooltip, useTo
 import { useSegments, type SegmentsDataSource } from '../../hooks/useSegments';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import { useBrand } from '../../hooks/useBrand';
+import { useAuth } from '../../hooks/useAuth';
+import { useBrandMembers } from '../../hooks/useCoordination';
 import { auth, buildFunctionUrl } from '../../config/firebase';
 import { FirestoreService } from '../../services/firestore';
 import { clearAnalysisSnapshots } from '../../services/analysisSnapshotCache';
@@ -139,6 +141,17 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
   } = useSegments({ variant: 'data_analysis' });
   const ecomm = useEcommerceSummary();
   const { currentBrand } = useBrand();
+  const { user, isSuperAdmin } = useAuth();
+  const { members } = useBrandMembers();
+  // The manual "Refresh Analysis" recompute is an expensive (1200s/2GiB) write of
+  // the shared RFM aggregate and is owner/admin-only on the server. Gate the button
+  // to match so members get a clear affordance instead of a permission-denied (FN-C).
+  const myRole = members.find((m) => m.userId === user?.uid)?.role ?? 'member';
+  const canRefreshAnalysis =
+    Boolean(isSuperAdmin) ||
+    Boolean(user?.uid && currentBrand?.createdBy === user.uid) ||
+    myRole === 'owner' ||
+    myRole === 'admin';
   const queryClient = useQueryClient();
   const toast = useToast();
   const [isDeleting, setIsDeleting] = useState(false);
@@ -231,7 +244,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
   };
 
   const handleRefreshAnalysis = async () => {
-    if (!currentBrand?.id || isRefreshingAnalysis) return;
+    if (!currentBrand?.id || isRefreshingAnalysis || !canRefreshAnalysis) return;
     setIsRefreshingAnalysis(true);
     try {
       const token = await auth.currentUser?.getIdToken();
@@ -360,9 +373,13 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
             size="sm"
             icon={<RefreshCw size={14} className={`shrink-0 ${isRefreshingAnalysis ? 'animate-spin' : ''}`} />}
             onClick={handleRefreshAnalysis}
-            disabled={isRefreshingAnalysis || !currentBrand?.id}
+            disabled={isRefreshingAnalysis || !currentBrand?.id || !canRefreshAnalysis}
             className="min-h-[36px] w-full sm:w-auto"
-            title="Η ανάλυση τρέχει αυτόματα σε μηνιαία βάση, αν το επιθυμείτε ανανεώστε τη χειροκίνητα."
+            title={
+              canRefreshAnalysis
+                ? 'Η ανάλυση τρέχει αυτόματα σε μηνιαία βάση, αν το επιθυμείτε ανανεώστε τη χειροκίνητα.'
+                : 'Μόνο ο ιδιοκτήτης ή διαχειριστής του brand μπορεί να ανανεώσει χειροκίνητα την ανάλυση.'
+            }
           >
             {isRefreshingAnalysis ? 'Ανανέωση…' : 'Ανανέωση ανάλυσης'}
           </Button>
