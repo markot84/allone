@@ -4,6 +4,8 @@ import { Card, Button, Spinner, useToast, EnterpriseBadge, PageHeader } from '..
 import { useAutomationSettings, useAutomationAlerts } from '../../hooks/useAutomation';
 import { usePlan } from '../../hooks/usePlan';
 import { useBrand } from '../../hooks/useBrand';
+import { useAuth } from '../../hooks/useAuth';
+import { useBrandMembers } from '../../hooks/useCoordination';
 import { AutomationSettingsService, AutomationAlertsService } from '../../services/automationSettings';
 import { TRIGGERS_CATALOG, TRIGGER_GROUPS, getDefaultTriggerConfigs } from '../../data/triggersCatalog';
 import type { TriggerConfig, AutomationAlert } from '../../types';
@@ -16,6 +18,14 @@ const SEVERITY_STYLE: Record<string, { icon: typeof AlertTriangle; color: string
 
 export function AutomationSettingsPage() {
   const { currentBrand } = useBrand();
+  const { user, isSuperAdmin } = useAuth();
+  const { members } = useBrandMembers();
+  // PP-14: automation triggers can drive ad spend — only owner/admin/creator may
+  // save. Mirrors firestore.rules canManageBrandConnectors so the UI matches the
+  // server check instead of surfacing a permission error to regular members.
+  const myRole = members.find((m) => m.userId === user?.uid)?.role ?? 'member';
+  const canManageAutomation =
+    myRole === 'owner' || myRole === 'admin' || currentBrand?.createdBy === user?.uid || isSuperAdmin;
   const { plan, isEnterprise, canAccess } = usePlan();
   const { settings, isLoading, invalidate } = useAutomationSettings();
   const { newAlerts, invalidate: invalidateAlerts } = useAutomationAlerts();
@@ -41,6 +51,10 @@ export function AutomationSettingsPage() {
 
   const handleSave = async () => {
     if (!currentBrand) return;
+    if (!canManageAutomation) {
+      toast.error('Μόνο ο owner/admin του brand μπορεί να αλλάξει τις ρυθμίσεις αυτοματισμού.');
+      return;
+    }
     setSaving(true);
     try {
       await AutomationSettingsService.save(currentBrand.id, triggers);
@@ -84,7 +98,7 @@ export function AutomationSettingsPage() {
           </p>
         }
         actions={
-          dirty ? (
+          dirty && canManageAutomation ? (
             <Button
               variant="primary"
               size="sm"

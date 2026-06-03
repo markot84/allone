@@ -38,11 +38,19 @@ service cloud.firestore {
     // Briefing / coordination: sender (member of brandId) may create in-app notifications for other members
     function canCreateNotificationForRecipient(recipientUid) {
       let b = request.resource.data.brandId;
+      let d = request.resource.data;
       return request.auth != null
         && b is string
         && b.size() > 0
         && isBrandMember(b)
-        && exists(/databases/$(database)/documents/brands/$(b)/members/$(recipientUid));
+        && exists(/databases/$(database)/documents/brands/$(b)/members/$(recipientUid))
+        // PP-15: constrain the payload a member may inject into another member's
+        // feed — well-formed coordination notification only, bounded sizes. (Full
+        // protection against a teammate sending a deceptive message would require
+        // creating these server-side; this blocks malformed/oversized injection.)
+        && d.type is string && d.type.size() > 0 && d.type.size() <= 64
+        && d.title is string && d.title.size() <= 300
+        && d.body is string && d.body.size() <= 4000;
     }
 
     // Brand-scoped docs store their owning brand in `brandId`. Authorization for
@@ -380,7 +388,11 @@ service cloud.firestore {
     }
     // Automation settings & alerts
     match /automation_settings/{brandId} {
-      allow read, write: if isBrandMember(brandId);
+      // Read: any member. Write: owner/admin/creator (or super admin) only —
+      // automation triggers can drive ad spend, so configuration is restricted to
+      // brand managers rather than every member (PP-14).
+      allow read: if isBrandMember(brandId);
+      allow write: if canManageBrandConnectors(brandId);
     }
     match /automation_alerts/{alertId} {
       allow read: if request.auth != null && isBrandMember(resource.data.brandId);
