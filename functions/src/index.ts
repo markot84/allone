@@ -686,6 +686,84 @@ export const importData = onRequest(
 );
 
 /**
+ * fetchImportUrl — server-side fetch of an import/feed URL for the import UI.
+ *
+ * Browsers can't fetch most feed hosts (the hosts send no CORS headers); the
+ * server isn't subject to CORS, so the SPA posts the URL here and we return the
+ * raw bytes for the existing client-side parser. This is a generic outbound
+ * fetcher (an SSRF surface), so every request goes through validateImportUrl +
+ * safeFetch (DNS re-check, private/link-local/metadata ranges blocked, redirects
+ * re-validated). ID-token auth + per-user rate limit keep it from being abused
+ * as an open relay.
+ *
+ * Headers: Authorization: Bearer {FIREBASE_ID_TOKEN}
+ * Body: { url: string }
+ * Returns: raw bytes (upstream Content-Type passed through), or { error }.
+ */
+export const fetchImportUrl = onRequest(
+  { region: 'europe-west1', timeoutSeconds: 60, memory: '256MiB' },
+  async (req, res) => {
+    if (applyStrictCors(req, res)) return;
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'Method not allowed' });
+      return;
+    }
+
+    const authHeader = req.headers.authorization || '';
+    if (!authHeader.startsWith('Bearer ')) {
+      res.status(401).json({ error: 'Missing Authorization header' });
+      return;
+    }
+    let uid = '';
+    try {
+      const decoded = await admin.auth().verifyIdToken(authHeader.slice(7));
+      uid = decoded.uid;
+    } catch {
+      res.status(401).json({ error: 'Invalid or expired token' });
+      return;
+    }
+
+    // Outbound fetcher → rate limit per user (20 / 5 min) to prevent relay abuse.
+    const rl = await enforceRateLimit({ key: `fetchImportUrl:${uid}`, limit: 20, windowSeconds: 300 });
+    if (!rl.allowed) {
+      sendRateLimitExceeded(res, rl.resetInSeconds, 'fetchImportUrl');
+      return;
+    }
+
+    const { url } = (req.body ?? {}) as { url?: string };
+    if (!url || typeof url !== 'string') {
+      res.status(400).json({ error: 'Missing url' });
+      return;
+    }
+    const check = validateImportUrl(url);
+    if (!check.ok) {
+      res.status(400).json({ error: `Invalid url: ${check.reason}` });
+      return;
+    }
+
+    let upstream: Awaited<ReturnType<typeof safeFetch>>;
+    try {
+      upstream = await safeFetch(url);
+    } catch (e) {
+      res.status(400).json({ error: e instanceof Error ? e.message : 'Failed to fetch URL' });
+      return;
+    }
+    if (!upstream.ok) {
+      res.status(502).json({ error: `Upstream responded ${upstream.status}` });
+      return;
+    }
+
+    const buf = Buffer.from(await upstream.arrayBuffer());
+    if (buf.length > 50 * 1024 * 1024) {
+      res.status(413).json({ error: 'File too large (max 50MB)' });
+      return;
+    }
+    res.set('Content-Type', upstream.headers.get('content-type') || 'application/octet-stream');
+    res.status(200).send(buf);
+  }
+);
+
+/**
  * Generate API Key endpoint
  * POST /generateApiKey
  * Headers: Authorization: Bearer {FIREBASE_ID_TOKEN}

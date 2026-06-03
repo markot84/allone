@@ -6,7 +6,7 @@ import { useRefreshProcurementSignals } from '../../hooks/useProcurementSignals'
 import { FileText, CheckCircle2, XCircle, AlertCircle, Clock, Trash2, FileUp, Link as LinkIcon, HelpCircle, ExternalLink, Package, Users, BarChart3, Euro, ClipboardList } from 'lucide-react';
 import { Card, Button, Spinner, ProgressBar, useToast, Badge, PageHeader } from '../common';
 import { importFile, saveImportJob, getImportJobs, getLastImportDates, isSupportedFile, PRODUCT_COLUMN_MAPPING, type ImportType, type ImportResult, type ImportJob, type ImportProgress, type CampaignChannelOverride } from '../../services/import';
-import { buildFunctionUrl } from '../../config/firebase';
+import { auth, buildFunctionUrl, getAppCheckHeader } from '../../config/firebase';
 import { FEED_SOURCE_OPTIONS, downloadGoogleAdsCsvTemplate, type FeedSourceType } from '../../data/feedSourceConfig';
 import { FeedPreviewModal } from './FeedPreviewModal';
 import { FeedSourcesSection } from './FeedSourcesSection';
@@ -236,9 +236,20 @@ export function DataImport({ initialType }: DataImportProps = {}) {
     setUrlError(null);
     setImportResult(null);
     try {
-      const res = await fetch(url, { mode: 'cors' });
+      // Fetch server-side: most feed hosts send no CORS headers, so a browser
+      // fetch is blocked. fetchImportUrl (SSRF-guarded) returns the bytes for us.
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) throw new Error('Συνδεθείτε ξανά και δοκιμάστε.');
+      const appCheck = await getAppCheckHeader();
+      const res = await fetch(buildFunctionUrl('fetchImportUrl'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}`, ...appCheck },
+        body: JSON.stringify({ url }),
+      });
       if (!res.ok) {
-        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        let msg = `HTTP ${res.status}`;
+        try { const j = await res.json(); if (j?.error) msg = j.error; } catch { /* non-JSON error body */ }
+        throw new Error(msg);
       }
       const blob = await res.blob();
       const contentType = res.headers.get('Content-Type') || blob.type;
@@ -279,11 +290,9 @@ export function DataImport({ initialType }: DataImportProps = {}) {
       toast.success(`Το αρχείο "${fileName}" φορτώθηκε επιτυχώς. Κάντε κλικ στο Import για εισαγωγή.`);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Unknown error';
-      if (errorMsg.includes('CORS') || errorMsg.includes('Failed to fetch')) {
-        setUrlError('CORS error: Το URL πρέπει να επιτρέπει cross-origin requests. Προσπαθήστε με Google Cloud signed URL ή άλλο CORS-enabled link.');
-      } else {
-        setUrlError(`Σφάλμα: ${errorMsg}. Ελέγξτε ότι το URL είναι έγκυρο και προσβάσιμο.`);
-      }
+      // The fetch now goes through fetchImportUrl server-side, so CORS is no
+      // longer a failure mode; surface the proxy's actual error.
+      setUrlError(`Σφάλμα: ${errorMsg}. Ελέγξτε ότι το URL είναι έγκυρο και προσβάσιμο.`);
     } finally {
       setUrlLoading(false);
     }
