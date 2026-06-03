@@ -1400,7 +1400,9 @@ export const connectorSync = onRequest(
  * αλλαγή ημερομηνίας. Το cache γράφεται ΜΟΝΟ server-side (admin) → δεν χρειάζεται client rule.
  */
 export const ga4PeriodTotals = onRequest(
-  { region: 'europe-west1', cors: true, secrets: ['GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET'] },
+  // CONNECTOR_TOKEN_KEY: απαραίτητο — το decryptToken το χρειάζεται για να αποκρυπτογραφήσει το GA4
+  // refresh token. Χωρίς αυτό η αποκρυπτογράφηση αποτυγχάνει → «GA4 token unavailable» → fallback.
+  { region: 'europe-west1', cors: true, secrets: ['GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'CONNECTOR_TOKEN_KEY'] },
   async (req, res) => {
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
     const authHeader = req.headers.authorization;
