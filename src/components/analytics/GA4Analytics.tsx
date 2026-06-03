@@ -766,7 +766,7 @@ export function GA4Analytics() {
               channelMixSource === 'daily'
                 ? `Sessions ανά GA4 Default Channel Group για ${formatDateTooltipEl(effectiveFrom)} — ${formatDateTooltipEl(effectiveTo)}. Είναι traffic attribution, όχι πραγματική απόδοση Google Ads / Meta.`
                 : channelMixSource === 'full_sync'
-                  ? `⚠️ Δεν υπάρχουν ημερήσια ανά κανάλι στο τελευταίο sync — δείχνουμε το ΣΥΝΟΛΙΚΟ διαθέσιμο ιστορικό. Τα labels είναι GA4 attribution groups, όχι διαφημιστική πραγματικότητα.`
+                  ? `⚠️ Δεν υπάρχουν ημερήσια ανά κανάλι στο τελευταίο sync — δείχνουμε το συνολικό διαθέσιμο ιστορικό. Τα labels είναι GA4 attribution groups, όχι διαφημιστική πραγματικότητα.`
                   : `Δεν υπάρχουν δεδομένα GA4 ακόμη. Κάντε σύνδεση/sync από τις Συνδέσεις.`
             }
           />

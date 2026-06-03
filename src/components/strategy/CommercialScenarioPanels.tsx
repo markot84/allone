@@ -603,7 +603,7 @@ function PriceTable({ rows, limit, getThumbnailUrl, stockBySku }: { rows: PriceC
           <th className="px-3 py-2 text-left">SKU</th>
           <th className="px-3 py-2 text-left">Τιμή</th>
           <th className="px-3 py-2 text-right">
-            <Tooltip content="Τεμάχια πριν → μετά την αλλαγή. Η ένδειξη «απόθ.» δείχνει το διαθέσιμο απόθεμα όπου υπάρχει στοιχείο (e-shop products ή ERP/Megaventory). «απόθ. —» = δεν υπάρχει καταγραφή αποθέματος, ΔΕΝ σημαίνει ότι υπάρχει στοκ.">
+            <Tooltip content="Τεμάχια πριν → μετά την αλλαγή. Η ένδειξη «απόθ.» δείχνει το διαθέσιμο απόθεμα όπου υπάρχει στοιχείο (e-shop products ή ERP/Megaventory). «απόθ. —» = δεν υπάρχει καταγραφή αποθέματος, δεν σημαίνει ότι υπάρχει στοκ.">
               Πωληθέντα Τεμ.
             </Tooltip>
           </th>

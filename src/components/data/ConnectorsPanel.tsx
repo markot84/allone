@@ -3341,7 +3341,7 @@ export function ConnectorsPanel() {
                               variant="secondary"
                               size="sm"
                               onClick={() => {
-                                if (window.confirm('Full Re-sync: θα ξανακατεβάσει ΟΛΟ το ιστορικό παραγγελιών. Συνέχεια;')) {
+                                if (window.confirm('Full Re-sync: θα ξανακατεβάσει όλο το ιστορικό παραγγελιών. Συνέχεια;')) {
                                   handleSync(conn.id, { forceFullSync: true });
                                 }
                               }}
