@@ -310,6 +310,7 @@ export function DataImport({ initialType }: DataImportProps = {}) {
 
     try {
       const job: Omit<ImportJob, 'id'> = {
+        brandId: currentBrand.id,
         type: selectedType,
         fileName: total === 1 ? selectedFiles[0].file.name : `${total} files`,
         status: 'processing',

@@ -222,6 +222,13 @@ export interface ImportResult {
 
 export interface ImportJob {
   id: string;
+  /**
+   * Owning brand. REQUIRED: firestore.rules gates import_jobs writes on
+   * isBrandMember(brandId). Without it the create is denied for everyone except
+   * super-admins (isSuperAdmin short-circuits the check), which silently broke
+   * CSV import for regular brand members/owners.
+   */
+  brandId: string;
   type: ImportType;
   fileName: string;
   status: 'pending' | 'processing' | 'completed' | 'failed';
