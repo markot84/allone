@@ -33,7 +33,7 @@ import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import { useBrand } from '../../hooks/useBrand';
 import { useAuth } from '../../hooks/useAuth';
 import { useBrandMembers } from '../../hooks/useCoordination';
-import { auth, buildFunctionUrl } from '../../config/firebase';
+import { auth, buildFunctionUrl, getAppCheckHeader } from '../../config/firebase';
 import { FirestoreService } from '../../services/firestore';
 import { clearAnalysisSnapshots } from '../../services/analysisSnapshotCache';
 import { BehavioralTab } from './BehavioralTab';
@@ -258,6 +258,7 @@ export function RFMAnalysis({ onSectionChange }: RFMAnalysisProps = {}) {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
+          ...(await getAppCheckHeader()),
         },
         body: JSON.stringify({ brandId: currentBrand.id, action: 'run' }),
       });

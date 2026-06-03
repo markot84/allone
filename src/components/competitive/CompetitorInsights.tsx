@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { collection, doc, getDocs, setDoc, getDoc } from 'firebase/firestore';
-import { db, auth, FUNCTIONS_BASE_URL } from '../../config/firebase';
+import { db, auth, FUNCTIONS_BASE_URL, getAppCheckHeader } from '../../config/firebase';
 import { useBrand } from '../../hooks/useBrand';
 import { usePriceBenchmarks } from '../../hooks/usePriceBenchmarks';
 import { usePriceInsights, type PriceInsight } from '../../hooks/usePriceInsights';
@@ -564,7 +564,7 @@ export function CompetitorInsights() {
         if (!token) return;
         const res = await fetch(`${FUNCTIONS_BASE}/refreshCompetitiveInventory`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...(await getAppCheckHeader()) },
           body: JSON.stringify({ brandId }),
         });
         if (res.ok) {
@@ -693,7 +693,7 @@ export function CompetitorInsights() {
       if (!token) throw new Error('Not authenticated');
       const res = await fetch(`${FUNCTIONS_BASE}/connectorSync`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...(await getAppCheckHeader()) },
         body: JSON.stringify({ brandId, provider }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);

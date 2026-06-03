@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { doc, getDoc } from 'firebase/firestore';
-import { db, auth, FUNCTIONS_BASE_URL } from '../config/firebase';
+import { db, auth, FUNCTIONS_BASE_URL, getAppCheckHeader } from '../config/firebase';
 import { useBrand } from './useBrand';
 
 const REFRESH_URL = `${FUNCTIONS_BASE_URL.replace(/\/$/, '')}/refreshAggregates`;
@@ -105,6 +105,7 @@ export function useRefreshAggregates() {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
+          ...(await getAppCheckHeader()),
         },
         body: JSON.stringify({ brandId }),
       });

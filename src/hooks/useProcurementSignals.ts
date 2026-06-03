@@ -9,7 +9,7 @@
 import { useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { doc, getDoc } from 'firebase/firestore';
-import { db, auth, FUNCTIONS_BASE_URL } from '../config/firebase';
+import { db, auth, FUNCTIONS_BASE_URL, getAppCheckHeader } from '../config/firebase';
 import { useBrand } from './useBrand';
 
 const REFRESH_URL = `${FUNCTIONS_BASE_URL.replace(/\/$/, '')}/refreshSignals`;
@@ -109,6 +109,7 @@ export function useRefreshProcurementSignals() {
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
+            ...(await getAppCheckHeader()),
           },
           body: JSON.stringify({ brandId }),
         });
