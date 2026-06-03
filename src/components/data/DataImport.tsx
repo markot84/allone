@@ -263,23 +263,30 @@ export function DataImport({ initialType }: DataImportProps = {}) {
       }
       
       // Detect file type from content type or filename
-      const isExcel = 
-        contentType.includes('spreadsheet') || 
+      const isExcel =
+        contentType.includes('spreadsheet') ||
         contentType.includes('excel') ||
         contentType.includes('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') ||
         fileName.toLowerCase().endsWith('.xlsx') ||
         fileName.toLowerCase().endsWith('.xls');
-      
+      // XML feeds (application/xml, text/xml) — must NOT be renamed to .csv, or the
+      // importer parses each XML line as a CSV row (12k junk "products").
+      const isXml =
+        contentType.includes('xml') ||
+        fileName.toLowerCase().endsWith('.xml');
+
       if (!isSupportedFile(fileName)) {
         if (isExcel) {
           fileName = fileName.replace(/\.[^.]+$/, '') + '.xlsx';
+        } else if (isXml) {
+          fileName = fileName.replace(/\.[^.]+$/, '') + '.xml';
         } else {
           fileName = fileName.replace(/\.[^.]+$/, '') + '.csv';
         }
       }
-      
-      const file = new File([blob], fileName, { 
-        type: isExcel ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : blob.type 
+
+      const file = new File([blob], fileName, {
+        type: isExcel ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : (isXml ? 'application/xml' : blob.type)
       });
       setSelectedFiles(prev => [...prev, {
         file,
