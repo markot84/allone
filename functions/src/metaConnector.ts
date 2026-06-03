@@ -13,6 +13,7 @@
  */
 
 import * as admin from 'firebase-admin';
+import { signState } from './oauthState';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { decryptToken } from './tokenCrypto';
@@ -329,7 +330,7 @@ export function getMetaAuthUrl(
   const statePayload: Record<string, string> = { brandId, provider: 'meta', redirectUri };
   if (returnOrigin?.trim()) statePayload.returnOrigin = returnOrigin.trim();
   if (oauthInitiatedByUid?.trim()) statePayload.oauthInitiatedByUid = oauthInitiatedByUid.trim();
-  const state = Buffer.from(JSON.stringify(statePayload)).toString('base64url');
+  const state = signState(statePayload);
 
   const params = new URLSearchParams({
     client_id: appId,

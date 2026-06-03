@@ -9,6 +9,7 @@
  */
 
 import * as admin from 'firebase-admin';
+import { signState } from './oauthState';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { encryptToken, decryptToken } from './tokenCrypto';
@@ -196,7 +197,7 @@ export function getGA4AuthUrl(
   const payload: Record<string, string> = { brandId, provider: 'ga4', redirectUri };
   if (returnOrigin?.trim()) payload.returnOrigin = returnOrigin.trim();
   if (oauthInitiatedByUid?.trim()) payload.oauthInitiatedByUid = oauthInitiatedByUid.trim();
-  const state = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const state = signState(payload);
 
   const params = new URLSearchParams({
     client_id: clientId,

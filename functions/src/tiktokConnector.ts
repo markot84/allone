@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin';
+import { signState } from './oauthState';
 import { type Firestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { encryptToken, decryptToken } from './tokenCrypto';
@@ -209,7 +210,7 @@ export function getTikTokAuthUrl(
   const params = new URLSearchParams({
     app_id: appId,
     redirect_uri: redirectUri,
-    state: Buffer.from(JSON.stringify(payload)).toString('base64url'),
+    state: signState(payload),
   });
 
   return `${TIKTOK_AUTH_URL}?${params.toString()}`;

@@ -15,6 +15,7 @@ const SMTP_EMAIL_SECRET = defineSecret('SMTP_EMAIL');
 const SMTP_PASSWORD_SECRET = defineSecret('SMTP_PASSWORD');
 import { sanitizeOAuthReturnOrigin } from './oauthRedirect';
 import { validateImportUrl, safeFetch } from './urlValidator';
+import { verifyState } from './oauthState';
 import { parseCSV, parseXLSXBuffer, parseXLSXAllSheets, csvToObjects } from './parseFile';
 import { validateProduct } from './validateProduct';
 import { validateCampaign } from './validateCampaign';
@@ -828,7 +829,8 @@ export const generateApiKey = onRequest(
  * Returns: { authUrl }
  */
 export const connectorAuth = onRequest(
-  { region: 'europe-west1', secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID', 'SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET', 'TIKTOK_APP_ID', 'TIKTOK_APP_SECRET'] },
+  // CONNECTOR_TOKEN_KEY: used by signState() to HMAC-sign the OAuth state (PP-12).
+  { region: 'europe-west1', secrets: ['META_APP_ID', 'META_APP_SECRET', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID', 'SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET', 'TIKTOK_APP_ID', 'TIKTOK_APP_SECRET', 'CONNECTOR_TOKEN_KEY'] },
   async (req, res) => {
     if (applyStrictCors(req, res)) return;
     if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
@@ -978,10 +980,9 @@ export const connectorCallback = onRequest(
     // Google OAuth may redirect with ?error=access_denied instead of ?code=xxx
     if (oauthError && state) {
       try {
-        const parsed = JSON.parse(Buffer.from(state, 'base64url').toString()) as {
-          provider?: string;
-          returnOrigin?: string;
-        };
+        // Lenient parse — this branch only builds an error-redirect; returnOrigin is
+        // re-validated by sanitizeOAuthReturnOrigin regardless of signature.
+        const parsed = (verifyState<{ provider?: string; returnOrigin?: string }>(state)) ?? {};
         const provider = parsed.provider || 'unknown';
         const origin = sanitizeOAuthReturnOrigin(parsed.returnOrigin);
         logger.warn(`[ConnectorCallback] OAuth denied: ${oauthError} for ${provider}`);
@@ -1000,7 +1001,10 @@ export const connectorCallback = onRequest(
     }
 
     try {
-      const parsed = JSON.parse(Buffer.from(state, 'base64url').toString()) as {
+      // PP-12: verify the HMAC signature + expiry. A forged/tampered state (e.g.
+      // one carrying a victim's brandId) fails verification and is rejected, so
+      // connector tokens can only be written to the brand the signer intended.
+      const parsed = verifyState<{
         brandId: string;
         provider: string;
         redirectUri: string;
@@ -1008,7 +1012,11 @@ export const connectorCallback = onRequest(
         shopDomain?: string;
         /** Firebase uid of admin who started OAuth (embedded in state from connectorAuth) */
         oauthInitiatedByUid?: string;
-      };
+      }>(state);
+      if (!parsed || !parsed.brandId || !parsed.provider) {
+        res.status(400).send('Invalid or expired OAuth state');
+        return;
+      }
       const { brandId, provider, redirectUri } = parsed;
       const oauthInitiatedByUid = parsed.oauthInitiatedByUid?.trim();
       const appOrigin = sanitizeOAuthReturnOrigin(parsed.returnOrigin);
