@@ -144,7 +144,14 @@ describe('metaUsesLegacyMonthBuckets', () => {
 });
 
 describe('getCampaignDailyAttributedValueInPeriod (ημερήσιο ROAS chart)', () => {
-  it('Meta ημέρα με purchase_* = 0 αλλά conversion_value > 0 → χρησιμοποιεί conversion_value', () => {
+  // Intended business logic (roiUtils.dailyMetricsHasPurchaseSlice + DashboardOverview ROAS chart):
+  // if a campaign reports purchases at all, daily attributed revenue uses purchase_conversion_value
+  // PER DAY — so a 0-purchase day attributes 0. Falling back to total conversion_value there would
+  // fold in non-purchase conversions and inflate ROAS ("ROAS πλασματικά υψηλό" / ad-platform
+  // double-counting), which the code explicitly avoids. conversion_value is used ONLY for campaigns
+  // with no purchase slice at all. (The earlier test asserted the inflating fallback — it contradicted
+  // the documented design and had been failing since the first commit; corrected here. See TEST-F2.)
+  it('Meta purchase-slice campaign: a 0-purchase day attributes 0 (no conversion_value inflation)', () => {
     const c = {
       channel: 'Meta',
       dailyMetrics: {
@@ -154,6 +161,37 @@ describe('getCampaignDailyAttributedValueInPeriod (ημερήσιο ROAS chart)'
           conversion_value: 200,
           purchase_conversions: 0,
           purchase_conversion_value: 0,
+        },
+      },
+    } as unknown as Campaign;
+    const m = getCampaignDailyAttributedValueInPeriod(c, '2026-03-01', '2026-03-31');
+    // Purchase slice present (purchase_* fields) → use purchase per day; 0 purchases → no revenue.
+    expect(m.get('2026-03-07')).toBeUndefined();
+  });
+
+  it('Meta purchase-slice campaign: a day with purchase_conversion_value > 0 uses the purchase value', () => {
+    const c = {
+      channel: 'Meta',
+      dailyMetrics: {
+        '2026-03-07': {
+          amount_spent: 50,
+          conversion_value: 200, // total conversions (may include non-purchase)
+          purchase_conversion_value: 150, // actual purchase revenue → this is what ROAS should use
+        },
+      },
+    } as unknown as Campaign;
+    const m = getCampaignDailyAttributedValueInPeriod(c, '2026-03-01', '2026-03-31');
+    expect(m.get('2026-03-07')).toBe(150);
+  });
+
+  it('campaign with NO purchase slice at all: falls back to conversion_value', () => {
+    const c = {
+      channel: 'Meta',
+      dailyMetrics: {
+        '2026-03-07': {
+          amount_spent: 50,
+          conversion_value: 200,
+          // no purchase_conversions / purchase_conversion_value anywhere → no purchase slice
         },
       },
     } as unknown as Campaign;

@@ -28,7 +28,9 @@ function makeProduct(overrides: Partial<Product> = {}): Product {
 describe('buildErpSkuMap', () => {
   it('keys by normalized sku', () => {
     const m = buildErpSkuMap([makeProduct({ sku: ' ab-1 ', brand: 'B', category: 'C', subcategory: 'S' })]);
-    expect(m.get('AB-1')).toEqual({ brand: 'B', category: 'C', subcategory: 'S' });
+    // buildErpSkuMap also carries operational dims (pickOperationalDims): makeProduct's
+    // default stock_level:5 maps to stockOnHand:5. (Test was stale; impl behavior is intended.)
+    expect(m.get('AB-1')).toEqual({ brand: 'B', category: 'C', subcategory: 'S', stockOnHand: 5 });
   });
 });
 
