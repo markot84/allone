@@ -35,6 +35,10 @@ import { generateMarketingPlanMessage } from '../../services/marketingPlanMessag
 import { fetchDataAnalysisOrders, fetchEcommercePlatformOrders } from '../../services/ecommerceRawOrders';
 import { buildCommercialLearnings, type CommercialLearning } from '../../services/commercialLearnings';
 import { shiftIsoDate } from '../../services/commercialScenarioMetrics';
+import { buildSalesForecast, type ForecastGroupInput } from '../../services/salesForecast';
+import { formatCommercialInfoForPrompt } from '../../services/commercialInfo';
+import { resolveParentSku } from '../../utils/parentSku';
+import { useCommercialInfo } from '../../hooks/useCommercialInfo';
 import type { Campaign } from '../../types';
 import { FirestoreService } from '../../services/firestore';
 import { useBrand } from '../../hooks/useBrand';
@@ -68,14 +72,21 @@ type PlanCacheEntry = { savedAt: number; plan: MarketingPlanDraft };
 
 // v2: το draft περιλαμβάνει πλέον per-group SKU (για τα expandable reorder cards) — bump
 // ώστε παλιά cached drafts χωρίς `skus` να ξαναϋπολογιστούν.
-function planCacheStorageKey(brandId: string, preset: string): string {
-  return `mp_draft_v2_${brandId}_${preset}`;
+function planCacheStorageKey(brandId: string, preset: string, sig = ''): string {
+  // Το sig (υπογραφή εμπορικών πληροφοριών) εξασφαλίζει recompute όταν αλλάζουν οι πληροφορίες.
+  return `mp_draft_v2_${brandId}_${preset}${sig ? `_${hashSig(sig)}` : ''}`;
 }
 
-function readPlanCacheEntry(brandId: string | null, preset: string): PlanCacheEntry | null {
+function hashSig(s: string): string {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
+}
+
+function readPlanCacheEntry(brandId: string | null, preset: string, sig = ''): PlanCacheEntry | null {
   if (!brandId || typeof localStorage === 'undefined') return null;
   try {
-    const raw = localStorage.getItem(planCacheStorageKey(brandId, preset));
+    const raw = localStorage.getItem(planCacheStorageKey(brandId, preset, sig));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as PlanCacheEntry;
     if (!parsed?.savedAt || !parsed.plan) return null;
@@ -86,9 +97,9 @@ function readPlanCacheEntry(brandId: string | null, preset: string): PlanCacheEn
   }
 }
 
-function writePlanCache(brandId: string, preset: string, plan: MarketingPlanDraft): void {
+function writePlanCache(brandId: string, preset: string, plan: MarketingPlanDraft, sig = ''): void {
   if (typeof localStorage === 'undefined') return;
-  const key = planCacheStorageKey(brandId, preset);
+  const key = planCacheStorageKey(brandId, preset, sig);
   const payload = JSON.stringify({ savedAt: Date.now(), plan });
   try {
     localStorage.setItem(key, payload);
@@ -106,10 +117,10 @@ function writePlanCache(brandId: string, preset: string, plan: MarketingPlanDraf
   }
 }
 
-function clearPlanCache(brandId: string, preset: string): void {
+function clearPlanCache(brandId: string, preset: string, sig = ''): void {
   if (typeof localStorage === 'undefined') return;
   try {
-    localStorage.removeItem(planCacheStorageKey(brandId, preset));
+    localStorage.removeItem(planCacheStorageKey(brandId, preset, sig));
   } catch {
     /* noop */
   }
@@ -126,7 +137,20 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
   const { products: inventoryProducts, isLoading: inventoryLoading } = useProducts();
   const segments = useSegments({ variant: 'data_analysis', skipOrderHydration: true });
   const { benchmarks: priceBenchmarks } = usePriceBenchmarks({ maxDocs: 200 });
+  const commercialInfo = useCommercialInfo();
   const queryClient = useQueryClient();
+
+  // Ενεργές εμπορικές πληροφορίες — τροφοδοτούν AI μήνυμα + πρόβλεψη πωλήσεων.
+  const activeInfo = useMemo(
+    () => commercialInfo.items.filter((i) => i.status === 'active'),
+    [commercialInfo.items]
+  );
+  const activeInfoText = useMemo(() => formatCommercialInfoForPrompt(activeInfo), [activeInfo]);
+  // Υπογραφή για το queryKey: το draft ξαναϋπολογίζεται όταν αλλάζουν οι πληροφορίες.
+  const infoSig = useMemo(
+    () => activeInfo.map((i) => `${i.id}:${i.direction}:${i.magnitude}`).sort().join('|'),
+    [activeInfo]
+  );
 
   const [preset, setPreset] = useState<MarketingPlanPresetId>('next_month');
   const [learningsOpen, setLearningsOpen] = useState(false);
@@ -159,7 +183,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
   const learnTo = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const learnFrom = useMemo(() => shiftIsoDate(learnTo, -90), [learnTo]);
   const learningsQuery = useQuery({
-    queryKey: ['marketingPlanLearnings', brandId, learnFrom, learnTo, [...ecomm.connectedPlatforms].sort().join('|'), campaigns.length],
+    queryKey: ['marketingPlanLearnings', brandId, learnFrom, learnTo, [...ecomm.connectedPlatforms].sort().join('|'), campaigns.length, Object.keys(procurementSignals.signalsBySku).length],
     queryFn: async () => {
       if (!brandId) return null;
       // Orders από windowFrom-30 (price baseline) έως σήμερα· platform-only paginated.
@@ -170,11 +194,18 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
         revenueMode: 'all',
         fetchAll: true,
       });
+      // Κόστος ανά SKU από procurement signals → margin-aware learnings.
+      const costBySku = new Map<string, number>();
+      for (const [sku, sig] of Object.entries(procurementSignals.signalsBySku)) {
+        const cost = (sig as { cost_unit?: number }).cost_unit;
+        if (typeof cost === 'number' && cost > 0) costBySku.set(sku, cost);
+      }
       return buildCommercialLearnings({
         campaigns: campaigns as Campaign[],
         orders,
         windowFrom: learnFrom,
         windowTo: learnTo,
+        costBySku: costBySku.size > 0 ? costBySku : undefined,
       });
     },
     enabled: !!brandId,
@@ -214,7 +245,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
   // Το plan draft ζει στο React Query cache (επιβιώνει της πλοήγησης) + localStorage (επιβιώνει reload),
   // με daily staleTime. Έτσι ΔΕΝ ξανατρέχει η βαριά ανάλυση + AI σε κάθε είσοδο στη σελίδα.
   const planQuery = useQuery<MarketingPlanDraft>({
-    queryKey: ['marketingPlanDraft', 'v2', brandId, preset],
+    queryKey: ['marketingPlanDraft', 'v2', brandId, preset, infoSig],
     enabled: baseDataReady,
     staleTime: PLAN_CACHE_TTL_MS,
     gcTime: PLAN_CACHE_TTL_MS,
@@ -222,8 +253,8 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     retry: false,
-    initialData: () => readPlanCacheEntry(brandId, preset)?.plan,
-    initialDataUpdatedAt: () => readPlanCacheEntry(brandId, preset)?.savedAt,
+    initialData: () => readPlanCacheEntry(brandId, preset, infoSig)?.plan,
+    initialDataUpdatedAt: () => readPlanCacheEntry(brandId, preset, infoSig)?.savedAt,
     queryFn: async () => {
       const insight = buildMarketingPlanInsight({
         period,
@@ -248,19 +279,55 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
       // 1) Άμεσο draft με deterministic fallback μήνυμα: γράφεται στο cache + εμφανίζεται ΤΩΡΑ,
       //    ώστε ΑΚΟΜΗ κι αν ο χρήστης κάνει reload όσο τρέχει το (αργό) AI, να μην ξαναρχίζει η ανάλυση.
       const fastDraft = assemble(buildFallbackCoreMessage(insight));
-      if (brandId) writePlanCache(brandId, preset, fastDraft);
-      queryClient.setQueryData(['marketingPlanDraft', 'v2', brandId, preset], fastDraft);
+      if (brandId) writePlanCache(brandId, preset, fastDraft, infoSig);
+      queryClient.setQueryData(['marketingPlanDraft', 'v2', brandId, preset, infoSig], fastDraft);
 
-      // 2) Μη-μπλοκαριστικό AI enhancement: αναβαθμίζει μόνο το core message όταν επιστρέψει.
-      const coreMessage = await generateMarketingPlanMessage({ insight, brandName: currentBrand?.name });
+      // 2) Μη-μπλοκαριστικό AI enhancement: ενσωματώνει και τις εμπορικές πληροφορίες.
+      const coreMessage = await generateMarketingPlanMessage({
+        insight,
+        brandName: currentBrand?.name,
+        commercialInfoText: activeInfo.length > 0 ? activeInfoText : undefined,
+      });
       const built = coreMessage.source === 'ai' ? assemble(coreMessage) : fastDraft;
-      if (brandId) writePlanCache(brandId, preset, built);
+      if (brandId) writePlanCache(brandId, preset, built, infoSig);
       return built;
     },
   });
 
   const draft = planQuery.data ?? null;
   const generating = planQuery.isFetching;
+
+  // Πρόβλεψη πωλήσεων σε επίπεδο Κατηγορίας / Parent SKU με baseline το περσινό αντίστοιχο
+  // διάστημα (από το reorderPlan/skuSuggestions) και προσαρμογή από τις εμπορικές πληροφορίες.
+  const forecast = useMemo(() => {
+    if (!draft) return null;
+    const catMap = new Map<string, ForecastGroupInput>();
+    for (const row of draft.reorderPlan) {
+      const cat = row.category || 'Λοιπά';
+      const cur = catMap.get(cat) ?? { category: cat, pastRevenue: 0, pastUnits: 0 };
+      cur.pastRevenue += row.lastYearRevenue || 0;
+      cur.pastUnits += row.lastYearUnits || 0;
+      catMap.set(cat, cur);
+    }
+
+    const pskMap = new Map<string, ForecastGroupInput>();
+    for (const s of draft.skuSuggestions) {
+      const parent = resolveParentSku(s.sku);
+      if (!parent) continue;
+      const cat = s.category || 'Λοιπά';
+      const key = `${cat}__${parent}`;
+      const cur = pskMap.get(key) ?? { category: cat, parentSku: parent, pastRevenue: 0, pastUnits: 0 };
+      cur.pastRevenue += s.lastYearRevenue || 0;
+      cur.pastUnits += s.lastYearUnits || 0;
+      pskMap.set(key, cur);
+    }
+
+    return buildSalesForecast({
+      categoryGroups: [...catMap.values()].filter((g) => g.pastRevenue > 0 || g.pastUnits > 0),
+      parentSkuGroups: [...pskMap.values()].filter((g) => g.pastRevenue > 0 || g.pastUnits > 0),
+      activeInfo,
+    });
+  }, [draft, activeInfo]);
   const generateError = planQuery.isError
     ? (planQuery.error instanceof Error ? planQuery.error.message : 'Αποτυχία δημιουργίας plan. Δοκίμασε ξανά.')
     : null;
@@ -268,7 +335,7 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
   // Manual «Επαναδημιουργία»: καθάρισε το daily cache και ξανατρέξε τον υπολογισμό.
   const regenerate = () => {
     if (!brandId) return;
-    clearPlanCache(brandId, preset);
+    clearPlanCache(brandId, preset, infoSig);
     void planQuery.refetch();
   };
 
@@ -496,6 +563,104 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
             )}
           </PlanSection>
 
+          {/* Πρόβλεψη πωλήσεων (Κατηγορία / Parent SKU) */}
+          {forecast && forecast.categories.length > 0 && (
+            <Card>
+              <CardHeader
+                title="Πρόβλεψη πωλήσεων — Κατηγορίες & Parent SKU"
+                subtitle={
+                  forecast.appliedInfoCount > 0
+                    ? `Baseline περσινής περιόδου + προσαρμογή από ${forecast.appliedInfoCount} εμπορικές πληροφορίες`
+                    : 'Baseline περσινής αντίστοιχης περιόδου (καμία ενεργή εμπορική πληροφορία)'
+                }
+              />
+              <div className="p-4 pt-0 space-y-4">
+                <div className="flex flex-wrap items-center gap-4 text-sm">
+                  <div>
+                    <span className="text-[#6B7280]">Baseline: </span>
+                    <span className="font-mono font-semibold">{formatCurrency(forecast.totalBaselineRevenue, 0)}</span>
+                  </div>
+                  <ArrowUpRight size={16} className="text-[#9CA3AF]" />
+                  <div>
+                    <span className="text-[#6B7280]">Πρόβλεψη: </span>
+                    <span className="font-mono font-semibold text-[var(--nts-charcoal)]">{formatCurrency(forecast.totalForecastRevenue, 0)}</span>
+                  </div>
+                  {forecast.totalBaselineRevenue > 0 && (
+                    <Badge variant={forecast.totalForecastRevenue >= forecast.totalBaselineRevenue ? 'success' : 'warning'}>
+                      {forecast.totalForecastRevenue >= forecast.totalBaselineRevenue ? '+' : ''}
+                      {Math.round(((forecast.totalForecastRevenue - forecast.totalBaselineRevenue) / forecast.totalBaselineRevenue) * 100)}%
+                    </Badge>
+                  )}
+                </div>
+
+                <div className="overflow-x-auto rounded-xl border border-[#E5E7EB]">
+                  <table className="w-full text-sm">
+                    <thead className="bg-[#F9FAFB] text-xs text-[#6B7280]">
+                      <tr>
+                        <th className="px-3 py-2 text-left">Κατηγορία</th>
+                        <th className="px-3 py-2 text-right">Baseline</th>
+                        <th className="px-3 py-2 text-right">Προσαρμογή</th>
+                        <th className="px-3 py-2 text-right">Πρόβλεψη</th>
+                        <th className="px-3 py-2 text-left">Σήμα</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {forecast.categories.slice(0, 12).map((r) => (
+                        <tr key={r.key} className="border-t border-[#E5E7EB]">
+                          <td className="px-3 py-2 font-medium">{r.category}</td>
+                          <td className="px-3 py-2 text-right font-mono text-[#6B7280]">{formatCurrency(r.baselineRevenue, 0)}</td>
+                          <td className="px-3 py-2 text-right font-mono">
+                            {r.upliftPct === 0 ? (
+                              <span className="text-[#9CA3AF]">—</span>
+                            ) : (
+                              <span className={r.upliftPct > 0 ? 'text-emerald-600' : 'text-red-500'}>
+                                {r.upliftPct > 0 ? '+' : ''}
+                                {Math.round(r.upliftPct * 100)}%
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-right font-mono font-semibold">{formatCurrency(r.forecastRevenue, 0)}</td>
+                          <td className="px-3 py-2 text-xs text-[#6B7280] max-w-[220px] truncate" title={r.drivers.join(' · ')}>
+                            {r.drivers.length > 0 ? r.drivers[0] : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {forecast.parentSkus.filter((r) => r.upliftPct !== 0).length > 0 && (
+                  <div>
+                    <p className="mb-2 text-xs font-semibold uppercase text-[#9CA3AF]">Parent SKU με σήμα από εμπορική πληροφορία</p>
+                    <div className="flex flex-wrap gap-2">
+                      {forecast.parentSkus
+                        .filter((r) => r.upliftPct !== 0)
+                        .slice(0, 10)
+                        .map((r) => (
+                          <span
+                            key={r.key}
+                            className="text-xs px-2 py-1 rounded-full bg-[#F3F4F6] text-[var(--nts-charcoal)]"
+                            title={r.drivers.join(' · ')}
+                          >
+                            {r.parentSku} <span className={r.upliftPct > 0 ? 'text-emerald-600' : 'text-red-500'}>{r.upliftPct > 0 ? '+' : ''}{Math.round(r.upliftPct * 100)}%</span>
+                          </span>
+                        ))}
+                    </div>
+                  </div>
+                )}
+
+                {forecast.appliedInfoCount === 0 && (
+                  <button
+                    onClick={() => onSectionChange?.('commercial-info')}
+                    className="text-xs text-[var(--nts-accent)] hover:underline"
+                  >
+                    + Πρόσθεσε εμπορική πληροφορία για πιο ακριβή πρόβλεψη
+                  </button>
+                )}
+              </div>
+            </Card>
+          )}
+
           {/* Section 3: Paid Media */}
           <PlanSection
             id="paid"
@@ -512,10 +677,10 @@ export function MarketingPlanPage({ onSectionChange }: { onSectionChange?: (s: s
                 {draft.budgetSplitSource === 'data' && <span className="ml-2 text-emerald-600 normal-case font-normal">· από πραγματικές καμπάνιες</span>}
               </p>
               <div className="grid grid-cols-4 gap-3">
-                <BudgetPill label="Google Ads" pct={draft.budgetSplit.googleAds} />
-                <BudgetPill label="Meta" pct={draft.budgetSplit.meta} />
-                <BudgetPill label="Organic" pct={draft.budgetSplit.organic} />
-                {draft.budgetSplit.other > 0 && <BudgetPill label="Other" pct={draft.budgetSplit.other} />}
+                <BudgetPill label="Google Ads" pct={draft.budgetSplit.googleAds} monthlyBudget={activeStrategy?.monthlyBudget} />
+                <BudgetPill label="Meta" pct={draft.budgetSplit.meta} monthlyBudget={activeStrategy?.monthlyBudget} />
+                <BudgetPill label="Organic" pct={draft.budgetSplit.organic} monthlyBudget={activeStrategy?.monthlyBudget} />
+                {draft.budgetSplit.other > 0 && <BudgetPill label="Other" pct={draft.budgetSplit.other} monthlyBudget={activeStrategy?.monthlyBudget} />}
               </div>
             </div>
 
@@ -906,11 +1071,13 @@ function Metric({ label, value, color }: { label: string; value: string; color?:
   );
 }
 
-function BudgetPill({ label, pct }: { label: string; pct: number }) {
+function BudgetPill({ label, pct, monthlyBudget }: { label: string; pct: number; monthlyBudget?: number }) {
+  const euro = monthlyBudget && monthlyBudget > 0 ? Math.round((monthlyBudget * pct) / 100) : null;
   return (
     <div className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-center">
       <p className="text-[10px] font-semibold uppercase text-[#9CA3AF]">{label}</p>
       <p className="font-mono text-xl font-bold text-[#1A1A1A]">{pct}%</p>
+      {euro != null && <p className="font-mono text-xs text-[#6B7280]">{formatCurrency(euro, 0)}/μήνα</p>}
     </div>
   );
 }

@@ -44,6 +44,7 @@ import { useToast } from '../common/Toast';
 import { useProductSource } from '../../hooks/useProductSource';
 import { useCampaigns } from '../../hooks/useCampaigns';
 import { useBrand } from '../../hooks/useBrand';
+import { CommercialInfoBanner } from '../commercial-info/CommercialInfoBanner';
 import { useSegments } from '../../hooks/useSegments';
 import { useActiveStrategy } from '../../hooks/useActiveStrategy';
 import { useChannelActivations } from '../../hooks/useChannelActivations';
@@ -1001,6 +1002,8 @@ export function ChannelActivation({ onSectionChange }: ChannelActivationProps = 
           </div>
         }
       />
+
+      <CommercialInfoBanner context="channel" onOpen={onSectionChange ? () => onSectionChange('commercial-info') : undefined} />
 
       {/* Progress bar */}
       {progressSummary && progressSummary.total > 0 && (

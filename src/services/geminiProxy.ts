@@ -3,11 +3,20 @@ import { FUNCTIONS_BASE_URL, getAppCheckHeader } from '../config/firebase';
 
 const PROXY_URL = `${FUNCTIONS_BASE_URL.replace(/\/$/, '')}/geminiProxy`;
 
+export interface GeminiChatTurn {
+  role: 'user' | 'model';
+  text: string;
+}
+
 export interface GeminiProxyParams {
   systemPrompt?: string;
   userPrompt: string;
   model?: string;
   temperature?: number;
+  /** Ιστορικό συνομιλίας για multi-turn (η Nilia). Το πρώτο 'user' turn ορίζει την έναρξη. */
+  history?: GeminiChatTurn[];
+  /** Ενεργό brand — για per-brand λογιστική κόστους (ai_usage) στον server. */
+  brandId?: string;
 }
 
 /**

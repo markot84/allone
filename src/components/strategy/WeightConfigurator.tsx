@@ -37,6 +37,7 @@ import { useProductSignals } from '../../hooks/useProductSignals';
 import { buildTriagePromptContext, buildProvenancePromptContext } from '../../utils/aiPromptContext';
 import { useSegments } from '../../hooks/useSegments';
 import { useBrand } from '../../hooks/useBrand';
+import { CommercialInfoBanner } from '../commercial-info/CommercialInfoBanner';
 import { useActiveStrategy, type SeasonalProposal, type TriageOrigin } from '../../hooks/useActiveStrategy';
 import { useAuth } from '../../hooks/useAuth';
 import {
@@ -1418,6 +1419,8 @@ export function WeightConfigurator({
               ) : undefined
             }
           />
+
+          <CommercialInfoBanner context="policy" onOpen={onSectionChange ? () => onSectionChange('commercial-info') : undefined} />
 
           {/* Strategy Package — share/copy active strategy */}
           {selectedScenario && (

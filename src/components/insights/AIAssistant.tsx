@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getAuth } from 'firebase/auth';
 import {
@@ -6,7 +6,10 @@ import {
   Send,
   BookOpen,
   ExternalLink,
-  MessageCircle
+  MessageCircle,
+  Mic,
+  Plus,
+  RotateCcw,
 } from 'lucide-react';
 import { searchArticles, getArticleById } from '../../data/knowledgeBase';
 import { FormattedProse } from '../common';
@@ -15,10 +18,21 @@ import {
   formatTenantPackForPrompt,
   formatKnowledgeExcerptsForPrompt,
   formatWebSnippetsForPrompt,
-  generateAssistantReply,
   fallbackKnowledgeAnswer,
   type AssistantTenantPack,
 } from '../../services/aiAssistantChat';
+import {
+  loadNiliaSession,
+  saveNiliaSession,
+  clearNiliaSession,
+  generateNiliaReply,
+  buildProactiveGreeting,
+  toGeminiHistory,
+  type NiliaMessage,
+} from '../../services/nilia';
+import { formatCommercialInfoForPrompt, structureCommercialInfo } from '../../services/commercialInfo';
+import { useCommercialInfo } from '../../hooks/useCommercialInfo';
+import { useSpeechToText } from '../../hooks/useSpeechToText';
 import { useBrand } from '../../hooks/useBrand';
 import { useEcommerceSummary } from '../../hooks/useEcommerceSummary';
 import { useSegments } from '../../hooks/useSegments';
@@ -35,6 +49,35 @@ interface Message {
   relatedArticles?: string[];
   webSources?: Array<{ title: string; url: string; snippet: string }>;
   timestamp: Date;
+  /** Proactive καλωσόρισμα — δεν στέλνεται ως context turn στο μοντέλο. */
+  proactive?: boolean;
+  savedInfoId?: string;
+}
+
+function toNilia(m: Message): NiliaMessage {
+  return {
+    id: m.id,
+    role: m.type,
+    content: m.content,
+    ts: m.timestamp.getTime(),
+    relatedArticles: m.relatedArticles,
+    webSources: m.webSources,
+    proactive: m.proactive,
+    savedInfoId: m.savedInfoId,
+  };
+}
+
+function fromNilia(m: NiliaMessage): Message {
+  return {
+    id: m.id,
+    type: m.role,
+    content: m.content,
+    relatedArticles: m.relatedArticles,
+    webSources: m.webSources,
+    timestamp: new Date(m.ts || Date.now()),
+    proactive: m.proactive,
+    savedInfoId: m.savedInfoId,
+  };
 }
 
 interface AIAssistantProps {
@@ -42,8 +85,9 @@ interface AIAssistantProps {
   onClose: () => void;
 }
 
-export function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
+export function NiliaAgent({ isOpen, onClose }: AIAssistantProps) {
   const { currentBrand } = useBrand();
+  const commercialInfo = useCommercialInfo();
   const ecomm = useEcommerceSummary();
   const {
     segments: rfmSegments,
@@ -177,48 +221,107 @@ export function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
 
   const tenantSnapshotText = useMemo(() => formatTenantPackForPrompt(tenantPack), [tenantPack]);
 
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: 'welcome',
-      type: 'assistant',
-      content:
-        'Γεια σας! Είμαι ο AI Assistant του Performance+. Με σύνδεση στο λογαριασμό σας χρησιμοποιώ και μια σύνοψη των τρεχόντων δεδομένων του brand (e-shop, segments, καμπάνιες κ.λπ.) μαζί με το Help και — όταν χρειάζεται — διαδικτυακές πηγές. Ρωτήστε με για τη χρήση της πλατφόρμας ή για ερμηνεία των δεδομένων σας.',
-      timestamp: new Date()
-    }
-  ]);
+  const brandId = currentBrand?.id ?? null;
+  const brandName = currentBrand?.name ?? null;
+
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [savingInfo, setSavingInfo] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  /** Το brandId του οποίου το session είναι φορτωμένο — guard κατά mismatch. */
+  const loadedBrandRef = useRef<string | null>(null);
+  const hydratedRef = useRef(false);
+
+  const activeInfoText = useMemo(
+    () => formatCommercialInfoForPrompt(commercialInfo.items.filter((i) => i.status === 'active')),
+    [commercialInfo.items]
+  );
+  const openInfoCount = useMemo(
+    () => commercialInfo.items.filter((i) => i.status === 'active').length,
+    [commercialInfo.items]
+  );
+
+  // ── BRAND ISOLATION: φόρτωση session του ΕΝΕΡΓΟΥ brand· reset σε κάθε αλλαγή brand ──
+  useEffect(() => {
+    let cancelled = false;
+    hydratedRef.current = false;
+    loadedBrandRef.current = brandId;
+    setMessages([]);
+    setInput('');
+    setIsTyping(false);
+
+    if (!brandId) {
+      hydratedRef.current = true;
+      return;
+    }
+
+    (async () => {
+      const stored = await loadNiliaSession(brandId);
+      if (cancelled || loadedBrandRef.current !== brandId) return;
+
+      if (stored.length > 0) {
+        setMessages(stored.map(fromNilia));
+        hydratedRef.current = true;
+        return;
+      }
+
+      // Νέα συνομιλία: proactive καλωσόρισμα + brief.
+      const greeting = await buildProactiveGreeting({ brandId, brandName, openInfoCount });
+      if (cancelled || loadedBrandRef.current !== brandId) return;
+      setMessages([
+        { id: `nilia-welcome-${Date.now()}`, type: 'assistant', content: greeting, timestamp: new Date(), proactive: true },
+      ]);
+      hydratedRef.current = true;
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // openInfoCount/brandName σκόπιμα εκτός deps: το greeting χτίζεται μία φορά ανά brand load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [brandId]);
+
+  // Persist συνομιλίας (μόνο μετά το hydrate, μόνο για το φορτωμένο brand).
+  useEffect(() => {
+    if (!brandId || !hydratedRef.current || loadedBrandRef.current !== brandId) return;
+    if (messages.length === 0) return;
+    void saveNiliaSession(brandId, messages.map(toNilia));
+  }, [messages, brandId]);
 
   useEffect(() => {
-    if (isOpen) {
-      inputRef.current?.focus();
-    }
+    if (isOpen) inputRef.current?.focus();
   }, [isOpen]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, isTyping]);
 
-  const handleSend = async () => {
-    if (!input.trim() || isTyping) return;
+  const handleSend = async (overrideText?: string) => {
+    const userQuery = (overrideText ?? input).trim();
+    if (!userQuery || isTyping) return;
 
-    const userQuery = input.trim();
+    // BRAND GUARD: «κλειδώνουμε» το brand στην έναρξη του αιτήματος.
+    const requestBrandId = brandId;
+    const requestBrandName = brandName;
+    if (!requestBrandId) return;
+
+    const historyTurns = toGeminiHistory(messages.map(toNilia));
+
     const userMessage: Message = {
       id: `user-${Date.now()}`,
       type: 'user',
       content: userQuery,
-      timestamp: new Date()
+      timestamp: new Date(),
     };
-
-    setMessages(prev => [...prev, userMessage]);
+    setMessages((prev) => [...prev, userMessage]);
     setInput('');
     setIsTyping(true);
 
     try {
       const articleCandidates = searchArticles(userQuery).slice(0, 5);
-      let articleRefs = articleCandidates.map((a) => a.id);
+      const articleRefs = articleCandidates.map((a) => a.id);
       let webSources: Array<{ title: string; url: string; snippet: string }> = [];
       const needsWebSearch = shouldSearchWeb(userQuery);
 
@@ -226,11 +329,7 @@ export function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
         try {
           const webResults = await searchWeb(userQuery);
           if (webResults.results.length > 0) {
-            webSources = webResults.results.map((r) => ({
-              title: r.title,
-              url: r.url,
-              snippet: r.snippet,
-            }));
+            webSources = webResults.results.map((r) => ({ title: r.title, url: r.url, snippet: r.snippet }));
           }
         } catch (webError) {
           console.error('Web search error:', webError);
@@ -243,75 +342,114 @@ export function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
       if (firebaseUser) {
         try {
           const kbExcerpts = formatKnowledgeExcerptsForPrompt(userQuery);
-          const webBlock =
-            webSources.length > 0 ? formatWebSnippetsForPrompt(webSources) : undefined;
-          response = await generateAssistantReply({
+          const webBlock = webSources.length > 0 ? formatWebSnippetsForPrompt(webSources) : undefined;
+          response = await generateNiliaReply({
+            brandId: requestBrandId,
+            brandName: requestBrandName,
             userQuery,
             tenantSnapshotText,
+            commercialInfoText: activeInfoText,
+            history: historyTurns,
             knowledgeExcerpts: kbExcerpts,
             webContext: webBlock,
           });
         } catch (geminiErr) {
-          console.error('[AIAssistant] Gemini:', geminiErr);
+          console.error('[Nilia] Gemini:', geminiErr);
           response = fallbackKnowledgeAnswer(userQuery, articleCandidates);
           const errMsg = geminiErr instanceof Error ? geminiErr.message : '';
           if (errMsg.includes('Rate limit') || errMsg.includes('429')) {
-            response +=
-              '\n\n_Προσωρινό όριο αιτημάτων AI — δοκίμασε ξανά αργότερα._';
+            response += '\n\n_Προσωρινό όριο αιτημάτων AI — δοκίμασε ξανά αργότερα._';
           }
           if (needsWebSearch && webSources.length > 0) {
             response +=
               '\n\n---\n\n' +
-              formatSearchResultsForResponse({
-                query: userQuery,
-                results: webSources,
-                totalResults: webSources.length,
-              });
+              formatSearchResultsForResponse({ query: userQuery, results: webSources, totalResults: webSources.length });
           }
         }
       } else {
-        if (needsWebSearch && webSources.length > 0) {
-          response = formatSearchResultsForResponse({
-            query: userQuery,
-            results: webSources,
-            totalResults: webSources.length,
-          });
-          if (articleCandidates.length > 0) {
-            response += '\n\n—\n\nΣχετικά με το Performance+:\n';
-            articleCandidates.forEach((article) => {
-              response += `• ${article.title}\n`;
-            });
-          }
-        } else {
-          response = fallbackKnowledgeAnswer(userQuery, articleCandidates);
-          response +=
-            '\n\n_Για απαντήσεις με βάση τα πραγματικά δεδομένα του brand σου (μέσω AI), συνδέσου στο λογαριασμό Performance+._';
-        }
+        response = fallbackKnowledgeAnswer(userQuery, articleCandidates);
+        response += '\n\n_Συνδέσου στο Performance+ για απαντήσεις με βάση τα πραγματικά δεδομένα του brand._';
+      }
+
+      // BRAND GUARD: αν άλλαξε brand όσο τρέχαμε, απόρριψη απάντησης (όχι cross-brand mix).
+      if (loadedBrandRef.current !== requestBrandId) {
+        setIsTyping(false);
+        return;
       }
 
       const assistantMessage: Message = {
-        id: `assistant-${Date.now()}`,
+        id: `nilia-${Date.now()}`,
         type: 'assistant',
         content: response,
         relatedArticles: articleRefs.length > 0 ? articleRefs : undefined,
         webSources: webSources.length > 0 ? webSources : undefined,
         timestamp: new Date(),
       };
-
       setMessages((prev) => [...prev, assistantMessage]);
       setIsTyping(false);
     } catch (error) {
       console.error('Error generating response:', error);
-      const errorMessage: Message = {
-        id: `assistant-error-${Date.now()}`,
-        type: 'assistant',
-        content: 'Συγγνώμη, προέκυψε ένα σφάλμα. Παρακαλώ δοκιμάστε ξανά.',
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, errorMessage]);
+      if (loadedBrandRef.current !== requestBrandId) {
+        setIsTyping(false);
+        return;
+      }
+      setMessages((prev) => [
+        ...prev,
+        { id: `nilia-error-${Date.now()}`, type: 'assistant', content: 'Συγγνώμη, προέκυψε σφάλμα. Δοκίμασε ξανά.', timestamp: new Date() },
+      ]);
       setIsTyping(false);
     }
   };
+
+  /** Καταχώριση εμπορικής πληροφορίας: δομεί το κείμενο και το αποθηκεύει (brand-scoped). */
+  const handleSaveInfo = useCallback(
+    async (text: string) => {
+      const raw = text.trim();
+      const requestBrandId = brandId;
+      if (!raw || savingInfo || !requestBrandId) return;
+      setSavingInfo(true);
+      setInput('');
+      setMessages((prev) => [...prev, { id: `user-info-${Date.now()}`, type: 'user', content: raw, timestamp: new Date() }]);
+      try {
+        const structured = await structureCommercialInfo(raw, { brandName });
+        if (loadedBrandRef.current !== requestBrandId) {
+          setSavingInfo(false);
+          return;
+        }
+        const id = await commercialInfo.addInfo.mutateAsync({ rawText: raw, structured, source: 'nilia' });
+        const scope = [
+          structured.brands.length ? `επωνυμίες: ${structured.brands.join(', ')}` : '',
+          structured.categories.length ? `κατηγορίες: ${structured.categories.join(', ')}` : '',
+          structured.parentSkus.length ? `parent SKU: ${structured.parentSkus.join(', ')}` : '',
+        ]
+          .filter(Boolean)
+          .join(' · ');
+        const confirm = `Καταχώρισα την εμπορική πληροφορία ✓\n\n**${structured.summary}**\n${scope ? `\n${scope}` : ''}\n\nΘα τη λαμβάνω υπόψη στο Marketing Plan και στις προτάσεις. Θες να φτιάξουμε ένα πλάνο ενεργειών γύρω από αυτό;`;
+        setMessages((prev) => [
+          ...prev,
+          { id: `nilia-info-${Date.now()}`, type: 'assistant', content: confirm, timestamp: new Date(), savedInfoId: id },
+        ]);
+      } catch (e) {
+        console.error('[Nilia] save info:', e);
+        setMessages((prev) => [
+          ...prev,
+          { id: `nilia-info-err-${Date.now()}`, type: 'assistant', content: 'Δεν κατάφερα να καταχωρήσω την πληροφορία. Δοκίμασε ξανά.', timestamp: new Date() },
+        ]);
+      } finally {
+        setSavingInfo(false);
+      }
+    },
+    [brandId, brandName, savingInfo, commercialInfo.addInfo]
+  );
+
+  const handleResetSession = useCallback(async () => {
+    if (!brandId) return;
+    await clearNiliaSession(brandId);
+    const greeting = await buildProactiveGreeting({ brandId, brandName, openInfoCount });
+    setMessages([{ id: `nilia-welcome-${Date.now()}`, type: 'assistant', content: greeting, timestamp: new Date(), proactive: true }]);
+  }, [brandId, brandName, openInfoCount]);
+
+  const stt = useSpeechToText({ onResult: (text) => setInput((prev) => (prev ? `${prev} ${text}` : text)) });
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -358,18 +496,31 @@ export function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
                     />
                   </div>
                   <div>
-                    <h2 className="font-bold text-[var(--nts-charcoal)] text-[15px]">AI Assistant</h2>
-                    <p className="text-[13px] text-[var(--nts-medium-gray)]">
-                      AI με σύνοψη λογαριασμού, Help και διαδίκτυο
+                    <h2 className="font-bold text-[var(--nts-charcoal)] text-[15px]">Nilia</h2>
+                    <p className="text-[12px] text-[var(--nts-medium-gray)]">
+                      {brandName ? (
+                        <>μιλάς για: <span className="font-semibold text-[var(--nts-charcoal)]">{brandName}</span></>
+                      ) : (
+                        'Επίλεξε brand για εξατομικευμένες προτάσεις'
+                      )}
                     </p>
                   </div>
                 </div>
-                <button
-                  onClick={onClose}
-                  className="p-2 rounded-md hover:bg-[var(--nts-light-gray)] transition-colors"
-                >
-                  <X size={18} className="text-[var(--nts-medium-gray)]" />
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={handleResetSession}
+                    title="Νέα συνομιλία"
+                    className="p-2 rounded-md hover:bg-[var(--nts-light-gray)] transition-colors"
+                  >
+                    <RotateCcw size={16} className="text-[var(--nts-medium-gray)]" />
+                  </button>
+                  <button
+                    onClick={onClose}
+                    className="p-2 rounded-md hover:bg-[var(--nts-light-gray)] transition-colors"
+                  >
+                    <X size={18} className="text-[var(--nts-medium-gray)]" />
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -499,29 +650,67 @@ export function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
 
             {/* Input */}
             <div className="p-4 border-t border-[var(--nts-border-gray)]">
+              {/* Quick actions */}
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                <button
+                  onClick={() => handleSend('Διάβασέ μου το brief της ημέρας και πες μου τι αξίζει να προσέξω.')}
+                  disabled={isTyping || !brandId}
+                  className="text-[11px] px-2.5 py-1 rounded-full bg-[var(--nts-light-gray)] text-[var(--nts-charcoal)] hover:bg-[var(--nts-border-gray)] transition-colors disabled:opacity-50"
+                >
+                  Διάβασέ μου το brief
+                </button>
+                <button
+                  onClick={() => { if (input.trim()) { handleSaveInfo(input); } else { inputRef.current?.focus(); } }}
+                  disabled={savingInfo || !brandId}
+                  title="Καταχώριση εμπορικής πληροφορίας (γράψε στο πεδίο και πάτησε εδώ)"
+                  className="text-[11px] px-2.5 py-1 rounded-full bg-[var(--nts-accent)]/10 text-[var(--nts-accent)] hover:bg-[var(--nts-accent)]/20 transition-colors disabled:opacity-50 flex items-center gap-1"
+                >
+                  <Plus size={12} /> Νέα εμπορική πληροφορία
+                </button>
+                <button
+                  onClick={() => handleSend('Εξήγησέ μου ένα σημαντικό KPI του brand και τι σημαίνει εμπορικά.')}
+                  disabled={isTyping || !brandId}
+                  className="text-[11px] px-2.5 py-1 rounded-full bg-[var(--nts-light-gray)] text-[var(--nts-charcoal)] hover:bg-[var(--nts-border-gray)] transition-colors disabled:opacity-50"
+                >
+                  Εξήγησε ένα KPI
+                </button>
+              </div>
               <div className="flex gap-2">
                 <input
-                  id="ai-assistant-input"
-                  name="ai-assistant-input"
+                  id="nilia-input"
+                  name="nilia-input"
                   ref={inputRef}
                   type="text"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyPress={handleKeyPress}
-                  placeholder="Ρωτήστε κάτι..."
+                  placeholder={savingInfo ? 'Καταχώριση πληροφορίας…' : 'Γράψε στη Nilia ή πάτησε το μικρόφωνο…'}
                   className="flex-1 px-4 py-2 border border-[var(--nts-border-gray)] rounded-lg text-sm focus:outline-none focus:border-[var(--nts-accent)]"
-                  disabled={isTyping}
+                  disabled={isTyping || savingInfo}
                 />
+                {stt.supported && (
+                  <button
+                    onClick={stt.toggle}
+                    title={stt.listening ? 'Διακοπή' : 'Ομιλία (μικρόφωνο)'}
+                    className={`p-2 rounded-lg border transition-colors ${
+                      stt.listening
+                        ? 'bg-red-500 text-white border-red-500 animate-pulse'
+                        : 'bg-white text-[var(--nts-medium-gray)] border-[var(--nts-border-gray)] hover:text-[var(--nts-accent)]'
+                    }`}
+                  >
+                    <Mic size={18} />
+                  </button>
+                )}
                 <button
-                  onClick={handleSend}
-                  disabled={!input.trim() || isTyping}
+                  onClick={() => handleSend()}
+                  disabled={!input.trim() || isTyping || savingInfo}
                   className="p-2 bg-[var(--nts-accent)] text-white rounded-lg hover:bg-[var(--nts-accent-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Send size={18} />
                 </button>
               </div>
               <p className="text-xs text-[var(--nts-medium-gray)] mt-2 text-center leading-snug">
-                Με σύνδεση: απαντήσεις μέσω cloud AI με βάση τα τρέχοντα KPIs του brand σας, αποσπάσματα Knowledge Library και (όταν χρειάζεται) διαδικτυακές πηγές. Όριο χρήσης για προστασία κόστους.
+                Η Nilia απαντά με βάση τα τρέχοντα δεδομένα του brand, το Help και (όταν χρειάζεται) το διαδίκτυο. Όριο χρήσης για προστασία κόστους.
               </p>
             </div>
           </motion.div>
@@ -530,3 +719,6 @@ export function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
     </AnimatePresence>
   );
 }
+
+/** Backward-compatible alias — η Nilia είναι η εξέλιξη του παλιού AI Assistant. */
+export const AIAssistant = NiliaAgent;

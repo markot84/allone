@@ -109,6 +109,12 @@ service cloud.firestore {
         allow read, write: if isBrandMember(brandId);
       }
 
+      // Nilia agent conversation sessions (per-brand, multi-turn history).
+      // Brand isolation: τα sessions ζουν κάτω από το brand και απαιτούν membership.
+      match /nilia_sessions/{sessionId} {
+        allow read, write: if isBrandMember(brandId);
+      }
+
       // Server-side aggregated stats (products, segments, campaigns)
       match /aggregates/{type} {
         allow read: if isBrandMember(brandId);
@@ -563,6 +569,14 @@ service cloud.firestore {
       allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
     }
 
+    // «Εμπορικές Πληροφορίες» — γνώση/ένστικτο επιχειρηματία (brand-scoped, client-written).
+    // Τροφοδοτεί Nilia, Marketing Plan, πρόβλεψη πωλήσεων, εμπορικές πολιτικές.
+    match /commercial_info/{infoId} {
+      allow read: if request.auth != null && (resource == null || isBrandMember(resource.data.brandId));
+      allow create: if request.auth != null && isBrandMember(request.resource.data.brandId);
+      allow update, delete: if request.auth != null && isBrandMember(resource.data.brandId);
+    }
+
     // Policy Impact precomputed result cache (client-written, brand-scoped). Μικρό doc με τα ήδη
     // υπολογισμένα price/marketing decisions ώστε ο βαρύς υπολογισμός να γίνεται μία φορά ανά περίοδο.
     match /commercial_scenario_cache/{docId} {
@@ -580,6 +594,12 @@ service cloud.firestore {
     // Nightly scheduler health/status — write μόνο από Cloud Functions (Admin SDK), read από authenticated users
     match /system_health/{docId} {
       allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    // AI token/cost logging — write μόνο από Cloud Functions (Admin SDK), read super admin
+    match /ai_usage/{usageId} {
+      allow read: if isSuperAdmin();
       allow write: if false;
     }
 

@@ -28,7 +28,7 @@ import {
   ThreeBarsIcon,
   XIcon
 } from '@primer/octicons-react';
-import { Upload, UserPlus, Building2, Target, Euro, Truck, FileSpreadsheet, GitPullRequestArrow, Zap, BarChart3, ShoppingBag, Handshake, Users, Globe2, HeartHandshake, MapPin, ClipboardList, Palette } from 'lucide-react';
+import { Upload, UserPlus, Building2, Target, Euro, Truck, FileSpreadsheet, GitPullRequestArrow, Zap, BarChart3, ShoppingBag, Handshake, Users, Globe2, HeartHandshake, MapPin, ClipboardList, Palette, Lightbulb } from 'lucide-react';
 import { NotificationBell } from '../coordination/NotificationBell';
 
 const SIDEBAR_PIN_KEY = 'perf-plus-sidebar-pinned';
@@ -622,6 +622,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
         { id: 'sales', label: moduleConfig.sales.label, icon: Handshake, group: 'commercial' },
         { id: 'offers', label: moduleConfig.offers.label, icon: ClipboardList, group: 'commercial' },
         { id: 'marketing-plan', label: 'Marketing Plan', icon: ClipboardList, group: 'marketing' },
+        { id: 'commercial-info', label: 'Εμπορικές Πληροφορίες', icon: Lightbulb, group: 'marketing' },
         { id: 'channels', label: moduleConfig.channels.label, icon: MegaphoneIcon, group: 'marketing' },
         { id: 'campaigns', label: moduleConfig.campaigns.label, icon: Target, group: 'marketing' },
         { id: 'analytics', label: moduleConfig.analytics.label, icon: BarChart3, group: 'marketing' },

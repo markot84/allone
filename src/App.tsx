@@ -74,6 +74,8 @@ const ContentStrategy = lazyNamedWithRetry(() => import('./components/content'),
 const Help = lazyNamedWithRetry(() => import('./components/help'), 'Help');
 const Concept = lazyNamedWithRetry(() => import('./components/concept'), 'Concept');
 const AIInsightsPage = lazyNamedWithRetry(() => import('./components/insights/AIInsightsPage'), 'AIInsightsPage');
+const NiliaAgent = lazyNamedWithRetry(() => import('./components/insights/AIAssistant'), 'NiliaAgent');
+const CommercialInfoPage = lazyNamedWithRetry(() => import('./components/commercial-info/CommercialInfoPage'), 'CommercialInfoPage');
 const DataImport = lazyNamedWithRetry(() => import('./components/data'), 'DataImport');
 const SuppliersPage = lazyNamedWithRetry(() => import('./components/inventory/SuppliersPage'), 'SuppliersPage');
 const CoordinationPage = lazyNamedWithRetry(() => import('./components/coordination'), 'CoordinationPage');
@@ -193,6 +195,9 @@ function AppMain() {
   };
 
   const [activeSection, setActiveSection] = useState(getInitialSection);
+  // Global Nilia agent: lazy-mounted στο πρώτο άνοιγμα, διαθέσιμη από κάθε σελίδα.
+  const [niliaOpen, setNiliaOpen] = useState(false);
+  const [niliaMounted, setNiliaMounted] = useState(false);
 
   // Πριν από child effects: αποθήκευση OAuth query (connector/status) — αλλιώς χάνεται από hash sync ή race.
   useLayoutEffect(() => {
@@ -280,6 +285,8 @@ function AppMain() {
         return <PolicyImpactPage onSectionChange={handleSectionChange} />;
       case 'marketing-plan':
         return <MarketingPlanPage onSectionChange={handleSectionChange} />;
+      case 'commercial-info':
+        return <CommercialInfoPage />;
       case 'rfm':
         return <RFMAnalysis />;
       case 'products':
@@ -373,7 +380,13 @@ function AppMain() {
       </AppShell>
 
       {activeSection !== 'insights' && (
-        <AIInsightsTriggerWrapper onClick={() => handleSectionChange('insights')} />
+        <AIInsightsTriggerWrapper onClick={() => { setNiliaMounted(true); setNiliaOpen(true); }} />
+      )}
+
+      {niliaMounted && (
+        <Suspense fallback={null}>
+          <NiliaAgent isOpen={niliaOpen} onClose={() => setNiliaOpen(false)} />
+        </Suspense>
       )}
     </div>
   );

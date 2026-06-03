@@ -38,7 +38,7 @@ export function parseMarketingPlanMessage(text: string): MarketingPlanCoreMessag
   };
 }
 
-function buildUserPrompt(insight: MarketingPlanInsight, brandName?: string): string {
+function buildUserPrompt(insight: MarketingPlanInsight, brandName?: string, commercialInfoText?: string): string {
   const topGroups = insight.reorderPlan.slice(0, 5).map((row) => ({
     category: row.category,
     subcategory: row.subcategory,
@@ -60,23 +60,29 @@ function buildUserPrompt(insight: MarketingPlanInsight, brandName?: string): str
     lastYearEvidence: insight.evidence,
     dataQuality: insight.dataQuality,
     topGroups,
+    // Εμπορική γνώση/ένστικτο επιχειρηματία (από τη σελίδα «Εμπορικές Πληροφορίες»).
+    commercialContext: commercialInfoText && commercialInfoText.trim() ? commercialInfoText : undefined,
     instruction:
-      'Γράψε το βασικό μήνυμα της περιόδου για marketing plan. Να συνδέεται με περσινή ζήτηση, τρέχον απόθεμα και εμπορική προτεραιότητα.',
+      'Γράψε το βασικό μήνυμα της περιόδου για marketing plan. Να συνδέεται με περσινή ζήτηση, τρέχον απόθεμα και εμπορική προτεραιότητα. Αν υπάρχει commercialContext, ενσωμάτωσέ τον ως ισχυρό σήμα για την κατεύθυνση/χρονισμό της καμπάνιας.',
   });
 }
 
 export async function generateMarketingPlanMessage(input: {
   insight: MarketingPlanInsight;
   brandName?: string;
+  /** Συμπυκνωμένες ενεργές εμπορικές πληροφορίες (formatCommercialInfoForPrompt). */
+  commercialInfoText?: string;
 }): Promise<MarketingPlanCoreMessage> {
   const fallback = buildFallbackCoreMessage(input.insight);
-  if (input.insight.dataQuality.level === 'weak' || input.insight.reorderPlan.length === 0) {
+  const hasContext = !!(input.commercialInfoText && input.commercialInfoText.trim());
+  // Με εμπορικές πληροφορίες αξίζει AND να παράγουμε μήνυμα ακόμη κι αν τα data είναι μέτρια.
+  if (!hasContext && (input.insight.dataQuality.level === 'weak' || input.insight.reorderPlan.length === 0)) {
     return fallback;
   }
   try {
     const text = await callGemini({
       systemPrompt: SYSTEM_PROMPT,
-      userPrompt: buildUserPrompt(input.insight, input.brandName),
+      userPrompt: buildUserPrompt(input.insight, input.brandName, input.commercialInfoText),
       model: MODEL_NAME,
       temperature: 0.2,
     });

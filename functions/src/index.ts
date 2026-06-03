@@ -2468,11 +2468,15 @@ export const geminiProxy = onRequest(
       return;
     }
 
-    const { systemPrompt, userPrompt, model = 'gemini-2.5-pro', temperature = 0 } = req.body as {
+    const { systemPrompt, userPrompt, model = 'gemini-2.5-pro', temperature = 0, history, brandId } = req.body as {
       systemPrompt?: string;
       userPrompt?: string;
       model?: string;
       temperature?: number;
+      /** Προαιρετικό ιστορικό συνομιλίας (multi-turn). Το API απαιτεί η αλληλουχία να ξεκινά από 'user'. */
+      history?: Array<{ role?: string; text?: string }>;
+      /** Για per-brand λογιστική κόστους (ai_usage). */
+      brandId?: string;
     };
 
     if (!userPrompt) {
@@ -2489,8 +2493,49 @@ export const geminiProxy = onRequest(
         generationConfig: { temperature },
       });
 
-      const result = await geminiModel.generateContent(userPrompt);
+      // Multi-turn: χτίζουμε contents από το ιστορικό + το τρέχον μήνυμα.
+      const cleanedHistory = Array.isArray(history)
+        ? history
+            .filter(
+              (h): h is { role: 'user' | 'model'; text: string } =>
+                !!h &&
+                typeof h.text === 'string' &&
+                h.text.trim().length > 0 &&
+                (h.role === 'user' || h.role === 'model')
+            )
+            .map((h) => ({ role: h.role, parts: [{ text: h.text }] }))
+        : [];
+      // Το Gemini απαιτεί το πρώτο content να έχει role 'user' — αφαιρούμε leading 'model' turns
+      // (π.χ. proactive καλωσόρισμα της Nilia).
+      while (cleanedHistory.length > 0 && cleanedHistory[0].role === 'model') cleanedHistory.shift();
+
+      const result =
+        cleanedHistory.length > 0
+          ? await geminiModel.generateContent({
+              contents: [...cleanedHistory, { role: 'user', parts: [{ text: userPrompt }] }],
+            })
+          : await geminiModel.generateContent(userPrompt);
       const text = result.response.text();
+
+      // Token/cost logging (per user + brand) — καλύπτει το κενό του AI_COST_MODEL.
+      try {
+        const usage = result.response.usageMetadata;
+        if (usage) {
+          await db.collection('ai_usage').add({
+            uid: decodedUid,
+            brandId: typeof brandId === 'string' && brandId ? brandId : null,
+            model,
+            promptTokens: usage.promptTokenCount ?? null,
+            candidatesTokens: usage.candidatesTokenCount ?? null,
+            totalTokens: usage.totalTokenCount ?? null,
+            multiTurn: cleanedHistory.length > 0,
+            createdAt: FieldValue.serverTimestamp(),
+          });
+        }
+      } catch (logErr) {
+        logger.warn('[geminiProxy] usage log failed:', logErr);
+      }
+
       res.status(200).json({ text });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
