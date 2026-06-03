@@ -4,6 +4,7 @@ import {
   getDefaultSectionForBrand,
   getModuleIdForSection,
   getModuleLabel,
+  getSectionFallbackAlias,
   resolveEnabledModules,
 } from '../config/modules';
 import type { AppSectionId, ModuleId } from '../types';
@@ -71,6 +72,20 @@ export function useModules() {
     [brandType, enabledModules, isSectionEnabled]
   );
 
+  /**
+   * Επιστρέφει το πιο κατάλληλο προσβάσιμο section για ένα ζητούμενο: το ίδιο αν είναι ενεργό,
+   * αλλιώς το alias του (π.χ. products → procurement σε Enterprise), αλλιώς το γενικό fallback.
+   */
+  const resolveAccessibleSection = useMemo(
+    () => (section: string): AppSectionId => {
+      if (isSectionEnabled(section)) return section as AppSectionId;
+      const alias = getSectionFallbackAlias(section);
+      if (alias && isSectionEnabled(alias)) return alias;
+      return getFallbackSection();
+    },
+    [isSectionEnabled, getFallbackSection]
+  );
+
   return {
     brandType,
     isB2B,
@@ -79,5 +94,6 @@ export function useModules() {
     isSectionEnabled,
     getSectionLabel,
     getFallbackSection,
+    resolveAccessibleSection,
   };
 }

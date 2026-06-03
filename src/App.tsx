@@ -91,7 +91,7 @@ const queryClient = new QueryClient({
   }
 });
 
-const QUERY_CACHE_KEY = 'PERF_PLUS_QUERY_CACHE_v15';
+const QUERY_CACHE_KEY = 'PERF_PLUS_QUERY_CACHE_v16';
 
 if (typeof window !== 'undefined') {
   try {
@@ -133,6 +133,22 @@ function QueryProvider({ children }: { children: React.ReactNode }) {
               if (key === 'campaigns' || key === 'search_intelligence' || key === 'priceBenchmarks' || key === 'priceInsights') return false;
               // Product query shape changed during the rollback window; always refetch it from Firestore.
               if (key === 'products') return false;
+              // ΒΑΡΙΑ procurement / Product Intelligence payloads (skuSignalsJson, 12k inventory rows,
+              // product arrays): σερβίρονται από το Firestore IndexedDB cache. Αν έμπαιναν στο
+              // localStorage, ο SYNC persister σειριοποιούσε MB σε κάθε αλλαγή brand → μπλοκάριζε το
+              // main thread (όλες οι σελίδες) + ξεπερνούσε το quota → σιωπηλό wipe όλου του cache.
+              if (
+                key === 'procurement_signals' ||
+                key === 'procurement-sheet' ||
+                key === 'procurement' ||
+                key === 'productIntelligencePage' ||
+                key === 'productIntelligenceInventory'
+              ) {
+                return false;
+              }
+              // ecommerce_summary: η compact 'summary' έκδοση επιτρέπεται· η 'sku' έκδοση κουβαλά
+              // ολόκληρο το skuStats map (βαρύ) → εκτός localStorage.
+              if (key === 'ecommerce_summary' && query.queryKey[2] === 'sku') return false;
               // Policy Impact scenarios: ΜΕΓΑΛΟ payload (εκατοντάδες rows) με ΔΙΚΟ του durable cache
               // (dedicated localStorage key `pp-erp-scenario` + Firestore `commercial_scenario_cache`).
               // Αν έμπαινε κι εδώ, διπλασίαζε το localStorage και ξεπερνούσε το quota → σιωπηλό σβήσιμο
@@ -176,7 +192,7 @@ function normalizeHashPath(segmentPart: string): string {
 
 /** Hash routing + AppShell — must render under AuthGuard → BrandProvider (useModules → useBrand). */
 function AppMain() {
-  const { isSectionEnabled, getFallbackSection } = useModules();
+  const { isSectionEnabled, getFallbackSection, resolveAccessibleSection } = useModules();
   useAppWarmup();
   const VALID_SECTIONS = APP_SECTIONS;
 
@@ -190,7 +206,7 @@ function AppMain() {
     }
     const hash = window.location.hash.replace('#', '');
     const baseSection = normalizeHashPath(hash.split('?')[0]);
-    if (baseSection && VALID_SECTIONS.includes(baseSection as (typeof VALID_SECTIONS)[number]) && isSectionEnabled(baseSection)) return baseSection;
+    if (baseSection && VALID_SECTIONS.includes(baseSection as (typeof VALID_SECTIONS)[number])) return resolveAccessibleSection(baseSection);
     return getFallbackSection();
   };
 
@@ -222,25 +238,25 @@ function AppMain() {
       const base = normalizeHashPath(full.split('?')[0]);
       if (!full) return;
       if (!isSectionEnabled(base)) {
-        setActiveSection(getFallbackSection());
+        setActiveSection(resolveAccessibleSection(base));
         return;
       }
       if (VALID_SECTIONS.includes(base as (typeof VALID_SECTIONS)[number]) && base !== activeSection) {
-        setActiveSection(base);
+        setActiveSection(base as (typeof VALID_SECTIONS)[number]);
       }
     };
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
-  }, [activeSection, getFallbackSection, isSectionEnabled]);
+  }, [activeSection, getFallbackSection, isSectionEnabled, resolveAccessibleSection]);
 
   useEffect(() => {
     if (isSectionEnabled(activeSection)) return;
-    const fallback = getFallbackSection();
+    const fallback = resolveAccessibleSection(activeSection);
     setActiveSection(fallback);
     if (typeof window !== 'undefined') {
       window.history.replaceState(null, '', `#${fallback}`);
     }
-  }, [activeSection, getFallbackSection, isSectionEnabled]);
+  }, [activeSection, getFallbackSection, isSectionEnabled, resolveAccessibleSection]);
 
   // Listen for navigate-to-help events
   useEffect(() => {
@@ -256,7 +272,7 @@ function AppMain() {
 
   const handleSectionChange = useCallback((section: string, opts?: { hashQuery?: string }) => {
     requestAnimationFrame(() => {
-      const targetSection = isSectionEnabled(section) ? section : getFallbackSection();
+      const targetSection = resolveAccessibleSection(section);
       setActiveSection(targetSection);
       window.scrollTo({ top: 0 });
       if (typeof window !== 'undefined') {
@@ -265,7 +281,7 @@ function AppMain() {
         window.dispatchEvent(new HashChangeEvent('hashchange'));
       }
     });
-  }, [getFallbackSection, isSectionEnabled]);
+  }, [getFallbackSection, isSectionEnabled, resolveAccessibleSection]);
 
   const renderContent = () => {
     switch (activeSection) {

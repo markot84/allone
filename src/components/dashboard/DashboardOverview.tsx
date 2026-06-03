@@ -38,6 +38,8 @@ import { useSuppliers } from '../../hooks/useSuppliers';
 import { useBrand } from '../../hooks/useBrand';
 import { useProductAggregates, useSegmentAggregates } from '../../hooks/useAggregates';
 import { useProductIntelligenceAggregate } from '../../hooks/useProductIntelligenceAggregate';
+import { useProcurementSignals } from '../../hooks/useProcurementSignals';
+import { usePlan } from '../../hooks/usePlan';
 import { usePeriodScopedCampaigns } from '../../hooks/usePeriodScopedCampaigns';
 import { useTasks } from '../../hooks/useCoordination';
 import { useDashPeriod } from '../../hooks/useDashPeriod';
@@ -206,6 +208,8 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
   });
   const productIntelligence = useProductIntelligenceAggregate('all', 1, { pageSize: 150 });
   const products = productIntelligence.page?.products ?? [];
+  const { isEnterprise } = usePlan();
+  const { signalsBySku: procurementSignals } = useProcurementSignals();
   const { productStats } = useProductAggregates();
   const { suppliers } = useSuppliers();
   const { tasks } = useTasks();
@@ -649,13 +653,29 @@ export function DashboardOverview({ onSectionChange, onOpenInsights }: Dashboard
     storeRevenueInPeriod > 0 &&
     !ecommAggregateFresh &&
     (ecommDaysSinceLatestRevenue ?? 0) >= 2;
-  // Για Enterprise+Procurement brands η αξία αποθέματος προέρχεται από το PI aggregate (procurement),
-  // όχι από το products aggregate που δεν τροφοδοτείται από procurement uploads.
+  // Αξία αποθέματος:
+  //  - Enterprise: από τα procurement_signals (Σ tied_capital = απόθεμα × κόστος). Το Product
+  //    Intelligence είναι κρυφό σε Enterprise, οπότε δεν εξαρτιόμαστε πλέον από το PI aggregate.
+  //  - Growth: από το PI aggregate (procurement-sourced) ή το products aggregate (ERP/import).
+  const procurementInventoryValue = useMemo(() => {
+    if (!isEnterprise) return 0;
+    let total = 0;
+    for (const sig of Object.values(procurementSignals)) {
+      const tied = sig.tied_capital ?? (sig.available_stock ?? 0) * (sig.cost_unit ?? 0);
+      if (tied > 0) total += tied;
+    }
+    return total;
+  }, [isEnterprise, procurementSignals]);
   const piSummaryValue =
     productIntelligence.aggregate?.sourceKind === 'procurement'
       ? productIntelligence.aggregate?.summary?.total_value ?? 0
       : 0;
-  const inventoryValueEstimate = piSummaryValue > 0 ? piSummaryValue : productStats?.totalInventoryValue ?? 0;
+  const inventoryValueEstimate =
+    procurementInventoryValue > 0
+      ? procurementInventoryValue
+      : piSummaryValue > 0
+        ? piSummaryValue
+        : productStats?.totalInventoryValue ?? 0;
   const openCommercialTasks = useMemo(
     () => tasks.filter((task) => task.status === 'pending' || task.status === 'in_progress').length,
     [tasks]

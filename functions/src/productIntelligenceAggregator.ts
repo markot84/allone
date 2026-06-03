@@ -1,6 +1,7 @@
 import type { Firestore, QueryDocumentSnapshot } from 'firebase-admin/firestore';
 import { FieldPath, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
+import { computeProcurementSignals } from './procurementSignals';
 
 let db: Firestore;
 
@@ -412,23 +413,6 @@ async function shouldUseProcurementCatalog(brandId: string): Promise<boolean> {
   }
 }
 
-type ProcSignal = {
-  available_stock?: number;
-  dynamic_stock?: number;
-  cost_unit?: number;
-  avg_sale_price?: number;
-  list_price?: number;
-  margin_pct?: number;
-  days_of_cover?: number;
-  lifetime_qty?: number;
-  category?: string;
-  supplier?: string;
-  status?: string;
-  flow_group?: string;
-  description?: string;
-  replenishment_qty?: number;
-};
-
 function procurementStockBucket(avail: number, daysOfCover: number | null, lifetimeQty: number | null): StockBucket {
   if (avail <= 0) return 'no_stock';
   if (daysOfCover != null && Number.isFinite(daysOfCover)) {
@@ -442,21 +426,14 @@ function procurementStockBucket(avail: number, daysOfCover: number | null, lifet
 }
 
 /**
- * Χτίζει κατάλογο CompactProduct από το aggregated procurement_signals/{brandId}.
- * Μία ανάγνωση doc (το βαρύ join έχει ήδη γίνει στο computeProcurementSignals).
+ * Χτίζει κατάλογο CompactProduct από procurement δεδομένα. Καλεί ΑΠΕΥΘΕΙΑΣ το
+ * computeProcurementSignals (live read + κανονικοποίηση headers) αντί να διαβάζει το αποθηκευμένο
+ * procurement_signals doc — ώστε το PI να είναι αυτάρκες και να μην εξαρτάται από stale/σπασμένο
+ * signals doc (π.χ. όταν είχε υπολογιστεί με παλιό logic χωρίς inventory stock).
  */
 async function loadProcurementCatalog(brandId: string): Promise<CompactProduct[]> {
-  const firestore = assertDb();
-  const snap = await firestore.doc(`procurement_signals/${brandId}`).get();
-  if (!snap.exists) return [];
-  const raw = snap.data()?.skuSignalsJson;
-  if (typeof raw !== 'string' || !raw) return [];
-  let signals: Record<string, ProcSignal>;
-  try {
-    signals = JSON.parse(raw) as Record<string, ProcSignal>;
-  } catch {
-    return [];
-  }
+  const { signals } = await computeProcurementSignals(brandId);
+  if (!signals || Object.keys(signals).length === 0) return [];
 
   const products: CompactProduct[] = [];
   for (const [sku, sig] of Object.entries(signals)) {
