@@ -130,7 +130,7 @@ export function GA4Analytics() {
   } = useGA4Data();
 
   // Date range: local override (session-only) falls back to global
-  const { fromDate: globalFrom, toDate: globalTo, period: globalPeriod, setPeriod: setGlobalPeriod } = useGlobalDate();
+  const { fromDate: globalFrom, toDate: globalTo, period: globalPeriod, setPeriod: setGlobalPeriod, setCustomRange } = useGlobalDate();
   const [localDateFrom, setLocalDateFrom] = useState('');
   const [localDateTo,   setLocalDateTo]   = useState('');
   const { currentBrand } = useBrand();
@@ -674,17 +674,11 @@ export function GA4Analytics() {
             <DateRangePicker
               from={effectiveFrom}
               to={effectiveTo}
-              onChange={(f, t) => { setLocalDateFrom(f); setLocalDateTo(t); }}
-              onClear={() => { setLocalDateFrom(''); setLocalDateTo(''); }}
+              // Γράφει στο GLOBAL (persisted per-brand) context ώστε η προσαρμοσμένη περίοδος να
+              // ΠΑΡΑΜΕΝΕΙ μετά από refresh. Πριν έγραφε σε τοπικό session-state → χανόταν στο reload.
+              onChange={(f, t) => { setLocalDateFrom(''); setLocalDateTo(''); setCustomRange(f, t); }}
+              onClear={() => { setLocalDateFrom(''); setLocalDateTo(''); setGlobalPeriod('current_month'); }}
             />
-            {hasLocalOverride && (
-              <button
-                onClick={() => { setLocalDateFrom(''); setLocalDateTo(''); }}
-                className="text-xs text-[var(--nts-orange)] hover:underline whitespace-nowrap"
-              >
-                ↩ Global
-              </button>
-            )}
           </div>
         }
       />
