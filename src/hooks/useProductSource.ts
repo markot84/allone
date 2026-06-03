@@ -132,7 +132,8 @@ export function useProductSource(options: UseProductSourceOptions = {}) {
     const pricingRows = ((procData?.pricing_policy ?? []) as unknown[]) as Record<string, unknown>[];
     const pricingBySku = buildPricingBySku(pricingRows);
 
-    const codeCol = findColByKeywords(invRows, ['ΚΩΔΙΚΟΣ']);
+    // Ορισμένα templates χρησιμοποιούν «MASTER» αντί για «ΚΩΔΙΚΟΣ» στο inventory sheet.
+    const codeCol = findColByKeywords(invRows, ['ΚΩΔΙΚΟΣ', 'MASTER']);
     const descCol = findColByKeywords(invRows, ['ΠΕΡΙΓΡΑΦΗ']);
     const stockCol = findColByKeywords(invRows, ['ΔΙΑΘΕΣΙΜΟ_ΥΠΟΛΟΙΠΟ', 'ΔΙΑΘΕΣΙΜΟ ΥΠΟΛΟΙΠΟ']);
     const costCol = findColByKeywords(invRows, [

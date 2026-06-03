@@ -1774,12 +1774,20 @@ async function importProcurementFile(
       const headers = cleaned[headerRowIdx].map(h => String(h || '').trim());
       const dataRows = cleaned.slice(headerRowIdx + 1).filter(r => r.some(c => c !== ''));
 
+      // Κανονικοποίηση headers: κενά/τελείες → underscore ώστε όλα τα downstream (signals,
+      // useProductSource) να βλέπουν σταθερά κλειδιά (π.χ. «ΔΙΑΘΕΣΙΜΟ ΥΠΟΛΟΙΠΟ» →
+      // «ΔΙΑΘΕΣΙΜΟ_ΥΠΟΛΟΙΠΟ»). Idempotent για ήδη κανονικά headers.
+      const normalizeKey = (h: string) => h.trim().replace(/[.\s]+/g, '_').replace(/^_+|_+$/g, '');
       const objects: Record<string, string>[] = dataRows.map(row => {
         const obj: Record<string, string> = {};
         headers.forEach((h, idx) => {
           if (!h) return;
-          obj[h] = row[idx] != null ? String(row[idx]).trim() : '';
+          obj[normalizeKey(h)] = row[idx] != null ? String(row[idx]).trim() : '';
         });
+        // Το inventory sheet κάποιων templates έχει κωδικό στη στήλη «MASTER» αντί «ΚΩΔΙΚΟΣ».
+        if ((!obj['ΚΩΔΙΚΟΣ'] || obj['ΚΩΔΙΚΟΣ'].trim() === '') && obj['MASTER'] && obj['MASTER'].trim() !== '') {
+          obj['ΚΩΔΙΚΟΣ'] = obj['MASTER'];
+        }
         return obj;
       });
 
