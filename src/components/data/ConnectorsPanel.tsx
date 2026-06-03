@@ -371,9 +371,14 @@ const CONNECTORS: ConnectorConfig[] = [
 
 /** Απευθείας cloudfunctions.net ώστε μεγάλα sync (Megaventory) να μην κόβονται από όριο Hosting ~60s. */
 const FUNCTIONS_BASE = FUNCTIONS_BASE_URL.replace(/\/$/, '');
+// Canonical, project-derived endpoint. 2nd-gen functions are reachable (with their
+// full timeout) via *.cloudfunctions.net when called directly, and it's correct on
+// every serving context — staging/prod *.web.app and the performanceplus.gr custom
+// domain — because it's built from the project id, not the domain. The previous
+// hardcoded *.a.run.app fallback was a single-project Cloud Run hash (wrong for the
+// other project) and CSP-blocked; dropped (FN-E).
 const CONNECTOR_SYNC_URLS = [
   `${FUNCTIONS_BASE}/connectorSync`,
-  'https://connectorsync-edvzr6unva-ew.a.run.app',
 ];
 
 async function connectorRequestHeaders(idToken: string): Promise<Record<string, string>> {
