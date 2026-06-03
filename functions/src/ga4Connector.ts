@@ -433,6 +433,102 @@ function normalizeGa4DateDimension(raw: unknown): string {
   return '';
 }
 
+export interface GA4PeriodTotals {
+  sessions: number;
+  totalUsers: number;
+  newUsers: number;
+  pageViews: number;
+  bounceRate: number;
+  avgSessionDuration: number;
+  conversions: number;
+  addToCarts: number;
+}
+
+/**
+ * GA4-deduplicated totals για ΣΥΓΚΕΚΡΙΜΕΝΗ περίοδο (ένα report ΧΩΡΙΣ date dimension → μία γραμμή).
+ *
+ * Γιατί χρειάζεται: το `dailyMetrics` αποθηκεύει ημερήσιες τιμές· totalUsers/newUsers ΔΕΝ είναι αθροιστικά
+ * (ένας χρήστης που μπήκε 5 μέρες μετράει 1 στο GA4 αλλά 5 στο άθροισμα ημερών). Εδώ ζητάμε από το GA4 το
+ * ίδιο deduplicated σύνολο που δείχνει το GA4 UI για το επιλεγμένο εύρος → ακριβής ευθυγράμμιση.
+ * Τα start/end είναι YYYY-MM-DD.
+ */
+export async function fetchGA4PeriodTotals(
+  brandId: string,
+  startDate: string,
+  endDate: string
+): Promise<{ success: boolean; totals?: GA4PeriodTotals; error?: string }> {
+  const isDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
+  if (!isDate(startDate) || !isDate(endDate)) {
+    return { success: false, error: 'Invalid date range (expected YYYY-MM-DD)' };
+  }
+
+  const db = getDb();
+  const conn = (await db.doc(`connectors/${brandId}`).get()).data()?.ga4;
+  if (!conn?.connected || !conn?.refreshToken || !conn?.propertyId) {
+    return { success: false, error: 'GA4 not connected or no property selected' };
+  }
+
+  try {
+    const refreshTokenPlain = decryptToken(conn.refreshToken);
+    if (!refreshTokenPlain) {
+      return { success: false, error: 'GA4 token unavailable — reconnect required' };
+    }
+    const accessToken = await refreshAccessToken(refreshTokenPlain);
+    const propertyId = conn.propertyId;
+
+    const baseMetrics = [
+      { name: 'sessions' },
+      { name: 'totalUsers' },
+      { name: 'newUsers' },
+      { name: 'screenPageViews' },
+      { name: 'bounceRate' },
+      { name: 'averageSessionDuration' },
+      { name: 'conversions' },
+    ];
+    const run = (metrics: Array<{ name: string }>) =>
+      fetch(`${GA4_DATA_API}/properties/${propertyId}:runReport`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ dateRanges: [{ startDate, endDate }], metrics }),
+      });
+
+    let res = await run([...baseMetrics, { name: 'addToCarts' }]);
+    let hasCarts = res.ok;
+    if (!res.ok) {
+      // addToCarts μη διαθέσιμο σε ορισμένα properties → retry χωρίς αυτό
+      res = await run(baseMetrics);
+      hasCarts = false;
+    }
+    if (!res.ok) {
+      const err = await res.text();
+      return { success: false, error: `GA4 API error: ${res.status} — ${err.slice(0, 150)}` };
+    }
+
+    const data = await res.json();
+    const v = data.rows?.[0]?.metricValues || [];
+    const num = (i: number) => parseInt(v[i]?.value || '0', 10) || 0;
+    const fl = (i: number) => parseFloat(v[i]?.value || '0') || 0;
+
+    return {
+      success: true,
+      totals: {
+        sessions: num(0),
+        totalUsers: num(1),
+        newUsers: num(2),
+        pageViews: num(3),
+        bounceRate: fl(4),
+        avgSessionDuration: fl(5),
+        conversions: num(6),
+        addToCarts: hasCarts ? num(7) : 0,
+      },
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.error('[GA4] fetchGA4PeriodTotals error:', msg);
+    return { success: false, error: msg };
+  }
+}
+
 /**
  * Fetch GA4 analytics data and store in Firestore
  */

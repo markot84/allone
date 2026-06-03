@@ -20,6 +20,7 @@ import {
 } from 'recharts';
 import { Card, CardHeader, KPICard, PageHeader } from '../common';
 import { useGA4Data, type OrganicSearchSource } from '../../hooks/useGA4Data';
+import { useGA4PeriodTotals } from '../../hooks/useGA4PeriodTotals';
 import type { KPICardData } from '../common/KPICard';
 import { formatCurrency } from '../../utils/format';
 import { useGlobalDate, GLOBAL_PERIOD_OPTIONS } from '../../contexts/GlobalDateContext';
@@ -166,6 +167,25 @@ export function GA4Analytics() {
     const n = filteredDailyEntries.length;
     return { ...sum, bounceRate: sum.bounceRate / n, avgDuration: sum.avgDuration / n };
   }, [filteredDailyEntries]);
+
+  // GA4-deduplicated σύνολα περιόδου (ακριβής ευθυγράμμιση με GA4 UI για Χρήστες/Νέους χρήστες κ.λπ.).
+  // Τα ημερήσια totalUsers/newUsers ΔΕΝ αθροίζονται σωστά (dedup ανά περίοδο). Όταν διαθέσιμα, τα KPI
+  // cards χρησιμοποιούν αυτά· αλλιώς fallback στο daily-sum (`totals`).
+  const { periodTotals } = useGA4PeriodTotals(effectiveFrom, effectiveTo, hasData);
+  const usingPeriodTotals = !!periodTotals;
+  const displayTotals = useMemo(() => {
+    if (!periodTotals) return totals;
+    return {
+      sessions: periodTotals.sessions,
+      users: periodTotals.totalUsers,
+      newUsers: periodTotals.newUsers,
+      pageViews: periodTotals.pageViews,
+      bounceRate: periodTotals.bounceRate,
+      conversions: periodTotals.conversions,
+      avgDuration: periodTotals.avgSessionDuration,
+      addToCarts: periodTotals.addToCarts,
+    };
+  }, [periodTotals, totals]);
 
   // weeklyChange από τα φιλτραρισμένα ημερήσια (τελευταία 7 vs προηγούμενες 7)
   const weeklyChange = useMemo(() => {
@@ -533,7 +553,7 @@ export function GA4Analytics() {
   const primaryKpis: KPICardData[] = [
     {
       label: 'Συνεδρίες',
-      value: fmt(totals.sessions),
+      value: fmt(displayTotals.sessions),
       change: round1(weeklyChange?.sessions),
       changeLabel: 'vs 7 ημ.',
       trend: weeklyChange?.sessions != null ? (weeklyChange.sessions >= 0 ? 'up' : 'down') : undefined,
@@ -542,25 +562,29 @@ export function GA4Analytics() {
     },
     {
       label: 'Χρήστες',
-      value: fmt(totals.users),
+      value: fmt(displayTotals.users),
       change: round1(weeklyChange?.users),
       changeLabel: 'vs 7 ημ.',
       trend: weeklyChange?.users != null ? (weeklyChange.users >= 0 ? 'up' : 'down') : undefined,
       sparklineData: sparkFiltered.map((d) => d.totalUsers),
-      tooltip: `Άθροισμα μοναδικών χρηστών (totalUsers ανά ημέρα) για την περίοδο (${kpiTooltipBase.period}). Στο GA4 είναι «εντός ημέρας», όχι de-duplicated σε όλη την περίοδο.\n${kpiTooltipBase.sync}\n${kpiTooltipBase.cmp}\n${kpiTooltipBase.spark}`,
+      tooltip: usingPeriodTotals
+        ? `Μοναδικοί χρήστες de-duplicated για όλη την περίοδο (${kpiTooltipBase.period}) — ίδιος υπολογισμός με το GA4 UI.\n${kpiTooltipBase.sync}\n${kpiTooltipBase.cmp}\n${kpiTooltipBase.spark}`
+        : `Άθροισμα μοναδικών χρηστών (totalUsers ανά ημέρα) για την περίοδο (${kpiTooltipBase.period}). Στο GA4 είναι «εντός ημέρας», όχι de-duplicated σε όλη την περίοδο.\n${kpiTooltipBase.sync}\n${kpiTooltipBase.cmp}\n${kpiTooltipBase.spark}`,
     },
     {
       label: 'Νέοι χρήστες',
-      value: fmt(totals.newUsers),
+      value: fmt(displayTotals.newUsers),
       change: round1(weeklyChange?.newUsers),
       changeLabel: 'vs 7 ημ.',
       trend: weeklyChange?.newUsers != null ? (weeklyChange.newUsers >= 0 ? 'up' : 'down') : undefined,
       sparklineData: sparkFiltered.map((d) => d.newUsers),
-      tooltip: `Άθροισμα νέων χρηστών ανά ημέρα για την περίοδο (${kpiTooltipBase.period}).\n${kpiTooltipBase.sync}\n${kpiTooltipBase.cmp}\n${kpiTooltipBase.spark}`,
+      tooltip: usingPeriodTotals
+        ? `Νέοι χρήστες de-duplicated για όλη την περίοδο (${kpiTooltipBase.period}) — ίδιος υπολογισμός με το GA4 UI.\n${kpiTooltipBase.sync}\n${kpiTooltipBase.cmp}\n${kpiTooltipBase.spark}`
+        : `Άθροισμα νέων χρηστών ανά ημέρα για την περίοδο (${kpiTooltipBase.period}).\n${kpiTooltipBase.sync}\n${kpiTooltipBase.cmp}\n${kpiTooltipBase.spark}`,
     },
     {
       label: 'Μετατροπές',
-      value: fmt(totals.conversions),
+      value: fmt(displayTotals.conversions),
       change: round1(weeklyChange?.conversions),
       changeLabel: 'vs 7 ημ.',
       trend: weeklyChange?.conversions != null ? (weeklyChange.conversions >= 0 ? 'up' : 'down') : undefined,
@@ -572,7 +596,7 @@ export function GA4Analytics() {
   const secondaryKpis: KPICardData[] = [
     {
       label: 'Bounce rate',
-      value: fmtPct(totals.bounceRate),
+      value: fmtPct(displayTotals.bounceRate),
       change: round1(weeklyChange?.bounceRate),
       changeLabel: 'vs 7 ημ.',
       trend: weeklyChange?.bounceRate != null ? (weeklyChange.bounceRate >= 0 ? 'up' : 'down') : undefined,
@@ -581,7 +605,7 @@ export function GA4Analytics() {
     },
     {
       label: 'Μέση διάρκεια',
-      value: fmtDuration(totals.avgDuration),
+      value: fmtDuration(displayTotals.avgDuration),
       change: round1(weeklyChange?.avgDuration),
       changeLabel: 'vs 7 ημ.',
       trend: weeklyChange?.avgDuration != null ? (weeklyChange.avgDuration >= 0 ? 'up' : 'down') : undefined,
@@ -590,7 +614,7 @@ export function GA4Analytics() {
     },
     {
       label: 'Προβολές σελίδων',
-      value: fmt(totals.pageViews),
+      value: fmt(displayTotals.pageViews),
       change: round1(weeklyChange?.pageViews),
       changeLabel: 'vs 7 ημ.',
       trend: weeklyChange?.pageViews != null ? (weeklyChange.pageViews >= 0 ? 'up' : 'down') : undefined,
@@ -599,7 +623,7 @@ export function GA4Analytics() {
     },
     {
       label: 'Προσθήκες στο καλάθι',
-      value: fmt(totals.addToCarts),
+      value: fmt(displayTotals.addToCarts),
       change: round1(weeklyChange?.addToCarts),
       changeLabel: 'vs 7 ημ.',
       trend: weeklyChange?.addToCarts != null ? (weeklyChange.addToCarts >= 0 ? 'up' : 'down') : undefined,

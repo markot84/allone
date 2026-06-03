@@ -127,6 +127,7 @@ import {
   getGA4AuthUrl,
   handleGA4Callback,
   fetchGA4Data,
+  fetchGA4PeriodTotals,
   setDb as setGA4Db,
 } from './ga4Connector';
 import {
@@ -1387,6 +1388,68 @@ export const connectorSync = onRequest(
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       logger.error(`[connectorSync] failed for brand=${brandId || 'unknown'} provider=${provider || 'unknown'}: ${msg}`);
+      res.status(500).json({ error: msg });
+    }
+  }
+);
+
+/**
+ * GA4-deduplicated σύνολα περιόδου (Χρήστες/Νέοι χρήστες κ.λπ.) για ΣΥΓΚΕΚΡΙΜΕΝΟ εύρος.
+ * Τα ημερήσια totalUsers/newUsers ΔΕΝ αθροίζονται σωστά (dedup ανά περίοδο στο GA4). Εδώ ζητάμε
+ * το ίδιο σύνολο που δείχνει το GA4 UI. Firestore cache (TTL 3h) ώστε να μη χτυπάμε το GA4 σε κάθε
+ * αλλαγή ημερομηνίας. Το cache γράφεται ΜΟΝΟ server-side (admin) → δεν χρειάζεται client rule.
+ */
+export const ga4PeriodTotals = onRequest(
+  { region: 'europe-west1', cors: true, secrets: ['GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET'] },
+  async (req, res) => {
+    if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+
+    try {
+      const decoded = await admin.auth().verifyIdToken(authHeader.slice(7).trim());
+      const body = req.body as { brandId?: string; startDate?: string; endDate?: string };
+      const brandId = body.brandId || '';
+      const startDate = body.startDate || '';
+      const endDate = body.endDate || '';
+      if (!brandId || !startDate || !endDate) { res.status(400).json({ error: 'Missing params' }); return; }
+
+      if (!(await verifyBrandMembership(decoded.uid, brandId))) {
+        res.status(403).json({ error: 'forbidden' });
+        return;
+      }
+
+      const docId = `${brandId}__${startDate}__${endDate}`.replace(/[^A-Za-z0-9_-]/g, '_');
+      const cacheRef = db.doc(`ga4_period_cache/${docId}`);
+      const TTL_MS = 3 * 60 * 60 * 1000;
+
+      const cached = await cacheRef.get();
+      if (cached.exists) {
+        const c = cached.data() as { totals?: unknown; computedAtMs?: number };
+        if (c.totals && typeof c.computedAtMs === 'number' && Date.now() - c.computedAtMs < TTL_MS) {
+          res.status(200).json({ success: true, totals: c.totals, cached: true });
+          return;
+        }
+      }
+
+      const r = await fetchGA4PeriodTotals(brandId, startDate, endDate);
+      if (!r.success || !r.totals) {
+        res.status(502).json({ success: false, error: r.error || 'GA4 period totals failed' });
+        return;
+      }
+
+      await cacheRef.set({
+        brandId,
+        startDate,
+        endDate,
+        totals: r.totals,
+        computedAtMs: Date.now(),
+        computedAt: FieldValue.serverTimestamp(),
+      });
+      res.status(200).json({ success: true, totals: r.totals, cached: false });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      logger.error('[ga4PeriodTotals] failed:', msg);
       res.status(500).json({ error: msg });
     }
   }
