@@ -2421,6 +2421,52 @@ export const geminiProxy = onRequest(
   }
 );
 
+// ── Web Search Proxy (AI Assistant) ─────────────────────────────────────────
+// The AI Assistant grounds general-marketing answers with a DuckDuckGo Instant
+// Answer lookup. That was a direct browser fetch in the original code; the
+// hosting CSP (connect-src) now blocks it. This proxy performs the lookup
+// server-side so the feature keeps working WITHOUT loosening the CSP (FN-D) —
+// same approach as fetchImportUrl. The upstream host is fixed (no SSRF; only the
+// query param is caller-controlled), and the call is auth-gated + rate-limited.
+export const webSearch = onRequest(
+  { region: 'europe-west1', timeoutSeconds: 30, memory: '256MiB' },
+  async (req, res) => {
+    if (applyStrictCors(req, res)) return;
+    if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
+
+    const authHeader = req.headers.authorization || '';
+    if (!authHeader.startsWith('Bearer ')) { res.status(401).json({ error: 'Missing auth' }); return; }
+    let uid = '';
+    try {
+      uid = (await admin.auth().verifyIdToken(authHeader.slice(7).trim())).uid;
+    } catch {
+      res.status(401).json({ error: 'Invalid or expired token' });
+      return;
+    }
+
+    // 60 searches / 5 min ανά χρήστη — αποτρέπει κατάχρηση του proxy egress.
+    const rl = await enforceRateLimit({ key: `webSearch:${uid}`, limit: 60, windowSeconds: 300 });
+    if (!rl.allowed) { sendRateLimitExceeded(res, rl.resetInSeconds, 'webSearch'); return; }
+
+    const rawQuery = (req.body as { query?: unknown })?.query;
+    const query = typeof rawQuery === 'string' ? rawQuery.trim().slice(0, 500) : '';
+    if (!query) { res.status(400).json({ error: 'Missing query' }); return; }
+
+    try {
+      // Fixed upstream host — only the URL-encoded query varies, so no SSRF surface.
+      const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
+      const ddg = await fetch(url, { signal: AbortSignal.timeout(10000) });
+      if (!ddg.ok) { res.status(502).json({ error: 'Upstream search failed' }); return; }
+      const data = await ddg.json();
+      // Return the raw DuckDuckGo payload — the client parses it unchanged.
+      res.status(200).json(data);
+    } catch (err) {
+      logger.error('[webSearch] upstream error:', err);
+      res.status(502).json({ error: 'Search unavailable' });
+    }
+  }
+);
+
 // ── Email Notification Endpoint ─────────────────────────────────────────────
 
 export const sendEmailNotification = onRequest(

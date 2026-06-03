@@ -1,5 +1,7 @@
 // Web Search Service for AI Assistant
 // Provides internet access for marketing, digital marketing, procurement, analytics, content marketing topics
+import { getAuth } from 'firebase/auth';
+import { buildFunctionUrl, getAppCheckHeader } from '../config/firebase';
 
 interface SearchResult {
   title: string;
@@ -78,13 +80,22 @@ export function shouldSearchWeb(query: string): boolean {
   return hasMarketingKeyword || asksForExternalInfo || isGeneralMarketingQuery;
 }
 
-// Perform web search using DuckDuckGo Instant Answer API (no API key required)
+// Perform web search via the server-side webSearch proxy (DuckDuckGo Instant
+// Answer). The browser CSP blocks a direct fetch to api.duckduckgo.com, so the
+// lookup runs server-side; the proxy returns the raw DuckDuckGo payload, parsed
+// below exactly as before. Falls back to curated resources on any failure.
 export async function searchWeb(query: string): Promise<WebSearchResponse> {
   try {
-    // Use DuckDuckGo Instant Answer API for quick answers
-    const instantAnswerUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
-    
-    const response = await fetch(instantAnswerUrl);
+    const idToken = await getAuth().currentUser?.getIdToken();
+    if (!idToken) return getCuratedMarketingResources(query);
+    const appCheck = await getAppCheckHeader();
+
+    const response = await fetch(buildFunctionUrl('webSearch'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}`, ...appCheck },
+      body: JSON.stringify({ query }),
+    });
+    if (!response.ok) return getCuratedMarketingResources(query);
     const data = await response.json();
     
     const results: SearchResult[] = [];
@@ -101,7 +112,7 @@ export async function searchWeb(query: string): Promise<WebSearchResponse> {
     
     // Extract related topics
     if (data.RelatedTopics && Array.isArray(data.RelatedTopics)) {
-      data.RelatedTopics.slice(0, 3).forEach((topic: any) => {
+      data.RelatedTopics.slice(0, 3).forEach((topic: { Text?: string; FirstURL?: string }) => {
         if (topic.Text) {
           results.push({
             title: topic.Text.split(' - ')[0] || topic.Text,
