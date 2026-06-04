@@ -23,6 +23,27 @@ const MARK_WAKE_ALIASES = [
   'μαρκς', 'μάρκ', 'μαρκ', 'marko', 'marc', 'mark',
 ];
 
+/**
+ * Συντηρητικός διορθωτής συχνών φωνητικών λαθών σε εμπορικούς όρους (ελληνικό STT).
+ * Περιλαμβάνει ΜΟΝΟ μεταγραφές που σχεδόν αποκλείεται να είναι κανονική λέξη σε
+ * εμπορικό ερώτημα (π.χ. «ιησού»→«e-shop»). Πιο διφορούμενα (π.χ. «ξύλο»→«τζίρο»)
+ * τα αναλαμβάνει το μοντέλο μέσω prompt, για να μη χαλάμε υπαρκτές λέξεις.
+ * Το matching γίνεται σε ολόκληρη λέξη (whole-word).
+ */
+const DOMAIN_PHONETIC_FIXES: Array<{ aliases: string[]; canonical: string }> = [
+  { aliases: ['ιησού', 'ιησου', 'εσοπ', 'έσοπ', 'ισοπ', 'ίσοπ'], canonical: 'e-shop' },
+  { aliases: ['ρόας', 'ρωας', 'ρόουας'], canonical: 'ROAS' },
+];
+
+function normalizeMarkDomainTerms(text: string): string {
+  let out = text;
+  for (const { aliases, canonical } of DOMAIN_PHONETIC_FIXES) {
+    const re = new RegExp(`(^|\\s)(?:${aliases.join('|')})(?=\\s|[.,!?;:·]|$)`, 'giu');
+    out = out.replace(re, (_m, pre: string) => `${pre}${canonical}`);
+  }
+  return out;
+}
+
 export function normalizeMarkTranscript(text: string): string {
   if (!text) return text;
   const aliasGroup = MARK_WAKE_ALIASES.join('|');
@@ -31,7 +52,8 @@ export function normalizeMarkTranscript(text: string): string {
     `(^|\\s)(γει[άα]\\s+σου|γεια|έλα|οκ|hey)?\\s*(?:${aliasGroup})(?=\\s|[.,!?;:·]|$)`,
     'iu'
   );
-  return text.replace(re, (_m, pre: string, greet?: string) => `${pre}${greet ? `${greet} ` : ''}Mark`);
+  const withWakeWord = text.replace(re, (_m, pre: string, greet?: string) => `${pre}${greet ? `${greet} ` : ''}Mark`);
+  return normalizeMarkDomainTerms(withWakeWord);
 }
 
 export interface MarkMessage {

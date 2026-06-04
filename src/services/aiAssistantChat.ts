@@ -43,6 +43,12 @@ export type AssistantTenantPack = {
     business?: RevenueSeries;
     ecommerce?: RevenueSeries;
   };
+  /**
+   * Κατάσταση φόρτωσης ανά πηγή τζίρου. ΚΡΙΣΙΜΟ: τα aggregates του e-tennis είναι μεγάλα
+   * και σε αργό δίκτυο φορτώνουν με καθυστέρηση — ο Mark ΔΕΝ πρέπει να λέει «δεν υπάρχουν
+   * δεδομένα» όταν απλώς φορτώνουν ακόμη.
+   */
+  revenueLoading?: { ecommerce?: boolean; business?: boolean };
   commercial?: {
     adSpend: number;
     attributedRevenue: number;
@@ -175,17 +181,29 @@ export function formatTenantPackForPrompt(pack: AssistantTenantPack): string {
   // ERP πρώτο: για πολλά brands είναι η ΚΥΡΙΑ πηγή (το e-shop είναι υποσύνολο).
   const businessSeries = pack.revenue?.business;
   const ecommerceSeries = pack.revenue?.ecommerce;
+  const ecommerceLoading = pack.revenueLoading?.ecommerce;
+  const businessLoading = pack.revenueLoading?.business;
+
   if (businessSeries) {
     lines.push(formatRevenueSeries('Συνολικός τζίρος επιχείρησης', businessSeries));
+  } else if (businessLoading) {
+    lines.push('Συνολικός τζίρος επιχείρησης (ERP): φορτώνει ακόμη — ΜΗΝ πεις ότι δεν υπάρχει.');
   }
 
-  lines.push(
-    `E-shop σύνοψη: hasData=${pack.ecommerce.hasData}, σύνολο ιστορικού e-shop≈€${Math.round(pack.ecommerce.totalRevenue)}, παραγγελίες=${pack.ecommerce.orderCount}, AOV≈€${pack.ecommerce.aov.toFixed(2)}, πλατφόρμες: ${pack.ecommerce.connectedPlatforms.join(', ') || '—'}`
-  );
-  if (ecommerceSeries && ecommerceSeries.recentDaily.length + ecommerceSeries.monthly.length > 0) {
-    lines.push(formatRevenueSeries('Τζίρος e-shop', ecommerceSeries));
+  if (ecommerceLoading && !ecommerceSeries) {
+    lines.push(
+      'E-shop: τα δεδομένα φορτώνουν ακόμη (μεγάλος όγκος ιστορικού). ΜΗΝ δηλώσεις ότι δεν υπάρχουν e-shop δεδομένα· πες ότι φορτώνουν και ζήτησε να ξαναρωτήσει σε λίγο ή δώσε ό,τι άλλο έχει ήδη φορτώσει.'
+    );
+  } else {
+    lines.push(
+      `E-shop σύνοψη: hasData=${pack.ecommerce.hasData}, σύνολο ιστορικού e-shop≈€${Math.round(pack.ecommerce.totalRevenue)}, παραγγελίες=${pack.ecommerce.orderCount}, AOV≈€${pack.ecommerce.aov.toFixed(2)}, πλατφόρμες: ${pack.ecommerce.connectedPlatforms.join(', ') || '—'}`
+    );
+    if (ecommerceSeries && ecommerceSeries.recentDaily.length + ecommerceSeries.monthly.length > 0) {
+      lines.push(formatRevenueSeries('Τζίρος e-shop', ecommerceSeries));
+    }
   }
-  if (businessSeries && !pack.ecommerce.hasData) {
+
+  if (businessSeries && !pack.ecommerce.hasData && !ecommerceLoading) {
     lines.push(
       'ΣΗΜΕΙΩΣΗ: Ακόμη κι αν το e-shop δεν έχει ξεχωριστό aggregate, ο συνολικός τζίρος της επιχείρησης ΥΠΑΡΧΕΙ από το ERP. Για ερωτήσεις «σύνολο εσόδων/τζίρος» σε οποιαδήποτε περίοδο, υπολόγισε από τις παραπάνω χρονοσειρές ERP.'
     );

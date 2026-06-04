@@ -91,7 +91,9 @@ interface AIAssistantProps {
 export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
   const { currentBrand } = useBrand();
   const commercialInfo = useCommercialInfo();
-  const ecomm = useEcommerceSummary();
+  // Light path: ο Mark χρειάζεται ΜΟΝΟ revenue/orders/platforms — όχι SKU stats / stock movement
+  // chunks (βαρύ multi-doc fetch). Αποφεύγει αργή/αποτυχημένη φόρτωση που εμφάνιζε το e-shop ως κενό.
+  const ecomm = useEcommerceSummary({ includeSkuDetails: false, includeStockMovement: false });
   const businessRev = useBusinessRevenueSummary();
   const {
     segments: rfmSegments,
@@ -195,6 +197,7 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
         connectedPlatforms: ecomm.connectedPlatforms,
       },
       revenue: revenueSeries,
+      revenueLoading: { ecommerce: ecomm.isLoading, business: businessRev.isLoading },
       commercial: {
         adSpend: campaignMetrics.totalSpend,
         attributedRevenue: campaignMetrics.totalRevenue,
@@ -252,6 +255,8 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
     ecomm.orderCount,
     ecomm.aov,
     ecomm.connectedPlatforms,
+    ecomm.isLoading,
+    businessRev.isLoading,
     revenueSeries,
     campaignMetrics.totalSpend,
     campaignMetrics.totalRevenue,
