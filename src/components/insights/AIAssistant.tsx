@@ -534,6 +534,7 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
   const [isTyping, setIsTyping] = useState(false);
   const [savingInfo, setSavingInfo] = useState(false);
   const [voiceRepliesEnabled, setVoiceRepliesEnabled] = useState(readVoiceRepliesPreference);
+  const [voiceAutoSubmitArmed, setVoiceAutoSubmitArmed] = useState(false);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -653,6 +654,7 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
       window.clearTimeout(voiceAutoSubmitTimerRef.current);
       voiceAutoSubmitTimerRef.current = null;
     }
+    setVoiceAutoSubmitArmed(false);
   }, []);
 
   const handleMessagesScroll = useCallback(() => {
@@ -860,6 +862,7 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
         voiceDraftRef.current = nextDraft;
         return nextDraft;
       });
+      setVoiceAutoSubmitArmed(true);
       voiceAutoSubmitTimerRef.current = window.setTimeout(() => {
         const draft = voiceDraftRef.current.trim();
         if (!draft) return;
@@ -872,9 +875,11 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
     if (!isOpen || !voiceRepliesEnabled || !tts.supported) return;
     const latest = getLatestSpeakableAssistantMessage(messages);
     if (!latest || latest.id === lastSpokenMessageIdRef.current) return;
-    if (tts.speak(latest.content)) {
-      lastSpokenMessageIdRef.current = latest.id;
-    }
+    tts.speak(latest.content, {
+      onStart: () => {
+        lastSpokenMessageIdRef.current = latest.id;
+      },
+    });
   }, [isOpen, messages, tts, voiceRepliesEnabled]);
 
   useEffect(() => {
@@ -913,10 +918,10 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="fixed right-0 top-0 h-screen w-full max-w-md bg-white shadow-2xl z-50 flex flex-col"
+            className="fixed inset-0 z-50 flex h-[100dvh] w-full flex-col bg-white shadow-2xl sm:left-auto sm:max-w-md"
           >
             {/* Header */}
-            <div className="p-5 border-b border-[var(--nts-border-gray)]">
+            <div className="border-b border-[var(--nts-border-gray)] p-4 sm:p-5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="mark-avatar-orb h-10 w-10 aspect-square rounded-full bg-white border border-[var(--nts-accent)]/20 flex items-center justify-center flex-shrink-0 overflow-hidden">
@@ -948,6 +953,7 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
                       type="button"
                       onClick={() => {
                         if (voiceRepliesEnabled) tts.stop();
+                        else tts.prime();
                         setVoiceRepliesEnabled((prev) => !prev);
                       }}
                       title={voiceRepliesEnabled ? 'Απενεργοποίηση φωνητικών απαντήσεων' : 'Ενεργοποίηση φωνητικών απαντήσεων'}
@@ -992,7 +998,7 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
             <div
               ref={messagesScrollRef}
               onScroll={handleMessagesScroll}
-              className="flex-1 overflow-y-auto p-4 space-y-4"
+              className="flex-1 overflow-y-auto p-3 space-y-4 sm:p-4"
             >
               {messages.map((message) => (
                 <MarkMessageItem
@@ -1023,7 +1029,7 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
             </div>
 
             {/* Input */}
-            <div className="p-4 border-t border-[var(--nts-border-gray)]">
+            <div className="border-t border-[var(--nts-border-gray)] p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4">
               {/* Quick actions */}
               <div className="flex flex-wrap gap-1.5 mb-2">
                 <button
@@ -1065,6 +1071,7 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
                 <button
                   onClick={stt.supported ? () => {
                     tts.stop();
+                    tts.prime();
                     setVoiceRepliesEnabled(true);
                     clearVoiceAutoSubmit();
                     stt.toggle();
@@ -1095,6 +1102,11 @@ export function MarkAgent({ isOpen, onClose }: AIAssistantProps) {
               </div>
               {stt.listening && (
                 <p className="mt-2 text-center text-xs font-medium text-red-500">Μίλα τώρα…</p>
+              )}
+              {voiceAutoSubmitArmed && !stt.listening && !isTyping && (
+                <p className="mt-2 text-center text-xs font-medium text-[var(--nts-accent)]">
+                  Θα το στείλω αυτόματα σε {VOICE_AUTO_SUBMIT_DELAY_MS / 1000}″. Πάτησε μικρόφωνο για διόρθωση.
+                </p>
               )}
               {stt.error && (
                 <p className="mt-2 text-center text-xs text-red-500">{stt.error}</p>

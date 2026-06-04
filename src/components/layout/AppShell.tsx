@@ -40,7 +40,9 @@ export interface AppShellProps {
 }
 
 type NavGroup = 'business' | 'commerce' | 'commercial' | 'marketing' | 'procurement' | 'finance' | 'operations' | 'admin';
-type NavItem = { id: AppSectionId; label: string; icon: any; badge?: string; badgeColor?: string; group: NavGroup };
+type NavIcon = React.ComponentType<{ size?: number }>;
+type NavItem = { id: AppSectionId; label: string; icon: NavIcon; badge?: string; badgeColor?: string; group: NavGroup };
+type TimestampLike = { toMillis?: () => number; seconds?: number };
 
 const NAV_GROUP_LABELS: Record<NavGroup, string> = {
   business: 'Business',
@@ -52,6 +54,77 @@ const NAV_GROUP_LABELS: Record<NavGroup, string> = {
   operations: 'Operations',
   admin: 'Admin',
 };
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error || '');
+}
+
+function SidebarNav({
+  navItems,
+  activeSection,
+  onSelect,
+}: {
+  navItems: NavItem[];
+  activeSection: string;
+  onSelect: (id: AppSectionId) => void;
+}) {
+  return (
+    <NavList aria-label="Primary">
+      {navItems.map((item, index) => {
+        const previousGroup = navItems[index - 1]?.group;
+        const isFirstGroup = index === 0;
+        const showGroupLabel = item.group !== previousGroup;
+        return (
+          <React.Fragment key={item.id}>
+            {showGroupLabel && (
+              <li
+                style={{
+                  listStyle: 'none',
+                  margin: isFirstGroup ? '2px 12px 4px' : '10px 12px 4px',
+                  paddingTop: isFirstGroup ? 0 : 8,
+                  borderTop: isFirstGroup ? 'none' : '1px solid rgba(255,255,255,0.08)'
+                }}
+              >
+                <span
+                  className="text-[10px] font-semibold uppercase tracking-[0.16em]"
+                  style={{ color: 'rgba(255,255,255,0.34)' }}
+                >
+                  {NAV_GROUP_LABELS[item.group]}
+                </span>
+              </li>
+            )}
+            <NavList.Item
+              as="button"
+              type="button"
+              onClick={(e) => { 
+                e.preventDefault(); 
+                e.stopPropagation();
+                onSelect(item.id); 
+              }}
+              aria-current={(activeSection === item.id || (item.id === 'data' && activeSection.startsWith('data-'))) ? 'page' : undefined}
+              style={{ width: '100%', textAlign: 'left' }}
+            >
+              <NavList.LeadingVisual>
+                {<item.icon size={16} />}
+              </NavList.LeadingVisual>
+              <span className="flex items-center gap-2">
+                {item.label}
+                {item.badge && (
+                  <span
+                    className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full leading-none"
+                    style={{ backgroundColor: `${item.badgeColor}20`, color: item.badgeColor }}
+                  >
+                    {item.badge}
+                  </span>
+                )}
+              </span>
+            </NavList.Item>
+          </React.Fragment>
+        );
+      })}
+    </NavList>
+  );
+}
 
 function BrandMenu({
   currentBrand,
@@ -359,8 +432,9 @@ function AccountMenu({
                             setLinkMsg({ type: 'ok', text: 'Κωδικός ορίστηκε!' });
                             setShowSetPassword(false);
                             setNewPassword('');
-                          } catch (e: any) {
-                            setLinkMsg({ type: 'err', text: e.message?.includes('auth/') ? 'Αποτυχία σύνδεσης' : (e.message || 'Σφάλμα') });
+                          } catch (e) {
+                            const msg = errorMessage(e);
+                            setLinkMsg({ type: 'err', text: msg.includes('auth/') ? 'Αποτυχία σύνδεσης' : (msg || 'Σφάλμα') });
                           }
                         }}
                         style={{
@@ -392,8 +466,9 @@ function AccountMenu({
                     try {
                       await onLinkGoogle();
                       setLinkMsg({ type: 'ok', text: 'Google συνδέθηκε!' });
-                    } catch (e: any) {
-                      setLinkMsg({ type: 'err', text: e.message?.includes('auth/credential-already-in-use') ? 'Αυτό το Google account χρησιμοποιείται ήδη' : (e.message || 'Σφάλμα') });
+                    } catch (e) {
+                      const msg = errorMessage(e);
+                      setLinkMsg({ type: 'err', text: msg.includes('auth/credential-already-in-use') ? 'Αυτό το Google account χρησιμοποιείται ήδη' : (msg || 'Σφάλμα') });
                     }
                   }}
                   style={{
@@ -570,6 +645,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
 
   /** Το κύριο scroll είναι εδώ (όχι το window) — ώστε νέα σελίδα από το μενού να ξεκινά από πάνω. */
   const mainContentScrollRef = useRef<HTMLDivElement>(null);
+  const [nowMs] = useState(() => Date.now());
   useEffect(() => {
     const el = mainContentScrollRef.current;
     if (el) el.scrollTop = 0;
@@ -580,20 +656,21 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
     const dur = typeof activeStrategy.duration === 'string' ? parseInt(activeStrategy.duration as string, 10) : activeStrategy.duration;
     if (!dur || isNaN(dur)) return null;
     const raw = activeStrategy.updatedAt || activeStrategy.createdAt;
+    const timestamp = raw as TimestampLike | undefined;
     const startMs = typeof raw === 'string' ? new Date(raw).getTime()
-      : typeof (raw as any)?.toMillis === 'function' ? (raw as any).toMillis()
-      : typeof (raw as any)?.seconds === 'number' ? (raw as any).seconds * 1000
+      : typeof timestamp?.toMillis === 'function' ? timestamp.toMillis()
+      : typeof timestamp?.seconds === 'number' ? timestamp.seconds * 1000
       : NaN;
     if (isNaN(startMs)) {
       return { text: `${dur}ημ`, color: '#F97316' };
     }
-    const elapsedDays = Math.floor((Date.now() - startMs) / 86400000);
+    const elapsedDays = Math.floor((nowMs - startMs) / 86400000);
     if (elapsedDays < 1) return { text: `${dur}ημ`, color: '#F97316' };
     const remaining = dur - elapsedDays;
     if (remaining <= 0) return { text: 'Έληξε', color: '#EF4444' };
     if (remaining <= 3) return { text: `${remaining}ημ`, color: '#F59E0B' };
     return { text: `${remaining}ημ`, color: '#F97316' };
-  }, [activeStrategy]);
+  }, [activeStrategy, nowMs]);
 
   const togglePin = () => {
     const next = !sidebarPinned;
@@ -667,66 +744,6 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
     },
     [enabledModules, isB2B, isSuperAdmin, moduleConfig, strategyBadge]
   );
-
-  const Nav = ({ onSelect }: { onSelect: (id: AppSectionId) => void }) => {
-    let lastGroup: NavGroup | null = null;
-    return (
-      <NavList aria-label="Primary">
-        {navItems.map((item) => {
-          const isFirstGroup = lastGroup === null;
-          const showGroupLabel = item.group !== lastGroup;
-          lastGroup = item.group;
-          return (
-            <React.Fragment key={item.id}>
-              {showGroupLabel && (
-                <li
-                  style={{
-                    listStyle: 'none',
-                    margin: isFirstGroup ? '2px 12px 4px' : '10px 12px 4px',
-                    paddingTop: isFirstGroup ? 0 : 8,
-                    borderTop: isFirstGroup ? 'none' : '1px solid rgba(255,255,255,0.08)'
-                  }}
-                >
-                  <span
-                    className="text-[10px] font-semibold uppercase tracking-[0.16em]"
-                    style={{ color: 'rgba(255,255,255,0.34)' }}
-                  >
-                    {NAV_GROUP_LABELS[item.group]}
-                  </span>
-                </li>
-              )}
-              <NavList.Item
-                as="button"
-                type="button"
-                onClick={(e) => { 
-                  e.preventDefault(); 
-                  e.stopPropagation();
-                  onSelect(item.id); 
-                }}
-                aria-current={(activeSection === item.id || (item.id === 'data' && activeSection.startsWith('data-'))) ? 'page' : undefined}
-                style={{ width: '100%', textAlign: 'left' }}
-              >
-                <NavList.LeadingVisual>
-                  {typeof item.icon === 'function' ? <item.icon size={16} /> : <item.icon />}
-                </NavList.LeadingVisual>
-                <span className="flex items-center gap-2">
-                  {item.label}
-                  {item.badge && (
-                    <span
-                      className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full leading-none"
-                      style={{ backgroundColor: `${item.badgeColor}20`, color: item.badgeColor }}
-                    >
-                      {item.badge}
-                    </span>
-                  )}
-                </span>
-              </NavList.Item>
-            </React.Fragment>
-          );
-        })}
-      </NavList>
-    );
-  };
 
   return (
     <>
@@ -855,7 +872,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
               </button>
             </div>
             <div style={{ padding: 12, flex: 1, overflowY: 'auto' }}>
-              <Nav onSelect={(id) => onSectionChange(id)} />
+              <SidebarNav navItems={navItems} activeSection={activeSection} onSelect={(id) => onSectionChange(id)} />
             </div>
           </div>
         )}
@@ -874,7 +891,7 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
             backgroundColor: 'var(--app-canvas-bg, var(--nts-bg-pure))'
           }}
         >
-          <div className="mx-auto w-full max-w-[1400px] px-3 py-4 sm:px-4 sm:py-5 md:px-6 md:py-6">
+          <div className="mx-auto w-full max-w-[1400px] px-3 pb-28 pt-4 sm:px-4 sm:pb-28 sm:pt-5 md:px-6 md:py-6">
             {children}
           </div>
         </div>
@@ -973,7 +990,9 @@ export function AppShell({ activeSection, onSectionChange, children }: AppShellP
             </div>
             {/* Navigation */}
             <div style={{ padding: 16, flex: 1, overflowY: 'auto' }}>
-              <Nav
+              <SidebarNav
+                navItems={navItems}
+                activeSection={activeSection}
                 onSelect={(id) => {
                   setSidebarOpen(false);
                   onSectionChange(id);

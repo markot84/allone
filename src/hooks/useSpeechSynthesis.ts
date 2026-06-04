@@ -75,8 +75,24 @@ export function useSpeechSynthesis() {
     setSpeaking(false);
   }, []);
 
+  const prime = useCallback(() => {
+    const synth = synthRef.current;
+    if (!synth) return false;
+    try {
+      if (synth.paused) synth.resume();
+      const utterance = new SpeechSynthesisUtterance('.');
+      utterance.lang = selectedVoice?.lang || 'el-GR';
+      utterance.volume = 0;
+      if (selectedVoice) utterance.voice = selectedVoice;
+      synth.speak(utterance);
+      return true;
+    } catch {
+      return false;
+    }
+  }, [selectedVoice]);
+
   const speak = useCallback(
-    (text: string, opts?: { full?: boolean }) => {
+    (text: string, opts?: { full?: boolean; onStart?: () => void; onError?: () => void }) => {
       const synth = synthRef.current;
       if (!synth) return false;
       const spokenText = cleanTextForSpeech(text, opts?.full ? 4000 : MAX_AUTO_READ_CHARS);
@@ -89,9 +105,15 @@ export function useSpeechSynthesis() {
       if (selectedVoice) utterance.voice = selectedVoice;
       utterance.rate = 0.96;
       utterance.pitch = 1;
-      utterance.onstart = () => setSpeaking(true);
+      utterance.onstart = () => {
+        opts?.onStart?.();
+        setSpeaking(true);
+      };
       utterance.onend = () => setSpeaking(false);
-      utterance.onerror = () => setSpeaking(false);
+      utterance.onerror = () => {
+        opts?.onError?.();
+        setSpeaking(false);
+      };
       synth.speak(utterance);
       window.setTimeout(() => {
         if (synth.paused) synth.resume();
@@ -108,6 +130,7 @@ export function useSpeechSynthesis() {
     speaking,
     voices,
     selectedVoice,
+    prime,
     speak,
     stop,
   };

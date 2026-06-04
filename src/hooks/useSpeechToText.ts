@@ -91,7 +91,15 @@ export function useSpeechToText(opts?: { lang?: string; onResult?: (text: string
           transcript += event.results[i][0]?.transcript ?? '';
         }
         const text = transcript.trim();
-        if (text) onResultRef.current?.(text);
+        if (text) {
+          onResultRef.current?.(text);
+          setListening(false);
+          try {
+            rec.stop();
+          } catch {
+            /* ignore */
+          }
+        }
       };
       rec.onerror = (event) => {
         const msg = friendlyError(event?.error);

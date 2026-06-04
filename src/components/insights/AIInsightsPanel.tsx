@@ -7,7 +7,7 @@ export function AIInsightsPanel() {
 
 export function AIInsightsTrigger({ onClick }: { onClick: () => void }) {
   return (
-    <div className="fixed bottom-6 right-6 z-30 flex h-16 w-16 items-center justify-center overflow-visible">
+    <div className="fixed bottom-6 right-6 z-30 hidden h-16 w-16 items-center justify-center overflow-visible md:flex">
       <motion.button
         type="button"
         onClick={onClick}

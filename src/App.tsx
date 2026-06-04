@@ -19,11 +19,14 @@ import { TermsOfService } from './components/legal/TermsOfService';
 import { captureOAuthParamsFromLocation } from './utils/oauthSession';
 import { AttributionProvider } from './contexts/AttributionContext';
 import { APP_SECTIONS } from './config/modules';
+import { BarChart3, ClipboardList, MessageCircle } from 'lucide-react';
 
 const CHUNK_RELOAD_ONCE_KEY = 'pp_chunk_reload_once';
 const isChunkLoadError = (msg: string) =>
   /Failed to fetch dynamically imported module|Loading chunk|ChunkLoadError|Unexpected token|Importing a module script failed/i.test(msg);
 
+// ComponentType<any> is intentional here: lazyNamedWithRetry must preserve arbitrary lazy component props.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyComponent = ComponentType<any>;
 function lazyNamedWithRetry<T extends Record<string, unknown>, K extends keyof T>(
   importer: () => Promise<T>,
@@ -91,6 +94,56 @@ const queryClient = new QueryClient({
     queries: { staleTime: 5 * 60 * 1000, gcTime: 30 * 60 * 1000 }
   }
 });
+
+function MobileQuickActions({
+  activeSection,
+  onOpenMark,
+  onSectionChange,
+}: {
+  activeSection: string;
+  onOpenMark: () => void;
+  onSectionChange: (section: string) => void;
+}) {
+  const nav = [
+    { id: 'dashboard', label: 'Σήμερα', icon: BarChart3 },
+    { id: 'marketing-plan', label: 'Plan', icon: ClipboardList },
+  ];
+
+  return (
+    <div className="mobile-quick-actions fixed inset-x-3 bottom-3 z-40 md:hidden">
+      <div className="flex items-center gap-2 rounded-2xl border border-white/70 bg-white/95 p-2 shadow-[0_18px_48px_rgba(15,23,42,0.18)] backdrop-blur">
+        <button
+          type="button"
+          onClick={onOpenMark}
+          className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-[var(--nts-accent)] px-3 text-sm font-bold text-white shadow-sm active:scale-[0.98]"
+        >
+          <MessageCircle size={18} />
+          Ρώτα τον Mark
+        </button>
+        {nav.map((item) => {
+          const Icon = item.icon;
+          const selected = activeSection === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => onSectionChange(item.id)}
+              aria-current={selected ? 'page' : undefined}
+              className={`flex min-h-12 min-w-16 flex-col items-center justify-center rounded-xl px-2 text-[11px] font-semibold transition-colors ${
+                selected
+                  ? 'bg-[var(--nts-accent)]/10 text-[var(--nts-accent)]'
+                  : 'text-[#4B5563] hover:bg-[#F3F4F6]'
+              }`}
+            >
+              <Icon size={16} />
+              {item.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 const QUERY_CACHE_KEY = 'PERF_PLUS_QUERY_CACHE_v16';
 
@@ -218,8 +271,13 @@ function AppMain() {
 
   const [activeSection, setActiveSection] = useState(getInitialSection);
   // Global Mark agent: lazy-mounted στο πρώτο άνοιγμα, διαθέσιμος από κάθε σελίδα.
-  const [markOpen, setMarkOpen] = useState(false);
-  const [markMounted, setMarkMounted] = useState(false);
+  const shouldOpenMarkOnBoot = (() => {
+    if (typeof window === 'undefined') return;
+    const query = window.location.hash.split('?')[1] ?? '';
+    return new URLSearchParams(query).get('mark') === '1';
+  })();
+  const [markOpen, setMarkOpen] = useState(Boolean(shouldOpenMarkOnBoot));
+  const [markMounted, setMarkMounted] = useState(Boolean(shouldOpenMarkOnBoot));
 
   // Πριν από child effects: αποθήκευση OAuth query (connector/status) — αλλιώς χάνεται από hash sync ή race.
   useLayoutEffect(() => {
@@ -253,16 +311,18 @@ function AppMain() {
     };
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
-  }, [activeSection, getFallbackSection, isSectionEnabled, resolveAccessibleSection]);
+  }, [VALID_SECTIONS, activeSection, getFallbackSection, isSectionEnabled, resolveAccessibleSection]);
 
   useEffect(() => {
     if (isSectionEnabled(activeSection)) return;
     const fallback = resolveAccessibleSection(activeSection);
-    setActiveSection(fallback);
-    if (typeof window !== 'undefined') {
-      window.history.replaceState(null, '', `#${fallback}`);
-    }
-  }, [activeSection, getFallbackSection, isSectionEnabled, resolveAccessibleSection]);
+    requestAnimationFrame(() => {
+      setActiveSection(fallback);
+      if (typeof window !== 'undefined') {
+        window.history.replaceState(null, '', `#${fallback}`);
+      }
+    });
+  }, [activeSection, isSectionEnabled, resolveAccessibleSection]);
 
   // Listen for navigate-to-help events
   useEffect(() => {
@@ -270,9 +330,9 @@ function AppMain() {
       setActiveSection('help');
       // The Help component will handle the articleId from hash
     };
-    window.addEventListener('navigate-to-help' as any, handleNavigateToHelp);
+    window.addEventListener('navigate-to-help', handleNavigateToHelp);
     return () => {
-      window.removeEventListener('navigate-to-help' as any, handleNavigateToHelp);
+      window.removeEventListener('navigate-to-help', handleNavigateToHelp);
     };
   }, []);
 
@@ -287,7 +347,7 @@ function AppMain() {
         window.dispatchEvent(new HashChangeEvent('hashchange'));
       }
     });
-  }, [getFallbackSection, isSectionEnabled, resolveAccessibleSection]);
+  }, [resolveAccessibleSection]);
 
   const renderContent = () => {
     switch (activeSection) {
@@ -406,6 +466,12 @@ function AppMain() {
       {activeSection !== 'insights' && (
         <AIInsightsTriggerWrapper onClick={() => { setMarkMounted(true); setMarkOpen(true); }} />
       )}
+
+      <MobileQuickActions
+        activeSection={activeSection}
+        onOpenMark={() => { setMarkMounted(true); setMarkOpen(true); }}
+        onSectionChange={handleSectionChange}
+      />
 
       {markMounted && (
         <Suspense fallback={null}>

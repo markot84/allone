@@ -1,0 +1,48 @@
+{
+  "name": "Performance+",
+  "short_name": "Performance+",
+  "description": "AI commerce intelligence για γρήγορες εμπορικές αποφάσεις από κινητό.",
+  "start_url": "/#dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#F97316",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/nts-icon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/mark-orb.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Ρώτα τον Mark",
+      "short_name": "Mark",
+      "description": "Άνοιγμα του Performance+ για γρήγορη φωνητική ερώτηση στον Mark.",
+      "url": "/#dashboard?mark=1",
+      "icons": [{ "src": "/mark-orb.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Marketing Plan",
+      "short_name": "Plan",
+      "description": "Άνοιγμα Marketing Plan.",
+      "url": "/#marketing-plan",
+      "icons": [{ "src": "/nts-icon.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ]
+}
